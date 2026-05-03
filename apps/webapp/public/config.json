@@ -1,0 +1,4 @@
+{
+  "api_url": "${API_URL}",
+  "issuer_url": "${ISSUER_URL}"
+}
