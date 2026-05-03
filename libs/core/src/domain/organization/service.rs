@@ -710,10 +710,7 @@ mod tests {
             MockAuthorizer::new(),
         );
 
-        let orgs = service
-            .list_organizations_for_user(sub)
-            .await
-            .unwrap();
+        let orgs = service.list_organizations_for_user(sub).await.unwrap();
 
         assert!(orgs.is_empty());
     }
