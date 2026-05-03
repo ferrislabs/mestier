@@ -1,4 +1,4 @@
-import { type Fetcher } from '#/api/api.client'
+import { type Fetcher } from '#/api/api-client'
 import { authStore } from '#/store/auth.store'
 
 export const fetcher: Fetcher['fetch'] = async (input) => {

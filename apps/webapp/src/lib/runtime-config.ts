@@ -1,4 +1,4 @@
-import { createApiClient } from "#/api/api.client";
+import { createApiClient, type ApiClient } from "#/api/api-client";
 import { fetcher } from "#/api/api.fetch";
 import { TanstackQueryApiClient } from "#/api/api.tanstack";
 
@@ -15,7 +15,7 @@ export interface OidcConfiguration {
 
 declare global {
   interface Window {
-    api: ReturnType<typeof createApiClient>;
+    api: ApiClient;
     tanstackApi: TanstackQueryApiClient;
     apiUrl: string;
     issuerUrl?: string;
