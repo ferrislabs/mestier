@@ -1,5 +1,7 @@
 # Mestier
 
+[![CodSpeed](https://img.shields.io/endpoint?url=https://codspeed.io/badge.json)](https://codspeed.io/ferrislabs/mestier?utm_source=badge)
+
 Open-source, high-performance ERP for artisans and SMEs.
 
 Backend in Rust (Axum + SQLx + PostgreSQL), frontend in React 19 + TanStack.
