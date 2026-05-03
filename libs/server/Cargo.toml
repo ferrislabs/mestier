@@ -1,0 +1,11 @@
+[package]
+name = "server"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+
+[dependencies]
+thiserror = { workspace = true }
+axum = { workspace = true }
+axum-server = { workspace = true }
+tracing = { workspace = true }

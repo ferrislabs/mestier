@@ -1,0 +1,31 @@
+[package]
+name = "handlers"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+
+[dependencies]
+mestier-core = { workspace = true }
+auth = { workspace = true }
+pagination = { workspace = true }
+common = { workspace = true }
+server = { workspace = true }
+args = { workspace = true }
+rate-limit = { workspace = true }
+
+axum = { workspace = true }
+http = { workspace = true }
+itoa = "1"
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+utoipa = { workspace = true }
+
+[dev-dependencies]
+divan = { workspace = true }
+tokio = { workspace = true, features = ["macros", "rt"] }
+
+[[bench]]
+name = "rate_limit_headers"
+harness = false

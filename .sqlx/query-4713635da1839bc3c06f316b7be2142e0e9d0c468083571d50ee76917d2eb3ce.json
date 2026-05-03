@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO member_roles (id, member_id, role_id)\n            VALUES (gen_random_uuid(), $1, $2)\n            ON CONFLICT (member_id, role_id) DO NOTHING\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "4713635da1839bc3c06f316b7be2142e0e9d0c468083571d50ee76917d2eb3ce"
+}

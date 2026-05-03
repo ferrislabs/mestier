@@ -1,0 +1,205 @@
+name: docker
+
+on:
+  push:
+    branches:
+      - main
+    tags:
+      - v*.*.*
+      - v*.*.*-rc*
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+    inputs:
+      push:
+        type: boolean
+        default: false
+        description: "Whether to push the image"
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  packages: write
+
+env:
+  CARGO_TERM_COLOR: always
+  RUSTFLAGS: "-D warnings"
+  # Avoid contention with the host-level lock when several cargo invocations
+  # run back-to-back in the same job.
+  CARGO_INCREMENTAL: 0
+
+jobs:
+  rust-check:
+    name: rust (${{ matrix.task }})
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - task: fmt
+            cmd: cargo fmt --all -- --check
+          - task: clippy
+            cmd: cargo clippy --workspace --all-targets --locked -- -D warnings
+          - task: test
+            cmd: cargo test --workspace --locked
+    steps:
+      - name: checkout
+        uses: actions/checkout@v5
+
+      - name: install rust toolchain
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: 1.95.0
+          components: rustfmt, clippy
+
+      - name: cache cargo + target
+        uses: Swatinem/rust-cache@v2
+        with:
+          # Each task gets its own cache slot — clippy and test compile
+          # different artefact sets, sharing one cache trashes hit-rate.
+          shared-key: rust-${{ matrix.task }}
+          # Keep deps cached even when the task itself fails: the next run
+          # only has to recompile the fix, not the full dependency graph.
+          cache-on-failure: true
+          # fmt does not touch target/, skip caching it for that job.
+          cache-targets: ${{ matrix.task != 'fmt' }}
+
+      - name: ${{ matrix.task }}
+        env:
+          SQLX_OFFLINE: "true"
+        run: ${{ matrix.cmd }}
+
+  build:
+    needs: rust-check
+    runs-on: ${{ matrix.runner.name }}
+    strategy:
+      matrix:
+        runner:
+          - name: ubuntu-24.04
+            platform: linux/amd64
+          - name: ubuntu-24.04-arm
+            platform: linux/arm64
+        target:
+          - webapp
+          - api
+    steps:
+      - name: checkout
+        uses: actions/checkout@v5
+
+      - name: set up builx
+        uses: docker/setup-buildx-action@v3
+
+      - name: cache layers
+        uses: actions/cache@v4
+        with:
+          path: ${{ runner.temp }}/.buildx-cache
+          key: buildx-${{ runner.arch }}-${{ matrix.target }}-${{ github.sha }}
+          restore-keys: |
+            buildx-${{ runner.arch }}-${{ matrix.target }}-
+
+      - name: get image metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/ferrislabs/mestier-${{ matrix.target }}
+
+      - name: log-in to ghcr
+        if: inputs.push || startsWith(github.ref, 'refs/tags/v') || github.ref_name ==
+          github.event.repository.default_branch
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: build and push
+        uses: docker/build-push-action@v6
+        id: build
+        with:
+          context: .
+          target: ${{ matrix.target }}
+          platforms: ${{ matrix.runner.platform }}
+          tags: ghcr.io/ferrislabs/mestier-${{ matrix.target }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=local,src=${{ runner.temp }}/.buildx-cache
+          cache-to: type=local,dest=${{ runner.temp }}/.buildx-cache-new,mode=max
+          outputs: type=image,push-by-digest=true,name-canonical=true,push=${{ inputs.push
+            || startsWith(github.ref, 'refs/tags/v') || github.ref_name ==
+            github.event.repository.default_branch }}
+
+      - name: prepare digest
+        id: digest
+        if: inputs.push || startsWith(github.ref, 'refs/tags/v') || github.ref_name ==
+          github.event.repository.default_branch
+        run: |
+          mkdir -p ${{ runner.temp }}/digests
+          digest="${{ steps.build.outputs.digest }}"
+          touch "${{ runner.temp }}/digests/${digest#sha256:}"
+
+      - name: upload digest
+        if: inputs.push || startsWith(github.ref, 'refs/tags/v') || github.ref_name ==
+          github.event.repository.default_branch
+        uses: actions/upload-artifact@v4
+        with:
+          name: digests-${{ runner.arch }}-${{ matrix.target }}
+          path: ${{ runner.temp }}/digests/*
+          if-no-files-found: error
+          retention-days: 1
+
+      # https://github.com/docker/build-push-action/issues/252
+      # https://github.com/moby/buildkit/issues/1896
+      - name: move cache
+        run: |
+          rm -rf ${{ runner.temp }}/.buildx-cache
+          mv ${{ runner.temp }}/.buildx-cache-new ${{ runner.temp }}/.buildx-cache
+
+  push-manifest:
+    if: inputs.push || startsWith(github.ref, 'refs/tags/v') || github.ref_name ==
+      github.event.repository.default_branch
+    needs:
+      - build
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        target:
+          - webapp
+          - api
+    steps:
+      - name: set up builx
+        uses: docker/setup-buildx-action@v3
+
+      - name: download digests
+        uses: actions/download-artifact@v4
+        with:
+          path: ${{ runner.temp }}/digests
+          pattern: digests-*-${{ matrix.target }}
+          merge-multiple: true
+
+      - name: log-in to ghcr
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: get image metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/ferrislabs/mestier-${{ matrix.target }}
+          tags: |
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=semver,pattern={{major}}
+            type=ref,event=pr
+            type=sha
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - name: push manifest
+        working-directory: ${{ runner.temp }}/digests
+        run: |
+          docker buildx imagetools create $(jq -cr '.tags | map("-t " + .) | join(" ")' <<< "$DOCKER_METADATA_OUTPUT_JSON") $(printf 'ghcr.io/ferrislabs/mestier-${{ matrix.target }}@sha256:%s ' *)

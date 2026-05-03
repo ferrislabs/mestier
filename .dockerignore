@@ -1,0 +1,22 @@
+target/
+**/target/
+**/node_modules/
+**/dist/
+.git/
+.github/
+.vscode/
+.idea/
+.DS_Store
+*.log
+
+# Build artefacts the image rebuilds itself
+apps/webapp/dist/
+apps/webapp/node_modules/
+
+# Local-only files
+.env
+.env.*
+!.env.example
+
+# Editor/CI noise
+.claude/

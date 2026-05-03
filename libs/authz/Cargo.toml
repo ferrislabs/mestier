@@ -1,0 +1,22 @@
+[package]
+name = "authz"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+
+[dependencies]
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+mockall = { workspace = true, optional = true }
+
+[dev-dependencies]
+mockall = { workspace = true }
+tokio = { workspace = true, features = ["macros", "rt"] }
+
+[features]
+# Generates `MockAuthorizer` for downstream crates' tests. In-crate tests
+# inside `authz` itself get the mock via `cfg(test)` without enabling the
+# feature.
+mock = ["dep:mockall"]

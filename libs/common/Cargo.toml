@@ -1,0 +1,10 @@
+[package]
+name = "common"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+
+[dependencies]
+thiserror = { workspace = true }
+chrono = { workspace = true }
+uuid = { workspace = true }

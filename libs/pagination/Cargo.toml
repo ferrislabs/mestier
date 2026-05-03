@@ -1,0 +1,12 @@
+[package]
+name = "pagination"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+
+[dependencies]
+serde = { workspace = true }
+utoipa = { workspace = true }
+
+[dev-dependencies]
+serde_json = { workspace = true }

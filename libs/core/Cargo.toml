@@ -1,0 +1,26 @@
+[package]
+name = "mestier-core"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+
+[dependencies]
+common = { workspace = true }
+auth = { workspace = true }
+authz = { workspace = true }
+mestier-macros = { workspace = true }
+rate-limit = { workspace = true }
+
+uuid = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+utoipa = { workspace = true }
+chrono = { workspace = true }
+sqlx = { workspace = true }
+tokio = { workspace = true, features = ["sync"] }
+tracing = { workspace = true }
+
+[dev-dependencies]
+authz = { workspace = true, features = ["mock"] }
+mockall = { workspace = true }
+tokio = { workspace = true }
