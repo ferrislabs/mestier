@@ -1,7 +1,7 @@
 use aws_credential_types::Credentials;
 use aws_sdk_s3::{
     Client,
-    config::{Builder as S3ConfigBuilder, Region},
+    config::{BehaviorVersion, Builder as S3ConfigBuilder, Region},
     primitives::ByteStream,
 };
 use common::{CoreError, FileStorageConfig};
@@ -27,6 +27,7 @@ impl S3FileStorage {
             "mestier",
         );
         let s3_config = S3ConfigBuilder::new()
+            .behavior_version(BehaviorVersion::latest())
             .region(Region::new(config.region.clone()))
             .endpoint_url(config.endpoint.clone())
             .credentials_provider(credentials)
