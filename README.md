@@ -40,6 +40,8 @@ Exposed ports on the host:
 | Service              | Port        | Notes                                          |
 | -------------------- | ----------- | ---------------------------------------------- |
 | PostgreSQL           | 5433        | mapped to container `5432` (avoid clash)       |
+| RustFS S3 API        | 9000        | file storage endpoint                          |
+| RustFS Console       | 9001        | http://localhost:9001                          |
 | OTLP gRPC            | 4317        | matches `OTLP_ENDPOINT` in `.env`              |
 | OTLP HTTP            | 4318        |                                                |
 | SigNoz UI            | 8080        | http://localhost:8080                          |
@@ -68,6 +70,20 @@ Common flags / env vars (see `libs/args/src/`):
 | `ACTIVE_OBSERVABILITY` | `--active-observability`   | `false`                            |
 | `OTLP_ENDPOINT`        | `--otlp-endpoint`          | `http://localhost:4317`            |
 | `METRICS_ENDPOINT`     | `--metrics-endpoint`       | `http://localhost:4317`            |
+
+File storage defaults target the local RustFS service:
+
+| Env                              | Flag                                   | Default                 |
+| -------------------------------- | -------------------------------------- | ----------------------- |
+| `FILE_STORAGE_BUCKET`            | `--file-storage-bucket`                | `mestier-files`         |
+| `FILE_STORAGE_ENDPOINT`          | `--file-storage-endpoint`              | `http://localhost:9000` |
+| `FILE_STORAGE_REGION`            | `--file-storage-region`                | `us-east-1`             |
+| `FILE_STORAGE_ACCESS_KEY_ID`     | `--file-storage-access-key-id`         | `rustfsadmin`           |
+| `FILE_STORAGE_SECRET_ACCESS_KEY` | `--file-storage-secret-access-key`     | `rustfsadmin`           |
+| `FILE_STORAGE_FORCE_PATH_STYLE`  | `--file-storage-force-path-style`      | `true`                  |
+| `FILE_STORAGE_AUTO_CREATE_BUCKET` | `--file-storage-auto-create-bucket`   | `true`                  |
+| `FILE_STORAGE_KEY_PREFIX`        | `--file-storage-key-prefix`            | `uploads`               |
+| `FILE_STORAGE_MAX_UPLOAD_BYTES`  | `--file-storage-max-upload-bytes`      | `10485760`              |
 
 ## Database migrations
 

@@ -90,6 +90,22 @@ services:
       timeout: 3s
       retries: 5
 
+  rustfs:
+    <<: *common
+    image: rustfs/rustfs:latest
+    command: /data
+    environment:
+      RUSTFS_ACCESS_KEY: rustfsadmin
+      RUSTFS_SECRET_KEY: rustfsadmin
+      RUSTFS_CONSOLE_ENABLE: "true"
+      RUSTFS_ADDRESS: ":9000"
+      RUSTFS_REGION: us-east-1
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - rustfs-data:/data
+
   init-clickhouse:
     <<: *common
     image: clickhouse/clickhouse-server:25.5.6
@@ -201,6 +217,7 @@ networks:
 volumes:
   postgres-data:
   redis-data:
+  rustfs-data:
   clickhouse:
     name: signoz-clickhouse
   sqlite:

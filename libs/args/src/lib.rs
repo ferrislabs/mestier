@@ -2,12 +2,13 @@ use clap::Parser;
 use common::Config;
 
 use crate::{
-    auth::AuthArgs, database::DatabaseArgs, log::LogArgs, observability::ObservabilityArgs,
-    rate_limit::RateLimitArgs, server::ServerArgs,
+    auth::AuthArgs, database::DatabaseArgs, file_storage::FileStorageArgs, log::LogArgs,
+    observability::ObservabilityArgs, rate_limit::RateLimitArgs, server::ServerArgs,
 };
 
 pub mod auth;
 pub mod database;
+pub mod file_storage;
 pub mod log;
 pub mod observability;
 pub mod rate_limit;
@@ -32,6 +33,9 @@ pub struct Args {
 
     #[command(flatten)]
     pub rate_limit: RateLimitArgs,
+
+    #[command(flatten)]
+    pub file_storage: FileStorageArgs,
 }
 
 impl From<Args> for Config {
@@ -40,6 +44,7 @@ impl From<Args> for Config {
             auth: value.auth.into(),
             database: value.db.into(),
             rate_limit: value.rate_limit.into(),
+            file_storage: value.file_storage.into(),
         }
     }
 }

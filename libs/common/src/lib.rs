@@ -7,6 +7,7 @@ pub struct Config {
     pub database: DatabaseConfig,
     pub auth: AuthConfig,
     pub rate_limit: RateLimitConfig,
+    pub file_storage: FileStorageConfig,
 }
 
 #[derive(Clone, Debug)]
@@ -27,6 +28,19 @@ pub struct DatabaseConfig {
 #[derive(Clone, Debug)]
 pub struct AuthConfig {
     pub issuer: String,
+}
+
+#[derive(Clone, Debug)]
+pub struct FileStorageConfig {
+    pub bucket: String,
+    pub endpoint: String,
+    pub region: String,
+    pub access_key_id: String,
+    pub secret_access_key: String,
+    pub force_path_style: bool,
+    pub auto_create_bucket: bool,
+    pub key_prefix: String,
+    pub max_upload_bytes: u64,
 }
 
 #[derive(Debug, Error)]

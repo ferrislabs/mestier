@@ -3,6 +3,7 @@ use utoipa::{
     openapi::security::{HttpAuthScheme, HttpBuilder, SecurityScheme},
 };
 
+use handlers_files as files;
 use handlers_organization as organization;
 
 pub struct SecurityAddon;
@@ -26,6 +27,7 @@ impl Modify for SecurityAddon {
 #[openapi(
     info(title = "Mestier API", description = "API for Mestier", version = "0.1.0"),
     paths(
+        files::upload::handler,
         organization::create::handler,
         organization::list::handler,
         organization::list_mine::handler,
@@ -37,10 +39,12 @@ impl Modify for SecurityAddon {
         organization::create::CreateOrganizationRequest,
         organization::update::UpdateOrganizationRequest,
         organization::response::OrganizationResponse,
+        files::response::FileUploadResponse,
     )),
     modifiers(&SecurityAddon),
     tags(
         (name = "organizations", description = "Organizations management"),
+        (name = "files", description = "File uploads and storage"),
     )
 )]
 pub struct ApiDoc;
