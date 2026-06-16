@@ -5,7 +5,9 @@ use rate_limit::{Quota, RateLimitService, RedisRateLimiter};
 use sqlx::PgPool;
 use sqlx::postgres::PgPoolOptions;
 
+use crate::domain::file_storage::service::FileStorageService;
 use crate::domain::role::Permissions;
+use crate::infrastructure::file_storage::S3FileStorage;
 use crate::infrastructure::postgres::error::map_sqlx_error;
 
 pub mod member;
@@ -15,6 +17,7 @@ pub mod role;
 pub mod user;
 
 pub type MestierAuthService = AuthService<FerrisKeyRepository>;
+pub type MestierFileStorageService = FileStorageService<S3FileStorage>;
 pub type MestierRateLimitService = RateLimitService<RedisRateLimiter>;
 
 /// In-process Policy Decision Point used by Mestier's services. Aliased so
@@ -51,6 +54,7 @@ impl MestierUseCase {
 #[derive(Clone)]
 pub struct MestierService {
     pub auth: MestierAuthService,
+    pub file_storage: MestierFileStorageService,
     pub usecase: MestierUseCase,
     pub rate_limit: MestierRateLimitService,
     pub rate_limit_quota: Quota,
@@ -59,12 +63,14 @@ pub struct MestierService {
 impl MestierService {
     pub fn new(
         auth: MestierAuthService,
+        file_storage: MestierFileStorageService,
         usecase: MestierUseCase,
         rate_limit: MestierRateLimitService,
         rate_limit_quota: Quota,
     ) -> Self {
         Self {
             auth,
+            file_storage,
             usecase,
             rate_limit,
             rate_limit_quota,
@@ -75,6 +81,11 @@ impl MestierService {
 pub async fn create_service(config: Config) -> Result<MestierService, CoreError> {
     let auth_repo = FerrisKeyRepository::new(config.auth.issuer, None);
     let auth = AuthService::new(auth_repo);
+    let s3_storage = S3FileStorage::from_config(&config.file_storage);
+    if config.file_storage.auto_create_bucket {
+        s3_storage.ensure_bucket().await?;
+    }
+    let file_storage = FileStorageService::new(s3_storage, config.file_storage.key_prefix);
 
     let db_url = format!(
         "postgres://{}:{}@{}:{}/{}",
@@ -97,6 +108,7 @@ pub async fn create_service(config: Config) -> Result<MestierService, CoreError>
 
     Ok(MestierService::new(
         auth,
+        file_storage,
         MestierUseCase::new(pool, default_authorizer()),
         rate_limit,
         rate_limit_quota,

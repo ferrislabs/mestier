@@ -1,3 +1,4 @@
+pub mod file_storage;
 pub mod member;
 pub mod organization;
 pub mod postgres;

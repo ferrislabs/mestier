@@ -19,6 +19,9 @@ chrono = { workspace = true }
 sqlx = { workspace = true }
 tokio = { workspace = true, features = ["sync"] }
 tracing = { workspace = true }
+aws-credential-types = { workspace = true }
+aws-sdk-s3 = { workspace = true }
+bytes = { workspace = true }
 
 [dev-dependencies]
 authz = { workspace = true, features = ["mock"] }

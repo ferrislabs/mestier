@@ -6,7 +6,9 @@ pub mod infrastructure;
 
 pub use application::*;
 pub use domain::{
-    Member, MemberId, Organization, OrganizationId, Permissions, Role, RoleId, User, UserId,
+    FileObject, Member, MemberId, Organization, OrganizationId, Permissions, Role, RoleId,
+    StoredFile, User, UserId,
+    file_storage::commands::UploadFileCommand,
     organization::commands::{CreateOrganizationCommand, UpdateOrganizationCommand},
     user::commands::CreateUserCommand,
 };

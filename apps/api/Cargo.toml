@@ -6,6 +6,7 @@ edition.workspace = true
 
 [dependencies]
 handlers = { workspace = true }
+handlers-files = { workspace = true }
 handlers-organization = { workspace = true }
 server = { workspace = true }
 args = { workspace = true }

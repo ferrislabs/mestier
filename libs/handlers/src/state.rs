@@ -1,5 +1,8 @@
 use common::Config;
-use mestier_core::{MestierAuthService, MestierRateLimitService, MestierUseCase, create_service};
+use mestier_core::{
+    MestierAuthService, MestierFileStorageService, MestierRateLimitService, MestierUseCase,
+    create_service,
+};
 use rate_limit::Quota;
 use server::errors::ServerError;
 use std::sync::Arc;
@@ -11,6 +14,7 @@ pub struct AppState {
     pub args: Arc<Args>,
 
     pub auth: MestierAuthService,
+    pub file_storage: MestierFileStorageService,
     pub usecase: MestierUseCase,
     pub rate_limit: MestierRateLimitService,
     pub rate_limit_quota: Quota,
@@ -24,6 +28,7 @@ pub async fn state(args: Arc<Args>) -> Result<AppState, ServerError> {
     Ok(AppState {
         args,
         auth: service.auth,
+        file_storage: service.file_storage,
         usecase: service.usecase,
         rate_limit: service.rate_limit,
         rate_limit_quota: service.rate_limit_quota,
