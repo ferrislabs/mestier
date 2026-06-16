@@ -10,10 +10,13 @@ use crate::domain::role::Permissions;
 use crate::infrastructure::file_storage::S3FileStorage;
 use crate::infrastructure::postgres::error::map_sqlx_error;
 
+pub mod employee;
+pub mod equipment;
 pub mod member;
 pub mod organization;
 pub mod policy;
 pub mod role;
+pub mod service_rate;
 pub mod user;
 
 pub type MestierAuthService = AuthService<FerrisKeyRepository>;
