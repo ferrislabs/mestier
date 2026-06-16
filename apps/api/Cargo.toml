@@ -8,6 +8,7 @@ edition.workspace = true
 handlers = { workspace = true }
 handlers-files = { workspace = true }
 handlers-organization = { workspace = true }
+handlers-reference = { workspace = true }
 server = { workspace = true }
 args = { workspace = true }
 

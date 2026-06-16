@@ -1,7 +1,7 @@
 use std::{fmt::Display, str::FromStr};
 
 use chrono::{DateTime, Utc};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 use uuid::Uuid;
 
@@ -9,7 +9,7 @@ pub mod commands;
 pub mod ports;
 pub mod service;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, ToSchema)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, ToSchema)]
 pub struct UserId(pub Uuid);
 
 impl FromStr for UserId {

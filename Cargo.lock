@@ -99,6 +99,7 @@ dependencies = [
  "handlers",
  "handlers-files",
  "handlers-organization",
+ "handlers-reference",
  "http 1.4.0",
  "opentelemetry",
  "opentelemetry-appender-tracing",
@@ -2107,6 +2108,22 @@ dependencies = [
 
 [[package]]
 name = "handlers-organization"
+version = "0.1.0"
+dependencies = [
+ "auth",
+ "axum",
+ "axum-extra",
+ "chrono",
+ "handlers",
+ "http 1.4.0",
+ "mestier-core",
+ "serde",
+ "tracing",
+ "utoipa",
+]
+
+[[package]]
+name = "handlers-reference"
 version = "0.1.0"
 dependencies = [
  "auth",

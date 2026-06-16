@@ -12,6 +12,7 @@ use utoipa_swagger_ui::SwaggerUi;
 use handlers::{ApiError, AppState};
 use handlers_files as files;
 use handlers_organization as organization;
+use handlers_reference as reference;
 
 use crate::openapi::ApiDoc;
 
@@ -66,6 +67,7 @@ pub fn router(state: AppState) -> Result<Router, ApiError> {
     let router = Router::new()
         .merge(files::router(&state))
         .merge(organization::router(&state))
+        .merge(reference::router(&state))
         .merge(Scalar::with_url("/scalar", openapi.clone()))
         .merge(SwaggerUi::new("/swagger").url("/api-docs/openapi.json", openapi.clone()))
         .layer(trace_layer)
