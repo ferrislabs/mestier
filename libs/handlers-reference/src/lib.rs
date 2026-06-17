@@ -1,9 +1,7 @@
 use auth::Identity;
 use axum::{Router, middleware::from_fn_with_state};
 use axum_extra::routing::RouterExt;
-use handlers::{
-    ApiError, AppState, IdentityExt, auth::auth_middleware, rate_limit::rate_limit_middleware,
-};
+use handlers::{ApiError, AppState, auth::auth_middleware, rate_limit::rate_limit_middleware};
 use mestier_core::OrganizationId;
 
 pub mod employee;
@@ -22,10 +20,14 @@ async fn require_org_membership(
     identity: &Identity,
     organization_id: OrganizationId,
 ) -> Result<(), ApiError> {
-    let user_id = identity.user_id()?;
+    let user = state
+        .usecase
+        .find_user_by_sub(identity.id())
+        .await?
+        .ok_or(ApiError::Forbidden)?;
     let membership = state
         .usecase
-        .find_membership(organization_id, user_id)
+        .find_membership(organization_id, user.id)
         .await?;
 
     if membership.is_none() {

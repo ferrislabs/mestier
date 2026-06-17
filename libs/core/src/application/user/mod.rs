@@ -19,4 +19,10 @@ impl MestierUseCase {
         let mut service = UserService::new(user_repository);
         service.find_by_email(email).await
     }
+
+    #[transactional(user)]
+    pub async fn find_user_by_sub(&self, sub: &str) -> Result<Option<User>, CoreError> {
+        let mut service = UserService::new(user_repository);
+        service.find_by_sub(sub).await
+    }
 }

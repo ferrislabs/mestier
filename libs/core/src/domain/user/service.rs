@@ -39,6 +39,10 @@ where
     pub async fn find_by_email(&mut self, email: &str) -> Result<Option<User>, CoreError> {
         self.repo.find_by_email(email).await
     }
+
+    pub async fn find_by_sub(&mut self, sub: &str) -> Result<Option<User>, CoreError> {
+        self.repo.find_by_sub(sub).await
+    }
 }
 
 #[cfg(test)]
@@ -88,5 +92,19 @@ mod tests {
 
         let err = service.create_user(cmd()).await.unwrap_err();
         assert!(matches!(err, CoreError::Database(_)));
+    }
+
+    #[tokio::test]
+    async fn find_by_sub_delegates_to_repo() {
+        let mut repo = MockUserRepository::new();
+        repo.expect_find_by_sub()
+            .with(mockall::predicate::eq("sub-1"))
+            .times(1)
+            .returning(|_| Box::pin(async { Ok(None) }));
+
+        let mut service = UserService::new(repo);
+        let user = service.find_by_sub("sub-1").await.unwrap();
+
+        assert!(user.is_none());
     }
 }
