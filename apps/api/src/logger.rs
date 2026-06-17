@@ -117,7 +117,7 @@ pub fn init_tracing_and_logging(
             "observability enabled: exporting traces, metrics and logs via OTLP/gRPC"
         );
     } else {
-        let subscriber = Registry::default().with(fmt_layer);
+        let subscriber = Registry::default().with(fmt_layer).with(filter);
 
         subscriber.init();
 

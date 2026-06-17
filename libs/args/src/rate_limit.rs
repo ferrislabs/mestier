@@ -15,7 +15,7 @@ pub struct RateLimitArgs {
         long = "rate-limit-per-minute",
         env = "RATE_LIMIT_PER_MINUTE",
         name = "RATE_LIMIT_PER_MINUTE",
-        default_value_t = 10,
+        default_value_t = 120,
         long_help = "Allowed requests per minute per client IP"
     )]
     pub per_minute: u32,
@@ -45,7 +45,7 @@ mod tests {
     fn parse_defaults() {
         let cmd = Cmd::try_parse_from(["cmd"]).unwrap();
         assert_eq!(cmd.rate_limit.redis_url, "redis://localhost:6379");
-        assert_eq!(cmd.rate_limit.per_minute, 10);
+        assert_eq!(cmd.rate_limit.per_minute, 120);
     }
 
     #[test]
