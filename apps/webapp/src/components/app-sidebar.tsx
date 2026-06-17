@@ -35,7 +35,7 @@ const coreItems: NavItem[] = [
 ]
 
 const configItems: NavItem[] = [
-	{ title: 'Paramètres', to: '/customers', icon: Settings, disabled: true },
+	{ title: 'Paramètres', to: '/settings', icon: Settings },
 	{ title: 'Intégrations', to: '/customers', icon: Link2, disabled: true },
 	{ title: 'Rapports', to: '/customers', icon: BarChart3, disabled: true },
 ]
