@@ -1,8 +1,9 @@
-use axum::extract::State;
+use auth::Identity;
+use axum::{Extension, extract::State};
 use handlers::{ApiError, AppState, DataEnvelope, Response};
 use mestier_core::OrganizationId;
 
-use crate::{paths::OrganizationPath, response::OrganizationResponse};
+use crate::{paths::OrganizationPath, require_org_membership, response::OrganizationResponse};
 
 #[utoipa::path(
     get,
@@ -21,10 +22,13 @@ use crate::{paths::OrganizationPath, response::OrganizationResponse};
     security(("bearer_auth" = []))
 )]
 pub async fn handler(
-    OrganizationPath {
-        organization_id: _organization_id,
-    }: OrganizationPath,
-    State(_state): State<AppState>,
+    OrganizationPath { organization_id }: OrganizationPath,
+    State(state): State<AppState>,
+    Extension(identity): Extension<Identity>,
 ) -> Result<Response<OrganizationResponse>, ApiError> {
-    todo!("get organization by id")
+    require_org_membership(&state, &identity, organization_id).await?;
+
+    let organization = state.usecase.get_organization(organization_id).await?;
+
+    Ok(Response::OK(organization.into()))
 }

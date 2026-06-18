@@ -73,7 +73,7 @@ export function AppSidebar(props: React.ComponentProps<typeof Sidebar>) {
 				</SidebarMenu>
 			</SidebarHeader>
 			<SidebarContent>
-				<NavMain label="Core" items={coreItems} />
+				<NavMain label="Activité" items={coreItems} />
 				<NavMain label="Configuration" items={configItems} />
 				<NavMain label="Sécurité" items={securityItems} />
 			</SidebarContent>

@@ -6,6 +6,7 @@ import {
 } from '@tanstack/react-table'
 import {
 	BriefcaseBusiness,
+	Building2,
 	CircleDollarSign,
 	Loader2,
 	MoreHorizontal,
@@ -44,6 +45,7 @@ import {
 	SectionHeader,
 	StatusBadge,
 } from '#/components/ui/surface'
+import type { Organization } from '#/hooks/use-organizations'
 import type {
 	Employee,
 	Equipment,
@@ -53,16 +55,18 @@ import type {
 import type {
 	EmployeeFormValues,
 	EquipmentFormValues,
+	OrganizationFormValues,
 	ReferenceCatalogData,
 	ReferenceTab,
 	ServiceRateFormValues,
 } from '#/pages/settings/types'
 
 interface SettingsUIProps {
-	organizationName: string
+	organization: Organization
 	isLoading: boolean
 	error: string | null
 	data: ReferenceCatalogData
+	organizationForm: FormBinding<OrganizationFormValues>
 	employeeForm: FormBinding<EmployeeFormValues>
 	equipmentForm: FormBinding<EquipmentFormValues>
 	serviceRateForm: FormBinding<ServiceRateFormValues>
@@ -113,10 +117,11 @@ const UNIT_LABELS: Record<ServiceRateUnit, string> = {
 }
 
 export function SettingsUI({
-	organizationName,
+	organization,
 	isLoading,
 	error,
 	data,
+	organizationForm,
 	employeeForm,
 	equipmentForm,
 	serviceRateForm,
@@ -179,9 +184,14 @@ export function SettingsUI({
 	return (
 		<PageShell>
 			<PageHeader
-				eyebrow={organizationName}
+				eyebrow={organization.name}
 				title="Paramètres"
-				description="Référentiel des coûts utilisé pour les devis, la planification et la rentabilité."
+				description="Configurez l’espace de travail, les équipes, les ressources et les tarifs utilisés par vos opérations."
+			/>
+
+			<OrganizationSection
+				organization={organization}
+				form={organizationForm}
 			/>
 
 			<div className="grid grid-cols-1 gap-4 md:grid-cols-3">
@@ -194,13 +204,13 @@ export function SettingsUI({
 				<MetricCard
 					label="Matériel"
 					value={data.equipment.length}
-					hint="Coûts horaires disponibles"
+					hint="Ressources facturables"
 					icon={<Package className="size-4" />}
 				/>
 				<MetricCard
 					label="Coût horaire"
 					value={formatMoney(totalHourlyCost)}
-					hint="Employés + matériel"
+					hint="Équipes + ressources"
 					icon={<CircleDollarSign className="size-4" />}
 				/>
 			</div>
@@ -338,12 +348,68 @@ export function SettingsUI({
 	)
 }
 
+interface OrganizationSectionProps {
+	organization: Organization
+	form: FormBinding<OrganizationFormValues>
+}
+
+function OrganizationSection({ organization, form }: OrganizationSectionProps) {
+	const hasChanges =
+		form.values.name.trim() !== organization.name ||
+		form.values.slug.trim() !== organization.slug
+
+	return (
+		<SectionCard>
+			<SectionHeader
+				title="Organisation"
+				description="Informations visibles dans l’application et utilisées pour identifier l’espace de travail."
+				actions={
+					<StatusBadge tone="brand">
+						<Building2 className="mr-1 size-3" />
+						{organization.slug}
+					</StatusBadge>
+				}
+			/>
+			<div className="grid grid-cols-1 gap-4 p-5 lg:grid-cols-[1fr_auto] lg:items-end">
+				<div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+					<TextField
+						label="Nom"
+						value={form.values.name}
+						onChange={(name) => form.onChange({ name })}
+						placeholder="Nom de l’entreprise"
+					/>
+					<TextField
+						label="Identifiant"
+						value={form.values.slug}
+						onChange={(slug) => form.onChange({ slug: normalizeSlug(slug) })}
+						placeholder="mon-entreprise"
+						className="font-mono text-sm"
+					/>
+				</div>
+				<Button
+					type="button"
+					onClick={form.onSubmit}
+					disabled={form.isPending || !hasChanges}
+					className="gap-2"
+				>
+					{form.isPending ? (
+						<Loader2 className="size-4 animate-spin" />
+					) : (
+						<Save className="size-4" />
+					)}
+					Enregistrer
+				</Button>
+			</div>
+		</SectionCard>
+	)
+}
+
 SettingsUI.Loading = function SettingsLoading() {
 	return (
 		<PageShell>
 			<SectionCard className="flex min-h-72 items-center justify-center gap-3 p-8 text-sm text-muted-foreground">
 				<Loader2 className="size-5 animate-spin" />
-				Chargement du référentiel…
+				Chargement des paramètres…
 			</SectionCard>
 		</PageShell>
 	)
@@ -464,6 +530,15 @@ function CreateReferenceSection({
 			</div>
 		</SectionCard>
 	)
+}
+
+function normalizeSlug(value: string): string {
+	return value
+		.toLowerCase()
+		.trim()
+		.replace(/\s+/g, '-')
+		.replace(/[^a-z0-9-]/g, '')
+		.replace(/-{2,}/g, '-')
 }
 
 interface EmployeeTableProps {

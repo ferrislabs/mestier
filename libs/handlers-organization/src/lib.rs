@@ -1,6 +1,8 @@
+use auth::Identity;
 use axum::{Router, middleware::from_fn_with_state, routing::get};
 use axum_extra::routing::TypedPath;
-use handlers::{AppState, auth::auth_middleware, rate_limit::rate_limit_middleware};
+use handlers::{ApiError, AppState, auth::auth_middleware, rate_limit::rate_limit_middleware};
+use mestier_core::{OrganizationId, User};
 
 use crate::paths::{CurrentUserOrganizationsPath, OrganizationPath, OrganizationsPath};
 
@@ -14,6 +16,32 @@ pub mod soft_delete;
 pub mod update;
 
 pub const TAG: &str = "organizations";
+
+async fn resolve_identity_user(state: &AppState, identity: &Identity) -> Result<User, ApiError> {
+    state
+        .usecase
+        .find_user_by_sub(identity.id())
+        .await?
+        .ok_or(ApiError::Unauthorized)
+}
+
+async fn require_org_membership(
+    state: &AppState,
+    identity: &Identity,
+    organization_id: OrganizationId,
+) -> Result<User, ApiError> {
+    let user = resolve_identity_user(state, identity).await?;
+    let membership = state
+        .usecase
+        .find_membership(organization_id, user.id)
+        .await?;
+
+    if membership.is_none() {
+        return Err(ApiError::Forbidden);
+    }
+
+    Ok(user)
+}
 
 pub fn router(state: &AppState) -> Router<AppState> {
     Router::new()

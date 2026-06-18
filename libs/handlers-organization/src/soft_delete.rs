@@ -1,9 +1,10 @@
-use axum::extract::State;
+use auth::Identity;
+use axum::{Extension, extract::State};
 use handlers::{ApiError, AppState};
 use http::StatusCode;
 use mestier_core::OrganizationId;
 
-use crate::paths::OrganizationPath;
+use crate::{paths::OrganizationPath, require_org_membership};
 
 #[utoipa::path(
     delete,
@@ -22,10 +23,21 @@ use crate::paths::OrganizationPath;
     security(("bearer_auth" = []))
 )]
 pub async fn handler(
-    OrganizationPath {
-        organization_id: _organization_id,
-    }: OrganizationPath,
-    State(_state): State<AppState>,
+    OrganizationPath { organization_id }: OrganizationPath,
+    State(state): State<AppState>,
+    Extension(identity): Extension<Identity>,
 ) -> Result<StatusCode, ApiError> {
-    todo!("soft delete organization")
+    let user = require_org_membership(&state, &identity, organization_id).await?;
+    let organization = state.usecase.get_organization(organization_id).await?;
+
+    if organization.owner_id != user.id {
+        return Err(ApiError::Forbidden);
+    }
+
+    state
+        .usecase
+        .soft_delete_organization(organization_id)
+        .await?;
+
+    Ok(StatusCode::NO_CONTENT)
 }
