@@ -6,6 +6,7 @@ use utoipa::{
 use handlers_customer as customer;
 use handlers_files as files;
 use handlers_organization as organization;
+use handlers_quote as quote;
 use handlers_reference as reference;
 
 pub struct SecurityAddon;
@@ -46,6 +47,13 @@ impl Modify for SecurityAddon {
         organization::get_one::handler,
         organization::update::handler,
         organization::soft_delete::handler,
+        quote::quote::create::handler,
+        quote::quote::list::handler,
+        quote::quote::get_one::handler,
+        quote::quote::update::handler,
+        quote::quote::update_status::handler,
+        quote::quote::soft_delete::handler,
+        quote::quote::export_pdf::handler,
         reference::employee::create::handler,
         reference::employee::list::handler,
         reference::employee::get_one::handler,
@@ -73,6 +81,12 @@ impl Modify for SecurityAddon {
         customer::property::update::UpdatePropertyRequest,
         customer::response::CustomerResponse,
         customer::response::PropertyResponse,
+        quote::quote::create::CreateQuoteRequest,
+        quote::quote::create::QuoteLineRequest,
+        quote::quote::update::UpdateQuoteRequest,
+        quote::quote::update_status::UpdateQuoteStatusRequest,
+        quote::response::QuoteLineResponse,
+        quote::response::QuoteResponse,
         reference::employee::create::CreateEmployeeRequest,
         reference::employee::update::UpdateEmployeeRequest,
         reference::equipment::create::CreateEquipmentRequest,
@@ -88,6 +102,7 @@ impl Modify for SecurityAddon {
         (name = "organizations", description = "Organizations management"),
         (name = "files", description = "File uploads and storage"),
         (name = "customers", description = "Customers and properties management"),
+        (name = "quotes", description = "Quotes and quote lines management"),
         (name = "reference", description = "Reference cost catalog"),
     )
 )]
