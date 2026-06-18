@@ -690,6 +690,7 @@ mod tests {
                     username: "user".into(),
                     name: "User".into(),
                     sub: s.to_owned(),
+                    deleted_at: None,
                     created_at: now,
                     updated_at: now,
                 };
@@ -741,6 +742,7 @@ mod tests {
                     username: "owner".into(),
                     name: "Owner".into(),
                     sub: s.to_owned(),
+                    deleted_at: None,
                     created_at: now,
                     updated_at: now,
                 };
@@ -823,6 +825,7 @@ mod tests {
                     username: "owner".into(),
                     name: "Owner".into(),
                     sub: s.to_owned(),
+                    deleted_at: None,
                     created_at: now,
                     updated_at: now,
                 };

@@ -2,7 +2,9 @@ use chrono::Utc;
 use common::{CoreError, generate_uuid_v7};
 
 use crate::{
-    User, UserId, domain::user::commands::CreateUserCommand, domain::user::ports::UserRepository,
+    User, UserId,
+    domain::user::commands::{CreateUserCommand, UpsertUserBySubCommand},
+    domain::user::ports::UserRepository,
 };
 
 pub struct UserService<U>
@@ -29,6 +31,7 @@ where
             username: command.username,
             email: command.email,
             sub: command.sub,
+            deleted_at: None,
             created_at: now,
             updated_at: now,
         };
@@ -43,10 +46,29 @@ where
     pub async fn find_by_sub(&mut self, sub: &str) -> Result<Option<User>, CoreError> {
         self.repo.find_by_sub(sub).await
     }
+
+    #[tracing::instrument(skip(self), fields(user.sub = %command.sub, user.email = %command.email), err)]
+    pub async fn reconcile_upsert(
+        &mut self,
+        command: UpsertUserBySubCommand,
+    ) -> Result<User, CoreError> {
+        self.repo.upsert_by_sub(command).await
+    }
+
+    #[tracing::instrument(skip(self), fields(user.sub = %sub), err)]
+    pub async fn reconcile_deletion(&mut self, sub: &str) -> Result<(), CoreError> {
+        self.repo.soft_delete_by_sub(sub).await
+    }
+
+    pub async fn list(&mut self) -> Result<Vec<User>, CoreError> {
+        self.repo.list_active().await
+    }
 }
 
 #[cfg(test)]
 mod tests {
+    use uuid::Uuid;
+
     use super::*;
     use crate::domain::user::ports::MockUserRepository;
 
@@ -56,6 +78,29 @@ mod tests {
             username: "alice".into(),
             email: "alice@example.com".into(),
             sub: "sub-1".into(),
+        }
+    }
+
+    fn make_user() -> User {
+        let now = Utc::now();
+        User {
+            id: UserId(Uuid::new_v4()),
+            email: "alice@example.com".into(),
+            username: "alice".into(),
+            name: "Alice".into(),
+            sub: "sub-1".into(),
+            deleted_at: None,
+            created_at: now,
+            updated_at: now,
+        }
+    }
+
+    fn upsert_cmd() -> UpsertUserBySubCommand {
+        UpsertUserBySubCommand {
+            sub: "sub-1".into(),
+            email: "alice@example.com".into(),
+            username: "alice".into(),
+            name: Some("Alice".into()),
         }
     }
 
@@ -69,6 +114,7 @@ mod tests {
                 username: u.username.clone(),
                 name: u.name.clone(),
                 sub: u.sub.clone(),
+                deleted_at: u.deleted_at,
                 created_at: u.created_at,
                 updated_at: u.updated_at,
             };
@@ -106,5 +152,56 @@ mod tests {
         let user = service.find_by_sub("sub-1").await.unwrap();
 
         assert!(user.is_none());
+    }
+
+    #[tokio::test]
+    async fn reconcile_upsert_delegates_to_repo() {
+        let mut repo = MockUserRepository::new();
+        repo.expect_upsert_by_sub()
+            .times(1)
+            .returning(|_| Box::pin(async { Ok(make_user()) }));
+
+        let mut service = UserService::new(repo);
+        let user = service.reconcile_upsert(upsert_cmd()).await.unwrap();
+
+        assert_eq!(user.sub, "sub-1");
+        assert!(user.deleted_at.is_none());
+    }
+
+    #[tokio::test]
+    async fn reconcile_deletion_delegates_to_repo() {
+        let mut repo = MockUserRepository::new();
+        repo.expect_soft_delete_by_sub()
+            .with(mockall::predicate::eq("sub-1"))
+            .times(1)
+            .returning(|_| Box::pin(async { Ok(()) }));
+
+        let mut service = UserService::new(repo);
+        service.reconcile_deletion("sub-1").await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn reconcile_deletion_propagates_not_found() {
+        let mut repo = MockUserRepository::new();
+        repo.expect_soft_delete_by_sub()
+            .returning(|_| Box::pin(async { Err(CoreError::NotFound) }));
+
+        let mut service = UserService::new(repo);
+        let err = service.reconcile_deletion("sub-ghost").await.unwrap_err();
+        assert!(matches!(err, CoreError::NotFound));
+    }
+
+    #[tokio::test]
+    async fn list_delegates_to_repo() {
+        let mut repo = MockUserRepository::new();
+        repo.expect_list_active()
+            .times(1)
+            .returning(|| Box::pin(async { Ok(vec![make_user()]) }));
+
+        let mut service = UserService::new(repo);
+        let users = service.list().await.unwrap();
+
+        assert_eq!(users.len(), 1);
+        assert_eq!(users[0].sub, "sub-1");
     }
 }

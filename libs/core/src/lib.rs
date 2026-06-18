@@ -20,5 +20,5 @@ pub use domain::{
         CreateQuoteCommand, QuoteLineCommand, UpdateQuoteCommand, UpdateQuoteStatusCommand,
     },
     service_rate::commands::{CreateServiceRateCommand, UpdateServiceRateCommand},
-    user::commands::CreateUserCommand,
+    user::commands::{CreateUserCommand, UpsertUserBySubCommand},
 };

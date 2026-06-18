@@ -1,6 +1,7 @@
 use common::CoreError;
 
 use crate::User;
+use crate::domain::user::commands::UpsertUserBySubCommand;
 
 #[cfg_attr(test, mockall::automock)]
 pub trait UserRepository: Send {
@@ -18,4 +19,16 @@ pub trait UserRepository: Send {
         &mut self,
         sub: &str,
     ) -> impl Future<Output = Result<Option<User>, CoreError>> + Send;
+
+    fn upsert_by_sub(
+        &mut self,
+        command: UpsertUserBySubCommand,
+    ) -> impl Future<Output = Result<User, CoreError>> + Send;
+
+    fn soft_delete_by_sub(
+        &mut self,
+        sub: &str,
+    ) -> impl Future<Output = Result<(), CoreError>> + Send;
+
+    fn list_active(&mut self) -> impl Future<Output = Result<Vec<User>, CoreError>> + Send;
 }
