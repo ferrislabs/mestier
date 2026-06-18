@@ -17,6 +17,7 @@ pub mod member;
 pub mod organization;
 pub mod policy;
 pub mod property;
+pub mod quote;
 pub mod role;
 pub mod service_rate;
 pub mod user;
