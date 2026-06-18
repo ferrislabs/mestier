@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT id, email, username, display_name, sub, created_at, updated_at\n            FROM users\n            WHERE sub = $1\n            ",
+  "query": "\n            SELECT id, email, username, display_name, sub, deleted_at, created_at, updated_at\n            FROM users\n            WHERE deleted_at IS NULL\n            ORDER BY created_at ASC\n            ",
   "describe": {
     "columns": [
       {
@@ -30,19 +30,22 @@
       },
       {
         "ordinal": 5,
-        "name": "created_at",
+        "name": "deleted_at",
         "type_info": "Timestamptz"
       },
       {
         "ordinal": 6,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 7,
         "name": "updated_at",
         "type_info": "Timestamptz"
       }
     ],
     "parameters": {
-      "Left": [
-        "Text"
-      ]
+      "Left": []
     },
     "nullable": [
       false,
@@ -50,9 +53,10 @@
       false,
       false,
       false,
+      true,
       false,
       false
     ]
   },
-  "hash": "558ae3fb496c6ff52163266d715d3f8f7bb7f2e80ba626e86db29f9bb47c5a59"
+  "hash": "1a3a02cd7c79289d87a278569cd20acf64c8a16434ef06d1795345ddf86d8023"
 }
