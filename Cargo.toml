@@ -1,5 +1,5 @@
 [workspace]
-members = ["apps/api", "libs/args", "libs/auth", "libs/authz", "libs/common", "libs/core", "libs/handlers", "libs/handlers-files", "libs/handlers-organization", "libs/handlers-reference", "libs/iam", "libs/macros", "libs/pagination", "libs/rate-limit", "libs/server"]
+members = ["apps/api", "libs/args", "libs/auth", "libs/authz", "libs/common", "libs/core", "libs/handlers", "libs/handlers-customer", "libs/handlers-files", "libs/handlers-organization", "libs/handlers-reference", "libs/iam", "libs/macros", "libs/pagination", "libs/rate-limit", "libs/server"]
 resolver = "3"
 
 [workspace.package]
@@ -52,6 +52,7 @@ authz = { path = "libs/authz" }
 common = { path = "libs/common" }
 mestier-core = { path = "libs/core" }
 handlers = { path = "libs/handlers" }
+handlers-customer = { path = "libs/handlers-customer" }
 handlers-files = { path = "libs/handlers-files" }
 handlers-organization = { path = "libs/handlers-organization" }
 handlers-reference = { path = "libs/handlers-reference" }

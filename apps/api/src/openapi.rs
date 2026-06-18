@@ -3,6 +3,7 @@ use utoipa::{
     openapi::security::{HttpAuthScheme, HttpBuilder, SecurityScheme},
 };
 
+use handlers_customer as customer;
 use handlers_files as files;
 use handlers_organization as organization;
 use handlers_reference as reference;
@@ -29,6 +30,16 @@ impl Modify for SecurityAddon {
     info(title = "Mestier API", description = "API for Mestier", version = "0.1.0"),
     paths(
         files::upload::handler,
+        customer::customer::create::handler,
+        customer::customer::list::handler,
+        customer::customer::get_one::handler,
+        customer::customer::update::handler,
+        customer::customer::soft_delete::handler,
+        customer::property::create::handler,
+        customer::property::list::handler,
+        customer::property::get_one::handler,
+        customer::property::update::handler,
+        customer::property::soft_delete::handler,
         organization::create::handler,
         organization::list::handler,
         organization::list_mine::handler,
@@ -56,6 +67,12 @@ impl Modify for SecurityAddon {
         organization::update::UpdateOrganizationRequest,
         organization::response::OrganizationResponse,
         files::response::FileUploadResponse,
+        customer::customer::create::CreateCustomerRequest,
+        customer::customer::update::UpdateCustomerRequest,
+        customer::property::create::CreatePropertyRequest,
+        customer::property::update::UpdatePropertyRequest,
+        customer::response::CustomerResponse,
+        customer::response::PropertyResponse,
         reference::employee::create::CreateEmployeeRequest,
         reference::employee::update::UpdateEmployeeRequest,
         reference::equipment::create::CreateEquipmentRequest,
@@ -70,6 +87,7 @@ impl Modify for SecurityAddon {
     tags(
         (name = "organizations", description = "Organizations management"),
         (name = "files", description = "File uploads and storage"),
+        (name = "customers", description = "Customers and properties management"),
         (name = "reference", description = "Reference cost catalog"),
     )
 )]
