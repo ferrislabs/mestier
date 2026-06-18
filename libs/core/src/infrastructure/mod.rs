@@ -6,6 +6,7 @@ pub mod member;
 pub mod organization;
 pub mod postgres;
 pub mod property;
+pub mod quote;
 pub mod registry;
 pub mod role;
 pub mod service_rate;

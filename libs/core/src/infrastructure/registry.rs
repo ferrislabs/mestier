@@ -14,6 +14,7 @@ pub mod domain {
     pub struct Equipment;
     pub struct Organization;
     pub struct Property;
+    pub struct Quote;
     pub struct Role;
     pub struct Member;
     pub struct ServiceRate;

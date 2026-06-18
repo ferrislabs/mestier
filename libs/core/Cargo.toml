@@ -17,6 +17,7 @@ serde_json = { workspace = true }
 utoipa = { workspace = true }
 chrono = { workspace = true }
 sqlx = { workspace = true }
+rust_decimal = { workspace = true }
 tokio = { workspace = true, features = ["sync"] }
 tracing = { workspace = true }
 aws-credential-types = { workspace = true }
