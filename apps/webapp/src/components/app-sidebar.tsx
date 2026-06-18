@@ -29,7 +29,7 @@ import {
 const coreItems: NavItem[] = [
 	{ title: 'Accueil', to: '/', icon: LayoutDashboard, exact: true },
 	{ title: 'Clients', to: '/customers', icon: Users, badge: '3' },
-	{ title: 'Devis', to: '/customers', icon: FileText, disabled: true },
+	{ title: 'Devis', to: '/quotes', icon: FileText },
 	{ title: 'Factures', to: '/customers', icon: Receipt, disabled: true },
 	{ title: 'Stock', to: '/customers', icon: Package, disabled: true },
 ]

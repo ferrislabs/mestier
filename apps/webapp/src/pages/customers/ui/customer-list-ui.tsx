@@ -104,7 +104,7 @@ export function CustomerListUI({
 		<PageShell>
 			<PageHeader
 				title="Fichier client"
-				description="Gérez vos clients, leurs coordonnées et leurs sites associés."
+				description="Gérez vos clients, leurs coordonnées et leurs contextes associés."
 				actions={
 					<Button onClick={() => setShowCreate((value) => !value)}>
 						<Plus />

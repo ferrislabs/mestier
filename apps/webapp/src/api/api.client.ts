@@ -24,13 +24,29 @@ export namespace Schemas {
 		street: string
 		zip: string
 	}
+	export type CustomerId = string
+	export type ServiceRateId = string
 	export type ServiceRateUnit = 'HOUR' | 'ML' | 'M2'
+	export type QuoteLineRequest = {
+		label: string
+		notes?: (string | null) | undefined
+		photo_keys: Array<string>
+		quantity: string
+		service_rate_id?: (null | ServiceRateId) | undefined
+		unit: ServiceRateUnit
+		unit_price_cents: number
+	}
+	export type PropertyId = string
+	export type CreateQuoteRequest = {
+		customer_id: CustomerId
+		lines: Array<QuoteLineRequest>
+		property_id: PropertyId
+	}
 	export type CreateServiceRateRequest = {
 		label: string
 		rate_cents: number
 		unit: ServiceRateUnit
 	}
-	export type CustomerId = string
 	export type OrganizationId = string
 	export type CustomerResponse = {
 		created_at: string
@@ -84,7 +100,6 @@ export namespace Schemas {
 		prev_page?: (number | null) | undefined
 		total?: (number | null) | undefined
 	}
-	export type PropertyId = string
 	export type PropertyResponse = {
 		city: string
 		created_at: string
@@ -96,7 +111,39 @@ export namespace Schemas {
 		updated_at: string
 		zip: string
 	}
-	export type ServiceRateId = string
+	export type QuoteId = string
+	export type QuoteLineId = string
+	export type QuoteLineResponse = {
+		created_at: string
+		id: QuoteLineId
+		label: string
+		notes?: (string | null) | undefined
+		organization_id: OrganizationId
+		photo_keys: Array<string>
+		quantity: string
+		quote_id: QuoteId
+		service_rate_id?: (null | ServiceRateId) | undefined
+		unit: ServiceRateUnit
+		unit_price_cents: number
+		updated_at: string
+	}
+	export type QuoteStatus =
+		| 'DRAFT'
+		| 'SENT'
+		| 'ACCEPTED'
+		| 'DECLINED'
+		| 'CANCELLED'
+	export type QuoteResponse = {
+		created_at: string
+		customer_id: CustomerId
+		id: QuoteId
+		lines: Array<QuoteLineResponse>
+		organization_id: OrganizationId
+		property_id: PropertyId
+		status: QuoteStatus
+		total_cents: number
+		updated_at: string
+	}
 	export type ServiceRateResponse = {
 		created_at: string
 		id: ServiceRateId
@@ -129,6 +176,13 @@ export namespace Schemas {
 		street: string
 		zip: string
 	}
+	export type UpdateQuoteRequest = {
+		customer_id: CustomerId
+		lines: Array<QuoteLineRequest>
+		property_id: PropertyId
+		status: QuoteStatus
+	}
+	export type UpdateQuoteStatusRequest = { status: QuoteStatus }
 	export type UpdateServiceRateRequest = {
 		label: string
 		rate_cents: number
@@ -673,6 +727,63 @@ export namespace Endpoints {
 			409: unknown
 		}
 	}
+	export type get_ListQuotes = {
+		method: 'GET'
+		path: '/api/v1/organizations/{organization_id}/quotes'
+		requestFormat: 'json'
+		parameters: {
+			query: Partial<{ page: number; per_page: number }>
+			path: { organization_id: string }
+		}
+		responses: {
+			200: {
+				data: Array<{
+					created_at: string
+					customer_id: Schemas.CustomerId
+					id: Schemas.QuoteId
+					lines: Array<Schemas.QuoteLineResponse>
+					organization_id: Schemas.OrganizationId
+					property_id: Schemas.PropertyId
+					status: Schemas.QuoteStatus
+					total_cents: number
+					updated_at: string
+				}>
+				pagination?: (null | Schemas.PaginationMetadata) | undefined
+			}
+			401: unknown
+			403: unknown
+		}
+	}
+	export type post_CreateQuote = {
+		method: 'POST'
+		path: '/api/v1/organizations/{organization_id}/quotes'
+		requestFormat: 'json'
+		parameters: {
+			path: { organization_id: string }
+
+			body: Schemas.CreateQuoteRequest
+		}
+		responses: {
+			201: {
+				data: {
+					created_at: string
+					customer_id: Schemas.CustomerId
+					id: Schemas.QuoteId
+					lines: Array<Schemas.QuoteLineResponse>
+					organization_id: Schemas.OrganizationId
+					property_id: Schemas.PropertyId
+					status: Schemas.QuoteStatus
+					total_cents: number
+					updated_at: string
+				}
+				pagination?: (null | Schemas.PaginationMetadata) | undefined
+			}
+			400: unknown
+			401: unknown
+			403: unknown
+			409: unknown
+		}
+	}
 	export type get_ListServiceRates = {
 		method: 'GET'
 		path: '/api/v1/organizations/{organization_id}/service-rates'
@@ -793,6 +904,112 @@ export namespace Endpoints {
 			409: unknown
 		}
 	}
+	export type get_GetQuote = {
+		method: 'GET'
+		path: '/api/v1/quotes/{quote_id}'
+		requestFormat: 'json'
+		parameters: {
+			path: { quote_id: string }
+		}
+		responses: {
+			200: {
+				data: {
+					created_at: string
+					customer_id: Schemas.CustomerId
+					id: Schemas.QuoteId
+					lines: Array<Schemas.QuoteLineResponse>
+					organization_id: Schemas.OrganizationId
+					property_id: Schemas.PropertyId
+					status: Schemas.QuoteStatus
+					total_cents: number
+					updated_at: string
+				}
+				pagination?: (null | Schemas.PaginationMetadata) | undefined
+			}
+			401: unknown
+			403: unknown
+			404: unknown
+		}
+	}
+	export type delete_DeleteQuote = {
+		method: 'DELETE'
+		path: '/api/v1/quotes/{quote_id}'
+		requestFormat: 'json'
+		parameters: {
+			path: { quote_id: string }
+		}
+		responses: { 204: unknown; 401: unknown; 403: unknown; 404: unknown }
+	}
+	export type patch_UpdateQuote = {
+		method: 'PATCH'
+		path: '/api/v1/quotes/{quote_id}'
+		requestFormat: 'json'
+		parameters: {
+			path: { quote_id: string }
+
+			body: Schemas.UpdateQuoteRequest
+		}
+		responses: {
+			200: {
+				data: {
+					created_at: string
+					customer_id: Schemas.CustomerId
+					id: Schemas.QuoteId
+					lines: Array<Schemas.QuoteLineResponse>
+					organization_id: Schemas.OrganizationId
+					property_id: Schemas.PropertyId
+					status: Schemas.QuoteStatus
+					total_cents: number
+					updated_at: string
+				}
+				pagination?: (null | Schemas.PaginationMetadata) | undefined
+			}
+			400: unknown
+			401: unknown
+			403: unknown
+			404: unknown
+			409: unknown
+		}
+	}
+	export type get_ExportQuotePdf = {
+		method: 'GET'
+		path: '/api/v1/quotes/{quote_id}/pdf'
+		requestFormat: 'json'
+		parameters: {
+			path: { quote_id: string }
+		}
+		responses: { 200: unknown; 401: unknown; 403: unknown; 404: unknown }
+	}
+	export type patch_UpdateQuoteStatus = {
+		method: 'PATCH'
+		path: '/api/v1/quotes/{quote_id}/status'
+		requestFormat: 'json'
+		parameters: {
+			path: { quote_id: string }
+
+			body: Schemas.UpdateQuoteStatusRequest
+		}
+		responses: {
+			200: {
+				data: {
+					created_at: string
+					customer_id: Schemas.CustomerId
+					id: Schemas.QuoteId
+					lines: Array<Schemas.QuoteLineResponse>
+					organization_id: Schemas.OrganizationId
+					property_id: Schemas.PropertyId
+					status: Schemas.QuoteStatus
+					total_cents: number
+					updated_at: string
+				}
+				pagination?: (null | Schemas.PaginationMetadata) | undefined
+			}
+			400: unknown
+			401: unknown
+			403: unknown
+			404: unknown
+		}
+	}
 	export type get_GetServiceRate = {
 		method: 'GET'
 		path: '/api/v1/service-rates/{service_rate_id}'
@@ -892,8 +1109,11 @@ export type EndpointByMethod = {
 		'/api/v1/organizations/{organization_id}/customers': Endpoints.get_ListCustomers
 		'/api/v1/organizations/{organization_id}/employees': Endpoints.get_ListEmployees
 		'/api/v1/organizations/{organization_id}/equipment': Endpoints.get_ListEquipment
+		'/api/v1/organizations/{organization_id}/quotes': Endpoints.get_ListQuotes
 		'/api/v1/organizations/{organization_id}/service-rates': Endpoints.get_ListServiceRates
 		'/api/v1/properties/{property_id}': Endpoints.get_GetProperty
+		'/api/v1/quotes/{quote_id}': Endpoints.get_GetQuote
+		'/api/v1/quotes/{quote_id}/pdf': Endpoints.get_ExportQuotePdf
 		'/api/v1/service-rates/{service_rate_id}': Endpoints.get_GetServiceRate
 		'/api/v1/users/@me/organizations': Endpoints.get_ListMyOrganizations
 	}
@@ -903,6 +1123,7 @@ export type EndpointByMethod = {
 		'/api/v1/equipment/{equipment_id}': Endpoints.delete_DeleteEquipment
 		'/api/v1/organizations/{organization_id}': Endpoints.delete_DeleteOrganization
 		'/api/v1/properties/{property_id}': Endpoints.delete_DeleteProperty
+		'/api/v1/quotes/{quote_id}': Endpoints.delete_DeleteQuote
 		'/api/v1/service-rates/{service_rate_id}': Endpoints.delete_DeleteServiceRate
 	}
 	patch: {
@@ -911,6 +1132,8 @@ export type EndpointByMethod = {
 		'/api/v1/equipment/{equipment_id}': Endpoints.patch_UpdateEquipment
 		'/api/v1/organizations/{organization_id}': Endpoints.patch_UpdateOrganization
 		'/api/v1/properties/{property_id}': Endpoints.patch_UpdateProperty
+		'/api/v1/quotes/{quote_id}': Endpoints.patch_UpdateQuote
+		'/api/v1/quotes/{quote_id}/status': Endpoints.patch_UpdateQuoteStatus
 		'/api/v1/service-rates/{service_rate_id}': Endpoints.patch_UpdateServiceRate
 	}
 	post: {
@@ -920,6 +1143,7 @@ export type EndpointByMethod = {
 		'/api/v1/organizations/{organization_id}/customers': Endpoints.post_CreateCustomer
 		'/api/v1/organizations/{organization_id}/employees': Endpoints.post_CreateEmployee
 		'/api/v1/organizations/{organization_id}/equipment': Endpoints.post_CreateEquipment
+		'/api/v1/organizations/{organization_id}/quotes': Endpoints.post_CreateQuote
 		'/api/v1/organizations/{organization_id}/service-rates': Endpoints.post_CreateServiceRate
 	}
 }

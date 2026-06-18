@@ -12,6 +12,7 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as AppRouteImport } from './routes/_app'
 import { Route as AppIndexRouteImport } from './routes/_app.index'
 import { Route as AppSettingsRouteImport } from './routes/_app.settings'
+import { Route as AppQuotesIndexRouteImport } from './routes/_app.quotes.index'
 import { Route as AppCustomersIndexRouteImport } from './routes/_app.customers.index'
 import { Route as AppCustomersCustomerIdRouteImport } from './routes/_app.customers.$customerId'
 
@@ -27,6 +28,11 @@ const AppIndexRoute = AppIndexRouteImport.update({
 const AppSettingsRoute = AppSettingsRouteImport.update({
   id: '/settings',
   path: '/settings',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppQuotesIndexRoute = AppQuotesIndexRouteImport.update({
+  id: '/quotes/',
+  path: '/quotes/',
   getParentRoute: () => AppRoute,
 } as any)
 const AppCustomersIndexRoute = AppCustomersIndexRouteImport.update({
@@ -45,12 +51,14 @@ export interface FileRoutesByFullPath {
   '/settings': typeof AppSettingsRoute
   '/customers/$customerId': typeof AppCustomersCustomerIdRoute
   '/customers/': typeof AppCustomersIndexRoute
+  '/quotes/': typeof AppQuotesIndexRoute
 }
 export interface FileRoutesByTo {
   '/settings': typeof AppSettingsRoute
   '/': typeof AppIndexRoute
   '/customers/$customerId': typeof AppCustomersCustomerIdRoute
   '/customers': typeof AppCustomersIndexRoute
+  '/quotes': typeof AppQuotesIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -59,12 +67,18 @@ export interface FileRoutesById {
   '/_app/': typeof AppIndexRoute
   '/_app/customers/$customerId': typeof AppCustomersCustomerIdRoute
   '/_app/customers/': typeof AppCustomersIndexRoute
+  '/_app/quotes/': typeof AppQuotesIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/settings' | '/customers/$customerId' | '/customers/'
+  fullPaths:
+    | '/'
+    | '/settings'
+    | '/customers/$customerId'
+    | '/customers/'
+    | '/quotes/'
   fileRoutesByTo: FileRoutesByTo
-  to: '/settings' | '/' | '/customers/$customerId' | '/customers'
+  to: '/settings' | '/' | '/customers/$customerId' | '/customers' | '/quotes'
   id:
     | '__root__'
     | '/_app'
@@ -72,6 +86,7 @@ export interface FileRouteTypes {
     | '/_app/'
     | '/_app/customers/$customerId'
     | '/_app/customers/'
+    | '/_app/quotes/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -101,6 +116,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppSettingsRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/quotes/': {
+      id: '/_app/quotes/'
+      path: '/quotes'
+      fullPath: '/quotes/'
+      preLoaderRoute: typeof AppQuotesIndexRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/_app/customers/': {
       id: '/_app/customers/'
       path: '/customers'
@@ -123,6 +145,7 @@ interface AppRouteChildren {
   AppIndexRoute: typeof AppIndexRoute
   AppCustomersCustomerIdRoute: typeof AppCustomersCustomerIdRoute
   AppCustomersIndexRoute: typeof AppCustomersIndexRoute
+  AppQuotesIndexRoute: typeof AppQuotesIndexRoute
 }
 
 const AppRouteChildren: AppRouteChildren = {
@@ -130,6 +153,7 @@ const AppRouteChildren: AppRouteChildren = {
   AppIndexRoute: AppIndexRoute,
   AppCustomersCustomerIdRoute: AppCustomersCustomerIdRoute,
   AppCustomersIndexRoute: AppCustomersIndexRoute,
+  AppQuotesIndexRoute: AppQuotesIndexRoute,
 }
 
 const AppRouteWithChildren = AppRoute._addFileChildren(AppRouteChildren)

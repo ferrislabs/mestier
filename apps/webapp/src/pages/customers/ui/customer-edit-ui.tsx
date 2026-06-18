@@ -154,8 +154,8 @@ export function CustomerEditUI({
 				</Section>
 
 				<Section
-					title="Sites et adresses"
-					description="Adresses associées à ce client"
+					title="Contextes client"
+					description="Adresses, établissements ou périmètres associés à ce client"
 					className="lg:col-span-3"
 				>
 					{propertiesError ? (
@@ -177,14 +177,14 @@ export function CustomerEditUI({
 
 					{isPropertiesLoading ? (
 						<div className="rounded-lg border border-dashed p-8 text-center text-sm text-muted-foreground">
-							Chargement des sites…
+							Chargement des contextes…
 						</div>
 					) : properties.length === 0 ? (
 						<div className="rounded-lg border border-dashed p-8 text-center">
 							<MapPin className="mx-auto size-6 text-muted-foreground" />
-							<p className="mt-2 font-medium">Aucun site renseigné</p>
+							<p className="mt-2 font-medium">Aucun contexte renseigné</p>
 							<p className="mt-1 text-sm text-muted-foreground">
-								Ajoutez une adresse pour ce client.
+								Ajoutez un contexte pour ce client.
 							</p>
 						</div>
 					) : (
@@ -205,10 +205,13 @@ export function CustomerEditUI({
 						<div className="flex items-center justify-between gap-4 border-b px-4 py-3">
 							<div>
 								<p className="font-medium">
-									{editingPropertyId ? 'Modifier le site' : 'Ajouter un site'}
+									{editingPropertyId
+										? 'Modifier le contexte'
+										: 'Ajouter un contexte'}
 								</p>
 								<p className="text-xs text-muted-foreground">
-									Les champs adresse sont indépendants du client.
+									Les champs d’adresse peuvent représenter un établissement, un
+									lieu de livraison ou un repère interne.
 								</p>
 							</div>
 							{editingPropertyId ? (
@@ -250,7 +253,7 @@ export function CustomerEditUI({
 						</div>
 						<div className="grid gap-4 border-t p-4 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-end">
 							<div className="flex flex-col gap-2">
-								<Label htmlFor="property-photo">Photo du site</Label>
+								<Label htmlFor="property-photo">Photo du contexte</Label>
 								<div className="flex flex-col gap-3 sm:flex-row sm:items-center">
 									<label
 										htmlFor="property-photo"
@@ -282,7 +285,7 @@ export function CustomerEditUI({
 							{photoPreviewUrl ? (
 								<img
 									src={photoPreviewUrl}
-									alt="Aperçu du site"
+									alt="Aperçu du contexte"
 									className="h-24 w-36 rounded-lg border object-cover"
 								/>
 							) : null}
@@ -294,7 +297,7 @@ export function CustomerEditUI({
 								onClick={onPropertySubmit}
 							>
 								<Plus />
-								{editingPropertyId ? 'Enregistrer le site' : 'Ajouter le site'}
+								{editingPropertyId ? 'Enregistrer' : 'Ajouter'}
 							</Button>
 						</div>
 					</div>
