@@ -134,6 +134,27 @@ export namespace Schemas {
 		rate_cents: number
 		unit: ServiceRateUnit
 	}
+	// Hand-extended to match #49 interface contract.
+	export type UserResponse = {
+		email: string
+		email_verified: boolean
+		enabled: boolean
+		id: string
+		name?: (string | null) | undefined
+		username: string
+	}
+	export type CreateUserRequest = {
+		email: string
+		name?: (string | null) | undefined
+		send_invite_email: boolean
+		username: string
+	}
+	export type UpdateUserRequest = {
+		email?: (string | null) | undefined
+		enabled?: (boolean | null) | undefined
+		name?: (string | null) | undefined
+		username?: (string | null) | undefined
+	}
 
 	// </Schemas>
 }
@@ -876,6 +897,70 @@ export namespace Endpoints {
 			401: unknown
 		}
 	}
+	// Hand-extended to match #49 interface contract. Regenerate via
+	// `pnpm dlx typed-openapi <API_URL>/api-docs/openapi.json -o src/api/api.client.ts`
+	// once the #49 API is deployed and reachable.
+	export type get_ListUsers = {
+		method: 'GET'
+		path: '/api/v1/users'
+		requestFormat: 'json'
+		parameters: never
+		responses: {
+			200: {
+				data: Array<Schemas.UserResponse>
+				pagination?: (null | Schemas.PaginationMetadata) | undefined
+			}
+			401: unknown
+			403: unknown
+		}
+	}
+	export type post_CreateUser = {
+		method: 'POST'
+		path: '/api/v1/users'
+		requestFormat: 'json'
+		parameters: {
+			body: Schemas.CreateUserRequest
+		}
+		responses: {
+			201: {
+				data: Schemas.UserResponse
+				pagination?: (null | Schemas.PaginationMetadata) | undefined
+			}
+			400: unknown
+			401: unknown
+			403: unknown
+			409: unknown
+		}
+	}
+	export type patch_UpdateUser = {
+		method: 'PATCH'
+		path: '/api/v1/users/{id}'
+		requestFormat: 'json'
+		parameters: {
+			path: { id: string }
+			body: Schemas.UpdateUserRequest
+		}
+		responses: {
+			200: {
+				data: Schemas.UserResponse
+				pagination?: (null | Schemas.PaginationMetadata) | undefined
+			}
+			400: unknown
+			401: unknown
+			403: unknown
+			404: unknown
+			409: unknown
+		}
+	}
+	export type delete_DeleteUser = {
+		method: 'DELETE'
+		path: '/api/v1/users/{id}'
+		requestFormat: 'json'
+		parameters: {
+			path: { id: string }
+		}
+		responses: { 204: unknown; 401: unknown; 403: unknown; 404: unknown }
+	}
 
 	// </Endpoints>
 }
@@ -895,6 +980,7 @@ export type EndpointByMethod = {
 		'/api/v1/organizations/{organization_id}/service-rates': Endpoints.get_ListServiceRates
 		'/api/v1/properties/{property_id}': Endpoints.get_GetProperty
 		'/api/v1/service-rates/{service_rate_id}': Endpoints.get_GetServiceRate
+		'/api/v1/users': Endpoints.get_ListUsers
 		'/api/v1/users/@me/organizations': Endpoints.get_ListMyOrganizations
 	}
 	delete: {
@@ -904,6 +990,7 @@ export type EndpointByMethod = {
 		'/api/v1/organizations/{organization_id}': Endpoints.delete_DeleteOrganization
 		'/api/v1/properties/{property_id}': Endpoints.delete_DeleteProperty
 		'/api/v1/service-rates/{service_rate_id}': Endpoints.delete_DeleteServiceRate
+		'/api/v1/users/{id}': Endpoints.delete_DeleteUser
 	}
 	patch: {
 		'/api/v1/customers/{customer_id}': Endpoints.patch_UpdateCustomer
@@ -912,6 +999,7 @@ export type EndpointByMethod = {
 		'/api/v1/organizations/{organization_id}': Endpoints.patch_UpdateOrganization
 		'/api/v1/properties/{property_id}': Endpoints.patch_UpdateProperty
 		'/api/v1/service-rates/{service_rate_id}': Endpoints.patch_UpdateServiceRate
+		'/api/v1/users/{id}': Endpoints.patch_UpdateUser
 	}
 	post: {
 		'/api/v1/customers/{customer_id}/properties': Endpoints.post_CreateProperty
@@ -921,6 +1009,7 @@ export type EndpointByMethod = {
 		'/api/v1/organizations/{organization_id}/employees': Endpoints.post_CreateEmployee
 		'/api/v1/organizations/{organization_id}/equipment': Endpoints.post_CreateEquipment
 		'/api/v1/organizations/{organization_id}/service-rates': Endpoints.post_CreateServiceRate
+		'/api/v1/users': Endpoints.post_CreateUser
 	}
 }
 

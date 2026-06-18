@@ -41,6 +41,7 @@ const configItems: NavItem[] = [
 ]
 
 const securityItems: NavItem[] = [
+	{ title: 'Utilisateurs', to: '/users', icon: Users },
 	{ title: 'Audit', to: '/customers', icon: Eye, disabled: true },
 	{
 		title: 'Permissions',
