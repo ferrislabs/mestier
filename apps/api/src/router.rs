@@ -72,6 +72,9 @@ pub fn router(state: AppState) -> Result<Router, ApiError> {
         .merge(organization::router(&state))
         .merge(reference::router(&state))
         .merge(user::router(&state))
+        // The webhook router must be merged AFTER the authenticated routers so
+        // that it never receives the auth_middleware layer applied above.
+        .merge(user::webhook_router(&state))
         .merge(Scalar::with_url("/scalar", openapi.clone()))
         .merge(SwaggerUi::new("/swagger").url("/api-docs/openapi.json", openapi.clone()))
         .layer(trace_layer)

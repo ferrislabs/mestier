@@ -4,6 +4,7 @@ use common::Config;
 use crate::{
     auth::AuthArgs, database::DatabaseArgs, file_storage::FileStorageArgs, log::LogArgs,
     observability::ObservabilityArgs, rate_limit::RateLimitArgs, server::ServerArgs,
+    webhook::WebhookArgs,
 };
 
 pub mod auth;
@@ -13,6 +14,7 @@ pub mod log;
 pub mod observability;
 pub mod rate_limit;
 pub mod server;
+pub mod webhook;
 
 #[derive(Debug, Clone, Parser)]
 pub struct Args {
@@ -36,6 +38,9 @@ pub struct Args {
 
     #[command(flatten)]
     pub file_storage: FileStorageArgs,
+
+    #[command(flatten)]
+    pub webhook: WebhookArgs,
 }
 
 impl From<Args> for Config {

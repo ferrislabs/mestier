@@ -21,6 +21,7 @@ pub struct AppState {
     pub rate_limit: MestierRateLimitService,
     pub rate_limit_quota: Quota,
     pub iam: FerriskeyIamProvider,
+    pub webhook_secret: String,
 }
 
 pub async fn state(args: Arc<Args>) -> Result<AppState, ServerError> {
@@ -36,12 +37,13 @@ pub async fn state(args: Arc<Args>) -> Result<AppState, ServerError> {
     let iam = FerriskeyIamProvider::new(ferriskey_config);
 
     Ok(AppState {
-        args,
+        args: args.clone(),
         auth: service.auth,
         file_storage: service.file_storage,
         usecase: service.usecase,
         rate_limit: service.rate_limit,
         rate_limit_quota: service.rate_limit_quota,
         iam,
+        webhook_secret: args.webhook.ferriskey_secret.clone(),
     })
 }

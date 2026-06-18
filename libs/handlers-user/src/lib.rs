@@ -6,6 +6,7 @@ use handlers::{ApiError, AppState, auth::auth_middleware, rate_limit::rate_limit
 pub mod paths;
 pub mod response;
 pub mod user;
+pub mod webhook;
 
 pub const TAG: &str = "users";
 
@@ -35,4 +36,15 @@ pub fn router(state: &AppState) -> Router<AppState> {
         .typed_delete(user::disable::handler)
         .layer(from_fn_with_state(state.clone(), rate_limit_middleware))
         .layer(from_fn_with_state(state.clone(), auth_middleware))
+}
+
+/// Unauthenticated router for the FerrisKey webhook receiver.
+///
+/// This router intentionally does NOT carry `auth_middleware`. The only
+/// credential is the HMAC-SHA256 signature verified inside the handler.
+pub fn webhook_router(_state: &AppState) -> Router<AppState> {
+    Router::new().route(
+        "/api/v1/webhooks/ferriskey",
+        axum::routing::post(webhook::handler),
+    )
 }
