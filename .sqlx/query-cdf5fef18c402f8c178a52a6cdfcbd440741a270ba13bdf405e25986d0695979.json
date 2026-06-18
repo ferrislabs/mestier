@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE quote_lines\n            SET deleted_at = $2, updated_at = $2\n            WHERE quote_id = $1 AND deleted_at IS NULL\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Timestamptz"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "cdf5fef18c402f8c178a52a6cdfcbd440741a270ba13bdf405e25986d0695979"
+}
