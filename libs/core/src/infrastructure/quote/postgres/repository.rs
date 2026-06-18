@@ -47,7 +47,7 @@ impl<'tx> QuoteRepository for PgQuoteRepository<'tx> {
         .await
         .map_err(map_sqlx_error)?;
 
-        insert_lines(&mut ***tx, &quote.lines).await?;
+        insert_lines(&mut tx, &quote.lines).await?;
         row.into_quote(quote.lines.clone())
     }
 
@@ -68,7 +68,7 @@ impl<'tx> QuoteRepository for PgQuoteRepository<'tx> {
 
         match row {
             Some(row) => {
-                let lines = fetch_lines(&mut ***tx, id).await?;
+                let lines = fetch_lines(&mut tx, id).await?;
                 Ok(Some(row.into_quote(lines)?))
             }
             None => Ok(None),
@@ -109,7 +109,7 @@ impl<'tx> QuoteRepository for PgQuoteRepository<'tx> {
 
         let mut quotes = Vec::with_capacity(rows.len());
         for row in rows {
-            let lines = fetch_lines(&mut ***tx, QuoteId(row.id)).await?;
+            let lines = fetch_lines(&mut tx, QuoteId(row.id)).await?;
             quotes.push(row.into_quote(lines)?);
         }
 
@@ -156,7 +156,7 @@ impl<'tx> QuoteRepository for PgQuoteRepository<'tx> {
         .await
         .map_err(map_sqlx_error)?;
 
-        insert_lines(&mut ***tx, &quote.lines).await?;
+        insert_lines(&mut tx, &quote.lines).await?;
         row.into_quote(quote.lines.clone())
     }
 
@@ -184,7 +184,7 @@ impl<'tx> QuoteRepository for PgQuoteRepository<'tx> {
         .map_err(map_sqlx_error)?;
 
         let row = row.ok_or(CoreError::NotFound)?;
-        let lines = fetch_lines(&mut ***tx, id).await?;
+        let lines = fetch_lines(&mut tx, id).await?;
         row.into_quote(lines)
     }
 
