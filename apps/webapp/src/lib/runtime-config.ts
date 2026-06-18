@@ -1,106 +1,118 @@
-import { createApiClient, type ApiClient } from "#/api/api-client";
-import { fetcher } from "#/api/api.fetch";
-import { TanstackQueryApiClient } from "#/api/api.tanstack";
+import { createClientOnlyFn } from '@tanstack/react-start'
+
+type ApiClient = import('#/api/api.client').ApiClient
+type TanstackQueryApiClient =
+	import('#/api/api.tanstack').TanstackQueryApiClient
 
 export interface OidcConfiguration {
-  authority: string;
-  client_id: string;
-  redirect_uri: string;
-  scope: string;
-  silent_redirect_uri?: string;
-  monitor_session?: boolean;
-  automaticSilentRenew?: boolean;
-  onSigninCallback?: () => void;
+	authority: string
+	client_id: string
+	redirect_uri: string
+	scope: string
+	silent_redirect_uri?: string
+	monitor_session?: boolean
+	automaticSilentRenew?: boolean
+	onSigninCallback?: () => void
 }
 
 declare global {
-  interface Window {
-    api: ApiClient;
-    tanstackApi: TanstackQueryApiClient;
-    apiUrl: string;
-    issuerUrl?: string;
-    oidcConfiguration?: OidcConfiguration;
-    inDevelopmentMode: boolean;
-  }
+	interface Window {
+		api: ApiClient
+		tanstackApi: TanstackQueryApiClient
+		apiUrl: string
+		issuerUrl?: string
+		oidcConfiguration?: OidcConfiguration
+		inDevelopmentMode: boolean
+	}
 }
 
 interface RawConfig {
-  api_url?: string;
-  issuer_url?: string;
+	api_url?: string
+	issuer_url?: string
 }
 
-let loadingPromise: Promise<void> | null = null;
+let loadingPromise: Promise<void> | null = null
+
+const initializeApiClients = createClientOnlyFn(async (apiUrl: string) => {
+	const [{ createApiClient }, { fetcher }, { TanstackQueryApiClient }] =
+		await Promise.all([
+			import('#/api/api.client'),
+			import('#/api/api.fetch'),
+			import('#/api/api.tanstack'),
+		])
+	const api = createApiClient({ fetch: fetcher }).setBaseUrl(apiUrl)
+	window.api = api
+	window.tanstackApi = new TanstackQueryApiClient(api)
+})
 
 export function loadRuntimeConfig(): Promise<void> {
-  if (typeof window === "undefined") return Promise.resolve();
-  if (loadingPromise) return loadingPromise;
+	if (typeof window === 'undefined') return Promise.resolve()
+	if (loadingPromise) return loadingPromise
 
-  loadingPromise = (async () => {
-    const isDev = import.meta.env.DEV;
-    window.inDevelopmentMode = isDev;
+	loadingPromise = (async () => {
+		const isDev = import.meta.env.DEV
+		window.inDevelopmentMode = isDev
 
-    let apiUrl: string | undefined;
-    let issuerUrl: string | undefined;
+		let apiUrl: string | undefined
+		let issuerUrl: string | undefined
 
-    if (isDev) {
-      apiUrl = import.meta.env.VITE_API_URL as string | undefined;
-      issuerUrl = import.meta.env.VITE_OIDC_AUTHORITY as string | undefined;
-    } else {
-      try {
-        const res = await fetch("/config.json", { cache: "no-store" });
-        if (res.ok) {
-          const data: RawConfig = await res.json();
-          apiUrl = isPlaceholder(data.api_url) ? undefined : data.api_url;
-          issuerUrl = isPlaceholder(data.issuer_url)
-            ? undefined
-            : data.issuer_url;
-        }
-      } catch (err) {
-        console.error("Failed to load /config.json", err);
-      }
-    }
+		if (isDev) {
+			apiUrl = import.meta.env.VITE_API_URL as string | undefined
+			issuerUrl = import.meta.env.VITE_OIDC_AUTHORITY as string | undefined
+		} else {
+			try {
+				const res = await fetch('/config.json', { cache: 'no-store' })
+				if (res.ok) {
+					const data: RawConfig = await res.json()
+					apiUrl = isPlaceholder(data.api_url) ? undefined : data.api_url
+					issuerUrl = isPlaceholder(data.issuer_url)
+						? undefined
+						: data.issuer_url
+				}
+			} catch (err) {
+				console.error('Failed to load /config.json', err)
+			}
+		}
 
-    window.apiUrl = apiUrl ?? "";
-    window.issuerUrl = issuerUrl;
-    const api = createApiClient({ fetch: fetcher }).setBaseUrl(apiUrl ?? "");
-    window.api = api;
-    window.tanstackApi = new TanstackQueryApiClient(api);
+		window.apiUrl = apiUrl ?? ''
+		window.issuerUrl = issuerUrl
+		await initializeApiClients(apiUrl ?? '')
 
-    const clientId = import.meta.env.VITE_OIDC_CLIENT_ID as string | undefined;
-    const scope =
-      (import.meta.env.VITE_OIDC_SCOPE as string | undefined) ??
-      "openid profile email";
-    const redirectUri =
-      (import.meta.env.VITE_OIDC_REDIRECT_URI as string | undefined) ??
-      `${window.location.origin}/`;
+		const clientId = import.meta.env.VITE_OIDC_CLIENT_ID as string | undefined
+		const scope =
+			(import.meta.env.VITE_OIDC_SCOPE as string | undefined) ??
+			'openid profile email'
+		const redirectUri =
+			(import.meta.env.VITE_OIDC_REDIRECT_URI as string | undefined) ??
+			`${window.location.origin}/`
 
-    if (issuerUrl && clientId) {
-      window.oidcConfiguration = {
-        authority: issuerUrl,
-        client_id: clientId,
-        redirect_uri: redirectUri,
-        scope,
-        automaticSilentRenew: true,
-      };
-    } else {
-      window.oidcConfiguration = undefined;
-    }
-  })();
+		if (issuerUrl && clientId) {
+			window.oidcConfiguration = {
+				authority: issuerUrl,
+				client_id: clientId,
+				redirect_uri: redirectUri,
+				scope,
+				automaticSilentRenew: true,
+			}
+		} else {
+			window.oidcConfiguration = undefined
+		}
+	})()
 
-  return loadingPromise;
+	return loadingPromise
 }
 
 function isPlaceholder(value: string | undefined): boolean {
-  if (!value) return true;
-  return value.startsWith("${") && value.endsWith("}");
+	if (!value) return true
+	return value.startsWith('${') && value.endsWith('}')
 }
 
 export function getOidcConfiguration(): OidcConfiguration | undefined {
-  if (typeof window === "undefined") return undefined;
-  return window.oidcConfiguration;
+	if (typeof window === 'undefined') return undefined
+	return window.oidcConfiguration
 }
 
 export function isDevelopmentMode(): boolean {
-  if (typeof window === "undefined") return import.meta.env.DEV;
-  return window.inDevelopmentMode;
+	if (typeof window === 'undefined') return import.meta.env.DEV
+	return window.inDevelopmentMode
 }

@@ -1,4 +1,13 @@
-import { MoreHorizontal, Plus, Search, Trash2, UserPlus } from 'lucide-react'
+import {
+	AlertCircle,
+	Mail,
+	MoreHorizontal,
+	Phone,
+	Plus,
+	Search,
+	Trash2,
+	UserPlus,
+} from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { Button } from '#/components/ui/button'
 import {
@@ -9,6 +18,7 @@ import {
 	DropdownMenuTrigger,
 } from '#/components/ui/dropdown-menu'
 import { Input } from '#/components/ui/input'
+import { Label } from '#/components/ui/label'
 import {
 	EntityAvatar,
 	MetricCard,
@@ -17,103 +27,105 @@ import {
 	SectionCard,
 	StatusBadge,
 } from '#/components/ui/surface'
-import {
-	CATEGORY_LABELS,
-	type Customer,
-	type CustomerCategory,
-} from '#/pages/customers/types'
+import type { Customer, CustomerPayload } from '#/hooks/use-customers'
+import { customerDisplayName, customerInitials } from '#/pages/customers/types'
 
 interface CustomerListUIProps {
 	customers: Customer[]
+	error?: string | null
 	isLoading?: boolean
-	onAdd?: () => void
+	isCreating?: boolean
+	deletingId?: string | null
+	onAdd?: (payload: CustomerPayload) => Promise<unknown>
 	onEdit?: (customer: Customer) => void
 	onDelete?: (customer: Customer) => void
+	onRetry?: () => void
 }
-
-const CATEGORY_TONE: Record<CustomerCategory, 'brand' | 'success' | 'warning'> =
-	{
-		artisan: 'warning',
-		sme: 'brand',
-		individual: 'success',
-	}
-
-type Filter = 'all' | CustomerCategory
-
-const FILTERS: { id: Filter; label: string }[] = [
-	{ id: 'all', label: 'Tous' },
-	{ id: 'artisan', label: 'Artisans' },
-	{ id: 'sme', label: 'PME' },
-	{ id: 'individual', label: 'Particuliers' },
-]
 
 export function CustomerListUI({
 	customers,
+	error,
 	isLoading,
+	isCreating,
+	deletingId,
 	onAdd,
 	onEdit,
 	onDelete,
+	onRetry,
 }: CustomerListUIProps) {
 	const [search, setSearch] = useState('')
-	const [filter, setFilter] = useState<Filter>('all')
+	const [showCreate, setShowCreate] = useState(false)
+	const [draft, setDraft] = useState({
+		firstName: '',
+		lastName: '',
+		email: '',
+		phone: '',
+	})
 
 	const counts = useMemo(() => {
-		const c = {
+		return {
 			total: customers.length,
-			artisan: 0,
-			sme: 0,
-			individual: 0,
+			withEmail: customers.filter((customer) => customer.email).length,
+			withPhone: customers.filter((customer) => customer.phone).length,
+			thisMonth: customers.filter((customer) =>
+				isCurrentMonth(customer.created_at),
+			).length,
 		}
-		for (const x of customers) c[x.category]++
-		return c
 	}, [customers])
 
 	const visible = useMemo(() => {
 		const q = search.trim().toLowerCase()
 		return customers.filter((c) => {
-			if (filter !== 'all' && c.category !== filter) return false
 			if (!q) return true
+			const name = customerDisplayName(c).toLowerCase()
 			return (
-				c.name.toLowerCase().includes(q) ||
-				c.contact_name.toLowerCase().includes(q) ||
-				c.email.toLowerCase().includes(q) ||
-				c.address.city.toLowerCase().includes(q)
+				name.includes(q) ||
+				(c.email ?? '').toLowerCase().includes(q) ||
+				(c.phone ?? '').toLowerCase().includes(q)
 			)
 		})
-	}, [customers, search, filter])
+	}, [customers, search])
+
+	const canCreate = draft.firstName.trim() && draft.lastName.trim()
+
+	const submitCreate = async () => {
+		if (!canCreate) return
+		await onAdd?.({
+			first_name: draft.firstName.trim(),
+			last_name: draft.lastName.trim(),
+			email: draft.email.trim() || null,
+			phone: draft.phone.trim() || null,
+		})
+		setDraft({ firstName: '', lastName: '', email: '', phone: '' })
+		setShowCreate(false)
+	}
 
 	return (
 		<PageShell>
 			<PageHeader
 				title="Fichier client"
-				description="Gérez vos clients, leurs contacts et leurs informations commerciales."
+				description="Gérez vos clients, leurs coordonnées et leurs sites associés."
 				actions={
-					<Button onClick={onAdd}>
+					<Button onClick={() => setShowCreate((value) => !value)}>
 						<Plus />
 						Nouveau client
 					</Button>
 				}
 			/>
 
-			<div className="flex flex-wrap gap-2">
-				{FILTERS.map((f) => {
-					const active = f.id === filter
-					return (
-						<button
-							type="button"
-							key={f.id}
-							onClick={() => setFilter(f.id)}
-							className={`rounded-lg border px-4 py-1.5 text-sm font-medium transition-colors ${
-								active
-									? 'border-primary/30 bg-brand-soft text-primary'
-									: 'border-border bg-card text-muted-foreground hover:bg-muted'
-							}`}
-						>
-							{f.label}
-						</button>
-					)
-				})}
-			</div>
+			{error ? (
+				<SectionCard className="flex flex-col gap-3 border-destructive/30 bg-destructive-soft p-5 text-destructive sm:flex-row sm:items-center sm:justify-between">
+					<div className="flex items-center gap-3">
+						<AlertCircle className="size-5 shrink-0" />
+						<p className="text-sm font-medium">{error}</p>
+					</div>
+					{onRetry ? (
+						<Button onClick={onRetry} variant="outline" size="sm">
+							Réessayer
+						</Button>
+					) : null}
+				</SectionCard>
+			) : null}
 
 			<section>
 				<p className="mb-3 text-sm text-muted-foreground">Aperçu du fichier</p>
@@ -124,22 +136,67 @@ export function CustomerListUI({
 						hint="Tous clients confondus"
 					/>
 					<MetricCard
-						label="Artisans"
-						value={counts.artisan}
-						hint="Clients professionnels"
+						label="Email renseigné"
+						value={counts.withEmail}
+						hint="Coordonnées exploitables"
 					/>
 					<MetricCard
-						label="PME"
-						value={counts.sme}
-						hint="Petites et moyennes entreprises"
+						label="Téléphone"
+						value={counts.withPhone}
+						hint="Contact direct"
 					/>
 					<MetricCard
-						label="Particuliers"
-						value={counts.individual}
-						hint="Clients privés"
+						label="Ce mois-ci"
+						value={counts.thisMonth}
+						hint="Nouveaux clients"
 					/>
 				</div>
 			</section>
+
+			{showCreate ? (
+				<SectionCard>
+					<div className="grid gap-4 p-5 md:grid-cols-4">
+						<Field
+							label="Prénom"
+							value={draft.firstName}
+							onChange={(firstName) => setDraft((v) => ({ ...v, firstName }))}
+						/>
+						<Field
+							label="Nom"
+							value={draft.lastName}
+							onChange={(lastName) => setDraft((v) => ({ ...v, lastName }))}
+						/>
+						<Field
+							label="Email"
+							type="email"
+							value={draft.email}
+							onChange={(email) => setDraft((v) => ({ ...v, email }))}
+						/>
+						<Field
+							label="Téléphone"
+							value={draft.phone}
+							onChange={(phone) => setDraft((v) => ({ ...v, phone }))}
+						/>
+					</div>
+					<div className="flex justify-end gap-2 border-t p-4">
+						<Button
+							type="button"
+							variant="ghost"
+							onClick={() => setShowCreate(false)}
+						>
+							Annuler
+						</Button>
+						<Button
+							type="button"
+							disabled={!canCreate || isCreating}
+							onClick={() => void submitCreate()}
+						>
+							<Plus />
+							Créer
+						</Button>
+					</div>
+				</SectionCard>
+			) : null}
 
 			<section className="flex flex-col gap-3">
 				<div className="flex flex-col items-start justify-between gap-3 sm:flex-row sm:items-center">
@@ -168,13 +225,13 @@ export function CustomerListUI({
 						<div>
 							<p className="font-medium">Aucun client trouvé</p>
 							<p className="text-sm text-muted-foreground">
-								{search || filter !== 'all'
+								{search
 									? "Essayez d'autres critères"
 									: 'Commencez par ajouter votre premier client'}
 							</p>
 						</div>
-						{!search && filter === 'all' && (
-							<Button onClick={onAdd} variant="outline">
+						{!search && (
+							<Button onClick={() => setShowCreate(true)} variant="outline">
 								<Plus />
 								Ajouter un client
 							</Button>
@@ -187,15 +244,15 @@ export function CustomerListUI({
 								key={c.id}
 								className="flex items-center gap-4 px-5 py-4 transition-colors hover:bg-muted/40"
 							>
-								<EntityAvatar tone={CATEGORY_TONE[c.category]}>
-									{c.name[0]?.toUpperCase()}
-								</EntityAvatar>
+								<EntityAvatar tone="brand">{customerInitials(c)}</EntityAvatar>
 
 								<div className="min-w-0 flex-1">
 									<div className="flex items-center gap-2">
-										<p className="truncate font-semibold">{c.name}</p>
-										<StatusBadge tone={CATEGORY_TONE[c.category]}>
-											{CATEGORY_LABELS[c.category].toLowerCase()}
+										<p className="truncate font-semibold">
+											{customerDisplayName(c)}
+										</p>
+										<StatusBadge tone="neutral">
+											{formatDate(c.created_at)}
 										</StatusBadge>
 									</div>
 									<p className="mt-0.5 truncate font-mono text-xs text-muted-foreground">
@@ -204,12 +261,18 @@ export function CustomerListUI({
 								</div>
 
 								<div className="hidden flex-col items-end gap-0.5 text-xs text-muted-foreground md:flex">
-									<span className="truncate">{c.email}</span>
-									<span>{c.address.city}</span>
+									<span className="flex items-center gap-1 truncate">
+										<Mail className="size-3" />
+										{c.email || 'Email non renseigné'}
+									</span>
+									<span className="flex items-center gap-1">
+										<Phone className="size-3" />
+										{c.phone || 'Téléphone non renseigné'}
+									</span>
 								</div>
 
 								<span className="hidden items-center rounded-md border bg-card px-2 py-1 text-[11px] font-medium text-muted-foreground lg:inline-flex">
-									{c.phone}
+									{c.organization_id}
 								</span>
 
 								<DropdownMenu>
@@ -230,6 +293,7 @@ export function CustomerListUI({
 										<DropdownMenuSeparator />
 										<DropdownMenuItem
 											variant="destructive"
+											disabled={deletingId === c.id}
 											onClick={() => onDelete?.(c)}
 										>
 											<Trash2 />
@@ -244,4 +308,55 @@ export function CustomerListUI({
 			</section>
 		</PageShell>
 	)
+}
+
+export namespace CustomerListUI {
+	export function Loading() {
+		return (
+			<PageShell>
+				<SectionCard className="flex items-center justify-center p-12 text-sm text-muted-foreground">
+					Chargement…
+				</SectionCard>
+			</PageShell>
+		)
+	}
+}
+
+interface FieldProps {
+	label: string
+	value: string
+	onChange: (value: string) => void
+	type?: string
+}
+
+function Field({ label, value, onChange, type = 'text' }: FieldProps) {
+	const id = label.toLowerCase().replaceAll(/\s+/g, '-')
+	return (
+		<div className="flex flex-col gap-2">
+			<Label htmlFor={id}>{label}</Label>
+			<Input
+				id={id}
+				type={type}
+				value={value}
+				onChange={(event) => onChange(event.target.value)}
+			/>
+		</div>
+	)
+}
+
+function isCurrentMonth(value: string): boolean {
+	const date = new Date(value)
+	const now = new Date()
+	return (
+		date.getFullYear() === now.getFullYear() &&
+		date.getMonth() === now.getMonth()
+	)
+}
+
+function formatDate(value: string): string {
+	return new Intl.DateTimeFormat('fr-FR', {
+		day: '2-digit',
+		month: 'short',
+		year: 'numeric',
+	}).format(new Date(value))
 }

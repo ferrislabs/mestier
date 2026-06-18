@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import type { Schemas } from '#/api/api-client'
+import type { Schemas } from '#/api/api.client'
 
 const EMPLOYEES_PATH = '/api/v1/organizations/{organization_id}/employees'
 const EQUIPMENT_PATH = '/api/v1/organizations/{organization_id}/equipment'

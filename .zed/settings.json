@@ -1,0 +1,28 @@
+{
+  "lsp": {
+    "biome": {
+      "settings": {
+        "config_path": "apps/webapp/biome.json",
+        "require_config_file": true
+      }
+    }
+  },
+  "languages": {
+    "JavaScript": {
+      "formatter": { "language_server": { "name": "biome" } },
+      "prettier": { "allowed": false }
+    },
+    "JSX": {
+      "formatter": { "language_server": { "name": "biome" } },
+      "prettier": { "allowed": false }
+    },
+    "TypeScript": {
+      "formatter": { "language_server": { "name": "biome" } },
+      "prettier": { "allowed": false }
+    },
+    "TSX": {
+      "formatter": { "language_server": { "name": "biome" } },
+      "prettier": { "allowed": false }
+    }
+  }
+}

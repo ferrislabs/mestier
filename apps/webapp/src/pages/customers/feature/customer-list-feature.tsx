@@ -1,17 +1,50 @@
 import { useNavigate } from '@tanstack/react-router'
-import { useState } from 'react'
-import { MOCK_CUSTOMERS } from '#/pages/customers/mocks'
-import type { Customer } from '#/pages/customers/types'
+import { AlertCircle } from 'lucide-react'
+import { Button } from '#/components/ui/button'
+import {
+	type Customer,
+	useCreateCustomer,
+	useCustomers,
+	useDeleteCustomer,
+} from '#/hooks/use-customers'
+import { useMyOrganizations } from '#/hooks/use-organizations'
 import { CustomerListUI } from '#/pages/customers/ui/customer-list-ui'
 
 export function CustomerListFeature() {
-	const navigate = useNavigate()
-	const [customers] = useState<Customer[]>(MOCK_CUSTOMERS)
-	const [isLoading] = useState(false)
+	const organizations = useMyOrganizations()
+	const organization = organizations.data?.data?.[0]
 
-	const handleAdd = () => {
-		console.log('[customers] add')
+	if (organizations.isLoading) {
+		return <CustomerListUI.Loading />
 	}
+
+	if (organizations.isError || !organization) {
+		return (
+			<div className="flex flex-col items-center justify-center gap-3 p-12 text-center">
+				<div className="flex size-14 items-center justify-center rounded-lg border bg-card">
+					<AlertCircle className="size-6 text-destructive" />
+				</div>
+				<div>
+					<p className="font-semibold">Organisation indisponible</p>
+					<p className="text-sm text-muted-foreground">
+						Le fichier client nécessite une organisation active.
+					</p>
+				</div>
+				<Button onClick={() => void organizations.refetch()} variant="outline">
+					Réessayer
+				</Button>
+			</div>
+		)
+	}
+
+	return <CustomerList organizationId={organization.id} />
+}
+
+function CustomerList({ organizationId }: { organizationId: string }) {
+	const navigate = useNavigate()
+	const customers = useCustomers(organizationId)
+	const createCustomer = useCreateCustomer(organizationId)
+	const deleteCustomer = useDeleteCustomer(organizationId)
 
 	const handleEdit = (customer: Customer) => {
 		void navigate({
@@ -20,17 +53,35 @@ export function CustomerListFeature() {
 		})
 	}
 
-	const handleDelete = (customer: Customer) => {
-		console.log('[customers] delete', customer.id)
-	}
-
 	return (
 		<CustomerListUI
-			customers={customers}
-			isLoading={isLoading}
-			onAdd={handleAdd}
+			customers={customers.data?.data ?? []}
+			error={
+				customers.error?.message ??
+				createCustomer.error?.message ??
+				deleteCustomer.error?.message ??
+				null
+			}
+			isLoading={customers.isLoading}
+			isCreating={createCustomer.isPending}
+			deletingId={
+				deleteCustomer.variables?.path.customer_id && deleteCustomer.isPending
+					? deleteCustomer.variables.path.customer_id
+					: null
+			}
+			onAdd={(payload) =>
+				createCustomer.mutateAsync({
+					path: { organization_id: organizationId },
+					body: payload,
+				})
+			}
 			onEdit={handleEdit}
-			onDelete={handleDelete}
+			onDelete={(customer) =>
+				deleteCustomer.mutate({
+					path: { customer_id: customer.id },
+				})
+			}
+			onRetry={() => void customers.refetch()}
 		/>
 	)
 }
