@@ -1,11 +1,11 @@
 use auth::Identity;
 use axum::{Extension, Json, extract::State};
-use handlers::{ApiError, AppState, DataEnvelope, IdentityExt, Response};
+use handlers::{ApiError, AppState, DataEnvelope, Response};
 use mestier_core::{OrganizationId, UpdateOrganizationCommand, application::policy};
 use serde::Deserialize;
 use utoipa::ToSchema;
 
-use crate::{paths::OrganizationPath, response::OrganizationResponse};
+use crate::{paths::OrganizationPath, resolve_identity_user, response::OrganizationResponse};
 
 #[derive(Debug, Deserialize, ToSchema)]
 pub struct UpdateOrganizationRequest {
@@ -39,12 +39,12 @@ pub async fn handler(
     Extension(identity): Extension<Identity>,
     Json(payload): Json<UpdateOrganizationRequest>,
 ) -> Result<Response<OrganizationResponse>, ApiError> {
-    let user_id = identity.user_id()?;
+    let user = resolve_identity_user(&state, &identity).await?;
     let iam_roles = match &identity {
         Identity::User(u) => u.roles.clone(),
         Identity::Client(c) => c.roles.clone(),
     };
-    let actor = policy::user_subject(user_id, iam_roles);
+    let actor = policy::user_subject(user.id, iam_roles);
 
     let organization = state
         .usecase

@@ -64,7 +64,7 @@ export function OnboardingUI({
 							<Label htmlFor="org-name">Nom de l'organisation</Label>
 							<Input
 								id="org-name"
-								placeholder="Atelier Dupont"
+								placeholder="Entreprise Dupont"
 								value={name}
 								onChange={(e) => onNameChange(e.target.value)}
 								disabled={isPending}
@@ -83,7 +83,7 @@ export function OnboardingUI({
 							</div>
 							<Input
 								id="org-slug"
-								placeholder="atelier-dupont"
+								placeholder="entreprise-dupont"
 								value={slug}
 								onChange={(e) => onSlugChange(normalizeSlug(e.target.value))}
 								disabled={isPending}

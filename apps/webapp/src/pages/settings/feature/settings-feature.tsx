@@ -1,7 +1,11 @@
 import { useForm } from '@tanstack/react-form'
 import { AlertCircle } from 'lucide-react'
 import { Button } from '#/components/ui/button'
-import { useMyOrganizations } from '#/hooks/use-organizations'
+import {
+	type Organization,
+	useMyOrganizations,
+	useUpdateOrganization,
+} from '#/hooks/use-organizations'
 import {
 	useCreateEmployee,
 	useCreateEquipment,
@@ -17,6 +21,7 @@ import {
 import type {
 	EmployeeFormValues,
 	EquipmentFormValues,
+	OrganizationFormValues,
 	ServiceRateFormValues,
 } from '#/pages/settings/types'
 import { SettingsUI } from '#/pages/settings/ui/settings-ui'
@@ -48,24 +53,17 @@ export function SettingsFeature() {
 		)
 	}
 
-	return (
-		<SettingsCatalog
-			organizationId={organization.id}
-			organizationName={organization.name}
-		/>
-	)
+	return <SettingsCatalog organization={organization} />
 }
 
 interface SettingsCatalogProps {
-	organizationId: string
-	organizationName: string
+	organization: Organization
 }
 
-function SettingsCatalog({
-	organizationId,
-	organizationName,
-}: SettingsCatalogProps) {
+function SettingsCatalog({ organization }: SettingsCatalogProps) {
+	const organizationId = organization.id
 	const catalog = useReferenceCatalog(organizationId)
+	const updateOrganization = useUpdateOrganization(organizationId)
 	const createEmployee = useCreateEmployee(organizationId)
 	const updateEmployee = useUpdateEmployee()
 	const deleteEmployee = useDeleteEmployee()
@@ -128,6 +126,22 @@ function SettingsCatalog({
 		},
 	})
 
+	const organizationForm = useForm({
+		defaultValues: {
+			name: organization.name,
+			slug: organization.slug,
+		} satisfies OrganizationFormValues,
+		onSubmit: async ({ value }) => {
+			await updateOrganization.mutateAsync({
+				path: { organization_id: organizationId },
+				body: {
+					name: value.name.trim(),
+					slug: normalizeSlug(value.slug),
+				},
+			})
+		},
+	})
+
 	const isLoading =
 		catalog.employees.isLoading ||
 		catalog.equipment.isLoading ||
@@ -145,111 +159,134 @@ function SettingsCatalog({
 		deleteEquipment.error ??
 		createServiceRate.error ??
 		updateServiceRate.error ??
-		deleteServiceRate.error
+		deleteServiceRate.error ??
+		updateOrganization.error
 
 	return (
-		<employeeForm.Subscribe selector={(state) => state.values}>
-			{(employeeValues) => (
-				<equipmentForm.Subscribe selector={(state) => state.values}>
-					{(equipmentValues) => (
-						<serviceRateForm.Subscribe selector={(state) => state.values}>
-							{(serviceRateValues) => (
-								<SettingsUI
-									organizationName={organizationName}
-									isLoading={isLoading}
-									error={error?.message ?? null}
-									data={{
-										employees: catalog.employees.data?.data ?? [],
-										equipment: catalog.equipment.data?.data ?? [],
-										serviceRates: catalog.serviceRates.data?.data ?? [],
-									}}
-									employeeForm={{
-										values: employeeValues,
-										isPending: createEmployee.isPending,
-										onChange: (patch) => {
-											for (const key of Object.keys(
-												patch,
-											) as (keyof EmployeeFormValues)[]) {
-												employeeForm.setFieldValue(key, patch[key] ?? '')
+		<organizationForm.Subscribe selector={(state) => state.values}>
+			{(organizationValues) => (
+				<employeeForm.Subscribe selector={(state) => state.values}>
+					{(employeeValues) => (
+						<equipmentForm.Subscribe selector={(state) => state.values}>
+							{(equipmentValues) => (
+								<serviceRateForm.Subscribe selector={(state) => state.values}>
+									{(serviceRateValues) => (
+										<SettingsUI
+											organization={organization}
+											isLoading={isLoading}
+											error={error?.message ?? null}
+											data={{
+												employees: catalog.employees.data?.data ?? [],
+												equipment: catalog.equipment.data?.data ?? [],
+												serviceRates: catalog.serviceRates.data?.data ?? [],
+											}}
+											organizationForm={{
+												values: organizationValues,
+												isPending: updateOrganization.isPending,
+												onChange: (patch) => {
+													for (const key of Object.keys(
+														patch,
+													) as (keyof OrganizationFormValues)[]) {
+														organizationForm.setFieldValue(
+															key,
+															patch[key] ?? '',
+														)
+													}
+												},
+												onSubmit: () => void organizationForm.handleSubmit(),
+											}}
+											employeeForm={{
+												values: employeeValues,
+												isPending: createEmployee.isPending,
+												onChange: (patch) => {
+													for (const key of Object.keys(
+														patch,
+													) as (keyof EmployeeFormValues)[]) {
+														employeeForm.setFieldValue(key, patch[key] ?? '')
+													}
+												},
+												onSubmit: () => void employeeForm.handleSubmit(),
+											}}
+											equipmentForm={{
+												values: equipmentValues,
+												isPending: createEquipment.isPending,
+												onChange: (patch) => {
+													for (const key of Object.keys(
+														patch,
+													) as (keyof EquipmentFormValues)[]) {
+														equipmentForm.setFieldValue(key, patch[key] ?? '')
+													}
+												},
+												onSubmit: () => void equipmentForm.handleSubmit(),
+											}}
+											serviceRateForm={{
+												values: serviceRateValues,
+												isPending: createServiceRate.isPending,
+												onChange: (patch) => {
+													for (const key of Object.keys(
+														patch,
+													) as (keyof ServiceRateFormValues)[]) {
+														serviceRateForm.setFieldValue(
+															key,
+															patch[key] as never,
+														)
+													}
+												},
+												onSubmit: () => void serviceRateForm.handleSubmit(),
+											}}
+											onUpdateEmployee={(employee, values) =>
+												updateEmployee.mutateAsync({
+													path: { employee_id: employee.id },
+													body: {
+														name: values.name.trim(),
+														hourly_rate_cents: eurosToCents(values.hourlyRate),
+														user_id: values.userId.trim() || null,
+													},
+												})
 											}
-										},
-										onSubmit: () => void employeeForm.handleSubmit(),
-									}}
-									equipmentForm={{
-										values: equipmentValues,
-										isPending: createEquipment.isPending,
-										onChange: (patch) => {
-											for (const key of Object.keys(
-												patch,
-											) as (keyof EquipmentFormValues)[]) {
-												equipmentForm.setFieldValue(key, patch[key] ?? '')
+											onDeleteEmployee={(employee) =>
+												deleteEmployee.mutateAsync({
+													path: { employee_id: employee.id },
+												})
 											}
-										},
-										onSubmit: () => void equipmentForm.handleSubmit(),
-									}}
-									serviceRateForm={{
-										values: serviceRateValues,
-										isPending: createServiceRate.isPending,
-										onChange: (patch) => {
-											for (const key of Object.keys(
-												patch,
-											) as (keyof ServiceRateFormValues)[]) {
-												serviceRateForm.setFieldValue(key, patch[key] as never)
+											onUpdateEquipment={(equipment, values) =>
+												updateEquipment.mutateAsync({
+													path: { equipment_id: equipment.id },
+													body: {
+														name: values.name.trim(),
+														hourly_rate_cents: eurosToCents(values.hourlyRate),
+													},
+												})
 											}
-										},
-										onSubmit: () => void serviceRateForm.handleSubmit(),
-									}}
-									onUpdateEmployee={(employee, values) =>
-										updateEmployee.mutateAsync({
-											path: { employee_id: employee.id },
-											body: {
-												name: values.name.trim(),
-												hourly_rate_cents: eurosToCents(values.hourlyRate),
-												user_id: values.userId.trim() || null,
-											},
-										})
-									}
-									onDeleteEmployee={(employee) =>
-										deleteEmployee.mutateAsync({
-											path: { employee_id: employee.id },
-										})
-									}
-									onUpdateEquipment={(equipment, values) =>
-										updateEquipment.mutateAsync({
-											path: { equipment_id: equipment.id },
-											body: {
-												name: values.name.trim(),
-												hourly_rate_cents: eurosToCents(values.hourlyRate),
-											},
-										})
-									}
-									onDeleteEquipment={(equipment) =>
-										deleteEquipment.mutateAsync({
-											path: { equipment_id: equipment.id },
-										})
-									}
-									onUpdateServiceRate={(serviceRate, values) =>
-										updateServiceRate.mutateAsync({
-											path: { service_rate_id: serviceRate.id },
-											body: {
-												label: values.label.trim(),
-												unit: values.unit,
-												rate_cents: eurosToCents(values.rate),
-											},
-										})
-									}
-									onDeleteServiceRate={(serviceRate) =>
-										deleteServiceRate.mutateAsync({
-											path: { service_rate_id: serviceRate.id },
-										})
-									}
-								/>
+											onDeleteEquipment={(equipment) =>
+												deleteEquipment.mutateAsync({
+													path: { equipment_id: equipment.id },
+												})
+											}
+											onUpdateServiceRate={(serviceRate, values) =>
+												updateServiceRate.mutateAsync({
+													path: { service_rate_id: serviceRate.id },
+													body: {
+														label: values.label.trim(),
+														unit: values.unit,
+														rate_cents: eurosToCents(values.rate),
+													},
+												})
+											}
+											onDeleteServiceRate={(serviceRate) =>
+												deleteServiceRate.mutateAsync({
+													path: { service_rate_id: serviceRate.id },
+												})
+											}
+										/>
+									)}
+								</serviceRateForm.Subscribe>
 							)}
-						</serviceRateForm.Subscribe>
+						</equipmentForm.Subscribe>
 					)}
-				</equipmentForm.Subscribe>
+				</employeeForm.Subscribe>
 			)}
-		</employeeForm.Subscribe>
+		</organizationForm.Subscribe>
 	)
 }
 
@@ -260,4 +297,14 @@ function eurosToCents(value: string): number {
 		return 0
 	}
 	return Math.round(parsed * 100)
+}
+
+function normalizeSlug(value: string): string {
+	return value
+		.toLowerCase()
+		.trim()
+		.replace(/\s+/g, '-')
+		.replace(/[^a-z0-9-]/g, '')
+		.replace(/-{2,}/g, '-')
+		.replace(/^-|-$/g, '')
 }

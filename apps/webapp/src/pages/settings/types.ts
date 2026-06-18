@@ -7,6 +7,11 @@ import type {
 
 export type ReferenceTab = 'employees' | 'equipment' | 'service-rates'
 
+export interface OrganizationFormValues {
+	name: string
+	slug: string
+}
+
 export interface EmployeeFormValues {
 	name: string
 	hourlyRate: string
