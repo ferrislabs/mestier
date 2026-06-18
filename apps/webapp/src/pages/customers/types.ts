@@ -1,24 +1,57 @@
-export type CustomerCategory = 'artisan' | 'sme' | 'individual'
+import type { Customer, Property } from '#/hooks/use-customers'
 
-export interface CustomerAddress {
-	street: string
-	city: string
-	zip: string
-}
-
-export interface Customer {
-	id: string
-	name: string
-	category: CustomerCategory
-	contact_name: string
+export interface CustomerFormValues {
+	firstName: string
+	lastName: string
 	email: string
 	phone: string
-	address: CustomerAddress
-	created_at: string
 }
 
-export const CATEGORY_LABELS: Record<CustomerCategory, string> = {
-	artisan: 'Artisan',
-	sme: 'PME',
-	individual: 'Particulier',
+export interface PropertyFormValues {
+	label: string
+	street: string
+	zip: string
+	city: string
+	photoKey: string
+}
+
+export function customerDisplayName(customer: Customer): string {
+	return `${customer.first_name} ${customer.last_name}`.trim()
+}
+
+export function customerInitials(customer: Customer): string {
+	const parts = [customer.first_name, customer.last_name].filter(Boolean)
+	return (
+		parts
+			.slice(0, 2)
+			.map((part) => part[0]?.toUpperCase() ?? '')
+			.join('') || 'C'
+	)
+}
+
+export function customerToForm(customer: Customer): CustomerFormValues {
+	return {
+		firstName: customer.first_name,
+		lastName: customer.last_name,
+		email: customer.email ?? '',
+		phone: customer.phone ?? '',
+	}
+}
+
+export function propertyToForm(property?: Property): PropertyFormValues {
+	return {
+		label: property?.label ?? '',
+		street: property?.street ?? '',
+		zip: property?.zip ?? '',
+		city: property?.city ?? '',
+		photoKey: property?.photo_key ?? '',
+	}
+}
+
+export const EMPTY_PROPERTY_FORM: PropertyFormValues = {
+	label: '',
+	street: '',
+	zip: '',
+	city: '',
+	photoKey: '',
 }
