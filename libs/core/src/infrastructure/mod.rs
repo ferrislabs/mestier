@@ -1,9 +1,11 @@
+pub mod customer;
 pub mod employee;
 pub mod equipment;
 pub mod file_storage;
 pub mod member;
 pub mod organization;
 pub mod postgres;
+pub mod property;
 pub mod registry;
 pub mod role;
 pub mod service_rate;
