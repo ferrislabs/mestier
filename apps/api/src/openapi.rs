@@ -8,6 +8,7 @@ use handlers_files as files;
 use handlers_organization as organization;
 use handlers_quote as quote;
 use handlers_reference as reference;
+use handlers_user as user;
 
 pub struct SecurityAddon;
 
@@ -69,6 +70,10 @@ impl Modify for SecurityAddon {
         reference::service_rate::get_one::handler,
         reference::service_rate::update::handler,
         reference::service_rate::soft_delete::handler,
+        user::user::create::handler,
+        user::user::update::handler,
+        user::user::disable::handler,
+        user::user::list::handler,
     ),
     components(schemas(
         organization::create::CreateOrganizationRequest,
@@ -96,6 +101,9 @@ impl Modify for SecurityAddon {
         reference::response::EmployeeResponse,
         reference::response::EquipmentResponse,
         reference::response::ServiceRateResponse,
+        user::user::create::CreateUserRequest,
+        user::user::update::UpdateUserRequest,
+        user::response::UserResponse,
     )),
     modifiers(&SecurityAddon),
     tags(
@@ -104,6 +112,7 @@ impl Modify for SecurityAddon {
         (name = "customers", description = "Customers and properties management"),
         (name = "quotes", description = "Quotes and quote lines management"),
         (name = "reference", description = "Reference cost catalog"),
+        (name = "users", description = "User account management"),
     )
 )]
 pub struct ApiDoc;

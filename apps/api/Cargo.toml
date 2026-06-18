@@ -11,6 +11,7 @@ handlers-files = { workspace = true }
 handlers-organization = { workspace = true }
 handlers-quote = { workspace = true }
 handlers-reference = { workspace = true }
+handlers-user = { workspace = true }
 server = { workspace = true }
 args = { workspace = true }
 

@@ -1,0 +1,22 @@
+[package]
+name = "handlers-user"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+
+[dependencies]
+handlers = { workspace = true }
+iam = { workspace = true }
+mestier-core = { workspace = true }
+auth = { workspace = true }
+
+axum = { workspace = true }
+axum-extra = { workspace = true }
+serde = { workspace = true }
+tracing = { workspace = true }
+utoipa = { workspace = true }
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["macros", "rt"] }
+chrono = { workspace = true }
+uuid = { workspace = true }

@@ -1,11 +1,13 @@
+use std::sync::Arc;
+
 use common::Config;
+use iam::infrastructure::ferriskey::{FerriskeyConfig, FerriskeyIamProvider};
 use mestier_core::{
     MestierAuthService, MestierFileStorageService, MestierRateLimitService, MestierUseCase,
     create_service,
 };
 use rate_limit::Quota;
 use server::errors::ServerError;
-use std::sync::Arc;
 
 use args::Args;
 
@@ -18,12 +20,20 @@ pub struct AppState {
     pub usecase: MestierUseCase,
     pub rate_limit: MestierRateLimitService,
     pub rate_limit_quota: Quota,
+    pub iam: FerriskeyIamProvider,
 }
 
 pub async fn state(args: Arc<Args>) -> Result<AppState, ServerError> {
     let config = Config::from(args.as_ref().clone());
 
     let service = create_service(config).await.unwrap();
+
+    let ferriskey_config = FerriskeyConfig::new(
+        args.auth.issuer.clone(),
+        args.auth.client_id.clone(),
+        args.auth.client_secret.clone(),
+    );
+    let iam = FerriskeyIamProvider::new(ferriskey_config);
 
     Ok(AppState {
         args,
@@ -32,5 +42,6 @@ pub async fn state(args: Arc<Args>) -> Result<AppState, ServerError> {
         usecase: service.usecase,
         rate_limit: service.rate_limit,
         rate_limit_quota: service.rate_limit_quota,
+        iam,
     })
 }
