@@ -57,11 +57,12 @@ export function useCustomer(customerId: string) {
 	)
 }
 
-export function useCustomerProperties(customerId: string) {
-	return useQuery(
-		window.tanstackApi.get(PROPERTIES_PATH, propertiesParams(customerId))
+export function useCustomerProperties(customerId: string, enabled = true) {
+	return useQuery({
+		...window.tanstackApi.get(PROPERTIES_PATH, propertiesParams(customerId))
 			.queryOptions,
-	)
+		enabled: enabled && Boolean(customerId),
+	})
 }
 
 export function useCreateCustomer(organizationId: string) {
