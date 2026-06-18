@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE customer_contexts\n            SET deleted_at = $2, updated_at = $2\n            WHERE customer_id = $1 AND deleted_at IS NULL\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Timestamptz"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "0cc1b3024dbe0f1b3dc404bac07156b668a6711f98d5b1c5db6b78cb78500078"
+}

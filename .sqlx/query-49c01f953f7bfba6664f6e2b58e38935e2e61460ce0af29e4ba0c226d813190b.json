@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT COUNT(*) AS \"count!\" FROM properties WHERE customer_id = $1 AND deleted_at IS NULL",
+  "query": "SELECT COUNT(*) AS \"count!\" FROM customer_contexts WHERE customer_id = $1 AND deleted_at IS NULL",
   "describe": {
     "columns": [
       {
@@ -18,5 +18,5 @@
       null
     ]
   },
-  "hash": "b84cb3626ca3fba6115b81eff2a9096f58991dfcc578a8ffed0d2186410e46e0"
+  "hash": "49c01f953f7bfba6664f6e2b58e38935e2e61460ce0af29e4ba0c226d813190b"
 }

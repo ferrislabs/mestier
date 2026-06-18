@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT id, customer_id, label, street, zip, city, photo_key, deleted_at, created_at, updated_at\n            FROM properties\n            WHERE id = $1 AND deleted_at IS NULL\n            ",
+  "query": "\n            SELECT id, customer_id, label, address_line, postal_code, city, photo_key, deleted_at, created_at, updated_at\n            FROM customer_contexts\n            WHERE id = $1 AND deleted_at IS NULL\n            ",
   "describe": {
     "columns": [
       {
@@ -20,12 +20,12 @@
       },
       {
         "ordinal": 3,
-        "name": "street",
+        "name": "address_line",
         "type_info": "Text"
       },
       {
         "ordinal": 4,
-        "name": "zip",
+        "name": "postal_code",
         "type_info": "Text"
       },
       {
@@ -63,14 +63,14 @@
       false,
       false,
       false,
-      false,
-      false,
-      false,
+      true,
+      true,
+      true,
       true,
       true,
       false,
       false
     ]
   },
-  "hash": "ffa1f081615c841f428a5e73e776aea3596454470f732c6a228763f62e3f007f"
+  "hash": "2ff94b19eb0f4de4df703f87d09f2b0bd33a04ac3aa8ef0e3f77382adac94fc3"
 }

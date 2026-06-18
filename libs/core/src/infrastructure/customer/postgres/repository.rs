@@ -151,7 +151,7 @@ impl<'tx> CustomerRepository for PgCustomerRepository<'tx> {
 
         sqlx::query!(
             r#"
-            UPDATE properties
+            UPDATE customer_contexts
             SET deleted_at = $2, updated_at = $2
             WHERE customer_id = $1 AND deleted_at IS NULL
             "#,

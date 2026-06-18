@@ -1,5 +1,5 @@
 use chrono::{DateTime, Utc};
-use mestier_core::{Customer, CustomerId, OrganizationId, Property, PropertyId};
+use mestier_core::{Customer, CustomerContext, CustomerContextId, CustomerId, OrganizationId};
 use serde::Serialize;
 use utoipa::ToSchema;
 
@@ -31,26 +31,26 @@ impl From<Customer> for CustomerResponse {
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, ToSchema)]
-pub struct PropertyResponse {
-    pub id: PropertyId,
+pub struct CustomerContextResponse {
+    pub id: CustomerContextId,
     pub customer_id: CustomerId,
     pub label: String,
-    pub street: String,
-    pub zip: String,
-    pub city: String,
+    pub address_line: Option<String>,
+    pub postal_code: Option<String>,
+    pub city: Option<String>,
     pub photo_key: Option<String>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }
 
-impl From<Property> for PropertyResponse {
-    fn from(value: Property) -> Self {
+impl From<CustomerContext> for CustomerContextResponse {
+    fn from(value: CustomerContext) -> Self {
         Self {
             id: value.id,
             customer_id: value.customer_id,
             label: value.label,
-            street: value.street,
-            zip: value.zip,
+            address_line: value.address_line,
+            postal_code: value.postal_code,
             city: value.city,
             photo_key: value.photo_key,
             created_at: value.created_at,

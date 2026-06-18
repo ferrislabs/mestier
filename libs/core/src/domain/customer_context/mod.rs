@@ -12,30 +12,30 @@ pub mod ports;
 pub mod service;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, ToSchema)]
-pub struct PropertyId(pub Uuid);
+pub struct CustomerContextId(pub Uuid);
 
-impl FromStr for PropertyId {
+impl FromStr for CustomerContextId {
     type Err = uuid::Error;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        Uuid::from_str(s).map(PropertyId)
+        Uuid::from_str(s).map(CustomerContextId)
     }
 }
 
-impl Display for PropertyId {
+impl Display for CustomerContextId {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.0)
     }
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct Property {
-    pub id: PropertyId,
+pub struct CustomerContext {
+    pub id: CustomerContextId,
     pub customer_id: CustomerId,
     pub label: String,
-    pub street: String,
-    pub zip: String,
-    pub city: String,
+    pub address_line: Option<String>,
+    pub postal_code: Option<String>,
+    pub city: Option<String>,
     pub photo_key: Option<String>,
     pub deleted_at: Option<DateTime<Utc>>,
     pub created_at: DateTime<Utc>,
@@ -47,15 +47,15 @@ mod tests {
     use super::*;
 
     #[test]
-    fn property_id_parses_uuid() {
+    fn customer_context_id_parses_uuid() {
         let uuid = Uuid::new_v4();
-        let parsed = PropertyId::from_str(&uuid.to_string()).unwrap();
+        let parsed = CustomerContextId::from_str(&uuid.to_string()).unwrap();
 
         assert_eq!(parsed.0, uuid);
     }
 
     #[test]
-    fn property_id_rejects_invalid_uuid() {
-        assert!(PropertyId::from_str("not-a-uuid").is_err());
+    fn customer_context_id_rejects_invalid_uuid() {
+        assert!(CustomerContextId::from_str("not-a-uuid").is_err());
     }
 }

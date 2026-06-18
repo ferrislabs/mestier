@@ -1,22 +1,22 @@
 pub(crate) mod customer;
+pub(crate) mod customer_context;
 pub(crate) mod employee;
 pub(crate) mod equipment;
 pub(crate) mod file_storage;
 pub(crate) mod member;
 pub(crate) mod organization;
-pub(crate) mod property;
 pub(crate) mod quote;
 pub(crate) mod role;
 pub(crate) mod service_rate;
 pub(crate) mod user;
 
 pub use customer::*;
+pub use customer_context::*;
 pub use employee::*;
 pub use equipment::*;
 pub use file_storage::*;
 pub use member::*;
 pub use organization::*;
-pub use property::*;
 pub use quote::*;
 pub use role::*;
 pub use service_rate::*;

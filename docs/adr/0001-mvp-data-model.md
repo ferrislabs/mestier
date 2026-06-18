@@ -10,7 +10,7 @@ Le MVP de Mestier doit couvrir le flux metier principal d'un artisan ou d'une
 PME de services :
 
 1. configurer les couts de l'entreprise ;
-2. gerer les clients et leurs lieux d'intervention ;
+2. gerer les clients et leurs contextes metier ;
 3. produire des devis detailles ;
 4. planifier et assigner les chantiers ;
 5. permettre aux employes de pointer et documenter le terrain ;
@@ -28,7 +28,7 @@ Le MVP s'appuie sur les entites metier suivantes :
 - `equipment`
 - `service_rates`
 - `customers`
-- `properties`
+- `customer_contexts`
 - `quotes`
 - `quote_lines`
 - `work_orders`
@@ -55,7 +55,7 @@ Tables avec `org_id` :
 - `equipment`
 - `service_rates`
 - `customers`
-- `properties`
+- `customer_contexts`
 - `quotes`
 - `quote_lines`
 - `work_orders`
@@ -109,7 +109,7 @@ Tables concernees :
 - `equipment`
 - `service_rates`
 - `customers`
-- `properties`
+- `customer_contexts`
 - `quotes`
 - `quote_lines`
 - `work_orders`
@@ -146,7 +146,7 @@ cles opaques retournees par le service de stockage defini dans #3.
 
 Colonnes prevues :
 
-- `properties.photo_key`
+- `customer_contexts.photo_key`
 - `quote_lines.photo_keys`
 - futures photos de terrain liees aux chantiers ou pointages
 
@@ -168,15 +168,15 @@ erDiagram
 
     users ||--o{ employees : may_link_to
 
-    customers ||--o{ properties : has
+    customers ||--o{ customer_contexts : has
     customers ||--o{ quotes : receives
-    properties ||--o{ quotes : concerns
+    customer_contexts ||--o{ quotes : concerns
 
     quotes ||--o{ quote_lines : contains
     service_rates ||--o{ quote_lines : prices
 
     customers ||--o{ work_orders : has
-    properties ||--o{ work_orders : located_at
+    customer_contexts ||--o{ work_orders : scoped_by
     quotes ||--o{ work_orders : may_create
 
     work_orders ||--o{ assignments : has
@@ -283,11 +283,13 @@ Colonnes principales :
 Regles :
 
 - un client appartient a une seule organisation ;
-- un client peut avoir plusieurs proprietes ou sites d'intervention.
+- un client peut avoir plusieurs contextes metier.
 
-### properties
+### customer_contexts
 
-Representent les lieux d'intervention d'un client.
+Representent un contexte rattache a un client : site, agence, projet,
+departement interne, contrat, ou tout autre perimetre utile selon le metier de
+l'organisation.
 
 Colonnes principales :
 
@@ -295,9 +297,9 @@ Colonnes principales :
 - `org_id UUID NOT NULL REFERENCES organizations(id)`
 - `customer_id UUID NOT NULL REFERENCES customers(id)`
 - `label TEXT NOT NULL`
-- `street TEXT NOT NULL`
-- `zip TEXT NOT NULL`
-- `city TEXT NOT NULL`
+- `address_line TEXT NULL`
+- `postal_code TEXT NULL`
+- `city TEXT NULL`
 - `photo_key TEXT NULL`
 - `created_at TIMESTAMPTZ NOT NULL DEFAULT now()`
 - `updated_at TIMESTAMPTZ NOT NULL DEFAULT now()`
@@ -305,8 +307,10 @@ Colonnes principales :
 
 Regles :
 
-- une propriete depend d'un client ;
+- un contexte client depend d'un client ;
 - `org_id` doit etre identique au `customers.org_id` du client parent ;
+- les champs d'adresse sont optionnels et ne doivent pas etre utilises pour
+  imposer un modele lie au terrain ;
 - `photo_key` reference le service de stockage, pas un chemin local.
 
 ### quotes
@@ -318,7 +322,7 @@ Colonnes principales :
 - `id UUID PRIMARY KEY`
 - `org_id UUID NOT NULL REFERENCES organizations(id)`
 - `customer_id UUID NOT NULL REFERENCES customers(id)`
-- `property_id UUID NOT NULL REFERENCES properties(id)`
+- `customer_context_id UUID NOT NULL REFERENCES customer_contexts(id)`
 - `status quote_status NOT NULL`
 - `total_cents INTEGER NOT NULL`
 - `created_at TIMESTAMPTZ NOT NULL DEFAULT now()`
@@ -336,7 +340,7 @@ Enum `quote_status` :
 Regles :
 
 - `total_cents` est calcule cote backend a partir des lignes ;
-- l'API refuse un `property_id` qui n'appartient pas au `customer_id` ;
+- l'API refuse un `customer_context_id` qui n'appartient pas au `customer_id` ;
 - un devis accepte peut servir a creer un chantier.
 
 ### quote_lines
@@ -379,7 +383,7 @@ Colonnes principales :
 - `id UUID PRIMARY KEY`
 - `org_id UUID NOT NULL REFERENCES organizations(id)`
 - `customer_id UUID NOT NULL REFERENCES customers(id)`
-- `property_id UUID NOT NULL REFERENCES properties(id)`
+- `customer_context_id UUID NOT NULL REFERENCES customer_contexts(id)`
 - `quote_id UUID NULL REFERENCES quotes(id)`
 - `scheduled_date DATE NOT NULL`
 - `status work_order_status NOT NULL`
@@ -399,8 +403,8 @@ Regles :
 
 - un chantier peut etre cree depuis un devis ou directement depuis un client ;
 - `quote_id` est nullable pour les interventions sans devis ;
-- l'API refuse un `property_id` qui n'appartient pas au `customer_id` ;
-- la note peut etre pre-remplie depuis la fiche client ou propriete, puis
+- l'API refuse un `customer_context_id` qui n'appartient pas au `customer_id` ;
+- la note peut etre pre-remplie depuis la fiche client ou le contexte client, puis
   surchargee manuellement.
 
 ### assignments

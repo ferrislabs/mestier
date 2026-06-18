@@ -5,8 +5,8 @@ use handlers::{ApiError, AppState, auth::auth_middleware, rate_limit::rate_limit
 use mestier_core::{CustomerId, OrganizationId};
 
 pub mod customer;
+pub mod customer_context;
 pub mod paths;
-pub mod property;
 pub mod response;
 
 pub const TAG: &str = "customers";
@@ -52,11 +52,11 @@ pub fn router(state: &AppState) -> Router<AppState> {
         .typed_get(customer::get_one::handler)
         .typed_patch(customer::update::handler)
         .typed_delete(customer::soft_delete::handler)
-        .typed_get(property::list::handler)
-        .typed_post(property::create::handler)
-        .typed_get(property::get_one::handler)
-        .typed_patch(property::update::handler)
-        .typed_delete(property::soft_delete::handler)
+        .typed_get(customer_context::list::handler)
+        .typed_post(customer_context::create::handler)
+        .typed_get(customer_context::get_one::handler)
+        .typed_patch(customer_context::update::handler)
+        .typed_delete(customer_context::soft_delete::handler)
         .layer(from_fn_with_state(state.clone(), rate_limit_middleware))
         .layer(from_fn_with_state(state.clone(), auth_middleware))
 }

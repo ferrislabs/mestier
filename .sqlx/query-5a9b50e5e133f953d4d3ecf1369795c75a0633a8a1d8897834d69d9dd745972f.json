@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT id, customer_id, label, street, zip, city, photo_key, deleted_at, created_at, updated_at\n            FROM properties\n            WHERE customer_id = $1 AND deleted_at IS NULL\n            ORDER BY label ASC, created_at ASC\n            LIMIT $2 OFFSET $3\n            ",
+  "query": "\n            UPDATE quotes\n            SET status = CAST($2 AS text)::quote_status, updated_at = $3\n            WHERE id = $1 AND deleted_at IS NULL\n            RETURNING id, org_id, customer_id, customer_context_id, status::text AS \"status!\", total_cents, deleted_at, created_at, updated_at\n            ",
   "describe": {
     "columns": [
       {
@@ -10,46 +10,41 @@
       },
       {
         "ordinal": 1,
-        "name": "customer_id",
+        "name": "org_id",
         "type_info": "Uuid"
       },
       {
         "ordinal": 2,
-        "name": "label",
-        "type_info": "Text"
+        "name": "customer_id",
+        "type_info": "Uuid"
       },
       {
         "ordinal": 3,
-        "name": "street",
-        "type_info": "Text"
+        "name": "customer_context_id",
+        "type_info": "Uuid"
       },
       {
         "ordinal": 4,
-        "name": "zip",
+        "name": "status!",
         "type_info": "Text"
       },
       {
         "ordinal": 5,
-        "name": "city",
-        "type_info": "Text"
+        "name": "total_cents",
+        "type_info": "Int4"
       },
       {
         "ordinal": 6,
-        "name": "photo_key",
-        "type_info": "Text"
-      },
-      {
-        "ordinal": 7,
         "name": "deleted_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 8,
+        "ordinal": 7,
         "name": "created_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 9,
+        "ordinal": 8,
         "name": "updated_at",
         "type_info": "Timestamptz"
       }
@@ -57,8 +52,8 @@
     "parameters": {
       "Left": [
         "Uuid",
-        "Int8",
-        "Int8"
+        "Text",
+        "Timestamptz"
       ]
     },
     "nullable": [
@@ -66,13 +61,12 @@
       false,
       false,
       false,
+      null,
       false,
-      false,
-      true,
       true,
       false,
       false
     ]
   },
-  "hash": "6952f331b20bc0bc0a1fdf773a457955d218e140c3c9b8b17f1c9ec65902b587"
+  "hash": "5a9b50e5e133f953d4d3ecf1369795c75a0633a8a1d8897834d69d9dd745972f"
 }
