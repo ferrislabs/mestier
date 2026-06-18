@@ -4,7 +4,10 @@ use mestier_macros::transactional;
 use crate::{
     User,
     application::MestierUseCase,
-    domain::user::{commands::CreateUserCommand, service::UserService},
+    domain::user::{
+        commands::{CreateUserCommand, UpsertUserBySubCommand},
+        service::UserService,
+    },
 };
 
 impl MestierUseCase {
@@ -24,5 +27,26 @@ impl MestierUseCase {
     pub async fn find_user_by_sub(&self, sub: &str) -> Result<Option<User>, CoreError> {
         let mut service = UserService::new(user_repository);
         service.find_by_sub(sub).await
+    }
+
+    #[transactional(user)]
+    pub async fn reconcile_user_upsert(
+        &self,
+        command: UpsertUserBySubCommand,
+    ) -> Result<User, CoreError> {
+        let mut service = UserService::new(user_repository);
+        service.reconcile_upsert(command).await
+    }
+
+    #[transactional(user)]
+    pub async fn reconcile_user_deletion(&self, sub: String) -> Result<(), CoreError> {
+        let mut service = UserService::new(user_repository);
+        service.reconcile_deletion(&sub).await
+    }
+
+    #[transactional(user)]
+    pub async fn list_users(&self) -> Result<Vec<User>, CoreError> {
+        let mut service = UserService::new(user_repository);
+        service.list().await
     }
 }

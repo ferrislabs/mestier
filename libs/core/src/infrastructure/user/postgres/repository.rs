@@ -1,9 +1,9 @@
-use common::CoreError;
+use common::{CoreError, generate_uuid_v7};
 use mestier_macros::repository;
 
 use crate::{
     User,
-    domain::user::ports::UserRepository,
+    domain::user::{commands::UpsertUserBySubCommand, ports::UserRepository},
     infrastructure::{
         postgres::{SharedTx, error::map_sqlx_error},
         user::postgres::model::UserRow,
@@ -35,7 +35,7 @@ impl<'tx> UserRepository for PgUserRepository<'tx> {
                 display_name = EXCLUDED.display_name,
                 sub          = EXCLUDED.sub,
                 updated_at   = EXCLUDED.updated_at
-            RETURNING id, email, username, display_name, sub, created_at, updated_at
+            RETURNING id, email, username, display_name, sub, deleted_at, created_at, updated_at
             "#,
             user.id.0,
             user.email,
@@ -58,9 +58,9 @@ impl<'tx> UserRepository for PgUserRepository<'tx> {
         let row = sqlx::query_as!(
             UserRow,
             r#"
-            SELECT id, email, username, display_name, sub, created_at, updated_at
+            SELECT id, email, username, display_name, sub, deleted_at, created_at, updated_at
             FROM users
-            WHERE email = $1
+            WHERE email = $1 AND deleted_at IS NULL
             "#,
             email,
         )
@@ -77,9 +77,9 @@ impl<'tx> UserRepository for PgUserRepository<'tx> {
         let row = sqlx::query_as!(
             UserRow,
             r#"
-            SELECT id, email, username, display_name, sub, created_at, updated_at
+            SELECT id, email, username, display_name, sub, deleted_at, created_at, updated_at
             FROM users
-            WHERE sub = $1
+            WHERE sub = $1 AND deleted_at IS NULL
             "#,
             sub,
         )
@@ -88,5 +88,76 @@ impl<'tx> UserRepository for PgUserRepository<'tx> {
         .map_err(map_sqlx_error)?;
 
         Ok(row.map(Into::into))
+    }
+
+    #[tracing::instrument(skip(self), fields(db.system = "postgresql", db.operation = "upsert", db.table = "users", user.sub = %command.sub), err)]
+    async fn upsert_by_sub(&mut self, command: UpsertUserBySubCommand) -> Result<User, CoreError> {
+        let mut tx = self.tx.lock().await;
+        let id = generate_uuid_v7();
+        let row = sqlx::query_as!(
+            UserRow,
+            r#"
+            INSERT INTO users (id, email, username, display_name, sub, created_at, updated_at)
+            VALUES ($5, $1, $2, $3, $4, now(), now())
+            ON CONFLICT (sub) DO UPDATE SET
+                email        = EXCLUDED.email,
+                username     = EXCLUDED.username,
+                display_name = EXCLUDED.display_name,
+                deleted_at   = NULL,
+                updated_at   = now()
+            RETURNING id, email, username, display_name, sub, deleted_at, created_at, updated_at
+            "#,
+            command.email,
+            command.username,
+            command.name.unwrap_or_default(),
+            command.sub,
+            id,
+        )
+        .fetch_one(&mut ***tx)
+        .await
+        .map_err(map_sqlx_error)?;
+
+        Ok(row.into())
+    }
+
+    #[tracing::instrument(skip(self), fields(db.system = "postgresql", db.operation = "update", db.table = "users", user.sub = %sub), err)]
+    async fn soft_delete_by_sub(&mut self, sub: &str) -> Result<(), CoreError> {
+        let mut tx = self.tx.lock().await;
+        let result = sqlx::query!(
+            r#"
+            UPDATE users
+            SET deleted_at = now(), updated_at = now()
+            WHERE sub = $1 AND deleted_at IS NULL
+            "#,
+            sub,
+        )
+        .execute(&mut ***tx)
+        .await
+        .map_err(map_sqlx_error)?;
+
+        if result.rows_affected() == 0 {
+            return Err(CoreError::NotFound);
+        }
+
+        Ok(())
+    }
+
+    #[tracing::instrument(skip(self), fields(db.system = "postgresql", db.operation = "select", db.table = "users"), err)]
+    async fn list_active(&mut self) -> Result<Vec<User>, CoreError> {
+        let mut tx = self.tx.lock().await;
+        let rows = sqlx::query_as!(
+            UserRow,
+            r#"
+            SELECT id, email, username, display_name, sub, deleted_at, created_at, updated_at
+            FROM users
+            WHERE deleted_at IS NULL
+            ORDER BY created_at ASC
+            "#,
+        )
+        .fetch_all(&mut ***tx)
+        .await
+        .map_err(map_sqlx_error)?;
+
+        Ok(rows.into_iter().map(Into::into).collect())
     }
 }
