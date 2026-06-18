@@ -97,6 +97,7 @@ dependencies = [
  "clap",
  "dotenvy",
  "handlers",
+ "handlers-customer",
  "handlers-files",
  "handlers-organization",
  "handlers-reference",
@@ -2088,6 +2089,22 @@ dependencies = [
  "server",
  "thiserror 2.0.18",
  "tokio",
+ "tracing",
+ "utoipa",
+]
+
+[[package]]
+name = "handlers-customer"
+version = "0.1.0"
+dependencies = [
+ "auth",
+ "axum",
+ "axum-extra",
+ "chrono",
+ "handlers",
+ "http 1.4.0",
+ "mestier-core",
+ "serde",
  "tracing",
  "utoipa",
 ]

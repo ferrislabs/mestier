@@ -1,0 +1,58 @@
+use auth::Identity;
+use axum::{Extension, Json, extract::State};
+use handlers::{ApiError, AppState, DataEnvelope, Response};
+use mestier_core::{CustomerId, UpdateCustomerCommand};
+use serde::Deserialize;
+use utoipa::ToSchema;
+
+use crate::{paths::CustomerPath, require_org_membership, response::CustomerResponse};
+
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct UpdateCustomerRequest {
+    pub last_name: String,
+    pub first_name: String,
+    pub phone: Option<String>,
+    pub email: Option<String>,
+}
+
+#[utoipa::path(
+    patch,
+    path = "/api/v1/customers/{customer_id}",
+    operation_id = "updateCustomer",
+    tag = super::super::TAG,
+    params(
+        ("customer_id" = CustomerId, Path, description = "Customer identifier"),
+    ),
+    request_body = UpdateCustomerRequest,
+    responses(
+        (status = 200, description = "Customer updated", body = inline(DataEnvelope<CustomerResponse>)),
+        (status = 400, description = "Validation failed"),
+        (status = 401, description = "Unauthorized"),
+        (status = 403, description = "Forbidden"),
+        (status = 404, description = "Customer not found"),
+        (status = 409, description = "Customer conflict"),
+    ),
+    security(("bearer_auth" = []))
+)]
+pub async fn handler(
+    CustomerPath { customer_id }: CustomerPath,
+    State(state): State<AppState>,
+    Extension(identity): Extension<Identity>,
+    Json(payload): Json<UpdateCustomerRequest>,
+) -> Result<Response<CustomerResponse>, ApiError> {
+    let current = state.usecase.get_customer(customer_id).await?;
+    require_org_membership(&state, &identity, current.organization_id).await?;
+
+    let customer = state
+        .usecase
+        .update_customer(UpdateCustomerCommand {
+            id: customer_id,
+            last_name: payload.last_name,
+            first_name: payload.first_name,
+            phone: payload.phone,
+            email: payload.email,
+        })
+        .await?;
+
+    Ok(Response::OK(customer.into()))
+}
