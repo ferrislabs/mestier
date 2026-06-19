@@ -217,6 +217,7 @@ mod tests {
         let mut repo = MockCategoryRepository::new();
         repo.expect_find_by_id()
             .with(eq(id))
+            .times(1)
             .returning(move |_| Box::pin(async move { Ok(Some(make_category(id, org))) }));
         repo.expect_update().times(1).returning(|c| {
             let c = c.clone();
