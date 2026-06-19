@@ -3,16 +3,19 @@ use common::{CoreError, generate_uuid_v7};
 use uuid::Uuid;
 
 use crate::{
-    AuthorType, ChannelId, Message, MessageId, Webhook, WebhookId, components,
+    ChannelId, Webhook, WebhookId,
     domain::{
-        message::ports::MessageRepository,
+        message::{
+            commands::{CreateMessageCommand, MessageAuthor},
+            ports::MessageRepository,
+            service::build_new_message,
+        },
         webhook::{
             commands::{CreateWebhookCommand, ExecuteWebhookCommand, UpdateWebhookCommand},
             ports::WebhookRepository,
         },
     },
     events::{DomainEvent, EventPublisher},
-    mentions::parse_mentions,
 };
 
 pub struct WebhookService<R, MR, E> {
@@ -98,7 +101,7 @@ where
     pub async fn execute_webhook(
         &mut self,
         cmd: ExecuteWebhookCommand,
-    ) -> Result<Message, CoreError> {
+    ) -> Result<crate::Message, CoreError> {
         let webhook = self
             .repo
             .find_by_id(cmd.webhook_id)
@@ -110,30 +113,14 @@ where
             return Err(CoreError::Forbidden { reason: None });
         }
 
-        if let Some(ref comps) = cmd.components {
-            components::validate(comps)?;
-        }
-
-        let parsed = parse_mentions(&cmd.content);
-        let now = Utc::now();
-        let msg = Message {
-            id: MessageId(generate_uuid_v7()),
+        let message = build_new_message(CreateMessageCommand {
             organization_id: webhook.organization_id,
             channel_id: webhook.channel_id,
-            author_type: AuthorType::Webhook,
-            author_user_id: None,
-            author_webhook_id: Some(cmd.webhook_id),
+            author: MessageAuthor::Webhook(cmd.webhook_id),
             content: cmd.content,
             components: cmd.components,
-            mention_user_ids: parsed.user_ids,
-            mention_role_ids: parsed.role_ids,
-            mention_channel_ids: parsed.channel_ids,
-            mention_everyone: parsed.everyone,
-            reactions: vec![],
-            edited_at: None,
-            created_at: now,
-        };
-        let saved = self.message_repo.insert(&msg).await?;
+        })?;
+        let saved = self.message_repo.insert(&message).await?;
         self.events
             .publish(DomainEvent::MessageCreated(saved.clone()))
             .await?;
@@ -182,8 +169,12 @@ mod tests {
                 Box::pin(async move { Ok(Some(make_webhook(wh_id, org, channel_id))) })
             });
 
-        let msg_repo = MockMessageRepository::new();
-        let events = MockEventPublisher::new();
+        let mut msg_repo = MockMessageRepository::new();
+        msg_repo.expect_insert().times(0);
+
+        let mut events = MockEventPublisher::new();
+        events.expect_publish().times(0);
+
         let mut svc = WebhookService::new(wh_repo, msg_repo, events);
 
         let result = svc
@@ -196,6 +187,40 @@ mod tests {
             .await;
 
         assert!(matches!(result, Err(CoreError::Forbidden { .. })));
+    }
+
+    #[tokio::test]
+    async fn execute_webhook_rejects_blank_content() {
+        let org = OrganizationId(Uuid::new_v4());
+        let channel_id = ChannelId(Uuid::new_v4());
+        let wh_id = WebhookId(Uuid::new_v4());
+
+        let mut wh_repo = MockWebhookRepository::new();
+        wh_repo
+            .expect_find_by_id()
+            .with(mockall::predicate::eq(wh_id))
+            .returning(move |_| {
+                Box::pin(async move { Ok(Some(make_webhook(wh_id, org, channel_id))) })
+            });
+
+        let mut msg_repo = MockMessageRepository::new();
+        msg_repo.expect_insert().times(0);
+
+        let mut events = MockEventPublisher::new();
+        events.expect_publish().times(0);
+
+        let mut svc = WebhookService::new(wh_repo, msg_repo, events);
+
+        let result = svc
+            .execute_webhook(ExecuteWebhookCommand {
+                webhook_id: wh_id,
+                token: "secret-token".to_owned(),
+                content: "   ".to_owned(),
+                components: None,
+            })
+            .await;
+
+        assert!(matches!(result, Err(CoreError::Conflict(_))));
     }
 
     #[tokio::test]

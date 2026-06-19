@@ -14,6 +14,55 @@ use crate::{
     mentions::parse_mentions,
 };
 
+/// Builds a validated, fully-populated [`Message`] from a [`CreateMessageCommand`].
+///
+/// Performs all invariant checks (blank content, component restrictions, component
+/// shape validation) and mention parsing. Does NOT persist or publish anything.
+pub(crate) fn build_new_message(cmd: CreateMessageCommand) -> Result<Message, CoreError> {
+    // Invariant: components are forbidden for USER-authored messages
+    let is_user = matches!(cmd.author, MessageAuthor::User(_));
+    if is_user && cmd.components.is_some() {
+        return Err(CoreError::Conflict(
+            "components are not allowed for user-authored messages".to_owned(),
+        ));
+    }
+    if cmd.content.trim().is_empty() {
+        return Err(CoreError::Conflict(
+            "message content cannot be blank".to_owned(),
+        ));
+    }
+
+    if let Some(ref comps) = cmd.components {
+        components::validate(comps)?;
+    }
+
+    let parsed = parse_mentions(&cmd.content);
+    let (author_type, author_user_id, author_webhook_id) = match cmd.author {
+        MessageAuthor::User(uid) => (AuthorType::User, Some(uid), None),
+        MessageAuthor::Webhook(wid) => (AuthorType::Webhook, None, Some(wid)),
+        MessageAuthor::System => (AuthorType::System, None, None),
+    };
+
+    let now = Utc::now();
+    Ok(Message {
+        id: MessageId(generate_uuid_v7()),
+        organization_id: cmd.organization_id,
+        channel_id: cmd.channel_id,
+        author_type,
+        author_user_id,
+        author_webhook_id,
+        content: cmd.content,
+        components: cmd.components,
+        mention_user_ids: parsed.user_ids,
+        mention_role_ids: parsed.role_ids,
+        mention_channel_ids: parsed.channel_ids,
+        mention_everyone: parsed.everyone,
+        reactions: vec![],
+        edited_at: None,
+        created_at: now,
+    })
+}
+
 pub struct MessageService<R, E> {
     repo: R,
     events: E,
@@ -32,49 +81,8 @@ where
         &mut self,
         cmd: CreateMessageCommand,
     ) -> Result<Message, CoreError> {
-        // Invariant: components are forbidden for USER-authored messages
-        let is_user = matches!(cmd.author, MessageAuthor::User(_));
-        if is_user && cmd.components.is_some() {
-            return Err(CoreError::Conflict(
-                "components are not allowed for user-authored messages".to_owned(),
-            ));
-        }
-        if cmd.content.trim().is_empty() {
-            return Err(CoreError::Conflict(
-                "message content cannot be blank".to_owned(),
-            ));
-        }
-
-        if let Some(ref comps) = cmd.components {
-            components::validate(comps)?;
-        }
-
-        let parsed = parse_mentions(&cmd.content);
-        let (author_type, author_user_id, author_webhook_id) = match cmd.author {
-            MessageAuthor::User(uid) => (AuthorType::User, Some(uid), None),
-            MessageAuthor::Webhook(wid) => (AuthorType::Webhook, None, Some(wid)),
-            MessageAuthor::System => (AuthorType::System, None, None),
-        };
-
-        let now = Utc::now();
-        let msg = Message {
-            id: MessageId(generate_uuid_v7()),
-            organization_id: cmd.organization_id,
-            channel_id: cmd.channel_id,
-            author_type,
-            author_user_id,
-            author_webhook_id,
-            content: cmd.content,
-            components: cmd.components,
-            mention_user_ids: parsed.user_ids,
-            mention_role_ids: parsed.role_ids,
-            mention_channel_ids: parsed.channel_ids,
-            mention_everyone: parsed.everyone,
-            reactions: vec![],
-            edited_at: None,
-            created_at: now,
-        };
-        let saved = self.repo.insert(&msg).await?;
+        let message = build_new_message(cmd)?;
+        let saved = self.repo.insert(&message).await?;
         self.events
             .publish(DomainEvent::MessageCreated(saved.clone()))
             .await?;
