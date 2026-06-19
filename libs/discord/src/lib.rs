@@ -12,3 +12,7 @@ pub mod components;
 pub mod domain;
 
 pub use domain::{Category, Channel, Message, Presence, Reaction, ReactionCount, Webhook};
+
+pub mod mentions;
+
+pub use mentions::{ParsedMentions, parse_mentions};
