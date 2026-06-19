@@ -8,3 +8,7 @@ pub use enums::{AuthorType, ChannelType, PresenceStatus};
 pub use ids::{CategoryId, ChannelId, MessageId, ReactionId, WebhookId};
 
 pub mod components;
+
+pub mod domain;
+
+pub use domain::{Category, Channel, Message, Presence, Reaction, ReactionCount, Webhook};
