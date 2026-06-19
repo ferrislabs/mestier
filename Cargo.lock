@@ -1624,6 +1624,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "discord"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "common",
+ "mockall",
+ "serde",
+ "serde_json",
+ "tokio",
+ "url",
+ "utoipa",
+ "uuid",
+]
+
+[[package]]
 name = "displaydoc"
 version = "0.2.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
