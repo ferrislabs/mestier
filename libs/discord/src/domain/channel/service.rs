@@ -204,6 +204,14 @@ mod tests {
     use mockall::predicate::eq;
     use uuid::Uuid;
 
+    fn thread_channel(id: ChannelId, org: OrganizationId) -> Channel {
+        Channel {
+            channel_type: ChannelType::Thread,
+            parent_id: Some(ChannelId(Uuid::new_v4())),
+            ..text_channel(id, org)
+        }
+    }
+
     fn text_channel(id: ChannelId, org: OrganizationId) -> Channel {
         use chrono::Utc;
         Channel {
@@ -444,7 +452,7 @@ mod tests {
         repo.expect_find_by_id()
             .with(eq(id))
             .times(1)
-            .returning(move |_| Box::pin(async move { Ok(Some(text_channel(id, org))) }));
+            .returning(move |_| Box::pin(async move { Ok(Some(thread_channel(id, org))) }));
         repo.expect_update().times(1).returning(|c| {
             let c = c.clone();
             Box::pin(async move { Ok(c) })
@@ -478,7 +486,7 @@ mod tests {
         repo.expect_find_by_id()
             .with(eq(id))
             .times(1)
-            .returning(move |_| Box::pin(async move { Ok(Some(text_channel(id, org))) }));
+            .returning(move |_| Box::pin(async move { Ok(Some(thread_channel(id, org))) }));
         repo.expect_delete()
             .with(eq(id))
             .times(1)
