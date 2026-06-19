@@ -1340,7 +1340,9 @@ name = "common"
 version = "0.1.0"
 dependencies = [
  "chrono",
+ "serde",
  "thiserror 2.0.18",
+ "utoipa",
  "uuid",
 ]
 
@@ -1619,6 +1621,21 @@ dependencies = [
  "libc",
  "redox_users",
  "winapi",
+]
+
+[[package]]
+name = "discord"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "common",
+ "mockall",
+ "serde",
+ "serde_json",
+ "tokio",
+ "url",
+ "utoipa",
+ "uuid",
 ]
 
 [[package]]

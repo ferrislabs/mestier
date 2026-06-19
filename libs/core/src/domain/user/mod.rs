@@ -1,30 +1,9 @@
-use std::{fmt::Display, str::FromStr};
-
 use chrono::{DateTime, Utc};
-use serde::{Deserialize, Serialize};
-use utoipa::ToSchema;
-use uuid::Uuid;
+pub use common::UserId;
 
 pub mod commands;
 pub mod ports;
 pub mod service;
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, ToSchema)]
-pub struct UserId(pub Uuid);
-
-impl FromStr for UserId {
-    type Err = uuid::Error;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        Uuid::from_str(s).map(UserId)
-    }
-}
-
-impl Display for UserId {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.0)
-    }
-}
 
 #[derive(Debug, Clone)]
 pub struct User {
@@ -41,6 +20,8 @@ pub struct User {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::str::FromStr;
+    use uuid::Uuid;
 
     #[test]
     fn user_id_parses_uuid() {

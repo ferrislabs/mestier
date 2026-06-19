@@ -8,3 +8,5 @@ edition.workspace = true
 thiserror = { workspace = true }
 chrono = { workspace = true }
 uuid = { workspace = true }
+serde = { workspace = true }
+utoipa = { workspace = true }
