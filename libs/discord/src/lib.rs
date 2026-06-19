@@ -16,3 +16,6 @@ pub use domain::{Category, Channel, Message, Presence, Reaction, ReactionCount, 
 pub mod mentions;
 
 pub use mentions::{ParsedMentions, parse_mentions};
+
+pub mod events;
+pub use events::{DomainEvent, EventPublisher};
