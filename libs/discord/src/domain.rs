@@ -87,3 +87,5 @@ pub struct Presence {
     pub status: PresenceStatus,
     pub updated_at: DateTime<Utc>,
 }
+
+pub mod category;
