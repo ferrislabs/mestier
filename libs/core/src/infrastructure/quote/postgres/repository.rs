@@ -29,14 +29,14 @@ impl<'tx> QuoteRepository for PgQuoteRepository<'tx> {
         let row = sqlx::query_as!(
             QuoteRow,
             r#"
-            INSERT INTO quotes (id, org_id, customer_id, property_id, status, total_cents, deleted_at, created_at, updated_at)
+            INSERT INTO quotes (id, org_id, customer_id, customer_context_id, status, total_cents, deleted_at, created_at, updated_at)
             VALUES ($1, $2, $3, $4, CAST($5 AS text)::quote_status, $6, $7, $8, $9)
-            RETURNING id, org_id, customer_id, property_id, status::text AS "status!", total_cents, deleted_at, created_at, updated_at
+            RETURNING id, org_id, customer_id, customer_context_id, status::text AS "status!", total_cents, deleted_at, created_at, updated_at
             "#,
             quote.id.0,
             quote.organization_id.0,
             quote.customer_id.0,
-            quote.property_id.0,
+            quote.customer_context_id.0,
             quote.status.as_str(),
             quote.total_cents,
             quote.deleted_at,
@@ -56,7 +56,7 @@ impl<'tx> QuoteRepository for PgQuoteRepository<'tx> {
         let row = sqlx::query_as!(
             QuoteRow,
             r#"
-            SELECT id, org_id, customer_id, property_id, status::text AS "status!", total_cents, deleted_at, created_at, updated_at
+            SELECT id, org_id, customer_id, customer_context_id, status::text AS "status!", total_cents, deleted_at, created_at, updated_at
             FROM quotes
             WHERE id = $1 AND deleted_at IS NULL
             "#,
@@ -85,7 +85,7 @@ impl<'tx> QuoteRepository for PgQuoteRepository<'tx> {
         let rows = sqlx::query_as!(
             QuoteRow,
             r#"
-            SELECT id, org_id, customer_id, property_id, status::text AS "status!", total_cents, deleted_at, created_at, updated_at
+            SELECT id, org_id, customer_id, customer_context_id, status::text AS "status!", total_cents, deleted_at, created_at, updated_at
             FROM quotes
             WHERE org_id = $1 AND deleted_at IS NULL
             ORDER BY created_at DESC, id DESC
@@ -123,16 +123,16 @@ impl<'tx> QuoteRepository for PgQuoteRepository<'tx> {
             r#"
             UPDATE quotes
             SET customer_id = $2,
-                property_id = $3,
+                customer_context_id = $3,
                 status = CAST($4 AS text)::quote_status,
                 total_cents = $5,
                 updated_at = $6
             WHERE id = $1 AND deleted_at IS NULL
-            RETURNING id, org_id, customer_id, property_id, status::text AS "status!", total_cents, deleted_at, created_at, updated_at
+            RETURNING id, org_id, customer_id, customer_context_id, status::text AS "status!", total_cents, deleted_at, created_at, updated_at
             "#,
             quote.id.0,
             quote.customer_id.0,
-            quote.property_id.0,
+            quote.customer_context_id.0,
             quote.status.as_str(),
             quote.total_cents,
             quote.updated_at,
@@ -173,7 +173,7 @@ impl<'tx> QuoteRepository for PgQuoteRepository<'tx> {
             UPDATE quotes
             SET status = CAST($2 AS text)::quote_status, updated_at = $3
             WHERE id = $1 AND deleted_at IS NULL
-            RETURNING id, org_id, customer_id, property_id, status::text AS "status!", total_cents, deleted_at, created_at, updated_at
+            RETURNING id, org_id, customer_id, customer_context_id, status::text AS "status!", total_cents, deleted_at, created_at, updated_at
             "#,
             id.0,
             status.as_str(),

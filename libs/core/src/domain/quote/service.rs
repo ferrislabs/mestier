@@ -38,7 +38,7 @@ where
                 id: quote_id,
                 organization_id: command.organization_id,
                 customer_id: command.customer_id,
-                property_id: command.property_id,
+                customer_context_id: command.customer_context_id,
                 status: crate::QuoteStatus::Draft,
                 total_cents,
                 lines,
@@ -75,7 +75,7 @@ where
                 id: existing.id,
                 organization_id: existing.organization_id,
                 customer_id: command.customer_id,
-                property_id: command.property_id,
+                customer_context_id: command.customer_context_id,
                 status: command.status,
                 total_cents,
                 lines,
@@ -197,7 +197,7 @@ fn calculate_total_cents(lines: &[QuoteLine]) -> Result<i32, CoreError> {
 mod tests {
     use super::*;
     use crate::{
-        CustomerId, PropertyId, QuoteStatus, ServiceRateUnit,
+        CustomerContextId, CustomerId, QuoteStatus, ServiceRateUnit,
         domain::quote::ports::MockQuoteRepository,
     };
     use mockall::predicate::eq;
@@ -223,7 +223,7 @@ mod tests {
             id,
             organization_id,
             customer_id: CustomerId(Uuid::new_v4()),
-            property_id: PropertyId(Uuid::new_v4()),
+            customer_context_id: CustomerContextId(Uuid::new_v4()),
             status: QuoteStatus::Draft,
             total_cents: 5500,
             lines: vec![QuoteLine {
@@ -260,7 +260,7 @@ mod tests {
             .create_quote(CreateQuoteCommand {
                 organization_id: OrganizationId(Uuid::new_v4()),
                 customer_id: CustomerId(Uuid::new_v4()),
-                property_id: PropertyId(Uuid::new_v4()),
+                customer_context_id: CustomerContextId(Uuid::new_v4()),
                 lines: vec![
                     line_command(Decimal::new(25, 1), 1200),
                     line_command(Decimal::new(1, 0), 500),
@@ -290,7 +290,7 @@ mod tests {
             .update_quote(UpdateQuoteCommand {
                 id,
                 customer_id: CustomerId(Uuid::new_v4()),
-                property_id: PropertyId(Uuid::new_v4()),
+                customer_context_id: CustomerContextId(Uuid::new_v4()),
                 status: QuoteStatus::Sent,
                 lines: vec![line_command(Decimal::new(3, 0), 2000)],
             })
@@ -364,7 +364,7 @@ mod tests {
             .create_quote(CreateQuoteCommand {
                 organization_id: OrganizationId(Uuid::new_v4()),
                 customer_id: CustomerId(Uuid::new_v4()),
-                property_id: PropertyId(Uuid::new_v4()),
+                customer_context_id: CustomerContextId(Uuid::new_v4()),
                 lines: vec![line_command(Decimal::ZERO, 1000)],
             })
             .await;

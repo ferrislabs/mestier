@@ -2,7 +2,7 @@ use auth::Identity;
 use axum::{Router, middleware::from_fn_with_state};
 use axum_extra::routing::RouterExt;
 use handlers::{ApiError, AppState, auth::auth_middleware, rate_limit::rate_limit_middleware};
-use mestier_core::{CustomerId, OrganizationId, PropertyId, QuoteId};
+use mestier_core::{CustomerContextId, CustomerId, OrganizationId, QuoteId};
 
 pub mod paths;
 pub mod quote;
@@ -50,15 +50,18 @@ async fn require_quote_targets(
     state: &AppState,
     organization_id: OrganizationId,
     customer_id: CustomerId,
-    property_id: PropertyId,
+    customer_context_id: CustomerContextId,
 ) -> Result<(), ApiError> {
     let customer = state.usecase.get_customer(customer_id).await?;
     if customer.organization_id != organization_id {
         return Err(ApiError::Forbidden);
     }
 
-    let property = state.usecase.get_property(property_id).await?;
-    if property.customer_id != customer_id {
+    let customer_context = state
+        .usecase
+        .get_customer_context(customer_context_id)
+        .await?;
+    if customer_context.customer_id != customer_id {
         return Err(ApiError::Forbidden);
     }
 

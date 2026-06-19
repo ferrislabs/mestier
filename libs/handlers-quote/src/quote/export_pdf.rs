@@ -58,7 +58,7 @@ fn render_quote_pdf(quote: &Quote) -> Vec<u8> {
         "Mestier - Devis".to_owned(),
         format!("Identifiant: {}", quote.id.0),
         format!("Client: {}", quote.customer_id.0),
-        format!("Lieu: {}", quote.property_id.0),
+        format!("Contexte: {}", quote.customer_context_id.0),
         format!("Statut: {}", quote.status.as_str()),
         format!("Total: {}", format_cents(quote.total_cents)),
         String::new(),

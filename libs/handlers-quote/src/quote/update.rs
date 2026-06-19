@@ -1,7 +1,7 @@
 use auth::Identity;
 use axum::{Extension, Json, extract::State};
 use handlers::{ApiError, AppState, DataEnvelope, Response};
-use mestier_core::{CustomerId, PropertyId, QuoteId, QuoteStatus, UpdateQuoteCommand};
+use mestier_core::{CustomerContextId, CustomerId, QuoteId, QuoteStatus, UpdateQuoteCommand};
 use serde::Deserialize;
 use utoipa::ToSchema;
 
@@ -15,7 +15,7 @@ use crate::{
 #[derive(Debug, Deserialize, ToSchema)]
 pub struct UpdateQuoteRequest {
     pub customer_id: CustomerId,
-    pub property_id: PropertyId,
+    pub customer_context_id: CustomerContextId,
     pub status: QuoteStatus,
     pub lines: Vec<QuoteLineRequest>,
 }
@@ -50,7 +50,7 @@ pub async fn handler(
         &state,
         current.organization_id,
         payload.customer_id,
-        payload.property_id,
+        payload.customer_context_id,
     )
     .await?;
 
@@ -59,7 +59,7 @@ pub async fn handler(
         .update_quote(UpdateQuoteCommand {
             id: quote_id,
             customer_id: payload.customer_id,
-            property_id: payload.property_id,
+            customer_context_id: payload.customer_context_id,
             status: payload.status,
             lines: into_line_commands(payload.lines)?,
         })

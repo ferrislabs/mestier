@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            UPDATE properties\n            SET label = $2, street = $3, zip = $4, city = $5, photo_key = $6, updated_at = $7\n            WHERE id = $1 AND deleted_at IS NULL\n            RETURNING id, customer_id, label, street, zip, city, photo_key, deleted_at, created_at, updated_at\n            ",
+  "query": "\n            SELECT id, customer_id, label, address_line, postal_code, city, photo_key, deleted_at, created_at, updated_at\n            FROM customer_contexts\n            WHERE customer_id = $1 AND deleted_at IS NULL\n            ORDER BY label ASC, created_at ASC\n            LIMIT $2 OFFSET $3\n            ",
   "describe": {
     "columns": [
       {
@@ -20,12 +20,12 @@
       },
       {
         "ordinal": 3,
-        "name": "street",
+        "name": "address_line",
         "type_info": "Text"
       },
       {
         "ordinal": 4,
-        "name": "zip",
+        "name": "postal_code",
         "type_info": "Text"
       },
       {
@@ -57,26 +57,22 @@
     "parameters": {
       "Left": [
         "Uuid",
-        "Text",
-        "Text",
-        "Text",
-        "Text",
-        "Text",
-        "Timestamptz"
+        "Int8",
+        "Int8"
       ]
     },
     "nullable": [
       false,
       false,
       false,
-      false,
-      false,
-      false,
+      true,
+      true,
+      true,
       true,
       true,
       false,
       false
     ]
   },
-  "hash": "e65132e22001029f68e369236cb48e9993054777577a1b6f60e25f84f390bca2"
+  "hash": "0bce817d4241449a56c618eb18ce32a631fdf097af4b323e17b5d11b01954df2"
 }

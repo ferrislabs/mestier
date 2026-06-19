@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            UPDATE quotes\n            SET customer_id = $2,\n                property_id = $3,\n                status = CAST($4 AS text)::quote_status,\n                total_cents = $5,\n                updated_at = $6\n            WHERE id = $1 AND deleted_at IS NULL\n            RETURNING id, org_id, customer_id, property_id, status::text AS \"status!\", total_cents, deleted_at, created_at, updated_at\n            ",
+  "query": "\n            SELECT id, org_id, customer_id, customer_context_id, status::text AS \"status!\", total_cents, deleted_at, created_at, updated_at\n            FROM quotes\n            WHERE org_id = $1 AND deleted_at IS NULL\n            ORDER BY created_at DESC, id DESC\n            LIMIT $2 OFFSET $3\n            ",
   "describe": {
     "columns": [
       {
@@ -20,7 +20,7 @@
       },
       {
         "ordinal": 3,
-        "name": "property_id",
+        "name": "customer_context_id",
         "type_info": "Uuid"
       },
       {
@@ -52,11 +52,8 @@
     "parameters": {
       "Left": [
         "Uuid",
-        "Uuid",
-        "Uuid",
-        "Text",
-        "Int4",
-        "Timestamptz"
+        "Int8",
+        "Int8"
       ]
     },
     "nullable": [
@@ -71,5 +68,5 @@
       false
     ]
   },
-  "hash": "81dab69463a7936a7ac2428716dcf6288f6c2543218eea2398b01958d1975dd0"
+  "hash": "e7de0656f6b0d4e5e677218c656377419e725016ee5e5577fd7a89ff0385a3ef"
 }

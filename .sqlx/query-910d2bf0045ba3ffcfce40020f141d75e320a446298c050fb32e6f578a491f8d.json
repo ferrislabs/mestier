@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT id, org_id, customer_id, property_id, status::text AS \"status!\", total_cents, deleted_at, created_at, updated_at\n            FROM quotes\n            WHERE org_id = $1 AND deleted_at IS NULL\n            ORDER BY created_at DESC, id DESC\n            LIMIT $2 OFFSET $3\n            ",
+  "query": "\n            INSERT INTO quotes (id, org_id, customer_id, customer_context_id, status, total_cents, deleted_at, created_at, updated_at)\n            VALUES ($1, $2, $3, $4, CAST($5 AS text)::quote_status, $6, $7, $8, $9)\n            RETURNING id, org_id, customer_id, customer_context_id, status::text AS \"status!\", total_cents, deleted_at, created_at, updated_at\n            ",
   "describe": {
     "columns": [
       {
@@ -20,7 +20,7 @@
       },
       {
         "ordinal": 3,
-        "name": "property_id",
+        "name": "customer_context_id",
         "type_info": "Uuid"
       },
       {
@@ -52,8 +52,14 @@
     "parameters": {
       "Left": [
         "Uuid",
-        "Int8",
-        "Int8"
+        "Uuid",
+        "Uuid",
+        "Uuid",
+        "Text",
+        "Int4",
+        "Timestamptz",
+        "Timestamptz",
+        "Timestamptz"
       ]
     },
     "nullable": [
@@ -68,5 +74,5 @@
       false
     ]
   },
-  "hash": "7ca26736105c4d3dbf28114e88516c0b3be143006dfcb9cfe20d455f9c606c41"
+  "hash": "910d2bf0045ba3ffcfce40020f141d75e320a446298c050fb32e6f578a491f8d"
 }
