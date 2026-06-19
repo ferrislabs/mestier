@@ -1,36 +1,13 @@
-use std::{
-    fmt::Display,
-    ops::{BitAnd, BitOr, BitOrAssign},
-    str::FromStr,
-};
-
-use chrono::{DateTime, Utc};
-use serde::Serialize;
-use utoipa::ToSchema;
-use uuid::Uuid;
+use std::ops::{BitAnd, BitOr, BitOrAssign};
 
 use crate::domain::organization::OrganizationId;
+use chrono::{DateTime, Utc};
+pub use common::RoleId;
+use serde::Serialize;
 
 pub mod commands;
 pub mod ports;
 pub mod service;
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, ToSchema)]
-pub struct RoleId(pub Uuid);
-
-impl FromStr for RoleId {
-    type Err = uuid::Error;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        Uuid::from_str(s).map(RoleId)
-    }
-}
-
-impl Display for RoleId {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.0)
-    }
-}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize)]
 pub struct Permissions(pub i64);
@@ -96,6 +73,8 @@ pub const MEMBER_ROLE_NAME: &str = "member";
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::str::FromStr;
+    use uuid::Uuid;
 
     #[test]
     fn role_id_parses_uuid() {

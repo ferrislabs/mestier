@@ -1,32 +1,10 @@
-use std::{fmt::Display, str::FromStr};
-
-use chrono::{DateTime, Utc};
-use serde::{Deserialize, Serialize};
-use utoipa::ToSchema;
-use uuid::Uuid;
-
 use crate::UserId;
+use chrono::{DateTime, Utc};
+pub use common::OrganizationId;
 
 pub mod commands;
 pub mod ports;
 pub mod service;
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, ToSchema)]
-pub struct OrganizationId(pub Uuid);
-
-impl FromStr for OrganizationId {
-    type Err = uuid::Error;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        Uuid::from_str(s).map(OrganizationId)
-    }
-}
-
-impl Display for OrganizationId {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.0)
-    }
-}
 
 #[derive(Debug, Clone)]
 pub struct Organization {
@@ -42,6 +20,8 @@ pub struct Organization {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::str::FromStr;
+    use uuid::Uuid;
 
     #[test]
     fn organization_id_parses_uuid() {
