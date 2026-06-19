@@ -144,10 +144,10 @@ fn validate_component(component: &Component) -> Result<(), CoreError> {
         Component::Button {
             style, label, url, ..
         } => {
-            if !matches!(style, ButtonStyle::Link) {
-                return Err(CoreError::Conflict(
-                    "Only Link buttons are supported in v1".into(),
-                ));
+            // Link is the only supported style in v1; this exhaustive match makes adding
+            // a new ButtonStyle a compile error here until validation is decided.
+            match style {
+                ButtonStyle::Link => {}
             }
             if label.is_empty() {
                 return Err(CoreError::Conflict("Button label must not be empty".into()));
@@ -228,6 +228,20 @@ mod tests {
                     url: "https://example.com/img.png".into(),
                     description: None,
                 },
+            })),
+        };
+        assert!(validate(&[c]).is_ok());
+    }
+
+    #[test]
+    fn valid_section_with_button_accessory_passes() {
+        let c = Component::Section {
+            children: vec![text("body")],
+            accessory: Some(Box::new(Component::Button {
+                style: ButtonStyle::Link,
+                label: "Open".into(),
+                url: "https://example.com".into(),
+                emoji: None,
             })),
         };
         assert!(validate(&[c]).is_ok());
