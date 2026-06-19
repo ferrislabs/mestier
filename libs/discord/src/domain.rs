@@ -91,4 +91,5 @@ pub struct Presence {
 pub mod category;
 pub mod channel;
 pub mod message;
+pub mod presence;
 pub mod webhook;
