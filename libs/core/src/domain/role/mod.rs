@@ -18,6 +18,8 @@ impl Permissions {
     pub const MANAGE_ORG: Self = Permissions(1 << 0);
     pub const MANAGE_MEMBERS: Self = Permissions(1 << 1);
     pub const MANAGE_ROLES: Self = Permissions(1 << 2);
+    pub const MANAGE_CHANNELS: Self = Permissions(1 << 3);
+    pub const MANAGE_WEBHOOKS: Self = Permissions(1 << 4);
 
     pub const ALL: Self = Permissions(i64::MAX);
 
@@ -118,5 +120,40 @@ mod tests {
         assert_eq!(Permissions::MANAGE_ORG.bits(), 1);
         assert_eq!(Permissions::MANAGE_MEMBERS.bits(), 2);
         assert_eq!(Permissions::MANAGE_ROLES.bits(), 4);
+    }
+
+    #[test]
+    fn manage_channels_has_stable_bit_value() {
+        assert_eq!(Permissions::MANAGE_CHANNELS.bits(), 8);
+    }
+
+    #[test]
+    fn manage_webhooks_has_stable_bit_value() {
+        assert_eq!(Permissions::MANAGE_WEBHOOKS.bits(), 16);
+    }
+
+    #[test]
+    fn all_contains_manage_channels() {
+        assert!(Permissions::ALL.contains(Permissions::MANAGE_CHANNELS));
+    }
+
+    #[test]
+    fn all_contains_manage_webhooks() {
+        assert!(Permissions::ALL.contains(Permissions::MANAGE_WEBHOOKS));
+    }
+
+    #[test]
+    fn manage_channels_does_not_overlap_existing_bits() {
+        assert!(!Permissions::MANAGE_ORG.contains(Permissions::MANAGE_CHANNELS));
+        assert!(!Permissions::MANAGE_MEMBERS.contains(Permissions::MANAGE_CHANNELS));
+        assert!(!Permissions::MANAGE_ROLES.contains(Permissions::MANAGE_CHANNELS));
+    }
+
+    #[test]
+    fn manage_webhooks_does_not_overlap_existing_bits() {
+        assert!(!Permissions::MANAGE_ORG.contains(Permissions::MANAGE_WEBHOOKS));
+        assert!(!Permissions::MANAGE_MEMBERS.contains(Permissions::MANAGE_WEBHOOKS));
+        assert!(!Permissions::MANAGE_ROLES.contains(Permissions::MANAGE_WEBHOOKS));
+        assert!(!Permissions::MANAGE_CHANNELS.contains(Permissions::MANAGE_WEBHOOKS));
     }
 }
