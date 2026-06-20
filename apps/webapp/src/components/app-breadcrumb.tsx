@@ -9,6 +9,8 @@ import {
 	BreadcrumbSeparator,
 } from '#/components/ui/breadcrumb'
 import { useActiveOrganization } from '#/hooks/use-active-organization'
+import { useCustomer } from '#/hooks/use-customers'
+import { customerDisplayName } from '#/pages/customers/types'
 
 interface BreadcrumbItemDefinition {
 	id: string
@@ -19,7 +21,16 @@ interface BreadcrumbItemDefinition {
 export function AppBreadcrumb() {
 	const location = useLocation()
 	const { activeOrganization } = useActiveOrganization()
-	const items = getBreadcrumbItems(location.pathname, activeOrganization.name)
+	const customerId = getCustomerId(location.pathname)
+	const customer = useCustomer(customerId ?? '', Boolean(customerId))
+	const customerLabel = customer.data?.data
+		? customerDisplayName(customer.data.data)
+		: 'Fiche client'
+	const items = getBreadcrumbItems(
+		location.pathname,
+		activeOrganization.name,
+		customerLabel,
+	)
 
 	return (
 		<Breadcrumb className="min-w-0 flex-1">
@@ -52,6 +63,7 @@ export function AppBreadcrumb() {
 function getBreadcrumbItems(
 	pathname: string,
 	organizationName: string,
+	customerLabel: string,
 ): BreadcrumbItemDefinition[] {
 	if (pathname === '/') {
 		return [{ id: 'organization', label: organizationName }]
@@ -61,7 +73,7 @@ function getBreadcrumbItems(
 		return [
 			{ id: 'organization', label: organizationName, to: '/' },
 			{ id: 'customers', label: 'Clients', to: '/customers' },
-			{ id: 'customer-detail', label: 'Fiche client' },
+			{ id: 'customer-detail', label: customerLabel },
 		]
 	}
 
@@ -90,4 +102,10 @@ function getBreadcrumbItems(
 		{ id: 'organization', label: organizationName, to: '/' },
 		{ id: 'console', label: 'Console' },
 	]
+}
+
+function getCustomerId(pathname: string): string | null {
+	const match = /^\/customers\/([^/]+)$/.exec(pathname)
+	if (!match?.[1]) return null
+	return decodeURIComponent(match[1])
 }

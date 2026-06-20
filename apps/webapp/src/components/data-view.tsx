@@ -47,6 +47,11 @@ interface UseDataViewOptions<TItem> {
 	sortOptions: DataViewSortOption<TItem>[]
 	page: number
 	pageSize: number
+	manualPagination?: boolean
+	totalCount?: number
+	pageCount?: number
+	from?: number
+	to?: number
 }
 
 export function useDataView<TItem>({
@@ -59,6 +64,11 @@ export function useDataView<TItem>({
 	sortOptions,
 	page,
 	pageSize,
+	manualPagination,
+	totalCount,
+	pageCount: controlledPageCount,
+	from,
+	to,
 }: UseDataViewOptions<TItem>) {
 	return useMemo(() => {
 		const query = search.trim().toLowerCase()
@@ -72,30 +82,55 @@ export function useDataView<TItem>({
 		const sorted = activeSort
 			? [...filtered].sort(activeSort.compare)
 			: filtered
-		const pageCount = Math.max(1, Math.ceil(sorted.length / pageSize))
+		const resolvedTotalCount = totalCount ?? data.length
+		const filteredCount =
+			manualPagination && !query && filter === 'all'
+				? resolvedTotalCount
+				: sorted.length
+		const pageCount =
+			controlledPageCount ?? Math.max(1, Math.ceil(filteredCount / pageSize))
 		const currentPage = Math.min(Math.max(page, 1), pageCount)
 		const fromIndex = (currentPage - 1) * pageSize
-		const rows = sorted.slice(fromIndex, fromIndex + pageSize)
+		const rows = manualPagination
+			? sorted
+			: sorted.slice(fromIndex, fromIndex + pageSize)
+		const resolvedFrom =
+			from ??
+			(filteredCount === 0
+				? 0
+				: manualPagination
+					? fromIndex + 1
+					: fromIndex + 1)
+		const resolvedTo =
+			to ??
+			(manualPagination
+				? Math.min(fromIndex + rows.length, filteredCount)
+				: Math.min(fromIndex + pageSize, filteredCount))
 
 		return {
 			rows,
-			totalCount: data.length,
-			filteredCount: sorted.length,
+			totalCount: resolvedTotalCount,
+			filteredCount,
 			page: currentPage,
 			pageCount,
-			from: sorted.length === 0 ? 0 : fromIndex + 1,
-			to: Math.min(fromIndex + pageSize, sorted.length),
+			from: resolvedFrom,
+			to: resolvedTo,
 		}
 	}, [
 		data,
 		filter,
 		filterPredicate,
+		from,
+		manualPagination,
 		page,
 		pageSize,
+		controlledPageCount,
 		search,
 		searchPredicate,
 		sort,
 		sortOptions,
+		to,
+		totalCount,
 	])
 }
 

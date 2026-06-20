@@ -1,5 +1,6 @@
 import { useNavigate } from '@tanstack/react-router'
 import { AlertCircle } from 'lucide-react'
+import { useState } from 'react'
 import { useActiveOrganization } from '#/hooks/use-active-organization'
 import {
 	type Customer,
@@ -7,6 +8,7 @@ import {
 	useCustomers,
 	useDeleteCustomer,
 } from '#/hooks/use-customers'
+import { getCustomerListUrlState } from '#/pages/customers/customer-list-url-state'
 import { CustomerListUI } from '#/pages/customers/ui/customer-list-ui'
 
 export function CustomerListFeature() {
@@ -38,7 +40,10 @@ export function CustomerListFeature() {
 
 function CustomerList({ organizationId }: { organizationId: string }) {
 	const navigate = useNavigate()
-	const customers = useCustomers(organizationId)
+	const [initialListState] = useState(getCustomerListUrlState)
+	const [page, setPage] = useState(initialListState.page)
+	const [pageSize, setPageSize] = useState(initialListState.pageSize)
+	const customers = useCustomers(organizationId, { page, perPage: pageSize })
 	const createCustomer = useCreateCustomer(organizationId)
 	const deleteCustomer = useDeleteCustomer(organizationId)
 
@@ -52,6 +57,9 @@ function CustomerList({ organizationId }: { organizationId: string }) {
 	return (
 		<CustomerListUI
 			customers={customers.data?.data ?? []}
+			pagination={customers.data?.pagination ?? null}
+			page={page}
+			pageSize={pageSize}
 			error={
 				customers.error?.message ??
 				createCustomer.error?.message ??
@@ -65,6 +73,11 @@ function CustomerList({ organizationId }: { organizationId: string }) {
 					? deleteCustomer.variables.path.customer_id
 					: null
 			}
+			onPageChange={setPage}
+			onPageSizeChange={(nextPageSize) => {
+				setPageSize(nextPageSize)
+				setPage(1)
+			}}
 			onAdd={(payload) =>
 				createCustomer.mutateAsync({
 					path: { organization_id: organizationId },

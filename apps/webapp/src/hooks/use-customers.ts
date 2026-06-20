@@ -7,10 +7,15 @@ const CUSTOMER_CONTEXTS_PATH =
 	'/api/v1/customers/{customer_id}/customer-contexts'
 const CUSTOMER_CONTEXT_PATH = '/api/v1/customer-contexts/{customer_context_id}'
 
-function listParams(organizationId: string) {
+interface CustomerListParams {
+	page: number
+	perPage: number
+}
+
+function listParams(organizationId: string, params: CustomerListParams) {
 	return {
 		path: { organization_id: organizationId },
-		query: { page: 1, per_page: 100 },
+		query: { page: params.page, per_page: params.perPage },
 	}
 }
 
@@ -19,11 +24,6 @@ function customerContextsParams(customerId: string) {
 		path: { customer_id: customerId },
 		query: { page: 1, per_page: 100 },
 	}
-}
-
-function customersKey(organizationId: string) {
-	return window.tanstackApi.get(CUSTOMERS_PATH, listParams(organizationId))
-		.queryKey
 }
 
 function customerKey(customerId: string) {
@@ -45,19 +45,23 @@ function customerContextKey(customerContextId: string) {
 	}).queryKey
 }
 
-export function useCustomers(organizationId: string) {
+export function useCustomers(
+	organizationId: string,
+	params: CustomerListParams = { page: 1, perPage: 100 },
+) {
 	return useQuery(
-		window.tanstackApi.get(CUSTOMERS_PATH, listParams(organizationId))
+		window.tanstackApi.get(CUSTOMERS_PATH, listParams(organizationId, params))
 			.queryOptions,
 	)
 }
 
-export function useCustomer(customerId: string) {
-	return useQuery(
-		window.tanstackApi.get(CUSTOMER_PATH, {
+export function useCustomer(customerId: string, enabled = true) {
+	return useQuery({
+		...window.tanstackApi.get(CUSTOMER_PATH, {
 			path: { customer_id: customerId },
 		}).queryOptions,
-	)
+		enabled: enabled && Boolean(customerId),
+	})
 }
 
 export function useCustomerContexts(customerId: string, enabled = true) {
@@ -77,7 +81,9 @@ export function useCreateCustomer(organizationId: string) {
 		...window.tanstackApi.mutation('post', CUSTOMERS_PATH).mutationOptions,
 		onSuccess: async () => {
 			await queryClient.invalidateQueries({
-				queryKey: customersKey(organizationId),
+				predicate: (query) =>
+					query.queryKey[0]?._id === CUSTOMERS_PATH &&
+					query.queryKey[0]?.path?.organization_id === organizationId,
 			})
 		},
 		meta: { organizationId },
@@ -92,7 +98,10 @@ export function useUpdateCustomer() {
 		onSuccess: async (customer) => {
 			await Promise.all([
 				queryClient.invalidateQueries({
-					queryKey: customersKey(customer.organization_id),
+					predicate: (query) =>
+						query.queryKey[0]?._id === CUSTOMERS_PATH &&
+						query.queryKey[0]?.path?.organization_id ===
+							customer.organization_id,
 				}),
 				queryClient.invalidateQueries({
 					queryKey: customerKey(customer.id),
@@ -110,7 +119,9 @@ export function useDeleteCustomer(organizationId: string) {
 		onSuccess: async (_res, variables) => {
 			await Promise.all([
 				queryClient.invalidateQueries({
-					queryKey: customersKey(organizationId),
+					predicate: (query) =>
+						query.queryKey[0]?._id === CUSTOMERS_PATH &&
+						query.queryKey[0]?.path?.organization_id === organizationId,
 				}),
 				queryClient.invalidateQueries({
 					queryKey: customerKey(variables.path.customer_id),
@@ -191,3 +202,4 @@ export type CustomerPayload = Schemas.CreateCustomerRequest
 export type CustomerContext = Schemas.CustomerContextResponse
 export type CustomerContextPayload = Schemas.CreateCustomerContextRequest
 export type FileUpload = Schemas.FileUploadResponse
+export type PaginationMetadata = Schemas.PaginationMetadata

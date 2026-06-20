@@ -1,13 +1,13 @@
 'use client'
 
-import { Building2, Check, ChevronsUpDown, Plus } from 'lucide-react'
+import { useLocation, useNavigate } from '@tanstack/react-router'
+import { Building2, Check, ChevronsUpDown } from 'lucide-react'
 
 import {
 	DropdownMenu,
 	DropdownMenuContent,
 	DropdownMenuItem,
 	DropdownMenuLabel,
-	DropdownMenuSeparator,
 	DropdownMenuTrigger,
 } from '#/components/ui/dropdown-menu'
 import {
@@ -22,12 +22,21 @@ import { cn } from '#/lib/utils'
 
 export function TeamSwitcher() {
 	const { isMobile } = useSidebar()
+	const location = useLocation()
+	const navigate = useNavigate()
 	const {
 		organizations,
 		activeOrganization,
 		activeOrganizationId,
 		setActiveOrganizationId,
 	} = useActiveOrganization()
+	const handleOrganizationSelect = (organizationId: string) => {
+		if (organizationId === activeOrganizationId) return
+		setActiveOrganizationId(organizationId)
+		if (location.pathname.startsWith('/customers/')) {
+			void navigate({ to: '/customers' })
+		}
+	}
 
 	return (
 		<SidebarMenu>
@@ -65,7 +74,7 @@ export function TeamSwitcher() {
 							return (
 								<DropdownMenuItem
 									key={organization.id}
-									onClick={() => setActiveOrganizationId(organization.id)}
+									onClick={() => handleOrganizationSelect(organization.id)}
 									className="gap-2 p-2"
 								>
 									<OrganizationMark
@@ -84,18 +93,6 @@ export function TeamSwitcher() {
 								</DropdownMenuItem>
 							)
 						})}
-						<DropdownMenuSeparator />
-						<DropdownMenuItem disabled className="gap-2 p-2">
-							<div className="flex size-7 items-center justify-center rounded-md border bg-transparent">
-								<Plus className="size-4" />
-							</div>
-							<div className="grid leading-tight">
-								<span className="font-medium">Ajouter une organisation</span>
-								<span className="text-xs text-muted-foreground">
-									Bientôt disponible
-								</span>
-							</div>
-						</DropdownMenuItem>
 					</DropdownMenuContent>
 				</DropdownMenu>
 			</SidebarMenuItem>

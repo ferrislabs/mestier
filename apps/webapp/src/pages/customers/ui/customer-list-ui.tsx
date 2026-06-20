@@ -7,7 +7,7 @@ import {
 	Trash2,
 	UserPlus,
 } from 'lucide-react'
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import {
 	DataViewPagination,
 	type DataViewSortOption,
@@ -40,15 +40,28 @@ import {
 	SectionCard,
 	StatusBadge,
 } from '#/components/ui/surface'
-import type { Customer, CustomerPayload } from '#/hooks/use-customers'
+import type {
+	Customer,
+	CustomerPayload,
+	PaginationMetadata,
+} from '#/hooks/use-customers'
+import {
+	getCustomerListUrlState,
+	writeCustomerListUrlState,
+} from '#/pages/customers/customer-list-url-state'
 import { customerDisplayName, customerInitials } from '#/pages/customers/types'
 
 interface CustomerListUIProps {
 	customers: Customer[]
+	pagination?: PaginationMetadata | null
+	page: number
+	pageSize: number
 	error?: string | null
 	isLoading?: boolean
 	isCreating?: boolean
 	deletingId?: string | null
+	onPageChange: (page: number) => void
+	onPageSizeChange: (pageSize: number) => void
 	onAdd?: (payload: CustomerPayload) => Promise<unknown>
 	onEdit?: (customer: Customer) => void
 	onDelete?: (customer: Customer) => void
@@ -57,20 +70,32 @@ interface CustomerListUIProps {
 
 export function CustomerListUI({
 	customers,
+	pagination,
+	page,
+	pageSize,
 	error,
 	isLoading,
 	isCreating,
 	deletingId,
+	onPageChange,
+	onPageSizeChange,
 	onAdd,
 	onEdit,
 	onDelete,
 	onRetry,
 }: CustomerListUIProps) {
-	const [search, setSearch] = useState('')
-	const [contactFilter, setContactFilter] = useState('all')
-	const [sort, setSort] = useState('created-desc')
-	const [page, setPage] = useState(1)
-	const [pageSize, setPageSize] = useState(10)
+	const [initialListState] = useState(getCustomerListUrlState)
+	const [search, setSearch] = useState(initialListState.search)
+	const [contactFilter, setContactFilter] = useState(
+		isValidCustomerFilter(initialListState.filter)
+			? initialListState.filter
+			: 'all',
+	)
+	const [sort, setSort] = useState(
+		isValidCustomerSort(initialListState.sort)
+			? initialListState.sort
+			: 'created-desc',
+	)
 	const [createOpen, setCreateOpen] = useState(false)
 	const [draft, setDraft] = useState({
 		firstName: '',
@@ -100,7 +125,41 @@ export function CustomerListUI({
 		sortOptions: CUSTOMER_SORT_OPTIONS,
 		page,
 		pageSize,
+		manualPagination: true,
+		totalCount: pagination?.total ?? customers.length,
+		pageCount: pagination?.last_page ?? Math.max(page, 1),
+		from: getPaginationFrom(pagination),
+		to: getPaginationTo(pagination, customers.length),
 	})
+
+	useEffect(() => {
+		if (!pagination) return
+		if (dataView.page !== page) onPageChange(dataView.page)
+	}, [dataView.page, onPageChange, page, pagination])
+
+	useEffect(() => {
+		writeCustomerListUrlState({
+			search,
+			filter: contactFilter,
+			sort,
+			page,
+			pageSize,
+		})
+	}, [contactFilter, page, pageSize, search, sort])
+
+	useEffect(() => {
+		const syncFromUrl = () => {
+			const next = getCustomerListUrlState()
+			setSearch(next.search)
+			setContactFilter(isValidCustomerFilter(next.filter) ? next.filter : 'all')
+			setSort(isValidCustomerSort(next.sort) ? next.sort : 'created-desc')
+			onPageChange(next.page)
+			onPageSizeChange(next.pageSize)
+		}
+
+		window.addEventListener('popstate', syncFromUrl)
+		return () => window.removeEventListener('popstate', syncFromUrl)
+	}, [onPageChange, onPageSizeChange])
 
 	const canCreate = draft.firstName.trim() && draft.lastName.trim()
 
@@ -266,19 +325,19 @@ export function CustomerListUI({
 						search={search}
 						onSearchChange={(value) => {
 							setSearch(value)
-							setPage(1)
+							onPageChange(1)
 						}}
 						searchPlaceholder="Rechercher un client…"
 						filter={contactFilter}
 						onFilterChange={(value) => {
 							setContactFilter(value)
-							setPage(1)
+							onPageChange(1)
 						}}
 						filterOptions={CUSTOMER_FILTER_OPTIONS}
 						sort={sort}
 						onSortChange={(value) => {
 							setSort(value)
-							setPage(1)
+							onPageChange(1)
 						}}
 						sortOptions={CUSTOMER_SORT_OPTIONS}
 						filteredCount={dataView.filteredCount}
@@ -286,7 +345,7 @@ export function CustomerListUI({
 						onReset={() => {
 							setSearch('')
 							setContactFilter('all')
-							setPage(1)
+							onPageChange(1)
 						}}
 					/>
 				</div>
@@ -361,7 +420,7 @@ export function CustomerListUI({
 									</span>
 								</button>
 
-								<div className="absolute right-3 top-1/2 z-20 -translate-y-1/2 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100">
+								<div className="absolute right-3 top-1/2 z-20 -translate-y-1/2 opacity-100 transition-opacity md:opacity-0 md:group-hover:opacity-100 md:group-focus-within:opacity-100">
 									<DropdownMenu>
 										<DropdownMenuTrigger asChild>
 											<Button
@@ -403,12 +462,9 @@ export function CustomerListUI({
 						pageSize={pageSize}
 						from={dataView.from}
 						to={dataView.to}
-						totalCount={dataView.filteredCount}
-						onPageChange={setPage}
-						onPageSizeChange={(value) => {
-							setPageSize(value)
-							setPage(1)
-						}}
+						totalCount={dataView.totalCount}
+						onPageChange={onPageChange}
+						onPageSizeChange={onPageSizeChange}
 					/>
 				) : null}
 			</section>
@@ -552,4 +608,28 @@ function formatDate(value: string): string {
 
 function dateValue(value: string): number {
 	return new Date(value).getTime()
+}
+
+function isValidCustomerFilter(value: string): boolean {
+	return CUSTOMER_FILTER_OPTIONS.some((option) => option.value === value)
+}
+
+function isValidCustomerSort(value: string): boolean {
+	return CUSTOMER_SORT_OPTIONS.some((option) => option.value === value)
+}
+
+function getPaginationFrom(pagination?: PaginationMetadata | null): number {
+	if (!pagination || pagination.is_empty) return 0
+	return (pagination.current_page - 1) * pagination.per_page + 1
+}
+
+function getPaginationTo(
+	pagination: PaginationMetadata | null | undefined,
+	rowCount: number,
+): number {
+	if (!pagination || pagination.is_empty) return 0
+	return Math.min(
+		(pagination.current_page - 1) * pagination.per_page + rowCount,
+		pagination.total,
+	)
 }
