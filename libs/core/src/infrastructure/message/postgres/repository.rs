@@ -115,32 +115,64 @@ impl<'tx> MessageRepository for PgMessageRepository<'tx> {
         limit: u64,
     ) -> Result<Vec<Message>, CoreError> {
         let mut tx = self.tx.lock().await;
-        let rows = sqlx::query_as!(
-            MessageRow,
-            r#"
-			SELECT id, org_id, channel_id,
-			       author_type::text AS "author_type!",
-			       author_user_id, author_webhook_id,
-			       content, components,
-			       mention_user_ids AS "mention_user_ids!: Vec<uuid::Uuid>",
-			       mention_role_ids AS "mention_role_ids!: Vec<uuid::Uuid>",
-			       mention_channel_ids AS "mention_channel_ids!: Vec<uuid::Uuid>",
-			       mention_everyone, edited_at, created_at
-			FROM messages
-			WHERE channel_id = $1
-			  AND ($2::uuid IS NULL OR id < $2)
-			  AND ($3::uuid IS NULL OR id > $3)
-			ORDER BY id DESC
-			LIMIT $4
-			"#,
-            channel.0,
-            before.map(|m| m.0),
-            after.map(|m| m.0),
-            limit as i64,
-        )
-        .fetch_all(&mut ***tx)
-        .await
-        .map_err(map_sqlx_error)?;
+
+        let rows = if after.is_some() && before.is_none() {
+            // Forward pagination: fetch the n messages CLOSEST to (just after) the
+            // cursor by ordering ASC, then reverse so callers always receive newest-first.
+            let after_id = after.unwrap().0;
+            let mut rows = sqlx::query_as!(
+                MessageRow,
+                r#"
+				SELECT id, org_id, channel_id,
+				       author_type::text AS "author_type!",
+				       author_user_id, author_webhook_id,
+				       content, components,
+				       mention_user_ids AS "mention_user_ids!: Vec<uuid::Uuid>",
+				       mention_role_ids AS "mention_role_ids!: Vec<uuid::Uuid>",
+				       mention_channel_ids AS "mention_channel_ids!: Vec<uuid::Uuid>",
+				       mention_everyone, edited_at, created_at
+				FROM messages
+				WHERE channel_id = $1
+				  AND id > $2
+				ORDER BY id ASC
+				LIMIT $3
+				"#,
+                channel.0,
+                after_id,
+                limit as i64,
+            )
+            .fetch_all(&mut ***tx)
+            .await
+            .map_err(map_sqlx_error)?;
+            // Reverse to restore newest-first order, consistent with other pagination paths.
+            rows.reverse();
+            rows
+        } else {
+            sqlx::query_as!(
+                MessageRow,
+                r#"
+				SELECT id, org_id, channel_id,
+				       author_type::text AS "author_type!",
+				       author_user_id, author_webhook_id,
+				       content, components,
+				       mention_user_ids AS "mention_user_ids!: Vec<uuid::Uuid>",
+				       mention_role_ids AS "mention_role_ids!: Vec<uuid::Uuid>",
+				       mention_channel_ids AS "mention_channel_ids!: Vec<uuid::Uuid>",
+				       mention_everyone, edited_at, created_at
+				FROM messages
+				WHERE channel_id = $1
+				  AND ($2::uuid IS NULL OR id < $2)
+				ORDER BY id DESC
+				LIMIT $3
+				"#,
+                channel.0,
+                before.map(|m| m.0),
+                limit as i64,
+            )
+            .fetch_all(&mut ***tx)
+            .await
+            .map_err(map_sqlx_error)?
+        };
 
         let mut messages = Vec::with_capacity(rows.len());
         for row in rows {
@@ -160,11 +192,22 @@ impl<'tx> MessageRepository for PgMessageRepository<'tx> {
             .transpose()
             .map_err(|e| CoreError::Internal(format!("components serialization: {e}")))?;
 
+        let mention_user_ids: Vec<uuid::Uuid> = m.mention_user_ids.iter().map(|u| u.0).collect();
+        let mention_role_ids: Vec<uuid::Uuid> = m.mention_role_ids.iter().map(|r| r.0).collect();
+        let mention_channel_ids: Vec<uuid::Uuid> =
+            m.mention_channel_ids.iter().map(|c| c.0).collect();
+
         let row = sqlx::query_as!(
             MessageRow,
             r#"
 			UPDATE messages
-			SET content = $2, components = $3, edited_at = $4
+			SET content = $2,
+			    components = $3,
+			    edited_at = $4,
+			    mention_user_ids = $5,
+			    mention_role_ids = $6,
+			    mention_channel_ids = $7,
+			    mention_everyone = $8
 			WHERE id = $1
 			RETURNING
 				id, org_id, channel_id,
@@ -180,6 +223,10 @@ impl<'tx> MessageRepository for PgMessageRepository<'tx> {
             m.content,
             components_json,
             m.edited_at,
+            mention_user_ids.as_slice(),
+            mention_role_ids.as_slice(),
+            mention_channel_ids.as_slice(),
+            m.mention_everyone,
         )
         .fetch_optional(&mut ***tx)
         .await
@@ -287,4 +334,151 @@ async fn fetch_reaction_counts(
     .await
     .map_err(map_sqlx_error)?;
     Ok(rows.into_iter().map(Into::into).collect())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use chrono::Utc;
+    use common::{OrganizationId, generate_uuid_v7};
+    use discord::{AuthorType, ChannelId, Message, MessageId, UserId};
+    use sqlx::PgPool;
+
+    async fn make_pool() -> PgPool {
+        PgPool::connect("postgres://ferriskey:ferriskey@localhost:5433/mestier")
+            .await
+            .unwrap()
+    }
+
+    /// Seeds a throwaway user + organization + channel in the current transaction.
+    /// Returns `(OrganizationId, UserId, ChannelId)`.
+    async fn seed_org_user_channel(
+        tx: &mut sqlx::Transaction<'static, sqlx::Postgres>,
+    ) -> (OrganizationId, UserId, ChannelId) {
+        let user_id = generate_uuid_v7();
+        sqlx::query!(
+            r#"INSERT INTO users (id, email, username, display_name, sub)
+			   VALUES ($1, $2, $3, $4, $5)"#,
+            user_id,
+            format!("test-{}@example.com", user_id),
+            format!("user-{}", user_id),
+            "Test User",
+            format!("sub-{}", user_id),
+        )
+        .execute(&mut **tx)
+        .await
+        .unwrap();
+
+        let org_id = generate_uuid_v7();
+        sqlx::query!(
+            r#"INSERT INTO organizations (id, name, slug, owner_id)
+			   VALUES ($1, $2, $3, $4)"#,
+            org_id,
+            "Test Org",
+            format!("test-org-{}", org_id),
+            user_id,
+        )
+        .execute(&mut **tx)
+        .await
+        .unwrap();
+
+        let channel_id = generate_uuid_v7();
+        sqlx::query!(
+			r#"INSERT INTO channels (id, org_id, channel_type, name, position, archived, created_at, updated_at)
+			   VALUES ($1, $2, 'TEXT'::channel_type, $3, 0, false, now(), now())"#,
+			channel_id,
+			org_id,
+			format!("test-channel-{}", channel_id),
+		)
+		.execute(&mut **tx)
+		.await
+		.unwrap();
+
+        (
+            OrganizationId(org_id),
+            UserId(user_id),
+            ChannelId(channel_id),
+        )
+    }
+
+    #[tokio::test]
+    #[ignore = "requires live postgres"]
+    async fn update_persists_reparsed_mentions() {
+        let pool = make_pool().await;
+
+        crate::infrastructure::postgres::with_tx(&pool, async |tx| {
+            let (org_id, author_id, channel_id) = {
+                let mut guard = tx.lock().await;
+                seed_org_user_channel(*guard).await
+            };
+
+            // Seed a second user to mention later
+            let other_user_id = UserId(generate_uuid_v7());
+            {
+                let mut guard = tx.lock().await;
+                sqlx::query!(
+                    r#"INSERT INTO users (id, email, username, display_name, sub)
+					   VALUES ($1, $2, $3, $4, $5)"#,
+                    other_user_id.0,
+                    format!("test-{}@example.com", other_user_id.0),
+                    format!("user-{}", other_user_id.0),
+                    "Other User",
+                    format!("sub-{}", other_user_id.0),
+                )
+                .execute(&mut ***guard)
+                .await
+                .unwrap();
+            }
+
+            let mut repo = PgMessageRepository::new(&tx);
+
+            // Insert an initial message mentioning author_id
+            let msg_id = MessageId(generate_uuid_v7());
+            let now = Utc::now();
+            let original = Message {
+                id: msg_id,
+                organization_id: org_id,
+                channel_id,
+                author_type: AuthorType::User,
+                author_user_id: Some(author_id),
+                author_webhook_id: None,
+                content: "hello".into(),
+                components: None,
+                mention_user_ids: vec![author_id],
+                mention_role_ids: vec![],
+                mention_channel_ids: vec![],
+                mention_everyone: false,
+                reactions: vec![],
+                edited_at: None,
+                created_at: now,
+            };
+            repo.insert(&original).await.unwrap();
+
+            // Update: different mention arrays
+            let updated_msg = Message {
+                mention_user_ids: vec![other_user_id],
+                mention_role_ids: vec![],
+                mention_channel_ids: vec![channel_id],
+                mention_everyone: true,
+                content: "hello everyone".into(),
+                edited_at: Some(Utc::now()),
+                ..original.clone()
+            };
+            repo.update(&updated_msg).await.unwrap();
+
+            // Re-fetch and assert stored mentions equal the new ones
+            let fetched = repo
+                .find_by_id(msg_id)
+                .await
+                .unwrap()
+                .expect("message must exist");
+            assert_eq!(fetched.mention_user_ids, vec![other_user_id]);
+            assert_eq!(fetched.mention_channel_ids, vec![channel_id]);
+            assert!(fetched.mention_everyone);
+
+            Err::<(), _>(CoreError::Internal("rollback".into()))
+        })
+        .await
+        .unwrap_err();
+    }
 }
