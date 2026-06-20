@@ -1,5 +1,12 @@
 export namespace Schemas {
 	// <Schemas>
+	export type CreateCustomerContextRequest = {
+		address_line?: (string | null) | undefined
+		city?: (string | null) | undefined
+		label: string
+		photo_key?: (string | null) | undefined
+		postal_code?: (string | null) | undefined
+	}
 	export type CreateCustomerRequest = {
 		email?: (string | null) | undefined
 		first_name: string
@@ -17,13 +24,7 @@ export namespace Schemas {
 		name: string
 	}
 	export type CreateOrganizationRequest = { name: string; slug: string }
-	export type CreatePropertyRequest = {
-		city: string
-		label: string
-		photo_key?: (string | null) | undefined
-		street: string
-		zip: string
-	}
+	export type CustomerContextId = string
 	export type CustomerId = string
 	export type ServiceRateId = string
 	export type ServiceRateUnit = 'HOUR' | 'ML' | 'M2'
@@ -36,16 +37,26 @@ export namespace Schemas {
 		unit: ServiceRateUnit
 		unit_price_cents: number
 	}
-	export type PropertyId = string
 	export type CreateQuoteRequest = {
+		customer_context_id: CustomerContextId
 		customer_id: CustomerId
 		lines: Array<QuoteLineRequest>
-		property_id: PropertyId
 	}
 	export type CreateServiceRateRequest = {
 		label: string
 		rate_cents: number
 		unit: ServiceRateUnit
+	}
+	export type CustomerContextResponse = {
+		address_line?: (string | null) | undefined
+		city?: (string | null) | undefined
+		created_at: string
+		customer_id: CustomerId
+		id: CustomerContextId
+		label: string
+		photo_key?: (string | null) | undefined
+		postal_code?: (string | null) | undefined
+		updated_at: string
 	}
 	export type OrganizationId = string
 	export type CustomerResponse = {
@@ -100,17 +111,6 @@ export namespace Schemas {
 		prev_page?: (number | null) | undefined
 		total?: (number | null) | undefined
 	}
-	export type PropertyResponse = {
-		city: string
-		created_at: string
-		customer_id: CustomerId
-		id: PropertyId
-		label: string
-		photo_key?: (string | null) | undefined
-		street: string
-		updated_at: string
-		zip: string
-	}
 	export type QuoteId = string
 	export type QuoteLineId = string
 	export type QuoteLineResponse = {
@@ -135,11 +135,11 @@ export namespace Schemas {
 		| 'CANCELLED'
 	export type QuoteResponse = {
 		created_at: string
+		customer_context_id: CustomerContextId
 		customer_id: CustomerId
 		id: QuoteId
 		lines: Array<QuoteLineResponse>
 		organization_id: OrganizationId
-		property_id: PropertyId
 		status: QuoteStatus
 		total_cents: number
 		updated_at: string
@@ -152,6 +152,13 @@ export namespace Schemas {
 		rate_cents: number
 		unit: ServiceRateUnit
 		updated_at: string
+	}
+	export type UpdateCustomerContextRequest = {
+		address_line?: (string | null) | undefined
+		city?: (string | null) | undefined
+		label: string
+		photo_key?: (string | null) | undefined
+		postal_code?: (string | null) | undefined
 	}
 	export type UpdateCustomerRequest = {
 		email?: (string | null) | undefined
@@ -169,17 +176,10 @@ export namespace Schemas {
 		name: string
 	}
 	export type UpdateOrganizationRequest = { name: string; slug: string }
-	export type UpdatePropertyRequest = {
-		city: string
-		label: string
-		photo_key?: (string | null) | undefined
-		street: string
-		zip: string
-	}
 	export type UpdateQuoteRequest = {
+		customer_context_id: CustomerContextId
 		customer_id: CustomerId
 		lines: Array<QuoteLineRequest>
-		property_id: PropertyId
 		status: QuoteStatus
 	}
 	export type UpdateQuoteStatusRequest = { status: QuoteStatus }
@@ -195,6 +195,73 @@ export namespace Schemas {
 export namespace Endpoints {
 	// <Endpoints>
 
+	export type get_GetCustomerContext = {
+		method: 'GET'
+		path: '/api/v1/customer-contexts/{customer_context_id}'
+		requestFormat: 'json'
+		parameters: {
+			path: { customer_context_id: string }
+		}
+		responses: {
+			200: {
+				data: {
+					address_line?: (string | null) | undefined
+					city?: (string | null) | undefined
+					created_at: string
+					customer_id: Schemas.CustomerId
+					id: Schemas.CustomerContextId
+					label: string
+					photo_key?: (string | null) | undefined
+					postal_code?: (string | null) | undefined
+					updated_at: string
+				}
+				pagination?: (null | Schemas.PaginationMetadata) | undefined
+			}
+			401: unknown
+			403: unknown
+			404: unknown
+		}
+	}
+	export type delete_DeleteCustomerContext = {
+		method: 'DELETE'
+		path: '/api/v1/customer-contexts/{customer_context_id}'
+		requestFormat: 'json'
+		parameters: {
+			path: { customer_context_id: string }
+		}
+		responses: { 204: unknown; 401: unknown; 403: unknown; 404: unknown }
+	}
+	export type patch_UpdateCustomerContext = {
+		method: 'PATCH'
+		path: '/api/v1/customer-contexts/{customer_context_id}'
+		requestFormat: 'json'
+		parameters: {
+			path: { customer_context_id: string }
+
+			body: Schemas.UpdateCustomerContextRequest
+		}
+		responses: {
+			200: {
+				data: {
+					address_line?: (string | null) | undefined
+					city?: (string | null) | undefined
+					created_at: string
+					customer_id: Schemas.CustomerId
+					id: Schemas.CustomerContextId
+					label: string
+					photo_key?: (string | null) | undefined
+					postal_code?: (string | null) | undefined
+					updated_at: string
+				}
+				pagination?: (null | Schemas.PaginationMetadata) | undefined
+			}
+			400: unknown
+			401: unknown
+			403: unknown
+			404: unknown
+			409: unknown
+		}
+	}
 	export type get_GetCustomer = {
 		method: 'GET'
 		path: '/api/v1/customers/{customer_id}'
@@ -260,9 +327,9 @@ export namespace Endpoints {
 			409: unknown
 		}
 	}
-	export type get_ListProperties = {
+	export type get_ListCustomerContexts = {
 		method: 'GET'
-		path: '/api/v1/customers/{customer_id}/properties'
+		path: '/api/v1/customers/{customer_id}/customer-contexts'
 		requestFormat: 'json'
 		parameters: {
 			query: Partial<{ page: number; per_page: number }>
@@ -271,15 +338,15 @@ export namespace Endpoints {
 		responses: {
 			200: {
 				data: Array<{
-					city: string
+					address_line?: (string | null) | undefined
+					city?: (string | null) | undefined
 					created_at: string
 					customer_id: Schemas.CustomerId
-					id: Schemas.PropertyId
+					id: Schemas.CustomerContextId
 					label: string
 					photo_key?: (string | null) | undefined
-					street: string
+					postal_code?: (string | null) | undefined
 					updated_at: string
-					zip: string
 				}>
 				pagination?: (null | Schemas.PaginationMetadata) | undefined
 			}
@@ -288,27 +355,27 @@ export namespace Endpoints {
 			404: unknown
 		}
 	}
-	export type post_CreateProperty = {
+	export type post_CreateCustomerContext = {
 		method: 'POST'
-		path: '/api/v1/customers/{customer_id}/properties'
+		path: '/api/v1/customers/{customer_id}/customer-contexts'
 		requestFormat: 'json'
 		parameters: {
 			path: { customer_id: string }
 
-			body: Schemas.CreatePropertyRequest
+			body: Schemas.CreateCustomerContextRequest
 		}
 		responses: {
 			201: {
 				data: {
-					city: string
+					address_line?: (string | null) | undefined
+					city?: (string | null) | undefined
 					created_at: string
 					customer_id: Schemas.CustomerId
-					id: Schemas.PropertyId
+					id: Schemas.CustomerContextId
 					label: string
 					photo_key?: (string | null) | undefined
-					street: string
+					postal_code?: (string | null) | undefined
 					updated_at: string
-					zip: string
 				}
 				pagination?: (null | Schemas.PaginationMetadata) | undefined
 			}
@@ -739,11 +806,11 @@ export namespace Endpoints {
 			200: {
 				data: Array<{
 					created_at: string
+					customer_context_id: Schemas.CustomerContextId
 					customer_id: Schemas.CustomerId
 					id: Schemas.QuoteId
 					lines: Array<Schemas.QuoteLineResponse>
 					organization_id: Schemas.OrganizationId
-					property_id: Schemas.PropertyId
 					status: Schemas.QuoteStatus
 					total_cents: number
 					updated_at: string
@@ -767,11 +834,11 @@ export namespace Endpoints {
 			201: {
 				data: {
 					created_at: string
+					customer_context_id: Schemas.CustomerContextId
 					customer_id: Schemas.CustomerId
 					id: Schemas.QuoteId
 					lines: Array<Schemas.QuoteLineResponse>
 					organization_id: Schemas.OrganizationId
-					property_id: Schemas.PropertyId
 					status: Schemas.QuoteStatus
 					total_cents: number
 					updated_at: string
@@ -837,73 +904,6 @@ export namespace Endpoints {
 			409: unknown
 		}
 	}
-	export type get_GetProperty = {
-		method: 'GET'
-		path: '/api/v1/properties/{property_id}'
-		requestFormat: 'json'
-		parameters: {
-			path: { property_id: string }
-		}
-		responses: {
-			200: {
-				data: {
-					city: string
-					created_at: string
-					customer_id: Schemas.CustomerId
-					id: Schemas.PropertyId
-					label: string
-					photo_key?: (string | null) | undefined
-					street: string
-					updated_at: string
-					zip: string
-				}
-				pagination?: (null | Schemas.PaginationMetadata) | undefined
-			}
-			401: unknown
-			403: unknown
-			404: unknown
-		}
-	}
-	export type delete_DeleteProperty = {
-		method: 'DELETE'
-		path: '/api/v1/properties/{property_id}'
-		requestFormat: 'json'
-		parameters: {
-			path: { property_id: string }
-		}
-		responses: { 204: unknown; 401: unknown; 403: unknown; 404: unknown }
-	}
-	export type patch_UpdateProperty = {
-		method: 'PATCH'
-		path: '/api/v1/properties/{property_id}'
-		requestFormat: 'json'
-		parameters: {
-			path: { property_id: string }
-
-			body: Schemas.UpdatePropertyRequest
-		}
-		responses: {
-			200: {
-				data: {
-					city: string
-					created_at: string
-					customer_id: Schemas.CustomerId
-					id: Schemas.PropertyId
-					label: string
-					photo_key?: (string | null) | undefined
-					street: string
-					updated_at: string
-					zip: string
-				}
-				pagination?: (null | Schemas.PaginationMetadata) | undefined
-			}
-			400: unknown
-			401: unknown
-			403: unknown
-			404: unknown
-			409: unknown
-		}
-	}
 	export type get_GetQuote = {
 		method: 'GET'
 		path: '/api/v1/quotes/{quote_id}'
@@ -915,11 +915,11 @@ export namespace Endpoints {
 			200: {
 				data: {
 					created_at: string
+					customer_context_id: Schemas.CustomerContextId
 					customer_id: Schemas.CustomerId
 					id: Schemas.QuoteId
 					lines: Array<Schemas.QuoteLineResponse>
 					organization_id: Schemas.OrganizationId
-					property_id: Schemas.PropertyId
 					status: Schemas.QuoteStatus
 					total_cents: number
 					updated_at: string
@@ -953,11 +953,11 @@ export namespace Endpoints {
 			200: {
 				data: {
 					created_at: string
+					customer_context_id: Schemas.CustomerContextId
 					customer_id: Schemas.CustomerId
 					id: Schemas.QuoteId
 					lines: Array<Schemas.QuoteLineResponse>
 					organization_id: Schemas.OrganizationId
-					property_id: Schemas.PropertyId
 					status: Schemas.QuoteStatus
 					total_cents: number
 					updated_at: string
@@ -993,11 +993,11 @@ export namespace Endpoints {
 			200: {
 				data: {
 					created_at: string
+					customer_context_id: Schemas.CustomerContextId
 					customer_id: Schemas.CustomerId
 					id: Schemas.QuoteId
 					lines: Array<Schemas.QuoteLineResponse>
 					organization_id: Schemas.OrganizationId
-					property_id: Schemas.PropertyId
 					status: Schemas.QuoteStatus
 					total_cents: number
 					updated_at: string
@@ -1100,8 +1100,9 @@ export namespace Endpoints {
 // <EndpointByMethod>
 export type EndpointByMethod = {
 	get: {
+		'/api/v1/customer-contexts/{customer_context_id}': Endpoints.get_GetCustomerContext
 		'/api/v1/customers/{customer_id}': Endpoints.get_GetCustomer
-		'/api/v1/customers/{customer_id}/properties': Endpoints.get_ListProperties
+		'/api/v1/customers/{customer_id}/customer-contexts': Endpoints.get_ListCustomerContexts
 		'/api/v1/employees/{employee_id}': Endpoints.get_GetEmployee
 		'/api/v1/equipment/{equipment_id}': Endpoints.get_GetEquipment
 		'/api/v1/organizations': Endpoints.get_ListOrganizations
@@ -1111,33 +1112,32 @@ export type EndpointByMethod = {
 		'/api/v1/organizations/{organization_id}/equipment': Endpoints.get_ListEquipment
 		'/api/v1/organizations/{organization_id}/quotes': Endpoints.get_ListQuotes
 		'/api/v1/organizations/{organization_id}/service-rates': Endpoints.get_ListServiceRates
-		'/api/v1/properties/{property_id}': Endpoints.get_GetProperty
 		'/api/v1/quotes/{quote_id}': Endpoints.get_GetQuote
 		'/api/v1/quotes/{quote_id}/pdf': Endpoints.get_ExportQuotePdf
 		'/api/v1/service-rates/{service_rate_id}': Endpoints.get_GetServiceRate
 		'/api/v1/users/@me/organizations': Endpoints.get_ListMyOrganizations
 	}
 	delete: {
+		'/api/v1/customer-contexts/{customer_context_id}': Endpoints.delete_DeleteCustomerContext
 		'/api/v1/customers/{customer_id}': Endpoints.delete_DeleteCustomer
 		'/api/v1/employees/{employee_id}': Endpoints.delete_DeleteEmployee
 		'/api/v1/equipment/{equipment_id}': Endpoints.delete_DeleteEquipment
 		'/api/v1/organizations/{organization_id}': Endpoints.delete_DeleteOrganization
-		'/api/v1/properties/{property_id}': Endpoints.delete_DeleteProperty
 		'/api/v1/quotes/{quote_id}': Endpoints.delete_DeleteQuote
 		'/api/v1/service-rates/{service_rate_id}': Endpoints.delete_DeleteServiceRate
 	}
 	patch: {
+		'/api/v1/customer-contexts/{customer_context_id}': Endpoints.patch_UpdateCustomerContext
 		'/api/v1/customers/{customer_id}': Endpoints.patch_UpdateCustomer
 		'/api/v1/employees/{employee_id}': Endpoints.patch_UpdateEmployee
 		'/api/v1/equipment/{equipment_id}': Endpoints.patch_UpdateEquipment
 		'/api/v1/organizations/{organization_id}': Endpoints.patch_UpdateOrganization
-		'/api/v1/properties/{property_id}': Endpoints.patch_UpdateProperty
 		'/api/v1/quotes/{quote_id}': Endpoints.patch_UpdateQuote
 		'/api/v1/quotes/{quote_id}/status': Endpoints.patch_UpdateQuoteStatus
 		'/api/v1/service-rates/{service_rate_id}': Endpoints.patch_UpdateServiceRate
 	}
 	post: {
-		'/api/v1/customers/{customer_id}/properties': Endpoints.post_CreateProperty
+		'/api/v1/customers/{customer_id}/customer-contexts': Endpoints.post_CreateCustomerContext
 		'/api/v1/files': Endpoints.post_UploadFile
 		'/api/v1/organizations': Endpoints.post_CreateOrganization
 		'/api/v1/organizations/{organization_id}/customers': Endpoints.post_CreateCustomer

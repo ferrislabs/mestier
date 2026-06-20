@@ -1,4 +1,4 @@
-import type { Customer, Property } from '#/hooks/use-customers'
+import type { Customer, CustomerContext } from '#/hooks/use-customers'
 import type {
 	ServiceRate,
 	ServiceRateUnit,
@@ -17,7 +17,7 @@ export interface QuoteLineFormValues {
 
 export interface QuoteFormValues {
 	customerId: string
-	propertyId: string
+	customerContextId: string
 	lines: QuoteLineFormValues[]
 }
 
@@ -38,8 +38,13 @@ export function customerDisplayName(customer: Customer): string {
 	return `${customer.first_name} ${customer.last_name}`.trim()
 }
 
-export function propertyDisplayName(property: Property): string {
-	return `${property.label} · ${property.city}`.trim()
+export function customerContextDisplayName(
+	customerContext: CustomerContext,
+): string {
+	const detail = [customerContext.postal_code, customerContext.city]
+		.filter(Boolean)
+		.join(' ')
+	return detail ? `${customerContext.label} · ${detail}` : customerContext.label
 }
 
 export function serviceRateDisplayName(serviceRate: ServiceRate): string {

@@ -3,7 +3,7 @@ import {
 	AlertCircle,
 	ArrowLeft,
 	Image,
-	MapPin,
+	LayoutPanelTop,
 	Pencil,
 	Plus,
 	Trash2,
@@ -20,11 +20,11 @@ import {
 	SectionCard,
 	SectionHeader,
 } from '#/components/ui/surface'
-import type { Customer, Property } from '#/hooks/use-customers'
+import type { Customer, CustomerContext } from '#/hooks/use-customers'
 import {
+	type CustomerContextFormValues,
 	type CustomerFormValues,
 	customerInitials,
-	type PropertyFormValues,
 } from '#/pages/customers/types'
 
 interface CustomerEditUIProps {
@@ -33,25 +33,25 @@ interface CustomerEditUIProps {
 	isDirty: boolean
 	changedKeys: (keyof CustomerFormValues)[]
 	isSaving: boolean
-	properties: Property[]
-	propertiesError: string | null
-	isPropertiesLoading: boolean
-	propertyDraft: PropertyFormValues
-	editingPropertyId: string | null
-	isPropertySaving: boolean
+	customerContexts: CustomerContext[]
+	customerContextsError: string | null
+	isCustomerContextsLoading: boolean
+	customerContextDraft: CustomerContextFormValues
+	editingCustomerContextId: string | null
+	isCustomerContextSaving: boolean
 	isUploadingPhoto: boolean
-	deletingPropertyId: string | null
+	deletingCustomerContextId: string | null
 	photoPreviewUrl: string | null
 	onChange: (patch: Partial<CustomerFormValues>) => void
 	onReset: () => void
 	onSave: () => void
-	onPropertyChange: (patch: Partial<PropertyFormValues>) => void
-	onPropertyEdit: (property: Property) => void
-	onPropertyCancel: () => void
-	onPropertySubmit: () => void
-	onPropertyDelete: (property: Property) => void
-	onPropertyPhotoChange: (file: File) => void
-	onRetryProperties: () => void
+	onCustomerContextChange: (patch: Partial<CustomerContextFormValues>) => void
+	onCustomerContextEdit: (customerContext: CustomerContext) => void
+	onCustomerContextCancel: () => void
+	onCustomerContextSubmit: () => void
+	onCustomerContextDelete: (customerContext: CustomerContext) => void
+	onCustomerContextPhotoChange: (file: File) => void
+	onRetryCustomerContexts: () => void
 }
 
 export function CustomerEditUI({
@@ -60,32 +60,28 @@ export function CustomerEditUI({
 	isDirty,
 	changedKeys,
 	isSaving,
-	properties,
-	propertiesError,
-	isPropertiesLoading,
-	propertyDraft,
-	editingPropertyId,
-	isPropertySaving,
+	customerContexts,
+	customerContextsError,
+	isCustomerContextsLoading,
+	customerContextDraft,
+	editingCustomerContextId,
+	isCustomerContextSaving,
 	isUploadingPhoto,
-	deletingPropertyId,
+	deletingCustomerContextId,
 	photoPreviewUrl,
 	onChange,
 	onReset,
 	onSave,
-	onPropertyChange,
-	onPropertyEdit,
-	onPropertyCancel,
-	onPropertySubmit,
-	onPropertyDelete,
-	onPropertyPhotoChange,
-	onRetryProperties,
+	onCustomerContextChange,
+	onCustomerContextEdit,
+	onCustomerContextCancel,
+	onCustomerContextSubmit,
+	onCustomerContextDelete,
+	onCustomerContextPhotoChange,
+	onRetryCustomerContexts,
 }: CustomerEditUIProps) {
 	const displayName = `${form.firstName} ${form.lastName}`.trim()
-	const canSubmitProperty =
-		propertyDraft.label.trim() &&
-		propertyDraft.street.trim() &&
-		propertyDraft.zip.trim() &&
-		propertyDraft.city.trim()
+	const canSubmitCustomerContext = Boolean(customerContextDraft.label.trim())
 
 	return (
 		<PageShell className="pb-24 md:pb-28">
@@ -158,30 +154,30 @@ export function CustomerEditUI({
 					description="Adresses, établissements ou périmètres associés à ce client"
 					className="lg:col-span-3"
 				>
-					{propertiesError ? (
+					{customerContextsError ? (
 						<div className="mb-4 flex flex-col gap-3 rounded-lg border border-destructive/30 bg-destructive-soft p-4 text-destructive sm:flex-row sm:items-center sm:justify-between">
 							<div className="flex items-center gap-2">
 								<AlertCircle className="size-4" />
-								<p className="text-sm font-medium">{propertiesError}</p>
+								<p className="text-sm font-medium">{customerContextsError}</p>
 							</div>
 							<Button
 								type="button"
 								variant="outline"
 								size="sm"
-								onClick={onRetryProperties}
+								onClick={onRetryCustomerContexts}
 							>
 								Réessayer
 							</Button>
 						</div>
 					) : null}
 
-					{isPropertiesLoading ? (
+					{isCustomerContextsLoading ? (
 						<div className="rounded-lg border border-dashed p-8 text-center text-sm text-muted-foreground">
 							Chargement des contextes…
 						</div>
-					) : properties.length === 0 ? (
+					) : customerContexts.length === 0 ? (
 						<div className="rounded-lg border border-dashed p-8 text-center">
-							<MapPin className="mx-auto size-6 text-muted-foreground" />
+							<LayoutPanelTop className="mx-auto size-6 text-muted-foreground" />
 							<p className="mt-2 font-medium">Aucun contexte renseigné</p>
 							<p className="mt-1 text-sm text-muted-foreground">
 								Ajoutez un contexte pour ce client.
@@ -189,13 +185,13 @@ export function CustomerEditUI({
 						</div>
 					) : (
 						<div className="grid gap-3 lg:grid-cols-2">
-							{properties.map((property) => (
-								<PropertyCard
-									key={property.id}
-									property={property}
-									isDeleting={deletingPropertyId === property.id}
-									onEdit={() => onPropertyEdit(property)}
-									onDelete={() => onPropertyDelete(property)}
+							{customerContexts.map((customerContext) => (
+								<CustomerContextCard
+									key={customerContext.id}
+									customerContext={customerContext}
+									isDeleting={deletingCustomerContextId === customerContext.id}
+									onEdit={() => onCustomerContextEdit(customerContext)}
+									onDelete={() => onCustomerContextDelete(customerContext)}
 								/>
 							))}
 						</div>
@@ -205,21 +201,21 @@ export function CustomerEditUI({
 						<div className="flex items-center justify-between gap-4 border-b px-4 py-3">
 							<div>
 								<p className="font-medium">
-									{editingPropertyId
+									{editingCustomerContextId
 										? 'Modifier le contexte'
 										: 'Ajouter un contexte'}
 								</p>
 								<p className="text-xs text-muted-foreground">
-									Les champs d’adresse peuvent représenter un établissement, un
-									lieu de livraison ou un repère interne.
+									Le libellé suffit. L’adresse reste optionnelle selon le
+									contexte.
 								</p>
 							</div>
-							{editingPropertyId ? (
+							{editingCustomerContextId ? (
 								<Button
 									type="button"
 									variant="ghost"
 									size="sm"
-									onClick={onPropertyCancel}
+									onClick={onCustomerContextCancel}
 								>
 									Annuler
 								</Button>
@@ -228,55 +224,57 @@ export function CustomerEditUI({
 						<div className="grid gap-4 p-4 md:grid-cols-2">
 							<Field
 								label="Libellé"
-								name="property-label"
-								value={propertyDraft.label}
-								onChange={(v) => onPropertyChange({ label: v })}
+								name="customer-context-label"
+								value={customerContextDraft.label}
+								onChange={(v) => onCustomerContextChange({ label: v })}
 							/>
 							<Field
 								label="Ville"
-								name="property-city"
-								value={propertyDraft.city}
-								onChange={(v) => onPropertyChange({ city: v })}
+								name="customer-context-city"
+								value={customerContextDraft.city}
+								onChange={(v) => onCustomerContextChange({ city: v })}
 							/>
 							<Field
-								label="Rue"
-								name="property-street"
-								value={propertyDraft.street}
-								onChange={(v) => onPropertyChange({ street: v })}
+								label="Adresse"
+								name="customer-context-address-line"
+								value={customerContextDraft.addressLine}
+								onChange={(v) => onCustomerContextChange({ addressLine: v })}
 							/>
 							<Field
 								label="Code postal"
-								name="property-zip"
-								value={propertyDraft.zip}
-								onChange={(v) => onPropertyChange({ zip: v })}
+								name="customer-context-postal-code"
+								value={customerContextDraft.postalCode}
+								onChange={(v) => onCustomerContextChange({ postalCode: v })}
 							/>
 						</div>
 						<div className="grid gap-4 border-t p-4 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-end">
 							<div className="flex flex-col gap-2">
-								<Label htmlFor="property-photo">Photo du contexte</Label>
+								<Label htmlFor="customer-context-photo">
+									Photo du contexte
+								</Label>
 								<div className="flex flex-col gap-3 sm:flex-row sm:items-center">
 									<label
-										htmlFor="property-photo"
+										htmlFor="customer-context-photo"
 										className="inline-flex h-9 cursor-pointer items-center justify-center gap-2 rounded-lg border border-primary/40 bg-card px-4 text-sm font-medium text-primary shadow-xs hover:bg-brand-soft"
 									>
 										<Upload className="size-4" />
 										{isUploadingPhoto ? 'Téléversement…' : 'Téléverser'}
 									</label>
 									<input
-										id="property-photo"
+										id="customer-context-photo"
 										type="file"
 										accept="image/*"
 										className="sr-only"
 										disabled={isUploadingPhoto}
 										onChange={(event) => {
 											const file = event.target.files?.[0]
-											if (file) onPropertyPhotoChange(file)
+											if (file) onCustomerContextPhotoChange(file)
 											event.currentTarget.value = ''
 										}}
 									/>
-									{propertyDraft.photoKey ? (
+									{customerContextDraft.photoKey ? (
 										<span className="min-w-0 truncate font-mono text-xs text-muted-foreground">
-											{propertyDraft.photoKey}
+											{customerContextDraft.photoKey}
 										</span>
 									) : null}
 								</div>
@@ -293,11 +291,11 @@ export function CustomerEditUI({
 						<div className="flex justify-end border-t p-4">
 							<Button
 								type="button"
-								disabled={!canSubmitProperty || isPropertySaving}
-								onClick={onPropertySubmit}
+								disabled={!canSubmitCustomerContext || isCustomerContextSaving}
+								onClick={onCustomerContextSubmit}
 							>
 								<Plus />
-								{editingPropertyId ? 'Enregistrer' : 'Ajouter'}
+								{editingCustomerContextId ? 'Enregistrer' : 'Ajouter'}
 							</Button>
 						</div>
 					</div>
@@ -398,38 +396,50 @@ function Dot() {
 	)
 }
 
-interface PropertyCardProps {
-	property: Property
+interface CustomerContextCardProps {
+	customerContext: CustomerContext
 	isDeleting: boolean
 	onEdit: () => void
 	onDelete: () => void
 }
 
-function PropertyCard({
-	property,
+function CustomerContextCard({
+	customerContext,
 	isDeleting,
 	onEdit,
 	onDelete,
-}: PropertyCardProps) {
+}: CustomerContextCardProps) {
+	const addressParts = [
+		customerContext.address_line,
+		[customerContext.postal_code, customerContext.city]
+			.filter(Boolean)
+			.join(' '),
+	].filter(Boolean)
+
 	return (
 		<div className="flex gap-4 rounded-lg border bg-card p-4">
 			<div className="flex size-16 shrink-0 items-center justify-center overflow-hidden rounded-lg border bg-muted">
-				{property.photo_key ? (
+				{customerContext.photo_key ? (
 					<Image className="size-6 text-muted-foreground" />
 				) : (
-					<MapPin className="size-6 text-muted-foreground" />
+					<LayoutPanelTop className="size-6 text-muted-foreground" />
 				)}
 			</div>
 			<div className="min-w-0 flex-1">
 				<div className="flex items-start justify-between gap-3">
 					<div className="min-w-0">
-						<p className="truncate font-semibold">{property.label}</p>
-						<p className="mt-1 text-sm text-muted-foreground">
-							{property.street}
-						</p>
-						<p className="text-sm text-muted-foreground">
-							{property.zip} {property.city}
-						</p>
+						<p className="truncate font-semibold">{customerContext.label}</p>
+						{addressParts.length > 0 ? (
+							<div className="mt-1 text-sm text-muted-foreground">
+								{addressParts.map((part) => (
+									<p key={part}>{part}</p>
+								))}
+							</div>
+						) : (
+							<p className="mt-1 text-sm text-muted-foreground">
+								Aucune adresse renseignée
+							</p>
+						)}
 					</div>
 					<div className="flex shrink-0 gap-1">
 						<Button
@@ -453,9 +463,9 @@ function PropertyCard({
 						</Button>
 					</div>
 				</div>
-				{property.photo_key ? (
+				{customerContext.photo_key ? (
 					<p className="mt-2 truncate font-mono text-xs text-muted-foreground">
-						photo: {property.photo_key}
+						photo: {customerContext.photo_key}
 					</p>
 				) : null}
 			</div>

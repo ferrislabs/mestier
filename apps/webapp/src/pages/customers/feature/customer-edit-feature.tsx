@@ -5,22 +5,22 @@ import { useEffect, useRef, useState } from 'react'
 import { Button } from '#/components/ui/button'
 import {
 	type Customer,
-	type Property,
-	useCreateProperty,
+	type CustomerContext,
+	useCreateCustomerContext,
 	useCustomer,
-	useCustomerProperties,
-	useDeleteProperty,
+	useCustomerContexts,
+	useDeleteCustomerContext,
 	useUpdateCustomer,
-	useUpdateProperty,
+	useUpdateCustomerContext,
 	useUploadFile,
 } from '#/hooks/use-customers'
 import { useDirtyBaseline } from '#/hooks/use-dirty'
 import {
+	type CustomerContextFormValues,
 	type CustomerFormValues,
+	customerContextToForm,
 	customerToForm,
-	EMPTY_PROPERTY_FORM,
-	type PropertyFormValues,
-	propertyToForm,
+	EMPTY_CUSTOMER_CONTEXT_FORM,
 } from '#/pages/customers/types'
 import { CustomerEditUI } from '#/pages/customers/ui/customer-edit-ui'
 
@@ -30,7 +30,7 @@ interface CustomerEditFeatureProps {
 
 export function CustomerEditFeature({ customerId }: CustomerEditFeatureProps) {
 	const customer = useCustomer(customerId)
-	const properties = useCustomerProperties(customerId)
+	const customerContexts = useCustomerContexts(customerId)
 
 	if (customer.isLoading) {
 		return <CustomerEditUI.Loading />
@@ -77,40 +77,40 @@ export function CustomerEditFeature({ customerId }: CustomerEditFeatureProps) {
 	return (
 		<CustomerEditInner
 			customer={customer.data.data}
-			properties={properties.data?.data ?? []}
-			propertiesError={properties.error?.message ?? null}
-			isPropertiesLoading={properties.isLoading}
-			refetchProperties={() => void properties.refetch()}
+			customerContexts={customerContexts.data?.data ?? []}
+			customerContextsError={customerContexts.error?.message ?? null}
+			isCustomerContextsLoading={customerContexts.isLoading}
+			refetchCustomerContexts={() => void customerContexts.refetch()}
 		/>
 	)
 }
 
 interface CustomerEditInnerProps {
 	customer: Customer
-	properties: Property[]
-	propertiesError: string | null
-	isPropertiesLoading: boolean
-	refetchProperties: () => void
+	customerContexts: CustomerContext[]
+	customerContextsError: string | null
+	isCustomerContextsLoading: boolean
+	refetchCustomerContexts: () => void
 }
 
 function CustomerEditInner({
 	customer,
-	properties,
-	propertiesError,
-	isPropertiesLoading,
-	refetchProperties,
+	customerContexts,
+	customerContextsError,
+	isCustomerContextsLoading,
+	refetchCustomerContexts,
 }: CustomerEditInnerProps) {
 	const updateCustomer = useUpdateCustomer()
-	const createProperty = useCreateProperty()
-	const updateProperty = useUpdateProperty()
-	const deleteProperty = useDeleteProperty(customer.id)
+	const createCustomerContext = useCreateCustomerContext()
+	const updateCustomerContext = useUpdateCustomerContext()
+	const deleteCustomerContext = useDeleteCustomerContext(customer.id)
 	const uploadFile = useUploadFile()
 	const commitRef = useRef<(v: CustomerFormValues) => void>(() => {})
-	const [propertyDraft, setPropertyDraft] =
-		useState<PropertyFormValues>(EMPTY_PROPERTY_FORM)
-	const [editingPropertyId, setEditingPropertyId] = useState<string | null>(
-		null,
-	)
+	const [customerContextDraft, setCustomerContextDraft] =
+		useState<CustomerContextFormValues>(EMPTY_CUSTOMER_CONTEXT_FORM)
+	const [editingCustomerContextId, setEditingCustomerContextId] = useState<
+		string | null
+	>(null)
 	const [photoPreviewUrl, setPhotoPreviewUrl] = useState<string | null>(null)
 
 	const form = useForm({
@@ -135,44 +135,44 @@ function CustomerEditInner({
 		}
 	}, [photoPreviewUrl])
 
-	const resetPropertyDraft = () => {
-		setEditingPropertyId(null)
-		setPropertyDraft(EMPTY_PROPERTY_FORM)
+	const resetCustomerContextDraft = () => {
+		setEditingCustomerContextId(null)
+		setCustomerContextDraft(EMPTY_CUSTOMER_CONTEXT_FORM)
 		if (photoPreviewUrl) URL.revokeObjectURL(photoPreviewUrl)
 		setPhotoPreviewUrl(null)
 	}
 
-	const handlePropertySubmit = async () => {
+	const handleCustomerContextSubmit = async () => {
 		const body = {
-			label: propertyDraft.label.trim(),
-			street: propertyDraft.street.trim(),
-			zip: propertyDraft.zip.trim(),
-			city: propertyDraft.city.trim(),
-			photo_key: propertyDraft.photoKey.trim() || null,
+			label: customerContextDraft.label.trim(),
+			address_line: customerContextDraft.addressLine.trim() || null,
+			postal_code: customerContextDraft.postalCode.trim() || null,
+			city: customerContextDraft.city.trim() || null,
+			photo_key: customerContextDraft.photoKey.trim() || null,
 		}
 
-		if (!body.label || !body.street || !body.zip || !body.city) return
+		if (!body.label) return
 
-		if (editingPropertyId) {
-			await updateProperty.mutateAsync({
-				path: { property_id: editingPropertyId },
+		if (editingCustomerContextId) {
+			await updateCustomerContext.mutateAsync({
+				path: { customer_context_id: editingCustomerContextId },
 				body,
 			})
 		} else {
-			await createProperty.mutateAsync({
+			await createCustomerContext.mutateAsync({
 				path: { customer_id: customer.id },
 				body,
 			})
 		}
 
-		resetPropertyDraft()
+		resetCustomerContextDraft()
 	}
 
 	const handlePhotoChange = async (file: File) => {
 		if (photoPreviewUrl) URL.revokeObjectURL(photoPreviewUrl)
 		setPhotoPreviewUrl(URL.createObjectURL(file))
 		const uploaded = await uploadFile.mutateAsync(file)
-		setPropertyDraft((current) => ({
+		setCustomerContextDraft((current) => ({
 			...current,
 			photoKey: uploaded.data.key,
 		}))
@@ -186,50 +186,50 @@ function CustomerEditInner({
 				<CustomerEditForm
 					customer={customer}
 					values={values}
-					properties={properties}
-					propertiesError={
-						propertiesError ??
-						createProperty.error?.message ??
-						updateProperty.error?.message ??
-						deleteProperty.error?.message ??
+					customerContexts={customerContexts}
+					customerContextsError={
+						customerContextsError ??
+						createCustomerContext.error?.message ??
+						updateCustomerContext.error?.message ??
+						deleteCustomerContext.error?.message ??
 						uploadFile.error?.message ??
 						null
 					}
 					isSubmitting={isSubmitting || updateCustomer.isPending}
-					isPropertiesLoading={isPropertiesLoading}
-					propertyDraft={propertyDraft}
-					editingPropertyId={editingPropertyId}
-					isPropertySaving={
-						createProperty.isPending || updateProperty.isPending
+					isCustomerContextsLoading={isCustomerContextsLoading}
+					customerContextDraft={customerContextDraft}
+					editingCustomerContextId={editingCustomerContextId}
+					isCustomerContextSaving={
+						createCustomerContext.isPending || updateCustomerContext.isPending
 					}
 					isUploadingPhoto={uploadFile.isPending}
-					deletingPropertyId={
-						deleteProperty.variables?.path.property_id &&
-						deleteProperty.isPending
-							? deleteProperty.variables.path.property_id
+					deletingCustomerContextId={
+						deleteCustomerContext.variables?.path.customer_context_id &&
+						deleteCustomerContext.isPending
+							? deleteCustomerContext.variables.path.customer_context_id
 							: null
 					}
 					photoPreviewUrl={photoPreviewUrl}
 					form={form}
 					commitRef={commitRef}
-					onPropertyChange={(patch) =>
-						setPropertyDraft((current) => ({ ...current, ...patch }))
+					onCustomerContextChange={(patch) =>
+						setCustomerContextDraft((current) => ({ ...current, ...patch }))
 					}
-					onPropertyEdit={(property) => {
-						setEditingPropertyId(property.id)
-						setPropertyDraft(propertyToForm(property))
+					onCustomerContextEdit={(customerContext) => {
+						setEditingCustomerContextId(customerContext.id)
+						setCustomerContextDraft(customerContextToForm(customerContext))
 						if (photoPreviewUrl) URL.revokeObjectURL(photoPreviewUrl)
 						setPhotoPreviewUrl(null)
 					}}
-					onPropertyCancel={resetPropertyDraft}
-					onPropertySubmit={() => void handlePropertySubmit()}
-					onPropertyDelete={(property) =>
-						deleteProperty.mutate({
-							path: { property_id: property.id },
+					onCustomerContextCancel={resetCustomerContextDraft}
+					onCustomerContextSubmit={() => void handleCustomerContextSubmit()}
+					onCustomerContextDelete={(customerContext) =>
+						deleteCustomerContext.mutate({
+							path: { customer_context_id: customerContext.id },
 						})
 					}
-					onPropertyPhotoChange={(file) => void handlePhotoChange(file)}
-					onRetryProperties={refetchProperties}
+					onCustomerContextPhotoChange={(file) => void handlePhotoChange(file)}
+					onRetryCustomerContexts={refetchCustomerContexts}
 				/>
 			)}
 		</form.Subscribe>
@@ -239,49 +239,49 @@ function CustomerEditInner({
 interface CustomerEditFormProps {
 	customer: Customer
 	values: CustomerFormValues
-	properties: Property[]
-	propertiesError: string | null
+	customerContexts: CustomerContext[]
+	customerContextsError: string | null
 	isSubmitting: boolean
-	isPropertiesLoading: boolean
-	propertyDraft: PropertyFormValues
-	editingPropertyId: string | null
-	isPropertySaving: boolean
+	isCustomerContextsLoading: boolean
+	customerContextDraft: CustomerContextFormValues
+	editingCustomerContextId: string | null
+	isCustomerContextSaving: boolean
 	isUploadingPhoto: boolean
-	deletingPropertyId: string | null
+	deletingCustomerContextId: string | null
 	photoPreviewUrl: string | null
 	form: AnyFormApi
 	commitRef: React.MutableRefObject<(v: CustomerFormValues) => void>
-	onPropertyChange: (patch: Partial<PropertyFormValues>) => void
-	onPropertyEdit: (property: Property) => void
-	onPropertyCancel: () => void
-	onPropertySubmit: () => void
-	onPropertyDelete: (property: Property) => void
-	onPropertyPhotoChange: (file: File) => void
-	onRetryProperties: () => void
+	onCustomerContextChange: (patch: Partial<CustomerContextFormValues>) => void
+	onCustomerContextEdit: (customerContext: CustomerContext) => void
+	onCustomerContextCancel: () => void
+	onCustomerContextSubmit: () => void
+	onCustomerContextDelete: (customerContext: CustomerContext) => void
+	onCustomerContextPhotoChange: (file: File) => void
+	onRetryCustomerContexts: () => void
 }
 
 function CustomerEditForm({
 	customer,
 	values,
-	properties,
-	propertiesError,
+	customerContexts,
+	customerContextsError,
 	isSubmitting,
-	isPropertiesLoading,
-	propertyDraft,
-	editingPropertyId,
-	isPropertySaving,
+	isCustomerContextsLoading,
+	customerContextDraft,
+	editingCustomerContextId,
+	isCustomerContextSaving,
 	isUploadingPhoto,
-	deletingPropertyId,
+	deletingCustomerContextId,
 	photoPreviewUrl,
 	form,
 	commitRef,
-	onPropertyChange,
-	onPropertyEdit,
-	onPropertyCancel,
-	onPropertySubmit,
-	onPropertyDelete,
-	onPropertyPhotoChange,
-	onRetryProperties,
+	onCustomerContextChange,
+	onCustomerContextEdit,
+	onCustomerContextCancel,
+	onCustomerContextSubmit,
+	onCustomerContextDelete,
+	onCustomerContextPhotoChange,
+	onRetryCustomerContexts,
 }: CustomerEditFormProps) {
 	const baseline = customerToForm(customer)
 	const {
@@ -300,14 +300,14 @@ function CustomerEditForm({
 			isDirty={isDirty}
 			changedKeys={changedKeys}
 			isSaving={isSubmitting}
-			properties={properties}
-			propertiesError={propertiesError}
-			isPropertiesLoading={isPropertiesLoading}
-			propertyDraft={propertyDraft}
-			editingPropertyId={editingPropertyId}
-			isPropertySaving={isPropertySaving}
+			customerContexts={customerContexts}
+			customerContextsError={customerContextsError}
+			isCustomerContextsLoading={isCustomerContextsLoading}
+			customerContextDraft={customerContextDraft}
+			editingCustomerContextId={editingCustomerContextId}
+			isCustomerContextSaving={isCustomerContextSaving}
 			isUploadingPhoto={isUploadingPhoto}
-			deletingPropertyId={deletingPropertyId}
+			deletingCustomerContextId={deletingCustomerContextId}
 			photoPreviewUrl={photoPreviewUrl}
 			onChange={(patch) => {
 				for (const key of Object.keys(patch) as (keyof CustomerFormValues)[]) {
@@ -319,13 +319,13 @@ function CustomerEditForm({
 				resetBaseline()
 			}}
 			onSave={() => form.handleSubmit()}
-			onPropertyChange={onPropertyChange}
-			onPropertyEdit={onPropertyEdit}
-			onPropertyCancel={onPropertyCancel}
-			onPropertySubmit={onPropertySubmit}
-			onPropertyDelete={onPropertyDelete}
-			onPropertyPhotoChange={onPropertyPhotoChange}
-			onRetryProperties={onRetryProperties}
+			onCustomerContextChange={onCustomerContextChange}
+			onCustomerContextEdit={onCustomerContextEdit}
+			onCustomerContextCancel={onCustomerContextCancel}
+			onCustomerContextSubmit={onCustomerContextSubmit}
+			onCustomerContextDelete={onCustomerContextDelete}
+			onCustomerContextPhotoChange={onCustomerContextPhotoChange}
+			onRetryCustomerContexts={onRetryCustomerContexts}
 		/>
 	)
 }
