@@ -12,6 +12,7 @@ import {
 	DataViewPagination,
 	type DataViewSortOption,
 	DataViewToolbar,
+	getPaginationViewModel,
 	useDataView,
 } from '#/components/data-view'
 import { Button } from '#/components/ui/button'
@@ -46,7 +47,10 @@ import type {
 	PaginationMetadata,
 } from '#/hooks/use-customers'
 import {
+	CUSTOMER_FILTER_OPTIONS,
 	getCustomerListUrlState,
+	isValidCustomerFilter,
+	isValidCustomerSortValue,
 	writeCustomerListUrlState,
 } from '#/pages/customers/customer-list-url-state'
 import { customerDisplayName, customerInitials } from '#/pages/customers/types'
@@ -92,7 +96,7 @@ export function CustomerListUI({
 			: 'all',
 	)
 	const [sort, setSort] = useState(
-		isValidCustomerSort(initialListState.sort)
+		isValidCustomerSortValue(initialListState.sort)
 			? initialListState.sort
 			: 'created-desc',
 	)
@@ -115,6 +119,13 @@ export function CustomerListUI({
 		}
 	}, [customers])
 
+	const paginationView = getPaginationViewModel(
+		pagination,
+		customers.length,
+		page,
+		pageSize,
+	)
+
 	const dataView = useDataView({
 		data: customers,
 		search,
@@ -126,10 +137,10 @@ export function CustomerListUI({
 		page,
 		pageSize,
 		manualPagination: true,
-		totalCount: pagination?.total ?? customers.length,
-		pageCount: pagination?.last_page ?? Math.max(page, 1),
-		from: getPaginationFrom(pagination),
-		to: getPaginationTo(pagination, customers.length),
+		totalCount: paginationView.totalCount,
+		pageCount: paginationView.pageCount,
+		from: paginationView.from,
+		to: paginationView.to,
 	})
 
 	useEffect(() => {
@@ -152,7 +163,7 @@ export function CustomerListUI({
 			const next = getCustomerListUrlState()
 			setSearch(next.search)
 			setContactFilter(isValidCustomerFilter(next.filter) ? next.filter : 'all')
-			setSort(isValidCustomerSort(next.sort) ? next.sort : 'created-desc')
+			setSort(isValidCustomerSortValue(next.sort) ? next.sort : 'created-desc')
 			onPageChange(next.page)
 			onPageSizeChange(next.pageSize)
 		}
@@ -532,13 +543,6 @@ function FormSection({ title, description, children }: FormSectionProps) {
 	)
 }
 
-const CUSTOMER_FILTER_OPTIONS = [
-	{ value: 'all', label: 'Tous les clients' },
-	{ value: 'with-email', label: 'Avec email' },
-	{ value: 'with-phone', label: 'Avec téléphone' },
-	{ value: 'incomplete-contact', label: 'Coordonnées incomplètes' },
-]
-
 const CUSTOMER_SORT_OPTIONS: DataViewSortOption<Customer>[] = [
 	{
 		value: 'created-desc',
@@ -608,28 +612,4 @@ function formatDate(value: string): string {
 
 function dateValue(value: string): number {
 	return new Date(value).getTime()
-}
-
-function isValidCustomerFilter(value: string): boolean {
-	return CUSTOMER_FILTER_OPTIONS.some((option) => option.value === value)
-}
-
-function isValidCustomerSort(value: string): boolean {
-	return CUSTOMER_SORT_OPTIONS.some((option) => option.value === value)
-}
-
-function getPaginationFrom(pagination?: PaginationMetadata | null): number {
-	if (!pagination || pagination.is_empty) return 0
-	return (pagination.current_page - 1) * pagination.per_page + 1
-}
-
-function getPaginationTo(
-	pagination: PaginationMetadata | null | undefined,
-	rowCount: number,
-): number {
-	if (!pagination || pagination.is_empty) return 0
-	return Math.min(
-		(pagination.current_page - 1) * pagination.per_page + rowCount,
-		pagination.total,
-	)
 }
