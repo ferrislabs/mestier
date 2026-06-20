@@ -4,11 +4,16 @@ import {
 	MoreHorizontal,
 	Phone,
 	Plus,
-	Search,
 	Trash2,
 	UserPlus,
 } from 'lucide-react'
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
+import {
+	DataViewPagination,
+	type DataViewSortOption,
+	DataViewToolbar,
+	useDataView,
+} from '#/components/data-view'
 import { Button } from '#/components/ui/button'
 import {
 	DropdownMenu,
@@ -20,6 +25,14 @@ import {
 import { Input } from '#/components/ui/input'
 import { Label } from '#/components/ui/label'
 import {
+	Sheet,
+	SheetContent,
+	SheetDescription,
+	SheetFooter,
+	SheetHeader,
+	SheetTitle,
+} from '#/components/ui/sheet'
+import {
 	EntityAvatar,
 	MetricCard,
 	PageHeader,
@@ -27,15 +40,28 @@ import {
 	SectionCard,
 	StatusBadge,
 } from '#/components/ui/surface'
-import type { Customer, CustomerPayload } from '#/hooks/use-customers'
+import type {
+	Customer,
+	CustomerPayload,
+	PaginationMetadata,
+} from '#/hooks/use-customers'
+import {
+	getCustomerListUrlState,
+	writeCustomerListUrlState,
+} from '#/pages/customers/customer-list-url-state'
 import { customerDisplayName, customerInitials } from '#/pages/customers/types'
 
 interface CustomerListUIProps {
 	customers: Customer[]
+	pagination?: PaginationMetadata | null
+	page: number
+	pageSize: number
 	error?: string | null
 	isLoading?: boolean
 	isCreating?: boolean
 	deletingId?: string | null
+	onPageChange: (page: number) => void
+	onPageSizeChange: (pageSize: number) => void
 	onAdd?: (payload: CustomerPayload) => Promise<unknown>
 	onEdit?: (customer: Customer) => void
 	onDelete?: (customer: Customer) => void
@@ -44,17 +70,33 @@ interface CustomerListUIProps {
 
 export function CustomerListUI({
 	customers,
+	pagination,
+	page,
+	pageSize,
 	error,
 	isLoading,
 	isCreating,
 	deletingId,
+	onPageChange,
+	onPageSizeChange,
 	onAdd,
 	onEdit,
 	onDelete,
 	onRetry,
 }: CustomerListUIProps) {
-	const [search, setSearch] = useState('')
-	const [showCreate, setShowCreate] = useState(false)
+	const [initialListState] = useState(getCustomerListUrlState)
+	const [search, setSearch] = useState(initialListState.search)
+	const [contactFilter, setContactFilter] = useState(
+		isValidCustomerFilter(initialListState.filter)
+			? initialListState.filter
+			: 'all',
+	)
+	const [sort, setSort] = useState(
+		isValidCustomerSort(initialListState.sort)
+			? initialListState.sort
+			: 'created-desc',
+	)
+	const [createOpen, setCreateOpen] = useState(false)
 	const [draft, setDraft] = useState({
 		firstName: '',
 		lastName: '',
@@ -73,20 +115,62 @@ export function CustomerListUI({
 		}
 	}, [customers])
 
-	const visible = useMemo(() => {
-		const q = search.trim().toLowerCase()
-		return customers.filter((c) => {
-			if (!q) return true
-			const name = customerDisplayName(c).toLowerCase()
-			return (
-				name.includes(q) ||
-				(c.email ?? '').toLowerCase().includes(q) ||
-				(c.phone ?? '').toLowerCase().includes(q)
-			)
+	const dataView = useDataView({
+		data: customers,
+		search,
+		searchPredicate: customerMatchesSearch,
+		filter: contactFilter,
+		filterPredicate: customerMatchesContactFilter,
+		sort,
+		sortOptions: CUSTOMER_SORT_OPTIONS,
+		page,
+		pageSize,
+		manualPagination: true,
+		totalCount: pagination?.total ?? customers.length,
+		pageCount: pagination?.last_page ?? Math.max(page, 1),
+		from: getPaginationFrom(pagination),
+		to: getPaginationTo(pagination, customers.length),
+	})
+
+	useEffect(() => {
+		if (!pagination) return
+		if (dataView.page !== page) onPageChange(dataView.page)
+	}, [dataView.page, onPageChange, page, pagination])
+
+	useEffect(() => {
+		writeCustomerListUrlState({
+			search,
+			filter: contactFilter,
+			sort,
+			page,
+			pageSize,
 		})
-	}, [customers, search])
+	}, [contactFilter, page, pageSize, search, sort])
+
+	useEffect(() => {
+		const syncFromUrl = () => {
+			const next = getCustomerListUrlState()
+			setSearch(next.search)
+			setContactFilter(isValidCustomerFilter(next.filter) ? next.filter : 'all')
+			setSort(isValidCustomerSort(next.sort) ? next.sort : 'created-desc')
+			onPageChange(next.page)
+			onPageSizeChange(next.pageSize)
+		}
+
+		window.addEventListener('popstate', syncFromUrl)
+		return () => window.removeEventListener('popstate', syncFromUrl)
+	}, [onPageChange, onPageSizeChange])
 
 	const canCreate = draft.firstName.trim() && draft.lastName.trim()
+
+	const resetDraft = () => {
+		setDraft({ firstName: '', lastName: '', email: '', phone: '' })
+	}
+
+	const handleCreateOpenChange = (open: boolean) => {
+		setCreateOpen(open)
+		if (!open) resetDraft()
+	}
 
 	const submitCreate = async () => {
 		if (!canCreate) return
@@ -96,8 +180,8 @@ export function CustomerListUI({
 			email: draft.email.trim() || null,
 			phone: draft.phone.trim() || null,
 		})
-		setDraft({ firstName: '', lastName: '', email: '', phone: '' })
-		setShowCreate(false)
+		resetDraft()
+		setCreateOpen(false)
 	}
 
 	return (
@@ -106,7 +190,7 @@ export function CustomerListUI({
 				title="Fichier client"
 				description="Gérez vos clients, leurs coordonnées et leurs contextes associés."
 				actions={
-					<Button onClick={() => setShowCreate((value) => !value)}>
+					<Button onClick={() => setCreateOpen(true)}>
 						<Plus />
 						Nouveau client
 					</Button>
@@ -126,6 +210,87 @@ export function CustomerListUI({
 					) : null}
 				</SectionCard>
 			) : null}
+
+			<Sheet open={createOpen} onOpenChange={handleCreateOpenChange}>
+				<SheetContent className="w-full gap-0 overflow-y-auto sm:max-w-xl">
+					<form
+						className="flex min-h-0 flex-1 flex-col"
+						onSubmit={(event) => {
+							event.preventDefault()
+							void submitCreate()
+						}}
+					>
+						<SheetHeader className="border-b">
+							<SheetTitle>Créer un client</SheetTitle>
+							<SheetDescription>
+								Ajoutez les informations de base. Les coordonnées restent
+								optionnelles.
+							</SheetDescription>
+						</SheetHeader>
+
+						<div className="flex-1 space-y-6 overflow-y-auto p-4">
+							<FormSection
+								title="Identité"
+								description="Ces champs identifient le client dans le fichier."
+							>
+								<div className="grid gap-4 sm:grid-cols-2">
+									<Field
+										label="Prénom"
+										value={draft.firstName}
+										onChange={(firstName) =>
+											setDraft((v) => ({ ...v, firstName }))
+										}
+										required
+									/>
+									<Field
+										label="Nom"
+										value={draft.lastName}
+										onChange={(lastName) =>
+											setDraft((v) => ({ ...v, lastName }))
+										}
+										required
+									/>
+								</div>
+							</FormSection>
+
+							<FormSection
+								title="Coordonnées"
+								description="Renseignez ce qui est disponible aujourd'hui."
+							>
+								<div className="grid gap-4 sm:grid-cols-2">
+									<Field
+										label="Email"
+										type="email"
+										value={draft.email}
+										onChange={(email) => setDraft((v) => ({ ...v, email }))}
+									/>
+									<Field
+										label="Téléphone"
+										value={draft.phone}
+										onChange={(phone) => setDraft((v) => ({ ...v, phone }))}
+									/>
+								</div>
+							</FormSection>
+						</div>
+
+						<SheetFooter className="border-t bg-background sm:flex-row sm:justify-end">
+							<Button
+								type="button"
+								variant="ghost"
+								onClick={() => {
+									handleCreateOpenChange(false)
+								}}
+							>
+								Annuler
+							</Button>
+							<Button type="submit" disabled={!canCreate || isCreating}>
+								<Plus />
+								Créer le client
+							</Button>
+						</SheetFooter>
+					</form>
+				</SheetContent>
+			</Sheet>
 
 			<section>
 				<p className="mb-3 text-sm text-muted-foreground">Aperçu du fichier</p>
@@ -153,71 +318,43 @@ export function CustomerListUI({
 				</div>
 			</section>
 
-			{showCreate ? (
-				<SectionCard>
-					<div className="grid gap-4 p-5 md:grid-cols-4">
-						<Field
-							label="Prénom"
-							value={draft.firstName}
-							onChange={(firstName) => setDraft((v) => ({ ...v, firstName }))}
-						/>
-						<Field
-							label="Nom"
-							value={draft.lastName}
-							onChange={(lastName) => setDraft((v) => ({ ...v, lastName }))}
-						/>
-						<Field
-							label="Email"
-							type="email"
-							value={draft.email}
-							onChange={(email) => setDraft((v) => ({ ...v, email }))}
-						/>
-						<Field
-							label="Téléphone"
-							value={draft.phone}
-							onChange={(phone) => setDraft((v) => ({ ...v, phone }))}
-						/>
-					</div>
-					<div className="flex justify-end gap-2 border-t p-4">
-						<Button
-							type="button"
-							variant="ghost"
-							onClick={() => setShowCreate(false)}
-						>
-							Annuler
-						</Button>
-						<Button
-							type="button"
-							disabled={!canCreate || isCreating}
-							onClick={() => void submitCreate()}
-						>
-							<Plus />
-							Créer
-						</Button>
-					</div>
-				</SectionCard>
-			) : null}
-
 			<section className="flex flex-col gap-3">
-				<div className="flex flex-col items-start justify-between gap-3 sm:flex-row sm:items-center">
-					<h2 className="font-semibold">Clients ({visible.length})</h2>
-					<div className="relative w-full sm:w-72">
-						<Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-						<Input
-							type="search"
-							value={search}
-							onChange={(e) => setSearch(e.target.value)}
-							placeholder="Rechercher un client…"
-							className="pl-9"
-						/>
-					</div>
+				<div className="flex flex-col gap-3">
+					<h2 className="font-semibold">Clients ({dataView.filteredCount})</h2>
+					<DataViewToolbar
+						search={search}
+						onSearchChange={(value) => {
+							setSearch(value)
+							onPageChange(1)
+						}}
+						searchPlaceholder="Rechercher un client…"
+						filter={contactFilter}
+						onFilterChange={(value) => {
+							setContactFilter(value)
+							onPageChange(1)
+						}}
+						filterOptions={CUSTOMER_FILTER_OPTIONS}
+						sort={sort}
+						onSortChange={(value) => {
+							setSort(value)
+							onPageChange(1)
+						}}
+						sortOptions={CUSTOMER_SORT_OPTIONS}
+						filteredCount={dataView.filteredCount}
+						totalCount={dataView.totalCount}
+						onReset={() => {
+							setSearch('')
+							setContactFilter('all')
+							onPageChange(1)
+						}}
+					/>
 				</div>
 
 				{isLoading ? (
 					<SectionCard className="flex items-center justify-center p-12 text-sm text-muted-foreground">
 						Chargement…
 					</SectionCard>
-				) : visible.length === 0 ? (
+				) : dataView.rows.length === 0 ? (
 					<SectionCard className="flex flex-col items-center justify-center gap-3 border-dashed p-12 text-center">
 						<div className="flex size-12 items-center justify-center rounded-lg bg-brand-soft">
 							<UserPlus className="size-6 text-muted-foreground" />
@@ -225,86 +362,111 @@ export function CustomerListUI({
 						<div>
 							<p className="font-medium">Aucun client trouvé</p>
 							<p className="text-sm text-muted-foreground">
-								{search
+								{search || contactFilter !== 'all'
 									? "Essayez d'autres critères"
 									: 'Commencez par ajouter votre premier client'}
 							</p>
 						</div>
-						{!search && (
-							<Button onClick={() => setShowCreate(true)} variant="outline">
+						{!search && contactFilter === 'all' ? (
+							<Button onClick={() => setCreateOpen(true)} variant="outline">
 								<Plus />
 								Ajouter un client
 							</Button>
-						)}
+						) : null}
 					</SectionCard>
 				) : (
-					<ul className="overflow-hidden rounded-lg border bg-card divide-y">
-						{visible.map((c) => (
+					<ul className="divide-y overflow-hidden rounded-lg border bg-card">
+						{dataView.rows.map((c) => (
 							<li
 								key={c.id}
-								className="flex items-center gap-4 px-5 py-4 transition-colors hover:bg-muted/40"
+								className="group relative transition-all hover:z-10 hover:bg-card hover:shadow-md hover:ring-1 hover:ring-border focus-within:z-10 focus-within:bg-card focus-within:shadow-md focus-within:ring-2 focus-within:ring-ring/45"
 							>
-								<EntityAvatar tone="brand">{customerInitials(c)}</EntityAvatar>
+								<button
+									type="button"
+									className="flex w-full cursor-pointer items-center gap-4 px-5 py-4 pr-16 text-left outline-none"
+									onClick={() => onEdit?.(c)}
+								>
+									<EntityAvatar tone="brand">
+										{customerInitials(c)}
+									</EntityAvatar>
 
-								<div className="min-w-0 flex-1">
-									<div className="flex items-center gap-2">
-										<p className="truncate font-semibold">
-											{customerDisplayName(c)}
+									<div className="min-w-0 flex-1">
+										<div className="flex items-center gap-2">
+											<p className="truncate font-semibold">
+												{customerDisplayName(c)}
+											</p>
+											<StatusBadge tone="neutral">
+												{formatDate(c.created_at)}
+											</StatusBadge>
+										</div>
+										<p className="mt-0.5 truncate font-mono text-xs text-muted-foreground">
+											id: {c.id}
 										</p>
-										<StatusBadge tone="neutral">
-											{formatDate(c.created_at)}
-										</StatusBadge>
 									</div>
-									<p className="mt-0.5 truncate font-mono text-xs text-muted-foreground">
-										id: {c.id}
-									</p>
-								</div>
 
-								<div className="hidden flex-col items-end gap-0.5 text-xs text-muted-foreground md:flex">
-									<span className="flex items-center gap-1 truncate">
-										<Mail className="size-3" />
-										{c.email || 'Email non renseigné'}
+									<div className="hidden flex-col items-end gap-0.5 text-xs text-muted-foreground md:flex">
+										<span className="flex items-center gap-1 truncate">
+											<Mail className="size-3" />
+											{c.email || 'Email non renseigné'}
+										</span>
+										<span className="flex items-center gap-1">
+											<Phone className="size-3" />
+											{c.phone || 'Téléphone non renseigné'}
+										</span>
+									</div>
+
+									<span className="hidden items-center rounded-md border bg-card px-2 py-1 text-[11px] font-medium text-muted-foreground lg:inline-flex">
+										{c.organization_id}
 									</span>
-									<span className="flex items-center gap-1">
-										<Phone className="size-3" />
-										{c.phone || 'Téléphone non renseigné'}
-									</span>
+								</button>
+
+								<div className="absolute right-3 top-1/2 z-20 -translate-y-1/2 opacity-100 transition-opacity md:opacity-0 md:group-hover:opacity-100 md:group-focus-within:opacity-100">
+									<DropdownMenu>
+										<DropdownMenuTrigger asChild>
+											<Button
+												variant="ghost"
+												size="icon-sm"
+												className="text-muted-foreground"
+												onPointerDown={(event) => event.stopPropagation()}
+												onClick={(event) => event.stopPropagation()}
+											>
+												<MoreHorizontal />
+												<span className="sr-only">Actions</span>
+											</Button>
+										</DropdownMenuTrigger>
+										<DropdownMenuContent align="end">
+											<DropdownMenuItem onClick={() => onEdit?.(c)}>
+												Modifier
+											</DropdownMenuItem>
+											<DropdownMenuSeparator />
+											<DropdownMenuItem
+												variant="destructive"
+												disabled={deletingId === c.id}
+												onClick={() => onDelete?.(c)}
+											>
+												<Trash2 />
+												Supprimer
+											</DropdownMenuItem>
+										</DropdownMenuContent>
+									</DropdownMenu>
 								</div>
-
-								<span className="hidden items-center rounded-md border bg-card px-2 py-1 text-[11px] font-medium text-muted-foreground lg:inline-flex">
-									{c.organization_id}
-								</span>
-
-								<DropdownMenu>
-									<DropdownMenuTrigger asChild>
-										<Button
-											variant="ghost"
-											size="icon-sm"
-											className="text-muted-foreground"
-										>
-											<MoreHorizontal />
-											<span className="sr-only">Actions</span>
-										</Button>
-									</DropdownMenuTrigger>
-									<DropdownMenuContent align="end">
-										<DropdownMenuItem onClick={() => onEdit?.(c)}>
-											Modifier
-										</DropdownMenuItem>
-										<DropdownMenuSeparator />
-										<DropdownMenuItem
-											variant="destructive"
-											disabled={deletingId === c.id}
-											onClick={() => onDelete?.(c)}
-										>
-											<Trash2 />
-											Supprimer
-										</DropdownMenuItem>
-									</DropdownMenuContent>
-								</DropdownMenu>
 							</li>
 						))}
 					</ul>
 				)}
+
+				{!isLoading ? (
+					<DataViewPagination
+						page={dataView.page}
+						pageCount={dataView.pageCount}
+						pageSize={pageSize}
+						from={dataView.from}
+						to={dataView.to}
+						totalCount={dataView.totalCount}
+						onPageChange={onPageChange}
+						onPageSizeChange={onPageSizeChange}
+					/>
+				) : null}
 			</section>
 		</PageShell>
 	)
@@ -327,9 +489,16 @@ interface FieldProps {
 	value: string
 	onChange: (value: string) => void
 	type?: string
+	required?: boolean
 }
 
-function Field({ label, value, onChange, type = 'text' }: FieldProps) {
+function Field({
+	label,
+	value,
+	onChange,
+	type = 'text',
+	required,
+}: FieldProps) {
 	const id = label.toLowerCase().replaceAll(/\s+/g, '-')
 	return (
 		<div className="flex flex-col gap-2">
@@ -338,10 +507,86 @@ function Field({ label, value, onChange, type = 'text' }: FieldProps) {
 				id={id}
 				type={type}
 				value={value}
+				required={required}
 				onChange={(event) => onChange(event.target.value)}
 			/>
 		</div>
 	)
+}
+
+interface FormSectionProps {
+	title: string
+	description: string
+	children: React.ReactNode
+}
+
+function FormSection({ title, description, children }: FormSectionProps) {
+	return (
+		<section className="space-y-3">
+			<div>
+				<h3 className="text-sm font-semibold">{title}</h3>
+				<p className="text-xs text-muted-foreground">{description}</p>
+			</div>
+			{children}
+		</section>
+	)
+}
+
+const CUSTOMER_FILTER_OPTIONS = [
+	{ value: 'all', label: 'Tous les clients' },
+	{ value: 'with-email', label: 'Avec email' },
+	{ value: 'with-phone', label: 'Avec téléphone' },
+	{ value: 'incomplete-contact', label: 'Coordonnées incomplètes' },
+]
+
+const CUSTOMER_SORT_OPTIONS: DataViewSortOption<Customer>[] = [
+	{
+		value: 'created-desc',
+		label: 'Plus récents',
+		compare: (a, b) => dateValue(b.created_at) - dateValue(a.created_at),
+	},
+	{
+		value: 'created-asc',
+		label: 'Plus anciens',
+		compare: (a, b) => dateValue(a.created_at) - dateValue(b.created_at),
+	},
+	{
+		value: 'name-asc',
+		label: 'Nom A-Z',
+		compare: (a, b) =>
+			customerDisplayName(a).localeCompare(customerDisplayName(b), 'fr'),
+	},
+	{
+		value: 'name-desc',
+		label: 'Nom Z-A',
+		compare: (a, b) =>
+			customerDisplayName(b).localeCompare(customerDisplayName(a), 'fr'),
+	},
+]
+
+function customerMatchesSearch(customer: Customer, query: string): boolean {
+	const name = customerDisplayName(customer).toLowerCase()
+	return (
+		name.includes(query) ||
+		(customer.email ?? '').toLowerCase().includes(query) ||
+		(customer.phone ?? '').toLowerCase().includes(query)
+	)
+}
+
+function customerMatchesContactFilter(
+	customer: Customer,
+	filter: string,
+): boolean {
+	switch (filter) {
+		case 'with-email':
+			return Boolean(customer.email)
+		case 'with-phone':
+			return Boolean(customer.phone)
+		case 'incomplete-contact':
+			return !customer.email || !customer.phone
+		default:
+			return true
+	}
 }
 
 function isCurrentMonth(value: string): boolean {
@@ -359,4 +604,32 @@ function formatDate(value: string): string {
 		month: 'short',
 		year: 'numeric',
 	}).format(new Date(value))
+}
+
+function dateValue(value: string): number {
+	return new Date(value).getTime()
+}
+
+function isValidCustomerFilter(value: string): boolean {
+	return CUSTOMER_FILTER_OPTIONS.some((option) => option.value === value)
+}
+
+function isValidCustomerSort(value: string): boolean {
+	return CUSTOMER_SORT_OPTIONS.some((option) => option.value === value)
+}
+
+function getPaginationFrom(pagination?: PaginationMetadata | null): number {
+	if (!pagination || pagination.is_empty) return 0
+	return (pagination.current_page - 1) * pagination.per_page + 1
+}
+
+function getPaginationTo(
+	pagination: PaginationMetadata | null | undefined,
+	rowCount: number,
+): number {
+	if (!pagination || pagination.is_empty) return 0
+	return Math.min(
+		(pagination.current_page - 1) * pagination.per_page + rowCount,
+		pagination.total,
+	)
 }

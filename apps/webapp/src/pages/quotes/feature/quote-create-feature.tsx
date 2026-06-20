@@ -1,14 +1,13 @@
 import { useForm } from '@tanstack/react-form'
 import { AlertCircle } from 'lucide-react'
 import { useState } from 'react'
-import { Button } from '#/components/ui/button'
+import { useActiveOrganization } from '#/hooks/use-active-organization'
 import {
 	type Customer,
 	useCustomerContexts,
 	useCustomers,
 	useUploadFile,
 } from '#/hooks/use-customers'
-import { useMyOrganizations } from '#/hooks/use-organizations'
 import { type Quote, useCreateQuote, useQuotes } from '#/hooks/use-quotes'
 import {
 	type ServiceRate,
@@ -24,14 +23,9 @@ import {
 import { QuoteCreateUI } from '#/pages/quotes/ui/quote-create-ui'
 
 export function QuoteCreateFeature() {
-	const organizations = useMyOrganizations()
-	const organization = organizations.data?.data?.[0]
+	const { activeOrganization } = useActiveOrganization()
 
-	if (organizations.isLoading) {
-		return <QuoteCreateUI.Loading />
-	}
-
-	if (organizations.isError || !organization) {
+	if (!activeOrganization) {
 		return (
 			<div className="flex flex-col items-center justify-center gap-3 p-12 text-center">
 				<div className="flex size-14 items-center justify-center rounded-lg border bg-card">
@@ -43,14 +37,16 @@ export function QuoteCreateFeature() {
 						La création de devis nécessite une organisation active.
 					</p>
 				</div>
-				<Button onClick={() => void organizations.refetch()} variant="outline">
-					Réessayer
-				</Button>
 			</div>
 		)
 	}
 
-	return <QuoteWorkspace organizationId={organization.id} />
+	return (
+		<QuoteWorkspace
+			key={activeOrganization.id}
+			organizationId={activeOrganization.id}
+		/>
+	)
 }
 
 function QuoteWorkspace({ organizationId }: { organizationId: string }) {

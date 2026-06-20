@@ -1,24 +1,20 @@
 import { useNavigate } from '@tanstack/react-router'
 import { AlertCircle } from 'lucide-react'
-import { Button } from '#/components/ui/button'
+import { useState } from 'react'
+import { useActiveOrganization } from '#/hooks/use-active-organization'
 import {
 	type Customer,
 	useCreateCustomer,
 	useCustomers,
 	useDeleteCustomer,
 } from '#/hooks/use-customers'
-import { useMyOrganizations } from '#/hooks/use-organizations'
+import { getCustomerListUrlState } from '#/pages/customers/customer-list-url-state'
 import { CustomerListUI } from '#/pages/customers/ui/customer-list-ui'
 
 export function CustomerListFeature() {
-	const organizations = useMyOrganizations()
-	const organization = organizations.data?.data?.[0]
+	const { activeOrganization } = useActiveOrganization()
 
-	if (organizations.isLoading) {
-		return <CustomerListUI.Loading />
-	}
-
-	if (organizations.isError || !organization) {
+	if (!activeOrganization) {
 		return (
 			<div className="flex flex-col items-center justify-center gap-3 p-12 text-center">
 				<div className="flex size-14 items-center justify-center rounded-lg border bg-card">
@@ -30,19 +26,24 @@ export function CustomerListFeature() {
 						Le fichier client nécessite une organisation active.
 					</p>
 				</div>
-				<Button onClick={() => void organizations.refetch()} variant="outline">
-					Réessayer
-				</Button>
 			</div>
 		)
 	}
 
-	return <CustomerList organizationId={organization.id} />
+	return (
+		<CustomerList
+			key={activeOrganization.id}
+			organizationId={activeOrganization.id}
+		/>
+	)
 }
 
 function CustomerList({ organizationId }: { organizationId: string }) {
 	const navigate = useNavigate()
-	const customers = useCustomers(organizationId)
+	const [initialListState] = useState(getCustomerListUrlState)
+	const [page, setPage] = useState(initialListState.page)
+	const [pageSize, setPageSize] = useState(initialListState.pageSize)
+	const customers = useCustomers(organizationId, { page, perPage: pageSize })
 	const createCustomer = useCreateCustomer(organizationId)
 	const deleteCustomer = useDeleteCustomer(organizationId)
 
@@ -56,6 +57,9 @@ function CustomerList({ organizationId }: { organizationId: string }) {
 	return (
 		<CustomerListUI
 			customers={customers.data?.data ?? []}
+			pagination={customers.data?.pagination ?? null}
+			page={page}
+			pageSize={pageSize}
 			error={
 				customers.error?.message ??
 				createCustomer.error?.message ??
@@ -69,6 +73,11 @@ function CustomerList({ organizationId }: { organizationId: string }) {
 					? deleteCustomer.variables.path.customer_id
 					: null
 			}
+			onPageChange={setPage}
+			onPageSizeChange={(nextPageSize) => {
+				setPageSize(nextPageSize)
+				setPage(1)
+			}}
 			onAdd={(payload) =>
 				createCustomer.mutateAsync({
 					path: { organization_id: organizationId },

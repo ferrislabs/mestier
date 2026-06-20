@@ -1,12 +1,12 @@
 import { createFileRoute, Outlet } from '@tanstack/react-router'
-import { Bell, LogOut, Search, User } from 'lucide-react'
+import { Bell, LogOut, User } from 'lucide-react'
 import { useAuth } from 'react-oidc-context'
 
+import { AppBreadcrumb } from '#/components/app-breadcrumb'
 import { AppSidebar } from '#/components/app-sidebar'
 import { AuthGate } from '#/components/auth-gate'
 import { OrgGate } from '#/components/org-gate'
 import { Button } from '#/components/ui/button'
-import { Input } from '#/components/ui/input'
 import {
 	DropdownMenu,
 	DropdownMenuContent,
@@ -20,6 +20,7 @@ import {
 	SidebarProvider,
 	SidebarTrigger,
 } from '#/components/ui/sidebar'
+import { useActiveOrganization } from '#/hooks/use-active-organization'
 
 export const Route = createFileRoute('/_app')({ component: AppLayout })
 
@@ -35,6 +36,7 @@ function AppLayout() {
 
 function AppShell() {
 	const auth = useAuth()
+	const { activeOrganization } = useActiveOrganization()
 	const profile = auth.user?.profile
 	const displayName =
 		profile?.name ||
@@ -51,22 +53,14 @@ function AppShell() {
 				<header className="sticky top-0 z-10 flex h-16 shrink-0 items-center gap-3 border-b bg-card/90 px-3 backdrop-blur md:px-6">
 					<SidebarTrigger className="-ml-1" />
 
-					<div className="relative flex max-w-xl flex-1 items-center">
-						<Search className="pointer-events-none absolute left-3 size-4 text-muted-foreground" />
-						<Input
-							type="search"
-							placeholder="Rechercher…"
-							className="pl-9 pr-16"
-						/>
-						<kbd className="pointer-events-none absolute right-3 hidden h-5 select-none items-center gap-0.5 rounded border bg-muted px-1.5 font-mono text-[10px] font-medium text-muted-foreground sm:inline-flex">
-							⌘K
-						</kbd>
-					</div>
+					<AppBreadcrumb />
 
 					<div className="ml-auto flex items-center gap-2">
 						<span className="hidden items-center gap-1.5 rounded-lg border bg-card px-3 py-1.5 text-xs font-medium text-muted-foreground sm:inline-flex">
-							espace:{' '}
-							<span className="font-mono text-foreground">production</span>
+							org:{' '}
+							<span className="max-w-40 truncate font-medium text-foreground">
+								{activeOrganization.name}
+							</span>
 						</span>
 						<Button
 							variant="ghost"
