@@ -33,6 +33,32 @@ export interface DataViewOption {
 	label: string
 }
 
+export interface DataViewUrlState {
+	search: string
+	filter: string
+	sort: string
+	page: number
+	pageSize: number
+}
+
+export interface DataViewPaginationMetadata {
+	per_page: number
+	current_page: number
+	first_page: number
+	is_empty: boolean
+	total: number
+	last_page?: number | null
+}
+
+export interface DataViewPaginationViewModel {
+	page: number
+	pageCount: number
+	pageSize: number
+	from: number
+	to: number
+	totalCount: number
+}
+
 export interface DataViewSortOption<TItem> extends DataViewOption {
 	compare: (a: TItem, b: TItem) => number
 }
@@ -48,6 +74,7 @@ interface UseDataViewOptions<TItem> {
 	page: number
 	pageSize: number
 	manualPagination?: boolean
+	defaultFilter?: string
 	totalCount?: number
 	pageCount?: number
 	from?: number
@@ -65,6 +92,7 @@ export function useDataView<TItem>({
 	page,
 	pageSize,
 	manualPagination,
+	defaultFilter = 'all',
 	totalCount,
 	pageCount: controlledPageCount,
 	from,
@@ -84,7 +112,7 @@ export function useDataView<TItem>({
 			: filtered
 		const resolvedTotalCount = totalCount ?? data.length
 		const filteredCount =
-			manualPagination && !query && filter === 'all'
+			manualPagination && !query && filter === defaultFilter
 				? resolvedTotalCount
 				: sorted.length
 		const pageCount =
@@ -120,6 +148,7 @@ export function useDataView<TItem>({
 		data,
 		filter,
 		filterPredicate,
+		defaultFilter,
 		from,
 		manualPagination,
 		page,
@@ -141,6 +170,7 @@ interface DataViewToolbarProps {
 	filter: string
 	onFilterChange: (value: string) => void
 	filterOptions: DataViewOption[]
+	defaultFilter?: string
 	sort: string
 	onSortChange: (value: string) => void
 	sortOptions: DataViewOption[]
@@ -156,6 +186,7 @@ export function DataViewToolbar({
 	filter,
 	onFilterChange,
 	filterOptions,
+	defaultFilter = 'all',
 	sort,
 	onSortChange,
 	sortOptions,
@@ -163,7 +194,7 @@ export function DataViewToolbar({
 	totalCount,
 	onReset,
 }: DataViewToolbarProps) {
-	const hasActiveCriteria = search.trim() || filter !== 'all'
+	const hasActiveCriteria = search.trim() || filter !== defaultFilter
 	const activeFilterLabel =
 		filterOptions.find((option) => option.value === filter)?.label ?? 'Filtres'
 
@@ -186,12 +217,12 @@ export function DataViewToolbar({
 						<DropdownMenuTrigger asChild>
 							<Button
 								type="button"
-								variant={filter === 'all' ? 'outline' : 'default'}
+								variant={filter === defaultFilter ? 'outline' : 'default'}
 								className="justify-start"
 							>
 								<Filter />
 								Filtres
-								{filter !== 'all' ? (
+								{filter !== defaultFilter ? (
 									<span className="rounded-md bg-primary-foreground/20 px-1.5 py-0.5 text-[11px]">
 										1
 									</span>
@@ -245,7 +276,7 @@ export function DataViewToolbar({
 
 			<p className="text-xs text-muted-foreground">
 				{filteredCount} résultat{filteredCount > 1 ? 's' : ''} sur {totalCount}
-				{filter !== 'all' ? ` · ${activeFilterLabel}` : null}
+				{filter !== defaultFilter ? ` · ${activeFilterLabel}` : null}
 			</p>
 		</div>
 	)
@@ -346,4 +377,130 @@ export function DataViewPagination({
 			</div>
 		</div>
 	)
+}
+
+interface DataViewUrlStateConfig {
+	defaults: DataViewUrlState
+	isValidFilter?: (value: string) => boolean
+	isValidSort?: (value: string) => boolean
+	pageSizeOptions?: number[]
+}
+
+export function readDataViewUrlState({
+	defaults,
+	isValidFilter,
+	isValidSort,
+	pageSizeOptions = [10, 25, 50],
+}: DataViewUrlStateConfig): DataViewUrlState {
+	if (typeof window === 'undefined') return defaults
+
+	const params = new URLSearchParams(window.location.search)
+	const filter = params.get('filter') ?? defaults.filter
+	const sort = params.get('sort') ?? defaults.sort
+
+	return {
+		search: params.get('q') ?? defaults.search,
+		filter: !isValidFilter || isValidFilter(filter) ? filter : defaults.filter,
+		sort: !isValidSort || isValidSort(sort) ? sort : defaults.sort,
+		page: parsePositiveInteger(params.get('page'), defaults.page),
+		pageSize: parsePageSize(
+			params.get('perPage'),
+			defaults.pageSize,
+			pageSizeOptions,
+		),
+	}
+}
+
+export function writeDataViewUrlState(
+	state: DataViewUrlState,
+	defaults: DataViewUrlState,
+) {
+	if (typeof window === 'undefined') return
+
+	const params = new URLSearchParams(window.location.search)
+	setOptionalParam(params, 'q', state.search.trim())
+	setOptionalParam(
+		params,
+		'filter',
+		state.filter === defaults.filter ? '' : state.filter,
+	)
+	setOptionalParam(
+		params,
+		'sort',
+		state.sort === defaults.sort ? '' : state.sort,
+	)
+	setOptionalParam(
+		params,
+		'page',
+		state.page === defaults.page ? '' : String(state.page),
+	)
+	setOptionalParam(
+		params,
+		'perPage',
+		state.pageSize === defaults.pageSize ? '' : String(state.pageSize),
+	)
+
+	const query = params.toString()
+	const nextUrl = query
+		? `${window.location.pathname}?${query}`
+		: window.location.pathname
+	const currentUrl = `${window.location.pathname}${window.location.search}`
+	if (nextUrl !== currentUrl) window.history.replaceState(null, '', nextUrl)
+}
+
+export function getPaginationViewModel(
+	pagination: DataViewPaginationMetadata | null | undefined,
+	rowCount: number,
+	requestedPage: number,
+	requestedPageSize: number,
+): DataViewPaginationViewModel {
+	if (!pagination) {
+		return {
+			page: requestedPage,
+			pageCount: Math.max(requestedPage, 1),
+			pageSize: requestedPageSize,
+			from: 0,
+			to: 0,
+			totalCount: rowCount,
+		}
+	}
+
+	return {
+		page: pagination.current_page,
+		pageCount: pagination.last_page ?? Math.max(pagination.current_page, 1),
+		pageSize: pagination.per_page,
+		from: pagination.is_empty
+			? 0
+			: (pagination.current_page - 1) * pagination.per_page + 1,
+		to: pagination.is_empty
+			? 0
+			: Math.min(
+					(pagination.current_page - 1) * pagination.per_page + rowCount,
+					pagination.total,
+				),
+		totalCount: pagination.total,
+	}
+}
+
+function setOptionalParam(params: URLSearchParams, key: string, value: string) {
+	if (value) {
+		params.set(key, value)
+	} else {
+		params.delete(key)
+	}
+}
+
+function parsePositiveInteger(value: string | null, fallback: number): number {
+	const parsed = Number(value)
+	if (!Number.isInteger(parsed) || parsed < 1) return fallback
+	return parsed
+}
+
+function parsePageSize(
+	value: string | null,
+	fallback: number,
+	pageSizeOptions: number[],
+): number {
+	const parsed = parsePositiveInteger(value, fallback)
+	return pageSizeOptions.includes(parsed) ? parsed : fallback
 }
