@@ -15,6 +15,7 @@ import type * as React from 'react'
 
 import { MestierAppIcon } from '#/components/brand/mestier-logo'
 import { type NavItem, NavMain } from '#/components/nav-main'
+import { TeamSwitcher } from '#/components/team-switcher'
 import {
 	Sidebar,
 	SidebarContent,
@@ -53,7 +54,7 @@ const securityItems: NavItem[] = [
 export function AppSidebar(props: React.ComponentProps<typeof Sidebar>) {
 	return (
 		<Sidebar collapsible="icon" {...props}>
-			<SidebarHeader className="border-b border-sidebar-border/70 pb-3">
+			<SidebarHeader className="gap-3 border-b border-sidebar-border/70 pb-3">
 				<SidebarMenu>
 					<SidebarMenuItem>
 						<SidebarMenuButton size="lg" asChild tooltip="Mestier">
@@ -71,6 +72,7 @@ export function AppSidebar(props: React.ComponentProps<typeof Sidebar>) {
 						</SidebarMenuButton>
 					</SidebarMenuItem>
 				</SidebarMenu>
+				<TeamSwitcher />
 			</SidebarHeader>
 			<SidebarContent>
 				<NavMain label="Activité" items={coreItems} />

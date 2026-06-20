@@ -1,5 +1,6 @@
 import { AlertCircle, Loader2 } from 'lucide-react'
 import { Button } from '#/components/ui/button'
+import { ActiveOrganizationProvider } from '#/hooks/use-active-organization'
 import { useMyOrganizations } from '#/hooks/use-organizations'
 import { OnboardingFeature } from '#/pages/onboarding/feature/onboarding-feature'
 
@@ -35,7 +36,11 @@ export function OrgGate({ children }: OrgGateProps) {
 		return <OnboardingFeature />
 	}
 
-	return <>{children}</>
+	return (
+		<ActiveOrganizationProvider organizations={data.data}>
+			{children}
+		</ActiveOrganizationProvider>
+	)
 }
 
 interface FullscreenMessageProps {

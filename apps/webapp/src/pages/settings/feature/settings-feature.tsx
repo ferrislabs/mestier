@@ -1,9 +1,8 @@
 import { useForm } from '@tanstack/react-form'
 import { AlertCircle } from 'lucide-react'
-import { Button } from '#/components/ui/button'
+import { useActiveOrganization } from '#/hooks/use-active-organization'
 import {
 	type Organization,
-	useMyOrganizations,
 	useUpdateOrganization,
 } from '#/hooks/use-organizations'
 import {
@@ -27,14 +26,9 @@ import type {
 import { SettingsUI } from '#/pages/settings/ui/settings-ui'
 
 export function SettingsFeature() {
-	const organizations = useMyOrganizations()
-	const organization = organizations.data?.data?.[0]
+	const { activeOrganization } = useActiveOrganization()
 
-	if (organizations.isLoading) {
-		return <SettingsUI.Loading />
-	}
-
-	if (organizations.isError || !organization) {
+	if (!activeOrganization) {
 		return (
 			<div className="flex flex-col items-center justify-center gap-3 p-12 text-center">
 				<div className="flex size-14 items-center justify-center rounded-lg border bg-card">
@@ -46,14 +40,16 @@ export function SettingsFeature() {
 						Le référentiel nécessite une organisation active.
 					</p>
 				</div>
-				<Button onClick={() => void organizations.refetch()} variant="outline">
-					Réessayer
-				</Button>
 			</div>
 		)
 	}
 
-	return <SettingsCatalog organization={organization} />
+	return (
+		<SettingsCatalog
+			key={activeOrganization.id}
+			organization={activeOrganization}
+		/>
+	)
 }
 
 interface SettingsCatalogProps {

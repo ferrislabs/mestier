@@ -1,24 +1,18 @@
 import { useNavigate } from '@tanstack/react-router'
 import { AlertCircle } from 'lucide-react'
-import { Button } from '#/components/ui/button'
+import { useActiveOrganization } from '#/hooks/use-active-organization'
 import {
 	type Customer,
 	useCreateCustomer,
 	useCustomers,
 	useDeleteCustomer,
 } from '#/hooks/use-customers'
-import { useMyOrganizations } from '#/hooks/use-organizations'
 import { CustomerListUI } from '#/pages/customers/ui/customer-list-ui'
 
 export function CustomerListFeature() {
-	const organizations = useMyOrganizations()
-	const organization = organizations.data?.data?.[0]
+	const { activeOrganization } = useActiveOrganization()
 
-	if (organizations.isLoading) {
-		return <CustomerListUI.Loading />
-	}
-
-	if (organizations.isError || !organization) {
+	if (!activeOrganization) {
 		return (
 			<div className="flex flex-col items-center justify-center gap-3 p-12 text-center">
 				<div className="flex size-14 items-center justify-center rounded-lg border bg-card">
@@ -30,14 +24,16 @@ export function CustomerListFeature() {
 						Le fichier client nécessite une organisation active.
 					</p>
 				</div>
-				<Button onClick={() => void organizations.refetch()} variant="outline">
-					Réessayer
-				</Button>
 			</div>
 		)
 	}
 
-	return <CustomerList organizationId={organization.id} />
+	return (
+		<CustomerList
+			key={activeOrganization.id}
+			organizationId={activeOrganization.id}
+		/>
+	)
 }
 
 function CustomerList({ organizationId }: { organizationId: string }) {
