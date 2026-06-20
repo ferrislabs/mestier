@@ -4,7 +4,7 @@ import { useState } from 'react'
 import { Button } from '#/components/ui/button'
 import {
 	type Customer,
-	useCustomerProperties,
+	useCustomerContexts,
 	useCustomers,
 	useUploadFile,
 } from '#/hooks/use-customers'
@@ -64,7 +64,7 @@ function QuoteWorkspace({ organizationId }: { organizationId: string }) {
 	const form = useForm({
 		defaultValues: {
 			customerId: '',
-			propertyId: '',
+			customerContextId: '',
 			lines: [emptyQuoteLine()],
 		} satisfies QuoteFormValues,
 		onSubmit: async ({ value }) => {
@@ -72,7 +72,7 @@ function QuoteWorkspace({ organizationId }: { organizationId: string }) {
 				path: { organization_id: organizationId },
 				body: {
 					customer_id: value.customerId,
-					property_id: value.propertyId,
+					customer_context_id: value.customerContextId,
 					lines: value.lines.map((line) => ({
 						service_rate_id: line.serviceRateId || null,
 						label: line.label.trim(),
@@ -97,7 +97,7 @@ function QuoteWorkspace({ organizationId }: { organizationId: string }) {
 					form={form}
 					organizationId={organizationId}
 					customers={customers.data?.data ?? []}
-					propertiesQueryEnabled={Boolean(values.customerId)}
+					customerContextsQueryEnabled={Boolean(values.customerId)}
 					serviceRates={catalog.serviceRates.data?.data ?? []}
 					quotes={quotes.data?.data ?? []}
 					lastCreated={lastCreated}
@@ -143,7 +143,7 @@ interface QuoteWorkspaceWithValuesProps {
 	form: ReturnType<typeof useForm<QuoteFormValues>>
 	organizationId: string
 	customers: Customer[]
-	propertiesQueryEnabled: boolean
+	customerContextsQueryEnabled: boolean
 	serviceRates: ServiceRate[]
 	quotes: Quote[]
 	lastCreated: Quote | null
@@ -159,7 +159,7 @@ function QuoteWorkspaceWithValues({
 	values,
 	form,
 	customers,
-	propertiesQueryEnabled,
+	customerContextsQueryEnabled,
 	serviceRates,
 	quotes,
 	lastCreated,
@@ -170,9 +170,9 @@ function QuoteWorkspaceWithValues({
 	refetch,
 	uploadFile,
 }: QuoteWorkspaceWithValuesProps) {
-	const properties = useCustomerProperties(
+	const customerContexts = useCustomerContexts(
 		values.customerId,
-		propertiesQueryEnabled,
+		customerContextsQueryEnabled,
 	)
 
 	const updateValues = (patch: Partial<QuoteFormValues>) => {
@@ -221,19 +221,19 @@ function QuoteWorkspaceWithValues({
 		<QuoteCreateUI
 			values={values}
 			customers={customers}
-			properties={properties.data?.data ?? []}
+			customerContexts={customerContexts.data?.data ?? []}
 			serviceRates={serviceRates}
 			quotes={quotes}
 			lastCreated={lastCreated}
-			error={error ?? properties.error?.message ?? null}
+			error={error ?? customerContexts.error?.message ?? null}
 			isLoading={isLoading}
 			isCreating={isCreating}
 			isUploading={isUploading}
-			isPropertiesLoading={properties.isLoading}
+			isCustomerContextsLoading={customerContexts.isLoading}
 			onRetry={refetch}
 			onChange={(patch) => {
 				if (patch.customerId !== undefined) {
-					updateValues({ customerId: patch.customerId, propertyId: '' })
+					updateValues({ customerId: patch.customerId, customerContextId: '' })
 					return
 				}
 				updateValues(patch)

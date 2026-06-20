@@ -1,4 +1,4 @@
-import type { Customer, Property } from '#/hooks/use-customers'
+import type { Customer, CustomerContext } from '#/hooks/use-customers'
 
 export interface CustomerFormValues {
 	firstName: string
@@ -7,10 +7,10 @@ export interface CustomerFormValues {
 	phone: string
 }
 
-export interface PropertyFormValues {
+export interface CustomerContextFormValues {
 	label: string
-	street: string
-	zip: string
+	addressLine: string
+	postalCode: string
 	city: string
 	photoKey: string
 }
@@ -38,20 +38,22 @@ export function customerToForm(customer: Customer): CustomerFormValues {
 	}
 }
 
-export function propertyToForm(property?: Property): PropertyFormValues {
+export function customerContextToForm(
+	customerContext?: CustomerContext,
+): CustomerContextFormValues {
 	return {
-		label: property?.label ?? '',
-		street: property?.street ?? '',
-		zip: property?.zip ?? '',
-		city: property?.city ?? '',
-		photoKey: property?.photo_key ?? '',
+		label: customerContext?.label ?? '',
+		addressLine: customerContext?.address_line ?? '',
+		postalCode: customerContext?.postal_code ?? '',
+		city: customerContext?.city ?? '',
+		photoKey: customerContext?.photo_key ?? '',
 	}
 }
 
-export const EMPTY_PROPERTY_FORM: PropertyFormValues = {
+export const EMPTY_CUSTOMER_CONTEXT_FORM: CustomerContextFormValues = {
 	label: '',
-	street: '',
-	zip: '',
+	addressLine: '',
+	postalCode: '',
 	city: '',
 	photoKey: '',
 }

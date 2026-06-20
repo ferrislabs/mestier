@@ -3,8 +3,9 @@ import type { Schemas } from '#/api/api.client'
 
 const CUSTOMERS_PATH = '/api/v1/organizations/{organization_id}/customers'
 const CUSTOMER_PATH = '/api/v1/customers/{customer_id}'
-const PROPERTIES_PATH = '/api/v1/customers/{customer_id}/properties'
-const PROPERTY_PATH = '/api/v1/properties/{property_id}'
+const CUSTOMER_CONTEXTS_PATH =
+	'/api/v1/customers/{customer_id}/customer-contexts'
+const CUSTOMER_CONTEXT_PATH = '/api/v1/customer-contexts/{customer_context_id}'
 
 function listParams(organizationId: string) {
 	return {
@@ -13,7 +14,7 @@ function listParams(organizationId: string) {
 	}
 }
 
-function propertiesParams(customerId: string) {
+function customerContextsParams(customerId: string) {
 	return {
 		path: { customer_id: customerId },
 		query: { page: 1, per_page: 100 },
@@ -31,14 +32,16 @@ function customerKey(customerId: string) {
 	}).queryKey
 }
 
-function propertiesKey(customerId: string) {
-	return window.tanstackApi.get(PROPERTIES_PATH, propertiesParams(customerId))
-		.queryKey
+function customerContextsKey(customerId: string) {
+	return window.tanstackApi.get(
+		CUSTOMER_CONTEXTS_PATH,
+		customerContextsParams(customerId),
+	).queryKey
 }
 
-function propertyKey(propertyId: string) {
-	return window.tanstackApi.get(PROPERTY_PATH, {
-		path: { property_id: propertyId },
+function customerContextKey(customerContextId: string) {
+	return window.tanstackApi.get(CUSTOMER_CONTEXT_PATH, {
+		path: { customer_context_id: customerContextId },
 	}).queryKey
 }
 
@@ -57,10 +60,12 @@ export function useCustomer(customerId: string) {
 	)
 }
 
-export function useCustomerProperties(customerId: string, enabled = true) {
+export function useCustomerContexts(customerId: string, enabled = true) {
 	return useQuery({
-		...window.tanstackApi.get(PROPERTIES_PATH, propertiesParams(customerId))
-			.queryOptions,
+		...window.tanstackApi.get(
+			CUSTOMER_CONTEXTS_PATH,
+			customerContextsParams(customerId),
+		).queryOptions,
 		enabled: enabled && Boolean(customerId),
 	})
 }
@@ -115,49 +120,52 @@ export function useDeleteCustomer(organizationId: string) {
 	})
 }
 
-export function useCreateProperty() {
+export function useCreateCustomerContext() {
 	const queryClient = useQueryClient()
 
 	return useMutation({
-		...window.tanstackApi.mutation('post', PROPERTIES_PATH).mutationOptions,
-		onSuccess: async (property) => {
+		...window.tanstackApi.mutation('post', CUSTOMER_CONTEXTS_PATH)
+			.mutationOptions,
+		onSuccess: async (customerContext) => {
 			await queryClient.invalidateQueries({
-				queryKey: propertiesKey(property.customer_id),
+				queryKey: customerContextsKey(customerContext.customer_id),
 			})
 		},
 	})
 }
 
-export function useUpdateProperty() {
+export function useUpdateCustomerContext() {
 	const queryClient = useQueryClient()
 
 	return useMutation({
-		...window.tanstackApi.mutation('patch', PROPERTY_PATH).mutationOptions,
-		onSuccess: async (property) => {
+		...window.tanstackApi.mutation('patch', CUSTOMER_CONTEXT_PATH)
+			.mutationOptions,
+		onSuccess: async (customerContext) => {
 			await Promise.all([
 				queryClient.invalidateQueries({
-					queryKey: propertiesKey(property.customer_id),
+					queryKey: customerContextsKey(customerContext.customer_id),
 				}),
 				queryClient.invalidateQueries({
-					queryKey: propertyKey(property.id),
+					queryKey: customerContextKey(customerContext.id),
 				}),
 			])
 		},
 	})
 }
 
-export function useDeleteProperty(customerId: string) {
+export function useDeleteCustomerContext(customerId: string) {
 	const queryClient = useQueryClient()
 
 	return useMutation({
-		...window.tanstackApi.mutation('delete', PROPERTY_PATH).mutationOptions,
+		...window.tanstackApi.mutation('delete', CUSTOMER_CONTEXT_PATH)
+			.mutationOptions,
 		onSuccess: async (_res, variables) => {
 			await Promise.all([
 				queryClient.invalidateQueries({
-					queryKey: propertiesKey(customerId),
+					queryKey: customerContextsKey(customerId),
 				}),
 				queryClient.invalidateQueries({
-					queryKey: propertyKey(variables.path.property_id),
+					queryKey: customerContextKey(variables.path.customer_context_id),
 				}),
 			])
 		},
@@ -180,6 +188,6 @@ export function useUploadFile() {
 
 export type Customer = Schemas.CustomerResponse
 export type CustomerPayload = Schemas.CreateCustomerRequest
-export type Property = Schemas.PropertyResponse
-export type PropertyPayload = Schemas.CreatePropertyRequest
+export type CustomerContext = Schemas.CustomerContextResponse
+export type CustomerContextPayload = Schemas.CreateCustomerContextRequest
 export type FileUpload = Schemas.FileUploadResponse

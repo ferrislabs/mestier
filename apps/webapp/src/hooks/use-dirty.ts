@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 
 export interface DirtyResult<T> {
 	isDirty: boolean
@@ -27,10 +27,12 @@ export function useDirtyBaseline<T extends object>(
 	const [original, setOriginal] = useState<T>(initial)
 	const [baseline, setBaseline] = useState<T>(initial)
 
-	if (original !== initial) {
-		setOriginal(initial)
-		setBaseline(initial)
-	}
+	useEffect(() => {
+		if (!isEqual(original, initial)) {
+			setOriginal(initial)
+			setBaseline(initial)
+		}
+	}, [initial, original])
 
 	const { isDirty, changedKeys } = useMemo(
 		() => diff(current, baseline),

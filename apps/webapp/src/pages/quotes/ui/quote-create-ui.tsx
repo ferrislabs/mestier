@@ -26,18 +26,18 @@ import {
 	StatusBadge,
 } from '#/components/ui/surface'
 import { Textarea } from '#/components/ui/textarea'
-import type { Customer, Property } from '#/hooks/use-customers'
+import type { Customer, CustomerContext } from '#/hooks/use-customers'
 import type { Quote } from '#/hooks/use-quotes'
 import type {
 	ServiceRate,
 	ServiceRateUnit,
 } from '#/hooks/use-reference-catalog'
 import {
+	customerContextDisplayName,
 	customerDisplayName,
 	formatCents,
 	formatDate,
 	formatUnit,
-	propertyDisplayName,
 	type QuoteFormValues,
 	type QuoteLineFormValues,
 	quoteStatusLabel,
@@ -47,7 +47,7 @@ import {
 interface QuoteCreateUIProps {
 	values: QuoteFormValues
 	customers: Customer[]
-	properties: Property[]
+	customerContexts: CustomerContext[]
 	serviceRates: ServiceRate[]
 	quotes: Quote[]
 	lastCreated: Quote | null
@@ -55,7 +55,7 @@ interface QuoteCreateUIProps {
 	isLoading?: boolean
 	isCreating?: boolean
 	isUploading?: boolean
-	isPropertiesLoading?: boolean
+	isCustomerContextsLoading?: boolean
 	onRetry?: () => void
 	onChange: (patch: Partial<QuoteFormValues>) => void
 	onLineChange: (index: number, patch: Partial<QuoteLineFormValues>) => void
@@ -69,7 +69,7 @@ interface QuoteCreateUIProps {
 export function QuoteCreateUI({
 	values,
 	customers,
-	properties,
+	customerContexts,
 	serviceRates,
 	quotes,
 	lastCreated,
@@ -77,7 +77,7 @@ export function QuoteCreateUI({
 	isLoading,
 	isCreating,
 	isUploading,
-	isPropertiesLoading,
+	isCustomerContextsLoading,
 	onRetry,
 	onChange,
 	onLineChange,
@@ -104,7 +104,7 @@ export function QuoteCreateUI({
 
 	const canSubmit =
 		Boolean(values.customerId) &&
-		Boolean(values.propertyId) &&
+		Boolean(values.customerContextId) &&
 		values.lines.length > 0 &&
 		values.lines.every((line) => {
 			return (
@@ -212,9 +212,11 @@ export function QuoteCreateUI({
 
 						<FieldBlock label="Contexte client">
 							<Select
-								value={values.propertyId}
-								onValueChange={(propertyId) => onChange({ propertyId })}
-								disabled={!values.customerId || isPropertiesLoading}
+								value={values.customerContextId}
+								onValueChange={(customerContextId) =>
+									onChange({ customerContextId })
+								}
+								disabled={!values.customerId || isCustomerContextsLoading}
 							>
 								<SelectTrigger className="w-full">
 									<SelectValue
@@ -226,9 +228,12 @@ export function QuoteCreateUI({
 									/>
 								</SelectTrigger>
 								<SelectContent>
-									{properties.map((property) => (
-										<SelectItem key={property.id} value={property.id}>
-											{propertyDisplayName(property)}
+									{customerContexts.map((customerContext) => (
+										<SelectItem
+											key={customerContext.id}
+											value={customerContext.id}
+										>
+											{customerContextDisplayName(customerContext)}
 										</SelectItem>
 									))}
 								</SelectContent>
