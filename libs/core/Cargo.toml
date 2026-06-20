@@ -6,6 +6,7 @@ edition.workspace = true
 
 [dependencies]
 common = { workspace = true }
+discord = { workspace = true }
 auth = { workspace = true }
 authz = { workspace = true }
 mestier-macros = { workspace = true }

@@ -21,6 +21,11 @@ pub mod domain {
     pub struct Member;
     pub struct ServiceRate;
     pub struct User;
+    pub struct Category;
+    pub struct Channel;
+    pub struct Message;
+    pub struct Webhook;
+    pub struct Presence;
 }
 
 /// Backend markers — one zero-sized type per supported persistence layer.
