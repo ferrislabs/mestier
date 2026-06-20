@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n\t\t\tINSERT INTO message_reactions (message_id, emoji, user_id, created_at)\n\t\t\tVALUES ($1, $2, $3, $4)\n\t\t\tON CONFLICT (message_id, emoji, user_id) DO NOTHING\n\t\t\t",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Uuid",
+        "Timestamptz"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "f12f007af9ebdd08499c062173997ff4e2d866ce2d64c81326de20f87bdf80b5"
+}
