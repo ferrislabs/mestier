@@ -87,3 +87,9 @@ pub struct Presence {
     pub status: PresenceStatus,
     pub updated_at: DateTime<Utc>,
 }
+
+pub mod category;
+pub mod channel;
+pub mod message;
+pub mod presence;
+pub mod webhook;
