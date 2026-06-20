@@ -100,6 +100,8 @@ impl<'tx> ChannelRepository for PgChannelRepository<'tx> {
 
     async fn update(&mut self, ch: &Channel) -> Result<Channel, CoreError> {
         let mut tx = self.tx.lock().await;
+        // `channel_type` and `parent_id` are immutable after creation — no domain
+        // command exposes changing them — so they are intentionally not in the SET.
         let row = sqlx::query_as!(
 			ChannelRow,
 			r#"
