@@ -1,7 +1,7 @@
 use chrono::{DateTime, Utc};
 use mestier_core::{
     Customer, CustomerContact, CustomerContactId, CustomerContext, CustomerContextId, CustomerId,
-    CustomerStatus, OrganizationId,
+    CustomerPipelineStage, CustomerStatus, OrganizationId,
 };
 use serde::Serialize;
 use utoipa::ToSchema;
@@ -11,6 +11,7 @@ pub struct CustomerResponse {
     pub id: CustomerId,
     pub organization_id: OrganizationId,
     pub status: CustomerStatus,
+    pub pipeline_stage: CustomerPipelineStage,
     pub last_name: String,
     pub first_name: String,
     pub phone: Option<String>,
@@ -25,6 +26,7 @@ impl From<Customer> for CustomerResponse {
             id: value.id,
             organization_id: value.organization_id,
             status: value.status,
+            pipeline_stage: value.pipeline_stage,
             last_name: value.last_name,
             first_name: value.first_name,
             phone: value.phone,

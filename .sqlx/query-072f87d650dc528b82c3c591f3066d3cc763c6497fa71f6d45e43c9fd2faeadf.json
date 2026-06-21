@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT id, org_id, status, last_name, first_name, phone, email, deleted_at, created_at, updated_at\n            FROM customers\n            WHERE id = $1 AND deleted_at IS NULL\n            ",
+  "query": "\n            SELECT id, org_id, status, pipeline_stage, last_name, first_name, phone, email, deleted_at, created_at, updated_at\n            FROM customers\n            WHERE org_id = $1 AND deleted_at IS NULL\n            ORDER BY last_name ASC, first_name ASC, created_at ASC\n            LIMIT $2 OFFSET $3\n            ",
   "describe": {
     "columns": [
       {
@@ -20,46 +20,54 @@
       },
       {
         "ordinal": 3,
-        "name": "last_name",
+        "name": "pipeline_stage",
         "type_info": "Text"
       },
       {
         "ordinal": 4,
-        "name": "first_name",
+        "name": "last_name",
         "type_info": "Text"
       },
       {
         "ordinal": 5,
-        "name": "phone",
+        "name": "first_name",
         "type_info": "Text"
       },
       {
         "ordinal": 6,
-        "name": "email",
+        "name": "phone",
         "type_info": "Text"
       },
       {
         "ordinal": 7,
+        "name": "email",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 8,
         "name": "deleted_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 8,
+        "ordinal": 9,
         "name": "created_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 9,
+        "ordinal": 10,
         "name": "updated_at",
         "type_info": "Timestamptz"
       }
     ],
     "parameters": {
       "Left": [
-        "Uuid"
+        "Uuid",
+        "Int8",
+        "Int8"
       ]
     },
     "nullable": [
+      false,
       false,
       false,
       false,
@@ -72,5 +80,5 @@
       false
     ]
   },
-  "hash": "001a89e5725a4b1bdb161560b7069951ecbb7185394991704f4f0698916c7476"
+  "hash": "072f87d650dc528b82c3c591f3066d3cc763c6497fa71f6d45e43c9fd2faeadf"
 }

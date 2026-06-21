@@ -38,6 +38,7 @@ import type {
 	Customer,
 	CustomerContact,
 	CustomerContext,
+	CustomerPipelineStage,
 	CustomerStatus,
 } from '#/hooks/use-customers'
 import {
@@ -45,6 +46,7 @@ import {
 	type CustomerContextFormValues,
 	type CustomerFormValues,
 	customerInitials,
+	customerPipelineStageLabel,
 	customerStatusLabel,
 } from '#/pages/customers/types'
 
@@ -88,6 +90,15 @@ interface CustomerEditUIProps {
 	onRetryCustomerContacts: () => void
 	onRetryCustomerContexts: () => void
 }
+
+const CUSTOMER_PIPELINE_STAGE_OPTIONS: CustomerPipelineStage[] = [
+	'NEW',
+	'CONTACTED',
+	'QUALIFIED',
+	'QUOTE_SENT',
+	'WON',
+	'LOST',
+]
 
 export function CustomerEditUI({
 	customer,
@@ -215,6 +226,31 @@ export function CustomerEditUI({
 								<SelectItem value="PROSPECT">Prospect</SelectItem>
 								<SelectItem value="CLIENT">Client</SelectItem>
 								<SelectItem value="ARCHIVED">Archivé</SelectItem>
+							</SelectContent>
+						</Select>
+					</div>
+					<div className="flex flex-col gap-2">
+						<Label htmlFor="customer-pipeline-stage">
+							Étape pipeline
+							{changedKeys.includes('pipelineStage') ? <Dot /> : null}
+						</Label>
+						<Select
+							value={form.pipelineStage}
+							onValueChange={(pipelineStage) =>
+								onChange({
+									pipelineStage: pipelineStage as CustomerPipelineStage,
+								})
+							}
+						>
+							<SelectTrigger id="customer-pipeline-stage" className="w-full">
+								<SelectValue />
+							</SelectTrigger>
+							<SelectContent>
+								{CUSTOMER_PIPELINE_STAGE_OPTIONS.map((stage) => (
+									<SelectItem key={stage} value={stage}>
+										{customerPipelineStageLabel(stage)}
+									</SelectItem>
+								))}
 							</SelectContent>
 						</Select>
 					</div>

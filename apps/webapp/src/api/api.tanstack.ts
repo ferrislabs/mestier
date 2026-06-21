@@ -1,10 +1,10 @@
 import { queryOptions } from '@tanstack/react-query'
 import type {
-	ApiClient,
 	EndpointByMethod,
+	ApiClient,
+	SuccessStatusCode,
 	ErrorStatusCode,
 	InferResponseByStatus,
-	SuccessStatusCode,
 	TypedSuccessResponse,
 } from './api.client.ts'
 import { errorStatusCodes, TypedStatusError } from './api.client.ts'

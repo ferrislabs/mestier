@@ -4,6 +4,7 @@ import {
 	Boxes,
 	Eye,
 	FileText,
+	KanbanSquare,
 	LayoutDashboard,
 	Link2,
 	Package,
@@ -30,7 +31,8 @@ import {
 
 const coreItems: NavItem[] = [
 	{ title: 'Accueil', to: '/', icon: LayoutDashboard, exact: true },
-	{ title: 'Clients', to: '/customers', icon: Users, badge: '3' },
+	{ title: 'Clients', to: '/customers', icon: Users, exact: true, badge: '3' },
+	{ title: 'Pipeline', to: '/customers/pipeline', icon: KanbanSquare },
 	{ title: 'Catalogue', to: '/catalog', icon: Boxes },
 	{ title: 'Devis', to: '/quotes', icon: FileText },
 	{ title: 'Factures', to: '/customers', icon: Receipt, disabled: true },

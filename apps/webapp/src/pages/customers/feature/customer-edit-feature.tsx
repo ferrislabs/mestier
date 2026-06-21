@@ -149,6 +149,7 @@ function CustomerEditInner({
 				path: { customer_id: customer.id },
 				body: {
 					status: value.status,
+					pipeline_stage: value.pipelineStage,
 					first_name: value.firstName.trim(),
 					last_name: value.lastName.trim(),
 					email: value.email.trim() || null,
@@ -298,6 +299,7 @@ function CustomerEditInner({
 						const promotedValues = {
 							...values,
 							status: 'CLIENT' as CustomerFormValues['status'],
+							pipelineStage: 'WON' as CustomerFormValues['pipelineStage'],
 						}
 
 						updateCustomer.mutate(
@@ -305,6 +307,7 @@ function CustomerEditInner({
 								path: { customer_id: customer.id },
 								body: {
 									status: promotedValues.status,
+									pipeline_stage: promotedValues.pipelineStage,
 									first_name: promotedValues.firstName.trim(),
 									last_name: promotedValues.lastName.trim(),
 									email: promotedValues.email.trim() || null,
@@ -314,6 +317,10 @@ function CustomerEditInner({
 							{
 								onSuccess: () => {
 									form.setFieldValue('status', promotedValues.status)
+									form.setFieldValue(
+										'pipelineStage',
+										promotedValues.pipelineStage,
+									)
 									commitRef.current(promotedValues)
 								},
 							},

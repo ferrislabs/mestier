@@ -28,13 +28,14 @@ impl<'tx> CustomerRepository for PgCustomerRepository<'tx> {
         let row = sqlx::query_as!(
             CustomerRow,
             r#"
-            INSERT INTO customers (id, org_id, status, last_name, first_name, phone, email, deleted_at, created_at, updated_at)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-            RETURNING id, org_id, status, last_name, first_name, phone, email, deleted_at, created_at, updated_at
+            INSERT INTO customers (id, org_id, status, pipeline_stage, last_name, first_name, phone, email, deleted_at, created_at, updated_at)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+            RETURNING id, org_id, status, pipeline_stage, last_name, first_name, phone, email, deleted_at, created_at, updated_at
             "#,
             customer.id.0,
             customer.organization_id.0,
             customer.status.as_str(),
+            customer.pipeline_stage.as_str(),
             customer.last_name,
             customer.first_name,
             customer.phone,
@@ -55,7 +56,7 @@ impl<'tx> CustomerRepository for PgCustomerRepository<'tx> {
         let row = sqlx::query_as!(
             CustomerRow,
             r#"
-            SELECT id, org_id, status, last_name, first_name, phone, email, deleted_at, created_at, updated_at
+            SELECT id, org_id, status, pipeline_stage, last_name, first_name, phone, email, deleted_at, created_at, updated_at
             FROM customers
             WHERE id = $1 AND deleted_at IS NULL
             "#,
@@ -78,7 +79,7 @@ impl<'tx> CustomerRepository for PgCustomerRepository<'tx> {
         let rows = sqlx::query_as!(
             CustomerRow,
             r#"
-            SELECT id, org_id, status, last_name, first_name, phone, email, deleted_at, created_at, updated_at
+            SELECT id, org_id, status, pipeline_stage, last_name, first_name, phone, email, deleted_at, created_at, updated_at
             FROM customers
             WHERE org_id = $1 AND deleted_at IS NULL
             ORDER BY last_name ASC, first_name ASC, created_at ASC
@@ -114,12 +115,13 @@ impl<'tx> CustomerRepository for PgCustomerRepository<'tx> {
             CustomerRow,
             r#"
             UPDATE customers
-            SET status = $2, last_name = $3, first_name = $4, phone = $5, email = $6, updated_at = $7
+            SET status = $2, pipeline_stage = $3, last_name = $4, first_name = $5, phone = $6, email = $7, updated_at = $8
             WHERE id = $1 AND deleted_at IS NULL
-            RETURNING id, org_id, status, last_name, first_name, phone, email, deleted_at, created_at, updated_at
+            RETURNING id, org_id, status, pipeline_stage, last_name, first_name, phone, email, deleted_at, created_at, updated_at
             "#,
             customer.id.0,
             customer.status.as_str(),
+            customer.pipeline_stage.as_str(),
             customer.last_name,
             customer.first_name,
             customer.phone,

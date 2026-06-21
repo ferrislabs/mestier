@@ -4,13 +4,14 @@ use chrono::{DateTime, Utc};
 use common::CoreError;
 use uuid::Uuid;
 
-use crate::{Customer, CustomerId, CustomerStatus, OrganizationId};
+use crate::{Customer, CustomerId, CustomerPipelineStage, CustomerStatus, OrganizationId};
 
 #[derive(Debug, Clone)]
 pub struct CustomerRow {
     pub id: Uuid,
     pub org_id: Uuid,
     pub status: String,
+    pub pipeline_stage: String,
     pub last_name: String,
     pub first_name: String,
     pub phone: Option<String>,
@@ -27,11 +28,15 @@ impl TryFrom<CustomerRow> for Customer {
         let status = CustomerStatus::from_str(&row.status).map_err(|e| {
             CoreError::Internal(format!("invalid customer status in database: {e}"))
         })?;
+        let pipeline_stage = CustomerPipelineStage::from_str(&row.pipeline_stage).map_err(|e| {
+            CoreError::Internal(format!("invalid customer pipeline stage in database: {e}"))
+        })?;
 
         Ok(Self {
             id: CustomerId(row.id),
             organization_id: OrganizationId(row.org_id),
             status,
+            pipeline_stage,
             last_name: row.last_name,
             first_name: row.first_name,
             phone: row.phone,

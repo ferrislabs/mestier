@@ -69,6 +69,14 @@ function getBreadcrumbItems(
 		return [{ id: 'organization', label: organizationName }]
 	}
 
+	if (pathname === '/customers/pipeline') {
+		return [
+			{ id: 'organization', label: organizationName, to: '/' },
+			{ id: 'customers', label: 'Clients', to: '/customers' },
+			{ id: 'pipeline', label: 'Pipeline' },
+		]
+	}
+
 	if (pathname.startsWith('/customers/')) {
 		return [
 			{ id: 'organization', label: organizationName, to: '/' },
@@ -120,6 +128,7 @@ function getBreadcrumbItems(
 }
 
 function getCustomerId(pathname: string): string | null {
+	if (pathname === '/customers/pipeline') return null
 	const match = /^\/customers\/([^/]+)$/.exec(pathname)
 	if (!match?.[1]) return null
 	return decodeURIComponent(match[1])

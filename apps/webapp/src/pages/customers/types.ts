@@ -2,11 +2,13 @@ import type {
 	Customer,
 	CustomerContact,
 	CustomerContext,
+	CustomerPipelineStage,
 	CustomerStatus,
 } from '#/hooks/use-customers'
 
 export interface CustomerFormValues {
 	status: CustomerStatus
+	pipelineStage: CustomerPipelineStage
 	firstName: string
 	lastName: string
 	email: string
@@ -47,6 +49,7 @@ export function customerInitials(customer: Customer): string {
 export function customerToForm(customer: Customer): CustomerFormValues {
 	return {
 		status: customer.status,
+		pipelineStage: customer.pipeline_stage,
 		firstName: customer.first_name,
 		lastName: customer.last_name,
 		email: customer.email ?? '',
@@ -71,6 +74,17 @@ export function customerStatusLabel(status: CustomerStatus): string {
 	if (status === 'PROSPECT') return 'Prospect'
 	if (status === 'CLIENT') return 'Client'
 	return 'Archivé'
+}
+
+export function customerPipelineStageLabel(
+	stage: CustomerPipelineStage,
+): string {
+	if (stage === 'NEW') return 'Nouveau'
+	if (stage === 'CONTACTED') return 'Contacté'
+	if (stage === 'QUALIFIED') return 'Qualifié'
+	if (stage === 'QUOTE_SENT') return 'Devis envoyé'
+	if (stage === 'WON') return 'Gagné'
+	return 'Perdu'
 }
 
 export function customerContextToForm(

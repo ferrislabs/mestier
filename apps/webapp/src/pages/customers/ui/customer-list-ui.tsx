@@ -1,5 +1,7 @@
+import { Link } from '@tanstack/react-router'
 import {
 	AlertCircle,
+	KanbanSquare,
 	Mail,
 	MoreHorizontal,
 	Phone,
@@ -51,6 +53,7 @@ import {
 import type {
 	Customer,
 	CustomerPayload,
+	CustomerPipelineStage,
 	CustomerStatus,
 	PaginationMetadata,
 } from '#/hooks/use-customers'
@@ -64,8 +67,13 @@ import {
 import {
 	customerDisplayName,
 	customerInitials,
+	customerPipelineStageLabel,
 	customerStatusLabel,
 } from '#/pages/customers/types'
+import {
+	CUSTOMER_PIPELINE_STAGES,
+	pipelineStageTone,
+} from '#/pages/customers/ui/customer-pipeline-board'
 
 interface CustomerListUIProps {
 	customers: Customer[]
@@ -115,6 +123,7 @@ export function CustomerListUI({
 	const [createOpen, setCreateOpen] = useState(false)
 	const [draft, setDraft] = useState({
 		status: 'PROSPECT' as CustomerStatus,
+		pipelineStage: 'NEW' as CustomerPipelineStage,
 		firstName: '',
 		lastName: '',
 		email: '',
@@ -194,6 +203,7 @@ export function CustomerListUI({
 	const resetDraft = () => {
 		setDraft({
 			status: 'PROSPECT',
+			pipelineStage: 'NEW',
 			firstName: '',
 			lastName: '',
 			email: '',
@@ -210,6 +220,7 @@ export function CustomerListUI({
 		if (!canCreate) return
 		await onAdd?.({
 			status: draft.status,
+			pipeline_stage: draft.status === 'CLIENT' ? 'WON' : draft.pipelineStage,
 			first_name: draft.firstName.trim(),
 			last_name: draft.lastName.trim(),
 			email: draft.email.trim() || null,
@@ -225,10 +236,18 @@ export function CustomerListUI({
 				title="Fichier client"
 				description="Gérez vos clients, leurs coordonnées et leurs contextes associés."
 				actions={
-					<Button onClick={() => setCreateOpen(true)}>
-						<Plus />
-						Nouveau client
-					</Button>
+					<div className="flex flex-wrap gap-2">
+						<Button asChild variant="outline">
+							<Link to="/customers/pipeline">
+								<KanbanSquare />
+								Pipeline
+							</Link>
+						</Button>
+						<Button onClick={() => setCreateOpen(true)}>
+							<Plus />
+							Nouveau client
+						</Button>
+					</div>
 				}
 			/>
 
@@ -277,6 +296,8 @@ export function CustomerListUI({
 												setDraft((v) => ({
 													...v,
 													status: status as CustomerStatus,
+													pipelineStage:
+														status === 'CLIENT' ? 'WON' : v.pipelineStage,
 												}))
 											}
 										>
@@ -292,6 +313,39 @@ export function CustomerListUI({
 											</SelectContent>
 										</Select>
 									</div>
+									{draft.status === 'PROSPECT' ? (
+										<div className="flex flex-col gap-2">
+											<Label htmlFor="customer-pipeline-stage">
+												Étape pipeline
+											</Label>
+											<Select
+												value={draft.pipelineStage}
+												onValueChange={(pipelineStage) =>
+													setDraft((v) => ({
+														...v,
+														pipelineStage:
+															pipelineStage as CustomerPipelineStage,
+													}))
+												}
+											>
+												<SelectTrigger
+													id="customer-pipeline-stage"
+													className="w-full border-primary/25 bg-card shadow-sm hover:bg-brand-soft"
+												>
+													<SelectValue />
+												</SelectTrigger>
+												<SelectContent>
+													{CUSTOMER_PIPELINE_STAGES.filter(
+														(stage) => stage !== 'WON',
+													).map((stage) => (
+														<SelectItem key={stage} value={stage}>
+															{customerPipelineStageLabel(stage)}
+														</SelectItem>
+													))}
+												</SelectContent>
+											</Select>
+										</div>
+									) : null}
 								</div>
 								<div className="grid gap-4 sm:grid-cols-2">
 									<Field
@@ -457,6 +511,9 @@ export function CustomerListUI({
 											</p>
 											<StatusBadge tone={customerStatusTone(c.status)}>
 												{customerStatusLabel(c.status)}
+											</StatusBadge>
+											<StatusBadge tone={pipelineStageTone(c.pipeline_stage)}>
+												{customerPipelineStageLabel(c.pipeline_stage)}
 											</StatusBadge>
 											<StatusBadge tone="neutral">
 												{formatDate(c.created_at)}
@@ -625,6 +682,9 @@ function customerMatchesSearch(customer: Customer, query: string): boolean {
 	return (
 		name.includes(query) ||
 		customerStatusLabel(customer.status).toLowerCase().includes(query) ||
+		customerPipelineStageLabel(customer.pipeline_stage)
+			.toLowerCase()
+			.includes(query) ||
 		(customer.email ?? '').toLowerCase().includes(query) ||
 		(customer.phone ?? '').toLowerCase().includes(query)
 	)

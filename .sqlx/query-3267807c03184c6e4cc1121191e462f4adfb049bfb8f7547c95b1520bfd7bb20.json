@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            INSERT INTO customers (id, org_id, status, last_name, first_name, phone, email, deleted_at, created_at, updated_at)\n            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)\n            RETURNING id, org_id, status, last_name, first_name, phone, email, deleted_at, created_at, updated_at\n            ",
+  "query": "\n            SELECT id, org_id, status, pipeline_stage, last_name, first_name, phone, email, deleted_at, created_at, updated_at\n            FROM customers\n            WHERE id = $1 AND deleted_at IS NULL\n            ",
   "describe": {
     "columns": [
       {
@@ -20,55 +20,52 @@
       },
       {
         "ordinal": 3,
-        "name": "last_name",
+        "name": "pipeline_stage",
         "type_info": "Text"
       },
       {
         "ordinal": 4,
-        "name": "first_name",
+        "name": "last_name",
         "type_info": "Text"
       },
       {
         "ordinal": 5,
-        "name": "phone",
+        "name": "first_name",
         "type_info": "Text"
       },
       {
         "ordinal": 6,
-        "name": "email",
+        "name": "phone",
         "type_info": "Text"
       },
       {
         "ordinal": 7,
+        "name": "email",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 8,
         "name": "deleted_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 8,
+        "ordinal": 9,
         "name": "created_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 9,
+        "ordinal": 10,
         "name": "updated_at",
         "type_info": "Timestamptz"
       }
     ],
     "parameters": {
       "Left": [
-        "Uuid",
-        "Uuid",
-        "Text",
-        "Text",
-        "Text",
-        "Text",
-        "Text",
-        "Timestamptz",
-        "Timestamptz",
-        "Timestamptz"
+        "Uuid"
       ]
     },
     "nullable": [
+      false,
       false,
       false,
       false,
@@ -81,5 +78,5 @@
       false
     ]
   },
-  "hash": "9534e45f2cfdb9d67b2e7eebfd90c6e6b000f5a2a43865006f8aa9b0d9067c05"
+  "hash": "3267807c03184c6e4cc1121191e462f4adfb049bfb8f7547c95b1520bfd7bb20"
 }

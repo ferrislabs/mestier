@@ -41,6 +41,7 @@ where
                 id: CustomerId(generate_uuid_v7()),
                 organization_id: command.organization_id,
                 status: command.status,
+                pipeline_stage: command.pipeline_stage,
                 last_name: command.last_name,
                 first_name: command.first_name,
                 phone: command.phone,
@@ -80,6 +81,7 @@ where
 
         let mut customer = self.get_customer(command.id).await?;
         customer.status = command.status;
+        customer.pipeline_stage = command.pipeline_stage;
         customer.last_name = command.last_name;
         customer.first_name = command.first_name;
         customer.phone = command.phone;
@@ -137,6 +139,7 @@ mod tests {
             id,
             organization_id: OrganizationId(Uuid::new_v4()),
             status: crate::CustomerStatus::Prospect,
+            pipeline_stage: crate::CustomerPipelineStage::New,
             last_name: "Dupont".to_owned(),
             first_name: "Alice".to_owned(),
             phone: Some("+33123456789".to_owned()),
@@ -160,6 +163,7 @@ mod tests {
             .create_customer(CreateCustomerCommand {
                 organization_id: OrganizationId(Uuid::new_v4()),
                 status: crate::CustomerStatus::Prospect,
+                pipeline_stage: crate::CustomerPipelineStage::New,
                 last_name: "Dupont".to_owned(),
                 first_name: "Alice".to_owned(),
                 phone: None,
@@ -188,6 +192,7 @@ mod tests {
             .update_customer(UpdateCustomerCommand {
                 id,
                 status: crate::CustomerStatus::Client,
+                pipeline_stage: crate::CustomerPipelineStage::Won,
                 last_name: "Martin".to_owned(),
                 first_name: "Alice".to_owned(),
                 phone: Some("0102030405".to_owned()),
@@ -198,6 +203,7 @@ mod tests {
 
         assert_eq!(updated.last_name, "Martin");
         assert_eq!(updated.status, crate::CustomerStatus::Client);
+        assert_eq!(updated.pipeline_stage, crate::CustomerPipelineStage::Won);
         assert_eq!(updated.phone.as_deref(), Some("0102030405"));
     }
 
@@ -242,6 +248,7 @@ mod tests {
             .create_customer(CreateCustomerCommand {
                 organization_id: OrganizationId(Uuid::new_v4()),
                 status: crate::CustomerStatus::Prospect,
+                pipeline_stage: crate::CustomerPipelineStage::New,
                 last_name: " ".to_owned(),
                 first_name: "Alice".to_owned(),
                 phone: None,
