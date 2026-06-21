@@ -37,7 +37,7 @@ pub async fn handler(
 ) -> Result<Response, ApiError> {
     let quote = require_quote_membership(&state, &identity, quote_id).await?;
     let pdf = render_quote_pdf(&quote);
-    let filename = format!("quote-{}.pdf", quote.id.0);
+    let filename = format!("{}.pdf", quote.reference);
 
     Ok((
         StatusCode::OK,
@@ -56,7 +56,9 @@ pub async fn handler(
 fn render_quote_pdf(quote: &Quote) -> Vec<u8> {
     let mut text_lines = vec![
         "Mestier - Devis".to_owned(),
-        format!("Identifiant: {}", quote.id.0),
+        format!("Reference: {}", quote.reference),
+        format!("Objet: {}", quote.title),
+        format!("Identifiant technique: {}", quote.id.0),
         format!("Client: {}", quote.customer_id.0),
         format!("Contexte: {}", quote.customer_context_id.0),
         format!("Statut: {}", quote.status.as_str()),

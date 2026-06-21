@@ -1,4 +1,4 @@
-use chrono::Utc;
+use chrono::{Datelike, Utc};
 use common::{CoreError, generate_uuid_v7};
 use rust_decimal::{Decimal, prelude::ToPrimitive};
 
@@ -30,6 +30,11 @@ where
     pub async fn create_quote(&mut self, command: CreateQuoteCommand) -> Result<Quote, CoreError> {
         let now = Utc::now();
         let quote_id = QuoteId(generate_uuid_v7());
+        validate_title(&command.title)?;
+        let reference = self
+            .repo
+            .next_reference(command.organization_id, now.year())
+            .await?;
         let lines = build_quote_lines(command.organization_id, quote_id, command.lines, now)?;
         let total_cents = calculate_total_cents(&lines)?;
 
@@ -37,6 +42,8 @@ where
             .insert(&Quote {
                 id: quote_id,
                 organization_id: command.organization_id,
+                reference,
+                title: command.title.trim().to_owned(),
                 customer_id: command.customer_id,
                 customer_context_id: command.customer_context_id,
                 status: crate::QuoteStatus::Draft,
@@ -67,6 +74,7 @@ where
     pub async fn update_quote(&mut self, command: UpdateQuoteCommand) -> Result<Quote, CoreError> {
         let existing = self.get_quote(command.id).await?;
         let now = Utc::now();
+        validate_title(&command.title)?;
         let lines = build_quote_lines(existing.organization_id, existing.id, command.lines, now)?;
         let total_cents = calculate_total_cents(&lines)?;
 
@@ -74,6 +82,8 @@ where
             .update(&Quote {
                 id: existing.id,
                 organization_id: existing.organization_id,
+                reference: existing.reference,
+                title: command.title.trim().to_owned(),
                 customer_id: command.customer_id,
                 customer_context_id: command.customer_context_id,
                 status: command.status,
@@ -100,6 +110,16 @@ where
         self.get_quote(id).await?;
         self.repo.soft_delete(id, Utc::now()).await
     }
+}
+
+fn validate_title(title: &str) -> Result<(), CoreError> {
+    if title.trim().is_empty() {
+        return Err(CoreError::Conflict(
+            "quote title cannot be empty".to_owned(),
+        ));
+    }
+
+    Ok(())
 }
 
 fn build_quote_lines(
@@ -222,6 +242,8 @@ mod tests {
         Quote {
             id,
             organization_id,
+            reference: "DEV-2026-0001".to_owned(),
+            title: "Rénovation cuisine".to_owned(),
             customer_id: CustomerId(Uuid::new_v4()),
             customer_context_id: CustomerContextId(Uuid::new_v4()),
             status: QuoteStatus::Draft,
@@ -250,6 +272,9 @@ mod tests {
     #[tokio::test]
     async fn create_quote_calculates_total_from_lines() {
         let mut repo = MockQuoteRepository::new();
+        repo.expect_next_reference()
+            .times(1)
+            .returning(|_, _| Box::pin(async { Ok("DEV-2026-0001".to_owned()) }));
         repo.expect_insert().times(1).returning(|q| {
             let quote = q.clone();
             Box::pin(async move { Ok(quote) })
@@ -259,6 +284,7 @@ mod tests {
         let created = service
             .create_quote(CreateQuoteCommand {
                 organization_id: OrganizationId(Uuid::new_v4()),
+                title: "Rénovation cuisine".to_owned(),
                 customer_id: CustomerId(Uuid::new_v4()),
                 customer_context_id: CustomerContextId(Uuid::new_v4()),
                 lines: vec![
@@ -270,6 +296,8 @@ mod tests {
             .unwrap();
 
         assert_eq!(created.status, QuoteStatus::Draft);
+        assert_eq!(created.reference, "DEV-2026-0001");
+        assert_eq!(created.title, "Rénovation cuisine");
         assert_eq!(created.total_cents, 3500);
     }
 
@@ -289,6 +317,7 @@ mod tests {
         let updated = service
             .update_quote(UpdateQuoteCommand {
                 id,
+                title: "Version ajustée".to_owned(),
                 customer_id: CustomerId(Uuid::new_v4()),
                 customer_context_id: CustomerContextId(Uuid::new_v4()),
                 status: QuoteStatus::Sent,
@@ -298,6 +327,8 @@ mod tests {
             .unwrap();
 
         assert_eq!(updated.status, QuoteStatus::Sent);
+        assert_eq!(updated.reference, "DEV-2026-0001");
+        assert_eq!(updated.title, "Version ajustée");
         assert_eq!(updated.total_cents, 6000);
     }
 
@@ -358,14 +389,35 @@ mod tests {
 
     #[tokio::test]
     async fn rejects_invalid_line_input() {
+        let mut repo = MockQuoteRepository::new();
+        repo.expect_next_reference()
+            .times(1)
+            .returning(|_, _| Box::pin(async { Ok("DEV-2026-0001".to_owned()) }));
+        let mut service = QuoteService::new(repo);
+        let result = service
+            .create_quote(CreateQuoteCommand {
+                organization_id: OrganizationId(Uuid::new_v4()),
+                title: "Rénovation cuisine".to_owned(),
+                customer_id: CustomerId(Uuid::new_v4()),
+                customer_context_id: CustomerContextId(Uuid::new_v4()),
+                lines: vec![line_command(Decimal::ZERO, 1000)],
+            })
+            .await;
+
+        assert!(matches!(result, Err(CoreError::Conflict(_))));
+    }
+
+    #[tokio::test]
+    async fn rejects_empty_quote_title() {
         let repo = MockQuoteRepository::new();
         let mut service = QuoteService::new(repo);
         let result = service
             .create_quote(CreateQuoteCommand {
                 organization_id: OrganizationId(Uuid::new_v4()),
+                title: " ".to_owned(),
                 customer_id: CustomerId(Uuid::new_v4()),
                 customer_context_id: CustomerContextId(Uuid::new_v4()),
-                lines: vec![line_command(Decimal::ZERO, 1000)],
+                lines: vec![line_command(Decimal::new(1, 0), 1000)],
             })
             .await;
 

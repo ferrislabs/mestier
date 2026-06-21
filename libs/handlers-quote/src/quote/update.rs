@@ -14,6 +14,7 @@ use crate::{
 
 #[derive(Debug, Deserialize, ToSchema)]
 pub struct UpdateQuoteRequest {
+    pub title: String,
     pub customer_id: CustomerId,
     pub customer_context_id: CustomerContextId,
     pub status: QuoteStatus,
@@ -58,6 +59,7 @@ pub async fn handler(
         .usecase
         .update_quote(UpdateQuoteCommand {
             id: quote_id,
+            title: payload.title,
             customer_id: payload.customer_id,
             customer_context_id: payload.customer_context_id,
             status: payload.status,

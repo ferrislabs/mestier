@@ -32,6 +32,15 @@ export function useQuotes(
 	)
 }
 
+export function useQuote(quoteId: string, enabled = true) {
+	return useQuery({
+		...window.tanstackApi.get(QUOTE_PATH, {
+			path: { quote_id: quoteId },
+		}).queryOptions,
+		enabled: enabled && Boolean(quoteId),
+	})
+}
+
 export function useCreateQuote(organizationId: string) {
 	const queryClient = useQueryClient()
 
@@ -57,6 +66,33 @@ export function useCreateQuote(organizationId: string) {
 			])
 		},
 		meta: { organizationId },
+	})
+}
+
+export function useUpdateQuote() {
+	const queryClient = useQueryClient()
+
+	return useMutation({
+		...window.tanstackApi.mutation('patch', QUOTE_PATH).mutationOptions,
+		onSuccess: async (quote) => {
+			await Promise.all([
+				queryClient.invalidateQueries({
+					predicate: (query) => {
+						const queryKey = query.queryKey[0] as
+							| { _id?: string; path?: { organization_id?: string } }
+							| undefined
+
+						return (
+							queryKey?._id === QUOTES_PATH &&
+							queryKey.path?.organization_id === quote.data.organization_id
+						)
+					},
+				}),
+				queryClient.invalidateQueries({
+					queryKey: quoteKey(quote.data.id),
+				}),
+			])
+		},
 	})
 }
 

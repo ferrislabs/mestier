@@ -78,6 +78,7 @@ function QuoteWorkspace({ organizationId }: { organizationId: string }) {
 
 	const form = useForm({
 		defaultValues: {
+			title: '',
 			customerId: '',
 			customerContextId: '',
 			lines: [emptyQuoteLine()],
@@ -86,6 +87,7 @@ function QuoteWorkspace({ organizationId }: { organizationId: string }) {
 			const quote = await createQuote.mutateAsync({
 				path: { organization_id: organizationId },
 				body: {
+					title: value.title.trim(),
 					customer_id: value.customerId,
 					customer_context_id: value.customerContextId,
 					lines: value.lines.map((line) => ({
@@ -227,6 +229,9 @@ function QuoteWorkspaceWithValues({
 	)
 
 	const updateValues = (patch: Partial<QuoteFormValues>) => {
+		if (patch.title !== undefined) {
+			form.setFieldValue('title', patch.title)
+		}
 		if (patch.customerId !== undefined) {
 			form.setFieldValue('customerId', patch.customerId)
 		}

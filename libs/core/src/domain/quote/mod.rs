@@ -110,6 +110,8 @@ pub struct QuoteLine {
 pub struct Quote {
     pub id: QuoteId,
     pub organization_id: OrganizationId,
+    pub reference: String,
+    pub title: String,
     pub customer_id: CustomerId,
     pub customer_context_id: CustomerContextId,
     pub status: QuoteStatus,

@@ -45,6 +45,8 @@ impl From<QuoteLine> for QuoteLineResponse {
 pub struct QuoteResponse {
     pub id: QuoteId,
     pub organization_id: OrganizationId,
+    pub reference: String,
+    pub title: String,
     pub customer_id: CustomerId,
     pub customer_context_id: CustomerContextId,
     pub status: QuoteStatus,
@@ -59,6 +61,8 @@ impl From<Quote> for QuoteResponse {
         Self {
             id: value.id,
             organization_id: value.organization_id,
+            reference: value.reference,
+            title: value.title,
             customer_id: value.customer_id,
             customer_context_id: value.customer_context_id,
             status: value.status,

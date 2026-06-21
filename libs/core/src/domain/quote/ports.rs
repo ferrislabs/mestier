@@ -5,6 +5,12 @@ use crate::{OrganizationId, Quote, QuoteId, QuoteStatus};
 
 #[cfg_attr(test, mockall::automock)]
 pub trait QuoteRepository: Send {
+    fn next_reference(
+        &mut self,
+        organization_id: OrganizationId,
+        year: i32,
+    ) -> impl Future<Output = Result<String, CoreError>> + Send;
+
     fn insert(&mut self, quote: &Quote) -> impl Future<Output = Result<Quote, CoreError>> + Send;
 
     fn find_by_id(

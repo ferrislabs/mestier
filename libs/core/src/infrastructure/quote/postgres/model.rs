@@ -14,6 +14,8 @@ use crate::{
 pub struct QuoteRow {
     pub id: Uuid,
     pub org_id: Uuid,
+    pub reference: String,
+    pub title: String,
     pub customer_id: Uuid,
     pub customer_context_id: Uuid,
     pub status: String,
@@ -48,6 +50,8 @@ impl QuoteRow {
         Ok(Quote {
             id: QuoteId(self.id),
             organization_id: OrganizationId(self.org_id),
+            reference: self.reference,
+            title: self.title,
             customer_id: CustomerId(self.customer_id),
             customer_context_id: CustomerContextId(self.customer_context_id),
             status,

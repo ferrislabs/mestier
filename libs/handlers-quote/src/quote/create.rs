@@ -47,6 +47,7 @@ impl TryFrom<QuoteLineRequest> for QuoteLineCommand {
 
 #[derive(Debug, Deserialize, ToSchema)]
 pub struct CreateQuoteRequest {
+    pub title: String,
     pub customer_id: CustomerId,
     pub customer_context_id: CustomerContextId,
     pub lines: Vec<QuoteLineRequest>,
@@ -93,6 +94,7 @@ pub async fn handler(
         .usecase
         .create_quote(CreateQuoteCommand {
             organization_id: path.organization_id,
+            title: payload.title,
             customer_id: payload.customer_id,
             customer_context_id: payload.customer_context_id,
             lines: into_line_commands(payload.lines)?,

@@ -15,6 +15,7 @@ import { Route as AppSettingsRouteImport } from './routes/_app.settings'
 import { Route as AppQuotesIndexRouteImport } from './routes/_app.quotes.index'
 import { Route as AppCustomersIndexRouteImport } from './routes/_app.customers.index'
 import { Route as AppCatalogIndexRouteImport } from './routes/_app.catalog.index'
+import { Route as AppQuotesQuoteIdRouteImport } from './routes/_app.quotes.$quoteId'
 import { Route as AppCustomersCustomerIdRouteImport } from './routes/_app.customers.$customerId'
 
 const AppRoute = AppRouteImport.update({
@@ -46,6 +47,11 @@ const AppCatalogIndexRoute = AppCatalogIndexRouteImport.update({
   path: '/catalog/',
   getParentRoute: () => AppRoute,
 } as any)
+const AppQuotesQuoteIdRoute = AppQuotesQuoteIdRouteImport.update({
+  id: '/quotes/$quoteId',
+  path: '/quotes/$quoteId',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppCustomersCustomerIdRoute = AppCustomersCustomerIdRouteImport.update({
   id: '/customers/$customerId',
   path: '/customers/$customerId',
@@ -56,6 +62,7 @@ export interface FileRoutesByFullPath {
   '/': typeof AppIndexRoute
   '/settings': typeof AppSettingsRoute
   '/customers/$customerId': typeof AppCustomersCustomerIdRoute
+  '/quotes/$quoteId': typeof AppQuotesQuoteIdRoute
   '/catalog/': typeof AppCatalogIndexRoute
   '/customers/': typeof AppCustomersIndexRoute
   '/quotes/': typeof AppQuotesIndexRoute
@@ -64,6 +71,7 @@ export interface FileRoutesByTo {
   '/settings': typeof AppSettingsRoute
   '/': typeof AppIndexRoute
   '/customers/$customerId': typeof AppCustomersCustomerIdRoute
+  '/quotes/$quoteId': typeof AppQuotesQuoteIdRoute
   '/catalog': typeof AppCatalogIndexRoute
   '/customers': typeof AppCustomersIndexRoute
   '/quotes': typeof AppQuotesIndexRoute
@@ -74,6 +82,7 @@ export interface FileRoutesById {
   '/_app/settings': typeof AppSettingsRoute
   '/_app/': typeof AppIndexRoute
   '/_app/customers/$customerId': typeof AppCustomersCustomerIdRoute
+  '/_app/quotes/$quoteId': typeof AppQuotesQuoteIdRoute
   '/_app/catalog/': typeof AppCatalogIndexRoute
   '/_app/customers/': typeof AppCustomersIndexRoute
   '/_app/quotes/': typeof AppQuotesIndexRoute
@@ -84,6 +93,7 @@ export interface FileRouteTypes {
     | '/'
     | '/settings'
     | '/customers/$customerId'
+    | '/quotes/$quoteId'
     | '/catalog/'
     | '/customers/'
     | '/quotes/'
@@ -92,6 +102,7 @@ export interface FileRouteTypes {
     | '/settings'
     | '/'
     | '/customers/$customerId'
+    | '/quotes/$quoteId'
     | '/catalog'
     | '/customers'
     | '/quotes'
@@ -101,6 +112,7 @@ export interface FileRouteTypes {
     | '/_app/settings'
     | '/_app/'
     | '/_app/customers/$customerId'
+    | '/_app/quotes/$quoteId'
     | '/_app/catalog/'
     | '/_app/customers/'
     | '/_app/quotes/'
@@ -154,6 +166,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppCatalogIndexRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/quotes/$quoteId': {
+      id: '/_app/quotes/$quoteId'
+      path: '/quotes/$quoteId'
+      fullPath: '/quotes/$quoteId'
+      preLoaderRoute: typeof AppQuotesQuoteIdRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/_app/customers/$customerId': {
       id: '/_app/customers/$customerId'
       path: '/customers/$customerId'
@@ -168,6 +187,7 @@ interface AppRouteChildren {
   AppSettingsRoute: typeof AppSettingsRoute
   AppIndexRoute: typeof AppIndexRoute
   AppCustomersCustomerIdRoute: typeof AppCustomersCustomerIdRoute
+  AppQuotesQuoteIdRoute: typeof AppQuotesQuoteIdRoute
   AppCatalogIndexRoute: typeof AppCatalogIndexRoute
   AppCustomersIndexRoute: typeof AppCustomersIndexRoute
   AppQuotesIndexRoute: typeof AppQuotesIndexRoute
@@ -177,6 +197,7 @@ const AppRouteChildren: AppRouteChildren = {
   AppSettingsRoute: AppSettingsRoute,
   AppIndexRoute: AppIndexRoute,
   AppCustomersCustomerIdRoute: AppCustomersCustomerIdRoute,
+  AppQuotesQuoteIdRoute: AppQuotesQuoteIdRoute,
   AppCatalogIndexRoute: AppCatalogIndexRoute,
   AppCustomersIndexRoute: AppCustomersIndexRoute,
   AppQuotesIndexRoute: AppQuotesIndexRoute,

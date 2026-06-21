@@ -48,6 +48,7 @@ export namespace Schemas {
 		customer_context_id: CustomerContextId
 		customer_id: CustomerId
 		lines: Array<QuoteLineRequest>
+		title: string
 	}
 	export type CreateServiceRateRequest = {
 		label: string
@@ -159,7 +160,9 @@ export namespace Schemas {
 		id: QuoteId
 		lines: Array<QuoteLineResponse>
 		organization_id: OrganizationId
+		reference: string
 		status: QuoteStatus
+		title: string
 		total_cents: number
 		updated_at: string
 	}
@@ -207,6 +210,7 @@ export namespace Schemas {
 		customer_id: CustomerId
 		lines: Array<QuoteLineRequest>
 		status: QuoteStatus
+		title: string
 	}
 	export type UpdateQuoteStatusRequest = { status: QuoteStatus }
 	export type UpdateServiceRateRequest = {
@@ -894,7 +898,9 @@ export namespace Endpoints {
 					id: Schemas.QuoteId
 					lines: Array<Schemas.QuoteLineResponse>
 					organization_id: Schemas.OrganizationId
+					reference: string
 					status: Schemas.QuoteStatus
+					title: string
 					total_cents: number
 					updated_at: string
 				}>
@@ -922,7 +928,9 @@ export namespace Endpoints {
 					id: Schemas.QuoteId
 					lines: Array<Schemas.QuoteLineResponse>
 					organization_id: Schemas.OrganizationId
+					reference: string
 					status: Schemas.QuoteStatus
+					title: string
 					total_cents: number
 					updated_at: string
 				}
@@ -1070,7 +1078,9 @@ export namespace Endpoints {
 					id: Schemas.QuoteId
 					lines: Array<Schemas.QuoteLineResponse>
 					organization_id: Schemas.OrganizationId
+					reference: string
 					status: Schemas.QuoteStatus
+					title: string
 					total_cents: number
 					updated_at: string
 				}
@@ -1108,7 +1118,9 @@ export namespace Endpoints {
 					id: Schemas.QuoteId
 					lines: Array<Schemas.QuoteLineResponse>
 					organization_id: Schemas.OrganizationId
+					reference: string
 					status: Schemas.QuoteStatus
+					title: string
 					total_cents: number
 					updated_at: string
 				}
@@ -1148,7 +1160,9 @@ export namespace Endpoints {
 					id: Schemas.QuoteId
 					lines: Array<Schemas.QuoteLineResponse>
 					organization_id: Schemas.OrganizationId
+					reference: string
 					status: Schemas.QuoteStatus
+					title: string
 					total_cents: number
 					updated_at: string
 				}

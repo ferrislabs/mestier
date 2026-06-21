@@ -1,3 +1,4 @@
+import { Link } from '@tanstack/react-router'
 import {
 	AlertCircle,
 	Calculator,
@@ -205,6 +206,7 @@ export function QuoteCreateUI({
 	}, [onQuotePageChange, onQuotePageSizeChange])
 
 	const canSubmit =
+		Boolean(values.title.trim()) &&
 		Boolean(values.customerId) &&
 		Boolean(values.customerContextId) &&
 		values.lines.length > 0 &&
@@ -304,9 +306,20 @@ export function QuoteCreateUI({
 								<div className="space-y-5">
 									<FormSection
 										icon={<UserRound className="size-4" />}
-										title="Client et contexte"
+										title="Objet et client"
 									>
 										<div className="grid gap-4 md:grid-cols-2">
+											<div className="md:col-span-2">
+												<FieldBlock label="Objet du devis">
+													<Input
+														value={values.title}
+														onChange={(event) =>
+															onChange({ title: event.target.value })
+														}
+														placeholder="Ex. Rénovation salle de bain"
+													/>
+												</FieldBlock>
+											</div>
 											<FieldBlock label="Client">
 												<Select
 													value={values.customerId}
@@ -403,6 +416,7 @@ export function QuoteCreateUI({
 								</div>
 
 								<QuoteDraftSummary
+									title={values.title.trim() || 'Non renseigné'}
 									customerName={
 										selectedCustomer
 											? customerDisplayName(selectedCustomer)
@@ -482,9 +496,11 @@ export function QuoteCreateUI({
 								<FileText className="size-5" />
 							</div>
 							<div className="min-w-0">
-								<p className="text-sm font-semibold">Dernier devis créé</p>
-								<p className="mt-1 truncate font-mono text-xs text-muted-foreground">
-									{lastCreated.id}
+								<p className="truncate text-sm font-semibold">
+									{lastCreated.reference} · {lastCreated.title}
+								</p>
+								<p className="mt-1 text-xs text-muted-foreground">
+									Dernier devis créé
 								</p>
 							</div>
 						</div>
@@ -571,44 +587,47 @@ export function QuoteCreateUI({
 							})
 
 							return (
-								<li
-									key={quote.id}
-									className="grid gap-4 px-5 py-4 transition hover:bg-muted/40 sm:grid-cols-[minmax(0,1fr)_160px_160px] sm:items-center"
-								>
-									<div className="flex min-w-0 items-center gap-4">
-										<div className="flex size-11 shrink-0 items-center justify-center rounded-lg bg-brand-soft text-primary">
-											<FileText className="size-5" />
-										</div>
-										<div className="min-w-0">
-											<div className="flex min-w-0 items-center gap-2">
-												<p className="truncate font-semibold">
+								<li key={quote.id}>
+									<Link
+										to="/quotes/$quoteId"
+										params={{ quoteId: quote.id }}
+										className="grid gap-4 px-5 py-4 transition hover:bg-muted/40 sm:grid-cols-[minmax(0,1fr)_160px_160px] sm:items-center"
+									>
+										<div className="flex min-w-0 items-center gap-4">
+											<div className="flex size-11 shrink-0 items-center justify-center rounded-lg bg-brand-soft text-primary">
+												<FileText className="size-5" />
+											</div>
+											<div className="min-w-0">
+												<div className="flex min-w-0 items-center gap-2">
+													<p className="truncate font-semibold">
+														{quote.reference} · {quote.title}
+													</p>
+													<StatusBadge tone={statusTone(quote.status)}>
+														{quoteStatusLabel(quote.status)}
+													</StatusBadge>
+												</div>
+												<p className="mt-1 truncate text-xs text-muted-foreground">
 													{customer
 														? customerDisplayName(customer)
 														: 'Client inconnu'}
 												</p>
-												<StatusBadge tone={statusTone(quote.status)}>
-													{quoteStatusLabel(quote.status)}
-												</StatusBadge>
 											</div>
-											<p className="mt-1 truncate font-mono text-xs text-muted-foreground">
-												{quote.id}
+										</div>
+
+										<div className="text-sm">
+											<p className="font-medium">
+												{quote.lines.length} ligne
+												{quote.lines.length > 1 ? 's' : ''}
+											</p>
+											<p className="mt-1 text-xs text-muted-foreground">
+												{formatDate(quote.created_at)}
 											</p>
 										</div>
-									</div>
 
-									<div className="text-sm">
-										<p className="font-medium">
-											{quote.lines.length} ligne
-											{quote.lines.length > 1 ? 's' : ''}
+										<p className="text-lg font-bold sm:text-right">
+											{formatCents(quote.total_cents)}
 										</p>
-										<p className="mt-1 text-xs text-muted-foreground">
-											{formatDate(quote.created_at)}
-										</p>
-									</div>
-
-									<p className="text-lg font-bold sm:text-right">
-										{formatCents(quote.total_cents)}
-									</p>
+									</Link>
 								</li>
 							)
 						})}
@@ -864,6 +883,7 @@ function FormSection({
 }
 
 interface QuoteDraftSummaryProps {
+	title: string
 	customerName: string
 	contextName: string
 	lineCount: number
@@ -873,6 +893,7 @@ interface QuoteDraftSummaryProps {
 }
 
 function QuoteDraftSummary({
+	title,
 	customerName,
 	contextName,
 	lineCount,
@@ -895,6 +916,7 @@ function QuoteDraftSummary({
 			</div>
 
 			<div className="mt-5 space-y-4">
+				<SummaryRow icon={<FileText />} label="Objet" value={title} />
 				<SummaryRow icon={<UserRound />} label="Client" value={customerName} />
 				<SummaryRow icon={<MapPin />} label="Contexte" value={contextName} />
 				<SummaryRow
@@ -990,6 +1012,8 @@ function quoteMatchesSearch(
 		: ''
 	return (
 		quote.id.toLowerCase().includes(query) ||
+		quote.reference.toLowerCase().includes(query) ||
+		quote.title.toLowerCase().includes(query) ||
 		quoteStatusLabel(quote.status).toLowerCase().includes(query) ||
 		formatCents(quote.total_cents).toLowerCase().includes(query) ||
 		customerName.includes(query)

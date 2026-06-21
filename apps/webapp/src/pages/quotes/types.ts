@@ -18,6 +18,7 @@ export interface QuoteLineFormValues {
 }
 
 export interface QuoteFormValues {
+	title: string
 	customerId: string
 	customerContextId: string
 	lines: QuoteLineFormValues[]

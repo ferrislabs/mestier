@@ -85,6 +85,14 @@ function getBreadcrumbItems(
 	}
 
 	if (pathname.startsWith('/quotes')) {
+		if (pathname.startsWith('/quotes/')) {
+			return [
+				{ id: 'organization', label: organizationName, to: '/' },
+				{ id: 'quotes', label: 'Devis', to: '/quotes' },
+				{ id: 'quote-detail', label: 'Fiche devis' },
+			]
+		}
+
 		return [
 			{ id: 'organization', label: organizationName, to: '/' },
 			{ id: 'quotes', label: 'Devis' },
