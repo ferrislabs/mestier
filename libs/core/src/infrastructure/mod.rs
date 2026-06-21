@@ -1,4 +1,5 @@
 pub mod customer;
+pub mod customer_contact;
 pub mod customer_context;
 pub mod employee;
 pub mod equipment;

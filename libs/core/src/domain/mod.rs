@@ -1,4 +1,5 @@
 pub(crate) mod customer;
+pub(crate) mod customer_contact;
 pub(crate) mod customer_context;
 pub(crate) mod employee;
 pub(crate) mod equipment;
@@ -12,6 +13,7 @@ pub(crate) mod service_rate;
 pub(crate) mod user;
 
 pub use customer::*;
+pub use customer_contact::*;
 pub use customer_context::*;
 pub use employee::*;
 pub use equipment::*;

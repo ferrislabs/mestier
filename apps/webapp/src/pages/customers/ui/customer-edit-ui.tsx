@@ -4,27 +4,48 @@ import {
 	ArrowLeft,
 	Image,
 	LayoutPanelTop,
+	Mail,
 	Pencil,
+	Phone,
 	Plus,
+	Star,
 	Trash2,
 	Upload,
+	UserCheck,
+	UserRound,
 } from 'lucide-react'
 import { FloatingActionBar } from '#/components/floating-action-bar'
 import { Button } from '#/components/ui/button'
 import { Input } from '#/components/ui/input'
 import { Label } from '#/components/ui/label'
 import {
+	Select,
+	SelectContent,
+	SelectItem,
+	SelectTrigger,
+	SelectValue,
+} from '#/components/ui/select'
+import {
 	EntityAvatar,
 	PageHeader,
 	PageShell,
 	SectionCard,
 	SectionHeader,
+	StatusBadge,
 } from '#/components/ui/surface'
-import type { Customer, CustomerContext } from '#/hooks/use-customers'
+import { Switch } from '#/components/ui/switch'
+import type {
+	Customer,
+	CustomerContact,
+	CustomerContext,
+	CustomerStatus,
+} from '#/hooks/use-customers'
 import {
+	type CustomerContactFormValues,
 	type CustomerContextFormValues,
 	type CustomerFormValues,
 	customerInitials,
+	customerStatusLabel,
 } from '#/pages/customers/types'
 
 interface CustomerEditUIProps {
@@ -33,6 +54,13 @@ interface CustomerEditUIProps {
 	isDirty: boolean
 	changedKeys: (keyof CustomerFormValues)[]
 	isSaving: boolean
+	customerContacts: CustomerContact[]
+	customerContactsError: string | null
+	isCustomerContactsLoading: boolean
+	customerContactDraft: CustomerContactFormValues
+	editingCustomerContactId: string | null
+	isCustomerContactSaving: boolean
+	deletingCustomerContactId: string | null
 	customerContexts: CustomerContext[]
 	customerContextsError: string | null
 	isCustomerContextsLoading: boolean
@@ -45,12 +73,19 @@ interface CustomerEditUIProps {
 	onChange: (patch: Partial<CustomerFormValues>) => void
 	onReset: () => void
 	onSave: () => void
+	onPromoteToClient: () => void
+	onCustomerContactChange: (patch: Partial<CustomerContactFormValues>) => void
+	onCustomerContactEdit: (customerContact: CustomerContact) => void
+	onCustomerContactCancel: () => void
+	onCustomerContactSubmit: () => void
+	onCustomerContactDelete: (customerContact: CustomerContact) => void
 	onCustomerContextChange: (patch: Partial<CustomerContextFormValues>) => void
 	onCustomerContextEdit: (customerContext: CustomerContext) => void
 	onCustomerContextCancel: () => void
 	onCustomerContextSubmit: () => void
 	onCustomerContextDelete: (customerContext: CustomerContext) => void
 	onCustomerContextPhotoChange: (file: File) => void
+	onRetryCustomerContacts: () => void
 	onRetryCustomerContexts: () => void
 }
 
@@ -60,6 +95,13 @@ export function CustomerEditUI({
 	isDirty,
 	changedKeys,
 	isSaving,
+	customerContacts,
+	customerContactsError,
+	isCustomerContactsLoading,
+	customerContactDraft,
+	editingCustomerContactId,
+	isCustomerContactSaving,
+	deletingCustomerContactId,
 	customerContexts,
 	customerContextsError,
 	isCustomerContextsLoading,
@@ -72,15 +114,25 @@ export function CustomerEditUI({
 	onChange,
 	onReset,
 	onSave,
+	onPromoteToClient,
+	onCustomerContactChange,
+	onCustomerContactEdit,
+	onCustomerContactCancel,
+	onCustomerContactSubmit,
+	onCustomerContactDelete,
 	onCustomerContextChange,
 	onCustomerContextEdit,
 	onCustomerContextCancel,
 	onCustomerContextSubmit,
 	onCustomerContextDelete,
 	onCustomerContextPhotoChange,
+	onRetryCustomerContacts,
 	onRetryCustomerContexts,
 }: CustomerEditUIProps) {
 	const displayName = `${form.firstName} ${form.lastName}`.trim()
+	const canSubmitCustomerContact =
+		Boolean(customerContactDraft.firstName.trim()) &&
+		Boolean(customerContactDraft.lastName.trim())
 	const canSubmitCustomerContext = Boolean(customerContextDraft.label.trim())
 
 	return (
@@ -101,7 +153,21 @@ export function CustomerEditUI({
 					<span className="font-mono text-xs">id: {customer.id}</span>
 				}
 				className="items-center sm:items-center sm:justify-start"
-				eyebrow="Client"
+				eyebrow={customerStatusLabel(form.status)}
+				actions={
+					form.status === 'PROSPECT' ? (
+						<Button
+							type="button"
+							variant="outline"
+							onClick={onPromoteToClient}
+							disabled={isSaving}
+							className="border-success/35 bg-success-soft text-success hover:bg-success-soft/80 hover:text-success"
+						>
+							<UserCheck />
+							Promouvoir en client
+						</Button>
+					) : null
+				}
 				leading={
 					<EntityAvatar tone="brand" size="lg">
 						{customerInitials(customer)}
@@ -112,26 +178,49 @@ export function CustomerEditUI({
 			<div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
 				<Section
 					title="Identité"
-					description="Informations principales du client"
+					description="Informations principales et statut CRM"
 					className="lg:col-span-2"
 				>
-					<Field
-						label="Prénom"
-						name="firstName"
-						value={form.firstName}
-						onChange={(v) => onChange({ firstName: v })}
-						changed={changedKeys.includes('firstName')}
-					/>
-					<Field
-						label="Nom"
-						name="lastName"
-						value={form.lastName}
-						onChange={(v) => onChange({ lastName: v })}
-						changed={changedKeys.includes('lastName')}
-					/>
+					<div className="grid gap-4 md:grid-cols-2">
+						<Field
+							label="Prénom"
+							name="firstName"
+							value={form.firstName}
+							onChange={(v) => onChange({ firstName: v })}
+							changed={changedKeys.includes('firstName')}
+						/>
+						<Field
+							label="Nom"
+							name="lastName"
+							value={form.lastName}
+							onChange={(v) => onChange({ lastName: v })}
+							changed={changedKeys.includes('lastName')}
+						/>
+					</div>
+					<div className="flex flex-col gap-2">
+						<Label htmlFor="customer-status">
+							Statut CRM
+							{changedKeys.includes('status') ? <Dot /> : null}
+						</Label>
+						<Select
+							value={form.status}
+							onValueChange={(status) =>
+								onChange({ status: status as CustomerStatus })
+							}
+						>
+							<SelectTrigger id="customer-status" className="w-full">
+								<SelectValue />
+							</SelectTrigger>
+							<SelectContent>
+								<SelectItem value="PROSPECT">Prospect</SelectItem>
+								<SelectItem value="CLIENT">Client</SelectItem>
+								<SelectItem value="ARCHIVED">Archivé</SelectItem>
+							</SelectContent>
+						</Select>
+					</div>
 				</Section>
 
-				<Section title="Coordonnées" description="Email et téléphone">
+				<Section title="Coordonnées" description="Email et téléphone généraux">
 					<Field
 						label="Email"
 						name="email"
@@ -150,39 +239,150 @@ export function CustomerEditUI({
 				</Section>
 
 				<Section
+					title="Contacts"
+					description="Interlocuteurs liés à ce prospect ou client"
+					className="lg:col-span-3"
+				>
+					{customerContactsError ? (
+						<InlineError
+							message={customerContactsError}
+							onRetry={onRetryCustomerContacts}
+						/>
+					) : null}
+
+					{isCustomerContactsLoading ? (
+						<EmptyState label="Chargement des contacts…" />
+					) : customerContacts.length === 0 ? (
+						<EmptyState
+							icon={
+								<UserRound className="mx-auto size-6 text-muted-foreground" />
+							}
+							label="Aucun contact renseigné"
+							description="Ajoutez au moins un interlocuteur pour qualifier la relation."
+						/>
+					) : (
+						<div className="grid gap-3 lg:grid-cols-2">
+							{customerContacts.map((customerContact) => (
+								<CustomerContactCard
+									key={customerContact.id}
+									customerContact={customerContact}
+									isDeleting={deletingCustomerContactId === customerContact.id}
+									onEdit={() => onCustomerContactEdit(customerContact)}
+									onDelete={() => onCustomerContactDelete(customerContact)}
+								/>
+							))}
+						</div>
+					)}
+
+					<div className="mt-1 rounded-lg border bg-muted/20">
+						<div className="flex items-center justify-between gap-4 border-b px-4 py-3">
+							<div>
+								<p className="font-medium">
+									{editingCustomerContactId
+										? 'Modifier le contact'
+										: 'Ajouter un contact'}
+								</p>
+								<p className="text-xs text-muted-foreground">
+									Nom et prénom sont requis. Le rôle aide à identifier le bon
+									interlocuteur.
+								</p>
+							</div>
+							{editingCustomerContactId ? (
+								<Button
+									type="button"
+									variant="ghost"
+									size="sm"
+									onClick={onCustomerContactCancel}
+								>
+									Annuler
+								</Button>
+							) : null}
+						</div>
+						<div className="grid gap-4 p-4 md:grid-cols-2">
+							<Field
+								label="Prénom"
+								name="customer-contact-first-name"
+								value={customerContactDraft.firstName}
+								onChange={(v) => onCustomerContactChange({ firstName: v })}
+							/>
+							<Field
+								label="Nom"
+								name="customer-contact-last-name"
+								value={customerContactDraft.lastName}
+								onChange={(v) => onCustomerContactChange({ lastName: v })}
+							/>
+							<Field
+								label="Rôle"
+								name="customer-contact-role"
+								value={customerContactDraft.role}
+								onChange={(v) => onCustomerContactChange({ role: v })}
+							/>
+							<Field
+								label="Email"
+								name="customer-contact-email"
+								type="email"
+								value={customerContactDraft.email}
+								onChange={(v) => onCustomerContactChange({ email: v })}
+							/>
+							<Field
+								label="Téléphone"
+								name="customer-contact-phone"
+								value={customerContactDraft.phone}
+								onChange={(v) => onCustomerContactChange({ phone: v })}
+							/>
+							<div className="flex items-center justify-between gap-4 rounded-lg border bg-card px-3 py-2">
+								<div>
+									<Label htmlFor="customer-contact-primary">
+										Contact principal
+									</Label>
+									<p className="text-xs text-muted-foreground">
+										Affiché en priorité dans la fiche.
+									</p>
+								</div>
+								<Switch
+									id="customer-contact-primary"
+									checked={customerContactDraft.isPrimary}
+									onCheckedChange={(isPrimary) =>
+										onCustomerContactChange({ isPrimary })
+									}
+								/>
+							</div>
+						</div>
+						<div className="flex justify-end border-t p-4">
+							<Button
+								type="button"
+								disabled={!canSubmitCustomerContact || isCustomerContactSaving}
+								onClick={onCustomerContactSubmit}
+							>
+								<Plus />
+								{editingCustomerContactId ? 'Enregistrer' : 'Ajouter'}
+							</Button>
+						</div>
+					</div>
+				</Section>
+
+				<Section
 					title="Contextes client"
 					description="Adresses, établissements ou périmètres associés à ce client"
 					className="lg:col-span-3"
 				>
 					{customerContextsError ? (
-						<div className="mb-4 flex flex-col gap-3 rounded-lg border border-destructive/30 bg-destructive-soft p-4 text-destructive sm:flex-row sm:items-center sm:justify-between">
-							<div className="flex items-center gap-2">
-								<AlertCircle className="size-4" />
-								<p className="text-sm font-medium">{customerContextsError}</p>
-							</div>
-							<Button
-								type="button"
-								variant="outline"
-								size="sm"
-								onClick={onRetryCustomerContexts}
-							>
-								Réessayer
-							</Button>
-						</div>
+						<InlineError
+							message={customerContextsError}
+							onRetry={onRetryCustomerContexts}
+						/>
 					) : null}
 
 					{isCustomerContextsLoading ? (
-						<div className="rounded-lg border border-dashed p-8 text-center text-sm text-muted-foreground">
-							Chargement des contextes…
-						</div>
+						<EmptyState label="Chargement des contextes…" />
 					) : customerContexts.length === 0 ? (
-						<div className="rounded-lg border border-dashed p-8 text-center">
-							<LayoutPanelTop className="mx-auto size-6 text-muted-foreground" />
-							<p className="mt-2 font-medium">Aucun contexte renseigné</p>
-							<p className="mt-1 text-sm text-muted-foreground">
-								Ajoutez un contexte pour ce client.
-							</p>
-						</div>
+						<EmptyState
+							icon={
+								<LayoutPanelTop className="mx-auto size-6 text-muted-foreground" />
+							}
+							label="Aucun contexte renseigné"
+							description="Ajoutez un contexte pour ce client."
+						/>
 					) : (
 						<div className="grid gap-3 lg:grid-cols-2">
 							{customerContexts.map((customerContext) => (
@@ -197,7 +397,7 @@ export function CustomerEditUI({
 						</div>
 					)}
 
-					<div className="mt-5 rounded-lg border bg-muted/20">
+					<div className="mt-1 rounded-lg border bg-muted/20">
 						<div className="flex items-center justify-between gap-4 border-b px-4 py-3">
 							<div>
 								<p className="font-medium">
@@ -396,6 +596,106 @@ function Dot() {
 	)
 }
 
+function InlineError({
+	message,
+	onRetry,
+}: {
+	message: string
+	onRetry: () => void
+}) {
+	return (
+		<div className="flex flex-col gap-3 rounded-lg border border-destructive/30 bg-destructive-soft p-4 text-destructive sm:flex-row sm:items-center sm:justify-between">
+			<div className="flex items-center gap-2">
+				<AlertCircle className="size-4" />
+				<p className="text-sm font-medium">{message}</p>
+			</div>
+			<Button type="button" variant="outline" size="sm" onClick={onRetry}>
+				Réessayer
+			</Button>
+		</div>
+	)
+}
+
+function EmptyState({
+	icon,
+	label,
+	description,
+}: {
+	icon?: React.ReactNode
+	label: string
+	description?: string
+}) {
+	return (
+		<div className="rounded-lg border border-dashed p-8 text-center text-sm text-muted-foreground">
+			{icon}
+			<p className={icon ? 'mt-2 font-medium text-foreground' : ''}>{label}</p>
+			{description ? <p className="mt-1">{description}</p> : null}
+		</div>
+	)
+}
+
+interface CustomerContactCardProps {
+	customerContact: CustomerContact
+	isDeleting: boolean
+	onEdit: () => void
+	onDelete: () => void
+}
+
+function CustomerContactCard({
+	customerContact,
+	isDeleting,
+	onEdit,
+	onDelete,
+}: CustomerContactCardProps) {
+	const displayName =
+		`${customerContact.first_name} ${customerContact.last_name}`.trim()
+
+	return (
+		<div className="flex gap-4 rounded-lg border bg-card p-4">
+			<div className="flex size-12 shrink-0 items-center justify-center rounded-lg bg-brand-soft text-primary">
+				<UserRound className="size-5" />
+			</div>
+			<div className="min-w-0 flex-1">
+				<div className="flex items-start justify-between gap-3">
+					<div className="min-w-0">
+						<div className="flex flex-wrap items-center gap-2">
+							<p className="truncate font-semibold">{displayName}</p>
+							{customerContact.is_primary ? (
+								<StatusBadge tone="brand">
+									<Star className="size-3" />
+									Principal
+								</StatusBadge>
+							) : null}
+						</div>
+						{customerContact.role ? (
+							<p className="mt-1 text-sm text-muted-foreground">
+								{customerContact.role}
+							</p>
+						) : null}
+						<div className="mt-2 flex flex-col gap-1 text-xs text-muted-foreground">
+							<span className="flex min-w-0 items-center gap-1">
+								<Mail className="size-3" />
+								<span className="truncate">
+									{customerContact.email || 'Email non renseigné'}
+								</span>
+							</span>
+							<span className="flex items-center gap-1">
+								<Phone className="size-3" />
+								{customerContact.phone || 'Téléphone non renseigné'}
+							</span>
+						</div>
+					</div>
+					<RowActions
+						isDeleting={isDeleting}
+						onEdit={onEdit}
+						onDelete={onDelete}
+					/>
+				</div>
+			</div>
+		</div>
+	)
+}
+
 interface CustomerContextCardProps {
 	customerContext: CustomerContext
 	isDeleting: boolean
@@ -441,27 +741,11 @@ function CustomerContextCard({
 							</p>
 						)}
 					</div>
-					<div className="flex shrink-0 gap-1">
-						<Button
-							type="button"
-							variant="ghost"
-							size="icon-sm"
-							onClick={onEdit}
-						>
-							<Pencil />
-							<span className="sr-only">Modifier</span>
-						</Button>
-						<Button
-							type="button"
-							variant="ghost"
-							size="icon-sm"
-							disabled={isDeleting}
-							onClick={onDelete}
-						>
-							<Trash2 />
-							<span className="sr-only">Supprimer</span>
-						</Button>
-					</div>
+					<RowActions
+						isDeleting={isDeleting}
+						onEdit={onEdit}
+						onDelete={onDelete}
+					/>
 				</div>
 				{customerContext.photo_key ? (
 					<p className="mt-2 truncate font-mono text-xs text-muted-foreground">
@@ -469,6 +753,35 @@ function CustomerContextCard({
 					</p>
 				) : null}
 			</div>
+		</div>
+	)
+}
+
+function RowActions({
+	isDeleting,
+	onEdit,
+	onDelete,
+}: {
+	isDeleting: boolean
+	onEdit: () => void
+	onDelete: () => void
+}) {
+	return (
+		<div className="flex shrink-0 gap-1">
+			<Button type="button" variant="ghost" size="icon-sm" onClick={onEdit}>
+				<Pencil />
+				<span className="sr-only">Modifier</span>
+			</Button>
+			<Button
+				type="button"
+				variant="ghost"
+				size="icon-sm"
+				disabled={isDeleting}
+				onClick={onDelete}
+			>
+				<Trash2 />
+				<span className="sr-only">Supprimer</span>
+			</Button>
 		</div>
 	)
 }

@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            UPDATE customers\n            SET last_name = $2, first_name = $3, phone = $4, email = $5, updated_at = $6\n            WHERE id = $1 AND deleted_at IS NULL\n            RETURNING id, org_id, last_name, first_name, phone, email, deleted_at, created_at, updated_at\n            ",
+  "query": "\n            SELECT id, org_id, reference, title, customer_id, customer_context_id, status::text AS \"status!\", total_cents, deleted_at, created_at, updated_at\n            FROM quotes\n            WHERE id = $1 AND deleted_at IS NULL\n            ",
   "describe": {
     "columns": [
       {
@@ -15,48 +15,53 @@
       },
       {
         "ordinal": 2,
-        "name": "last_name",
+        "name": "reference",
         "type_info": "Text"
       },
       {
         "ordinal": 3,
-        "name": "first_name",
+        "name": "title",
         "type_info": "Text"
       },
       {
         "ordinal": 4,
-        "name": "phone",
-        "type_info": "Text"
+        "name": "customer_id",
+        "type_info": "Uuid"
       },
       {
         "ordinal": 5,
-        "name": "email",
-        "type_info": "Text"
+        "name": "customer_context_id",
+        "type_info": "Uuid"
       },
       {
         "ordinal": 6,
+        "name": "status!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 7,
+        "name": "total_cents",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 8,
         "name": "deleted_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 7,
+        "ordinal": 9,
         "name": "created_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 8,
+        "ordinal": 10,
         "name": "updated_at",
         "type_info": "Timestamptz"
       }
     ],
     "parameters": {
       "Left": [
-        "Uuid",
-        "Text",
-        "Text",
-        "Text",
-        "Text",
-        "Timestamptz"
+        "Uuid"
       ]
     },
     "nullable": [
@@ -64,12 +69,14 @@
       false,
       false,
       false,
-      true,
-      true,
+      false,
+      false,
+      null,
+      false,
       true,
       false,
       false
     ]
   },
-  "hash": "93c832e3bd66df34955c54c3b7b41a7d7d1da710afd81c6bdee6534ebce029dd"
+  "hash": "020b63d237bc7dd04638d416c26758e7472b7e28ae54d88502e2adda71d84dcf"
 }

@@ -6,6 +6,8 @@ const CUSTOMER_PATH = '/api/v1/customers/{customer_id}'
 const CUSTOMER_CONTEXTS_PATH =
 	'/api/v1/customers/{customer_id}/customer-contexts'
 const CUSTOMER_CONTEXT_PATH = '/api/v1/customer-contexts/{customer_context_id}'
+const CUSTOMER_CONTACTS_PATH = '/api/v1/customers/{customer_id}/contacts'
+const CUSTOMER_CONTACT_PATH = '/api/v1/customer-contacts/{customer_contact_id}'
 
 interface CustomerListParams {
 	page: number
@@ -70,6 +72,19 @@ function customerContextKey(customerContextId: string) {
 	}).queryKey
 }
 
+function customerContactsKey(customerId: string) {
+	return window.tanstackApi.get(CUSTOMER_CONTACTS_PATH, {
+		path: { customer_id: customerId },
+		query: { page: 1, per_page: 100 },
+	}).queryKey
+}
+
+function customerContactKey(customerContactId: string) {
+	return window.tanstackApi.get(CUSTOMER_CONTACT_PATH, {
+		path: { customer_contact_id: customerContactId },
+	}).queryKey
+}
+
 export function useCustomers(
 	organizationId: string,
 	params: CustomerListParams = { page: 1, perPage: 100 },
@@ -95,6 +110,16 @@ export function useCustomerContexts(customerId: string, enabled = true) {
 			CUSTOMER_CONTEXTS_PATH,
 			customerContextsParams(customerId),
 		).queryOptions,
+		enabled: enabled && Boolean(customerId),
+	})
+}
+
+export function useCustomerContacts(customerId: string, enabled = true) {
+	return useQuery({
+		...window.tanstackApi.get(CUSTOMER_CONTACTS_PATH, {
+			path: { customer_id: customerId },
+			query: { page: 1, per_page: 100 },
+		}).queryOptions,
 		enabled: enabled && Boolean(customerId),
 	})
 }
@@ -207,6 +232,60 @@ export function useDeleteCustomerContext(customerId: string) {
 	})
 }
 
+export function useCreateCustomerContact() {
+	const queryClient = useQueryClient()
+
+	return useMutation({
+		...window.tanstackApi.mutation('post', CUSTOMER_CONTACTS_PATH)
+			.mutationOptions,
+		onSuccess: async (response) => {
+			const customerContact = response.data
+			await queryClient.invalidateQueries({
+				queryKey: customerContactsKey(customerContact.customer_id),
+			})
+		},
+	})
+}
+
+export function useUpdateCustomerContact() {
+	const queryClient = useQueryClient()
+
+	return useMutation({
+		...window.tanstackApi.mutation('patch', CUSTOMER_CONTACT_PATH)
+			.mutationOptions,
+		onSuccess: async (response) => {
+			const customerContact = response.data
+			await Promise.all([
+				queryClient.invalidateQueries({
+					queryKey: customerContactsKey(customerContact.customer_id),
+				}),
+				queryClient.invalidateQueries({
+					queryKey: customerContactKey(customerContact.id),
+				}),
+			])
+		},
+	})
+}
+
+export function useDeleteCustomerContact(customerId: string) {
+	const queryClient = useQueryClient()
+
+	return useMutation({
+		...window.tanstackApi.mutation('delete', CUSTOMER_CONTACT_PATH)
+			.mutationOptions,
+		onSuccess: async (_res, variables) => {
+			await Promise.all([
+				queryClient.invalidateQueries({
+					queryKey: customerContactsKey(customerId),
+				}),
+				queryClient.invalidateQueries({
+					queryKey: customerContactKey(variables.path.customer_contact_id),
+				}),
+			])
+		},
+	})
+}
+
 export function useUploadFile() {
 	return useMutation({
 		mutationFn: async (file: File) => {
@@ -223,6 +302,9 @@ export function useUploadFile() {
 
 export type Customer = Schemas.CustomerResponse
 export type CustomerPayload = Schemas.CreateCustomerRequest
+export type CustomerStatus = Schemas.CustomerStatus
+export type CustomerContact = Schemas.CustomerContactResponse
+export type CustomerContactPayload = Schemas.CreateCustomerContactRequest
 export type CustomerContext = Schemas.CustomerContextResponse
 export type CustomerContextPayload = Schemas.CreateCustomerContextRequest
 export type FileUpload = Schemas.FileUploadResponse

@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            INSERT INTO quotes (id, org_id, customer_id, customer_context_id, status, total_cents, deleted_at, created_at, updated_at)\n            VALUES ($1, $2, $3, $4, CAST($5 AS text)::quote_status, $6, $7, $8, $9)\n            RETURNING id, org_id, customer_id, customer_context_id, status::text AS \"status!\", total_cents, deleted_at, created_at, updated_at\n            ",
+  "query": "\n            SELECT id, org_id, status, last_name, first_name, phone, email, deleted_at, created_at, updated_at\n            FROM customers\n            WHERE org_id = $1 AND deleted_at IS NULL\n            ORDER BY last_name ASC, first_name ASC, created_at ASC\n            LIMIT $2 OFFSET $3\n            ",
   "describe": {
     "columns": [
       {
@@ -15,36 +15,41 @@
       },
       {
         "ordinal": 2,
-        "name": "customer_id",
-        "type_info": "Uuid"
+        "name": "status",
+        "type_info": "Text"
       },
       {
         "ordinal": 3,
-        "name": "customer_context_id",
-        "type_info": "Uuid"
+        "name": "last_name",
+        "type_info": "Text"
       },
       {
         "ordinal": 4,
-        "name": "status!",
+        "name": "first_name",
         "type_info": "Text"
       },
       {
         "ordinal": 5,
-        "name": "total_cents",
-        "type_info": "Int4"
+        "name": "phone",
+        "type_info": "Text"
       },
       {
         "ordinal": 6,
+        "name": "email",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 7,
         "name": "deleted_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 7,
+        "ordinal": 8,
         "name": "created_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 8,
+        "ordinal": 9,
         "name": "updated_at",
         "type_info": "Timestamptz"
       }
@@ -52,14 +57,8 @@
     "parameters": {
       "Left": [
         "Uuid",
-        "Uuid",
-        "Uuid",
-        "Uuid",
-        "Text",
-        "Int4",
-        "Timestamptz",
-        "Timestamptz",
-        "Timestamptz"
+        "Int8",
+        "Int8"
       ]
     },
     "nullable": [
@@ -67,12 +66,13 @@
       false,
       false,
       false,
-      null,
       false,
+      true,
+      true,
       true,
       false,
       false
     ]
   },
-  "hash": "910d2bf0045ba3ffcfce40020f141d75e320a446298c050fb32e6f578a491f8d"
+  "hash": "f958afd7bcda4bef7622172f62ba03d902046d7f10641e66322dfefc5bccaa7a"
 }

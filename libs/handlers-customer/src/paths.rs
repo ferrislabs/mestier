@@ -1,5 +1,5 @@
 use axum_extra::routing::TypedPath;
-use mestier_core::{CustomerContextId, CustomerId, OrganizationId};
+use mestier_core::{CustomerContactId, CustomerContextId, CustomerId, OrganizationId};
 use serde::Deserialize;
 
 #[derive(TypedPath, Deserialize)]
@@ -18,6 +18,18 @@ pub struct CustomerPath {
 #[typed_path("/api/v1/customers/{customer_id}/customer-contexts")]
 pub struct CustomerContextsPath {
     pub customer_id: CustomerId,
+}
+
+#[derive(TypedPath, Deserialize)]
+#[typed_path("/api/v1/customers/{customer_id}/contacts")]
+pub struct CustomerContactsPath {
+    pub customer_id: CustomerId,
+}
+
+#[derive(TypedPath, Deserialize)]
+#[typed_path("/api/v1/customer-contacts/{customer_contact_id}")]
+pub struct CustomerContactPath {
+    pub customer_contact_id: CustomerContactId,
 }
 
 #[derive(TypedPath, Deserialize)]

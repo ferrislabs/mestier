@@ -28,12 +28,13 @@ impl<'tx> CustomerRepository for PgCustomerRepository<'tx> {
         let row = sqlx::query_as!(
             CustomerRow,
             r#"
-            INSERT INTO customers (id, org_id, last_name, first_name, phone, email, deleted_at, created_at, updated_at)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-            RETURNING id, org_id, last_name, first_name, phone, email, deleted_at, created_at, updated_at
+            INSERT INTO customers (id, org_id, status, last_name, first_name, phone, email, deleted_at, created_at, updated_at)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+            RETURNING id, org_id, status, last_name, first_name, phone, email, deleted_at, created_at, updated_at
             "#,
             customer.id.0,
             customer.organization_id.0,
+            customer.status.as_str(),
             customer.last_name,
             customer.first_name,
             customer.phone,
@@ -46,7 +47,7 @@ impl<'tx> CustomerRepository for PgCustomerRepository<'tx> {
         .await
         .map_err(map_sqlx_error)?;
 
-        Ok(row.into())
+        row.try_into()
     }
 
     async fn find_by_id(&mut self, id: CustomerId) -> Result<Option<Customer>, CoreError> {
@@ -54,7 +55,7 @@ impl<'tx> CustomerRepository for PgCustomerRepository<'tx> {
         let row = sqlx::query_as!(
             CustomerRow,
             r#"
-            SELECT id, org_id, last_name, first_name, phone, email, deleted_at, created_at, updated_at
+            SELECT id, org_id, status, last_name, first_name, phone, email, deleted_at, created_at, updated_at
             FROM customers
             WHERE id = $1 AND deleted_at IS NULL
             "#,
@@ -64,7 +65,7 @@ impl<'tx> CustomerRepository for PgCustomerRepository<'tx> {
         .await
         .map_err(map_sqlx_error)?;
 
-        Ok(row.map(Into::into))
+        row.map(TryInto::try_into).transpose()
     }
 
     async fn list_by_organization(
@@ -77,7 +78,7 @@ impl<'tx> CustomerRepository for PgCustomerRepository<'tx> {
         let rows = sqlx::query_as!(
             CustomerRow,
             r#"
-            SELECT id, org_id, last_name, first_name, phone, email, deleted_at, created_at, updated_at
+            SELECT id, org_id, status, last_name, first_name, phone, email, deleted_at, created_at, updated_at
             FROM customers
             WHERE org_id = $1 AND deleted_at IS NULL
             ORDER BY last_name ASC, first_name ASC, created_at ASC
@@ -99,7 +100,12 @@ impl<'tx> CustomerRepository for PgCustomerRepository<'tx> {
         .await
         .map_err(map_sqlx_error)?;
 
-        Ok((rows.into_iter().map(Into::into).collect(), total as u64))
+        let customers = rows
+            .into_iter()
+            .map(TryInto::try_into)
+            .collect::<Result<Vec<_>, CoreError>>()?;
+
+        Ok((customers, total as u64))
     }
 
     async fn update(&mut self, customer: &Customer) -> Result<Customer, CoreError> {
@@ -108,11 +114,12 @@ impl<'tx> CustomerRepository for PgCustomerRepository<'tx> {
             CustomerRow,
             r#"
             UPDATE customers
-            SET last_name = $2, first_name = $3, phone = $4, email = $5, updated_at = $6
+            SET status = $2, last_name = $3, first_name = $4, phone = $5, email = $6, updated_at = $7
             WHERE id = $1 AND deleted_at IS NULL
-            RETURNING id, org_id, last_name, first_name, phone, email, deleted_at, created_at, updated_at
+            RETURNING id, org_id, status, last_name, first_name, phone, email, deleted_at, created_at, updated_at
             "#,
             customer.id.0,
+            customer.status.as_str(),
             customer.last_name,
             customer.first_name,
             customer.phone,
@@ -123,7 +130,9 @@ impl<'tx> CustomerRepository for PgCustomerRepository<'tx> {
         .await
         .map_err(map_sqlx_error)?;
 
-        row.map(Into::into).ok_or(CoreError::NotFound)
+        row.map(TryInto::try_into)
+            .transpose()?
+            .ok_or(CoreError::NotFound)
     }
 
     async fn soft_delete(
@@ -152,6 +161,19 @@ impl<'tx> CustomerRepository for PgCustomerRepository<'tx> {
         sqlx::query!(
             r#"
             UPDATE customer_contexts
+            SET deleted_at = $2, updated_at = $2
+            WHERE customer_id = $1 AND deleted_at IS NULL
+            "#,
+            id.0,
+            deleted_at,
+        )
+        .execute(&mut ***tx)
+        .await
+        .map_err(map_sqlx_error)?;
+
+        sqlx::query!(
+            r#"
+            UPDATE customer_contacts
             SET deleted_at = $2, updated_at = $2
             WHERE customer_id = $1 AND deleted_at IS NULL
             "#,

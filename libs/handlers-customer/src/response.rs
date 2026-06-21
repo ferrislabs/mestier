@@ -1,5 +1,8 @@
 use chrono::{DateTime, Utc};
-use mestier_core::{Customer, CustomerContext, CustomerContextId, CustomerId, OrganizationId};
+use mestier_core::{
+    Customer, CustomerContact, CustomerContactId, CustomerContext, CustomerContextId, CustomerId,
+    CustomerStatus, OrganizationId,
+};
 use serde::Serialize;
 use utoipa::ToSchema;
 
@@ -7,6 +10,7 @@ use utoipa::ToSchema;
 pub struct CustomerResponse {
     pub id: CustomerId,
     pub organization_id: OrganizationId,
+    pub status: CustomerStatus,
     pub last_name: String,
     pub first_name: String,
     pub phone: Option<String>,
@@ -20,10 +24,42 @@ impl From<Customer> for CustomerResponse {
         Self {
             id: value.id,
             organization_id: value.organization_id,
+            status: value.status,
             last_name: value.last_name,
             first_name: value.first_name,
             phone: value.phone,
             email: value.email,
+            created_at: value.created_at,
+            updated_at: value.updated_at,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, ToSchema)]
+pub struct CustomerContactResponse {
+    pub id: CustomerContactId,
+    pub customer_id: CustomerId,
+    pub first_name: String,
+    pub last_name: String,
+    pub role: Option<String>,
+    pub phone: Option<String>,
+    pub email: Option<String>,
+    pub is_primary: bool,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+}
+
+impl From<CustomerContact> for CustomerContactResponse {
+    fn from(value: CustomerContact) -> Self {
+        Self {
+            id: value.id,
+            customer_id: value.customer_id,
+            first_name: value.first_name,
+            last_name: value.last_name,
+            role: value.role,
+            phone: value.phone,
+            email: value.email,
+            is_primary: value.is_primary,
             created_at: value.created_at,
             updated_at: value.updated_at,
         }

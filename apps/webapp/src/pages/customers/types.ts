@@ -1,10 +1,25 @@
-import type { Customer, CustomerContext } from '#/hooks/use-customers'
+import type {
+	Customer,
+	CustomerContact,
+	CustomerContext,
+	CustomerStatus,
+} from '#/hooks/use-customers'
 
 export interface CustomerFormValues {
+	status: CustomerStatus
 	firstName: string
 	lastName: string
 	email: string
 	phone: string
+}
+
+export interface CustomerContactFormValues {
+	firstName: string
+	lastName: string
+	role: string
+	email: string
+	phone: string
+	isPrimary: boolean
 }
 
 export interface CustomerContextFormValues {
@@ -31,11 +46,31 @@ export function customerInitials(customer: Customer): string {
 
 export function customerToForm(customer: Customer): CustomerFormValues {
 	return {
+		status: customer.status,
 		firstName: customer.first_name,
 		lastName: customer.last_name,
 		email: customer.email ?? '',
 		phone: customer.phone ?? '',
 	}
+}
+
+export function customerContactToForm(
+	customerContact?: CustomerContact,
+): CustomerContactFormValues {
+	return {
+		firstName: customerContact?.first_name ?? '',
+		lastName: customerContact?.last_name ?? '',
+		role: customerContact?.role ?? '',
+		email: customerContact?.email ?? '',
+		phone: customerContact?.phone ?? '',
+		isPrimary: customerContact?.is_primary ?? false,
+	}
+}
+
+export function customerStatusLabel(status: CustomerStatus): string {
+	if (status === 'PROSPECT') return 'Prospect'
+	if (status === 'CLIENT') return 'Client'
+	return 'Archivé'
 }
 
 export function customerContextToForm(
@@ -56,4 +91,13 @@ export const EMPTY_CUSTOMER_CONTEXT_FORM: CustomerContextFormValues = {
 	postalCode: '',
 	city: '',
 	photoKey: '',
+}
+
+export const EMPTY_CUSTOMER_CONTACT_FORM: CustomerContactFormValues = {
+	firstName: '',
+	lastName: '',
+	role: '',
+	email: '',
+	phone: '',
+	isPrimary: false,
 }

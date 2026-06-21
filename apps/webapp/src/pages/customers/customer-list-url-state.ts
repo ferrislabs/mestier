@@ -7,6 +7,8 @@ import {
 
 export const CUSTOMER_FILTER_OPTIONS: DataViewOption[] = [
 	{ value: 'all', label: 'Tous les clients' },
+	{ value: 'prospects', label: 'Prospects' },
+	{ value: 'clients', label: 'Clients' },
 	{ value: 'with-email', label: 'Avec email' },
 	{ value: 'with-phone', label: 'Avec téléphone' },
 	{ value: 'incomplete-contact', label: 'Coordonnées incomplètes' },

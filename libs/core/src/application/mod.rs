@@ -11,6 +11,7 @@ use crate::infrastructure::file_storage::S3FileStorage;
 use crate::infrastructure::postgres::error::map_sqlx_error;
 
 pub mod customer;
+pub mod customer_contact;
 pub mod customer_context;
 pub mod employee;
 pub mod equipment;

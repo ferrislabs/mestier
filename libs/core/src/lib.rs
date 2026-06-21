@@ -6,11 +6,13 @@ pub mod infrastructure;
 
 pub use application::*;
 pub use domain::{
-    Customer, CustomerContext, CustomerContextId, CustomerId, Employee, EmployeeId, Equipment,
-    EquipmentId, FileObject, Member, MemberId, Organization, OrganizationId, Permissions, Product,
-    ProductId, Quote, QuoteId, QuoteLine, QuoteLineId, QuoteStatus, Role, RoleId, ServiceRate,
-    ServiceRateId, ServiceRateUnit, StoredFile, User, UserId,
+    Customer, CustomerContact, CustomerContactId, CustomerContext, CustomerContextId, CustomerId,
+    CustomerStatus, Employee, EmployeeId, Equipment, EquipmentId, FileObject, Member, MemberId,
+    Organization, OrganizationId, Permissions, Product, ProductId, Quote, QuoteId, QuoteLine,
+    QuoteLineId, QuoteStatus, Role, RoleId, ServiceRate, ServiceRateId, ServiceRateUnit,
+    StoredFile, User, UserId,
     customer::commands::{CreateCustomerCommand, UpdateCustomerCommand},
+    customer_contact::commands::{CreateCustomerContactCommand, UpdateCustomerContactCommand},
     customer_context::commands::{CreateCustomerContextCommand, UpdateCustomerContextCommand},
     employee::commands::{CreateEmployeeCommand, LinkEmployeeUserCommand, UpdateEmployeeCommand},
     equipment::commands::{CreateEquipmentCommand, UpdateEquipmentCommand},

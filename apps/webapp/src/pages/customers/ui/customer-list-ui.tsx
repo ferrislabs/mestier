@@ -26,6 +26,13 @@ import {
 import { Input } from '#/components/ui/input'
 import { Label } from '#/components/ui/label'
 import {
+	Select,
+	SelectContent,
+	SelectItem,
+	SelectTrigger,
+	SelectValue,
+} from '#/components/ui/select'
+import {
 	Sheet,
 	SheetContent,
 	SheetDescription,
@@ -44,6 +51,7 @@ import {
 import type {
 	Customer,
 	CustomerPayload,
+	CustomerStatus,
 	PaginationMetadata,
 } from '#/hooks/use-customers'
 import {
@@ -53,7 +61,11 @@ import {
 	isValidCustomerSortValue,
 	writeCustomerListUrlState,
 } from '#/pages/customers/customer-list-url-state'
-import { customerDisplayName, customerInitials } from '#/pages/customers/types'
+import {
+	customerDisplayName,
+	customerInitials,
+	customerStatusLabel,
+} from '#/pages/customers/types'
 
 interface CustomerListUIProps {
 	customers: Customer[]
@@ -102,6 +114,7 @@ export function CustomerListUI({
 	)
 	const [createOpen, setCreateOpen] = useState(false)
 	const [draft, setDraft] = useState({
+		status: 'PROSPECT' as CustomerStatus,
 		firstName: '',
 		lastName: '',
 		email: '',
@@ -111,6 +124,10 @@ export function CustomerListUI({
 	const counts = useMemo(() => {
 		return {
 			total: customers.length,
+			prospects: customers.filter((customer) => customer.status === 'PROSPECT')
+				.length,
+			clients: customers.filter((customer) => customer.status === 'CLIENT')
+				.length,
 			withEmail: customers.filter((customer) => customer.email).length,
 			withPhone: customers.filter((customer) => customer.phone).length,
 			thisMonth: customers.filter((customer) =>
@@ -175,7 +192,13 @@ export function CustomerListUI({
 	const canCreate = draft.firstName.trim() && draft.lastName.trim()
 
 	const resetDraft = () => {
-		setDraft({ firstName: '', lastName: '', email: '', phone: '' })
+		setDraft({
+			status: 'PROSPECT',
+			firstName: '',
+			lastName: '',
+			email: '',
+			phone: '',
+		})
 	}
 
 	const handleCreateOpenChange = (open: boolean) => {
@@ -186,6 +209,7 @@ export function CustomerListUI({
 	const submitCreate = async () => {
 		if (!canCreate) return
 		await onAdd?.({
+			status: draft.status,
 			first_name: draft.firstName.trim(),
 			last_name: draft.lastName.trim(),
 			email: draft.email.trim() || null,
@@ -244,6 +268,31 @@ export function CustomerListUI({
 								title="Identité"
 								description="Ces champs identifient le client dans le fichier."
 							>
+								<div className="grid gap-4">
+									<div className="flex flex-col gap-2">
+										<Label htmlFor="customer-status">Statut CRM</Label>
+										<Select
+											value={draft.status}
+											onValueChange={(status) =>
+												setDraft((v) => ({
+													...v,
+													status: status as CustomerStatus,
+												}))
+											}
+										>
+											<SelectTrigger
+												id="customer-status"
+												className="w-full border-primary/25 bg-card shadow-sm hover:bg-brand-soft"
+											>
+												<SelectValue />
+											</SelectTrigger>
+											<SelectContent>
+												<SelectItem value="PROSPECT">Prospect</SelectItem>
+												<SelectItem value="CLIENT">Client</SelectItem>
+											</SelectContent>
+										</Select>
+									</div>
+								</div>
 								<div className="grid gap-4 sm:grid-cols-2">
 									<Field
 										label="Prénom"
@@ -312,14 +361,14 @@ export function CustomerListUI({
 						hint="Tous clients confondus"
 					/>
 					<MetricCard
-						label="Email renseigné"
-						value={counts.withEmail}
-						hint="Coordonnées exploitables"
+						label="Prospects"
+						value={counts.prospects}
+						hint="À qualifier"
 					/>
 					<MetricCard
-						label="Téléphone"
-						value={counts.withPhone}
-						hint="Contact direct"
+						label="Clients"
+						value={counts.clients}
+						hint="Relation active"
 					/>
 					<MetricCard
 						label="Ce mois-ci"
@@ -406,6 +455,9 @@ export function CustomerListUI({
 											<p className="truncate font-semibold">
 												{customerDisplayName(c)}
 											</p>
+											<StatusBadge tone={customerStatusTone(c.status)}>
+												{customerStatusLabel(c.status)}
+											</StatusBadge>
 											<StatusBadge tone="neutral">
 												{formatDate(c.created_at)}
 											</StatusBadge>
@@ -572,6 +624,7 @@ function customerMatchesSearch(customer: Customer, query: string): boolean {
 	const name = customerDisplayName(customer).toLowerCase()
 	return (
 		name.includes(query) ||
+		customerStatusLabel(customer.status).toLowerCase().includes(query) ||
 		(customer.email ?? '').toLowerCase().includes(query) ||
 		(customer.phone ?? '').toLowerCase().includes(query)
 	)
@@ -582,6 +635,10 @@ function customerMatchesContactFilter(
 	filter: string,
 ): boolean {
 	switch (filter) {
+		case 'prospects':
+			return customer.status === 'PROSPECT'
+		case 'clients':
+			return customer.status === 'CLIENT'
 		case 'with-email':
 			return Boolean(customer.email)
 		case 'with-phone':
@@ -591,6 +648,12 @@ function customerMatchesContactFilter(
 		default:
 			return true
 	}
+}
+
+function customerStatusTone(status: CustomerStatus) {
+	if (status === 'CLIENT') return 'success'
+	if (status === 'ARCHIVED') return 'neutral'
+	return 'warning'
 }
 
 function isCurrentMonth(value: string): boolean {

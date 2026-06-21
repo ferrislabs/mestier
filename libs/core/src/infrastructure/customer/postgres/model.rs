@@ -1,12 +1,16 @@
+use std::str::FromStr;
+
 use chrono::{DateTime, Utc};
+use common::CoreError;
 use uuid::Uuid;
 
-use crate::{Customer, CustomerId, OrganizationId};
+use crate::{Customer, CustomerId, CustomerStatus, OrganizationId};
 
 #[derive(Debug, Clone)]
 pub struct CustomerRow {
     pub id: Uuid,
     pub org_id: Uuid,
+    pub status: String,
     pub last_name: String,
     pub first_name: String,
     pub phone: Option<String>,
@@ -16,11 +20,18 @@ pub struct CustomerRow {
     pub updated_at: DateTime<Utc>,
 }
 
-impl From<CustomerRow> for Customer {
-    fn from(row: CustomerRow) -> Self {
-        Self {
+impl TryFrom<CustomerRow> for Customer {
+    type Error = CoreError;
+
+    fn try_from(row: CustomerRow) -> Result<Self, Self::Error> {
+        let status = CustomerStatus::from_str(&row.status).map_err(|e| {
+            CoreError::Internal(format!("invalid customer status in database: {e}"))
+        })?;
+
+        Ok(Self {
             id: CustomerId(row.id),
             organization_id: OrganizationId(row.org_id),
+            status,
             last_name: row.last_name,
             first_name: row.first_name,
             phone: row.phone,
@@ -28,6 +39,6 @@ impl From<CustomerRow> for Customer {
             deleted_at: row.deleted_at,
             created_at: row.created_at,
             updated_at: row.updated_at,
-        }
+        })
     }
 }

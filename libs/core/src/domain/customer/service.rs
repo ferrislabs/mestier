@@ -40,6 +40,7 @@ where
             .insert(&Customer {
                 id: CustomerId(generate_uuid_v7()),
                 organization_id: command.organization_id,
+                status: command.status,
                 last_name: command.last_name,
                 first_name: command.first_name,
                 phone: command.phone,
@@ -78,6 +79,7 @@ where
         )?;
 
         let mut customer = self.get_customer(command.id).await?;
+        customer.status = command.status;
         customer.last_name = command.last_name;
         customer.first_name = command.first_name;
         customer.phone = command.phone;
@@ -134,6 +136,7 @@ mod tests {
         Customer {
             id,
             organization_id: OrganizationId(Uuid::new_v4()),
+            status: crate::CustomerStatus::Prospect,
             last_name: "Dupont".to_owned(),
             first_name: "Alice".to_owned(),
             phone: Some("+33123456789".to_owned()),
@@ -156,6 +159,7 @@ mod tests {
         let created = service
             .create_customer(CreateCustomerCommand {
                 organization_id: OrganizationId(Uuid::new_v4()),
+                status: crate::CustomerStatus::Prospect,
                 last_name: "Dupont".to_owned(),
                 first_name: "Alice".to_owned(),
                 phone: None,
@@ -183,6 +187,7 @@ mod tests {
         let updated = service
             .update_customer(UpdateCustomerCommand {
                 id,
+                status: crate::CustomerStatus::Client,
                 last_name: "Martin".to_owned(),
                 first_name: "Alice".to_owned(),
                 phone: Some("0102030405".to_owned()),
@@ -192,6 +197,7 @@ mod tests {
             .unwrap();
 
         assert_eq!(updated.last_name, "Martin");
+        assert_eq!(updated.status, crate::CustomerStatus::Client);
         assert_eq!(updated.phone.as_deref(), Some("0102030405"));
     }
 
@@ -235,6 +241,7 @@ mod tests {
         let err = service
             .create_customer(CreateCustomerCommand {
                 organization_id: OrganizationId(Uuid::new_v4()),
+                status: crate::CustomerStatus::Prospect,
                 last_name: " ".to_owned(),
                 first_name: "Alice".to_owned(),
                 phone: None,

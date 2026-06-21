@@ -1,5 +1,13 @@
 export namespace Schemas {
 	// <Schemas>
+	export type CreateCustomerContactRequest = {
+		email?: (string | null) | undefined
+		first_name: string
+		is_primary: boolean
+		last_name: string
+		phone?: (string | null) | undefined
+		role?: (string | null) | undefined
+	}
 	export type CreateCustomerContextRequest = {
 		address_line?: (string | null) | undefined
 		city?: (string | null) | undefined
@@ -7,11 +15,13 @@ export namespace Schemas {
 		photo_key?: (string | null) | undefined
 		postal_code?: (string | null) | undefined
 	}
+	export type CustomerStatus = 'PROSPECT' | 'CLIENT' | 'ARCHIVED'
 	export type CreateCustomerRequest = {
 		email?: (string | null) | undefined
 		first_name: string
 		last_name: string
 		phone?: (string | null) | undefined
+		status: CustomerStatus
 	}
 	export type UserId = string
 	export type CreateEmployeeRequest = {
@@ -55,6 +65,19 @@ export namespace Schemas {
 		rate_cents: number
 		unit: ServiceRateUnit
 	}
+	export type CustomerContactId = string
+	export type CustomerContactResponse = {
+		created_at: string
+		customer_id: CustomerId
+		email?: (string | null) | undefined
+		first_name: string
+		id: CustomerContactId
+		is_primary: boolean
+		last_name: string
+		phone?: (string | null) | undefined
+		role?: (string | null) | undefined
+		updated_at: string
+	}
 	export type CustomerContextResponse = {
 		address_line?: (string | null) | undefined
 		city?: (string | null) | undefined
@@ -75,6 +98,7 @@ export namespace Schemas {
 		last_name: string
 		organization_id: OrganizationId
 		phone?: (string | null) | undefined
+		status: CustomerStatus
 		updated_at: string
 	}
 	export type EmployeeId = string
@@ -175,6 +199,14 @@ export namespace Schemas {
 		unit: ServiceRateUnit
 		updated_at: string
 	}
+	export type UpdateCustomerContactRequest = {
+		email?: (string | null) | undefined
+		first_name: string
+		is_primary: boolean
+		last_name: string
+		phone?: (string | null) | undefined
+		role?: (string | null) | undefined
+	}
 	export type UpdateCustomerContextRequest = {
 		address_line?: (string | null) | undefined
 		city?: (string | null) | undefined
@@ -187,6 +219,7 @@ export namespace Schemas {
 		first_name: string
 		last_name: string
 		phone?: (string | null) | undefined
+		status: CustomerStatus
 	}
 	export type UpdateEmployeeRequest = {
 		hourly_rate_cents: number
@@ -225,6 +258,75 @@ export namespace Schemas {
 export namespace Endpoints {
 	// <Endpoints>
 
+	export type get_GetCustomerContact = {
+		method: 'GET'
+		path: '/api/v1/customer-contacts/{customer_contact_id}'
+		requestFormat: 'json'
+		parameters: {
+			path: { customer_contact_id: string }
+		}
+		responses: {
+			200: {
+				data: {
+					created_at: string
+					customer_id: Schemas.CustomerId
+					email?: (string | null) | undefined
+					first_name: string
+					id: Schemas.CustomerContactId
+					is_primary: boolean
+					last_name: string
+					phone?: (string | null) | undefined
+					role?: (string | null) | undefined
+					updated_at: string
+				}
+				pagination?: (null | Schemas.PaginationMetadata) | undefined
+			}
+			401: unknown
+			403: unknown
+			404: unknown
+		}
+	}
+	export type delete_DeleteCustomerContact = {
+		method: 'DELETE'
+		path: '/api/v1/customer-contacts/{customer_contact_id}'
+		requestFormat: 'json'
+		parameters: {
+			path: { customer_contact_id: string }
+		}
+		responses: { 204: unknown; 401: unknown; 403: unknown; 404: unknown }
+	}
+	export type patch_UpdateCustomerContact = {
+		method: 'PATCH'
+		path: '/api/v1/customer-contacts/{customer_contact_id}'
+		requestFormat: 'json'
+		parameters: {
+			path: { customer_contact_id: string }
+
+			body: Schemas.UpdateCustomerContactRequest
+		}
+		responses: {
+			200: {
+				data: {
+					created_at: string
+					customer_id: Schemas.CustomerId
+					email?: (string | null) | undefined
+					first_name: string
+					id: Schemas.CustomerContactId
+					is_primary: boolean
+					last_name: string
+					phone?: (string | null) | undefined
+					role?: (string | null) | undefined
+					updated_at: string
+				}
+				pagination?: (null | Schemas.PaginationMetadata) | undefined
+			}
+			400: unknown
+			401: unknown
+			403: unknown
+			404: unknown
+			409: unknown
+		}
+	}
 	export type get_GetCustomerContext = {
 		method: 'GET'
 		path: '/api/v1/customer-contexts/{customer_context_id}'
@@ -309,6 +411,7 @@ export namespace Endpoints {
 					last_name: string
 					organization_id: Schemas.OrganizationId
 					phone?: (string | null) | undefined
+					status: Schemas.CustomerStatus
 					updated_at: string
 				}
 				pagination?: (null | Schemas.PaginationMetadata) | undefined
@@ -346,6 +449,68 @@ export namespace Endpoints {
 					last_name: string
 					organization_id: Schemas.OrganizationId
 					phone?: (string | null) | undefined
+					status: Schemas.CustomerStatus
+					updated_at: string
+				}
+				pagination?: (null | Schemas.PaginationMetadata) | undefined
+			}
+			400: unknown
+			401: unknown
+			403: unknown
+			404: unknown
+			409: unknown
+		}
+	}
+	export type get_ListCustomerContacts = {
+		method: 'GET'
+		path: '/api/v1/customers/{customer_id}/contacts'
+		requestFormat: 'json'
+		parameters: {
+			query: Partial<{ page: number; per_page: number }>
+			path: { customer_id: string }
+		}
+		responses: {
+			200: {
+				data: Array<{
+					created_at: string
+					customer_id: Schemas.CustomerId
+					email?: (string | null) | undefined
+					first_name: string
+					id: Schemas.CustomerContactId
+					is_primary: boolean
+					last_name: string
+					phone?: (string | null) | undefined
+					role?: (string | null) | undefined
+					updated_at: string
+				}>
+				pagination?: (null | Schemas.PaginationMetadata) | undefined
+			}
+			401: unknown
+			403: unknown
+			404: unknown
+		}
+	}
+	export type post_CreateCustomerContact = {
+		method: 'POST'
+		path: '/api/v1/customers/{customer_id}/contacts'
+		requestFormat: 'json'
+		parameters: {
+			path: { customer_id: string }
+
+			body: Schemas.CreateCustomerContactRequest
+		}
+		responses: {
+			201: {
+				data: {
+					created_at: string
+					customer_id: Schemas.CustomerId
+					email?: (string | null) | undefined
+					first_name: string
+					id: Schemas.CustomerContactId
+					is_primary: boolean
+					last_name: string
+					phone?: (string | null) | undefined
+					role?: (string | null) | undefined
 					updated_at: string
 				}
 				pagination?: (null | Schemas.PaginationMetadata) | undefined
@@ -683,6 +848,7 @@ export namespace Endpoints {
 					last_name: string
 					organization_id: Schemas.OrganizationId
 					phone?: (string | null) | undefined
+					status: Schemas.CustomerStatus
 					updated_at: string
 				}>
 				pagination?: (null | Schemas.PaginationMetadata) | undefined
@@ -710,6 +876,7 @@ export namespace Endpoints {
 					last_name: string
 					organization_id: Schemas.OrganizationId
 					phone?: (string | null) | undefined
+					status: Schemas.CustomerStatus
 					updated_at: string
 				}
 				pagination?: (null | Schemas.PaginationMetadata) | undefined
@@ -1264,8 +1431,10 @@ export namespace Endpoints {
 // <EndpointByMethod>
 export type EndpointByMethod = {
 	get: {
+		'/api/v1/customer-contacts/{customer_contact_id}': Endpoints.get_GetCustomerContact
 		'/api/v1/customer-contexts/{customer_context_id}': Endpoints.get_GetCustomerContext
 		'/api/v1/customers/{customer_id}': Endpoints.get_GetCustomer
+		'/api/v1/customers/{customer_id}/contacts': Endpoints.get_ListCustomerContacts
 		'/api/v1/customers/{customer_id}/customer-contexts': Endpoints.get_ListCustomerContexts
 		'/api/v1/employees/{employee_id}': Endpoints.get_GetEmployee
 		'/api/v1/equipment/{equipment_id}': Endpoints.get_GetEquipment
@@ -1284,6 +1453,7 @@ export type EndpointByMethod = {
 		'/api/v1/users/@me/organizations': Endpoints.get_ListMyOrganizations
 	}
 	delete: {
+		'/api/v1/customer-contacts/{customer_contact_id}': Endpoints.delete_DeleteCustomerContact
 		'/api/v1/customer-contexts/{customer_context_id}': Endpoints.delete_DeleteCustomerContext
 		'/api/v1/customers/{customer_id}': Endpoints.delete_DeleteCustomer
 		'/api/v1/employees/{employee_id}': Endpoints.delete_DeleteEmployee
@@ -1294,6 +1464,7 @@ export type EndpointByMethod = {
 		'/api/v1/service-rates/{service_rate_id}': Endpoints.delete_DeleteServiceRate
 	}
 	patch: {
+		'/api/v1/customer-contacts/{customer_contact_id}': Endpoints.patch_UpdateCustomerContact
 		'/api/v1/customer-contexts/{customer_context_id}': Endpoints.patch_UpdateCustomerContext
 		'/api/v1/customers/{customer_id}': Endpoints.patch_UpdateCustomer
 		'/api/v1/employees/{employee_id}': Endpoints.patch_UpdateEmployee
@@ -1305,6 +1476,7 @@ export type EndpointByMethod = {
 		'/api/v1/service-rates/{service_rate_id}': Endpoints.patch_UpdateServiceRate
 	}
 	post: {
+		'/api/v1/customers/{customer_id}/contacts': Endpoints.post_CreateCustomerContact
 		'/api/v1/customers/{customer_id}/customer-contexts': Endpoints.post_CreateCustomerContext
 		'/api/v1/files': Endpoints.post_UploadFile
 		'/api/v1/organizations': Endpoints.post_CreateOrganization

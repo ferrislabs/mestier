@@ -5,21 +5,29 @@ import { useEffect, useRef, useState } from 'react'
 import { Button } from '#/components/ui/button'
 import {
 	type Customer,
+	type CustomerContact,
 	type CustomerContext,
+	useCreateCustomerContact,
 	useCreateCustomerContext,
 	useCustomer,
+	useCustomerContacts,
 	useCustomerContexts,
+	useDeleteCustomerContact,
 	useDeleteCustomerContext,
 	useUpdateCustomer,
+	useUpdateCustomerContact,
 	useUpdateCustomerContext,
 	useUploadFile,
 } from '#/hooks/use-customers'
 import { useDirtyBaseline } from '#/hooks/use-dirty'
 import {
+	type CustomerContactFormValues,
 	type CustomerContextFormValues,
 	type CustomerFormValues,
+	customerContactToForm,
 	customerContextToForm,
 	customerToForm,
+	EMPTY_CUSTOMER_CONTACT_FORM,
 	EMPTY_CUSTOMER_CONTEXT_FORM,
 } from '#/pages/customers/types'
 import { CustomerEditUI } from '#/pages/customers/ui/customer-edit-ui'
@@ -30,6 +38,7 @@ interface CustomerEditFeatureProps {
 
 export function CustomerEditFeature({ customerId }: CustomerEditFeatureProps) {
 	const customer = useCustomer(customerId)
+	const customerContacts = useCustomerContacts(customerId)
 	const customerContexts = useCustomerContexts(customerId)
 
 	if (customer.isLoading) {
@@ -77,9 +86,13 @@ export function CustomerEditFeature({ customerId }: CustomerEditFeatureProps) {
 	return (
 		<CustomerEditInner
 			customer={customer.data.data}
+			customerContacts={customerContacts.data?.data ?? []}
+			customerContactsError={customerContacts.error?.message ?? null}
 			customerContexts={customerContexts.data?.data ?? []}
 			customerContextsError={customerContexts.error?.message ?? null}
+			isCustomerContactsLoading={customerContacts.isLoading}
 			isCustomerContextsLoading={customerContexts.isLoading}
+			refetchCustomerContacts={() => void customerContacts.refetch()}
 			refetchCustomerContexts={() => void customerContexts.refetch()}
 		/>
 	)
@@ -87,25 +100,41 @@ export function CustomerEditFeature({ customerId }: CustomerEditFeatureProps) {
 
 interface CustomerEditInnerProps {
 	customer: Customer
+	customerContacts: CustomerContact[]
+	customerContactsError: string | null
 	customerContexts: CustomerContext[]
 	customerContextsError: string | null
+	isCustomerContactsLoading: boolean
 	isCustomerContextsLoading: boolean
+	refetchCustomerContacts: () => void
 	refetchCustomerContexts: () => void
 }
 
 function CustomerEditInner({
 	customer,
+	customerContacts,
+	customerContactsError,
 	customerContexts,
 	customerContextsError,
+	isCustomerContactsLoading,
 	isCustomerContextsLoading,
+	refetchCustomerContacts,
 	refetchCustomerContexts,
 }: CustomerEditInnerProps) {
 	const updateCustomer = useUpdateCustomer()
+	const createCustomerContact = useCreateCustomerContact()
+	const updateCustomerContact = useUpdateCustomerContact()
+	const deleteCustomerContact = useDeleteCustomerContact(customer.id)
 	const createCustomerContext = useCreateCustomerContext()
 	const updateCustomerContext = useUpdateCustomerContext()
 	const deleteCustomerContext = useDeleteCustomerContext(customer.id)
 	const uploadFile = useUploadFile()
 	const commitRef = useRef<(v: CustomerFormValues) => void>(() => {})
+	const [customerContactDraft, setCustomerContactDraft] =
+		useState<CustomerContactFormValues>(EMPTY_CUSTOMER_CONTACT_FORM)
+	const [editingCustomerContactId, setEditingCustomerContactId] = useState<
+		string | null
+	>(null)
 	const [customerContextDraft, setCustomerContextDraft] =
 		useState<CustomerContextFormValues>(EMPTY_CUSTOMER_CONTEXT_FORM)
 	const [editingCustomerContextId, setEditingCustomerContextId] = useState<
@@ -119,6 +148,7 @@ function CustomerEditInner({
 			await updateCustomer.mutateAsync({
 				path: { customer_id: customer.id },
 				body: {
+					status: value.status,
 					first_name: value.firstName.trim(),
 					last_name: value.lastName.trim(),
 					email: value.email.trim() || null,
@@ -135,11 +165,43 @@ function CustomerEditInner({
 		}
 	}, [photoPreviewUrl])
 
+	const resetCustomerContactDraft = () => {
+		setEditingCustomerContactId(null)
+		setCustomerContactDraft(EMPTY_CUSTOMER_CONTACT_FORM)
+	}
+
 	const resetCustomerContextDraft = () => {
 		setEditingCustomerContextId(null)
 		setCustomerContextDraft(EMPTY_CUSTOMER_CONTEXT_FORM)
 		if (photoPreviewUrl) URL.revokeObjectURL(photoPreviewUrl)
 		setPhotoPreviewUrl(null)
+	}
+
+	const handleCustomerContactSubmit = async () => {
+		const body = {
+			first_name: customerContactDraft.firstName.trim(),
+			last_name: customerContactDraft.lastName.trim(),
+			role: customerContactDraft.role.trim() || null,
+			email: customerContactDraft.email.trim() || null,
+			phone: customerContactDraft.phone.trim() || null,
+			is_primary: customerContactDraft.isPrimary,
+		}
+
+		if (!body.first_name || !body.last_name) return
+
+		if (editingCustomerContactId) {
+			await updateCustomerContact.mutateAsync({
+				path: { customer_contact_id: editingCustomerContactId },
+				body,
+			})
+		} else {
+			await createCustomerContact.mutateAsync({
+				path: { customer_id: customer.id },
+				body,
+			})
+		}
+
+		resetCustomerContactDraft()
 	}
 
 	const handleCustomerContextSubmit = async () => {
@@ -186,6 +248,14 @@ function CustomerEditInner({
 				<CustomerEditForm
 					customer={customer}
 					values={values}
+					customerContacts={customerContacts}
+					customerContactsError={
+						customerContactsError ??
+						createCustomerContact.error?.message ??
+						updateCustomerContact.error?.message ??
+						deleteCustomerContact.error?.message ??
+						null
+					}
 					customerContexts={customerContexts}
 					customerContextsError={
 						customerContextsError ??
@@ -196,13 +266,25 @@ function CustomerEditInner({
 						null
 					}
 					isSubmitting={isSubmitting || updateCustomer.isPending}
+					isCustomerContactsLoading={isCustomerContactsLoading}
 					isCustomerContextsLoading={isCustomerContextsLoading}
+					customerContactDraft={customerContactDraft}
+					editingCustomerContactId={editingCustomerContactId}
+					isCustomerContactSaving={
+						createCustomerContact.isPending || updateCustomerContact.isPending
+					}
 					customerContextDraft={customerContextDraft}
 					editingCustomerContextId={editingCustomerContextId}
 					isCustomerContextSaving={
 						createCustomerContext.isPending || updateCustomerContext.isPending
 					}
 					isUploadingPhoto={uploadFile.isPending}
+					deletingCustomerContactId={
+						deleteCustomerContact.variables?.path.customer_contact_id &&
+						deleteCustomerContact.isPending
+							? deleteCustomerContact.variables.path.customer_contact_id
+							: null
+					}
 					deletingCustomerContextId={
 						deleteCustomerContext.variables?.path.customer_context_id &&
 						deleteCustomerContext.isPending
@@ -212,6 +294,45 @@ function CustomerEditInner({
 					photoPreviewUrl={photoPreviewUrl}
 					form={form}
 					commitRef={commitRef}
+					onPromoteToClient={() => {
+						const promotedValues = {
+							...values,
+							status: 'CLIENT' as CustomerFormValues['status'],
+						}
+
+						updateCustomer.mutate(
+							{
+								path: { customer_id: customer.id },
+								body: {
+									status: promotedValues.status,
+									first_name: promotedValues.firstName.trim(),
+									last_name: promotedValues.lastName.trim(),
+									email: promotedValues.email.trim() || null,
+									phone: promotedValues.phone.trim() || null,
+								},
+							},
+							{
+								onSuccess: () => {
+									form.setFieldValue('status', promotedValues.status)
+									commitRef.current(promotedValues)
+								},
+							},
+						)
+					}}
+					onCustomerContactChange={(patch) =>
+						setCustomerContactDraft((current) => ({ ...current, ...patch }))
+					}
+					onCustomerContactEdit={(customerContact) => {
+						setEditingCustomerContactId(customerContact.id)
+						setCustomerContactDraft(customerContactToForm(customerContact))
+					}}
+					onCustomerContactCancel={resetCustomerContactDraft}
+					onCustomerContactSubmit={() => void handleCustomerContactSubmit()}
+					onCustomerContactDelete={(customerContact) =>
+						deleteCustomerContact.mutate({
+							path: { customer_contact_id: customerContact.id },
+						})
+					}
 					onCustomerContextChange={(patch) =>
 						setCustomerContextDraft((current) => ({ ...current, ...patch }))
 					}
@@ -229,6 +350,7 @@ function CustomerEditInner({
 						})
 					}
 					onCustomerContextPhotoChange={(file) => void handlePhotoChange(file)}
+					onRetryCustomerContacts={refetchCustomerContacts}
 					onRetryCustomerContexts={refetchCustomerContexts}
 				/>
 			)}
@@ -239,48 +361,76 @@ function CustomerEditInner({
 interface CustomerEditFormProps {
 	customer: Customer
 	values: CustomerFormValues
+	customerContacts: CustomerContact[]
+	customerContactsError: string | null
 	customerContexts: CustomerContext[]
 	customerContextsError: string | null
 	isSubmitting: boolean
+	isCustomerContactsLoading: boolean
 	isCustomerContextsLoading: boolean
+	customerContactDraft: CustomerContactFormValues
+	editingCustomerContactId: string | null
+	isCustomerContactSaving: boolean
 	customerContextDraft: CustomerContextFormValues
 	editingCustomerContextId: string | null
 	isCustomerContextSaving: boolean
 	isUploadingPhoto: boolean
+	deletingCustomerContactId: string | null
 	deletingCustomerContextId: string | null
 	photoPreviewUrl: string | null
 	form: AnyFormApi
 	commitRef: React.MutableRefObject<(v: CustomerFormValues) => void>
+	onCustomerContactChange: (patch: Partial<CustomerContactFormValues>) => void
+	onCustomerContactEdit: (customerContact: CustomerContact) => void
+	onCustomerContactCancel: () => void
+	onCustomerContactSubmit: () => void
+	onCustomerContactDelete: (customerContact: CustomerContact) => void
+	onPromoteToClient: () => void
 	onCustomerContextChange: (patch: Partial<CustomerContextFormValues>) => void
 	onCustomerContextEdit: (customerContext: CustomerContext) => void
 	onCustomerContextCancel: () => void
 	onCustomerContextSubmit: () => void
 	onCustomerContextDelete: (customerContext: CustomerContext) => void
 	onCustomerContextPhotoChange: (file: File) => void
+	onRetryCustomerContacts: () => void
 	onRetryCustomerContexts: () => void
 }
 
 function CustomerEditForm({
 	customer,
 	values,
+	customerContacts,
+	customerContactsError,
 	customerContexts,
 	customerContextsError,
 	isSubmitting,
+	isCustomerContactsLoading,
 	isCustomerContextsLoading,
+	customerContactDraft,
+	editingCustomerContactId,
+	isCustomerContactSaving,
 	customerContextDraft,
 	editingCustomerContextId,
 	isCustomerContextSaving,
 	isUploadingPhoto,
+	deletingCustomerContactId,
 	deletingCustomerContextId,
 	photoPreviewUrl,
 	form,
 	commitRef,
+	onCustomerContactChange,
+	onCustomerContactEdit,
+	onCustomerContactCancel,
+	onCustomerContactSubmit,
+	onCustomerContactDelete,
+	onPromoteToClient,
 	onCustomerContextChange,
 	onCustomerContextEdit,
 	onCustomerContextCancel,
 	onCustomerContextSubmit,
 	onCustomerContextDelete,
 	onCustomerContextPhotoChange,
+	onRetryCustomerContacts,
 	onRetryCustomerContexts,
 }: CustomerEditFormProps) {
 	const baseline = customerToForm(customer)
@@ -300,6 +450,13 @@ function CustomerEditForm({
 			isDirty={isDirty}
 			changedKeys={changedKeys}
 			isSaving={isSubmitting}
+			customerContacts={customerContacts}
+			customerContactsError={customerContactsError}
+			isCustomerContactsLoading={isCustomerContactsLoading}
+			customerContactDraft={customerContactDraft}
+			editingCustomerContactId={editingCustomerContactId}
+			isCustomerContactSaving={isCustomerContactSaving}
+			deletingCustomerContactId={deletingCustomerContactId}
 			customerContexts={customerContexts}
 			customerContextsError={customerContextsError}
 			isCustomerContextsLoading={isCustomerContextsLoading}
@@ -319,12 +476,19 @@ function CustomerEditForm({
 				resetBaseline()
 			}}
 			onSave={() => form.handleSubmit()}
+			onPromoteToClient={onPromoteToClient}
+			onCustomerContactChange={onCustomerContactChange}
+			onCustomerContactEdit={onCustomerContactEdit}
+			onCustomerContactCancel={onCustomerContactCancel}
+			onCustomerContactSubmit={onCustomerContactSubmit}
+			onCustomerContactDelete={onCustomerContactDelete}
 			onCustomerContextChange={onCustomerContextChange}
 			onCustomerContextEdit={onCustomerContextEdit}
 			onCustomerContextCancel={onCustomerContextCancel}
 			onCustomerContextSubmit={onCustomerContextSubmit}
 			onCustomerContextDelete={onCustomerContextDelete}
 			onCustomerContextPhotoChange={onCustomerContextPhotoChange}
+			onRetryCustomerContacts={onRetryCustomerContacts}
 			onRetryCustomerContexts={onRetryCustomerContexts}
 		/>
 	)
