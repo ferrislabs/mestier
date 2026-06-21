@@ -5,11 +5,31 @@ const EMPLOYEES_PATH = '/api/v1/organizations/{organization_id}/employees'
 const EQUIPMENT_PATH = '/api/v1/organizations/{organization_id}/equipment'
 const SERVICE_RATES_PATH =
 	'/api/v1/organizations/{organization_id}/service-rates'
+const PRODUCTS_PATH = '/api/v1/organizations/{organization_id}/products'
 
 type ReferenceListPath =
 	| typeof EMPLOYEES_PATH
 	| typeof EQUIPMENT_PATH
 	| typeof SERVICE_RATES_PATH
+	| typeof PRODUCTS_PATH
+
+interface ReferenceCatalogOptions {
+	employees?: boolean
+	equipment?: boolean
+	serviceRates?: boolean
+	products?: boolean
+}
+
+interface QueryKeyMeta {
+	_id?: unknown
+}
+
+function queryKeyMeta(queryKey: readonly unknown[]) {
+	const meta = queryKey[0]
+	return typeof meta === 'object' && meta !== null
+		? (meta as QueryKeyMeta)
+		: null
+}
 
 function referenceListParams(organizationId: string) {
 	return {
@@ -23,24 +43,41 @@ function invalidateReferenceList(
 	path: ReferenceListPath,
 ) {
 	return queryClient.invalidateQueries({
-		predicate: (query) => query.queryKey[0]?._id === path,
+		predicate: (query) => queryKeyMeta(query.queryKey)?._id === path,
 	})
 }
 
-export function useReferenceCatalog(organizationId: string) {
+function isReferenceEnabled(
+	options: ReferenceCatalogOptions,
+	key: keyof ReferenceCatalogOptions,
+) {
+	return options[key] ?? true
+}
+
+export function useReferenceCatalog(
+	organizationId: string,
+	options: ReferenceCatalogOptions = {},
+) {
 	const params = referenceListParams(organizationId)
 
-	const employees = useQuery(
-		window.tanstackApi.get(EMPLOYEES_PATH, params).queryOptions,
-	)
-	const equipment = useQuery(
-		window.tanstackApi.get(EQUIPMENT_PATH, params).queryOptions,
-	)
-	const serviceRates = useQuery(
-		window.tanstackApi.get(SERVICE_RATES_PATH, params).queryOptions,
-	)
+	const employees = useQuery({
+		...window.tanstackApi.get(EMPLOYEES_PATH, params).queryOptions,
+		enabled: isReferenceEnabled(options, 'employees'),
+	})
+	const equipment = useQuery({
+		...window.tanstackApi.get(EQUIPMENT_PATH, params).queryOptions,
+		enabled: isReferenceEnabled(options, 'equipment'),
+	})
+	const serviceRates = useQuery({
+		...window.tanstackApi.get(SERVICE_RATES_PATH, params).queryOptions,
+		enabled: isReferenceEnabled(options, 'serviceRates'),
+	})
+	const products = useQuery({
+		...window.tanstackApi.get(PRODUCTS_PATH, params).queryOptions,
+		enabled: isReferenceEnabled(options, 'products'),
+	})
 
-	return { employees, equipment, serviceRates }
+	return { employees, equipment, serviceRates, products }
 }
 
 export function useCreateEmployee(organizationId: string) {
@@ -140,7 +177,38 @@ export function useDeleteServiceRate() {
 	})
 }
 
+export function useCreateProduct(organizationId: string) {
+	const queryClient = useQueryClient()
+
+	return useMutation({
+		...window.tanstackApi.mutation('post', PRODUCTS_PATH).mutationOptions,
+		onSuccess: () => invalidateReferenceList(queryClient, PRODUCTS_PATH),
+		meta: { organizationId },
+	})
+}
+
+export function useUpdateProduct() {
+	const queryClient = useQueryClient()
+
+	return useMutation({
+		...window.tanstackApi.mutation('patch', '/api/v1/products/{product_id}')
+			.mutationOptions,
+		onSuccess: () => invalidateReferenceList(queryClient, PRODUCTS_PATH),
+	})
+}
+
+export function useDeleteProduct() {
+	const queryClient = useQueryClient()
+
+	return useMutation({
+		...window.tanstackApi.mutation('delete', '/api/v1/products/{product_id}')
+			.mutationOptions,
+		onSuccess: () => invalidateReferenceList(queryClient, PRODUCTS_PATH),
+	})
+}
+
 export type Employee = Schemas.EmployeeResponse
 export type Equipment = Schemas.EquipmentResponse
+export type Product = Schemas.ProductResponse
 export type ServiceRate = Schemas.ServiceRateResponse
 export type ServiceRateUnit = Schemas.ServiceRateUnit

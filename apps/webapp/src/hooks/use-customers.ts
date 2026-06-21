@@ -12,6 +12,31 @@ interface CustomerListParams {
 	perPage: number
 }
 
+interface QueryKeyMeta {
+	_id?: unknown
+	path?: {
+		organization_id?: unknown
+	}
+}
+
+function queryKeyMeta(queryKey: readonly unknown[]) {
+	const meta = queryKey[0]
+	return typeof meta === 'object' && meta !== null
+		? (meta as QueryKeyMeta)
+		: null
+}
+
+function isCustomerListQuery(
+	queryKey: readonly unknown[],
+	organizationId?: string,
+) {
+	const meta = queryKeyMeta(queryKey)
+	return (
+		meta?._id === CUSTOMERS_PATH &&
+		(!organizationId || meta.path?.organization_id === organizationId)
+	)
+}
+
 function listParams(organizationId: string, params: CustomerListParams) {
 	return {
 		path: { organization_id: organizationId },
@@ -82,8 +107,7 @@ export function useCreateCustomer(organizationId: string) {
 		onSuccess: async () => {
 			await queryClient.invalidateQueries({
 				predicate: (query) =>
-					query.queryKey[0]?._id === CUSTOMERS_PATH &&
-					query.queryKey[0]?.path?.organization_id === organizationId,
+					isCustomerListQuery(query.queryKey, organizationId),
 			})
 		},
 		meta: { organizationId },
@@ -95,13 +119,12 @@ export function useUpdateCustomer() {
 
 	return useMutation({
 		...window.tanstackApi.mutation('patch', CUSTOMER_PATH).mutationOptions,
-		onSuccess: async (customer) => {
+		onSuccess: async (response) => {
+			const customer = response.data
 			await Promise.all([
 				queryClient.invalidateQueries({
 					predicate: (query) =>
-						query.queryKey[0]?._id === CUSTOMERS_PATH &&
-						query.queryKey[0]?.path?.organization_id ===
-							customer.organization_id,
+						isCustomerListQuery(query.queryKey, customer.organization_id),
 				}),
 				queryClient.invalidateQueries({
 					queryKey: customerKey(customer.id),
@@ -120,8 +143,7 @@ export function useDeleteCustomer(organizationId: string) {
 			await Promise.all([
 				queryClient.invalidateQueries({
 					predicate: (query) =>
-						query.queryKey[0]?._id === CUSTOMERS_PATH &&
-						query.queryKey[0]?.path?.organization_id === organizationId,
+						isCustomerListQuery(query.queryKey, organizationId),
 				}),
 				queryClient.invalidateQueries({
 					queryKey: customerKey(variables.path.customer_id),
@@ -137,7 +159,8 @@ export function useCreateCustomerContext() {
 	return useMutation({
 		...window.tanstackApi.mutation('post', CUSTOMER_CONTEXTS_PATH)
 			.mutationOptions,
-		onSuccess: async (customerContext) => {
+		onSuccess: async (response) => {
+			const customerContext = response.data
 			await queryClient.invalidateQueries({
 				queryKey: customerContextsKey(customerContext.customer_id),
 			})
@@ -151,7 +174,8 @@ export function useUpdateCustomerContext() {
 	return useMutation({
 		...window.tanstackApi.mutation('patch', CUSTOMER_CONTEXT_PATH)
 			.mutationOptions,
-		onSuccess: async (customerContext) => {
+		onSuccess: async (response) => {
+			const customerContext = response.data
 			await Promise.all([
 				queryClient.invalidateQueries({
 					queryKey: customerContextsKey(customerContext.customer_id),

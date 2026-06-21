@@ -7,6 +7,7 @@ use mestier_core::OrganizationId;
 pub mod employee;
 pub mod equipment;
 pub mod paths;
+pub mod product;
 pub mod response;
 pub mod service_rate;
 
@@ -54,6 +55,11 @@ pub fn router(state: &AppState) -> Router<AppState> {
         .typed_get(service_rate::get_one::handler)
         .typed_patch(service_rate::update::handler)
         .typed_delete(service_rate::soft_delete::handler)
+        .typed_get(product::list::handler)
+        .typed_post(product::create::handler)
+        .typed_get(product::get_one::handler)
+        .typed_patch(product::update::handler)
+        .typed_delete(product::soft_delete::handler)
         .layer(from_fn_with_state(state.clone(), rate_limit_middleware))
         .layer(from_fn_with_state(state.clone(), auth_middleware))
 }

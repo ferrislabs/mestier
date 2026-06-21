@@ -6,6 +6,7 @@ pub mod file_storage;
 pub mod member;
 pub mod organization;
 pub mod postgres;
+pub mod product;
 pub mod quote;
 pub mod registry;
 pub mod role;

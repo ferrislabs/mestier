@@ -4,16 +4,16 @@ import type { Schemas } from '#/api/api.client'
 const QUOTES_PATH = '/api/v1/organizations/{organization_id}/quotes'
 const QUOTE_PATH = '/api/v1/quotes/{quote_id}'
 
-function listParams(organizationId: string) {
-	return {
-		path: { organization_id: organizationId },
-		query: { page: 1, per_page: 100 },
-	}
+interface QuoteListParams {
+	page: number
+	perPage: number
 }
 
-function quotesKey(organizationId: string) {
-	return window.tanstackApi.get(QUOTES_PATH, listParams(organizationId))
-		.queryKey
+function listParams(organizationId: string, params: QuoteListParams) {
+	return {
+		path: { organization_id: organizationId },
+		query: { page: params.page, per_page: params.perPage },
+	}
 }
 
 function quoteKey(quoteId: string) {
@@ -22,9 +22,12 @@ function quoteKey(quoteId: string) {
 	}).queryKey
 }
 
-export function useQuotes(organizationId: string) {
+export function useQuotes(
+	organizationId: string,
+	params: QuoteListParams = { page: 1, perPage: 100 },
+) {
 	return useQuery(
-		window.tanstackApi.get(QUOTES_PATH, listParams(organizationId))
+		window.tanstackApi.get(QUOTES_PATH, listParams(organizationId, params))
 			.queryOptions,
 	)
 }
@@ -37,10 +40,19 @@ export function useCreateQuote(organizationId: string) {
 		onSuccess: async (quote) => {
 			await Promise.all([
 				queryClient.invalidateQueries({
-					queryKey: quotesKey(organizationId),
+					predicate: (query) => {
+						const queryKey = query.queryKey[0] as
+							| { _id?: string; path?: { organization_id?: string } }
+							| undefined
+
+						return (
+							queryKey?._id === QUOTES_PATH &&
+							queryKey.path?.organization_id === organizationId
+						)
+					},
 				}),
 				queryClient.invalidateQueries({
-					queryKey: quoteKey(quote.id),
+					queryKey: quoteKey(quote.data.id),
 				}),
 			])
 		},
@@ -52,3 +64,4 @@ export type Quote = Schemas.QuoteResponse
 export type QuotePayload = Schemas.CreateQuoteRequest
 export type QuoteLinePayload = Schemas.QuoteLineRequest
 export type QuoteStatus = Schemas.QuoteStatus
+export type PaginationMetadata = Schemas.PaginationMetadata

@@ -42,11 +42,11 @@ export interface DataViewUrlState {
 }
 
 export interface DataViewPaginationMetadata {
-	per_page: number
-	current_page: number
-	first_page: number
-	is_empty: boolean
-	total: number
+	per_page?: number | null
+	current_page?: number | null
+	first_page?: number | null
+	is_empty?: boolean | null
+	total?: number | null
 	last_page?: number | null
 }
 
@@ -465,20 +465,18 @@ export function getPaginationViewModel(
 		}
 	}
 
+	const page = pagination.current_page ?? requestedPage
+	const pageSize = pagination.per_page ?? requestedPageSize
+	const totalCount = pagination.total ?? rowCount
+	const isEmpty = pagination.is_empty ?? rowCount === 0
+
 	return {
-		page: pagination.current_page,
-		pageCount: pagination.last_page ?? Math.max(pagination.current_page, 1),
-		pageSize: pagination.per_page,
-		from: pagination.is_empty
-			? 0
-			: (pagination.current_page - 1) * pagination.per_page + 1,
-		to: pagination.is_empty
-			? 0
-			: Math.min(
-					(pagination.current_page - 1) * pagination.per_page + rowCount,
-					pagination.total,
-				),
-		totalCount: pagination.total,
+		page,
+		pageCount: pagination.last_page ?? Math.max(page, 1),
+		pageSize,
+		from: isEmpty ? 0 : (page - 1) * pageSize + 1,
+		to: isEmpty ? 0 : Math.min((page - 1) * pageSize + rowCount, totalCount),
+		totalCount,
 	}
 }
 

@@ -1,7 +1,7 @@
 use chrono::{DateTime, Utc};
 use mestier_core::{
-    Employee, EmployeeId, Equipment, EquipmentId, OrganizationId, ServiceRate, ServiceRateId,
-    ServiceRateUnit, UserId,
+    Employee, EmployeeId, Equipment, EquipmentId, OrganizationId, Product, ProductId, ServiceRate,
+    ServiceRateId, ServiceRateUnit, UserId,
 };
 use serde::Serialize;
 use utoipa::ToSchema;
@@ -73,6 +73,35 @@ impl From<ServiceRate> for ServiceRateResponse {
             label: value.label,
             unit: value.unit,
             rate_cents: value.rate_cents,
+            created_at: value.created_at,
+            updated_at: value.updated_at,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, ToSchema)]
+pub struct ProductResponse {
+    pub id: ProductId,
+    pub organization_id: OrganizationId,
+    pub name: String,
+    pub sku: Option<String>,
+    pub unit: ServiceRateUnit,
+    pub unit_price_cents: i32,
+    pub description: Option<String>,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+}
+
+impl From<Product> for ProductResponse {
+    fn from(value: Product) -> Self {
+        Self {
+            id: value.id,
+            organization_id: value.organization_id,
+            name: value.name,
+            sku: value.sku,
+            unit: value.unit,
+            unit_price_cents: value.unit_price_cents,
+            description: value.description,
             created_at: value.created_at,
             updated_at: value.updated_at,
         }

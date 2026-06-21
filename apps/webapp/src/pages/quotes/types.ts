@@ -6,6 +6,8 @@ import type {
 
 export interface QuoteLineFormValues {
 	clientId: string
+	catalogItemId: string
+	catalogItemType: 'SERVICE' | 'PRODUCT' | 'CUSTOM'
 	serviceRateId: string
 	label: string
 	quantity: string
@@ -24,6 +26,8 @@ export interface QuoteFormValues {
 export function emptyQuoteLine(clientId = 'line-1'): QuoteLineFormValues {
 	return {
 		clientId,
+		catalogItemId: '',
+		catalogItemType: 'CUSTOM',
 		serviceRateId: '',
 		label: '',
 		quantity: '1',

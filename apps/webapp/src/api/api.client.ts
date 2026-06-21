@@ -24,10 +24,17 @@ export namespace Schemas {
 		name: string
 	}
 	export type CreateOrganizationRequest = { name: string; slug: string }
+	export type ServiceRateUnit = 'HOUR' | 'ML' | 'M2'
+	export type CreateProductRequest = {
+		description?: (string | null) | undefined
+		name: string
+		sku?: (string | null) | undefined
+		unit: ServiceRateUnit
+		unit_price_cents: number
+	}
 	export type CustomerContextId = string
 	export type CustomerId = string
 	export type ServiceRateId = string
-	export type ServiceRateUnit = 'HOUR' | 'ML' | 'M2'
 	export type QuoteLineRequest = {
 		label: string
 		notes?: (string | null) | undefined
@@ -111,6 +118,18 @@ export namespace Schemas {
 		prev_page?: (number | null) | undefined
 		total?: (number | null) | undefined
 	}
+	export type ProductId = string
+	export type ProductResponse = {
+		created_at: string
+		description?: (string | null) | undefined
+		id: ProductId
+		name: string
+		organization_id: OrganizationId
+		sku?: (string | null) | undefined
+		unit: ServiceRateUnit
+		unit_price_cents: number
+		updated_at: string
+	}
 	export type QuoteId = string
 	export type QuoteLineId = string
 	export type QuoteLineResponse = {
@@ -176,6 +195,13 @@ export namespace Schemas {
 		name: string
 	}
 	export type UpdateOrganizationRequest = { name: string; slug: string }
+	export type UpdateProductRequest = {
+		description?: (string | null) | undefined
+		name: string
+		sku?: (string | null) | undefined
+		unit: ServiceRateUnit
+		unit_price_cents: number
+	}
 	export type UpdateQuoteRequest = {
 		customer_context_id: CustomerContextId
 		customer_id: CustomerId
@@ -794,6 +820,63 @@ export namespace Endpoints {
 			409: unknown
 		}
 	}
+	export type get_ListProducts = {
+		method: 'GET'
+		path: '/api/v1/organizations/{organization_id}/products'
+		requestFormat: 'json'
+		parameters: {
+			query: Partial<{ page: number; per_page: number }>
+			path: { organization_id: string }
+		}
+		responses: {
+			200: {
+				data: Array<{
+					created_at: string
+					description?: (string | null) | undefined
+					id: Schemas.ProductId
+					name: string
+					organization_id: Schemas.OrganizationId
+					sku?: (string | null) | undefined
+					unit: Schemas.ServiceRateUnit
+					unit_price_cents: number
+					updated_at: string
+				}>
+				pagination?: (null | Schemas.PaginationMetadata) | undefined
+			}
+			401: unknown
+			403: unknown
+		}
+	}
+	export type post_CreateProduct = {
+		method: 'POST'
+		path: '/api/v1/organizations/{organization_id}/products'
+		requestFormat: 'json'
+		parameters: {
+			path: { organization_id: string }
+
+			body: Schemas.CreateProductRequest
+		}
+		responses: {
+			201: {
+				data: {
+					created_at: string
+					description?: (string | null) | undefined
+					id: Schemas.ProductId
+					name: string
+					organization_id: Schemas.OrganizationId
+					sku?: (string | null) | undefined
+					unit: Schemas.ServiceRateUnit
+					unit_price_cents: number
+					updated_at: string
+				}
+				pagination?: (null | Schemas.PaginationMetadata) | undefined
+			}
+			400: unknown
+			401: unknown
+			403: unknown
+			409: unknown
+		}
+	}
 	export type get_ListQuotes = {
 		method: 'GET'
 		path: '/api/v1/organizations/{organization_id}/quotes'
@@ -901,6 +984,73 @@ export namespace Endpoints {
 			400: unknown
 			401: unknown
 			403: unknown
+			409: unknown
+		}
+	}
+	export type get_GetProduct = {
+		method: 'GET'
+		path: '/api/v1/products/{product_id}'
+		requestFormat: 'json'
+		parameters: {
+			path: { product_id: string }
+		}
+		responses: {
+			200: {
+				data: {
+					created_at: string
+					description?: (string | null) | undefined
+					id: Schemas.ProductId
+					name: string
+					organization_id: Schemas.OrganizationId
+					sku?: (string | null) | undefined
+					unit: Schemas.ServiceRateUnit
+					unit_price_cents: number
+					updated_at: string
+				}
+				pagination?: (null | Schemas.PaginationMetadata) | undefined
+			}
+			401: unknown
+			403: unknown
+			404: unknown
+		}
+	}
+	export type delete_DeleteProduct = {
+		method: 'DELETE'
+		path: '/api/v1/products/{product_id}'
+		requestFormat: 'json'
+		parameters: {
+			path: { product_id: string }
+		}
+		responses: { 204: unknown; 401: unknown; 403: unknown; 404: unknown }
+	}
+	export type patch_UpdateProduct = {
+		method: 'PATCH'
+		path: '/api/v1/products/{product_id}'
+		requestFormat: 'json'
+		parameters: {
+			path: { product_id: string }
+
+			body: Schemas.UpdateProductRequest
+		}
+		responses: {
+			200: {
+				data: {
+					created_at: string
+					description?: (string | null) | undefined
+					id: Schemas.ProductId
+					name: string
+					organization_id: Schemas.OrganizationId
+					sku?: (string | null) | undefined
+					unit: Schemas.ServiceRateUnit
+					unit_price_cents: number
+					updated_at: string
+				}
+				pagination?: (null | Schemas.PaginationMetadata) | undefined
+			}
+			400: unknown
+			401: unknown
+			403: unknown
+			404: unknown
 			409: unknown
 		}
 	}
@@ -1110,8 +1260,10 @@ export type EndpointByMethod = {
 		'/api/v1/organizations/{organization_id}/customers': Endpoints.get_ListCustomers
 		'/api/v1/organizations/{organization_id}/employees': Endpoints.get_ListEmployees
 		'/api/v1/organizations/{organization_id}/equipment': Endpoints.get_ListEquipment
+		'/api/v1/organizations/{organization_id}/products': Endpoints.get_ListProducts
 		'/api/v1/organizations/{organization_id}/quotes': Endpoints.get_ListQuotes
 		'/api/v1/organizations/{organization_id}/service-rates': Endpoints.get_ListServiceRates
+		'/api/v1/products/{product_id}': Endpoints.get_GetProduct
 		'/api/v1/quotes/{quote_id}': Endpoints.get_GetQuote
 		'/api/v1/quotes/{quote_id}/pdf': Endpoints.get_ExportQuotePdf
 		'/api/v1/service-rates/{service_rate_id}': Endpoints.get_GetServiceRate
@@ -1123,6 +1275,7 @@ export type EndpointByMethod = {
 		'/api/v1/employees/{employee_id}': Endpoints.delete_DeleteEmployee
 		'/api/v1/equipment/{equipment_id}': Endpoints.delete_DeleteEquipment
 		'/api/v1/organizations/{organization_id}': Endpoints.delete_DeleteOrganization
+		'/api/v1/products/{product_id}': Endpoints.delete_DeleteProduct
 		'/api/v1/quotes/{quote_id}': Endpoints.delete_DeleteQuote
 		'/api/v1/service-rates/{service_rate_id}': Endpoints.delete_DeleteServiceRate
 	}
@@ -1132,6 +1285,7 @@ export type EndpointByMethod = {
 		'/api/v1/employees/{employee_id}': Endpoints.patch_UpdateEmployee
 		'/api/v1/equipment/{equipment_id}': Endpoints.patch_UpdateEquipment
 		'/api/v1/organizations/{organization_id}': Endpoints.patch_UpdateOrganization
+		'/api/v1/products/{product_id}': Endpoints.patch_UpdateProduct
 		'/api/v1/quotes/{quote_id}': Endpoints.patch_UpdateQuote
 		'/api/v1/quotes/{quote_id}/status': Endpoints.patch_UpdateQuoteStatus
 		'/api/v1/service-rates/{service_rate_id}': Endpoints.patch_UpdateServiceRate
@@ -1143,6 +1297,7 @@ export type EndpointByMethod = {
 		'/api/v1/organizations/{organization_id}/customers': Endpoints.post_CreateCustomer
 		'/api/v1/organizations/{organization_id}/employees': Endpoints.post_CreateEmployee
 		'/api/v1/organizations/{organization_id}/equipment': Endpoints.post_CreateEquipment
+		'/api/v1/organizations/{organization_id}/products': Endpoints.post_CreateProduct
 		'/api/v1/organizations/{organization_id}/quotes': Endpoints.post_CreateQuote
 		'/api/v1/organizations/{organization_id}/service-rates': Endpoints.post_CreateServiceRate
 	}

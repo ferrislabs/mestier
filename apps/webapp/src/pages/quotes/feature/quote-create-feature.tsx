@@ -2,17 +2,21 @@ import { useForm } from '@tanstack/react-form'
 import { AlertCircle } from 'lucide-react'
 import { useState } from 'react'
 import { useActiveOrganization } from '#/hooks/use-active-organization'
+import { type CatalogItem, useCatalogItems } from '#/hooks/use-catalog-items'
 import {
 	type Customer,
 	useCustomerContexts,
 	useCustomers,
 	useUploadFile,
 } from '#/hooks/use-customers'
-import { type Quote, useCreateQuote, useQuotes } from '#/hooks/use-quotes'
 import {
-	type ServiceRate,
-	useReferenceCatalog,
-} from '#/hooks/use-reference-catalog'
+	type PaginationMetadata,
+	type Quote,
+	useCreateQuote,
+	useQuotes,
+} from '#/hooks/use-quotes'
+import { useReferenceCatalog } from '#/hooks/use-reference-catalog'
+import { getQuoteListUrlState } from '#/pages/quotes/quote-list-url-state'
 import {
 	centsToEuros,
 	emptyQuoteLine,
@@ -50,10 +54,25 @@ export function QuoteCreateFeature() {
 }
 
 function QuoteWorkspace({ organizationId }: { organizationId: string }) {
+	const [initialQuoteListState] = useState(getQuoteListUrlState)
+	const [quotePage, setQuotePage] = useState(initialQuoteListState.page)
+	const [quotePageSize, setQuotePageSize] = useState(
+		initialQuoteListState.pageSize,
+	)
 	const [lastCreated, setLastCreated] = useState<Quote | null>(null)
 	const customers = useCustomers(organizationId)
-	const quotes = useQuotes(organizationId)
-	const catalog = useReferenceCatalog(organizationId)
+	const quotes = useQuotes(organizationId, {
+		page: quotePage,
+		perPage: quotePageSize,
+	})
+	const catalog = useReferenceCatalog(organizationId, {
+		employees: false,
+		equipment: false,
+	})
+	const catalogItems = useCatalogItems(
+		catalog.serviceRates.data?.data ?? [],
+		catalog.products.data?.data ?? [],
+	)
 	const createQuote = useCreateQuote(organizationId)
 	const uploadFile = useUploadFile()
 
@@ -80,7 +99,7 @@ function QuoteWorkspace({ organizationId }: { organizationId: string }) {
 					})),
 				},
 			})
-			setLastCreated(quote)
+			setLastCreated(quote.data)
 			form.reset()
 		},
 	})
@@ -90,16 +109,26 @@ function QuoteWorkspace({ organizationId }: { organizationId: string }) {
 			{(values) => (
 				<QuoteWorkspaceWithValues
 					values={values}
-					form={form}
+					form={{
+						state: form.state,
+						setFieldValue: (field, value) => {
+							form.setFieldValue(field, value as never)
+						},
+						handleSubmit: form.handleSubmit,
+					}}
 					organizationId={organizationId}
 					customers={customers.data?.data ?? []}
 					customerContextsQueryEnabled={Boolean(values.customerId)}
-					serviceRates={catalog.serviceRates.data?.data ?? []}
+					catalogItems={catalogItems}
 					quotes={quotes.data?.data ?? []}
+					quotesPagination={quotes.data?.pagination ?? null}
+					quotePage={quotePage}
+					quotePageSize={quotePageSize}
 					lastCreated={lastCreated}
 					isLoading={
 						customers.isLoading ||
 						catalog.serviceRates.isLoading ||
+						catalog.products.isLoading ||
 						quotes.isLoading
 					}
 					isCreating={createQuote.isPending}
@@ -107,6 +136,7 @@ function QuoteWorkspace({ organizationId }: { organizationId: string }) {
 					error={
 						customers.error?.message ??
 						catalog.serviceRates.error?.message ??
+						catalog.products.error?.message ??
 						quotes.error?.message ??
 						createQuote.error?.message ??
 						uploadFile.error?.message ??
@@ -115,7 +145,13 @@ function QuoteWorkspace({ organizationId }: { organizationId: string }) {
 					refetch={() => {
 						void customers.refetch()
 						void catalog.serviceRates.refetch()
+						void catalog.products.refetch()
 						void quotes.refetch()
+					}}
+					onQuotePageChange={setQuotePage}
+					onQuotePageSizeChange={(pageSize) => {
+						setQuotePageSize(pageSize)
+						setQuotePage(1)
 					}}
 					uploadFile={async (lineIndex, file) => {
 						const uploaded = await uploadFile.mutateAsync(file)
@@ -124,7 +160,7 @@ function QuoteWorkspace({ organizationId }: { organizationId: string }) {
 						if (!line) return
 						lines[lineIndex] = {
 							...line,
-							photoKeys: [...line.photoKeys, uploaded.key],
+							photoKeys: [...line.photoKeys, uploaded.data.key],
 						}
 						form.setFieldValue('lines', lines)
 					}}
@@ -136,19 +172,33 @@ function QuoteWorkspace({ organizationId }: { organizationId: string }) {
 
 interface QuoteWorkspaceWithValuesProps {
 	values: QuoteFormValues
-	form: ReturnType<typeof useForm<QuoteFormValues>>
+	form: QuoteFormApi
 	organizationId: string
 	customers: Customer[]
 	customerContextsQueryEnabled: boolean
-	serviceRates: ServiceRate[]
+	catalogItems: CatalogItem[]
 	quotes: Quote[]
+	quotesPagination?: PaginationMetadata | null
+	quotePage: number
+	quotePageSize: number
 	lastCreated: Quote | null
 	isLoading: boolean
 	isCreating: boolean
 	isUploading: boolean
 	error: string | null
 	refetch: () => void
+	onQuotePageChange: (page: number) => void
+	onQuotePageSizeChange: (pageSize: number) => void
 	uploadFile: (lineIndex: number, file: File) => Promise<void>
+}
+
+interface QuoteFormApi {
+	state: { values: QuoteFormValues }
+	setFieldValue: (
+		field: keyof QuoteFormValues,
+		value: QuoteFormValues[keyof QuoteFormValues],
+	) => void
+	handleSubmit: () => void | Promise<void>
 }
 
 function QuoteWorkspaceWithValues({
@@ -156,14 +206,19 @@ function QuoteWorkspaceWithValues({
 	form,
 	customers,
 	customerContextsQueryEnabled,
-	serviceRates,
+	catalogItems,
 	quotes,
+	quotesPagination,
+	quotePage,
+	quotePageSize,
 	lastCreated,
 	isLoading,
 	isCreating,
 	isUploading,
 	error,
 	refetch,
+	onQuotePageChange,
+	onQuotePageSizeChange,
 	uploadFile,
 }: QuoteWorkspaceWithValuesProps) {
 	const customerContexts = useCustomerContexts(
@@ -172,8 +227,14 @@ function QuoteWorkspaceWithValues({
 	)
 
 	const updateValues = (patch: Partial<QuoteFormValues>) => {
-		for (const key of Object.keys(patch) as (keyof QuoteFormValues)[]) {
-			form.setFieldValue(key, patch[key] as never)
+		if (patch.customerId !== undefined) {
+			form.setFieldValue('customerId', patch.customerId)
+		}
+		if (patch.customerContextId !== undefined) {
+			form.setFieldValue('customerContextId', patch.customerContextId)
+		}
+		if (patch.lines !== undefined) {
+			form.setFieldValue('lines', patch.lines)
 		}
 	}
 
@@ -185,17 +246,26 @@ function QuoteWorkspaceWithValues({
 		form.setFieldValue('lines', lines)
 	}
 
-	const selectServiceRate = (index: number, serviceRateId: string) => {
-		const serviceRate = serviceRates.find((item) => item.id === serviceRateId)
-		if (!serviceRate) {
-			updateLine(index, { serviceRateId })
+	const selectCatalogItem = (index: number, catalogItemId: string) => {
+		const catalogItem = catalogItems.find((item) => item.id === catalogItemId)
+		if (!catalogItem) {
+			updateLine(index, {
+				catalogItemId: '',
+				catalogItemType: 'CUSTOM',
+				serviceRateId: '',
+			})
 			return
 		}
+
 		updateLine(index, {
-			serviceRateId,
-			label: serviceRate.label,
-			unit: serviceRate.unit,
-			unitPrice: centsToEuros(serviceRate.rate_cents),
+			catalogItemId: catalogItem.id,
+			catalogItemType: catalogItem.type,
+			serviceRateId: catalogItem.type === 'SERVICE' ? catalogItem.sourceId : '',
+			label: catalogItem.label,
+			unit: catalogItem.unit,
+			unitPrice: centsToEuros(catalogItem.unitPriceCents),
+			notes:
+				catalogItem.description || form.state.values.lines[index]?.notes || '',
 		})
 	}
 
@@ -207,7 +277,7 @@ function QuoteWorkspaceWithValues({
 	}
 
 	const removeLine = (index: number) => {
-		const next = form.state.values.lines.filter((_, itemIndex) => {
+		const next = form.state.values.lines.filter((_line, itemIndex) => {
 			return itemIndex !== index
 		})
 		form.setFieldValue('lines', next.length > 0 ? next : [emptyQuoteLine()])
@@ -218,8 +288,11 @@ function QuoteWorkspaceWithValues({
 			values={values}
 			customers={customers}
 			customerContexts={customerContexts.data?.data ?? []}
-			serviceRates={serviceRates}
+			catalogItems={catalogItems}
 			quotes={quotes}
+			quotesPagination={quotesPagination}
+			quotePage={quotePage}
+			quotePageSize={quotePageSize}
 			lastCreated={lastCreated}
 			error={error ?? customerContexts.error?.message ?? null}
 			isLoading={isLoading}
@@ -235,10 +308,12 @@ function QuoteWorkspaceWithValues({
 				updateValues(patch)
 			}}
 			onLineChange={updateLine}
-			onSelectServiceRate={selectServiceRate}
+			onSelectCatalogItem={selectCatalogItem}
 			onAddLine={addLine}
 			onRemoveLine={removeLine}
 			onUploadLinePhoto={uploadFile}
+			onQuotePageChange={onQuotePageChange}
+			onQuotePageSizeChange={onQuotePageSizeChange}
 			onSubmit={() => void form.handleSubmit()}
 		/>
 	)

@@ -13,6 +13,7 @@ pub mod domain {
     pub struct Employee;
     pub struct Equipment;
     pub struct Organization;
+    pub struct Product;
     pub struct CustomerContext;
     pub struct Quote;
     pub struct Role;

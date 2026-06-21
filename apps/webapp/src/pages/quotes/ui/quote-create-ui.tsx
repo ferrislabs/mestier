@@ -1,22 +1,42 @@
 import {
 	AlertCircle,
+	Calculator,
 	FileText,
 	ImagePlus,
+	MapPin,
 	Plus,
 	RefreshCw,
 	Trash2,
+	UserRound,
 } from 'lucide-react'
-import { useMemo } from 'react'
+import { useEffect, useMemo, useState } from 'react'
+import {
+	DataViewPagination,
+	type DataViewSortOption,
+	DataViewToolbar,
+	getPaginationViewModel,
+	useDataView,
+} from '#/components/data-view'
 import { Button } from '#/components/ui/button'
 import { Input } from '#/components/ui/input'
 import { Label } from '#/components/ui/label'
 import {
 	Select,
 	SelectContent,
+	SelectGroup,
 	SelectItem,
+	SelectLabel,
 	SelectTrigger,
 	SelectValue,
 } from '#/components/ui/select'
+import {
+	Sheet,
+	SheetContent,
+	SheetDescription,
+	SheetFooter,
+	SheetHeader,
+	SheetTitle,
+} from '#/components/ui/sheet'
 import {
 	MetricCard,
 	PageHeader,
@@ -26,30 +46,38 @@ import {
 	StatusBadge,
 } from '#/components/ui/surface'
 import { Textarea } from '#/components/ui/textarea'
+import type { CatalogItem } from '#/hooks/use-catalog-items'
 import type { Customer, CustomerContext } from '#/hooks/use-customers'
-import type { Quote } from '#/hooks/use-quotes'
-import type {
-	ServiceRate,
-	ServiceRateUnit,
-} from '#/hooks/use-reference-catalog'
+import type { PaginationMetadata, Quote } from '#/hooks/use-quotes'
+import type { ServiceRateUnit } from '#/hooks/use-reference-catalog'
+import {
+	getQuoteListUrlState,
+	isValidQuoteFilter,
+	isValidQuoteSortValue,
+	QUOTE_FILTER_OPTIONS,
+	writeQuoteListUrlState,
+} from '#/pages/quotes/quote-list-url-state'
 import {
 	customerContextDisplayName,
 	customerDisplayName,
+	eurosToCents,
 	formatCents,
 	formatDate,
 	formatUnit,
 	type QuoteFormValues,
 	type QuoteLineFormValues,
 	quoteStatusLabel,
-	serviceRateDisplayName,
 } from '#/pages/quotes/types'
 
 interface QuoteCreateUIProps {
 	values: QuoteFormValues
 	customers: Customer[]
 	customerContexts: CustomerContext[]
-	serviceRates: ServiceRate[]
+	catalogItems: CatalogItem[]
 	quotes: Quote[]
+	quotesPagination?: PaginationMetadata | null
+	quotePage: number
+	quotePageSize: number
 	lastCreated: Quote | null
 	error?: string | null
 	isLoading?: boolean
@@ -59,10 +87,12 @@ interface QuoteCreateUIProps {
 	onRetry?: () => void
 	onChange: (patch: Partial<QuoteFormValues>) => void
 	onLineChange: (index: number, patch: Partial<QuoteLineFormValues>) => void
-	onSelectServiceRate: (index: number, serviceRateId: string) => void
+	onSelectCatalogItem: (index: number, catalogItemId: string) => void
 	onAddLine: () => void
 	onRemoveLine: (index: number) => void
 	onUploadLinePhoto: (index: number, file: File) => Promise<void>
+	onQuotePageChange: (page: number) => void
+	onQuotePageSizeChange: (pageSize: number) => void
 	onSubmit: () => void
 }
 
@@ -70,8 +100,11 @@ export function QuoteCreateUI({
 	values,
 	customers,
 	customerContexts,
-	serviceRates,
+	catalogItems,
 	quotes,
+	quotesPagination,
+	quotePage,
+	quotePageSize,
 	lastCreated,
 	error,
 	isLoading,
@@ -81,26 +114,95 @@ export function QuoteCreateUI({
 	onRetry,
 	onChange,
 	onLineChange,
-	onSelectServiceRate,
+	onSelectCatalogItem,
 	onAddLine,
 	onRemoveLine,
 	onUploadLinePhoto,
+	onQuotePageChange,
+	onQuotePageSizeChange,
 	onSubmit,
 }: QuoteCreateUIProps) {
+	const [createOpen, setCreateOpen] = useState(false)
+	const [initialQuoteListState] = useState(getQuoteListUrlState)
+	const [quoteSearch, setQuoteSearch] = useState(initialQuoteListState.search)
+	const [quoteStatusFilter, setQuoteStatusFilter] = useState(
+		isValidQuoteFilter(initialQuoteListState.filter)
+			? initialQuoteListState.filter
+			: 'all',
+	)
+	const [quoteSort, setQuoteSort] = useState(
+		isValidQuoteSortValue(initialQuoteListState.sort)
+			? initialQuoteListState.sort
+			: 'created-desc',
+	)
 	const stats = useMemo(() => {
 		return {
-			total: quotes.length,
+			total: quotesPagination?.total ?? quotes.length,
 			draft: quotes.filter((quote) => quote.status === 'DRAFT').length,
 			accepted: quotes.filter((quote) => quote.status === 'ACCEPTED').length,
 			revenue: quotes
 				.filter((quote) => quote.status === 'ACCEPTED')
 				.reduce((sum, quote) => sum + quote.total_cents, 0),
 		}
-	}, [quotes])
+	}, [quotes, quotesPagination])
 
-	const selectedCustomer = customers.find((customer) => {
-		return customer.id === values.customerId
+	const quotePaginationView = getPaginationViewModel(
+		quotesPagination,
+		quotes.length,
+		quotePage,
+		quotePageSize,
+	)
+
+	const quoteDataView = useDataView({
+		data: quotes,
+		search: quoteSearch,
+		searchPredicate: (quote, query) =>
+			quoteMatchesSearch(quote, query, customers),
+		filter: quoteStatusFilter,
+		filterPredicate: quoteMatchesStatusFilter,
+		sort: quoteSort,
+		sortOptions: QUOTE_SORT_OPTIONS,
+		page: quotePage,
+		pageSize: quotePageSize,
+		manualPagination: true,
+		totalCount: quotePaginationView.totalCount,
+		pageCount: quotePaginationView.pageCount,
+		from: quotePaginationView.from,
+		to: quotePaginationView.to,
 	})
+
+	useEffect(() => {
+		if (!quotesPagination) return
+		if (quoteDataView.page !== quotePage) onQuotePageChange(quoteDataView.page)
+	}, [onQuotePageChange, quoteDataView.page, quotePage, quotesPagination])
+
+	useEffect(() => {
+		writeQuoteListUrlState({
+			search: quoteSearch,
+			filter: quoteStatusFilter,
+			sort: quoteSort,
+			page: quotePage,
+			pageSize: quotePageSize,
+		})
+	}, [quotePage, quotePageSize, quoteSearch, quoteSort, quoteStatusFilter])
+
+	useEffect(() => {
+		const syncFromUrl = () => {
+			const next = getQuoteListUrlState()
+			setQuoteSearch(next.search)
+			setQuoteStatusFilter(
+				isValidQuoteFilter(next.filter) ? next.filter : 'all',
+			)
+			setQuoteSort(
+				isValidQuoteSortValue(next.sort) ? next.sort : 'created-desc',
+			)
+			onQuotePageChange(next.page)
+			onQuotePageSizeChange(next.pageSize)
+		}
+
+		window.addEventListener('popstate', syncFromUrl)
+		return () => window.removeEventListener('popstate', syncFromUrl)
+	}, [onQuotePageChange, onQuotePageSizeChange])
 
 	const canSubmit =
 		Boolean(values.customerId) &&
@@ -116,21 +218,53 @@ export function QuoteCreateUI({
 			)
 		})
 
+	const selectedCustomer = customers.find((customer) => {
+		return customer.id === values.customerId
+	})
+	const selectedCustomerContext = customerContexts.find((customerContext) => {
+		return customerContext.id === values.customerContextId
+	})
+	const draftTotalCents = values.lines.reduce((sum, line) => {
+		return sum + quoteLineTotalCents(line)
+	}, 0)
+	const completedLineCount = values.lines.filter((line) => {
+		return line.label.trim() && quoteLineTotalCents(line) > 0
+	}).length
+	const serviceCount = catalogItems.filter(
+		(item) => item.type === 'SERVICE',
+	).length
+	const productCount = catalogItems.filter(
+		(item) => item.type === 'PRODUCT',
+	).length
+
+	const resetQuoteDataView = () => {
+		setQuoteSearch('')
+		setQuoteStatusFilter('all')
+		setQuoteSort('created-desc')
+		onQuotePageChange(1)
+	}
+
 	return (
 		<PageShell>
 			<PageHeader
 				title="Devis"
-				description="Créez des devis détaillés à partir du catalogue de prestations et conservez le total renvoyé par l'API comme référence."
+				description="Pilotez les devis de l'organisation et créez un nouveau document quand le contexte client est prêt."
 				actions={
-					<Button
-						type="button"
-						variant="outline"
-						onClick={onRetry}
-						disabled={!onRetry}
-					>
-						<RefreshCw />
-						Actualiser
-					</Button>
+					<div className="flex items-center gap-2">
+						<Button
+							type="button"
+							variant="outline"
+							onClick={onRetry}
+							disabled={!onRetry}
+						>
+							<RefreshCw />
+							Actualiser
+						</Button>
+						<Button type="button" onClick={() => setCreateOpen(true)}>
+							<Plus />
+							Nouveau devis
+						</Button>
+					</div>
 				}
 			/>
 
@@ -147,6 +281,172 @@ export function QuoteCreateUI({
 					) : null}
 				</SectionCard>
 			) : null}
+
+			<Sheet open={createOpen} onOpenChange={setCreateOpen}>
+				<SheetContent className="w-full gap-0 overflow-y-auto sm:max-w-5xl">
+					<form
+						className="flex min-h-0 flex-1 flex-col"
+						onSubmit={(event) => {
+							event.preventDefault()
+							onSubmit()
+						}}
+					>
+						<SheetHeader className="border-b">
+							<SheetTitle>Nouveau devis</SheetTitle>
+							<SheetDescription>
+								Sélectionnez le client, puis ajoutez des services, produits ou
+								lignes libres.
+							</SheetDescription>
+						</SheetHeader>
+
+						<div className="flex-1 overflow-y-auto bg-muted/25">
+							<div className="grid gap-5 p-5 xl:grid-cols-[minmax(0,1fr)_300px]">
+								<div className="space-y-5">
+									<FormSection
+										icon={<UserRound className="size-4" />}
+										title="Client et contexte"
+									>
+										<div className="grid gap-4 md:grid-cols-2">
+											<FieldBlock label="Client">
+												<Select
+													value={values.customerId}
+													onValueChange={(customerId) =>
+														onChange({ customerId })
+													}
+												>
+													<SelectTrigger className="w-full">
+														<SelectValue placeholder="Sélectionner un client" />
+													</SelectTrigger>
+													<SelectContent>
+														{customers.map((customer) => (
+															<SelectItem key={customer.id} value={customer.id}>
+																{customerDisplayName(customer)}
+															</SelectItem>
+														))}
+													</SelectContent>
+												</Select>
+											</FieldBlock>
+
+											<FieldBlock label="Contexte client">
+												<Select
+													value={values.customerContextId}
+													onValueChange={(customerContextId) =>
+														onChange({ customerContextId })
+													}
+													disabled={
+														!values.customerId || isCustomerContextsLoading
+													}
+												>
+													<SelectTrigger className="w-full">
+														<SelectValue
+															placeholder={
+																values.customerId
+																	? 'Sélectionner un contexte'
+																	: 'Choisir un client'
+															}
+														/>
+													</SelectTrigger>
+													<SelectContent>
+														{customerContexts.map((customerContext) => (
+															<SelectItem
+																key={customerContext.id}
+																value={customerContext.id}
+															>
+																{customerContextDisplayName(customerContext)}
+															</SelectItem>
+														))}
+													</SelectContent>
+												</Select>
+											</FieldBlock>
+										</div>
+									</FormSection>
+
+									<FormSection
+										icon={<FileText className="size-4" />}
+										title="Lignes du devis"
+										description={`${serviceCount} service${
+											serviceCount > 1 ? 's' : ''
+										} · ${productCount} produit${productCount > 1 ? 's' : ''}`}
+										actions={
+											<Button
+												type="button"
+												variant="outline"
+												size="sm"
+												onClick={onAddLine}
+											>
+												<Plus />
+												Ajouter
+											</Button>
+										}
+									>
+										<div className="-m-4 divide-y">
+											{values.lines.map((line, index) => (
+												<QuoteLineEditor
+													key={line.clientId}
+													index={index}
+													line={line}
+													catalogItems={catalogItems}
+													canRemove={values.lines.length > 1}
+													isUploading={isUploading}
+													onChange={(patch) => onLineChange(index, patch)}
+													onSelectCatalogItem={(catalogItemId) =>
+														onSelectCatalogItem(index, catalogItemId)
+													}
+													onRemove={() => onRemoveLine(index)}
+													onUploadPhoto={(file) =>
+														onUploadLinePhoto(index, file)
+													}
+												/>
+											))}
+										</div>
+									</FormSection>
+								</div>
+
+								<QuoteDraftSummary
+									customerName={
+										selectedCustomer
+											? customerDisplayName(selectedCustomer)
+											: 'Non sélectionné'
+									}
+									contextName={
+										selectedCustomerContext
+											? customerContextDisplayName(selectedCustomerContext)
+											: 'Non sélectionné'
+									}
+									lineCount={values.lines.length}
+									completedLineCount={completedLineCount}
+									totalCents={draftTotalCents}
+									canSubmit={canSubmit}
+								/>
+							</div>
+						</div>
+
+						<SheetFooter className="border-t bg-background sm:flex-row sm:items-center sm:justify-between">
+							<div className="flex items-center justify-between gap-4 rounded-lg bg-muted px-3 py-2 sm:min-w-64">
+								<span className="text-xs font-medium text-muted-foreground">
+									Total estimé
+								</span>
+								<span className="font-semibold">
+									{formatCents(draftTotalCents)}
+								</span>
+							</div>
+							<div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
+								<Button
+									type="button"
+									variant="ghost"
+									onClick={() => setCreateOpen(false)}
+								>
+									Annuler
+								</Button>
+								<Button type="submit" disabled={!canSubmit || isCreating}>
+									<FileText />
+									Créer le devis
+								</Button>
+							</div>
+						</SheetFooter>
+					</form>
+				</SheetContent>
+			</Sheet>
 
 			<section>
 				<p className="mb-3 text-sm text-muted-foreground">Suivi des devis</p>
@@ -174,175 +474,117 @@ export function QuoteCreateUI({
 				</div>
 			</section>
 
-			<div className="grid gap-6 xl:grid-cols-[minmax(0,1.45fr)_minmax(360px,0.75fr)]">
-				<SectionCard>
-					<SectionHeader
-						title="Nouveau devis"
-						description="Les lignes sont envoyées à l'API, qui calcule le total sauvegardé."
-						actions={
-							<Button
-								type="button"
-								onClick={onSubmit}
-								disabled={!canSubmit || isCreating}
-							>
-								<FileText />
-								Créer
-							</Button>
-						}
-					/>
-
-					<div className="grid gap-5 p-5 lg:grid-cols-2">
-						<FieldBlock label="Client">
-							<Select
-								value={values.customerId}
-								onValueChange={(customerId) => onChange({ customerId })}
-							>
-								<SelectTrigger className="w-full">
-									<SelectValue placeholder="Sélectionner un client" />
-								</SelectTrigger>
-								<SelectContent>
-									{customers.map((customer) => (
-										<SelectItem key={customer.id} value={customer.id}>
-											{customerDisplayName(customer)}
-										</SelectItem>
-									))}
-								</SelectContent>
-							</Select>
-						</FieldBlock>
-
-						<FieldBlock label="Contexte client">
-							<Select
-								value={values.customerContextId}
-								onValueChange={(customerContextId) =>
-									onChange({ customerContextId })
-								}
-								disabled={!values.customerId || isCustomerContextsLoading}
-							>
-								<SelectTrigger className="w-full">
-									<SelectValue
-										placeholder={
-											values.customerId
-												? 'Sélectionner un contexte'
-												: 'Choisir un client'
-										}
-									/>
-								</SelectTrigger>
-								<SelectContent>
-									{customerContexts.map((customerContext) => (
-										<SelectItem
-											key={customerContext.id}
-											value={customerContext.id}
-										>
-											{customerContextDisplayName(customerContext)}
-										</SelectItem>
-									))}
-								</SelectContent>
-							</Select>
-						</FieldBlock>
-					</div>
-
-					<div className="border-t">
-						<div className="flex items-center justify-between gap-3 px-5 py-4">
-							<div>
-								<h2 className="font-semibold">Lignes</h2>
-								<p className="text-xs text-muted-foreground">
-									Prestations, quantités, notes et photos.
+			{lastCreated ? (
+				<SectionCard className="border-brand/25 bg-brand-soft p-5">
+					<div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+						<div className="flex min-w-0 items-center gap-4">
+							<div className="flex size-11 shrink-0 items-center justify-center rounded-lg bg-background text-primary shadow-xs">
+								<FileText className="size-5" />
+							</div>
+							<div className="min-w-0">
+								<p className="text-sm font-semibold">Dernier devis créé</p>
+								<p className="mt-1 truncate font-mono text-xs text-muted-foreground">
+									{lastCreated.id}
 								</p>
 							</div>
-							<Button
-								type="button"
-								variant="outline"
-								size="sm"
-								onClick={onAddLine}
-							>
-								<Plus />
-								Ajouter
-							</Button>
 						</div>
-
-						<div className="divide-y">
-							{values.lines.map((line, index) => (
-								<QuoteLineEditor
-									key={line.clientId}
-									index={index}
-									line={line}
-									serviceRates={serviceRates}
-									canRemove={values.lines.length > 1}
-									isUploading={isUploading}
-									onChange={(patch) => onLineChange(index, patch)}
-									onSelectServiceRate={(serviceRateId) =>
-										onSelectServiceRate(index, serviceRateId)
-									}
-									onRemove={() => onRemoveLine(index)}
-									onUploadPhoto={(file) => onUploadLinePhoto(index, file)}
-								/>
-							))}
+						<div className="flex items-center gap-3 sm:justify-end">
+							<p className="text-xl font-bold">
+								{formatCents(lastCreated.total_cents)}
+							</p>
+							<StatusBadge tone="brand">
+								{quoteStatusLabel(lastCreated.status)}
+							</StatusBadge>
 						</div>
 					</div>
 				</SectionCard>
+			) : null}
 
-				<div className="flex flex-col gap-6">
-					<SectionCard>
-						<SectionHeader
-							title="Aperçu API"
-							description="Dernier total calculé après enregistrement."
-						/>
-						<div className="p-5">
-							{lastCreated ? (
-								<div className="flex flex-col gap-4">
-									<div className="flex items-center justify-between gap-4">
-										<div className="min-w-0">
-											<p className="truncate font-mono text-xs text-muted-foreground">
-												{lastCreated.id}
-											</p>
-											<p className="mt-1 text-2xl font-bold">
-												{formatCents(lastCreated.total_cents)}
-											</p>
-										</div>
-										<StatusBadge tone="brand">
-											{quoteStatusLabel(lastCreated.status)}
-										</StatusBadge>
-									</div>
-									<p className="text-sm text-muted-foreground">
-										{lastCreated.lines.length} ligne
-										{lastCreated.lines.length > 1 ? 's' : ''} sauvegardée
-										{lastCreated.lines.length > 1 ? 's' : ''}
-									</p>
-								</div>
-							) : (
-								<p className="text-sm text-muted-foreground">
-									Créez un devis pour afficher le total renvoyé par l'API.
-								</p>
-							)}
+			<SectionCard>
+				<SectionHeader
+					title={`Devis (${quoteDataView.filteredCount})`}
+					description="Liste paginée des devis de l'organisation, avec recherche, statut et tri."
+				/>
+				<div className="border-b p-4">
+					<DataViewToolbar
+						search={quoteSearch}
+						onSearchChange={(value) => {
+							setQuoteSearch(value)
+							onQuotePageChange(1)
+						}}
+						searchPlaceholder="Rechercher un devis…"
+						filter={quoteStatusFilter}
+						onFilterChange={(value) => {
+							setQuoteStatusFilter(value)
+							onQuotePageChange(1)
+						}}
+						filterOptions={QUOTE_FILTER_OPTIONS}
+						sort={quoteSort}
+						onSortChange={(value) => {
+							setQuoteSort(value)
+							onQuotePageChange(1)
+						}}
+						sortOptions={QUOTE_SORT_OPTIONS}
+						filteredCount={quoteDataView.filteredCount}
+						totalCount={quoteDataView.totalCount}
+						onReset={resetQuoteDataView}
+					/>
+				</div>
+				{isLoading ? (
+					<p className="p-5 text-sm text-muted-foreground">Chargement…</p>
+				) : quoteDataView.rows.length === 0 ? (
+					<div className="flex min-h-52 flex-col items-center justify-center gap-3 p-8 text-center">
+						<div className="flex size-12 items-center justify-center rounded-lg bg-muted text-muted-foreground">
+							<FileText className="size-5" />
 						</div>
-					</SectionCard>
-
-					<SectionCard>
-						<SectionHeader
-							title="Devis récents"
-							description={
-								selectedCustomer
-									? `Client sélectionné : ${customerDisplayName(selectedCustomer)}`
-									: 'Tous les devis de l’organisation'
-							}
-						/>
-						{isLoading ? (
-							<p className="p-5 text-sm text-muted-foreground">Chargement…</p>
-						) : quotes.length === 0 ? (
-							<p className="p-5 text-sm text-muted-foreground">
-								Aucun devis enregistré.
+						<div>
+							<p className="font-medium">
+								{quoteSearch || quoteStatusFilter !== 'all'
+									? 'Aucun devis ne correspond aux critères.'
+									: 'Aucun devis enregistré.'}
 							</p>
+							<p className="mt-1 text-sm text-muted-foreground">
+								Créez un devis depuis l'action principale pour alimenter cette
+								vue.
+							</p>
+						</div>
+						{quoteSearch || quoteStatusFilter !== 'all' ? (
+							<Button
+								type="button"
+								variant="outline"
+								onClick={resetQuoteDataView}
+							>
+								Réinitialiser la vue
+							</Button>
 						) : (
-							<ul className="divide-y">
-								{quotes.slice(0, 8).map((quote) => (
-									<li
-										key={quote.id}
-										className="flex items-center justify-between gap-4 px-5 py-4"
-									>
+							<Button type="button" onClick={() => setCreateOpen(true)}>
+								<Plus />
+								Nouveau devis
+							</Button>
+						)}
+					</div>
+				) : (
+					<ul className="divide-y">
+						{quoteDataView.rows.map((quote) => {
+							const customer = customers.find((item) => {
+								return item.id === quote.customer_id
+							})
+
+							return (
+								<li
+									key={quote.id}
+									className="grid gap-4 px-5 py-4 transition hover:bg-muted/40 sm:grid-cols-[minmax(0,1fr)_160px_160px] sm:items-center"
+								>
+									<div className="flex min-w-0 items-center gap-4">
+										<div className="flex size-11 shrink-0 items-center justify-center rounded-lg bg-brand-soft text-primary">
+											<FileText className="size-5" />
+										</div>
 										<div className="min-w-0">
-											<div className="flex items-center gap-2">
-												<p className="font-semibold">
-													{formatCents(quote.total_cents)}
+											<div className="flex min-w-0 items-center gap-2">
+												<p className="truncate font-semibold">
+													{customer
+														? customerDisplayName(customer)
+														: 'Client inconnu'}
 												</p>
 												<StatusBadge tone={statusTone(quote.status)}>
 													{quoteStatusLabel(quote.status)}
@@ -352,20 +594,41 @@ export function QuoteCreateUI({
 												{quote.id}
 											</p>
 										</div>
-										<div className="shrink-0 text-right text-xs text-muted-foreground">
-											<p>{formatDate(quote.created_at)}</p>
-											<p>
-												{quote.lines.length} ligne
-												{quote.lines.length > 1 ? 's' : ''}
-											</p>
-										</div>
-									</li>
-								))}
-							</ul>
-						)}
-					</SectionCard>
-				</div>
-			</div>
+									</div>
+
+									<div className="text-sm">
+										<p className="font-medium">
+											{quote.lines.length} ligne
+											{quote.lines.length > 1 ? 's' : ''}
+										</p>
+										<p className="mt-1 text-xs text-muted-foreground">
+											{formatDate(quote.created_at)}
+										</p>
+									</div>
+
+									<p className="text-lg font-bold sm:text-right">
+										{formatCents(quote.total_cents)}
+									</p>
+								</li>
+							)
+						})}
+					</ul>
+				)}
+				{!isLoading ? (
+					<div className="border-t p-4">
+						<DataViewPagination
+							page={quoteDataView.page}
+							pageCount={quoteDataView.pageCount}
+							pageSize={quotePageSize}
+							from={quoteDataView.from}
+							to={quoteDataView.to}
+							totalCount={quoteDataView.totalCount}
+							onPageChange={onQuotePageChange}
+							onPageSizeChange={onQuotePageSizeChange}
+						/>
+					</div>
+				) : null}
+			</SectionCard>
 		</PageShell>
 	)
 }
@@ -373,11 +636,11 @@ export function QuoteCreateUI({
 interface QuoteLineEditorProps {
 	index: number
 	line: QuoteLineFormValues
-	serviceRates: ServiceRate[]
+	catalogItems: CatalogItem[]
 	canRemove: boolean
 	isUploading?: boolean
 	onChange: (patch: Partial<QuoteLineFormValues>) => void
-	onSelectServiceRate: (serviceRateId: string) => void
+	onSelectCatalogItem: (catalogItemId: string) => void
 	onRemove: () => void
 	onUploadPhoto: (file: File) => Promise<void>
 }
@@ -385,125 +648,287 @@ interface QuoteLineEditorProps {
 function QuoteLineEditor({
 	index,
 	line,
-	serviceRates,
+	catalogItems,
 	canRemove,
 	isUploading,
 	onChange,
-	onSelectServiceRate,
+	onSelectCatalogItem,
 	onRemove,
 	onUploadPhoto,
 }: QuoteLineEditorProps) {
+	const lineTotalCents = quoteLineTotalCents(line)
+	const serviceItems = catalogItems.filter((item) => item.type === 'SERVICE')
+	const productItems = catalogItems.filter((item) => item.type === 'PRODUCT')
+	const selectedCatalogItem = catalogItems.find((item) => {
+		return item.id === line.catalogItemId
+	})
+
 	return (
-		<div className="grid gap-4 p-5 lg:grid-cols-[minmax(190px,1.1fr)_minmax(160px,1fr)_120px_140px]">
-			<FieldBlock label={`Prestation ${index + 1}`}>
-				<Select
-					value={line.serviceRateId || 'custom'}
-					onValueChange={(value) => {
-						onSelectServiceRate(value === 'custom' ? '' : value)
-					}}
-				>
-					<SelectTrigger className="w-full">
-						<SelectValue placeholder="Ligne libre" />
-					</SelectTrigger>
-					<SelectContent>
-						<SelectItem value="custom">Ligne libre</SelectItem>
-						{serviceRates.map((serviceRate) => (
-							<SelectItem key={serviceRate.id} value={serviceRate.id}>
-								{serviceRateDisplayName(serviceRate)}
-							</SelectItem>
-						))}
-					</SelectContent>
-				</Select>
-			</FieldBlock>
+		<div className="bg-card px-4 py-4">
+			<div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+				<div className="flex min-w-0 items-center gap-3">
+					<div className="flex size-8 shrink-0 items-center justify-center rounded-md bg-muted text-muted-foreground">
+						<span className="text-sm font-semibold">{index + 1}</span>
+					</div>
+					<div className="min-w-0">
+						<p className="truncate text-sm font-semibold">
+							{line.label.trim() || `Ligne ${index + 1}`}
+						</p>
+						<p className="text-xs text-muted-foreground">
+							{quoteLineSourceLabel(line.catalogItemType)}
+						</p>
+					</div>
+				</div>
+				<div className="flex items-center justify-between gap-3 sm:justify-end">
+					<p className="text-sm font-semibold">{formatCents(lineTotalCents)}</p>
+					<Button
+						type="button"
+						variant="ghost"
+						size="icon-sm"
+						disabled={!canRemove}
+						onClick={onRemove}
+					>
+						<Trash2 />
+						<span className="sr-only">Supprimer la ligne</span>
+					</Button>
+				</div>
+			</div>
 
-			<FieldBlock label="Libellé">
-				<Input
-					value={line.label}
-					onChange={(event) => onChange({ label: event.target.value })}
-					placeholder="Libellé de ligne"
-				/>
-			</FieldBlock>
+			<div className="mt-4 grid gap-4 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)_96px_128px_128px]">
+				<div className="lg:col-span-2">
+					<FieldBlock label="Catalogue">
+						<Select
+							value={line.catalogItemId || 'custom'}
+							onValueChange={(value) => {
+								onSelectCatalogItem(value === 'custom' ? '' : value)
+							}}
+						>
+							<SelectTrigger className="w-full">
+								<SelectValue placeholder="Ligne libre" />
+							</SelectTrigger>
+							<SelectContent>
+								<SelectItem value="custom">Ligne libre</SelectItem>
+								{serviceItems.length > 0 ? (
+									<SelectGroup>
+										<SelectLabel>Services</SelectLabel>
+										{serviceItems.map((item) => (
+											<SelectItem key={item.id} value={item.id}>
+												{catalogItemOptionLabel(item)}
+											</SelectItem>
+										))}
+									</SelectGroup>
+								) : null}
+								{productItems.length > 0 ? (
+									<SelectGroup>
+										<SelectLabel>Produits</SelectLabel>
+										{productItems.map((item) => (
+											<SelectItem key={item.id} value={item.id}>
+												{catalogItemOptionLabel(item)}
+											</SelectItem>
+										))}
+									</SelectGroup>
+								) : null}
+							</SelectContent>
+						</Select>
+						{selectedCatalogItem ? (
+							<p className="truncate text-xs text-muted-foreground">
+								{catalogItemDetail(selectedCatalogItem)}
+							</p>
+						) : null}
+					</FieldBlock>
+				</div>
 
-			<FieldBlock label="Quantité">
-				<Input
-					inputMode="decimal"
-					value={line.quantity}
-					onChange={(event) => onChange({ quantity: event.target.value })}
-				/>
-			</FieldBlock>
-
-			<FieldBlock label="Prix unitaire">
-				<Input
-					inputMode="decimal"
-					value={line.unitPrice}
-					onChange={(event) => onChange({ unitPrice: event.target.value })}
-					placeholder="0.00"
-				/>
-			</FieldBlock>
-
-			<FieldBlock label="Unité">
-				<Select
-					value={line.unit}
-					onValueChange={(unit) => onChange({ unit: unit as ServiceRateUnit })}
-				>
-					<SelectTrigger className="w-full">
-						<SelectValue />
-					</SelectTrigger>
-					<SelectContent>
-						<SelectItem value="HOUR">{formatUnit('HOUR')}</SelectItem>
-						<SelectItem value="ML">{formatUnit('ML')}</SelectItem>
-						<SelectItem value="M2">{formatUnit('M2')}</SelectItem>
-					</SelectContent>
-				</Select>
-			</FieldBlock>
-
-			<div className="lg:col-span-2">
-				<FieldBlock label="Notes">
-					<Textarea
-						value={line.notes}
-						onChange={(event) => onChange({ notes: event.target.value })}
-						placeholder="Précisions utiles pour cadrer la prestation"
+				<FieldBlock label="Libellé">
+					<Input
+						value={line.label}
+						onChange={(event) => onChange({ label: event.target.value })}
+						placeholder="Libellé de ligne"
 					/>
 				</FieldBlock>
-			</div>
 
-			<div className="lg:col-span-1">
-				<FieldBlock label="Photos">
-					<label className="flex h-10 cursor-pointer items-center justify-center gap-2 rounded-lg border bg-card px-3 text-sm font-medium text-primary shadow-xs hover:bg-brand-soft">
-						<ImagePlus className="size-4" />
-						Ajouter
-						<input
-							type="file"
-							accept="image/*"
-							className="sr-only"
-							disabled={isUploading}
-							onChange={(event) => {
-								const file = event.target.files?.[0]
-								if (file) void onUploadPhoto(file)
-								event.target.value = ''
-							}}
-						/>
-					</label>
-					{line.photoKeys.length > 0 ? (
-						<p className="mt-2 truncate text-xs text-muted-foreground">
-							{line.photoKeys.length} fichier
-							{line.photoKeys.length > 1 ? 's' : ''}
-						</p>
-					) : null}
+				<FieldBlock label="Quantité">
+					<Input
+						inputMode="decimal"
+						value={line.quantity}
+						onChange={(event) => onChange({ quantity: event.target.value })}
+					/>
 				</FieldBlock>
+
+				<FieldBlock label="Prix unitaire">
+					<Input
+						inputMode="decimal"
+						value={line.unitPrice}
+						onChange={(event) => onChange({ unitPrice: event.target.value })}
+						placeholder="0.00"
+					/>
+				</FieldBlock>
+
+				<FieldBlock label="Unité">
+					<Select
+						value={line.unit}
+						onValueChange={(unit) =>
+							onChange({ unit: unit as ServiceRateUnit })
+						}
+					>
+						<SelectTrigger className="w-full">
+							<SelectValue />
+						</SelectTrigger>
+						<SelectContent>
+							<SelectItem value="HOUR">
+								{line.catalogItemType === 'PRODUCT'
+									? 'unité'
+									: formatUnit('HOUR')}
+							</SelectItem>
+							<SelectItem value="ML">{formatUnit('ML')}</SelectItem>
+							<SelectItem value="M2">{formatUnit('M2')}</SelectItem>
+						</SelectContent>
+					</Select>
+				</FieldBlock>
+
+				<div className="lg:col-span-2">
+					<FieldBlock label="Notes">
+						<Textarea
+							value={line.notes}
+							onChange={(event) => onChange({ notes: event.target.value })}
+							placeholder="Précisions utiles pour cadrer la prestation"
+						/>
+					</FieldBlock>
+				</div>
+
+				<div>
+					<FieldBlock label="Photos">
+						<label className="flex h-10 cursor-pointer items-center justify-center gap-2 rounded-lg border bg-card px-3 text-sm font-medium text-primary shadow-xs hover:bg-brand-soft">
+							<ImagePlus className="size-4" />
+							Ajouter
+							<input
+								type="file"
+								accept="image/*"
+								className="sr-only"
+								disabled={isUploading}
+								onChange={(event) => {
+									const file = event.target.files?.[0]
+									if (file) void onUploadPhoto(file)
+									event.target.value = ''
+								}}
+							/>
+						</label>
+						{line.photoKeys.length > 0 ? (
+							<p className="mt-2 truncate text-xs text-muted-foreground">
+								{line.photoKeys.length} fichier
+								{line.photoKeys.length > 1 ? 's' : ''}
+							</p>
+						) : null}
+					</FieldBlock>
+				</div>
+			</div>
+		</div>
+	)
+}
+
+interface FormSectionProps {
+	icon: React.ReactNode
+	title: string
+	description?: string
+	actions?: React.ReactNode
+	children: React.ReactNode
+}
+
+function FormSection({
+	icon,
+	title,
+	description,
+	actions,
+	children,
+}: FormSectionProps) {
+	return (
+		<section className="rounded-lg border bg-card shadow-sm">
+			<div className="flex items-center justify-between gap-3 border-b px-4 py-3">
+				<div className="flex min-w-0 items-center gap-3">
+					<div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground">
+						{icon}
+					</div>
+					<div className="min-w-0">
+						<h2 className="truncate font-semibold">{title}</h2>
+						{description ? (
+							<p className="truncate text-xs text-muted-foreground">
+								{description}
+							</p>
+						) : null}
+					</div>
+				</div>
+				{actions}
+			</div>
+			<div className="p-4">{children}</div>
+		</section>
+	)
+}
+
+interface QuoteDraftSummaryProps {
+	customerName: string
+	contextName: string
+	lineCount: number
+	completedLineCount: number
+	totalCents: number
+	canSubmit: boolean
+}
+
+function QuoteDraftSummary({
+	customerName,
+	contextName,
+	lineCount,
+	completedLineCount,
+	totalCents,
+	canSubmit,
+}: QuoteDraftSummaryProps) {
+	return (
+		<aside className="h-fit rounded-lg border bg-card p-4 shadow-sm xl:sticky xl:top-5">
+			<div className="flex items-center gap-3">
+				<div className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-brand-soft text-primary">
+					<Calculator className="size-5" />
+				</div>
+				<div>
+					<p className="text-sm font-semibold">Aperçu du devis</p>
+					<p className="text-xs text-muted-foreground">
+						{canSubmit ? 'Prêt à créer' : 'Brouillon incomplet'}
+					</p>
+				</div>
 			</div>
 
-			<div className="flex items-end justify-end">
-				<Button
-					type="button"
-					variant="ghost"
-					size="icon-sm"
-					disabled={!canRemove}
-					onClick={onRemove}
-				>
-					<Trash2 />
-					<span className="sr-only">Supprimer la ligne</span>
-				</Button>
+			<div className="mt-5 space-y-4">
+				<SummaryRow icon={<UserRound />} label="Client" value={customerName} />
+				<SummaryRow icon={<MapPin />} label="Contexte" value={contextName} />
+				<SummaryRow
+					icon={<FileText />}
+					label="Lignes"
+					value={`${completedLineCount}/${lineCount} chiffrée${
+						completedLineCount > 1 ? 's' : ''
+					}`}
+				/>
+			</div>
+
+			<div className="mt-5 rounded-lg bg-muted p-4">
+				<p className="text-xs font-medium text-muted-foreground">
+					Total estimé
+				</p>
+				<p className="mt-1 text-2xl font-bold">{formatCents(totalCents)}</p>
+			</div>
+		</aside>
+	)
+}
+
+interface SummaryRowProps {
+	icon: React.ReactNode
+	label: string
+	value: string
+}
+
+function SummaryRow({ icon, label, value }: SummaryRowProps) {
+	return (
+		<div className="flex min-w-0 items-start gap-3">
+			<div className="mt-0.5 text-muted-foreground [&>svg]:size-4">{icon}</div>
+			<div className="min-w-0">
+				<p className="text-xs font-medium text-muted-foreground">{label}</p>
+				<p className="truncate text-sm font-medium">{value}</p>
 			</div>
 		</div>
 	)
@@ -529,6 +954,85 @@ function statusTone(status: Quote['status']) {
 	if (status === 'SENT') return 'brand'
 	if (status === 'DECLINED' || status === 'CANCELLED') return 'error'
 	return 'neutral'
+}
+
+const QUOTE_SORT_OPTIONS: DataViewSortOption<Quote>[] = [
+	{
+		value: 'created-desc',
+		label: 'Plus récents',
+		compare: (a, b) => dateValue(b.created_at) - dateValue(a.created_at),
+	},
+	{
+		value: 'created-asc',
+		label: 'Plus anciens',
+		compare: (a, b) => dateValue(a.created_at) - dateValue(b.created_at),
+	},
+	{
+		value: 'total-desc',
+		label: 'Montant décroissant',
+		compare: (a, b) => b.total_cents - a.total_cents,
+	},
+	{
+		value: 'total-asc',
+		label: 'Montant croissant',
+		compare: (a, b) => a.total_cents - b.total_cents,
+	},
+]
+
+function quoteMatchesSearch(
+	quote: Quote,
+	query: string,
+	customers: Customer[],
+): boolean {
+	const customer = customers.find((item) => item.id === quote.customer_id)
+	const customerName = customer
+		? customerDisplayName(customer).toLowerCase()
+		: ''
+	return (
+		quote.id.toLowerCase().includes(query) ||
+		quoteStatusLabel(quote.status).toLowerCase().includes(query) ||
+		formatCents(quote.total_cents).toLowerCase().includes(query) ||
+		customerName.includes(query)
+	)
+}
+
+function quoteMatchesStatusFilter(quote: Quote, filter: string): boolean {
+	if (filter === 'all') return true
+	return quote.status === filter
+}
+
+function dateValue(value: string): number {
+	return new Date(value).getTime()
+}
+
+function catalogItemOptionLabel(item: CatalogItem): string {
+	const reference = item.sku ? ` · ${item.sku}` : ''
+	return `${item.label}${reference} · ${formatCents(item.unitPriceCents)}`
+}
+
+function catalogItemDetail(item: CatalogItem): string {
+	const unit = catalogItemUnitLabel(item)
+	const description = item.description ? ` · ${item.description}` : ''
+	return `${item.type === 'PRODUCT' ? 'Produit' : 'Service'} · ${formatCents(
+		item.unitPriceCents,
+	)} / ${unit}${description}`
+}
+
+function catalogItemUnitLabel(item: CatalogItem): string {
+	if (item.type === 'PRODUCT' && item.unit === 'HOUR') return 'unité'
+	return formatUnit(item.unit)
+}
+
+function quoteLineSourceLabel(type: QuoteLineFormValues['catalogItemType']) {
+	if (type === 'SERVICE') return 'Service catalogue'
+	if (type === 'PRODUCT') return 'Produit catalogue'
+	return 'Ligne libre'
+}
+
+function quoteLineTotalCents(line: QuoteLineFormValues): number {
+	const quantity = Number(line.quantity.replace(',', '.'))
+	if (!Number.isFinite(quantity) || quantity <= 0) return 0
+	return Math.round(quantity * eurosToCents(line.unitPrice))
 }
 
 export namespace QuoteCreateUI {

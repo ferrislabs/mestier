@@ -5,9 +5,7 @@ import {
 	useReactTable,
 } from '@tanstack/react-table'
 import {
-	BriefcaseBusiness,
 	Building2,
-	CircleDollarSign,
 	Loader2,
 	MoreHorizontal,
 	Package,
@@ -56,6 +54,8 @@ import type {
 	EmployeeFormValues,
 	EquipmentFormValues,
 	OrganizationFormValues,
+	Product,
+	ProductCatalogFormValues,
 	ReferenceCatalogData,
 	ReferenceTab,
 	ServiceRateFormValues,
@@ -70,6 +70,7 @@ interface SettingsUIProps {
 	employeeForm: FormBinding<EmployeeFormValues>
 	equipmentForm: FormBinding<EquipmentFormValues>
 	serviceRateForm: FormBinding<ServiceRateFormValues>
+	productForm: FormBinding<ProductCatalogFormValues>
 	onUpdateEmployee: (
 		employee: Employee,
 		values: EmployeeFormValues,
@@ -85,6 +86,11 @@ interface SettingsUIProps {
 		values: ServiceRateFormValues,
 	) => Promise<unknown>
 	onDeleteServiceRate: (serviceRate: ServiceRate) => Promise<unknown>
+	onUpdateProduct: (
+		product: Product,
+		values: ProductCatalogFormValues,
+	) => Promise<unknown>
+	onDeleteProduct: (product: Product) => Promise<unknown>
 }
 
 interface FormBinding<T> {
@@ -98,6 +104,7 @@ type Draft =
 	| { tab: 'employees'; id: string; values: EmployeeFormValues }
 	| { tab: 'equipment'; id: string; values: EquipmentFormValues }
 	| { tab: 'service-rates'; id: string; values: ServiceRateFormValues }
+	| { tab: 'products'; id: string; values: ProductCatalogFormValues }
 	| null
 
 const TABS: {
@@ -107,11 +114,16 @@ const TABS: {
 }[] = [
 	{ id: 'employees', label: 'Employés', icon: Users },
 	{ id: 'equipment', label: 'Matériel', icon: Package },
-	{ id: 'service-rates', label: 'Prestations', icon: BriefcaseBusiness },
 ]
 
 const UNIT_LABELS: Record<ServiceRateUnit, string> = {
 	HOUR: '€/h',
+	ML: '€/ml',
+	M2: '€/m²',
+}
+
+const PRODUCT_UNIT_LABELS: Record<ServiceRateUnit, string> = {
+	HOUR: '€/unité',
 	ML: '€/ml',
 	M2: '€/m²',
 }
@@ -125,12 +137,15 @@ export function SettingsUI({
 	employeeForm,
 	equipmentForm,
 	serviceRateForm,
+	productForm,
 	onUpdateEmployee,
 	onDeleteEmployee,
 	onUpdateEquipment,
 	onDeleteEquipment,
 	onUpdateServiceRate,
 	onDeleteServiceRate,
+	onUpdateProduct,
+	onDeleteProduct,
 }: SettingsUIProps) {
 	const [activeTab, setActiveTab] = useState<ReferenceTab>('employees')
 	const [search, setSearch] = useState('')
@@ -149,13 +164,16 @@ export function SettingsUI({
 			serviceRates: data.serviceRates.filter((serviceRate) =>
 				serviceRate.label.toLowerCase().includes(normalizedSearch),
 			),
+			products: data.products.filter((product) => {
+				return (
+					product.name.toLowerCase().includes(normalizedSearch) ||
+					(product.sku ?? '').toLowerCase().includes(normalizedSearch) ||
+					(product.description ?? '').toLowerCase().includes(normalizedSearch)
+				)
+			}),
 		}),
 		[data, normalizedSearch],
 	)
-
-	const totalHourlyCost =
-		sum(data.employees.map((employee) => employee.hourly_rate_cents)) +
-		sum(data.equipment.map((item) => item.hourly_rate_cents))
 
 	const handleSaveDraft = async () => {
 		if (!draft) return
@@ -175,6 +193,10 @@ export function SettingsUI({
 				)
 				if (serviceRate) await onUpdateServiceRate(serviceRate, draft.values)
 			}
+			if (draft.tab === 'products') {
+				const product = data.products.find((item) => item.id === draft.id)
+				if (product) await onUpdateProduct(product, draft.values)
+			}
 			setDraft(null)
 		} finally {
 			setIsSaving(false)
@@ -186,7 +208,7 @@ export function SettingsUI({
 			<PageHeader
 				eyebrow={organization.name}
 				title="Paramètres"
-				description="Configurez l’espace de travail, les équipes, les ressources et les tarifs utilisés par vos opérations."
+				description="Configurez l’espace de travail, les équipes et les ressources internes de l’organisation."
 			/>
 
 			<OrganizationSection
@@ -194,7 +216,7 @@ export function SettingsUI({
 				form={organizationForm}
 			/>
 
-			<div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+			<div className="grid grid-cols-1 gap-4 md:grid-cols-2">
 				<MetricCard
 					label="Employés"
 					value={data.employees.length}
@@ -206,12 +228,6 @@ export function SettingsUI({
 					value={data.equipment.length}
 					hint="Ressources facturables"
 					icon={<Package className="size-4" />}
-				/>
-				<MetricCard
-					label="Coût horaire"
-					value={formatMoney(totalHourlyCost)}
-					hint="Équipes + ressources"
-					icon={<CircleDollarSign className="size-4" />}
 				/>
 			</div>
 
@@ -263,6 +279,7 @@ export function SettingsUI({
 				employeeForm={employeeForm}
 				equipmentForm={equipmentForm}
 				serviceRateForm={serviceRateForm}
+				productForm={productForm}
 			/>
 
 			{isLoading ? (
@@ -316,7 +333,7 @@ export function SettingsUI({
 					onSave={handleSaveDraft}
 					onDelete={onDeleteEquipment}
 				/>
-			) : (
+			) : activeTab === 'service-rates' ? (
 				<ServiceRateTable
 					data={filteredData.serviceRates}
 					draft={draft}
@@ -342,6 +359,33 @@ export function SettingsUI({
 					onCancel={() => setDraft(null)}
 					onSave={handleSaveDraft}
 					onDelete={onDeleteServiceRate}
+				/>
+			) : (
+				<ProductTable
+					data={filteredData.products}
+					draft={draft}
+					isSaving={isSaving}
+					onEdit={(product) =>
+						setDraft({
+							tab: 'products',
+							id: product.id,
+							values: {
+								name: product.name,
+								sku: product.sku ?? '',
+								unit: product.unit,
+								unitPrice: centsToEuros(product.unit_price_cents),
+								description: product.description ?? '',
+							},
+						})
+					}
+					onDraftChange={(values) =>
+						setDraft((current) =>
+							current?.tab === 'products' ? { ...current, values } : current,
+						)
+					}
+					onCancel={() => setDraft(null)}
+					onSave={handleSaveDraft}
+					onDelete={onDeleteProduct}
 				/>
 			)}
 		</PageShell>
@@ -420,6 +464,7 @@ interface CreateReferenceSectionProps {
 	employeeForm: FormBinding<EmployeeFormValues>
 	equipmentForm: FormBinding<EquipmentFormValues>
 	serviceRateForm: FormBinding<ServiceRateFormValues>
+	productForm: FormBinding<ProductCatalogFormValues>
 }
 
 function CreateReferenceSection({
@@ -427,6 +472,7 @@ function CreateReferenceSection({
 	employeeForm,
 	equipmentForm,
 	serviceRateForm,
+	productForm,
 }: CreateReferenceSectionProps) {
 	return (
 		<SectionCard>
@@ -485,7 +531,7 @@ function CreateReferenceSection({
 							onClick={equipmentForm.onSubmit}
 						/>
 					</>
-				) : (
+				) : activeTab === 'service-rates' ? (
 					<>
 						<div className="grid grid-cols-1 gap-4 md:grid-cols-3">
 							<TextField
@@ -524,6 +570,59 @@ function CreateReferenceSection({
 						<CreateButton
 							isPending={serviceRateForm.isPending}
 							onClick={serviceRateForm.onSubmit}
+						/>
+					</>
+				) : (
+					<>
+						<div className="grid grid-cols-1 gap-4 md:grid-cols-5">
+							<TextField
+								label="Produit"
+								value={productForm.values.name}
+								onChange={(name) => productForm.onChange({ name })}
+							/>
+							<TextField
+								label="Référence"
+								value={productForm.values.sku}
+								onChange={(sku) => productForm.onChange({ sku })}
+								placeholder="Optionnel"
+							/>
+							<div className="flex flex-col gap-2">
+								<Label>Unité</Label>
+								<Select
+									value={productForm.values.unit}
+									onValueChange={(unit) =>
+										productForm.onChange({ unit: unit as ServiceRateUnit })
+									}
+								>
+									<SelectTrigger className="w-full">
+										<SelectValue />
+									</SelectTrigger>
+									<SelectContent>
+										<SelectItem value="ML">Mètre linéaire</SelectItem>
+										<SelectItem value="M2">Mètre carré</SelectItem>
+										<SelectItem value="HOUR">Unité</SelectItem>
+									</SelectContent>
+								</Select>
+							</div>
+							<TextField
+								label="Prix"
+								value={productForm.values.unitPrice}
+								onChange={(unitPrice) => productForm.onChange({ unitPrice })}
+								inputMode="decimal"
+								suffix={PRODUCT_UNIT_LABELS[productForm.values.unit]}
+							/>
+							<TextField
+								label="Description"
+								value={productForm.values.description}
+								onChange={(description) =>
+									productForm.onChange({ description })
+								}
+								placeholder="Optionnel"
+							/>
+						</div>
+						<CreateButton
+							isPending={productForm.isPending}
+							onClick={productForm.onSubmit}
 						/>
 					</>
 				)}
@@ -632,7 +731,16 @@ function EmployeeTable({
 		[draft, isSaving, onCancel, onDelete, onDraftChange, onEdit, onSave],
 	)
 
-	return <ReferenceTable title="Employés" data={data} columns={columns} />
+	return (
+		<ReferenceTable
+			title="Employés"
+			description="Taux horaires et rattachements aux comptes utilisateurs."
+			emptyTitle="Aucun employé trouvé"
+			emptyDescription="Ajoutez un employé pour le rendre disponible dans les prochains workflows opérationnels."
+			data={data}
+			columns={columns}
+		/>
+	)
 }
 
 interface EquipmentTableProps {
@@ -709,7 +817,16 @@ function EquipmentTable({
 		[draft, isSaving, onCancel, onDelete, onDraftChange, onEdit, onSave],
 	)
 
-	return <ReferenceTable title="Matériel" data={data} columns={columns} />
+	return (
+		<ReferenceTable
+			title="Matériel"
+			description="Ressources matérielles facturables ou utilisées dans les opérations."
+			emptyTitle="Aucun matériel trouvé"
+			emptyDescription="Ajoutez une ressource pour la retrouver dans le référentiel de l'organisation."
+			data={data}
+			columns={columns}
+		/>
+	)
 }
 
 interface ServiceRateTableProps {
@@ -773,7 +890,7 @@ function ServiceRateTable({
 						</Select>
 					) : (
 						<StatusBadge tone="brand">
-							{UNIT_LABELS[row.original.unit]}
+							{PRODUCT_UNIT_LABELS[row.original.unit]}
 						</StatusBadge>
 					),
 			},
@@ -814,16 +931,189 @@ function ServiceRateTable({
 		[draft, isSaving, onCancel, onDelete, onDraftChange, onEdit, onSave],
 	)
 
-	return <ReferenceTable title="Prestations" data={data} columns={columns} />
+	return (
+		<ReferenceTable
+			title="Services"
+			description="Prestations réutilisables dans les devis et futures pièces commerciales."
+			emptyTitle="Aucun service trouvé"
+			emptyDescription="Ajoutez une prestation pour accélérer la saisie des devis."
+			data={data}
+			columns={columns}
+		/>
+	)
+}
+
+interface ProductTableProps {
+	data: Product[]
+	draft: Draft
+	isSaving: boolean
+	onEdit: (product: Product) => void
+	onDraftChange: (values: ProductCatalogFormValues) => void
+	onCancel: () => void
+	onSave: () => void
+	onDelete: (product: Product) => Promise<unknown>
+}
+
+function ProductTable({
+	data,
+	draft,
+	isSaving,
+	onEdit,
+	onDraftChange,
+	onCancel,
+	onSave,
+	onDelete,
+}: ProductTableProps) {
+	const columns = useMemo<ColumnDef<Product>[]>(
+		() => [
+			{
+				header: 'Produit',
+				cell: ({ row }) =>
+					draft?.tab === 'products' && draft.id === row.original.id ? (
+						<Input
+							value={draft.values.name}
+							onChange={(event) =>
+								onDraftChange({ ...draft.values, name: event.target.value })
+							}
+						/>
+					) : (
+						<ProductIdentity product={row.original} />
+					),
+			},
+			{
+				header: 'Référence',
+				cell: ({ row }) =>
+					draft?.tab === 'products' && draft.id === row.original.id ? (
+						<Input
+							value={draft.values.sku}
+							onChange={(event) =>
+								onDraftChange({ ...draft.values, sku: event.target.value })
+							}
+							placeholder="Optionnel"
+						/>
+					) : row.original.sku ? (
+						<StatusBadge tone="brand">{row.original.sku}</StatusBadge>
+					) : (
+						<StatusBadge>sans réf.</StatusBadge>
+					),
+			},
+			{
+				header: 'Unité',
+				cell: ({ row }) =>
+					draft?.tab === 'products' && draft.id === row.original.id ? (
+						<Select
+							value={draft.values.unit}
+							onValueChange={(unit) =>
+								onDraftChange({
+									...draft.values,
+									unit: unit as ServiceRateUnit,
+								})
+							}
+						>
+							<SelectTrigger className="w-36">
+								<SelectValue />
+							</SelectTrigger>
+							<SelectContent>
+								<SelectItem value="ML">Mètre linéaire</SelectItem>
+								<SelectItem value="M2">Mètre carré</SelectItem>
+								<SelectItem value="HOUR">Unité</SelectItem>
+							</SelectContent>
+						</Select>
+					) : (
+						<StatusBadge tone="brand">
+							{UNIT_LABELS[row.original.unit]}
+						</StatusBadge>
+					),
+			},
+			{
+				header: 'Prix',
+				cell: ({ row }) =>
+					draft?.tab === 'products' && draft.id === row.original.id ? (
+						<Input
+							value={draft.values.unitPrice}
+							onChange={(event) =>
+								onDraftChange({
+									...draft.values,
+									unitPrice: event.target.value,
+								})
+							}
+							inputMode="decimal"
+						/>
+					) : (
+						<MoneyCell
+							value={row.original.unit_price_cents}
+							suffix={productUnitSuffix(row.original.unit)}
+						/>
+					),
+			},
+			{
+				header: 'Description',
+				cell: ({ row }) =>
+					draft?.tab === 'products' && draft.id === row.original.id ? (
+						<Input
+							value={draft.values.description}
+							onChange={(event) =>
+								onDraftChange({
+									...draft.values,
+									description: event.target.value,
+								})
+							}
+							placeholder="Optionnel"
+						/>
+					) : (
+						<p className="max-w-64 truncate text-sm text-muted-foreground">
+							{row.original.description || 'Aucune description'}
+						</p>
+					),
+			},
+			{
+				id: 'actions',
+				cell: ({ row }) => (
+					<RowActions
+						isEditing={
+							draft?.tab === 'products' && draft.id === row.original.id
+						}
+						isSaving={isSaving}
+						onEdit={() => onEdit(row.original)}
+						onCancel={onCancel}
+						onSave={onSave}
+						onDelete={() => onDelete(row.original)}
+					/>
+				),
+			},
+		],
+		[draft, isSaving, onCancel, onDelete, onDraftChange, onEdit, onSave],
+	)
+
+	return (
+		<ReferenceTable
+			title="Produits"
+			description="Articles vendables avec référence, unité, prix et description préremplie."
+			emptyTitle="Aucun produit trouvé"
+			emptyDescription="Ajoutez un produit pour l'insérer rapidement dans les devis."
+			data={data}
+			columns={columns}
+		/>
+	)
 }
 
 interface ReferenceTableProps<T> {
 	title: string
+	description: string
+	emptyTitle: string
+	emptyDescription: string
 	data: T[]
 	columns: ColumnDef<T>[]
 }
 
-function ReferenceTable<T>({ title, data, columns }: ReferenceTableProps<T>) {
+function ReferenceTable<T>({
+	title,
+	description,
+	emptyTitle,
+	emptyDescription,
+	data,
+	columns,
+}: ReferenceTableProps<T>) {
 	const table = useReactTable({
 		data,
 		columns,
@@ -834,7 +1124,7 @@ function ReferenceTable<T>({ title, data, columns }: ReferenceTableProps<T>) {
 		<SectionCard>
 			<SectionHeader
 				title={`${title} (${data.length})`}
-				description="Modifiez une ligne ou supprimez-la du référentiel actif."
+				description={description}
 			/>
 			<div className="overflow-x-auto">
 				<table className="w-full min-w-[720px] border-collapse text-sm">
@@ -860,16 +1150,21 @@ function ReferenceTable<T>({ title, data, columns }: ReferenceTableProps<T>) {
 					<tbody>
 						{table.getRowModel().rows.length === 0 ? (
 							<tr>
-								<td
-									colSpan={columns.length}
-									className="px-5 py-12 text-center text-sm text-muted-foreground"
-								>
-									Aucune entrée trouvée.
+								<td colSpan={columns.length} className="px-5 py-12 text-center">
+									<div className="mx-auto flex max-w-sm flex-col items-center gap-2">
+										<p className="font-medium">{emptyTitle}</p>
+										<p className="text-sm text-muted-foreground">
+											{emptyDescription}
+										</p>
+									</div>
 								</td>
 							</tr>
 						) : (
 							table.getRowModel().rows.map((row) => (
-								<tr key={row.id} className="border-b last:border-b-0">
+								<tr
+									key={row.id}
+									className="group border-b transition hover:bg-muted/35 hover:shadow-xs last:border-b-0"
+								>
 									{row.getVisibleCells().map((cell) => (
 										<td key={cell.id} className="px-5 py-3 align-middle">
 											{flexRender(
@@ -921,7 +1216,7 @@ function RowActions({
 	}
 
 	return (
-		<div className="flex justify-end">
+		<div className="flex justify-end opacity-0 transition group-hover:opacity-100 group-focus-within:opacity-100">
 			<DropdownMenu>
 				<DropdownMenuTrigger asChild>
 					<Button size="icon-sm" variant="ghost">
@@ -942,7 +1237,11 @@ function RowActions({
 	)
 }
 
-interface TextFieldProps extends React.InputHTMLAttributes<HTMLInputElement> {
+interface TextFieldProps
+	extends Omit<
+		React.InputHTMLAttributes<HTMLInputElement>,
+		'value' | 'onChange'
+	> {
 	label: string
 	value: string
 	onChange: (value: string) => void
@@ -1004,6 +1303,22 @@ function RowIdentity({ title, id }: { title: string; id: string }) {
 	)
 }
 
+function ProductIdentity({ product }: { product: Product }) {
+	return (
+		<div className="min-w-0">
+			<div className="flex min-w-0 items-center gap-2">
+				<p className="truncate font-medium">{product.name}</p>
+				{product.sku ? (
+					<StatusBadge tone="brand">{product.sku}</StatusBadge>
+				) : null}
+			</div>
+			<p className="mt-0.5 truncate font-mono text-xs text-muted-foreground">
+				id: {product.id}
+			</p>
+		</div>
+	)
+}
+
 function MoneyCell({ value, suffix }: { value: number; suffix: string }) {
 	return (
 		<span className="font-medium tabular-nums">
@@ -1030,6 +1345,8 @@ function unitSuffix(unit: ServiceRateUnit): string {
 	return '/m²'
 }
 
-function sum(values: number[]): number {
-	return values.reduce((total, value) => total + value, 0)
+function productUnitSuffix(unit: ServiceRateUnit): string {
+	if (unit === 'HOUR') return '/unité'
+	if (unit === 'ML') return '/ml'
+	return '/m²'
 }

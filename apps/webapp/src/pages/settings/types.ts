@@ -1,11 +1,17 @@
+import type { ProductCatalogFormValues } from '#/hooks/use-catalog-items'
 import type {
 	Employee,
 	Equipment,
+	Product,
 	ServiceRate,
 	ServiceRateUnit,
 } from '#/hooks/use-reference-catalog'
 
-export type ReferenceTab = 'employees' | 'equipment' | 'service-rates'
+export type ReferenceTab =
+	| 'employees'
+	| 'equipment'
+	| 'service-rates'
+	| 'products'
 
 export interface OrganizationFormValues {
 	name: string
@@ -33,4 +39,7 @@ export interface ReferenceCatalogData {
 	employees: Employee[]
 	equipment: Equipment[]
 	serviceRates: ServiceRate[]
+	products: Product[]
 }
+
+export type { ProductCatalogFormValues, Product }

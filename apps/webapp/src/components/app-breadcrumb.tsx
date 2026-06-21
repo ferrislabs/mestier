@@ -91,6 +91,13 @@ function getBreadcrumbItems(
 		]
 	}
 
+	if (pathname.startsWith('/catalog')) {
+		return [
+			{ id: 'organization', label: organizationName, to: '/' },
+			{ id: 'catalog', label: 'Catalogue' },
+		]
+	}
+
 	if (pathname.startsWith('/settings')) {
 		return [
 			{ id: 'organization', label: organizationName, to: '/' },

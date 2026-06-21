@@ -17,6 +17,7 @@ pub mod equipment;
 pub mod member;
 pub mod organization;
 pub mod policy;
+pub mod product;
 pub mod quote;
 pub mod role;
 pub mod service_rate;

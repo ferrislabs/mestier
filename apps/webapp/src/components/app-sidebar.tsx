@@ -1,6 +1,7 @@
 import { Link } from '@tanstack/react-router'
 import {
 	BarChart3,
+	Boxes,
 	Eye,
 	FileText,
 	LayoutDashboard,
@@ -30,6 +31,7 @@ import {
 const coreItems: NavItem[] = [
 	{ title: 'Accueil', to: '/', icon: LayoutDashboard, exact: true },
 	{ title: 'Clients', to: '/customers', icon: Users, badge: '3' },
+	{ title: 'Catalogue', to: '/catalog', icon: Boxes },
 	{ title: 'Devis', to: '/quotes', icon: FileText },
 	{ title: 'Factures', to: '/customers', icon: Receipt, disabled: true },
 	{ title: 'Stock', to: '/customers', icon: Package, disabled: true },

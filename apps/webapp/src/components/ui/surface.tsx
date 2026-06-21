@@ -1,5 +1,5 @@
-import type * as React from 'react'
 import { cva, type VariantProps } from 'class-variance-authority'
+import type * as React from 'react'
 
 import { cn } from '#/lib/utils'
 
@@ -18,7 +18,8 @@ function PageShell({
 	)
 }
 
-interface PageHeaderProps extends React.ComponentPropsWithoutRef<'header'> {
+interface PageHeaderProps
+	extends Omit<React.ComponentPropsWithoutRef<'header'>, 'title'> {
 	title: React.ReactNode
 	description?: React.ReactNode
 	actions?: React.ReactNode
@@ -84,7 +85,8 @@ function SectionCard({
 	)
 }
 
-interface SectionHeaderProps extends React.ComponentPropsWithoutRef<'div'> {
+interface SectionHeaderProps
+	extends Omit<React.ComponentPropsWithoutRef<'div'>, 'title'> {
 	title: React.ReactNode
 	description?: React.ReactNode
 	actions?: React.ReactNode

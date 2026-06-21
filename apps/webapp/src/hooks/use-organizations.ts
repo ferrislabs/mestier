@@ -4,6 +4,17 @@ import type { Schemas } from '#/api/api.client'
 const MY_ORGS_KEY = '/api/v1/users/@me/organizations'
 const ORGANIZATION_PATH = '/api/v1/organizations/{organization_id}'
 
+interface QueryKeyMeta {
+	_id?: unknown
+}
+
+function queryKeyMeta(queryKey: readonly unknown[]) {
+	const meta = queryKey[0]
+	return typeof meta === 'object' && meta !== null
+		? (meta as QueryKeyMeta)
+		: null
+}
+
 export function useMyOrganizations() {
 	return useQuery(
 		window.tanstackApi.get('/api/v1/users/@me/organizations').queryOptions,
@@ -40,8 +51,8 @@ export function useUpdateOrganization(organizationId: string) {
 		onSuccess: () => {
 			void queryClient.invalidateQueries({
 				predicate: (query) =>
-					query.queryKey[0]?._id === MY_ORGS_KEY ||
-					query.queryKey[0]?._id === ORGANIZATION_PATH,
+					queryKeyMeta(query.queryKey)?._id === MY_ORGS_KEY ||
+					queryKeyMeta(query.queryKey)?._id === ORGANIZATION_PATH,
 			})
 		},
 		meta: { organizationId },
@@ -56,8 +67,8 @@ export function useDeleteOrganization() {
 		onSuccess: () => {
 			void queryClient.invalidateQueries({
 				predicate: (query) =>
-					query.queryKey[0]?._id === MY_ORGS_KEY ||
-					query.queryKey[0]?._id === ORGANIZATION_PATH,
+					queryKeyMeta(query.queryKey)?._id === MY_ORGS_KEY ||
+					queryKeyMeta(query.queryKey)?._id === ORGANIZATION_PATH,
 			})
 		},
 	})
