@@ -5,6 +5,7 @@ import {
 	FileText,
 	ImagePlus,
 	MapPin,
+	MoreHorizontal,
 	Plus,
 	RefreshCw,
 	Trash2,
@@ -18,7 +19,24 @@ import {
 	getPaginationViewModel,
 	useDataView,
 } from '#/components/data-view'
+import {
+	AlertDialog,
+	AlertDialogAction,
+	AlertDialogCancel,
+	AlertDialogContent,
+	AlertDialogDescription,
+	AlertDialogFooter,
+	AlertDialogHeader,
+	AlertDialogTitle,
+} from '#/components/ui/alert-dialog'
 import { Button } from '#/components/ui/button'
+import {
+	DropdownMenu,
+	DropdownMenuContent,
+	DropdownMenuItem,
+	DropdownMenuSeparator,
+	DropdownMenuTrigger,
+} from '#/components/ui/dropdown-menu'
 import { Input } from '#/components/ui/input'
 import { Label } from '#/components/ui/label'
 import {
@@ -84,6 +102,7 @@ interface QuoteCreateUIProps {
 	isLoading?: boolean
 	isCreating?: boolean
 	isUploading?: boolean
+	deletingQuoteId?: string | null
 	isCustomerContextsLoading?: boolean
 	onRetry?: () => void
 	onChange: (patch: Partial<QuoteFormValues>) => void
@@ -94,6 +113,7 @@ interface QuoteCreateUIProps {
 	onUploadLinePhoto: (index: number, file: File) => Promise<void>
 	onQuotePageChange: (page: number) => void
 	onQuotePageSizeChange: (pageSize: number) => void
+	onQuoteDelete?: (quote: Quote) => Promise<unknown>
 	onSubmit: () => void
 }
 
@@ -111,6 +131,7 @@ export function QuoteCreateUI({
 	isLoading,
 	isCreating,
 	isUploading,
+	deletingQuoteId,
 	isCustomerContextsLoading,
 	onRetry,
 	onChange,
@@ -121,9 +142,11 @@ export function QuoteCreateUI({
 	onUploadLinePhoto,
 	onQuotePageChange,
 	onQuotePageSizeChange,
+	onQuoteDelete,
 	onSubmit,
 }: QuoteCreateUIProps) {
 	const [createOpen, setCreateOpen] = useState(false)
+	const [quoteToDelete, setQuoteToDelete] = useState<Quote | null>(null)
 	const [initialQuoteListState] = useState(getQuoteListUrlState)
 	const [quoteSearch, setQuoteSearch] = useState(initialQuoteListState.search)
 	const [quoteStatusFilter, setQuoteStatusFilter] = useState(
@@ -238,6 +261,8 @@ export function QuoteCreateUI({
 	const productCount = catalogItems.filter(
 		(item) => item.type === 'PRODUCT',
 	).length
+	const isDeletingSelectedQuote =
+		Boolean(quoteToDelete) && deletingQuoteId === quoteToDelete?.id
 
 	const resetQuoteDataView = () => {
 		setQuoteSearch('')
@@ -587,11 +612,11 @@ export function QuoteCreateUI({
 							})
 
 							return (
-								<li key={quote.id}>
+								<li key={quote.id} className="group relative">
 									<Link
 										to="/quotes/$quoteId"
 										params={{ quoteId: quote.id }}
-										className="grid gap-4 px-5 py-4 transition hover:bg-muted/40 sm:grid-cols-[minmax(0,1fr)_160px_160px] sm:items-center"
+										className="grid gap-4 px-5 py-4 pr-14 transition hover:bg-muted/40 sm:grid-cols-[minmax(0,1fr)_160px_160px] sm:items-center"
 									>
 										<div className="flex min-w-0 items-center gap-4">
 											<div className="flex size-11 shrink-0 items-center justify-center rounded-lg bg-brand-soft text-primary">
@@ -628,6 +653,44 @@ export function QuoteCreateUI({
 											{formatCents(quote.total_cents)}
 										</p>
 									</Link>
+
+									{onQuoteDelete ? (
+										<div className="absolute right-3 top-1/2 z-20 -translate-y-1/2 opacity-100 transition-opacity md:opacity-0 md:group-hover:opacity-100 md:group-focus-within:opacity-100">
+											<DropdownMenu>
+												<DropdownMenuTrigger asChild>
+													<Button
+														type="button"
+														variant="ghost"
+														size="icon-sm"
+														className="text-muted-foreground"
+														disabled={deletingQuoteId === quote.id}
+													>
+														<MoreHorizontal />
+														<span className="sr-only">Actions</span>
+													</Button>
+												</DropdownMenuTrigger>
+												<DropdownMenuContent align="end">
+													<DropdownMenuItem asChild>
+														<Link
+															to="/quotes/$quoteId"
+															params={{ quoteId: quote.id }}
+														>
+															Modifier
+														</Link>
+													</DropdownMenuItem>
+													<DropdownMenuSeparator />
+													<DropdownMenuItem
+														variant="destructive"
+														disabled={deletingQuoteId === quote.id}
+														onClick={() => setQuoteToDelete(quote)}
+													>
+														<Trash2 />
+														Supprimer
+													</DropdownMenuItem>
+												</DropdownMenuContent>
+											</DropdownMenu>
+										</div>
+									) : null}
 								</li>
 							)
 						})}
@@ -648,6 +711,47 @@ export function QuoteCreateUI({
 					</div>
 				) : null}
 			</SectionCard>
+
+			<AlertDialog
+				open={Boolean(quoteToDelete)}
+				onOpenChange={(open) => {
+					if (!open) setQuoteToDelete(null)
+				}}
+			>
+				<AlertDialogContent>
+					<AlertDialogHeader>
+						<AlertDialogTitle>Supprimer ce devis ?</AlertDialogTitle>
+						<AlertDialogDescription>
+							{quoteToDelete
+								? `Le devis ${quoteToDelete.reference} sera supprimé de la liste. Cette action est irréversible.`
+								: 'Ce devis sera supprimé de la liste. Cette action est irréversible.'}
+						</AlertDialogDescription>
+					</AlertDialogHeader>
+					<AlertDialogFooter>
+						<AlertDialogCancel disabled={isDeletingSelectedQuote}>
+							Annuler
+						</AlertDialogCancel>
+						<AlertDialogAction
+							disabled={!quoteToDelete || isDeletingSelectedQuote}
+							className="bg-destructive text-white hover:bg-destructive/90 focus-visible:ring-destructive/20"
+							onClick={(event) => {
+								event.preventDefault()
+								if (!quoteToDelete || !onQuoteDelete) return
+								void onQuoteDelete(quoteToDelete).then(() => {
+									setQuoteToDelete(null)
+								})
+							}}
+						>
+							{isDeletingSelectedQuote ? (
+								<RefreshCw className="animate-spin" />
+							) : (
+								<Trash2 />
+							)}
+							Supprimer
+						</AlertDialogAction>
+					</AlertDialogFooter>
+				</AlertDialogContent>
+			</AlertDialog>
 		</PageShell>
 	)
 }

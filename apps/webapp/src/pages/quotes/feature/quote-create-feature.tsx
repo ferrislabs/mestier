@@ -13,6 +13,7 @@ import {
 	type PaginationMetadata,
 	type Quote,
 	useCreateQuote,
+	useDeleteQuote,
 	useQuotes,
 } from '#/hooks/use-quotes'
 import { useReferenceCatalog } from '#/hooks/use-reference-catalog'
@@ -74,6 +75,7 @@ function QuoteWorkspace({ organizationId }: { organizationId: string }) {
 		catalog.products.data?.data ?? [],
 	)
 	const createQuote = useCreateQuote(organizationId)
+	const deleteQuote = useDeleteQuote(organizationId)
 	const uploadFile = useUploadFile()
 
 	const form = useForm({
@@ -135,12 +137,18 @@ function QuoteWorkspace({ organizationId }: { organizationId: string }) {
 					}
 					isCreating={createQuote.isPending}
 					isUploading={uploadFile.isPending}
+					deletingQuoteId={
+						deleteQuote.variables?.path.quote_id && deleteQuote.isPending
+							? deleteQuote.variables.path.quote_id
+							: null
+					}
 					error={
 						customers.error?.message ??
 						catalog.serviceRates.error?.message ??
 						catalog.products.error?.message ??
 						quotes.error?.message ??
 						createQuote.error?.message ??
+						deleteQuote.error?.message ??
 						uploadFile.error?.message ??
 						null
 					}
@@ -155,6 +163,11 @@ function QuoteWorkspace({ organizationId }: { organizationId: string }) {
 						setQuotePageSize(pageSize)
 						setQuotePage(1)
 					}}
+					onQuoteDelete={(quote) =>
+						deleteQuote.mutateAsync({
+							path: { quote_id: quote.id },
+						})
+					}
 					uploadFile={async (lineIndex, file) => {
 						const uploaded = await uploadFile.mutateAsync(file)
 						const lines = [...form.state.values.lines]
@@ -187,10 +200,12 @@ interface QuoteWorkspaceWithValuesProps {
 	isLoading: boolean
 	isCreating: boolean
 	isUploading: boolean
+	deletingQuoteId: string | null
 	error: string | null
 	refetch: () => void
 	onQuotePageChange: (page: number) => void
 	onQuotePageSizeChange: (pageSize: number) => void
+	onQuoteDelete: (quote: Quote) => Promise<unknown>
 	uploadFile: (lineIndex: number, file: File) => Promise<void>
 }
 
@@ -217,10 +232,12 @@ function QuoteWorkspaceWithValues({
 	isLoading,
 	isCreating,
 	isUploading,
+	deletingQuoteId,
 	error,
 	refetch,
 	onQuotePageChange,
 	onQuotePageSizeChange,
+	onQuoteDelete,
 	uploadFile,
 }: QuoteWorkspaceWithValuesProps) {
 	const customerContexts = useCustomerContexts(
@@ -303,6 +320,7 @@ function QuoteWorkspaceWithValues({
 			isLoading={isLoading}
 			isCreating={isCreating}
 			isUploading={isUploading}
+			deletingQuoteId={deletingQuoteId}
 			isCustomerContextsLoading={customerContexts.isLoading}
 			onRetry={refetch}
 			onChange={(patch) => {
@@ -319,6 +337,7 @@ function QuoteWorkspaceWithValues({
 			onUploadLinePhoto={uploadFile}
 			onQuotePageChange={onQuotePageChange}
 			onQuotePageSizeChange={onQuotePageSizeChange}
+			onQuoteDelete={onQuoteDelete}
 			onSubmit={() => void form.handleSubmit()}
 		/>
 	)

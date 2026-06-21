@@ -9,6 +9,31 @@ interface QuoteListParams {
 	perPage: number
 }
 
+interface QueryKeyMeta {
+	_id?: unknown
+	path?: {
+		organization_id?: unknown
+	}
+}
+
+function queryKeyMeta(queryKey: readonly unknown[]) {
+	const meta = queryKey[0]
+	return typeof meta === 'object' && meta !== null
+		? (meta as QueryKeyMeta)
+		: null
+}
+
+function isQuoteListQuery(
+	queryKey: readonly unknown[],
+	organizationId?: string,
+) {
+	const meta = queryKeyMeta(queryKey)
+	return (
+		meta?._id === QUOTES_PATH &&
+		(!organizationId || meta.path?.organization_id === organizationId)
+	)
+}
+
 function listParams(organizationId: string, params: QuoteListParams) {
 	return {
 		path: { organization_id: organizationId },
@@ -49,16 +74,8 @@ export function useCreateQuote(organizationId: string) {
 		onSuccess: async (quote) => {
 			await Promise.all([
 				queryClient.invalidateQueries({
-					predicate: (query) => {
-						const queryKey = query.queryKey[0] as
-							| { _id?: string; path?: { organization_id?: string } }
-							| undefined
-
-						return (
-							queryKey?._id === QUOTES_PATH &&
-							queryKey.path?.organization_id === organizationId
-						)
-					},
+					predicate: (query) =>
+						isQuoteListQuery(query.queryKey, organizationId),
 				}),
 				queryClient.invalidateQueries({
 					queryKey: quoteKey(quote.data.id),
@@ -77,19 +94,30 @@ export function useUpdateQuote() {
 		onSuccess: async (quote) => {
 			await Promise.all([
 				queryClient.invalidateQueries({
-					predicate: (query) => {
-						const queryKey = query.queryKey[0] as
-							| { _id?: string; path?: { organization_id?: string } }
-							| undefined
-
-						return (
-							queryKey?._id === QUOTES_PATH &&
-							queryKey.path?.organization_id === quote.data.organization_id
-						)
-					},
+					predicate: (query) =>
+						isQuoteListQuery(query.queryKey, quote.data.organization_id),
 				}),
 				queryClient.invalidateQueries({
 					queryKey: quoteKey(quote.data.id),
+				}),
+			])
+		},
+	})
+}
+
+export function useDeleteQuote(organizationId?: string) {
+	const queryClient = useQueryClient()
+
+	return useMutation({
+		...window.tanstackApi.mutation('delete', QUOTE_PATH).mutationOptions,
+		onSuccess: async (_response, variables) => {
+			await Promise.all([
+				queryClient.invalidateQueries({
+					predicate: (query) =>
+						isQuoteListQuery(query.queryKey, organizationId),
+				}),
+				queryClient.removeQueries({
+					queryKey: quoteKey(variables.path.quote_id),
 				}),
 			])
 		},

@@ -1,4 +1,4 @@
-import { Link } from '@tanstack/react-router'
+import { Link, useNavigate } from '@tanstack/react-router'
 import {
 	AlertCircle,
 	ArrowLeft,
@@ -9,6 +9,17 @@ import {
 } from 'lucide-react'
 import type * as React from 'react'
 import { useEffect, useState } from 'react'
+import {
+	AlertDialog,
+	AlertDialogAction,
+	AlertDialogCancel,
+	AlertDialogContent,
+	AlertDialogDescription,
+	AlertDialogFooter,
+	AlertDialogHeader,
+	AlertDialogTitle,
+	AlertDialogTrigger,
+} from '#/components/ui/alert-dialog'
 import { Button } from '#/components/ui/button'
 import { Input } from '#/components/ui/input'
 import { Label } from '#/components/ui/label'
@@ -39,6 +50,7 @@ import {
 import {
 	type Quote,
 	type QuoteStatus,
+	useDeleteQuote,
 	useQuote,
 	useUpdateQuote,
 } from '#/hooks/use-quotes'
@@ -91,6 +103,7 @@ export function QuoteEditFeature({ quoteId }: QuoteEditFeatureProps) {
 }
 
 function QuoteEditWorkspace({ quote }: { quote: Quote }) {
+	const navigate = useNavigate()
 	const customers = useCustomers(quote.organization_id)
 	const catalog = useReferenceCatalog(quote.organization_id, {
 		employees: false,
@@ -101,6 +114,7 @@ function QuoteEditWorkspace({ quote }: { quote: Quote }) {
 		catalog.products.data?.data ?? [],
 	)
 	const updateQuote = useUpdateQuote()
+	const deleteQuote = useDeleteQuote(quote.organization_id)
 	const uploadFile = useUploadFile()
 	const [status, setStatus] = useState<QuoteStatus>(quote.status)
 	const [values, setValues] = useState<QuoteFormValues>(() =>
@@ -210,6 +224,7 @@ function QuoteEditWorkspace({ quote }: { quote: Quote }) {
 		catalog.serviceRates.error?.message ??
 		catalog.products.error?.message ??
 		updateQuote.error?.message ??
+		deleteQuote.error?.message ??
 		uploadFile.error?.message ??
 		null
 
@@ -235,6 +250,13 @@ function QuoteEditWorkspace({ quote }: { quote: Quote }) {
 		})
 	}
 
+	const deleteCurrentQuote = async () => {
+		await deleteQuote.mutateAsync({
+			path: { quote_id: quote.id },
+		})
+		await navigate({ to: '/quotes' })
+	}
+
 	return (
 		<QuoteEditUI
 			quote={quote}
@@ -251,6 +273,7 @@ function QuoteEditWorkspace({ quote }: { quote: Quote }) {
 				catalog.products.isLoading
 			}
 			isSaving={updateQuote.isPending}
+			isDeleting={deleteQuote.isPending}
 			isUploading={uploadFile.isPending}
 			totalCents={totalCents}
 			canSave={canSave}
@@ -268,6 +291,7 @@ function QuoteEditWorkspace({ quote }: { quote: Quote }) {
 			onRemoveLine={removeLine}
 			onUploadLinePhoto={uploadLinePhoto}
 			onSave={saveQuote}
+			onDelete={deleteCurrentQuote}
 		/>
 	)
 }
@@ -282,6 +306,7 @@ function QuoteEditUI({
 	error,
 	isLoading,
 	isSaving,
+	isDeleting,
 	isUploading,
 	totalCents,
 	canSave,
@@ -293,6 +318,7 @@ function QuoteEditUI({
 	onRemoveLine,
 	onUploadLinePhoto,
 	onSave,
+	onDelete,
 }: {
 	quote: Quote
 	values: QuoteFormValues
@@ -303,6 +329,7 @@ function QuoteEditUI({
 	error: string | null
 	isLoading: boolean
 	isSaving: boolean
+	isDeleting: boolean
 	isUploading: boolean
 	totalCents: number
 	canSave: boolean
@@ -314,6 +341,7 @@ function QuoteEditUI({
 	onRemoveLine: (index: number) => void
 	onUploadLinePhoto: (index: number, file: File) => Promise<void>
 	onSave: () => void
+	onDelete: () => void
 }) {
 	return (
 		<PageShell>
@@ -329,9 +357,54 @@ function QuoteEditUI({
 								Retour
 							</Link>
 						</Button>
+						<AlertDialog>
+							<AlertDialogTrigger asChild>
+								<Button
+									type="button"
+									variant="destructive"
+									disabled={isDeleting || isSaving}
+								>
+									{isDeleting ? (
+										<Loader2 className="animate-spin" />
+									) : (
+										<Trash2 />
+									)}
+									Supprimer
+								</Button>
+							</AlertDialogTrigger>
+							<AlertDialogContent>
+								<AlertDialogHeader>
+									<AlertDialogTitle>Supprimer ce devis ?</AlertDialogTitle>
+									<AlertDialogDescription>
+										Le devis {quote.reference} sera supprimé de la liste. Cette
+										action est irréversible.
+									</AlertDialogDescription>
+								</AlertDialogHeader>
+								<AlertDialogFooter>
+									<AlertDialogCancel disabled={isDeleting}>
+										Annuler
+									</AlertDialogCancel>
+									<AlertDialogAction
+										disabled={isDeleting}
+										className="bg-destructive text-white hover:bg-destructive/90 focus-visible:ring-destructive/20"
+										onClick={(event) => {
+											event.preventDefault()
+											void onDelete()
+										}}
+									>
+										{isDeleting ? (
+											<Loader2 className="animate-spin" />
+										) : (
+											<Trash2 />
+										)}
+										Supprimer
+									</AlertDialogAction>
+								</AlertDialogFooter>
+							</AlertDialogContent>
+						</AlertDialog>
 						<Button
 							type="button"
-							disabled={!canSave || isSaving}
+							disabled={!canSave || isSaving || isDeleting}
 							onClick={onSave}
 						>
 							{isSaving ? <Loader2 className="animate-spin" /> : <FileText />}
