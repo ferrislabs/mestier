@@ -132,7 +132,6 @@ impl From<MessageAttachmentRow> for Attachment {
 mod tests {
     use super::*;
     use chrono::Utc;
-    use discord::AttachmentId;
     use uuid::Uuid;
 
     #[test]

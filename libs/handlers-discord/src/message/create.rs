@@ -114,6 +114,7 @@ mod tests {
         let input: discord::AttachmentInput = dto.into();
         assert_eq!(input.storage_key, "prefix/attachments/018f0000");
         assert_eq!(input.filename, "report.pdf");
+        assert_eq!(input.mime_type, "application/pdf");
         assert_eq!(input.size_bytes, 102_400);
     }
 }

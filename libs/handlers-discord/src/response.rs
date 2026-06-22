@@ -380,6 +380,7 @@ mod tests {
         assert_eq!(resp.attachments.len(), 1);
         assert_eq!(resp.attachments[0].filename, "photo.png");
         assert_eq!(resp.attachments[0].storage_key, "prefix/attachments/abc123");
+        assert_eq!(resp.attachments[0].mime_type, "image/png");
         assert_eq!(resp.attachments[0].size_bytes, 51_200);
     }
 }
