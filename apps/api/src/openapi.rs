@@ -107,6 +107,8 @@ impl Modify for SecurityAddon {
         discord::webhook::execute::handler,
         discord::presence::set::handler,
         discord::typing::start::handler,
+        discord::read_state::mark::handler,
+        discord::read_state::unread::handler,
     ),
     components(schemas(
         organization::create::CreateOrganizationRequest,
@@ -153,6 +155,7 @@ impl Modify for SecurityAddon {
         discord::webhook::update::UpdateWebhookRequest,
         discord::webhook::execute::ExecuteWebhookRequest,
         discord::presence::set::SetPresenceRequest,
+        discord::read_state::mark::MarkChannelReadRequest,
         discord::response::CategoryResponse,
         discord::response::ChannelResponse,
         discord::response::MessageResponse,
@@ -161,6 +164,7 @@ impl Modify for SecurityAddon {
         discord::response::WebhookResponse,
         discord::response::WebhookCreatedResponse,
         discord::response::PresenceResponse,
+        discord::read_state::unread::UnreadResponse,
     )),
     modifiers(&SecurityAddon),
     tags(
@@ -169,7 +173,7 @@ impl Modify for SecurityAddon {
         (name = "customers", description = "Customers and customer contexts management"),
         (name = "quotes", description = "Quotes and quote lines management"),
         (name = "reference", description = "Reference cost catalog"),
-        (name = "discord", description = "Chat — categories, channels, threads, messages, reactions, webhooks, presence, typing"),
+        (name = "discord", description = "Chat — categories, channels, threads, messages, reactions, webhooks, presence, typing, read states"),
     )
 )]
 pub struct ApiDoc;
