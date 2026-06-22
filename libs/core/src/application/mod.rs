@@ -21,6 +21,7 @@ pub mod discord_category;
 pub mod discord_channel;
 pub mod discord_message;
 pub mod discord_presence;
+pub mod discord_read_state;
 pub mod discord_webhook;
 pub mod employee;
 pub mod equipment;
