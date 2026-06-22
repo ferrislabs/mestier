@@ -12,8 +12,8 @@ pub mod components;
 pub mod domain;
 
 pub use domain::{
-    Attachment, Category, Channel, ChannelReadState, Message, Presence, Reaction, ReactionCount,
-    Webhook,
+    Attachment, Category, Channel, ChannelPermissionOverwrite, ChannelReadState, Message,
+    OverwriteTarget, Presence, Reaction, ReactionCount, Webhook,
 };
 
 pub mod mentions;
