@@ -1,9 +1,9 @@
 use auth::Identity;
 use axum::{Extension, extract::State};
 use discord::RemoveReactionCommand;
-use handlers::{ApiError, AppState, IdentityExt, Response};
+use handlers::{ApiError, AppState, Response};
 
-use crate::{EmptyResponse, paths::ReactionPath, require_org_membership};
+use crate::{EmptyResponse, paths::ReactionPath, require_org_membership, resolve_user_id};
 
 #[utoipa::path(
 	delete,
@@ -30,7 +30,7 @@ pub async fn handler(
     let message = state.usecase.get_message(path.message_id).await?;
     require_org_membership(&state, &identity, message.organization_id).await?;
 
-    let user_id = identity.user_id()?;
+    let user_id = resolve_user_id(&state, &identity).await?;
 
     state
         .usecase

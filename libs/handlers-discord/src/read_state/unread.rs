@@ -1,11 +1,11 @@
 use auth::Identity;
 use axum::{Extension, Json, extract::State};
 use discord::ChannelId;
-use handlers::{ApiError, AppState, IdentityExt};
+use handlers::{ApiError, AppState};
 use serde::Serialize;
 use utoipa::ToSchema;
 
-use crate::{paths::OrgUnreadPath, require_org_membership};
+use crate::{paths::OrgUnreadPath, require_org_membership, resolve_user_id};
 
 #[derive(Debug, Serialize, ToSchema)]
 pub struct UnreadResponse {
@@ -31,7 +31,7 @@ pub async fn handler(
     Extension(identity): Extension<Identity>,
 ) -> Result<Json<UnreadResponse>, ApiError> {
     require_org_membership(&state, &identity, path.organization_id).await?;
-    let user_id = identity.user_id()?;
+    let user_id = resolve_user_id(&state, &identity).await?;
 
     let channel_ids = state
         .usecase

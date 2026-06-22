@@ -1,11 +1,11 @@
 use auth::Identity;
 use axum::{Extension, Json, extract::State};
 use discord::{MarkChannelReadCommand, MessageId};
-use handlers::{ApiError, AppState, IdentityExt, Response};
+use handlers::{ApiError, AppState, Response};
 use serde::Deserialize;
 use utoipa::ToSchema;
 
-use crate::{EmptyResponse, paths::ChannelReadPath, require_org_membership};
+use crate::{EmptyResponse, paths::ChannelReadPath, require_org_membership, resolve_user_id};
 
 #[derive(Debug, Deserialize, ToSchema)]
 pub struct MarkChannelReadRequest {
@@ -35,7 +35,7 @@ pub async fn handler(
 ) -> Result<Response<EmptyResponse>, ApiError> {
     let channel = state.usecase.get_channel(path.channel_id).await?;
     require_org_membership(&state, &identity, channel.organization_id).await?;
-    let user_id = identity.user_id()?;
+    let user_id = resolve_user_id(&state, &identity).await?;
 
     state
         .usecase

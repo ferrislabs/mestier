@@ -1,7 +1,7 @@
 use auth::Identity;
 use axum::{Extension, Json, extract::State};
 use discord::{CreateMessageCommand, MessageAuthor};
-use handlers::{ApiError, AppState, DataEnvelope, IdentityExt, Response};
+use handlers::{ApiError, AppState, DataEnvelope, Response};
 use serde::Deserialize;
 use utoipa::ToSchema;
 
@@ -9,7 +9,7 @@ use mestier_core::Permissions;
 
 use crate::{
     paths::ChannelMessagesPath, require_channel_permission, require_org_membership,
-    response::MessageResponse,
+    resolve_user_id, response::MessageResponse,
 };
 
 /// Per-attachment descriptor included in a message create request.
@@ -78,7 +78,7 @@ pub async fn handler(
         ));
     }
 
-    let user_id = identity.user_id()?;
+    let user_id = resolve_user_id(&state, &identity).await?;
 
     let message = state
         .usecase
