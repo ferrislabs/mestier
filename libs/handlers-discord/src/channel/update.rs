@@ -17,7 +17,7 @@ pub struct UpdateChannelRequest {
 
 #[utoipa::path(
     patch,
-    path = "/api/v1/channels/{channel_id}",
+    path = "/api/v1/chat/channels/{channel_id}",
     operation_id = "updateChannel",
     tag = super::super::TAG,
     params(("channel_id" = discord::ChannelId, Path, description = "Channel identifier")),

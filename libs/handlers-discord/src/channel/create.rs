@@ -17,7 +17,7 @@ pub struct CreateChannelRequest {
 
 #[utoipa::path(
     post,
-    path = "/api/v1/organizations/{organization_id}/channels",
+    path = "/api/v1/chat/organizations/{organization_id}/channels",
     operation_id = "createChannel",
     tag = super::super::TAG,
     params(("organization_id" = common::OrganizationId, Path, description = "Organization identifier")),

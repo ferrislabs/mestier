@@ -6,7 +6,7 @@ use crate::{EmptyResponse, paths::ChannelPath, require_permission};
 
 #[utoipa::path(
     delete,
-    path = "/api/v1/channels/{channel_id}",
+    path = "/api/v1/chat/channels/{channel_id}",
     operation_id = "deleteChannel",
     tag = super::super::TAG,
     params(("channel_id" = discord::ChannelId, Path, description = "Channel identifier")),

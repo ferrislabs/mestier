@@ -6,7 +6,7 @@ use crate::{paths::OrgChannelsPath, require_org_membership, response::ChannelRes
 
 #[utoipa::path(
     get,
-    path = "/api/v1/organizations/{organization_id}/channels",
+    path = "/api/v1/chat/organizations/{organization_id}/channels",
     operation_id = "listChannels",
     tag = super::super::TAG,
     params(("organization_id" = common::OrganizationId, Path, description = "Organization identifier")),

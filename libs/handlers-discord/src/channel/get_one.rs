@@ -6,7 +6,7 @@ use crate::{paths::ChannelPath, require_org_membership, response::ChannelRespons
 
 #[utoipa::path(
     get,
-    path = "/api/v1/channels/{channel_id}",
+    path = "/api/v1/chat/channels/{channel_id}",
     operation_id = "getChannel",
     tag = super::super::TAG,
     params(("channel_id" = discord::ChannelId, Path, description = "Channel identifier")),

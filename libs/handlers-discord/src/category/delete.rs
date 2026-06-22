@@ -6,7 +6,7 @@ use crate::{EmptyResponse, paths::CategoryPath, require_permission};
 
 #[utoipa::path(
     delete,
-    path = "/api/v1/categories/{category_id}",
+    path = "/api/v1/chat/categories/{category_id}",
     operation_id = "deleteCategory",
     tag = super::super::TAG,
     params(("category_id" = discord::CategoryId, Path, description = "Category identifier")),

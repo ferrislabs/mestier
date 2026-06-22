@@ -6,7 +6,7 @@ use crate::{paths::ChannelThreadsPath, require_org_membership, response::Channel
 
 #[utoipa::path(
     get,
-    path = "/api/v1/channels/{channel_id}/threads",
+    path = "/api/v1/chat/channels/{channel_id}/threads",
     operation_id = "listThreads",
     tag = super::super::TAG,
     params(("channel_id" = discord::ChannelId, Path, description = "Parent TEXT channel")),

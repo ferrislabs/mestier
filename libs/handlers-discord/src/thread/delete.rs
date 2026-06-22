@@ -6,7 +6,7 @@ use crate::{EmptyResponse, paths::ThreadPath, require_permission};
 
 #[utoipa::path(
     delete,
-    path = "/api/v1/threads/{channel_id}",
+    path = "/api/v1/chat/threads/{channel_id}",
     operation_id = "deleteThread",
     tag = super::super::TAG,
     params(("channel_id" = discord::ChannelId, Path, description = "Thread identifier")),

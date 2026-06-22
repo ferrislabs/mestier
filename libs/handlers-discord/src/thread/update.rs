@@ -15,7 +15,7 @@ pub struct UpdateThreadRequest {
 
 #[utoipa::path(
     patch,
-    path = "/api/v1/threads/{channel_id}",
+    path = "/api/v1/chat/threads/{channel_id}",
     operation_id = "updateThread",
     tag = super::super::TAG,
     params(("channel_id" = discord::ChannelId, Path, description = "Thread identifier")),

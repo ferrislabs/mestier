@@ -15,7 +15,7 @@ pub struct CreateThreadRequest {
 
 #[utoipa::path(
     post,
-    path = "/api/v1/channels/{channel_id}/threads",
+    path = "/api/v1/chat/channels/{channel_id}/threads",
     operation_id = "createThread",
     tag = super::super::TAG,
     params(("channel_id" = discord::ChannelId, Path, description = "Parent TEXT channel")),

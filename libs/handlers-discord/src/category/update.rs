@@ -15,7 +15,7 @@ pub struct UpdateCategoryRequest {
 
 #[utoipa::path(
     patch,
-    path = "/api/v1/categories/{category_id}",
+    path = "/api/v1/chat/categories/{category_id}",
     operation_id = "updateCategory",
     tag = super::super::TAG,
     params(("category_id" = discord::CategoryId, Path, description = "Category identifier")),

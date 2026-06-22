@@ -15,7 +15,7 @@ pub struct CreateCategoryRequest {
 
 #[utoipa::path(
     post,
-    path = "/api/v1/organizations/{organization_id}/categories",
+    path = "/api/v1/chat/organizations/{organization_id}/categories",
     operation_id = "createCategory",
     tag = super::super::TAG,
     params(("organization_id" = common::OrganizationId, Path, description = "Organization identifier")),

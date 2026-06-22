@@ -6,7 +6,7 @@ use crate::{paths::OrgCategoriesPath, require_org_membership, response::Category
 
 #[utoipa::path(
     get,
-    path = "/api/v1/organizations/{organization_id}/categories",
+    path = "/api/v1/chat/organizations/{organization_id}/categories",
     operation_id = "listCategories",
     tag = super::super::TAG,
     params(("organization_id" = common::OrganizationId, Path, description = "Organization identifier")),
