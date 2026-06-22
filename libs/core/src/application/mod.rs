@@ -44,6 +44,10 @@ pub fn default_authorizer() -> MestierAuthorizer {
         .action("member.remove", Permissions::MANAGE_MEMBERS.0)
         .action("role.assign", Permissions::MANAGE_ROLES.0)
         .action("role.manage", Permissions::MANAGE_ROLES.0)
+        .action("category.manage", Permissions::MANAGE_CHANNELS.0)
+        .action("channel.manage", Permissions::MANAGE_CHANNELS.0)
+        .action("message.delete_any", Permissions::MANAGE_CHANNELS.0)
+        .action("webhook.manage", Permissions::MANAGE_WEBHOOKS.0)
         .build()
 }
 
