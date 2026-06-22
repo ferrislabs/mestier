@@ -177,6 +177,14 @@ async fn handle_socket(mut socket: WebSocket, state: AppState) {
             maybe_event = event_rx.recv() => {
                 match maybe_event {
                     Some(Ok(event)) => {
+                        // User-private filter: CHANNEL_READ (and any future user-targeted events)
+                        // must only reach the socket of the acting user.  The event still travels
+                        // the per-org broadcast in-process; we drop it here before it crosses the wire.
+                        if let Some(target) = event.target_user() {
+                            if target != user.id {
+                                continue;
+                            }
+                        }
                         let full = serde_json::to_value(&event)
                             .unwrap_or(serde_json::Value::Null);
                         let event_type = full
@@ -334,5 +342,53 @@ mod tests {
         let json = serde_json::to_string(&msg).unwrap();
         assert!(json.contains("\"op\":\"close\""));
         assert!(json.contains("timeout"));
+    }
+
+    #[test]
+    fn channel_read_target_user_is_self_scoped() {
+        use discord::{ChannelId, MessageId};
+        use mestier_core::infrastructure::realtime::wire::GatewayEvent;
+        use std::str::FromStr;
+
+        let acting_user = common::UserId::from_str("018f0000-0000-7000-8000-000000000001").unwrap();
+        let other_user = common::UserId::from_str("018f0000-0000-7000-8000-000000000002").unwrap();
+        let organization_id =
+            common::OrganizationId::from_str("018f0000-0000-7000-8000-000000000003").unwrap();
+        let channel_id = ChannelId::from_str("018f0000-0000-7000-8000-000000000004").unwrap();
+        let last_read_message_id =
+            Some(MessageId::from_str("018f0000-0000-7000-8000-000000000005").unwrap());
+
+        let event = GatewayEvent::ChannelRead {
+            organization_id,
+            channel_id,
+            user_id: acting_user,
+            last_read_message_id,
+        };
+
+        // target_user() returns the acting user, not the other user
+        assert_eq!(event.target_user(), Some(acting_user));
+        assert_ne!(event.target_user(), Some(other_user));
+
+        // Simulate the filter: acting_user's socket SHOULD receive the event
+        let connected = acting_user;
+        let should_forward = match event.target_user() {
+            Some(target) => target == connected,
+            None => true,
+        };
+        assert!(
+            should_forward,
+            "acting user must receive their own CHANNEL_READ event"
+        );
+
+        // Simulate the filter: other_user's socket must NOT receive the event
+        let connected_other = other_user;
+        let should_forward_other = match event.target_user() {
+            Some(target) => target == connected_other,
+            None => true,
+        };
+        assert!(
+            !should_forward_other,
+            "other user must NOT receive acting user's CHANNEL_READ event"
+        );
     }
 }
