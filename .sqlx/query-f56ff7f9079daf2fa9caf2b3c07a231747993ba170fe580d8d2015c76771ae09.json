@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n\t\t\tSELECT org_id, user_id, status::text AS \"status!\", updated_at\n\t\t\tFROM member_presence WHERE org_id = $1 ORDER BY user_id ASC\n\t\t\t",
+  "query": "\n\t\t\tSELECT org_id, user_id, status::text AS \"status!\", updated_at\n\t\t\tFROM chat.member_presence WHERE org_id = $1 ORDER BY user_id ASC\n\t\t\t",
   "describe": {
     "columns": [
       {
@@ -36,5 +36,5 @@
       false
     ]
   },
-  "hash": "e3852f3f30ef6fae7cb4463734248b27dfd1ab995be34695b006207f368bc3ee"
+  "hash": "f56ff7f9079daf2fa9caf2b3c07a231747993ba170fe580d8d2015c76771ae09"
 }

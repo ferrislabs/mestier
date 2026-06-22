@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n\t\t\tUPDATE webhooks SET name = $2, avatar_url = $3, updated_at = $4 WHERE id = $1\n\t\t\tRETURNING id, org_id, channel_id, name, avatar_url, token, created_by, created_at, updated_at\n\t\t\t",
+  "query": "\n\t\t\tSELECT id, org_id, channel_id, name, avatar_url, token, created_by, created_at, updated_at\n\t\t\tFROM chat.webhooks WHERE channel_id = $1 ORDER BY created_at ASC\n\t\t\t",
   "describe": {
     "columns": [
       {
@@ -51,10 +51,7 @@
     ],
     "parameters": {
       "Left": [
-        "Uuid",
-        "Text",
-        "Text",
-        "Timestamptz"
+        "Uuid"
       ]
     },
     "nullable": [
@@ -69,5 +66,5 @@
       false
     ]
   },
-  "hash": "0881352b0856141804e4a1ada1c9439d47c399f09af0dcee88caf2d4f14a1dc9"
+  "hash": "a33cbcbb2de26068f9c6ff2ceadb16a741d82ac1dec2438d6e521f9500dfb319"
 }

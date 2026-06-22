@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT id, org_id, name, position, created_at, updated_at\n            FROM categories WHERE id = $1\n            ",
+  "query": "\n            UPDATE chat.categories\n            SET name = $2, position = $3, updated_at = $4\n            WHERE id = $1\n            RETURNING id, org_id, name, position, created_at, updated_at\n            ",
   "describe": {
     "columns": [
       {
@@ -36,7 +36,10 @@
     ],
     "parameters": {
       "Left": [
-        "Uuid"
+        "Uuid",
+        "Text",
+        "Int4",
+        "Timestamptz"
       ]
     },
     "nullable": [
@@ -48,5 +51,5 @@
       false
     ]
   },
-  "hash": "2c1ffa0eebcc5bc6413374fc2ecb52ad6d5ae4f66ccba146bba480c70ec59289"
+  "hash": "b792701a4738030cdbb2f02eca27f40e28a970114d92f725c1454a567ce7f85b"
 }

@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n\t\t\tSELECT id, org_id, channel_id, name, avatar_url, token, created_by, created_at, updated_at\n\t\t\tFROM webhooks WHERE channel_id = $1 ORDER BY created_at ASC\n\t\t\t",
+  "query": "\n            SELECT id, org_id, channel_type::text AS \"channel_type!\", name, topic, position, category_id, parent_id, origin_message_id, archived, created_at, updated_at\n            FROM chat.channels WHERE org_id = $1 AND channel_type = 'TEXT'\n            ORDER BY position ASC, id ASC\n            ",
   "describe": {
     "columns": [
       {
@@ -15,8 +15,8 @@
       },
       {
         "ordinal": 2,
-        "name": "channel_id",
-        "type_info": "Uuid"
+        "name": "channel_type!",
+        "type_info": "Text"
       },
       {
         "ordinal": 3,
@@ -25,26 +25,41 @@
       },
       {
         "ordinal": 4,
-        "name": "avatar_url",
+        "name": "topic",
         "type_info": "Text"
       },
       {
         "ordinal": 5,
-        "name": "token",
-        "type_info": "Text"
+        "name": "position",
+        "type_info": "Int4"
       },
       {
         "ordinal": 6,
-        "name": "created_by",
+        "name": "category_id",
         "type_info": "Uuid"
       },
       {
         "ordinal": 7,
+        "name": "parent_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 8,
+        "name": "origin_message_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 9,
+        "name": "archived",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 10,
         "name": "created_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 8,
+        "ordinal": 11,
         "name": "updated_at",
         "type_info": "Timestamptz"
       }
@@ -57,14 +72,17 @@
     "nullable": [
       false,
       false,
-      false,
+      null,
       false,
       true,
       false,
+      true,
+      true,
+      true,
       false,
       false,
       false
     ]
   },
-  "hash": "63911610c6e568fb3759d843456b25faf66777046871c5a33603ecd5a1339158"
+  "hash": "c1dd26a3320bc342791bfd7c2c99d49dbe37fecca5a5d442f712670d3f21ce87"
 }

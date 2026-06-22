@@ -22,8 +22,8 @@ impl<'tx> ChannelRepository for PgChannelRepository<'tx> {
         let row = sqlx::query_as!(
 			ChannelRow,
 			r#"
-            INSERT INTO channels (id, org_id, channel_type, name, topic, position, category_id, parent_id, origin_message_id, archived, created_at, updated_at)
-            VALUES ($1, $2, CAST($3 AS text)::channel_type, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+            INSERT INTO chat.channels (id, org_id, channel_type, name, topic, position, category_id, parent_id, origin_message_id, archived, created_at, updated_at)
+            VALUES ($1, $2, CAST($3 AS text)::chat.channel_type, $4, $5, $6, $7, $8, $9, $10, $11, $12)
             RETURNING id, org_id, channel_type::text AS "channel_type!", name, topic, position, category_id, parent_id, origin_message_id, archived, created_at, updated_at
             "#,
 			ch.id.0,
@@ -51,7 +51,7 @@ impl<'tx> ChannelRepository for PgChannelRepository<'tx> {
 			ChannelRow,
 			r#"
             SELECT id, org_id, channel_type::text AS "channel_type!", name, topic, position, category_id, parent_id, origin_message_id, archived, created_at, updated_at
-            FROM channels WHERE id = $1
+            FROM chat.channels WHERE id = $1
             "#,
 			id.0,
 		)
@@ -70,7 +70,7 @@ impl<'tx> ChannelRepository for PgChannelRepository<'tx> {
 			ChannelRow,
 			r#"
             SELECT id, org_id, channel_type::text AS "channel_type!", name, topic, position, category_id, parent_id, origin_message_id, archived, created_at, updated_at
-            FROM channels WHERE org_id = $1 AND channel_type = 'TEXT'
+            FROM chat.channels WHERE org_id = $1 AND channel_type = 'TEXT'
             ORDER BY position ASC, id ASC
             "#,
 			org.0,
@@ -87,7 +87,7 @@ impl<'tx> ChannelRepository for PgChannelRepository<'tx> {
 			ChannelRow,
 			r#"
             SELECT id, org_id, channel_type::text AS "channel_type!", name, topic, position, category_id, parent_id, origin_message_id, archived, created_at, updated_at
-            FROM channels WHERE parent_id = $1 AND channel_type = 'THREAD'
+            FROM chat.channels WHERE parent_id = $1 AND channel_type = 'THREAD'
             ORDER BY id ASC
             "#,
 			parent.0,
@@ -105,7 +105,7 @@ impl<'tx> ChannelRepository for PgChannelRepository<'tx> {
         let row = sqlx::query_as!(
 			ChannelRow,
 			r#"
-            UPDATE channels
+            UPDATE chat.channels
             SET name = $2, topic = $3, position = $4, category_id = $5, archived = $6, updated_at = $7
             WHERE id = $1
             RETURNING id, org_id, channel_type::text AS "channel_type!", name, topic, position, category_id, parent_id, origin_message_id, archived, created_at, updated_at
@@ -126,7 +126,7 @@ impl<'tx> ChannelRepository for PgChannelRepository<'tx> {
 
     async fn delete(&mut self, id: ChannelId) -> Result<(), CoreError> {
         let mut tx = self.tx.lock().await;
-        let result = sqlx::query!("DELETE FROM channels WHERE id = $1", id.0)
+        let result = sqlx::query!("DELETE FROM chat.channels WHERE id = $1", id.0)
             .execute(&mut ***tx)
             .await
             .map_err(map_sqlx_error)?;

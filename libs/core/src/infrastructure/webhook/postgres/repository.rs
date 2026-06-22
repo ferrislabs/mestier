@@ -23,7 +23,7 @@ impl<'tx> WebhookRepository for PgWebhookRepository<'tx> {
         let row = sqlx::query_as!(
 			WebhookRow,
 			r#"
-			INSERT INTO webhooks (id, org_id, channel_id, name, avatar_url, token, created_by, created_at, updated_at)
+			INSERT INTO chat.webhooks (id, org_id, channel_id, name, avatar_url, token, created_by, created_at, updated_at)
 			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
 			RETURNING id, org_id, channel_id, name, avatar_url, token, created_by, created_at, updated_at
 			"#,
@@ -49,7 +49,7 @@ impl<'tx> WebhookRepository for PgWebhookRepository<'tx> {
             WebhookRow,
             r#"
 			SELECT id, org_id, channel_id, name, avatar_url, token, created_by, created_at, updated_at
-			FROM webhooks WHERE id = $1
+			FROM chat.webhooks WHERE id = $1
 			"#,
             id.0,
         )
@@ -65,7 +65,7 @@ impl<'tx> WebhookRepository for PgWebhookRepository<'tx> {
             WebhookRow,
             r#"
 			SELECT id, org_id, channel_id, name, avatar_url, token, created_by, created_at, updated_at
-			FROM webhooks WHERE channel_id = $1 ORDER BY created_at ASC
+			FROM chat.webhooks WHERE channel_id = $1 ORDER BY created_at ASC
 			"#,
             channel.0,
         )
@@ -80,7 +80,7 @@ impl<'tx> WebhookRepository for PgWebhookRepository<'tx> {
         let row = sqlx::query_as!(
             WebhookRow,
             r#"
-			UPDATE webhooks SET name = $2, avatar_url = $3, updated_at = $4 WHERE id = $1
+			UPDATE chat.webhooks SET name = $2, avatar_url = $3, updated_at = $4 WHERE id = $1
 			RETURNING id, org_id, channel_id, name, avatar_url, token, created_by, created_at, updated_at
 			"#,
             w.id.0,
@@ -96,7 +96,7 @@ impl<'tx> WebhookRepository for PgWebhookRepository<'tx> {
 
     async fn delete(&mut self, id: WebhookId) -> Result<(), CoreError> {
         let mut tx = self.tx.lock().await;
-        let result = sqlx::query!("DELETE FROM webhooks WHERE id = $1", id.0)
+        let result = sqlx::query!("DELETE FROM chat.webhooks WHERE id = $1", id.0)
             .execute(&mut ***tx)
             .await
             .map_err(map_sqlx_error)?;

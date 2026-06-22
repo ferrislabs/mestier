@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT id, org_id, name, position, created_at, updated_at\n            FROM categories WHERE org_id = $1 ORDER BY position ASC, id ASC\n            ",
+  "query": "\n            INSERT INTO chat.categories (id, org_id, name, position, created_at, updated_at)\n            VALUES ($1, $2, $3, $4, $5, $6)\n            RETURNING id, org_id, name, position, created_at, updated_at\n            ",
   "describe": {
     "columns": [
       {
@@ -36,7 +36,12 @@
     ],
     "parameters": {
       "Left": [
-        "Uuid"
+        "Uuid",
+        "Uuid",
+        "Text",
+        "Int4",
+        "Timestamptz",
+        "Timestamptz"
       ]
     },
     "nullable": [
@@ -48,5 +53,5 @@
       false
     ]
   },
-  "hash": "de7f2dcb73f7f88383fd72a4b075b8516b6a295b9869bec179b7f168f70e4470"
+  "hash": "f542d242d102a045ac78a373866514b054071f4a4c2e70a7b2945872ee310b65"
 }

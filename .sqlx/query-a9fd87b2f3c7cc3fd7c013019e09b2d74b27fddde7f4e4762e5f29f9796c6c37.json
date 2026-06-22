@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n\t\t\t\tSELECT id, org_id, channel_id,\n\t\t\t\t       author_type::text AS \"author_type!\",\n\t\t\t\t       author_user_id, author_webhook_id,\n\t\t\t\t       content, components,\n\t\t\t\t       mention_user_ids AS \"mention_user_ids!: Vec<uuid::Uuid>\",\n\t\t\t\t       mention_role_ids AS \"mention_role_ids!: Vec<uuid::Uuid>\",\n\t\t\t\t       mention_channel_ids AS \"mention_channel_ids!: Vec<uuid::Uuid>\",\n\t\t\t\t       mention_everyone, edited_at, created_at\n\t\t\t\tFROM messages\n\t\t\t\tWHERE channel_id = $1\n\t\t\t\t  AND id > $2\n\t\t\t\tORDER BY id ASC\n\t\t\t\tLIMIT $3\n\t\t\t\t",
+  "query": "\n\t\t\tSELECT id, org_id, channel_id,\n\t\t\t       author_type::text AS \"author_type!\",\n\t\t\t       author_user_id, author_webhook_id,\n\t\t\t       content, components,\n\t\t\t       mention_user_ids AS \"mention_user_ids!: Vec<uuid::Uuid>\",\n\t\t\t       mention_role_ids AS \"mention_role_ids!: Vec<uuid::Uuid>\",\n\t\t\t       mention_channel_ids AS \"mention_channel_ids!: Vec<uuid::Uuid>\",\n\t\t\t       mention_everyone, edited_at, created_at\n\t\t\tFROM chat.messages WHERE id = $1\n\t\t\t",
   "describe": {
     "columns": [
       {
@@ -76,9 +76,7 @@
     ],
     "parameters": {
       "Left": [
-        "Uuid",
-        "Uuid",
-        "Int8"
+        "Uuid"
       ]
     },
     "nullable": [
@@ -98,5 +96,5 @@
       false
     ]
   },
-  "hash": "0fec69ca899920c240d3594b59ee2644bf23f1e20e241d2e6d33aa22cd8ca20d"
+  "hash": "a9fd87b2f3c7cc3fd7c013019e09b2d74b27fddde7f4e4762e5f29f9796c6c37"
 }

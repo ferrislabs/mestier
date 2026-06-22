@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT id, org_id, channel_type::text AS \"channel_type!\", name, topic, position, category_id, parent_id, origin_message_id, archived, created_at, updated_at\n            FROM channels WHERE org_id = $1 AND channel_type = 'TEXT'\n            ORDER BY position ASC, id ASC\n            ",
+  "query": "\n            SELECT id, org_id, channel_type::text AS \"channel_type!\", name, topic, position, category_id, parent_id, origin_message_id, archived, created_at, updated_at\n            FROM chat.channels WHERE id = $1\n            ",
   "describe": {
     "columns": [
       {
@@ -84,5 +84,5 @@
       false
     ]
   },
-  "hash": "abb85b85ceca09a1521910e6c6ee01b6783c6f9338ff81784901a325e59bfd6c"
+  "hash": "f5bba787b3f3d8afedc3bef19e1cab42ef6b0def515969753959cd9eb9e5881a"
 }

@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "DELETE FROM channels WHERE id = $1",
+  "query": "DELETE FROM chat.webhooks WHERE id = $1",
   "describe": {
     "columns": [],
     "parameters": {
@@ -10,5 +10,5 @@
     },
     "nullable": []
   },
-  "hash": "0b72902bc8ec599bc847b3671444f3f19f59bdcc47e22697d73196df434c9aca"
+  "hash": "0f1fca92e10f6b677917184086a7543dfbe95ca61cad6700f1bea0fd811b8261"
 }

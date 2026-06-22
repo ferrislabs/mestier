@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n\t\t\t\tSELECT id, org_id, channel_id,\n\t\t\t\t       author_type::text AS \"author_type!\",\n\t\t\t\t       author_user_id, author_webhook_id,\n\t\t\t\t       content, components,\n\t\t\t\t       mention_user_ids AS \"mention_user_ids!: Vec<uuid::Uuid>\",\n\t\t\t\t       mention_role_ids AS \"mention_role_ids!: Vec<uuid::Uuid>\",\n\t\t\t\t       mention_channel_ids AS \"mention_channel_ids!: Vec<uuid::Uuid>\",\n\t\t\t\t       mention_everyone, edited_at, created_at\n\t\t\t\tFROM messages\n\t\t\t\tWHERE channel_id = $1\n\t\t\t\t  AND ($2::uuid IS NULL OR id < $2)\n\t\t\t\tORDER BY id DESC\n\t\t\t\tLIMIT $3\n\t\t\t\t",
+  "query": "\n\t\t\tUPDATE chat.messages\n\t\t\tSET content = $2,\n\t\t\t    components = $3,\n\t\t\t    edited_at = $4,\n\t\t\t    mention_user_ids = $5,\n\t\t\t    mention_role_ids = $6,\n\t\t\t    mention_channel_ids = $7,\n\t\t\t    mention_everyone = $8\n\t\t\tWHERE id = $1\n\t\t\tRETURNING\n\t\t\t\tid, org_id, channel_id,\n\t\t\t\tauthor_type::text AS \"author_type!\",\n\t\t\t\tauthor_user_id, author_webhook_id,\n\t\t\t\tcontent, components,\n\t\t\t\tmention_user_ids AS \"mention_user_ids!: Vec<uuid::Uuid>\",\n\t\t\t\tmention_role_ids AS \"mention_role_ids!: Vec<uuid::Uuid>\",\n\t\t\t\tmention_channel_ids AS \"mention_channel_ids!: Vec<uuid::Uuid>\",\n\t\t\t\tmention_everyone, edited_at, created_at\n\t\t\t",
   "describe": {
     "columns": [
       {
@@ -77,8 +77,13 @@
     "parameters": {
       "Left": [
         "Uuid",
-        "Uuid",
-        "Int8"
+        "Text",
+        "Jsonb",
+        "Timestamptz",
+        "UuidArray",
+        "UuidArray",
+        "UuidArray",
+        "Bool"
       ]
     },
     "nullable": [
@@ -98,5 +103,5 @@
       false
     ]
   },
-  "hash": "f2a80a4f954e2960314b3d7eefc8cea4f6a2d94cbcc8cb082c77e8295b3ca3dc"
+  "hash": "ac4dfc2de626100dab12158b9254a61fde0d29c39e478bece0ea56792ad7df34"
 }

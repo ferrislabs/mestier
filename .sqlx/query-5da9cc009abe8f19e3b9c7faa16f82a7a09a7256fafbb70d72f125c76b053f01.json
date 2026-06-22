@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n\t\t\tSELECT id, org_id, channel_id, name, avatar_url, token, created_by, created_at, updated_at\n\t\t\tFROM webhooks WHERE id = $1\n\t\t\t",
+  "query": "\n            SELECT id, org_id, name, position, created_at, updated_at\n            FROM chat.categories WHERE org_id = $1 ORDER BY position ASC, id ASC\n            ",
   "describe": {
     "columns": [
       {
@@ -15,36 +15,21 @@
       },
       {
         "ordinal": 2,
-        "name": "channel_id",
-        "type_info": "Uuid"
-      },
-      {
-        "ordinal": 3,
         "name": "name",
         "type_info": "Text"
       },
       {
+        "ordinal": 3,
+        "name": "position",
+        "type_info": "Int4"
+      },
+      {
         "ordinal": 4,
-        "name": "avatar_url",
-        "type_info": "Text"
-      },
-      {
-        "ordinal": 5,
-        "name": "token",
-        "type_info": "Text"
-      },
-      {
-        "ordinal": 6,
-        "name": "created_by",
-        "type_info": "Uuid"
-      },
-      {
-        "ordinal": 7,
         "name": "created_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 8,
+        "ordinal": 5,
         "name": "updated_at",
         "type_info": "Timestamptz"
       }
@@ -59,12 +44,9 @@
       false,
       false,
       false,
-      true,
-      false,
-      false,
       false,
       false
     ]
   },
-  "hash": "7a88578b7e17bcea404b696473e2d3c071a146e44ed21bb868ae0026bbc5972c"
+  "hash": "5da9cc009abe8f19e3b9c7faa16f82a7a09a7256fafbb70d72f125c76b053f01"
 }

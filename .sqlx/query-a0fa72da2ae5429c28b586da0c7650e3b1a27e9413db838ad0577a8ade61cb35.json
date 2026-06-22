@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "DELETE FROM messages WHERE id = $1",
+  "query": "DELETE FROM chat.messages WHERE id = $1",
   "describe": {
     "columns": [],
     "parameters": {
@@ -10,5 +10,5 @@
     },
     "nullable": []
   },
-  "hash": "df0a808a49fa9445ab63a46e53318c0ebfb2bbdd4baddb7ff82f295bdad48b23"
+  "hash": "a0fa72da2ae5429c28b586da0c7650e3b1a27e9413db838ad0577a8ade61cb35"
 }

@@ -22,7 +22,7 @@ impl<'tx> CategoryRepository for PgCategoryRepository<'tx> {
         let row = sqlx::query_as!(
             CategoryRow,
             r#"
-            INSERT INTO categories (id, org_id, name, position, created_at, updated_at)
+            INSERT INTO chat.categories (id, org_id, name, position, created_at, updated_at)
             VALUES ($1, $2, $3, $4, $5, $6)
             RETURNING id, org_id, name, position, created_at, updated_at
             "#,
@@ -45,7 +45,7 @@ impl<'tx> CategoryRepository for PgCategoryRepository<'tx> {
             CategoryRow,
             r#"
             SELECT id, org_id, name, position, created_at, updated_at
-            FROM categories WHERE id = $1
+            FROM chat.categories WHERE id = $1
             "#,
             id.0,
         )
@@ -64,7 +64,7 @@ impl<'tx> CategoryRepository for PgCategoryRepository<'tx> {
             CategoryRow,
             r#"
             SELECT id, org_id, name, position, created_at, updated_at
-            FROM categories WHERE org_id = $1 ORDER BY position ASC, id ASC
+            FROM chat.categories WHERE org_id = $1 ORDER BY position ASC, id ASC
             "#,
             org.0,
         )
@@ -79,7 +79,7 @@ impl<'tx> CategoryRepository for PgCategoryRepository<'tx> {
         let row = sqlx::query_as!(
             CategoryRow,
             r#"
-            UPDATE categories
+            UPDATE chat.categories
             SET name = $2, position = $3, updated_at = $4
             WHERE id = $1
             RETURNING id, org_id, name, position, created_at, updated_at
@@ -97,7 +97,7 @@ impl<'tx> CategoryRepository for PgCategoryRepository<'tx> {
 
     async fn delete(&mut self, id: CategoryId) -> Result<(), CoreError> {
         let mut tx = self.tx.lock().await;
-        let result = sqlx::query!("DELETE FROM categories WHERE id = $1", id.0,)
+        let result = sqlx::query!("DELETE FROM chat.categories WHERE id = $1", id.0,)
             .execute(&mut ***tx)
             .await
             .map_err(map_sqlx_error)?;

@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n\t\t\tINSERT INTO messages (\n\t\t\t\tid, org_id, channel_id, author_type, author_user_id, author_webhook_id,\n\t\t\t\tcontent, components, mention_user_ids, mention_role_ids, mention_channel_ids,\n\t\t\t\tmention_everyone, edited_at, created_at\n\t\t\t)\n\t\t\tVALUES (\n\t\t\t\t$1, $2, $3, CAST($4 AS text)::author_type, $5, $6,\n\t\t\t\t$7, $8, $9, $10, $11, $12, $13, $14\n\t\t\t)\n\t\t\tRETURNING\n\t\t\t\tid, org_id, channel_id,\n\t\t\t\tauthor_type::text AS \"author_type!\",\n\t\t\t\tauthor_user_id, author_webhook_id,\n\t\t\t\tcontent, components,\n\t\t\t\tmention_user_ids AS \"mention_user_ids!: Vec<uuid::Uuid>\",\n\t\t\t\tmention_role_ids AS \"mention_role_ids!: Vec<uuid::Uuid>\",\n\t\t\t\tmention_channel_ids AS \"mention_channel_ids!: Vec<uuid::Uuid>\",\n\t\t\t\tmention_everyone, edited_at, created_at\n\t\t\t",
+  "query": "\n\t\t\tINSERT INTO chat.messages (\n\t\t\t\tid, org_id, channel_id, author_type, author_user_id, author_webhook_id,\n\t\t\t\tcontent, components, mention_user_ids, mention_role_ids, mention_channel_ids,\n\t\t\t\tmention_everyone, edited_at, created_at\n\t\t\t)\n\t\t\tVALUES (\n\t\t\t\t$1, $2, $3, CAST($4 AS text)::chat.author_type, $5, $6,\n\t\t\t\t$7, $8, $9, $10, $11, $12, $13, $14\n\t\t\t)\n\t\t\tRETURNING\n\t\t\t\tid, org_id, channel_id,\n\t\t\t\tauthor_type::text AS \"author_type!\",\n\t\t\t\tauthor_user_id, author_webhook_id,\n\t\t\t\tcontent, components,\n\t\t\t\tmention_user_ids AS \"mention_user_ids!: Vec<uuid::Uuid>\",\n\t\t\t\tmention_role_ids AS \"mention_role_ids!: Vec<uuid::Uuid>\",\n\t\t\t\tmention_channel_ids AS \"mention_channel_ids!: Vec<uuid::Uuid>\",\n\t\t\t\tmention_everyone, edited_at, created_at\n\t\t\t",
   "describe": {
     "columns": [
       {
@@ -109,5 +109,5 @@
       false
     ]
   },
-  "hash": "a53ccb136fad97ff2339acc4530086b4a2cada1769f2a38653772582403e18bd"
+  "hash": "6071699a30987b61d132341615e80fe96d600f561effc83bc4273e84e50e7525"
 }
