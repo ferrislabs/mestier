@@ -1,5 +1,6 @@
 use auth::Identity;
 use axum::{Router, middleware::from_fn_with_state};
+use axum_extra::routing::RouterExt;
 use common::OrganizationId;
 use handlers::{ApiError, AppState, auth::auth_middleware, rate_limit::rate_limit_middleware};
 
@@ -76,8 +77,11 @@ pub async fn require_permission(
 
 pub fn router(state: &AppState) -> Router<AppState> {
     // Authenticated routes: FerrisKey OIDC (`auth_middleware`) + rate-limit.
-    // Tasks 3-9 mount the member-facing REST handlers here via `typed_*`.
     let authed = Router::new()
+        .typed_get(category::list::handler)
+        .typed_post(category::create::handler)
+        .typed_patch(category::update::handler)
+        .typed_delete(category::delete::handler)
         .layer(from_fn_with_state(state.clone(), rate_limit_middleware))
         .layer(from_fn_with_state(state.clone(), auth_middleware));
 
