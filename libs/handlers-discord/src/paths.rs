@@ -2,6 +2,7 @@ use axum_extra::routing::TypedPath;
 use common::OrganizationId;
 use discord::{CategoryId, ChannelId, MessageId, WebhookId};
 use serde::Deserialize;
+use uuid::Uuid;
 
 // Categories
 #[derive(TypedPath, Deserialize)]
@@ -108,6 +109,27 @@ pub struct ChannelReadPath {
 #[typed_path("/api/v1/chat/organizations/{organization_id}/unread")]
 pub struct OrgUnreadPath {
     pub organization_id: OrganizationId,
+}
+
+// Channel Permission Overwrites
+#[derive(TypedPath, Deserialize)]
+#[typed_path("/api/v1/chat/channels/{channel_id}/permissions")]
+pub struct ChannelPermissionsPath {
+    pub channel_id: ChannelId,
+}
+
+#[derive(TypedPath, Deserialize)]
+#[typed_path("/api/v1/chat/channels/{channel_id}/permissions/everyone")]
+pub struct ChannelOverwriteEveryonePath {
+    pub channel_id: ChannelId,
+}
+
+#[derive(TypedPath, Deserialize)]
+#[typed_path("/api/v1/chat/channels/{channel_id}/permissions/{target_type}/{target_id}")]
+pub struct ChannelOverwriteTargetPath {
+    pub channel_id: ChannelId,
+    pub target_type: String,
+    pub target_id: Uuid,
 }
 
 // Gateway (no path params)
