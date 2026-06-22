@@ -449,6 +449,7 @@ mod tests {
                 mention_channel_ids: vec![],
                 mention_everyone: false,
                 reactions: vec![],
+                attachments: vec![], // shim — field added by Plan 1; Task 3 adds the real INSERT/load
                 edited_at: None,
                 created_at: now,
             };

@@ -3,8 +3,8 @@ use std::str::FromStr;
 use chrono::{DateTime, Utc};
 use common::CoreError;
 use discord::{
-    AuthorType, ChannelId, Message, MessageId, OrganizationId, Reaction, ReactionCount, RoleId,
-    UserId, WebhookId, components::Component,
+    Attachment, AttachmentId, AuthorType, ChannelId, Message, MessageId, OrganizationId, Reaction,
+    ReactionCount, RoleId, UserId, WebhookId, components::Component,
 };
 use uuid::Uuid;
 
@@ -55,6 +55,7 @@ impl MessageRow {
                 .collect(),
             mention_everyone: self.mention_everyone,
             reactions,
+            attachments: vec![], // Temporary shim — Task 3 replaces this with a real `attachments` parameter.
             edited_at: self.edited_at,
             created_at: self.created_at,
         })
@@ -95,5 +96,64 @@ impl From<ReactionAggRow> for ReactionCount {
             count: r.count,
             user_ids: r.user_ids.into_iter().map(UserId).collect(),
         }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct MessageAttachmentRow {
+    pub id: Uuid,
+    pub message_id: Uuid,
+    pub storage_key: String,
+    pub filename: String,
+    pub mime_type: String,
+    pub size_bytes: i64,
+    pub position: i32,
+    pub created_at: DateTime<Utc>,
+}
+
+impl From<MessageAttachmentRow> for Attachment {
+    fn from(r: MessageAttachmentRow) -> Self {
+        Self {
+            id: AttachmentId(r.id),
+            storage_key: r.storage_key,
+            filename: r.filename,
+            mime_type: r.mime_type,
+            size_bytes: r.size_bytes,
+            created_at: r.created_at,
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use chrono::Utc;
+    use discord::AttachmentId;
+    use uuid::Uuid;
+
+    #[test]
+    fn attachment_row_into_attachment_round_trips_fields() {
+        let id = Uuid::new_v4();
+        let message_id = Uuid::new_v4();
+        let now = Utc::now();
+
+        let row = MessageAttachmentRow {
+            id,
+            message_id,
+            storage_key: "uploads/attachments/abc".to_string(),
+            filename: "photo.png".to_string(),
+            mime_type: "image/png".to_string(),
+            size_bytes: 1024,
+            position: 0,
+            created_at: now,
+        };
+
+        let attachment: discord::Attachment = row.into();
+
+        assert_eq!(attachment.id, AttachmentId(id));
+        assert_eq!(attachment.filename, "photo.png");
+        assert_eq!(attachment.storage_key, "uploads/attachments/abc");
+        assert_eq!(attachment.size_bytes, 1024);
+        assert_eq!(attachment.created_at, now);
     }
 }
