@@ -13,6 +13,7 @@ use crate::infrastructure::file_storage::S3FileStorage;
 use crate::infrastructure::postgres::error::map_sqlx_error;
 use crate::infrastructure::realtime::{EventHub, RealtimeEventPublisher};
 
+pub mod authorization;
 pub mod customer;
 pub mod customer_contact;
 pub mod customer_context;
