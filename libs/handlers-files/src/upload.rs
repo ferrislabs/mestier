@@ -49,6 +49,7 @@ pub async fn handler(
         .upload(UploadFileCommand {
             mime_type,
             bytes: body.to_vec(),
+            folder: None,
         })
         .await?;
 
