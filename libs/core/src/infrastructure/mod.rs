@@ -9,6 +9,7 @@ pub mod file_storage;
 pub mod member;
 pub mod message;
 pub mod organization;
+pub mod overwrite;
 pub mod postgres;
 pub mod presence;
 pub mod product;
