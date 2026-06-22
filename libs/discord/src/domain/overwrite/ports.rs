@@ -81,11 +81,9 @@ mod tests {
             .times(1)
             .returning(|_, _| Box::pin(async { Ok(()) }));
 
-        let result = repo
-            .delete(channel_id, OverwriteTarget::Everyone)
+        repo.delete(channel_id, OverwriteTarget::Everyone)
             .await
             .unwrap();
-        assert_eq!(result, ());
     }
 
     #[tokio::test]

@@ -228,7 +228,7 @@ mod tests {
         crate::infrastructure::postgres::with_tx(&pool, async |tx| {
             let (org_id, user_id, channel_id) = {
                 let mut guard = tx.lock().await;
-                seed_org_user_channel(&mut *guard).await
+                seed_org_user_channel(*guard).await
             };
 
             let role_id = RoleId(generate_uuid_v7());
