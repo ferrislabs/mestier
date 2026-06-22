@@ -16,6 +16,11 @@ use crate::infrastructure::realtime::{EventHub, RealtimeEventPublisher};
 pub mod customer;
 pub mod customer_contact;
 pub mod customer_context;
+pub mod discord_category;
+pub mod discord_channel;
+pub mod discord_message;
+pub mod discord_presence;
+pub mod discord_webhook;
 pub mod employee;
 pub mod equipment;
 pub mod member;
@@ -58,8 +63,6 @@ pub fn default_authorizer() -> MestierAuthorizer {
 pub struct MestierUseCase {
     pub(crate) pool: PgPool,
     pub(crate) authz: MestierAuthorizer,
-    // Task 10 will use this field to flush events after each use-case operation.
-    #[allow(dead_code)]
     pub(crate) events: Arc<RealtimeEventPublisher>,
 }
 

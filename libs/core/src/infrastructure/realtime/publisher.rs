@@ -63,6 +63,15 @@ impl EventPublisher for RealtimeEventPublisher {
     }
 }
 
+// DECISION 3 (option b): services are generic over `E: EventPublisher` and the
+// use-case passes `self.events.as_ref()` which yields `&RealtimeEventPublisher`.
+// We provide this impl so the reference satisfies the bound without cloning the Arc.
+impl EventPublisher for &RealtimeEventPublisher {
+    async fn publish(&self, event: DomainEvent) -> Result<(), CoreError> {
+        (*self).publish(event).await
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
