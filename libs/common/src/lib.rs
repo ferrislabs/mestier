@@ -1,6 +1,8 @@
+use std::sync::{LazyLock, Mutex};
+
 use chrono::{DateTime, Utc};
 use thiserror::Error;
-use uuid::{NoContext, Timestamp, Uuid};
+use uuid::{ContextV7, Timestamp, Uuid};
 
 #[derive(Clone, Debug)]
 pub struct Config {
@@ -64,11 +66,19 @@ pub enum CoreError {
     Internal(String),
 }
 
+/// Shared monotonic counter so that uuid v7 ids minted within the same
+/// millisecond stay strictly ordered (used for read-state unread detection and
+/// message cursor pagination, which rely on `id` order matching creation order).
+/// `ContextV7` is not `Sync` (it holds `Cell`s), so it is guarded by a `Mutex`;
+/// the lock is held only for the counter bump, so contention is negligible.
+static UUID_CONTEXT: LazyLock<Mutex<ContextV7>> = LazyLock::new(|| Mutex::new(ContextV7::new()));
+
 pub fn generate_timestamp() -> (DateTime<Utc>, Timestamp) {
     let now = Utc::now();
     let seconds = now.timestamp().try_into().unwrap_or(0);
 
-    let timestamp = Timestamp::from_unix(NoContext, seconds, 0);
+    let context = UUID_CONTEXT.lock().expect("uuid v7 context mutex poisoned");
+    let timestamp = Timestamp::from_unix(&*context, seconds, now.timestamp_subsec_nanos());
 
     (now, timestamp)
 }
@@ -128,5 +138,30 @@ impl FromStr for RoleId {
 impl Display for RoleId {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.0)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn generate_uuid_v7_is_strictly_monotonic() {
+        // Ids minted back-to-back must be strictly increasing so that `id > marker`
+        // reliably means "newer" (read-state unread detection, message cursor pagination).
+        let mut prev = generate_uuid_v7();
+        for _ in 0..10_000 {
+            let next = generate_uuid_v7();
+            assert!(
+                next > prev,
+                "uuid v7 must be strictly increasing, got {prev} then {next}"
+            );
+            prev = next;
+        }
+    }
+
+    #[test]
+    fn generate_uuid_v7_has_version_7() {
+        assert_eq!(generate_uuid_v7().get_version_num(), 7);
     }
 }
