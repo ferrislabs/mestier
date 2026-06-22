@@ -16,7 +16,7 @@ pub mod domain;
 
 pub use domain::{
     Attachment, Category, Channel, ChannelPermissionOverwrite, ChannelReadState, Message,
-    OverwriteTarget, Presence, Reaction, ReactionCount, Webhook,
+    Notification, OverwriteTarget, Presence, Reaction, ReactionCount, Webhook,
 };
 
 pub mod mentions;
@@ -40,6 +40,10 @@ pub use domain::channel::{
 pub use domain::message::{
     AddReactionCommand, AttachmentInput, CreateMessageCommand, MessageAuthor, MessageRepository,
     MessageService, RemoveReactionCommand, UpdateMessageCommand,
+};
+pub use domain::notification::{
+    CreateNotification, MarkNotificationRead, NotificationRepository,
+    mention_notification_recipients, notification_should_deliver,
 };
 pub use domain::overwrite::{
     DeleteChannelOverwrite, OverwriteRepository, UpsertChannelOverwrite,
