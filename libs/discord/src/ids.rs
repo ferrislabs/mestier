@@ -83,6 +83,22 @@ impl Display for WebhookId {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, ToSchema)]
+pub struct AttachmentId(pub Uuid);
+
+impl FromStr for AttachmentId {
+    type Err = uuid::Error;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Uuid::from_str(s).map(AttachmentId)
+    }
+}
+
+impl Display for AttachmentId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -132,5 +148,18 @@ mod tests {
         assert!(MessageId::from_str("not-a-uuid").is_err());
         assert!(ReactionId::from_str("not-a-uuid").is_err());
         assert!(WebhookId::from_str("not-a-uuid").is_err());
+    }
+
+    #[test]
+    fn attachment_id_round_trips() {
+        let uuid = Uuid::new_v4();
+        let id = AttachmentId::from_str(&uuid.to_string()).unwrap();
+        assert_eq!(id.0, uuid);
+        assert_eq!(id.to_string(), uuid.to_string());
+    }
+
+    #[test]
+    fn attachment_id_rejects_invalid_uuid() {
+        assert!(AttachmentId::from_str("not-a-uuid").is_err());
     }
 }
