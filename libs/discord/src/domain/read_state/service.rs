@@ -138,7 +138,15 @@ mod tests {
         let mut events = MockEventPublisher::new();
         events
             .expect_publish()
-            .withf(|e| matches!(e, DomainEvent::ChannelRead { .. }))
+            .withf(move |e| match e {
+                DomainEvent::ChannelRead {
+                    organization_id: oid,
+                    channel_id: cid,
+                    user_id: uid,
+                    ..
+                } => *oid == org_id && *cid == channel_id && *uid == user_id,
+                _ => false,
+            })
             .times(1)
             .returning(|_| Box::pin(async { Ok(()) }));
 
@@ -177,8 +185,8 @@ mod tests {
             .times(1)
             .returning(|_| Box::pin(async { Ok(None) }));
 
-        // MockEventPublisher with no expectations: any call to publish would panic.
-        let events = MockEventPublisher::new();
+        let mut events = MockEventPublisher::new();
+        events.expect_publish().times(0);
 
         let mut svc = ReadStateService::new(read_state, messages, events);
         let result = svc
@@ -220,6 +228,40 @@ mod tests {
             .mark_channel_read(MarkChannelReadCommand {
                 organization_id: org_id,
                 channel_id: command_channel,
+                user_id,
+                message_id,
+            })
+            .await;
+
+        assert!(matches!(result, Err(CoreError::NotFound)));
+    }
+
+    /// Message not found (find_by_id returns Ok(None)) → CoreError::NotFound,
+    /// upsert and publish must NOT be called.
+    #[tokio::test]
+    async fn mark_channel_read_message_not_found_returns_not_found() {
+        let org_id = OrganizationId(Uuid::new_v4());
+        let channel_id = ChannelId(Uuid::new_v4());
+        let user_id = UserId(Uuid::new_v4());
+        let message_id = MessageId(Uuid::new_v4());
+
+        let mut messages = MockMessageRepository::new();
+        messages
+            .expect_find_by_id()
+            .times(1)
+            .returning(|_| Box::pin(async { Ok(None) }));
+
+        let mut read_state = MockReadStateRepository::new();
+        read_state.expect_upsert().times(0);
+
+        let mut events = MockEventPublisher::new();
+        events.expect_publish().times(0);
+
+        let mut svc = ReadStateService::new(read_state, messages, events);
+        let result = svc
+            .mark_channel_read(MarkChannelReadCommand {
+                organization_id: org_id,
+                channel_id,
                 user_id,
                 message_id,
             })
