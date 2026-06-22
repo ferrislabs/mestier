@@ -140,6 +140,11 @@ pub fn router(state: &AppState) -> Router<AppState> {
         .typed_post(typing::start::handler)
         .typed_put(read_state::mark::handler)
         .typed_get(read_state::unread::handler)
+        .typed_get(channel::permissions::list::handler)
+        .typed_put(channel::permissions::upsert_everyone::handler)
+        .typed_put(channel::permissions::upsert_target::handler)
+        .typed_delete(channel::permissions::delete_everyone::handler)
+        .typed_delete(channel::permissions::delete_target::handler)
         .layer(from_fn_with_state(state.clone(), rate_limit_middleware))
         .layer(from_fn_with_state(state.clone(), auth_middleware));
 
