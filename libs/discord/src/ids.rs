@@ -143,6 +143,7 @@ mod tests {
 
     #[test]
     fn all_ids_reject_invalid_uuid() {
+        assert!(AttachmentId::from_str("not-a-uuid").is_err());
         assert!(CategoryId::from_str("not-a-uuid").is_err());
         assert!(ChannelId::from_str("not-a-uuid").is_err());
         assert!(MessageId::from_str("not-a-uuid").is_err());

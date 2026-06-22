@@ -5,7 +5,7 @@ pub mod enums;
 pub mod ids;
 
 pub use enums::{AuthorType, ChannelType, PresenceStatus};
-pub use ids::{CategoryId, ChannelId, MessageId, ReactionId, WebhookId};
+pub use ids::{AttachmentId, CategoryId, ChannelId, MessageId, ReactionId, WebhookId};
 
 pub mod components;
 
