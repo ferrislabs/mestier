@@ -100,8 +100,18 @@ pub struct Presence {
     pub updated_at: DateTime<Utc>,
 }
 
+#[derive(Debug, Clone, Serialize)]
+pub struct ChannelReadState {
+    pub organization_id: OrganizationId,
+    pub channel_id: ChannelId,
+    pub user_id: UserId,
+    pub last_read_message_id: Option<MessageId>,
+    pub updated_at: DateTime<Utc>,
+}
+
 pub mod category;
 pub mod channel;
 pub mod message;
 pub mod presence;
+pub mod read_state;
 pub mod webhook;
