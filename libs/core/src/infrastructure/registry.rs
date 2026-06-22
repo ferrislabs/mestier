@@ -28,6 +28,7 @@ pub mod domain {
     pub struct Presence;
     pub struct ReadState;
     pub struct Overwrite;
+    pub struct Notification;
 }
 
 /// Backend markers — one zero-sized type per supported persistence layer.

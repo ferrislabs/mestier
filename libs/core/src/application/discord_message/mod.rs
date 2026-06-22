@@ -1,21 +1,47 @@
 use common::CoreError;
 use discord::{
-    AddReactionCommand, ChannelId, CreateMessageCommand, Message, MessageId, MessageRepository,
-    MessageService, OrganizationId, RemoveReactionCommand, UpdateMessageCommand,
+    AddReactionCommand, ChannelId, CreateMessageCommand, CreateNotification, DomainEvent,
+    EventPublisher, Message, MessageId, MessageRepository, MessageService, NotificationKind,
+    NotificationRepository, OrganizationId, PresenceRepository, RemoveReactionCommand,
+    UpdateMessageCommand, mention_notification_recipients, notification_should_deliver,
 };
 use mestier_macros::transactional;
 
 use crate::application::MestierUseCase;
 
+mod tests;
+
 impl MestierUseCase {
-    #[transactional(message)]
+    #[transactional(message, notification, presence)]
     pub async fn create_message(&self, cmd: CreateMessageCommand) -> Result<Message, CoreError> {
         let org_id = cmd.organization_id;
         let mut service = MessageService::new(message_repository, self.events.as_ref());
-        let result = service.create_message(cmd).await?;
+        let message = service.create_message(cmd).await?;
+
+        let mut presence_repository = presence_repository;
+        for recipient in mention_notification_recipients(&message) {
+            let notif = notification_repository
+                .create(CreateNotification {
+                    organization_id: message.organization_id,
+                    user_id: recipient,
+                    channel_id: message.channel_id,
+                    message_id: message.id,
+                    kind: NotificationKind::Mention,
+                })
+                .await?;
+            let presence = presence_repository
+                .find(message.organization_id, recipient)
+                .await?;
+            if notification_should_deliver(presence.map(|p| p.status)) {
+                self.events
+                    .publish(DomainEvent::NotificationCreated(notif))
+                    .await?;
+            }
+        }
+
         // best-effort flush at end of tx closure; events are reconciled via REST (spec §2)
         self.events.flush(org_id);
-        Ok(result)
+        Ok(message)
     }
 
     #[transactional(message)]

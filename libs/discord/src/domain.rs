@@ -4,8 +4,8 @@ use serde::Serialize;
 
 use crate::{
     components::Component,
-    enums::{AuthorType, ChannelType, PresenceStatus},
-    ids::{AttachmentId, CategoryId, ChannelId, MessageId, OverwriteId, WebhookId},
+    enums::{AuthorType, ChannelType, NotificationKind, PresenceStatus},
+    ids::{AttachmentId, CategoryId, ChannelId, MessageId, NotificationId, OverwriteId, WebhookId},
 };
 
 #[derive(Debug, Clone, Serialize)]
@@ -128,6 +128,18 @@ pub struct ChannelPermissionOverwrite {
     pub updated_at: DateTime<Utc>,
 }
 
+#[derive(Debug, Clone, Serialize)]
+pub struct Notification {
+    pub id: NotificationId,
+    pub organization_id: OrganizationId,
+    pub user_id: UserId,
+    pub channel_id: ChannelId,
+    pub message_id: MessageId,
+    pub kind: NotificationKind,
+    pub read_at: Option<DateTime<Utc>>,
+    pub created_at: DateTime<Utc>,
+}
+
 #[cfg(test)]
 mod overwrite_tests {
     use super::*;
@@ -178,6 +190,7 @@ mod overwrite_tests {
 pub mod category;
 pub mod channel;
 pub mod message;
+pub mod notification;
 pub mod overwrite;
 pub mod presence;
 pub mod read_state;

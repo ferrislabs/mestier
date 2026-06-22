@@ -1,6 +1,6 @@
 use axum_extra::routing::TypedPath;
 use common::OrganizationId;
-use discord::{CategoryId, ChannelId, MessageId, WebhookId};
+use discord::{CategoryId, ChannelId, MessageId, NotificationId, WebhookId};
 use serde::Deserialize;
 use uuid::Uuid;
 
@@ -136,3 +136,22 @@ pub struct ChannelOverwriteTargetPath {
 #[derive(TypedPath, Deserialize)]
 #[typed_path("/api/v1/chat/gateway")]
 pub struct GatewayPath;
+
+// Notifications
+#[derive(TypedPath, Deserialize)]
+#[typed_path("/api/v1/chat/organizations/{organization_id}/notifications")]
+pub struct OrgNotificationsPath {
+    pub organization_id: OrganizationId,
+}
+
+#[derive(TypedPath, Deserialize)]
+#[typed_path("/api/v1/chat/notifications/{notification_id}/read")]
+pub struct NotificationReadPath {
+    pub notification_id: NotificationId,
+}
+
+#[derive(TypedPath, Deserialize)]
+#[typed_path("/api/v1/chat/organizations/{organization_id}/notifications/read-all")]
+pub struct OrgNotificationsReadAllPath {
+    pub organization_id: OrganizationId,
+}

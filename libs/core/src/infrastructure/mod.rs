@@ -8,6 +8,7 @@ pub mod equipment;
 pub mod file_storage;
 pub mod member;
 pub mod message;
+pub mod notification;
 pub mod organization;
 pub mod overwrite;
 pub mod postgres;

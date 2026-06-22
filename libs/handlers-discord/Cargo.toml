@@ -22,5 +22,5 @@ utoipa      = { workspace = true }
 uuid        = { workspace = true }
 
 [dev-dependencies]
-mockall     = { workspace = true }
-tokio       = { workspace = true, features = ["rt", "macros"] }
+mockall             = { workspace = true }
+tokio               = { workspace = true, features = ["rt", "macros"] }

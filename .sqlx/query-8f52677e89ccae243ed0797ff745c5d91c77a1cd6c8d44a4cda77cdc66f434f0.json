@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE chat.notification\n            SET read_at = now()\n            WHERE user_id = $1 AND org_id = $2 AND read_at IS NULL\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "8f52677e89ccae243ed0797ff745c5d91c77a1cd6c8d44a4cda77cdc66f434f0"
+}
