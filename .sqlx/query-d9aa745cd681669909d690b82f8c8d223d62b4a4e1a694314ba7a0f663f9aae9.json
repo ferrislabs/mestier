@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                INSERT INTO chat.message_attachments\n                    (id, org_id, message_id, storage_key, filename, mime_type,\n                     size_bytes, position, created_at)\n                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)\n                ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Uuid",
+        "Text",
+        "Text",
+        "Text",
+        "Int8",
+        "Int4",
+        "Timestamptz"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "d9aa745cd681669909d690b82f8c8d223d62b4a4e1a694314ba7a0f663f9aae9"
+}

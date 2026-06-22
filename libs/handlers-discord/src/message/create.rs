@@ -52,6 +52,7 @@ pub async fn handler(
             author: MessageAuthor::User(user_id),
             content: payload.content,
             components: None,
+            attachments: vec![], // Plan 3 will add attachment support to this handler
         })
         .await?;
 

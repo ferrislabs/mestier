@@ -27,7 +27,11 @@ pub struct MessageRow {
 }
 
 impl MessageRow {
-    pub fn into_message(self, reactions: Vec<ReactionCount>) -> Result<Message, CoreError> {
+    pub fn into_message(
+        self,
+        reactions: Vec<ReactionCount>,
+        attachments: Vec<Attachment>,
+    ) -> Result<Message, CoreError> {
         let author_type = AuthorType::from_str(&self.author_type)
             .map_err(|e| CoreError::Internal(format!("invalid author_type in db: {e}")))?;
         let components: Option<Vec<Component>> = match self.components {
@@ -55,7 +59,7 @@ impl MessageRow {
                 .collect(),
             mention_everyone: self.mention_everyone,
             reactions,
-            attachments: vec![], // Temporary shim — Task 3 replaces this with a real `attachments` parameter.
+            attachments,
             edited_at: self.edited_at,
             created_at: self.created_at,
         })
