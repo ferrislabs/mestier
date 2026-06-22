@@ -178,6 +178,7 @@ mod overwrite_tests {
 pub mod category;
 pub mod channel;
 pub mod message;
+pub mod overwrite;
 pub mod presence;
 pub mod read_state;
 pub mod webhook;

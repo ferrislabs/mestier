@@ -38,6 +38,10 @@ pub use domain::message::{
     AddReactionCommand, AttachmentInput, CreateMessageCommand, MessageAuthor, MessageRepository,
     MessageService, RemoveReactionCommand, UpdateMessageCommand,
 };
+pub use domain::overwrite::{
+    DeleteChannelOverwrite, OverwriteRepository, UpsertChannelOverwrite,
+    resolve_channel_permissions,
+};
 pub use domain::presence::{
     PresenceRepository, PresenceService, SetPresenceCommand, StartTypingCommand,
 };
