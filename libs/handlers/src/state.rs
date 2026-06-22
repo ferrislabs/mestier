@@ -1,7 +1,7 @@
 use common::Config;
 use mestier_core::{
-    MestierAuthService, MestierFileStorageService, MestierRateLimitService, MestierUseCase,
-    create_service,
+    EventHub, MestierAuthService, MestierFileStorageService, MestierRateLimitService,
+    MestierUseCase, create_service,
 };
 use rate_limit::Quota;
 use server::errors::ServerError;
@@ -18,6 +18,10 @@ pub struct AppState {
     pub usecase: MestierUseCase,
     pub rate_limit: MestierRateLimitService,
     pub rate_limit_quota: Quota,
+    /// Subscribe-side handle for the in-process realtime event bus.
+    /// Populated from the single [`EventHub`] created by `create_service`
+    /// so all subscribers share the same broadcast channel.
+    pub events: EventHub,
 }
 
 pub async fn state(args: Arc<Args>) -> Result<AppState, ServerError> {
@@ -32,5 +36,6 @@ pub async fn state(args: Arc<Args>) -> Result<AppState, ServerError> {
         usecase: service.usecase,
         rate_limit: service.rate_limit,
         rate_limit_quota: service.rate_limit_quota,
+        events: service.events,
     })
 }

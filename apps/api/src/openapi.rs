@@ -4,6 +4,7 @@ use utoipa::{
 };
 
 use handlers_customer as customer;
+use handlers_discord as discord;
 use handlers_files as files;
 use handlers_organization as organization;
 use handlers_quote as quote;
@@ -79,6 +80,33 @@ impl Modify for SecurityAddon {
         reference::product::get_one::handler,
         reference::product::update::handler,
         reference::product::soft_delete::handler,
+        discord::category::list::handler,
+        discord::category::create::handler,
+        discord::category::update::handler,
+        discord::category::delete::handler,
+        discord::channel::list::handler,
+        discord::channel::create::handler,
+        discord::channel::get_one::handler,
+        discord::channel::update::handler,
+        discord::channel::delete::handler,
+        discord::thread::list::handler,
+        discord::thread::create::handler,
+        discord::thread::update::handler,
+        discord::thread::delete::handler,
+        discord::message::list::handler,
+        discord::message::create::handler,
+        discord::message::update::handler,
+        discord::message::delete::handler,
+        discord::reaction::add::handler,
+        discord::reaction::remove::handler,
+        discord::reaction::list::handler,
+        discord::webhook::list::handler,
+        discord::webhook::create::handler,
+        discord::webhook::update::handler,
+        discord::webhook::delete::handler,
+        discord::webhook::execute::handler,
+        discord::presence::set::handler,
+        discord::typing::start::handler,
     ),
     components(schemas(
         organization::create::CreateOrganizationRequest,
@@ -112,6 +140,25 @@ impl Modify for SecurityAddon {
         reference::response::EquipmentResponse,
         reference::response::ServiceRateResponse,
         reference::response::ProductResponse,
+        discord::category::create::CreateCategoryRequest,
+        discord::category::update::UpdateCategoryRequest,
+        discord::channel::create::CreateChannelRequest,
+        discord::channel::update::UpdateChannelRequest,
+        discord::thread::create::CreateThreadRequest,
+        discord::thread::update::UpdateThreadRequest,
+        discord::message::create::CreateMessageRequest,
+        discord::message::update::UpdateMessageRequest,
+        discord::webhook::create::CreateWebhookRequest,
+        discord::webhook::update::UpdateWebhookRequest,
+        discord::webhook::execute::ExecuteWebhookRequest,
+        discord::presence::set::SetPresenceRequest,
+        discord::response::CategoryResponse,
+        discord::response::ChannelResponse,
+        discord::response::MessageResponse,
+        discord::response::ReactionCountResponse,
+        discord::response::WebhookResponse,
+        discord::response::WebhookCreatedResponse,
+        discord::response::PresenceResponse,
     )),
     modifiers(&SecurityAddon),
     tags(
@@ -120,6 +167,7 @@ impl Modify for SecurityAddon {
         (name = "customers", description = "Customers and customer contexts management"),
         (name = "quotes", description = "Quotes and quote lines management"),
         (name = "reference", description = "Reference cost catalog"),
+        (name = "discord", description = "Chat — categories, channels, threads, messages, reactions, webhooks, presence, typing"),
     )
 )]
 pub struct ApiDoc;

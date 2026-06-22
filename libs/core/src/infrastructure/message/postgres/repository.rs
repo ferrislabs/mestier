@@ -24,7 +24,7 @@ impl<'tx> MessageRepository for PgMessageRepository<'tx> {
         let components_json = m
             .components
             .as_ref()
-            .map(|c| serde_json::to_value(c))
+            .map(serde_json::to_value)
             .transpose()
             .map_err(|e| CoreError::Internal(format!("components serialization: {e}")))?;
 
@@ -36,13 +36,13 @@ impl<'tx> MessageRepository for PgMessageRepository<'tx> {
         let row = sqlx::query_as!(
             MessageRow,
             r#"
-			INSERT INTO messages (
+			INSERT INTO chat.messages (
 				id, org_id, channel_id, author_type, author_user_id, author_webhook_id,
 				content, components, mention_user_ids, mention_role_ids, mention_channel_ids,
 				mention_everyone, edited_at, created_at
 			)
 			VALUES (
-				$1, $2, $3, CAST($4 AS text)::author_type, $5, $6,
+				$1, $2, $3, CAST($4 AS text)::chat.author_type, $5, $6,
 				$7, $8, $9, $10, $11, $12, $13, $14
 			)
 			RETURNING
@@ -90,7 +90,7 @@ impl<'tx> MessageRepository for PgMessageRepository<'tx> {
 			       mention_role_ids AS "mention_role_ids!: Vec<uuid::Uuid>",
 			       mention_channel_ids AS "mention_channel_ids!: Vec<uuid::Uuid>",
 			       mention_everyone, edited_at, created_at
-			FROM messages WHERE id = $1
+			FROM chat.messages WHERE id = $1
 			"#,
             id.0,
         )
@@ -116,10 +116,10 @@ impl<'tx> MessageRepository for PgMessageRepository<'tx> {
     ) -> Result<Vec<Message>, CoreError> {
         let mut tx = self.tx.lock().await;
 
-        let rows = if after.is_some() && before.is_none() {
+        let rows = if let (Some(after_msg), None) = (after, before) {
             // Forward pagination: fetch the n messages CLOSEST to (just after) the
             // cursor by ordering ASC, then reverse so callers always receive newest-first.
-            let after_id = after.unwrap().0;
+            let after_id = after_msg.0;
             let mut rows = sqlx::query_as!(
                 MessageRow,
                 r#"
@@ -131,7 +131,7 @@ impl<'tx> MessageRepository for PgMessageRepository<'tx> {
 				       mention_role_ids AS "mention_role_ids!: Vec<uuid::Uuid>",
 				       mention_channel_ids AS "mention_channel_ids!: Vec<uuid::Uuid>",
 				       mention_everyone, edited_at, created_at
-				FROM messages
+				FROM chat.messages
 				WHERE channel_id = $1
 				  AND id > $2
 				ORDER BY id ASC
@@ -159,7 +159,7 @@ impl<'tx> MessageRepository for PgMessageRepository<'tx> {
 				       mention_role_ids AS "mention_role_ids!: Vec<uuid::Uuid>",
 				       mention_channel_ids AS "mention_channel_ids!: Vec<uuid::Uuid>",
 				       mention_everyone, edited_at, created_at
-				FROM messages
+				FROM chat.messages
 				WHERE channel_id = $1
 				  AND ($2::uuid IS NULL OR id < $2)
 				ORDER BY id DESC
@@ -188,7 +188,7 @@ impl<'tx> MessageRepository for PgMessageRepository<'tx> {
         let components_json = m
             .components
             .as_ref()
-            .map(|c| serde_json::to_value(c))
+            .map(serde_json::to_value)
             .transpose()
             .map_err(|e| CoreError::Internal(format!("components serialization: {e}")))?;
 
@@ -200,7 +200,7 @@ impl<'tx> MessageRepository for PgMessageRepository<'tx> {
         let row = sqlx::query_as!(
             MessageRow,
             r#"
-			UPDATE messages
+			UPDATE chat.messages
 			SET content = $2,
 			    components = $3,
 			    edited_at = $4,
@@ -243,7 +243,7 @@ impl<'tx> MessageRepository for PgMessageRepository<'tx> {
 
     async fn delete(&mut self, id: MessageId) -> Result<(), CoreError> {
         let mut tx = self.tx.lock().await;
-        let result = sqlx::query!("DELETE FROM messages WHERE id = $1", id.0)
+        let result = sqlx::query!("DELETE FROM chat.messages WHERE id = $1", id.0)
             .execute(&mut ***tx)
             .await
             .map_err(map_sqlx_error)?;
@@ -257,7 +257,7 @@ impl<'tx> MessageRepository for PgMessageRepository<'tx> {
         let mut tx = self.tx.lock().await;
         sqlx::query!(
             r#"
-			INSERT INTO message_reactions (message_id, emoji, user_id, created_at)
+			INSERT INTO chat.message_reactions (message_id, emoji, user_id, created_at)
 			VALUES ($1, $2, $3, $4)
 			ON CONFLICT (message_id, emoji, user_id) DO NOTHING
 			"#,
@@ -280,7 +280,7 @@ impl<'tx> MessageRepository for PgMessageRepository<'tx> {
     ) -> Result<(), CoreError> {
         let mut tx = self.tx.lock().await;
         let result = sqlx::query!(
-            "DELETE FROM message_reactions WHERE message_id = $1 AND emoji = $2 AND user_id = $3",
+            "DELETE FROM chat.message_reactions WHERE message_id = $1 AND emoji = $2 AND user_id = $3",
             message_id.0,
             emoji,
             user_id.0,
@@ -300,7 +300,7 @@ impl<'tx> MessageRepository for PgMessageRepository<'tx> {
             ReactionRow,
             r#"
 			SELECT message_id, emoji, user_id, created_at
-			FROM message_reactions WHERE message_id = $1
+			FROM chat.message_reactions WHERE message_id = $1
 			ORDER BY created_at ASC
 			"#,
             message_id.0,
@@ -323,7 +323,7 @@ async fn fetch_reaction_counts(
 		SELECT emoji,
 		       COUNT(*)                                    AS "count!: i64",
 		       array_agg(user_id ORDER BY created_at)     AS "user_ids!: Vec<uuid::Uuid>"
-		FROM message_reactions
+		FROM chat.message_reactions
 		WHERE message_id = $1
 		GROUP BY emoji
 		ORDER BY emoji
@@ -384,8 +384,8 @@ mod tests {
 
         let channel_id = generate_uuid_v7();
         sqlx::query!(
-			r#"INSERT INTO channels (id, org_id, channel_type, name, position, archived, created_at, updated_at)
-			   VALUES ($1, $2, 'TEXT'::channel_type, $3, 0, false, now(), now())"#,
+			r#"INSERT INTO chat.channels (id, org_id, channel_type, name, position, archived, created_at, updated_at)
+			   VALUES ($1, $2, 'TEXT'::chat.channel_type, $3, 0, false, now(), now())"#,
 			channel_id,
 			org_id,
 			format!("test-channel-{}", channel_id),

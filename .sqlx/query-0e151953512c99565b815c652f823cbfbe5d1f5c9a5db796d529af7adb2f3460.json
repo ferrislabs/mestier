@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM chat.message_reactions WHERE message_id = $1 AND emoji = $2 AND user_id = $3",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "0e151953512c99565b815c652f823cbfbe5d1f5c9a5db796d529af7adb2f3460"
+}

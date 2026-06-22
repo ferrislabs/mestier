@@ -1,0 +1,107 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n\t\t\tUPDATE chat.messages\n\t\t\tSET content = $2,\n\t\t\t    components = $3,\n\t\t\t    edited_at = $4,\n\t\t\t    mention_user_ids = $5,\n\t\t\t    mention_role_ids = $6,\n\t\t\t    mention_channel_ids = $7,\n\t\t\t    mention_everyone = $8\n\t\t\tWHERE id = $1\n\t\t\tRETURNING\n\t\t\t\tid, org_id, channel_id,\n\t\t\t\tauthor_type::text AS \"author_type!\",\n\t\t\t\tauthor_user_id, author_webhook_id,\n\t\t\t\tcontent, components,\n\t\t\t\tmention_user_ids AS \"mention_user_ids!: Vec<uuid::Uuid>\",\n\t\t\t\tmention_role_ids AS \"mention_role_ids!: Vec<uuid::Uuid>\",\n\t\t\t\tmention_channel_ids AS \"mention_channel_ids!: Vec<uuid::Uuid>\",\n\t\t\t\tmention_everyone, edited_at, created_at\n\t\t\t",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "org_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "channel_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 3,
+        "name": "author_type!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "author_user_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 5,
+        "name": "author_webhook_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 6,
+        "name": "content",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 7,
+        "name": "components",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 8,
+        "name": "mention_user_ids!: Vec<uuid::Uuid>",
+        "type_info": "UuidArray"
+      },
+      {
+        "ordinal": 9,
+        "name": "mention_role_ids!: Vec<uuid::Uuid>",
+        "type_info": "UuidArray"
+      },
+      {
+        "ordinal": 10,
+        "name": "mention_channel_ids!: Vec<uuid::Uuid>",
+        "type_info": "UuidArray"
+      },
+      {
+        "ordinal": 11,
+        "name": "mention_everyone",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 12,
+        "name": "edited_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 13,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Jsonb",
+        "Timestamptz",
+        "UuidArray",
+        "UuidArray",
+        "UuidArray",
+        "Bool"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      null,
+      true,
+      true,
+      false,
+      true,
+      false,
+      false,
+      false,
+      false,
+      true,
+      false
+    ]
+  },
+  "hash": "ac4dfc2de626100dab12158b9254a61fde0d29c39e478bece0ea56792ad7df34"
+}

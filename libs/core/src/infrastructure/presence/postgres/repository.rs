@@ -23,8 +23,8 @@ impl<'tx> PresenceRepository for PgPresenceRepository<'tx> {
         let row = sqlx::query_as!(
             PresenceRow,
             r#"
-			INSERT INTO member_presence (org_id, user_id, status, updated_at)
-			VALUES ($1, $2, CAST($3 AS text)::presence_status, $4)
+			INSERT INTO chat.member_presence (org_id, user_id, status, updated_at)
+			VALUES ($1, $2, CAST($3 AS text)::chat.presence_status, $4)
 			ON CONFLICT (org_id, user_id) DO UPDATE
 				SET status = EXCLUDED.status, updated_at = EXCLUDED.updated_at
 			RETURNING org_id, user_id, status::text AS "status!", updated_at
@@ -50,7 +50,7 @@ impl<'tx> PresenceRepository for PgPresenceRepository<'tx> {
             PresenceRow,
             r#"
 			SELECT org_id, user_id, status::text AS "status!", updated_at
-			FROM member_presence WHERE org_id = $1 AND user_id = $2
+			FROM chat.member_presence WHERE org_id = $1 AND user_id = $2
 			"#,
             org.0,
             user.0,
@@ -70,7 +70,7 @@ impl<'tx> PresenceRepository for PgPresenceRepository<'tx> {
             PresenceRow,
             r#"
 			SELECT org_id, user_id, status::text AS "status!", updated_at
-			FROM member_presence WHERE org_id = $1 ORDER BY user_id ASC
+			FROM chat.member_presence WHERE org_id = $1 ORDER BY user_id ASC
 			"#,
             org.0,
         )

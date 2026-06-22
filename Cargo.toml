@@ -1,5 +1,5 @@
 [workspace]
-members = ["apps/api", "libs/args", "libs/auth", "libs/authz", "libs/common", "libs/core", "libs/discord", "libs/handlers", "libs/handlers-customer", "libs/handlers-files", "libs/handlers-organization", "libs/handlers-quote", "libs/handlers-reference", "libs/iam", "libs/macros", "libs/pagination", "libs/rate-limit", "libs/server"]
+members = ["apps/api", "libs/args", "libs/auth", "libs/authz", "libs/common", "libs/core", "libs/discord", "libs/handlers", "libs/handlers-customer", "libs/handlers-discord", "libs/handlers-files", "libs/handlers-organization", "libs/handlers-quote", "libs/handlers-reference", "libs/iam", "libs/macros", "libs/pagination", "libs/rate-limit", "libs/server"]
 resolver = "3"
 
 [workspace.package]
@@ -11,7 +11,7 @@ edition = "2024"
 [workspace.dependencies]
 tokio = { version = "1.52.1", features = ["macros", "rt-multi-thread"] }
 thiserror = "2.0.18"
-axum = { version = "0.8.9", features = ["macros"] }
+axum = { version = "0.8.9", features = ["macros", "ws"] }
 axum-server = "0.8.0"
 http = "1.4.0"
 serde = { version = "1.0.228", features = ["derive"] }
@@ -55,6 +55,7 @@ discord = { path = "libs/discord" }
 mestier-core = { path = "libs/core" }
 handlers = { path = "libs/handlers" }
 handlers-customer = { path = "libs/handlers-customer" }
+handlers-discord = { path = "libs/handlers-discord" }
 handlers-files = { path = "libs/handlers-files" }
 handlers-organization = { path = "libs/handlers-organization" }
 handlers-quote = { path = "libs/handlers-quote" }
