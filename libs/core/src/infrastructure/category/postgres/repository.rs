@@ -126,18 +126,22 @@ mod tests {
     #[ignore = "requires live postgres"]
     async fn insert_and_find_by_id() {
         let pool = make_pool().await;
-        let org_id =
-            OrganizationId(uuid::Uuid::parse_str("00000000-0000-0000-0000-000000000001").unwrap());
-        let cat = Category {
-            id: CategoryId(generate_uuid_v7()),
-            organization_id: org_id,
-            name: "General".into(),
-            position: 0,
-            created_at: Utc::now(),
-            updated_at: Utc::now(),
-        };
 
         crate::infrastructure::postgres::with_tx(&pool, async |tx| {
+            let org_id = {
+                let mut guard = tx.lock().await;
+                seed_org(*guard).await
+            };
+
+            let cat = Category {
+                id: CategoryId(generate_uuid_v7()),
+                organization_id: org_id,
+                name: "General".into(),
+                position: 0,
+                created_at: Utc::now(),
+                updated_at: Utc::now(),
+            };
+
             let mut repo = PgCategoryRepository::new(&tx);
             let inserted = repo.insert(&cat).await.unwrap();
             assert_eq!(inserted.name, "General");
@@ -147,5 +151,38 @@ mod tests {
         })
         .await
         .unwrap_err();
+    }
+
+    /// Seeds a user + organization so the FK `categories_org_id_fkey -> organizations(id)`
+    /// is satisfied. Mirrors the channel repo test helper.
+    async fn seed_org(tx: &mut sqlx::Transaction<'static, sqlx::Postgres>) -> OrganizationId {
+        let user_id = generate_uuid_v7();
+        sqlx::query!(
+            r#"INSERT INTO users (id, email, username, display_name, sub)
+               VALUES ($1, $2, $3, $4, $5)"#,
+            user_id,
+            format!("test-{}@example.com", user_id),
+            format!("user-{}", user_id),
+            "Test User",
+            format!("sub-{}", user_id),
+        )
+        .execute(&mut **tx)
+        .await
+        .unwrap();
+
+        let org_id = generate_uuid_v7();
+        sqlx::query!(
+            r#"INSERT INTO organizations (id, name, slug, owner_id)
+               VALUES ($1, $2, $3, $4)"#,
+            org_id,
+            "Test Org",
+            format!("test-org-{}", org_id),
+            user_id,
+        )
+        .execute(&mut **tx)
+        .await
+        .unwrap();
+
+        OrganizationId(org_id)
     }
 }
