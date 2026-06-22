@@ -41,6 +41,7 @@ pub use domain::message::{
 pub use domain::presence::{
     PresenceRepository, PresenceService, SetPresenceCommand, StartTypingCommand,
 };
+pub use domain::read_state::{MarkChannelReadCommand, ReadStateRepository, ReadStateService};
 pub use domain::webhook::{
     CreateWebhookCommand, ExecuteWebhookCommand, UpdateWebhookCommand, WebhookRepository,
     WebhookService,
