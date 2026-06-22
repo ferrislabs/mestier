@@ -1,6 +1,9 @@
 use common::{CoreError, OrganizationId, UserId};
 
-use crate::{Category, CategoryId, Channel, ChannelId, Message, MessageId, PresenceStatus};
+use crate::{
+    Category, CategoryId, Channel, ChannelId, Message, MessageId, PresenceStatus,
+    domain::Notification,
+};
 
 #[derive(Debug, Clone)]
 pub enum DomainEvent {
@@ -54,6 +57,7 @@ pub enum DomainEvent {
         user_id: UserId,
         last_read_message_id: Option<MessageId>,
     },
+    NotificationCreated(Notification),
 }
 
 #[cfg_attr(test, mockall::automock)]
@@ -102,6 +106,36 @@ mod tests {
                 user_id: UserId(Uuid::new_v4()),
                 last_read_message_id: None,
             })
+            .await
+            .unwrap();
+    }
+
+    #[tokio::test]
+    async fn mock_event_publisher_accepts_notification_created() {
+        use crate::domain::Notification;
+        use crate::{ChannelId, MessageId, NotificationId, NotificationKind};
+        use chrono::Utc;
+
+        let mut publisher = MockEventPublisher::new();
+        publisher
+            .expect_publish()
+            .withf(|e| matches!(e, DomainEvent::NotificationCreated(_)))
+            .times(1)
+            .returning(|_| Box::pin(async { Ok(()) }));
+
+        let notif = Notification {
+            id: NotificationId(Uuid::new_v4()),
+            organization_id: OrganizationId(Uuid::new_v4()),
+            user_id: UserId(Uuid::new_v4()),
+            channel_id: ChannelId(Uuid::new_v4()),
+            message_id: MessageId(Uuid::new_v4()),
+            kind: NotificationKind::Mention,
+            read_at: None,
+            created_at: Utc::now(),
+        };
+
+        publisher
+            .publish(DomainEvent::NotificationCreated(notif))
             .await
             .unwrap();
     }
