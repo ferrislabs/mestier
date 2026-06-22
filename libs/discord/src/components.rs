@@ -24,11 +24,14 @@ pub enum SeparatorSpacing {
 pub enum Component {
     Container {
         accent_color: Option<u32>,
+        #[schema(no_recursion)]
         children: Vec<Component>,
     },
     Section {
         /// Must all be TextDisplay variants.
+        #[schema(no_recursion)]
         children: Vec<Component>,
+        #[schema(no_recursion)]
         accessory: Option<Box<Component>>,
     },
     TextDisplay {
@@ -46,6 +49,7 @@ pub enum Component {
     },
     ActionRow {
         /// Must all be Button variants.
+        #[schema(no_recursion)]
         components: Vec<Component>,
     },
     Button {
