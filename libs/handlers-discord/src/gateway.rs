@@ -180,10 +180,10 @@ async fn handle_socket(mut socket: WebSocket, state: AppState) {
                         // User-private filter: CHANNEL_READ (and any future user-targeted events)
                         // must only reach the socket of the acting user.  The event still travels
                         // the per-org broadcast in-process; we drop it here before it crosses the wire.
-                        if let Some(target) = event.target_user() {
-                            if target != user.id {
-                                continue;
-                            }
+                        if let Some(target) = event.target_user()
+                            && target != user.id
+                        {
+                            continue;
                         }
                         let full = serde_json::to_value(&event)
                             .unwrap_or(serde_json::Value::Null);

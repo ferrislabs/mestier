@@ -215,11 +215,11 @@ mod tests {
         crate::infrastructure::postgres::with_tx(&pool, async |tx| {
             let (org_id, user_id, channel_id) = {
                 let mut guard = tx.lock().await;
-                seed_org_user_channel(&mut *guard).await
+                seed_org_user_channel(&mut guard).await
             };
             let (msg1, msg2) = {
                 let mut guard = tx.lock().await;
-                seed_two_messages(&mut *guard, org_id, user_id, channel_id).await
+                seed_two_messages(&mut guard, org_id, user_id, channel_id).await
             };
 
             let repo = PgReadStateRepository::new(&tx);
