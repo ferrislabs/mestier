@@ -75,9 +75,16 @@ pub async fn require_permission(
 }
 
 pub fn router(state: &AppState) -> Router<AppState> {
-    // Routes will be wired in Tasks 3-10.  The middleware stack is applied now
-    // so the crate already enforces auth + rate-limiting on every future route.
-    Router::new()
+    // Authenticated routes: FerrisKey OIDC (`auth_middleware`) + rate-limit.
+    // Tasks 3-9 mount the member-facing REST handlers here via `typed_*`.
+    let authed = Router::new()
         .layer(from_fn_with_state(state.clone(), rate_limit_middleware))
-        .layer(from_fn_with_state(state.clone(), auth_middleware))
+        .layer(from_fn_with_state(state.clone(), auth_middleware));
+
+    // Public routes that authenticate THEMSELVES — they must NOT go behind
+    // `auth_middleware`: Task 8 mounts `webhook::execute` (webhook-token auth)
+    // and Task 10 mounts `gateway` (WS `identify` handshake) here.
+    let public = Router::new().layer(from_fn_with_state(state.clone(), rate_limit_middleware));
+
+    Router::new().merge(authed).merge(public)
 }
