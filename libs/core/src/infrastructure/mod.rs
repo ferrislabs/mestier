@@ -13,6 +13,7 @@ pub mod postgres;
 pub mod presence;
 pub mod product;
 pub mod quote;
+pub mod realtime;
 pub mod registry;
 pub mod role;
 pub mod service_rate;

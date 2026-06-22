@@ -28,4 +28,4 @@ bytes = { workspace = true }
 [dev-dependencies]
 authz = { workspace = true, features = ["mock"] }
 mockall = { workspace = true }
-tokio = { workspace = true }
+tokio = { workspace = true, features = ["time"] }
