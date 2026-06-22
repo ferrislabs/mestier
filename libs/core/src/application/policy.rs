@@ -118,6 +118,27 @@ where
     Ok(enriched)
 }
 
+/// Computes the aggregated [`Permissions`] for a member from their org-role set.
+///
+/// Mirrors the OR-fold inside [`enrich_for_organization`] but as a pure, sync
+/// helper so callers that already hold the member + role data (e.g. the channel
+/// permission resolver) can reuse it without a redundant DB round-trip.
+///
+/// `member_role_ids` is the set of role IDs held by the member (from
+/// [`MemberRepository::list_role_ids`]).  `org_roles` is the full set of
+/// [`Role`]s for the organization (from [`RoleRepository::list_by_organization`]).
+pub fn resolve_org_permissions(
+    _member: &crate::domain::member::Member,
+    member_role_ids: &[crate::domain::role::RoleId],
+    org_roles: &[crate::domain::role::Role],
+) -> Permissions {
+    org_roles
+        .iter()
+        .filter(|r| member_role_ids.contains(&r.id))
+        .map(|r| r.permissions)
+        .fold(Permissions::NONE, |acc, p| acc | p)
+}
+
 /// Calls the authorizer with `(subject, action, resource)` and converts
 /// a deny decision into [`CoreError::Forbidden`]. PDP-side failures
 /// surface as [`CoreError::Internal`] (the PDP itself is misbehaving;
@@ -159,4 +180,75 @@ pub fn user_subject(user_id: UserId, iam_roles: Vec<String>) -> Subject {
     Subject::new(SubjectKind::User, user_id.to_string())
         .with_property(SUBJECT_USER_ID_KEY, user_id.to_string())
         .with_property(SUBJECT_IAM_ROLES_KEY, json!(iam_roles))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::domain::member::{Member, MemberId};
+    use crate::domain::role::Role;
+    use chrono::Utc;
+    use uuid::Uuid;
+
+    fn make_role(org_id: OrganizationId, perms: Permissions) -> Role {
+        use crate::domain::role::RoleId;
+        Role {
+            id: RoleId(Uuid::new_v4()),
+            organization_id: org_id,
+            name: "test".to_string(),
+            permissions: perms,
+            created_at: Utc::now(),
+            updated_at: Utc::now(),
+        }
+    }
+
+    fn make_member(org_id: OrganizationId, user_id: UserId) -> Member {
+        Member {
+            id: MemberId(Uuid::new_v4()),
+            organization_id: org_id,
+            user_id,
+            joined_at: Utc::now(),
+        }
+    }
+
+    #[test]
+    fn resolve_org_permissions_ors_role_bits() {
+        use crate::domain::role::RoleId;
+        let org = OrganizationId(Uuid::from_u128(1));
+        let user = UserId(Uuid::from_u128(2));
+        let member = make_member(org, user);
+        let roles = vec![
+            make_role(org, Permissions::MANAGE_ORG),
+            make_role(org, Permissions::MANAGE_MEMBERS),
+        ];
+        let role_ids: Vec<RoleId> = roles.iter().map(|r| r.id).collect();
+
+        let result = resolve_org_permissions(&member, &role_ids, &roles);
+
+        assert!(result.contains(Permissions::MANAGE_ORG));
+        assert!(result.contains(Permissions::MANAGE_MEMBERS));
+        assert!(!result.contains(Permissions::MANAGE_ROLES));
+    }
+
+    #[test]
+    fn resolve_org_permissions_ignores_roles_not_held() {
+        use crate::domain::role::RoleId;
+        let org = OrganizationId(Uuid::from_u128(1));
+        let user = UserId(Uuid::from_u128(2));
+        let member = make_member(org, user);
+        let other_role_id = RoleId(Uuid::from_u128(99));
+        let roles = vec![make_role(org, Permissions::MANAGE_ORG)];
+        // member holds other_role_id, which is NOT in `roles` list — yields NONE
+        let result = resolve_org_permissions(&member, &[other_role_id], &roles);
+        assert!(result.is_empty());
+    }
+
+    #[test]
+    fn resolve_org_permissions_no_roles_yields_none() {
+        let org = OrganizationId(Uuid::from_u128(1));
+        let user = UserId(Uuid::from_u128(2));
+        let member = make_member(org, user);
+        let result = resolve_org_permissions(&member, &[], &[]);
+        assert_eq!(result, Permissions::NONE);
+    }
 }
