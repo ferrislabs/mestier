@@ -2,8 +2,9 @@ use chrono::{DateTime, Utc};
 use common::{OrganizationId, RoleId, UserId};
 use discord::components::Component;
 use discord::{
-    Attachment, AuthorType, Category, CategoryId, Channel, ChannelId, ChannelType, Message,
-    MessageId, Presence, PresenceStatus, ReactionCount, Webhook, WebhookId,
+    Attachment, AuthorType, Category, CategoryId, Channel, ChannelId, ChannelPermissionOverwrite,
+    ChannelType, Message, MessageId, OverwriteTarget, Presence, PresenceStatus, ReactionCount,
+    Webhook, WebhookId,
 };
 use serde::Serialize;
 use utoipa::ToSchema;
@@ -256,6 +257,46 @@ impl From<Presence> for PresenceResponse {
     }
 }
 
+// ── Channel Permission Overwrite ──────────────────────────────────────────────
+
+/// Overwrite read response. The internal `id` field is deliberately omitted —
+/// clients identify overwrites by (channel_id, target_type, target_id).
+#[derive(Debug, Clone, PartialEq, Serialize, ToSchema)]
+pub struct OverwriteResponse {
+    pub target_type: String,
+    pub target_id: Option<uuid::Uuid>,
+    pub allow: i64,
+    pub deny: i64,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+}
+
+impl From<ChannelPermissionOverwrite> for OverwriteResponse {
+    fn from(o: ChannelPermissionOverwrite) -> Self {
+        let (target_type, target_id) = match o.target {
+            OverwriteTarget::Everyone => ("everyone".to_owned(), None),
+            OverwriteTarget::Role(role_id) => ("role".to_owned(), Some(role_id.0)),
+            OverwriteTarget::Member(user_id) => ("member".to_owned(), Some(user_id.0)),
+        };
+        Self {
+            target_type,
+            target_id,
+            allow: o.allow,
+            deny: o.deny,
+            created_at: o.created_at,
+            updated_at: o.updated_at,
+        }
+    }
+}
+
+/// Request body for PUT `.../permissions/everyone` and
+/// PUT `.../permissions/{target_type}/{target_id}`.
+#[derive(Debug, serde::Deserialize, ToSchema)]
+pub struct UpsertOverwriteRequest {
+    pub allow: i64,
+    pub deny: i64,
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 
 #[cfg(test)]
@@ -382,5 +423,113 @@ mod tests {
         assert_eq!(resp.attachments[0].storage_key, "prefix/attachments/abc123");
         assert_eq!(resp.attachments[0].mime_type, "image/png");
         assert_eq!(resp.attachments[0].size_bytes, 51_200);
+    }
+
+    #[test]
+    fn overwrite_response_from_everyone_overwrite() {
+        use discord::{ChannelId, ChannelPermissionOverwrite, OverwriteId, OverwriteTarget};
+        use std::str::FromStr;
+
+        let channel_id = ChannelId::from_str(UUID_A).unwrap();
+        let org_id = OrganizationId::from_str(UUID_B).unwrap();
+        let overwrite_id = OverwriteId::from_str(UUID_C).unwrap();
+        let now = Utc::now();
+
+        let overwrite = ChannelPermissionOverwrite {
+            id: overwrite_id,
+            channel_id,
+            organization_id: org_id,
+            target: OverwriteTarget::Everyone,
+            allow: 32,
+            deny: 64,
+            created_at: now,
+            updated_at: now,
+        };
+        let resp = OverwriteResponse::from(overwrite);
+        assert_eq!(resp.target_type, "everyone");
+        assert!(
+            resp.target_id.is_none(),
+            "EVERYONE target must have no target_id"
+        );
+        assert_eq!(resp.allow, 32);
+        assert_eq!(resp.deny, 64);
+
+        let json = serde_json::to_string(&resp).expect("must serialize");
+        assert!(
+            !json.contains(UUID_C),
+            "overwrite id must not be exposed in OverwriteResponse; got: {json}"
+        );
+    }
+
+    #[test]
+    fn overwrite_response_from_role_overwrite() {
+        use common::RoleId;
+        use discord::{ChannelId, ChannelPermissionOverwrite, OverwriteId, OverwriteTarget};
+        use std::str::FromStr;
+
+        let channel_id = ChannelId::from_str(UUID_A).unwrap();
+        let org_id = OrganizationId::from_str(UUID_B).unwrap();
+        let overwrite_id = OverwriteId::from_str(UUID_C).unwrap();
+        let role_id = RoleId::from_str(UUID_D).unwrap();
+        let now = Utc::now();
+
+        let overwrite = ChannelPermissionOverwrite {
+            id: overwrite_id,
+            channel_id,
+            organization_id: org_id,
+            target: OverwriteTarget::Role(role_id),
+            allow: 32,
+            deny: 0,
+            created_at: now,
+            updated_at: now,
+        };
+        let resp = OverwriteResponse::from(overwrite);
+        assert_eq!(resp.target_type, "role");
+        assert_eq!(
+            resp.target_id.unwrap().to_string(),
+            UUID_D,
+            "role overwrite must expose the role UUID as target_id"
+        );
+    }
+
+    #[test]
+    fn overwrite_response_from_member_overwrite() {
+        use common::UserId;
+        use discord::{ChannelId, ChannelPermissionOverwrite, OverwriteId, OverwriteTarget};
+        use std::str::FromStr;
+
+        let channel_id = ChannelId::from_str(UUID_A).unwrap();
+        let org_id = OrganizationId::from_str(UUID_B).unwrap();
+        let overwrite_id = OverwriteId::from_str(UUID_C).unwrap();
+        let user_id = UserId::from_str(UUID_D).unwrap();
+        let now = Utc::now();
+
+        let overwrite = ChannelPermissionOverwrite {
+            id: overwrite_id,
+            channel_id,
+            organization_id: org_id,
+            target: OverwriteTarget::Member(user_id),
+            allow: 0,
+            deny: 32,
+            created_at: now,
+            updated_at: now,
+        };
+        let resp = OverwriteResponse::from(overwrite);
+        assert_eq!(resp.target_type, "member");
+        assert_eq!(
+            resp.target_id.unwrap().to_string(),
+            UUID_D,
+            "member overwrite must expose the user UUID as target_id"
+        );
+        assert_eq!(resp.deny, 32);
+    }
+
+    #[test]
+    fn upsert_overwrite_request_deserializes_allow_and_deny() {
+        let json = r#"{"allow":32,"deny":64}"#;
+        let req: UpsertOverwriteRequest =
+            serde_json::from_str(json).expect("must deserialize UpsertOverwriteRequest");
+        assert_eq!(req.allow, 32);
+        assert_eq!(req.deny, 64);
     }
 }
