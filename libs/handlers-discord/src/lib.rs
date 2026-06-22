@@ -98,13 +98,19 @@ pub fn router(state: &AppState) -> Router<AppState> {
         .typed_put(reaction::add::handler)
         .typed_delete(reaction::remove::handler)
         .typed_get(reaction::list::handler)
+        .typed_get(webhook::list::handler)
+        .typed_post(webhook::create::handler)
+        .typed_patch(webhook::update::handler)
+        .typed_delete(webhook::delete::handler)
         .layer(from_fn_with_state(state.clone(), rate_limit_middleware))
         .layer(from_fn_with_state(state.clone(), auth_middleware));
 
     // Public routes that authenticate THEMSELVES — they must NOT go behind
     // `auth_middleware`: Task 8 mounts `webhook::execute` (webhook-token auth)
     // and Task 10 mounts `gateway` (WS `identify` handshake) here.
-    let public = Router::new().layer(from_fn_with_state(state.clone(), rate_limit_middleware));
+    let public = Router::new()
+        .typed_post(webhook::execute::handler)
+        .layer(from_fn_with_state(state.clone(), rate_limit_middleware));
 
     Router::new().merge(authed).merge(public)
 }
