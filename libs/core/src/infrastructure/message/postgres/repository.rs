@@ -24,7 +24,7 @@ impl<'tx> MessageRepository for PgMessageRepository<'tx> {
         let components_json = m
             .components
             .as_ref()
-            .map(|c| serde_json::to_value(c))
+            .map(serde_json::to_value)
             .transpose()
             .map_err(|e| CoreError::Internal(format!("components serialization: {e}")))?;
 
@@ -116,10 +116,10 @@ impl<'tx> MessageRepository for PgMessageRepository<'tx> {
     ) -> Result<Vec<Message>, CoreError> {
         let mut tx = self.tx.lock().await;
 
-        let rows = if after.is_some() && before.is_none() {
+        let rows = if let (Some(after_msg), None) = (after, before) {
             // Forward pagination: fetch the n messages CLOSEST to (just after) the
             // cursor by ordering ASC, then reverse so callers always receive newest-first.
-            let after_id = after.unwrap().0;
+            let after_id = after_msg.0;
             let mut rows = sqlx::query_as!(
                 MessageRow,
                 r#"
@@ -188,7 +188,7 @@ impl<'tx> MessageRepository for PgMessageRepository<'tx> {
         let components_json = m
             .components
             .as_ref()
-            .map(|c| serde_json::to_value(c))
+            .map(serde_json::to_value)
             .transpose()
             .map_err(|e| CoreError::Internal(format!("components serialization: {e}")))?;
 

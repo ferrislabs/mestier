@@ -281,10 +281,10 @@ async fn wait_for_identify(socket: &mut WebSocket) -> Result<String, String> {
 async fn wait_for_ack(socket: &mut WebSocket) -> Result<(), String> {
     while let Some(msg) = socket.recv().await {
         let msg = msg.map_err(|e| e.to_string())?;
-        if let Message::Text(text) = msg {
-            if let Ok(ClientMessage::HeartbeatAck) = serde_json::from_str::<ClientMessage>(&text) {
-                return Ok(());
-            }
+        if let Message::Text(text) = msg
+            && let Ok(ClientMessage::HeartbeatAck) = serde_json::from_str::<ClientMessage>(&text)
+        {
+            return Ok(());
         }
     }
     Err("connection closed while waiting for ack".into())
