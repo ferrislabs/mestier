@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO chat.messages (id, org_id, channel_id, author_type, author_user_id, content, created_at)\n               VALUES ($1, $2, $3, 'USER'::chat.author_type, $4, 'first', now())",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "3894622011417768ae82af4579d51615b596ffe8c480e1898ba2cf071aa1c2f5"
+}

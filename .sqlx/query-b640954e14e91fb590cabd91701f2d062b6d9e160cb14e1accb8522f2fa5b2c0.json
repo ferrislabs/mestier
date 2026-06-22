@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT c.id AS \"id!\"\n            FROM chat.channels c\n            WHERE c.org_id = $1\n              AND EXISTS (\n                  SELECT 1 FROM chat.messages m\n                  WHERE m.channel_id = c.id\n                    AND m.id > COALESCE(\n                        (SELECT rs.last_read_message_id\n                         FROM chat.channel_read_state rs\n                         WHERE rs.user_id = $2 AND rs.channel_id = c.id),\n                        '00000000-0000-0000-0000-000000000000'::uuid)\n              )\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id!",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "b640954e14e91fb590cabd91701f2d062b6d9e160cb14e1accb8522f2fa5b2c0"
+}
