@@ -1,4 +1,5 @@
 #[cfg(test)]
+#[allow(clippy::module_inception)]
 mod tests {
     use std::sync::Arc;
 
@@ -186,22 +187,19 @@ mod tests {
             .await
             .expect("create_message must succeed");
 
-        struct NotifRow {
-            id: uuid::Uuid,
-        }
-        let rows = sqlx::query_as!(
-            NotifRow,
-            r#"SELECT id FROM chat.notification WHERE user_id = $1 AND message_id = $2"#,
+        let count = sqlx::query_scalar!(
+            r#"SELECT COUNT(*) FROM chat.notification WHERE user_id = $1 AND message_id = $2"#,
             author_id.0,
             message.id.0,
         )
-        .fetch_all(&pool)
+        .fetch_one(&pool)
         .await
-        .expect("notification query must succeed");
+        .expect("notification count query must succeed");
 
-        assert!(
-            rows.is_empty(),
-            "author self-mention must not create a notification"
+        assert_eq!(
+            count.unwrap_or(0),
+            0,
+            "self-mention must create no notification"
         );
 
         cleanup(&pool, org_id, &[author_id]).await;
