@@ -112,6 +112,7 @@ pub fn router(state: &AppState) -> Router<AppState> {
     // and Task 10 mounts `gateway` (WS `identify` handshake) here.
     let public = Router::new()
         .typed_post(webhook::execute::handler)
+        .typed_get(gateway::handler)
         .layer(from_fn_with_state(state.clone(), rate_limit_middleware));
 
     Router::new().merge(authed).merge(public)
