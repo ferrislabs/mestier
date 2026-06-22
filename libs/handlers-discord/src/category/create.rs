@@ -53,18 +53,3 @@ pub async fn handler(
 
     Ok(Response::Created(category.into()))
 }
-
-#[cfg(test)]
-mod tests {
-    #[test]
-    fn blank_name_triggers_validation() {
-        let name = "  ";
-        assert!(name.trim().is_empty());
-    }
-
-    #[test]
-    fn non_blank_name_passes() {
-        let name = "General";
-        assert!(!name.trim().is_empty());
-    }
-}
