@@ -5,7 +5,9 @@ use handlers::{ApiError, AppState, DataEnvelope, Response};
 use serde::Deserialize;
 use utoipa::ToSchema;
 
-use crate::{paths::ChannelPath, require_permission, response::ChannelResponse};
+use mestier_core::Permissions;
+
+use crate::{paths::ChannelPath, require_channel_permission, response::ChannelResponse};
 
 #[derive(Debug, Deserialize, ToSchema)]
 pub struct UpdateChannelRequest {
@@ -37,14 +39,11 @@ pub async fn handler(
     Extension(identity): Extension<Identity>,
     Json(payload): Json<UpdateChannelRequest>,
 ) -> Result<Response<ChannelResponse>, ApiError> {
-    // Fetch the channel first to obtain organization_id for the permission check.
-    let existing = state.usecase.get_channel(path.channel_id).await?;
-
-    require_permission(
+    require_channel_permission(
         &state,
         &identity,
-        existing.organization_id,
-        "channel.manage",
+        path.channel_id,
+        Permissions::MANAGE_CHANNELS,
     )
     .await?;
 
@@ -66,4 +65,28 @@ pub async fn handler(
         .await?;
 
     Ok(Response::OK(updated.into()))
+}
+
+#[cfg(test)]
+mod tests {
+    use mestier_core::Permissions;
+
+    #[test]
+    fn manage_channels_bit_is_8() {
+        assert_eq!(Permissions::MANAGE_CHANNELS.bits(), 8);
+    }
+
+    #[test]
+    fn effective_without_manage_channels_cannot_update() {
+        // A member with only VIEW+SEND cannot manage channels.
+        let member_effective = Permissions::VIEW_CHANNEL | Permissions::SEND_MESSAGES;
+        assert!(!member_effective.contains(Permissions::MANAGE_CHANNELS));
+    }
+
+    #[test]
+    fn effective_with_manage_channels_can_update() {
+        let manager_effective =
+            Permissions::VIEW_CHANNEL | Permissions::SEND_MESSAGES | Permissions::MANAGE_CHANNELS;
+        assert!(manager_effective.contains(Permissions::MANAGE_CHANNELS));
+    }
 }

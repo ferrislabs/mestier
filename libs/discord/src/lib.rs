@@ -5,15 +5,15 @@ pub mod enums;
 pub mod ids;
 
 pub use enums::{AuthorType, ChannelType, PresenceStatus};
-pub use ids::{AttachmentId, CategoryId, ChannelId, MessageId, ReactionId, WebhookId};
+pub use ids::{AttachmentId, CategoryId, ChannelId, MessageId, OverwriteId, ReactionId, WebhookId};
 
 pub mod components;
 
 pub mod domain;
 
 pub use domain::{
-    Attachment, Category, Channel, ChannelReadState, Message, Presence, Reaction, ReactionCount,
-    Webhook,
+    Attachment, Category, Channel, ChannelPermissionOverwrite, ChannelReadState, Message,
+    OverwriteTarget, Presence, Reaction, ReactionCount, Webhook,
 };
 
 pub mod mentions;
@@ -37,6 +37,10 @@ pub use domain::channel::{
 pub use domain::message::{
     AddReactionCommand, AttachmentInput, CreateMessageCommand, MessageAuthor, MessageRepository,
     MessageService, RemoveReactionCommand, UpdateMessageCommand,
+};
+pub use domain::overwrite::{
+    DeleteChannelOverwrite, OverwriteRepository, UpsertChannelOverwrite,
+    resolve_channel_permissions,
 };
 pub use domain::presence::{
     PresenceRepository, PresenceService, SetPresenceCommand, StartTypingCommand,

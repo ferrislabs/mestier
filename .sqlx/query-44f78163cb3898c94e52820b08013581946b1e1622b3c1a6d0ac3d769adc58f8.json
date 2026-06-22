@@ -1,0 +1,76 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                INSERT INTO chat.channel_permission_overwrite\n                    (id, channel_id, org_id, target_type, target_id, allow, deny, created_at, updated_at)\n                VALUES ($1, $2, $3, $4, $5, $6, $7, now(), now())\n                ON CONFLICT (channel_id, target_type, target_id) WHERE target_type IN ('ROLE','MEMBER')\n                DO UPDATE SET allow = EXCLUDED.allow,\n                              deny  = EXCLUDED.deny,\n                              updated_at = now()\n                RETURNING id, channel_id, org_id, target_type, target_id, allow, deny, created_at, updated_at\n                ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "channel_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "org_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 3,
+        "name": "target_type",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "target_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 5,
+        "name": "allow",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 6,
+        "name": "deny",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 7,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 8,
+        "name": "updated_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Uuid",
+        "Text",
+        "Uuid",
+        "Int8",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      true,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "44f78163cb3898c94e52820b08013581946b1e1622b3c1a6d0ac3d769adc58f8"
+}

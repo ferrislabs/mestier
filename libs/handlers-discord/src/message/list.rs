@@ -7,7 +7,12 @@ use discord::MessageId;
 use handlers::{ApiError, AppState, DataEnvelope, Response};
 use serde::Deserialize;
 
-use crate::{paths::ChannelMessagesPath, require_org_membership, response::MessageResponse};
+use mestier_core::Permissions;
+
+use crate::{
+    paths::ChannelMessagesPath, require_channel_permission, require_org_membership,
+    response::MessageResponse,
+};
 
 #[derive(Debug, Deserialize)]
 pub struct MessageCursorQuery {
@@ -48,6 +53,13 @@ pub async fn handler(
 ) -> Result<Response<Vec<MessageResponse>>, ApiError> {
     let channel = state.usecase.get_channel(path.channel_id).await?;
     require_org_membership(&state, &identity, channel.organization_id).await?;
+    require_channel_permission(
+        &state,
+        &identity,
+        path.channel_id,
+        Permissions::VIEW_CHANNEL,
+    )
+    .await?;
 
     let messages = state
         .usecase
@@ -61,4 +73,27 @@ pub async fn handler(
 
     let items: Vec<MessageResponse> = messages.into_iter().map(MessageResponse::from).collect();
     Ok(Response::OK(items))
+}
+
+#[cfg(test)]
+mod tests {
+    use mestier_core::Permissions;
+
+    #[test]
+    fn view_channel_bit_is_not_send_messages_bit() {
+        // Guards against accidental bit collision: the two checks must enforce different gates.
+        assert_ne!(
+            Permissions::VIEW_CHANNEL.bits(),
+            Permissions::SEND_MESSAGES.bits(),
+            "VIEW_CHANNEL and SEND_MESSAGES must be distinct bits"
+        );
+        assert_eq!(Permissions::VIEW_CHANNEL.bits(), 32);
+    }
+
+    #[test]
+    fn combined_bits_contain_both_individually() {
+        let combined = Permissions::VIEW_CHANNEL | Permissions::SEND_MESSAGES;
+        assert!(combined.contains(Permissions::VIEW_CHANNEL));
+        assert!(combined.contains(Permissions::SEND_MESSAGES));
+    }
 }

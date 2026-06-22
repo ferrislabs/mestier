@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                    DELETE FROM chat.channel_permission_overwrite\n                    WHERE channel_id = $1 AND target_type = 'MEMBER' AND target_id = $2\n                    ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "da29d7ecfe15ee0899c6d08cb25c20d04ef459c82e2b20f042390da6170063e0"
+}

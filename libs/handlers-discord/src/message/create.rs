@@ -5,7 +5,12 @@ use handlers::{ApiError, AppState, DataEnvelope, IdentityExt, Response};
 use serde::Deserialize;
 use utoipa::ToSchema;
 
-use crate::{paths::ChannelMessagesPath, require_org_membership, response::MessageResponse};
+use mestier_core::Permissions;
+
+use crate::{
+    paths::ChannelMessagesPath, require_channel_permission, require_org_membership,
+    response::MessageResponse,
+};
 
 /// Per-attachment descriptor included in a message create request.
 /// The client uploads each file via `POST /api/v1/files?folder=attachments` first,
@@ -59,6 +64,13 @@ pub async fn handler(
 ) -> Result<Response<MessageResponse>, ApiError> {
     let channel = state.usecase.get_channel(path.channel_id).await?;
     require_org_membership(&state, &identity, channel.organization_id).await?;
+    require_channel_permission(
+        &state,
+        &identity,
+        path.channel_id,
+        Permissions::SEND_MESSAGES,
+    )
+    .await?;
 
     if payload.content.trim().is_empty() {
         return Err(ApiError::Validation(
@@ -101,6 +113,25 @@ mod tests {
             req.attachments.is_empty(),
             "attachments must default to empty Vec when absent from JSON"
         );
+    }
+
+    #[test]
+    fn send_messages_bit_differs_from_view_channel_bit() {
+        use mestier_core::Permissions;
+        assert_ne!(
+            Permissions::SEND_MESSAGES.bits(),
+            Permissions::VIEW_CHANNEL.bits(),
+            "SEND_MESSAGES and VIEW_CHANNEL must be distinct permission bits"
+        );
+        assert_eq!(Permissions::SEND_MESSAGES.bits(), 64);
+    }
+
+    #[test]
+    fn effective_with_only_view_channel_lacks_send_messages() {
+        use mestier_core::Permissions;
+        let effective = Permissions::VIEW_CHANNEL; // e.g. EVERYONE deny SEND_MESSAGES
+        assert!(effective.contains(Permissions::VIEW_CHANNEL));
+        assert!(!effective.contains(Permissions::SEND_MESSAGES));
     }
 
     #[test]

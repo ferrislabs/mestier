@@ -5,7 +5,7 @@ use serde::Serialize;
 use crate::{
     components::Component,
     enums::{AuthorType, ChannelType, PresenceStatus},
-    ids::{AttachmentId, CategoryId, ChannelId, MessageId, WebhookId},
+    ids::{AttachmentId, CategoryId, ChannelId, MessageId, OverwriteId, WebhookId},
 };
 
 #[derive(Debug, Clone, Serialize)]
@@ -109,9 +109,76 @@ pub struct ChannelReadState {
     pub updated_at: DateTime<Utc>,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+pub enum OverwriteTarget {
+    Everyone,
+    Role(RoleId),
+    Member(UserId),
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct ChannelPermissionOverwrite {
+    pub id: OverwriteId,
+    pub channel_id: ChannelId,
+    pub organization_id: OrganizationId,
+    pub target: OverwriteTarget,
+    pub allow: i64,
+    pub deny: i64,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+}
+
+#[cfg(test)]
+mod overwrite_tests {
+    use super::*;
+    use common::{RoleId, UserId};
+    use uuid::Uuid;
+
+    #[test]
+    fn overwrite_target_everyone_eq() {
+        assert_eq!(OverwriteTarget::Everyone, OverwriteTarget::Everyone);
+    }
+
+    #[test]
+    fn overwrite_target_role_eq() {
+        let role_id = RoleId(Uuid::new_v4());
+        assert_eq!(
+            OverwriteTarget::Role(role_id),
+            OverwriteTarget::Role(role_id)
+        );
+    }
+
+    #[test]
+    fn overwrite_target_member_eq() {
+        let user_id = UserId(Uuid::new_v4());
+        assert_eq!(
+            OverwriteTarget::Member(user_id),
+            OverwriteTarget::Member(user_id)
+        );
+    }
+
+    #[test]
+    fn overwrite_target_different_variants_ne() {
+        let id = Uuid::new_v4();
+        assert_ne!(
+            OverwriteTarget::Role(RoleId(id)),
+            OverwriteTarget::Member(UserId(id)),
+        );
+        assert_ne!(OverwriteTarget::Everyone, OverwriteTarget::Role(RoleId(id)));
+    }
+
+    #[test]
+    fn overwrite_target_is_copy() {
+        let t = OverwriteTarget::Everyone;
+        let _copy = t;
+        let _again = t; // copy semantics — no move error
+    }
+}
+
 pub mod category;
 pub mod channel;
 pub mod message;
+pub mod overwrite;
 pub mod presence;
 pub mod read_state;
 pub mod webhook;

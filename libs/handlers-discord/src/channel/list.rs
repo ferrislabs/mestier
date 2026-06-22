@@ -23,8 +23,35 @@ pub async fn handler(
     Extension(identity): Extension<Identity>,
 ) -> Result<Response<Vec<ChannelResponse>>, ApiError> {
     require_org_membership(&state, &identity, path.organization_id).await?;
+    let user = state
+        .usecase
+        .find_user_by_sub(identity.id())
+        .await?
+        .ok_or(ApiError::Forbidden)?;
 
-    let channels = state.usecase.list_channels(path.organization_id).await?;
+    let channels = state
+        .usecase
+        .list_visible_channels(user.id, path.organization_id)
+        .await?;
     let items: Vec<ChannelResponse> = channels.into_iter().map(ChannelResponse::from).collect();
     Ok(Response::OK(items))
+}
+
+#[cfg(test)]
+mod tests {
+    use mestier_core::Permissions;
+
+    #[test]
+    fn channel_without_view_channel_bit_is_filtered() {
+        // Simulate the bit test list_visible_channels performs per channel:
+        // a channel whose resolved bits lack VIEW_CHANNEL must be excluded.
+        let no_view = Permissions::SEND_MESSAGES; // VIEW_CHANNEL is absent
+        assert!(!no_view.contains(Permissions::VIEW_CHANNEL));
+    }
+
+    #[test]
+    fn channel_with_view_channel_bit_is_included() {
+        let with_view = Permissions::VIEW_CHANNEL | Permissions::SEND_MESSAGES;
+        assert!(with_view.contains(Permissions::VIEW_CHANNEL));
+    }
 }

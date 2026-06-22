@@ -27,6 +27,7 @@ pub mod domain {
     pub struct Webhook;
     pub struct Presence;
     pub struct ReadState;
+    pub struct Overwrite;
 }
 
 /// Backend markers — one zero-sized type per supported persistence layer.
