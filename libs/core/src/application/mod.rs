@@ -20,6 +20,7 @@ pub mod customer_context;
 pub mod discord_category;
 pub mod discord_channel;
 pub mod discord_message;
+pub mod discord_notification;
 pub mod discord_overwrite;
 pub mod discord_presence;
 pub mod discord_read_state;
