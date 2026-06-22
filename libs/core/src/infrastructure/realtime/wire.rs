@@ -1,6 +1,6 @@
 use discord::{
-    Category, CategoryId, Channel, ChannelId, DomainEvent, Message, MessageId, OrganizationId,
-    Presence, UserId,
+    Category, CategoryId, Channel, ChannelId, DomainEvent, Message, MessageId, Notification,
+    OrganizationId, Presence, UserId,
 };
 use serde::Serialize;
 
@@ -59,6 +59,7 @@ pub enum GatewayEvent {
         user_id: UserId,
         last_read_message_id: Option<MessageId>,
     },
+    NotificationCreate(Notification),
 }
 
 /// How long a typing indicator stays active on the client side (milliseconds).
@@ -157,6 +158,7 @@ pub fn from_domain(event: DomainEvent, org_id: OrganizationId) -> GatewayEvent {
             user_id,
             last_read_message_id,
         },
+        DomainEvent::NotificationCreated(n) => GatewayEvent::NotificationCreate(n),
     }
 }
 
@@ -166,6 +168,7 @@ impl GatewayEvent {
     pub fn target_user(&self) -> Option<UserId> {
         match self {
             GatewayEvent::ChannelRead { user_id, .. } => Some(*user_id),
+            GatewayEvent::NotificationCreate(n) => Some(n.user_id),
             _ => None,
         }
     }
@@ -206,5 +209,25 @@ mod tests {
             message_id: msg,
         };
         assert_eq!(ev.target_user(), None);
+    }
+
+    #[test]
+    fn target_user_returns_some_for_notification_create() {
+        use discord::{
+            ChannelId, MessageId, Notification, NotificationId, NotificationKind, OrganizationId,
+            UserId,
+        };
+        let notif = Notification {
+            id: NotificationId(Uuid::from_u128(10)),
+            organization_id: OrganizationId(Uuid::from_u128(1)),
+            user_id: UserId(Uuid::from_u128(42)),
+            channel_id: ChannelId(Uuid::from_u128(2)),
+            message_id: MessageId(Uuid::from_u128(9)),
+            kind: NotificationKind::Mention,
+            read_at: None,
+            created_at: chrono::Utc::now(),
+        };
+        let ev = GatewayEvent::NotificationCreate(notif);
+        assert_eq!(ev.target_user(), Some(UserId(Uuid::from_u128(42))));
     }
 }
