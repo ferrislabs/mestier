@@ -2,22 +2,27 @@ use chrono::Utc;
 use common::{CoreError, generate_uuid_v7};
 
 use crate::{
-    AuthorType, ChannelId, Message, MessageId, Reaction, components,
+    Attachment, AuthorType, ChannelId, Message, MessageId, Reaction, components,
     domain::message::{
         commands::{
-            AddReactionCommand, CreateMessageCommand, MessageAuthor, RemoveReactionCommand,
-            UpdateMessageCommand,
+            AddReactionCommand, AttachmentInput, CreateMessageCommand, MessageAuthor,
+            RemoveReactionCommand, UpdateMessageCommand,
         },
         ports::MessageRepository,
     },
     events::{DomainEvent, EventPublisher},
+    ids::AttachmentId,
     mentions::parse_mentions,
 };
+
+/// Maximum number of attachments allowed per message.
+pub(crate) const MAX_MESSAGE_ATTACHMENTS: usize = 10;
 
 /// Builds a validated, fully-populated [`Message`] from a [`CreateMessageCommand`].
 ///
 /// Performs all invariant checks (blank content, component restrictions, component
-/// shape validation) and mention parsing. Does NOT persist or publish anything.
+/// shape validation, attachment count/field validation) and mention parsing.
+/// Does NOT persist or publish anything.
 pub(crate) fn build_new_message(cmd: CreateMessageCommand) -> Result<Message, CoreError> {
     // Invariant: components are forbidden for USER-authored messages
     let is_user = matches!(cmd.author, MessageAuthor::User(_));
@@ -35,6 +40,44 @@ pub(crate) fn build_new_message(cmd: CreateMessageCommand) -> Result<Message, Co
     if let Some(ref comps) = cmd.components {
         components::validate(comps)?;
     }
+
+    // Invariant: at most MAX_MESSAGE_ATTACHMENTS attachments
+    if cmd.attachments.len() > MAX_MESSAGE_ATTACHMENTS {
+        return Err(CoreError::Conflict(format!(
+            "a message may have at most {MAX_MESSAGE_ATTACHMENTS} attachments"
+        )));
+    }
+
+    // Validate each attachment input and map to domain Attachment
+    let attachments: Vec<Attachment> = cmd
+        .attachments
+        .into_iter()
+        .map(|input: AttachmentInput| {
+            if input.filename.trim().is_empty() {
+                return Err(CoreError::Conflict(
+                    "attachment filename cannot be blank".to_owned(),
+                ));
+            }
+            if input.storage_key.trim().is_empty() {
+                return Err(CoreError::Conflict(
+                    "attachment storage_key cannot be blank".to_owned(),
+                ));
+            }
+            if input.size_bytes < 0 {
+                return Err(CoreError::Conflict(
+                    "attachment size_bytes must be >= 0".to_owned(),
+                ));
+            }
+            Ok(Attachment {
+                id: AttachmentId(generate_uuid_v7()),
+                storage_key: input.storage_key,
+                filename: input.filename,
+                mime_type: input.mime_type,
+                size_bytes: input.size_bytes,
+                created_at: Utc::now(),
+            })
+        })
+        .collect::<Result<Vec<Attachment>, CoreError>>()?;
 
     let parsed = parse_mentions(&cmd.content);
     let (author_type, author_user_id, author_webhook_id) = match cmd.author {
@@ -58,6 +101,7 @@ pub(crate) fn build_new_message(cmd: CreateMessageCommand) -> Result<Message, Co
         mention_channel_ids: parsed.channel_ids,
         mention_everyone: parsed.everyone,
         reactions: vec![],
+        attachments,
         edited_at: None,
         created_at: now,
     })
@@ -201,7 +245,7 @@ where
 mod tests {
     use super::*;
     use crate::{
-        AuthorType, ChannelId, MessageId, WebhookId,
+        AttachmentInput, AuthorType, ChannelId, MessageId, WebhookId,
         components::Component,
         domain::message::ports::MockMessageRepository,
         events::{DomainEvent, MockEventPublisher},
@@ -230,6 +274,7 @@ mod tests {
             mention_channel_ids: vec![],
             mention_everyone: false,
             reactions: vec![],
+            attachments: vec![],
             edited_at: None,
             created_at: Utc::now(),
         }
@@ -250,6 +295,7 @@ mod tests {
                 components: Some(vec![Component::TextDisplay {
                     content: "rich".to_owned(),
                 }]),
+                attachments: vec![],
             })
             .await;
 
@@ -286,6 +332,7 @@ mod tests {
                 components: Some(vec![Component::TextDisplay {
                     content: "embed".to_owned(),
                 }]),
+                attachments: vec![],
             })
             .await
             .unwrap();
@@ -323,6 +370,7 @@ mod tests {
                 author: MessageAuthor::User(UserId(Uuid::new_v4())),
                 content: "hey @everyone".to_owned(),
                 components: None,
+                attachments: vec![],
             })
             .await
             .unwrap();
@@ -358,6 +406,7 @@ mod tests {
                 components: Some(vec![Component::TextDisplay {
                     content: "notice body".to_owned(),
                 }]),
+                attachments: vec![],
             })
             .await
             .unwrap();
@@ -386,6 +435,7 @@ mod tests {
                     accent_color: None,
                     children: vec![],
                 }]),
+                attachments: vec![],
             })
             .await;
 
@@ -601,5 +651,256 @@ mod tests {
         })
         .await
         .unwrap();
+    }
+
+    #[tokio::test]
+    async fn create_message_with_attachments_stored_on_message_created() {
+        let org = OrganizationId(Uuid::new_v4());
+        let channel_id = ChannelId(Uuid::new_v4());
+
+        let mut repo = MockMessageRepository::new();
+        repo.expect_insert().times(1).returning(|m| {
+            let m = m.clone();
+            Box::pin(async move { Ok(m) })
+        });
+
+        let mut events = MockEventPublisher::new();
+        events
+            .expect_publish()
+            .withf(|e| {
+                if let DomainEvent::MessageCreated(msg) = e {
+                    msg.attachments.len() == 2
+                        && msg.attachments[0].filename == "photo.png"
+                        && msg.attachments[0].storage_key == "uploads/abc"
+                        && msg.attachments[0].size_bytes == 1024
+                        && msg.attachments[1].filename == "doc.pdf"
+                        && msg.attachments[1].storage_key == "uploads/def"
+                        && msg.attachments[1].size_bytes == 2048
+                } else {
+                    false
+                }
+            })
+            .times(1)
+            .returning(|_| Box::pin(async { Ok(()) }));
+
+        let mut svc = MessageService::new(repo, events);
+        let result = svc
+            .create_message(CreateMessageCommand {
+                organization_id: org,
+                channel_id,
+                author: MessageAuthor::User(UserId(Uuid::new_v4())),
+                content: "see attached".to_owned(),
+                components: None,
+                attachments: vec![
+                    AttachmentInput {
+                        storage_key: "uploads/abc".to_owned(),
+                        filename: "photo.png".to_owned(),
+                        mime_type: "image/png".to_owned(),
+                        size_bytes: 1024,
+                    },
+                    AttachmentInput {
+                        storage_key: "uploads/def".to_owned(),
+                        filename: "doc.pdf".to_owned(),
+                        mime_type: "application/pdf".to_owned(),
+                        size_bytes: 2048,
+                    },
+                ],
+            })
+            .await
+            .unwrap();
+
+        assert_eq!(result.attachments.len(), 2);
+        assert_eq!(result.attachments[0].filename, "photo.png");
+        assert_eq!(result.attachments[0].storage_key, "uploads/abc");
+        assert_eq!(result.attachments[0].size_bytes, 1024);
+        assert_eq!(result.attachments[0].mime_type, "image/png");
+        assert_eq!(result.attachments[1].filename, "doc.pdf");
+        assert_eq!(result.attachments[1].storage_key, "uploads/def");
+        assert_eq!(result.attachments[1].size_bytes, 2048);
+        // AttachmentId must be non-nil uuid v7 (just check it is not nil)
+        assert_ne!(result.attachments[0].id.0, uuid::Uuid::nil());
+        assert_ne!(result.attachments[1].id.0, uuid::Uuid::nil());
+    }
+
+    #[tokio::test]
+    async fn create_message_exceeds_attachment_cap_is_rejected() {
+        let repo = MockMessageRepository::new();
+        let events = MockEventPublisher::new();
+        let mut svc = MessageService::new(repo, events);
+
+        let attachments: Vec<AttachmentInput> = (0..11)
+            .map(|i| AttachmentInput {
+                storage_key: format!("uploads/key-{i}"),
+                filename: format!("file-{i}.txt"),
+                mime_type: "text/plain".to_owned(),
+                size_bytes: 100,
+            })
+            .collect();
+
+        let result = svc
+            .create_message(CreateMessageCommand {
+                organization_id: OrganizationId(Uuid::new_v4()),
+                channel_id: ChannelId(Uuid::new_v4()),
+                author: MessageAuthor::User(UserId(Uuid::new_v4())),
+                content: "too many".to_owned(),
+                components: None,
+                attachments,
+            })
+            .await;
+
+        assert!(matches!(result, Err(CoreError::Conflict(_))));
+    }
+
+    #[tokio::test]
+    async fn create_message_blank_filename_is_rejected() {
+        let repo = MockMessageRepository::new();
+        let events = MockEventPublisher::new();
+        let mut svc = MessageService::new(repo, events);
+
+        let result = svc
+            .create_message(CreateMessageCommand {
+                organization_id: OrganizationId(Uuid::new_v4()),
+                channel_id: ChannelId(Uuid::new_v4()),
+                author: MessageAuthor::User(UserId(Uuid::new_v4())),
+                content: "hello".to_owned(),
+                components: None,
+                attachments: vec![AttachmentInput {
+                    storage_key: "uploads/valid-key".to_owned(),
+                    filename: "   ".to_owned(), // blank after trim
+                    mime_type: "image/png".to_owned(),
+                    size_bytes: 512,
+                }],
+            })
+            .await;
+
+        assert!(matches!(result, Err(CoreError::Conflict(_))));
+    }
+
+    #[tokio::test]
+    async fn create_message_blank_storage_key_is_rejected() {
+        let repo = MockMessageRepository::new();
+        let events = MockEventPublisher::new();
+        let mut svc = MessageService::new(repo, events);
+
+        let result = svc
+            .create_message(CreateMessageCommand {
+                organization_id: OrganizationId(Uuid::new_v4()),
+                channel_id: ChannelId(Uuid::new_v4()),
+                author: MessageAuthor::User(UserId(Uuid::new_v4())),
+                content: "hello".to_owned(),
+                components: None,
+                attachments: vec![AttachmentInput {
+                    storage_key: "".to_owned(), // blank
+                    filename: "photo.png".to_owned(),
+                    mime_type: "image/png".to_owned(),
+                    size_bytes: 512,
+                }],
+            })
+            .await;
+
+        assert!(matches!(result, Err(CoreError::Conflict(_))));
+    }
+
+    #[tokio::test]
+    async fn create_message_negative_size_bytes_is_rejected() {
+        let repo = MockMessageRepository::new();
+        let events = MockEventPublisher::new();
+        let mut svc = MessageService::new(repo, events);
+
+        let result = svc
+            .create_message(CreateMessageCommand {
+                organization_id: OrganizationId(Uuid::new_v4()),
+                channel_id: ChannelId(Uuid::new_v4()),
+                author: MessageAuthor::User(UserId(Uuid::new_v4())),
+                content: "hello".to_owned(),
+                components: None,
+                attachments: vec![AttachmentInput {
+                    storage_key: "uploads/valid-key".to_owned(),
+                    filename: "photo.png".to_owned(),
+                    mime_type: "image/png".to_owned(),
+                    size_bytes: -1,
+                }],
+            })
+            .await;
+
+        assert!(matches!(result, Err(CoreError::Conflict(_))));
+    }
+
+    #[tokio::test]
+    async fn update_message_does_not_change_attachments() {
+        use crate::Attachment;
+        use crate::ids::AttachmentId;
+        use chrono::Utc;
+
+        let org = OrganizationId(Uuid::new_v4());
+        let channel_id = ChannelId(Uuid::new_v4());
+        let id = MessageId(Uuid::new_v4());
+        let author = UserId(Uuid::new_v4());
+
+        let existing_attachment = Attachment {
+            id: AttachmentId(Uuid::new_v4()),
+            storage_key: "uploads/original".to_owned(),
+            filename: "original.png".to_owned(),
+            mime_type: "image/png".to_owned(),
+            size_bytes: 999,
+            created_at: Utc::now(),
+        };
+
+        let existing_message = Message {
+            id,
+            organization_id: org,
+            channel_id,
+            author_type: AuthorType::User,
+            author_user_id: Some(author),
+            author_webhook_id: None,
+            content: "original content".to_owned(),
+            components: None,
+            mention_user_ids: vec![],
+            mention_role_ids: vec![],
+            mention_channel_ids: vec![],
+            mention_everyone: false,
+            reactions: vec![],
+            attachments: vec![existing_attachment.clone()],
+            edited_at: None,
+            created_at: Utc::now(),
+        };
+
+        let mut repo = MockMessageRepository::new();
+        repo.expect_find_by_id()
+            .with(mockall::predicate::eq(id))
+            .returning(move |_| {
+                let msg = existing_message.clone();
+                Box::pin(async move { Ok(Some(msg)) })
+            });
+        repo.expect_update().times(1).returning(|m| {
+            let m = m.clone();
+            Box::pin(async move { Ok(m) })
+        });
+
+        let mut events = MockEventPublisher::new();
+        events
+            .expect_publish()
+            .withf(|e| matches!(e, DomainEvent::MessageUpdated(_)))
+            .times(1)
+            .returning(|_| Box::pin(async { Ok(()) }));
+
+        let mut svc = MessageService::new(repo, events);
+        let result = svc
+            .update_message(UpdateMessageCommand {
+                id,
+                requester: author,
+                content: "edited content".to_owned(),
+                components: None,
+            })
+            .await
+            .unwrap();
+
+        // Content updated
+        assert_eq!(result.content, "edited content");
+        assert!(result.edited_at.is_some());
+        // Attachments are unchanged
+        assert_eq!(result.attachments.len(), 1);
+        assert_eq!(result.attachments[0].storage_key, "uploads/original");
+        assert_eq!(result.attachments[0].filename, "original.png");
     }
 }

@@ -4,7 +4,7 @@ use discord::{ChannelId, Message, MessageId, Reaction, ReactionCount, UserId};
 use mestier_macros::repository;
 use sqlx::PgConnection;
 
-use super::model::{MessageRow, ReactionAggRow, ReactionRow};
+use super::model::{MessageAttachmentRow, MessageRow, ReactionAggRow, ReactionRow};
 use crate::infrastructure::postgres::{SharedTx, error::map_sqlx_error};
 
 #[repository(domain = Message, backend = Postgres)]
@@ -74,7 +74,31 @@ impl<'tx> MessageRepository for PgMessageRepository<'tx> {
         .await
         .map_err(map_sqlx_error)?;
 
-        row.into_message(vec![])
+        // Persist attachment rows for this message (ordered by their position in the input list).
+        for (position, attachment) in m.attachments.iter().enumerate() {
+            sqlx::query!(
+                r#"
+                INSERT INTO chat.message_attachments
+                    (id, org_id, message_id, storage_key, filename, mime_type,
+                     size_bytes, position, created_at)
+                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+                "#,
+                attachment.id.0,
+                m.organization_id.0,
+                m.id.0,
+                attachment.storage_key,
+                attachment.filename,
+                attachment.mime_type,
+                attachment.size_bytes,
+                position as i32,
+                attachment.created_at,
+            )
+            .execute(&mut ***tx)
+            .await
+            .map_err(map_sqlx_error)?;
+        }
+
+        row.into_message(vec![], m.attachments.clone())
     }
 
     async fn find_by_id(&mut self, id: MessageId) -> Result<Option<Message>, CoreError> {
@@ -102,7 +126,8 @@ impl<'tx> MessageRepository for PgMessageRepository<'tx> {
             None => Ok(None),
             Some(r) => {
                 let reactions = fetch_reaction_counts(&mut tx, id).await?;
-                Ok(Some(r.into_message(reactions)?))
+                let attachments = fetch_attachments(&mut tx, id).await?;
+                Ok(Some(r.into_message(reactions, attachments)?))
             }
         }
     }
@@ -178,7 +203,8 @@ impl<'tx> MessageRepository for PgMessageRepository<'tx> {
         for row in rows {
             let id = MessageId(row.id);
             let reactions = fetch_reaction_counts(&mut tx, id).await?;
-            messages.push(row.into_message(reactions)?);
+            let attachments = fetch_attachments(&mut tx, id).await?;
+            messages.push(row.into_message(reactions, attachments)?);
         }
         Ok(messages)
     }
@@ -236,7 +262,8 @@ impl<'tx> MessageRepository for PgMessageRepository<'tx> {
             None => Err(CoreError::NotFound),
             Some(r) => {
                 let reactions = fetch_reaction_counts(&mut tx, m.id).await?;
-                r.into_message(reactions)
+                let attachments = fetch_attachments(&mut tx, m.id).await?;
+                r.into_message(reactions, attachments)
             }
         }
     }
@@ -333,6 +360,32 @@ async fn fetch_reaction_counts(
     .fetch_all(conn)
     .await
     .map_err(map_sqlx_error)?;
+    Ok(rows.into_iter().map(Into::into).collect())
+}
+
+/// Load attachments for a single message, ordered by position then id (stable tie-break).
+/// Called by find_by_id / list_by_channel / update RETURNING paths — same pattern as
+/// fetch_reaction_counts; the caller already holds the tx lock so we receive a bare
+/// &mut PgConnection.
+pub(super) async fn fetch_attachments(
+    conn: &mut sqlx::PgConnection,
+    message_id: MessageId,
+) -> Result<Vec<discord::Attachment>, CoreError> {
+    let rows = sqlx::query_as!(
+        MessageAttachmentRow,
+        r#"
+        SELECT id, message_id, storage_key, filename, mime_type,
+               size_bytes, position, created_at
+        FROM chat.message_attachments
+        WHERE message_id = $1
+        ORDER BY position ASC, id ASC
+        "#,
+        message_id.0,
+    )
+    .fetch_all(conn)
+    .await
+    .map_err(map_sqlx_error)?;
+
     Ok(rows.into_iter().map(Into::into).collect())
 }
 
@@ -449,6 +502,7 @@ mod tests {
                 mention_channel_ids: vec![],
                 mention_everyone: false,
                 reactions: vec![],
+                attachments: vec![], // shim — field added by Plan 1; Task 3 adds the real INSERT/load
                 edited_at: None,
                 created_at: now,
             };
@@ -475,6 +529,95 @@ mod tests {
             assert_eq!(fetched.mention_user_ids, vec![other_user_id]);
             assert_eq!(fetched.mention_channel_ids, vec![channel_id]);
             assert!(fetched.mention_everyone);
+
+            Err::<(), _>(CoreError::Internal("rollback".into()))
+        })
+        .await
+        .unwrap_err();
+    }
+
+    #[tokio::test]
+    #[ignore = "requires live postgres"]
+    async fn insert_message_with_attachments_and_reload() {
+        let pool = make_pool().await;
+
+        crate::infrastructure::postgres::with_tx(&pool, async |tx| {
+            let (org_id, author_id, channel_id) = {
+                let mut guard = tx.lock().await;
+                seed_org_user_channel(*guard).await
+            };
+
+            let mut repo = PgMessageRepository::new(&tx);
+
+            let msg_id = MessageId(generate_uuid_v7());
+            let now = Utc::now();
+
+            // Build two attachments (order matters: position 0 and 1)
+            let att_0 = discord::Attachment {
+                id: discord::AttachmentId(generate_uuid_v7()),
+                storage_key: "uploads/attachments/file-a".to_string(),
+                filename: "photo.png".to_string(),
+                mime_type: "image/png".to_string(),
+                size_bytes: 2048,
+                created_at: now,
+            };
+            let att_1 = discord::Attachment {
+                id: discord::AttachmentId(generate_uuid_v7()),
+                storage_key: "uploads/attachments/file-b".to_string(),
+                filename: "doc.pdf".to_string(),
+                mime_type: "application/pdf".to_string(),
+                size_bytes: 51200,
+                created_at: now,
+            };
+
+            let original = discord::Message {
+                id: msg_id,
+                organization_id: org_id,
+                channel_id,
+                author_type: discord::AuthorType::User,
+                author_user_id: Some(author_id),
+                author_webhook_id: None,
+                content: "see attached".to_string(),
+                components: None,
+                mention_user_ids: vec![],
+                mention_role_ids: vec![],
+                mention_channel_ids: vec![],
+                mention_everyone: false,
+                reactions: vec![],
+                attachments: vec![att_0.clone(), att_1.clone()],
+                edited_at: None,
+                created_at: now,
+            };
+
+            // insert
+            repo.insert(&original).await.unwrap();
+
+            // reload via find_by_id and assert round-trip
+            let fetched = repo
+                .find_by_id(msg_id)
+                .await
+                .unwrap()
+                .expect("message must exist");
+            assert_eq!(fetched.attachments.len(), 2, "expected 2 attachments");
+            // position 0 comes first
+            assert_eq!(fetched.attachments[0].filename, "photo.png");
+            assert_eq!(
+                fetched.attachments[0].storage_key,
+                "uploads/attachments/file-a"
+            );
+            assert_eq!(fetched.attachments[0].size_bytes, 2048);
+            // position 1 comes second
+            assert_eq!(fetched.attachments[1].filename, "doc.pdf");
+            assert_eq!(fetched.attachments[1].size_bytes, 51200);
+
+            // also verify list_by_channel surfaces the attachments
+            let listed = repo
+                .list_by_channel(channel_id, None, None, 10)
+                .await
+                .unwrap();
+            assert_eq!(listed.len(), 1);
+            assert_eq!(listed[0].attachments.len(), 2);
+            assert_eq!(listed[0].attachments[0].filename, "photo.png");
 
             Err::<(), _>(CoreError::Internal("rollback".into()))
         })

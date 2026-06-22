@@ -9,12 +9,21 @@ pub enum MessageAuthor {
     System,
 }
 
+/// One file the client already uploaded; referenced by its storage key.
+pub struct AttachmentInput {
+    pub storage_key: String,
+    pub filename: String,
+    pub mime_type: String,
+    pub size_bytes: i64,
+}
+
 pub struct CreateMessageCommand {
     pub organization_id: OrganizationId,
     pub channel_id: ChannelId,
     pub author: MessageAuthor,
     pub content: String,
     pub components: Option<Vec<Component>>,
+    pub attachments: Vec<AttachmentInput>,
 }
 
 pub struct UpdateMessageCommand {

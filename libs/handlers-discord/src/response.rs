@@ -2,8 +2,8 @@ use chrono::{DateTime, Utc};
 use common::{OrganizationId, RoleId, UserId};
 use discord::components::Component;
 use discord::{
-    AuthorType, Category, CategoryId, Channel, ChannelId, ChannelType, Message, MessageId,
-    Presence, PresenceStatus, ReactionCount, Webhook, WebhookId,
+    Attachment, AuthorType, Category, CategoryId, Channel, ChannelId, ChannelType, Message,
+    MessageId, Presence, PresenceStatus, ReactionCount, Webhook, WebhookId,
 };
 use serde::Serialize;
 use utoipa::ToSchema;
@@ -92,6 +92,29 @@ impl From<ReactionCount> for ReactionCountResponse {
     }
 }
 
+// ── Attachment ────────────────────────────────────────────────────────────────
+
+/// Per-message attachment. The internal `AttachmentId` is deliberately omitted —
+/// clients reference files by `storage_key` via the download endpoint.
+#[derive(Debug, Clone, PartialEq, Serialize, ToSchema)]
+pub struct AttachmentResponse {
+    pub storage_key: String,
+    pub filename: String,
+    pub mime_type: String,
+    pub size_bytes: i64,
+}
+
+impl From<Attachment> for AttachmentResponse {
+    fn from(a: Attachment) -> Self {
+        Self {
+            storage_key: a.storage_key,
+            filename: a.filename,
+            mime_type: a.mime_type,
+            size_bytes: a.size_bytes,
+        }
+    }
+}
+
 // ── Message ───────────────────────────────────────────────────────────────────
 
 #[derive(Debug, Clone, PartialEq, Serialize, ToSchema)]
@@ -109,6 +132,7 @@ pub struct MessageResponse {
     pub mention_channel_ids: Vec<ChannelId>,
     pub mention_everyone: bool,
     pub reactions: Vec<ReactionCountResponse>,
+    pub attachments: Vec<AttachmentResponse>,
     pub edited_at: Option<DateTime<Utc>>,
     pub created_at: DateTime<Utc>,
 }
@@ -132,6 +156,11 @@ impl From<Message> for MessageResponse {
                 .reactions
                 .into_iter()
                 .map(ReactionCountResponse::from)
+                .collect(),
+            attachments: m
+                .attachments
+                .into_iter()
+                .map(AttachmentResponse::from)
                 .collect(),
             edited_at: m.edited_at,
             created_at: m.created_at,
@@ -281,5 +310,77 @@ mod tests {
             !json.contains("token"),
             "WebhookResponse must not expose the token field; got: {json}"
         );
+    }
+
+    #[test]
+    fn attachment_response_does_not_expose_id() {
+        use discord::{Attachment, AttachmentId};
+
+        let attachment = Attachment {
+            id: AttachmentId::from_str(UUID_A).unwrap(),
+            storage_key: "prefix/attachments/018f1234".to_owned(),
+            filename: "invoice.pdf".to_owned(),
+            mime_type: "application/pdf".to_owned(),
+            size_bytes: 204_800,
+            created_at: Utc::now(),
+        };
+        let resp = AttachmentResponse::from(attachment);
+        let json = serde_json::to_string(&resp).expect("serialize");
+        assert!(
+            !json.contains("id"),
+            "AttachmentResponse must not expose id; got: {json}"
+        );
+        assert!(
+            json.contains("invoice.pdf"),
+            "filename must be present; got: {json}"
+        );
+        assert!(
+            json.contains("204800"),
+            "size_bytes must be present; got: {json}"
+        );
+    }
+
+    #[test]
+    fn message_response_carries_attachments() {
+        use discord::{Attachment, AttachmentId, AuthorType, ChannelId, Message, MessageId};
+
+        let msg_id = MessageId::from_str(UUID_A).unwrap();
+        let org_id = OrganizationId::from_str(UUID_B).unwrap();
+        let ch_id = ChannelId::from_str(UUID_C).unwrap();
+        let att_id = AttachmentId::from_str(UUID_D).unwrap();
+        let now = Utc::now();
+
+        let message = Message {
+            id: msg_id,
+            organization_id: org_id,
+            channel_id: ch_id,
+            author_type: AuthorType::User,
+            author_user_id: None,
+            author_webhook_id: None,
+            content: "see attached".to_owned(),
+            components: None,
+            mention_user_ids: vec![],
+            mention_role_ids: vec![],
+            mention_channel_ids: vec![],
+            mention_everyone: false,
+            reactions: vec![],
+            attachments: vec![Attachment {
+                id: att_id,
+                storage_key: "prefix/attachments/abc123".to_owned(),
+                filename: "photo.png".to_owned(),
+                mime_type: "image/png".to_owned(),
+                size_bytes: 51_200,
+                created_at: now,
+            }],
+            edited_at: None,
+            created_at: now,
+        };
+
+        let resp = MessageResponse::from(message);
+        assert_eq!(resp.attachments.len(), 1);
+        assert_eq!(resp.attachments[0].filename, "photo.png");
+        assert_eq!(resp.attachments[0].storage_key, "prefix/attachments/abc123");
+        assert_eq!(resp.attachments[0].mime_type, "image/png");
+        assert_eq!(resp.attachments[0].size_bytes, 51_200);
     }
 }

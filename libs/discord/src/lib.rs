@@ -5,13 +5,15 @@ pub mod enums;
 pub mod ids;
 
 pub use enums::{AuthorType, ChannelType, PresenceStatus};
-pub use ids::{CategoryId, ChannelId, MessageId, ReactionId, WebhookId};
+pub use ids::{AttachmentId, CategoryId, ChannelId, MessageId, ReactionId, WebhookId};
 
 pub mod components;
 
 pub mod domain;
 
-pub use domain::{Category, Channel, Message, Presence, Reaction, ReactionCount, Webhook};
+pub use domain::{
+    Attachment, Category, Channel, Message, Presence, Reaction, ReactionCount, Webhook,
+};
 
 pub mod mentions;
 
@@ -32,8 +34,8 @@ pub use domain::channel::{
     UpdateChannelCommand, UpdateThreadCommand,
 };
 pub use domain::message::{
-    AddReactionCommand, CreateMessageCommand, MessageAuthor, MessageRepository, MessageService,
-    RemoveReactionCommand, UpdateMessageCommand,
+    AddReactionCommand, AttachmentInput, CreateMessageCommand, MessageAuthor, MessageRepository,
+    MessageService, RemoveReactionCommand, UpdateMessageCommand,
 };
 pub use domain::presence::{
     PresenceRepository, PresenceService, SetPresenceCommand, StartTypingCommand,

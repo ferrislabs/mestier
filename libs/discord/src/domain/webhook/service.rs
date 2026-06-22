@@ -119,6 +119,7 @@ where
             author: MessageAuthor::Webhook(cmd.webhook_id),
             content: cmd.content,
             components: cmd.components,
+            attachments: vec![],
         })?;
         let saved = self.message_repo.insert(&message).await?;
         self.events

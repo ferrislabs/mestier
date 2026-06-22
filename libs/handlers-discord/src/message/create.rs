@@ -7,9 +7,33 @@ use utoipa::ToSchema;
 
 use crate::{paths::ChannelMessagesPath, require_org_membership, response::MessageResponse};
 
+/// Per-attachment descriptor included in a message create request.
+/// The client uploads each file via `POST /api/v1/files?folder=attachments` first,
+/// then references the returned `key` as `storage_key` here.
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct CreateMessageAttachment {
+    pub storage_key: String,
+    pub filename: String,
+    pub mime_type: String,
+    pub size_bytes: i64,
+}
+
+impl From<CreateMessageAttachment> for discord::AttachmentInput {
+    fn from(a: CreateMessageAttachment) -> Self {
+        discord::AttachmentInput {
+            storage_key: a.storage_key,
+            filename: a.filename,
+            mime_type: a.mime_type,
+            size_bytes: a.size_bytes,
+        }
+    }
+}
+
 #[derive(Debug, Deserialize, ToSchema)]
 pub struct CreateMessageRequest {
     pub content: String,
+    #[serde(default)]
+    pub attachments: Vec<CreateMessageAttachment>,
 }
 
 #[utoipa::path(
@@ -52,8 +76,45 @@ pub async fn handler(
             author: MessageAuthor::User(user_id),
             content: payload.content,
             components: None,
+            attachments: payload
+                .attachments
+                .into_iter()
+                .map(discord::AttachmentInput::from)
+                .collect(),
         })
         .await?;
 
     Ok(Response::Created(message.into()))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn create_message_request_defaults_attachments_to_empty() {
+        // Simulate deserializing a JSON body that has no "attachments" key.
+        let json = r#"{"content": "hello world"}"#;
+        let req: CreateMessageRequest =
+            serde_json::from_str(json).expect("must deserialize without attachments field");
+        assert!(
+            req.attachments.is_empty(),
+            "attachments must default to empty Vec when absent from JSON"
+        );
+    }
+
+    #[test]
+    fn create_message_attachment_maps_to_attachment_input() {
+        let dto = CreateMessageAttachment {
+            storage_key: "prefix/attachments/018f0000".to_owned(),
+            filename: "report.pdf".to_owned(),
+            mime_type: "application/pdf".to_owned(),
+            size_bytes: 102_400,
+        };
+        let input: discord::AttachmentInput = dto.into();
+        assert_eq!(input.storage_key, "prefix/attachments/018f0000");
+        assert_eq!(input.filename, "report.pdf");
+        assert_eq!(input.mime_type, "application/pdf");
+        assert_eq!(input.size_bytes, 102_400);
+    }
 }
