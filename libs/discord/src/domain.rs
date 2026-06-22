@@ -1,5 +1,6 @@
 use chrono::{DateTime, Utc};
 use common::{OrganizationId, RoleId, UserId};
+use serde::Serialize;
 
 use crate::{
     components::Component,
@@ -7,7 +8,7 @@ use crate::{
     ids::{CategoryId, ChannelId, MessageId, WebhookId},
 };
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub struct Category {
     pub id: CategoryId,
     pub organization_id: OrganizationId,
@@ -17,7 +18,7 @@ pub struct Category {
     pub updated_at: DateTime<Utc>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub struct Channel {
     pub id: ChannelId,
     pub organization_id: OrganizationId,
@@ -33,14 +34,14 @@ pub struct Channel {
     pub updated_at: DateTime<Utc>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub struct ReactionCount {
     pub emoji: String,
     pub count: i64,
     pub user_ids: Vec<UserId>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub struct Message {
     pub id: MessageId,
     pub organization_id: OrganizationId,
@@ -59,7 +60,7 @@ pub struct Message {
     pub created_at: DateTime<Utc>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub struct Reaction {
     pub message_id: MessageId,
     pub emoji: String,
@@ -67,7 +68,7 @@ pub struct Reaction {
     pub created_at: DateTime<Utc>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub struct Webhook {
     pub id: WebhookId,
     pub organization_id: OrganizationId,
@@ -80,7 +81,7 @@ pub struct Webhook {
     pub updated_at: DateTime<Utc>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub struct Presence {
     pub organization_id: OrganizationId,
     pub user_id: UserId,

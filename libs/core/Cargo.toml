@@ -6,6 +6,7 @@ edition.workspace = true
 
 [dependencies]
 common = { workspace = true }
+discord = { workspace = true }
 auth = { workspace = true }
 authz = { workspace = true }
 mestier-macros = { workspace = true }
@@ -27,4 +28,4 @@ bytes = { workspace = true }
 [dev-dependencies]
 authz = { workspace = true, features = ["mock"] }
 mockall = { workspace = true }
-tokio = { workspace = true }
+tokio = { workspace = true, features = ["time"] }
