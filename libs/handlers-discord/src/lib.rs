@@ -11,6 +11,7 @@ pub mod message;
 pub mod paths;
 pub mod presence;
 pub mod reaction;
+pub mod read_state;
 pub mod response;
 pub mod thread;
 pub mod typing;
@@ -104,6 +105,8 @@ pub fn router(state: &AppState) -> Router<AppState> {
         .typed_delete(webhook::delete::handler)
         .typed_put(presence::set::handler)
         .typed_post(typing::start::handler)
+        .typed_put(read_state::mark::handler)
+        .typed_get(read_state::unread::handler)
         .layer(from_fn_with_state(state.clone(), rate_limit_middleware))
         .layer(from_fn_with_state(state.clone(), auth_middleware));
 
