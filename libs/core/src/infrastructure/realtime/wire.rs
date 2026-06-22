@@ -53,6 +53,12 @@ pub enum GatewayEvent {
         user_id: UserId,
         ttl_ms: u64,
     },
+    ChannelRead {
+        organization_id: OrganizationId,
+        channel_id: ChannelId,
+        user_id: UserId,
+        last_read_message_id: Option<MessageId>,
+    },
 }
 
 /// How long a typing indicator stays active on the client side (milliseconds).
@@ -140,5 +146,65 @@ pub fn from_domain(event: DomainEvent, org_id: OrganizationId) -> GatewayEvent {
             user_id,
             ttl_ms: TYPING_TTL_MS,
         },
+        DomainEvent::ChannelRead {
+            organization_id,
+            channel_id,
+            user_id,
+            last_read_message_id,
+        } => GatewayEvent::ChannelRead {
+            organization_id,
+            channel_id,
+            user_id,
+            last_read_message_id,
+        },
+    }
+}
+
+impl GatewayEvent {
+    /// Returns `Some(user_id)` for user-private events (currently only `ChannelRead`).
+    /// The gateway dispatch loop uses this to skip forwarding to other users' sockets.
+    pub fn target_user(&self) -> Option<UserId> {
+        match self {
+            GatewayEvent::ChannelRead { user_id, .. } => Some(*user_id),
+            _ => None,
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use uuid::Uuid;
+
+    fn channel_read_event() -> GatewayEvent {
+        let org = OrganizationId(Uuid::from_u128(1));
+        let ch = ChannelId(Uuid::from_u128(2));
+        let u = UserId(Uuid::from_u128(3));
+        GatewayEvent::ChannelRead {
+            organization_id: org,
+            channel_id: ch,
+            user_id: u,
+            last_read_message_id: None,
+        }
+    }
+
+    #[test]
+    fn target_user_returns_some_for_channel_read() {
+        let ev = channel_read_event();
+        let uid = UserId(Uuid::from_u128(3));
+        assert_eq!(ev.target_user(), Some(uid));
+    }
+
+    #[test]
+    fn target_user_returns_none_for_other_events() {
+        let org = OrganizationId(Uuid::from_u128(1));
+        let ch = ChannelId(Uuid::from_u128(2));
+        let msg = MessageId(Uuid::from_u128(9));
+        let ev = GatewayEvent::MessageDelete {
+            organization_id: org,
+            channel_id: ch,
+            message_id: msg,
+        };
+        assert_eq!(ev.target_user(), None);
     }
 }

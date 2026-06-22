@@ -48,6 +48,12 @@ pub enum DomainEvent {
         channel_id: ChannelId,
         user_id: UserId,
     },
+    ChannelRead {
+        organization_id: OrganizationId,
+        channel_id: ChannelId,
+        user_id: UserId,
+        last_read_message_id: Option<MessageId>,
+    },
 }
 
 #[cfg_attr(test, mockall::automock)]
@@ -75,6 +81,26 @@ mod tests {
                 organization_id: OrganizationId(Uuid::new_v4()),
                 channel_id: crate::ChannelId(Uuid::new_v4()),
                 user_id: UserId(Uuid::new_v4()),
+            })
+            .await
+            .unwrap();
+    }
+
+    #[tokio::test]
+    async fn mock_event_publisher_accepts_channel_read() {
+        let mut publisher = MockEventPublisher::new();
+        publisher
+            .expect_publish()
+            .withf(|e| matches!(e, DomainEvent::ChannelRead { .. }))
+            .times(1)
+            .returning(|_| Box::pin(async { Ok(()) }));
+
+        publisher
+            .publish(DomainEvent::ChannelRead {
+                organization_id: OrganizationId(Uuid::new_v4()),
+                channel_id: crate::ChannelId(Uuid::new_v4()),
+                user_id: UserId(Uuid::new_v4()),
+                last_read_message_id: None,
             })
             .await
             .unwrap();

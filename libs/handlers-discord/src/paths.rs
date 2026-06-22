@@ -97,6 +97,19 @@ pub struct ChannelTypingPath {
     pub channel_id: ChannelId,
 }
 
+// Read States
+#[derive(TypedPath, Deserialize)]
+#[typed_path("/api/v1/chat/channels/{channel_id}/read")]
+pub struct ChannelReadPath {
+    pub channel_id: ChannelId,
+}
+
+#[derive(TypedPath, Deserialize)]
+#[typed_path("/api/v1/chat/organizations/{organization_id}/unread")]
+pub struct OrgUnreadPath {
+    pub organization_id: OrganizationId,
+}
+
 // Gateway (no path params)
 #[derive(TypedPath, Deserialize)]
 #[typed_path("/api/v1/chat/gateway")]
