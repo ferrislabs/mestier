@@ -10,6 +10,7 @@ pub mod category;
 pub mod channel;
 pub mod gateway;
 pub mod message;
+pub mod notification;
 pub mod paths;
 pub mod presence;
 pub mod reaction;
@@ -140,6 +141,9 @@ pub fn router(state: &AppState) -> Router<AppState> {
         .typed_post(typing::start::handler)
         .typed_put(read_state::mark::handler)
         .typed_get(read_state::unread::handler)
+        .typed_get(notification::list::handler)
+        .typed_put(notification::mark_read::handler)
+        .typed_put(notification::mark_all_read::handler)
         .typed_get(channel::permissions::list::handler)
         .typed_put(channel::permissions::upsert_everyone::handler)
         .typed_put(channel::permissions::upsert_target::handler)
