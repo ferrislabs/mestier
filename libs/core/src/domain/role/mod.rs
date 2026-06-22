@@ -21,6 +21,9 @@ impl Permissions {
     pub const MANAGE_CHANNELS: Self = Permissions(1 << 3);
     pub const MANAGE_WEBHOOKS: Self = Permissions(1 << 4);
 
+    pub const VIEW_CHANNEL: Self = Permissions(1 << 5); // 32
+    pub const SEND_MESSAGES: Self = Permissions(1 << 6); // 64
+
     pub const ALL: Self = Permissions(i64::MAX);
 
     pub const fn contains(self, other: Permissions) -> bool {
@@ -155,5 +158,40 @@ mod tests {
         assert!(!Permissions::MANAGE_MEMBERS.contains(Permissions::MANAGE_WEBHOOKS));
         assert!(!Permissions::MANAGE_ROLES.contains(Permissions::MANAGE_WEBHOOKS));
         assert!(!Permissions::MANAGE_CHANNELS.contains(Permissions::MANAGE_WEBHOOKS));
+    }
+
+    #[test]
+    fn view_channel_has_stable_bit_value() {
+        assert_eq!(Permissions::VIEW_CHANNEL.bits(), 32);
+    }
+
+    #[test]
+    fn send_messages_has_stable_bit_value() {
+        assert_eq!(Permissions::SEND_MESSAGES.bits(), 64);
+    }
+
+    #[test]
+    fn view_channel_does_not_overlap_existing_bits() {
+        assert!(!Permissions::MANAGE_ORG.contains(Permissions::VIEW_CHANNEL));
+        assert!(!Permissions::MANAGE_MEMBERS.contains(Permissions::VIEW_CHANNEL));
+        assert!(!Permissions::MANAGE_ROLES.contains(Permissions::VIEW_CHANNEL));
+        assert!(!Permissions::MANAGE_CHANNELS.contains(Permissions::VIEW_CHANNEL));
+        assert!(!Permissions::MANAGE_WEBHOOKS.contains(Permissions::VIEW_CHANNEL));
+    }
+
+    #[test]
+    fn send_messages_does_not_overlap_existing_bits() {
+        assert!(!Permissions::MANAGE_ORG.contains(Permissions::SEND_MESSAGES));
+        assert!(!Permissions::MANAGE_MEMBERS.contains(Permissions::SEND_MESSAGES));
+        assert!(!Permissions::MANAGE_ROLES.contains(Permissions::SEND_MESSAGES));
+        assert!(!Permissions::MANAGE_CHANNELS.contains(Permissions::SEND_MESSAGES));
+        assert!(!Permissions::MANAGE_WEBHOOKS.contains(Permissions::SEND_MESSAGES));
+        assert!(!Permissions::VIEW_CHANNEL.contains(Permissions::SEND_MESSAGES));
+    }
+
+    #[test]
+    fn all_contains_view_channel_and_send_messages() {
+        assert!(Permissions::ALL.contains(Permissions::VIEW_CHANNEL));
+        assert!(Permissions::ALL.contains(Permissions::SEND_MESSAGES));
     }
 }
