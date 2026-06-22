@@ -36,6 +36,12 @@ pub struct ChannelThreadsPath {
     pub channel_id: ChannelId,
 }
 
+#[derive(TypedPath, Deserialize)]
+#[typed_path("/api/v1/threads/{channel_id}")]
+pub struct ThreadPath {
+    pub channel_id: ChannelId,
+}
+
 // Messages
 #[derive(TypedPath, Deserialize)]
 #[typed_path("/api/v1/channels/{channel_id}/messages")]
