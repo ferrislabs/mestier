@@ -23,5 +23,4 @@ uuid        = { workspace = true }
 
 [dev-dependencies]
 mockall             = { workspace = true }
-serde_urlencoded    = "0.7"
 tokio               = { workspace = true, features = ["rt", "macros"] }
