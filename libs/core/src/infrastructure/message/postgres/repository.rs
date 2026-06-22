@@ -126,7 +126,7 @@ impl<'tx> MessageRepository for PgMessageRepository<'tx> {
             None => Ok(None),
             Some(r) => {
                 let reactions = fetch_reaction_counts(&mut tx, id).await?;
-                let attachments = fetch_attachments(&mut **tx, id).await?;
+                let attachments = fetch_attachments(&mut tx, id).await?;
                 Ok(Some(r.into_message(reactions, attachments)?))
             }
         }
@@ -203,7 +203,7 @@ impl<'tx> MessageRepository for PgMessageRepository<'tx> {
         for row in rows {
             let id = MessageId(row.id);
             let reactions = fetch_reaction_counts(&mut tx, id).await?;
-            let attachments = fetch_attachments(&mut **tx, id).await?;
+            let attachments = fetch_attachments(&mut tx, id).await?;
             messages.push(row.into_message(reactions, attachments)?);
         }
         Ok(messages)
@@ -262,7 +262,7 @@ impl<'tx> MessageRepository for PgMessageRepository<'tx> {
             None => Err(CoreError::NotFound),
             Some(r) => {
                 let reactions = fetch_reaction_counts(&mut tx, m.id).await?;
-                let attachments = fetch_attachments(&mut **tx, m.id).await?;
+                let attachments = fetch_attachments(&mut tx, m.id).await?;
                 r.into_message(reactions, attachments)
             }
         }
