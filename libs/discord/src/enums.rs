@@ -107,6 +107,39 @@ impl FromStr for PresenceStatus {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum NotificationKind {
+    Mention,
+    Reply,
+}
+
+impl NotificationKind {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Mention => "MENTION",
+            Self::Reply => "REPLY",
+        }
+    }
+}
+
+impl Display for NotificationKind {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.as_str())
+    }
+}
+
+impl FromStr for NotificationKind {
+    type Err = String;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "MENTION" => Ok(Self::Mention),
+            "REPLY" => Ok(Self::Reply),
+            other => Err(format!("invalid notification kind `{other}`")),
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -170,5 +203,29 @@ mod tests {
     #[test]
     fn presence_status_display_matches_as_str() {
         assert_eq!(PresenceStatus::Dnd.to_string(), "DND");
+    }
+
+    #[test]
+    fn notification_kind_parses_known_values() {
+        assert_eq!(
+            "MENTION".parse::<NotificationKind>().unwrap(),
+            NotificationKind::Mention
+        );
+        assert_eq!(
+            "REPLY".parse::<NotificationKind>().unwrap(),
+            NotificationKind::Reply
+        );
+    }
+
+    #[test]
+    fn notification_kind_rejects_unknown() {
+        assert!("mention".parse::<NotificationKind>().is_err());
+        assert!("DM".parse::<NotificationKind>().is_err());
+    }
+
+    #[test]
+    fn notification_kind_display_matches_as_str() {
+        assert_eq!(NotificationKind::Mention.to_string(), "MENTION");
+        assert_eq!(NotificationKind::Reply.to_string(), "REPLY");
     }
 }
