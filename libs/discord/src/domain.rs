@@ -5,7 +5,7 @@ use serde::Serialize;
 use crate::{
     components::Component,
     enums::{AuthorType, ChannelType, PresenceStatus},
-    ids::{CategoryId, ChannelId, MessageId, WebhookId},
+    ids::{AttachmentId, CategoryId, ChannelId, MessageId, WebhookId},
 };
 
 #[derive(Debug, Clone, Serialize)]
@@ -42,6 +42,16 @@ pub struct ReactionCount {
 }
 
 #[derive(Debug, Clone, Serialize)]
+pub struct Attachment {
+    pub id: AttachmentId,
+    pub storage_key: String,
+    pub filename: String,
+    pub mime_type: String,
+    pub size_bytes: i64,
+    pub created_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Clone, Serialize)]
 pub struct Message {
     pub id: MessageId,
     pub organization_id: OrganizationId,
@@ -56,6 +66,7 @@ pub struct Message {
     pub mention_channel_ids: Vec<ChannelId>,
     pub mention_everyone: bool,
     pub reactions: Vec<ReactionCount>, // aggregated when loaded
+    pub attachments: Vec<Attachment>,
     pub edited_at: Option<DateTime<Utc>>,
     pub created_at: DateTime<Utc>,
 }

@@ -11,7 +11,9 @@ pub mod components;
 
 pub mod domain;
 
-pub use domain::{Category, Channel, Message, Presence, Reaction, ReactionCount, Webhook};
+pub use domain::{
+    Attachment, Category, Channel, Message, Presence, Reaction, ReactionCount, Webhook,
+};
 
 pub mod mentions;
 

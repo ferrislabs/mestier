@@ -58,6 +58,7 @@ pub(crate) fn build_new_message(cmd: CreateMessageCommand) -> Result<Message, Co
         mention_channel_ids: parsed.channel_ids,
         mention_everyone: parsed.everyone,
         reactions: vec![],
+        attachments: vec![],
         edited_at: None,
         created_at: now,
     })
@@ -230,6 +231,7 @@ mod tests {
             mention_channel_ids: vec![],
             mention_everyone: false,
             reactions: vec![],
+            attachments: vec![],
             edited_at: None,
             created_at: Utc::now(),
         }
