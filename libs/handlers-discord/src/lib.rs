@@ -82,6 +82,11 @@ pub fn router(state: &AppState) -> Router<AppState> {
         .typed_post(category::create::handler)
         .typed_patch(category::update::handler)
         .typed_delete(category::delete::handler)
+        .typed_get(channel::list::handler)
+        .typed_post(channel::create::handler)
+        .typed_get(channel::get_one::handler)
+        .typed_patch(channel::update::handler)
+        .typed_delete(channel::delete::handler)
         .layer(from_fn_with_state(state.clone(), rate_limit_middleware))
         .layer(from_fn_with_state(state.clone(), auth_middleware));
 
