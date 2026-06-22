@@ -1,6 +1,6 @@
 use auth::Identity;
 use axum::{Extension, Json, extract::State};
-use handlers::{ApiError, AppState, DataEnvelope, IdentityExt, Response};
+use handlers::{ApiError, AppState, DataEnvelope, Response};
 use mestier_core::CreateOrganizationCommand;
 use serde::Deserialize;
 use utoipa::ToSchema;
@@ -34,10 +34,15 @@ pub async fn handler(
     Extension(identity): Extension<Identity>,
     Json(payload): Json<CreateOrganizationRequest>,
 ) -> Result<Response<OrganizationResponse>, ApiError> {
+    let owner = state
+        .usecase
+        .find_user_by_sub(identity.id())
+        .await?
+        .ok_or(ApiError::Forbidden)?;
     let command = CreateOrganizationCommand {
         name: payload.name,
         slug: payload.slug,
-        owner_id: identity.user_id()?,
+        owner_id: owner.id,
     };
 
     let org = state.usecase.create_organization(command).await?;

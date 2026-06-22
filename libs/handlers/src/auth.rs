@@ -1,5 +1,3 @@
-use std::str::FromStr;
-
 use auth::Identity;
 use axum::{
     extract::{Request, State},
@@ -7,25 +5,13 @@ use axum::{
     response::Response,
 };
 use http::{HeaderValue, header::AUTHORIZATION};
-use mestier_core::{CreateUserCommand, UserId};
+use mestier_core::CreateUserCommand;
 use tracing::error;
 
 use crate::{
     errors::{ApiError, MiddlewareError},
     state::AppState,
 };
-
-pub trait IdentityExt {
-    /// Parse the identity subject as a `UserId`. Returns `ApiError::Unauthorized`
-    /// when the subject is not a valid UUID (malformed or non-user token).
-    fn user_id(&self) -> Result<UserId, ApiError>;
-}
-
-impl IdentityExt for Identity {
-    fn user_id(&self) -> Result<UserId, ApiError> {
-        UserId::from_str(self.id()).map_err(|_| ApiError::Unauthorized)
-    }
-}
 
 pub async fn auth_middleware(
     State(state): State<AppState>,
