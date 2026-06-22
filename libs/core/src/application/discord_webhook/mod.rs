@@ -40,11 +40,10 @@ impl MestierUseCase {
         Ok(())
     }
 
-    #[transactional(webhook, message)]
+    #[transactional(webhook)]
     pub async fn list_webhooks(&self, channel: ChannelId) -> Result<Vec<Webhook>, CoreError> {
-        let mut service =
-            WebhookService::new(webhook_repository, message_repository, self.events.as_ref());
-        service.list_webhooks(channel).await
+        let mut repo = webhook_repository;
+        repo.list_by_channel(channel).await
     }
 
     #[transactional(webhook)]
