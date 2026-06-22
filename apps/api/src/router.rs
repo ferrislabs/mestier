@@ -11,6 +11,7 @@ use utoipa_swagger_ui::SwaggerUi;
 
 use handlers::{ApiError, AppState};
 use handlers_customer as customer;
+use handlers_discord as discord;
 use handlers_files as files;
 use handlers_organization as organization;
 use handlers_quote as quote;
@@ -69,6 +70,7 @@ pub fn router(state: AppState) -> Result<Router, ApiError> {
     let router = Router::new()
         .merge(files::router(&state))
         .merge(customer::router(&state))
+        .merge(discord::router(&state))
         .merge(organization::router(&state))
         .merge(quote::router(&state))
         .merge(reference::router(&state))

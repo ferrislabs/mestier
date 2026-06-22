@@ -109,6 +109,7 @@ dependencies = [
  "dotenvy",
  "handlers",
  "handlers-customer",
+ "handlers-discord",
  "handlers-files",
  "handlers-organization",
  "handlers-quote",
