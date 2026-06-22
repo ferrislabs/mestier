@@ -60,6 +60,10 @@ mod tests {
             "first channel id must appear in JSON; got: {json}"
         );
         assert!(
+            json.contains("018f0000-0000-7000-8000-000000000002"),
+            "second channel id must appear in JSON; got: {json}"
+        );
+        assert!(
             json.contains("channel_ids"),
             "field key 'channel_ids' must appear in JSON; got: {json}"
         );
