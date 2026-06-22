@@ -38,12 +38,6 @@ pub async fn handler(
 ) -> Result<Response<ChannelResponse>, ApiError> {
     require_permission(&state, &identity, path.organization_id, "channel.manage").await?;
 
-    if payload.name.trim().is_empty() {
-        return Err(ApiError::Validation(
-            "channel name must not be blank".into(),
-        ));
-    }
-
     let channel = state
         .usecase
         .create_channel(CreateChannelCommand {
@@ -56,12 +50,4 @@ pub async fn handler(
         .await?;
 
     Ok(Response::Created(channel.into()))
-}
-
-#[cfg(test)]
-mod tests {
-    #[test]
-    fn blank_channel_name_is_rejected() {
-        assert!("".trim().is_empty());
-    }
 }
