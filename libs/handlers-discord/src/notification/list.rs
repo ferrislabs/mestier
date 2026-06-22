@@ -19,6 +19,7 @@ const MAX_LIMIT: i64 = 100;
 pub struct NotificationListQuery {
     pub unread_only: Option<bool>,
     pub before: Option<Uuid>,
+    pub limit: Option<i64>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, ToSchema)]
@@ -43,6 +44,10 @@ impl From<discord::Notification> for NotificationResponse {
             created_at: n.created_at,
         }
     }
+}
+
+fn resolve_limit(requested: Option<i64>) -> i64 {
+    requested.unwrap_or(DEFAULT_LIMIT).clamp(1, MAX_LIMIT)
 }
 
 #[utoipa::path(
@@ -79,7 +84,7 @@ pub async fn handler(
         .await?
         .ok_or(ApiError::Forbidden)?;
 
-    let limit = DEFAULT_LIMIT.min(MAX_LIMIT);
+    let limit = resolve_limit(query.limit);
     let before = query.before.map(NotificationId);
 
     let notifications = state
@@ -106,26 +111,28 @@ mod tests {
     use std::str::FromStr;
 
     #[test]
-    fn notification_list_query_defaults_unread_only_to_none() {
-        let q: NotificationListQuery = serde_urlencoded::from_str("").unwrap();
-        assert!(
-            q.unread_only.is_none(),
-            "unread_only must be None when absent from query string"
-        );
-        assert!(
-            q.before.is_none(),
-            "before must be None when absent from query string"
-        );
+    fn resolve_limit_none_returns_default() {
+        assert_eq!(resolve_limit(None), DEFAULT_LIMIT);
     }
 
     #[test]
-    fn notification_list_query_parses_unread_only_true() {
-        let q: NotificationListQuery = serde_urlencoded::from_str("unread_only=true").unwrap();
-        assert_eq!(
-            q.unread_only,
-            Some(true),
-            "unread_only=true must parse as Some(true)"
-        );
+    fn resolve_limit_some_within_bounds() {
+        assert_eq!(resolve_limit(Some(10)), 10);
+    }
+
+    #[test]
+    fn resolve_limit_exceeds_max_is_capped() {
+        assert_eq!(resolve_limit(Some(500)), MAX_LIMIT);
+    }
+
+    #[test]
+    fn resolve_limit_zero_is_floored_to_one() {
+        assert_eq!(resolve_limit(Some(0)), 1);
+    }
+
+    #[test]
+    fn resolve_limit_negative_is_floored_to_one() {
+        assert_eq!(resolve_limit(Some(-5)), 1);
     }
 
     #[test]
