@@ -30,22 +30,16 @@ impl EventHub {
         }
     }
 
-    /// Subscribe to events for `orgs[0]`.  Creates the per-org channel on first use.
-    /// Callers that belong to multiple orgs must call `subscribe` once per org and
-    /// select across all receivers in their WebSocket task.
-    pub fn subscribe(&self, orgs: &[OrganizationId]) -> Receiver<GatewayEvent> {
+    /// Subscribe to events for a single `org`.  Creates the per-org channel on first use.
+    /// A multi-org gateway must call `subscribe` once per org and select across all
+    /// receivers in its WebSocket task.
+    pub fn subscribe(&self, org: OrganizationId) -> Receiver<GatewayEvent> {
         let mut inner = self.inner.lock().unwrap();
-        if let Some(first) = orgs.first() {
-            let tx = inner
-                .senders
-                .entry(*first)
-                .or_insert_with(|| broadcast::channel(HUB_CHANNEL_CAPACITY).0);
-            tx.subscribe()
-        } else {
-            let (tx, rx) = broadcast::channel(1);
-            drop(tx);
-            rx
-        }
+        let tx = inner
+            .senders
+            .entry(org)
+            .or_insert_with(|| broadcast::channel(HUB_CHANNEL_CAPACITY).0);
+        tx.subscribe()
     }
 
     /// Broadcast `event` to every subscriber registered for `org`.
@@ -76,8 +70,9 @@ mod tests {
         OrganizationId(Uuid::from_u128(n))
     }
 
-    fn delete_event() -> GatewayEvent {
+    fn delete_event(org_id: OrganizationId) -> GatewayEvent {
         GatewayEvent::MessageDelete {
+            organization_id: org_id,
             channel_id: ChannelId(Uuid::from_u128(2)),
             message_id: MessageId(Uuid::from_u128(3)),
         }
@@ -87,9 +82,9 @@ mod tests {
     async fn broadcast_fan_out_to_subscriber_for_matching_org() {
         let hub = EventHub::new();
         let o = org(1);
-        let mut rx = hub.subscribe(&[o]);
+        let mut rx = hub.subscribe(o);
 
-        hub.broadcast(o, delete_event());
+        hub.broadcast(o, delete_event(o));
 
         let received = rx.recv().await.unwrap();
         assert!(matches!(received, GatewayEvent::MessageDelete { .. }));
@@ -100,9 +95,9 @@ mod tests {
         let hub = EventHub::new();
         let o_a = org(10);
         let o_b = org(20);
-        let mut rx = hub.subscribe(&[o_a]);
+        let mut rx = hub.subscribe(o_a);
 
-        hub.broadcast(o_b, delete_event());
+        hub.broadcast(o_b, delete_event(o_b));
 
         assert!(
             tokio::time::timeout(std::time::Duration::from_millis(20), rx.recv())

@@ -7,7 +7,7 @@ use super::{hub::EventHub, wire::from_domain};
 
 /// Per-transaction event accumulator.
 struct TxBuffer {
-    events: Vec<(OrganizationId, DomainEvent)>,
+    events: Vec<DomainEvent>,
 }
 
 impl TxBuffer {
@@ -38,16 +38,15 @@ impl RealtimeEventPublisher {
     /// Drain the buffer and broadcast each event to the hub.
     ///
     /// Must be called **after** the enclosing transaction commits.  `org_id` is
-    /// the organization context for the current transaction; it is used as the
-    /// broadcast key for events that do not carry an `organization_id` inline
-    /// (reactions, message deletes).
+    /// the organization context for the current transaction; every buffered
+    /// event in a transaction belongs to the same org.
     pub fn flush(&self, org_id: OrganizationId) {
         let events = {
             let mut buf = self.buffer.lock().unwrap();
             std::mem::take(&mut buf.events)
         };
-        for (event_org, domain_event) in events {
-            let wire = from_domain(domain_event, event_org);
+        for domain_event in events {
+            let wire = from_domain(domain_event, org_id);
             self.hub.broadcast(org_id, wire);
         }
     }
@@ -55,54 +54,19 @@ impl RealtimeEventPublisher {
 
 impl EventPublisher for RealtimeEventPublisher {
     async fn publish(&self, event: DomainEvent) -> Result<(), CoreError> {
-        let org_id = org_id_from_event(&event);
         let mut buf = self
             .buffer
             .lock()
             .map_err(|_| CoreError::Internal("publisher buffer lock poisoned".into()))?;
-        buf.events.push((org_id, event));
+        buf.events.push(event);
         Ok(())
-    }
-}
-
-/// Extract the `organization_id` from events that carry one inline.
-/// For events without an inline org (reactions, message deletes) a nil UUID is
-/// stored; `flush(org_id)` supplies the correct org from the call site.
-fn org_id_from_event(event: &DomainEvent) -> OrganizationId {
-    match event {
-        DomainEvent::MessageCreated(m) => m.organization_id,
-        DomainEvent::MessageUpdated(m) => m.organization_id,
-        DomainEvent::MessageDeleted { .. } => OrganizationId(uuid::Uuid::nil()),
-        DomainEvent::ReactionAdded { .. } => OrganizationId(uuid::Uuid::nil()),
-        DomainEvent::ReactionRemoved { .. } => OrganizationId(uuid::Uuid::nil()),
-        DomainEvent::CategoryCreated(c) => c.organization_id,
-        DomainEvent::CategoryUpdated(c) => c.organization_id,
-        DomainEvent::CategoryDeleted {
-            organization_id, ..
-        } => *organization_id,
-        DomainEvent::ChannelCreated(c) => c.organization_id,
-        DomainEvent::ChannelUpdated(c) => c.organization_id,
-        DomainEvent::ChannelDeleted {
-            organization_id, ..
-        } => *organization_id,
-        DomainEvent::ThreadCreated(c) => c.organization_id,
-        DomainEvent::ThreadUpdated(c) => c.organization_id,
-        DomainEvent::ThreadDeleted {
-            organization_id, ..
-        } => *organization_id,
-        DomainEvent::PresenceUpdated {
-            organization_id, ..
-        } => *organization_id,
-        DomainEvent::TypingStarted {
-            organization_id, ..
-        } => *organization_id,
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use discord::{Category, CategoryId};
+    use discord::{Category, CategoryId, ChannelId, MessageId};
     use uuid::Uuid;
 
     fn org(n: u128) -> OrganizationId {
@@ -120,11 +84,18 @@ mod tests {
         })
     }
 
+    fn message_deleted() -> DomainEvent {
+        DomainEvent::MessageDeleted {
+            channel_id: ChannelId(Uuid::from_u128(10)),
+            message_id: MessageId(Uuid::from_u128(11)),
+        }
+    }
+
     #[tokio::test]
     async fn buffered_events_not_emitted_before_flush() {
         let hub = EventHub::new();
         let o = org(1);
-        let mut rx = hub.subscribe(&[o]);
+        let mut rx = hub.subscribe(o);
         let publisher = RealtimeEventPublisher::new(hub.clone());
 
         publisher.publish(category_created(o)).await.unwrap();
@@ -141,7 +112,7 @@ mod tests {
     async fn flush_emits_event_to_subscriber() {
         let hub = EventHub::new();
         let o = org(2);
-        let mut rx = hub.subscribe(&[o]);
+        let mut rx = hub.subscribe(o);
         let publisher = RealtimeEventPublisher::new(hub.clone());
 
         publisher.publish(category_created(o)).await.unwrap();
@@ -165,7 +136,7 @@ mod tests {
     async fn dropped_buffer_emits_nothing() {
         let hub = EventHub::new();
         let o = org(3);
-        let mut rx = hub.subscribe(&[o]);
+        let mut rx = hub.subscribe(o);
 
         {
             let publisher = RealtimeEventPublisher::new(hub.clone());
@@ -179,5 +150,31 @@ mod tests {
                 .is_err(),
             "dropped publisher must not emit events"
         );
+    }
+
+    #[tokio::test]
+    async fn flush_populates_organization_id_for_message_delete() {
+        let hub = EventHub::new();
+        let o = org(4);
+        let mut rx = hub.subscribe(o);
+        let publisher = RealtimeEventPublisher::new(hub.clone());
+
+        publisher.publish(message_deleted()).await.unwrap();
+        publisher.flush(o);
+
+        let received = tokio::time::timeout(std::time::Duration::from_millis(50), rx.recv())
+            .await
+            .expect("expected event within 50 ms")
+            .unwrap();
+
+        match received {
+            crate::infrastructure::realtime::wire::GatewayEvent::MessageDelete {
+                organization_id,
+                ..
+            } => {
+                assert_eq!(organization_id, o, "organization_id must match flush org");
+            }
+            other => panic!("expected MessageDelete, got {:?}", other),
+        }
     }
 }

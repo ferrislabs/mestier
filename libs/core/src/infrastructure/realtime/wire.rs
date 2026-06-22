@@ -2,25 +2,28 @@ use discord::{
     Category, CategoryId, Channel, ChannelId, DomainEvent, Message, MessageId, OrganizationId,
     Presence, UserId,
 };
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 
 /// Wire-format gateway event sent to WebSocket clients.
 /// JSON envelope: `{ "type": "MESSAGE_CREATE", "data": { ... } }`
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize)]
 #[serde(tag = "type", content = "data", rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum GatewayEvent {
     MessageCreate(Message),
     MessageUpdate(Message),
     MessageDelete {
+        organization_id: OrganizationId,
         channel_id: ChannelId,
         message_id: MessageId,
     },
     ReactionAdd {
+        organization_id: OrganizationId,
         message_id: MessageId,
         emoji: String,
         user_id: UserId,
     },
     ReactionRemove {
+        organization_id: OrganizationId,
         message_id: MessageId,
         emoji: String,
         user_id: UserId,
@@ -59,7 +62,6 @@ const TYPING_TTL_MS: u64 = 10_000;
 /// `org_id` must be provided by the caller for events that do not carry an
 /// `organization_id` inline (message deletes, reactions).
 pub fn from_domain(event: DomainEvent, org_id: OrganizationId) -> GatewayEvent {
-    let _ = org_id; // used as fallback org context by the hub.broadcast caller
     match event {
         DomainEvent::MessageCreated(m) => GatewayEvent::MessageCreate(m),
         DomainEvent::MessageUpdated(m) => GatewayEvent::MessageUpdate(m),
@@ -67,6 +69,7 @@ pub fn from_domain(event: DomainEvent, org_id: OrganizationId) -> GatewayEvent {
             channel_id,
             message_id,
         } => GatewayEvent::MessageDelete {
+            organization_id: org_id,
             channel_id,
             message_id,
         },
@@ -75,6 +78,7 @@ pub fn from_domain(event: DomainEvent, org_id: OrganizationId) -> GatewayEvent {
             emoji,
             user_id,
         } => GatewayEvent::ReactionAdd {
+            organization_id: org_id,
             message_id,
             emoji,
             user_id,
@@ -84,6 +88,7 @@ pub fn from_domain(event: DomainEvent, org_id: OrganizationId) -> GatewayEvent {
             emoji,
             user_id,
         } => GatewayEvent::ReactionRemove {
+            organization_id: org_id,
             message_id,
             emoji,
             user_id,
