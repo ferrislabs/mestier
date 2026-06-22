@@ -1,6 +1,6 @@
 use auth::Identity;
 use axum::{Extension, extract::State};
-use handlers::{ApiError, AppState, DataEnvelope, IdentityExt, Response};
+use handlers::{ApiError, AppState, DataEnvelope, Response};
 
 use crate::{paths::OrgChannelsPath, require_org_membership, response::ChannelResponse};
 
@@ -23,11 +23,15 @@ pub async fn handler(
     Extension(identity): Extension<Identity>,
 ) -> Result<Response<Vec<ChannelResponse>>, ApiError> {
     require_org_membership(&state, &identity, path.organization_id).await?;
-    let user_id = identity.user_id()?;
+    let user = state
+        .usecase
+        .find_user_by_sub(identity.id())
+        .await?
+        .ok_or(ApiError::Forbidden)?;
 
     let channels = state
         .usecase
-        .list_visible_channels(user_id, path.organization_id)
+        .list_visible_channels(user.id, path.organization_id)
         .await?;
     let items: Vec<ChannelResponse> = channels.into_iter().map(ChannelResponse::from).collect();
     Ok(Response::OK(items))
