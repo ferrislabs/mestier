@@ -34,8 +34,8 @@ pub use domain::channel::{
     UpdateChannelCommand, UpdateThreadCommand,
 };
 pub use domain::message::{
-    AddReactionCommand, CreateMessageCommand, MessageAuthor, MessageRepository, MessageService,
-    RemoveReactionCommand, UpdateMessageCommand,
+    AddReactionCommand, AttachmentInput, CreateMessageCommand, MessageAuthor, MessageRepository,
+    MessageService, RemoveReactionCommand, UpdateMessageCommand,
 };
 pub use domain::presence::{
     PresenceRepository, PresenceService, SetPresenceCommand, StartTypingCommand,

@@ -252,6 +252,7 @@ mod tests {
                 components: Some(vec![Component::TextDisplay {
                     content: "rich".to_owned(),
                 }]),
+                attachments: vec![],
             })
             .await;
 
@@ -288,6 +289,7 @@ mod tests {
                 components: Some(vec![Component::TextDisplay {
                     content: "embed".to_owned(),
                 }]),
+                attachments: vec![],
             })
             .await
             .unwrap();
@@ -325,6 +327,7 @@ mod tests {
                 author: MessageAuthor::User(UserId(Uuid::new_v4())),
                 content: "hey @everyone".to_owned(),
                 components: None,
+                attachments: vec![],
             })
             .await
             .unwrap();
@@ -360,6 +363,7 @@ mod tests {
                 components: Some(vec![Component::TextDisplay {
                     content: "notice body".to_owned(),
                 }]),
+                attachments: vec![],
             })
             .await
             .unwrap();
@@ -388,6 +392,7 @@ mod tests {
                     accent_color: None,
                     children: vec![],
                 }]),
+                attachments: vec![],
             })
             .await;
 
