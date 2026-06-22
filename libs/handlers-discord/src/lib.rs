@@ -102,6 +102,8 @@ pub fn router(state: &AppState) -> Router<AppState> {
         .typed_post(webhook::create::handler)
         .typed_patch(webhook::update::handler)
         .typed_delete(webhook::delete::handler)
+        .typed_put(presence::set::handler)
+        .typed_post(typing::start::handler)
         .layer(from_fn_with_state(state.clone(), rate_limit_middleware))
         .layer(from_fn_with_state(state.clone(), auth_middleware));
 
