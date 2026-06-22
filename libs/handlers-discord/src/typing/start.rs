@@ -1,9 +1,9 @@
 use auth::Identity;
 use axum::{Extension, extract::State};
 use discord::StartTypingCommand;
-use handlers::{ApiError, AppState, IdentityExt, Response};
+use handlers::{ApiError, AppState, Response};
 
-use crate::{EmptyResponse, paths::ChannelTypingPath, require_org_membership};
+use crate::{EmptyResponse, paths::ChannelTypingPath, require_org_membership, resolve_user_id};
 
 #[utoipa::path(
 	post,
@@ -25,7 +25,7 @@ pub async fn handler(
 ) -> Result<Response<EmptyResponse>, ApiError> {
     let channel = state.usecase.get_channel(path.channel_id).await?;
     require_org_membership(&state, &identity, channel.organization_id).await?;
-    let user_id = identity.user_id()?;
+    let user_id = resolve_user_id(&state, &identity).await?;
 
     state
         .usecase

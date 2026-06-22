@@ -1,11 +1,13 @@
 use auth::Identity;
 use axum::{Extension, Json, extract::State};
 use discord::{PresenceStatus, SetPresenceCommand};
-use handlers::{ApiError, AppState, DataEnvelope, IdentityExt, Response};
+use handlers::{ApiError, AppState, DataEnvelope, Response};
 use serde::Deserialize;
 use utoipa::ToSchema;
 
-use crate::{paths::OrgPresencePath, require_org_membership, response::PresenceResponse};
+use crate::{
+    paths::OrgPresencePath, require_org_membership, resolve_user_id, response::PresenceResponse,
+};
 
 #[derive(Debug, Deserialize, ToSchema)]
 pub struct SetPresenceRequest {
@@ -34,7 +36,7 @@ pub async fn handler(
     Json(payload): Json<SetPresenceRequest>,
 ) -> Result<Response<PresenceResponse>, ApiError> {
     require_org_membership(&state, &identity, path.organization_id).await?;
-    let user_id = identity.user_id()?;
+    let user_id = resolve_user_id(&state, &identity).await?;
 
     let presence = state
         .usecase

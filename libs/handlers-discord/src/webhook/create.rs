@@ -1,13 +1,13 @@
 use auth::Identity;
 use axum::{Extension, Json, extract::State};
 use discord::CreateWebhookCommand;
-use handlers::{ApiError, AppState, DataEnvelope, IdentityExt, Response};
+use handlers::{ApiError, AppState, DataEnvelope, Response};
 use serde::Deserialize;
 use utoipa::ToSchema;
 
 use crate::{
     paths::ChannelWebhooksPath,
-    require_permission,
+    require_permission, resolve_user_id,
     response::{WebhookCreatedResponse, webhook_created_response},
 };
 
@@ -48,7 +48,7 @@ pub async fn handler(
         ));
     }
 
-    let created_by = identity.user_id()?;
+    let created_by = resolve_user_id(&state, &identity).await?;
 
     let webhook = state
         .usecase

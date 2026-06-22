@@ -1,11 +1,13 @@
 use auth::Identity;
 use axum::{Extension, Json, extract::State};
 use discord::UpdateMessageCommand;
-use handlers::{ApiError, AppState, DataEnvelope, IdentityExt, Response};
+use handlers::{ApiError, AppState, DataEnvelope, Response};
 use serde::Deserialize;
 use utoipa::ToSchema;
 
-use crate::{paths::MessagePath, require_org_membership, response::MessageResponse};
+use crate::{
+    paths::MessagePath, require_org_membership, resolve_user_id, response::MessageResponse,
+};
 
 #[derive(Debug, Deserialize, ToSchema)]
 pub struct UpdateMessageRequest {
@@ -37,7 +39,7 @@ pub async fn handler(
     let message = state.usecase.get_message(path.message_id).await?;
     require_org_membership(&state, &identity, message.organization_id).await?;
 
-    let user_id = identity.user_id()?;
+    let user_id = resolve_user_id(&state, &identity).await?;
 
     let updated = state
         .usecase

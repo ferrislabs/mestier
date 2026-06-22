@@ -1,8 +1,8 @@
 use auth::Identity;
 use axum::{Extension, extract::State};
-use handlers::{ApiError, AppState, IdentityExt, Response};
+use handlers::{ApiError, AppState, Response};
 
-use crate::{EmptyResponse, paths::MessagePath, require_permission};
+use crate::{EmptyResponse, paths::MessagePath, require_permission, resolve_user_id};
 
 #[utoipa::path(
 	delete,
@@ -24,7 +24,7 @@ pub async fn handler(
     Extension(identity): Extension<Identity>,
 ) -> Result<Response<EmptyResponse>, ApiError> {
     let message = state.usecase.get_message(path.message_id).await?;
-    let user_id = identity.user_id()?;
+    let user_id = resolve_user_id(&state, &identity).await?;
 
     // Allow if the caller is the message author; otherwise require moderator permission.
     if message.author_user_id != Some(user_id) {

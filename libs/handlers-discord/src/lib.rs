@@ -1,7 +1,7 @@
 use auth::Identity;
 use axum::{Router, middleware::from_fn_with_state};
 use axum_extra::routing::RouterExt;
-use common::OrganizationId;
+use common::{OrganizationId, UserId};
 use discord::ChannelId;
 use handlers::{ApiError, AppState, auth::auth_middleware, rate_limit::rate_limit_middleware};
 use mestier_core::Permissions;
@@ -108,6 +108,17 @@ pub async fn require_channel_permission(
     }
 
     Ok(())
+}
+
+/// Resolve the authenticated caller's DB user id (users.id) from the OIDC sub.
+/// NEVER use identity.user_id() for this — it parses the sub, which is not users.id.
+pub async fn resolve_user_id(state: &AppState, identity: &Identity) -> Result<UserId, ApiError> {
+    let user = state
+        .usecase
+        .find_user_by_sub(identity.id())
+        .await?
+        .ok_or(ApiError::Forbidden)?;
+    Ok(user.id)
 }
 
 pub fn router(state: &AppState) -> Router<AppState> {
