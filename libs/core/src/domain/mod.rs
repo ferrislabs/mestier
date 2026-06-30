@@ -1,3 +1,4 @@
+pub(crate) mod billing;
 pub(crate) mod customer;
 pub(crate) mod customer_contact;
 pub(crate) mod customer_context;
@@ -12,6 +13,7 @@ pub(crate) mod role;
 pub(crate) mod service_rate;
 pub(crate) mod user;
 
+pub use billing::*;
 pub use customer::*;
 pub use customer_contact::*;
 pub use customer_context::*;
