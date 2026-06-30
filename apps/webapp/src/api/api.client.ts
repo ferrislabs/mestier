@@ -59,6 +59,7 @@ export namespace Schemas {
   export type CreateQuoteRequest = {
     customer_context_id: CustomerContextId;
     customer_id: CustomerId;
+    legal_mention_template_ids?: (string[] | null) | undefined;
     lines: Array<QuoteLineRequest>;
     title: string;
   };
@@ -175,6 +176,7 @@ export namespace Schemas {
     customer_context_id: CustomerContextId;
     customer_id: CustomerId;
     id: QuoteId;
+    legal_mention_template_ids: string[];
     lines: Array<QuoteLineResponse>;
     organization_id: OrganizationId;
     reference: string;
@@ -239,6 +241,7 @@ export namespace Schemas {
   export type UpdateQuoteRequest = {
     customer_context_id: CustomerContextId;
     customer_id: CustomerId;
+    legal_mention_template_ids?: (string[] | null) | undefined;
     lines: Array<QuoteLineRequest>;
     status: QuoteStatus;
     title: string;

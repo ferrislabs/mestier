@@ -10,6 +10,10 @@ import {
 	useUploadFile,
 } from '#/hooks/use-customers'
 import {
+	type LegalMentionTemplate,
+	useLegalMentionTemplates,
+} from '#/hooks/use-legal-mentions'
+import {
 	type PaginationMetadata,
 	type Quote,
 	useCreateQuote,
@@ -62,6 +66,7 @@ function QuoteWorkspace({ organizationId }: { organizationId: string }) {
 	)
 	const [lastCreated, setLastCreated] = useState<Quote | null>(null)
 	const customers = useCustomers(organizationId)
+	const legalMentionTemplates = useLegalMentionTemplates(organizationId)
 	const quotes = useQuotes(organizationId, {
 		page: quotePage,
 		perPage: quotePageSize,
@@ -83,6 +88,7 @@ function QuoteWorkspace({ organizationId }: { organizationId: string }) {
 			title: '',
 			customerId: '',
 			customerContextId: '',
+			legalMentionTemplateIds: [],
 			lines: [emptyQuoteLine()],
 		} satisfies QuoteFormValues,
 		onSubmit: async ({ value }) => {
@@ -92,6 +98,7 @@ function QuoteWorkspace({ organizationId }: { organizationId: string }) {
 					title: value.title.trim(),
 					customer_id: value.customerId,
 					customer_context_id: value.customerContextId,
+					legal_mention_template_ids: value.legalMentionTemplateIds,
 					lines: value.lines.map((line) => ({
 						service_rate_id: line.serviceRateId || null,
 						label: line.label.trim(),
@@ -123,6 +130,8 @@ function QuoteWorkspace({ organizationId }: { organizationId: string }) {
 					}}
 					organizationId={organizationId}
 					customers={customers.data?.data ?? []}
+					legalMentionTemplates={legalMentionTemplates.data?.data ?? []}
+					isLegalMentionTemplatesLoading={legalMentionTemplates.isLoading}
 					customerContextsQueryEnabled={Boolean(values.customerId)}
 					catalogItems={catalogItems}
 					quotes={quotes.data?.data ?? []}
@@ -191,6 +200,8 @@ interface QuoteWorkspaceWithValuesProps {
 	form: QuoteFormApi
 	organizationId: string
 	customers: Customer[]
+	legalMentionTemplates: LegalMentionTemplate[]
+	isLegalMentionTemplatesLoading: boolean
 	customerContextsQueryEnabled: boolean
 	catalogItems: CatalogItem[]
 	quotes: Quote[]
@@ -223,6 +234,8 @@ function QuoteWorkspaceWithValues({
 	values,
 	form,
 	customers,
+	legalMentionTemplates,
+	isLegalMentionTemplatesLoading,
 	customerContextsQueryEnabled,
 	catalogItems,
 	quotes,
@@ -255,6 +268,12 @@ function QuoteWorkspaceWithValues({
 		}
 		if (patch.customerContextId !== undefined) {
 			form.setFieldValue('customerContextId', patch.customerContextId)
+		}
+		if (patch.legalMentionTemplateIds !== undefined) {
+			form.setFieldValue(
+				'legalMentionTemplateIds',
+				patch.legalMentionTemplateIds,
+			)
 		}
 		if (patch.lines !== undefined) {
 			form.setFieldValue('lines', patch.lines)
@@ -310,6 +329,8 @@ function QuoteWorkspaceWithValues({
 		<QuoteCreateUI
 			values={values}
 			customers={customers}
+			legalMentionTemplates={legalMentionTemplates}
+			isLegalMentionTemplatesLoading={isLegalMentionTemplatesLoading}
 			customerContexts={customerContexts.data?.data ?? []}
 			catalogItems={catalogItems}
 			quotes={quotes}
