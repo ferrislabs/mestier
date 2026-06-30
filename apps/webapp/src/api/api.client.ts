@@ -246,6 +246,52 @@ export namespace Schemas {
   export type UpdateQuoteStatusRequest = { status: QuoteStatus };
   export type UpdateServiceRateRequest = { custom_fields?: (Record<string, string> | null) | undefined; label: string; rate_cents: number; unit: ServiceRateUnit; vat_rate?: (string | null) | undefined };
 
+  export type LegalMentionTemplateId = string;
+  export type LegalMentionTemplateResponse = {
+    id: LegalMentionTemplateId;
+    org_id: OrganizationId;
+    name: string;
+    body: string;
+    created_at: string;
+    updated_at: string;
+  };
+  export type CreateLegalMentionTemplateRequest = { name: string; body: string };
+  export type UpdateLegalMentionTemplateRequest = { name?: string | undefined; body?: string | undefined };
+
+  export type BillingSettingsResponse = {
+    org_id: OrganizationId;
+    payment_terms_days: number;
+    late_penalty_rate: string;
+    recovery_indemnity_cents: number;
+    default_deposit_basis: string | null;
+    default_deposit_value: string | null;
+    default_vat_rate: string;
+    iban: string | null;
+    bic: string | null;
+    siret: string | null;
+    rcs: string | null;
+    ape: string | null;
+    vat_intracom: string | null;
+    footer: string | null;
+    created_at: string;
+    updated_at: string;
+  };
+  export type UpsertBillingSettingsRequest = {
+    payment_terms_days: number;
+    late_penalty_rate: string;
+    recovery_indemnity_cents: number;
+    default_deposit_basis?: (string | null) | undefined;
+    default_deposit_value?: (string | null) | undefined;
+    default_vat_rate: string;
+    iban?: (string | null) | undefined;
+    bic?: (string | null) | undefined;
+    siret?: (string | null) | undefined;
+    rcs?: (string | null) | undefined;
+    ape?: (string | null) | undefined;
+    vat_intracom?: (string | null) | undefined;
+    footer?: (string | null) | undefined;
+  };
+
   // </Schemas>
 }
 
@@ -1423,6 +1469,132 @@ export namespace Endpoints {
     };
   };
 
+  export type get_GetBillingSettings = {
+    method: "GET";
+    path: "/api/v1/organizations/{organization_id}/billing-settings";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string };
+    };
+    responses: {
+      200: {
+        data: Schemas.BillingSettingsResponse;
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      204: unknown;
+      401: unknown;
+      403: unknown;
+      404: unknown;
+    };
+  };
+
+  export type put_UpsertBillingSettings = {
+    method: "PUT";
+    path: "/api/v1/organizations/{organization_id}/billing-settings";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string };
+      body: Schemas.UpsertBillingSettingsRequest;
+    };
+    responses: {
+      200: {
+        data: Schemas.BillingSettingsResponse;
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      400: unknown;
+      401: unknown;
+      403: unknown;
+    };
+  };
+
+  export type get_ListLegalMentionTemplates = {
+    method: "GET";
+    path: "/api/v1/organizations/{organization_id}/legal-mention-templates";
+    requestFormat: "json";
+    parameters: {
+      query: Partial<{ page: number; per_page: number }>;
+      path: { organization_id: string };
+    };
+    responses: {
+      200: {
+        data: Array<{
+          id: Schemas.LegalMentionTemplateId;
+          org_id: Schemas.OrganizationId;
+          name: string;
+          body: string;
+          created_at: string;
+          updated_at: string;
+        }>;
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+    };
+  };
+
+  export type post_CreateLegalMentionTemplate = {
+    method: "POST";
+    path: "/api/v1/organizations/{organization_id}/legal-mention-templates";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string };
+      body: Schemas.CreateLegalMentionTemplateRequest;
+    };
+    responses: {
+      201: {
+        data: {
+          id: Schemas.LegalMentionTemplateId;
+          org_id: Schemas.OrganizationId;
+          name: string;
+          body: string;
+          created_at: string;
+          updated_at: string;
+        };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      400: unknown;
+      401: unknown;
+      403: unknown;
+    };
+  };
+
+  export type patch_UpdateLegalMentionTemplate = {
+    method: "PATCH";
+    path: "/api/v1/legal-mention-templates/{template_id}";
+    requestFormat: "json";
+    parameters: {
+      path: { template_id: string };
+      body: Schemas.UpdateLegalMentionTemplateRequest;
+    };
+    responses: {
+      200: {
+        data: {
+          id: Schemas.LegalMentionTemplateId;
+          org_id: Schemas.OrganizationId;
+          name: string;
+          body: string;
+          created_at: string;
+          updated_at: string;
+        };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      400: unknown;
+      401: unknown;
+      403: unknown;
+      404: unknown;
+    };
+  };
+
+  export type delete_DeleteLegalMentionTemplate = {
+    method: "DELETE";
+    path: "/api/v1/legal-mention-templates/{template_id}";
+    requestFormat: "json";
+    parameters: {
+      path: { template_id: string };
+    };
+    responses: { 204: unknown; 401: unknown; 403: unknown; 404: unknown };
+  };
+
   // </Endpoints>
 }
 
@@ -1438,9 +1610,11 @@ export type EndpointByMethod = {
     "/api/v1/equipment/{equipment_id}": Endpoints.get_GetEquipment;
     "/api/v1/organizations": Endpoints.get_ListOrganizations;
     "/api/v1/organizations/{organization_id}": Endpoints.get_GetOrganization;
+    "/api/v1/organizations/{organization_id}/billing-settings": Endpoints.get_GetBillingSettings;
     "/api/v1/organizations/{organization_id}/customers": Endpoints.get_ListCustomers;
     "/api/v1/organizations/{organization_id}/employees": Endpoints.get_ListEmployees;
     "/api/v1/organizations/{organization_id}/equipment": Endpoints.get_ListEquipment;
+    "/api/v1/organizations/{organization_id}/legal-mention-templates": Endpoints.get_ListLegalMentionTemplates;
     "/api/v1/organizations/{organization_id}/products": Endpoints.get_ListProducts;
     "/api/v1/organizations/{organization_id}/quotes": Endpoints.get_ListQuotes;
     "/api/v1/organizations/{organization_id}/service-rates": Endpoints.get_ListServiceRates;
@@ -1456,6 +1630,7 @@ export type EndpointByMethod = {
     "/api/v1/customers/{customer_id}": Endpoints.delete_DeleteCustomer;
     "/api/v1/employees/{employee_id}": Endpoints.delete_DeleteEmployee;
     "/api/v1/equipment/{equipment_id}": Endpoints.delete_DeleteEquipment;
+    "/api/v1/legal-mention-templates/{template_id}": Endpoints.delete_DeleteLegalMentionTemplate;
     "/api/v1/organizations/{organization_id}": Endpoints.delete_DeleteOrganization;
     "/api/v1/products/{product_id}": Endpoints.delete_DeleteProduct;
     "/api/v1/quotes/{quote_id}": Endpoints.delete_DeleteQuote;
@@ -1467,6 +1642,7 @@ export type EndpointByMethod = {
     "/api/v1/customers/{customer_id}": Endpoints.patch_UpdateCustomer;
     "/api/v1/employees/{employee_id}": Endpoints.patch_UpdateEmployee;
     "/api/v1/equipment/{equipment_id}": Endpoints.patch_UpdateEquipment;
+    "/api/v1/legal-mention-templates/{template_id}": Endpoints.patch_UpdateLegalMentionTemplate;
     "/api/v1/organizations/{organization_id}": Endpoints.patch_UpdateOrganization;
     "/api/v1/products/{product_id}": Endpoints.patch_UpdateProduct;
     "/api/v1/quotes/{quote_id}": Endpoints.patch_UpdateQuote;
@@ -1481,9 +1657,13 @@ export type EndpointByMethod = {
     "/api/v1/organizations/{organization_id}/customers": Endpoints.post_CreateCustomer;
     "/api/v1/organizations/{organization_id}/employees": Endpoints.post_CreateEmployee;
     "/api/v1/organizations/{organization_id}/equipment": Endpoints.post_CreateEquipment;
+    "/api/v1/organizations/{organization_id}/legal-mention-templates": Endpoints.post_CreateLegalMentionTemplate;
     "/api/v1/organizations/{organization_id}/products": Endpoints.post_CreateProduct;
     "/api/v1/organizations/{organization_id}/quotes": Endpoints.post_CreateQuote;
     "/api/v1/organizations/{organization_id}/service-rates": Endpoints.post_CreateServiceRate;
+  };
+  put: {
+    "/api/v1/organizations/{organization_id}/billing-settings": Endpoints.put_UpsertBillingSettings;
   };
 };
 
@@ -1494,6 +1674,7 @@ export type GetEndpoints = EndpointByMethod["get"];
 export type DeleteEndpoints = EndpointByMethod["delete"];
 export type PatchEndpoints = EndpointByMethod["patch"];
 export type PostEndpoints = EndpointByMethod["post"];
+export type PutEndpoints = EndpointByMethod["put"];
 // </EndpointByMethod.Shorthands>
 
 // <ApiClientTypes>
@@ -1818,6 +1999,37 @@ export class ApiClient {
     return this.request("patch", path, ...params);
   }
   // </ApiClient.patch>
+
+  // <ApiClient.put>
+  put<Path extends keyof PutEndpoints, TEndpoint extends PutEndpoints[Path]>(
+    path: Path,
+    ...params: MaybeOptionalArg<
+      TEndpoint extends { parameters: infer UParams }
+        ? NotNever<UParams> extends true
+          ? UParams & { overrides?: RequestInit; withResponse?: false; throwOnStatusError?: boolean }
+          : { overrides?: RequestInit; withResponse?: false; throwOnStatusError?: boolean }
+        : { overrides?: RequestInit; withResponse?: false; throwOnStatusError?: boolean }
+    >
+  ): Promise<Extract<InferResponseByStatus<TEndpoint, SuccessStatusCode>, { data: {} }>["data"]>;
+
+  put<Path extends keyof PutEndpoints, TEndpoint extends PutEndpoints[Path]>(
+    path: Path,
+    ...params: MaybeOptionalArg<
+      TEndpoint extends { parameters: infer UParams }
+        ? NotNever<UParams> extends true
+          ? UParams & { overrides?: RequestInit; withResponse?: true; throwOnStatusError?: boolean }
+          : { overrides?: RequestInit; withResponse?: true; throwOnStatusError?: boolean }
+        : { overrides?: RequestInit; withResponse?: true; throwOnStatusError?: boolean }
+    >
+  ): Promise<SafeApiResponse<TEndpoint>>;
+
+  put<Path extends keyof PutEndpoints, _TEndpoint extends PutEndpoints[Path]>(
+    path: Path,
+    ...params: MaybeOptionalArg<any>
+  ): Promise<any> {
+    return this.request("put" as any, path, ...params);
+  }
+  // </ApiClient.put>
 
   // <ApiClient.post>
   post<Path extends keyof PostEndpoints, TEndpoint extends PostEndpoints[Path]>(

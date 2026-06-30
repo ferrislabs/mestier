@@ -6,10 +6,13 @@ import {
 } from '@tanstack/react-table'
 import {
 	Building2,
+	ChevronDown,
+	FileText,
 	Loader2,
 	MoreHorizontal,
 	Package,
 	Plus,
+	Receipt,
 	Save,
 	Search,
 	Trash2,
@@ -47,6 +50,7 @@ import {
 	SectionHeader,
 	StatusBadge,
 } from '#/components/ui/surface'
+import { Textarea } from '#/components/ui/textarea'
 import type { Organization } from '#/hooks/use-organizations'
 import type {
 	Employee,
@@ -54,9 +58,13 @@ import type {
 	ServiceRate,
 	ServiceRateUnit,
 } from '#/hooks/use-reference-catalog'
+import { LEGAL_MENTION_PRESETS } from '#/lib/legal-mention-presets'
 import type {
+	BillingFormValues,
 	EmployeeFormValues,
 	EquipmentFormValues,
+	LegalMentionFormValues,
+	LegalMentionTemplate,
 	OrganizationFormValues,
 	Product,
 	ProductCatalogFormValues,
@@ -71,6 +79,7 @@ interface SettingsUIProps {
 	error: string | null
 	data: ReferenceCatalogData
 	organizationForm: FormBinding<OrganizationFormValues>
+	billingForm: FormBinding<BillingFormValues>
 	employeeForm: FormBinding<EmployeeFormValues>
 	equipmentForm: FormBinding<EquipmentFormValues>
 	serviceRateForm: FormBinding<ServiceRateFormValues>
@@ -95,6 +104,16 @@ interface SettingsUIProps {
 		values: ProductCatalogFormValues,
 	) => Promise<unknown>
 	onDeleteProduct: (product: Product) => Promise<unknown>
+	onCreateLegalMentionTemplate: (
+		values: LegalMentionFormValues,
+	) => Promise<unknown>
+	onUpdateLegalMentionTemplate: (
+		template: LegalMentionTemplate,
+		values: LegalMentionFormValues,
+	) => Promise<unknown>
+	onDeleteLegalMentionTemplate: (
+		template: LegalMentionTemplate,
+	) => Promise<unknown>
 }
 
 interface FormBinding<T> {
@@ -138,6 +157,7 @@ export function SettingsUI({
 	error,
 	data,
 	organizationForm,
+	billingForm,
 	employeeForm,
 	equipmentForm,
 	serviceRateForm,
@@ -150,6 +170,9 @@ export function SettingsUI({
 	onDeleteServiceRate,
 	onUpdateProduct,
 	onDeleteProduct,
+	onCreateLegalMentionTemplate,
+	onUpdateLegalMentionTemplate,
+	onDeleteLegalMentionTemplate,
 }: SettingsUIProps) {
 	const [activeTab, setActiveTab] = useState<ReferenceTab>('employees')
 	const [search, setSearch] = useState('')
@@ -218,6 +241,15 @@ export function SettingsUI({
 			<OrganizationSection
 				organization={organization}
 				form={organizationForm}
+			/>
+
+			<BillingSection form={billingForm} />
+
+			<LegalMentionSection
+				templates={data.legalMentionTemplates}
+				onCreate={onCreateLegalMentionTemplate}
+				onUpdate={onUpdateLegalMentionTemplate}
+				onDelete={onDeleteLegalMentionTemplate}
 			/>
 
 			<div className="grid grid-cols-1 gap-4 md:grid-cols-2">
@@ -1471,4 +1503,467 @@ function productUnitSuffix(unit: ServiceRateUnit): string {
 	if (unit === 'HOUR') return '/unité'
 	if (unit === 'ML') return '/ml'
 	return '/m²'
+}
+
+// ─── Billing Section ─────────────────────────────────────────────────────────
+
+interface BillingSectionProps {
+	form: FormBinding<BillingFormValues>
+}
+
+function BillingSection({ form }: BillingSectionProps) {
+	return (
+		<SectionCard>
+			<SectionHeader
+				title="Facturation"
+				description="Paramètres appliqués aux devis, factures et exports PDF."
+				actions={
+					<StatusBadge tone="brand">
+						<Receipt className="mr-1 size-3" />
+						Facturation
+					</StatusBadge>
+				}
+			/>
+			<div className="flex flex-col gap-6 p-5">
+				<fieldset className="flex flex-col gap-3">
+					<legend className="mb-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+						Paiement
+					</legend>
+					<div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+						<TextField
+							label="Délai de paiement"
+							value={form.values.paymentTermsDays}
+							onChange={(v) => form.onChange({ paymentTermsDays: v })}
+							inputMode="numeric"
+							suffix="jours"
+						/>
+						<TextField
+							label="Taux pénalités retard"
+							value={form.values.latePenaltyRate}
+							onChange={(v) => form.onChange({ latePenaltyRate: v })}
+							inputMode="decimal"
+							suffix="%"
+						/>
+						<TextField
+							label="Indemnité forfaitaire recouvrement"
+							value={form.values.recoveryIndemnityEuros}
+							onChange={(v) => form.onChange({ recoveryIndemnityEuros: v })}
+							inputMode="decimal"
+							suffix="€"
+						/>
+					</div>
+				</fieldset>
+
+				<fieldset className="flex flex-col gap-3">
+					<legend className="mb-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+						Acompte par défaut
+					</legend>
+					<div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+						<div className="flex flex-col gap-2">
+							<Label>Type d&apos;acompte</Label>
+							<Select
+								value={form.values.defaultDepositBasis ?? ''}
+								onValueChange={(v) =>
+									form.onChange({ defaultDepositBasis: v || null })
+								}
+							>
+								<SelectTrigger className="w-full">
+									<SelectValue placeholder="— Aucun —" />
+								</SelectTrigger>
+								<SelectContent>
+									<SelectItem value="PERCENT">Pourcentage</SelectItem>
+									<SelectItem value="FIXED">Montant fixe (€)</SelectItem>
+								</SelectContent>
+							</Select>
+						</div>
+						<TextField
+							label="Valeur de l'acompte"
+							value={form.values.defaultDepositValue ?? ''}
+							onChange={(v) =>
+								form.onChange({ defaultDepositValue: v || null })
+							}
+							inputMode="decimal"
+							suffix={form.values.defaultDepositBasis === 'PERCENT' ? '%' : '€'}
+							disabled={!form.values.defaultDepositBasis}
+						/>
+					</div>
+				</fieldset>
+
+				<fieldset className="flex flex-col gap-3">
+					<legend className="mb-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+						TVA
+					</legend>
+					<div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+						<TextField
+							label="Taux de TVA par défaut"
+							value={form.values.defaultVatRate}
+							onChange={(v) => form.onChange({ defaultVatRate: v })}
+							inputMode="decimal"
+							suffix="%"
+						/>
+					</div>
+				</fieldset>
+
+				<fieldset className="flex flex-col gap-3">
+					<legend className="mb-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+						Identifiants légaux
+					</legend>
+					<div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
+						<TextField
+							label="SIRET"
+							value={form.values.siret}
+							onChange={(v) => form.onChange({ siret: v })}
+							placeholder="14 chiffres"
+						/>
+						<TextField
+							label="RCS"
+							value={form.values.rcs}
+							onChange={(v) => form.onChange({ rcs: v })}
+							placeholder="Ville + n° d'immatriculation"
+						/>
+						<TextField
+							label="APE / NAF"
+							value={form.values.ape}
+							onChange={(v) => form.onChange({ ape: v })}
+							placeholder="ex. 4321A"
+						/>
+						<TextField
+							label="N° TVA intracommunautaire"
+							value={form.values.vatIntracom}
+							onChange={(v) => form.onChange({ vatIntracom: v })}
+							placeholder="ex. FR12345678901"
+						/>
+					</div>
+				</fieldset>
+
+				<fieldset className="flex flex-col gap-3">
+					<legend className="mb-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+						Banque
+					</legend>
+					<div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+						<TextField
+							label="IBAN"
+							value={form.values.iban}
+							onChange={(v) => form.onChange({ iban: v })}
+							placeholder="FR76 …"
+						/>
+						<TextField
+							label="BIC"
+							value={form.values.bic}
+							onChange={(v) => form.onChange({ bic: v })}
+							placeholder="ex. BNPAFRPP"
+						/>
+					</div>
+				</fieldset>
+
+				<fieldset className="flex flex-col gap-3">
+					<legend className="mb-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+						Pied de page
+					</legend>
+					<div className="flex flex-col gap-2">
+						<Label htmlFor="billing-footer">Texte de pied de page</Label>
+						<Textarea
+							id="billing-footer"
+							value={form.values.footer}
+							onChange={(e) => form.onChange({ footer: e.target.value })}
+							rows={3}
+							placeholder="Texte libre affiché en bas des documents…"
+						/>
+					</div>
+				</fieldset>
+
+				<div className="flex justify-end">
+					<Button
+						type="button"
+						onClick={form.onSubmit}
+						disabled={form.isPending}
+						className="gap-2"
+					>
+						{form.isPending ? (
+							<Loader2 className="size-4 animate-spin" />
+						) : (
+							<Save className="size-4" />
+						)}
+						Enregistrer
+					</Button>
+				</div>
+			</div>
+		</SectionCard>
+	)
+}
+
+// ─── Legal Mention Section ────────────────────────────────────────────────────
+
+interface LegalMentionSectionProps {
+	templates: LegalMentionTemplate[]
+	onCreate: (values: LegalMentionFormValues) => Promise<unknown>
+	onUpdate: (
+		template: LegalMentionTemplate,
+		values: LegalMentionFormValues,
+	) => Promise<unknown>
+	onDelete: (template: LegalMentionTemplate) => Promise<unknown>
+}
+
+type LegalMentionDraft = {
+	id: string
+	values: LegalMentionFormValues
+} | null
+
+const EMPTY_LEGAL_FORM: LegalMentionFormValues = { name: '', body: '' }
+
+function LegalMentionSection({
+	templates,
+	onCreate,
+	onUpdate,
+	onDelete,
+}: LegalMentionSectionProps) {
+	const [draft, setDraft] = useState<LegalMentionDraft>(null)
+	const [createForm, setCreateForm] =
+		useState<LegalMentionFormValues>(EMPTY_LEGAL_FORM)
+	const [isSaving, setIsSaving] = useState(false)
+	const [isCreating, setIsCreating] = useState(false)
+
+	const handleCreate = async () => {
+		if (!createForm.name.trim() || !createForm.body.trim()) return
+		setIsCreating(true)
+		try {
+			await onCreate(createForm)
+			setCreateForm(EMPTY_LEGAL_FORM)
+		} finally {
+			setIsCreating(false)
+		}
+	}
+
+	const handleSaveDraft = async () => {
+		if (!draft) return
+		const template = templates.find((t) => t.id === draft.id)
+		if (!template) return
+		setIsSaving(true)
+		try {
+			await onUpdate(template, draft.values)
+			setDraft(null)
+		} finally {
+			setIsSaving(false)
+		}
+	}
+
+	const applyPreset = (presetId: string) => {
+		const preset = LEGAL_MENTION_PRESETS.find((p) => p.id === presetId)
+		if (!preset) return
+		setCreateForm({ name: preset.name, body: preset.body })
+	}
+
+	return (
+		<SectionCard>
+			<SectionHeader
+				title={`Mentions légales (${templates.length})`}
+				description="Modèles de mentions légales réutilisables dans les documents commerciaux."
+				actions={
+					<StatusBadge tone="brand">
+						<FileText className="mr-1 size-3" />
+						Modèles
+					</StatusBadge>
+				}
+			/>
+			<div className="flex flex-col gap-4 p-5">
+				<div className="flex flex-col gap-3 rounded-lg border bg-muted/30 p-4">
+					<div className="flex flex-col gap-1">
+						<p className="text-sm font-medium">Nouveau modèle</p>
+						<p className="text-xs text-muted-foreground">
+							Saisissez manuellement ou choisissez un modèle prédéfini.
+						</p>
+					</div>
+
+					<div className="flex flex-wrap items-center gap-2">
+						<DropdownMenu>
+							<DropdownMenuTrigger asChild>
+								<Button
+									type="button"
+									variant="outline"
+									size="sm"
+									className="gap-2"
+								>
+									<FileText className="size-3.5" />
+									Insérer un modèle
+									<ChevronDown className="size-3.5" />
+								</Button>
+							</DropdownMenuTrigger>
+							<DropdownMenuContent align="start" className="w-72">
+								{LEGAL_MENTION_PRESETS.map((preset) => (
+									<DropdownMenuItem
+										key={preset.id}
+										onClick={() => applyPreset(preset.id)}
+									>
+										{preset.label}
+									</DropdownMenuItem>
+								))}
+							</DropdownMenuContent>
+						</DropdownMenu>
+					</div>
+
+					<div className="grid grid-cols-1 gap-3">
+						<TextField
+							label="Nom du modèle"
+							value={createForm.name}
+							onChange={(v) => setCreateForm((f) => ({ ...f, name: v }))}
+							placeholder="ex. Pénalités de retard"
+						/>
+						<div className="flex flex-col gap-2">
+							<Label htmlFor="legal-create-body">Contenu</Label>
+							<Textarea
+								id="legal-create-body"
+								value={createForm.body}
+								onChange={(e) =>
+									setCreateForm((f) => ({ ...f, body: e.target.value }))
+								}
+								rows={4}
+								placeholder="Texte de la mention légale…"
+							/>
+						</div>
+					</div>
+					<div className="flex justify-end">
+						<Button
+							type="button"
+							onClick={handleCreate}
+							disabled={
+								isCreating || !createForm.name.trim() || !createForm.body.trim()
+							}
+							size="sm"
+							className="gap-2"
+						>
+							{isCreating ? (
+								<Loader2 className="size-3.5 animate-spin" />
+							) : (
+								<Plus className="size-3.5" />
+							)}
+							Ajouter
+						</Button>
+					</div>
+				</div>
+
+				{templates.length === 0 ? (
+					<div className="flex flex-col items-center gap-2 py-8 text-center text-sm text-muted-foreground">
+						<FileText className="size-8 opacity-30" />
+						<p className="font-medium text-foreground">
+							Aucune mention légale configurée
+						</p>
+						<p>Créez votre premier modèle ci-dessus.</p>
+					</div>
+				) : (
+					<div className="flex flex-col divide-y rounded-lg border">
+						{templates.map((template) => {
+							const isEditing = draft?.id === template.id
+							return (
+								<div
+									key={template.id}
+									className="group flex flex-col gap-3 p-4"
+								>
+									{isEditing ? (
+										<>
+											<TextField
+												label="Nom"
+												value={draft.values.name}
+												onChange={(v) =>
+													setDraft((d) =>
+														d ? { ...d, values: { ...d.values, name: v } } : d,
+													)
+												}
+											/>
+											<div className="flex flex-col gap-2">
+												<Label htmlFor={`legal-edit-body-${template.id}`}>
+													Contenu
+												</Label>
+												<Textarea
+													id={`legal-edit-body-${template.id}`}
+													value={draft.values.body}
+													onChange={(e) =>
+														setDraft((d) =>
+															d
+																? {
+																		...d,
+																		values: {
+																			...d.values,
+																			body: e.target.value,
+																		},
+																	}
+																: d,
+														)
+													}
+													rows={5}
+												/>
+											</div>
+											<div className="flex justify-end gap-2">
+												<Button
+													size="sm"
+													variant="ghost"
+													onClick={() => setDraft(null)}
+												>
+													<Undo2 className="size-3.5" />
+													Annuler
+												</Button>
+												<Button
+													size="sm"
+													onClick={handleSaveDraft}
+													disabled={isSaving}
+												>
+													{isSaving ? (
+														<Loader2 className="size-3.5 animate-spin" />
+													) : (
+														<Save className="size-3.5" />
+													)}
+													Enregistrer
+												</Button>
+											</div>
+										</>
+									) : (
+										<div className="flex items-start justify-between gap-3">
+											<div className="min-w-0">
+												<p className="truncate font-medium">{template.name}</p>
+												<p className="mt-1 line-clamp-2 text-sm text-muted-foreground">
+													{template.body}
+												</p>
+											</div>
+											<div className="opacity-0 transition group-hover:opacity-100 group-focus-within:opacity-100">
+												<DropdownMenu>
+													<DropdownMenuTrigger asChild>
+														<Button size="icon-sm" variant="ghost">
+															<MoreHorizontal />
+															<span className="sr-only">Actions</span>
+														</Button>
+													</DropdownMenuTrigger>
+													<DropdownMenuContent align="end">
+														<DropdownMenuItem
+															onClick={() =>
+																setDraft({
+																	id: template.id,
+																	values: {
+																		name: template.name,
+																		body: template.body,
+																	},
+																})
+															}
+														>
+															Modifier
+														</DropdownMenuItem>
+														<DropdownMenuSeparator />
+														<DropdownMenuItem
+															variant="destructive"
+															onClick={() => onDelete(template)}
+														>
+															<Trash2 />
+															Supprimer
+														</DropdownMenuItem>
+													</DropdownMenuContent>
+												</DropdownMenu>
+											</div>
+										</div>
+									)}
+								</div>
+							)
+						})}
+					</div>
+				)}
+			</div>
+		</SectionCard>
+	)
 }
