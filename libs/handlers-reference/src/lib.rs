@@ -4,8 +4,10 @@ use axum_extra::routing::RouterExt;
 use handlers::{ApiError, AppState, auth::auth_middleware, rate_limit::rate_limit_middleware};
 use mestier_core::OrganizationId;
 
+pub mod billing_settings;
 pub mod employee;
 pub mod equipment;
+pub mod legal_mention_template;
 pub mod paths;
 pub mod product;
 pub mod response;
@@ -60,6 +62,12 @@ pub fn router(state: &AppState) -> Router<AppState> {
         .typed_get(product::get_one::handler)
         .typed_patch(product::update::handler)
         .typed_delete(product::soft_delete::handler)
+        .typed_get(billing_settings::get::handler)
+        .typed_put(billing_settings::upsert::handler)
+        .typed_get(legal_mention_template::list::handler)
+        .typed_post(legal_mention_template::create::handler)
+        .typed_patch(legal_mention_template::update::handler)
+        .typed_delete(legal_mention_template::soft_delete::handler)
         .layer(from_fn_with_state(state.clone(), rate_limit_middleware))
         .layer(from_fn_with_state(state.clone(), auth_middleware))
 }
