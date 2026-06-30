@@ -1,14 +1,17 @@
 use chrono::{Datelike, Utc};
 use common::{CoreError, generate_uuid_v7};
-use rust_decimal::{Decimal, prelude::ToPrimitive};
+use rust_decimal::Decimal;
 
 use crate::{
     OrganizationId, Quote, QuoteId, QuoteLine, QuoteLineId,
-    domain::quote::{
-        commands::{
-            CreateQuoteCommand, QuoteLineCommand, UpdateQuoteCommand, UpdateQuoteStatusCommand,
+    domain::{
+        billing::{BillingLine, compute_totals},
+        quote::{
+            commands::{
+                CreateQuoteCommand, QuoteLineCommand, UpdateQuoteCommand, UpdateQuoteStatusCommand,
+            },
+            ports::QuoteRepository,
         },
-        ports::QuoteRepository,
     },
 };
 
@@ -36,7 +39,8 @@ where
             .next_reference(command.organization_id, now.year())
             .await?;
         let lines = build_quote_lines(command.organization_id, quote_id, command.lines, now)?;
-        let total_cents = calculate_total_cents(&lines)?;
+        let (total_cents, total_ht_cents, total_vat_cents, total_ttc_cents) =
+            compute_quote_totals(&lines)?;
 
         self.repo
             .insert(&Quote {
@@ -48,6 +52,9 @@ where
                 customer_context_id: command.customer_context_id,
                 status: crate::QuoteStatus::Draft,
                 total_cents,
+                total_ht_cents,
+                total_vat_cents,
+                total_ttc_cents,
                 lines,
                 deleted_at: None,
                 created_at: now,
@@ -76,7 +83,8 @@ where
         let now = Utc::now();
         validate_title(&command.title)?;
         let lines = build_quote_lines(existing.organization_id, existing.id, command.lines, now)?;
-        let total_cents = calculate_total_cents(&lines)?;
+        let (total_cents, total_ht_cents, total_vat_cents, total_ttc_cents) =
+            compute_quote_totals(&lines)?;
 
         self.repo
             .update(&Quote {
@@ -88,6 +96,9 @@ where
                 customer_context_id: command.customer_context_id,
                 status: command.status,
                 total_cents,
+                total_ht_cents,
+                total_vat_cents,
+                total_ttc_cents,
                 lines,
                 deleted_at: existing.deleted_at,
                 created_at: existing.created_at,
@@ -151,6 +162,7 @@ fn build_quote_line(
         quantity: command.quantity,
         unit: command.unit,
         unit_price_cents: command.unit_price_cents,
+        vat_rate: command.vat_rate,
         notes: command.notes,
         photo_keys: command.photo_keys,
         deleted_at: None,
@@ -197,20 +209,28 @@ fn validate_line(command: &QuoteLineCommand) -> Result<(), CoreError> {
     Ok(())
 }
 
-fn calculate_total_cents(lines: &[QuoteLine]) -> Result<i32, CoreError> {
-    let total = lines.iter().try_fold(0_i64, |sum, line| {
-        let line_total = (line.quantity * Decimal::from(line.unit_price_cents)).round_dp(0);
-        let line_total = line_total.to_i64().ok_or_else(|| {
-            CoreError::Conflict("quote line total is outside supported bounds".to_owned())
-        })?;
-
-        sum.checked_add(line_total).ok_or_else(|| {
-            CoreError::Conflict("quote total is outside supported bounds".to_owned())
+fn compute_quote_totals(lines: &[QuoteLine]) -> Result<(i32, i32, i32, i32), CoreError> {
+    let billing_lines: Vec<BillingLine> = lines
+        .iter()
+        .map(|line| BillingLine {
+            quantity: line.quantity,
+            unit_price_cents: line.unit_price_cents as i64,
+            vat_rate: line.vat_rate,
         })
+        .collect();
+
+    let totals = compute_totals(&billing_lines);
+
+    let total_ht_cents = i32::try_from(totals.total_ht_cents)
+        .map_err(|_| CoreError::Conflict("quote HT total is outside supported bounds".to_owned()))?;
+    let total_vat_cents = i32::try_from(totals.total_vat_cents).map_err(|_| {
+        CoreError::Conflict("quote VAT total is outside supported bounds".to_owned())
+    })?;
+    let total_ttc_cents = i32::try_from(totals.total_ttc_cents).map_err(|_| {
+        CoreError::Conflict("quote TTC total is outside supported bounds".to_owned())
     })?;
 
-    i32::try_from(total)
-        .map_err(|_| CoreError::Conflict("quote total is outside supported bounds".to_owned()))
+    Ok((total_ttc_cents, total_ht_cents, total_vat_cents, total_ttc_cents))
 }
 
 #[cfg(test)]
@@ -231,6 +251,7 @@ mod tests {
             quantity,
             unit: ServiceRateUnit::Ml,
             unit_price_cents,
+            vat_rate: Decimal::from(20u32),
             notes: Some("Acces jardin".to_owned()),
             photo_keys: vec!["quotes/photo-1.jpg".to_owned()],
         }
@@ -247,7 +268,10 @@ mod tests {
             customer_id: CustomerId(Uuid::new_v4()),
             customer_context_id: CustomerContextId(Uuid::new_v4()),
             status: QuoteStatus::Draft,
-            total_cents: 5500,
+            total_cents: 6600,
+            total_ht_cents: 5500,
+            total_vat_cents: 1100,
+            total_ttc_cents: 6600,
             lines: vec![QuoteLine {
                 id: QuoteLineId(Uuid::new_v4()),
                 organization_id,
@@ -257,6 +281,7 @@ mod tests {
                 quantity: Decimal::new(1, 0),
                 unit: ServiceRateUnit::Hour,
                 unit_price_cents: 5500,
+                vat_rate: Decimal::from(20u32),
                 notes: None,
                 photo_keys: vec![],
                 deleted_at: None,
@@ -298,7 +323,11 @@ mod tests {
         assert_eq!(created.status, QuoteStatus::Draft);
         assert_eq!(created.reference, "DEV-2026-0001");
         assert_eq!(created.title, "Rénovation cuisine");
-        assert_eq!(created.total_cents, 3500);
+        // 2.5*1200=3000 + 1*500=500 → HT=3500, VAT@20%=700, TTC=4200
+        assert_eq!(created.total_ht_cents, 3500);
+        assert_eq!(created.total_vat_cents, 700);
+        assert_eq!(created.total_ttc_cents, 4200);
+        assert_eq!(created.total_cents, 4200);
     }
 
     #[tokio::test]
@@ -329,7 +358,11 @@ mod tests {
         assert_eq!(updated.status, QuoteStatus::Sent);
         assert_eq!(updated.reference, "DEV-2026-0001");
         assert_eq!(updated.title, "Version ajustée");
-        assert_eq!(updated.total_cents, 6000);
+        // 3*2000=6000 HT, VAT@20%=1200, TTC=7200
+        assert_eq!(updated.total_ht_cents, 6000);
+        assert_eq!(updated.total_vat_cents, 1200);
+        assert_eq!(updated.total_ttc_cents, 7200);
+        assert_eq!(updated.total_cents, 7200);
     }
 
     #[tokio::test]

@@ -39,6 +39,7 @@ where
                 label: command.label,
                 unit: command.unit,
                 rate_cents: command.rate_cents,
+                vat_rate: command.vat_rate,
                 deleted_at: None,
                 created_at: now,
                 updated_at: now,
@@ -72,6 +73,7 @@ where
         service_rate.label = command.label;
         service_rate.unit = command.unit;
         service_rate.rate_cents = command.rate_cents;
+        service_rate.vat_rate = command.vat_rate;
         service_rate.updated_at = Utc::now();
 
         self.repo.update(&service_rate).await
@@ -118,6 +120,7 @@ mod tests {
             label: "Taille".to_owned(),
             unit: ServiceRateUnit::Hour,
             rate_cents: 5500,
+            vat_rate: rust_decimal::Decimal::from(20u32),
             deleted_at: None,
             created_at: now,
             updated_at: now,
@@ -139,6 +142,7 @@ mod tests {
                 label: "Taille".to_owned(),
                 unit: ServiceRateUnit::Hour,
                 rate_cents: 5500,
+                vat_rate: rust_decimal::Decimal::from(20u32),
             })
             .await
             .unwrap();
@@ -165,6 +169,7 @@ mod tests {
                 label: "Haie".to_owned(),
                 unit: ServiceRateUnit::Ml,
                 rate_cents: 1200,
+                vat_rate: rust_decimal::Decimal::from(10u32),
             })
             .await
             .unwrap();

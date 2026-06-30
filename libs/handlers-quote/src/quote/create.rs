@@ -22,6 +22,7 @@ pub struct QuoteLineRequest {
     pub quantity: String,
     pub unit: ServiceRateUnit,
     pub unit_price_cents: i32,
+    pub vat_rate: Option<String>,
     pub notes: Option<String>,
     pub photo_keys: Vec<String>,
 }
@@ -33,12 +34,20 @@ impl TryFrom<QuoteLineRequest> for QuoteLineCommand {
         let quantity = Decimal::from_str(&value.quantity)
             .map_err(|_| ApiError::Validation("quote line quantity must be decimal".to_owned()))?;
 
+        let vat_rate = match value.vat_rate {
+            Some(s) => Decimal::from_str(&s).map_err(|_| {
+                ApiError::Validation("quote line vat_rate must be decimal".to_owned())
+            })?,
+            None => Decimal::from(20u32),
+        };
+
         Ok(Self {
             service_rate_id: value.service_rate_id,
             label: value.label,
             quantity,
             unit: value.unit,
             unit_price_cents: value.unit_price_cents,
+            vat_rate,
             notes: value.notes,
             photo_keys: value.photo_keys,
         })

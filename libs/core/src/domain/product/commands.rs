@@ -1,3 +1,5 @@
+use rust_decimal::Decimal;
+
 use crate::{OrganizationId, ProductId, ServiceRateUnit};
 
 #[derive(Debug, Clone)]
@@ -7,6 +9,7 @@ pub struct CreateProductCommand {
     pub sku: Option<String>,
     pub unit: ServiceRateUnit,
     pub unit_price_cents: i32,
+    pub vat_rate: Decimal,
     pub description: Option<String>,
 }
 
@@ -17,5 +20,6 @@ pub struct UpdateProductCommand {
     pub sku: Option<String>,
     pub unit: ServiceRateUnit,
     pub unit_price_cents: i32,
+    pub vat_rate: Decimal,
     pub description: Option<String>,
 }

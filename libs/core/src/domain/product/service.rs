@@ -40,6 +40,7 @@ where
                 sku: normalize_optional(command.sku),
                 unit: command.unit,
                 unit_price_cents: command.unit_price_cents,
+                vat_rate: command.vat_rate,
                 description: normalize_optional(command.description),
                 deleted_at: None,
                 created_at: now,
@@ -75,6 +76,7 @@ where
         product.sku = normalize_optional(command.sku);
         product.unit = command.unit;
         product.unit_price_cents = command.unit_price_cents;
+        product.vat_rate = command.vat_rate;
         product.description = normalize_optional(command.description);
         product.updated_at = Utc::now();
 

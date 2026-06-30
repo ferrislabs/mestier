@@ -16,6 +16,7 @@ pub struct QuoteLineResponse {
     pub quantity: String,
     pub unit: ServiceRateUnit,
     pub unit_price_cents: i32,
+    pub vat_rate: String,
     pub notes: Option<String>,
     pub photo_keys: Vec<String>,
     pub created_at: DateTime<Utc>,
@@ -33,6 +34,7 @@ impl From<QuoteLine> for QuoteLineResponse {
             quantity: value.quantity.normalize().to_string(),
             unit: value.unit,
             unit_price_cents: value.unit_price_cents,
+            vat_rate: value.vat_rate.normalize().to_string(),
             notes: value.notes,
             photo_keys: value.photo_keys,
             created_at: value.created_at,
@@ -51,6 +53,9 @@ pub struct QuoteResponse {
     pub customer_context_id: CustomerContextId,
     pub status: QuoteStatus,
     pub total_cents: i32,
+    pub total_ht_cents: i32,
+    pub total_vat_cents: i32,
+    pub total_ttc_cents: i32,
     pub lines: Vec<QuoteLineResponse>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
@@ -67,6 +72,9 @@ impl From<Quote> for QuoteResponse {
             customer_context_id: value.customer_context_id,
             status: value.status,
             total_cents: value.total_cents,
+            total_ht_cents: value.total_ht_cents,
+            total_vat_cents: value.total_vat_cents,
+            total_ttc_cents: value.total_ttc_cents,
             lines: value
                 .lines
                 .into_iter()

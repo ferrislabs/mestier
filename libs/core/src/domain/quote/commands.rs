@@ -12,6 +12,7 @@ pub struct QuoteLineCommand {
     pub quantity: Decimal,
     pub unit: ServiceRateUnit,
     pub unit_price_cents: i32,
+    pub vat_rate: Decimal,
     pub notes: Option<String>,
     pub photo_keys: Vec<String>,
 }

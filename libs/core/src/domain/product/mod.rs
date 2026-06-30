@@ -5,6 +5,8 @@ use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 use uuid::Uuid;
 
+use rust_decimal::Decimal;
+
 use crate::{OrganizationId, ServiceRateUnit};
 
 pub mod commands;
@@ -36,6 +38,7 @@ pub struct Product {
     pub sku: Option<String>,
     pub unit: ServiceRateUnit,
     pub unit_price_cents: i32,
+    pub vat_rate: Decimal,
     pub description: Option<String>,
     pub deleted_at: Option<DateTime<Utc>>,
     pub created_at: DateTime<Utc>,

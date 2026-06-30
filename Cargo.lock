@@ -2297,6 +2297,7 @@ dependencies = [
  "handlers",
  "http 1.4.0",
  "mestier-core",
+ "rust_decimal",
  "serde",
  "tracing",
  "utoipa",

@@ -28,9 +28,9 @@ impl<'tx> ProductRepository for PgProductRepository<'tx> {
         let row = sqlx::query_as!(
             ProductRow,
             r#"
-            INSERT INTO products (id, org_id, name, sku, unit, unit_price_cents, description, deleted_at, created_at, updated_at)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-            RETURNING id, org_id, name, sku, unit, unit_price_cents, description, deleted_at, created_at, updated_at
+            INSERT INTO products (id, org_id, name, sku, unit, unit_price_cents, vat_rate, description, deleted_at, created_at, updated_at)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+            RETURNING id, org_id, name, sku, unit, unit_price_cents, vat_rate, description, deleted_at, created_at, updated_at
             "#,
             product.id.0,
             product.organization_id.0,
@@ -38,6 +38,7 @@ impl<'tx> ProductRepository for PgProductRepository<'tx> {
             product.sku,
             product.unit.as_str(),
             product.unit_price_cents,
+            product.vat_rate,
             product.description,
             product.deleted_at,
             product.created_at,
@@ -55,7 +56,7 @@ impl<'tx> ProductRepository for PgProductRepository<'tx> {
         let row = sqlx::query_as!(
             ProductRow,
             r#"
-            SELECT id, org_id, name, sku, unit, unit_price_cents, description, deleted_at, created_at, updated_at
+            SELECT id, org_id, name, sku, unit, unit_price_cents, vat_rate, description, deleted_at, created_at, updated_at
             FROM products
             WHERE id = $1 AND deleted_at IS NULL
             "#,
@@ -78,7 +79,7 @@ impl<'tx> ProductRepository for PgProductRepository<'tx> {
         let rows = sqlx::query_as!(
             ProductRow,
             r#"
-            SELECT id, org_id, name, sku, unit, unit_price_cents, description, deleted_at, created_at, updated_at
+            SELECT id, org_id, name, sku, unit, unit_price_cents, vat_rate, description, deleted_at, created_at, updated_at
             FROM products
             WHERE org_id = $1 AND deleted_at IS NULL
             ORDER BY name ASC, created_at ASC
@@ -114,15 +115,16 @@ impl<'tx> ProductRepository for PgProductRepository<'tx> {
             ProductRow,
             r#"
             UPDATE products
-            SET name = $2, sku = $3, unit = $4, unit_price_cents = $5, description = $6, updated_at = $7
+            SET name = $2, sku = $3, unit = $4, unit_price_cents = $5, vat_rate = $6, description = $7, updated_at = $8
             WHERE id = $1 AND deleted_at IS NULL
-            RETURNING id, org_id, name, sku, unit, unit_price_cents, description, deleted_at, created_at, updated_at
+            RETURNING id, org_id, name, sku, unit, unit_price_cents, vat_rate, description, deleted_at, created_at, updated_at
             "#,
             product.id.0,
             product.name,
             product.sku,
             product.unit.as_str(),
             product.unit_price_cents,
+            product.vat_rate,
             product.description,
             product.updated_at,
         )

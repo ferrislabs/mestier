@@ -2,6 +2,7 @@ use std::str::FromStr;
 
 use chrono::{DateTime, Utc};
 use common::CoreError;
+use rust_decimal::Decimal;
 use uuid::Uuid;
 
 use crate::{OrganizationId, ServiceRate, ServiceRateId, ServiceRateUnit};
@@ -13,6 +14,7 @@ pub struct ServiceRateRow {
     pub label: String,
     pub unit: String,
     pub rate_cents: i32,
+    pub vat_rate: Decimal,
     pub deleted_at: Option<DateTime<Utc>>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
@@ -32,6 +34,7 @@ impl TryFrom<ServiceRateRow> for ServiceRate {
             label: row.label,
             unit,
             rate_cents: row.rate_cents,
+            vat_rate: row.vat_rate,
             deleted_at: row.deleted_at,
             created_at: row.created_at,
             updated_at: row.updated_at,

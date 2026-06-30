@@ -1,0 +1,8 @@
+ALTER TABLE products      ADD COLUMN vat_rate NUMERIC NOT NULL DEFAULT 20.00;
+ALTER TABLE service_rates ADD COLUMN vat_rate NUMERIC NOT NULL DEFAULT 20.00;
+ALTER TABLE quote_lines   ADD COLUMN vat_rate NUMERIC NOT NULL DEFAULT 20.00;
+ALTER TABLE quotes
+  ADD COLUMN total_ht_cents  INTEGER NOT NULL DEFAULT 0,
+  ADD COLUMN total_vat_cents INTEGER NOT NULL DEFAULT 0,
+  ADD COLUMN total_ttc_cents INTEGER NOT NULL DEFAULT 0;
+UPDATE quotes SET total_ttc_cents = total_cents;

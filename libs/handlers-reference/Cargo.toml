@@ -13,6 +13,7 @@ axum = { workspace = true }
 axum-extra = { workspace = true }
 chrono = { workspace = true }
 http = { workspace = true }
+rust_decimal = { workspace = true }
 serde = { workspace = true }
 tracing = { workspace = true }
 utoipa = { workspace = true }

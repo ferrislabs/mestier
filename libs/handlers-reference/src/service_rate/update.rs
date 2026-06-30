@@ -1,7 +1,10 @@
+use std::str::FromStr;
+
 use auth::Identity;
 use axum::{Extension, Json, extract::State};
 use handlers::{ApiError, AppState, DataEnvelope, Response};
 use mestier_core::{ServiceRateId, ServiceRateUnit, UpdateServiceRateCommand};
+use rust_decimal::Decimal;
 use serde::Deserialize;
 use utoipa::ToSchema;
 
@@ -12,6 +15,7 @@ pub struct UpdateServiceRateRequest {
     pub label: String,
     pub unit: ServiceRateUnit,
     pub rate_cents: i32,
+    pub vat_rate: Option<String>,
 }
 
 #[utoipa::path(
@@ -42,6 +46,13 @@ pub async fn handler(
     let current = state.usecase.get_service_rate(service_rate_id).await?;
     require_org_membership(&state, &identity, current.organization_id).await?;
 
+    let vat_rate = match payload.vat_rate {
+        Some(s) => Decimal::from_str(&s).map_err(|_| {
+            ApiError::Validation("service rate vat_rate must be decimal".to_owned())
+        })?,
+        None => Decimal::from(20u32),
+    };
+
     let service_rate = state
         .usecase
         .update_service_rate(UpdateServiceRateCommand {
@@ -49,6 +60,7 @@ pub async fn handler(
             label: payload.label,
             unit: payload.unit,
             rate_cents: payload.rate_cents,
+            vat_rate,
         })
         .await?;
 

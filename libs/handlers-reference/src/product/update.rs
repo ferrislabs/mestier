@@ -1,7 +1,10 @@
+use std::str::FromStr;
+
 use auth::Identity;
 use axum::{Extension, Json, extract::State};
 use handlers::{ApiError, AppState, DataEnvelope, Response};
 use mestier_core::{ProductId, ServiceRateUnit, UpdateProductCommand};
+use rust_decimal::Decimal;
 use serde::Deserialize;
 use utoipa::ToSchema;
 
@@ -13,6 +16,7 @@ pub struct UpdateProductRequest {
     pub sku: Option<String>,
     pub unit: ServiceRateUnit,
     pub unit_price_cents: i32,
+    pub vat_rate: Option<String>,
     pub description: Option<String>,
 }
 
@@ -44,6 +48,12 @@ pub async fn handler(
     let current = state.usecase.get_product(product_id).await?;
     require_org_membership(&state, &identity, current.organization_id).await?;
 
+    let vat_rate = match payload.vat_rate {
+        Some(s) => Decimal::from_str(&s)
+            .map_err(|_| ApiError::Validation("product vat_rate must be decimal".to_owned()))?,
+        None => Decimal::from(20u32),
+    };
+
     let product = state
         .usecase
         .update_product(UpdateProductCommand {
@@ -52,6 +62,7 @@ pub async fn handler(
             sku: payload.sku,
             unit: payload.unit,
             unit_price_cents: payload.unit_price_cents,
+            vat_rate,
             description: payload.description,
         })
         .await?;

@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            INSERT INTO service_rates (id, org_id, label, unit, rate_cents, deleted_at, created_at, updated_at)\n            VALUES ($1, $2, $3, $4, $5, $6, $7, $8)\n            RETURNING id, org_id, label, unit, rate_cents, deleted_at, created_at, updated_at\n            ",
+  "query": "\n            SELECT id, org_id, label, unit, rate_cents, vat_rate, deleted_at, created_at, updated_at\n            FROM service_rates\n            WHERE org_id = $1 AND deleted_at IS NULL\n            ORDER BY label ASC, created_at ASC\n            LIMIT $2 OFFSET $3\n            ",
   "describe": {
     "columns": [
       {
@@ -30,16 +30,21 @@
       },
       {
         "ordinal": 5,
+        "name": "vat_rate",
+        "type_info": "Numeric"
+      },
+      {
+        "ordinal": 6,
         "name": "deleted_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 6,
+        "ordinal": 7,
         "name": "created_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 7,
+        "ordinal": 8,
         "name": "updated_at",
         "type_info": "Timestamptz"
       }
@@ -47,16 +52,12 @@
     "parameters": {
       "Left": [
         "Uuid",
-        "Uuid",
-        "Text",
-        "Text",
-        "Int4",
-        "Timestamptz",
-        "Timestamptz",
-        "Timestamptz"
+        "Int8",
+        "Int8"
       ]
     },
     "nullable": [
+      false,
       false,
       false,
       false,
@@ -67,5 +68,5 @@
       false
     ]
   },
-  "hash": "c2d711726f3961142b8e4f3743b39d424a8ee8de4b6b4114cd28941215aa15e3"
+  "hash": "1796b2190c439b4b61482f3b2002b713bf5b63778f8e673a063b1b560b0d5275"
 }

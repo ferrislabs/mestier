@@ -1,3 +1,5 @@
+use rust_decimal::Decimal;
+
 use crate::{OrganizationId, ServiceRateId, ServiceRateUnit};
 
 #[derive(Debug, Clone)]
@@ -6,6 +8,7 @@ pub struct CreateServiceRateCommand {
     pub label: String,
     pub unit: ServiceRateUnit,
     pub rate_cents: i32,
+    pub vat_rate: Decimal,
 }
 
 #[derive(Debug, Clone)]
@@ -14,4 +17,5 @@ pub struct UpdateServiceRateCommand {
     pub label: String,
     pub unit: ServiceRateUnit,
     pub rate_cents: i32,
+    pub vat_rate: Decimal,
 }

@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            UPDATE quotes\n            SET status = CAST($2 AS text)::quote_status, updated_at = $3\n            WHERE id = $1 AND deleted_at IS NULL\n            RETURNING id, org_id, reference, title, customer_id, customer_context_id, status::text AS \"status!\", total_cents, deleted_at, created_at, updated_at\n            ",
+  "query": "\n            SELECT id, org_id, reference, title, customer_id, customer_context_id, status::text AS \"status!\", total_cents, total_ht_cents, total_vat_cents, total_ttc_cents, deleted_at, created_at, updated_at\n            FROM quotes\n            WHERE id = $1 AND deleted_at IS NULL\n            ",
   "describe": {
     "columns": [
       {
@@ -45,25 +45,38 @@
       },
       {
         "ordinal": 8,
+        "name": "total_ht_cents",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 9,
+        "name": "total_vat_cents",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 10,
+        "name": "total_ttc_cents",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 11,
         "name": "deleted_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 9,
+        "ordinal": 12,
         "name": "created_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 10,
+        "ordinal": 13,
         "name": "updated_at",
         "type_info": "Timestamptz"
       }
     ],
     "parameters": {
       "Left": [
-        "Uuid",
-        "Text",
-        "Timestamptz"
+        "Uuid"
       ]
     },
     "nullable": [
@@ -75,10 +88,13 @@
       false,
       null,
       false,
+      false,
+      false,
+      false,
       true,
       false,
       false
     ]
   },
-  "hash": "8eb7964088f79013d5cd7eae183f18e7a53a513646796a8f11c38cf01e4fed4c"
+  "hash": "576e868655dfc8b96a86e17c7113c45a4c2f6af7c87748b2d82526e0df596b43"
 }
