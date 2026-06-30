@@ -14,6 +14,7 @@ export interface ProductCatalogFormValues {
 	unitPrice: string
 	vatRate: string
 	description: string
+	customFields: { key: string; value: string }[]
 }
 
 export interface CatalogItem {

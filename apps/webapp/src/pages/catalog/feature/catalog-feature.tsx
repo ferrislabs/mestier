@@ -1,5 +1,6 @@
 import { useForm } from '@tanstack/react-form'
 import { AlertCircle } from 'lucide-react'
+import { customFieldsToRecord } from '#/components/custom-fields-editor'
 import { useActiveOrganization } from '#/hooks/use-active-organization'
 import type { ProductCatalogFormValues } from '#/hooks/use-catalog-items'
 import {
@@ -66,6 +67,7 @@ function CatalogWorkspace({
 			unit: 'HOUR',
 			rate: '',
 			vatRate: '20',
+			customFields: [],
 		} satisfies ServiceRateFormValues,
 		onSubmit: async ({ value }) => {
 			await createServiceRate.mutateAsync({
@@ -75,6 +77,7 @@ function CatalogWorkspace({
 					unit: value.unit,
 					rate_cents: eurosToCents(value.rate),
 					vat_rate: value.vatRate.replace(',', '.').trim(),
+					custom_fields: customFieldsToRecord(value.customFields),
 				},
 			})
 			serviceRateForm.reset()
@@ -89,6 +92,7 @@ function CatalogWorkspace({
 			unitPrice: '',
 			vatRate: '20',
 			description: '',
+			customFields: [],
 		} satisfies ProductCatalogFormValues,
 		onSubmit: async ({ value }) => {
 			await createProduct.mutateAsync({
@@ -100,6 +104,7 @@ function CatalogWorkspace({
 					unit_price_cents: eurosToCents(value.unitPrice),
 					vat_rate: value.vatRate.replace(',', '.').trim(),
 					description: value.description.trim() || null,
+					custom_fields: customFieldsToRecord(value.customFields),
 				},
 			})
 			productForm.reset()
@@ -160,6 +165,7 @@ function CatalogWorkspace({
 										unit: values.unit,
 										rate_cents: eurosToCents(values.rate),
 										vat_rate: values.vatRate.replace(',', '.').trim(),
+										custom_fields: customFieldsToRecord(values.customFields),
 									},
 								})
 							}
@@ -178,6 +184,7 @@ function CatalogWorkspace({
 										unit_price_cents: eurosToCents(values.unitPrice),
 										vat_rate: values.vatRate.replace(',', '.').trim(),
 										description: values.description.trim() || null,
+										custom_fields: customFieldsToRecord(values.customFields),
 									},
 								})
 							}

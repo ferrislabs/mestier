@@ -1,5 +1,6 @@
 import { useForm } from '@tanstack/react-form'
 import { AlertCircle } from 'lucide-react'
+import { customFieldsToRecord } from '#/components/custom-fields-editor'
 import { useActiveOrganization } from '#/hooks/use-active-organization'
 import {
 	type Organization,
@@ -119,6 +120,7 @@ function SettingsCatalog({ organization }: SettingsCatalogProps) {
 			unit: 'HOUR',
 			rate: '',
 			vatRate: '20',
+			customFields: [],
 		} satisfies ServiceRateFormValues,
 		onSubmit: async ({ value }) => {
 			await createServiceRate.mutateAsync({
@@ -128,6 +130,7 @@ function SettingsCatalog({ organization }: SettingsCatalogProps) {
 					unit: value.unit,
 					rate_cents: eurosToCents(value.rate),
 					vat_rate: value.vatRate.replace(',', '.').trim(),
+					custom_fields: customFieldsToRecord(value.customFields),
 				},
 			})
 			serviceRateForm.reset()
@@ -142,6 +145,7 @@ function SettingsCatalog({ organization }: SettingsCatalogProps) {
 			unitPrice: '',
 			vatRate: '20',
 			description: '',
+			customFields: [],
 		} satisfies ProductCatalogFormValues,
 		onSubmit: async ({ value }) => {
 			await createProduct.mutateAsync({
@@ -153,6 +157,7 @@ function SettingsCatalog({ organization }: SettingsCatalogProps) {
 					unit_price_cents: eurosToCents(value.unitPrice),
 					vat_rate: value.vatRate.replace(',', '.').trim(),
 					description: value.description.trim() || null,
+					custom_fields: customFieldsToRecord(value.customFields),
 				},
 			})
 			productForm.reset()
@@ -340,6 +345,9 @@ function SettingsCatalog({ organization }: SettingsCatalogProps) {
 																vat_rate: values.vatRate
 																	.replace(',', '.')
 																	.trim(),
+																custom_fields: customFieldsToRecord(
+																	values.customFields,
+																),
 															},
 														})
 													}
@@ -362,6 +370,9 @@ function SettingsCatalog({ organization }: SettingsCatalogProps) {
 																	.replace(',', '.')
 																	.trim(),
 																description: values.description.trim() || null,
+																custom_fields: customFieldsToRecord(
+																	values.customFields,
+																),
 															},
 														})
 													}}
