@@ -823,145 +823,149 @@ function QuoteLineEditor({
 				</div>
 			</div>
 
-			<div className="mt-4 grid gap-4 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)_96px_128px_128px_80px]">
-				<div className="lg:col-span-2">
-					<FieldBlock label="Catalogue">
-						<Select
-							value={line.catalogItemId || 'custom'}
-							onValueChange={(value) => {
-								onSelectCatalogItem(value === 'custom' ? '' : value)
-							}}
-						>
-							<SelectTrigger className="w-full">
-								<SelectValue placeholder="Ligne libre" />
-							</SelectTrigger>
-							<SelectContent>
-								<SelectItem value="custom">Ligne libre</SelectItem>
-								{serviceItems.length > 0 ? (
-									<SelectGroup>
-										<SelectLabel>Services</SelectLabel>
-										{serviceItems.map((item) => (
-											<SelectItem key={item.id} value={item.id}>
-												{catalogItemOptionLabel(item)}
-											</SelectItem>
-										))}
-									</SelectGroup>
-								) : null}
-								{productItems.length > 0 ? (
-									<SelectGroup>
-										<SelectLabel>Produits</SelectLabel>
-										{productItems.map((item) => (
-											<SelectItem key={item.id} value={item.id}>
-												{catalogItemOptionLabel(item)}
-											</SelectItem>
-										))}
-									</SelectGroup>
-								) : null}
-							</SelectContent>
-						</Select>
-						{selectedCatalogItem ? (
-							<p className="truncate text-xs text-muted-foreground">
-								{catalogItemDetail(selectedCatalogItem)}
-							</p>
-						) : null}
-					</FieldBlock>
-				</div>
-
-				<FieldBlock label="Libellé">
-					<Input
-						value={line.label}
-						onChange={(event) => onChange({ label: event.target.value })}
-						placeholder="Libellé de ligne"
-					/>
-				</FieldBlock>
-
-				<FieldBlock label="Quantité">
-					<Input
-						inputMode="decimal"
-						value={line.quantity}
-						onChange={(event) => onChange({ quantity: event.target.value })}
-					/>
-				</FieldBlock>
-
-				<FieldBlock label="Prix unitaire">
-					<Input
-						inputMode="decimal"
-						value={line.unitPrice}
-						onChange={(event) => onChange({ unitPrice: event.target.value })}
-						placeholder="0.00"
-					/>
-				</FieldBlock>
-
-				<FieldBlock label="TVA">
-					<div className="relative">
-						<Input
-							inputMode="decimal"
-							value={line.vatRate}
-							onChange={(event) => onChange({ vatRate: event.target.value })}
-							className="pr-6"
-						/>
-						<span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">
-							%
-						</span>
-					</div>
-				</FieldBlock>
-
-				<FieldBlock label="Unité">
-					<Select
-						value={line.unit}
-						onValueChange={(unit) =>
-							onChange({ unit: unit as ServiceRateUnit })
-						}
-					>
-						<SelectTrigger className="w-full">
-							<SelectValue />
-						</SelectTrigger>
-						<SelectContent>
-							<SelectItem value="HOUR">
-								{line.catalogItemType === 'PRODUCT'
-									? 'unité'
-									: formatUnit('HOUR')}
-							</SelectItem>
-							<SelectItem value="ML">{formatUnit('ML')}</SelectItem>
-							<SelectItem value="M2">{formatUnit('M2')}</SelectItem>
-						</SelectContent>
-					</Select>
-				</FieldBlock>
-
-				<div className="lg:col-span-2">
-					<FieldBlock label="Notes">
-						<Textarea
-							value={line.notes}
-							onChange={(event) => onChange({ notes: event.target.value })}
-							placeholder="Précisions utiles pour cadrer la prestation"
-						/>
-					</FieldBlock>
-				</div>
-
-				<div>
-					<FieldBlock label="Photos">
-						<label className="flex h-10 cursor-pointer items-center justify-center gap-2 rounded-lg border bg-card px-3 text-sm font-medium text-primary shadow-xs hover:bg-brand-soft">
-							<ImagePlus className="size-4" />
-							Ajouter
-							<input
-								type="file"
-								accept="image/*"
-								className="sr-only"
-								disabled={isUploading}
-								onChange={(event) => {
-									const file = event.target.files?.[0]
-									if (file) void onUploadPhoto(file)
-									event.target.value = ''
+			<div className="mt-4 @container">
+				<div className="flex flex-col gap-4">
+					{/* Row 1: identification — Catalogue + Libellé */}
+					<div className="grid gap-4 @md:grid-cols-2">
+						<FieldBlock label="Catalogue">
+							<Select
+								value={line.catalogItemId || 'custom'}
+								onValueChange={(value) => {
+									onSelectCatalogItem(value === 'custom' ? '' : value)
 								}}
+							>
+								<SelectTrigger className="w-full">
+									<SelectValue placeholder="Ligne libre" />
+								</SelectTrigger>
+								<SelectContent>
+									<SelectItem value="custom">Ligne libre</SelectItem>
+									{serviceItems.length > 0 ? (
+										<SelectGroup>
+											<SelectLabel>Services</SelectLabel>
+											{serviceItems.map((item) => (
+												<SelectItem key={item.id} value={item.id}>
+													{catalogItemOptionLabel(item)}
+												</SelectItem>
+											))}
+										</SelectGroup>
+									) : null}
+									{productItems.length > 0 ? (
+										<SelectGroup>
+											<SelectLabel>Produits</SelectLabel>
+											{productItems.map((item) => (
+												<SelectItem key={item.id} value={item.id}>
+													{catalogItemOptionLabel(item)}
+												</SelectItem>
+											))}
+										</SelectGroup>
+									) : null}
+								</SelectContent>
+							</Select>
+							{selectedCatalogItem ? (
+								<p className="truncate text-xs text-muted-foreground">
+									{catalogItemDetail(selectedCatalogItem)}
+								</p>
+							) : null}
+						</FieldBlock>
+						<FieldBlock label="Libellé">
+							<Input
+								value={line.label}
+								onChange={(event) => onChange({ label: event.target.value })}
+								placeholder="Libellé de ligne"
 							/>
-						</label>
-						{line.photoKeys.length > 0 ? (
-							<p className="mt-2 truncate text-xs text-muted-foreground">
-								{line.photoKeys.length} fichier
-								{line.photoKeys.length > 1 ? 's' : ''}
-							</p>
-						) : null}
-					</FieldBlock>
+						</FieldBlock>
+					</div>
+
+					{/* Row 2: compact numeric/select fields */}
+					<div className="grid grid-cols-2 gap-3 @md:grid-cols-4">
+						<FieldBlock label="Quantité">
+							<Input
+								inputMode="decimal"
+								value={line.quantity}
+								onChange={(event) => onChange({ quantity: event.target.value })}
+							/>
+						</FieldBlock>
+						<FieldBlock label="Unité">
+							<Select
+								value={line.unit}
+								onValueChange={(unit) =>
+									onChange({ unit: unit as ServiceRateUnit })
+								}
+							>
+								<SelectTrigger className="w-full">
+									<SelectValue />
+								</SelectTrigger>
+								<SelectContent>
+									<SelectItem value="HOUR">
+										{line.catalogItemType === 'PRODUCT'
+											? 'unité'
+											: formatUnit('HOUR')}
+									</SelectItem>
+									<SelectItem value="ML">{formatUnit('ML')}</SelectItem>
+									<SelectItem value="M2">{formatUnit('M2')}</SelectItem>
+								</SelectContent>
+							</Select>
+						</FieldBlock>
+						<FieldBlock label="Prix unitaire">
+							<Input
+								inputMode="decimal"
+								value={line.unitPrice}
+								onChange={(event) =>
+									onChange({ unitPrice: event.target.value })
+								}
+								placeholder="0.00"
+							/>
+						</FieldBlock>
+						<FieldBlock label="TVA">
+							<div className="relative">
+								<Input
+									inputMode="decimal"
+									value={line.vatRate}
+									onChange={(event) =>
+										onChange({ vatRate: event.target.value })
+									}
+									className="pr-6"
+								/>
+								<span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">
+									%
+								</span>
+							</div>
+						</FieldBlock>
+					</div>
+
+					{/* Row 3: Notes + Photos */}
+					<div className="grid gap-4 @lg:grid-cols-[minmax(0,1fr)_200px]">
+						<FieldBlock label="Notes">
+							<Textarea
+								value={line.notes}
+								onChange={(event) => onChange({ notes: event.target.value })}
+								placeholder="Précisions utiles pour cadrer la prestation"
+							/>
+						</FieldBlock>
+						<FieldBlock label="Photos">
+							<label className="flex h-10 cursor-pointer items-center justify-center gap-2 rounded-lg border bg-card px-3 text-sm font-medium text-primary shadow-xs hover:bg-brand-soft">
+								<ImagePlus className="size-4" />
+								Ajouter
+								<input
+									type="file"
+									accept="image/*"
+									className="sr-only"
+									disabled={isUploading}
+									onChange={(event) => {
+										const file = event.target.files?.[0]
+										if (file) void onUploadPhoto(file)
+										event.target.value = ''
+									}}
+								/>
+							</label>
+							{line.photoKeys.length > 0 ? (
+								<p className="mt-2 truncate text-xs text-muted-foreground">
+									{line.photoKeys.length} fichier
+									{line.photoKeys.length > 1 ? 's' : ''}
+								</p>
+							) : null}
+						</FieldBlock>
+					</div>
 				</div>
 			</div>
 		</div>
