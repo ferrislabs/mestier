@@ -54,6 +54,7 @@ pub fn compute_totals(lines: &[BillingLine]) -> Totals {
 
     for line in lines {
         let ht = round_to_i64(line.quantity * Decimal::from(line.unit_price_cents));
+        // normalize() so semantically-equal rates ("20" vs "20.00") share one bucket
         let key = line.vat_rate.normalize().to_string();
         let entry = buckets.entry(key).or_insert((line.vat_rate, 0i64));
         entry.1 += ht;

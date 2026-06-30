@@ -39,8 +39,9 @@ where
             .next_reference(command.organization_id, now.year())
             .await?;
         let lines = build_quote_lines(command.organization_id, quote_id, command.lines, now)?;
-        let (total_cents, total_ht_cents, total_vat_cents, total_ttc_cents) =
+        let (total_ht_cents, total_vat_cents, total_ttc_cents) =
             compute_quote_totals(&lines)?;
+        let total_cents = total_ttc_cents; // spec invariant: total_cents mirrors TTC
 
         self.repo
             .insert(&Quote {
@@ -83,8 +84,9 @@ where
         let now = Utc::now();
         validate_title(&command.title)?;
         let lines = build_quote_lines(existing.organization_id, existing.id, command.lines, now)?;
-        let (total_cents, total_ht_cents, total_vat_cents, total_ttc_cents) =
+        let (total_ht_cents, total_vat_cents, total_ttc_cents) =
             compute_quote_totals(&lines)?;
+        let total_cents = total_ttc_cents; // spec invariant: total_cents mirrors TTC
 
         self.repo
             .update(&Quote {
@@ -209,7 +211,7 @@ fn validate_line(command: &QuoteLineCommand) -> Result<(), CoreError> {
     Ok(())
 }
 
-fn compute_quote_totals(lines: &[QuoteLine]) -> Result<(i32, i32, i32, i32), CoreError> {
+fn compute_quote_totals(lines: &[QuoteLine]) -> Result<(i32, i32, i32), CoreError> {
     let billing_lines: Vec<BillingLine> = lines
         .iter()
         .map(|line| BillingLine {
@@ -230,7 +232,7 @@ fn compute_quote_totals(lines: &[QuoteLine]) -> Result<(i32, i32, i32, i32), Cor
         CoreError::Conflict("quote TTC total is outside supported bounds".to_owned())
     })?;
 
-    Ok((total_ttc_cents, total_ht_cents, total_vat_cents, total_ttc_cents))
+    Ok((total_ht_cents, total_vat_cents, total_ttc_cents))
 }
 
 #[cfg(test)]
