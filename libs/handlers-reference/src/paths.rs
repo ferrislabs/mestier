@@ -1,5 +1,5 @@
 use axum_extra::routing::TypedPath;
-use mestier_core::{EmployeeId, EquipmentId, OrganizationId, ProductId, ServiceRateId};
+use mestier_core::{EmployeeId, EquipmentId, LegalMentionTemplateId, OrganizationId, ProductId, ServiceRateId};
 use serde::Deserialize;
 
 #[derive(TypedPath, Deserialize)]
@@ -48,4 +48,22 @@ pub struct ProductsPath {
 #[typed_path("/api/v1/products/{product_id}")]
 pub struct ProductPath {
     pub product_id: ProductId,
+}
+
+#[derive(TypedPath, Deserialize)]
+#[typed_path("/api/v1/organizations/{organization_id}/billing-settings")]
+pub struct BillingSettingsPath {
+    pub organization_id: OrganizationId,
+}
+
+#[derive(TypedPath, Deserialize)]
+#[typed_path("/api/v1/organizations/{organization_id}/legal-mention-templates")]
+pub struct LegalMentionTemplatesPath {
+    pub organization_id: OrganizationId,
+}
+
+#[derive(TypedPath, Deserialize)]
+#[typed_path("/api/v1/legal-mention-templates/{template_id}")]
+pub struct LegalMentionTemplatePath {
+    pub template_id: LegalMentionTemplateId,
 }

@@ -1,10 +1,12 @@
 pub(crate) mod billing;
+pub(crate) mod billing_settings;
 pub(crate) mod customer;
 pub(crate) mod customer_contact;
 pub(crate) mod customer_context;
 pub(crate) mod employee;
 pub(crate) mod equipment;
 pub(crate) mod file_storage;
+pub(crate) mod legal_mention_template;
 pub(crate) mod member;
 pub(crate) mod organization;
 pub(crate) mod product;
@@ -14,12 +16,14 @@ pub(crate) mod service_rate;
 pub(crate) mod user;
 
 pub use billing::*;
+pub use billing_settings::*;
 pub use customer::*;
 pub use customer_contact::*;
 pub use customer_context::*;
 pub use employee::*;
 pub use equipment::*;
 pub use file_storage::*;
+pub use legal_mention_template::*;
 pub use member::*;
 pub use organization::*;
 pub use product::*;

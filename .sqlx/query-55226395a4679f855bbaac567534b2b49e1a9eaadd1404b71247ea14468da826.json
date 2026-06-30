@@ -1,0 +1,112 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT\n                org_id, payment_terms_days, late_penalty_rate, recovery_indemnity_cents,\n                default_deposit_basis, default_deposit_value, default_vat_rate,\n                iban, bic, siret, rcs, ape, vat_intracom, footer,\n                created_at, updated_at\n            FROM billing_settings\n            WHERE org_id = $1\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "org_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "payment_terms_days",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 2,
+        "name": "late_penalty_rate",
+        "type_info": "Numeric"
+      },
+      {
+        "ordinal": 3,
+        "name": "recovery_indemnity_cents",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 4,
+        "name": "default_deposit_basis",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "default_deposit_value",
+        "type_info": "Numeric"
+      },
+      {
+        "ordinal": 6,
+        "name": "default_vat_rate",
+        "type_info": "Numeric"
+      },
+      {
+        "ordinal": 7,
+        "name": "iban",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 8,
+        "name": "bic",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 9,
+        "name": "siret",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 10,
+        "name": "rcs",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 11,
+        "name": "ape",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 12,
+        "name": "vat_intracom",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 13,
+        "name": "footer",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 14,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 15,
+        "name": "updated_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      true,
+      true,
+      false,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      false,
+      false
+    ]
+  },
+  "hash": "55226395a4679f855bbaac567534b2b49e1a9eaadd1404b71247ea14468da826"
+}

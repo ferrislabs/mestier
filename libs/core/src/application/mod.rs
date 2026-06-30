@@ -14,6 +14,7 @@ use crate::infrastructure::postgres::error::map_sqlx_error;
 use crate::infrastructure::realtime::{EventHub, RealtimeEventPublisher};
 
 pub mod authorization;
+pub mod billing_settings;
 pub mod customer;
 pub mod customer_contact;
 pub mod customer_context;
@@ -27,6 +28,7 @@ pub mod discord_read_state;
 pub mod discord_webhook;
 pub mod employee;
 pub mod equipment;
+pub mod legal_mention_template;
 pub mod member;
 pub mod organization;
 pub mod policy;
