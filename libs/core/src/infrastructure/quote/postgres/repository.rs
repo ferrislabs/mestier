@@ -1,10 +1,10 @@
 use chrono::{DateTime, Utc};
-use common::CoreError;
+use common::{CoreError, generate_uuid_v7};
 use mestier_macros::repository;
 use sqlx::PgConnection;
 
 use crate::{
-    OrganizationId, Quote, QuoteId, QuoteLine, QuoteStatus,
+    LegalMentionTemplateId, OrganizationId, Quote, QuoteId, QuoteLine, QuoteStatus,
     domain::quote::ports::QuoteRepository,
     infrastructure::{
         postgres::{SharedTx, error::map_sqlx_error},
@@ -272,6 +272,76 @@ impl<'tx> QuoteRepository for PgQuoteRepository<'tx> {
 
         Ok(())
     }
+
+    async fn replace_legal_mention_templates(
+        &mut self,
+        quote: &Quote,
+        template_ids: &[LegalMentionTemplateId],
+    ) -> Result<(), CoreError> {
+        let mut tx = self.tx.lock().await;
+
+        sqlx::query!(
+            r#"DELETE FROM quote_legal_mentions WHERE quote_id = $1"#,
+            quote.id.0,
+        )
+        .execute(&mut ***tx)
+        .await
+        .map_err(map_sqlx_error)?;
+
+        insert_legal_mention_templates(&mut tx, quote, template_ids).await
+    }
+
+    async fn find_legal_mention_template_ids(
+        &mut self,
+        quote_id: QuoteId,
+    ) -> Result<Vec<LegalMentionTemplateId>, CoreError> {
+        let mut tx = self.tx.lock().await;
+        fetch_legal_mention_template_ids(&mut tx, quote_id).await
+    }
+}
+
+async fn fetch_legal_mention_template_ids(
+    conn: &mut PgConnection,
+    quote_id: QuoteId,
+) -> Result<Vec<LegalMentionTemplateId>, CoreError> {
+    let rows = sqlx::query_scalar!(
+        r#"
+        SELECT template_id
+        FROM quote_legal_mentions
+        WHERE quote_id = $1
+        ORDER BY created_at ASC, id ASC
+        "#,
+        quote_id.0,
+    )
+    .fetch_all(conn)
+    .await
+    .map_err(map_sqlx_error)?;
+
+    Ok(rows.into_iter().map(LegalMentionTemplateId).collect())
+}
+
+async fn insert_legal_mention_templates(
+    conn: &mut PgConnection,
+    quote: &Quote,
+    template_ids: &[LegalMentionTemplateId],
+) -> Result<(), CoreError> {
+    for template_id in template_ids {
+        sqlx::query!(
+            r#"
+            INSERT INTO quote_legal_mentions (id, org_id, quote_id, template_id)
+            VALUES ($1, $2, $3, $4)
+            "#,
+            generate_uuid_v7(),
+            quote.organization_id.0,
+            quote.id.0,
+            template_id.0,
+        )
+        .execute(&mut *conn)
+        .await
+        .map_err(map_sqlx_error)?;
+    }
+
+    Ok(())
 }
 
 async fn fetch_lines(

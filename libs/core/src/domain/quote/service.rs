@@ -43,7 +43,8 @@ where
             compute_quote_totals(&lines)?;
         let total_cents = total_ttc_cents; // spec invariant: total_cents mirrors TTC
 
-        self.repo
+        let quote = self
+            .repo
             .insert(&Quote {
                 id: quote_id,
                 organization_id: command.organization_id,
@@ -57,15 +58,31 @@ where
                 total_vat_cents,
                 total_ttc_cents,
                 lines,
+                legal_mention_template_ids: vec![],
                 deleted_at: None,
                 created_at: now,
                 updated_at: now,
             })
-            .await
+            .await?;
+
+        self.repo
+            .replace_legal_mention_templates(&quote, &command.legal_mention_template_ids)
+            .await?;
+
+        Ok(Quote {
+            legal_mention_template_ids: command.legal_mention_template_ids,
+            ..quote
+        })
     }
 
     pub async fn get_quote(&mut self, id: QuoteId) -> Result<Quote, CoreError> {
-        self.repo.find_by_id(id).await?.ok_or(CoreError::NotFound)
+        let quote = self.repo.find_by_id(id).await?.ok_or(CoreError::NotFound)?;
+        let legal_mention_template_ids =
+            self.repo.find_legal_mention_template_ids(id).await?;
+        Ok(Quote {
+            legal_mention_template_ids,
+            ..quote
+        })
     }
 
     pub async fn list_quotes(
@@ -74,9 +91,22 @@ where
         limit: u64,
         offset: u64,
     ) -> Result<(Vec<Quote>, u64), CoreError> {
-        self.repo
+        let (quotes, total) = self
+            .repo
             .list_by_organization(organization_id, limit, offset)
-            .await
+            .await?;
+
+        let mut enriched = Vec::with_capacity(quotes.len());
+        for quote in quotes {
+            let legal_mention_template_ids =
+                self.repo.find_legal_mention_template_ids(quote.id).await?;
+            enriched.push(Quote {
+                legal_mention_template_ids,
+                ..quote
+            });
+        }
+
+        Ok((enriched, total))
     }
 
     pub async fn update_quote(&mut self, command: UpdateQuoteCommand) -> Result<Quote, CoreError> {
@@ -88,7 +118,8 @@ where
             compute_quote_totals(&lines)?;
         let total_cents = total_ttc_cents; // spec invariant: total_cents mirrors TTC
 
-        self.repo
+        let quote = self
+            .repo
             .update(&Quote {
                 id: existing.id,
                 organization_id: existing.organization_id,
@@ -102,11 +133,21 @@ where
                 total_vat_cents,
                 total_ttc_cents,
                 lines,
+                legal_mention_template_ids: vec![],
                 deleted_at: existing.deleted_at,
                 created_at: existing.created_at,
                 updated_at: now,
             })
-            .await
+            .await?;
+
+        self.repo
+            .replace_legal_mention_templates(&quote, &command.legal_mention_template_ids)
+            .await?;
+
+        Ok(Quote {
+            legal_mention_template_ids: command.legal_mention_template_ids,
+            ..quote
+        })
     }
 
     pub async fn update_quote_status(
@@ -114,9 +155,16 @@ where
         command: UpdateQuoteStatusCommand,
     ) -> Result<Quote, CoreError> {
         self.get_quote(command.id).await?;
-        self.repo
+        let quote = self
+            .repo
             .update_status(command.id, command.status, Utc::now())
-            .await
+            .await?;
+        let legal_mention_template_ids =
+            self.repo.find_legal_mention_template_ids(command.id).await?;
+        Ok(Quote {
+            legal_mention_template_ids,
+            ..quote
+        })
     }
 
     pub async fn soft_delete_quote(&mut self, id: QuoteId) -> Result<(), CoreError> {
@@ -239,7 +287,7 @@ fn compute_quote_totals(lines: &[QuoteLine]) -> Result<(i32, i32, i32), CoreErro
 mod tests {
     use super::*;
     use crate::{
-        CustomerContextId, CustomerId, QuoteStatus, ServiceRateUnit,
+        CustomerContextId, CustomerId, LegalMentionTemplateId, QuoteStatus, ServiceRateUnit,
         domain::quote::ports::MockQuoteRepository,
     };
     use mockall::predicate::eq;
@@ -290,6 +338,7 @@ mod tests {
                 created_at: now,
                 updated_at: now,
             }],
+            legal_mention_template_ids: vec![],
             deleted_at: None,
             created_at: now,
             updated_at: now,
@@ -306,6 +355,9 @@ mod tests {
             let quote = q.clone();
             Box::pin(async move { Ok(quote) })
         });
+        repo.expect_replace_legal_mention_templates()
+            .times(1)
+            .returning(|_, _| Box::pin(async { Ok(()) }));
 
         let mut service = QuoteService::new(repo);
         let created = service
@@ -318,6 +370,7 @@ mod tests {
                     line_command(Decimal::new(25, 1), 1200),
                     line_command(Decimal::new(1, 0), 500),
                 ],
+                legal_mention_template_ids: vec![],
             })
             .await
             .unwrap();
@@ -333,16 +386,68 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn update_quote_recalculates_total() {
-        let id = QuoteId(Uuid::new_v4());
+    async fn create_quote_persists_and_reads_back_legal_mention_template_ids() {
+        let template_a = LegalMentionTemplateId(Uuid::new_v4());
+        let template_b = LegalMentionTemplateId(Uuid::new_v4());
+        let template_ids = vec![template_a, template_b];
+        let template_ids_clone = template_ids.clone();
+
         let mut repo = MockQuoteRepository::new();
+        repo.expect_next_reference()
+            .times(1)
+            .returning(|_, _| Box::pin(async { Ok("DEV-2026-0001".to_owned()) }));
+        repo.expect_insert().times(1).returning(|q| {
+            let quote = q.clone();
+            Box::pin(async move { Ok(quote) })
+        });
+        repo.expect_replace_legal_mention_templates()
+            .times(1)
+            .returning(|_, _| Box::pin(async { Ok(()) }));
+
+        let mut service = QuoteService::new(repo);
+        let created = service
+            .create_quote(CreateQuoteCommand {
+                organization_id: OrganizationId(Uuid::new_v4()),
+                title: "Devis avec mentions".to_owned(),
+                customer_id: CustomerId(Uuid::new_v4()),
+                customer_context_id: CustomerContextId(Uuid::new_v4()),
+                lines: vec![line_command(Decimal::new(1, 0), 1000)],
+                legal_mention_template_ids: template_ids_clone,
+            })
+            .await
+            .unwrap();
+
+        assert_eq!(created.legal_mention_template_ids, template_ids);
+    }
+
+    #[tokio::test]
+    async fn update_quote_replaces_legal_mention_template_ids() {
+        let id = QuoteId(Uuid::new_v4());
+        let template_a = LegalMentionTemplateId(Uuid::new_v4());
+        let template_b = LegalMentionTemplateId(Uuid::new_v4());
+        let new_ids = vec![template_b];
+        let new_ids_clone = new_ids.clone();
+
+        let mut repo = MockQuoteRepository::new();
+        // get_quote called inside update_quote
         repo.expect_find_by_id()
             .with(eq(id))
-            .returning(move |_| Box::pin(async move { Ok(Some(quote(id))) }));
+            .returning(move |_| {
+                let mut q = quote(id);
+                q.legal_mention_template_ids = vec![template_a];
+                Box::pin(async move { Ok(Some(q)) })
+            });
+        repo.expect_find_legal_mention_template_ids()
+            .with(eq(id))
+            .times(1)
+            .returning(|_| Box::pin(async { Ok(vec![]) }));
         repo.expect_update().times(1).returning(|q| {
             let quote = q.clone();
             Box::pin(async move { Ok(quote) })
         });
+        repo.expect_replace_legal_mention_templates()
+            .times(1)
+            .returning(|_, _| Box::pin(async { Ok(()) }));
 
         let mut service = QuoteService::new(repo);
         let updated = service
@@ -353,6 +458,43 @@ mod tests {
                 customer_context_id: CustomerContextId(Uuid::new_v4()),
                 status: QuoteStatus::Sent,
                 lines: vec![line_command(Decimal::new(3, 0), 2000)],
+                legal_mention_template_ids: new_ids_clone,
+            })
+            .await
+            .unwrap();
+
+        assert_eq!(updated.legal_mention_template_ids, new_ids);
+    }
+
+    #[tokio::test]
+    async fn update_quote_recalculates_total() {
+        let id = QuoteId(Uuid::new_v4());
+        let mut repo = MockQuoteRepository::new();
+        repo.expect_find_by_id()
+            .with(eq(id))
+            .returning(move |_| Box::pin(async move { Ok(Some(quote(id))) }));
+        repo.expect_find_legal_mention_template_ids()
+            .with(eq(id))
+            .times(1)
+            .returning(|_| Box::pin(async { Ok(vec![]) }));
+        repo.expect_update().times(1).returning(|q| {
+            let quote = q.clone();
+            Box::pin(async move { Ok(quote) })
+        });
+        repo.expect_replace_legal_mention_templates()
+            .times(1)
+            .returning(|_, _| Box::pin(async { Ok(()) }));
+
+        let mut service = QuoteService::new(repo);
+        let updated = service
+            .update_quote(UpdateQuoteCommand {
+                id,
+                title: "Version ajustée".to_owned(),
+                customer_id: CustomerId(Uuid::new_v4()),
+                customer_context_id: CustomerContextId(Uuid::new_v4()),
+                status: QuoteStatus::Sent,
+                lines: vec![line_command(Decimal::new(3, 0), 2000)],
+                legal_mention_template_ids: vec![],
             })
             .await
             .unwrap();
@@ -371,9 +513,14 @@ mod tests {
     async fn update_quote_status_delegates_without_recalculating_lines() {
         let id = QuoteId(Uuid::new_v4());
         let mut repo = MockQuoteRepository::new();
+        // get_quote (existence check) calls find_by_id + find_legal_mention_template_ids
         repo.expect_find_by_id()
             .with(eq(id))
             .returning(move |_| Box::pin(async move { Ok(Some(quote(id))) }));
+        repo.expect_find_legal_mention_template_ids()
+            .with(eq(id))
+            .times(2) // once for get_quote check, once for update_quote_status result
+            .returning(|_| Box::pin(async { Ok(vec![]) }));
         repo.expect_update_status()
             .withf(move |quote_id, status, _| *quote_id == id && *status == QuoteStatus::Accepted)
             .returning(move |_, _, _| Box::pin(async move { Ok(quote(id)) }));
@@ -392,12 +539,17 @@ mod tests {
     #[tokio::test]
     async fn list_quotes_delegates_to_repo() {
         let org_id = OrganizationId(Uuid::new_v4());
+        let quote_id = QuoteId(Uuid::new_v4());
         let mut repo = MockQuoteRepository::new();
         repo.expect_list_by_organization()
             .with(eq(org_id), eq(25), eq(50))
             .returning(move |_, _, _| {
-                Box::pin(async move { Ok((vec![quote(QuoteId(Uuid::new_v4()))], 1)) })
+                Box::pin(async move { Ok((vec![quote(quote_id)], 1)) })
             });
+        repo.expect_find_legal_mention_template_ids()
+            .with(eq(quote_id))
+            .times(1)
+            .returning(|_| Box::pin(async { Ok(vec![]) }));
 
         let mut service = QuoteService::new(repo);
         let (items, total) = service.list_quotes(org_id, 25, 50).await.unwrap();
@@ -413,6 +565,10 @@ mod tests {
         repo.expect_find_by_id()
             .with(eq(id))
             .returning(move |_| Box::pin(async move { Ok(Some(quote(id))) }));
+        repo.expect_find_legal_mention_template_ids()
+            .with(eq(id))
+            .times(1)
+            .returning(|_| Box::pin(async { Ok(vec![]) }));
         repo.expect_soft_delete()
             .withf(move |deleted_id, _| *deleted_id == id)
             .returning(|_, _| Box::pin(async { Ok(()) }));
@@ -436,6 +592,7 @@ mod tests {
                 customer_id: CustomerId(Uuid::new_v4()),
                 customer_context_id: CustomerContextId(Uuid::new_v4()),
                 lines: vec![line_command(Decimal::ZERO, 1000)],
+                legal_mention_template_ids: vec![],
             })
             .await;
 
@@ -453,6 +610,7 @@ mod tests {
                 customer_id: CustomerId(Uuid::new_v4()),
                 customer_context_id: CustomerContextId(Uuid::new_v4()),
                 lines: vec![line_command(Decimal::new(1, 0), 1000)],
+                legal_mention_template_ids: vec![],
             })
             .await;
 

@@ -1,7 +1,7 @@
 use chrono::{DateTime, Utc};
 use common::CoreError;
 
-use crate::{OrganizationId, Quote, QuoteId, QuoteStatus};
+use crate::{LegalMentionTemplateId, OrganizationId, Quote, QuoteId, QuoteStatus};
 
 #[cfg_attr(test, mockall::automock)]
 pub trait QuoteRepository: Send {
@@ -39,4 +39,15 @@ pub trait QuoteRepository: Send {
         id: QuoteId,
         deleted_at: DateTime<Utc>,
     ) -> impl Future<Output = Result<(), CoreError>> + Send;
+
+    fn replace_legal_mention_templates(
+        &mut self,
+        quote: &Quote,
+        template_ids: &[LegalMentionTemplateId],
+    ) -> impl Future<Output = Result<(), CoreError>> + Send;
+
+    fn find_legal_mention_template_ids(
+        &mut self,
+        quote_id: QuoteId,
+    ) -> impl Future<Output = Result<Vec<LegalMentionTemplateId>, CoreError>> + Send;
 }
