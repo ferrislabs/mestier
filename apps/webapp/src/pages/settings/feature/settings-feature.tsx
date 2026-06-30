@@ -2,6 +2,11 @@ import { useForm } from '@tanstack/react-form'
 import { AlertCircle } from 'lucide-react'
 import { useActiveOrganization } from '#/hooks/use-active-organization'
 import {
+	type OrgUser,
+	useCreateOrgUser,
+	useOrgUsers,
+} from '#/hooks/use-org-users'
+import {
 	type Organization,
 	useUpdateOrganization,
 } from '#/hooks/use-organizations'
@@ -66,6 +71,8 @@ function SettingsCatalog({ organization }: SettingsCatalogProps) {
 		serviceRates: false,
 		products: false,
 	})
+	const orgUsers = useOrgUsers(organizationId)
+	const createOrgUser = useCreateOrgUser(organizationId)
 	const updateOrganization = useUpdateOrganization(organizationId)
 	const createEmployee = useCreateEmployee(organizationId)
 	const updateEmployee = useUpdateEmployee()
@@ -196,6 +203,18 @@ function SettingsCatalog({ organization }: SettingsCatalogProps) {
 		deleteProduct.error ??
 		updateOrganization.error
 
+	async function handleCreateOrgUser(payload: {
+		email: string
+		username: string
+		name: string
+	}): Promise<OrgUser> {
+		const result = await createOrgUser.mutateAsync({
+			path: { organization_id: organizationId },
+			body: payload,
+		})
+		return result.data
+	}
+
 	return (
 		<organizationForm.Subscribe selector={(state) => state.values}>
 			{(organizationValues) => (
@@ -217,6 +236,9 @@ function SettingsCatalog({ organization }: SettingsCatalogProps) {
 														serviceRates: catalog.serviceRates.data?.data ?? [],
 														products: catalog.products.data?.data ?? [],
 													}}
+													orgUsers={orgUsers.data?.data ?? []}
+													isCreatingOrgUser={createOrgUser.isPending}
+													onCreateOrgUser={handleCreateOrgUser}
 													organizationForm={{
 														values: organizationValues,
 														isPending: updateOrganization.isPending,

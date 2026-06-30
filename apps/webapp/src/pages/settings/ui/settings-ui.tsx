@@ -14,7 +14,9 @@ import {
 	Search,
 	Trash2,
 	Undo2,
+	UserPlus,
 	Users,
+	X,
 } from 'lucide-react'
 import type * as React from 'react'
 import { useMemo, useState } from 'react'
@@ -43,6 +45,7 @@ import {
 	SectionHeader,
 	StatusBadge,
 } from '#/components/ui/surface'
+import type { OrgUser } from '#/hooks/use-org-users'
 import type { Organization } from '#/hooks/use-organizations'
 import type {
 	Employee,
@@ -66,6 +69,13 @@ interface SettingsUIProps {
 	isLoading: boolean
 	error: string | null
 	data: ReferenceCatalogData
+	orgUsers: OrgUser[]
+	isCreatingOrgUser: boolean
+	onCreateOrgUser: (payload: {
+		email: string
+		username: string
+		name: string
+	}) => Promise<OrgUser>
 	organizationForm: FormBinding<OrganizationFormValues>
 	employeeForm: FormBinding<EmployeeFormValues>
 	equipmentForm: FormBinding<EquipmentFormValues>
@@ -133,6 +143,9 @@ export function SettingsUI({
 	isLoading,
 	error,
 	data,
+	orgUsers,
+	isCreatingOrgUser,
+	onCreateOrgUser,
 	organizationForm,
 	employeeForm,
 	equipmentForm,
@@ -280,6 +293,9 @@ export function SettingsUI({
 				equipmentForm={equipmentForm}
 				serviceRateForm={serviceRateForm}
 				productForm={productForm}
+				orgUsers={orgUsers}
+				isCreatingOrgUser={isCreatingOrgUser}
+				onCreateOrgUser={onCreateOrgUser}
 			/>
 
 			{isLoading ? (
@@ -289,6 +305,7 @@ export function SettingsUI({
 					data={filteredData.employees}
 					draft={draft}
 					isSaving={isSaving}
+					orgUsers={orgUsers}
 					onEdit={(employee) =>
 						setDraft({
 							tab: 'employees',
@@ -465,6 +482,13 @@ interface CreateReferenceSectionProps {
 	equipmentForm: FormBinding<EquipmentFormValues>
 	serviceRateForm: FormBinding<ServiceRateFormValues>
 	productForm: FormBinding<ProductCatalogFormValues>
+	orgUsers: OrgUser[]
+	isCreatingOrgUser: boolean
+	onCreateOrgUser: (payload: {
+		email: string
+		username: string
+		name: string
+	}) => Promise<OrgUser>
 }
 
 function CreateReferenceSection({
@@ -473,6 +497,9 @@ function CreateReferenceSection({
 	equipmentForm,
 	serviceRateForm,
 	productForm,
+	orgUsers,
+	isCreatingOrgUser,
+	onCreateOrgUser,
 }: CreateReferenceSectionProps) {
 	return (
 		<SectionCard>
@@ -496,11 +523,12 @@ function CreateReferenceSection({
 								inputMode="decimal"
 								suffix="€/h"
 							/>
-							<TextField
-								label="Compte Ferriskey"
+							<UserSelectField
+								orgUsers={orgUsers}
 								value={employeeForm.values.userId}
 								onChange={(userId) => employeeForm.onChange({ userId })}
-								placeholder="UUID optionnel"
+								isCreatingOrgUser={isCreatingOrgUser}
+								onCreateOrgUser={onCreateOrgUser}
 							/>
 						</div>
 						<CreateButton
@@ -644,6 +672,7 @@ interface EmployeeTableProps {
 	data: Employee[]
 	draft: Draft
 	isSaving: boolean
+	orgUsers: OrgUser[]
 	onEdit: (employee: Employee) => void
 	onDraftChange: (values: EmployeeFormValues) => void
 	onCancel: () => void
@@ -655,6 +684,7 @@ function EmployeeTable({
 	data,
 	draft,
 	isSaving,
+	orgUsers,
 	onEdit,
 	onDraftChange,
 	onCancel,
@@ -679,20 +709,42 @@ function EmployeeTable({
 			},
 			{
 				header: 'Compte',
-				cell: ({ row }) =>
-					draft?.tab === 'employees' && draft.id === row.original.id ? (
-						<Input
-							value={draft.values.userId}
-							onChange={(event) =>
-								onDraftChange({ ...draft.values, userId: event.target.value })
-							}
-							placeholder="UUID optionnel"
-						/>
-					) : row.original.user_id ? (
+				cell: ({ row }) => {
+					if (draft?.tab === 'employees' && draft.id === row.original.id) {
+						return (
+							<Select
+								value={draft.values.userId || '__none__'}
+								onValueChange={(v) =>
+									onDraftChange({
+										...draft.values,
+										userId: v === '__none__' ? '' : v,
+									})
+								}
+							>
+								<SelectTrigger className="w-48">
+									<SelectValue />
+								</SelectTrigger>
+								<SelectContent>
+									<SelectItem value="__none__">— Aucun —</SelectItem>
+									{orgUsers.map((user) => (
+										<SelectItem key={user.id} value={user.id}>
+											{user.name} ({user.email})
+										</SelectItem>
+									))}
+								</SelectContent>
+							</Select>
+						)
+					}
+					const linked = orgUsers.find((u) => u.id === row.original.user_id)
+					if (linked) {
+						return <StatusBadge tone="success">{linked.name}</StatusBadge>
+					}
+					return row.original.user_id ? (
 						<StatusBadge tone="success">lié</StatusBadge>
 					) : (
 						<StatusBadge>non lié</StatusBadge>
-					),
+					)
+				},
 			},
 			{
 				header: 'Taux',
@@ -728,7 +780,16 @@ function EmployeeTable({
 				),
 			},
 		],
-		[draft, isSaving, onCancel, onDelete, onDraftChange, onEdit, onSave],
+		[
+			draft,
+			isSaving,
+			onCancel,
+			onDelete,
+			onDraftChange,
+			onEdit,
+			onSave,
+			orgUsers,
+		],
 	)
 
 	return (
@@ -1273,6 +1334,156 @@ function TextField({
 					</span>
 				) : null}
 			</div>
+		</div>
+	)
+}
+
+interface UserSelectFieldProps {
+	orgUsers: OrgUser[]
+	value: string
+	onChange: (userId: string) => void
+	isCreatingOrgUser: boolean
+	onCreateOrgUser: (payload: {
+		email: string
+		username: string
+		name: string
+	}) => Promise<OrgUser>
+}
+
+function UserSelectField({
+	orgUsers,
+	value,
+	onChange,
+	isCreatingOrgUser,
+	onCreateOrgUser,
+}: UserSelectFieldProps) {
+	const [showCreateForm, setShowCreateForm] = useState(false)
+	const [createEmail, setCreateEmail] = useState('')
+	const [createUsername, setCreateUsername] = useState('')
+	const [createName, setCreateName] = useState('')
+	const [createError, setCreateError] = useState<string | null>(null)
+
+	async function handleCreate() {
+		setCreateError(null)
+		try {
+			const user = await onCreateOrgUser({
+				email: createEmail.trim(),
+				username: createUsername.trim(),
+				name: createName.trim(),
+			})
+			onChange(user.id)
+			setShowCreateForm(false)
+			setCreateEmail('')
+			setCreateUsername('')
+			setCreateName('')
+		} catch (err: unknown) {
+			const status =
+				err &&
+				typeof err === 'object' &&
+				'status' in err &&
+				typeof (err as { status: unknown }).status === 'number'
+					? (err as { status: number }).status
+					: null
+			if (status === 409) {
+				setCreateError('Email déjà enregistré.')
+			} else {
+				setCreateError('Une erreur est survenue.')
+			}
+		}
+	}
+
+	const selectedUser = orgUsers.find((u) => u.id === value)
+
+	return (
+		<div className="flex flex-col gap-2">
+			<Label>Compte utilisateur</Label>
+			<Select
+				value={value}
+				onValueChange={(v) => onChange(v === '__none__' ? '' : v)}
+			>
+				<SelectTrigger className="w-full">
+					<SelectValue placeholder="— Aucun —">
+						{selectedUser
+							? `${selectedUser.name} (${selectedUser.email})`
+							: '— Aucun —'}
+					</SelectValue>
+				</SelectTrigger>
+				<SelectContent>
+					<SelectItem value="__none__">— Aucun —</SelectItem>
+					{orgUsers.map((user) => (
+						<SelectItem key={user.id} value={user.id}>
+							{user.name} ({user.email})
+						</SelectItem>
+					))}
+				</SelectContent>
+			</Select>
+			{showCreateForm ? (
+				<div className="flex flex-col gap-2 rounded-lg border bg-muted/40 p-3">
+					<div className="flex items-center justify-between">
+						<span className="text-xs font-semibold">Créer un utilisateur</span>
+						<Button
+							type="button"
+							size="icon-sm"
+							variant="ghost"
+							onClick={() => {
+								setShowCreateForm(false)
+								setCreateError(null)
+							}}
+						>
+							<X className="size-3" />
+							<span className="sr-only">Fermer</span>
+						</Button>
+					</div>
+					<Input
+						placeholder="Email"
+						type="email"
+						value={createEmail}
+						onChange={(e) => setCreateEmail(e.target.value)}
+					/>
+					<Input
+						placeholder="Nom d'utilisateur"
+						value={createUsername}
+						onChange={(e) => setCreateUsername(e.target.value)}
+					/>
+					<Input
+						placeholder="Nom complet"
+						value={createName}
+						onChange={(e) => setCreateName(e.target.value)}
+					/>
+					{createError ? (
+						<p className="text-xs text-destructive">{createError}</p>
+					) : null}
+					<Button
+						type="button"
+						size="sm"
+						onClick={() => void handleCreate()}
+						disabled={
+							isCreatingOrgUser ||
+							!createEmail.trim() ||
+							!createUsername.trim() ||
+							!createName.trim()
+						}
+					>
+						{isCreatingOrgUser ? (
+							<Loader2 className="size-3 animate-spin" />
+						) : (
+							<UserPlus className="size-3" />
+						)}
+						Créer
+					</Button>
+				</div>
+			) : (
+				<Button
+					type="button"
+					variant="ghost"
+					size="sm"
+					className="w-fit gap-1.5 text-xs text-muted-foreground"
+					onClick={() => setShowCreateForm(true)}
+				>
+					<UserPlus className="size-3" />
+					Créer un utilisateur
+				</Button>
+			)}
 		</div>
 	)
 }

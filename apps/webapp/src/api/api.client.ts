@@ -232,6 +232,8 @@ export namespace Schemas {
   };
   export type UpdateQuoteStatusRequest = { status: QuoteStatus };
   export type UpdateServiceRateRequest = { label: string; rate_cents: number; unit: ServiceRateUnit };
+  export type UserResponse = { id: string; email: string; username: string; name: string };
+  export type CreateOrgUserRequest = { email: string; username: string; name: string };
 
   // </Schemas>
 }
@@ -1410,6 +1412,43 @@ export namespace Endpoints {
     };
   };
 
+  export type get_ListOrgUsers = {
+    method: "GET";
+    path: "/api/v1/organizations/{organization_id}/users";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string };
+    };
+    responses: {
+      200: {
+        data: Array<Schemas.UserResponse>;
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+    };
+  };
+  export type post_CreateOrgUser = {
+    method: "POST";
+    path: "/api/v1/organizations/{organization_id}/users";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string };
+
+      body: Schemas.CreateOrgUserRequest;
+    };
+    responses: {
+      201: {
+        data: Schemas.UserResponse;
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      400: unknown;
+      401: unknown;
+      403: unknown;
+      409: unknown;
+    };
+  };
+
   // </Endpoints>
 }
 
@@ -1431,6 +1470,7 @@ export type EndpointByMethod = {
     "/api/v1/organizations/{organization_id}/products": Endpoints.get_ListProducts;
     "/api/v1/organizations/{organization_id}/quotes": Endpoints.get_ListQuotes;
     "/api/v1/organizations/{organization_id}/service-rates": Endpoints.get_ListServiceRates;
+    "/api/v1/organizations/{organization_id}/users": Endpoints.get_ListOrgUsers;
     "/api/v1/products/{product_id}": Endpoints.get_GetProduct;
     "/api/v1/quotes/{quote_id}": Endpoints.get_GetQuote;
     "/api/v1/quotes/{quote_id}/pdf": Endpoints.get_ExportQuotePdf;
@@ -1471,6 +1511,7 @@ export type EndpointByMethod = {
     "/api/v1/organizations/{organization_id}/products": Endpoints.post_CreateProduct;
     "/api/v1/organizations/{organization_id}/quotes": Endpoints.post_CreateQuote;
     "/api/v1/organizations/{organization_id}/service-rates": Endpoints.post_CreateServiceRate;
+    "/api/v1/organizations/{organization_id}/users": Endpoints.post_CreateOrgUser;
   };
 };
 
