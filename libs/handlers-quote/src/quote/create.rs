@@ -4,12 +4,13 @@ use auth::Identity;
 use axum::{Extension, Json, extract::State};
 use handlers::{ApiError, AppState, DataEnvelope, Response};
 use mestier_core::{
-    CreateQuoteCommand, CustomerContextId, CustomerId, QuoteLineCommand, ServiceRateId,
-    ServiceRateUnit,
+    CreateQuoteCommand, CustomerContextId, CustomerId, LegalMentionTemplateId, QuoteLineCommand,
+    ServiceRateId, ServiceRateUnit,
 };
 use rust_decimal::Decimal;
 use serde::Deserialize;
 use utoipa::ToSchema;
+use uuid::Uuid;
 
 use crate::{
     paths::QuotesPath, require_org_membership, require_quote_targets, response::QuoteResponse,
@@ -60,6 +61,17 @@ pub struct CreateQuoteRequest {
     pub customer_id: CustomerId,
     pub customer_context_id: CustomerContextId,
     pub lines: Vec<QuoteLineRequest>,
+    #[serde(default)]
+    pub legal_mention_template_ids: Option<Vec<Uuid>>,
+}
+
+pub fn into_legal_mention_template_ids(
+    ids: Option<Vec<Uuid>>,
+) -> Vec<LegalMentionTemplateId> {
+    ids.unwrap_or_default()
+        .into_iter()
+        .map(LegalMentionTemplateId)
+        .collect()
 }
 
 pub fn into_line_commands(lines: Vec<QuoteLineRequest>) -> Result<Vec<QuoteLineCommand>, ApiError> {
@@ -107,6 +119,9 @@ pub async fn handler(
             customer_id: payload.customer_id,
             customer_context_id: payload.customer_context_id,
             lines: into_line_commands(payload.lines)?,
+            legal_mention_template_ids: into_legal_mention_template_ids(
+                payload.legal_mention_template_ids,
+            ),
         })
         .await?;
 

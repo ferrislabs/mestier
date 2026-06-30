@@ -57,6 +57,7 @@ pub struct QuoteResponse {
     pub total_vat_cents: i32,
     pub total_ttc_cents: i32,
     pub lines: Vec<QuoteLineResponse>,
+    pub legal_mention_template_ids: Vec<String>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }
@@ -79,6 +80,11 @@ impl From<Quote> for QuoteResponse {
                 .lines
                 .into_iter()
                 .map(QuoteLineResponse::from)
+                .collect(),
+            legal_mention_template_ids: value
+                .legal_mention_template_ids
+                .into_iter()
+                .map(|id| id.0.to_string())
                 .collect(),
             created_at: value.created_at,
             updated_at: value.updated_at,

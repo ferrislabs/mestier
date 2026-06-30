@@ -6,7 +6,10 @@ use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 use uuid::Uuid;
 
-use crate::{CustomerContextId, CustomerId, OrganizationId, ServiceRateId, ServiceRateUnit};
+use crate::{
+	CustomerContextId, CustomerId, LegalMentionTemplateId, OrganizationId, ServiceRateId,
+	ServiceRateUnit,
+};
 
 pub mod commands;
 pub mod ports;
@@ -121,6 +124,7 @@ pub struct Quote {
     pub total_vat_cents: i32,
     pub total_ttc_cents: i32,
     pub lines: Vec<QuoteLine>,
+    pub legal_mention_template_ids: Vec<LegalMentionTemplateId>,
     pub deleted_at: Option<DateTime<Utc>>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,

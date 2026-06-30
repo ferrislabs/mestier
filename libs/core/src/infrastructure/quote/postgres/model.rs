@@ -64,6 +64,8 @@ impl QuoteRow {
             total_vat_cents: self.total_vat_cents,
             total_ttc_cents: self.total_ttc_cents,
             lines,
+            // Populated by the service layer after a separate fetch.
+            legal_mention_template_ids: vec![],
             deleted_at: self.deleted_at,
             created_at: self.created_at,
             updated_at: self.updated_at,

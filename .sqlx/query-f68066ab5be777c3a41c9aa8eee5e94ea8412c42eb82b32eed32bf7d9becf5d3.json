@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM quote_legal_mentions WHERE quote_id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "f68066ab5be777c3a41c9aa8eee5e94ea8412c42eb82b32eed32bf7d9becf5d3"
+}

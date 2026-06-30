@@ -4,10 +4,11 @@ use handlers::{ApiError, AppState, DataEnvelope, Response};
 use mestier_core::{CustomerContextId, CustomerId, QuoteId, QuoteStatus, UpdateQuoteCommand};
 use serde::Deserialize;
 use utoipa::ToSchema;
+use uuid::Uuid;
 
 use crate::{
     paths::QuotePath,
-    quote::create::{QuoteLineRequest, into_line_commands},
+    quote::create::{QuoteLineRequest, into_legal_mention_template_ids, into_line_commands},
     require_quote_membership, require_quote_targets,
     response::QuoteResponse,
 };
@@ -19,6 +20,8 @@ pub struct UpdateQuoteRequest {
     pub customer_context_id: CustomerContextId,
     pub status: QuoteStatus,
     pub lines: Vec<QuoteLineRequest>,
+    #[serde(default)]
+    pub legal_mention_template_ids: Option<Vec<Uuid>>,
 }
 
 #[utoipa::path(
@@ -64,6 +67,9 @@ pub async fn handler(
             customer_context_id: payload.customer_context_id,
             status: payload.status,
             lines: into_line_commands(payload.lines)?,
+            legal_mention_template_ids: into_legal_mention_template_ids(
+                payload.legal_mention_template_ids,
+            ),
         })
         .await?;
 
