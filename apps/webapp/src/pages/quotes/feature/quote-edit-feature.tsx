@@ -9,6 +9,7 @@ import {
 } from 'lucide-react'
 import type * as React from 'react'
 import { useEffect, useState } from 'react'
+import { LegalMentionSelector } from '#/components/legal-mention-selector'
 import {
 	AlertDialog,
 	AlertDialogAction,
@@ -47,6 +48,10 @@ import {
 	useCustomers,
 	useUploadFile,
 } from '#/hooks/use-customers'
+import {
+	type LegalMentionTemplate,
+	useLegalMentionTemplates,
+} from '#/hooks/use-legal-mentions'
 import {
 	type Quote,
 	type QuoteStatus,
@@ -105,6 +110,7 @@ export function QuoteEditFeature({ quoteId }: QuoteEditFeatureProps) {
 function QuoteEditWorkspace({ quote }: { quote: Quote }) {
 	const navigate = useNavigate()
 	const customers = useCustomers(quote.organization_id)
+	const legalMentionTemplates = useLegalMentionTemplates(quote.organization_id)
 	const catalog = useReferenceCatalog(quote.organization_id, {
 		employees: false,
 		equipment: false,
@@ -232,6 +238,7 @@ function QuoteEditWorkspace({ quote }: { quote: Quote }) {
 				title: values.title.trim(),
 				customer_id: values.customerId,
 				customer_context_id: values.customerContextId,
+				legal_mention_template_ids: values.legalMentionTemplateIds,
 				status,
 				lines: values.lines.map((line) => ({
 					service_rate_id: line.serviceRateId || null,
@@ -260,6 +267,8 @@ function QuoteEditWorkspace({ quote }: { quote: Quote }) {
 			values={values}
 			status={status}
 			customers={customers.data?.data ?? []}
+			legalMentionTemplates={legalMentionTemplates.data?.data ?? []}
+			isLegalMentionTemplatesLoading={legalMentionTemplates.isLoading}
 			customerContexts={customerContexts.data?.data ?? []}
 			catalogItems={catalogItems}
 			error={error}
@@ -297,6 +306,8 @@ function QuoteEditUI({
 	values,
 	status,
 	customers,
+	legalMentionTemplates,
+	isLegalMentionTemplatesLoading,
 	customerContexts,
 	catalogItems,
 	error,
@@ -319,6 +330,8 @@ function QuoteEditUI({
 	values: QuoteFormValues
 	status: QuoteStatus
 	customers: Customer[]
+	legalMentionTemplates: LegalMentionTemplate[]
+	isLegalMentionTemplatesLoading: boolean
 	customerContexts: CustomerContext[]
 	catalogItems: CatalogItem[]
 	error: string | null
@@ -524,6 +537,21 @@ function QuoteEditUI({
 									onUploadPhoto={(file) => onUploadLinePhoto(index, file)}
 								/>
 							))}
+						</div>
+					</SectionCard>
+
+					<SectionCard>
+						<SectionHeader
+							title="Mentions légales"
+							description="Sélectionnez les mentions légales à inclure dans ce devis."
+						/>
+						<div className="p-5">
+							<LegalMentionSelector
+								templates={legalMentionTemplates}
+								selectedIds={values.legalMentionTemplateIds}
+								onChange={(ids) => onChange({ legalMentionTemplateIds: ids })}
+								isLoading={isLegalMentionTemplatesLoading}
+							/>
 						</div>
 					</SectionCard>
 				</div>
@@ -774,6 +802,7 @@ function quoteToForm(
 		title: quote.title,
 		customerId: quote.customer_id,
 		customerContextId: quote.customer_context_id,
+		legalMentionTemplateIds: quote.legal_mention_template_ids ?? [],
 		lines: lines.length ? lines : [emptyQuoteLine()],
 	}
 }

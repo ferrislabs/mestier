@@ -3,6 +3,7 @@ import {
 	AlertCircle,
 	Calculator,
 	FileText,
+	Gavel,
 	ImagePlus,
 	MapPin,
 	MoreHorizontal,
@@ -19,6 +20,7 @@ import {
 	getPaginationViewModel,
 	useDataView,
 } from '#/components/data-view'
+import { LegalMentionSelector } from '#/components/legal-mention-selector'
 import {
 	AlertDialog,
 	AlertDialogAction,
@@ -91,6 +93,8 @@ import {
 interface QuoteCreateUIProps {
 	values: QuoteFormValues
 	customers: Customer[]
+	legalMentionTemplates: { id: string; name: string; body: string }[]
+	isLegalMentionTemplatesLoading?: boolean
 	customerContexts: CustomerContext[]
 	catalogItems: CatalogItem[]
 	quotes: Quote[]
@@ -120,6 +124,8 @@ interface QuoteCreateUIProps {
 export function QuoteCreateUI({
 	values,
 	customers,
+	legalMentionTemplates,
+	isLegalMentionTemplatesLoading,
 	customerContexts,
 	catalogItems,
 	quotes,
@@ -437,6 +443,20 @@ export function QuoteCreateUI({
 												/>
 											))}
 										</div>
+									</FormSection>
+
+									<FormSection
+										icon={<Gavel className="size-4" />}
+										title="Mentions légales"
+									>
+										<LegalMentionSelector
+											templates={legalMentionTemplates}
+											selectedIds={values.legalMentionTemplateIds}
+											onChange={(ids) =>
+												onChange({ legalMentionTemplateIds: ids })
+											}
+											isLoading={isLegalMentionTemplatesLoading}
+										/>
 									</FormSection>
 								</div>
 
