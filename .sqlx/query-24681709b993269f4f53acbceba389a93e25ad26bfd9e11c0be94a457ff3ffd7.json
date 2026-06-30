@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT id, org_id, name, sku, unit, unit_price_cents, vat_rate, description, deleted_at, created_at, updated_at\n            FROM products\n            WHERE id = $1 AND deleted_at IS NULL\n            ",
+  "query": "\n            INSERT INTO products (id, org_id, name, sku, unit, unit_price_cents, vat_rate, custom_fields, description, deleted_at, created_at, updated_at)\n            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)\n            RETURNING id, org_id, name, sku, unit, unit_price_cents, vat_rate,\n                      custom_fields as \"custom_fields: sqlx::types::Json<serde_json::Value>\",\n                      description, deleted_at, created_at, updated_at\n            ",
   "describe": {
     "columns": [
       {
@@ -40,28 +40,44 @@
       },
       {
         "ordinal": 7,
+        "name": "custom_fields: sqlx::types::Json<serde_json::Value>",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 8,
         "name": "description",
         "type_info": "Text"
       },
       {
-        "ordinal": 8,
+        "ordinal": 9,
         "name": "deleted_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 9,
+        "ordinal": 10,
         "name": "created_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 10,
+        "ordinal": 11,
         "name": "updated_at",
         "type_info": "Timestamptz"
       }
     ],
     "parameters": {
       "Left": [
-        "Uuid"
+        "Uuid",
+        "Uuid",
+        "Text",
+        "Text",
+        "Text",
+        "Int4",
+        "Numeric",
+        "Jsonb",
+        "Text",
+        "Timestamptz",
+        "Timestamptz",
+        "Timestamptz"
       ]
     },
     "nullable": [
@@ -72,11 +88,12 @@
       false,
       false,
       false,
+      false,
       true,
       true,
       false,
       false
     ]
   },
-  "hash": "52c9edf19685af2a201af59974ce3775d95f8a38f36669d77839010542126a38"
+  "hash": "24681709b993269f4f53acbceba389a93e25ad26bfd9e11c0be94a457ff3ffd7"
 }

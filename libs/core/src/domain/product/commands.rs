@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use rust_decimal::Decimal;
 
 use crate::{OrganizationId, ProductId, ServiceRateUnit};
@@ -10,6 +12,7 @@ pub struct CreateProductCommand {
     pub unit: ServiceRateUnit,
     pub unit_price_cents: i32,
     pub vat_rate: Decimal,
+    pub custom_fields: HashMap<String, String>,
     pub description: Option<String>,
 }
 
@@ -21,5 +24,6 @@ pub struct UpdateProductCommand {
     pub unit: ServiceRateUnit,
     pub unit_price_cents: i32,
     pub vat_rate: Decimal,
+    pub custom_fields: HashMap<String, String>,
     pub description: Option<String>,
 }

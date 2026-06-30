@@ -40,6 +40,7 @@ where
                 unit: command.unit,
                 rate_cents: command.rate_cents,
                 vat_rate: command.vat_rate,
+                custom_fields: command.custom_fields,
                 deleted_at: None,
                 created_at: now,
                 updated_at: now,
@@ -74,6 +75,7 @@ where
         service_rate.unit = command.unit;
         service_rate.rate_cents = command.rate_cents;
         service_rate.vat_rate = command.vat_rate;
+        service_rate.custom_fields = command.custom_fields;
         service_rate.updated_at = Utc::now();
 
         self.repo.update(&service_rate).await
@@ -121,6 +123,7 @@ mod tests {
             unit: ServiceRateUnit::Hour,
             rate_cents: 5500,
             vat_rate: rust_decimal::Decimal::from(20u32),
+            custom_fields: std::collections::HashMap::new(),
             deleted_at: None,
             created_at: now,
             updated_at: now,
@@ -143,6 +146,7 @@ mod tests {
                 unit: ServiceRateUnit::Hour,
                 rate_cents: 5500,
                 vat_rate: rust_decimal::Decimal::from(20u32),
+                custom_fields: std::collections::HashMap::new(),
             })
             .await
             .unwrap();
@@ -170,6 +174,7 @@ mod tests {
                 unit: ServiceRateUnit::Ml,
                 rate_cents: 1200,
                 vat_rate: rust_decimal::Decimal::from(10u32),
+                custom_fields: std::collections::HashMap::new(),
             })
             .await
             .unwrap();
@@ -209,5 +214,64 @@ mod tests {
         let mut service = ServiceRateService::new(repo);
 
         service.soft_delete_service_rate(id).await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn create_service_rate_maps_custom_fields() {
+        let mut repo = MockServiceRateRepository::new();
+        repo.expect_insert().times(1).returning(|r| {
+            let service_rate = r.clone();
+            Box::pin(async move { Ok(service_rate) })
+        });
+
+        let mut service = ServiceRateService::new(repo);
+        let mut fields = std::collections::HashMap::new();
+        fields.insert("color".to_owned(), "blue".to_owned());
+        fields.insert("finish".to_owned(), "matte".to_owned());
+
+        let created = service
+            .create_service_rate(CreateServiceRateCommand {
+                organization_id: OrganizationId(Uuid::new_v4()),
+                label: "Peinture".to_owned(),
+                unit: ServiceRateUnit::Ml,
+                rate_cents: 300,
+                vat_rate: rust_decimal::Decimal::from(20u32),
+                custom_fields: fields.clone(),
+            })
+            .await
+            .unwrap();
+
+        assert_eq!(created.custom_fields, fields);
+    }
+
+    #[tokio::test]
+    async fn update_service_rate_maps_custom_fields() {
+        let id = ServiceRateId(Uuid::new_v4());
+        let mut repo = MockServiceRateRepository::new();
+        repo.expect_find_by_id()
+            .with(eq(id))
+            .returning(move |_| Box::pin(async move { Ok(Some(service_rate(id))) }));
+        repo.expect_update().times(1).returning(|r| {
+            let service_rate = r.clone();
+            Box::pin(async move { Ok(service_rate) })
+        });
+
+        let mut service = ServiceRateService::new(repo);
+        let mut fields = std::collections::HashMap::new();
+        fields.insert("zone".to_owned(), "nord".to_owned());
+
+        let updated = service
+            .update_service_rate(UpdateServiceRateCommand {
+                id,
+                label: "Haie".to_owned(),
+                unit: ServiceRateUnit::M2,
+                rate_cents: 800,
+                vat_rate: rust_decimal::Decimal::from(10u32),
+                custom_fields: fields.clone(),
+            })
+            .await
+            .unwrap();
+
+        assert_eq!(updated.custom_fields, fields);
     }
 }

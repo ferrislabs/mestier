@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use chrono::{DateTime, Utc};
 use mestier_core::{
     Employee, EmployeeId, Equipment, EquipmentId, OrganizationId, Product, ProductId, ServiceRate,
@@ -62,6 +64,7 @@ pub struct ServiceRateResponse {
     pub unit: ServiceRateUnit,
     pub rate_cents: i32,
     pub vat_rate: String,
+    pub custom_fields: HashMap<String, String>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }
@@ -75,6 +78,7 @@ impl From<ServiceRate> for ServiceRateResponse {
             unit: value.unit,
             rate_cents: value.rate_cents,
             vat_rate: value.vat_rate.normalize().to_string(),
+            custom_fields: value.custom_fields,
             created_at: value.created_at,
             updated_at: value.updated_at,
         }
@@ -90,6 +94,7 @@ pub struct ProductResponse {
     pub unit: ServiceRateUnit,
     pub unit_price_cents: i32,
     pub vat_rate: String,
+    pub custom_fields: HashMap<String, String>,
     pub description: Option<String>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
@@ -105,6 +110,7 @@ impl From<Product> for ProductResponse {
             unit: value.unit,
             unit_price_cents: value.unit_price_cents,
             vat_rate: value.vat_rate.normalize().to_string(),
+            custom_fields: value.custom_fields,
             description: value.description,
             created_at: value.created_at,
             updated_at: value.updated_at,

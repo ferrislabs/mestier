@@ -1,4 +1,4 @@
-use std::{fmt::Display, str::FromStr};
+use std::{collections::HashMap, fmt::Display, str::FromStr};
 
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
@@ -39,6 +39,7 @@ pub struct Product {
     pub unit: ServiceRateUnit,
     pub unit_price_cents: i32,
     pub vat_rate: Decimal,
+    pub custom_fields: HashMap<String, String>,
     pub description: Option<String>,
     pub deleted_at: Option<DateTime<Utc>>,
     pub created_at: DateTime<Utc>,
