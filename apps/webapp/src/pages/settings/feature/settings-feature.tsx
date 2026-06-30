@@ -118,6 +118,7 @@ function SettingsCatalog({ organization }: SettingsCatalogProps) {
 			label: '',
 			unit: 'HOUR',
 			rate: '',
+			vatRate: '20',
 		} satisfies ServiceRateFormValues,
 		onSubmit: async ({ value }) => {
 			await createServiceRate.mutateAsync({
@@ -126,6 +127,7 @@ function SettingsCatalog({ organization }: SettingsCatalogProps) {
 					label: value.label.trim(),
 					unit: value.unit,
 					rate_cents: eurosToCents(value.rate),
+					vat_rate: value.vatRate.replace(',', '.').trim(),
 				},
 			})
 			serviceRateForm.reset()
@@ -138,6 +140,7 @@ function SettingsCatalog({ organization }: SettingsCatalogProps) {
 			sku: '',
 			unit: 'M2',
 			unitPrice: '',
+			vatRate: '20',
 			description: '',
 		} satisfies ProductCatalogFormValues,
 		onSubmit: async ({ value }) => {
@@ -148,6 +151,7 @@ function SettingsCatalog({ organization }: SettingsCatalogProps) {
 					sku: value.sku.trim() || null,
 					unit: value.unit,
 					unit_price_cents: eurosToCents(value.unitPrice),
+					vat_rate: value.vatRate.replace(',', '.').trim(),
 					description: value.description.trim() || null,
 				},
 			})
@@ -333,6 +337,9 @@ function SettingsCatalog({ organization }: SettingsCatalogProps) {
 																label: values.label.trim(),
 																unit: values.unit,
 																rate_cents: eurosToCents(values.rate),
+																vat_rate: values.vatRate
+																	.replace(',', '.')
+																	.trim(),
 															},
 														})
 													}
@@ -351,6 +358,9 @@ function SettingsCatalog({ organization }: SettingsCatalogProps) {
 																unit_price_cents: eurosToCents(
 																	values.unitPrice,
 																),
+																vat_rate: values.vatRate
+																	.replace(',', '.')
+																	.trim(),
 																description: values.description.trim() || null,
 															},
 														})

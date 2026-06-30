@@ -13,6 +13,7 @@ export interface QuoteLineFormValues {
 	quantity: string
 	unit: ServiceRateUnit
 	unitPrice: string
+	vatRate: string
 	notes: string
 	photoKeys: string[]
 }
@@ -34,6 +35,7 @@ export function emptyQuoteLine(clientId = 'line-1'): QuoteLineFormValues {
 		quantity: '1',
 		unit: 'HOUR',
 		unitPrice: '',
+		vatRate: '20',
 		notes: '',
 		photoKeys: [],
 	}

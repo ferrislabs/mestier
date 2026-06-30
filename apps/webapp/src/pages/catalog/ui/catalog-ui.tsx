@@ -281,6 +281,7 @@ export function CatalogUI({
 								sku: product.sku ?? '',
 								unit: product.unit,
 								unitPrice: centsToEuros(product.unit_price_cents),
+								vatRate: product.vat_rate,
 								description: product.description ?? '',
 							},
 						})
@@ -308,6 +309,7 @@ export function CatalogUI({
 								label: serviceRate.label,
 								unit: serviceRate.unit,
 								rate: centsToEuros(serviceRate.rate_cents),
+								vatRate: serviceRate.vat_rate,
 							},
 						})
 					}
@@ -434,6 +436,13 @@ function ProductCreateFields({
 					suffix={PRODUCT_UNIT_LABELS[form.values.unit]}
 				/>
 			</div>
+			<TextField
+				label="TVA"
+				value={form.values.vatRate}
+				onChange={(vatRate) => form.onChange({ vatRate })}
+				inputMode="decimal"
+				suffix="%"
+			/>
 			<div className="flex flex-col gap-2">
 				<Label>Description</Label>
 				<Textarea
@@ -473,6 +482,13 @@ function ServiceCreateFields({
 					suffix={UNIT_LABELS[form.values.unit]}
 				/>
 			</div>
+			<TextField
+				label="TVA"
+				value={form.values.vatRate}
+				onChange={(vatRate) => form.onChange({ vatRate })}
+				inputMode="decimal"
+				suffix="%"
+			/>
 		</div>
 	)
 }
@@ -519,7 +535,7 @@ function ProductList({
 						return (
 							<li
 								key={product.id}
-								className="group grid gap-4 px-5 py-4 transition hover:bg-muted/35 hover:shadow-xs lg:grid-cols-[minmax(0,1fr)_140px_140px_140px_40px] lg:items-center"
+								className="group grid gap-4 px-5 py-4 transition hover:bg-muted/35 hover:shadow-xs lg:grid-cols-[minmax(0,1fr)_140px_140px_80px_140px_40px] lg:items-center"
 							>
 								{isEditing ? (
 									<ProductDraftFields
@@ -545,6 +561,9 @@ function ProductList({
 										<p className="font-semibold tabular-nums">
 											{formatMoney(product.unit_price_cents)}
 										</p>
+										<StatusBadge tone="neutral">
+											TVA {product.vat_rate}%
+										</StatusBadge>
 										<p className="truncate font-mono text-xs text-muted-foreground">
 											{product.id}
 										</p>
@@ -609,6 +628,19 @@ function ProductDraftFields({
 				}
 				inputMode="decimal"
 			/>
+			<div className="relative">
+				<Input
+					value={values.vatRate}
+					onChange={(event) =>
+						onChange({ ...values, vatRate: event.target.value })
+					}
+					inputMode="decimal"
+					className="pr-6"
+				/>
+				<span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">
+					%
+				</span>
+			</div>
 		</>
 	)
 }
@@ -655,7 +687,7 @@ function ServiceList({
 						return (
 							<li
 								key={serviceRate.id}
-								className="group grid gap-4 px-5 py-4 transition hover:bg-muted/35 hover:shadow-xs lg:grid-cols-[minmax(0,1fr)_140px_140px_40px] lg:items-center"
+								className="group grid gap-4 px-5 py-4 transition hover:bg-muted/35 hover:shadow-xs lg:grid-cols-[minmax(0,1fr)_140px_140px_80px_40px] lg:items-center"
 							>
 								{isEditing ? (
 									<>
@@ -684,6 +716,22 @@ function ServiceList({
 											}
 											inputMode="decimal"
 										/>
+										<div className="relative">
+											<Input
+												value={draft.values.vatRate}
+												onChange={(event) =>
+													onDraftChange({
+														...draft.values,
+														vatRate: event.target.value,
+													})
+												}
+												inputMode="decimal"
+												className="pr-6"
+											/>
+											<span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">
+												%
+											</span>
+										</div>
 									</>
 								) : (
 									<>
@@ -701,6 +749,9 @@ function ServiceList({
 										<p className="font-semibold tabular-nums">
 											{formatMoney(serviceRate.rate_cents)}
 										</p>
+										<StatusBadge tone="neutral">
+											TVA {serviceRate.vat_rate}%
+										</StatusBadge>
 									</>
 								)}
 								<RowActions

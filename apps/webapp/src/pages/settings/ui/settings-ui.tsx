@@ -346,6 +346,7 @@ export function SettingsUI({
 								label: serviceRate.label,
 								unit: serviceRate.unit,
 								rate: centsToEuros(serviceRate.rate_cents),
+								vatRate: serviceRate.vat_rate,
 							},
 						})
 					}
@@ -374,6 +375,7 @@ export function SettingsUI({
 								sku: product.sku ?? '',
 								unit: product.unit,
 								unitPrice: centsToEuros(product.unit_price_cents),
+								vatRate: product.vat_rate,
 								description: product.description ?? '',
 							},
 						})
@@ -533,7 +535,7 @@ function CreateReferenceSection({
 					</>
 				) : activeTab === 'service-rates' ? (
 					<>
-						<div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+						<div className="grid grid-cols-1 gap-4 md:grid-cols-4">
 							<TextField
 								label="Libellé"
 								value={serviceRateForm.values.label}
@@ -566,6 +568,13 @@ function CreateReferenceSection({
 								inputMode="decimal"
 								suffix={UNIT_LABELS[serviceRateForm.values.unit]}
 							/>
+							<TextField
+								label="TVA"
+								value={serviceRateForm.values.vatRate}
+								onChange={(vatRate) => serviceRateForm.onChange({ vatRate })}
+								inputMode="decimal"
+								suffix="%"
+							/>
 						</div>
 						<CreateButton
 							isPending={serviceRateForm.isPending}
@@ -574,7 +583,7 @@ function CreateReferenceSection({
 					</>
 				) : (
 					<>
-						<div className="grid grid-cols-1 gap-4 md:grid-cols-5">
+						<div className="grid grid-cols-1 gap-4 md:grid-cols-6">
 							<TextField
 								label="Produit"
 								value={productForm.values.name}
@@ -610,6 +619,13 @@ function CreateReferenceSection({
 								onChange={(unitPrice) => productForm.onChange({ unitPrice })}
 								inputMode="decimal"
 								suffix={PRODUCT_UNIT_LABELS[productForm.values.unit]}
+							/>
+							<TextField
+								label="TVA"
+								value={productForm.values.vatRate}
+								onChange={(vatRate) => productForm.onChange({ vatRate })}
+								inputMode="decimal"
+								suffix="%"
 							/>
 							<TextField
 								label="Description"
@@ -913,6 +929,30 @@ function ServiceRateTable({
 					),
 			},
 			{
+				header: 'TVA',
+				cell: ({ row }) =>
+					draft?.tab === 'service-rates' && draft.id === row.original.id ? (
+						<div className="relative w-24">
+							<Input
+								value={draft.values.vatRate}
+								onChange={(event) =>
+									onDraftChange({
+										...draft.values,
+										vatRate: event.target.value,
+									})
+								}
+								inputMode="decimal"
+								className="pr-6"
+							/>
+							<span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">
+								%
+							</span>
+						</div>
+					) : (
+						<span className="text-sm">{row.original.vat_rate}%</span>
+					),
+			},
+			{
 				id: 'actions',
 				cell: ({ row }) => (
 					<RowActions
@@ -1044,6 +1084,30 @@ function ProductTable({
 							value={row.original.unit_price_cents}
 							suffix={productUnitSuffix(row.original.unit)}
 						/>
+					),
+			},
+			{
+				header: 'TVA',
+				cell: ({ row }) =>
+					draft?.tab === 'products' && draft.id === row.original.id ? (
+						<div className="relative w-24">
+							<Input
+								value={draft.values.vatRate}
+								onChange={(event) =>
+									onDraftChange({
+										...draft.values,
+										vatRate: event.target.value,
+									})
+								}
+								inputMode="decimal"
+								className="pr-6"
+							/>
+							<span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">
+								%
+							</span>
+						</div>
+					) : (
+						<span className="text-sm">{row.original.vat_rate}%</span>
 					),
 			},
 			{

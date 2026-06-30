@@ -40,6 +40,7 @@ export namespace Schemas {
     sku?: (string | null) | undefined;
     unit: ServiceRateUnit;
     unit_price_cents: number;
+    vat_rate?: (string | null) | undefined;
   };
   export type CustomerContextId = string;
   export type CustomerId = string;
@@ -52,6 +53,7 @@ export namespace Schemas {
     service_rate_id?: (null | ServiceRateId) | undefined;
     unit: ServiceRateUnit;
     unit_price_cents: number;
+    vat_rate?: (string | null) | undefined;
   };
   export type CreateQuoteRequest = {
     customer_context_id: CustomerContextId;
@@ -59,7 +61,7 @@ export namespace Schemas {
     lines: Array<QuoteLineRequest>;
     title: string;
   };
-  export type CreateServiceRateRequest = { label: string; rate_cents: number; unit: ServiceRateUnit };
+  export type CreateServiceRateRequest = { label: string; rate_cents: number; unit: ServiceRateUnit; vat_rate?: (string | null) | undefined };
   export type CustomerContactId = string;
   export type CustomerContactResponse = {
     created_at: string;
@@ -146,6 +148,7 @@ export namespace Schemas {
     unit: ServiceRateUnit;
     unit_price_cents: number;
     updated_at: string;
+    vat_rate: string;
   };
   export type QuoteId = string;
   export type QuoteLineId = string;
@@ -162,6 +165,7 @@ export namespace Schemas {
     unit: ServiceRateUnit;
     unit_price_cents: number;
     updated_at: string;
+    vat_rate: string;
   };
   export type QuoteStatus = "DRAFT" | "SENT" | "ACCEPTED" | "DECLINED" | "CANCELLED";
   export type QuoteResponse = {
@@ -175,6 +179,9 @@ export namespace Schemas {
     status: QuoteStatus;
     title: string;
     total_cents: number;
+    total_ht_cents: number;
+    total_vat_cents: number;
+    total_ttc_cents: number;
     updated_at: string;
   };
   export type ServiceRateResponse = {
@@ -185,6 +192,7 @@ export namespace Schemas {
     rate_cents: number;
     unit: ServiceRateUnit;
     updated_at: string;
+    vat_rate: string;
   };
   export type UpdateCustomerContactRequest = {
     email?: (string | null) | undefined;
@@ -222,6 +230,7 @@ export namespace Schemas {
     sku?: (string | null) | undefined;
     unit: ServiceRateUnit;
     unit_price_cents: number;
+    vat_rate?: (string | null) | undefined;
   };
   export type UpdateQuoteRequest = {
     customer_context_id: CustomerContextId;
@@ -231,7 +240,7 @@ export namespace Schemas {
     title: string;
   };
   export type UpdateQuoteStatusRequest = { status: QuoteStatus };
-  export type UpdateServiceRateRequest = { label: string; rate_cents: number; unit: ServiceRateUnit };
+  export type UpdateServiceRateRequest = { label: string; rate_cents: number; unit: ServiceRateUnit; vat_rate?: (string | null) | undefined };
 
   // </Schemas>
 }

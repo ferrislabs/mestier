@@ -12,6 +12,7 @@ export interface ProductCatalogFormValues {
 	sku: string
 	unit: ServiceRateUnit
 	unitPrice: string
+	vatRate: string
 	description: string
 }
 

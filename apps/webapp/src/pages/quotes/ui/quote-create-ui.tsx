@@ -530,9 +530,15 @@ export function QuoteCreateUI({
 							</div>
 						</div>
 						<div className="flex items-center gap-3 sm:justify-end">
-							<p className="text-xl font-bold">
-								{formatCents(lastCreated.total_cents)}
-							</p>
+							<div className="text-right">
+								<p className="text-xl font-bold">
+									{formatCents(lastCreated.total_ttc_cents)}
+								</p>
+								<p className="text-xs text-muted-foreground">
+									HT {formatCents(lastCreated.total_ht_cents)} · TVA{' '}
+									{formatCents(lastCreated.total_vat_cents)}
+								</p>
+							</div>
 							<StatusBadge tone="brand">
 								{quoteStatusLabel(lastCreated.status)}
 							</StatusBadge>
@@ -817,7 +823,7 @@ function QuoteLineEditor({
 				</div>
 			</div>
 
-			<div className="mt-4 grid gap-4 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)_96px_128px_128px]">
+			<div className="mt-4 grid gap-4 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)_96px_128px_128px_80px]">
 				<div className="lg:col-span-2">
 					<FieldBlock label="Catalogue">
 						<Select
@@ -884,6 +890,20 @@ function QuoteLineEditor({
 						onChange={(event) => onChange({ unitPrice: event.target.value })}
 						placeholder="0.00"
 					/>
+				</FieldBlock>
+
+				<FieldBlock label="TVA">
+					<div className="relative">
+						<Input
+							inputMode="decimal"
+							value={line.vatRate}
+							onChange={(event) => onChange({ vatRate: event.target.value })}
+							className="pr-6"
+						/>
+						<span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">
+							%
+						</span>
+					</div>
 				</FieldBlock>
 
 				<FieldBlock label="Unité">

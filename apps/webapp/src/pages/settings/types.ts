@@ -33,6 +33,7 @@ export interface ServiceRateFormValues {
 	label: string
 	unit: ServiceRateUnit
 	rate: string
+	vatRate: string
 }
 
 export interface ReferenceCatalogData {

@@ -214,10 +214,6 @@ function QuoteEditWorkspace({ quote }: { quote: Quote }) {
 			)
 		})
 
-	const totalCents = values.lines.reduce(
-		(sum, line) => sum + lineTotalCents(line),
-		0,
-	)
 	const error =
 		customers.error?.message ??
 		customerContexts.error?.message ??
@@ -243,6 +239,7 @@ function QuoteEditWorkspace({ quote }: { quote: Quote }) {
 					quantity: line.quantity.replace(',', '.').trim(),
 					unit: line.unit,
 					unit_price_cents: eurosToCents(line.unitPrice),
+					vat_rate: line.vatRate.replace(',', '.').trim(),
 					notes: line.notes.trim() || null,
 					photo_keys: line.photoKeys,
 				})),
@@ -275,7 +272,6 @@ function QuoteEditWorkspace({ quote }: { quote: Quote }) {
 			isSaving={updateQuote.isPending}
 			isDeleting={deleteQuote.isPending}
 			isUploading={uploadFile.isPending}
-			totalCents={totalCents}
 			canSave={canSave}
 			onChange={(patch) => {
 				if (patch.customerId !== undefined) {
@@ -308,7 +304,6 @@ function QuoteEditUI({
 	isSaving,
 	isDeleting,
 	isUploading,
-	totalCents,
 	canSave,
 	onChange,
 	onStatusChange,
@@ -331,7 +326,6 @@ function QuoteEditUI({
 	isSaving: boolean
 	isDeleting: boolean
 	isUploading: boolean
-	totalCents: number
 	canSave: boolean
 	onChange: (patch: Partial<QuoteFormValues>) => void
 	onStatusChange: (status: QuoteStatus) => void
@@ -541,7 +535,19 @@ function QuoteEditUI({
 						<SummaryRow label="Statut" value={quoteStatusLabel(status)} />
 						<SummaryRow label="Objet" value={values.title || 'Non renseigné'} />
 						<SummaryRow label="Lignes" value={String(values.lines.length)} />
-						<SummaryRow label="Total" value={formatCents(totalCents)} strong />
+						<SummaryRow
+							label="Total HT"
+							value={formatCents(quote.total_ht_cents)}
+						/>
+						<SummaryRow
+							label="TVA"
+							value={formatCents(quote.total_vat_cents)}
+						/>
+						<SummaryRow
+							label="Total TTC"
+							value={formatCents(quote.total_ttc_cents)}
+							strong
+						/>
 					</div>
 				</aside>
 			</div>
@@ -604,7 +610,7 @@ function QuoteLineEditor({
 				</div>
 			</div>
 
-			<div className="grid gap-4 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)_96px_128px_128px]">
+			<div className="grid gap-4 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)_96px_128px_128px_80px]">
 				<div className="lg:col-span-2">
 					<FieldBlock label="Catalogue">
 						<Select
@@ -666,6 +672,19 @@ function QuoteLineEditor({
 						value={line.unitPrice}
 						onChange={(event) => onChange({ unitPrice: event.target.value })}
 					/>
+				</FieldBlock>
+				<FieldBlock label="TVA">
+					<div className="relative">
+						<Input
+							inputMode="decimal"
+							value={line.vatRate}
+							onChange={(event) => onChange({ vatRate: event.target.value })}
+							className="pr-6"
+						/>
+						<span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">
+							%
+						</span>
+					</div>
 				</FieldBlock>
 				<FieldBlock label="Unité">
 					<Select
@@ -745,6 +764,7 @@ function quoteToForm(
 			quantity: line.quantity,
 			unit: line.unit,
 			unitPrice: centsToEuros(line.unit_price_cents),
+			vatRate: line.vat_rate,
 			notes: line.notes ?? '',
 			photoKeys: line.photo_keys,
 		}

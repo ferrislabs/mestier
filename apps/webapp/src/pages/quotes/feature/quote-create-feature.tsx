@@ -98,6 +98,7 @@ function QuoteWorkspace({ organizationId }: { organizationId: string }) {
 						quantity: line.quantity.replace(',', '.').trim(),
 						unit: line.unit,
 						unit_price_cents: eurosToCents(line.unitPrice),
+						vat_rate: line.vatRate.replace(',', '.').trim(),
 						notes: line.notes.trim() || null,
 						photo_keys: line.photoKeys,
 					})),
