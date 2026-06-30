@@ -1,4 +1,5 @@
 import type { ProductCatalogFormValues } from '#/hooks/use-catalog-items'
+import type { LegalMentionTemplate } from '#/hooks/use-legal-mentions'
 import type {
 	Employee,
 	Equipment,
@@ -37,11 +38,33 @@ export interface ServiceRateFormValues {
 	customFields: { key: string; value: string }[]
 }
 
+export interface BillingFormValues {
+	paymentTermsDays: string
+	latePenaltyRate: string
+	recoveryIndemnityEuros: string
+	defaultDepositBasis: string | null
+	defaultDepositValue: string | null
+	defaultVatRate: string
+	iban: string
+	bic: string
+	siret: string
+	rcs: string
+	ape: string
+	vatIntracom: string
+	footer: string
+}
+
+export interface LegalMentionFormValues {
+	name: string
+	body: string
+}
+
 export interface ReferenceCatalogData {
 	employees: Employee[]
 	equipment: Equipment[]
 	serviceRates: ServiceRate[]
 	products: Product[]
+	legalMentionTemplates: LegalMentionTemplate[]
 }
 
-export type { ProductCatalogFormValues, Product }
+export type { LegalMentionTemplate, ProductCatalogFormValues, Product }
