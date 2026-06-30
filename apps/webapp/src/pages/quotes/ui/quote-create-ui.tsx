@@ -228,6 +228,10 @@ export function QuoteCreateUI({
 		return () => window.removeEventListener('popstate', syncFromUrl)
 	}, [onQuotePageChange, onQuotePageSizeChange])
 
+	useEffect(() => {
+		if (lastCreated) setCreateOpen(false)
+	}, [lastCreated])
+
 	const canSubmit =
 		Boolean(values.title.trim()) &&
 		Boolean(values.customerId) &&
