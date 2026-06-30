@@ -3,6 +3,7 @@ use common::{CoreError, generate_uuid_v7};
 
 use crate::{
     User, UserId,
+    domain::organization::OrganizationId,
     domain::user::commands::{CreateUserCommand, UpsertUserBySubCommand},
     domain::user::ports::UserRepository,
 };
@@ -62,6 +63,13 @@ where
 
     pub async fn list(&mut self) -> Result<Vec<User>, CoreError> {
         self.repo.list_active().await
+    }
+
+    pub async fn list_by_organization(
+        &mut self,
+        organization_id: OrganizationId,
+    ) -> Result<Vec<User>, CoreError> {
+        self.repo.list_by_organization(organization_id).await
     }
 }
 
@@ -203,5 +211,45 @@ mod tests {
 
         assert_eq!(users.len(), 1);
         assert_eq!(users[0].sub, "sub-1");
+    }
+
+    #[tokio::test]
+    async fn list_by_organization_delegates_to_repo() {
+        use crate::domain::organization::OrganizationId;
+
+        let org_id = OrganizationId(Uuid::new_v4());
+        let user = make_user();
+        let user_clone = user.clone();
+
+        let mut repo = MockUserRepository::new();
+        repo.expect_list_by_organization()
+            .times(1)
+            .returning(move |_| {
+                let u = user_clone.clone();
+                Box::pin(async move { Ok(vec![u]) })
+            });
+
+        let mut service = UserService::new(repo);
+        let users = service.list_by_organization(org_id).await.unwrap();
+
+        assert_eq!(users.len(), 1);
+        assert_eq!(users[0].email, "alice@example.com");
+    }
+
+    #[tokio::test]
+    async fn list_by_organization_empty_when_no_members() {
+        use crate::domain::organization::OrganizationId;
+
+        let org_id = OrganizationId(Uuid::new_v4());
+
+        let mut repo = MockUserRepository::new();
+        repo.expect_list_by_organization()
+            .times(1)
+            .returning(|_| Box::pin(async { Ok(vec![]) }));
+
+        let mut service = UserService::new(repo);
+        let users = service.list_by_organization(org_id).await.unwrap();
+
+        assert!(users.is_empty());
     }
 }

@@ -1,4 +1,5 @@
 use common::Config;
+use iam::infrastructure::ferriskey::{FerriskeyIamProvider, config::FerriskeyConfig};
 use mestier_core::{
     EventHub, MestierAuthService, MestierFileStorageService, MestierRateLimitService,
     MestierUseCase, create_service,
@@ -22,10 +23,19 @@ pub struct AppState {
     /// Populated from the single [`EventHub`] created by `create_service`
     /// so all subscribers share the same broadcast channel.
     pub events: EventHub,
+    /// IAM provider for admin operations (create user, etc.).
+    pub iam: Arc<FerriskeyIamProvider>,
 }
 
 pub async fn state(args: Arc<Args>) -> Result<AppState, ServerError> {
     let config = Config::from(args.as_ref().clone());
+
+    let iam_config = FerriskeyConfig::new(
+        args.auth.issuer.clone(),
+        args.auth.client_id.clone(),
+        args.auth.client_secret.clone(),
+    );
+    let iam = Arc::new(FerriskeyIamProvider::new(iam_config));
 
     let service = create_service(config).await.unwrap();
 
@@ -37,5 +47,6 @@ pub async fn state(args: Arc<Args>) -> Result<AppState, ServerError> {
         rate_limit: service.rate_limit,
         rate_limit_quota: service.rate_limit_quota,
         events: service.events,
+        iam,
     })
 }

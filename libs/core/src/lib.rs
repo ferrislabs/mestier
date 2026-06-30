@@ -19,6 +19,7 @@ pub use domain::{
     employee::commands::{CreateEmployeeCommand, LinkEmployeeUserCommand, UpdateEmployeeCommand},
     equipment::commands::{CreateEquipmentCommand, UpdateEquipmentCommand},
     file_storage::commands::UploadFileCommand,
+    member::commands::AddMemberCommand,
     organization::commands::{CreateOrganizationCommand, UpdateOrganizationCommand},
     product::commands::{CreateProductCommand, UpdateProductCommand},
     quote::commands::{

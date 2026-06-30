@@ -3,7 +3,10 @@ use mestier_macros::repository;
 
 use crate::{
     User,
-    domain::user::{commands::UpsertUserBySubCommand, ports::UserRepository},
+    domain::{
+        organization::OrganizationId,
+        user::{commands::UpsertUserBySubCommand, ports::UserRepository},
+    },
     infrastructure::{
         postgres::{SharedTx, error::map_sqlx_error},
         user::postgres::model::UserRow,
@@ -153,6 +156,31 @@ impl<'tx> UserRepository for PgUserRepository<'tx> {
             WHERE deleted_at IS NULL
             ORDER BY created_at ASC
             "#,
+        )
+        .fetch_all(&mut ***tx)
+        .await
+        .map_err(map_sqlx_error)?;
+
+        Ok(rows.into_iter().map(Into::into).collect())
+    }
+
+    #[tracing::instrument(skip(self), fields(db.system = "postgresql", db.operation = "select", db.table = "users", organization_id = %organization_id.0), err)]
+    async fn list_by_organization(
+        &mut self,
+        organization_id: OrganizationId,
+    ) -> Result<Vec<User>, CoreError> {
+        let mut tx = self.tx.lock().await;
+        let rows = sqlx::query_as!(
+            UserRow,
+            r#"
+            SELECT u.id, u.email, u.username, u.display_name, u.sub, u.deleted_at, u.created_at, u.updated_at
+            FROM users u
+            INNER JOIN organization_members om ON om.user_id = u.id
+            WHERE om.organization_id = $1
+              AND u.deleted_at IS NULL
+            ORDER BY om.joined_at ASC
+            "#,
+            organization_id.0,
         )
         .fetch_all(&mut ***tx)
         .await

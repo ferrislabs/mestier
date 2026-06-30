@@ -31,4 +31,9 @@ pub trait UserRepository: Send {
     ) -> impl Future<Output = Result<(), CoreError>> + Send;
 
     fn list_active(&mut self) -> impl Future<Output = Result<Vec<User>, CoreError>> + Send;
+
+    fn list_by_organization(
+        &mut self,
+        organization_id: crate::domain::organization::OrganizationId,
+    ) -> impl Future<Output = Result<Vec<User>, CoreError>> + Send;
 }

@@ -8,6 +8,7 @@ edition.workspace = true
 handlers = { workspace = true }
 mestier-core = { workspace = true }
 auth = { workspace = true }
+iam = { workspace = true }
 
 axum = { workspace = true }
 axum-extra = { workspace = true }

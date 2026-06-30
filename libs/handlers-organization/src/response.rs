@@ -1,5 +1,5 @@
 use chrono::{DateTime, Utc};
-use mestier_core::{Organization, OrganizationId, UserId};
+use mestier_core::{Organization, OrganizationId, User, UserId};
 use serde::Serialize;
 use utoipa::ToSchema;
 
@@ -22,6 +22,26 @@ impl From<Organization> for OrganizationResponse {
             owner_id: org.owner_id,
             created_at: org.created_at,
             updated_at: org.updated_at,
+        }
+    }
+}
+
+/// Lightweight user representation returned by admin user endpoints.
+#[derive(Debug, Serialize, PartialEq, ToSchema)]
+pub struct UserResponse {
+    pub id: UserId,
+    pub email: String,
+    pub username: String,
+    pub name: String,
+}
+
+impl From<User> for UserResponse {
+    fn from(user: User) -> Self {
+        Self {
+            id: user.id,
+            email: user.email,
+            username: user.username,
+            name: user.name,
         }
     }
 }

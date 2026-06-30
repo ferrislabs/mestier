@@ -4,9 +4,12 @@ use mestier_macros::transactional;
 use crate::{
     User,
     application::MestierUseCase,
-    domain::user::{
-        commands::{CreateUserCommand, UpsertUserBySubCommand},
-        service::UserService,
+    domain::{
+        organization::OrganizationId,
+        user::{
+            commands::{CreateUserCommand, UpsertUserBySubCommand},
+            service::UserService,
+        },
     },
 };
 
@@ -48,5 +51,14 @@ impl MestierUseCase {
     pub async fn list_users(&self) -> Result<Vec<User>, CoreError> {
         let mut service = UserService::new(user_repository);
         service.list().await
+    }
+
+    #[transactional(user)]
+    pub async fn list_users_by_org(
+        &self,
+        organization_id: OrganizationId,
+    ) -> Result<Vec<User>, CoreError> {
+        let mut service = UserService::new(user_repository);
+        service.list_by_organization(organization_id).await
     }
 }
