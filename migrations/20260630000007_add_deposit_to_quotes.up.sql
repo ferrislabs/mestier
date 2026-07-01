@@ -1,0 +1,2 @@
+ALTER TABLE quotes ADD COLUMN deposit_basis TEXT NULL;
+ALTER TABLE quotes ADD COLUMN deposit_value NUMERIC NULL;

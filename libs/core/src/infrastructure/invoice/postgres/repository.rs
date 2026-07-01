@@ -375,6 +375,40 @@ impl<'tx> InvoiceRepository for PgInvoiceRepository<'tx> {
 		let mut tx = self.tx.lock().await;
 		fetch_legal_mention_template_ids(&mut tx, invoice_id).await
 	}
+
+	async fn list_deposits_for_parent(
+		&mut self,
+		parent_id: InvoiceId,
+	) -> Result<Vec<Invoice>, CoreError> {
+		let mut tx = self.tx.lock().await;
+		let rows = sqlx::query_as!(
+			InvoiceRow,
+			r#"
+			SELECT
+				id, org_id, customer_id, customer_context_id, reference, title,
+				status::text AS "status!", invoice_type::text AS "invoice_type!",
+				source_quote_id, parent_invoice_id,
+				deposit_basis, deposit_value, deposit_amount_cents,
+				total_ht_cents, total_vat_cents, total_ttc_cents, total_cents,
+				amount_paid_cents, pdf_key, issued_at, due_at,
+				deleted_at, created_at, updated_at
+			FROM invoices
+			WHERE parent_invoice_id = $1
+			  AND invoice_type = 'DEPOSIT'
+			  AND deleted_at IS NULL
+			"#,
+			parent_id.0,
+		)
+		.fetch_all(&mut ***tx)
+		.await
+		.map_err(map_sqlx_error)?;
+
+		let mut invoices = Vec::with_capacity(rows.len());
+		for row in rows {
+			invoices.push(row.into_invoice(vec![])?);
+		}
+		Ok(invoices)
+	}
 }
 
 async fn fetch_legal_mention_template_ids(

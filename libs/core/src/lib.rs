@@ -8,7 +8,7 @@ pub use application::*;
 pub use infrastructure::realtime::EventHub;
 
 pub use domain::{
-    BillingSettings,
+    BillingSettings, DepositBasis,
     Customer, CustomerContact, CustomerContactId, CustomerContext, CustomerContextId, CustomerId,
     CustomerPipelineStage, CustomerStatus, Employee, EmployeeId, Equipment, EquipmentId,
     FileObject, Invoice, InvoiceId, InvoiceLine, InvoiceLineId, InvoiceStatus, InvoiceType,

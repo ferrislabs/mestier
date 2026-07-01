@@ -3,11 +3,11 @@ use common::{CoreError, generate_uuid_v7};
 use rust_decimal::Decimal;
 
 use crate::{
-	OrganizationId,
+	OrganizationId, ServiceRateUnit,
 	domain::{
-		billing::{BillingLine, compute_totals},
+		billing::{BillingLine, DepositBasis, compute_totals, remaining_to_pay, resolve_deposit},
 		invoice::{
-			Invoice, InvoiceId, InvoiceLine, InvoiceLineId, InvoiceStatus,
+			Invoice, InvoiceId, InvoiceLine, InvoiceLineId, InvoiceStatus, InvoiceType,
 			commands::{
 				CreateInvoiceCommand, InvoiceLineCommand, UpdateInvoiceCommand,
 				UpdateInvoiceStatusCommand,
@@ -223,6 +223,196 @@ where
 		}
 
 		self.repo.soft_delete(id, Utc::now()).await
+	}
+
+	pub async fn create_deposit_invoice(
+		&mut self,
+		parent_invoice_id: InvoiceId,
+		basis: DepositBasis,
+		value: Decimal,
+	) -> Result<Invoice, CoreError> {
+		let parent = self
+			.repo
+			.find_by_id(parent_invoice_id)
+			.await?
+			.filter(|inv| inv.deleted_at.is_none())
+			.ok_or(CoreError::NotFound)?;
+
+		let deposit_cents = resolve_deposit(parent.total_ttc_cents as i64, basis, value);
+
+		let now = Utc::now();
+		let invoice_id = InvoiceId(generate_uuid_v7());
+
+		let deposit_basis_str = match basis {
+			DepositBasis::Percent => "PERCENT",
+			DepositBasis::Fixed => "FIXED",
+		};
+
+		// Proportional HT for the deposit; if TTC is zero, HT is zero.
+		let total_ht_cents = if parent.total_ttc_cents > 0 {
+			((parent.total_ht_cents as i64 * deposit_cents) / parent.total_ttc_cents as i64) as i32
+		} else {
+			0
+		};
+		let total_ttc_cents = deposit_cents as i32;
+		let total_vat_cents = total_ttc_cents - total_ht_cents;
+		let total_cents = total_ttc_cents;
+
+		let line = InvoiceLine {
+			id: InvoiceLineId(generate_uuid_v7()),
+			org_id: parent.org_id,
+			invoice_id,
+			service_rate_id: None,
+			label: "Acompte".to_owned(),
+			quantity: Decimal::from(1u32),
+			unit: ServiceRateUnit::Hour,
+			unit_price_cents: deposit_cents as i32,
+			vat_rate: Decimal::ZERO,
+			notes: None,
+			photo_keys: vec![],
+			deleted_at: None,
+			created_at: now,
+			updated_at: now,
+		};
+
+		let invoice = self
+			.repo
+			.insert(&Invoice {
+				id: invoice_id,
+				org_id: parent.org_id,
+				customer_id: parent.customer_id,
+				customer_context_id: parent.customer_context_id,
+				reference: None,
+				title: format!("Acompte — {}", parent.title),
+				status: InvoiceStatus::Draft,
+				invoice_type: InvoiceType::Deposit,
+				source_quote_id: parent.source_quote_id,
+				parent_invoice_id: Some(parent.id),
+				deposit_basis: Some(deposit_basis_str.to_owned()),
+				deposit_value: Some(value),
+				deposit_amount_cents: Some(deposit_cents as i32),
+				total_ht_cents,
+				total_vat_cents,
+				total_ttc_cents,
+				total_cents,
+				amount_paid_cents: 0,
+				pdf_key: None,
+				issued_at: None,
+				due_at: None,
+				lines: vec![line],
+				legal_mention_template_ids: vec![],
+				deleted_at: None,
+				created_at: now,
+				updated_at: now,
+			})
+			.await?;
+
+		self.repo
+			.replace_legal_mention_templates(&invoice, &[])
+			.await?;
+
+		Ok(invoice)
+	}
+
+	pub async fn create_balance_invoice(
+		&mut self,
+		parent_invoice_id: InvoiceId,
+	) -> Result<Invoice, CoreError> {
+		let parent = self
+			.repo
+			.find_by_id(parent_invoice_id)
+			.await?
+			.filter(|inv| inv.deleted_at.is_none())
+			.ok_or(CoreError::NotFound)?;
+
+		let deposits = self
+			.repo
+			.list_deposits_for_parent(parent.id)
+			.await?;
+
+		let deposits_sum: i64 = deposits
+			.iter()
+			.map(|d| {
+				d.deposit_amount_cents
+					.unwrap_or(d.total_ttc_cents) as i64
+			})
+			.sum();
+
+		let remaining = remaining_to_pay(parent.total_ttc_cents as i64, deposits_sum);
+
+		if remaining <= 0 {
+			return Err(CoreError::Conflict(
+				"balance invoice cannot be created: remaining amount to pay is zero or negative"
+					.to_owned(),
+			));
+		}
+
+		let now = Utc::now();
+		let invoice_id = InvoiceId(generate_uuid_v7());
+
+		// Clone parent lines with fresh IDs bound to the new invoice.
+		// Simplification: total_ht_cents and total_vat_cents reflect the parent's full
+		// breakdown; the amount actually due is `remaining` (stored in total_ttc_cents /
+		// total_cents), with deposit_amount_cents recording the already-deducted sum.
+		let lines: Vec<InvoiceLine> = parent
+			.lines
+			.iter()
+			.filter(|l| l.deleted_at.is_none())
+			.map(|l| InvoiceLine {
+				id: InvoiceLineId(generate_uuid_v7()),
+				org_id: l.org_id,
+				invoice_id,
+				service_rate_id: l.service_rate_id,
+				label: l.label.clone(),
+				quantity: l.quantity,
+				unit: l.unit,
+				unit_price_cents: l.unit_price_cents,
+				vat_rate: l.vat_rate,
+				notes: l.notes.clone(),
+				photo_keys: l.photo_keys.clone(),
+				deleted_at: None,
+				created_at: now,
+				updated_at: now,
+			})
+			.collect();
+
+		let invoice = self
+			.repo
+			.insert(&Invoice {
+				id: invoice_id,
+				org_id: parent.org_id,
+				customer_id: parent.customer_id,
+				customer_context_id: parent.customer_context_id,
+				reference: None,
+				title: format!("Solde — {}", parent.title),
+				status: InvoiceStatus::Draft,
+				invoice_type: InvoiceType::Balance,
+				source_quote_id: parent.source_quote_id,
+				parent_invoice_id: Some(parent.id),
+				deposit_basis: None,
+				deposit_value: None,
+				deposit_amount_cents: Some(deposits_sum as i32),
+				total_ht_cents: parent.total_ht_cents,
+				total_vat_cents: parent.total_vat_cents,
+				total_ttc_cents: remaining as i32,
+				total_cents: remaining as i32,
+				amount_paid_cents: 0,
+				pdf_key: None,
+				issued_at: None,
+				due_at: None,
+				lines,
+				legal_mention_template_ids: vec![],
+				deleted_at: None,
+				created_at: now,
+				updated_at: now,
+			})
+			.await?;
+
+		self.repo
+			.replace_legal_mention_templates(&invoice, &[])
+			.await?;
+
+		Ok(invoice)
 	}
 }
 
@@ -795,6 +985,291 @@ mod tests {
 			.unwrap();
 
 		assert_eq!(created.legal_mention_template_ids, template_ids);
+	}
+
+	// ---- deposit invoice ----
+
+	fn parent_invoice_120k(id: InvoiceId) -> Invoice {
+		let now = Utc::now();
+		let org_id = OrganizationId(Uuid::new_v4());
+		Invoice {
+			id,
+			org_id,
+			customer_id: CustomerId(Uuid::new_v4()),
+			customer_context_id: CustomerContextId(Uuid::new_v4()),
+			reference: None,
+			title: "Chantier cuisine".to_owned(),
+			status: InvoiceStatus::Draft,
+			invoice_type: InvoiceType::Standard,
+			source_quote_id: None,
+			parent_invoice_id: None,
+			deposit_basis: None,
+			deposit_value: None,
+			deposit_amount_cents: None,
+			// 100 000 HT + 20 000 TVA = 120 000 TTC
+			total_ht_cents: 100_000,
+			total_vat_cents: 20_000,
+			total_ttc_cents: 120_000,
+			total_cents: 120_000,
+			amount_paid_cents: 0,
+			pdf_key: None,
+			issued_at: None,
+			due_at: None,
+			lines: vec![InvoiceLine {
+				id: InvoiceLineId(Uuid::new_v4()),
+				org_id,
+				invoice_id: id,
+				service_rate_id: None,
+				label: "Cuisine complète".to_owned(),
+				quantity: Decimal::new(1, 0),
+				unit: ServiceRateUnit::M2,
+				unit_price_cents: 100_000,
+				vat_rate: Decimal::from(20u32),
+				notes: None,
+				photo_keys: vec![],
+				deleted_at: None,
+				created_at: now,
+				updated_at: now,
+			}],
+			legal_mention_template_ids: vec![],
+			deleted_at: None,
+			created_at: now,
+			updated_at: now,
+		}
+	}
+
+	#[tokio::test]
+	async fn deposit_30_percent_of_120k_ttc() {
+		let parent_id = InvoiceId(Uuid::new_v4());
+		let parent = parent_invoice_120k(parent_id);
+
+		let mut repo = MockInvoiceRepository::new();
+		repo.expect_find_by_id()
+			.with(eq(parent_id))
+			.times(1)
+			.returning(move |_| {
+				let p = parent.clone();
+				Box::pin(async move { Ok(Some(p)) })
+			});
+		repo.expect_insert().times(1).returning(|inv| {
+			let inv = inv.clone();
+			Box::pin(async move { Ok(inv) })
+		});
+		repo.expect_replace_legal_mention_templates()
+			.times(1)
+			.returning(|_, _| Box::pin(async { Ok(()) }));
+
+		let mut service = InvoiceService::new(repo);
+		let deposit = service
+			.create_deposit_invoice(
+				parent_id,
+				crate::domain::billing::DepositBasis::Percent,
+				Decimal::from(30u32),
+			)
+			.await
+			.unwrap();
+
+		assert_eq!(deposit.total_ttc_cents, 36_000);
+		assert_eq!(deposit.invoice_type, InvoiceType::Deposit);
+		assert_eq!(deposit.parent_invoice_id, Some(parent_id));
+		assert_eq!(deposit.deposit_basis.as_deref(), Some("PERCENT"));
+		assert_eq!(deposit.deposit_amount_cents, Some(36_000));
+	}
+
+	#[tokio::test]
+	async fn deposit_fixed_amount() {
+		let parent_id = InvoiceId(Uuid::new_v4());
+		let parent = parent_invoice_120k(parent_id);
+
+		let mut repo = MockInvoiceRepository::new();
+		repo.expect_find_by_id()
+			.with(eq(parent_id))
+			.times(1)
+			.returning(move |_| {
+				let p = parent.clone();
+				Box::pin(async move { Ok(Some(p)) })
+			});
+		repo.expect_insert().times(1).returning(|inv| {
+			let inv = inv.clone();
+			Box::pin(async move { Ok(inv) })
+		});
+		repo.expect_replace_legal_mention_templates()
+			.times(1)
+			.returning(|_, _| Box::pin(async { Ok(()) }));
+
+		let mut service = InvoiceService::new(repo);
+		let deposit = service
+			.create_deposit_invoice(
+				parent_id,
+				crate::domain::billing::DepositBasis::Fixed,
+				Decimal::from(50_000u32),
+			)
+			.await
+			.unwrap();
+
+		assert_eq!(deposit.total_ttc_cents, 50_000);
+		assert_eq!(deposit.deposit_basis.as_deref(), Some("FIXED"));
+		assert_eq!(deposit.deposit_amount_cents, Some(50_000));
+		assert_eq!(deposit.parent_invoice_id, Some(parent_id));
+	}
+
+	// ---- balance invoice ----
+
+	#[tokio::test]
+	async fn balance_after_36k_deposit_gives_84k_remaining() {
+		let parent_id = InvoiceId(Uuid::new_v4());
+		let parent = parent_invoice_120k(parent_id);
+		let deposit_invoice_id = InvoiceId(Uuid::new_v4());
+		let now = Utc::now();
+
+		// A deposit invoice that already exists against the parent.
+		let deposit_inv = Invoice {
+			id: deposit_invoice_id,
+			org_id: parent.org_id,
+			customer_id: parent.customer_id,
+			customer_context_id: parent.customer_context_id,
+			reference: None,
+			title: "Acompte — Chantier cuisine".to_owned(),
+			status: InvoiceStatus::Draft,
+			invoice_type: InvoiceType::Deposit,
+			source_quote_id: None,
+			parent_invoice_id: Some(parent_id),
+			deposit_basis: Some("PERCENT".to_owned()),
+			deposit_value: Some(Decimal::from(30u32)),
+			deposit_amount_cents: Some(36_000),
+			total_ht_cents: 30_000,
+			total_vat_cents: 6_000,
+			total_ttc_cents: 36_000,
+			total_cents: 36_000,
+			amount_paid_cents: 0,
+			pdf_key: None,
+			issued_at: None,
+			due_at: None,
+			lines: vec![],
+			legal_mention_template_ids: vec![],
+			deleted_at: None,
+			created_at: now,
+			updated_at: now,
+		};
+
+		let mut repo = MockInvoiceRepository::new();
+		repo.expect_find_by_id()
+			.with(eq(parent_id))
+			.times(1)
+			.returning(move |_| {
+				let p = parent.clone();
+				Box::pin(async move { Ok(Some(p)) })
+			});
+		repo.expect_list_deposits_for_parent()
+			.with(eq(parent_id))
+			.times(1)
+			.returning(move |_| {
+				let d = deposit_inv.clone();
+				Box::pin(async move { Ok(vec![d]) })
+			});
+		repo.expect_insert().times(1).returning(|inv| {
+			let inv = inv.clone();
+			Box::pin(async move { Ok(inv) })
+		});
+		repo.expect_replace_legal_mention_templates()
+			.times(1)
+			.returning(|_, _| Box::pin(async { Ok(()) }));
+
+		let mut service = InvoiceService::new(repo);
+		let balance = service.create_balance_invoice(parent_id).await.unwrap();
+
+		assert_eq!(balance.total_ttc_cents, 84_000);
+		assert_eq!(balance.total_cents, 84_000);
+		assert_eq!(balance.invoice_type, InvoiceType::Balance);
+		assert_eq!(balance.parent_invoice_id, Some(parent_id));
+		assert_eq!(balance.deposit_amount_cents, Some(36_000));
+	}
+
+	#[tokio::test]
+	async fn balance_rejected_when_remaining_is_zero() {
+		let parent_id = InvoiceId(Uuid::new_v4());
+		let parent = parent_invoice_120k(parent_id);
+		let now = Utc::now();
+
+		// A deposit invoice that covers 100% of the TTC.
+		let full_deposit = Invoice {
+			id: InvoiceId(Uuid::new_v4()),
+			org_id: parent.org_id,
+			customer_id: parent.customer_id,
+			customer_context_id: parent.customer_context_id,
+			reference: None,
+			title: "Acompte — Chantier cuisine".to_owned(),
+			status: InvoiceStatus::Draft,
+			invoice_type: InvoiceType::Deposit,
+			source_quote_id: None,
+			parent_invoice_id: Some(parent_id),
+			deposit_basis: Some("PERCENT".to_owned()),
+			deposit_value: Some(Decimal::from(100u32)),
+			deposit_amount_cents: Some(120_000),
+			total_ht_cents: 100_000,
+			total_vat_cents: 20_000,
+			total_ttc_cents: 120_000,
+			total_cents: 120_000,
+			amount_paid_cents: 0,
+			pdf_key: None,
+			issued_at: None,
+			due_at: None,
+			lines: vec![],
+			legal_mention_template_ids: vec![],
+			deleted_at: None,
+			created_at: now,
+			updated_at: now,
+		};
+
+		let mut repo = MockInvoiceRepository::new();
+		repo.expect_find_by_id()
+			.with(eq(parent_id))
+			.times(1)
+			.returning(move |_| {
+				let p = parent.clone();
+				Box::pin(async move { Ok(Some(p)) })
+			});
+		repo.expect_list_deposits_for_parent()
+			.with(eq(parent_id))
+			.times(1)
+			.returning(move |_| {
+				let d = full_deposit.clone();
+				Box::pin(async move { Ok(vec![d]) })
+			});
+
+		let mut service = InvoiceService::new(repo);
+		let result = service.create_balance_invoice(parent_id).await;
+
+		assert!(matches!(result, Err(CoreError::Conflict(_))));
+	}
+
+	#[tokio::test]
+	async fn deposit_and_balance_not_found_when_parent_missing() {
+		let parent_id = InvoiceId(Uuid::new_v4());
+
+		let mut repo = MockInvoiceRepository::new();
+		repo.expect_find_by_id()
+			.returning(|_| Box::pin(async { Ok(None) }));
+
+		let mut service = InvoiceService::new(repo);
+		let r1 = service
+			.create_deposit_invoice(
+				parent_id,
+				crate::domain::billing::DepositBasis::Percent,
+				Decimal::from(30u32),
+			)
+			.await;
+		assert!(matches!(r1, Err(CoreError::NotFound)));
+
+		// Need a fresh repo for the balance call because find_by_id can only be set once
+		// with `.returning` (any call). A second mock is cleaner.
+		let mut repo2 = MockInvoiceRepository::new();
+		repo2
+			.expect_find_by_id()
+			.returning(|_| Box::pin(async { Ok(None) }));
+		let mut service2 = InvoiceService::new(repo2);
+		let r2 = service2.create_balance_invoice(parent_id).await;
+		assert!(matches!(r2, Err(CoreError::NotFound)));
 	}
 
 	// ---- list ----

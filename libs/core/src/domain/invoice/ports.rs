@@ -59,4 +59,9 @@ pub trait InvoiceRepository: Send {
 		&mut self,
 		invoice_id: InvoiceId,
 	) -> impl Future<Output = Result<Vec<LegalMentionTemplateId>, CoreError>> + Send;
+
+	fn list_deposits_for_parent(
+		&mut self,
+		parent_id: InvoiceId,
+	) -> impl Future<Output = Result<Vec<Invoice>, CoreError>> + Send;
 }

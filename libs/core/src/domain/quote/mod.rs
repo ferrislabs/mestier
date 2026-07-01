@@ -119,6 +119,8 @@ pub struct Quote {
     pub customer_id: CustomerId,
     pub customer_context_id: CustomerContextId,
     pub status: QuoteStatus,
+    pub deposit_basis: Option<String>,
+    pub deposit_value: Option<Decimal>,
     pub total_cents: i32,
     pub total_ht_cents: i32,
     pub total_vat_cents: i32,
