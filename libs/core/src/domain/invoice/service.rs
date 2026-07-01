@@ -1102,7 +1102,7 @@ mod tests {
 			.create_deposit_invoice(
 				parent_id,
 				crate::domain::billing::DepositBasis::Fixed,
-				Decimal::from(50_000u32),
+				Decimal::from(500u32),
 			)
 			.await
 			.unwrap();
