@@ -151,6 +151,8 @@ const DEPOSIT_INVOICE_PATH =
 	'/api/v1/invoices/{invoice_id}/deposit-invoice' as const
 const BALANCE_INVOICE_PATH =
 	'/api/v1/invoices/{invoice_id}/balance-invoice' as const
+const ISSUE_INVOICE_PATH = '/api/v1/invoices/{invoice_id}/issue' as const
+const SHARE_INVOICE_PATH = '/api/v1/invoices/{invoice_id}/share' as const
 
 export function useConvertQuoteToInvoice() {
 	const queryClient = useQueryClient()
@@ -208,6 +210,31 @@ export function useCreateBalanceInvoice() {
 				}),
 			])
 		},
+	})
+}
+
+export function useIssueInvoice(invoiceId: string) {
+	const queryClient = useQueryClient()
+
+	return useMutation({
+		...window.tanstackApi.mutation('post', ISSUE_INVOICE_PATH).mutationOptions,
+		onSuccess: async (invoice) => {
+			await Promise.all([
+				queryClient.invalidateQueries({
+					predicate: (query) =>
+						isInvoiceListQuery(query.queryKey, invoice.data.organization_id),
+				}),
+				queryClient.invalidateQueries({
+					queryKey: invoiceKey(invoiceId),
+				}),
+			])
+		},
+	})
+}
+
+export function useShareInvoice() {
+	return useMutation({
+		...window.tanstackApi.mutation('post', SHARE_INVOICE_PATH).mutationOptions,
 	})
 }
 

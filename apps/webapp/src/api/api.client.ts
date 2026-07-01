@@ -375,6 +375,12 @@ export namespace Schemas {
 
   export type CreateDepositInvoiceRequest = { basis: string; value: string };
 
+  export type ShareLinkResponse = {
+    token: string;
+    path: string;
+    expires_at: number;
+  };
+
   // </Schemas>
 }
 
@@ -1836,6 +1842,39 @@ export namespace Endpoints {
     };
   };
 
+  export type post_IssueInvoice = {
+    method: "POST";
+    path: "/api/v1/invoices/{invoice_id}/issue";
+    requestFormat: "json";
+    parameters: {
+      path: { invoice_id: string };
+    };
+    responses: {
+      200: { data: Schemas.InvoiceResponse };
+      400: unknown;
+      401: unknown;
+      403: unknown;
+      404: unknown;
+      409: unknown;
+    };
+  };
+
+  export type post_ShareInvoice = {
+    method: "POST";
+    path: "/api/v1/invoices/{invoice_id}/share";
+    requestFormat: "json";
+    parameters: {
+      path: { invoice_id: string };
+    };
+    responses: {
+      200: { data: Schemas.ShareLinkResponse };
+      400: unknown;
+      401: unknown;
+      403: unknown;
+      404: unknown;
+    };
+  };
+
   // </Endpoints>
 }
 
@@ -1911,6 +1950,8 @@ export type EndpointByMethod = {
     "/api/v1/quotes/{quote_id}/convert-to-invoice": Endpoints.post_ConvertQuoteToInvoice;
     "/api/v1/invoices/{invoice_id}/deposit-invoice": Endpoints.post_CreateDepositInvoice;
     "/api/v1/invoices/{invoice_id}/balance-invoice": Endpoints.post_CreateBalanceInvoice;
+    "/api/v1/invoices/{invoice_id}/issue": Endpoints.post_IssueInvoice;
+    "/api/v1/invoices/{invoice_id}/share": Endpoints.post_ShareInvoice;
   };
   put: {
     "/api/v1/organizations/{organization_id}/billing-settings": Endpoints.put_UpsertBillingSettings;

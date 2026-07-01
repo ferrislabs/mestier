@@ -2,15 +2,20 @@ import { Link, useNavigate } from '@tanstack/react-router'
 import {
 	AlertCircle,
 	ArrowLeft,
+	Copy,
+	Download,
+	Eye,
 	FileText,
 	ImagePlus,
 	Loader2,
 	Plus,
 	SendHorizonal,
 	Trash2,
+	Zap,
 } from 'lucide-react'
 import type * as React from 'react'
 import { useEffect, useState } from 'react'
+import { DocumentPreview } from '#/components/document-preview'
 import { LegalMentionSelector } from '#/components/legal-mention-selector'
 import {
 	AlertDialog,
@@ -36,6 +41,12 @@ import {
 	SelectValue,
 } from '#/components/ui/select'
 import {
+	Sheet,
+	SheetContent,
+	SheetHeader,
+	SheetTitle,
+} from '#/components/ui/sheet'
+import {
 	PageHeader,
 	PageShell,
 	SectionCard,
@@ -43,6 +54,8 @@ import {
 	StatusBadge,
 } from '#/components/ui/surface'
 import { Textarea } from '#/components/ui/textarea'
+import { useActiveOrganization } from '#/hooks/use-active-organization'
+import { useBillingSettings } from '#/hooks/use-billing-settings'
 import { type CatalogItem, useCatalogItems } from '#/hooks/use-catalog-items'
 import {
 	type Customer,
@@ -58,6 +71,8 @@ import {
 	useCreateDepositInvoice,
 	useDeleteInvoice,
 	useInvoice,
+	useIssueInvoice,
+	useShareInvoice,
 	useUpdateInvoice,
 	useUpdateInvoiceStatus,
 } from '#/hooks/use-invoices'
@@ -69,6 +84,7 @@ import {
 	type ServiceRateUnit,
 	useReferenceCatalog,
 } from '#/hooks/use-reference-catalog'
+import { buildShareUrl, openInvoicePdf } from '#/lib/document-download'
 import {
 	centsToEuros,
 	customerContextDisplayName,
@@ -115,10 +131,12 @@ export function InvoiceEditFeature({ invoiceId }: InvoiceEditFeatureProps) {
 
 function InvoiceEditWorkspace({ invoice }: { invoice: Invoice }) {
 	const navigate = useNavigate()
+	const { activeOrganization } = useActiveOrganization()
 	const customers = useCustomers(invoice.organization_id)
 	const legalMentionTemplates = useLegalMentionTemplates(
 		invoice.organization_id,
 	)
+	const billingSettings = useBillingSettings(invoice.organization_id)
 	const catalog = useReferenceCatalog(invoice.organization_id, {
 		employees: false,
 		equipment: false,
@@ -132,6 +150,8 @@ function InvoiceEditWorkspace({ invoice }: { invoice: Invoice }) {
 	const deleteInvoice = useDeleteInvoice(invoice.organization_id)
 	const createDepositInvoice = useCreateDepositInvoice()
 	const createBalanceInvoice = useCreateBalanceInvoice()
+	const issueInvoice = useIssueInvoice(invoice.id)
+	const shareInvoice = useShareInvoice()
 	const uploadFile = useUploadFile()
 	const [values, setValues] = useState<InvoiceFormValues>(() =>
 		invoiceToForm(invoice, catalogItems),
@@ -139,6 +159,9 @@ function InvoiceEditWorkspace({ invoice }: { invoice: Invoice }) {
 	const [depositDialogOpen, setDepositDialogOpen] = useState(false)
 	const [depositBasis, setDepositBasis] = useState('PERCENT')
 	const [depositValue, setDepositValueState] = useState('')
+	const [previewOpen, setPreviewOpen] = useState(false)
+	const [shareLabel, setShareLabel] = useState<string | null>(null)
+	const [pdfError, setPdfError] = useState<string | null>(null)
 	const customerContexts = useCustomerContexts(
 		values.customerId,
 		Boolean(values.customerId),
@@ -149,6 +172,7 @@ function InvoiceEditWorkspace({ invoice }: { invoice: Invoice }) {
 	}, [catalogItems, invoice])
 
 	const isDraft = invoice.status === 'DRAFT'
+	const isIssued = Boolean(invoice.reference) && invoice.status !== 'DRAFT'
 
 	const updateValues = (patch: Partial<InvoiceFormValues>) => {
 		setValues((current) => ({ ...current, ...patch }))
@@ -248,6 +272,9 @@ function InvoiceEditWorkspace({ invoice }: { invoice: Invoice }) {
 		deleteInvoice.error?.message ??
 		createDepositInvoice.error?.message ??
 		createBalanceInvoice.error?.message ??
+		issueInvoice.error?.message ??
+		shareInvoice.error?.message ??
+		pdfError ??
 		uploadFile.error?.message ??
 		null
 
@@ -312,58 +339,132 @@ function InvoiceEditWorkspace({ invoice }: { invoice: Invoice }) {
 		})
 	}
 
+	const issueCurrentInvoice = async () => {
+		await issueInvoice.mutateAsync({
+			path: { invoice_id: invoice.id },
+		})
+	}
+
+	const downloadPdf = async () => {
+		setPdfError(null)
+		try {
+			await openInvoicePdf(invoice.id)
+		} catch (err) {
+			setPdfError(
+				err instanceof Error
+					? err.message
+					: 'Erreur lors du téléchargement du PDF',
+			)
+		}
+	}
+
+	const shareLinkAndCopy = async () => {
+		setShareLabel(null)
+		const result = await shareInvoice.mutateAsync({
+			path: { invoice_id: invoice.id },
+		})
+		const url = buildShareUrl(result.data.path)
+		try {
+			await navigator.clipboard.writeText(url)
+			setShareLabel('Lien copié !')
+			setTimeout(() => setShareLabel(null), 3000)
+		} catch {
+			setShareLabel(url)
+		}
+	}
+
+	const currentCustomer = customers.data?.data.find(
+		(c) => c.id === invoice.customer_id,
+	)
+	const customerName = currentCustomer
+		? `${currentCustomer.first_name} ${currentCustomer.last_name}`
+		: ''
+
 	return (
-		<InvoiceEditUI
-			invoice={invoice}
-			values={values}
-			customers={customers.data?.data ?? []}
-			legalMentionTemplates={legalMentionTemplates.data?.data ?? []}
-			isLegalMentionTemplatesLoading={legalMentionTemplates.isLoading}
-			customerContexts={customerContexts.data?.data ?? []}
-			catalogItems={catalogItems}
-			error={error}
-			isDraft={isDraft}
-			isLoading={
-				customers.isLoading ||
-				customerContexts.isLoading ||
-				catalog.serviceRates.isLoading ||
-				catalog.products.isLoading
-			}
-			isSaving={updateInvoice.isPending}
-			isSendingStatus={updateInvoiceStatus.isPending}
-			isDeleting={deleteInvoice.isPending}
-			isCreatingDeposit={createDepositInvoice.isPending}
-			isCreatingBalance={createBalanceInvoice.isPending}
-			isUploading={uploadFile.isPending}
-			canSave={canSave}
-			depositDialogOpen={depositDialogOpen}
-			depositBasis={depositBasis}
-			depositValue={depositValue}
-			onChange={(patch) => {
-				if (patch.customerId !== undefined) {
-					updateValues({ customerId: patch.customerId, customerContextId: '' })
-					return
+		<>
+			<Sheet open={previewOpen} onOpenChange={setPreviewOpen}>
+				<SheetContent
+					side="right"
+					className="w-full overflow-y-auto sm:max-w-2xl"
+				>
+					<SheetHeader>
+						<SheetTitle>Aperçu du document</SheetTitle>
+					</SheetHeader>
+					<div className="p-4">
+						<DocumentPreview
+							invoice={invoice}
+							billingSettings={billingSettings.data ?? null}
+							templates={legalMentionTemplates.data?.data ?? []}
+							customerName={customerName}
+							sellerName={activeOrganization?.name ?? ''}
+						/>
+					</div>
+				</SheetContent>
+			</Sheet>
+
+			<InvoiceEditUI
+				invoice={invoice}
+				values={values}
+				customers={customers.data?.data ?? []}
+				legalMentionTemplates={legalMentionTemplates.data?.data ?? []}
+				isLegalMentionTemplatesLoading={legalMentionTemplates.isLoading}
+				customerContexts={customerContexts.data?.data ?? []}
+				catalogItems={catalogItems}
+				error={error}
+				isDraft={isDraft}
+				isIssued={isIssued}
+				isLoading={
+					customers.isLoading ||
+					customerContexts.isLoading ||
+					catalog.serviceRates.isLoading ||
+					catalog.products.isLoading
 				}
-				updateValues(patch)
-			}}
-			onLineChange={updateLine}
-			onSelectCatalogItem={selectCatalogItem}
-			onAddLine={addLine}
-			onRemoveLine={removeLine}
-			onUploadLinePhoto={uploadLinePhoto}
-			onSave={saveInvoice}
-			onMarkAsSent={markAsSent}
-			onDelete={deleteCurrentInvoice}
-			onOpenDepositDialog={() => setDepositDialogOpen(true)}
-			onCloseDepositDialog={() => {
-				setDepositDialogOpen(false)
-				setDepositValueState('')
-			}}
-			onDepositBasisChange={setDepositBasis}
-			onDepositValueChange={setDepositValueState}
-			onCreateDeposit={() => void createDeposit()}
-			onCreateBalance={() => void createBalance()}
-		/>
+				isSaving={updateInvoice.isPending}
+				isSendingStatus={updateInvoiceStatus.isPending}
+				isDeleting={deleteInvoice.isPending}
+				isCreatingDeposit={createDepositInvoice.isPending}
+				isCreatingBalance={createBalanceInvoice.isPending}
+				isIssuing={issueInvoice.isPending}
+				isSharing={shareInvoice.isPending}
+				isUploading={uploadFile.isPending}
+				shareLabel={shareLabel}
+				canSave={canSave}
+				depositDialogOpen={depositDialogOpen}
+				depositBasis={depositBasis}
+				depositValue={depositValue}
+				onChange={(patch) => {
+					if (patch.customerId !== undefined) {
+						updateValues({
+							customerId: patch.customerId,
+							customerContextId: '',
+						})
+						return
+					}
+					updateValues(patch)
+				}}
+				onLineChange={updateLine}
+				onSelectCatalogItem={selectCatalogItem}
+				onAddLine={addLine}
+				onRemoveLine={removeLine}
+				onUploadLinePhoto={uploadLinePhoto}
+				onSave={saveInvoice}
+				onMarkAsSent={markAsSent}
+				onDelete={deleteCurrentInvoice}
+				onOpenDepositDialog={() => setDepositDialogOpen(true)}
+				onCloseDepositDialog={() => {
+					setDepositDialogOpen(false)
+					setDepositValueState('')
+				}}
+				onDepositBasisChange={setDepositBasis}
+				onDepositValueChange={setDepositValueState}
+				onCreateDeposit={() => void createDeposit()}
+				onCreateBalance={() => void createBalance()}
+				onOpenPreview={() => setPreviewOpen(true)}
+				onIssue={() => void issueCurrentInvoice()}
+				onDownloadPdf={() => void downloadPdf()}
+				onShareLink={() => void shareLinkAndCopy()}
+			/>
+		</>
 	)
 }
 
@@ -377,13 +478,17 @@ function InvoiceEditUI({
 	catalogItems,
 	error,
 	isDraft,
+	isIssued,
 	isLoading,
 	isSaving,
 	isSendingStatus,
 	isDeleting,
 	isCreatingDeposit,
 	isCreatingBalance,
+	isIssuing,
+	isSharing,
 	isUploading,
+	shareLabel,
 	canSave,
 	depositDialogOpen,
 	depositBasis,
@@ -403,6 +508,10 @@ function InvoiceEditUI({
 	onDepositValueChange,
 	onCreateDeposit,
 	onCreateBalance,
+	onOpenPreview,
+	onIssue,
+	onDownloadPdf,
+	onShareLink,
 }: {
 	invoice: Invoice
 	values: InvoiceFormValues
@@ -413,13 +522,17 @@ function InvoiceEditUI({
 	catalogItems: CatalogItem[]
 	error: string | null
 	isDraft: boolean
+	isIssued: boolean
 	isLoading: boolean
 	isSaving: boolean
 	isSendingStatus: boolean
 	isDeleting: boolean
 	isCreatingDeposit: boolean
 	isCreatingBalance: boolean
+	isIssuing: boolean
+	isSharing: boolean
 	isUploading: boolean
+	shareLabel: string | null
 	canSave: boolean
 	depositDialogOpen: boolean
 	depositBasis: string
@@ -439,6 +552,10 @@ function InvoiceEditUI({
 	onDepositValueChange: (value: string) => void
 	onCreateDeposit: () => void
 	onCreateBalance: () => void
+	onOpenPreview: () => void
+	onIssue: () => void
+	onDownloadPdf: () => void
+	onShareLink: () => void
 }) {
 	const isStandard = invoice.invoice_type === 'STANDARD'
 	const anyPending =
@@ -446,7 +563,9 @@ function InvoiceEditUI({
 		isSaving ||
 		isSendingStatus ||
 		isCreatingDeposit ||
-		isCreatingBalance
+		isCreatingBalance ||
+		isIssuing ||
+		isSharing
 
 	return (
 		<PageShell>
@@ -461,6 +580,12 @@ function InvoiceEditUI({
 								<ArrowLeft />
 								Retour
 							</Link>
+						</Button>
+
+						{/* Aperçu — always available */}
+						<Button type="button" variant="outline" onClick={onOpenPreview}>
+							<Eye />
+							Aperçu
 						</Button>
 
 						{isStandard ? (
@@ -558,6 +683,55 @@ function InvoiceEditUI({
 									Marquer comme envoyée
 								</Button>
 
+								{/* Issue / emit invoice — DRAFT only, irreversible */}
+								<AlertDialog>
+									<AlertDialogTrigger asChild>
+										<Button
+											type="button"
+											variant="default"
+											disabled={anyPending}
+										>
+											{isIssuing ? (
+												<Loader2 className="animate-spin" />
+											) : (
+												<Zap />
+											)}
+											Émettre / Envoyer au client
+										</Button>
+									</AlertDialogTrigger>
+									<AlertDialogContent>
+										<AlertDialogHeader>
+											<AlertDialogTitle>
+												Émettre cette facture ?
+											</AlertDialogTitle>
+											<AlertDialogDescription>
+												Un PDF sera généré et la facture passera en statut «
+												Envoyée ». Cette action est irréversible : la facture ne
+												pourra plus être modifiée.
+											</AlertDialogDescription>
+										</AlertDialogHeader>
+										<AlertDialogFooter>
+											<AlertDialogCancel disabled={isIssuing}>
+												Annuler
+											</AlertDialogCancel>
+											<AlertDialogAction
+												disabled={isIssuing}
+												onClick={(event) => {
+													event.preventDefault()
+													void onIssue()
+												}}
+											>
+												{isIssuing ? (
+													<Loader2 className="animate-spin" />
+												) : (
+													<Zap />
+												)}
+												Émettre
+											</AlertDialogAction>
+										</AlertDialogFooter>
+									</AlertDialogContent>
+								</AlertDialog>
+
 								<Button
 									type="button"
 									disabled={
@@ -571,6 +745,30 @@ function InvoiceEditUI({
 										<FileText />
 									)}
 									Enregistrer
+								</Button>
+							</>
+						) : null}
+
+						{/* Post-issue actions — PDF download + share */}
+						{isIssued ? (
+							<>
+								<Button
+									type="button"
+									variant="outline"
+									disabled={anyPending}
+									onClick={onDownloadPdf}
+								>
+									<Download />
+									Télécharger le PDF
+								</Button>
+								<Button
+									type="button"
+									variant="outline"
+									disabled={anyPending || isSharing}
+									onClick={onShareLink}
+								>
+									{isSharing ? <Loader2 className="animate-spin" /> : <Copy />}
+									{shareLabel ?? 'Partager le lien'}
 								</Button>
 							</>
 						) : null}
