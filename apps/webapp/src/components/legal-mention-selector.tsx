@@ -1,3 +1,4 @@
+import { Link } from '@tanstack/react-router'
 import { Checkbox as CheckboxPrimitive } from 'radix-ui'
 import { cn } from '#/lib/utils'
 
@@ -25,7 +26,14 @@ export function LegalMentionSelector({
 	if (templates.length === 0) {
 		return (
 			<p className="text-sm text-muted-foreground">
-				Aucune mention légale. Créez-en dans Paramètres → Facturation.
+				Aucune mention légale. Créez-en dans{' '}
+				<Link
+					to="/settings"
+					className="font-medium text-primary underline underline-offset-2"
+				>
+					Paramètres → Facturation
+				</Link>
+				.
 			</p>
 		)
 	}
