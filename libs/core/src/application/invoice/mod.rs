@@ -134,10 +134,15 @@ impl MestierUseCase {
 			.next_reference(invoice.org_id, now.year())
 			.await?;
 
-		// ── 3. Gather billing settings ───────────────────────────────────────
+		// ── 3. Gather billing settings (required — seller identity) ──────────
 		let settings = billing_settings_repository
 			.find_by_org(invoice.org_id)
 			.await?;
+		if settings.is_none() {
+			return Err(CoreError::Conflict(
+				"configure billing settings before issuing an invoice".to_owned(),
+			));
+		}
 
 		// ── 4. Gather organization (for seller name) ──────────────────────────
 		let org = organization_repository

@@ -423,6 +423,7 @@ function InvoiceEditWorkspace({ invoice }: { invoice: Invoice }) {
 				error={error}
 				isDraft={isDraft}
 				isIssued={isIssued}
+				billingConfigured={Boolean(billingSettings.data)}
 				isLoading={
 					customers.isLoading ||
 					customerContexts.isLoading ||
@@ -489,6 +490,7 @@ function InvoiceEditUI({
 	error,
 	isDraft,
 	isIssued,
+	billingConfigured,
 	isLoading,
 	isSaving,
 	isSendingStatus,
@@ -533,6 +535,7 @@ function InvoiceEditUI({
 	error: string | null
 	isDraft: boolean
 	isIssued: boolean
+	billingConfigured: boolean
 	isLoading: boolean
 	isSaving: boolean
 	isSendingStatus: boolean
@@ -605,7 +608,7 @@ function InvoiceEditUI({
 										<Button
 											type="button"
 											variant="default"
-											disabled={anyPending}
+											disabled={anyPending || !billingConfigured}
 										>
 											{isIssuing ? (
 												<Loader2 className="animate-spin" />
@@ -853,6 +856,16 @@ function InvoiceEditUI({
 			{error ? (
 				<div className="rounded-lg border border-destructive/30 bg-destructive-soft px-4 py-3 text-sm text-destructive">
 					{error}
+				</div>
+			) : null}
+
+			{isDraft && !billingConfigured ? (
+				<div className="rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+					Renseignez l'identité de l'émetteur dans{' '}
+					<Link to="/settings" className="font-semibold underline">
+						Paramètres → Facturation
+					</Link>{' '}
+					avant de pouvoir émettre cette facture.
 				</div>
 			) : null}
 
