@@ -17,6 +17,8 @@ export function useBillingSettings(organizationId: string) {
 	const baseQueryFn = options.queryFn
 	return useQuery({
 		...options,
+		// Do not fire the request when we have no organization id yet.
+		enabled: Boolean(organizationId),
 		// The backend returns 204 (no body) when no settings have been saved yet, so
 		// the fetcher resolves with `undefined`. TanStack Query forbids `undefined`
 		// from a queryFn, so coerce it to `null` ("not configured" → form defaults).
