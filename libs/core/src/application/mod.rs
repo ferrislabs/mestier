@@ -15,6 +15,7 @@ use crate::infrastructure::realtime::{EventHub, RealtimeEventPublisher};
 
 pub mod authorization;
 pub mod billing_settings;
+pub mod document;
 pub mod customer;
 pub mod customer_contact;
 pub mod customer_context;
@@ -71,6 +72,7 @@ pub struct MestierUseCase {
     pub(crate) pool: PgPool,
     pub(crate) authz: MestierAuthorizer,
     pub(crate) events: Arc<RealtimeEventPublisher>,
+    pub(crate) file_storage: MestierFileStorageService,
 }
 
 impl MestierUseCase {
@@ -78,11 +80,13 @@ impl MestierUseCase {
         pool: PgPool,
         authz: MestierAuthorizer,
         events: Arc<RealtimeEventPublisher>,
+        file_storage: MestierFileStorageService,
     ) -> Self {
         Self {
             pool,
             authz,
             events,
+            file_storage,
         }
     }
 }
@@ -152,8 +156,8 @@ pub async fn create_service(config: Config) -> Result<MestierService, CoreError>
 
     Ok(MestierService::new(
         auth,
-        file_storage,
-        MestierUseCase::new(pool, default_authorizer(), publisher),
+        file_storage.clone(),
+        MestierUseCase::new(pool, default_authorizer(), publisher, file_storage),
         rate_limit,
         rate_limit_quota,
         hub,

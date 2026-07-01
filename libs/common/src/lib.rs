@@ -1,3 +1,6 @@
+pub mod document_token;
+pub use document_token::{DocumentTokenError, sign_document_token, verify_document_token};
+
 use std::sync::{LazyLock, Mutex};
 
 use chrono::{DateTime, Utc};
@@ -10,6 +13,10 @@ pub struct Config {
     pub auth: AuthConfig,
     pub rate_limit: RateLimitConfig,
     pub file_storage: FileStorageConfig,
+    /// Secret used to sign and verify document access tokens (HMAC-SHA256).
+    /// Reads from `DOCUMENT_SIGNING_SECRET`; falls back to `AUTH_CLIENT_SECRET`
+    /// when not set (both are owned by the app process and never leave the server).
+    pub document_signing_secret: String,
 }
 
 #[derive(Clone, Debug)]

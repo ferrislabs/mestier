@@ -1,0 +1,165 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n\t\t\tUPDATE invoices\n\t\t\tSET\n\t\t\t\tstatus     = 'SENT'::invoice_status,\n\t\t\t\treference  = $2,\n\t\t\t\tissued_at  = $3,\n\t\t\t\tpdf_key    = $4,\n\t\t\t\tsnapshot   = $5,\n\t\t\t\tupdated_at = $6\n\t\t\tWHERE id = $1 AND deleted_at IS NULL\n\t\t\tRETURNING\n\t\t\t\tid, org_id, customer_id, customer_context_id, reference, title,\n\t\t\t\tstatus::text AS \"status!\", invoice_type::text AS \"invoice_type!\",\n\t\t\t\tsource_quote_id, parent_invoice_id,\n\t\t\t\tdeposit_basis, deposit_value, deposit_amount_cents,\n\t\t\t\ttotal_ht_cents, total_vat_cents, total_ttc_cents, total_cents,\n\t\t\t\tamount_paid_cents, pdf_key, issued_at, due_at,\n\t\t\t\tdeleted_at, created_at, updated_at\n\t\t\t",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "org_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "customer_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 3,
+        "name": "customer_context_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 4,
+        "name": "reference",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "title",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 6,
+        "name": "status!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 7,
+        "name": "invoice_type!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 8,
+        "name": "source_quote_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 9,
+        "name": "parent_invoice_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 10,
+        "name": "deposit_basis",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 11,
+        "name": "deposit_value",
+        "type_info": "Numeric"
+      },
+      {
+        "ordinal": 12,
+        "name": "deposit_amount_cents",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 13,
+        "name": "total_ht_cents",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 14,
+        "name": "total_vat_cents",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 15,
+        "name": "total_ttc_cents",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 16,
+        "name": "total_cents",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 17,
+        "name": "amount_paid_cents",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 18,
+        "name": "pdf_key",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 19,
+        "name": "issued_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 20,
+        "name": "due_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 21,
+        "name": "deleted_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 22,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 23,
+        "name": "updated_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Timestamptz",
+        "Text",
+        "Jsonb",
+        "Timestamptz"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      true,
+      false,
+      null,
+      null,
+      true,
+      true,
+      true,
+      true,
+      true,
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      true,
+      true,
+      true,
+      false,
+      false
+    ]
+  },
+  "hash": "e2f79c48ba0e5014fcf38acd165448e89c72a6224467070af01750b1dfcf63fa"
+}

@@ -1,5 +1,6 @@
 use chrono::{DateTime, Utc};
 use common::CoreError;
+use serde_json::Value;
 
 use crate::{LegalMentionTemplateId, OrganizationId};
 use crate::domain::invoice::{Invoice, InvoiceId, InvoiceStatus};
@@ -64,4 +65,17 @@ pub trait InvoiceRepository: Send {
 		&mut self,
 		parent_id: InvoiceId,
 	) -> impl Future<Output = Result<Vec<Invoice>, CoreError>> + Send;
+
+	/// Atomically write the immutable issued state: status→SENT, reference,
+	/// issued_at, pdf_key, and the rendered snapshot JSON.  Called only once per
+	/// invoice (first SENT transition + PDF generation).
+	fn mark_issued(
+		&mut self,
+		id: InvoiceId,
+		reference: String,
+		issued_at: DateTime<Utc>,
+		pdf_key: String,
+		snapshot_json: Value,
+		updated_at: DateTime<Utc>,
+	) -> impl Future<Output = Result<Invoice, CoreError>> + Send;
 }

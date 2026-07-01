@@ -1,15 +1,28 @@
+use chrono::{Datelike, Utc};
 use common::CoreError;
 use mestier_macros::transactional;
 use rust_decimal::Decimal;
 
 use crate::{
 	Invoice, InvoiceId, OrganizationId,
-	application::MestierUseCase,
-	domain::billing::DepositBasis,
-	domain::invoice::{
-		InvoiceType,
-		commands::{CreateInvoiceCommand, InvoiceLineCommand, UpdateInvoiceCommand, UpdateInvoiceStatusCommand},
-		service::InvoiceService,
+	application::{
+		MestierUseCase,
+		document::snapshot::build_invoice_snapshot,
+	},
+	domain::{
+		billing::DepositBasis,
+		billing_settings::ports::BillingSettingsRepository,
+		customer::ports::CustomerRepository,
+		customer_context::ports::CustomerContextRepository,
+		file_storage::commands::UploadFileCommand,
+		invoice::{
+			InvoiceStatus, InvoiceType,
+			commands::{CreateInvoiceCommand, InvoiceLineCommand, UpdateInvoiceCommand, UpdateInvoiceStatusCommand},
+			ports::InvoiceRepository,
+			service::InvoiceService,
+		},
+		legal_mention_template::ports::LegalMentionTemplateRepository,
+		organization::ports::OrganizationRepository,
 	},
 	domain::quote::{QuoteId, service::QuoteService},
 };
@@ -83,6 +96,129 @@ impl MestierUseCase {
 	) -> Result<Invoice, CoreError> {
 		let mut service = InvoiceService::new(invoice_repository);
 		service.create_balance_invoice(parent_invoice_id).await
+	}
+
+	/// Issue an invoice: assign a reference, generate the PDF snapshot, upload it
+	/// to object storage, and persist the immutable issued state atomically.
+	///
+	/// Only DRAFT invoices may be issued. The invoice becomes immutable after this call.
+	#[transactional(invoice, billing_settings, customer, customer_context, legal_mention_template, organization)]
+	pub async fn issue_invoice(&self, invoice_id: InvoiceId) -> Result<Invoice, CoreError> {
+		// Shadow-rebind all repos as mutable (the macro emits non-mut bindings).
+		let mut invoice_repository = invoice_repository;
+		let mut billing_settings_repository = billing_settings_repository;
+		let mut customer_repository = customer_repository;
+		let mut customer_context_repository = customer_context_repository;
+		let mut legal_mention_template_repository = legal_mention_template_repository;
+		let mut organization_repository = organization_repository;
+
+		// ── 1. Load invoice, guard DRAFT ─────────────────────────────────────
+		let invoice = invoice_repository
+			.find_by_id(invoice_id)
+			.await?
+			.ok_or(CoreError::NotFound)?;
+		let legal_mention_template_ids = invoice_repository
+			.find_legal_mention_template_ids(invoice_id)
+			.await?;
+		let invoice = Invoice { legal_mention_template_ids, ..invoice };
+
+		if invoice.status != InvoiceStatus::Draft {
+			return Err(CoreError::Conflict(
+				"only DRAFT invoices can be issued".to_owned(),
+			));
+		}
+
+		// ── 2. Assign reference + issued_at ──────────────────────────────────
+		let now = Utc::now();
+		let reference = invoice_repository
+			.next_reference(invoice.org_id, now.year())
+			.await?;
+
+		// ── 3. Gather billing settings ───────────────────────────────────────
+		let settings = billing_settings_repository
+			.find_by_org(invoice.org_id)
+			.await?;
+
+		// ── 4. Gather organization (for seller name) ──────────────────────────
+		let org = organization_repository
+			.find_by_id(invoice.org_id)
+			.await?
+			.ok_or(CoreError::NotFound)?;
+
+		// ── 5. Gather customer + context ─────────────────────────────────────
+		let customer = customer_repository
+			.find_by_id(invoice.customer_id)
+			.await?
+			.ok_or(CoreError::NotFound)?;
+
+		let context = customer_context_repository
+			.find_by_id(invoice.customer_context_id)
+			.await?;
+
+		// ── 6. Gather legal mention bodies ────────────────────────────────────
+		let mut mention_bodies: Vec<String> = Vec::with_capacity(invoice.legal_mention_template_ids.len());
+		for template_id in &invoice.legal_mention_template_ids {
+			if let Some(t) = legal_mention_template_repository.find_by_id(*template_id).await? {
+				mention_bodies.push(t.body);
+			}
+		}
+
+		// ── 7. Build snapshot ─────────────────────────────────────────────────
+		let snapshot = build_invoice_snapshot(
+			&Invoice {
+				reference: Some(reference.clone()),
+				issued_at: Some(now),
+				status: InvoiceStatus::Sent,
+				..invoice.clone()
+			},
+			&org.name,
+			settings.as_ref(),
+			&customer,
+			context.as_ref(),
+			&mention_bodies,
+		);
+
+		// ── 8. Render PDF ─────────────────────────────────────────────────────
+		let pdf_bytes = pdf::render_document_pdf(&snapshot)
+			.map_err(|e| CoreError::Internal(format!("PDF rendering failed: {e}")))?;
+
+		// ── 9. Upload PDF ─────────────────────────────────────────────────────
+		// Note: upload is a side effect outside the DB transaction. On DB commit
+		// failure the S3 object becomes an orphan (the invoice stays DRAFT and
+		// can be retried). This is acceptable — a cleanup job can prune orphans.
+		let stored = self
+			.file_storage
+			.upload(UploadFileCommand {
+				mime_type: "application/pdf".to_owned(),
+				bytes: pdf_bytes,
+				folder: Some("documents".to_owned()),
+			})
+			.await?;
+
+		// ── 10. Persist issued state atomically ───────────────────────────────
+		let snapshot_json = serde_json::to_value(&snapshot)
+			.map_err(|e| CoreError::Internal(format!("snapshot serialization failed: {e}")))?;
+
+		let issued_invoice = invoice_repository
+			.mark_issued(
+				invoice_id,
+				reference,
+				now,
+				stored.key,
+				snapshot_json,
+				now,
+			)
+			.await?;
+
+		// Re-attach legal mention template ids (not returned by mark_issued)
+		let legal_mention_template_ids = invoice_repository
+			.find_legal_mention_template_ids(invoice_id)
+			.await?;
+
+		Ok(Invoice {
+			legal_mention_template_ids,
+			..issued_invoice
+		})
 	}
 
 	#[transactional(quote, invoice)]

@@ -1,6 +1,7 @@
 use chrono::{DateTime, Utc};
 use common::{CoreError, generate_uuid_v7};
 use mestier_macros::repository;
+use serde_json::Value;
 use sqlx::PgConnection;
 
 use crate::{
@@ -408,6 +409,53 @@ impl<'tx> InvoiceRepository for PgInvoiceRepository<'tx> {
 			invoices.push(row.into_invoice(vec![])?);
 		}
 		Ok(invoices)
+	}
+
+	async fn mark_issued(
+		&mut self,
+		id: InvoiceId,
+		reference: String,
+		issued_at: DateTime<Utc>,
+		pdf_key: String,
+		snapshot_json: Value,
+		updated_at: DateTime<Utc>,
+	) -> Result<Invoice, CoreError> {
+		let mut tx = self.tx.lock().await;
+		let row = sqlx::query_as!(
+			InvoiceRow,
+			r#"
+			UPDATE invoices
+			SET
+				status     = 'SENT'::invoice_status,
+				reference  = $2,
+				issued_at  = $3,
+				pdf_key    = $4,
+				snapshot   = $5,
+				updated_at = $6
+			WHERE id = $1 AND deleted_at IS NULL
+			RETURNING
+				id, org_id, customer_id, customer_context_id, reference, title,
+				status::text AS "status!", invoice_type::text AS "invoice_type!",
+				source_quote_id, parent_invoice_id,
+				deposit_basis, deposit_value, deposit_amount_cents,
+				total_ht_cents, total_vat_cents, total_ttc_cents, total_cents,
+				amount_paid_cents, pdf_key, issued_at, due_at,
+				deleted_at, created_at, updated_at
+			"#,
+			id.0,
+			reference,
+			issued_at,
+			pdf_key,
+			snapshot_json,
+			updated_at,
+		)
+		.fetch_optional(&mut ***tx)
+		.await
+		.map_err(map_sqlx_error)?;
+
+		let row = row.ok_or(CoreError::NotFound)?;
+		let lines = fetch_lines(&mut tx, id).await?;
+		row.into_invoice(lines)
 	}
 }
 
