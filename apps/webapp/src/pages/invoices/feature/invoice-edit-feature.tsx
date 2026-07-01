@@ -61,7 +61,6 @@ import {
 	StatusBadge,
 } from '#/components/ui/surface'
 import { Textarea } from '#/components/ui/textarea'
-import { useActiveOrganization } from '#/hooks/use-active-organization'
 import { useBillingSettings } from '#/hooks/use-billing-settings'
 import { type CatalogItem, useCatalogItems } from '#/hooks/use-catalog-items'
 import {
@@ -87,6 +86,10 @@ import {
 	type LegalMentionTemplate,
 	useLegalMentionTemplates,
 } from '#/hooks/use-legal-mentions'
+import {
+	type OrganizationContext,
+	useOrganizationContexts,
+} from '#/hooks/use-organization-contexts'
 import {
 	type ServiceRateUnit,
 	useReferenceCatalog,
@@ -138,7 +141,6 @@ export function InvoiceEditFeature({ invoiceId }: InvoiceEditFeatureProps) {
 
 function InvoiceEditWorkspace({ invoice }: { invoice: Invoice }) {
 	const navigate = useNavigate()
-	const { activeOrganization } = useActiveOrganization()
 	const customers = useCustomers(invoice.org_id)
 	const legalMentionTemplates = useLegalMentionTemplates(invoice.org_id)
 	const billingSettings = useBillingSettings(invoice.org_id)
@@ -176,6 +178,7 @@ function InvoiceEditWorkspace({ invoice }: { invoice: Invoice }) {
 		values.customerId,
 		Boolean(values.customerId),
 	)
+	const organizationContexts = useOrganizationContexts(invoice.org_id)
 
 	useEffect(() => {
 		setValues(invoiceToForm(invoice, catalogItems))
@@ -296,6 +299,7 @@ function InvoiceEditWorkspace({ invoice }: { invoice: Invoice }) {
 				title: values.title.trim(),
 				customer_id: values.customerId,
 				customer_context_id: values.customerContextId,
+				emitter_context_id: values.emitterContextId || null,
 				legal_mention_template_ids: values.legalMentionTemplateIds,
 				lines: values.lines.map((line) => ({
 					service_rate_id: line.serviceRateId || null,
@@ -390,6 +394,13 @@ function InvoiceEditWorkspace({ invoice }: { invoice: Invoice }) {
 		? `${currentCustomer.first_name} ${currentCustomer.last_name}`
 		: ''
 
+	const emitter: OrganizationContext | null =
+		organizationContexts.data?.data.find(
+			(c) => c.id === values.emitterContextId,
+		) ?? null
+
+	const emitterSelected = Boolean(values.emitterContextId)
+
 	return (
 		<>
 			<Sheet open={previewOpen} onOpenChange={setPreviewOpen}>
@@ -406,7 +417,7 @@ function InvoiceEditWorkspace({ invoice }: { invoice: Invoice }) {
 							billingSettings={billingSettings.data ?? null}
 							templates={legalMentionTemplates.data?.data ?? []}
 							customerName={customerName}
-							sellerName={activeOrganization?.name ?? ''}
+							emitter={emitter}
 						/>
 					</div>
 				</SheetContent>
@@ -419,14 +430,16 @@ function InvoiceEditWorkspace({ invoice }: { invoice: Invoice }) {
 				legalMentionTemplates={legalMentionTemplates.data?.data ?? []}
 				isLegalMentionTemplatesLoading={legalMentionTemplates.isLoading}
 				customerContexts={customerContexts.data?.data ?? []}
+				organizationContexts={organizationContexts.data?.data ?? []}
 				catalogItems={catalogItems}
 				error={error}
 				isDraft={isDraft}
 				isIssued={isIssued}
-				billingConfigured={Boolean(billingSettings.data)}
+				emitterSelected={emitterSelected}
 				isLoading={
 					customers.isLoading ||
 					customerContexts.isLoading ||
+					organizationContexts.isLoading ||
 					catalog.serviceRates.isLoading ||
 					catalog.products.isLoading
 				}
@@ -486,11 +499,12 @@ function InvoiceEditUI({
 	legalMentionTemplates,
 	isLegalMentionTemplatesLoading,
 	customerContexts,
+	organizationContexts,
 	catalogItems,
 	error,
 	isDraft,
 	isIssued,
-	billingConfigured,
+	emitterSelected,
 	isLoading,
 	isSaving,
 	isSendingStatus,
@@ -531,11 +545,12 @@ function InvoiceEditUI({
 	legalMentionTemplates: LegalMentionTemplate[]
 	isLegalMentionTemplatesLoading: boolean
 	customerContexts: CustomerContext[]
+	organizationContexts: OrganizationContext[]
 	catalogItems: CatalogItem[]
 	error: string | null
 	isDraft: boolean
 	isIssued: boolean
-	billingConfigured: boolean
+	emitterSelected: boolean
 	isLoading: boolean
 	isSaving: boolean
 	isSendingStatus: boolean
@@ -608,7 +623,7 @@ function InvoiceEditUI({
 										<Button
 											type="button"
 											variant="default"
-											disabled={anyPending || !billingConfigured}
+											disabled={anyPending || !emitterSelected}
 										>
 											{isIssuing ? (
 												<Loader2 className="animate-spin" />
@@ -859,13 +874,14 @@ function InvoiceEditUI({
 				</div>
 			) : null}
 
-			{isDraft && !billingConfigured ? (
+			{isDraft && !emitterSelected ? (
 				<div className="rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-					Renseignez l'identité de l'émetteur dans{' '}
+					Sélectionnez un contexte émetteur pour cette facture avant de
+					l'émettre, ou créez-en un dans{' '}
 					<Link to="/settings" className="font-semibold underline">
-						Paramètres → Facturation
-					</Link>{' '}
-					avant de pouvoir émettre cette facture.
+						Paramètres → Organisation
+					</Link>
+					.
 				</div>
 			) : null}
 
@@ -928,6 +944,29 @@ function InvoiceEditUI({
 												value={customerContext.id}
 											>
 												{customerContextDisplayName(customerContext)}
+											</SelectItem>
+										))}
+									</SelectContent>
+								</Select>
+							</FieldBlock>
+							<FieldBlock label="Émetteur">
+								<Select
+									value={values.emitterContextId || '__none__'}
+									onValueChange={(value) =>
+										onChange({
+											emitterContextId: value === '__none__' ? '' : value,
+										})
+									}
+									disabled={!isDraft || isLoading}
+								>
+									<SelectTrigger className="w-full">
+										<SelectValue placeholder="Sélectionner un émetteur" />
+									</SelectTrigger>
+									<SelectContent>
+										<SelectItem value="__none__">— Aucun —</SelectItem>
+										{organizationContexts.map((ctx) => (
+											<SelectItem key={ctx.id} value={ctx.id}>
+												{ctx.label}
 											</SelectItem>
 										))}
 									</SelectContent>
@@ -1288,6 +1327,7 @@ function invoiceToForm(
 		title: invoice.title,
 		customerId: invoice.customer_id,
 		customerContextId: invoice.customer_context_id,
+		emitterContextId: invoice.emitter_context_id ?? '',
 		legalMentionTemplateIds: invoice.legal_mention_template_ids ?? [],
 		lines: lines.length ? lines : [emptyInvoiceLine()],
 	}

@@ -30,6 +30,7 @@ export interface InvoiceFormValues {
 	title: string
 	customerId: string
 	customerContextId: string
+	emitterContextId: string
 	legalMentionTemplateIds: string[]
 	lines: InvoiceLineFormValues[]
 }

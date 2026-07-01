@@ -1,6 +1,7 @@
 import type { BillingSettings } from '#/hooks/use-billing-settings'
 import type { Invoice } from '#/hooks/use-invoices'
 import type { LegalMentionTemplate } from '#/hooks/use-legal-mentions'
+import type { OrganizationContext } from '#/hooks/use-organization-contexts'
 import { formatCents, formatUnit } from '#/pages/invoices/types'
 
 interface DocumentPreviewProps {
@@ -8,7 +9,7 @@ interface DocumentPreviewProps {
 	billingSettings: BillingSettings | null
 	templates: LegalMentionTemplate[]
 	customerName: string
-	sellerName: string
+	emitter: OrganizationContext | null
 }
 
 export function DocumentPreview({
@@ -16,7 +17,7 @@ export function DocumentPreview({
 	billingSettings,
 	templates,
 	customerName,
-	sellerName,
+	emitter,
 }: DocumentPreviewProps) {
 	const resolvedTemplates = invoice.legal_mention_template_ids
 		.map((id) => templates.find((t) => t.id === id))
@@ -42,30 +43,37 @@ export function DocumentPreview({
 			<div className="flex flex-col gap-6 border-b pb-6 sm:flex-row sm:justify-between">
 				{/* Seller block */}
 				<div className="min-w-0 space-y-0.5">
-					<p className="text-base font-bold">{sellerName || '—'}</p>
-					{billingSettings?.siret ? (
+					<p className="text-base font-bold">{emitter?.label ?? '—'}</p>
+					{emitter?.address_line ? (
+						<p className="text-xs text-zinc-500">{emitter.address_line}</p>
+					) : null}
+					{emitter?.postal_code || emitter?.city ? (
 						<p className="text-xs text-zinc-500">
-							SIRET : {billingSettings.siret}
+							{[emitter.postal_code, emitter.city].filter(Boolean).join(' ')}
 						</p>
 					) : null}
-					{billingSettings?.rcs ? (
-						<p className="text-xs text-zinc-500">RCS : {billingSettings.rcs}</p>
+					{emitter?.country ? (
+						<p className="text-xs text-zinc-500">{emitter.country}</p>
 					) : null}
-					{billingSettings?.ape ? (
-						<p className="text-xs text-zinc-500">APE : {billingSettings.ape}</p>
+					{emitter?.siret ? (
+						<p className="text-xs text-zinc-500">SIRET : {emitter.siret}</p>
 					) : null}
-					{billingSettings?.vat_intracom ? (
+					{emitter?.rcs ? (
+						<p className="text-xs text-zinc-500">RCS : {emitter.rcs}</p>
+					) : null}
+					{emitter?.ape ? (
+						<p className="text-xs text-zinc-500">APE : {emitter.ape}</p>
+					) : null}
+					{emitter?.vat_intracom ? (
 						<p className="text-xs text-zinc-500">
-							TVA intracom. : {billingSettings.vat_intracom}
+							TVA intracom. : {emitter.vat_intracom}
 						</p>
 					) : null}
-					{billingSettings?.iban ? (
-						<p className="text-xs text-zinc-500">
-							IBAN : {billingSettings.iban}
-						</p>
+					{emitter?.iban ? (
+						<p className="text-xs text-zinc-500">IBAN : {emitter.iban}</p>
 					) : null}
-					{billingSettings?.bic ? (
-						<p className="text-xs text-zinc-500">BIC : {billingSettings.bic}</p>
+					{emitter?.bic ? (
+						<p className="text-xs text-zinc-500">BIC : {emitter.bic}</p>
 					) : null}
 				</div>
 
