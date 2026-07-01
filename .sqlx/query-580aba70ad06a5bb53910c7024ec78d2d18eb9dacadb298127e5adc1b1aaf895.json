@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n\t\t\tUPDATE invoice_lines\n\t\t\tSET deleted_at = $2, updated_at = $2\n\t\t\tWHERE invoice_id = $1 AND deleted_at IS NULL\n\t\t\t",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Timestamptz"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "580aba70ad06a5bb53910c7024ec78d2d18eb9dacadb298127e5adc1b1aaf895"
+}

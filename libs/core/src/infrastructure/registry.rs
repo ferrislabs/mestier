@@ -14,6 +14,7 @@ pub mod domain {
     pub struct CustomerContact;
     pub struct Employee;
     pub struct Equipment;
+    pub struct Invoice;
     pub struct LegalMentionTemplate;
     pub struct Organization;
     pub struct Product;

@@ -7,6 +7,7 @@ pub mod customer_context;
 pub mod employee;
 pub mod equipment;
 pub mod file_storage;
+pub mod invoice;
 pub mod legal_mention_template;
 pub mod member;
 pub mod message;

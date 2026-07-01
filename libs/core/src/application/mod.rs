@@ -28,6 +28,7 @@ pub mod discord_read_state;
 pub mod discord_webhook;
 pub mod employee;
 pub mod equipment;
+pub mod invoice;
 pub mod legal_mention_template;
 pub mod member;
 pub mod organization;
