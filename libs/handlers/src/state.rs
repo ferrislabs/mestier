@@ -22,10 +22,15 @@ pub struct AppState {
     /// Populated from the single [`EventHub`] created by `create_service`
     /// so all subscribers share the same broadcast channel.
     pub events: EventHub,
+    /// HMAC-SHA256 secret for signing and verifying document access tokens.
+    /// Sourced from `DOCUMENT_SIGNING_SECRET` (falls back to `AUTH_CLIENT_SECRET`).
+    pub document_signing_secret: Arc<String>,
 }
 
 pub async fn state(args: Arc<Args>) -> Result<AppState, ServerError> {
     let config = Config::from(args.as_ref().clone());
+
+    let document_signing_secret = Arc::new(config.document_signing_secret.clone());
 
     let service = create_service(config).await.unwrap();
 
@@ -37,5 +42,6 @@ pub async fn state(args: Arc<Args>) -> Result<AppState, ServerError> {
         rate_limit: service.rate_limit,
         rate_limit_quota: service.rate_limit_quota,
         events: service.events,
+        document_signing_secret,
     })
 }

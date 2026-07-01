@@ -37,3 +37,27 @@ pub struct InvoiceDepositPath {
 pub struct InvoiceBalancePath {
 	pub invoice_id: InvoiceId,
 }
+
+#[derive(TypedPath, Deserialize)]
+#[typed_path("/api/v1/invoices/{invoice_id}/issue")]
+pub struct InvoiceIssuePath {
+	pub invoice_id: InvoiceId,
+}
+
+#[derive(TypedPath, Deserialize)]
+#[typed_path("/api/v1/invoices/{invoice_id}/pdf")]
+pub struct InvoicePdfPath {
+	pub invoice_id: InvoiceId,
+}
+
+#[derive(TypedPath, Deserialize)]
+#[typed_path("/api/v1/invoices/{invoice_id}/share")]
+pub struct InvoiceSharePath {
+	pub invoice_id: InvoiceId,
+}
+
+#[derive(TypedPath, Deserialize)]
+#[typed_path("/api/v1/public/documents/{token}")]
+pub struct PublicDocumentPath {
+	pub token: String,
+}
