@@ -28,7 +28,16 @@ export function DocumentPreview({
 			: null
 
 	return (
-		<div className="mx-auto w-full max-w-[794px] rounded-lg border bg-white p-10 text-sm text-zinc-800 shadow-sm print:shadow-none">
+		<div
+			// A4 page at 96dpi (794×1123px). min-height fills a full page; taller
+			// content flows onto further pages (the container scrolls vertically),
+			// with a faint separator drawn at each A4 page boundary.
+			className="mx-auto min-h-[1123px] w-[794px] max-w-full bg-white p-[48px] text-sm text-zinc-800 shadow-lg print:shadow-none"
+			style={{
+				backgroundImage:
+					'repeating-linear-gradient(to bottom, transparent 0, transparent 1122px, rgba(0,0,0,0.08) 1122px, rgba(0,0,0,0.08) 1123px)',
+			}}
+		>
 			{/* Header — seller identity + document title */}
 			<div className="flex flex-col gap-6 border-b pb-6 sm:flex-row sm:justify-between">
 				{/* Seller block */}

@@ -395,12 +395,12 @@ function InvoiceEditWorkspace({ invoice }: { invoice: Invoice }) {
 			<Sheet open={previewOpen} onOpenChange={setPreviewOpen}>
 				<SheetContent
 					side="right"
-					className="w-full overflow-y-auto sm:max-w-2xl"
+					className="flex w-full flex-col bg-muted/40 p-0 sm:max-w-[900px]"
 				>
-					<SheetHeader>
+					<SheetHeader className="border-b bg-background px-6 py-4">
 						<SheetTitle>Aperçu du document</SheetTitle>
 					</SheetHeader>
-					<div className="p-4">
+					<div className="flex-1 overflow-y-auto p-6">
 						<DocumentPreview
 							invoice={invoice}
 							billingSettings={billingSettings.data ?? null}
