@@ -41,6 +41,11 @@ import {
 	SectionHeader,
 } from '#/components/ui/surface'
 import { Textarea } from '#/components/ui/textarea'
+import {
+	Tooltip,
+	TooltipContent,
+	TooltipTrigger,
+} from '#/components/ui/tooltip'
 import { type CatalogItem, useCatalogItems } from '#/hooks/use-catalog-items'
 import {
 	type Customer,
@@ -447,19 +452,32 @@ function QuoteEditUI({
 								</AlertDialogFooter>
 							</AlertDialogContent>
 						</AlertDialog>
-						<Button
-							type="button"
-							variant="outline"
-							disabled={!canConvert || isConverting || isSaving || isDeleting}
-							onClick={() => void onConvert()}
-						>
-							{isConverting ? (
-								<Loader2 className="animate-spin" />
-							) : (
-								<ArrowRightLeft />
-							)}
-							Convertir en facture
-						</Button>
+						<Tooltip>
+							<TooltipTrigger asChild>
+								<span className="inline-flex">
+									<Button
+										type="button"
+										variant="outline"
+										disabled={
+											!canConvert || isConverting || isSaving || isDeleting
+										}
+										onClick={() => void onConvert()}
+									>
+										{isConverting ? (
+											<Loader2 className="animate-spin" />
+										) : (
+											<ArrowRightLeft />
+										)}
+										Convertir en facture
+									</Button>
+								</span>
+							</TooltipTrigger>
+							<TooltipContent>
+								{canConvert
+									? 'Créer une facture brouillon à partir de ce devis.'
+									: 'Le devis doit être Envoyé ou Accepté pour être converti en facture.'}
+							</TooltipContent>
+						</Tooltip>
 						<Button
 							type="button"
 							disabled={!canSave || isSaving || isDeleting || isConverting}
