@@ -1,0 +1,18 @@
+[package]
+name = "pdf"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+
+[dependencies]
+thiserror = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+
+typst = "0.15.0"
+typst-pdf = "0.15.0"
+typst-layout = "0.15.0"
+typst-as-lib = { version = "0.16.0", features = ["typst-kit-fonts", "typst-kit-embed-fonts"] }
+
+[dev-dependencies]
+# none needed — test data built inline
