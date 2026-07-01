@@ -8,6 +8,7 @@ import {
 	FileText,
 	ImagePlus,
 	Loader2,
+	MoreHorizontal,
 	Plus,
 	SendHorizonal,
 	Trash2,
@@ -29,6 +30,13 @@ import {
 	AlertDialogTrigger,
 } from '#/components/ui/alert-dialog'
 import { Button } from '#/components/ui/button'
+import {
+	DropdownMenu,
+	DropdownMenuContent,
+	DropdownMenuItem,
+	DropdownMenuSeparator,
+	DropdownMenuTrigger,
+} from '#/components/ui/dropdown-menu'
 import { Input } from '#/components/ui/input'
 import { Label } from '#/components/ui/label'
 import {
@@ -572,122 +580,36 @@ function InvoiceEditUI({
 		isIssuing ||
 		isSharing
 
+	const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
+
+	// Determine whether the "…" menu has any applicable items
+	const hasMoreMenu = isStandard || isDraft
+
 	return (
 		<PageShell>
 			<PageHeader
 				eyebrow={invoice.reference ?? 'Brouillon'}
 				title={invoice.title}
 				description="Visualisez et modifiez le contenu de la facture."
+				leading={
+					<Button asChild variant="outline" size="icon">
+						<Link to="/invoices">
+							<ArrowLeft />
+							<span className="sr-only">Retour aux factures</span>
+						</Link>
+					</Button>
+				}
 				actions={
-					<div className="flex flex-col gap-2 sm:flex-row">
-						<Button asChild variant="outline">
-							<Link to="/invoices">
-								<ArrowLeft />
-								Retour
-							</Link>
-						</Button>
-
+					<div className="flex flex-wrap items-center justify-end gap-2">
 						{/* Aperçu — always available */}
 						<Button type="button" variant="outline" onClick={onOpenPreview}>
 							<Eye />
 							Aperçu
 						</Button>
 
-						{isStandard ? (
-							<>
-								<Button
-									type="button"
-									variant="outline"
-									disabled={anyPending}
-									onClick={onOpenDepositDialog}
-								>
-									{isCreatingDeposit ? (
-										<Loader2 className="animate-spin" />
-									) : (
-										<Plus />
-									)}
-									Facture d'acompte
-								</Button>
-								<Button
-									type="button"
-									variant="outline"
-									disabled={anyPending}
-									onClick={onCreateBalance}
-								>
-									{isCreatingBalance ? (
-										<Loader2 className="animate-spin" />
-									) : (
-										<FileText />
-									)}
-									Facture de solde
-								</Button>
-							</>
-						) : null}
-
+						{/* DRAFT primary actions */}
 						{isDraft ? (
 							<>
-								<AlertDialog>
-									<AlertDialogTrigger asChild>
-										<Button
-											type="button"
-											variant="destructive"
-											disabled={anyPending}
-										>
-											{isDeleting ? (
-												<Loader2 className="animate-spin" />
-											) : (
-												<Trash2 />
-											)}
-											Supprimer
-										</Button>
-									</AlertDialogTrigger>
-									<AlertDialogContent>
-										<AlertDialogHeader>
-											<AlertDialogTitle>
-												Supprimer cette facture ?
-											</AlertDialogTitle>
-											<AlertDialogDescription>
-												La facture brouillon sera supprimée de la liste. Cette
-												action est irréversible.
-											</AlertDialogDescription>
-										</AlertDialogHeader>
-										<AlertDialogFooter>
-											<AlertDialogCancel disabled={isDeleting}>
-												Annuler
-											</AlertDialogCancel>
-											<AlertDialogAction
-												disabled={isDeleting}
-												className="bg-destructive text-white hover:bg-destructive/90 focus-visible:ring-destructive/20"
-												onClick={(event) => {
-													event.preventDefault()
-													void onDelete()
-												}}
-											>
-												{isDeleting ? (
-													<Loader2 className="animate-spin" />
-												) : (
-													<Trash2 />
-												)}
-												Supprimer
-											</AlertDialogAction>
-										</AlertDialogFooter>
-									</AlertDialogContent>
-								</AlertDialog>
-
-								<Button
-									type="button"
-									variant="outline"
-									disabled={isSendingStatus || isSaving || isDeleting}
-									onClick={onMarkAsSent}
-								>
-									{isSendingStatus ? (
-										<Loader2 className="animate-spin" />
-									) : (
-										<SendHorizonal />
-									)}
-									Marquer comme envoyée
-								</Button>
-
 								{/* Issue / emit invoice — DRAFT only, irreversible */}
 								<AlertDialog>
 									<AlertDialogTrigger asChild>
@@ -777,9 +699,107 @@ function InvoiceEditUI({
 								</Button>
 							</>
 						) : null}
+
+						{/* "…" overflow menu — secondary actions */}
+						{hasMoreMenu ? (
+							<DropdownMenu>
+								<DropdownMenuTrigger asChild>
+									<Button variant="outline" size="icon">
+										<MoreHorizontal />
+										<span className="sr-only">Plus d'actions</span>
+									</Button>
+								</DropdownMenuTrigger>
+								<DropdownMenuContent align="end">
+									{isStandard ? (
+										<>
+											<DropdownMenuItem
+												disabled={anyPending}
+												onSelect={onOpenDepositDialog}
+											>
+												{isCreatingDeposit ? (
+													<Loader2 className="animate-spin" />
+												) : (
+													<Plus />
+												)}
+												Facture d'acompte
+											</DropdownMenuItem>
+											<DropdownMenuItem
+												disabled={anyPending}
+												onSelect={onCreateBalance}
+											>
+												{isCreatingBalance ? (
+													<Loader2 className="animate-spin" />
+												) : (
+													<FileText />
+												)}
+												Facture de solde
+											</DropdownMenuItem>
+										</>
+									) : null}
+									{isDraft ? (
+										<>
+											<DropdownMenuItem
+												disabled={isSendingStatus || isSaving || isDeleting}
+												onSelect={onMarkAsSent}
+											>
+												{isSendingStatus ? (
+													<Loader2 className="animate-spin" />
+												) : (
+													<SendHorizonal />
+												)}
+												Marquer comme envoyée
+											</DropdownMenuItem>
+											<DropdownMenuSeparator />
+											<DropdownMenuItem
+												variant="destructive"
+												disabled={anyPending}
+												onSelect={(e) => {
+													e.preventDefault()
+													setDeleteDialogOpen(true)
+												}}
+											>
+												{isDeleting ? (
+													<Loader2 className="animate-spin" />
+												) : (
+													<Trash2 />
+												)}
+												Supprimer
+											</DropdownMenuItem>
+										</>
+									) : null}
+								</DropdownMenuContent>
+							</DropdownMenu>
+						) : null}
 					</div>
 				}
 			/>
+
+			{/* Controlled delete confirmation dialog — rendered outside the dropdown */}
+			<AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+				<AlertDialogContent>
+					<AlertDialogHeader>
+						<AlertDialogTitle>Supprimer cette facture ?</AlertDialogTitle>
+						<AlertDialogDescription>
+							La facture brouillon sera supprimée de la liste. Cette action est
+							irréversible.
+						</AlertDialogDescription>
+					</AlertDialogHeader>
+					<AlertDialogFooter>
+						<AlertDialogCancel disabled={isDeleting}>Annuler</AlertDialogCancel>
+						<AlertDialogAction
+							disabled={isDeleting}
+							className="bg-destructive text-white hover:bg-destructive/90 focus-visible:ring-destructive/20"
+							onClick={(event) => {
+								event.preventDefault()
+								void onDelete()
+							}}
+						>
+							{isDeleting ? <Loader2 className="animate-spin" /> : <Trash2 />}
+							Supprimer
+						</AlertDialogAction>
+					</AlertDialogFooter>
+				</AlertDialogContent>
+			</AlertDialog>
 
 			{depositDialogOpen ? (
 				<div className="rounded-lg border bg-card p-5 shadow-sm">
