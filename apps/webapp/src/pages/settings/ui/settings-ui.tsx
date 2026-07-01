@@ -8,6 +8,7 @@ import {
 	Building2,
 	ChevronDown,
 	FileText,
+	Landmark,
 	Loader2,
 	MoreHorizontal,
 	Package,
@@ -51,6 +52,7 @@ import {
 	StatusBadge,
 } from '#/components/ui/surface'
 import { Textarea } from '#/components/ui/textarea'
+import type { OrganizationContext } from '#/hooks/use-organization-contexts'
 import type { Organization } from '#/hooks/use-organizations'
 import type {
 	Employee,
@@ -61,6 +63,7 @@ import type {
 import { LEGAL_MENTION_PRESETS } from '#/lib/legal-mention-presets'
 import type {
 	BillingFormValues,
+	EmitterContextFormValues,
 	EmployeeFormValues,
 	EquipmentFormValues,
 	LegalMentionFormValues,
@@ -113,6 +116,16 @@ interface SettingsUIProps {
 	) => Promise<unknown>
 	onDeleteLegalMentionTemplate: (
 		template: LegalMentionTemplate,
+	) => Promise<unknown>
+	onCreateOrganizationContext: (
+		values: EmitterContextFormValues,
+	) => Promise<unknown>
+	onUpdateOrganizationContext: (
+		context: OrganizationContext,
+		values: EmitterContextFormValues,
+	) => Promise<unknown>
+	onDeleteOrganizationContext: (
+		context: OrganizationContext,
 	) => Promise<unknown>
 }
 
@@ -173,6 +186,9 @@ export function SettingsUI({
 	onCreateLegalMentionTemplate,
 	onUpdateLegalMentionTemplate,
 	onDeleteLegalMentionTemplate,
+	onCreateOrganizationContext,
+	onUpdateOrganizationContext,
+	onDeleteOrganizationContext,
 }: SettingsUIProps) {
 	const [activeTab, setActiveTab] = useState<ReferenceTab>('employees')
 	const [search, setSearch] = useState('')
@@ -241,6 +257,13 @@ export function SettingsUI({
 			<OrganizationSection
 				organization={organization}
 				form={organizationForm}
+			/>
+
+			<EmitterContextSection
+				contexts={data.organizationContexts}
+				onCreate={onCreateOrganizationContext}
+				onUpdate={onUpdateOrganizationContext}
+				onDelete={onDeleteOrganizationContext}
 			/>
 
 			<BillingSection form={billingForm} />
@@ -1949,6 +1972,485 @@ function LegalMentionSection({
 														<DropdownMenuItem
 															variant="destructive"
 															onClick={() => onDelete(template)}
+														>
+															<Trash2 />
+															Supprimer
+														</DropdownMenuItem>
+													</DropdownMenuContent>
+												</DropdownMenu>
+											</div>
+										</div>
+									)}
+								</div>
+							)
+						})}
+					</div>
+				)}
+			</div>
+		</SectionCard>
+	)
+}
+
+// ─── Emitter Context Section ──────────────────────────────────────────────────
+
+interface EmitterContextSectionProps {
+	contexts: OrganizationContext[]
+	onCreate: (values: EmitterContextFormValues) => Promise<unknown>
+	onUpdate: (
+		context: OrganizationContext,
+		values: EmitterContextFormValues,
+	) => Promise<unknown>
+	onDelete: (context: OrganizationContext) => Promise<unknown>
+}
+
+type EmitterContextDraft = {
+	id: string
+	values: EmitterContextFormValues
+} | null
+
+const EMPTY_EMITTER_FORM: EmitterContextFormValues = {
+	label: '',
+	address_line: '',
+	postal_code: '',
+	city: '',
+	country: '',
+	siret: '',
+	rcs: '',
+	ape: '',
+	vat_intracom: '',
+	iban: '',
+	bic: '',
+}
+
+function EmitterContextSection({
+	contexts,
+	onCreate,
+	onUpdate,
+	onDelete,
+}: EmitterContextSectionProps) {
+	const [draft, setDraft] = useState<EmitterContextDraft>(null)
+	const [createForm, setCreateForm] =
+		useState<EmitterContextFormValues>(EMPTY_EMITTER_FORM)
+	const [isSaving, setIsSaving] = useState(false)
+	const [isCreating, setIsCreating] = useState(false)
+
+	const handleCreate = async () => {
+		if (!createForm.label.trim()) return
+		setIsCreating(true)
+		try {
+			await onCreate(createForm)
+			setCreateForm(EMPTY_EMITTER_FORM)
+		} finally {
+			setIsCreating(false)
+		}
+	}
+
+	const handleSaveDraft = async () => {
+		if (!draft) return
+		const context = contexts.find((c) => c.id === draft.id)
+		if (!context) return
+		setIsSaving(true)
+		try {
+			await onUpdate(context, draft.values)
+			setDraft(null)
+		} finally {
+			setIsSaving(false)
+		}
+	}
+
+	return (
+		<SectionCard>
+			<SectionHeader
+				title={`Contextes \u00e9metteurs (${contexts.length})`}
+				description="Identit\u00e9s d'\u00e9mission utilis\u00e9es sur les devis et factures (si\u00e8ge, agences, entit\u00e9s\u2026)."
+				actions={
+					<StatusBadge tone="brand">
+						<Landmark className="mr-1 size-3" />
+						\u00c9metteurs
+					</StatusBadge>
+				}
+			/>
+			<div className="flex flex-col gap-4 p-5">
+				<div className="flex flex-col gap-3 rounded-lg border bg-muted/30 p-4">
+					<div className="flex flex-col gap-1">
+						<p className="text-sm font-medium">Nouveau contexte</p>
+						<p className="text-xs text-muted-foreground">
+							Seul le nom est obligatoire.
+						</p>
+					</div>
+
+					<div className="flex flex-col gap-4">
+						<fieldset className="flex flex-col gap-3">
+							<legend className="mb-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+								Nomination
+							</legend>
+							<TextField
+								label="Nom du contexte"
+								value={createForm.label}
+								onChange={(v) => setCreateForm((f) => ({ ...f, label: v }))}
+								placeholder="ex. Si\u00e8ge, Agence Lyon\u2026"
+							/>
+						</fieldset>
+
+						<fieldset className="flex flex-col gap-3">
+							<legend className="mb-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+								Adresse
+							</legend>
+							<div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+								<TextField
+									label="Adresse"
+									value={createForm.address_line}
+									onChange={(v) =>
+										setCreateForm((f) => ({ ...f, address_line: v }))
+									}
+									placeholder="12 rue de la Paix"
+								/>
+								<TextField
+									label="Code postal"
+									value={createForm.postal_code}
+									onChange={(v) =>
+										setCreateForm((f) => ({ ...f, postal_code: v }))
+									}
+									placeholder="75000"
+								/>
+								<TextField
+									label="Ville"
+									value={createForm.city}
+									onChange={(v) => setCreateForm((f) => ({ ...f, city: v }))}
+									placeholder="Paris"
+								/>
+								<TextField
+									label="Pays"
+									value={createForm.country}
+									onChange={(v) => setCreateForm((f) => ({ ...f, country: v }))}
+									placeholder="France"
+								/>
+							</div>
+						</fieldset>
+
+						<fieldset className="flex flex-col gap-3">
+							<legend className="mb-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+								Identit\u00e9 l\u00e9gale
+							</legend>
+							<div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-4">
+								<TextField
+									label="SIRET"
+									value={createForm.siret}
+									onChange={(v) => setCreateForm((f) => ({ ...f, siret: v }))}
+									placeholder="14 chiffres"
+								/>
+								<TextField
+									label="RCS"
+									value={createForm.rcs}
+									onChange={(v) => setCreateForm((f) => ({ ...f, rcs: v }))}
+									placeholder="Ville + n\u00b0 immat."
+								/>
+								<TextField
+									label="APE / NAF"
+									value={createForm.ape}
+									onChange={(v) => setCreateForm((f) => ({ ...f, ape: v }))}
+									placeholder="ex. 4321A"
+								/>
+								<TextField
+									label="TVA intracom"
+									value={createForm.vat_intracom}
+									onChange={(v) =>
+										setCreateForm((f) => ({ ...f, vat_intracom: v }))
+									}
+									placeholder="ex. FR12345678901"
+								/>
+							</div>
+						</fieldset>
+
+						<fieldset className="flex flex-col gap-3">
+							<legend className="mb-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+								Banque
+							</legend>
+							<div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+								<TextField
+									label="IBAN"
+									value={createForm.iban}
+									onChange={(v) => setCreateForm((f) => ({ ...f, iban: v }))}
+									placeholder="FR76 \u2026"
+								/>
+								<TextField
+									label="BIC"
+									value={createForm.bic}
+									onChange={(v) => setCreateForm((f) => ({ ...f, bic: v }))}
+									placeholder="ex. BNPAFRPP"
+								/>
+							</div>
+						</fieldset>
+					</div>
+
+					<div className="flex justify-end">
+						<Button
+							type="button"
+							onClick={handleCreate}
+							disabled={isCreating || !createForm.label.trim()}
+							size="sm"
+							className="gap-2"
+						>
+							{isCreating ? (
+								<Loader2 className="size-3.5 animate-spin" />
+							) : (
+								<Plus className="size-3.5" />
+							)}
+							Ajouter
+						</Button>
+					</div>
+				</div>
+
+				{contexts.length === 0 ? (
+					<div className="flex flex-col items-center gap-2 py-8 text-center text-sm text-muted-foreground">
+						<Landmark className="size-8 opacity-30" />
+						<p className="font-medium text-foreground">
+							Aucun contexte \u00e9metteur configur\u00e9
+						</p>
+						<p>Cr\u00e9ez votre premier contexte ci-dessus.</p>
+					</div>
+				) : (
+					<div className="flex flex-col divide-y rounded-lg border">
+						{contexts.map((context) => {
+							const isEditing = draft?.id === context.id
+							const summary = [context.city, context.siret]
+								.filter(Boolean)
+								.join(' \u00b7 ')
+							return (
+								<div key={context.id} className="group flex flex-col gap-3 p-4">
+									{isEditing ? (
+										<>
+											<fieldset className="flex flex-col gap-3">
+												<legend className="mb-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+													Nomination
+												</legend>
+												<TextField
+													label="Nom du contexte"
+													value={draft.values.label}
+													onChange={(v) =>
+														setDraft((d) =>
+															d
+																? { ...d, values: { ...d.values, label: v } }
+																: d,
+														)
+													}
+												/>
+											</fieldset>
+
+											<fieldset className="flex flex-col gap-3">
+												<legend className="mb-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+													Adresse
+												</legend>
+												<div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+													<TextField
+														label="Adresse"
+														value={draft.values.address_line}
+														onChange={(v) =>
+															setDraft((d) =>
+																d
+																	? {
+																			...d,
+																			values: { ...d.values, address_line: v },
+																		}
+																	: d,
+															)
+														}
+													/>
+													<TextField
+														label="Code postal"
+														value={draft.values.postal_code}
+														onChange={(v) =>
+															setDraft((d) =>
+																d
+																	? {
+																			...d,
+																			values: { ...d.values, postal_code: v },
+																		}
+																	: d,
+															)
+														}
+													/>
+													<TextField
+														label="Ville"
+														value={draft.values.city}
+														onChange={(v) =>
+															setDraft((d) =>
+																d
+																	? { ...d, values: { ...d.values, city: v } }
+																	: d,
+															)
+														}
+													/>
+													<TextField
+														label="Pays"
+														value={draft.values.country}
+														onChange={(v) =>
+															setDraft((d) =>
+																d
+																	? {
+																			...d,
+																			values: { ...d.values, country: v },
+																		}
+																	: d,
+															)
+														}
+													/>
+												</div>
+											</fieldset>
+
+											<fieldset className="flex flex-col gap-3">
+												<legend className="mb-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+													Identit\u00e9 l\u00e9gale
+												</legend>
+												<div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-4">
+													<TextField
+														label="SIRET"
+														value={draft.values.siret}
+														onChange={(v) =>
+															setDraft((d) =>
+																d
+																	? { ...d, values: { ...d.values, siret: v } }
+																	: d,
+															)
+														}
+													/>
+													<TextField
+														label="RCS"
+														value={draft.values.rcs}
+														onChange={(v) =>
+															setDraft((d) =>
+																d
+																	? { ...d, values: { ...d.values, rcs: v } }
+																	: d,
+															)
+														}
+													/>
+													<TextField
+														label="APE / NAF"
+														value={draft.values.ape}
+														onChange={(v) =>
+															setDraft((d) =>
+																d
+																	? { ...d, values: { ...d.values, ape: v } }
+																	: d,
+															)
+														}
+													/>
+													<TextField
+														label="TVA intracom"
+														value={draft.values.vat_intracom}
+														onChange={(v) =>
+															setDraft((d) =>
+																d
+																	? {
+																			...d,
+																			values: { ...d.values, vat_intracom: v },
+																		}
+																	: d,
+															)
+														}
+													/>
+												</div>
+											</fieldset>
+
+											<fieldset className="flex flex-col gap-3">
+												<legend className="mb-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+													Banque
+												</legend>
+												<div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+													<TextField
+														label="IBAN"
+														value={draft.values.iban}
+														onChange={(v) =>
+															setDraft((d) =>
+																d
+																	? { ...d, values: { ...d.values, iban: v } }
+																	: d,
+															)
+														}
+													/>
+													<TextField
+														label="BIC"
+														value={draft.values.bic}
+														onChange={(v) =>
+															setDraft((d) =>
+																d
+																	? { ...d, values: { ...d.values, bic: v } }
+																	: d,
+															)
+														}
+													/>
+												</div>
+											</fieldset>
+
+											<div className="flex justify-end gap-2">
+												<Button
+													size="sm"
+													variant="ghost"
+													onClick={() => setDraft(null)}
+												>
+													<Undo2 className="size-3.5" />
+													Annuler
+												</Button>
+												<Button
+													size="sm"
+													onClick={handleSaveDraft}
+													disabled={isSaving}
+												>
+													{isSaving ? (
+														<Loader2 className="size-3.5 animate-spin" />
+													) : (
+														<Save className="size-3.5" />
+													)}
+													Enregistrer
+												</Button>
+											</div>
+										</>
+									) : (
+										<div className="flex items-start justify-between gap-3">
+											<div className="min-w-0">
+												<p className="truncate font-medium">{context.label}</p>
+												{summary ? (
+													<p className="mt-1 truncate text-sm text-muted-foreground">
+														{summary}
+													</p>
+												) : null}
+											</div>
+											<div className="opacity-0 transition group-hover:opacity-100 group-focus-within:opacity-100">
+												<DropdownMenu>
+													<DropdownMenuTrigger asChild>
+														<Button size="icon-sm" variant="ghost">
+															<MoreHorizontal />
+															<span className="sr-only">Actions</span>
+														</Button>
+													</DropdownMenuTrigger>
+													<DropdownMenuContent align="end">
+														<DropdownMenuItem
+															onClick={() =>
+																setDraft({
+																	id: context.id,
+																	values: {
+																		label: context.label,
+																		address_line: context.address_line ?? '',
+																		postal_code: context.postal_code ?? '',
+																		city: context.city ?? '',
+																		country: context.country ?? '',
+																		siret: context.siret ?? '',
+																		rcs: context.rcs ?? '',
+																		ape: context.ape ?? '',
+																		vat_intracom: context.vat_intracom ?? '',
+																		iban: context.iban ?? '',
+																		bic: context.bic ?? '',
+																	},
+																})
+															}
+														>
+															Modifier
+														</DropdownMenuItem>
+														<DropdownMenuSeparator />
+														<DropdownMenuItem
+															variant="destructive"
+															onClick={() => onDelete(context)}
 														>
 															<Trash2 />
 															Supprimer

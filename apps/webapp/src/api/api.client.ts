@@ -61,6 +61,7 @@ export namespace Schemas {
     customer_id: CustomerId;
     deposit_basis?: (string | null) | undefined;
     deposit_value?: (string | null) | undefined;
+    emitter_context_id?: (string | null) | undefined;
     legal_mention_template_ids?: (string[] | null) | undefined;
     lines: Array<QuoteLineRequest>;
     title: string;
@@ -179,6 +180,7 @@ export namespace Schemas {
     customer_id: CustomerId;
     deposit_basis: string | null;
     deposit_value: string | null;
+    emitter_context_id: string | null;
     id: QuoteId;
     legal_mention_template_ids: string[];
     lines: Array<QuoteLineResponse>;
@@ -247,6 +249,7 @@ export namespace Schemas {
     customer_id: CustomerId;
     deposit_basis?: (string | null) | undefined;
     deposit_value?: (string | null) | undefined;
+    emitter_context_id?: (string | null) | undefined;
     legal_mention_template_ids?: (string[] | null) | undefined;
     lines: Array<QuoteLineRequest>;
     status: QuoteStatus;
@@ -284,6 +287,7 @@ export namespace Schemas {
   export type CreateInvoiceRequest = {
     customer_context_id: CustomerContextId;
     customer_id: CustomerId;
+    emitter_context_id?: (string | null) | undefined;
     legal_mention_template_ids?: (string[] | null) | undefined;
     lines: Array<InvoiceLineRequest>;
     title: string;
@@ -291,6 +295,7 @@ export namespace Schemas {
   export type UpdateInvoiceRequest = {
     customer_context_id: CustomerContextId;
     customer_id: CustomerId;
+    emitter_context_id?: (string | null) | undefined;
     legal_mention_template_ids?: (string[] | null) | undefined;
     lines: Array<InvoiceLineRequest>;
     title: string;
@@ -320,6 +325,7 @@ export namespace Schemas {
     deposit_basis?: (string | null) | undefined;
     deposit_value?: (string | null) | undefined;
     due_at?: (string | null) | undefined;
+    emitter_context_id: string | null;
     id: InvoiceId;
     invoice_type: InvoiceType;
     issued_at?: (string | null) | undefined;
@@ -379,6 +385,51 @@ export namespace Schemas {
     token: string;
     path: string;
     expires_at: number;
+  };
+
+  export type OrganizationContextId = string;
+  export type OrganizationContextResponse = {
+    id: OrganizationContextId;
+    org_id: OrganizationId;
+    label: string;
+    address_line: string | null;
+    postal_code: string | null;
+    city: string | null;
+    country: string | null;
+    siret: string | null;
+    rcs: string | null;
+    ape: string | null;
+    vat_intracom: string | null;
+    iban: string | null;
+    bic: string | null;
+    created_at: string;
+    updated_at: string;
+  };
+  export type CreateOrganizationContextRequest = {
+    label: string;
+    address_line?: (string | null) | undefined;
+    postal_code?: (string | null) | undefined;
+    city?: (string | null) | undefined;
+    country?: (string | null) | undefined;
+    siret?: (string | null) | undefined;
+    rcs?: (string | null) | undefined;
+    ape?: (string | null) | undefined;
+    vat_intracom?: (string | null) | undefined;
+    iban?: (string | null) | undefined;
+    bic?: (string | null) | undefined;
+  };
+  export type UpdateOrganizationContextRequest = {
+    label?: string | undefined;
+    address_line?: (string | null) | undefined;
+    postal_code?: (string | null) | undefined;
+    city?: (string | null) | undefined;
+    country?: (string | null) | undefined;
+    siret?: (string | null) | undefined;
+    rcs?: (string | null) | undefined;
+    ape?: (string | null) | undefined;
+    vat_intracom?: (string | null) | undefined;
+    iban?: (string | null) | undefined;
+    bic?: (string | null) | undefined;
   };
 
   // </Schemas>
@@ -1875,6 +1926,74 @@ export namespace Endpoints {
     };
   };
 
+  export type get_ListOrganizationContexts = {
+    method: "GET";
+    path: "/api/v1/organizations/{organization_id}/organization-contexts";
+    requestFormat: "json";
+    parameters: {
+      query: Partial<{ page: number; per_page: number }>;
+      path: { organization_id: string };
+    };
+    responses: {
+      200: {
+        data: Array<Schemas.OrganizationContextResponse>;
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+    };
+  };
+
+  export type post_CreateOrganizationContext = {
+    method: "POST";
+    path: "/api/v1/organizations/{organization_id}/organization-contexts";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string };
+      body: Schemas.CreateOrganizationContextRequest;
+    };
+    responses: {
+      201: {
+        data: Schemas.OrganizationContextResponse;
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      400: unknown;
+      401: unknown;
+      403: unknown;
+      409: unknown;
+    };
+  };
+
+  export type patch_UpdateOrganizationContext = {
+    method: "PATCH";
+    path: "/api/v1/organization-contexts/{context_id}";
+    requestFormat: "json";
+    parameters: {
+      path: { context_id: string };
+      body: Schemas.UpdateOrganizationContextRequest;
+    };
+    responses: {
+      200: {
+        data: Schemas.OrganizationContextResponse;
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      400: unknown;
+      401: unknown;
+      403: unknown;
+      404: unknown;
+    };
+  };
+
+  export type delete_DeleteOrganizationContext = {
+    method: "DELETE";
+    path: "/api/v1/organization-contexts/{context_id}";
+    requestFormat: "json";
+    parameters: {
+      path: { context_id: string };
+    };
+    responses: { 204: unknown; 401: unknown; 403: unknown; 404: unknown };
+  };
+
   // </Endpoints>
 }
 
@@ -1897,6 +2016,7 @@ export type EndpointByMethod = {
     "/api/v1/organizations/{organization_id}/legal-mention-templates": Endpoints.get_ListLegalMentionTemplates;
     "/api/v1/organizations/{organization_id}/products": Endpoints.get_ListProducts;
     "/api/v1/organizations/{organization_id}/invoices": Endpoints.get_ListInvoices;
+    "/api/v1/organizations/{organization_id}/organization-contexts": Endpoints.get_ListOrganizationContexts;
     "/api/v1/organizations/{organization_id}/quotes": Endpoints.get_ListQuotes;
     "/api/v1/organizations/{organization_id}/service-rates": Endpoints.get_ListServiceRates;
     "/api/v1/invoices/{invoice_id}": Endpoints.get_GetInvoice;
@@ -1914,6 +2034,7 @@ export type EndpointByMethod = {
     "/api/v1/equipment/{equipment_id}": Endpoints.delete_DeleteEquipment;
     "/api/v1/invoices/{invoice_id}": Endpoints.delete_DeleteInvoice;
     "/api/v1/legal-mention-templates/{template_id}": Endpoints.delete_DeleteLegalMentionTemplate;
+    "/api/v1/organization-contexts/{context_id}": Endpoints.delete_DeleteOrganizationContext;
     "/api/v1/organizations/{organization_id}": Endpoints.delete_DeleteOrganization;
     "/api/v1/products/{product_id}": Endpoints.delete_DeleteProduct;
     "/api/v1/quotes/{quote_id}": Endpoints.delete_DeleteQuote;
@@ -1928,6 +2049,7 @@ export type EndpointByMethod = {
     "/api/v1/invoices/{invoice_id}": Endpoints.patch_UpdateInvoice;
     "/api/v1/invoices/{invoice_id}/status": Endpoints.patch_UpdateInvoiceStatus;
     "/api/v1/legal-mention-templates/{template_id}": Endpoints.patch_UpdateLegalMentionTemplate;
+    "/api/v1/organization-contexts/{context_id}": Endpoints.patch_UpdateOrganizationContext;
     "/api/v1/organizations/{organization_id}": Endpoints.patch_UpdateOrganization;
     "/api/v1/products/{product_id}": Endpoints.patch_UpdateProduct;
     "/api/v1/quotes/{quote_id}": Endpoints.patch_UpdateQuote;
@@ -1944,6 +2066,7 @@ export type EndpointByMethod = {
     "/api/v1/organizations/{organization_id}/equipment": Endpoints.post_CreateEquipment;
     "/api/v1/organizations/{organization_id}/invoices": Endpoints.post_CreateInvoice;
     "/api/v1/organizations/{organization_id}/legal-mention-templates": Endpoints.post_CreateLegalMentionTemplate;
+    "/api/v1/organizations/{organization_id}/organization-contexts": Endpoints.post_CreateOrganizationContext;
     "/api/v1/organizations/{organization_id}/products": Endpoints.post_CreateProduct;
     "/api/v1/organizations/{organization_id}/quotes": Endpoints.post_CreateQuote;
     "/api/v1/organizations/{organization_id}/service-rates": Endpoints.post_CreateServiceRate;

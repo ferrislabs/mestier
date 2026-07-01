@@ -13,6 +13,12 @@ import {
 	useUpdateLegalMentionTemplate,
 } from '#/hooks/use-legal-mentions'
 import {
+	useCreateOrganizationContext,
+	useDeleteOrganizationContext,
+	useOrganizationContexts,
+	useUpdateOrganizationContext,
+} from '#/hooks/use-organization-contexts'
+import {
 	type Organization,
 	useUpdateOrganization,
 } from '#/hooks/use-organizations'
@@ -101,6 +107,10 @@ function SettingsCatalog({ organization }: SettingsCatalogProps) {
 		useUpdateLegalMentionTemplate(organizationId)
 	const deleteLegalMentionTemplate =
 		useDeleteLegalMentionTemplate(organizationId)
+	const organizationContextsQuery = useOrganizationContexts(organizationId)
+	const createOrganizationContext = useCreateOrganizationContext(organizationId)
+	const updateOrganizationContext = useUpdateOrganizationContext(organizationId)
+	const deleteOrganizationContext = useDeleteOrganizationContext(organizationId)
 
 	const billingSettings = billingSettingsQuery.data ?? null
 
@@ -272,7 +282,10 @@ function SettingsCatalog({ organization }: SettingsCatalogProps) {
 		upsertBillingSettings.error ??
 		createLegalMentionTemplate.error ??
 		updateLegalMentionTemplate.error ??
-		deleteLegalMentionTemplate.error
+		deleteLegalMentionTemplate.error ??
+		createOrganizationContext.error ??
+		updateOrganizationContext.error ??
+		deleteOrganizationContext.error
 
 	return (
 		<organizationForm.Subscribe selector={(state) => state.values}>
@@ -301,6 +314,8 @@ function SettingsCatalog({ organization }: SettingsCatalogProps) {
 																products: catalog.products.data?.data ?? [],
 																legalMentionTemplates:
 																	legalMentionTemplatesQuery.data?.data ?? [],
+																organizationContexts:
+																	organizationContextsQuery.data?.data ?? [],
 															}}
 															organizationForm={{
 																values: organizationValues,
@@ -500,6 +515,53 @@ function SettingsCatalog({ organization }: SettingsCatalogProps) {
 															onDeleteLegalMentionTemplate={(template) =>
 																deleteLegalMentionTemplate.mutateAsync({
 																	path: { template_id: template.id },
+																})
+															}
+															onCreateOrganizationContext={(values) =>
+																createOrganizationContext.mutateAsync({
+																	path: { organization_id: organizationId },
+																	body: {
+																		label: values.label.trim(),
+																		address_line:
+																			values.address_line.trim() || null,
+																		postal_code:
+																			values.postal_code.trim() || null,
+																		city: values.city.trim() || null,
+																		country: values.country.trim() || null,
+																		siret: values.siret.trim() || null,
+																		rcs: values.rcs.trim() || null,
+																		ape: values.ape.trim() || null,
+																		vat_intracom:
+																			values.vat_intracom.trim() || null,
+																		iban: values.iban.trim() || null,
+																		bic: values.bic.trim() || null,
+																	},
+																})
+															}
+															onUpdateOrganizationContext={(context, values) =>
+																updateOrganizationContext.mutateAsync({
+																	path: { context_id: context.id },
+																	body: {
+																		label: values.label.trim() || undefined,
+																		address_line:
+																			values.address_line.trim() || null,
+																		postal_code:
+																			values.postal_code.trim() || null,
+																		city: values.city.trim() || null,
+																		country: values.country.trim() || null,
+																		siret: values.siret.trim() || null,
+																		rcs: values.rcs.trim() || null,
+																		ape: values.ape.trim() || null,
+																		vat_intracom:
+																			values.vat_intracom.trim() || null,
+																		iban: values.iban.trim() || null,
+																		bic: values.bic.trim() || null,
+																	},
+																})
+															}
+															onDeleteOrganizationContext={(context) =>
+																deleteOrganizationContext.mutateAsync({
+																	path: { context_id: context.id },
 																})
 															}
 														/>

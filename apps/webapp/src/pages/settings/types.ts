@@ -1,5 +1,6 @@
 import type { ProductCatalogFormValues } from '#/hooks/use-catalog-items'
 import type { LegalMentionTemplate } from '#/hooks/use-legal-mentions'
+import type { OrganizationContext } from '#/hooks/use-organization-contexts'
 import type {
 	Employee,
 	Equipment,
@@ -59,12 +60,32 @@ export interface LegalMentionFormValues {
 	body: string
 }
 
+export interface EmitterContextFormValues {
+	label: string
+	address_line: string
+	postal_code: string
+	city: string
+	country: string
+	siret: string
+	rcs: string
+	ape: string
+	vat_intracom: string
+	iban: string
+	bic: string
+}
+
 export interface ReferenceCatalogData {
 	employees: Employee[]
 	equipment: Equipment[]
 	serviceRates: ServiceRate[]
 	products: Product[]
 	legalMentionTemplates: LegalMentionTemplate[]
+	organizationContexts: OrganizationContext[]
 }
 
-export type { LegalMentionTemplate, ProductCatalogFormValues, Product }
+export type {
+	LegalMentionTemplate,
+	OrganizationContext,
+	ProductCatalogFormValues,
+	Product,
+}
