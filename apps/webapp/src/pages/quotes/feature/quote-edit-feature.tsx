@@ -9,7 +9,7 @@ import {
 	Trash2,
 } from 'lucide-react'
 import type * as React from 'react'
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { LegalMentionSelector } from '#/components/legal-mention-selector'
 import {
 	AlertDialog,
@@ -117,10 +117,15 @@ function QuoteEditWorkspace({ quote }: { quote: Quote }) {
 		employees: false,
 		equipment: false,
 	})
-	const catalogItems = useCatalogItems(
-		catalog.serviceRates.data?.data ?? [],
-		catalog.products.data?.data ?? [],
+	const serviceRates = useMemo(
+		() => catalog.serviceRates.data?.data ?? [],
+		[catalog.serviceRates.data],
 	)
+	const products = useMemo(
+		() => catalog.products.data?.data ?? [],
+		[catalog.products.data],
+	)
+	const catalogItems = useCatalogItems(serviceRates, products)
 	const updateQuote = useUpdateQuote()
 	const deleteQuote = useDeleteQuote(quote.organization_id)
 	const convertQuote = useConvertQuoteToInvoice()

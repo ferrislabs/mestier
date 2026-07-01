@@ -14,7 +14,7 @@ import {
 	Zap,
 } from 'lucide-react'
 import type * as React from 'react'
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { DocumentPreview } from '#/components/document-preview'
 import { LegalMentionSelector } from '#/components/legal-mention-selector'
 import {
@@ -141,10 +141,15 @@ function InvoiceEditWorkspace({ invoice }: { invoice: Invoice }) {
 		employees: false,
 		equipment: false,
 	})
-	const catalogItems = useCatalogItems(
-		catalog.serviceRates.data?.data ?? [],
-		catalog.products.data?.data ?? [],
+	const serviceRates = useMemo(
+		() => catalog.serviceRates.data?.data ?? [],
+		[catalog.serviceRates.data],
 	)
+	const products = useMemo(
+		() => catalog.products.data?.data ?? [],
+		[catalog.products.data],
+	)
+	const catalogItems = useCatalogItems(serviceRates, products)
 	const updateInvoice = useUpdateInvoice(invoice.id)
 	const updateInvoiceStatus = useUpdateInvoiceStatus(invoice.id)
 	const deleteInvoice = useDeleteInvoice(invoice.organization_id)
