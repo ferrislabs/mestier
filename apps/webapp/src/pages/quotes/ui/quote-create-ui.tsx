@@ -446,6 +446,63 @@ export function QuoteCreateUI({
 									</FormSection>
 
 									<FormSection
+										icon={<Calculator className="size-4" />}
+										title="Acompte"
+									>
+										<div className="grid gap-4 md:grid-cols-2">
+											<FieldBlock label="Type d'acompte">
+												<Select
+													value={values.depositBasis || 'NONE'}
+													onValueChange={(v) =>
+														onChange({
+															depositBasis: v === 'NONE' ? '' : v,
+															depositValue: '',
+														})
+													}
+												>
+													<SelectTrigger className="w-full">
+														<SelectValue />
+													</SelectTrigger>
+													<SelectContent>
+														<SelectItem value="NONE">Aucun</SelectItem>
+														<SelectItem value="PERCENT">Pourcentage</SelectItem>
+														<SelectItem value="FIXED">Montant fixe</SelectItem>
+													</SelectContent>
+												</Select>
+											</FieldBlock>
+											{values.depositBasis === 'PERCENT' ||
+											values.depositBasis === 'FIXED' ? (
+												<FieldBlock
+													label={
+														values.depositBasis === 'PERCENT'
+															? 'Pourcentage (%)'
+															: 'Montant (€)'
+													}
+												>
+													<div className="relative">
+														<Input
+															inputMode="decimal"
+															value={values.depositValue}
+															onChange={(event) =>
+																onChange({ depositValue: event.target.value })
+															}
+															placeholder={
+																values.depositBasis === 'PERCENT'
+																	? 'Ex. 30'
+																	: 'Ex. 300'
+															}
+															className="pr-6"
+														/>
+														<span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">
+															{values.depositBasis === 'PERCENT' ? '%' : '€'}
+														</span>
+													</div>
+												</FieldBlock>
+											) : null}
+										</div>
+									</FormSection>
+
+									<FormSection
 										icon={<Gavel className="size-4" />}
 										title="Mentions légales"
 									>

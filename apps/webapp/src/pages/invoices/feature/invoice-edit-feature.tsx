@@ -54,6 +54,8 @@ import {
 import {
 	type Invoice,
 	type InvoiceStatus,
+	useCreateBalanceInvoice,
+	useCreateDepositInvoice,
 	useDeleteInvoice,
 	useInvoice,
 	useUpdateInvoice,
@@ -128,10 +130,15 @@ function InvoiceEditWorkspace({ invoice }: { invoice: Invoice }) {
 	const updateInvoice = useUpdateInvoice(invoice.id)
 	const updateInvoiceStatus = useUpdateInvoiceStatus(invoice.id)
 	const deleteInvoice = useDeleteInvoice(invoice.organization_id)
+	const createDepositInvoice = useCreateDepositInvoice()
+	const createBalanceInvoice = useCreateBalanceInvoice()
 	const uploadFile = useUploadFile()
 	const [values, setValues] = useState<InvoiceFormValues>(() =>
 		invoiceToForm(invoice, catalogItems),
 	)
+	const [depositDialogOpen, setDepositDialogOpen] = useState(false)
+	const [depositBasis, setDepositBasis] = useState('PERCENT')
+	const [depositValue, setDepositValueState] = useState('')
 	const customerContexts = useCustomerContexts(
 		values.customerId,
 		Boolean(values.customerId),
@@ -239,6 +246,8 @@ function InvoiceEditWorkspace({ invoice }: { invoice: Invoice }) {
 		updateInvoice.error?.message ??
 		updateInvoiceStatus.error?.message ??
 		deleteInvoice.error?.message ??
+		createDepositInvoice.error?.message ??
+		createBalanceInvoice.error?.message ??
 		uploadFile.error?.message ??
 		null
 
@@ -279,6 +288,30 @@ function InvoiceEditWorkspace({ invoice }: { invoice: Invoice }) {
 		await navigate({ to: '/invoices' })
 	}
 
+	const createDeposit = async () => {
+		if (!depositValue.trim()) return
+		const result = await createDepositInvoice.mutateAsync({
+			path: { invoice_id: invoice.id },
+			body: { basis: depositBasis, value: depositValue.trim() },
+		})
+		setDepositDialogOpen(false)
+		setDepositValueState('')
+		await navigate({
+			to: '/invoices/$invoiceId',
+			params: { invoiceId: result.data.id },
+		})
+	}
+
+	const createBalance = async () => {
+		const result = await createBalanceInvoice.mutateAsync({
+			path: { invoice_id: invoice.id },
+		})
+		await navigate({
+			to: '/invoices/$invoiceId',
+			params: { invoiceId: result.data.id },
+		})
+	}
+
 	return (
 		<InvoiceEditUI
 			invoice={invoice}
@@ -299,8 +332,13 @@ function InvoiceEditWorkspace({ invoice }: { invoice: Invoice }) {
 			isSaving={updateInvoice.isPending}
 			isSendingStatus={updateInvoiceStatus.isPending}
 			isDeleting={deleteInvoice.isPending}
+			isCreatingDeposit={createDepositInvoice.isPending}
+			isCreatingBalance={createBalanceInvoice.isPending}
 			isUploading={uploadFile.isPending}
 			canSave={canSave}
+			depositDialogOpen={depositDialogOpen}
+			depositBasis={depositBasis}
+			depositValue={depositValue}
 			onChange={(patch) => {
 				if (patch.customerId !== undefined) {
 					updateValues({ customerId: patch.customerId, customerContextId: '' })
@@ -316,6 +354,15 @@ function InvoiceEditWorkspace({ invoice }: { invoice: Invoice }) {
 			onSave={saveInvoice}
 			onMarkAsSent={markAsSent}
 			onDelete={deleteCurrentInvoice}
+			onOpenDepositDialog={() => setDepositDialogOpen(true)}
+			onCloseDepositDialog={() => {
+				setDepositDialogOpen(false)
+				setDepositValueState('')
+			}}
+			onDepositBasisChange={setDepositBasis}
+			onDepositValueChange={setDepositValueState}
+			onCreateDeposit={() => void createDeposit()}
+			onCreateBalance={() => void createBalance()}
 		/>
 	)
 }
@@ -334,8 +381,13 @@ function InvoiceEditUI({
 	isSaving,
 	isSendingStatus,
 	isDeleting,
+	isCreatingDeposit,
+	isCreatingBalance,
 	isUploading,
 	canSave,
+	depositDialogOpen,
+	depositBasis,
+	depositValue,
 	onChange,
 	onLineChange,
 	onSelectCatalogItem,
@@ -345,6 +397,12 @@ function InvoiceEditUI({
 	onSave,
 	onMarkAsSent,
 	onDelete,
+	onOpenDepositDialog,
+	onCloseDepositDialog,
+	onDepositBasisChange,
+	onDepositValueChange,
+	onCreateDeposit,
+	onCreateBalance,
 }: {
 	invoice: Invoice
 	values: InvoiceFormValues
@@ -359,8 +417,13 @@ function InvoiceEditUI({
 	isSaving: boolean
 	isSendingStatus: boolean
 	isDeleting: boolean
+	isCreatingDeposit: boolean
+	isCreatingBalance: boolean
 	isUploading: boolean
 	canSave: boolean
+	depositDialogOpen: boolean
+	depositBasis: string
+	depositValue: string
 	onChange: (patch: Partial<InvoiceFormValues>) => void
 	onLineChange: (index: number, patch: Partial<InvoiceLineFormValues>) => void
 	onSelectCatalogItem: (index: number, catalogItemId: string) => void
@@ -370,7 +433,21 @@ function InvoiceEditUI({
 	onSave: () => void
 	onMarkAsSent: () => void
 	onDelete: () => void
+	onOpenDepositDialog: () => void
+	onCloseDepositDialog: () => void
+	onDepositBasisChange: (basis: string) => void
+	onDepositValueChange: (value: string) => void
+	onCreateDeposit: () => void
+	onCreateBalance: () => void
 }) {
+	const isStandard = invoice.invoice_type === 'STANDARD'
+	const anyPending =
+		isDeleting ||
+		isSaving ||
+		isSendingStatus ||
+		isCreatingDeposit ||
+		isCreatingBalance
+
 	return (
 		<PageShell>
 			<PageHeader
@@ -386,6 +463,37 @@ function InvoiceEditUI({
 							</Link>
 						</Button>
 
+						{isStandard ? (
+							<>
+								<Button
+									type="button"
+									variant="outline"
+									disabled={anyPending}
+									onClick={onOpenDepositDialog}
+								>
+									{isCreatingDeposit ? (
+										<Loader2 className="animate-spin" />
+									) : (
+										<Plus />
+									)}
+									Facture d'acompte
+								</Button>
+								<Button
+									type="button"
+									variant="outline"
+									disabled={anyPending}
+									onClick={onCreateBalance}
+								>
+									{isCreatingBalance ? (
+										<Loader2 className="animate-spin" />
+									) : (
+										<FileText />
+									)}
+									Facture de solde
+								</Button>
+							</>
+						) : null}
+
 						{isDraft ? (
 							<>
 								<AlertDialog>
@@ -393,7 +501,7 @@ function InvoiceEditUI({
 										<Button
 											type="button"
 											variant="destructive"
-											disabled={isDeleting || isSaving || isSendingStatus}
+											disabled={anyPending}
 										>
 											{isDeleting ? (
 												<Loader2 className="animate-spin" />
@@ -469,6 +577,66 @@ function InvoiceEditUI({
 					</div>
 				}
 			/>
+
+			{depositDialogOpen ? (
+				<div className="rounded-lg border bg-card p-5 shadow-sm">
+					<p className="mb-4 text-sm font-semibold">Facture d'acompte</p>
+					<div className="grid gap-4 md:grid-cols-3">
+						<div className="flex flex-col gap-2">
+							<Label>Type</Label>
+							<Select value={depositBasis} onValueChange={onDepositBasisChange}>
+								<SelectTrigger className="w-full">
+									<SelectValue />
+								</SelectTrigger>
+								<SelectContent>
+									<SelectItem value="PERCENT">Pourcentage</SelectItem>
+									<SelectItem value="FIXED">Montant fixe</SelectItem>
+								</SelectContent>
+							</Select>
+						</div>
+						<div className="flex flex-col gap-2">
+							<Label>
+								{depositBasis === 'PERCENT' ? 'Pourcentage (%)' : 'Montant (€)'}
+							</Label>
+							<div className="relative">
+								<Input
+									inputMode="decimal"
+									value={depositValue}
+									onChange={(event) => onDepositValueChange(event.target.value)}
+									placeholder={
+										depositBasis === 'PERCENT' ? 'Ex. 30' : 'Ex. 300'
+									}
+									className="pr-6"
+								/>
+								<span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">
+									{depositBasis === 'PERCENT' ? '%' : '€'}
+								</span>
+							</div>
+						</div>
+						<div className="flex items-end gap-2">
+							<Button
+								type="button"
+								disabled={!depositValue.trim() || isCreatingDeposit}
+								onClick={onCreateDeposit}
+							>
+								{isCreatingDeposit ? (
+									<Loader2 className="animate-spin" />
+								) : (
+									<FileText />
+								)}
+								Créer
+							</Button>
+							<Button
+								type="button"
+								variant="outline"
+								onClick={onCloseDepositDialog}
+							>
+								Annuler
+							</Button>
+						</div>
+					</div>
+				</div>
+			) : null}
 
 			{error ? (
 				<div className="rounded-lg border border-destructive/30 bg-destructive-soft px-4 py-3 text-sm text-destructive">
@@ -613,6 +781,12 @@ function InvoiceEditUI({
 							label="Statut"
 							value={invoiceStatusLabel(invoice.status)}
 						/>
+						<div className="flex items-center justify-between gap-4">
+							<span className="text-muted-foreground">Type</span>
+							<StatusBadge tone={invoiceTypeTone(invoice.invoice_type)}>
+								{invoiceTypeLabel(invoice.invoice_type)}
+							</StatusBadge>
+						</div>
 						<SummaryRow label="Objet" value={values.title || 'Non renseigné'} />
 						<SummaryRow label="Lignes" value={String(values.lines.length)} />
 						<SummaryRow
@@ -628,6 +802,28 @@ function InvoiceEditUI({
 							value={formatCents(invoice.total_ttc_cents)}
 							strong
 						/>
+						{invoice.invoice_type === 'BALANCE' &&
+						invoice.deposit_amount_cents != null ? (
+							<SummaryRow
+								label="Acompte déduit"
+								value={formatCents(invoice.deposit_amount_cents)}
+							/>
+						) : null}
+						{invoice.invoice_type === 'STANDARD' ? (
+							<SummaryRow
+								label="Reste à payer"
+								value={formatCents(
+									invoice.total_ttc_cents - invoice.amount_paid_cents,
+								)}
+							/>
+						) : null}
+						{invoice.invoice_type === 'BALANCE' ? (
+							<SummaryRow
+								label="Reste à payer"
+								value={formatCents(invoice.total_ttc_cents)}
+								strong
+							/>
+						) : null}
 					</div>
 				</aside>
 			</div>
@@ -981,5 +1177,17 @@ function invoiceStatusTone(status: InvoiceStatus) {
 	if (status === 'PAID') return 'success' as const
 	if (status === 'SENT' || status === 'PARTIALLY_PAID') return 'brand' as const
 	if (status === 'CANCELLED') return 'error' as const
+	return 'neutral' as const
+}
+
+function invoiceTypeLabel(type: string) {
+	if (type === 'DEPOSIT') return 'Acompte'
+	if (type === 'BALANCE') return 'Solde'
+	return 'Standard'
+}
+
+function invoiceTypeTone(type: string) {
+	if (type === 'DEPOSIT') return 'brand' as const
+	if (type === 'BALANCE') return 'success' as const
 	return 'neutral' as const
 }

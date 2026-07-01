@@ -59,6 +59,8 @@ export namespace Schemas {
   export type CreateQuoteRequest = {
     customer_context_id: CustomerContextId;
     customer_id: CustomerId;
+    deposit_basis?: (string | null) | undefined;
+    deposit_value?: (string | null) | undefined;
     legal_mention_template_ids?: (string[] | null) | undefined;
     lines: Array<QuoteLineRequest>;
     title: string;
@@ -175,6 +177,8 @@ export namespace Schemas {
     created_at: string;
     customer_context_id: CustomerContextId;
     customer_id: CustomerId;
+    deposit_basis: string | null;
+    deposit_value: string | null;
     id: QuoteId;
     legal_mention_template_ids: string[];
     lines: Array<QuoteLineResponse>;
@@ -241,6 +245,8 @@ export namespace Schemas {
   export type UpdateQuoteRequest = {
     customer_context_id: CustomerContextId;
     customer_id: CustomerId;
+    deposit_basis?: (string | null) | undefined;
+    deposit_value?: (string | null) | undefined;
     legal_mention_template_ids?: (string[] | null) | undefined;
     lines: Array<QuoteLineRequest>;
     status: QuoteStatus;
@@ -366,6 +372,8 @@ export namespace Schemas {
     vat_intracom?: (string | null) | undefined;
     footer?: (string | null) | undefined;
   };
+
+  export type CreateDepositInvoiceRequest = { basis: string; value: string };
 
   // </Schemas>
 }
@@ -1793,6 +1801,41 @@ export namespace Endpoints {
     };
   };
 
+  export type post_CreateDepositInvoice = {
+    method: "POST";
+    path: "/api/v1/invoices/{invoice_id}/deposit-invoice";
+    requestFormat: "json";
+    parameters: {
+      path: { invoice_id: string };
+      body: Schemas.CreateDepositInvoiceRequest;
+    };
+    responses: {
+      201: { data: Schemas.InvoiceResponse };
+      400: unknown;
+      401: unknown;
+      403: unknown;
+      404: unknown;
+      409: unknown;
+    };
+  };
+
+  export type post_CreateBalanceInvoice = {
+    method: "POST";
+    path: "/api/v1/invoices/{invoice_id}/balance-invoice";
+    requestFormat: "json";
+    parameters: {
+      path: { invoice_id: string };
+    };
+    responses: {
+      201: { data: Schemas.InvoiceResponse };
+      400: unknown;
+      401: unknown;
+      403: unknown;
+      404: unknown;
+      409: unknown;
+    };
+  };
+
   // </Endpoints>
 }
 
@@ -1866,6 +1909,8 @@ export type EndpointByMethod = {
     "/api/v1/organizations/{organization_id}/quotes": Endpoints.post_CreateQuote;
     "/api/v1/organizations/{organization_id}/service-rates": Endpoints.post_CreateServiceRate;
     "/api/v1/quotes/{quote_id}/convert-to-invoice": Endpoints.post_ConvertQuoteToInvoice;
+    "/api/v1/invoices/{invoice_id}/deposit-invoice": Endpoints.post_CreateDepositInvoice;
+    "/api/v1/invoices/{invoice_id}/balance-invoice": Endpoints.post_CreateBalanceInvoice;
   };
   put: {
     "/api/v1/organizations/{organization_id}/billing-settings": Endpoints.put_UpsertBillingSettings;

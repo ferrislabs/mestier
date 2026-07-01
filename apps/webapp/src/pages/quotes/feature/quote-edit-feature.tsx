@@ -236,6 +236,14 @@ function QuoteEditWorkspace({ quote }: { quote: Quote }) {
 
 	const saveQuote = async () => {
 		if (!canSave) return
+		const depositBasis =
+			values.depositBasis === 'PERCENT' || values.depositBasis === 'FIXED'
+				? values.depositBasis
+				: null
+		const depositValue =
+			depositBasis && values.depositValue.trim()
+				? values.depositValue.trim()
+				: null
 		await updateQuote.mutateAsync({
 			path: { quote_id: quote.id },
 			body: {
@@ -243,6 +251,8 @@ function QuoteEditWorkspace({ quote }: { quote: Quote }) {
 				customer_id: values.customerId,
 				customer_context_id: values.customerContextId,
 				legal_mention_template_ids: values.legalMentionTemplateIds,
+				deposit_basis: depositBasis,
+				deposit_value: depositValue,
 				status,
 				lines: values.lines.map((line) => ({
 					service_rate_id: line.serviceRateId || null,
@@ -578,6 +588,62 @@ function QuoteEditUI({
 
 					<SectionCard>
 						<SectionHeader
+							title="Acompte"
+							description="Montant d'acompte mentionné sur le devis (informatif)."
+						/>
+						<div className="grid gap-4 p-5 md:grid-cols-2">
+							<FieldBlock label="Type d'acompte">
+								<Select
+									value={values.depositBasis || 'NONE'}
+									onValueChange={(v) =>
+										onChange({
+											depositBasis: v === 'NONE' ? '' : v,
+											depositValue: '',
+										})
+									}
+								>
+									<SelectTrigger className="w-full">
+										<SelectValue />
+									</SelectTrigger>
+									<SelectContent>
+										<SelectItem value="NONE">Aucun</SelectItem>
+										<SelectItem value="PERCENT">Pourcentage</SelectItem>
+										<SelectItem value="FIXED">Montant fixe</SelectItem>
+									</SelectContent>
+								</Select>
+							</FieldBlock>
+							{values.depositBasis === 'PERCENT' ||
+							values.depositBasis === 'FIXED' ? (
+								<FieldBlock
+									label={
+										values.depositBasis === 'PERCENT'
+											? 'Pourcentage (%)'
+											: 'Montant (€)'
+									}
+								>
+									<div className="relative">
+										<Input
+											inputMode="decimal"
+											value={values.depositValue}
+											onChange={(event) =>
+												onChange({ depositValue: event.target.value })
+											}
+											placeholder={
+												values.depositBasis === 'PERCENT' ? 'Ex. 30' : 'Ex. 300'
+											}
+											className="pr-6"
+										/>
+										<span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">
+											{values.depositBasis === 'PERCENT' ? '%' : '€'}
+										</span>
+									</div>
+								</FieldBlock>
+							) : null}
+						</div>
+					</SectionCard>
+
+					<SectionCard>
+						<SectionHeader
 							title="Mentions légales"
 							description="Sélectionnez les mentions légales à inclure dans ce devis."
 						/>
@@ -612,6 +678,12 @@ function QuoteEditUI({
 							value={formatCents(quote.total_ttc_cents)}
 							strong
 						/>
+						{values.depositBasis === 'PERCENT' && values.depositValue ? (
+							<SummaryRow label="Acompte" value={`${values.depositValue} %`} />
+						) : null}
+						{values.depositBasis === 'FIXED' && values.depositValue ? (
+							<SummaryRow label="Acompte" value={`${values.depositValue} €`} />
+						) : null}
 					</div>
 				</aside>
 			</div>
@@ -840,6 +912,8 @@ function quoteToForm(
 		customerContextId: quote.customer_context_id,
 		legalMentionTemplateIds: quote.legal_mention_template_ids ?? [],
 		lines: lines.length ? lines : [emptyQuoteLine()],
+		depositBasis: quote.deposit_basis ?? '',
+		depositValue: quote.deposit_value ?? '',
 	}
 }
 
