@@ -4,8 +4,8 @@ use auth::Identity;
 use axum::{Extension, Json, extract::State};
 use handlers::{ApiError, AppState, DataEnvelope, Response};
 use mestier_core::{
-    CreateQuoteCommand, CustomerContextId, CustomerId, LegalMentionTemplateId, QuoteLineCommand,
-    ServiceRateId, ServiceRateUnit,
+    CreateQuoteCommand, CustomerContextId, CustomerId, LegalMentionTemplateId,
+    OrganizationContextId, QuoteLineCommand, ServiceRateId, ServiceRateUnit,
 };
 use rust_decimal::Decimal;
 use serde::Deserialize;
@@ -60,6 +60,8 @@ pub struct CreateQuoteRequest {
     pub title: String,
     pub customer_id: CustomerId,
     pub customer_context_id: CustomerContextId,
+    #[serde(default)]
+    pub emitter_context_id: Option<Uuid>,
     pub lines: Vec<QuoteLineRequest>,
     #[serde(default)]
     pub legal_mention_template_ids: Option<Vec<Uuid>>,
@@ -130,6 +132,7 @@ pub async fn handler(
             title: payload.title,
             customer_id: payload.customer_id,
             customer_context_id: payload.customer_context_id,
+            emitter_context_id: payload.emitter_context_id.map(OrganizationContextId),
             deposit_basis: payload.deposit_basis,
             deposit_value,
             lines: into_line_commands(payload.lines)?,

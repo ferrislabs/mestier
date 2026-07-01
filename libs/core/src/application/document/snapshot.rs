@@ -198,6 +198,7 @@ mod tests {
 			org_id,
 			customer_id: CustomerId(Uuid::new_v4()),
 			customer_context_id: CustomerContextId(Uuid::new_v4()),
+			emitter_context_id: None,
 			reference: Some("FAC-2026-0001".to_owned()),
 			title: "Facture cuisine".to_owned(),
 			status: InvoiceStatus::Sent,

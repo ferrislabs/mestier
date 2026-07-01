@@ -50,6 +50,7 @@ where
 				org_id: command.org_id,
 				customer_id: command.customer_id,
 				customer_context_id: command.customer_context_id,
+				emitter_context_id: command.emitter_context_id,
 				reference: None,
 				title: command.title.trim().to_owned(),
 				status: InvoiceStatus::Draft,
@@ -145,6 +146,7 @@ where
 				org_id: existing.org_id,
 				customer_id: command.customer_id,
 				customer_context_id: command.customer_context_id,
+				emitter_context_id: command.emitter_context_id,
 				reference: existing.reference,
 				title: command.title.trim().to_owned(),
 				status: existing.status,
@@ -282,6 +284,7 @@ where
 				org_id: parent.org_id,
 				customer_id: parent.customer_id,
 				customer_context_id: parent.customer_context_id,
+				emitter_context_id: parent.emitter_context_id,
 				reference: None,
 				title: format!("Acompte — {}", parent.title),
 				status: InvoiceStatus::Draft,
@@ -383,6 +386,7 @@ where
 				org_id: parent.org_id,
 				customer_id: parent.customer_id,
 				customer_context_id: parent.customer_context_id,
+				emitter_context_id: parent.emitter_context_id,
 				reference: None,
 				title: format!("Solde — {}", parent.title),
 				status: InvoiceStatus::Draft,
@@ -530,7 +534,7 @@ fn compute_invoice_totals(lines: &[InvoiceLine]) -> Result<(i32, i32, i32), Core
 mod tests {
 	use super::*;
 	use crate::{
-		CustomerContextId, CustomerId, LegalMentionTemplateId, ServiceRateUnit,
+		CustomerContextId, CustomerId, LegalMentionTemplateId, OrganizationContextId, ServiceRateUnit,
 		domain::invoice::{InvoiceType, ports::MockInvoiceRepository},
 	};
 	use mockall::predicate::eq;
@@ -558,6 +562,7 @@ mod tests {
 			org_id,
 			customer_id: CustomerId(Uuid::new_v4()),
 			customer_context_id: CustomerContextId(Uuid::new_v4()),
+			emitter_context_id: None,
 			reference: None,
 			title: "Facture chantier".to_owned(),
 			status: InvoiceStatus::Draft,
@@ -618,6 +623,7 @@ mod tests {
 				title: "Facture cuisine".to_owned(),
 				customer_id: CustomerId(Uuid::new_v4()),
 				customer_context_id: CustomerContextId(Uuid::new_v4()),
+				emitter_context_id: None,
 				invoice_type: InvoiceType::Standard,
 				source_quote_id: None,
 				parent_invoice_id: None,
@@ -661,6 +667,7 @@ mod tests {
 				title: "Facture test".to_owned(),
 				customer_id: CustomerId(Uuid::new_v4()),
 				customer_context_id: CustomerContextId(Uuid::new_v4()),
+				emitter_context_id: None,
 				invoice_type: InvoiceType::Standard,
 				source_quote_id: None,
 				parent_invoice_id: None,
@@ -706,6 +713,7 @@ mod tests {
 				title: "Facture mise à jour".to_owned(),
 				customer_id: CustomerId(Uuid::new_v4()),
 				customer_context_id: CustomerContextId(Uuid::new_v4()),
+				emitter_context_id: None,
 				deposit_basis: None,
 				deposit_value: None,
 				deposit_amount_cents: None,
@@ -746,6 +754,7 @@ mod tests {
 				title: "Tentative modif".to_owned(),
 				customer_id: CustomerId(Uuid::new_v4()),
 				customer_context_id: CustomerContextId(Uuid::new_v4()),
+				emitter_context_id: None,
 				deposit_basis: None,
 				deposit_value: None,
 				deposit_amount_cents: None,
@@ -971,6 +980,7 @@ mod tests {
 				title: "Facture avec mentions".to_owned(),
 				customer_id: CustomerId(Uuid::new_v4()),
 				customer_context_id: CustomerContextId(Uuid::new_v4()),
+				emitter_context_id: None,
 				invoice_type: InvoiceType::Standard,
 				source_quote_id: None,
 				parent_invoice_id: None,
@@ -997,6 +1007,7 @@ mod tests {
 			org_id,
 			customer_id: CustomerId(Uuid::new_v4()),
 			customer_context_id: CustomerContextId(Uuid::new_v4()),
+			emitter_context_id: None,
 			reference: None,
 			title: "Chantier cuisine".to_owned(),
 			status: InvoiceStatus::Draft,
@@ -1128,6 +1139,7 @@ mod tests {
 			org_id: parent.org_id,
 			customer_id: parent.customer_id,
 			customer_context_id: parent.customer_context_id,
+			emitter_context_id: None,
 			reference: None,
 			title: "Acompte — Chantier cuisine".to_owned(),
 			status: InvoiceStatus::Draft,
@@ -1197,6 +1209,7 @@ mod tests {
 			org_id: parent.org_id,
 			customer_id: parent.customer_id,
 			customer_context_id: parent.customer_context_id,
+			emitter_context_id: None,
 			reference: None,
 			title: "Acompte — Chantier cuisine".to_owned(),
 			status: InvoiceStatus::Draft,
@@ -1308,6 +1321,7 @@ mod tests {
 				title: " ".to_owned(),
 				customer_id: CustomerId(Uuid::new_v4()),
 				customer_context_id: CustomerContextId(Uuid::new_v4()),
+				emitter_context_id: None,
 				invoice_type: InvoiceType::Standard,
 				source_quote_id: None,
 				parent_invoice_id: None,
@@ -1333,6 +1347,7 @@ mod tests {
 				title: "Facture test".to_owned(),
 				customer_id: CustomerId(Uuid::new_v4()),
 				customer_context_id: CustomerContextId(Uuid::new_v4()),
+				emitter_context_id: None,
 				invoice_type: InvoiceType::Standard,
 				source_quote_id: None,
 				parent_invoice_id: None,
@@ -1375,6 +1390,7 @@ mod tests {
 				title: "Rénovation cuisine".to_owned(),
 				customer_id: CustomerId(Uuid::new_v4()),
 				customer_context_id: CustomerContextId(Uuid::new_v4()),
+				emitter_context_id: None,
 				invoice_type: InvoiceType::Standard,
 				source_quote_id: Some(quote_id),
 				parent_invoice_id: None,
@@ -1407,5 +1423,88 @@ mod tests {
 		assert_eq!(created.total_cents, 7800);
 		// legal mention template IDs are preserved
 		assert_eq!(created.legal_mention_template_ids, template_ids);
+	}
+
+	// ---- emitter context ----
+
+	#[tokio::test]
+	async fn create_invoice_copies_emitter_context_id() {
+		use crate::domain::quote::QuoteId;
+
+		let emitter_id = OrganizationContextId(Uuid::new_v4());
+		let quote_id = QuoteId(Uuid::new_v4());
+
+		let mut repo = MockInvoiceRepository::new();
+		repo.expect_insert().times(1).returning(|inv| {
+			let inv = inv.clone();
+			Box::pin(async move { Ok(inv) })
+		});
+		repo.expect_replace_legal_mention_templates()
+			.times(1)
+			.returning(|_, _| Box::pin(async { Ok(()) }));
+
+		let mut service = InvoiceService::new(repo);
+		let created = service
+			.create_invoice(CreateInvoiceCommand {
+				org_id: OrganizationId(Uuid::new_v4()),
+				title: "Facture emetteur".to_owned(),
+				customer_id: CustomerId(Uuid::new_v4()),
+				customer_context_id: CustomerContextId(Uuid::new_v4()),
+				emitter_context_id: Some(emitter_id),
+				invoice_type: InvoiceType::Standard,
+				source_quote_id: Some(quote_id),
+				parent_invoice_id: None,
+				deposit_basis: None,
+				deposit_value: None,
+				deposit_amount_cents: None,
+				due_at: None,
+				lines: vec![line_command(Decimal::new(1, 0), 1000)],
+				legal_mention_template_ids: vec![],
+			})
+			.await
+			.unwrap();
+
+		assert_eq!(created.emitter_context_id, Some(emitter_id));
+	}
+
+	/// Verifies the application-level gate logic: an invoice with no emitter context
+	/// should not be issuable. Since the gate is in MestierUseCase::issue_invoice,
+	/// we verify here that the emitter_context_id field is correctly set to None
+	/// when not supplied, so the guard will trigger.
+	#[tokio::test]
+	async fn invoice_created_without_emitter_context_has_none() {
+		let mut repo = MockInvoiceRepository::new();
+		repo.expect_insert().times(1).returning(|inv| {
+			let inv = inv.clone();
+			Box::pin(async move { Ok(inv) })
+		});
+		repo.expect_replace_legal_mention_templates()
+			.times(1)
+			.returning(|_, _| Box::pin(async { Ok(()) }));
+
+		let mut service = InvoiceService::new(repo);
+		let created = service
+			.create_invoice(CreateInvoiceCommand {
+				org_id: OrganizationId(Uuid::new_v4()),
+				title: "Facture sans emetteur".to_owned(),
+				customer_id: CustomerId(Uuid::new_v4()),
+				customer_context_id: CustomerContextId(Uuid::new_v4()),
+				emitter_context_id: None,
+				invoice_type: InvoiceType::Standard,
+				source_quote_id: None,
+				parent_invoice_id: None,
+				deposit_basis: None,
+				deposit_value: None,
+				deposit_amount_cents: None,
+				due_at: None,
+				lines: vec![line_command(Decimal::new(1, 0), 1000)],
+				legal_mention_template_ids: vec![],
+			})
+			.await
+			.unwrap();
+
+		// emitter_context_id is None — the issue_invoice guard in the application
+		// layer will reject this invoice with a Conflict error.
+		assert_eq!(created.emitter_context_id, None);
 	}
 }

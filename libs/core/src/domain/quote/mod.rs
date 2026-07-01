@@ -7,8 +7,8 @@ use utoipa::ToSchema;
 use uuid::Uuid;
 
 use crate::{
-	CustomerContextId, CustomerId, LegalMentionTemplateId, OrganizationId, ServiceRateId,
-	ServiceRateUnit,
+	CustomerContextId, CustomerId, LegalMentionTemplateId, OrganizationContextId, OrganizationId,
+	ServiceRateId, ServiceRateUnit,
 };
 
 pub mod commands;
@@ -118,6 +118,7 @@ pub struct Quote {
     pub title: String,
     pub customer_id: CustomerId,
     pub customer_context_id: CustomerContextId,
+    pub emitter_context_id: Option<OrganizationContextId>,
     pub status: QuoteStatus,
     pub deposit_basis: Option<String>,
     pub deposit_value: Option<Decimal>,

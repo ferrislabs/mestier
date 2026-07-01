@@ -2,8 +2,8 @@ use chrono::{DateTime, Utc};
 use rust_decimal::Decimal;
 
 use crate::{
-	CustomerContextId, CustomerId, LegalMentionTemplateId, OrganizationId, ServiceRateId,
-	ServiceRateUnit,
+	CustomerContextId, CustomerId, LegalMentionTemplateId, OrganizationContextId, OrganizationId,
+	ServiceRateId, ServiceRateUnit,
 };
 use crate::domain::invoice::{InvoiceId, InvoiceStatus, InvoiceType};
 use crate::domain::quote::QuoteId;
@@ -26,6 +26,7 @@ pub struct CreateInvoiceCommand {
 	pub title: String,
 	pub customer_id: CustomerId,
 	pub customer_context_id: CustomerContextId,
+	pub emitter_context_id: Option<OrganizationContextId>,
 	pub invoice_type: InvoiceType,
 	pub source_quote_id: Option<QuoteId>,
 	pub parent_invoice_id: Option<InvoiceId>,
@@ -43,6 +44,7 @@ pub struct UpdateInvoiceCommand {
 	pub title: String,
 	pub customer_id: CustomerId,
 	pub customer_context_id: CustomerContextId,
+	pub emitter_context_id: Option<OrganizationContextId>,
 	pub deposit_basis: Option<String>,
 	pub deposit_value: Option<Decimal>,
 	pub deposit_amount_cents: Option<i32>,

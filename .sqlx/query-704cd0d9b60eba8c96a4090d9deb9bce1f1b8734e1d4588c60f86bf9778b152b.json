@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            UPDATE quotes\n            SET status = CAST($2 AS text)::quote_status, updated_at = $3\n            WHERE id = $1 AND deleted_at IS NULL\n            RETURNING id, org_id, reference, title, customer_id, customer_context_id, status::text AS \"status!\", deposit_basis, deposit_value, total_cents, total_ht_cents, total_vat_cents, total_ttc_cents, deleted_at, created_at, updated_at\n            ",
+  "query": "\n            UPDATE quotes\n            SET title = $2,\n                customer_id = $3,\n                customer_context_id = $4,\n                emitter_context_id = $5,\n                status = CAST($6 AS text)::quote_status,\n                deposit_basis = $7,\n                deposit_value = $8,\n                total_cents = $9,\n                total_ht_cents = $10,\n                total_vat_cents = $11,\n                total_ttc_cents = $12,\n                updated_at = $13\n            WHERE id = $1 AND deleted_at IS NULL\n            RETURNING id, org_id, reference, title, customer_id, customer_context_id, emitter_context_id, status::text AS \"status!\", deposit_basis, deposit_value, total_cents, total_ht_cents, total_vat_cents, total_ttc_cents, deleted_at, created_at, updated_at\n            ",
   "describe": {
     "columns": [
       {
@@ -35,51 +35,56 @@
       },
       {
         "ordinal": 6,
+        "name": "emitter_context_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 7,
         "name": "status!",
         "type_info": "Text"
       },
       {
-        "ordinal": 7,
+        "ordinal": 8,
         "name": "deposit_basis",
         "type_info": "Text"
       },
       {
-        "ordinal": 8,
+        "ordinal": 9,
         "name": "deposit_value",
         "type_info": "Numeric"
       },
       {
-        "ordinal": 9,
+        "ordinal": 10,
         "name": "total_cents",
         "type_info": "Int4"
       },
       {
-        "ordinal": 10,
+        "ordinal": 11,
         "name": "total_ht_cents",
         "type_info": "Int4"
       },
       {
-        "ordinal": 11,
+        "ordinal": 12,
         "name": "total_vat_cents",
         "type_info": "Int4"
       },
       {
-        "ordinal": 12,
+        "ordinal": 13,
         "name": "total_ttc_cents",
         "type_info": "Int4"
       },
       {
-        "ordinal": 13,
+        "ordinal": 14,
         "name": "deleted_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 14,
+        "ordinal": 15,
         "name": "created_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 15,
+        "ordinal": 16,
         "name": "updated_at",
         "type_info": "Timestamptz"
       }
@@ -88,6 +93,16 @@
       "Left": [
         "Uuid",
         "Text",
+        "Uuid",
+        "Uuid",
+        "Uuid",
+        "Text",
+        "Text",
+        "Numeric",
+        "Int4",
+        "Int4",
+        "Int4",
+        "Int4",
         "Timestamptz"
       ]
     },
@@ -98,6 +113,7 @@
       false,
       false,
       false,
+      true,
       null,
       true,
       true,
@@ -110,5 +126,5 @@
       false
     ]
   },
-  "hash": "c6117a13ffe0db0025fd4bab06131eb57d70cec39901dc476f15ee4b5777bc78"
+  "hash": "704cd0d9b60eba8c96a4090d9deb9bce1f1b8734e1d4588c60f86bf9778b152b"
 }

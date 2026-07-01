@@ -68,7 +68,7 @@ impl<'tx> InvoiceRepository for PgInvoiceRepository<'tx> {
 			InvoiceRow,
 			r#"
 			INSERT INTO invoices (
-				id, org_id, customer_id, customer_context_id, reference, title,
+				id, org_id, customer_id, customer_context_id, emitter_context_id, reference, title,
 				status, invoice_type, source_quote_id, parent_invoice_id,
 				deposit_basis, deposit_value, deposit_amount_cents,
 				total_ht_cents, total_vat_cents, total_ttc_cents, total_cents,
@@ -76,13 +76,13 @@ impl<'tx> InvoiceRepository for PgInvoiceRepository<'tx> {
 				deleted_at, created_at, updated_at
 			)
 			VALUES (
-				$1, $2, $3, $4, $5, $6,
-				CAST($7 AS text)::invoice_status, CAST($8 AS text)::invoice_type,
-				$9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21,
-				$22, $23, $24
+				$1, $2, $3, $4, $5, $6, $7,
+				CAST($8 AS text)::invoice_status, CAST($9 AS text)::invoice_type,
+				$10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22,
+				$23, $24, $25
 			)
 			RETURNING
-				id, org_id, customer_id, customer_context_id, reference, title,
+				id, org_id, customer_id, customer_context_id, emitter_context_id, reference, title,
 				status::text AS "status!", invoice_type::text AS "invoice_type!",
 				source_quote_id, parent_invoice_id,
 				deposit_basis, deposit_value, deposit_amount_cents,
@@ -94,6 +94,7 @@ impl<'tx> InvoiceRepository for PgInvoiceRepository<'tx> {
 			invoice.org_id.0,
 			invoice.customer_id.0,
 			invoice.customer_context_id.0,
+			invoice.emitter_context_id.map(|id| id.0),
 			invoice.reference,
 			invoice.title,
 			invoice.status.as_str(),
@@ -129,7 +130,7 @@ impl<'tx> InvoiceRepository for PgInvoiceRepository<'tx> {
 			InvoiceRow,
 			r#"
 			SELECT
-				id, org_id, customer_id, customer_context_id, reference, title,
+				id, org_id, customer_id, customer_context_id, emitter_context_id, reference, title,
 				status::text AS "status!", invoice_type::text AS "invoice_type!",
 				source_quote_id, parent_invoice_id,
 				deposit_basis, deposit_value, deposit_amount_cents,
@@ -165,7 +166,7 @@ impl<'tx> InvoiceRepository for PgInvoiceRepository<'tx> {
 			InvoiceRow,
 			r#"
 			SELECT
-				id, org_id, customer_id, customer_context_id, reference, title,
+				id, org_id, customer_id, customer_context_id, emitter_context_id, reference, title,
 				status::text AS "status!", invoice_type::text AS "invoice_type!",
 				source_quote_id, parent_invoice_id,
 				deposit_basis, deposit_value, deposit_amount_cents,
@@ -212,18 +213,19 @@ impl<'tx> InvoiceRepository for PgInvoiceRepository<'tx> {
 				title = $2,
 				customer_id = $3,
 				customer_context_id = $4,
-				deposit_basis = $5,
-				deposit_value = $6,
-				deposit_amount_cents = $7,
-				total_ht_cents = $8,
-				total_vat_cents = $9,
-				total_ttc_cents = $10,
-				total_cents = $11,
-				due_at = $12,
-				updated_at = $13
+				emitter_context_id = $5,
+				deposit_basis = $6,
+				deposit_value = $7,
+				deposit_amount_cents = $8,
+				total_ht_cents = $9,
+				total_vat_cents = $10,
+				total_ttc_cents = $11,
+				total_cents = $12,
+				due_at = $13,
+				updated_at = $14
 			WHERE id = $1 AND deleted_at IS NULL
 			RETURNING
-				id, org_id, customer_id, customer_context_id, reference, title,
+				id, org_id, customer_id, customer_context_id, emitter_context_id, reference, title,
 				status::text AS "status!", invoice_type::text AS "invoice_type!",
 				source_quote_id, parent_invoice_id,
 				deposit_basis, deposit_value, deposit_amount_cents,
@@ -235,6 +237,7 @@ impl<'tx> InvoiceRepository for PgInvoiceRepository<'tx> {
 			invoice.title,
 			invoice.customer_id.0,
 			invoice.customer_context_id.0,
+			invoice.emitter_context_id.map(|id| id.0),
 			invoice.deposit_basis,
 			invoice.deposit_value,
 			invoice.deposit_amount_cents,
@@ -289,7 +292,7 @@ impl<'tx> InvoiceRepository for PgInvoiceRepository<'tx> {
 				updated_at = $5
 			WHERE id = $1 AND deleted_at IS NULL
 			RETURNING
-				id, org_id, customer_id, customer_context_id, reference, title,
+				id, org_id, customer_id, customer_context_id, emitter_context_id, reference, title,
 				status::text AS "status!", invoice_type::text AS "invoice_type!",
 				source_quote_id, parent_invoice_id,
 				deposit_basis, deposit_value, deposit_amount_cents,
@@ -386,7 +389,7 @@ impl<'tx> InvoiceRepository for PgInvoiceRepository<'tx> {
 			InvoiceRow,
 			r#"
 			SELECT
-				id, org_id, customer_id, customer_context_id, reference, title,
+				id, org_id, customer_id, customer_context_id, emitter_context_id, reference, title,
 				status::text AS "status!", invoice_type::text AS "invoice_type!",
 				source_quote_id, parent_invoice_id,
 				deposit_basis, deposit_value, deposit_amount_cents,
@@ -434,7 +437,7 @@ impl<'tx> InvoiceRepository for PgInvoiceRepository<'tx> {
 				updated_at = $6
 			WHERE id = $1 AND deleted_at IS NULL
 			RETURNING
-				id, org_id, customer_id, customer_context_id, reference, title,
+				id, org_id, customer_id, customer_context_id, emitter_context_id, reference, title,
 				status::text AS "status!", invoice_type::text AS "invoice_type!",
 				source_quote_id, parent_invoice_id,
 				deposit_basis, deposit_value, deposit_amount_cents,

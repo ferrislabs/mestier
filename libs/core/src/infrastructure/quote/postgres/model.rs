@@ -6,8 +6,8 @@ use rust_decimal::Decimal;
 use uuid::Uuid;
 
 use crate::{
-    CustomerContextId, CustomerId, OrganizationId, Quote, QuoteId, QuoteLine, QuoteLineId,
-    QuoteStatus, ServiceRateId, ServiceRateUnit,
+    CustomerContextId, CustomerId, OrganizationContextId, OrganizationId, Quote, QuoteId,
+    QuoteLine, QuoteLineId, QuoteStatus, ServiceRateId, ServiceRateUnit,
 };
 
 #[derive(Debug, Clone)]
@@ -18,6 +18,7 @@ pub struct QuoteRow {
     pub title: String,
     pub customer_id: Uuid,
     pub customer_context_id: Uuid,
+    pub emitter_context_id: Option<Uuid>,
     pub status: String,
     pub deposit_basis: Option<String>,
     pub deposit_value: Option<Decimal>,
@@ -60,6 +61,7 @@ impl QuoteRow {
             title: self.title,
             customer_id: CustomerId(self.customer_id),
             customer_context_id: CustomerContextId(self.customer_context_id),
+            emitter_context_id: self.emitter_context_id.map(OrganizationContextId),
             status,
             deposit_basis: self.deposit_basis,
             deposit_value: self.deposit_value,

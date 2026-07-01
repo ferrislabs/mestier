@@ -1,7 +1,7 @@
 use auth::Identity;
 use axum::{Extension, Json, extract::State};
 use handlers::{ApiError, AppState, DataEnvelope, Response};
-use mestier_core::{CustomerContextId, CustomerId, InvoiceId, UpdateInvoiceCommand};
+use mestier_core::{CustomerContextId, CustomerId, InvoiceId, OrganizationContextId, UpdateInvoiceCommand};
 use serde::Deserialize;
 use utoipa::ToSchema;
 use uuid::Uuid;
@@ -18,6 +18,8 @@ pub struct UpdateInvoiceRequest {
 	pub title: String,
 	pub customer_id: CustomerId,
 	pub customer_context_id: CustomerContextId,
+	#[serde(default)]
+	pub emitter_context_id: Option<Uuid>,
 	pub lines: Vec<InvoiceLineRequest>,
 	#[serde(default)]
 	pub legal_mention_template_ids: Option<Vec<Uuid>>,
@@ -64,6 +66,7 @@ pub async fn handler(
 			title: payload.title,
 			customer_id: payload.customer_id,
 			customer_context_id: payload.customer_context_id,
+			emitter_context_id: payload.emitter_context_id.map(OrganizationContextId),
 			deposit_basis: None,
 			deposit_value: None,
 			deposit_amount_cents: None,

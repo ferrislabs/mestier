@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n\t\t\tSELECT\n\t\t\t\tid, org_id, customer_id, customer_context_id, reference, title,\n\t\t\t\tstatus::text AS \"status!\", invoice_type::text AS \"invoice_type!\",\n\t\t\t\tsource_quote_id, parent_invoice_id,\n\t\t\t\tdeposit_basis, deposit_value, deposit_amount_cents,\n\t\t\t\ttotal_ht_cents, total_vat_cents, total_ttc_cents, total_cents,\n\t\t\t\tamount_paid_cents, pdf_key, issued_at, due_at,\n\t\t\t\tdeleted_at, created_at, updated_at\n\t\t\tFROM invoices\n\t\t\tWHERE id = $1 AND deleted_at IS NULL\n\t\t\t",
+  "query": "\n\t\t\tSELECT\n\t\t\t\tid, org_id, customer_id, customer_context_id, emitter_context_id, reference, title,\n\t\t\t\tstatus::text AS \"status!\", invoice_type::text AS \"invoice_type!\",\n\t\t\t\tsource_quote_id, parent_invoice_id,\n\t\t\t\tdeposit_basis, deposit_value, deposit_amount_cents,\n\t\t\t\ttotal_ht_cents, total_vat_cents, total_ttc_cents, total_cents,\n\t\t\t\tamount_paid_cents, pdf_key, issued_at, due_at,\n\t\t\t\tdeleted_at, created_at, updated_at\n\t\t\tFROM invoices\n\t\t\tWHERE id = $1 AND deleted_at IS NULL\n\t\t\t",
   "describe": {
     "columns": [
       {
@@ -25,101 +25,106 @@
       },
       {
         "ordinal": 4,
+        "name": "emitter_context_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 5,
         "name": "reference",
         "type_info": "Text"
       },
       {
-        "ordinal": 5,
+        "ordinal": 6,
         "name": "title",
         "type_info": "Text"
       },
       {
-        "ordinal": 6,
+        "ordinal": 7,
         "name": "status!",
         "type_info": "Text"
       },
       {
-        "ordinal": 7,
+        "ordinal": 8,
         "name": "invoice_type!",
         "type_info": "Text"
       },
       {
-        "ordinal": 8,
+        "ordinal": 9,
         "name": "source_quote_id",
         "type_info": "Uuid"
       },
       {
-        "ordinal": 9,
+        "ordinal": 10,
         "name": "parent_invoice_id",
         "type_info": "Uuid"
       },
       {
-        "ordinal": 10,
+        "ordinal": 11,
         "name": "deposit_basis",
         "type_info": "Text"
       },
       {
-        "ordinal": 11,
+        "ordinal": 12,
         "name": "deposit_value",
         "type_info": "Numeric"
       },
       {
-        "ordinal": 12,
+        "ordinal": 13,
         "name": "deposit_amount_cents",
         "type_info": "Int4"
       },
       {
-        "ordinal": 13,
+        "ordinal": 14,
         "name": "total_ht_cents",
         "type_info": "Int4"
       },
       {
-        "ordinal": 14,
+        "ordinal": 15,
         "name": "total_vat_cents",
         "type_info": "Int4"
       },
       {
-        "ordinal": 15,
+        "ordinal": 16,
         "name": "total_ttc_cents",
         "type_info": "Int4"
       },
       {
-        "ordinal": 16,
+        "ordinal": 17,
         "name": "total_cents",
         "type_info": "Int4"
       },
       {
-        "ordinal": 17,
+        "ordinal": 18,
         "name": "amount_paid_cents",
         "type_info": "Int4"
       },
       {
-        "ordinal": 18,
+        "ordinal": 19,
         "name": "pdf_key",
         "type_info": "Text"
       },
       {
-        "ordinal": 19,
+        "ordinal": 20,
         "name": "issued_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 20,
+        "ordinal": 21,
         "name": "due_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 21,
+        "ordinal": 22,
         "name": "deleted_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 22,
+        "ordinal": 23,
         "name": "created_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 23,
+        "ordinal": 24,
         "name": "updated_at",
         "type_info": "Timestamptz"
       }
@@ -134,6 +139,7 @@
       false,
       false,
       false,
+      true,
       true,
       false,
       null,
@@ -156,5 +162,5 @@
       false
     ]
   },
-  "hash": "1da38b0d2ed83240279e676e450df790b5d1e9ff3dc546a6641a617824a40e07"
+  "hash": "c780987b105393d88f3f659b810cf3bf61ebfb46ed61c6597055cecbfe58a1a0"
 }

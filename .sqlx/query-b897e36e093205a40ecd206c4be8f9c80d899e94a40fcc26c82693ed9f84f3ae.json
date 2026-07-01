@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n\t\t\tUPDATE invoices\n\t\t\tSET\n\t\t\t\tstatus     = 'SENT'::invoice_status,\n\t\t\t\treference  = $2,\n\t\t\t\tissued_at  = $3,\n\t\t\t\tpdf_key    = $4,\n\t\t\t\tsnapshot   = $5,\n\t\t\t\tupdated_at = $6\n\t\t\tWHERE id = $1 AND deleted_at IS NULL\n\t\t\tRETURNING\n\t\t\t\tid, org_id, customer_id, customer_context_id, reference, title,\n\t\t\t\tstatus::text AS \"status!\", invoice_type::text AS \"invoice_type!\",\n\t\t\t\tsource_quote_id, parent_invoice_id,\n\t\t\t\tdeposit_basis, deposit_value, deposit_amount_cents,\n\t\t\t\ttotal_ht_cents, total_vat_cents, total_ttc_cents, total_cents,\n\t\t\t\tamount_paid_cents, pdf_key, issued_at, due_at,\n\t\t\t\tdeleted_at, created_at, updated_at\n\t\t\t",
+  "query": "\n\t\t\tUPDATE invoices\n\t\t\tSET\n\t\t\t\tstatus     = 'SENT'::invoice_status,\n\t\t\t\treference  = $2,\n\t\t\t\tissued_at  = $3,\n\t\t\t\tpdf_key    = $4,\n\t\t\t\tsnapshot   = $5,\n\t\t\t\tupdated_at = $6\n\t\t\tWHERE id = $1 AND deleted_at IS NULL\n\t\t\tRETURNING\n\t\t\t\tid, org_id, customer_id, customer_context_id, emitter_context_id, reference, title,\n\t\t\t\tstatus::text AS \"status!\", invoice_type::text AS \"invoice_type!\",\n\t\t\t\tsource_quote_id, parent_invoice_id,\n\t\t\t\tdeposit_basis, deposit_value, deposit_amount_cents,\n\t\t\t\ttotal_ht_cents, total_vat_cents, total_ttc_cents, total_cents,\n\t\t\t\tamount_paid_cents, pdf_key, issued_at, due_at,\n\t\t\t\tdeleted_at, created_at, updated_at\n\t\t\t",
   "describe": {
     "columns": [
       {
@@ -25,101 +25,106 @@
       },
       {
         "ordinal": 4,
+        "name": "emitter_context_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 5,
         "name": "reference",
         "type_info": "Text"
       },
       {
-        "ordinal": 5,
+        "ordinal": 6,
         "name": "title",
         "type_info": "Text"
       },
       {
-        "ordinal": 6,
+        "ordinal": 7,
         "name": "status!",
         "type_info": "Text"
       },
       {
-        "ordinal": 7,
+        "ordinal": 8,
         "name": "invoice_type!",
         "type_info": "Text"
       },
       {
-        "ordinal": 8,
+        "ordinal": 9,
         "name": "source_quote_id",
         "type_info": "Uuid"
       },
       {
-        "ordinal": 9,
+        "ordinal": 10,
         "name": "parent_invoice_id",
         "type_info": "Uuid"
       },
       {
-        "ordinal": 10,
+        "ordinal": 11,
         "name": "deposit_basis",
         "type_info": "Text"
       },
       {
-        "ordinal": 11,
+        "ordinal": 12,
         "name": "deposit_value",
         "type_info": "Numeric"
       },
       {
-        "ordinal": 12,
+        "ordinal": 13,
         "name": "deposit_amount_cents",
         "type_info": "Int4"
       },
       {
-        "ordinal": 13,
+        "ordinal": 14,
         "name": "total_ht_cents",
         "type_info": "Int4"
       },
       {
-        "ordinal": 14,
+        "ordinal": 15,
         "name": "total_vat_cents",
         "type_info": "Int4"
       },
       {
-        "ordinal": 15,
+        "ordinal": 16,
         "name": "total_ttc_cents",
         "type_info": "Int4"
       },
       {
-        "ordinal": 16,
+        "ordinal": 17,
         "name": "total_cents",
         "type_info": "Int4"
       },
       {
-        "ordinal": 17,
+        "ordinal": 18,
         "name": "amount_paid_cents",
         "type_info": "Int4"
       },
       {
-        "ordinal": 18,
+        "ordinal": 19,
         "name": "pdf_key",
         "type_info": "Text"
       },
       {
-        "ordinal": 19,
+        "ordinal": 20,
         "name": "issued_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 20,
+        "ordinal": 21,
         "name": "due_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 21,
+        "ordinal": 22,
         "name": "deleted_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 22,
+        "ordinal": 23,
         "name": "created_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 23,
+        "ordinal": 24,
         "name": "updated_at",
         "type_info": "Timestamptz"
       }
@@ -139,6 +144,7 @@
       false,
       false,
       false,
+      true,
       true,
       false,
       null,
@@ -161,5 +167,5 @@
       false
     ]
   },
-  "hash": "e2f79c48ba0e5014fcf38acd165448e89c72a6224467070af01750b1dfcf63fa"
+  "hash": "b897e36e093205a40ecd206c4be8f9c80d899e94a40fcc26c82693ed9f84f3ae"
 }

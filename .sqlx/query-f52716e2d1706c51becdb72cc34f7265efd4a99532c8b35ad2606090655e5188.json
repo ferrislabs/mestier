@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n\t\t\tUPDATE invoices\n\t\t\tSET\n\t\t\t\ttitle = $2,\n\t\t\t\tcustomer_id = $3,\n\t\t\t\tcustomer_context_id = $4,\n\t\t\t\tdeposit_basis = $5,\n\t\t\t\tdeposit_value = $6,\n\t\t\t\tdeposit_amount_cents = $7,\n\t\t\t\ttotal_ht_cents = $8,\n\t\t\t\ttotal_vat_cents = $9,\n\t\t\t\ttotal_ttc_cents = $10,\n\t\t\t\ttotal_cents = $11,\n\t\t\t\tdue_at = $12,\n\t\t\t\tupdated_at = $13\n\t\t\tWHERE id = $1 AND deleted_at IS NULL\n\t\t\tRETURNING\n\t\t\t\tid, org_id, customer_id, customer_context_id, reference, title,\n\t\t\t\tstatus::text AS \"status!\", invoice_type::text AS \"invoice_type!\",\n\t\t\t\tsource_quote_id, parent_invoice_id,\n\t\t\t\tdeposit_basis, deposit_value, deposit_amount_cents,\n\t\t\t\ttotal_ht_cents, total_vat_cents, total_ttc_cents, total_cents,\n\t\t\t\tamount_paid_cents, pdf_key, issued_at, due_at,\n\t\t\t\tdeleted_at, created_at, updated_at\n\t\t\t",
+  "query": "\n\t\t\tSELECT\n\t\t\t\tid, org_id, customer_id, customer_context_id, emitter_context_id, reference, title,\n\t\t\t\tstatus::text AS \"status!\", invoice_type::text AS \"invoice_type!\",\n\t\t\t\tsource_quote_id, parent_invoice_id,\n\t\t\t\tdeposit_basis, deposit_value, deposit_amount_cents,\n\t\t\t\ttotal_ht_cents, total_vat_cents, total_ttc_cents, total_cents,\n\t\t\t\tamount_paid_cents, pdf_key, issued_at, due_at,\n\t\t\t\tdeleted_at, created_at, updated_at\n\t\t\tFROM invoices\n\t\t\tWHERE parent_invoice_id = $1\n\t\t\t  AND invoice_type = 'DEPOSIT'\n\t\t\t  AND deleted_at IS NULL\n\t\t\t",
   "describe": {
     "columns": [
       {
@@ -25,120 +25,113 @@
       },
       {
         "ordinal": 4,
+        "name": "emitter_context_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 5,
         "name": "reference",
         "type_info": "Text"
       },
       {
-        "ordinal": 5,
+        "ordinal": 6,
         "name": "title",
         "type_info": "Text"
       },
       {
-        "ordinal": 6,
+        "ordinal": 7,
         "name": "status!",
         "type_info": "Text"
       },
       {
-        "ordinal": 7,
+        "ordinal": 8,
         "name": "invoice_type!",
         "type_info": "Text"
       },
       {
-        "ordinal": 8,
+        "ordinal": 9,
         "name": "source_quote_id",
         "type_info": "Uuid"
       },
       {
-        "ordinal": 9,
+        "ordinal": 10,
         "name": "parent_invoice_id",
         "type_info": "Uuid"
       },
       {
-        "ordinal": 10,
+        "ordinal": 11,
         "name": "deposit_basis",
         "type_info": "Text"
       },
       {
-        "ordinal": 11,
+        "ordinal": 12,
         "name": "deposit_value",
         "type_info": "Numeric"
       },
       {
-        "ordinal": 12,
+        "ordinal": 13,
         "name": "deposit_amount_cents",
         "type_info": "Int4"
       },
       {
-        "ordinal": 13,
+        "ordinal": 14,
         "name": "total_ht_cents",
         "type_info": "Int4"
       },
       {
-        "ordinal": 14,
+        "ordinal": 15,
         "name": "total_vat_cents",
         "type_info": "Int4"
       },
       {
-        "ordinal": 15,
+        "ordinal": 16,
         "name": "total_ttc_cents",
         "type_info": "Int4"
       },
       {
-        "ordinal": 16,
+        "ordinal": 17,
         "name": "total_cents",
         "type_info": "Int4"
       },
       {
-        "ordinal": 17,
+        "ordinal": 18,
         "name": "amount_paid_cents",
         "type_info": "Int4"
       },
       {
-        "ordinal": 18,
+        "ordinal": 19,
         "name": "pdf_key",
         "type_info": "Text"
       },
       {
-        "ordinal": 19,
+        "ordinal": 20,
         "name": "issued_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 20,
+        "ordinal": 21,
         "name": "due_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 21,
+        "ordinal": 22,
         "name": "deleted_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 22,
+        "ordinal": 23,
         "name": "created_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 23,
+        "ordinal": 24,
         "name": "updated_at",
         "type_info": "Timestamptz"
       }
     ],
     "parameters": {
       "Left": [
-        "Uuid",
-        "Text",
-        "Uuid",
-        "Uuid",
-        "Text",
-        "Numeric",
-        "Int4",
-        "Int4",
-        "Int4",
-        "Int4",
-        "Int4",
-        "Timestamptz",
-        "Timestamptz"
+        "Uuid"
       ]
     },
     "nullable": [
@@ -146,6 +139,7 @@
       false,
       false,
       false,
+      true,
       true,
       false,
       null,
@@ -168,5 +162,5 @@
       false
     ]
   },
-  "hash": "58d707c9c082455429e7df4c80fc54d7f37e056d2fe18f027323e37491626479"
+  "hash": "f52716e2d1706c51becdb72cc34f7265efd4a99532c8b35ad2606090655e5188"
 }

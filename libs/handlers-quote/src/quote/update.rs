@@ -3,7 +3,9 @@ use std::str::FromStr;
 use auth::Identity;
 use axum::{Extension, Json, extract::State};
 use handlers::{ApiError, AppState, DataEnvelope, Response};
-use mestier_core::{CustomerContextId, CustomerId, QuoteId, QuoteStatus, UpdateQuoteCommand};
+use mestier_core::{
+    CustomerContextId, CustomerId, OrganizationContextId, QuoteId, QuoteStatus, UpdateQuoteCommand,
+};
 use rust_decimal::Decimal;
 use serde::Deserialize;
 use utoipa::ToSchema;
@@ -21,6 +23,8 @@ pub struct UpdateQuoteRequest {
     pub title: String,
     pub customer_id: CustomerId,
     pub customer_context_id: CustomerContextId,
+    #[serde(default)]
+    pub emitter_context_id: Option<Uuid>,
     pub status: QuoteStatus,
     pub lines: Vec<QuoteLineRequest>,
     #[serde(default)]
@@ -80,6 +84,7 @@ pub async fn handler(
             title: payload.title,
             customer_id: payload.customer_id,
             customer_context_id: payload.customer_context_id,
+            emitter_context_id: payload.emitter_context_id.map(OrganizationContextId),
             status: payload.status,
             deposit_basis: payload.deposit_basis,
             deposit_value,

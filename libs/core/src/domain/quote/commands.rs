@@ -1,8 +1,8 @@
 use rust_decimal::Decimal;
 
 use crate::{
-	CustomerContextId, CustomerId, LegalMentionTemplateId, OrganizationId, QuoteId, QuoteStatus,
-	ServiceRateId, ServiceRateUnit,
+	CustomerContextId, CustomerId, LegalMentionTemplateId, OrganizationContextId, OrganizationId,
+	QuoteId, QuoteStatus, ServiceRateId, ServiceRateUnit,
 };
 
 #[derive(Debug, Clone)]
@@ -23,6 +23,7 @@ pub struct CreateQuoteCommand {
 	pub title: String,
 	pub customer_id: CustomerId,
 	pub customer_context_id: CustomerContextId,
+	pub emitter_context_id: Option<OrganizationContextId>,
 	pub deposit_basis: Option<String>,
 	pub deposit_value: Option<Decimal>,
 	pub lines: Vec<QuoteLineCommand>,
@@ -35,6 +36,7 @@ pub struct UpdateQuoteCommand {
 	pub title: String,
 	pub customer_id: CustomerId,
 	pub customer_context_id: CustomerContextId,
+	pub emitter_context_id: Option<OrganizationContextId>,
 	pub status: QuoteStatus,
 	pub deposit_basis: Option<String>,
 	pub deposit_value: Option<Decimal>,

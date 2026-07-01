@@ -6,7 +6,8 @@ use rust_decimal::Decimal;
 use uuid::Uuid;
 
 use crate::{
-	CustomerContextId, CustomerId, OrganizationId, ServiceRateId, ServiceRateUnit,
+	CustomerContextId, CustomerId, OrganizationContextId, OrganizationId, ServiceRateId,
+	ServiceRateUnit,
 	domain::{
 		invoice::{
 			Invoice, InvoiceId, InvoiceLine, InvoiceLineId, InvoiceStatus, InvoiceType,
@@ -21,6 +22,7 @@ pub struct InvoiceRow {
 	pub org_id: Uuid,
 	pub customer_id: Uuid,
 	pub customer_context_id: Uuid,
+	pub emitter_context_id: Option<Uuid>,
 	pub reference: Option<String>,
 	pub title: String,
 	pub status: String,
@@ -75,6 +77,7 @@ impl InvoiceRow {
 			org_id: OrganizationId(self.org_id),
 			customer_id: CustomerId(self.customer_id),
 			customer_context_id: CustomerContextId(self.customer_context_id),
+			emitter_context_id: self.emitter_context_id.map(OrganizationContextId),
 			reference: self.reference,
 			title: self.title,
 			status,

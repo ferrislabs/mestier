@@ -7,8 +7,8 @@ use utoipa::ToSchema;
 use uuid::Uuid;
 
 use crate::{
-	CustomerContextId, CustomerId, LegalMentionTemplateId, OrganizationId, ServiceRateId,
-	ServiceRateUnit,
+	CustomerContextId, CustomerId, LegalMentionTemplateId, OrganizationContextId, OrganizationId,
+	ServiceRateId, ServiceRateUnit,
 };
 use crate::domain::quote::QuoteId;
 
@@ -154,6 +154,7 @@ pub struct Invoice {
 	pub org_id: OrganizationId,
 	pub customer_id: CustomerId,
 	pub customer_context_id: CustomerContextId,
+	pub emitter_context_id: Option<OrganizationContextId>,
 	pub reference: Option<String>,
 	pub title: String,
 	pub status: InvoiceStatus,
