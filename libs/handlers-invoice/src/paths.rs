@@ -25,3 +25,15 @@ pub struct InvoiceStatusPath {
 pub struct QuoteConvertPath {
 	pub quote_id: QuoteId,
 }
+
+#[derive(TypedPath, Deserialize)]
+#[typed_path("/api/v1/invoices/{invoice_id}/deposit-invoice")]
+pub struct InvoiceDepositPath {
+	pub invoice_id: InvoiceId,
+}
+
+#[derive(TypedPath, Deserialize)]
+#[typed_path("/api/v1/invoices/{invoice_id}/balance-invoice")]
+pub struct InvoiceBalancePath {
+	pub invoice_id: InvoiceId,
+}

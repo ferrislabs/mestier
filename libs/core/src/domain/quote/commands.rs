@@ -23,6 +23,8 @@ pub struct CreateQuoteCommand {
 	pub title: String,
 	pub customer_id: CustomerId,
 	pub customer_context_id: CustomerContextId,
+	pub deposit_basis: Option<String>,
+	pub deposit_value: Option<Decimal>,
 	pub lines: Vec<QuoteLineCommand>,
 	pub legal_mention_template_ids: Vec<LegalMentionTemplateId>,
 }
@@ -34,6 +36,8 @@ pub struct UpdateQuoteCommand {
 	pub customer_id: CustomerId,
 	pub customer_context_id: CustomerContextId,
 	pub status: QuoteStatus,
+	pub deposit_basis: Option<String>,
+	pub deposit_value: Option<Decimal>,
 	pub lines: Vec<QuoteLineCommand>,
 	pub legal_mention_template_ids: Vec<LegalMentionTemplateId>,
 }

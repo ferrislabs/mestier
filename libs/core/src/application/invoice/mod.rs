@@ -1,9 +1,11 @@
 use common::CoreError;
 use mestier_macros::transactional;
+use rust_decimal::Decimal;
 
 use crate::{
 	Invoice, InvoiceId, OrganizationId,
 	application::MestierUseCase,
+	domain::billing::DepositBasis,
 	domain::invoice::{
 		InvoiceType,
 		commands::{CreateInvoiceCommand, InvoiceLineCommand, UpdateInvoiceCommand, UpdateInvoiceStatusCommand},
@@ -61,6 +63,26 @@ impl MestierUseCase {
 	pub async fn soft_delete_invoice(&self, id: InvoiceId) -> Result<(), CoreError> {
 		let mut service = InvoiceService::new(invoice_repository);
 		service.soft_delete_invoice(id).await
+	}
+
+	#[transactional(invoice)]
+	pub async fn create_deposit_invoice(
+		&self,
+		parent_invoice_id: InvoiceId,
+		basis: DepositBasis,
+		value: Decimal,
+	) -> Result<Invoice, CoreError> {
+		let mut service = InvoiceService::new(invoice_repository);
+		service.create_deposit_invoice(parent_invoice_id, basis, value).await
+	}
+
+	#[transactional(invoice)]
+	pub async fn create_balance_invoice(
+		&self,
+		parent_invoice_id: InvoiceId,
+	) -> Result<Invoice, CoreError> {
+		let mut service = InvoiceService::new(invoice_repository);
+		service.create_balance_invoice(parent_invoice_id).await
 	}
 
 	#[transactional(quote, invoice)]

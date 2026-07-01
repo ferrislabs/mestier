@@ -1,5 +1,7 @@
 pub mod convert_from_quote;
 pub mod create;
+pub mod create_balance;
+pub mod create_deposit;
 pub mod get_one;
 pub mod list;
 pub mod soft_delete;
