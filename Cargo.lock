@@ -1540,7 +1540,10 @@ name = "common"
 version = "0.1.0"
 dependencies = [
  "chrono",
+ "hex",
+ "hmac 0.12.1",
  "serde",
+ "sha2 0.10.9",
  "thiserror 2.0.18",
  "utoipa",
  "uuid",
@@ -3954,6 +3957,7 @@ dependencies = [
  "discord",
  "mestier-macros",
  "mockall",
+ "pdf",
  "rate-limit",
  "rust_decimal",
  "serde",

@@ -100,9 +100,27 @@ mod tests {
     }
 
     fn make_usecase(pool: PgPool) -> MestierUseCase {
+        use crate::domain::file_storage::service::FileStorageService;
+        use crate::infrastructure::file_storage::S3FileStorage;
+        use common::FileStorageConfig;
+
+        let cfg = FileStorageConfig {
+            bucket: "test-bucket".to_owned(),
+            endpoint: "http://localhost:9000".to_owned(),
+            region: "us-east-1".to_owned(),
+            access_key_id: "test".to_owned(),
+            secret_access_key: "test".to_owned(),
+            force_path_style: true,
+            auto_create_bucket: false,
+            key_prefix: "uploads".to_owned(),
+            max_upload_bytes: 10 * 1024 * 1024,
+        };
+        let s3 = S3FileStorage::from_config(&cfg);
+        let file_storage = FileStorageService::new(s3, "uploads");
+
         let hub = EventHub::new();
         let publisher = Arc::new(RealtimeEventPublisher::new(hub));
-        MestierUseCase::new(pool, default_authorizer(), publisher)
+        MestierUseCase::new(pool, default_authorizer(), publisher, file_storage)
     }
 
     // ── Case 1: mention persists a MENTION notification ──────────────────────
