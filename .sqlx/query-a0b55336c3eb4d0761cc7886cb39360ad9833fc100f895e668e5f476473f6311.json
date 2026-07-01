@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM invoice_legal_mentions WHERE invoice_id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "a0b55336c3eb4d0761cc7886cb39360ad9833fc100f895e668e5f476473f6311"
+}

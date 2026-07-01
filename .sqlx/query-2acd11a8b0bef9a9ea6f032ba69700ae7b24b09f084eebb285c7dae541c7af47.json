@@ -1,0 +1,24 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n\t\t\tSELECT COALESCE(MAX(substring(reference FROM $2)::INTEGER), 0) + 1 AS \"next_number!\"\n\t\t\tFROM invoices\n\t\t\tWHERE org_id = $1 AND reference LIKE $3\n\t\t\t",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "next_number!",
+        "type_info": "Int4"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "2acd11a8b0bef9a9ea6f032ba69700ae7b24b09f084eebb285c7dae541c7af47"
+}

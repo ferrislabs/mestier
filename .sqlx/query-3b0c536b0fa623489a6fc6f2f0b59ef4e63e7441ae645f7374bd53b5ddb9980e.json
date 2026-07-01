@@ -1,0 +1,100 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n\t\tSELECT id, org_id, invoice_id, service_rate_id, label, quantity, unit,\n\t\t       unit_price_cents, vat_rate, notes, photo_keys, deleted_at, created_at, updated_at\n\t\tFROM invoice_lines\n\t\tWHERE invoice_id = $1 AND deleted_at IS NULL\n\t\tORDER BY created_at ASC, id ASC\n\t\t",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "org_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "invoice_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 3,
+        "name": "service_rate_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 4,
+        "name": "label",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "quantity",
+        "type_info": "Numeric"
+      },
+      {
+        "ordinal": 6,
+        "name": "unit",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 7,
+        "name": "unit_price_cents",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 8,
+        "name": "vat_rate",
+        "type_info": "Numeric"
+      },
+      {
+        "ordinal": 9,
+        "name": "notes",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 10,
+        "name": "photo_keys",
+        "type_info": "TextArray"
+      },
+      {
+        "ordinal": 11,
+        "name": "deleted_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 12,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 13,
+        "name": "updated_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      true,
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      false,
+      true,
+      false,
+      false
+    ]
+  },
+  "hash": "3b0c536b0fa623489a6fc6f2f0b59ef4e63e7441ae645f7374bd53b5ddb9980e"
+}

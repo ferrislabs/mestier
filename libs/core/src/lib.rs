@@ -11,7 +11,8 @@ pub use domain::{
     BillingSettings,
     Customer, CustomerContact, CustomerContactId, CustomerContext, CustomerContextId, CustomerId,
     CustomerPipelineStage, CustomerStatus, Employee, EmployeeId, Equipment, EquipmentId,
-    FileObject, LegalMentionTemplate, LegalMentionTemplateId, Member, MemberId, Organization,
+    FileObject, Invoice, InvoiceId, InvoiceLine, InvoiceLineId, InvoiceStatus, InvoiceType,
+    LegalMentionTemplate, LegalMentionTemplateId, Member, MemberId, Organization,
     OrganizationId, Permissions, Product, ProductId, Quote, QuoteId, QuoteLine, QuoteLineId,
     QuoteStatus, Role, RoleId, ServiceRate, ServiceRateId, ServiceRateUnit, StoredFile, User,
     UserId,
@@ -22,6 +23,9 @@ pub use domain::{
     employee::commands::{CreateEmployeeCommand, LinkEmployeeUserCommand, UpdateEmployeeCommand},
     equipment::commands::{CreateEquipmentCommand, UpdateEquipmentCommand},
     file_storage::commands::UploadFileCommand,
+    invoice::commands::{
+        CreateInvoiceCommand, InvoiceLineCommand, UpdateInvoiceCommand, UpdateInvoiceStatusCommand,
+    },
     legal_mention_template::commands::{
         CreateLegalMentionTemplateCommand, UpdateLegalMentionTemplateCommand,
     },
