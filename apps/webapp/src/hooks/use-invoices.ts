@@ -145,6 +145,28 @@ export function useDeleteInvoice(organizationId?: string) {
 	})
 }
 
+const CONVERT_QUOTE_PATH =
+	'/api/v1/quotes/{quote_id}/convert-to-invoice' as const
+
+export function useConvertQuoteToInvoice() {
+	const queryClient = useQueryClient()
+
+	return useMutation({
+		...window.tanstackApi.mutation('post', CONVERT_QUOTE_PATH).mutationOptions,
+		onSuccess: async (invoice) => {
+			await Promise.all([
+				queryClient.invalidateQueries({
+					predicate: (query) =>
+						isInvoiceListQuery(query.queryKey, invoice.data.organization_id),
+				}),
+				queryClient.invalidateQueries({
+					queryKey: invoiceKey(invoice.data.id),
+				}),
+			])
+		},
+	})
+}
+
 export type Invoice = Schemas.InvoiceResponse
 export type InvoicePayload = Schemas.CreateInvoiceRequest
 export type InvoiceLinePayload = Schemas.InvoiceLineRequest

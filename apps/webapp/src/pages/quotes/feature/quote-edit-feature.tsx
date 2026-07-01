@@ -2,6 +2,7 @@ import { Link, useNavigate } from '@tanstack/react-router'
 import {
 	AlertCircle,
 	ArrowLeft,
+	ArrowRightLeft,
 	FileText,
 	Loader2,
 	Plus,
@@ -48,6 +49,7 @@ import {
 	useCustomers,
 	useUploadFile,
 } from '#/hooks/use-customers'
+import { useConvertQuoteToInvoice } from '#/hooks/use-invoices'
 import {
 	type LegalMentionTemplate,
 	useLegalMentionTemplates,
@@ -121,6 +123,7 @@ function QuoteEditWorkspace({ quote }: { quote: Quote }) {
 	)
 	const updateQuote = useUpdateQuote()
 	const deleteQuote = useDeleteQuote(quote.organization_id)
+	const convertQuote = useConvertQuoteToInvoice()
 	const uploadFile = useUploadFile()
 	const [status, setStatus] = useState<QuoteStatus>(quote.status)
 	const [values, setValues] = useState<QuoteFormValues>(() =>
@@ -227,6 +230,7 @@ function QuoteEditWorkspace({ quote }: { quote: Quote }) {
 		catalog.products.error?.message ??
 		updateQuote.error?.message ??
 		deleteQuote.error?.message ??
+		convertQuote.error?.message ??
 		uploadFile.error?.message ??
 		null
 
@@ -261,6 +265,16 @@ function QuoteEditWorkspace({ quote }: { quote: Quote }) {
 		await navigate({ to: '/quotes' })
 	}
 
+	const convertCurrentQuote = async () => {
+		const result = await convertQuote.mutateAsync({
+			path: { quote_id: quote.id },
+		})
+		await navigate({
+			to: '/invoices/$invoiceId',
+			params: { invoiceId: result.data.id },
+		})
+	}
+
 	return (
 		<QuoteEditUI
 			quote={quote}
@@ -280,8 +294,10 @@ function QuoteEditWorkspace({ quote }: { quote: Quote }) {
 			}
 			isSaving={updateQuote.isPending}
 			isDeleting={deleteQuote.isPending}
+			isConverting={convertQuote.isPending}
 			isUploading={uploadFile.isPending}
 			canSave={canSave}
+			canConvert={quote.status === 'ACCEPTED' || quote.status === 'SENT'}
 			onChange={(patch) => {
 				if (patch.customerId !== undefined) {
 					updateValues({ customerId: patch.customerId, customerContextId: '' })
@@ -297,6 +313,7 @@ function QuoteEditWorkspace({ quote }: { quote: Quote }) {
 			onUploadLinePhoto={uploadLinePhoto}
 			onSave={saveQuote}
 			onDelete={deleteCurrentQuote}
+			onConvert={convertCurrentQuote}
 		/>
 	)
 }
@@ -314,8 +331,10 @@ function QuoteEditUI({
 	isLoading,
 	isSaving,
 	isDeleting,
+	isConverting,
 	isUploading,
 	canSave,
+	canConvert,
 	onChange,
 	onStatusChange,
 	onLineChange,
@@ -325,6 +344,7 @@ function QuoteEditUI({
 	onUploadLinePhoto,
 	onSave,
 	onDelete,
+	onConvert,
 }: {
 	quote: Quote
 	values: QuoteFormValues
@@ -338,8 +358,10 @@ function QuoteEditUI({
 	isLoading: boolean
 	isSaving: boolean
 	isDeleting: boolean
+	isConverting: boolean
 	isUploading: boolean
 	canSave: boolean
+	canConvert: boolean
 	onChange: (patch: Partial<QuoteFormValues>) => void
 	onStatusChange: (status: QuoteStatus) => void
 	onLineChange: (index: number, patch: Partial<QuoteLineFormValues>) => void
@@ -349,6 +371,7 @@ function QuoteEditUI({
 	onUploadLinePhoto: (index: number, file: File) => Promise<void>
 	onSave: () => void
 	onDelete: () => void
+	onConvert: () => void
 }) {
 	return (
 		<PageShell>
@@ -369,7 +392,7 @@ function QuoteEditUI({
 								<Button
 									type="button"
 									variant="destructive"
-									disabled={isDeleting || isSaving}
+									disabled={isDeleting || isSaving || isConverting}
 								>
 									{isDeleting ? (
 										<Loader2 className="animate-spin" />
@@ -411,7 +434,20 @@ function QuoteEditUI({
 						</AlertDialog>
 						<Button
 							type="button"
-							disabled={!canSave || isSaving || isDeleting}
+							variant="outline"
+							disabled={!canConvert || isConverting || isSaving || isDeleting}
+							onClick={() => void onConvert()}
+						>
+							{isConverting ? (
+								<Loader2 className="animate-spin" />
+							) : (
+								<ArrowRightLeft />
+							)}
+							Convertir en facture
+						</Button>
+						<Button
+							type="button"
+							disabled={!canSave || isSaving || isDeleting || isConverting}
 							onClick={onSave}
 						>
 							{isSaving ? <Loader2 className="animate-spin" /> : <FileText />}

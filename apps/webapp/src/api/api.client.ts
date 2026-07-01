@@ -1777,6 +1777,22 @@ export namespace Endpoints {
     responses: { 204: unknown; 401: unknown; 403: unknown; 404: unknown };
   };
 
+  export type post_ConvertQuoteToInvoice = {
+    method: "POST";
+    path: "/api/v1/quotes/{quote_id}/convert-to-invoice";
+    requestFormat: "json";
+    parameters: {
+      path: { quote_id: string };
+    };
+    responses: {
+      201: { data: Schemas.InvoiceResponse };
+      401: unknown;
+      403: unknown;
+      404: unknown;
+      409: unknown;
+    };
+  };
+
   // </Endpoints>
 }
 
@@ -1849,6 +1865,7 @@ export type EndpointByMethod = {
     "/api/v1/organizations/{organization_id}/products": Endpoints.post_CreateProduct;
     "/api/v1/organizations/{organization_id}/quotes": Endpoints.post_CreateQuote;
     "/api/v1/organizations/{organization_id}/service-rates": Endpoints.post_CreateServiceRate;
+    "/api/v1/quotes/{quote_id}/convert-to-invoice": Endpoints.post_ConvertQuoteToInvoice;
   };
   put: {
     "/api/v1/organizations/{organization_id}/billing-settings": Endpoints.put_UpsertBillingSettings;
