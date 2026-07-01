@@ -22,7 +22,7 @@ use crate::{
 			service::InvoiceService,
 		},
 		legal_mention_template::ports::LegalMentionTemplateRepository,
-		organization::ports::OrganizationRepository,
+		organization_context::ports::OrganizationContextRepository,
 	},
 	domain::quote::{QuoteId, service::QuoteService},
 };
@@ -102,7 +102,7 @@ impl MestierUseCase {
 	/// to object storage, and persist the immutable issued state atomically.
 	///
 	/// Only DRAFT invoices may be issued. The invoice becomes immutable after this call.
-	#[transactional(invoice, billing_settings, customer, customer_context, legal_mention_template, organization)]
+	#[transactional(invoice, billing_settings, customer, customer_context, legal_mention_template, organization_context)]
 	pub async fn issue_invoice(&self, invoice_id: InvoiceId) -> Result<Invoice, CoreError> {
 		// Shadow-rebind all repos as mutable (the macro emits non-mut bindings).
 		let mut invoice_repository = invoice_repository;
@@ -110,7 +110,7 @@ impl MestierUseCase {
 		let mut customer_repository = customer_repository;
 		let mut customer_context_repository = customer_context_repository;
 		let mut legal_mention_template_repository = legal_mention_template_repository;
-		let mut organization_repository = organization_repository;
+		let mut organization_context_repository = organization_context_repository;
 
 		// ── 1. Load invoice, guard DRAFT ─────────────────────────────────────
 		let invoice = invoice_repository
@@ -141,14 +141,15 @@ impl MestierUseCase {
 			.next_reference(invoice.org_id, now.year())
 			.await?;
 
-		// ── 4. Gather billing settings (optional — used for payment terms/footer) ──
+		// ── 4. Gather billing settings (optional — used for payment terms/footer only) ──
 		let settings = billing_settings_repository
 			.find_by_org(invoice.org_id)
 			.await?;
 
-		// ── 5. Gather organization (for seller name) ──────────────────────────
-		let org = organization_repository
-			.find_by_id(invoice.org_id)
+		// ── 5. Load emitter context (seller identity on the document) ─────────
+		// Safety: guarded above — emitter_context_id is Some at this point.
+		let emitter = organization_context_repository
+			.find_by_id(invoice.emitter_context_id.unwrap())
 			.await?
 			.ok_or(CoreError::NotFound)?;
 
@@ -178,7 +179,7 @@ impl MestierUseCase {
 				status: InvoiceStatus::Sent,
 				..invoice.clone()
 			},
-			&org.name,
+			&emitter,
 			settings.as_ref(),
 			&customer,
 			context.as_ref(),

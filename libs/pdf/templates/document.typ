@@ -61,6 +61,7 @@
   // ── left: seller identity ──────────────────────────────────────────────────
   stack(dir: ttb, spacing: 3pt,
     text(weight: "bold", size: 13pt)[#data.seller.name],
+    if data.seller.address != none [#data.seller.address],
     if data.seller.siret != none [SIRET : #data.seller.siret],
     if data.seller.rcs   != none [RCS : #data.seller.rcs],
     if data.seller.ape   != none [APE : #data.seller.ape],

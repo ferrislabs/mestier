@@ -2,7 +2,7 @@ use chrono::{DateTime, Utc};
 use rust_decimal::Decimal;
 
 use crate::{
-	BillingSettings, Customer, CustomerContext,
+	BillingSettings, Customer, CustomerContext, OrganizationContext,
 	domain::{
 		billing::{BillingLine, compute_totals},
 		invoice::{Invoice, InvoiceLine, InvoiceType},
@@ -16,14 +16,16 @@ fn fmt_date(dt: &DateTime<Utc>) -> String {
 
 /// Build a `pdf::DocumentSnapshot` from the domain entities gathered for an invoice.
 ///
-/// `org_name` is the organization's display name, used as the seller name when
-/// no override is present in `BillingSettings`.
+/// `emitter` is the selected `OrganizationContext` that acts as the seller on
+/// the document. Its identity fields (`label`, `siret`, `iban`, …) are mapped
+/// directly to `SellerInfo`; `settings` is used only for `payment_terms` and
+/// `footer`.
 ///
 /// `mention_bodies` are the resolved template bodies in the order they appear in
 /// `invoice.legal_mention_template_ids`.
 pub fn build_invoice_snapshot(
 	invoice: &Invoice,
-	org_name: &str,
+	emitter: &OrganizationContext,
 	settings: Option<&BillingSettings>,
 	customer: &Customer,
 	context: Option<&CustomerContext>,
@@ -45,14 +47,31 @@ pub fn build_invoice_snapshot(
 	let due_date = invoice.due_at.as_ref().map(fmt_date);
 
 	// ── Seller ───────────────────────────────────────────────────────────────
+	let seller_address = {
+		let parts: Vec<String> = [
+			emitter.address_line.clone(),
+			emitter.postal_code
+				.as_ref()
+				.and_then(|pc| emitter.city.as_ref().map(|c| format!("{pc} {c}")))
+				.or_else(|| emitter.postal_code.clone())
+				.or_else(|| emitter.city.clone()),
+			emitter.country.clone(),
+		]
+		.into_iter()
+		.flatten()
+		.filter(|s| !s.is_empty())
+		.collect();
+		if parts.is_empty() { None } else { Some(parts.join(", ")) }
+	};
 	let seller = pdf::SellerInfo {
-		name: org_name.to_owned(),
-		siret: settings.and_then(|s| s.siret.clone()),
-		rcs: settings.and_then(|s| s.rcs.clone()),
-		ape: settings.and_then(|s| s.ape.clone()),
-		vat_intracom: settings.and_then(|s| s.vat_intracom.clone()),
-		iban: settings.and_then(|s| s.iban.clone()),
-		bic: settings.and_then(|s| s.bic.clone()),
+		name: emitter.label.clone(),
+		address: seller_address,
+		siret: emitter.siret.clone(),
+		rcs: emitter.rcs.clone(),
+		ape: emitter.ape.clone(),
+		vat_intracom: emitter.vat_intracom.clone(),
+		iban: emitter.iban.clone(),
+		bic: emitter.bic.clone(),
 	};
 
 	// ── Customer ─────────────────────────────────────────────────────────────
@@ -183,7 +202,7 @@ mod tests {
 	use super::*;
 	use crate::{
 		CustomerContextId, CustomerId, InvoiceId, InvoiceLineId, InvoiceStatus, InvoiceType,
-		OrganizationId, ServiceRateUnit,
+		OrganizationContextId, OrganizationId, ServiceRateUnit,
 	};
 	use chrono::Utc;
 	use rust_decimal::Decimal;
@@ -260,13 +279,36 @@ mod tests {
 		}
 	}
 
+	fn make_emitter(org_id: OrganizationId) -> OrganizationContext {
+		let now = Utc::now();
+		OrganizationContext {
+			id: OrganizationContextId(Uuid::new_v4()),
+			org_id,
+			label: "Mon Atelier SAS".to_owned(),
+			address_line: Some("12 rue des Artisans".to_owned()),
+			postal_code: Some("75011".to_owned()),
+			city: Some("Paris".to_owned()),
+			country: Some("France".to_owned()),
+			siret: Some("12345678901234".to_owned()),
+			rcs: None,
+			ape: Some("4321A".to_owned()),
+			vat_intracom: Some("FR12123456789".to_owned()),
+			iban: Some("FR76123".to_owned()),
+			bic: Some("BNPAFRPP".to_owned()),
+			deleted_at: None,
+			created_at: now,
+			updated_at: now,
+		}
+	}
+
 	#[test]
 	fn snapshot_standard_invoice_maps_fields_correctly() {
 		let invoice = make_invoice(InvoiceType::Standard, true);
 		let customer = make_customer();
+		let emitter = make_emitter(invoice.org_id);
 		let snapshot = build_invoice_snapshot(
 			&invoice,
-			"Mon Atelier SAS",
+			&emitter,
 			None,
 			&customer,
 			None,
@@ -277,7 +319,15 @@ mod tests {
 		assert_eq!(snapshot.reference.as_deref(), Some("FAC-2026-0001"));
 		assert_eq!(snapshot.title, "Facture cuisine");
 		assert!(snapshot.issued_date.is_some());
+		// seller comes from the emitter context
 		assert_eq!(snapshot.seller.name, "Mon Atelier SAS");
+		assert_eq!(snapshot.seller.siret.as_deref(), Some("12345678901234"));
+		assert_eq!(snapshot.seller.iban.as_deref(), Some("FR76123"));
+		let seller_addr = snapshot.seller.address.as_deref().unwrap();
+		assert!(seller_addr.contains("12 rue des Artisans"), "seller_addr={seller_addr}");
+		assert!(seller_addr.contains("75011"), "seller_addr={seller_addr}");
+		assert!(seller_addr.contains("Paris"), "seller_addr={seller_addr}");
+		assert!(seller_addr.contains("France"), "seller_addr={seller_addr}");
 		assert_eq!(snapshot.customer.name, "Jean Dupont");
 		assert_eq!(snapshot.lines.len(), 1);
 		assert_eq!(snapshot.lines[0].label, "Pose carrelage");
@@ -296,9 +346,10 @@ mod tests {
 		let mut invoice = make_invoice(InvoiceType::Balance, true);
 		invoice.deposit_amount_cents = Some(36_000);
 		let customer = make_customer();
+		let emitter = make_emitter(invoice.org_id);
 		let snapshot = build_invoice_snapshot(
 			&invoice,
-			"Atelier Pro",
+			&emitter,
 			None,
 			&customer,
 			None,
@@ -312,11 +363,12 @@ mod tests {
 	}
 
 	#[test]
-	fn snapshot_with_billing_settings_populates_seller_fields() {
+	fn snapshot_with_billing_settings_populates_payment_terms_and_footer() {
 		use chrono::Utc;
 		use rust_decimal::Decimal;
 		let invoice = make_invoice(InvoiceType::Standard, false);
 		let customer = make_customer();
+		let emitter = make_emitter(invoice.org_id);
 		let settings = BillingSettings {
 			org_id: invoice.org_id,
 			payment_terms_days: 30,
@@ -325,12 +377,12 @@ mod tests {
 			default_deposit_basis: None,
 			default_deposit_value: None,
 			default_vat_rate: Decimal::from(20u32),
-			iban: Some("FR76123".to_owned()),
+			iban: Some("FR76999".to_owned()),
 			bic: Some("BNPAFRPP".to_owned()),
-			siret: Some("12345678901234".to_owned()),
+			siret: Some("99999999999999".to_owned()),
 			rcs: None,
-			ape: Some("4321A".to_owned()),
-			vat_intracom: Some("FR12123456789".to_owned()),
+			ape: Some("0000Z".to_owned()),
+			vat_intracom: Some("FR99999999999".to_owned()),
 			footer: Some("Pied de page légal".to_owned()),
 			created_at: Utc::now(),
 			updated_at: Utc::now(),
@@ -338,16 +390,19 @@ mod tests {
 
 		let snapshot = build_invoice_snapshot(
 			&invoice,
-			"Artisan SARL",
+			&emitter,
 			Some(&settings),
 			&customer,
 			None,
 			&[],
 		);
 
+		// seller identity still comes from the emitter context, NOT from billing settings
+		assert_eq!(snapshot.seller.name, "Mon Atelier SAS");
 		assert_eq!(snapshot.seller.siret.as_deref(), Some("12345678901234"));
 		assert_eq!(snapshot.seller.iban.as_deref(), Some("FR76123"));
 		assert_eq!(snapshot.seller.vat_intracom.as_deref(), Some("FR12123456789"));
+		// payment terms and footer come from billing settings
 		assert_eq!(snapshot.footer.as_deref(), Some("Pied de page légal"));
 		assert!(snapshot.payment_terms.as_ref().unwrap().contains("30"));
 	}
@@ -356,6 +411,7 @@ mod tests {
 	fn snapshot_with_customer_context_builds_address() {
 		let invoice = make_invoice(InvoiceType::Standard, false);
 		let customer = make_customer();
+		let emitter = make_emitter(invoice.org_id);
 		let now = Utc::now();
 		let context = CustomerContext {
 			id: CustomerContextId(Uuid::new_v4()),
@@ -372,7 +428,7 @@ mod tests {
 
 		let snapshot = build_invoice_snapshot(
 			&invoice,
-			"Atelier",
+			&emitter,
 			None,
 			&customer,
 			Some(&context),
@@ -383,5 +439,35 @@ mod tests {
 		assert!(addr.contains("12 rue de la Paix"), "addr={addr}");
 		assert!(addr.contains("75001"), "addr={addr}");
 		assert!(addr.contains("Paris"), "addr={addr}");
+	}
+
+	#[test]
+	fn snapshot_seller_address_is_none_when_emitter_has_no_address_fields() {
+		let now = Utc::now();
+		let org_id = OrganizationId(Uuid::new_v4());
+		let emitter = OrganizationContext {
+			id: OrganizationContextId(Uuid::new_v4()),
+			org_id,
+			label: "Atelier Sans Adresse".to_owned(),
+			address_line: None,
+			postal_code: None,
+			city: None,
+			country: None,
+			siret: None,
+			rcs: None,
+			ape: None,
+			vat_intracom: None,
+			iban: None,
+			bic: None,
+			deleted_at: None,
+			created_at: now,
+			updated_at: now,
+		};
+		let invoice = make_invoice(InvoiceType::Standard, false);
+		let customer = make_customer();
+		let snapshot = build_invoice_snapshot(&invoice, &emitter, None, &customer, None, &[]);
+
+		assert_eq!(snapshot.seller.name, "Atelier Sans Adresse");
+		assert!(snapshot.seller.address.is_none());
 	}
 }

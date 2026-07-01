@@ -4,6 +4,7 @@ use thiserror::Error;
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SellerInfo {
 	pub name: String,
+	pub address: Option<String>,
 	pub siret: Option<String>,
 	pub rcs: Option<String>,
 	pub ape: Option<String>,

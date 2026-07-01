@@ -13,6 +13,7 @@ fn test_render_invoice_returns_pdf_bytes() {
 		due_date: Some("31/07/2026".to_string()),
 		seller: SellerInfo {
 			name: "Atelier Dupont".to_string(),
+			address: Some("12 rue des Artisans, 75011 Paris, France".to_string()),
 			siret: Some("123 456 789 00012".to_string()),
 			rcs: Some("RCS Paris B 123 456 789".to_string()),
 			ape: Some("4339Z".to_string()),
