@@ -11,14 +11,19 @@ function billingSettingsKey(organizationId: string) {
 }
 
 export function useBillingSettings(organizationId: string) {
+	const options = window.tanstackApi.get(BILLING_SETTINGS_PATH, {
+		path: { organization_id: organizationId },
+	}).queryOptions
+	const baseQueryFn = options.queryFn
 	return useQuery({
-		...window.tanstackApi.get(BILLING_SETTINGS_PATH, {
-			path: { organization_id: organizationId },
-		}).queryOptions,
-		// The backend returns 204 with no body when no settings have been saved yet.
-		// The fetcher does not throw on 2xx, so the queryFn resolves with undefined.
-		// We treat that as "not configured" and the UI shows the form with defaults.
-		select: (data) => data ?? null,
+		...options,
+		// The backend returns 204 (no body) when no settings have been saved yet, so
+		// the fetcher resolves with `undefined`. TanStack Query forbids `undefined`
+		// from a queryFn, so coerce it to `null` ("not configured" → form defaults).
+		queryFn:
+			typeof baseQueryFn === 'function'
+				? async (context) => (await baseQueryFn(context)) ?? null
+				: baseQueryFn,
 	})
 }
 
