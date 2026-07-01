@@ -35,7 +35,7 @@ const coreItems: NavItem[] = [
 	{ title: 'Pipeline', to: '/customers/pipeline', icon: KanbanSquare },
 	{ title: 'Catalogue', to: '/catalog', icon: Boxes },
 	{ title: 'Devis', to: '/quotes', icon: FileText },
-	{ title: 'Factures', to: '/customers', icon: Receipt, disabled: true },
+	{ title: 'Factures', to: '/invoices', icon: Receipt },
 	{ title: 'Stock', to: '/customers', icon: Package, disabled: true },
 ]
 

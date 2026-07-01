@@ -13,9 +13,11 @@ import { Route as AppRouteImport } from './routes/_app'
 import { Route as AppIndexRouteImport } from './routes/_app.index'
 import { Route as AppSettingsRouteImport } from './routes/_app.settings'
 import { Route as AppQuotesIndexRouteImport } from './routes/_app.quotes.index'
+import { Route as AppInvoicesIndexRouteImport } from './routes/_app.invoices.index'
 import { Route as AppCustomersIndexRouteImport } from './routes/_app.customers.index'
 import { Route as AppCatalogIndexRouteImport } from './routes/_app.catalog.index'
 import { Route as AppQuotesQuoteIdRouteImport } from './routes/_app.quotes.$quoteId'
+import { Route as AppInvoicesInvoiceIdRouteImport } from './routes/_app.invoices.$invoiceId'
 import { Route as AppCustomersPipelineRouteImport } from './routes/_app.customers.pipeline'
 import { Route as AppCustomersCustomerIdRouteImport } from './routes/_app.customers.$customerId'
 
@@ -38,6 +40,11 @@ const AppQuotesIndexRoute = AppQuotesIndexRouteImport.update({
   path: '/quotes/',
   getParentRoute: () => AppRoute,
 } as any)
+const AppInvoicesIndexRoute = AppInvoicesIndexRouteImport.update({
+  id: '/invoices/',
+  path: '/invoices/',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppCustomersIndexRoute = AppCustomersIndexRouteImport.update({
   id: '/customers/',
   path: '/customers/',
@@ -51,6 +58,11 @@ const AppCatalogIndexRoute = AppCatalogIndexRouteImport.update({
 const AppQuotesQuoteIdRoute = AppQuotesQuoteIdRouteImport.update({
   id: '/quotes/$quoteId',
   path: '/quotes/$quoteId',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppInvoicesInvoiceIdRoute = AppInvoicesInvoiceIdRouteImport.update({
+  id: '/invoices/$invoiceId',
+  path: '/invoices/$invoiceId',
   getParentRoute: () => AppRoute,
 } as any)
 const AppCustomersPipelineRoute = AppCustomersPipelineRouteImport.update({
@@ -69,9 +81,11 @@ export interface FileRoutesByFullPath {
   '/settings': typeof AppSettingsRoute
   '/customers/$customerId': typeof AppCustomersCustomerIdRoute
   '/customers/pipeline': typeof AppCustomersPipelineRoute
+  '/invoices/$invoiceId': typeof AppInvoicesInvoiceIdRoute
   '/quotes/$quoteId': typeof AppQuotesQuoteIdRoute
   '/catalog/': typeof AppCatalogIndexRoute
   '/customers/': typeof AppCustomersIndexRoute
+  '/invoices/': typeof AppInvoicesIndexRoute
   '/quotes/': typeof AppQuotesIndexRoute
 }
 export interface FileRoutesByTo {
@@ -79,9 +93,11 @@ export interface FileRoutesByTo {
   '/': typeof AppIndexRoute
   '/customers/$customerId': typeof AppCustomersCustomerIdRoute
   '/customers/pipeline': typeof AppCustomersPipelineRoute
+  '/invoices/$invoiceId': typeof AppInvoicesInvoiceIdRoute
   '/quotes/$quoteId': typeof AppQuotesQuoteIdRoute
   '/catalog': typeof AppCatalogIndexRoute
   '/customers': typeof AppCustomersIndexRoute
+  '/invoices': typeof AppInvoicesIndexRoute
   '/quotes': typeof AppQuotesIndexRoute
 }
 export interface FileRoutesById {
@@ -91,9 +107,11 @@ export interface FileRoutesById {
   '/_app/': typeof AppIndexRoute
   '/_app/customers/$customerId': typeof AppCustomersCustomerIdRoute
   '/_app/customers/pipeline': typeof AppCustomersPipelineRoute
+  '/_app/invoices/$invoiceId': typeof AppInvoicesInvoiceIdRoute
   '/_app/quotes/$quoteId': typeof AppQuotesQuoteIdRoute
   '/_app/catalog/': typeof AppCatalogIndexRoute
   '/_app/customers/': typeof AppCustomersIndexRoute
+  '/_app/invoices/': typeof AppInvoicesIndexRoute
   '/_app/quotes/': typeof AppQuotesIndexRoute
 }
 export interface FileRouteTypes {
@@ -103,9 +121,11 @@ export interface FileRouteTypes {
     | '/settings'
     | '/customers/$customerId'
     | '/customers/pipeline'
+    | '/invoices/$invoiceId'
     | '/quotes/$quoteId'
     | '/catalog/'
     | '/customers/'
+    | '/invoices/'
     | '/quotes/'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -113,9 +133,11 @@ export interface FileRouteTypes {
     | '/'
     | '/customers/$customerId'
     | '/customers/pipeline'
+    | '/invoices/$invoiceId'
     | '/quotes/$quoteId'
     | '/catalog'
     | '/customers'
+    | '/invoices'
     | '/quotes'
   id:
     | '__root__'
@@ -124,9 +146,11 @@ export interface FileRouteTypes {
     | '/_app/'
     | '/_app/customers/$customerId'
     | '/_app/customers/pipeline'
+    | '/_app/invoices/$invoiceId'
     | '/_app/quotes/$quoteId'
     | '/_app/catalog/'
     | '/_app/customers/'
+    | '/_app/invoices/'
     | '/_app/quotes/'
   fileRoutesById: FileRoutesById
 }
@@ -164,6 +188,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppQuotesIndexRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/invoices/': {
+      id: '/_app/invoices/'
+      path: '/invoices'
+      fullPath: '/invoices/'
+      preLoaderRoute: typeof AppInvoicesIndexRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/_app/customers/': {
       id: '/_app/customers/'
       path: '/customers'
@@ -183,6 +214,13 @@ declare module '@tanstack/react-router' {
       path: '/quotes/$quoteId'
       fullPath: '/quotes/$quoteId'
       preLoaderRoute: typeof AppQuotesQuoteIdRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/invoices/$invoiceId': {
+      id: '/_app/invoices/$invoiceId'
+      path: '/invoices/$invoiceId'
+      fullPath: '/invoices/$invoiceId'
+      preLoaderRoute: typeof AppInvoicesInvoiceIdRouteImport
       parentRoute: typeof AppRoute
     }
     '/_app/customers/pipeline': {
@@ -207,9 +245,11 @@ interface AppRouteChildren {
   AppIndexRoute: typeof AppIndexRoute
   AppCustomersCustomerIdRoute: typeof AppCustomersCustomerIdRoute
   AppCustomersPipelineRoute: typeof AppCustomersPipelineRoute
+  AppInvoicesInvoiceIdRoute: typeof AppInvoicesInvoiceIdRoute
   AppQuotesQuoteIdRoute: typeof AppQuotesQuoteIdRoute
   AppCatalogIndexRoute: typeof AppCatalogIndexRoute
   AppCustomersIndexRoute: typeof AppCustomersIndexRoute
+  AppInvoicesIndexRoute: typeof AppInvoicesIndexRoute
   AppQuotesIndexRoute: typeof AppQuotesIndexRoute
 }
 
@@ -218,9 +258,11 @@ const AppRouteChildren: AppRouteChildren = {
   AppIndexRoute: AppIndexRoute,
   AppCustomersCustomerIdRoute: AppCustomersCustomerIdRoute,
   AppCustomersPipelineRoute: AppCustomersPipelineRoute,
+  AppInvoicesInvoiceIdRoute: AppInvoicesInvoiceIdRoute,
   AppQuotesQuoteIdRoute: AppQuotesQuoteIdRoute,
   AppCatalogIndexRoute: AppCatalogIndexRoute,
   AppCustomersIndexRoute: AppCustomersIndexRoute,
+  AppInvoicesIndexRoute: AppInvoicesIndexRoute,
   AppQuotesIndexRoute: AppQuotesIndexRoute,
 }
 
