@@ -1,0 +1,114 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT id, org_id, label, address_line, postal_code, city, country, siret, rcs, ape, vat_intracom, iban, bic, deleted_at, created_at, updated_at\n            FROM organization_contexts\n            WHERE org_id = $1 AND deleted_at IS NULL\n            ORDER BY label ASC, created_at ASC\n            LIMIT $2 OFFSET $3\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "org_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "label",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "address_line",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "postal_code",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "city",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 6,
+        "name": "country",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 7,
+        "name": "siret",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 8,
+        "name": "rcs",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 9,
+        "name": "ape",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 10,
+        "name": "vat_intracom",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 11,
+        "name": "iban",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 12,
+        "name": "bic",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 13,
+        "name": "deleted_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 14,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 15,
+        "name": "updated_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Int8",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      false,
+      false
+    ]
+  },
+  "hash": "c18ea1e28dd5aed14de18a5ca461856014feab6c4d392468e26074edb0a9b41d"
+}

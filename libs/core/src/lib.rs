@@ -13,9 +13,9 @@ pub use domain::{
     CustomerPipelineStage, CustomerStatus, Employee, EmployeeId, Equipment, EquipmentId,
     FileObject, Invoice, InvoiceId, InvoiceLine, InvoiceLineId, InvoiceStatus, InvoiceType,
     LegalMentionTemplate, LegalMentionTemplateId, Member, MemberId, Organization,
-    OrganizationId, Permissions, Product, ProductId, Quote, QuoteId, QuoteLine, QuoteLineId,
-    QuoteStatus, Role, RoleId, ServiceRate, ServiceRateId, ServiceRateUnit, StoredFile, User,
-    UserId,
+    OrganizationContext, OrganizationContextId, OrganizationId, Permissions, Product, ProductId,
+    Quote, QuoteId, QuoteLine, QuoteLineId, QuoteStatus, Role, RoleId, ServiceRate, ServiceRateId,
+    ServiceRateUnit, StoredFile, User, UserId,
     billing_settings::commands::UpsertBillingSettingsCommand,
     customer::commands::{CreateCustomerCommand, UpdateCustomerCommand},
     customer_contact::commands::{CreateCustomerContactCommand, UpdateCustomerContactCommand},
@@ -30,6 +30,9 @@ pub use domain::{
         CreateLegalMentionTemplateCommand, UpdateLegalMentionTemplateCommand,
     },
     organization::commands::{CreateOrganizationCommand, UpdateOrganizationCommand},
+    organization_context::commands::{
+        CreateOrganizationContextCommand, UpdateOrganizationContextCommand,
+    },
     product::commands::{CreateProductCommand, UpdateProductCommand},
     quote::commands::{
         CreateQuoteCommand, QuoteLineCommand, UpdateQuoteCommand, UpdateQuoteStatusCommand,

@@ -20,6 +20,7 @@ pub mod customer;
 pub mod customer_contact;
 pub mod customer_context;
 pub mod discord_category;
+pub mod organization_context;
 pub mod discord_channel;
 pub mod discord_message;
 pub mod discord_notification;

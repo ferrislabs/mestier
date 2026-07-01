@@ -13,6 +13,7 @@ pub mod member;
 pub mod message;
 pub mod notification;
 pub mod organization;
+pub mod organization_context;
 pub mod overwrite;
 pub mod postgres;
 pub mod presence;

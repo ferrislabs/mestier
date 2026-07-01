@@ -19,6 +19,7 @@ pub mod domain {
     pub struct Organization;
     pub struct Product;
     pub struct CustomerContext;
+    pub struct OrganizationContext;
     pub struct Quote;
     pub struct Role;
     pub struct Member;
