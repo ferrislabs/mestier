@@ -1,7 +1,6 @@
 import { Link, useNavigate } from '@tanstack/react-router'
 import {
 	AlertCircle,
-	ArrowLeft,
 	Copy,
 	Download,
 	Eye,
@@ -591,14 +590,6 @@ function InvoiceEditUI({
 				eyebrow={invoice.reference ?? 'Brouillon'}
 				title={invoice.title}
 				description="Visualisez et modifiez le contenu de la facture."
-				leading={
-					<Button asChild variant="outline" size="icon">
-						<Link to="/invoices">
-							<ArrowLeft />
-							<span className="sr-only">Retour aux factures</span>
-						</Link>
-					</Button>
-				}
 				actions={
 					<div className="flex flex-wrap items-center justify-end gap-2">
 						{/* Aperçu — always available */}
