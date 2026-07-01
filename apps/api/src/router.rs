@@ -13,6 +13,7 @@ use handlers::{ApiError, AppState};
 use handlers_customer as customer;
 use handlers_discord as discord;
 use handlers_files as files;
+use handlers_invoice as invoice;
 use handlers_organization as organization;
 use handlers_quote as quote;
 use handlers_reference as reference;
@@ -71,6 +72,7 @@ pub fn router(state: AppState) -> Result<Router, ApiError> {
         .merge(files::router(&state))
         .merge(customer::router(&state))
         .merge(discord::router(&state))
+        .merge(invoice::router(&state))
         .merge(organization::router(&state))
         .merge(quote::router(&state))
         .merge(reference::router(&state))
