@@ -1,5 +1,5 @@
 use axum_extra::routing::TypedPath;
-use mestier_core::{InvoiceId, OrganizationId};
+use mestier_core::{InvoiceId, OrganizationId, QuoteId};
 use serde::Deserialize;
 
 #[derive(TypedPath, Deserialize)]
@@ -18,4 +18,10 @@ pub struct InvoicePath {
 #[typed_path("/api/v1/invoices/{invoice_id}/status")]
 pub struct InvoiceStatusPath {
 	pub invoice_id: InvoiceId,
+}
+
+#[derive(TypedPath, Deserialize)]
+#[typed_path("/api/v1/quotes/{quote_id}/convert-to-invoice")]
+pub struct QuoteConvertPath {
+	pub quote_id: QuoteId,
 }

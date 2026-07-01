@@ -872,4 +872,65 @@ mod tests {
 
 		assert!(matches!(result, Err(CoreError::Conflict(_))));
 	}
+
+	// ---- convert quote to invoice ----
+
+	#[tokio::test]
+	async fn create_invoice_from_quote_sets_source_quote_id_and_copies_lines() {
+		use crate::domain::quote::QuoteId;
+
+		let quote_id = QuoteId(Uuid::new_v4());
+		let template_a = LegalMentionTemplateId(Uuid::new_v4());
+		let template_ids = vec![template_a];
+		let template_ids_clone = template_ids.clone();
+
+		let mut repo = MockInvoiceRepository::new();
+		repo.expect_insert().times(1).returning(|inv| {
+			let inv = inv.clone();
+			Box::pin(async move { Ok(inv) })
+		});
+		repo.expect_replace_legal_mention_templates()
+			.times(1)
+			.returning(|_, _| Box::pin(async { Ok(()) }));
+
+		let mut service = InvoiceService::new(repo);
+		let created = service
+			.create_invoice(CreateInvoiceCommand {
+				org_id: OrganizationId(Uuid::new_v4()),
+				title: "Rénovation cuisine".to_owned(),
+				customer_id: CustomerId(Uuid::new_v4()),
+				customer_context_id: CustomerContextId(Uuid::new_v4()),
+				invoice_type: InvoiceType::Standard,
+				source_quote_id: Some(quote_id),
+				parent_invoice_id: None,
+				deposit_basis: None,
+				deposit_value: None,
+				deposit_amount_cents: None,
+				due_at: None,
+				lines: vec![
+					line_command(Decimal::new(2, 0), 3000),
+					line_command(Decimal::new(1, 0), 500),
+				],
+				legal_mention_template_ids: template_ids_clone,
+			})
+			.await
+			.unwrap();
+
+		// source_quote_id must be forwarded
+		assert_eq!(created.source_quote_id, Some(quote_id));
+		// invoice_type is Standard
+		assert_eq!(created.invoice_type, InvoiceType::Standard);
+		// starts as DRAFT with no reference
+		assert_eq!(created.status, InvoiceStatus::Draft);
+		assert_eq!(created.reference, None);
+		// two lines were copied
+		assert_eq!(created.lines.len(), 2);
+		// totals are recomputed from lines: 2*3000=6000 + 1*500=500 → HT=6500, VAT@20%=1300, TTC=7800
+		assert_eq!(created.total_ht_cents, 6500);
+		assert_eq!(created.total_vat_cents, 1300);
+		assert_eq!(created.total_ttc_cents, 7800);
+		assert_eq!(created.total_cents, 7800);
+		// legal mention template IDs are preserved
+		assert_eq!(created.legal_mention_template_ids, template_ids);
+	}
 }
