@@ -27,12 +27,13 @@ function invalidateLegalMentionList(
 }
 
 export function useLegalMentionTemplates(organizationId: string) {
-	return useQuery(
-		window.tanstackApi.get(LEGAL_MENTION_TEMPLATES_PATH, {
+	return useQuery({
+		...window.tanstackApi.get(LEGAL_MENTION_TEMPLATES_PATH, {
 			path: { organization_id: organizationId },
 			query: { page: 1, per_page: 100 },
 		}).queryOptions,
-	)
+		enabled: Boolean(organizationId),
+	})
 }
 
 export function useCreateLegalMentionTemplate(organizationId: string) {

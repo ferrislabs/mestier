@@ -59,22 +59,23 @@ export function useReferenceCatalog(
 	options: ReferenceCatalogOptions = {},
 ) {
 	const params = referenceListParams(organizationId)
+	const hasOrg = Boolean(organizationId)
 
 	const employees = useQuery({
 		...window.tanstackApi.get(EMPLOYEES_PATH, params).queryOptions,
-		enabled: isReferenceEnabled(options, 'employees'),
+		enabled: hasOrg && isReferenceEnabled(options, 'employees'),
 	})
 	const equipment = useQuery({
 		...window.tanstackApi.get(EQUIPMENT_PATH, params).queryOptions,
-		enabled: isReferenceEnabled(options, 'equipment'),
+		enabled: hasOrg && isReferenceEnabled(options, 'equipment'),
 	})
 	const serviceRates = useQuery({
 		...window.tanstackApi.get(SERVICE_RATES_PATH, params).queryOptions,
-		enabled: isReferenceEnabled(options, 'serviceRates'),
+		enabled: hasOrg && isReferenceEnabled(options, 'serviceRates'),
 	})
 	const products = useQuery({
 		...window.tanstackApi.get(PRODUCTS_PATH, params).queryOptions,
-		enabled: isReferenceEnabled(options, 'products'),
+		enabled: hasOrg && isReferenceEnabled(options, 'products'),
 	})
 
 	return { employees, equipment, serviceRates, products }

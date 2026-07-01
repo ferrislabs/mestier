@@ -89,10 +89,11 @@ export function useCustomers(
 	organizationId: string,
 	params: CustomerListParams = { page: 1, perPage: 100 },
 ) {
-	return useQuery(
-		window.tanstackApi.get(CUSTOMERS_PATH, listParams(organizationId, params))
+	return useQuery({
+		...window.tanstackApi.get(CUSTOMERS_PATH, listParams(organizationId, params))
 			.queryOptions,
-	)
+		enabled: Boolean(organizationId),
+	})
 }
 
 export function useCustomer(customerId: string, enabled = true) {
