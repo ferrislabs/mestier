@@ -60,6 +60,7 @@ impl Modify for SecurityAddon {
         invoice::invoice::update::handler,
         invoice::invoice::update_status::handler,
         invoice::invoice::soft_delete::handler,
+        invoice::invoice::convert_from_quote::handler,
         quote::quote::create::handler,
         quote::quote::list::handler,
         quote::quote::get_one::handler,
