@@ -69,6 +69,10 @@ pub fn router(state: AppState) -> Result<Router, ApiError> {
         .allow_credentials(true);
 
     let router = Router::new()
+        // Unauthenticated public routes are merged first, before any auth layer
+        // is applied by the other sub-routers. Matching is done by method+path so
+        // there is no ambiguity even though all routers share the same state type.
+        .merge(invoice::public_router())
         .merge(files::router(&state))
         .merge(customer::router(&state))
         .merge(discord::router(&state))

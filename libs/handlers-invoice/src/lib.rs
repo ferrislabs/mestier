@@ -68,6 +68,7 @@ async fn require_invoice_targets(
 	Ok(())
 }
 
+/// Authenticated routes (require bearer token + org membership).
 pub fn router(state: &AppState) -> Router<AppState> {
 	Router::new()
 		.typed_get(invoice::list::handler)
@@ -79,6 +80,15 @@ pub fn router(state: &AppState) -> Router<AppState> {
 		.typed_post(invoice::convert_from_quote::handler)
 		.typed_post(invoice::create_deposit::handler)
 		.typed_post(invoice::create_balance::handler)
+		.typed_post(invoice::issue::handler)
+		.typed_get(invoice::export_pdf::handler)
+		.typed_post(invoice::share::handler)
 		.layer(from_fn_with_state(state.clone(), rate_limit_middleware))
 		.layer(from_fn_with_state(state.clone(), auth_middleware))
+}
+
+/// Unauthenticated routes — no bearer token required.
+/// Must be merged into the router BEFORE/OUTSIDE the auth middleware layer.
+pub fn public_router() -> Router<AppState> {
+	Router::new().typed_get(invoice::public_document::handler)
 }
