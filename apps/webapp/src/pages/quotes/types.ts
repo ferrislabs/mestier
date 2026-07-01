@@ -24,6 +24,8 @@ export interface QuoteFormValues {
 	customerContextId: string
 	legalMentionTemplateIds: string[]
 	lines: QuoteLineFormValues[]
+	depositBasis: string
+	depositValue: string
 }
 
 export function emptyQuoteLine(clientId = 'line-1'): QuoteLineFormValues {

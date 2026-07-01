@@ -90,8 +90,18 @@ function QuoteWorkspace({ organizationId }: { organizationId: string }) {
 			customerContextId: '',
 			legalMentionTemplateIds: [],
 			lines: [emptyQuoteLine()],
+			depositBasis: '',
+			depositValue: '',
 		} satisfies QuoteFormValues,
 		onSubmit: async ({ value }) => {
+			const depositBasis =
+				value.depositBasis === 'PERCENT' || value.depositBasis === 'FIXED'
+					? value.depositBasis
+					: null
+			const depositValue =
+				depositBasis && value.depositValue.trim()
+					? value.depositValue.trim()
+					: null
 			const quote = await createQuote.mutateAsync({
 				path: { organization_id: organizationId },
 				body: {
@@ -99,6 +109,8 @@ function QuoteWorkspace({ organizationId }: { organizationId: string }) {
 					customer_id: value.customerId,
 					customer_context_id: value.customerContextId,
 					legal_mention_template_ids: value.legalMentionTemplateIds,
+					deposit_basis: depositBasis,
+					deposit_value: depositValue,
 					lines: value.lines.map((line) => ({
 						service_rate_id: line.serviceRateId || null,
 						label: line.label.trim(),
@@ -277,6 +289,12 @@ function QuoteWorkspaceWithValues({
 		}
 		if (patch.lines !== undefined) {
 			form.setFieldValue('lines', patch.lines)
+		}
+		if (patch.depositBasis !== undefined) {
+			form.setFieldValue('depositBasis', patch.depositBasis)
+		}
+		if (patch.depositValue !== undefined) {
+			form.setFieldValue('depositValue', patch.depositValue)
 		}
 	}
 

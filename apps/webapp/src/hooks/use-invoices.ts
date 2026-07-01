@@ -147,12 +147,56 @@ export function useDeleteInvoice(organizationId?: string) {
 
 const CONVERT_QUOTE_PATH =
 	'/api/v1/quotes/{quote_id}/convert-to-invoice' as const
+const DEPOSIT_INVOICE_PATH =
+	'/api/v1/invoices/{invoice_id}/deposit-invoice' as const
+const BALANCE_INVOICE_PATH =
+	'/api/v1/invoices/{invoice_id}/balance-invoice' as const
 
 export function useConvertQuoteToInvoice() {
 	const queryClient = useQueryClient()
 
 	return useMutation({
 		...window.tanstackApi.mutation('post', CONVERT_QUOTE_PATH).mutationOptions,
+		onSuccess: async (invoice) => {
+			await Promise.all([
+				queryClient.invalidateQueries({
+					predicate: (query) =>
+						isInvoiceListQuery(query.queryKey, invoice.data.organization_id),
+				}),
+				queryClient.invalidateQueries({
+					queryKey: invoiceKey(invoice.data.id),
+				}),
+			])
+		},
+	})
+}
+
+export function useCreateDepositInvoice() {
+	const queryClient = useQueryClient()
+
+	return useMutation({
+		...window.tanstackApi.mutation('post', DEPOSIT_INVOICE_PATH)
+			.mutationOptions,
+		onSuccess: async (invoice) => {
+			await Promise.all([
+				queryClient.invalidateQueries({
+					predicate: (query) =>
+						isInvoiceListQuery(query.queryKey, invoice.data.organization_id),
+				}),
+				queryClient.invalidateQueries({
+					queryKey: invoiceKey(invoice.data.id),
+				}),
+			])
+		},
+	})
+}
+
+export function useCreateBalanceInvoice() {
+	const queryClient = useQueryClient()
+
+	return useMutation({
+		...window.tanstackApi.mutation('post', BALANCE_INVOICE_PATH)
+			.mutationOptions,
 		onSuccess: async (invoice) => {
 			await Promise.all([
 				queryClient.invalidateQueries({
