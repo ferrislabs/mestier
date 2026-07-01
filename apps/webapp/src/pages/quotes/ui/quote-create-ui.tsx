@@ -1,6 +1,7 @@
 import { Link } from '@tanstack/react-router'
 import {
 	AlertCircle,
+	Building2,
 	Calculator,
 	FileText,
 	Gavel,
@@ -69,6 +70,7 @@ import {
 import { Textarea } from '#/components/ui/textarea'
 import type { CatalogItem } from '#/hooks/use-catalog-items'
 import type { Customer, CustomerContext } from '#/hooks/use-customers'
+import type { OrganizationContext } from '#/hooks/use-organization-contexts'
 import type { PaginationMetadata, Quote } from '#/hooks/use-quotes'
 import type { ServiceRateUnit } from '#/hooks/use-reference-catalog'
 import {
@@ -96,6 +98,7 @@ interface QuoteCreateUIProps {
 	legalMentionTemplates: { id: string; name: string; body: string }[]
 	isLegalMentionTemplatesLoading?: boolean
 	customerContexts: CustomerContext[]
+	organizationContexts: OrganizationContext[]
 	catalogItems: CatalogItem[]
 	quotes: Quote[]
 	quotesPagination?: PaginationMetadata | null
@@ -127,6 +130,7 @@ export function QuoteCreateUI({
 	legalMentionTemplates,
 	isLegalMentionTemplatesLoading,
 	customerContexts,
+	organizationContexts,
 	catalogItems,
 	quotes,
 	quotesPagination,
@@ -258,6 +262,9 @@ export function QuoteCreateUI({
 	})
 	const selectedCustomerContext = customerContexts.find((customerContext) => {
 		return customerContext.id === values.customerContextId
+	})
+	const selectedOrganizationContext = organizationContexts.find((ctx) => {
+		return ctx.id === values.emitterContextId
 	})
 	const draftTotalCents = values.lines.reduce((sum, line) => {
 		return sum + quoteLineTotalCents(line)
@@ -406,6 +413,29 @@ export function QuoteCreateUI({
 													</SelectContent>
 												</Select>
 											</FieldBlock>
+											<FieldBlock label="Émetteur">
+												<Select
+													value={values.emitterContextId || '__none__'}
+													onValueChange={(value) =>
+														onChange({
+															emitterContextId:
+																value === '__none__' ? '' : value,
+														})
+													}
+												>
+													<SelectTrigger className="w-full">
+														<SelectValue placeholder="— Aucun —" />
+													</SelectTrigger>
+													<SelectContent>
+														<SelectItem value="__none__">— Aucun —</SelectItem>
+														{organizationContexts.map((ctx) => (
+															<SelectItem key={ctx.id} value={ctx.id}>
+																{ctx.label}
+															</SelectItem>
+														))}
+													</SelectContent>
+												</Select>
+											</FieldBlock>
 										</div>
 									</FormSection>
 
@@ -532,6 +562,11 @@ export function QuoteCreateUI({
 										selectedCustomerContext
 											? customerContextDisplayName(selectedCustomerContext)
 											: 'Non sélectionné'
+									}
+									emitterName={
+										selectedOrganizationContext
+											? selectedOrganizationContext.label
+											: '— Aucun —'
 									}
 									lineCount={values.lines.length}
 									completedLineCount={completedLineCount}
@@ -1095,6 +1130,7 @@ interface QuoteDraftSummaryProps {
 	title: string
 	customerName: string
 	contextName: string
+	emitterName: string
 	lineCount: number
 	completedLineCount: number
 	totalCents: number
@@ -1105,6 +1141,7 @@ function QuoteDraftSummary({
 	title,
 	customerName,
 	contextName,
+	emitterName,
 	lineCount,
 	completedLineCount,
 	totalCents,
@@ -1128,6 +1165,7 @@ function QuoteDraftSummary({
 				<SummaryRow icon={<FileText />} label="Objet" value={title} />
 				<SummaryRow icon={<UserRound />} label="Client" value={customerName} />
 				<SummaryRow icon={<MapPin />} label="Contexte" value={contextName} />
+				<SummaryRow icon={<Building2 />} label="Émetteur" value={emitterName} />
 				<SummaryRow
 					icon={<FileText />}
 					label="Lignes"

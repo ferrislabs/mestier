@@ -14,6 +14,10 @@ import {
 	useLegalMentionTemplates,
 } from '#/hooks/use-legal-mentions'
 import {
+	type OrganizationContext,
+	useOrganizationContexts,
+} from '#/hooks/use-organization-contexts'
+import {
 	type PaginationMetadata,
 	type Quote,
 	useCreateQuote,
@@ -67,6 +71,7 @@ function QuoteWorkspace({ organizationId }: { organizationId: string }) {
 	const [lastCreated, setLastCreated] = useState<Quote | null>(null)
 	const customers = useCustomers(organizationId)
 	const legalMentionTemplates = useLegalMentionTemplates(organizationId)
+	const organizationContexts = useOrganizationContexts(organizationId)
 	const quotes = useQuotes(organizationId, {
 		page: quotePage,
 		perPage: quotePageSize,
@@ -88,6 +93,7 @@ function QuoteWorkspace({ organizationId }: { organizationId: string }) {
 			title: '',
 			customerId: '',
 			customerContextId: '',
+			emitterContextId: '',
 			legalMentionTemplateIds: [],
 			lines: [emptyQuoteLine()],
 			depositBasis: '',
@@ -108,6 +114,7 @@ function QuoteWorkspace({ organizationId }: { organizationId: string }) {
 					title: value.title.trim(),
 					customer_id: value.customerId,
 					customer_context_id: value.customerContextId,
+					emitter_context_id: value.emitterContextId || null,
 					legal_mention_template_ids: value.legalMentionTemplateIds,
 					deposit_basis: depositBasis,
 					deposit_value: depositValue,
@@ -145,6 +152,7 @@ function QuoteWorkspace({ organizationId }: { organizationId: string }) {
 					legalMentionTemplates={legalMentionTemplates.data?.data ?? []}
 					isLegalMentionTemplatesLoading={legalMentionTemplates.isLoading}
 					customerContextsQueryEnabled={Boolean(values.customerId)}
+					organizationContexts={organizationContexts.data?.data ?? []}
 					catalogItems={catalogItems}
 					quotes={quotes.data?.data ?? []}
 					quotesPagination={quotes.data?.pagination ?? null}
@@ -166,6 +174,7 @@ function QuoteWorkspace({ organizationId }: { organizationId: string }) {
 					}
 					error={
 						customers.error?.message ??
+						organizationContexts.error?.message ??
 						catalog.serviceRates.error?.message ??
 						catalog.products.error?.message ??
 						quotes.error?.message ??
@@ -215,6 +224,7 @@ interface QuoteWorkspaceWithValuesProps {
 	legalMentionTemplates: LegalMentionTemplate[]
 	isLegalMentionTemplatesLoading: boolean
 	customerContextsQueryEnabled: boolean
+	organizationContexts: OrganizationContext[]
 	catalogItems: CatalogItem[]
 	quotes: Quote[]
 	quotesPagination?: PaginationMetadata | null
@@ -249,6 +259,7 @@ function QuoteWorkspaceWithValues({
 	legalMentionTemplates,
 	isLegalMentionTemplatesLoading,
 	customerContextsQueryEnabled,
+	organizationContexts,
 	catalogItems,
 	quotes,
 	quotesPagination,
@@ -280,6 +291,9 @@ function QuoteWorkspaceWithValues({
 		}
 		if (patch.customerContextId !== undefined) {
 			form.setFieldValue('customerContextId', patch.customerContextId)
+		}
+		if (patch.emitterContextId !== undefined) {
+			form.setFieldValue('emitterContextId', patch.emitterContextId)
 		}
 		if (patch.legalMentionTemplateIds !== undefined) {
 			form.setFieldValue(
@@ -350,6 +364,7 @@ function QuoteWorkspaceWithValues({
 			legalMentionTemplates={legalMentionTemplates}
 			isLegalMentionTemplatesLoading={isLegalMentionTemplatesLoading}
 			customerContexts={customerContexts.data?.data ?? []}
+			organizationContexts={organizationContexts}
 			catalogItems={catalogItems}
 			quotes={quotes}
 			quotesPagination={quotesPagination}

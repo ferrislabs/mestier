@@ -22,6 +22,7 @@ export interface QuoteFormValues {
 	title: string
 	customerId: string
 	customerContextId: string
+	emitterContextId: string
 	legalMentionTemplateIds: string[]
 	lines: QuoteLineFormValues[]
 	depositBasis: string

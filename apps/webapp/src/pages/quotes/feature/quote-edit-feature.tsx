@@ -60,6 +60,10 @@ import {
 	useLegalMentionTemplates,
 } from '#/hooks/use-legal-mentions'
 import {
+	type OrganizationContext,
+	useOrganizationContexts,
+} from '#/hooks/use-organization-contexts'
+import {
 	type Quote,
 	type QuoteStatus,
 	useDeleteQuote,
@@ -143,6 +147,7 @@ function QuoteEditWorkspace({ quote }: { quote: Quote }) {
 		values.customerId,
 		Boolean(values.customerId),
 	)
+	const organizationContexts = useOrganizationContexts(quote.org_id)
 
 	useEffect(() => {
 		setStatus(quote.status)
@@ -236,6 +241,7 @@ function QuoteEditWorkspace({ quote }: { quote: Quote }) {
 	const error =
 		customers.error?.message ??
 		customerContexts.error?.message ??
+		organizationContexts.error?.message ??
 		catalog.serviceRates.error?.message ??
 		catalog.products.error?.message ??
 		updateQuote.error?.message ??
@@ -260,6 +266,7 @@ function QuoteEditWorkspace({ quote }: { quote: Quote }) {
 				title: values.title.trim(),
 				customer_id: values.customerId,
 				customer_context_id: values.customerContextId,
+				emitter_context_id: values.emitterContextId || null,
 				legal_mention_template_ids: values.legalMentionTemplateIds,
 				deposit_basis: depositBasis,
 				deposit_value: depositValue,
@@ -295,6 +302,9 @@ function QuoteEditWorkspace({ quote }: { quote: Quote }) {
 		})
 	}
 
+	const canConvert = quote.status === 'ACCEPTED' || quote.status === 'SENT'
+	const hasEmitter = Boolean(values.emitterContextId)
+
 	return (
 		<QuoteEditUI
 			quote={quote}
@@ -304,11 +314,13 @@ function QuoteEditWorkspace({ quote }: { quote: Quote }) {
 			legalMentionTemplates={legalMentionTemplates.data?.data ?? []}
 			isLegalMentionTemplatesLoading={legalMentionTemplates.isLoading}
 			customerContexts={customerContexts.data?.data ?? []}
+			organizationContexts={organizationContexts.data?.data ?? []}
 			catalogItems={catalogItems}
 			error={error}
 			isLoading={
 				customers.isLoading ||
 				customerContexts.isLoading ||
+				organizationContexts.isLoading ||
 				catalog.serviceRates.isLoading ||
 				catalog.products.isLoading
 			}
@@ -317,7 +329,8 @@ function QuoteEditWorkspace({ quote }: { quote: Quote }) {
 			isConverting={convertQuote.isPending}
 			isUploading={uploadFile.isPending}
 			canSave={canSave}
-			canConvert={quote.status === 'ACCEPTED' || quote.status === 'SENT'}
+			canConvert={canConvert}
+			hasEmitter={hasEmitter}
 			onChange={(patch) => {
 				if (patch.customerId !== undefined) {
 					updateValues({ customerId: patch.customerId, customerContextId: '' })
@@ -346,6 +359,7 @@ function QuoteEditUI({
 	legalMentionTemplates,
 	isLegalMentionTemplatesLoading,
 	customerContexts,
+	organizationContexts,
 	catalogItems,
 	error,
 	isLoading,
@@ -355,6 +369,7 @@ function QuoteEditUI({
 	isUploading,
 	canSave,
 	canConvert,
+	hasEmitter,
 	onChange,
 	onStatusChange,
 	onLineChange,
@@ -373,6 +388,7 @@ function QuoteEditUI({
 	legalMentionTemplates: LegalMentionTemplate[]
 	isLegalMentionTemplatesLoading: boolean
 	customerContexts: CustomerContext[]
+	organizationContexts: OrganizationContext[]
 	catalogItems: CatalogItem[]
 	error: string | null
 	isLoading: boolean
@@ -382,6 +398,7 @@ function QuoteEditUI({
 	isUploading: boolean
 	canSave: boolean
 	canConvert: boolean
+	hasEmitter: boolean
 	onChange: (patch: Partial<QuoteFormValues>) => void
 	onStatusChange: (status: QuoteStatus) => void
 	onLineChange: (index: number, patch: Partial<QuoteLineFormValues>) => void
@@ -459,7 +476,11 @@ function QuoteEditUI({
 										type="button"
 										variant="outline"
 										disabled={
-											!canConvert || isConverting || isSaving || isDeleting
+											!canConvert ||
+											!hasEmitter ||
+											isConverting ||
+											isSaving ||
+											isDeleting
 										}
 										onClick={() => void onConvert()}
 									>
@@ -473,9 +494,11 @@ function QuoteEditUI({
 								</span>
 							</TooltipTrigger>
 							<TooltipContent>
-								{canConvert
-									? 'Créer une facture brouillon à partir de ce devis.'
-									: 'Le devis doit être Envoyé ou Accepté pour être converti en facture.'}
+								{!hasEmitter
+									? 'Sélectionnez un contexte émetteur pour ce devis avant de le convertir.'
+									: canConvert
+										? 'Créer une facture brouillon à partir de ce devis.'
+										: 'Le devis doit être Envoyé ou Accepté pour être converti en facture.'}
 							</TooltipContent>
 						</Tooltip>
 						<Button
@@ -565,6 +588,28 @@ function QuoteEditUI({
 												value={customerContext.id}
 											>
 												{customerContextDisplayName(customerContext)}
+											</SelectItem>
+										))}
+									</SelectContent>
+								</Select>
+							</FieldBlock>
+							<FieldBlock label="Émetteur">
+								<Select
+									value={values.emitterContextId || '__none__'}
+									onValueChange={(value) =>
+										onChange({
+											emitterContextId: value === '__none__' ? '' : value,
+										})
+									}
+								>
+									<SelectTrigger className="w-full">
+										<SelectValue placeholder="— Aucun —" />
+									</SelectTrigger>
+									<SelectContent>
+										<SelectItem value="__none__">— Aucun —</SelectItem>
+										{organizationContexts.map((ctx) => (
+											<SelectItem key={ctx.id} value={ctx.id}>
+												{ctx.label}
 											</SelectItem>
 										))}
 									</SelectContent>
@@ -933,6 +978,7 @@ function quoteToForm(
 		title: quote.title,
 		customerId: quote.customer_id,
 		customerContextId: quote.customer_context_id,
+		emitterContextId: quote.emitter_context_id ?? '',
 		legalMentionTemplateIds: quote.legal_mention_template_ids ?? [],
 		lines: lines.length ? lines : [emptyQuoteLine()],
 		depositBasis: quote.deposit_basis ?? '',
