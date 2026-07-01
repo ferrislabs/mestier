@@ -14,7 +14,7 @@ use crate::{paths::InvoiceDepositPath, require_invoice_membership, response::Inv
 pub struct CreateDepositInvoiceRequest {
 	/// "PERCENT" or "FIXED"
 	pub basis: String,
-	/// Decimal string — percentage (e.g. "30") or fixed amount in cents (e.g. "50000")
+	/// Decimal string — percentage (e.g. "30") or fixed amount in euros (e.g. "500")
 	pub value: String,
 }
 

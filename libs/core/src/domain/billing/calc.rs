@@ -95,9 +95,8 @@ pub fn resolve_deposit(total_ttc_cents: i64, basis: DepositBasis, value: Decimal
             let amount = Decimal::from(total_ttc_cents) * value / Decimal::from(100u32);
             round_to_i64(amount)
         }
-        DepositBasis::Fixed => {
-            round_to_i64(value)
-        }
+        // Fixed value is entered in euros (like the UI); convert to cents.
+        DepositBasis::Fixed => round_to_i64(value * Decimal::from(100u32)),
     };
     raw.clamp(0, total_ttc_cents)
 }
@@ -221,8 +220,16 @@ mod tests {
 
     #[test]
     fn resolve_deposit_fixed() {
-        let result = resolve_deposit(120000, DepositBasis::Fixed, dec("50000"));
+        // 500 € fixed → 50000 cents
+        let result = resolve_deposit(120000, DepositBasis::Fixed, dec("500"));
         assert_eq!(result, 50000);
+    }
+
+    #[test]
+    fn resolve_deposit_fixed_clamps_above_total() {
+        // 2000 € on a 1200 € invoice clamps to the total (120000 cents)
+        let result = resolve_deposit(120000, DepositBasis::Fixed, dec("2000"));
+        assert_eq!(result, 120000);
     }
 
     #[test]
