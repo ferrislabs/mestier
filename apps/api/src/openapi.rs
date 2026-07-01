@@ -6,6 +6,7 @@ use utoipa::{
 use handlers_customer as customer;
 use handlers_discord as discord;
 use handlers_files as files;
+use handlers_invoice as invoice;
 use handlers_organization as organization;
 use handlers_quote as quote;
 use handlers_reference as reference;
@@ -53,6 +54,12 @@ impl Modify for SecurityAddon {
         organization::get_one::handler,
         organization::update::handler,
         organization::soft_delete::handler,
+        invoice::invoice::create::handler,
+        invoice::invoice::list::handler,
+        invoice::invoice::get_one::handler,
+        invoice::invoice::update::handler,
+        invoice::invoice::update_status::handler,
+        invoice::invoice::soft_delete::handler,
         quote::quote::create::handler,
         quote::quote::list::handler,
         quote::quote::get_one::handler,
@@ -138,6 +145,12 @@ impl Modify for SecurityAddon {
         customer::response::CustomerResponse,
         customer::response::CustomerContactResponse,
         customer::response::CustomerContextResponse,
+        invoice::invoice::create::CreateInvoiceRequest,
+        invoice::invoice::create::InvoiceLineRequest,
+        invoice::invoice::update::UpdateInvoiceRequest,
+        invoice::invoice::update_status::UpdateInvoiceStatusRequest,
+        invoice::response::InvoiceLineResponse,
+        invoice::response::InvoiceResponse,
         quote::quote::create::CreateQuoteRequest,
         quote::quote::create::QuoteLineRequest,
         quote::quote::update::UpdateQuoteRequest,
@@ -193,6 +206,7 @@ impl Modify for SecurityAddon {
         (name = "organizations", description = "Organizations management"),
         (name = "files", description = "File uploads and storage"),
         (name = "customers", description = "Customers and customer contexts management"),
+        (name = "invoices", description = "Invoices and invoice lines management"),
         (name = "quotes", description = "Quotes and quote lines management"),
         (name = "reference", description = "Reference cost catalog"),
         (name = "discord", description = "Chat — categories, channels, threads, messages, reactions, webhooks, presence, typing, read states, channel permission overwrites, notifications"),

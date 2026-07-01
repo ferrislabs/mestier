@@ -111,6 +111,7 @@ dependencies = [
  "handlers-customer",
  "handlers-discord",
  "handlers-files",
+ "handlers-invoice",
  "handlers-organization",
  "handlers-quote",
  "handlers-reference",
@@ -2251,6 +2252,24 @@ dependencies = [
  "serde",
  "tracing",
  "utoipa",
+]
+
+[[package]]
+name = "handlers-invoice"
+version = "0.1.0"
+dependencies = [
+ "auth",
+ "axum",
+ "axum-extra",
+ "chrono",
+ "handlers",
+ "http 1.4.0",
+ "mestier-core",
+ "rust_decimal",
+ "serde",
+ "tracing",
+ "utoipa",
+ "uuid",
 ]
 
 [[package]]
