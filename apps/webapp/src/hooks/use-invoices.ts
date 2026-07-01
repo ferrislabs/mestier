@@ -96,7 +96,7 @@ export function useUpdateInvoice(invoiceId: string) {
 			await Promise.all([
 				queryClient.invalidateQueries({
 					predicate: (query) =>
-						isInvoiceListQuery(query.queryKey, invoice.data.organization_id),
+						isInvoiceListQuery(query.queryKey, invoice.data.org_id),
 				}),
 				queryClient.invalidateQueries({
 					queryKey: invoiceKey(invoiceId),
@@ -116,7 +116,7 @@ export function useUpdateInvoiceStatus(invoiceId: string) {
 			await Promise.all([
 				queryClient.invalidateQueries({
 					predicate: (query) =>
-						isInvoiceListQuery(query.queryKey, invoice.data.organization_id),
+						isInvoiceListQuery(query.queryKey, invoice.data.org_id),
 				}),
 				queryClient.invalidateQueries({
 					queryKey: invoiceKey(invoiceId),
@@ -163,7 +163,7 @@ export function useConvertQuoteToInvoice() {
 			await Promise.all([
 				queryClient.invalidateQueries({
 					predicate: (query) =>
-						isInvoiceListQuery(query.queryKey, invoice.data.organization_id),
+						isInvoiceListQuery(query.queryKey, invoice.data.org_id),
 				}),
 				queryClient.invalidateQueries({
 					queryKey: invoiceKey(invoice.data.id),
@@ -183,7 +183,7 @@ export function useCreateDepositInvoice() {
 			await Promise.all([
 				queryClient.invalidateQueries({
 					predicate: (query) =>
-						isInvoiceListQuery(query.queryKey, invoice.data.organization_id),
+						isInvoiceListQuery(query.queryKey, invoice.data.org_id),
 				}),
 				queryClient.invalidateQueries({
 					queryKey: invoiceKey(invoice.data.id),
@@ -203,7 +203,7 @@ export function useCreateBalanceInvoice() {
 			await Promise.all([
 				queryClient.invalidateQueries({
 					predicate: (query) =>
-						isInvoiceListQuery(query.queryKey, invoice.data.organization_id),
+						isInvoiceListQuery(query.queryKey, invoice.data.org_id),
 				}),
 				queryClient.invalidateQueries({
 					queryKey: invoiceKey(invoice.data.id),
@@ -222,7 +222,7 @@ export function useIssueInvoice(invoiceId: string) {
 			await Promise.all([
 				queryClient.invalidateQueries({
 					predicate: (query) =>
-						isInvoiceListQuery(query.queryKey, invoice.data.organization_id),
+						isInvoiceListQuery(query.queryKey, invoice.data.org_id),
 				}),
 				queryClient.invalidateQueries({
 					queryKey: invoiceKey(invoiceId),

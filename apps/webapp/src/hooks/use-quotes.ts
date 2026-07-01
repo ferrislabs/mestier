@@ -95,7 +95,7 @@ export function useUpdateQuote() {
 			await Promise.all([
 				queryClient.invalidateQueries({
 					predicate: (query) =>
-						isQuoteListQuery(query.queryKey, quote.data.organization_id),
+						isQuoteListQuery(query.queryKey, quote.data.org_id),
 				}),
 				queryClient.invalidateQueries({
 					queryKey: quoteKey(quote.data.id),

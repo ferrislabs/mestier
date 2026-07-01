@@ -139,12 +139,10 @@ export function InvoiceEditFeature({ invoiceId }: InvoiceEditFeatureProps) {
 function InvoiceEditWorkspace({ invoice }: { invoice: Invoice }) {
 	const navigate = useNavigate()
 	const { activeOrganization } = useActiveOrganization()
-	const customers = useCustomers(invoice.organization_id)
-	const legalMentionTemplates = useLegalMentionTemplates(
-		invoice.organization_id,
-	)
-	const billingSettings = useBillingSettings(invoice.organization_id)
-	const catalog = useReferenceCatalog(invoice.organization_id, {
+	const customers = useCustomers(invoice.org_id)
+	const legalMentionTemplates = useLegalMentionTemplates(invoice.org_id)
+	const billingSettings = useBillingSettings(invoice.org_id)
+	const catalog = useReferenceCatalog(invoice.org_id, {
 		employees: false,
 		equipment: false,
 	})
@@ -159,7 +157,7 @@ function InvoiceEditWorkspace({ invoice }: { invoice: Invoice }) {
 	const catalogItems = useCatalogItems(serviceRates, products)
 	const updateInvoice = useUpdateInvoice(invoice.id)
 	const updateInvoiceStatus = useUpdateInvoiceStatus(invoice.id)
-	const deleteInvoice = useDeleteInvoice(invoice.organization_id)
+	const deleteInvoice = useDeleteInvoice(invoice.org_id)
 	const createDepositInvoice = useCreateDepositInvoice()
 	const createBalanceInvoice = useCreateBalanceInvoice()
 	const issueInvoice = useIssueInvoice(invoice.id)

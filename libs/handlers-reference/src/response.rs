@@ -12,7 +12,7 @@ use utoipa::ToSchema;
 #[derive(Debug, Clone, PartialEq, Serialize, ToSchema)]
 pub struct EmployeeResponse {
     pub id: EmployeeId,
-    pub organization_id: OrganizationId,
+    pub org_id: OrganizationId,
     pub user_id: Option<UserId>,
     pub name: String,
     pub hourly_rate_cents: i32,
@@ -24,7 +24,7 @@ impl From<Employee> for EmployeeResponse {
     fn from(value: Employee) -> Self {
         Self {
             id: value.id,
-            organization_id: value.organization_id,
+            org_id: value.organization_id,
             user_id: value.user_id,
             name: value.name,
             hourly_rate_cents: value.hourly_rate_cents,
@@ -37,7 +37,7 @@ impl From<Employee> for EmployeeResponse {
 #[derive(Debug, Clone, PartialEq, Serialize, ToSchema)]
 pub struct EquipmentResponse {
     pub id: EquipmentId,
-    pub organization_id: OrganizationId,
+    pub org_id: OrganizationId,
     pub name: String,
     pub hourly_rate_cents: i32,
     pub created_at: DateTime<Utc>,
@@ -48,7 +48,7 @@ impl From<Equipment> for EquipmentResponse {
     fn from(value: Equipment) -> Self {
         Self {
             id: value.id,
-            organization_id: value.organization_id,
+            org_id: value.organization_id,
             name: value.name,
             hourly_rate_cents: value.hourly_rate_cents,
             created_at: value.created_at,
@@ -60,7 +60,7 @@ impl From<Equipment> for EquipmentResponse {
 #[derive(Debug, Clone, PartialEq, Serialize, ToSchema)]
 pub struct ServiceRateResponse {
     pub id: ServiceRateId,
-    pub organization_id: OrganizationId,
+    pub org_id: OrganizationId,
     pub label: String,
     pub unit: ServiceRateUnit,
     pub rate_cents: i32,
@@ -74,7 +74,7 @@ impl From<ServiceRate> for ServiceRateResponse {
     fn from(value: ServiceRate) -> Self {
         Self {
             id: value.id,
-            organization_id: value.organization_id,
+            org_id: value.organization_id,
             label: value.label,
             unit: value.unit,
             rate_cents: value.rate_cents,
@@ -89,7 +89,7 @@ impl From<ServiceRate> for ServiceRateResponse {
 #[derive(Debug, Clone, PartialEq, Serialize, ToSchema)]
 pub struct ProductResponse {
     pub id: ProductId,
-    pub organization_id: OrganizationId,
+    pub org_id: OrganizationId,
     pub name: String,
     pub sku: Option<String>,
     pub unit: ServiceRateUnit,
@@ -105,7 +105,7 @@ impl From<Product> for ProductResponse {
     fn from(value: Product) -> Self {
         Self {
             id: value.id,
-            organization_id: value.organization_id,
+            org_id: value.organization_id,
             name: value.name,
             sku: value.sku,
             unit: value.unit,

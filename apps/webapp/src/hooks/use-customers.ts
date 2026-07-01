@@ -149,7 +149,7 @@ export function useUpdateCustomer() {
 			await Promise.all([
 				queryClient.invalidateQueries({
 					predicate: (query) =>
-						isCustomerListQuery(query.queryKey, customer.organization_id),
+						isCustomerListQuery(query.queryKey, customer.org_id),
 				}),
 				queryClient.invalidateQueries({
 					queryKey: customerKey(customer.id),

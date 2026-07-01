@@ -536,7 +536,7 @@ export function CustomerListUI({
 									</div>
 
 									<span className="hidden items-center rounded-md border bg-card px-2 py-1 text-[11px] font-medium text-muted-foreground lg:inline-flex">
-										{c.organization_id}
+										{c.org_id}
 									</span>
 								</button>
 

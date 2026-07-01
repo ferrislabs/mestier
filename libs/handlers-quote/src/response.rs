@@ -9,7 +9,7 @@ use utoipa::ToSchema;
 #[derive(Debug, Clone, PartialEq, Serialize, ToSchema)]
 pub struct QuoteLineResponse {
     pub id: QuoteLineId,
-    pub organization_id: OrganizationId,
+    pub org_id: OrganizationId,
     pub quote_id: QuoteId,
     pub service_rate_id: Option<ServiceRateId>,
     pub label: String,
@@ -27,7 +27,7 @@ impl From<QuoteLine> for QuoteLineResponse {
     fn from(value: QuoteLine) -> Self {
         Self {
             id: value.id,
-            organization_id: value.organization_id,
+            org_id: value.organization_id,
             quote_id: value.quote_id,
             service_rate_id: value.service_rate_id,
             label: value.label,
@@ -46,7 +46,7 @@ impl From<QuoteLine> for QuoteLineResponse {
 #[derive(Debug, Clone, PartialEq, Serialize, ToSchema)]
 pub struct QuoteResponse {
     pub id: QuoteId,
-    pub organization_id: OrganizationId,
+    pub org_id: OrganizationId,
     pub reference: String,
     pub title: String,
     pub customer_id: CustomerId,
@@ -68,7 +68,7 @@ impl From<Quote> for QuoteResponse {
     fn from(value: Quote) -> Self {
         Self {
             id: value.id,
-            organization_id: value.organization_id,
+            org_id: value.organization_id,
             reference: value.reference,
             title: value.title,
             customer_id: value.customer_id,

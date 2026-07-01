@@ -9,7 +9,7 @@ use utoipa::ToSchema;
 #[derive(Debug, Clone, PartialEq, Serialize, ToSchema)]
 pub struct CustomerResponse {
     pub id: CustomerId,
-    pub organization_id: OrganizationId,
+    pub org_id: OrganizationId,
     pub status: CustomerStatus,
     pub pipeline_stage: CustomerPipelineStage,
     pub last_name: String,
@@ -24,7 +24,7 @@ impl From<Customer> for CustomerResponse {
     fn from(value: Customer) -> Self {
         Self {
             id: value.id,
-            organization_id: value.organization_id,
+            org_id: value.organization_id,
             status: value.status,
             pipeline_stage: value.pipeline_stage,
             last_name: value.last_name,

@@ -97,7 +97,7 @@ export namespace Schemas {
     first_name: string;
     id: CustomerId;
     last_name: string;
-    organization_id: OrganizationId;
+    org_id: OrganizationId;
     phone?: (string | null) | undefined;
     pipeline_stage: CustomerPipelineStage;
     status: CustomerStatus;
@@ -109,7 +109,7 @@ export namespace Schemas {
     hourly_rate_cents: number;
     id: EmployeeId;
     name: string;
-    organization_id: OrganizationId;
+    org_id: OrganizationId;
     updated_at: string;
     user_id?: (null | UserId) | undefined;
   };
@@ -119,7 +119,7 @@ export namespace Schemas {
     hourly_rate_cents: number;
     id: EquipmentId;
     name: string;
-    organization_id: OrganizationId;
+    org_id: OrganizationId;
     updated_at: string;
   };
   export type FileUploadResponse = { key: string; mime_type: string; size_bytes: number };
@@ -148,7 +148,7 @@ export namespace Schemas {
     description?: (string | null) | undefined;
     id: ProductId;
     name: string;
-    organization_id: OrganizationId;
+    org_id: OrganizationId;
     sku?: (string | null) | undefined;
     unit: ServiceRateUnit;
     unit_price_cents: number;
@@ -162,7 +162,7 @@ export namespace Schemas {
     id: QuoteLineId;
     label: string;
     notes?: (string | null) | undefined;
-    organization_id: OrganizationId;
+    org_id: OrganizationId;
     photo_keys: Array<string>;
     quantity: string;
     quote_id: QuoteId;
@@ -182,7 +182,7 @@ export namespace Schemas {
     id: QuoteId;
     legal_mention_template_ids: string[];
     lines: Array<QuoteLineResponse>;
-    organization_id: OrganizationId;
+    org_id: OrganizationId;
     reference: string;
     status: QuoteStatus;
     title: string;
@@ -197,7 +197,7 @@ export namespace Schemas {
     custom_fields: Record<string, string>;
     id: ServiceRateId;
     label: string;
-    organization_id: OrganizationId;
+    org_id: OrganizationId;
     rate_cents: number;
     unit: ServiceRateUnit;
     updated_at: string;
@@ -302,7 +302,7 @@ export namespace Schemas {
     invoice_id: InvoiceId;
     label: string;
     notes?: (string | null) | undefined;
-    organization_id: OrganizationId;
+    org_id: OrganizationId;
     photo_keys: Array<string>;
     quantity: string;
     service_rate_id?: (null | ServiceRateId) | undefined;
@@ -325,7 +325,7 @@ export namespace Schemas {
     issued_at?: (string | null) | undefined;
     legal_mention_template_ids: string[];
     lines: Array<InvoiceLineResponse>;
-    organization_id: OrganizationId;
+    org_id: OrganizationId;
     parent_invoice_id?: (null | InvoiceId) | undefined;
     pdf_key?: (string | null) | undefined;
     reference?: (string | null) | undefined;
@@ -538,7 +538,7 @@ export namespace Endpoints {
           first_name: string;
           id: Schemas.CustomerId;
           last_name: string;
-          organization_id: Schemas.OrganizationId;
+          org_id: Schemas.OrganizationId;
           phone?: (string | null) | undefined;
           pipeline_stage: Schemas.CustomerPipelineStage;
           status: Schemas.CustomerStatus;
@@ -577,7 +577,7 @@ export namespace Endpoints {
           first_name: string;
           id: Schemas.CustomerId;
           last_name: string;
-          organization_id: Schemas.OrganizationId;
+          org_id: Schemas.OrganizationId;
           phone?: (string | null) | undefined;
           pipeline_stage: Schemas.CustomerPipelineStage;
           status: Schemas.CustomerStatus;
@@ -726,7 +726,7 @@ export namespace Endpoints {
           hourly_rate_cents: number;
           id: Schemas.EmployeeId;
           name: string;
-          organization_id: Schemas.OrganizationId;
+          org_id: Schemas.OrganizationId;
           updated_at: string;
           user_id?: (null | Schemas.UserId) | undefined;
         };
@@ -762,7 +762,7 @@ export namespace Endpoints {
           hourly_rate_cents: number;
           id: Schemas.EmployeeId;
           name: string;
-          organization_id: Schemas.OrganizationId;
+          org_id: Schemas.OrganizationId;
           updated_at: string;
           user_id?: (null | Schemas.UserId) | undefined;
         };
@@ -789,7 +789,7 @@ export namespace Endpoints {
           hourly_rate_cents: number;
           id: Schemas.EquipmentId;
           name: string;
-          organization_id: Schemas.OrganizationId;
+          org_id: Schemas.OrganizationId;
           updated_at: string;
         };
         pagination?: (null | Schemas.PaginationMetadata) | undefined;
@@ -824,7 +824,7 @@ export namespace Endpoints {
           hourly_rate_cents: number;
           id: Schemas.EquipmentId;
           name: string;
-          organization_id: Schemas.OrganizationId;
+          org_id: Schemas.OrganizationId;
           updated_at: string;
         };
         pagination?: (null | Schemas.PaginationMetadata) | undefined;
@@ -977,7 +977,7 @@ export namespace Endpoints {
           first_name: string;
           id: Schemas.CustomerId;
           last_name: string;
-          organization_id: Schemas.OrganizationId;
+          org_id: Schemas.OrganizationId;
           phone?: (string | null) | undefined;
           pipeline_stage: Schemas.CustomerPipelineStage;
           status: Schemas.CustomerStatus;
@@ -1006,7 +1006,7 @@ export namespace Endpoints {
           first_name: string;
           id: Schemas.CustomerId;
           last_name: string;
-          organization_id: Schemas.OrganizationId;
+          org_id: Schemas.OrganizationId;
           phone?: (string | null) | undefined;
           pipeline_stage: Schemas.CustomerPipelineStage;
           status: Schemas.CustomerStatus;
@@ -1035,7 +1035,7 @@ export namespace Endpoints {
           hourly_rate_cents: number;
           id: Schemas.EmployeeId;
           name: string;
-          organization_id: Schemas.OrganizationId;
+          org_id: Schemas.OrganizationId;
           updated_at: string;
           user_id?: (null | Schemas.UserId) | undefined;
         }>;
@@ -1061,7 +1061,7 @@ export namespace Endpoints {
           hourly_rate_cents: number;
           id: Schemas.EmployeeId;
           name: string;
-          organization_id: Schemas.OrganizationId;
+          org_id: Schemas.OrganizationId;
           updated_at: string;
           user_id?: (null | Schemas.UserId) | undefined;
         };
@@ -1088,7 +1088,7 @@ export namespace Endpoints {
           hourly_rate_cents: number;
           id: Schemas.EquipmentId;
           name: string;
-          organization_id: Schemas.OrganizationId;
+          org_id: Schemas.OrganizationId;
           updated_at: string;
         }>;
         pagination?: (null | Schemas.PaginationMetadata) | undefined;
@@ -1113,7 +1113,7 @@ export namespace Endpoints {
           hourly_rate_cents: number;
           id: Schemas.EquipmentId;
           name: string;
-          organization_id: Schemas.OrganizationId;
+          org_id: Schemas.OrganizationId;
           updated_at: string;
         };
         pagination?: (null | Schemas.PaginationMetadata) | undefined;
@@ -1139,7 +1139,7 @@ export namespace Endpoints {
           description?: (string | null) | undefined;
           id: Schemas.ProductId;
           name: string;
-          organization_id: Schemas.OrganizationId;
+          org_id: Schemas.OrganizationId;
           sku?: (string | null) | undefined;
           unit: Schemas.ServiceRateUnit;
           unit_price_cents: number;
@@ -1167,7 +1167,7 @@ export namespace Endpoints {
           description?: (string | null) | undefined;
           id: Schemas.ProductId;
           name: string;
-          organization_id: Schemas.OrganizationId;
+          org_id: Schemas.OrganizationId;
           sku?: (string | null) | undefined;
           unit: Schemas.ServiceRateUnit;
           unit_price_cents: number;
@@ -1197,7 +1197,7 @@ export namespace Endpoints {
           customer_id: Schemas.CustomerId;
           id: Schemas.QuoteId;
           lines: Array<Schemas.QuoteLineResponse>;
-          organization_id: Schemas.OrganizationId;
+          org_id: Schemas.OrganizationId;
           reference: string;
           status: Schemas.QuoteStatus;
           title: string;
@@ -1227,7 +1227,7 @@ export namespace Endpoints {
           customer_id: Schemas.CustomerId;
           id: Schemas.QuoteId;
           lines: Array<Schemas.QuoteLineResponse>;
-          organization_id: Schemas.OrganizationId;
+          org_id: Schemas.OrganizationId;
           reference: string;
           status: Schemas.QuoteStatus;
           title: string;
@@ -1256,7 +1256,7 @@ export namespace Endpoints {
           created_at: string;
           id: Schemas.ServiceRateId;
           label: string;
-          organization_id: Schemas.OrganizationId;
+          org_id: Schemas.OrganizationId;
           rate_cents: number;
           unit: Schemas.ServiceRateUnit;
           updated_at: string;
@@ -1282,7 +1282,7 @@ export namespace Endpoints {
           created_at: string;
           id: Schemas.ServiceRateId;
           label: string;
-          organization_id: Schemas.OrganizationId;
+          org_id: Schemas.OrganizationId;
           rate_cents: number;
           unit: Schemas.ServiceRateUnit;
           updated_at: string;
@@ -1309,7 +1309,7 @@ export namespace Endpoints {
           description?: (string | null) | undefined;
           id: Schemas.ProductId;
           name: string;
-          organization_id: Schemas.OrganizationId;
+          org_id: Schemas.OrganizationId;
           sku?: (string | null) | undefined;
           unit: Schemas.ServiceRateUnit;
           unit_price_cents: number;
@@ -1347,7 +1347,7 @@ export namespace Endpoints {
           description?: (string | null) | undefined;
           id: Schemas.ProductId;
           name: string;
-          organization_id: Schemas.OrganizationId;
+          org_id: Schemas.OrganizationId;
           sku?: (string | null) | undefined;
           unit: Schemas.ServiceRateUnit;
           unit_price_cents: number;
@@ -1377,7 +1377,7 @@ export namespace Endpoints {
           customer_id: Schemas.CustomerId;
           id: Schemas.QuoteId;
           lines: Array<Schemas.QuoteLineResponse>;
-          organization_id: Schemas.OrganizationId;
+          org_id: Schemas.OrganizationId;
           reference: string;
           status: Schemas.QuoteStatus;
           title: string;
@@ -1417,7 +1417,7 @@ export namespace Endpoints {
           customer_id: Schemas.CustomerId;
           id: Schemas.QuoteId;
           lines: Array<Schemas.QuoteLineResponse>;
-          organization_id: Schemas.OrganizationId;
+          org_id: Schemas.OrganizationId;
           reference: string;
           status: Schemas.QuoteStatus;
           title: string;
@@ -1459,7 +1459,7 @@ export namespace Endpoints {
           customer_id: Schemas.CustomerId;
           id: Schemas.QuoteId;
           lines: Array<Schemas.QuoteLineResponse>;
-          organization_id: Schemas.OrganizationId;
+          org_id: Schemas.OrganizationId;
           reference: string;
           status: Schemas.QuoteStatus;
           title: string;
@@ -1487,7 +1487,7 @@ export namespace Endpoints {
           created_at: string;
           id: Schemas.ServiceRateId;
           label: string;
-          organization_id: Schemas.OrganizationId;
+          org_id: Schemas.OrganizationId;
           rate_cents: number;
           unit: Schemas.ServiceRateUnit;
           updated_at: string;
@@ -1523,7 +1523,7 @@ export namespace Endpoints {
           created_at: string;
           id: Schemas.ServiceRateId;
           label: string;
-          organization_id: Schemas.OrganizationId;
+          org_id: Schemas.OrganizationId;
           rate_cents: number;
           unit: Schemas.ServiceRateUnit;
           updated_at: string;

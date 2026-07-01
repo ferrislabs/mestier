@@ -9,7 +9,7 @@ use utoipa::ToSchema;
 #[derive(Debug, Clone, PartialEq, Serialize, ToSchema)]
 pub struct InvoiceLineResponse {
 	pub id: InvoiceLineId,
-	pub organization_id: OrganizationId,
+	pub org_id: OrganizationId,
 	pub invoice_id: InvoiceId,
 	pub service_rate_id: Option<ServiceRateId>,
 	pub label: String,
@@ -27,7 +27,7 @@ impl From<InvoiceLine> for InvoiceLineResponse {
 	fn from(value: InvoiceLine) -> Self {
 		Self {
 			id: value.id,
-			organization_id: value.org_id,
+			org_id: value.org_id,
 			invoice_id: value.invoice_id,
 			service_rate_id: value.service_rate_id,
 			label: value.label,
@@ -46,7 +46,7 @@ impl From<InvoiceLine> for InvoiceLineResponse {
 #[derive(Debug, Clone, PartialEq, Serialize, ToSchema)]
 pub struct InvoiceResponse {
 	pub id: InvoiceId,
-	pub organization_id: OrganizationId,
+	pub org_id: OrganizationId,
 	pub customer_id: CustomerId,
 	pub customer_context_id: CustomerContextId,
 	pub reference: Option<String>,
@@ -76,7 +76,7 @@ impl From<Invoice> for InvoiceResponse {
 	fn from(value: Invoice) -> Self {
 		Self {
 			id: value.id,
-			organization_id: value.org_id,
+			org_id: value.org_id,
 			customer_id: value.customer_id,
 			customer_context_id: value.customer_context_id,
 			reference: value.reference,

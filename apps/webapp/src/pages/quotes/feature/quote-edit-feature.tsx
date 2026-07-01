@@ -111,9 +111,9 @@ export function QuoteEditFeature({ quoteId }: QuoteEditFeatureProps) {
 
 function QuoteEditWorkspace({ quote }: { quote: Quote }) {
 	const navigate = useNavigate()
-	const customers = useCustomers(quote.organization_id)
-	const legalMentionTemplates = useLegalMentionTemplates(quote.organization_id)
-	const catalog = useReferenceCatalog(quote.organization_id, {
+	const customers = useCustomers(quote.org_id)
+	const legalMentionTemplates = useLegalMentionTemplates(quote.org_id)
+	const catalog = useReferenceCatalog(quote.org_id, {
 		employees: false,
 		equipment: false,
 	})
@@ -127,7 +127,7 @@ function QuoteEditWorkspace({ quote }: { quote: Quote }) {
 	)
 	const catalogItems = useCatalogItems(serviceRates, products)
 	const updateQuote = useUpdateQuote()
-	const deleteQuote = useDeleteQuote(quote.organization_id)
+	const deleteQuote = useDeleteQuote(quote.org_id)
 	const convertQuote = useConvertQuoteToInvoice()
 	const uploadFile = useUploadFile()
 	const [status, setStatus] = useState<QuoteStatus>(quote.status)
