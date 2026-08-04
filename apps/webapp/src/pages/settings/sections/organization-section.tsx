@@ -1,5 +1,5 @@
 import { useForm } from '@tanstack/react-form'
-import { Building2, Loader2, Save } from 'lucide-react'
+import { AlertCircle, Building2, Loader2, Save } from 'lucide-react'
 import { Button } from '#/components/ui/button'
 import {
 	SectionCard,
@@ -7,12 +7,47 @@ import {
 	StatusBadge,
 } from '#/components/ui/surface'
 import { useActiveOrganization } from '#/hooks/use-active-organization'
-import { useUpdateOrganization } from '#/hooks/use-organizations'
+import {
+	type Organization,
+	useUpdateOrganization,
+} from '#/hooks/use-organizations'
 import type { OrganizationFormValues } from '#/pages/settings/types'
 import { type FormBinding, TextField } from '#/pages/settings/ui/primitives'
 
 export function OrganizationSection() {
-	const { activeOrganization: organization } = useActiveOrganization()
+	const { activeOrganization } = useActiveOrganization()
+
+	if (!activeOrganization) {
+		return (
+			<div className="flex flex-col items-center justify-center gap-3 p-12 text-center">
+				<div className="flex size-14 items-center justify-center rounded-lg border bg-card">
+					<AlertCircle className="size-6 text-destructive" />
+				</div>
+				<div>
+					<p className="font-semibold">Organisation indisponible</p>
+					<p className="text-sm text-muted-foreground">
+						La fiche d’organisation nécessite une organisation active.
+					</p>
+				</div>
+			</div>
+		)
+	}
+
+	return (
+		<OrganizationSectionContent
+			key={activeOrganization.id}
+			organization={activeOrganization}
+		/>
+	)
+}
+
+interface OrganizationSectionContentProps {
+	organization: Organization
+}
+
+function OrganizationSectionContent({
+	organization,
+}: OrganizationSectionContentProps) {
 	const organizationId = organization.id
 	const updateOrganization = useUpdateOrganization(organizationId)
 
