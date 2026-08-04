@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { buildBreadcrumbItems } from '#/modules/breadcrumb'
+import type { NavItem } from '#/components/nav-main'
+import { buildBreadcrumbItems, matchingNavItems } from '#/modules/breadcrumb'
 
 function labelsOf(pathname: string, detailLabel?: string): string[] {
 	return buildBreadcrumbItems({
@@ -44,5 +45,30 @@ describe('buildBreadcrumbItems', () => {
 		expect(items[0]?.to).toBe('/')
 		expect(items[1]?.to).toBe('/customers')
 		expect(items[2]?.to).toBeUndefined()
+	})
+})
+
+describe('matchingNavItems', () => {
+	it("trie du plus court au plus long, quel que soit l'ordre d'entrée", () => {
+		const items: NavItem[] = [
+			{ title: 'C', to: '/a/b/c' },
+			{ title: 'B', to: '/a/b' },
+			{ title: 'A', to: '/a' },
+		]
+
+		const result = matchingNavItems(items, '/none', '/a/b/c')
+
+		expect(result.map((item) => item.title)).toEqual(['A', 'B', 'C'])
+	})
+
+	it('exclut une entrée désactivée même si elle correspondrait sinon', () => {
+		const items: NavItem[] = [
+			{ title: 'A', to: '/a', disabled: true },
+			{ title: 'B', to: '/a/b' },
+		]
+
+		const result = matchingNavItems(items, '/none', '/a/b')
+
+		expect(result.map((item) => item.title)).toEqual(['B'])
 	})
 })

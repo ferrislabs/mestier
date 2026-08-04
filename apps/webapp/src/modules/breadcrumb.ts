@@ -48,7 +48,7 @@ export function buildBreadcrumbItems({
 	return items
 }
 
-function matchingNavItems(
+export function matchingNavItems(
 	items: NavItem[],
 	basePath: string,
 	pathname: string,
