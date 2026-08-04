@@ -77,7 +77,7 @@ export function CustomerEditFeature({ customerId }: CustomerEditFeatureProps) {
 					</p>
 				</div>
 				<Button asChild variant="outline">
-					<Link to="/customers">Retour aux clients</Link>
+					<Link to="/crm/customers">Retour aux clients</Link>
 				</Button>
 			</div>
 		)

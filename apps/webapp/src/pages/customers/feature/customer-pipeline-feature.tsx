@@ -71,7 +71,7 @@ function CustomerPipeline({ organizationId }: { organizationId: string }) {
 			onMovePipelineStage={movePipelineStage}
 			onOpenCustomer={(customer) =>
 				void navigate({
-					to: '/customers/$customerId',
+					to: '/crm/customers/$customerId',
 					params: { customerId: customer.id },
 				})
 			}

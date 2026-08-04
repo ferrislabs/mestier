@@ -9,8 +9,14 @@ function titlesOf(pathname: string): string[] {
 
 describe('buildSidebarGroups', () => {
 	it('expose la nav du module courant', () => {
-		expect(titlesOf('/')).toContain('Accueil')
-		expect(titlesOf('/')).toContain('Clients')
+		expect(titlesOf('/')).toEqual([
+			'Accueil',
+			'Paramètres',
+			'Intégrations',
+			'Permissions',
+		])
+		expect(titlesOf('/crm/customers')).toContain('Clients')
+		expect(titlesOf('/crm/customers')).toContain('Pipeline')
 	})
 
 	it('ajoute les groupes globaux à tous les modules', () => {
@@ -20,6 +26,6 @@ describe('buildSidebarGroups', () => {
 
 	it('place les groupes du module avant les groupes globaux', () => {
 		const labels = buildSidebarGroups('/').map((group) => group.label)
-		expect(labels).toEqual(['Activité', 'Configuration', 'Sécurité'])
+		expect(labels).toEqual(['Activité', 'Configuration'])
 	})
 })

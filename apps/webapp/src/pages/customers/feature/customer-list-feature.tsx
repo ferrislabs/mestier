@@ -49,7 +49,7 @@ function CustomerList({ organizationId }: { organizationId: string }) {
 
 	const handleEdit = (customer: Customer) => {
 		void navigate({
-			to: '/customers/$customerId',
+			to: '/crm/customers/$customerId',
 			params: { customerId: customer.id },
 		})
 	}

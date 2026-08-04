@@ -238,7 +238,7 @@ export function CustomerListUI({
 				actions={
 					<div className="flex flex-wrap gap-2">
 						<Button asChild variant="outline">
-							<Link to="/customers/pipeline">
+							<Link to="/crm/customers/pipeline">
 								<KanbanSquare />
 								Pipeline
 							</Link>

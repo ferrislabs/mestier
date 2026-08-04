@@ -1,14 +1,4 @@
-import { Link } from '@tanstack/react-router'
-import {
-	ArrowRight,
-	FileText,
-	Package,
-	Plus,
-	Receipt,
-	TrendingUp,
-	Users,
-} from 'lucide-react'
-import { Button } from '#/components/ui/button'
+import { Package, Receipt, TrendingUp, Users } from 'lucide-react'
 import {
 	EntityAvatar,
 	MetricCard,
@@ -35,14 +25,6 @@ export function HomeUI({ userName, stats }: HomeUIProps) {
 			<PageHeader
 				title={userName ? `Bonjour, ${userName}` : 'Tableau de bord'}
 				description="Voici un résumé de votre activité. Gérez vos clients, devis et factures en un clin d'œil."
-				actions={
-					<Button asChild>
-						<Link to="/customers">
-							<Plus />
-							Nouveau client
-						</Link>
-					</Button>
-				}
 			/>
 
 			<section className="flex flex-col gap-4">
@@ -112,32 +94,6 @@ export function HomeUI({ userName, stats }: HomeUIProps) {
 						/>
 					</ul>
 				</SectionCard>
-
-				<SectionCard>
-					<SectionHeader
-						title="Raccourcis"
-						description="Accès rapide aux actions"
-					/>
-					<div className="flex flex-col gap-1 p-3">
-						<Shortcut
-							to="/customers"
-							icon={<Users className="size-4" />}
-							label="Gérer les clients"
-						/>
-						<Shortcut
-							to="/customers"
-							icon={<FileText className="size-4" />}
-							label="Créer un devis"
-							disabled
-						/>
-						<Shortcut
-							to="/customers"
-							icon={<Receipt className="size-4" />}
-							label="Nouvelle facture"
-							disabled
-						/>
-					</div>
-				</SectionCard>
 			</section>
 		</PageShell>
 	)
@@ -174,34 +130,5 @@ function ActivityRow({
 			</div>
 			<span className="text-xs text-muted-foreground">{meta}</span>
 		</li>
-	)
-}
-
-interface ShortcutProps {
-	to: string
-	icon: React.ReactNode
-	label: string
-	disabled?: boolean
-}
-
-function Shortcut({ to, icon, label, disabled }: ShortcutProps) {
-	if (disabled) {
-		return (
-			<div className="flex cursor-not-allowed items-center gap-3 rounded-lg px-3 py-2 text-sm text-muted-foreground opacity-60">
-				{icon}
-				<span className="flex-1">{label}</span>
-				<StatusBadge>soon</StatusBadge>
-			</div>
-		)
-	}
-	return (
-		<Link
-			to={to}
-			className="flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-foreground transition-colors hover:bg-muted hover:text-foreground"
-		>
-			{icon}
-			<span className="flex-1">{label}</span>
-			<ArrowRight className="size-4 opacity-60" />
-		</Link>
 	)
 }

@@ -33,8 +33,8 @@ export function TeamSwitcher() {
 	const handleOrganizationSelect = (organizationId: string) => {
 		if (organizationId === activeOrganizationId) return
 		setActiveOrganizationId(organizationId)
-		if (location.pathname.startsWith('/customers/')) {
-			void navigate({ to: '/customers' })
+		if (location.pathname.startsWith('/crm/customers/')) {
+			void navigate({ to: '/crm/customers' })
 		}
 	}
 

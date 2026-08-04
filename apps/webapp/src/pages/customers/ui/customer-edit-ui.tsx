@@ -150,7 +150,7 @@ export function CustomerEditUI({
 		<PageShell className="pb-24 md:pb-28">
 			<div>
 				<Link
-					to="/customers"
+					to="/crm/customers"
 					className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground"
 				>
 					<ArrowLeft className="size-4" />
