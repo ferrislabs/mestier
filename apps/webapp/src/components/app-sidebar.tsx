@@ -1,22 +1,9 @@
-import { Link } from '@tanstack/react-router'
-import {
-	BarChart3,
-	Boxes,
-	Eye,
-	FileText,
-	KanbanSquare,
-	LayoutDashboard,
-	Link2,
-	Package,
-	Receipt,
-	Settings,
-	ShieldCheck,
-	Users,
-} from 'lucide-react'
+import { Link, useLocation } from '@tanstack/react-router'
 import type * as React from 'react'
 
 import { MestierAppIcon } from '#/components/brand/mestier-logo'
-import { type NavItem, NavMain } from '#/components/nav-main'
+import { ModuleSwitcher } from '#/components/module-switcher'
+import { NavMain } from '#/components/nav-main'
 import { TeamSwitcher } from '#/components/team-switcher'
 import {
 	Sidebar,
@@ -28,40 +15,25 @@ import {
 	SidebarMenuItem,
 	SidebarRail,
 } from '#/components/ui/sidebar'
-
-const coreItems: NavItem[] = [
-	{ title: 'Accueil', to: '/', icon: LayoutDashboard, exact: true },
-	{ title: 'Clients', to: '/customers', icon: Users, exact: true, badge: '3' },
-	{ title: 'Pipeline', to: '/customers/pipeline', icon: KanbanSquare },
-	{ title: 'Catalogue', to: '/catalog', icon: Boxes },
-	{ title: 'Devis', to: '/quotes', icon: FileText },
-	{ title: 'Factures', to: '/customers', icon: Receipt, disabled: true },
-	{ title: 'Stock', to: '/customers', icon: Package, disabled: true },
-]
-
-const configItems: NavItem[] = [
-	{ title: 'Paramètres', to: '/settings', icon: Settings },
-	{ title: 'Intégrations', to: '/customers', icon: Link2, disabled: true },
-	{ title: 'Rapports', to: '/customers', icon: BarChart3, disabled: true },
-]
-
-const securityItems: NavItem[] = [
-	{ title: 'Audit', to: '/customers', icon: Eye, disabled: true },
-	{
-		title: 'Permissions',
-		to: '/customers',
-		icon: ShieldCheck,
-		disabled: true,
-	},
-]
+import { buildSidebarGroups } from '#/modules/nav-groups'
+import { resolveModule } from '#/modules/resolve-module'
 
 export function AppSidebar(props: React.ComponentProps<typeof Sidebar>) {
+	const location = useLocation()
+	const groups = buildSidebarGroups(location.pathname)
+	const activeModule = resolveModule(location.pathname)
+
 	return (
 		<Sidebar collapsible="icon" {...props}>
 			<SidebarHeader className="gap-3 border-b border-sidebar-border/70 pb-3">
 				<SidebarMenu>
-					<SidebarMenuItem>
-						<SidebarMenuButton size="lg" asChild tooltip="Mestier">
+					<SidebarMenuItem className="flex items-center gap-1">
+						<SidebarMenuButton
+							size="lg"
+							asChild
+							tooltip="Mestier"
+							className="flex-1"
+						>
 							<Link to="/">
 								<MestierAppIcon className="size-9 border border-sidebar-border bg-white/10 text-white shadow-none" />
 								<div className="grid flex-1 text-left leading-tight">
@@ -69,19 +41,24 @@ export function AppSidebar(props: React.ComponentProps<typeof Sidebar>) {
 										Mestier
 									</span>
 									<span className="truncate text-[10px] font-medium uppercase tracking-wider text-white/60">
-										Console
+										{activeModule.label}
 									</span>
 								</div>
 							</Link>
 						</SidebarMenuButton>
+						<ModuleSwitcher activeModuleId={activeModule.id} />
 					</SidebarMenuItem>
 				</SidebarMenu>
 				<TeamSwitcher />
 			</SidebarHeader>
 			<SidebarContent>
-				<NavMain label="Activité" items={coreItems} />
-				<NavMain label="Configuration" items={configItems} />
-				<NavMain label="Sécurité" items={securityItems} />
+				{groups.map((group, index) => (
+					<NavMain
+						key={group.label ?? `group-${index}`}
+						label={group.label}
+						items={group.items}
+					/>
+				))}
 			</SidebarContent>
 			<SidebarFooter>
 				<div className="flex items-center justify-start px-2 pb-1 text-[10px] font-medium group-data-[collapsible=icon]:hidden">
