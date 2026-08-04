@@ -8,7 +8,6 @@ import {
 	LayoutDashboard,
 	Link2,
 	MessagesSquare,
-	Package,
 	Receipt,
 	Settings,
 	ShieldCheck,
@@ -56,18 +55,6 @@ export const MODULES: AppModule[] = [
 				label: 'Activité',
 				items: [
 					{ title: 'Accueil', to: '/', icon: LayoutDashboard, exact: true },
-					{
-						title: 'Clients',
-						to: '/customers',
-						icon: Users,
-						exact: true,
-						badge: '3',
-					},
-					{ title: 'Pipeline', to: '/customers/pipeline', icon: KanbanSquare },
-					{ title: 'Catalogue', to: '/catalog', icon: Boxes },
-					{ title: 'Devis', to: '/quotes', icon: FileText },
-					{ title: 'Factures', to: '/invoices', icon: Receipt, disabled: true },
-					{ title: 'Stock', to: '/stock', icon: Package, disabled: true },
 				],
 			},
 		],
@@ -77,8 +64,28 @@ export const MODULES: AppModule[] = [
 		label: 'CRM',
 		icon: Users,
 		basePath: '/crm',
-		enabled: false,
-		nav: [],
+		enabled: true,
+		nav: [
+			{
+				label: 'Activité',
+				items: [
+					{ title: 'Clients', to: '/crm/customers', icon: Users, exact: true },
+					{
+						title: 'Pipeline',
+						to: '/crm/customers/pipeline',
+						icon: KanbanSquare,
+					},
+					{ title: 'Catalogue', to: '/catalog', icon: Boxes },
+					{ title: 'Devis', to: '/quotes', icon: FileText },
+					{
+						title: 'Factures',
+						to: '/crm/invoices',
+						icon: Receipt,
+						disabled: true,
+					},
+				],
+			},
+		],
 	},
 	{
 		id: 'hr',

@@ -106,7 +106,7 @@ export function CustomerPipelineUI({
 				description="Pilotez les prospects par étape, de la qualification à la conversion."
 				actions={
 					<Button asChild variant="outline">
-						<Link to="/customers">
+						<Link to="/crm/customers">
 							<Users />
 							Fichier clients
 						</Link>

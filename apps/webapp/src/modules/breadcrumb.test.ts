@@ -16,21 +16,23 @@ describe('buildBreadcrumbItems', () => {
 	})
 
 	it("ajoute l'entrée de nav correspondante", () => {
-		expect(labelsOf('/customers')).toEqual(['Baptiste', 'Clients'])
+		expect(labelsOf('/crm/customers')).toEqual(['Baptiste', 'CRM', 'Clients'])
 		expect(labelsOf('/settings')).toEqual(['Baptiste', 'Paramètres'])
 	})
 
 	it('empile les entrées de la plus générale à la plus précise', () => {
-		expect(labelsOf('/customers/pipeline')).toEqual([
+		expect(labelsOf('/crm/customers/pipeline')).toEqual([
 			'Baptiste',
+			'CRM',
 			'Clients',
 			'Pipeline',
 		])
 	})
 
 	it('ajoute le libellé de détail en dernier', () => {
-		expect(labelsOf('/customers/abc-123', 'Marie Leroy')).toEqual([
+		expect(labelsOf('/crm/customers/abc-123', 'Marie Leroy')).toEqual([
 			'Baptiste',
+			'CRM',
 			'Clients',
 			'Marie Leroy',
 		])
@@ -38,13 +40,14 @@ describe('buildBreadcrumbItems', () => {
 
 	it('donne une cible de lien à toutes les entrées sauf le détail', () => {
 		const items = buildBreadcrumbItems({
-			pathname: '/customers/abc-123',
+			pathname: '/crm/customers/abc-123',
 			organizationName: 'Baptiste',
 			detailLabel: 'Marie Leroy',
 		})
 		expect(items[0]?.to).toBe('/')
-		expect(items[1]?.to).toBe('/customers')
-		expect(items[2]?.to).toBeUndefined()
+		expect(items[1]?.to).toBe('/crm')
+		expect(items[2]?.to).toBe('/crm/customers')
+		expect(items[3]?.to).toBeUndefined()
 	})
 })
 

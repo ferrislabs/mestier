@@ -65,8 +65,8 @@ function getDetailLabel(
 }
 
 function getCustomerId(pathname: string): string | null {
-	if (pathname === '/customers/pipeline') return null
-	const match = /^\/customers\/([^/]+)$/.exec(pathname)
+	if (pathname === '/crm/customers/pipeline') return null
+	const match = /^\/crm\/customers\/([^/]+)$/.exec(pathname)
 	if (!match?.[1]) return null
 	return decodeURIComponent(match[1])
 }

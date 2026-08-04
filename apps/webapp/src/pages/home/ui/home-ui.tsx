@@ -37,7 +37,7 @@ export function HomeUI({ userName, stats }: HomeUIProps) {
 				description="Voici un résumé de votre activité. Gérez vos clients, devis et factures en un clin d'œil."
 				actions={
 					<Button asChild>
-						<Link to="/customers">
+						<Link to="/crm/customers">
 							<Plus />
 							Nouveau client
 						</Link>
@@ -120,18 +120,18 @@ export function HomeUI({ userName, stats }: HomeUIProps) {
 					/>
 					<div className="flex flex-col gap-1 p-3">
 						<Shortcut
-							to="/customers"
+							to="/crm/customers"
 							icon={<Users className="size-4" />}
 							label="Gérer les clients"
 						/>
 						<Shortcut
-							to="/customers"
+							to="/crm/customers"
 							icon={<FileText className="size-4" />}
 							label="Créer un devis"
 							disabled
 						/>
 						<Shortcut
-							to="/customers"
+							to="/crm/customers"
 							icon={<Receipt className="size-4" />}
 							label="Nouvelle facture"
 							disabled

@@ -21,6 +21,11 @@ describe('resolveModule', () => {
 		expect(resolveModule('/inconnu').id).toBe('home')
 	})
 
+	it('résout les pages clients vers le module crm', () => {
+		expect(resolveModule('/crm/customers').id).toBe('crm')
+		expect(resolveModule('/crm/customers/pipeline').id).toBe('crm')
+	})
+
 	it('résout un module désactivé comme les autres', () => {
 		expect(resolveModule('/discussions').id).toBe('discussions')
 	})
