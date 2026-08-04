@@ -2,6 +2,7 @@ import { Link, useLocation } from '@tanstack/react-router'
 import type * as React from 'react'
 
 import { MestierAppIcon } from '#/components/brand/mestier-logo'
+import { ModuleSwitcher } from '#/components/module-switcher'
 import { NavMain } from '#/components/nav-main'
 import { TeamSwitcher } from '#/components/team-switcher'
 import {
@@ -15,17 +16,24 @@ import {
 	SidebarRail,
 } from '#/components/ui/sidebar'
 import { buildSidebarGroups } from '#/modules/nav-groups'
+import { resolveModule } from '#/modules/resolve-module'
 
 export function AppSidebar(props: React.ComponentProps<typeof Sidebar>) {
 	const location = useLocation()
 	const groups = buildSidebarGroups(location.pathname)
+	const activeModule = resolveModule(location.pathname)
 
 	return (
 		<Sidebar collapsible="icon" {...props}>
 			<SidebarHeader className="gap-3 border-b border-sidebar-border/70 pb-3">
 				<SidebarMenu>
-					<SidebarMenuItem>
-						<SidebarMenuButton size="lg" asChild tooltip="Mestier">
+					<SidebarMenuItem className="flex items-center gap-1">
+						<SidebarMenuButton
+							size="lg"
+							asChild
+							tooltip="Mestier"
+							className="flex-1"
+						>
 							<Link to="/">
 								<MestierAppIcon className="size-9 border border-sidebar-border bg-white/10 text-white shadow-none" />
 								<div className="grid flex-1 text-left leading-tight">
@@ -33,11 +41,12 @@ export function AppSidebar(props: React.ComponentProps<typeof Sidebar>) {
 										Mestier
 									</span>
 									<span className="truncate text-[10px] font-medium uppercase tracking-wider text-white/60">
-										Console
+										{activeModule.label}
 									</span>
 								</div>
 							</Link>
 						</SidebarMenuButton>
+						<ModuleSwitcher activeModuleId={activeModule.id} />
 					</SidebarMenuItem>
 				</SidebarMenu>
 				<TeamSwitcher />
