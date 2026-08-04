@@ -5,6 +5,12 @@ import { useEffect, useState } from 'react'
 // sub-pixel drift at 100%/125% zoom).
 const BOTTOM_THRESHOLD_PX = 2
 
+// Height of the sticky app header that sections must not scroll under.
+// Tailwind classes can't read this constant, so `anchor-nav.tsx`
+// (`sticky top-20`) and `settings-layout.tsx` (`scroll-mt-20`) encode the
+// same 80px separately — both must be updated together with this value.
+export const SETTINGS_HEADER_OFFSET_PX = 80
+
 export function useActiveSection(ids: string[]): string {
 	const [activeId, setActiveId] = useState(ids[0] ?? '')
 	const key = ids.join('|')
@@ -69,7 +75,7 @@ export function useActiveSection(ids: string[]): string {
 				const mostRecentlyEntered = visible[visible.length - 1]?.target.id
 				if (mostRecentlyEntered) setActiveId(mostRecentlyEntered)
 			},
-			{ rootMargin: '-80px 0px -60% 0px' },
+			{ rootMargin: `-${SETTINGS_HEADER_OFFSET_PX}px 0px -60% 0px` },
 		)
 
 		for (const element of elements) observer.observe(element)

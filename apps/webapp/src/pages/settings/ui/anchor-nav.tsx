@@ -10,6 +10,9 @@ export function AnchorNav({ groups, activeId }: AnchorNavProps) {
 	return (
 		<nav
 			aria-label="Sections de configuration"
+			// top-20 (80px) must match SETTINGS_HEADER_OFFSET_PX in
+			// #/pages/settings/use-active-section.ts and settings-layout.tsx's
+			// scroll-mt-20 — all three move together with the header height.
 			className="sticky top-20 hidden w-56 shrink-0 flex-col gap-6 self-start lg:flex"
 		>
 			{groups.map((group) => {
