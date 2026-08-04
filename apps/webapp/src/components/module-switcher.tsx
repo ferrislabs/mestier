@@ -75,6 +75,10 @@ function ModuleTile({ module, active }: ModuleTileProps) {
 		)
 	}
 
+	// Invariant : ni le onClick de fermeture (Radix) ni le handleClick de navigation
+	// (TanStack Router) n'appellent preventDefault/stopPropagation — c'est cette
+	// non-interférence, pas un ordre garanti, qui permet aux deux de s'exécuter ;
+	// une évolution de l'une des deux libs pourrait avaler la navigation en silence.
 	return (
 		<PopoverClose asChild>
 			<Link
