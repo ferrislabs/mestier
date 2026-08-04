@@ -29,4 +29,8 @@ describe('resolveModule', () => {
 	it('résout un module désactivé comme les autres', () => {
 		expect(resolveModule('/discussions').id).toBe('discussions')
 	})
+
+	it('résout les pages RH vers le module hr', () => {
+		expect(resolveModule('/hr/employees').id).toBe('hr')
+	})
 })

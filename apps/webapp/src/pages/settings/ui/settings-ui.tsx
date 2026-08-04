@@ -14,7 +14,6 @@ import {
 	Search,
 	Trash2,
 	Undo2,
-	Users,
 } from 'lucide-react'
 import type * as React from 'react'
 import { useMemo, useState } from 'react'
@@ -37,13 +36,11 @@ import {
 	StatusBadge,
 } from '#/components/ui/surface'
 import type { Organization } from '#/hooks/use-organizations'
-import type { Employee, Equipment } from '#/hooks/use-reference-catalog'
+import type { Equipment } from '#/hooks/use-reference-catalog'
 import type {
-	EmployeeFormValues,
 	EquipmentFormValues,
 	OrganizationFormValues,
 	ReferenceCatalogData,
-	ReferenceTab,
 } from '#/pages/settings/types'
 
 interface SettingsUIProps {
@@ -52,13 +49,7 @@ interface SettingsUIProps {
 	error: string | null
 	data: ReferenceCatalogData
 	organizationForm: FormBinding<OrganizationFormValues>
-	employeeForm: FormBinding<EmployeeFormValues>
 	equipmentForm: FormBinding<EquipmentFormValues>
-	onUpdateEmployee: (
-		employee: Employee,
-		values: EmployeeFormValues,
-	) => Promise<unknown>
-	onDeleteEmployee: (employee: Employee) => Promise<unknown>
 	onUpdateEquipment: (
 		equipment: Equipment,
 		values: EquipmentFormValues,
@@ -73,19 +64,11 @@ interface FormBinding<T> {
 	onSubmit: () => void
 }
 
-type Draft =
-	| { tab: 'employees'; id: string; values: EmployeeFormValues }
-	| { tab: 'equipment'; id: string; values: EquipmentFormValues }
-	| null
-
-const TABS: {
-	id: ReferenceTab
-	label: string
-	icon: typeof Users
-}[] = [
-	{ id: 'employees', label: 'Employés', icon: Users },
-	{ id: 'equipment', label: 'Matériel', icon: Package },
-]
+type Draft = {
+	tab: 'equipment'
+	id: string
+	values: EquipmentFormValues
+} | null
 
 export function SettingsUI({
 	organization,
@@ -93,14 +76,10 @@ export function SettingsUI({
 	error,
 	data,
 	organizationForm,
-	employeeForm,
 	equipmentForm,
-	onUpdateEmployee,
-	onDeleteEmployee,
 	onUpdateEquipment,
 	onDeleteEquipment,
 }: SettingsUIProps) {
-	const [activeTab, setActiveTab] = useState<ReferenceTab>('employees')
 	const [search, setSearch] = useState('')
 	const [draft, setDraft] = useState<Draft>(null)
 	const [isSaving, setIsSaving] = useState(false)
@@ -108,9 +87,6 @@ export function SettingsUI({
 	const normalizedSearch = search.trim().toLowerCase()
 	const filteredData = useMemo(
 		() => ({
-			employees: data.employees.filter((employee) =>
-				employee.name.toLowerCase().includes(normalizedSearch),
-			),
 			equipment: data.equipment.filter((item) =>
 				item.name.toLowerCase().includes(normalizedSearch),
 			),
@@ -122,10 +98,6 @@ export function SettingsUI({
 		if (!draft) return
 		setIsSaving(true)
 		try {
-			if (draft.tab === 'employees') {
-				const employee = data.employees.find((item) => item.id === draft.id)
-				if (employee) await onUpdateEmployee(employee, draft.values)
-			}
 			if (draft.tab === 'equipment') {
 				const equipment = data.equipment.find((item) => item.id === draft.id)
 				if (equipment) await onUpdateEquipment(equipment, draft.values)
@@ -141,7 +113,7 @@ export function SettingsUI({
 			<PageHeader
 				eyebrow={organization.name}
 				title="Paramètres"
-				description="Configurez l’espace de travail, les équipes et les ressources internes de l’organisation."
+				description="Configurez l’espace de travail et les ressources internes de l’organisation."
 			/>
 
 			<OrganizationSection
@@ -149,20 +121,12 @@ export function SettingsUI({
 				form={organizationForm}
 			/>
 
-			<div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-				<MetricCard
-					label="Employés"
-					value={data.employees.length}
-					hint="Taux horaires configurés"
-					icon={<Users className="size-4" />}
-				/>
-				<MetricCard
-					label="Matériel"
-					value={data.equipment.length}
-					hint="Ressources facturables"
-					icon={<Package className="size-4" />}
-				/>
-			</div>
+			<MetricCard
+				label="Matériel"
+				value={data.equipment.length}
+				hint="Ressources facturables"
+				icon={<Package className="size-4" />}
+			/>
 
 			{error ? (
 				<div className="rounded-lg border border-destructive/30 bg-destructive-soft px-4 py-3 text-sm text-destructive">
@@ -171,30 +135,6 @@ export function SettingsUI({
 			) : null}
 
 			<div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-				<div className="flex flex-wrap gap-2">
-					{TABS.map((tab) => {
-						const active = tab.id === activeTab
-						return (
-							<button
-								key={tab.id}
-								type="button"
-								onClick={() => {
-									setActiveTab(tab.id)
-									setDraft(null)
-								}}
-								className={`inline-flex h-9 items-center gap-2 rounded-lg border px-3 text-sm font-medium ${
-									active
-										? 'border-primary/30 bg-brand-soft text-primary'
-										: 'border-border bg-card text-muted-foreground hover:bg-muted'
-								}`}
-							>
-								<tab.icon className="size-4" />
-								{tab.label}
-							</button>
-						)
-					})}
-				</div>
-
 				<div className="relative w-full lg:w-80">
 					<Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
 					<Input
@@ -207,39 +147,10 @@ export function SettingsUI({
 				</div>
 			</div>
 
-			<CreateReferenceSection
-				activeTab={activeTab}
-				employeeForm={employeeForm}
-				equipmentForm={equipmentForm}
-			/>
+			<CreateReferenceSection equipmentForm={equipmentForm} />
 
 			{isLoading ? (
 				<SettingsUI.Loading />
-			) : activeTab === 'employees' ? (
-				<EmployeeTable
-					data={filteredData.employees}
-					draft={draft}
-					isSaving={isSaving}
-					onEdit={(employee) =>
-						setDraft({
-							tab: 'employees',
-							id: employee.id,
-							values: {
-								name: employee.name,
-								hourlyRate: centsToEuros(employee.hourly_rate_cents),
-								userId: employee.user_id ?? '',
-							},
-						})
-					}
-					onDraftChange={(values) =>
-						setDraft((current) =>
-							current?.tab === 'employees' ? { ...current, values } : current,
-						)
-					}
-					onCancel={() => setDraft(null)}
-					onSave={handleSaveDraft}
-					onDelete={onDeleteEmployee}
-				/>
 			) : (
 				<EquipmentTable
 					data={filteredData.equipment}
@@ -337,14 +248,10 @@ SettingsUI.Loading = function SettingsLoading() {
 }
 
 interface CreateReferenceSectionProps {
-	activeTab: ReferenceTab
-	employeeForm: FormBinding<EmployeeFormValues>
 	equipmentForm: FormBinding<EquipmentFormValues>
 }
 
 function CreateReferenceSection({
-	activeTab,
-	employeeForm,
 	equipmentForm,
 }: CreateReferenceSectionProps) {
 	return (
@@ -354,57 +261,24 @@ function CreateReferenceSection({
 				description="Les montants sont saisis en euros et stockés en centimes côté API."
 			/>
 			<div className="grid grid-cols-1 gap-4 p-5 lg:grid-cols-[1fr_auto] lg:items-end">
-				{activeTab === 'employees' ? (
-					<>
-						<div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-							<TextField
-								label="Nom"
-								value={employeeForm.values.name}
-								onChange={(name) => employeeForm.onChange({ name })}
-							/>
-							<TextField
-								label="Taux horaire"
-								value={employeeForm.values.hourlyRate}
-								onChange={(hourlyRate) => employeeForm.onChange({ hourlyRate })}
-								inputMode="decimal"
-								suffix="€/h"
-							/>
-							<TextField
-								label="Compte Ferriskey"
-								value={employeeForm.values.userId}
-								onChange={(userId) => employeeForm.onChange({ userId })}
-								placeholder="UUID optionnel"
-							/>
-						</div>
-						<CreateButton
-							isPending={employeeForm.isPending}
-							onClick={employeeForm.onSubmit}
-						/>
-					</>
-				) : (
-					<>
-						<div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-							<TextField
-								label="Nom"
-								value={equipmentForm.values.name}
-								onChange={(name) => equipmentForm.onChange({ name })}
-							/>
-							<TextField
-								label="Coût horaire"
-								value={equipmentForm.values.hourlyRate}
-								onChange={(hourlyRate) =>
-									equipmentForm.onChange({ hourlyRate })
-								}
-								inputMode="decimal"
-								suffix="€/h"
-							/>
-						</div>
-						<CreateButton
-							isPending={equipmentForm.isPending}
-							onClick={equipmentForm.onSubmit}
-						/>
-					</>
-				)}
+				<div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+					<TextField
+						label="Nom"
+						value={equipmentForm.values.name}
+						onChange={(name) => equipmentForm.onChange({ name })}
+					/>
+					<TextField
+						label="Coût horaire"
+						value={equipmentForm.values.hourlyRate}
+						onChange={(hourlyRate) => equipmentForm.onChange({ hourlyRate })}
+						inputMode="decimal"
+						suffix="€/h"
+					/>
+				</div>
+				<CreateButton
+					isPending={equipmentForm.isPending}
+					onClick={equipmentForm.onSubmit}
+				/>
 			</div>
 		</SectionCard>
 	)
@@ -417,109 +291,6 @@ function normalizeSlug(value: string): string {
 		.replace(/\s+/g, '-')
 		.replace(/[^a-z0-9-]/g, '')
 		.replace(/-{2,}/g, '-')
-}
-
-interface EmployeeTableProps {
-	data: Employee[]
-	draft: Draft
-	isSaving: boolean
-	onEdit: (employee: Employee) => void
-	onDraftChange: (values: EmployeeFormValues) => void
-	onCancel: () => void
-	onSave: () => void
-	onDelete: (employee: Employee) => Promise<unknown>
-}
-
-function EmployeeTable({
-	data,
-	draft,
-	isSaving,
-	onEdit,
-	onDraftChange,
-	onCancel,
-	onSave,
-	onDelete,
-}: EmployeeTableProps) {
-	const columns = useMemo<ColumnDef<Employee>[]>(
-		() => [
-			{
-				header: 'Employé',
-				cell: ({ row }) =>
-					draft?.tab === 'employees' && draft.id === row.original.id ? (
-						<Input
-							value={draft.values.name}
-							onChange={(event) =>
-								onDraftChange({ ...draft.values, name: event.target.value })
-							}
-						/>
-					) : (
-						<RowIdentity title={row.original.name} id={row.original.id} />
-					),
-			},
-			{
-				header: 'Compte',
-				cell: ({ row }) =>
-					draft?.tab === 'employees' && draft.id === row.original.id ? (
-						<Input
-							value={draft.values.userId}
-							onChange={(event) =>
-								onDraftChange({ ...draft.values, userId: event.target.value })
-							}
-							placeholder="UUID optionnel"
-						/>
-					) : row.original.user_id ? (
-						<StatusBadge tone="success">lié</StatusBadge>
-					) : (
-						<StatusBadge>non lié</StatusBadge>
-					),
-			},
-			{
-				header: 'Taux',
-				cell: ({ row }) =>
-					draft?.tab === 'employees' && draft.id === row.original.id ? (
-						<Input
-							value={draft.values.hourlyRate}
-							onChange={(event) =>
-								onDraftChange({
-									...draft.values,
-									hourlyRate: event.target.value,
-								})
-							}
-							inputMode="decimal"
-						/>
-					) : (
-						<MoneyCell value={row.original.hourly_rate_cents} suffix="/h" />
-					),
-			},
-			{
-				id: 'actions',
-				cell: ({ row }) => (
-					<RowActions
-						isEditing={
-							draft?.tab === 'employees' && draft.id === row.original.id
-						}
-						isSaving={isSaving}
-						onEdit={() => onEdit(row.original)}
-						onCancel={onCancel}
-						onSave={onSave}
-						onDelete={() => onDelete(row.original)}
-					/>
-				),
-			},
-		],
-		[draft, isSaving, onCancel, onDelete, onDraftChange, onEdit, onSave],
-	)
-
-	return (
-		<ReferenceTable
-			title="Employés"
-			description="Taux horaires et rattachements aux comptes utilisateurs."
-			emptyTitle="Aucun employé trouvé"
-			emptyDescription="Ajoutez un employé pour le rendre disponible dans les prochains workflows opérationnels."
-			data={data}
-			columns={columns}
-		/>
-	)
 }
 
 interface EquipmentTableProps {

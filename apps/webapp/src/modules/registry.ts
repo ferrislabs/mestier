@@ -88,8 +88,13 @@ export const MODULES: AppModule[] = [
 		label: 'RH',
 		icon: BriefcaseBusiness,
 		basePath: '/hr',
-		enabled: false,
-		nav: [],
+		enabled: true,
+		nav: [
+			{
+				label: 'Équipe',
+				items: [{ title: 'Employés', to: '/hr/employees', icon: Users }],
+			},
+		],
 	},
 	{
 		id: 'discussions',

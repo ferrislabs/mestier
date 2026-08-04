@@ -6,16 +6,12 @@ import {
 	useUpdateOrganization,
 } from '#/hooks/use-organizations'
 import {
-	useCreateEmployee,
 	useCreateEquipment,
-	useDeleteEmployee,
 	useDeleteEquipment,
 	useReferenceCatalog,
-	useUpdateEmployee,
 	useUpdateEquipment,
 } from '#/hooks/use-reference-catalog'
 import type {
-	EmployeeFormValues,
 	EquipmentFormValues,
 	OrganizationFormValues,
 } from '#/pages/settings/types'
@@ -55,35 +51,14 @@ interface SettingsCatalogProps {
 function SettingsCatalog({ organization }: SettingsCatalogProps) {
 	const organizationId = organization.id
 	const catalog = useReferenceCatalog(organizationId, {
+		employees: false,
 		serviceRates: false,
 		products: false,
 	})
 	const updateOrganization = useUpdateOrganization(organizationId)
-	const createEmployee = useCreateEmployee(organizationId)
-	const updateEmployee = useUpdateEmployee()
-	const deleteEmployee = useDeleteEmployee()
 	const createEquipment = useCreateEquipment(organizationId)
 	const updateEquipment = useUpdateEquipment()
 	const deleteEquipment = useDeleteEquipment()
-
-	const employeeForm = useForm({
-		defaultValues: {
-			name: '',
-			hourlyRate: '',
-			userId: '',
-		} satisfies EmployeeFormValues,
-		onSubmit: async ({ value }) => {
-			await createEmployee.mutateAsync({
-				path: { organization_id: organizationId },
-				body: {
-					name: value.name.trim(),
-					hourly_rate_cents: eurosToCents(value.hourlyRate),
-					user_id: value.userId.trim() || null,
-				},
-			})
-			employeeForm.reset()
-		},
-	})
 
 	const equipmentForm = useForm({
 		defaultValues: { name: '', hourlyRate: '' } satisfies EquipmentFormValues,
@@ -115,14 +90,10 @@ function SettingsCatalog({ organization }: SettingsCatalogProps) {
 		},
 	})
 
-	const isLoading = catalog.employees.isLoading || catalog.equipment.isLoading
+	const isLoading = catalog.equipment.isLoading
 
 	const error =
-		catalog.employees.error ??
 		catalog.equipment.error ??
-		createEmployee.error ??
-		updateEmployee.error ??
-		deleteEmployee.error ??
 		createEquipment.error ??
 		updateEquipment.error ??
 		deleteEquipment.error ??
@@ -131,88 +102,56 @@ function SettingsCatalog({ organization }: SettingsCatalogProps) {
 	return (
 		<organizationForm.Subscribe selector={(state) => state.values}>
 			{(organizationValues) => (
-				<employeeForm.Subscribe selector={(state) => state.values}>
-					{(employeeValues) => (
-						<equipmentForm.Subscribe selector={(state) => state.values}>
-							{(equipmentValues) => (
-								<SettingsUI
-									organization={organization}
-									isLoading={isLoading}
-									error={error?.message ?? null}
-									data={{
-										employees: catalog.employees.data?.data ?? [],
-										equipment: catalog.equipment.data?.data ?? [],
-									}}
-									organizationForm={{
-										values: organizationValues,
-										isPending: updateOrganization.isPending,
-										onChange: (patch) => {
-											for (const key of Object.keys(
-												patch,
-											) as (keyof OrganizationFormValues)[]) {
-												organizationForm.setFieldValue(key, patch[key] ?? '')
-											}
-										},
-										onSubmit: () => void organizationForm.handleSubmit(),
-									}}
-									employeeForm={{
-										values: employeeValues,
-										isPending: createEmployee.isPending,
-										onChange: (patch) => {
-											for (const key of Object.keys(
-												patch,
-											) as (keyof EmployeeFormValues)[]) {
-												employeeForm.setFieldValue(key, patch[key] ?? '')
-											}
-										},
-										onSubmit: () => void employeeForm.handleSubmit(),
-									}}
-									equipmentForm={{
-										values: equipmentValues,
-										isPending: createEquipment.isPending,
-										onChange: (patch) => {
-											for (const key of Object.keys(
-												patch,
-											) as (keyof EquipmentFormValues)[]) {
-												equipmentForm.setFieldValue(key, patch[key] ?? '')
-											}
-										},
-										onSubmit: () => void equipmentForm.handleSubmit(),
-									}}
-									onUpdateEmployee={(employee, values) =>
-										updateEmployee.mutateAsync({
-											path: { employee_id: employee.id },
-											body: {
-												name: values.name.trim(),
-												hourly_rate_cents: eurosToCents(values.hourlyRate),
-												user_id: values.userId.trim() || null,
-											},
-										})
+				<equipmentForm.Subscribe selector={(state) => state.values}>
+					{(equipmentValues) => (
+						<SettingsUI
+							organization={organization}
+							isLoading={isLoading}
+							error={error?.message ?? null}
+							data={{
+								equipment: catalog.equipment.data?.data ?? [],
+							}}
+							organizationForm={{
+								values: organizationValues,
+								isPending: updateOrganization.isPending,
+								onChange: (patch) => {
+									for (const key of Object.keys(
+										patch,
+									) as (keyof OrganizationFormValues)[]) {
+										organizationForm.setFieldValue(key, patch[key] ?? '')
 									}
-									onDeleteEmployee={(employee) =>
-										deleteEmployee.mutateAsync({
-											path: { employee_id: employee.id },
-										})
+								},
+								onSubmit: () => void organizationForm.handleSubmit(),
+							}}
+							equipmentForm={{
+								values: equipmentValues,
+								isPending: createEquipment.isPending,
+								onChange: (patch) => {
+									for (const key of Object.keys(
+										patch,
+									) as (keyof EquipmentFormValues)[]) {
+										equipmentForm.setFieldValue(key, patch[key] ?? '')
 									}
-									onUpdateEquipment={(equipment, values) =>
-										updateEquipment.mutateAsync({
-											path: { equipment_id: equipment.id },
-											body: {
-												name: values.name.trim(),
-												hourly_rate_cents: eurosToCents(values.hourlyRate),
-											},
-										})
-									}
-									onDeleteEquipment={(equipment) =>
-										deleteEquipment.mutateAsync({
-											path: { equipment_id: equipment.id },
-										})
-									}
-								/>
-							)}
-						</equipmentForm.Subscribe>
+								},
+								onSubmit: () => void equipmentForm.handleSubmit(),
+							}}
+							onUpdateEquipment={(equipment, values) =>
+								updateEquipment.mutateAsync({
+									path: { equipment_id: equipment.id },
+									body: {
+										name: values.name.trim(),
+										hourly_rate_cents: eurosToCents(values.hourlyRate),
+									},
+								})
+							}
+							onDeleteEquipment={(equipment) =>
+								deleteEquipment.mutateAsync({
+									path: { equipment_id: equipment.id },
+								})
+							}
+						/>
 					)}
-				</employeeForm.Subscribe>
+				</equipmentForm.Subscribe>
 			)}
 		</organizationForm.Subscribe>
 	)
