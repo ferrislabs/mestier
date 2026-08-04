@@ -60,8 +60,14 @@ export function useActiveSection(ids: string[]): string {
 					.filter((entry) => entry.isIntersecting)
 					.sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top)
 
-				const first = visible[0]?.target.id
-				if (first) setActiveId(first)
+				// A section that is almost entirely scrolled past can still be
+				// intersecting — only its trailing edge trails through the band —
+				// at the same time as the section the reader has just reached.
+				// Sorting by top puts that scrolled-past section first and the
+				// just-entered one last: take the last entry, since it is the
+				// one whose top edge most recently crossed into the band.
+				const mostRecentlyEntered = visible[visible.length - 1]?.target.id
+				if (mostRecentlyEntered) setActiveId(mostRecentlyEntered)
 			},
 			{ rootMargin: '-80px 0px -60% 0px' },
 		)
