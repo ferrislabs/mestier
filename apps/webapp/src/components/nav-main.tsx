@@ -12,6 +12,7 @@ import {
 export interface NavItem {
 	title: string
 	to: string
+	hash?: string
 	icon?: LucideIcon
 	exact?: boolean
 	disabled?: boolean
@@ -49,6 +50,7 @@ export function NavMain({ label, items }: NavMainProps) {
 							<SidebarMenuButton asChild tooltip={item.title}>
 								<Link
 									to={item.to}
+									hash={item.hash}
 									activeOptions={item.exact ? { exact: true } : undefined}
 									activeProps={{ 'data-active': 'true' }}
 									className="rounded-lg font-medium text-white transition-colors hover:bg-white/10 hover:text-white data-[active=true]:bg-white/15 data-[active=true]:font-semibold data-[active=true]:text-white data-[active=true]:[&_.nav-badge]:bg-white/20 data-[active=true]:[&_.nav-badge]:text-white data-[active=true]:[&_svg]:text-white [&_svg]:text-white"
