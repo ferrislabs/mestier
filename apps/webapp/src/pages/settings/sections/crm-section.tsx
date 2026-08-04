@@ -1,6 +1,5 @@
 import { useForm } from '@tanstack/react-form'
 import {
-	AlertCircle,
 	Boxes,
 	BriefcaseBusiness,
 	Loader2,
@@ -80,22 +79,6 @@ const PRODUCT_UNIT_LABELS: Record<ServiceRateUnit, string> = {
 
 export function CrmSection() {
 	const { activeOrganization } = useActiveOrganization()
-
-	if (!activeOrganization) {
-		return (
-			<div className="flex flex-col items-center justify-center gap-3 p-12 text-center">
-				<div className="flex size-14 items-center justify-center rounded-lg border bg-card">
-					<AlertCircle className="size-6 text-destructive" />
-				</div>
-				<div>
-					<p className="font-semibold">Organisation indisponible</p>
-					<p className="text-sm text-muted-foreground">
-						Le catalogue nécessite une organisation active.
-					</p>
-				</div>
-			</div>
-		)
-	}
 
 	return (
 		<CrmSectionContent
