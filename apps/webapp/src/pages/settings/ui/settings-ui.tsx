@@ -29,13 +29,6 @@ import {
 import { Input } from '#/components/ui/input'
 import { Label } from '#/components/ui/label'
 import {
-	Select,
-	SelectContent,
-	SelectItem,
-	SelectTrigger,
-	SelectValue,
-} from '#/components/ui/select'
-import {
 	MetricCard,
 	PageHeader,
 	PageShell,
@@ -44,21 +37,13 @@ import {
 	StatusBadge,
 } from '#/components/ui/surface'
 import type { Organization } from '#/hooks/use-organizations'
-import type {
-	Employee,
-	Equipment,
-	ServiceRate,
-	ServiceRateUnit,
-} from '#/hooks/use-reference-catalog'
+import type { Employee, Equipment } from '#/hooks/use-reference-catalog'
 import type {
 	EmployeeFormValues,
 	EquipmentFormValues,
 	OrganizationFormValues,
-	Product,
-	ProductCatalogFormValues,
 	ReferenceCatalogData,
 	ReferenceTab,
-	ServiceRateFormValues,
 } from '#/pages/settings/types'
 
 interface SettingsUIProps {
@@ -69,8 +54,6 @@ interface SettingsUIProps {
 	organizationForm: FormBinding<OrganizationFormValues>
 	employeeForm: FormBinding<EmployeeFormValues>
 	equipmentForm: FormBinding<EquipmentFormValues>
-	serviceRateForm: FormBinding<ServiceRateFormValues>
-	productForm: FormBinding<ProductCatalogFormValues>
 	onUpdateEmployee: (
 		employee: Employee,
 		values: EmployeeFormValues,
@@ -81,16 +64,6 @@ interface SettingsUIProps {
 		values: EquipmentFormValues,
 	) => Promise<unknown>
 	onDeleteEquipment: (equipment: Equipment) => Promise<unknown>
-	onUpdateServiceRate: (
-		serviceRate: ServiceRate,
-		values: ServiceRateFormValues,
-	) => Promise<unknown>
-	onDeleteServiceRate: (serviceRate: ServiceRate) => Promise<unknown>
-	onUpdateProduct: (
-		product: Product,
-		values: ProductCatalogFormValues,
-	) => Promise<unknown>
-	onDeleteProduct: (product: Product) => Promise<unknown>
 }
 
 interface FormBinding<T> {
@@ -103,8 +76,6 @@ interface FormBinding<T> {
 type Draft =
 	| { tab: 'employees'; id: string; values: EmployeeFormValues }
 	| { tab: 'equipment'; id: string; values: EquipmentFormValues }
-	| { tab: 'service-rates'; id: string; values: ServiceRateFormValues }
-	| { tab: 'products'; id: string; values: ProductCatalogFormValues }
 	| null
 
 const TABS: {
@@ -116,18 +87,6 @@ const TABS: {
 	{ id: 'equipment', label: 'Matériel', icon: Package },
 ]
 
-const UNIT_LABELS: Record<ServiceRateUnit, string> = {
-	HOUR: '€/h',
-	ML: '€/ml',
-	M2: '€/m²',
-}
-
-const PRODUCT_UNIT_LABELS: Record<ServiceRateUnit, string> = {
-	HOUR: '€/unité',
-	ML: '€/ml',
-	M2: '€/m²',
-}
-
 export function SettingsUI({
 	organization,
 	isLoading,
@@ -136,16 +95,10 @@ export function SettingsUI({
 	organizationForm,
 	employeeForm,
 	equipmentForm,
-	serviceRateForm,
-	productForm,
 	onUpdateEmployee,
 	onDeleteEmployee,
 	onUpdateEquipment,
 	onDeleteEquipment,
-	onUpdateServiceRate,
-	onDeleteServiceRate,
-	onUpdateProduct,
-	onDeleteProduct,
 }: SettingsUIProps) {
 	const [activeTab, setActiveTab] = useState<ReferenceTab>('employees')
 	const [search, setSearch] = useState('')
@@ -161,16 +114,6 @@ export function SettingsUI({
 			equipment: data.equipment.filter((item) =>
 				item.name.toLowerCase().includes(normalizedSearch),
 			),
-			serviceRates: data.serviceRates.filter((serviceRate) =>
-				serviceRate.label.toLowerCase().includes(normalizedSearch),
-			),
-			products: data.products.filter((product) => {
-				return (
-					product.name.toLowerCase().includes(normalizedSearch) ||
-					(product.sku ?? '').toLowerCase().includes(normalizedSearch) ||
-					(product.description ?? '').toLowerCase().includes(normalizedSearch)
-				)
-			}),
 		}),
 		[data, normalizedSearch],
 	)
@@ -186,16 +129,6 @@ export function SettingsUI({
 			if (draft.tab === 'equipment') {
 				const equipment = data.equipment.find((item) => item.id === draft.id)
 				if (equipment) await onUpdateEquipment(equipment, draft.values)
-			}
-			if (draft.tab === 'service-rates') {
-				const serviceRate = data.serviceRates.find(
-					(item) => item.id === draft.id,
-				)
-				if (serviceRate) await onUpdateServiceRate(serviceRate, draft.values)
-			}
-			if (draft.tab === 'products') {
-				const product = data.products.find((item) => item.id === draft.id)
-				if (product) await onUpdateProduct(product, draft.values)
 			}
 			setDraft(null)
 		} finally {
@@ -278,8 +211,6 @@ export function SettingsUI({
 				activeTab={activeTab}
 				employeeForm={employeeForm}
 				equipmentForm={equipmentForm}
-				serviceRateForm={serviceRateForm}
-				productForm={productForm}
 			/>
 
 			{isLoading ? (
@@ -309,7 +240,7 @@ export function SettingsUI({
 					onSave={handleSaveDraft}
 					onDelete={onDeleteEmployee}
 				/>
-			) : activeTab === 'equipment' ? (
+			) : (
 				<EquipmentTable
 					data={filteredData.equipment}
 					draft={draft}
@@ -332,60 +263,6 @@ export function SettingsUI({
 					onCancel={() => setDraft(null)}
 					onSave={handleSaveDraft}
 					onDelete={onDeleteEquipment}
-				/>
-			) : activeTab === 'service-rates' ? (
-				<ServiceRateTable
-					data={filteredData.serviceRates}
-					draft={draft}
-					isSaving={isSaving}
-					onEdit={(serviceRate) =>
-						setDraft({
-							tab: 'service-rates',
-							id: serviceRate.id,
-							values: {
-								label: serviceRate.label,
-								unit: serviceRate.unit,
-								rate: centsToEuros(serviceRate.rate_cents),
-							},
-						})
-					}
-					onDraftChange={(values) =>
-						setDraft((current) =>
-							current?.tab === 'service-rates'
-								? { ...current, values }
-								: current,
-						)
-					}
-					onCancel={() => setDraft(null)}
-					onSave={handleSaveDraft}
-					onDelete={onDeleteServiceRate}
-				/>
-			) : (
-				<ProductTable
-					data={filteredData.products}
-					draft={draft}
-					isSaving={isSaving}
-					onEdit={(product) =>
-						setDraft({
-							tab: 'products',
-							id: product.id,
-							values: {
-								name: product.name,
-								sku: product.sku ?? '',
-								unit: product.unit,
-								unitPrice: centsToEuros(product.unit_price_cents),
-								description: product.description ?? '',
-							},
-						})
-					}
-					onDraftChange={(values) =>
-						setDraft((current) =>
-							current?.tab === 'products' ? { ...current, values } : current,
-						)
-					}
-					onCancel={() => setDraft(null)}
-					onSave={handleSaveDraft}
-					onDelete={onDeleteProduct}
 				/>
 			)}
 		</PageShell>
@@ -463,16 +340,12 @@ interface CreateReferenceSectionProps {
 	activeTab: ReferenceTab
 	employeeForm: FormBinding<EmployeeFormValues>
 	equipmentForm: FormBinding<EquipmentFormValues>
-	serviceRateForm: FormBinding<ServiceRateFormValues>
-	productForm: FormBinding<ProductCatalogFormValues>
 }
 
 function CreateReferenceSection({
 	activeTab,
 	employeeForm,
 	equipmentForm,
-	serviceRateForm,
-	productForm,
 }: CreateReferenceSectionProps) {
 	return (
 		<SectionCard>
@@ -508,7 +381,7 @@ function CreateReferenceSection({
 							onClick={employeeForm.onSubmit}
 						/>
 					</>
-				) : activeTab === 'equipment' ? (
+				) : (
 					<>
 						<div className="grid grid-cols-1 gap-4 md:grid-cols-2">
 							<TextField
@@ -529,100 +402,6 @@ function CreateReferenceSection({
 						<CreateButton
 							isPending={equipmentForm.isPending}
 							onClick={equipmentForm.onSubmit}
-						/>
-					</>
-				) : activeTab === 'service-rates' ? (
-					<>
-						<div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-							<TextField
-								label="Libellé"
-								value={serviceRateForm.values.label}
-								onChange={(label) => serviceRateForm.onChange({ label })}
-							/>
-							<div className="flex flex-col gap-2">
-								<Label>Unité</Label>
-								<Select
-									value={serviceRateForm.values.unit}
-									onValueChange={(unit) =>
-										serviceRateForm.onChange({
-											unit: unit as ServiceRateUnit,
-										})
-									}
-								>
-									<SelectTrigger className="w-full">
-										<SelectValue />
-									</SelectTrigger>
-									<SelectContent>
-										<SelectItem value="HOUR">Heure</SelectItem>
-										<SelectItem value="ML">Mètre linéaire</SelectItem>
-										<SelectItem value="M2">Mètre carré</SelectItem>
-									</SelectContent>
-								</Select>
-							</div>
-							<TextField
-								label="Tarif"
-								value={serviceRateForm.values.rate}
-								onChange={(rate) => serviceRateForm.onChange({ rate })}
-								inputMode="decimal"
-								suffix={UNIT_LABELS[serviceRateForm.values.unit]}
-							/>
-						</div>
-						<CreateButton
-							isPending={serviceRateForm.isPending}
-							onClick={serviceRateForm.onSubmit}
-						/>
-					</>
-				) : (
-					<>
-						<div className="grid grid-cols-1 gap-4 md:grid-cols-5">
-							<TextField
-								label="Produit"
-								value={productForm.values.name}
-								onChange={(name) => productForm.onChange({ name })}
-							/>
-							<TextField
-								label="Référence"
-								value={productForm.values.sku}
-								onChange={(sku) => productForm.onChange({ sku })}
-								placeholder="Optionnel"
-							/>
-							<div className="flex flex-col gap-2">
-								<Label>Unité</Label>
-								<Select
-									value={productForm.values.unit}
-									onValueChange={(unit) =>
-										productForm.onChange({ unit: unit as ServiceRateUnit })
-									}
-								>
-									<SelectTrigger className="w-full">
-										<SelectValue />
-									</SelectTrigger>
-									<SelectContent>
-										<SelectItem value="ML">Mètre linéaire</SelectItem>
-										<SelectItem value="M2">Mètre carré</SelectItem>
-										<SelectItem value="HOUR">Unité</SelectItem>
-									</SelectContent>
-								</Select>
-							</div>
-							<TextField
-								label="Prix"
-								value={productForm.values.unitPrice}
-								onChange={(unitPrice) => productForm.onChange({ unitPrice })}
-								inputMode="decimal"
-								suffix={PRODUCT_UNIT_LABELS[productForm.values.unit]}
-							/>
-							<TextField
-								label="Description"
-								value={productForm.values.description}
-								onChange={(description) =>
-									productForm.onChange({ description })
-								}
-								placeholder="Optionnel"
-							/>
-						</div>
-						<CreateButton
-							isPending={productForm.isPending}
-							onClick={productForm.onSubmit}
 						/>
 					</>
 				)}
@@ -823,274 +602,6 @@ function EquipmentTable({
 			description="Ressources matérielles facturables ou utilisées dans les opérations."
 			emptyTitle="Aucun matériel trouvé"
 			emptyDescription="Ajoutez une ressource pour la retrouver dans le référentiel de l'organisation."
-			data={data}
-			columns={columns}
-		/>
-	)
-}
-
-interface ServiceRateTableProps {
-	data: ServiceRate[]
-	draft: Draft
-	isSaving: boolean
-	onEdit: (serviceRate: ServiceRate) => void
-	onDraftChange: (values: ServiceRateFormValues) => void
-	onCancel: () => void
-	onSave: () => void
-	onDelete: (serviceRate: ServiceRate) => Promise<unknown>
-}
-
-function ServiceRateTable({
-	data,
-	draft,
-	isSaving,
-	onEdit,
-	onDraftChange,
-	onCancel,
-	onSave,
-	onDelete,
-}: ServiceRateTableProps) {
-	const columns = useMemo<ColumnDef<ServiceRate>[]>(
-		() => [
-			{
-				header: 'Prestation',
-				cell: ({ row }) =>
-					draft?.tab === 'service-rates' && draft.id === row.original.id ? (
-						<Input
-							value={draft.values.label}
-							onChange={(event) =>
-								onDraftChange({ ...draft.values, label: event.target.value })
-							}
-						/>
-					) : (
-						<RowIdentity title={row.original.label} id={row.original.id} />
-					),
-			},
-			{
-				header: 'Unité',
-				cell: ({ row }) =>
-					draft?.tab === 'service-rates' && draft.id === row.original.id ? (
-						<Select
-							value={draft.values.unit}
-							onValueChange={(unit) =>
-								onDraftChange({
-									...draft.values,
-									unit: unit as ServiceRateUnit,
-								})
-							}
-						>
-							<SelectTrigger className="w-36">
-								<SelectValue />
-							</SelectTrigger>
-							<SelectContent>
-								<SelectItem value="HOUR">Heure</SelectItem>
-								<SelectItem value="ML">Mètre linéaire</SelectItem>
-								<SelectItem value="M2">Mètre carré</SelectItem>
-							</SelectContent>
-						</Select>
-					) : (
-						<StatusBadge tone="brand">
-							{PRODUCT_UNIT_LABELS[row.original.unit]}
-						</StatusBadge>
-					),
-			},
-			{
-				header: 'Tarif',
-				cell: ({ row }) =>
-					draft?.tab === 'service-rates' && draft.id === row.original.id ? (
-						<Input
-							value={draft.values.rate}
-							onChange={(event) =>
-								onDraftChange({ ...draft.values, rate: event.target.value })
-							}
-							inputMode="decimal"
-						/>
-					) : (
-						<MoneyCell
-							value={row.original.rate_cents}
-							suffix={unitSuffix(row.original.unit)}
-						/>
-					),
-			},
-			{
-				id: 'actions',
-				cell: ({ row }) => (
-					<RowActions
-						isEditing={
-							draft?.tab === 'service-rates' && draft.id === row.original.id
-						}
-						isSaving={isSaving}
-						onEdit={() => onEdit(row.original)}
-						onCancel={onCancel}
-						onSave={onSave}
-						onDelete={() => onDelete(row.original)}
-					/>
-				),
-			},
-		],
-		[draft, isSaving, onCancel, onDelete, onDraftChange, onEdit, onSave],
-	)
-
-	return (
-		<ReferenceTable
-			title="Services"
-			description="Prestations réutilisables dans les devis et futures pièces commerciales."
-			emptyTitle="Aucun service trouvé"
-			emptyDescription="Ajoutez une prestation pour accélérer la saisie des devis."
-			data={data}
-			columns={columns}
-		/>
-	)
-}
-
-interface ProductTableProps {
-	data: Product[]
-	draft: Draft
-	isSaving: boolean
-	onEdit: (product: Product) => void
-	onDraftChange: (values: ProductCatalogFormValues) => void
-	onCancel: () => void
-	onSave: () => void
-	onDelete: (product: Product) => Promise<unknown>
-}
-
-function ProductTable({
-	data,
-	draft,
-	isSaving,
-	onEdit,
-	onDraftChange,
-	onCancel,
-	onSave,
-	onDelete,
-}: ProductTableProps) {
-	const columns = useMemo<ColumnDef<Product>[]>(
-		() => [
-			{
-				header: 'Produit',
-				cell: ({ row }) =>
-					draft?.tab === 'products' && draft.id === row.original.id ? (
-						<Input
-							value={draft.values.name}
-							onChange={(event) =>
-								onDraftChange({ ...draft.values, name: event.target.value })
-							}
-						/>
-					) : (
-						<ProductIdentity product={row.original} />
-					),
-			},
-			{
-				header: 'Référence',
-				cell: ({ row }) =>
-					draft?.tab === 'products' && draft.id === row.original.id ? (
-						<Input
-							value={draft.values.sku}
-							onChange={(event) =>
-								onDraftChange({ ...draft.values, sku: event.target.value })
-							}
-							placeholder="Optionnel"
-						/>
-					) : row.original.sku ? (
-						<StatusBadge tone="brand">{row.original.sku}</StatusBadge>
-					) : (
-						<StatusBadge>sans réf.</StatusBadge>
-					),
-			},
-			{
-				header: 'Unité',
-				cell: ({ row }) =>
-					draft?.tab === 'products' && draft.id === row.original.id ? (
-						<Select
-							value={draft.values.unit}
-							onValueChange={(unit) =>
-								onDraftChange({
-									...draft.values,
-									unit: unit as ServiceRateUnit,
-								})
-							}
-						>
-							<SelectTrigger className="w-36">
-								<SelectValue />
-							</SelectTrigger>
-							<SelectContent>
-								<SelectItem value="ML">Mètre linéaire</SelectItem>
-								<SelectItem value="M2">Mètre carré</SelectItem>
-								<SelectItem value="HOUR">Unité</SelectItem>
-							</SelectContent>
-						</Select>
-					) : (
-						<StatusBadge tone="brand">
-							{UNIT_LABELS[row.original.unit]}
-						</StatusBadge>
-					),
-			},
-			{
-				header: 'Prix',
-				cell: ({ row }) =>
-					draft?.tab === 'products' && draft.id === row.original.id ? (
-						<Input
-							value={draft.values.unitPrice}
-							onChange={(event) =>
-								onDraftChange({
-									...draft.values,
-									unitPrice: event.target.value,
-								})
-							}
-							inputMode="decimal"
-						/>
-					) : (
-						<MoneyCell
-							value={row.original.unit_price_cents}
-							suffix={productUnitSuffix(row.original.unit)}
-						/>
-					),
-			},
-			{
-				header: 'Description',
-				cell: ({ row }) =>
-					draft?.tab === 'products' && draft.id === row.original.id ? (
-						<Input
-							value={draft.values.description}
-							onChange={(event) =>
-								onDraftChange({
-									...draft.values,
-									description: event.target.value,
-								})
-							}
-							placeholder="Optionnel"
-						/>
-					) : (
-						<p className="max-w-64 truncate text-sm text-muted-foreground">
-							{row.original.description || 'Aucune description'}
-						</p>
-					),
-			},
-			{
-				id: 'actions',
-				cell: ({ row }) => (
-					<RowActions
-						isEditing={
-							draft?.tab === 'products' && draft.id === row.original.id
-						}
-						isSaving={isSaving}
-						onEdit={() => onEdit(row.original)}
-						onCancel={onCancel}
-						onSave={onSave}
-						onDelete={() => onDelete(row.original)}
-					/>
-				),
-			},
-		],
-		[draft, isSaving, onCancel, onDelete, onDraftChange, onEdit, onSave],
-	)
-
-	return (
-		<ReferenceTable
-			title="Produits"
-			description="Articles vendables avec référence, unité, prix et description préremplie."
-			emptyTitle="Aucun produit trouvé"
-			emptyDescription="Ajoutez un produit pour l'insérer rapidement dans les devis."
 			data={data}
 			columns={columns}
 		/>
@@ -1303,22 +814,6 @@ function RowIdentity({ title, id }: { title: string; id: string }) {
 	)
 }
 
-function ProductIdentity({ product }: { product: Product }) {
-	return (
-		<div className="min-w-0">
-			<div className="flex min-w-0 items-center gap-2">
-				<p className="truncate font-medium">{product.name}</p>
-				{product.sku ? (
-					<StatusBadge tone="brand">{product.sku}</StatusBadge>
-				) : null}
-			</div>
-			<p className="mt-0.5 truncate font-mono text-xs text-muted-foreground">
-				id: {product.id}
-			</p>
-		</div>
-	)
-}
-
 function MoneyCell({ value, suffix }: { value: number; suffix: string }) {
 	return (
 		<span className="font-medium tabular-nums">
@@ -1337,16 +832,4 @@ function formatMoney(value: number): string {
 		style: 'currency',
 		currency: 'EUR',
 	}).format(value / 100)
-}
-
-function unitSuffix(unit: ServiceRateUnit): string {
-	if (unit === 'HOUR') return '/h'
-	if (unit === 'ML') return '/ml'
-	return '/m²'
-}
-
-function productUnitSuffix(unit: ServiceRateUnit): string {
-	if (unit === 'HOUR') return '/unité'
-	if (unit === 'ML') return '/ml'
-	return '/m²'
 }

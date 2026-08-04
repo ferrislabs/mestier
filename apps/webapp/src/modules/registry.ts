@@ -66,7 +66,6 @@ export const MODULES: AppModule[] = [
 						to: '/crm/customers/pipeline',
 						icon: KanbanSquare,
 					},
-					{ title: 'Catalogue', to: '/catalog', icon: Boxes },
 					{ title: 'Devis', to: '/crm/quotes', icon: FileText },
 					{
 						title: 'Factures',
@@ -74,6 +73,12 @@ export const MODULES: AppModule[] = [
 						icon: Receipt,
 						disabled: true,
 					},
+				],
+			},
+			{
+				label: 'Configuration du module',
+				items: [
+					{ title: 'Configuration', to: '/crm/configuration', icon: Boxes },
 				],
 			},
 		],

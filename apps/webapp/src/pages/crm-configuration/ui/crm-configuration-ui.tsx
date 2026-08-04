@@ -68,7 +68,7 @@ type Draft =
 	| { tab: 'services'; id: string; values: ServiceRateFormValues }
 	| null
 
-interface CatalogUIProps {
+interface CrmConfigurationUIProps {
 	organizationName: string
 	isLoading: boolean
 	error: string | null
@@ -100,7 +100,7 @@ const PRODUCT_UNIT_LABELS: Record<ServiceRateUnit, string> = {
 	M2: '€/m²',
 }
 
-export function CatalogUI({
+export function CrmConfigurationUI({
 	organizationName,
 	isLoading,
 	error,
@@ -112,7 +112,7 @@ export function CatalogUI({
 	onDeleteServiceRate,
 	onUpdateProduct,
 	onDeleteProduct,
-}: CatalogUIProps) {
+}: CrmConfigurationUIProps) {
 	const [activeTab, setActiveTab] = useState<CatalogTab>('products')
 	const [createOpen, setCreateOpen] = useState(false)
 	const [createMode, setCreateMode] = useState<CatalogTab>('products')

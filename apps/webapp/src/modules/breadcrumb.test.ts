@@ -59,6 +59,14 @@ describe('buildBreadcrumbItems', () => {
 			'Fiche devis',
 		])
 	})
+
+	it('résout le fil de la configuration CRM', () => {
+		expect(labelsOf('/crm/configuration')).toEqual([
+			'Baptiste',
+			'CRM',
+			'Configuration',
+		])
+	})
 })
 
 describe('matchingNavItems', () => {
