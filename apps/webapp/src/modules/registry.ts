@@ -1,0 +1,99 @@
+import {
+	BarChart3,
+	Boxes,
+	BriefcaseBusiness,
+	Eye,
+	FileText,
+	KanbanSquare,
+	LayoutDashboard,
+	Link2,
+	MessagesSquare,
+	Package,
+	Receipt,
+	Settings,
+	ShieldCheck,
+	Users,
+} from 'lucide-react'
+import type { AppModule, ModuleNavGroup } from '#/modules/types'
+
+export const GLOBAL_NAV_GROUPS: ModuleNavGroup[] = [
+	{
+		label: 'Configuration',
+		items: [
+			{ title: 'Paramètres', to: '/settings', icon: Settings },
+			{
+				title: 'Intégrations',
+				to: '/integrations',
+				icon: Link2,
+				disabled: true,
+			},
+			{ title: 'Rapports', to: '/reports', icon: BarChart3, disabled: true },
+		],
+	},
+	{
+		label: 'Sécurité',
+		items: [
+			{ title: 'Audit', to: '/audit', icon: Eye, disabled: true },
+			{
+				title: 'Permissions',
+				to: '/permissions',
+				icon: ShieldCheck,
+				disabled: true,
+			},
+		],
+	},
+]
+
+export const MODULES: AppModule[] = [
+	{
+		id: 'home',
+		label: 'Accueil',
+		icon: LayoutDashboard,
+		basePath: '/',
+		enabled: true,
+		nav: [
+			{
+				label: 'Activité',
+				items: [
+					{ title: 'Accueil', to: '/', icon: LayoutDashboard, exact: true },
+					{
+						title: 'Clients',
+						to: '/customers',
+						icon: Users,
+						exact: true,
+						badge: '3',
+					},
+					{ title: 'Pipeline', to: '/customers/pipeline', icon: KanbanSquare },
+					{ title: 'Catalogue', to: '/catalog', icon: Boxes },
+					{ title: 'Devis', to: '/quotes', icon: FileText },
+					{ title: 'Factures', to: '/invoices', icon: Receipt, disabled: true },
+					{ title: 'Stock', to: '/stock', icon: Package, disabled: true },
+				],
+			},
+		],
+	},
+	{
+		id: 'crm',
+		label: 'CRM',
+		icon: Users,
+		basePath: '/crm',
+		enabled: false,
+		nav: [],
+	},
+	{
+		id: 'hr',
+		label: 'RH',
+		icon: BriefcaseBusiness,
+		basePath: '/hr',
+		enabled: false,
+		nav: [],
+	},
+	{
+		id: 'discussions',
+		label: 'Discussions',
+		icon: MessagesSquare,
+		basePath: '/discussions',
+		enabled: false,
+		nav: [],
+	},
+]
