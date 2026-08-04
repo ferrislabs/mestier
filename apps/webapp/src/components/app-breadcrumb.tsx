@@ -10,13 +10,8 @@ import {
 } from '#/components/ui/breadcrumb'
 import { useActiveOrganization } from '#/hooks/use-active-organization'
 import { useCustomer } from '#/hooks/use-customers'
+import { buildBreadcrumbItems } from '#/modules/breadcrumb'
 import { customerDisplayName } from '#/pages/customers/types'
-
-interface BreadcrumbItemDefinition {
-	id: string
-	label: string
-	to?: string
-}
 
 export function AppBreadcrumb() {
 	const location = useLocation()
@@ -26,11 +21,11 @@ export function AppBreadcrumb() {
 	const customerLabel = customer.data?.data
 		? customerDisplayName(customer.data.data)
 		: 'Fiche client'
-	const items = getBreadcrumbItems(
-		location.pathname,
-		activeOrganization.name,
-		customerLabel,
-	)
+	const items = buildBreadcrumbItems({
+		pathname: location.pathname,
+		organizationName: activeOrganization.name,
+		detailLabel: getDetailLabel(location.pathname, customerLabel),
+	})
 
 	return (
 		<Breadcrumb className="min-w-0 flex-1">
@@ -60,71 +55,13 @@ export function AppBreadcrumb() {
 	)
 }
 
-function getBreadcrumbItems(
+function getDetailLabel(
 	pathname: string,
-	organizationName: string,
 	customerLabel: string,
-): BreadcrumbItemDefinition[] {
-	if (pathname === '/') {
-		return [{ id: 'organization', label: organizationName }]
-	}
-
-	if (pathname === '/customers/pipeline') {
-		return [
-			{ id: 'organization', label: organizationName, to: '/' },
-			{ id: 'customers', label: 'Clients', to: '/customers' },
-			{ id: 'pipeline', label: 'Pipeline' },
-		]
-	}
-
-	if (pathname.startsWith('/customers/')) {
-		return [
-			{ id: 'organization', label: organizationName, to: '/' },
-			{ id: 'customers', label: 'Clients', to: '/customers' },
-			{ id: 'customer-detail', label: customerLabel },
-		]
-	}
-
-	if (pathname.startsWith('/customers')) {
-		return [
-			{ id: 'organization', label: organizationName, to: '/' },
-			{ id: 'customers', label: 'Clients' },
-		]
-	}
-
-	if (pathname.startsWith('/quotes')) {
-		if (pathname.startsWith('/quotes/')) {
-			return [
-				{ id: 'organization', label: organizationName, to: '/' },
-				{ id: 'quotes', label: 'Devis', to: '/quotes' },
-				{ id: 'quote-detail', label: 'Fiche devis' },
-			]
-		}
-
-		return [
-			{ id: 'organization', label: organizationName, to: '/' },
-			{ id: 'quotes', label: 'Devis' },
-		]
-	}
-
-	if (pathname.startsWith('/catalog')) {
-		return [
-			{ id: 'organization', label: organizationName, to: '/' },
-			{ id: 'catalog', label: 'Catalogue' },
-		]
-	}
-
-	if (pathname.startsWith('/settings')) {
-		return [
-			{ id: 'organization', label: organizationName, to: '/' },
-			{ id: 'settings', label: 'Paramètres' },
-		]
-	}
-
-	return [
-		{ id: 'organization', label: organizationName, to: '/' },
-		{ id: 'console', label: 'Console' },
-	]
+): string | undefined {
+	if (getCustomerId(pathname)) return customerLabel
+	if (/^\/quotes\/[^/]+$/.test(pathname)) return 'Fiche devis'
+	return undefined
 }
 
 function getCustomerId(pathname: string): string | null {
