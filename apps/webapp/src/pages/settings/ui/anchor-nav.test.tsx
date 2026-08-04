@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react'
+import { render, screen, within } from '@testing-library/react'
 import { Boxes } from 'lucide-react'
 import { describe, expect, it } from 'vitest'
 import type { SettingsNavGroup } from '#/pages/settings/nav'
@@ -62,5 +62,19 @@ describe('AnchorNav', () => {
 
 		const current = screen.getAllByRole('link', { current: 'location' })
 		expect(current.map((link) => link.textContent)).toEqual(['Catalogue'])
+	})
+
+	it('range chaque lien dans son propre groupe, pas un autre', () => {
+		render(<AnchorNav groups={groups} activeId="organisation" />)
+
+		const generalGroup = screen.getByRole('group', { name: 'Général' })
+		const crmGroup = screen.getByRole('group', { name: 'CRM' })
+
+		expect(
+			within(crmGroup).getByRole('link', { name: 'Catalogue' }),
+		).toBeDefined()
+		expect(
+			within(generalGroup).queryByRole('link', { name: 'Catalogue' }),
+		).toBeNull()
 	})
 })
