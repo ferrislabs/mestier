@@ -3,6 +3,7 @@ import { LayoutGrid } from 'lucide-react'
 
 import {
 	Popover,
+	PopoverClose,
 	PopoverContent,
 	PopoverTrigger,
 } from '#/components/ui/popover'
@@ -75,17 +76,19 @@ function ModuleTile({ module, active }: ModuleTileProps) {
 	}
 
 	return (
-		<Link
-			to={module.basePath}
-			aria-current={active ? 'page' : undefined}
-			className={cn(
-				tileClassName,
-				'transition-colors hover:bg-muted',
-				active ? 'border-primary bg-muted' : 'border-transparent',
-			)}
-		>
-			<Icon className="size-5" />
-			<span className="truncate">{module.label}</span>
-		</Link>
+		<PopoverClose asChild>
+			<Link
+				to={module.basePath}
+				aria-current={active ? 'page' : undefined}
+				className={cn(
+					tileClassName,
+					'transition-colors hover:bg-muted',
+					active ? 'border-primary bg-muted' : 'border-transparent',
+				)}
+			>
+				<Icon className="size-5" />
+				<span className="truncate">{module.label}</span>
+			</Link>
+		</PopoverClose>
 	)
 }
