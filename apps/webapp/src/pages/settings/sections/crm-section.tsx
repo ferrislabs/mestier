@@ -293,19 +293,25 @@ function CrmSectionContent({ organizationId }: CrmSectionContentProps) {
 
 						return (
 							<div className="flex flex-col gap-6">
-								<div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
-									<Button
-										type="button"
-										variant="outline"
-										onClick={() => openCreate('services')}
-									>
-										<BriefcaseBusiness />
-										Nouveau service
-									</Button>
-									<Button type="button" onClick={() => openCreate('products')}>
-										<Plus />
-										Nouveau produit
-									</Button>
+								<div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+									<h2 className="font-semibold text-foreground">Catalogue</h2>
+									<div className="flex flex-col gap-2 sm:flex-row">
+										<Button
+											type="button"
+											variant="outline"
+											onClick={() => openCreate('services')}
+										>
+											<BriefcaseBusiness />
+											Nouveau service
+										</Button>
+										<Button
+											type="button"
+											onClick={() => openCreate('products')}
+										>
+											<Plus />
+											Nouveau produit
+										</Button>
+									</div>
 								</div>
 
 								<div className="grid grid-cols-1 gap-4 md:grid-cols-3">
