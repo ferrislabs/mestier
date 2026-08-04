@@ -880,12 +880,11 @@ interface WideSuffixTextFieldProps
 	suffix?: string
 }
 
-// crm-configuration's TextField pads its suffix with `pr-20`, not the `pr-14`
-// of `#/pages/settings/ui/primitives`. The wider padding is load-bearing here:
-// this section's suffixes ("€/unité", "mètre linéaire"-length labels) are
-// longer than equipment's "€/h", and `pr-14` would let the input's value run
-// under them. Kept as a local variant rather than passed off as the shared
-// primitive — see task-7 report for the full comparison.
+// Pads with `pr-20`, wider than the `pr-14` used by the shared TextField in
+// `#/pages/settings/ui/primitives`. This section's suffixes ("€/unité",
+// "mètre linéaire"-length labels) are longer than equipment's "€/h", and
+// `pr-14` would let the input's value run under them. Kept as a local
+// variant rather than widening the shared primitive for every caller.
 function WideSuffixTextField({
 	label,
 	value,
