@@ -1,3 +1,4 @@
+import { AlertCircle } from 'lucide-react'
 import { useMemo } from 'react'
 
 import { PageHeader, PageShell } from '#/components/ui/surface'
@@ -12,6 +13,22 @@ export function SettingsFeature() {
 	const groups = useMemo(() => buildSettingsNavGroups(SETTINGS_SECTIONS), [])
 	const ids = useMemo(() => SETTINGS_SECTIONS.map((section) => section.id), [])
 	const activeId = useActiveSection(ids)
+
+	if (!activeOrganization) {
+		return (
+			<div className="flex flex-col items-center justify-center gap-3 p-12 text-center">
+				<div className="flex size-14 items-center justify-center rounded-lg border bg-card">
+					<AlertCircle className="size-6 text-destructive" />
+				</div>
+				<div>
+					<p className="font-semibold">Organisation indisponible</p>
+					<p className="text-sm text-muted-foreground">
+						Les paramètres nécessitent une organisation active.
+					</p>
+				</div>
+			</div>
+		)
+	}
 
 	return (
 		<PageShell>
