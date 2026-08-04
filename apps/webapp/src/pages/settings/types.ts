@@ -1,6 +1,6 @@
 import type { LucideIcon } from 'lucide-react'
 import type { ComponentType } from 'react'
-import type { Equipment, ServiceRateUnit } from '#/hooks/use-reference-catalog'
+import type { ServiceRateUnit } from '#/hooks/use-reference-catalog'
 import type { ModuleId } from '#/modules/types'
 
 export interface SettingsSection {
@@ -10,8 +10,6 @@ export interface SettingsSection {
 	moduleId?: ModuleId
 	Component: ComponentType
 }
-
-export type ReferenceTab = 'equipment'
 
 export interface OrganizationFormValues {
 	name: string
@@ -27,8 +25,4 @@ export interface ServiceRateFormValues {
 	label: string
 	unit: ServiceRateUnit
 	rate: string
-}
-
-export interface ReferenceCatalogData {
-	equipment: Equipment[]
 }
