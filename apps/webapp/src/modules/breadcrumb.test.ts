@@ -67,6 +67,10 @@ describe('buildBreadcrumbItems', () => {
 			'Configuration',
 		])
 	})
+
+	it('résout le fil des employés', () => {
+		expect(labelsOf('/hr/employees')).toEqual(['Baptiste', 'RH', 'Employés'])
+	})
 })
 
 describe('matchingNavItems', () => {
