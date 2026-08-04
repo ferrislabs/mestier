@@ -1,20 +1,10 @@
-import type {
-	Employee,
-	Equipment,
-	ServiceRateUnit,
-} from '#/hooks/use-reference-catalog'
+import type { Equipment, ServiceRateUnit } from '#/hooks/use-reference-catalog'
 
-export type ReferenceTab = 'employees' | 'equipment'
+export type ReferenceTab = 'equipment'
 
 export interface OrganizationFormValues {
 	name: string
 	slug: string
-}
-
-export interface EmployeeFormValues {
-	name: string
-	hourlyRate: string
-	userId: string
 }
 
 export interface EquipmentFormValues {
@@ -29,6 +19,5 @@ export interface ServiceRateFormValues {
 }
 
 export interface ReferenceCatalogData {
-	employees: Employee[]
 	equipment: Equipment[]
 }
