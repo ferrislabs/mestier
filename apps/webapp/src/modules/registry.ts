@@ -76,7 +76,7 @@ export const MODULES: AppModule[] = [
 						icon: KanbanSquare,
 					},
 					{ title: 'Catalogue', to: '/catalog', icon: Boxes },
-					{ title: 'Devis', to: '/quotes', icon: FileText },
+					{ title: 'Devis', to: '/crm/quotes', icon: FileText },
 					{
 						title: 'Factures',
 						to: '/crm/invoices',

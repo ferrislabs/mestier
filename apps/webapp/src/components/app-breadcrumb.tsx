@@ -60,7 +60,7 @@ function getDetailLabel(
 	customerLabel: string,
 ): string | undefined {
 	if (getCustomerId(pathname)) return customerLabel
-	if (/^\/quotes\/[^/]+$/.test(pathname)) return 'Fiche devis'
+	if (/^\/crm\/quotes\/[^/]+$/.test(pathname)) return 'Fiche devis'
 	return undefined
 }
 

@@ -49,6 +49,16 @@ describe('buildBreadcrumbItems', () => {
 		expect(items[2]?.to).toBe('/crm/customers')
 		expect(items[3]?.to).toBeUndefined()
 	})
+
+	it('résout le fil des devis', () => {
+		expect(labelsOf('/crm/quotes')).toEqual(['Baptiste', 'CRM', 'Devis'])
+		expect(labelsOf('/crm/quotes/abc-123', 'Fiche devis')).toEqual([
+			'Baptiste',
+			'CRM',
+			'Devis',
+			'Fiche devis',
+		])
+	})
 })
 
 describe('matchingNavItems', () => {

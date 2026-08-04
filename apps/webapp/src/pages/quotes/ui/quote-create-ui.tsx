@@ -614,7 +614,7 @@ export function QuoteCreateUI({
 							return (
 								<li key={quote.id} className="group relative">
 									<Link
-										to="/quotes/$quoteId"
+										to="/crm/quotes/$quoteId"
 										params={{ quoteId: quote.id }}
 										className="grid gap-4 px-5 py-4 pr-14 transition hover:bg-muted/40 sm:grid-cols-[minmax(0,1fr)_160px_160px] sm:items-center"
 									>
@@ -672,7 +672,7 @@ export function QuoteCreateUI({
 												<DropdownMenuContent align="end">
 													<DropdownMenuItem asChild>
 														<Link
-															to="/quotes/$quoteId"
+															to="/crm/quotes/$quoteId"
 															params={{ quoteId: quote.id }}
 														>
 															Modifier

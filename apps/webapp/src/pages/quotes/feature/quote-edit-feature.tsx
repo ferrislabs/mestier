@@ -254,7 +254,7 @@ function QuoteEditWorkspace({ quote }: { quote: Quote }) {
 		await deleteQuote.mutateAsync({
 			path: { quote_id: quote.id },
 		})
-		await navigate({ to: '/quotes' })
+		await navigate({ to: '/crm/quotes' })
 	}
 
 	return (
@@ -352,7 +352,7 @@ function QuoteEditUI({
 				actions={
 					<div className="flex flex-col gap-2 sm:flex-row">
 						<Button asChild variant="outline">
-							<Link to="/quotes">
+							<Link to="/crm/quotes">
 								<ArrowLeft />
 								Retour
 							</Link>
@@ -788,7 +788,7 @@ function QuoteEditError({
 				</div>
 				<div className="flex gap-2">
 					<Button asChild variant="outline">
-						<Link to="/quotes">Retour aux devis</Link>
+						<Link to="/crm/quotes">Retour aux devis</Link>
 					</Button>
 					{onRetry ? (
 						<Button type="button" onClick={onRetry}>
