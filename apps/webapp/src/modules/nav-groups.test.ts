@@ -13,8 +13,6 @@ describe('buildSidebarGroups', () => {
 			'Accueil',
 			'Paramètres',
 			'Intégrations',
-			'Rapports',
-			'Audit',
 			'Permissions',
 		])
 		expect(titlesOf('/crm/customers')).toContain('Clients')
@@ -28,6 +26,6 @@ describe('buildSidebarGroups', () => {
 
 	it('place les groupes du module avant les groupes globaux', () => {
 		const labels = buildSidebarGroups('/').map((group) => group.label)
-		expect(labels).toEqual(['Activité', 'Configuration', 'Sécurité'])
+		expect(labels).toEqual(['Activité', 'Configuration'])
 	})
 })

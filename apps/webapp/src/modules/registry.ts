@@ -1,8 +1,6 @@
 import {
-	BarChart3,
 	Boxes,
 	BriefcaseBusiness,
-	Eye,
 	FileText,
 	KanbanSquare,
 	LayoutDashboard,
@@ -26,13 +24,6 @@ export const GLOBAL_NAV_GROUPS: ModuleNavGroup[] = [
 				icon: Link2,
 				disabled: true,
 			},
-			{ title: 'Rapports', to: '/reports', icon: BarChart3, disabled: true },
-		],
-	},
-	{
-		label: 'Sécurité',
-		items: [
-			{ title: 'Audit', to: '/audit', icon: Eye, disabled: true },
 			{
 				title: 'Permissions',
 				to: '/permissions',
