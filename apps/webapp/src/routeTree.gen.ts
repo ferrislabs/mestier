@@ -12,6 +12,7 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as AppRouteImport } from './routes/_app'
 import { Route as AppIndexRouteImport } from './routes/_app.index'
 import { Route as AppSettingsRouteImport } from './routes/_app.settings'
+import { Route as AppCrmIndexRouteImport } from './routes/_app.crm.index'
 import { Route as AppCatalogIndexRouteImport } from './routes/_app.catalog.index'
 import { Route as AppCrmQuotesIndexRouteImport } from './routes/_app.crm.quotes.index'
 import { Route as AppCrmCustomersIndexRouteImport } from './routes/_app.crm.customers.index'
@@ -31,6 +32,11 @@ const AppIndexRoute = AppIndexRouteImport.update({
 const AppSettingsRoute = AppSettingsRouteImport.update({
   id: '/settings',
   path: '/settings',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppCrmIndexRoute = AppCrmIndexRouteImport.update({
+  id: '/crm/',
+  path: '/crm/',
   getParentRoute: () => AppRoute,
 } as any)
 const AppCatalogIndexRoute = AppCatalogIndexRouteImport.update({
@@ -69,6 +75,7 @@ export interface FileRoutesByFullPath {
   '/': typeof AppIndexRoute
   '/settings': typeof AppSettingsRoute
   '/catalog/': typeof AppCatalogIndexRoute
+  '/crm/': typeof AppCrmIndexRoute
   '/crm/customers/$customerId': typeof AppCrmCustomersCustomerIdRoute
   '/crm/customers/pipeline': typeof AppCrmCustomersPipelineRoute
   '/crm/quotes/$quoteId': typeof AppCrmQuotesQuoteIdRoute
@@ -79,6 +86,7 @@ export interface FileRoutesByTo {
   '/settings': typeof AppSettingsRoute
   '/': typeof AppIndexRoute
   '/catalog': typeof AppCatalogIndexRoute
+  '/crm': typeof AppCrmIndexRoute
   '/crm/customers/$customerId': typeof AppCrmCustomersCustomerIdRoute
   '/crm/customers/pipeline': typeof AppCrmCustomersPipelineRoute
   '/crm/quotes/$quoteId': typeof AppCrmQuotesQuoteIdRoute
@@ -91,6 +99,7 @@ export interface FileRoutesById {
   '/_app/settings': typeof AppSettingsRoute
   '/_app/': typeof AppIndexRoute
   '/_app/catalog/': typeof AppCatalogIndexRoute
+  '/_app/crm/': typeof AppCrmIndexRoute
   '/_app/crm/customers/$customerId': typeof AppCrmCustomersCustomerIdRoute
   '/_app/crm/customers/pipeline': typeof AppCrmCustomersPipelineRoute
   '/_app/crm/quotes/$quoteId': typeof AppCrmQuotesQuoteIdRoute
@@ -103,6 +112,7 @@ export interface FileRouteTypes {
     | '/'
     | '/settings'
     | '/catalog/'
+    | '/crm/'
     | '/crm/customers/$customerId'
     | '/crm/customers/pipeline'
     | '/crm/quotes/$quoteId'
@@ -113,6 +123,7 @@ export interface FileRouteTypes {
     | '/settings'
     | '/'
     | '/catalog'
+    | '/crm'
     | '/crm/customers/$customerId'
     | '/crm/customers/pipeline'
     | '/crm/quotes/$quoteId'
@@ -124,6 +135,7 @@ export interface FileRouteTypes {
     | '/_app/settings'
     | '/_app/'
     | '/_app/catalog/'
+    | '/_app/crm/'
     | '/_app/crm/customers/$customerId'
     | '/_app/crm/customers/pipeline'
     | '/_app/crm/quotes/$quoteId'
@@ -156,6 +168,13 @@ declare module '@tanstack/react-router' {
       path: '/settings'
       fullPath: '/settings'
       preLoaderRoute: typeof AppSettingsRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/crm/': {
+      id: '/_app/crm/'
+      path: '/crm'
+      fullPath: '/crm/'
+      preLoaderRoute: typeof AppCrmIndexRouteImport
       parentRoute: typeof AppRoute
     }
     '/_app/catalog/': {
@@ -207,6 +226,7 @@ interface AppRouteChildren {
   AppSettingsRoute: typeof AppSettingsRoute
   AppIndexRoute: typeof AppIndexRoute
   AppCatalogIndexRoute: typeof AppCatalogIndexRoute
+  AppCrmIndexRoute: typeof AppCrmIndexRoute
   AppCrmCustomersCustomerIdRoute: typeof AppCrmCustomersCustomerIdRoute
   AppCrmCustomersPipelineRoute: typeof AppCrmCustomersPipelineRoute
   AppCrmQuotesQuoteIdRoute: typeof AppCrmQuotesQuoteIdRoute
@@ -218,6 +238,7 @@ const AppRouteChildren: AppRouteChildren = {
   AppSettingsRoute: AppSettingsRoute,
   AppIndexRoute: AppIndexRoute,
   AppCatalogIndexRoute: AppCatalogIndexRoute,
+  AppCrmIndexRoute: AppCrmIndexRoute,
   AppCrmCustomersCustomerIdRoute: AppCrmCustomersCustomerIdRoute,
   AppCrmCustomersPipelineRoute: AppCrmCustomersPipelineRoute,
   AppCrmQuotesQuoteIdRoute: AppCrmQuotesQuoteIdRoute,
