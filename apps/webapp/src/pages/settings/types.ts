@@ -1,4 +1,15 @@
+import type { LucideIcon } from 'lucide-react'
+import type { ComponentType } from 'react'
 import type { Equipment, ServiceRateUnit } from '#/hooks/use-reference-catalog'
+import type { ModuleId } from '#/modules/types'
+
+export interface SettingsSection {
+	id: string
+	label: string
+	icon: LucideIcon
+	moduleId?: ModuleId
+	Component: ComponentType
+}
 
 export type ReferenceTab = 'equipment'
 
