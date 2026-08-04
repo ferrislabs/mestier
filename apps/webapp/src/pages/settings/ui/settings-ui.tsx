@@ -1,7 +1,6 @@
 import type { ColumnDef } from '@tanstack/react-table'
-import { Building2, Loader2, Package, Save, Search } from 'lucide-react'
+import { Loader2, Package, Search } from 'lucide-react'
 import { useMemo, useState } from 'react'
-import { Button } from '#/components/ui/button'
 import { Input } from '#/components/ui/input'
 import {
 	MetricCard,
@@ -9,13 +8,11 @@ import {
 	PageShell,
 	SectionCard,
 	SectionHeader,
-	StatusBadge,
 } from '#/components/ui/surface'
 import type { Organization } from '#/hooks/use-organizations'
 import type { Equipment } from '#/hooks/use-reference-catalog'
 import type {
 	EquipmentFormValues,
-	OrganizationFormValues,
 	ReferenceCatalogData,
 } from '#/pages/settings/types'
 import {
@@ -34,7 +31,6 @@ interface SettingsUIProps {
 	isLoading: boolean
 	error: string | null
 	data: ReferenceCatalogData
-	organizationForm: FormBinding<OrganizationFormValues>
 	equipmentForm: FormBinding<EquipmentFormValues>
 	onUpdateEquipment: (
 		equipment: Equipment,
@@ -54,7 +50,6 @@ export function SettingsUI({
 	isLoading,
 	error,
 	data,
-	organizationForm,
 	equipmentForm,
 	onUpdateEquipment,
 	onDeleteEquipment,
@@ -93,11 +88,6 @@ export function SettingsUI({
 				eyebrow={organization.name}
 				title="Paramètres"
 				description="Configurez l’espace de travail et les ressources internes de l’organisation."
-			/>
-
-			<OrganizationSection
-				organization={organization}
-				form={organizationForm}
 			/>
 
 			<MetricCard
@@ -159,62 +149,6 @@ export function SettingsUI({
 	)
 }
 
-interface OrganizationSectionProps {
-	organization: Organization
-	form: FormBinding<OrganizationFormValues>
-}
-
-function OrganizationSection({ organization, form }: OrganizationSectionProps) {
-	const hasChanges =
-		form.values.name.trim() !== organization.name ||
-		form.values.slug.trim() !== organization.slug
-
-	return (
-		<SectionCard>
-			<SectionHeader
-				title="Organisation"
-				description="Informations visibles dans l’application et utilisées pour identifier l’espace de travail."
-				actions={
-					<StatusBadge tone="brand">
-						<Building2 className="mr-1 size-3" />
-						{organization.slug}
-					</StatusBadge>
-				}
-			/>
-			<div className="grid grid-cols-1 gap-4 p-5 lg:grid-cols-[1fr_auto] lg:items-end">
-				<div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-					<TextField
-						label="Nom"
-						value={form.values.name}
-						onChange={(name) => form.onChange({ name })}
-						placeholder="Nom de l’entreprise"
-					/>
-					<TextField
-						label="Identifiant"
-						value={form.values.slug}
-						onChange={(slug) => form.onChange({ slug: normalizeSlug(slug) })}
-						placeholder="mon-entreprise"
-						className="font-mono text-sm"
-					/>
-				</div>
-				<Button
-					type="button"
-					onClick={form.onSubmit}
-					disabled={form.isPending || !hasChanges}
-					className="gap-2"
-				>
-					{form.isPending ? (
-						<Loader2 className="size-4 animate-spin" />
-					) : (
-						<Save className="size-4" />
-					)}
-					Enregistrer
-				</Button>
-			</div>
-		</SectionCard>
-	)
-}
-
 SettingsUI.Loading = function SettingsLoading() {
 	return (
 		<PageShell>
@@ -261,15 +195,6 @@ function CreateReferenceSection({
 			</div>
 		</SectionCard>
 	)
-}
-
-function normalizeSlug(value: string): string {
-	return value
-		.toLowerCase()
-		.trim()
-		.replace(/\s+/g, '-')
-		.replace(/[^a-z0-9-]/g, '')
-		.replace(/-{2,}/g, '-')
 }
 
 interface EquipmentTableProps {
