@@ -67,8 +67,8 @@ describe('AnchorNav', () => {
 	it('range chaque lien dans son propre groupe, pas un autre', () => {
 		render(<AnchorNav groups={groups} activeId="organisation" />)
 
-		const generalGroup = screen.getByRole('group', { name: 'Général' })
-		const crmGroup = screen.getByRole('group', { name: 'CRM' })
+		const generalGroup = screen.getByRole('list', { name: 'Général' })
+		const crmGroup = screen.getByRole('list', { name: 'CRM' })
 
 		expect(
 			within(crmGroup).getByRole('link', { name: 'Catalogue' }),
