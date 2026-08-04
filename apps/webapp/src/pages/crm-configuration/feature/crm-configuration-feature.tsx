@@ -11,10 +11,10 @@ import {
 	useUpdateProduct,
 	useUpdateServiceRate,
 } from '#/hooks/use-reference-catalog'
-import { CatalogUI } from '#/pages/catalog/ui/catalog-ui'
+import { CrmConfigurationUI } from '#/pages/crm-configuration/ui/crm-configuration-ui'
 import type { ServiceRateFormValues } from '#/pages/settings/types'
 
-export function CatalogFeature() {
+export function CrmConfigurationFeature() {
 	const { activeOrganization } = useActiveOrganization()
 
 	if (!activeOrganization) {
@@ -118,7 +118,7 @@ function CatalogWorkspace({
 			{(serviceRateValues) => (
 				<productForm.Subscribe selector={(state) => state.values}>
 					{(productValues) => (
-						<CatalogUI
+						<CrmConfigurationUI
 							organizationName={organizationName}
 							isLoading={isLoading}
 							error={error?.message ?? null}
