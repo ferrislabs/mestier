@@ -1,4 +1,4 @@
-use std::str::FromStr;
+use std::{collections::HashMap, str::FromStr};
 
 use auth::Identity;
 use axum::{Extension, Json, extract::State};
@@ -17,6 +17,7 @@ pub struct CreateProductRequest {
     pub unit: ServiceRateUnit,
     pub unit_price_cents: i32,
     pub vat_rate: Option<String>,
+    pub custom_fields: Option<HashMap<String, String>>,
     pub description: Option<String>,
 }
 
@@ -61,6 +62,7 @@ pub async fn handler(
             unit: payload.unit,
             unit_price_cents: payload.unit_price_cents,
             vat_rate,
+            custom_fields: payload.custom_fields.unwrap_or_default(),
             description: payload.description,
         })
         .await?;

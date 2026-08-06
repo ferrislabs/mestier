@@ -35,6 +35,7 @@ export namespace Schemas {
   export type CreateOrganizationRequest = { name: string; slug: string };
   export type ServiceRateUnit = "HOUR" | "ML" | "M2";
   export type CreateProductRequest = {
+    custom_fields?: (Record<string, string> | null) | undefined;
     description?: (string | null) | undefined;
     name: string;
     sku?: (string | null) | undefined;
@@ -61,7 +62,7 @@ export namespace Schemas {
     lines: Array<QuoteLineRequest>;
     title: string;
   };
-  export type CreateServiceRateRequest = { label: string; rate_cents: number; unit: ServiceRateUnit; vat_rate?: (string | null) | undefined };
+  export type CreateServiceRateRequest = { custom_fields?: (Record<string, string> | null) | undefined; label: string; rate_cents: number; unit: ServiceRateUnit; vat_rate?: (string | null) | undefined };
   export type CustomerContactId = string;
   export type CustomerContactResponse = {
     created_at: string;
@@ -140,6 +141,7 @@ export namespace Schemas {
   export type ProductId = string;
   export type ProductResponse = {
     created_at: string;
+    custom_fields: Record<string, string>;
     description?: (string | null) | undefined;
     id: ProductId;
     name: string;
@@ -186,6 +188,7 @@ export namespace Schemas {
   };
   export type ServiceRateResponse = {
     created_at: string;
+    custom_fields: Record<string, string>;
     id: ServiceRateId;
     label: string;
     organization_id: OrganizationId;
@@ -225,6 +228,7 @@ export namespace Schemas {
   export type UpdateEquipmentRequest = { hourly_rate_cents: number; name: string };
   export type UpdateOrganizationRequest = { name: string; slug: string };
   export type UpdateProductRequest = {
+    custom_fields?: (Record<string, string> | null) | undefined;
     description?: (string | null) | undefined;
     name: string;
     sku?: (string | null) | undefined;
@@ -240,7 +244,7 @@ export namespace Schemas {
     title: string;
   };
   export type UpdateQuoteStatusRequest = { status: QuoteStatus };
-  export type UpdateServiceRateRequest = { label: string; rate_cents: number; unit: ServiceRateUnit; vat_rate?: (string | null) | undefined };
+  export type UpdateServiceRateRequest = { custom_fields?: (Record<string, string> | null) | undefined; label: string; rate_cents: number; unit: ServiceRateUnit; vat_rate?: (string | null) | undefined };
 
   // </Schemas>
 }

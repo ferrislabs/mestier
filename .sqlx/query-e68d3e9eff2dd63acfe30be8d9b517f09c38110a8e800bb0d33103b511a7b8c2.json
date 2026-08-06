@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT id, org_id, name, sku, unit, unit_price_cents, vat_rate, description, deleted_at, created_at, updated_at\n            FROM products\n            WHERE org_id = $1 AND deleted_at IS NULL\n            ORDER BY name ASC, created_at ASC\n            LIMIT $2 OFFSET $3\n            ",
+  "query": "\n            SELECT id, org_id, name, sku, unit, unit_price_cents, vat_rate,\n                   custom_fields as \"custom_fields: sqlx::types::Json<serde_json::Value>\",\n                   description, deleted_at, created_at, updated_at\n            FROM products\n            WHERE org_id = $1 AND deleted_at IS NULL\n            ORDER BY name ASC, created_at ASC\n            LIMIT $2 OFFSET $3\n            ",
   "describe": {
     "columns": [
       {
@@ -40,21 +40,26 @@
       },
       {
         "ordinal": 7,
+        "name": "custom_fields: sqlx::types::Json<serde_json::Value>",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 8,
         "name": "description",
         "type_info": "Text"
       },
       {
-        "ordinal": 8,
+        "ordinal": 9,
         "name": "deleted_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 9,
+        "ordinal": 10,
         "name": "created_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 10,
+        "ordinal": 11,
         "name": "updated_at",
         "type_info": "Timestamptz"
       }
@@ -74,11 +79,12 @@
       false,
       false,
       false,
+      false,
       true,
       true,
       false,
       false
     ]
   },
-  "hash": "dd62fbd621b067924d3dfe1b338955f463a07f2f905449a524b7c8c7775b0d83"
+  "hash": "e68d3e9eff2dd63acfe30be8d9b517f09c38110a8e800bb0d33103b511a7b8c2"
 }

@@ -34,6 +34,7 @@ export interface ServiceRateFormValues {
 	unit: ServiceRateUnit
 	rate: string
 	vatRate: string
+	customFields: { key: string; value: string }[]
 }
 
 export interface ReferenceCatalogData {

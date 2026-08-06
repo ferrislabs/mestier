@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT id, org_id, label, unit, rate_cents, vat_rate, deleted_at, created_at, updated_at\n            FROM service_rates\n            WHERE id = $1 AND deleted_at IS NULL\n            ",
+  "query": "\n            SELECT id, org_id, label, unit, rate_cents, vat_rate,\n                   custom_fields as \"custom_fields: sqlx::types::Json<serde_json::Value>\",\n                   deleted_at, created_at, updated_at\n            FROM service_rates\n            WHERE id = $1 AND deleted_at IS NULL\n            ",
   "describe": {
     "columns": [
       {
@@ -35,16 +35,21 @@
       },
       {
         "ordinal": 6,
+        "name": "custom_fields: sqlx::types::Json<serde_json::Value>",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 7,
         "name": "deleted_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 7,
+        "ordinal": 8,
         "name": "created_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 8,
+        "ordinal": 9,
         "name": "updated_at",
         "type_info": "Timestamptz"
       }
@@ -61,10 +66,11 @@
       false,
       false,
       false,
+      false,
       true,
       false,
       false
     ]
   },
-  "hash": "d12b626fd7d462deb5733a543530f70670080270450c0452c9d830d4edbf2c84"
+  "hash": "0035034e3167b48b0b37cb49b9173133cd93ef8401dcc59e52013f0803d7de42"
 }

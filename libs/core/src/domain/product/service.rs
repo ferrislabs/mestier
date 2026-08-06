@@ -41,6 +41,7 @@ where
                 unit: command.unit,
                 unit_price_cents: command.unit_price_cents,
                 vat_rate: command.vat_rate,
+                custom_fields: command.custom_fields,
                 description: normalize_optional(command.description),
                 deleted_at: None,
                 created_at: now,
@@ -77,6 +78,7 @@ where
         product.unit = command.unit;
         product.unit_price_cents = command.unit_price_cents;
         product.vat_rate = command.vat_rate;
+        product.custom_fields = command.custom_fields;
         product.description = normalize_optional(command.description);
         product.updated_at = Utc::now();
 
@@ -118,4 +120,97 @@ fn normalize_optional(value: Option<String>) -> Option<String> {
             Some(trimmed)
         }
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{
+        OrganizationId, ServiceRateUnit,
+        domain::product::{commands::CreateProductCommand, ports::MockProductRepository},
+    };
+    use mockall::predicate::eq;
+    use rust_decimal::Decimal;
+    use std::collections::HashMap;
+    use uuid::Uuid;
+
+    fn product(id: ProductId) -> Product {
+        let now = chrono::Utc::now();
+        Product {
+            id,
+            organization_id: OrganizationId(Uuid::new_v4()),
+            name: "Enduit".to_owned(),
+            sku: None,
+            unit: ServiceRateUnit::Ml,
+            unit_price_cents: 1000,
+            vat_rate: Decimal::from(20u32),
+            custom_fields: HashMap::new(),
+            description: None,
+            deleted_at: None,
+            created_at: now,
+            updated_at: now,
+        }
+    }
+
+    #[tokio::test]
+    async fn create_product_maps_custom_fields() {
+        let mut repo = MockProductRepository::new();
+        repo.expect_insert().times(1).returning(|p| {
+            let product = p.clone();
+            Box::pin(async move { Ok(product) })
+        });
+
+        let mut service = ProductService::new(repo);
+        let mut fields = HashMap::new();
+        fields.insert("couleur".to_owned(), "blanc".to_owned());
+
+        let created = service
+            .create_product(CreateProductCommand {
+                organization_id: OrganizationId(Uuid::new_v4()),
+                name: "Enduit blanc".to_owned(),
+                sku: None,
+                unit: ServiceRateUnit::Ml,
+                unit_price_cents: 1500,
+                vat_rate: Decimal::from(20u32),
+                custom_fields: fields.clone(),
+                description: None,
+            })
+            .await
+            .unwrap();
+
+        assert_eq!(created.custom_fields, fields);
+    }
+
+    #[tokio::test]
+    async fn update_product_maps_custom_fields() {
+        let id = ProductId(Uuid::new_v4());
+        let mut repo = MockProductRepository::new();
+        repo.expect_find_by_id()
+            .with(eq(id))
+            .returning(move |_| Box::pin(async move { Ok(Some(product(id))) }));
+        repo.expect_update().times(1).returning(|p| {
+            let product = p.clone();
+            Box::pin(async move { Ok(product) })
+        });
+
+        let mut service = ProductService::new(repo);
+        let mut fields = HashMap::new();
+        fields.insert("ref".to_owned(), "AB-123".to_owned());
+
+        let updated = service
+            .update_product(UpdateProductCommand {
+                id,
+                name: "Enduit gris".to_owned(),
+                sku: None,
+                unit: ServiceRateUnit::M2,
+                unit_price_cents: 2000,
+                vat_rate: Decimal::from(10u32),
+                custom_fields: fields.clone(),
+                description: None,
+            })
+            .await
+            .unwrap();
+
+        assert_eq!(updated.custom_fields, fields);
+    }
 }

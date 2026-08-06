@@ -1,4 +1,4 @@
-use std::str::FromStr;
+use std::{collections::HashMap, str::FromStr};
 
 use auth::Identity;
 use axum::{Extension, Json, extract::State};
@@ -16,6 +16,7 @@ pub struct CreateServiceRateRequest {
     pub unit: ServiceRateUnit,
     pub rate_cents: i32,
     pub vat_rate: Option<String>,
+    pub custom_fields: Option<HashMap<String, String>>,
 }
 
 #[utoipa::path(
@@ -59,6 +60,7 @@ pub async fn handler(
             unit: payload.unit,
             rate_cents: payload.rate_cents,
             vat_rate,
+            custom_fields: payload.custom_fields.unwrap_or_default(),
         })
         .await?;
 

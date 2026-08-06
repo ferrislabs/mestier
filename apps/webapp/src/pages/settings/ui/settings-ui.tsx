@@ -18,6 +18,10 @@ import {
 } from 'lucide-react'
 import type * as React from 'react'
 import { useMemo, useState } from 'react'
+import {
+	CustomFieldsEditor,
+	recordToCustomFields,
+} from '#/components/custom-fields-editor'
 import { Button } from '#/components/ui/button'
 import {
 	DropdownMenu,
@@ -347,6 +351,7 @@ export function SettingsUI({
 								unit: serviceRate.unit,
 								rate: centsToEuros(serviceRate.rate_cents),
 								vatRate: serviceRate.vat_rate,
+								customFields: recordToCustomFields(serviceRate.custom_fields),
 							},
 						})
 					}
@@ -377,6 +382,7 @@ export function SettingsUI({
 								unitPrice: centsToEuros(product.unit_price_cents),
 								vatRate: product.vat_rate,
 								description: product.description ?? '',
+								customFields: recordToCustomFields(product.custom_fields),
 							},
 						})
 					}
@@ -535,45 +541,53 @@ function CreateReferenceSection({
 					</>
 				) : activeTab === 'service-rates' ? (
 					<>
-						<div className="grid grid-cols-1 gap-4 md:grid-cols-4">
-							<TextField
-								label="Libellé"
-								value={serviceRateForm.values.label}
-								onChange={(label) => serviceRateForm.onChange({ label })}
-							/>
-							<div className="flex flex-col gap-2">
-								<Label>Unité</Label>
-								<Select
-									value={serviceRateForm.values.unit}
-									onValueChange={(unit) =>
-										serviceRateForm.onChange({
-											unit: unit as ServiceRateUnit,
-										})
-									}
-								>
-									<SelectTrigger className="w-full">
-										<SelectValue />
-									</SelectTrigger>
-									<SelectContent>
-										<SelectItem value="HOUR">Heure</SelectItem>
-										<SelectItem value="ML">Mètre linéaire</SelectItem>
-										<SelectItem value="M2">Mètre carré</SelectItem>
-									</SelectContent>
-								</Select>
+						<div className="flex flex-col gap-4 flex-1">
+							<div className="grid grid-cols-1 gap-4 md:grid-cols-4">
+								<TextField
+									label="Libellé"
+									value={serviceRateForm.values.label}
+									onChange={(label) => serviceRateForm.onChange({ label })}
+								/>
+								<div className="flex flex-col gap-2">
+									<Label>Unité</Label>
+									<Select
+										value={serviceRateForm.values.unit}
+										onValueChange={(unit) =>
+											serviceRateForm.onChange({
+												unit: unit as ServiceRateUnit,
+											})
+										}
+									>
+										<SelectTrigger className="w-full">
+											<SelectValue />
+										</SelectTrigger>
+										<SelectContent>
+											<SelectItem value="HOUR">Heure</SelectItem>
+											<SelectItem value="ML">Mètre linéaire</SelectItem>
+											<SelectItem value="M2">Mètre carré</SelectItem>
+										</SelectContent>
+									</Select>
+								</div>
+								<TextField
+									label="Tarif"
+									value={serviceRateForm.values.rate}
+									onChange={(rate) => serviceRateForm.onChange({ rate })}
+									inputMode="decimal"
+									suffix={UNIT_LABELS[serviceRateForm.values.unit]}
+								/>
+								<TextField
+									label="TVA"
+									value={serviceRateForm.values.vatRate}
+									onChange={(vatRate) => serviceRateForm.onChange({ vatRate })}
+									inputMode="decimal"
+									suffix="%"
+								/>
 							</div>
-							<TextField
-								label="Tarif"
-								value={serviceRateForm.values.rate}
-								onChange={(rate) => serviceRateForm.onChange({ rate })}
-								inputMode="decimal"
-								suffix={UNIT_LABELS[serviceRateForm.values.unit]}
-							/>
-							<TextField
-								label="TVA"
-								value={serviceRateForm.values.vatRate}
-								onChange={(vatRate) => serviceRateForm.onChange({ vatRate })}
-								inputMode="decimal"
-								suffix="%"
+							<CustomFieldsEditor
+								fields={serviceRateForm.values.customFields}
+								onChange={(customFields) =>
+									serviceRateForm.onChange({ customFields })
+								}
 							/>
 						</div>
 						<CreateButton
@@ -583,57 +597,65 @@ function CreateReferenceSection({
 					</>
 				) : (
 					<>
-						<div className="grid grid-cols-1 gap-4 md:grid-cols-6">
-							<TextField
-								label="Produit"
-								value={productForm.values.name}
-								onChange={(name) => productForm.onChange({ name })}
-							/>
-							<TextField
-								label="Référence"
-								value={productForm.values.sku}
-								onChange={(sku) => productForm.onChange({ sku })}
-								placeholder="Optionnel"
-							/>
-							<div className="flex flex-col gap-2">
-								<Label>Unité</Label>
-								<Select
-									value={productForm.values.unit}
-									onValueChange={(unit) =>
-										productForm.onChange({ unit: unit as ServiceRateUnit })
+						<div className="flex flex-col gap-4 flex-1">
+							<div className="grid grid-cols-1 gap-4 md:grid-cols-6">
+								<TextField
+									label="Produit"
+									value={productForm.values.name}
+									onChange={(name) => productForm.onChange({ name })}
+								/>
+								<TextField
+									label="Référence"
+									value={productForm.values.sku}
+									onChange={(sku) => productForm.onChange({ sku })}
+									placeholder="Optionnel"
+								/>
+								<div className="flex flex-col gap-2">
+									<Label>Unité</Label>
+									<Select
+										value={productForm.values.unit}
+										onValueChange={(unit) =>
+											productForm.onChange({ unit: unit as ServiceRateUnit })
+										}
+									>
+										<SelectTrigger className="w-full">
+											<SelectValue />
+										</SelectTrigger>
+										<SelectContent>
+											<SelectItem value="ML">Mètre linéaire</SelectItem>
+											<SelectItem value="M2">Mètre carré</SelectItem>
+											<SelectItem value="HOUR">Unité</SelectItem>
+										</SelectContent>
+									</Select>
+								</div>
+								<TextField
+									label="Prix"
+									value={productForm.values.unitPrice}
+									onChange={(unitPrice) => productForm.onChange({ unitPrice })}
+									inputMode="decimal"
+									suffix={PRODUCT_UNIT_LABELS[productForm.values.unit]}
+								/>
+								<TextField
+									label="TVA"
+									value={productForm.values.vatRate}
+									onChange={(vatRate) => productForm.onChange({ vatRate })}
+									inputMode="decimal"
+									suffix="%"
+								/>
+								<TextField
+									label="Description"
+									value={productForm.values.description}
+									onChange={(description) =>
+										productForm.onChange({ description })
 									}
-								>
-									<SelectTrigger className="w-full">
-										<SelectValue />
-									</SelectTrigger>
-									<SelectContent>
-										<SelectItem value="ML">Mètre linéaire</SelectItem>
-										<SelectItem value="M2">Mètre carré</SelectItem>
-										<SelectItem value="HOUR">Unité</SelectItem>
-									</SelectContent>
-								</Select>
+									placeholder="Optionnel"
+								/>
 							</div>
-							<TextField
-								label="Prix"
-								value={productForm.values.unitPrice}
-								onChange={(unitPrice) => productForm.onChange({ unitPrice })}
-								inputMode="decimal"
-								suffix={PRODUCT_UNIT_LABELS[productForm.values.unit]}
-							/>
-							<TextField
-								label="TVA"
-								value={productForm.values.vatRate}
-								onChange={(vatRate) => productForm.onChange({ vatRate })}
-								inputMode="decimal"
-								suffix="%"
-							/>
-							<TextField
-								label="Description"
-								value={productForm.values.description}
-								onChange={(description) =>
-									productForm.onChange({ description })
+							<CustomFieldsEditor
+								fields={productForm.values.customFields}
+								onChange={(customFields) =>
+									productForm.onChange({ customFields })
 								}
-								placeholder="Optionnel"
 							/>
 						</div>
 						<CreateButton
@@ -953,6 +975,24 @@ function ServiceRateTable({
 					),
 			},
 			{
+				header: 'Champs perso',
+				cell: ({ row }) =>
+					draft?.tab === 'service-rates' && draft.id === row.original.id ? (
+						<CustomFieldsEditor
+							fields={draft.values.customFields}
+							onChange={(customFields) =>
+								onDraftChange({ ...draft.values, customFields })
+							}
+						/>
+					) : (
+						<span className="text-sm text-muted-foreground">
+							{Object.keys(row.original.custom_fields).length > 0
+								? `${Object.keys(row.original.custom_fields).length} champ(s)`
+								: '—'}
+						</span>
+					),
+			},
+			{
 				id: 'actions',
 				cell: ({ row }) => (
 					<RowActions
@@ -1128,6 +1168,24 @@ function ProductTable({
 						<p className="max-w-64 truncate text-sm text-muted-foreground">
 							{row.original.description || 'Aucune description'}
 						</p>
+					),
+			},
+			{
+				header: 'Champs perso',
+				cell: ({ row }) =>
+					draft?.tab === 'products' && draft.id === row.original.id ? (
+						<CustomFieldsEditor
+							fields={draft.values.customFields}
+							onChange={(customFields) =>
+								onDraftChange({ ...draft.values, customFields })
+							}
+						/>
+					) : (
+						<span className="text-sm text-muted-foreground">
+							{Object.keys(row.original.custom_fields).length > 0
+								? `${Object.keys(row.original.custom_fields).length} champ(s)`
+								: '—'}
+						</span>
 					),
 			},
 			{

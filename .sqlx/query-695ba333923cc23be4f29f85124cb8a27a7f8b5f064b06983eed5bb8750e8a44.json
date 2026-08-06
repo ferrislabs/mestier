@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            UPDATE service_rates\n            SET label = $2, unit = $3, rate_cents = $4, vat_rate = $5, updated_at = $6\n            WHERE id = $1 AND deleted_at IS NULL\n            RETURNING id, org_id, label, unit, rate_cents, vat_rate, deleted_at, created_at, updated_at\n            ",
+  "query": "\n            SELECT id, org_id, label, unit, rate_cents, vat_rate,\n                   custom_fields as \"custom_fields: sqlx::types::Json<serde_json::Value>\",\n                   deleted_at, created_at, updated_at\n            FROM service_rates\n            WHERE org_id = $1 AND deleted_at IS NULL\n            ORDER BY label ASC, created_at ASC\n            LIMIT $2 OFFSET $3\n            ",
   "describe": {
     "columns": [
       {
@@ -35,16 +35,21 @@
       },
       {
         "ordinal": 6,
+        "name": "custom_fields: sqlx::types::Json<serde_json::Value>",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 7,
         "name": "deleted_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 7,
+        "ordinal": 8,
         "name": "created_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 8,
+        "ordinal": 9,
         "name": "updated_at",
         "type_info": "Timestamptz"
       }
@@ -52,14 +57,12 @@
     "parameters": {
       "Left": [
         "Uuid",
-        "Text",
-        "Text",
-        "Int4",
-        "Numeric",
-        "Timestamptz"
+        "Int8",
+        "Int8"
       ]
     },
     "nullable": [
+      false,
       false,
       false,
       false,
@@ -71,5 +74,5 @@
       false
     ]
   },
-  "hash": "eb30d1f056e9e289d60b68590fecd3c81cf769552f7a60e3fc4f2810fac9ae39"
+  "hash": "695ba333923cc23be4f29f85124cb8a27a7f8b5f064b06983eed5bb8750e8a44"
 }

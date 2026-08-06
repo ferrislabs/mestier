@@ -12,6 +12,10 @@ import {
 } from 'lucide-react'
 import type * as React from 'react'
 import { useMemo, useState } from 'react'
+import {
+	CustomFieldsEditor,
+	recordToCustomFields,
+} from '#/components/custom-fields-editor'
 import { Button } from '#/components/ui/button'
 import {
 	DropdownMenu,
@@ -283,6 +287,7 @@ export function CatalogUI({
 								unitPrice: centsToEuros(product.unit_price_cents),
 								vatRate: product.vat_rate,
 								description: product.description ?? '',
+								customFields: recordToCustomFields(product.custom_fields),
 							},
 						})
 					}
@@ -310,6 +315,7 @@ export function CatalogUI({
 								unit: serviceRate.unit,
 								rate: centsToEuros(serviceRate.rate_cents),
 								vatRate: serviceRate.vat_rate,
+								customFields: recordToCustomFields(serviceRate.custom_fields),
 							},
 						})
 					}
@@ -453,6 +459,10 @@ function ProductCreateFields({
 					placeholder="Optionnel"
 				/>
 			</div>
+			<CustomFieldsEditor
+				fields={form.values.customFields}
+				onChange={(customFields) => form.onChange({ customFields })}
+			/>
 		</div>
 	)
 }
@@ -488,6 +498,10 @@ function ServiceCreateFields({
 				onChange={(vatRate) => form.onChange({ vatRate })}
 				inputMode="decimal"
 				suffix="%"
+			/>
+			<CustomFieldsEditor
+				fields={form.values.customFields}
+				onChange={(customFields) => form.onChange({ customFields })}
 			/>
 		</div>
 	)
@@ -615,6 +629,12 @@ function ProductDraftFields({
 					placeholder="Description"
 					className="md:col-span-2"
 				/>
+				<div className="md:col-span-2">
+					<CustomFieldsEditor
+						fields={values.customFields}
+						onChange={(customFields) => onChange({ ...values, customFields })}
+					/>
+				</div>
 			</div>
 			<UnitField
 				value={values.unit}
@@ -731,6 +751,14 @@ function ServiceList({
 											<span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">
 												%
 											</span>
+										</div>
+										<div className="lg:col-span-full">
+											<CustomFieldsEditor
+												fields={draft.values.customFields}
+												onChange={(customFields) =>
+													onDraftChange({ ...draft.values, customFields })
+												}
+											/>
 										</div>
 									</>
 								) : (

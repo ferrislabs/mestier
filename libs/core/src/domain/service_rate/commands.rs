@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use rust_decimal::Decimal;
 
 use crate::{OrganizationId, ServiceRateId, ServiceRateUnit};
@@ -9,6 +11,7 @@ pub struct CreateServiceRateCommand {
     pub unit: ServiceRateUnit,
     pub rate_cents: i32,
     pub vat_rate: Decimal,
+    pub custom_fields: HashMap<String, String>,
 }
 
 #[derive(Debug, Clone)]
@@ -18,4 +21,5 @@ pub struct UpdateServiceRateCommand {
     pub unit: ServiceRateUnit,
     pub rate_cents: i32,
     pub vat_rate: Decimal,
+    pub custom_fields: HashMap<String, String>,
 }
