@@ -5,6 +5,20 @@ import { useEffect, useState } from 'react'
 // sub-pixel drift at 100%/125% zoom).
 const BOTTOM_THRESHOLD_PX = 2
 
+// Fraction of the viewport that stays below the detection band's lower
+// edge. Mirrors the `-60%` bottom rootMargin this hook used to hand
+// IntersectionObserver: the band's lower edge sits at `innerHeight * (1 -
+// BAND_BOTTOM_VIEWPORT_RATIO)`. Keeping that edge partway down the
+// viewport, instead of right at its top, is what stops the highlight from
+// flickering when two headings are briefly stacked near the top together.
+const BAND_BOTTOM_VIEWPORT_RATIO = 0.6
+
+// Height of the sticky app header that sections must not scroll under.
+// Tailwind classes can't read this constant, so `anchor-nav.tsx`
+// (`sticky top-20`) and `settings-layout.tsx` (`scroll-mt-20`) encode the
+// same 80px separately — both must be updated together with this value.
+export const SETTINGS_HEADER_OFFSET_PX = 80
+
 export function useActiveSection(ids: string[]): string {
 	const [activeId, setActiveId] = useState(ids[0] ?? '')
 	const key = ids.join('|')
@@ -17,25 +31,21 @@ export function useActiveSection(ids: string[]): string {
 
 		if (elements.length === 0) return
 
-		const lastElement = elements[elements.length - 1]
-		const lastId = lastElement.id
+		const lastId = elements[elements.length - 1].id
 
-		// The rootMargin below ties detection to a fixed strip near the top
-		// of the viewport, independent of scroll position. When the document
-		// is only slightly taller than the viewport, or the last section is
-		// short, that section's rect can sit below the strip for the entire
-		// scrollable range and never be reported as intersecting — the nav
-		// then gets stuck on whichever earlier section still spans the
-		// strip. Reaching the bottom of the page is unambiguous regardless
-		// of section geometry, so both writers below consult this single
-		// check before deciding activeId, instead of one inferring it from
-		// intersection state that can be wrong right at the bottom.
+		// Reaching the bottom of the page is unambiguous regardless of section
+		// geometry, so this check is authoritative and is consulted before the
+		// band-based decision below, from the single call site that decides
+		// activeId. Without it, a short final section — one that can never be
+		// scrolled up past the band's lower edge, because the page runs out of
+		// room to scroll first — would leave the nav stuck on an earlier
+		// section even once the reader has scrolled all the way down.
 		const isAtBottom = () => {
 			const scrollHeight = document.documentElement.scrollHeight
-			// The page doesn't scroll at all: every section is already
-			// fully on screen, so there's nothing to scroll "toward" and
-			// forcing any single section active here would be arbitrary.
-			// Left to the observer on purpose, not an oversight.
+			// The page doesn't scroll at all: every section is already fully
+			// on screen, so there's nothing to scroll "toward" and forcing any
+			// single section active here would be arbitrary. Left to the
+			// band-based check below on purpose, not an oversight.
 			if (scrollHeight <= window.innerHeight + BOTTOM_THRESHOLD_PX) {
 				return false
 			}
@@ -45,39 +55,41 @@ export function useActiveSection(ids: string[]): string {
 			)
 		}
 
-		const observer = new IntersectionObserver(
-			(entries) => {
-				// The observer's own reading can be wrong right at the
-				// bottom of a short page (see comment above): re-check the
-				// same authoritative condition before trusting entries, so
-				// whichever writer runs last still lands on the same value.
-				if (isAtBottom()) {
-					setActiveId(lastId)
-					return
+		// Picks the section the reader is currently on by measuring every
+		// section's position directly, instead of relying on which targets an
+		// IntersectionObserver happens to report as changed. A callback-driven
+		// `entries` list only ever contains targets whose intersection status
+		// just flipped, so deriving the answer from it silently drops every
+		// section that hasn't crossed a boundary since the previous callback —
+		// which, at any given moment, is most of them.
+		const computeActiveId = () => {
+			if (isAtBottom()) return lastId
+
+			const bandBottom = window.innerHeight * (1 - BAND_BOTTOM_VIEWPORT_RATIO)
+
+			// The reader is "on" the last section whose top edge has already
+			// scrolled up to or past the band's lower edge. `elements` runs top
+			// to bottom, so later qualifying sections override earlier ones,
+			// leaving whichever qualifying section is furthest down the page —
+			// i.e. the one most recently reached.
+			let candidateId = elements[0].id
+			for (const element of elements) {
+				if (element.getBoundingClientRect().top <= bandBottom) {
+					candidateId = element.id
 				}
-
-				const visible = entries
-					.filter((entry) => entry.isIntersecting)
-					.sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top)
-
-				const first = visible[0]?.target.id
-				if (first) setActiveId(first)
-			},
-			{ rootMargin: '-80px 0px -60% 0px' },
-		)
-
-		for (const element of elements) observer.observe(element)
-
-		const handleScroll = () => {
-			if (isAtBottom()) setActiveId(lastId)
+			}
+			return candidateId
 		}
 
-		handleScroll()
-		window.addEventListener('scroll', handleScroll, { passive: true })
+		const handleUpdate = () => setActiveId(computeActiveId())
+
+		handleUpdate()
+		window.addEventListener('scroll', handleUpdate, { passive: true })
+		window.addEventListener('resize', handleUpdate, { passive: true })
 
 		return () => {
-			observer.disconnect()
-			window.removeEventListener('scroll', handleScroll)
+			window.removeEventListener('scroll', handleUpdate)
+			window.removeEventListener('resize', handleUpdate)
 		}
 	}, [key])
 

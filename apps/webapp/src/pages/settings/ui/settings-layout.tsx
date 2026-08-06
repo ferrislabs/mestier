@@ -20,7 +20,15 @@ export function SettingsLayout({
 				{sections.map((section) => {
 					const Section = section.Component
 					return (
-						<section key={section.id} id={section.id} className="scroll-mt-20">
+						<section
+							key={section.id}
+							id={section.id}
+							aria-label={section.label}
+							// scroll-mt-20 (80px) must match SETTINGS_HEADER_OFFSET_PX in
+							// #/pages/settings/use-active-section.ts and anchor-nav.tsx's
+							// top-20 — all three move together with the header height.
+							className="scroll-mt-20"
+						>
 							<Section />
 						</section>
 					)

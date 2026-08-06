@@ -78,7 +78,7 @@ export const MODULES: AppModule[] = [
 			{
 				label: 'Configuration du module',
 				items: [
-					{ title: 'Configuration', to: '/crm/configuration', icon: Boxes },
+					{ title: 'Configuration', to: '/settings', hash: 'crm', icon: Boxes },
 				],
 			},
 		],

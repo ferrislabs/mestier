@@ -1,6 +1,6 @@
 import { useForm } from '@tanstack/react-form'
 import type { ColumnDef } from '@tanstack/react-table'
-import { AlertCircle, Loader2, Package, Search } from 'lucide-react'
+import { Loader2, Package, Search } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { Input } from '#/components/ui/input'
 import { MetricCard, SectionCard, SectionHeader } from '#/components/ui/surface'
@@ -26,22 +26,6 @@ import {
 
 export function EquipmentSection() {
 	const { activeOrganization } = useActiveOrganization()
-
-	if (!activeOrganization) {
-		return (
-			<div className="flex flex-col items-center justify-center gap-3 p-12 text-center">
-				<div className="flex size-14 items-center justify-center rounded-lg border bg-card">
-					<AlertCircle className="size-6 text-destructive" />
-				</div>
-				<div>
-					<p className="font-semibold">Organisation indisponible</p>
-					<p className="text-sm text-muted-foreground">
-						Le référentiel nécessite une organisation active.
-					</p>
-				</div>
-			</div>
-		)
-	}
 
 	return (
 		<EquipmentSectionContent

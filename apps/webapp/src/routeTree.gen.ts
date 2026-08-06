@@ -15,7 +15,6 @@ import { Route as AppSettingsRouteImport } from './routes/_app.settings'
 import { Route as AppHrIndexRouteImport } from './routes/_app.hr.index'
 import { Route as AppCrmIndexRouteImport } from './routes/_app.crm.index'
 import { Route as AppHrEmployeesRouteImport } from './routes/_app.hr.employees'
-import { Route as AppCrmConfigurationRouteImport } from './routes/_app.crm.configuration'
 import { Route as AppCrmQuotesIndexRouteImport } from './routes/_app.crm.quotes.index'
 import { Route as AppCrmCustomersIndexRouteImport } from './routes/_app.crm.customers.index'
 import { Route as AppCrmQuotesQuoteIdRouteImport } from './routes/_app.crm.quotes.$quoteId'
@@ -51,11 +50,6 @@ const AppHrEmployeesRoute = AppHrEmployeesRouteImport.update({
   path: '/hr/employees',
   getParentRoute: () => AppRoute,
 } as any)
-const AppCrmConfigurationRoute = AppCrmConfigurationRouteImport.update({
-  id: '/crm/configuration',
-  path: '/crm/configuration',
-  getParentRoute: () => AppRoute,
-} as any)
 const AppCrmQuotesIndexRoute = AppCrmQuotesIndexRouteImport.update({
   id: '/crm/quotes/',
   path: '/crm/quotes/',
@@ -86,7 +80,6 @@ const AppCrmCustomersCustomerIdRoute =
 export interface FileRoutesByFullPath {
   '/': typeof AppIndexRoute
   '/settings': typeof AppSettingsRoute
-  '/crm/configuration': typeof AppCrmConfigurationRoute
   '/hr/employees': typeof AppHrEmployeesRoute
   '/crm/': typeof AppCrmIndexRoute
   '/hr/': typeof AppHrIndexRoute
@@ -99,7 +92,6 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/settings': typeof AppSettingsRoute
   '/': typeof AppIndexRoute
-  '/crm/configuration': typeof AppCrmConfigurationRoute
   '/hr/employees': typeof AppHrEmployeesRoute
   '/crm': typeof AppCrmIndexRoute
   '/hr': typeof AppHrIndexRoute
@@ -114,7 +106,6 @@ export interface FileRoutesById {
   '/_app': typeof AppRouteWithChildren
   '/_app/settings': typeof AppSettingsRoute
   '/_app/': typeof AppIndexRoute
-  '/_app/crm/configuration': typeof AppCrmConfigurationRoute
   '/_app/hr/employees': typeof AppHrEmployeesRoute
   '/_app/crm/': typeof AppCrmIndexRoute
   '/_app/hr/': typeof AppHrIndexRoute
@@ -129,7 +120,6 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/settings'
-    | '/crm/configuration'
     | '/hr/employees'
     | '/crm/'
     | '/hr/'
@@ -142,7 +132,6 @@ export interface FileRouteTypes {
   to:
     | '/settings'
     | '/'
-    | '/crm/configuration'
     | '/hr/employees'
     | '/crm'
     | '/hr'
@@ -156,7 +145,6 @@ export interface FileRouteTypes {
     | '/_app'
     | '/_app/settings'
     | '/_app/'
-    | '/_app/crm/configuration'
     | '/_app/hr/employees'
     | '/_app/crm/'
     | '/_app/hr/'
@@ -215,13 +203,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppHrEmployeesRouteImport
       parentRoute: typeof AppRoute
     }
-    '/_app/crm/configuration': {
-      id: '/_app/crm/configuration'
-      path: '/crm/configuration'
-      fullPath: '/crm/configuration'
-      preLoaderRoute: typeof AppCrmConfigurationRouteImport
-      parentRoute: typeof AppRoute
-    }
     '/_app/crm/quotes/': {
       id: '/_app/crm/quotes/'
       path: '/crm/quotes'
@@ -263,7 +244,6 @@ declare module '@tanstack/react-router' {
 interface AppRouteChildren {
   AppSettingsRoute: typeof AppSettingsRoute
   AppIndexRoute: typeof AppIndexRoute
-  AppCrmConfigurationRoute: typeof AppCrmConfigurationRoute
   AppHrEmployeesRoute: typeof AppHrEmployeesRoute
   AppCrmIndexRoute: typeof AppCrmIndexRoute
   AppHrIndexRoute: typeof AppHrIndexRoute
@@ -277,7 +257,6 @@ interface AppRouteChildren {
 const AppRouteChildren: AppRouteChildren = {
   AppSettingsRoute: AppSettingsRoute,
   AppIndexRoute: AppIndexRoute,
-  AppCrmConfigurationRoute: AppCrmConfigurationRoute,
   AppHrEmployeesRoute: AppHrEmployeesRoute,
   AppCrmIndexRoute: AppCrmIndexRoute,
   AppHrIndexRoute: AppHrIndexRoute,

@@ -60,14 +60,6 @@ describe('buildBreadcrumbItems', () => {
 		])
 	})
 
-	it('résout le fil de la configuration CRM', () => {
-		expect(labelsOf('/crm/configuration')).toEqual([
-			'Baptiste',
-			'CRM',
-			'Configuration',
-		])
-	})
-
 	it('résout le fil des employés', () => {
 		expect(labelsOf('/hr/employees')).toEqual(['Baptiste', 'RH', 'Employés'])
 	})

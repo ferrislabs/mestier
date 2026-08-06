@@ -1,25 +1,15 @@
+import { useForm } from '@tanstack/react-form'
 import {
 	Boxes,
 	BriefcaseBusiness,
 	Loader2,
-	MoreHorizontal,
 	Package,
 	Plus,
-	Save,
 	Search,
-	Trash2,
-	Undo2,
 } from 'lucide-react'
 import type * as React from 'react'
 import { useMemo, useState } from 'react'
 import { Button } from '#/components/ui/button'
-import {
-	DropdownMenu,
-	DropdownMenuContent,
-	DropdownMenuItem,
-	DropdownMenuSeparator,
-	DropdownMenuTrigger,
-} from '#/components/ui/dropdown-menu'
 import { Input } from '#/components/ui/input'
 import { Label } from '#/components/ui/label'
 import {
@@ -39,54 +29,41 @@ import {
 } from '#/components/ui/sheet'
 import {
 	MetricCard,
-	PageHeader,
-	PageShell,
 	SectionCard,
 	SectionHeader,
 	StatusBadge,
 } from '#/components/ui/surface'
 import { Textarea } from '#/components/ui/textarea'
+import { useActiveOrganization } from '#/hooks/use-active-organization'
 import type { ProductCatalogFormValues } from '#/hooks/use-catalog-items'
 import type {
 	Product,
 	ServiceRate,
 	ServiceRateUnit,
 } from '#/hooks/use-reference-catalog'
+import {
+	useCreateProduct,
+	useCreateServiceRate,
+	useDeleteProduct,
+	useDeleteServiceRate,
+	useReferenceCatalog,
+	useUpdateProduct,
+	useUpdateServiceRate,
+} from '#/hooks/use-reference-catalog'
 import type { ServiceRateFormValues } from '#/pages/settings/types'
+import {
+	centsToEuros,
+	type FormBinding,
+	formatMoney,
+	RowActions,
+} from '#/pages/settings/ui/primitives'
 
 type CatalogTab = 'products' | 'services'
-
-interface FormBinding<T> {
-	values: T
-	isPending: boolean
-	onChange: (patch: Partial<T>) => void
-	onSubmit: () => void | Promise<void>
-}
 
 type Draft =
 	| { tab: 'products'; id: string; values: ProductCatalogFormValues }
 	| { tab: 'services'; id: string; values: ServiceRateFormValues }
 	| null
-
-interface CrmConfigurationUIProps {
-	organizationName: string
-	isLoading: boolean
-	error: string | null
-	serviceRates: ServiceRate[]
-	products: Product[]
-	serviceRateForm: FormBinding<ServiceRateFormValues>
-	productForm: FormBinding<ProductCatalogFormValues>
-	onUpdateServiceRate: (
-		serviceRate: ServiceRate,
-		values: ServiceRateFormValues,
-	) => Promise<unknown>
-	onDeleteServiceRate: (serviceRate: ServiceRate) => Promise<unknown>
-	onUpdateProduct: (
-		product: Product,
-		values: ProductCatalogFormValues,
-	) => Promise<unknown>
-	onDeleteProduct: (product: Product) => Promise<unknown>
-}
 
 const UNIT_LABELS: Record<ServiceRateUnit, string> = {
 	HOUR: '€/h',
@@ -100,25 +77,94 @@ const PRODUCT_UNIT_LABELS: Record<ServiceRateUnit, string> = {
 	M2: '€/m²',
 }
 
-export function CrmConfigurationUI({
-	organizationName,
-	isLoading,
-	error,
-	serviceRates,
-	products,
-	serviceRateForm,
-	productForm,
-	onUpdateServiceRate,
-	onDeleteServiceRate,
-	onUpdateProduct,
-	onDeleteProduct,
-}: CrmConfigurationUIProps) {
+export function CrmSection() {
+	const { activeOrganization } = useActiveOrganization()
+
+	return (
+		<CrmSectionContent
+			key={activeOrganization.id}
+			organizationId={activeOrganization.id}
+		/>
+	)
+}
+
+interface CrmSectionContentProps {
+	organizationId: string
+}
+
+function CrmSectionContent({ organizationId }: CrmSectionContentProps) {
+	const catalog = useReferenceCatalog(organizationId, {
+		employees: false,
+		equipment: false,
+	})
+	const createServiceRate = useCreateServiceRate(organizationId)
+	const updateServiceRate = useUpdateServiceRate()
+	const deleteServiceRate = useDeleteServiceRate()
+	const createProduct = useCreateProduct(organizationId)
+	const updateProduct = useUpdateProduct()
+	const deleteProduct = useDeleteProduct()
+
+	const serviceRateForm = useForm({
+		defaultValues: {
+			label: '',
+			unit: 'HOUR',
+			rate: '',
+		} satisfies ServiceRateFormValues,
+		onSubmit: async ({ value }) => {
+			await createServiceRate.mutateAsync({
+				path: { organization_id: organizationId },
+				body: {
+					label: value.label.trim(),
+					unit: value.unit,
+					rate_cents: eurosToCents(value.rate),
+				},
+			})
+			serviceRateForm.reset()
+		},
+	})
+
+	const productForm = useForm({
+		defaultValues: {
+			name: '',
+			sku: '',
+			unit: 'M2',
+			unitPrice: '',
+			description: '',
+		} satisfies ProductCatalogFormValues,
+		onSubmit: async ({ value }) => {
+			await createProduct.mutateAsync({
+				path: { organization_id: organizationId },
+				body: {
+					name: value.name.trim(),
+					sku: value.sku.trim() || null,
+					unit: value.unit,
+					unit_price_cents: eurosToCents(value.unitPrice),
+					description: value.description.trim() || null,
+				},
+			})
+			productForm.reset()
+		},
+	})
+
 	const [activeTab, setActiveTab] = useState<CatalogTab>('products')
 	const [createOpen, setCreateOpen] = useState(false)
 	const [createMode, setCreateMode] = useState<CatalogTab>('products')
 	const [search, setSearch] = useState('')
 	const [draft, setDraft] = useState<Draft>(null)
 	const [isSaving, setIsSaving] = useState(false)
+
+	const serviceRates = catalog.serviceRates.data?.data ?? []
+	const products = catalog.products.data?.data ?? []
+	const isLoading = catalog.serviceRates.isLoading || catalog.products.isLoading
+	const error =
+		catalog.serviceRates.error ??
+		catalog.products.error ??
+		createServiceRate.error ??
+		updateServiceRate.error ??
+		deleteServiceRate.error ??
+		createProduct.error ??
+		updateProduct.error ??
+		deleteProduct.error
 
 	const normalizedSearch = search.trim().toLowerCase()
 	const filteredProducts = useMemo(() => {
@@ -151,11 +197,31 @@ export function CrmConfigurationUI({
 		try {
 			if (draft.tab === 'products') {
 				const product = products.find((item) => item.id === draft.id)
-				if (product) await onUpdateProduct(product, draft.values)
+				if (product) {
+					await updateProduct.mutateAsync({
+						path: { product_id: product.id },
+						body: {
+							name: draft.values.name.trim(),
+							sku: draft.values.sku.trim() || null,
+							unit: draft.values.unit,
+							unit_price_cents: eurosToCents(draft.values.unitPrice),
+							description: draft.values.description.trim() || null,
+						},
+					})
+				}
 			}
 			if (draft.tab === 'services') {
 				const serviceRate = serviceRates.find((item) => item.id === draft.id)
-				if (serviceRate) await onUpdateServiceRate(serviceRate, draft.values)
+				if (serviceRate) {
+					await updateServiceRate.mutateAsync({
+						path: { service_rate_id: serviceRate.id },
+						body: {
+							label: draft.values.label.trim(),
+							unit: draft.values.unit,
+							rate_cents: eurosToCents(draft.values.rate),
+						},
+					})
+				}
 			}
 			setDraft(null)
 		} finally {
@@ -170,213 +236,266 @@ export function CrmConfigurationUI({
 
 	const handleCreateSubmit = async () => {
 		if (createMode === 'products') {
-			await productForm.onSubmit()
+			await productForm.handleSubmit()
 			setCreateOpen(false)
 			return
 		}
-		await serviceRateForm.onSubmit()
+		await serviceRateForm.handleSubmit()
 		setCreateOpen(false)
 	}
 
 	return (
-		<PageShell>
-			<PageHeader
-				eyebrow={organizationName}
-				title="Catalogue"
-				description="Centralisez les produits et prestations utilisés pour composer les devis et les prochaines pièces commerciales."
-				actions={
-					<div className="flex flex-col gap-2 sm:flex-row">
-						<Button
-							type="button"
-							variant="outline"
-							onClick={() => openCreate('services')}
-						>
-							<BriefcaseBusiness />
-							Nouveau service
-						</Button>
-						<Button type="button" onClick={() => openCreate('products')}>
-							<Plus />
-							Nouveau produit
-						</Button>
-					</div>
-				}
-			/>
-
-			<div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-				<MetricCard
-					label="Produits"
-					value={products.length}
-					hint="Articles vendables"
-					icon={<Boxes className="size-4" />}
-				/>
-				<MetricCard
-					label="Services"
-					value={serviceRates.length}
-					hint="Prestations chiffrables"
-					icon={<BriefcaseBusiness className="size-4" />}
-				/>
-				<MetricCard
-					label="Prix produit moyen"
-					value={formatMoney(defaultProductPrice)}
-					hint="Base de chiffrage"
-					icon={<Package className="size-4" />}
-				/>
-			</div>
-
-			{error ? (
-				<div className="rounded-lg border border-destructive/30 bg-destructive-soft px-4 py-3 text-sm text-destructive">
-					{error}
-				</div>
-			) : null}
-
-			<div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-				<div className="flex flex-wrap gap-2">
-					<SegmentButton
-						active={activeTab === 'products'}
-						icon={<Boxes className="size-4" />}
-						label="Produits"
-						onClick={() => {
-							setActiveTab('products')
-							setDraft(null)
-						}}
-					/>
-					<SegmentButton
-						active={activeTab === 'services'}
-						icon={<BriefcaseBusiness className="size-4" />}
-						label="Services"
-						onClick={() => {
-							setActiveTab('services')
-							setDraft(null)
-						}}
-					/>
-				</div>
-				<div className="relative w-full lg:w-96">
-					<Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-					<Input
-						type="search"
-						value={search}
-						onChange={(event) => setSearch(event.target.value)}
-						placeholder="Rechercher un produit, une référence ou un service"
-						className="pl-9"
-					/>
-				</div>
-			</div>
-
-			{isLoading ? (
-				<SectionCard className="flex min-h-72 items-center justify-center gap-3 p-8 text-sm text-muted-foreground">
-					<Loader2 className="size-5 animate-spin" />
-					Chargement du catalogue…
-				</SectionCard>
-			) : activeTab === 'products' ? (
-				<ProductList
-					products={filteredProducts}
-					draft={draft}
-					isSaving={isSaving}
-					onEdit={(product) =>
-						setDraft({
-							tab: 'products',
-							id: product.id,
-							values: {
-								name: product.name,
-								sku: product.sku ?? '',
-								unit: product.unit,
-								unitPrice: centsToEuros(product.unit_price_cents),
-								description: product.description ?? '',
+		<serviceRateForm.Subscribe selector={(state) => state.values}>
+			{(serviceRateValues) => (
+				<productForm.Subscribe selector={(state) => state.values}>
+					{(productValues) => {
+						const serviceRateFormBinding: FormBinding<ServiceRateFormValues> = {
+							values: serviceRateValues,
+							isPending: createServiceRate.isPending,
+							onChange: (patch) => {
+								for (const key of Object.keys(
+									patch,
+								) as (keyof ServiceRateFormValues)[]) {
+									serviceRateForm.setFieldValue(key, patch[key] as never)
+								}
 							},
-						})
-					}
-					onDraftChange={(values) =>
-						setDraft((current) =>
-							current?.tab === 'products' ? { ...current, values } : current,
-						)
-					}
-					onCancel={() => setDraft(null)}
-					onSave={handleSaveDraft}
-					onDelete={onDeleteProduct}
-					onCreate={() => openCreate('products')}
-				/>
-			) : (
-				<ServiceList
-					serviceRates={filteredServices}
-					draft={draft}
-					isSaving={isSaving}
-					onEdit={(serviceRate) =>
-						setDraft({
-							tab: 'services',
-							id: serviceRate.id,
-							values: {
-								label: serviceRate.label,
-								unit: serviceRate.unit,
-								rate: centsToEuros(serviceRate.rate_cents),
+							onSubmit: () => serviceRateForm.handleSubmit(),
+						}
+						const productFormBinding: FormBinding<ProductCatalogFormValues> = {
+							values: productValues,
+							isPending: createProduct.isPending,
+							onChange: (patch) => {
+								for (const key of Object.keys(
+									patch,
+								) as (keyof ProductCatalogFormValues)[]) {
+									productForm.setFieldValue(key, patch[key] as never)
+								}
 							},
-						})
-					}
-					onDraftChange={(values) =>
-						setDraft((current) =>
-							current?.tab === 'services' ? { ...current, values } : current,
+							onSubmit: () => productForm.handleSubmit(),
+						}
+
+						return (
+							<div className="flex flex-col gap-6">
+								<div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+									<h2 className="font-semibold text-foreground">Catalogue</h2>
+									<div className="flex flex-col gap-2 sm:flex-row">
+										<Button
+											type="button"
+											variant="outline"
+											onClick={() => openCreate('services')}
+										>
+											<BriefcaseBusiness />
+											Nouveau service
+										</Button>
+										<Button
+											type="button"
+											onClick={() => openCreate('products')}
+										>
+											<Plus />
+											Nouveau produit
+										</Button>
+									</div>
+								</div>
+
+								<div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+									<MetricCard
+										label="Produits"
+										value={products.length}
+										hint="Articles vendables"
+										icon={<Boxes className="size-4" />}
+									/>
+									<MetricCard
+										label="Services"
+										value={serviceRates.length}
+										hint="Prestations chiffrables"
+										icon={<BriefcaseBusiness className="size-4" />}
+									/>
+									<MetricCard
+										label="Prix produit moyen"
+										value={formatMoney(defaultProductPrice)}
+										hint="Base de chiffrage"
+										icon={<Package className="size-4" />}
+									/>
+								</div>
+
+								{error ? (
+									<div className="rounded-lg border border-destructive/30 bg-destructive-soft px-4 py-3 text-sm text-destructive">
+										{error.message}
+									</div>
+								) : null}
+
+								<div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+									<div className="flex flex-wrap gap-2">
+										<SegmentButton
+											active={activeTab === 'products'}
+											icon={<Boxes className="size-4" />}
+											label="Produits"
+											onClick={() => {
+												setActiveTab('products')
+												setDraft(null)
+											}}
+										/>
+										<SegmentButton
+											active={activeTab === 'services'}
+											icon={<BriefcaseBusiness className="size-4" />}
+											label="Services"
+											onClick={() => {
+												setActiveTab('services')
+												setDraft(null)
+											}}
+										/>
+									</div>
+									<div className="relative w-full lg:w-96">
+										<Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+										<Input
+											type="search"
+											value={search}
+											onChange={(event) => setSearch(event.target.value)}
+											placeholder="Rechercher un produit, une référence ou un service"
+											className="pl-9"
+										/>
+									</div>
+								</div>
+
+								{isLoading ? (
+									<SectionCard className="flex min-h-72 items-center justify-center gap-3 p-8 text-sm text-muted-foreground">
+										<Loader2 className="size-5 animate-spin" />
+										Chargement du catalogue…
+									</SectionCard>
+								) : activeTab === 'products' ? (
+									<ProductList
+										products={filteredProducts}
+										draft={draft}
+										isSaving={isSaving}
+										onEdit={(product) =>
+											setDraft({
+												tab: 'products',
+												id: product.id,
+												values: {
+													name: product.name,
+													sku: product.sku ?? '',
+													unit: product.unit,
+													unitPrice: centsToEuros(product.unit_price_cents),
+													description: product.description ?? '',
+												},
+											})
+										}
+										onDraftChange={(values) =>
+											setDraft((current) =>
+												current?.tab === 'products'
+													? { ...current, values }
+													: current,
+											)
+										}
+										onCancel={() => setDraft(null)}
+										onSave={handleSaveDraft}
+										onDelete={(product) =>
+											deleteProduct.mutateAsync({
+												path: { product_id: product.id },
+											})
+										}
+										onCreate={() => openCreate('products')}
+									/>
+								) : (
+									<ServiceList
+										serviceRates={filteredServices}
+										draft={draft}
+										isSaving={isSaving}
+										onEdit={(serviceRate) =>
+											setDraft({
+												tab: 'services',
+												id: serviceRate.id,
+												values: {
+													label: serviceRate.label,
+													unit: serviceRate.unit,
+													rate: centsToEuros(serviceRate.rate_cents),
+												},
+											})
+										}
+										onDraftChange={(values) =>
+											setDraft((current) =>
+												current?.tab === 'services'
+													? { ...current, values }
+													: current,
+											)
+										}
+										onCancel={() => setDraft(null)}
+										onSave={handleSaveDraft}
+										onDelete={(serviceRate) =>
+											deleteServiceRate.mutateAsync({
+												path: { service_rate_id: serviceRate.id },
+											})
+										}
+										onCreate={() => openCreate('services')}
+									/>
+								)}
+
+								<Sheet open={createOpen} onOpenChange={setCreateOpen}>
+									<SheetContent className="w-full overflow-y-auto sm:max-w-xl">
+										<SheetHeader className="border-b">
+											<SheetTitle>
+												{createMode === 'products'
+													? 'Nouveau produit'
+													: 'Nouveau service'}
+											</SheetTitle>
+											<SheetDescription>
+												{createMode === 'products'
+													? 'Ajoutez un article vendable qui pourra être inséré dans les devis.'
+													: 'Ajoutez une prestation réutilisable avec son unité de facturation.'}
+											</SheetDescription>
+										</SheetHeader>
+										<div className="flex-1 overflow-y-auto p-4">
+											{createMode === 'products' ? (
+												<ProductCreateFields form={productFormBinding} />
+											) : (
+												<ServiceCreateFields form={serviceRateFormBinding} />
+											)}
+										</div>
+										<SheetFooter className="border-t sm:flex-row sm:justify-end">
+											<Button
+												type="button"
+												variant="ghost"
+												onClick={() => setCreateOpen(false)}
+											>
+												Annuler
+											</Button>
+											<Button
+												type="button"
+												onClick={handleCreateSubmit}
+												disabled={
+													createMode === 'products'
+														? createProduct.isPending
+														: createServiceRate.isPending
+												}
+											>
+												{(
+													createMode === 'products'
+														? createProduct.isPending
+														: createServiceRate.isPending
+												) ? (
+													<Loader2 className="animate-spin" />
+												) : (
+													<Plus />
+												)}
+												Ajouter
+											</Button>
+										</SheetFooter>
+									</SheetContent>
+								</Sheet>
+							</div>
 						)
-					}
-					onCancel={() => setDraft(null)}
-					onSave={handleSaveDraft}
-					onDelete={onDeleteServiceRate}
-					onCreate={() => openCreate('services')}
-				/>
+					}}
+				</productForm.Subscribe>
 			)}
-
-			<Sheet open={createOpen} onOpenChange={setCreateOpen}>
-				<SheetContent className="w-full overflow-y-auto sm:max-w-xl">
-					<SheetHeader className="border-b">
-						<SheetTitle>
-							{createMode === 'products'
-								? 'Nouveau produit'
-								: 'Nouveau service'}
-						</SheetTitle>
-						<SheetDescription>
-							{createMode === 'products'
-								? 'Ajoutez un article vendable qui pourra être inséré dans les devis.'
-								: 'Ajoutez une prestation réutilisable avec son unité de facturation.'}
-						</SheetDescription>
-					</SheetHeader>
-					<div className="flex-1 overflow-y-auto p-4">
-						{createMode === 'products' ? (
-							<ProductCreateFields form={productForm} />
-						) : (
-							<ServiceCreateFields form={serviceRateForm} />
-						)}
-					</div>
-					<SheetFooter className="border-t sm:flex-row sm:justify-end">
-						<Button
-							type="button"
-							variant="ghost"
-							onClick={() => setCreateOpen(false)}
-						>
-							Annuler
-						</Button>
-						<Button
-							type="button"
-							onClick={handleCreateSubmit}
-							disabled={
-								createMode === 'products'
-									? productForm.isPending
-									: serviceRateForm.isPending
-							}
-						>
-							{(
-								createMode === 'products'
-									? productForm.isPending
-									: serviceRateForm.isPending
-							) ? (
-								<Loader2 className="animate-spin" />
-							) : (
-								<Plus />
-							)}
-							Ajouter
-						</Button>
-					</SheetFooter>
-				</SheetContent>
-			</Sheet>
-		</PageShell>
+		</serviceRateForm.Subscribe>
 	)
+}
+
+function eurosToCents(value: string): number {
+	const normalized = value.replace(',', '.').trim()
+	const parsed = Number.parseFloat(normalized)
+	if (!Number.isFinite(parsed)) return 0
+	return Math.round(parsed * 100)
 }
 
 function SegmentButton({
@@ -409,12 +528,12 @@ function ProductCreateFields({
 }) {
 	return (
 		<div className="space-y-4">
-			<TextField
+			<WideSuffixTextField
 				label="Produit"
 				value={form.values.name}
 				onChange={(name) => form.onChange({ name })}
 			/>
-			<TextField
+			<WideSuffixTextField
 				label="Référence"
 				value={form.values.sku}
 				onChange={(sku) => form.onChange({ sku })}
@@ -426,7 +545,7 @@ function ProductCreateFields({
 					onChange={(unit) => form.onChange({ unit })}
 					product
 				/>
-				<TextField
+				<WideSuffixTextField
 					label="Prix"
 					value={form.values.unitPrice}
 					onChange={(unitPrice) => form.onChange({ unitPrice })}
@@ -455,7 +574,7 @@ function ServiceCreateFields({
 }) {
 	return (
 		<div className="space-y-4">
-			<TextField
+			<WideSuffixTextField
 				label="Libellé"
 				value={form.values.label}
 				onChange={(label) => form.onChange({ label })}
@@ -465,7 +584,7 @@ function ServiceCreateFields({
 					value={form.values.unit}
 					onChange={(unit) => form.onChange({ unit })}
 				/>
-				<TextField
+				<WideSuffixTextField
 					label="Tarif"
 					value={form.values.rate}
 					onChange={(rate) => form.onChange({ rate })}
@@ -750,59 +869,7 @@ function UnitField({
 	)
 }
 
-function RowActions({
-	isEditing,
-	isSaving,
-	onEdit,
-	onCancel,
-	onSave,
-	onDelete,
-}: {
-	isEditing: boolean
-	isSaving: boolean
-	onEdit: () => void
-	onCancel: () => void
-	onSave: () => void
-	onDelete: () => void
-}) {
-	if (isEditing) {
-		return (
-			<div className="flex justify-end gap-1">
-				<Button size="icon-sm" variant="ghost" onClick={onCancel}>
-					<Undo2 />
-					<span className="sr-only">Annuler</span>
-				</Button>
-				<Button size="icon-sm" onClick={onSave} disabled={isSaving}>
-					{isSaving ? <Loader2 className="animate-spin" /> : <Save />}
-					<span className="sr-only">Enregistrer</span>
-				</Button>
-			</div>
-		)
-	}
-
-	return (
-		<div className="flex justify-end opacity-0 transition group-hover:opacity-100 group-focus-within:opacity-100">
-			<DropdownMenu>
-				<DropdownMenuTrigger asChild>
-					<Button size="icon-sm" variant="ghost">
-						<MoreHorizontal />
-						<span className="sr-only">Actions</span>
-					</Button>
-				</DropdownMenuTrigger>
-				<DropdownMenuContent align="end">
-					<DropdownMenuItem onClick={onEdit}>Modifier</DropdownMenuItem>
-					<DropdownMenuSeparator />
-					<DropdownMenuItem variant="destructive" onClick={onDelete}>
-						<Trash2 />
-						Supprimer
-					</DropdownMenuItem>
-				</DropdownMenuContent>
-			</DropdownMenu>
-		</div>
-	)
-}
-
-interface TextFieldProps
+interface WideSuffixTextFieldProps
 	extends Omit<
 		React.InputHTMLAttributes<HTMLInputElement>,
 		'value' | 'onChange'
@@ -813,13 +880,18 @@ interface TextFieldProps
 	suffix?: string
 }
 
-function TextField({
+// Pads with `pr-20`, wider than the `pr-14` used by the shared TextField in
+// `#/pages/settings/ui/primitives`. This section's suffixes ("€/unité",
+// "mètre linéaire"-length labels) are longer than equipment's "€/h", and
+// `pr-14` would let the input's value run under them. Kept as a local
+// variant rather than widening the shared primitive for every caller.
+function WideSuffixTextField({
 	label,
 	value,
 	onChange,
 	suffix,
 	...props
-}: TextFieldProps) {
+}: WideSuffixTextFieldProps) {
 	const id = label.toLowerCase().replace(/\s+/g, '-')
 	return (
 		<div className="flex flex-col gap-2">
@@ -870,17 +942,6 @@ function EmptyState({
 			</Button>
 		</div>
 	)
-}
-
-function centsToEuros(value: number): string {
-	return (value / 100).toFixed(2).replace('.', ',')
-}
-
-function formatMoney(value: number): string {
-	return new Intl.NumberFormat('fr-FR', {
-		style: 'currency',
-		currency: 'EUR',
-	}).format(value / 100)
 }
 
 function productUnitLabel(unit: ServiceRateUnit): string {
