@@ -28,7 +28,8 @@ const ORGANIZATION: Organization = {
 const EMPLOYEE = {
 	id: 'employee-1',
 	organization_id: 'org-1',
-	name: 'Alix Martin',
+	last_name: 'Martin',
+	first_name: 'Alix',
 	hourly_rate_cents: 1500,
 	user_id: null,
 	weekly_contract_minutes: 2100,
@@ -152,7 +153,7 @@ describe('EmployeeWorkTimeFeature', () => {
 	it("charge et affiche le rythme actuel de l'employé", async () => {
 		renderFeature()
 
-		expect(await screen.findByText('Alix Martin')).toBeDefined()
+		expect(await screen.findByText('Martin Alix')).toBeDefined()
 		const lundiSection = await screen.findByRole('region', { name: 'Lundi' })
 		expect(within(lundiSection).getByLabelText('Début')).toBeDefined()
 	})
@@ -162,7 +163,7 @@ describe('EmployeeWorkTimeFeature', () => {
 		const putRhythm = vi.fn().mockResolvedValue(OPEN_RHYTHM)
 		const { calls } = renderFeature({ putRhythm })
 
-		await screen.findByText('Alix Martin')
+		await screen.findByText('Martin Alix')
 		await user.click(
 			screen.getByRole('button', { name: 'Enregistrer le rythme' }),
 		)
@@ -188,7 +189,7 @@ describe('EmployeeWorkTimeFeature', () => {
 		const putRhythm = vi.fn().mockRejectedValue(conflictError)
 		renderFeature({ putRhythm })
 
-		await screen.findByText('Alix Martin')
+		await screen.findByText('Martin Alix')
 		await user.click(
 			screen.getByRole('button', { name: 'Enregistrer le rythme' }),
 		)
@@ -209,7 +210,7 @@ describe('EmployeeWorkTimeFeature', () => {
 		const putWorkSlots = vi.fn().mockResolvedValue([])
 		const { calls } = renderFeature({ putWorkSlots })
 
-		await screen.findByText('Alix Martin')
+		await screen.findByText('Martin Alix')
 		await user.click(screen.getByRole('button', { name: 'Ajouter une plage' }))
 		await user.click(
 			screen.getByRole('button', { name: 'Enregistrer les plages' }),
@@ -234,7 +235,7 @@ describe('EmployeeWorkTimeFeature', () => {
 		const patchEmployee = vi.fn().mockResolvedValue(EMPLOYEE)
 		const { calls } = renderFeature({ patchEmployee })
 
-		await screen.findByText('Alix Martin')
+		await screen.findByText('Martin Alix')
 		const contractInput = screen.getByLabelText('Base contractuelle')
 		await user.clear(contractInput)
 		await user.type(contractInput, '30h00')
@@ -249,7 +250,8 @@ describe('EmployeeWorkTimeFeature', () => {
 		expect(call?.params).toMatchObject({
 			path: { employee_id: 'employee-1' },
 			body: {
-				name: 'Alix Martin',
+				last_name: 'Martin',
+				first_name: 'Alix',
 				hourly_rate_cents: 1500,
 				user_id: null,
 				weekly_contract_minutes: 1800,

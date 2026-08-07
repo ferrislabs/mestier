@@ -470,7 +470,7 @@ fn employee_resource(employee: Employee) -> PlanningResource {
     PlanningResource::Employee {
         employee_id: employee.id,
         user_id: employee.user_id,
-        display_name: employee.name,
+        display_name: employee.display_name(),
         hourly_rate_cents: employee.hourly_rate_cents,
         weekly_contract_minutes: employee.weekly_contract_minutes,
     }
@@ -611,6 +611,36 @@ mod tests {
             created_at: starts_at,
             updated_at: starts_at,
         }
+    }
+
+    #[test]
+    fn employee_resource_formats_display_name_as_last_name_then_first_name() {
+        let employee_id = EmployeeId(Uuid::new_v4());
+        let mut source = employee(employee_id, None);
+        source.last_name = "Bonnal".to_owned();
+        source.first_name = Some("Baptiste".to_owned());
+
+        let resource = employee_resource(source);
+
+        assert!(matches!(
+            resource,
+            PlanningResource::Employee { display_name, .. } if display_name == "Bonnal Baptiste"
+        ));
+    }
+
+    #[test]
+    fn employee_resource_formats_display_name_without_a_first_name() {
+        let employee_id = EmployeeId(Uuid::new_v4());
+        let mut source = employee(employee_id, None);
+        source.last_name = "Bonnal".to_owned();
+        source.first_name = None;
+
+        let resource = employee_resource(source);
+
+        assert!(matches!(
+            resource,
+            PlanningResource::Employee { display_name, .. } if display_name == "Bonnal"
+        ));
     }
 
     fn work_order(starts_at: DateTime<Utc>, ends_at: DateTime<Utc>) -> WorkOrder {
@@ -853,7 +883,8 @@ mod tests {
             id,
             organization_id: OrganizationId(Uuid::new_v4()),
             user_id,
-            name: "Alice".to_owned(),
+            last_name: "Alice".to_owned(),
+            first_name: None,
             hourly_rate_cents: Some(3500),
             weekly_contract_minutes: 2100,
             deleted_at: None,

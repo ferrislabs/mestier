@@ -10,7 +10,10 @@ use crate::{paths::EmployeesPath, require_org_membership, response::EmployeeResp
 #[derive(Debug, Deserialize, ToSchema)]
 pub struct CreateEmployeeRequest {
     pub user_id: Option<UserId>,
-    pub name: String,
+    pub last_name: String,
+    /// `null` means "not provided" — see `Employee::first_name`.
+    #[serde(default)]
+    pub first_name: Option<String>,
     /// `null` means the rate is not set yet; `0` means genuinely free.
     pub hourly_rate_cents: Option<i32>,
     #[serde(default)]
@@ -49,7 +52,8 @@ pub async fn handler(
         .create_employee(CreateEmployeeCommand {
             organization_id: path.organization_id,
             user_id: payload.user_id,
-            name: payload.name,
+            last_name: payload.last_name,
+            first_name: payload.first_name,
             hourly_rate_cents: payload.hourly_rate_cents,
             weekly_contract_minutes: payload.weekly_contract_minutes,
         })

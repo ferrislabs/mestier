@@ -13,6 +13,7 @@ import { useActiveOrganization } from '#/hooks/use-active-organization'
 import { useCustomer } from '#/hooks/use-customers'
 import { buildBreadcrumbItems } from '#/modules/breadcrumb'
 import { customerDisplayName } from '#/pages/customers/types'
+import { employeeDisplayName } from '#/pages/hr/types'
 
 export function AppBreadcrumb() {
 	const location = useLocation()
@@ -30,7 +31,9 @@ export function AppBreadcrumb() {
 		}).queryOptions,
 		enabled: Boolean(employeeId),
 	})
-	const employeeLabel = employee.data?.data?.name ?? 'Temps de travail'
+	const employeeLabel = employee.data?.data
+		? employeeDisplayName(employee.data.data)
+		: 'Temps de travail'
 
 	const items = buildBreadcrumbItems({
 		pathname: location.pathname,

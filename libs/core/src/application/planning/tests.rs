@@ -113,7 +113,7 @@ mod tests {
         .unwrap();
 
         sqlx::query!(
-            r#"INSERT INTO employees (id, org_id, user_id, name, hourly_rate_cents, weekly_contract_minutes)
+            r#"INSERT INTO employees (id, org_id, user_id, last_name, hourly_rate_cents, weekly_contract_minutes)
                VALUES ($1, $2, $3, $4, $5, $6)"#,
             generate_uuid_v7(),
             organization_id.0,
@@ -133,7 +133,7 @@ mod tests {
     async fn seed_employee(pool: &PgPool, organization_id: OrganizationId) -> EmployeeId {
         let employee_id = generate_uuid_v7();
         sqlx::query!(
-            r#"INSERT INTO employees (id, org_id, name, hourly_rate_cents, weekly_contract_minutes)
+            r#"INSERT INTO employees (id, org_id, last_name, hourly_rate_cents, weekly_contract_minutes)
                VALUES ($1, $2, $3, $4, $5)"#,
             employee_id,
             organization_id.0,
