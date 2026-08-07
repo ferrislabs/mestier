@@ -2,7 +2,7 @@ use common::{CoreError, generate_uuid_v7};
 use mestier_macros::repository;
 
 use crate::{
-    User,
+    User, UserId,
     domain::user::{commands::UpsertUserBySubCommand, ports::UserRepository},
     infrastructure::{
         postgres::{SharedTx, error::map_sqlx_error},
@@ -50,6 +50,25 @@ impl<'tx> UserRepository for PgUserRepository<'tx> {
         .map_err(map_sqlx_error)?;
 
         Ok(row.into())
+    }
+
+    #[tracing::instrument(skip(self), fields(db.system = "postgresql", db.operation = "select", db.table = "users"), err)]
+    async fn find_by_id(&mut self, id: UserId) -> Result<Option<User>, CoreError> {
+        let mut tx = self.tx.lock().await;
+        let row = sqlx::query_as!(
+            UserRow,
+            r#"
+            SELECT id, email, username, display_name, sub, deleted_at, created_at, updated_at
+            FROM users
+            WHERE id = $1 AND deleted_at IS NULL
+            "#,
+            id.0,
+        )
+        .fetch_optional(&mut ***tx)
+        .await
+        .map_err(map_sqlx_error)?;
+
+        Ok(row.map(Into::into))
     }
 
     #[tracing::instrument(skip(self), fields(db.system = "postgresql", db.operation = "select", db.table = "users"), err)]

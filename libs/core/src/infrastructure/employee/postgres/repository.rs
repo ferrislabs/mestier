@@ -3,7 +3,7 @@ use common::CoreError;
 use mestier_macros::repository;
 
 use crate::{
-    Employee, EmployeeId, OrganizationId,
+    Employee, EmployeeId, OrganizationId, UserId,
     domain::employee::ports::EmployeeRepository,
     infrastructure::{
         employee::postgres::model::EmployeeRow,
@@ -59,6 +59,29 @@ impl<'tx> EmployeeRepository for PgEmployeeRepository<'tx> {
             WHERE id = $1 AND deleted_at IS NULL
             "#,
             id.0,
+        )
+        .fetch_optional(&mut ***tx)
+        .await
+        .map_err(map_sqlx_error)?;
+
+        Ok(row.map(Into::into))
+    }
+
+    async fn find_by_user_id(
+        &mut self,
+        organization_id: OrganizationId,
+        user_id: UserId,
+    ) -> Result<Option<Employee>, CoreError> {
+        let mut tx = self.tx.lock().await;
+        let row = sqlx::query_as!(
+            EmployeeRow,
+            r#"
+            SELECT id, org_id, user_id, name, hourly_rate_cents, weekly_contract_minutes, deleted_at, created_at, updated_at
+            FROM employees
+            WHERE org_id = $1 AND user_id = $2 AND deleted_at IS NULL
+            "#,
+            organization_id.0,
+            user_id.0,
         )
         .fetch_optional(&mut ***tx)
         .await
