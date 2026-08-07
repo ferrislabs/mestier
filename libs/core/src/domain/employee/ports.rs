@@ -33,6 +33,15 @@ pub trait EmployeeRepository: Send {
         offset: u64,
     ) -> impl Future<Output = Result<(Vec<Employee>, u64), CoreError>> + Send;
 
+    /// Every active employee of the organization, unpaginated. Added
+    /// additively for the planning read model, which always needs the
+    /// whole roster in one query — to dedup against organization members,
+    /// never one page at a time (see the planning module design doc).
+    fn list_active_by_organization(
+        &mut self,
+        organization_id: OrganizationId,
+    ) -> impl Future<Output = Result<Vec<Employee>, CoreError>> + Send;
+
     fn update(
         &mut self,
         employee: &Employee,
