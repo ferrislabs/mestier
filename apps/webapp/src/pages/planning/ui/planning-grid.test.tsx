@@ -32,6 +32,7 @@ function employeeResource(
 function task(overrides: Partial<PlanningEntry> = {}): PlanningEntry {
 	return {
 		kind: 'task',
+		labels: [],
 		title: 'Tâche',
 		blocks_availability: true,
 		child_count: 0,
