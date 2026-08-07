@@ -1,87 +1,93 @@
+use std::collections::HashMap;
+
 use common::CoreError;
 use mestier_macros::transactional;
 
 use crate::{
-    Employee, OrganizationId, WorkOrder, WorkOrderId,
+    Employee, OrganizationId, Task, TaskId,
     application::MestierUseCase,
-    domain::work_order::{
-        commands::{CreateWorkOrderCommand, PatchWorkOrderCommand},
-        service::WorkOrderService,
+    domain::task::{
+        commands::{CreateTaskCommand, PatchTaskCommand},
+        service::TaskService,
     },
 };
 
 mod tests;
 
 impl MestierUseCase {
-    #[transactional(work_order, employee, user, member)]
-    pub async fn create_work_order(
-        &self,
-        command: CreateWorkOrderCommand,
-    ) -> Result<WorkOrder, CoreError> {
-        let mut service = WorkOrderService::new(
-            work_order_repository,
+    #[transactional(task, employee, user, member)]
+    pub async fn create_task(&self, command: CreateTaskCommand) -> Result<Task, CoreError> {
+        let mut service = TaskService::new(
+            task_repository,
             employee_repository,
             user_repository,
             member_repository,
         );
-        service.create_work_order(command).await
+        service.create_task(command).await
     }
 
-    #[transactional(work_order, employee, user, member)]
-    pub async fn get_work_order(&self, id: WorkOrderId) -> Result<WorkOrder, CoreError> {
-        let mut service = WorkOrderService::new(
-            work_order_repository,
+    #[transactional(task, employee, user, member)]
+    pub async fn get_task(&self, id: TaskId) -> Result<Task, CoreError> {
+        let mut service = TaskService::new(
+            task_repository,
             employee_repository,
             user_repository,
             member_repository,
         );
-        service.get_work_order(id).await
+        service.get_task(id).await
     }
 
-    #[transactional(work_order, employee, user, member)]
-    pub async fn list_work_orders(
+    /// Lists a page of `organization_id`'s tasks — every root when
+    /// `parent_task_id` is `None`, or a specific task's children otherwise —
+    /// together with each returned task's own child count (see
+    /// `TaskService::list_tasks`: computed in one grouped query, never one
+    /// per task).
+    #[transactional(task, employee, user, member)]
+    pub async fn list_tasks(
         &self,
         organization_id: OrganizationId,
+        parent_task_id: Option<TaskId>,
         limit: u64,
         offset: u64,
-    ) -> Result<(Vec<WorkOrder>, u64), CoreError> {
-        let mut service = WorkOrderService::new(
-            work_order_repository,
+    ) -> Result<(Vec<Task>, HashMap<TaskId, i64>, u64), CoreError> {
+        let mut service = TaskService::new(
+            task_repository,
             employee_repository,
             user_repository,
             member_repository,
         );
         service
-            .list_work_orders(organization_id, limit, offset)
+            .list_tasks(organization_id, parent_task_id, limit, offset)
             .await
     }
 
-    /// Reschedules and reassigns a work order in one transaction: either
-    /// every write here (the schedule/status/title/note edits, the full
-    /// assignment replacement, and any on-the-fly employee record) lands
-    /// together, or the whole `PATCH` rolls back.
-    #[transactional(work_order, employee, user, member)]
-    pub async fn patch_work_order(
+    /// Reparents, reschedules and reassigns a task in one transaction:
+    /// either every write here (the parent/schedule/status/title/description
+    /// edits, the `blocks_availability` flag, the full assignment
+    /// replacement, and any on-the-fly employee record) lands together, or
+    /// the whole `PATCH` rolls back.
+    #[transactional(task, employee, user, member)]
+    pub async fn patch_task(
         &self,
-        command: PatchWorkOrderCommand,
-    ) -> Result<(WorkOrder, Vec<Employee>), CoreError> {
-        let mut service = WorkOrderService::new(
-            work_order_repository,
+        command: PatchTaskCommand,
+    ) -> Result<(Task, Vec<Employee>), CoreError> {
+        let mut service = TaskService::new(
+            task_repository,
             employee_repository,
             user_repository,
             member_repository,
         );
-        service.patch_work_order(command).await
+        service.patch_task(command).await
     }
 
-    #[transactional(work_order, employee, user, member)]
-    pub async fn soft_delete_work_order(&self, id: WorkOrderId) -> Result<(), CoreError> {
-        let mut service = WorkOrderService::new(
-            work_order_repository,
+    #[transactional(task, employee, user, member)]
+    pub async fn soft_delete_task(&self, id: TaskId) -> Result<(), CoreError> {
+        let mut service = TaskService::new(
+            task_repository,
             employee_repository,
             user_repository,
             member_repository,
         );
-        service.soft_delete_work_order(id).await
+        service.soft_delete_task(id).await
     }
 }

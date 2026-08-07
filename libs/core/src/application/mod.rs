@@ -36,8 +36,8 @@ pub mod product;
 pub mod quote;
 pub mod role;
 pub mod service_rate;
+pub mod task;
 pub mod user;
-pub mod work_order;
 pub mod work_time;
 
 pub type MestierAuthService = AuthService<FerrisKeyRepository>;
