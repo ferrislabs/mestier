@@ -10,11 +10,12 @@ pub use infrastructure::realtime::EventHub;
 pub use domain::{
     AbsenceKind, AssigneeRef, Assignment, AssignmentId, Customer, CustomerContact,
     CustomerContactId, CustomerContext, CustomerContextId, CustomerId, CustomerPipelineStage,
-    CustomerStatus, Employee, EmployeeAbsence, EmployeeAbsenceId, EmployeeId, Equipment,
-    EquipmentId, FileObject, Member, MemberId, Organization, OrganizationId, Permissions, Product,
-    ProductId, Quote, QuoteId, QuoteLine, QuoteLineId, QuoteStatus, Role, RoleId, ServiceRate,
-    ServiceRateId, ServiceRateUnit, StoredFile, User, UserId, WorkOrder, WorkOrderId,
-    WorkOrderStatus,
+    CustomerStatus, DateRange, Employee, EmployeeAbsence, EmployeeAbsenceId, EmployeeId,
+    EmployeeRhythm, EmployeeRhythmId, EmployeeWorkSlot, EmployeeWorkSlotId, Equipment, EquipmentId,
+    FileObject, Member, MemberId, MinuteInterval, Organization, OrganizationId, Permissions,
+    Product, ProductId, Quote, QuoteId, QuoteLine, QuoteLineId, QuoteStatus, RhythmSlot,
+    RhythmSlotId, Role, RoleId, ServiceRate, ServiceRateId, ServiceRateUnit, StoredFile, Tz, User,
+    UserId, WorkOrder, WorkOrderId, WorkOrderStatus,
     absence::commands::{CreateAbsenceCommand, PatchAbsenceCommand},
     customer::commands::{CreateCustomerCommand, UpdateCustomerCommand},
     customer_contact::commands::{CreateCustomerContactCommand, UpdateCustomerContactCommand},
@@ -30,4 +31,8 @@ pub use domain::{
     service_rate::commands::{CreateServiceRateCommand, UpdateServiceRateCommand},
     user::commands::{CreateUserCommand, UpsertUserBySubCommand},
     work_order::commands::{CreateWorkOrderCommand, PatchWorkOrderCommand},
+    work_time::commands::{
+        ReplaceRhythmCommand, ReplaceWorkSlotsCommand, RhythmSlotInput, WorkSlotInput,
+    },
+    work_time::service::expand_work_slots,
 };
