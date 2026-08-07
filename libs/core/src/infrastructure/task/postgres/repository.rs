@@ -133,9 +133,12 @@ impl<'tx> TaskRepository for PgTaskRepository<'tx> {
         .await
         .map_err(map_sqlx_error)?;
 
+        let ids: Vec<Uuid> = rows.iter().map(|row| row.id).collect();
+        let mut assignments_by_task = fetch_assignments_for_tasks(&mut tx, &ids).await?;
+
         let mut tasks = Vec::with_capacity(rows.len());
         for row in rows {
-            let assignments = fetch_assignments(&mut tx, TaskId(row.id)).await?;
+            let assignments = assignments_by_task.remove(&row.id).unwrap_or_default();
             tasks.push(row.into_task(assignments)?);
         }
 
@@ -256,6 +259,45 @@ async fn fetch_assignments(
     .map_err(map_sqlx_error)?;
 
     Ok(rows.into_iter().map(Into::into).collect())
+}
+
+/// Every assignment for each id in `task_ids`, in one grouped query — never
+/// one per task. Mirrors `count_children`'s own batching (`WHERE ... = ANY($1)`
+/// plus in-memory grouping); `list_by_organization` used to call
+/// `fetch_assignments` once per row inside a loop, a pre-existing N+1 found
+/// while proving `GET /tasks`'s total query count for the task-labels
+/// workstream (#142) — fixed here rather than left for a separate PR, since
+/// T5's list view (#145) is about to hit this same endpoint hard. A task
+/// with no assignments is absent from the map rather than mapped to an
+/// empty `Vec`, same contract as `count_children`.
+async fn fetch_assignments_for_tasks(
+    conn: &mut PgConnection,
+    task_ids: &[Uuid],
+) -> Result<HashMap<Uuid, Vec<TaskAssignment>>, CoreError> {
+    if task_ids.is_empty() {
+        return Ok(HashMap::new());
+    }
+
+    let rows = sqlx::query_as!(
+        TaskAssignmentRow,
+        r#"
+        SELECT id, org_id, task_id, employee_id, created_at
+        FROM task_assignments
+        WHERE task_id = ANY($1)
+        ORDER BY task_id ASC, created_at ASC, id ASC
+        "#,
+        task_ids,
+    )
+    .fetch_all(conn)
+    .await
+    .map_err(map_sqlx_error)?;
+
+    let mut grouped: HashMap<Uuid, Vec<TaskAssignment>> = HashMap::new();
+    for row in rows {
+        grouped.entry(row.task_id).or_default().push(row.into());
+    }
+
+    Ok(grouped)
 }
 
 /// Replaces the complete assignment set for a task: physical delete of
