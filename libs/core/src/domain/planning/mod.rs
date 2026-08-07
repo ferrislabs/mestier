@@ -4,7 +4,8 @@ use chrono::{DateTime, NaiveDate, Utc};
 use common::CoreError;
 
 use crate::{
-    AbsenceKind, EmployeeAbsenceId, EmployeeId, MinuteInterval, Task, TaskId, TaskStatus, UserId,
+    AbsenceKind, EmployeeAbsenceId, EmployeeId, MinuteInterval, Task, TaskId, TaskLabel,
+    TaskStatus, UserId,
 };
 
 pub mod ports;
@@ -81,6 +82,14 @@ pub enum PlanningEntry {
         context_label: Option<String>,
         description: Option<String>,
         employee_ids: Vec<EmployeeId>,
+        /// Every label currently attached to this task, built from
+        /// `task_label_links` — see `MestierUseCase::get_planning`
+        /// (`application/planning/mod.rs`), which batch-loads these after
+        /// `PlanningService::get_planning` returns rather than inside it,
+        /// for the same reason `patch_task` composes `TaskLabelRepository`
+        /// at the application seam: `task`/`planning` and `task_label` stay
+        /// separate aggregates.
+        labels: Vec<TaskLabel>,
     },
     Absence {
         id: EmployeeAbsenceId,

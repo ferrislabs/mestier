@@ -528,6 +528,10 @@ fn build_entries(tasks: &[PlanningTask], absences: &[EmployeeAbsence]) -> Vec<Pl
                 .iter()
                 .map(|assignment| assignment.employee_id)
                 .collect(),
+            // Populated by `MestierUseCase::get_planning`, after this
+            // service returns — see `PlanningEntry::Task::labels`'s doc
+            // comment.
+            labels: Vec::new(),
         });
     }
 
