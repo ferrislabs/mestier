@@ -162,6 +162,26 @@ impl<'tx> UserRepository for PgUserRepository<'tx> {
     }
 
     #[tracing::instrument(skip(self), fields(db.system = "postgresql", db.operation = "select", db.table = "users"), err)]
+    async fn list_by_ids(&mut self, ids: &[UserId]) -> Result<Vec<User>, CoreError> {
+        let mut tx = self.tx.lock().await;
+        let ids: Vec<uuid::Uuid> = ids.iter().map(|id| id.0).collect();
+        let rows = sqlx::query_as!(
+            UserRow,
+            r#"
+            SELECT id, email, username, display_name, sub, deleted_at, created_at, updated_at
+            FROM users
+            WHERE id = ANY($1) AND deleted_at IS NULL
+            "#,
+            &ids,
+        )
+        .fetch_all(&mut ***tx)
+        .await
+        .map_err(map_sqlx_error)?;
+
+        Ok(rows.into_iter().map(Into::into).collect())
+    }
+
+    #[tracing::instrument(skip(self), fields(db.system = "postgresql", db.operation = "select", db.table = "users"), err)]
     async fn list_active(&mut self) -> Result<Vec<User>, CoreError> {
         let mut tx = self.tx.lock().await;
         let rows = sqlx::query_as!(
