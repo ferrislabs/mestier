@@ -1,0 +1,60 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT id, org_id, employee_id, effective_from, effective_to, created_at, updated_at\n            FROM employee_rhythms\n            WHERE org_id = $1\n              AND effective_from <= $3\n              AND (effective_to IS NULL OR effective_to > $2)\n            ORDER BY employee_id ASC, effective_from ASC\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "org_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "employee_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 3,
+        "name": "effective_from",
+        "type_info": "Date"
+      },
+      {
+        "ordinal": 4,
+        "name": "effective_to",
+        "type_info": "Date"
+      },
+      {
+        "ordinal": 5,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 6,
+        "name": "updated_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Date",
+        "Date"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      true,
+      false,
+      false
+    ]
+  },
+  "hash": "aacd8b87a0164f08ff1fc9d532af79a44b930e5ca87c6741e09c3f473a146c49"
+}

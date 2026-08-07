@@ -17,6 +17,7 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 utoipa = { workspace = true }
 chrono = { workspace = true }
+chrono-tz = { workspace = true }
 sqlx = { workspace = true }
 rust_decimal = { workspace = true }
 tokio = { workspace = true, features = ["sync"] }

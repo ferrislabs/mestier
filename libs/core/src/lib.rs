@@ -8,14 +8,15 @@ pub use application::*;
 pub use infrastructure::realtime::EventHub;
 
 pub use domain::{
-    AbsenceKind, AssigneeRef, Assignment, AssignmentId, Customer, CustomerContact,
-    CustomerContactId, CustomerContext, CustomerContextId, CustomerId, CustomerPipelineStage,
-    CustomerStatus, DateRange, Employee, EmployeeAbsence, EmployeeAbsenceId, EmployeeId,
-    EmployeeRhythm, EmployeeRhythmId, EmployeeWorkSlot, EmployeeWorkSlotId, Equipment, EquipmentId,
-    FileObject, Member, MemberId, MinuteInterval, Organization, OrganizationId, Permissions,
-    Product, ProductId, Quote, QuoteId, QuoteLine, QuoteLineId, QuoteStatus, RhythmSlot,
-    RhythmSlotId, Role, RoleId, ServiceRate, ServiceRateId, ServiceRateUnit, StoredFile, User,
-    UserId, WorkOrder, WorkOrderId, WorkOrderStatus,
+    AbsenceKind, AssigneeRef, Assignment, AssignmentId, AvailabilityReport, Conflict, ConflictKind,
+    Customer, CustomerContact, CustomerContactId, CustomerContext, CustomerContextId, CustomerId,
+    CustomerPipelineStage, CustomerStatus, DateRange, Employee, EmployeeAbsence, EmployeeAbsenceId,
+    EmployeeId, EmployeeRhythm, EmployeeRhythmId, EmployeeWorkSlot, EmployeeWorkSlotId,
+    EmployeeWorkTime, Equipment, EquipmentId, FileObject, Member, MemberId, MinuteInterval,
+    Organization, OrganizationId, Permissions, PlanningEntry, PlanningResource, PlanningView,
+    PlanningWorkOrder, Product, ProductId, Quote, QuoteId, QuoteLine, QuoteLineId, QuoteStatus,
+    RhythmSlot, RhythmSlotId, Role, RoleId, ServiceRate, ServiceRateId, ServiceRateUnit,
+    StoredFile, TimeRange, Tz, User, UserId, WorkOrder, WorkOrderId, WorkOrderStatus,
     absence::commands::{CreateAbsenceCommand, PatchAbsenceCommand},
     customer::commands::{CreateCustomerCommand, UpdateCustomerCommand},
     customer_contact::commands::{CreateCustomerContactCommand, UpdateCustomerContactCommand},
@@ -24,6 +25,7 @@ pub use domain::{
     equipment::commands::{CreateEquipmentCommand, UpdateEquipmentCommand},
     file_storage::commands::UploadFileCommand,
     organization::commands::{CreateOrganizationCommand, UpdateOrganizationCommand},
+    planning::service::detect_conflicts,
     product::commands::{CreateProductCommand, UpdateProductCommand},
     quote::commands::{
         CreateQuoteCommand, QuoteLineCommand, UpdateQuoteCommand, UpdateQuoteStatusCommand,

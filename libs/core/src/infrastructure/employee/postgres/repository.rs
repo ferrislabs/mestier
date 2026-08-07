@@ -125,6 +125,28 @@ impl<'tx> EmployeeRepository for PgEmployeeRepository<'tx> {
         Ok((rows.into_iter().map(Into::into).collect(), total as u64))
     }
 
+    async fn list_active_by_organization(
+        &mut self,
+        organization_id: OrganizationId,
+    ) -> Result<Vec<Employee>, CoreError> {
+        let mut tx = self.tx.lock().await;
+        let rows = sqlx::query_as!(
+            EmployeeRow,
+            r#"
+            SELECT id, org_id, user_id, name, hourly_rate_cents, weekly_contract_minutes, deleted_at, created_at, updated_at
+            FROM employees
+            WHERE org_id = $1 AND deleted_at IS NULL
+            ORDER BY name ASC, created_at ASC
+            "#,
+            organization_id.0,
+        )
+        .fetch_all(&mut ***tx)
+        .await
+        .map_err(map_sqlx_error)?;
+
+        Ok(rows.into_iter().map(Into::into).collect())
+    }
+
     async fn update(&mut self, employee: &Employee) -> Result<Employee, CoreError> {
         let mut tx = self.tx.lock().await;
         let row = sqlx::query_as!(

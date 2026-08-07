@@ -1,0 +1,48 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT a.id, a.org_id, a.work_order_id, a.employee_id, a.created_at\n            FROM assignments a\n            JOIN work_orders wo ON wo.id = a.work_order_id\n            WHERE wo.org_id = $1 AND wo.deleted_at IS NULL\n              AND wo.starts_at < $3 AND wo.ends_at > $2\n            ORDER BY a.created_at ASC, a.id ASC\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "org_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "work_order_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 3,
+        "name": "employee_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 4,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Timestamptz",
+        "Timestamptz"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "a23900bfb043628488fc1bd7a8e36f7d0ab8bec8cc2aca0928f5e1421dbe3a97"
+}

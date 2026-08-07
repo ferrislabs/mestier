@@ -41,4 +41,13 @@ pub trait UserRepository: Send {
     ) -> impl Future<Output = Result<(), CoreError>> + Send;
 
     fn list_active(&mut self) -> impl Future<Output = Result<Vec<User>, CoreError>> + Send;
+
+    /// Every active user among `ids`, in one query. Added additively for
+    /// the planning read model, which resolves the `display_name` of
+    /// member-only resources without one lookup per member (see the
+    /// planning module design doc's N+1 warning).
+    fn list_by_ids(
+        &mut self,
+        ids: &[UserId],
+    ) -> impl Future<Output = Result<Vec<User>, CoreError>> + Send;
 }

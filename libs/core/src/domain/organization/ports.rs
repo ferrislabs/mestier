@@ -18,6 +18,17 @@ pub trait OrganizationRepository: Send {
         id: OrganizationId,
     ) -> impl Future<Output = Result<Option<Organization>, CoreError>> + Send;
 
+    /// The organization's IANA timezone (`organizations.timezone`), or
+    /// `None` if the organization does not exist or is soft-deleted.
+    /// Added additively for the planning read model, which reconciles
+    /// `TIMESTAMPTZ` entries (absences, work orders) against
+    /// organization-local work-time minutes and needs the zone to do it
+    /// (see the planning module design doc).
+    fn find_timezone(
+        &mut self,
+        id: OrganizationId,
+    ) -> impl Future<Output = Result<Option<String>, CoreError>> + Send;
+
     fn list_for_user(
         &mut self,
         user_id: UserId,

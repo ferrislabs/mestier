@@ -12,6 +12,7 @@ pub mod message;
 pub mod notification;
 pub mod organization;
 pub mod overwrite;
+pub mod planning;
 pub mod postgres;
 pub mod presence;
 pub mod product;

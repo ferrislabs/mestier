@@ -1,0 +1,48 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT rs.id, rs.rhythm_id, rs.weekday, rs.starts_minute, rs.ends_minute\n            FROM employee_rhythm_slots rs\n            JOIN employee_rhythms r ON r.id = rs.rhythm_id\n            WHERE r.org_id = $1\n              AND r.effective_from <= $3\n              AND (r.effective_to IS NULL OR r.effective_to > $2)\n            ORDER BY rs.weekday ASC, rs.starts_minute ASC\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "rhythm_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "weekday",
+        "type_info": "Int2"
+      },
+      {
+        "ordinal": 3,
+        "name": "starts_minute",
+        "type_info": "Int2"
+      },
+      {
+        "ordinal": 4,
+        "name": "ends_minute",
+        "type_info": "Int2"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Date",
+        "Date"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "b0169ef2180b2fe9cd0b4a4b08b557a90150ac172f61d19cb9cf9f5f2e6068be"
+}
