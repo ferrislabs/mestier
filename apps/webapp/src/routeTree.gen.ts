@@ -20,6 +20,7 @@ import { Route as AppCrmCustomersIndexRouteImport } from './routes/_app.crm.cust
 import { Route as AppCrmQuotesQuoteIdRouteImport } from './routes/_app.crm.quotes.$quoteId'
 import { Route as AppCrmCustomersPipelineRouteImport } from './routes/_app.crm.customers.pipeline'
 import { Route as AppCrmCustomersCustomerIdRouteImport } from './routes/_app.crm.customers.$customerId'
+import { Route as AppHrEmployeesEmployeeIdWorkTimeRouteImport } from './routes/_app.hr.employees.$employeeId.work-time'
 
 const AppRoute = AppRouteImport.update({
   id: '/_app',
@@ -76,11 +77,17 @@ const AppCrmCustomersCustomerIdRoute =
     path: '/crm/customers/$customerId',
     getParentRoute: () => AppRoute,
   } as any)
+const AppHrEmployeesEmployeeIdWorkTimeRoute =
+  AppHrEmployeesEmployeeIdWorkTimeRouteImport.update({
+    id: '/$employeeId/work-time',
+    path: '/$employeeId/work-time',
+    getParentRoute: () => AppHrEmployeesRoute,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof AppIndexRoute
   '/settings': typeof AppSettingsRoute
-  '/hr/employees': typeof AppHrEmployeesRoute
+  '/hr/employees': typeof AppHrEmployeesRouteWithChildren
   '/crm/': typeof AppCrmIndexRoute
   '/hr/': typeof AppHrIndexRoute
   '/crm/customers/$customerId': typeof AppCrmCustomersCustomerIdRoute
@@ -88,11 +95,12 @@ export interface FileRoutesByFullPath {
   '/crm/quotes/$quoteId': typeof AppCrmQuotesQuoteIdRoute
   '/crm/customers/': typeof AppCrmCustomersIndexRoute
   '/crm/quotes/': typeof AppCrmQuotesIndexRoute
+  '/hr/employees/$employeeId/work-time': typeof AppHrEmployeesEmployeeIdWorkTimeRoute
 }
 export interface FileRoutesByTo {
   '/settings': typeof AppSettingsRoute
   '/': typeof AppIndexRoute
-  '/hr/employees': typeof AppHrEmployeesRoute
+  '/hr/employees': typeof AppHrEmployeesRouteWithChildren
   '/crm': typeof AppCrmIndexRoute
   '/hr': typeof AppHrIndexRoute
   '/crm/customers/$customerId': typeof AppCrmCustomersCustomerIdRoute
@@ -100,13 +108,14 @@ export interface FileRoutesByTo {
   '/crm/quotes/$quoteId': typeof AppCrmQuotesQuoteIdRoute
   '/crm/customers': typeof AppCrmCustomersIndexRoute
   '/crm/quotes': typeof AppCrmQuotesIndexRoute
+  '/hr/employees/$employeeId/work-time': typeof AppHrEmployeesEmployeeIdWorkTimeRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/_app': typeof AppRouteWithChildren
   '/_app/settings': typeof AppSettingsRoute
   '/_app/': typeof AppIndexRoute
-  '/_app/hr/employees': typeof AppHrEmployeesRoute
+  '/_app/hr/employees': typeof AppHrEmployeesRouteWithChildren
   '/_app/crm/': typeof AppCrmIndexRoute
   '/_app/hr/': typeof AppHrIndexRoute
   '/_app/crm/customers/$customerId': typeof AppCrmCustomersCustomerIdRoute
@@ -114,6 +123,7 @@ export interface FileRoutesById {
   '/_app/crm/quotes/$quoteId': typeof AppCrmQuotesQuoteIdRoute
   '/_app/crm/customers/': typeof AppCrmCustomersIndexRoute
   '/_app/crm/quotes/': typeof AppCrmQuotesIndexRoute
+  '/_app/hr/employees/$employeeId/work-time': typeof AppHrEmployeesEmployeeIdWorkTimeRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -128,6 +138,7 @@ export interface FileRouteTypes {
     | '/crm/quotes/$quoteId'
     | '/crm/customers/'
     | '/crm/quotes/'
+    | '/hr/employees/$employeeId/work-time'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/settings'
@@ -140,6 +151,7 @@ export interface FileRouteTypes {
     | '/crm/quotes/$quoteId'
     | '/crm/customers'
     | '/crm/quotes'
+    | '/hr/employees/$employeeId/work-time'
   id:
     | '__root__'
     | '/_app'
@@ -153,6 +165,7 @@ export interface FileRouteTypes {
     | '/_app/crm/quotes/$quoteId'
     | '/_app/crm/customers/'
     | '/_app/crm/quotes/'
+    | '/_app/hr/employees/$employeeId/work-time'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -238,13 +251,32 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppCrmCustomersCustomerIdRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/hr/employees/$employeeId/work-time': {
+      id: '/_app/hr/employees/$employeeId/work-time'
+      path: '/$employeeId/work-time'
+      fullPath: '/hr/employees/$employeeId/work-time'
+      preLoaderRoute: typeof AppHrEmployeesEmployeeIdWorkTimeRouteImport
+      parentRoute: typeof AppHrEmployeesRoute
+    }
   }
 }
+
+interface AppHrEmployeesRouteChildren {
+  AppHrEmployeesEmployeeIdWorkTimeRoute: typeof AppHrEmployeesEmployeeIdWorkTimeRoute
+}
+
+const AppHrEmployeesRouteChildren: AppHrEmployeesRouteChildren = {
+  AppHrEmployeesEmployeeIdWorkTimeRoute: AppHrEmployeesEmployeeIdWorkTimeRoute,
+}
+
+const AppHrEmployeesRouteWithChildren = AppHrEmployeesRoute._addFileChildren(
+  AppHrEmployeesRouteChildren,
+)
 
 interface AppRouteChildren {
   AppSettingsRoute: typeof AppSettingsRoute
   AppIndexRoute: typeof AppIndexRoute
-  AppHrEmployeesRoute: typeof AppHrEmployeesRoute
+  AppHrEmployeesRoute: typeof AppHrEmployeesRouteWithChildren
   AppCrmIndexRoute: typeof AppCrmIndexRoute
   AppHrIndexRoute: typeof AppHrIndexRoute
   AppCrmCustomersCustomerIdRoute: typeof AppCrmCustomersCustomerIdRoute
@@ -257,7 +289,7 @@ interface AppRouteChildren {
 const AppRouteChildren: AppRouteChildren = {
   AppSettingsRoute: AppSettingsRoute,
   AppIndexRoute: AppIndexRoute,
-  AppHrEmployeesRoute: AppHrEmployeesRoute,
+  AppHrEmployeesRoute: AppHrEmployeesRouteWithChildren,
   AppCrmIndexRoute: AppCrmIndexRoute,
   AppHrIndexRoute: AppHrIndexRoute,
   AppCrmCustomersCustomerIdRoute: AppCrmCustomersCustomerIdRoute,

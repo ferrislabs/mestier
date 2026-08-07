@@ -1,10 +1,38 @@
 export namespace Schemas {
   // <Schemas>
+  export type AbsenceKind = "LEAVE" | "SICK" | "UNAVAILABLE";
+  export type EmployeeId = string;
+  export type EmployeeAbsenceId = string;
+  export type OrganizationId = string;
+  export type AbsenceResponse = {
+    all_day: boolean;
+    created_at: string;
+    employee_id: EmployeeId;
+    ends_at: string;
+    id: EmployeeAbsenceId;
+    kind: AbsenceKind;
+    note?: (string | null) | undefined;
+    organization_id: OrganizationId;
+    starts_at: string;
+    updated_at: string;
+  };
+  export type UserId = string;
+  export type AssigneeRefRequest = { employee_id: EmployeeId; kind: "employee" } | { kind: "member"; user_id: UserId };
   export type AttachmentResponse = { filename: string; mime_type: string; size_bytes: number; storage_key: string };
   export type AuthorType = "USER" | "WEBHOOK" | "SYSTEM";
+  export type WorkOrderId = string;
+  export type ConflictResponse =
+    | { ends_at: string; kind: "absence"; note?: (string | null) | undefined; reason: AbsenceKind; starts_at: string }
+    | { ends_at: string; kind: "outside_work_hours"; starts_at: string }
+    | { ends_at: string; kind: "overlapping_work_order"; starts_at: string; work_order_id: WorkOrderId };
+  export type AvailabilityResourceResponse = {
+    available: boolean;
+    conflicts: Array<ConflictResponse>;
+    resource_id: string;
+  };
+  export type AvailabilityResponse = { resources: Array<AvailabilityResourceResponse> };
   export type ButtonStyle = "Link";
   export type CategoryId = string;
-  export type OrganizationId = string;
   export type CategoryResponse = {
     created_at: string;
     id: CategoryId;
@@ -41,6 +69,14 @@ export namespace Schemas {
     | { divider: boolean; spacing?: (null | SeparatorSpacing) | undefined; type: "SEPARATOR" }
     | { components: Array<Component>; type: "ACTION_ROW" }
     | { emoji?: (string | null) | undefined; label: string; style: ButtonStyle; type: "BUTTON"; url: string };
+  export type CreateAbsenceRequest = {
+    all_day?: boolean | undefined;
+    employee_id: EmployeeId;
+    ends_at: string;
+    kind: AbsenceKind;
+    note?: (string | null) | undefined;
+    starts_at: string;
+  };
   export type CreateCategoryRequest = { name: string; position: number };
   export type CreateChannelRequest = {
     category_id?: (null | CategoryId) | undefined;
@@ -73,7 +109,6 @@ export namespace Schemas {
     pipeline_stage: CustomerPipelineStage;
     status: CustomerStatus;
   };
-  export type UserId = string;
   export type CreateEmployeeRequest = {
     hourly_rate_cents?: (number | null) | undefined;
     name: string;
@@ -118,6 +153,17 @@ export namespace Schemas {
   export type CreateServiceRateRequest = { label: string; rate_cents: number; unit: ServiceRateUnit };
   export type CreateThreadRequest = { name: string; origin_message_id?: (null | MessageId) | undefined };
   export type CreateWebhookRequest = { avatar_url?: (string | null) | undefined; name: string };
+  export type QuoteId = string;
+  export type CreateWorkOrderRequest = {
+    all_day?: boolean | undefined;
+    customer_context_id: CustomerContextId;
+    customer_id: CustomerId;
+    ends_at: string;
+    note?: (string | null) | undefined;
+    quote_id?: (null | QuoteId) | undefined;
+    starts_at: string;
+    title?: (string | null) | undefined;
+  };
   export type CustomerContactId = string;
   export type CustomerContactResponse = {
     created_at: string;
@@ -154,7 +200,6 @@ export namespace Schemas {
     status: CustomerStatus;
     updated_at: string;
   };
-  export type EmployeeId = string;
   export type EmployeeResponse = {
     created_at: string;
     hourly_rate_cents?: (number | null) | undefined;
@@ -165,6 +210,8 @@ export namespace Schemas {
     user_id?: (null | UserId) | undefined;
     weekly_contract_minutes: number;
   };
+  export type EmployeeRhythmId = string;
+  export type EmployeeWorkSlotId = string;
   export type EquipmentId = string;
   export type EquipmentResponse = {
     created_at: string;
@@ -198,6 +245,7 @@ export namespace Schemas {
     organization_id: OrganizationId;
     reactions: Array<ReactionCountResponse>;
   };
+  export type MinuteIntervalResponse = { ends_minute: number; starts_minute: number };
   export type NotificationId = string;
   export type NotificationResponse = {
     channel_id: ChannelId;
@@ -233,6 +281,66 @@ export namespace Schemas {
     prev_page?: (number | null) | undefined;
     total?: (number | null) | undefined;
   };
+  export type WorkOrderStatus = "PLANNED" | "IN_PROGRESS" | "DONE" | "CANCELLED";
+  export type WorkOrderResponse = {
+    all_day: boolean;
+    created_at: string;
+    customer_context_id: CustomerContextId;
+    customer_id: CustomerId;
+    employee_ids: Array<EmployeeId>;
+    ends_at: string;
+    id: WorkOrderId;
+    note?: (string | null) | undefined;
+    organization_id: OrganizationId;
+    quote_id?: (null | QuoteId) | undefined;
+    starts_at: string;
+    status: WorkOrderStatus;
+    title?: (string | null) | undefined;
+    updated_at: string;
+  };
+  export type PatchWorkOrderResponse = { created_employees: Array<EmployeeResponse>; work_order: WorkOrderResponse };
+  export type PlanningEntryResponse =
+    | {
+        all_day: boolean;
+        context_label: string;
+        customer_name: string;
+        employee_ids: Array<EmployeeId>;
+        ends_at: string;
+        id: WorkOrderId;
+        kind: "work_order";
+        note?: (string | null) | undefined;
+        starts_at: string;
+        status: WorkOrderStatus;
+        title?: (string | null) | undefined;
+      }
+    | {
+        absence_kind: AbsenceKind;
+        all_day: boolean;
+        employee_id: EmployeeId;
+        ends_at: string;
+        id: EmployeeAbsenceId;
+        kind: "absence";
+        note?: (string | null) | undefined;
+        starts_at: string;
+      };
+  export type PlanningResourceKindResponse = "employee" | "member";
+  export type PlanningResourceResponse = {
+    display_name: string;
+    employee_id?: (null | EmployeeId) | undefined;
+    hourly_rate_cents?: (number | null) | undefined;
+    kind: PlanningResourceKindResponse;
+    resource_id: string;
+    user_id?: (null | UserId) | undefined;
+    weekly_contract_minutes: number;
+  };
+  export type PlanningWorkTimeDayResponse = { date: string; intervals: Array<MinuteIntervalResponse> };
+  export type PlanningWorkTimeResponse = { days: Array<PlanningWorkTimeDayResponse>; employee_id: EmployeeId };
+  export type PlanningResponse = {
+    entries: Array<PlanningEntryResponse>;
+    resources: Array<PlanningResourceResponse>;
+    timezone: string;
+    work_time: Array<PlanningWorkTimeResponse>;
+  };
   export type PresenceStatus = "ONLINE" | "OFFLINE" | "DND";
   export type PresenceResponse = {
     organization_id: OrganizationId;
@@ -252,7 +360,14 @@ export namespace Schemas {
     unit_price_cents: number;
     updated_at: string;
   };
-  export type QuoteId = string;
+  export type RhythmSlotRequest = { ends_minute: number; starts_minute: number; weekday: number };
+  export type PutRhythmRequest = {
+    effective_from: string;
+    effective_to?: (string | null) | undefined;
+    slots: Array<RhythmSlotRequest>;
+  };
+  export type WorkSlotRequest = { ends_minute: number; starts_minute: number; work_date: string };
+  export type PutWorkSlotsRequest = { slots: Array<WorkSlotRequest> };
   export type QuoteLineId = string;
   export type QuoteLineResponse = {
     created_at: string;
@@ -282,6 +397,17 @@ export namespace Schemas {
     total_cents: number;
     updated_at: string;
   };
+  export type RhythmSlotResponse = { ends_minute: number; starts_minute: number; weekday: number };
+  export type RhythmResponse = {
+    created_at: string;
+    effective_from: string;
+    effective_to?: (string | null) | undefined;
+    employee_id: EmployeeId;
+    id: EmployeeRhythmId;
+    organization_id: OrganizationId;
+    slots: Array<RhythmSlotResponse>;
+    updated_at: string;
+  };
   export type ServiceRateResponse = {
     created_at: string;
     id: ServiceRateId;
@@ -293,6 +419,13 @@ export namespace Schemas {
   };
   export type SetPresenceRequest = { status: PresenceStatus };
   export type UnreadResponse = { channel_ids: Array<ChannelId> };
+  export type UpdateAbsenceRequest = Partial<{
+    all_day: boolean | null;
+    ends_at: string | null;
+    kind: null | AbsenceKind;
+    note: string | null;
+    starts_at: string | null;
+  }>;
   export type UpdateCategoryRequest = { name: string; position: number };
   export type UpdateChannelRequest = {
     category_id?: (null | CategoryId) | undefined;
@@ -350,6 +483,15 @@ export namespace Schemas {
   export type UpdateServiceRateRequest = { label: string; rate_cents: number; unit: ServiceRateUnit };
   export type UpdateThreadRequest = { archived: boolean; name: string };
   export type UpdateWebhookRequest = { avatar_url?: (string | null) | undefined; name: string };
+  export type UpdateWorkOrderRequest = Partial<{
+    all_day: boolean | null;
+    assignees: Array<AssigneeRefRequest> | null;
+    ends_at: string | null;
+    note: string | null;
+    starts_at: string | null;
+    status: null | WorkOrderStatus;
+    title: string | null;
+  }>;
   export type UpsertOverwriteRequest = { allow: number; deny: number };
   export type WebhookCreatedResponse = {
     avatar_url?: (string | null) | undefined;
@@ -372,6 +514,15 @@ export namespace Schemas {
     organization_id: OrganizationId;
     updated_at: string;
   };
+  export type WorkSlotResponse = {
+    employee_id: EmployeeId;
+    ends_minute: number;
+    id: EmployeeWorkSlotId;
+    organization_id: OrganizationId;
+    starts_minute: number;
+    work_date: string;
+  };
+  export type WorkTimeResponse = { rhythms: Array<RhythmResponse>; work_slots: Array<WorkSlotResponse> };
 
   // </Schemas>
 }
@@ -1748,6 +1899,106 @@ export namespace Endpoints {
       409: unknown;
     };
   };
+  export type get_ListAbsences = {
+    method: "GET";
+    path: "/api/v1/organizations/{organization_id}/absences";
+    requestFormat: "json";
+    parameters: {
+      query: Partial<{ page: number; per_page: number }>;
+      path: { organization_id: string };
+    };
+    responses: {
+      200: {
+        data: Array<{
+          all_day: boolean;
+          created_at: string;
+          employee_id: Schemas.EmployeeId;
+          ends_at: string;
+          id: Schemas.EmployeeAbsenceId;
+          kind: Schemas.AbsenceKind;
+          note?: (string | null) | undefined;
+          organization_id: Schemas.OrganizationId;
+          starts_at: string;
+          updated_at: string;
+        }>;
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+    };
+  };
+  export type post_CreateAbsence = {
+    method: "POST";
+    path: "/api/v1/organizations/{organization_id}/absences";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string };
+
+      body: Schemas.CreateAbsenceRequest;
+    };
+    responses: {
+      201: {
+        data: {
+          all_day: boolean;
+          created_at: string;
+          employee_id: Schemas.EmployeeId;
+          ends_at: string;
+          id: Schemas.EmployeeAbsenceId;
+          kind: Schemas.AbsenceKind;
+          note?: (string | null) | undefined;
+          organization_id: Schemas.OrganizationId;
+          starts_at: string;
+          updated_at: string;
+        };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      400: unknown;
+      401: unknown;
+      403: unknown;
+      409: unknown;
+    };
+  };
+  export type delete_DeleteAbsence = {
+    method: "DELETE";
+    path: "/api/v1/organizations/{organization_id}/absences/{absence_id}";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string; absence_id: string };
+    };
+    responses: { 204: unknown; 401: unknown; 403: unknown; 404: unknown };
+  };
+  export type patch_PatchAbsence = {
+    method: "PATCH";
+    path: "/api/v1/organizations/{organization_id}/absences/{absence_id}";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string; absence_id: string };
+
+      body: Schemas.UpdateAbsenceRequest;
+    };
+    responses: {
+      200: {
+        data: {
+          all_day: boolean;
+          created_at: string;
+          employee_id: Schemas.EmployeeId;
+          ends_at: string;
+          id: Schemas.EmployeeAbsenceId;
+          kind: Schemas.AbsenceKind;
+          note?: (string | null) | undefined;
+          organization_id: Schemas.OrganizationId;
+          starts_at: string;
+          updated_at: string;
+        };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      400: unknown;
+      401: unknown;
+      403: unknown;
+      404: unknown;
+      409: unknown;
+    };
+  };
   export type get_ListCustomers = {
     method: "GET";
     path: "/api/v1/organizations/{organization_id}/customers";
@@ -1862,6 +2113,81 @@ export namespace Endpoints {
       409: unknown;
     };
   };
+  export type put_PutRhythm = {
+    method: "PUT";
+    path: "/api/v1/organizations/{organization_id}/employees/{employee_id}/rhythm";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string; employee_id: string };
+
+      body: Schemas.PutRhythmRequest;
+    };
+    responses: {
+      200: {
+        data: {
+          created_at: string;
+          effective_from: string;
+          effective_to?: (string | null) | undefined;
+          employee_id: Schemas.EmployeeId;
+          id: Schemas.EmployeeRhythmId;
+          organization_id: Schemas.OrganizationId;
+          slots: Array<Schemas.RhythmSlotResponse>;
+          updated_at: string;
+        };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      400: unknown;
+      401: unknown;
+      403: unknown;
+      409: unknown;
+    };
+  };
+  export type put_PutWorkSlots = {
+    method: "PUT";
+    path: "/api/v1/organizations/{organization_id}/employees/{employee_id}/work-slots";
+    requestFormat: "json";
+    parameters: {
+      query: { from: string; to: string };
+      path: { organization_id: string; employee_id: string };
+
+      body: Schemas.PutWorkSlotsRequest;
+    };
+    responses: {
+      200: {
+        data: Array<{
+          employee_id: Schemas.EmployeeId;
+          ends_minute: number;
+          id: Schemas.EmployeeWorkSlotId;
+          organization_id: Schemas.OrganizationId;
+          starts_minute: number;
+          work_date: string;
+        }>;
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      400: unknown;
+      401: unknown;
+      403: unknown;
+      409: unknown;
+    };
+  };
+  export type get_GetWorkTime = {
+    method: "GET";
+    path: "/api/v1/organizations/{organization_id}/employees/{employee_id}/work-time";
+    requestFormat: "json";
+    parameters: {
+      query: { from: string; to: string };
+      path: { organization_id: string; employee_id: string };
+    };
+    responses: {
+      200: {
+        data: { rhythms: Array<Schemas.RhythmResponse>; work_slots: Array<Schemas.WorkSlotResponse> };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      400: unknown;
+      401: unknown;
+      403: unknown;
+    };
+  };
   export type get_ListEquipment = {
     method: "GET";
     path: "/api/v1/organizations/{organization_id}/equipment";
@@ -1911,6 +2237,47 @@ export namespace Endpoints {
       401: unknown;
       403: unknown;
       409: unknown;
+    };
+  };
+  export type get_GetPlanning = {
+    method: "GET";
+    path: "/api/v1/organizations/{organization_id}/planning";
+    requestFormat: "json";
+    parameters: {
+      query: { from: string; to: string };
+      path: { organization_id: string };
+    };
+    responses: {
+      200: {
+        data: {
+          entries: Array<Schemas.PlanningEntryResponse>;
+          resources: Array<Schemas.PlanningResourceResponse>;
+          timezone: string;
+          work_time: Array<Schemas.PlanningWorkTimeResponse>;
+        };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      400: unknown;
+      401: unknown;
+      403: unknown;
+    };
+  };
+  export type get_GetPlanningAvailability = {
+    method: "GET";
+    path: "/api/v1/organizations/{organization_id}/planning/availability";
+    requestFormat: "json";
+    parameters: {
+      query: { starts_at: string; ends_at: string; all_day?: boolean | undefined };
+      path: { organization_id: string };
+    };
+    responses: {
+      200: {
+        data: { resources: Array<Schemas.AvailabilityResourceResponse> };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      400: unknown;
+      401: unknown;
+      403: unknown;
     };
   };
   export type get_ListProducts = {
@@ -2081,6 +2448,135 @@ export namespace Endpoints {
       400: unknown;
       401: unknown;
       403: unknown;
+      409: unknown;
+    };
+  };
+  export type get_ListWorkOrders = {
+    method: "GET";
+    path: "/api/v1/organizations/{organization_id}/work-orders";
+    requestFormat: "json";
+    parameters: {
+      query: Partial<{ page: number; per_page: number }>;
+      path: { organization_id: string };
+    };
+    responses: {
+      200: {
+        data: Array<{
+          all_day: boolean;
+          created_at: string;
+          customer_context_id: Schemas.CustomerContextId;
+          customer_id: Schemas.CustomerId;
+          employee_ids: Array<Schemas.EmployeeId>;
+          ends_at: string;
+          id: Schemas.WorkOrderId;
+          note?: (string | null) | undefined;
+          organization_id: Schemas.OrganizationId;
+          quote_id?: (null | Schemas.QuoteId) | undefined;
+          starts_at: string;
+          status: Schemas.WorkOrderStatus;
+          title?: (string | null) | undefined;
+          updated_at: string;
+        }>;
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+    };
+  };
+  export type post_CreateWorkOrder = {
+    method: "POST";
+    path: "/api/v1/organizations/{organization_id}/work-orders";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string };
+
+      body: Schemas.CreateWorkOrderRequest;
+    };
+    responses: {
+      201: {
+        data: {
+          all_day: boolean;
+          created_at: string;
+          customer_context_id: Schemas.CustomerContextId;
+          customer_id: Schemas.CustomerId;
+          employee_ids: Array<Schemas.EmployeeId>;
+          ends_at: string;
+          id: Schemas.WorkOrderId;
+          note?: (string | null) | undefined;
+          organization_id: Schemas.OrganizationId;
+          quote_id?: (null | Schemas.QuoteId) | undefined;
+          starts_at: string;
+          status: Schemas.WorkOrderStatus;
+          title?: (string | null) | undefined;
+          updated_at: string;
+        };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      400: unknown;
+      401: unknown;
+      403: unknown;
+      409: unknown;
+    };
+  };
+  export type get_GetWorkOrder = {
+    method: "GET";
+    path: "/api/v1/organizations/{organization_id}/work-orders/{work_order_id}";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string; work_order_id: string };
+    };
+    responses: {
+      200: {
+        data: {
+          all_day: boolean;
+          created_at: string;
+          customer_context_id: Schemas.CustomerContextId;
+          customer_id: Schemas.CustomerId;
+          employee_ids: Array<Schemas.EmployeeId>;
+          ends_at: string;
+          id: Schemas.WorkOrderId;
+          note?: (string | null) | undefined;
+          organization_id: Schemas.OrganizationId;
+          quote_id?: (null | Schemas.QuoteId) | undefined;
+          starts_at: string;
+          status: Schemas.WorkOrderStatus;
+          title?: (string | null) | undefined;
+          updated_at: string;
+        };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+      404: unknown;
+    };
+  };
+  export type delete_DeleteWorkOrder = {
+    method: "DELETE";
+    path: "/api/v1/organizations/{organization_id}/work-orders/{work_order_id}";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string; work_order_id: string };
+    };
+    responses: { 204: unknown; 401: unknown; 403: unknown; 404: unknown };
+  };
+  export type patch_PatchWorkOrder = {
+    method: "PATCH";
+    path: "/api/v1/organizations/{organization_id}/work-orders/{work_order_id}";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string; work_order_id: string };
+
+      body: Schemas.UpdateWorkOrderRequest;
+    };
+    responses: {
+      200: {
+        data: { created_employees: Array<Schemas.EmployeeResponse>; work_order: Schemas.WorkOrderResponse };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      400: unknown;
+      401: unknown;
+      403: unknown;
+      404: unknown;
       409: unknown;
     };
   };
@@ -2367,6 +2863,8 @@ export type EndpointByMethod = {
     "/api/v1/employees/{employee_id}": Endpoints.delete_DeleteEmployee;
     "/api/v1/equipment/{equipment_id}": Endpoints.delete_DeleteEquipment;
     "/api/v1/organizations/{organization_id}": Endpoints.delete_DeleteOrganization;
+    "/api/v1/organizations/{organization_id}/absences/{absence_id}": Endpoints.delete_DeleteAbsence;
+    "/api/v1/organizations/{organization_id}/work-orders/{work_order_id}": Endpoints.delete_DeleteWorkOrder;
     "/api/v1/products/{product_id}": Endpoints.delete_DeleteProduct;
     "/api/v1/quotes/{quote_id}": Endpoints.delete_DeleteQuote;
     "/api/v1/service-rates/{service_rate_id}": Endpoints.delete_DeleteServiceRate;
@@ -2383,6 +2881,8 @@ export type EndpointByMethod = {
     "/api/v1/employees/{employee_id}": Endpoints.patch_UpdateEmployee;
     "/api/v1/equipment/{equipment_id}": Endpoints.patch_UpdateEquipment;
     "/api/v1/organizations/{organization_id}": Endpoints.patch_UpdateOrganization;
+    "/api/v1/organizations/{organization_id}/absences/{absence_id}": Endpoints.patch_PatchAbsence;
+    "/api/v1/organizations/{organization_id}/work-orders/{work_order_id}": Endpoints.patch_PatchWorkOrder;
     "/api/v1/products/{product_id}": Endpoints.patch_UpdateProduct;
     "/api/v1/quotes/{quote_id}": Endpoints.patch_UpdateQuote;
     "/api/v1/quotes/{quote_id}/status": Endpoints.patch_UpdateQuoteStatus;
@@ -2408,12 +2908,18 @@ export type EndpointByMethod = {
     "/api/v1/equipment/{equipment_id}": Endpoints.get_GetEquipment;
     "/api/v1/organizations": Endpoints.get_ListOrganizations;
     "/api/v1/organizations/{organization_id}": Endpoints.get_GetOrganization;
+    "/api/v1/organizations/{organization_id}/absences": Endpoints.get_ListAbsences;
     "/api/v1/organizations/{organization_id}/customers": Endpoints.get_ListCustomers;
     "/api/v1/organizations/{organization_id}/employees": Endpoints.get_ListEmployees;
+    "/api/v1/organizations/{organization_id}/employees/{employee_id}/work-time": Endpoints.get_GetWorkTime;
     "/api/v1/organizations/{organization_id}/equipment": Endpoints.get_ListEquipment;
+    "/api/v1/organizations/{organization_id}/planning": Endpoints.get_GetPlanning;
+    "/api/v1/organizations/{organization_id}/planning/availability": Endpoints.get_GetPlanningAvailability;
     "/api/v1/organizations/{organization_id}/products": Endpoints.get_ListProducts;
     "/api/v1/organizations/{organization_id}/quotes": Endpoints.get_ListQuotes;
     "/api/v1/organizations/{organization_id}/service-rates": Endpoints.get_ListServiceRates;
+    "/api/v1/organizations/{organization_id}/work-orders": Endpoints.get_ListWorkOrders;
+    "/api/v1/organizations/{organization_id}/work-orders/{work_order_id}": Endpoints.get_GetWorkOrder;
     "/api/v1/products/{product_id}": Endpoints.get_GetProduct;
     "/api/v1/quotes/{quote_id}": Endpoints.get_GetQuote;
     "/api/v1/quotes/{quote_id}/pdf": Endpoints.get_ExportQuotePdf;
@@ -2432,12 +2938,14 @@ export type EndpointByMethod = {
     "/api/v1/customers/{customer_id}/customer-contexts": Endpoints.post_CreateCustomerContext;
     "/api/v1/files": Endpoints.post_UploadFile;
     "/api/v1/organizations": Endpoints.post_CreateOrganization;
+    "/api/v1/organizations/{organization_id}/absences": Endpoints.post_CreateAbsence;
     "/api/v1/organizations/{organization_id}/customers": Endpoints.post_CreateCustomer;
     "/api/v1/organizations/{organization_id}/employees": Endpoints.post_CreateEmployee;
     "/api/v1/organizations/{organization_id}/equipment": Endpoints.post_CreateEquipment;
     "/api/v1/organizations/{organization_id}/products": Endpoints.post_CreateProduct;
     "/api/v1/organizations/{organization_id}/quotes": Endpoints.post_CreateQuote;
     "/api/v1/organizations/{organization_id}/service-rates": Endpoints.post_CreateServiceRate;
+    "/api/v1/organizations/{organization_id}/work-orders": Endpoints.post_CreateWorkOrder;
   };
   put: {
     "/api/v1/chat/channels/{channel_id}/permissions/everyone": Endpoints.put_UpsertEveryoneOverwrite;
@@ -2447,6 +2955,8 @@ export type EndpointByMethod = {
     "/api/v1/chat/notifications/{notification_id}/read": Endpoints.put_MarkNotificationRead;
     "/api/v1/chat/organizations/{organization_id}/notifications/read-all": Endpoints.put_MarkAllNotificationsRead;
     "/api/v1/chat/organizations/{organization_id}/presence": Endpoints.put_SetPresence;
+    "/api/v1/organizations/{organization_id}/employees/{employee_id}/rhythm": Endpoints.put_PutRhythm;
+    "/api/v1/organizations/{organization_id}/employees/{employee_id}/work-slots": Endpoints.put_PutWorkSlots;
   };
 };
 

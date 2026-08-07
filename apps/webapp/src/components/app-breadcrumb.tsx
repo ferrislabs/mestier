@@ -1,3 +1,4 @@
+import { useQuery } from '@tanstack/react-query'
 import { Link, useLocation } from '@tanstack/react-router'
 import { Fragment } from 'react'
 import {
@@ -21,10 +22,24 @@ export function AppBreadcrumb() {
 	const customerLabel = customer.data?.data
 		? customerDisplayName(customer.data.data)
 		: 'Fiche client'
+
+	const employeeId = getEmployeeWorkTimeId(location.pathname)
+	const employee = useQuery({
+		...window.tanstackApi.get('/api/v1/employees/{employee_id}', {
+			path: { employee_id: employeeId ?? '' },
+		}).queryOptions,
+		enabled: Boolean(employeeId),
+	})
+	const employeeLabel = employee.data?.data?.name ?? 'Temps de travail'
+
 	const items = buildBreadcrumbItems({
 		pathname: location.pathname,
 		organizationName: activeOrganization.name,
-		detailLabel: getDetailLabel(location.pathname, customerLabel),
+		detailLabel: getDetailLabel(
+			location.pathname,
+			customerLabel,
+			employeeLabel,
+		),
 	})
 
 	return (
@@ -58,15 +73,23 @@ export function AppBreadcrumb() {
 function getDetailLabel(
 	pathname: string,
 	customerLabel: string,
+	employeeLabel: string,
 ): string | undefined {
 	if (getCustomerId(pathname)) return customerLabel
 	if (/^\/crm\/quotes\/[^/]+$/.test(pathname)) return 'Fiche devis'
+	if (getEmployeeWorkTimeId(pathname)) return employeeLabel
 	return undefined
 }
 
 function getCustomerId(pathname: string): string | null {
 	if (pathname === '/crm/customers/pipeline') return null
 	const match = /^\/crm\/customers\/([^/]+)$/.exec(pathname)
+	if (!match?.[1]) return null
+	return decodeURIComponent(match[1])
+}
+
+function getEmployeeWorkTimeId(pathname: string): string | null {
+	const match = /^\/hr\/employees\/([^/]+)\/work-time$/.exec(pathname)
 	if (!match?.[1]) return null
 	return decodeURIComponent(match[1])
 }
