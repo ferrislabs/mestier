@@ -8,12 +8,14 @@ pub use application::*;
 pub use infrastructure::realtime::EventHub;
 
 pub use domain::{
-    AssigneeRef, Assignment, AssignmentId, Customer, CustomerContact, CustomerContactId,
-    CustomerContext, CustomerContextId, CustomerId, CustomerPipelineStage, CustomerStatus,
-    Employee, EmployeeId, Equipment, EquipmentId, FileObject, Member, MemberId, Organization,
-    OrganizationId, Permissions, Product, ProductId, Quote, QuoteId, QuoteLine, QuoteLineId,
-    QuoteStatus, Role, RoleId, ServiceRate, ServiceRateId, ServiceRateUnit, StoredFile, User,
-    UserId, WorkOrder, WorkOrderId, WorkOrderStatus,
+    AbsenceKind, AssigneeRef, Assignment, AssignmentId, Customer, CustomerContact,
+    CustomerContactId, CustomerContext, CustomerContextId, CustomerId, CustomerPipelineStage,
+    CustomerStatus, Employee, EmployeeAbsence, EmployeeAbsenceId, EmployeeId, Equipment,
+    EquipmentId, FileObject, Member, MemberId, Organization, OrganizationId, Permissions, Product,
+    ProductId, Quote, QuoteId, QuoteLine, QuoteLineId, QuoteStatus, Role, RoleId, ServiceRate,
+    ServiceRateId, ServiceRateUnit, StoredFile, User, UserId, WorkOrder, WorkOrderId,
+    WorkOrderStatus,
+    absence::commands::{CreateAbsenceCommand, PatchAbsenceCommand},
     customer::commands::{CreateCustomerCommand, UpdateCustomerCommand},
     customer_contact::commands::{CreateCustomerContactCommand, UpdateCustomerContactCommand},
     customer_context::commands::{CreateCustomerContextCommand, UpdateCustomerContextCommand},

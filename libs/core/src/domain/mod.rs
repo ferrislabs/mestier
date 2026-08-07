@@ -1,3 +1,4 @@
+pub(crate) mod absence;
 pub(crate) mod customer;
 pub(crate) mod customer_contact;
 pub(crate) mod customer_context;
@@ -13,6 +14,7 @@ pub(crate) mod service_rate;
 pub(crate) mod user;
 pub(crate) mod work_order;
 
+pub use absence::*;
 pub use customer::*;
 pub use customer_contact::*;
 pub use customer_context::*;
