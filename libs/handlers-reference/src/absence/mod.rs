@@ -3,9 +3,18 @@
 //! the API only ever hands absences back as part of a list or a mutation
 //! response (see the planning module design doc).
 //!
-//! Owns its own leaf paths (see the crate-level `paths.rs` docstring) since
-//! `organization_id` and `absence_id` are both part of the single-item
-//! route.
+//! Moved here from `handlers-planning` — an absence is a fact about an
+//! employee, not about how the planning grid is edited; the aggregate itself
+//! never left `libs/core` (see the planning remodel design doc's "Absences
+//! vers le module RH" decision).
+//!
+//! Unlike this crate's other aggregates, this module keeps its own
+//! `router(state)`, its own `AbsencesPath`/`AbsencePath`, and its own
+//! `AbsenceResponse` instead of folding into the shared `paths.rs`/
+//! `response.rs`/flat `router()` in `lib.rs` — this workstream's ownership
+//! boundary is `absence/**` only, so it stays self-contained rather than
+//! editing files it doesn't own. `lib.rs` only gains a `pub mod absence;`
+//! and a `.merge(absence::router(state))`.
 
 use auth::Identity;
 use axum::Router;
@@ -121,7 +130,7 @@ impl From<EmployeeAbsence> for AbsenceResponse {
 mod tests {
     use super::*;
 
-    // `uuid` is not a direct dependency of `handlers-planning` (a
+    // `uuid` is not a direct dependency of `handlers-reference` (a
     // `Cargo.toml` this workstream does not own), so fixture ids are parsed
     // from literal strings via `FromStr` rather than generated.
     fn absence() -> EmployeeAbsence {
