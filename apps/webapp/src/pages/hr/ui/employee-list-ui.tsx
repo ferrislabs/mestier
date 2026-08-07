@@ -1,4 +1,6 @@
+import { Link } from '@tanstack/react-router'
 import {
+	Clock,
 	Loader2,
 	MoreHorizontal,
 	Plus,
@@ -298,6 +300,7 @@ function EmployeeTable({
 										</td>
 										<td className="px-5 py-3 align-middle">
 											<RowActions
+												employeeId={employee.id}
 												isEditing={isEditing}
 												isSaving={isSaving}
 												onEdit={() => onEdit(employee)}
@@ -318,6 +321,7 @@ function EmployeeTable({
 }
 
 interface RowActionsProps {
+	employeeId: string
 	isEditing: boolean
 	isSaving: boolean
 	onEdit: () => void
@@ -327,6 +331,7 @@ interface RowActionsProps {
 }
 
 function RowActions({
+	employeeId,
 	isEditing,
 	isSaving,
 	onEdit,
@@ -360,6 +365,15 @@ function RowActions({
 				</DropdownMenuTrigger>
 				<DropdownMenuContent align="end">
 					<DropdownMenuItem onClick={onEdit}>Modifier</DropdownMenuItem>
+					<DropdownMenuItem asChild>
+						<Link
+							to="/hr/employees/$employeeId/work-time"
+							params={{ employeeId }}
+						>
+							<Clock />
+							Temps de travail
+						</Link>
+					</DropdownMenuItem>
 					<DropdownMenuSeparator />
 					<DropdownMenuItem variant="destructive" onClick={onDelete}>
 						<Trash2 />
