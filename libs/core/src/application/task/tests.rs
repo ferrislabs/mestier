@@ -344,6 +344,69 @@ mod tests {
         cleanup(&pool, fixture.organization_id, &[fixture.owner_id]).await;
     }
 
+    /// Proves the fix for a pre-existing N+1 in
+    /// `PgTaskRepository::list_by_organization`: it used to call
+    /// `fetch_assignments` once per task row, inside a loop (found while
+    /// proving `GET /tasks`'s total query count for the task-labels
+    /// workstream, #142; fixed here rather than in a separate PR — see that
+    /// commit's message). Three tasks with disjoint assignee sets, one of
+    /// them with none, must all resolve correctly through a single
+    /// `list_tasks` call — proof that `fetch_assignments_for_tasks`'s
+    /// grouped query (`WHERE task_id = ANY($1)`) actually replaced the
+    /// per-row loop rather than the loop silently surviving alongside it.
+    #[tokio::test]
+    #[ignore = "requires live postgres"]
+    async fn list_tasks_batches_assignments_across_the_whole_page() {
+        let pool = make_pool().await;
+        let fixture = seed_fixture(&pool).await;
+        let employee_a = seed_employee(&pool, fixture.organization_id).await;
+        let employee_b = seed_employee(&pool, fixture.organization_id).await;
+        let usecase = make_usecase(pool.clone());
+
+        let task_a = usecase.create_task(create_command(&fixture)).await.unwrap();
+        let mut patch_a = PatchTaskCommand::new(task_a.id);
+        patch_a.assignees = Some(vec![AssigneeRef::Employee(employee_a)]);
+        usecase.patch_task(patch_a).await.unwrap();
+
+        let mut second_command = create_command(&fixture);
+        second_command.title = "Deuxième tâche".to_owned();
+        let task_b = usecase.create_task(second_command).await.unwrap();
+        let mut patch_b = PatchTaskCommand::new(task_b.id);
+        patch_b.assignees = Some(vec![AssigneeRef::Employee(employee_b)]);
+        usecase.patch_task(patch_b).await.unwrap();
+
+        let mut third_command = create_command(&fixture);
+        third_command.title = "Troisième tâche — sans assigné".to_owned();
+        let task_c = usecase.create_task(third_command).await.unwrap();
+        // task_c is deliberately left unassigned.
+
+        let (tasks, _child_counts, total) = usecase
+            .list_tasks(fixture.organization_id, None, 20, 0)
+            .await
+            .expect("list_tasks must succeed");
+
+        assert_eq!(total, 3);
+        assert_eq!(tasks.len(), 3);
+
+        let find = |id: TaskId| tasks.iter().find(|task| task.id == id).unwrap();
+        let employee_ids_of = |id: TaskId| -> Vec<EmployeeId> {
+            find(id)
+                .assignments
+                .iter()
+                .map(|assignment| assignment.employee_id)
+                .collect()
+        };
+
+        assert_eq!(employee_ids_of(task_a.id), vec![employee_a]);
+        assert_eq!(employee_ids_of(task_b.id), vec![employee_b]);
+        assert!(
+            employee_ids_of(task_c.id).is_empty(),
+            "a task with no assignees must come back with an empty list, not another task's"
+        );
+
+        cleanup(&pool, fixture.organization_id, &[fixture.owner_id]).await;
+    }
+
     #[tokio::test]
     #[ignore = "requires live postgres"]
     async fn create_task_rejects_a_subtask_under_a_task_that_already_has_a_parent() {

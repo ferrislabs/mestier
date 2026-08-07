@@ -10,6 +10,7 @@ use crate::{
         commands::{CreateTaskCommand, PatchTaskCommand},
         service::TaskService,
     },
+    domain::task_label::service::TaskLabelService,
 };
 
 mod tests;
@@ -64,20 +65,39 @@ impl MestierUseCase {
     /// Reparents, reschedules and reassigns a task in one transaction:
     /// either every write here (the parent/schedule/status/title/description
     /// edits, the `blocks_availability` flag, the full assignment
-    /// replacement, and any on-the-fly employee record) lands together, or
-    /// the whole `PATCH` rolls back.
-    #[transactional(task, employee, user, member)]
+    /// replacement, any on-the-fly employee record, and — the piece this
+    /// workstream adds — the full label replacement) lands together, or the
+    /// whole `PATCH` rolls back.
+    ///
+    /// Label handling lives here rather than inside `TaskService::patch_task`
+    /// on purpose: `task` and `task_label` are deliberately separate
+    /// aggregates (see the planning module design doc — T2 and T3 must not
+    /// collide on the same domain files), so composing `TaskLabelRepository`
+    /// at this thin, already-transactional seam avoids adding a dependency
+    /// from `task`'s own domain service onto a sibling aggregate's port.
+    #[transactional(task, employee, user, member, task_label)]
     pub async fn patch_task(
         &self,
         command: PatchTaskCommand,
     ) -> Result<(Task, Vec<Employee>), CoreError> {
+        let label_ids = command.label_ids.clone();
+
         let mut service = TaskService::new(
             task_repository,
             employee_repository,
             user_repository,
             member_repository,
         );
-        service.patch_task(command).await
+        let (task, created_employees) = service.patch_task(command).await?;
+
+        if let Some(label_ids) = label_ids {
+            let mut label_service = TaskLabelService::new(task_label_repository);
+            label_service
+                .replace_task_labels(task.organization_id, task.id, label_ids)
+                .await?;
+        }
+
+        Ok((task, created_employees))
     }
 
     #[transactional(task, employee, user, member)]

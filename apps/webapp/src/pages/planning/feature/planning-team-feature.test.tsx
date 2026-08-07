@@ -69,6 +69,7 @@ const RESOURCE_MEMBER = {
 
 const TASK_ENTRY = {
 	kind: 'task' as const,
+	labels: [],
 	title: 'Tâche',
 	blocks_availability: true,
 	child_count: 0,

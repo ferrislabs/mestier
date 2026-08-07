@@ -145,9 +145,7 @@ export function shiftInstant(
  * lands back where it started — the caller skips both the call and the
  * confirmation dialog.
  */
-export function computeTaskDropPatch(
-	input: TaskDropInput,
-): TaskPatchResult {
+export function computeTaskDropPatch(input: TaskDropInput): TaskPatchResult {
 	const { source, target, entry, timeZone } = input
 	const dayDelta = differenceInCalendarDays(
 		parseISO(target.date),

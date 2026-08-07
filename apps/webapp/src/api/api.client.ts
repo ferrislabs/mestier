@@ -152,6 +152,7 @@ export namespace Schemas {
     title: string;
   };
   export type CreateServiceRateRequest = { label: string; rate_cents: number; unit: ServiceRateUnit };
+  export type CreateTaskLabelRequest = { color: string; name: string };
   export type QuoteId = string;
   export type CreateTaskRequest = {
     all_day?: boolean | undefined;
@@ -285,6 +286,15 @@ export namespace Schemas {
     prev_page?: (number | null) | undefined;
     total?: (number | null) | undefined;
   };
+  export type TaskLabelId = string;
+  export type TaskLabelResponse = {
+    color: string;
+    created_at: string;
+    id: TaskLabelId;
+    name: string;
+    organization_id: OrganizationId;
+    updated_at: string;
+  };
   export type TaskStatus = "PLANNED" | "IN_PROGRESS" | "DONE" | "CANCELLED";
   export type TaskResponse = {
     all_day: boolean;
@@ -297,6 +307,7 @@ export namespace Schemas {
     employee_ids: Array<EmployeeId>;
     ends_at?: (string | null) | undefined;
     id: TaskId;
+    labels: Array<TaskLabelResponse>;
     organization_id: OrganizationId;
     parent_task_id?: (null | TaskId) | undefined;
     quote_id?: (null | QuoteId) | undefined;
@@ -318,6 +329,7 @@ export namespace Schemas {
         ends_at: string;
         id: TaskId;
         kind: "task";
+        labels: Array<TaskLabelResponse>;
         parent_task_id?: (null | TaskId) | undefined;
         starts_at: string;
         status: TaskStatus;
@@ -492,12 +504,14 @@ export namespace Schemas {
   };
   export type UpdateQuoteStatusRequest = { status: QuoteStatus };
   export type UpdateServiceRateRequest = { label: string; rate_cents: number; unit: ServiceRateUnit };
+  export type UpdateTaskLabelRequest = { color: string; name: string };
   export type UpdateTaskRequest = Partial<{
     all_day: boolean | null;
     assignees: Array<AssigneeRefRequest> | null;
     blocks_availability: boolean | null;
     description: string | null;
     ends_at: string | null;
+    label_ids: Array<TaskLabelId> | null;
     parent_task_id: null | TaskId;
     starts_at: string | null;
     status: null | TaskStatus;
@@ -2468,6 +2482,93 @@ export namespace Endpoints {
       409: unknown;
     };
   };
+  export type get_ListTaskLabels = {
+    method: "GET";
+    path: "/api/v1/organizations/{organization_id}/task-labels";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string };
+    };
+    responses: {
+      200: {
+        data: Array<{
+          color: string;
+          created_at: string;
+          id: Schemas.TaskLabelId;
+          name: string;
+          organization_id: Schemas.OrganizationId;
+          updated_at: string;
+        }>;
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+    };
+  };
+  export type post_CreateTaskLabel = {
+    method: "POST";
+    path: "/api/v1/organizations/{organization_id}/task-labels";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string };
+
+      body: Schemas.CreateTaskLabelRequest;
+    };
+    responses: {
+      201: {
+        data: {
+          color: string;
+          created_at: string;
+          id: Schemas.TaskLabelId;
+          name: string;
+          organization_id: Schemas.OrganizationId;
+          updated_at: string;
+        };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      400: unknown;
+      401: unknown;
+      403: unknown;
+      409: unknown;
+    };
+  };
+  export type delete_DeleteTaskLabel = {
+    method: "DELETE";
+    path: "/api/v1/organizations/{organization_id}/task-labels/{label_id}";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string; label_id: string };
+    };
+    responses: { 204: unknown; 401: unknown; 403: unknown; 404: unknown };
+  };
+  export type patch_UpdateTaskLabel = {
+    method: "PATCH";
+    path: "/api/v1/organizations/{organization_id}/task-labels/{label_id}";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string; label_id: string };
+
+      body: Schemas.UpdateTaskLabelRequest;
+    };
+    responses: {
+      200: {
+        data: {
+          color: string;
+          created_at: string;
+          id: Schemas.TaskLabelId;
+          name: string;
+          organization_id: Schemas.OrganizationId;
+          updated_at: string;
+        };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      400: unknown;
+      401: unknown;
+      403: unknown;
+      404: unknown;
+      409: unknown;
+    };
+  };
   export type get_ListTasks = {
     method: "GET";
     path: "/api/v1/organizations/{organization_id}/tasks";
@@ -2489,6 +2590,7 @@ export namespace Endpoints {
           employee_ids: Array<Schemas.EmployeeId>;
           ends_at?: (string | null) | undefined;
           id: Schemas.TaskId;
+          labels: Array<Schemas.TaskLabelResponse>;
           organization_id: Schemas.OrganizationId;
           parent_task_id?: (null | Schemas.TaskId) | undefined;
           quote_id?: (null | Schemas.QuoteId) | undefined;
@@ -2525,6 +2627,7 @@ export namespace Endpoints {
           employee_ids: Array<Schemas.EmployeeId>;
           ends_at?: (string | null) | undefined;
           id: Schemas.TaskId;
+          labels: Array<Schemas.TaskLabelResponse>;
           organization_id: Schemas.OrganizationId;
           parent_task_id?: (null | Schemas.TaskId) | undefined;
           quote_id?: (null | Schemas.QuoteId) | undefined;
@@ -2561,6 +2664,7 @@ export namespace Endpoints {
           employee_ids: Array<Schemas.EmployeeId>;
           ends_at?: (string | null) | undefined;
           id: Schemas.TaskId;
+          labels: Array<Schemas.TaskLabelResponse>;
           organization_id: Schemas.OrganizationId;
           parent_task_id?: (null | Schemas.TaskId) | undefined;
           quote_id?: (null | Schemas.QuoteId) | undefined;
@@ -2890,6 +2994,7 @@ export type EndpointByMethod = {
     "/api/v1/equipment/{equipment_id}": Endpoints.delete_DeleteEquipment;
     "/api/v1/organizations/{organization_id}": Endpoints.delete_DeleteOrganization;
     "/api/v1/organizations/{organization_id}/absences/{absence_id}": Endpoints.delete_DeleteAbsence;
+    "/api/v1/organizations/{organization_id}/task-labels/{label_id}": Endpoints.delete_DeleteTaskLabel;
     "/api/v1/organizations/{organization_id}/tasks/{task_id}": Endpoints.delete_DeleteTask;
     "/api/v1/products/{product_id}": Endpoints.delete_DeleteProduct;
     "/api/v1/quotes/{quote_id}": Endpoints.delete_DeleteQuote;
@@ -2908,6 +3013,7 @@ export type EndpointByMethod = {
     "/api/v1/equipment/{equipment_id}": Endpoints.patch_UpdateEquipment;
     "/api/v1/organizations/{organization_id}": Endpoints.patch_UpdateOrganization;
     "/api/v1/organizations/{organization_id}/absences/{absence_id}": Endpoints.patch_PatchAbsence;
+    "/api/v1/organizations/{organization_id}/task-labels/{label_id}": Endpoints.patch_UpdateTaskLabel;
     "/api/v1/organizations/{organization_id}/tasks/{task_id}": Endpoints.patch_PatchTask;
     "/api/v1/products/{product_id}": Endpoints.patch_UpdateProduct;
     "/api/v1/quotes/{quote_id}": Endpoints.patch_UpdateQuote;
@@ -2944,6 +3050,7 @@ export type EndpointByMethod = {
     "/api/v1/organizations/{organization_id}/products": Endpoints.get_ListProducts;
     "/api/v1/organizations/{organization_id}/quotes": Endpoints.get_ListQuotes;
     "/api/v1/organizations/{organization_id}/service-rates": Endpoints.get_ListServiceRates;
+    "/api/v1/organizations/{organization_id}/task-labels": Endpoints.get_ListTaskLabels;
     "/api/v1/organizations/{organization_id}/tasks": Endpoints.get_ListTasks;
     "/api/v1/organizations/{organization_id}/tasks/{task_id}": Endpoints.get_GetTask;
     "/api/v1/products/{product_id}": Endpoints.get_GetProduct;
@@ -2971,6 +3078,7 @@ export type EndpointByMethod = {
     "/api/v1/organizations/{organization_id}/products": Endpoints.post_CreateProduct;
     "/api/v1/organizations/{organization_id}/quotes": Endpoints.post_CreateQuote;
     "/api/v1/organizations/{organization_id}/service-rates": Endpoints.post_CreateServiceRate;
+    "/api/v1/organizations/{organization_id}/task-labels": Endpoints.post_CreateTaskLabel;
     "/api/v1/organizations/{organization_id}/tasks": Endpoints.post_CreateTask;
   };
   put: {

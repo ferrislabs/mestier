@@ -1,0 +1,58 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT\n                lnk.task_id AS \"task_id!\",\n                tl.id AS \"label_id!\",\n                tl.org_id AS \"org_id!\",\n                tl.name AS \"name!\",\n                tl.color AS \"color!\",\n                tl.created_at AS \"created_at!\",\n                tl.updated_at AS \"updated_at!\"\n            FROM task_label_links lnk\n            JOIN task_labels tl ON tl.id = lnk.label_id\n            WHERE lnk.task_id = ANY($1)\n            ORDER BY tl.name ASC\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "task_id!",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "label_id!",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "org_id!",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 3,
+        "name": "name!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "color!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "created_at!",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 6,
+        "name": "updated_at!",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "UuidArray"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "24399b29b447c3612836edbe112b8d6da82cf90702dc0505eafc37d5577573fb"
+}

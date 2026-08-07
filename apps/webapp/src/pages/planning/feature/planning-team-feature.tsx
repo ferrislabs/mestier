@@ -9,15 +9,15 @@ import {
 } from '#/hooks/use-planning'
 import { employeeDisplayName } from '#/pages/hr/types'
 import {
+	computeRemoveAssigneePatch,
+	computeTaskDropPatch,
+} from '#/pages/planning/lib/task-drop'
+import {
 	buildWarnings,
 	conflictsForResource,
 	type Warning,
 } from '#/pages/planning/lib/warnings'
 import { computeWindow } from '#/pages/planning/lib/window'
-import {
-	computeRemoveAssigneePatch,
-	computeTaskDropPatch,
-} from '#/pages/planning/lib/task-drop'
 import type { PlanningView } from '#/pages/planning/types'
 import type {
 	RemoveAssigneeEvent,

@@ -6,6 +6,8 @@ use mestier_core::{
 use serde::Serialize;
 use utoipa::ToSchema;
 
+use crate::task_label::TaskLabelResponse;
+
 #[derive(Debug, Clone, PartialEq, Serialize, ToSchema)]
 pub struct TaskResponse {
     pub id: TaskId,
@@ -29,6 +31,20 @@ pub struct TaskResponse {
     /// other endpoint leaves it `None` rather than pay for an extra query
     /// or report a stale/wrong `0`.
     pub child_count: Option<i64>,
+    /// The complete set of labels currently attached to this task — the
+    /// full object (`id`, `name`, `color`), not just an id, so the front
+    /// can paint a colored chip without a second call. Always `[]`, never
+    /// `null`, for a task with none.
+    ///
+    /// `From<Task>` below defaults this to empty: `Task` itself does not
+    /// carry labels (see the planning module design doc — `task` and
+    /// `task_label` are deliberately separate aggregates), so every
+    /// handler that wants the real set fetches it separately, batched
+    /// across the whole response in one call
+    /// (`MestierUseCase::list_task_labels_for_tasks`) — see
+    /// `task::{create,get_one,list,update}` for how each of the four
+    /// surfaces that return this type populates it.
+    pub labels: Vec<TaskLabelResponse>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }
@@ -55,6 +71,13 @@ impl From<Task> for TaskResponse {
                 .map(|assignment| assignment.employee_id)
                 .collect(),
             child_count: None,
+            // A task freshly loaded from `Task` alone (never labeled by
+            // `Task` itself) has no labels until a caller fetches and
+            // overlays the real set — see `labels`'s own doc comment. A
+            // task fresh out of `POST /tasks` cannot have any yet regardless
+            // (a label link is only ever created by a later `PATCH`), so
+            // `create.rs` leaves this default as is, no extra query.
+            labels: Vec::new(),
             created_at: value.created_at,
             updated_at: value.updated_at,
         }
@@ -167,5 +190,51 @@ mod tests {
             response.child_count, None,
             "only the GET /tasks list handler populates child_count"
         );
+    }
+
+    #[test]
+    fn task_response_serializes_no_labels_as_an_empty_array_not_null() {
+        let response: TaskResponse = task().into();
+        assert_eq!(response.labels, Vec::new());
+
+        let value = serde_json::to_value(&response).unwrap();
+
+        assert_eq!(
+            value["labels"],
+            serde_json::json!([]),
+            "a task with no labels must serialize `labels` as `[]`, not `null`"
+        );
+    }
+
+    #[test]
+    fn task_response_carries_both_labels_of_a_two_label_task() {
+        let now = Utc::now();
+        let label_a = TaskLabelResponse {
+            id: "77777777-7777-7777-7777-777777777777".parse().unwrap(),
+            organization_id: "22222222-2222-2222-2222-222222222222".parse().unwrap(),
+            name: "Urgent".to_owned(),
+            color: "#DC2626".to_owned(),
+            created_at: now,
+            updated_at: now,
+        };
+        let label_b = TaskLabelResponse {
+            id: "88888888-8888-8888-8888-888888888888".parse().unwrap(),
+            organization_id: "22222222-2222-2222-2222-222222222222".parse().unwrap(),
+            name: "Réunion".to_owned(),
+            color: "#2563EB".to_owned(),
+            created_at: now,
+            updated_at: now,
+        };
+
+        let response = TaskResponse {
+            labels: vec![label_a.clone(), label_b.clone()],
+            ..task().into()
+        };
+
+        assert_eq!(response.labels, vec![label_a, label_b]);
+
+        let value = serde_json::to_value(&response).unwrap();
+        assert_eq!(value["labels"][0]["name"], "Urgent");
+        assert_eq!(value["labels"][1]["name"], "Réunion");
     }
 }

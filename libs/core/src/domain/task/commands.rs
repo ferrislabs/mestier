@@ -3,6 +3,7 @@ use chrono::{DateTime, Utc};
 use crate::{
     CustomerContextId, CustomerId, OrganizationId, QuoteId,
     domain::task::{AssigneeRef, TaskId, TaskStatus},
+    domain::task_label::TaskLabelId,
 };
 
 #[derive(Debug, Clone)]
@@ -48,6 +49,15 @@ pub struct PatchTaskCommand {
     /// The complete replacement list of assignees, or `None` to leave the
     /// current assignments untouched. Never a delta.
     pub assignees: Option<Vec<AssigneeRef>>,
+    /// The complete replacement list of labels, or `None` to leave the
+    /// task's current labels untouched. Same semantics as `assignees`, same
+    /// reason: idempotence, and a single path for both adding and removing
+    /// a label (see the planning module design doc). Applied by
+    /// `MestierUseCase::patch_task` (`application/task/mod.rs`) after
+    /// `TaskService::patch_task` returns — `label_ids` is carried on this
+    /// command only so the field survives the trip from the HTTP layer; the
+    /// `task` aggregate itself never reads it.
+    pub label_ids: Option<Vec<TaskLabelId>>,
 }
 
 impl PatchTaskCommand {
@@ -65,6 +75,7 @@ impl PatchTaskCommand {
             status: None,
             blocks_availability: None,
             assignees: None,
+            label_ids: None,
         }
     }
 }

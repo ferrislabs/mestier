@@ -34,5 +34,14 @@ pub async fn handler(
 ) -> Result<Response<TaskResponse>, ApiError> {
     let task = require_task(&state, &identity, organization_id, task_id).await?;
 
-    Ok(Response::OK(task.into()))
+    let mut labels_by_task = state
+        .usecase
+        .list_task_labels_for_tasks(vec![task.id])
+        .await?;
+    let labels = labels_by_task.remove(&task.id).unwrap_or_default();
+
+    Ok(Response::OK(TaskResponse {
+        labels: labels.into_iter().map(Into::into).collect(),
+        ..task.into()
+    }))
 }
