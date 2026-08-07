@@ -1,0 +1,114 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT\n                wo.id, wo.org_id, wo.customer_id, wo.customer_context_id, wo.quote_id,\n                wo.starts_at, wo.ends_at, wo.all_day, wo.status::text AS \"status!\", wo.title, wo.note,\n                wo.deleted_at, wo.created_at, wo.updated_at,\n                (c.first_name || ' ' || c.last_name) AS \"customer_name!\",\n                cc.label AS \"context_label!\"\n            FROM work_orders wo\n            JOIN customers c ON c.id = wo.customer_id\n            JOIN customer_contexts cc ON cc.id = wo.customer_context_id\n            WHERE wo.org_id = $1 AND wo.deleted_at IS NULL\n              AND wo.starts_at < $3 AND wo.ends_at > $2\n            ORDER BY wo.starts_at ASC, wo.id ASC\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "org_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "customer_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 3,
+        "name": "customer_context_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 4,
+        "name": "quote_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 5,
+        "name": "starts_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 6,
+        "name": "ends_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 7,
+        "name": "all_day",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 8,
+        "name": "status!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 9,
+        "name": "title",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 10,
+        "name": "note",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 11,
+        "name": "deleted_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 12,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 13,
+        "name": "updated_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 14,
+        "name": "customer_name!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 15,
+        "name": "context_label!",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Timestamptz",
+        "Timestamptz"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      true,
+      false,
+      false,
+      false,
+      null,
+      true,
+      true,
+      true,
+      false,
+      false,
+      null,
+      false
+    ]
+  },
+  "hash": "1f62ed55e495fab79c8b0ab0782984bb79a6a7a03435282529061e366b9fb580"
+}

@@ -93,6 +93,8 @@ impl Modify for SecurityAddon {
         planning::work_time::get_work_time::handler,
         planning::work_time::put_rhythm::handler,
         planning::work_time::put_work_slots::handler,
+        planning::planning::get_planning::handler,
+        planning::planning::get_availability::handler,
         discord::category::list::handler,
         discord::category::create::handler,
         discord::category::update::handler,
@@ -174,6 +176,16 @@ impl Modify for SecurityAddon {
         planning::work_time::put_rhythm::RhythmSlotRequest,
         planning::work_time::put_work_slots::PutWorkSlotsRequest,
         planning::work_time::put_work_slots::WorkSlotRequest,
+        planning::planning::get_planning::PlanningResourceKindResponse,
+        planning::planning::get_planning::PlanningResourceResponse,
+        planning::planning::get_planning::PlanningEntryResponse,
+        planning::planning::get_planning::MinuteIntervalResponse,
+        planning::planning::get_planning::PlanningWorkTimeDayResponse,
+        planning::planning::get_planning::PlanningWorkTimeResponse,
+        planning::planning::get_planning::PlanningResponse,
+        planning::planning::get_availability::ConflictResponse,
+        planning::planning::get_availability::AvailabilityResourceResponse,
+        planning::planning::get_availability::AvailabilityResponse,
         // `planning::response::EmployeeResponse` is deliberately absent: it is
         // byte-identical to `reference::response::EmployeeResponse` above, and
         // utoipa names schemas after the type, so registering both would

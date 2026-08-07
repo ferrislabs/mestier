@@ -1,0 +1,54 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT id, org_id, employee_id, work_date, starts_minute, ends_minute\n            FROM employee_work_slots\n            WHERE org_id = $1 AND work_date BETWEEN $2 AND $3\n            ORDER BY employee_id ASC, work_date ASC, starts_minute ASC\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "org_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "employee_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 3,
+        "name": "work_date",
+        "type_info": "Date"
+      },
+      {
+        "ordinal": 4,
+        "name": "starts_minute",
+        "type_info": "Int2"
+      },
+      {
+        "ordinal": 5,
+        "name": "ends_minute",
+        "type_info": "Int2"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Date",
+        "Date"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "13df0e27812785de90f3fb1eec58a7101cfffe012f0dd2d4d6267e025bf9956f"
+}
