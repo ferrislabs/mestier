@@ -109,6 +109,22 @@ describe('PlanningWarningDialog', () => {
 		expect(action.disabled).toBe(true)
 		expect(cancel.disabled).toBe(true)
 	})
+
+	it('affiche l’erreur d’une confirmation précédemment échouée sans fermer le dialogue', () => {
+		render(
+			<PlanningWarningDialog
+				open={true}
+				warnings={[ABSENCE_WARNING]}
+				isPending={false}
+				error="HTTP 500: Internal Server Error"
+				onConfirm={vi.fn()}
+				onCancel={vi.fn()}
+			/>,
+		)
+
+		expect(screen.getByRole('alertdialog')).toBeDefined()
+		expect(screen.getByText('HTTP 500: Internal Server Error')).toBeDefined()
+	})
 })
 
 describe('PlanningWarningDialog — pas d’appel réseau', () => {
