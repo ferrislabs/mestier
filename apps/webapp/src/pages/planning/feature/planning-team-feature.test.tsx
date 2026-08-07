@@ -26,8 +26,7 @@ globalAny.ResizeObserver ??= ResizeObserverStub
 const PLANNING_PATH = '/api/v1/organizations/{organization_id}/planning'
 const AVAILABILITY_PATH =
 	'/api/v1/organizations/{organization_id}/planning/availability'
-const TASK_PATH =
-	'/api/v1/organizations/{organization_id}/tasks/{task_id}'
+const TASK_PATH = '/api/v1/organizations/{organization_id}/tasks/{task_id}'
 
 const ORGANIZATION: Organization = {
 	id: 'org-1',
@@ -70,6 +69,9 @@ const RESOURCE_MEMBER = {
 
 const TASK_ENTRY = {
 	kind: 'task' as const,
+	title: 'Tâche',
+	blocks_availability: true,
+	child_count: 0,
 	id: 'wo-1',
 	starts_at: '2026-08-03T08:00:00+02:00',
 	ends_at: '2026-08-03T10:00:00+02:00',

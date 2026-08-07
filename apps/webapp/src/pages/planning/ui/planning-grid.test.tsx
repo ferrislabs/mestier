@@ -32,12 +32,14 @@ function employeeResource(
 function task(overrides: Partial<PlanningEntry> = {}): PlanningEntry {
 	return {
 		kind: 'task',
+		title: 'Tâche',
+		blocks_availability: true,
+		child_count: 0,
 		id: 'wo-1',
 		starts_at: '2026-08-10T08:00:00Z',
 		ends_at: '2026-08-10T10:00:00Z',
 		all_day: false,
 		status: 'PLANNED',
-		title: 'Toiture',
 		employee_ids: ['employee-1'],
 		customer_name: 'Client Dupont',
 		context_label: 'Chantier toiture',

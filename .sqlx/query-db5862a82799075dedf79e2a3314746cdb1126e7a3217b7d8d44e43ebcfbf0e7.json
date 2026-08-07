@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT id, org_id, customer_id, customer_context_id, quote_id, starts_at, ends_at, all_day, status::text AS \"status!\", title, note, deleted_at, created_at, updated_at\n            FROM work_orders\n            WHERE id = $1 AND deleted_at IS NULL\n            ",
+  "query": "\n            SELECT id, org_id, parent_task_id, title, description, starts_at, ends_at, all_day, status::text AS \"status!\", blocks_availability, customer_id, customer_context_id, quote_id, deleted_at, created_at, updated_at\n            FROM tasks\n            WHERE id = $1 AND deleted_at IS NULL\n            ",
   "describe": {
     "columns": [
       {
@@ -15,18 +15,18 @@
       },
       {
         "ordinal": 2,
-        "name": "customer_id",
+        "name": "parent_task_id",
         "type_info": "Uuid"
       },
       {
         "ordinal": 3,
-        "name": "customer_context_id",
-        "type_info": "Uuid"
+        "name": "title",
+        "type_info": "Text"
       },
       {
         "ordinal": 4,
-        "name": "quote_id",
-        "type_info": "Uuid"
+        "name": "description",
+        "type_info": "Text"
       },
       {
         "ordinal": 5,
@@ -50,26 +50,36 @@
       },
       {
         "ordinal": 9,
-        "name": "title",
-        "type_info": "Text"
+        "name": "blocks_availability",
+        "type_info": "Bool"
       },
       {
         "ordinal": 10,
-        "name": "note",
-        "type_info": "Text"
+        "name": "customer_id",
+        "type_info": "Uuid"
       },
       {
         "ordinal": 11,
+        "name": "customer_context_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 12,
+        "name": "quote_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 13,
         "name": "deleted_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 12,
+        "ordinal": 14,
         "name": "created_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 13,
+        "ordinal": 15,
         "name": "updated_at",
         "type_info": "Timestamptz"
       }
@@ -82,13 +92,15 @@
     "nullable": [
       false,
       false,
-      false,
-      false,
       true,
       false,
-      false,
+      true,
+      true,
+      true,
       false,
       null,
+      false,
+      true,
       true,
       true,
       true,
@@ -96,5 +108,5 @@
       false
     ]
   },
-  "hash": "11ba16bac1fbd8f700e4cbfb4c2e7a0ba8bfa9f0da9336ff45754c66ea36aa8c"
+  "hash": "db5862a82799075dedf79e2a3314746cdb1126e7a3217b7d8d44e43ebcfbf0e7"
 }

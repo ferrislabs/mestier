@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT COUNT(*) AS \"count!\"\n            FROM tasks\n            WHERE org_id = $1 AND deleted_at IS NULL\n              AND (\n                ($2::uuid IS NULL AND parent_task_id IS NULL)\n                OR parent_task_id = $2\n              )\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "count!",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "60f81d7601fb2cb08b2d91e8bc8bdb6ebc0b7b6a549656038a218d5b53b55cb4"
+}

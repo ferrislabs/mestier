@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            UPDATE work_orders\n            SET starts_at = $2,\n                ends_at = $3,\n                all_day = $4,\n                status = CAST($5 AS text)::work_order_status,\n                title = $6,\n                note = $7,\n                updated_at = $8\n            WHERE id = $1 AND deleted_at IS NULL\n            RETURNING id, org_id, customer_id, customer_context_id, quote_id, starts_at, ends_at, all_day, status::text AS \"status!\", title, note, deleted_at, created_at, updated_at\n            ",
+  "query": "\n            INSERT INTO tasks (id, org_id, parent_task_id, title, description, starts_at, ends_at, all_day, status, blocks_availability, customer_id, customer_context_id, quote_id, deleted_at, created_at, updated_at)\n            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, CAST($9 AS text)::task_status, $10, $11, $12, $13, $14, $15, $16)\n            RETURNING id, org_id, parent_task_id, title, description, starts_at, ends_at, all_day, status::text AS \"status!\", blocks_availability, customer_id, customer_context_id, quote_id, deleted_at, created_at, updated_at\n            ",
   "describe": {
     "columns": [
       {
@@ -15,18 +15,18 @@
       },
       {
         "ordinal": 2,
-        "name": "customer_id",
+        "name": "parent_task_id",
         "type_info": "Uuid"
       },
       {
         "ordinal": 3,
-        "name": "customer_context_id",
-        "type_info": "Uuid"
+        "name": "title",
+        "type_info": "Text"
       },
       {
         "ordinal": 4,
-        "name": "quote_id",
-        "type_info": "Uuid"
+        "name": "description",
+        "type_info": "Text"
       },
       {
         "ordinal": 5,
@@ -50,26 +50,36 @@
       },
       {
         "ordinal": 9,
-        "name": "title",
-        "type_info": "Text"
+        "name": "blocks_availability",
+        "type_info": "Bool"
       },
       {
         "ordinal": 10,
-        "name": "note",
-        "type_info": "Text"
+        "name": "customer_id",
+        "type_info": "Uuid"
       },
       {
         "ordinal": 11,
+        "name": "customer_context_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 12,
+        "name": "quote_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 13,
         "name": "deleted_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 12,
+        "ordinal": 14,
         "name": "created_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 13,
+        "ordinal": 15,
         "name": "updated_at",
         "type_info": "Timestamptz"
       }
@@ -77,25 +87,35 @@
     "parameters": {
       "Left": [
         "Uuid",
+        "Uuid",
+        "Uuid",
+        "Text",
+        "Text",
         "Timestamptz",
         "Timestamptz",
         "Bool",
         "Text",
-        "Text",
-        "Text",
+        "Bool",
+        "Uuid",
+        "Uuid",
+        "Uuid",
+        "Timestamptz",
+        "Timestamptz",
         "Timestamptz"
       ]
     },
     "nullable": [
       false,
       false,
-      false,
-      false,
       true,
       false,
-      false,
+      true,
+      true,
+      true,
       false,
       null,
+      false,
+      true,
       true,
       true,
       true,
@@ -103,5 +123,5 @@
       false
     ]
   },
-  "hash": "f0f3155ce043984035e4d16c37aab39bbb600714b85e1fb754fe69e6c179fe89"
+  "hash": "a2cda0c2e47cd26126cff970dbe74eb2efd351e2319294353cb1d76f13ec0d85"
 }

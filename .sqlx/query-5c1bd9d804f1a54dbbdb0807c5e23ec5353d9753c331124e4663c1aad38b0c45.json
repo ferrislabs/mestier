@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "DELETE FROM assignments WHERE work_order_id = $1",
+  "query": "DELETE FROM task_assignments WHERE task_id = $1",
   "describe": {
     "columns": [],
     "parameters": {
@@ -10,5 +10,5 @@
     },
     "nullable": []
   },
-  "hash": "bb7c88088eeb89ed8debb09f5925cc533c978cabea598a4f59fc79683a125bd2"
+  "hash": "5c1bd9d804f1a54dbbdb0807c5e23ec5353d9753c331124e4663c1aad38b0c45"
 }

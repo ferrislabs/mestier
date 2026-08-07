@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "DELETE FROM work_orders WHERE org_id = $1",
+  "query": "DELETE FROM tasks WHERE org_id = $1",
   "describe": {
     "columns": [],
     "parameters": {
@@ -10,5 +10,5 @@
     },
     "nullable": []
   },
-  "hash": "10a2c04d5629fd3b3f5dbd673b1595ad1217b9e0376ff1f7bb207ce991fd5a63"
+  "hash": "ff72089e21aebc13c8e0a56937ede03cbc44794004994d62ef2c107b65fd8a07"
 }
