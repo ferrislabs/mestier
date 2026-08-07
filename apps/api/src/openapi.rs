@@ -184,6 +184,7 @@ impl Modify for SecurityAddon {
         (name = "customers", description = "Customers and customer contexts management"),
         (name = "quotes", description = "Quotes and quote lines management"),
         (name = "reference", description = "Reference cost catalog"),
+        (name = "planning", description = "Team planning — work orders, assignments, absences, working time and availability"),
         (name = "discord", description = "Chat — categories, channels, threads, messages, reactions, webhooks, presence, typing, read states, channel permission overwrites, notifications"),
     )
 )]

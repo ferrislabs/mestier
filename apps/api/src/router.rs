@@ -15,6 +15,7 @@ use handlers_discord as discord;
 use handlers_files as files;
 use handlers_organization as organization;
 use handlers_quote as quote;
+use handlers_planning as planning;
 use handlers_reference as reference;
 
 use crate::openapi::ApiDoc;
@@ -73,6 +74,7 @@ pub fn router(state: AppState) -> Result<Router, ApiError> {
         .merge(discord::router(&state))
         .merge(organization::router(&state))
         .merge(quote::router(&state))
+        .merge(planning::router(&state))
         .merge(reference::router(&state))
         .merge(Scalar::with_url("/scalar", openapi.clone()))
         .merge(SwaggerUi::new("/swagger").url("/api-docs/openapi.json", openapi.clone()))
