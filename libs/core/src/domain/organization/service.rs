@@ -33,6 +33,7 @@ use crate::{
             ADMIN_ROLE_NAME, MEMBER_ROLE_NAME, OWNER_ROLE_NAME, Permissions, Role, RoleId,
             ports::RoleRepository,
         },
+        task_label::{PRESET_TASK_LABELS, TaskLabel, TaskLabelId, ports::TaskLabelRepository},
         user::ports::UserRepository,
     },
 };
@@ -165,11 +166,28 @@ where
             .await
     }
 
-    #[tracing::instrument(skip(self), fields(organization.slug = %command.slug, owner_id = %command.owner_id.0), err)]
-    pub async fn create_organization(
+    /// Creates an organization together with its default roles, the
+    /// owner's membership, and — the piece this workstream adds — its three
+    /// preset task labels ("Réunion", "Déplacement", "Formation"). All in
+    /// the same transaction: see `#[transactional(organization, role,
+    /// member, user, authz, task_label)]` on
+    /// `MestierUseCase::create_organization`. `task_label_repository` is a
+    /// method-scoped generic rather than a field on `OrganizationService`
+    /// itself, so every other use case on this service (get/list/update/
+    /// soft_delete/leave) stays entirely unaware of the label aggregate.
+    #[tracing::instrument(
+        skip(self, task_label_repository),
+        fields(organization.slug = %command.slug, owner_id = %command.owner_id.0),
+        err
+    )]
+    pub async fn create_organization<TL>(
         &mut self,
         command: CreateOrganizationCommand,
-    ) -> Result<Organization, CoreError> {
+        mut task_label_repository: TL,
+    ) -> Result<Organization, CoreError>
+    where
+        TL: TaskLabelRepository,
+    {
         let now = Utc::now();
         let owner_id = command.owner_id;
 
@@ -241,6 +259,22 @@ where
             .assign_role(member.id, owner_role.id)
             .await?;
 
+        // Presets, not privileges: nothing distinguishes these rows from a
+        // label created by hand afterwards — the user may rename or delete
+        // any of them (see the planning module design doc).
+        for (name, color) in PRESET_TASK_LABELS {
+            task_label_repository
+                .insert(&TaskLabel {
+                    id: TaskLabelId(generate_uuid_v7()),
+                    organization_id: organization.id,
+                    name: name.to_owned(),
+                    color: color.to_owned(),
+                    created_at: now,
+                    updated_at: now,
+                })
+                .await?;
+        }
+
         Ok(organization)
     }
 
@@ -274,11 +308,13 @@ mod tests {
         application::policy,
         domain::{
             member::ports::MockMemberRepository, organization::ports::MockOrganizationRepository,
-            role::ports::MockRoleRepository, user::ports::MockUserRepository,
+            role::ports::MockRoleRepository, task_label::ports::MockTaskLabelRepository,
+            user::ports::MockUserRepository,
         },
     };
     use authz::{Decision, MockAuthorizer};
     use mockall::predicate::eq;
+    use std::sync::{Arc, Mutex};
     use uuid::Uuid;
 
     fn fixture(id: OrganizationId) -> Organization {
@@ -792,6 +828,15 @@ mod tests {
             .times(1)
             .returning(|_, _| Box::pin(async { Ok(()) }));
 
+        let mut task_label_repository = MockTaskLabelRepository::new();
+        task_label_repository
+            .expect_insert()
+            .times(3)
+            .returning(|l| {
+                let cloned = l.clone();
+                Box::pin(async move { Ok(cloned) })
+            });
+
         let mut service = OrganizationService::new(
             organization_repository,
             role_repository,
@@ -800,11 +845,121 @@ mod tests {
             MockAuthorizer::new(),
         );
 
-        let org = service.create_organization(create_cmd()).await.unwrap();
+        let org = service
+            .create_organization(create_cmd(), task_label_repository)
+            .await
+            .unwrap();
 
         assert_eq!(org.name, "Acme");
         assert_eq!(org.slug, "acme");
         assert!(org.deleted_at.is_none());
+    }
+
+    /// The preset names/colors themselves — `create_organization_seeds_roles_and_owner_membership`
+    /// only asserts the insert count, not which labels landed.
+    #[tokio::test]
+    async fn create_organization_seeds_the_three_documented_preset_labels() {
+        let mut organization_repository = MockOrganizationRepository::new();
+        let mut role_repository = MockRoleRepository::new();
+        let mut member_repository = MockMemberRepository::new();
+        let mut user_repository = MockUserRepository::new();
+
+        user_repository
+            .expect_find_by_sub()
+            .times(1)
+            .returning(|s| {
+                let now = Utc::now();
+                let user = User {
+                    id: UserId(Uuid::new_v4()),
+                    email: "owner@example.com".into(),
+                    username: "owner".into(),
+                    name: "Owner".into(),
+                    sub: s.to_owned(),
+                    deleted_at: None,
+                    created_at: now,
+                    updated_at: now,
+                };
+                Box::pin(async move { Ok(Some(user)) })
+            });
+        organization_repository
+            .expect_insert()
+            .times(1)
+            .returning(|o| {
+                let cloned = Organization {
+                    id: o.id,
+                    name: o.name.clone(),
+                    slug: o.slug.clone(),
+                    owner_id: o.owner_id,
+                    deleted_at: o.deleted_at,
+                    created_at: o.created_at,
+                    updated_at: o.updated_at,
+                };
+                Box::pin(async move { Ok(cloned) })
+            });
+        role_repository.expect_insert().times(3).returning(|r| {
+            let cloned = Role {
+                id: r.id,
+                organization_id: r.organization_id,
+                name: r.name.clone(),
+                permissions: r.permissions,
+                created_at: r.created_at,
+                updated_at: r.updated_at,
+            };
+            Box::pin(async move { Ok(cloned) })
+        });
+        member_repository.expect_insert().times(1).returning(|m| {
+            let cloned = Member {
+                id: m.id,
+                organization_id: m.organization_id,
+                user_id: m.user_id,
+                joined_at: m.joined_at,
+            };
+            Box::pin(async move { Ok(cloned) })
+        });
+        member_repository
+            .expect_assign_role()
+            .times(1)
+            .returning(|_, _| Box::pin(async { Ok(()) }));
+
+        let inserted: Arc<Mutex<Vec<(String, String)>>> = Arc::new(Mutex::new(Vec::new()));
+        let inserted_handle = Arc::clone(&inserted);
+        let mut task_label_repository = MockTaskLabelRepository::new();
+        task_label_repository
+            .expect_insert()
+            .times(3)
+            .returning(move |l| {
+                inserted_handle
+                    .lock()
+                    .unwrap()
+                    .push((l.name.clone(), l.color.clone()));
+                let cloned = l.clone();
+                Box::pin(async move { Ok(cloned) })
+            });
+
+        let mut service = OrganizationService::new(
+            organization_repository,
+            role_repository,
+            member_repository,
+            user_repository,
+            MockAuthorizer::new(),
+        );
+
+        service
+            .create_organization(create_cmd(), task_label_repository)
+            .await
+            .unwrap();
+
+        let inserted = inserted.lock().unwrap();
+        assert_eq!(inserted.len(), 3);
+        assert!(inserted.iter().any(|(name, _)| name == "Réunion"));
+        assert!(inserted.iter().any(|(name, _)| name == "Déplacement"));
+        assert!(inserted.iter().any(|(name, _)| name == "Formation"));
+        assert!(
+            inserted
+                .iter()
+                .all(|(_, color)| color.starts_with('#') && color.len() == 7),
+            "every preset must carry a well-formed hex color"
+        );
     }
 
     #[tokio::test]
@@ -840,6 +995,11 @@ mod tests {
                 Box::pin(async { Err(CoreError::Conflict("organizations_slug_key".into())) })
             });
 
+        // No `expect_insert` on this mock: creation must fail on the
+        // organization insert itself, before any preset label is ever
+        // attempted.
+        let task_label_repository = MockTaskLabelRepository::new();
+
         let mut service = OrganizationService::new(
             organization_repository,
             role_repository,
@@ -848,7 +1008,10 @@ mod tests {
             MockAuthorizer::new(),
         );
 
-        let err = service.create_organization(create_cmd()).await.unwrap_err();
+        let err = service
+            .create_organization(create_cmd(), task_label_repository)
+            .await
+            .unwrap_err();
 
         match err {
             CoreError::Conflict(msg) => assert_eq!(msg, "slug already taken"),

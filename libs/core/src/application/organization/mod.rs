@@ -12,7 +12,11 @@ use crate::{
 };
 
 impl MestierUseCase {
-    #[transactional(organization, role, member, user, authz)]
+    /// Also seeds the organization's three preset task labels — see
+    /// `OrganizationService::create_organization`. `task_label` is added
+    /// only to this one method's repository list; the other use cases below
+    /// stay unaware of the label aggregate.
+    #[transactional(organization, role, member, user, authz, task_label)]
     pub async fn create_organization(
         &self,
         command: CreateOrganizationCommand,
@@ -24,7 +28,9 @@ impl MestierUseCase {
             user_repository,
             authz,
         );
-        service.create_organization(command).await
+        service
+            .create_organization(command, task_label_repository)
+            .await
     }
 
     #[transactional(organization, role, member, user, authz)]
