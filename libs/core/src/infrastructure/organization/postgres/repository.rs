@@ -69,6 +69,20 @@ impl<'tx> OrganizationRepository for PgOrganizationRepository<'tx> {
     }
 
     #[tracing::instrument(skip(self), fields(db.system = "postgresql", db.operation = "select", db.table = "organizations"), err)]
+    async fn find_timezone(&mut self, id: OrganizationId) -> Result<Option<String>, CoreError> {
+        let mut tx = self.tx.lock().await;
+        let row = sqlx::query!(
+            r#"SELECT timezone FROM organizations WHERE id = $1 AND deleted_at IS NULL"#,
+            id.0,
+        )
+        .fetch_optional(&mut ***tx)
+        .await
+        .map_err(map_sqlx_error)?;
+
+        Ok(row.map(|row| row.timezone))
+    }
+
+    #[tracing::instrument(skip(self), fields(db.system = "postgresql", db.operation = "select", db.table = "organizations"), err)]
     async fn list_for_user(&mut self, user_id: UserId) -> Result<Vec<Organization>, CoreError> {
         let mut tx = self.tx.lock().await;
         info!("user_id: {:?}", user_id);
