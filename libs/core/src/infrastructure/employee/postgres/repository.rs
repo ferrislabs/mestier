@@ -28,14 +28,15 @@ impl<'tx> EmployeeRepository for PgEmployeeRepository<'tx> {
         let row = sqlx::query_as!(
             EmployeeRow,
             r#"
-            INSERT INTO employees (id, org_id, user_id, name, hourly_rate_cents, weekly_contract_minutes, deleted_at, created_at, updated_at)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-            RETURNING id, org_id, user_id, name, hourly_rate_cents, weekly_contract_minutes, deleted_at, created_at, updated_at
+            INSERT INTO employees (id, org_id, user_id, last_name, first_name, hourly_rate_cents, weekly_contract_minutes, deleted_at, created_at, updated_at)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+            RETURNING id, org_id, user_id, last_name, first_name, hourly_rate_cents, weekly_contract_minutes, deleted_at, created_at, updated_at
             "#,
             employee.id.0,
             employee.organization_id.0,
             employee.user_id.map(|id| id.0),
-            employee.name,
+            employee.last_name,
+            employee.first_name,
             employee.hourly_rate_cents,
             employee.weekly_contract_minutes,
             employee.deleted_at,
@@ -54,7 +55,7 @@ impl<'tx> EmployeeRepository for PgEmployeeRepository<'tx> {
         let row = sqlx::query_as!(
             EmployeeRow,
             r#"
-            SELECT id, org_id, user_id, name, hourly_rate_cents, weekly_contract_minutes, deleted_at, created_at, updated_at
+            SELECT id, org_id, user_id, last_name, first_name, hourly_rate_cents, weekly_contract_minutes, deleted_at, created_at, updated_at
             FROM employees
             WHERE id = $1 AND deleted_at IS NULL
             "#,
@@ -76,7 +77,7 @@ impl<'tx> EmployeeRepository for PgEmployeeRepository<'tx> {
         let row = sqlx::query_as!(
             EmployeeRow,
             r#"
-            SELECT id, org_id, user_id, name, hourly_rate_cents, weekly_contract_minutes, deleted_at, created_at, updated_at
+            SELECT id, org_id, user_id, last_name, first_name, hourly_rate_cents, weekly_contract_minutes, deleted_at, created_at, updated_at
             FROM employees
             WHERE org_id = $1 AND user_id = $2 AND deleted_at IS NULL
             "#,
@@ -100,10 +101,10 @@ impl<'tx> EmployeeRepository for PgEmployeeRepository<'tx> {
         let rows = sqlx::query_as!(
             EmployeeRow,
             r#"
-            SELECT id, org_id, user_id, name, hourly_rate_cents, weekly_contract_minutes, deleted_at, created_at, updated_at
+            SELECT id, org_id, user_id, last_name, first_name, hourly_rate_cents, weekly_contract_minutes, deleted_at, created_at, updated_at
             FROM employees
             WHERE org_id = $1 AND deleted_at IS NULL
-            ORDER BY name ASC, created_at ASC
+            ORDER BY last_name ASC, first_name ASC, created_at ASC
             LIMIT $2 OFFSET $3
             "#,
             organization_id.0,
@@ -133,10 +134,10 @@ impl<'tx> EmployeeRepository for PgEmployeeRepository<'tx> {
         let rows = sqlx::query_as!(
             EmployeeRow,
             r#"
-            SELECT id, org_id, user_id, name, hourly_rate_cents, weekly_contract_minutes, deleted_at, created_at, updated_at
+            SELECT id, org_id, user_id, last_name, first_name, hourly_rate_cents, weekly_contract_minutes, deleted_at, created_at, updated_at
             FROM employees
             WHERE org_id = $1 AND deleted_at IS NULL
-            ORDER BY name ASC, created_at ASC
+            ORDER BY last_name ASC, first_name ASC, created_at ASC
             "#,
             organization_id.0,
         )
@@ -153,13 +154,14 @@ impl<'tx> EmployeeRepository for PgEmployeeRepository<'tx> {
             EmployeeRow,
             r#"
             UPDATE employees
-            SET user_id = $2, name = $3, hourly_rate_cents = $4, weekly_contract_minutes = $5, updated_at = $6
+            SET user_id = $2, last_name = $3, first_name = $4, hourly_rate_cents = $5, weekly_contract_minutes = $6, updated_at = $7
             WHERE id = $1 AND deleted_at IS NULL
-            RETURNING id, org_id, user_id, name, hourly_rate_cents, weekly_contract_minutes, deleted_at, created_at, updated_at
+            RETURNING id, org_id, user_id, last_name, first_name, hourly_rate_cents, weekly_contract_minutes, deleted_at, created_at, updated_at
             "#,
             employee.id.0,
             employee.user_id.map(|id| id.0),
-            employee.name,
+            employee.last_name,
+            employee.first_name,
             employee.hourly_rate_cents,
             employee.weekly_contract_minutes,
             employee.updated_at,

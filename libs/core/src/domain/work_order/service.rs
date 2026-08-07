@@ -240,7 +240,14 @@ where
                         id: EmployeeId(generate_uuid_v7()),
                         organization_id: work_order.organization_id,
                         user_id: Some(user_id),
-                        name: user.name,
+                        // The account's `display_name` is a single free-text
+                        // field, exactly like the pre-split `employees.name`
+                        // was — it cannot be reliably split into a first and
+                        // last name (see the `split_employee_name`
+                        // migration), so it becomes `last_name` and
+                        // `first_name` is left unset, same as a backfilled row.
+                        last_name: user.name,
+                        first_name: None,
                         // Never `Some(0)`: an on-the-fly record has no rate
                         // *yet*, which is not the same as "free".
                         hourly_rate_cents: None,
@@ -359,7 +366,8 @@ mod tests {
             id,
             organization_id,
             user_id: None,
-            name: "Alice".to_owned(),
+            last_name: "Alice".to_owned(),
+            first_name: None,
             hourly_rate_cents: Some(3500),
             weekly_contract_minutes: 2100,
             deleted_at: None,
@@ -728,7 +736,8 @@ mod tests {
                 e.user_id == Some(user_id)
                     && e.hourly_rate_cents.is_none()
                     && e.weekly_contract_minutes == 0
-                    && e.name == "Bob Member"
+                    && e.last_name == "Bob Member"
+                    && e.first_name.is_none()
             })
             .times(1)
             .returning(|e| {

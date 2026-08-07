@@ -32,7 +32,8 @@ where
         &mut self,
         command: CreateEmployeeCommand,
     ) -> Result<Employee, CoreError> {
-        validate_name(&command.name)?;
+        validate_last_name(&command.last_name)?;
+        validate_first_name(&command.first_name)?;
         validate_rate(command.hourly_rate_cents)?;
         validate_weekly_contract_minutes(command.weekly_contract_minutes)?;
 
@@ -41,7 +42,8 @@ where
             id: EmployeeId(generate_uuid_v7()),
             organization_id: command.organization_id,
             user_id: command.user_id,
-            name: command.name,
+            last_name: command.last_name,
+            first_name: command.first_name,
             hourly_rate_cents: command.hourly_rate_cents,
             weekly_contract_minutes: command.weekly_contract_minutes,
             deleted_at: None,
@@ -71,12 +73,14 @@ where
         &mut self,
         command: UpdateEmployeeCommand,
     ) -> Result<Employee, CoreError> {
-        validate_name(&command.name)?;
+        validate_last_name(&command.last_name)?;
+        validate_first_name(&command.first_name)?;
         validate_rate(command.hourly_rate_cents)?;
         validate_weekly_contract_minutes(command.weekly_contract_minutes)?;
 
         let mut employee = self.get_employee(command.id).await?;
-        employee.name = command.name;
+        employee.last_name = command.last_name;
+        employee.first_name = command.first_name;
         employee.hourly_rate_cents = command.hourly_rate_cents;
         employee.weekly_contract_minutes = command.weekly_contract_minutes;
         employee.updated_at = Utc::now();
@@ -101,10 +105,24 @@ where
     }
 }
 
-fn validate_name(name: &str) -> Result<(), CoreError> {
-    if name.trim().is_empty() {
+fn validate_last_name(last_name: &str) -> Result<(), CoreError> {
+    if last_name.trim().is_empty() {
         return Err(CoreError::Conflict(
-            "employee name cannot be empty".to_owned(),
+            "employee last name cannot be empty".to_owned(),
+        ));
+    }
+
+    Ok(())
+}
+
+/// `first_name` is optional (see `Employee::first_name`), but when it is
+/// provided it must not be blank — mirroring
+/// `chk_employees_first_name_not_blank_when_present`, so a blank string
+/// never masquerades as a real, if minimal, first name.
+fn validate_first_name(first_name: &Option<String>) -> Result<(), CoreError> {
+    if first_name.as_deref().is_some_and(|v| v.trim().is_empty()) {
+        return Err(CoreError::Conflict(
+            "employee first name cannot be blank when provided".to_owned(),
         ));
     }
 
@@ -150,7 +168,8 @@ mod tests {
             id,
             organization_id: OrganizationId(Uuid::new_v4()),
             user_id: None,
-            name: "Alice".to_owned(),
+            last_name: "Alice".to_owned(),
+            first_name: None,
             hourly_rate_cents: Some(3500),
             weekly_contract_minutes: 2100,
             deleted_at: None,
@@ -163,7 +182,8 @@ mod tests {
         CreateEmployeeCommand {
             organization_id: OrganizationId(Uuid::new_v4()),
             user_id: None,
-            name: "Alice".to_owned(),
+            last_name: "Alice".to_owned(),
+            first_name: None,
             hourly_rate_cents: Some(3500),
             weekly_contract_minutes: 2100,
         }
@@ -180,9 +200,63 @@ mod tests {
         let mut service = EmployeeService::new(repo);
         let created = service.create_employee(create_command()).await.unwrap();
 
-        assert_eq!(created.name, "Alice");
+        assert_eq!(created.last_name, "Alice");
+        assert_eq!(created.first_name, None);
         assert_eq!(created.hourly_rate_cents, Some(3500));
         assert_eq!(created.weekly_contract_minutes, 2100);
+    }
+
+    #[tokio::test]
+    async fn create_employee_persists_a_provided_first_name() {
+        let mut repo = MockEmployeeRepository::new();
+        repo.expect_insert().times(1).returning(|e| {
+            let employee = e.clone();
+            Box::pin(async move { Ok(employee) })
+        });
+
+        let mut service = EmployeeService::new(repo);
+        let created = service
+            .create_employee(CreateEmployeeCommand {
+                first_name: Some("Baptiste".to_owned()),
+                ..create_command()
+            })
+            .await
+            .unwrap();
+
+        assert_eq!(created.first_name.as_deref(), Some("Baptiste"));
+        assert_eq!(created.display_name(), "Alice Baptiste");
+    }
+
+    #[tokio::test]
+    async fn create_employee_rejects_an_empty_last_name() {
+        let repo = MockEmployeeRepository::new();
+        let mut service = EmployeeService::new(repo);
+
+        let err = service
+            .create_employee(CreateEmployeeCommand {
+                last_name: "   ".to_owned(),
+                ..create_command()
+            })
+            .await
+            .unwrap_err();
+
+        assert!(matches!(err, CoreError::Conflict(_)));
+    }
+
+    #[tokio::test]
+    async fn create_employee_rejects_a_blank_first_name_when_provided() {
+        let repo = MockEmployeeRepository::new();
+        let mut service = EmployeeService::new(repo);
+
+        let err = service
+            .create_employee(CreateEmployeeCommand {
+                first_name: Some("   ".to_owned()),
+                ..create_command()
+            })
+            .await
+            .unwrap_err();
+
+        assert!(matches!(err, CoreError::Conflict(_)));
     }
 
     #[tokio::test]
@@ -290,14 +364,16 @@ mod tests {
         let updated = service
             .update_employee(UpdateEmployeeCommand {
                 id,
-                name: "Bob".to_owned(),
+                last_name: "Bob".to_owned(),
+                first_name: Some("Martin".to_owned()),
                 hourly_rate_cents: Some(4200),
                 weekly_contract_minutes: 1920,
             })
             .await
             .unwrap();
 
-        assert_eq!(updated.name, "Bob");
+        assert_eq!(updated.last_name, "Bob");
+        assert_eq!(updated.first_name.as_deref(), Some("Martin"));
         assert_eq!(updated.hourly_rate_cents, Some(4200));
         assert_eq!(updated.weekly_contract_minutes, 1920);
     }
@@ -318,7 +394,8 @@ mod tests {
         let updated = service
             .update_employee(UpdateEmployeeCommand {
                 id,
-                name: "Bob".to_owned(),
+                last_name: "Bob".to_owned(),
+                first_name: None,
                 hourly_rate_cents: None,
                 weekly_contract_minutes: 2100,
             })
