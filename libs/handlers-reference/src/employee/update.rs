@@ -10,7 +10,10 @@ use crate::{paths::EmployeePath, require_org_membership, response::EmployeeRespo
 #[derive(Debug, Deserialize, ToSchema)]
 pub struct UpdateEmployeeRequest {
     pub name: String,
-    pub hourly_rate_cents: i32,
+    /// `null` means the rate is not set yet; `0` means genuinely free.
+    pub hourly_rate_cents: Option<i32>,
+    #[serde(default)]
+    pub weekly_contract_minutes: i32,
     pub user_id: Option<UserId>,
 }
 
@@ -49,6 +52,7 @@ pub async fn handler(
             id: employee_id,
             name: payload.name,
             hourly_rate_cents: payload.hourly_rate_cents,
+            weekly_contract_minutes: payload.weekly_contract_minutes,
         })
         .await?;
     let employee = state

@@ -28,15 +28,16 @@ impl<'tx> EmployeeRepository for PgEmployeeRepository<'tx> {
         let row = sqlx::query_as!(
             EmployeeRow,
             r#"
-            INSERT INTO employees (id, org_id, user_id, name, hourly_rate_cents, deleted_at, created_at, updated_at)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-            RETURNING id, org_id, user_id, name, hourly_rate_cents, deleted_at, created_at, updated_at
+            INSERT INTO employees (id, org_id, user_id, name, hourly_rate_cents, weekly_contract_minutes, deleted_at, created_at, updated_at)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+            RETURNING id, org_id, user_id, name, hourly_rate_cents, weekly_contract_minutes, deleted_at, created_at, updated_at
             "#,
             employee.id.0,
             employee.organization_id.0,
             employee.user_id.map(|id| id.0),
             employee.name,
             employee.hourly_rate_cents,
+            employee.weekly_contract_minutes,
             employee.deleted_at,
             employee.created_at,
             employee.updated_at,
@@ -53,7 +54,7 @@ impl<'tx> EmployeeRepository for PgEmployeeRepository<'tx> {
         let row = sqlx::query_as!(
             EmployeeRow,
             r#"
-            SELECT id, org_id, user_id, name, hourly_rate_cents, deleted_at, created_at, updated_at
+            SELECT id, org_id, user_id, name, hourly_rate_cents, weekly_contract_minutes, deleted_at, created_at, updated_at
             FROM employees
             WHERE id = $1 AND deleted_at IS NULL
             "#,
@@ -76,7 +77,7 @@ impl<'tx> EmployeeRepository for PgEmployeeRepository<'tx> {
         let rows = sqlx::query_as!(
             EmployeeRow,
             r#"
-            SELECT id, org_id, user_id, name, hourly_rate_cents, deleted_at, created_at, updated_at
+            SELECT id, org_id, user_id, name, hourly_rate_cents, weekly_contract_minutes, deleted_at, created_at, updated_at
             FROM employees
             WHERE org_id = $1 AND deleted_at IS NULL
             ORDER BY name ASC, created_at ASC
@@ -107,14 +108,15 @@ impl<'tx> EmployeeRepository for PgEmployeeRepository<'tx> {
             EmployeeRow,
             r#"
             UPDATE employees
-            SET user_id = $2, name = $3, hourly_rate_cents = $4, updated_at = $5
+            SET user_id = $2, name = $3, hourly_rate_cents = $4, weekly_contract_minutes = $5, updated_at = $6
             WHERE id = $1 AND deleted_at IS NULL
-            RETURNING id, org_id, user_id, name, hourly_rate_cents, deleted_at, created_at, updated_at
+            RETURNING id, org_id, user_id, name, hourly_rate_cents, weekly_contract_minutes, deleted_at, created_at, updated_at
             "#,
             employee.id.0,
             employee.user_id.map(|id| id.0),
             employee.name,
             employee.hourly_rate_cents,
+            employee.weekly_contract_minutes,
             employee.updated_at,
         )
         .fetch_optional(&mut ***tx)

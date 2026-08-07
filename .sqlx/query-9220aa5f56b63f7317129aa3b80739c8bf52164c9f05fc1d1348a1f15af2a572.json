@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT id, org_id, user_id, name, hourly_rate_cents, deleted_at, created_at, updated_at\n            FROM employees\n            WHERE org_id = $1 AND deleted_at IS NULL\n            ORDER BY name ASC, created_at ASC\n            LIMIT $2 OFFSET $3\n            ",
+  "query": "\n            SELECT id, org_id, user_id, name, hourly_rate_cents, weekly_contract_minutes, deleted_at, created_at, updated_at\n            FROM employees\n            WHERE org_id = $1 AND deleted_at IS NULL\n            ORDER BY name ASC, created_at ASC\n            LIMIT $2 OFFSET $3\n            ",
   "describe": {
     "columns": [
       {
@@ -30,16 +30,21 @@
       },
       {
         "ordinal": 5,
+        "name": "weekly_contract_minutes",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 6,
         "name": "deleted_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 6,
+        "ordinal": 7,
         "name": "created_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 7,
+        "ordinal": 8,
         "name": "updated_at",
         "type_info": "Timestamptz"
       }
@@ -56,11 +61,12 @@
       false,
       true,
       false,
+      true,
       false,
       true,
       false,
       false
     ]
   },
-  "hash": "6e44990c69250e7ac3670e063da7442c2d1280836496f39c69308ab6bf56cdb1"
+  "hash": "9220aa5f56b63f7317129aa3b80739c8bf52164c9f05fc1d1348a1f15af2a572"
 }

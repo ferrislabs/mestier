@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            UPDATE employees\n            SET user_id = $2, name = $3, hourly_rate_cents = $4, updated_at = $5\n            WHERE id = $1 AND deleted_at IS NULL\n            RETURNING id, org_id, user_id, name, hourly_rate_cents, deleted_at, created_at, updated_at\n            ",
+  "query": "\n            INSERT INTO employees (id, org_id, user_id, name, hourly_rate_cents, weekly_contract_minutes, deleted_at, created_at, updated_at)\n            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)\n            RETURNING id, org_id, user_id, name, hourly_rate_cents, weekly_contract_minutes, deleted_at, created_at, updated_at\n            ",
   "describe": {
     "columns": [
       {
@@ -30,16 +30,21 @@
       },
       {
         "ordinal": 5,
+        "name": "weekly_contract_minutes",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 6,
         "name": "deleted_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 6,
+        "ordinal": 7,
         "name": "created_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 7,
+        "ordinal": 8,
         "name": "updated_at",
         "type_info": "Timestamptz"
       }
@@ -48,8 +53,12 @@
       "Left": [
         "Uuid",
         "Uuid",
+        "Uuid",
         "Text",
         "Int4",
+        "Int4",
+        "Timestamptz",
+        "Timestamptz",
         "Timestamptz"
       ]
     },
@@ -58,11 +67,12 @@
       false,
       true,
       false,
+      true,
       false,
       true,
       false,
       false
     ]
   },
-  "hash": "4863429884c44d6566dfadb1add6a746e726410711b697cbe2ecbdd85e6041f3"
+  "hash": "9468a53c7ca050b5b83016525e8e46317048de6db5a9fc8aa930eba896f30a4b"
 }

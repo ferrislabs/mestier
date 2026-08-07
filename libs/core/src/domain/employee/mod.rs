@@ -34,7 +34,15 @@ pub struct Employee {
     pub organization_id: OrganizationId,
     pub user_id: Option<UserId>,
     pub name: String,
-    pub hourly_rate_cents: i32,
+    /// `None` means the rate is not set yet; `Some(0)` means genuinely free.
+    ///
+    /// The distinction matters: an employee record created on the fly while
+    /// assigning a work order has no rate, and a cost computation must refuse
+    /// to produce a figure rather than silently sum it as zero.
+    pub hourly_rate_cents: Option<i32>,
+    /// Contractual weekly base. Deliberately not derived from the sum of the
+    /// employee's work slots — the gap between the two is the information.
+    pub weekly_contract_minutes: i32,
     pub deleted_at: Option<DateTime<Utc>>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,

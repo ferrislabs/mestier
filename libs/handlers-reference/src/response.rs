@@ -12,7 +12,9 @@ pub struct EmployeeResponse {
     pub organization_id: OrganizationId,
     pub user_id: Option<UserId>,
     pub name: String,
-    pub hourly_rate_cents: i32,
+    /// `null` means the rate is not set yet; `0` means genuinely free.
+    pub hourly_rate_cents: Option<i32>,
+    pub weekly_contract_minutes: i32,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }
@@ -25,6 +27,7 @@ impl From<Employee> for EmployeeResponse {
             user_id: value.user_id,
             name: value.name,
             hourly_rate_cents: value.hourly_rate_cents,
+            weekly_contract_minutes: value.weekly_contract_minutes,
             created_at: value.created_at,
             updated_at: value.updated_at,
         }
