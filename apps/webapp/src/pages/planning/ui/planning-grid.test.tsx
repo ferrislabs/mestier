@@ -1,7 +1,16 @@
-import { render, screen, within } from '@testing-library/react'
+import { fireEvent, render, screen, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { PlanningEntry, PlanningResource } from '#/pages/planning/types'
 import { PlanningGrid } from '#/pages/planning/ui/planning-grid'
+
+/** jsdom has no `DataTransfer`; a plain object backed by a `Map` is enough for `setData`/`getData`. */
+function fakeDataTransfer() {
+	const store = new Map<string, string>()
+	return {
+		setData: (format: string, data: string) => store.set(format, data),
+		getData: (format: string) => store.get(format) ?? '',
+	}
+}
 
 const TZ = 'Europe/Paris'
 
@@ -251,6 +260,189 @@ describe('PlanningGrid — résilience aux kinds inconnus', () => {
 		).not.toThrow()
 
 		expect(screen.getAllByTestId('grid-segment')).toHaveLength(1)
+	})
+})
+
+describe('PlanningGrid — drag & drop', () => {
+	function twoResources() {
+		return [
+			employeeResource(),
+			employeeResource({
+				resource_id: 'employee:employee-2',
+				employee_id: 'employee-2',
+				display_name: 'Marie Leroy',
+			}),
+		]
+	}
+
+	it('un segment de chantier est draggable et transporte entryId/resourceId/date au dragstart', () => {
+		render(
+			<PlanningGrid
+				view="week"
+				windowFrom="2026-08-10"
+				windowTo="2026-08-10"
+				timeZone={TZ}
+				resources={[employeeResource()]}
+				entries={[workOrder()]}
+				workTime={[]}
+			/>,
+		)
+
+		const segment = screen.getByTestId('grid-segment')
+		expect(segment.getAttribute('draggable')).toBe('true')
+	})
+
+	it('un drop sur une autre ligne, même date, appelle onDropWorkOrder avec la ressource cible', () => {
+		const onDropWorkOrder = vi.fn()
+		render(
+			<PlanningGrid
+				view="week"
+				windowFrom="2026-08-10"
+				windowTo="2026-08-10"
+				timeZone={TZ}
+				resources={twoResources()}
+				entries={[workOrder()]}
+				workTime={[]}
+				onDropWorkOrder={onDropWorkOrder}
+			/>,
+		)
+
+		const segment = screen.getByTestId('grid-segment')
+		const dataTransfer = fakeDataTransfer()
+		fireEvent.dragStart(segment, { dataTransfer })
+
+		const rows = screen.getAllByTestId('grid-row')
+		const targetRow = rows.find(
+			(row) => row.getAttribute('data-resource-id') === 'employee:employee-2',
+		)
+		if (!targetRow) throw new Error('target row not found')
+		const targetCell = within(targetRow).getByTestId('grid-cell')
+
+		fireEvent.drop(targetCell, { dataTransfer })
+
+		expect(onDropWorkOrder).toHaveBeenCalledWith({
+			entryId: 'wo-1',
+			sourceResourceId: 'employee:employee-1',
+			sourceDate: '2026-08-10',
+			targetResourceId: 'employee:employee-2',
+			targetDate: '2026-08-10',
+		})
+	})
+
+	it("un drop sur la cellule d'origine (rien ne change) appelle quand même le callback avec des cibles identiques aux sources", () => {
+		const onDropWorkOrder = vi.fn()
+		render(
+			<PlanningGrid
+				view="week"
+				windowFrom="2026-08-10"
+				windowTo="2026-08-10"
+				timeZone={TZ}
+				resources={[employeeResource()]}
+				entries={[workOrder()]}
+				workTime={[]}
+				onDropWorkOrder={onDropWorkOrder}
+			/>,
+		)
+
+		const segment = screen.getByTestId('grid-segment')
+		const dataTransfer = fakeDataTransfer()
+		fireEvent.dragStart(segment, { dataTransfer })
+		fireEvent.drop(screen.getByTestId('grid-cell'), { dataTransfer })
+
+		expect(onDropWorkOrder).toHaveBeenCalledWith({
+			entryId: 'wo-1',
+			sourceResourceId: 'employee:employee-1',
+			sourceDate: '2026-08-10',
+			targetResourceId: 'employee:employee-1',
+			targetDate: '2026-08-10',
+		})
+	})
+
+	it('sans onDropWorkOrder, un drop ne plante pas', () => {
+		render(
+			<PlanningGrid
+				view="week"
+				windowFrom="2026-08-10"
+				windowTo="2026-08-10"
+				timeZone={TZ}
+				resources={[employeeResource()]}
+				entries={[workOrder()]}
+				workTime={[]}
+			/>,
+		)
+
+		const segment = screen.getByTestId('grid-segment')
+		const dataTransfer = fakeDataTransfer()
+		fireEvent.dragStart(segment, { dataTransfer })
+		expect(() =>
+			fireEvent.drop(screen.getByTestId('grid-cell'), { dataTransfer }),
+		).not.toThrow()
+	})
+})
+
+describe('PlanningGrid — retrait d’un assigné', () => {
+	it('le bouton retirer sur un segment de chantier appelle onRemoveAssignee avec entryId et resourceId de la ligne', () => {
+		const onRemoveAssignee = vi.fn()
+		render(
+			<PlanningGrid
+				view="week"
+				windowFrom="2026-08-10"
+				windowTo="2026-08-10"
+				timeZone={TZ}
+				resources={[employeeResource()]}
+				entries={[workOrder()]}
+				workTime={[]}
+				onRemoveAssignee={onRemoveAssignee}
+			/>,
+		)
+
+		fireEvent.click(
+			screen.getByRole('button', { name: /Retirer cette personne/ }),
+		)
+
+		expect(onRemoveAssignee).toHaveBeenCalledWith({
+			entryId: 'wo-1',
+			resourceId: 'employee:employee-1',
+		})
+	})
+
+	it("n'affiche pas de bouton retirer sans onRemoveAssignee", () => {
+		render(
+			<PlanningGrid
+				view="week"
+				windowFrom="2026-08-10"
+				windowTo="2026-08-10"
+				timeZone={TZ}
+				resources={[employeeResource()]}
+				entries={[workOrder()]}
+				workTime={[]}
+			/>,
+		)
+
+		expect(
+			screen.queryByRole('button', { name: /Retirer cette personne/ }),
+		).toBeNull()
+	})
+})
+
+describe('PlanningGrid — sélection d’une absence', () => {
+	it("un clic sur un segment d'absence appelle onSelectAbsence avec son id", () => {
+		const onSelectAbsence = vi.fn()
+		render(
+			<PlanningGrid
+				view="week"
+				windowFrom="2026-08-10"
+				windowTo="2026-08-10"
+				timeZone={TZ}
+				resources={[employeeResource()]}
+				entries={[absence()]}
+				workTime={[]}
+				onSelectAbsence={onSelectAbsence}
+			/>,
+		)
+
+		fireEvent.click(screen.getByTestId('grid-segment'))
+		expect(onSelectAbsence).toHaveBeenCalledWith('ab-1')
 	})
 })
 

@@ -1,3 +1,4 @@
+import { X } from 'lucide-react'
 import { cn } from '#/lib/utils'
 import type { MinuteRange } from '#/pages/planning/lib/amplitude'
 import {
@@ -14,6 +15,28 @@ import type {
 } from '#/pages/planning/types'
 import { CurrentTimeLine } from '#/pages/planning/ui/current-time-line'
 
+/** The drag payload a work order segment carries, read back on drop — see the planning design doc's "Drag & drop" section. */
+interface DragPayload {
+	entryId: string
+	resourceId: string
+	date: string
+}
+
+const DRAG_PAYLOAD_FORMAT = 'application/json'
+
+export interface WorkOrderDropEvent {
+	entryId: string
+	sourceResourceId: string
+	sourceDate: string
+	targetResourceId: string
+	targetDate: string
+}
+
+export interface RemoveAssigneeEvent {
+	entryId: string
+	resourceId: string
+}
+
 export interface PlanningGridProps {
 	view: PlanningView
 	windowFrom: string
@@ -24,6 +47,12 @@ export interface PlanningGridProps {
 	workTime: PlanningWorkTime[]
 	/** Forwarded to {@link CurrentTimeLine} — tests only, see its own doc. */
 	now?: Date
+	/** A work order segment was dropped onto a (possibly different) row and/or day — see the planning design doc's "Drag & drop" decision: one event, whichever axis moved. */
+	onDropWorkOrder?: (event: WorkOrderDropEvent) => void
+	/** The small "×" on a work order segment — unassigns that one resource, through the same complete-list path a move uses. */
+	onRemoveAssignee?: (event: RemoveAssigneeEvent) => void
+	/** A click on an absence segment — opens it for editing. */
+	onSelectAbsence?: (entryId: string) => void
 }
 
 const SEGMENT_HEIGHT_PX: Record<PlanningView, number> = {
@@ -49,6 +78,9 @@ export function PlanningGrid({
 	entries,
 	workTime,
 	now,
+	onDropWorkOrder,
+	onRemoveAssignee,
+	onSelectAbsence,
 }: PlanningGridProps) {
 	const model = buildGridModel({
 		windowFrom,
@@ -95,7 +127,14 @@ export function PlanningGrid({
 
 				<div className="relative">
 					{model.rows.map((row) => (
-						<GridRow key={row.resourceId} view={view} row={row} />
+						<GridRow
+							key={row.resourceId}
+							view={view}
+							row={row}
+							onDropWorkOrder={onDropWorkOrder}
+							onRemoveAssignee={onRemoveAssignee}
+							onSelectAbsence={onSelectAbsence}
+						/>
 					))}
 
 					<div className="pointer-events-none absolute inset-x-0 top-9 bottom-0">
@@ -154,10 +193,19 @@ function TimeHeader({
 	)
 }
 
+interface GridInteractionHandlers {
+	onDropWorkOrder?: (event: WorkOrderDropEvent) => void
+	onRemoveAssignee?: (event: RemoveAssigneeEvent) => void
+	onSelectAbsence?: (entryId: string) => void
+}
+
 function GridRow({
 	view,
 	row,
-}: {
+	onDropWorkOrder,
+	onRemoveAssignee,
+	onSelectAbsence,
+}: GridInteractionHandlers & {
 	view: PlanningView
 	row: GridResourceRowVM
 }) {
@@ -172,16 +220,36 @@ function GridRow({
 			data-resource-id={row.resourceId}
 		>
 			{row.cells.map((cell) => (
-				<GridCell key={cell.date} view={view} cell={cell} />
+				<GridCell
+					key={cell.date}
+					view={view}
+					cell={cell}
+					resourceId={row.resourceId}
+					onDropWorkOrder={onDropWorkOrder}
+					onRemoveAssignee={onRemoveAssignee}
+					onSelectAbsence={onSelectAbsence}
+				/>
 			))}
 		</div>
 	)
 }
 
-function GridCell({ view, cell }: { view: PlanningView; cell: GridCellVM }) {
+function GridCell({
+	view,
+	cell,
+	resourceId,
+	onDropWorkOrder,
+	onRemoveAssignee,
+	onSelectAbsence,
+}: GridInteractionHandlers & {
+	view: PlanningView
+	cell: GridCellVM
+	resourceId: string
+}) {
 	const segmentHeight = SEGMENT_HEIGHT_PX[view]
 
 	return (
+		// biome-ignore lint/a11y/noStaticElementInteractions: HTML5 drag & drop's drop target has no native interactive equivalent — it isn't a keyboard-operable widget, dragging a segment onto it is.
 		<div
 			className={cn(
 				'relative min-w-0 flex-1 border-r py-1.5 last:border-r-0',
@@ -190,6 +258,22 @@ function GridCell({ view, cell }: { view: PlanningView; cell: GridCellVM }) {
 			data-testid="grid-cell"
 			data-date={cell.date}
 			data-has-absence={cell.hasAbsence}
+			onDragOver={(event) => {
+				event.preventDefault()
+			}}
+			onDrop={(event) => {
+				event.preventDefault()
+				const raw = event.dataTransfer.getData(DRAG_PAYLOAD_FORMAT)
+				if (!raw) return
+				const source = JSON.parse(raw) as DragPayload
+				onDropWorkOrder?.({
+					entryId: source.entryId,
+					sourceResourceId: source.resourceId,
+					sourceDate: source.date,
+					targetResourceId: resourceId,
+					targetDate: cell.date,
+				})
+			}}
 		>
 			{cell.backgroundBars.map((bar, index) => (
 				<div
@@ -200,28 +284,83 @@ function GridCell({ view, cell }: { view: PlanningView; cell: GridCellVM }) {
 				/>
 			))}
 
-			{cell.segments.map((segment) => (
-				<div
-					key={segment.entryId}
-					className={cn(
-						'absolute overflow-hidden rounded-sm px-1 text-[10px] leading-tight text-nowrap',
-						toneClassName(segment.tone),
-						view === 'day' ? 'text-xs' : 'text-[9px]',
-					)}
-					data-testid="grid-segment"
-					data-entry-id={segment.entryId}
-					data-tone={segment.tone}
-					title={segment.label}
-					style={{
-						left: `${segment.left}%`,
-						width: `${Math.max(segment.width, 2)}%`,
-						top: `${segment.row * segmentHeight}px`,
-						height: `${segmentHeight - 2}px`,
-					}}
-				>
-					{view === 'day' ? segment.label : null}
-				</div>
-			))}
+			{cell.segments.map((segment) => {
+				const isWorkOrder = segment.tone === 'work_order'
+				const isAbsence = segment.tone === 'absence'
+				const clickableAbsence = isAbsence && Boolean(onSelectAbsence)
+
+				return (
+					// biome-ignore lint/a11y/noStaticElementInteractions: the drag source has no native interactive equivalent; when clickable (an absence segment) it carries its own role="button"/tabIndex/onKeyDown above.
+					<div
+						key={segment.entryId}
+						className={cn(
+							'group absolute overflow-hidden rounded-sm px-1 text-[10px] leading-tight text-nowrap',
+							toneClassName(segment.tone),
+							view === 'day' ? 'text-xs' : 'text-[9px]',
+							clickableAbsence && 'cursor-pointer',
+						)}
+						data-testid="grid-segment"
+						data-entry-id={segment.entryId}
+						data-tone={segment.tone}
+						title={segment.label}
+						style={{
+							left: `${segment.left}%`,
+							width: `${Math.max(segment.width, 2)}%`,
+							top: `${segment.row * segmentHeight}px`,
+							height: `${segmentHeight - 2}px`,
+						}}
+						draggable={isWorkOrder}
+						onDragStart={
+							isWorkOrder
+								? (event) => {
+										const payload: DragPayload = {
+											entryId: segment.entryId,
+											resourceId,
+											date: cell.date,
+										}
+										event.dataTransfer.setData(
+											DRAG_PAYLOAD_FORMAT,
+											JSON.stringify(payload),
+										)
+									}
+								: undefined
+						}
+						role={clickableAbsence ? 'button' : undefined}
+						tabIndex={clickableAbsence ? 0 : undefined}
+						onClick={
+							clickableAbsence
+								? () => onSelectAbsence?.(segment.entryId)
+								: undefined
+						}
+						onKeyDown={
+							clickableAbsence
+								? (event) => {
+										if (event.key === 'Enter' || event.key === ' ') {
+											event.preventDefault()
+											onSelectAbsence?.(segment.entryId)
+										}
+									}
+								: undefined
+						}
+					>
+						{view === 'day' ? segment.label : null}
+						{isWorkOrder && onRemoveAssignee ? (
+							<button
+								type="button"
+								className="absolute top-0 right-0 hidden size-3.5 items-center justify-center rounded-bl-sm bg-black/20 hover:bg-black/40 group-hover:flex"
+								title="Retirer cette personne du chantier"
+								aria-label="Retirer cette personne du chantier"
+								onClick={(event) => {
+									event.stopPropagation()
+									onRemoveAssignee({ entryId: segment.entryId, resourceId })
+								}}
+							>
+								<X className="size-2.5" />
+							</button>
+						) : null}
+					</div>
+				)
+			})}
 		</div>
 	)
 }
