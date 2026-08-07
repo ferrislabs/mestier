@@ -2,7 +2,9 @@ use auth::Identity;
 use axum::{Extension, Json, extract::State};
 use chrono::{DateTime, Utc};
 use handlers::{ApiError, AppState, DataEnvelope, Response};
-use mestier_core::{AssigneeRef, EmployeeId, PatchTaskCommand, TaskId, TaskStatus, UserId};
+use mestier_core::{
+    AssigneeRef, EmployeeId, PatchTaskCommand, TaskId, TaskLabelId, TaskStatus, UserId,
+};
 use serde::{Deserialize, Deserializer};
 use utoipa::ToSchema;
 
@@ -45,8 +47,9 @@ impl From<AssigneeRefRequest> for AssigneeRef {
 /// [`deserialize_present`]) — `null` clears `parent_task_id` (the task
 /// becomes a root) or `starts_at`/`ends_at` (the task reverts to inheriting
 /// its parent's window). `title` cannot be cleared (the column is `NOT
-/// NULL`), so a plain `Option<String>` is enough for it. `assignees` is the
-/// complete replacement list, never a delta.
+/// NULL`), so a plain `Option<String>` is enough for it. `assignees` and
+/// `label_ids` are each the complete replacement list, never a delta: an
+/// absent key leaves the current set untouched, `[]` clears it entirely.
 #[derive(Debug, Deserialize, ToSchema)]
 pub struct UpdateTaskRequest {
     #[serde(default, deserialize_with = "deserialize_present")]
@@ -71,6 +74,8 @@ pub struct UpdateTaskRequest {
     pub blocks_availability: Option<bool>,
     #[serde(default)]
     pub assignees: Option<Vec<AssigneeRefRequest>>,
+    #[serde(default)]
+    pub label_ids: Option<Vec<TaskLabelId>>,
 }
 
 #[utoipa::path(
@@ -113,6 +118,7 @@ pub async fn handler(
     command.all_day = payload.all_day;
     command.status = payload.status;
     command.blocks_availability = payload.blocks_availability;
+    command.label_ids = payload.label_ids;
     command.assignees = payload
         .assignees
         .map(|assignees| assignees.into_iter().map(Into::into).collect());
@@ -283,5 +289,38 @@ mod tests {
         let resolved: Vec<AssigneeRef> = assignees.into_iter().map(Into::into).collect();
         assert!(matches!(resolved[0], AssigneeRef::Employee(id) if id == employee_id));
         assert!(matches!(resolved[1], AssigneeRef::Member(id) if id == user_id));
+    }
+
+    // ── empty vs. absent `label_ids` ────────────────────────────────────
+
+    #[test]
+    fn present_label_ids_sets_the_new_value() {
+        let label_id: TaskLabelId = "77777777-7777-7777-7777-777777777777".parse().unwrap();
+        let request = parse(json!({ "label_ids": [label_id.0.to_string()] }));
+
+        assert_eq!(request.label_ids, Some(vec![label_id]));
+    }
+
+    #[test]
+    fn absent_label_ids_means_leave_labels_untouched() {
+        let request = parse(json!({}));
+
+        assert_eq!(
+            request.label_ids, None,
+            "an absent `label_ids` key must leave the task's current labels untouched, which is \
+             a different outcome than `label_ids: []`"
+        );
+    }
+
+    #[test]
+    fn empty_label_ids_array_means_clear_every_label() {
+        let request = parse(json!({ "label_ids": [] }));
+
+        assert_eq!(
+            request.label_ids,
+            Some(Vec::new()),
+            "`label_ids: []` is a present, empty replacement list — it must drop every label, \
+             not be mistaken for \"don't touch labels\""
+        );
     }
 }

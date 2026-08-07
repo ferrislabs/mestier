@@ -12,7 +12,7 @@ use mestier_core::{
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
-use crate::{paths::PlanningPath, require_org_membership};
+use crate::{paths::PlanningPath, require_org_membership, task_label::TaskLabelResponse};
 
 #[derive(Debug, Deserialize)]
 pub struct PlanningWindowQuery {
@@ -99,6 +99,7 @@ pub enum PlanningEntryResponse {
         context_label: Option<String>,
         description: Option<String>,
         employee_ids: Vec<EmployeeId>,
+        labels: Vec<TaskLabelResponse>,
     },
     Absence {
         id: EmployeeAbsenceId,
@@ -128,6 +129,7 @@ impl From<PlanningEntry> for PlanningEntryResponse {
                 context_label,
                 description,
                 employee_ids,
+                labels,
             } => Self::Task {
                 id,
                 parent_task_id,
@@ -142,6 +144,7 @@ impl From<PlanningEntry> for PlanningEntryResponse {
                 context_label,
                 description,
                 employee_ids,
+                labels: labels.into_iter().map(TaskLabelResponse::from).collect(),
             },
             PlanningEntry::Absence {
                 id,
@@ -289,9 +292,25 @@ fn validate_window_width(range: DateRange) -> Result<(), ApiError> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use mestier_core::TaskLabel;
 
     fn date(y: i32, m: u32, d: u32) -> NaiveDate {
         NaiveDate::from_ymd_opt(y, m, d).unwrap()
+    }
+
+    // `uuid` is not a direct dependency of `handlers-planning`, so this
+    // fixture id is parsed from a literal string via `FromStr`, matching
+    // the rest of this test module.
+    fn label() -> TaskLabel {
+        let now = Utc::now();
+        TaskLabel {
+            id: "88888888-8888-8888-8888-888888888888".parse().unwrap(),
+            organization_id: "99999999-9999-9999-9999-999999999999".parse().unwrap(),
+            name: "Urgent".to_owned(),
+            color: "#DC2626".to_owned(),
+            created_at: now,
+            updated_at: now,
+        }
     }
 
     #[test]
@@ -375,6 +394,7 @@ mod tests {
             context_label: Some("Chantier principal".to_owned()),
             description: None,
             employee_ids: vec![employee_id()],
+            labels: vec![label()],
         }
         .into();
 
@@ -383,6 +403,8 @@ mod tests {
         assert_eq!(value["kind"], "task");
         assert_eq!(value["customer_name"], "Alice Dupont");
         assert_eq!(value["status"], "PLANNED");
+        assert_eq!(value["labels"][0]["name"], "Urgent");
+        assert_eq!(value["labels"][0]["color"], "#DC2626");
     }
 
     #[test]
@@ -401,6 +423,7 @@ mod tests {
             context_label: None,
             description: None,
             employee_ids: vec![],
+            labels: Vec::new(),
         }
         .into();
 
@@ -411,6 +434,7 @@ mod tests {
         assert!(value["context_label"].is_null());
         assert_eq!(value["blocks_availability"], false);
         assert_eq!(value["child_count"], 2);
+        assert_eq!(value["labels"], serde_json::json!([]));
     }
 
     #[test]
