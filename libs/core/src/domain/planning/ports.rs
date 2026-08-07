@@ -3,12 +3,12 @@ use common::CoreError;
 
 use crate::{
     EmployeeAbsence, EmployeeRhythm, EmployeeWorkSlot, OrganizationId,
-    domain::planning::PlanningWorkOrder,
+    domain::planning::PlanningTask,
 };
 
 /// The planning read model's own repository: the tables no other aggregate
 /// already owns a suitable batched, organization-wide query for
-/// (`work_orders`/`assignments` enriched with the customer join,
+/// (`tasks`/`task_assignments` enriched with the customer join,
 /// `employee_absences`, `employee_rhythms`/`employee_rhythm_slots`,
 /// `employee_work_slots`). Resources (`employees`/`organization_members`)
 /// and the organization's timezone are read through the existing
@@ -21,16 +21,19 @@ use crate::{
 /// module design doc's N+1 warning).
 #[cfg_attr(test, mockall::automock)]
 pub trait PlanningRepository: Send {
-    /// Every work order (with its assignments), enriched with
-    /// `customer_name`/`context_label`, whose window overlaps
-    /// `[from, to)` — for the whole organization in one query pair (work
-    /// orders, then their assignments).
-    fn list_work_orders_in_window(
+    /// Every task (with its assignments and its child count), enriched with
+    /// `customer_name`/`context_label`, whose own window overlaps
+    /// `[from, to)` — for the whole organization in one small, fixed set of
+    /// queries. A task with no dates of its own (a subtask inheriting its
+    /// parent's window) is not returned here — resolving and rendering an
+    /// inherited window on the grid is T4's concern; `resolve_task_window`
+    /// is ready for it.
+    fn list_tasks_in_window(
         &mut self,
         organization_id: OrganizationId,
         from: DateTime<Utc>,
         to: DateTime<Utc>,
-    ) -> impl Future<Output = Result<Vec<PlanningWorkOrder>, CoreError>> + Send;
+    ) -> impl Future<Output = Result<Vec<PlanningTask>, CoreError>> + Send;
 
     /// Every absence whose window overlaps `[from, to)`, for the whole
     /// organization in one query.

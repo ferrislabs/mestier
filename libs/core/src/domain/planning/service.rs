@@ -5,15 +5,14 @@ use common::CoreError;
 
 use crate::{
     DateRange, Employee, EmployeeAbsence, EmployeeId, EmployeeRhythm, EmployeeWorkSlot,
-    MinuteInterval, OrganizationId, UserId, WorkOrder,
+    MinuteInterval, OrganizationId, Task, UserId,
     domain::{
         employee::ports::EmployeeRepository,
         member::ports::MemberRepository,
         organization::ports::OrganizationRepository,
         planning::{
             AvailabilityReport, Conflict, ConflictKind, EmployeeWorkTime, PlanningEntry,
-            PlanningResource, PlanningView, PlanningWorkOrder, TimeRange, Tz,
-            ports::PlanningRepository,
+            PlanningResource, PlanningTask, PlanningView, TimeRange, Tz, ports::PlanningRepository,
         },
         user::ports::UserRepository,
         work_time::service::expand_work_slots,
@@ -28,14 +27,20 @@ use crate::{
 
 /// For one resource's window, reports every reason it might be unavailable:
 /// an overlapping absence, a candidate slot that is not fully covered by
-/// the resource's work-time intervals, or an already-assigned work order
-/// that overlaps. Never refuses anything — see invariant 1 in the planning
-/// module design doc: the API reports, the caller decides.
+/// the resource's work-time intervals, or an already-assigned task that
+/// overlaps and blocks availability. Never refuses anything — see
+/// invariant 1 in the planning module design doc: the API reports, the
+/// caller decides.
+///
+/// `busy` may contain tasks with `blocks_availability = false` (a reminder,
+/// say) — they are skipped entirely: only a task that carries
+/// `blocks_availability = true` can produce an `OverlappingTask` conflict
+/// (invariant 9).
 pub fn detect_conflicts(
     window: TimeRange,
     absences: &[EmployeeAbsence],
     work_time: &BTreeMap<NaiveDate, Vec<MinuteInterval>>,
-    busy: &[WorkOrder],
+    busy: &[Task],
     tz: Tz,
 ) -> Vec<Conflict> {
     let mut conflicts = Vec::new();
@@ -58,19 +63,20 @@ pub fn detect_conflicts(
         }
     }
 
-    for work_order in busy {
-        if overlaps(
-            work_order.starts_at,
-            work_order.ends_at,
-            window.starts_at,
-            window.ends_at,
-        ) {
+    for task in busy {
+        if !task.blocks_availability {
+            continue;
+        }
+
+        let (Some(starts_at), Some(ends_at)) = (task.starts_at, task.ends_at) else {
+            continue;
+        };
+
+        if overlaps(starts_at, ends_at, window.starts_at, window.ends_at) {
             conflicts.push(Conflict {
-                kind: ConflictKind::OverlappingWorkOrder {
-                    work_order_id: work_order.id,
-                },
-                starts_at: work_order.starts_at,
-                ends_at: work_order.ends_at,
+                kind: ConflictKind::OverlappingTask { task_id: task.id },
+                starts_at,
+                ends_at,
             });
         }
     }
@@ -234,9 +240,9 @@ fn local_date_span(window: TimeRange, tz: Tz) -> DateRange {
 // ---------------------------------------------------------------------------
 
 /// Assembles the planning read model. Composes the dedicated
-/// `PlanningRepository` (work orders, absences, rhythms, work slots) with
+/// `PlanningRepository` (tasks, absences, rhythms, work slots) with
 /// the existing employee/member/organization/user repositories — mirroring
-/// how `WorkOrderService` composes cross-aggregate repositories directly in
+/// how `TaskService` composes cross-aggregate repositories directly in
 /// the domain service that owns the use case.
 pub struct PlanningService<PR, ER, MR, OR, UR>
 where
@@ -277,9 +283,9 @@ where
         }
     }
 
-    /// Assembles `GET /planning`'s response: resources, entries (work
-    /// orders + absences) and work time, all over `range`. Never computes
-    /// conflicts — that is `get_availability`'s job.
+    /// Assembles `GET /planning`'s response: resources, entries (tasks +
+    /// absences) and work time, all over `range`. Never computes conflicts
+    /// — that is `get_availability`'s job.
     pub async fn get_planning(
         &mut self,
         organization_id: OrganizationId,
@@ -291,9 +297,9 @@ where
         let resources = self.load_resources(organization_id).await?;
         let window = local_date_range_to_utc(range, tz)?;
 
-        let work_orders = self
+        let tasks = self
             .planning_repository
-            .list_work_orders_in_window(organization_id, window.starts_at, window.ends_at)
+            .list_tasks_in_window(organization_id, window.starts_at, window.ends_at)
             .await?;
         let absences = self
             .planning_repository
@@ -308,7 +314,7 @@ where
             .list_work_slots_for_organization(organization_id, range.from, range.to)
             .await?;
 
-        let entries = build_entries(&work_orders, &absences);
+        let entries = build_entries(&tasks, &absences);
         let work_time = build_work_time(&resources, &rhythms, &work_slots, range);
 
         Ok(PlanningView {
@@ -333,9 +339,9 @@ where
         let resources = self.load_resources(organization_id).await?;
         let local_span = local_date_span(window, tz);
 
-        let work_orders = self
+        let tasks = self
             .planning_repository
-            .list_work_orders_in_window(organization_id, window.starts_at, window.ends_at)
+            .list_tasks_in_window(organization_id, window.starts_at, window.ends_at)
             .await?;
         let absences = self
             .planning_repository
@@ -359,16 +365,16 @@ where
                         .filter(|absence| absence.employee_id == employee_id)
                         .cloned()
                         .collect();
-                    let employee_busy: Vec<WorkOrder> = work_orders
+                    let employee_busy: Vec<Task> = tasks
                         .iter()
-                        .filter(|planning_work_order| {
-                            planning_work_order
-                                .work_order
+                        .filter(|planning_task| {
+                            planning_task
+                                .task
                                 .assignments
                                 .iter()
                                 .any(|assignment| assignment.employee_id == employee_id)
                         })
-                        .map(|planning_work_order| planning_work_order.work_order.clone())
+                        .map(|planning_task| planning_task.task.clone())
                         .collect();
                     let employee_rhythms: Vec<EmployeeRhythm> = rhythms
                         .iter()
@@ -489,25 +495,35 @@ fn parse_tz(timezone: &str) -> Result<Tz, CoreError> {
         .map_err(|_| CoreError::Internal(format!("invalid organization timezone `{timezone}`")))
 }
 
-fn build_entries(
-    work_orders: &[PlanningWorkOrder],
-    absences: &[EmployeeAbsence],
-) -> Vec<PlanningEntry> {
-    let mut entries = Vec::with_capacity(work_orders.len() + absences.len());
+fn build_entries(tasks: &[PlanningTask], absences: &[EmployeeAbsence]) -> Vec<PlanningEntry> {
+    let mut entries = Vec::with_capacity(tasks.len() + absences.len());
 
-    for planning_work_order in work_orders {
-        let work_order = &planning_work_order.work_order;
-        entries.push(PlanningEntry::WorkOrder {
-            id: work_order.id,
-            starts_at: work_order.starts_at,
-            ends_at: work_order.ends_at,
-            all_day: work_order.all_day,
-            status: work_order.status,
-            title: work_order.title.clone(),
-            customer_name: planning_work_order.customer_name.clone(),
-            context_label: planning_work_order.context_label.clone(),
-            note: work_order.note.clone(),
-            employee_ids: work_order
+    for planning_task in tasks {
+        let task = &planning_task.task;
+        // Every task `PlanningRepository::list_tasks_in_window` returns has
+        // its own concrete window — a subtask inheriting its parent's (both
+        // `None`) does not match the window query in the first place. Skip
+        // defensively rather than trust that invariant blindly: rendering an
+        // inherited window on the grid is a read-time resolution
+        // (`resolve_task_window`) that this read model does not perform yet.
+        let (Some(starts_at), Some(ends_at)) = (task.starts_at, task.ends_at) else {
+            continue;
+        };
+
+        entries.push(PlanningEntry::Task {
+            id: task.id,
+            parent_task_id: task.parent_task_id,
+            starts_at,
+            ends_at,
+            all_day: task.all_day,
+            status: task.status,
+            blocks_availability: task.blocks_availability,
+            child_count: planning_task.child_count,
+            title: task.title.clone(),
+            customer_name: planning_task.customer_name.clone(),
+            context_label: planning_task.context_label.clone(),
+            description: task.description.clone(),
+            employee_ids: task
                 .assignments
                 .iter()
                 .map(|assignment| assignment.employee_id)
@@ -568,8 +584,8 @@ fn build_work_time(
 mod tests {
     use super::*;
     use crate::{
-        AbsenceKind, Assignment, AssignmentId, CustomerContextId, CustomerId, EmployeeAbsenceId,
-        Member, MemberId, QuoteId, RhythmSlot, RhythmSlotId, User, WorkOrderId, WorkOrderStatus,
+        AbsenceKind, CustomerContextId, CustomerId, EmployeeAbsenceId, Member, MemberId, QuoteId,
+        RhythmSlot, RhythmSlotId, TaskAssignment, TaskAssignmentId, TaskId, TaskStatus, User,
         domain::{
             employee::ports::MockEmployeeRepository, member::ports::MockMemberRepository,
             organization::ports::MockOrganizationRepository,
@@ -643,19 +659,21 @@ mod tests {
         ));
     }
 
-    fn work_order(starts_at: DateTime<Utc>, ends_at: DateTime<Utc>) -> WorkOrder {
-        WorkOrder {
-            id: WorkOrderId(Uuid::new_v4()),
+    fn task(starts_at: DateTime<Utc>, ends_at: DateTime<Utc>) -> Task {
+        Task {
+            id: TaskId(Uuid::new_v4()),
             organization_id: OrganizationId(Uuid::new_v4()),
-            customer_id: CustomerId(Uuid::new_v4()),
-            customer_context_id: CustomerContextId(Uuid::new_v4()),
-            quote_id: None::<QuoteId>,
-            starts_at,
-            ends_at,
+            parent_task_id: None,
+            title: "Toiture".to_owned(),
+            description: None,
+            starts_at: Some(starts_at),
+            ends_at: Some(ends_at),
             all_day: false,
-            status: WorkOrderStatus::Planned,
-            title: Some("Toiture".to_owned()),
-            note: None,
+            status: TaskStatus::Planned,
+            blocks_availability: true,
+            customer_id: Some(CustomerId(Uuid::new_v4())),
+            customer_context_id: Some(CustomerContextId(Uuid::new_v4())),
+            quote_id: None::<QuoteId>,
             assignments: Vec::new(),
             deleted_at: None,
             created_at: starts_at,
@@ -762,12 +780,12 @@ mod tests {
         assert!(matches!(conflicts[0].kind, ConflictKind::OutsideWorkHours));
     }
 
-    // -- detect_conflicts: overlapping work orders --------------------------
+    // -- detect_conflicts: overlapping tasks --------------------------------
 
     #[test]
-    fn an_overlapping_work_order_is_a_conflict() {
+    fn an_overlapping_blocking_task_is_a_conflict() {
         let win = window(2026, 8, 10, 9, 12);
-        let busy = vec![work_order(utc(2026, 8, 10, 10, 0), utc(2026, 8, 10, 11, 0))];
+        let busy = vec![task(utc(2026, 8, 10, 10, 0), utc(2026, 8, 10, 11, 0))];
         let work_time = BTreeMap::from([(date(2026, 8, 10), vec![interval(0, 1440)])]);
 
         let conflicts = detect_conflicts(win, &[], &work_time, &busy, Europe::Paris);
@@ -775,18 +793,56 @@ mod tests {
         assert_eq!(conflicts.len(), 1);
         assert!(matches!(
             conflicts[0].kind,
-            ConflictKind::OverlappingWorkOrder { .. }
+            ConflictKind::OverlappingTask { .. }
         ));
     }
 
     #[test]
-    fn an_adjacent_work_order_is_not_a_conflict() {
+    fn an_overlapping_task_that_does_not_block_availability_is_not_a_conflict() {
         let win = window(2026, 8, 10, 9, 12);
-        // Starts exactly when the window ends: touching, not overlapping.
-        let busy = vec![work_order(utc(2026, 8, 10, 12, 0), utc(2026, 8, 10, 13, 0))];
+        let busy = vec![Task {
+            blocks_availability: false,
+            ..task(utc(2026, 8, 10, 10, 0), utc(2026, 8, 10, 11, 0))
+        }];
         let work_time = BTreeMap::from([(date(2026, 8, 10), vec![interval(0, 1440)])]);
 
         let conflicts = detect_conflicts(win, &[], &work_time, &busy, Europe::Paris);
+
+        assert!(
+            conflicts.is_empty(),
+            "a reminder-like task (`blocks_availability = false`) must never produce a conflict, \
+             even while it overlaps the checked window"
+        );
+    }
+
+    #[test]
+    fn an_adjacent_task_is_not_a_conflict() {
+        let win = window(2026, 8, 10, 9, 12);
+        // Starts exactly when the window ends: touching, not overlapping.
+        let busy = vec![task(utc(2026, 8, 10, 12, 0), utc(2026, 8, 10, 13, 0))];
+        let work_time = BTreeMap::from([(date(2026, 8, 10), vec![interval(0, 1440)])]);
+
+        let conflicts = detect_conflicts(win, &[], &work_time, &busy, Europe::Paris);
+
+        assert!(conflicts.is_empty());
+    }
+
+    #[test]
+    fn a_task_with_no_dates_of_its_own_is_skipped_rather_than_panicking() {
+        // A subtask inheriting its parent's window carries `None` for both
+        // — `detect_conflicts` must not choke on it (resolving it is
+        // `resolve_task_window`'s job, upstream of this function).
+        let win = window(2026, 8, 10, 9, 12);
+        let inheriting_subtask = Task {
+            parent_task_id: Some(TaskId(Uuid::new_v4())),
+            starts_at: None,
+            ends_at: None,
+            ..task(utc(2026, 8, 10, 10, 0), utc(2026, 8, 10, 11, 0))
+        };
+        let work_time = BTreeMap::from([(date(2026, 8, 10), vec![interval(0, 1440)])]);
+
+        let conflicts =
+            detect_conflicts(win, &[], &work_time, &[inheriting_subtask], Europe::Paris);
 
         assert!(conflicts.is_empty());
     }
@@ -803,10 +859,7 @@ mod tests {
             utc(2026, 8, 10, 17, 0),
             utc(2026, 8, 10, 19, 0),
         )];
-        let busy = vec![work_order(
-            utc(2026, 8, 10, 18, 30),
-            utc(2026, 8, 10, 19, 30),
-        )];
+        let busy = vec![task(utc(2026, 8, 10, 18, 30), utc(2026, 8, 10, 19, 30))];
         let work_time = BTreeMap::from([(date(2026, 8, 10), vec![interval(480, 720)])]);
 
         let conflicts = detect_conflicts(win, &absences, &work_time, &busy, Europe::Paris);
@@ -825,7 +878,7 @@ mod tests {
         assert!(
             conflicts
                 .iter()
-                .any(|c| matches!(c.kind, ConflictKind::OverlappingWorkOrder { .. }))
+                .any(|c| matches!(c.kind, ConflictKind::OverlappingTask { .. }))
         );
     }
 
@@ -921,7 +974,7 @@ mod tests {
         organization_id: OrganizationId,
     ) {
         planning_repository
-            .expect_list_work_orders_in_window()
+            .expect_list_tasks_in_window()
             .withf(move |org, _, _| *org == organization_id)
             .returning(|_, _, _| Box::pin(async { Ok(Vec::new()) }));
         planning_repository
@@ -1142,20 +1195,21 @@ mod tests {
     }
 
     #[test]
-    fn build_entries_flattens_a_work_order_and_an_absence() {
+    fn build_entries_flattens_a_task_and_an_absence() {
         let employee_id = EmployeeId(Uuid::new_v4());
-        let mut wo = work_order(utc(2026, 8, 10, 8, 0), utc(2026, 8, 10, 12, 0));
-        wo.assignments.push(Assignment {
-            id: AssignmentId(Uuid::new_v4()),
-            organization_id: wo.organization_id,
-            work_order_id: wo.id,
+        let mut t = task(utc(2026, 8, 10, 8, 0), utc(2026, 8, 10, 12, 0));
+        t.assignments.push(TaskAssignment {
+            id: TaskAssignmentId(Uuid::new_v4()),
+            organization_id: t.organization_id,
+            task_id: t.id,
             employee_id,
-            created_at: wo.created_at,
+            created_at: t.created_at,
         });
-        let planning_work_orders = vec![PlanningWorkOrder {
-            work_order: wo,
-            customer_name: "Alice Dupont".to_owned(),
-            context_label: "Chantier principal".to_owned(),
+        let planning_tasks = vec![PlanningTask {
+            task: t,
+            customer_name: Some("Alice Dupont".to_owned()),
+            context_label: Some("Chantier principal".to_owned()),
+            child_count: 0,
         }];
         let absences = vec![absence(
             employee_id,
@@ -1164,12 +1218,12 @@ mod tests {
             utc(2026, 8, 12, 0, 0),
         )];
 
-        let entries = build_entries(&planning_work_orders, &absences);
+        let entries = build_entries(&planning_tasks, &absences);
 
         assert_eq!(entries.len(), 2);
         assert!(matches!(
             &entries[0],
-            PlanningEntry::WorkOrder { customer_name, context_label, employee_ids, .. }
+            PlanningEntry::Task { customer_name: Some(customer_name), context_label: Some(context_label), employee_ids, .. }
                 if customer_name == "Alice Dupont"
                     && context_label == "Chantier principal"
                     && employee_ids == &[employee_id]
@@ -1181,6 +1235,49 @@ mod tests {
                 ..
             }
         ));
+    }
+
+    #[test]
+    fn build_entries_reports_no_customer_for_a_task_without_one() {
+        let t = Task {
+            customer_id: None,
+            customer_context_id: None,
+            ..task(utc(2026, 8, 10, 8, 0), utc(2026, 8, 10, 12, 0))
+        };
+        let planning_tasks = vec![PlanningTask {
+            task: t,
+            customer_name: None,
+            context_label: None,
+            child_count: 0,
+        }];
+
+        let entries = build_entries(&planning_tasks, &[]);
+
+        assert_eq!(entries.len(), 1);
+        assert!(matches!(
+            &entries[0],
+            PlanningEntry::Task { customer_name: None, context_label: None, .. }
+        ));
+    }
+
+    #[test]
+    fn build_entries_skips_a_task_with_no_dates_of_its_own() {
+        let inheriting_subtask = Task {
+            parent_task_id: Some(TaskId(Uuid::new_v4())),
+            starts_at: None,
+            ends_at: None,
+            ..task(utc(2026, 8, 10, 8, 0), utc(2026, 8, 10, 12, 0))
+        };
+        let planning_tasks = vec![PlanningTask {
+            task: inheriting_subtask,
+            customer_name: None,
+            context_label: None,
+            child_count: 0,
+        }];
+
+        let entries = build_entries(&planning_tasks, &[]);
+
+        assert!(entries.is_empty());
     }
 
     #[test]

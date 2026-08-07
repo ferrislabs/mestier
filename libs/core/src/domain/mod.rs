@@ -12,8 +12,8 @@ pub(crate) mod product;
 pub(crate) mod quote;
 pub(crate) mod role;
 pub(crate) mod service_rate;
+pub(crate) mod task;
 pub(crate) mod user;
-pub(crate) mod work_order;
 pub(crate) mod work_time;
 
 pub use absence::*;
@@ -30,6 +30,6 @@ pub use product::*;
 pub use quote::*;
 pub use role::*;
 pub use service_rate::*;
+pub use task::*;
 pub use user::*;
-pub use work_order::*;
 pub use work_time::*;
