@@ -119,7 +119,9 @@ fn validate_schedule(
 
 fn validate_note(note: &Option<String>) -> Result<(), CoreError> {
     if note.as_deref().is_some_and(|v| v.trim().is_empty()) {
-        return Err(CoreError::Conflict("absence note cannot be blank".to_owned()));
+        return Err(CoreError::Conflict(
+            "absence note cannot be blank".to_owned(),
+        ));
     }
 
     Ok(())
@@ -132,9 +134,7 @@ mod tests {
     use mockall::predicate::eq;
     use uuid::Uuid;
 
-    fn service(
-        absence_repository: MockAbsenceRepository,
-    ) -> AbsenceService<MockAbsenceRepository> {
+    fn service(absence_repository: MockAbsenceRepository) -> AbsenceService<MockAbsenceRepository> {
         AbsenceService::new(absence_repository)
     }
 
@@ -171,13 +171,10 @@ mod tests {
     #[tokio::test]
     async fn create_absence_persists_with_given_kind() {
         let mut absence_repository = MockAbsenceRepository::new();
-        absence_repository
-            .expect_insert()
-            .times(1)
-            .returning(|a| {
-                let cloned = a.clone();
-                Box::pin(async move { Ok(cloned) })
-            });
+        absence_repository.expect_insert().times(1).returning(|a| {
+            let cloned = a.clone();
+            Box::pin(async move { Ok(cloned) })
+        });
 
         let mut service = service(absence_repository);
 
@@ -235,7 +232,9 @@ mod tests {
             .expect_list_by_organization()
             .with(eq(organization_id), eq(10), eq(20))
             .returning(move |org_id, _, _| {
-                Box::pin(async move { Ok((vec![absence(EmployeeAbsenceId(Uuid::new_v4()), org_id)], 1)) })
+                Box::pin(async move {
+                    Ok((vec![absence(EmployeeAbsenceId(Uuid::new_v4()), org_id)], 1))
+                })
             });
 
         let mut service = service(absence_repository);
