@@ -33,8 +33,8 @@ function outsideWorkHoursConflict(): ConflictResponse {
 
 function overlappingConflict(): ConflictResponse {
 	return {
-		kind: 'overlapping_work_order',
-		work_order_id: 'wo-42',
+		kind: 'overlapping_task',
+		task_id: 'wo-42',
 		starts_at: '2026-08-10T08:00:00Z',
 		ends_at: '2026-08-10T10:00:00Z',
 	}
@@ -99,7 +99,7 @@ describe('buildWarnings — les trois natures venant de availability', () => {
 		])
 	})
 
-	it('mappe un conflit overlapping_work_order avec son work_order_id', () => {
+	it('mappe un conflit overlapping_task avec son task_id', () => {
 		const warnings = buildWarnings({
 			conflicts: [overlappingConflict()],
 			resourceKind: 'employee',
@@ -107,8 +107,8 @@ describe('buildWarnings — les trois natures venant de availability', () => {
 
 		expect(warnings).toEqual([
 			{
-				kind: 'overlapping_work_order',
-				workOrderId: 'wo-42',
+				kind: 'overlapping_task',
+				taskId: 'wo-42',
 				startsAt: '2026-08-10T08:00:00Z',
 				endsAt: '2026-08-10T10:00:00Z',
 			},
@@ -163,7 +163,7 @@ describe('buildWarnings — plusieurs natures dans une seule liste', () => {
 		expect(warnings.map((warning) => warning.kind)).toEqual([
 			'absence',
 			'outside_work_hours',
-			'overlapping_work_order',
+			'overlapping_task',
 		])
 	})
 })
@@ -173,8 +173,8 @@ describe('warningTitle / warningDetail', () => {
 		expect(warningTitle({ kind: 'missing_employee_record' })).toMatch(/fiche/i)
 		expect(
 			warningTitle({
-				kind: 'overlapping_work_order',
-				workOrderId: 'wo-1',
+				kind: 'overlapping_task',
+				taskId: 'wo-1',
 				startsAt: 'a',
 				endsAt: 'b',
 			}),

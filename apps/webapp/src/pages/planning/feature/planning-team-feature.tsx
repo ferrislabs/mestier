@@ -4,7 +4,7 @@ import type { Schemas } from '#/api/api.client'
 import { useActiveOrganization } from '#/hooks/use-active-organization'
 import {
 	useCheckAvailability,
-	useMoveWorkOrder,
+	useMoveTask,
 	usePlanning,
 } from '#/hooks/use-planning'
 import { employeeDisplayName } from '#/pages/hr/types'
@@ -16,12 +16,12 @@ import {
 import { computeWindow } from '#/pages/planning/lib/window'
 import {
 	computeRemoveAssigneePatch,
-	computeWorkOrderDropPatch,
-} from '#/pages/planning/lib/work-order-drop'
+	computeTaskDropPatch,
+} from '#/pages/planning/lib/task-drop'
 import type { PlanningView } from '#/pages/planning/types'
 import type {
 	RemoveAssigneeEvent,
-	WorkOrderDropEvent,
+	TaskDropEvent,
 } from '#/pages/planning/ui/planning-grid'
 import { PlanningTeamUI } from '#/pages/planning/ui/planning-team-ui'
 
@@ -86,8 +86,8 @@ interface PlanningTeamScreenProps {
 }
 
 interface PendingDrop {
-	workOrderId: string
-	body: Schemas.UpdateWorkOrderRequest
+	taskId: string
+	body: Schemas.UpdateTaskRequest
 	warnings: Warning[]
 }
 
@@ -106,23 +106,23 @@ function PlanningTeamScreen({
 	const data = planningQuery.data?.data ?? null
 
 	const checkAvailability = useCheckAvailability()
-	const moveWorkOrder = useMoveWorkOrder()
+	const moveTask = useMoveTask()
 
 	const [pendingDrop, setPendingDrop] = useState<PendingDrop | null>(null)
 	const [dropError, setDropError] = useState<string | null>(null)
 	const [createdEmployeeNames, setCreatedEmployeeNames] = useState<string[]>([])
 
-	async function applyWorkOrderPatch(
-		workOrderId: string,
-		body: Schemas.UpdateWorkOrderRequest,
+	async function applyTaskPatch(
+		taskId: string,
+		body: Schemas.UpdateTaskRequest,
 	) {
 		try {
 			// `mutation()` resolves one envelope short of `InferResponseData`'s
 			// declared type — see `use-work-time.ts`'s `.data?.data` precedent for
 			// `useQuery`; the same extra `.data` applies here, undetected by
 			// `tsc` since the generated type lies about it too.
-			const response = await moveWorkOrder.mutateAsync({
-				path: { organization_id: organizationId, work_order_id: workOrderId },
+			const response = await moveTask.mutateAsync({
+				path: { organization_id: organizationId, task_id: taskId },
 				body,
 			})
 			const result = response.data
@@ -142,15 +142,15 @@ function PlanningTeamScreen({
 		}
 	}
 
-	async function handleDropWorkOrder(event: WorkOrderDropEvent) {
+	async function handleDropTask(event: TaskDropEvent) {
 		if (!data) return
 		const entry = data.entries.find(
 			(candidate) =>
-				candidate.kind === 'work_order' && candidate.id === event.entryId,
+				candidate.kind === 'task' && candidate.id === event.entryId,
 		)
-		if (!entry || entry.kind !== 'work_order') return
+		if (!entry || entry.kind !== 'task') return
 
-		const { changed, body } = computeWorkOrderDropPatch({
+		const { changed, body } = computeTaskDropPatch({
 			source: {
 				entryId: event.entryId,
 				resourceId: event.sourceResourceId,
@@ -193,12 +193,12 @@ function PlanningTeamScreen({
 			})
 
 			if (warnings.length === 0) {
-				await applyWorkOrderPatch(event.entryId, body)
+				await applyTaskPatch(event.entryId, body)
 				return
 			}
 
 			setDropError(null)
-			setPendingDrop({ workOrderId: event.entryId, body, warnings })
+			setPendingDrop({ taskId: event.entryId, body, warnings })
 		} catch (error) {
 			console.error(
 				'[planning] échec de la vérification de disponibilité',
@@ -211,9 +211,9 @@ function PlanningTeamScreen({
 		if (!data) return
 		const entry = data.entries.find(
 			(candidate) =>
-				candidate.kind === 'work_order' && candidate.id === event.entryId,
+				candidate.kind === 'task' && candidate.id === event.entryId,
 		)
-		if (!entry || entry.kind !== 'work_order') return
+		if (!entry || entry.kind !== 'task') return
 
 		// Removing never introduces risk, so it skips the warnings dialog and
 		// applies straight away — but through the exact same complete-list
@@ -223,12 +223,12 @@ function PlanningTeamScreen({
 			resourceId: event.resourceId,
 		})
 		if (!changed) return
-		void applyWorkOrderPatch(event.entryId, body)
+		void applyTaskPatch(event.entryId, body)
 	}
 
 	function handleConfirmDrop() {
 		if (!pendingDrop) return
-		void applyWorkOrderPatch(pendingDrop.workOrderId, pendingDrop.body)
+		void applyTaskPatch(pendingDrop.taskId, pendingDrop.body)
 	}
 
 	function handleCancelDrop() {
@@ -248,12 +248,12 @@ function PlanningTeamScreen({
 			isLoading={planningQuery.isLoading}
 			error={planningQuery.error?.message ?? null}
 			data={data}
-			onDropWorkOrder={(event) => void handleDropWorkOrder(event)}
+			onDropTask={(event) => void handleDropTask(event)}
 			onRemoveAssignee={handleRemoveAssignee}
 			warningDialog={{
 				open: pendingDrop !== null,
 				warnings: pendingDrop?.warnings ?? [],
-				isPending: moveWorkOrder.isPending,
+				isPending: moveTask.isPending,
 				error: dropError,
 				onConfirm: handleConfirmDrop,
 				onCancel: handleCancelDrop,

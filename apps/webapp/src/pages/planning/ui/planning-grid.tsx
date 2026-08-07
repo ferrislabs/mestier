@@ -15,7 +15,7 @@ import type {
 } from '#/pages/planning/types'
 import { CurrentTimeLine } from '#/pages/planning/ui/current-time-line'
 
-/** The drag payload a work order segment carries, read back on drop — see the planning design doc's "Drag & drop" section. */
+/** The drag payload a task segment carries, read back on drop — see the planning design doc's "Drag & drop" section. */
 interface DragPayload {
 	entryId: string
 	resourceId: string
@@ -24,7 +24,7 @@ interface DragPayload {
 
 const DRAG_PAYLOAD_FORMAT = 'application/json'
 
-export interface WorkOrderDropEvent {
+export interface TaskDropEvent {
 	entryId: string
 	sourceResourceId: string
 	sourceDate: string
@@ -47,9 +47,9 @@ export interface PlanningGridProps {
 	workTime: PlanningWorkTime[]
 	/** Forwarded to {@link CurrentTimeLine} — tests only, see its own doc. */
 	now?: Date
-	/** A work order segment was dropped onto a (possibly different) row and/or day — see the planning design doc's "Drag & drop" decision: one event, whichever axis moved. */
-	onDropWorkOrder?: (event: WorkOrderDropEvent) => void
-	/** The small "×" on a work order segment — unassigns that one resource, through the same complete-list path a move uses. */
+	/** A task segment was dropped onto a (possibly different) row and/or day — see the planning design doc's "Drag & drop" decision: one event, whichever axis moved. */
+	onDropTask?: (event: TaskDropEvent) => void
+	/** The small "×" on a task segment — unassigns that one resource, through the same complete-list path a move uses. */
 	onRemoveAssignee?: (event: RemoveAssigneeEvent) => void
 }
 
@@ -81,7 +81,7 @@ export function PlanningGrid({
 	entries,
 	workTime,
 	now,
-	onDropWorkOrder,
+	onDropTask,
 	onRemoveAssignee,
 }: PlanningGridProps) {
 	const model = buildGridModel({
@@ -133,7 +133,7 @@ export function PlanningGrid({
 							key={row.resourceId}
 							view={view}
 							row={row}
-							onDropWorkOrder={onDropWorkOrder}
+							onDropTask={onDropTask}
 							onRemoveAssignee={onRemoveAssignee}
 						/>
 					))}
@@ -195,14 +195,14 @@ function TimeHeader({
 }
 
 interface GridInteractionHandlers {
-	onDropWorkOrder?: (event: WorkOrderDropEvent) => void
+	onDropTask?: (event: TaskDropEvent) => void
 	onRemoveAssignee?: (event: RemoveAssigneeEvent) => void
 }
 
 function GridRow({
 	view,
 	row,
-	onDropWorkOrder,
+	onDropTask,
 	onRemoveAssignee,
 }: GridInteractionHandlers & {
 	view: PlanningView
@@ -224,7 +224,7 @@ function GridRow({
 					view={view}
 					cell={cell}
 					resourceId={row.resourceId}
-					onDropWorkOrder={onDropWorkOrder}
+					onDropTask={onDropTask}
 					onRemoveAssignee={onRemoveAssignee}
 				/>
 			))}
@@ -236,7 +236,7 @@ function GridCell({
 	view,
 	cell,
 	resourceId,
-	onDropWorkOrder,
+	onDropTask,
 	onRemoveAssignee,
 }: GridInteractionHandlers & {
 	view: PlanningView
@@ -263,7 +263,7 @@ function GridCell({
 				const raw = event.dataTransfer.getData(DRAG_PAYLOAD_FORMAT)
 				if (!raw) return
 				const source = JSON.parse(raw) as DragPayload
-				onDropWorkOrder?.({
+				onDropTask?.({
 					entryId: source.entryId,
 					sourceResourceId: source.resourceId,
 					sourceDate: source.date,
@@ -282,7 +282,7 @@ function GridCell({
 			))}
 
 			{cell.segments.map((segment) => {
-				const isWorkOrder = segment.tone === 'work_order'
+				const isTask = segment.tone === 'task'
 
 				return (
 					// biome-ignore lint/a11y/noStaticElementInteractions: the drag source has no native interactive equivalent; absence segments are display-only (see PlanningGrid's own doc — absence management moved to the HR module).
@@ -303,9 +303,9 @@ function GridCell({
 							top: `${segment.row * segmentHeight}px`,
 							height: `${segmentHeight - 2}px`,
 						}}
-						draggable={isWorkOrder}
+						draggable={isTask}
 						onDragStart={
-							isWorkOrder
+							isTask
 								? (event) => {
 										const payload: DragPayload = {
 											entryId: segment.entryId,
@@ -321,7 +321,7 @@ function GridCell({
 						}
 					>
 						{view === 'day' ? segment.label : null}
-						{isWorkOrder && onRemoveAssignee ? (
+						{isTask && onRemoveAssignee ? (
 							<button
 								type="button"
 								className="absolute top-0 right-0 hidden size-3.5 items-center justify-center rounded-bl-sm bg-black/20 hover:bg-black/40 group-hover:flex"
@@ -344,7 +344,7 @@ function GridCell({
 
 function toneClassName(tone: EntryTone): string {
 	switch (tone) {
-		case 'work_order':
+		case 'task':
 			return 'bg-primary text-primary-foreground'
 		case 'absence':
 			return 'bg-warning-soft text-warning border border-warning/40'

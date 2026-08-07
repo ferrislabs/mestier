@@ -4,9 +4,9 @@ import {
 	buildAssigneesForMove,
 	buildAssigneesForRemoval,
 	computeRemoveAssigneePatch,
-	computeWorkOrderDropPatch,
+	computeTaskDropPatch,
 	shiftInstant,
-} from '#/pages/planning/lib/work-order-drop'
+} from '#/pages/planning/lib/task-drop'
 
 const TZ = 'Europe/Paris'
 
@@ -109,9 +109,9 @@ describe('buildAssigneesForRemoval', () => {
 	})
 })
 
-describe('computeWorkOrderDropPatch — jour seul', () => {
+describe('computeTaskDropPatch — jour seul', () => {
 	it('ne porte que starts_at/ends_at décalés, avec la liste complète des assignés inchangée', () => {
-		const result = computeWorkOrderDropPatch({
+		const result = computeTaskDropPatch({
 			source: {
 				entryId: 'wo-1',
 				resourceId: 'employee:emp-1',
@@ -135,9 +135,9 @@ describe('computeWorkOrderDropPatch — jour seul', () => {
 	})
 })
 
-describe('computeWorkOrderDropPatch — ligne seule', () => {
+describe('computeTaskDropPatch — ligne seule', () => {
 	it('ne porte que la liste des assignés, sans starts_at/ends_at', () => {
-		const result = computeWorkOrderDropPatch({
+		const result = computeTaskDropPatch({
 			source: {
 				entryId: 'wo-1',
 				resourceId: 'employee:emp-1',
@@ -161,9 +161,9 @@ describe('computeWorkOrderDropPatch — ligne seule', () => {
 	})
 })
 
-describe('computeWorkOrderDropPatch — jour et ligne à la fois', () => {
+describe('computeTaskDropPatch — jour et ligne à la fois', () => {
 	it('porte starts_at/ends_at décalés et la nouvelle liste des assignés, en un seul objet', () => {
-		const result = computeWorkOrderDropPatch({
+		const result = computeTaskDropPatch({
 			source: {
 				entryId: 'wo-1',
 				resourceId: 'employee:emp-1',
@@ -187,9 +187,9 @@ describe('computeWorkOrderDropPatch — jour et ligne à la fois', () => {
 	})
 })
 
-describe('computeWorkOrderDropPatch — drop sans effet', () => {
+describe('computeTaskDropPatch — drop sans effet', () => {
 	it('ne change rien quand le drop atterrit sur la même ligne et la même date', () => {
-		const result = computeWorkOrderDropPatch({
+		const result = computeTaskDropPatch({
 			source: {
 				entryId: 'wo-1',
 				resourceId: 'employee:emp-1',

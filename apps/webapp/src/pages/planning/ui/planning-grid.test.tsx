@@ -29,14 +29,15 @@ function employeeResource(
 	}
 }
 
-function workOrder(overrides: Partial<PlanningEntry> = {}): PlanningEntry {
+function task(overrides: Partial<PlanningEntry> = {}): PlanningEntry {
 	return {
-		kind: 'work_order',
+		kind: 'task',
 		id: 'wo-1',
 		starts_at: '2026-08-10T08:00:00Z',
 		ends_at: '2026-08-10T10:00:00Z',
 		all_day: false,
 		status: 'PLANNED',
+		title: 'Toiture',
 		employee_ids: ['employee-1'],
 		customer_name: 'Client Dupont',
 		context_label: 'Chantier toiture',
@@ -138,14 +139,14 @@ describe('PlanningGrid — vue semaine', () => {
 				windowTo="2026-08-10"
 				timeZone={TZ}
 				resources={[employeeResource()]}
-				entries={[workOrder()]}
+				entries={[task()]}
 				workTime={[]}
 			/>,
 		)
 
 		const segment = screen.getByTestId('grid-segment')
 		expect(segment.getAttribute('data-entry-id')).toBe('wo-1')
-		expect(segment.getAttribute('data-tone')).toBe('work_order')
+		expect(segment.getAttribute('data-tone')).toBe('task')
 		expect(segment.style.left).toBe('0%')
 		expect(segment.style.width).toBe('100%')
 	})
@@ -176,7 +177,7 @@ describe('PlanningGrid — vue jour', () => {
 				windowTo="2026-08-10"
 				timeZone={TZ}
 				resources={[employeeResource()]}
-				entries={[workOrder({ title: 'Réfection toiture' })]}
+				entries={[task({ title: 'Réfection toiture' })]}
 				workTime={[]}
 			/>,
 		)
@@ -221,12 +222,12 @@ describe('PlanningGrid — empilement des chevauchements', () => {
 				timeZone={TZ}
 				resources={[employeeResource()]}
 				entries={[
-					workOrder({
+					task({
 						id: 'wo-1',
 						starts_at: '2026-08-10T08:00:00Z',
 						ends_at: '2026-08-10T10:00:00Z',
 					}),
-					workOrder({
+					task({
 						id: 'wo-2',
 						starts_at: '2026-08-10T09:00:00Z',
 						ends_at: '2026-08-10T11:00:00Z',
@@ -253,7 +254,7 @@ describe('PlanningGrid — résilience aux kinds inconnus', () => {
 					windowTo="2026-08-10"
 					timeZone={TZ}
 					resources={[employeeResource()]}
-					entries={[workOrder(), unknownKindEntry()]}
+					entries={[task(), unknownKindEntry()]}
 					workTime={[]}
 				/>,
 			),
@@ -283,7 +284,7 @@ describe('PlanningGrid — drag & drop', () => {
 				windowTo="2026-08-10"
 				timeZone={TZ}
 				resources={[employeeResource()]}
-				entries={[workOrder()]}
+				entries={[task()]}
 				workTime={[]}
 			/>,
 		)
@@ -292,8 +293,8 @@ describe('PlanningGrid — drag & drop', () => {
 		expect(segment.getAttribute('draggable')).toBe('true')
 	})
 
-	it('un drop sur une autre ligne, même date, appelle onDropWorkOrder avec la ressource cible', () => {
-		const onDropWorkOrder = vi.fn()
+	it('un drop sur une autre ligne, même date, appelle onDropTask avec la ressource cible', () => {
+		const onDropTask = vi.fn()
 		render(
 			<PlanningGrid
 				view="week"
@@ -301,9 +302,9 @@ describe('PlanningGrid — drag & drop', () => {
 				windowTo="2026-08-10"
 				timeZone={TZ}
 				resources={twoResources()}
-				entries={[workOrder()]}
+				entries={[task()]}
 				workTime={[]}
-				onDropWorkOrder={onDropWorkOrder}
+				onDropTask={onDropTask}
 			/>,
 		)
 
@@ -320,7 +321,7 @@ describe('PlanningGrid — drag & drop', () => {
 
 		fireEvent.drop(targetCell, { dataTransfer })
 
-		expect(onDropWorkOrder).toHaveBeenCalledWith({
+		expect(onDropTask).toHaveBeenCalledWith({
 			entryId: 'wo-1',
 			sourceResourceId: 'employee:employee-1',
 			sourceDate: '2026-08-10',
@@ -330,7 +331,7 @@ describe('PlanningGrid — drag & drop', () => {
 	})
 
 	it("un drop sur la cellule d'origine (rien ne change) appelle quand même le callback avec des cibles identiques aux sources", () => {
-		const onDropWorkOrder = vi.fn()
+		const onDropTask = vi.fn()
 		render(
 			<PlanningGrid
 				view="week"
@@ -338,9 +339,9 @@ describe('PlanningGrid — drag & drop', () => {
 				windowTo="2026-08-10"
 				timeZone={TZ}
 				resources={[employeeResource()]}
-				entries={[workOrder()]}
+				entries={[task()]}
 				workTime={[]}
-				onDropWorkOrder={onDropWorkOrder}
+				onDropTask={onDropTask}
 			/>,
 		)
 
@@ -349,7 +350,7 @@ describe('PlanningGrid — drag & drop', () => {
 		fireEvent.dragStart(segment, { dataTransfer })
 		fireEvent.drop(screen.getByTestId('grid-cell'), { dataTransfer })
 
-		expect(onDropWorkOrder).toHaveBeenCalledWith({
+		expect(onDropTask).toHaveBeenCalledWith({
 			entryId: 'wo-1',
 			sourceResourceId: 'employee:employee-1',
 			sourceDate: '2026-08-10',
@@ -358,7 +359,7 @@ describe('PlanningGrid — drag & drop', () => {
 		})
 	})
 
-	it('sans onDropWorkOrder, un drop ne plante pas', () => {
+	it('sans onDropTask, un drop ne plante pas', () => {
 		render(
 			<PlanningGrid
 				view="week"
@@ -366,7 +367,7 @@ describe('PlanningGrid — drag & drop', () => {
 				windowTo="2026-08-10"
 				timeZone={TZ}
 				resources={[employeeResource()]}
-				entries={[workOrder()]}
+				entries={[task()]}
 				workTime={[]}
 			/>,
 		)
@@ -390,7 +391,7 @@ describe('PlanningGrid — retrait d’un assigné', () => {
 				windowTo="2026-08-10"
 				timeZone={TZ}
 				resources={[employeeResource()]}
-				entries={[workOrder()]}
+				entries={[task()]}
 				workTime={[]}
 				onRemoveAssignee={onRemoveAssignee}
 			/>,
@@ -414,7 +415,7 @@ describe('PlanningGrid — retrait d’un assigné', () => {
 				windowTo="2026-08-10"
 				timeZone={TZ}
 				resources={[employeeResource()]}
-				entries={[workOrder()]}
+				entries={[task()]}
 				workTime={[]}
 			/>,
 		)
@@ -473,7 +474,7 @@ describe('PlanningGrid — pas d’appel réseau', () => {
 				windowTo="2026-08-09"
 				timeZone={TZ}
 				resources={[employeeResource()]}
-				entries={[workOrder(), absence()]}
+				entries={[task(), absence()]}
 				workTime={[]}
 			/>,
 		)

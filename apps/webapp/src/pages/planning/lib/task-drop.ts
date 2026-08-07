@@ -3,7 +3,7 @@ import { addDays, differenceInCalendarDays, parseISO } from 'date-fns'
 import type { Schemas } from '#/api/api.client'
 
 export type AssigneeRef = Schemas.AssigneeRefRequest
-export type UpdateWorkOrderRequest = Schemas.UpdateWorkOrderRequest
+export type UpdateTaskRequest = Schemas.UpdateTaskRequest
 
 /** Where a drag started: the entry being moved, the row it was rendered on, and the day column it sat in. */
 export interface DragSource {
@@ -18,16 +18,16 @@ export interface DropTarget {
 	date: string
 }
 
-export interface WorkOrderDropInput {
+export interface TaskDropInput {
 	source: DragSource
 	target: DropTarget
 	entry: { startsAt: string; endsAt: string; employeeIds: string[] }
 	timeZone: string
 }
 
-export interface WorkOrderPatchResult {
+export interface TaskPatchResult {
 	changed: boolean
-	body: UpdateWorkOrderRequest
+	body: UpdateTaskRequest
 }
 
 /**
@@ -59,7 +59,7 @@ function assigneeKey(ref: AssigneeRef): string {
  * `employeeIds`, preserving every other assignee and their order — the
  * complete list a drop's `PATCH` sends, never a delta (see the planning
  * design doc's "Drag & drop" decision). Dropping onto a resource already on
- * the work order collapses to one assignment instead of duplicating it.
+ * the task collapses to one assignment instead of duplicating it.
  */
 export function buildAssigneesForMove(
 	employeeIds: string[],
@@ -145,9 +145,9 @@ export function shiftInstant(
  * lands back where it started — the caller skips both the call and the
  * confirmation dialog.
  */
-export function computeWorkOrderDropPatch(
-	input: WorkOrderDropInput,
-): WorkOrderPatchResult {
+export function computeTaskDropPatch(
+	input: TaskDropInput,
+): TaskPatchResult {
 	const { source, target, entry, timeZone } = input
 	const dayDelta = differenceInCalendarDays(
 		parseISO(target.date),
@@ -164,7 +164,7 @@ export function computeWorkOrderDropPatch(
 		source.resourceId,
 		target.resourceId,
 	)
-	const body: UpdateWorkOrderRequest = { assignees }
+	const body: UpdateTaskRequest = { assignees }
 	if (dayDelta !== 0) {
 		body.starts_at = shiftInstant(entry.startsAt, dayDelta, timeZone)
 		body.ends_at = shiftInstant(entry.endsAt, dayDelta, timeZone)
@@ -174,14 +174,14 @@ export function computeWorkOrderDropPatch(
 }
 
 /**
- * The `PATCH` body that unassigns one resource from a work order — reuses
+ * The `PATCH` body that unassigns one resource from a task — reuses
  * {@link buildAssigneesForRemoval} so a removal travels the same
  * complete-list path as a move.
  */
 export function computeRemoveAssigneePatch(input: {
 	employeeIds: string[]
 	resourceId: string
-}): WorkOrderPatchResult {
+}): TaskPatchResult {
 	const assignees = buildAssigneesForRemoval(
 		input.employeeIds,
 		input.resourceId,

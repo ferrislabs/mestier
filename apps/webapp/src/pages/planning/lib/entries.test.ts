@@ -6,14 +6,15 @@ import {
 } from '#/pages/planning/lib/entries'
 import type { PlanningEntry } from '#/pages/planning/types'
 
-function workOrder(overrides: Partial<PlanningEntry> = {}): PlanningEntry {
+function task(overrides: Partial<PlanningEntry> = {}): PlanningEntry {
 	return {
-		kind: 'work_order',
+		kind: 'task',
 		id: 'wo-1',
 		starts_at: '2026-08-10T08:00:00Z',
 		ends_at: '2026-08-10T10:00:00Z',
 		all_day: false,
 		status: 'PLANNED',
+		title: 'Toiture',
 		employee_ids: ['employee-1', 'employee-2'],
 		customer_name: 'Client Dupont',
 		context_label: 'Chantier toiture',
@@ -47,7 +48,7 @@ function unknownKindEntry(): PlanningEntry {
 
 describe('entryEmployeeIds', () => {
 	it('renvoie tous les employee_ids pour un chantier', () => {
-		expect(entryEmployeeIds(workOrder())).toEqual(['employee-1', 'employee-2'])
+		expect(entryEmployeeIds(task())).toEqual(['employee-1', 'employee-2'])
 	})
 
 	it("renvoie l'unique employee_id pour une absence", () => {
@@ -61,14 +62,10 @@ describe('entryEmployeeIds', () => {
 })
 
 describe('entryLabel', () => {
-	it('utilise le titre du chantier quand il est renseigné', () => {
-		expect(entryLabel(workOrder({ title: 'Réfection toiture' }))).toBe(
+	it('utilise le titre de la tâche — toujours renseigné, plus de repli sur le client', () => {
+		expect(entryLabel(task({ title: 'Réfection toiture' }))).toBe(
 			'Réfection toiture',
 		)
-	})
-
-	it('replie sur le nom du client quand le chantier n’a pas de titre', () => {
-		expect(entryLabel(workOrder({ title: null }))).toBe('Client Dupont')
 	})
 
 	it("traduit le motif d'absence en français", () => {
@@ -87,7 +84,7 @@ describe('entryLabel', () => {
 
 describe('entryTone', () => {
 	it('distingue chantier, absence et inconnu', () => {
-		expect(entryTone(workOrder())).toBe('work_order')
+		expect(entryTone(task())).toBe('task')
 		expect(entryTone(absence())).toBe('absence')
 		expect(entryTone(unknownKindEntry())).toBe('unknown')
 	})

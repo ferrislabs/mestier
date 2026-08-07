@@ -26,8 +26,8 @@ globalAny.ResizeObserver ??= ResizeObserverStub
 const PLANNING_PATH = '/api/v1/organizations/{organization_id}/planning'
 const AVAILABILITY_PATH =
 	'/api/v1/organizations/{organization_id}/planning/availability'
-const WORK_ORDER_PATH =
-	'/api/v1/organizations/{organization_id}/work-orders/{work_order_id}'
+const TASK_PATH =
+	'/api/v1/organizations/{organization_id}/tasks/{task_id}'
 
 const ORGANIZATION: Organization = {
 	id: 'org-1',
@@ -68,8 +68,8 @@ const RESOURCE_MEMBER = {
 	weekly_contract_minutes: 0,
 }
 
-const WORK_ORDER_ENTRY = {
-	kind: 'work_order' as const,
+const TASK_ENTRY = {
+	kind: 'task' as const,
 	id: 'wo-1',
 	starts_at: '2026-08-03T08:00:00+02:00',
 	ends_at: '2026-08-03T10:00:00+02:00',
@@ -210,7 +210,7 @@ function renderFeature(
 function patchCallsFor(
 	calls: { method: string; path: string; params: unknown }[],
 ) {
-	return calls.filter((c) => c.method === 'patch' && c.path === WORK_ORDER_PATH)
+	return calls.filter((c) => c.method === 'patch' && c.path === TASK_PATH)
 }
 
 describe('PlanningTeamFeature', () => {
@@ -261,15 +261,15 @@ describe('PlanningTeamFeature — drag & drop sans avertissement', () => {
 		const { calls, mock } = renderFeature({
 			planning: planningResponse({
 				resources: [RESOURCE_EMPLOYEE_1, RESOURCE_EMPLOYEE_2],
-				entries: [WORK_ORDER_ENTRY],
+				entries: [TASK_ENTRY],
 			}),
 		})
 		mock('get', AVAILABILITY_PATH, () => ({
 			data: { resources: [] },
 			pagination: null,
 		}))
-		mock('patch', WORK_ORDER_PATH, () => ({
-			data: { work_order: WORK_ORDER_ENTRY, created_employees: [] },
+		mock('patch', TASK_PATH, () => ({
+			data: { task: TASK_ENTRY, created_employees: [] },
 			pagination: null,
 		}))
 
@@ -294,7 +294,7 @@ describe('PlanningTeamFeature — drag & drop sans avertissement', () => {
 		await waitFor(() => expect(patchCallsFor(calls)).toHaveLength(1))
 		const patch = patchCallsFor(calls)[0]
 		expect(patch.params).toMatchObject({
-			path: { organization_id: 'org-1', work_order_id: 'wo-1' },
+			path: { organization_id: 'org-1', task_id: 'wo-1' },
 			body: {
 				assignees: [{ kind: 'employee', employee_id: 'employee-2' }],
 			},
@@ -304,7 +304,7 @@ describe('PlanningTeamFeature — drag & drop sans avertissement', () => {
 		).body
 		expect(body.starts_at).toBeDefined()
 		expect(body.ends_at).toBeDefined()
-		expect(body.starts_at).not.toBe(WORK_ORDER_ENTRY.starts_at)
+		expect(body.starts_at).not.toBe(TASK_ENTRY.starts_at)
 
 		// Availability was checked once for the drop, not stacked into extra calls.
 		const availabilityCalls = calls.filter(
@@ -315,7 +315,7 @@ describe('PlanningTeamFeature — drag & drop sans avertissement', () => {
 
 	it("un drop qui ne change ni le jour ni la ligne n'émet aucun appel", async () => {
 		const { calls } = renderFeature({
-			planning: planningResponse({ entries: [WORK_ORDER_ENTRY] }),
+			planning: planningResponse({ entries: [TASK_ENTRY] }),
 		})
 
 		await screen.findByText('Alix Martin')
@@ -323,7 +323,7 @@ describe('PlanningTeamFeature — drag & drop sans avertissement', () => {
 
 		await new Promise((resolve) => setTimeout(resolve, 0))
 		expect(calls.some((c) => c.path === AVAILABILITY_PATH)).toBe(false)
-		expect(calls.some((c) => c.path === WORK_ORDER_PATH)).toBe(false)
+		expect(calls.some((c) => c.path === TASK_PATH)).toBe(false)
 	})
 })
 
@@ -332,7 +332,7 @@ describe('PlanningTeamFeature — avertissements', () => {
 		const { calls, mock } = renderFeature({
 			planning: planningResponse({
 				resources: [RESOURCE_EMPLOYEE_1, RESOURCE_EMPLOYEE_2],
-				entries: [WORK_ORDER_ENTRY],
+				entries: [TASK_ENTRY],
 			}),
 		})
 		mock('get', AVAILABILITY_PATH, () => ({
@@ -373,7 +373,7 @@ describe('PlanningTeamFeature — avertissements', () => {
 		const { calls, mock } = renderFeature({
 			planning: planningResponse({
 				resources: [RESOURCE_EMPLOYEE_1, RESOURCE_EMPLOYEE_2],
-				entries: [WORK_ORDER_ENTRY],
+				entries: [TASK_ENTRY],
 			}),
 		})
 		mock('get', AVAILABILITY_PATH, () => ({
@@ -396,8 +396,8 @@ describe('PlanningTeamFeature — avertissements', () => {
 			},
 			pagination: null,
 		}))
-		mock('patch', WORK_ORDER_PATH, () => ({
-			data: { work_order: WORK_ORDER_ENTRY, created_employees: [] },
+		mock('patch', TASK_PATH, () => ({
+			data: { task: TASK_ENTRY, created_employees: [] },
 			pagination: null,
 		}))
 
@@ -419,16 +419,16 @@ describe('PlanningTeamFeature — avertissements', () => {
 		const { calls, mock } = renderFeature({
 			planning: planningResponse({
 				resources: [RESOURCE_EMPLOYEE_1, RESOURCE_MEMBER],
-				entries: [WORK_ORDER_ENTRY],
+				entries: [TASK_ENTRY],
 			}),
 		})
 		mock('get', AVAILABILITY_PATH, () => ({
 			data: { resources: [] },
 			pagination: null,
 		}))
-		mock('patch', WORK_ORDER_PATH, () => ({
+		mock('patch', TASK_PATH, () => ({
 			data: {
-				work_order: WORK_ORDER_ENTRY,
+				task: TASK_ENTRY,
 				created_employees: [
 					{
 						id: 'employee-9',
@@ -476,12 +476,12 @@ describe('PlanningTeamFeature — retrait d’un assigné', () => {
 			planning: planningResponse({
 				resources: [RESOURCE_EMPLOYEE_1, RESOURCE_EMPLOYEE_2],
 				entries: [
-					{ ...WORK_ORDER_ENTRY, employee_ids: ['employee-1', 'employee-2'] },
+					{ ...TASK_ENTRY, employee_ids: ['employee-1', 'employee-2'] },
 				],
 			}),
 		})
-		mock('patch', WORK_ORDER_PATH, () => ({
-			data: { work_order: WORK_ORDER_ENTRY, created_employees: [] },
+		mock('patch', TASK_PATH, () => ({
+			data: { task: TASK_ENTRY, created_employees: [] },
 			pagination: null,
 		}))
 
