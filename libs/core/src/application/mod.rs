@@ -35,6 +35,7 @@ pub mod quote;
 pub mod role;
 pub mod service_rate;
 pub mod user;
+pub mod work_order;
 
 pub type MestierAuthService = AuthService<FerrisKeyRepository>;
 pub type MestierFileStorageService = FileStorageService<S3FileStorage>;
