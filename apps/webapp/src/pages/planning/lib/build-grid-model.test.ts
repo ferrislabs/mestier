@@ -39,9 +39,12 @@ function memberResource(
 	}
 }
 
-function workOrder(overrides: Partial<PlanningEntry> = {}): PlanningEntry {
+function task(overrides: Partial<PlanningEntry> = {}): PlanningEntry {
 	return {
-		kind: 'work_order',
+		kind: 'task',
+		title: 'Tâche',
+		blocks_availability: true,
+		child_count: 0,
 		id: 'wo-1',
 		starts_at: '2026-08-10T08:00:00Z', // 10:00 Paris
 		ends_at: '2026-08-10T10:00:00Z', // 12:00 Paris
@@ -112,7 +115,7 @@ describe('buildGridModel', () => {
 			windowTo: '2026-08-10',
 			timeZone: TZ,
 			resources: [employeeResource()],
-			entries: [workOrder()],
+			entries: [task()],
 			workTime: [],
 		})
 
@@ -125,7 +128,7 @@ describe('buildGridModel', () => {
 		expect(cell?.segments).toHaveLength(1)
 		expect(cell?.segments[0]).toMatchObject({
 			entryId: 'wo-1',
-			tone: 'work_order',
+			tone: 'task',
 			row: 0,
 			left: 0,
 			width: 100,
@@ -138,7 +141,7 @@ describe('buildGridModel', () => {
 			windowTo: '2026-08-10',
 			timeZone: TZ,
 			resources: [employeeResource()],
-			entries: [workOrder()],
+			entries: [task()],
 			workTime: [workTime()],
 		})
 
@@ -155,12 +158,12 @@ describe('buildGridModel', () => {
 			timeZone: TZ,
 			resources: [employeeResource()],
 			entries: [
-				workOrder({
+				task({
 					id: 'wo-1',
 					starts_at: '2026-08-10T08:00:00Z',
 					ends_at: '2026-08-10T10:00:00Z',
 				}),
-				workOrder({
+				task({
 					id: 'wo-2',
 					starts_at: '2026-08-10T09:00:00Z',
 					ends_at: '2026-08-10T11:00:00Z',
@@ -220,7 +223,7 @@ describe('buildGridModel', () => {
 			windowTo: '2026-08-10',
 			timeZone: TZ,
 			resources: [memberResource()],
-			entries: [workOrder({ employee_ids: ['employee-1'] })],
+			entries: [task({ employee_ids: ['employee-1'] })],
 			workTime: [],
 		})
 
@@ -247,7 +250,7 @@ describe('buildGridModel', () => {
 				windowTo: '2026-08-10',
 				timeZone: TZ,
 				resources: [employeeResource()],
-				entries: [workOrder(), unknownKindEntry()],
+				entries: [task(), unknownKindEntry()],
 				workTime: [],
 			}),
 		).not.toThrow()
@@ -257,7 +260,7 @@ describe('buildGridModel', () => {
 			windowTo: '2026-08-10',
 			timeZone: TZ,
 			resources: [employeeResource()],
-			entries: [workOrder(), unknownKindEntry()],
+			entries: [task(), unknownKindEntry()],
 			workTime: [],
 		})
 		// L'entrée de kind inconnu n'est rattachable à aucune ressource connue :

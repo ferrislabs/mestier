@@ -5,7 +5,7 @@ import type { PlanningResponse, PlanningView } from '#/pages/planning/types'
 import {
 	PlanningGrid,
 	type RemoveAssigneeEvent,
-	type WorkOrderDropEvent,
+	type TaskDropEvent,
 } from '#/pages/planning/ui/planning-grid'
 import { PlanningToolbar } from '#/pages/planning/ui/planning-toolbar'
 import {
@@ -24,9 +24,9 @@ export interface PlanningTeamUIProps {
 	isLoading: boolean
 	error: string | null
 	data: PlanningResponse | null
-	/** A work order segment was dropped on the grid — forwarded to {@link PlanningGrid}. */
-	onDropWorkOrder?: (event: WorkOrderDropEvent) => void
-	/** The grid's "×" on a work order segment. */
+	/** A task segment was dropped on the grid — forwarded to {@link PlanningGrid}. */
+	onDropTask?: (event: TaskDropEvent) => void
+	/** The grid's "×" on a task segment. */
 	onRemoveAssignee?: (event: RemoveAssigneeEvent) => void
 	/** The single warnings dialog a risky drop funnels through — see the planning design doc's "Avertissements" section. Not rendered when absent. */
 	warningDialog?: PlanningWarningDialogProps
@@ -54,7 +54,7 @@ export function PlanningTeamUI({
 	isLoading,
 	error,
 	data,
-	onDropWorkOrder,
+	onDropTask,
 	onRemoveAssignee,
 	warningDialog,
 	createdEmployeeNames,
@@ -113,7 +113,7 @@ export function PlanningTeamUI({
 					resources={data.resources}
 					entries={data.entries}
 					workTime={data.work_time}
-					onDropWorkOrder={onDropWorkOrder}
+					onDropTask={onDropTask}
 					onRemoveAssignee={onRemoveAssignee}
 				/>
 			) : null}

@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT parent_task_id AS \"parent_task_id!\", COUNT(*) AS \"count!\"\n            FROM tasks\n            WHERE parent_task_id = ANY($1) AND deleted_at IS NULL\n            GROUP BY parent_task_id\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "parent_task_id!",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "count!",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "UuidArray"
+      ]
+    },
+    "nullable": [
+      true,
+      null
+    ]
+  },
+  "hash": "3ac76f98d9301f26fdb84190ca26a98a0a4bc2d540599f7284b3193e246c9ebd"
+}

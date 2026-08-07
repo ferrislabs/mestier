@@ -2,8 +2,8 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import type { Schemas } from '#/api/api.client'
 
 const PLANNING_PATH = '/api/v1/organizations/{organization_id}/planning'
-const WORK_ORDER_PATH =
-	'/api/v1/organizations/{organization_id}/work-orders/{work_order_id}'
+const TASK_PATH =
+	'/api/v1/organizations/{organization_id}/tasks/{task_id}'
 const AVAILABILITY_PATH =
 	'/api/v1/organizations/{organization_id}/planning/availability'
 
@@ -77,11 +77,11 @@ export function useCheckAvailability() {
  * drop" decision: one endpoint reprograms and reassigns at once, so there is
  * no partial write to roll back on cancel.
  */
-export function useMoveWorkOrder() {
+export function useMoveTask() {
 	const queryClient = useQueryClient()
 
 	return useMutation({
-		...window.tanstackApi.mutation('patch', WORK_ORDER_PATH).mutationOptions,
+		...window.tanstackApi.mutation('patch', TASK_PATH).mutationOptions,
 		onSuccess: () => invalidatePlanning(queryClient),
 	})
 }
@@ -93,6 +93,6 @@ export type PlanningResponse = Schemas.PlanningResponse
 export type AvailabilityResponse = Schemas.AvailabilityResponse
 export type AvailabilityResource = Schemas.AvailabilityResourceResponse
 export type ConflictResponse = Schemas.ConflictResponse
-export type PatchWorkOrderResponse = Schemas.PatchWorkOrderResponse
+export type PatchTaskResponse = Schemas.PatchTaskResponse
 export type AssigneeRef = Schemas.AssigneeRefRequest
 export type CreatedEmployee = Schemas.EmployeeResponse

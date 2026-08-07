@@ -8,15 +8,16 @@ pub use application::*;
 pub use infrastructure::realtime::EventHub;
 
 pub use domain::{
-    AbsenceKind, AssigneeRef, Assignment, AssignmentId, AvailabilityReport, Conflict, ConflictKind,
-    Customer, CustomerContact, CustomerContactId, CustomerContext, CustomerContextId, CustomerId,
+    AbsenceKind, AssigneeRef, AvailabilityReport, Conflict, ConflictKind, Customer,
+    CustomerContact, CustomerContactId, CustomerContext, CustomerContextId, CustomerId,
     CustomerPipelineStage, CustomerStatus, DateRange, Employee, EmployeeAbsence, EmployeeAbsenceId,
     EmployeeId, EmployeeRhythm, EmployeeRhythmId, EmployeeWorkSlot, EmployeeWorkSlotId,
     EmployeeWorkTime, Equipment, EquipmentId, FileObject, Member, MemberId, MinuteInterval,
-    Organization, OrganizationId, Permissions, PlanningEntry, PlanningResource, PlanningView,
-    PlanningWorkOrder, Product, ProductId, Quote, QuoteId, QuoteLine, QuoteLineId, QuoteStatus,
+    Organization, OrganizationId, Permissions, PlanningEntry, PlanningResource, PlanningTask,
+    PlanningView, Product, ProductId, Quote, QuoteId, QuoteLine, QuoteLineId, QuoteStatus,
     RhythmSlot, RhythmSlotId, Role, RoleId, ServiceRate, ServiceRateId, ServiceRateUnit,
-    StoredFile, TimeRange, Tz, User, UserId, WorkOrder, WorkOrderId, WorkOrderStatus,
+    StoredFile, Task, TaskAssignment, TaskAssignmentId, TaskId, TaskStatus, TimeRange, Tz, User,
+    UserId,
     absence::commands::{CreateAbsenceCommand, PatchAbsenceCommand},
     customer::commands::{CreateCustomerCommand, UpdateCustomerCommand},
     customer_contact::commands::{CreateCustomerContactCommand, UpdateCustomerContactCommand},
@@ -31,8 +32,9 @@ pub use domain::{
         CreateQuoteCommand, QuoteLineCommand, UpdateQuoteCommand, UpdateQuoteStatusCommand,
     },
     service_rate::commands::{CreateServiceRateCommand, UpdateServiceRateCommand},
+    task::commands::{CreateTaskCommand, PatchTaskCommand},
+    task::service::{resolve_task_window, validate_parent_depth, validate_reparenting},
     user::commands::{CreateUserCommand, UpsertUserBySubCommand},
-    work_order::commands::{CreateWorkOrderCommand, PatchWorkOrderCommand},
     work_time::commands::{
         ReplaceRhythmCommand, ReplaceWorkSlotsCommand, RhythmSlotInput, WorkSlotInput,
     },

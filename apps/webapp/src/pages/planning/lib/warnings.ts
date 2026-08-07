@@ -15,8 +15,8 @@ export type Warning =
 	  }
 	| { kind: 'outside_work_hours'; startsAt: string; endsAt: string }
 	| {
-			kind: 'overlapping_work_order'
-			workOrderId: string
+			kind: 'overlapping_task'
+			taskId: string
 			startsAt: string
 			endsAt: string
 	  }
@@ -54,10 +54,10 @@ function mapConflict(conflict: ConflictResponse): Warning {
 				startsAt: conflict.starts_at,
 				endsAt: conflict.ends_at,
 			}
-		case 'overlapping_work_order':
+		case 'overlapping_task':
 			return {
-				kind: 'overlapping_work_order',
-				workOrderId: conflict.work_order_id,
+				kind: 'overlapping_task',
+				taskId: conflict.task_id,
 				startsAt: conflict.starts_at,
 				endsAt: conflict.ends_at,
 			}
@@ -91,7 +91,7 @@ export function warningTitle(warning: Warning): string {
 			return `Absence : ${ABSENCE_LABELS[warning.reason]}`
 		case 'outside_work_hours':
 			return 'Hors des plages de travail habituelles'
-		case 'overlapping_work_order':
+		case 'overlapping_task':
 			return 'Déjà affecté à un autre chantier sur ce créneau'
 		case 'missing_employee_record':
 			return 'Aucune fiche employé pour cette personne'

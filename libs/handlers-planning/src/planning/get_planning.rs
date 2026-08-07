@@ -7,7 +7,7 @@ use chrono::{DateTime, NaiveDate, Utc};
 use handlers::{ApiError, AppState, DataEnvelope, Response};
 use mestier_core::{
     AbsenceKind, DateRange, EmployeeAbsenceId, EmployeeId, MinuteInterval, PlanningEntry,
-    PlanningResource, PlanningView, UserId, WorkOrderId, WorkOrderStatus,
+    PlanningResource, PlanningView, TaskId, TaskStatus, UserId,
 };
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
@@ -85,16 +85,19 @@ impl From<PlanningResource> for PlanningResourceResponse {
 #[derive(Debug, Clone, PartialEq, Serialize, ToSchema)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum PlanningEntryResponse {
-    WorkOrder {
-        id: WorkOrderId,
+    Task {
+        id: TaskId,
+        parent_task_id: Option<TaskId>,
         starts_at: DateTime<Utc>,
         ends_at: DateTime<Utc>,
         all_day: bool,
-        status: WorkOrderStatus,
-        title: Option<String>,
-        customer_name: String,
-        context_label: String,
-        note: Option<String>,
+        status: TaskStatus,
+        blocks_availability: bool,
+        child_count: i64,
+        title: String,
+        customer_name: Option<String>,
+        context_label: Option<String>,
+        description: Option<String>,
         employee_ids: Vec<EmployeeId>,
     },
     Absence {
@@ -111,27 +114,33 @@ pub enum PlanningEntryResponse {
 impl From<PlanningEntry> for PlanningEntryResponse {
     fn from(value: PlanningEntry) -> Self {
         match value {
-            PlanningEntry::WorkOrder {
+            PlanningEntry::Task {
                 id,
+                parent_task_id,
                 starts_at,
                 ends_at,
                 all_day,
                 status,
+                blocks_availability,
+                child_count,
                 title,
                 customer_name,
                 context_label,
-                note,
+                description,
                 employee_ids,
-            } => Self::WorkOrder {
+            } => Self::Task {
                 id,
+                parent_task_id,
                 starts_at,
                 ends_at,
                 all_day,
                 status,
+                blocks_availability,
+                child_count,
                 title,
                 customer_name,
                 context_label,
-                note,
+                description,
                 employee_ids,
             },
             PlanningEntry::Absence {
@@ -351,26 +360,57 @@ mod tests {
     }
 
     #[test]
-    fn work_order_entry_serializes_with_the_work_order_tag() {
-        let entry: PlanningEntryResponse = PlanningEntry::WorkOrder {
+    fn task_entry_serializes_with_the_task_tag() {
+        let entry: PlanningEntryResponse = PlanningEntry::Task {
             id: "33333333-3333-3333-3333-333333333333".parse().unwrap(),
+            parent_task_id: None,
             starts_at: Utc::now(),
             ends_at: Utc::now(),
             all_day: false,
-            status: WorkOrderStatus::Planned,
-            title: Some("Toiture".to_owned()),
-            customer_name: "Alice Dupont".to_owned(),
-            context_label: "Chantier principal".to_owned(),
-            note: None,
+            status: TaskStatus::Planned,
+            blocks_availability: true,
+            child_count: 0,
+            title: "Toiture".to_owned(),
+            customer_name: Some("Alice Dupont".to_owned()),
+            context_label: Some("Chantier principal".to_owned()),
+            description: None,
             employee_ids: vec![employee_id()],
         }
         .into();
 
         let value = serde_json::to_value(&entry).unwrap();
 
-        assert_eq!(value["kind"], "work_order");
+        assert_eq!(value["kind"], "task");
         assert_eq!(value["customer_name"], "Alice Dupont");
         assert_eq!(value["status"], "PLANNED");
+    }
+
+    #[test]
+    fn task_entry_without_a_customer_serializes_null_customer_fields() {
+        let entry: PlanningEntryResponse = PlanningEntry::Task {
+            id: "33333333-3333-3333-3333-333333333333".parse().unwrap(),
+            parent_task_id: None,
+            starts_at: Utc::now(),
+            ends_at: Utc::now(),
+            all_day: false,
+            status: TaskStatus::Planned,
+            blocks_availability: false,
+            child_count: 2,
+            title: "Réunion d'équipe".to_owned(),
+            customer_name: None,
+            context_label: None,
+            description: None,
+            employee_ids: vec![],
+        }
+        .into();
+
+        let value = serde_json::to_value(&entry).unwrap();
+
+        assert_eq!(value["kind"], "task");
+        assert!(value["customer_name"].is_null());
+        assert!(value["context_label"].is_null());
+        assert_eq!(value["blocks_availability"], false);
+        assert_eq!(value["child_count"], 2);
     }
 
     #[test]

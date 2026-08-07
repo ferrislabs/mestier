@@ -32,7 +32,7 @@ mod tests {
     }
 
     /// Seeds an owner user, an organization, a customer and a customer
-    /// context — the minimal graph a work order needs to exist.
+    /// context — the minimal graph a task needs to exist as a chantier.
     async fn seed_fixture(pool: &PgPool) -> Fixture {
         let owner_id = generate_uuid_v7();
         sqlx::query!(
@@ -185,20 +185,20 @@ mod tests {
         UserId(user_id)
     }
 
-    async fn seed_work_order(
+    async fn seed_task(
         pool: &PgPool,
         fixture: &Fixture,
         employee_id: EmployeeId,
         starts_at: DateTime<Utc>,
         ends_at: DateTime<Utc>,
     ) {
-        let work_order_id = generate_uuid_v7();
+        let task_id = generate_uuid_v7();
         sqlx::query!(
             r#"
-            INSERT INTO work_orders (id, org_id, customer_id, customer_context_id, starts_at, ends_at, status, title)
+            INSERT INTO tasks (id, org_id, customer_id, customer_context_id, starts_at, ends_at, status, title)
             VALUES ($1, $2, $3, $4, $5, $6, 'PLANNED', $7)
             "#,
-            work_order_id,
+            task_id,
             fixture.organization_id.0,
             fixture.customer_id.0,
             fixture.customer_context_id.0,
@@ -211,11 +211,11 @@ mod tests {
         .unwrap();
 
         sqlx::query!(
-            r#"INSERT INTO assignments (id, org_id, work_order_id, employee_id)
+            r#"INSERT INTO task_assignments (id, org_id, task_id, employee_id)
                VALUES ($1, $2, $3, $4)"#,
             generate_uuid_v7(),
             fixture.organization_id.0,
-            work_order_id,
+            task_id,
             employee_id.0,
         )
         .execute(pool)
@@ -252,8 +252,8 @@ mod tests {
         for table in [
             "employee_absences",
             "employee_work_slots",
-            "assignments",
-            "work_orders",
+            "task_assignments",
+            "tasks",
         ] {
             sqlx::query(&format!("DELETE FROM {table} WHERE org_id = $1"))
                 .bind(organization_id.0)
@@ -379,12 +379,12 @@ mod tests {
 
     #[tokio::test]
     #[ignore = "requires live postgres"]
-    async fn get_planning_returns_work_order_and_absence_entries_in_the_window() {
+    async fn get_planning_returns_task_and_absence_entries_in_the_window() {
         let pool = make_pool().await;
         let fixture = seed_fixture(&pool).await;
         let employee_id = seed_employee(&pool, fixture.organization_id).await;
         let now = Utc::now();
-        seed_work_order(&pool, &fixture, employee_id, now, now + Duration::hours(2)).await;
+        seed_task(&pool, &fixture, employee_id, now, now + Duration::hours(2)).await;
         seed_absence(
             &pool,
             fixture.organization_id,
@@ -408,7 +408,7 @@ mod tests {
         assert!(
             view.entries
                 .iter()
-                .any(|e| matches!(e, crate::PlanningEntry::WorkOrder { .. }))
+                .any(|e| matches!(e, crate::PlanningEntry::Task { .. }))
         );
         assert!(
             view.entries

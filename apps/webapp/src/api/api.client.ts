@@ -20,11 +20,11 @@ export namespace Schemas {
   export type AssigneeRefRequest = { employee_id: EmployeeId; kind: "employee" } | { kind: "member"; user_id: UserId };
   export type AttachmentResponse = { filename: string; mime_type: string; size_bytes: number; storage_key: string };
   export type AuthorType = "USER" | "WEBHOOK" | "SYSTEM";
-  export type WorkOrderId = string;
+  export type TaskId = string;
   export type ConflictResponse =
     | { ends_at: string; kind: "absence"; note?: (string | null) | undefined; reason: AbsenceKind; starts_at: string }
     | { ends_at: string; kind: "outside_work_hours"; starts_at: string }
-    | { ends_at: string; kind: "overlapping_work_order"; starts_at: string; work_order_id: WorkOrderId };
+    | { ends_at: string; kind: "overlapping_task"; starts_at: string; task_id: TaskId };
   export type AvailabilityResourceResponse = {
     available: boolean;
     conflicts: Array<ConflictResponse>;
@@ -152,19 +152,21 @@ export namespace Schemas {
     title: string;
   };
   export type CreateServiceRateRequest = { label: string; rate_cents: number; unit: ServiceRateUnit };
+  export type QuoteId = string;
+  export type CreateTaskRequest = {
+    all_day?: boolean | undefined;
+    blocks_availability: boolean;
+    customer_context_id?: (null | CustomerContextId) | undefined;
+    customer_id?: (null | CustomerId) | undefined;
+    description?: (string | null) | undefined;
+    ends_at?: (string | null) | undefined;
+    parent_task_id?: (null | TaskId) | undefined;
+    quote_id?: (null | QuoteId) | undefined;
+    starts_at?: (string | null) | undefined;
+    title: string;
+  };
   export type CreateThreadRequest = { name: string; origin_message_id?: (null | MessageId) | undefined };
   export type CreateWebhookRequest = { avatar_url?: (string | null) | undefined; name: string };
-  export type QuoteId = string;
-  export type CreateWorkOrderRequest = {
-    all_day?: boolean | undefined;
-    customer_context_id: CustomerContextId;
-    customer_id: CustomerId;
-    ends_at: string;
-    note?: (string | null) | undefined;
-    quote_id?: (null | QuoteId) | undefined;
-    starts_at: string;
-    title?: (string | null) | undefined;
-  };
   export type CustomerContactId = string;
   export type CustomerContactResponse = {
     created_at: string;
@@ -283,37 +285,43 @@ export namespace Schemas {
     prev_page?: (number | null) | undefined;
     total?: (number | null) | undefined;
   };
-  export type WorkOrderStatus = "PLANNED" | "IN_PROGRESS" | "DONE" | "CANCELLED";
-  export type WorkOrderResponse = {
+  export type TaskStatus = "PLANNED" | "IN_PROGRESS" | "DONE" | "CANCELLED";
+  export type TaskResponse = {
     all_day: boolean;
+    blocks_availability: boolean;
+    child_count?: (number | null) | undefined;
     created_at: string;
-    customer_context_id: CustomerContextId;
-    customer_id: CustomerId;
+    customer_context_id?: (null | CustomerContextId) | undefined;
+    customer_id?: (null | CustomerId) | undefined;
+    description?: (string | null) | undefined;
     employee_ids: Array<EmployeeId>;
-    ends_at: string;
-    id: WorkOrderId;
-    note?: (string | null) | undefined;
+    ends_at?: (string | null) | undefined;
+    id: TaskId;
     organization_id: OrganizationId;
+    parent_task_id?: (null | TaskId) | undefined;
     quote_id?: (null | QuoteId) | undefined;
-    starts_at: string;
-    status: WorkOrderStatus;
-    title?: (string | null) | undefined;
+    starts_at?: (string | null) | undefined;
+    status: TaskStatus;
+    title: string;
     updated_at: string;
   };
-  export type PatchWorkOrderResponse = { created_employees: Array<EmployeeResponse>; work_order: WorkOrderResponse };
+  export type PatchTaskResponse = { created_employees: Array<EmployeeResponse>; task: TaskResponse };
   export type PlanningEntryResponse =
     | {
         all_day: boolean;
-        context_label: string;
-        customer_name: string;
+        blocks_availability: boolean;
+        child_count: number;
+        context_label?: (string | null) | undefined;
+        customer_name?: (string | null) | undefined;
+        description?: (string | null) | undefined;
         employee_ids: Array<EmployeeId>;
         ends_at: string;
-        id: WorkOrderId;
-        kind: "work_order";
-        note?: (string | null) | undefined;
+        id: TaskId;
+        kind: "task";
+        parent_task_id?: (null | TaskId) | undefined;
         starts_at: string;
-        status: WorkOrderStatus;
-        title?: (string | null) | undefined;
+        status: TaskStatus;
+        title: string;
       }
     | {
         absence_kind: AbsenceKind;
@@ -484,17 +492,19 @@ export namespace Schemas {
   };
   export type UpdateQuoteStatusRequest = { status: QuoteStatus };
   export type UpdateServiceRateRequest = { label: string; rate_cents: number; unit: ServiceRateUnit };
-  export type UpdateThreadRequest = { archived: boolean; name: string };
-  export type UpdateWebhookRequest = { avatar_url?: (string | null) | undefined; name: string };
-  export type UpdateWorkOrderRequest = Partial<{
+  export type UpdateTaskRequest = Partial<{
     all_day: boolean | null;
     assignees: Array<AssigneeRefRequest> | null;
+    blocks_availability: boolean | null;
+    description: string | null;
     ends_at: string | null;
-    note: string | null;
+    parent_task_id: null | TaskId;
     starts_at: string | null;
-    status: null | WorkOrderStatus;
+    status: null | TaskStatus;
     title: string | null;
   }>;
+  export type UpdateThreadRequest = { archived: boolean; name: string };
+  export type UpdateWebhookRequest = { avatar_url?: (string | null) | undefined; name: string };
   export type UpsertOverwriteRequest = { allow: number; deny: number };
   export type WebhookCreatedResponse = {
     avatar_url?: (string | null) | undefined;
@@ -2458,30 +2468,33 @@ export namespace Endpoints {
       409: unknown;
     };
   };
-  export type get_ListWorkOrders = {
+  export type get_ListTasks = {
     method: "GET";
-    path: "/api/v1/organizations/{organization_id}/work-orders";
+    path: "/api/v1/organizations/{organization_id}/tasks";
     requestFormat: "json";
     parameters: {
-      query: Partial<{ page: number; per_page: number }>;
+      query: Partial<{ page: number; per_page: number; parent_task_id: string }>;
       path: { organization_id: string };
     };
     responses: {
       200: {
         data: Array<{
           all_day: boolean;
+          blocks_availability: boolean;
+          child_count?: (number | null) | undefined;
           created_at: string;
-          customer_context_id: Schemas.CustomerContextId;
-          customer_id: Schemas.CustomerId;
+          customer_context_id?: (null | Schemas.CustomerContextId) | undefined;
+          customer_id?: (null | Schemas.CustomerId) | undefined;
+          description?: (string | null) | undefined;
           employee_ids: Array<Schemas.EmployeeId>;
-          ends_at: string;
-          id: Schemas.WorkOrderId;
-          note?: (string | null) | undefined;
+          ends_at?: (string | null) | undefined;
+          id: Schemas.TaskId;
           organization_id: Schemas.OrganizationId;
+          parent_task_id?: (null | Schemas.TaskId) | undefined;
           quote_id?: (null | Schemas.QuoteId) | undefined;
-          starts_at: string;
-          status: Schemas.WorkOrderStatus;
-          title?: (string | null) | undefined;
+          starts_at?: (string | null) | undefined;
+          status: Schemas.TaskStatus;
+          title: string;
           updated_at: string;
         }>;
         pagination?: (null | Schemas.PaginationMetadata) | undefined;
@@ -2490,31 +2503,34 @@ export namespace Endpoints {
       403: unknown;
     };
   };
-  export type post_CreateWorkOrder = {
+  export type post_CreateTask = {
     method: "POST";
-    path: "/api/v1/organizations/{organization_id}/work-orders";
+    path: "/api/v1/organizations/{organization_id}/tasks";
     requestFormat: "json";
     parameters: {
       path: { organization_id: string };
 
-      body: Schemas.CreateWorkOrderRequest;
+      body: Schemas.CreateTaskRequest;
     };
     responses: {
       201: {
         data: {
           all_day: boolean;
+          blocks_availability: boolean;
+          child_count?: (number | null) | undefined;
           created_at: string;
-          customer_context_id: Schemas.CustomerContextId;
-          customer_id: Schemas.CustomerId;
+          customer_context_id?: (null | Schemas.CustomerContextId) | undefined;
+          customer_id?: (null | Schemas.CustomerId) | undefined;
+          description?: (string | null) | undefined;
           employee_ids: Array<Schemas.EmployeeId>;
-          ends_at: string;
-          id: Schemas.WorkOrderId;
-          note?: (string | null) | undefined;
+          ends_at?: (string | null) | undefined;
+          id: Schemas.TaskId;
           organization_id: Schemas.OrganizationId;
+          parent_task_id?: (null | Schemas.TaskId) | undefined;
           quote_id?: (null | Schemas.QuoteId) | undefined;
-          starts_at: string;
-          status: Schemas.WorkOrderStatus;
-          title?: (string | null) | undefined;
+          starts_at?: (string | null) | undefined;
+          status: Schemas.TaskStatus;
+          title: string;
           updated_at: string;
         };
         pagination?: (null | Schemas.PaginationMetadata) | undefined;
@@ -2525,29 +2541,32 @@ export namespace Endpoints {
       409: unknown;
     };
   };
-  export type get_GetWorkOrder = {
+  export type get_GetTask = {
     method: "GET";
-    path: "/api/v1/organizations/{organization_id}/work-orders/{work_order_id}";
+    path: "/api/v1/organizations/{organization_id}/tasks/{task_id}";
     requestFormat: "json";
     parameters: {
-      path: { organization_id: string; work_order_id: string };
+      path: { organization_id: string; task_id: string };
     };
     responses: {
       200: {
         data: {
           all_day: boolean;
+          blocks_availability: boolean;
+          child_count?: (number | null) | undefined;
           created_at: string;
-          customer_context_id: Schemas.CustomerContextId;
-          customer_id: Schemas.CustomerId;
+          customer_context_id?: (null | Schemas.CustomerContextId) | undefined;
+          customer_id?: (null | Schemas.CustomerId) | undefined;
+          description?: (string | null) | undefined;
           employee_ids: Array<Schemas.EmployeeId>;
-          ends_at: string;
-          id: Schemas.WorkOrderId;
-          note?: (string | null) | undefined;
+          ends_at?: (string | null) | undefined;
+          id: Schemas.TaskId;
           organization_id: Schemas.OrganizationId;
+          parent_task_id?: (null | Schemas.TaskId) | undefined;
           quote_id?: (null | Schemas.QuoteId) | undefined;
-          starts_at: string;
-          status: Schemas.WorkOrderStatus;
-          title?: (string | null) | undefined;
+          starts_at?: (string | null) | undefined;
+          status: Schemas.TaskStatus;
+          title: string;
           updated_at: string;
         };
         pagination?: (null | Schemas.PaginationMetadata) | undefined;
@@ -2557,27 +2576,27 @@ export namespace Endpoints {
       404: unknown;
     };
   };
-  export type delete_DeleteWorkOrder = {
+  export type delete_DeleteTask = {
     method: "DELETE";
-    path: "/api/v1/organizations/{organization_id}/work-orders/{work_order_id}";
+    path: "/api/v1/organizations/{organization_id}/tasks/{task_id}";
     requestFormat: "json";
     parameters: {
-      path: { organization_id: string; work_order_id: string };
+      path: { organization_id: string; task_id: string };
     };
     responses: { 204: unknown; 401: unknown; 403: unknown; 404: unknown };
   };
-  export type patch_PatchWorkOrder = {
+  export type patch_PatchTask = {
     method: "PATCH";
-    path: "/api/v1/organizations/{organization_id}/work-orders/{work_order_id}";
+    path: "/api/v1/organizations/{organization_id}/tasks/{task_id}";
     requestFormat: "json";
     parameters: {
-      path: { organization_id: string; work_order_id: string };
+      path: { organization_id: string; task_id: string };
 
-      body: Schemas.UpdateWorkOrderRequest;
+      body: Schemas.UpdateTaskRequest;
     };
     responses: {
       200: {
-        data: { created_employees: Array<Schemas.EmployeeResponse>; work_order: Schemas.WorkOrderResponse };
+        data: { created_employees: Array<Schemas.EmployeeResponse>; task: Schemas.TaskResponse };
         pagination?: (null | Schemas.PaginationMetadata) | undefined;
       };
       400: unknown;
@@ -2871,7 +2890,7 @@ export type EndpointByMethod = {
     "/api/v1/equipment/{equipment_id}": Endpoints.delete_DeleteEquipment;
     "/api/v1/organizations/{organization_id}": Endpoints.delete_DeleteOrganization;
     "/api/v1/organizations/{organization_id}/absences/{absence_id}": Endpoints.delete_DeleteAbsence;
-    "/api/v1/organizations/{organization_id}/work-orders/{work_order_id}": Endpoints.delete_DeleteWorkOrder;
+    "/api/v1/organizations/{organization_id}/tasks/{task_id}": Endpoints.delete_DeleteTask;
     "/api/v1/products/{product_id}": Endpoints.delete_DeleteProduct;
     "/api/v1/quotes/{quote_id}": Endpoints.delete_DeleteQuote;
     "/api/v1/service-rates/{service_rate_id}": Endpoints.delete_DeleteServiceRate;
@@ -2889,7 +2908,7 @@ export type EndpointByMethod = {
     "/api/v1/equipment/{equipment_id}": Endpoints.patch_UpdateEquipment;
     "/api/v1/organizations/{organization_id}": Endpoints.patch_UpdateOrganization;
     "/api/v1/organizations/{organization_id}/absences/{absence_id}": Endpoints.patch_PatchAbsence;
-    "/api/v1/organizations/{organization_id}/work-orders/{work_order_id}": Endpoints.patch_PatchWorkOrder;
+    "/api/v1/organizations/{organization_id}/tasks/{task_id}": Endpoints.patch_PatchTask;
     "/api/v1/products/{product_id}": Endpoints.patch_UpdateProduct;
     "/api/v1/quotes/{quote_id}": Endpoints.patch_UpdateQuote;
     "/api/v1/quotes/{quote_id}/status": Endpoints.patch_UpdateQuoteStatus;
@@ -2925,8 +2944,8 @@ export type EndpointByMethod = {
     "/api/v1/organizations/{organization_id}/products": Endpoints.get_ListProducts;
     "/api/v1/organizations/{organization_id}/quotes": Endpoints.get_ListQuotes;
     "/api/v1/organizations/{organization_id}/service-rates": Endpoints.get_ListServiceRates;
-    "/api/v1/organizations/{organization_id}/work-orders": Endpoints.get_ListWorkOrders;
-    "/api/v1/organizations/{organization_id}/work-orders/{work_order_id}": Endpoints.get_GetWorkOrder;
+    "/api/v1/organizations/{organization_id}/tasks": Endpoints.get_ListTasks;
+    "/api/v1/organizations/{organization_id}/tasks/{task_id}": Endpoints.get_GetTask;
     "/api/v1/products/{product_id}": Endpoints.get_GetProduct;
     "/api/v1/quotes/{quote_id}": Endpoints.get_GetQuote;
     "/api/v1/quotes/{quote_id}/pdf": Endpoints.get_ExportQuotePdf;
@@ -2952,7 +2971,7 @@ export type EndpointByMethod = {
     "/api/v1/organizations/{organization_id}/products": Endpoints.post_CreateProduct;
     "/api/v1/organizations/{organization_id}/quotes": Endpoints.post_CreateQuote;
     "/api/v1/organizations/{organization_id}/service-rates": Endpoints.post_CreateServiceRate;
-    "/api/v1/organizations/{organization_id}/work-orders": Endpoints.post_CreateWorkOrder;
+    "/api/v1/organizations/{organization_id}/tasks": Endpoints.post_CreateTask;
   };
   put: {
     "/api/v1/chat/channels/{channel_id}/permissions/everyone": Endpoints.put_UpsertEveryoneOverwrite;

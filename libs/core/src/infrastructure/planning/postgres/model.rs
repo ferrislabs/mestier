@@ -2,64 +2,69 @@ use chrono::{DateTime, Utc};
 use common::CoreError;
 use uuid::Uuid;
 
-use crate::{
-    Assignment, PlanningWorkOrder, infrastructure::work_order::postgres::model::WorkOrderRow,
-};
+use crate::{PlanningTask, TaskAssignment, infrastructure::task::postgres::model::TaskRow};
 
-/// A `work_orders` row projected for the planning read model:
-/// `WorkOrderRow`'s own columns plus the two joined display fields it does
-/// not itself carry, `customer_name` and `context_label`. Delegates to
-/// `WorkOrderRow::into_work_order` for the shared status-parsing logic
-/// rather than duplicating it — `work_order` (W1) is read-only from here,
-/// never modified.
+/// A `tasks` row projected for the planning read model: `TaskRow`'s own
+/// columns plus the fields it does not itself carry — `customer_name`/
+/// `context_label` (both `None` for a task with no customer, via the `LEFT
+/// JOIN`) and `child_count`. Delegates to `TaskRow::into_task` for the
+/// shared status-parsing logic rather than duplicating it — `task` (T1) is
+/// read-only from here, never modified.
 #[derive(Debug, Clone)]
-pub struct PlanningWorkOrderRow {
+pub struct PlanningTaskRow {
     pub id: Uuid,
     pub org_id: Uuid,
-    pub customer_id: Uuid,
-    pub customer_context_id: Uuid,
-    pub quote_id: Option<Uuid>,
-    pub starts_at: DateTime<Utc>,
-    pub ends_at: DateTime<Utc>,
+    pub parent_task_id: Option<Uuid>,
+    pub title: String,
+    pub description: Option<String>,
+    pub starts_at: Option<DateTime<Utc>>,
+    pub ends_at: Option<DateTime<Utc>>,
     pub all_day: bool,
     pub status: String,
-    pub title: Option<String>,
-    pub note: Option<String>,
+    pub blocks_availability: bool,
+    pub customer_id: Option<Uuid>,
+    pub customer_context_id: Option<Uuid>,
+    pub quote_id: Option<Uuid>,
     pub deleted_at: Option<DateTime<Utc>>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
-    pub customer_name: String,
-    pub context_label: String,
+    pub customer_name: Option<String>,
+    pub context_label: Option<String>,
+    pub child_count: i64,
 }
 
-impl PlanningWorkOrderRow {
-    pub fn into_planning_work_order(
+impl PlanningTaskRow {
+    pub fn into_planning_task(
         self,
-        assignments: Vec<Assignment>,
-    ) -> Result<PlanningWorkOrder, CoreError> {
+        assignments: Vec<TaskAssignment>,
+    ) -> Result<PlanningTask, CoreError> {
         let customer_name = self.customer_name;
         let context_label = self.context_label;
-        let row = WorkOrderRow {
+        let child_count = self.child_count;
+        let row = TaskRow {
             id: self.id,
             org_id: self.org_id,
-            customer_id: self.customer_id,
-            customer_context_id: self.customer_context_id,
-            quote_id: self.quote_id,
+            parent_task_id: self.parent_task_id,
+            title: self.title,
+            description: self.description,
             starts_at: self.starts_at,
             ends_at: self.ends_at,
             all_day: self.all_day,
             status: self.status,
-            title: self.title,
-            note: self.note,
+            blocks_availability: self.blocks_availability,
+            customer_id: self.customer_id,
+            customer_context_id: self.customer_context_id,
+            quote_id: self.quote_id,
             deleted_at: self.deleted_at,
             created_at: self.created_at,
             updated_at: self.updated_at,
         };
 
-        Ok(PlanningWorkOrder {
-            work_order: row.into_work_order(assignments)?,
+        Ok(PlanningTask {
+            task: row.into_task(assignments)?,
             customer_name,
             context_label,
+            child_count,
         })
     }
 }

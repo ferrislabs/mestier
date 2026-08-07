@@ -4,8 +4,7 @@ use chrono::{DateTime, NaiveDate, Utc};
 use common::CoreError;
 
 use crate::{
-    AbsenceKind, EmployeeAbsenceId, EmployeeId, MinuteInterval, UserId, WorkOrder, WorkOrderId,
-    WorkOrderStatus,
+    AbsenceKind, EmployeeAbsenceId, EmployeeId, MinuteInterval, Task, TaskId, TaskStatus, UserId,
 };
 
 pub mod ports;
@@ -66,16 +65,21 @@ impl PlanningResource {
 /// planning module design doc).
 #[derive(Debug, Clone, PartialEq)]
 pub enum PlanningEntry {
-    WorkOrder {
-        id: WorkOrderId,
+    Task {
+        id: TaskId,
+        parent_task_id: Option<TaskId>,
         starts_at: DateTime<Utc>,
         ends_at: DateTime<Utc>,
         all_day: bool,
-        status: WorkOrderStatus,
-        title: Option<String>,
-        customer_name: String,
-        context_label: String,
-        note: Option<String>,
+        status: TaskStatus,
+        blocks_availability: bool,
+        /// The number of direct children — always `0` for a subtask, since
+        /// the hierarchy is capped at two levels.
+        child_count: i64,
+        title: String,
+        customer_name: Option<String>,
+        context_label: Option<String>,
+        description: Option<String>,
         employee_ids: Vec<EmployeeId>,
     },
     Absence {
@@ -89,16 +93,19 @@ pub enum PlanningEntry {
     },
 }
 
-/// A work order projected for the planning read model: the domain
-/// `WorkOrder` (with its `assignments`) plus the two display fields it does
-/// not itself carry, `customer_name` and `context_label`. Feeds both
-/// `PlanningEntry::WorkOrder` (via the two extra fields) and, via
-/// `.work_order`, `detect_conflicts`'s `busy` argument.
+/// A task projected for the planning read model: the domain `Task` (with
+/// its `assignments`) plus the display fields it does not itself carry —
+/// `customer_name`/`context_label` (both `None` for a task with no
+/// customer) and `child_count`, computed alongside it in one grouped query
+/// rather than loaded from the hierarchy (see the planning module design
+/// doc's N+1 warning). Feeds both `PlanningEntry::Task` (via the extra
+/// fields) and, via `.task`, `detect_conflicts`'s `busy` argument.
 #[derive(Debug, Clone, PartialEq)]
-pub struct PlanningWorkOrder {
-    pub work_order: WorkOrder,
-    pub customer_name: String,
-    pub context_label: String,
+pub struct PlanningTask {
+    pub task: Task,
+    pub customer_name: Option<String>,
+    pub context_label: Option<String>,
+    pub child_count: i64,
 }
 
 /// One employee's work time for the read window: every day
@@ -152,8 +159,8 @@ pub enum ConflictKind {
         note: Option<String>,
     },
     OutsideWorkHours,
-    OverlappingWorkOrder {
-        work_order_id: WorkOrderId,
+    OverlappingTask {
+        task_id: TaskId,
     },
 }
 

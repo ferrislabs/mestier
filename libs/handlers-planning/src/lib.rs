@@ -18,7 +18,7 @@ use mestier_core::OrganizationId;
 pub mod paths;
 pub mod planning;
 pub mod response;
-pub mod work_order;
+pub mod task;
 pub mod work_time;
 
 pub const TAG: &str = "planning";
@@ -71,7 +71,7 @@ pub(crate) async fn require_employee_target(
 
 pub fn router(state: &AppState) -> Router<AppState> {
     Router::new()
-        .merge(work_order::router(state))
+        .merge(task::router(state))
         .merge(work_time::router(state))
         .merge(planning::router(state))
         .layer(from_fn_with_state(state.clone(), rate_limit_middleware))
