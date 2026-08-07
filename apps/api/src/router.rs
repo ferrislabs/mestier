@@ -14,8 +14,8 @@ use handlers_customer as customer;
 use handlers_discord as discord;
 use handlers_files as files;
 use handlers_organization as organization;
-use handlers_quote as quote;
 use handlers_planning as planning;
+use handlers_quote as quote;
 use handlers_reference as reference;
 
 use crate::openapi::ApiDoc;
