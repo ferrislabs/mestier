@@ -57,7 +57,7 @@ impl PlanningWorkOrderRow {
         };
 
         Ok(PlanningWorkOrder {
-            work_order: row.into_work_order(assignments)?,
+            work_order: row.into_work_order(assignments, Vec::new())?,
             customer_name,
             context_label,
         })

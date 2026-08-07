@@ -2,7 +2,9 @@ use auth::Identity;
 use axum::{Extension, Json, extract::State};
 use chrono::{DateTime, Utc};
 use handlers::{ApiError, AppState, DataEnvelope, Response};
-use mestier_core::{AssigneeRef, EmployeeId, PatchWorkOrderCommand, UserId, WorkOrderStatus};
+use mestier_core::{
+    AssigneeRef, EmployeeId, EquipmentId, PatchWorkOrderCommand, UserId, WorkOrderStatus,
+};
 use serde::{Deserialize, Deserializer};
 use utoipa::ToSchema;
 
@@ -41,8 +43,8 @@ impl From<AssigneeRefRequest> for AssigneeRef {
 
 /// Every field is optional and, when present, replaces the current value —
 /// `title`/`note` additionally distinguish "absent" from "present but
-/// `null`" (see [`deserialize_present`]), and `assignees` is the complete
-/// replacement list, never a delta.
+/// `null`" (see [`deserialize_present`]), and `assignees` / `equipment` are
+/// the complete replacement lists, never a delta.
 #[derive(Debug, Deserialize, ToSchema)]
 pub struct UpdateWorkOrderRequest {
     #[serde(default)]
@@ -61,6 +63,8 @@ pub struct UpdateWorkOrderRequest {
     pub note: Option<Option<String>>,
     #[serde(default)]
     pub assignees: Option<Vec<AssigneeRefRequest>>,
+    #[serde(default)]
+    pub equipment: Option<Vec<EquipmentId>>,
 }
 
 #[utoipa::path(
@@ -104,6 +108,7 @@ pub async fn handler(
     command.assignees = payload
         .assignees
         .map(|assignees| assignees.into_iter().map(Into::into).collect());
+    command.equipment = payload.equipment;
 
     let (work_order, created_employees) = state.usecase.patch_work_order(command).await?;
 
@@ -234,6 +239,22 @@ mod tests {
             request.assignees, None,
             "an absent `assignees` key must leave current assignments untouched, which is a \
              different outcome than `assignees: []`"
+        );
+        assert_eq!(
+            request.equipment, None,
+            "an absent `equipment` key must leave current equipment untouched"
+        );
+    }
+
+    #[test]
+    fn empty_equipment_array_means_clear_every_link() {
+        let request = parse(json!({ "equipment": [] }));
+
+        assert_eq!(
+            request.equipment,
+            Some(Vec::new()),
+            "`equipment: []` is a present, empty replacement list — it must drop every \
+             equipment link"
         );
     }
 

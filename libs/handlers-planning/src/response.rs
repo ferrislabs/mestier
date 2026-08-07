@@ -1,7 +1,7 @@
 use chrono::{DateTime, Utc};
 use mestier_core::{
-    CustomerContextId, CustomerId, Employee, EmployeeId, OrganizationId, QuoteId, UserId,
-    WorkOrder, WorkOrderId, WorkOrderStatus,
+    CustomerContextId, CustomerId, Employee, EmployeeId, EquipmentId, OrganizationId, QuoteId,
+    UserId, WorkOrder, WorkOrderId, WorkOrderStatus,
 };
 use serde::Serialize;
 use utoipa::ToSchema;
@@ -22,6 +22,9 @@ pub struct WorkOrderResponse {
     /// The complete set of currently assigned employees — mirrors the
     /// `PATCH` contract, where `assignees` is always the full list.
     pub employee_ids: Vec<EmployeeId>,
+    /// The complete set of currently assigned equipment — mirrors the
+    /// `PATCH` contract, where `equipment` is always the full list.
+    pub equipment_ids: Vec<EquipmentId>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }
@@ -44,6 +47,11 @@ impl From<WorkOrder> for WorkOrderResponse {
                 .assignments
                 .into_iter()
                 .map(|assignment| assignment.employee_id)
+                .collect(),
+            equipment_ids: value
+                .equipment
+                .into_iter()
+                .map(|link| link.equipment_id)
                 .collect(),
             created_at: value.created_at,
             updated_at: value.updated_at,
@@ -128,6 +136,7 @@ mod tests {
                 employee_id,
                 created_at: now,
             }],
+            equipment: Vec::new(),
             deleted_at: None,
             created_at: now,
             updated_at: now,

@@ -5,7 +5,9 @@ use crate::{
     Employee, OrganizationId, WorkOrder, WorkOrderId,
     application::MestierUseCase,
     domain::work_order::{
-        commands::{CreateWorkOrderCommand, PatchWorkOrderCommand},
+        commands::{
+            BulkCreateWorkOrdersCommand, CreateWorkOrderCommand, PatchWorkOrderCommand,
+        },
         service::WorkOrderService,
     },
 };
@@ -13,7 +15,7 @@ use crate::{
 mod tests;
 
 impl MestierUseCase {
-    #[transactional(work_order, employee, user, member)]
+    #[transactional(work_order, employee, user, member, equipment)]
     pub async fn create_work_order(
         &self,
         command: CreateWorkOrderCommand,
@@ -23,22 +25,41 @@ impl MestierUseCase {
             employee_repository,
             user_repository,
             member_repository,
+            equipment_repository,
         );
         service.create_work_order(command).await
     }
 
-    #[transactional(work_order, employee, user, member)]
+    /// Creates many work orders (shared schedule/assignees/equipment) in one
+    /// transaction — either every insert lands or the whole bulk rolls back.
+    #[transactional(work_order, employee, user, member, equipment)]
+    pub async fn bulk_create_work_orders(
+        &self,
+        command: BulkCreateWorkOrdersCommand,
+    ) -> Result<(Vec<WorkOrder>, Vec<Employee>), CoreError> {
+        let mut service = WorkOrderService::new(
+            work_order_repository,
+            employee_repository,
+            user_repository,
+            member_repository,
+            equipment_repository,
+        );
+        service.bulk_create_work_orders(command).await
+    }
+
+    #[transactional(work_order, employee, user, member, equipment)]
     pub async fn get_work_order(&self, id: WorkOrderId) -> Result<WorkOrder, CoreError> {
         let mut service = WorkOrderService::new(
             work_order_repository,
             employee_repository,
             user_repository,
             member_repository,
+            equipment_repository,
         );
         service.get_work_order(id).await
     }
 
-    #[transactional(work_order, employee, user, member)]
+    #[transactional(work_order, employee, user, member, equipment)]
     pub async fn list_work_orders(
         &self,
         organization_id: OrganizationId,
@@ -50,6 +71,7 @@ impl MestierUseCase {
             employee_repository,
             user_repository,
             member_repository,
+            equipment_repository,
         );
         service
             .list_work_orders(organization_id, limit, offset)
@@ -58,9 +80,9 @@ impl MestierUseCase {
 
     /// Reschedules and reassigns a work order in one transaction: either
     /// every write here (the schedule/status/title/note edits, the full
-    /// assignment replacement, and any on-the-fly employee record) lands
-    /// together, or the whole `PATCH` rolls back.
-    #[transactional(work_order, employee, user, member)]
+    /// assignment / equipment replacement, and any on-the-fly employee
+    /// record) lands together, or the whole `PATCH` rolls back.
+    #[transactional(work_order, employee, user, member, equipment)]
     pub async fn patch_work_order(
         &self,
         command: PatchWorkOrderCommand,
@@ -70,17 +92,19 @@ impl MestierUseCase {
             employee_repository,
             user_repository,
             member_repository,
+            equipment_repository,
         );
         service.patch_work_order(command).await
     }
 
-    #[transactional(work_order, employee, user, member)]
+    #[transactional(work_order, employee, user, member, equipment)]
     pub async fn soft_delete_work_order(&self, id: WorkOrderId) -> Result<(), CoreError> {
         let mut service = WorkOrderService::new(
             work_order_repository,
             employee_repository,
             user_repository,
             member_repository,
+            equipment_repository,
         );
         service.soft_delete_work_order(id).await
     }

@@ -5,7 +5,9 @@ use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 use uuid::Uuid;
 
-use crate::{CustomerContextId, CustomerId, EmployeeId, OrganizationId, QuoteId, UserId};
+use crate::{
+    CustomerContextId, CustomerId, EmployeeId, EquipmentId, OrganizationId, QuoteId, UserId,
+};
 
 pub mod commands;
 pub mod ports;
@@ -107,6 +109,32 @@ pub struct Assignment {
     pub created_at: DateTime<Utc>,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, ToSchema)]
+pub struct WorkOrderEquipmentId(pub Uuid);
+
+impl FromStr for WorkOrderEquipmentId {
+    type Err = uuid::Error;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Uuid::from_str(s).map(WorkOrderEquipmentId)
+    }
+}
+
+impl Display for WorkOrderEquipmentId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct WorkOrderEquipment {
+    pub id: WorkOrderEquipmentId,
+    pub organization_id: OrganizationId,
+    pub work_order_id: WorkOrderId,
+    pub equipment_id: EquipmentId,
+    pub created_at: DateTime<Utc>,
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct WorkOrder {
     pub id: WorkOrderId,
@@ -124,6 +152,9 @@ pub struct WorkOrder {
     /// persisted as a whole — see the `PATCH` contract: `assignees` is the
     /// full list, never a delta.
     pub assignments: Vec<Assignment>,
+    /// The complete set of equipment currently assigned. Same full-replace
+    /// contract as `assignments` (`PATCH`'s `equipment`).
+    pub equipment: Vec<WorkOrderEquipment>,
     pub deleted_at: Option<DateTime<Utc>>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
@@ -157,6 +188,19 @@ mod tests {
     #[test]
     fn assignment_id_rejects_invalid_uuid() {
         assert!(AssignmentId::from_str("not-a-uuid").is_err());
+    }
+
+    #[test]
+    fn work_order_equipment_id_parses_uuid() {
+        let uuid = Uuid::new_v4();
+        let parsed = WorkOrderEquipmentId::from_str(&uuid.to_string()).unwrap();
+
+        assert_eq!(parsed.0, uuid);
+    }
+
+    #[test]
+    fn work_order_equipment_id_rejects_invalid_uuid() {
+        assert!(WorkOrderEquipmentId::from_str("not-a-uuid").is_err());
     }
 
     #[test]

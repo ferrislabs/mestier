@@ -5,8 +5,9 @@ use common::CoreError;
 use uuid::Uuid;
 
 use crate::{
-    Assignment, AssignmentId, CustomerContextId, CustomerId, EmployeeId, OrganizationId, QuoteId,
-    WorkOrder, WorkOrderId, WorkOrderStatus,
+    Assignment, AssignmentId, CustomerContextId, CustomerId, EmployeeId, EquipmentId,
+    OrganizationId, QuoteId, WorkOrder, WorkOrderEquipment, WorkOrderEquipmentId, WorkOrderId,
+    WorkOrderStatus,
 };
 
 #[derive(Debug, Clone)]
@@ -28,7 +29,11 @@ pub struct WorkOrderRow {
 }
 
 impl WorkOrderRow {
-    pub fn into_work_order(self, assignments: Vec<Assignment>) -> Result<WorkOrder, CoreError> {
+    pub fn into_work_order(
+        self,
+        assignments: Vec<Assignment>,
+        equipment: Vec<WorkOrderEquipment>,
+    ) -> Result<WorkOrder, CoreError> {
         let status = WorkOrderStatus::from_str(&self.status).map_err(|e| {
             CoreError::Internal(format!("invalid work order status in database: {e}"))
         })?;
@@ -46,6 +51,7 @@ impl WorkOrderRow {
             title: self.title,
             note: self.note,
             assignments,
+            equipment,
             deleted_at: self.deleted_at,
             created_at: self.created_at,
             updated_at: self.updated_at,
@@ -69,6 +75,27 @@ impl From<AssignmentRow> for Assignment {
             organization_id: OrganizationId(row.org_id),
             work_order_id: WorkOrderId(row.work_order_id),
             employee_id: EmployeeId(row.employee_id),
+            created_at: row.created_at,
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct WorkOrderEquipmentRow {
+    pub id: Uuid,
+    pub org_id: Uuid,
+    pub work_order_id: Uuid,
+    pub equipment_id: Uuid,
+    pub created_at: DateTime<Utc>,
+}
+
+impl From<WorkOrderEquipmentRow> for WorkOrderEquipment {
+    fn from(row: WorkOrderEquipmentRow) -> Self {
+        Self {
+            id: WorkOrderEquipmentId(row.id),
+            organization_id: OrganizationId(row.org_id),
+            work_order_id: WorkOrderId(row.work_order_id),
+            equipment_id: EquipmentId(row.equipment_id),
             created_at: row.created_at,
         }
     }

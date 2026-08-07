@@ -16,7 +16,8 @@ pub use domain::{
     Organization, OrganizationId, Permissions, PlanningEntry, PlanningResource, PlanningView,
     PlanningWorkOrder, Product, ProductId, Quote, QuoteId, QuoteLine, QuoteLineId, QuoteStatus,
     RhythmSlot, RhythmSlotId, Role, RoleId, ServiceRate, ServiceRateId, ServiceRateUnit,
-    StoredFile, TimeRange, Tz, User, UserId, WorkOrder, WorkOrderId, WorkOrderStatus,
+    StoredFile, TimeRange, Tz, User, UserId, WorkOrder, WorkOrderEquipment, WorkOrderEquipmentId,
+    WorkOrderId, WorkOrderStatus,
     absence::commands::{CreateAbsenceCommand, PatchAbsenceCommand},
     customer::commands::{CreateCustomerCommand, UpdateCustomerCommand},
     customer_contact::commands::{CreateCustomerContactCommand, UpdateCustomerContactCommand},
@@ -32,7 +33,10 @@ pub use domain::{
     },
     service_rate::commands::{CreateServiceRateCommand, UpdateServiceRateCommand},
     user::commands::{CreateUserCommand, UpsertUserBySubCommand},
-    work_order::commands::{CreateWorkOrderCommand, PatchWorkOrderCommand},
+    work_order::commands::{
+        BulkCreateWorkOrderItem, BulkCreateWorkOrdersCommand, CreateWorkOrderCommand,
+        PatchWorkOrderCommand,
+    },
     work_time::commands::{
         ReplaceRhythmCommand, ReplaceWorkSlotsCommand, RhythmSlotInput, WorkSlotInput,
     },

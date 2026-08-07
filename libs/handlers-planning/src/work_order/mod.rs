@@ -14,6 +14,7 @@ use serde::Deserialize;
 
 use crate::require_org_membership;
 
+pub mod bulk_create;
 pub mod create;
 pub mod get_one;
 pub mod list;
@@ -28,6 +29,7 @@ pub fn router(_state: &AppState) -> Router<AppState> {
     Router::new()
         .typed_get(list::handler)
         .typed_post(create::handler)
+        .typed_post(bulk_create::handler)
         .typed_get(get_one::handler)
         .typed_patch(update::handler)
         .typed_delete(soft_delete::handler)
@@ -36,6 +38,12 @@ pub fn router(_state: &AppState) -> Router<AppState> {
 #[derive(TypedPath, Deserialize)]
 #[typed_path("/api/v1/organizations/{organization_id}/work-orders")]
 pub struct WorkOrdersPath {
+    pub organization_id: mestier_core::OrganizationId,
+}
+
+#[derive(TypedPath, Deserialize)]
+#[typed_path("/api/v1/organizations/{organization_id}/work-orders/bulk")]
+pub struct BulkWorkOrdersPath {
     pub organization_id: mestier_core::OrganizationId,
 }
 

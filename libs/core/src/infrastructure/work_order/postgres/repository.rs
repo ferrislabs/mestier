@@ -4,11 +4,11 @@ use mestier_macros::repository;
 use sqlx::PgConnection;
 
 use crate::{
-    Assignment, OrganizationId, WorkOrder, WorkOrderId,
+    Assignment, OrganizationId, WorkOrder, WorkOrderEquipment, WorkOrderId,
     domain::work_order::ports::WorkOrderRepository,
     infrastructure::{
         postgres::{SharedTx, error::map_sqlx_error},
-        work_order::postgres::model::{AssignmentRow, WorkOrderRow},
+        work_order::postgres::model::{AssignmentRow, WorkOrderEquipmentRow, WorkOrderRow},
     },
 };
 
@@ -53,7 +53,8 @@ impl<'tx> WorkOrderRepository for PgWorkOrderRepository<'tx> {
         .map_err(map_sqlx_error)?;
 
         replace_assignments(&mut tx, work_order.id, &work_order.assignments).await?;
-        row.into_work_order(work_order.assignments.clone())
+        replace_equipment(&mut tx, work_order.id, &work_order.equipment).await?;
+        row.into_work_order(work_order.assignments.clone(), work_order.equipment.clone())
     }
 
     async fn find_by_id(&mut self, id: WorkOrderId) -> Result<Option<WorkOrder>, CoreError> {
@@ -74,7 +75,8 @@ impl<'tx> WorkOrderRepository for PgWorkOrderRepository<'tx> {
         match row {
             Some(row) => {
                 let assignments = fetch_assignments(&mut tx, id).await?;
-                Ok(Some(row.into_work_order(assignments)?))
+                let equipment = fetch_equipment(&mut tx, id).await?;
+                Ok(Some(row.into_work_order(assignments, equipment)?))
             }
             None => Ok(None),
         }
@@ -114,8 +116,10 @@ impl<'tx> WorkOrderRepository for PgWorkOrderRepository<'tx> {
 
         let mut work_orders = Vec::with_capacity(rows.len());
         for row in rows {
-            let assignments = fetch_assignments(&mut tx, WorkOrderId(row.id)).await?;
-            work_orders.push(row.into_work_order(assignments)?);
+            let id = WorkOrderId(row.id);
+            let assignments = fetch_assignments(&mut tx, id).await?;
+            let equipment = fetch_equipment(&mut tx, id).await?;
+            work_orders.push(row.into_work_order(assignments, equipment)?);
         }
 
         Ok((work_orders, total as u64))
@@ -153,7 +157,8 @@ impl<'tx> WorkOrderRepository for PgWorkOrderRepository<'tx> {
         let row = row.ok_or(CoreError::NotFound)?;
 
         replace_assignments(&mut tx, work_order.id, &work_order.assignments).await?;
-        row.into_work_order(work_order.assignments.clone())
+        replace_equipment(&mut tx, work_order.id, &work_order.equipment).await?;
+        row.into_work_order(work_order.assignments.clone(), work_order.equipment.clone())
     }
 
     async fn soft_delete(
@@ -234,6 +239,62 @@ async fn replace_assignments(
             assignment.work_order_id.0,
             assignment.employee_id.0,
             assignment.created_at,
+        )
+        .execute(&mut *conn)
+        .await
+        .map_err(map_sqlx_error)?;
+    }
+
+    Ok(())
+}
+
+async fn fetch_equipment(
+    conn: &mut PgConnection,
+    work_order_id: WorkOrderId,
+) -> Result<Vec<WorkOrderEquipment>, CoreError> {
+    let rows = sqlx::query_as!(
+        WorkOrderEquipmentRow,
+        r#"
+        SELECT id, org_id, work_order_id, equipment_id, created_at
+        FROM work_order_equipment
+        WHERE work_order_id = $1
+        ORDER BY created_at ASC, id ASC
+        "#,
+        work_order_id.0,
+    )
+    .fetch_all(conn)
+    .await
+    .map_err(map_sqlx_error)?;
+
+    Ok(rows.into_iter().map(Into::into).collect())
+}
+
+/// Replaces the complete equipment set for a work order — same physical
+/// delete-then-insert strategy as assignments.
+async fn replace_equipment(
+    conn: &mut PgConnection,
+    work_order_id: WorkOrderId,
+    equipment: &[WorkOrderEquipment],
+) -> Result<(), CoreError> {
+    sqlx::query!(
+        r#"DELETE FROM work_order_equipment WHERE work_order_id = $1"#,
+        work_order_id.0,
+    )
+    .execute(&mut *conn)
+    .await
+    .map_err(map_sqlx_error)?;
+
+    for link in equipment {
+        sqlx::query!(
+            r#"
+            INSERT INTO work_order_equipment (id, org_id, work_order_id, equipment_id, created_at)
+            VALUES ($1, $2, $3, $4, $5)
+            "#,
+            link.id.0,
+            link.organization_id.0,
+            link.work_order_id.0,
+            link.equipment_id.0,
+            link.created_at,
         )
         .execute(&mut *conn)
         .await

@@ -1,7 +1,7 @@
 use chrono::{DateTime, Utc};
 
 use crate::{
-    CustomerContextId, CustomerId, OrganizationId, QuoteId,
+    CustomerContextId, CustomerId, EquipmentId, OrganizationId, QuoteId,
     domain::work_order::{AssigneeRef, WorkOrderId, WorkOrderStatus},
 };
 
@@ -16,6 +16,30 @@ pub struct CreateWorkOrderCommand {
     pub all_day: bool,
     pub title: Option<String>,
     pub note: Option<String>,
+}
+
+/// One customer/context row in a bulk create — schedule, assignees and
+/// equipment are shared across every item by the parent command.
+#[derive(Debug, Clone)]
+pub struct BulkCreateWorkOrderItem {
+    pub customer_id: CustomerId,
+    pub customer_context_id: CustomerContextId,
+    pub quote_id: Option<QuoteId>,
+    pub title: Option<String>,
+    pub note: Option<String>,
+}
+
+/// Creates many work orders in one transaction, sharing schedule + assignees
+/// + equipment across every customer/context item.
+#[derive(Debug, Clone)]
+pub struct BulkCreateWorkOrdersCommand {
+    pub organization_id: OrganizationId,
+    pub starts_at: DateTime<Utc>,
+    pub ends_at: DateTime<Utc>,
+    pub all_day: bool,
+    pub assignees: Vec<AssigneeRef>,
+    pub equipment_ids: Vec<EquipmentId>,
+    pub items: Vec<BulkCreateWorkOrderItem>,
 }
 
 /// Carries a `PATCH`: every field is optional and only the ones present are
@@ -34,6 +58,9 @@ pub struct PatchWorkOrderCommand {
     /// The complete replacement list of assignees, or `None` to leave the
     /// current assignments untouched. Never a delta.
     pub assignees: Option<Vec<AssigneeRef>>,
+    /// The complete replacement list of equipment ids, or `None` to leave
+    /// the current equipment untouched. Never a delta.
+    pub equipment: Option<Vec<EquipmentId>>,
 }
 
 impl PatchWorkOrderCommand {
@@ -49,6 +76,7 @@ impl PatchWorkOrderCommand {
             title: None,
             note: None,
             assignees: None,
+            equipment: None,
         }
     }
 }

@@ -1,60 +1,68 @@
-use std::collections::HashSet;
+﻿use std::collections::HashSet;
 
 use chrono::Utc;
 use common::{CoreError, generate_uuid_v7};
 
 use crate::{
-    Employee, EmployeeId, WorkOrder,
+    Employee, EmployeeId, EquipmentId, WorkOrder,
     domain::{
         employee::ports::EmployeeRepository,
+        equipment::ports::EquipmentRepository,
         member::ports::MemberRepository,
         user::ports::UserRepository,
         work_order::{
-            Assignment, AssignmentId, WorkOrderId,
-            commands::{CreateWorkOrderCommand, PatchWorkOrderCommand},
+            Assignment, AssignmentId, WorkOrderEquipment, WorkOrderEquipmentId, WorkOrderId,
+            commands::{
+                BulkCreateWorkOrdersCommand, CreateWorkOrderCommand, PatchWorkOrderCommand,
+            },
             ports::WorkOrderRepository,
         },
     },
 };
 
-/// Orchestrates work orders together with the employee, user and member
-/// repositories it needs to resolve `PATCH`'s `assignees` — in particular
-/// the on-the-fly employee creation for a `member` assignee who does not
-/// have an employee record yet. This mirrors how `OrganizationService`
-/// composes `role`/`member`/`user` repositories directly: cross-aggregate
-/// orchestration lives in the domain service that owns the use case, never
-/// in the thin `#[transactional]` application layer.
-pub struct WorkOrderService<WR, ER, UR, MR>
+/// Orchestrates work orders together with the employee, equipment, user and
+/// member repositories it needs to resolve `PATCH`'s `assignees` /
+/// `equipment` — in particular the on-the-fly employee creation for a
+/// `member` assignee who does not have an employee record yet. This mirrors
+/// how `OrganizationService` composes `role`/`member`/`user` repositories
+/// directly: cross-aggregate orchestration lives in the domain service that
+/// owns the use case, never in the thin `#[transactional]` application layer.
+pub struct WorkOrderService<WR, ER, UR, MR, EqR>
 where
     WR: WorkOrderRepository,
     ER: EmployeeRepository,
     UR: UserRepository,
     MR: MemberRepository,
+    EqR: EquipmentRepository,
 {
     work_order_repository: WR,
     employee_repository: ER,
     user_repository: UR,
     member_repository: MR,
+    equipment_repository: EqR,
 }
 
-impl<WR, ER, UR, MR> WorkOrderService<WR, ER, UR, MR>
+impl<WR, ER, UR, MR, EqR> WorkOrderService<WR, ER, UR, MR, EqR>
 where
     WR: WorkOrderRepository,
     ER: EmployeeRepository,
     UR: UserRepository,
     MR: MemberRepository,
+    EqR: EquipmentRepository,
 {
     pub fn new(
         work_order_repository: WR,
         employee_repository: ER,
         user_repository: UR,
         member_repository: MR,
+        equipment_repository: EqR,
     ) -> Self {
         Self {
             work_order_repository,
             employee_repository,
             user_repository,
             member_repository,
+            equipment_repository,
         }
     }
 
@@ -81,11 +89,92 @@ where
                 title: command.title,
                 note: command.note,
                 assignments: Vec::new(),
+                equipment: Vec::new(),
                 deleted_at: None,
                 created_at: now,
                 updated_at: now,
             })
             .await
+    }
+
+    /// Creates many work orders sharing one schedule, assignee set and
+    /// equipment set. Resolves assignees/equipment once, then inserts every
+    /// item in the same transaction (caller wraps with `#[transactional]`).
+    pub async fn bulk_create_work_orders(
+        &mut self,
+        command: BulkCreateWorkOrdersCommand,
+    ) -> Result<(Vec<WorkOrder>, Vec<Employee>), CoreError> {
+        if command.items.is_empty() {
+            return Err(CoreError::Conflict(
+                "bulk create requires at least one item".to_owned(),
+            ));
+        }
+
+        validate_schedule(command.starts_at, command.ends_at)?;
+        for item in &command.items {
+            validate_text_field("work order title", &item.title)?;
+            validate_text_field("work order note", &item.note)?;
+        }
+
+        let (employee_ids, created_employees) = self
+            .resolve_employee_ids(command.organization_id, command.assignees)
+            .await?;
+        let equipment_ids = self
+            .validate_equipment_ids(command.organization_id, command.equipment_ids)
+            .await?;
+
+        let now = Utc::now();
+        let mut created = Vec::with_capacity(command.items.len());
+        for item in command.items {
+            let id = WorkOrderId(generate_uuid_v7());
+            let assignments = employee_ids
+                .iter()
+                .copied()
+                .map(|employee_id| Assignment {
+                    id: AssignmentId(generate_uuid_v7()),
+                    organization_id: command.organization_id,
+                    work_order_id: id,
+                    employee_id,
+                    created_at: now,
+                })
+                .collect();
+            let equipment = equipment_ids
+                .iter()
+                .copied()
+                .map(|equipment_id| WorkOrderEquipment {
+                    id: WorkOrderEquipmentId(generate_uuid_v7()),
+                    organization_id: command.organization_id,
+                    work_order_id: id,
+                    equipment_id,
+                    created_at: now,
+                })
+                .collect();
+
+            let work_order = self
+                .work_order_repository
+                .insert(&WorkOrder {
+                    id,
+                    organization_id: command.organization_id,
+                    customer_id: item.customer_id,
+                    customer_context_id: item.customer_context_id,
+                    quote_id: item.quote_id,
+                    starts_at: command.starts_at,
+                    ends_at: command.ends_at,
+                    all_day: command.all_day,
+                    status: crate::WorkOrderStatus::Planned,
+                    title: item.title,
+                    note: item.note,
+                    assignments,
+                    equipment,
+                    deleted_at: None,
+                    created_at: now,
+                    updated_at: now,
+                })
+                .await?;
+            created.push(work_order);
+        }
+
+        Ok((created, created_employees))
     }
 
     pub async fn get_work_order(&mut self, id: WorkOrderId) -> Result<WorkOrder, CoreError> {
@@ -107,9 +196,9 @@ where
     }
 
     /// Applies a `PATCH`: reschedule, status/title/note edits, and a full
-    /// assignee replacement, all against the single `WorkOrder` loaded at
-    /// the top — the caller wraps this in one transaction (see
-    /// `#[transactional(work_order, employee, user, member)]` on
+    /// assignee / equipment replacement, all against the single `WorkOrder`
+    /// loaded at the top — the caller wraps this in one transaction (see
+    /// `#[transactional(work_order, employee, user, member, equipment)]` on
     /// `MestierUseCase::patch_work_order`), so either every write here lands
     /// or none does.
     ///
@@ -151,6 +240,12 @@ where
             Vec::new()
         };
 
+        if let Some(equipment_ids) = command.equipment {
+            work_order.equipment = self
+                .resolve_equipment(&work_order, equipment_ids)
+                .await?;
+        }
+
         let updated = self.work_order_repository.update(&work_order).await?;
         Ok((updated, created_employees))
     }
@@ -164,19 +259,9 @@ where
         work_order: &WorkOrder,
         assignees: Vec<crate::AssigneeRef>,
     ) -> Result<(Vec<Assignment>, Vec<Employee>), CoreError> {
-        let mut created_employees = Vec::new();
-        let mut seen = HashSet::new();
-        let mut employee_ids = Vec::with_capacity(assignees.len());
-
-        for assignee in assignees {
-            let employee_id = self
-                .resolve_assignee(work_order, assignee, &mut created_employees)
-                .await?;
-
-            if seen.insert(employee_id) {
-                employee_ids.push(employee_id);
-            }
-        }
+        let (employee_ids, created_employees) = self
+            .resolve_employee_ids(work_order.organization_id, assignees)
+            .await?;
 
         let now = Utc::now();
         let assignments = employee_ids
@@ -193,9 +278,31 @@ where
         Ok((assignments, created_employees))
     }
 
+    async fn resolve_employee_ids(
+        &mut self,
+        organization_id: crate::OrganizationId,
+        assignees: Vec<crate::AssigneeRef>,
+    ) -> Result<(Vec<EmployeeId>, Vec<Employee>), CoreError> {
+        let mut created_employees = Vec::new();
+        let mut seen = HashSet::new();
+        let mut employee_ids = Vec::with_capacity(assignees.len());
+
+        for assignee in assignees {
+            let employee_id = self
+                .resolve_assignee(organization_id, assignee, &mut created_employees)
+                .await?;
+
+            if seen.insert(employee_id) {
+                employee_ids.push(employee_id);
+            }
+        }
+
+        Ok((employee_ids, created_employees))
+    }
+
     async fn resolve_assignee(
         &mut self,
-        work_order: &WorkOrder,
+        organization_id: crate::OrganizationId,
         assignee: crate::AssigneeRef,
         created_employees: &mut Vec<Employee>,
     ) -> Result<EmployeeId, CoreError> {
@@ -207,7 +314,7 @@ where
                     .await?
                     .ok_or(CoreError::NotFound)?;
 
-                if employee.organization_id != work_order.organization_id {
+                if employee.organization_id != organization_id {
                     return Err(CoreError::NotFound);
                 }
 
@@ -215,13 +322,13 @@ where
             }
             crate::AssigneeRef::Member(user_id) => {
                 self.member_repository
-                    .find_by_org_and_user(work_order.organization_id, user_id)
+                    .find_by_org_and_user(organization_id, user_id)
                     .await?
                     .ok_or(CoreError::NotFound)?;
 
                 if let Some(existing) = self
                     .employee_repository
-                    .find_by_user_id(work_order.organization_id, user_id)
+                    .find_by_user_id(organization_id, user_id)
                     .await?
                 {
                     return Ok(existing.id);
@@ -238,7 +345,7 @@ where
                     .employee_repository
                     .insert(&Employee {
                         id: EmployeeId(generate_uuid_v7()),
-                        organization_id: work_order.organization_id,
+                        organization_id,
                         user_id: Some(user_id),
                         name: user.name,
                         // Never `Some(0)`: an on-the-fly record has no rate
@@ -256,6 +363,57 @@ where
                 Ok(employee_id)
             }
         }
+    }
+
+    async fn resolve_equipment(
+        &mut self,
+        work_order: &WorkOrder,
+        equipment_ids: Vec<EquipmentId>,
+    ) -> Result<Vec<WorkOrderEquipment>, CoreError> {
+        let validated = self
+            .validate_equipment_ids(work_order.organization_id, equipment_ids)
+            .await?;
+
+        let now = Utc::now();
+        Ok(validated
+            .into_iter()
+            .map(|equipment_id| WorkOrderEquipment {
+                id: WorkOrderEquipmentId(generate_uuid_v7()),
+                organization_id: work_order.organization_id,
+                work_order_id: work_order.id,
+                equipment_id,
+                created_at: now,
+            })
+            .collect())
+    }
+
+    async fn validate_equipment_ids(
+        &mut self,
+        organization_id: crate::OrganizationId,
+        equipment_ids: Vec<EquipmentId>,
+    ) -> Result<Vec<EquipmentId>, CoreError> {
+        let mut seen = HashSet::new();
+        let mut validated = Vec::with_capacity(equipment_ids.len());
+
+        for equipment_id in equipment_ids {
+            if !seen.insert(equipment_id) {
+                continue;
+            }
+
+            let equipment = self
+                .equipment_repository
+                .find_by_id(equipment_id)
+                .await?
+                .ok_or(CoreError::NotFound)?;
+
+            if equipment.organization_id != organization_id {
+                return Err(CoreError::NotFound);
+            }
+
+            validated.push(equipment_id);
+        }
+
+        Ok(validated)
     }
 
     pub async fn soft_delete_work_order(&mut self, id: WorkOrderId) -> Result<(), CoreError> {
@@ -289,10 +447,14 @@ fn validate_text_field(label: &str, value: &Option<String>) -> Result<(), CoreEr
 mod tests {
     use super::*;
     use crate::{
-        AssigneeRef, CustomerContextId, CustomerId, OrganizationId, User, UserId, WorkOrderStatus,
+        AssigneeRef, CustomerContextId, CustomerId, Equipment, EquipmentId, OrganizationId, User,
+        UserId, WorkOrderStatus,
         domain::{
-            employee::ports::MockEmployeeRepository, member::ports::MockMemberRepository,
-            user::ports::MockUserRepository, work_order::ports::MockWorkOrderRepository,
+            employee::ports::MockEmployeeRepository,
+            equipment::ports::MockEquipmentRepository,
+            member::ports::MockMemberRepository,
+            user::ports::MockUserRepository,
+            work_order::ports::MockWorkOrderRepository,
         },
     };
     use mockall::predicate::eq;
@@ -303,17 +465,20 @@ mod tests {
         employee_repository: MockEmployeeRepository,
         user_repository: MockUserRepository,
         member_repository: MockMemberRepository,
+        equipment_repository: MockEquipmentRepository,
     ) -> WorkOrderService<
         MockWorkOrderRepository,
         MockEmployeeRepository,
         MockUserRepository,
         MockMemberRepository,
+        MockEquipmentRepository,
     > {
         WorkOrderService::new(
             work_order_repository,
             employee_repository,
             user_repository,
             member_repository,
+            equipment_repository,
         )
     }
 
@@ -347,6 +512,20 @@ mod tests {
             title: Some("Toiture".to_owned()),
             note: None,
             assignments: Vec::new(),
+            equipment: Vec::new(),
+            deleted_at: None,
+            created_at: now,
+            updated_at: now,
+        }
+    }
+
+    fn equipment(id: EquipmentId, organization_id: OrganizationId) -> Equipment {
+        let now = Utc::now();
+        Equipment {
+            id,
+            organization_id,
+            name: "Nacelle".to_owned(),
+            hourly_rate_cents: 4500,
             deleted_at: None,
             created_at: now,
             updated_at: now,
@@ -384,6 +563,7 @@ mod tests {
             MockEmployeeRepository::new(),
             MockUserRepository::new(),
             MockMemberRepository::new(),
+            MockEquipmentRepository::new(),
         );
 
         let created = service.create_work_order(create_command()).await.unwrap();
@@ -400,6 +580,7 @@ mod tests {
             MockEmployeeRepository::new(),
             MockUserRepository::new(),
             MockMemberRepository::new(),
+            MockEquipmentRepository::new(),
         );
 
         let mut command = create_command();
@@ -417,6 +598,7 @@ mod tests {
             MockEmployeeRepository::new(),
             MockUserRepository::new(),
             MockMemberRepository::new(),
+            MockEquipmentRepository::new(),
         );
 
         let mut command = create_command();
@@ -441,6 +623,7 @@ mod tests {
             MockEmployeeRepository::new(),
             MockUserRepository::new(),
             MockMemberRepository::new(),
+            MockEquipmentRepository::new(),
         );
 
         let err = service.get_work_order(id).await.unwrap_err();
@@ -466,6 +649,7 @@ mod tests {
             MockEmployeeRepository::new(),
             MockUserRepository::new(),
             MockMemberRepository::new(),
+            MockEquipmentRepository::new(),
         );
 
         let (items, total) = service
@@ -506,6 +690,7 @@ mod tests {
             MockEmployeeRepository::new(),
             MockUserRepository::new(),
             MockMemberRepository::new(),
+            MockEquipmentRepository::new(),
         );
 
         let mut command = PatchWorkOrderCommand::new(id);
@@ -539,6 +724,7 @@ mod tests {
             MockEmployeeRepository::new(),
             MockUserRepository::new(),
             MockMemberRepository::new(),
+            MockEquipmentRepository::new(),
         );
 
         // Force an invalid window: ends_at before the existing starts_at.
@@ -578,6 +764,7 @@ mod tests {
             MockEmployeeRepository::new(),
             MockUserRepository::new(),
             MockMemberRepository::new(),
+            MockEquipmentRepository::new(),
         );
 
         let mut command = PatchWorkOrderCommand::new(id);
@@ -626,6 +813,7 @@ mod tests {
             employee_repository,
             MockUserRepository::new(),
             MockMemberRepository::new(),
+            MockEquipmentRepository::new(),
         );
 
         let mut command = PatchWorkOrderCommand::new(id);
@@ -670,6 +858,7 @@ mod tests {
             employee_repository,
             MockUserRepository::new(),
             MockMemberRepository::new(),
+            MockEquipmentRepository::new(),
         );
 
         let mut command = PatchWorkOrderCommand::new(id);
@@ -760,6 +949,7 @@ mod tests {
             employee_repository,
             user_repository,
             member_repository,
+            MockEquipmentRepository::new(),
         );
 
         let mut command = PatchWorkOrderCommand::new(id);
@@ -829,6 +1019,7 @@ mod tests {
             employee_repository,
             MockUserRepository::new(),
             member_repository,
+            MockEquipmentRepository::new(),
         );
 
         let mut command = PatchWorkOrderCommand::new(id);
@@ -868,6 +1059,7 @@ mod tests {
             MockEmployeeRepository::new(),
             MockUserRepository::new(),
             member_repository,
+            MockEquipmentRepository::new(),
         );
 
         let mut command = PatchWorkOrderCommand::new(id);
@@ -916,6 +1108,7 @@ mod tests {
             employee_repository,
             MockUserRepository::new(),
             MockMemberRepository::new(),
+            MockEquipmentRepository::new(),
         );
 
         let mut command = PatchWorkOrderCommand::new(id);
@@ -963,6 +1156,7 @@ mod tests {
             MockEmployeeRepository::new(),
             MockUserRepository::new(),
             MockMemberRepository::new(),
+            MockEquipmentRepository::new(),
         );
 
         let mut command = PatchWorkOrderCommand::new(id);
@@ -971,6 +1165,101 @@ mod tests {
         let (updated, _) = service.patch_work_order(command).await.unwrap();
 
         assert!(updated.assignments.is_empty());
+    }
+
+    #[tokio::test]
+    async fn patch_work_order_replaces_equipment() {
+        let id = WorkOrderId(Uuid::new_v4());
+        let organization_id = OrganizationId(Uuid::new_v4());
+        let existing = work_order(id, organization_id);
+        let equipment_id = EquipmentId(Uuid::new_v4());
+        let target = equipment(equipment_id, organization_id);
+
+        let mut work_order_repository = MockWorkOrderRepository::new();
+        work_order_repository
+            .expect_find_by_id()
+            .with(eq(id))
+            .returning(move |_| {
+                let existing = existing.clone();
+                Box::pin(async move { Ok(Some(existing)) })
+            });
+        work_order_repository
+            .expect_update()
+            .withf(move |w| {
+                w.equipment.len() == 1 && w.equipment[0].equipment_id == equipment_id
+            })
+            .returning(|w| {
+                let cloned = w.clone();
+                Box::pin(async move { Ok(cloned) })
+            });
+
+        let mut equipment_repository = MockEquipmentRepository::new();
+        equipment_repository
+            .expect_find_by_id()
+            .with(eq(equipment_id))
+            .returning(move |_| {
+                let e = target.clone();
+                Box::pin(async move { Ok(Some(e)) })
+            });
+
+        let mut service = service(
+            work_order_repository,
+            MockEmployeeRepository::new(),
+            MockUserRepository::new(),
+            MockMemberRepository::new(),
+            equipment_repository,
+        );
+
+        let mut command = PatchWorkOrderCommand::new(id);
+        command.equipment = Some(vec![equipment_id]);
+
+        let (updated, _) = service.patch_work_order(command).await.unwrap();
+
+        assert_eq!(updated.equipment.len(), 1);
+        assert_eq!(updated.equipment[0].equipment_id, equipment_id);
+    }
+
+    #[tokio::test]
+    async fn patch_work_order_rejects_equipment_from_another_organization() {
+        let id = WorkOrderId(Uuid::new_v4());
+        let organization_id = OrganizationId(Uuid::new_v4());
+        let other_org_id = OrganizationId(Uuid::new_v4());
+        let existing = work_order(id, organization_id);
+        let equipment_id = EquipmentId(Uuid::new_v4());
+        let foreign = equipment(equipment_id, other_org_id);
+
+        let mut work_order_repository = MockWorkOrderRepository::new();
+        work_order_repository
+            .expect_find_by_id()
+            .with(eq(id))
+            .returning(move |_| {
+                let existing = existing.clone();
+                Box::pin(async move { Ok(Some(existing)) })
+            });
+
+        let mut equipment_repository = MockEquipmentRepository::new();
+        equipment_repository
+            .expect_find_by_id()
+            .with(eq(equipment_id))
+            .returning(move |_| {
+                let e = foreign.clone();
+                Box::pin(async move { Ok(Some(e)) })
+            });
+
+        let mut service = service(
+            work_order_repository,
+            MockEmployeeRepository::new(),
+            MockUserRepository::new(),
+            MockMemberRepository::new(),
+            equipment_repository,
+        );
+
+        let mut command = PatchWorkOrderCommand::new(id);
+        command.equipment = Some(vec![equipment_id]);
+
+        let err = service.patch_work_order(command).await.unwrap_err();
+
+        assert!(matches!(err, CoreError::NotFound));
     }
 
     #[tokio::test]
@@ -997,8 +1286,10 @@ mod tests {
             MockEmployeeRepository::new(),
             MockUserRepository::new(),
             MockMemberRepository::new(),
+            MockEquipmentRepository::new(),
         );
 
         service.soft_delete_work_order(id).await.unwrap();
     }
 }
+

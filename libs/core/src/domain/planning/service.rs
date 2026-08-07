@@ -627,6 +627,7 @@ mod tests {
             title: Some("Toiture".to_owned()),
             note: None,
             assignments: Vec::new(),
+            equipment: Vec::new(),
             deleted_at: None,
             created_at: starts_at,
             updated_at: starts_at,

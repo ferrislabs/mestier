@@ -23,9 +23,10 @@ pub trait WorkOrderRepository: Send {
     ) -> impl Future<Output = Result<(Vec<WorkOrder>, u64), CoreError>> + Send;
 
     /// Persists both the work order's own fields and its complete
-    /// `assignments` list. The infra adapter replaces assignments as a
-    /// whole (physical delete then insert) rather than diffing — matching
-    /// the `PATCH` contract, where `assignees` is never a delta.
+    /// `assignments` / `equipment` lists. The infra adapter replaces both as
+    /// a whole (physical delete then insert) rather than diffing — matching
+    /// the `PATCH` contract, where `assignees` / `equipment` are never a
+    /// delta.
     fn update(
         &mut self,
         work_order: &WorkOrder,
