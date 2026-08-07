@@ -425,9 +425,8 @@ describe('PlanningGrid — retrait d’un assigné', () => {
 	})
 })
 
-describe('PlanningGrid — sélection d’une absence', () => {
-	it("un clic sur un segment d'absence appelle onSelectAbsence avec son id", () => {
-		const onSelectAbsence = vi.fn()
+describe('PlanningGrid — segment d’absence inerte', () => {
+	it("un clic sur un segment d'absence ne déclenche aucune interaction (pas de role bouton, pas d'onClick)", () => {
 		render(
 			<PlanningGrid
 				view="week"
@@ -437,12 +436,15 @@ describe('PlanningGrid — sélection d’une absence', () => {
 				resources={[employeeResource()]}
 				entries={[absence()]}
 				workTime={[]}
-				onSelectAbsence={onSelectAbsence}
 			/>,
 		)
 
-		fireEvent.click(screen.getByTestId('grid-segment'))
-		expect(onSelectAbsence).toHaveBeenCalledWith('ab-1')
+		const segment = screen.getByTestId('grid-segment')
+		expect(segment.getAttribute('role')).toBeNull()
+		expect(segment.getAttribute('tabindex')).toBeNull()
+		// A click must not throw and must not carry any accessible "button" affordance.
+		fireEvent.click(segment)
+		expect(screen.queryAllByRole('button')).toHaveLength(0)
 	})
 })
 

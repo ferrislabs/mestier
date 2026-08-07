@@ -1,11 +1,13 @@
 import { describe, expect, it } from 'vitest'
 import {
 	absenceToDraft,
+	calendarSelectionToRange,
 	draftToCreateAbsenceRequest,
 	draftToUpdateAbsenceRequest,
 	emptyAbsenceDraft,
+	rangeToCalendarSelection,
 	validateAbsenceDraft,
-} from '#/pages/planning/lib/absences'
+} from '#/pages/hr/lib/absences'
 
 const TZ = 'Europe/Paris'
 
@@ -15,8 +17,7 @@ describe('emptyAbsenceDraft', () => {
 		expect(draft.employeeId).toBe('emp-1')
 		expect(draft.kind).toBe('LEAVE')
 		expect(draft.allDay).toBe(true)
-		expect(draft.startDate).toBe('2026-08-10')
-		expect(draft.endDate).toBe('2026-08-10')
+		expect(draft.range).toEqual({ from: '2026-08-10', to: '2026-08-10' })
 	})
 })
 
@@ -41,7 +42,7 @@ describe('validateAbsenceDraft', () => {
 	it('rejette une fin de journée entière avant le début', () => {
 		const draft = {
 			...emptyAbsenceDraft('emp-1', '2026-08-10'),
-			endDate: '2026-08-09',
+			range: { from: '2026-08-10', to: '2026-08-09' },
 		}
 		expect(validateAbsenceDraft(draft).length).toBeGreaterThan(0)
 	})
@@ -71,7 +72,7 @@ describe('draftToCreateAbsenceRequest — journée entière', () => {
 	it('construit starts_at/ends_at comme la fenêtre locale [00:00, 24:00) sur la plage de jours', () => {
 		const draft = {
 			...emptyAbsenceDraft('emp-1', '2026-08-10'),
-			endDate: '2026-08-12',
+			range: { from: '2026-08-10', to: '2026-08-12' },
 			note: 'Congés été',
 		}
 		const request = draftToCreateAbsenceRequest(draft, TZ)
@@ -83,6 +84,19 @@ describe('draftToCreateAbsenceRequest — journée entière', () => {
 			starts_at: new Date('2026-08-10T00:00:00+02:00').toISOString(),
 			ends_at: new Date('2026-08-13T00:00:00+02:00').toISOString(),
 			note: 'Congés été',
+		})
+	})
+
+	it('accepte une plage réduite à un seul jour (from === to)', () => {
+		const draft = {
+			...emptyAbsenceDraft('emp-1', '2026-08-10'),
+			range: { from: '2026-08-10', to: '2026-08-10' },
+		}
+		const request = draftToCreateAbsenceRequest(draft, TZ)
+
+		expect(request).toMatchObject({
+			starts_at: new Date('2026-08-10T00:00:00+02:00').toISOString(),
+			ends_at: new Date('2026-08-11T00:00:00+02:00').toISOString(),
 		})
 	})
 
@@ -126,7 +140,7 @@ describe('draftToUpdateAbsenceRequest', () => {
 	it('renvoie null quand la validation échoue', () => {
 		const draft = {
 			...emptyAbsenceDraft('emp-1', '2026-08-10'),
-			endDate: '2026-08-01',
+			range: { from: '2026-08-10', to: '2026-08-01' },
 		}
 		expect(draftToUpdateAbsenceRequest(draft, TZ)).toBeNull()
 	})
@@ -137,7 +151,7 @@ describe('absenceToDraft — aller-retour', () => {
 		const created = draftToCreateAbsenceRequest(
 			{
 				...emptyAbsenceDraft('emp-1', '2026-08-10'),
-				endDate: '2026-08-12',
+				range: { from: '2026-08-10', to: '2026-08-12' },
 				kind: 'UNAVAILABLE',
 				note: 'Formation',
 			},
@@ -161,10 +175,34 @@ describe('absenceToDraft — aller-retour', () => {
 			employeeId: 'emp-1',
 			kind: 'UNAVAILABLE',
 			allDay: true,
-			startDate: '2026-08-10',
-			endDate: '2026-08-12',
+			range: { from: '2026-08-10', to: '2026-08-12' },
 			note: 'Formation',
 		})
+	})
+
+	it('reconstruit un draft journée entière sur un seul jour (from === to)', () => {
+		const created = draftToCreateAbsenceRequest(
+			{
+				...emptyAbsenceDraft('emp-1', '2026-08-10'),
+				range: { from: '2026-08-10', to: '2026-08-10' },
+			},
+			TZ,
+		)
+		if (!created) throw new Error('expected a request')
+
+		const draft = absenceToDraft(
+			{
+				employee_id: 'emp-1',
+				absence_kind: created.kind,
+				all_day: created.all_day ?? true,
+				starts_at: created.starts_at,
+				ends_at: created.ends_at,
+				note: created.note ?? null,
+			},
+			TZ,
+		)
+
+		expect(draft.range).toEqual({ from: '2026-08-10', to: '2026-08-10' })
 	})
 
 	it('reconstruit un draft à créneau horaire cohérent avec le payload qui l’a produit', () => {
@@ -193,10 +231,40 @@ describe('absenceToDraft — aller-retour', () => {
 
 		expect(draft).toMatchObject({
 			allDay: false,
-			startDate: '2026-08-10',
+			range: { from: '2026-08-10', to: '2026-08-10' },
 			startTime: '09:00',
-			endDate: '2026-08-10',
 			endTime: '17:00',
 		})
+	})
+})
+
+describe('calendarSelectionToRange', () => {
+	it('renvoie null quand rien n’est sélectionné', () => {
+		expect(calendarSelectionToRange(undefined)).toBeNull()
+	})
+
+	it('replie to sur from après le premier clic (sélection en cours)', () => {
+		const from = new Date('2026-08-10T00:00:00Z')
+		expect(calendarSelectionToRange({ from })).toEqual({
+			from: '2026-08-10',
+			to: '2026-08-10',
+		})
+	})
+
+	it('porte les deux bornes une fois la plage complète', () => {
+		const from = new Date('2026-08-10T00:00:00Z')
+		const to = new Date('2026-08-12T00:00:00Z')
+		expect(calendarSelectionToRange({ from, to })).toEqual({
+			from: '2026-08-10',
+			to: '2026-08-12',
+		})
+	})
+})
+
+describe('rangeToCalendarSelection', () => {
+	it('est l’inverse de calendarSelectionToRange sur une plage complète', () => {
+		const range = { from: '2026-08-10', to: '2026-08-12' }
+		const selection = rangeToCalendarSelection(range)
+		expect(calendarSelectionToRange(selection)).toEqual(range)
 	})
 })

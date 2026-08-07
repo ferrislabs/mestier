@@ -1,5 +1,11 @@
 import { AlertCircle, UserX } from 'lucide-react'
 import { useState } from 'react'
+import {
+	useAbsences,
+	useCreateAbsence,
+	useDeleteAbsence,
+	useUpdateAbsence,
+} from '#/hooks/use-absences'
 import { useActiveOrganization } from '#/hooks/use-active-organization'
 import {
 	useReferenceCatalog,
@@ -12,10 +18,20 @@ import {
 	useWorkTime,
 } from '#/hooks/use-work-time'
 import {
+	type AbsenceFormValues,
+	type AbsenceListItem,
+	absenceToDraft,
+	draftToCreateAbsenceRequest,
+	draftToUpdateAbsenceRequest,
+	emptyAbsenceDraft,
+	validateAbsenceDraft,
+} from '#/pages/hr/lib/absences'
+import {
 	addDaysIso,
 	computeWeeklyGap,
 	draftToRhythmSlots,
 	draftToWorkSlots,
+	employeeDisplayName,
 	emptyRhythmSlotDraft,
 	emptyWorkSlotDraft,
 	findOpenRhythm,
@@ -32,9 +48,33 @@ import {
 	type WorkSlotsFormValues,
 	workSlotsToDraft,
 } from '#/pages/hr/types'
+import type { AbsenceEmployeeOption } from '#/pages/hr/ui/absence-form-sheet'
 import { EmployeeWorkTimeUI } from '#/pages/hr/ui/employee-work-time-ui'
 
 const WORK_SLOTS_WINDOW_DAYS = 13
+
+interface AbsenceSheetState {
+	mode: 'create' | 'edit'
+	absenceId: string | null
+	draft: AbsenceFormValues
+}
+
+/**
+ * This screen has no organization timezone to read: `GET
+ * /organizations/{id}` doesn't expose `organizations.timezone`, only `GET
+ * /planning` does (see the planning design doc), and this screen isn't
+ * otherwise coupled to the planning module — fetching a planning window just
+ * to read a timezone field would be a strange, wasteful dependency for an
+ * HR-only page. Falls back to the browser's own zone; on a device set to a
+ * different zone than the organization's configured one, this can disagree
+ * slightly with the planning grid (which always resolves through
+ * `organizations.timezone`) for non-all-day absences, or shift the
+ * displayed day near a midnight boundary — a real, human-reviewable
+ * trade-off, not an oversight.
+ */
+function browserTimeZone(): string {
+	return Intl.DateTimeFormat().resolvedOptions().timeZone
+}
 
 interface EmployeeWorkTimeFeatureProps {
 	employeeId: string
@@ -127,6 +167,14 @@ function EmployeeWorkTimeScreen({
 		workSlotsToDraft(workTimeQuery.data?.data.work_slots ?? [], workSlotsRange)
 
 	const [contractDraft, setContractDraft] = useState<string | null>(null)
+
+	const absencesQuery = useAbsences(organizationId)
+	const createAbsence = useCreateAbsence()
+	const updateAbsence = useUpdateAbsence()
+	const deleteAbsence = useDeleteAbsence()
+	const [absenceSheet, setAbsenceSheet] = useState<AbsenceSheetState | null>(
+		null,
+	)
 
 	if (catalog.employees.isLoading) {
 		return <EmployeeWorkTimeUI.Loading />
@@ -241,6 +289,120 @@ function EmployeeWorkTimeScreen({
 		}
 	}
 
+	// See `browserTimeZone`'s doc for why this isn't `organizations.timezone`.
+	const timeZone = browserTimeZone()
+
+	const employeeOptions: AbsenceEmployeeOption[] = (
+		catalog.employees.data?.data ?? []
+	).map((candidate) => ({
+		employeeId: candidate.id,
+		displayName: employeeDisplayName(candidate),
+	}))
+
+	const employeeAbsences: AbsenceListItem[] = (absencesQuery.data?.data ?? [])
+		.filter((absence) => absence.employee_id === employeeId)
+		.map((absence) => ({
+			id: absence.id,
+			...absenceToDraft({ ...absence, absence_kind: absence.kind }, timeZone),
+		}))
+		.sort((a, b) => a.range.from.localeCompare(b.range.from))
+
+	function handleCreateAbsence() {
+		setAbsenceSheet({
+			mode: 'create',
+			absenceId: null,
+			draft: emptyAbsenceDraft(employeeId, today),
+		})
+	}
+
+	function handleSelectAbsence(absenceId: string) {
+		const absence = (absencesQuery.data?.data ?? []).find(
+			(candidate) => candidate.id === absenceId,
+		)
+		if (!absence) return
+		setAbsenceSheet({
+			mode: 'edit',
+			absenceId,
+			draft: absenceToDraft(
+				{ ...absence, absence_kind: absence.kind },
+				timeZone,
+			),
+		})
+	}
+
+	function handleAbsenceSheetOpenChange(open: boolean) {
+		if (!open) setAbsenceSheet(null)
+	}
+
+	function handleAbsenceDraftChange(patch: Partial<AbsenceFormValues>) {
+		setAbsenceSheet((current) =>
+			current ? { ...current, draft: { ...current.draft, ...patch } } : current,
+		)
+	}
+
+	async function handleSubmitAbsence() {
+		if (!absenceSheet) return
+
+		if (absenceSheet.mode === 'create') {
+			const request = draftToCreateAbsenceRequest(absenceSheet.draft, timeZone)
+			if (!request) return
+			try {
+				await createAbsence.mutateAsync({
+					path: { organization_id: organizationId },
+					body: request,
+				})
+				setAbsenceSheet(null)
+			} catch {
+				// Surfaced reactively via `createAbsence.error` — the draft is kept.
+			}
+			return
+		}
+
+		if (!absenceSheet.absenceId) return
+		const request = draftToUpdateAbsenceRequest(absenceSheet.draft, timeZone)
+		if (!request) return
+		try {
+			await updateAbsence.mutateAsync({
+				path: {
+					organization_id: organizationId,
+					absence_id: absenceSheet.absenceId,
+				},
+				body: request,
+			})
+			setAbsenceSheet(null)
+		} catch {
+			// Surfaced reactively via `updateAbsence.error`.
+		}
+	}
+
+	async function handleDeleteAbsence() {
+		if (!absenceSheet?.absenceId) return
+		try {
+			await deleteAbsence.mutateAsync({
+				path: {
+					organization_id: organizationId,
+					absence_id: absenceSheet.absenceId,
+				},
+			})
+			setAbsenceSheet(null)
+		} catch {
+			// Surfaced reactively via `deleteAbsence.error`.
+		}
+	}
+
+	const absenceDraft =
+		absenceSheet?.draft ?? emptyAbsenceDraft(employeeId, today)
+	const absenceErrors = absenceSheet
+		? validateAbsenceDraft(absenceDraft, {
+				requireEmployee: absenceSheet.mode === 'create',
+			})
+		: []
+	const absenceSaveError =
+		createAbsence.error?.message ??
+		updateAbsence.error?.message ??
+		deleteAbsence.error?.message ??
+		null
+
 	return (
 		<EmployeeWorkTimeUI
 			organizationName={organizationName}
@@ -321,6 +483,29 @@ function EmployeeWorkTimeScreen({
 						slots: workSlotsValues.slots.filter((slot) => slot.key !== key),
 					}),
 				onSubmit: () => void handleSubmitWorkSlots(),
+			}}
+			absencesSection={{
+				absences: employeeAbsences,
+				isLoading: absencesQuery.isLoading,
+				onCreate: handleCreateAbsence,
+				onSelect: handleSelectAbsence,
+			}}
+			absenceSheet={{
+				open: absenceSheet !== null,
+				mode: absenceSheet?.mode ?? 'create',
+				values: absenceDraft,
+				employees: employeeOptions,
+				errors: absenceErrors,
+				isSaving: createAbsence.isPending || updateAbsence.isPending,
+				isDeleting: deleteAbsence.isPending,
+				saveError: absenceSaveError,
+				onChange: handleAbsenceDraftChange,
+				onSubmit: () => void handleSubmitAbsence(),
+				onDelete:
+					absenceSheet?.mode === 'edit'
+						? () => void handleDeleteAbsence()
+						: undefined,
+				onOpenChange: handleAbsenceSheetOpenChange,
 			}}
 		/>
 	)

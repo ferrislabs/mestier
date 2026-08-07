@@ -51,8 +51,6 @@ export interface PlanningGridProps {
 	onDropWorkOrder?: (event: WorkOrderDropEvent) => void
 	/** The small "×" on a work order segment — unassigns that one resource, through the same complete-list path a move uses. */
 	onRemoveAssignee?: (event: RemoveAssigneeEvent) => void
-	/** A click on an absence segment — opens it for editing. */
-	onSelectAbsence?: (entryId: string) => void
 }
 
 const SEGMENT_HEIGHT_PX: Record<PlanningView, number> = {
@@ -68,6 +66,11 @@ const CELL_PADDING_PX = 6
  * doc's "une grille, trois granularités" section). Pure function of its
  * props: no hooks, no fetch. The single stateful, ticking element is
  * {@link CurrentTimeLine}, rendered once as an overlay, never per cell.
+ *
+ * Absence segments render but are inert — no click, no keyboard activation
+ * — since absence management moved to the HR module (see the planning
+ * remodel design doc's "Absences vers le module RH" decision); the grid
+ * keeps displaying them, it no longer edits them.
  */
 export function PlanningGrid({
 	view,
@@ -80,7 +83,6 @@ export function PlanningGrid({
 	now,
 	onDropWorkOrder,
 	onRemoveAssignee,
-	onSelectAbsence,
 }: PlanningGridProps) {
 	const model = buildGridModel({
 		windowFrom,
@@ -133,7 +135,6 @@ export function PlanningGrid({
 							row={row}
 							onDropWorkOrder={onDropWorkOrder}
 							onRemoveAssignee={onRemoveAssignee}
-							onSelectAbsence={onSelectAbsence}
 						/>
 					))}
 
@@ -196,7 +197,6 @@ function TimeHeader({
 interface GridInteractionHandlers {
 	onDropWorkOrder?: (event: WorkOrderDropEvent) => void
 	onRemoveAssignee?: (event: RemoveAssigneeEvent) => void
-	onSelectAbsence?: (entryId: string) => void
 }
 
 function GridRow({
@@ -204,7 +204,6 @@ function GridRow({
 	row,
 	onDropWorkOrder,
 	onRemoveAssignee,
-	onSelectAbsence,
 }: GridInteractionHandlers & {
 	view: PlanningView
 	row: GridResourceRowVM
@@ -227,7 +226,6 @@ function GridRow({
 					resourceId={row.resourceId}
 					onDropWorkOrder={onDropWorkOrder}
 					onRemoveAssignee={onRemoveAssignee}
-					onSelectAbsence={onSelectAbsence}
 				/>
 			))}
 		</div>
@@ -240,7 +238,6 @@ function GridCell({
 	resourceId,
 	onDropWorkOrder,
 	onRemoveAssignee,
-	onSelectAbsence,
 }: GridInteractionHandlers & {
 	view: PlanningView
 	cell: GridCellVM
@@ -286,18 +283,15 @@ function GridCell({
 
 			{cell.segments.map((segment) => {
 				const isWorkOrder = segment.tone === 'work_order'
-				const isAbsence = segment.tone === 'absence'
-				const clickableAbsence = isAbsence && Boolean(onSelectAbsence)
 
 				return (
-					// biome-ignore lint/a11y/noStaticElementInteractions: the drag source has no native interactive equivalent; when clickable (an absence segment) it carries its own role="button"/tabIndex/onKeyDown above.
+					// biome-ignore lint/a11y/noStaticElementInteractions: the drag source has no native interactive equivalent; absence segments are display-only (see PlanningGrid's own doc — absence management moved to the HR module).
 					<div
 						key={segment.entryId}
 						className={cn(
 							'group absolute overflow-hidden rounded-sm px-1 text-[10px] leading-tight text-nowrap',
 							toneClassName(segment.tone),
 							view === 'day' ? 'text-xs' : 'text-[9px]',
-							clickableAbsence && 'cursor-pointer',
 						)}
 						data-testid="grid-segment"
 						data-entry-id={segment.entryId}
@@ -322,23 +316,6 @@ function GridCell({
 											DRAG_PAYLOAD_FORMAT,
 											JSON.stringify(payload),
 										)
-									}
-								: undefined
-						}
-						role={clickableAbsence ? 'button' : undefined}
-						tabIndex={clickableAbsence ? 0 : undefined}
-						onClick={
-							clickableAbsence
-								? () => onSelectAbsence?.(segment.entryId)
-								: undefined
-						}
-						onKeyDown={
-							clickableAbsence
-								? (event) => {
-										if (event.key === 'Enter' || event.key === ' ') {
-											event.preventDefault()
-											onSelectAbsence?.(segment.entryId)
-										}
 									}
 								: undefined
 						}

@@ -58,7 +58,7 @@ pub async fn handler(
     Json(payload): Json<PutRhythmRequest>,
 ) -> Result<Response<RhythmResponse>, ApiError> {
     require_org_membership(&state, &identity, organization_id).await?;
-    crate::absence::require_employee_target(&state, organization_id, employee_id).await?;
+    crate::require_employee_target(&state, organization_id, employee_id).await?;
 
     let rhythm = state
         .usecase

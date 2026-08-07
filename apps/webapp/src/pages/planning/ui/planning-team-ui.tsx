@@ -1,11 +1,7 @@
-import { AlertCircle, CalendarPlus, Info, X } from 'lucide-react'
+import { AlertCircle, Info, X } from 'lucide-react'
 import { Button } from '#/components/ui/button'
 import { PageHeader, PageShell, SectionCard } from '#/components/ui/surface'
 import type { PlanningResponse, PlanningView } from '#/pages/planning/types'
-import {
-	AbsenceFormSheet,
-	type AbsenceFormSheetProps,
-} from '#/pages/planning/ui/absence-form-sheet'
 import {
 	PlanningGrid,
 	type RemoveAssigneeEvent,
@@ -32,20 +28,21 @@ export interface PlanningTeamUIProps {
 	onDropWorkOrder?: (event: WorkOrderDropEvent) => void
 	/** The grid's "×" on a work order segment. */
 	onRemoveAssignee?: (event: RemoveAssigneeEvent) => void
-	/** A click on an absence segment — opens it for editing. */
-	onSelectAbsence?: (entryId: string) => void
-	/** The header's "Ajouter une absence" button — absent when the screen isn't ready to open the form yet. */
-	onCreateAbsence?: () => void
 	/** The single warnings dialog a risky drop funnels through — see the planning design doc's "Avertissements" section. Not rendered when absent. */
 	warningDialog?: PlanningWarningDialogProps
-	/** The create/edit absence form. Not rendered when absent. */
-	absenceSheet?: AbsenceFormSheetProps
 	/** Names of employee records the last `PATCH` created on the fly — see the planning design doc: `hourly_rate_cents` stays `NULL` until filled in. */
 	createdEmployeeNames?: string[]
 	onDismissCreatedEmployees?: () => void
 }
 
-/** Assembles the toolbar, the grid, and the editing surfaces — pure presentation, all data and state come in as props. */
+/**
+ * Assembles the toolbar, the grid, and the editing surfaces — pure
+ * presentation, all data and state come in as props. Absence management
+ * moved to the HR module (`EmployeeWorkTimeFeature`, see the planning
+ * remodel design doc's "Absences vers le module RH" decision) — the grid
+ * still displays absence segments, read-only, but this screen no longer
+ * creates, edits or deletes them.
+ */
 export function PlanningTeamUI({
 	organizationName,
 	view,
@@ -59,10 +56,7 @@ export function PlanningTeamUI({
 	data,
 	onDropWorkOrder,
 	onRemoveAssignee,
-	onSelectAbsence,
-	onCreateAbsence,
 	warningDialog,
-	absenceSheet,
 	createdEmployeeNames,
 	onDismissCreatedEmployees,
 }: PlanningTeamUIProps) {
@@ -72,14 +66,6 @@ export function PlanningTeamUI({
 				eyebrow={organizationName}
 				title="Planning"
 				description="Chantiers, absences et plages de travail de l'équipe."
-				actions={
-					onCreateAbsence ? (
-						<Button type="button" onClick={onCreateAbsence}>
-							<CalendarPlus />
-							Ajouter une absence
-						</Button>
-					) : undefined
-				}
 			/>
 
 			{createdEmployeeNames && createdEmployeeNames.length > 0 ? (
@@ -129,12 +115,10 @@ export function PlanningTeamUI({
 					workTime={data.work_time}
 					onDropWorkOrder={onDropWorkOrder}
 					onRemoveAssignee={onRemoveAssignee}
-					onSelectAbsence={onSelectAbsence}
 				/>
 			) : null}
 
 			{warningDialog ? <PlanningWarningDialog {...warningDialog} /> : null}
-			{absenceSheet ? <AbsenceFormSheet {...absenceSheet} /> : null}
 		</PageShell>
 	)
 }

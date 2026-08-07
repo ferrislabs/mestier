@@ -1,11 +1,6 @@
 import { AlertCircle } from 'lucide-react'
 import { useState } from 'react'
 import type { Schemas } from '#/api/api.client'
-import {
-	useCreateAbsence,
-	useDeleteAbsence,
-	useUpdateAbsence,
-} from '#/hooks/use-absences'
 import { useActiveOrganization } from '#/hooks/use-active-organization'
 import {
 	useCheckAvailability,
@@ -13,14 +8,6 @@ import {
 	usePlanning,
 } from '#/hooks/use-planning'
 import { employeeDisplayName } from '#/pages/hr/types'
-import {
-	type AbsenceFormValues,
-	absenceToDraft,
-	draftToCreateAbsenceRequest,
-	draftToUpdateAbsenceRequest,
-	emptyAbsenceDraft,
-	validateAbsenceDraft,
-} from '#/pages/planning/lib/absences'
 import {
 	buildWarnings,
 	conflictsForResource,
@@ -31,7 +18,7 @@ import {
 	computeRemoveAssigneePatch,
 	computeWorkOrderDropPatch,
 } from '#/pages/planning/lib/work-order-drop'
-import { type PlanningView, todayIsoDate } from '#/pages/planning/types'
+import type { PlanningView } from '#/pages/planning/types'
 import type {
 	RemoveAssigneeEvent,
 	WorkOrderDropEvent,
@@ -104,12 +91,6 @@ interface PendingDrop {
 	warnings: Warning[]
 }
 
-interface AbsenceSheetState {
-	mode: 'create' | 'edit'
-	absenceId: string | null
-	draft: AbsenceFormValues
-}
-
 function PlanningTeamScreen({
 	organizationId,
 	organizationName,
@@ -126,15 +107,9 @@ function PlanningTeamScreen({
 
 	const checkAvailability = useCheckAvailability()
 	const moveWorkOrder = useMoveWorkOrder()
-	const createAbsence = useCreateAbsence()
-	const updateAbsence = useUpdateAbsence()
-	const deleteAbsence = useDeleteAbsence()
 
 	const [pendingDrop, setPendingDrop] = useState<PendingDrop | null>(null)
 	const [dropError, setDropError] = useState<string | null>(null)
-	const [absenceSheet, setAbsenceSheet] = useState<AbsenceSheetState | null>(
-		null,
-	)
 	const [createdEmployeeNames, setCreatedEmployeeNames] = useState<string[]>([])
 
 	async function applyWorkOrderPatch(
@@ -261,107 +236,6 @@ function PlanningTeamScreen({
 		setDropError(null)
 	}
 
-	function handleCreateAbsence() {
-		setAbsenceSheet({
-			mode: 'create',
-			absenceId: null,
-			draft: emptyAbsenceDraft('', todayIsoDate()),
-		})
-	}
-
-	function handleSelectAbsence(entryId: string) {
-		if (!data) return
-		const entry = data.entries.find(
-			(candidate) => candidate.kind === 'absence' && candidate.id === entryId,
-		)
-		if (!entry || entry.kind !== 'absence') return
-		setAbsenceSheet({
-			mode: 'edit',
-			absenceId: entryId,
-			draft: absenceToDraft(entry, data.timezone),
-		})
-	}
-
-	function handleAbsenceSheetOpenChange(open: boolean) {
-		if (!open) setAbsenceSheet(null)
-	}
-
-	function handleAbsenceDraftChange(patch: Partial<AbsenceFormValues>) {
-		setAbsenceSheet((current) =>
-			current ? { ...current, draft: { ...current.draft, ...patch } } : current,
-		)
-	}
-
-	async function handleSubmitAbsence() {
-		if (!absenceSheet || !data) return
-		const timeZone = data.timezone
-
-		if (absenceSheet.mode === 'create') {
-			const request = draftToCreateAbsenceRequest(absenceSheet.draft, timeZone)
-			if (!request) return
-			try {
-				await createAbsence.mutateAsync({
-					path: { organization_id: organizationId },
-					body: request,
-				})
-				setAbsenceSheet(null)
-			} catch {
-				// Surfaced reactively via `createAbsence.error` — the draft is kept.
-			}
-			return
-		}
-
-		if (!absenceSheet.absenceId) return
-		const request = draftToUpdateAbsenceRequest(absenceSheet.draft, timeZone)
-		if (!request) return
-		try {
-			await updateAbsence.mutateAsync({
-				path: {
-					organization_id: organizationId,
-					absence_id: absenceSheet.absenceId,
-				},
-				body: request,
-			})
-			setAbsenceSheet(null)
-		} catch {
-			// Surfaced reactively via `updateAbsence.error`.
-		}
-	}
-
-	async function handleDeleteAbsence() {
-		if (!absenceSheet?.absenceId) return
-		try {
-			await deleteAbsence.mutateAsync({
-				path: {
-					organization_id: organizationId,
-					absence_id: absenceSheet.absenceId,
-				},
-			})
-			setAbsenceSheet(null)
-		} catch {
-			// Surfaced reactively via `deleteAbsence.error`.
-		}
-	}
-
-	const employeeOptions = (data?.resources ?? [])
-		.filter((resource) => resource.employee_id)
-		.map((resource) => ({
-			employeeId: resource.employee_id as string,
-			displayName: resource.display_name,
-		}))
-
-	const absenceDraft = absenceSheet?.draft ?? emptyAbsenceDraft('', date)
-	const absenceErrors = absenceSheet
-		? validateAbsenceDraft(absenceDraft, {
-				requireEmployee: absenceSheet.mode === 'create',
-			})
-		: []
-	const absenceSaveError =
-		createAbsence.error?.message ??
-		updateAbsence.error?.message ??
-		deleteAbsence.error?.message ??
-		null
-
 	return (
 		<PlanningTeamUI
 			organizationName={organizationName}
@@ -376,8 +250,6 @@ function PlanningTeamScreen({
 			data={data}
 			onDropWorkOrder={(event) => void handleDropWorkOrder(event)}
 			onRemoveAssignee={handleRemoveAssignee}
-			onSelectAbsence={handleSelectAbsence}
-			onCreateAbsence={handleCreateAbsence}
 			warningDialog={{
 				open: pendingDrop !== null,
 				warnings: pendingDrop?.warnings ?? [],
@@ -385,23 +257,6 @@ function PlanningTeamScreen({
 				error: dropError,
 				onConfirm: handleConfirmDrop,
 				onCancel: handleCancelDrop,
-			}}
-			absenceSheet={{
-				open: absenceSheet !== null,
-				mode: absenceSheet?.mode ?? 'create',
-				values: absenceDraft,
-				employees: employeeOptions,
-				errors: absenceErrors,
-				isSaving: createAbsence.isPending || updateAbsence.isPending,
-				isDeleting: deleteAbsence.isPending,
-				saveError: absenceSaveError,
-				onChange: handleAbsenceDraftChange,
-				onSubmit: () => void handleSubmitAbsence(),
-				onDelete:
-					absenceSheet?.mode === 'edit'
-						? () => void handleDeleteAbsence()
-						: undefined,
-				onOpenChange: handleAbsenceSheetOpenChange,
 			}}
 			createdEmployeeNames={createdEmployeeNames}
 			onDismissCreatedEmployees={() => setCreatedEmployeeNames([])}

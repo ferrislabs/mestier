@@ -2328,6 +2328,7 @@ dependencies = [
  "http 1.4.0",
  "mestier-core",
  "serde",
+ "serde_json",
  "tracing",
  "utoipa",
 ]

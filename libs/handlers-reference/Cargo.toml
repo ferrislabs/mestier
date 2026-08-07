@@ -16,3 +16,6 @@ http = { workspace = true }
 serde = { workspace = true }
 tracing = { workspace = true }
 utoipa = { workspace = true }
+
+[dev-dependencies]
+serde_json = { workspace = true }

@@ -1,7 +1,13 @@
-import { Loader2, Trash2 } from 'lucide-react'
+import { CalendarIcon, Loader2, Trash2 } from 'lucide-react'
 import { Button } from '#/components/ui/button'
+import { Calendar } from '#/components/ui/calendar'
 import { Input } from '#/components/ui/input'
 import { Label } from '#/components/ui/label'
+import {
+	Popover,
+	PopoverContent,
+	PopoverTrigger,
+} from '#/components/ui/popover'
 import {
 	Select,
 	SelectContent,
@@ -23,7 +29,10 @@ import {
 	ABSENCE_KIND_LABELS,
 	ABSENCE_KINDS,
 	type AbsenceFormValues,
-} from '#/pages/planning/lib/absences'
+	calendarSelectionToRange,
+	rangeToCalendarSelection,
+} from '#/pages/hr/lib/absences'
+import { formatDateFr } from '#/pages/hr/types'
 
 export interface AbsenceEmployeeOption {
 	employeeId: string
@@ -47,10 +56,12 @@ export interface AbsenceFormSheetProps {
 
 /**
  * Create/edit form for an absence — pure presentation, all state lives in
- * the feature (see the planning design doc's CRUD-des-absences scope). In
- * edit mode the employee is locked rather than offered as a select: the
- * `PATCH /absences/{id}` payload has no `employee_id` field, so there is
- * nothing to send even if the user picked a different one.
+ * the feature (see the planning remodel design doc's "Absences vers le
+ * module RH" decision — absence management now lives on the employee's
+ * work-time screen, `EmployeeWorkTimeFeature`). In edit mode the employee is
+ * locked rather than offered as a select: the `PATCH /absences/{id}`
+ * payload has no `employee_id` field, so there is nothing to send even if
+ * the user picked a different one.
  */
 export function AbsenceFormSheet({
 	open,
@@ -163,18 +174,10 @@ export function AbsenceFormSheet({
 							/>
 						</div>
 
-						<div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-							<DateField
-								label="Date de début"
-								value={values.startDate}
-								onChange={(startDate) => onChange({ startDate })}
-							/>
-							<DateField
-								label="Date de fin"
-								value={values.endDate}
-								onChange={(endDate) => onChange({ endDate })}
-							/>
-						</div>
+						<RangeField
+							value={values.range}
+							onChange={(range) => onChange({ range })}
+						/>
 
 						{!values.allDay ? (
 							<div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -257,24 +260,55 @@ export function AbsenceFormSheet({
 	)
 }
 
-function DateField({
-	label,
+/**
+ * The single date-range field replacing the old `startDate`/`endDate` pair
+ * (see the planning remodel design doc's "champ de plage unique" decision).
+ * Fully controlled off `value`/`onChange`, like `planning-toolbar.tsx`'s
+ * single-date `Calendar` popover: no local component state, so this stays a
+ * pure `ui/` component. `onSelect` fires with a partial range mid-selection
+ * (`to` only lands after the second click) — {@link calendarSelectionToRange}
+ * folds that into a single-day range rather than needing a "pending click"
+ * state of its own.
+ */
+function RangeField({
 	value,
 	onChange,
 }: {
-	label: string
-	value: string
-	onChange: (value: string) => void
+	value: AbsenceFormValues['range']
+	onChange: (range: AbsenceFormValues['range']) => void
 }) {
+	const label =
+		value.from === value.to
+			? formatDateFr(value.from)
+			: `${formatDateFr(value.from)} – ${formatDateFr(value.to)}`
+
 	return (
 		<div className="flex flex-col gap-1.5">
-			<Label>{label}</Label>
-			<Input
-				aria-label={label}
-				type="date"
-				value={value}
-				onChange={(event) => onChange(event.target.value)}
-			/>
+			<Label>Période</Label>
+			<Popover>
+				<PopoverTrigger asChild>
+					<Button
+						type="button"
+						variant="outline"
+						data-testid="absence-range-trigger"
+						className="w-full justify-start font-normal"
+					>
+						<CalendarIcon />
+						{label}
+					</Button>
+				</PopoverTrigger>
+				<PopoverContent className="w-auto p-0" align="start">
+					<Calendar
+						mode="range"
+						captionLayout="dropdown"
+						selected={rangeToCalendarSelection(value)}
+						onSelect={(selection) => {
+							const next = calendarSelectionToRange(selection)
+							if (next) onChange(next)
+						}}
+					/>
+				</PopoverContent>
+			</Popover>
 		</div>
 	)
 }
