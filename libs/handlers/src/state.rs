@@ -1,11 +1,13 @@
+use std::sync::Arc;
+
 use common::Config;
+use iam::infrastructure::ferriskey::{FerriskeyConfig, FerriskeyIamProvider};
 use mestier_core::{
     EventHub, MestierAuthService, MestierFileStorageService, MestierRateLimitService,
     MestierUseCase, create_service,
 };
 use rate_limit::Quota;
 use server::errors::ServerError;
-use std::sync::Arc;
 
 use args::Args;
 
@@ -22,12 +24,22 @@ pub struct AppState {
     /// Populated from the single [`EventHub`] created by `create_service`
     /// so all subscribers share the same broadcast channel.
     pub events: EventHub,
+    /// Concrete FerrisKey IAM adapter. The [`iam::IamProvider`] trait uses
+    /// RPITIT and is not object-safe, so this stays as the concrete type.
+    pub iam: FerriskeyIamProvider,
 }
 
 pub async fn state(args: Arc<Args>) -> Result<AppState, ServerError> {
     let config = Config::from(args.as_ref().clone());
 
     let service = create_service(config).await.unwrap();
+
+    let ferriskey_config = FerriskeyConfig::new(
+        args.auth.issuer.clone(),
+        args.auth.client_id.clone(),
+        args.auth.client_secret.clone(),
+    );
+    let iam = FerriskeyIamProvider::new(ferriskey_config);
 
     Ok(AppState {
         args,
@@ -37,5 +49,6 @@ pub async fn state(args: Arc<Args>) -> Result<AppState, ServerError> {
         rate_limit: service.rate_limit,
         rate_limit_quota: service.rate_limit_quota,
         events: service.events,
+        iam,
     })
 }

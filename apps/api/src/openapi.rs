@@ -1,4 +1,4 @@
-use utoipa::{
+﻿use utoipa::{
     Modify, OpenApi,
     openapi::security::{HttpAuthScheme, HttpBuilder, SecurityScheme},
 };
@@ -10,6 +10,7 @@ use handlers_organization as organization;
 use handlers_planning as planning;
 use handlers_quote as quote;
 use handlers_reference as reference;
+use handlers_user as user;
 
 pub struct SecurityAddon;
 
@@ -130,6 +131,10 @@ impl Modify for SecurityAddon {
         discord::notification::list::handler,
         discord::notification::mark_read::handler,
         discord::notification::mark_all_read::handler,
+        user::user::create::handler,
+        user::user::update::handler,
+        user::user::disable::handler,
+        user::user::list::handler,
     ),
     components(schemas(
         organization::create::CreateOrganizationRequest,
@@ -177,7 +182,7 @@ impl Modify for SecurityAddon {
         // `planning::response::EmployeeResponse` is deliberately absent: it is
         // byte-identical to `reference::response::EmployeeResponse` above, and
         // utoipa names schemas after the type, so registering both would
-        // collide. See the PR description — if the two ever diverge, this
+        // collide. See the PR description â€” if the two ever diverge, this
         // document starts describing the wrong shape silently.
         reference::response::EmployeeResponse,
         reference::response::EquipmentResponse,
@@ -209,6 +214,9 @@ impl Modify for SecurityAddon {
         discord::response::OverwriteResponse,
         discord::response::UpsertOverwriteRequest,
         discord::notification::list::NotificationResponse,
+        user::user::create::CreateUserRequest,
+        user::user::update::UpdateUserRequest,
+        user::response::UserResponse,
     )),
     modifiers(&SecurityAddon),
     tags(
@@ -217,8 +225,9 @@ impl Modify for SecurityAddon {
         (name = "customers", description = "Customers and customer contexts management"),
         (name = "quotes", description = "Quotes and quote lines management"),
         (name = "reference", description = "Reference cost catalog"),
-        (name = "planning", description = "Team planning — work orders, assignments, absences, working time and availability"),
-        (name = "discord", description = "Chat — categories, channels, threads, messages, reactions, webhooks, presence, typing, read states, channel permission overwrites, notifications"),
+        (name = "planning", description = "Team planning â€” work orders, assignments, absences, working time and availability"),
+        (name = "discord", description = "Chat â€” categories, channels, threads, messages, reactions, webhooks, presence, typing, read states, channel permission overwrites, notifications"),
+        (name = "users", description = "User account management"),
     )
 )]
 pub struct ApiDoc;

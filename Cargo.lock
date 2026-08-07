@@ -115,6 +115,7 @@ dependencies = [
  "handlers-planning",
  "handlers-quote",
  "handlers-reference",
+ "handlers-user",
  "http 1.4.0",
  "opentelemetry",
  "opentelemetry-appender-tracing",
@@ -2190,6 +2191,7 @@ dependencies = [
  "codspeed-divan-compat",
  "common",
  "http 1.4.0",
+ "iam",
  "itoa",
  "mestier-core",
  "pagination",
@@ -2320,6 +2322,24 @@ dependencies = [
  "serde",
  "tracing",
  "utoipa",
+]
+
+[[package]]
+name = "handlers-user"
+version = "0.1.0"
+dependencies = [
+ "auth",
+ "axum",
+ "axum-extra",
+ "chrono",
+ "handlers",
+ "iam",
+ "mestier-core",
+ "serde",
+ "tokio",
+ "tracing",
+ "utoipa",
+ "uuid",
 ]
 
 [[package]]

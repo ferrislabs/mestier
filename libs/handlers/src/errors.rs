@@ -176,6 +176,32 @@ impl From<CoreError> for ApiError {
     }
 }
 
+impl From<iam::IamError> for ApiError {
+    fn from(err: iam::IamError) -> Self {
+        match err {
+            iam::IamError::NotFound => Self::NotFound,
+            iam::IamError::Conflict(msg) => Self::Conflict(msg),
+            iam::IamError::Unauthorized => {
+                tracing::error!("IAM service-account credentials rejected");
+                Self::ExternalService("IAM authentication failed".into())
+            }
+            iam::IamError::Forbidden => {
+                tracing::error!("IAM refused the operation (service-account scope)");
+                Self::ExternalService("IAM forbade the operation".into())
+            }
+            iam::IamError::InvalidInput(msg) => Self::UnprocessableEntity(msg),
+            iam::IamError::Unavailable(msg) => {
+                tracing::error!(error = %msg, "IAM unavailable");
+                Self::ExternalService(format!("IAM unavailable: {msg}"))
+            }
+            iam::IamError::Internal(msg) => {
+                tracing::error!(error = %msg, "IAM internal error");
+                Self::Internal
+            }
+        }
+    }
+}
+
 impl IntoResponse for ApiError {
     fn into_response(self) -> Response {
         let status = self.status();
@@ -392,5 +418,54 @@ mod tests {
     async fn test_response_has_no_details_by_default() {
         let (_, json) = parse_response(ApiError::Internal).await;
         assert!(json.get("details").is_none());
+    }
+
+    #[tokio::test]
+    async fn from_iam_not_found_maps_to_404() {
+        let api: ApiError = iam::IamError::NotFound.into();
+        assert_error!(api, StatusCode::NOT_FOUND, "E_NOT_FOUND");
+    }
+
+    #[tokio::test]
+    async fn from_iam_conflict_maps_to_409() {
+        let api: ApiError = iam::IamError::Conflict("email taken".into()).into();
+        let (status, json) = parse_response(api).await;
+        assert_eq!(status, StatusCode::CONFLICT);
+        assert_eq!(json["code"], "E_CONFLICT");
+    }
+
+    #[tokio::test]
+    async fn from_iam_invalid_input_maps_to_422() {
+        let api: ApiError = iam::IamError::InvalidInput("bad email".into()).into();
+        assert_error!(
+            api,
+            StatusCode::UNPROCESSABLE_ENTITY,
+            "E_UNPROCESSABLE_ENTITY"
+        );
+    }
+
+    #[tokio::test]
+    async fn from_iam_unauthorized_maps_to_external_service() {
+        let api: ApiError = iam::IamError::Unauthorized.into();
+        assert_error!(api, StatusCode::INTERNAL_SERVER_ERROR, "E_EXTERNAL_SERVICE");
+    }
+
+    #[tokio::test]
+    async fn from_iam_forbidden_maps_to_external_service() {
+        let api: ApiError = iam::IamError::Forbidden.into();
+        assert_error!(api, StatusCode::INTERNAL_SERVER_ERROR, "E_EXTERNAL_SERVICE");
+    }
+
+    #[tokio::test]
+    async fn from_iam_unavailable_maps_to_external_service() {
+        let api: ApiError = iam::IamError::Unavailable("timeout".into()).into();
+        assert_error!(api, StatusCode::INTERNAL_SERVER_ERROR, "E_EXTERNAL_SERVICE");
+    }
+
+    #[tokio::test]
+    async fn from_iam_internal_redacts_message() {
+        let api: ApiError = iam::IamError::Internal("secret details".into()).into();
+        let (_, json) = parse_response(api).await;
+        assert!(!json["message"].as_str().unwrap().contains("secret details"));
     }
 }
