@@ -9,7 +9,7 @@ use serde::{Deserialize, Deserializer};
 use utoipa::ToSchema;
 
 use crate::{
-    response::PatchTaskResponse,
+    response::{PatchTaskResponse, TaskResponse},
     task::{TaskPath, require_task},
 };
 
@@ -125,8 +125,20 @@ pub async fn handler(
 
     let (task, created_employees) = state.usecase.patch_task(command).await?;
 
+    // Reflects the task's current labels regardless of whether this PATCH
+    // touched them — a PATCH that never mentions `label_ids` still needs to
+    // report the set it left untouched.
+    let mut labels_by_task = state
+        .usecase
+        .list_task_labels_for_tasks(vec![task.id])
+        .await?;
+    let labels = labels_by_task.remove(&task.id).unwrap_or_default();
+
     Ok(Response::OK(PatchTaskResponse {
-        task: task.into(),
+        task: TaskResponse {
+            labels: labels.into_iter().map(Into::into).collect(),
+            ..task.into()
+        },
         created_employees: created_employees.into_iter().map(Into::into).collect(),
     }))
 }

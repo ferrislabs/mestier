@@ -59,12 +59,20 @@ pub async fn handler(
             offset,
         )
         .await?;
+
+    // One grouped query for the whole page's labels, never one per row —
+    // mirrors `child_counts` just above.
+    let task_ids: Vec<TaskId> = tasks.iter().map(|task| task.id).collect();
+    let mut labels_by_task = state.usecase.list_task_labels_for_tasks(task_ids).await?;
+
     let items: Vec<TaskResponse> = tasks
         .into_iter()
         .map(|task| {
             let child_count = child_counts.get(&task.id).copied().unwrap_or(0);
+            let labels = labels_by_task.remove(&task.id).unwrap_or_default();
             TaskResponse {
                 child_count: Some(child_count),
+                labels: labels.into_iter().map(Into::into).collect(),
                 ..TaskResponse::from(task)
             }
         })

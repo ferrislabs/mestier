@@ -443,4 +443,160 @@ mod tests {
 
         cleanup(&pool, organization.id, &[owner_id]).await;
     }
+
+    // -- list_task_labels_for_tasks: feeds TaskResponse.labels ---------------
+
+    /// Proves the acceptance criterion: a task carrying two labels reports
+    /// both, not just one — exercised through the same batched call
+    /// `GET /tasks{,/{id}}` and `PATCH /tasks` use to populate
+    /// `TaskResponse.labels`.
+    #[tokio::test]
+    #[ignore = "requires live postgres"]
+    async fn list_task_labels_for_tasks_returns_every_label_of_a_two_label_task() {
+        let pool = make_pool().await;
+        let fixture = seed_fixture(&pool).await;
+        let usecase = make_usecase(pool.clone());
+
+        let task = usecase
+            .create_task(create_task_command(&fixture, "Réunion de chantier"))
+            .await
+            .unwrap();
+        let label_a = usecase
+            .create_task_label(create_label_command(fixture.organization_id, "Urgent"))
+            .await
+            .unwrap();
+        let label_b = usecase
+            .create_task_label(create_label_command(fixture.organization_id, "Important"))
+            .await
+            .unwrap();
+
+        let mut patch = PatchTaskCommand::new(task.id);
+        patch.label_ids = Some(vec![label_a.id, label_b.id]);
+        usecase.patch_task(patch).await.unwrap();
+
+        let mut labels_by_task = usecase
+            .list_task_labels_for_tasks(vec![task.id])
+            .await
+            .expect("list_task_labels_for_tasks must succeed");
+        let mut names: Vec<String> = labels_by_task
+            .remove(&task.id)
+            .expect("the task must have an entry — it carries labels")
+            .into_iter()
+            .map(|l| l.name)
+            .collect();
+        names.sort_unstable();
+
+        assert_eq!(names, vec!["Important".to_owned(), "Urgent".to_owned()]);
+
+        cleanup(&pool, fixture.organization_id, &[fixture.owner_id]).await;
+    }
+
+    /// A task with no labels is simply absent from the map — mirrors
+    /// `TaskRepository::count_children`'s own contract — so `TaskResponse`
+    /// building code must fall back to an empty `Vec`, never treat a
+    /// missing entry as an error.
+    #[tokio::test]
+    #[ignore = "requires live postgres"]
+    async fn list_task_labels_for_tasks_omits_a_labelless_task_from_the_map() {
+        let pool = make_pool().await;
+        let fixture = seed_fixture(&pool).await;
+        let usecase = make_usecase(pool.clone());
+
+        let task = usecase
+            .create_task(create_task_command(&fixture, "Sans étiquette"))
+            .await
+            .unwrap();
+
+        let labels_by_task = usecase
+            .list_task_labels_for_tasks(vec![task.id])
+            .await
+            .unwrap();
+
+        assert!(
+            !labels_by_task.contains_key(&task.id),
+            "a task with no labels must be absent from the map, not mapped to an empty Vec"
+        );
+
+        cleanup(&pool, fixture.organization_id, &[fixture.owner_id]).await;
+    }
+
+    /// Proves `GET /tasks` does not degenerate into one label query per
+    /// task: three tasks, with disjoint label sets (including one task with
+    /// none), are all resolved correctly by a *single* call to
+    /// `list_task_labels_for_tasks` carrying every id at once — exactly what
+    /// `handlers-planning/src/task/list.rs` does for a whole page. The
+    /// underlying `PgTaskLabelRepository::list_labels_for_tasks` issues one
+    /// SQL statement (`... WHERE task_id = ANY($1)`) regardless of how many
+    /// ids it's given — there is no loop over `task_ids` anywhere on this
+    /// path — so the query count this test's single call makes is constant,
+    /// not a function of the number of tasks in the page.
+    #[tokio::test]
+    #[ignore = "requires live postgres"]
+    async fn list_task_labels_for_tasks_batches_an_entire_page_in_one_call() {
+        let pool = make_pool().await;
+        let fixture = seed_fixture(&pool).await;
+        let usecase = make_usecase(pool.clone());
+
+        let shared_label = usecase
+            .create_task_label(create_label_command(fixture.organization_id, "Urgent"))
+            .await
+            .unwrap();
+        let solo_label = usecase
+            .create_task_label(create_label_command(fixture.organization_id, "Important"))
+            .await
+            .unwrap();
+
+        let task_a = usecase
+            .create_task(create_task_command(&fixture, "Tâche A"))
+            .await
+            .unwrap();
+        let task_b = usecase
+            .create_task(create_task_command(&fixture, "Tâche B"))
+            .await
+            .unwrap();
+        let task_c = usecase
+            .create_task(create_task_command(&fixture, "Tâche C — sans étiquette"))
+            .await
+            .unwrap();
+
+        let mut patch_a = PatchTaskCommand::new(task_a.id);
+        patch_a.label_ids = Some(vec![shared_label.id]);
+        usecase.patch_task(patch_a).await.unwrap();
+
+        let mut patch_b = PatchTaskCommand::new(task_b.id);
+        patch_b.label_ids = Some(vec![shared_label.id, solo_label.id]);
+        usecase.patch_task(patch_b).await.unwrap();
+        // task_c is left unpatched — no labels.
+
+        // One call, every task id at once — the shape `GET /tasks` uses for
+        // a whole page.
+        let mut labels_by_task = usecase
+            .list_task_labels_for_tasks(vec![task_a.id, task_b.id, task_c.id])
+            .await
+            .expect("a single batched call must resolve every task's labels");
+
+        let names_a: Vec<String> = labels_by_task
+            .remove(&task_a.id)
+            .unwrap()
+            .into_iter()
+            .map(|l| l.name)
+            .collect();
+        assert_eq!(names_a, vec!["Urgent".to_owned()]);
+
+        let mut names_b: Vec<String> = labels_by_task
+            .remove(&task_b.id)
+            .unwrap()
+            .into_iter()
+            .map(|l| l.name)
+            .collect();
+        names_b.sort_unstable();
+        assert_eq!(names_b, vec!["Important".to_owned(), "Urgent".to_owned()]);
+
+        assert!(
+            !labels_by_task.contains_key(&task_c.id),
+            "task_c carries no labels and must be absent from the map"
+        );
+
+        cleanup(&pool, fixture.organization_id, &[fixture.owner_id]).await;
+    }
 }
