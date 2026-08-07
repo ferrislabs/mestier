@@ -16,8 +16,8 @@ pub use domain::{
     Organization, OrganizationId, Permissions, PlanningEntry, PlanningResource, PlanningTask,
     PlanningView, Product, ProductId, Quote, QuoteId, QuoteLine, QuoteLineId, QuoteStatus,
     RhythmSlot, RhythmSlotId, Role, RoleId, ServiceRate, ServiceRateId, ServiceRateUnit,
-    StoredFile, Task, TaskAssignment, TaskAssignmentId, TaskId, TaskLabel, TaskLabelId, TaskStatus,
-    TimeRange, Tz, User, UserId,
+    StoredFile, Task, TaskAssignment, TaskAssignmentId, TaskComment, TaskCommentId, TaskId,
+    TaskLabel, TaskLabelId, TaskStatus, TimeRange, Tz, User, UserId,
     absence::commands::{CreateAbsenceCommand, PatchAbsenceCommand},
     customer::commands::{CreateCustomerCommand, UpdateCustomerCommand},
     customer_contact::commands::{CreateCustomerContactCommand, UpdateCustomerContactCommand},
@@ -34,6 +34,7 @@ pub use domain::{
     service_rate::commands::{CreateServiceRateCommand, UpdateServiceRateCommand},
     task::commands::{CreateTaskCommand, PatchTaskCommand},
     task::service::{resolve_task_window, validate_parent_depth, validate_reparenting},
+    task_comment::commands::{CreateTaskCommentCommand, UpdateTaskCommentCommand},
     task_label::commands::{CreateTaskLabelCommand, UpdateTaskLabelCommand},
     user::commands::{CreateUserCommand, UpsertUserBySubCommand},
     work_time::commands::{
