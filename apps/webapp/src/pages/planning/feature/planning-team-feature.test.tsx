@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { render, screen } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import type { ReactNode } from 'react'
 import { describe, expect, it, vi } from 'vitest'
@@ -9,8 +9,31 @@ import {
 	PlanningTeamFeature,
 	type PlanningTeamFeatureProps,
 } from '#/pages/planning/feature/planning-team-feature'
+import type { PlanningResponse } from '#/pages/planning/types'
+
+// jsdom has no ResizeObserver, and Radix `Select`'s listbox needs
+// `scrollIntoView`/pointer-capture methods it also doesn't implement.
+// Stubbed locally — this workstream doesn't own `vitest.setup.ts`.
+class ResizeObserverStub {
+	observe() {}
+	unobserve() {}
+	disconnect() {}
+}
+// biome-ignore lint/suspicious/noExplicitAny: test-only global polyfills
+const globalAny = globalThis as any
+globalAny.ResizeObserver ??= ResizeObserverStub
+Element.prototype.scrollIntoView ??= () => {}
+Element.prototype.hasPointerCapture ??= () => false
+Element.prototype.releasePointerCapture ??= () => {}
 
 const PLANNING_PATH = '/api/v1/organizations/{organization_id}/planning'
+const AVAILABILITY_PATH =
+	'/api/v1/organizations/{organization_id}/planning/availability'
+const WORK_ORDER_PATH =
+	'/api/v1/organizations/{organization_id}/work-orders/{work_order_id}'
+const ABSENCES_PATH = '/api/v1/organizations/{organization_id}/absences'
+const ABSENCE_PATH =
+	'/api/v1/organizations/{organization_id}/absences/{absence_id}'
 
 const ORGANIZATION: Organization = {
 	id: 'org-1',
@@ -21,29 +44,93 @@ const ORGANIZATION: Organization = {
 	updated_at: '2026-01-01T00:00:00Z',
 }
 
-const PLANNING_RESPONSE = {
-	timezone: 'Europe/Paris',
-	resources: [
-		{
-			resource_id: 'employee:employee-1',
-			kind: 'employee',
-			employee_id: 'employee-1',
-			user_id: null,
-			display_name: 'Alix Martin',
-			hourly_rate_cents: 1500,
-			weekly_contract_minutes: 2100,
-		},
-	],
-	entries: [],
-	work_time: [],
+const RESOURCE_EMPLOYEE_1 = {
+	resource_id: 'employee:employee-1',
+	kind: 'employee' as const,
+	employee_id: 'employee-1',
+	user_id: null,
+	display_name: 'Alix Martin',
+	hourly_rate_cents: 1500,
+	weekly_contract_minutes: 2100,
 }
 
-function installFakeTanstackApi() {
+const RESOURCE_EMPLOYEE_2 = {
+	resource_id: 'employee:employee-2',
+	kind: 'employee' as const,
+	employee_id: 'employee-2',
+	user_id: null,
+	display_name: 'Marie Leroy',
+	hourly_rate_cents: 1600,
+	weekly_contract_minutes: 2100,
+}
+
+const RESOURCE_MEMBER = {
+	resource_id: 'member:user-9',
+	kind: 'member' as const,
+	employee_id: null,
+	user_id: 'user-9',
+	display_name: 'Jules Petit',
+	hourly_rate_cents: null,
+	weekly_contract_minutes: 0,
+}
+
+const WORK_ORDER_ENTRY = {
+	kind: 'work_order' as const,
+	id: 'wo-1',
+	starts_at: '2026-08-03T08:00:00+02:00',
+	ends_at: '2026-08-03T10:00:00+02:00',
+	all_day: false,
+	status: 'PLANNED' as const,
+	employee_ids: ['employee-1'],
+	customer_name: 'Client Dupont',
+	context_label: 'Chantier toiture',
+}
+
+const ABSENCE_ENTRY = {
+	kind: 'absence' as const,
+	id: 'ab-1',
+	starts_at: '2026-08-03T00:00:00+02:00',
+	ends_at: '2026-08-04T00:00:00+02:00',
+	all_day: true,
+	absence_kind: 'LEAVE' as const,
+	employee_id: 'employee-1',
+	note: 'Vacances',
+}
+
+function planningResponse(
+	overrides: Partial<PlanningResponse> = {},
+): PlanningResponse {
+	return {
+		timezone: 'Europe/Paris',
+		resources: [RESOURCE_EMPLOYEE_1],
+		entries: [],
+		work_time: [],
+		...overrides,
+	}
+}
+
+/** jsdom has no `DataTransfer`; a plain object backed by a `Map` is enough for `setData`/`getData`. */
+function fakeDataTransfer() {
+	const store = new Map<string, string>()
+	return {
+		setData: (format: string, data: string) => store.set(format, data),
+		getData: (format: string) => store.get(format) ?? '',
+	}
+}
+
+type Handler = (params: unknown) => unknown
+
+function installFakeTanstackApi(planning: PlanningResponse) {
 	const calls: { method: string; path: string; params: unknown }[] = []
+	const handlers = new Map<string, Handler>()
 
 	function queryKeyFor(path: string, params: unknown) {
 		const p = (params ?? {}) as { path?: unknown; query?: unknown }
 		return [{ _id: path, path: p.path, query: p.query }]
+	}
+
+	function mock(method: string, path: string, handler: Handler) {
+		handlers.set(`${method}:${path}`, handler)
 	}
 
 	const fakeApi = {
@@ -56,26 +143,44 @@ function installFakeTanstackApi() {
 					queryFn: async () => {
 						calls.push({ method: 'get', path, params })
 						if (path === PLANNING_PATH) {
-							return { data: PLANNING_RESPONSE, pagination: null }
+							return { data: planning, pagination: null }
 						}
 						throw new Error(`unmocked GET ${path}`)
 					},
 				},
 			}
 		},
-		mutation() {
-			throw new Error('no mutation expected in W6 — planning is read-only')
+		mutation(method: string, path: string) {
+			return {
+				mutationOptions: {
+					mutationKey: [{ method, path }],
+					mutationFn: async (params: unknown) => {
+						calls.push({ method, path, params })
+						const handler = handlers.get(`${method}:${path}`)
+						if (!handler) {
+							throw new Error(`unmocked ${method.toUpperCase()} ${path}`)
+						}
+						return handler(params)
+					},
+				},
+			}
 		},
 	}
 
 	// biome-ignore lint/suspicious/noExplicitAny: test-only fake, shape matches TanstackQueryApiClient's used surface
 	;(window as any).tanstackApi = fakeApi
 
-	return calls
+	return { calls, mock }
 }
 
-function renderFeature(overrides: Partial<PlanningTeamFeatureProps> = {}) {
-	const calls = installFakeTanstackApi()
+function renderFeature(
+	options: {
+		planning?: PlanningResponse
+		overrides?: Partial<PlanningTeamFeatureProps>
+	} = {},
+) {
+	const planning = options.planning ?? planningResponse()
+	const { calls, mock } = installFakeTanstackApi(planning)
 	const queryClient = new QueryClient({
 		defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
 	})
@@ -100,12 +205,18 @@ function renderFeature(overrides: Partial<PlanningTeamFeatureProps> = {}) {
 				date="2026-08-07"
 				onViewChange={onViewChange}
 				onDateChange={onDateChange}
-				{...overrides}
+				{...options.overrides}
 			/>
 		</Providers>,
 	)
 
-	return { calls, onViewChange, onDateChange }
+	return { calls, mock, onViewChange, onDateChange }
+}
+
+function patchCallsFor(
+	calls: { method: string; path: string; params: unknown }[],
+) {
+	return calls.filter((c) => c.method === 'patch' && c.path === WORK_ORDER_PATH)
 }
 
 describe('PlanningTeamFeature', () => {
@@ -121,7 +232,7 @@ describe('PlanningTeamFeature', () => {
 	})
 
 	it('recalcule la fenêtre pour la vue mois', async () => {
-		const { calls } = renderFeature({ view: 'month' })
+		const { calls } = renderFeature({ overrides: { view: 'month' } })
 
 		await screen.findByText('Alix Martin')
 		const call = calls.find((c) => c.path === PLANNING_PATH)
@@ -150,3 +261,370 @@ describe('PlanningTeamFeature', () => {
 		expect(onDateChange).toHaveBeenCalledWith('2026-08-14')
 	})
 })
+
+describe('PlanningTeamFeature — drag & drop sans avertissement', () => {
+	it('un drop qui change le jour et la ligne à la fois émet un seul PATCH avec starts_at/ends_at et la liste complète des assignés', async () => {
+		const { calls, mock } = renderFeature({
+			planning: planningResponse({
+				resources: [RESOURCE_EMPLOYEE_1, RESOURCE_EMPLOYEE_2],
+				entries: [WORK_ORDER_ENTRY],
+			}),
+		})
+		mock('get', AVAILABILITY_PATH, () => ({
+			data: { resources: [] },
+			pagination: null,
+		}))
+		mock('patch', WORK_ORDER_PATH, () => ({
+			data: { work_order: WORK_ORDER_ENTRY, created_employees: [] },
+			pagination: null,
+		}))
+
+		await screen.findByText('Alix Martin')
+		const segment = screen.getByTestId('grid-segment')
+		const dataTransfer = fakeDataTransfer()
+		fireEventDragStart(segment, dataTransfer)
+
+		const targetRow = screen
+			.getAllByTestId('grid-row')
+			.find(
+				(row) => row.getAttribute('data-resource-id') === 'employee:employee-2',
+			)
+		if (!targetRow) throw new Error('target row not found')
+		const targetCell = within(targetRow)
+			.getAllByTestId('grid-cell')
+			.find((cell) => cell.getAttribute('data-date') === '2026-08-05')
+		if (!targetCell) throw new Error('target cell not found')
+
+		fireEventDrop(targetCell, dataTransfer)
+
+		await waitFor(() => expect(patchCallsFor(calls)).toHaveLength(1))
+		const patch = patchCallsFor(calls)[0]
+		expect(patch.params).toMatchObject({
+			path: { organization_id: 'org-1', work_order_id: 'wo-1' },
+			body: {
+				assignees: [{ kind: 'employee', employee_id: 'employee-2' }],
+			},
+		})
+		const body = (
+			patch.params as { body: { starts_at?: string; ends_at?: string } }
+		).body
+		expect(body.starts_at).toBeDefined()
+		expect(body.ends_at).toBeDefined()
+		expect(body.starts_at).not.toBe(WORK_ORDER_ENTRY.starts_at)
+
+		// Availability was checked once for the drop, not stacked into extra calls.
+		const availabilityCalls = calls.filter(
+			(c) => c.method === 'get' && c.path === AVAILABILITY_PATH,
+		)
+		expect(availabilityCalls).toHaveLength(1)
+	})
+
+	it("un drop qui ne change ni le jour ni la ligne n'émet aucun appel", async () => {
+		const { calls } = renderFeature({
+			planning: planningResponse({ entries: [WORK_ORDER_ENTRY] }),
+		})
+
+		await screen.findByText('Alix Martin')
+		dropOnResourceDate('employee:employee-1', '2026-08-03')
+
+		await new Promise((resolve) => setTimeout(resolve, 0))
+		expect(calls.some((c) => c.path === AVAILABILITY_PATH)).toBe(false)
+		expect(calls.some((c) => c.path === WORK_ORDER_PATH)).toBe(false)
+	})
+})
+
+describe('PlanningTeamFeature — avertissements', () => {
+	it('un drop sur une ressource en congé ouvre le dialogue ; annuler n’émet aucun PATCH', async () => {
+		const { calls, mock } = renderFeature({
+			planning: planningResponse({
+				resources: [RESOURCE_EMPLOYEE_1, RESOURCE_EMPLOYEE_2],
+				entries: [WORK_ORDER_ENTRY],
+			}),
+		})
+		mock('get', AVAILABILITY_PATH, () => ({
+			data: {
+				resources: [
+					{
+						resource_id: 'employee:employee-2',
+						available: false,
+						conflicts: [
+							{
+								kind: 'absence',
+								reason: 'LEAVE',
+								note: 'Vacances',
+								starts_at: '2026-08-05T00:00:00+02:00',
+								ends_at: '2026-08-06T00:00:00+02:00',
+							},
+						],
+					},
+				],
+			},
+			pagination: null,
+		}))
+
+		await screen.findByText('Alix Martin')
+		dropOnResourceDate('employee:employee-2', '2026-08-05')
+
+		expect(await screen.findByRole('alertdialog')).toBeDefined()
+		expect(screen.getByText(/Absence : Congé/)).toBeDefined()
+
+		const user = userEvent.setup()
+		await user.click(screen.getByRole('button', { name: 'Annuler' }))
+
+		expect(screen.queryByRole('alertdialog')).toBeNull()
+		expect(patchCallsFor(calls)).toHaveLength(0)
+	})
+
+	it('confirmer applique la mutation — une ressource en congé reste assignable après confirmation', async () => {
+		const { calls, mock } = renderFeature({
+			planning: planningResponse({
+				resources: [RESOURCE_EMPLOYEE_1, RESOURCE_EMPLOYEE_2],
+				entries: [WORK_ORDER_ENTRY],
+			}),
+		})
+		mock('get', AVAILABILITY_PATH, () => ({
+			data: {
+				resources: [
+					{
+						resource_id: 'employee:employee-2',
+						available: false,
+						conflicts: [
+							{
+								kind: 'absence',
+								reason: 'LEAVE',
+								note: 'Vacances',
+								starts_at: '2026-08-05T00:00:00+02:00',
+								ends_at: '2026-08-06T00:00:00+02:00',
+							},
+						],
+					},
+				],
+			},
+			pagination: null,
+		}))
+		mock('patch', WORK_ORDER_PATH, () => ({
+			data: { work_order: WORK_ORDER_ENTRY, created_employees: [] },
+			pagination: null,
+		}))
+
+		await screen.findByText('Alix Martin')
+		dropOnResourceDate('employee:employee-2', '2026-08-05')
+		await screen.findByRole('alertdialog')
+
+		const user = userEvent.setup()
+		await user.click(screen.getByRole('button', { name: /Confirmer/ }))
+
+		await waitFor(() => expect(patchCallsFor(calls)).toHaveLength(1))
+		expect(patchCallsFor(calls)[0].params).toMatchObject({
+			body: { assignees: [{ kind: 'employee', employee_id: 'employee-2' }] },
+		})
+		await waitFor(() => expect(screen.queryByRole('alertdialog')).toBeNull())
+	})
+
+	it('un drop sur une ressource member sans fiche affiche missing_employee_record ; confirmer crée la fiche et avertit sur le taux horaire', async () => {
+		const { calls, mock } = renderFeature({
+			planning: planningResponse({
+				resources: [RESOURCE_EMPLOYEE_1, RESOURCE_MEMBER],
+				entries: [WORK_ORDER_ENTRY],
+			}),
+		})
+		mock('get', AVAILABILITY_PATH, () => ({
+			data: { resources: [] },
+			pagination: null,
+		}))
+		mock('patch', WORK_ORDER_PATH, () => ({
+			data: {
+				work_order: WORK_ORDER_ENTRY,
+				created_employees: [
+					{
+						id: 'employee-9',
+						organization_id: 'org-1',
+						name: 'Jules Petit',
+						user_id: 'user-9',
+						hourly_rate_cents: null,
+						weekly_contract_minutes: 0,
+						created_at: '2026-08-07T00:00:00Z',
+						updated_at: '2026-08-07T00:00:00Z',
+					},
+				],
+			},
+			pagination: null,
+		}))
+
+		await screen.findByText('Alix Martin')
+		dropOnResourceDate('member:user-9', '2026-08-03')
+
+		expect(await screen.findByRole('alertdialog')).toBeDefined()
+		expect(screen.getByText(/Aucune fiche employé/)).toBeDefined()
+
+		const user = userEvent.setup()
+		await user.click(screen.getByRole('button', { name: /Confirmer/ }))
+
+		await waitFor(() => expect(patchCallsFor(calls)).toHaveLength(1))
+		expect(patchCallsFor(calls)[0].params).toMatchObject({
+			body: { assignees: [{ kind: 'member', user_id: 'user-9' }] },
+		})
+
+		expect(
+			await screen.findByText(/Fiche employé créée.*Jules Petit/),
+		).toBeDefined()
+		expect(screen.getByText(/taux horaire/)).toBeDefined()
+	})
+})
+
+describe('PlanningTeamFeature — retrait d’un assigné', () => {
+	it('le bouton retirer envoie directement un PATCH avec la liste complète moins la ressource retirée, sans dialogue', async () => {
+		const { calls, mock } = renderFeature({
+			planning: planningResponse({
+				resources: [RESOURCE_EMPLOYEE_1, RESOURCE_EMPLOYEE_2],
+				entries: [
+					{ ...WORK_ORDER_ENTRY, employee_ids: ['employee-1', 'employee-2'] },
+				],
+			}),
+		})
+		mock('patch', WORK_ORDER_PATH, () => ({
+			data: { work_order: WORK_ORDER_ENTRY, created_employees: [] },
+			pagination: null,
+		}))
+
+		await screen.findByText('Alix Martin')
+		const user = userEvent.setup()
+		const removeButtons = screen.getAllByRole('button', {
+			name: /Retirer cette personne/,
+		})
+		await user.click(removeButtons[0])
+
+		await waitFor(() => expect(patchCallsFor(calls)).toHaveLength(1))
+		expect(patchCallsFor(calls)[0].params).toMatchObject({
+			body: { assignees: [{ kind: 'employee', employee_id: 'employee-2' }] },
+		})
+		expect(screen.queryByRole('alertdialog')).toBeNull()
+		expect(calls.some((c) => c.path === AVAILABILITY_PATH)).toBe(false)
+	})
+})
+
+describe('PlanningTeamFeature — absences', () => {
+	it("l'édition d'une absence pré-remplit le formulaire et envoie un PATCH sans employee_id", async () => {
+		const { calls, mock } = renderFeature({
+			planning: planningResponse({ entries: [ABSENCE_ENTRY] }),
+		})
+		mock('patch', ABSENCE_PATH, () => ({
+			data: {
+				...ABSENCE_ENTRY,
+				organization_id: 'org-1',
+				created_at: '',
+				updated_at: '',
+			},
+			pagination: null,
+		}))
+
+		await screen.findByText('Alix Martin')
+		const user = userEvent.setup()
+		await user.click(screen.getByTestId('grid-segment'))
+
+		const sheet = await screen.findByRole('dialog')
+		expect(within(sheet).getByText('Modifier l’absence')).toBeDefined()
+
+		await user.click(screen.getByRole('button', { name: 'Enregistrer' }))
+
+		await waitFor(() => {
+			const patchCalls = calls.filter(
+				(c) => c.method === 'patch' && c.path === ABSENCE_PATH,
+			)
+			expect(patchCalls).toHaveLength(1)
+			expect(patchCalls[0].params).toMatchObject({
+				path: { organization_id: 'org-1', absence_id: 'ab-1' },
+			})
+			expect(patchCalls[0].params).not.toHaveProperty('body.employee_id')
+		})
+	})
+
+	it('la suppression déclenche un DELETE et ferme le formulaire', async () => {
+		const { calls, mock } = renderFeature({
+			planning: planningResponse({ entries: [ABSENCE_ENTRY] }),
+		})
+		mock('delete', ABSENCE_PATH, () => ({ data: undefined, pagination: null }))
+
+		await screen.findByText('Alix Martin')
+		const user = userEvent.setup()
+		await user.click(screen.getByTestId('grid-segment'))
+		await screen.findByRole('dialog')
+
+		await user.click(screen.getByRole('button', { name: /Supprimer/ }))
+
+		await waitFor(() => {
+			const deleteCalls = calls.filter(
+				(c) => c.method === 'delete' && c.path === ABSENCE_PATH,
+			)
+			expect(deleteCalls).toHaveLength(1)
+			expect(deleteCalls[0].params).toMatchObject({
+				path: { organization_id: 'org-1', absence_id: 'ab-1' },
+			})
+		})
+		await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+	})
+
+	it('la création choisit un employé via le sélecteur puis envoie un POST avec employee_id', async () => {
+		const { calls, mock } = renderFeature({
+			planning: planningResponse({ resources: [RESOURCE_EMPLOYEE_1] }),
+		})
+		mock('post', ABSENCES_PATH, () => ({
+			data: { ...ABSENCE_ENTRY, id: 'ab-2', organization_id: 'org-1' },
+			pagination: null,
+		}))
+
+		await screen.findByText('Alix Martin')
+		const user = userEvent.setup()
+		await user.click(
+			screen.getByRole('button', { name: /Ajouter une absence/ }),
+		)
+
+		const sheet = await screen.findByRole('dialog')
+		await user.click(within(sheet).getByRole('combobox', { name: 'Employé' }))
+		await user.click(await screen.findByRole('option', { name: 'Alix Martin' }))
+
+		await user.click(screen.getByRole('button', { name: /Créer l’absence/ }))
+
+		await waitFor(() => {
+			const postCalls = calls.filter(
+				(c) => c.method === 'post' && c.path === ABSENCES_PATH,
+			)
+			expect(postCalls).toHaveLength(1)
+			expect(postCalls[0].params).toMatchObject({
+				path: { organization_id: 'org-1' },
+				body: { employee_id: 'employee-1', kind: 'LEAVE' },
+			})
+		})
+	})
+})
+
+// -- Helpers de simulation drag & drop --------------------------------------
+
+function fireEventDragStart(element: Element, dataTransfer: unknown) {
+	const event = new Event('dragstart', { bubbles: true, cancelable: true })
+	Object.assign(event, { dataTransfer })
+	element.dispatchEvent(event)
+}
+
+function fireEventDrop(element: Element, dataTransfer: unknown) {
+	const event = new Event('drop', { bubbles: true, cancelable: true })
+	Object.assign(event, { dataTransfer })
+	element.dispatchEvent(event)
+}
+
+function dropOnResourceDate(resourceId: string, date: string) {
+	const segment = screen.getByTestId('grid-segment')
+	const dataTransfer = fakeDataTransfer()
+	fireEventDragStart(segment, dataTransfer)
+
+	const targetRow = screen
+		.getAllByTestId('grid-row')
+		.find((row) => row.getAttribute('data-resource-id') === resourceId)
+	if (!targetRow) throw new Error(`target row not found: ${resourceId}`)
+	const targetCell = within(targetRow)
+		.getAllByTestId('grid-cell')
+		.find((cell) => cell.getAttribute('data-date') === date)
+	if (!targetCell) throw new Error(`target cell not found: ${date}`)
+
+	fireEventDrop(targetCell, dataTransfer)
+}
