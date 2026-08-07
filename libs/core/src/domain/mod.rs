@@ -11,6 +11,7 @@ pub(crate) mod quote;
 pub(crate) mod role;
 pub(crate) mod service_rate;
 pub(crate) mod user;
+pub(crate) mod work_order;
 
 pub use customer::*;
 pub use customer_contact::*;
@@ -25,3 +26,4 @@ pub use quote::*;
 pub use role::*;
 pub use service_rate::*;
 pub use user::*;
+pub use work_order::*;

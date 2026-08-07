@@ -8,11 +8,12 @@ pub use application::*;
 pub use infrastructure::realtime::EventHub;
 
 pub use domain::{
-    Customer, CustomerContact, CustomerContactId, CustomerContext, CustomerContextId, CustomerId,
-    CustomerPipelineStage, CustomerStatus, Employee, EmployeeId, Equipment, EquipmentId,
-    FileObject, Member, MemberId, Organization, OrganizationId, Permissions, Product, ProductId,
-    Quote, QuoteId, QuoteLine, QuoteLineId, QuoteStatus, Role, RoleId, ServiceRate, ServiceRateId,
-    ServiceRateUnit, StoredFile, User, UserId,
+    AssigneeRef, Assignment, AssignmentId, Customer, CustomerContact, CustomerContactId,
+    CustomerContext, CustomerContextId, CustomerId, CustomerPipelineStage, CustomerStatus,
+    Employee, EmployeeId, Equipment, EquipmentId, FileObject, Member, MemberId, Organization,
+    OrganizationId, Permissions, Product, ProductId, Quote, QuoteId, QuoteLine, QuoteLineId,
+    QuoteStatus, Role, RoleId, ServiceRate, ServiceRateId, ServiceRateUnit, StoredFile, User,
+    UserId, WorkOrder, WorkOrderId, WorkOrderStatus,
     customer::commands::{CreateCustomerCommand, UpdateCustomerCommand},
     customer_contact::commands::{CreateCustomerContactCommand, UpdateCustomerContactCommand},
     customer_context::commands::{CreateCustomerContextCommand, UpdateCustomerContextCommand},
@@ -26,4 +27,5 @@ pub use domain::{
     },
     service_rate::commands::{CreateServiceRateCommand, UpdateServiceRateCommand},
     user::commands::{CreateUserCommand, UpsertUserBySubCommand},
+    work_order::commands::{CreateWorkOrderCommand, PatchWorkOrderCommand},
 };

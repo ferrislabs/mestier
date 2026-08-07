@@ -1,7 +1,7 @@
 use chrono::{DateTime, Utc};
 use common::CoreError;
 
-use crate::{Employee, EmployeeId, OrganizationId};
+use crate::{Employee, EmployeeId, OrganizationId, UserId};
 
 #[cfg_attr(test, mockall::automock)]
 pub trait EmployeeRepository: Send {
@@ -13,6 +13,17 @@ pub trait EmployeeRepository: Send {
     fn find_by_id(
         &mut self,
         id: EmployeeId,
+    ) -> impl Future<Output = Result<Option<Employee>, CoreError>> + Send;
+
+    /// The active employee record linked to `user_id` within `organization_id`,
+    /// if any. Backs the planning module's dedup rule ("a person who is both a
+    /// member and an employee appears once, on the employee side") and the
+    /// `PATCH /work-orders/{id}` on-the-fly employee provisioning: a `member`
+    /// assignee reuses this record instead of creating a duplicate one.
+    fn find_by_user_id(
+        &mut self,
+        organization_id: OrganizationId,
+        user_id: UserId,
     ) -> impl Future<Output = Result<Option<Employee>, CoreError>> + Send;
 
     fn list_by_organization(
