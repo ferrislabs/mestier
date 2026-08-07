@@ -594,8 +594,12 @@ mod tests {
         employee_repository: MockEmployeeRepository,
         user_repository: MockUserRepository,
         member_repository: MockMemberRepository,
-    ) -> TaskService<MockTaskRepository, MockEmployeeRepository, MockUserRepository, MockMemberRepository>
-    {
+    ) -> TaskService<
+        MockTaskRepository,
+        MockEmployeeRepository,
+        MockUserRepository,
+        MockMemberRepository,
+    > {
         TaskService::new(
             task_repository,
             employee_repository,
@@ -890,9 +894,7 @@ mod tests {
         task_repository
             .expect_count_children()
             .withf(move |ids| ids == [root_id])
-            .returning(move |_| {
-                Box::pin(async move { Ok(HashMap::from([(root_id, 2)])) })
-            });
+            .returning(move |_| Box::pin(async move { Ok(HashMap::from([(root_id, 2)])) }));
 
         let mut service = service(
             task_repository,

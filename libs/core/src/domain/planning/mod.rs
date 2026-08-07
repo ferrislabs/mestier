@@ -3,7 +3,9 @@ use std::collections::BTreeMap;
 use chrono::{DateTime, NaiveDate, Utc};
 use common::CoreError;
 
-use crate::{AbsenceKind, EmployeeAbsenceId, EmployeeId, MinuteInterval, Task, TaskId, TaskStatus, UserId};
+use crate::{
+    AbsenceKind, EmployeeAbsenceId, EmployeeId, MinuteInterval, Task, TaskId, TaskStatus, UserId,
+};
 
 pub mod ports;
 pub mod service;

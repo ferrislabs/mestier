@@ -1256,7 +1256,11 @@ mod tests {
         assert_eq!(entries.len(), 1);
         assert!(matches!(
             &entries[0],
-            PlanningEntry::Task { customer_name: None, context_label: None, .. }
+            PlanningEntry::Task {
+                customer_name: None,
+                context_label: None,
+                ..
+            }
         ));
     }
 

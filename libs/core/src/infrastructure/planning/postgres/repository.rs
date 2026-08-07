@@ -106,7 +106,10 @@ impl<'tx> PlanningRepository for PgPlanningRepository<'tx> {
         let mut assignments_by_task: HashMap<Uuid, Vec<TaskAssignment>> = HashMap::new();
         for row in assignment_rows {
             let task_id = row.task_id;
-            assignments_by_task.entry(task_id).or_default().push(row.into());
+            assignments_by_task
+                .entry(task_id)
+                .or_default()
+                .push(row.into());
         }
 
         let mut tasks = Vec::with_capacity(task_rows.len());

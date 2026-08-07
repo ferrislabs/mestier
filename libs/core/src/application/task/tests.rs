@@ -260,8 +260,14 @@ mod tests {
         let fixture_b = seed_fixture(&pool).await;
         let usecase = make_usecase(pool.clone());
 
-        usecase.create_task(create_command(&fixture_a)).await.unwrap();
-        usecase.create_task(create_command(&fixture_b)).await.unwrap();
+        usecase
+            .create_task(create_command(&fixture_a))
+            .await
+            .unwrap();
+        usecase
+            .create_task(create_command(&fixture_b))
+            .await
+            .unwrap();
 
         let (items, _child_counts, total) = usecase
             .list_tasks(fixture_a.organization_id, None, 20, 0)
@@ -323,11 +329,15 @@ mod tests {
             .unwrap();
         assert_eq!(children_total, 2);
         assert_eq!(children.len(), 2);
-        assert!(children.iter().all(|task| task.parent_task_id == Some(root.id)));
         assert!(
             children
                 .iter()
-                .all(|task| child_child_counts.get(&task.id).is_none()),
+                .all(|task| task.parent_task_id == Some(root.id))
+        );
+        assert!(
+            children
+                .iter()
+                .all(|task| !child_child_counts.contains_key(&task.id)),
             "a subtask has no children of its own — the two-level cap"
         );
 
@@ -478,7 +488,10 @@ mod tests {
             "the reschedule must not have landed"
         );
         assert_eq!(task.ends_at, original_ends_at);
-        assert!(task.assignments.is_empty(), "no assignment must have landed");
+        assert!(
+            task.assignments.is_empty(),
+            "no assignment must have landed"
+        );
 
         let employee_count: i64 = sqlx::query_scalar!(
             r#"SELECT COUNT(*) AS "count!" FROM employees WHERE org_id = $1 AND user_id = $2"#,
@@ -620,14 +633,16 @@ mod tests {
         .unwrap();
 
         let org_id = generate_uuid_v7();
-        sqlx::query(r#"INSERT INTO organizations (id, name, slug, owner_id) VALUES ($1, $2, $3, $4)"#)
-            .bind(org_id)
-            .bind("Test Org")
-            .bind(format!("test-org-{org_id}"))
-            .bind(owner_id)
-            .execute(&scratch_pool)
-            .await
-            .unwrap();
+        sqlx::query(
+            r#"INSERT INTO organizations (id, name, slug, owner_id) VALUES ($1, $2, $3, $4)"#,
+        )
+        .bind(org_id)
+        .bind("Test Org")
+        .bind(format!("test-org-{org_id}"))
+        .bind(owner_id)
+        .execute(&scratch_pool)
+        .await
+        .unwrap();
 
         let customer_id = generate_uuid_v7();
         sqlx::query(

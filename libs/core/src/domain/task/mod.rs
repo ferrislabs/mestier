@@ -181,7 +181,10 @@ mod tests {
 
     #[test]
     fn task_status_parses_known_values() {
-        assert_eq!("PLANNED".parse::<TaskStatus>().unwrap(), TaskStatus::Planned);
+        assert_eq!(
+            "PLANNED".parse::<TaskStatus>().unwrap(),
+            TaskStatus::Planned
+        );
         assert_eq!(
             "IN_PROGRESS".parse::<TaskStatus>().unwrap(),
             TaskStatus::InProgress

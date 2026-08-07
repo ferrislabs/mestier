@@ -8,13 +8,13 @@ pub use application::*;
 pub use infrastructure::realtime::EventHub;
 
 pub use domain::{
-    AbsenceKind, AssigneeRef, AvailabilityReport, Conflict, ConflictKind,
-    Customer, CustomerContact, CustomerContactId, CustomerContext, CustomerContextId, CustomerId,
+    AbsenceKind, AssigneeRef, AvailabilityReport, Conflict, ConflictKind, Customer,
+    CustomerContact, CustomerContactId, CustomerContext, CustomerContextId, CustomerId,
     CustomerPipelineStage, CustomerStatus, DateRange, Employee, EmployeeAbsence, EmployeeAbsenceId,
     EmployeeId, EmployeeRhythm, EmployeeRhythmId, EmployeeWorkSlot, EmployeeWorkSlotId,
     EmployeeWorkTime, Equipment, EquipmentId, FileObject, Member, MemberId, MinuteInterval,
-    Organization, OrganizationId, Permissions, PlanningEntry, PlanningResource, PlanningView,
-    PlanningTask, Product, ProductId, Quote, QuoteId, QuoteLine, QuoteLineId, QuoteStatus,
+    Organization, OrganizationId, Permissions, PlanningEntry, PlanningResource, PlanningTask,
+    PlanningView, Product, ProductId, Quote, QuoteId, QuoteLine, QuoteLineId, QuoteStatus,
     RhythmSlot, RhythmSlotId, Role, RoleId, ServiceRate, ServiceRateId, ServiceRateUnit,
     StoredFile, Task, TaskAssignment, TaskAssignmentId, TaskId, TaskStatus, TimeRange, Tz, User,
     UserId,

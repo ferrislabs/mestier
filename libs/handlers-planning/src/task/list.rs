@@ -52,7 +52,12 @@ pub async fn handler(
     let offset = pagination.offset();
     let (tasks, child_counts, total) = state
         .usecase
-        .list_tasks(path.organization_id, filter.parent_task_id, per_page, offset)
+        .list_tasks(
+            path.organization_id,
+            filter.parent_task_id,
+            per_page,
+            offset,
+        )
         .await?;
     let items: Vec<TaskResponse> = tasks
         .into_iter()

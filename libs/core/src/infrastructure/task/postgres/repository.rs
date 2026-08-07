@@ -210,7 +210,11 @@ impl<'tx> TaskRepository for PgTaskRepository<'tx> {
         row.into_task(task.assignments.clone())
     }
 
-    async fn soft_delete(&mut self, id: TaskId, deleted_at: DateTime<Utc>) -> Result<(), CoreError> {
+    async fn soft_delete(
+        &mut self,
+        id: TaskId,
+        deleted_at: DateTime<Utc>,
+    ) -> Result<(), CoreError> {
         let mut tx = self.tx.lock().await;
         let result = sqlx::query!(
             r#"
@@ -265,10 +269,13 @@ async fn replace_assignments(
     task_id: TaskId,
     assignments: &[TaskAssignment],
 ) -> Result<(), CoreError> {
-    sqlx::query!(r#"DELETE FROM task_assignments WHERE task_id = $1"#, task_id.0,)
-        .execute(&mut *conn)
-        .await
-        .map_err(map_sqlx_error)?;
+    sqlx::query!(
+        r#"DELETE FROM task_assignments WHERE task_id = $1"#,
+        task_id.0,
+    )
+    .execute(&mut *conn)
+    .await
+    .map_err(map_sqlx_error)?;
 
     for assignment in assignments {
         sqlx::query!(
