@@ -24,3 +24,4 @@ pub mod service_rate;
 pub mod user;
 pub mod webhook;
 pub mod work_order;
+pub mod work_time;
