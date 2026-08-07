@@ -31,7 +31,7 @@ pub mod domain {
     pub struct ReadState;
     pub struct Overwrite;
     pub struct Notification;
-    pub struct WorkOrder;
+    pub struct Task;
     pub struct EmployeeRhythm;
     pub struct EmployeeWorkSlot;
 }

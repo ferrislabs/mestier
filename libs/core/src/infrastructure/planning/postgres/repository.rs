@@ -6,24 +6,25 @@ use mestier_macros::repository;
 use uuid::Uuid;
 
 use crate::{
-    Assignment, EmployeeAbsence, EmployeeRhythm, EmployeeWorkSlot, OrganizationId,
-    PlanningWorkOrder, RhythmSlot,
+    EmployeeAbsence, EmployeeRhythm, EmployeeWorkSlot, OrganizationId, PlanningTask, RhythmSlot,
+    TaskAssignment,
     domain::planning::ports::PlanningRepository,
     infrastructure::{
         absence::postgres::model::AbsenceRow,
-        planning::postgres::model::PlanningWorkOrderRow,
+        planning::postgres::model::PlanningTaskRow,
         postgres::{SharedTx, error::map_sqlx_error},
-        work_order::postgres::model::AssignmentRow,
+        task::postgres::model::TaskAssignmentRow,
         work_time::postgres::model::{RhythmRow, RhythmSlotRow, WorkSlotRow},
     },
 };
 
 /// The planning read model's repository: batched, organization-wide reads
-/// across `work_orders`/`assignments` (enriched with the customer join),
-/// `employee_absences`, `employee_rhythms`/`employee_rhythm_slots` and
-/// `employee_work_slots`. Every method loads the whole organization in a
-/// small, fixed number of queries — never one per employee (see the
-/// planning module design doc's N+1 warning).
+/// across `tasks`/`task_assignments` (enriched with the customer join and
+/// each task's child count), `employee_absences`,
+/// `employee_rhythms`/`employee_rhythm_slots` and `employee_work_slots`.
+/// Every method loads the whole organization in a small, fixed number of
+/// queries — never one per employee (see the planning module design doc's
+/// N+1 warning).
 #[repository(domain = Planning, backend = Postgres)]
 pub struct PgPlanningRepository<'tx> {
     tx: SharedTx<'tx>,
@@ -36,30 +37,45 @@ impl<'tx> PgPlanningRepository<'tx> {
 }
 
 impl<'tx> PlanningRepository for PgPlanningRepository<'tx> {
-    #[tracing::instrument(skip(self), fields(db.system = "postgresql", db.operation = "select", db.table = "work_orders"), err)]
-    async fn list_work_orders_in_window(
+    #[tracing::instrument(skip(self), fields(db.system = "postgresql", db.operation = "select", db.table = "tasks"), err)]
+    async fn list_tasks_in_window(
         &mut self,
         organization_id: OrganizationId,
         from: DateTime<Utc>,
         to: DateTime<Utc>,
-    ) -> Result<Vec<PlanningWorkOrder>, CoreError> {
+    ) -> Result<Vec<PlanningTask>, CoreError> {
         let mut tx = self.tx.lock().await;
 
-        let work_order_rows = sqlx::query_as!(
-            PlanningWorkOrderRow,
+        // `customer_id`/`customer_context_id` are nullable now, so the
+        // customer join is a `LEFT JOIN` (a task with no customer must
+        // still appear) and `customer_name`/`context_label` resolve to
+        // `NULL` rather than dropping the row. `starts_at`/`ends_at` are
+        // nullable too — the window predicate below naturally excludes a
+        // task with neither (a subtask inheriting its parent's window);
+        // see `PlanningRepository::list_tasks_in_window`'s doc comment.
+        let task_rows = sqlx::query_as!(
+            PlanningTaskRow,
             r#"
             SELECT
-                wo.id, wo.org_id, wo.customer_id, wo.customer_context_id, wo.quote_id,
-                wo.starts_at, wo.ends_at, wo.all_day, wo.status::text AS "status!", wo.title, wo.note,
-                wo.deleted_at, wo.created_at, wo.updated_at,
-                (c.first_name || ' ' || c.last_name) AS "customer_name!",
-                cc.label AS "context_label!"
-            FROM work_orders wo
-            JOIN customers c ON c.id = wo.customer_id
-            JOIN customer_contexts cc ON cc.id = wo.customer_context_id
-            WHERE wo.org_id = $1 AND wo.deleted_at IS NULL
-              AND wo.starts_at < $3 AND wo.ends_at > $2
-            ORDER BY wo.starts_at ASC, wo.id ASC
+                t.id, t.org_id, t.parent_task_id, t.title, t.description,
+                t.starts_at, t.ends_at, t.all_day, t.status::text AS "status!", t.blocks_availability,
+                t.customer_id, t.customer_context_id, t.quote_id,
+                t.deleted_at, t.created_at, t.updated_at,
+                (c.first_name || ' ' || c.last_name) AS customer_name,
+                cc.label AS context_label,
+                COALESCE(child_counts.count, 0) AS "child_count!"
+            FROM tasks t
+            LEFT JOIN customers c ON c.id = t.customer_id
+            LEFT JOIN customer_contexts cc ON cc.id = t.customer_context_id
+            LEFT JOIN (
+                SELECT parent_task_id, COUNT(*) AS count
+                FROM tasks
+                WHERE org_id = $1 AND deleted_at IS NULL AND parent_task_id IS NOT NULL
+                GROUP BY parent_task_id
+            ) child_counts ON child_counts.parent_task_id = t.id
+            WHERE t.org_id = $1 AND t.deleted_at IS NULL
+              AND t.starts_at < $3 AND t.ends_at > $2
+            ORDER BY t.starts_at ASC, t.id ASC
             "#,
             organization_id.0,
             from,
@@ -70,13 +86,13 @@ impl<'tx> PlanningRepository for PgPlanningRepository<'tx> {
         .map_err(map_sqlx_error)?;
 
         let assignment_rows = sqlx::query_as!(
-            AssignmentRow,
+            TaskAssignmentRow,
             r#"
-            SELECT a.id, a.org_id, a.work_order_id, a.employee_id, a.created_at
-            FROM assignments a
-            JOIN work_orders wo ON wo.id = a.work_order_id
-            WHERE wo.org_id = $1 AND wo.deleted_at IS NULL
-              AND wo.starts_at < $3 AND wo.ends_at > $2
+            SELECT a.id, a.org_id, a.task_id, a.employee_id, a.created_at
+            FROM task_assignments a
+            JOIN tasks t ON t.id = a.task_id
+            WHERE t.org_id = $1 AND t.deleted_at IS NULL
+              AND t.starts_at < $3 AND t.ends_at > $2
             ORDER BY a.created_at ASC, a.id ASC
             "#,
             organization_id.0,
@@ -87,23 +103,20 @@ impl<'tx> PlanningRepository for PgPlanningRepository<'tx> {
         .await
         .map_err(map_sqlx_error)?;
 
-        let mut assignments_by_work_order: HashMap<Uuid, Vec<Assignment>> = HashMap::new();
+        let mut assignments_by_task: HashMap<Uuid, Vec<TaskAssignment>> = HashMap::new();
         for row in assignment_rows {
-            let work_order_id = row.work_order_id;
-            assignments_by_work_order
-                .entry(work_order_id)
-                .or_default()
-                .push(row.into());
+            let task_id = row.task_id;
+            assignments_by_task.entry(task_id).or_default().push(row.into());
         }
 
-        let mut work_orders = Vec::with_capacity(work_order_rows.len());
-        for row in work_order_rows {
+        let mut tasks = Vec::with_capacity(task_rows.len());
+        for row in task_rows {
             let id = row.id;
-            let assignments = assignments_by_work_order.remove(&id).unwrap_or_default();
-            work_orders.push(row.into_planning_work_order(assignments)?);
+            let assignments = assignments_by_task.remove(&id).unwrap_or_default();
+            tasks.push(row.into_planning_task(assignments)?);
         }
 
-        Ok(work_orders)
+        Ok(tasks)
     }
 
     #[tracing::instrument(skip(self), fields(db.system = "postgresql", db.operation = "select", db.table = "employee_absences"), err)]

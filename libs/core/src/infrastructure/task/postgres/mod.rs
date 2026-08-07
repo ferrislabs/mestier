@@ -1,4 +1,4 @@
 pub mod model;
 pub mod repository;
 
-pub use repository::PgWorkOrderRepository;
+pub use repository::PgTaskRepository;

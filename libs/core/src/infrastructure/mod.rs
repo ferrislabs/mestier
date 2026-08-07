@@ -22,7 +22,7 @@ pub mod realtime;
 pub mod registry;
 pub mod role;
 pub mod service_rate;
+pub mod task;
 pub mod user;
 pub mod webhook;
-pub mod work_order;
 pub mod work_time;

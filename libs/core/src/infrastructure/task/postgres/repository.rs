@@ -1,68 +1,73 @@
+use std::collections::HashMap;
+
 use chrono::{DateTime, Utc};
 use common::CoreError;
 use mestier_macros::repository;
 use sqlx::PgConnection;
+use uuid::Uuid;
 
 use crate::{
-    Assignment, OrganizationId, WorkOrder, WorkOrderId,
-    domain::work_order::ports::WorkOrderRepository,
+    OrganizationId, Task, TaskAssignment, TaskId,
+    domain::task::ports::TaskRepository,
     infrastructure::{
         postgres::{SharedTx, error::map_sqlx_error},
-        work_order::postgres::model::{AssignmentRow, WorkOrderRow},
+        task::postgres::model::{TaskAssignmentRow, TaskRow},
     },
 };
 
-#[repository(domain = WorkOrder, backend = Postgres)]
-pub struct PgWorkOrderRepository<'tx> {
+#[repository(domain = Task, backend = Postgres)]
+pub struct PgTaskRepository<'tx> {
     tx: SharedTx<'tx>,
 }
 
-impl<'tx> PgWorkOrderRepository<'tx> {
+impl<'tx> PgTaskRepository<'tx> {
     pub fn new(tx: &SharedTx<'tx>) -> Self {
         Self { tx: tx.clone() }
     }
 }
 
-impl<'tx> WorkOrderRepository for PgWorkOrderRepository<'tx> {
-    async fn insert(&mut self, work_order: &WorkOrder) -> Result<WorkOrder, CoreError> {
+impl<'tx> TaskRepository for PgTaskRepository<'tx> {
+    async fn insert(&mut self, task: &Task) -> Result<Task, CoreError> {
         let mut tx = self.tx.lock().await;
         let row = sqlx::query_as!(
-            WorkOrderRow,
+            TaskRow,
             r#"
-            INSERT INTO work_orders (id, org_id, customer_id, customer_context_id, quote_id, starts_at, ends_at, all_day, status, title, note, deleted_at, created_at, updated_at)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, CAST($9 AS text)::work_order_status, $10, $11, $12, $13, $14)
-            RETURNING id, org_id, customer_id, customer_context_id, quote_id, starts_at, ends_at, all_day, status::text AS "status!", title, note, deleted_at, created_at, updated_at
+            INSERT INTO tasks (id, org_id, parent_task_id, title, description, starts_at, ends_at, all_day, status, blocks_availability, customer_id, customer_context_id, quote_id, deleted_at, created_at, updated_at)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, CAST($9 AS text)::task_status, $10, $11, $12, $13, $14, $15, $16)
+            RETURNING id, org_id, parent_task_id, title, description, starts_at, ends_at, all_day, status::text AS "status!", blocks_availability, customer_id, customer_context_id, quote_id, deleted_at, created_at, updated_at
             "#,
-            work_order.id.0,
-            work_order.organization_id.0,
-            work_order.customer_id.0,
-            work_order.customer_context_id.0,
-            work_order.quote_id.map(|id| id.0),
-            work_order.starts_at,
-            work_order.ends_at,
-            work_order.all_day,
-            work_order.status.as_str(),
-            work_order.title,
-            work_order.note,
-            work_order.deleted_at,
-            work_order.created_at,
-            work_order.updated_at,
+            task.id.0,
+            task.organization_id.0,
+            task.parent_task_id.map(|id| id.0),
+            task.title,
+            task.description,
+            task.starts_at,
+            task.ends_at,
+            task.all_day,
+            task.status.as_str(),
+            task.blocks_availability,
+            task.customer_id.map(|id| id.0),
+            task.customer_context_id.map(|id| id.0),
+            task.quote_id.map(|id| id.0),
+            task.deleted_at,
+            task.created_at,
+            task.updated_at,
         )
         .fetch_one(&mut ***tx)
         .await
         .map_err(map_sqlx_error)?;
 
-        replace_assignments(&mut tx, work_order.id, &work_order.assignments).await?;
-        row.into_work_order(work_order.assignments.clone())
+        replace_assignments(&mut tx, task.id, &task.assignments).await?;
+        row.into_task(task.assignments.clone())
     }
 
-    async fn find_by_id(&mut self, id: WorkOrderId) -> Result<Option<WorkOrder>, CoreError> {
+    async fn find_by_id(&mut self, id: TaskId) -> Result<Option<Task>, CoreError> {
         let mut tx = self.tx.lock().await;
         let row = sqlx::query_as!(
-            WorkOrderRow,
+            TaskRow,
             r#"
-            SELECT id, org_id, customer_id, customer_context_id, quote_id, starts_at, ends_at, all_day, status::text AS "status!", title, note, deleted_at, created_at, updated_at
-            FROM work_orders
+            SELECT id, org_id, parent_task_id, title, description, starts_at, ends_at, all_day, status::text AS "status!", blocks_availability, customer_id, customer_context_id, quote_id, deleted_at, created_at, updated_at
+            FROM tasks
             WHERE id = $1 AND deleted_at IS NULL
             "#,
             id.0,
@@ -74,7 +79,7 @@ impl<'tx> WorkOrderRepository for PgWorkOrderRepository<'tx> {
         match row {
             Some(row) => {
                 let assignments = fetch_assignments(&mut tx, id).await?;
-                Ok(Some(row.into_work_order(assignments)?))
+                Ok(Some(row.into_task(assignments)?))
             }
             None => Ok(None),
         }
@@ -83,20 +88,27 @@ impl<'tx> WorkOrderRepository for PgWorkOrderRepository<'tx> {
     async fn list_by_organization(
         &mut self,
         organization_id: OrganizationId,
+        parent_task_id: Option<TaskId>,
         limit: u64,
         offset: u64,
-    ) -> Result<(Vec<WorkOrder>, u64), CoreError> {
+    ) -> Result<(Vec<Task>, u64), CoreError> {
         let mut tx = self.tx.lock().await;
+        let parent_task_id = parent_task_id.map(|id| id.0);
         let rows = sqlx::query_as!(
-            WorkOrderRow,
+            TaskRow,
             r#"
-            SELECT id, org_id, customer_id, customer_context_id, quote_id, starts_at, ends_at, all_day, status::text AS "status!", title, note, deleted_at, created_at, updated_at
-            FROM work_orders
+            SELECT id, org_id, parent_task_id, title, description, starts_at, ends_at, all_day, status::text AS "status!", blocks_availability, customer_id, customer_context_id, quote_id, deleted_at, created_at, updated_at
+            FROM tasks
             WHERE org_id = $1 AND deleted_at IS NULL
-            ORDER BY starts_at ASC, id ASC
-            LIMIT $2 OFFSET $3
+              AND (
+                ($2::uuid IS NULL AND parent_task_id IS NULL)
+                OR parent_task_id = $2
+              )
+            ORDER BY starts_at ASC NULLS LAST, id ASC
+            LIMIT $3 OFFSET $4
             "#,
             organization_id.0,
+            parent_task_id,
             limit as i64,
             offset as i64,
         )
@@ -105,46 +117,88 @@ impl<'tx> WorkOrderRepository for PgWorkOrderRepository<'tx> {
         .map_err(map_sqlx_error)?;
 
         let total: i64 = sqlx::query_scalar!(
-            r#"SELECT COUNT(*) AS "count!" FROM work_orders WHERE org_id = $1 AND deleted_at IS NULL"#,
+            r#"
+            SELECT COUNT(*) AS "count!"
+            FROM tasks
+            WHERE org_id = $1 AND deleted_at IS NULL
+              AND (
+                ($2::uuid IS NULL AND parent_task_id IS NULL)
+                OR parent_task_id = $2
+              )
+            "#,
             organization_id.0,
+            parent_task_id,
         )
         .fetch_one(&mut ***tx)
         .await
         .map_err(map_sqlx_error)?;
 
-        let mut work_orders = Vec::with_capacity(rows.len());
+        let mut tasks = Vec::with_capacity(rows.len());
         for row in rows {
-            let assignments = fetch_assignments(&mut tx, WorkOrderId(row.id)).await?;
-            work_orders.push(row.into_work_order(assignments)?);
+            let assignments = fetch_assignments(&mut tx, TaskId(row.id)).await?;
+            tasks.push(row.into_task(assignments)?);
         }
 
-        Ok((work_orders, total as u64))
+        Ok((tasks, total as u64))
     }
 
-    async fn update(&mut self, work_order: &WorkOrder) -> Result<WorkOrder, CoreError> {
+    async fn count_children(
+        &mut self,
+        task_ids: &[TaskId],
+    ) -> Result<HashMap<TaskId, i64>, CoreError> {
+        if task_ids.is_empty() {
+            return Ok(HashMap::new());
+        }
+
+        let mut tx = self.tx.lock().await;
+        let ids: Vec<Uuid> = task_ids.iter().map(|id| id.0).collect();
+        let rows = sqlx::query!(
+            r#"
+            SELECT parent_task_id AS "parent_task_id!", COUNT(*) AS "count!"
+            FROM tasks
+            WHERE parent_task_id = ANY($1) AND deleted_at IS NULL
+            GROUP BY parent_task_id
+            "#,
+            &ids,
+        )
+        .fetch_all(&mut ***tx)
+        .await
+        .map_err(map_sqlx_error)?;
+
+        Ok(rows
+            .into_iter()
+            .map(|row| (TaskId(row.parent_task_id), row.count))
+            .collect())
+    }
+
+    async fn update(&mut self, task: &Task) -> Result<Task, CoreError> {
         let mut tx = self.tx.lock().await;
         let row = sqlx::query_as!(
-            WorkOrderRow,
+            TaskRow,
             r#"
-            UPDATE work_orders
-            SET starts_at = $2,
-                ends_at = $3,
-                all_day = $4,
-                status = CAST($5 AS text)::work_order_status,
-                title = $6,
-                note = $7,
-                updated_at = $8
+            UPDATE tasks
+            SET parent_task_id = $2,
+                title = $3,
+                description = $4,
+                starts_at = $5,
+                ends_at = $6,
+                all_day = $7,
+                status = CAST($8 AS text)::task_status,
+                blocks_availability = $9,
+                updated_at = $10
             WHERE id = $1 AND deleted_at IS NULL
-            RETURNING id, org_id, customer_id, customer_context_id, quote_id, starts_at, ends_at, all_day, status::text AS "status!", title, note, deleted_at, created_at, updated_at
+            RETURNING id, org_id, parent_task_id, title, description, starts_at, ends_at, all_day, status::text AS "status!", blocks_availability, customer_id, customer_context_id, quote_id, deleted_at, created_at, updated_at
             "#,
-            work_order.id.0,
-            work_order.starts_at,
-            work_order.ends_at,
-            work_order.all_day,
-            work_order.status.as_str(),
-            work_order.title,
-            work_order.note,
-            work_order.updated_at,
+            task.id.0,
+            task.parent_task_id.map(|id| id.0),
+            task.title,
+            task.description,
+            task.starts_at,
+            task.ends_at,
+            task.all_day,
+            task.status.as_str(),
+            task.blocks_availability,
+            task.updated_at,
         )
         .fetch_optional(&mut ***tx)
         .await
@@ -152,19 +206,15 @@ impl<'tx> WorkOrderRepository for PgWorkOrderRepository<'tx> {
 
         let row = row.ok_or(CoreError::NotFound)?;
 
-        replace_assignments(&mut tx, work_order.id, &work_order.assignments).await?;
-        row.into_work_order(work_order.assignments.clone())
+        replace_assignments(&mut tx, task.id, &task.assignments).await?;
+        row.into_task(task.assignments.clone())
     }
 
-    async fn soft_delete(
-        &mut self,
-        id: WorkOrderId,
-        deleted_at: DateTime<Utc>,
-    ) -> Result<(), CoreError> {
+    async fn soft_delete(&mut self, id: TaskId, deleted_at: DateTime<Utc>) -> Result<(), CoreError> {
         let mut tx = self.tx.lock().await;
         let result = sqlx::query!(
             r#"
-            UPDATE work_orders
+            UPDATE tasks
             SET deleted_at = $2, updated_at = $2
             WHERE id = $1 AND deleted_at IS NULL
             "#,
@@ -185,17 +235,17 @@ impl<'tx> WorkOrderRepository for PgWorkOrderRepository<'tx> {
 
 async fn fetch_assignments(
     conn: &mut PgConnection,
-    work_order_id: WorkOrderId,
-) -> Result<Vec<Assignment>, CoreError> {
+    task_id: TaskId,
+) -> Result<Vec<TaskAssignment>, CoreError> {
     let rows = sqlx::query_as!(
-        AssignmentRow,
+        TaskAssignmentRow,
         r#"
-        SELECT id, org_id, work_order_id, employee_id, created_at
-        FROM assignments
-        WHERE work_order_id = $1
+        SELECT id, org_id, task_id, employee_id, created_at
+        FROM task_assignments
+        WHERE task_id = $1
         ORDER BY created_at ASC, id ASC
         "#,
-        work_order_id.0,
+        task_id.0,
     )
     .fetch_all(conn)
     .await
@@ -204,34 +254,31 @@ async fn fetch_assignments(
     Ok(rows.into_iter().map(Into::into).collect())
 }
 
-/// Replaces the complete assignment set for a work order: physical delete of
+/// Replaces the complete assignment set for a task: physical delete of
 /// whatever is there, then insert of the new list. Assignments carry no
-/// history worth keeping once removed (unlike work orders themselves, which
-/// are soft-deleted), and the `PATCH` contract treats `assignees` as the
-/// full list rather than a delta, so a diff would add complexity without
-/// adding correctness.
+/// history worth keeping once removed (unlike tasks themselves, which are
+/// soft-deleted), and the `PATCH` contract treats `assignees` as the full
+/// list rather than a delta, so a diff would add complexity without adding
+/// correctness.
 async fn replace_assignments(
     conn: &mut PgConnection,
-    work_order_id: WorkOrderId,
-    assignments: &[Assignment],
+    task_id: TaskId,
+    assignments: &[TaskAssignment],
 ) -> Result<(), CoreError> {
-    sqlx::query!(
-        r#"DELETE FROM assignments WHERE work_order_id = $1"#,
-        work_order_id.0,
-    )
-    .execute(&mut *conn)
-    .await
-    .map_err(map_sqlx_error)?;
+    sqlx::query!(r#"DELETE FROM task_assignments WHERE task_id = $1"#, task_id.0,)
+        .execute(&mut *conn)
+        .await
+        .map_err(map_sqlx_error)?;
 
     for assignment in assignments {
         sqlx::query!(
             r#"
-            INSERT INTO assignments (id, org_id, work_order_id, employee_id, created_at)
+            INSERT INTO task_assignments (id, org_id, task_id, employee_id, created_at)
             VALUES ($1, $2, $3, $4, $5)
             "#,
             assignment.id.0,
             assignment.organization_id.0,
-            assignment.work_order_id.0,
+            assignment.task_id.0,
             assignment.employee_id.0,
             assignment.created_at,
         )
