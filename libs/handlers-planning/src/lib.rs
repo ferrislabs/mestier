@@ -17,6 +17,7 @@ use mestier_core::OrganizationId;
 
 pub mod absence;
 pub mod paths;
+pub mod planning;
 pub mod response;
 pub mod work_order;
 pub mod work_time;
@@ -55,6 +56,7 @@ pub fn router(state: &AppState) -> Router<AppState> {
         .merge(work_order::router(state))
         .merge(absence::router(state))
         .merge(work_time::router(state))
+        .merge(planning::router(state))
         .layer(from_fn_with_state(state.clone(), rate_limit_middleware))
         .layer(from_fn_with_state(state.clone(), auth_middleware))
 }

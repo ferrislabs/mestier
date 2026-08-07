@@ -1,0 +1,231 @@
+use auth::Identity;
+use axum::{
+    Extension,
+    extract::{Query, State},
+};
+use chrono::{DateTime, Utc};
+use handlers::{ApiError, AppState, DataEnvelope, Response};
+use mestier_core::{
+    AbsenceKind, AvailabilityReport, Conflict, ConflictKind, TimeRange, WorkOrderId,
+};
+use serde::{Deserialize, Serialize};
+use utoipa::ToSchema;
+
+use crate::{paths::PlanningAvailabilityPath, require_org_membership};
+
+/// Mirrors the `starts_at`/`ends_at`/`all_day` triple work orders and
+/// absences are created with, so the front can check availability with the
+/// exact same values it is about to submit. `starts_at`/`ends_at` are
+/// already the precise `TIMESTAMPTZ` bounds either way — `all_day` does not
+/// change the computed window, it is accepted for contract parity (see the
+/// planning module design doc's decision on all-day entries).
+#[derive(Debug, Deserialize)]
+pub struct AvailabilityQuery {
+    pub starts_at: DateTime<Utc>,
+    pub ends_at: DateTime<Utc>,
+    #[serde(default)]
+    #[allow(dead_code)]
+    pub all_day: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, ToSchema)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum ConflictResponse {
+    Absence {
+        reason: AbsenceKind,
+        note: Option<String>,
+        starts_at: DateTime<Utc>,
+        ends_at: DateTime<Utc>,
+    },
+    OutsideWorkHours {
+        starts_at: DateTime<Utc>,
+        ends_at: DateTime<Utc>,
+    },
+    OverlappingWorkOrder {
+        work_order_id: WorkOrderId,
+        starts_at: DateTime<Utc>,
+        ends_at: DateTime<Utc>,
+    },
+}
+
+impl From<Conflict> for ConflictResponse {
+    fn from(value: Conflict) -> Self {
+        match value.kind {
+            ConflictKind::Absence { kind, note } => Self::Absence {
+                reason: kind,
+                note,
+                starts_at: value.starts_at,
+                ends_at: value.ends_at,
+            },
+            ConflictKind::OutsideWorkHours => Self::OutsideWorkHours {
+                starts_at: value.starts_at,
+                ends_at: value.ends_at,
+            },
+            ConflictKind::OverlappingWorkOrder { work_order_id } => Self::OverlappingWorkOrder {
+                work_order_id,
+                starts_at: value.starts_at,
+                ends_at: value.ends_at,
+            },
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, ToSchema)]
+pub struct AvailabilityResourceResponse {
+    pub resource_id: String,
+    pub available: bool,
+    pub conflicts: Vec<ConflictResponse>,
+}
+
+impl From<AvailabilityReport> for AvailabilityResourceResponse {
+    fn from(value: AvailabilityReport) -> Self {
+        Self {
+            resource_id: value.resource.resource_id(),
+            available: value.available(),
+            conflicts: value
+                .conflicts
+                .into_iter()
+                .map(ConflictResponse::from)
+                .collect(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, ToSchema)]
+pub struct AvailabilityResponse {
+    pub resources: Vec<AvailabilityResourceResponse>,
+}
+
+#[utoipa::path(
+    get,
+    path = "/api/v1/organizations/{organization_id}/planning/availability",
+    operation_id = "getPlanningAvailability",
+    tag = super::super::TAG,
+    params(
+        ("organization_id" = mestier_core::OrganizationId, Path, description = "Organization identifier"),
+        ("starts_at" = chrono::DateTime<chrono::Utc>, Query, description = "Candidate window start"),
+        ("ends_at" = chrono::DateTime<chrono::Utc>, Query, description = "Candidate window end"),
+        ("all_day" = Option<bool>, Query, description = "Whether the candidate entry is all-day"),
+    ),
+    responses(
+        (status = 200, description = "Every resource of the organization, annotated with its conflicts for the window", body = inline(DataEnvelope<AvailabilityResponse>)),
+        (status = 400, description = "`ends_at` not after `starts_at`"),
+        (status = 401, description = "Unauthorized"),
+        (status = 403, description = "Forbidden"),
+    ),
+    security(("bearer_auth" = []))
+)]
+pub async fn handler(
+    PlanningAvailabilityPath { organization_id }: PlanningAvailabilityPath,
+    State(state): State<AppState>,
+    Extension(identity): Extension<Identity>,
+    Query(query): Query<AvailabilityQuery>,
+) -> Result<Response<AvailabilityResponse>, ApiError> {
+    require_org_membership(&state, &identity, organization_id).await?;
+
+    let window = TimeRange::new(query.starts_at, query.ends_at)?;
+
+    let reports = state
+        .usecase
+        .get_availability(organization_id, window)
+        .await?;
+
+    Ok(Response::OK(AvailabilityResponse {
+        resources: reports
+            .into_iter()
+            .map(AvailabilityResourceResponse::from)
+            .collect(),
+    }))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use mestier_core::{EmployeeId, PlanningResource};
+
+    // `uuid` is not a direct dependency of `handlers-planning` (a
+    // `Cargo.toml` this workstream does not own), so fixture ids are parsed
+    // from literal strings via `FromStr` rather than generated.
+    fn employee_id() -> EmployeeId {
+        "11111111-1111-1111-1111-111111111111".parse().unwrap()
+    }
+
+    fn work_order_id() -> WorkOrderId {
+        "22222222-2222-2222-2222-222222222222".parse().unwrap()
+    }
+
+    fn now() -> DateTime<Utc> {
+        Utc::now()
+    }
+
+    #[test]
+    fn absence_conflict_serializes_reason_and_note_alongside_the_absence_tag() {
+        let response: ConflictResponse = Conflict {
+            kind: ConflictKind::Absence {
+                kind: AbsenceKind::Sick,
+                note: Some("Grippe".to_owned()),
+            },
+            starts_at: now(),
+            ends_at: now(),
+        }
+        .into();
+
+        let value = serde_json::to_value(&response).unwrap();
+
+        assert_eq!(value["kind"], "absence");
+        assert_eq!(value["reason"], "SICK");
+        assert_eq!(value["note"], "Grippe");
+    }
+
+    #[test]
+    fn outside_work_hours_conflict_serializes_with_its_own_tag() {
+        let response: ConflictResponse = Conflict {
+            kind: ConflictKind::OutsideWorkHours,
+            starts_at: now(),
+            ends_at: now(),
+        }
+        .into();
+
+        let value = serde_json::to_value(&response).unwrap();
+
+        assert_eq!(value["kind"], "outside_work_hours");
+        assert!(value.get("reason").is_none());
+    }
+
+    #[test]
+    fn overlapping_work_order_conflict_serializes_the_work_order_id() {
+        let response: ConflictResponse = Conflict {
+            kind: ConflictKind::OverlappingWorkOrder {
+                work_order_id: work_order_id(),
+            },
+            starts_at: now(),
+            ends_at: now(),
+        }
+        .into();
+
+        let value = serde_json::to_value(&response).unwrap();
+
+        assert_eq!(value["kind"], "overlapping_work_order");
+        assert_eq!(value["work_order_id"], work_order_id().to_string());
+    }
+
+    #[test]
+    fn available_resource_has_no_conflicts_and_a_true_flag() {
+        let report = AvailabilityReport {
+            resource: PlanningResource::Employee {
+                employee_id: employee_id(),
+                user_id: None,
+                display_name: "Alice".to_owned(),
+                hourly_rate_cents: None,
+                weekly_contract_minutes: 0,
+            },
+            conflicts: Vec::new(),
+        };
+
+        let response = AvailabilityResourceResponse::from(report);
+
+        assert_eq!(response.resource_id, format!("employee:{}", employee_id()));
+        assert!(response.available);
+        assert!(response.conflicts.is_empty());
+    }
+}
