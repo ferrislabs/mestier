@@ -16,6 +16,8 @@ use handlers::{ApiError, AppState, auth::auth_middleware, rate_limit::rate_limit
 use mestier_core::OrganizationId;
 
 pub mod paths;
+pub mod response;
+pub mod work_order;
 
 pub const TAG: &str = "planning";
 
@@ -48,6 +50,7 @@ pub async fn require_org_membership(
 
 pub fn router(state: &AppState) -> Router<AppState> {
     Router::new()
+        .merge(work_order::router(state))
         .layer(from_fn_with_state(state.clone(), rate_limit_middleware))
         .layer(from_fn_with_state(state.clone(), auth_middleware))
 }
