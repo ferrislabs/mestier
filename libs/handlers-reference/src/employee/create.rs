@@ -11,7 +11,10 @@ use crate::{paths::EmployeesPath, require_org_membership, response::EmployeeResp
 pub struct CreateEmployeeRequest {
     pub user_id: Option<UserId>,
     pub name: String,
-    pub hourly_rate_cents: i32,
+    /// `null` means the rate is not set yet; `0` means genuinely free.
+    pub hourly_rate_cents: Option<i32>,
+    #[serde(default)]
+    pub weekly_contract_minutes: i32,
 }
 
 #[utoipa::path(
@@ -48,6 +51,7 @@ pub async fn handler(
             user_id: payload.user_id,
             name: payload.name,
             hourly_rate_cents: payload.hourly_rate_cents,
+            weekly_contract_minutes: payload.weekly_contract_minutes,
         })
         .await?;
 

@@ -166,15 +166,26 @@ function EmployeeDirectory({
 	)
 }
 
-function eurosToCents(value: string): number {
+/**
+ * An empty field means "rate not set", not "free". Collapsing it to 0 would
+ * feed a wrong cost into the profitability computation instead of an absent
+ * one, which is the whole reason the column is nullable.
+ */
+function eurosToCents(value: string): number | null {
 	const normalized = value.replace(',', '.').trim()
+	if (normalized === '') {
+		return null
+	}
 	const parsed = Number.parseFloat(normalized)
 	if (!Number.isFinite(parsed)) {
-		return 0
+		return null
 	}
 	return Math.round(parsed * 100)
 }
 
-function centsToEuros(value: number): string {
+function centsToEuros(value: number | null | undefined): string {
+	if (value === null || value === undefined) {
+		return ''
+	}
 	return (value / 100).toFixed(2).replace('.', ',')
 }

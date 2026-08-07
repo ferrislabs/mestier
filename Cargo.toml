@@ -1,5 +1,5 @@
 [workspace]
-members = ["apps/api", "libs/args", "libs/auth", "libs/authz", "libs/common", "libs/core", "libs/discord", "libs/handlers", "libs/handlers-customer", "libs/handlers-discord", "libs/handlers-files", "libs/handlers-organization", "libs/handlers-quote", "libs/handlers-reference", "libs/iam", "libs/macros", "libs/pagination", "libs/rate-limit", "libs/server"]
+members = ["apps/api", "libs/args", "libs/auth", "libs/authz", "libs/common", "libs/core", "libs/discord", "libs/handlers", "libs/handlers-customer", "libs/handlers-discord", "libs/handlers-files", "libs/handlers-organization", "libs/handlers-planning", "libs/handlers-quote", "libs/handlers-reference", "libs/iam", "libs/macros", "libs/pagination", "libs/rate-limit", "libs/server"]
 resolver = "3"
 
 [workspace.package]
@@ -59,6 +59,7 @@ handlers-discord = { path = "libs/handlers-discord" }
 handlers-files = { path = "libs/handlers-files" }
 handlers-organization = { path = "libs/handlers-organization" }
 handlers-quote = { path = "libs/handlers-quote" }
+handlers-planning = { path = "libs/handlers-planning" }
 handlers-reference = { path = "libs/handlers-reference" }
 iam = { path = "libs/iam" }
 mestier-macros = { path = "libs/macros" }

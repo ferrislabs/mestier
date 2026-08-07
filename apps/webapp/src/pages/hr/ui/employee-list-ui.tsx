@@ -437,7 +437,18 @@ function RowIdentity({ title, id }: { title: string; id: string }) {
 	)
 }
 
-function MoneyCell({ value, suffix }: { value: number; suffix: string }) {
+function MoneyCell({
+	value,
+	suffix,
+}: {
+	/** `null` renders as "non renseigné" — an absent rate is not a free one. */
+	value: number | null | undefined
+	suffix: string
+}) {
+	if (value === null || value === undefined) {
+		return <span className="text-muted-foreground italic">Non renseigné</span>
+	}
+
 	return (
 		<span className="font-medium tabular-nums">
 			{formatMoney(value)}

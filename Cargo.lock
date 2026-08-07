@@ -112,6 +112,7 @@ dependencies = [
  "handlers-discord",
  "handlers-files",
  "handlers-organization",
+ "handlers-planning",
  "handlers-quote",
  "handlers-reference",
  "http 1.4.0",
@@ -2264,6 +2265,23 @@ dependencies = [
  "handlers",
  "http 1.4.0",
  "mestier-core",
+ "serde",
+ "tracing",
+ "utoipa",
+]
+
+[[package]]
+name = "handlers-planning"
+version = "0.1.0"
+dependencies = [
+ "auth",
+ "axum",
+ "axum-extra",
+ "chrono",
+ "handlers",
+ "http 1.4.0",
+ "mestier-core",
+ "pagination",
  "serde",
  "tracing",
  "utoipa",
