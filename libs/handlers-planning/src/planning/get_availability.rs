@@ -141,6 +141,7 @@ pub async fn handler(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use axum::extract::FromRequestParts;
     use mestier_core::{EmployeeId, PlanningResource};
 
     // `uuid` is not a direct dependency of `handlers-planning` (a
@@ -227,5 +228,58 @@ mod tests {
         assert_eq!(response.resource_id, format!("employee:{}", employee_id()));
         assert!(response.available);
         assert!(response.conflicts.is_empty());
+    }
+
+    /// `NaiveDate` is the only type used as a `Query` field elsewhere in
+    /// this crate (`work_time`'s `from`/`to`) -- `DateTime<Utc>` has no
+    /// precedent here, so this proves axum's `Query` extractor actually
+    /// parses an RFC 3339 timestamp out of a real query string rather than
+    /// assuming it from the type deriving `Deserialize`.
+    ///
+    /// Driven with a manual single poll rather than `#[tokio::test]`:
+    /// `tokio` is not a dependency of this crate (a `Cargo.toml` this
+    /// workstream does not own), and `Query`'s extraction never actually
+    /// awaits anything, so one poll is enough.
+    #[test]
+    fn availability_query_parses_starts_at_ends_at_and_all_day_from_a_query_string() {
+        let uri: axum::http::Uri =
+            "http://example.com/x?starts_at=2026-08-10T08:00:00Z&ends_at=2026-08-10T09:00:00Z&all_day=true"
+                .parse()
+                .unwrap();
+        let request = axum::http::Request::builder().uri(uri).body(()).unwrap();
+        let (mut parts, ()) = request.into_parts();
+
+        let result = poll_once(Query::<AvailabilityQuery>::from_request_parts(
+            &mut parts,
+            &(),
+        ));
+        let Query(query) = result.expect("the query string must parse into AvailabilityQuery");
+
+        assert_eq!(query.starts_at, utc(2026, 8, 10, 8, 0));
+        assert_eq!(query.ends_at, utc(2026, 8, 10, 9, 0));
+        assert!(query.all_day);
+    }
+
+    /// Polls a future once with a no-op waker. Valid here because `Query`'s
+    /// `FromRequestParts` implementation resolves synchronously — it never
+    /// awaits I/O, it just parses the already-buffered query string.
+    fn poll_once<F: std::future::Future>(future: F) -> F::Output {
+        use std::{
+            pin::pin,
+            task::{Context, Poll, Waker},
+        };
+
+        let mut future = pin!(future);
+        let waker = Waker::noop();
+        let mut cx = Context::from_waker(waker);
+        match future.as_mut().poll(&mut cx) {
+            Poll::Ready(output) => output,
+            Poll::Pending => panic!("expected the query extractor to resolve synchronously"),
+        }
+    }
+
+    fn utc(y: i32, m: u32, d: u32, h: u32, min: u32) -> DateTime<Utc> {
+        use chrono::TimeZone;
+        Utc.with_ymd_and_hms(y, m, d, h, min, 0).unwrap()
     }
 }
