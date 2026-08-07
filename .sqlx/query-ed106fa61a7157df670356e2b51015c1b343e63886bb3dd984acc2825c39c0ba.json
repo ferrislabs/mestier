@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM employee_rhythm_slots WHERE rhythm_id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "ed106fa61a7157df670356e2b51015c1b343e63886bb3dd984acc2825c39c0ba"
+}

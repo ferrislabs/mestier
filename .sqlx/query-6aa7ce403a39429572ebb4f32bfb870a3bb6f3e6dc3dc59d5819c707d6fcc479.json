@@ -1,0 +1,46 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT id, rhythm_id, weekday, starts_minute, ends_minute\n        FROM employee_rhythm_slots\n        WHERE rhythm_id = $1\n        ORDER BY weekday ASC, starts_minute ASC\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "rhythm_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "weekday",
+        "type_info": "Int2"
+      },
+      {
+        "ordinal": 3,
+        "name": "starts_minute",
+        "type_info": "Int2"
+      },
+      {
+        "ordinal": 4,
+        "name": "ends_minute",
+        "type_info": "Int2"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "6aa7ce403a39429572ebb4f32bfb870a3bb6f3e6dc3dc59d5819c707d6fcc479"
+}
