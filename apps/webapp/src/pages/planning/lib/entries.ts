@@ -1,7 +1,7 @@
 import type { Schemas } from '#/api/api.client'
 import type { PlanningEntry } from '#/pages/planning/types'
 
-const ABSENCE_LABELS: Record<Schemas.AbsenceKind, string> = {
+export const ABSENCE_LABELS: Record<Schemas.AbsenceKind, string> = {
 	LEAVE: 'Congé',
 	SICK: 'Arrêt maladie',
 	UNAVAILABLE: 'Indisponible',
