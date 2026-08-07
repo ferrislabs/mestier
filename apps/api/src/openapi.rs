@@ -7,6 +7,7 @@ use handlers_customer as customer;
 use handlers_discord as discord;
 use handlers_files as files;
 use handlers_organization as organization;
+use handlers_planning as planning;
 use handlers_quote as quote;
 use handlers_reference as reference;
 
@@ -80,6 +81,15 @@ impl Modify for SecurityAddon {
         reference::product::get_one::handler,
         reference::product::update::handler,
         reference::product::soft_delete::handler,
+        planning::work_order::create::handler,
+        planning::work_order::list::handler,
+        planning::work_order::get_one::handler,
+        planning::work_order::update::handler,
+        planning::work_order::soft_delete::handler,
+        planning::absence::create::handler,
+        planning::absence::list::handler,
+        planning::absence::update::handler,
+        planning::absence::soft_delete::handler,
         discord::category::list::handler,
         discord::category::create::handler,
         discord::category::update::handler,
@@ -146,6 +156,18 @@ impl Modify for SecurityAddon {
         reference::service_rate::update::UpdateServiceRateRequest,
         reference::product::create::CreateProductRequest,
         reference::product::update::UpdateProductRequest,
+        planning::work_order::create::CreateWorkOrderRequest,
+        planning::work_order::update::UpdateWorkOrderRequest,
+        planning::response::WorkOrderResponse,
+        planning::response::PatchWorkOrderResponse,
+        planning::absence::create::CreateAbsenceRequest,
+        planning::absence::update::UpdateAbsenceRequest,
+        planning::absence::AbsenceResponse,
+        // `planning::response::EmployeeResponse` is deliberately absent: it is
+        // byte-identical to `reference::response::EmployeeResponse` above, and
+        // utoipa names schemas after the type, so registering both would
+        // collide. See the PR description — if the two ever diverge, this
+        // document starts describing the wrong shape silently.
         reference::response::EmployeeResponse,
         reference::response::EquipmentResponse,
         reference::response::ServiceRateResponse,
