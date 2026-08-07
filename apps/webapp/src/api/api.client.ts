@@ -1,5 +1,53 @@
 export namespace Schemas {
   // <Schemas>
+  export type AttachmentResponse = { filename: string; mime_type: string; size_bytes: number; storage_key: string };
+  export type AuthorType = "USER" | "WEBHOOK" | "SYSTEM";
+  export type ButtonStyle = "Link";
+  export type CategoryId = string;
+  export type OrganizationId = string;
+  export type CategoryResponse = {
+    created_at: string;
+    id: CategoryId;
+    name: string;
+    organization_id: OrganizationId;
+    position: number;
+    updated_at: string;
+  };
+  export type ChannelId = string;
+  export type ChannelType = "TEXT" | "THREAD";
+  export type MessageId = string;
+  export type ChannelResponse = {
+    archived: boolean;
+    category_id?: (null | CategoryId) | undefined;
+    channel_type: ChannelType;
+    created_at: string;
+    id: ChannelId;
+    name: string;
+    organization_id: OrganizationId;
+    origin_message_id?: (null | MessageId) | undefined;
+    parent_id?: (null | ChannelId) | undefined;
+    position: number;
+    topic?: (string | null) | undefined;
+    updated_at: string;
+  };
+  export type MediaItem = { description?: (string | null) | undefined; url: string };
+  export type SeparatorSpacing = "Small" | "Large";
+  export type Component =
+    | { accent_color?: (number | null) | undefined; children: Array<Component>; type: "CONTAINER" }
+    | { accessory?: (null | Component) | undefined; children: Array<Component>; type: "SECTION" }
+    | { content: string; type: "TEXT_DISPLAY" }
+    | { items: Array<MediaItem>; type: "MEDIA_GALLERY" }
+    | { media: MediaItem; type: "THUMBNAIL" }
+    | { divider: boolean; spacing?: (null | SeparatorSpacing) | undefined; type: "SEPARATOR" }
+    | { components: Array<Component>; type: "ACTION_ROW" }
+    | { emoji?: (string | null) | undefined; label: string; style: ButtonStyle; type: "BUTTON"; url: string };
+  export type CreateCategoryRequest = { name: string; position: number };
+  export type CreateChannelRequest = {
+    category_id?: (null | CategoryId) | undefined;
+    name: string;
+    position: number;
+    topic?: (string | null) | undefined;
+  };
   export type CreateCustomerContactRequest = {
     email?: (string | null) | undefined;
     first_name: string;
@@ -27,11 +75,19 @@ export namespace Schemas {
   };
   export type UserId = string;
   export type CreateEmployeeRequest = {
-    hourly_rate_cents: number;
+    hourly_rate_cents?: (number | null) | undefined;
     name: string;
     user_id?: (null | UserId) | undefined;
+    weekly_contract_minutes?: number | undefined;
   };
   export type CreateEquipmentRequest = { hourly_rate_cents: number; name: string };
+  export type CreateMessageAttachment = {
+    filename: string;
+    mime_type: string;
+    size_bytes: number;
+    storage_key: string;
+  };
+  export type CreateMessageRequest = { attachments?: Array<CreateMessageAttachment> | undefined; content: string };
   export type CreateOrganizationRequest = { name: string; slug: string };
   export type ServiceRateUnit = "HOUR" | "ML" | "M2";
   export type CreateProductRequest = {
@@ -60,6 +116,8 @@ export namespace Schemas {
     title: string;
   };
   export type CreateServiceRateRequest = { label: string; rate_cents: number; unit: ServiceRateUnit };
+  export type CreateThreadRequest = { name: string; origin_message_id?: (null | MessageId) | undefined };
+  export type CreateWebhookRequest = { avatar_url?: (string | null) | undefined; name: string };
   export type CustomerContactId = string;
   export type CustomerContactResponse = {
     created_at: string;
@@ -84,7 +142,6 @@ export namespace Schemas {
     postal_code?: (string | null) | undefined;
     updated_at: string;
   };
-  export type OrganizationId = string;
   export type CustomerResponse = {
     created_at: string;
     email?: (string | null) | undefined;
@@ -100,12 +157,13 @@ export namespace Schemas {
   export type EmployeeId = string;
   export type EmployeeResponse = {
     created_at: string;
-    hourly_rate_cents: number;
+    hourly_rate_cents?: (number | null) | undefined;
     id: EmployeeId;
     name: string;
     organization_id: OrganizationId;
     updated_at: string;
     user_id?: (null | UserId) | undefined;
+    weekly_contract_minutes: number;
   };
   export type EquipmentId = string;
   export type EquipmentResponse = {
@@ -116,13 +174,53 @@ export namespace Schemas {
     organization_id: OrganizationId;
     updated_at: string;
   };
+  export type ExecuteWebhookRequest = { components?: (Array<Component> | null) | undefined; content: string };
   export type FileUploadResponse = { key: string; mime_type: string; size_bytes: number };
+  export type MarkChannelReadRequest = { message_id: MessageId };
+  export type WebhookId = string;
+  export type RoleId = string;
+  export type ReactionCountResponse = { count: number; emoji: string; user_ids: Array<UserId> };
+  export type MessageResponse = {
+    attachments: Array<AttachmentResponse>;
+    author_type: AuthorType;
+    author_user_id?: (null | UserId) | undefined;
+    author_webhook_id?: (null | WebhookId) | undefined;
+    channel_id: ChannelId;
+    components?: (Array<Component> | null) | undefined;
+    content: string;
+    created_at: string;
+    edited_at?: (string | null) | undefined;
+    id: MessageId;
+    mention_channel_ids: Array<ChannelId>;
+    mention_everyone: boolean;
+    mention_role_ids: Array<RoleId>;
+    mention_user_ids: Array<UserId>;
+    organization_id: OrganizationId;
+    reactions: Array<ReactionCountResponse>;
+  };
+  export type NotificationId = string;
+  export type NotificationResponse = {
+    channel_id: ChannelId;
+    created_at: string;
+    id: NotificationId;
+    kind: string;
+    message_id: MessageId;
+    read_at?: (string | null) | undefined;
+  };
   export type OrganizationResponse = {
     created_at: string;
     id: OrganizationId;
     name: string;
     owner_id: UserId;
     slug: string;
+    updated_at: string;
+  };
+  export type OverwriteResponse = {
+    allow: number;
+    created_at: string;
+    deny: number;
+    target_id?: (string | null) | undefined;
+    target_type: string;
     updated_at: string;
   };
   export type PaginationMetadata = {
@@ -134,6 +232,13 @@ export namespace Schemas {
     per_page: number;
     prev_page?: (number | null) | undefined;
     total?: (number | null) | undefined;
+  };
+  export type PresenceStatus = "ONLINE" | "OFFLINE" | "DND";
+  export type PresenceResponse = {
+    organization_id: OrganizationId;
+    status: PresenceStatus;
+    updated_at: string;
+    user_id: UserId;
   };
   export type ProductId = string;
   export type ProductResponse = {
@@ -186,6 +291,15 @@ export namespace Schemas {
     unit: ServiceRateUnit;
     updated_at: string;
   };
+  export type SetPresenceRequest = { status: PresenceStatus };
+  export type UnreadResponse = { channel_ids: Array<ChannelId> };
+  export type UpdateCategoryRequest = { name: string; position: number };
+  export type UpdateChannelRequest = {
+    category_id?: (null | CategoryId) | undefined;
+    name: string;
+    position: number;
+    topic?: (string | null) | undefined;
+  };
   export type UpdateCustomerContactRequest = {
     email?: (string | null) | undefined;
     first_name: string;
@@ -210,11 +324,13 @@ export namespace Schemas {
     status: CustomerStatus;
   };
   export type UpdateEmployeeRequest = {
-    hourly_rate_cents: number;
+    hourly_rate_cents?: (number | null) | undefined;
     name: string;
     user_id?: (null | UserId) | undefined;
+    weekly_contract_minutes?: number | undefined;
   };
   export type UpdateEquipmentRequest = { hourly_rate_cents: number; name: string };
+  export type UpdateMessageRequest = { content: string };
   export type UpdateOrganizationRequest = { name: string; slug: string };
   export type UpdateProductRequest = {
     description?: (string | null) | undefined;
@@ -232,6 +348,30 @@ export namespace Schemas {
   };
   export type UpdateQuoteStatusRequest = { status: QuoteStatus };
   export type UpdateServiceRateRequest = { label: string; rate_cents: number; unit: ServiceRateUnit };
+  export type UpdateThreadRequest = { archived: boolean; name: string };
+  export type UpdateWebhookRequest = { avatar_url?: (string | null) | undefined; name: string };
+  export type UpsertOverwriteRequest = { allow: number; deny: number };
+  export type WebhookCreatedResponse = {
+    avatar_url?: (string | null) | undefined;
+    channel_id: ChannelId;
+    created_at: string;
+    created_by: UserId;
+    id: WebhookId;
+    name: string;
+    organization_id: OrganizationId;
+    token: string;
+    updated_at: string;
+  };
+  export type WebhookResponse = {
+    avatar_url?: (string | null) | undefined;
+    channel_id: ChannelId;
+    created_at: string;
+    created_by: UserId;
+    id: WebhookId;
+    name: string;
+    organization_id: OrganizationId;
+    updated_at: string;
+  };
 
   // </Schemas>
 }
@@ -239,6 +379,797 @@ export namespace Schemas {
 export namespace Endpoints {
   // <Endpoints>
 
+  export type delete_DeleteCategory = {
+    method: "DELETE";
+    path: "/api/v1/chat/categories/{category_id}";
+    requestFormat: "json";
+    parameters: {
+      path: { category_id: string };
+    };
+    responses: { 204: unknown; 401: unknown; 403: unknown; 404: unknown };
+  };
+  export type patch_UpdateCategory = {
+    method: "PATCH";
+    path: "/api/v1/chat/categories/{category_id}";
+    requestFormat: "json";
+    parameters: {
+      path: { category_id: string };
+
+      body: Schemas.UpdateCategoryRequest;
+    };
+    responses: {
+      200: {
+        data: {
+          created_at: string;
+          id: Schemas.CategoryId;
+          name: string;
+          organization_id: Schemas.OrganizationId;
+          position: number;
+          updated_at: string;
+        };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      400: unknown;
+      401: unknown;
+      403: unknown;
+      404: unknown;
+    };
+  };
+  export type get_GetChannel = {
+    method: "GET";
+    path: "/api/v1/chat/channels/{channel_id}";
+    requestFormat: "json";
+    parameters: {
+      path: { channel_id: string };
+    };
+    responses: {
+      200: {
+        data: {
+          archived: boolean;
+          category_id?: (null | Schemas.CategoryId) | undefined;
+          channel_type: Schemas.ChannelType;
+          created_at: string;
+          id: Schemas.ChannelId;
+          name: string;
+          organization_id: Schemas.OrganizationId;
+          origin_message_id?: (null | Schemas.MessageId) | undefined;
+          parent_id?: (null | Schemas.ChannelId) | undefined;
+          position: number;
+          topic?: (string | null) | undefined;
+          updated_at: string;
+        };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+      404: unknown;
+    };
+  };
+  export type delete_DeleteChannel = {
+    method: "DELETE";
+    path: "/api/v1/chat/channels/{channel_id}";
+    requestFormat: "json";
+    parameters: {
+      path: { channel_id: string };
+    };
+    responses: { 204: unknown; 401: unknown; 403: unknown; 404: unknown };
+  };
+  export type patch_UpdateChannel = {
+    method: "PATCH";
+    path: "/api/v1/chat/channels/{channel_id}";
+    requestFormat: "json";
+    parameters: {
+      path: { channel_id: string };
+
+      body: Schemas.UpdateChannelRequest;
+    };
+    responses: {
+      200: {
+        data: {
+          archived: boolean;
+          category_id?: (null | Schemas.CategoryId) | undefined;
+          channel_type: Schemas.ChannelType;
+          created_at: string;
+          id: Schemas.ChannelId;
+          name: string;
+          organization_id: Schemas.OrganizationId;
+          origin_message_id?: (null | Schemas.MessageId) | undefined;
+          parent_id?: (null | Schemas.ChannelId) | undefined;
+          position: number;
+          topic?: (string | null) | undefined;
+          updated_at: string;
+        };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      400: unknown;
+      401: unknown;
+      403: unknown;
+      404: unknown;
+    };
+  };
+  export type get_ListMessages = {
+    method: "GET";
+    path: "/api/v1/chat/channels/{channel_id}/messages";
+    requestFormat: "json";
+    parameters: {
+      query: Partial<{ before: string; after: string; limit: number }>;
+      path: { channel_id: string };
+    };
+    responses: {
+      200: {
+        data: Array<{
+          attachments: Array<Schemas.AttachmentResponse>;
+          author_type: Schemas.AuthorType;
+          author_user_id?: (null | Schemas.UserId) | undefined;
+          author_webhook_id?: (null | Schemas.WebhookId) | undefined;
+          channel_id: Schemas.ChannelId;
+          components?: (Array<Schemas.Component> | null) | undefined;
+          content: string;
+          created_at: string;
+          edited_at?: (string | null) | undefined;
+          id: Schemas.MessageId;
+          mention_channel_ids: Array<Schemas.ChannelId>;
+          mention_everyone: boolean;
+          mention_role_ids: Array<Schemas.RoleId>;
+          mention_user_ids: Array<Schemas.UserId>;
+          organization_id: Schemas.OrganizationId;
+          reactions: Array<Schemas.ReactionCountResponse>;
+        }>;
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+    };
+  };
+  export type post_CreateMessage = {
+    method: "POST";
+    path: "/api/v1/chat/channels/{channel_id}/messages";
+    requestFormat: "json";
+    parameters: {
+      path: { channel_id: string };
+
+      body: Schemas.CreateMessageRequest;
+    };
+    responses: {
+      201: {
+        data: {
+          attachments: Array<Schemas.AttachmentResponse>;
+          author_type: Schemas.AuthorType;
+          author_user_id?: (null | Schemas.UserId) | undefined;
+          author_webhook_id?: (null | Schemas.WebhookId) | undefined;
+          channel_id: Schemas.ChannelId;
+          components?: (Array<Schemas.Component> | null) | undefined;
+          content: string;
+          created_at: string;
+          edited_at?: (string | null) | undefined;
+          id: Schemas.MessageId;
+          mention_channel_ids: Array<Schemas.ChannelId>;
+          mention_everyone: boolean;
+          mention_role_ids: Array<Schemas.RoleId>;
+          mention_user_ids: Array<Schemas.UserId>;
+          organization_id: Schemas.OrganizationId;
+          reactions: Array<Schemas.ReactionCountResponse>;
+        };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      400: unknown;
+      401: unknown;
+      403: unknown;
+    };
+  };
+  export type get_ListChannelPermissions = {
+    method: "GET";
+    path: "/api/v1/chat/channels/{channel_id}/permissions";
+    requestFormat: "json";
+    parameters: {
+      path: { channel_id: string };
+    };
+    responses: {
+      200: {
+        data: Array<{
+          allow: number;
+          created_at: string;
+          deny: number;
+          target_id?: (string | null) | undefined;
+          target_type: string;
+          updated_at: string;
+        }>;
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+      404: unknown;
+    };
+  };
+  export type put_UpsertEveryoneOverwrite = {
+    method: "PUT";
+    path: "/api/v1/chat/channels/{channel_id}/permissions/everyone";
+    requestFormat: "json";
+    parameters: {
+      path: { channel_id: string };
+
+      body: Schemas.UpsertOverwriteRequest;
+    };
+    responses: {
+      200: {
+        data: {
+          allow: number;
+          created_at: string;
+          deny: number;
+          target_id?: (string | null) | undefined;
+          target_type: string;
+          updated_at: string;
+        };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+      404: unknown;
+    };
+  };
+  export type delete_DeleteEveryoneOverwrite = {
+    method: "DELETE";
+    path: "/api/v1/chat/channels/{channel_id}/permissions/everyone";
+    requestFormat: "json";
+    parameters: {
+      path: { channel_id: string };
+    };
+    responses: { 204: unknown; 401: unknown; 403: unknown; 404: unknown };
+  };
+  export type put_UpsertTargetOverwrite = {
+    method: "PUT";
+    path: "/api/v1/chat/channels/{channel_id}/permissions/{target_type}/{target_id}";
+    requestFormat: "json";
+    parameters: {
+      path: { channel_id: string; target_type: string; target_id: string };
+
+      body: Schemas.UpsertOverwriteRequest;
+    };
+    responses: {
+      200: {
+        data: {
+          allow: number;
+          created_at: string;
+          deny: number;
+          target_id?: (string | null) | undefined;
+          target_type: string;
+          updated_at: string;
+        };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      400: unknown;
+      401: unknown;
+      403: unknown;
+      404: unknown;
+    };
+  };
+  export type delete_DeleteTargetOverwrite = {
+    method: "DELETE";
+    path: "/api/v1/chat/channels/{channel_id}/permissions/{target_type}/{target_id}";
+    requestFormat: "json";
+    parameters: {
+      path: { channel_id: string; target_type: string; target_id: string };
+    };
+    responses: { 204: unknown; 400: unknown; 401: unknown; 403: unknown; 404: unknown };
+  };
+  export type put_MarkChannelRead = {
+    method: "PUT";
+    path: "/api/v1/chat/channels/{channel_id}/read";
+    requestFormat: "json";
+    parameters: {
+      path: { channel_id: string };
+
+      body: Schemas.MarkChannelReadRequest;
+    };
+    responses: { 204: unknown; 401: unknown; 403: unknown; 404: unknown };
+  };
+  export type get_ListThreads = {
+    method: "GET";
+    path: "/api/v1/chat/channels/{channel_id}/threads";
+    requestFormat: "json";
+    parameters: {
+      path: { channel_id: string };
+    };
+    responses: {
+      200: {
+        data: Array<{
+          archived: boolean;
+          category_id?: (null | Schemas.CategoryId) | undefined;
+          channel_type: Schemas.ChannelType;
+          created_at: string;
+          id: Schemas.ChannelId;
+          name: string;
+          organization_id: Schemas.OrganizationId;
+          origin_message_id?: (null | Schemas.MessageId) | undefined;
+          parent_id?: (null | Schemas.ChannelId) | undefined;
+          position: number;
+          topic?: (string | null) | undefined;
+          updated_at: string;
+        }>;
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+      404: unknown;
+    };
+  };
+  export type post_CreateThread = {
+    method: "POST";
+    path: "/api/v1/chat/channels/{channel_id}/threads";
+    requestFormat: "json";
+    parameters: {
+      path: { channel_id: string };
+
+      body: Schemas.CreateThreadRequest;
+    };
+    responses: {
+      201: {
+        data: {
+          archived: boolean;
+          category_id?: (null | Schemas.CategoryId) | undefined;
+          channel_type: Schemas.ChannelType;
+          created_at: string;
+          id: Schemas.ChannelId;
+          name: string;
+          organization_id: Schemas.OrganizationId;
+          origin_message_id?: (null | Schemas.MessageId) | undefined;
+          parent_id?: (null | Schemas.ChannelId) | undefined;
+          position: number;
+          topic?: (string | null) | undefined;
+          updated_at: string;
+        };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      400: unknown;
+      401: unknown;
+      403: unknown;
+      404: unknown;
+      409: unknown;
+    };
+  };
+  export type post_StartTyping = {
+    method: "POST";
+    path: "/api/v1/chat/channels/{channel_id}/typing";
+    requestFormat: "json";
+    parameters: {
+      path: { channel_id: string };
+    };
+    responses: { 204: unknown; 401: unknown; 403: unknown };
+  };
+  export type get_ListWebhooks = {
+    method: "GET";
+    path: "/api/v1/chat/channels/{channel_id}/webhooks";
+    requestFormat: "json";
+    parameters: {
+      path: { channel_id: string };
+    };
+    responses: {
+      200: {
+        data: Array<{
+          avatar_url?: (string | null) | undefined;
+          channel_id: Schemas.ChannelId;
+          created_at: string;
+          created_by: Schemas.UserId;
+          id: Schemas.WebhookId;
+          name: string;
+          organization_id: Schemas.OrganizationId;
+          updated_at: string;
+        }>;
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+      404: unknown;
+    };
+  };
+  export type post_CreateWebhook = {
+    method: "POST";
+    path: "/api/v1/chat/channels/{channel_id}/webhooks";
+    requestFormat: "json";
+    parameters: {
+      path: { channel_id: string };
+
+      body: Schemas.CreateWebhookRequest;
+    };
+    responses: {
+      201: {
+        data: {
+          avatar_url?: (string | null) | undefined;
+          channel_id: Schemas.ChannelId;
+          created_at: string;
+          created_by: Schemas.UserId;
+          id: Schemas.WebhookId;
+          name: string;
+          organization_id: Schemas.OrganizationId;
+          token: string;
+          updated_at: string;
+        };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      400: unknown;
+      401: unknown;
+      403: unknown;
+      404: unknown;
+    };
+  };
+  export type delete_DeleteMessage = {
+    method: "DELETE";
+    path: "/api/v1/chat/messages/{message_id}";
+    requestFormat: "json";
+    parameters: {
+      path: { message_id: string };
+    };
+    responses: { 204: unknown; 401: unknown; 403: unknown; 404: unknown };
+  };
+  export type patch_UpdateMessage = {
+    method: "PATCH";
+    path: "/api/v1/chat/messages/{message_id}";
+    requestFormat: "json";
+    parameters: {
+      path: { message_id: string };
+
+      body: Schemas.UpdateMessageRequest;
+    };
+    responses: {
+      200: {
+        data: {
+          attachments: Array<Schemas.AttachmentResponse>;
+          author_type: Schemas.AuthorType;
+          author_user_id?: (null | Schemas.UserId) | undefined;
+          author_webhook_id?: (null | Schemas.WebhookId) | undefined;
+          channel_id: Schemas.ChannelId;
+          components?: (Array<Schemas.Component> | null) | undefined;
+          content: string;
+          created_at: string;
+          edited_at?: (string | null) | undefined;
+          id: Schemas.MessageId;
+          mention_channel_ids: Array<Schemas.ChannelId>;
+          mention_everyone: boolean;
+          mention_role_ids: Array<Schemas.RoleId>;
+          mention_user_ids: Array<Schemas.UserId>;
+          organization_id: Schemas.OrganizationId;
+          reactions: Array<Schemas.ReactionCountResponse>;
+        };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      400: unknown;
+      401: unknown;
+      403: unknown;
+      404: unknown;
+    };
+  };
+  export type get_ListReactors = {
+    method: "GET";
+    path: "/api/v1/chat/messages/{message_id}/reactions/{emoji}";
+    requestFormat: "json";
+    parameters: {
+      path: { message_id: string; emoji: string };
+    };
+    responses: {
+      200: { data: Array<string>; pagination?: (null | Schemas.PaginationMetadata) | undefined };
+      401: unknown;
+      403: unknown;
+      404: unknown;
+    };
+  };
+  export type put_AddReaction = {
+    method: "PUT";
+    path: "/api/v1/chat/messages/{message_id}/reactions/{emoji}";
+    requestFormat: "json";
+    parameters: {
+      path: { message_id: string; emoji: string };
+    };
+    responses: { 204: unknown; 401: unknown; 403: unknown; 404: unknown };
+  };
+  export type delete_RemoveReaction = {
+    method: "DELETE";
+    path: "/api/v1/chat/messages/{message_id}/reactions/{emoji}";
+    requestFormat: "json";
+    parameters: {
+      path: { message_id: string; emoji: string };
+    };
+    responses: { 204: unknown; 401: unknown; 403: unknown; 404: unknown };
+  };
+  export type put_MarkNotificationRead = {
+    method: "PUT";
+    path: "/api/v1/chat/notifications/{notification_id}/read";
+    requestFormat: "json";
+    parameters: {
+      path: { notification_id: string };
+    };
+    responses: { 204: unknown; 401: unknown; 403: unknown };
+  };
+  export type get_ListCategories = {
+    method: "GET";
+    path: "/api/v1/chat/organizations/{organization_id}/categories";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string };
+    };
+    responses: {
+      200: {
+        data: Array<{
+          created_at: string;
+          id: Schemas.CategoryId;
+          name: string;
+          organization_id: Schemas.OrganizationId;
+          position: number;
+          updated_at: string;
+        }>;
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+    };
+  };
+  export type post_CreateCategory = {
+    method: "POST";
+    path: "/api/v1/chat/organizations/{organization_id}/categories";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string };
+
+      body: Schemas.CreateCategoryRequest;
+    };
+    responses: {
+      201: {
+        data: {
+          created_at: string;
+          id: Schemas.CategoryId;
+          name: string;
+          organization_id: Schemas.OrganizationId;
+          position: number;
+          updated_at: string;
+        };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      400: unknown;
+      401: unknown;
+      403: unknown;
+    };
+  };
+  export type get_ListChannels = {
+    method: "GET";
+    path: "/api/v1/chat/organizations/{organization_id}/channels";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string };
+    };
+    responses: {
+      200: {
+        data: Array<{
+          archived: boolean;
+          category_id?: (null | Schemas.CategoryId) | undefined;
+          channel_type: Schemas.ChannelType;
+          created_at: string;
+          id: Schemas.ChannelId;
+          name: string;
+          organization_id: Schemas.OrganizationId;
+          origin_message_id?: (null | Schemas.MessageId) | undefined;
+          parent_id?: (null | Schemas.ChannelId) | undefined;
+          position: number;
+          topic?: (string | null) | undefined;
+          updated_at: string;
+        }>;
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+    };
+  };
+  export type post_CreateChannel = {
+    method: "POST";
+    path: "/api/v1/chat/organizations/{organization_id}/channels";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string };
+
+      body: Schemas.CreateChannelRequest;
+    };
+    responses: {
+      201: {
+        data: {
+          archived: boolean;
+          category_id?: (null | Schemas.CategoryId) | undefined;
+          channel_type: Schemas.ChannelType;
+          created_at: string;
+          id: Schemas.ChannelId;
+          name: string;
+          organization_id: Schemas.OrganizationId;
+          origin_message_id?: (null | Schemas.MessageId) | undefined;
+          parent_id?: (null | Schemas.ChannelId) | undefined;
+          position: number;
+          topic?: (string | null) | undefined;
+          updated_at: string;
+        };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      400: unknown;
+      401: unknown;
+      403: unknown;
+    };
+  };
+  export type get_ListNotifications = {
+    method: "GET";
+    path: "/api/v1/chat/organizations/{organization_id}/notifications";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string; unread_only: boolean | null; before: string | null; limit: number | null };
+    };
+    responses: {
+      200: {
+        data: Array<{
+          channel_id: Schemas.ChannelId;
+          created_at: string;
+          id: Schemas.NotificationId;
+          kind: string;
+          message_id: Schemas.MessageId;
+          read_at?: (string | null) | undefined;
+        }>;
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+    };
+  };
+  export type put_MarkAllNotificationsRead = {
+    method: "PUT";
+    path: "/api/v1/chat/organizations/{organization_id}/notifications/read-all";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string };
+    };
+    responses: { 204: unknown; 401: unknown; 403: unknown };
+  };
+  export type put_SetPresence = {
+    method: "PUT";
+    path: "/api/v1/chat/organizations/{organization_id}/presence";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string };
+
+      body: Schemas.SetPresenceRequest;
+    };
+    responses: {
+      200: {
+        data: {
+          organization_id: Schemas.OrganizationId;
+          status: Schemas.PresenceStatus;
+          updated_at: string;
+          user_id: Schemas.UserId;
+        };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      400: unknown;
+      401: unknown;
+      403: unknown;
+    };
+  };
+  export type get_ListUnreadChannels = {
+    method: "GET";
+    path: "/api/v1/chat/organizations/{organization_id}/unread";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string };
+    };
+    responses: { 200: Schemas.UnreadResponse; 401: unknown; 403: unknown };
+  };
+  export type delete_DeleteThread = {
+    method: "DELETE";
+    path: "/api/v1/chat/threads/{channel_id}";
+    requestFormat: "json";
+    parameters: {
+      path: { channel_id: string };
+    };
+    responses: { 204: unknown; 401: unknown; 403: unknown; 404: unknown };
+  };
+  export type patch_UpdateThread = {
+    method: "PATCH";
+    path: "/api/v1/chat/threads/{channel_id}";
+    requestFormat: "json";
+    parameters: {
+      path: { channel_id: string };
+
+      body: Schemas.UpdateThreadRequest;
+    };
+    responses: {
+      200: {
+        data: {
+          archived: boolean;
+          category_id?: (null | Schemas.CategoryId) | undefined;
+          channel_type: Schemas.ChannelType;
+          created_at: string;
+          id: Schemas.ChannelId;
+          name: string;
+          organization_id: Schemas.OrganizationId;
+          origin_message_id?: (null | Schemas.MessageId) | undefined;
+          parent_id?: (null | Schemas.ChannelId) | undefined;
+          position: number;
+          topic?: (string | null) | undefined;
+          updated_at: string;
+        };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      400: unknown;
+      401: unknown;
+      403: unknown;
+      404: unknown;
+    };
+  };
+  export type delete_DeleteWebhook = {
+    method: "DELETE";
+    path: "/api/v1/chat/webhooks/{webhook_id}";
+    requestFormat: "json";
+    parameters: {
+      path: { webhook_id: string };
+    };
+    responses: { 204: unknown; 401: unknown; 403: unknown; 404: unknown };
+  };
+  export type patch_UpdateWebhook = {
+    method: "PATCH";
+    path: "/api/v1/chat/webhooks/{webhook_id}";
+    requestFormat: "json";
+    parameters: {
+      path: { webhook_id: string };
+
+      body: Schemas.UpdateWebhookRequest;
+    };
+    responses: {
+      200: {
+        data: {
+          avatar_url?: (string | null) | undefined;
+          channel_id: Schemas.ChannelId;
+          created_at: string;
+          created_by: Schemas.UserId;
+          id: Schemas.WebhookId;
+          name: string;
+          organization_id: Schemas.OrganizationId;
+          updated_at: string;
+        };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      400: unknown;
+      401: unknown;
+      403: unknown;
+      404: unknown;
+    };
+  };
+  export type post_ExecuteWebhook = {
+    method: "POST";
+    path: "/api/v1/chat/webhooks/{webhook_id}/{token}";
+    requestFormat: "json";
+    parameters: {
+      path: { webhook_id: string; token: string };
+
+      body: Schemas.ExecuteWebhookRequest;
+    };
+    responses: {
+      201: {
+        data: {
+          attachments: Array<Schemas.AttachmentResponse>;
+          author_type: Schemas.AuthorType;
+          author_user_id?: (null | Schemas.UserId) | undefined;
+          author_webhook_id?: (null | Schemas.WebhookId) | undefined;
+          channel_id: Schemas.ChannelId;
+          components?: (Array<Schemas.Component> | null) | undefined;
+          content: string;
+          created_at: string;
+          edited_at?: (string | null) | undefined;
+          id: Schemas.MessageId;
+          mention_channel_ids: Array<Schemas.ChannelId>;
+          mention_everyone: boolean;
+          mention_role_ids: Array<Schemas.RoleId>;
+          mention_user_ids: Array<Schemas.UserId>;
+          organization_id: Schemas.OrganizationId;
+          reactions: Array<Schemas.ReactionCountResponse>;
+        };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      400: unknown;
+      403: unknown;
+      404: unknown;
+    };
+  };
   export type get_GetCustomerContact = {
     method: "GET";
     path: "/api/v1/customer-contacts/{customer_contact_id}";
@@ -575,12 +1506,13 @@ export namespace Endpoints {
       200: {
         data: {
           created_at: string;
-          hourly_rate_cents: number;
+          hourly_rate_cents?: (number | null) | undefined;
           id: Schemas.EmployeeId;
           name: string;
           organization_id: Schemas.OrganizationId;
           updated_at: string;
           user_id?: (null | Schemas.UserId) | undefined;
+          weekly_contract_minutes: number;
         };
         pagination?: (null | Schemas.PaginationMetadata) | undefined;
       };
@@ -611,12 +1543,13 @@ export namespace Endpoints {
       200: {
         data: {
           created_at: string;
-          hourly_rate_cents: number;
+          hourly_rate_cents?: (number | null) | undefined;
           id: Schemas.EmployeeId;
           name: string;
           organization_id: Schemas.OrganizationId;
           updated_at: string;
           user_id?: (null | Schemas.UserId) | undefined;
+          weekly_contract_minutes: number;
         };
         pagination?: (null | Schemas.PaginationMetadata) | undefined;
       };
@@ -693,6 +1626,8 @@ export namespace Endpoints {
     path: "/api/v1/files";
     requestFormat: "binary";
     parameters: {
+      query: Partial<{ folder: string }>;
+
       body: Array<number>;
     };
     responses: {
@@ -884,12 +1819,13 @@ export namespace Endpoints {
       200: {
         data: Array<{
           created_at: string;
-          hourly_rate_cents: number;
+          hourly_rate_cents?: (number | null) | undefined;
           id: Schemas.EmployeeId;
           name: string;
           organization_id: Schemas.OrganizationId;
           updated_at: string;
           user_id?: (null | Schemas.UserId) | undefined;
+          weekly_contract_minutes: number;
         }>;
         pagination?: (null | Schemas.PaginationMetadata) | undefined;
       };
@@ -910,12 +1846,13 @@ export namespace Endpoints {
       201: {
         data: {
           created_at: string;
-          hourly_rate_cents: number;
+          hourly_rate_cents?: (number | null) | undefined;
           id: Schemas.EmployeeId;
           name: string;
           organization_id: Schemas.OrganizationId;
           updated_at: string;
           user_id?: (null | Schemas.UserId) | undefined;
+          weekly_contract_minutes: number;
         };
         pagination?: (null | Schemas.PaginationMetadata) | undefined;
       };
@@ -1415,7 +2352,53 @@ export namespace Endpoints {
 
 // <EndpointByMethod>
 export type EndpointByMethod = {
+  delete: {
+    "/api/v1/chat/categories/{category_id}": Endpoints.delete_DeleteCategory;
+    "/api/v1/chat/channels/{channel_id}": Endpoints.delete_DeleteChannel;
+    "/api/v1/chat/channels/{channel_id}/permissions/everyone": Endpoints.delete_DeleteEveryoneOverwrite;
+    "/api/v1/chat/channels/{channel_id}/permissions/{target_type}/{target_id}": Endpoints.delete_DeleteTargetOverwrite;
+    "/api/v1/chat/messages/{message_id}": Endpoints.delete_DeleteMessage;
+    "/api/v1/chat/messages/{message_id}/reactions/{emoji}": Endpoints.delete_RemoveReaction;
+    "/api/v1/chat/threads/{channel_id}": Endpoints.delete_DeleteThread;
+    "/api/v1/chat/webhooks/{webhook_id}": Endpoints.delete_DeleteWebhook;
+    "/api/v1/customer-contacts/{customer_contact_id}": Endpoints.delete_DeleteCustomerContact;
+    "/api/v1/customer-contexts/{customer_context_id}": Endpoints.delete_DeleteCustomerContext;
+    "/api/v1/customers/{customer_id}": Endpoints.delete_DeleteCustomer;
+    "/api/v1/employees/{employee_id}": Endpoints.delete_DeleteEmployee;
+    "/api/v1/equipment/{equipment_id}": Endpoints.delete_DeleteEquipment;
+    "/api/v1/organizations/{organization_id}": Endpoints.delete_DeleteOrganization;
+    "/api/v1/products/{product_id}": Endpoints.delete_DeleteProduct;
+    "/api/v1/quotes/{quote_id}": Endpoints.delete_DeleteQuote;
+    "/api/v1/service-rates/{service_rate_id}": Endpoints.delete_DeleteServiceRate;
+  };
+  patch: {
+    "/api/v1/chat/categories/{category_id}": Endpoints.patch_UpdateCategory;
+    "/api/v1/chat/channels/{channel_id}": Endpoints.patch_UpdateChannel;
+    "/api/v1/chat/messages/{message_id}": Endpoints.patch_UpdateMessage;
+    "/api/v1/chat/threads/{channel_id}": Endpoints.patch_UpdateThread;
+    "/api/v1/chat/webhooks/{webhook_id}": Endpoints.patch_UpdateWebhook;
+    "/api/v1/customer-contacts/{customer_contact_id}": Endpoints.patch_UpdateCustomerContact;
+    "/api/v1/customer-contexts/{customer_context_id}": Endpoints.patch_UpdateCustomerContext;
+    "/api/v1/customers/{customer_id}": Endpoints.patch_UpdateCustomer;
+    "/api/v1/employees/{employee_id}": Endpoints.patch_UpdateEmployee;
+    "/api/v1/equipment/{equipment_id}": Endpoints.patch_UpdateEquipment;
+    "/api/v1/organizations/{organization_id}": Endpoints.patch_UpdateOrganization;
+    "/api/v1/products/{product_id}": Endpoints.patch_UpdateProduct;
+    "/api/v1/quotes/{quote_id}": Endpoints.patch_UpdateQuote;
+    "/api/v1/quotes/{quote_id}/status": Endpoints.patch_UpdateQuoteStatus;
+    "/api/v1/service-rates/{service_rate_id}": Endpoints.patch_UpdateServiceRate;
+  };
   get: {
+    "/api/v1/chat/channels/{channel_id}": Endpoints.get_GetChannel;
+    "/api/v1/chat/channels/{channel_id}/messages": Endpoints.get_ListMessages;
+    "/api/v1/chat/channels/{channel_id}/permissions": Endpoints.get_ListChannelPermissions;
+    "/api/v1/chat/channels/{channel_id}/threads": Endpoints.get_ListThreads;
+    "/api/v1/chat/channels/{channel_id}/webhooks": Endpoints.get_ListWebhooks;
+    "/api/v1/chat/messages/{message_id}/reactions/{emoji}": Endpoints.get_ListReactors;
+    "/api/v1/chat/organizations/{organization_id}/categories": Endpoints.get_ListCategories;
+    "/api/v1/chat/organizations/{organization_id}/channels": Endpoints.get_ListChannels;
+    "/api/v1/chat/organizations/{organization_id}/notifications": Endpoints.get_ListNotifications;
+    "/api/v1/chat/organizations/{organization_id}/unread": Endpoints.get_ListUnreadChannels;
     "/api/v1/customer-contacts/{customer_contact_id}": Endpoints.get_GetCustomerContact;
     "/api/v1/customer-contexts/{customer_context_id}": Endpoints.get_GetCustomerContext;
     "/api/v1/customers/{customer_id}": Endpoints.get_GetCustomer;
@@ -1437,30 +2420,14 @@ export type EndpointByMethod = {
     "/api/v1/service-rates/{service_rate_id}": Endpoints.get_GetServiceRate;
     "/api/v1/users/@me/organizations": Endpoints.get_ListMyOrganizations;
   };
-  delete: {
-    "/api/v1/customer-contacts/{customer_contact_id}": Endpoints.delete_DeleteCustomerContact;
-    "/api/v1/customer-contexts/{customer_context_id}": Endpoints.delete_DeleteCustomerContext;
-    "/api/v1/customers/{customer_id}": Endpoints.delete_DeleteCustomer;
-    "/api/v1/employees/{employee_id}": Endpoints.delete_DeleteEmployee;
-    "/api/v1/equipment/{equipment_id}": Endpoints.delete_DeleteEquipment;
-    "/api/v1/organizations/{organization_id}": Endpoints.delete_DeleteOrganization;
-    "/api/v1/products/{product_id}": Endpoints.delete_DeleteProduct;
-    "/api/v1/quotes/{quote_id}": Endpoints.delete_DeleteQuote;
-    "/api/v1/service-rates/{service_rate_id}": Endpoints.delete_DeleteServiceRate;
-  };
-  patch: {
-    "/api/v1/customer-contacts/{customer_contact_id}": Endpoints.patch_UpdateCustomerContact;
-    "/api/v1/customer-contexts/{customer_context_id}": Endpoints.patch_UpdateCustomerContext;
-    "/api/v1/customers/{customer_id}": Endpoints.patch_UpdateCustomer;
-    "/api/v1/employees/{employee_id}": Endpoints.patch_UpdateEmployee;
-    "/api/v1/equipment/{equipment_id}": Endpoints.patch_UpdateEquipment;
-    "/api/v1/organizations/{organization_id}": Endpoints.patch_UpdateOrganization;
-    "/api/v1/products/{product_id}": Endpoints.patch_UpdateProduct;
-    "/api/v1/quotes/{quote_id}": Endpoints.patch_UpdateQuote;
-    "/api/v1/quotes/{quote_id}/status": Endpoints.patch_UpdateQuoteStatus;
-    "/api/v1/service-rates/{service_rate_id}": Endpoints.patch_UpdateServiceRate;
-  };
   post: {
+    "/api/v1/chat/channels/{channel_id}/messages": Endpoints.post_CreateMessage;
+    "/api/v1/chat/channels/{channel_id}/threads": Endpoints.post_CreateThread;
+    "/api/v1/chat/channels/{channel_id}/typing": Endpoints.post_StartTyping;
+    "/api/v1/chat/channels/{channel_id}/webhooks": Endpoints.post_CreateWebhook;
+    "/api/v1/chat/organizations/{organization_id}/categories": Endpoints.post_CreateCategory;
+    "/api/v1/chat/organizations/{organization_id}/channels": Endpoints.post_CreateChannel;
+    "/api/v1/chat/webhooks/{webhook_id}/{token}": Endpoints.post_ExecuteWebhook;
     "/api/v1/customers/{customer_id}/contacts": Endpoints.post_CreateCustomerContact;
     "/api/v1/customers/{customer_id}/customer-contexts": Endpoints.post_CreateCustomerContext;
     "/api/v1/files": Endpoints.post_UploadFile;
@@ -1472,15 +2439,25 @@ export type EndpointByMethod = {
     "/api/v1/organizations/{organization_id}/quotes": Endpoints.post_CreateQuote;
     "/api/v1/organizations/{organization_id}/service-rates": Endpoints.post_CreateServiceRate;
   };
+  put: {
+    "/api/v1/chat/channels/{channel_id}/permissions/everyone": Endpoints.put_UpsertEveryoneOverwrite;
+    "/api/v1/chat/channels/{channel_id}/permissions/{target_type}/{target_id}": Endpoints.put_UpsertTargetOverwrite;
+    "/api/v1/chat/channels/{channel_id}/read": Endpoints.put_MarkChannelRead;
+    "/api/v1/chat/messages/{message_id}/reactions/{emoji}": Endpoints.put_AddReaction;
+    "/api/v1/chat/notifications/{notification_id}/read": Endpoints.put_MarkNotificationRead;
+    "/api/v1/chat/organizations/{organization_id}/notifications/read-all": Endpoints.put_MarkAllNotificationsRead;
+    "/api/v1/chat/organizations/{organization_id}/presence": Endpoints.put_SetPresence;
+  };
 };
 
 // </EndpointByMethod>
 
 // <EndpointByMethod.Shorthands>
-export type GetEndpoints = EndpointByMethod["get"];
 export type DeleteEndpoints = EndpointByMethod["delete"];
 export type PatchEndpoints = EndpointByMethod["patch"];
+export type GetEndpoints = EndpointByMethod["get"];
 export type PostEndpoints = EndpointByMethod["post"];
+export type PutEndpoints = EndpointByMethod["put"];
 // </EndpointByMethod.Shorthands>
 
 // <ApiClientTypes>
@@ -1713,37 +2690,6 @@ export class ApiClient {
     return;
   };
 
-  // <ApiClient.get>
-  get<Path extends keyof GetEndpoints, TEndpoint extends GetEndpoints[Path]>(
-    path: Path,
-    ...params: MaybeOptionalArg<
-      TEndpoint extends { parameters: infer UParams }
-        ? NotNever<UParams> extends true
-          ? UParams & { overrides?: RequestInit; withResponse?: false; throwOnStatusError?: boolean }
-          : { overrides?: RequestInit; withResponse?: false; throwOnStatusError?: boolean }
-        : { overrides?: RequestInit; withResponse?: false; throwOnStatusError?: boolean }
-    >
-  ): Promise<Extract<InferResponseByStatus<TEndpoint, SuccessStatusCode>, { data: {} }>["data"]>;
-
-  get<Path extends keyof GetEndpoints, TEndpoint extends GetEndpoints[Path]>(
-    path: Path,
-    ...params: MaybeOptionalArg<
-      TEndpoint extends { parameters: infer UParams }
-        ? NotNever<UParams> extends true
-          ? UParams & { overrides?: RequestInit; withResponse?: true; throwOnStatusError?: boolean }
-          : { overrides?: RequestInit; withResponse?: true; throwOnStatusError?: boolean }
-        : { overrides?: RequestInit; withResponse?: true; throwOnStatusError?: boolean }
-    >
-  ): Promise<SafeApiResponse<TEndpoint>>;
-
-  get<Path extends keyof GetEndpoints, _TEndpoint extends GetEndpoints[Path]>(
-    path: Path,
-    ...params: MaybeOptionalArg<any>
-  ): Promise<any> {
-    return this.request("get", path, ...params);
-  }
-  // </ApiClient.get>
-
   // <ApiClient.delete>
   delete<Path extends keyof DeleteEndpoints, TEndpoint extends DeleteEndpoints[Path]>(
     path: Path,
@@ -1806,6 +2752,37 @@ export class ApiClient {
   }
   // </ApiClient.patch>
 
+  // <ApiClient.get>
+  get<Path extends keyof GetEndpoints, TEndpoint extends GetEndpoints[Path]>(
+    path: Path,
+    ...params: MaybeOptionalArg<
+      TEndpoint extends { parameters: infer UParams }
+        ? NotNever<UParams> extends true
+          ? UParams & { overrides?: RequestInit; withResponse?: false; throwOnStatusError?: boolean }
+          : { overrides?: RequestInit; withResponse?: false; throwOnStatusError?: boolean }
+        : { overrides?: RequestInit; withResponse?: false; throwOnStatusError?: boolean }
+    >
+  ): Promise<Extract<InferResponseByStatus<TEndpoint, SuccessStatusCode>, { data: {} }>["data"]>;
+
+  get<Path extends keyof GetEndpoints, TEndpoint extends GetEndpoints[Path]>(
+    path: Path,
+    ...params: MaybeOptionalArg<
+      TEndpoint extends { parameters: infer UParams }
+        ? NotNever<UParams> extends true
+          ? UParams & { overrides?: RequestInit; withResponse?: true; throwOnStatusError?: boolean }
+          : { overrides?: RequestInit; withResponse?: true; throwOnStatusError?: boolean }
+        : { overrides?: RequestInit; withResponse?: true; throwOnStatusError?: boolean }
+    >
+  ): Promise<SafeApiResponse<TEndpoint>>;
+
+  get<Path extends keyof GetEndpoints, _TEndpoint extends GetEndpoints[Path]>(
+    path: Path,
+    ...params: MaybeOptionalArg<any>
+  ): Promise<any> {
+    return this.request("get", path, ...params);
+  }
+  // </ApiClient.get>
+
   // <ApiClient.post>
   post<Path extends keyof PostEndpoints, TEndpoint extends PostEndpoints[Path]>(
     path: Path,
@@ -1836,6 +2813,37 @@ export class ApiClient {
     return this.request("post", path, ...params);
   }
   // </ApiClient.post>
+
+  // <ApiClient.put>
+  put<Path extends keyof PutEndpoints, TEndpoint extends PutEndpoints[Path]>(
+    path: Path,
+    ...params: MaybeOptionalArg<
+      TEndpoint extends { parameters: infer UParams }
+        ? NotNever<UParams> extends true
+          ? UParams & { overrides?: RequestInit; withResponse?: false; throwOnStatusError?: boolean }
+          : { overrides?: RequestInit; withResponse?: false; throwOnStatusError?: boolean }
+        : { overrides?: RequestInit; withResponse?: false; throwOnStatusError?: boolean }
+    >
+  ): Promise<Extract<InferResponseByStatus<TEndpoint, SuccessStatusCode>, { data: {} }>["data"]>;
+
+  put<Path extends keyof PutEndpoints, TEndpoint extends PutEndpoints[Path]>(
+    path: Path,
+    ...params: MaybeOptionalArg<
+      TEndpoint extends { parameters: infer UParams }
+        ? NotNever<UParams> extends true
+          ? UParams & { overrides?: RequestInit; withResponse?: true; throwOnStatusError?: boolean }
+          : { overrides?: RequestInit; withResponse?: true; throwOnStatusError?: boolean }
+        : { overrides?: RequestInit; withResponse?: true; throwOnStatusError?: boolean }
+    >
+  ): Promise<SafeApiResponse<TEndpoint>>;
+
+  put<Path extends keyof PutEndpoints, _TEndpoint extends PutEndpoints[Path]>(
+    path: Path,
+    ...params: MaybeOptionalArg<any>
+  ): Promise<any> {
+    return this.request("put", path, ...params);
+  }
+  // </ApiClient.put>
 
   // <ApiClient.request>
   /**
