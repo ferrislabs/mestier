@@ -25,7 +25,9 @@ export interface EmployeeListData {
  */
 export function employeeDisplayName(employee: {
 	last_name: string
-	first_name: string | null
+	// Optional, not just nullable: utoipa maps `Option<String>` to an optional
+	// field, so the generated type is `first_name?: string | null | undefined`.
+	first_name?: string | null
 }): string {
 	const last = employee.last_name.trim()
 	const first = employee.first_name?.trim()

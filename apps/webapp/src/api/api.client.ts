@@ -110,8 +110,9 @@ export namespace Schemas {
     status: CustomerStatus;
   };
   export type CreateEmployeeRequest = {
+    first_name?: (string | null) | undefined;
     hourly_rate_cents?: (number | null) | undefined;
-    name: string;
+    last_name: string;
     user_id?: (null | UserId) | undefined;
     weekly_contract_minutes?: number | undefined;
   };
@@ -202,9 +203,10 @@ export namespace Schemas {
   };
   export type EmployeeResponse = {
     created_at: string;
+    first_name?: (string | null) | undefined;
     hourly_rate_cents?: (number | null) | undefined;
     id: EmployeeId;
-    name: string;
+    last_name: string;
     organization_id: OrganizationId;
     updated_at: string;
     user_id?: (null | UserId) | undefined;
@@ -457,8 +459,9 @@ export namespace Schemas {
     status: CustomerStatus;
   };
   export type UpdateEmployeeRequest = {
+    first_name?: (string | null) | undefined;
     hourly_rate_cents?: (number | null) | undefined;
-    name: string;
+    last_name: string;
     user_id?: (null | UserId) | undefined;
     weekly_contract_minutes?: number | undefined;
   };
@@ -1657,9 +1660,10 @@ export namespace Endpoints {
       200: {
         data: {
           created_at: string;
+          first_name?: (string | null) | undefined;
           hourly_rate_cents?: (number | null) | undefined;
           id: Schemas.EmployeeId;
-          name: string;
+          last_name: string;
           organization_id: Schemas.OrganizationId;
           updated_at: string;
           user_id?: (null | Schemas.UserId) | undefined;
@@ -1694,9 +1698,10 @@ export namespace Endpoints {
       200: {
         data: {
           created_at: string;
+          first_name?: (string | null) | undefined;
           hourly_rate_cents?: (number | null) | undefined;
           id: Schemas.EmployeeId;
-          name: string;
+          last_name: string;
           organization_id: Schemas.OrganizationId;
           updated_at: string;
           user_id?: (null | Schemas.UserId) | undefined;
@@ -2070,9 +2075,10 @@ export namespace Endpoints {
       200: {
         data: Array<{
           created_at: string;
+          first_name?: (string | null) | undefined;
           hourly_rate_cents?: (number | null) | undefined;
           id: Schemas.EmployeeId;
-          name: string;
+          last_name: string;
           organization_id: Schemas.OrganizationId;
           updated_at: string;
           user_id?: (null | Schemas.UserId) | undefined;
@@ -2097,9 +2103,10 @@ export namespace Endpoints {
       201: {
         data: {
           created_at: string;
+          first_name?: (string | null) | undefined;
           hourly_rate_cents?: (number | null) | undefined;
           id: Schemas.EmployeeId;
-          name: string;
+          last_name: string;
           organization_id: Schemas.OrganizationId;
           updated_at: string;
           user_id?: (null | Schemas.UserId) | undefined;

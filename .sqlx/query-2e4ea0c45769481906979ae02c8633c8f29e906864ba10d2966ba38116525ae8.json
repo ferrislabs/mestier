@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT id, org_id, user_id, name, hourly_rate_cents, weekly_contract_minutes, deleted_at, created_at, updated_at\n            FROM employees\n            WHERE org_id = $1 AND deleted_at IS NULL\n            ORDER BY name ASC, created_at ASC\n            ",
+  "query": "\n            UPDATE employees\n            SET user_id = $2, last_name = $3, first_name = $4, hourly_rate_cents = $5, weekly_contract_minutes = $6, updated_at = $7\n            WHERE id = $1 AND deleted_at IS NULL\n            RETURNING id, org_id, user_id, last_name, first_name, hourly_rate_cents, weekly_contract_minutes, deleted_at, created_at, updated_at\n            ",
   "describe": {
     "columns": [
       {
@@ -20,38 +20,49 @@
       },
       {
         "ordinal": 3,
-        "name": "name",
+        "name": "last_name",
         "type_info": "Text"
       },
       {
         "ordinal": 4,
+        "name": "first_name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
         "name": "hourly_rate_cents",
         "type_info": "Int4"
       },
       {
-        "ordinal": 5,
+        "ordinal": 6,
         "name": "weekly_contract_minutes",
         "type_info": "Int4"
       },
       {
-        "ordinal": 6,
+        "ordinal": 7,
         "name": "deleted_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 7,
+        "ordinal": 8,
         "name": "created_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 8,
+        "ordinal": 9,
         "name": "updated_at",
         "type_info": "Timestamptz"
       }
     ],
     "parameters": {
       "Left": [
-        "Uuid"
+        "Uuid",
+        "Uuid",
+        "Text",
+        "Text",
+        "Int4",
+        "Int4",
+        "Timestamptz"
       ]
     },
     "nullable": [
@@ -60,11 +71,12 @@
       true,
       false,
       true,
+      true,
       false,
       true,
       false,
       false
     ]
   },
-  "hash": "1aa5636d4e9ea2c28d4b01ab07bc2b232e7f1eef539b878430854d95bdee45bf"
+  "hash": "2e4ea0c45769481906979ae02c8633c8f29e906864ba10d2966ba38116525ae8"
 }
