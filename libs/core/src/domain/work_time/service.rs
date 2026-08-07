@@ -7,7 +7,7 @@ use crate::{
     EmployeeId, EmployeeRhythm, EmployeeRhythmId, EmployeeWorkSlot, EmployeeWorkSlotId, RhythmSlot,
     RhythmSlotId,
     domain::work_time::{
-        DateRange, MinuteInterval, Tz,
+        DateRange, MinuteInterval,
         commands::{ReplaceRhythmCommand, ReplaceWorkSlotsCommand, RhythmSlotInput, WorkSlotInput},
         ports::{RhythmRepository, WorkSlotRepository},
     },
@@ -31,7 +31,6 @@ pub fn expand_work_slots(
     rhythms: &[EmployeeRhythm],
     work_slots: &[EmployeeWorkSlot],
     range: DateRange,
-    _tz: Tz,
 ) -> BTreeMap<NaiveDate, Vec<MinuteInterval>> {
     let mut expanded = BTreeMap::new();
     let mut date = range.from;
@@ -317,10 +316,6 @@ mod tests {
         NaiveDate::from_ymd_opt(y, m, d).unwrap()
     }
 
-    fn tz() -> Tz {
-        Tz("Europe/Paris".to_owned())
-    }
-
     fn work_slot(
         employee_id: EmployeeId,
         work_date: NaiveDate,
@@ -391,7 +386,7 @@ mod tests {
         let work_slots = vec![work_slot(employee_id, monday, 540, 600)];
         let range = DateRange::new(monday, monday).unwrap();
 
-        let expanded = expand_work_slots(&rhythms, &work_slots, range, tz());
+        let expanded = expand_work_slots(&rhythms, &work_slots, range);
 
         assert_eq!(
             expanded.get(&monday),
@@ -415,7 +410,7 @@ mod tests {
         )];
         let range = DateRange::new(monday, monday).unwrap();
 
-        let expanded = expand_work_slots(&rhythms, &[], range, tz());
+        let expanded = expand_work_slots(&rhythms, &[], range);
 
         assert_eq!(
             expanded.get(&monday),
@@ -431,7 +426,7 @@ mod tests {
         let monday = date(2026, 8, 10);
         let range = DateRange::new(monday, monday).unwrap();
 
-        let expanded = expand_work_slots(&[], &[], range, tz());
+        let expanded = expand_work_slots(&[], &[], range);
 
         assert!(!expanded.contains_key(&monday));
         assert!(expanded.is_empty());
@@ -463,7 +458,7 @@ mod tests {
         ];
         let range = DateRange::new(first_monday, second_monday).unwrap();
 
-        let expanded = expand_work_slots(&rhythms, &[], range, tz());
+        let expanded = expand_work_slots(&rhythms, &[], range);
 
         assert_eq!(
             expanded.get(&first_monday),
@@ -494,7 +489,7 @@ mod tests {
         )];
         let range = DateRange::new(far_future_monday, far_future_monday).unwrap();
 
-        let expanded = expand_work_slots(&rhythms, &[], range, tz());
+        let expanded = expand_work_slots(&rhythms, &[], range);
 
         assert!(expanded.contains_key(&far_future_monday));
     }
@@ -513,7 +508,7 @@ mod tests {
         )];
         let range = DateRange::new(sunday, sunday).unwrap();
 
-        let expanded = expand_work_slots(&rhythms, &[], range, tz());
+        let expanded = expand_work_slots(&rhythms, &[], range);
 
         assert!(!expanded.contains_key(&sunday));
     }
@@ -534,7 +529,7 @@ mod tests {
         )];
         let range = DateRange::new(monday, monday).unwrap();
 
-        let expanded = expand_work_slots(&rhythms, &[], range, tz());
+        let expanded = expand_work_slots(&rhythms, &[], range);
 
         let intervals = expanded.get(&monday).unwrap();
         assert_eq!(intervals.len(), 2);
@@ -558,7 +553,7 @@ mod tests {
         ];
         let range = DateRange::new(monday, monday).unwrap();
 
-        let expanded = expand_work_slots(&[], &work_slots, range, tz());
+        let expanded = expand_work_slots(&[], &work_slots, range);
 
         assert_eq!(expanded.get(&monday).unwrap().len(), 2);
     }
@@ -574,7 +569,7 @@ mod tests {
         ];
         let range = DateRange::new(from, to).unwrap();
 
-        let expanded = expand_work_slots(&[], &work_slots, range, tz());
+        let expanded = expand_work_slots(&[], &work_slots, range);
 
         assert!(
             expanded.contains_key(&from),
@@ -596,7 +591,7 @@ mod tests {
         let work_slots = vec![work_slot(employee_id, outside, 480, 720)];
         let range = DateRange::new(from, to).unwrap();
 
-        let expanded = expand_work_slots(&[], &work_slots, range, tz());
+        let expanded = expand_work_slots(&[], &work_slots, range);
 
         assert!(expanded.is_empty());
     }
@@ -617,7 +612,7 @@ mod tests {
         let work_slots = vec![work_slot(employee_id, closing_day, 900, 960)];
         let range = DateRange::new(closing_day, closing_day).unwrap();
 
-        let expanded = expand_work_slots(&rhythms, &work_slots, range, tz());
+        let expanded = expand_work_slots(&rhythms, &work_slots, range);
 
         assert_eq!(
             expanded.get(&closing_day),

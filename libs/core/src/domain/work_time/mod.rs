@@ -115,22 +115,6 @@ pub struct MinuteInterval {
     pub ends_minute: i16,
 }
 
-/// The organization's IANA timezone identifier (e.g. `"Europe/Paris"`), as
-/// stored in `organizations.timezone`. Threaded through
-/// [`service::expand_work_slots`] for signature symmetry with the planning
-/// module's `detect_conflicts` (W4), which performs genuine timezone-aware
-/// conversions between `TIMESTAMPTZ` columns and local minutes. Every input
-/// `expand_work_slots` reads — `DATE` columns, minute-of-day integers — is
-/// already expressed in that local time, so it does no timezone arithmetic
-/// itself.
-///
-/// A real IANA-aware type (`chrono_tz::Tz`) would need a new workspace
-/// dependency, which is a `Cargo.toml` change outside this workstream's
-/// owned files (see the final report). This wraps the raw identifier
-/// instead so the signature can stay stable once that dependency lands.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Tz(pub String);
-
 /// An inclusive `[from, to]` window of calendar days — the unit both the
 /// `work-time` read/write endpoints and `expand_work_slots` operate on.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

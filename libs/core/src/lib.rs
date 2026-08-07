@@ -14,7 +14,7 @@ pub use domain::{
     EmployeeRhythm, EmployeeRhythmId, EmployeeWorkSlot, EmployeeWorkSlotId, Equipment, EquipmentId,
     FileObject, Member, MemberId, MinuteInterval, Organization, OrganizationId, Permissions,
     Product, ProductId, Quote, QuoteId, QuoteLine, QuoteLineId, QuoteStatus, RhythmSlot,
-    RhythmSlotId, Role, RoleId, ServiceRate, ServiceRateId, ServiceRateUnit, StoredFile, Tz, User,
+    RhythmSlotId, Role, RoleId, ServiceRate, ServiceRateId, ServiceRateUnit, StoredFile, User,
     UserId, WorkOrder, WorkOrderId, WorkOrderStatus,
     absence::commands::{CreateAbsenceCommand, PatchAbsenceCommand},
     customer::commands::{CreateCustomerCommand, UpdateCustomerCommand},
