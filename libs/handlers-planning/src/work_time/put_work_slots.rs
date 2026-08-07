@@ -22,7 +22,7 @@ pub struct WorkSlotRequest {
 }
 
 /// The complete replacement set for the `[from, to]` window — never a
-/// delta, mirroring the `PATCH work-orders` `assignees` contract.
+/// delta, mirroring the `PATCH tasks` `assignees` contract.
 #[derive(Debug, Deserialize, ToSchema)]
 pub struct PutWorkSlotsRequest {
     pub slots: Vec<WorkSlotRequest>,

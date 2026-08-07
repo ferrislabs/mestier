@@ -1,14 +1,14 @@
 use auth::Identity;
 use axum::{Extension, Json, extract::State};
 use chrono::{DateTime, Utc};
+use mestier_core::{AssigneeRef, EmployeeId, PatchTaskCommand, TaskId, TaskStatus, UserId};
 use handlers::{ApiError, AppState, DataEnvelope, Response};
-use mestier_core::{AssigneeRef, EmployeeId, PatchWorkOrderCommand, UserId, WorkOrderStatus};
 use serde::{Deserialize, Deserializer};
 use utoipa::ToSchema;
 
 use crate::{
-    response::PatchWorkOrderResponse,
-    work_order::{WorkOrderPath, require_work_order},
+    response::PatchTaskResponse,
+    task::{TaskPath, require_task},
 };
 
 /// Distinguishes "the key is absent" (leave the field unchanged) from "the
@@ -39,76 +39,88 @@ impl From<AssigneeRefRequest> for AssigneeRef {
     }
 }
 
-/// Every field is optional and, when present, replaces the current value —
-/// `title`/`note` additionally distinguish "absent" from "present but
-/// `null`" (see [`deserialize_present`]), and `assignees` is the complete
-/// replacement list, never a delta.
+/// Every field is optional and, when present, replaces the current value.
+/// `parent_task_id`/`description`/`starts_at`/`ends_at` additionally
+/// distinguish "absent" from "present but `null`" (see
+/// [`deserialize_present`]) — `null` clears `parent_task_id` (the task
+/// becomes a root) or `starts_at`/`ends_at` (the task reverts to inheriting
+/// its parent's window). `title` cannot be cleared (the column is `NOT
+/// NULL`), so a plain `Option<String>` is enough for it. `assignees` is the
+/// complete replacement list, never a delta.
 #[derive(Debug, Deserialize, ToSchema)]
-pub struct UpdateWorkOrderRequest {
+pub struct UpdateTaskRequest {
+    #[serde(default, deserialize_with = "deserialize_present")]
+    #[schema(value_type = Option<TaskId>, nullable)]
+    pub parent_task_id: Option<Option<TaskId>>,
     #[serde(default)]
-    pub starts_at: Option<DateTime<Utc>>,
-    #[serde(default)]
-    pub ends_at: Option<DateTime<Utc>>,
+    pub title: Option<String>,
+    #[serde(default, deserialize_with = "deserialize_present")]
+    #[schema(value_type = Option<String>, nullable)]
+    pub description: Option<Option<String>>,
+    #[serde(default, deserialize_with = "deserialize_present")]
+    #[schema(value_type = Option<DateTime<Utc>>, nullable)]
+    pub starts_at: Option<Option<DateTime<Utc>>>,
+    #[serde(default, deserialize_with = "deserialize_present")]
+    #[schema(value_type = Option<DateTime<Utc>>, nullable)]
+    pub ends_at: Option<Option<DateTime<Utc>>>,
     #[serde(default)]
     pub all_day: Option<bool>,
     #[serde(default)]
-    pub status: Option<WorkOrderStatus>,
-    #[serde(default, deserialize_with = "deserialize_present")]
-    #[schema(value_type = Option<String>, nullable)]
-    pub title: Option<Option<String>>,
-    #[serde(default, deserialize_with = "deserialize_present")]
-    #[schema(value_type = Option<String>, nullable)]
-    pub note: Option<Option<String>>,
+    pub status: Option<TaskStatus>,
+    #[serde(default)]
+    pub blocks_availability: Option<bool>,
     #[serde(default)]
     pub assignees: Option<Vec<AssigneeRefRequest>>,
 }
 
 #[utoipa::path(
     patch,
-    path = "/api/v1/organizations/{organization_id}/work-orders/{work_order_id}",
-    operation_id = "patchWorkOrder",
+    path = "/api/v1/organizations/{organization_id}/tasks/{task_id}",
+    operation_id = "patchTask",
     tag = super::super::TAG,
     params(
         ("organization_id" = mestier_core::OrganizationId, Path, description = "Organization identifier"),
-        ("work_order_id" = mestier_core::WorkOrderId, Path, description = "Work order identifier"),
+        ("task_id" = mestier_core::TaskId, Path, description = "Task identifier"),
     ),
-    request_body = UpdateWorkOrderRequest,
+    request_body = UpdateTaskRequest,
     responses(
-        (status = 200, description = "Work order rescheduled and/or reassigned", body = inline(DataEnvelope<PatchWorkOrderResponse>)),
+        (status = 200, description = "Task reparented, rescheduled and/or reassigned", body = inline(DataEnvelope<PatchTaskResponse>)),
         (status = 400, description = "Validation failed"),
         (status = 401, description = "Unauthorized"),
         (status = 403, description = "Forbidden"),
-        (status = 404, description = "Work order, employee or member not found"),
-        (status = 409, description = "Work order conflict"),
+        (status = 404, description = "Task, employee or member not found"),
+        (status = 409, description = "Task conflict"),
     ),
     security(("bearer_auth" = []))
 )]
 pub async fn handler(
-    WorkOrderPath {
+    TaskPath {
         organization_id,
-        work_order_id,
-    }: WorkOrderPath,
+        task_id,
+    }: TaskPath,
     State(state): State<AppState>,
     Extension(identity): Extension<Identity>,
-    Json(payload): Json<UpdateWorkOrderRequest>,
-) -> Result<Response<PatchWorkOrderResponse>, ApiError> {
-    require_work_order(&state, &identity, organization_id, work_order_id).await?;
+    Json(payload): Json<UpdateTaskRequest>,
+) -> Result<Response<PatchTaskResponse>, ApiError> {
+    require_task(&state, &identity, organization_id, task_id).await?;
 
-    let mut command = PatchWorkOrderCommand::new(work_order_id);
+    let mut command = PatchTaskCommand::new(task_id);
+    command.parent_task_id = payload.parent_task_id;
+    command.title = payload.title;
+    command.description = payload.description;
     command.starts_at = payload.starts_at;
     command.ends_at = payload.ends_at;
     command.all_day = payload.all_day;
     command.status = payload.status;
-    command.title = payload.title;
-    command.note = payload.note;
+    command.blocks_availability = payload.blocks_availability;
     command.assignees = payload
         .assignees
         .map(|assignees| assignees.into_iter().map(Into::into).collect());
 
-    let (work_order, created_employees) = state.usecase.patch_work_order(command).await?;
+    let (task, created_employees) = state.usecase.patch_task(command).await?;
 
-    Ok(Response::OK(PatchWorkOrderResponse {
-        work_order: work_order.into(),
+    Ok(Response::OK(PatchTaskResponse {
+        task: task.into(),
         created_employees: created_employees.into_iter().map(Into::into).collect(),
     }))
 }
@@ -118,53 +130,70 @@ mod tests {
     use super::*;
     use serde_json::json;
 
-    fn parse(value: serde_json::Value) -> UpdateWorkOrderRequest {
+    fn parse(value: serde_json::Value) -> UpdateTaskRequest {
         serde_json::from_value(value).expect("payload must deserialize")
     }
 
-    // ── absent vs. `null` on `title`/`note` ─────────────────────────────
+    // ── absent vs. `null` on nullable fields ────────────────────────────
 
     #[test]
-    fn absent_title_and_note_leave_both_fields_unset() {
+    fn absent_nullable_fields_leave_them_unset() {
         let request = parse(json!({}));
 
         assert_eq!(
-            request.title, None,
-            "an absent `title` key must not be mistaken for a clearing `null`"
+            request.parent_task_id, None,
+            "an absent `parent_task_id` key must not be mistaken for a clearing `null`"
         );
+        assert_eq!(request.description, None);
+        assert_eq!(request.starts_at, None);
+        assert_eq!(request.ends_at, None);
+    }
+
+    #[test]
+    fn null_parent_task_id_clears_it() {
+        let request = parse(json!({ "parent_task_id": null }));
+
         assert_eq!(
-            request.note, None,
-            "an absent `note` key must not be mistaken for a clearing `null`"
+            request.parent_task_id,
+            Some(None),
+            "an explicit `null` clears `parent_task_id`, turning the task back into a root"
         );
     }
 
     #[test]
-    fn null_title_clears_it() {
-        let request = parse(json!({ "title": null }));
+    fn null_description_clears_it() {
+        let request = parse(json!({ "description": null }));
 
-        assert_eq!(
-            request.title,
-            Some(None),
-            "an explicit `null` must be distinguishable from an absent key: it clears the title"
-        );
+        assert_eq!(request.description, Some(None));
     }
 
     #[test]
-    fn null_note_clears_it() {
-        let request = parse(json!({ "note": null }));
+    fn null_starts_at_and_ends_at_clear_them_to_inherit_from_the_parent() {
+        let request = parse(json!({ "starts_at": null, "ends_at": null }));
 
-        assert_eq!(
-            request.note,
-            Some(None),
-            "the note field must clear independently of the title field"
-        );
+        assert_eq!(request.starts_at, Some(None));
+        assert_eq!(request.ends_at, Some(None));
     }
 
     #[test]
     fn present_title_sets_the_new_value() {
         let request = parse(json!({ "title": "Nouveau titre" }));
 
-        assert_eq!(request.title, Some(Some("Nouveau titre".to_owned())));
+        assert_eq!(request.title, Some("Nouveau titre".to_owned()));
+    }
+
+    #[test]
+    fn absent_title_leaves_it_unset() {
+        let request = parse(json!({}));
+
+        assert_eq!(request.title, None);
+    }
+
+    #[test]
+    fn present_blocks_availability_sets_the_new_value() {
+        let request = parse(json!({ "blocks_availability": false }));
+
+        assert_eq!(request.blocks_availability, Some(false));
     }
 
     // ── the tagged `assignees` union ────────────────────────────────────

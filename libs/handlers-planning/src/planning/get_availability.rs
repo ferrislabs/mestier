@@ -5,15 +5,13 @@ use axum::{
 };
 use chrono::{DateTime, Utc};
 use handlers::{ApiError, AppState, DataEnvelope, Response};
-use mestier_core::{
-    AbsenceKind, AvailabilityReport, Conflict, ConflictKind, TimeRange, WorkOrderId,
-};
+use mestier_core::{AbsenceKind, AvailabilityReport, Conflict, ConflictKind, TaskId, TimeRange};
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
 use crate::{paths::PlanningAvailabilityPath, require_org_membership};
 
-/// Mirrors the `starts_at`/`ends_at`/`all_day` triple work orders and
+/// Mirrors the `starts_at`/`ends_at`/`all_day` triple tasks and
 /// absences are created with, so the front can check availability with the
 /// exact same values it is about to submit. `starts_at`/`ends_at` are
 /// already the precise `TIMESTAMPTZ` bounds either way — `all_day` does not
@@ -41,8 +39,8 @@ pub enum ConflictResponse {
         starts_at: DateTime<Utc>,
         ends_at: DateTime<Utc>,
     },
-    OverlappingWorkOrder {
-        work_order_id: WorkOrderId,
+    OverlappingTask {
+        task_id: TaskId,
         starts_at: DateTime<Utc>,
         ends_at: DateTime<Utc>,
     },
@@ -61,8 +59,8 @@ impl From<Conflict> for ConflictResponse {
                 starts_at: value.starts_at,
                 ends_at: value.ends_at,
             },
-            ConflictKind::OverlappingWorkOrder { work_order_id } => Self::OverlappingWorkOrder {
-                work_order_id,
+            ConflictKind::OverlappingTask { task_id } => Self::OverlappingTask {
+                task_id,
                 starts_at: value.starts_at,
                 ends_at: value.ends_at,
             },
@@ -166,7 +164,7 @@ mod tests {
         "11111111-1111-1111-1111-111111111111".parse().unwrap()
     }
 
-    fn work_order_id() -> WorkOrderId {
+    fn task_id() -> TaskId {
         "22222222-2222-2222-2222-222222222222".parse().unwrap()
     }
 
@@ -243,11 +241,9 @@ mod tests {
     }
 
     #[test]
-    fn overlapping_work_order_conflict_serializes_the_work_order_id() {
+    fn overlapping_task_conflict_serializes_the_task_id() {
         let response: ConflictResponse = Conflict {
-            kind: ConflictKind::OverlappingWorkOrder {
-                work_order_id: work_order_id(),
-            },
+            kind: ConflictKind::OverlappingTask { task_id: task_id() },
             starts_at: now(),
             ends_at: now(),
         }
@@ -255,8 +251,8 @@ mod tests {
 
         let value = serde_json::to_value(&response).unwrap();
 
-        assert_eq!(value["kind"], "overlapping_work_order");
-        assert_eq!(value["work_order_id"], work_order_id().to_string());
+        assert_eq!(value["kind"], "overlapping_task");
+        assert_eq!(value["task_id"], task_id().to_string());
     }
 
     #[test]
