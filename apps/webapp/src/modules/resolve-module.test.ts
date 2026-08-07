@@ -33,4 +33,9 @@ describe('resolveModule', () => {
 	it('résout les pages RH vers le module hr', () => {
 		expect(resolveModule('/hr/employees').id).toBe('hr')
 	})
+
+	it('résout les pages de planning vers le module planning', () => {
+		expect(resolveModule('/planning').id).toBe('planning')
+		expect(resolveModule('/planning/team').id).toBe('planning')
+	})
 })

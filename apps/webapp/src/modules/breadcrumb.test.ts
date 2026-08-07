@@ -63,6 +63,14 @@ describe('buildBreadcrumbItems', () => {
 	it('résout le fil des employés', () => {
 		expect(labelsOf('/hr/employees')).toEqual(['Baptiste', 'RH', 'Employés'])
 	})
+
+	it('résout le fil du planning', () => {
+		expect(labelsOf('/planning/team')).toEqual([
+			'Baptiste',
+			'Planning',
+			'Vue équipe',
+		])
+	})
 })
 
 describe('matchingNavItems', () => {
