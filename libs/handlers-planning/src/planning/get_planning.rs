@@ -14,10 +14,6 @@ use utoipa::ToSchema;
 
 use crate::{paths::PlanningPath, require_org_membership};
 
-/// The API's reading window is capped at 92 days — invariant 6 in the
-/// planning module design doc, mirrored by `work-time`'s own `GET` (W3).
-const MAX_WINDOW_DAYS: i64 = 92;
-
 #[derive(Debug, Deserialize)]
 pub struct PlanningWindowQuery {
     pub from: NaiveDate,
@@ -263,20 +259,49 @@ pub async fn handler(
     require_org_membership(&state, &identity, organization_id).await?;
 
     let range = DateRange::new(window.from, window.to)?;
-    if range.span_days() > MAX_WINDOW_DAYS {
-        return Err(ApiError::BadRequest(format!(
-            "planning window must not exceed {MAX_WINDOW_DAYS} days"
-        )));
-    }
+    validate_window_width(range)?;
 
     let view = state.usecase.get_planning(organization_id, range).await?;
 
     Ok(Response::OK(PlanningResponse::from(view)))
 }
 
+/// Rejects `range` if it spans more than `MAX_WINDOW_DAYS` calendar days.
+/// Extracted so the boundary is directly testable, rather than only
+/// reachable by driving the full handler against a live `AppState`.
+fn validate_window_width(range: DateRange) -> Result<(), ApiError> {
+    if range.span_days() > super::MAX_WINDOW_DAYS {
+        return Err(super::window_too_wide_error());
+    }
+
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn date(y: i32, m: u32, d: u32) -> NaiveDate {
+        NaiveDate::from_ymd_opt(y, m, d).unwrap()
+    }
+
+    #[test]
+    fn a_window_of_exactly_92_days_is_accepted() {
+        // Matches `DateRange`'s own boundary test: 2026-01-01 to
+        // 2026-04-02 spans exactly 92 calendar days, inclusive.
+        let range = DateRange::new(date(2026, 1, 1), date(2026, 4, 2)).unwrap();
+
+        assert!(validate_window_width(range).is_ok());
+    }
+
+    #[test]
+    fn a_window_wider_than_92_days_is_a_bad_request() {
+        let range = DateRange::new(date(2026, 1, 1), date(2026, 4, 3)).unwrap();
+
+        let err = validate_window_width(range).unwrap_err();
+
+        assert!(matches!(err, ApiError::BadRequest(_)));
+    }
 
     // `uuid` is not a direct dependency of `handlers-planning` (a
     // `Cargo.toml` this workstream does not own), so fixture ids are parsed

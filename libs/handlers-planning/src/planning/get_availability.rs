@@ -109,7 +109,7 @@ pub struct AvailabilityResponse {
     ),
     responses(
         (status = 200, description = "Every resource of the organization, annotated with its conflicts for the window", body = inline(DataEnvelope<AvailabilityResponse>)),
-        (status = 400, description = "`ends_at` not after `starts_at`"),
+        (status = 400, description = "`ends_at` not after `starts_at`, or window wider than 92 days"),
         (status = 401, description = "Unauthorized"),
         (status = 403, description = "Forbidden"),
     ),
@@ -124,6 +124,7 @@ pub async fn handler(
     require_org_membership(&state, &identity, organization_id).await?;
 
     let window = TimeRange::new(query.starts_at, query.ends_at)?;
+    validate_window_width(window)?;
 
     let reports = state
         .usecase
@@ -136,6 +137,20 @@ pub async fn handler(
             .map(AvailabilityResourceResponse::from)
             .collect(),
     }))
+}
+
+/// Rejects `window` if it spans more than `MAX_WINDOW_DAYS` — the same cap
+/// `/planning` applies to its own calendar-day range, applied here to an
+/// exact instant span so a caller cannot request, say, ten years of
+/// availability in one call. A duration comparison rather than a
+/// `.num_days()` count: the latter truncates towards zero, which would let
+/// a window a few hours past the 92-day mark slip through.
+fn validate_window_width(window: TimeRange) -> Result<(), ApiError> {
+    if window.ends_at - window.starts_at > chrono::Duration::days(super::MAX_WINDOW_DAYS) {
+        return Err(super::window_too_wide_error());
+    }
+
+    Ok(())
 }
 
 #[cfg(test)]
@@ -157,6 +172,40 @@ mod tests {
 
     fn now() -> DateTime<Utc> {
         Utc::now()
+    }
+
+    #[test]
+    fn a_window_of_exactly_92_days_is_accepted() {
+        let starts_at = now();
+        let window = TimeRange::new(starts_at, starts_at + chrono::Duration::days(92)).unwrap();
+
+        assert!(validate_window_width(window).is_ok());
+    }
+
+    #[test]
+    fn a_window_wider_than_92_days_is_a_bad_request() {
+        let starts_at = now();
+        let window = TimeRange::new(starts_at, starts_at + chrono::Duration::days(93)).unwrap();
+
+        let err = validate_window_width(window).unwrap_err();
+
+        assert!(matches!(err, ApiError::BadRequest(_)));
+    }
+
+    #[test]
+    fn a_window_a_few_hours_past_92_days_is_still_rejected() {
+        // Guards the duration-comparison choice over `.num_days()`, which
+        // truncates towards zero and would let this slip through as "92".
+        let starts_at = now();
+        let window = TimeRange::new(
+            starts_at,
+            starts_at + chrono::Duration::days(92) + chrono::Duration::hours(1),
+        )
+        .unwrap();
+
+        let err = validate_window_width(window).unwrap_err();
+
+        assert!(matches!(err, ApiError::BadRequest(_)));
     }
 
     #[test]
