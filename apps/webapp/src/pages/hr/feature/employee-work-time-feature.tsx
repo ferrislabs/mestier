@@ -193,7 +193,8 @@ function EmployeeWorkTimeScreen({
 			await updateEmployee.mutateAsync({
 				path: { employee_id: employee.id },
 				body: {
-					name: employee.name,
+					last_name: employee.last_name,
+					first_name: employee.first_name,
 					hourly_rate_cents: employee.hourly_rate_cents ?? null,
 					user_id: employee.user_id ?? null,
 					weekly_contract_minutes: minutes,

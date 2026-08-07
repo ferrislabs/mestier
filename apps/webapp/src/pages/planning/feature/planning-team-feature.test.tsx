@@ -439,7 +439,11 @@ describe('PlanningTeamFeature — avertissements', () => {
 					{
 						id: 'employee-9',
 						organization_id: 'org-1',
-						name: 'Jules Petit',
+						// The on-the-fly provisioning path always leaves `first_name`
+						// unset — the account's `display_name` is a single free-text
+						// field, exactly like the pre-split `employees.name` was.
+						last_name: 'Jules Petit',
+						first_name: null,
 						user_id: 'user-9',
 						hourly_rate_cents: null,
 						weekly_contract_minutes: 0,

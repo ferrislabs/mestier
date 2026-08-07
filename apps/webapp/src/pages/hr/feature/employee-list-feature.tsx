@@ -8,7 +8,7 @@ import {
 	useReferenceCatalog,
 	useUpdateEmployee,
 } from '#/hooks/use-reference-catalog'
-import type { EmployeeFormValues } from '#/pages/hr/types'
+import { type EmployeeFormValues, employeeDisplayName } from '#/pages/hr/types'
 import {
 	type EmployeeDraft,
 	EmployeeListUI,
@@ -66,7 +66,8 @@ function EmployeeDirectory({
 
 	const employeeForm = useForm({
 		defaultValues: {
-			name: '',
+			lastName: '',
+			firstName: '',
 			hourlyRate: '',
 			userId: '',
 		} satisfies EmployeeFormValues,
@@ -74,7 +75,8 @@ function EmployeeDirectory({
 			await createEmployee.mutateAsync({
 				path: { organization_id: organizationId },
 				body: {
-					name: value.name.trim(),
+					last_name: value.lastName.trim(),
+					first_name: value.firstName.trim() || null,
 					hourly_rate_cents: eurosToCents(value.hourlyRate),
 					user_id: value.userId.trim() || null,
 				},
@@ -86,7 +88,7 @@ function EmployeeDirectory({
 	const employees = catalog.employees.data?.data ?? []
 	const normalizedSearch = search.trim().toLowerCase()
 	const filteredEmployees = employees.filter((employee) =>
-		employee.name.toLowerCase().includes(normalizedSearch),
+		employeeDisplayName(employee).toLowerCase().includes(normalizedSearch),
 	)
 
 	const isLoading = catalog.employees.isLoading
@@ -106,7 +108,8 @@ function EmployeeDirectory({
 				await updateEmployee.mutateAsync({
 					path: { employee_id: employee.id },
 					body: {
-						name: draft.values.name.trim(),
+						last_name: draft.values.lastName.trim(),
+						first_name: draft.values.firstName.trim() || null,
 						hourly_rate_cents: eurosToCents(draft.values.hourlyRate),
 						user_id: draft.values.userId.trim() || null,
 					},
@@ -146,7 +149,8 @@ function EmployeeDirectory({
 						setDraft({
 							id: employee.id,
 							values: {
-								name: employee.name,
+								lastName: employee.last_name,
+								firstName: employee.first_name ?? '',
 								hourlyRate: centsToEuros(employee.hourly_rate_cents),
 								userId: employee.user_id ?? '',
 							},

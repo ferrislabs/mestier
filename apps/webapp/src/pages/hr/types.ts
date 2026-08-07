@@ -3,13 +3,33 @@ import type { Employee } from '#/hooks/use-reference-catalog'
 import type { Rhythm, WorkSlot, WorkTimeRange } from '#/hooks/use-work-time'
 
 export interface EmployeeFormValues {
-	name: string
+	lastName: string
+	firstName: string
 	hourlyRate: string
 	userId: string
 }
 
 export interface EmployeeListData {
 	employees: Employee[]
+}
+
+/**
+ * The one display format for an employee, everywhere: "{last_name}
+ * {first_name}" — last name first, then first name, per the design doc's
+ * acceptance criteria. Mirrors `Employee::display_name` on the Rust side so
+ * front and back never diverge on how a name is shown.
+ *
+ * Loosely typed on purpose (not `Employee` itself): every screen that shows
+ * an employee's name should route through this function instead of
+ * concatenating `last_name`/`first_name` by hand.
+ */
+export function employeeDisplayName(employee: {
+	last_name: string
+	first_name: string | null
+}): string {
+	const last = employee.last_name.trim()
+	const first = employee.first_name?.trim()
+	return first ? `${last} ${first}` : last
 }
 
 // -- Rythme et plages de travail -----------------------------------------

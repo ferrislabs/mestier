@@ -5,6 +5,7 @@ import {
 	computeWeeklyGap,
 	draftToRhythmSlots,
 	draftToWorkSlots,
+	employeeDisplayName,
 	emptyRhythmSlotDraft,
 	emptyWorkSlotDraft,
 	findOpenRhythm,
@@ -18,6 +19,35 @@ import {
 	validateWorkSlotsDraft,
 	workSlotsToDraft,
 } from '#/pages/hr/types'
+
+describe('employeeDisplayName', () => {
+	it('joint last_name et first_name dans cet ordre — nom puis prénom', () => {
+		expect(
+			employeeDisplayName({ last_name: 'Bonnal', first_name: 'Baptiste' }),
+		).toBe('Bonnal Baptiste')
+	})
+
+	it('retombe sur le seul nom quand first_name est absent, sans espace résiduel', () => {
+		expect(employeeDisplayName({ last_name: 'Bonnal', first_name: null })).toBe(
+			'Bonnal',
+		)
+	})
+
+	it('traite un first_name réduit à des espaces comme absent', () => {
+		expect(
+			employeeDisplayName({ last_name: 'Bonnal', first_name: '   ' }),
+		).toBe('Bonnal')
+	})
+
+	it('rogne les espaces parasites autour des deux parties', () => {
+		expect(
+			employeeDisplayName({
+				last_name: '  Bonnal  ',
+				first_name: '  Baptiste  ',
+			}),
+		).toBe('Bonnal Baptiste')
+	})
+})
 
 describe('minutesToTime / timeToMinutes', () => {
 	it('convertit 0 minute en 00:00', () => {

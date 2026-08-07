@@ -9,7 +9,8 @@ function employee(overrides: Partial<Employee> = {}): Employee {
 	return {
 		id: 'employee-1',
 		organization_id: 'org-1',
-		name: 'Alix Martin',
+		last_name: 'Martin',
+		first_name: 'Alix',
 		hourly_rate_cents: 1500,
 		user_id: null,
 		weekly_contract_minutes: 2100,
@@ -28,7 +29,7 @@ function baseProps() {
 		search: '',
 		onSearchChange: vi.fn(),
 		createForm: {
-			values: { name: '', hourlyRate: '', userId: '' },
+			values: { lastName: '', firstName: '', hourlyRate: '', userId: '' },
 			isPending: false,
 			onChange: vi.fn(),
 			onSubmit: vi.fn(),
@@ -42,6 +43,26 @@ function baseProps() {
 		onDeleteEmployee: vi.fn(),
 	}
 }
+
+describe('EmployeeListUI — rendu du nom', () => {
+	it('affiche « {nom} {prénom} » quand le prénom est renseigné', async () => {
+		await renderWithRouter(<EmployeeListUI {...baseProps()} />)
+
+		expect(screen.getByText('Martin Alix')).toBeDefined()
+	})
+
+	it('affiche le seul nom, sans espace résiduel, quand le prénom est absent', async () => {
+		await renderWithRouter(
+			<EmployeeListUI
+				{...baseProps()}
+				data={{ employees: [employee({ first_name: null })] }}
+			/>,
+		)
+
+		expect(screen.getByText('Martin')).toBeDefined()
+		expect(screen.queryByText('Martin Alix')).toBeNull()
+	})
+})
 
 describe('EmployeeListUI — accès à l’écran de temps de travail', () => {
 	it('expose un lien vers le temps de travail de l’employé, pas seulement un rendu', async () => {

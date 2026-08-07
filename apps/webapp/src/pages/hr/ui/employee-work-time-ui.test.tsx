@@ -12,7 +12,8 @@ function employee(overrides: Partial<Employee> = {}): Employee {
 	return {
 		id: 'employee-1',
 		organization_id: 'org-1',
-		name: 'Alix Martin',
+		last_name: 'Martin',
+		first_name: 'Alix',
 		hourly_rate_cents: 1500,
 		user_id: null,
 		weekly_contract_minutes: 2100,
@@ -88,6 +89,24 @@ function baseProps(
 		...overrides,
 	}
 }
+
+describe('EmployeeWorkTimeUI — rendu du nom', () => {
+	it('affiche « {nom} {prénom} » dans le titre', () => {
+		render(<EmployeeWorkTimeUI {...baseProps()} />)
+
+		expect(screen.getByText('Martin Alix')).toBeDefined()
+	})
+
+	it('affiche le seul nom, sans espace résiduel, quand le prénom est absent', () => {
+		render(
+			<EmployeeWorkTimeUI
+				{...baseProps({ employee: employee({ first_name: null }) })}
+			/>,
+		)
+
+		expect(screen.getByText('Martin')).toBeDefined()
+	})
+})
 
 describe('EmployeeWorkTimeUI', () => {
 	it('affiche le taux horaire quand il est renseigné', () => {

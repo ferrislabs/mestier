@@ -12,6 +12,7 @@ import {
 	useMoveWorkOrder,
 	usePlanning,
 } from '#/hooks/use-planning'
+import { employeeDisplayName } from '#/pages/hr/types'
 import {
 	type AbsenceFormValues,
 	absenceToDraft,
@@ -152,7 +153,9 @@ function PlanningTeamScreen({
 			const result = response.data
 			if (result.created_employees.length > 0) {
 				setCreatedEmployeeNames(
-					result.created_employees.map((employee) => employee.name),
+					result.created_employees.map((employee) =>
+						employeeDisplayName(employee),
+					),
 				)
 			}
 			setPendingDrop(null)

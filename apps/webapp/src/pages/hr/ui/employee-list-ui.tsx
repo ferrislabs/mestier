@@ -30,7 +30,11 @@ import {
 	StatusBadge,
 } from '#/components/ui/surface'
 import type { Employee } from '#/hooks/use-reference-catalog'
-import type { EmployeeFormValues, EmployeeListData } from '#/pages/hr/types'
+import {
+	type EmployeeFormValues,
+	type EmployeeListData,
+	employeeDisplayName,
+} from '#/pages/hr/types'
 
 interface FormBinding<T> {
 	values: T
@@ -154,11 +158,17 @@ function CreateEmployeeSection({ form }: CreateEmployeeSectionProps) {
 				description="Les montants sont saisis en euros et stockés en centimes côté API."
 			/>
 			<div className="grid grid-cols-1 gap-4 p-5 lg:grid-cols-[1fr_auto] lg:items-end">
-				<div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+				<div className="grid grid-cols-1 gap-4 md:grid-cols-4">
 					<TextField
 						label="Nom"
-						value={form.values.name}
-						onChange={(name) => form.onChange({ name })}
+						value={form.values.lastName}
+						onChange={(lastName) => form.onChange({ lastName })}
+					/>
+					<TextField
+						label="Prénom"
+						value={form.values.firstName}
+						onChange={(firstName) => form.onChange({ firstName })}
+						placeholder="Optionnel"
 					/>
 					<TextField
 						label="Taux horaire"
@@ -248,17 +258,34 @@ function EmployeeTable({
 									>
 										<td className="px-5 py-3 align-middle">
 											{isEditing ? (
-												<Input
-													value={draft.values.name}
-													onChange={(event) =>
-														onDraftChange({
-															...draft.values,
-															name: event.target.value,
-														})
-													}
-												/>
+												<div className="flex flex-col gap-1.5">
+													<Input
+														aria-label="Nom"
+														value={draft.values.lastName}
+														onChange={(event) =>
+															onDraftChange({
+																...draft.values,
+																lastName: event.target.value,
+															})
+														}
+													/>
+													<Input
+														aria-label="Prénom"
+														placeholder="Prénom (optionnel)"
+														value={draft.values.firstName}
+														onChange={(event) =>
+															onDraftChange({
+																...draft.values,
+																firstName: event.target.value,
+															})
+														}
+													/>
+												</div>
 											) : (
-												<RowIdentity title={employee.name} id={employee.id} />
+												<RowIdentity
+													title={employeeDisplayName(employee)}
+													id={employee.id}
+												/>
 											)}
 										</td>
 										<td className="px-5 py-3 align-middle">

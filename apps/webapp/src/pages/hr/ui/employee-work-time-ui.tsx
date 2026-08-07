@@ -7,7 +7,11 @@ import {
 	StatusBadge,
 } from '#/components/ui/surface'
 import type { Employee } from '#/hooks/use-reference-catalog'
-import { formatDurationMinutes, type WeeklyGap } from '#/pages/hr/types'
+import {
+	employeeDisplayName,
+	formatDurationMinutes,
+	type WeeklyGap,
+} from '#/pages/hr/types'
 import {
 	RhythmSection,
 	type RhythmSectionProps,
@@ -45,7 +49,7 @@ export function EmployeeWorkTimeUI({
 		<PageShell>
 			<PageHeader
 				eyebrow={organizationName}
-				title={employee.name}
+				title={employeeDisplayName(employee)}
 				description="Base contractuelle, rythme hebdomadaire et plages de travail."
 			/>
 
