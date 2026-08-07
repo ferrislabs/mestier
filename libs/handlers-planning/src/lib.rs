@@ -19,6 +19,7 @@ pub mod absence;
 pub mod paths;
 pub mod response;
 pub mod work_order;
+pub mod work_time;
 
 pub const TAG: &str = "planning";
 
@@ -53,6 +54,7 @@ pub fn router(state: &AppState) -> Router<AppState> {
     Router::new()
         .merge(work_order::router(state))
         .merge(absence::router(state))
+        .merge(work_time::router(state))
         .layer(from_fn_with_state(state.clone(), rate_limit_middleware))
         .layer(from_fn_with_state(state.clone(), auth_middleware))
 }
