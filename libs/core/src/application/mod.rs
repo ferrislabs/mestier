@@ -30,6 +30,7 @@ pub mod employee;
 pub mod equipment;
 pub mod member;
 pub mod organization;
+pub mod planning;
 pub mod policy;
 pub mod product;
 pub mod quote;
