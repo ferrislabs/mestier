@@ -60,7 +60,7 @@ pub async fn handler(
     Json(payload): Json<PutWorkSlotsRequest>,
 ) -> Result<Response<Vec<WorkSlotResponse>>, ApiError> {
     require_org_membership(&state, &identity, organization_id).await?;
-    crate::absence::require_employee_target(&state, organization_id, employee_id).await?;
+    crate::require_employee_target(&state, organization_id, employee_id).await?;
 
     let work_slots = state
         .usecase

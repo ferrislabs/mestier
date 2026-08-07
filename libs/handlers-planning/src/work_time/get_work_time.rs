@@ -48,7 +48,7 @@ pub async fn handler(
     Query(window): Query<WorkTimeWindowQuery>,
 ) -> Result<Response<WorkTimeResponse>, ApiError> {
     require_org_membership(&state, &identity, organization_id).await?;
-    crate::absence::require_employee_target(&state, organization_id, employee_id).await?;
+    crate::require_employee_target(&state, organization_id, employee_id).await?;
 
     let range = DateRange::new(window.from, window.to)?;
     if range.span_days() > MAX_WINDOW_DAYS {

@@ -15,7 +15,6 @@ use axum::{Router, middleware::from_fn_with_state};
 use handlers::{ApiError, AppState, auth::auth_middleware, rate_limit::rate_limit_middleware};
 use mestier_core::OrganizationId;
 
-pub mod absence;
 pub mod paths;
 pub mod planning;
 pub mod response;
@@ -51,10 +50,28 @@ pub async fn require_org_membership(
     Ok(())
 }
 
+/// Rejects an employee that belongs to another organization.
+///
+/// Duplicated from `handlers-reference`, which carries the same guard for
+/// absences: the two crates are separate HTTP adapters and the repository
+/// already duplicates `require_org_membership` the same way. Ten lines of
+/// honest duplication beat a shared module built for two occurrences.
+pub(crate) async fn require_employee_target(
+    state: &AppState,
+    organization_id: OrganizationId,
+    employee_id: mestier_core::EmployeeId,
+) -> Result<(), ApiError> {
+    let employee = state.usecase.get_employee(employee_id).await?;
+    if employee.organization_id != organization_id {
+        return Err(ApiError::Forbidden);
+    }
+
+    Ok(())
+}
+
 pub fn router(state: &AppState) -> Router<AppState> {
     Router::new()
         .merge(work_order::router(state))
-        .merge(absence::router(state))
         .merge(work_time::router(state))
         .merge(planning::router(state))
         .layer(from_fn_with_state(state.clone(), rate_limit_middleware))
