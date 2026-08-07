@@ -2283,8 +2283,10 @@ dependencies = [
  "mestier-core",
  "pagination",
  "serde",
+ "serde_json",
  "tracing",
  "utoipa",
+ "uuid",
 ]
 
 [[package]]
