@@ -1,6 +1,7 @@
 import {
 	Boxes,
 	BriefcaseBusiness,
+	CalendarRange,
 	FileText,
 	KanbanSquare,
 	LayoutDashboard,
@@ -93,6 +94,21 @@ export const MODULES: AppModule[] = [
 			{
 				label: 'Équipe',
 				items: [{ title: 'Employés', to: '/hr/employees', icon: Users }],
+			},
+		],
+	},
+	{
+		id: 'planning',
+		label: 'Planning',
+		icon: CalendarRange,
+		basePath: '/planning',
+		enabled: true,
+		nav: [
+			{
+				label: 'Équipe',
+				items: [
+					{ title: 'Vue équipe', to: '/planning/team', icon: CalendarRange },
+				],
 			},
 		],
 	},

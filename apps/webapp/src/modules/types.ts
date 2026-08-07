@@ -1,7 +1,7 @@
 import type { LucideIcon } from 'lucide-react'
 import type { NavItem } from '#/components/nav-main'
 
-export type ModuleId = 'home' | 'crm' | 'hr' | 'discussions'
+export type ModuleId = 'home' | 'crm' | 'hr' | 'planning' | 'discussions'
 
 export interface ModuleNavGroup {
 	label?: string
