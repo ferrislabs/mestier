@@ -67,6 +67,29 @@ pub fn validate_parent_depth(parent: Option<&Task>) -> Result<(), CoreError> {
     }
 }
 
+/// Refuses to turn a task into a subtask when it already has children of its
+/// own. `validate_parent_depth` asks whether a *candidate parent* is
+/// acceptable; this asks the reciprocal question, about the task being
+/// moved — reparenting a task with children would silently push those
+/// children to a third level, which is exactly the invariant
+/// `validate_parent_depth` exists to prevent from the other direction.
+///
+/// `child_count` is supplied by the caller (`TaskRepository::count_children`,
+/// already loaded at the application layer for `GET /tasks`) rather than
+/// fetched here, so this stays pure and I/O-free like its sibling. A task
+/// that stays a root, whatever else a `PATCH` changes about it (dates,
+/// title, assignees), never needs this check — only an attempt to set
+/// `parent_task_id` does.
+pub fn validate_reparenting(child_count: i64) -> Result<(), CoreError> {
+    if child_count > 0 {
+        return Err(CoreError::Conflict(
+            "a task with children cannot become a subtask".to_owned(),
+        ));
+    }
+
+    Ok(())
+}
+
 // ---------------------------------------------------------------------------
 // TaskService — I/O-bound orchestration.
 // ---------------------------------------------------------------------------
@@ -212,6 +235,15 @@ where
                             "a task cannot be its own parent".to_owned(),
                         ));
                     }
+
+                    // Checked before the parent lookup: a task with
+                    // children of its own can never become a subtask,
+                    // whatever the candidate parent looks like — see
+                    // `validate_reparenting`.
+                    let child_counts = self.task_repository.count_children(&[task.id]).await?;
+                    let child_count = child_counts.get(&task.id).copied().unwrap_or(0);
+                    validate_reparenting(child_count)?;
+
                     let parent = self
                         .task_repository
                         .find_by_id(parent_id)
@@ -581,6 +613,24 @@ mod tests {
             };
 
             let err = validate_parent_depth(Some(&candidate_parent)).unwrap_err();
+
+            assert!(matches!(err, CoreError::Conflict(_)));
+        }
+    }
+
+    // -- validate_reparenting -------------------------------------------------
+
+    mod validate_reparenting_tests {
+        use super::*;
+
+        #[test]
+        fn a_task_with_no_children_may_be_reparented() {
+            assert!(validate_reparenting(0).is_ok());
+        }
+
+        #[test]
+        fn a_task_with_children_is_rejected_as_a_subtask() {
+            let err = validate_reparenting(2).unwrap_err();
 
             assert!(matches!(err, CoreError::Conflict(_)));
         }
@@ -1217,6 +1267,10 @@ mod tests {
                 Box::pin(async move { Ok(Some(existing)) })
             });
         task_repository
+            .expect_count_children()
+            .withf(move |ids| ids == [id])
+            .returning(|_| Box::pin(async { Ok(HashMap::new()) }));
+        task_repository
             .expect_find_by_id()
             .with(eq(candidate_parent_id))
             .returning(move |_| {
@@ -1237,6 +1291,193 @@ mod tests {
         let err = service.patch_task(command).await.unwrap_err();
 
         assert!(matches!(err, CoreError::Conflict(_)));
+    }
+
+    #[tokio::test]
+    async fn patch_task_reparents_a_childless_task_under_a_root() {
+        let id = TaskId(Uuid::new_v4());
+        let organization_id = OrganizationId(Uuid::new_v4());
+        let existing = task(id, organization_id);
+        let new_parent_id = TaskId(Uuid::new_v4());
+        let new_parent = task(new_parent_id, organization_id);
+
+        let mut task_repository = MockTaskRepository::new();
+        task_repository
+            .expect_find_by_id()
+            .with(eq(id))
+            .returning(move |_| {
+                let existing = existing.clone();
+                Box::pin(async move { Ok(Some(existing)) })
+            });
+        task_repository
+            .expect_count_children()
+            .withf(move |ids| ids == [id])
+            .returning(|_| Box::pin(async { Ok(HashMap::new()) }));
+        task_repository
+            .expect_find_by_id()
+            .with(eq(new_parent_id))
+            .returning(move |_| {
+                let parent = new_parent.clone();
+                Box::pin(async move { Ok(Some(parent)) })
+            });
+        task_repository
+            .expect_update()
+            .withf(move |t| t.parent_task_id == Some(new_parent_id))
+            .returning(|t| {
+                let cloned = t.clone();
+                Box::pin(async move { Ok(cloned) })
+            });
+
+        let mut service = service(
+            task_repository,
+            MockEmployeeRepository::new(),
+            MockUserRepository::new(),
+            MockMemberRepository::new(),
+        );
+
+        let mut command = PatchTaskCommand::new(id);
+        command.parent_task_id = Some(Some(new_parent_id));
+
+        let (updated, _) = service.patch_task(command).await.unwrap();
+
+        assert_eq!(updated.parent_task_id, Some(new_parent_id));
+    }
+
+    #[tokio::test]
+    async fn patch_task_rejects_reparenting_a_task_that_has_children() {
+        let id = TaskId(Uuid::new_v4());
+        let organization_id = OrganizationId(Uuid::new_v4());
+        let existing = task(id, organization_id);
+        let new_parent_id = TaskId(Uuid::new_v4());
+
+        let mut task_repository = MockTaskRepository::new();
+        task_repository
+            .expect_find_by_id()
+            .with(eq(id))
+            .returning(move |_| {
+                let existing = existing.clone();
+                Box::pin(async move { Ok(Some(existing)) })
+            });
+        task_repository
+            .expect_count_children()
+            .withf(move |ids| ids == [id])
+            .returning(move |_| Box::pin(async move { Ok(HashMap::from([(id, 2)])) }));
+        // No `expect_find_by_id` for `new_parent_id`, no `expect_update`: the
+        // rejection must land before either — a task with children never
+        // even gets to the point of checking the candidate parent.
+
+        let mut service = service(
+            task_repository,
+            MockEmployeeRepository::new(),
+            MockUserRepository::new(),
+            MockMemberRepository::new(),
+        );
+
+        let mut command = PatchTaskCommand::new(id);
+        command.parent_task_id = Some(Some(new_parent_id));
+
+        let err = service.patch_task(command).await.unwrap_err();
+
+        assert!(matches!(err, CoreError::Conflict(_)));
+    }
+
+    #[tokio::test]
+    async fn patch_task_keeps_a_task_with_children_editable_while_it_stays_a_root() {
+        let id = TaskId(Uuid::new_v4());
+        let organization_id = OrganizationId(Uuid::new_v4());
+        let existing = task(id, organization_id);
+
+        let mut task_repository = MockTaskRepository::new();
+        task_repository
+            .expect_find_by_id()
+            .with(eq(id))
+            .returning(move |_| {
+                let existing = existing.clone();
+                Box::pin(async move { Ok(Some(existing)) })
+            });
+        // No `expect_count_children`: leaving `parent_task_id` untouched must
+        // never trigger the reparenting check — a root with children stays
+        // freely editable (mockall panics if an unexpected method is called,
+        // which is exactly the assertion this test relies on).
+        task_repository
+            .expect_update()
+            .withf(|t| {
+                t.title == "Nouveau titre" && t.assignments.len() == 1 && t.parent_task_id.is_none()
+            })
+            .returning(|t| {
+                let cloned = t.clone();
+                Box::pin(async move { Ok(cloned) })
+            });
+
+        let employee_id = EmployeeId(Uuid::new_v4());
+        let target_employee = employee(employee_id, organization_id);
+        let mut employee_repository = MockEmployeeRepository::new();
+        employee_repository
+            .expect_find_by_id()
+            .with(eq(employee_id))
+            .returning(move |_| {
+                let e = target_employee.clone();
+                Box::pin(async move { Ok(Some(e)) })
+            });
+
+        let mut service = service(
+            task_repository,
+            employee_repository,
+            MockUserRepository::new(),
+            MockMemberRepository::new(),
+        );
+
+        let mut command = PatchTaskCommand::new(id);
+        command.title = Some("Nouveau titre".to_owned());
+        command.assignees = Some(vec![AssigneeRef::Employee(employee_id)]);
+
+        let (updated, _) = service.patch_task(command).await.unwrap();
+
+        assert_eq!(updated.title, "Nouveau titre");
+        assert_eq!(updated.assignments.len(), 1);
+    }
+
+    #[tokio::test]
+    async fn patch_task_rejects_clearing_the_parent_of_a_dateless_subtask() {
+        let id = TaskId(Uuid::new_v4());
+        let organization_id = OrganizationId(Uuid::new_v4());
+        let parent_id = TaskId(Uuid::new_v4());
+        let existing = Task {
+            parent_task_id: Some(parent_id),
+            starts_at: None,
+            ends_at: None,
+            ..task(id, organization_id)
+        };
+
+        let mut task_repository = MockTaskRepository::new();
+        task_repository
+            .expect_find_by_id()
+            .with(eq(id))
+            .returning(move |_| {
+                let existing = existing.clone();
+                Box::pin(async move { Ok(Some(existing)) })
+            });
+        // No `expect_update`: turning this subtask into a dateless root must
+        // be rejected before any write is attempted.
+
+        let mut service = service(
+            task_repository,
+            MockEmployeeRepository::new(),
+            MockUserRepository::new(),
+            MockMemberRepository::new(),
+        );
+
+        let mut command = PatchTaskCommand::new(id);
+        command.parent_task_id = Some(None);
+
+        let err = service.patch_task(command).await.unwrap_err();
+
+        assert!(
+            matches!(err, CoreError::Conflict(_)),
+            "a root without its own dates must be rejected, even when the \
+             dates were already absent before the PATCH — clearing the \
+             parent is what turns the missing dates into a violation"
+        );
     }
 
     #[tokio::test]

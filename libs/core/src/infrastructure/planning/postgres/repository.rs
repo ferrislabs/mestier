@@ -74,6 +74,12 @@ impl<'tx> PlanningRepository for PgPlanningRepository<'tx> {
                 GROUP BY parent_task_id
             ) child_counts ON child_counts.parent_task_id = t.id
             WHERE t.org_id = $1 AND t.deleted_at IS NULL
+              -- NULL < / > NULL is NULL, never TRUE, so a task with no
+              -- dates of its own (a subtask inheriting its parent's window)
+              -- is excluded here automatically, not by an explicit
+              -- IS NOT NULL guard. Deliberate for T1: rendering an
+              -- inherited window on the grid needs `resolve_task_window`
+              -- plus a parent fetch, which no front code calls yet.
               AND t.starts_at < $3 AND t.ends_at > $2
             ORDER BY t.starts_at ASC, t.id ASC
             "#,
@@ -92,6 +98,8 @@ impl<'tx> PlanningRepository for PgPlanningRepository<'tx> {
             FROM task_assignments a
             JOIN tasks t ON t.id = a.task_id
             WHERE t.org_id = $1 AND t.deleted_at IS NULL
+              -- Same window predicate as above, kept in sync: an assignment
+              -- must only be attached to a task that itself made the cut.
               AND t.starts_at < $3 AND t.ends_at > $2
             ORDER BY a.created_at ASC, a.id ASC
             "#,

@@ -599,6 +599,11 @@ mod tests {
     /// `description` with its content intact, an existing `title` is left
     /// untouched, and a missing `title` is backfilled with `'Sans titre'`
     /// rather than dropped or left blank.
+    ///
+    /// Requires the `sqlx` CLI binary on `PATH` (see `run_sqlx_migrate`) in
+    /// addition to `DATABASE_URL` — if this fails with a "No such file or
+    /// directory"-shaped panic rather than an assertion failure, that's why:
+    /// install it with `cargo install sqlx-cli`, not a code regression.
     #[tokio::test]
     #[ignore = "requires live postgres and the sqlx CLI binary on PATH"]
     async fn migration_backfills_title_and_renames_note_to_description() {

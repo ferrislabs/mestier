@@ -33,7 +33,7 @@ pub use domain::{
     },
     service_rate::commands::{CreateServiceRateCommand, UpdateServiceRateCommand},
     task::commands::{CreateTaskCommand, PatchTaskCommand},
-    task::service::{resolve_task_window, validate_parent_depth},
+    task::service::{resolve_task_window, validate_parent_depth, validate_reparenting},
     user::commands::{CreateUserCommand, UpsertUserBySubCommand},
     work_time::commands::{
         ReplaceRhythmCommand, ReplaceWorkSlotsCommand, RhythmSlotInput, WorkSlotInput,
