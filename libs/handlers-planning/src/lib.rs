@@ -16,9 +16,11 @@ use handlers::{ApiError, AppState, auth::auth_middleware, rate_limit::rate_limit
 use mestier_core::OrganizationId;
 
 pub mod absence;
+pub mod day_log;
 pub mod paths;
 pub mod planning;
 pub mod response;
+pub mod time_entry;
 pub mod work_order;
 pub mod work_time;
 
@@ -57,6 +59,8 @@ pub fn router(state: &AppState) -> Router<AppState> {
         .merge(absence::router(state))
         .merge(work_time::router(state))
         .merge(planning::router(state))
+        .merge(time_entry::router(state))
+        .merge(day_log::router(state))
         .layer(from_fn_with_state(state.clone(), rate_limit_middleware))
         .layer(from_fn_with_state(state.clone(), auth_middleware))
 }

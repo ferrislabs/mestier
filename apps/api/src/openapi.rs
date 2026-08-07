@@ -95,6 +95,11 @@ impl Modify for SecurityAddon {
         planning::work_time::put_work_slots::handler,
         planning::planning::get_planning::handler,
         planning::planning::get_availability::handler,
+        planning::time_entry::start::handler,
+        planning::time_entry::stop::handler,
+        planning::time_entry::attach_photos::handler,
+        planning::time_entry::get_active::handler,
+        planning::day_log::create::handler,
         discord::category::list::handler,
         discord::category::create::handler,
         discord::category::update::handler,
@@ -186,6 +191,13 @@ impl Modify for SecurityAddon {
         planning::planning::get_availability::ConflictResponse,
         planning::planning::get_availability::AvailabilityResourceResponse,
         planning::planning::get_availability::AvailabilityResponse,
+        planning::time_entry::start::StartTimeEntryRequest,
+        planning::time_entry::stop::StopTimeEntryRequest,
+        planning::time_entry::attach_photos::AttachTimeEntryPhotosRequest,
+        planning::time_entry::get_active::ActiveTimeEntryQuery,
+        planning::time_entry::TimeEntryResponse,
+        planning::day_log::create::CloseDayRequest,
+        planning::day_log::DayLogResponse,
         // `planning::response::EmployeeResponse` is deliberately absent: it is
         // byte-identical to `reference::response::EmployeeResponse` above, and
         // utoipa names schemas after the type, so registering both would
@@ -229,7 +241,7 @@ impl Modify for SecurityAddon {
         (name = "customers", description = "Customers and customer contexts management"),
         (name = "quotes", description = "Quotes and quote lines management"),
         (name = "reference", description = "Reference cost catalog"),
-        (name = "planning", description = "Team planning — work orders, assignments, absences, working time and availability"),
+        (name = "planning", description = "Team planning — work orders, assignments, absences, working time, availability and field clocking"),
         (name = "discord", description = "Chat — categories, channels, threads, messages, reactions, webhooks, presence, typing, read states, channel permission overwrites, notifications"),
     )
 )]

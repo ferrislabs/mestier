@@ -56,6 +56,16 @@ where
         self.repo.find_by_id(id).await?.ok_or(CoreError::NotFound)
     }
 
+    pub async fn find_employee_by_user_id(
+        &mut self,
+        organization_id: OrganizationId,
+        user_id: crate::UserId,
+    ) -> Result<Option<Employee>, CoreError> {
+        self.repo
+            .find_by_user_id(organization_id, user_id)
+            .await
+    }
+
     pub async fn list_employees(
         &mut self,
         organization_id: OrganizationId,

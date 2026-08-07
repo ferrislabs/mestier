@@ -2,7 +2,7 @@ use common::CoreError;
 use mestier_macros::transactional;
 
 use crate::{
-    Employee, EmployeeId, OrganizationId,
+    Employee, EmployeeId, OrganizationId, UserId,
     application::MestierUseCase,
     domain::employee::{
         commands::{CreateEmployeeCommand, LinkEmployeeUserCommand, UpdateEmployeeCommand},
@@ -24,6 +24,18 @@ impl MestierUseCase {
     pub async fn get_employee(&self, id: EmployeeId) -> Result<Employee, CoreError> {
         let mut service = EmployeeService::new(employee_repository);
         service.get_employee(id).await
+    }
+
+    #[transactional(employee)]
+    pub async fn find_employee_by_user_id(
+        &self,
+        organization_id: OrganizationId,
+        user_id: UserId,
+    ) -> Result<Option<Employee>, CoreError> {
+        let mut service = EmployeeService::new(employee_repository);
+        service
+            .find_employee_by_user_id(organization_id, user_id)
+            .await
     }
 
     #[transactional(employee)]
