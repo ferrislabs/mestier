@@ -1,12 +1,13 @@
 import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { emptyAbsenceDraft } from '#/pages/planning/lib/absences'
-import { AbsenceFormSheet } from '#/pages/planning/ui/absence-form-sheet'
+import { emptyAbsenceDraft } from '#/pages/hr/lib/absences'
+import { AbsenceFormSheet } from '#/pages/hr/ui/absence-form-sheet'
 
-// jsdom doesn't implement ResizeObserver; Radix's `Select` measures its
-// trigger with it. Stubbed locally rather than in the shared
-// `vitest.setup.ts`, which this workstream doesn't own.
+// jsdom doesn't implement ResizeObserver, and Radix `Select`'s listbox needs
+// `scrollIntoView`/pointer-capture methods it also doesn't implement.
+// Stubbed locally rather than in the shared `vitest.setup.ts`, which this
+// workstream doesn't own.
 class ResizeObserverStub {
 	observe() {}
 	unobserve() {}
@@ -14,10 +15,13 @@ class ResizeObserverStub {
 }
 // biome-ignore lint/suspicious/noExplicitAny: test-only global polyfill
 ;(globalThis as any).ResizeObserver ??= ResizeObserverStub
+Element.prototype.scrollIntoView ??= () => {}
+Element.prototype.hasPointerCapture ??= () => false
+Element.prototype.releasePointerCapture ??= () => {}
 
 const EMPLOYEES = [
-	{ employeeId: 'emp-1', displayName: 'Alix Martin' },
-	{ employeeId: 'emp-2', displayName: 'Marie Leroy' },
+	{ employeeId: 'emp-1', displayName: 'Martin Alix' },
+	{ employeeId: 'emp-2', displayName: 'Leroy Marie' },
 ]
 
 function baseProps() {
@@ -49,6 +53,30 @@ describe('AbsenceFormSheet — création', () => {
 		expect(screen.getByText('Nouvelle absence')).toBeDefined()
 		expect(screen.getByRole('combobox', { name: 'Employé' })).toBeDefined()
 		expect(screen.queryByRole('button', { name: /Supprimer/ })).toBeNull()
+	})
+
+	it('affiche « {nom} {prénom} » dans les options du sélecteur employé', async () => {
+		const user = userEvent.setup()
+		render(<AbsenceFormSheet {...baseProps()} />)
+
+		await user.click(screen.getByRole('combobox', { name: 'Employé' }))
+		expect(
+			await screen.findByRole('option', { name: 'Martin Alix' }),
+		).toBeDefined()
+		expect(screen.getByRole('option', { name: 'Leroy Marie' })).toBeDefined()
+	})
+
+	it('affiche le seul nom dans le sélecteur quand le prénom est absent', async () => {
+		const user = userEvent.setup()
+		render(
+			<AbsenceFormSheet
+				{...baseProps()}
+				employees={[{ employeeId: 'emp-3', displayName: 'Petit' }]}
+			/>,
+		)
+
+		await user.click(screen.getByRole('combobox', { name: 'Employé' }))
+		expect(await screen.findByRole('option', { name: 'Petit' })).toBeDefined()
 	})
 
 	it('masque les champs horaires quand journée entière est actif', () => {
@@ -97,6 +125,41 @@ describe('AbsenceFormSheet — création', () => {
 	})
 })
 
+describe('AbsenceFormSheet — champ de plage', () => {
+	it('affiche un seul jour quand la plage est réduite à une journée', () => {
+		render(<AbsenceFormSheet {...baseProps()} />)
+
+		expect(screen.getByTestId('absence-range-trigger').textContent).toBe(
+			'10/08/2026',
+		)
+	})
+
+	it('affiche les deux bornes séparées par un tiret quand la plage couvre plusieurs jours', () => {
+		const props = baseProps()
+		render(
+			<AbsenceFormSheet
+				{...props}
+				values={{
+					...props.values,
+					range: { from: '2026-08-10', to: '2026-08-12' },
+				}}
+			/>,
+		)
+
+		expect(screen.getByTestId('absence-range-trigger').textContent).toBe(
+			'10/08/2026 – 12/08/2026',
+		)
+	})
+
+	it('ouvre un calendrier au clic sur le déclencheur de la période', async () => {
+		const user = userEvent.setup()
+		render(<AbsenceFormSheet {...baseProps()} />)
+
+		await user.click(screen.getByTestId('absence-range-trigger'))
+		expect(screen.getByRole('grid')).toBeDefined()
+	})
+})
+
 describe('AbsenceFormSheet — édition', () => {
 	function editProps() {
 		return {
@@ -112,7 +175,7 @@ describe('AbsenceFormSheet — édition', () => {
 		expect(screen.getByText('Modifier l’absence')).toBeDefined()
 		expect(screen.queryByRole('combobox', { name: 'Employé' })).toBeNull()
 		expect(
-			within(screen.getByRole('dialog')).getByText('Alix Martin'),
+			within(screen.getByRole('dialog')).getByText('Martin Alix'),
 		).toBeDefined()
 	})
 

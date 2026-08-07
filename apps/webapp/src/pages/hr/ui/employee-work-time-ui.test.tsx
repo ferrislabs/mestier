@@ -3,10 +3,22 @@ import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Employee } from '#/hooks/use-reference-catalog'
 import type { Rhythm } from '#/hooks/use-work-time'
+import { emptyAbsenceDraft } from '#/pages/hr/lib/absences'
 import {
 	EmployeeWorkTimeUI,
 	type EmployeeWorkTimeUIProps,
 } from '#/pages/hr/ui/employee-work-time-ui'
+
+// jsdom doesn't implement ResizeObserver; the absence sheet's `Select` (via
+// Radix) measures its trigger with it. Stubbed locally, see
+// `absence-form-sheet.test.tsx` for the same workaround.
+class ResizeObserverStub {
+	observe() {}
+	unobserve() {}
+	disconnect() {}
+}
+// biome-ignore lint/suspicious/noExplicitAny: test-only global polyfill
+;(globalThis as any).ResizeObserver ??= ResizeObserverStub
 
 function employee(overrides: Partial<Employee> = {}): Employee {
 	return {
@@ -85,6 +97,25 @@ function baseProps(
 			onAddSlot: vi.fn(),
 			onRemoveSlot: vi.fn(),
 			onSubmit: vi.fn(),
+		},
+		absencesSection: {
+			absences: [],
+			isLoading: false,
+			onCreate: vi.fn(),
+			onSelect: vi.fn(),
+		},
+		absenceSheet: {
+			open: false,
+			mode: 'create',
+			values: emptyAbsenceDraft('employee-1', '2026-08-10'),
+			employees: [],
+			errors: [],
+			isSaving: false,
+			isDeleting: false,
+			saveError: null,
+			onChange: vi.fn(),
+			onSubmit: vi.fn(),
+			onOpenChange: vi.fn(),
 		},
 		...overrides,
 	}
@@ -316,6 +347,53 @@ describe('EmployeeWorkTimeUI', () => {
 		)
 
 		expect(screen.getByText(/Chargement/)).toBeDefined()
+	})
+})
+
+describe('EmployeeWorkTimeUI — absences', () => {
+	it('rend la section des absences de l’employé', () => {
+		render(
+			<EmployeeWorkTimeUI
+				{...baseProps({
+					absencesSection: {
+						absences: [
+							{
+								id: 'ab-1',
+								employeeId: 'employee-1',
+								kind: 'LEAVE',
+								allDay: true,
+								range: { from: '2026-08-10', to: '2026-08-10' },
+								startTime: '08:00',
+								endTime: '18:00',
+								note: '',
+							},
+						],
+						isLoading: false,
+						onCreate: vi.fn(),
+						onSelect: vi.fn(),
+					},
+				})}
+			/>,
+		)
+
+		expect(screen.getByText(/Congé — 10\/08\/2026/)).toBeDefined()
+	})
+
+	it('n’affiche pas le formulaire d’absence quand le sheet est fermé', () => {
+		render(<EmployeeWorkTimeUI {...baseProps()} />)
+		expect(screen.queryByRole('dialog')).toBeNull()
+	})
+
+	it('affiche le formulaire d’absence quand absenceSheet.open est vrai', () => {
+		render(
+			<EmployeeWorkTimeUI
+				{...baseProps({
+					absenceSheet: { ...baseProps().absenceSheet, open: true },
+				})}
+			/>,
+		)
+
+		expect(screen.getByRole('dialog')).toBeDefined()
 	})
 })
 

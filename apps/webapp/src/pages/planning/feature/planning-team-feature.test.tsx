@@ -11,29 +11,23 @@ import {
 } from '#/pages/planning/feature/planning-team-feature'
 import type { PlanningResponse } from '#/pages/planning/types'
 
-// jsdom has no ResizeObserver, and Radix `Select`'s listbox needs
-// `scrollIntoView`/pointer-capture methods it also doesn't implement.
-// Stubbed locally — this workstream doesn't own `vitest.setup.ts`.
+// jsdom has no ResizeObserver, which Radix primitives (e.g. `Tabs`) probe
+// defensively. Stubbed locally — this workstream doesn't own
+// `vitest.setup.ts`.
 class ResizeObserverStub {
 	observe() {}
 	unobserve() {}
 	disconnect() {}
 }
-// biome-ignore lint/suspicious/noExplicitAny: test-only global polyfills
+// biome-ignore lint/suspicious/noExplicitAny: test-only global polyfill
 const globalAny = globalThis as any
 globalAny.ResizeObserver ??= ResizeObserverStub
-Element.prototype.scrollIntoView ??= () => {}
-Element.prototype.hasPointerCapture ??= () => false
-Element.prototype.releasePointerCapture ??= () => {}
 
 const PLANNING_PATH = '/api/v1/organizations/{organization_id}/planning'
 const AVAILABILITY_PATH =
 	'/api/v1/organizations/{organization_id}/planning/availability'
 const WORK_ORDER_PATH =
 	'/api/v1/organizations/{organization_id}/work-orders/{work_order_id}'
-const ABSENCES_PATH = '/api/v1/organizations/{organization_id}/absences'
-const ABSENCE_PATH =
-	'/api/v1/organizations/{organization_id}/absences/{absence_id}'
 
 const ORGANIZATION: Organization = {
 	id: 'org-1',
@@ -507,98 +501,26 @@ describe('PlanningTeamFeature — retrait d’un assigné', () => {
 	})
 })
 
-describe('PlanningTeamFeature — absences', () => {
-	it("l'édition d'une absence pré-remplit le formulaire et envoie un PATCH sans employee_id", async () => {
-		const { calls, mock } = renderFeature({
+describe('PlanningTeamFeature — absences (affichage lecture seule)', () => {
+	it('affiche toujours un segment absence sur la grille, mais sans bouton ni sheet — la gestion a déménagé vers le module RH', async () => {
+		const { calls } = renderFeature({
 			planning: planningResponse({ entries: [ABSENCE_ENTRY] }),
 		})
-		mock('patch', ABSENCE_PATH, () => ({
-			data: {
-				...ABSENCE_ENTRY,
-				organization_id: 'org-1',
-				created_at: '',
-				updated_at: '',
-			},
-			pagination: null,
-		}))
 
 		await screen.findByText('Alix Martin')
+		const segment = screen.getByTestId('grid-segment')
+		expect(segment.getAttribute('data-tone')).toBe('absence')
+
+		expect(
+			screen.queryByRole('button', { name: /Ajouter une absence/ }),
+		).toBeNull()
+
 		const user = userEvent.setup()
-		await user.click(screen.getByTestId('grid-segment'))
+		await user.click(segment)
+		expect(screen.queryByRole('dialog')).toBeNull()
 
-		const sheet = await screen.findByRole('dialog')
-		expect(within(sheet).getByText('Modifier l’absence')).toBeDefined()
-
-		await user.click(screen.getByRole('button', { name: 'Enregistrer' }))
-
-		await waitFor(() => {
-			const patchCalls = calls.filter(
-				(c) => c.method === 'patch' && c.path === ABSENCE_PATH,
-			)
-			expect(patchCalls).toHaveLength(1)
-			expect(patchCalls[0].params).toMatchObject({
-				path: { organization_id: 'org-1', absence_id: 'ab-1' },
-			})
-			expect(patchCalls[0].params).not.toHaveProperty('body.employee_id')
-		})
-	})
-
-	it('la suppression déclenche un DELETE et ferme le formulaire', async () => {
-		const { calls, mock } = renderFeature({
-			planning: planningResponse({ entries: [ABSENCE_ENTRY] }),
-		})
-		mock('delete', ABSENCE_PATH, () => ({ data: undefined, pagination: null }))
-
-		await screen.findByText('Alix Martin')
-		const user = userEvent.setup()
-		await user.click(screen.getByTestId('grid-segment'))
-		await screen.findByRole('dialog')
-
-		await user.click(screen.getByRole('button', { name: /Supprimer/ }))
-
-		await waitFor(() => {
-			const deleteCalls = calls.filter(
-				(c) => c.method === 'delete' && c.path === ABSENCE_PATH,
-			)
-			expect(deleteCalls).toHaveLength(1)
-			expect(deleteCalls[0].params).toMatchObject({
-				path: { organization_id: 'org-1', absence_id: 'ab-1' },
-			})
-		})
-		await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
-	})
-
-	it('la création choisit un employé via le sélecteur puis envoie un POST avec employee_id', async () => {
-		const { calls, mock } = renderFeature({
-			planning: planningResponse({ resources: [RESOURCE_EMPLOYEE_1] }),
-		})
-		mock('post', ABSENCES_PATH, () => ({
-			data: { ...ABSENCE_ENTRY, id: 'ab-2', organization_id: 'org-1' },
-			pagination: null,
-		}))
-
-		await screen.findByText('Alix Martin')
-		const user = userEvent.setup()
-		await user.click(
-			screen.getByRole('button', { name: /Ajouter une absence/ }),
-		)
-
-		const sheet = await screen.findByRole('dialog')
-		await user.click(within(sheet).getByRole('combobox', { name: 'Employé' }))
-		await user.click(await screen.findByRole('option', { name: 'Alix Martin' }))
-
-		await user.click(screen.getByRole('button', { name: /Créer l’absence/ }))
-
-		await waitFor(() => {
-			const postCalls = calls.filter(
-				(c) => c.method === 'post' && c.path === ABSENCES_PATH,
-			)
-			expect(postCalls).toHaveLength(1)
-			expect(postCalls[0].params).toMatchObject({
-				path: { organization_id: 'org-1' },
-				body: { employee_id: 'employee-1', kind: 'LEAVE' },
-			})
-		})
+		// No absence endpoint is ever hit from the planning screen.
+		expect(calls.some((c) => c.path.includes('/absences'))).toBe(false)
 	})
 })
 

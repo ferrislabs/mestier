@@ -15,23 +15,45 @@ export const ABSENCE_KIND_LABELS: Record<AbsenceKind, string> = {
 }
 
 /**
+ * The inclusive day range the form edits — both ends are calendar days the
+ * absence covers, unlike the API's `starts_at`/`ends_at`, which is a
+ * half-open window (see {@link AbsenceFormValues}'s own doc). Shaped to
+ * match what a shadcn `Calendar` in `mode="range"` hands back through
+ * {@link calendarSelectionToRange}, without depending on `react-day-picker`
+ * itself — this file stays presentation-library-free.
+ */
+export interface AbsenceDateRange {
+	from: string
+	to: string
+}
+
+/**
  * The create/edit form's own shape — a date range plus, when it isn't
- * all-day, the time-of-day on each end. `endDate` is the last day *included*
- * (a leave "from Monday to Friday" means five days off), unlike the API's
- * `ends_at`, which is the exclusive end of a half-open window (see the
- * planning design doc's `work_orders`/`employee_absences` decision) —
+ * all-day, the time-of-day on each end. `range.to` is the last day
+ * *included* (a leave "from Monday to Friday" means five days off), unlike
+ * the API's `ends_at`, which is the exclusive end of a half-open window (see
+ * the planning design doc's `work_orders`/`employee_absences` decision) —
  * {@link draftToCreateAbsenceRequest} does that conversion.
  */
 export interface AbsenceFormValues {
 	employeeId: string
 	kind: AbsenceKind
 	allDay: boolean
-	startDate: string
+	range: AbsenceDateRange
 	startTime: string
-	endDate: string
 	endTime: string
 	note: string
 }
+
+/**
+ * One row of the employee's absence list (`AbsencesSection`) — the draft
+ * shape plus the absence's own id. Built via {@link absenceToDraft} so the
+ * list shows exactly the same range/allDay/time-of-day resolution the edit
+ * form itself uses. `employeeId` rides along unused by the list (already
+ * scoped to one employee, see `EmployeeWorkTimeFeature`) rather than being
+ * stripped out — one shape, no destructure-and-discard.
+ */
+export type AbsenceListItem = AbsenceFormValues & { id: string }
 
 export function emptyAbsenceDraft(
 	employeeId: string,
@@ -41,12 +63,39 @@ export function emptyAbsenceDraft(
 		employeeId,
 		kind: 'LEAVE',
 		allDay: true,
-		startDate: today,
+		range: { from: today, to: today },
 		startTime: '08:00',
-		endDate: today,
 		endTime: '18:00',
 		note: '',
 	}
+}
+
+/**
+ * The shadcn `Calendar`'s `mode="range"` selection, translated to
+ * {@link AbsenceDateRange}. `to` is `undefined` mid-selection — after the
+ * first click, before the second — so it falls back to `from`: a single day
+ * is a valid range on its own, which keeps the field fully controlled (no
+ * local component state needed in the `ui/` layer to track a pending click,
+ * mirroring how `planning-toolbar.tsx`'s single-date `Calendar` is driven
+ * straight off props). Returns `null` when nothing is selected (`from`
+ * missing), so the caller can leave the current value untouched instead of
+ * clearing it.
+ */
+export function calendarSelectionToRange(
+	selection: { from?: Date; to?: Date } | undefined,
+): AbsenceDateRange | null {
+	if (!selection?.from) return null
+	const from = format(selection.from, 'yyyy-MM-dd')
+	const to = selection.to ? format(selection.to, 'yyyy-MM-dd') : from
+	return { from, to }
+}
+
+/** The inverse of {@link calendarSelectionToRange} — feeds the `Calendar`'s `selected` prop from the draft's stored range. */
+export function rangeToCalendarSelection(range: AbsenceDateRange): {
+	from: Date
+	to: Date
+} {
+	return { from: parseISO(range.from), to: parseISO(range.to) }
 }
 
 function isValidTime(value: string): boolean {
@@ -67,19 +116,19 @@ export function validateAbsenceDraft(
 	if (options.requireEmployee && !draft.employeeId) {
 		errors.push('Employé requis')
 	}
-	if (!draft.startDate) errors.push('Date de début requise')
-	if (!draft.endDate) errors.push('Date de fin requise')
+	if (!draft.range.from) errors.push('Date de début requise')
+	if (!draft.range.to) errors.push('Date de fin requise')
 	if (!draft.allDay) {
 		if (!isValidTime(draft.startTime)) errors.push('Heure de début invalide')
 		if (!isValidTime(draft.endTime)) errors.push('Heure de fin invalide')
 	}
-	if (draft.startDate && draft.endDate) {
+	if (draft.range.from && draft.range.to) {
 		const startKey = draft.allDay
-			? draft.startDate
-			: `${draft.startDate}T${draft.startTime}`
+			? draft.range.from
+			: `${draft.range.from}T${draft.startTime}`
 		const endKey = draft.allDay
-			? draft.endDate
-			: `${draft.endDate}T${draft.endTime}`
+			? draft.range.to
+			: `${draft.range.to}T${draft.endTime}`
 		if (endKey < startKey) errors.push('La fin doit être après le début')
 	}
 	return errors
@@ -113,11 +162,11 @@ function buildAbsencePayload(
 	timeZone: string,
 ): Omit<CreateAbsenceRequest, 'employee_id'> {
 	const startsAt = draft.allDay
-		? dateOnlyToIsoMidnight(draft.startDate, timeZone)
-		: dateTimeToIso(draft.startDate, draft.startTime, timeZone)
+		? dateOnlyToIsoMidnight(draft.range.from, timeZone)
+		: dateTimeToIso(draft.range.from, draft.startTime, timeZone)
 	const endsAt = draft.allDay
-		? dateOnlyToIsoMidnight(addDaysIso(draft.endDate, 1), timeZone)
-		: dateTimeToIso(draft.endDate, draft.endTime, timeZone)
+		? dateOnlyToIsoMidnight(addDaysIso(draft.range.to, 1), timeZone)
+		: dateTimeToIso(draft.range.to, draft.endTime, timeZone)
 
 	return {
 		kind: draft.kind,
@@ -157,7 +206,15 @@ export function draftToUpdateAbsenceRequest(
 	return buildAbsencePayload(draft, timeZone)
 }
 
-/** The inverse of {@link draftToCreateAbsenceRequest} — feeds the edit form from an existing absence (or the matching `PlanningEntry` — same fields). */
+/**
+ * The inverse of {@link draftToCreateAbsenceRequest} — feeds the edit form
+ * from an existing absence. Accepts `absence_kind` rather than `kind`
+ * because its usual source is a `PlanningEntry` of kind `absence` (the
+ * planning grid's read model disambiguates the entry's own `kind` —
+ * `"absence"` — from the absence's `kind` field by renaming the latter); a
+ * plain `Schemas.AbsenceResponse` (this module's own list read) maps its
+ * `kind` field to `absence_kind` at the call site.
+ */
 export function absenceToDraft(
 	absence: {
 		employee_id: string
@@ -178,9 +235,11 @@ export function absenceToDraft(
 			employeeId: absence.employee_id,
 			kind: absence.absence_kind,
 			allDay: true,
-			startDate: format(startZoned, 'yyyy-MM-dd'),
+			range: {
+				from: format(startZoned, 'yyyy-MM-dd'),
+				to: addDaysIso(endDateExclusive, -1),
+			},
 			startTime: '08:00',
-			endDate: addDaysIso(endDateExclusive, -1),
 			endTime: '18:00',
 			note: absence.note ?? '',
 		}
@@ -190,9 +249,11 @@ export function absenceToDraft(
 		employeeId: absence.employee_id,
 		kind: absence.absence_kind,
 		allDay: false,
-		startDate: format(startZoned, 'yyyy-MM-dd'),
+		range: {
+			from: format(startZoned, 'yyyy-MM-dd'),
+			to: format(endZoned, 'yyyy-MM-dd'),
+		},
 		startTime: format(startZoned, 'HH:mm'),
-		endDate: format(endZoned, 'yyyy-MM-dd'),
 		endTime: format(endZoned, 'HH:mm'),
 		note: absence.note ?? '',
 	}

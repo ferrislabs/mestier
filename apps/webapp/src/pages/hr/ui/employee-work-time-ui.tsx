@@ -13,6 +13,14 @@ import {
 	type WeeklyGap,
 } from '#/pages/hr/types'
 import {
+	AbsenceFormSheet,
+	type AbsenceFormSheetProps,
+} from '#/pages/hr/ui/absence-form-sheet'
+import {
+	AbsencesSection,
+	type AbsencesSectionProps,
+} from '#/pages/hr/ui/absences-section'
+import {
 	RhythmSection,
 	type RhythmSectionProps,
 	WorkSlotsSection,
@@ -35,6 +43,9 @@ export interface EmployeeWorkTimeUIProps {
 	contractForm: ContractFormBinding
 	rhythmSection: RhythmSectionProps
 	workSlotsSection: WorkSlotsSectionProps
+	absencesSection: AbsencesSectionProps
+	/** The create/edit absence form — see the planning remodel design doc: absence management moved here from the planning module. */
+	absenceSheet: AbsenceFormSheetProps
 }
 
 export function EmployeeWorkTimeUI({
@@ -44,6 +55,8 @@ export function EmployeeWorkTimeUI({
 	contractForm,
 	rhythmSection,
 	workSlotsSection,
+	absencesSection,
+	absenceSheet,
 }: EmployeeWorkTimeUIProps) {
 	return (
 		<PageShell>
@@ -90,6 +103,8 @@ export function EmployeeWorkTimeUI({
 
 			<RhythmSection {...rhythmSection} />
 			<WorkSlotsSection {...workSlotsSection} />
+			<AbsencesSection {...absencesSection} />
+			<AbsenceFormSheet {...absenceSheet} />
 		</PageShell>
 	)
 }

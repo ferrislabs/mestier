@@ -7,6 +7,21 @@ import { ActiveOrganizationProvider } from '#/hooks/use-active-organization'
 import type { Organization } from '#/hooks/use-organizations'
 import { EmployeeWorkTimeFeature } from '#/pages/hr/feature/employee-work-time-feature'
 
+// jsdom has no ResizeObserver, and Radix `Select`'s listbox needs
+// `scrollIntoView`/pointer-capture methods it also doesn't implement.
+// Stubbed locally — this workstream doesn't own `vitest.setup.ts`.
+class ResizeObserverStub {
+	observe() {}
+	unobserve() {}
+	disconnect() {}
+}
+// biome-ignore lint/suspicious/noExplicitAny: test-only global polyfills
+const globalAny = globalThis as any
+globalAny.ResizeObserver ??= ResizeObserverStub
+Element.prototype.scrollIntoView ??= () => {}
+Element.prototype.hasPointerCapture ??= () => false
+Element.prototype.releasePointerCapture ??= () => {}
+
 const EMPLOYEES_PATH = '/api/v1/organizations/{organization_id}/employees'
 const EMPLOYEE_PATH = '/api/v1/employees/{employee_id}'
 const WORK_TIME_PATH =
@@ -15,6 +30,9 @@ const RHYTHM_PATH =
 	'/api/v1/organizations/{organization_id}/employees/{employee_id}/rhythm'
 const WORK_SLOTS_PATH =
 	'/api/v1/organizations/{organization_id}/employees/{employee_id}/work-slots'
+const ABSENCES_PATH = '/api/v1/organizations/{organization_id}/absences'
+const ABSENCE_PATH =
+	'/api/v1/organizations/{organization_id}/absences/{absence_id}'
 
 const ORGANIZATION: Organization = {
 	id: 'org-1',
@@ -25,7 +43,19 @@ const ORGANIZATION: Organization = {
 	updated_at: '2026-01-01T00:00:00Z',
 }
 
-const EMPLOYEE = {
+interface FakeEmployee {
+	id: string
+	organization_id: string
+	last_name: string
+	first_name: string | null
+	hourly_rate_cents: number
+	user_id: string | null
+	weekly_contract_minutes: number
+	created_at: string
+	updated_at: string
+}
+
+const EMPLOYEE: FakeEmployee = {
 	id: 'employee-1',
 	organization_id: 'org-1',
 	last_name: 'Martin',
@@ -52,10 +82,17 @@ interface FakeApiHandlers {
 	putRhythm?: (params: unknown) => unknown
 	putWorkSlots?: (params: unknown) => unknown
 	patchEmployee?: (params: unknown) => unknown
+	postAbsence?: (params: unknown) => unknown
+	patchAbsence?: (params: unknown) => unknown
+	deleteAbsence?: (params: unknown) => unknown
+	employees?: FakeEmployee[]
+	absences?: Record<string, unknown>[]
 }
 
 function installFakeTanstackApi(handlers: FakeApiHandlers = {}) {
 	const calls: { method: string; path: string; params: unknown }[] = []
+	const employees = handlers.employees ?? [EMPLOYEE]
+	const absences = handlers.absences ?? []
 
 	function queryKeyFor(path: string, params: unknown) {
 		const p = (params ?? {}) as { path?: unknown; query?: unknown }
@@ -72,13 +109,16 @@ function installFakeTanstackApi(handlers: FakeApiHandlers = {}) {
 					queryFn: async () => {
 						calls.push({ method: 'get', path, params })
 						if (path === EMPLOYEES_PATH) {
-							return { data: [EMPLOYEE], pagination: null }
+							return { data: employees, pagination: null }
 						}
 						if (path === WORK_TIME_PATH) {
 							return {
 								data: { rhythms: [OPEN_RHYTHM], work_slots: [] },
 								pagination: null,
 							}
+						}
+						if (path === ABSENCES_PATH) {
+							return { data: absences, pagination: null }
 						}
 						throw new Error(`unmocked GET ${path}`)
 					},
@@ -106,6 +146,21 @@ function installFakeTanstackApi(handlers: FakeApiHandlers = {}) {
 							if (!handlers.patchEmployee)
 								throw new Error('patchEmployee not mocked')
 							return handlers.patchEmployee(params)
+						}
+						if (method === 'post' && path === ABSENCES_PATH) {
+							if (!handlers.postAbsence)
+								throw new Error('postAbsence not mocked')
+							return handlers.postAbsence(params)
+						}
+						if (method === 'patch' && path === ABSENCE_PATH) {
+							if (!handlers.patchAbsence)
+								throw new Error('patchAbsence not mocked')
+							return handlers.patchAbsence(params)
+						}
+						if (method === 'delete' && path === ABSENCE_PATH) {
+							if (!handlers.deleteAbsence)
+								throw new Error('deleteAbsence not mocked')
+							return handlers.deleteAbsence(params)
 						}
 						throw new Error(`unmocked mutation ${method} ${path}`)
 					},
@@ -257,5 +312,144 @@ describe('EmployeeWorkTimeFeature', () => {
 				weekly_contract_minutes: 1800,
 			},
 		})
+	})
+})
+
+describe('EmployeeWorkTimeFeature — absences', () => {
+	afterEach(() => {
+		vi.restoreAllMocks()
+	})
+
+	const EMPLOYEE_2 = {
+		id: 'employee-2',
+		organization_id: 'org-1',
+		last_name: 'Petit',
+		first_name: null,
+		hourly_rate_cents: 1400,
+		user_id: null,
+		weekly_contract_minutes: 2100,
+		created_at: '2026-01-01T00:00:00Z',
+		updated_at: '2026-01-01T00:00:00Z',
+	}
+
+	function absence(overrides: Record<string, unknown> = {}) {
+		return {
+			id: 'ab-1',
+			organization_id: 'org-1',
+			employee_id: 'employee-1',
+			kind: 'LEAVE',
+			all_day: true,
+			starts_at: '2026-08-10T00:00:00Z',
+			ends_at: '2026-08-11T00:00:00Z',
+			note: 'Vacances',
+			created_at: '2026-08-01T00:00:00Z',
+			updated_at: '2026-08-01T00:00:00Z',
+			...overrides,
+		}
+	}
+
+	it("affiche uniquement les absences de l'employé de la page", async () => {
+		renderFeature({
+			absences: [
+				absence({ id: 'ab-1', employee_id: 'employee-1' }),
+				absence({ id: 'ab-2', employee_id: 'employee-2' }),
+			],
+		})
+
+		await screen.findByText('Martin Alix')
+		expect(await screen.findByText(/Congé —/)).toBeDefined()
+		expect(screen.getAllByText(/Congé —/)).toHaveLength(1)
+	})
+
+	it("l'édition d'une absence pré-remplit le formulaire et envoie un PATCH sans employee_id", async () => {
+		const user = userEvent.setup()
+		const patchAbsence = vi.fn().mockResolvedValue(absence())
+		const { calls } = renderFeature({
+			absences: [absence()],
+			patchAbsence,
+		})
+
+		await screen.findByText('Martin Alix')
+		await user.click(await screen.findByText(/Congé —/))
+
+		const sheet = await screen.findByRole('dialog')
+		expect(within(sheet).getByText('Modifier l’absence')).toBeDefined()
+
+		await user.click(screen.getByRole('button', { name: 'Enregistrer' }))
+
+		await waitFor(() => expect(patchAbsence).toHaveBeenCalledTimes(1))
+		const call = calls.find(
+			(c) => c.method === 'patch' && c.path === ABSENCE_PATH,
+		)
+		expect(call?.params).toMatchObject({
+			path: { organization_id: 'org-1', absence_id: 'ab-1' },
+		})
+		expect(call?.params).not.toHaveProperty('body.employee_id')
+	})
+
+	it('la suppression déclenche un DELETE et ferme le formulaire', async () => {
+		const user = userEvent.setup()
+		const deleteAbsence = vi.fn().mockResolvedValue(undefined)
+		const { calls } = renderFeature({
+			absences: [absence()],
+			deleteAbsence,
+		})
+
+		await screen.findByText('Martin Alix')
+		await user.click(await screen.findByText(/Congé —/))
+		await screen.findByRole('dialog')
+
+		await user.click(screen.getByRole('button', { name: /Supprimer/ }))
+
+		await waitFor(() => expect(deleteAbsence).toHaveBeenCalledTimes(1))
+		const call = calls.find(
+			(c) => c.method === 'delete' && c.path === ABSENCE_PATH,
+		)
+		expect(call?.params).toMatchObject({
+			path: { organization_id: 'org-1', absence_id: 'ab-1' },
+		})
+		await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+	})
+
+	it("la création pré-remplit l'employé de la page et envoie un POST avec son employee_id", async () => {
+		const user = userEvent.setup()
+		const postAbsence = vi.fn().mockResolvedValue(absence({ id: 'ab-new' }))
+		const { calls } = renderFeature({ postAbsence })
+
+		await screen.findByText('Martin Alix')
+		await user.click(
+			screen.getByRole('button', { name: /Ajouter une absence/ }),
+		)
+
+		const sheet = await screen.findByRole('dialog')
+		expect(within(sheet).getByText('Nouvelle absence')).toBeDefined()
+
+		await user.click(screen.getByRole('button', { name: /Créer l’absence/ }))
+
+		await waitFor(() => expect(postAbsence).toHaveBeenCalledTimes(1))
+		const call = calls.find(
+			(c) => c.method === 'post' && c.path === ABSENCES_PATH,
+		)
+		expect(call?.params).toMatchObject({
+			path: { organization_id: 'org-1' },
+			body: { employee_id: 'employee-1', kind: 'LEAVE' },
+		})
+	})
+
+	it('le sélecteur employé affiche « {nom} {prénom} » et le nom seul sans prénom', async () => {
+		const user = userEvent.setup()
+		renderFeature({ employees: [EMPLOYEE, EMPLOYEE_2] })
+
+		await screen.findByText('Martin Alix')
+		await user.click(
+			screen.getByRole('button', { name: /Ajouter une absence/ }),
+		)
+		const sheet = await screen.findByRole('dialog')
+		await user.click(within(sheet).getByRole('combobox', { name: 'Employé' }))
+
+		expect(
+			await screen.findByRole('option', { name: 'Martin Alix' }),
+		).toBeDefined()
+		expect(screen.getByRole('option', { name: 'Petit' })).toBeDefined()
 	})
 })

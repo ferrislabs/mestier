@@ -1,22 +1,10 @@
 import { fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { emptyAbsenceDraft } from '#/pages/planning/lib/absences'
 import type { PlanningResponse } from '#/pages/planning/types'
 import {
 	PlanningTeamUI,
 	type PlanningTeamUIProps,
 } from '#/pages/planning/ui/planning-team-ui'
-
-// jsdom doesn't implement ResizeObserver; the absence sheet's `Select` (via
-// Radix) measures its trigger with it. Stubbed locally, see
-// `absence-form-sheet.test.tsx` for the same workaround.
-class ResizeObserverStub {
-	observe() {}
-	unobserve() {}
-	disconnect() {}
-}
-// biome-ignore lint/suspicious/noExplicitAny: test-only global polyfill
-;(globalThis as any).ResizeObserver ??= ResizeObserverStub
 
 function planningResponse(
 	overrides: Partial<PlanningResponse> = {},
@@ -95,19 +83,37 @@ describe('PlanningTeamUI — barre d’outils', () => {
 })
 
 describe('PlanningTeamUI — édition', () => {
-	it('affiche le bouton nouvelle absence et déclenche onCreateAbsence', () => {
-		const onCreateAbsence = vi.fn()
-		render(<PlanningTeamUI {...baseProps({ onCreateAbsence })} />)
-
-		fireEvent.click(screen.getByRole('button', { name: /Ajouter une absence/ }))
-		expect(onCreateAbsence).toHaveBeenCalledTimes(1)
-	})
-
-	it("n'affiche pas le bouton nouvelle absence sans onCreateAbsence", () => {
+	it("n'expose plus de bouton pour ajouter une absence — géré depuis le module RH", () => {
 		render(<PlanningTeamUI {...baseProps()} />)
 		expect(
 			screen.queryByRole('button', { name: /Ajouter une absence/ }),
 		).toBeNull()
+	})
+
+	it("n'expose plus de sheet d'édition d'absence, même avec un entry absence dans la grille", () => {
+		render(
+			<PlanningTeamUI
+				{...baseProps({
+					data: {
+						...planningResponse(),
+						entries: [
+							{
+								kind: 'absence',
+								id: 'ab-1',
+								starts_at: '2026-08-03T00:00:00+02:00',
+								ends_at: '2026-08-04T00:00:00+02:00',
+								all_day: true,
+								absence_kind: 'LEAVE',
+								employee_id: 'employee-1',
+							},
+						],
+					},
+				})}
+			/>,
+		)
+
+		fireEvent.click(screen.getByTestId('grid-segment'))
+		expect(screen.queryByRole('dialog')).toBeNull()
 	})
 
 	it('affiche le dialogue d’avertissement quand warningDialog.open est vrai', () => {
@@ -129,30 +135,6 @@ describe('PlanningTeamUI — édition', () => {
 		expect(screen.getByText(/Aucune fiche employé/)).toBeDefined()
 	})
 
-	it('affiche le formulaire d’absence quand absenceSheet.open est vrai', () => {
-		render(
-			<PlanningTeamUI
-				{...baseProps({
-					absenceSheet: {
-						open: true,
-						mode: 'create',
-						values: emptyAbsenceDraft('', '2026-08-07'),
-						employees: [],
-						errors: [],
-						isSaving: false,
-						isDeleting: false,
-						saveError: null,
-						onChange: vi.fn(),
-						onSubmit: vi.fn(),
-						onOpenChange: vi.fn(),
-					},
-				})}
-			/>,
-		)
-
-		expect(screen.getByRole('dialog')).toBeDefined()
-	})
-
 	it('affiche les fiches employé créées et laisse les fermer', () => {
 		const onDismiss = vi.fn()
 		render(
@@ -168,34 +150,6 @@ describe('PlanningTeamUI — édition', () => {
 		expect(screen.getByText(/taux horaire/)).toBeDefined()
 		fireEvent.click(screen.getByRole('button', { name: /Fermer/ }))
 		expect(onDismiss).toHaveBeenCalledTimes(1)
-	})
-
-	it('relaie la sélection d’une absence depuis la grille', () => {
-		const onSelectAbsence = vi.fn()
-		render(
-			<PlanningTeamUI
-				{...baseProps({
-					onSelectAbsence,
-					data: {
-						...planningResponse(),
-						entries: [
-							{
-								kind: 'absence',
-								id: 'ab-1',
-								starts_at: '2026-08-03T00:00:00+02:00',
-								ends_at: '2026-08-04T00:00:00+02:00',
-								all_day: true,
-								absence_kind: 'LEAVE',
-								employee_id: 'employee-1',
-							},
-						],
-					},
-				})}
-			/>,
-		)
-
-		fireEvent.click(screen.getByTestId('grid-segment'))
-		expect(onSelectAbsence).toHaveBeenCalledWith('ab-1')
 	})
 })
 
