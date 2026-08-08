@@ -110,16 +110,7 @@ pub async fn require_channel_permission(
     Ok(())
 }
 
-/// Resolve the authenticated caller's DB user id (users.id) from the OIDC sub.
-/// NEVER use identity.user_id() for this — it parses the sub, which is not users.id.
-pub async fn resolve_user_id(state: &AppState, identity: &Identity) -> Result<UserId, ApiError> {
-    let user = state
-        .usecase
-        .find_user_by_sub(identity.id())
-        .await?
-        .ok_or(ApiError::Forbidden)?;
-    Ok(user.id)
-}
+pub use handlers::resolve_user_id;
 
 pub fn router(state: &AppState) -> Router<AppState> {
     // Authenticated routes: FerrisKey OIDC (`auth_middleware`) + rate-limit.
