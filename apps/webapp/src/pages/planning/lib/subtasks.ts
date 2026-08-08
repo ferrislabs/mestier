@@ -69,6 +69,24 @@ function sameLocalDay(a: string, b: string, timeZone: string): boolean {
 }
 
 /**
+ * A window as "start – end", the end trimmed to a bare time when it falls
+ * on the same local day as the start. The one date-range formatter for the
+ * module — {@link formatWindowPlaceholder} and the task list view's rows
+ * both build on this rather than re-deriving the same start/end logic.
+ */
+export function formatWindowRange(
+	window: { startsAt: string; endsAt: string },
+	timeZone: string,
+): string {
+	const start = formatDateTime(window.startsAt, timeZone)
+	const end = sameLocalDay(window.startsAt, window.endsAt, timeZone)
+		? formatTime(window.endsAt, timeZone)
+		: formatDateTime(window.endsAt, timeZone)
+
+	return `${start} – ${end}`
+}
+
+/**
  * The subtask date field's placeholder text when it is empty — "the window
  * a blank field would inherit", spelled out rather than left for the user
  * to guess (see the planning remodel design doc's "un champ de dates vide
@@ -81,11 +99,5 @@ export function formatWindowPlaceholder(
 	timeZone: string,
 ): string | null {
 	if (!window) return null
-
-	const start = formatDateTime(window.startsAt, timeZone)
-	const end = sameLocalDay(window.startsAt, window.endsAt, timeZone)
-		? formatTime(window.endsAt, timeZone)
-		: formatDateTime(window.endsAt, timeZone)
-
-	return `Hérite du parent : ${start} – ${end}`
+	return `Hérite du parent : ${formatWindowRange(window, timeZone)}`
 }

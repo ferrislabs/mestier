@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
 	canAddSubtask,
 	formatWindowPlaceholder,
+	formatWindowRange,
 	resolveDisplayWindow,
 } from '#/pages/planning/lib/subtasks'
 
@@ -75,5 +76,31 @@ describe('formatWindowPlaceholder', () => {
 
 	it('returns null when there is no window to describe', () => {
 		expect(formatWindowPlaceholder(null, 'Europe/Paris')).toBeNull()
+	})
+})
+
+describe('formatWindowRange', () => {
+	it('formats a same-day window with a bare end time', () => {
+		expect(
+			formatWindowRange(
+				{
+					startsAt: '2026-08-10T07:00:00.000Z',
+					endsAt: '2026-08-10T09:00:00.000Z',
+				},
+				'Europe/Paris',
+			),
+		).toBe('10/08/2026 09:00 – 11:00')
+	})
+
+	it('formats a multi-day window with a full end date-time', () => {
+		expect(
+			formatWindowRange(
+				{
+					startsAt: '2026-08-10T07:00:00.000Z',
+					endsAt: '2026-08-12T09:00:00.000Z',
+				},
+				'Europe/Paris',
+			),
+		).toBe('10/08/2026 09:00 – 12/08/2026 11:00')
 	})
 })

@@ -6,6 +6,7 @@ import {
 	KanbanSquare,
 	LayoutDashboard,
 	Link2,
+	ListTree,
 	MessagesSquare,
 	Receipt,
 	Settings,
@@ -108,6 +109,7 @@ export const MODULES: AppModule[] = [
 				label: 'Équipe',
 				items: [
 					{ title: 'Vue équipe', to: '/planning/team', icon: CalendarRange },
+					{ title: 'Liste des tâches', to: '/planning/tasks', icon: ListTree },
 				],
 			},
 		],
