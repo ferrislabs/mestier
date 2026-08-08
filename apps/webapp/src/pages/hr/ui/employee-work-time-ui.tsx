@@ -1,3 +1,4 @@
+import { MoneyCell, TextField } from '#/components/reference-table'
 import { Button } from '#/components/ui/button'
 import {
 	PageHeader,
@@ -26,7 +27,6 @@ import {
 	WorkSlotsSection,
 	type WorkSlotsSectionProps,
 } from '#/pages/hr/ui/work-time-editors'
-import { MoneyCell, TextField } from '#/pages/settings/ui/primitives'
 
 export interface ContractFormBinding {
 	value: string

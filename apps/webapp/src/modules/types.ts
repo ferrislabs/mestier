@@ -49,6 +49,4 @@ export interface AppModule {
 	 * Par défaut : `primary`.
 	 */
 	railPlacement?: 'primary' | 'utility'
-	/** Section de `/settings` qui configure ce module, s'il en a une. */
-	settingsSectionId?: string
 }

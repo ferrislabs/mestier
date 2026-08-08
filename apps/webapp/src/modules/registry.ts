@@ -1,4 +1,5 @@
 import {
+	Boxes,
 	BriefcaseBusiness,
 	CalendarDays,
 	CalendarRange,
@@ -7,6 +8,7 @@ import {
 	LayoutDashboard,
 	ListTree,
 	MessagesSquare,
+	Package,
 	Receipt,
 	Settings,
 	Users,
@@ -38,7 +40,6 @@ export const MODULES: AppModule[] = [
 		basePath: '/crm',
 		status: 'available',
 		hasOverview: false,
-		settingsSectionId: 'crm',
 		sections: [
 			{
 				id: 'customers',
@@ -60,6 +61,12 @@ export const MODULES: AppModule[] = [
 				to: '/crm/invoices',
 				icon: Receipt,
 				status: 'coming-soon',
+			},
+			{
+				id: 'catalog',
+				label: 'Catalogue',
+				to: '/crm/catalog',
+				icon: Boxes,
 			},
 		],
 	},
@@ -100,6 +107,12 @@ export const MODULES: AppModule[] = [
 				to: '/planning/tasks',
 				icon: ListTree,
 			},
+			{
+				id: 'equipment',
+				label: 'Matériel',
+				to: '/planning/equipment',
+				icon: Package,
+			},
 		],
 	},
 	{
@@ -119,9 +132,13 @@ export const MODULES: AppModule[] = [
 		status: 'available',
 		hasOverview: true,
 		railPlacement: 'utility',
-		// `/settings` reste une page unique à ancres : ses sections deviendront des
-		// entrées de nav — et l'AnchorNav disparaîtra — à l'étape
-		// « settings-as-module ».
-		sections: [],
+		sections: [
+			{
+				id: 'organisation',
+				label: 'Organisation',
+				to: '/settings',
+				exact: true,
+			},
+		],
 	},
 ]

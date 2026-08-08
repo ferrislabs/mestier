@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest'
 import { firstLandingTarget, moduleLandingPath } from '#/modules/landing'
 import { buildOrgPath } from '#/modules/org-path'
 import { MODULES } from '#/modules/registry'
-import type { ModuleSection } from '#/modules/types'
+import type { AppModule, ModuleSection } from '#/modules/types'
 import { routeTree } from '#/routeTree.gen'
 
 function createTestRouter() {
@@ -102,6 +102,17 @@ describe('routabilité des modules', () => {
 			.filter((cible) => !Object.hasOwn(router.routesByPath, routePath(cible)))
 
 		expect(ciblesSansRoute).toEqual([])
+	})
+
+	it('expose le catalogue et le matériel dans leur module, pas dans les réglages', () => {
+		const sectionsOf = (id: AppModule['id']) =>
+			MODULES.find((module) => module.id === id)?.sections.map(
+				(section) => section.to,
+			) ?? []
+
+		expect(sectionsOf('crm')).toContain('/crm/catalog')
+		expect(sectionsOf('planning')).toContain('/planning/equipment')
+		expect(sectionsOf('settings')).toEqual(['/settings'])
 	})
 
 	it("aucun module sans vue d'ensemble ne redirige vers son propre basePath", () => {

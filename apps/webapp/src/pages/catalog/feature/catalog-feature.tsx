@@ -9,6 +9,12 @@ import {
 } from 'lucide-react'
 import type * as React from 'react'
 import { useMemo, useState } from 'react'
+import {
+	centsToEuros,
+	type FormBinding,
+	formatMoney,
+	RowActions,
+} from '#/components/reference-table'
 import { Button } from '#/components/ui/button'
 import { Input } from '#/components/ui/input'
 import { Label } from '#/components/ui/label'
@@ -29,6 +35,8 @@ import {
 } from '#/components/ui/sheet'
 import {
 	MetricCard,
+	PageHeader,
+	PageShell,
 	SectionCard,
 	SectionHeader,
 	StatusBadge,
@@ -50,13 +58,7 @@ import {
 	useUpdateProduct,
 	useUpdateServiceRate,
 } from '#/hooks/use-reference-catalog'
-import type { ServiceRateFormValues } from '#/pages/settings/types'
-import {
-	centsToEuros,
-	type FormBinding,
-	formatMoney,
-	RowActions,
-} from '#/pages/settings/ui/primitives'
+import type { ServiceRateFormValues } from '#/pages/catalog/types'
 
 type CatalogTab = 'products' | 'services'
 
@@ -77,14 +79,27 @@ const PRODUCT_UNIT_LABELS: Record<ServiceRateUnit, string> = {
 	M2: '€/m²',
 }
 
-export function CrmSection() {
+/**
+ * Catalogue des produits et des services tarifés.
+ *
+ * Il vivait dans les réglages de l'organisation ; on l'édite au quotidien pour
+ * remplir un devis, donc il appartient au module qui les produit.
+ */
+export function CatalogFeature() {
 	const { activeOrganization } = useActiveOrganization()
 
 	return (
-		<CrmSectionContent
-			key={activeOrganization.id}
-			organizationId={activeOrganization.id}
-		/>
+		<PageShell>
+			<PageHeader
+				eyebrow={activeOrganization.name}
+				title="Catalogue"
+				description="Les produits et services que vous insérez dans un devis, avec leur unité et leur tarif."
+			/>
+			<CrmSectionContent
+				key={activeOrganization.id}
+				organizationId={activeOrganization.id}
+			/>
+		</PageShell>
 	)
 }
 
@@ -881,7 +896,7 @@ interface WideSuffixTextFieldProps
 }
 
 // Pads with `pr-20`, wider than the `pr-14` used by the shared TextField in
-// `#/pages/settings/ui/primitives`. This section's suffixes ("€/unité",
+// `#/components/reference-table`. This section's suffixes ("€/unité",
 // "mètre linéaire"-length labels) are longer than equipment's "€/h", and
 // `pr-14` would let the input's value run under them. Kept as a local
 // variant rather than widening the shared primitive for every caller.
