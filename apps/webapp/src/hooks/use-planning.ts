@@ -2,8 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import type { Schemas } from '#/api/api.client'
 
 const PLANNING_PATH = '/api/v1/organizations/{organization_id}/planning'
-const TASK_PATH =
-	'/api/v1/organizations/{organization_id}/tasks/{task_id}'
+const TASK_PATH = '/api/v1/organizations/{organization_id}/tasks/{task_id}'
 const AVAILABILITY_PATH =
 	'/api/v1/organizations/{organization_id}/planning/availability'
 
@@ -51,7 +50,15 @@ function isPlanningQuery(queryKey: readonly unknown[]) {
 	return queryKeyMeta(queryKey)?._id === PLANNING_PATH
 }
 
-function invalidatePlanning(queryClient: ReturnType<typeof useQueryClient>) {
+/**
+ * Invalidates the planning grid's query — exported so mutations that
+ * change a task from *outside* the grid (the task form, subtasks, `PATCH`
+ * from the detail sheet) refresh it too, the same way a drag & drop already
+ * does via {@link useMoveTask}.
+ */
+export function invalidatePlanning(
+	queryClient: ReturnType<typeof useQueryClient>,
+) {
 	return queryClient.invalidateQueries({
 		predicate: (query) => isPlanningQuery(query.queryKey),
 	})
