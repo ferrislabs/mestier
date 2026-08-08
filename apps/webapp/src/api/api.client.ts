@@ -152,6 +152,7 @@ export namespace Schemas {
     title: string;
   };
   export type CreateServiceRateRequest = { label: string; rate_cents: number; unit: ServiceRateUnit };
+  export type CreateTaskCommentRequest = { body: string };
   export type CreateTaskLabelRequest = { color: string; name: string };
   export type QuoteId = string;
   export type CreateTaskRequest = {
@@ -440,6 +441,17 @@ export namespace Schemas {
     updated_at: string;
   };
   export type SetPresenceRequest = { status: PresenceStatus };
+  export type TaskCommentAuthorResponse = { display_name: string; id: UserId };
+  export type TaskCommentId = string;
+  export type TaskCommentResponse = {
+    author: TaskCommentAuthorResponse;
+    body: string;
+    created_at: string;
+    id: TaskCommentId;
+    organization_id: OrganizationId;
+    task_id: TaskId;
+    updated_at: string;
+  };
   export type UnreadResponse = { channel_ids: Array<ChannelId> };
   export type UpdateAbsenceRequest = Partial<{
     all_day: boolean | null;
@@ -504,6 +516,7 @@ export namespace Schemas {
   };
   export type UpdateQuoteStatusRequest = { status: QuoteStatus };
   export type UpdateServiceRateRequest = { label: string; rate_cents: number; unit: ServiceRateUnit };
+  export type UpdateTaskCommentRequest = { body: string };
   export type UpdateTaskLabelRequest = { color: string; name: string };
   export type UpdateTaskRequest = Partial<{
     all_day: boolean | null;
@@ -2710,6 +2723,97 @@ export namespace Endpoints {
       409: unknown;
     };
   };
+  export type get_ListTaskComments = {
+    method: "GET";
+    path: "/api/v1/organizations/{organization_id}/tasks/{task_id}/comments";
+    requestFormat: "json";
+    parameters: {
+      query: Partial<{ page: number; per_page: number }>;
+      path: { organization_id: string; task_id: string };
+    };
+    responses: {
+      200: {
+        data: Array<{
+          author: Schemas.TaskCommentAuthorResponse;
+          body: string;
+          created_at: string;
+          id: Schemas.TaskCommentId;
+          organization_id: Schemas.OrganizationId;
+          task_id: Schemas.TaskId;
+          updated_at: string;
+        }>;
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+      404: unknown;
+    };
+  };
+  export type post_CreateTaskComment = {
+    method: "POST";
+    path: "/api/v1/organizations/{organization_id}/tasks/{task_id}/comments";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string; task_id: string };
+
+      body: Schemas.CreateTaskCommentRequest;
+    };
+    responses: {
+      201: {
+        data: {
+          author: Schemas.TaskCommentAuthorResponse;
+          body: string;
+          created_at: string;
+          id: Schemas.TaskCommentId;
+          organization_id: Schemas.OrganizationId;
+          task_id: Schemas.TaskId;
+          updated_at: string;
+        };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      400: unknown;
+      401: unknown;
+      403: unknown;
+      404: unknown;
+    };
+  };
+  export type delete_DeleteTaskComment = {
+    method: "DELETE";
+    path: "/api/v1/organizations/{organization_id}/tasks/{task_id}/comments/{comment_id}";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string; task_id: string; comment_id: string };
+    };
+    responses: { 204: unknown; 401: unknown; 403: unknown; 404: unknown };
+  };
+  export type patch_UpdateTaskComment = {
+    method: "PATCH";
+    path: "/api/v1/organizations/{organization_id}/tasks/{task_id}/comments/{comment_id}";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string; task_id: string; comment_id: string };
+
+      body: Schemas.UpdateTaskCommentRequest;
+    };
+    responses: {
+      200: {
+        data: {
+          author: Schemas.TaskCommentAuthorResponse;
+          body: string;
+          created_at: string;
+          id: Schemas.TaskCommentId;
+          organization_id: Schemas.OrganizationId;
+          task_id: Schemas.TaskId;
+          updated_at: string;
+        };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      400: unknown;
+      401: unknown;
+      403: unknown;
+      404: unknown;
+    };
+  };
   export type get_GetProduct = {
     method: "GET";
     path: "/api/v1/products/{product_id}";
@@ -2996,6 +3100,7 @@ export type EndpointByMethod = {
     "/api/v1/organizations/{organization_id}/absences/{absence_id}": Endpoints.delete_DeleteAbsence;
     "/api/v1/organizations/{organization_id}/task-labels/{label_id}": Endpoints.delete_DeleteTaskLabel;
     "/api/v1/organizations/{organization_id}/tasks/{task_id}": Endpoints.delete_DeleteTask;
+    "/api/v1/organizations/{organization_id}/tasks/{task_id}/comments/{comment_id}": Endpoints.delete_DeleteTaskComment;
     "/api/v1/products/{product_id}": Endpoints.delete_DeleteProduct;
     "/api/v1/quotes/{quote_id}": Endpoints.delete_DeleteQuote;
     "/api/v1/service-rates/{service_rate_id}": Endpoints.delete_DeleteServiceRate;
@@ -3015,6 +3120,7 @@ export type EndpointByMethod = {
     "/api/v1/organizations/{organization_id}/absences/{absence_id}": Endpoints.patch_PatchAbsence;
     "/api/v1/organizations/{organization_id}/task-labels/{label_id}": Endpoints.patch_UpdateTaskLabel;
     "/api/v1/organizations/{organization_id}/tasks/{task_id}": Endpoints.patch_PatchTask;
+    "/api/v1/organizations/{organization_id}/tasks/{task_id}/comments/{comment_id}": Endpoints.patch_UpdateTaskComment;
     "/api/v1/products/{product_id}": Endpoints.patch_UpdateProduct;
     "/api/v1/quotes/{quote_id}": Endpoints.patch_UpdateQuote;
     "/api/v1/quotes/{quote_id}/status": Endpoints.patch_UpdateQuoteStatus;
@@ -3053,6 +3159,7 @@ export type EndpointByMethod = {
     "/api/v1/organizations/{organization_id}/task-labels": Endpoints.get_ListTaskLabels;
     "/api/v1/organizations/{organization_id}/tasks": Endpoints.get_ListTasks;
     "/api/v1/organizations/{organization_id}/tasks/{task_id}": Endpoints.get_GetTask;
+    "/api/v1/organizations/{organization_id}/tasks/{task_id}/comments": Endpoints.get_ListTaskComments;
     "/api/v1/products/{product_id}": Endpoints.get_GetProduct;
     "/api/v1/quotes/{quote_id}": Endpoints.get_GetQuote;
     "/api/v1/quotes/{quote_id}/pdf": Endpoints.get_ExportQuotePdf;
@@ -3080,6 +3187,7 @@ export type EndpointByMethod = {
     "/api/v1/organizations/{organization_id}/service-rates": Endpoints.post_CreateServiceRate;
     "/api/v1/organizations/{organization_id}/task-labels": Endpoints.post_CreateTaskLabel;
     "/api/v1/organizations/{organization_id}/tasks": Endpoints.post_CreateTask;
+    "/api/v1/organizations/{organization_id}/tasks/{task_id}/comments": Endpoints.post_CreateTaskComment;
   };
   put: {
     "/api/v1/chat/channels/{channel_id}/permissions/everyone": Endpoints.put_UpsertEveryoneOverwrite;

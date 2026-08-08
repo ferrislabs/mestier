@@ -37,6 +37,7 @@ pub mod quote;
 pub mod role;
 pub mod service_rate;
 pub mod task;
+pub mod task_comment;
 pub mod task_label;
 pub mod user;
 pub mod work_time;
