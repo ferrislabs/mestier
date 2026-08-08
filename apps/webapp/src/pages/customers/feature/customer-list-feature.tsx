@@ -8,6 +8,7 @@ import {
 	useCustomers,
 	useDeleteCustomer,
 } from '#/hooks/use-customers'
+import { buildOrgPath } from '#/modules/org-path'
 import { getCustomerListUrlState } from '#/pages/customers/customer-list-url-state'
 import { CustomerListUI } from '#/pages/customers/ui/customer-list-ui'
 
@@ -34,11 +35,18 @@ export function CustomerListFeature() {
 		<CustomerList
 			key={activeOrganization.id}
 			organizationId={activeOrganization.id}
+			organizationSlug={activeOrganization.slug}
 		/>
 	)
 }
 
-function CustomerList({ organizationId }: { organizationId: string }) {
+function CustomerList({
+	organizationId,
+	organizationSlug,
+}: {
+	organizationId: string
+	organizationSlug: string
+}) {
 	const navigate = useNavigate()
 	const [initialListState] = useState(getCustomerListUrlState)
 	const [page, setPage] = useState(initialListState.page)
@@ -49,13 +57,14 @@ function CustomerList({ organizationId }: { organizationId: string }) {
 
 	const handleEdit = (customer: Customer) => {
 		void navigate({
-			to: '/crm/customers/$customerId',
+			to: buildOrgPath(organizationSlug, '/crm/customers/$customerId'),
 			params: { customerId: customer.id },
 		})
 	}
 
 	return (
 		<CustomerListUI
+			organizationSlug={organizationSlug}
 			customers={customers.data?.data ?? []}
 			pagination={customers.data?.pagination ?? null}
 			page={page}

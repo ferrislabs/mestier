@@ -50,11 +50,18 @@ export function QuoteCreateFeature() {
 		<QuoteWorkspace
 			key={activeOrganization.id}
 			organizationId={activeOrganization.id}
+			organizationSlug={activeOrganization.slug}
 		/>
 	)
 }
 
-function QuoteWorkspace({ organizationId }: { organizationId: string }) {
+function QuoteWorkspace({
+	organizationId,
+	organizationSlug,
+}: {
+	organizationId: string
+	organizationSlug: string
+}) {
 	const [initialQuoteListState] = useState(getQuoteListUrlState)
 	const [quotePage, setQuotePage] = useState(initialQuoteListState.page)
 	const [quotePageSize, setQuotePageSize] = useState(
@@ -112,6 +119,7 @@ function QuoteWorkspace({ organizationId }: { organizationId: string }) {
 		<form.Subscribe selector={(state) => state.values}>
 			{(values) => (
 				<QuoteWorkspaceWithValues
+					organizationSlug={organizationSlug}
 					values={values}
 					form={{
 						state: form.state,
@@ -207,6 +215,7 @@ interface QuoteWorkspaceWithValuesProps {
 	onQuotePageSizeChange: (pageSize: number) => void
 	onQuoteDelete: (quote: Quote) => Promise<unknown>
 	uploadFile: (lineIndex: number, file: File) => Promise<void>
+	organizationSlug: string
 }
 
 interface QuoteFormApi {
@@ -219,6 +228,7 @@ interface QuoteFormApi {
 }
 
 function QuoteWorkspaceWithValues({
+	organizationSlug,
 	values,
 	form,
 	customers,
@@ -307,6 +317,7 @@ function QuoteWorkspaceWithValues({
 
 	return (
 		<QuoteCreateUI
+			organizationSlug={organizationSlug}
 			values={values}
 			customers={customers}
 			customerContexts={customerContexts.data?.data ?? []}

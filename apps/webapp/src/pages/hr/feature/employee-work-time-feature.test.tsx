@@ -3,7 +3,10 @@ import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import type { ReactNode } from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { ActiveOrganizationProvider } from '#/hooks/use-active-organization'
+import {
+	ActiveOrganizationProvider,
+	OrganizationListProvider,
+} from '#/hooks/use-active-organization'
 import type { Organization } from '#/hooks/use-organizations'
 import { EmployeeWorkTimeFeature } from '#/pages/hr/feature/employee-work-time-feature'
 
@@ -184,9 +187,11 @@ function renderFeature(handlers: FakeApiHandlers = {}) {
 	function Providers({ children }: { children: ReactNode }) {
 		return (
 			<QueryClientProvider client={queryClient}>
-				<ActiveOrganizationProvider organizations={[ORGANIZATION]}>
-					{children}
-				</ActiveOrganizationProvider>
+				<OrganizationListProvider organizations={[ORGANIZATION]}>
+					<ActiveOrganizationProvider activeOrganization={ORGANIZATION}>
+						{children}
+					</ActiveOrganizationProvider>
+				</OrganizationListProvider>
 			</QueryClientProvider>
 		)
 	}

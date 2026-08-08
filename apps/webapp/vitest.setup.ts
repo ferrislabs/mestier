@@ -1,9 +1,23 @@
 import { cleanup } from '@testing-library/react'
 import { afterEach } from 'vitest'
 
-// jsdom does not implement scrollTo; Radix Popper positioning (used by popovers,
-// dropdowns, selects, etc.) calls it when computing layout on open.
 window.scrollTo = () => {}
+
+// jsdom n'implémente pas matchMedia, dont dépend `useIsMobile` — donc toute la
+// primitive Sidebar. Média toujours faux : les tests rendent la version bureau.
+if (typeof window.matchMedia !== 'function') {
+	window.matchMedia = (query: string): MediaQueryList =>
+		({
+			matches: false,
+			media: query,
+			onchange: null,
+			addEventListener: () => {},
+			removeEventListener: () => {},
+			addListener: () => {},
+			removeListener: () => {},
+			dispatchEvent: () => false,
+		}) as MediaQueryList
+}
 
 afterEach(() => {
 	cleanup()

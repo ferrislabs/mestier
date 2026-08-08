@@ -52,7 +52,7 @@ function PageHeader({
 						{eyebrow}
 					</p>
 				) : null}
-				<h1 className="truncate text-2xl font-bold text-foreground md:text-[28px]">
+				<h1 className="truncate text-2xl font-normal text-foreground md:text-[28px]">
 					{title}
 				</h1>
 				{description ? (
@@ -75,7 +75,7 @@ function SectionCard({
 	return (
 		<section
 			className={cn(
-				'rounded-lg border bg-card text-card-foreground shadow-xs',
+				'rounded-xl border bg-card text-card-foreground',
 				className,
 			)}
 			{...props}
@@ -109,7 +109,7 @@ function SectionHeader({
 			{...props}
 		>
 			<div className="min-w-0">
-				<h2 className="font-semibold text-foreground">{title}</h2>
+				<h2 className="font-medium text-foreground">{title}</h2>
 				{description ? (
 					<p className="mt-0.5 text-xs text-muted-foreground">{description}</p>
 				) : null}
@@ -140,7 +140,7 @@ function MetricCard({
 	return (
 		<div
 			className={cn(
-				'flex min-h-32 flex-col justify-between rounded-lg border bg-card p-5 text-card-foreground shadow-xs',
+				'flex min-h-32 flex-col justify-between rounded-xl border bg-card p-5 text-card-foreground',
 				className,
 			)}
 			{...props}
@@ -154,7 +154,7 @@ function MetricCard({
 				) : null}
 			</div>
 			<div>
-				<p className="text-3xl font-bold text-foreground md:text-[32px]">
+				<p className="text-3xl font-normal text-foreground md:text-[32px]">
 					{value}
 				</p>
 				{hint || trend ? (

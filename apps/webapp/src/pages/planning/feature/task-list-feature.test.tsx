@@ -3,7 +3,10 @@ import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import type { ReactNode } from 'react'
 import { describe, expect, it } from 'vitest'
-import { ActiveOrganizationProvider } from '#/hooks/use-active-organization'
+import {
+	ActiveOrganizationProvider,
+	OrganizationListProvider,
+} from '#/hooks/use-active-organization'
 import type { Organization } from '#/hooks/use-organizations'
 import { TaskListFeature } from '#/pages/planning/feature/task-list-feature'
 
@@ -191,9 +194,11 @@ function renderFeature(
 	function Providers({ children }: { children: ReactNode }) {
 		return (
 			<QueryClientProvider client={queryClient}>
-				<ActiveOrganizationProvider organizations={[ORGANIZATION]}>
-					{children}
-				</ActiveOrganizationProvider>
+				<OrganizationListProvider organizations={[ORGANIZATION]}>
+					<ActiveOrganizationProvider activeOrganization={ORGANIZATION}>
+						{children}
+					</ActiveOrganizationProvider>
+				</OrganizationListProvider>
 			</QueryClientProvider>
 		)
 	}

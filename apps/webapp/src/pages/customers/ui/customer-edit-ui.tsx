@@ -41,6 +41,7 @@ import type {
 	CustomerPipelineStage,
 	CustomerStatus,
 } from '#/hooks/use-customers'
+import { buildOrgPath } from '#/modules/org-path'
 import {
 	type CustomerContactFormValues,
 	type CustomerContextFormValues,
@@ -52,6 +53,7 @@ import {
 
 interface CustomerEditUIProps {
 	customer: Customer
+	organizationSlug: string
 	form: CustomerFormValues
 	isDirty: boolean
 	changedKeys: (keyof CustomerFormValues)[]
@@ -102,6 +104,7 @@ const CUSTOMER_PIPELINE_STAGE_OPTIONS: CustomerPipelineStage[] = [
 
 export function CustomerEditUI({
 	customer,
+	organizationSlug,
 	form,
 	isDirty,
 	changedKeys,
@@ -150,7 +153,7 @@ export function CustomerEditUI({
 		<PageShell className="pb-24 md:pb-28">
 			<div>
 				<Link
-					to="/crm/customers"
+					to={buildOrgPath(organizationSlug, '/crm/customers')}
 					className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground"
 				>
 					<ArrowLeft className="size-4" />

@@ -30,6 +30,7 @@ import {
 	StatusBadge,
 } from '#/components/ui/surface'
 import type { Employee } from '#/hooks/use-reference-catalog'
+import { buildOrgPath } from '#/modules/org-path'
 import {
 	type EmployeeFormValues,
 	type EmployeeListData,
@@ -50,6 +51,7 @@ export interface EmployeeDraft {
 
 interface EmployeeListUIProps {
 	organizationName: string
+	organizationSlug: string
 	isLoading: boolean
 	error: string | null
 	data: EmployeeListData
@@ -67,6 +69,7 @@ interface EmployeeListUIProps {
 
 export function EmployeeListUI({
 	organizationName,
+	organizationSlug,
 	isLoading,
 	error,
 	data,
@@ -122,6 +125,7 @@ export function EmployeeListUI({
 			) : (
 				<EmployeeTable
 					data={data.employees}
+					organizationSlug={organizationSlug}
 					draft={draft}
 					isSaving={isSaving}
 					onEdit={onEdit}
@@ -192,6 +196,7 @@ function CreateEmployeeSection({ form }: CreateEmployeeSectionProps) {
 
 interface EmployeeTableProps {
 	data: Employee[]
+	organizationSlug: string
 	draft: EmployeeDraft | null
 	isSaving: boolean
 	onEdit: (employee: Employee) => void
@@ -203,6 +208,7 @@ interface EmployeeTableProps {
 
 function EmployeeTable({
 	data,
+	organizationSlug,
 	draft,
 	isSaving,
 	onEdit,
@@ -328,6 +334,7 @@ function EmployeeTable({
 										<td className="px-5 py-3 align-middle">
 											<RowActions
 												employeeId={employee.id}
+												organizationSlug={organizationSlug}
 												isEditing={isEditing}
 												isSaving={isSaving}
 												onEdit={() => onEdit(employee)}
@@ -349,6 +356,7 @@ function EmployeeTable({
 
 interface RowActionsProps {
 	employeeId: string
+	organizationSlug: string
 	isEditing: boolean
 	isSaving: boolean
 	onEdit: () => void
@@ -359,6 +367,7 @@ interface RowActionsProps {
 
 function RowActions({
 	employeeId,
+	organizationSlug,
 	isEditing,
 	isSaving,
 	onEdit,
@@ -394,7 +403,10 @@ function RowActions({
 					<DropdownMenuItem onClick={onEdit}>Modifier</DropdownMenuItem>
 					<DropdownMenuItem asChild>
 						<Link
-							to="/hr/employees/$employeeId/work-time"
+							to={buildOrgPath(
+								organizationSlug,
+								'/hr/employees/$employeeId/work-time',
+							)}
 							params={{ employeeId }}
 						>
 							<Clock />
