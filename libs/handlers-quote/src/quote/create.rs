@@ -2,7 +2,7 @@ use std::str::FromStr;
 
 use auth::Identity;
 use axum::{Extension, Json, extract::State};
-use handlers::{ApiError, AppState, DataEnvelope, Response};
+use handlers::{ApiError, AppState, DataEnvelope, Response, resolve_user_id};
 use mestier_core::{
     CreateQuoteCommand, CustomerContextId, CustomerId, QuoteLineCommand, ServiceRateId,
     ServiceRateUnit,
@@ -82,6 +82,7 @@ pub async fn handler(
     Json(payload): Json<CreateQuoteRequest>,
 ) -> Result<Response<QuoteResponse>, ApiError> {
     require_org_membership(&state, &identity, path.organization_id).await?;
+    let actor = resolve_user_id(&state, &identity).await?;
     require_quote_targets(
         &state,
         path.organization_id,
@@ -92,6 +93,7 @@ pub async fn handler(
 
     let quote = state
         .usecase
+        .acting_as(actor)
         .create_quote(CreateQuoteCommand {
             organization_id: path.organization_id,
             title: payload.title,

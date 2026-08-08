@@ -1,6 +1,6 @@
 use auth::Identity;
 use axum::{Extension, extract::State};
-use handlers::{ApiError, AppState, Response};
+use handlers::{ApiError, AppState, Response, resolve_user_id};
 use mestier_core::QuoteId;
 
 use crate::{EmptyResponse, paths::QuotePath, require_quote_membership};
@@ -27,7 +27,12 @@ pub async fn handler(
     Extension(identity): Extension<Identity>,
 ) -> Result<Response<EmptyResponse>, ApiError> {
     require_quote_membership(&state, &identity, quote_id).await?;
-    state.usecase.soft_delete_quote(quote_id).await?;
+    let actor = resolve_user_id(&state, &identity).await?;
+    state
+        .usecase
+        .acting_as(actor)
+        .soft_delete_quote(quote_id)
+        .await?;
 
     Ok(Response::NoContent)
 }
