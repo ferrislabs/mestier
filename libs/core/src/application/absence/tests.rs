@@ -1,7 +1,6 @@
 #[cfg(test)]
 #[allow(clippy::module_inception)]
 mod tests {
-    use std::sync::Arc;
 
     use chrono::{Duration, Utc};
     use common::{OrganizationId, UserId, generate_uuid_v7};
@@ -9,7 +8,7 @@ mod tests {
 
     use crate::application::{MestierUseCase, default_authorizer};
     use crate::domain::absence::commands::{CreateAbsenceCommand, PatchAbsenceCommand};
-    use crate::infrastructure::realtime::{EventHub, RealtimeEventPublisher};
+    use crate::infrastructure::realtime::EventHub;
     use crate::{AbsenceKind, EmployeeAbsenceId, EmployeeId};
 
     async fn make_pool() -> PgPool {
@@ -19,9 +18,7 @@ mod tests {
     }
 
     fn make_usecase(pool: PgPool) -> MestierUseCase {
-        let hub = EventHub::new();
-        let publisher = Arc::new(RealtimeEventPublisher::new(hub));
-        MestierUseCase::new(pool, default_authorizer(), publisher)
+        MestierUseCase::new(pool, default_authorizer(), EventHub::new())
     }
 
     struct Fixture {

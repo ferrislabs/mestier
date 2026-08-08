@@ -8,16 +8,12 @@ use mestier_macros::transactional;
 use crate::application::MestierUseCase;
 
 impl MestierUseCase {
-    #[transactional(read_state, message)]
+    #[transactional(read_state, message, events)]
     pub async fn mark_channel_read(&self, cmd: MarkChannelReadCommand) -> Result<(), CoreError> {
         let org_id = cmd.organization_id;
-        let mut service = ReadStateService::new(
-            read_state_repository,
-            message_repository,
-            self.events.as_ref(),
-        );
+        let mut service = ReadStateService::new(read_state_repository, message_repository, &events);
         service.mark_channel_read(cmd).await?;
-        self.events.flush(org_id);
+        events.flush(org_id);
         Ok(())
     }
 

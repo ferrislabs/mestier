@@ -22,6 +22,12 @@ impl TxBuffer {
 /// forwarded to the [`EventHub`] when `flush` is called after the transaction
 /// commits successfully.  If the transaction rolls back the buffer is simply
 /// dropped, emitting nothing.
+///
+/// One publisher belongs to **one transaction of one organization**. Both are
+/// fixed at construction, which is what makes a cross-organization delivery
+/// unrepresentable rather than merely unlikely: there is no way to ask this
+/// buffer to flush on behalf of somebody else. A single publisher shared by
+/// every request is exactly how events used to reach the wrong tenant.
 pub struct RealtimeEventPublisher {
     hub: EventHub,
     buffer: Mutex<TxBuffer>,
@@ -63,9 +69,9 @@ impl EventPublisher for RealtimeEventPublisher {
     }
 }
 
-// DECISION 3 (option b): services are generic over `E: EventPublisher` and the
-// use-case passes `self.events.as_ref()` which yields `&RealtimeEventPublisher`.
-// We provide this impl so the reference satisfies the bound without cloning the Arc.
+// Services are generic over `E: EventPublisher`, and the use case passes
+// `&events` — the publisher `#[transactional(events)]` built for this
+// transaction. This impl is what lets the reference satisfy the bound.
 impl EventPublisher for &RealtimeEventPublisher {
     async fn publish(&self, event: DomainEvent) -> Result<(), CoreError> {
         (*self).publish(event).await
@@ -138,6 +144,33 @@ mod tests {
                 crate::infrastructure::realtime::wire::GatewayEvent::CategoryCreate(_)
             ),
             "expected CategoryCreate wire event"
+        );
+    }
+
+    /// The regression this whole change exists for.
+    ///
+    /// Production used to hold one `Arc<RealtimeEventPublisher>` on the
+    /// long-lived `MestierUseCase`, so every request shared one buffer and the
+    /// first transaction to commit drained everyone's events onto its own
+    /// organization's channel — re-stamped with that organization's id.
+    #[tokio::test]
+    async fn one_transactions_events_are_invisible_to_anothers_flush() {
+        let hub = EventHub::new();
+        let org_a = org(100);
+        let org_b = org(200);
+        let mut rx_a = hub.subscribe(org_a);
+
+        let tx_b = RealtimeEventPublisher::new(hub.clone());
+        tx_b.publish(category_created(org_b)).await.unwrap();
+
+        let tx_a = RealtimeEventPublisher::new(hub.clone());
+        tx_a.flush(org_a);
+
+        assert!(
+            tokio::time::timeout(std::time::Duration::from_millis(20), rx_a.recv())
+                .await
+                .is_err(),
+            "org A's flush must not drain org B's transaction"
         );
     }
 

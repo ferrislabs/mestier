@@ -1,7 +1,6 @@
 #[cfg(test)]
 #[allow(clippy::module_inception)]
 mod tests {
-    use std::sync::Arc;
 
     use common::{OrganizationId, UserId, generate_uuid_v7};
     use discord::domain::message::commands::CreateMessageCommand;
@@ -9,7 +8,7 @@ mod tests {
     use sqlx::PgPool;
 
     use crate::application::{MestierUseCase, default_authorizer};
-    use crate::infrastructure::realtime::{EventHub, RealtimeEventPublisher};
+    use crate::infrastructure::realtime::EventHub;
 
     async fn make_pool() -> PgPool {
         PgPool::connect("postgres://ferriskey:ferriskey@localhost:5433/mestier")
@@ -100,9 +99,7 @@ mod tests {
     }
 
     fn make_usecase(pool: PgPool) -> MestierUseCase {
-        let hub = EventHub::new();
-        let publisher = Arc::new(RealtimeEventPublisher::new(hub));
-        MestierUseCase::new(pool, default_authorizer(), publisher)
+        MestierUseCase::new(pool, default_authorizer(), EventHub::new())
     }
 
     // ── Case 1: mention persists a MENTION notification ──────────────────────
