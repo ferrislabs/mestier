@@ -122,10 +122,20 @@ pub struct TaskCommentResponse {
     pub body: String,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
+    /// Whether the caller who requested this response is this comment's own
+    /// author — resolved here, server-side, from the authenticated identity,
+    /// rather than left for the frontend to guess by comparing display
+    /// names (which two members sharing a name would each pass for the
+    /// other's comment). This field only decides whether the UI *offers*
+    /// the edit/delete actions; `TaskCommentService::update_task_comment`/
+    /// `delete_task_comment` still enforce authorship independently, so a
+    /// forged request never gets further than `403` regardless of what this
+    /// says.
+    pub author_is_self: bool,
 }
 
 impl TaskCommentResponse {
-    pub fn new(comment: TaskComment, author_display_name: String) -> Self {
+    pub fn new(comment: TaskComment, author_display_name: String, author_is_self: bool) -> Self {
         Self {
             id: comment.id,
             organization_id: comment.organization_id,
@@ -137,6 +147,7 @@ impl TaskCommentResponse {
             body: comment.body,
             created_at: comment.created_at,
             updated_at: comment.updated_at,
+            author_is_self,
         }
     }
 }
@@ -152,4 +163,39 @@ pub(crate) fn display_name_for(
         .get(&author_user_id)
         .map(|user| user.name.clone())
         .unwrap_or_else(|| "Unknown".to_owned())
+}
+
+#[cfg(test)]
+mod response_tests {
+    use super::*;
+    use chrono::Utc;
+
+    fn comment(author_user_id: UserId) -> TaskComment {
+        let now = Utc::now();
+        TaskComment {
+            id: "33333333-3333-3333-3333-333333333333".parse().unwrap(),
+            organization_id: "44444444-4444-4444-4444-444444444444".parse().unwrap(),
+            task_id: "55555555-5555-5555-5555-555555555555".parse().unwrap(),
+            author_user_id,
+            body: "Salut".to_owned(),
+            deleted_at: None,
+            created_at: now,
+            updated_at: now,
+        }
+    }
+
+    /// Locks in that `author_is_self` is carried through verbatim from the
+    /// caller — the actual "is it really them" resolution happens at each
+    /// handler's call site (comparing the authenticated identity's user id
+    /// against `comment.author_user_id`), not inside this constructor.
+    #[test]
+    fn author_is_self_is_passed_through_as_given() {
+        let author_user_id = "66666666-6666-6666-6666-666666666666".parse().unwrap();
+
+        let own = TaskCommentResponse::new(comment(author_user_id), "Alice".to_owned(), true);
+        let not_own = TaskCommentResponse::new(comment(author_user_id), "Alice".to_owned(), false);
+
+        assert!(own.author_is_self);
+        assert!(!not_own.author_is_self);
+    }
 }
