@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO automation.delivery (id, event_id, subscription_id, org_id)\n            SELECT gen_random_uuid(), e.id, s.id, e.org_id\n            FROM automation.event e\n            JOIN automation.subscription s\n              ON s.org_id = e.org_id\n             AND s.enabled\n             AND e.name = ANY(s.event_names)\n            WHERE e.id = ANY($1)\n            ON CONFLICT ON CONSTRAINT uq_automation_delivery_event_subscription DO NOTHING\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "UuidArray"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "2d89db9b2256b613fe4ac8cea8b47b60493d5d0b74205e8ad261641edbf1c1b9"
+}

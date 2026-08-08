@@ -15,6 +15,7 @@ use events::Actor;
 
 pub mod absence;
 pub mod authorization;
+pub mod automation;
 pub mod customer;
 pub mod customer_contact;
 pub mod customer_context;
