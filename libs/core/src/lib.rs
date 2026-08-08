@@ -6,6 +6,7 @@ pub mod infrastructure;
 
 pub use application::*;
 pub use domain::automation::event_catalogue;
+pub use domain::automation::ports::DispatchOutcome;
 pub use infrastructure::realtime::EventHub;
 
 pub use domain::{

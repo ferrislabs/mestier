@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT id\n            FROM automation.event\n            WHERE dispatched_at IS NULL\n            ORDER BY occurred_at\n            LIMIT $1\n            FOR UPDATE SKIP LOCKED\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "1e7ea9bf227d882dcfa493d072457cacd49016fa06e262d42c9c277975e2fe3d"
+}
