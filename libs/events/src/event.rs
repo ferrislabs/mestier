@@ -15,10 +15,6 @@ impl EventSubject {
     pub fn new(kind: &'static str, id: Uuid) -> Self {
         Self { kind, id: Some(id) }
     }
-
-    pub fn organization_wide(kind: &'static str) -> Self {
-        Self { kind, id: None }
-    }
 }
 
 /// A business fact a module chose to publish.
