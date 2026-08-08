@@ -72,16 +72,23 @@ export function CalendarGrid({ model, callbacks, now }: CalendarGridProps) {
 	return (
 		<div className="overflow-x-auto">
 			<div className="min-w-3xl">
-				<DayHeaderRow days={model.days} />
-
-				{hasAllDay ? (
-					<AllDayRow days={model.days} callbacks={callbacks} />
-				) : null}
-
 				<div
 					ref={scrollRef}
-					className="relative max-h-[65vh] overflow-y-auto overscroll-contain"
+					className="relative max-h-[72vh] overflow-y-auto overscroll-contain"
 				>
+					{/* En-tête et bandeau vivent dans le conteneur défilant, collés en
+					    haut. Les laisser dehors les faisait mesurer une largeur sans
+					    barre de défilement, alors que la grille horaire en dessous en
+					    perdait l'épaisseur — d'où des colonnes décalées, l'écart se
+					    cumulant vers la droite. */}
+					<div className="sticky top-0 z-30 bg-card">
+						<DayHeaderRow days={model.days} />
+
+						{hasAllDay ? (
+							<AllDayRow days={model.days} callbacks={callbacks} />
+						) : null}
+					</div>
+
 					<div className="relative flex" style={{ height: bodyHeight }}>
 						<HourGutter
 							marks={model.hourMarks}
