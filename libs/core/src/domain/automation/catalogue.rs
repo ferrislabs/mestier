@@ -22,6 +22,37 @@ fn descriptors() -> Vec<EventDescriptor> {
     quote::events::descriptors()
 }
 
+/// Refuses a subscription to an event the product cannot emit.
+///
+/// A free-text event name is a silent dead end: the endpoint is created, looks
+/// healthy, and never fires. Checking against the catalogue turns a typo into
+/// an error at the moment it is made.
+pub fn validate_event_names(
+    names: &[String],
+    catalogue: &EventCatalogue,
+) -> Result<(), common::CoreError> {
+    if names.is_empty() {
+        return Err(common::CoreError::Conflict(
+            "a subscription with no event listens to nothing".to_owned(),
+        ));
+    }
+
+    let unknown: Vec<&str> = names
+        .iter()
+        .filter(|name| !catalogue.descriptors().any(|d| d.name == name.as_str()))
+        .map(String::as_str)
+        .collect();
+
+    if !unknown.is_empty() {
+        return Err(common::CoreError::Conflict(format!(
+            "unknown event names: {}",
+            unknown.join(", ")
+        )));
+    }
+
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use events::testing::{EventKey, drift};
@@ -82,35 +113,4 @@ mod tests {
             );
         }
     }
-}
-
-/// Refuses a subscription to an event the product cannot emit.
-///
-/// A free-text event name is a silent dead end: the endpoint is created, looks
-/// healthy, and never fires. Checking against the catalogue turns a typo into
-/// an error at the moment it is made.
-pub fn validate_event_names(
-    names: &[String],
-    catalogue: &EventCatalogue,
-) -> Result<(), common::CoreError> {
-    if names.is_empty() {
-        return Err(common::CoreError::Conflict(
-            "a subscription with no event listens to nothing".to_owned(),
-        ));
-    }
-
-    let unknown: Vec<&str> = names
-        .iter()
-        .filter(|name| !catalogue.descriptors().any(|d| d.name == name.as_str()))
-        .map(String::as_str)
-        .collect();
-
-    if !unknown.is_empty() {
-        return Err(common::CoreError::Conflict(format!(
-            "unknown event names: {}",
-            unknown.join(", ")
-        )));
-    }
-
-    Ok(())
 }

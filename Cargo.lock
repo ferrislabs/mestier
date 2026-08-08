@@ -108,6 +108,7 @@ dependencies = [
  "clap",
  "dotenvy",
  "handlers",
+ "handlers-automation",
  "handlers-customer",
  "handlers-discord",
  "handlers-files",
@@ -2223,6 +2224,22 @@ dependencies = [
  "tokio",
  "tracing",
  "utoipa",
+]
+
+[[package]]
+name = "handlers-automation"
+version = "0.1.0"
+dependencies = [
+ "auth",
+ "axum",
+ "axum-extra",
+ "chrono",
+ "handlers",
+ "mestier-core",
+ "serde",
+ "serde_json",
+ "utoipa",
+ "uuid",
 ]
 
 [[package]]

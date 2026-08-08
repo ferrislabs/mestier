@@ -3,6 +3,7 @@ use utoipa::{
     openapi::security::{HttpAuthScheme, HttpBuilder, SecurityScheme},
 };
 
+use handlers_automation as automation;
 use handlers_customer as customer;
 use handlers_discord as discord;
 use handlers_files as files;
@@ -54,6 +55,16 @@ impl Modify for SecurityAddon {
         organization::get_one::handler,
         organization::update::handler,
         organization::soft_delete::handler,
+        automation::list_events,
+        automation::endpoint::list::handler,
+        automation::endpoint::create::handler,
+        automation::endpoint::update::handler,
+        automation::endpoint::delete::handler,
+        automation::endpoint::regenerate_secret::handler,
+        automation::settings::get::handler,
+        automation::settings::update::handler,
+        automation::delivery::list::handler,
+        automation::delivery::replay::handler,
         quote::quote::create::handler,
         quote::quote::list::handler,
         quote::quote::get_one::handler,
@@ -241,6 +252,7 @@ impl Modify for SecurityAddon {
         (name = "organizations", description = "Organizations management"),
         (name = "files", description = "File uploads and storage"),
         (name = "customers", description = "Customers and customer contexts management"),
+        (name = "automation", description = "Webhook endpoints, delivery settings and the delivery log"),
         (name = "quotes", description = "Quotes and quote lines management"),
         (name = "reference", description = "Reference cost catalog"),
         (name = "planning", description = "Team planning — tasks, assignments, working time and availability"),
