@@ -132,9 +132,13 @@ export const MODULES: AppModule[] = [
 		status: 'available',
 		hasOverview: true,
 		railPlacement: 'utility',
-		// `/settings` reste une page unique à ancres : ses sections deviendront des
-		// entrées de nav — et l'AnchorNav disparaîtra — à l'étape
-		// « settings-as-module ».
-		sections: [],
+		sections: [
+			{
+				id: 'organisation',
+				label: 'Organisation',
+				to: '/settings',
+				exact: true,
+			},
+		],
 	},
 ]

@@ -112,7 +112,7 @@ describe('routabilité des modules', () => {
 
 		expect(sectionsOf('crm')).toContain('/crm/catalog')
 		expect(sectionsOf('planning')).toContain('/planning/equipment')
-		expect(sectionsOf('settings')).toEqual([])
+		expect(sectionsOf('settings')).toEqual(['/settings'])
 	})
 
 	it("aucun module sans vue d'ensemble ne redirige vers son propre basePath", () => {

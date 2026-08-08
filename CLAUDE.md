@@ -21,8 +21,7 @@ Adding a module means editing a registry, never a `match`:
 - Crate → `Cargo.toml` (workspace `members` **and** `workspace.dependencies`).
 - Repository → a marker in `libs/core/src/infrastructure/registry.rs`, plus `#[repository(domain = X, backend = Postgres)]` on the adapter.
 - Route and OpenAPI tag → `apps/api/src/router.rs` and `apps/api/src/openapi.rs`.
-- Frontend module and its sidebar → `apps/webapp/src/modules/registry.ts`.
-- Frontend settings section → `apps/webapp/src/pages/settings/registry.tsx`.
+- Frontend module and its sidebar, settings sections included → `apps/webapp/src/modules/registry.ts`.
 
 ## Commands
 
