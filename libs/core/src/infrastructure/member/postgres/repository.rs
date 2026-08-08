@@ -1,3 +1,4 @@
+use chrono::{DateTime, Utc};
 use common::CoreError;
 use mestier_macros::repository;
 
@@ -32,20 +33,43 @@ impl<'tx> MemberRepository for PgMemberRepository<'tx> {
         let row = sqlx::query_as!(
             MemberRow,
             r#"
-            INSERT INTO organization_members (id, organization_id, user_id, joined_at)
-            VALUES ($1, $2, $3, $4)
-            RETURNING id, organization_id, user_id, joined_at
+            INSERT INTO organization_members (id, organization_id, user_id, last_name, first_name, joined_at, created_at, deleted_at)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+            RETURNING id, organization_id, user_id, last_name, first_name, joined_at, created_at, deleted_at
             "#,
             member.id.0,
             member.organization_id.0,
-            member.user_id.0,
+            member.user_id.map(|id| id.0),
+            member.last_name,
+            member.first_name,
             member.joined_at,
+            member.created_at,
+            member.deleted_at,
         )
         .fetch_one(&mut ***tx)
         .await
         .map_err(map_sqlx_error)?;
 
         Ok(row.into())
+    }
+
+    #[tracing::instrument(skip(self), fields(db.system = "postgresql", db.operation = "select", db.table = "organization_members"), err)]
+    async fn find_by_id(&mut self, member_id: MemberId) -> Result<Option<Member>, CoreError> {
+        let mut tx = self.tx.lock().await;
+        let row = sqlx::query_as!(
+            MemberRow,
+            r#"
+            SELECT id, organization_id, user_id, last_name, first_name, joined_at, created_at, deleted_at
+            FROM organization_members
+            WHERE id = $1 AND deleted_at IS NULL
+            "#,
+            member_id.0,
+        )
+        .fetch_optional(&mut ***tx)
+        .await
+        .map_err(map_sqlx_error)?;
+
+        Ok(row.map(Into::into))
     }
 
     #[tracing::instrument(skip(self), fields(db.system = "postgresql", db.operation = "select", db.table = "organization_members"), err)]
@@ -57,9 +81,9 @@ impl<'tx> MemberRepository for PgMemberRepository<'tx> {
         let rows = sqlx::query_as!(
             MemberRow,
             r#"
-            SELECT id, organization_id, user_id, joined_at
+            SELECT id, organization_id, user_id, last_name, first_name, joined_at, created_at, deleted_at
             FROM organization_members
-            WHERE organization_id = $1
+            WHERE organization_id = $1 AND deleted_at IS NULL
             ORDER BY joined_at ASC
             "#,
             organization_id.0,
@@ -100,9 +124,9 @@ impl<'tx> MemberRepository for PgMemberRepository<'tx> {
         let row = sqlx::query_as!(
             MemberRow,
             r#"
-            SELECT id, organization_id, user_id, joined_at
+            SELECT id, organization_id, user_id, last_name, first_name, joined_at, created_at, deleted_at
             FROM organization_members
-            WHERE organization_id = $1 AND user_id = $2
+            WHERE organization_id = $1 AND user_id = $2 AND deleted_at IS NULL
             "#,
             organization_id.0,
             user_id.0,
@@ -114,15 +138,45 @@ impl<'tx> MemberRepository for PgMemberRepository<'tx> {
         Ok(row.map(Into::into))
     }
 
-    #[tracing::instrument(skip(self), fields(db.system = "postgresql", db.operation = "delete", db.table = "organization_members"), err)]
-    async fn remove(&mut self, member_id: MemberId) -> Result<(), CoreError> {
+    #[tracing::instrument(skip(self, member), fields(db.system = "postgresql", db.operation = "update", db.table = "organization_members"), err)]
+    async fn update(&mut self, member: &Member) -> Result<Member, CoreError> {
+        let mut tx = self.tx.lock().await;
+        let row = sqlx::query_as!(
+            MemberRow,
+            r#"
+            UPDATE organization_members
+            SET user_id = $2, last_name = $3, first_name = $4, joined_at = $5
+            WHERE id = $1 AND deleted_at IS NULL
+            RETURNING id, organization_id, user_id, last_name, first_name, joined_at, created_at, deleted_at
+            "#,
+            member.id.0,
+            member.user_id.map(|id| id.0),
+            member.last_name,
+            member.first_name,
+            member.joined_at,
+        )
+        .fetch_optional(&mut ***tx)
+        .await
+        .map_err(map_sqlx_error)?;
+
+        row.map(Into::into).ok_or(CoreError::NotFound)
+    }
+
+    #[tracing::instrument(skip(self), fields(db.system = "postgresql", db.operation = "update", db.table = "organization_members"), err)]
+    async fn soft_delete(
+        &mut self,
+        member_id: MemberId,
+        deleted_at: DateTime<Utc>,
+    ) -> Result<(), CoreError> {
         let mut tx = self.tx.lock().await;
         let result = sqlx::query!(
             r#"
-            DELETE FROM organization_members
-            WHERE id = $1
+            UPDATE organization_members
+            SET deleted_at = $2
+            WHERE id = $1 AND deleted_at IS NULL
             "#,
             member_id.0,
+            deleted_at,
         )
         .execute(&mut ***tx)
         .await

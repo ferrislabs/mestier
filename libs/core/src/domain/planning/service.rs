@@ -439,9 +439,14 @@ where
         let mut resources: Vec<PlanningResource> =
             employees.into_iter().map(employee_resource).collect();
 
+        // Transitional: a free seat (`user_id: None`, #180) has no user to
+        // represent yet, so it is skipped here rather than surfaced as a
+        // `PlanningResource::Member`. #182 removes `PlanningResource::Member`
+        // entirely and reads the member's own name instead — this dedup by
+        // `user_id` is scaffolding for that, not the final shape.
         let member_only_user_ids: Vec<UserId> = members
             .into_iter()
-            .map(|member| member.user_id)
+            .filter_map(|member| member.user_id)
             .filter(|user_id| !linked_user_ids.contains(user_id))
             .collect();
 
@@ -1026,8 +1031,12 @@ mod tests {
                     Ok(vec![Member {
                         id: MemberId(Uuid::new_v4()),
                         organization_id: org_id,
-                        user_id,
-                        joined_at: Utc::now(),
+                        user_id: Some(user_id),
+                        last_name: "Member".to_owned(),
+                        first_name: None,
+                        joined_at: Some(Utc::now()),
+                        created_at: Utc::now(),
+                        deleted_at: None,
                     }])
                 })
             });
@@ -1083,8 +1092,12 @@ mod tests {
                     Ok(vec![Member {
                         id: MemberId(Uuid::new_v4()),
                         organization_id: org_id,
-                        user_id,
-                        joined_at: Utc::now(),
+                        user_id: Some(user_id),
+                        last_name: "Member".to_owned(),
+                        first_name: None,
+                        joined_at: Some(Utc::now()),
+                        created_at: Utc::now(),
+                        deleted_at: None,
                     }])
                 })
             });
@@ -1130,6 +1143,68 @@ mod tests {
         ));
     }
 
+    /// Transitional (#180): a free seat (`user_id: None`) has no user to
+    /// resolve a display name for, so `load_resources` skips it rather than
+    /// producing a `PlanningResource::Member` — no route can create one yet
+    /// (that is #181), so this has no observable effect today. #182 removes
+    /// `PlanningResource::Member` and reads the member's own name instead.
+    #[tokio::test]
+    async fn get_planning_skips_a_free_seat_member_with_no_user_id() {
+        let organization_id = OrganizationId(Uuid::new_v4());
+
+        let mut organization_repository = MockOrganizationRepository::new();
+        organization_repository
+            .expect_find_timezone()
+            .with(eq(organization_id))
+            .returning(|_| Box::pin(async { Ok(Some("Europe/Paris".to_owned())) }));
+
+        let mut employee_repository = MockEmployeeRepository::new();
+        employee_repository
+            .expect_list_active_by_organization()
+            .with(eq(organization_id))
+            .returning(|_| Box::pin(async { Ok(Vec::new()) }));
+
+        let mut member_repository = MockMemberRepository::new();
+        member_repository
+            .expect_list_by_organization()
+            .with(eq(organization_id))
+            .returning(move |org_id| {
+                let now = Utc::now();
+                Box::pin(async move {
+                    Ok(vec![Member {
+                        id: MemberId(Uuid::new_v4()),
+                        organization_id: org_id,
+                        user_id: None,
+                        last_name: "Free Seat".to_owned(),
+                        first_name: None,
+                        joined_at: None,
+                        created_at: now,
+                        deleted_at: None,
+                    }])
+                })
+            });
+
+        // No `expect_list_by_ids`: a free seat has no `user_id` to resolve
+        // a display name for, so the user lookup must never even happen.
+        let user_repository = MockUserRepository::new();
+
+        let mut planning_repository = MockPlanningRepository::new();
+        empty_repository_expectations(&mut planning_repository, organization_id);
+
+        let mut service = service(
+            planning_repository,
+            employee_repository,
+            member_repository,
+            organization_repository,
+            user_repository,
+        );
+
+        let range = DateRange::new(date(2026, 8, 1), date(2026, 8, 7)).unwrap();
+        let view = service.get_planning(organization_id, range).await.unwrap();
+
+        assert!(view.resources.is_empty());
+    }
+
     #[tokio::test]
     async fn get_availability_reports_a_member_only_resource_as_always_available() {
         let organization_id = OrganizationId(Uuid::new_v4());
@@ -1156,8 +1231,12 @@ mod tests {
                     Ok(vec![Member {
                         id: MemberId(Uuid::new_v4()),
                         organization_id: org_id,
-                        user_id,
-                        joined_at: Utc::now(),
+                        user_id: Some(user_id),
+                        last_name: "Member".to_owned(),
+                        first_name: None,
+                        joined_at: Some(Utc::now()),
+                        created_at: Utc::now(),
+                        deleted_at: None,
                     }])
                 })
             });

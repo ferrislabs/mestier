@@ -133,10 +133,11 @@ mod tests {
         .unwrap();
 
         sqlx::query!(
-            r#"INSERT INTO organization_members (organization_id, user_id)
-               VALUES ($1, $2)"#,
+            r#"INSERT INTO organization_members (organization_id, user_id, last_name)
+               VALUES ($1, $2, $3)"#,
             organization_id.0,
             user_id,
+            "Member Without Employee",
         )
         .execute(pool)
         .await

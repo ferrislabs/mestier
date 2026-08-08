@@ -206,8 +206,12 @@ mod tests {
         Member {
             id: MemberId(Uuid::new_v4()),
             organization_id: org_id,
-            user_id,
-            joined_at: Utc::now(),
+            user_id: Some(user_id),
+            last_name: "Member".to_owned(),
+            first_name: None,
+            joined_at: Some(Utc::now()),
+            created_at: Utc::now(),
+            deleted_at: None,
         }
     }
 
