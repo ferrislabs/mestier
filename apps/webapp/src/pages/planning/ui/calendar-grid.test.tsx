@@ -3,10 +3,8 @@ import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 import { buildCalendarModel } from '#/pages/planning/lib/build-calendar-model'
 import type { PlanningEntry } from '#/pages/planning/types'
-import {
-	type CalendarEventCallbacks,
-	CalendarGrid,
-} from '#/pages/planning/ui/calendar-grid'
+import { CalendarGrid } from '#/pages/planning/ui/calendar-grid'
+import type { CalendarEventCallbacks } from '#/pages/planning/ui/event-popover'
 
 const TASK = {
 	kind: 'task',
@@ -111,7 +109,7 @@ describe('CalendarGrid — panneau de détail', () => {
 		await userEvent.click(screen.getByRole('button', { name: /Terminée/ }))
 
 		expect(callbacks.onChangeStatus).toHaveBeenCalledWith(
-			expect.objectContaining({ entryId: 't-1' }),
+			expect.objectContaining({ id: 't-1' }),
 			'DONE',
 		)
 	})

@@ -35,28 +35,37 @@ export interface CalendarAttendeeVM {
 	initials: string
 }
 
-export interface CalendarEventVM {
+/**
+ * Ce dont le panneau de détail a besoin, et rien de plus. Les vues semaine et
+ * mois positionnent leurs entrées différemment, mais elles les décrivent
+ * pareil — c'est ce contrat qui leur permet de partager le panneau.
+ */
+export interface EventDetailVM {
+	title: string
+	/** Jour de l'entrée, en toutes lettres. */
+	dateLabel: string
+	/** Plage horaire, ou « Journée entière ». */
+	timeLabel: string
+	attendees: CalendarAttendeeVM[]
+	entry: PlanningEntry
+}
+
+export interface CalendarEventVM extends EventDetailVM {
 	/** Identifiant de rendu : une entrée s'étalant sur plusieurs jours produit un segment par jour. */
 	key: string
 	entryId: string
 	nature: CalendarNature | 'unknown'
-	title: string
-	timeLabel: string
 	allDay: boolean
 	/** Minutes depuis minuit local, pour positionner le défilement d'ouverture. */
 	startMinute: number
 	/** Durée du segment sur ce jour — c'est elle qui décide de la densité de la carte. */
 	durationMinutes: number
-	/** Jour du segment, en toutes lettres, pour l'en-tête du panneau de détail. */
-	dateLabel: string
 	/** Position verticale, en pourcentage de l'amplitude horaire visible. */
 	top: number
 	height: number
 	/** Répartition horizontale des chevauchements dans la colonne du jour. */
 	column: number
 	columnCount: number
-	attendees: CalendarAttendeeVM[]
-	entry: PlanningEntry
 }
 
 export interface CalendarDayVM {
@@ -239,7 +248,7 @@ function matchesEmployees(
 	return ids.some((id) => employeeIds.includes(id))
 }
 
-function buildAttendeeIndex(
+export function buildAttendeeIndex(
 	resources: PlanningResource[],
 ): Map<string, CalendarAttendeeVM> {
 	const index = new Map<string, CalendarAttendeeVM>()

@@ -33,8 +33,8 @@ import {
 	type PlanningView,
 	todayIsoDate,
 } from '#/pages/planning/types'
-import type { CalendarEventCallbacks } from '#/pages/planning/ui/calendar-grid'
 import type { CalendarCreateKind } from '#/pages/planning/ui/calendar-toolbar'
+import type { CalendarEventCallbacks } from '#/pages/planning/ui/event-popover'
 import { PlanningCalendarUI } from '#/pages/planning/ui/planning-calendar-ui'
 
 export interface PlanningCalendarFeatureProps {
@@ -160,6 +160,7 @@ function PlanningCalendarScreen({
 			to: range.to,
 			month: date.slice(0, 7),
 			entries: data.entries,
+			resources: data.resources,
 			timeZone: data.timezone,
 			today: todayIsoDate(),
 			filter,
@@ -242,14 +243,14 @@ function PlanningCalendarScreen({
 	}
 
 	const eventCallbacks: CalendarEventCallbacks = {
-		onOpen: (event) => openEntry(event.entry),
-		onChangeStatus: (event, status) => {
-			if (event.entry.kind !== 'task') return
-			void changeTaskStatus(event.entry.id, status)
+		onOpen: openEntry,
+		onChangeStatus: (entry, status) => {
+			if (entry.kind !== 'task') return
+			void changeTaskStatus(entry.id, status)
 		},
-		onDelete: (event) => {
-			if (event.entry.kind !== 'absence') return
-			void removeAbsence(event.entry.id)
+		onDelete: (entry) => {
+			if (entry.kind !== 'absence') return
+			void removeAbsence(entry.id)
 		},
 		isPending: patchTask.isPending || deleteAbsence.isPending,
 	}
@@ -339,7 +340,6 @@ function PlanningCalendarScreen({
 				onResetEmployees={() => setSelectedEmployeeIds([])}
 				onCreate={handleCreate}
 				eventCallbacks={eventCallbacks}
-				onSelectEntry={openEntry}
 				onRetry={() => void planningQuery.refetch()}
 			/>
 

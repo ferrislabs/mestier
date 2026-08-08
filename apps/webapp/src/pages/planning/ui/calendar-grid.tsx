@@ -1,11 +1,5 @@
 import { ChevronDown } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
-import type { Schemas } from '#/api/api.client'
-import {
-	Popover,
-	PopoverContent,
-	PopoverTrigger,
-} from '#/components/ui/popover'
 import { cn } from '#/lib/utils'
 import type { MinuteRange } from '#/pages/planning/lib/amplitude'
 import type {
@@ -20,16 +14,10 @@ import {
 	isCurrentTimeVisible,
 	millisecondsUntilNextMinute,
 } from '#/pages/planning/lib/current-time'
-import { EventDetailCard } from '#/pages/planning/ui/event-detail-card'
-
-/** Ce que le calendrier sait faire d'un événement — le reste vit dans la feature. */
-export interface CalendarEventCallbacks {
-	/** Ouvre l'entrée dans son écran complet : fiche de tâche, formulaire d'absence. */
-	onOpen: (event: CalendarEventVM) => void
-	onChangeStatus?: (event: CalendarEventVM, status: Schemas.TaskStatus) => void
-	onDelete?: (event: CalendarEventVM) => void
-	isPending?: boolean
-}
+import {
+	type CalendarEventCallbacks,
+	EventPopover,
+} from '#/pages/planning/ui/event-popover'
 
 /** Hauteur d'une heure de grille, en pixels. Fixe : c'est elle qui donne son échelle au calendrier. */
 const HOUR_HEIGHT_PX = 64
@@ -180,7 +168,7 @@ function AllDayRow({ days, callbacks }: AllDayRowProps) {
 					)}
 				>
 					{day.allDayEvents.map((event) => (
-						<EventPopover key={event.key} event={event} callbacks={callbacks}>
+						<EventPopover key={event.key} detail={event} callbacks={callbacks}>
 							<button
 								type="button"
 								className={cn(
@@ -334,7 +322,7 @@ function EventCard({ event, callbacks }: EventCardProps) {
 	const showTime = event.durationMinutes >= TIMED_CARD_MINUTES
 
 	return (
-		<EventPopover event={event} callbacks={callbacks}>
+		<EventPopover detail={event} callbacks={callbacks}>
 			<button
 				type="button"
 				className={cn(
@@ -370,57 +358,6 @@ function EventCard({ event, callbacks }: EventCardProps) {
 				) : null}
 			</button>
 		</EventPopover>
-	)
-}
-
-interface EventPopoverProps {
-	event: CalendarEventVM
-	callbacks: CalendarEventCallbacks
-	children: React.ReactNode
-}
-
-/**
- * Panneau de détail d'un événement, ancré sur sa carte.
- *
- * Un clic ouvre ce que l'entrée contient déjà — horaire, assignés, client,
- * étiquettes, description — au lieu d'envoyer vers un écran pour le lire. Les
- * actions de fond restent derrière « ouvrir ».
- */
-function EventPopover({ event, callbacks, children }: EventPopoverProps) {
-	const [open, setOpen] = useState(false)
-
-	return (
-		<Popover open={open} onOpenChange={setOpen}>
-			<PopoverTrigger asChild>{children}</PopoverTrigger>
-			<PopoverContent
-				align="start"
-				side="right"
-				className="w-96 rounded-2xl p-5"
-			>
-				<EventDetailCard
-					event={event}
-					isPending={callbacks.isPending}
-					onOpen={() => {
-						setOpen(false)
-						callbacks.onOpen(event)
-					}}
-					onClose={() => setOpen(false)}
-					onChangeStatus={
-						callbacks.onChangeStatus
-							? (status) => callbacks.onChangeStatus?.(event, status)
-							: undefined
-					}
-					onDelete={
-						callbacks.onDelete
-							? () => {
-									setOpen(false)
-									callbacks.onDelete?.(event)
-								}
-							: undefined
-					}
-				/>
-			</PopoverContent>
-		</Popover>
 	)
 }
 

@@ -1,5 +1,10 @@
 import type { TimeSpan } from '#/pages/planning/lib/amplitude'
 import {
+	buildAttendeeIndex,
+	type CalendarAttendeeVM,
+	type EventDetailVM,
+} from '#/pages/planning/lib/build-calendar-model'
+import {
 	type CalendarFilter,
 	type CalendarNature,
 	entryNature,
@@ -12,7 +17,7 @@ import {
 	minuteSpanOnDate,
 } from '#/pages/planning/lib/occurrence'
 import { enumerateDays } from '#/pages/planning/lib/window'
-import type { PlanningEntry } from '#/pages/planning/types'
+import type { PlanningEntry, PlanningResource } from '#/pages/planning/types'
 
 const DAYS_PER_WEEK = 7
 
@@ -31,6 +36,7 @@ export interface MonthEntryVM {
 	/** Heure de début sur ce jour, vide pour une entrée qui vient de la veille. */
 	timeLabel: string
 	entry: PlanningEntry
+	detail: EventDetailVM
 }
 
 /** Bandeau d'une entrée à la journée, étalé sur les colonnes qu'elle couvre. */
@@ -49,6 +55,7 @@ export interface MonthSpanVM {
 	continuesBefore: boolean
 	continuesAfter: boolean
 	entry: PlanningEntry
+	detail: EventDetailVM
 }
 
 export interface MonthDayVM {
@@ -84,6 +91,7 @@ export interface BuildMonthModelInput {
 	/** Mois affiché, au format `YYYY-MM` — sert à griser les jours voisins. */
 	month: string
 	entries: PlanningEntry[]
+	resources: PlanningResource[]
 	timeZone: string
 	today: string
 	filter: CalendarFilter
@@ -98,6 +106,7 @@ export function buildMonthModel(input: BuildMonthModelInput): MonthModel {
 	)
 
 	const days = enumerateDays(input.from, input.to)
+	const attendeesByEmployee = buildAttendeeIndex(input.resources)
 	const weeks: MonthWeekVM[] = []
 
 	for (let index = 0; index < days.length; index += DAYS_PER_WEEK) {
@@ -108,6 +117,7 @@ export function buildMonthModel(input: BuildMonthModelInput): MonthModel {
 				month: input.month,
 				timeZone: input.timeZone,
 				today: input.today,
+				attendeesByEmployee,
 			}),
 		)
 	}
@@ -125,6 +135,7 @@ function buildWeek(params: {
 	month: string
 	timeZone: string
 	today: string
+	attendeesByEmployee: Map<string, CalendarAttendeeVM>
 }): MonthWeekVM {
 	const spans = buildSpans(params)
 
@@ -136,6 +147,7 @@ function buildWeek(params: {
 				month: params.month,
 				timeZone: params.timeZone,
 				today: params.today,
+				attendeesByEmployee: params.attendeesByEmployee,
 			}),
 		),
 		spans,
@@ -149,6 +161,7 @@ function buildDay(params: {
 	month: string
 	timeZone: string
 	today: string
+	attendeesByEmployee: Map<string, CalendarAttendeeVM>
 }): MonthDayVM {
 	const timed = params.entries
 		.filter((entry) => !entry.all_day)
@@ -182,6 +195,12 @@ function buildDay(params: {
 				? formatMinute(startMinute)
 				: '',
 			entry,
+			detail: buildDetail({
+				entry,
+				date: params.date,
+				timeZone: params.timeZone,
+				attendeesByEmployee: params.attendeesByEmployee,
+			}),
 		})),
 		hiddenCount: timed.length - shown.length,
 	}
@@ -191,6 +210,7 @@ function buildSpans(params: {
 	dates: string[]
 	entries: PlanningEntry[]
 	timeZone: string
+	attendeesByEmployee: Map<string, CalendarAttendeeVM>
 }): MonthSpanVM[] {
 	const first = params.dates[0]
 	const last = params.dates.at(-1)
@@ -237,7 +257,52 @@ function buildSpans(params: {
 		continuesBefore: item.continuesBefore,
 		continuesAfter: item.continuesAfter,
 		entry: item.entry,
+		detail: buildDetail({
+			entry: item.entry,
+			date: params.dates[item.startIndex] ?? first,
+			timeZone: params.timeZone,
+			attendeesByEmployee: params.attendeesByEmployee,
+		}),
 	}))
+}
+
+/**
+ * Description d'une entrée pour le panneau de détail, dans le format que la
+ * vue semaine produit déjà — c'est ce contrat commun qui laisse les deux
+ * projections partager le même panneau.
+ */
+function buildDetail(params: {
+	entry: PlanningEntry
+	date: string
+	timeZone: string
+	attendeesByEmployee: Map<string, CalendarAttendeeVM>
+}): EventDetailVM {
+	const span = minuteSpanOnDate(
+		toTimeSpan(params.entry),
+		params.date,
+		params.timeZone,
+	)
+
+	return {
+		title: entryLabel(params.entry),
+		dateLabel: formatLongDate(params.date),
+		timeLabel: params.entry.all_day
+			? 'Journée entière'
+			: `${formatMinute(span.startMinute)} – ${formatMinute(span.endMinute)}`,
+		attendees: entryEmployeeIds(params.entry)
+			.map((employeeId) => params.attendeesByEmployee.get(employeeId))
+			.filter((attendee) => attendee !== undefined),
+		entry: params.entry,
+	}
+}
+
+function formatLongDate(date: string): string {
+	return new Intl.DateTimeFormat('fr-FR', {
+		weekday: 'long',
+		day: 'numeric',
+		month: 'long',
+		timeZone: 'UTC',
+	}).format(new Date(`${date}T00:00:00Z`))
 }
 
 function matchesEmployees(

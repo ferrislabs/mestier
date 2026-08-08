@@ -7,13 +7,17 @@ import type {
 	MonthWeekVM,
 } from '#/pages/planning/lib/build-month-model'
 import type { CalendarNature } from '#/pages/planning/lib/calendar-filters'
+import {
+	type CalendarEventCallbacks,
+	EventPopover,
+} from '#/pages/planning/ui/event-popover'
 
 /** Hauteur d'un rang du bandeau des journées entières, en pixels. */
 const SPAN_LANE_HEIGHT_PX = 22
 
 export interface MonthGridProps {
 	model: MonthModel
-	onSelectEntry: (entry: MonthEntryVM['entry']) => void
+	callbacks: CalendarEventCallbacks
 }
 
 /**
@@ -24,7 +28,7 @@ export interface MonthGridProps {
  * case, et chaque entrée une ligne de texte — on lit « qu'est-ce qui se passe
  * ce mois-ci », pas « à quelle heure ».
  */
-export function MonthGrid({ model, onSelectEntry }: MonthGridProps) {
+export function MonthGrid({ model, callbacks }: MonthGridProps) {
 	return (
 		<div className="overflow-x-auto">
 			<div className="min-w-3xl">
@@ -40,11 +44,7 @@ export function MonthGrid({ model, onSelectEntry }: MonthGridProps) {
 				</div>
 
 				{model.weeks.map((week) => (
-					<WeekRow
-						key={week.days[0]?.date}
-						week={week}
-						onSelectEntry={onSelectEntry}
-					/>
+					<WeekRow key={week.days[0]?.date} week={week} callbacks={callbacks} />
 				))}
 			</div>
 		</div>
@@ -53,10 +53,10 @@ export function MonthGrid({ model, onSelectEntry }: MonthGridProps) {
 
 interface WeekRowProps {
 	week: MonthWeekVM
-	onSelectEntry: (entry: MonthEntryVM['entry']) => void
+	callbacks: CalendarEventCallbacks
 }
 
-function WeekRow({ week, onSelectEntry }: WeekRowProps) {
+function WeekRow({ week, callbacks }: WeekRowProps) {
 	return (
 		<div className="relative border-b last:border-b-0">
 			<div className="grid min-h-32 grid-cols-7">
@@ -65,7 +65,7 @@ function WeekRow({ week, onSelectEntry }: WeekRowProps) {
 						key={day.date}
 						day={day}
 						spanOffset={week.laneCount * SPAN_LANE_HEIGHT_PX}
-						onSelectEntry={onSelectEntry}
+						callbacks={callbacks}
 					/>
 				))}
 			</div>
@@ -73,7 +73,7 @@ function WeekRow({ week, onSelectEntry }: WeekRowProps) {
 			{/* Les bandeaux se superposent à la grille : une entrée à la journée
 			    couvre plusieurs colonnes, elle ne peut donc pas vivre dans une case. */}
 			{week.spans.map((span) => (
-				<SpanBar key={span.key} span={span} onSelectEntry={onSelectEntry} />
+				<SpanBar key={span.key} span={span} callbacks={callbacks} />
 			))}
 		</div>
 	)
@@ -83,10 +83,10 @@ interface DayCellProps {
 	day: MonthDayVM
 	/** Place réservée en haut de la case pour les bandeaux de la semaine. */
 	spanOffset: number
-	onSelectEntry: (entry: MonthEntryVM['entry']) => void
+	callbacks: CalendarEventCallbacks
 }
 
-function DayCell({ day, spanOffset, onSelectEntry }: DayCellProps) {
+function DayCell({ day, spanOffset, callbacks }: DayCellProps) {
 	return (
 		<div
 			className={cn(
@@ -110,11 +110,7 @@ function DayCell({ day, spanOffset, onSelectEntry }: DayCellProps) {
 
 			<div style={{ marginTop: spanOffset }} className="flex flex-col gap-0.5">
 				{day.entries.map((entry) => (
-					<EntryRow
-						key={entry.key}
-						entry={entry}
-						onSelect={() => onSelectEntry(entry.entry)}
-					/>
+					<EntryRow key={entry.key} entry={entry} callbacks={callbacks} />
 				))}
 				{day.hiddenCount > 0 ? (
 					<span className="px-1 text-[11px] font-medium text-muted-foreground">
@@ -128,62 +124,64 @@ function DayCell({ day, spanOffset, onSelectEntry }: DayCellProps) {
 
 interface EntryRowProps {
 	entry: MonthEntryVM
-	onSelect: () => void
+	callbacks: CalendarEventCallbacks
 }
 
-function EntryRow({ entry, onSelect }: EntryRowProps) {
+function EntryRow({ entry, callbacks }: EntryRowProps) {
 	return (
-		<button
-			type="button"
-			onClick={onSelect}
-			className="flex w-full items-center gap-1.5 rounded px-1 py-px text-left transition-colors hover:bg-muted"
-		>
-			<span
-				aria-hidden="true"
-				className={cn(
-					'h-3 w-1 shrink-0 rounded-full',
-					natureDotClassName(entry.nature),
-				)}
-			/>
-			<span className="min-w-0 flex-1 truncate text-[11px] text-foreground">
-				{entry.title}
-			</span>
-			{entry.timeLabel ? (
-				<span className="shrink-0 text-[11px] text-muted-foreground tabular-nums">
-					{entry.timeLabel}
+		<EventPopover detail={entry.detail} callbacks={callbacks}>
+			<button
+				type="button"
+				className="flex w-full items-center gap-1.5 rounded px-1 py-px text-left transition-colors hover:bg-muted data-[state=open]:bg-muted"
+			>
+				<span
+					aria-hidden="true"
+					className={cn(
+						'h-3 w-1 shrink-0 rounded-full',
+						natureDotClassName(entry.nature),
+					)}
+				/>
+				<span className="min-w-0 flex-1 truncate text-[11px] text-foreground">
+					{entry.title}
 				</span>
-			) : null}
-		</button>
+				{entry.timeLabel ? (
+					<span className="shrink-0 text-[11px] text-muted-foreground tabular-nums">
+						{entry.timeLabel}
+					</span>
+				) : null}
+			</button>
+		</EventPopover>
 	)
 }
 
 interface SpanBarProps {
 	span: MonthSpanVM
-	onSelectEntry: (entry: MonthEntryVM['entry']) => void
+	callbacks: CalendarEventCallbacks
 }
 
-function SpanBar({ span, onSelectEntry }: SpanBarProps) {
+function SpanBar({ span, callbacks }: SpanBarProps) {
 	const columnWidth = 100 / 7
 
 	return (
-		<button
-			type="button"
-			onClick={() => onSelectEntry(span.entry)}
-			className={cn(
-				'absolute truncate px-2 text-left text-[11px] font-medium leading-5',
-				natureBarClassName(span.nature),
-				span.continuesBefore ? 'rounded-l-none' : 'rounded-l-full',
-				span.continuesAfter ? 'rounded-r-none' : 'rounded-r-full',
-			)}
-			style={{
-				left: `calc(${span.startIndex * columnWidth}% + 4px)`,
-				width: `calc(${span.length * columnWidth}% - 8px)`,
-				// Sous le numéro du jour, qui occupe la première ligne de la case.
-				top: 32 + span.lane * SPAN_LANE_HEIGHT_PX,
-			}}
-		>
-			{span.title}
-		</button>
+		<EventPopover detail={span.detail} callbacks={callbacks}>
+			<button
+				type="button"
+				className={cn(
+					'absolute truncate px-2 text-left text-[11px] font-medium leading-5',
+					natureBarClassName(span.nature),
+					span.continuesBefore ? 'rounded-l-none' : 'rounded-l-full',
+					span.continuesAfter ? 'rounded-r-none' : 'rounded-r-full',
+				)}
+				style={{
+					left: `calc(${span.startIndex * columnWidth}% + 4px)`,
+					width: `calc(${span.length * columnWidth}% - 8px)`,
+					// Sous le numéro du jour, qui occupe la première ligne de la case.
+					top: 32 + span.lane * SPAN_LANE_HEIGHT_PX,
+				}}
+			>
+				{span.title}
+			</button>
+		</EventPopover>
 	)
 }
 

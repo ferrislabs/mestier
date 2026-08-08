@@ -16,7 +16,7 @@ import type * as React from 'react'
 import type { Schemas } from '#/api/api.client'
 import { Button } from '#/components/ui/button'
 import { cn } from '#/lib/utils'
-import type { CalendarEventVM } from '#/pages/planning/lib/build-calendar-model'
+import type { EventDetailVM } from '#/pages/planning/lib/build-calendar-model'
 import { ABSENCE_LABELS } from '#/pages/planning/lib/entries'
 
 type TaskStatus = Schemas.TaskStatus
@@ -32,7 +32,7 @@ const STATUS_LABELS: Record<TaskStatus, string> = {
 const QUICK_STATUSES: TaskStatus[] = ['PLANNED', 'IN_PROGRESS', 'DONE']
 
 export interface EventDetailCardProps {
-	event: CalendarEventVM
+	event: EventDetailVM
 	/** Ouvre l'entrée dans son écran complet — fiche de tâche, formulaire d'absence. */
 	onOpen: () => void
 	onClose: () => void
@@ -201,7 +201,7 @@ export function EventDetailCard({
 function TaskRows({
 	entry,
 }: {
-	entry: Extract<CalendarEventVM['entry'], { kind: 'task' }>
+	entry: Extract<EventDetailVM['entry'], { kind: 'task' }>
 }) {
 	return (
 		<>
@@ -241,7 +241,7 @@ function TaskRows({
 function AbsenceRows({
 	entry,
 }: {
-	entry: Extract<CalendarEventVM['entry'], { kind: 'absence' }>
+	entry: Extract<EventDetailVM['entry'], { kind: 'absence' }>
 }) {
 	return (
 		<>

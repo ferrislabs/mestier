@@ -4,16 +4,14 @@ import { PageHeader, PageShell, SectionCard } from '#/components/ui/surface'
 import type { CalendarModel } from '#/pages/planning/lib/build-calendar-model'
 import type { MonthModel } from '#/pages/planning/lib/build-month-model'
 import type { CalendarFilter } from '#/pages/planning/lib/calendar-filters'
-import type { PlanningEntry, PlanningView } from '#/pages/planning/types'
-import {
-	type CalendarEventCallbacks,
-	CalendarGrid,
-} from '#/pages/planning/ui/calendar-grid'
+import type { PlanningView } from '#/pages/planning/types'
+import { CalendarGrid } from '#/pages/planning/ui/calendar-grid'
 import {
 	type CalendarCreateKind,
 	type CalendarEmployeeOption,
 	CalendarToolbar,
 } from '#/pages/planning/ui/calendar-toolbar'
+import type { CalendarEventCallbacks } from '#/pages/planning/ui/event-popover'
 import { MonthGrid } from '#/pages/planning/ui/month-grid'
 
 export interface PlanningCalendarUIProps {
@@ -37,8 +35,6 @@ export interface PlanningCalendarUIProps {
 	onCreate: (kind: CalendarCreateKind) => void
 	/** Ce que le panneau de détail d'un événement sait déclencher. */
 	eventCallbacks: CalendarEventCallbacks
-	/** Ouvre une entrée depuis la vue mois, qui n'a pas de segment positionné. */
-	onSelectEntry: (entry: PlanningEntry) => void
 	onRetry: () => void
 	/** Fige l'heure courante — tests seulement. */
 	now?: Date
@@ -64,7 +60,6 @@ export function PlanningCalendarUI({
 	onResetEmployees,
 	onCreate,
 	eventCallbacks,
-	onSelectEntry,
 	onRetry,
 	now,
 }: PlanningCalendarUIProps) {
@@ -142,7 +137,7 @@ export function PlanningCalendarUI({
 						}
 					/>
 				) : isMonth && monthModel ? (
-					<MonthGrid model={monthModel} onSelectEntry={onSelectEntry} />
+					<MonthGrid model={monthModel} callbacks={eventCallbacks} />
 				) : model ? (
 					<CalendarGrid model={model} callbacks={eventCallbacks} now={now} />
 				) : null}

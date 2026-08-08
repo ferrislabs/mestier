@@ -1,9 +1,19 @@
 import { describe, expect, it } from 'vitest'
 import { buildMonthModel } from '#/pages/planning/lib/build-month-model'
 import { computeMonthGridWindow } from '#/pages/planning/lib/window'
-import type { PlanningEntry } from '#/pages/planning/types'
+import type { PlanningEntry, PlanningResource } from '#/pages/planning/types'
 
 const TIME_ZONE = 'UTC'
+
+const RESOURCES: PlanningResource[] = [
+	{
+		resource_id: 'r-1',
+		employee_id: 'e-1',
+		display_name: 'Marie Leroy',
+		kind: 'employee',
+		weekly_contract_minutes: 2100,
+	},
+]
 
 /** Août 2026 : le 1er tombe un samedi, la grille démarre donc le lundi 27 juillet. */
 const MONTH = '2026-08'
@@ -45,6 +55,7 @@ function build(entries: PlanningEntry[], overrides = {}) {
 		to: GRID.to,
 		month: MONTH,
 		entries,
+		resources: RESOURCES,
 		timeZone: TIME_ZONE,
 		today: '2026-08-09',
 		filter: 'all',
@@ -182,6 +193,25 @@ describe('buildMonthModel', () => {
 		const model = build([leave()])
 
 		expect(dayOf(model, '2026-08-05')?.entries).toHaveLength(0)
+	})
+
+	it('décrit chaque ligne pour le panneau de détail', () => {
+		const model = build([task()])
+		const detail = dayOf(model, '2026-08-05')?.entries[0]?.detail
+
+		expect(detail?.title).toBe('Taille de haie')
+		expect(detail?.dateLabel).toMatch(/^mercredi 5 août$/)
+		expect(detail?.timeLabel).toMatch(/^\d{2}:\d{2} – \d{2}:\d{2}$/)
+		expect(detail?.attendees.map((a) => a.name)).toEqual(['Marie Leroy'])
+	})
+
+	it('décrit un bandeau comme une journée entière, daté de son premier jour', () => {
+		const model = build([leave()])
+		const detail = model.weeks.find((week) => week.spans.length > 0)?.spans[0]
+			?.detail
+
+		expect(detail?.timeLabel).toBe('Journée entière')
+		expect(detail?.dateLabel).toMatch(/^mercredi 5 août$/)
 	})
 
 	it('filtre par nature et compte ce qui est masqué', () => {
