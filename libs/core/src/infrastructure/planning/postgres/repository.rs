@@ -49,22 +49,43 @@ impl<'tx> PlanningRepository for PgPlanningRepository<'tx> {
         // `customer_id`/`customer_context_id` are nullable now, so the
         // customer join is a `LEFT JOIN` (a task with no customer must
         // still appear) and `customer_name`/`context_label` resolve to
-        // `NULL` rather than dropping the row. `starts_at`/`ends_at` are
-        // nullable too — the window predicate below naturally excludes a
-        // task with neither (a subtask inheriting its parent's window);
-        // see `PlanningRepository::list_tasks_in_window`'s doc comment.
+        // `NULL` rather than dropping the row.
+        //
+        // `starts_at`/`ends_at` are nullable too — a subtask that omits
+        // them inherits its parent's window (see `resolve_task_window` in
+        // `domain::task::service`). `p` is the `LEFT JOIN` to that parent,
+        // and `COALESCE(t.starts_at, p.starts_at)` mirrors
+        // `resolve_task_window`'s own branch exactly: the task's own dates
+        // when it has them, the parent's otherwise. This is safe without
+        // walking further up the tree because the domain caps nesting at
+        // two levels (`validate_parent_depth`) — a row usable as `p` here
+        // is always a root, and a root always carries its own dates
+        // (`chk_tasks_root_has_dates`). A soft-deleted parent does not
+        // resolve (`p.deleted_at IS NULL`), so an orphaned dateless subtask
+        // is excluded rather than resolving to a dangling window. See
+        // `PlanningRepository::list_tasks_in_window`'s doc comment.
         let task_rows = sqlx::query_as!(
             PlanningTaskRow,
             r#"
             SELECT
                 t.id, t.org_id, t.parent_task_id, t.title, t.description,
-                t.starts_at, t.ends_at, t.all_day, t.status::text AS "status!", t.blocks_availability,
+                COALESCE(t.starts_at, p.starts_at) AS starts_at,
+                COALESCE(t.ends_at, p.ends_at) AS ends_at,
+                t.all_day, t.status::text AS "status!", t.blocks_availability,
                 t.customer_id, t.customer_context_id, t.quote_id,
                 t.deleted_at, t.created_at, t.updated_at,
-                (c.first_name || ' ' || c.last_name) AS customer_name,
-                cc.label AS context_label,
+                -- Postgres's own nullability analysis of a concatenation
+                -- over a `LEFT JOIN`ed table is not reliable enough to trust
+                -- (it has reported this expression as non-nullable in
+                -- practice, which then panics at decode time on the first
+                -- customer-less task) — `?` forces the `Option<String>`
+                -- decode the nullable join actually requires, matching
+                -- `PlanningTaskRow::customer_name`'s declared type.
+                (c.first_name || ' ' || c.last_name) AS "customer_name?",
+                cc.label AS "context_label?",
                 COALESCE(child_counts.count, 0) AS "child_count!"
             FROM tasks t
+            LEFT JOIN tasks p ON p.id = t.parent_task_id AND p.deleted_at IS NULL
             LEFT JOIN customers c ON c.id = t.customer_id
             LEFT JOIN customer_contexts cc ON cc.id = t.customer_context_id
             LEFT JOIN (
@@ -74,14 +95,13 @@ impl<'tx> PlanningRepository for PgPlanningRepository<'tx> {
                 GROUP BY parent_task_id
             ) child_counts ON child_counts.parent_task_id = t.id
             WHERE t.org_id = $1 AND t.deleted_at IS NULL
-              -- NULL < / > NULL is NULL, never TRUE, so a task with no
-              -- dates of its own (a subtask inheriting its parent's window)
-              -- is excluded here automatically, not by an explicit
-              -- IS NOT NULL guard. Deliberate for T1: rendering an
-              -- inherited window on the grid needs `resolve_task_window`
-              -- plus a parent fetch, which no front code calls yet.
-              AND t.starts_at < $3 AND t.ends_at > $2
-            ORDER BY t.starts_at ASC, t.id ASC
+              -- NULL < / > NULL is NULL, never TRUE, so a dateless subtask
+              -- whose parent is missing or itself out of window is still
+              -- excluded here — only now via the resolved (COALESCEd)
+              -- window rather than the task's own, possibly-absent one.
+              AND COALESCE(t.starts_at, p.starts_at) < $3
+              AND COALESCE(t.ends_at, p.ends_at) > $2
+            ORDER BY COALESCE(t.starts_at, p.starts_at) ASC, t.id ASC
             "#,
             organization_id.0,
             from,
@@ -97,10 +117,13 @@ impl<'tx> PlanningRepository for PgPlanningRepository<'tx> {
             SELECT a.id, a.org_id, a.task_id, a.employee_id, a.created_at
             FROM task_assignments a
             JOIN tasks t ON t.id = a.task_id
+            LEFT JOIN tasks p ON p.id = t.parent_task_id AND p.deleted_at IS NULL
             WHERE t.org_id = $1 AND t.deleted_at IS NULL
-              -- Same window predicate as above, kept in sync: an assignment
-              -- must only be attached to a task that itself made the cut.
-              AND t.starts_at < $3 AND t.ends_at > $2
+              -- Same resolved-window predicate as above, kept in sync: an
+              -- assignment must only be attached to a task that itself made
+              -- the cut, whether that task's window is its own or inherited.
+              AND COALESCE(t.starts_at, p.starts_at) < $3
+              AND COALESCE(t.ends_at, p.ends_at) > $2
             ORDER BY a.created_at ASC, a.id ASC
             "#,
             organization_id.0,
