@@ -88,7 +88,10 @@ mod tests {
 
         let report = drift(
             &catalogue,
-            &[EventKey::new("quote.accepted", 1), EventKey::new("quote.sent", 1)],
+            &[
+                EventKey::new("quote.accepted", 1),
+                EventKey::new("quote.sent", 1),
+            ],
         );
 
         assert!(report.is_clean(), "{report:?}");
@@ -100,10 +103,16 @@ mod tests {
 
         let report = drift(
             &catalogue,
-            &[EventKey::new("quote.accepted", 1), EventKey::new("quote.declined", 1)],
+            &[
+                EventKey::new("quote.accepted", 1),
+                EventKey::new("quote.declined", 1),
+            ],
         );
 
-        assert_eq!(report.undocumented, vec![EventKey::new("quote.declined", 1)]);
+        assert_eq!(
+            report.undocumented,
+            vec![EventKey::new("quote.declined", 1)]
+        );
         assert_eq!(report.unemitted, vec![]);
     }
 
@@ -125,7 +134,10 @@ mod tests {
 
         let report = drift(&catalogue, &[EventKey::new("quote.accepted", 2)]);
 
-        assert_eq!(report.undocumented, vec![EventKey::new("quote.accepted", 2)]);
+        assert_eq!(
+            report.undocumented,
+            vec![EventKey::new("quote.accepted", 2)]
+        );
         assert_eq!(report.unemitted, vec![EventKey::new("quote.accepted", 1)]);
     }
 
@@ -133,7 +145,10 @@ mod tests {
     fn both_sides_of_the_report_are_sorted() {
         let catalogue = catalogue_of(&[("b.event", 1), ("a.event", 1)]);
 
-        let report = drift(&catalogue, &[EventKey::new("d.event", 1), EventKey::new("c.event", 1)]);
+        let report = drift(
+            &catalogue,
+            &[EventKey::new("d.event", 1), EventKey::new("c.event", 1)],
+        );
 
         assert_eq!(
             report.undocumented,
