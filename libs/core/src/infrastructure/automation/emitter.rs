@@ -1,7 +1,7 @@
 use std::sync::Mutex;
 
 use common::{CoreError, OrganizationId};
-use events::{Actor, DomainEvent, EmissionContext, EventEnvelope};
+use events::{Actor, DomainEvent, EmissionContext, EventEmitter, EventEnvelope};
 use uuid::Uuid;
 
 /// Accumulates the events of **one transaction**, in memory, until the
@@ -56,6 +56,21 @@ impl TransactionalEventEmitter {
             .map_err(|_| CoreError::Internal("event emitter buffer lock poisoned".into()))?;
 
         Ok(std::mem::take(&mut buffer))
+    }
+}
+
+impl EventEmitter for TransactionalEventEmitter {
+    fn emit<E: DomainEvent>(&self, org_id: OrganizationId, event: &E) -> Result<(), CoreError> {
+        TransactionalEventEmitter::emit(self, org_id, event)
+    }
+}
+
+// `#[transactional(emitter)]` hands the body a reference, and services are
+// generic over `E: EventEmitter` — this is what lets the reference satisfy the
+// bound without cloning.
+impl EventEmitter for &TransactionalEventEmitter {
+    fn emit<E: DomainEvent>(&self, org_id: OrganizationId, event: &E) -> Result<(), CoreError> {
+        (*self).emit(org_id, event)
     }
 }
 

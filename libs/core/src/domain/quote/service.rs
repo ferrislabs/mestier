@@ -2,29 +2,36 @@ use chrono::{Datelike, Utc};
 use common::{CoreError, generate_uuid_v7};
 use rust_decimal::{Decimal, prelude::ToPrimitive};
 
+use events::EventEmitter;
+use serde_json::{Value, json};
+
 use crate::{
     OrganizationId, Quote, QuoteId, QuoteLine, QuoteLineId,
     domain::quote::{
         commands::{
             CreateQuoteCommand, QuoteLineCommand, UpdateQuoteCommand, UpdateQuoteStatusCommand,
         },
+        events::{QuoteCreated, QuoteDeleted, QuoteTransitioned, QuoteUpdated},
         ports::QuoteRepository,
     },
 };
 
-pub struct QuoteService<R>
+pub struct QuoteService<R, E>
 where
     R: QuoteRepository,
+    E: EventEmitter,
 {
     repo: R,
+    emitter: E,
 }
 
-impl<R> QuoteService<R>
+impl<R, E> QuoteService<R, E>
 where
     R: QuoteRepository,
+    E: EventEmitter,
 {
-    pub fn new(repo: R) -> Self {
-        Self { repo }
+    pub fn new(repo: R, emitter: E) -> Self {
+        Self { repo, emitter }
     }
 
     pub async fn create_quote(&mut self, command: CreateQuoteCommand) -> Result<Quote, CoreError> {
@@ -38,7 +45,8 @@ where
         let lines = build_quote_lines(command.organization_id, quote_id, command.lines, now)?;
         let total_cents = calculate_total_cents(&lines)?;
 
-        self.repo
+        let created = self
+            .repo
             .insert(&Quote {
                 id: quote_id,
                 organization_id: command.organization_id,
@@ -53,7 +61,16 @@ where
                 created_at: now,
                 updated_at: now,
             })
-            .await
+            .await?;
+
+        self.emitter.emit(
+            created.organization_id,
+            &QuoteCreated {
+                quote: created.clone(),
+            },
+        )?;
+
+        Ok(created)
     }
 
     pub async fn get_quote(&mut self, id: QuoteId) -> Result<Quote, CoreError> {
@@ -78,11 +95,12 @@ where
         let lines = build_quote_lines(existing.organization_id, existing.id, command.lines, now)?;
         let total_cents = calculate_total_cents(&lines)?;
 
-        self.repo
+        let updated = self
+            .repo
             .update(&Quote {
                 id: existing.id,
                 organization_id: existing.organization_id,
-                reference: existing.reference,
+                reference: existing.reference.clone(),
                 title: command.title.trim().to_owned(),
                 customer_id: command.customer_id,
                 customer_context_id: command.customer_context_id,
@@ -93,23 +111,116 @@ where
                 created_at: existing.created_at,
                 updated_at: now,
             })
-            .await
+            .await?;
+
+        // Content first, then the transition. The two perimeters never
+        // overlap: `changed_fields` cannot contain the status, and the
+        // transition carries nothing about the content.
+        let (changed_fields, previous) = content_diff(&existing, &updated);
+        if !changed_fields.is_empty() {
+            self.emitter.emit(
+                updated.organization_id,
+                &QuoteUpdated {
+                    quote: updated.clone(),
+                    changed_fields,
+                    previous,
+                },
+            )?;
+        }
+        self.emit_transition(existing.status, &updated)?;
+
+        Ok(updated)
     }
 
     pub async fn update_quote_status(
         &mut self,
         command: UpdateQuoteStatusCommand,
     ) -> Result<Quote, CoreError> {
-        self.get_quote(command.id).await?;
-        self.repo
+        let existing = self.get_quote(command.id).await?;
+        let updated = self
+            .repo
             .update_status(command.id, command.status, Utc::now())
-            .await
+            .await?;
+
+        self.emit_transition(existing.status, &updated)?;
+
+        Ok(updated)
+    }
+
+    /// Emits the named event for a landed transition. Silent when the status
+    /// did not move, and when the destination has no name the product uses.
+    fn emit_transition(&self, from: crate::QuoteStatus, quote: &Quote) -> Result<(), CoreError> {
+        if from == quote.status || QuoteTransitioned::event_name(quote.status).is_none() {
+            return Ok(());
+        }
+
+        self.emitter.emit(
+            quote.organization_id,
+            &QuoteTransitioned {
+                quote: quote.clone(),
+                from,
+            },
+        )
     }
 
     pub async fn soft_delete_quote(&mut self, id: QuoteId) -> Result<(), CoreError> {
-        self.get_quote(id).await?;
-        self.repo.soft_delete(id, Utc::now()).await
+        let existing = self.get_quote(id).await?;
+        self.repo.soft_delete(id, Utc::now()).await?;
+
+        self.emitter
+            .emit(existing.organization_id, &QuoteDeleted { quote_id: id })
     }
+}
+
+/// Which content fields moved, and what they held before.
+///
+/// `status` is absent by construction: a status change is a transition, and
+/// reporting it here would make the two perimeters overlap.
+fn content_diff(existing: &Quote, updated: &Quote) -> (Vec<&'static str>, Value) {
+    let mut changed = Vec::new();
+    let mut previous = serde_json::Map::new();
+
+    if existing.title != updated.title {
+        changed.push("title");
+        previous.insert("title".to_owned(), json!(existing.title));
+    }
+    if existing.customer_id != updated.customer_id {
+        changed.push("customer_id");
+        previous.insert("customer_id".to_owned(), json!(existing.customer_id.0));
+    }
+    if existing.customer_context_id != updated.customer_context_id {
+        changed.push("customer_context_id");
+        previous.insert(
+            "customer_context_id".to_owned(),
+            json!(existing.customer_context_id.0),
+        );
+    }
+    if line_projection(existing) != line_projection(updated) {
+        changed.push("lines");
+        previous.insert("lines".to_owned(), line_projection(existing));
+        previous.insert("total_cents".to_owned(), json!(existing.total_cents));
+    }
+
+    (changed, Value::Object(previous))
+}
+
+/// Lines compared on what a subscriber can observe, not on their ids: a line
+/// rebuilt with the same content is not a change worth waking an automation.
+fn line_projection(quote: &Quote) -> Value {
+    json!(
+        quote
+            .lines
+            .iter()
+            .map(|line| json!({
+                "label": line.label,
+                "quantity": line.quantity.to_string(),
+                "unit": line.unit,
+                "unit_price_cents": line.unit_price_cents,
+                "notes": line.notes,
+                "photo_keys": line.photo_keys,
+            }))
+            .collect::<Vec<_>>()
+    )
 }
 
 fn validate_title(title: &str) -> Result<(), CoreError> {
@@ -224,7 +335,7 @@ mod tests {
     use rust_decimal::Decimal;
     use uuid::Uuid;
 
-    fn line_command(quantity: Decimal, unit_price_cents: i32) -> QuoteLineCommand {
+    pub(super) fn line_command(quantity: Decimal, unit_price_cents: i32) -> QuoteLineCommand {
         QuoteLineCommand {
             service_rate_id: None,
             label: "Taille de haie".to_owned(),
@@ -236,7 +347,7 @@ mod tests {
         }
     }
 
-    fn quote(id: QuoteId) -> Quote {
+    pub(super) fn quote(id: QuoteId) -> Quote {
         let now = Utc::now();
         let organization_id = OrganizationId(Uuid::new_v4());
         Quote {
@@ -280,7 +391,7 @@ mod tests {
             Box::pin(async move { Ok(quote) })
         });
 
-        let mut service = QuoteService::new(repo);
+        let mut service = QuoteService::new(repo, events::testing::RecordingEmitter::new());
         let created = service
             .create_quote(CreateQuoteCommand {
                 organization_id: OrganizationId(Uuid::new_v4()),
@@ -313,7 +424,7 @@ mod tests {
             Box::pin(async move { Ok(quote) })
         });
 
-        let mut service = QuoteService::new(repo);
+        let mut service = QuoteService::new(repo, events::testing::RecordingEmitter::new());
         let updated = service
             .update_quote(UpdateQuoteCommand {
                 id,
@@ -343,7 +454,7 @@ mod tests {
             .withf(move |quote_id, status, _| *quote_id == id && *status == QuoteStatus::Accepted)
             .returning(move |_, _, _| Box::pin(async move { Ok(quote(id)) }));
 
-        let mut service = QuoteService::new(repo);
+        let mut service = QuoteService::new(repo, events::testing::RecordingEmitter::new());
 
         service
             .update_quote_status(UpdateQuoteStatusCommand {
@@ -364,7 +475,7 @@ mod tests {
                 Box::pin(async move { Ok((vec![quote(QuoteId(Uuid::new_v4()))], 1)) })
             });
 
-        let mut service = QuoteService::new(repo);
+        let mut service = QuoteService::new(repo, events::testing::RecordingEmitter::new());
         let (items, total) = service.list_quotes(org_id, 25, 50).await.unwrap();
 
         assert_eq!(items.len(), 1);
@@ -382,7 +493,7 @@ mod tests {
             .withf(move |deleted_id, _| *deleted_id == id)
             .returning(|_, _| Box::pin(async { Ok(()) }));
 
-        let mut service = QuoteService::new(repo);
+        let mut service = QuoteService::new(repo, events::testing::RecordingEmitter::new());
 
         service.soft_delete_quote(id).await.unwrap();
     }
@@ -393,7 +504,7 @@ mod tests {
         repo.expect_next_reference()
             .times(1)
             .returning(|_, _| Box::pin(async { Ok("DEV-2026-0001".to_owned()) }));
-        let mut service = QuoteService::new(repo);
+        let mut service = QuoteService::new(repo, events::testing::RecordingEmitter::new());
         let result = service
             .create_quote(CreateQuoteCommand {
                 organization_id: OrganizationId(Uuid::new_v4()),
@@ -410,7 +521,7 @@ mod tests {
     #[tokio::test]
     async fn rejects_empty_quote_title() {
         let repo = MockQuoteRepository::new();
-        let mut service = QuoteService::new(repo);
+        let mut service = QuoteService::new(repo, events::testing::RecordingEmitter::new());
         let result = service
             .create_quote(CreateQuoteCommand {
                 organization_id: OrganizationId(Uuid::new_v4()),
@@ -422,5 +533,282 @@ mod tests {
             .await;
 
         assert!(matches!(result, Err(CoreError::Conflict(_))));
+    }
+}
+
+#[cfg(test)]
+mod emission_tests {
+    use events::testing::RecordingEmitter;
+    use mockall::predicate::eq;
+    use rust_decimal::Decimal;
+    use serde_json::json;
+    use uuid::Uuid;
+
+    use super::tests::{line_command, quote};
+    use super::*;
+    use crate::{
+        CustomerContextId, CustomerId, QuoteStatus, domain::quote::ports::MockQuoteRepository,
+    };
+
+    /// Mirrors the line the `quote` fixture holds, so a test that means to
+    /// change only the title does not silently change the lines too.
+    fn unchanged_line() -> QuoteLineCommand {
+        QuoteLineCommand {
+            service_rate_id: None,
+            label: "Taille de haie".to_owned(),
+            quantity: Decimal::new(1, 0),
+            unit: crate::ServiceRateUnit::Hour,
+            unit_price_cents: 5500,
+            notes: None,
+            photo_keys: vec![],
+        }
+    }
+
+    fn update_command(
+        id: QuoteId,
+        title: &str,
+        status: QuoteStatus,
+        from: &Quote,
+    ) -> UpdateQuoteCommand {
+        UpdateQuoteCommand {
+            id,
+            title: title.to_owned(),
+            customer_id: from.customer_id,
+            customer_context_id: from.customer_context_id,
+            status,
+            lines: vec![unchanged_line()],
+        }
+    }
+
+    #[tokio::test]
+    async fn creating_a_quote_emits_created_and_nothing_else() {
+        let mut repo = MockQuoteRepository::new();
+        repo.expect_next_reference()
+            .returning(|_, _| Box::pin(async { Ok("DEV-2026-0001".to_owned()) }));
+        repo.expect_insert().returning(|q| {
+            let q = q.clone();
+            Box::pin(async move { Ok(q) })
+        });
+        let emitter = RecordingEmitter::new();
+        let mut service = QuoteService::new(repo, &emitter);
+
+        service
+            .create_quote(CreateQuoteCommand {
+                organization_id: OrganizationId(Uuid::new_v4()),
+                title: "Rénovation cuisine".to_owned(),
+                customer_id: CustomerId(Uuid::new_v4()),
+                customer_context_id: CustomerContextId(Uuid::new_v4()),
+                lines: vec![line_command(Decimal::new(1, 0), 5500)],
+            })
+            .await
+            .unwrap();
+
+        assert_eq!(emitter.names(), vec!["quote.created"]);
+    }
+
+    #[tokio::test]
+    async fn a_content_change_reports_only_the_fields_that_moved() {
+        let id = QuoteId(Uuid::new_v4());
+        let existing = quote(id);
+        let mut repo = MockQuoteRepository::new();
+        let stored = existing.clone();
+        repo.expect_find_by_id().with(eq(id)).returning(move |_| {
+            let q = stored.clone();
+            Box::pin(async move { Ok(Some(q)) })
+        });
+        repo.expect_update().returning(|q| {
+            let q = q.clone();
+            Box::pin(async move { Ok(q) })
+        });
+        let emitter = RecordingEmitter::new();
+        let mut service = QuoteService::new(repo, &emitter);
+
+        service
+            .update_quote(update_command(
+                id,
+                "Nouveau titre",
+                existing.status,
+                &existing,
+            ))
+            .await
+            .unwrap();
+
+        assert_eq!(emitter.names(), vec!["quote.updated"]);
+        let payload = emitter.only("quote.updated").payload;
+        assert_eq!(payload["changed_fields"], json!(["title"]));
+        assert_eq!(payload["previous"]["title"], json!(existing.title));
+    }
+
+    #[tokio::test]
+    async fn changing_a_line_is_reported_as_a_content_change() {
+        let id = QuoteId(Uuid::new_v4());
+        let existing = quote(id);
+        let mut repo = MockQuoteRepository::new();
+        let stored = existing.clone();
+        repo.expect_find_by_id().returning(move |_| {
+            let q = stored.clone();
+            Box::pin(async move { Ok(Some(q)) })
+        });
+        repo.expect_update().returning(|q| {
+            let q = q.clone();
+            Box::pin(async move { Ok(q) })
+        });
+        let emitter = RecordingEmitter::new();
+        let mut service = QuoteService::new(repo, &emitter);
+
+        let mut command = update_command(id, &existing.title, existing.status, &existing);
+        command.lines = vec![line_command(Decimal::new(2, 0), 9000)];
+
+        service.update_quote(command).await.unwrap();
+
+        let payload = emitter.only("quote.updated").payload;
+        assert_eq!(payload["changed_fields"], json!(["lines"]));
+        assert_eq!(payload["previous"]["total_cents"], json!(5500));
+    }
+
+    /// The rule the whole taxonomy rests on: content and status never overlap.
+    #[tokio::test]
+    async fn a_write_touching_content_and_status_emits_both_on_disjoint_perimeters() {
+        let id = QuoteId(Uuid::new_v4());
+        let existing = quote(id);
+        let mut repo = MockQuoteRepository::new();
+        let stored = existing.clone();
+        repo.expect_find_by_id().returning(move |_| {
+            let q = stored.clone();
+            Box::pin(async move { Ok(Some(q)) })
+        });
+        repo.expect_update().returning(|q| {
+            let q = q.clone();
+            Box::pin(async move { Ok(q) })
+        });
+        let emitter = RecordingEmitter::new();
+        let mut service = QuoteService::new(repo, &emitter);
+
+        service
+            .update_quote(update_command(
+                id,
+                "Nouveau titre",
+                QuoteStatus::Sent,
+                &existing,
+            ))
+            .await
+            .unwrap();
+
+        assert_eq!(emitter.names(), vec!["quote.updated", "quote.sent"]);
+        let updated = emitter.only("quote.updated").payload;
+        assert_eq!(
+            updated["changed_fields"],
+            json!(["title"]),
+            "the status change must not be reported as a content change"
+        );
+        let sent = emitter.only("quote.sent").payload;
+        assert_eq!(sent["from"], json!("DRAFT"));
+        assert_eq!(sent["to"], json!("SENT"));
+    }
+
+    #[tokio::test]
+    async fn each_status_transition_has_its_own_event() {
+        for (status, expected) in [
+            (QuoteStatus::Sent, "quote.sent"),
+            (QuoteStatus::Accepted, "quote.accepted"),
+            (QuoteStatus::Declined, "quote.declined"),
+            (QuoteStatus::Cancelled, "quote.cancelled"),
+        ] {
+            let id = QuoteId(Uuid::new_v4());
+            let existing = quote(id);
+            let mut repo = MockQuoteRepository::new();
+            let stored = existing.clone();
+            repo.expect_find_by_id().returning(move |_| {
+                let q = stored.clone();
+                Box::pin(async move { Ok(Some(q)) })
+            });
+            let mut landed = existing.clone();
+            landed.status = status;
+            repo.expect_update_status().returning(move |_, _, _| {
+                let q = landed.clone();
+                Box::pin(async move { Ok(q) })
+            });
+            let emitter = RecordingEmitter::new();
+            let mut service = QuoteService::new(repo, &emitter);
+
+            service
+                .update_quote_status(UpdateQuoteStatusCommand { id, status })
+                .await
+                .unwrap();
+
+            assert_eq!(emitter.names(), vec![expected]);
+        }
+    }
+
+    #[tokio::test]
+    async fn restating_the_current_status_emits_nothing() {
+        let id = QuoteId(Uuid::new_v4());
+        let existing = quote(id);
+        let mut repo = MockQuoteRepository::new();
+        let stored = existing.clone();
+        repo.expect_find_by_id().returning(move |_| {
+            let q = stored.clone();
+            Box::pin(async move { Ok(Some(q)) })
+        });
+        let landed = existing.clone();
+        repo.expect_update_status().returning(move |_, _, _| {
+            let q = landed.clone();
+            Box::pin(async move { Ok(q) })
+        });
+        let emitter = RecordingEmitter::new();
+        let mut service = QuoteService::new(repo, &emitter);
+
+        service
+            .update_quote_status(UpdateQuoteStatusCommand {
+                id,
+                status: existing.status,
+            })
+            .await
+            .unwrap();
+
+        assert!(emitter.names().is_empty(), "{:?}", emitter.names());
+    }
+
+    #[tokio::test]
+    async fn deleting_a_quote_emits_deleted() {
+        let id = QuoteId(Uuid::new_v4());
+        let mut repo = MockQuoteRepository::new();
+        let stored = quote(id);
+        repo.expect_find_by_id().returning(move |_| {
+            let q = stored.clone();
+            Box::pin(async move { Ok(Some(q)) })
+        });
+        repo.expect_soft_delete()
+            .returning(|_, _| Box::pin(async { Ok(()) }));
+        let emitter = RecordingEmitter::new();
+        let mut service = QuoteService::new(repo, &emitter);
+
+        service.soft_delete_quote(id).await.unwrap();
+
+        assert_eq!(emitter.names(), vec!["quote.deleted"]);
+    }
+
+    #[tokio::test]
+    async fn a_write_that_fails_emits_nothing() {
+        let mut repo = MockQuoteRepository::new();
+        repo.expect_next_reference()
+            .returning(|_, _| Box::pin(async { Ok("DEV-2026-0001".to_owned()) }));
+        repo.expect_insert()
+            .returning(|_| Box::pin(async { Err(CoreError::Conflict("nope".into())) }));
+        let emitter = RecordingEmitter::new();
+        let mut service = QuoteService::new(repo, &emitter);
+
+        let outcome = service
+            .create_quote(CreateQuoteCommand {
+                organization_id: OrganizationId(Uuid::new_v4()),
+                title: "Rénovation cuisine".to_owned(),
+                customer_id: CustomerId(Uuid::new_v4()),
+                customer_context_id: CustomerContextId(Uuid::new_v4()),
+                lines: vec![line_command(Decimal::new(1, 0), 5500)],
+            })
+            .await;
+
+        assert!(outcome.is_err());
+        assert!(emitter.names().is_empty());
     }
 }

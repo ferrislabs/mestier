@@ -4,8 +4,74 @@
 //! suite. Nothing in here is meant to run in production.
 
 use std::collections::BTreeSet;
+use std::sync::Mutex;
 
-use crate::EventCatalogue;
+use common::{CoreError, OrganizationId};
+
+use crate::{Actor, DomainEvent, EmissionContext, EventCatalogue, EventEmitter, EventEnvelope};
+
+/// An [`EventEmitter`] that keeps what it was given instead of persisting it.
+///
+/// Lets a domain service be tested for what it publishes without a database,
+/// a transaction, or a mock whose expectations restate the implementation.
+#[derive(Default)]
+pub struct RecordingEmitter {
+    recorded: Mutex<Vec<EventEnvelope>>,
+}
+
+impl RecordingEmitter {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    pub fn recorded(&self) -> Vec<EventEnvelope> {
+        self.recorded.lock().expect("recorder lock").clone()
+    }
+
+    /// Event names in emission order — what most assertions actually care about.
+    pub fn names(&self) -> Vec<String> {
+        self.recorded()
+            .into_iter()
+            .map(|envelope| envelope.name)
+            .collect()
+    }
+
+    pub fn only(&self, name: &str) -> EventEnvelope {
+        let mut matching: Vec<_> = self
+            .recorded()
+            .into_iter()
+            .filter(|envelope| envelope.name == name)
+            .collect();
+        assert_eq!(
+            matching.len(),
+            1,
+            "expected exactly one `{name}`, got {:?}",
+            self.names()
+        );
+        matching.remove(0)
+    }
+}
+
+impl EventEmitter for RecordingEmitter {
+    fn emit<E: DomainEvent>(&self, org_id: OrganizationId, event: &E) -> Result<(), CoreError> {
+        let envelope = EventEnvelope::from_event(
+            event,
+            &EmissionContext {
+                org_id,
+                actor: Actor::system(),
+                correlation_id: None,
+            },
+        );
+        self.recorded.lock().expect("recorder lock").push(envelope);
+        Ok(())
+    }
+}
+
+impl EventEmitter for &RecordingEmitter {
+    fn emit<E: DomainEvent>(&self, org_id: OrganizationId, event: &E) -> Result<(), CoreError> {
+        (*self).emit(org_id, event)
+    }
+}
 
 /// One event, identified the way the catalogue keys it.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
