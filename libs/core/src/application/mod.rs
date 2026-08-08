@@ -1,12 +1,16 @@
 use auth::{AuthService, FerrisKeyRepository};
 use authz::LocalPolicyEngine;
-use common::{Config, CoreError};
+use common::{AutomationConfig, Config, CoreError};
 use rate_limit::{Quota, RateLimitService, RedisRateLimiter};
 use sqlx::PgPool;
 use sqlx::postgres::PgPoolOptions;
 
 use crate::domain::file_storage::service::FileStorageService;
 use crate::domain::role::Permissions;
+use crate::infrastructure::automation::webhook::{
+    WebhookDeliveryHandler, address_policy::PrivateNetworkAccess, secret::SecretCipher,
+};
+use crate::infrastructure::automation::worker::{WorkerSchedule, run_automation_worker};
 use crate::infrastructure::file_storage::S3FileStorage;
 use crate::infrastructure::postgres::error::map_sqlx_error;
 use crate::infrastructure::realtime::EventHub;
@@ -170,15 +174,69 @@ pub async fn create_service(config: Config) -> Result<MestierService, CoreError>
     let rate_limit_quota = Quota::per_minute(config.rate_limit.per_minute);
 
     let hub = EventHub::new();
+    let usecase = MestierUseCase::new(pool.clone(), default_authorizer(), hub.clone());
+
+    spawn_automation_worker(&config.automation, pool, usecase.clone())?;
 
     Ok(MestierService::new(
         auth,
         file_storage,
-        MestierUseCase::new(pool, default_authorizer(), hub.clone()),
+        usecase,
         rate_limit,
         rate_limit_quota,
         hub,
     ))
+}
+
+/// Starts the background loop that fans events out and delivers them.
+///
+/// Silently doing nothing when no key is configured would be the wrong
+/// failure: an operator would see events pile up with no explanation. It logs
+/// loudly instead, and the API refuses to create an endpoint for the same
+/// reason — no key means no way to store a secret.
+fn spawn_automation_worker(
+    config: &AutomationConfig,
+    pool: PgPool,
+    usecase: MestierUseCase,
+) -> Result<(), CoreError> {
+    let Some(encoded) = config.secret_key.as_deref() else {
+        tracing::warn!(
+            "no AUTOMATION_SECRET_KEY configured: the automation worker will not start and \
+             webhook endpoints cannot be created"
+        );
+        return Ok(());
+    };
+
+    let cipher = SecretCipher::from_base64(encoded)?;
+    let access = if config.allow_private_network {
+        tracing::warn!(
+            "webhooks may reach private addresses. Correct for a single-tenant instance; \
+             on a shared one a tenant can borrow this server's network rights"
+        );
+        PrivateNetworkAccess::Allowed
+    } else {
+        PrivateNetworkAccess::Denied
+    };
+
+    let handler = WebhookDeliveryHandler::new(pool, cipher, access)?;
+    // Named after the host so a delivery stuck `in_flight` points at the
+    // machine that was holding it.
+    let worker = hostname().unwrap_or_else(|| "mestier".to_owned());
+
+    tokio::spawn(run_automation_worker(
+        usecase,
+        handler,
+        worker,
+        WorkerSchedule::default(),
+    ));
+
+    Ok(())
+}
+
+fn hostname() -> Option<String> {
+    std::env::var("HOSTNAME")
+        .ok()
+        .filter(|name| !name.is_empty())
 }
 
 // `MestierUseCase` deliberately holds no event publisher. It is long-lived and

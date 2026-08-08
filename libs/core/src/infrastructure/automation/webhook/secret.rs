@@ -35,6 +35,28 @@ impl SecretCipher {
         })
     }
 
+    /// Builds a cipher from the base64 key an operator configured.
+    ///
+    /// Rejects a key of the wrong length rather than padding or truncating
+    /// one: a silently shortened key would seal secrets nobody can explain
+    /// later.
+    pub fn from_base64(encoded: &str) -> Result<Self, CoreError> {
+        use base64::{Engine, engine::general_purpose::STANDARD};
+
+        let decoded = STANDARD.decode(encoded.trim()).map_err(|_| {
+            CoreError::Internal("the automation secret key is not valid base64".to_owned())
+        })?;
+
+        let key: [u8; 32] = decoded.as_slice().try_into().map_err(|_| {
+            CoreError::Internal(format!(
+                "the automation secret key must decode to 32 bytes, got {}",
+                decoded.len()
+            ))
+        })?;
+
+        Self::new(&key)
+    }
+
     pub fn seal(&self, plaintext: &[u8]) -> Result<SealedSecret, CoreError> {
         let mut nonce_bytes = [0u8; NONCE_LEN];
         self.rng
@@ -94,6 +116,29 @@ mod tests {
 
     fn cipher() -> SecretCipher {
         SecretCipher::new(&[7u8; 32]).unwrap()
+    }
+
+    #[test]
+    fn a_configured_key_of_the_right_size_is_accepted() {
+        use base64::{Engine, engine::general_purpose::STANDARD};
+        let encoded = STANDARD.encode([4u8; 32]);
+
+        assert!(SecretCipher::from_base64(&encoded).is_ok());
+    }
+
+    /// Padding or truncating a mis-sized key would seal secrets that nobody
+    /// can account for afterwards.
+    #[test]
+    fn a_key_of_the_wrong_size_is_refused_rather_than_adjusted() {
+        use base64::{Engine, engine::general_purpose::STANDARD};
+
+        assert!(SecretCipher::from_base64(&STANDARD.encode([4u8; 16])).is_err());
+        assert!(SecretCipher::from_base64(&STANDARD.encode([4u8; 64])).is_err());
+    }
+
+    #[test]
+    fn a_key_that_is_not_base64_is_refused() {
+        assert!(SecretCipher::from_base64("not base64 at all !!").is_err());
     }
 
     #[test]

@@ -10,6 +10,20 @@ pub struct Config {
     pub auth: AuthConfig,
     pub rate_limit: RateLimitConfig,
     pub file_storage: FileStorageConfig,
+    pub automation: AutomationConfig,
+}
+
+#[derive(Clone, Debug)]
+pub struct AutomationConfig {
+    /// Base64-encoded 32-byte key sealing webhook secrets at rest.
+    ///
+    /// Optional so an instance that does not use webhooks still boots. Absent,
+    /// the worker does not start and no endpoint can be created — a visible,
+    /// contained degradation rather than a crash at startup.
+    pub secret_key: Option<String>,
+    /// Instance-level, never per organization. See
+    /// `mestier_core::PrivateNetworkAccess`.
+    pub allow_private_network: bool,
 }
 
 #[derive(Clone, Debug)]
