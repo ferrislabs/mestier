@@ -1,4 +1,5 @@
 pub(crate) mod absence;
+pub(crate) mod automation;
 pub(crate) mod customer;
 pub(crate) mod customer_contact;
 pub(crate) mod customer_context;
