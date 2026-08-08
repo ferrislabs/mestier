@@ -3,6 +3,7 @@ import { Link } from '@tanstack/react-router'
 import { AlertCircle, UserX } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { Button } from '#/components/ui/button'
+import { useActiveOrganization } from '#/hooks/use-active-organization'
 import {
 	type Customer,
 	type CustomerContact,
@@ -20,6 +21,7 @@ import {
 	useUploadFile,
 } from '#/hooks/use-customers'
 import { useDirtyBaseline } from '#/hooks/use-dirty'
+import { buildOrgPath } from '#/modules/org-path'
 import {
 	type CustomerContactFormValues,
 	type CustomerContextFormValues,
@@ -37,6 +39,7 @@ interface CustomerEditFeatureProps {
 }
 
 export function CustomerEditFeature({ customerId }: CustomerEditFeatureProps) {
+	const { activeOrganization } = useActiveOrganization()
 	const customer = useCustomer(customerId)
 	const customerContacts = useCustomerContacts(customerId)
 	const customerContexts = useCustomerContexts(customerId)
@@ -77,7 +80,9 @@ export function CustomerEditFeature({ customerId }: CustomerEditFeatureProps) {
 					</p>
 				</div>
 				<Button asChild variant="outline">
-					<Link to="/crm/customers">Retour aux clients</Link>
+					<Link to={buildOrgPath(activeOrganization.slug, '/crm/customers')}>
+						Retour aux clients
+					</Link>
 				</Button>
 			</div>
 		)
@@ -440,6 +445,8 @@ function CustomerEditForm({
 	onRetryCustomerContacts,
 	onRetryCustomerContexts,
 }: CustomerEditFormProps) {
+	const { activeOrganization } = useActiveOrganization()
+	const organizationSlug = activeOrganization.slug
 	const baseline = customerToForm(customer)
 	const {
 		isDirty,
@@ -452,6 +459,7 @@ function CustomerEditForm({
 
 	return (
 		<CustomerEditUI
+			organizationSlug={organizationSlug}
 			customer={customer}
 			form={values}
 			isDirty={isDirty}

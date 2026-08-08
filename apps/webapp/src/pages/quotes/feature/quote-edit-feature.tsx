@@ -39,6 +39,7 @@ import {
 	SectionHeader,
 } from '#/components/ui/surface'
 import { Textarea } from '#/components/ui/textarea'
+import { useActiveOrganization } from '#/hooks/use-active-organization'
 import { type CatalogItem, useCatalogItems } from '#/hooks/use-catalog-items'
 import {
 	type Customer,
@@ -58,6 +59,7 @@ import {
 	type ServiceRateUnit,
 	useReferenceCatalog,
 } from '#/hooks/use-reference-catalog'
+import { buildOrgPath } from '#/modules/org-path'
 import {
 	centsToEuros,
 	customerContextDisplayName,
@@ -104,6 +106,7 @@ export function QuoteEditFeature({ quoteId }: QuoteEditFeatureProps) {
 
 function QuoteEditWorkspace({ quote }: { quote: Quote }) {
 	const navigate = useNavigate()
+	const { activeOrganization } = useActiveOrganization()
 	const customers = useCustomers(quote.organization_id)
 	const catalog = useReferenceCatalog(quote.organization_id, {
 		employees: false,
@@ -254,7 +257,7 @@ function QuoteEditWorkspace({ quote }: { quote: Quote }) {
 		await deleteQuote.mutateAsync({
 			path: { quote_id: quote.id },
 		})
-		await navigate({ to: '/crm/quotes' })
+		await navigate({ to: buildOrgPath(activeOrganization.slug, '/crm/quotes') })
 	}
 
 	return (
@@ -343,6 +346,8 @@ function QuoteEditUI({
 	onSave: () => void
 	onDelete: () => void
 }) {
+	const { activeOrganization } = useActiveOrganization()
+
 	return (
 		<PageShell>
 			<PageHeader
@@ -352,7 +357,7 @@ function QuoteEditUI({
 				actions={
 					<div className="flex flex-col gap-2 sm:flex-row">
 						<Button asChild variant="outline">
-							<Link to="/crm/quotes">
+							<Link to={buildOrgPath(activeOrganization.slug, '/crm/quotes')}>
 								<ArrowLeft />
 								Retour
 							</Link>
@@ -778,6 +783,8 @@ function QuoteEditError({
 	message: string
 	onRetry?: () => void
 }) {
+	const { activeOrganization } = useActiveOrganization()
+
 	return (
 		<PageShell>
 			<SectionCard className="flex min-h-72 flex-col items-center justify-center gap-3 p-8 text-center">
@@ -788,7 +795,9 @@ function QuoteEditError({
 				</div>
 				<div className="flex gap-2">
 					<Button asChild variant="outline">
-						<Link to="/crm/quotes">Retour aux devis</Link>
+						<Link to={buildOrgPath(activeOrganization.slug, '/crm/quotes')}>
+							Retour aux devis
+						</Link>
 					</Button>
 					{onRetry ? (
 						<Button type="button" onClick={onRetry}>

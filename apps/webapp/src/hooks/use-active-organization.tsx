@@ -1,49 +1,77 @@
-import { createContext, useContext, useEffect, useMemo, useState } from 'react'
+import { createContext, useContext, useEffect, useMemo } from 'react'
 import type { Organization } from '#/hooks/use-organizations'
 
-const ACTIVE_ORGANIZATION_STORAGE_KEY = 'mestier.activeOrganizationId'
+const LAST_ORGANIZATION_STORAGE_KEY = 'mestier.lastOrganizationSlug'
+
+/**
+ * Dernier tenant visité. Ce n'est plus la source de vérité de l'organisation
+ * active — c'est l'URL qui la porte — mais seulement la préférence d'entrée
+ * utilisée quand on arrive sur `/`.
+ */
+export function readLastOrganizationSlug(): string | null {
+	if (typeof window === 'undefined') return null
+	return window.localStorage.getItem(LAST_ORGANIZATION_STORAGE_KEY)
+}
+
+interface OrganizationListContextValue {
+	organizations: Organization[]
+}
+
+const OrganizationListContext =
+	createContext<OrganizationListContextValue | null>(null)
+
+interface OrganizationListProviderProps {
+	organizations: Organization[]
+	children: React.ReactNode
+}
+
+export function OrganizationListProvider({
+	organizations,
+	children,
+}: OrganizationListProviderProps) {
+	const value = useMemo(() => ({ organizations }), [organizations])
+
+	return (
+		<OrganizationListContext.Provider value={value}>
+			{children}
+		</OrganizationListContext.Provider>
+	)
+}
+
+export function useOrganizationList() {
+	const context = useContext(OrganizationListContext)
+	if (!context) {
+		throw new Error(
+			'useOrganizationList must be used inside OrganizationListProvider',
+		)
+	}
+	return context.organizations
+}
 
 interface ActiveOrganizationContextValue {
 	organizations: Organization[]
 	activeOrganization: Organization
 	activeOrganizationId: string
-	setActiveOrganizationId: (organizationId: string) => void
 }
 
 const ActiveOrganizationContext =
 	createContext<ActiveOrganizationContextValue | null>(null)
 
 interface ActiveOrganizationProviderProps {
-	organizations: Organization[]
+	activeOrganization: Organization
 	children: React.ReactNode
 }
 
 export function ActiveOrganizationProvider({
-	organizations,
+	activeOrganization,
 	children,
 }: ActiveOrganizationProviderProps) {
-	const [storedOrganizationId, setStoredOrganizationId] = useState<
-		string | null
-	>(() => {
-		if (typeof window === 'undefined') return null
-		return window.localStorage.getItem(ACTIVE_ORGANIZATION_STORAGE_KEY)
-	})
-
-	const activeOrganization = (organizations.find(
-		(organization) => organization.id === storedOrganizationId,
-	) ?? organizations[0]) as Organization
+	const organizations = useOrganizationList()
 
 	useEffect(() => {
-		if (!activeOrganization) return
-		if (storedOrganizationId === activeOrganization.id) return
-		setStoredOrganizationId(activeOrganization.id)
-	}, [activeOrganization, storedOrganizationId])
-
-	useEffect(() => {
-		if (!activeOrganization) return
 		window.localStorage.setItem(
-			ACTIVE_ORGANIZATION_STORAGE_KEY,
-			activeOrganization.id,
+			LAST_ORGANIZATION_STORAGE_KEY,
+			activeOrganization.slug,
 		)
 	}, [activeOrganization])
 
@@ -52,7 +80,6 @@ export function ActiveOrganizationProvider({
 			organizations,
 			activeOrganization,
 			activeOrganizationId: activeOrganization.id,
-			setActiveOrganizationId: setStoredOrganizationId,
 		}),
 		[activeOrganization, organizations],
 	)

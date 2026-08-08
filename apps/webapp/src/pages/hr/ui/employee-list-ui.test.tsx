@@ -23,6 +23,7 @@ function employee(overrides: Partial<Employee> = {}): Employee {
 function baseProps() {
 	return {
 		organizationName: 'Atelier Bois & Co',
+		organizationSlug: 'atelier-bois',
 		isLoading: false,
 		error: null,
 		data: { employees: [employee()] },
@@ -75,6 +76,8 @@ describe('EmployeeListUI — accès à l’écran de temps de travail', () => {
 		// its role to `menuitem` — it is still a real `<a href>` underneath.
 		const link = screen.getByRole('menuitem', { name: /Temps de travail/ })
 		expect(link.tagName).toBe('A')
-		expect(link.getAttribute('href')).toBe('/hr/employees/employee-1/work-time')
+		expect(link.getAttribute('href')).toBe(
+			'/o/atelier-bois/hr/employees/employee-1/work-time',
+		)
 	})
 })

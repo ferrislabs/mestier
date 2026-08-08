@@ -7,6 +7,7 @@ import {
 	useCustomers,
 	useUpdateCustomer,
 } from '#/hooks/use-customers'
+import { buildOrgPath } from '#/modules/org-path'
 import { CustomerPipelineUI } from '#/pages/customers/ui/customer-pipeline-ui'
 
 export function CustomerPipelineFeature() {
@@ -32,11 +33,18 @@ export function CustomerPipelineFeature() {
 		<CustomerPipeline
 			key={activeOrganization.id}
 			organizationId={activeOrganization.id}
+			organizationSlug={activeOrganization.slug}
 		/>
 	)
 }
 
-function CustomerPipeline({ organizationId }: { organizationId: string }) {
+function CustomerPipeline({
+	organizationId,
+	organizationSlug,
+}: {
+	organizationId: string
+	organizationSlug: string
+}) {
 	const navigate = useNavigate()
 	const customers = useCustomers(organizationId, { page: 1, perPage: 100 })
 	const updateCustomer = useUpdateCustomer()
@@ -60,6 +68,7 @@ function CustomerPipeline({ organizationId }: { organizationId: string }) {
 
 	return (
 		<CustomerPipelineUI
+			organizationSlug={organizationSlug}
 			customers={customers.data?.data ?? []}
 			error={customers.error?.message ?? updateCustomer.error?.message ?? null}
 			isLoading={customers.isLoading}
@@ -71,7 +80,7 @@ function CustomerPipeline({ organizationId }: { organizationId: string }) {
 			onMovePipelineStage={movePipelineStage}
 			onOpenCustomer={(customer) =>
 				void navigate({
-					to: '/crm/customers/$customerId',
+					to: buildOrgPath(organizationSlug, '/crm/customers/$customerId'),
 					params: { customerId: customer.id },
 				})
 			}

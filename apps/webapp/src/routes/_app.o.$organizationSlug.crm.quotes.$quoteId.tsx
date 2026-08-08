@@ -1,7 +1,9 @@
 import { createFileRoute } from '@tanstack/react-router'
 import { QuoteEditFeature } from '#/pages/quotes/feature/quote-edit-feature'
 
-export const Route = createFileRoute('/_app/crm/quotes/$quoteId')({
+export const Route = createFileRoute(
+	'/_app/o/$organizationSlug/crm/quotes/$quoteId',
+)({
 	component: QuoteEditPage,
 })
 

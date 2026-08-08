@@ -57,6 +57,7 @@ import type {
 	CustomerStatus,
 	PaginationMetadata,
 } from '#/hooks/use-customers'
+import { buildOrgPath } from '#/modules/org-path'
 import {
 	CUSTOMER_FILTER_OPTIONS,
 	getCustomerListUrlState,
@@ -77,6 +78,7 @@ import {
 
 interface CustomerListUIProps {
 	customers: Customer[]
+	organizationSlug: string
 	pagination?: PaginationMetadata | null
 	page: number
 	pageSize: number
@@ -94,6 +96,7 @@ interface CustomerListUIProps {
 
 export function CustomerListUI({
 	customers,
+	organizationSlug,
 	pagination,
 	page,
 	pageSize,
@@ -238,7 +241,9 @@ export function CustomerListUI({
 				actions={
 					<div className="flex flex-wrap gap-2">
 						<Button asChild variant="outline">
-							<Link to="/crm/customers/pipeline">
+							<Link
+								to={buildOrgPath(organizationSlug, '/crm/customers/pipeline')}
+							>
 								<KanbanSquare />
 								Pipeline
 							</Link>

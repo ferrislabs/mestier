@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
 import { Link, useLocation } from '@tanstack/react-router'
 import { Fragment } from 'react'
+import { OrgSwitcher } from '#/components/org-switcher'
 import {
 	Breadcrumb,
 	BreadcrumbItem,
@@ -12,19 +13,23 @@ import {
 import { useActiveOrganization } from '#/hooks/use-active-organization'
 import { useCustomer } from '#/hooks/use-customers'
 import { buildBreadcrumbItems } from '#/modules/breadcrumb'
+import { splitOrgPath } from '#/modules/org-path'
 import { customerDisplayName } from '#/pages/customers/types'
 import { employeeDisplayName } from '#/pages/hr/types'
 
 export function AppBreadcrumb() {
 	const location = useLocation()
 	const { activeOrganization } = useActiveOrganization()
-	const customerId = getCustomerId(location.pathname)
+	// Les chemins reconnus ci-dessous sont relatifs à l'organisation : le tenant
+	// est retiré avant toute correspondance.
+	const modulePath = splitOrgPath(location.pathname).path
+	const customerId = getCustomerId(modulePath)
 	const customer = useCustomer(customerId ?? '', Boolean(customerId))
 	const customerLabel = customer.data?.data
 		? customerDisplayName(customer.data.data)
 		: 'Fiche client'
 
-	const employeeId = getEmployeeWorkTimeId(location.pathname)
+	const employeeId = getEmployeeWorkTimeId(modulePath)
 	const employee = useQuery({
 		...window.tanstackApi.get('/api/v1/employees/{employee_id}', {
 			path: { employee_id: employeeId ?? '' },
@@ -38,11 +43,8 @@ export function AppBreadcrumb() {
 	const items = buildBreadcrumbItems({
 		pathname: location.pathname,
 		organizationName: activeOrganization.name,
-		detailLabel: getDetailLabel(
-			location.pathname,
-			customerLabel,
-			employeeLabel,
-		),
+		organizationSlug: activeOrganization.slug,
+		detailLabel: getDetailLabel(modulePath, customerLabel, employeeLabel),
 	})
 
 	return (
@@ -54,7 +56,9 @@ export function AppBreadcrumb() {
 					return (
 						<Fragment key={item.id}>
 							<BreadcrumbItem className="min-w-0">
-								{isLast || !item.to ? (
+								{item.id === 'organization' ? (
+									<OrgSwitcher />
+								) : isLast || !item.to ? (
 									<BreadcrumbPage className="truncate font-medium">
 										{item.label}
 									</BreadcrumbPage>

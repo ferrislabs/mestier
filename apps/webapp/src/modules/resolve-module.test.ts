@@ -16,8 +16,11 @@ describe('resolveModule', () => {
 		expect(resolveModule('/crmsomething').id).toBe('home')
 	})
 
-	it('replie sur home pour une URL globale ou inconnue', () => {
-		expect(resolveModule('/settings').id).toBe('home')
+	it('rattache les paramètres à leur propre module', () => {
+		expect(resolveModule('/settings').id).toBe('settings')
+	})
+
+	it('replie sur home pour une URL inconnue', () => {
 		expect(resolveModule('/inconnu').id).toBe('home')
 	})
 
@@ -26,8 +29,8 @@ describe('resolveModule', () => {
 		expect(resolveModule('/crm/customers/pipeline').id).toBe('crm')
 	})
 
-	it('résout un module désactivé comme les autres', () => {
-		expect(resolveModule('/discussions').id).toBe('discussions')
+	it('résout un module annoncé comme les autres', () => {
+		expect(resolveModule('/chat').id).toBe('chat')
 	})
 
 	it('résout les pages RH vers le module hr', () => {

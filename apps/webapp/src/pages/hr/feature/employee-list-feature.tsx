@@ -38,6 +38,7 @@ export function EmployeeListFeature() {
 			key={activeOrganization.id}
 			organizationId={activeOrganization.id}
 			organizationName={activeOrganization.name}
+			organizationSlug={activeOrganization.slug}
 		/>
 	)
 }
@@ -45,11 +46,13 @@ export function EmployeeListFeature() {
 interface EmployeeDirectoryProps {
 	organizationId: string
 	organizationName: string
+	organizationSlug: string
 }
 
 function EmployeeDirectory({
 	organizationId,
 	organizationName,
+	organizationSlug,
 }: EmployeeDirectoryProps) {
 	const catalog = useReferenceCatalog(organizationId, {
 		equipment: false,
@@ -126,6 +129,7 @@ function EmployeeDirectory({
 			{(employeeValues) => (
 				<EmployeeListUI
 					organizationName={organizationName}
+					organizationSlug={organizationSlug}
 					isLoading={isLoading}
 					error={error?.message ?? null}
 					data={{ employees: filteredEmployees }}

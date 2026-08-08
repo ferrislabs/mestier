@@ -69,6 +69,7 @@ import type { CatalogItem } from '#/hooks/use-catalog-items'
 import type { Customer, CustomerContext } from '#/hooks/use-customers'
 import type { PaginationMetadata, Quote } from '#/hooks/use-quotes'
 import type { ServiceRateUnit } from '#/hooks/use-reference-catalog'
+import { buildOrgPath } from '#/modules/org-path'
 import {
 	getQuoteListUrlState,
 	isValidQuoteFilter,
@@ -89,6 +90,7 @@ import {
 } from '#/pages/quotes/types'
 
 interface QuoteCreateUIProps {
+	organizationSlug: string
 	values: QuoteFormValues
 	customers: Customer[]
 	customerContexts: CustomerContext[]
@@ -118,6 +120,7 @@ interface QuoteCreateUIProps {
 }
 
 export function QuoteCreateUI({
+	organizationSlug,
 	values,
 	customers,
 	customerContexts,
@@ -614,7 +617,7 @@ export function QuoteCreateUI({
 							return (
 								<li key={quote.id} className="group relative">
 									<Link
-										to="/crm/quotes/$quoteId"
+										to={buildOrgPath(organizationSlug, '/crm/quotes/$quoteId')}
 										params={{ quoteId: quote.id }}
 										className="grid gap-4 px-5 py-4 pr-14 transition hover:bg-muted/40 sm:grid-cols-[minmax(0,1fr)_160px_160px] sm:items-center"
 									>
@@ -672,7 +675,10 @@ export function QuoteCreateUI({
 												<DropdownMenuContent align="end">
 													<DropdownMenuItem asChild>
 														<Link
-															to="/crm/quotes/$quoteId"
+															to={buildOrgPath(
+																organizationSlug,
+																'/crm/quotes/$quoteId',
+															)}
 															params={{ quoteId: quote.id }}
 														>
 															Modifier

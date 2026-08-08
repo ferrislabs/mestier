@@ -18,6 +18,7 @@ import {
 	StatusBadge,
 } from '#/components/ui/surface'
 import type { Customer, CustomerPipelineStage } from '#/hooks/use-customers'
+import { buildOrgPath } from '#/modules/org-path'
 import {
 	customerDisplayName,
 	customerPipelineStageLabel,
@@ -29,6 +30,7 @@ import {
 
 interface CustomerPipelineUIProps {
 	customers: Customer[]
+	organizationSlug: string
 	error?: string | null
 	isLoading?: boolean
 	movingCustomerId?: string | null
@@ -42,6 +44,7 @@ interface CustomerPipelineUIProps {
 
 export function CustomerPipelineUI({
 	customers,
+	organizationSlug,
 	error,
 	isLoading,
 	movingCustomerId,
@@ -106,7 +109,7 @@ export function CustomerPipelineUI({
 				description="Pilotez les prospects par étape, de la qualification à la conversion."
 				actions={
 					<Button asChild variant="outline">
-						<Link to="/crm/customers">
+						<Link to={buildOrgPath(organizationSlug, '/crm/customers')}>
 							<Users />
 							Fichier clients
 						</Link>

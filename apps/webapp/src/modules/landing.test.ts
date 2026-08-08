@@ -2,8 +2,9 @@ import { QueryClient } from '@tanstack/react-query'
 import { createRouter } from '@tanstack/react-router'
 import { describe, expect, it } from 'vitest'
 import { firstLandingTarget, moduleLandingPath } from '#/modules/landing'
-import { GLOBAL_NAV_GROUPS, MODULES } from '#/modules/registry'
-import type { ModuleNavGroup } from '#/modules/types'
+import { buildOrgPath } from '#/modules/org-path'
+import { MODULES } from '#/modules/registry'
+import type { ModuleSection } from '#/modules/types'
 import { routeTree } from '#/routeTree.gen'
 
 function createTestRouter() {
@@ -13,52 +14,64 @@ function createTestRouter() {
 	})
 }
 
+const availableModules = MODULES.filter(
+	(module) => module.status === 'available',
+)
+
+/**
+ * Les chemins du registre sont relatifs à l'organisation ; les routes, elles,
+ * sont déclarées sous le gabarit `/o/$organizationSlug`.
+ */
+function routePath(to: string): string {
+	return buildOrgPath('$organizationSlug', to)
+}
+
 describe('moduleLandingPath', () => {
-	it('renvoie la première entrée de nav navigable du module', () => {
+	it('renvoie la première section navigable du module', () => {
 		expect(moduleLandingPath('crm')).toBe('/crm/customers')
 	})
 
-	it('retombe sur le basePath quand aucune entrée de nav ne diffère', () => {
+	it("s'arrête sur le basePath quand le module a une vue d'ensemble", () => {
 		expect(moduleLandingPath('home')).toBe('/')
 	})
 })
 
 describe('firstLandingTarget', () => {
-	it('ignore les entrées désactivées', () => {
-		const nav: ModuleNavGroup[] = [
-			{
-				items: [
-					{ title: 'A', to: '/module/a', disabled: true },
-					{ title: 'B', to: '/module/b' },
-				],
-			},
+	it('ignore les sections annoncées mais non navigables', () => {
+		const sections: ModuleSection[] = [
+			{ id: 'a', label: 'A', to: '/module/a', status: 'coming-soon' },
+			{ id: 'b', label: 'B', to: '/module/b' },
 		]
 
-		expect(firstLandingTarget(nav, '/module')).toBe('/module/b')
+		expect(firstLandingTarget(sections, '/module')).toBe('/module/b')
 	})
 
-	it('ignore les entrées qui pointent sur le basePath lui-même', () => {
-		const nav: ModuleNavGroup[] = [
-			{
-				items: [
-					{ title: 'A', to: '/module' },
-					{ title: 'B', to: '/module/b' },
-				],
-			},
+	it('ignore les sections qui pointent sur le basePath lui-même', () => {
+		const sections: ModuleSection[] = [
+			{ id: 'a', label: 'A', to: '/module' },
+			{ id: 'b', label: 'B', to: '/module/b' },
 		]
 
-		expect(firstLandingTarget(nav, '/module')).toBe('/module/b')
+		expect(firstLandingTarget(sections, '/module')).toBe('/module/b')
+	})
+
+	it('ne renvoie rien quand aucune section ne diffère du basePath', () => {
+		const sections: ModuleSection[] = [{ id: 'a', label: 'A', to: '/module' }]
+
+		expect(firstLandingTarget(sections, '/module')).toBeUndefined()
 	})
 })
 
 describe('routabilité des modules', () => {
-	it('chaque module activé a un basePath qui résout vers une route réelle', () => {
+	it('chaque module disponible a un basePath qui résout vers une route réelle', () => {
 		const router = createTestRouter()
 
-		const modulesSansRoute = MODULES.filter(
-			(module) =>
-				module.enabled && !Object.hasOwn(router.routesByPath, module.basePath),
-		).map((module) => module.basePath)
+		const modulesSansRoute = availableModules
+			.filter(
+				(module) =>
+					!Object.hasOwn(router.routesByPath, routePath(module.basePath)),
+			)
+			.map((module) => module.basePath)
 
 		expect(modulesSansRoute).toEqual([])
 	})
@@ -66,38 +79,34 @@ describe('routabilité des modules', () => {
 	it('chaque entrée de nav navigable pointe vers une route réelle', () => {
 		const router = createTestRouter()
 
-		const groupes: ModuleNavGroup[] = [
-			...MODULES.filter((module) => module.enabled).flatMap(
-				(module) => module.nav,
-			),
-			...GLOBAL_NAV_GROUPS,
-		]
-
-		const entreesSansRoute = groupes
-			.flatMap((group) => group.items)
+		const ciblesSansRoute = availableModules
+			.flatMap((module) => [
+				...module.sections,
+				...module.sections.flatMap((section) => section.tabs ?? []),
+			])
 			.filter(
-				(item) =>
-					!item.disabled && !Object.hasOwn(router.routesByPath, item.to),
+				(target) =>
+					target.status !== 'coming-soon' &&
+					!Object.hasOwn(router.routesByPath, routePath(target.to)),
 			)
-			.map((item) => item.to)
+			.map((target) => target.to)
 
-		expect(entreesSansRoute).toEqual([])
+		expect(ciblesSansRoute).toEqual([])
 	})
 
 	it("chaque cible d'atterrissage de module résout vers une route réelle", () => {
 		const router = createTestRouter()
 
-		const ciblesSansRoute = MODULES.filter((module) => module.enabled)
+		const ciblesSansRoute = availableModules
 			.map((module) => moduleLandingPath(module.id))
-			.filter((cible) => !Object.hasOwn(router.routesByPath, cible))
+			.filter((cible) => !Object.hasOwn(router.routesByPath, routePath(cible)))
 
 		expect(ciblesSansRoute).toEqual([])
 	})
 
-	it('aucun module ne redirige vers son propre basePath', () => {
-		const modulesEnBoucle = MODULES.filter(
-			(module) => module.enabled && module.basePath !== '/',
-		)
+	it("aucun module sans vue d'ensemble ne redirige vers son propre basePath", () => {
+		const modulesEnBoucle = availableModules
+			.filter((module) => !module.hasOverview && module.basePath !== '/')
 			.filter((module) => moduleLandingPath(module.id) === module.basePath)
 			.map((module) => module.basePath)
 

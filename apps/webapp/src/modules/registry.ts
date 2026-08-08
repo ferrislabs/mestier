@@ -1,40 +1,17 @@
 import {
-	Boxes,
 	BriefcaseBusiness,
+	CalendarDays,
 	CalendarRange,
 	FileText,
 	KanbanSquare,
 	LayoutDashboard,
-	Link2,
 	ListTree,
 	MessagesSquare,
 	Receipt,
 	Settings,
-	ShieldCheck,
 	Users,
 } from 'lucide-react'
-import type { AppModule, ModuleNavGroup } from '#/modules/types'
-
-export const GLOBAL_NAV_GROUPS: ModuleNavGroup[] = [
-	{
-		label: 'Configuration',
-		items: [
-			{ title: 'Paramètres', to: '/settings', icon: Settings },
-			{
-				title: 'Intégrations',
-				to: '/integrations',
-				icon: Link2,
-				disabled: true,
-			},
-			{
-				title: 'Permissions',
-				to: '/permissions',
-				icon: ShieldCheck,
-				disabled: true,
-			},
-		],
-	},
-]
+import type { AppModule } from '#/modules/types'
 
 export const MODULES: AppModule[] = [
 	{
@@ -42,13 +19,15 @@ export const MODULES: AppModule[] = [
 		label: 'Accueil',
 		icon: LayoutDashboard,
 		basePath: '/',
-		enabled: true,
-		nav: [
+		status: 'available',
+		hasOverview: true,
+		sections: [
 			{
-				label: 'Activité',
-				items: [
-					{ title: 'Accueil', to: '/', icon: LayoutDashboard, exact: true },
-				],
+				id: 'overview',
+				label: 'Vue d’ensemble',
+				to: '/',
+				icon: LayoutDashboard,
+				exact: true,
 			},
 		],
 	},
@@ -57,31 +36,30 @@ export const MODULES: AppModule[] = [
 		label: 'CRM',
 		icon: Users,
 		basePath: '/crm',
-		enabled: true,
-		nav: [
+		status: 'available',
+		hasOverview: false,
+		settingsSectionId: 'crm',
+		sections: [
 			{
-				label: 'Activité',
-				items: [
-					{ title: 'Clients', to: '/crm/customers', icon: Users, exact: true },
-					{
-						title: 'Pipeline',
-						to: '/crm/customers/pipeline',
-						icon: KanbanSquare,
-					},
-					{ title: 'Devis', to: '/crm/quotes', icon: FileText },
-					{
-						title: 'Factures',
-						to: '/crm/invoices',
-						icon: Receipt,
-						disabled: true,
-					},
-				],
+				id: 'customers',
+				label: 'Clients',
+				to: '/crm/customers',
+				icon: Users,
+				exact: true,
 			},
 			{
-				label: 'Configuration du module',
-				items: [
-					{ title: 'Configuration', to: '/settings', hash: 'crm', icon: Boxes },
-				],
+				id: 'pipeline',
+				label: 'Pipeline',
+				to: '/crm/customers/pipeline',
+				icon: KanbanSquare,
+			},
+			{ id: 'quotes', label: 'Devis', to: '/crm/quotes', icon: FileText },
+			{
+				id: 'invoices',
+				label: 'Factures',
+				to: '/crm/invoices',
+				icon: Receipt,
+				status: 'coming-soon',
 			},
 		],
 	},
@@ -90,12 +68,10 @@ export const MODULES: AppModule[] = [
 		label: 'RH',
 		icon: BriefcaseBusiness,
 		basePath: '/hr',
-		enabled: true,
-		nav: [
-			{
-				label: 'Équipe',
-				items: [{ title: 'Employés', to: '/hr/employees', icon: Users }],
-			},
+		status: 'available',
+		hasOverview: false,
+		sections: [
+			{ id: 'employees', label: 'Employés', to: '/hr/employees', icon: Users },
 		],
 	},
 	{
@@ -103,23 +79,49 @@ export const MODULES: AppModule[] = [
 		label: 'Planning',
 		icon: CalendarRange,
 		basePath: '/planning',
-		enabled: true,
-		nav: [
+		status: 'available',
+		hasOverview: false,
+		sections: [
 			{
-				label: 'Équipe',
-				items: [
-					{ title: 'Vue équipe', to: '/planning/team', icon: CalendarRange },
-					{ title: 'Liste des tâches', to: '/planning/tasks', icon: ListTree },
-				],
+				id: 'calendar',
+				label: 'Calendrier',
+				to: '/planning/calendar',
+				icon: CalendarDays,
+			},
+			{
+				id: 'team',
+				label: 'Vue équipe',
+				to: '/planning/team',
+				icon: CalendarRange,
+			},
+			{
+				id: 'tasks',
+				label: 'Liste des tâches',
+				to: '/planning/tasks',
+				icon: ListTree,
 			},
 		],
 	},
 	{
-		id: 'discussions',
+		id: 'chat',
 		label: 'Discussions',
 		icon: MessagesSquare,
-		basePath: '/discussions',
-		enabled: false,
-		nav: [],
+		basePath: '/chat',
+		status: 'coming-soon',
+		hasOverview: false,
+		sections: [],
+	},
+	{
+		id: 'settings',
+		label: 'Paramètres',
+		icon: Settings,
+		basePath: '/settings',
+		status: 'available',
+		hasOverview: true,
+		railPlacement: 'utility',
+		// `/settings` reste une page unique à ancres : ses sections deviendront des
+		// entrées de nav — et l'AnchorNav disparaîtra — à l'étape
+		// « settings-as-module ».
+		sections: [],
 	},
 ]
