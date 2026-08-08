@@ -10,6 +10,7 @@ use crate::domain::role::Permissions;
 use crate::infrastructure::file_storage::S3FileStorage;
 use crate::infrastructure::postgres::error::map_sqlx_error;
 use crate::infrastructure::realtime::EventHub;
+use common::UserId;
 use events::Actor;
 
 pub mod absence;
@@ -73,8 +74,8 @@ pub struct MestierUseCase {
     pub(crate) pool: PgPool,
     pub(crate) authz: MestierAuthorizer,
     pub(crate) hub: EventHub,
-    /// Who the events of this use case are attributed to. Always `System`
-    /// today; #166 threads the authenticated identity through instead.
+    /// Who the events produced through this handle are attributed to.
+    /// `System` unless a handler asked for an acting view via [`Self::acting_as`].
     pub(crate) actor: Actor,
 }
 
@@ -85,6 +86,24 @@ impl MestierUseCase {
             authz,
             hub,
             actor: Actor::System,
+        }
+    }
+
+    /// A view of this use case whose events are attributed to `user_id`.
+    ///
+    /// Takes the **local** `users.id`, not the FerrisKey subject: the subject
+    /// is an opaque string, and an event's actor has to be joinable against
+    /// the users table. Handlers get the local id from `require_org_membership`,
+    /// which already resolves it to check the caller belongs to the
+    /// organization — so an actor cannot be obtained without that check having
+    /// passed.
+    ///
+    /// Cloning is a handful of refcount bumps: the pool, the policy engine and
+    /// the hub are all `Arc`-backed.
+    pub fn acting_as(&self, user_id: UserId) -> Self {
+        Self {
+            actor: Actor::user(user_id.0),
+            ..self.clone()
         }
     }
 }
@@ -166,3 +185,43 @@ pub async fn create_service(config: Config) -> Result<MestierService, CoreError>
 // buffer for the whole process — which is precisely how events reached the
 // wrong organization. `#[transactional(events)]` builds one per transaction
 // instead; see `mestier_macros::transactional`.
+
+#[cfg(test)]
+mod tests {
+    use uuid::Uuid;
+
+    use super::*;
+
+    /// `connect_lazy` builds a pool without touching the network, so the actor
+    /// logic can be tested without a database it does not use.
+    fn use_case() -> MestierUseCase {
+        let pool = PgPool::connect_lazy("postgres://unused:unused@localhost/unused")
+            .expect("a lazy pool needs no server");
+        MestierUseCase::new(pool, default_authorizer(), EventHub::new())
+    }
+
+    #[tokio::test]
+    async fn a_use_case_acts_as_the_system_until_told_otherwise() {
+        assert_eq!(use_case().actor, Actor::System);
+    }
+
+    #[tokio::test]
+    async fn acting_as_a_user_attributes_events_to_that_user() {
+        let user_id = UserId(Uuid::from_u128(1));
+
+        let acting = use_case().acting_as(user_id);
+
+        assert_eq!(acting.actor, Actor::user(user_id.0));
+    }
+
+    /// The handler holds a shared `AppState`; asking for an acting view must
+    /// not change what every other request is attributed to.
+    #[tokio::test]
+    async fn acting_as_leaves_the_original_untouched() {
+        let base = use_case();
+
+        let _acting = base.acting_as(UserId(Uuid::from_u128(1)));
+
+        assert_eq!(base.actor, Actor::System);
+    }
+}
