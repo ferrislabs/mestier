@@ -10,6 +10,7 @@ use crate::domain::role::Permissions;
 use crate::infrastructure::file_storage::S3FileStorage;
 use crate::infrastructure::postgres::error::map_sqlx_error;
 use crate::infrastructure::realtime::EventHub;
+use events::Actor;
 
 pub mod absence;
 pub mod authorization;
@@ -72,11 +73,19 @@ pub struct MestierUseCase {
     pub(crate) pool: PgPool,
     pub(crate) authz: MestierAuthorizer,
     pub(crate) hub: EventHub,
+    /// Who the events of this use case are attributed to. Always `System`
+    /// today; #166 threads the authenticated identity through instead.
+    pub(crate) actor: Actor,
 }
 
 impl MestierUseCase {
     pub fn new(pool: PgPool, authz: MestierAuthorizer, hub: EventHub) -> Self {
-        Self { pool, authz, hub }
+        Self {
+            pool,
+            authz,
+            hub,
+            actor: Actor::System,
+        }
     }
 }
 

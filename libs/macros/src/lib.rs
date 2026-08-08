@@ -119,6 +119,8 @@ impl Parse for KeyValue {
 /// - When `authz` is listed, `self` must also have an `authz` field whose
 ///   type implements [`authz::Authorizer`].
 /// - When `events` is listed, `self` must also have a `hub: EventHub` field.
+/// - `self` must have an `actor: events::Actor` field: the durable emitter is
+///   built for every transaction, whether or not `emitter` is listed.
 /// - Each listed domain (other than `authz`) must have a registered impl
 ///   (see `#[repository]`).
 ///
@@ -151,6 +153,11 @@ pub fn transactional(args: TokenStream, input: TokenStream) -> TokenStream {
             // `authz` for the wrapped body.
             return quote! { let authz = &self.authz; };
         }
+        if name == "emitter" {
+            // The durable emitter is always created (see below); listing it
+            // only asks the macro to name it for the body.
+            return quote! { let emitter = &__event_emitter; };
+        }
         if name == "events" {
             // Non-repository binding: a publisher scoped to *this* transaction.
             // It is built here, and nowhere else, so no two transactions can
@@ -179,10 +186,22 @@ pub fn transactional(args: TokenStream, input: TokenStream) -> TokenStream {
     let expanded = quote! {
         #(#attrs)*
         #vis #sig {
-            ::mestier_core::infrastructure::postgres::with_tx(&self.pool, async |tx| {
-                #(#bindings)*
-                #(#body_stmts)*
-            }).await
+            // Built for every transaction, listed or not: persistence must not
+            // depend on a module remembering to ask for it. A body that emits
+            // nothing drains an empty buffer and costs no query.
+            let __event_emitter =
+                ::mestier_core::infrastructure::automation::TransactionalEventEmitter::new(
+                    self.actor,
+                    None,
+                );
+            ::mestier_core::infrastructure::postgres::with_tx_emitting(
+                &self.pool,
+                &__event_emitter,
+                async |tx| {
+                    #(#bindings)*
+                    #(#body_stmts)*
+                },
+            ).await
         }
     };
 

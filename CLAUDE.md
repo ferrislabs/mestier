@@ -4,20 +4,50 @@ This file provides guidance to Claude Code (claude.ai/code) when working with th
 
 ## Repository layout
 
-Monorepo-style workspace:
+Cargo workspace plus a pnpm app:
 
+- `apps/api` — the Axum binary. Assembles the router and the OpenAPI document; holds no business logic.
 - `apps/webapp` — React 19 + TanStack (Router, Query, Table, Form).
-- `libs/` — Shared logic and types (TBD).
+- `libs/core` — the whole backend domain, split `domain/` (entities, ports, pure services) → `application/` (use cases) → `infrastructure/` (adapters). One directory per bounded context in each layer.
+- `libs/handlers-*` — HTTP handlers, one crate per bounded context. `libs/handlers` holds `AppState` and the shared error type.
+- `libs/events` — the `DomainEvent` trait, the persisted envelope and the event catalogue. Depends on nothing in `libs/core`.
+- `libs/macros` — `#[transactional]` and `#[repository]`. Read it before touching a use case.
+- Others: `args`, `auth` (FerrisKey), `authz`, `common` (ids, `CoreError`, config), `discord` (chat domain), `iam`, `pagination`, `rate-limit`, `server`.
 
-## Commands (Webapp - `apps/webapp`)
+## Where things register
 
-Package manager is **pnpm**.
+Adding a module means editing a registry, never a `match`:
+
+- Crate → `Cargo.toml` (workspace `members` **and** `workspace.dependencies`).
+- Repository → a marker in `libs/core/src/infrastructure/registry.rs`, plus `#[repository(domain = X, backend = Postgres)]` on the adapter.
+- Route and OpenAPI tag → `apps/api/src/router.rs` and `apps/api/src/openapi.rs`.
+- Frontend module and its sidebar → `apps/webapp/src/modules/registry.ts`.
+- Frontend settings section → `apps/webapp/src/pages/settings/registry.tsx`.
+
+## Commands
+
+Backend, from the repository root:
+
+```bash
+cargo fmt --all --check
+SQLX_OFFLINE=true cargo check --workspace
+cargo clippy --workspace --all-targets -- -D warnings
+cargo test --workspace                      # unit tests, no database
+cargo test -p mestier-core -- --ignored     # integration tests, needs DATABASE_URL
+```
+
+Queries are compile-time checked. **Any new `query!` needs a live database and
+`cargo sqlx prepare --workspace -- --all-targets`** before the offline build passes again.
+`source .env` exports `DATABASE_URL`; migrations run with `sqlx migrate run --source migrations`.
+
+Frontend, from `apps/webapp` (pnpm, Node ≥ 22.13):
 
 ```bash
 pnpm install
-pnpm dev           # vite dev on port 3000
-pnpm build          # production build
-pnpm check          # biome check (lint + format + organize imports)
+pnpm dev                      # vite dev on port 3000
+pnpm build
+pnpm check                    # biome: lint + format + organize imports
+pnpm test                     # vitest
 pnpm dlx shadcn@latest add <component>
 ```
 
@@ -45,11 +75,13 @@ For every page in `src/pages/<domain>/`, we apply a strict Feature/UI split:
 - React 19: Use use and Action patterns for form submissions.
 - Tailwind v4: Styling with utility-first approach.
 
-### Backend Context (Rust - apps/server)
-- Framework: Axum (Asynchronous, Type-safe).
-- Database: PostgreSQL with SQLx (compile-time checked queries).
-- Auth: Ferriskey (WebAuthn/FIDO2) integration.
-- Convention: Logic should be split into handlers/, models/, and services/ (for heavy business/IA logic).
+### Backend (Rust)
+- Framework: Axum. Database: PostgreSQL with SQLx. Auth: FerrisKey — ferrislabs' own IAM, **not** Keycloak; never model its API on Keycloak's.
+- Hexagonal: the domain imports nothing from infrastructure. Ports are traits defined by the domain, implemented by adapters.
+- **A use case is a `#[transactional(...)]` method on `MestierUseCase`.** The macro opens the transaction, injects the repositories you list, and commits. Two names are special: `authz` (the policy engine) and `events` (a realtime publisher scoped to this transaction).
+- **Every transaction persists its domain events before committing**, via `with_tx_emitting`. An event exists if and only if its transaction committed. List `emitter` to emit one; see `libs/events` and the `automation` schema.
+- Never hold anything request-scoped on `MestierUseCase`: it is long-lived and cloned into every request. A shared buffer there once leaked chat events across organizations.
+- Multi-tenancy: every query is scoped by `org_id`. Migrations are reversible — write and test the `.down.sql`.
 
 
 ### Development Guidelines
