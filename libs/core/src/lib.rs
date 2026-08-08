@@ -10,6 +10,10 @@ pub use domain::automation::ports::{
     DeliveryHandler, DeliveryOutcome, DispatchOutcome, DueDelivery,
 };
 pub use domain::automation::settings::{AutomationSettings, SettingsBounds};
+pub use infrastructure::automation::webhook::{
+    WebhookDeliveryHandler, address_policy::PrivateNetworkAccess, secret::SecretCipher,
+};
+pub use infrastructure::automation::worker::{WorkerSchedule, run_automation_worker};
 pub use infrastructure::realtime::EventHub;
 
 pub use domain::{
