@@ -126,6 +126,14 @@ export function TaskSheetFeature({
 
 	const [saveError, setSaveError] = useState<string | null>(null)
 
+	// A single unpaginated fetch of the organization's first 100 customers —
+	// feeds both the create form's picker and, in edit mode, the client-side
+	// name lookup below (`editCustomerName`). Beyond 100 customers this
+	// silently misses some: the create picker just won't list them, and an
+	// edit-mode task whose client falls past the cut shows "Aucun client"
+	// even though `task.customer_id` is set. No pagination or search exists
+	// on this fetch today — worth knowing about before this ships to an
+	// organization with a large customer base.
 	const customersQuery = useCustomers(organizationId, { page: 1, perPage: 100 })
 	const customerContextsQuery = useCustomerContexts(
 		values.customerId,
@@ -178,6 +186,17 @@ export function TaskSheetFeature({
 			if (!createPayload) return
 
 			try {
+				// Two network calls for one user action: `POST /tasks` never
+				// accepts `assignees`/`label_ids` (a task is always created
+				// bare — see `lib/task-form.ts`'s `buildCreateTaskPayload`
+				// doc), so a create that also picked assignees or labels on
+				// the form has to follow up with an immediate `PATCH` using
+				// the id the `POST` just returned. Invisible to the user —
+				// one "Créer" click, one save state — but genuinely two
+				// requests; a failure in the second leaves the task created
+				// but unassigned/unlabeled rather than rolling back the
+				// first (there is no cross-request transaction to roll back
+				// into), surfaced the same as any other save error.
 				const created = await createTask.mutateAsync({
 					path: { organization_id: organizationId },
 					body: createPayload,
@@ -364,7 +383,6 @@ export function TaskSheetFeature({
 			title={sheetTitle(target.mode, isSubtask)}
 			isSaving={createTask.isPending || patchTask.isPending}
 			isDeleting={deleteTask.isPending}
-			canDelete={target.mode === 'edit' && (task?.child_count ?? 0) === 0}
 			saveError={saveError}
 			onSubmit={() => void handleSubmit()}
 			onDelete={target.mode === 'edit' ? () => void handleDelete() : undefined}

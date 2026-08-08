@@ -115,7 +115,6 @@ describe('TaskSheet — édition', () => {
 			mode: 'edit' as const,
 			title: 'Modifier la tâche',
 			fields: { ...fieldsProps(), mode: 'edit' as const },
-			canDelete: true,
 			onDelete: vi.fn(),
 			subtasksTab: subtasksProps(),
 			commentsTab: commentsProps(),
@@ -148,13 +147,29 @@ describe('TaskSheet — édition', () => {
 		expect(screen.getByLabelText('Nouveau commentaire')).toBeDefined()
 	})
 
-	it('affiche le bouton supprimer quand canDelete est vrai', () => {
-		render(<TaskSheet {...editProps()} />)
+	it('affiche le bouton supprimer en édition, même quand la tâche a des sous-tâches — la suppression cascade côté serveur', () => {
+		render(
+			<TaskSheet
+				{...editProps()}
+				subtasksTab={{
+					...subtasksProps(),
+					subtasks: [
+						{
+							id: 'sub-1',
+							title: 'Sous-tâche',
+							status: 'PLANNED',
+							assigneeCount: 0,
+							inheritedWindow: false,
+						},
+					],
+				}}
+			/>,
+		)
 		expect(screen.getByRole('button', { name: /Supprimer/ })).toBeDefined()
 	})
 
-	it('masque le bouton supprimer quand canDelete est faux (la tâche a des enfants)', () => {
-		render(<TaskSheet {...editProps()} canDelete={false} />)
+	it("masque le bouton supprimer quand aucun onDelete n'est fourni", () => {
+		render(<TaskSheet {...editProps()} onDelete={undefined} />)
 		expect(screen.queryByRole('button', { name: /Supprimer/ })).toBeNull()
 	})
 

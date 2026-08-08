@@ -29,10 +29,16 @@ export interface TaskSheetProps {
 	fields: TaskFormFieldsProps
 	isSaving: boolean
 	isDeleting?: boolean
-	/** `false` when the task has children — a task with subtasks is not casually removed, see this workstream's report. Ignored (no delete button at all) in create mode. */
-	canDelete?: boolean
 	saveError: string | null
 	onSubmit: () => void
+	/**
+	 * Absent (rather than a separate `canDelete` flag) hides the button
+	 * entirely. Offered unconditionally in edit mode, children or not:
+	 * `TaskService::soft_delete_task` cascades the delete to every direct
+	 * child in the same transaction (see its own doc), so there is nothing
+	 * left for this UI to guard against — a task with subtasks deletes
+	 * exactly as cleanly as one without.
+	 */
 	onDelete?: () => void
 	onOpenChange: (open: boolean) => void
 	/** Present only in edit mode — a task not yet created has no subtasks and no comment thread to show. */
@@ -54,7 +60,6 @@ export function TaskSheet({
 	fields,
 	isSaving,
 	isDeleting,
-	canDelete,
 	saveError,
 	onSubmit,
 	onDelete,
@@ -118,7 +123,7 @@ export function TaskSheet({
 					</div>
 
 					<SheetFooter className="border-t bg-background sm:flex-row sm:justify-between">
-						{mode === 'edit' && canDelete && onDelete ? (
+						{mode === 'edit' && onDelete ? (
 							<Button
 								type="button"
 								variant="ghost"

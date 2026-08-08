@@ -408,9 +408,39 @@ where
         }
     }
 
+    /// Soft-deletes `id` together with every direct child it has. The
+    /// two-level nesting cap (`validate_parent_depth`) means a child never
+    /// has children of its own, so cascading one level down is the whole
+    /// tree — no recursion needed.
+    ///
+    /// `ON DELETE CASCADE` on `tasks.parent_task_id` only fires for a
+    /// physical delete; nothing in the schema cascades a *soft* delete, so
+    /// without this a deleted root would leave its subtasks behind,
+    /// pointing at a parent that no longer exists — and, for the ones with
+    /// no dates of their own, with no window left to resolve at all (see
+    /// `resolve_task_window`). Every write here lands in the same
+    /// transaction as the caller (`#[transactional(task, ...)]` on
+    /// `MestierUseCase::soft_delete_task`), so a failure partway through
+    /// rolls back the whole cascade rather than leaving it half-applied.
     pub async fn soft_delete_task(&mut self, id: TaskId) -> Result<(), CoreError> {
-        self.get_task(id).await?;
-        self.task_repository.soft_delete(id, Utc::now()).await
+        let task = self.get_task(id).await?;
+        let now = Utc::now();
+
+        // `i64::MAX` rather than `u64::MAX`: the Postgres adapter casts
+        // `limit` to `i64` for the SQL `LIMIT` clause, and `u64::MAX as i64`
+        // wraps around to `-1`, which Postgres rejects outright. A parent's
+        // own direct children are never numerous enough for a real cap to
+        // matter — this is "no limit", not a page size.
+        let (children, _total) = self
+            .task_repository
+            .list_by_organization(task.organization_id, Some(id), i64::MAX as u64, 0)
+            .await?;
+
+        for child in &children {
+            self.task_repository.soft_delete(child.id, now).await?;
+        }
+
+        self.task_repository.soft_delete(id, now).await
     }
 }
 
@@ -1919,8 +1949,13 @@ mod tests {
                 Box::pin(async move { Ok(Some(existing)) })
             });
         task_repository
+            .expect_list_by_organization()
+            .withf(move |org, parent, _, _| *org == organization_id && *parent == Some(id))
+            .returning(|_, _, _, _| Box::pin(async { Ok((Vec::new(), 0)) }));
+        task_repository
             .expect_soft_delete()
             .withf(move |deleted_id, _| *deleted_id == id)
+            .times(1)
             .returning(|_, _| Box::pin(async { Ok(()) }));
 
         let mut service = service(
@@ -1931,5 +1966,76 @@ mod tests {
         );
 
         service.soft_delete_task(id).await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn soft_delete_task_cascades_to_every_direct_child() {
+        let id = TaskId(Uuid::new_v4());
+        let organization_id = OrganizationId(Uuid::new_v4());
+        let existing = task(id, organization_id);
+        let child_a_id = TaskId(Uuid::new_v4());
+        let child_b_id = TaskId(Uuid::new_v4());
+        let child_a = Task {
+            parent_task_id: Some(id),
+            starts_at: None,
+            ends_at: None,
+            ..task(child_a_id, organization_id)
+        };
+        let child_b = Task {
+            parent_task_id: Some(id),
+            ..task(child_b_id, organization_id)
+        };
+
+        let mut task_repository = MockTaskRepository::new();
+        task_repository
+            .expect_find_by_id()
+            .with(eq(id))
+            .returning(move |_| {
+                let existing = existing.clone();
+                Box::pin(async move { Ok(Some(existing)) })
+            });
+        task_repository
+            .expect_list_by_organization()
+            .withf(move |org, parent, _, _| *org == organization_id && *parent == Some(id))
+            .returning(move |_, _, _, _| {
+                let children = vec![child_a.clone(), child_b.clone()];
+                Box::pin(async move { Ok((children, 2)) })
+            });
+
+        let deleted_ids = std::sync::Arc::new(std::sync::Mutex::new(Vec::<TaskId>::new()));
+        let recorded = deleted_ids.clone();
+        task_repository
+            .expect_soft_delete()
+            .times(3)
+            .returning(move |deleted_id, _| {
+                recorded.lock().unwrap().push(deleted_id);
+                Box::pin(async { Ok(()) })
+            });
+
+        let mut service = service(
+            task_repository,
+            MockEmployeeRepository::new(),
+            MockUserRepository::new(),
+            MockMemberRepository::new(),
+        );
+
+        service.soft_delete_task(id).await.unwrap();
+
+        let deleted = deleted_ids.lock().unwrap();
+        assert_eq!(deleted.len(), 3);
+        assert!(
+            deleted.contains(&child_a_id),
+            "a dateless (inheriting) child must be deleted too"
+        );
+        assert!(deleted.contains(&child_b_id));
+        assert!(
+            deleted.contains(&id),
+            "the parent itself must still be deleted"
+        );
+        // Children first, parent last — matches the order `soft_delete_task`
+        // issues the calls in. All of it lands in one transaction either
+        // way (see this method's own doc), so this isn't a correctness
+        // requirement, just what the implementation actually does.
+        assert_eq!(deleted.last(), Some(&id));
     }
 }

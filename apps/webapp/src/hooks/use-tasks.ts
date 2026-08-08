@@ -37,6 +37,14 @@ function isTaskListQuery(
  * so a root task not yet loaded, or a subtask (which never has its own
  * children — see {@link import('#/pages/planning/lib/subtasks').canAddSubtask}),
  * simply doesn't fetch rather than the caller having to remember to gate it.
+ *
+ * Always requests page 1 at `per_page: 100` — this is a single, unpaginated
+ * fetch, not the first page of a pager the caller can advance. A parent
+ * with more than 100 subtasks would silently lose the rest from the sheet's
+ * "Sous-tâches" tab: nothing surfaces that truncation today. Left as-is
+ * rather than paginated up front — 100 direct children of one task is not a
+ * shape this module has seen in practice — but a real cap, not a
+ * theoretical one, so it belongs in a comment rather than assumed away.
  */
 export function useSubtasks(
 	organizationId: string,

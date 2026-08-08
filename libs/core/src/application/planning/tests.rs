@@ -522,6 +522,63 @@ mod tests {
         cleanup(&pool, fixture.organization_id, &[fixture.owner_id]).await;
     }
 
+    /// `soft_delete_task` cascades to direct children — proven here, not
+    /// just at the domain-service level, because the point of the cascade
+    /// is what the *user* sees afterward: a deleted root must take its
+    /// subtask down with it in `GET /planning`, not leave it orphaned and
+    /// (for a dateless one) unable to resolve a window at all.
+    #[tokio::test]
+    #[ignore = "requires live postgres"]
+    async fn deleting_a_parent_task_cascades_to_its_subtask_and_both_leave_get_planning() {
+        let pool = make_pool().await;
+        let fixture = seed_fixture(&pool).await;
+        let employee_id = seed_employee(&pool, fixture.organization_id).await;
+        let now = Utc::now();
+        let parent_task_id =
+            seed_task(&pool, &fixture, employee_id, now, now + Duration::hours(4)).await;
+        let subtask_id = seed_dateless_subtask(&pool, &fixture, parent_task_id, employee_id).await;
+        let usecase = make_usecase(pool.clone());
+
+        let today = now.date_naive();
+        let window = DateRange::new(today, today + Duration::days(1)).unwrap();
+
+        // Both entries are visible before the delete — the same assertion
+        // `get_planning_includes_a_dateless_subtask_using_its_parent_window`
+        // already locks in, repeated here so this test does not depend on
+        // that one having run first.
+        let before = usecase
+            .get_planning(fixture.organization_id, window)
+            .await
+            .expect("get_planning must succeed");
+        assert_eq!(
+            before.entries.len(),
+            2,
+            "parent and subtask both visible before delete"
+        );
+
+        usecase
+            .soft_delete_task(crate::TaskId(parent_task_id))
+            .await
+            .expect("soft_delete_task must succeed");
+
+        let after = usecase
+            .get_planning(fixture.organization_id, window)
+            .await
+            .expect("get_planning must succeed");
+        assert!(
+            after.entries.is_empty(),
+            "both the deleted parent and its cascaded subtask must be gone from GET /planning"
+        );
+
+        let subtask_lookup = usecase.get_task(crate::TaskId(subtask_id)).await;
+        assert!(
+            matches!(subtask_lookup, Err(common::CoreError::NotFound)),
+            "the subtask itself must be marked deleted, not merely hidden from the grid"
+        );
+
+        cleanup(&pool, fixture.organization_id, &[fixture.owner_id]).await;
+    }
+
     #[tokio::test]
     #[ignore = "requires live postgres"]
     async fn get_availability_reports_an_overlapping_absence_as_a_conflict() {
