@@ -9,6 +9,10 @@ import {
 } from '#/hooks/use-planning'
 import { employeeDisplayName } from '#/pages/hr/types'
 import {
+	TaskSheetFeature,
+	type TaskSheetTarget,
+} from '#/pages/planning/feature/task-sheet-feature'
+import {
 	computeRemoveAssigneePatch,
 	computeTaskDropPatch,
 } from '#/pages/planning/lib/task-drop'
@@ -20,6 +24,7 @@ import {
 import { computeWindow } from '#/pages/planning/lib/window'
 import type { PlanningView } from '#/pages/planning/types'
 import type {
+	OpenTaskEvent,
 	RemoveAssigneeEvent,
 	TaskDropEvent,
 } from '#/pages/planning/ui/planning-grid'
@@ -111,6 +116,8 @@ function PlanningTeamScreen({
 	const [pendingDrop, setPendingDrop] = useState<PendingDrop | null>(null)
 	const [dropError, setDropError] = useState<string | null>(null)
 	const [createdEmployeeNames, setCreatedEmployeeNames] = useState<string[]>([])
+	const [taskSheetTarget, setTaskSheetTarget] =
+		useState<TaskSheetTarget | null>(null)
 
 	async function applyTaskPatch(
 		taskId: string,
@@ -236,6 +243,10 @@ function PlanningTeamScreen({
 		setDropError(null)
 	}
 
+	function handleOpenTask(event: OpenTaskEvent) {
+		setTaskSheetTarget({ mode: 'edit', taskId: event.entryId })
+	}
+
 	return (
 		<PlanningTeamUI
 			organizationName={organizationName}
@@ -250,6 +261,10 @@ function PlanningTeamScreen({
 			data={data}
 			onDropTask={(event) => void handleDropTask(event)}
 			onRemoveAssignee={handleRemoveAssignee}
+			onOpenTask={handleOpenTask}
+			onCreateTask={() =>
+				setTaskSheetTarget({ mode: 'create', parentTaskId: null })
+			}
 			warningDialog={{
 				open: pendingDrop !== null,
 				warnings: pendingDrop?.warnings ?? [],
@@ -260,8 +275,35 @@ function PlanningTeamScreen({
 			}}
 			createdEmployeeNames={createdEmployeeNames}
 			onDismissCreatedEmployees={() => setCreatedEmployeeNames([])}
+			taskSheet={
+				data && taskSheetTarget ? (
+					<TaskSheetFeature
+						// Remounts with fresh local state whenever the targeted task
+						// changes — including navigating from a subtask row to its
+						// parent, or "add subtask" to a create draft — see
+						// `TaskSheetFeature`'s own doc on why a remount beats trying
+						// to reconcile state in place.
+						key={taskSheetTargetKey(taskSheetTarget)}
+						organizationId={organizationId}
+						timeZone={data.timezone}
+						resources={data.resources}
+						open={true}
+						target={taskSheetTarget}
+						onOpenChange={(open) => {
+							if (!open) setTaskSheetTarget(null)
+						}}
+						onNavigate={setTaskSheetTarget}
+					/>
+				) : null
+			}
 		/>
 	)
+}
+
+function taskSheetTargetKey(target: TaskSheetTarget): string {
+	return target.mode === 'create'
+		? `create:${target.parentTaskId ?? 'root'}`
+		: `edit:${target.taskId}`
 }
 
 function errorMessage(error: unknown): string {
