@@ -445,6 +445,7 @@ export namespace Schemas {
   export type TaskCommentId = string;
   export type TaskCommentResponse = {
     author: TaskCommentAuthorResponse;
+    author_is_self: boolean;
     body: string;
     created_at: string;
     id: TaskCommentId;
@@ -2735,6 +2736,7 @@ export namespace Endpoints {
       200: {
         data: Array<{
           author: Schemas.TaskCommentAuthorResponse;
+          author_is_self: boolean;
           body: string;
           created_at: string;
           id: Schemas.TaskCommentId;
@@ -2762,6 +2764,7 @@ export namespace Endpoints {
       201: {
         data: {
           author: Schemas.TaskCommentAuthorResponse;
+          author_is_self: boolean;
           body: string;
           created_at: string;
           id: Schemas.TaskCommentId;
@@ -2799,6 +2802,7 @@ export namespace Endpoints {
       200: {
         data: {
           author: Schemas.TaskCommentAuthorResponse;
+          author_is_self: boolean;
           body: string;
           created_at: string;
           id: Schemas.TaskCommentId;
