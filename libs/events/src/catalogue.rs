@@ -59,6 +59,12 @@ impl EventCatalogue {
     pub fn get(&self, name: &str, version: u16) -> Option<&EventDescriptor> {
         self.descriptors.get(name)?.get(&version)
     }
+
+    /// Every descriptor, in no particular order. The trigger picker and the
+    /// public event documentation are both built from this.
+    pub fn descriptors(&self) -> impl Iterator<Item = &EventDescriptor> {
+        self.descriptors.values().flat_map(HashMap::values)
+    }
 }
 
 #[cfg(test)]

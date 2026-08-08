@@ -2,6 +2,7 @@ mod actor;
 mod catalogue;
 mod envelope;
 mod event;
+pub mod testing;
 
 pub use actor::{Actor, ActorKind};
 pub use catalogue::{CatalogueError, EventCatalogue, EventDescriptor};
