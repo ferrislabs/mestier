@@ -13,8 +13,12 @@ use crate::{
 pub struct MemberRow {
     pub id: Uuid,
     pub organization_id: Uuid,
-    pub user_id: Uuid,
-    pub joined_at: DateTime<Utc>,
+    pub user_id: Option<Uuid>,
+    pub last_name: String,
+    pub first_name: Option<String>,
+    pub joined_at: Option<DateTime<Utc>>,
+    pub created_at: DateTime<Utc>,
+    pub deleted_at: Option<DateTime<Utc>>,
 }
 
 impl From<MemberRow> for Member {
@@ -22,8 +26,12 @@ impl From<MemberRow> for Member {
         Self {
             id: MemberId(row.id),
             organization_id: OrganizationId(row.organization_id),
-            user_id: UserId(row.user_id),
+            user_id: row.user_id.map(UserId),
+            last_name: row.last_name,
+            first_name: row.first_name,
             joined_at: row.joined_at,
+            created_at: row.created_at,
+            deleted_at: row.deleted_at,
         }
     }
 }

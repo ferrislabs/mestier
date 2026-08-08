@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 use uuid::Uuid;
 
-use crate::{OrganizationId, UserId};
+use crate::{OrganizationId, UserId, domain::member::format_person_name};
 
 pub mod commands;
 pub mod ports;
@@ -58,26 +58,15 @@ pub struct Employee {
 
 impl Employee {
     /// The one display format for an employee, everywhere: "{last_name}
-    /// {first_name}". See [`format_employee_name`].
+    /// {first_name}". See
+    /// [`format_person_name`](crate::domain::member::format_person_name),
+    /// the single place this formatting lives — shared with [`Member`]'s
+    /// own `display_name` so a person's name reads the same whether it
+    /// comes from a standalone seat or the HR profile attached to one.
+    ///
+    /// [`Member`]: crate::domain::member::Member
     pub fn display_name(&self) -> String {
-        format_employee_name(&self.last_name, self.first_name.as_deref())
-    }
-}
-
-/// "{last_name} {first_name}" — last name first, then first name, in that
-/// order (not the conventional first-then-last). When `first_name` is
-/// absent or blank, the last name alone, with no trailing whitespace.
-///
-/// The one formatting function, called from every layer that needs to show
-/// an employee's name — domain, handler DTOs, front — so the format lives in
-/// exactly one place instead of being hand-concatenated on each screen.
-pub fn format_employee_name(last_name: &str, first_name: Option<&str>) -> String {
-    let last = last_name.trim();
-    let first = first_name.map(str::trim).filter(|value| !value.is_empty());
-
-    match first {
-        Some(first) => format!("{last} {first}"),
-        None => last.to_owned(),
+        format_person_name(&self.last_name, self.first_name.as_deref())
     }
 }
 
@@ -99,33 +88,7 @@ mod tests {
     }
 
     #[test]
-    fn format_employee_name_joins_last_and_first_name_in_that_order() {
-        assert_eq!(
-            format_employee_name("Bonnal", Some("Baptiste")),
-            "Bonnal Baptiste"
-        );
-    }
-
-    #[test]
-    fn format_employee_name_falls_back_to_the_last_name_alone_without_a_trailing_space() {
-        assert_eq!(format_employee_name("Bonnal", None), "Bonnal");
-    }
-
-    #[test]
-    fn format_employee_name_treats_a_blank_first_name_as_absent() {
-        assert_eq!(format_employee_name("Bonnal", Some("   ")), "Bonnal");
-    }
-
-    #[test]
-    fn format_employee_name_trims_stray_whitespace_on_both_parts() {
-        assert_eq!(
-            format_employee_name("  Bonnal  ", Some("  Baptiste  ")),
-            "Bonnal Baptiste"
-        );
-    }
-
-    #[test]
-    fn employee_display_name_delegates_to_format_employee_name() {
+    fn employee_display_name_delegates_to_format_person_name() {
         let now = Utc::now();
         let employee = Employee {
             id: EmployeeId(Uuid::new_v4()),

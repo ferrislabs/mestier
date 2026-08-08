@@ -147,11 +147,18 @@ mod tests {
 
     /// Adds `user_id` as a member of `organization_id`.
     async fn seed_member(pool: &PgPool, organization_id: OrganizationId, user_id: UserId) {
+        let display_name =
+            sqlx::query_scalar!(r#"SELECT display_name FROM users WHERE id = $1"#, user_id.0,)
+                .fetch_one(pool)
+                .await
+                .unwrap();
+
         sqlx::query!(
-            r#"INSERT INTO organization_members (organization_id, user_id)
-               VALUES ($1, $2)"#,
+            r#"INSERT INTO organization_members (organization_id, user_id, last_name)
+               VALUES ($1, $2, $3)"#,
             organization_id.0,
             user_id.0,
+            display_name,
         )
         .execute(pool)
         .await

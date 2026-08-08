@@ -7,7 +7,9 @@ use crate::{
     domain::{
         member::{
             Member, MemberId,
-            commands::{AddMemberCommand, AssignRoleCommand},
+            commands::{
+                AddMemberCommand, AssignRoleCommand, CreateMemberCommand, UpdateMemberCommand,
+            },
             service::MemberService,
         },
         organization::OrganizationId,
@@ -20,6 +22,19 @@ impl MestierUseCase {
     pub async fn add_member(&self, command: AddMemberCommand) -> Result<Member, CoreError> {
         let mut service = MemberService::new(member_repository);
         service.add_member(command).await
+    }
+
+    /// A free, named seat — no `user_id`, unlike [`Self::add_member`].
+    #[transactional(member)]
+    pub async fn create_member(&self, command: CreateMemberCommand) -> Result<Member, CoreError> {
+        let mut service = MemberService::new(member_repository);
+        service.create_member(command).await
+    }
+
+    #[transactional(member)]
+    pub async fn update_member(&self, command: UpdateMemberCommand) -> Result<Member, CoreError> {
+        let mut service = MemberService::new(member_repository);
+        service.update_member(command).await
     }
 
     #[transactional(member)]

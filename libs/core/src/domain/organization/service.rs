@@ -250,8 +250,12 @@ where
             .insert(&Member {
                 id: MemberId(generate_uuid_v7()),
                 organization_id: organization.id,
-                user_id: user.id,
-                joined_at: now,
+                user_id: Some(user.id),
+                last_name: user.name,
+                first_name: None,
+                joined_at: Some(now),
+                created_at: now,
+                deleted_at: None,
             })
             .await?;
 
@@ -296,7 +300,9 @@ where
             .await?
             .ok_or(CoreError::NotFound)?;
 
-        self.member_repository.remove(member.id).await
+        self.member_repository
+            .soft_delete(member.id, Utc::now())
+            .await
     }
 }
 
@@ -355,8 +361,12 @@ mod tests {
                 let m = Member {
                     id: member_id,
                     organization_id,
-                    user_id,
-                    joined_at: Utc::now(),
+                    user_id: Some(user_id),
+                    last_name: "Member".to_owned(),
+                    first_name: None,
+                    joined_at: Some(Utc::now()),
+                    created_at: Utc::now(),
+                    deleted_at: None,
                 };
                 Box::pin(async move { Ok(Some(m)) })
             });
@@ -814,12 +824,7 @@ mod tests {
         });
 
         member_repository.expect_insert().times(1).returning(|m| {
-            let cloned = Member {
-                id: m.id,
-                organization_id: m.organization_id,
-                user_id: m.user_id,
-                joined_at: m.joined_at,
-            };
+            let cloned = m.clone();
             Box::pin(async move { Ok(cloned) })
         });
 
@@ -908,12 +913,7 @@ mod tests {
             Box::pin(async move { Ok(cloned) })
         });
         member_repository.expect_insert().times(1).returning(|m| {
-            let cloned = Member {
-                id: m.id,
-                organization_id: m.organization_id,
-                user_id: m.user_id,
-                joined_at: m.joined_at,
-            };
+            let cloned = m.clone();
             Box::pin(async move { Ok(cloned) })
         });
         member_repository
@@ -1065,7 +1065,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn leave_organization_removes_membership_when_non_owner_leaves() {
+    async fn leave_organization_soft_deletes_membership_when_non_owner_leaves() {
         let owner_id = UserId(Uuid::new_v4());
         let leaver_id = UserId(Uuid::new_v4());
         let org_id = OrganizationId(Uuid::new_v4());
@@ -1102,17 +1102,21 @@ mod tests {
                 let m = Member {
                     id: member_id,
                     organization_id,
-                    user_id,
-                    joined_at: Utc::now(),
+                    user_id: Some(user_id),
+                    last_name: "Member".to_owned(),
+                    first_name: None,
+                    joined_at: Some(Utc::now()),
+                    created_at: Utc::now(),
+                    deleted_at: None,
                 };
                 Box::pin(async move { Ok(Some(m)) })
             });
 
         member_repository
-            .expect_remove()
-            .with(eq(member_id))
+            .expect_soft_delete()
+            .withf(move |id, _| *id == member_id)
             .times(1)
-            .returning(|_| Box::pin(async { Ok(()) }));
+            .returning(|_, _| Box::pin(async { Ok(()) }));
 
         let mut service = OrganizationService::new(
             organization_repository,
