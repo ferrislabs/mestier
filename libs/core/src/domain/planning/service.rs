@@ -500,12 +500,14 @@ fn build_entries(tasks: &[PlanningTask], absences: &[EmployeeAbsence]) -> Vec<Pl
 
     for planning_task in tasks {
         let task = &planning_task.task;
-        // Every task `PlanningRepository::list_tasks_in_window` returns has
-        // its own concrete window — a subtask inheriting its parent's (both
-        // `None`) does not match the window query in the first place. Skip
-        // defensively rather than trust that invariant blindly: rendering an
-        // inherited window on the grid is a read-time resolution
-        // (`resolve_task_window`) that this read model does not perform yet.
+        // `PlanningRepository::list_tasks_in_window` resolves a dateless
+        // subtask's window to its parent's before returning it (see that
+        // trait method's doc comment and `resolve_task_window`), so both
+        // fields are `Some` in practice for every row reaching this point.
+        // Skipped defensively rather than trusted blindly: a future
+        // repository implementation, or a directly-constructed
+        // `PlanningTask` in a test, could still hand back an unresolved
+        // one.
         let (Some(starts_at), Some(ends_at)) = (task.starts_at, task.ends_at) else {
             continue;
         };

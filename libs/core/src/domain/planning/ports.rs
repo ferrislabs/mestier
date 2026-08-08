@@ -22,12 +22,15 @@ use crate::{
 #[cfg_attr(test, mockall::automock)]
 pub trait PlanningRepository: Send {
     /// Every task (with its assignments and its child count), enriched with
-    /// `customer_name`/`context_label`, whose own window overlaps
+    /// `customer_name`/`context_label`, whose *effective* window overlaps
     /// `[from, to)` — for the whole organization in one small, fixed set of
-    /// queries. A task with no dates of its own (a subtask inheriting its
-    /// parent's window) is not returned here — resolving and rendering an
-    /// inherited window on the grid is T4's concern; `resolve_task_window`
-    /// is ready for it.
+    /// queries, independent of how many tasks or employees the organization
+    /// has. A task's effective window is its own when it carries one, or
+    /// its parent's when it doesn't (a subtask inheriting its parent's
+    /// window, see `resolve_task_window` in `domain::task::service`) — the
+    /// returned `Task.starts_at`/`ends_at` always carry this resolved
+    /// value, never `None`, so a dateless subtask assigned to someone
+    /// appears on their row exactly like any other task.
     fn list_tasks_in_window(
         &mut self,
         organization_id: OrganizationId,

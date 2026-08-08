@@ -41,6 +41,18 @@ pub async fn handler(
 ) -> Result<Response<TaskCommentResponse>, ApiError> {
     require_task_for_comments(&state, &identity, organization_id, task_id).await?;
 
+    // Duplicates `require_org_membership`'s own `find_user_by_sub` lookup —
+    // that helper only proves membership, it does not hand back the
+    // resolved `User`, and this is the one place a *list* of comments needs
+    // to know who's asking: `author_is_self` is computed per comment below
+    // against this viewer, not against whichever `find_user_by_sub` call a
+    // single-comment endpoint (`create`/`update`) already made for itself.
+    let viewer = state
+        .usecase
+        .find_user_by_sub(identity.id())
+        .await?
+        .ok_or(ApiError::Forbidden)?;
+
     let per_page = pagination.per_page();
     let page = pagination.page();
     let offset = pagination.offset();
@@ -62,7 +74,8 @@ pub async fn handler(
         .into_iter()
         .map(|comment| {
             let display_name = display_name_for(&authors, comment.author_user_id);
-            TaskCommentResponse::new(comment, display_name)
+            let author_is_self = comment.author_user_id == viewer.id;
+            TaskCommentResponse::new(comment, display_name, author_is_self)
         })
         .collect();
     let is_empty = items.is_empty();

@@ -1,0 +1,357 @@
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { render, screen, waitFor } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
+import type { ReactNode } from 'react'
+import { describe, expect, it, vi } from 'vitest'
+import {
+	TaskSheetFeature,
+	type TaskSheetFeatureProps,
+} from '#/pages/planning/feature/task-sheet-feature'
+
+// jsdom has no ResizeObserver, which Radix primitives (Select, Popover,
+// Tabs) probe defensively.
+class ResizeObserverStub {
+	observe() {}
+	unobserve() {}
+	disconnect() {}
+}
+// biome-ignore lint/suspicious/noExplicitAny: test-only global polyfill
+const globalAny = globalThis as any
+globalAny.ResizeObserver ??= ResizeObserverStub
+Element.prototype.scrollIntoView ??= () => {}
+Element.prototype.hasPointerCapture ??= () => false
+Element.prototype.releasePointerCapture ??= () => {}
+
+const TASKS_PATH = '/api/v1/organizations/{organization_id}/tasks'
+const TASK_PATH = '/api/v1/organizations/{organization_id}/tasks/{task_id}'
+const TASK_LABELS_PATH = '/api/v1/organizations/{organization_id}/task-labels'
+const CUSTOMERS_PATH = '/api/v1/organizations/{organization_id}/customers'
+const TASK_COMMENTS_PATH =
+	'/api/v1/organizations/{organization_id}/tasks/{task_id}/comments'
+
+type Handler = (params: unknown) => unknown
+
+function installFakeTanstackApi() {
+	const calls: { method: string; path: string; params: unknown }[] = []
+	const getHandlers = new Map<string, Handler>()
+	const mutationHandlers = new Map<string, Handler>()
+
+	function queryKeyFor(path: string, params: unknown) {
+		const p = (params ?? {}) as { path?: unknown; query?: unknown }
+		return [{ _id: path, path: p.path, query: p.query }]
+	}
+
+	function mockGet(path: string, handler: Handler) {
+		getHandlers.set(path, handler)
+	}
+
+	function mockMutation(method: string, path: string, handler: Handler) {
+		mutationHandlers.set(`${method}:${path}`, handler)
+	}
+
+	const fakeApi = {
+		get(path: string, params: unknown) {
+			const queryKey = queryKeyFor(path, params)
+			return {
+				queryKey,
+				queryOptions: {
+					queryKey,
+					queryFn: async () => {
+						calls.push({ method: 'get', path, params })
+						const handler = getHandlers.get(path)
+						if (!handler) throw new Error(`unmocked GET ${path}`)
+						return handler(params)
+					},
+				},
+			}
+		},
+		mutation(method: string, path: string) {
+			return {
+				mutationOptions: {
+					mutationKey: [{ method, path }],
+					mutationFn: async (params: unknown) => {
+						calls.push({ method, path, params })
+						const handler = mutationHandlers.get(`${method}:${path}`)
+						if (!handler)
+							throw new Error(`unmocked ${method.toUpperCase()} ${path}`)
+						return handler(params)
+					},
+				},
+			}
+		},
+	}
+
+	// biome-ignore lint/suspicious/noExplicitAny: test-only fake, shape matches TanstackQueryApiClient's used surface
+	;(window as any).tanstackApi = fakeApi
+
+	return { calls, mockGet, mockMutation }
+}
+
+const LABEL_REUNION = {
+	id: 'label-1',
+	organization_id: 'org-1',
+	name: 'Réunion',
+	color: '#2563EB',
+	created_at: '2026-01-01T00:00:00Z',
+	updated_at: '2026-01-01T00:00:00Z',
+}
+
+const RESOURCE_EMPLOYEE = {
+	resource_id: 'employee:employee-1',
+	kind: 'employee' as const,
+	employee_id: 'employee-1',
+	user_id: null,
+	display_name: 'Alix Martin',
+	hourly_rate_cents: 1500,
+	weekly_contract_minutes: 2100,
+}
+
+/**
+ * `configure` runs before `render()` — any GET a hook fetches on mount
+ * (`useTask`'s task-in-edit-mode fetch, in particular) must already have a
+ * handler registered by then, since the query fires from a mount effect
+ * before the test body gets a chance to call `mockGet` afterwards (mirrors
+ * `planning-team-feature.test.tsx`'s own `installFakeTanstackApi` — the
+ * always-on-mount `PLANNING_PATH` fetch is baked in up front there too).
+ */
+function renderFeature(
+	overrides: Partial<TaskSheetFeatureProps> = {},
+	configure?: (api: ReturnType<typeof installFakeTanstackApi>) => void,
+) {
+	const api = installFakeTanstackApi()
+	const { calls, mockGet, mockMutation } = api
+	mockGet(TASK_LABELS_PATH, () => ({ data: [LABEL_REUNION], pagination: null }))
+	mockGet(CUSTOMERS_PATH, () => ({ data: [], pagination: null }))
+	configure?.(api)
+
+	const queryClient = new QueryClient({
+		defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+	})
+
+	function Providers({ children }: { children: ReactNode }) {
+		return (
+			<QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+		)
+	}
+
+	const onOpenChange = vi.fn()
+	const onNavigate = vi.fn()
+
+	const props: TaskSheetFeatureProps = {
+		organizationId: 'org-1',
+		timeZone: 'Europe/Paris',
+		resources: [RESOURCE_EMPLOYEE],
+		open: true,
+		target: { mode: 'create', parentTaskId: null },
+		onOpenChange,
+		onNavigate,
+		...overrides,
+	}
+
+	render(
+		<Providers>
+			<TaskSheetFeature {...props} />
+		</Providers>,
+	)
+
+	return { calls, mockGet, mockMutation, onOpenChange, onNavigate }
+}
+
+/** `POST /tasks` calls — always `TASKS_PATH`. */
+function postTaskCalls(
+	calls: { method: string; path: string; params: unknown }[],
+) {
+	return calls.filter((c) => c.method === 'post' && c.path === TASKS_PATH)
+}
+
+/** `PATCH /tasks/{task_id}` calls — always `TASK_PATH`, distinct from `TASKS_PATH`'s list/create path. */
+function patchTaskCalls(
+	calls: { method: string; path: string; params: unknown }[],
+) {
+	return calls.filter((c) => c.method === 'patch' && c.path === TASK_PATH)
+}
+
+describe('TaskSheetFeature — création sans client', () => {
+	it('envoie un POST avec customer_id/customer_context_id à null et sans PATCH de suivi', async () => {
+		const user = userEvent.setup()
+		const { calls, mockMutation, onOpenChange } = renderFeature()
+		mockMutation('post', TASKS_PATH, () => ({
+			data: { id: 'task-1', customer_id: null, customer_context_id: null },
+			pagination: null,
+		}))
+
+		await user.type(screen.getByLabelText('Titre'), 'Réunion de chantier')
+		await user.click(screen.getByRole('button', { name: 'Créer' }))
+
+		await waitFor(() => expect(postTaskCalls(calls)).toHaveLength(1))
+		const body = (
+			postTaskCalls(calls)[0].params as { body: Record<string, unknown> }
+		).body
+		expect(body.customer_id).toBeNull()
+		expect(body.customer_context_id).toBeNull()
+
+		expect(patchTaskCalls(calls)).toHaveLength(0)
+		await waitFor(() => expect(onOpenChange).toHaveBeenCalledWith(false))
+	})
+})
+
+describe('TaskSheetFeature — création avec assignés et labels', () => {
+	it('enchaîne un PATCH de suivi avec la liste complète des assignés et labels choisis', async () => {
+		const user = userEvent.setup()
+		const { calls, mockMutation } = renderFeature()
+		mockMutation('post', TASKS_PATH, () => ({
+			data: { id: 'task-1' },
+			pagination: null,
+		}))
+		mockMutation('patch', TASK_PATH, () => ({
+			data: { task: { id: 'task-1' }, created_employees: [] },
+			pagination: null,
+		}))
+
+		await user.type(screen.getByLabelText('Titre'), 'Chantier toiture')
+
+		await user.click(screen.getByRole('button', { name: /Aucun label/ }))
+		await user.click(screen.getByRole('option', { name: /Réunion/ }))
+
+		await user.click(screen.getByRole('button', { name: /Personne assigné/ }))
+		await user.click(screen.getByRole('option', { name: /Alix Martin/ }))
+
+		await user.click(screen.getByRole('button', { name: 'Créer' }))
+
+		await waitFor(() => expect(patchTaskCalls(calls)).toHaveLength(1))
+		const patchBody = (
+			patchTaskCalls(calls)[0].params as { body: Record<string, unknown> }
+		).body
+		expect(patchBody.label_ids).toEqual(['label-1'])
+		expect(patchBody.assignees).toEqual([
+			{ kind: 'employee', employee_id: 'employee-1' },
+		])
+	})
+})
+
+describe('TaskSheetFeature — édition, labels', () => {
+	function editTarget() {
+		return { mode: 'edit' as const, taskId: 'task-1' }
+	}
+
+	function mockEditTask(
+		mockGet: ReturnType<typeof installFakeTanstackApi>['mockGet'],
+	) {
+		mockGet(TASK_PATH, () => ({
+			data: {
+				id: 'task-1',
+				title: 'Chantier toiture',
+				description: null,
+				all_day: false,
+				starts_at: '2026-08-10T07:00:00.000Z',
+				ends_at: '2026-08-10T09:00:00.000Z',
+				blocks_availability: true,
+				status: 'PLANNED',
+				parent_task_id: null,
+				customer_id: null,
+				customer_context_id: null,
+				child_count: 0,
+				labels: [LABEL_REUNION],
+				employee_ids: [],
+			},
+			pagination: null,
+		}))
+		mockGet(TASKS_PATH, () => ({ data: [], pagination: null }))
+	}
+
+	it('envoie label_ids vide pour retirer tous les labels existants', async () => {
+		const user = userEvent.setup()
+		const { calls, mockMutation } = renderFeature(
+			{ target: editTarget() },
+			(api) => mockEditTask(api.mockGet),
+		)
+		mockMutation('patch', TASK_PATH, () => ({
+			data: { task: { id: 'task-1' }, created_employees: [] },
+			pagination: null,
+		}))
+
+		expect(await screen.findByDisplayValue('Chantier toiture')).toBeDefined()
+		// The one seeded label starts selected — deselect it.
+		await user.click(screen.getByRole('button', { name: /Réunion/ }))
+		await user.click(screen.getByRole('option', { name: /Réunion/ }))
+
+		await user.click(screen.getByRole('button', { name: 'Enregistrer' }))
+
+		await waitFor(() => expect(patchTaskCalls(calls)).toHaveLength(1))
+		const body = (
+			patchTaskCalls(calls)[0].params as { body: Record<string, unknown> }
+		).body
+		expect(body.label_ids).toEqual([])
+	})
+})
+
+describe('TaskSheetFeature — fil de commentaires paginé', () => {
+	it('ne demande que la première page à l’ouverture, jamais tout l’historique', async () => {
+		const { calls } = renderFeature(
+			{ target: { mode: 'edit', taskId: 'task-1' } },
+			(api) => {
+				api.mockGet(TASK_PATH, () => ({
+					data: {
+						id: 'task-1',
+						title: 'Chantier',
+						description: null,
+						all_day: false,
+						starts_at: '2026-08-10T07:00:00.000Z',
+						ends_at: '2026-08-10T09:00:00.000Z',
+						blocks_availability: true,
+						status: 'PLANNED',
+						parent_task_id: null,
+						customer_id: null,
+						customer_context_id: null,
+						child_count: 0,
+						labels: [],
+						employee_ids: [],
+					},
+					pagination: null,
+				}))
+				api.mockGet(TASKS_PATH, () => ({ data: [], pagination: null }))
+				api.mockGet(TASK_COMMENTS_PATH, () => ({
+					data: [
+						{
+							id: 'c1',
+							task_id: 'task-1',
+							organization_id: 'org-1',
+							author: { id: 'u1', display_name: 'Bob Martin' },
+							author_is_self: false,
+							body: 'Salut',
+							created_at: '2026-08-10T08:00:00Z',
+							updated_at: '2026-08-10T08:00:00Z',
+						},
+					],
+					pagination: {
+						current_page: 1,
+						first_page: 1,
+						is_empty: false,
+						per_page: 20,
+						last_page: 3,
+						next_page: 2,
+						total: 45,
+					},
+				}))
+			},
+		)
+
+		await screen.findByDisplayValue('Chantier')
+		const user = userEvent.setup()
+		await user.click(screen.getByRole('tab', { name: /Commentaires/ }))
+
+		expect(await screen.findByText('Salut')).toBeDefined()
+		const commentCalls = calls.filter(
+			(c) => c.method === 'get' && c.path === TASK_COMMENTS_PATH,
+		)
+		expect(commentCalls).toHaveLength(1)
+		expect(
+			(commentCalls[0].params as { query: { page: number; per_page: number } })
+				.query,
+		).toEqual({ page: 1, per_page: 20 })
+
+		// The "load more" control must be present rather than the thread
+		// silently fetching page 2 itself.
+		expect(screen.getByRole('button', { name: /plus récents/i })).toBeDefined()
+	})
+})

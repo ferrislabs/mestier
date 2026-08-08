@@ -431,6 +431,7 @@ describe('PlanningGrid — retrait d’un assigné', () => {
 
 describe('PlanningGrid — segment d’absence inerte', () => {
 	it("un clic sur un segment d'absence ne déclenche aucune interaction (pas de role bouton, pas d'onClick)", () => {
+		const onOpenTask = vi.fn()
 		render(
 			<PlanningGrid
 				view="week"
@@ -440,6 +441,7 @@ describe('PlanningGrid — segment d’absence inerte', () => {
 				resources={[employeeResource()]}
 				entries={[absence()]}
 				workTime={[]}
+				onOpenTask={onOpenTask}
 			/>,
 		)
 
@@ -449,6 +451,162 @@ describe('PlanningGrid — segment d’absence inerte', () => {
 		// A click must not throw and must not carry any accessible "button" affordance.
 		fireEvent.click(segment)
 		expect(screen.queryAllByRole('button')).toHaveLength(0)
+		expect(onOpenTask).not.toHaveBeenCalled()
+	})
+})
+
+describe('PlanningGrid — ouverture du détail d’une tâche', () => {
+	it('un clic sur un segment de tâche appelle onOpenTask avec entryId', () => {
+		const onOpenTask = vi.fn()
+		render(
+			<PlanningGrid
+				view="week"
+				windowFrom="2026-08-10"
+				windowTo="2026-08-10"
+				timeZone={TZ}
+				resources={[employeeResource()]}
+				entries={[task()]}
+				workTime={[]}
+				onOpenTask={onOpenTask}
+			/>,
+		)
+
+		fireEvent.click(screen.getByTestId('grid-segment'))
+
+		expect(onOpenTask).toHaveBeenCalledWith({ entryId: 'wo-1' })
+	})
+
+	it('porte un role bouton et un tabIndex quand onOpenTask est fourni', () => {
+		render(
+			<PlanningGrid
+				view="week"
+				windowFrom="2026-08-10"
+				windowTo="2026-08-10"
+				timeZone={TZ}
+				resources={[employeeResource()]}
+				entries={[task()]}
+				workTime={[]}
+				onOpenTask={vi.fn()}
+			/>,
+		)
+
+		const segment = screen.getByTestId('grid-segment')
+		expect(segment.getAttribute('role')).toBe('button')
+		expect(segment.getAttribute('tabindex')).toBe('0')
+	})
+
+	it('ne porte aucun role bouton ni tabIndex sans onOpenTask, et un clic ne plante pas', () => {
+		render(
+			<PlanningGrid
+				view="week"
+				windowFrom="2026-08-10"
+				windowTo="2026-08-10"
+				timeZone={TZ}
+				resources={[employeeResource()]}
+				entries={[task()]}
+				workTime={[]}
+			/>,
+		)
+
+		const segment = screen.getByTestId('grid-segment')
+		expect(segment.getAttribute('role')).toBeNull()
+		expect(segment.getAttribute('tabindex')).toBeNull()
+		expect(() => fireEvent.click(segment)).not.toThrow()
+	})
+
+	it('la touche Entrée sur un segment focalisé appelle onOpenTask', () => {
+		const onOpenTask = vi.fn()
+		render(
+			<PlanningGrid
+				view="week"
+				windowFrom="2026-08-10"
+				windowTo="2026-08-10"
+				timeZone={TZ}
+				resources={[employeeResource()]}
+				entries={[task()]}
+				workTime={[]}
+				onOpenTask={onOpenTask}
+			/>,
+		)
+
+		fireEvent.keyDown(screen.getByTestId('grid-segment'), { key: 'Enter' })
+
+		expect(onOpenTask).toHaveBeenCalledWith({ entryId: 'wo-1' })
+	})
+
+	it('un clic sur le bouton retirer ne déclenche pas aussi onOpenTask (stopPropagation)', () => {
+		const onOpenTask = vi.fn()
+		const onRemoveAssignee = vi.fn()
+		render(
+			<PlanningGrid
+				view="week"
+				windowFrom="2026-08-10"
+				windowTo="2026-08-10"
+				timeZone={TZ}
+				resources={[employeeResource()]}
+				entries={[task()]}
+				workTime={[]}
+				onOpenTask={onOpenTask}
+				onRemoveAssignee={onRemoveAssignee}
+			/>,
+		)
+
+		fireEvent.click(
+			screen.getByRole('button', { name: /Retirer cette personne/ }),
+		)
+
+		expect(onRemoveAssignee).toHaveBeenCalledTimes(1)
+		expect(onOpenTask).not.toHaveBeenCalled()
+	})
+})
+
+describe('PlanningGrid — pastilles de labels', () => {
+	it('affiche une pastille par label porté par la tâche', () => {
+		render(
+			<PlanningGrid
+				view="week"
+				windowFrom="2026-08-10"
+				windowTo="2026-08-10"
+				timeZone={TZ}
+				resources={[employeeResource()]}
+				entries={[
+					task({
+						labels: [
+							{
+								id: 'label-1',
+								organization_id: 'org-1',
+								name: 'Réunion',
+								color: '#2563EB',
+								created_at: '2026-01-01T00:00:00Z',
+								updated_at: '2026-01-01T00:00:00Z',
+							},
+						],
+					}),
+				]}
+				workTime={[]}
+			/>,
+		)
+
+		expect(screen.getByTitle('Réunion')).toBeDefined()
+	})
+
+	it('un segment sans labels ne rend aucune pastille', () => {
+		render(
+			<PlanningGrid
+				view="week"
+				windowFrom="2026-08-10"
+				windowTo="2026-08-10"
+				timeZone={TZ}
+				resources={[employeeResource()]}
+				entries={[task({ labels: [] })]}
+				workTime={[]}
+			/>,
+		)
+
+		const segment = screen.getByTestId('grid-segment')
+		expect(
+			segment.querySelectorAll('[style*="background-color"]'),
+		).toHaveLength(0)
 	})
 })
 

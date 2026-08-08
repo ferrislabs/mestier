@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO tasks (id, org_id, parent_task_id, status, title, blocks_availability)\n            VALUES ($1, $2, $3, 'PLANNED', $4, true)\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "2ff85781b06e2daee7f280fd0e13defcd51b8dcbdd259037091de995053667c7"
+}

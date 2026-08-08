@@ -67,9 +67,13 @@ pub async fn handler(
         })
         .await?;
 
+    // The caller just created this comment as themselves — `author_is_self`
+    // is always `true` here, never a lookup: `create_task_comment` sets
+    // `author_user_id` from this same resolved identity above.
     Ok(Response::Created(TaskCommentResponse::new(
         comment,
         author.name,
+        true,
     )))
 }
 

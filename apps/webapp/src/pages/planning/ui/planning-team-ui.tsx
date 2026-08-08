@@ -1,8 +1,9 @@
-import { AlertCircle, Info, X } from 'lucide-react'
+import { AlertCircle, Info, Plus, X } from 'lucide-react'
 import { Button } from '#/components/ui/button'
 import { PageHeader, PageShell, SectionCard } from '#/components/ui/surface'
 import type { PlanningResponse, PlanningView } from '#/pages/planning/types'
 import {
+	type OpenTaskEvent,
 	PlanningGrid,
 	type RemoveAssigneeEvent,
 	type TaskDropEvent,
@@ -28,11 +29,23 @@ export interface PlanningTeamUIProps {
 	onDropTask?: (event: TaskDropEvent) => void
 	/** The grid's "×" on a task segment. */
 	onRemoveAssignee?: (event: RemoveAssigneeEvent) => void
+	/** A task segment was clicked — opens its detail/edit sheet (see the planning remodel design doc's T4 scope). Absent means the grid's task segments stay unclickable, same as an absence segment. */
+	onOpenTask?: (event: OpenTaskEvent) => void
+	/** The header's "Nouvelle tâche" action — absent hides the button entirely rather than disabling it. */
+	onCreateTask?: () => void
 	/** The single warnings dialog a risky drop funnels through — see the planning design doc's "Avertissements" section. Not rendered when absent. */
 	warningDialog?: PlanningWarningDialogProps
 	/** Names of employee records the last `PATCH` created on the fly — see the planning design doc: `hourly_rate_cents` stays `NULL` until filled in. */
 	createdEmployeeNames?: string[]
 	onDismissCreatedEmployees?: () => void
+	/**
+	 * The task create/edit sheet, mounted by the feature layer (it needs
+	 * hooks this `ui/` component must not have — see `feature/
+	 * task-sheet-feature.tsx`) and handed down as an already-rendered node,
+	 * the same way `warningDialog` is handed down as props rather than this
+	 * component knowing how to build it.
+	 */
+	taskSheet?: React.ReactNode
 }
 
 /**
@@ -56,9 +69,12 @@ export function PlanningTeamUI({
 	data,
 	onDropTask,
 	onRemoveAssignee,
+	onOpenTask,
+	onCreateTask,
 	warningDialog,
 	createdEmployeeNames,
 	onDismissCreatedEmployees,
+	taskSheet,
 }: PlanningTeamUIProps) {
 	return (
 		<PageShell>
@@ -66,6 +82,14 @@ export function PlanningTeamUI({
 				eyebrow={organizationName}
 				title="Planning"
 				description="Chantiers, absences et plages de travail de l'équipe."
+				actions={
+					onCreateTask ? (
+						<Button type="button" className="gap-1.5" onClick={onCreateTask}>
+							<Plus className="size-4" />
+							Nouvelle tâche
+						</Button>
+					) : undefined
+				}
 			/>
 
 			{createdEmployeeNames && createdEmployeeNames.length > 0 ? (
@@ -115,10 +139,12 @@ export function PlanningTeamUI({
 					workTime={data.work_time}
 					onDropTask={onDropTask}
 					onRemoveAssignee={onRemoveAssignee}
+					onOpenTask={onOpenTask}
 				/>
 			) : null}
 
 			{warningDialog ? <PlanningWarningDialog {...warningDialog} /> : null}
+			{taskSheet}
 		</PageShell>
 	)
 }

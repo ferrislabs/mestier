@@ -6,6 +6,7 @@ mod tests {
     use chrono::{DateTime, Duration, Utc};
     use common::{OrganizationId, UserId, generate_uuid_v7};
     use sqlx::PgPool;
+    use uuid::Uuid;
 
     use crate::application::{MestierUseCase, default_authorizer};
     use crate::domain::planning::TimeRange;
@@ -191,7 +192,7 @@ mod tests {
         employee_id: EmployeeId,
         starts_at: DateTime<Utc>,
         ends_at: DateTime<Utc>,
-    ) {
+    ) -> Uuid {
         let task_id = generate_uuid_v7();
         sqlx::query!(
             r#"
@@ -221,6 +222,49 @@ mod tests {
         .execute(pool)
         .await
         .unwrap();
+
+        task_id
+    }
+
+    /// Seeds a subtask under `parent_task_id` with no `starts_at`/`ends_at`
+    /// of its own — the "inherits its parent's window" case
+    /// `resolve_task_window` exists for. Assigned to `employee_id`, unlike
+    /// its parent's own assignees (a subtask never inherits those, see
+    /// invariant 7 of the planning module design doc).
+    async fn seed_dateless_subtask(
+        pool: &PgPool,
+        fixture: &Fixture,
+        parent_task_id: Uuid,
+        employee_id: EmployeeId,
+    ) -> Uuid {
+        let task_id = generate_uuid_v7();
+        sqlx::query!(
+            r#"
+            INSERT INTO tasks (id, org_id, parent_task_id, status, title, blocks_availability)
+            VALUES ($1, $2, $3, 'PLANNED', $4, true)
+            "#,
+            task_id,
+            fixture.organization_id.0,
+            parent_task_id,
+            "Sous-tâche sans dates propres",
+        )
+        .execute(pool)
+        .await
+        .unwrap();
+
+        sqlx::query!(
+            r#"INSERT INTO task_assignments (id, org_id, task_id, employee_id)
+               VALUES ($1, $2, $3, $4)"#,
+            generate_uuid_v7(),
+            fixture.organization_id.0,
+            task_id,
+            employee_id.0,
+        )
+        .execute(pool)
+        .await
+        .unwrap();
+
+        task_id
     }
 
     async fn seed_absence(
@@ -414,6 +458,122 @@ mod tests {
             view.entries
                 .iter()
                 .any(|e| matches!(e, crate::PlanningEntry::Absence { .. }))
+        );
+
+        cleanup(&pool, fixture.organization_id, &[fixture.owner_id]).await;
+    }
+
+    /// The read-model fix this workstream owns: `GET /planning` used to
+    /// filter on `tasks.starts_at`/`ends_at` directly, so a subtask with no
+    /// dates of its own (`NULL`) never matched the window predicate and
+    /// silently vanished from the grid — even when assigned to someone,
+    /// even though the design doc is explicit that the grid must show it on
+    /// that person's row regardless of nesting level. Proven here against a
+    /// real database rather than mocked repositories, because the fix lives
+    /// in the SQL itself (a self-join resolving the window via
+    /// `COALESCE(t.starts_at, p.starts_at)`, mirroring `resolve_task_window`).
+    #[tokio::test]
+    #[ignore = "requires live postgres"]
+    async fn get_planning_includes_a_dateless_subtask_using_its_parent_window() {
+        let pool = make_pool().await;
+        let fixture = seed_fixture(&pool).await;
+        let employee_id = seed_employee(&pool, fixture.organization_id).await;
+        let now = Utc::now();
+        let parent_task_id =
+            seed_task(&pool, &fixture, employee_id, now, now + Duration::hours(4)).await;
+        let subtask_id = seed_dateless_subtask(&pool, &fixture, parent_task_id, employee_id).await;
+        let usecase = make_usecase(pool.clone());
+
+        let today = now.date_naive();
+        let view = usecase
+            .get_planning(
+                fixture.organization_id,
+                DateRange::new(today, today + Duration::days(1)).unwrap(),
+            )
+            .await
+            .expect("get_planning must succeed");
+
+        let subtask_entry = view
+            .entries
+            .iter()
+            .find(|entry| matches!(entry, crate::PlanningEntry::Task { id, .. } if *id == crate::TaskId(subtask_id)))
+            .expect("the dateless subtask must appear in the window its parent occupies");
+
+        match subtask_entry {
+            crate::PlanningEntry::Task {
+                parent_task_id: entry_parent_id,
+                starts_at,
+                ends_at,
+                employee_ids,
+                ..
+            } => {
+                assert_eq!(*entry_parent_id, Some(crate::TaskId(parent_task_id)));
+                assert_eq!(*starts_at, now, "must carry the parent's starts_at");
+                assert_eq!(
+                    *ends_at,
+                    now + Duration::hours(4),
+                    "must carry the parent's ends_at"
+                );
+                assert_eq!(employee_ids, &[employee_id]);
+            }
+            crate::PlanningEntry::Absence { .. } => panic!("expected a task entry"),
+        }
+
+        cleanup(&pool, fixture.organization_id, &[fixture.owner_id]).await;
+    }
+
+    /// `soft_delete_task` cascades to direct children — proven here, not
+    /// just at the domain-service level, because the point of the cascade
+    /// is what the *user* sees afterward: a deleted root must take its
+    /// subtask down with it in `GET /planning`, not leave it orphaned and
+    /// (for a dateless one) unable to resolve a window at all.
+    #[tokio::test]
+    #[ignore = "requires live postgres"]
+    async fn deleting_a_parent_task_cascades_to_its_subtask_and_both_leave_get_planning() {
+        let pool = make_pool().await;
+        let fixture = seed_fixture(&pool).await;
+        let employee_id = seed_employee(&pool, fixture.organization_id).await;
+        let now = Utc::now();
+        let parent_task_id =
+            seed_task(&pool, &fixture, employee_id, now, now + Duration::hours(4)).await;
+        let subtask_id = seed_dateless_subtask(&pool, &fixture, parent_task_id, employee_id).await;
+        let usecase = make_usecase(pool.clone());
+
+        let today = now.date_naive();
+        let window = DateRange::new(today, today + Duration::days(1)).unwrap();
+
+        // Both entries are visible before the delete — the same assertion
+        // `get_planning_includes_a_dateless_subtask_using_its_parent_window`
+        // already locks in, repeated here so this test does not depend on
+        // that one having run first.
+        let before = usecase
+            .get_planning(fixture.organization_id, window)
+            .await
+            .expect("get_planning must succeed");
+        assert_eq!(
+            before.entries.len(),
+            2,
+            "parent and subtask both visible before delete"
+        );
+
+        usecase
+            .soft_delete_task(crate::TaskId(parent_task_id))
+            .await
+            .expect("soft_delete_task must succeed");
+
+        let after = usecase
+            .get_planning(fixture.organization_id, window)
+            .await
+            .expect("get_planning must succeed");
+        assert!(
+            after.entries.is_empty(),
+            "both the deleted parent and its cascaded subtask must be gone from GET /planning"
+        );
+
+        let subtask_lookup = usecase.get_task(crate::TaskId(subtask_id)).await;
+        assert!(
+            matches!(subtask_lookup, Err(common::CoreError::NotFound)),
+            "the subtask itself must be marked deleted, not merely hidden from the grid"
         );
 
         cleanup(&pool, fixture.organization_id, &[fixture.owner_id]).await;

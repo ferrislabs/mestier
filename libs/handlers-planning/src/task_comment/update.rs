@@ -62,6 +62,9 @@ pub async fn handler(
     // `update_task_comment` only ever succeeds when `actor.id` matches the
     // comment's own author (anything else comes back `Forbidden` above), so
     // `actor.name` is always the right display name here — no second
-    // lookup needed.
-    Ok(Response::OK(TaskCommentResponse::new(comment, actor.name)))
+    // lookup needed — and `author_is_self` is always `true` for the same
+    // reason.
+    Ok(Response::OK(TaskCommentResponse::new(
+        comment, actor.name, true,
+    )))
 }
