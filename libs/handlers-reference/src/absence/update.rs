@@ -1,7 +1,7 @@
 use auth::Identity;
 use axum::{Extension, Json, extract::State};
 use chrono::{DateTime, Utc};
-use handlers::{ApiError, AppState, DataEnvelope, Response};
+use handlers::{ApiError, AppState, DataEnvelope, Response, resolve_user_id};
 use mestier_core::{AbsenceKind, PatchAbsenceCommand};
 use serde::{Deserialize, Deserializer};
 use utoipa::ToSchema;
@@ -69,6 +69,7 @@ pub async fn handler(
     Json(payload): Json<UpdateAbsenceRequest>,
 ) -> Result<Response<AbsenceResponse>, ApiError> {
     require_absence(&state, &identity, organization_id, absence_id).await?;
+    let actor = resolve_user_id(&state, &identity).await?;
 
     let mut command = PatchAbsenceCommand::new(absence_id);
     command.kind = payload.kind;
@@ -77,7 +78,11 @@ pub async fn handler(
     command.all_day = payload.all_day;
     command.note = payload.note;
 
-    let absence = state.usecase.patch_absence(command).await?;
+    let absence = state
+        .usecase
+        .acting_as(actor)
+        .patch_absence(command)
+        .await?;
 
     Ok(Response::OK(absence.into()))
 }

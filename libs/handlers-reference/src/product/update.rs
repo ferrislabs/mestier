@@ -1,6 +1,6 @@
 use auth::Identity;
 use axum::{Extension, Json, extract::State};
-use handlers::{ApiError, AppState, DataEnvelope, Response};
+use handlers::{ApiError, AppState, DataEnvelope, Response, resolve_user_id};
 use mestier_core::{ProductId, ServiceRateUnit, UpdateProductCommand};
 use serde::Deserialize;
 use utoipa::ToSchema;
@@ -43,9 +43,11 @@ pub async fn handler(
 ) -> Result<Response<ProductResponse>, ApiError> {
     let current = state.usecase.get_product(product_id).await?;
     require_org_membership(&state, &identity, current.organization_id).await?;
+    let actor = resolve_user_id(&state, &identity).await?;
 
     let product = state
         .usecase
+        .acting_as(actor)
         .update_product(UpdateProductCommand {
             id: product_id,
             name: payload.name,

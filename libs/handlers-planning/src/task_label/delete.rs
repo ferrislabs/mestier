@@ -1,6 +1,6 @@
 use auth::Identity;
 use axum::{Extension, extract::State};
-use handlers::{ApiError, AppState, Response};
+use handlers::{ApiError, AppState, Response, resolve_user_id};
 
 use crate::task_label::{TaskLabelPath, require_task_label};
 
@@ -30,7 +30,12 @@ pub async fn handler(
     Extension(identity): Extension<Identity>,
 ) -> Result<Response<()>, ApiError> {
     require_task_label(&state, &identity, organization_id, label_id).await?;
-    state.usecase.delete_task_label(label_id).await?;
+    let actor = resolve_user_id(&state, &identity).await?;
+    state
+        .usecase
+        .acting_as(actor)
+        .delete_task_label(label_id)
+        .await?;
 
     Ok(Response::NoContent)
 }

@@ -34,6 +34,7 @@ pub async fn handler(
 
     state
         .usecase
+        .acting_as(user.id)
         .mark_notification_read(MarkNotificationRead {
             notification_id: path.notification_id,
             user_id: user.id,

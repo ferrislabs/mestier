@@ -1,6 +1,6 @@
 use auth::Identity;
 use axum::{Extension, Json, extract::State};
-use handlers::{ApiError, AppState, DataEnvelope, Response};
+use handlers::{ApiError, AppState, DataEnvelope, Response, resolve_user_id};
 use mestier_core::{CreateServiceRateCommand, ServiceRateUnit};
 use serde::Deserialize;
 use utoipa::ToSchema;
@@ -39,9 +39,11 @@ pub async fn handler(
     Json(payload): Json<CreateServiceRateRequest>,
 ) -> Result<Response<ServiceRateResponse>, ApiError> {
     require_org_membership(&state, &identity, path.organization_id).await?;
+    let actor = resolve_user_id(&state, &identity).await?;
 
     let service_rate = state
         .usecase
+        .acting_as(actor)
         .create_service_rate(CreateServiceRateCommand {
             organization_id: path.organization_id,
             label: payload.label,

@@ -1,7 +1,7 @@
 use auth::Identity;
 use axum::{Extension, Json, extract::State};
 use discord::UpdateCategoryCommand;
-use handlers::{ApiError, AppState, DataEnvelope, Response};
+use handlers::{ApiError, AppState, DataEnvelope, Response, resolve_user_id};
 use serde::Deserialize;
 use utoipa::ToSchema;
 
@@ -45,6 +45,7 @@ pub async fn handler(
         "category.manage",
     )
     .await?;
+    let actor = resolve_user_id(&state, &identity).await?;
 
     if payload.name.trim().is_empty() {
         return Err(ApiError::Validation(
@@ -54,6 +55,7 @@ pub async fn handler(
 
     let updated = state
         .usecase
+        .acting_as(actor)
         .update_category(UpdateCategoryCommand {
             id: path.category_id,
             name: payload.name,

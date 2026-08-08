@@ -29,6 +29,7 @@ pub async fn handler(
 
     state
         .usecase
+        .acting_as(user_id)
         .start_typing(StartTypingCommand {
             organization_id: channel.organization_id,
             channel_id: path.channel_id,

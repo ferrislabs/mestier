@@ -1,6 +1,6 @@
 use auth::Identity;
 use axum::{Extension, Json, extract::State};
-use handlers::{ApiError, AppState, DataEnvelope, Response};
+use handlers::{ApiError, AppState, DataEnvelope, Response, resolve_user_id};
 use mestier_core::CreateTaskCommentCommand;
 use serde::Deserialize;
 use utoipa::ToSchema;
@@ -46,6 +46,7 @@ pub async fn handler(
     Json(payload): Json<CreateTaskCommentRequest>,
 ) -> Result<Response<TaskCommentResponse>, ApiError> {
     require_task_for_comments(&state, &identity, organization_id, task_id).await?;
+    let actor = resolve_user_id(&state, &identity).await?;
 
     // Duplicates `require_org_membership`'s own `find_user_by_sub` lookup —
     // that helper only proves membership, it does not hand back the
@@ -59,6 +60,7 @@ pub async fn handler(
 
     let comment = state
         .usecase
+        .acting_as(actor)
         .create_task_comment(CreateTaskCommentCommand {
             organization_id,
             task_id,

@@ -1,7 +1,7 @@
 use auth::Identity;
 use axum::{Extension, Json, extract::State};
 use discord::{CategoryId, UpdateChannelCommand};
-use handlers::{ApiError, AppState, DataEnvelope, Response};
+use handlers::{ApiError, AppState, DataEnvelope, Response, resolve_user_id};
 use serde::Deserialize;
 use utoipa::ToSchema;
 
@@ -46,6 +46,7 @@ pub async fn handler(
         Permissions::MANAGE_CHANNELS,
     )
     .await?;
+    let actor = resolve_user_id(&state, &identity).await?;
 
     if payload.name.trim().is_empty() {
         return Err(ApiError::Validation(
@@ -55,6 +56,7 @@ pub async fn handler(
 
     let updated = state
         .usecase
+        .acting_as(actor)
         .update_channel(UpdateChannelCommand {
             id: path.channel_id,
             category_id: payload.category_id,

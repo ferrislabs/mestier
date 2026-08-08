@@ -37,6 +37,10 @@ pub async fn handler(
         .await?;
     }
 
-    state.usecase.delete_message(path.message_id).await?;
+    state
+        .usecase
+        .acting_as(user_id)
+        .delete_message(path.message_id)
+        .await?;
     Ok(Response::NoContent)
 }

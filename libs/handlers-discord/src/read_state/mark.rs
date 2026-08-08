@@ -39,6 +39,7 @@ pub async fn handler(
 
     state
         .usecase
+        .acting_as(user_id)
         .mark_channel_read(MarkChannelReadCommand {
             organization_id: channel.organization_id,
             channel_id: path.channel_id,

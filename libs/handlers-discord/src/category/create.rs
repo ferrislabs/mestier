@@ -1,7 +1,7 @@
 use auth::Identity;
 use axum::{Extension, Json, extract::State};
 use discord::CreateCategoryCommand;
-use handlers::{ApiError, AppState, DataEnvelope, Response};
+use handlers::{ApiError, AppState, DataEnvelope, Response, resolve_user_id};
 use serde::Deserialize;
 use utoipa::ToSchema;
 
@@ -35,6 +35,7 @@ pub async fn handler(
     Json(payload): Json<CreateCategoryRequest>,
 ) -> Result<Response<CategoryResponse>, ApiError> {
     require_permission(&state, &identity, path.organization_id, "category.manage").await?;
+    let actor = resolve_user_id(&state, &identity).await?;
 
     if payload.name.trim().is_empty() {
         return Err(ApiError::Validation(
@@ -44,6 +45,7 @@ pub async fn handler(
 
     let category = state
         .usecase
+        .acting_as(actor)
         .create_category(CreateCategoryCommand {
             organization_id: path.organization_id,
             name: payload.name,

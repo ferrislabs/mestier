@@ -1,6 +1,6 @@
 use auth::Identity;
 use axum::{Extension, Json, extract::State};
-use handlers::{ApiError, AppState, DataEnvelope, Response};
+use handlers::{ApiError, AppState, DataEnvelope, Response, resolve_user_id};
 use mestier_core::{CreateEmployeeCommand, UserId};
 use serde::Deserialize;
 use utoipa::ToSchema;
@@ -46,9 +46,11 @@ pub async fn handler(
     Json(payload): Json<CreateEmployeeRequest>,
 ) -> Result<Response<EmployeeResponse>, ApiError> {
     require_org_membership(&state, &identity, path.organization_id).await?;
+    let actor = resolve_user_id(&state, &identity).await?;
 
     let employee = state
         .usecase
+        .acting_as(actor)
         .create_employee(CreateEmployeeCommand {
             organization_id: path.organization_id,
             user_id: payload.user_id,

@@ -27,6 +27,21 @@ impl IdentityExt for Identity {
     }
 }
 
+/// Resolve the authenticated caller's **local** `users.id` from the OIDC sub.
+///
+/// Never use [`IdentityExt::user_id`] for this: it parses the sub, and the sub
+/// is not `users.id` — the local row gets its own v7 uuid at first sight of the
+/// token. Confusing the two writes a foreign key that points nowhere.
+pub async fn resolve_user_id(state: &AppState, identity: &Identity) -> Result<UserId, ApiError> {
+    let user = state
+        .usecase
+        .find_user_by_sub(identity.id())
+        .await?
+        .ok_or(ApiError::Forbidden)?;
+
+    Ok(user.id)
+}
+
 pub async fn auth_middleware(
     State(state): State<AppState>,
     mut req: Request,

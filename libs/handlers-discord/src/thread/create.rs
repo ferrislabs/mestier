@@ -1,7 +1,7 @@
 use auth::Identity;
 use axum::{Extension, Json, extract::State};
 use discord::{CreateThreadCommand, MessageId};
-use handlers::{ApiError, AppState, DataEnvelope, Response};
+use handlers::{ApiError, AppState, DataEnvelope, Response, resolve_user_id};
 use serde::Deserialize;
 use utoipa::ToSchema;
 
@@ -38,9 +38,11 @@ pub async fn handler(
 ) -> Result<Response<ChannelResponse>, ApiError> {
     let parent = state.usecase.get_channel(path.channel_id).await?;
     require_permission(&state, &identity, parent.organization_id, "channel.manage").await?;
+    let actor = resolve_user_id(&state, &identity).await?;
 
     let thread = state
         .usecase
+        .acting_as(actor)
         .create_thread(CreateThreadCommand {
             organization_id: parent.organization_id,
             parent_id: path.channel_id,

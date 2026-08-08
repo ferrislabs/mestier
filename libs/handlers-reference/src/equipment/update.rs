@@ -1,6 +1,6 @@
 use auth::Identity;
 use axum::{Extension, Json, extract::State};
-use handlers::{ApiError, AppState, DataEnvelope, Response};
+use handlers::{ApiError, AppState, DataEnvelope, Response, resolve_user_id};
 use mestier_core::{EquipmentId, UpdateEquipmentCommand};
 use serde::Deserialize;
 use utoipa::ToSchema;
@@ -40,9 +40,11 @@ pub async fn handler(
 ) -> Result<Response<EquipmentResponse>, ApiError> {
     let current = state.usecase.get_equipment(equipment_id).await?;
     require_org_membership(&state, &identity, current.organization_id).await?;
+    let actor = resolve_user_id(&state, &identity).await?;
 
     let equipment = state
         .usecase
+        .acting_as(actor)
         .update_equipment(UpdateEquipmentCommand {
             id: equipment_id,
             name: payload.name,

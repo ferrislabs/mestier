@@ -1,6 +1,6 @@
 use auth::Identity;
 use axum::{Extension, Json, extract::State};
-use handlers::{ApiError, AppState, DataEnvelope, Response};
+use handlers::{ApiError, AppState, DataEnvelope, Response, resolve_user_id};
 use mestier_core::{CustomerId, CustomerPipelineStage, CustomerStatus, UpdateCustomerCommand};
 use serde::Deserialize;
 use utoipa::ToSchema;
@@ -44,9 +44,11 @@ pub async fn handler(
 ) -> Result<Response<CustomerResponse>, ApiError> {
     let current = state.usecase.get_customer(customer_id).await?;
     require_org_membership(&state, &identity, current.organization_id).await?;
+    let actor = resolve_user_id(&state, &identity).await?;
 
     let customer = state
         .usecase
+        .acting_as(actor)
         .update_customer(UpdateCustomerCommand {
             id: customer_id,
             status: payload.status,

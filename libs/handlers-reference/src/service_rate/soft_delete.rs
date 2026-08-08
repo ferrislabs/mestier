@@ -1,6 +1,6 @@
 use auth::Identity;
 use axum::{Extension, extract::State};
-use handlers::{ApiError, AppState, Response};
+use handlers::{ApiError, AppState, Response, resolve_user_id};
 use mestier_core::ServiceRateId;
 
 use crate::{EmptyResponse, paths::ServiceRatePath, require_org_membership};
@@ -28,8 +28,10 @@ pub async fn handler(
 ) -> Result<Response<EmptyResponse>, ApiError> {
     let current = state.usecase.get_service_rate(service_rate_id).await?;
     require_org_membership(&state, &identity, current.organization_id).await?;
+    let actor = resolve_user_id(&state, &identity).await?;
     state
         .usecase
+        .acting_as(actor)
         .soft_delete_service_rate(service_rate_id)
         .await?;
 

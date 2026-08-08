@@ -41,6 +41,7 @@ pub async fn handler(
 ) -> Result<Response<WebhookCreatedResponse>, ApiError> {
     let channel = state.usecase.get_channel(path.channel_id).await?;
     require_permission(&state, &identity, channel.organization_id, "webhook.manage").await?;
+    let actor = resolve_user_id(&state, &identity).await?;
 
     if payload.name.trim().is_empty() {
         return Err(ApiError::Validation(
@@ -52,6 +53,7 @@ pub async fn handler(
 
     let webhook = state
         .usecase
+        .acting_as(actor)
         .create_webhook(CreateWebhookCommand {
             organization_id: channel.organization_id,
             channel_id: path.channel_id,

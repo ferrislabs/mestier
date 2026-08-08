@@ -1,6 +1,6 @@
 use auth::Identity;
 use axum::{Extension, Json, extract::State};
-use handlers::{ApiError, AppState, DataEnvelope, Response};
+use handlers::{ApiError, AppState, DataEnvelope, Response, resolve_user_id};
 use mestier_core::UpdateTaskLabelCommand;
 use serde::Deserialize;
 use utoipa::ToSchema;
@@ -44,9 +44,11 @@ pub async fn handler(
     Json(payload): Json<UpdateTaskLabelRequest>,
 ) -> Result<Response<TaskLabelResponse>, ApiError> {
     require_task_label(&state, &identity, organization_id, label_id).await?;
+    let actor = resolve_user_id(&state, &identity).await?;
 
     let label = state
         .usecase
+        .acting_as(actor)
         .update_task_label(UpdateTaskLabelCommand {
             id: label_id,
             name: payload.name,
