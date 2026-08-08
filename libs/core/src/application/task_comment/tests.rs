@@ -8,7 +8,9 @@ mod tests {
     use sqlx::PgPool;
 
     use crate::application::{MestierUseCase, default_authorizer};
-    use crate::domain::task_comment::commands::{CreateTaskCommentCommand, UpdateTaskCommentCommand};
+    use crate::domain::task_comment::commands::{
+        CreateTaskCommentCommand, UpdateTaskCommentCommand,
+    };
     use crate::infrastructure::realtime::{EventHub, RealtimeEventPublisher};
     use crate::{CreateEmployeeCommand, CreateTaskCommand, TaskCommentId, TaskId};
 
@@ -91,13 +93,10 @@ mod tests {
         .execute(pool)
         .await
         .ok();
-        sqlx::query!(
-            "DELETE FROM employees WHERE org_id = $1",
-            organization_id.0
-        )
-        .execute(pool)
-        .await
-        .ok();
+        sqlx::query!("DELETE FROM employees WHERE org_id = $1", organization_id.0)
+            .execute(pool)
+            .await
+            .ok();
         sqlx::query!("DELETE FROM tasks WHERE org_id = $1", organization_id.0)
             .execute(pool)
             .await
@@ -331,19 +330,28 @@ mod tests {
         let (first_page, total) = usecase.list_task_comments(task.id, 2, 0).await.unwrap();
         assert_eq!(total, 5);
         assert_eq!(
-            first_page.iter().map(|c| c.body.as_str()).collect::<Vec<_>>(),
+            first_page
+                .iter()
+                .map(|c| c.body.as_str())
+                .collect::<Vec<_>>(),
             vec!["Un", "Deux"]
         );
 
         let (second_page, _) = usecase.list_task_comments(task.id, 2, 2).await.unwrap();
         assert_eq!(
-            second_page.iter().map(|c| c.body.as_str()).collect::<Vec<_>>(),
+            second_page
+                .iter()
+                .map(|c| c.body.as_str())
+                .collect::<Vec<_>>(),
             vec!["Trois", "Quatre"]
         );
 
         let (last_page, _) = usecase.list_task_comments(task.id, 2, 4).await.unwrap();
         assert_eq!(
-            last_page.iter().map(|c| c.body.as_str()).collect::<Vec<_>>(),
+            last_page
+                .iter()
+                .map(|c| c.body.as_str())
+                .collect::<Vec<_>>(),
             vec!["Cinq"]
         );
 

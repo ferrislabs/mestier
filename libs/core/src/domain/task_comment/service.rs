@@ -339,7 +339,10 @@ mod tests {
             .returning(|_, _| Box::pin(async { Ok(()) }));
 
         let mut service = TaskCommentService::new(repo);
-        service.delete_task_comment(id, author_user_id).await.unwrap();
+        service
+            .delete_task_comment(id, author_user_id)
+            .await
+            .unwrap();
     }
 
     /// Same security rule as the `PATCH` test, for `DELETE`.

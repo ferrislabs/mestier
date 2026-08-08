@@ -19,6 +19,7 @@ pub mod paths;
 pub mod planning;
 pub mod response;
 pub mod task;
+pub mod task_comment;
 pub mod task_label;
 pub mod work_time;
 
@@ -73,6 +74,7 @@ pub(crate) async fn require_employee_target(
 pub fn router(state: &AppState) -> Router<AppState> {
     Router::new()
         .merge(task::router(state))
+        .merge(task_comment::router(state))
         .merge(task_label::router(state))
         .merge(work_time::router(state))
         .merge(planning::router(state))

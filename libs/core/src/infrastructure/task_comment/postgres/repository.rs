@@ -126,7 +126,11 @@ impl<'tx> TaskCommentRepository for PgTaskCommentRepository<'tx> {
         row.map(Into::into).ok_or(CoreError::NotFound)
     }
 
-    async fn soft_delete(&mut self, id: TaskCommentId, deleted_at: DateTime<Utc>) -> Result<(), CoreError> {
+    async fn soft_delete(
+        &mut self,
+        id: TaskCommentId,
+        deleted_at: DateTime<Utc>,
+    ) -> Result<(), CoreError> {
         let mut tx = self.tx.lock().await;
         let result = sqlx::query!(
             r#"
