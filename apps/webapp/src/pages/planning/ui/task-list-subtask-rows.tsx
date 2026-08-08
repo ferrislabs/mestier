@@ -15,6 +15,14 @@ export interface TaskListSubtaskRowVM {
 	labels: LabelPastilleVM[]
 	/** `null` only while the root task's own window hasn't loaded yet — a subtask's window is always resolvable once the root has. See `lib/subtasks.ts`'s `resolveDisplayWindow`. */
 	window: { startsAt: string; endsAt: string; inherited: boolean } | null
+	/**
+	 * Governs how `window` renders (see `lib/subtasks.ts`'s
+	 * `formatWindowRange`'s `allDay` option). Already resolved to the right
+	 * task's flag by the feature layer — the subtask's own when `window` is
+	 * its own, the root's when `window.inherited` is true (see
+	 * `lib/task-list.ts`'s `resolveSubtaskAllDay`).
+	 */
+	allDay: boolean
 	assigneeNames: string[]
 }
 
@@ -110,7 +118,9 @@ export function TaskListSubtaskRows({
 					<td className="px-5 py-2 align-middle">
 						{subtask.window ? (
 							<span className="flex flex-wrap items-center gap-1.5">
-								{formatWindowRange(subtask.window, timeZone)}
+								{formatWindowRange(subtask.window, timeZone, {
+									allDay: subtask.allDay,
+								})}
 								{subtask.window.inherited ? (
 									<Badge variant="outline" className="text-[10px]">
 										Hérité

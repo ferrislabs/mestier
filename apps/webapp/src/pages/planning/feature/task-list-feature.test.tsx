@@ -320,6 +320,55 @@ describe('TaskListFeature — pagination', () => {
 	})
 })
 
+describe('TaskListFeature — journée entière', () => {
+	it('une sous-tâche sans dates propres, sous une racine journée entière, affiche la date héritée sans horaire', async () => {
+		const { mockGet } = renderFeature((api) =>
+			api.mockGet(TASKS_PATH, (params) => {
+				const query = (params as { query?: { parent_task_id?: string } }).query
+				if (query?.parent_task_id === 'root-1') {
+					return {
+						data: [
+							task({
+								id: 'sub-1',
+								title: 'Livraison matériaux',
+								parent_task_id: 'root-1',
+								starts_at: null,
+								ends_at: null,
+								all_day: false,
+							}),
+						],
+						pagination: null,
+					}
+				}
+				return tasksHandler([
+					task({
+						child_count: 1,
+						all_day: true,
+						starts_at: '2026-08-09T22:00:00.000Z',
+						ends_at: '2026-08-10T22:00:00.000Z',
+					}),
+				])(params)
+			}),
+		)
+		mockGet(TASK_PATH, (params) => ({
+			data: task({
+				id: (params as { path: { task_id: string } }).path.task_id,
+			}),
+			pagination: null,
+		}))
+
+		await screen.findByText('Chantier toiture')
+		const user = userEvent.setup()
+		await user.click(
+			screen.getByRole('button', { name: 'Afficher les sous-tâches' }),
+		)
+
+		const subtaskRow = await screen.findByTestId('subtask-row-sub-1')
+		expect(subtaskRow.textContent).toContain('10/08/2026')
+		expect(subtaskRow.textContent).not.toContain('00:00')
+	})
+})
+
 describe('TaskListFeature — ouverture du Sheet', () => {
 	it('ouvre le Sheet sur la tâche cliquée', async () => {
 		const { calls, mockGet } = renderFeature((api) =>

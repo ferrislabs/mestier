@@ -82,3 +82,21 @@ export function resolveAssigneeNames(
 export function formatAssigneeNames(names: string[]): string {
 	return names.length === 0 ? 'Personne assigné' : names.join(', ')
 }
+
+/**
+ * Which task's `all_day` flag governs a subtask row's window display.
+ * `all_day` lives on the task actually being shown — the subtask's own
+ * when it has its own dates, the root's when the row is showing the
+ * root's window because the subtask has none (see
+ * `lib/subtasks.ts`'s `resolveDisplayWindow`'s `inherited` flag). A
+ * subtask can carry `all_day: true` on itself while having no dates of
+ * its own; that flag is meaningless while the row is displaying the
+ * root's timed window instead.
+ */
+export function resolveSubtaskAllDay(
+	inherited: boolean,
+	subtaskAllDay: boolean,
+	rootAllDay: boolean,
+): boolean {
+	return inherited ? rootAllDay : subtaskAllDay
+}

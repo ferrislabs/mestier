@@ -13,6 +13,7 @@ import {
 	canGoToPreviousPage,
 	employeeNamesById,
 	resolveAssigneeNames,
+	resolveSubtaskAllDay,
 	taskHasChildren,
 	toggleExpandedTask,
 } from '#/pages/planning/lib/task-list'
@@ -103,6 +104,7 @@ function TaskListScreen({
 			task.starts_at && task.ends_at
 				? { startsAt: task.starts_at, endsAt: task.ends_at }
 				: null,
+		allDay: task.all_day,
 		assigneeNames: resolveAssigneeNames(task.employee_ids, namesById),
 		isExpanded: expandedIds.includes(task.id),
 	}))
@@ -117,7 +119,11 @@ function TaskListScreen({
 				taskId={taskId}
 				rootWindow={
 					root?.starts_at && root.ends_at
-						? { startsAt: root.starts_at, endsAt: root.ends_at }
+						? {
+								startsAt: root.starts_at,
+								endsAt: root.ends_at,
+								allDay: root.all_day,
+							}
 						: null
 				}
 				timeZone={timeZone}
@@ -178,7 +184,7 @@ function TaskListScreen({
 interface TaskListSubtasksFeatureProps {
 	organizationId: string
 	taskId: string
-	rootWindow: { startsAt: string; endsAt: string } | null
+	rootWindow: { startsAt: string; endsAt: string; allDay: boolean } | null
 	timeZone: string
 	namesById: Record<string, string>
 	onOpenSubtask: (id: string) => void
@@ -210,7 +216,7 @@ function TaskListSubtasksFeature({
 						startsAt: subtask.starts_at ?? null,
 						endsAt: subtask.ends_at ?? null,
 					},
-					rootWindow,
+					{ startsAt: rootWindow.startsAt, endsAt: rootWindow.endsAt },
 				)
 			: null
 		return {
@@ -219,6 +225,11 @@ function TaskListSubtasksFeature({
 			status: subtask.status,
 			labels: subtask.labels,
 			window: resolved,
+			allDay: resolveSubtaskAllDay(
+				resolved?.inherited ?? false,
+				subtask.all_day,
+				rootWindow?.allDay ?? false,
+			),
 			assigneeNames: resolveAssigneeNames(subtask.employee_ids, namesById),
 		}
 	})

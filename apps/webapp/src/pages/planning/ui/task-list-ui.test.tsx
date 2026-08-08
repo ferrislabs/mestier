@@ -18,6 +18,7 @@ const ROOT_WITH_CHILDREN: TaskListRowVM = {
 		startsAt: '2026-08-10T07:00:00.000Z',
 		endsAt: '2026-08-10T09:00:00.000Z',
 	},
+	allDay: false,
 	assigneeNames: ['Alix Martin'],
 	isExpanded: false,
 }
@@ -33,6 +34,7 @@ const ROOT_WITHOUT_CHILDREN: TaskListRowVM = {
 		startsAt: '2026-08-11T07:00:00.000Z',
 		endsAt: '2026-08-11T09:00:00.000Z',
 	},
+	allDay: false,
 	assigneeNames: [],
 	isExpanded: false,
 }
@@ -88,6 +90,24 @@ describe('TaskListUI — rendu des lignes', () => {
 	it('affiche un état de chargement', () => {
 		render(<TaskListUI {...baseProps({ isLoading: true, rows: [] })} />)
 		expect(screen.getByText(/Chargement/)).toBeDefined()
+	})
+
+	it('affiche la fenêtre d’une tâche racine journée entière comme une date, pas une plage de minuit à minuit', () => {
+		const allDayRoot: TaskListRowVM = {
+			...ROOT_WITHOUT_CHILDREN,
+			id: 'root-3',
+			title: 'Salon professionnel',
+			window: {
+				startsAt: '2026-08-09T22:00:00.000Z',
+				endsAt: '2026-08-10T22:00:00.000Z',
+			},
+			allDay: true,
+		}
+		render(<TaskListUI {...baseProps({ rows: [allDayRoot] })} />)
+
+		const row = screen.getByTestId('task-row-root-3')
+		expect(row.textContent).toContain('10/08/2026')
+		expect(row.textContent).not.toContain('00:00')
 	})
 
 	it('affiche un état vide', () => {

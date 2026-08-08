@@ -17,6 +17,7 @@ const SUBTASKS: TaskListSubtaskRowVM[] = [
 			endsAt: '2026-08-10T09:00:00.000Z',
 			inherited: false,
 		},
+		allDay: false,
 		assigneeNames: ['Alix Martin'],
 	},
 	{
@@ -29,6 +30,7 @@ const SUBTASKS: TaskListSubtaskRowVM[] = [
 			endsAt: '2026-08-11T09:00:00.000Z',
 			inherited: true,
 		},
+		allDay: false,
 		assigneeNames: [],
 	},
 ]
@@ -89,6 +91,31 @@ describe('TaskListSubtaskRows — rendu', () => {
 			<TaskListSubtaskRows {...baseProps()} subtasks={[]} error="Échec" />,
 		)
 		expect(screen.getByText('Échec')).toBeDefined()
+	})
+})
+
+describe('TaskListSubtaskRows — journée entière', () => {
+	it('renders an all-day subtask window as its single date, not a midnight-to-midnight range', () => {
+		const allDaySubtask: TaskListSubtaskRowVM = {
+			id: 'sub-3',
+			title: 'Livraison matériaux',
+			status: 'PLANNED',
+			labels: [],
+			window: {
+				startsAt: '2026-08-09T22:00:00.000Z',
+				endsAt: '2026-08-10T22:00:00.000Z',
+				inherited: false,
+			},
+			allDay: true,
+			assigneeNames: [],
+		}
+		renderInTable(
+			<TaskListSubtaskRows {...baseProps()} subtasks={[allDaySubtask]} />,
+		)
+
+		const row = screen.getByTestId('subtask-row-sub-3')
+		expect(row.textContent).toContain('10/08/2026')
+		expect(row.textContent).not.toContain('00:00')
 	})
 })
 

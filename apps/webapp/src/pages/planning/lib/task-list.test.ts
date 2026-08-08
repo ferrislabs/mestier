@@ -5,6 +5,7 @@ import {
 	employeeNamesById,
 	formatAssigneeNames,
 	resolveAssigneeNames,
+	resolveSubtaskAllDay,
 	taskHasChildren,
 	toggleExpandedTask,
 } from '#/pages/planning/lib/task-list'
@@ -138,5 +139,17 @@ describe('formatAssigneeNames', () => {
 
 	it('shows a placeholder for an unassigned task rather than a blank cell', () => {
 		expect(formatAssigneeNames([])).toBe('Personne assigné')
+	})
+})
+
+describe('resolveSubtaskAllDay', () => {
+	it("uses the subtask's own all_day when its window is its own", () => {
+		expect(resolveSubtaskAllDay(false, true, false)).toBe(true)
+		expect(resolveSubtaskAllDay(false, false, true)).toBe(false)
+	})
+
+	it("uses the root's all_day when the window shown is the root's, inherited", () => {
+		expect(resolveSubtaskAllDay(true, false, true)).toBe(true)
+		expect(resolveSubtaskAllDay(true, true, false)).toBe(false)
 	})
 })

@@ -103,4 +103,46 @@ describe('formatWindowRange', () => {
 			),
 		).toBe('10/08/2026 09:00 – 12/08/2026 11:00')
 	})
+
+	it('an explicit allDay: false formats identically to the default — no regression for existing callers', () => {
+		const window = {
+			startsAt: '2026-08-10T07:00:00.000Z',
+			endsAt: '2026-08-10T09:00:00.000Z',
+		}
+		expect(formatWindowRange(window, 'Europe/Paris', { allDay: false })).toBe(
+			formatWindowRange(window, 'Europe/Paris'),
+		)
+	})
+
+	it('formats a one-day all-day window as its single date, not a midnight-to-midnight range', () => {
+		// A local Europe/Paris all-day task on 2026-08-10: starts_at is local
+		// midnight that day, ends_at is *exclusive* local midnight the day
+		// after (see `formatAllDayWindow`'s own doc) — 2026-08-10T00:00+02:00
+		// and 2026-08-11T00:00+02:00.
+		expect(
+			formatWindowRange(
+				{
+					startsAt: '2026-08-09T22:00:00.000Z',
+					endsAt: '2026-08-10T22:00:00.000Z',
+				},
+				'Europe/Paris',
+				{ allDay: true },
+			),
+		).toBe('10/08/2026')
+	})
+
+	it('formats a multi-day all-day window with the real last day, one day before the exclusive end bound', () => {
+		// 2026-08-10 through 2026-08-12 inclusive: ends_at is exclusive
+		// midnight of 2026-08-13.
+		expect(
+			formatWindowRange(
+				{
+					startsAt: '2026-08-09T22:00:00.000Z',
+					endsAt: '2026-08-12T22:00:00.000Z',
+				},
+				'Europe/Paris',
+				{ allDay: true },
+			),
+		).toBe('10/08/2026 – 12/08/2026')
+	})
 })

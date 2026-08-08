@@ -32,6 +32,8 @@ export interface TaskListRowVM {
 	hasChildren: boolean
 	/** A root task always carries its own window (see the planning remodel design doc's invariant 8); `null` is only the pre-load render. */
 	window: { startsAt: string; endsAt: string } | null
+	/** Governs how `window` renders — see `lib/subtasks.ts`'s `formatWindowRange`'s `allDay` option. */
+	allDay: boolean
 	assigneeNames: string[]
 	isExpanded: boolean
 }
@@ -243,7 +245,9 @@ export function TaskListUI({
 												</td>
 												<td className="px-5 py-3 align-middle">
 													{row.window
-														? formatWindowRange(row.window, timeZone)
+														? formatWindowRange(row.window, timeZone, {
+																allDay: row.allDay,
+															})
 														: '—'}
 												</td>
 												<td className="px-5 py-3 align-middle">
