@@ -24,6 +24,12 @@ import type {
 	PlanningWorkTime,
 } from '#/pages/planning/types'
 
+export interface GridSegmentLabelVM {
+	id: string
+	name: string
+	color: string
+}
+
 export interface GridSegmentVM {
 	entryId: string
 	tone: EntryTone
@@ -31,6 +37,8 @@ export interface GridSegmentVM {
 	row: number
 	left: number
 	width: number
+	/** A task's labels, carried through for the grid's pastille display — always empty for an absence (see the planning remodel design doc's "Label picker and label display on the task form and on grid entries" scope). */
+	labels: GridSegmentLabelVM[]
 }
 
 export interface GridCellVM {
@@ -171,6 +179,14 @@ function buildCell(params: {
 			row,
 			left: position.left,
 			width: position.width,
+			labels:
+				item.kind === 'task'
+					? item.labels.map((label) => ({
+							id: label.id,
+							name: label.name,
+							color: label.color,
+						}))
+					: [],
 		}
 	})
 

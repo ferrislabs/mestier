@@ -153,6 +153,64 @@ describe('PlanningTeamUI — édition', () => {
 	})
 })
 
+describe('PlanningTeamUI — nouvelle tâche', () => {
+	it('affiche un bouton « Nouvelle tâche » et le reporte via onCreateTask', () => {
+		const onCreateTask = vi.fn()
+		render(<PlanningTeamUI {...baseProps({ onCreateTask })} />)
+
+		fireEvent.click(screen.getByRole('button', { name: /Nouvelle tâche/ }))
+		expect(onCreateTask).toHaveBeenCalledTimes(1)
+	})
+
+	it("n'affiche pas le bouton sans onCreateTask", () => {
+		render(<PlanningTeamUI {...baseProps()} />)
+		expect(screen.queryByRole('button', { name: /Nouvelle tâche/ })).toBeNull()
+	})
+
+	it('reporte le clic sur un segment de tâche via onOpenTask', () => {
+		const onOpenTask = vi.fn()
+		render(
+			<PlanningTeamUI
+				{...baseProps({
+					onOpenTask,
+					data: {
+						...planningResponse(),
+						entries: [
+							{
+								kind: 'task',
+								labels: [],
+								title: 'Tâche',
+								blocks_availability: true,
+								child_count: 0,
+								id: 'task-1',
+								starts_at: '2026-08-03T08:00:00+02:00',
+								ends_at: '2026-08-03T10:00:00+02:00',
+								all_day: false,
+								status: 'PLANNED',
+								employee_ids: ['employee-1'],
+								customer_name: null,
+								context_label: null,
+							},
+						],
+					},
+				})}
+			/>,
+		)
+
+		fireEvent.click(screen.getByTestId('grid-segment'))
+		expect(onOpenTask).toHaveBeenCalledWith({ entryId: 'task-1' })
+	})
+
+	it('rend le slot taskSheet quand fourni', () => {
+		render(
+			<PlanningTeamUI
+				{...baseProps({ taskSheet: <div data-testid="fake-task-sheet" /> })}
+			/>,
+		)
+		expect(screen.getByTestId('fake-task-sheet')).toBeDefined()
+	})
+})
+
 describe('PlanningTeamUI — pas d’appel réseau', () => {
 	let fetchSpy: ReturnType<typeof createFetchSpy>
 

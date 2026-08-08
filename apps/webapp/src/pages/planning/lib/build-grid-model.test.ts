@@ -269,4 +269,47 @@ describe('buildGridModel', () => {
 		expect(model.rows[0]?.cells[0]?.segments).toHaveLength(1)
 		expect(model.rows[0]?.cells[0]?.segments[0]?.entryId).toBe('wo-1')
 	})
+
+	it('porte les labels d’une tâche jusqu’au segment', () => {
+		const model = buildGridModel({
+			windowFrom: '2026-08-10',
+			windowTo: '2026-08-10',
+			timeZone: TZ,
+			resources: [employeeResource()],
+			entries: [
+				task({
+					labels: [
+						{
+							id: 'label-1',
+							organization_id: 'org-1',
+							name: 'Réunion',
+							color: '#2563EB',
+							created_at: '2026-01-01T00:00:00Z',
+							updated_at: '2026-01-01T00:00:00Z',
+						},
+					],
+				}),
+			],
+			workTime: [],
+		})
+
+		const segment = model.rows[0]?.cells[0]?.segments[0]
+		expect(segment?.labels).toEqual([
+			{ id: 'label-1', name: 'Réunion', color: '#2563EB' },
+		])
+	})
+
+	it('un segment d’absence ne porte jamais de labels', () => {
+		const model = buildGridModel({
+			windowFrom: '2026-08-10',
+			windowTo: '2026-08-10',
+			timeZone: TZ,
+			resources: [employeeResource()],
+			entries: [absence()],
+			workTime: [],
+		})
+
+		const segment = model.rows[0]?.cells[0]?.segments[0]
+		expect(segment?.labels).toEqual([])
+	})
 })

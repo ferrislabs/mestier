@@ -37,6 +37,10 @@ export interface RemoveAssigneeEvent {
 	resourceId: string
 }
 
+export interface OpenTaskEvent {
+	entryId: string
+}
+
 export interface PlanningGridProps {
 	view: PlanningView
 	windowFrom: string
@@ -51,6 +55,8 @@ export interface PlanningGridProps {
 	onDropTask?: (event: TaskDropEvent) => void
 	/** The small "×" on a task segment — unassigns that one resource, through the same complete-list path a move uses. */
 	onRemoveAssignee?: (event: RemoveAssigneeEvent) => void
+	/** A task segment was clicked — opens its detail/edit sheet. Absence segments stay inert (see `PlanningGrid`'s own doc — absence management moved to the HR module), never call this. */
+	onOpenTask?: (event: OpenTaskEvent) => void
 }
 
 const SEGMENT_HEIGHT_PX: Record<PlanningView, number> = {
@@ -83,6 +89,7 @@ export function PlanningGrid({
 	now,
 	onDropTask,
 	onRemoveAssignee,
+	onOpenTask,
 }: PlanningGridProps) {
 	const model = buildGridModel({
 		windowFrom,
@@ -135,6 +142,7 @@ export function PlanningGrid({
 							row={row}
 							onDropTask={onDropTask}
 							onRemoveAssignee={onRemoveAssignee}
+							onOpenTask={onOpenTask}
 						/>
 					))}
 
@@ -197,6 +205,7 @@ function TimeHeader({
 interface GridInteractionHandlers {
 	onDropTask?: (event: TaskDropEvent) => void
 	onRemoveAssignee?: (event: RemoveAssigneeEvent) => void
+	onOpenTask?: (event: OpenTaskEvent) => void
 }
 
 function GridRow({
@@ -204,6 +213,7 @@ function GridRow({
 	row,
 	onDropTask,
 	onRemoveAssignee,
+	onOpenTask,
 }: GridInteractionHandlers & {
 	view: PlanningView
 	row: GridResourceRowVM
@@ -226,6 +236,7 @@ function GridRow({
 					resourceId={row.resourceId}
 					onDropTask={onDropTask}
 					onRemoveAssignee={onRemoveAssignee}
+					onOpenTask={onOpenTask}
 				/>
 			))}
 		</div>
@@ -238,6 +249,7 @@ function GridCell({
 	resourceId,
 	onDropTask,
 	onRemoveAssignee,
+	onOpenTask,
 }: GridInteractionHandlers & {
 	view: PlanningView
 	cell: GridCellVM
@@ -283,15 +295,17 @@ function GridCell({
 
 			{cell.segments.map((segment) => {
 				const isTask = segment.tone === 'task'
+				const openable = isTask && Boolean(onOpenTask)
 
 				return (
-					// biome-ignore lint/a11y/noStaticElementInteractions: the drag source has no native interactive equivalent; absence segments are display-only (see PlanningGrid's own doc — absence management moved to the HR module).
+					// biome-ignore lint/a11y/noStaticElementInteractions: the drag source has no native interactive equivalent; absence segments are display-only (see PlanningGrid's own doc — absence management moved to the HR module). A task segment's own click/keyboard affordance is added explicitly below (role="button", tabIndex, onKeyDown) when onOpenTask is provided.
 					<div
 						key={segment.entryId}
 						className={cn(
 							'group absolute overflow-hidden rounded-sm px-1 text-[10px] leading-tight text-nowrap',
 							toneClassName(segment.tone),
 							view === 'day' ? 'text-xs' : 'text-[9px]',
+							openable && 'cursor-pointer',
 						)}
 						data-testid="grid-segment"
 						data-entry-id={segment.entryId}
@@ -319,8 +333,37 @@ function GridCell({
 									}
 								: undefined
 						}
+						role={openable ? 'button' : undefined}
+						tabIndex={openable ? 0 : undefined}
+						onClick={
+							openable
+								? () => onOpenTask?.({ entryId: segment.entryId })
+								: undefined
+						}
+						onKeyDown={
+							openable
+								? (event) => {
+										if (event.key === 'Enter' || event.key === ' ') {
+											event.preventDefault()
+											onOpenTask?.({ entryId: segment.entryId })
+										}
+									}
+								: undefined
+						}
 					>
 						{view === 'day' ? segment.label : null}
+						{segment.labels.length > 0 ? (
+							<span className="absolute inset-x-0.5 bottom-0.5 flex gap-0.5">
+								{segment.labels.slice(0, 4).map((label) => (
+									<span
+										key={label.id}
+										className="size-1 rounded-full ring-1 ring-white/70"
+										style={{ backgroundColor: label.color }}
+										title={label.name}
+									/>
+								))}
+							</span>
+						) : null}
 						{isTask && onRemoveAssignee ? (
 							<button
 								type="button"
