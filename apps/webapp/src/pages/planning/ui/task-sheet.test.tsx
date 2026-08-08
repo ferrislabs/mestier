@@ -46,7 +46,6 @@ function subtasksProps() {
 function commentsProps() {
 	return {
 		comments: [],
-		currentDisplayName: 'Alice Dupont',
 		isLoading: false,
 		error: null,
 		canLoadMore: false,

@@ -1,5 +1,4 @@
 import { useState } from 'react'
-import { useAuth } from 'react-oidc-context'
 import { useCustomerContexts, useCustomers } from '#/hooks/use-customers'
 import type { PlanningResource } from '#/hooks/use-planning'
 import {
@@ -74,15 +73,6 @@ export function TaskSheetFeature({
 	onOpenChange,
 	onNavigate,
 }: TaskSheetFeatureProps) {
-	const auth = useAuth()
-	const profile = auth.user?.profile
-	// Mirrors `_app.tsx`'s own fallback chain for the signed-in user's
-	// display name — see `lib/comments.ts`'s `isOwnComment` doc for why this
-	// heuristic exists at all (no endpoint hands back the caller's internal
-	// `UserId` to compare against `TaskCommentAuthorResponse.id` directly).
-	const currentDisplayName: string | null =
-		profile?.name || profile?.preferred_username || profile?.email || null
-
 	const taskId = target.mode === 'edit' ? target.taskId : null
 	const taskQuery = useTask(
 		organizationId,
@@ -426,7 +416,6 @@ export function TaskSheetFeature({
 				target.mode === 'edit'
 					? {
 							comments,
-							currentDisplayName,
 							isLoading: commentsQuery.isLoading,
 							error: commentsQuery.error?.message ?? null,
 							canLoadMore: canLoadMoreComments(commentsPagination),

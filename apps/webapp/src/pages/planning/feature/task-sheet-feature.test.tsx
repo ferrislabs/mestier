@@ -22,12 +22,6 @@ Element.prototype.scrollIntoView ??= () => {}
 Element.prototype.hasPointerCapture ??= () => false
 Element.prototype.releasePointerCapture ??= () => {}
 
-vi.mock('react-oidc-context', () => ({
-	useAuth: () => ({
-		user: { profile: { name: 'Alice Dupont' } },
-	}),
-}))
-
 const TASKS_PATH = '/api/v1/organizations/{organization_id}/tasks'
 const TASK_PATH = '/api/v1/organizations/{organization_id}/tasks/{task_id}'
 const TASK_LABELS_PATH = '/api/v1/organizations/{organization_id}/task-labels'
@@ -323,6 +317,7 @@ describe('TaskSheetFeature — fil de commentaires paginé', () => {
 							task_id: 'task-1',
 							organization_id: 'org-1',
 							author: { id: 'u1', display_name: 'Bob Martin' },
+							author_is_self: false,
 							body: 'Salut',
 							created_at: '2026-08-10T08:00:00Z',
 							updated_at: '2026-08-10T08:00:00Z',

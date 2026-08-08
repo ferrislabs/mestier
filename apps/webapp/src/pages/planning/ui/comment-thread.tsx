@@ -1,12 +1,10 @@
 import { Loader2, Pencil, Trash2 } from 'lucide-react'
 import { Button } from '#/components/ui/button'
 import { Textarea } from '#/components/ui/textarea'
-import { isOwnComment, type TaskComment } from '#/pages/planning/lib/comments'
+import type { TaskComment } from '#/pages/planning/lib/comments'
 
 export interface CommentThreadProps {
 	comments: TaskComment[]
-	/** The display name of the person looking at the thread — see `isOwnComment`'s own doc on why this is a heuristic, not a proof of identity. */
-	currentDisplayName: string | null
 	isLoading: boolean
 	error: string | null
 	canLoadMore: boolean
@@ -42,14 +40,13 @@ function formatTimestamp(iso: string): string {
  * A task's discussion thread — pure presentation. Paginated one page at a
  * time (`comments` is always a single page, never the accumulated
  * history — see the planning remodel design doc: the thread must not load
- * everything up front). Edit/delete only render on a comment whose author
- * matches `currentDisplayName` (`isOwnComment`); the backend's own `403`
- * remains the real guard, this only avoids offering an action doomed to
- * fail.
+ * everything up front). Edit/delete only render on a comment whose
+ * `author_is_self` the server itself reports as `true`; the backend's own
+ * `403` remains the real guard, this only avoids offering an action doomed
+ * to fail.
  */
 export function CommentThread({
 	comments,
-	currentDisplayName,
 	isLoading,
 	error,
 	canLoadMore,
@@ -98,7 +95,7 @@ export function CommentThread({
 			) : (
 				<ul className="flex flex-col gap-3">
 					{comments.map((comment) => {
-						const own = isOwnComment(comment, currentDisplayName)
+						const own = comment.author_is_self
 						const isEditing = editingCommentId === comment.id
 
 						return (

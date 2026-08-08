@@ -9,6 +9,7 @@ const COMMENTS = [
 		task_id: 't1',
 		organization_id: 'org1',
 		author: { id: 'u1', display_name: 'Alice Dupont' },
+		author_is_self: true,
 		body: 'Premier message',
 		created_at: '2026-08-10T08:00:00.000Z',
 		updated_at: '2026-08-10T08:00:00.000Z',
@@ -18,6 +19,7 @@ const COMMENTS = [
 		task_id: 't1',
 		organization_id: 'org1',
 		author: { id: 'u2', display_name: 'Bob Martin' },
+		author_is_self: false,
 		body: 'Deuxième message',
 		created_at: '2026-08-10T09:00:00.000Z',
 		updated_at: '2026-08-10T09:00:00.000Z',
@@ -27,7 +29,6 @@ const COMMENTS = [
 function baseProps() {
 	return {
 		comments: COMMENTS,
-		currentDisplayName: 'Alice Dupont',
 		isLoading: false,
 		error: null,
 		canLoadMore: false,
@@ -90,8 +91,8 @@ describe('CommentThread — rendu', () => {
 })
 
 describe('CommentThread — actions réservées à l’auteur', () => {
-	it("affiche les actions d'édition uniquement sur ses propres messages", () => {
-		render(<CommentThread {...baseProps()} currentDisplayName="Alice Dupont" />)
+	it("affiche les actions d'édition/suppression uniquement quand author_is_self est vrai", () => {
+		render(<CommentThread {...baseProps()} />)
 
 		const ownComment = screen.getByTestId('comment-c1')
 		const othersComment = screen.getByTestId('comment-c2')
@@ -102,11 +103,21 @@ describe('CommentThread — actions réservées à l’auteur', () => {
 		expect(othersComment.querySelector('[aria-label="Supprimer"]')).toBeNull()
 	})
 
-	it('shows no edit/delete action at all when the current user is unknown', () => {
-		render(<CommentThread {...baseProps()} currentDisplayName={null} />)
+	it('n’affiche jamais les actions sur un commentaire dont author_is_self est faux, quel que soit son auteur affiché', () => {
+		const sameDisplayNameButNotSelf = [
+			{
+				...COMMENTS[0],
+				id: 'c3',
+				author_is_self: false,
+			},
+		]
+		render(
+			<CommentThread {...baseProps()} comments={sameDisplayNameButNotSelf} />,
+		)
 
-		expect(screen.queryByLabelText('Modifier')).toBeNull()
-		expect(screen.queryByLabelText('Supprimer')).toBeNull()
+		const comment = screen.getByTestId('comment-c3')
+		expect(comment.querySelector('[aria-label="Modifier"]')).toBeNull()
+		expect(comment.querySelector('[aria-label="Supprimer"]')).toBeNull()
 	})
 
 	it('starts editing a comment on click', async () => {

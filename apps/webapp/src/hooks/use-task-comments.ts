@@ -79,7 +79,7 @@ export function useCreateTaskComment(organizationId: string, taskId: string) {
 	})
 }
 
-/** `PATCH` — the backend answers `403` for anyone but the comment's own author (see `TaskCommentService::update_task_comment`); the UI only ever offers this on the caller's own messages, see `isOwnComment`. */
+/** `PATCH` — the backend answers `403` for anyone but the comment's own author (see `TaskCommentService::update_task_comment`); the UI only ever offers this on a comment whose `author_is_self` the server itself reports as `true`. */
 export function useUpdateTaskComment(organizationId: string, taskId: string) {
 	const queryClient = useQueryClient()
 

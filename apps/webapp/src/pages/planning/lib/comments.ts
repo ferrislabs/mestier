@@ -3,30 +3,6 @@ import type { Schemas } from '#/api/api.client'
 export type TaskComment = Schemas.TaskCommentResponse
 export type PaginationMetadata = Schemas.PaginationMetadata
 
-/**
- * Whether `comment` was written by the person currently looking at it —
- * drives whether the edit/delete actions render at all (see the planning
- * remodel design doc: the backend answers `403` to anyone else, but this
- * app never lets the user discover that by trying).
- *
- * There is no endpoint that hands the frontend its own internal `UserId`
- * (`TaskCommentAuthorResponse.id` is a Mestier user id, not the OIDC `sub`
- * carried by the auth session — see `find_user_by_sub` in
- * `libs/handlers-planning/src/task_comment/create.rs`), so this compares
- * `display_name` instead of `id`. That is a heuristic, not a proof of
- * identity — two members who happen to share a display name would each see
- * the other's actions, and the backend's own `403` remains the actual
- * guard. Flagged here rather than silently relied upon; see this
- * workstream's report for the missing endpoint this works around.
- */
-export function isOwnComment(
-	comment: { author: { display_name: string } },
-	currentDisplayName: string | null,
-): boolean {
-	if (currentDisplayName === null) return false
-	return comment.author.display_name === currentDisplayName
-}
-
 /** Whether a newer page exists — the thread's "load more" control. `null`/`undefined` metadata (not loaded yet) means no. */
 export function canLoadMoreComments(
 	pagination: PaginationMetadata | null | undefined,

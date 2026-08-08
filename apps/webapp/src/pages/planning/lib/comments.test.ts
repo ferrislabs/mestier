@@ -2,31 +2,8 @@ import { describe, expect, it } from 'vitest'
 import {
 	canLoadMoreComments,
 	canLoadOlderComments,
-	isOwnComment,
 	nextPageAfterCreate,
 } from '#/pages/planning/lib/comments'
-
-describe('isOwnComment', () => {
-	it('is true when the comment author matches the current display name', () => {
-		const comment = { author: { id: 'u1', display_name: 'Alice Dupont' } }
-		expect(isOwnComment(comment, 'Alice Dupont')).toBe(true)
-	})
-
-	it('is false when the comment author is someone else', () => {
-		const comment = { author: { id: 'u1', display_name: 'Alice Dupont' } }
-		expect(isOwnComment(comment, 'Bob Martin')).toBe(false)
-	})
-
-	it('is false when there is no known current user', () => {
-		const comment = { author: { id: 'u1', display_name: 'Alice Dupont' } }
-		expect(isOwnComment(comment, null)).toBe(false)
-	})
-
-	it('is case-sensitive and does not trim — an exact display-name match only', () => {
-		const comment = { author: { id: 'u1', display_name: 'Alice Dupont' } }
-		expect(isOwnComment(comment, 'alice dupont')).toBe(false)
-	})
-})
 
 describe('canLoadMoreComments', () => {
 	it('is true when the pagination metadata reports a next page', () => {
