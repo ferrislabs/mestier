@@ -80,10 +80,15 @@ pub trait DeliveryHandler: Send + Sync {
 pub trait DeliveryRepository: Send {
     /// Claim deliveries that are due, marking them `in_flight` and stamping
     /// the worker so a crashed one can be recovered.
+    ///
+    /// `per_org` caps how many of the batch a single organization may take.
+    /// Without it, one tenant flooding the queue starves every other tenant,
+    /// because the claim is ordered by due date and nothing else.
     fn claim_due(
         &mut self,
         worker: &str,
         batch: i64,
+        per_org: i64,
     ) -> impl Future<Output = Result<Vec<DueDelivery>, CoreError>> + Send;
 
     /// Record a success: the delivery is done and its subscription's failure

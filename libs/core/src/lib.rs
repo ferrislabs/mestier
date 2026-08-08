@@ -6,7 +6,10 @@ pub mod infrastructure;
 
 pub use application::*;
 pub use domain::automation::event_catalogue;
-pub use domain::automation::ports::DispatchOutcome;
+pub use domain::automation::ports::{
+    DeliveryHandler, DeliveryOutcome, DispatchOutcome, DueDelivery,
+};
+pub use domain::automation::settings::{AutomationSettings, SettingsBounds};
 pub use infrastructure::realtime::EventHub;
 
 pub use domain::{

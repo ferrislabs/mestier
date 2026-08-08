@@ -1,0 +1,34 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT attempts, last_error, locked_by FROM automation.delivery WHERE id = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "attempts",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 1,
+        "name": "last_error",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "locked_by",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      true,
+      true
+    ]
+  },
+  "hash": "cfcd046a8089cda60adcd44d08d477b17d615859e74967b7fc1a3125482fda51"
+}

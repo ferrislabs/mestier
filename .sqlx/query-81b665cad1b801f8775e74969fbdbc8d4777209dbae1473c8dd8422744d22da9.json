@@ -1,0 +1,24 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE automation.delivery\n            SET attempts = attempts + 1,\n                last_error = $2,\n                status = CASE WHEN $3::timestamptz IS NULL THEN 'dead' ELSE 'failed' END,\n                next_attempt_at = COALESCE($3, next_attempt_at),\n                locked_at = NULL,\n                locked_by = NULL,\n                completed_at = CASE WHEN $3::timestamptz IS NULL THEN now() ELSE NULL END\n            WHERE id = $1\n            RETURNING subscription_id\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "subscription_id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Timestamptz"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "81b665cad1b801f8775e74969fbdbc8d4777209dbae1473c8dd8422744d22da9"
+}

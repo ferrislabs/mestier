@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE automation.delivery\n            SET status = 'failed',\n                attempts = attempts + 1,\n                last_error = 'the worker holding this delivery was lost',\n                next_attempt_at = now(),\n                locked_at = NULL,\n                locked_by = NULL\n            WHERE status = 'in_flight' AND locked_at < $1\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Timestamptz"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "d052b47d1b3c106d209cac9b3960d171670c4e6a13f2b1b7260ca24164921518"
+}

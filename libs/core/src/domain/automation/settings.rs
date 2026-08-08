@@ -122,6 +122,21 @@ impl AutomationSettings {
     }
 }
 
+/// Spreads an interval by up to 20%, deterministically from `seed`.
+///
+/// Deliveries created by one transaction come due together; without this they
+/// retry in lockstep and hit the same endpoint in synchronised waves. The seed
+/// is the delivery id rather than a random number: no dependency on a
+/// generator, and a retry that is reproducible when someone has to explain it.
+pub fn with_jitter(interval: Duration, seed: u64) -> Duration {
+    let spread = interval.as_millis() as u64 / 5;
+    if spread == 0 {
+        return interval;
+    }
+
+    interval + Duration::from_millis(seed % spread)
+}
+
 fn check_range(
     what: &str,
     value: Duration,
@@ -199,6 +214,41 @@ mod tests {
         };
 
         assert!(settings.validate(&SettingsBounds::default()).is_ok());
+    }
+
+    #[test]
+    fn jitter_never_shortens_an_interval_and_never_exceeds_a_fifth() {
+        let interval = Duration::from_secs(100);
+
+        for seed in [0, 1, 7, u64::MAX, 123_456_789] {
+            let jittered = with_jitter(interval, seed);
+
+            assert!(jittered >= interval, "a retry must never come early");
+            assert!(jittered <= interval + Duration::from_secs(20));
+        }
+    }
+
+    #[test]
+    fn jitter_is_reproducible_for_the_same_delivery() {
+        let interval = Duration::from_secs(60);
+
+        assert_eq!(with_jitter(interval, 42), with_jitter(interval, 42));
+    }
+
+    #[test]
+    fn jitter_spreads_different_deliveries_apart() {
+        let interval = Duration::from_secs(600);
+
+        assert_ne!(with_jitter(interval, 1), with_jitter(interval, 999_983));
+    }
+
+    /// An interval too short to spread is returned untouched rather than
+    /// rounded down to zero.
+    #[test]
+    fn an_interval_too_short_to_spread_is_left_alone() {
+        let interval = Duration::from_millis(4);
+
+        assert_eq!(with_jitter(interval, 12345), interval);
     }
 
     /// The attempt count is not a separate setting: it is the length of the
