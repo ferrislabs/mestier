@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE automation.subscription\n            SET enabled = false, disabled_at = now(), updated_at = now()\n            WHERE id = $1 AND enabled AND consecutive_failures >= $2\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Int4"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "5ebea13b417d2884d460a6fb85abc4bafafc128e91edcbaef0eb9b50200ed886"
+}

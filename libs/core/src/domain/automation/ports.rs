@@ -1,5 +1,9 @@
-use common::CoreError;
+use chrono::{DateTime, Utc};
+use common::{CoreError, OrganizationId};
 use events::EventEnvelope;
+use uuid::Uuid;
+
+use crate::domain::automation::settings::AutomationSettings;
 
 /// Appends events to the durable log.
 ///
@@ -39,4 +43,87 @@ pub trait EventDispatchRepository: Send {
         &mut self,
         batch: i64,
     ) -> impl Future<Output = Result<DispatchOutcome, CoreError>> + Send;
+}
+
+/// A delivery the worker has claimed, with everything needed to execute it.
+#[derive(Debug, Clone)]
+pub struct DueDelivery {
+    pub id: Uuid,
+    pub org_id: OrganizationId,
+    pub subscription_id: Uuid,
+    /// `webhook` today. The workflow engine becomes another value.
+    pub kind: String,
+    pub target_id: Uuid,
+    /// How many attempts have already failed. Indexes into the retry schedule.
+    pub attempts: u32,
+    pub event: EventEnvelope,
+}
+
+/// What executing a delivery produced.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum DeliveryOutcome {
+    Succeeded,
+    Failed { error: String },
+}
+
+/// Executes a claimed delivery. Implemented per `subscription.kind` — webhooks
+/// in W5, the workflow engine later.
+///
+/// Returns an outcome rather than a `Result`: a failed delivery is ordinary,
+/// expected, and belongs in the retry schedule, not in the error channel of
+/// the worker that runs it.
+pub trait DeliveryHandler: Send + Sync {
+    fn deliver(&self, delivery: &DueDelivery) -> impl Future<Output = DeliveryOutcome> + Send;
+}
+
+#[cfg_attr(test, mockall::automock)]
+pub trait DeliveryRepository: Send {
+    /// Claim deliveries that are due, marking them `in_flight` and stamping
+    /// the worker so a crashed one can be recovered.
+    ///
+    /// `per_org` caps how many of the batch a single organization may take.
+    /// Without it, one tenant flooding the queue starves every other tenant,
+    /// because the claim is ordered by due date and nothing else.
+    fn claim_due(
+        &mut self,
+        worker: &str,
+        batch: i64,
+        per_org: i64,
+    ) -> impl Future<Output = Result<Vec<DueDelivery>, CoreError>> + Send;
+
+    /// Record a success: the delivery is done and its subscription's failure
+    /// streak resets.
+    fn settle_succeeded(
+        &mut self,
+        delivery_id: Uuid,
+    ) -> impl Future<Output = Result<(), CoreError>> + Send;
+
+    /// Record a failure. `next_attempt_at` is `None` when the retry schedule
+    /// is exhausted, which is what makes the delivery dead.
+    fn settle_failed(
+        &mut self,
+        delivery_id: Uuid,
+        error: &str,
+        next_attempt_at: Option<DateTime<Utc>>,
+    ) -> impl Future<Output = Result<(), CoreError>> + Send;
+
+    /// Disable a subscription whose consecutive failures reached the
+    /// organization's threshold. Returns whether it disabled anything.
+    fn disable_target_if_exhausted(
+        &mut self,
+        subscription_id: Uuid,
+        threshold: u32,
+    ) -> impl Future<Output = Result<bool, CoreError>> + Send;
+
+    /// Release deliveries a worker claimed and never settled — it died in
+    /// flight — so they become claimable again instead of stranded.
+    fn release_stale_claims(
+        &mut self,
+        older_than: DateTime<Utc>,
+    ) -> impl Future<Output = Result<u64, CoreError>> + Send;
+
+    fn settings_for(
+        &mut self,
+        org_id: OrganizationId,
+    ) -> impl Future<Output = Result<AutomationSettings, CoreError>> + Send;
 }
