@@ -6,9 +6,15 @@ import {
 	PopoverContent,
 	PopoverTrigger,
 } from '#/components/ui/popover'
+import type { AbsenceFormValues } from '#/pages/hr/lib/absences'
 import type { EventDetailVM } from '#/pages/planning/lib/build-calendar-model'
+import type { TaskFormValues } from '#/pages/planning/lib/task-form'
 import type { PlanningEntry } from '#/pages/planning/types'
 import { EventDetailCard } from '#/pages/planning/ui/event-detail-card'
+import type {
+	EventAssigneeOption,
+	EventEditState,
+} from '#/pages/planning/ui/event-edit-form'
 
 /**
  * Ce que le calendrier sait faire d'une entrée — le reste vit dans la feature.
@@ -17,11 +23,18 @@ import { EventDetailCard } from '#/pages/planning/ui/event-detail-card'
  * partager le même panneau.
  */
 export interface CalendarEventCallbacks {
-	/** Ouvre l'entrée dans son écran complet : fiche de tâche, formulaire d'absence. */
-	onOpen: (entry: PlanningEntry) => void
 	onChangeStatus?: (entry: PlanningEntry, status: Schemas.TaskStatus) => void
 	onDelete?: (entry: PlanningEntry) => void
 	isPending?: boolean
+	/** Brouillon en cours, s'il porte sur cette entrée. */
+	editing: EventEditState | null
+	assignees: EventAssigneeOption[]
+	selectedResourceIds: string[]
+	onEdit: (entry: PlanningEntry) => void
+	onEditChange: (patch: Partial<TaskFormValues & AbsenceFormValues>) => void
+	onToggleAssignee: (resourceId: string) => void
+	onEditSubmit: () => void
+	onEditCancel: () => void
 }
 
 export interface EventPopoverProps {
@@ -55,11 +68,22 @@ export function EventPopover({
 				<EventDetailCard
 					event={detail}
 					isPending={callbacks.isPending}
-					onOpen={() => {
+					editing={
+						callbacks.editing?.entryId === detail.entry.id
+							? callbacks.editing
+							: null
+					}
+					assignees={callbacks.assignees}
+					selectedResourceIds={callbacks.selectedResourceIds}
+					onEdit={() => callbacks.onEdit(detail.entry)}
+					onEditChange={callbacks.onEditChange}
+					onToggleAssignee={callbacks.onToggleAssignee}
+					onEditSubmit={callbacks.onEditSubmit}
+					onEditCancel={callbacks.onEditCancel}
+					onClose={() => {
+						callbacks.onEditCancel()
 						setOpen(false)
-						callbacks.onOpen(detail.entry)
 					}}
-					onClose={() => setOpen(false)}
 					onChangeStatus={
 						callbacks.onChangeStatus
 							? (status) => callbacks.onChangeStatus?.(detail.entry, status)

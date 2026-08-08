@@ -39,9 +39,16 @@ function renderGrid(
 	overrides: Partial<CalendarEventCallbacks> = {},
 ) {
 	const callbacks: CalendarEventCallbacks = {
-		onOpen: vi.fn(),
 		onChangeStatus: vi.fn(),
 		onDelete: vi.fn(),
+		editing: null,
+		assignees: [],
+		selectedResourceIds: [],
+		onEdit: vi.fn(),
+		onEditChange: vi.fn(),
+		onToggleAssignee: vi.fn(),
+		onEditSubmit: vi.fn(),
+		onEditCancel: vi.fn(),
 		...overrides,
 	}
 
@@ -91,7 +98,7 @@ describe('CalendarGrid — panneau de détail', () => {
 		expect(panel.textContent).toMatch(/\d{2}:\d{2} – \d{2}:\d{2}/)
 	})
 
-	it('ouvre la fiche complète depuis le panneau', async () => {
+	it('passe le panneau en édition depuis le crayon', async () => {
 		const callbacks = renderGrid([TASK])
 		await openDetails(/Taille de haie/)
 
@@ -99,7 +106,7 @@ describe('CalendarGrid — panneau de détail', () => {
 			screen.getByRole('button', { name: 'Modifier la tâche' }),
 		)
 
-		expect(callbacks.onOpen).toHaveBeenCalledTimes(1)
+		expect(callbacks.onEdit).toHaveBeenCalledTimes(1)
 	})
 
 	it('change le statut depuis le pied du panneau', async () => {
@@ -126,6 +133,71 @@ describe('CalendarGrid — panneau de détail', () => {
 		)
 
 		expect(callbacks.onDelete).toHaveBeenCalledTimes(1)
+	})
+
+	it('édite dans le panneau, sans ouvrir de tiroir', async () => {
+		const callbacks = renderGrid([TASK], {
+			editing: {
+				kind: 'task',
+				entryId: 't-1',
+				errors: [],
+				values: {
+					title: 'Taille de haie',
+					description: '',
+					allDay: false,
+					startDate: '2026-03-02',
+					startTime: '09:00',
+					endDate: '2026-03-02',
+					endTime: '11:00',
+					blocksAvailability: true,
+					customerId: '',
+					customerContextId: '',
+					labelIds: [],
+					assignees: [],
+				},
+			},
+		})
+		await openDetails(/Taille de haie/)
+
+		const titre = screen.getByDisplayValue('Taille de haie')
+		await userEvent.type(titre, ' haute')
+
+		expect(callbacks.onEditChange).toHaveBeenCalled()
+
+		await userEvent.click(screen.getByRole('button', { name: 'Enregistrer' }))
+		expect(callbacks.onEditSubmit).toHaveBeenCalledTimes(1)
+	})
+
+	it("bloque l'enregistrement tant que le brouillon est invalide", async () => {
+		renderGrid([TASK], {
+			editing: {
+				kind: 'task',
+				entryId: 't-1',
+				errors: ['Le titre est obligatoire.'],
+				values: {
+					title: '',
+					description: '',
+					allDay: false,
+					startDate: '2026-03-02',
+					startTime: '09:00',
+					endDate: '2026-03-02',
+					endTime: '11:00',
+					blocksAvailability: true,
+					customerId: '',
+					customerContextId: '',
+					labelIds: [],
+					assignees: [],
+				},
+			},
+		})
+		await openDetails(/Taille de haie/)
+
+		expect(screen.getByText('Le titre est obligatoire.')).toBeDefined()
+		expect(
+			screen
+				.getByRole('button', { name: 'Enregistrer' })
+				.hasAttribute('disabled'),
+		).toBe(true)
 	})
 
 	it('se ferme par son bouton de fermeture', async () => {
