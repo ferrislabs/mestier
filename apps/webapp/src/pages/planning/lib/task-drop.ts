@@ -48,10 +48,42 @@ export function assigneeRefFromResourceId(resourceId: string): AssigneeRef {
 	throw new Error(`resource_id inattendu : ${resourceId}`)
 }
 
-function assigneeKey(ref: AssigneeRef): string {
+/**
+ * The inverse of {@link assigneeRefFromResourceId} — an `AssigneeRef` back
+ * to the `<kind>:<uuid>` resource id form the grid and the assignee picker
+ * both key on. Also the identity every dedup in this file keys on
+ * (`buildAssigneesForMove`/`buildAssigneesForRemoval`), so it is exported
+ * under one name instead of living twice.
+ */
+export function resourceIdFromAssigneeRef(ref: AssigneeRef): string {
 	return ref.kind === 'employee'
 		? `employee:${ref.employee_id}`
 		: `member:${ref.user_id}`
+}
+
+function assigneeKey(ref: AssigneeRef): string {
+	return resourceIdFromAssigneeRef(ref)
+}
+
+/**
+ * Adds `resourceId` to `assignees` if absent, removes it if present —
+ * never mutates `assignees`. The task form's assignee picker toggle: unlike
+ * a grid drop (`buildAssigneesForMove`), there is no "source" resource to
+ * replace, only a set to grow or shrink.
+ */
+export function toggleAssignee(
+	assignees: AssigneeRef[],
+	resourceId: string,
+): AssigneeRef[] {
+	const exists = assignees.some(
+		(ref) => resourceIdFromAssigneeRef(ref) === resourceId,
+	)
+	if (exists) {
+		return assignees.filter(
+			(ref) => resourceIdFromAssigneeRef(ref) !== resourceId,
+		)
+	}
+	return [...assignees, assigneeRefFromResourceId(resourceId)]
 }
 
 /**

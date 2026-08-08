@@ -5,7 +5,9 @@ import {
 	buildAssigneesForRemoval,
 	computeRemoveAssigneePatch,
 	computeTaskDropPatch,
+	resourceIdFromAssigneeRef,
 	shiftInstant,
+	toggleAssignee,
 } from '#/pages/planning/lib/task-drop'
 
 const TZ = 'Europe/Paris'
@@ -230,5 +232,66 @@ describe('computeRemoveAssigneePatch', () => {
 
 		expect(result.changed).toBe(false)
 		expect(result.body).toEqual({})
+	})
+})
+
+describe('resourceIdFromAssigneeRef', () => {
+	it('formate un AssigneeRef employee en resource_id', () => {
+		expect(
+			resourceIdFromAssigneeRef({ kind: 'employee', employee_id: 'emp-1' }),
+		).toBe('employee:emp-1')
+	})
+
+	it('formate un AssigneeRef member en resource_id', () => {
+		expect(
+			resourceIdFromAssigneeRef({ kind: 'member', user_id: 'user-1' }),
+		).toBe('member:user-1')
+	})
+
+	it('est l’inverse exact de assigneeRefFromResourceId', () => {
+		const resourceId = 'member:user-42'
+		expect(
+			resourceIdFromAssigneeRef(assigneeRefFromResourceId(resourceId)),
+		).toBe(resourceId)
+	})
+})
+
+describe('toggleAssignee', () => {
+	it('ajoute une ressource absente de la sélection', () => {
+		const result = toggleAssignee(
+			[{ kind: 'employee', employee_id: 'emp-1' }],
+			'employee:emp-2',
+		)
+
+		expect(result).toEqual([
+			{ kind: 'employee', employee_id: 'emp-1' },
+			{ kind: 'employee', employee_id: 'emp-2' },
+		])
+	})
+
+	it('retire une ressource déjà sélectionnée', () => {
+		const result = toggleAssignee(
+			[
+				{ kind: 'employee', employee_id: 'emp-1' },
+				{ kind: 'member', user_id: 'user-1' },
+			],
+			'employee:emp-1',
+		)
+
+		expect(result).toEqual([{ kind: 'member', user_id: 'user-1' }])
+	})
+
+	it('ne mute pas le tableau reçu', () => {
+		const assignees = [{ kind: 'employee' as const, employee_id: 'emp-1' }]
+		toggleAssignee(assignees, 'employee:emp-2')
+		expect(assignees).toEqual([{ kind: 'employee', employee_id: 'emp-1' }])
+	})
+
+	it('une sous-tâche démarre sans assigné — jamais hérités du parent', () => {
+		// Rien à retirer : la sélection vide reste vide tant qu'aucun toggle
+		// n'est appelé, cf. l'invariant 7 du document de conception.
+		expect(toggleAssignee([], 'employee:emp-1')).toEqual([
+			{ kind: 'employee', employee_id: 'emp-1' },
+		])
 	})
 })
