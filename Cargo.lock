@@ -1832,6 +1832,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "events"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "common",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.18",
+ "uuid",
+]
+
+[[package]]
 name = "fastrand"
 version = "2.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"

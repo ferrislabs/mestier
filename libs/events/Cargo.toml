@@ -1,0 +1,15 @@
+[package]
+name = "events"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+
+# This crate must never depend on `mestier-core`. Events are declared by the
+# modules that emit them; the backbone knows an envelope, never a business type.
+[dependencies]
+chrono = { workspace = true }
+common = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+uuid = { workspace = true }
