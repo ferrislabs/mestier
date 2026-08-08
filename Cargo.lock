@@ -3163,6 +3163,7 @@ dependencies = [
  "mestier-macros",
  "mockall",
  "rate-limit",
+ "reqwest",
  "rust_decimal",
  "serde",
  "serde_json",
