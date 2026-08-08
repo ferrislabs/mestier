@@ -1,3 +1,4 @@
+use common::{CoreError, OrganizationId};
 use serde_json::Value;
 use uuid::Uuid;
 
@@ -36,4 +37,18 @@ pub trait DomainEvent {
 
     /// The serialized domain model — never the database row.
     fn payload(&self) -> Value;
+}
+
+/// Port a domain service uses to publish what it just did.
+///
+/// Generic rather than object-safe: the implementation converts to an
+/// [`crate::EventEnvelope`] at call time, so nothing needs to buffer trait
+/// objects. `libs/core` implements it once, on the emitter `#[transactional]`
+/// builds for each transaction.
+///
+/// The organization is a parameter rather than emitter state because the
+/// `update_*` use cases identify their aggregate by id and only learn which
+/// organization owns it once the service has loaded it.
+pub trait EventEmitter {
+    fn emit<E: DomainEvent>(&self, org_id: OrganizationId, event: &E) -> Result<(), CoreError>;
 }

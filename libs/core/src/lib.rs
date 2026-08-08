@@ -5,6 +5,7 @@ pub(crate) mod domain;
 pub mod infrastructure;
 
 pub use application::*;
+pub use domain::automation::event_catalogue;
 pub use infrastructure::realtime::EventHub;
 
 pub use domain::{

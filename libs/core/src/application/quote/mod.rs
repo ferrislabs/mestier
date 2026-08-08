@@ -11,47 +11,47 @@ use crate::{
 };
 
 impl MestierUseCase {
-    #[transactional(quote)]
+    #[transactional(quote, emitter)]
     pub async fn create_quote(&self, command: CreateQuoteCommand) -> Result<Quote, CoreError> {
-        let mut service = QuoteService::new(quote_repository);
+        let mut service = QuoteService::new(quote_repository, emitter);
         service.create_quote(command).await
     }
 
-    #[transactional(quote)]
+    #[transactional(quote, emitter)]
     pub async fn get_quote(&self, id: QuoteId) -> Result<Quote, CoreError> {
-        let mut service = QuoteService::new(quote_repository);
+        let mut service = QuoteService::new(quote_repository, emitter);
         service.get_quote(id).await
     }
 
-    #[transactional(quote)]
+    #[transactional(quote, emitter)]
     pub async fn list_quotes(
         &self,
         organization_id: OrganizationId,
         limit: u64,
         offset: u64,
     ) -> Result<(Vec<Quote>, u64), CoreError> {
-        let mut service = QuoteService::new(quote_repository);
+        let mut service = QuoteService::new(quote_repository, emitter);
         service.list_quotes(organization_id, limit, offset).await
     }
 
-    #[transactional(quote)]
+    #[transactional(quote, emitter)]
     pub async fn update_quote(&self, command: UpdateQuoteCommand) -> Result<Quote, CoreError> {
-        let mut service = QuoteService::new(quote_repository);
+        let mut service = QuoteService::new(quote_repository, emitter);
         service.update_quote(command).await
     }
 
-    #[transactional(quote)]
+    #[transactional(quote, emitter)]
     pub async fn update_quote_status(
         &self,
         command: UpdateQuoteStatusCommand,
     ) -> Result<Quote, CoreError> {
-        let mut service = QuoteService::new(quote_repository);
+        let mut service = QuoteService::new(quote_repository, emitter);
         service.update_quote_status(command).await
     }
 
-    #[transactional(quote)]
+    #[transactional(quote, emitter)]
     pub async fn soft_delete_quote(&self, id: QuoteId) -> Result<(), CoreError> {
-        let mut service = QuoteService::new(quote_repository);
+        let mut service = QuoteService::new(quote_repository, emitter);
         service.soft_delete_quote(id).await
     }
 }

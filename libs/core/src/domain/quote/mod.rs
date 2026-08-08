@@ -1,3 +1,4 @@
+pub mod events;
 use std::{fmt::Display, str::FromStr};
 
 use chrono::{DateTime, Utc};
@@ -40,6 +41,17 @@ pub enum QuoteStatus {
 }
 
 impl QuoteStatus {
+    /// Every variant, for exhaustive iteration. Adding one here is not
+    /// enforced by the compiler, but naming its event is: `event_name` matches
+    /// exhaustively, so a new status cannot be ignored silently.
+    pub const ALL: [QuoteStatus; 5] = [
+        QuoteStatus::Draft,
+        QuoteStatus::Sent,
+        QuoteStatus::Accepted,
+        QuoteStatus::Declined,
+        QuoteStatus::Cancelled,
+    ];
+
     pub fn as_str(self) -> &'static str {
         match self {
             Self::Draft => "DRAFT",
