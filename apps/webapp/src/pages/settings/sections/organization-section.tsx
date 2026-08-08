@@ -1,5 +1,6 @@
 import { useForm } from '@tanstack/react-form'
 import { Building2, Loader2, Save } from 'lucide-react'
+import { type FormBinding, TextField } from '#/components/reference-table'
 import { Button } from '#/components/ui/button'
 import {
 	SectionCard,
@@ -12,7 +13,6 @@ import {
 	useUpdateOrganization,
 } from '#/hooks/use-organizations'
 import type { OrganizationFormValues } from '#/pages/settings/types'
-import { type FormBinding, TextField } from '#/pages/settings/ui/primitives'
 
 export function OrganizationSection() {
 	const { activeOrganization } = useActiveOrganization()

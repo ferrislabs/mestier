@@ -49,3 +49,8 @@ export type {
 	PlanningResponse,
 	PlanningWorkTime,
 }
+
+export interface EquipmentFormValues {
+	name: string
+	hourlyRate: string
+}

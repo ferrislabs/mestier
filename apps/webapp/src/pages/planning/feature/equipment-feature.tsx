@@ -2,17 +2,6 @@ import { useForm } from '@tanstack/react-form'
 import type { ColumnDef } from '@tanstack/react-table'
 import { Loader2, Package, Search } from 'lucide-react'
 import { useMemo, useState } from 'react'
-import { Input } from '#/components/ui/input'
-import { MetricCard, SectionCard, SectionHeader } from '#/components/ui/surface'
-import { useActiveOrganization } from '#/hooks/use-active-organization'
-import type { Equipment } from '#/hooks/use-reference-catalog'
-import {
-	useCreateEquipment,
-	useDeleteEquipment,
-	useReferenceCatalog,
-	useUpdateEquipment,
-} from '#/hooks/use-reference-catalog'
-import type { EquipmentFormValues } from '#/pages/settings/types'
 import {
 	CreateButton,
 	centsToEuros,
@@ -22,16 +11,47 @@ import {
 	RowActions,
 	RowIdentity,
 	TextField,
-} from '#/pages/settings/ui/primitives'
+} from '#/components/reference-table'
+import { Input } from '#/components/ui/input'
+import {
+	MetricCard,
+	PageHeader,
+	PageShell,
+	SectionCard,
+	SectionHeader,
+} from '#/components/ui/surface'
+import { useActiveOrganization } from '#/hooks/use-active-organization'
+import type { Equipment } from '#/hooks/use-reference-catalog'
+import {
+	useCreateEquipment,
+	useDeleteEquipment,
+	useReferenceCatalog,
+	useUpdateEquipment,
+} from '#/hooks/use-reference-catalog'
+import type { EquipmentFormValues } from '#/pages/planning/types'
 
-export function EquipmentSection() {
+/**
+ * Référentiel du matériel et de son coût horaire.
+ *
+ * Il vivait dans les réglages de l'organisation ; c'est une donnée de travail,
+ * pas un paramètre — son coût horaire alimente la rentabilité des tâches, donc
+ * il appartient au module qui les planifie.
+ */
+export function EquipmentFeature() {
 	const { activeOrganization } = useActiveOrganization()
 
 	return (
-		<EquipmentSectionContent
-			key={activeOrganization.id}
-			organizationId={activeOrganization.id}
-		/>
+		<PageShell>
+			<PageHeader
+				eyebrow={activeOrganization.name}
+				title="Matériel"
+				description="Les ressources facturables et leur coût horaire, utilisés pour calculer la rentabilité d'une tâche."
+			/>
+			<EquipmentSectionContent
+				key={activeOrganization.id}
+				organizationId={activeOrganization.id}
+			/>
+		</PageShell>
 	)
 }
 

@@ -1,4 +1,5 @@
 import {
+	Boxes,
 	BriefcaseBusiness,
 	CalendarDays,
 	CalendarRange,
@@ -7,6 +8,7 @@ import {
 	LayoutDashboard,
 	ListTree,
 	MessagesSquare,
+	Package,
 	Receipt,
 	Settings,
 	Users,
@@ -38,7 +40,6 @@ export const MODULES: AppModule[] = [
 		basePath: '/crm',
 		status: 'available',
 		hasOverview: false,
-		settingsSectionId: 'crm',
 		sections: [
 			{
 				id: 'customers',
@@ -60,6 +61,12 @@ export const MODULES: AppModule[] = [
 				to: '/crm/invoices',
 				icon: Receipt,
 				status: 'coming-soon',
+			},
+			{
+				id: 'catalog',
+				label: 'Catalogue',
+				to: '/crm/catalog',
+				icon: Boxes,
 			},
 		],
 	},
@@ -99,6 +106,12 @@ export const MODULES: AppModule[] = [
 				label: 'Liste des tâches',
 				to: '/planning/tasks',
 				icon: ListTree,
+			},
+			{
+				id: 'equipment',
+				label: 'Matériel',
+				to: '/planning/equipment',
+				icon: Package,
 			},
 		],
 	},
