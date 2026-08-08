@@ -3152,6 +3152,7 @@ dependencies = [
  "auth",
  "authz",
  "aws-credential-types",
+ "aws-lc-rs",
  "aws-sdk-s3",
  "bytes",
  "chrono",
