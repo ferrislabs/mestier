@@ -1,6 +1,6 @@
 use auth::Identity;
 use axum::{Extension, extract::State};
-use handlers::{ApiError, AppState, Response};
+use handlers::{ApiError, AppState, Response, resolve_user_id};
 
 use crate::{EmptyResponse, paths::CategoryPath, require_permission};
 
@@ -31,6 +31,11 @@ pub async fn handler(
         "category.manage",
     )
     .await?;
-    state.usecase.delete_category(path.category_id).await?;
+    let actor = resolve_user_id(&state, &identity).await?;
+    state
+        .usecase
+        .acting_as(actor)
+        .delete_category(path.category_id)
+        .await?;
     Ok(Response::NoContent)
 }

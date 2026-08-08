@@ -1,6 +1,6 @@
 use auth::Identity;
 use axum::{Extension, extract::State};
-use handlers::{ApiError, AppState, Response};
+use handlers::{ApiError, AppState, Response, resolve_user_id};
 
 use crate::task::{TaskPath, require_task};
 
@@ -30,7 +30,12 @@ pub async fn handler(
     Extension(identity): Extension<Identity>,
 ) -> Result<Response<()>, ApiError> {
     require_task(&state, &identity, organization_id, task_id).await?;
-    state.usecase.soft_delete_task(task_id).await?;
+    let actor = resolve_user_id(&state, &identity).await?;
+    state
+        .usecase
+        .acting_as(actor)
+        .soft_delete_task(task_id)
+        .await?;
 
     Ok(Response::NoContent)
 }

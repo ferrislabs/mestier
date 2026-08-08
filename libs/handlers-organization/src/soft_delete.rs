@@ -1,6 +1,6 @@
 use auth::Identity;
 use axum::{Extension, extract::State};
-use handlers::{ApiError, AppState};
+use handlers::{ApiError, AppState, resolve_user_id};
 use http::StatusCode;
 use mestier_core::OrganizationId;
 
@@ -28,6 +28,7 @@ pub async fn handler(
     Extension(identity): Extension<Identity>,
 ) -> Result<StatusCode, ApiError> {
     let user = require_org_membership(&state, &identity, organization_id).await?;
+    let actor = resolve_user_id(&state, &identity).await?;
     let organization = state.usecase.get_organization(organization_id).await?;
 
     if organization.owner_id != user.id {
@@ -36,6 +37,7 @@ pub async fn handler(
 
     state
         .usecase
+        .acting_as(actor)
         .soft_delete_organization(organization_id)
         .await?;
 

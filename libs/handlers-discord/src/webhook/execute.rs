@@ -41,6 +41,11 @@ pub async fn handler(
         ));
     }
 
+    // No acting user: this endpoint authenticates a webhook token, not a
+    // person, and an inbound integration has no representable actor today —
+    // `Actor::Client` needs a FerrisKey client id, which a webhook token is
+    // not. Its events are attributed to the system until the actor model
+    // grows a variant for it.
     let message = state
         .usecase
         .execute_webhook(ExecuteWebhookCommand {

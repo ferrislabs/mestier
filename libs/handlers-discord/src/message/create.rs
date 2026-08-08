@@ -82,6 +82,7 @@ pub async fn handler(
 
     let message = state
         .usecase
+        .acting_as(user_id)
         .create_message(CreateMessageCommand {
             organization_id: channel.organization_id,
             channel_id: path.channel_id,

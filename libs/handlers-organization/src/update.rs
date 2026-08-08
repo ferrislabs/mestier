@@ -48,6 +48,7 @@ pub async fn handler(
 
     let organization = state
         .usecase
+        .acting_as(user.id)
         .update_organization(UpdateOrganizationCommand {
             actor,
             id: organization_id,

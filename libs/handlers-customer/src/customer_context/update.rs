@@ -1,6 +1,6 @@
 use auth::Identity;
 use axum::{Extension, Json, extract::State};
-use handlers::{ApiError, AppState, DataEnvelope, Response};
+use handlers::{ApiError, AppState, DataEnvelope, Response, resolve_user_id};
 use mestier_core::{CustomerContextId, UpdateCustomerContextCommand};
 use serde::Deserialize;
 use utoipa::ToSchema;
@@ -50,9 +50,11 @@ pub async fn handler(
         .get_customer_context(customer_context_id)
         .await?;
     require_customer_membership(&state, &identity, current.customer_id).await?;
+    let actor = resolve_user_id(&state, &identity).await?;
 
     let customer_context = state
         .usecase
+        .acting_as(actor)
         .update_customer_context(UpdateCustomerContextCommand {
             id: customer_context_id,
             label: payload.label,

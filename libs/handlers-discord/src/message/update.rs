@@ -43,6 +43,7 @@ pub async fn handler(
 
     let updated = state
         .usecase
+        .acting_as(user_id)
         .update_message(UpdateMessageCommand {
             id: path.message_id,
             requester: user_id,

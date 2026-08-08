@@ -1,6 +1,6 @@
 use auth::Identity;
 use axum::{Extension, extract::State};
-use handlers::{ApiError, AppState, Response};
+use handlers::{ApiError, AppState, Response, resolve_user_id};
 
 use crate::{EmptyResponse, paths::OrgNotificationsReadAllPath, require_org_membership};
 
@@ -23,6 +23,7 @@ pub async fn handler(
     Extension(identity): Extension<Identity>,
 ) -> Result<Response<EmptyResponse>, ApiError> {
     require_org_membership(&state, &identity, path.organization_id).await?;
+    let actor = resolve_user_id(&state, &identity).await?;
 
     // Resolve the caller via find_user_by_sub → user.id (DB users.id).
     // Do NOT use identity.user_id() — it parses the OIDC sub, which differs
@@ -36,6 +37,7 @@ pub async fn handler(
 
     state
         .usecase
+        .acting_as(actor)
         .mark_all_notifications_read(user.id, path.organization_id)
         .await?;
 

@@ -1,6 +1,6 @@
 use auth::Identity;
 use axum::{Extension, extract::State};
-use handlers::{ApiError, AppState, Response};
+use handlers::{ApiError, AppState, Response, resolve_user_id};
 use mestier_core::CustomerContactId;
 
 use crate::{EmptyResponse, paths::CustomerContactPath, require_customer_contact_membership};
@@ -29,8 +29,10 @@ pub async fn handler(
     Extension(identity): Extension<Identity>,
 ) -> Result<Response<EmptyResponse>, ApiError> {
     require_customer_contact_membership(&state, &identity, customer_contact_id).await?;
+    let actor = resolve_user_id(&state, &identity).await?;
     state
         .usecase
+        .acting_as(actor)
         .soft_delete_customer_contact(customer_contact_id)
         .await?;
     Ok(Response::NoContent)

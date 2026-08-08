@@ -34,6 +34,7 @@ pub async fn handler(
 
     state
         .usecase
+        .acting_as(user_id)
         .remove_reaction(RemoveReactionCommand {
             message_id: path.message_id,
             emoji: path.emoji,

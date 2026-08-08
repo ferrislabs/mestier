@@ -1,7 +1,7 @@
 use auth::Identity;
 use axum::{Extension, Json, extract::State};
 use discord::UpdateWebhookCommand;
-use handlers::{ApiError, AppState, DataEnvelope, Response};
+use handlers::{ApiError, AppState, DataEnvelope, Response, resolve_user_id};
 use serde::Deserialize;
 use utoipa::ToSchema;
 
@@ -37,6 +37,7 @@ pub async fn handler(
 ) -> Result<Response<WebhookResponse>, ApiError> {
     let webhook = state.usecase.get_webhook(path.webhook_id).await?;
     require_permission(&state, &identity, webhook.organization_id, "webhook.manage").await?;
+    let actor = resolve_user_id(&state, &identity).await?;
 
     if payload.name.trim().is_empty() {
         return Err(ApiError::Validation(
@@ -46,6 +47,7 @@ pub async fn handler(
 
     let updated = state
         .usecase
+        .acting_as(actor)
         .update_webhook(UpdateWebhookCommand {
             id: path.webhook_id,
             name: payload.name,

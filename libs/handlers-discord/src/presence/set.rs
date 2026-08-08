@@ -40,6 +40,7 @@ pub async fn handler(
 
     let presence = state
         .usecase
+        .acting_as(user_id)
         .set_presence(SetPresenceCommand {
             organization_id: path.organization_id,
             user_id,

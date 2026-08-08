@@ -1,7 +1,7 @@
 use auth::Identity;
 use axum::{Extension, Json, extract::State};
 use chrono::{DateTime, Utc};
-use handlers::{ApiError, AppState, DataEnvelope, Response};
+use handlers::{ApiError, AppState, DataEnvelope, Response, resolve_user_id};
 use mestier_core::{
     AssigneeRef, EmployeeId, PatchTaskCommand, TaskId, TaskLabelId, TaskStatus, UserId,
 };
@@ -108,6 +108,7 @@ pub async fn handler(
     Json(payload): Json<UpdateTaskRequest>,
 ) -> Result<Response<PatchTaskResponse>, ApiError> {
     require_task(&state, &identity, organization_id, task_id).await?;
+    let actor = resolve_user_id(&state, &identity).await?;
 
     let mut command = PatchTaskCommand::new(task_id);
     command.parent_task_id = payload.parent_task_id;
@@ -123,7 +124,7 @@ pub async fn handler(
         .assignees
         .map(|assignees| assignees.into_iter().map(Into::into).collect());
 
-    let (task, created_employees) = state.usecase.patch_task(command).await?;
+    let (task, created_employees) = state.usecase.acting_as(actor).patch_task(command).await?;
 
     // Reflects the task's current labels regardless of whether this PATCH
     // touched them — a PATCH that never mentions `label_ids` still needs to

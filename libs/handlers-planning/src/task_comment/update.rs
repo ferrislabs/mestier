@@ -52,6 +52,7 @@ pub async fn handler(
 
     let comment = state
         .usecase
+        .acting_as(actor.id)
         .update_task_comment(UpdateTaskCommentCommand {
             id: comment_id,
             acting_user_id: actor.id,

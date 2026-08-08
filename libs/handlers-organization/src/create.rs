@@ -1,6 +1,6 @@
 use auth::Identity;
 use axum::{Extension, Json, extract::State};
-use handlers::{ApiError, AppState, DataEnvelope, IdentityExt, Response};
+use handlers::{ApiError, AppState, DataEnvelope, IdentityExt, Response, resolve_user_id};
 use mestier_core::CreateOrganizationCommand;
 use serde::Deserialize;
 use utoipa::ToSchema;
@@ -40,7 +40,12 @@ pub async fn handler(
         owner_id: identity.user_id()?,
     };
 
-    let org = state.usecase.create_organization(command).await?;
+    let actor = resolve_user_id(&state, &identity).await?;
+    let org = state
+        .usecase
+        .acting_as(actor)
+        .create_organization(command)
+        .await?;
 
     Ok(Response::Created(org.into()))
 }

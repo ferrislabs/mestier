@@ -1,7 +1,7 @@
 use auth::Identity;
 use axum::{Router, middleware::from_fn_with_state};
 use axum_extra::routing::RouterExt;
-use common::{OrganizationId, UserId};
+use common::OrganizationId;
 use discord::ChannelId;
 use handlers::{ApiError, AppState, auth::auth_middleware, rate_limit::rate_limit_middleware};
 use mestier_core::Permissions;
