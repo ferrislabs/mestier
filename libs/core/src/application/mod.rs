@@ -82,6 +82,10 @@ pub struct MestierUseCase {
     /// Who the events produced through this handle are attributed to.
     /// `System` unless a handler asked for an acting view via [`Self::acting_as`].
     pub(crate) actor: Actor,
+    /// Absent when the instance has no `AUTOMATION_SECRET_KEY`. Typed rather
+    /// than documented: without it there is no way to seal a webhook secret,
+    /// so endpoint creation cannot even be attempted.
+    pub(crate) secret_cipher: Option<std::sync::Arc<SecretCipher>>,
 }
 
 impl MestierUseCase {
@@ -91,7 +95,24 @@ impl MestierUseCase {
             authz,
             hub,
             actor: Actor::System,
+            secret_cipher: None,
         }
+    }
+
+    pub fn with_secret_cipher(mut self, cipher: std::sync::Arc<SecretCipher>) -> Self {
+        self.secret_cipher = Some(cipher);
+        self
+    }
+
+    /// The cipher, or a refusal an operator can act on.
+    pub(crate) fn cipher(&self) -> Result<&SecretCipher, CoreError> {
+        self.secret_cipher.as_deref().ok_or_else(|| {
+            CoreError::Conflict(
+                "this instance has no automation secret key configured, so webhook secrets \
+                 cannot be stored"
+                    .to_owned(),
+            )
+        })
     }
 
     /// A view of this use case whose events are attributed to `user_id`.
@@ -174,9 +195,20 @@ pub async fn create_service(config: Config) -> Result<MestierService, CoreError>
     let rate_limit_quota = Quota::per_minute(config.rate_limit.per_minute);
 
     let hub = EventHub::new();
-    let usecase = MestierUseCase::new(pool.clone(), default_authorizer(), hub.clone());
+    let cipher = config
+        .automation
+        .secret_key
+        .as_deref()
+        .map(SecretCipher::from_base64)
+        .transpose()?
+        .map(std::sync::Arc::new);
 
-    spawn_automation_worker(&config.automation, pool, usecase.clone())?;
+    let mut usecase = MestierUseCase::new(pool.clone(), default_authorizer(), hub.clone());
+    if let Some(cipher) = cipher.clone() {
+        usecase = usecase.with_secret_cipher(cipher);
+    }
+
+    spawn_automation_worker(&config.automation, pool, usecase.clone(), cipher)?;
 
     Ok(MestierService::new(
         auth,
@@ -198,8 +230,9 @@ fn spawn_automation_worker(
     config: &AutomationConfig,
     pool: PgPool,
     usecase: MestierUseCase,
+    cipher: Option<std::sync::Arc<SecretCipher>>,
 ) -> Result<(), CoreError> {
-    let Some(encoded) = config.secret_key.as_deref() else {
+    let Some(cipher) = cipher else {
         tracing::warn!(
             "no AUTOMATION_SECRET_KEY configured: the automation worker will not start and \
              webhook endpoints cannot be created"
@@ -207,7 +240,6 @@ fn spawn_automation_worker(
         return Ok(());
     };
 
-    let cipher = SecretCipher::from_base64(encoded)?;
     let access = if config.allow_private_network {
         tracing::warn!(
             "webhooks may reach private addresses. Correct for a single-tenant instance; \

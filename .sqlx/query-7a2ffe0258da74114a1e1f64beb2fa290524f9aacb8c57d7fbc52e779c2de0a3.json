@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM automation.subscription WHERE target_id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "7a2ffe0258da74114a1e1f64beb2fa290524f9aacb8c57d7fbc52e779c2de0a3"
+}

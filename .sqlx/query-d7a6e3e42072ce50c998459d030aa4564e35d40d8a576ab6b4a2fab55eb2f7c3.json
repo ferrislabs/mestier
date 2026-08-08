@@ -1,0 +1,40 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT event_retention_seconds,\n                      succeeded_delivery_retention_seconds,\n                      retry_schedule_seconds,\n                      disable_target_after\n               FROM automation.settings WHERE org_id = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "event_retention_seconds",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 1,
+        "name": "succeeded_delivery_retention_seconds",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 2,
+        "name": "retry_schedule_seconds",
+        "type_info": "Int8Array"
+      },
+      {
+        "ordinal": 3,
+        "name": "disable_target_after",
+        "type_info": "Int4"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      true
+    ]
+  },
+  "hash": "d7a6e3e42072ce50c998459d030aa4564e35d40d8a576ab6b4a2fab55eb2f7c3"
+}

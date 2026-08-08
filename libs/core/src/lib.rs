@@ -4,10 +4,14 @@ pub mod application;
 pub(crate) mod domain;
 pub mod infrastructure;
 
+pub use application::automation::{CreatedWebhookEndpoint, PassOutcome};
 pub use application::*;
+pub use domain::automation::endpoint::{
+    CreateWebhookEndpointCommand, SealedSecret, UpdateWebhookEndpointCommand, WebhookEndpoint,
+};
 pub use domain::automation::event_catalogue;
 pub use domain::automation::ports::{
-    DeliveryHandler, DeliveryOutcome, DispatchOutcome, DueDelivery,
+    DeliveryHandler, DeliveryOutcome, DeliveryRecord, DispatchOutcome, DueDelivery,
 };
 pub use domain::automation::settings::{AutomationSettings, SettingsBounds};
 pub use infrastructure::automation::webhook::{

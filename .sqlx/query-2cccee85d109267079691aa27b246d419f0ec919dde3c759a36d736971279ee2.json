@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE automation.webhook_endpoint\n               SET secret_nonce = $2, secret_ciphertext = $3, updated_at = now()\n               WHERE id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Bytea",
+        "Bytea"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "2cccee85d109267079691aa27b246d419f0ec919dde3c759a36d736971279ee2"
+}

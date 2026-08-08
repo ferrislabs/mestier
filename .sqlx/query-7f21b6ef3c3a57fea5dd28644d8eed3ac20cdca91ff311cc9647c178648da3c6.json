@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM automation.webhook_endpoint WHERE id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "7f21b6ef3c3a57fea5dd28644d8eed3ac20cdca91ff311cc9647c178648da3c6"
+}

@@ -4,6 +4,8 @@ use aws_lc_rs::{
 };
 use common::CoreError;
 
+use crate::domain::automation::endpoint::SealedSecret;
+
 /// Encrypts webhook secrets at rest.
 ///
 /// AES-256-GCM rather than a bare cipher: the tag is what tells decryption
@@ -13,15 +15,6 @@ use common::CoreError;
 pub struct SecretCipher {
     key: LessSafeKey,
     rng: SystemRandom,
-}
-
-/// A stored secret: the nonce is not sensitive and travels with the
-/// ciphertext, but it must never repeat under one key — reusing a nonce with
-/// GCM discloses the keystream.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct SealedSecret {
-    pub nonce: Vec<u8>,
-    pub ciphertext: Vec<u8>,
 }
 
 impl SecretCipher {

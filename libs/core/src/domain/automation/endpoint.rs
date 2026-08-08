@@ -19,6 +19,14 @@ pub struct WebhookEndpoint {
     pub disabled_at: Option<DateTime<Utc>>,
 }
 
+/// A stored secret. The nonce is not sensitive and travels with the
+/// ciphertext, but it must never repeat under one key.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SealedSecret {
+    pub nonce: Vec<u8>,
+    pub ciphertext: Vec<u8>,
+}
+
 #[derive(Debug, Clone)]
 pub struct CreateWebhookEndpointCommand {
     pub org_id: OrganizationId,

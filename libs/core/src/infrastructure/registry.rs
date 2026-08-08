@@ -21,6 +21,10 @@ pub mod domain {
     pub struct Product;
     pub struct CustomerContext;
     pub struct Delivery;
+    pub struct AutomationSettings;
+    pub struct DeliveryLog;
+    pub struct Subscription;
+    pub struct WebhookEndpoint;
     pub struct Quote;
     pub struct Role;
     pub struct Member;

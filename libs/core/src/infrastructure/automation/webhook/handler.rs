@@ -1,4 +1,4 @@
-use std::time::Duration;
+use std::{sync::Arc, time::Duration};
 
 use chrono::Utc;
 use common::CoreError;
@@ -8,9 +8,10 @@ use sqlx::PgPool;
 use uuid::Uuid;
 
 use super::{
-    address_policy::PrivateNetworkAccess, resolver::GuardedResolver, secret::SealedSecret,
-    secret::SecretCipher, signature::sign,
+    address_policy::PrivateNetworkAccess, resolver::GuardedResolver, secret::SecretCipher,
+    signature::sign,
 };
+use crate::domain::automation::endpoint::SealedSecret;
 use crate::domain::automation::ports::{DeliveryHandler, DeliveryOutcome, DueDelivery};
 
 /// A stranger's endpoint is allowed ten seconds. Beyond that the delivery is a
@@ -20,7 +21,8 @@ const TIMEOUT: Duration = Duration::from_secs(10);
 
 pub struct WebhookDeliveryHandler {
     pool: PgPool,
-    cipher: SecretCipher,
+    /// Shared with the use case that seals secrets: one key, one place.
+    cipher: Arc<SecretCipher>,
     client: Client,
 }
 
@@ -29,7 +31,7 @@ impl WebhookDeliveryHandler {
     /// caller can accidentally assemble one without the guard.
     pub fn new(
         pool: PgPool,
-        cipher: SecretCipher,
+        cipher: Arc<SecretCipher>,
         access: PrivateNetworkAccess,
     ) -> Result<Self, CoreError> {
         let client = Client::builder()
@@ -55,7 +57,7 @@ impl WebhookDeliveryHandler {
     /// Test seam: lets a test point at a local server, which the guard would
     /// otherwise refuse. Never use it to build a production client.
     #[cfg(test)]
-    pub fn with_client(pool: PgPool, cipher: SecretCipher, client: Client) -> Self {
+    pub fn with_client(pool: PgPool, cipher: Arc<SecretCipher>, client: Client) -> Self {
         Self {
             pool,
             cipher,
@@ -290,7 +292,7 @@ mod tests {
         let org_id = common::OrganizationId(common::generate_uuid_v7());
         // A plain client: the guard would refuse 127.0.0.1, and it has its own
         // tests. What is under test here is the request we build.
-        let handler = WebhookDeliveryHandler::with_client(pool, cipher, Client::new());
+        let handler = WebhookDeliveryHandler::with_client(pool, Arc::new(cipher), Client::new());
 
         let outcome = handler.deliver(&due(endpoint_id, org_id)).await;
 
@@ -333,7 +335,7 @@ mod tests {
         let (url, server) = serve_once("500 Internal Server Error").await;
         let (endpoint_id, _) = seed_endpoint(&pool, &url, &cipher).await;
         let org_id = common::OrganizationId(common::generate_uuid_v7());
-        let handler = WebhookDeliveryHandler::with_client(pool, cipher, Client::new());
+        let handler = WebhookDeliveryHandler::with_client(pool, Arc::new(cipher), Client::new());
 
         let outcome = handler.deliver(&due(endpoint_id, org_id)).await;
 
@@ -355,7 +357,7 @@ mod tests {
         .await
         .unwrap();
         let org_id = common::OrganizationId(common::generate_uuid_v7());
-        let handler = WebhookDeliveryHandler::with_client(pool, cipher, Client::new());
+        let handler = WebhookDeliveryHandler::with_client(pool, Arc::new(cipher), Client::new());
 
         let outcome = handler.deliver(&due(endpoint_id, org_id)).await;
 

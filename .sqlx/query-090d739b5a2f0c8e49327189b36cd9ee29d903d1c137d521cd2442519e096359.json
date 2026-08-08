@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE automation.delivery\n               SET status = 'pending',\n                   attempts = 0,\n                   next_attempt_at = now(),\n                   last_error = NULL,\n                   completed_at = NULL,\n                   locked_at = NULL,\n                   locked_by = NULL\n               WHERE id = $1 AND org_id = $2 AND status IN ('dead', 'failed', 'succeeded')",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "090d739b5a2f0c8e49327189b36cd9ee29d903d1c137d521cd2442519e096359"
+}

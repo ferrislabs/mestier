@@ -1,0 +1,18 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO automation.subscription\n                   (id, org_id, kind, target_id, event_names, enabled)\n               VALUES ($1, $2, 'webhook', $3, $4, $5)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Uuid",
+        "TextArray",
+        "Bool"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "8b76b82fd9f63fe8d40d7eef93a0f2e66755ff7068c9cd55c60625de19350a62"
+}

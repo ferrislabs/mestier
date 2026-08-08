@@ -127,3 +127,109 @@ pub trait DeliveryRepository: Send {
         org_id: OrganizationId,
     ) -> impl Future<Output = Result<AutomationSettings, CoreError>> + Send;
 }
+
+use crate::domain::automation::endpoint::{SealedSecret, WebhookEndpoint};
+
+#[cfg_attr(test, mockall::automock)]
+pub trait WebhookEndpointRepository: Send {
+    fn insert(
+        &mut self,
+        endpoint: &WebhookEndpoint,
+        secret: &SealedSecret,
+    ) -> impl Future<Output = Result<WebhookEndpoint, CoreError>> + Send;
+
+    fn list_by_organization(
+        &mut self,
+        org_id: OrganizationId,
+    ) -> impl Future<Output = Result<Vec<WebhookEndpoint>, CoreError>> + Send;
+
+    fn find_by_id(
+        &mut self,
+        id: Uuid,
+    ) -> impl Future<Output = Result<Option<WebhookEndpoint>, CoreError>> + Send;
+
+    fn update(
+        &mut self,
+        endpoint: &WebhookEndpoint,
+    ) -> impl Future<Output = Result<WebhookEndpoint, CoreError>> + Send;
+
+    /// Replaces the sealed secret. Rotation is regeneration: there is no read
+    /// side, so a lost secret is replaced rather than recovered.
+    fn reseal(
+        &mut self,
+        id: Uuid,
+        secret: &SealedSecret,
+    ) -> impl Future<Output = Result<(), CoreError>> + Send;
+
+    fn delete(&mut self, id: Uuid) -> impl Future<Output = Result<(), CoreError>> + Send;
+}
+
+#[cfg_attr(test, mockall::automock)]
+pub trait SubscriptionRepository: Send {
+    /// Creates or replaces the subscription pointing at `target_id`. An
+    /// endpoint and its subscription are written in one transaction: an
+    /// endpoint subscribed to nothing is a support ticket waiting to happen.
+    fn upsert_for_target(
+        &mut self,
+        org_id: OrganizationId,
+        target_id: Uuid,
+        event_names: &[String],
+        enabled: bool,
+    ) -> impl Future<Output = Result<(), CoreError>> + Send;
+
+    fn event_names_for_target(
+        &mut self,
+        target_id: Uuid,
+    ) -> impl Future<Output = Result<Vec<String>, CoreError>> + Send;
+
+    fn delete_for_target(
+        &mut self,
+        target_id: Uuid,
+    ) -> impl Future<Output = Result<(), CoreError>> + Send;
+}
+
+#[cfg_attr(test, mockall::automock)]
+pub trait AutomationSettingsRepository: Send {
+    fn get(
+        &mut self,
+        org_id: OrganizationId,
+    ) -> impl Future<Output = Result<AutomationSettings, CoreError>> + Send;
+
+    fn upsert(
+        &mut self,
+        org_id: OrganizationId,
+        settings: &AutomationSettings,
+    ) -> impl Future<Output = Result<AutomationSettings, CoreError>> + Send;
+}
+
+/// One row of the delivery log, as an operator reads it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DeliveryRecord {
+    pub id: Uuid,
+    pub event_id: Uuid,
+    pub event_name: String,
+    pub status: String,
+    pub attempts: i32,
+    pub next_attempt_at: DateTime<Utc>,
+    pub last_error: Option<String>,
+    pub created_at: DateTime<Utc>,
+    pub completed_at: Option<DateTime<Utc>>,
+}
+
+#[cfg_attr(test, mockall::automock)]
+pub trait DeliveryLogRepository: Send {
+    fn list_by_organization(
+        &mut self,
+        org_id: OrganizationId,
+        limit: i64,
+        offset: i64,
+    ) -> impl Future<Output = Result<(Vec<DeliveryRecord>, i64), CoreError>> + Send;
+
+    /// Puts a finished delivery back in the queue. Scoped by `org_id` so an
+    /// organization cannot replay somebody else's.
+    fn replay(
+        &mut self,
+        org_id: OrganizationId,
+        delivery_id: Uuid,
+    ) -> impl Future<Output = Result<bool, CoreError>> + Send;
+}
