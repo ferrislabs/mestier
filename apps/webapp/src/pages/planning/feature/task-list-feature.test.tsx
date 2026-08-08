@@ -320,6 +320,41 @@ describe('TaskListFeature — pagination', () => {
 	})
 })
 
+describe('TaskListFeature — chargement du référentiel', () => {
+	it("n'affiche la table qu'une fois les tâches ET le référentiel chargés, jamais avec un assigné non résolu", async () => {
+		let resolvePlanning: (value: unknown) => void = () => {}
+		const planningPromise = new Promise((resolve) => {
+			resolvePlanning = resolve
+		})
+
+		renderFeature((api) => {
+			api.mockGet(TASKS_PATH, tasksHandler([task()]))
+			api.mockGet(PLANNING_PATH, () => planningPromise)
+		})
+
+		// The roster fetch is still pending — the table (and any assignee
+		// cell) must not render yet, even though the root tasks themselves
+		// may already have resolved.
+		expect(screen.getByText(/Chargement/)).toBeDefined()
+		expect(screen.queryByTestId('task-row-root-1')).toBeNull()
+		expect(screen.queryByText('Assigné inconnu')).toBeNull()
+
+		resolvePlanning({
+			data: {
+				timezone: 'Europe/Paris',
+				resources: [RESOURCE_EMPLOYEE],
+				entries: [],
+				work_time: [],
+			},
+			pagination: null,
+		})
+
+		expect(await screen.findByTestId('task-row-root-1')).toBeDefined()
+		expect(screen.getByText('Alix Martin')).toBeDefined()
+		expect(screen.queryByText('Assigné inconnu')).toBeNull()
+	})
+})
+
 describe('TaskListFeature — journée entière', () => {
 	it('une sous-tâche sans dates propres, sous une racine journée entière, affiche la date héritée sans horaire', async () => {
 		const { mockGet } = renderFeature((api) =>

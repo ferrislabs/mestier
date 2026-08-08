@@ -138,7 +138,14 @@ function TaskListScreen({
 	return (
 		<TaskListUI
 			organizationName={organizationName}
-			isLoading={rootTasksQuery.isLoading}
+			// Gated on both queries — `rootTasksQuery` alone would let the table
+			// render before `planningQuery`'s roster has loaded, and every
+			// assigned row would flash `resolveAssigneeNames`'s "Assigné inconnu"
+			// fallback before the real name arrives. That fallback means "the
+			// roster loaded and this id isn't in it" — showing it while the
+			// roster simply hasn't loaded yet would be a false statement, not a
+			// loading state.
+			isLoading={rootTasksQuery.isLoading || planningQuery.isLoading}
 			error={rootTasksQuery.error?.message ?? null}
 			rows={rows}
 			timeZone={timeZone}
