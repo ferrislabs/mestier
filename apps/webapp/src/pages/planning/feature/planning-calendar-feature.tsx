@@ -22,9 +22,17 @@ import {
 	type TaskSheetTarget,
 } from '#/pages/planning/feature/task-sheet-feature'
 import { buildCalendarModel } from '#/pages/planning/lib/build-calendar-model'
+import { buildMonthModel } from '#/pages/planning/lib/build-month-model'
 import type { CalendarFilter } from '#/pages/planning/lib/calendar-filters'
-import { computeWindow } from '#/pages/planning/lib/window'
-import { type PlanningView, todayIsoDate } from '#/pages/planning/types'
+import {
+	computeMonthGridWindow,
+	computeWindow,
+} from '#/pages/planning/lib/window'
+import {
+	type PlanningEntry,
+	type PlanningView,
+	todayIsoDate,
+} from '#/pages/planning/types'
 import type { CalendarEventCallbacks } from '#/pages/planning/ui/calendar-grid'
 import type { CalendarCreateKind } from '#/pages/planning/ui/calendar-toolbar'
 import { PlanningCalendarUI } from '#/pages/planning/ui/planning-calendar-ui'
@@ -105,7 +113,10 @@ function PlanningCalendarScreen({
 	onViewChange,
 	onDateChange,
 }: PlanningCalendarScreenProps) {
-	const range = computeWindow(view, date)
+	// La grille de mois affiche des semaines entières, donc quelques jours des
+	// mois voisins : elle demande une fenêtre plus large que le mois lui-même.
+	const range =
+		view === 'month' ? computeMonthGridWindow(date) : computeWindow(view, date)
 	const planningQuery = usePlanning(organizationId, range)
 	const data = planningQuery.data?.data ?? null
 	const timeZone = data?.timezone ?? DEFAULT_TIME_ZONE
@@ -141,6 +152,20 @@ function PlanningCalendarScreen({
 			employeeIds: selectedEmployeeIds,
 		})
 	}, [data, range.from, range.to, filter, selectedEmployeeIds])
+
+	const monthModel = useMemo(() => {
+		if (!data || view !== 'month') return null
+		return buildMonthModel({
+			from: range.from,
+			to: range.to,
+			month: date.slice(0, 7),
+			entries: data.entries,
+			timeZone: data.timezone,
+			today: todayIsoDate(),
+			filter,
+			employeeIds: selectedEmployeeIds,
+		})
+	}, [data, view, date, range.from, range.to, filter, selectedEmployeeIds])
 
 	const employees = useMemo(
 		() =>
@@ -202,21 +227,22 @@ function PlanningCalendarScreen({
 	}
 
 	/** Ce que le panneau de détail d'un événement peut déclencher. */
+	function openEntry(entry: PlanningEntry) {
+		if (entry.kind === 'task') {
+			setTaskSheetTarget({ mode: 'edit', taskId: entry.id })
+			return
+		}
+		if (entry.kind === 'absence') {
+			setAbsenceSheet({
+				mode: 'edit',
+				absenceId: entry.id,
+				draft: absenceToDraft(entry, timeZone),
+			})
+		}
+	}
+
 	const eventCallbacks: CalendarEventCallbacks = {
-		onOpen: (event) => {
-			const entry = event.entry
-			if (entry.kind === 'task') {
-				setTaskSheetTarget({ mode: 'edit', taskId: entry.id })
-				return
-			}
-			if (entry.kind === 'absence') {
-				setAbsenceSheet({
-					mode: 'edit',
-					absenceId: entry.id,
-					draft: absenceToDraft(entry, timeZone),
-				})
-			}
-		},
+		onOpen: (event) => openEntry(event.entry),
 		onChangeStatus: (event, status) => {
 			if (event.entry.kind !== 'task') return
 			void changeTaskStatus(event.entry.id, status)
@@ -305,6 +331,7 @@ function PlanningCalendarScreen({
 				isLoading={planningQuery.isLoading}
 				error={planningQuery.error?.message ?? null}
 				model={model}
+				monthModel={monthModel}
 				onViewChange={onViewChange}
 				onDateChange={onDateChange}
 				onFilterChange={setFilter}
@@ -312,6 +339,7 @@ function PlanningCalendarScreen({
 				onResetEmployees={() => setSelectedEmployeeIds([])}
 				onCreate={handleCreate}
 				eventCallbacks={eventCallbacks}
+				onSelectEntry={openEntry}
 				onRetry={() => void planningQuery.refetch()}
 			/>
 
