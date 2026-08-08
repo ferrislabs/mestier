@@ -1,7 +1,6 @@
 #[cfg(test)]
 #[allow(clippy::module_inception)]
 mod tests {
-    use std::sync::Arc;
 
     use chrono::NaiveDate;
     use common::{OrganizationId, UserId, generate_uuid_v7};
@@ -13,7 +12,7 @@ mod tests {
         DateRange,
         commands::{ReplaceRhythmCommand, ReplaceWorkSlotsCommand, RhythmSlotInput, WorkSlotInput},
     };
-    use crate::infrastructure::realtime::{EventHub, RealtimeEventPublisher};
+    use crate::infrastructure::realtime::EventHub;
 
     fn date(y: i32, m: u32, d: u32) -> NaiveDate {
         NaiveDate::from_ymd_opt(y, m, d).unwrap()
@@ -26,9 +25,7 @@ mod tests {
     }
 
     fn make_usecase(pool: PgPool) -> MestierUseCase {
-        let hub = EventHub::new();
-        let publisher = Arc::new(RealtimeEventPublisher::new(hub));
-        MestierUseCase::new(pool, default_authorizer(), publisher)
+        MestierUseCase::new(pool, default_authorizer(), EventHub::new())
     }
 
     struct Fixture {

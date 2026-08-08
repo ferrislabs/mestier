@@ -1,7 +1,6 @@
 #[cfg(test)]
 #[allow(clippy::module_inception)]
 mod tests {
-    use std::sync::Arc;
 
     use chrono::{Duration, Utc};
     use common::{OrganizationId, UserId, generate_uuid_v7};
@@ -12,7 +11,7 @@ mod tests {
         AssigneeRef,
         commands::{CreateTaskCommand, PatchTaskCommand},
     };
-    use crate::infrastructure::realtime::{EventHub, RealtimeEventPublisher};
+    use crate::infrastructure::realtime::EventHub;
     use crate::{CustomerContextId, CustomerId, EmployeeId, TaskId, TaskStatus};
 
     async fn make_pool() -> PgPool {
@@ -22,9 +21,7 @@ mod tests {
     }
 
     fn make_usecase(pool: PgPool) -> MestierUseCase {
-        let hub = EventHub::new();
-        let publisher = Arc::new(RealtimeEventPublisher::new(hub));
-        MestierUseCase::new(pool, default_authorizer(), publisher)
+        MestierUseCase::new(pool, default_authorizer(), EventHub::new())
     }
 
     struct Fixture {

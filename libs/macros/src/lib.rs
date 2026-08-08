@@ -104,15 +104,21 @@ impl Parse for KeyValue {
 /// `registry::domain::*`, and resolved via the active [`Backend`] alias to its
 /// concrete repository. The resulting binding is named `{name}_repository`.
 ///
-/// The special name `authz` is reserved: it does not refer to a repository
-/// but to `self.authz` (the use-case's [`Authorizer`]). The macro emits a
-/// `let authz = &self.authz;` binding that callers pass to services generic
-/// over `A: Authorizer`.
+/// Two special names are reserved and do not refer to repositories:
+///
+/// - `authz` emits `let authz = &self.authz;` (the use-case's [`Authorizer`]),
+///   which callers pass to services generic over `A: Authorizer`.
+/// - `events` emits a `RealtimeEventPublisher` built from `self.hub`, scoped to
+///   this transaction. Building it here rather than holding one on the use case
+///   is deliberate: a publisher shared between requests means one buffer for
+///   the whole process, and the first transaction to flush drains everybody
+///   else's events onto its own organization's channel.
 ///
 /// # Conventions
 /// - `self` must have a `pool: PgPool` field.
 /// - When `authz` is listed, `self` must also have an `authz` field whose
 ///   type implements [`authz::Authorizer`].
+/// - When `events` is listed, `self` must also have a `hub: EventHub` field.
 /// - Each listed domain (other than `authz`) must have a registered impl
 ///   (see `#[repository]`).
 ///
@@ -144,6 +150,17 @@ pub fn transactional(args: TokenStream, input: TokenStream) -> TokenStream {
             // Non-repository binding: expose `&self.authz` under the name
             // `authz` for the wrapped body.
             return quote! { let authz = &self.authz; };
+        }
+        if name == "events" {
+            // Non-repository binding: a publisher scoped to *this* transaction.
+            // It is built here, and nowhere else, so no two transactions can
+            // ever share a buffer — which is how events used to be delivered
+            // to the wrong organization.
+            return quote! {
+                let events = ::mestier_core::infrastructure::realtime::RealtimeEventPublisher::new(
+                    self.hub.clone(),
+                );
+            };
         }
         let binding = Ident::new(&format!("{name}_repository"), name.span());
         let domain_ty = Ident::new(&pascal_case(&name.to_string()), name.span());

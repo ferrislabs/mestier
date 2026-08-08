@@ -1,5 +1,3 @@
-use std::sync::Arc;
-
 use auth::{AuthService, FerrisKeyRepository};
 use authz::LocalPolicyEngine;
 use common::{Config, CoreError};
@@ -11,7 +9,7 @@ use crate::domain::file_storage::service::FileStorageService;
 use crate::domain::role::Permissions;
 use crate::infrastructure::file_storage::S3FileStorage;
 use crate::infrastructure::postgres::error::map_sqlx_error;
-use crate::infrastructure::realtime::{EventHub, RealtimeEventPublisher};
+use crate::infrastructure::realtime::EventHub;
 
 pub mod absence;
 pub mod authorization;
@@ -73,20 +71,12 @@ pub fn default_authorizer() -> MestierAuthorizer {
 pub struct MestierUseCase {
     pub(crate) pool: PgPool,
     pub(crate) authz: MestierAuthorizer,
-    pub(crate) events: Arc<RealtimeEventPublisher>,
+    pub(crate) hub: EventHub,
 }
 
 impl MestierUseCase {
-    pub fn new(
-        pool: PgPool,
-        authz: MestierAuthorizer,
-        events: Arc<RealtimeEventPublisher>,
-    ) -> Self {
-        Self {
-            pool,
-            authz,
-            events,
-        }
+    pub fn new(pool: PgPool, authz: MestierAuthorizer, hub: EventHub) -> Self {
+        Self { pool, authz, hub }
     }
 }
 
@@ -151,24 +141,19 @@ pub async fn create_service(config: Config) -> Result<MestierService, CoreError>
     let rate_limit_quota = Quota::per_minute(config.rate_limit.per_minute);
 
     let hub = EventHub::new();
-    let publisher = Arc::new(RealtimeEventPublisher::new(hub.clone()));
 
     Ok(MestierService::new(
         auth,
         file_storage,
-        MestierUseCase::new(pool, default_authorizer(), publisher),
+        MestierUseCase::new(pool, default_authorizer(), hub.clone()),
         rate_limit,
         rate_limit_quota,
         hub,
     ))
 }
 
-#[cfg(test)]
-mod tests {
-    #[test]
-    fn mestier_use_case_has_events_field() {
-        // Verifies the struct compiles with the new field.
-        // Actual behavior is tested in Task 10.
-        let _ = std::any::type_name::<crate::application::MestierUseCase>();
-    }
-}
+// `MestierUseCase` deliberately holds no event publisher. It is long-lived and
+// cloned into every request, so any publisher stored here would be one shared
+// buffer for the whole process — which is precisely how events reached the
+// wrong organization. `#[transactional(events)]` builds one per transaction
+// instead; see `mestier_macros::transactional`.
