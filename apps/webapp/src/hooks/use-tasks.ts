@@ -60,6 +60,29 @@ export function useSubtasks(
 	})
 }
 
+/**
+ * The task list view's root rows — `GET /tasks` with no `parent_task_id`
+ * lists root tasks and populates each one's `child_count`, computed
+ * server-side without loading the hierarchy (see the planning remodel
+ * design doc's API section). Paginated, unlike {@link useSubtasks}: the
+ * list view's whole reason to exist is browsing every task, so it can't
+ * assume a small fixed page the way a single task's subtasks tab can.
+ */
+export function useRootTasks(
+	organizationId: string,
+	page: number,
+	perPage: number,
+	enabled = true,
+) {
+	return useQuery({
+		...window.tanstackApi.get(TASKS_PATH, {
+			path: { organization_id: organizationId },
+			query: { page, per_page: perPage },
+		}).queryOptions,
+		enabled: enabled && Boolean(organizationId),
+	})
+}
+
 export function useTask(
 	organizationId: string,
 	taskId: string,

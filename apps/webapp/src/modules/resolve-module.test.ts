@@ -37,5 +37,6 @@ describe('resolveModule', () => {
 	it('résout les pages de planning vers le module planning', () => {
 		expect(resolveModule('/planning').id).toBe('planning')
 		expect(resolveModule('/planning/team').id).toBe('planning')
+		expect(resolveModule('/planning/tasks').id).toBe('planning')
 	})
 })

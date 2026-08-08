@@ -71,6 +71,14 @@ describe('buildBreadcrumbItems', () => {
 			'Vue équipe',
 		])
 	})
+
+	it('résout le fil de la liste des tâches', () => {
+		expect(labelsOf('/planning/tasks')).toEqual([
+			'Baptiste',
+			'Planning',
+			'Liste des tâches',
+		])
+	})
 })
 
 describe('matchingNavItems', () => {
