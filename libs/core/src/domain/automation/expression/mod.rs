@@ -88,4 +88,18 @@ mod tests {
 
         assert_eq!(result, json!({ "a": 1, "b": [true, null] }));
     }
+
+    #[test]
+    fn a_plain_string_with_no_braces_is_a_static_literal() {
+        let template =
+            parse_template(&json!("hello world")).expect("plain text is a valid template");
+        let connectors = BTreeMap::new();
+        let ctx = empty_context(&connectors);
+
+        assert!(template.is_static());
+        assert_eq!(
+            template.evaluate(&ctx).expect("a literal never fails"),
+            json!("hello world")
+        );
+    }
 }
