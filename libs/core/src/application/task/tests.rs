@@ -63,12 +63,11 @@ mod tests {
 
         let customer_id = generate_uuid_v7();
         sqlx::query!(
-            r#"INSERT INTO customers (id, org_id, last_name, first_name)
-               VALUES ($1, $2, $3, $4)"#,
+            r#"INSERT INTO customers (id, org_id, name)
+               VALUES ($1, $2, $3)"#,
             customer_id,
             org_id,
-            "Dupont",
-            "Alice",
+            "Alice Dupont",
         )
         .execute(pool)
         .await
@@ -711,6 +710,9 @@ mod tests {
         .unwrap();
 
         let customer_id = generate_uuid_v7();
+        // This test pins the schema at 20260807000004, before customers traded
+        // `first_name`/`last_name` for a single `name` — the fixture must speak
+        // the schema of that point in history, not today's.
         sqlx::query(
             r#"INSERT INTO customers (id, org_id, last_name, first_name) VALUES ($1, $2, $3, $4)"#,
         )

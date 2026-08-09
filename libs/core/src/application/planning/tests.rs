@@ -61,12 +61,11 @@ mod tests {
 
         let customer_id = generate_uuid_v7();
         sqlx::query!(
-            r#"INSERT INTO customers (id, org_id, last_name, first_name)
-               VALUES ($1, $2, $3, $4)"#,
+            r#"INSERT INTO customers (id, org_id, name)
+               VALUES ($1, $2, $3)"#,
             customer_id,
             org_id,
-            "Dupont",
-            "Alice",
+            "Alice Dupont",
         )
         .execute(pool)
         .await

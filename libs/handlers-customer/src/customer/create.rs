@@ -11,8 +11,7 @@ use crate::{paths::CustomersPath, require_org_membership, response::CustomerResp
 pub struct CreateCustomerRequest {
     pub status: CustomerStatus,
     pub pipeline_stage: CustomerPipelineStage,
-    pub last_name: String,
-    pub first_name: String,
+    pub name: String,
     pub phone: Option<String>,
     pub email: Option<String>,
 }
@@ -51,8 +50,7 @@ pub async fn handler(
             organization_id: path.organization_id,
             status: payload.status,
             pipeline_stage: payload.pipeline_stage,
-            last_name: payload.last_name,
-            first_name: payload.first_name,
+            name: payload.name,
             phone: payload.phone,
             email: payload.email,
         })

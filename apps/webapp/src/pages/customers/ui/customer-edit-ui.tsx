@@ -143,7 +143,7 @@ export function CustomerEditUI({
 	onRetryCustomerContacts,
 	onRetryCustomerContexts,
 }: CustomerEditUIProps) {
-	const displayName = `${form.firstName} ${form.lastName}`.trim()
+	const displayName = form.name.trim()
 	const canSubmitCustomerContact =
 		Boolean(customerContactDraft.firstName.trim()) &&
 		Boolean(customerContactDraft.lastName.trim())
@@ -195,22 +195,13 @@ export function CustomerEditUI({
 					description="Informations principales et statut CRM"
 					className="lg:col-span-2"
 				>
-					<div className="grid gap-4 md:grid-cols-2">
-						<Field
-							label="Prénom"
-							name="firstName"
-							value={form.firstName}
-							onChange={(v) => onChange({ firstName: v })}
-							changed={changedKeys.includes('firstName')}
-						/>
-						<Field
-							label="Nom"
-							name="lastName"
-							value={form.lastName}
-							onChange={(v) => onChange({ lastName: v })}
-							changed={changedKeys.includes('lastName')}
-						/>
-					</div>
+					<Field
+						label="Nom ou raison sociale"
+						name="name"
+						value={form.name}
+						onChange={(v) => onChange({ name: v })}
+						changed={changedKeys.includes('name')}
+					/>
 					<div className="flex flex-col gap-2">
 						<Label htmlFor="customer-status">
 							Statut CRM

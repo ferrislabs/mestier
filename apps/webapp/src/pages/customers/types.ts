@@ -9,8 +9,8 @@ import type {
 export interface CustomerFormValues {
 	status: CustomerStatus
 	pipelineStage: CustomerPipelineStage
-	firstName: string
-	lastName: string
+	/** Raison sociale ou nom complet — un client est une entité, pas une personne. */
+	name: string
 	email: string
 	phone: string
 }
@@ -33,13 +33,18 @@ export interface CustomerContextFormValues {
 }
 
 export function customerDisplayName(customer: Customer): string {
-	return `${customer.first_name} ${customer.last_name}`.trim()
+	return customer.name.trim()
 }
 
+/**
+ * Deux initiales au plus. Un client est une entité : « Mairie de Saint-Julien »
+ * donne « MS », « Marie Leroy » donne « ML ».
+ */
 export function customerInitials(customer: Customer): string {
-	const parts = [customer.first_name, customer.last_name].filter(Boolean)
 	return (
-		parts
+		customer.name
+			.split(/\s+/)
+			.filter(Boolean)
 			.slice(0, 2)
 			.map((part) => part[0]?.toUpperCase() ?? '')
 			.join('') || 'C'
@@ -50,8 +55,7 @@ export function customerToForm(customer: Customer): CustomerFormValues {
 	return {
 		status: customer.status,
 		pipelineStage: customer.pipeline_stage,
-		firstName: customer.first_name,
-		lastName: customer.last_name,
+		name: customer.name,
 		email: customer.email ?? '',
 		phone: customer.phone ?? '',
 	}

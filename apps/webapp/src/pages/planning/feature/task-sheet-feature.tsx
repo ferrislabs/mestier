@@ -355,7 +355,7 @@ export function TaskSheetFeature({
 	)
 	const customerOptions = (customersQuery.data?.data ?? []).map((customer) => ({
 		id: customer.id,
-		displayName: `${customer.last_name} ${customer.first_name}`.trim(),
+		displayName: customer.name.trim(),
 	}))
 	// Edit mode's static customer display: `TaskResponse` carries only
 	// `customer_id`, no name — resolved against the same customer list the

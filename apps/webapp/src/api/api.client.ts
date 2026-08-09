@@ -103,8 +103,7 @@ export namespace Schemas {
   export type CustomerStatus = "PROSPECT" | "CLIENT" | "ARCHIVED";
   export type CreateCustomerRequest = {
     email?: (string | null) | undefined;
-    first_name: string;
-    last_name: string;
+    name: string;
     phone?: (string | null) | undefined;
     pipeline_stage: CustomerPipelineStage;
     status: CustomerStatus;
@@ -196,9 +195,8 @@ export namespace Schemas {
   export type CustomerResponse = {
     created_at: string;
     email?: (string | null) | undefined;
-    first_name: string;
     id: CustomerId;
-    last_name: string;
+    name: string;
     organization_id: OrganizationId;
     phone?: (string | null) | undefined;
     pipeline_stage: CustomerPipelineStage;
@@ -485,8 +483,7 @@ export namespace Schemas {
   };
   export type UpdateCustomerRequest = {
     email?: (string | null) | undefined;
-    first_name: string;
-    last_name: string;
+    name: string;
     phone?: (string | null) | undefined;
     pipeline_stage: CustomerPipelineStage;
     status: CustomerStatus;
@@ -1510,9 +1507,8 @@ export namespace Endpoints {
         data: {
           created_at: string;
           email?: (string | null) | undefined;
-          first_name: string;
           id: Schemas.CustomerId;
-          last_name: string;
+          name: string;
           organization_id: Schemas.OrganizationId;
           phone?: (string | null) | undefined;
           pipeline_stage: Schemas.CustomerPipelineStage;
@@ -1549,9 +1545,8 @@ export namespace Endpoints {
         data: {
           created_at: string;
           email?: (string | null) | undefined;
-          first_name: string;
           id: Schemas.CustomerId;
-          last_name: string;
+          name: string;
           organization_id: Schemas.OrganizationId;
           phone?: (string | null) | undefined;
           pipeline_stage: Schemas.CustomerPipelineStage;
@@ -2055,9 +2050,8 @@ export namespace Endpoints {
         data: Array<{
           created_at: string;
           email?: (string | null) | undefined;
-          first_name: string;
           id: Schemas.CustomerId;
-          last_name: string;
+          name: string;
           organization_id: Schemas.OrganizationId;
           phone?: (string | null) | undefined;
           pipeline_stage: Schemas.CustomerPipelineStage;
@@ -2084,9 +2078,8 @@ export namespace Endpoints {
         data: {
           created_at: string;
           email?: (string | null) | undefined;
-          first_name: string;
           id: Schemas.CustomerId;
-          last_name: string;
+          name: string;
           organization_id: Schemas.OrganizationId;
           phone?: (string | null) | undefined;
           pipeline_stage: Schemas.CustomerPipelineStage;

@@ -81,7 +81,7 @@ impl<'tx> PlanningRepository for PgPlanningRepository<'tx> {
                 -- customer-less task) — `?` forces the `Option<String>`
                 -- decode the nullable join actually requires, matching
                 -- `PlanningTaskRow::customer_name`'s declared type.
-                (c.first_name || ' ' || c.last_name) AS "customer_name?",
+                c.name AS "customer_name?",
                 cc.label AS "context_label?",
                 COALESCE(child_counts.count, 0) AS "child_count!"
             FROM tasks t
