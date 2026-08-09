@@ -1,7 +1,7 @@
 use std::{fmt::Display, str::FromStr};
 
 use chrono::{DateTime, Utc};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 use uuid::Uuid;
 
@@ -11,7 +11,7 @@ pub mod commands;
 pub mod ports;
 pub mod service;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, ToSchema)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, ToSchema)]
 pub struct MemberId(pub Uuid);
 
 impl FromStr for MemberId {
@@ -88,6 +88,16 @@ mod tests {
     #[test]
     fn member_id_rejects_invalid_uuid() {
         assert!(MemberId::from_str("not-a-uuid").is_err());
+    }
+
+    #[test]
+    fn member_id_deserializes_from_a_json_string() {
+        let uuid = Uuid::new_v4();
+        let value = serde_json::json!(uuid.to_string());
+
+        let parsed: MemberId = serde_json::from_value(value).unwrap();
+
+        assert_eq!(parsed.0, uuid);
     }
 
     #[test]

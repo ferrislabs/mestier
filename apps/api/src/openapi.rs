@@ -6,6 +6,7 @@ use utoipa::{
 use handlers_customer as customer;
 use handlers_discord as discord;
 use handlers_files as files;
+use handlers_member as member;
 use handlers_organization as organization;
 use handlers_planning as planning;
 use handlers_quote as quote;
@@ -48,6 +49,11 @@ impl Modify for SecurityAddon {
         customer::customer_context::get_one::handler,
         customer::customer_context::update::handler,
         customer::customer_context::soft_delete::handler,
+        member::member::list::handler,
+        member::member::create::handler,
+        member::member::get_one::handler,
+        member::member::update::handler,
+        member::member::soft_delete::handler,
         organization::create::handler,
         organization::list::handler,
         organization::list_mine::handler,
@@ -161,6 +167,10 @@ impl Modify for SecurityAddon {
         quote::quote::update_status::UpdateQuoteStatusRequest,
         quote::response::QuoteLineResponse,
         quote::response::QuoteResponse,
+        member::member::create::CreateMemberRequest,
+        member::member::update::UpdateMemberRequest,
+        member::response::MemberResponse,
+        member::response::MemberAccountResponse,
         reference::employee::create::CreateEmployeeRequest,
         reference::employee::update::UpdateEmployeeRequest,
         reference::equipment::create::CreateEquipmentRequest,
@@ -242,6 +252,7 @@ impl Modify for SecurityAddon {
         (name = "files", description = "File uploads and storage"),
         (name = "customers", description = "Customers and customer contexts management"),
         (name = "quotes", description = "Quotes and quote lines management"),
+        (name = "members", description = "Organization seats — free or occupied, no account required"),
         (name = "reference", description = "Reference cost catalog"),
         (name = "planning", description = "Team planning — tasks, assignments, working time and availability"),
         (name = "discord", description = "Chat — categories, channels, threads, messages, reactions, webhooks, presence, typing, read states, channel permission overwrites, notifications"),

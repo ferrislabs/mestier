@@ -95,12 +95,27 @@ where
         self.repo.update(&member).await
     }
 
+    /// Mirrors `EmployeeService::get_employee`: a member fetched by id must
+    /// exist, or the caller gets `NotFound` rather than an `Option` to
+    /// unwrap at every call site.
+    #[tracing::instrument(skip(self), fields(member_id = %member_id.0), err)]
+    pub async fn get_member(&mut self, member_id: MemberId) -> Result<Member, CoreError> {
+        self.repo
+            .find_by_id(member_id)
+            .await?
+            .ok_or(CoreError::NotFound)
+    }
+
     #[tracing::instrument(skip(self), fields(organization_id = %organization_id.0), err)]
     pub async fn list_members(
         &mut self,
         organization_id: OrganizationId,
-    ) -> Result<Vec<Member>, CoreError> {
-        self.repo.list_by_organization(organization_id).await
+        limit: u64,
+        offset: u64,
+    ) -> Result<(Vec<Member>, u64), CoreError> {
+        self.repo
+            .list_by_organization(organization_id, limit, offset)
+            .await
     }
 
     #[tracing::instrument(skip(self), fields(organization_id = %organization_id.0, user_id = %user_id.0), err)]
@@ -371,18 +386,49 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn list_members_delegates_to_repo() {
+    async fn list_members_delegates_to_repo_with_pagination() {
         let oid = org_id();
         let mut repo = MockMemberRepository::new();
         repo.expect_list_by_organization()
-            .with(eq(oid))
+            .with(eq(oid), eq(20u64), eq(40u64))
             .times(1)
-            .returning(|_| Box::pin(async { Ok(vec![]) }));
+            .returning(|_, _, _| Box::pin(async { Ok((vec![], 0)) }));
 
         let mut service = MemberService::new(repo);
-        let members = service.list_members(oid).await.unwrap();
+        let (members, total) = service.list_members(oid, 20, 40).await.unwrap();
 
         assert!(members.is_empty());
+        assert_eq!(total, 0);
+    }
+
+    #[tokio::test]
+    async fn get_member_returns_the_member_when_present() {
+        let id = MemberId(Uuid::new_v4());
+        let mut repo = MockMemberRepository::new();
+        repo.expect_find_by_id()
+            .with(eq(id))
+            .times(1)
+            .returning(move |_| Box::pin(async move { Ok(Some(member(id))) }));
+
+        let mut service = MemberService::new(repo);
+        let found = service.get_member(id).await.unwrap();
+
+        assert_eq!(found.id, id);
+    }
+
+    #[tokio::test]
+    async fn get_member_returns_not_found_when_absent() {
+        let id = MemberId(Uuid::new_v4());
+        let mut repo = MockMemberRepository::new();
+        repo.expect_find_by_id()
+            .with(eq(id))
+            .times(1)
+            .returning(|_| Box::pin(async { Ok(None) }));
+
+        let mut service = MemberService::new(repo);
+        let err = service.get_member(id).await.unwrap_err();
+
+        assert!(matches!(err, CoreError::NotFound));
     }
 
     #[tokio::test]

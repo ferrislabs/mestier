@@ -20,8 +20,23 @@ pub trait MemberRepository: Send {
         member_id: MemberId,
     ) -> impl Future<Output = Result<Option<Member>, CoreError>> + Send;
 
-    /// Active members (`deleted_at IS NULL`) only.
+    /// Active members (`deleted_at IS NULL`) only. Mirrors
+    /// `EmployeeRepository::list_by_organization`: `limit`/`offset` page the
+    /// result and the `u64` is the total active-member count for the
+    /// organization, independent of the page.
     fn list_by_organization(
+        &mut self,
+        organization_id: OrganizationId,
+        limit: u64,
+        offset: u64,
+    ) -> impl Future<Output = Result<(Vec<Member>, u64), CoreError>> + Send;
+
+    /// Every active member of the organization, unpaginated. Mirrors
+    /// `EmployeeRepository::list_active_by_organization`: added for the
+    /// planning read model, which needs the whole roster in one query to
+    /// dedup against employees, never one page at a time (see
+    /// `PlanningService::load_resources`).
+    fn list_active_by_organization(
         &mut self,
         organization_id: OrganizationId,
     ) -> impl Future<Output = Result<Vec<Member>, CoreError>> + Send;

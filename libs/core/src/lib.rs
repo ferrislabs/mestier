@@ -34,6 +34,9 @@ pub use domain::{
     employee::commands::{CreateEmployeeCommand, LinkEmployeeUserCommand, UpdateEmployeeCommand},
     equipment::commands::{CreateEquipmentCommand, UpdateEquipmentCommand},
     file_storage::commands::UploadFileCommand,
+    member::commands::{
+        AddMemberCommand, AssignRoleCommand, CreateMemberCommand, UpdateMemberCommand,
+    },
     organization::commands::{CreateOrganizationCommand, UpdateOrganizationCommand},
     planning::service::detect_conflicts,
     product::commands::{CreateProductCommand, UpdateProductCommand},

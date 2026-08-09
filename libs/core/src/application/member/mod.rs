@@ -37,13 +37,23 @@ impl MestierUseCase {
         service.update_member(command).await
     }
 
+    /// `CoreError::NotFound` when no active seat exists for `member_id`.
+    /// Mirrors `MestierUseCase::get_employee`.
+    #[transactional(member)]
+    pub async fn get_member(&self, member_id: MemberId) -> Result<Member, CoreError> {
+        let mut service = MemberService::new(member_repository);
+        service.get_member(member_id).await
+    }
+
     #[transactional(member)]
     pub async fn list_members(
         &self,
         organization_id: OrganizationId,
-    ) -> Result<Vec<Member>, CoreError> {
+        limit: u64,
+        offset: u64,
+    ) -> Result<(Vec<Member>, u64), CoreError> {
         let mut service = MemberService::new(member_repository);
-        service.list_members(organization_id).await
+        service.list_members(organization_id, limit, offset).await
     }
 
     #[transactional(member)]
