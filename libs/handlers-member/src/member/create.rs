@@ -1,11 +1,11 @@
 use auth::Identity;
 use axum::{Extension, Json, extract::State};
 use handlers::{ApiError, AppState, DataEnvelope, Response, resolve_user_id};
-use mestier_core::CreateMemberCommand;
+use mestier_core::{CreateMemberCommand, application::policy};
 use serde::Deserialize;
 use utoipa::ToSchema;
 
-use crate::{paths::MembersPath, require_permission, response::MemberResponse};
+use crate::{paths::MembersPath, response::MemberResponse};
 
 /// A free, named seat — no `user_id`. Occupying it is an invitation concern
 /// (#184), not part of creating the seat itself.
@@ -42,13 +42,15 @@ pub async fn handler(
     Extension(identity): Extension<Identity>,
     Json(payload): Json<CreateMemberRequest>,
 ) -> Result<Response<MemberResponse>, ApiError> {
-    require_permission(&state, &identity, path.organization_id, "member.manage").await?;
-    let actor = resolve_user_id(&state, &identity).await?;
+    let user_id = resolve_user_id(&state, &identity).await?;
+    // TODO: thread JWT realm roles once Identity exposes them.
+    let actor = policy::user_subject(user_id, Vec::new());
 
     let member = state
         .usecase
-        .acting_as(actor)
+        .acting_as(user_id)
         .create_member(CreateMemberCommand {
+            actor,
             organization_id: path.organization_id,
             last_name: payload.last_name,
             first_name: payload.first_name,

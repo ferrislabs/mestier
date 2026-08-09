@@ -5,12 +5,11 @@ use axum::{
 };
 use handlers::{
     ApiError, AppState, DataEnvelope, Page, PaginationMetadata, PaginationParams, Response,
+    resolve_user_id,
 };
-use mestier_core::UserId;
+use mestier_core::application::policy;
 
-use crate::{
-    paths::MembersPath, require_org_membership, resolve_accounts, response::MemberResponse,
-};
+use crate::{paths::MembersPath, response::MemberResponse};
 
 #[utoipa::path(
     get,
@@ -35,29 +34,23 @@ pub async fn handler(
     Extension(identity): Extension<Identity>,
     Query(pagination): Query<PaginationParams>,
 ) -> Result<Response<MemberResponse>, ApiError> {
-    require_org_membership(&state, &identity, path.organization_id).await?;
+    let user_id = resolve_user_id(&state, &identity).await?;
+    // TODO: thread JWT realm roles once Identity exposes them.
+    let actor = policy::user_subject(user_id, Vec::new());
 
     let per_page = pagination.per_page();
     let page = pagination.page();
     let offset = pagination.offset();
+
+    // Membership check and per-row account hydration both happen inside
+    // `MemberService::list_members` — one query for every occupied seat's
+    // account, not one per row.
     let (members, total) = state
         .usecase
-        .list_members(path.organization_id, per_page, offset)
+        .list_members(actor, path.organization_id, per_page, offset)
         .await?;
 
-    // One query for every occupied seat's account, not one per row.
-    let user_ids: Vec<UserId> = members.iter().filter_map(|member| member.user_id).collect();
-    let accounts = resolve_accounts(&state, &user_ids).await?;
-
-    let items: Vec<MemberResponse> = members
-        .into_iter()
-        .map(|member| {
-            let account = member.user_id.and_then(|id| accounts.get(&id).cloned());
-            let mut response = MemberResponse::from(member);
-            response.account = account;
-            response
-        })
-        .collect();
+    let items: Vec<MemberResponse> = members.into_iter().map(MemberResponse::from).collect();
     let is_empty = items.is_empty();
     let meta = PaginationMetadata::new(per_page, page, Some(total), is_empty);
 

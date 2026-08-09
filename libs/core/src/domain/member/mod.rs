@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 use uuid::Uuid;
 
-use crate::{UserId, domain::organization::OrganizationId};
+use crate::{UserId, domain::organization::OrganizationId, domain::user::User};
 
 pub mod commands;
 pub mod ports;
@@ -51,6 +51,17 @@ impl Member {
     pub fn display_name(&self) -> String {
         format_person_name(&self.last_name, self.first_name.as_deref())
     }
+}
+
+/// A seat together with its occupant, read out in a single service call so
+/// the HTTP layer never has to make a second business call to hydrate the
+/// account itself — see `MemberService::get_member` and
+/// `MemberService::list_members`.
+#[derive(Debug, Clone)]
+pub struct MemberWithAccount {
+    pub member: Member,
+    /// `None` when the seat is vacant, or when the linked user row is gone.
+    pub account: Option<User>,
 }
 
 /// "{last_name} {first_name}" — last name first, then first name, in that

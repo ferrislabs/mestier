@@ -1,9 +1,9 @@
 use auth::Identity;
 use axum::{Extension, extract::State};
-use handlers::{ApiError, AppState, DataEnvelope, Response};
-use mestier_core::MemberId;
+use handlers::{ApiError, AppState, DataEnvelope, Response, resolve_user_id};
+use mestier_core::{MemberId, application::policy};
 
-use crate::{paths::MemberPath, require_org_membership, resolve_account, response::MemberResponse};
+use crate::{paths::MemberPath, response::MemberResponse};
 
 #[utoipa::path(
     get,
@@ -26,15 +26,14 @@ pub async fn handler(
     State(state): State<AppState>,
     Extension(identity): Extension<Identity>,
 ) -> Result<Response<MemberResponse>, ApiError> {
-    // Load first, then check the organization from the loaded resource —
-    // never from the path — so a member from another organization is a 403
-    // rather than an IDOR that leaks its data.
-    let member = state.usecase.get_member(member_id).await?;
-    require_org_membership(&state, &identity, member.organization_id).await?;
+    let user_id = resolve_user_id(&state, &identity).await?;
+    // TODO: thread JWT realm roles once Identity exposes them.
+    let actor = policy::user_subject(user_id, Vec::new());
 
-    let account = resolve_account(&state, member.user_id).await?;
-    let mut response = MemberResponse::from(member);
-    response.account = account;
+    // Loading the seat and checking its organization — never the path's —
+    // now happens inside `MemberService::get_member`, which also hydrates
+    // the occupant in the same call.
+    let member = state.usecase.get_member(actor, member_id).await?;
 
-    Ok(Response::OK(response))
+    Ok(Response::OK(member.into()))
 }

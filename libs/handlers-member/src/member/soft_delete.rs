@@ -1,9 +1,9 @@
 use auth::Identity;
 use axum::{Extension, extract::State};
 use handlers::{ApiError, AppState, Response, resolve_user_id};
-use mestier_core::MemberId;
+use mestier_core::{MemberId, application::policy};
 
-use crate::{EmptyResponse, paths::MemberPath, require_permission};
+use crate::{EmptyResponse, paths::MemberPath};
 
 #[utoipa::path(
     delete,
@@ -26,17 +26,16 @@ pub async fn handler(
     State(state): State<AppState>,
     Extension(identity): Extension<Identity>,
 ) -> Result<Response<EmptyResponse>, ApiError> {
-    // Load first, then check the organization from the loaded resource —
-    // never from the path — so a member from another organization is a 403
-    // rather than an IDOR that leaks its data.
-    let current = state.usecase.get_member(member_id).await?;
-    require_permission(&state, &identity, current.organization_id, "member.remove").await?;
-    let actor = resolve_user_id(&state, &identity).await?;
+    let user_id = resolve_user_id(&state, &identity).await?;
+    // TODO: thread JWT realm roles once Identity exposes them.
+    let actor = policy::user_subject(user_id, Vec::new());
 
+    // Loading the seat and checking its organization — never the path's —
+    // now happens inside `MemberService::remove_member`.
     state
         .usecase
-        .acting_as(actor)
-        .remove_member(member_id)
+        .acting_as(user_id)
+        .remove_member(actor, member_id)
         .await?;
 
     Ok(Response::NoContent)

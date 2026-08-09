@@ -1,11 +1,11 @@
 use auth::Identity;
 use axum::{Extension, Json, extract::State};
 use handlers::{ApiError, AppState, DataEnvelope, Response, resolve_user_id};
-use mestier_core::UpdateMemberCommand;
+use mestier_core::{UpdateMemberCommand, application::policy};
 use serde::{Deserialize, Deserializer};
 use utoipa::ToSchema;
 
-use crate::{paths::MemberPath, require_permission, resolve_account, response::MemberResponse};
+use crate::{paths::MemberPath, response::MemberResponse};
 
 /// Distinguishes "the key is absent" (leave `first_name` unchanged) from
 /// "the key is present" (apply it, `null` included) — plain
@@ -62,39 +62,26 @@ pub async fn handler(
     Extension(identity): Extension<Identity>,
     Json(payload): Json<UpdateMemberRequest>,
 ) -> Result<Response<MemberResponse>, ApiError> {
-    // Load first, then check the organization from the loaded resource —
-    // never from the path — so a member from another organization is a 403
-    // rather than an IDOR that leaks its data.
-    let current = state.usecase.get_member(member_id).await?;
-    require_permission(&state, &identity, current.organization_id, "member.manage").await?;
-    let actor = resolve_user_id(&state, &identity).await?;
+    let user_id = resolve_user_id(&state, &identity).await?;
+    // TODO: thread JWT realm roles once Identity exposes them.
+    let actor = policy::user_subject(user_id, Vec::new());
 
-    // `UpdateMemberCommand` takes final values, not a patch — the read side
-    // of the PATCH semantics lives here: an absent field falls back to the
-    // value already on the loaded member instead of being reset.
-    let last_name = payload
-        .last_name
-        .unwrap_or_else(|| current.last_name.clone());
-    let first_name = match payload.first_name {
-        Some(value) => value,
-        None => current.first_name.clone(),
-    };
-
+    // Loading the seat, checking its organization — never the path's — and
+    // applying the PATCH's partial-update semantics (an absent field falls
+    // back to the value already stored) all happen inside
+    // `MemberService::update_member`, which also hydrates the occupant.
     let member = state
         .usecase
-        .acting_as(actor)
+        .acting_as(user_id)
         .update_member(UpdateMemberCommand {
+            actor,
             member_id,
-            last_name,
-            first_name,
+            last_name: payload.last_name,
+            first_name: payload.first_name,
         })
         .await?;
 
-    let account = resolve_account(&state, member.user_id).await?;
-    let mut response = MemberResponse::from(member);
-    response.account = account;
-
-    Ok(Response::OK(response))
+    Ok(Response::OK(member.into()))
 }
 
 #[cfg(test)]

@@ -1,5 +1,5 @@
 use chrono::{DateTime, Utc};
-use mestier_core::{Member, MemberId, OrganizationId};
+use mestier_core::{Member, MemberId, MemberWithAccount, OrganizationId};
 use serde::Serialize;
 use utoipa::ToSchema;
 
@@ -46,6 +46,21 @@ impl From<Member> for MemberResponse {
             joined_at: value.joined_at,
             created_at: value.created_at,
         }
+    }
+}
+
+impl From<MemberWithAccount> for MemberResponse {
+    /// The list/get-one counterpart of `From<Member>`: the occupant is
+    /// already hydrated by `MemberService`, so this conversion is still a
+    /// plain, synchronous mapping — it just has one more field to fill in.
+    fn from(value: MemberWithAccount) -> Self {
+        let account = value.account.map(|user| MemberAccountResponse {
+            email: user.email,
+            name: user.name,
+        });
+        let mut response = MemberResponse::from(value.member);
+        response.account = account;
+        response
     }
 }
 
