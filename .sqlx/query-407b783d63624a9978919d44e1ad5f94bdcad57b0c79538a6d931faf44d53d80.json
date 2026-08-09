@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT id, organization_id, user_id, last_name, first_name, joined_at, created_at, deleted_at\n            FROM organization_members\n            WHERE organization_id = $1 AND deleted_at IS NULL\n            ORDER BY joined_at ASC\n            ",
+  "query": "\n            SELECT id, organization_id, user_id, last_name, first_name, joined_at, created_at, deleted_at\n            FROM organization_members\n            WHERE organization_id = $1 AND deleted_at IS NULL\n            ORDER BY last_name ASC, first_name ASC, created_at ASC\n            ",
   "describe": {
     "columns": [
       {
@@ -60,5 +60,5 @@
       true
     ]
   },
-  "hash": "180963f7731f399c836fff099a85078834be805cba14681f463cf85ae3ac3f30"
+  "hash": "407b783d63624a9978919d44e1ad5f94bdcad57b0c79538a6d931faf44d53d80"
 }

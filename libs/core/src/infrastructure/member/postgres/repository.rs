@@ -76,6 +76,42 @@ impl<'tx> MemberRepository for PgMemberRepository<'tx> {
     async fn list_by_organization(
         &mut self,
         organization_id: OrganizationId,
+        limit: u64,
+        offset: u64,
+    ) -> Result<(Vec<Member>, u64), CoreError> {
+        let mut tx = self.tx.lock().await;
+        let rows = sqlx::query_as!(
+            MemberRow,
+            r#"
+            SELECT id, organization_id, user_id, last_name, first_name, joined_at, created_at, deleted_at
+            FROM organization_members
+            WHERE organization_id = $1 AND deleted_at IS NULL
+            ORDER BY last_name ASC, first_name ASC, created_at ASC
+            LIMIT $2 OFFSET $3
+            "#,
+            organization_id.0,
+            limit as i64,
+            offset as i64,
+        )
+        .fetch_all(&mut ***tx)
+        .await
+        .map_err(map_sqlx_error)?;
+
+        let total: i64 = sqlx::query_scalar!(
+            r#"SELECT COUNT(*) AS "count!" FROM organization_members WHERE organization_id = $1 AND deleted_at IS NULL"#,
+            organization_id.0,
+        )
+        .fetch_one(&mut ***tx)
+        .await
+        .map_err(map_sqlx_error)?;
+
+        Ok((rows.into_iter().map(Into::into).collect(), total as u64))
+    }
+
+    #[tracing::instrument(skip(self), fields(db.system = "postgresql", db.operation = "select", db.table = "organization_members"), err)]
+    async fn list_active_by_organization(
+        &mut self,
+        organization_id: OrganizationId,
     ) -> Result<Vec<Member>, CoreError> {
         let mut tx = self.tx.lock().await;
         let rows = sqlx::query_as!(
@@ -84,7 +120,7 @@ impl<'tx> MemberRepository for PgMemberRepository<'tx> {
             SELECT id, organization_id, user_id, last_name, first_name, joined_at, created_at, deleted_at
             FROM organization_members
             WHERE organization_id = $1 AND deleted_at IS NULL
-            ORDER BY joined_at ASC
+            ORDER BY last_name ASC, first_name ASC, created_at ASC
             "#,
             organization_id.0,
         )

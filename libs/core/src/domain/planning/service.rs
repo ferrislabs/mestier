@@ -431,7 +431,7 @@ where
             .await?;
         let members = self
             .member_repository
-            .list_by_organization(organization_id)
+            .list_active_by_organization(organization_id)
             .await?;
 
         let linked_user_ids: HashSet<UserId> = employees.iter().filter_map(|e| e.user_id).collect();
@@ -1024,7 +1024,7 @@ mod tests {
 
         let mut member_repository = MockMemberRepository::new();
         member_repository
-            .expect_list_by_organization()
+            .expect_list_active_by_organization()
             .with(eq(organization_id))
             .returning(move |org_id| {
                 Box::pin(async move {
@@ -1085,7 +1085,7 @@ mod tests {
 
         let mut member_repository = MockMemberRepository::new();
         member_repository
-            .expect_list_by_organization()
+            .expect_list_active_by_organization()
             .with(eq(organization_id))
             .returning(move |org_id| {
                 Box::pin(async move {
@@ -1166,7 +1166,7 @@ mod tests {
 
         let mut member_repository = MockMemberRepository::new();
         member_repository
-            .expect_list_by_organization()
+            .expect_list_active_by_organization()
             .with(eq(organization_id))
             .returning(move |org_id| {
                 let now = Utc::now();
@@ -1224,7 +1224,7 @@ mod tests {
 
         let mut member_repository = MockMemberRepository::new();
         member_repository
-            .expect_list_by_organization()
+            .expect_list_active_by_organization()
             .with(eq(organization_id))
             .returning(move |org_id| {
                 Box::pin(async move {

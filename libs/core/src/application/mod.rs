@@ -64,6 +64,7 @@ pub fn default_authorizer() -> MestierAuthorizer {
         .action("organization.update", Permissions::MANAGE_ORG.0)
         .action("organization.delete", Permissions::MANAGE_ORG.0)
         .action("member.invite", Permissions::MANAGE_MEMBERS.0)
+        .action("member.manage", Permissions::MANAGE_MEMBERS.0)
         .action("member.remove", Permissions::MANAGE_MEMBERS.0)
         .action("role.assign", Permissions::MANAGE_ROLES.0)
         .action("role.manage", Permissions::MANAGE_ROLES.0)

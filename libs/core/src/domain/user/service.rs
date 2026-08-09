@@ -47,6 +47,20 @@ where
         self.repo.find_by_sub(sub).await
     }
 
+    /// Looks a user up by primary key — used to resolve the account behind
+    /// an occupied organization seat (`member.user_id`) on the item member
+    /// routes. Never surfaces `id`/`sub` itself; callers project only
+    /// `email`/`name` into the HTTP response.
+    pub async fn find_by_id(&mut self, id: UserId) -> Result<Option<User>, CoreError> {
+        self.repo.find_by_id(id).await
+    }
+
+    /// Every active user among `ids`, in one query — the list-route
+    /// counterpart of [`Self::find_by_id`], avoiding one lookup per member.
+    pub async fn list_by_ids(&mut self, ids: &[UserId]) -> Result<Vec<User>, CoreError> {
+        self.repo.list_by_ids(ids).await
+    }
+
     #[tracing::instrument(skip(self), fields(user.sub = %command.sub, user.email = %command.email), err)]
     pub async fn reconcile_upsert(
         &mut self,
@@ -152,6 +166,43 @@ mod tests {
         let user = service.find_by_sub("sub-1").await.unwrap();
 
         assert!(user.is_none());
+    }
+
+    #[tokio::test]
+    async fn find_by_id_delegates_to_repo() {
+        let id = UserId(Uuid::new_v4());
+        let mut repo = MockUserRepository::new();
+        repo.expect_find_by_id()
+            .with(mockall::predicate::eq(id))
+            .times(1)
+            .returning(move |_| {
+                let mut user = make_user();
+                user.id = id;
+                Box::pin(async move { Ok(Some(user)) })
+            });
+
+        let mut service = UserService::new(repo);
+        let user = service.find_by_id(id).await.unwrap();
+
+        assert_eq!(user.unwrap().id, id);
+    }
+
+    #[tokio::test]
+    async fn list_by_ids_delegates_to_repo() {
+        let ids = vec![UserId(Uuid::new_v4()), UserId(Uuid::new_v4())];
+        let mut repo = MockUserRepository::new();
+        repo.expect_list_by_ids()
+            .withf({
+                let ids = ids.clone();
+                move |arg| arg == ids.as_slice()
+            })
+            .times(1)
+            .returning(|_| Box::pin(async { Ok(vec![make_user()]) }));
+
+        let mut service = UserService::new(repo);
+        let users = service.list_by_ids(&ids).await.unwrap();
+
+        assert_eq!(users.len(), 1);
     }
 
     #[tokio::test]
