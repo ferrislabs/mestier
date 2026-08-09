@@ -14,6 +14,7 @@ import {
 	draftToCreateAbsenceRequest,
 	draftToUpdateAbsenceRequest,
 	emptyAbsenceDraft,
+	validateAbsenceDraft as validateAbsence,
 	validateAbsenceDraft,
 } from '#/pages/hr/lib/absences'
 import { AbsenceFormSheet } from '#/pages/hr/ui/absence-form-sheet'
@@ -22,11 +23,30 @@ import {
 	type TaskSheetTarget,
 } from '#/pages/planning/feature/task-sheet-feature'
 import { buildCalendarModel } from '#/pages/planning/lib/build-calendar-model'
+import { buildMonthModel } from '#/pages/planning/lib/build-month-model'
 import type { CalendarFilter } from '#/pages/planning/lib/calendar-filters'
-import { computeWindow } from '#/pages/planning/lib/window'
-import { type PlanningView, todayIsoDate } from '#/pages/planning/types'
-import type { CalendarEventCallbacks } from '#/pages/planning/ui/calendar-grid'
+import {
+	assigneeRefFromResourceId,
+	resourceIdFromAssigneeRef,
+} from '#/pages/planning/lib/task-drop'
+import {
+	buildPatchTaskPayload,
+	type TaskFormValues,
+	taskToDraft,
+	validateTaskDraft,
+} from '#/pages/planning/lib/task-form'
+import {
+	computeMonthGridWindow,
+	computeWindow,
+} from '#/pages/planning/lib/window'
+import {
+	type PlanningEntry,
+	type PlanningView,
+	todayIsoDate,
+} from '#/pages/planning/types'
 import type { CalendarCreateKind } from '#/pages/planning/ui/calendar-toolbar'
+import type { EventEditState } from '#/pages/planning/ui/event-edit-form'
+import type { CalendarEventCallbacks } from '#/pages/planning/ui/event-popover'
 import { PlanningCalendarUI } from '#/pages/planning/ui/planning-calendar-ui'
 
 export interface PlanningCalendarFeatureProps {
@@ -105,7 +125,10 @@ function PlanningCalendarScreen({
 	onViewChange,
 	onDateChange,
 }: PlanningCalendarScreenProps) {
-	const range = computeWindow(view, date)
+	// La grille de mois affiche des semaines entières, donc quelques jours des
+	// mois voisins : elle demande une fenêtre plus large que le mois lui-même.
+	const range =
+		view === 'month' ? computeMonthGridWindow(date) : computeWindow(view, date)
 	const planningQuery = usePlanning(organizationId, range)
 	const data = planningQuery.data?.data ?? null
 	const timeZone = data?.timezone ?? DEFAULT_TIME_ZONE
@@ -121,6 +144,7 @@ function PlanningCalendarScreen({
 	const [absenceSheet, setAbsenceSheet] = useState<AbsenceSheetState | null>(
 		null,
 	)
+	const [editing, setEditing] = useState<EventEditState | null>(null)
 
 	const patchTask = useMoveTask()
 	const createAbsence = useCreateAbsence()
@@ -141,6 +165,30 @@ function PlanningCalendarScreen({
 			employeeIds: selectedEmployeeIds,
 		})
 	}, [data, range.from, range.to, filter, selectedEmployeeIds])
+
+	const monthModel = useMemo(() => {
+		if (!data || view !== 'month') return null
+		return buildMonthModel({
+			from: range.from,
+			to: range.to,
+			month: date.slice(0, 7),
+			entries: data.entries,
+			resources: data.resources,
+			timeZone: data.timezone,
+			today: todayIsoDate(),
+			filter,
+			employeeIds: selectedEmployeeIds,
+		})
+	}, [data, view, date, range.from, range.to, filter, selectedEmployeeIds])
+
+	const assigneeOptions = useMemo(
+		() =>
+			(data?.resources ?? []).map((resource) => ({
+				resourceId: resource.resource_id,
+				displayName: resource.display_name,
+			})),
+		[data],
+	)
 
 	const employees = useMemo(
 		() =>
@@ -201,29 +249,127 @@ function PlanningCalendarScreen({
 		}
 	}
 
-	/** Ce que le panneau de détail d'un événement peut déclencher. */
-	const eventCallbacks: CalendarEventCallbacks = {
-		onOpen: (event) => {
-			const entry = event.entry
-			if (entry.kind === 'task') {
-				setTaskSheetTarget({ mode: 'edit', taskId: entry.id })
-				return
+	function startEditing(entry: PlanningEntry) {
+		if (entry.kind === 'task') {
+			setEditing({
+				kind: 'task',
+				entryId: entry.id,
+				values: taskToDraft(entry, timeZone),
+				errors: [],
+			})
+			return
+		}
+		if (entry.kind === 'absence') {
+			setEditing({
+				kind: 'absence',
+				entryId: entry.id,
+				values: absenceToDraft(entry, timeZone),
+				errors: [],
+			})
+		}
+	}
+
+	function patchEditing(patch: Partial<TaskFormValues & AbsenceFormValues>) {
+		setEditing((current) => {
+			if (!current) return current
+			const values = { ...current.values, ...patch }
+			return current.kind === 'task'
+				? {
+						...current,
+						values: values as TaskFormValues,
+						errors: validateTaskDraft(values as TaskFormValues, {
+							isSubtask: false,
+						}),
+					}
+				: {
+						...current,
+						values: values as AbsenceFormValues,
+						errors: validateAbsence(values as AbsenceFormValues, {
+							requireEmployee: false,
+						}),
+					}
+		})
+	}
+
+	function toggleAssignee(resourceId: string) {
+		setEditing((current) => {
+			if (!current || current.kind !== 'task') return current
+			const ref = assigneeRefFromResourceId(resourceId)
+			const already = current.values.assignees.some(
+				(assignee) => resourceIdFromAssigneeRef(assignee) === resourceId,
+			)
+
+			return {
+				...current,
+				values: {
+					...current.values,
+					assignees: already
+						? current.values.assignees.filter(
+								(assignee) =>
+									resourceIdFromAssigneeRef(assignee) !== resourceId,
+							)
+						: [...current.values.assignees, ref],
+				},
 			}
-			if (entry.kind === 'absence') {
-				setAbsenceSheet({
-					mode: 'edit',
-					absenceId: entry.id,
-					draft: absenceToDraft(entry, timeZone),
+		})
+	}
+
+	async function submitEditing() {
+		if (!editing) return
+
+		if (editing.kind === 'task') {
+			const body = buildPatchTaskPayload(editing.values, {
+				isSubtask: false,
+				timeZone,
+			})
+			if (!body) return
+			try {
+				await patchTask.mutateAsync({
+					path: { organization_id: organizationId, task_id: editing.entryId },
+					body,
 				})
+				setEditing(null)
+			} catch {
+				// Rendu réactivement par `patchTask.error` ; le brouillon est gardé.
 			}
+			return
+		}
+
+		const body = draftToUpdateAbsenceRequest(editing.values, timeZone)
+		if (!body) return
+		try {
+			await updateAbsence.mutateAsync({
+				path: {
+					organization_id: organizationId,
+					absence_id: editing.entryId,
+				},
+				body,
+			})
+			setEditing(null)
+		} catch {
+			// Rendu réactivement par `updateAbsence.error`.
+		}
+	}
+
+	const eventCallbacks: CalendarEventCallbacks = {
+		editing,
+		assignees: assigneeOptions,
+		selectedResourceIds:
+			editing?.kind === 'task'
+				? editing.values.assignees.map(resourceIdFromAssigneeRef)
+				: [],
+		onEdit: startEditing,
+		onEditChange: patchEditing,
+		onToggleAssignee: toggleAssignee,
+		onEditSubmit: () => void submitEditing(),
+		onEditCancel: () => setEditing(null),
+		onChangeStatus: (entry, status) => {
+			if (entry.kind !== 'task') return
+			void changeTaskStatus(entry.id, status)
 		},
-		onChangeStatus: (event, status) => {
-			if (event.entry.kind !== 'task') return
-			void changeTaskStatus(event.entry.id, status)
-		},
-		onDelete: (event) => {
-			if (event.entry.kind !== 'absence') return
-			void removeAbsence(event.entry.id)
+		onDelete: (entry) => {
+			if (entry.kind !== 'absence') return
+			void removeAbsence(entry.id)
 		},
 		isPending: patchTask.isPending || deleteAbsence.isPending,
 	}
@@ -305,6 +451,7 @@ function PlanningCalendarScreen({
 				isLoading={planningQuery.isLoading}
 				error={planningQuery.error?.message ?? null}
 				model={model}
+				monthModel={monthModel}
 				onViewChange={onViewChange}
 				onDateChange={onDateChange}
 				onFilterChange={setFilter}

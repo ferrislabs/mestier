@@ -49,6 +49,25 @@ export function computeWindow(
 	}
 }
 
+/**
+ * The window a month **grid** needs: whole weeks, so the first and last rows
+ * are complete. Wider than {@link computeWindow}'s month, which stops at the
+ * month's own bounds — a grid that stopped there would leave holes at both
+ * ends. Kept separate so the team grid keeps asking for exactly its month.
+ */
+export function computeMonthGridWindow(date: string): PlanningWindow {
+	const anchor = parseISO(date)
+
+	return {
+		from: formatIsoDate(
+			startOfWeek(startOfMonth(anchor), { weekStartsOn: WEEK_STARTS_ON }),
+		),
+		to: formatIsoDate(
+			endOfWeek(endOfMonth(anchor), { weekStartsOn: WEEK_STARTS_ON }),
+		),
+	}
+}
+
 /** Moves the anchor date by one unit of `view` — a day, a week, or a month. */
 export function shiftDate(
 	view: PlanningView,

@@ -3,7 +3,6 @@ import {
 	CalendarDays,
 	Check,
 	CircleSlash,
-	Expand,
 	MapPin,
 	Pencil,
 	Tag,
@@ -16,8 +15,15 @@ import type * as React from 'react'
 import type { Schemas } from '#/api/api.client'
 import { Button } from '#/components/ui/button'
 import { cn } from '#/lib/utils'
-import type { CalendarEventVM } from '#/pages/planning/lib/build-calendar-model'
+import type { AbsenceFormValues } from '#/pages/hr/lib/absences'
+import type { EventDetailVM } from '#/pages/planning/lib/build-calendar-model'
 import { ABSENCE_LABELS } from '#/pages/planning/lib/entries'
+import type { TaskFormValues } from '#/pages/planning/lib/task-form'
+import {
+	type EventAssigneeOption,
+	EventEditForm,
+	type EventEditState,
+} from '#/pages/planning/ui/event-edit-form'
 
 type TaskStatus = Schemas.TaskStatus
 
@@ -32,13 +38,20 @@ const STATUS_LABELS: Record<TaskStatus, string> = {
 const QUICK_STATUSES: TaskStatus[] = ['PLANNED', 'IN_PROGRESS', 'DONE']
 
 export interface EventDetailCardProps {
-	event: CalendarEventVM
-	/** Ouvre l'entrée dans son écran complet — fiche de tâche, formulaire d'absence. */
-	onOpen: () => void
+	event: EventDetailVM
 	onClose: () => void
 	onChangeStatus?: (status: TaskStatus) => void
 	onDelete?: () => void
 	isPending?: boolean
+	/** Brouillon en cours sur cette entrée, ou `null` en lecture. */
+	editing: EventEditState | null
+	assignees: EventAssigneeOption[]
+	selectedResourceIds: string[]
+	onEdit: () => void
+	onEditChange: (patch: Partial<TaskFormValues & AbsenceFormValues>) => void
+	onToggleAssignee: (resourceId: string) => void
+	onEditSubmit: () => void
+	onEditCancel: () => void
 }
 
 /**
@@ -50,11 +63,18 @@ export interface EventDetailCardProps {
  */
 export function EventDetailCard({
 	event,
-	onOpen,
 	onClose,
 	onChangeStatus,
 	onDelete,
 	isPending,
+	editing,
+	assignees,
+	selectedResourceIds,
+	onEdit,
+	onEditChange,
+	onToggleAssignee,
+	onEditSubmit,
+	onEditCancel,
 }: EventDetailCardProps) {
 	const entry = event.entry
 	const isTask = entry.kind === 'task'
@@ -68,24 +88,17 @@ export function EventDetailCard({
 					{isTask ? 'Tâche' : 'Absence'}
 				</p>
 				<div className="flex shrink-0 items-center gap-0.5">
-					<Button
-						type="button"
-						variant="ghost"
-						size="icon-sm"
-						aria-label={isTask ? 'Modifier la tâche' : "Modifier l'absence"}
-						onClick={onOpen}
-					>
-						<Pencil />
-					</Button>
-					<Button
-						type="button"
-						variant="ghost"
-						size="icon-sm"
-						aria-label="Ouvrir en grand"
-						onClick={onOpen}
-					>
-						<Expand />
-					</Button>
+					{editing ? null : (
+						<Button
+							type="button"
+							variant="ghost"
+							size="icon-sm"
+							aria-label={isTask ? 'Modifier la tâche' : "Modifier l'absence"}
+							onClick={onEdit}
+						>
+							<Pencil />
+						</Button>
+					)}
 					<Button
 						type="button"
 						variant="ghost"
@@ -98,6 +111,65 @@ export function EventDetailCard({
 				</div>
 			</header>
 
+			{editing ? (
+				<>
+					<EventEditForm
+						state={editing}
+						assignees={assignees}
+						selectedResourceIds={selectedResourceIds}
+						onChange={onEditChange}
+						onToggleAssignee={onToggleAssignee}
+					/>
+					<footer className="flex items-center justify-end gap-2 border-t pt-4">
+						<Button
+							type="button"
+							size="sm"
+							variant="ghost"
+							disabled={isPending}
+							onClick={onEditCancel}
+						>
+							Annuler
+						</Button>
+						<Button
+							type="button"
+							size="sm"
+							disabled={isPending || editing.errors.length > 0}
+							onClick={onEditSubmit}
+						>
+							Enregistrer
+						</Button>
+					</footer>
+				</>
+			) : (
+				<ReadView
+					event={event}
+					entry={entry}
+					isPending={isPending}
+					onChangeStatus={onChangeStatus}
+					onDelete={onDelete}
+				/>
+			)}
+		</div>
+	)
+}
+
+interface ReadViewProps {
+	event: EventDetailVM
+	entry: EventDetailVM['entry']
+	isPending?: boolean
+	onChangeStatus?: (status: TaskStatus) => void
+	onDelete?: () => void
+}
+
+function ReadView({
+	event,
+	entry,
+	isPending,
+	onChangeStatus,
+	onDelete,
+}: ReadViewProps) {
+	return (
+		<>
 			<h3 className="text-xl font-medium leading-tight text-foreground">
 				{event.title}
 			</h3>
@@ -141,9 +213,10 @@ export function EventDetailCard({
 				</DetailRow>
 			)}
 
-			{isTask ? <TaskRows entry={entry} /> : <AbsenceRows entry={entry} />}
+			{entry.kind === 'task' ? <TaskRows entry={entry} /> : null}
+			{entry.kind === 'absence' ? <AbsenceRows entry={entry} /> : null}
 
-			{isTask && onChangeStatus ? (
+			{entry.kind === 'task' && onChangeStatus ? (
 				<footer className="border-t pt-4">
 					<p className="mb-2 text-sm font-medium text-foreground">
 						Où en est cette tâche ?
@@ -179,7 +252,7 @@ export function EventDetailCard({
 				</footer>
 			) : null}
 
-			{!isTask && onDelete ? (
+			{entry.kind === 'absence' && onDelete ? (
 				<footer className="border-t pt-4">
 					<Button
 						type="button"
@@ -194,14 +267,14 @@ export function EventDetailCard({
 					</Button>
 				</footer>
 			) : null}
-		</div>
+		</>
 	)
 }
 
 function TaskRows({
 	entry,
 }: {
-	entry: Extract<CalendarEventVM['entry'], { kind: 'task' }>
+	entry: Extract<EventDetailVM['entry'], { kind: 'task' }>
 }) {
 	return (
 		<>
@@ -241,7 +314,7 @@ function TaskRows({
 function AbsenceRows({
 	entry,
 }: {
-	entry: Extract<CalendarEventVM['entry'], { kind: 'absence' }>
+	entry: Extract<EventDetailVM['entry'], { kind: 'absence' }>
 }) {
 	return (
 		<>

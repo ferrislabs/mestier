@@ -4,9 +4,18 @@ import type { MinuteSpan } from '#/pages/planning/lib/layout'
 
 const ONE_DAY_MS = MINUTES_PER_DAY * 60_000
 
-/** The instant of local midnight, in `timeZone`, for calendar day `date`. */
+/**
+ * The instant of local midnight, in `timeZone`, for calendar day `date`.
+ *
+ * Built from date parts, not from a string: `new TZDate('2026-08-08T00:00:00',
+ * tz)` parses the wall time in the *system* zone and merely displays it in
+ * `tz`, so every day boundary was off by the offset between the two whenever
+ * they differed — stretching a three-day leave to four in a month grid.
+ */
 function startOfDayInTimeZone(date: string, timeZone: string): Date {
-	return new TZDate(`${date}T00:00:00`, timeZone)
+	const [year, month, day] = date.split('-').map(Number)
+
+	return TZDate.tz(timeZone, year ?? 1970, (month ?? 1) - 1, day ?? 1)
 }
 
 /**

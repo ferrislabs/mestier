@@ -2,17 +2,17 @@ import { AlertCircle, CalendarDays } from 'lucide-react'
 import { Button } from '#/components/ui/button'
 import { PageHeader, PageShell, SectionCard } from '#/components/ui/surface'
 import type { CalendarModel } from '#/pages/planning/lib/build-calendar-model'
+import type { MonthModel } from '#/pages/planning/lib/build-month-model'
 import type { CalendarFilter } from '#/pages/planning/lib/calendar-filters'
 import type { PlanningView } from '#/pages/planning/types'
-import {
-	type CalendarEventCallbacks,
-	CalendarGrid,
-} from '#/pages/planning/ui/calendar-grid'
+import { CalendarGrid } from '#/pages/planning/ui/calendar-grid'
 import {
 	type CalendarCreateKind,
 	type CalendarEmployeeOption,
 	CalendarToolbar,
 } from '#/pages/planning/ui/calendar-toolbar'
+import type { CalendarEventCallbacks } from '#/pages/planning/ui/event-popover'
+import { MonthGrid } from '#/pages/planning/ui/month-grid'
 
 export interface PlanningCalendarUIProps {
 	organizationName: string
@@ -26,6 +26,7 @@ export interface PlanningCalendarUIProps {
 	isLoading: boolean
 	error: string | null
 	model: CalendarModel | null
+	monthModel: MonthModel | null
 	onViewChange: (view: PlanningView) => void
 	onDateChange: (date: string) => void
 	onFilterChange: (filter: CalendarFilter) => void
@@ -51,6 +52,7 @@ export function PlanningCalendarUI({
 	isLoading,
 	error,
 	model,
+	monthModel,
 	onViewChange,
 	onDateChange,
 	onFilterChange,
@@ -61,11 +63,25 @@ export function PlanningCalendarUI({
 	onRetry,
 	now,
 }: PlanningCalendarUIProps) {
-	const eventCount =
-		model?.days.reduce(
-			(total, day) => total + day.allDayEvents.length + day.timedEvents.length,
-			0,
-		) ?? 0
+	const hiddenByFilter = filteredOutCount(view, model, monthModel)
+	const isMonth = view === 'month'
+	const activeModel = isMonth ? monthModel : model
+	const eventCount = isMonth
+		? (monthModel?.weeks.reduce(
+				(total, week) =>
+					total +
+					week.spans.length +
+					week.days.reduce(
+						(inner, day) => inner + day.entries.length + day.hiddenCount,
+						0,
+					),
+				0,
+			) ?? 0)
+		: (model?.days.reduce(
+				(total, day) =>
+					total + day.allDayEvents.length + day.timedEvents.length,
+				0,
+			) ?? 0)
 
 	return (
 		<PageShell className="max-w-none">
@@ -99,7 +115,7 @@ export function PlanningCalendarUI({
 							</Button>
 						}
 					/>
-				) : isLoading || !model ? (
+				) : isLoading || !activeModel ? (
 					<CalendarNotice
 						icon={<CalendarDays className="size-6 text-muted-foreground" />}
 						title="Chargement du calendrier…"
@@ -110,8 +126,8 @@ export function PlanningCalendarUI({
 						icon={<CalendarDays className="size-6 text-muted-foreground" />}
 						title="Rien de planifié sur cette période"
 						message={
-							model.hiddenCount > 0
-								? `${model.hiddenCount} entrée${model.hiddenCount > 1 ? 's sont masquées' : ' est masquée'} par les filtres en cours.`
+							hiddenByFilter > 0
+								? `${hiddenByFilter} entrée${hiddenByFilter > 1 ? 's sont masquées' : ' est masquée'} par les filtres en cours.`
 								: 'Ajoutez une tâche, un congé ou une absence pour remplir le calendrier.'
 						}
 						action={
@@ -120,12 +136,24 @@ export function PlanningCalendarUI({
 							</Button>
 						}
 					/>
-				) : (
+				) : isMonth && monthModel ? (
+					<MonthGrid model={monthModel} callbacks={eventCallbacks} />
+				) : model ? (
 					<CalendarGrid model={model} callbacks={eventCallbacks} now={now} />
-				)}
+				) : null}
 			</SectionCard>
 		</PageShell>
 	)
+}
+
+/** Les deux projections comptent leurs entrées masquées sous des noms différents. */
+function filteredOutCount(
+	view: PlanningView,
+	model: CalendarModel | null,
+	monthModel: MonthModel | null,
+): number {
+	if (view === 'month') return monthModel?.hiddenByFilter ?? 0
+	return model?.hiddenCount ?? 0
 }
 
 interface CalendarNoticeProps {
