@@ -6,8 +6,8 @@ import { OrgGate } from '#/components/org-gate'
 export const Route = createFileRoute('/_app')({ component: AppLayout })
 
 /**
- * Espace authentifié. Il ne rend aucune coque applicative : celle-ci dépend du
- * tenant, résolu un cran plus bas par `/o/$organizationSlug`.
+ * Authenticated space. It renders no application shell: that depends on the
+ * tenant, resolved one level down by `/o/$organizationSlug`.
  */
 function AppLayout() {
 	return (

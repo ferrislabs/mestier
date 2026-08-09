@@ -222,7 +222,7 @@ function patchCallsFor(
 }
 
 describe('PlanningTeamFeature', () => {
-	it('charge le planning avec la fenêtre from/to dérivée de la vue et de la date', async () => {
+	it('loads the planning with the from/to window derived from the view and the date', async () => {
 		const { calls } = renderFeature()
 
 		expect(await screen.findByText('Alix Martin')).toBeDefined()
@@ -233,7 +233,7 @@ describe('PlanningTeamFeature', () => {
 		})
 	})
 
-	it('recalcule la fenêtre pour la vue mois', async () => {
+	it('recomputes the window for the month view', async () => {
 		const { calls } = renderFeature({ overrides: { view: 'month' } })
 
 		await screen.findByText('Alix Martin')
@@ -243,7 +243,7 @@ describe('PlanningTeamFeature', () => {
 		})
 	})
 
-	it('reporte le changement de vue au parent plutôt que de le gérer lui-même', async () => {
+	it('reports the view change to the parent rather than handling it itself', async () => {
 		const user = userEvent.setup()
 		const { onViewChange } = renderFeature()
 
@@ -253,7 +253,7 @@ describe('PlanningTeamFeature', () => {
 		expect(onViewChange).toHaveBeenCalledWith('day')
 	})
 
-	it('reporte le changement de date au parent', async () => {
+	it('reports the date change to the parent', async () => {
 		const user = userEvent.setup()
 		const { onDateChange } = renderFeature()
 
@@ -264,8 +264,8 @@ describe('PlanningTeamFeature', () => {
 	})
 })
 
-describe('PlanningTeamFeature — drag & drop sans avertissement', () => {
-	it('un drop qui change le jour et la ligne à la fois émet un seul PATCH avec starts_at/ends_at et la liste complète des assignés', async () => {
+describe('PlanningTeamFeature — drag & drop without a warning', () => {
+	it('a drop changing both day and row emits a single PATCH with starts_at/ends_at and the full assignee list', async () => {
 		const { calls, mock } = renderFeature({
 			planning: planningResponse({
 				resources: [RESOURCE_EMPLOYEE_1, RESOURCE_EMPLOYEE_2],
@@ -321,7 +321,7 @@ describe('PlanningTeamFeature — drag & drop sans avertissement', () => {
 		expect(availabilityCalls).toHaveLength(1)
 	})
 
-	it("un drop qui ne change ni le jour ni la ligne n'émet aucun appel", async () => {
+	it('a drop changing neither day nor row emits no call', async () => {
 		const { calls } = renderFeature({
 			planning: planningResponse({ entries: [TASK_ENTRY] }),
 		})
@@ -336,7 +336,7 @@ describe('PlanningTeamFeature — drag & drop sans avertissement', () => {
 })
 
 describe('PlanningTeamFeature — avertissements', () => {
-	it('un drop sur une ressource en congé ouvre le dialogue ; annuler n’émet aucun PATCH', async () => {
+	it('a drop on a resource on leave opens the dialog; cancelling emits no PATCH', async () => {
 		const { calls, mock } = renderFeature({
 			planning: planningResponse({
 				resources: [RESOURCE_EMPLOYEE_1, RESOURCE_EMPLOYEE_2],
@@ -377,7 +377,7 @@ describe('PlanningTeamFeature — avertissements', () => {
 		expect(patchCallsFor(calls)).toHaveLength(0)
 	})
 
-	it('confirmer applique la mutation — une ressource en congé reste assignable après confirmation', async () => {
+	it('confirming applies the mutation — a resource on leave stays assignable once confirmed', async () => {
 		const { calls, mock } = renderFeature({
 			planning: planningResponse({
 				resources: [RESOURCE_EMPLOYEE_1, RESOURCE_EMPLOYEE_2],
@@ -423,7 +423,7 @@ describe('PlanningTeamFeature — avertissements', () => {
 		await waitFor(() => expect(screen.queryByRole('alertdialog')).toBeNull())
 	})
 
-	it('un drop sur une ressource member sans fiche affiche missing_employee_record ; confirmer crée la fiche et avertit sur le taux horaire', async () => {
+	it('a drop on a member resource with no record shows missing_employee_record; confirming creates the record and warns about the hourly rate', async () => {
 		const { calls, mock } = renderFeature({
 			planning: planningResponse({
 				resources: [RESOURCE_EMPLOYEE_1, RESOURCE_MEMBER],
@@ -478,8 +478,8 @@ describe('PlanningTeamFeature — avertissements', () => {
 	})
 })
 
-describe('PlanningTeamFeature — retrait d’un assigné', () => {
-	it('le bouton retirer envoie directement un PATCH avec la liste complète moins la ressource retirée, sans dialogue', async () => {
+describe('PlanningTeamFeature — removing an assignee', () => {
+	it('the remove button sends a PATCH straight away with the full list minus the removed resource, no dialog', async () => {
 		const { calls, mock } = renderFeature({
 			planning: planningResponse({
 				resources: [RESOURCE_EMPLOYEE_1, RESOURCE_EMPLOYEE_2],
@@ -510,7 +510,7 @@ describe('PlanningTeamFeature — retrait d’un assigné', () => {
 })
 
 describe('PlanningTeamFeature — absences (affichage lecture seule)', () => {
-	it('affiche toujours un segment absence sur la grille, mais sans bouton ni sheet — la gestion a déménagé vers le module RH', async () => {
+	it('still draws an absence segment on the grid, but with no button and no sheet — management moved to the HR module', async () => {
 		const { calls } = renderFeature({
 			planning: planningResponse({ entries: [ABSENCE_ENTRY] }),
 		})

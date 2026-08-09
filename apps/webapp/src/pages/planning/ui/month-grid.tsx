@@ -12,7 +12,7 @@ import {
 	EventPopover,
 } from '#/pages/planning/ui/event-popover'
 
-/** Hauteur d'un rang du bandeau des journées entières, en pixels. */
+/** Height of one rank of the all-day banner, in pixels. */
 const SPAN_LANE_HEIGHT_PX = 22
 
 export interface MonthGridProps {
@@ -21,12 +21,12 @@ export interface MonthGridProps {
 }
 
 /**
- * Vue mois en grille de semaines.
+ * Month view as a grid of weeks.
  *
- * Elle ne réutilise pas la grille horaire : sur trente jours, un axe des heures
- * donne trente colonnes illisibles. Ici une semaine est une ligne, un jour une
- * case, et chaque entrée une ligne de texte — on lit « qu'est-ce qui se passe
- * ce mois-ci », pas « à quelle heure ».
+ * It does not reuse the time grid: over thirty days, an hour axis yields
+ * thirty unreadable columns. Here a week is a row, a day is a cell, and each
+ * entry a line of text — one reads "what is happening this month", not "at
+ * what time".
  */
 export function MonthGrid({ model, callbacks }: MonthGridProps) {
 	return (
@@ -81,7 +81,7 @@ function WeekRow({ week, callbacks }: WeekRowProps) {
 
 interface DayCellProps {
 	day: MonthDayVM
-	/** Place réservée en haut de la case pour les bandeaux de la semaine. */
+	/** Room reserved at the top of the cell for the week's banners. */
 	spanOffset: number
 	callbacks: CalendarEventCallbacks
 }
@@ -175,7 +175,7 @@ function SpanBar({ span, callbacks }: SpanBarProps) {
 				style={{
 					left: `calc(${span.startIndex * columnWidth}% + 4px)`,
 					width: `calc(${span.length * columnWidth}% - 8px)`,
-					// Sous le numéro du jour, qui occupe la première ligne de la case.
+					// Under the day number, which takes the cell's first line.
 					top: 32 + span.lane * SPAN_LANE_HEIGHT_PX,
 				}}
 			>

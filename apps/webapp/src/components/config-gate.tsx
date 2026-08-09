@@ -35,7 +35,7 @@ export function ConfigGate({ children }: ConfigGateProps) {
 	)
 }
 
-/** Efface `code` et `state` de l'URL une fois le retour de l'IdP consommé. */
+/** Wipes `code` and `state` from the URL once the IdP's return is consumed. */
 function onSigninCallback() {
 	window.history.replaceState({}, document.title, window.location.pathname)
 }

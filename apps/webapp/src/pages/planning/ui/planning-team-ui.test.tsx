@@ -46,14 +46,14 @@ function baseProps(
 	}
 }
 
-describe('PlanningTeamUI — états', () => {
-	it('affiche un état de chargement sans planter', () => {
+describe('PlanningTeamUI — states', () => {
+	it('shows a loading state without crashing', () => {
 		render(<PlanningTeamUI {...baseProps({ isLoading: true, data: null })} />)
 
 		expect(screen.getByTestId('planning-loading')).toBeDefined()
 	})
 
-	it("affiche le message d'erreur sans exposer l'erreur brute ailleurs", () => {
+	it('shows the error message without exposing the raw error elsewhere', () => {
 		render(
 			<PlanningTeamUI
 				{...baseProps({ error: 'Fenêtre supérieure à 92 jours', data: null })}
@@ -64,7 +64,7 @@ describe('PlanningTeamUI — états', () => {
 		expect(screen.getByText('Fenêtre supérieure à 92 jours')).toBeDefined()
 	})
 
-	it('rend la grille quand les données sont chargées', () => {
+	it('renders the grid once the data is loaded', () => {
 		render(<PlanningTeamUI {...baseProps()} />)
 
 		expect(screen.getByTestId('planning-grid')).toBeDefined()
@@ -73,7 +73,7 @@ describe('PlanningTeamUI — états', () => {
 })
 
 describe('PlanningTeamUI — barre d’outils', () => {
-	it('affiche la barre de navigation avec la vue active', () => {
+	it('shows the navigation bar with the active view', () => {
 		render(<PlanningTeamUI {...baseProps()} />)
 
 		expect(
@@ -82,15 +82,15 @@ describe('PlanningTeamUI — barre d’outils', () => {
 	})
 })
 
-describe('PlanningTeamUI — édition', () => {
-	it("n'expose plus de bouton pour ajouter une absence — géré depuis le module RH", () => {
+describe('PlanningTeamUI — editing', () => {
+	it('no longer exposes a button to add an absence — handled from the HR module', () => {
 		render(<PlanningTeamUI {...baseProps()} />)
 		expect(
 			screen.queryByRole('button', { name: /Ajouter une absence/ }),
 		).toBeNull()
 	})
 
-	it("n'expose plus de sheet d'édition d'absence, même avec un entry absence dans la grille", () => {
+	it('no longer exposes an absence editing sheet, even with an absence entry in the grid', () => {
 		render(
 			<PlanningTeamUI
 				{...baseProps({
@@ -116,7 +116,7 @@ describe('PlanningTeamUI — édition', () => {
 		expect(screen.queryByRole('dialog')).toBeNull()
 	})
 
-	it('affiche le dialogue d’avertissement quand warningDialog.open est vrai', () => {
+	it('shows the warning dialog when warningDialog.open is true', () => {
 		render(
 			<PlanningTeamUI
 				{...baseProps({
@@ -135,7 +135,7 @@ describe('PlanningTeamUI — édition', () => {
 		expect(screen.getByText(/Aucune fiche employé/)).toBeDefined()
 	})
 
-	it('affiche les fiches employé créées et laisse les fermer', () => {
+	it('shows the created employee records and lets them be dismissed', () => {
 		const onDismiss = vi.fn()
 		render(
 			<PlanningTeamUI
@@ -153,8 +153,8 @@ describe('PlanningTeamUI — édition', () => {
 	})
 })
 
-describe('PlanningTeamUI — nouvelle tâche', () => {
-	it('affiche un bouton « Nouvelle tâche » et le reporte via onCreateTask', () => {
+describe('PlanningTeamUI — new task', () => {
+	it('shows a « Nouvelle tâche » button and reports it through onCreateTask', () => {
 		const onCreateTask = vi.fn()
 		render(<PlanningTeamUI {...baseProps({ onCreateTask })} />)
 
@@ -162,12 +162,12 @@ describe('PlanningTeamUI — nouvelle tâche', () => {
 		expect(onCreateTask).toHaveBeenCalledTimes(1)
 	})
 
-	it("n'affiche pas le bouton sans onCreateTask", () => {
+	it('does not show the button without onCreateTask', () => {
 		render(<PlanningTeamUI {...baseProps()} />)
 		expect(screen.queryByRole('button', { name: /Nouvelle tâche/ })).toBeNull()
 	})
 
-	it('reporte le clic sur un segment de tâche via onOpenTask', () => {
+	it('reports a click on a task segment through onOpenTask', () => {
 		const onOpenTask = vi.fn()
 		render(
 			<PlanningTeamUI
@@ -201,7 +201,7 @@ describe('PlanningTeamUI — nouvelle tâche', () => {
 		expect(onOpenTask).toHaveBeenCalledWith({ entryId: 'task-1' })
 	})
 
-	it('rend le slot taskSheet quand fourni', () => {
+	it('renders the taskSheet slot when provided', () => {
 		render(
 			<PlanningTeamUI
 				{...baseProps({ taskSheet: <div data-testid="fake-task-sheet" /> })}
@@ -211,7 +211,7 @@ describe('PlanningTeamUI — nouvelle tâche', () => {
 	})
 })
 
-describe('PlanningTeamUI — pas d’appel réseau', () => {
+describe('PlanningTeamUI — no network call', () => {
 	let fetchSpy: ReturnType<typeof createFetchSpy>
 
 	function createFetchSpy() {
@@ -228,7 +228,7 @@ describe('PlanningTeamUI — pas d’appel réseau', () => {
 		fetchSpy.mockRestore()
 	})
 
-	it('ne déclenche aucun fetch au rendu', () => {
+	it('fires no fetch on render', () => {
 		render(<PlanningTeamUI {...baseProps()} />)
 
 		expect(fetchSpy).not.toHaveBeenCalled()

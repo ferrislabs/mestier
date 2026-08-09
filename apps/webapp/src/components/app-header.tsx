@@ -46,9 +46,9 @@ export function AppHeader() {
 				/>
 
 				{/*
-				 * Placeholder assumé : aucun flux d'événements n'est branché à ce jour.
-				 * Le jour où il le sera, le compteur viendra du gateway temps réel —
-				 * ce bouton ne doit pas être transformé en sondage périodique.
+				 * A deliberate placeholder: no event stream is wired up yet. The day
+				 * one is, the counter will come from the realtime gateway — this
+				 * button must not be turned into periodic polling.
 				 */}
 				<Button variant="ghost" size="icon" className="text-muted-foreground">
 					<Bell />

@@ -95,7 +95,7 @@ function workTime(overrides: Partial<PlanningWorkTime> = {}): PlanningWorkTime {
 }
 
 describe('buildGridModel', () => {
-	it('une colonne par jour de la fenêtre, une ligne par ressource', () => {
+	it('one column per day of the window, one row per resource', () => {
 		const model = buildGridModel({
 			windowFrom: '2026-08-10',
 			windowTo: '2026-08-12',
@@ -110,7 +110,7 @@ describe('buildGridModel', () => {
 		expect(model.rows[0]?.cells).toHaveLength(3)
 	})
 
-	it('positionne un segment de chantier dans la bonne cellule, à la bonne place', () => {
+	it('positions a job segment in the right cell, at the right place', () => {
 		const model = buildGridModel({
 			windowFrom: '2026-08-10',
 			windowTo: '2026-08-10',
@@ -120,7 +120,7 @@ describe('buildGridModel', () => {
 			workTime: [],
 		})
 
-		// Amplitude dérivée du seul chantier : 10:00–12:00 Paris.
+		// Amplitude derived from the job alone: 10:00–12:00 Paris.
 		expect(model.amplitude).toEqual({
 			startMinute: 10 * 60,
 			endMinute: 12 * 60,
@@ -136,7 +136,7 @@ describe('buildGridModel', () => {
 		})
 	})
 
-	it('affiche les plages de travail en fond, positionnées sur l’amplitude', () => {
+	it('draws the work ranges in the background, positioned on the amplitude', () => {
 		const model = buildGridModel({
 			windowFrom: '2026-08-10',
 			windowTo: '2026-08-10',
@@ -146,13 +146,13 @@ describe('buildGridModel', () => {
 			workTime: [workTime()],
 		})
 
-		// Amplitude dérivée du chantier (10-12h) et de la plage de travail (9-17h) : 9h-17h.
+		// Amplitude derived from the job (10-12h) and the work range (9-17h): 9h-17h.
 		expect(model.amplitude).toEqual({ startMinute: 9 * 60, endMinute: 17 * 60 })
 		const cell = model.rows[0]?.cells[0]
 		expect(cell?.backgroundBars).toEqual([{ left: 0, width: 100 }])
 	})
 
-	it('empile deux chantiers qui se chevauchent le même jour', () => {
+	it('stacks two jobs overlapping on the same day', () => {
 		const model = buildGridModel({
 			windowFrom: '2026-08-10',
 			windowTo: '2026-08-10',
@@ -179,7 +179,7 @@ describe('buildGridModel', () => {
 		expect(rows).toEqual([0, 1])
 	})
 
-	it('rowCount vaut 1 quand la cellule est vide', () => {
+	it('rowCount is 1 when the cell is empty', () => {
 		const model = buildGridModel({
 			windowFrom: '2026-08-10',
 			windowTo: '2026-08-10',
@@ -192,7 +192,7 @@ describe('buildGridModel', () => {
 		expect(model.rows[0]?.cells[0]?.rowCount).toBe(1)
 	})
 
-	it('une absence de plusieurs jours pose un segment dans chacune de ses cellules', () => {
+	it('a multi-day absence lays a segment in each of its cells', () => {
 		const model = buildGridModel({
 			windowFrom: '2026-08-10',
 			windowTo: '2026-08-12',
@@ -218,7 +218,7 @@ describe('buildGridModel', () => {
 		}
 	})
 
-	it('une ressource member sans fiche employé ne porte jamais d’entrées', () => {
+	it('a member resource with no employee record never carries entries', () => {
 		const model = buildGridModel({
 			windowFrom: '2026-08-10',
 			windowTo: '2026-08-10',
@@ -231,7 +231,7 @@ describe('buildGridModel', () => {
 		expect(model.rows[0]?.cells[0]?.segments).toEqual([])
 	})
 
-	it('replie sur l’amplitude par défaut quand il n’y a aucune donnée', () => {
+	it('falls back to the default amplitude when there is no data', () => {
 		const model = buildGridModel({
 			windowFrom: '2026-08-10',
 			windowTo: '2026-08-10',
@@ -244,7 +244,7 @@ describe('buildGridModel', () => {
 		expect(model.amplitude).toEqual(FALLBACK_AMPLITUDE)
 	})
 
-	it('un kind d’entrée inconnu ne casse pas la construction du modèle', () => {
+	it('an unknown entry kind does not break model building', () => {
 		expect(() =>
 			buildGridModel({
 				windowFrom: '2026-08-10',
@@ -264,13 +264,13 @@ describe('buildGridModel', () => {
 			entries: [task(), unknownKindEntry()],
 			workTime: [],
 		})
-		// L'entrée de kind inconnu n'est rattachable à aucune ressource connue :
-		// elle disparaît silencieusement plutôt que de casser le rendu.
+		// The unknown-kind entry attaches to no known resource: it drops out
+		// silently rather than breaking the render.
 		expect(model.rows[0]?.cells[0]?.segments).toHaveLength(1)
 		expect(model.rows[0]?.cells[0]?.segments[0]?.entryId).toBe('wo-1')
 	})
 
-	it('porte les labels d’une tâche jusqu’au segment', () => {
+	it("carries a task's labels through to the segment", () => {
 		const model = buildGridModel({
 			windowFrom: '2026-08-10',
 			windowTo: '2026-08-10',
@@ -299,7 +299,7 @@ describe('buildGridModel', () => {
 		])
 	})
 
-	it('un segment d’absence ne porte jamais de labels', () => {
+	it('an absence segment never carries labels', () => {
 		const model = buildGridModel({
 			windowFrom: '2026-08-10',
 			windowTo: '2026-08-10',

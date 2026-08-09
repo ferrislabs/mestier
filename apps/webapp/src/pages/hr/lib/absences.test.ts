@@ -12,7 +12,7 @@ import {
 const TZ = 'Europe/Paris'
 
 describe('emptyAbsenceDraft', () => {
-	it('pré-remplit un congé journée entière sur un seul jour, pour un employé donné', () => {
+	it('prefills a single-day full-day leave for a given employee', () => {
 		const draft = emptyAbsenceDraft('emp-1', '2026-08-10')
 		expect(draft.employeeId).toBe('emp-1')
 		expect(draft.kind).toBe('LEAVE')
@@ -22,24 +22,24 @@ describe('emptyAbsenceDraft', () => {
 })
 
 describe('validateAbsenceDraft', () => {
-	it("signale l'employé manquant en création", () => {
+	it('reports the missing employee on creation', () => {
 		const draft = emptyAbsenceDraft('', '2026-08-10')
 		const errors = validateAbsenceDraft(draft, { requireEmployee: true })
 		expect(errors).toContain('Employé requis')
 	})
 
-	it("n'exige pas l'employé en édition", () => {
+	it('does not require the employee when editing', () => {
 		const draft = emptyAbsenceDraft('emp-1', '2026-08-10')
 		const errors = validateAbsenceDraft(draft, { requireEmployee: false })
 		expect(errors).not.toContain('Employé requis')
 	})
 
-	it('accepte une absence journée entière sur un seul jour (fin == début)', () => {
+	it('accepts a single-day full-day absence (end == start)', () => {
 		const draft = emptyAbsenceDraft('emp-1', '2026-08-10')
 		expect(validateAbsenceDraft(draft)).toEqual([])
 	})
 
-	it('rejette une fin de journée entière avant le début', () => {
+	it('rejects a full-day end before the start', () => {
 		const draft = {
 			...emptyAbsenceDraft('emp-1', '2026-08-10'),
 			range: { from: '2026-08-10', to: '2026-08-09' },
@@ -47,7 +47,7 @@ describe('validateAbsenceDraft', () => {
 		expect(validateAbsenceDraft(draft).length).toBeGreaterThan(0)
 	})
 
-	it("rejette un horaire invalide quand ce n'est pas journée entière", () => {
+	it('rejects an invalid time when it is not a full day', () => {
 		const draft = {
 			...emptyAbsenceDraft('emp-1', '2026-08-10'),
 			allDay: false,
@@ -57,7 +57,7 @@ describe('validateAbsenceDraft', () => {
 		expect(validateAbsenceDraft(draft).length).toBeGreaterThan(0)
 	})
 
-	it('rejette une fin avant le début sur un créneau horaire', () => {
+	it('rejects an end before the start on a time slot', () => {
 		const draft = {
 			...emptyAbsenceDraft('emp-1', '2026-08-10'),
 			allDay: false,
@@ -68,8 +68,8 @@ describe('validateAbsenceDraft', () => {
 	})
 })
 
-describe('draftToCreateAbsenceRequest — journée entière', () => {
-	it('construit starts_at/ends_at comme la fenêtre locale [00:00, 24:00) sur la plage de jours', () => {
+describe('draftToCreateAbsenceRequest — full day', () => {
+	it('builds starts_at/ends_at as the local window [00:00, 24:00) over the day range', () => {
 		const draft = {
 			...emptyAbsenceDraft('emp-1', '2026-08-10'),
 			range: { from: '2026-08-10', to: '2026-08-12' },
@@ -87,7 +87,7 @@ describe('draftToCreateAbsenceRequest — journée entière', () => {
 		})
 	})
 
-	it('accepte une plage réduite à un seul jour (from === to)', () => {
+	it('accepts a range reduced to a single day (from === to)', () => {
 		const draft = {
 			...emptyAbsenceDraft('emp-1', '2026-08-10'),
 			range: { from: '2026-08-10', to: '2026-08-10' },
@@ -100,14 +100,14 @@ describe('draftToCreateAbsenceRequest — journée entière', () => {
 		})
 	})
 
-	it('renvoie null quand la validation échoue plutôt que de fabriquer un payload cassé', () => {
+	it('returns null when validation fails rather than forging a broken payload', () => {
 		const draft = { ...emptyAbsenceDraft('', '2026-08-10') }
 		expect(draftToCreateAbsenceRequest(draft, TZ)).toBeNull()
 	})
 })
 
-describe('draftToCreateAbsenceRequest — créneau horaire', () => {
-	it('combine date et heure locales en instants ISO', () => {
+describe('draftToCreateAbsenceRequest — time slot', () => {
+	it('combines local date and time into ISO instants', () => {
 		const draft = {
 			...emptyAbsenceDraft('emp-1', '2026-08-10'),
 			allDay: false,
@@ -130,14 +130,14 @@ describe('draftToCreateAbsenceRequest — créneau horaire', () => {
 })
 
 describe('draftToUpdateAbsenceRequest', () => {
-	it("ne porte pas employee_id — l'API ne l'accepte pas en édition", () => {
+	it('carries no employee_id — the API rejects it when editing', () => {
 		const draft = emptyAbsenceDraft('emp-1', '2026-08-10')
 		const request = draftToUpdateAbsenceRequest(draft, TZ)
 		expect(request).not.toHaveProperty('employee_id')
 		expect(request).toMatchObject({ kind: 'LEAVE', all_day: true })
 	})
 
-	it('renvoie null quand la validation échoue', () => {
+	it('returns null when validation fails', () => {
 		const draft = {
 			...emptyAbsenceDraft('emp-1', '2026-08-10'),
 			range: { from: '2026-08-10', to: '2026-08-01' },
@@ -147,7 +147,7 @@ describe('draftToUpdateAbsenceRequest', () => {
 })
 
 describe('absenceToDraft — aller-retour', () => {
-	it('reconstruit un draft journée entière cohérent avec le payload qui l’a produit', () => {
+	it('rebuilds a full-day draft consistent with the payload that produced it', () => {
 		const created = draftToCreateAbsenceRequest(
 			{
 				...emptyAbsenceDraft('emp-1', '2026-08-10'),
@@ -180,7 +180,7 @@ describe('absenceToDraft — aller-retour', () => {
 		})
 	})
 
-	it('reconstruit un draft journée entière sur un seul jour (from === to)', () => {
+	it('rebuilds a single-day full-day draft (from === to)', () => {
 		const created = draftToCreateAbsenceRequest(
 			{
 				...emptyAbsenceDraft('emp-1', '2026-08-10'),
@@ -205,7 +205,7 @@ describe('absenceToDraft — aller-retour', () => {
 		expect(draft.range).toEqual({ from: '2026-08-10', to: '2026-08-10' })
 	})
 
-	it('reconstruit un draft à créneau horaire cohérent avec le payload qui l’a produit', () => {
+	it('rebuilds a time-slot draft consistent with the payload that produced it', () => {
 		const created = draftToCreateAbsenceRequest(
 			{
 				...emptyAbsenceDraft('emp-1', '2026-08-10'),
@@ -239,11 +239,11 @@ describe('absenceToDraft — aller-retour', () => {
 })
 
 describe('calendarSelectionToRange', () => {
-	it('renvoie null quand rien n’est sélectionné', () => {
+	it('returns null when nothing is selected', () => {
 		expect(calendarSelectionToRange(undefined)).toBeNull()
 	})
 
-	it('replie to sur from après le premier clic (sélection en cours)', () => {
+	it('folds to onto from after the first click (selection in progress)', () => {
 		const from = new Date('2026-08-10T00:00:00Z')
 		expect(calendarSelectionToRange({ from })).toEqual({
 			from: '2026-08-10',
@@ -251,7 +251,7 @@ describe('calendarSelectionToRange', () => {
 		})
 	})
 
-	it('porte les deux bornes une fois la plage complète', () => {
+	it('carries both bounds once the range is complete', () => {
 		const from = new Date('2026-08-10T00:00:00Z')
 		const to = new Date('2026-08-12T00:00:00Z')
 		expect(calendarSelectionToRange({ from, to })).toEqual({
@@ -262,7 +262,7 @@ describe('calendarSelectionToRange', () => {
 })
 
 describe('rangeToCalendarSelection', () => {
-	it('est l’inverse de calendarSelectionToRange sur une plage complète', () => {
+	it('is the inverse of calendarSelectionToRange on a complete range', () => {
 		const range = { from: '2026-08-10', to: '2026-08-12' }
 		const selection = rangeToCalendarSelection(range)
 		expect(calendarSelectionToRange(selection)).toEqual(range)

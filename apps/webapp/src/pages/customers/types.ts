@@ -9,7 +9,7 @@ import type {
 export interface CustomerFormValues {
 	status: CustomerStatus
 	pipelineStage: CustomerPipelineStage
-	/** Raison sociale ou nom complet — un client est une entité, pas une personne. */
+	/** Legal or full name — a customer is an entity, not a person. */
 	name: string
 	email: string
 	phone: string
@@ -37,8 +37,8 @@ export function customerDisplayName(customer: Customer): string {
 }
 
 /**
- * Deux initiales au plus. Un client est une entité : « Mairie de Saint-Julien »
- * donne « MS », « Marie Leroy » donne « ML ».
+ * Two initials at most. A customer is an entity: "Mairie de Saint-Julien"
+ * yields "MS", "Marie Leroy" yields "ML".
  */
 export function customerInitials(customer: Customer): string {
 	return (

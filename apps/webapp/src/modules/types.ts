@@ -3,30 +3,30 @@ import type { LucideIcon } from 'lucide-react'
 export type ModuleId = 'home' | 'crm' | 'hr' | 'planning' | 'chat' | 'settings'
 
 /**
- * `coming-soon` : module annoncé mais non navigable — il reste visible, grisé,
- * dans le sélecteur de modules.
- * `hidden` : jamais rendu. Réservé au futur filtrage par droits, hors scope.
+ * `coming-soon`: module announced but not navigable — it stays visible, greyed
+ * out, in the module launcher.
+ * `hidden`: never rendered. Reserved for future filtering by rights, out of scope.
  */
 export type ModuleStatus = 'available' | 'coming-soon' | 'hidden'
 
 export type NavStatus = Exclude<ModuleStatus, 'hidden'>
 
-/** Cible de navigation, commune aux deux niveaux. */
+/** Navigation target, shared by both levels. */
 export interface NavTarget {
 	id: string
 	label: string
 	to: string
 	icon?: LucideIcon
-	/** Actif uniquement sur une correspondance exacte du chemin. */
+	/** Active on an exact path match only. */
 	exact?: boolean
 	status?: NavStatus
 	badge?: string | number
 }
 
-/** Second niveau : onglets horizontaux, sous le fil d'Ariane. */
+/** Second level: horizontal tabs, under the breadcrumb. */
 export type ModuleTab = NavTarget
 
-/** Premier niveau : entrées de la nav latérale du module. */
+/** First level: entries of the module's side nav. */
 export interface ModuleSection extends NavTarget {
 	tabs?: ModuleTab[]
 }
@@ -37,16 +37,16 @@ export interface AppModule {
 	icon: LucideIcon
 	basePath: string
 	status: ModuleStatus
-	/** Navigation intra-module, rendue dans la colonne de gauche. */
+	/** Intra-module navigation, rendered in the left column. */
 	sections: ModuleSection[]
 	/**
-	 * `basePath` rend une vue d'ensemble au lieu de rediriger vers la première
-	 * section navigable.
+	 * `basePath` renders an overview instead of redirecting to the first
+	 * navigable section.
 	 */
 	hasOverview: boolean
 	/**
-	 * `utility` place le module en pied de nav, séparé des modules métier.
-	 * Par défaut : `primary`.
+	 * `utility` puts the module at the foot of the nav, apart from the business
+	 * modules. Defaults to `primary`.
 	 */
 	railPlacement?: 'primary' | 'utility'
 }

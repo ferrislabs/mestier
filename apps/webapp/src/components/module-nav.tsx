@@ -23,11 +23,11 @@ interface ModuleNavProps extends React.ComponentProps<typeof Sidebar> {
 }
 
 /**
- * Navigation du module actif, dans la colonne de gauche.
+ * Navigation for the active module, in the left column.
  *
- * Elle ne sert pas à changer de module — c'est le rôle du {@link ModuleLauncher}
- * de l'en-tête. Elle liste les écrans du module courant ; leur éventuel second
- * niveau est rendu en onglets horizontaux par le {@link ScopeBar}.
+ * It is not for switching modules — that is the header {@link ModuleLauncher}'s
+ * job. It lists the current module's screens; their second level, when they
+ * have one, is rendered as horizontal tabs by the {@link ScopeBar}.
  */
 export function ModuleNav({ organizationSlug, ...props }: ModuleNavProps) {
 	const location = useLocation()
@@ -86,8 +86,8 @@ export function ModuleNav({ organizationSlug, ...props }: ModuleNavProps) {
 	)
 }
 
-// Pilule arrondie, comme la nav des consoles Google : l'état actif est une
-// teinte de marque, pas un contraste de fond.
+// Rounded pill, like the Google consoles' nav: the active state is a brand
+// tint, not a background contrast.
 const pillClassName =
 	'rounded-full font-medium data-[active=true]:font-semibold group-data-[collapsible=icon]:rounded-full'
 

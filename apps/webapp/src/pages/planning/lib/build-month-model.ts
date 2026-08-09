@@ -22,9 +22,9 @@ import type { PlanningEntry, PlanningResource } from '#/pages/planning/types'
 const DAYS_PER_WEEK = 7
 
 /**
- * Nombre d'entrées horaires affichées dans une case avant de basculer sur un
- * compteur. Une case de mois a une hauteur fixe : au-delà, on annonce le reste
- * plutôt que de rogner silencieusement.
+ * Number of timed entries a cell shows before switching to a counter. A month
+ * cell has a fixed height: past that, we announce the remainder rather than
+ * silently clipping it.
  */
 export const MONTH_CELL_ENTRY_LIMIT = 4
 
@@ -33,25 +33,25 @@ export interface MonthEntryVM {
 	entryId: string
 	nature: CalendarNature | 'unknown'
 	title: string
-	/** Heure de début sur ce jour, vide pour une entrée qui vient de la veille. */
+	/** Start time on that day, empty for an entry carried over from the day before. */
 	timeLabel: string
 	entry: PlanningEntry
 	detail: EventDetailVM
 }
 
-/** Bandeau d'une entrée à la journée, étalé sur les colonnes qu'elle couvre. */
+/** Banner of an all-day entry, spread over the columns it covers. */
 export interface MonthSpanVM {
 	key: string
 	entryId: string
 	nature: CalendarNature | 'unknown'
 	title: string
-	/** Colonne de départ dans la semaine, 0 = lundi. */
+	/** Starting column within the week, 0 = Monday. */
 	startIndex: number
-	/** Nombre de colonnes couvertes dans cette semaine. */
+	/** Number of columns covered within this week. */
 	length: number
-	/** Rang vertical dans le bandeau, pour ne pas superposer deux entrées. */
+	/** Vertical rank within the banner, so two entries never overlap. */
 	lane: number
-	/** L'entrée déborde avant le début / après la fin de cette semaine. */
+	/** The entry spills before the start / after the end of this week. */
 	continuesBefore: boolean
 	continuesAfter: boolean
 	entry: PlanningEntry
@@ -60,35 +60,35 @@ export interface MonthSpanVM {
 
 export interface MonthDayVM {
 	date: string
-	/** Numéro du jour, ou « 1 sept. » au changement de mois, comme le fait Apple. */
+	/** Day number, or "1 sept." at a month change, the way Apple does it. */
 	dayLabel: string
 	isToday: boolean
-	/** Jour d'un mois voisin, affiché en retrait pour compléter la semaine. */
+	/** Day of a neighbouring month, dimmed to complete the week. */
 	isOutsideMonth: boolean
 	isWeekend: boolean
 	entries: MonthEntryVM[]
-	/** Entrées horaires non affichées faute de place. */
+	/** Timed entries left unshown for lack of room. */
 	hiddenCount: number
 }
 
 export interface MonthWeekVM {
 	days: MonthDayVM[]
 	spans: MonthSpanVM[]
-	/** Hauteur du bandeau des journées entières, en rangs. */
+	/** Height of the all-day banner, in ranks. */
 	laneCount: number
 }
 
 export interface MonthModel {
 	weeks: MonthWeekVM[]
 	weekdayLabels: string[]
-	/** Entrées écartées par les filtres, tous jours confondus. */
+	/** Entries dropped by the filters, across every day. */
 	hiddenByFilter: number
 }
 
 export interface BuildMonthModelInput {
 	from: string
 	to: string
-	/** Mois affiché, au format `YYYY-MM` — sert à griser les jours voisins. */
+	/** Displayed month, as `YYYY-MM` — used to dim the neighbouring days. */
 	month: string
 	entries: PlanningEntry[]
 	resources: PlanningResource[]
@@ -241,8 +241,8 @@ function buildSpans(params: {
 		})
 		.sort((a, b) => a.startIndex - b.startIndex || b.length - a.length)
 
-	// Même répartition en rangs que les chevauchements horaires : l'axe est ici
-	// l'index de colonne au lieu de la minute.
+	// Same rank spreading as timed overlaps: here the axis is the column index
+	// instead of the minute.
 	return stackOverlapping(candidates, (candidate) => ({
 		startMinute: candidate.startIndex,
 		endMinute: candidate.startIndex + candidate.length,
@@ -267,9 +267,9 @@ function buildSpans(params: {
 }
 
 /**
- * Description d'une entrée pour le panneau de détail, dans le format que la
- * vue semaine produit déjà — c'est ce contrat commun qui laisse les deux
- * projections partager le même panneau.
+ * Describes an entry for the detail panel, in the format the week view already
+ * produces — that shared contract is what lets both projections share the same
+ * panel.
  */
 function buildDetail(params: {
 	entry: PlanningEntry
