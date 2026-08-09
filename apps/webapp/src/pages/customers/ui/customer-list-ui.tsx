@@ -127,8 +127,7 @@ export function CustomerListUI({
 	const [draft, setDraft] = useState({
 		status: 'PROSPECT' as CustomerStatus,
 		pipelineStage: 'NEW' as CustomerPipelineStage,
-		firstName: '',
-		lastName: '',
+		name: '',
 		email: '',
 		phone: '',
 	})
@@ -201,14 +200,13 @@ export function CustomerListUI({
 		return () => window.removeEventListener('popstate', syncFromUrl)
 	}, [onPageChange, onPageSizeChange])
 
-	const canCreate = draft.firstName.trim() && draft.lastName.trim()
+	const canCreate = draft.name.trim().length > 0
 
 	const resetDraft = () => {
 		setDraft({
 			status: 'PROSPECT',
 			pipelineStage: 'NEW',
-			firstName: '',
-			lastName: '',
+			name: '',
 			email: '',
 			phone: '',
 		})
@@ -224,8 +222,7 @@ export function CustomerListUI({
 		await onAdd?.({
 			status: draft.status,
 			pipeline_stage: draft.status === 'CLIENT' ? 'WON' : draft.pipelineStage,
-			first_name: draft.firstName.trim(),
-			last_name: draft.lastName.trim(),
+			name: draft.name.trim(),
 			email: draft.email.trim() || null,
 			phone: draft.phone.trim() || null,
 		})
@@ -352,24 +349,12 @@ export function CustomerListUI({
 										</div>
 									) : null}
 								</div>
-								<div className="grid gap-4 sm:grid-cols-2">
-									<Field
-										label="Prénom"
-										value={draft.firstName}
-										onChange={(firstName) =>
-											setDraft((v) => ({ ...v, firstName }))
-										}
-										required
-									/>
-									<Field
-										label="Nom"
-										value={draft.lastName}
-										onChange={(lastName) =>
-											setDraft((v) => ({ ...v, lastName }))
-										}
-										required
-									/>
-								</div>
+								<Field
+									label="Nom ou raison sociale"
+									value={draft.name}
+									onChange={(name) => setDraft((v) => ({ ...v, name }))}
+									required
+								/>
 							</FormSection>
 
 							<FormSection

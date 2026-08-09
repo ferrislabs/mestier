@@ -28,12 +28,7 @@ where
         &mut self,
         command: CreateCustomerCommand,
     ) -> Result<Customer, CoreError> {
-        validate_customer(
-            &command.last_name,
-            &command.first_name,
-            &command.phone,
-            &command.email,
-        )?;
+        validate_customer(&command.name, &command.phone, &command.email)?;
 
         let now = Utc::now();
         self.repo
@@ -42,8 +37,7 @@ where
                 organization_id: command.organization_id,
                 status: command.status,
                 pipeline_stage: command.pipeline_stage,
-                last_name: command.last_name,
-                first_name: command.first_name,
+                name: command.name,
                 phone: command.phone,
                 email: command.email,
                 deleted_at: None,
@@ -72,18 +66,12 @@ where
         &mut self,
         command: UpdateCustomerCommand,
     ) -> Result<Customer, CoreError> {
-        validate_customer(
-            &command.last_name,
-            &command.first_name,
-            &command.phone,
-            &command.email,
-        )?;
+        validate_customer(&command.name, &command.phone, &command.email)?;
 
         let mut customer = self.get_customer(command.id).await?;
         customer.status = command.status;
         customer.pipeline_stage = command.pipeline_stage;
-        customer.last_name = command.last_name;
-        customer.first_name = command.first_name;
+        customer.name = command.name;
         customer.phone = command.phone;
         customer.email = command.email;
         customer.updated_at = Utc::now();
@@ -98,13 +86,11 @@ where
 }
 
 fn validate_customer(
-    last_name: &str,
-    first_name: &str,
+    name: &str,
     phone: &Option<String>,
     email: &Option<String>,
 ) -> Result<(), CoreError> {
-    validate_required("customer last name", last_name)?;
-    validate_required("customer first name", first_name)?;
+    validate_required("customer name", name)?;
     validate_optional("customer phone", phone)?;
     validate_optional("customer email", email)?;
     Ok(())
@@ -140,8 +126,7 @@ mod tests {
             organization_id: OrganizationId(Uuid::new_v4()),
             status: crate::CustomerStatus::Prospect,
             pipeline_stage: crate::CustomerPipelineStage::New,
-            last_name: "Dupont".to_owned(),
-            first_name: "Alice".to_owned(),
+            name: "Alice Dupont".to_owned(),
             phone: Some("+33123456789".to_owned()),
             email: Some("alice@example.com".to_owned()),
             deleted_at: None,
@@ -164,15 +149,14 @@ mod tests {
                 organization_id: OrganizationId(Uuid::new_v4()),
                 status: crate::CustomerStatus::Prospect,
                 pipeline_stage: crate::CustomerPipelineStage::New,
-                last_name: "Dupont".to_owned(),
-                first_name: "Alice".to_owned(),
+                name: "Alice Dupont".to_owned(),
                 phone: None,
                 email: None,
             })
             .await
             .unwrap();
 
-        assert_eq!(created.last_name, "Dupont");
+        assert_eq!(created.name, "Alice Dupont");
     }
 
     #[tokio::test]
@@ -193,15 +177,14 @@ mod tests {
                 id,
                 status: crate::CustomerStatus::Client,
                 pipeline_stage: crate::CustomerPipelineStage::Won,
-                last_name: "Martin".to_owned(),
-                first_name: "Alice".to_owned(),
+                name: "Syndic Martin".to_owned(),
                 phone: Some("0102030405".to_owned()),
                 email: None,
             })
             .await
             .unwrap();
 
-        assert_eq!(updated.last_name, "Martin");
+        assert_eq!(updated.name, "Syndic Martin");
         assert_eq!(updated.status, crate::CustomerStatus::Client);
         assert_eq!(updated.pipeline_stage, crate::CustomerPipelineStage::Won);
         assert_eq!(updated.phone.as_deref(), Some("0102030405"));
@@ -249,8 +232,7 @@ mod tests {
                 organization_id: OrganizationId(Uuid::new_v4()),
                 status: crate::CustomerStatus::Prospect,
                 pipeline_stage: crate::CustomerPipelineStage::New,
-                last_name: " ".to_owned(),
-                first_name: "Alice".to_owned(),
+                name: " ".to_owned(),
                 phone: None,
                 email: None,
             })

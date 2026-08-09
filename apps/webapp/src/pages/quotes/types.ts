@@ -40,7 +40,7 @@ export function emptyQuoteLine(clientId = 'line-1'): QuoteLineFormValues {
 }
 
 export function customerDisplayName(customer: Customer): string {
-	return `${customer.first_name} ${customer.last_name}`.trim()
+	return customer.name.trim()
 }
 
 export function customerContextDisplayName(

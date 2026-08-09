@@ -58,8 +58,7 @@ function CustomerPipeline({
 			body: {
 				status: pipelineStage === 'WON' ? 'CLIENT' : 'PROSPECT',
 				pipeline_stage: pipelineStage,
-				first_name: customer.first_name,
-				last_name: customer.last_name,
+				name: customer.name,
 				email: customer.email,
 				phone: customer.phone,
 			},

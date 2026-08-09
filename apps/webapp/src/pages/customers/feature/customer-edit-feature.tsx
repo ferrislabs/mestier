@@ -155,8 +155,7 @@ function CustomerEditInner({
 				body: {
 					status: value.status,
 					pipeline_stage: value.pipelineStage,
-					first_name: value.firstName.trim(),
-					last_name: value.lastName.trim(),
+					name: value.name.trim(),
 					email: value.email.trim() || null,
 					phone: value.phone.trim() || null,
 				},
@@ -313,8 +312,7 @@ function CustomerEditInner({
 								body: {
 									status: promotedValues.status,
 									pipeline_stage: promotedValues.pipelineStage,
-									first_name: promotedValues.firstName.trim(),
-									last_name: promotedValues.lastName.trim(),
+									name: promotedValues.name.trim(),
 									email: promotedValues.email.trim() || null,
 									phone: promotedValues.phone.trim() || null,
 								},
