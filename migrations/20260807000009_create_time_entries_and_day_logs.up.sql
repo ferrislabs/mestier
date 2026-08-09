@@ -1,10 +1,16 @@
--- Field clocking: actual time spent on a work order, plus declared end-of-day.
+-- Field clocking: actual time spent on a task, plus declared end-of-day.
 -- Distinct from employee_work_time (planned capacity / rhythms).
+--
+-- Originally numbered 20260807000005, which collided with
+-- `rename_work_orders_to_tasks`: sqlx keys migrations on the version alone, so
+-- one of the two was silently treated as already applied and never ran. Moved
+-- past 20260807000008 — hence after the rename, which is why the foreign key
+-- points at `tasks` rather than the `work_orders` this file first referenced.
 
 CREATE TABLE time_entries (
     id             UUID        PRIMARY KEY,
     org_id         UUID        NOT NULL REFERENCES organizations(id),
-    work_order_id  UUID        NOT NULL REFERENCES work_orders(id),
+    task_id        UUID        NOT NULL REFERENCES tasks(id),
     employee_id    UUID        NOT NULL REFERENCES employees(id),
     started_at     TIMESTAMPTZ NOT NULL,
     ended_at       TIMESTAMPTZ NULL,
@@ -16,7 +22,7 @@ CREATE TABLE time_entries (
 );
 
 CREATE INDEX idx_time_entries_org_id ON time_entries(org_id);
-CREATE INDEX idx_time_entries_work_order_id ON time_entries(work_order_id);
+CREATE INDEX idx_time_entries_task_id ON time_entries(task_id);
 CREATE INDEX idx_time_entries_employee_id_started_at ON time_entries(employee_id, started_at);
 
 -- An employee may have only one open (active) time entry at a time.
