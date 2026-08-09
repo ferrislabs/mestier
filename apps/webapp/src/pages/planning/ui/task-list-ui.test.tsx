@@ -62,15 +62,15 @@ function baseProps(overrides: Partial<TaskListUIProps> = {}): TaskListUIProps {
 	}
 }
 
-describe('TaskListUI — rendu des lignes', () => {
-	it('affiche chaque tâche racine avec son titre et ses assignés', () => {
+describe('TaskListUI — row rendering', () => {
+	it('shows every root task with its title and its assignees', () => {
 		render(<TaskListUI {...baseProps()} />)
 		expect(screen.getByText('Chantier toiture')).toBeDefined()
 		expect(screen.getByText('Réunion hebdo')).toBeDefined()
 		expect(screen.getByText('Alix Martin')).toBeDefined()
 	})
 
-	it("une racine sans enfant n'a pas de chevron", () => {
+	it('a root with no child has no chevron', () => {
 		render(<TaskListUI {...baseProps()} />)
 		const row = screen.getByTestId('task-row-root-2')
 		expect(
@@ -78,7 +78,7 @@ describe('TaskListUI — rendu des lignes', () => {
 		).toBeNull()
 	})
 
-	it('une racine avec enfants affiche un chevron et son nombre d’enfants', () => {
+	it('a root with children shows a chevron and its child count', () => {
 		render(<TaskListUI {...baseProps()} />)
 		const row = screen.getByTestId('task-row-root-1')
 		expect(
@@ -87,12 +87,12 @@ describe('TaskListUI — rendu des lignes', () => {
 		expect(screen.getByText('2 sous-tâches')).toBeDefined()
 	})
 
-	it('affiche un état de chargement', () => {
+	it('shows a loading state', () => {
 		render(<TaskListUI {...baseProps({ isLoading: true, rows: [] })} />)
 		expect(screen.getByText(/Chargement/)).toBeDefined()
 	})
 
-	it('affiche la fenêtre d’une tâche racine journée entière comme une date, pas une plage de minuit à minuit', () => {
+	it("shows a full-day root task's window as a date, not a midnight-to-midnight range", () => {
 		const allDayRoot: TaskListRowVM = {
 			...ROOT_WITHOUT_CHILDREN,
 			id: 'root-3',
@@ -110,12 +110,12 @@ describe('TaskListUI — rendu des lignes', () => {
 		expect(row.textContent).not.toContain('00:00')
 	})
 
-	it('affiche un état vide', () => {
+	it('shows an empty state', () => {
 		render(<TaskListUI {...baseProps({ rows: [] })} />)
 		expect(screen.getByText(/Aucune tâche/)).toBeDefined()
 	})
 
-	it("affiche l'erreur sans planter", () => {
+	it('shows the error without crashing', () => {
 		render(
 			<TaskListUI {...baseProps({ error: 'Échec du chargement', rows: [] })} />,
 		)
@@ -123,8 +123,8 @@ describe('TaskListUI — rendu des lignes', () => {
 	})
 })
 
-describe('TaskListUI — dépliage', () => {
-	it('appelle onToggleExpand avec l’id quand le chevron est cliqué, sans ouvrir la tâche', async () => {
+describe('TaskListUI — expansion', () => {
+	it('calls onToggleExpand with the id when the chevron is clicked, without opening the task', async () => {
 		const user = userEvent.setup()
 		const onToggleExpand = vi.fn()
 		const onOpenTask = vi.fn()
@@ -137,7 +137,7 @@ describe('TaskListUI — dépliage', () => {
 		expect(onOpenTask).not.toHaveBeenCalled()
 	})
 
-	it('rend les lignes de sous-tâches fournies pour une racine dépliée', () => {
+	it('renders the given subtask rows for an expanded root', () => {
 		render(
 			<TaskListUI
 				{...baseProps({
@@ -151,7 +151,7 @@ describe('TaskListUI — dépliage', () => {
 		expect(screen.getByTestId('fake-subtask-row')).toBeDefined()
 	})
 
-	it('ne rend aucune ligne de sous-tâche pour une racine repliée', () => {
+	it('renders no subtask row for a collapsed root', () => {
 		render(
 			<TaskListUI
 				{...baseProps({
@@ -166,7 +166,7 @@ describe('TaskListUI — dépliage', () => {
 })
 
 describe('TaskListUI — ouverture', () => {
-	it('appelle onOpenTask avec l’id quand la ligne est cliquée', async () => {
+	it('calls onOpenTask with the id when the row is clicked', async () => {
 		const user = userEvent.setup()
 		const onOpenTask = vi.fn()
 		render(<TaskListUI {...baseProps({ onOpenTask })} />)
@@ -175,7 +175,7 @@ describe('TaskListUI — ouverture', () => {
 		expect(onOpenTask).toHaveBeenCalledWith('root-2')
 	})
 
-	it('rend le taskSheet fourni par la feature', () => {
+	it('renders the taskSheet provided by the feature', () => {
 		render(
 			<TaskListUI
 				{...baseProps({ taskSheet: <div data-testid="fake-sheet" /> })}
@@ -186,7 +186,7 @@ describe('TaskListUI — ouverture', () => {
 })
 
 describe('TaskListUI — pagination', () => {
-	it('désactive les boutons quand il n’y a pas de page suivante/précédente', () => {
+	it('disables the buttons when there is no next/previous page', () => {
 		render(<TaskListUI {...baseProps()} />)
 		expect(
 			screen
@@ -198,7 +198,7 @@ describe('TaskListUI — pagination', () => {
 		).toBe(true)
 	})
 
-	it('appelle onNextPage/onPreviousPage quand activés', async () => {
+	it('calls onNextPage/onPreviousPage when enabled', async () => {
 		const user = userEvent.setup()
 		const onNextPage = vi.fn()
 		const onPreviousPage = vi.fn()
@@ -224,7 +224,7 @@ describe('TaskListUI — pagination', () => {
 	})
 })
 
-describe('TaskListUI — pas d’appel réseau', () => {
+describe('TaskListUI — no network call', () => {
 	let fetchSpy: ReturnType<typeof createFetchSpy>
 
 	function createFetchSpy() {

@@ -50,8 +50,8 @@ describe('userStorageKey', () => {
 		if (!manager) throw new Error('user manager expected')
 
 		window.localStorage.clear()
-		// `storeUser` traverse le vrai `WebStorageStateStore` : la clé observée
-		// est celle de la librairie, pas la nôtre.
+		// `storeUser` goes through the real `WebStorageStateStore`, so the key
+		// observed here is the library's own, not ours.
 		await manager.storeUser({
 			toStorageString: () => '{}',
 		} as never)

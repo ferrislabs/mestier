@@ -213,7 +213,7 @@ function renderFeature(
 }
 
 describe('TaskListFeature — chargement', () => {
-	it('charge les tâches racines de la page 1, sans parent_task_id', async () => {
+	it("loads page 1's root tasks, with no parent_task_id", async () => {
 		const { calls } = renderFeature((api) =>
 			api.mockGet(TASKS_PATH, tasksHandler([task()])),
 		)
@@ -232,8 +232,8 @@ describe('TaskListFeature — chargement', () => {
 	})
 })
 
-describe('TaskListFeature — dépliage paresseux', () => {
-	it("ne charge les sous-tâches qu'au moment du dépliage, pas au rendu initial", async () => {
+describe('TaskListFeature — lazy expansion', () => {
+	it('loads subtasks only on expansion, not on the initial render', async () => {
 		const { calls } = renderFeature((api) =>
 			api.mockGet(TASKS_PATH, (params) => {
 				const query = (params as { query?: { parent_task_id?: string } }).query
@@ -283,7 +283,7 @@ describe('TaskListFeature — dépliage paresseux', () => {
 })
 
 describe('TaskListFeature — pagination', () => {
-	it('demande la page suivante quand "Suivant" est cliqué', async () => {
+	it('asks for the next page when "Suivant" is clicked', async () => {
 		const rootTasks = [task()]
 		const { calls } = renderFeature((api) =>
 			api.mockGet(TASKS_PATH, (params) => {
@@ -325,8 +325,8 @@ describe('TaskListFeature — pagination', () => {
 	})
 })
 
-describe('TaskListFeature — chargement du référentiel', () => {
-	it("n'affiche la table qu'une fois les tâches ET le référentiel chargés, jamais avec un assigné non résolu", async () => {
+describe('TaskListFeature — reference data loading', () => {
+	it('renders the table only once tasks AND reference data are loaded, never with an unresolved assignee', async () => {
 		let resolvePlanning: (value: unknown) => void = () => {}
 		const planningPromise = new Promise((resolve) => {
 			resolvePlanning = resolve
@@ -360,8 +360,8 @@ describe('TaskListFeature — chargement du référentiel', () => {
 	})
 })
 
-describe('TaskListFeature — journée entière', () => {
-	it('une sous-tâche sans dates propres, sous une racine journée entière, affiche la date héritée sans horaire', async () => {
+describe('TaskListFeature — full day', () => {
+	it('a subtask with no dates of its own, under a full-day root, shows the inherited date with no time', async () => {
 		const { mockGet } = renderFeature((api) =>
 			api.mockGet(TASKS_PATH, (params) => {
 				const query = (params as { query?: { parent_task_id?: string } }).query
@@ -409,8 +409,8 @@ describe('TaskListFeature — journée entière', () => {
 	})
 })
 
-describe('TaskListFeature — ouverture du Sheet', () => {
-	it('ouvre le Sheet sur la tâche cliquée', async () => {
+describe('TaskListFeature — opening the Sheet', () => {
+	it('opens the Sheet on the clicked task', async () => {
 		const { calls, mockGet } = renderFeature((api) =>
 			api.mockGet(TASKS_PATH, tasksHandler([task()])),
 		)
@@ -438,7 +438,7 @@ describe('TaskListFeature — ouverture du Sheet', () => {
 		})
 	})
 
-	it('ouvre le Sheet sur la bonne sous-tâche', async () => {
+	it('opens the Sheet on the right subtask', async () => {
 		const { calls, mockGet } = renderFeature((api) =>
 			api.mockGet(TASKS_PATH, (params) => {
 				const query = (params as { query?: { parent_task_id?: string } }).query

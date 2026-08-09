@@ -12,11 +12,11 @@ function labelsOf(pathname: string, detailLabel?: string): string[] {
 }
 
 describe('buildBreadcrumbItems', () => {
-	it("n'affiche que l'organisation à la racine du tenant", () => {
+	it('shows only the organization at the tenant root', () => {
 		expect(labelsOf('/o/baptiste')).toEqual(['Baptiste'])
 	})
 
-	it("ajoute l'entrée de nav correspondante", () => {
+	it('adds the matching nav entry', () => {
 		expect(labelsOf('/o/baptiste/crm/customers')).toEqual([
 			'Baptiste',
 			'CRM',
@@ -25,7 +25,7 @@ describe('buildBreadcrumbItems', () => {
 		expect(labelsOf('/o/baptiste/settings')).toEqual(['Baptiste', 'Paramètres'])
 	})
 
-	it('empile les entrées de la plus générale à la plus précise', () => {
+	it('stacks entries from the most general to the most precise', () => {
 		expect(labelsOf('/o/baptiste/crm/customers/pipeline')).toEqual([
 			'Baptiste',
 			'CRM',
@@ -34,13 +34,13 @@ describe('buildBreadcrumbItems', () => {
 		])
 	})
 
-	it('ajoute le libellé de détail en dernier', () => {
+	it('adds the detail label last', () => {
 		expect(
 			labelsOf('/o/baptiste/crm/customers/abc-123', 'Marie Leroy'),
 		).toEqual(['Baptiste', 'CRM', 'Clients', 'Marie Leroy'])
 	})
 
-	it('préfixe chaque cible de lien par le tenant, sauf le détail', () => {
+	it('prefixes every link target with the tenant, except the detail', () => {
 		const items = buildBreadcrumbItems({
 			pathname: '/o/baptiste/crm/customers/abc-123',
 			organizationName: 'Baptiste',
@@ -54,7 +54,7 @@ describe('buildBreadcrumbItems', () => {
 		expect(items[3]?.to).toBeUndefined()
 	})
 
-	it('résout le fil des devis', () => {
+	it('resolves the quotes trail', () => {
 		expect(labelsOf('/o/baptiste/crm/quotes')).toEqual([
 			'Baptiste',
 			'CRM',
@@ -68,7 +68,7 @@ describe('buildBreadcrumbItems', () => {
 		])
 	})
 
-	it('résout le fil des employés', () => {
+	it('resolves the employees trail', () => {
 		expect(labelsOf('/o/baptiste/hr/employees')).toEqual([
 			'Baptiste',
 			'RH',
@@ -76,7 +76,7 @@ describe('buildBreadcrumbItems', () => {
 		])
 	})
 
-	it('résout le fil du planning', () => {
+	it('resolves the planning trail', () => {
 		expect(labelsOf('/o/baptiste/planning/team')).toEqual([
 			'Baptiste',
 			'Planning',
@@ -84,7 +84,7 @@ describe('buildBreadcrumbItems', () => {
 		])
 	})
 
-	it('résout le fil de la liste des tâches', () => {
+	it('resolves the task list trail', () => {
 		expect(labelsOf('/o/baptiste/planning/tasks')).toEqual([
 			'Baptiste',
 			'Planning',
@@ -94,7 +94,7 @@ describe('buildBreadcrumbItems', () => {
 })
 
 describe('matchingTargets', () => {
-	it("trie du plus court au plus long, quel que soit l'ordre d'entrée", () => {
+	it('sorts shortest to longest, whatever the input order', () => {
 		const targets: NavTarget[] = [
 			{ id: 'c', label: 'C', to: '/a/b/c' },
 			{ id: 'b', label: 'B', to: '/a/b' },
@@ -106,7 +106,7 @@ describe('matchingTargets', () => {
 		expect(result.map((target) => target.label)).toEqual(['A', 'B', 'C'])
 	})
 
-	it('exclut un onglet annoncé même si son chemin correspondrait', () => {
+	it('excludes an announced tab even when its path would match', () => {
 		const targets: NavTarget[] = [
 			{ id: 'a', label: 'A', to: '/a', status: 'coming-soon' },
 			{ id: 'b', label: 'B', to: '/a/b' },

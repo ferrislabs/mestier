@@ -1,15 +1,14 @@
-/** Segment qui porte le tenant dans l'URL : `/o/<slug>/…`. */
+/** Segment carrying the tenant in the URL: `/o/<slug>/…`. */
 export const ORG_PATH_SEGMENT = '/o'
 
-/** Gabarit de route TanStack correspondant au préfixe d'organisation. */
+/** TanStack route template matching the organization prefix. */
 export const ORG_ROUTE_PREFIX = `${ORG_PATH_SEGMENT}/$organizationSlug`
 
 /**
- * Préfixe un chemin relatif à l'organisation.
+ * Prefixes a path relative to the organization.
  *
- * Les chemins du registre de modules restent relatifs (`/crm/customers`) : le
- * tenant n'est ajouté qu'au moment de construire un lien, pour qu'un module
- * n'ait jamais à connaître la forme du préfixe.
+ * Module registry paths stay relative (`/crm/customers`): the tenant is only
+ * added when building a link, so a module never has to know the prefix's shape.
  */
 export function buildOrgPath(organizationSlug: string, to: string): string {
 	const base = `${ORG_PATH_SEGMENT}/${organizationSlug}`
@@ -20,13 +19,13 @@ export function buildOrgPath(organizationSlug: string, to: string): string {
 
 interface OrgPathParts {
 	organizationSlug: string | null
-	/** Chemin relatif à l'organisation, toujours préfixé par `/`. */
+	/** Path relative to the organization, always prefixed with `/`. */
 	path: string
 }
 
 /**
- * Sépare le tenant du reste du chemin. Sans préfixe d'organisation, le chemin
- * est renvoyé tel quel — c'est le cas des routes hors organisation.
+ * Splits the tenant off the rest of the path. With no organization prefix the
+ * path is returned as is — the case for routes outside any organization.
  */
 export function splitOrgPath(pathname: string): OrgPathParts {
 	if (!pathname.startsWith(`${ORG_PATH_SEGMENT}/`)) {

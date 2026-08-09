@@ -9,12 +9,12 @@ import type { AppModule } from '#/modules/types'
 
 function moduleById(id: AppModule['id']): AppModule {
 	const module = MODULES.find((module) => module.id === id)
-	if (!module) throw new Error(`registre: module ${id} manquant`)
+	if (!module) throw new Error(`registry: module ${id} missing`)
 	return module
 }
 
 describe('resolveSection', () => {
-	it('retient la section la plus profonde qui couvre le chemin', () => {
+	it('keeps the deepest section covering the path', () => {
 		const crm = moduleById('crm')
 
 		expect(resolveSection(crm, '/crm/customers')?.id).toBe('customers')
@@ -23,39 +23,39 @@ describe('resolveSection', () => {
 		expect(resolveSection(crm, '/crm/quotes/abc-123')?.id).toBe('quotes')
 	})
 
-	it('ne retient aucune section sur la racine du module', () => {
+	it('keeps no section on the module root', () => {
 		expect(resolveSection(moduleById('crm'), '/crm')).toBeUndefined()
 	})
 
-	it('ignore une section annoncée mais non navigable', () => {
+	it('ignores a section announced but not navigable', () => {
 		expect(resolveSection(moduleById('crm'), '/crm/invoices')).toBeUndefined()
 	})
 })
 
 describe('resolveScope', () => {
-	it('résout la section malgré le préfixe de tenant', () => {
+	it('resolves the section despite the tenant prefix', () => {
 		expect(resolveScope('/o/dupont/crm/customers').label).toBe('Clients')
 		expect(resolveScope('/o/dupont/crm/quotes').label).toBe('Devis')
 	})
 
-	it('retombe sur le libellé du module hors de toute section', () => {
+	it('falls back to the module label outside any section', () => {
 		expect(resolveScope('/o/dupont/crm').label).toBe('CRM')
 	})
 
-	it("n'expose aucun onglet tant que la section n'en déclare pas", () => {
+	it('exposes no tab until the section declares one', () => {
 		expect(resolveScope('/o/dupont/crm/customers').tabs).toEqual([])
 	})
 })
 
 describe('crossOrganizationPath', () => {
-	it('conserve un écran de liste', () => {
+	it('keeps a list screen', () => {
 		expect(crossOrganizationPath('/crm/customers')).toBe('/crm/customers')
 		expect(crossOrganizationPath('/crm/customers/pipeline')).toBe(
 			'/crm/customers/pipeline',
 		)
 	})
 
-	it("remonte à la liste depuis la fiche d'une entité", () => {
+	it('climbs back to the list from an entity screen', () => {
 		expect(crossOrganizationPath('/crm/customers/abc-123')).toBe(
 			'/crm/customers',
 		)
@@ -64,12 +64,12 @@ describe('crossOrganizationPath', () => {
 		)
 	})
 
-	it("garde la racine d'un module qui a une vue d'ensemble", () => {
+	it('keeps the root of a module that has an overview', () => {
 		expect(crossOrganizationPath('/')).toBe('/')
 		expect(crossOrganizationPath('/settings')).toBe('/settings')
 	})
 
-	it("retombe sur l'atterrissage d'un module sans vue d'ensemble", () => {
+	it('falls back to the landing of a module without an overview', () => {
 		expect(crossOrganizationPath('/crm')).toBe('/crm/customers')
 	})
 })

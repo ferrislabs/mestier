@@ -15,7 +15,7 @@ function baseProps() {
 }
 
 describe('PlanningToolbar — bascule de vue', () => {
-	it('affiche les trois onglets et marque la vue active', () => {
+	it('shows the three tabs and marks the active view', () => {
 		render(<PlanningToolbar {...baseProps()} />)
 
 		const semaine = screen.getByRole('tab', { name: 'Semaine' })
@@ -24,7 +24,7 @@ describe('PlanningToolbar — bascule de vue', () => {
 		expect(screen.getByRole('tab', { name: 'Mois' })).toBeDefined()
 	})
 
-	it('appelle onViewChange avec la vue cliquée', async () => {
+	it('calls onViewChange with the clicked view', async () => {
 		const user = userEvent.setup()
 		const props = baseProps()
 		render(<PlanningToolbar {...props} />)
@@ -35,8 +35,8 @@ describe('PlanningToolbar — bascule de vue', () => {
 	})
 })
 
-describe('PlanningToolbar — navigation précédent/suivant', () => {
-	it('recule d’une semaine en vue semaine', async () => {
+describe('PlanningToolbar — previous/next navigation', () => {
+	it('steps back one week in week view', async () => {
 		const user = userEvent.setup()
 		const props = baseProps()
 		render(<PlanningToolbar {...props} />)
@@ -46,7 +46,7 @@ describe('PlanningToolbar — navigation précédent/suivant', () => {
 		expect(props.onDateChange).toHaveBeenCalledWith('2026-07-31')
 	})
 
-	it('avance d’une semaine en vue semaine', async () => {
+	it('steps forward one week in week view', async () => {
 		const user = userEvent.setup()
 		const props = baseProps()
 		render(<PlanningToolbar {...props} />)
@@ -56,7 +56,7 @@ describe('PlanningToolbar — navigation précédent/suivant', () => {
 		expect(props.onDateChange).toHaveBeenCalledWith('2026-08-14')
 	})
 
-	it('avance d’un jour en vue jour', async () => {
+	it('steps forward one day in day view', async () => {
 		const user = userEvent.setup()
 		const props = { ...baseProps(), view: 'day' as const }
 		render(<PlanningToolbar {...props} />)
@@ -66,7 +66,7 @@ describe('PlanningToolbar — navigation précédent/suivant', () => {
 		expect(props.onDateChange).toHaveBeenCalledWith('2026-08-08')
 	})
 
-	it('avance d’un mois en vue mois', async () => {
+	it('steps forward one month in month view', async () => {
 		const user = userEvent.setup()
 		const props = { ...baseProps(), view: 'month' as const }
 		render(<PlanningToolbar {...props} />)
@@ -78,7 +78,7 @@ describe('PlanningToolbar — navigation précédent/suivant', () => {
 })
 
 describe('PlanningToolbar — bouton Aujourd’hui', () => {
-	it('cible la date fournie en contrôle plutôt que l’horloge réelle', async () => {
+	it('targets the controlled date rather than the real clock', async () => {
 		const user = userEvent.setup()
 		const props = { ...baseProps(), today: '2027-01-15' }
 		render(<PlanningToolbar {...props} />)
@@ -89,15 +89,15 @@ describe('PlanningToolbar — bouton Aujourd’hui', () => {
 	})
 })
 
-describe('PlanningToolbar — libellé de la période', () => {
-	it('affiche la période visible dans le déclencheur du calendrier', () => {
+describe('PlanningToolbar — period label', () => {
+	it('shows the visible period in the calendar trigger', () => {
 		render(<PlanningToolbar {...baseProps()} />)
 
 		expect(screen.getByText('3 août – 9 août')).toBeDefined()
 	})
 })
 
-describe('PlanningToolbar — pas d’appel réseau', () => {
+describe('PlanningToolbar — no network call', () => {
 	let fetchSpy: ReturnType<typeof createFetchSpy>
 
 	function createFetchSpy() {
@@ -114,7 +114,7 @@ describe('PlanningToolbar — pas d’appel réseau', () => {
 		fetchSpy.mockRestore()
 	})
 
-	it('ne déclenche aucun fetch au rendu ni pendant les interactions', async () => {
+	it('fires no fetch on render nor during interactions', async () => {
 		const user = userEvent.setup()
 		render(<PlanningToolbar {...baseProps()} />)
 

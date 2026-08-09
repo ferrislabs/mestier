@@ -130,7 +130,7 @@ describe('LabelPicker', () => {
 	})
 })
 
-describe('LabelPicker — pas d’appel réseau', () => {
+describe('LabelPicker — no network call', () => {
 	let fetchSpy: ReturnType<typeof createFetchSpy>
 
 	function createFetchSpy() {

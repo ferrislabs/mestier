@@ -7,7 +7,7 @@ import type {
 	PlanningWorkTime,
 } from '#/hooks/use-planning'
 
-// -- Vue et état d'URL ----------------------------------------------------
+// -- View and URL state ---------------------------------------------------
 
 export type PlanningView = 'day' | 'week' | 'month'
 

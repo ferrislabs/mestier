@@ -10,17 +10,17 @@ const TZ = 'Europe/Paris'
 const AMPLITUDE = { startMinute: 8 * 60, endMinute: 18 * 60 }
 
 describe('millisecondsUntilNextMinute', () => {
-	it('calcule le délai restant jusqu’à la prochaine frontière de minute', () => {
+	it('computes the delay left until the next minute boundary', () => {
 		const now = new Date('2026-08-10T12:30:15.250Z')
 		expect(millisecondsUntilNextMinute(now)).toBe(60_000 - 15_250)
 	})
 
-	it('renvoie une minute pleine pile sur une frontière de minute', () => {
+	it('returns a whole minute exactly on a minute boundary', () => {
 		const now = new Date('2026-08-10T12:31:00.000Z')
 		expect(millisecondsUntilNextMinute(now)).toBe(60_000)
 	})
 
-	it('renvoie une valeur toujours strictement positive et au plus 60000', () => {
+	it('returns a value always strictly positive and at most 60000', () => {
 		for (const seconds of [0, 1, 29, 59, 59.9]) {
 			const now = new Date(2026, 7, 10, 12, 30, Math.floor(seconds), 0)
 			const delay = millisecondsUntilNextMinute(now)
@@ -31,7 +31,7 @@ describe('millisecondsUntilNextMinute', () => {
 })
 
 describe('isCurrentTimeVisible', () => {
-	it('absent quand le jour courant est hors de la période visible', () => {
+	it('absent when the current day is outside the visible period', () => {
 		expect(
 			isCurrentTimeVisible({
 				now: new Date('2026-08-20T10:00:00Z'),
@@ -43,7 +43,7 @@ describe('isCurrentTimeVisible', () => {
 		).toBe(false)
 	})
 
-	it("absent quand l'heure courante est avant l'amplitude", () => {
+	it('absent when the current time is before the amplitude', () => {
 		expect(
 			isCurrentTimeVisible({
 				now: new Date('2026-08-05T05:00:00Z'), // 07:00 Paris
@@ -55,7 +55,7 @@ describe('isCurrentTimeVisible', () => {
 		).toBe(false)
 	})
 
-	it("absent quand l'heure courante est après l'amplitude", () => {
+	it('absent when the current time is after the amplitude', () => {
 		expect(
 			isCurrentTimeVisible({
 				now: new Date('2026-08-05T17:30:00Z'), // 19:30 Paris
@@ -67,7 +67,7 @@ describe('isCurrentTimeVisible', () => {
 		).toBe(false)
 	})
 
-	it("présent quand le jour est dans la période et l'heure dans l'amplitude", () => {
+	it('present when the day is in the period and the time in the amplitude', () => {
 		expect(
 			isCurrentTimeVisible({
 				now: new Date('2026-08-05T11:00:00Z'), // 13:00 Paris
@@ -79,7 +79,7 @@ describe('isCurrentTimeVisible', () => {
 		).toBe(true)
 	})
 
-	it('présent aux bornes inclusives de l’amplitude', () => {
+	it("present at the amplitude's inclusive bounds", () => {
 		const base = {
 			timeZone: TZ,
 			windowFrom: '2026-08-03',
@@ -96,7 +96,7 @@ describe('isCurrentTimeVisible', () => {
 })
 
 describe('currentTimePercent', () => {
-	it('place l’heure courante proportionnellement le long de l’amplitude', () => {
+	it('places the current time proportionally along the amplitude', () => {
 		const now = new Date('2026-08-05T11:00:00Z') // 13:00 Paris
 		expect(currentTimePercent(now, TZ, AMPLITUDE)).toBe(50)
 	})
@@ -111,13 +111,13 @@ describe('findTodayColumnIndex', () => {
 		'2026-08-07',
 	]
 
-	it('trouve l’index de la colonne du jour courant', () => {
+	it("finds the index of the current day's column", () => {
 		expect(
 			findTodayColumnIndex(columns, new Date('2026-08-05T11:00:00Z'), TZ),
 		).toBe(2)
 	})
 
-	it('renvoie null quand le jour courant n’est pas dans les colonnes', () => {
+	it('returns null when the current day is not among the columns', () => {
 		expect(
 			findTodayColumnIndex(columns, new Date('2026-08-20T11:00:00Z'), TZ),
 		).toBeNull()

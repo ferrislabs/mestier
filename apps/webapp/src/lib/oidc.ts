@@ -2,28 +2,28 @@ import { UserManager, WebStorageStateStore } from 'oidc-client-ts'
 import { getOidcConfiguration } from '#/lib/runtime-config'
 
 /**
- * FerrisKey fait tourner le jeton de rafraîchissement à chaque usage et révoque
- * toute la famille au moindre rejeu — un jeton déjà consommé n'est pas une
- * erreur récupérable, c'est la fin de la session. Comme l'access token ne vit
- * que cinq minutes, la webapp rafraîchit toutes les quatre minutes : deux
- * renouvellements qui se chevauchent suffisent à tuer la session entière.
+ * FerrisKey rotates the refresh token on every use and revokes the whole family
+ * on any replay — a token that has already been spent is not a recoverable
+ * error, it is the end of the session. Since the access token lives only five
+ * minutes, the webapp refreshes every four: two renewals overlapping is all it
+ * takes to kill the session outright.
  *
- * D'où ce module. Il ne reste qu'un seul renouveleur, sur deux axes :
- *  - un seul `UserManager` par document, car `react-oidc-context` n'appelle
- *    jamais `stopSilentRenew()` au démontage : chaque remontage (le HMR en dev)
- *    laisserait sinon un minuteur orphelin sur le même jeton ;
- *  - un seul onglet renouvelle à la fois, désigné par un Web Lock ; les autres
- *    adoptent le jeton que le leader vient d'écrire.
+ * Hence this module. It keeps exactly one renewer, along two axes:
+ *  - one `UserManager` per document, because `react-oidc-context` never calls
+ *    `stopSilentRenew()` on unmount: every remount (HMR in dev) would otherwise
+ *    strand a live timer on the same token;
+ *  - one tab renewing at a time, elected by a Web Lock; the others adopt the
+ *    token the leader just wrote.
  */
 
-/** Nom du verrou désignant l'onglet renouveleur. */
+/** Name of the lock that elects the renewing tab. */
 const RENEWAL_LOCK = 'mestier.oidc.silent-renew'
 
 /**
- * Clé sous laquelle `oidc-client-ts` range l'utilisateur : `WebStorageStateStore`
- * préfixe par `oidc.`, `UserManager` compose le reste. On la recalcule pour
- * écouter les renouvellements des autres onglets, et un test vérifie qu'elle
- * correspond toujours à ce que la librairie écrit réellement.
+ * The key `oidc-client-ts` files the user under: `WebStorageStateStore` prefixes
+ * with `oidc.`, `UserManager` composes the rest. We recompute it to listen for
+ * other tabs' renewals, and a test checks it still matches what the library
+ * actually writes.
  */
 export function userStorageKey(authority: string, clientId: string): string {
 	return `oidc.user:${authority}:${clientId}`
@@ -50,24 +50,24 @@ export function createUserManager(): UserManager | null {
 		response_type: 'code',
 		loadUserInfo: true,
 		userStore: new WebStorageStateStore({ store: window.localStorage }),
-		// Le renouvellement est démarré par `leadRenewalsForThisTab`, une fois le
-		// verrou obtenu — jamais par le constructeur, qui l'accorderait à tous.
+		// Renewal is started by `leadRenewalsForThisTab` once the lock is held —
+		// never by the constructor, which would grant it to every tab.
 		automaticSilentRenew: false,
 	})
 }
 
 /**
- * Prend le rôle de renouveleur dès que le verrou est libre, et le garde jusqu'à
- * la fermeture de l'onglet : la promesse rendue au navigateur ne se résout
- * jamais. Quand le leader disparaît, le verrou l'est aussi et un autre onglet
- * prend la relève — `SilentRenewService.start()` relit alors le jeton courant.
+ * Takes the renewer role as soon as the lock is free and holds it until the tab
+ * closes: the promise handed back to the browser never settles. When the leader
+ * goes away so does the lock, and another tab takes over —
+ * `SilentRenewService.start()` then re-reads the current token.
  */
 export function leadRenewalsForThisTab(
 	userManager: UserManager,
 ): Promise<void> {
 	if (typeof navigator === 'undefined' || !navigator.locks) {
-		// Sans Web Locks, on ne sait pas s'entendre entre onglets : mieux vaut
-		// renouveler et risquer la collision que laisser la session mourir.
+		// Without Web Locks there is no way for tabs to agree: better to renew
+		// and risk the collision than to let the session die.
 		userManager.startSilentRenew()
 		return Promise.resolve()
 	}
@@ -79,11 +79,11 @@ export function leadRenewalsForThisTab(
 }
 
 /**
- * Aligne cet onglet sur le jeton écrit par le leader. Sans ça un onglet suiveur
- * garderait en mémoire l'access token périmé et enverrait des requêtes vouées
- * au 401, alors qu'un jeton frais l'attend dans `localStorage`.
+ * Aligns this tab on the token the leader wrote. Without it a follower would
+ * keep the stale access token in memory and send requests doomed to 401 while a
+ * fresh token sits waiting in `localStorage`.
  *
- * Rend la fonction de désabonnement.
+ * Returns the unsubscribe function.
  */
 export function adoptRenewalsFromOtherTabs(
 	userManager: UserManager,
@@ -96,8 +96,8 @@ export function adoptRenewalsFromOtherTabs(
 	const onStorage = (event: StorageEvent) => {
 		if (event.key !== key) return
 
-		// Valeur effacée : le leader s'est déconnecté, ou sa session est morte.
-		// Suivre plutôt que de continuer avec un jeton que l'IdP a déjà oublié.
+		// Cleared value: the leader signed out, or its session died. Follow it
+		// out rather than carry on with a token the IdP has already forgotten.
 		if (event.newValue === null) {
 			void userManager.events.unload()
 			return
@@ -113,9 +113,9 @@ export function adoptRenewalsFromOtherTabs(
 let instance: UserManager | null | undefined
 
 /**
- * Le `UserManager` du document. `undefined` signifie « pas encore construit »,
- * `null` « authentification non configurée » — les distinguer évite de
- * reconstruire à chaque rendu quand la configuration est absente.
+ * The document's `UserManager`. `undefined` means "not built yet", `null` means
+ * "authentication not configured" — telling them apart avoids rebuilding on
+ * every render when the configuration is missing.
  */
 export function getUserManager(): UserManager | null {
 	if (instance !== undefined) return instance

@@ -12,15 +12,15 @@ function span(startsAt: string, endsAt: string, allDay = false): TimeSpan {
 }
 
 describe('entryOccursOnDate', () => {
-	it("une entrée d'un seul jour n'occupe que ce jour-là", () => {
+	it('a single-day entry occupies that day only', () => {
 		const s = span('2026-08-10T08:00:00Z', '2026-08-10T10:00:00Z')
 		expect(entryOccursOnDate(s, '2026-08-10', TZ)).toBe(true)
 		expect(entryOccursOnDate(s, '2026-08-09', TZ)).toBe(false)
 		expect(entryOccursOnDate(s, '2026-08-11', TZ)).toBe(false)
 	})
 
-	it('une absence de plusieurs jours occupe chacun de ses jours', () => {
-		// Congé du 10 au 14 août (bornes locales Paris).
+	it('a multi-day absence occupies each of its days', () => {
+		// Leave from 10 to 14 August (local Paris bounds).
 		const s = span(
 			'2026-08-10T00:00:00+02:00',
 			'2026-08-15T00:00:00+02:00',
@@ -33,7 +33,7 @@ describe('entryOccursOnDate', () => {
 		expect(entryOccursOnDate(s, '2026-08-15', TZ)).toBe(false)
 	})
 
-	it('une entrée journée entière ne déborde pas sur le lendemain (borne exclusive)', () => {
+	it('a full-day entry does not spill onto the next day (exclusive bound)', () => {
 		const s = span(
 			'2026-08-10T00:00:00+02:00',
 			'2026-08-11T00:00:00+02:00',
@@ -43,8 +43,8 @@ describe('entryOccursOnDate', () => {
 		expect(entryOccursOnDate(s, '2026-08-11', TZ)).toBe(false)
 	})
 
-	it('une entrée à cheval sur minuit local occupe les deux jours', () => {
-		// 22:00 Paris à 01:00 Paris le lendemain.
+	it('an entry straddling local midnight occupies both days', () => {
+		// 22:00 Paris to 01:00 Paris the next day.
 		const s = span('2026-08-10T20:00:00Z', '2026-08-10T23:00:00Z')
 		expect(entryOccursOnDate(s, '2026-08-10', TZ)).toBe(true)
 		expect(entryOccursOnDate(s, '2026-08-11', TZ)).toBe(true)
@@ -53,7 +53,7 @@ describe('entryOccursOnDate', () => {
 })
 
 describe('minuteSpanOnDate', () => {
-	it('renvoie 0–1440 pour une entrée journée entière', () => {
+	it('returns 0–1440 for a full-day entry', () => {
 		const s = span(
 			'2026-08-10T00:00:00+02:00',
 			'2026-08-11T00:00:00+02:00',
@@ -65,7 +65,7 @@ describe('minuteSpanOnDate', () => {
 		})
 	})
 
-	it('renvoie les minutes exactes pour une entrée entièrement dans le jour', () => {
+	it('returns the exact minutes for an entry fully inside the day', () => {
 		// 08:00–10:00 Paris.
 		const s = span('2026-08-10T06:00:00Z', '2026-08-10T08:00:00Z')
 		expect(minuteSpanOnDate(s, '2026-08-10', TZ)).toEqual({
@@ -74,8 +74,8 @@ describe('minuteSpanOnDate', () => {
 		})
 	})
 
-	it('coupe à 00:00 une entrée qui a commencé la veille', () => {
-		// 22:00 la veille à 01:00 le jour même (Paris) → sur le jour, 00:00–01:00.
+	it('clips at 00:00 an entry that started the day before', () => {
+		// 22:00 the day before to 01:00 the same day (Paris) → on that day, 00:00–01:00.
 		const s = span('2026-08-09T20:00:00Z', '2026-08-09T23:00:00Z')
 		expect(minuteSpanOnDate(s, '2026-08-10', TZ)).toEqual({
 			startMinute: 0,
@@ -83,8 +83,8 @@ describe('minuteSpanOnDate', () => {
 		})
 	})
 
-	it('coupe à 24:00 une entrée qui déborde sur le lendemain', () => {
-		// 22:00 Paris à 01:00 le lendemain → sur le jour, 22:00–24:00.
+	it('clips at 24:00 an entry spilling onto the next day', () => {
+		// 22:00 Paris to 01:00 the next day → on that day, 22:00–24:00.
 		const s = span('2026-08-10T20:00:00Z', '2026-08-10T23:00:00Z')
 		expect(minuteSpanOnDate(s, '2026-08-10', TZ)).toEqual({
 			startMinute: 22 * 60,

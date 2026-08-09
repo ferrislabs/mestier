@@ -76,7 +76,7 @@ describe('AssigneePicker', () => {
 	})
 })
 
-describe('AssigneePicker — pas d’appel réseau', () => {
+describe('AssigneePicker — no network call', () => {
 	let fetchSpy: ReturnType<typeof createFetchSpy>
 
 	function createFetchSpy() {

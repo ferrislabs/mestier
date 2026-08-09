@@ -19,7 +19,7 @@ import {
 	EventPopover,
 } from '#/pages/planning/ui/event-popover'
 
-/** Hauteur d'une heure de grille, en pixels. Fixe : c'est elle qui donne son échelle au calendrier. */
+/** Height of one grid hour, in pixels. Fixed: it is what gives the calendar its scale. */
 const HOUR_HEIGHT_PX = 64
 
 const GUTTER_CLASS = 'w-16 shrink-0 md:w-20'
@@ -28,8 +28,8 @@ export interface CalendarGridProps {
 	model: CalendarModel
 	callbacks: CalendarEventCallbacks
 	/**
-	 * Fige l'heure courante. La production l'omet — le trait avance seul ;
-	 * les tests passent un instant fixe, comme {@link CurrentTimeLine}.
+	 * Freezes the current time. Production omits it — the line moves on its
+	 * own; tests pass a fixed instant, like {@link CurrentTimeLine}.
 	 */
 	now?: Date
 }
@@ -45,9 +45,9 @@ export function CalendarGrid({ model, callbacks, now }: CalendarGridProps) {
 	const { startMinute, endMinute } = model.amplitude
 	const scrollToMinute = model.scrollToMinute
 
-	// La grille couvre les 24 h : on l'ouvre sur la première entrée de la période
-	// plutôt qu'à minuit, sinon l'écran s'ouvre sur des heures vides. On
-	// repositionne au changement de période, pas à chaque rendu.
+	// The grid covers the full 24 h: we open it on the period's first entry
+	// rather than at midnight, otherwise the screen opens on empty hours. We
+	// reposition when the period changes, not on every render.
 	useEffect(() => {
 		const container = scrollRef.current
 		if (!container) return
@@ -193,9 +193,9 @@ interface HourGutterProps {
 }
 
 function HourGutter({ marks, amplitude, height }: HourGutterProps) {
-	// Même repère que les traits d'heures : une position proportionnelle à
-	// l'amplitude, et non l'index de la marque — sinon les libellés se décalent
-	// dès que l'amplitude ne commence pas sur une heure pleine.
+	// Same landmark as the hour lines: a position proportional to the
+	// amplitude, not the tick index — otherwise the labels drift as soon as
+	// the amplitude does not start on a whole hour.
 	const span = Math.max(amplitude.endMinute - amplitude.startMinute, 1)
 
 	return (
@@ -205,10 +205,9 @@ function HourGutter({ marks, amplitude, height }: HourGutterProps) {
 					key={minute}
 					className={cn(
 						'absolute right-2 text-[11px] font-medium text-muted-foreground tabular-nums',
-						// Centrer sur le trait ferait déborder la première étiquette
-						// au-dessus de la grille — sur le bandeau des journées entières —
-						// et la dernière en dessous. Les deux bornes s'alignent donc sur
-						// le bord au lieu d'être centrées.
+						// Centring on the line would push the first label above the grid
+						// — onto the all-day banner — and the last one below it. Both
+						// bounds therefore align on the edge instead of being centred.
 						index === 0 && 'translate-y-0',
 						index > 0 && index < marks.length - 1 && '-translate-y-1/2',
 						index === marks.length - 1 && '-translate-y-full',
@@ -252,7 +251,7 @@ interface OffHoursBandsProps {
 	workingRange: MinuteRange
 }
 
-/** Assombrit ce qui tombe hors des heures travaillées, pour situer la journée dans les 24 h. */
+/** Dims whatever falls outside working hours, to place the day within the 24 h. */
 function OffHoursBands({ amplitude, workingRange }: OffHoursBandsProps) {
 	const span = Math.max(amplitude.endMinute - amplitude.startMinute, 1)
 	const toPercent = (minute: number) =>
@@ -306,17 +305,17 @@ interface EventCardProps {
 }
 
 /**
- * Densité de la carte selon la durée qu'elle couvre. Une tâche d'une demi-heure
- * n'a pas la place d'afficher ses participants : plutôt que de tronquer au
- * hasard, les rangs disparaissent par ordre d'importance décroissante.
+ * The card's density, driven by the span it covers. A half-hour task has no
+ * room to show its attendees: rather than truncating at random, the rows drop
+ * out in decreasing order of importance.
  */
 const FULL_CARD_MINUTES = 90
 const TIMED_CARD_MINUTES = 45
 
 function EventCard({ event, callbacks }: EventCardProps) {
 	const width = 100 / event.columnCount
-	// Un chevauchement décale la carte dans sa colonne plutôt que de la
-	// rétrécir davantage : deux cartes côte à côte restent lisibles.
+	// An overlap shifts the card inside its column rather than shrinking it
+	// further: two cards side by side stay readable.
 	const left = width * event.column
 	const showFooter = event.durationMinutes >= FULL_CARD_MINUTES
 	const showTime = event.durationMinutes >= TIMED_CARD_MINUTES
@@ -392,14 +391,14 @@ function AttendeeStack({
 interface NowLineProps {
 	model: CalendarModel
 	controlledNow: Date | undefined
-	/** Rendu dans la gouttière : la pastille d'heure, sans le trait. */
+	/** Rendered in the gutter: the time pill, without the line. */
 	gutterOffset: boolean
 }
 
 /**
- * Trait de l'heure courante. Seul élément du calendrier qui ne dérive pas des
- * données serveur : il porte son propre `now`, isolé ici pour que la grille
- * reste une fonction pure de ses props.
+ * The current-time line. The only calendar element not derived from server
+ * data: it carries its own `now`, isolated here so the grid stays a pure
+ * function of its props.
  */
 function NowLine({ model, controlledNow, gutterOffset }: NowLineProps) {
 	const [now, setNow] = useState<Date>(() => controlledNow ?? new Date())

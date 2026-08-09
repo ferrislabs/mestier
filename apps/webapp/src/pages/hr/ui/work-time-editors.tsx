@@ -349,7 +349,7 @@ export function WorkSlotsSection({
 	)
 }
 
-// -- Champs partagés ------------------------------------------------------
+// -- Shared fields --------------------------------------------------------
 
 interface DateFieldProps {
 	label: string

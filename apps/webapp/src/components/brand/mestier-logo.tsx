@@ -57,8 +57,8 @@ function MestierLogo({
 }
 
 function MestierAppIcon({ className }: MestierMarkProps) {
-	// `icon.svg` porte déjà son fond de marque et ses coins arrondis : le
-	// conteneur ne fait que contraindre la taille.
+	// `icon.svg` already carries its brand background and rounded corners: the
+	// container only constrains the size.
 	return (
 		<div
 			className={cn(

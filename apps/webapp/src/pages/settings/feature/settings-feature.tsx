@@ -5,12 +5,12 @@ import { useActiveOrganization } from '#/hooks/use-active-organization'
 import { OrganizationSection } from '#/pages/settings/sections/organization-section'
 
 /**
- * Réglages de l'organisation.
+ * Organization settings.
  *
- * L'écran ne porte plus que ce qui se configure une fois : le catalogue et le
- * matériel, qui s'éditent au quotidien, ont rejoint les modules qui les
- * consomment. Une seule section, donc plus de navigation par ancres — elle
- * reviendra le jour où membres, rôles ou facturation s'y ajouteront.
+ * The screen now carries only what is configured once: the catalogue and the
+ * equipment, edited daily, moved to the modules that consume them. A single
+ * section, hence no more anchor navigation — it will come back the day members,
+ * roles or billing join it.
  */
 export function SettingsFeature() {
 	const { activeOrganization } = useActiveOrganization()

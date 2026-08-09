@@ -105,7 +105,7 @@ describe('validateTaskDraft', () => {
 	})
 })
 
-describe('buildCreateTaskPayload — sans client', () => {
+describe('buildCreateTaskPayload — without a customer', () => {
 	it('sends null customer_id/customer_context_id for a task with no client', () => {
 		const payload = buildCreateTaskPayload(rootDraft(), {
 			parentTaskId: null,
@@ -151,7 +151,7 @@ describe('buildCreateTaskPayload — sans client', () => {
 	})
 })
 
-describe('buildCreateTaskPayload — avec client', () => {
+describe('buildCreateTaskPayload — with a customer', () => {
 	it('sends both customer_id and customer_context_id for a chantier', () => {
 		const payload = buildCreateTaskPayload(
 			rootDraft({ customerId: 'cust-1', customerContextId: 'ctx-1' }),
@@ -197,7 +197,7 @@ describe('buildCreateTaskPayload — racine', () => {
 	})
 })
 
-describe('buildCreateTaskPayload — sous-tâche', () => {
+describe('buildCreateTaskPayload — subtask', () => {
 	it('sends null starts_at/ends_at when the subtask has no dates of its own', () => {
 		const payload = buildCreateTaskPayload(
 			rootDraft({ startDate: '', endDate: '', startTime: '', endTime: '' }),
@@ -221,7 +221,7 @@ describe('buildCreateTaskPayload — sous-tâche', () => {
 	})
 })
 
-describe('buildCreateTaskPayload — journée entière', () => {
+describe('buildCreateTaskPayload — full day', () => {
 	it('resolves an all-day window to local midnight boundaries, end exclusive', () => {
 		const payload = buildCreateTaskPayload(
 			rootDraft({

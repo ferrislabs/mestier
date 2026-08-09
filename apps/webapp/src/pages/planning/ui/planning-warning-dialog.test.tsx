@@ -15,7 +15,7 @@ const ABSENCE_WARNING: Warning = {
 const MISSING_RECORD_WARNING: Warning = { kind: 'missing_employee_record' }
 
 describe('PlanningWarningDialog', () => {
-	it("n'affiche rien quand open est faux", () => {
+	it('renders nothing when open is false', () => {
 		render(
 			<PlanningWarningDialog
 				open={false}
@@ -29,7 +29,7 @@ describe('PlanningWarningDialog', () => {
 		expect(screen.queryByRole('alertdialog')).toBeNull()
 	})
 
-	it('affiche chaque avertissement de la liste, dans un seul dialogue', () => {
+	it('shows every warning in the list, in a single dialog', () => {
 		render(
 			<PlanningWarningDialog
 				open={true}
@@ -47,7 +47,7 @@ describe('PlanningWarningDialog', () => {
 		expect(screen.getByText(/taux horaire/)).toBeDefined()
 	})
 
-	it('confirmer appelle onConfirm et pas onCancel', async () => {
+	it('confirming calls onConfirm and not onCancel', async () => {
 		const user = userEvent.setup()
 		const onConfirm = vi.fn()
 		const onCancel = vi.fn()
@@ -68,7 +68,7 @@ describe('PlanningWarningDialog', () => {
 		expect(onCancel).not.toHaveBeenCalled()
 	})
 
-	it('annuler appelle onCancel et pas onConfirm', async () => {
+	it('cancelling calls onCancel and not onConfirm', async () => {
 		const user = userEvent.setup()
 		const onConfirm = vi.fn()
 		const onCancel = vi.fn()
@@ -89,7 +89,7 @@ describe('PlanningWarningDialog', () => {
 		expect(onConfirm).not.toHaveBeenCalled()
 	})
 
-	it('désactive les actions et change le libellé pendant la confirmation', () => {
+	it('disables the actions and changes the label while confirming', () => {
 		render(
 			<PlanningWarningDialog
 				open={true}
@@ -110,7 +110,7 @@ describe('PlanningWarningDialog', () => {
 		expect(cancel.disabled).toBe(true)
 	})
 
-	it('affiche l’erreur d’une confirmation précédemment échouée sans fermer le dialogue', () => {
+	it('shows the error of a previously failed confirmation without closing the dialog', () => {
 		render(
 			<PlanningWarningDialog
 				open={true}
@@ -127,7 +127,7 @@ describe('PlanningWarningDialog', () => {
 	})
 })
 
-describe('PlanningWarningDialog — pas d’appel réseau', () => {
+describe('PlanningWarningDialog — no network call', () => {
 	let fetchSpy: ReturnType<typeof createFetchSpy>
 
 	function createFetchSpy() {
@@ -144,7 +144,7 @@ describe('PlanningWarningDialog — pas d’appel réseau', () => {
 		fetchSpy.mockRestore()
 	})
 
-	it('ne déclenche aucun fetch au rendu', () => {
+	it('fires no fetch on render', () => {
 		render(
 			<PlanningWarningDialog
 				open={true}

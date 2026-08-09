@@ -30,9 +30,9 @@ function OrganizationLayout() {
 		(organization) => organization.slug === organizationSlug,
 	)
 
-	// Le tenant vient de l'URL : un slug inconnu, ou une organisation dont
-	// l'utilisateur n'est pas membre, doit se dire plutôt que se rattraper en
-	// silence sur une autre organisation.
+	// The tenant comes from the URL: an unknown slug, or an organization the
+	// user does not belong to, must say so rather than silently fall back to
+	// another organization.
 	if (!organization) {
 		return (
 			<FullscreenMessage

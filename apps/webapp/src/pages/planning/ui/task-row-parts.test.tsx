@@ -34,7 +34,7 @@ describe('STATUS_LABELS', () => {
 	})
 })
 
-describe('task-row-parts — pas d’appel réseau', () => {
+describe('task-row-parts — no network call', () => {
 	let fetchSpy: ReturnType<typeof createFetchSpy>
 
 	function createFetchSpy() {
