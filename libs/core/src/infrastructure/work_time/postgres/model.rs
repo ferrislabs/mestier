@@ -2,8 +2,8 @@ use chrono::{DateTime, NaiveDate, Utc};
 use uuid::Uuid;
 
 use crate::{
-    EmployeeId, EmployeeRhythm, EmployeeRhythmId, EmployeeWorkSlot, EmployeeWorkSlotId,
-    OrganizationId, RhythmSlot, RhythmSlotId,
+    EmployeeId, EmployeeRhythm, EmployeeRhythmId, MemberId, OrganizationId, RhythmSlot,
+    RhythmSlotId, WorkSlot, WorkSlotId,
 };
 
 #[derive(Debug, Clone)]
@@ -57,18 +57,18 @@ impl From<RhythmSlotRow> for RhythmSlot {
 pub struct WorkSlotRow {
     pub id: Uuid,
     pub org_id: Uuid,
-    pub employee_id: Uuid,
+    pub member_id: Uuid,
     pub work_date: NaiveDate,
     pub starts_minute: i16,
     pub ends_minute: i16,
 }
 
-impl From<WorkSlotRow> for EmployeeWorkSlot {
+impl From<WorkSlotRow> for WorkSlot {
     fn from(row: WorkSlotRow) -> Self {
         Self {
-            id: EmployeeWorkSlotId(row.id),
+            id: WorkSlotId(row.id),
             organization_id: OrganizationId(row.org_id),
-            employee_id: EmployeeId(row.employee_id),
+            member_id: MemberId(row.member_id),
             work_date: row.work_date,
             starts_minute: row.starts_minute,
             ends_minute: row.ends_minute,

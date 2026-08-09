@@ -4,7 +4,7 @@ use common::CoreError;
 use mestier_macros::transactional;
 
 use crate::{
-    Employee, OrganizationId, Task, TaskId,
+    OrganizationId, Task, TaskId,
     application::MestierUseCase,
     domain::task::{
         commands::{CreateTaskCommand, PatchTaskCommand},
@@ -16,25 +16,15 @@ use crate::{
 mod tests;
 
 impl MestierUseCase {
-    #[transactional(task, employee, user, member)]
+    #[transactional(task, member)]
     pub async fn create_task(&self, command: CreateTaskCommand) -> Result<Task, CoreError> {
-        let mut service = TaskService::new(
-            task_repository,
-            employee_repository,
-            user_repository,
-            member_repository,
-        );
+        let mut service = TaskService::new(task_repository, member_repository);
         service.create_task(command).await
     }
 
-    #[transactional(task, employee, user, member)]
+    #[transactional(task, member)]
     pub async fn get_task(&self, id: TaskId) -> Result<Task, CoreError> {
-        let mut service = TaskService::new(
-            task_repository,
-            employee_repository,
-            user_repository,
-            member_repository,
-        );
+        let mut service = TaskService::new(task_repository, member_repository);
         service.get_task(id).await
     }
 
@@ -43,7 +33,7 @@ impl MestierUseCase {
     /// together with each returned task's own child count (see
     /// `TaskService::list_tasks`: computed in one grouped query, never one
     /// per task).
-    #[transactional(task, employee, user, member)]
+    #[transactional(task, member)]
     pub async fn list_tasks(
         &self,
         organization_id: OrganizationId,
@@ -51,12 +41,7 @@ impl MestierUseCase {
         limit: u64,
         offset: u64,
     ) -> Result<(Vec<Task>, HashMap<TaskId, i64>, u64), CoreError> {
-        let mut service = TaskService::new(
-            task_repository,
-            employee_repository,
-            user_repository,
-            member_repository,
-        );
+        let mut service = TaskService::new(task_repository, member_repository);
         service
             .list_tasks(organization_id, parent_task_id, limit, offset)
             .await
@@ -75,20 +60,12 @@ impl MestierUseCase {
     /// collide on the same domain files), so composing `TaskLabelRepository`
     /// at this thin, already-transactional seam avoids adding a dependency
     /// from `task`'s own domain service onto a sibling aggregate's port.
-    #[transactional(task, employee, user, member, task_label)]
-    pub async fn patch_task(
-        &self,
-        command: PatchTaskCommand,
-    ) -> Result<(Task, Vec<Employee>), CoreError> {
+    #[transactional(task, member, task_label)]
+    pub async fn patch_task(&self, command: PatchTaskCommand) -> Result<Task, CoreError> {
         let label_ids = command.label_ids.clone();
 
-        let mut service = TaskService::new(
-            task_repository,
-            employee_repository,
-            user_repository,
-            member_repository,
-        );
-        let (task, created_employees) = service.patch_task(command).await?;
+        let mut service = TaskService::new(task_repository, member_repository);
+        let task = service.patch_task(command).await?;
 
         if let Some(label_ids) = label_ids {
             let mut label_service = TaskLabelService::new(task_label_repository);
@@ -97,17 +74,12 @@ impl MestierUseCase {
                 .await?;
         }
 
-        Ok((task, created_employees))
+        Ok(task)
     }
 
-    #[transactional(task, employee, user, member)]
+    #[transactional(task, member)]
     pub async fn soft_delete_task(&self, id: TaskId) -> Result<(), CoreError> {
-        let mut service = TaskService::new(
-            task_repository,
-            employee_repository,
-            user_repository,
-            member_repository,
-        );
+        let mut service = TaskService::new(task_repository, member_repository);
         service.soft_delete_task(id).await
     }
 }

@@ -58,17 +58,26 @@ pub async fn require_org_membership(
 /// absences: the two crates are separate HTTP adapters and the repository
 /// already duplicates `require_org_membership` the same way. Ten lines of
 /// honest duplication beat a shared module built for two occurrences.
-pub(crate) async fn require_employee_target(
+/// Loads the seat and checks the caller belongs to *its* organization.
+///
+/// The work-time routes are addressed by bare `member_id` now, so there is no
+/// organization in the path to check against — reading one from there is what
+/// turns a bare id into a cross-tenant IDOR. Returns the organization so the
+/// caller does not have to load the seat twice.
+pub(crate) async fn require_member_target(
     state: &AppState,
-    organization_id: OrganizationId,
-    employee_id: mestier_core::EmployeeId,
-) -> Result<(), ApiError> {
-    let employee = state.usecase.get_employee(employee_id).await?;
-    if employee.organization_id != organization_id {
-        return Err(ApiError::Forbidden);
-    }
+    identity: &auth::Identity,
+    member_id: mestier_core::MemberId,
+) -> Result<OrganizationId, ApiError> {
+    let member = state
+        .usecase
+        .find_member_seat(member_id)
+        .await?
+        .ok_or(ApiError::NotFound)?;
 
-    Ok(())
+    require_org_membership(state, identity, member.organization_id).await?;
+
+    Ok(member.organization_id)
 }
 
 pub fn router(state: &AppState) -> Router<AppState> {

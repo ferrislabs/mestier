@@ -247,7 +247,7 @@ async fn fetch_assignments(
     let rows = sqlx::query_as!(
         TaskAssignmentRow,
         r#"
-        SELECT id, org_id, task_id, employee_id, created_at
+        SELECT id, org_id, task_id, member_id, created_at
         FROM task_assignments
         WHERE task_id = $1
         ORDER BY created_at ASC, id ASC
@@ -281,7 +281,7 @@ async fn fetch_assignments_for_tasks(
     let rows = sqlx::query_as!(
         TaskAssignmentRow,
         r#"
-        SELECT id, org_id, task_id, employee_id, created_at
+        SELECT id, org_id, task_id, member_id, created_at
         FROM task_assignments
         WHERE task_id = ANY($1)
         ORDER BY task_id ASC, created_at ASC, id ASC
@@ -322,13 +322,13 @@ async fn replace_assignments(
     for assignment in assignments {
         sqlx::query!(
             r#"
-            INSERT INTO task_assignments (id, org_id, task_id, employee_id, created_at)
+            INSERT INTO task_assignments (id, org_id, task_id, member_id, created_at)
             VALUES ($1, $2, $3, $4, $5)
             "#,
             assignment.id.0,
             assignment.organization_id.0,
             assignment.task_id.0,
-            assignment.employee_id.0,
+            assignment.member_id.0,
             assignment.created_at,
         )
         .execute(&mut *conn)

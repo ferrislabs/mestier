@@ -21,7 +21,7 @@ use axum::Router;
 use axum_extra::routing::{RouterExt, TypedPath};
 use chrono::{DateTime, Utc};
 use handlers::{ApiError, AppState};
-use mestier_core::{AbsenceKind, EmployeeAbsence, EmployeeAbsenceId, EmployeeId, OrganizationId};
+use mestier_core::{Absence, AbsenceId, AbsenceKind, MemberId, OrganizationId};
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
@@ -54,7 +54,7 @@ pub struct AbsencesPath {
 #[typed_path("/api/v1/organizations/{organization_id}/absences/{absence_id}")]
 pub struct AbsencePath {
     pub organization_id: OrganizationId,
-    pub absence_id: EmployeeAbsenceId,
+    pub absence_id: AbsenceId,
 }
 
 /// Loads the absence and checks both that the caller belongs to
@@ -66,8 +66,8 @@ pub(crate) async fn require_absence(
     state: &AppState,
     identity: &Identity,
     organization_id: OrganizationId,
-    absence_id: EmployeeAbsenceId,
-) -> Result<EmployeeAbsence, ApiError> {
+    absence_id: AbsenceId,
+) -> Result<Absence, ApiError> {
     require_org_membership(state, identity, organization_id).await?;
 
     let absence = state.usecase.get_absence(absence_id).await?;
@@ -78,17 +78,21 @@ pub(crate) async fn require_absence(
     Ok(absence)
 }
 
-/// Validates that `employee_id` actually belongs to `organization_id`
+/// Validates that `member_id` actually belongs to `organization_id`
 /// before an absence is created for it. Mirrors `handlers-planning`'s own
 /// `work_order::require_work_order_targets` and `handlers-quote`'s
 /// `require_quote_targets`.
-pub(crate) async fn require_employee_target(
+pub(crate) async fn require_member_target(
     state: &AppState,
     organization_id: OrganizationId,
-    employee_id: EmployeeId,
+    member_id: MemberId,
 ) -> Result<(), ApiError> {
-    let employee = state.usecase.get_employee(employee_id).await?;
-    if employee.organization_id != organization_id {
+    let member = state
+        .usecase
+        .find_member_seat(member_id)
+        .await?
+        .ok_or(ApiError::NotFound)?;
+    if member.organization_id != organization_id {
         return Err(ApiError::Forbidden);
     }
 
@@ -97,9 +101,9 @@ pub(crate) async fn require_employee_target(
 
 #[derive(Debug, Clone, PartialEq, Serialize, ToSchema)]
 pub struct AbsenceResponse {
-    pub id: EmployeeAbsenceId,
+    pub id: AbsenceId,
     pub organization_id: OrganizationId,
-    pub employee_id: EmployeeId,
+    pub member_id: MemberId,
     pub kind: AbsenceKind,
     pub starts_at: DateTime<Utc>,
     pub ends_at: DateTime<Utc>,
@@ -109,12 +113,12 @@ pub struct AbsenceResponse {
     pub updated_at: DateTime<Utc>,
 }
 
-impl From<EmployeeAbsence> for AbsenceResponse {
-    fn from(value: EmployeeAbsence) -> Self {
+impl From<Absence> for AbsenceResponse {
+    fn from(value: Absence) -> Self {
         Self {
             id: value.id,
             organization_id: value.organization_id,
-            employee_id: value.employee_id,
+            member_id: value.member_id,
             kind: value.kind,
             starts_at: value.starts_at,
             ends_at: value.ends_at,
@@ -133,16 +137,16 @@ mod tests {
     // `uuid` is not a direct dependency of `handlers-reference` (a
     // `Cargo.toml` this workstream does not own), so fixture ids are parsed
     // from literal strings via `FromStr` rather than generated.
-    fn absence() -> EmployeeAbsence {
+    fn absence() -> Absence {
         let now = Utc::now();
-        let id: EmployeeAbsenceId = "11111111-1111-1111-1111-111111111111".parse().unwrap();
+        let id: AbsenceId = "11111111-1111-1111-1111-111111111111".parse().unwrap();
         let organization_id: OrganizationId =
             "22222222-2222-2222-2222-222222222222".parse().unwrap();
-        let employee_id: EmployeeId = "33333333-3333-3333-3333-333333333333".parse().unwrap();
-        EmployeeAbsence {
+        let member_id: MemberId = "33333333-3333-3333-3333-333333333333".parse().unwrap();
+        Absence {
             id,
             organization_id,
-            employee_id,
+            member_id,
             kind: AbsenceKind::Leave,
             starts_at: now,
             ends_at: now + chrono::Duration::hours(2),
@@ -157,11 +161,11 @@ mod tests {
     #[test]
     fn absence_response_carries_the_employee_and_kind() {
         let source = absence();
-        let expected_employee_id = source.employee_id;
+        let expected_member_id = source.member_id;
 
         let response: AbsenceResponse = source.into();
 
-        assert_eq!(response.employee_id, expected_employee_id);
+        assert_eq!(response.member_id, expected_member_id);
         assert_eq!(response.kind, AbsenceKind::Leave);
     }
 }

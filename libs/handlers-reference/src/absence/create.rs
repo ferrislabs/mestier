@@ -2,18 +2,18 @@ use auth::Identity;
 use axum::{Extension, Json, extract::State};
 use chrono::{DateTime, Utc};
 use handlers::{ApiError, AppState, DataEnvelope, Response, resolve_user_id};
-use mestier_core::{AbsenceKind, CreateAbsenceCommand, EmployeeId};
+use mestier_core::{AbsenceKind, CreateAbsenceCommand, MemberId};
 use serde::Deserialize;
 use utoipa::ToSchema;
 
 use crate::{
-    absence::{AbsenceResponse, AbsencesPath, require_employee_target},
+    absence::{AbsenceResponse, AbsencesPath, require_member_target},
     require_org_membership,
 };
 
 #[derive(Debug, Deserialize, ToSchema)]
 pub struct CreateAbsenceRequest {
-    pub employee_id: EmployeeId,
+    pub member_id: MemberId,
     pub kind: AbsenceKind,
     pub starts_at: DateTime<Utc>,
     pub ends_at: DateTime<Utc>,
@@ -48,7 +48,7 @@ pub async fn handler(
     Json(payload): Json<CreateAbsenceRequest>,
 ) -> Result<Response<AbsenceResponse>, ApiError> {
     require_org_membership(&state, &identity, path.organization_id).await?;
-    require_employee_target(&state, path.organization_id, payload.employee_id).await?;
+    require_member_target(&state, path.organization_id, payload.member_id).await?;
     let actor = resolve_user_id(&state, &identity).await?;
 
     let absence = state
@@ -56,7 +56,7 @@ pub async fn handler(
         .acting_as(actor)
         .create_absence(CreateAbsenceCommand {
             organization_id: path.organization_id,
-            employee_id: payload.employee_id,
+            member_id: payload.member_id,
             kind: payload.kind,
             starts_at: payload.starts_at,
             ends_at: payload.ends_at,

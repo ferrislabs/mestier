@@ -4,8 +4,8 @@ use chrono::{Datelike, NaiveDate, Utc};
 use common::{CoreError, generate_uuid_v7};
 
 use crate::{
-    EmployeeId, EmployeeRhythm, EmployeeRhythmId, EmployeeWorkSlot, EmployeeWorkSlotId, RhythmSlot,
-    RhythmSlotId,
+    EmployeeId, EmployeeRhythm, EmployeeRhythmId, MemberId, RhythmSlot, RhythmSlotId, WorkSlot,
+    WorkSlotId,
     domain::work_time::{
         DateRange, MinuteInterval,
         commands::{ReplaceRhythmCommand, ReplaceWorkSlotsCommand, RhythmSlotInput, WorkSlotInput},
@@ -29,7 +29,7 @@ use crate::{
 /// planning module design doc).
 pub fn expand_work_slots(
     rhythms: &[EmployeeRhythm],
-    work_slots: &[EmployeeWorkSlot],
+    work_slots: &[WorkSlot],
     range: DateRange,
 ) -> BTreeMap<NaiveDate, Vec<MinuteInterval>> {
     let mut expanded = BTreeMap::new();
@@ -158,18 +158,30 @@ where
         }
     }
 
+    /// The member's working time over `range`.
+    ///
+    /// `employee_id` is the contractual profile attached to that member, when
+    /// there is one. A member without a contract has no rhythm to read — not
+    /// an empty rhythm, none at all — so the rhythm repository is not even
+    /// consulted. Their dated work slots are read all the same: declaring the
+    /// days you work does not require a contract.
     pub async fn get_work_time(
         &mut self,
-        employee_id: EmployeeId,
+        member_id: MemberId,
+        employee_id: Option<EmployeeId>,
         range: DateRange,
-    ) -> Result<(Vec<EmployeeRhythm>, Vec<EmployeeWorkSlot>), CoreError> {
-        let rhythms = self
-            .rhythm_repository
-            .find_overlapping(employee_id, range.from, range.to)
-            .await?;
+    ) -> Result<(Vec<EmployeeRhythm>, Vec<WorkSlot>), CoreError> {
+        let rhythms = match employee_id {
+            Some(employee_id) => {
+                self.rhythm_repository
+                    .find_overlapping(employee_id, range.from, range.to)
+                    .await?
+            }
+            None => Vec::new(),
+        };
         let work_slots = self
             .work_slot_repository
-            .list_in_window(employee_id, range.from, range.to)
+            .list_in_window(member_id, range.from, range.to)
             .await?;
 
         Ok((rhythms, work_slots))
@@ -261,7 +273,7 @@ where
     pub async fn replace_work_slots(
         &mut self,
         command: ReplaceWorkSlotsCommand,
-    ) -> Result<Vec<EmployeeWorkSlot>, CoreError> {
+    ) -> Result<Vec<WorkSlot>, CoreError> {
         if command.to < command.from {
             return Err(CoreError::Conflict(
                 "work slots window `to` must not be before `from`".to_owned(),
@@ -277,13 +289,13 @@ where
             }
         }
 
-        let slots: Vec<EmployeeWorkSlot> = command
+        let slots: Vec<WorkSlot> = command
             .slots
             .iter()
-            .map(|input: &WorkSlotInput| EmployeeWorkSlot {
-                id: EmployeeWorkSlotId(generate_uuid_v7()),
+            .map(|input: &WorkSlotInput| WorkSlot {
+                id: WorkSlotId(generate_uuid_v7()),
                 organization_id: command.organization_id,
-                employee_id: command.employee_id,
+                member_id: command.member_id,
                 work_date: input.work_date,
                 starts_minute: input.starts_minute,
                 ends_minute: input.ends_minute,
@@ -293,7 +305,7 @@ where
         self.work_slot_repository
             .replace_window(
                 command.organization_id,
-                command.employee_id,
+                command.member_id,
                 command.from,
                 command.to,
                 &slots,
@@ -316,16 +328,11 @@ mod tests {
         NaiveDate::from_ymd_opt(y, m, d).unwrap()
     }
 
-    fn work_slot(
-        employee_id: EmployeeId,
-        work_date: NaiveDate,
-        starts: i16,
-        ends: i16,
-    ) -> EmployeeWorkSlot {
-        EmployeeWorkSlot {
-            id: EmployeeWorkSlotId(Uuid::new_v4()),
+    fn work_slot(member_id: MemberId, work_date: NaiveDate, starts: i16, ends: i16) -> WorkSlot {
+        WorkSlot {
+            id: WorkSlotId(Uuid::new_v4()),
             organization_id: OrganizationId(Uuid::new_v4()),
-            employee_id,
+            member_id,
             work_date,
             starts_minute: starts,
             ends_minute: ends,
@@ -374,6 +381,7 @@ mod tests {
     #[test]
     fn a_dated_work_slot_wins_over_the_rhythm_for_that_day() {
         let employee_id = EmployeeId(Uuid::new_v4());
+        let member_id = MemberId(Uuid::new_v4());
         // Monday 2026-08-10.
         let monday = date(2026, 8, 10);
         let rhythm_id = EmployeeRhythmId(Uuid::new_v4());
@@ -383,7 +391,7 @@ mod tests {
             None,
             vec![rhythm_slot(rhythm_id, 1, 480, 720)],
         )];
-        let work_slots = vec![work_slot(employee_id, monday, 540, 600)];
+        let work_slots = vec![work_slot(member_id, monday, 540, 600)];
         let range = DateRange::new(monday, monday).unwrap();
 
         let expanded = expand_work_slots(&rhythms, &work_slots, range);
@@ -400,6 +408,7 @@ mod tests {
     #[test]
     fn the_rhythm_is_used_when_no_dated_slot_exists() {
         let employee_id = EmployeeId(Uuid::new_v4());
+        let _member_id = MemberId(Uuid::new_v4());
         let monday = date(2026, 8, 10);
         let rhythm_id = EmployeeRhythmId(Uuid::new_v4());
         let rhythms = vec![rhythm(
@@ -435,6 +444,7 @@ mod tests {
     #[test]
     fn switching_rhythm_versions_mid_window_uses_each_versions_own_slots() {
         let employee_id = EmployeeId(Uuid::new_v4());
+        let _member_id = MemberId(Uuid::new_v4());
         // Two consecutive Mondays, one week apart, each governed by a
         // different rhythm version.
         let first_monday = date(2026, 8, 3);
@@ -479,6 +489,7 @@ mod tests {
     #[test]
     fn a_rhythm_with_no_effective_to_stays_in_effect_indefinitely() {
         let employee_id = EmployeeId(Uuid::new_v4());
+        let _member_id = MemberId(Uuid::new_v4());
         let far_future_monday = date(2030, 1, 7);
         let rhythm_id = EmployeeRhythmId(Uuid::new_v4());
         let rhythms = vec![rhythm(
@@ -497,6 +508,7 @@ mod tests {
     #[test]
     fn a_weekday_with_no_slot_in_the_rhythm_has_no_entry() {
         let employee_id = EmployeeId(Uuid::new_v4());
+        let _member_id = MemberId(Uuid::new_v4());
         // Sunday 2026-08-09: the rhythm only defines Monday.
         let sunday = date(2026, 8, 9);
         let rhythm_id = EmployeeRhythmId(Uuid::new_v4());
@@ -516,6 +528,7 @@ mod tests {
     #[test]
     fn several_slots_the_same_day_are_all_returned() {
         let employee_id = EmployeeId(Uuid::new_v4());
+        let _member_id = MemberId(Uuid::new_v4());
         let monday = date(2026, 8, 10);
         let rhythm_id = EmployeeRhythmId(Uuid::new_v4());
         let rhythms = vec![rhythm(
@@ -545,11 +558,12 @@ mod tests {
 
     #[test]
     fn several_dated_slots_the_same_day_are_all_returned() {
-        let employee_id = EmployeeId(Uuid::new_v4());
+        let _employee_id = EmployeeId(Uuid::new_v4());
+        let member_id = MemberId(Uuid::new_v4());
         let monday = date(2026, 8, 10);
         let work_slots = vec![
-            work_slot(employee_id, monday, 480, 720),
-            work_slot(employee_id, monday, 780, 1020),
+            work_slot(member_id, monday, 480, 720),
+            work_slot(member_id, monday, 780, 1020),
         ];
         let range = DateRange::new(monday, monday).unwrap();
 
@@ -560,12 +574,13 @@ mod tests {
 
     #[test]
     fn both_bounds_of_the_window_are_included() {
-        let employee_id = EmployeeId(Uuid::new_v4());
+        let _employee_id = EmployeeId(Uuid::new_v4());
+        let member_id = MemberId(Uuid::new_v4());
         let from = date(2026, 8, 3);
         let to = date(2026, 8, 5);
         let work_slots = vec![
-            work_slot(employee_id, from, 480, 720),
-            work_slot(employee_id, to, 480, 720),
+            work_slot(member_id, from, 480, 720),
+            work_slot(member_id, to, 480, 720),
         ];
         let range = DateRange::new(from, to).unwrap();
 
@@ -584,11 +599,12 @@ mod tests {
 
     #[test]
     fn dated_work_slots_outside_the_window_are_ignored() {
-        let employee_id = EmployeeId(Uuid::new_v4());
+        let _employee_id = EmployeeId(Uuid::new_v4());
+        let member_id = MemberId(Uuid::new_v4());
         let from = date(2026, 8, 3);
         let to = date(2026, 8, 5);
         let outside = date(2026, 8, 6);
-        let work_slots = vec![work_slot(employee_id, outside, 480, 720)];
+        let work_slots = vec![work_slot(member_id, outside, 480, 720)];
         let range = DateRange::new(from, to).unwrap();
 
         let expanded = expand_work_slots(&[], &work_slots, range);
@@ -601,6 +617,7 @@ mod tests {
         // The dated slot is authoritative regardless of which rhythm
         // version (if any) would otherwise apply that day.
         let employee_id = EmployeeId(Uuid::new_v4());
+        let member_id = MemberId(Uuid::new_v4());
         let closing_day = date(2026, 8, 7);
         let old_rhythm_id = EmployeeRhythmId(Uuid::new_v4());
         let rhythms = vec![rhythm(
@@ -609,7 +626,7 @@ mod tests {
             Some(closing_day),
             vec![rhythm_slot(old_rhythm_id, 5, 480, 720)],
         )];
-        let work_slots = vec![work_slot(employee_id, closing_day, 900, 960)];
+        let work_slots = vec![work_slot(member_id, closing_day, 900, 960)];
         let range = DateRange::new(closing_day, closing_day).unwrap();
 
         let expanded = expand_work_slots(&rhythms, &work_slots, range);
@@ -649,6 +666,7 @@ mod tests {
     #[tokio::test]
     async fn replace_rhythm_inserts_a_first_version_when_none_is_open() {
         let employee_id = EmployeeId(Uuid::new_v4());
+        let _member_id = MemberId(Uuid::new_v4());
         let mut rhythm_repository = MockRhythmRepository::new();
         rhythm_repository
             .expect_find_open_by_employee()
@@ -676,6 +694,7 @@ mod tests {
     #[tokio::test]
     async fn replace_rhythm_with_the_same_effective_from_replaces_in_place() {
         let employee_id = EmployeeId(Uuid::new_v4());
+        let _member_id = MemberId(Uuid::new_v4());
         let existing_id = EmployeeRhythmId(Uuid::new_v4());
         let existing = rhythm(
             employee_id,
@@ -720,6 +739,7 @@ mod tests {
     async fn replace_rhythm_with_a_later_effective_from_closes_the_open_version_and_opens_a_new_one()
      {
         let employee_id = EmployeeId(Uuid::new_v4());
+        let _member_id = MemberId(Uuid::new_v4());
         let existing_id = EmployeeRhythmId(Uuid::new_v4());
         let mut existing = rhythm(employee_id, date(2026, 1, 1), None, Vec::new());
         existing.id = existing_id;
@@ -757,6 +777,7 @@ mod tests {
     #[tokio::test]
     async fn replace_rhythm_rejects_an_effective_from_before_the_open_version() {
         let employee_id = EmployeeId(Uuid::new_v4());
+        let _member_id = MemberId(Uuid::new_v4());
         let existing = rhythm(employee_id, date(2026, 6, 1), None, Vec::new());
 
         let mut command = replace_rhythm_command(employee_id);
@@ -781,6 +802,7 @@ mod tests {
     #[tokio::test]
     async fn replace_rhythm_rejects_an_out_of_range_weekday() {
         let employee_id = EmployeeId(Uuid::new_v4());
+        let _member_id = MemberId(Uuid::new_v4());
         let mut command = replace_rhythm_command(employee_id);
         command.slots = vec![RhythmSlotInput {
             weekday: 8,
@@ -798,6 +820,7 @@ mod tests {
     #[tokio::test]
     async fn replace_rhythm_rejects_ends_minute_before_starts_minute() {
         let employee_id = EmployeeId(Uuid::new_v4());
+        let _member_id = MemberId(Uuid::new_v4());
         let mut command = replace_rhythm_command(employee_id);
         command.slots = vec![RhythmSlotInput {
             weekday: 1,
@@ -815,6 +838,7 @@ mod tests {
     #[tokio::test]
     async fn replace_rhythm_rejects_effective_to_not_after_effective_from() {
         let employee_id = EmployeeId(Uuid::new_v4());
+        let _member_id = MemberId(Uuid::new_v4());
         let mut command = replace_rhythm_command(employee_id);
         command.effective_to = Some(command.effective_from);
 
@@ -829,7 +853,7 @@ mod tests {
 
     #[tokio::test]
     async fn replace_work_slots_delegates_the_full_replace_to_the_repository() {
-        let employee_id = EmployeeId(Uuid::new_v4());
+        let member_id = MemberId(Uuid::new_v4());
         let organization_id = OrganizationId(Uuid::new_v4());
         let from = date(2026, 8, 1);
         let to = date(2026, 8, 7);
@@ -839,7 +863,7 @@ mod tests {
             .expect_replace_window()
             .withf(move |org, emp, f, t, slots| {
                 *org == organization_id
-                    && *emp == employee_id
+                    && *emp == member_id
                     && *f == from
                     && *t == to
                     && slots.len() == 1
@@ -853,7 +877,7 @@ mod tests {
 
         let command = ReplaceWorkSlotsCommand {
             organization_id,
-            employee_id,
+            member_id,
             from,
             to,
             slots: vec![WorkSlotInput {
@@ -870,12 +894,12 @@ mod tests {
 
     #[tokio::test]
     async fn replace_work_slots_rejects_to_before_from() {
-        let employee_id = EmployeeId(Uuid::new_v4());
+        let member_id = MemberId(Uuid::new_v4());
         let mut service = service(MockRhythmRepository::new(), MockWorkSlotRepository::new());
 
         let command = ReplaceWorkSlotsCommand {
             organization_id: OrganizationId(Uuid::new_v4()),
-            employee_id,
+            member_id,
             from: date(2026, 8, 7),
             to: date(2026, 8, 1),
             slots: Vec::new(),
@@ -888,12 +912,12 @@ mod tests {
 
     #[tokio::test]
     async fn replace_work_slots_rejects_a_slot_dated_outside_the_window() {
-        let employee_id = EmployeeId(Uuid::new_v4());
+        let member_id = MemberId(Uuid::new_v4());
         let mut service = service(MockRhythmRepository::new(), MockWorkSlotRepository::new());
 
         let command = ReplaceWorkSlotsCommand {
             organization_id: OrganizationId(Uuid::new_v4()),
-            employee_id,
+            member_id,
             from: date(2026, 8, 1),
             to: date(2026, 8, 7),
             slots: vec![WorkSlotInput {
@@ -911,6 +935,7 @@ mod tests {
     #[tokio::test]
     async fn get_work_time_delegates_to_both_repositories() {
         let employee_id = EmployeeId(Uuid::new_v4());
+        let member_id = MemberId(Uuid::new_v4());
         let from = date(2026, 8, 1);
         let to = date(2026, 8, 7);
 
@@ -923,13 +948,17 @@ mod tests {
         let mut work_slot_repository = MockWorkSlotRepository::new();
         work_slot_repository
             .expect_list_in_window()
-            .with(eq(employee_id), eq(from), eq(to))
+            .with(eq(member_id), eq(from), eq(to))
             .returning(|_, _, _| Box::pin(async { Ok(Vec::new()) }));
 
         let mut service = service(rhythm_repository, work_slot_repository);
 
         let (rhythms, work_slots) = service
-            .get_work_time(employee_id, DateRange::new(from, to).unwrap())
+            .get_work_time(
+                member_id,
+                Some(employee_id),
+                DateRange::new(from, to).unwrap(),
+            )
             .await
             .unwrap();
 

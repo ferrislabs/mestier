@@ -6,8 +6,7 @@ use mestier_macros::repository;
 use uuid::Uuid;
 
 use crate::{
-    EmployeeAbsence, EmployeeRhythm, EmployeeWorkSlot, OrganizationId, PlanningTask, RhythmSlot,
-    TaskAssignment,
+    Absence, EmployeeRhythm, OrganizationId, PlanningTask, RhythmSlot, TaskAssignment, WorkSlot,
     domain::planning::ports::PlanningRepository,
     infrastructure::{
         absence::postgres::model::AbsenceRow,
@@ -20,8 +19,8 @@ use crate::{
 
 /// The planning read model's repository: batched, organization-wide reads
 /// across `tasks`/`task_assignments` (enriched with the customer join and
-/// each task's child count), `employee_absences`,
-/// `employee_rhythms`/`employee_rhythm_slots` and `employee_work_slots`.
+/// each task's child count), `absences`,
+/// `employee_rhythms`/`employee_rhythm_slots` and `work_slots`.
 /// Every method loads the whole organization in a small, fixed number of
 /// queries — never one per employee (see the planning module design doc's
 /// N+1 warning).
@@ -114,7 +113,7 @@ impl<'tx> PlanningRepository for PgPlanningRepository<'tx> {
         let assignment_rows = sqlx::query_as!(
             TaskAssignmentRow,
             r#"
-            SELECT a.id, a.org_id, a.task_id, a.employee_id, a.created_at
+            SELECT a.id, a.org_id, a.task_id, a.member_id, a.created_at
             FROM task_assignments a
             JOIN tasks t ON t.id = a.task_id
             LEFT JOIN tasks p ON p.id = t.parent_task_id AND p.deleted_at IS NULL
@@ -153,19 +152,19 @@ impl<'tx> PlanningRepository for PgPlanningRepository<'tx> {
         Ok(tasks)
     }
 
-    #[tracing::instrument(skip(self), fields(db.system = "postgresql", db.operation = "select", db.table = "employee_absences"), err)]
+    #[tracing::instrument(skip(self), fields(db.system = "postgresql", db.operation = "select", db.table = "absences"), err)]
     async fn list_absences_in_window(
         &mut self,
         organization_id: OrganizationId,
         from: DateTime<Utc>,
         to: DateTime<Utc>,
-    ) -> Result<Vec<EmployeeAbsence>, CoreError> {
+    ) -> Result<Vec<Absence>, CoreError> {
         let mut tx = self.tx.lock().await;
         let rows = sqlx::query_as!(
             AbsenceRow,
             r#"
-            SELECT id, org_id, employee_id, kind::text AS "kind!", starts_at, ends_at, all_day, note, deleted_at, created_at, updated_at
-            FROM employee_absences
+            SELECT id, org_id, member_id, kind::text AS "kind!", starts_at, ends_at, all_day, note, deleted_at, created_at, updated_at
+            FROM absences
             WHERE org_id = $1 AND deleted_at IS NULL
               AND starts_at < $3 AND ends_at > $2
             ORDER BY starts_at ASC, id ASC
@@ -253,21 +252,21 @@ impl<'tx> PlanningRepository for PgPlanningRepository<'tx> {
         Ok(rhythms)
     }
 
-    #[tracing::instrument(skip(self), fields(db.system = "postgresql", db.operation = "select", db.table = "employee_work_slots"), err)]
+    #[tracing::instrument(skip(self), fields(db.system = "postgresql", db.operation = "select", db.table = "work_slots"), err)]
     async fn list_work_slots_for_organization(
         &mut self,
         organization_id: OrganizationId,
         from: NaiveDate,
         to: NaiveDate,
-    ) -> Result<Vec<EmployeeWorkSlot>, CoreError> {
+    ) -> Result<Vec<WorkSlot>, CoreError> {
         let mut tx = self.tx.lock().await;
         let rows = sqlx::query_as!(
             WorkSlotRow,
             r#"
-            SELECT id, org_id, employee_id, work_date, starts_minute, ends_minute
-            FROM employee_work_slots
+            SELECT id, org_id, member_id, work_date, starts_minute, ends_minute
+            FROM work_slots
             WHERE org_id = $1 AND work_date BETWEEN $2 AND $3
-            ORDER BY employee_id ASC, work_date ASC, starts_minute ASC
+            ORDER BY member_id ASC, work_date ASC, starts_minute ASC
             "#,
             organization_id.0,
             from,

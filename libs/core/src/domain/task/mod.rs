@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 use uuid::Uuid;
 
-use crate::{CustomerContextId, CustomerId, EmployeeId, OrganizationId, QuoteId, UserId};
+use crate::{CustomerContextId, CustomerId, MemberId, OrganizationId, QuoteId};
 
 pub mod commands;
 pub mod ports;
@@ -88,22 +88,20 @@ impl FromStr for TaskStatus {
 /// A reference to a plannable resource, as carried by the `PATCH` payload's
 /// `assignees` list (see the planning module design doc).
 ///
-/// `Employee` points at an existing employee record. `Member` points at an
-/// organization member who may not have one yet — resolving it is what
-/// triggers on-the-fly employee-record creation in
-/// [`service::TaskService::patch_task`].
+/// One variant, one identifier. It used to be two — an employee record or an
+/// organization member who might not have one — and resolving the second
+/// triggered on-the-fly employee-record creation. Every member is now
+/// assignable on its own, so there is nothing to provision and nothing to
+/// discriminate.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum AssigneeRef {
-    Employee(EmployeeId),
-    Member(UserId),
-}
+pub struct AssigneeRef(pub MemberId);
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct TaskAssignment {
     pub id: TaskAssignmentId,
     pub organization_id: OrganizationId,
     pub task_id: TaskId,
-    pub employee_id: EmployeeId,
+    pub member_id: MemberId,
     pub created_at: DateTime<Utc>,
 }
 

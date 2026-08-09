@@ -1,20 +1,19 @@
-use std::collections::{BTreeMap, HashMap, HashSet};
+use std::collections::{BTreeMap, HashMap};
 
 use chrono::{DateTime, NaiveDate, TimeZone, Timelike, Utc};
 use common::CoreError;
 
 use crate::{
-    DateRange, Employee, EmployeeAbsence, EmployeeId, EmployeeRhythm, EmployeeWorkSlot,
-    MinuteInterval, OrganizationId, Task, UserId,
+    Absence, DateRange, Employee, EmployeeRhythm, MemberId, MinuteInterval, OrganizationId, Task,
+    WorkSlot,
     domain::{
         employee::ports::EmployeeRepository,
         member::ports::MemberRepository,
         organization::ports::OrganizationRepository,
         planning::{
-            AvailabilityReport, Conflict, ConflictKind, EmployeeWorkTime, PlanningEntry,
+            AvailabilityReport, Conflict, ConflictKind, MemberWorkTime, PlanningEntry,
             PlanningResource, PlanningTask, PlanningView, TimeRange, Tz, ports::PlanningRepository,
         },
-        user::ports::UserRepository,
         work_time::service::expand_work_slots,
     },
 };
@@ -38,7 +37,7 @@ use crate::{
 /// (invariant 9).
 pub fn detect_conflicts(
     window: TimeRange,
-    absences: &[EmployeeAbsence],
+    absences: &[Absence],
     work_time: &BTreeMap<NaiveDate, Vec<MinuteInterval>>,
     busy: &[Task],
     tz: Tz,
@@ -244,42 +243,37 @@ fn local_date_span(window: TimeRange, tz: Tz) -> DateRange {
 /// the existing employee/member/organization/user repositories — mirroring
 /// how `TaskService` composes cross-aggregate repositories directly in
 /// the domain service that owns the use case.
-pub struct PlanningService<PR, ER, MR, OR, UR>
+pub struct PlanningService<PR, ER, MR, OR>
 where
     PR: PlanningRepository,
     ER: EmployeeRepository,
     MR: MemberRepository,
     OR: OrganizationRepository,
-    UR: UserRepository,
 {
     planning_repository: PR,
     employee_repository: ER,
     member_repository: MR,
     organization_repository: OR,
-    user_repository: UR,
 }
 
-impl<PR, ER, MR, OR, UR> PlanningService<PR, ER, MR, OR, UR>
+impl<PR, ER, MR, OR> PlanningService<PR, ER, MR, OR>
 where
     PR: PlanningRepository,
     ER: EmployeeRepository,
     MR: MemberRepository,
     OR: OrganizationRepository,
-    UR: UserRepository,
 {
     pub fn new(
         planning_repository: PR,
         employee_repository: ER,
         member_repository: MR,
         organization_repository: OR,
-        user_repository: UR,
     ) -> Self {
         Self {
             planning_repository,
             employee_repository,
             member_repository,
             organization_repository,
-            user_repository,
         }
     }
 
@@ -358,45 +352,56 @@ where
 
         let mut reports = Vec::with_capacity(resources.len());
         for resource in resources {
-            let conflicts = match resource_employee_id(&resource) {
-                Some(employee_id) => {
-                    let employee_absences: Vec<EmployeeAbsence> = absences
+            // Everything that concerns the person is filtered by the member;
+            // only the rhythm — the translation of a contract into recurring
+            // slots — is filtered by the profile, and a member without one
+            // simply has no rhythm to expand.
+            let member_absences: Vec<Absence> = absences
+                .iter()
+                .filter(|absence| absence.member_id == resource.member_id)
+                .cloned()
+                .collect();
+            let member_busy: Vec<Task> = tasks
+                .iter()
+                .filter(|planning_task| {
+                    planning_task
+                        .task
+                        .assignments
                         .iter()
-                        .filter(|absence| absence.employee_id == employee_id)
-                        .cloned()
-                        .collect();
-                    let employee_busy: Vec<Task> = tasks
-                        .iter()
-                        .filter(|planning_task| {
-                            planning_task
-                                .task
-                                .assignments
-                                .iter()
-                                .any(|assignment| assignment.employee_id == employee_id)
-                        })
-                        .map(|planning_task| planning_task.task.clone())
-                        .collect();
-                    let employee_rhythms: Vec<EmployeeRhythm> = rhythms
-                        .iter()
-                        .filter(|rhythm| rhythm.employee_id == employee_id)
-                        .cloned()
-                        .collect();
-                    let employee_work_slots: Vec<EmployeeWorkSlot> = work_slots
-                        .iter()
-                        .filter(|slot| slot.employee_id == employee_id)
-                        .cloned()
-                        .collect();
-
-                    let work_time =
-                        expand_work_slots(&employee_rhythms, &employee_work_slots, local_span);
-
-                    detect_conflicts(window, &employee_absences, &work_time, &employee_busy, tz)
-                }
-                // A member-only resource has no employee record yet, so it
-                // has no absence, work-time or work-order data to conflict
-                // with — always available.
+                        .any(|assignment| assignment.member_id == resource.member_id)
+                })
+                .map(|planning_task| planning_task.task.clone())
+                .collect();
+            let member_rhythms: Vec<EmployeeRhythm> = match resource.employee_id {
+                Some(employee_id) => rhythms
+                    .iter()
+                    .filter(|rhythm| rhythm.employee_id == employee_id)
+                    .cloned()
+                    .collect(),
                 None => Vec::new(),
             };
+            let member_work_slots: Vec<WorkSlot> = work_slots
+                .iter()
+                .filter(|slot| slot.member_id == resource.member_id)
+                .cloned()
+                .collect();
+
+            let work_time = expand_work_slots(&member_rhythms, &member_work_slots, local_span);
+
+            // Someone who has declared no working time at all — no rhythm, no
+            // dated slot — cannot be "outside" it. Reporting them unavailable
+            // everywhere would make every member without a contract unplannable,
+            // which is precisely what a seat existing on its own is meant to
+            // allow. Absences and overlapping tasks still count: those are facts
+            // about the person, not about a contract they do not have.
+            let declares_working_time = !member_rhythms.is_empty() || !member_work_slots.is_empty();
+
+            let mut conflicts =
+                detect_conflicts(window, &member_absences, &work_time, &member_busy, tz);
+            if !declares_working_time {
+                conflicts
+                    .retain(|conflict| !matches!(conflict.kind, ConflictKind::OutsideWorkHours));
+            }
 
             reports.push(AvailabilityReport {
                 resource,
@@ -417,80 +422,49 @@ where
             .ok_or(CoreError::NotFound)
     }
 
-    /// The dedup rule: every active employee, plus every organization
-    /// member whose `user_id` is not already carried by an active employee
-    /// — resolved with one query per source rather than one lookup per
-    /// member.
+    /// One row per active member, with its contractual profile attached when
+    /// there is one.
+    ///
+    /// This used to reconcile two rosters by `user_id`: employees on one side,
+    /// members on the other, deduplicated into a single list, with a best-effort
+    /// user lookup and an `"Unknown"` fallback for the name. None of that is
+    /// needed now — a member carries its own name and is plannable on its own,
+    /// so the roster *is* the member list and the profile is a lookup on the
+    /// side.
     async fn load_resources(
         &mut self,
         organization_id: OrganizationId,
     ) -> Result<Vec<PlanningResource>, CoreError> {
-        let employees = self
-            .employee_repository
-            .list_active_by_organization(organization_id)
-            .await?;
         let members = self
             .member_repository
             .list_active_by_organization(organization_id)
             .await?;
+        let employees = self
+            .employee_repository
+            .list_active_by_organization(organization_id)
+            .await?;
 
-        let linked_user_ids: HashSet<UserId> = employees.iter().filter_map(|e| e.user_id).collect();
-
-        let mut resources: Vec<PlanningResource> =
-            employees.into_iter().map(employee_resource).collect();
-
-        // Transitional: a free seat (`user_id: None`, #180) has no user to
-        // represent yet, so it is skipped here rather than surfaced as a
-        // `PlanningResource::Member`. #182 removes `PlanningResource::Member`
-        // entirely and reads the member's own name instead — this dedup by
-        // `user_id` is scaffolding for that, not the final shape.
-        let member_only_user_ids: Vec<UserId> = members
+        let profiles: HashMap<MemberId, Employee> = employees
             .into_iter()
-            .filter_map(|member| member.user_id)
-            .filter(|user_id| !linked_user_ids.contains(user_id))
+            .map(|employee| (employee.member_id, employee))
             .collect();
 
-        if !member_only_user_ids.is_empty() {
-            let users = self
-                .user_repository
-                .list_by_ids(&member_only_user_ids)
-                .await?;
-            let display_names: HashMap<UserId, String> =
-                users.into_iter().map(|user| (user.id, user.name)).collect();
+        Ok(members
+            .into_iter()
+            .map(|member| {
+                let profile = profiles.get(&member.id);
 
-            for user_id in member_only_user_ids {
-                resources.push(PlanningResource::Member {
-                    user_id,
-                    // A member row always has a `users` counterpart in
-                    // practice (the FK is `NOT NULL`); falling back rather
-                    // than failing the whole read model keeps one odd row
-                    // from taking the entire endpoint down.
-                    display_name: display_names
-                        .get(&user_id)
-                        .cloned()
-                        .unwrap_or_else(|| "Unknown".to_owned()),
-                });
-            }
-        }
-
-        Ok(resources)
-    }
-}
-
-fn employee_resource(employee: Employee) -> PlanningResource {
-    PlanningResource::Employee {
-        employee_id: employee.id,
-        user_id: employee.user_id,
-        display_name: employee.display_name(),
-        hourly_rate_cents: employee.hourly_rate_cents,
-        weekly_contract_minutes: employee.weekly_contract_minutes,
-    }
-}
-
-fn resource_employee_id(resource: &PlanningResource) -> Option<EmployeeId> {
-    match resource {
-        PlanningResource::Employee { employee_id, .. } => Some(*employee_id),
-        PlanningResource::Member { .. } => None,
+                PlanningResource {
+                    member_id: member.id,
+                    display_name: member.display_name(),
+                    employee_id: profile.map(|p| p.id),
+                    hourly_rate_cents: profile.and_then(|p| p.hourly_rate_cents),
+                    weekly_contract_minutes: profile
+                        .map(|p| p.weekly_contract_minutes)
+                        .unwrap_or(0),
+                }
+            })
+            .collect())
     }
 }
 
@@ -500,7 +474,7 @@ fn parse_tz(timezone: &str) -> Result<Tz, CoreError> {
         .map_err(|_| CoreError::Internal(format!("invalid organization timezone `{timezone}`")))
 }
 
-fn build_entries(tasks: &[PlanningTask], absences: &[EmployeeAbsence]) -> Vec<PlanningEntry> {
+fn build_entries(tasks: &[PlanningTask], absences: &[Absence]) -> Vec<PlanningEntry> {
     let mut entries = Vec::with_capacity(tasks.len() + absences.len());
 
     for planning_task in tasks {
@@ -530,10 +504,10 @@ fn build_entries(tasks: &[PlanningTask], absences: &[EmployeeAbsence]) -> Vec<Pl
             customer_name: planning_task.customer_name.clone(),
             context_label: planning_task.context_label.clone(),
             description: task.description.clone(),
-            employee_ids: task
+            member_ids: task
                 .assignments
                 .iter()
-                .map(|assignment| assignment.employee_id)
+                .map(|assignment| assignment.member_id)
                 .collect(),
             // Populated by `MestierUseCase::get_planning`, after this
             // service returns — see `PlanningEntry::Task::labels`'s doc
@@ -550,14 +524,14 @@ fn build_entries(tasks: &[PlanningTask], absences: &[EmployeeAbsence]) -> Vec<Pl
             all_day: absence.all_day,
             absence_kind: absence.kind,
             note: absence.note.clone(),
-            employee_id: absence.employee_id,
+            member_id: absence.member_id,
         });
     }
 
     entries
 }
 
-/// One `EmployeeWorkTime` per employee resource — always, even when
+/// One `MemberWorkTime` per employee resource — always, even when
 /// `expand_work_slots` returns an empty map for them — mirroring how
 /// `resources` lists every employee regardless of whether they have any
 /// entries. Member-only resources carry no work-time concept and are
@@ -565,27 +539,32 @@ fn build_entries(tasks: &[PlanningTask], absences: &[EmployeeAbsence]) -> Vec<Pl
 fn build_work_time(
     resources: &[PlanningResource],
     rhythms: &[EmployeeRhythm],
-    work_slots: &[EmployeeWorkSlot],
+    work_slots: &[WorkSlot],
     range: DateRange,
-) -> Vec<EmployeeWorkTime> {
+) -> Vec<MemberWorkTime> {
+    // Every member gets a row, contract or not: someone with no rhythm still
+    // has dated work slots, and a grid that skipped them would show them as
+    // never available rather than as simply unscheduled.
     resources
         .iter()
-        .filter_map(resource_employee_id)
-        .map(|employee_id| {
-            let employee_rhythms: Vec<EmployeeRhythm> = rhythms
+        .map(|resource| {
+            let member_rhythms: Vec<EmployeeRhythm> = match resource.employee_id {
+                Some(employee_id) => rhythms
+                    .iter()
+                    .filter(|rhythm| rhythm.employee_id == employee_id)
+                    .cloned()
+                    .collect(),
+                None => Vec::new(),
+            };
+            let member_work_slots: Vec<WorkSlot> = work_slots
                 .iter()
-                .filter(|rhythm| rhythm.employee_id == employee_id)
-                .cloned()
-                .collect();
-            let employee_work_slots: Vec<EmployeeWorkSlot> = work_slots
-                .iter()
-                .filter(|slot| slot.employee_id == employee_id)
+                .filter(|slot| slot.member_id == resource.member_id)
                 .cloned()
                 .collect();
 
-            EmployeeWorkTime {
-                employee_id,
-                days: expand_work_slots(&employee_rhythms, &employee_work_slots, range),
+            MemberWorkTime {
+                member_id: resource.member_id,
+                days: expand_work_slots(&member_rhythms, &member_work_slots, range),
             }
         })
         .collect()
@@ -595,12 +574,13 @@ fn build_work_time(
 mod tests {
     use super::*;
     use crate::{
-        AbsenceKind, CustomerContextId, CustomerId, EmployeeAbsenceId, Member, MemberId, QuoteId,
-        RhythmSlot, RhythmSlotId, TaskAssignment, TaskAssignmentId, TaskId, TaskStatus, User,
+        AbsenceId, AbsenceKind, CustomerContextId, CustomerId, EmployeeId, Member, MemberId,
+        QuoteId, RhythmSlot, RhythmSlotId, TaskAssignment, TaskAssignmentId, TaskId, TaskStatus,
+        UserId,
         domain::{
             employee::ports::MockEmployeeRepository, member::ports::MockMemberRepository,
             organization::ports::MockOrganizationRepository,
-            planning::ports::MockPlanningRepository, user::ports::MockUserRepository,
+            planning::ports::MockPlanningRepository,
         },
     };
     use chrono_tz::Europe;
@@ -620,15 +600,15 @@ mod tests {
     }
 
     fn absence(
-        employee_id: EmployeeId,
+        member_id: MemberId,
         kind: AbsenceKind,
         starts_at: DateTime<Utc>,
         ends_at: DateTime<Utc>,
-    ) -> EmployeeAbsence {
-        EmployeeAbsence {
-            id: EmployeeAbsenceId(Uuid::new_v4()),
+    ) -> Absence {
+        Absence {
+            id: AbsenceId(Uuid::new_v4()),
             organization_id: OrganizationId(Uuid::new_v4()),
-            employee_id,
+            member_id,
             kind,
             starts_at,
             ends_at,
@@ -640,34 +620,37 @@ mod tests {
         }
     }
 
-    #[test]
-    fn employee_resource_formats_display_name_as_last_name_then_first_name() {
-        let employee_id = EmployeeId(Uuid::new_v4());
-        let mut source = employee(employee_id, None);
-        source.last_name = "Bonnal".to_owned();
-        source.first_name = Some("Baptiste".to_owned());
-
-        let resource = employee_resource(source);
-
-        assert!(matches!(
-            resource,
-            PlanningResource::Employee { display_name, .. } if display_name == "Bonnal Baptiste"
-        ));
+    fn seat(id: MemberId, organization_id: OrganizationId, last_name: &str) -> Member {
+        Member {
+            id,
+            organization_id,
+            user_id: None,
+            last_name: last_name.to_owned(),
+            first_name: None,
+            joined_at: None,
+            created_at: Utc::now(),
+            deleted_at: None,
+        }
     }
 
+    /// A grid row takes its name from the seat, so there is nothing left for
+    /// the profile to format. Two tests here used to check that
+    /// `employee_resource` rendered "last first" — that function is gone with
+    /// the two-variant resource, and `Member::display_name` is now the one
+    /// place the format lives.
     #[test]
-    fn employee_resource_formats_display_name_without_a_first_name() {
-        let employee_id = EmployeeId(Uuid::new_v4());
-        let mut source = employee(employee_id, None);
-        source.last_name = "Bonnal".to_owned();
-        source.first_name = None;
+    fn resource_takes_its_display_name_from_the_seat() {
+        let member_id = MemberId(Uuid::new_v4());
+        let resource = PlanningResource {
+            member_id,
+            display_name: "Bonnal Baptiste".to_owned(),
+            employee_id: None,
+            hourly_rate_cents: None,
+            weekly_contract_minutes: 0,
+        };
 
-        let resource = employee_resource(source);
-
-        assert!(matches!(
-            resource,
-            PlanningResource::Employee { display_name, .. } if display_name == "Bonnal"
-        ));
+        assert_eq!(resource.display_name, "Bonnal Baptiste");
+        assert_eq!(resource.resource_id(), format!("member:{member_id}"));
     }
 
     fn task(starts_at: DateTime<Utc>, ends_at: DateTime<Utc>) -> Task {
@@ -703,10 +686,10 @@ mod tests {
 
     #[test]
     fn absence_overlapping_the_window_is_a_conflict() {
-        let employee_id = EmployeeId(Uuid::new_v4());
+        let member_id = MemberId(Uuid::new_v4());
         let win = window(2026, 8, 10, 9, 12);
         let absences = vec![absence(
-            employee_id,
+            member_id,
             AbsenceKind::Leave,
             utc(2026, 8, 10, 8, 0),
             utc(2026, 8, 10, 10, 0),
@@ -724,11 +707,11 @@ mod tests {
 
     #[test]
     fn absence_adjacent_to_the_window_is_not_a_conflict() {
-        let employee_id = EmployeeId(Uuid::new_v4());
+        let member_id = MemberId(Uuid::new_v4());
         let win = window(2026, 8, 10, 9, 12);
         // Ends exactly when the window starts: touching, not overlapping.
         let absences = vec![absence(
-            employee_id,
+            member_id,
             AbsenceKind::Leave,
             utc(2026, 8, 10, 7, 0),
             utc(2026, 8, 10, 9, 0),
@@ -862,10 +845,10 @@ mod tests {
 
     #[test]
     fn several_simultaneous_conflicts_are_all_reported() {
-        let employee_id = EmployeeId(Uuid::new_v4());
+        let member_id = MemberId(Uuid::new_v4());
         let win = window(2026, 8, 10, 18, 19); // 20:00-21:00 local, outside work hours
         let absences = vec![absence(
-            employee_id,
+            member_id,
             AbsenceKind::Sick,
             utc(2026, 8, 10, 17, 0),
             utc(2026, 8, 10, 19, 0),
@@ -941,14 +924,12 @@ mod tests {
 
     // -- PlanningService: resource dedup (mockall) --------------------------
 
-    fn employee(id: EmployeeId, user_id: Option<UserId>) -> Employee {
+    fn employee(id: EmployeeId, member_id: MemberId) -> Employee {
         let now = Utc::now();
         Employee {
             id,
             organization_id: OrganizationId(Uuid::new_v4()),
-            user_id,
-            last_name: "Alice".to_owned(),
-            first_name: None,
+            member_id,
             hourly_rate_cents: Some(3500),
             weekly_contract_minutes: 2100,
             deleted_at: None,
@@ -963,20 +944,17 @@ mod tests {
         employee_repository: MockEmployeeRepository,
         member_repository: MockMemberRepository,
         organization_repository: MockOrganizationRepository,
-        user_repository: MockUserRepository,
     ) -> PlanningService<
         MockPlanningRepository,
         MockEmployeeRepository,
         MockMemberRepository,
         MockOrganizationRepository,
-        MockUserRepository,
     > {
         PlanningService::new(
             planning_repository,
             employee_repository,
             member_repository,
             organization_repository,
-            user_repository,
         )
     }
 
@@ -1002,10 +980,19 @@ mod tests {
             .returning(|_, _, _| Box::pin(async { Ok(Vec::new()) }));
     }
 
+    /// One roster, one row per member — with or without a contract.
+    ///
+    /// Three tests used to live here: one for the dedup of a person who was
+    /// both member and employee, one adding a row for a member with no HR
+    /// record, and one skipping a free seat that had no user to name it. All
+    /// three described a read model that reconciled two rosters. There is one
+    /// roster now, and a seat carries its own name, so what is left to check is
+    /// that the contract is attached when it exists and absent when it does not.
     #[tokio::test]
-    async fn get_planning_deduplicates_a_person_who_is_both_member_and_employee() {
+    async fn get_planning_lists_every_member_once_with_its_profile_when_it_has_one() {
         let organization_id = OrganizationId(Uuid::new_v4());
-        let user_id = UserId(Uuid::new_v4());
+        let with_contract = MemberId(Uuid::new_v4());
+        let without_contract = MemberId(Uuid::new_v4());
         let employee_id = EmployeeId(Uuid::new_v4());
 
         let mut organization_repository = MockOrganizationRepository::new();
@@ -1019,7 +1006,7 @@ mod tests {
             .expect_list_active_by_organization()
             .with(eq(organization_id))
             .returning(move |_| {
-                Box::pin(async move { Ok(vec![employee(employee_id, Some(user_id))]) })
+                Box::pin(async move { Ok(vec![employee(employee_id, with_contract)]) })
             });
 
         let mut member_repository = MockMemberRepository::new();
@@ -1028,22 +1015,15 @@ mod tests {
             .with(eq(organization_id))
             .returning(move |org_id| {
                 Box::pin(async move {
-                    Ok(vec![Member {
-                        id: MemberId(Uuid::new_v4()),
-                        organization_id: org_id,
-                        user_id: Some(user_id),
-                        last_name: "Member".to_owned(),
-                        first_name: None,
-                        joined_at: Some(Utc::now()),
-                        created_at: Utc::now(),
-                        deleted_at: None,
-                    }])
+                    Ok(vec![
+                        seat(with_contract, org_id, "Avec"),
+                        seat(without_contract, org_id, "Sans"),
+                    ])
                 })
             });
 
-        // No `expect_list_by_ids`: the member is already covered by an
-        // active employee, so no user lookup should even happen.
-        let user_repository = MockUserRepository::new();
+        // No `expect_list_by_ids`: names come from the seats themselves, so
+        // the user repository is never consulted to build the roster.
 
         let mut planning_repository = MockPlanningRepository::new();
         empty_repository_expectations(&mut planning_repository, organization_id);
@@ -1053,156 +1033,33 @@ mod tests {
             employee_repository,
             member_repository,
             organization_repository,
-            user_repository,
         );
 
         let range = DateRange::new(date(2026, 8, 1), date(2026, 8, 7)).unwrap();
         let view = service.get_planning(organization_id, range).await.unwrap();
 
-        assert_eq!(view.resources.len(), 1);
-        assert!(matches!(
-            view.resources[0],
-            PlanningResource::Employee { employee_id: id, .. } if id == employee_id
-        ));
-    }
+        assert_eq!(view.resources.len(), 2);
 
-    #[tokio::test]
-    async fn get_planning_adds_a_member_only_row_for_a_member_without_an_employee_record() {
-        let organization_id = OrganizationId(Uuid::new_v4());
-        let user_id = UserId(Uuid::new_v4());
+        let contracted = view
+            .resources
+            .iter()
+            .find(|r| r.member_id == with_contract)
+            .expect("the member with a contract must appear");
+        assert_eq!(contracted.employee_id, Some(employee_id));
+        assert_eq!(contracted.hourly_rate_cents, Some(3500));
+        assert_eq!(contracted.weekly_contract_minutes, 2100);
 
-        let mut organization_repository = MockOrganizationRepository::new();
-        organization_repository
-            .expect_find_timezone()
-            .with(eq(organization_id))
-            .returning(|_| Box::pin(async { Ok(Some("Europe/Paris".to_owned())) }));
-
-        let mut employee_repository = MockEmployeeRepository::new();
-        employee_repository
-            .expect_list_active_by_organization()
-            .with(eq(organization_id))
-            .returning(|_| Box::pin(async { Ok(Vec::new()) }));
-
-        let mut member_repository = MockMemberRepository::new();
-        member_repository
-            .expect_list_active_by_organization()
-            .with(eq(organization_id))
-            .returning(move |org_id| {
-                Box::pin(async move {
-                    Ok(vec![Member {
-                        id: MemberId(Uuid::new_v4()),
-                        organization_id: org_id,
-                        user_id: Some(user_id),
-                        last_name: "Member".to_owned(),
-                        first_name: None,
-                        joined_at: Some(Utc::now()),
-                        created_at: Utc::now(),
-                        deleted_at: None,
-                    }])
-                })
-            });
-
-        let mut user_repository = MockUserRepository::new();
-        user_repository
-            .expect_list_by_ids()
-            .withf(move |ids| ids == [user_id])
-            .returning(move |_| {
-                let now = Utc::now();
-                Box::pin(async move {
-                    Ok(vec![User {
-                        id: user_id,
-                        email: "bob@example.com".to_owned(),
-                        username: "bob".to_owned(),
-                        name: "Bob Member".to_owned(),
-                        sub: "sub-bob".to_owned(),
-                        deleted_at: None,
-                        created_at: now,
-                        updated_at: now,
-                    }])
-                })
-            });
-
-        let mut planning_repository = MockPlanningRepository::new();
-        empty_repository_expectations(&mut planning_repository, organization_id);
-
-        let mut service = service(
-            planning_repository,
-            employee_repository,
-            member_repository,
-            organization_repository,
-            user_repository,
+        let bare = view
+            .resources
+            .iter()
+            .find(|r| r.member_id == without_contract)
+            .expect("the member with no contract must appear all the same");
+        assert_eq!(bare.employee_id, None);
+        assert_eq!(
+            bare.hourly_rate_cents, None,
+            "no contract means no rate — never a rate of zero"
         );
-
-        let range = DateRange::new(date(2026, 8, 1), date(2026, 8, 7)).unwrap();
-        let view = service.get_planning(organization_id, range).await.unwrap();
-
-        assert_eq!(view.resources.len(), 1);
-        assert!(matches!(
-            &view.resources[0],
-            PlanningResource::Member { user_id: id, display_name } if *id == user_id && display_name == "Bob Member"
-        ));
-    }
-
-    /// Transitional (#180): a free seat (`user_id: None`) has no user to
-    /// resolve a display name for, so `load_resources` skips it rather than
-    /// producing a `PlanningResource::Member` — no route can create one yet
-    /// (that is #181), so this has no observable effect today. #182 removes
-    /// `PlanningResource::Member` and reads the member's own name instead.
-    #[tokio::test]
-    async fn get_planning_skips_a_free_seat_member_with_no_user_id() {
-        let organization_id = OrganizationId(Uuid::new_v4());
-
-        let mut organization_repository = MockOrganizationRepository::new();
-        organization_repository
-            .expect_find_timezone()
-            .with(eq(organization_id))
-            .returning(|_| Box::pin(async { Ok(Some("Europe/Paris".to_owned())) }));
-
-        let mut employee_repository = MockEmployeeRepository::new();
-        employee_repository
-            .expect_list_active_by_organization()
-            .with(eq(organization_id))
-            .returning(|_| Box::pin(async { Ok(Vec::new()) }));
-
-        let mut member_repository = MockMemberRepository::new();
-        member_repository
-            .expect_list_active_by_organization()
-            .with(eq(organization_id))
-            .returning(move |org_id| {
-                let now = Utc::now();
-                Box::pin(async move {
-                    Ok(vec![Member {
-                        id: MemberId(Uuid::new_v4()),
-                        organization_id: org_id,
-                        user_id: None,
-                        last_name: "Free Seat".to_owned(),
-                        first_name: None,
-                        joined_at: None,
-                        created_at: now,
-                        deleted_at: None,
-                    }])
-                })
-            });
-
-        // No `expect_list_by_ids`: a free seat has no `user_id` to resolve
-        // a display name for, so the user lookup must never even happen.
-        let user_repository = MockUserRepository::new();
-
-        let mut planning_repository = MockPlanningRepository::new();
-        empty_repository_expectations(&mut planning_repository, organization_id);
-
-        let mut service = service(
-            planning_repository,
-            employee_repository,
-            member_repository,
-            organization_repository,
-            user_repository,
-        );
-
-        let range = DateRange::new(date(2026, 8, 1), date(2026, 8, 7)).unwrap();
-        let view = service.get_planning(organization_id, range).await.unwrap();
-
-        assert!(view.resources.is_empty());
+        assert_eq!(bare.weekly_contract_minutes, 0);
     }
 
     #[tokio::test]
@@ -1241,23 +1098,6 @@ mod tests {
                 })
             });
 
-        let mut user_repository = MockUserRepository::new();
-        user_repository.expect_list_by_ids().returning(move |_| {
-            let now = Utc::now();
-            Box::pin(async move {
-                Ok(vec![User {
-                    id: user_id,
-                    email: "bob@example.com".to_owned(),
-                    username: "bob".to_owned(),
-                    name: "Bob Member".to_owned(),
-                    sub: "sub-bob".to_owned(),
-                    deleted_at: None,
-                    created_at: now,
-                    updated_at: now,
-                }])
-            })
-        });
-
         let mut planning_repository = MockPlanningRepository::new();
         empty_repository_expectations(&mut planning_repository, organization_id);
 
@@ -1266,7 +1106,6 @@ mod tests {
             employee_repository,
             member_repository,
             organization_repository,
-            user_repository,
         );
 
         let window = TimeRange::new(utc(2026, 8, 10, 9, 0), utc(2026, 8, 10, 12, 0)).unwrap();
@@ -1281,13 +1120,13 @@ mod tests {
 
     #[test]
     fn build_entries_flattens_a_task_and_an_absence() {
-        let employee_id = EmployeeId(Uuid::new_v4());
+        let member_id = MemberId(Uuid::new_v4());
         let mut t = task(utc(2026, 8, 10, 8, 0), utc(2026, 8, 10, 12, 0));
         t.assignments.push(TaskAssignment {
             id: TaskAssignmentId(Uuid::new_v4()),
             organization_id: t.organization_id,
             task_id: t.id,
-            employee_id,
+            member_id,
             created_at: t.created_at,
         });
         let planning_tasks = vec![PlanningTask {
@@ -1297,7 +1136,7 @@ mod tests {
             child_count: 0,
         }];
         let absences = vec![absence(
-            employee_id,
+            member_id,
             AbsenceKind::Sick,
             utc(2026, 8, 11, 0, 0),
             utc(2026, 8, 12, 0, 0),
@@ -1308,10 +1147,10 @@ mod tests {
         assert_eq!(entries.len(), 2);
         assert!(matches!(
             &entries[0],
-            PlanningEntry::Task { customer_name: Some(customer_name), context_label: Some(context_label), employee_ids, .. }
+            PlanningEntry::Task { customer_name: Some(customer_name), context_label: Some(context_label), member_ids, .. }
                 if customer_name == "Alice Dupont"
                     && context_label == "Chantier principal"
-                    && employee_ids == &[employee_id]
+                    && member_ids == &[member_id]
         ));
         assert!(matches!(
             &entries[1],
@@ -1370,19 +1209,26 @@ mod tests {
     }
 
     #[test]
-    fn build_work_time_covers_every_employee_resource_and_skips_members() {
+    /// Every member gets a work-time row, contract or not. The version of this
+    /// test that skipped bare members described a grid on which someone without
+    /// an HR record read as never available rather than simply unscheduled.
+    fn build_work_time_covers_every_member_including_those_without_a_contract() {
+        let member_id = MemberId(Uuid::new_v4());
         let employee_id = EmployeeId(Uuid::new_v4());
         let resources = vec![
-            PlanningResource::Employee {
-                employee_id,
-                user_id: None,
+            PlanningResource {
+                member_id,
                 display_name: "Alice".to_owned(),
+                employee_id: Some(employee_id),
                 hourly_rate_cents: None,
                 weekly_contract_minutes: 0,
             },
-            PlanningResource::Member {
-                user_id: UserId(Uuid::new_v4()),
+            PlanningResource {
+                member_id: MemberId(Uuid::new_v4()),
                 display_name: "Bob".to_owned(),
+                employee_id: None,
+                hourly_rate_cents: None,
+                weekly_contract_minutes: 0,
             },
         ];
         let rhythm_id = crate::EmployeeRhythmId(Uuid::new_v4());
@@ -1408,10 +1254,14 @@ mod tests {
 
         assert_eq!(
             work_time.len(),
-            1,
-            "the member-only resource must be skipped"
+            2,
+            "every member gets a row — someone without a contract is unscheduled, not skipped"
         );
-        assert_eq!(work_time[0].employee_id, employee_id);
+        assert_eq!(work_time[0].member_id, member_id);
         assert!(work_time[0].days.contains_key(&date(2026, 8, 10)));
+        assert!(
+            work_time[1].days.is_empty(),
+            "a member with no rhythm and no slot declares no working day"
+        );
     }
 }

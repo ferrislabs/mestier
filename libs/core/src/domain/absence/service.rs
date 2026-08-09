@@ -2,9 +2,9 @@ use chrono::Utc;
 use common::{CoreError, generate_uuid_v7};
 
 use crate::{
-    EmployeeAbsence,
+    Absence,
     domain::absence::{
-        EmployeeAbsenceId,
+        AbsenceId,
         commands::{CreateAbsenceCommand, PatchAbsenceCommand},
         ports::AbsenceRepository,
     },
@@ -28,16 +28,16 @@ where
     pub async fn create_absence(
         &mut self,
         command: CreateAbsenceCommand,
-    ) -> Result<EmployeeAbsence, CoreError> {
+    ) -> Result<Absence, CoreError> {
         validate_schedule(command.starts_at, command.ends_at)?;
         validate_note(&command.note)?;
 
         let now = Utc::now();
         self.absence_repository
-            .insert(&EmployeeAbsence {
-                id: EmployeeAbsenceId(generate_uuid_v7()),
+            .insert(&Absence {
+                id: AbsenceId(generate_uuid_v7()),
                 organization_id: command.organization_id,
-                employee_id: command.employee_id,
+                member_id: command.member_id,
                 kind: command.kind,
                 starts_at: command.starts_at,
                 ends_at: command.ends_at,
@@ -50,10 +50,7 @@ where
             .await
     }
 
-    pub async fn get_absence(
-        &mut self,
-        id: EmployeeAbsenceId,
-    ) -> Result<EmployeeAbsence, CoreError> {
+    pub async fn get_absence(&mut self, id: AbsenceId) -> Result<Absence, CoreError> {
         self.absence_repository
             .find_by_id(id)
             .await?
@@ -65,7 +62,7 @@ where
         organization_id: crate::OrganizationId,
         limit: u64,
         offset: u64,
-    ) -> Result<(Vec<EmployeeAbsence>, u64), CoreError> {
+    ) -> Result<(Vec<Absence>, u64), CoreError> {
         self.absence_repository
             .list_by_organization(organization_id, limit, offset)
             .await
@@ -74,7 +71,7 @@ where
     pub async fn patch_absence(
         &mut self,
         command: PatchAbsenceCommand,
-    ) -> Result<EmployeeAbsence, CoreError> {
+    ) -> Result<Absence, CoreError> {
         let mut absence = self.get_absence(command.id).await?;
 
         let starts_at = command.starts_at.unwrap_or(absence.starts_at);
@@ -98,7 +95,7 @@ where
         self.absence_repository.update(&absence).await
     }
 
-    pub async fn soft_delete_absence(&mut self, id: EmployeeAbsenceId) -> Result<(), CoreError> {
+    pub async fn soft_delete_absence(&mut self, id: AbsenceId) -> Result<(), CoreError> {
         self.get_absence(id).await?;
         self.absence_repository.soft_delete(id, Utc::now()).await
     }
@@ -130,7 +127,7 @@ fn validate_note(note: &Option<String>) -> Result<(), CoreError> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{EmployeeId, OrganizationId, domain::absence::ports::MockAbsenceRepository};
+    use crate::{MemberId, OrganizationId, domain::absence::ports::MockAbsenceRepository};
     use mockall::predicate::eq;
     use uuid::Uuid;
 
@@ -142,7 +139,7 @@ mod tests {
         let now = Utc::now();
         CreateAbsenceCommand {
             organization_id: OrganizationId(Uuid::new_v4()),
-            employee_id: EmployeeId(Uuid::new_v4()),
+            member_id: MemberId(Uuid::new_v4()),
             kind: crate::AbsenceKind::Leave,
             starts_at: now,
             ends_at: now + chrono::Duration::hours(2),
@@ -151,12 +148,12 @@ mod tests {
         }
     }
 
-    fn absence(id: EmployeeAbsenceId, organization_id: OrganizationId) -> EmployeeAbsence {
+    fn absence(id: AbsenceId, organization_id: OrganizationId) -> Absence {
         let now = Utc::now();
-        EmployeeAbsence {
+        Absence {
             id,
             organization_id,
-            employee_id: EmployeeId(Uuid::new_v4()),
+            member_id: MemberId(Uuid::new_v4()),
             kind: crate::AbsenceKind::Leave,
             starts_at: now,
             ends_at: now + chrono::Duration::hours(2),
@@ -210,7 +207,7 @@ mod tests {
 
     #[tokio::test]
     async fn get_absence_returns_not_found_when_missing() {
-        let id = EmployeeAbsenceId(Uuid::new_v4());
+        let id = AbsenceId(Uuid::new_v4());
         let mut absence_repository = MockAbsenceRepository::new();
         absence_repository
             .expect_find_by_id()
@@ -232,9 +229,7 @@ mod tests {
             .expect_list_by_organization()
             .with(eq(organization_id), eq(10), eq(20))
             .returning(move |org_id, _, _| {
-                Box::pin(async move {
-                    Ok((vec![absence(EmployeeAbsenceId(Uuid::new_v4()), org_id)], 1))
-                })
+                Box::pin(async move { Ok((vec![absence(AbsenceId(Uuid::new_v4()), org_id)], 1)) })
             });
 
         let mut service = service(absence_repository);
@@ -250,7 +245,7 @@ mod tests {
 
     #[tokio::test]
     async fn patch_absence_reschedules_and_changes_kind() {
-        let id = EmployeeAbsenceId(Uuid::new_v4());
+        let id = AbsenceId(Uuid::new_v4());
         let organization_id = OrganizationId(Uuid::new_v4());
         let existing = absence(id, organization_id);
         let new_starts_at = existing.starts_at + chrono::Duration::days(1);
@@ -288,7 +283,7 @@ mod tests {
 
     #[tokio::test]
     async fn patch_absence_rejects_ends_at_before_merged_starts_at() {
-        let id = EmployeeAbsenceId(Uuid::new_v4());
+        let id = AbsenceId(Uuid::new_v4());
         let organization_id = OrganizationId(Uuid::new_v4());
         let existing = absence(id, organization_id);
         let existing_starts_at = existing.starts_at;
@@ -314,7 +309,7 @@ mod tests {
 
     #[tokio::test]
     async fn patch_absence_can_clear_the_note() {
-        let id = EmployeeAbsenceId(Uuid::new_v4());
+        let id = AbsenceId(Uuid::new_v4());
         let organization_id = OrganizationId(Uuid::new_v4());
         let existing = absence(id, organization_id);
 
@@ -346,7 +341,7 @@ mod tests {
 
     #[tokio::test]
     async fn patch_absence_rejects_blank_note() {
-        let id = EmployeeAbsenceId(Uuid::new_v4());
+        let id = AbsenceId(Uuid::new_v4());
         let organization_id = OrganizationId(Uuid::new_v4());
         let existing = absence(id, organization_id);
 
@@ -371,7 +366,7 @@ mod tests {
 
     #[tokio::test]
     async fn soft_delete_absence_checks_existence_then_deletes() {
-        let id = EmployeeAbsenceId(Uuid::new_v4());
+        let id = AbsenceId(Uuid::new_v4());
         let organization_id = OrganizationId(Uuid::new_v4());
         let existing = absence(id, organization_id);
 
@@ -395,7 +390,7 @@ mod tests {
 
     #[tokio::test]
     async fn soft_delete_absence_returns_not_found_when_missing() {
-        let id = EmployeeAbsenceId(Uuid::new_v4());
+        let id = AbsenceId(Uuid::new_v4());
         let mut absence_repository = MockAbsenceRepository::new();
         absence_repository
             .expect_find_by_id()

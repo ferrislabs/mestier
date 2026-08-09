@@ -2,14 +2,11 @@ use auth::Identity;
 use axum::{Extension, Json, extract::State};
 use chrono::NaiveDate;
 use handlers::{ApiError, AppState, DataEnvelope, Response, resolve_user_id};
-use mestier_core::{ReplaceRhythmCommand, RhythmSlotInput};
+use mestier_core::RhythmSlotInput;
 use serde::Deserialize;
 use utoipa::ToSchema;
 
-use crate::{
-    require_org_membership,
-    work_time::{RhythmPath, RhythmResponse},
-};
+use crate::work_time::{RhythmPath, RhythmResponse};
 
 #[derive(Debug, Deserialize, ToSchema)]
 pub struct RhythmSlotRequest {
@@ -49,27 +46,23 @@ pub struct PutRhythmRequest {
     security(("bearer_auth" = []))
 )]
 pub async fn handler(
-    RhythmPath {
-        organization_id,
-        employee_id,
-    }: RhythmPath,
+    RhythmPath { member_id }: RhythmPath,
     State(state): State<AppState>,
     Extension(identity): Extension<Identity>,
     Json(payload): Json<PutRhythmRequest>,
 ) -> Result<Response<RhythmResponse>, ApiError> {
-    require_org_membership(&state, &identity, organization_id).await?;
+    let organization_id = crate::require_member_target(&state, &identity, member_id).await?;
     let actor = resolve_user_id(&state, &identity).await?;
-    crate::require_employee_target(&state, organization_id, employee_id).await?;
 
     let rhythm = state
         .usecase
         .acting_as(actor)
-        .replace_rhythm(ReplaceRhythmCommand {
+        .replace_rhythm(
             organization_id,
-            employee_id,
-            effective_from: payload.effective_from,
-            effective_to: payload.effective_to,
-            slots: payload
+            member_id,
+            payload.effective_from,
+            payload.effective_to,
+            payload
                 .slots
                 .into_iter()
                 .map(|slot| RhythmSlotInput {
@@ -78,7 +71,7 @@ pub async fn handler(
                     ends_minute: slot.ends_minute,
                 })
                 .collect(),
-        })
+        )
         .await?;
 
     Ok(Response::OK(rhythm.into()))

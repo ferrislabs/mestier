@@ -1,19 +1,19 @@
 use chrono::{DateTime, Utc};
 use mestier_core::{
-    Employee, EmployeeId, Equipment, EquipmentId, OrganizationId, Product, ProductId, ServiceRate,
-    ServiceRateId, ServiceRateUnit, UserId,
+    Employee, EmployeeId, Equipment, EquipmentId, MemberId, OrganizationId, Product, ProductId,
+    ServiceRate, ServiceRateId, ServiceRateUnit,
 };
 use serde::Serialize;
 use utoipa::ToSchema;
 
 #[derive(Debug, Clone, PartialEq, Serialize, ToSchema)]
+/// The contractual profile of a member. It carries no name and no account:
+/// those belong to the seat, and duplicating them here is exactly what #182
+/// removed.
 pub struct EmployeeResponse {
     pub id: EmployeeId,
     pub organization_id: OrganizationId,
-    pub user_id: Option<UserId>,
-    pub last_name: String,
-    /// `null` means "not provided" — see `Employee::first_name`.
-    pub first_name: Option<String>,
+    pub member_id: MemberId,
     /// `null` means the rate is not set yet; `0` means genuinely free.
     pub hourly_rate_cents: Option<i32>,
     pub weekly_contract_minutes: i32,
@@ -26,9 +26,7 @@ impl From<Employee> for EmployeeResponse {
         Self {
             id: value.id,
             organization_id: value.organization_id,
-            user_id: value.user_id,
-            last_name: value.last_name,
-            first_name: value.first_name,
+            member_id: value.member_id,
             hourly_rate_cents: value.hourly_rate_cents,
             weekly_contract_minutes: value.weekly_contract_minutes,
             created_at: value.created_at,

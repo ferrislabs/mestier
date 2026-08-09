@@ -39,7 +39,7 @@ pub mod domain {
     pub struct TaskComment;
     pub struct TaskLabel;
     pub struct EmployeeRhythm;
-    pub struct EmployeeWorkSlot;
+    pub struct WorkSlot;
     pub struct Workflow;
     pub struct Run;
 }

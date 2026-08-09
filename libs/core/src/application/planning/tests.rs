@@ -10,7 +10,7 @@ mod tests {
     use crate::application::{MestierUseCase, default_authorizer};
     use crate::domain::planning::TimeRange;
     use crate::infrastructure::realtime::EventHub;
-    use crate::{CustomerContextId, CustomerId, DateRange, EmployeeId, PlanningResource};
+    use crate::{CustomerContextId, CustomerId, DateRange, MemberId};
 
     async fn make_pool() -> PgPool {
         let url = std::env::var("DATABASE_URL")
@@ -91,10 +91,13 @@ mod tests {
         }
     }
 
-    /// Seeds a user and an active employee record linked to it — a person
-    /// who is both a member and an employee, once `seed_member` also adds
-    /// them to `organization_members`.
-    async fn seed_employee_with_user(pool: &PgPool, organization_id: OrganizationId) -> UserId {
+    /// Seeds an occupied seat with a contractual profile attached. Returns
+    /// both: the seat identifies the grid row, the user id is only needed for
+    /// cleanup.
+    async fn seed_employee_with_user(
+        pool: &PgPool,
+        organization_id: OrganizationId,
+    ) -> (MemberId, UserId) {
         let user_id = generate_uuid_v7();
         sqlx::query!(
             r#"INSERT INTO users (id, email, username, display_name, sub)
@@ -109,13 +112,25 @@ mod tests {
         .await
         .unwrap();
 
+        let member_id = generate_uuid_v7();
         sqlx::query!(
-            r#"INSERT INTO employees (id, org_id, user_id, last_name, hourly_rate_cents, weekly_contract_minutes)
-               VALUES ($1, $2, $3, $4, $5, $6)"#,
-            generate_uuid_v7(),
+            r#"INSERT INTO organization_members (id, organization_id, user_id, last_name)
+               VALUES ($1, $2, $3, $4)"#,
+            member_id,
             organization_id.0,
             user_id,
             "Linked Employee",
+        )
+        .execute(pool)
+        .await
+        .unwrap();
+
+        sqlx::query!(
+            r#"INSERT INTO employees (id, org_id, member_id, hourly_rate_cents, weekly_contract_minutes)
+               VALUES ($1, $2, $3, $4, $5)"#,
+            generate_uuid_v7(),
+            organization_id.0,
+            member_id,
             3500,
             2100,
         )
@@ -123,38 +138,58 @@ mod tests {
         .await
         .unwrap();
 
-        UserId(user_id)
+        (MemberId(member_id), UserId(user_id))
     }
 
-    /// Seeds a plain active employee with no linked user account.
-    async fn seed_employee(pool: &PgPool, organization_id: OrganizationId) -> EmployeeId {
+    /// Seeds a free seat with a contractual profile attached — nobody holds
+    /// the seat, but the contract exists.
+    async fn seed_employee(pool: &PgPool, organization_id: OrganizationId) -> MemberId {
+        let member_id = generate_uuid_v7();
+        sqlx::query!(
+            r#"INSERT INTO organization_members (id, organization_id, last_name)
+               VALUES ($1, $2, $3)"#,
+            member_id,
+            organization_id.0,
+            "Existing Employee",
+        )
+        .execute(pool)
+        .await
+        .unwrap();
+
         let employee_id = generate_uuid_v7();
         sqlx::query!(
-            r#"INSERT INTO employees (id, org_id, last_name, hourly_rate_cents, weekly_contract_minutes)
+            r#"INSERT INTO employees (id, org_id, member_id, hourly_rate_cents, weekly_contract_minutes)
                VALUES ($1, $2, $3, $4, $5)"#,
             employee_id,
             organization_id.0,
-            "Existing Employee",
+            member_id,
             3500,
             2100,
         )
         .execute(pool)
         .await
         .unwrap();
-        EmployeeId(employee_id)
+
+        MemberId(member_id)
     }
 
     /// Adds `user_id` as a member of `organization_id`.
-    async fn seed_member(pool: &PgPool, organization_id: OrganizationId, user_id: UserId) {
+    async fn seed_member(
+        pool: &PgPool,
+        organization_id: OrganizationId,
+        user_id: UserId,
+    ) -> MemberId {
         let display_name =
             sqlx::query_scalar!(r#"SELECT display_name FROM users WHERE id = $1"#, user_id.0,)
                 .fetch_one(pool)
                 .await
                 .unwrap();
 
+        let member_id = generate_uuid_v7();
         sqlx::query!(
-            r#"INSERT INTO organization_members (organization_id, user_id, last_name)
-               VALUES ($1, $2, $3)"#,
+            r#"INSERT INTO organization_members (id, organization_id, user_id, last_name)
+               VALUES ($1, $2, $3, $4)"#,
+            member_id,
             organization_id.0,
             user_id.0,
             display_name,
@@ -162,6 +197,8 @@ mod tests {
         .execute(pool)
         .await
         .unwrap();
+
+        MemberId(member_id)
     }
 
     /// Seeds a user who is a member of `organization_id` but has no
@@ -169,7 +206,7 @@ mod tests {
     async fn seed_member_without_employee(
         pool: &PgPool,
         organization_id: OrganizationId,
-    ) -> UserId {
+    ) -> (MemberId, UserId) {
         let user_id = generate_uuid_v7();
         sqlx::query!(
             r#"INSERT INTO users (id, email, username, display_name, sub)
@@ -184,15 +221,15 @@ mod tests {
         .await
         .unwrap();
 
-        seed_member(pool, organization_id, UserId(user_id)).await;
+        let member_id = seed_member(pool, organization_id, UserId(user_id)).await;
 
-        UserId(user_id)
+        (member_id, UserId(user_id))
     }
 
     async fn seed_task(
         pool: &PgPool,
         fixture: &Fixture,
-        employee_id: EmployeeId,
+        member_id: MemberId,
         starts_at: DateTime<Utc>,
         ends_at: DateTime<Utc>,
     ) -> Uuid {
@@ -215,12 +252,12 @@ mod tests {
         .unwrap();
 
         sqlx::query!(
-            r#"INSERT INTO task_assignments (id, org_id, task_id, employee_id)
+            r#"INSERT INTO task_assignments (id, org_id, task_id, member_id)
                VALUES ($1, $2, $3, $4)"#,
             generate_uuid_v7(),
             fixture.organization_id.0,
             task_id,
-            employee_id.0,
+            member_id.0,
         )
         .execute(pool)
         .await
@@ -231,14 +268,14 @@ mod tests {
 
     /// Seeds a subtask under `parent_task_id` with no `starts_at`/`ends_at`
     /// of its own — the "inherits its parent's window" case
-    /// `resolve_task_window` exists for. Assigned to `employee_id`, unlike
+    /// `resolve_task_window` exists for. Assigned to `member_id`, unlike
     /// its parent's own assignees (a subtask never inherits those, see
     /// invariant 7 of the planning module design doc).
     async fn seed_dateless_subtask(
         pool: &PgPool,
         fixture: &Fixture,
         parent_task_id: Uuid,
-        employee_id: EmployeeId,
+        member_id: MemberId,
     ) -> Uuid {
         let task_id = generate_uuid_v7();
         sqlx::query!(
@@ -256,12 +293,12 @@ mod tests {
         .unwrap();
 
         sqlx::query!(
-            r#"INSERT INTO task_assignments (id, org_id, task_id, employee_id)
+            r#"INSERT INTO task_assignments (id, org_id, task_id, member_id)
                VALUES ($1, $2, $3, $4)"#,
             generate_uuid_v7(),
             fixture.organization_id.0,
             task_id,
-            employee_id.0,
+            member_id.0,
         )
         .execute(pool)
         .await
@@ -273,18 +310,18 @@ mod tests {
     async fn seed_absence(
         pool: &PgPool,
         organization_id: OrganizationId,
-        employee_id: EmployeeId,
+        member_id: MemberId,
         starts_at: DateTime<Utc>,
         ends_at: DateTime<Utc>,
     ) {
         sqlx::query!(
             r#"
-            INSERT INTO employee_absences (id, org_id, employee_id, kind, starts_at, ends_at)
+            INSERT INTO absences (id, org_id, member_id, kind, starts_at, ends_at)
             VALUES ($1, $2, $3, 'LEAVE', $4, $5)
             "#,
             generate_uuid_v7(),
             organization_id.0,
-            employee_id.0,
+            member_id.0,
             starts_at,
             ends_at,
         )
@@ -296,12 +333,7 @@ mod tests {
     /// Removes everything seeded under `organization_id`, plus the loose
     /// user rows that outlive the organization.
     async fn cleanup(pool: &PgPool, organization_id: OrganizationId, user_ids: &[UserId]) {
-        for table in [
-            "employee_absences",
-            "employee_work_slots",
-            "task_assignments",
-            "tasks",
-        ] {
+        for table in ["absences", "work_slots", "task_assignments", "tasks"] {
             sqlx::query(&format!("DELETE FROM {table} WHERE org_id = $1"))
                 .bind(organization_id.0)
                 .execute(pool)
@@ -355,11 +387,11 @@ mod tests {
     /// employee side — proven against a real database, not a mock.
     #[tokio::test]
     #[ignore = "requires live postgres"]
-    async fn get_planning_deduplicates_a_person_who_is_both_member_and_employee() {
+    async fn get_planning_lists_a_member_with_a_profile_once() {
         let pool = make_pool().await;
         let fixture = seed_fixture(&pool).await;
-        let linked_user_id = seed_employee_with_user(&pool, fixture.organization_id).await;
-        seed_member(&pool, fixture.organization_id, linked_user_id).await;
+        let (linked_member_id, linked_user_id) =
+            seed_employee_with_user(&pool, fixture.organization_id).await;
         let usecase = make_usecase(pool.clone());
 
         let view = usecase
@@ -373,12 +405,9 @@ mod tests {
         assert_eq!(
             view.resources.len(),
             1,
-            "the linked user must appear exactly once"
+            "a member appears once, profile or no profile — there is one roster"
         );
-        assert!(matches!(
-            &view.resources[0],
-            PlanningResource::Employee { user_id: Some(id), .. } if *id == linked_user_id
-        ));
+        assert_eq!(view.resources[0].member_id, linked_member_id);
 
         cleanup(
             &pool,
@@ -393,8 +422,8 @@ mod tests {
     async fn get_planning_lists_a_member_only_resource_alongside_employees() {
         let pool = make_pool().await;
         let fixture = seed_fixture(&pool).await;
-        let employee_id = seed_employee(&pool, fixture.organization_id).await;
-        let member_only_user_id =
+        let member_id = seed_employee(&pool, fixture.organization_id).await;
+        let (member_only_member_id, member_only_user_id) =
             seed_member_without_employee(&pool, fixture.organization_id).await;
         let usecase = make_usecase(pool.clone());
 
@@ -407,14 +436,12 @@ mod tests {
             .expect("get_planning must succeed");
 
         assert_eq!(view.resources.len(), 2);
-        assert!(view.resources.iter().any(|r| matches!(
-            r,
-            PlanningResource::Employee { employee_id: id, .. } if *id == employee_id
-        )));
-        assert!(view.resources.iter().any(|r| matches!(
-            r,
-            PlanningResource::Member { user_id, .. } if *user_id == member_only_user_id
-        )));
+        assert!(view.resources.iter().any(|r| r.member_id == member_id));
+        assert!(
+            view.resources
+                .iter()
+                .any(|r| r.member_id == member_only_member_id)
+        );
 
         cleanup(
             &pool,
@@ -429,13 +456,13 @@ mod tests {
     async fn get_planning_returns_task_and_absence_entries_in_the_window() {
         let pool = make_pool().await;
         let fixture = seed_fixture(&pool).await;
-        let employee_id = seed_employee(&pool, fixture.organization_id).await;
+        let member_id = seed_employee(&pool, fixture.organization_id).await;
         let now = Utc::now();
-        seed_task(&pool, &fixture, employee_id, now, now + Duration::hours(2)).await;
+        seed_task(&pool, &fixture, member_id, now, now + Duration::hours(2)).await;
         seed_absence(
             &pool,
             fixture.organization_id,
-            employee_id,
+            member_id,
             now + Duration::days(1),
             now + Duration::days(1) + Duration::hours(2),
         )
@@ -480,11 +507,11 @@ mod tests {
     async fn get_planning_includes_a_dateless_subtask_using_its_parent_window() {
         let pool = make_pool().await;
         let fixture = seed_fixture(&pool).await;
-        let employee_id = seed_employee(&pool, fixture.organization_id).await;
+        let member_id = seed_employee(&pool, fixture.organization_id).await;
         let now = Utc::now();
         let parent_task_id =
-            seed_task(&pool, &fixture, employee_id, now, now + Duration::hours(4)).await;
-        let subtask_id = seed_dateless_subtask(&pool, &fixture, parent_task_id, employee_id).await;
+            seed_task(&pool, &fixture, member_id, now, now + Duration::hours(4)).await;
+        let subtask_id = seed_dateless_subtask(&pool, &fixture, parent_task_id, member_id).await;
         let usecase = make_usecase(pool.clone());
 
         let today = now.date_naive();
@@ -507,7 +534,7 @@ mod tests {
                 parent_task_id: entry_parent_id,
                 starts_at,
                 ends_at,
-                employee_ids,
+                member_ids,
                 ..
             } => {
                 assert_eq!(*entry_parent_id, Some(crate::TaskId(parent_task_id)));
@@ -517,7 +544,7 @@ mod tests {
                     now + Duration::hours(4),
                     "must carry the parent's ends_at"
                 );
-                assert_eq!(employee_ids, &[employee_id]);
+                assert_eq!(member_ids, &[member_id]);
             }
             crate::PlanningEntry::Absence { .. } => panic!("expected a task entry"),
         }
@@ -535,11 +562,11 @@ mod tests {
     async fn deleting_a_parent_task_cascades_to_its_subtask_and_both_leave_get_planning() {
         let pool = make_pool().await;
         let fixture = seed_fixture(&pool).await;
-        let employee_id = seed_employee(&pool, fixture.organization_id).await;
+        let member_id = seed_employee(&pool, fixture.organization_id).await;
         let now = Utc::now();
         let parent_task_id =
-            seed_task(&pool, &fixture, employee_id, now, now + Duration::hours(4)).await;
-        let subtask_id = seed_dateless_subtask(&pool, &fixture, parent_task_id, employee_id).await;
+            seed_task(&pool, &fixture, member_id, now, now + Duration::hours(4)).await;
+        let subtask_id = seed_dateless_subtask(&pool, &fixture, parent_task_id, member_id).await;
         let usecase = make_usecase(pool.clone());
 
         let today = now.date_naive();
@@ -587,12 +614,12 @@ mod tests {
     async fn get_availability_reports_an_overlapping_absence_as_a_conflict() {
         let pool = make_pool().await;
         let fixture = seed_fixture(&pool).await;
-        let employee_id = seed_employee(&pool, fixture.organization_id).await;
+        let member_id = seed_employee(&pool, fixture.organization_id).await;
         let now = Utc::now();
         seed_absence(
             &pool,
             fixture.organization_id,
-            employee_id,
+            member_id,
             now,
             now + Duration::hours(4),
         )
@@ -607,7 +634,7 @@ mod tests {
 
         let report = reports
             .iter()
-            .find(|r| matches!(&r.resource, PlanningResource::Employee { employee_id: id, .. } if *id == employee_id))
+            .find(|r| r.resource.member_id == member_id)
             .expect("the seeded employee must be in the report");
 
         assert!(!report.available());

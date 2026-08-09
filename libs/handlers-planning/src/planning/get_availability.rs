@@ -155,12 +155,12 @@ fn validate_window_width(window: TimeRange) -> Result<(), ApiError> {
 mod tests {
     use super::*;
     use axum::extract::FromRequestParts;
-    use mestier_core::{EmployeeId, PlanningResource};
+    use mestier_core::PlanningResource;
 
     // `uuid` is not a direct dependency of `handlers-planning` (a
     // `Cargo.toml` this workstream does not own), so fixture ids are parsed
     // from literal strings via `FromStr` rather than generated.
-    fn employee_id() -> EmployeeId {
+    fn member_id() -> mestier_core::MemberId {
         "11111111-1111-1111-1111-111111111111".parse().unwrap()
     }
 
@@ -258,10 +258,10 @@ mod tests {
     #[test]
     fn available_resource_has_no_conflicts_and_a_true_flag() {
         let report = AvailabilityReport {
-            resource: PlanningResource::Employee {
-                employee_id: employee_id(),
-                user_id: None,
+            resource: PlanningResource {
+                member_id: member_id(),
                 display_name: "Alice".to_owned(),
+                employee_id: None,
                 hourly_rate_cents: None,
                 weekly_contract_minutes: 0,
             },
@@ -270,7 +270,7 @@ mod tests {
 
         let response = AvailabilityResourceResponse::from(report);
 
-        assert_eq!(response.resource_id, format!("employee:{}", employee_id()));
+        assert_eq!(response.resource_id, format!("member:{}", member_id()));
         assert!(response.available);
         assert!(response.conflicts.is_empty());
     }

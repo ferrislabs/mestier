@@ -4,7 +4,7 @@ use mestier_macros::repository;
 use sqlx::PgConnection;
 
 use crate::{
-    EmployeeId, EmployeeRhythm, EmployeeRhythmId, EmployeeWorkSlot, OrganizationId, RhythmSlot,
+    EmployeeId, EmployeeRhythm, EmployeeRhythmId, MemberId, OrganizationId, RhythmSlot, WorkSlot,
     domain::work_time::ports::{RhythmRepository, WorkSlotRepository},
     infrastructure::{
         postgres::{SharedTx, error::map_sqlx_error},
@@ -232,7 +232,7 @@ async fn replace_rhythm_slots(
     insert_rhythm_slots(conn, rhythm_id, slots).await
 }
 
-#[repository(domain = EmployeeWorkSlot, backend = Postgres)]
+#[repository(domain = WorkSlot, backend = Postgres)]
 pub struct PgWorkSlotRepository<'tx> {
     tx: SharedTx<'tx>,
 }
@@ -246,20 +246,20 @@ impl<'tx> PgWorkSlotRepository<'tx> {
 impl<'tx> WorkSlotRepository for PgWorkSlotRepository<'tx> {
     async fn list_in_window(
         &mut self,
-        employee_id: EmployeeId,
+        member_id: MemberId,
         from: NaiveDate,
         to: NaiveDate,
-    ) -> Result<Vec<EmployeeWorkSlot>, CoreError> {
+    ) -> Result<Vec<WorkSlot>, CoreError> {
         let mut tx = self.tx.lock().await;
         let rows = sqlx::query_as!(
             WorkSlotRow,
             r#"
-            SELECT id, org_id, employee_id, work_date, starts_minute, ends_minute
-            FROM employee_work_slots
-            WHERE employee_id = $1 AND work_date BETWEEN $2 AND $3
+            SELECT id, org_id, member_id, work_date, starts_minute, ends_minute
+            FROM work_slots
+            WHERE member_id = $1 AND work_date BETWEEN $2 AND $3
             ORDER BY work_date ASC, starts_minute ASC
             "#,
-            employee_id.0,
+            member_id.0,
             from,
             to,
         )
@@ -273,19 +273,19 @@ impl<'tx> WorkSlotRepository for PgWorkSlotRepository<'tx> {
     async fn replace_window(
         &mut self,
         organization_id: OrganizationId,
-        employee_id: EmployeeId,
+        member_id: MemberId,
         from: NaiveDate,
         to: NaiveDate,
-        slots: &[EmployeeWorkSlot],
-    ) -> Result<Vec<EmployeeWorkSlot>, CoreError> {
+        slots: &[WorkSlot],
+    ) -> Result<Vec<WorkSlot>, CoreError> {
         let mut tx = self.tx.lock().await;
 
         sqlx::query!(
             r#"
-            DELETE FROM employee_work_slots
-            WHERE employee_id = $1 AND work_date BETWEEN $2 AND $3
+            DELETE FROM work_slots
+            WHERE member_id = $1 AND work_date BETWEEN $2 AND $3
             "#,
-            employee_id.0,
+            member_id.0,
             from,
             to,
         )
@@ -296,12 +296,12 @@ impl<'tx> WorkSlotRepository for PgWorkSlotRepository<'tx> {
         for slot in slots {
             sqlx::query!(
                 r#"
-                INSERT INTO employee_work_slots (id, org_id, employee_id, work_date, starts_minute, ends_minute)
+                INSERT INTO work_slots (id, org_id, member_id, work_date, starts_minute, ends_minute)
                 VALUES ($1, $2, $3, $4, $5, $6)
                 "#,
                 slot.id.0,
                 organization_id.0,
-                employee_id.0,
+                member_id.0,
                 slot.work_date,
                 slot.starts_minute,
                 slot.ends_minute,

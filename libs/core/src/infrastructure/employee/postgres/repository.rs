@@ -3,7 +3,7 @@ use common::CoreError;
 use mestier_macros::repository;
 
 use crate::{
-    Employee, EmployeeId, OrganizationId, UserId,
+    Employee, EmployeeId, MemberId, OrganizationId,
     domain::employee::ports::EmployeeRepository,
     infrastructure::{
         employee::postgres::model::EmployeeRow,
@@ -28,15 +28,13 @@ impl<'tx> EmployeeRepository for PgEmployeeRepository<'tx> {
         let row = sqlx::query_as!(
             EmployeeRow,
             r#"
-            INSERT INTO employees (id, org_id, user_id, last_name, first_name, hourly_rate_cents, weekly_contract_minutes, deleted_at, created_at, updated_at)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-            RETURNING id, org_id, user_id, last_name, first_name, hourly_rate_cents, weekly_contract_minutes, deleted_at, created_at, updated_at
+            INSERT INTO employees (id, org_id, member_id, hourly_rate_cents, weekly_contract_minutes, deleted_at, created_at, updated_at)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+            RETURNING id, org_id, member_id, hourly_rate_cents, weekly_contract_minutes, deleted_at, created_at, updated_at
             "#,
             employee.id.0,
             employee.organization_id.0,
-            employee.user_id.map(|id| id.0),
-            employee.last_name,
-            employee.first_name,
+            employee.member_id.0,
             employee.hourly_rate_cents,
             employee.weekly_contract_minutes,
             employee.deleted_at,
@@ -55,7 +53,7 @@ impl<'tx> EmployeeRepository for PgEmployeeRepository<'tx> {
         let row = sqlx::query_as!(
             EmployeeRow,
             r#"
-            SELECT id, org_id, user_id, last_name, first_name, hourly_rate_cents, weekly_contract_minutes, deleted_at, created_at, updated_at
+            SELECT id, org_id, member_id, hourly_rate_cents, weekly_contract_minutes, deleted_at, created_at, updated_at
             FROM employees
             WHERE id = $1 AND deleted_at IS NULL
             "#,
@@ -68,21 +66,19 @@ impl<'tx> EmployeeRepository for PgEmployeeRepository<'tx> {
         Ok(row.map(Into::into))
     }
 
-    async fn find_by_user_id(
+    async fn find_by_member_id(
         &mut self,
-        organization_id: OrganizationId,
-        user_id: UserId,
+        member_id: MemberId,
     ) -> Result<Option<Employee>, CoreError> {
         let mut tx = self.tx.lock().await;
         let row = sqlx::query_as!(
             EmployeeRow,
             r#"
-            SELECT id, org_id, user_id, last_name, first_name, hourly_rate_cents, weekly_contract_minutes, deleted_at, created_at, updated_at
+            SELECT id, org_id, member_id, hourly_rate_cents, weekly_contract_minutes, deleted_at, created_at, updated_at
             FROM employees
-            WHERE org_id = $1 AND user_id = $2 AND deleted_at IS NULL
+            WHERE member_id = $1 AND deleted_at IS NULL
             "#,
-            organization_id.0,
-            user_id.0,
+            member_id.0,
         )
         .fetch_optional(&mut ***tx)
         .await
@@ -98,13 +94,18 @@ impl<'tx> EmployeeRepository for PgEmployeeRepository<'tx> {
         offset: u64,
     ) -> Result<(Vec<Employee>, u64), CoreError> {
         let mut tx = self.tx.lock().await;
+        // Ordered by the seat's name, which is where a person's name lives now
+        // — hence the join. Ordering by the profile's own columns is no longer
+        // possible, and ordering by `created_at` would put the list in an order
+        // no reader can predict.
         let rows = sqlx::query_as!(
             EmployeeRow,
             r#"
-            SELECT id, org_id, user_id, last_name, first_name, hourly_rate_cents, weekly_contract_minutes, deleted_at, created_at, updated_at
-            FROM employees
-            WHERE org_id = $1 AND deleted_at IS NULL
-            ORDER BY last_name ASC, first_name ASC, created_at ASC
+            SELECT e.id, e.org_id, e.member_id, e.hourly_rate_cents, e.weekly_contract_minutes, e.deleted_at, e.created_at, e.updated_at
+            FROM employees e
+            JOIN organization_members m ON m.id = e.member_id
+            WHERE e.org_id = $1 AND e.deleted_at IS NULL
+            ORDER BY m.last_name ASC, m.first_name ASC, e.created_at ASC
             LIMIT $2 OFFSET $3
             "#,
             organization_id.0,
@@ -134,10 +135,11 @@ impl<'tx> EmployeeRepository for PgEmployeeRepository<'tx> {
         let rows = sqlx::query_as!(
             EmployeeRow,
             r#"
-            SELECT id, org_id, user_id, last_name, first_name, hourly_rate_cents, weekly_contract_minutes, deleted_at, created_at, updated_at
-            FROM employees
-            WHERE org_id = $1 AND deleted_at IS NULL
-            ORDER BY last_name ASC, first_name ASC, created_at ASC
+            SELECT e.id, e.org_id, e.member_id, e.hourly_rate_cents, e.weekly_contract_minutes, e.deleted_at, e.created_at, e.updated_at
+            FROM employees e
+            JOIN organization_members m ON m.id = e.member_id
+            WHERE e.org_id = $1 AND e.deleted_at IS NULL
+            ORDER BY m.last_name ASC, m.first_name ASC, e.created_at ASC
             "#,
             organization_id.0,
         )
@@ -150,18 +152,17 @@ impl<'tx> EmployeeRepository for PgEmployeeRepository<'tx> {
 
     async fn update(&mut self, employee: &Employee) -> Result<Employee, CoreError> {
         let mut tx = self.tx.lock().await;
+        // `member_id` is deliberately not settable: moving a profile from one
+        // seat to another is not an edit, it is a detach and a re-attach.
         let row = sqlx::query_as!(
             EmployeeRow,
             r#"
             UPDATE employees
-            SET user_id = $2, last_name = $3, first_name = $4, hourly_rate_cents = $5, weekly_contract_minutes = $6, updated_at = $7
+            SET hourly_rate_cents = $2, weekly_contract_minutes = $3, updated_at = $4
             WHERE id = $1 AND deleted_at IS NULL
-            RETURNING id, org_id, user_id, last_name, first_name, hourly_rate_cents, weekly_contract_minutes, deleted_at, created_at, updated_at
+            RETURNING id, org_id, member_id, hourly_rate_cents, weekly_contract_minutes, deleted_at, created_at, updated_at
             "#,
             employee.id.0,
-            employee.user_id.map(|id| id.0),
-            employee.last_name,
-            employee.first_name,
             employee.hourly_rate_cents,
             employee.weekly_contract_minutes,
             employee.updated_at,

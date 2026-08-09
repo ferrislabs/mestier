@@ -6,8 +6,8 @@ use axum::{
 use chrono::{DateTime, NaiveDate, Utc};
 use handlers::{ApiError, AppState, DataEnvelope, Response};
 use mestier_core::{
-    AbsenceKind, DateRange, EmployeeAbsenceId, EmployeeId, MinuteInterval, PlanningEntry,
-    PlanningResource, PlanningView, TaskId, TaskStatus, UserId,
+    AbsenceId, AbsenceKind, DateRange, EmployeeId, MemberId, MinuteInterval, PlanningEntry,
+    PlanningResource, PlanningView, TaskId, TaskStatus,
 };
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
@@ -20,61 +20,33 @@ pub struct PlanningWindowQuery {
     pub to: NaiveDate,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Serialize, ToSchema)]
-#[serde(rename_all = "snake_case")]
-pub enum PlanningResourceKindResponse {
-    Employee,
-    Member,
-}
-
-/// A single flat shape, `kind` telling the front which fields are
-/// meaningful — unlike `entries`, `resources` is not a discriminated union
-/// with different fields per variant (see the planning module design doc).
+/// One flat shape per grid row. There is no `kind` any more: a row was either
+/// an employee or a bare member, and telling them apart is exactly what #182
+/// removed. `employee_id` and the contractual fields are simply absent when the
+/// member has no contract.
 #[derive(Debug, Clone, PartialEq, Serialize, ToSchema)]
 pub struct PlanningResourceResponse {
+    /// Always `member:{uuid}` — the front's drag & drop key.
     pub resource_id: String,
-    pub kind: PlanningResourceKindResponse,
-    pub employee_id: Option<EmployeeId>,
-    pub user_id: Option<UserId>,
+    pub member_id: MemberId,
     pub display_name: String,
+    /// The contractual profile attached to this member, when there is one.
+    pub employee_id: Option<EmployeeId>,
+    /// `null` means the rate is not set yet; `0` means genuinely free — never
+    /// conflate the two (see the planning module design doc's invariant 4).
     pub hourly_rate_cents: Option<i32>,
     pub weekly_contract_minutes: i32,
 }
 
 impl From<PlanningResource> for PlanningResourceResponse {
     fn from(value: PlanningResource) -> Self {
-        let resource_id = value.resource_id();
-        match value {
-            PlanningResource::Employee {
-                employee_id,
-                user_id,
-                display_name,
-                hourly_rate_cents,
-                weekly_contract_minutes,
-            } => Self {
-                resource_id,
-                kind: PlanningResourceKindResponse::Employee,
-                employee_id: Some(employee_id),
-                user_id,
-                display_name,
-                hourly_rate_cents,
-                weekly_contract_minutes,
-            },
-            PlanningResource::Member {
-                user_id,
-                display_name,
-            } => Self {
-                resource_id,
-                kind: PlanningResourceKindResponse::Member,
-                employee_id: None,
-                user_id: Some(user_id),
-                display_name,
-                // A member-only resource has no employee record yet:
-                // "not set" and "no contractual base", never `Some(0)`
-                // (see the planning module design doc's invariant 4).
-                hourly_rate_cents: None,
-                weekly_contract_minutes: 0,
-            },
+        Self {
+            resource_id: value.resource_id(),
+            member_id: value.member_id,
+            display_name: value.display_name,
+            employee_id: value.employee_id,
+            hourly_rate_cents: value.hourly_rate_cents,
+            weekly_contract_minutes: value.weekly_contract_minutes,
         }
     }
 }
@@ -98,17 +70,17 @@ pub enum PlanningEntryResponse {
         customer_name: Option<String>,
         context_label: Option<String>,
         description: Option<String>,
-        employee_ids: Vec<EmployeeId>,
+        member_ids: Vec<MemberId>,
         labels: Vec<TaskLabelResponse>,
     },
     Absence {
-        id: EmployeeAbsenceId,
+        id: AbsenceId,
         starts_at: DateTime<Utc>,
         ends_at: DateTime<Utc>,
         all_day: bool,
         absence_kind: AbsenceKind,
         note: Option<String>,
-        employee_id: EmployeeId,
+        member_id: MemberId,
     },
 }
 
@@ -128,7 +100,7 @@ impl From<PlanningEntry> for PlanningEntryResponse {
                 customer_name,
                 context_label,
                 description,
-                employee_ids,
+                member_ids,
                 labels,
             } => Self::Task {
                 id,
@@ -143,7 +115,7 @@ impl From<PlanningEntry> for PlanningEntryResponse {
                 customer_name,
                 context_label,
                 description,
-                employee_ids,
+                member_ids,
                 labels: labels.into_iter().map(TaskLabelResponse::from).collect(),
             },
             PlanningEntry::Absence {
@@ -153,7 +125,7 @@ impl From<PlanningEntry> for PlanningEntryResponse {
                 all_day,
                 absence_kind,
                 note,
-                employee_id,
+                member_id,
             } => Self::Absence {
                 id,
                 starts_at,
@@ -161,7 +133,7 @@ impl From<PlanningEntry> for PlanningEntryResponse {
                 all_day,
                 absence_kind,
                 note,
-                employee_id,
+                member_id,
             },
         }
     }
@@ -190,14 +162,14 @@ pub struct PlanningWorkTimeDayResponse {
 
 #[derive(Debug, Clone, PartialEq, Serialize, ToSchema)]
 pub struct PlanningWorkTimeResponse {
-    pub employee_id: EmployeeId,
+    pub member_id: MemberId,
     pub days: Vec<PlanningWorkTimeDayResponse>,
 }
 
-impl From<mestier_core::EmployeeWorkTime> for PlanningWorkTimeResponse {
-    fn from(value: mestier_core::EmployeeWorkTime) -> Self {
+impl From<mestier_core::MemberWorkTime> for PlanningWorkTimeResponse {
+    fn from(value: mestier_core::MemberWorkTime) -> Self {
         Self {
-            employee_id: value.employee_id,
+            member_id: value.member_id,
             days: value
                 .days
                 .into_iter()
@@ -334,20 +306,20 @@ mod tests {
     // `uuid` is not a direct dependency of `handlers-planning` (a
     // `Cargo.toml` this workstream does not own), so fixture ids are parsed
     // from literal strings via `FromStr` rather than generated.
-    fn employee_id() -> EmployeeId {
+    fn member_id() -> MemberId {
         "11111111-1111-1111-1111-111111111111".parse().unwrap()
     }
 
-    fn user_id() -> UserId {
-        "22222222-2222-2222-2222-222222222222".parse().unwrap()
+    fn employee_id() -> mestier_core::EmployeeId {
+        "33333333-3333-3333-3333-333333333333".parse().unwrap()
     }
 
     #[test]
-    fn employee_resource_serializes_with_the_employee_kind_and_resource_id() {
-        let response: PlanningResourceResponse = PlanningResource::Employee {
-            employee_id: employee_id(),
-            user_id: Some(user_id()),
+    fn resource_serializes_flat_with_its_contract_when_it_has_one() {
+        let response: PlanningResourceResponse = PlanningResource {
+            member_id: member_id(),
             display_name: "Alice".to_owned(),
+            employee_id: Some(employee_id()),
             hourly_rate_cents: Some(3500),
             weekly_contract_minutes: 2100,
         }
@@ -355,24 +327,34 @@ mod tests {
 
         let value = serde_json::to_value(&response).unwrap();
 
-        assert_eq!(value["kind"], "employee");
-        assert_eq!(value["resource_id"], format!("employee:{}", employee_id()));
+        assert_eq!(value["resource_id"], format!("member:{}", member_id()));
+        assert_eq!(value["member_id"], member_id().to_string());
         assert_eq!(value["employee_id"], employee_id().to_string());
         assert_eq!(value["hourly_rate_cents"], 3500);
+        assert!(
+            value.get("kind").is_none(),
+            "there is one kind of row now — a `kind` field would be describing a distinction that no longer exists"
+        );
     }
 
+    /// A member with no contract keys exactly like one with a contract; only
+    /// the contractual fields are null. That is what lets the front stop
+    /// branching on the row's kind.
     #[test]
-    fn member_resource_serializes_with_null_employee_fields() {
-        let response: PlanningResourceResponse = PlanningResource::Member {
-            user_id: user_id(),
+    fn resource_without_a_contract_keeps_its_key_and_nulls_the_contract() {
+        let response: PlanningResourceResponse = PlanningResource {
+            member_id: member_id(),
             display_name: "Bob".to_owned(),
+            employee_id: None,
+            hourly_rate_cents: None,
+            weekly_contract_minutes: 0,
         }
         .into();
 
         let value = serde_json::to_value(&response).unwrap();
 
-        assert_eq!(value["kind"], "member");
-        assert_eq!(value["resource_id"], format!("member:{}", user_id()));
+        assert_eq!(value["resource_id"], format!("member:{}", member_id()));
+        assert_eq!(value["member_id"], member_id().to_string());
         assert!(value["employee_id"].is_null());
         assert!(value["hourly_rate_cents"].is_null());
         assert_eq!(value["weekly_contract_minutes"], 0);
@@ -393,7 +375,7 @@ mod tests {
             customer_name: Some("Alice Dupont".to_owned()),
             context_label: Some("Chantier principal".to_owned()),
             description: None,
-            employee_ids: vec![employee_id()],
+            member_ids: vec![member_id()],
             labels: vec![label()],
         }
         .into();
@@ -422,7 +404,7 @@ mod tests {
             customer_name: None,
             context_label: None,
             description: None,
-            employee_ids: vec![],
+            member_ids: vec![],
             labels: Vec::new(),
         }
         .into();
@@ -446,7 +428,7 @@ mod tests {
             all_day: true,
             absence_kind: AbsenceKind::Leave,
             note: Some("Congés".to_owned()),
-            employee_id: employee_id(),
+            member_id: member_id(),
         }
         .into();
 
@@ -454,6 +436,6 @@ mod tests {
 
         assert_eq!(value["kind"], "absence");
         assert_eq!(value["absence_kind"], "LEAVE");
-        assert_eq!(value["employee_id"], employee_id().to_string());
+        assert_eq!(value["member_id"], member_id().to_string());
     }
 }

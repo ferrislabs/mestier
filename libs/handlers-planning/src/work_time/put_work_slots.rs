@@ -9,10 +9,7 @@ use mestier_core::{ReplaceWorkSlotsCommand, WorkSlotInput};
 use serde::Deserialize;
 use utoipa::ToSchema;
 
-use crate::{
-    require_org_membership,
-    work_time::{WorkSlotResponse, WorkSlotsPath, WorkTimeWindowQuery},
-};
+use crate::work_time::{WorkSlotResponse, WorkSlotsPath, WorkTimeWindowQuery};
 
 #[derive(Debug, Deserialize, ToSchema)]
 pub struct WorkSlotRequest {
@@ -30,12 +27,12 @@ pub struct PutWorkSlotsRequest {
 
 #[utoipa::path(
     put,
-    path = "/api/v1/organizations/{organization_id}/employees/{employee_id}/work-slots",
+    path = "/api/v1/organizations/{organization_id}/employees/{member_id}/work-slots",
     operation_id = "putWorkSlots",
     tag = super::super::TAG,
     params(
         ("organization_id" = mestier_core::OrganizationId, Path, description = "Organization identifier"),
-        ("employee_id" = mestier_core::EmployeeId, Path, description = "Employee identifier"),
+        ("member_id" = mestier_core::MemberId, Path, description = "Employee identifier"),
         ("from" = chrono::NaiveDate, Query, description = "Window start (inclusive)"),
         ("to" = chrono::NaiveDate, Query, description = "Window end (inclusive)"),
     ),
@@ -50,25 +47,21 @@ pub struct PutWorkSlotsRequest {
     security(("bearer_auth" = []))
 )]
 pub async fn handler(
-    WorkSlotsPath {
-        organization_id,
-        employee_id,
-    }: WorkSlotsPath,
+    WorkSlotsPath { member_id }: WorkSlotsPath,
     State(state): State<AppState>,
     Extension(identity): Extension<Identity>,
     Query(window): Query<WorkTimeWindowQuery>,
     Json(payload): Json<PutWorkSlotsRequest>,
 ) -> Result<Response<Vec<WorkSlotResponse>>, ApiError> {
-    require_org_membership(&state, &identity, organization_id).await?;
     let actor = resolve_user_id(&state, &identity).await?;
-    crate::require_employee_target(&state, organization_id, employee_id).await?;
+    let organization_id = crate::require_member_target(&state, &identity, member_id).await?;
 
     let work_slots = state
         .usecase
         .acting_as(actor)
         .replace_work_slots(ReplaceWorkSlotsCommand {
             organization_id,
-            employee_id,
+            member_id,
             from: window.from,
             to: window.to,
             slots: payload

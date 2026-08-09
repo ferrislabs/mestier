@@ -2,9 +2,9 @@ use chrono::Utc;
 use common::{CoreError, generate_uuid_v7};
 
 use crate::{
-    Employee, EmployeeId, OrganizationId,
+    Employee, EmployeeId, MemberId, OrganizationId,
     domain::employee::{
-        commands::{CreateEmployeeCommand, LinkEmployeeUserCommand, UpdateEmployeeCommand},
+        commands::{RemoveEmployeeProfileCommand, UpsertEmployeeProfileCommand},
         ports::EmployeeRepository,
     },
 };
@@ -28,34 +28,58 @@ where
         Self { repo }
     }
 
-    pub async fn create_employee(
+    /// Attaches a contractual profile to a member, or updates the one already
+    /// attached. Idempotent by design: the caller states what the contract is,
+    /// not whether a row exists.
+    pub async fn upsert_employee_profile(
         &mut self,
-        command: CreateEmployeeCommand,
+        command: UpsertEmployeeProfileCommand,
     ) -> Result<Employee, CoreError> {
-        validate_last_name(&command.last_name)?;
-        validate_first_name(&command.first_name)?;
         validate_rate(command.hourly_rate_cents)?;
         validate_weekly_contract_minutes(command.weekly_contract_minutes)?;
 
         let now = Utc::now();
-        let employee = Employee {
-            id: EmployeeId(generate_uuid_v7()),
-            organization_id: command.organization_id,
-            user_id: command.user_id,
-            last_name: command.last_name,
-            first_name: command.first_name,
-            hourly_rate_cents: command.hourly_rate_cents,
-            weekly_contract_minutes: command.weekly_contract_minutes,
-            deleted_at: None,
-            created_at: now,
-            updated_at: now,
-        };
 
-        self.repo.insert(&employee).await
+        match self.repo.find_by_member_id(command.member_id).await? {
+            Some(mut existing) => {
+                existing.hourly_rate_cents = command.hourly_rate_cents;
+                existing.weekly_contract_minutes = command.weekly_contract_minutes;
+                existing.updated_at = now;
+
+                self.repo.update(&existing).await
+            }
+            None => {
+                let employee = Employee {
+                    id: EmployeeId(generate_uuid_v7()),
+                    organization_id: command.organization_id,
+                    member_id: command.member_id,
+                    hourly_rate_cents: command.hourly_rate_cents,
+                    weekly_contract_minutes: command.weekly_contract_minutes,
+                    deleted_at: None,
+                    created_at: now,
+                    updated_at: now,
+                };
+
+                self.repo.insert(&employee).await
+            }
+        }
     }
 
     pub async fn get_employee(&mut self, id: EmployeeId) -> Result<Employee, CoreError> {
         self.repo.find_by_id(id).await?.ok_or(CoreError::NotFound)
+    }
+
+    /// The profile attached to a member, or [`CoreError::NotFound`] when the
+    /// member has none — the read counterpart of the upsert, keyed the way
+    /// callers address a person.
+    pub async fn get_employee_by_member(
+        &mut self,
+        member_id: MemberId,
+    ) -> Result<Employee, CoreError> {
+        self.repo
+            .find_by_member_id(member_id)
+            .await?
+            .ok_or(CoreError::NotFound)
     }
 
     pub async fn list_employees(
@@ -69,64 +93,16 @@ where
             .await
     }
 
-    pub async fn update_employee(
+    /// Detaches the profile from a member. The seat and everything hanging off
+    /// it — assignments, absences, work slots — survive: this removes a
+    /// contract, not a person.
+    pub async fn remove_employee_profile(
         &mut self,
-        command: UpdateEmployeeCommand,
-    ) -> Result<Employee, CoreError> {
-        validate_last_name(&command.last_name)?;
-        validate_first_name(&command.first_name)?;
-        validate_rate(command.hourly_rate_cents)?;
-        validate_weekly_contract_minutes(command.weekly_contract_minutes)?;
-
-        let mut employee = self.get_employee(command.id).await?;
-        employee.last_name = command.last_name;
-        employee.first_name = command.first_name;
-        employee.hourly_rate_cents = command.hourly_rate_cents;
-        employee.weekly_contract_minutes = command.weekly_contract_minutes;
-        employee.updated_at = Utc::now();
-
-        self.repo.update(&employee).await
+        command: RemoveEmployeeProfileCommand,
+    ) -> Result<(), CoreError> {
+        let employee = self.get_employee_by_member(command.member_id).await?;
+        self.repo.soft_delete(employee.id, Utc::now()).await
     }
-
-    pub async fn link_employee_user(
-        &mut self,
-        command: LinkEmployeeUserCommand,
-    ) -> Result<Employee, CoreError> {
-        let mut employee = self.get_employee(command.id).await?;
-        employee.user_id = command.user_id;
-        employee.updated_at = Utc::now();
-
-        self.repo.update(&employee).await
-    }
-
-    pub async fn soft_delete_employee(&mut self, id: EmployeeId) -> Result<(), CoreError> {
-        self.get_employee(id).await?;
-        self.repo.soft_delete(id, Utc::now()).await
-    }
-}
-
-fn validate_last_name(last_name: &str) -> Result<(), CoreError> {
-    if last_name.trim().is_empty() {
-        return Err(CoreError::Conflict(
-            "employee last name cannot be empty".to_owned(),
-        ));
-    }
-
-    Ok(())
-}
-
-/// `first_name` is optional (see `Employee::first_name`), but when it is
-/// provided it must not be blank — mirroring
-/// `chk_employees_first_name_not_blank_when_present`, so a blank string
-/// never masquerades as a real, if minimal, first name.
-fn validate_first_name(first_name: &Option<String>) -> Result<(), CoreError> {
-    if first_name.as_deref().is_some_and(|v| v.trim().is_empty()) {
-        return Err(CoreError::Conflict(
-            "employee first name cannot be blank when provided".to_owned(),
-        ));
-    }
-
-    Ok(())
 }
 
 fn validate_rate(rate_cents: Option<i32>) -> Result<(), CoreError> {
@@ -158,18 +134,16 @@ fn validate_weekly_contract_minutes(minutes: i32) -> Result<(), CoreError> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{UserId, domain::employee::ports::MockEmployeeRepository};
+    use crate::domain::employee::ports::MockEmployeeRepository;
     use mockall::predicate::eq;
     use uuid::Uuid;
 
-    fn employee(id: EmployeeId) -> Employee {
+    fn employee(id: EmployeeId, member_id: MemberId) -> Employee {
         let now = Utc::now();
         Employee {
             id,
             organization_id: OrganizationId(Uuid::new_v4()),
-            user_id: None,
-            last_name: "Alice".to_owned(),
-            first_name: None,
+            member_id,
             hourly_rate_cents: Some(3500),
             weekly_contract_minutes: 2100,
             deleted_at: None,
@@ -178,90 +152,86 @@ mod tests {
         }
     }
 
-    fn create_command() -> CreateEmployeeCommand {
-        CreateEmployeeCommand {
+    fn upsert_command(member_id: MemberId) -> UpsertEmployeeProfileCommand {
+        UpsertEmployeeProfileCommand {
             organization_id: OrganizationId(Uuid::new_v4()),
-            user_id: None,
-            last_name: "Alice".to_owned(),
-            first_name: None,
+            member_id,
             hourly_rate_cents: Some(3500),
             weekly_contract_minutes: 2100,
         }
     }
 
     #[tokio::test]
-    async fn create_employee_persists_via_repo() {
+    async fn upsert_inserts_when_the_member_has_no_profile_yet() {
+        let member_id = MemberId(Uuid::new_v4());
         let mut repo = MockEmployeeRepository::new();
+        repo.expect_find_by_member_id()
+            .with(eq(member_id))
+            .times(1)
+            .returning(|_| Box::pin(async { Ok(None) }));
         repo.expect_insert().times(1).returning(|e| {
             let employee = e.clone();
             Box::pin(async move { Ok(employee) })
         });
 
         let mut service = EmployeeService::new(repo);
-        let created = service.create_employee(create_command()).await.unwrap();
+        let created = service
+            .upsert_employee_profile(upsert_command(member_id))
+            .await
+            .unwrap();
 
-        assert_eq!(created.last_name, "Alice");
-        assert_eq!(created.first_name, None);
+        assert_eq!(created.member_id, member_id);
         assert_eq!(created.hourly_rate_cents, Some(3500));
         assert_eq!(created.weekly_contract_minutes, 2100);
     }
 
+    /// The whole point of an upsert: a second call must not open a second
+    /// profile for the same seat — `uq_employees_member_active` would reject it
+    /// anyway, and turning a constraint violation into normal behaviour is not
+    /// a design.
     #[tokio::test]
-    async fn create_employee_persists_a_provided_first_name() {
+    async fn upsert_updates_the_profile_already_attached() {
+        let member_id = MemberId(Uuid::new_v4());
+        let existing = employee(EmployeeId(Uuid::new_v4()), member_id);
+        let existing_id = existing.id;
+
         let mut repo = MockEmployeeRepository::new();
-        repo.expect_insert().times(1).returning(|e| {
+        repo.expect_find_by_member_id()
+            .with(eq(member_id))
+            .times(1)
+            .returning(move |_| {
+                let found = existing.clone();
+                Box::pin(async move { Ok(Some(found)) })
+            });
+        repo.expect_insert().never();
+        repo.expect_update().times(1).returning(|e| {
             let employee = e.clone();
             Box::pin(async move { Ok(employee) })
         });
 
         let mut service = EmployeeService::new(repo);
-        let created = service
-            .create_employee(CreateEmployeeCommand {
-                first_name: Some("Baptiste".to_owned()),
-                ..create_command()
+        let updated = service
+            .upsert_employee_profile(UpsertEmployeeProfileCommand {
+                hourly_rate_cents: Some(4200),
+                ..upsert_command(member_id)
             })
             .await
             .unwrap();
 
-        assert_eq!(created.first_name.as_deref(), Some("Baptiste"));
-        assert_eq!(created.display_name(), "Alice Baptiste");
+        assert_eq!(updated.id, existing_id);
+        assert_eq!(updated.hourly_rate_cents, Some(4200));
     }
 
+    /// `None` is "not set", `Some(0)` is "genuinely free". Collapsing the two
+    /// would feed a wrong cost into the profitability computation instead of
+    /// refusing to produce one.
     #[tokio::test]
-    async fn create_employee_rejects_an_empty_last_name() {
-        let repo = MockEmployeeRepository::new();
-        let mut service = EmployeeService::new(repo);
-
-        let err = service
-            .create_employee(CreateEmployeeCommand {
-                last_name: "   ".to_owned(),
-                ..create_command()
-            })
-            .await
-            .unwrap_err();
-
-        assert!(matches!(err, CoreError::Conflict(_)));
-    }
-
-    #[tokio::test]
-    async fn create_employee_rejects_a_blank_first_name_when_provided() {
-        let repo = MockEmployeeRepository::new();
-        let mut service = EmployeeService::new(repo);
-
-        let err = service
-            .create_employee(CreateEmployeeCommand {
-                first_name: Some("   ".to_owned()),
-                ..create_command()
-            })
-            .await
-            .unwrap_err();
-
-        assert!(matches!(err, CoreError::Conflict(_)));
-    }
-
-    #[tokio::test]
-    async fn create_employee_accepts_an_unset_hourly_rate() {
+    async fn upsert_keeps_an_unset_rate_distinct_from_zero() {
+        let member_id = MemberId(Uuid::new_v4());
         let mut repo = MockEmployeeRepository::new();
+        repo.expect_find_by_member_id()
+            .times(1)
+            .returning(|_| Box::pin(async { Ok(None) }));
         repo.expect_insert().times(1).returning(|e| {
             let employee = e.clone();
             Box::pin(async move { Ok(employee) })
@@ -269,200 +239,94 @@ mod tests {
 
         let mut service = EmployeeService::new(repo);
         let created = service
-            .create_employee(CreateEmployeeCommand {
+            .upsert_employee_profile(UpsertEmployeeProfileCommand {
                 hourly_rate_cents: None,
-                ..create_command()
+                ..upsert_command(member_id)
             })
             .await
             .unwrap();
 
-        // `None` means "rate not set"; `Some(0)` would mean "genuinely free".
         assert_eq!(created.hourly_rate_cents, None);
     }
 
     #[tokio::test]
-    async fn create_employee_rejects_negative_rate() {
-        let repo = MockEmployeeRepository::new();
-        let mut service = EmployeeService::new(repo);
+    async fn upsert_rejects_a_negative_rate() {
+        let mut repo = MockEmployeeRepository::new();
+        repo.expect_find_by_member_id().never();
+        repo.expect_insert().never();
 
-        let err = service
-            .create_employee(CreateEmployeeCommand {
+        let mut service = EmployeeService::new(repo);
+        let result = service
+            .upsert_employee_profile(UpsertEmployeeProfileCommand {
                 hourly_rate_cents: Some(-1),
-                ..create_command()
+                ..upsert_command(MemberId(Uuid::new_v4()))
             })
-            .await
-            .unwrap_err();
+            .await;
 
-        assert!(matches!(err, CoreError::Conflict(_)));
+        assert!(matches!(result, Err(CoreError::Conflict(_))));
     }
 
     #[tokio::test]
-    async fn create_employee_rejects_negative_weekly_contract_minutes() {
-        let repo = MockEmployeeRepository::new();
+    async fn upsert_rejects_a_contract_longer_than_a_week() {
+        let mut repo = MockEmployeeRepository::new();
+        repo.expect_find_by_member_id().never();
+        repo.expect_insert().never();
+
         let mut service = EmployeeService::new(repo);
-
-        let err = service
-            .create_employee(CreateEmployeeCommand {
-                weekly_contract_minutes: -1,
-                ..create_command()
-            })
-            .await
-            .unwrap_err();
-
-        assert!(matches!(err, CoreError::Conflict(_)));
-    }
-
-    #[tokio::test]
-    async fn create_employee_rejects_a_contract_longer_than_a_week() {
-        let repo = MockEmployeeRepository::new();
-        let mut service = EmployeeService::new(repo);
-
-        let err = service
-            .create_employee(CreateEmployeeCommand {
+        let result = service
+            .upsert_employee_profile(UpsertEmployeeProfileCommand {
                 weekly_contract_minutes: MINUTES_PER_WEEK + 1,
-                ..create_command()
+                ..upsert_command(MemberId(Uuid::new_v4()))
             })
-            .await
-            .unwrap_err();
+            .await;
 
-        assert!(matches!(err, CoreError::Conflict(_)));
+        assert!(matches!(result, Err(CoreError::Conflict(_))));
     }
 
     #[tokio::test]
-    async fn create_employee_accepts_a_full_week_contract() {
+    async fn remove_profile_soft_deletes_the_profile_of_that_member() {
+        let member_id = MemberId(Uuid::new_v4());
+        let existing = employee(EmployeeId(Uuid::new_v4()), member_id);
+        let existing_id = existing.id;
+
         let mut repo = MockEmployeeRepository::new();
-        repo.expect_insert().times(1).returning(|e| {
-            let employee = e.clone();
-            Box::pin(async move { Ok(employee) })
-        });
-
-        let mut service = EmployeeService::new(repo);
-        let created = service
-            .create_employee(CreateEmployeeCommand {
-                weekly_contract_minutes: MINUTES_PER_WEEK,
-                ..create_command()
-            })
-            .await
-            .unwrap();
-
-        assert_eq!(created.weekly_contract_minutes, MINUTES_PER_WEEK);
-    }
-
-    #[tokio::test]
-    async fn update_employee_mutates_existing_employee() {
-        let id = EmployeeId(Uuid::new_v4());
-        let mut repo = MockEmployeeRepository::new();
-        repo.expect_find_by_id()
-            .with(eq(id))
-            .returning(move |_| Box::pin(async move { Ok(Some(employee(id))) }));
-        repo.expect_update().times(1).returning(|e| {
-            let employee = e.clone();
-            Box::pin(async move { Ok(employee) })
-        });
-
-        let mut service = EmployeeService::new(repo);
-        let updated = service
-            .update_employee(UpdateEmployeeCommand {
-                id,
-                last_name: "Bob".to_owned(),
-                first_name: Some("Martin".to_owned()),
-                hourly_rate_cents: Some(4200),
-                weekly_contract_minutes: 1920,
-            })
-            .await
-            .unwrap();
-
-        assert_eq!(updated.last_name, "Bob");
-        assert_eq!(updated.first_name.as_deref(), Some("Martin"));
-        assert_eq!(updated.hourly_rate_cents, Some(4200));
-        assert_eq!(updated.weekly_contract_minutes, 1920);
-    }
-
-    #[tokio::test]
-    async fn update_employee_can_clear_the_hourly_rate() {
-        let id = EmployeeId(Uuid::new_v4());
-        let mut repo = MockEmployeeRepository::new();
-        repo.expect_find_by_id()
-            .with(eq(id))
-            .returning(move |_| Box::pin(async move { Ok(Some(employee(id))) }));
-        repo.expect_update().times(1).returning(|e| {
-            let employee = e.clone();
-            Box::pin(async move { Ok(employee) })
-        });
-
-        let mut service = EmployeeService::new(repo);
-        let updated = service
-            .update_employee(UpdateEmployeeCommand {
-                id,
-                last_name: "Bob".to_owned(),
-                first_name: None,
-                hourly_rate_cents: None,
-                weekly_contract_minutes: 2100,
-            })
-            .await
-            .unwrap();
-
-        assert_eq!(updated.hourly_rate_cents, None);
-    }
-
-    #[tokio::test]
-    async fn link_employee_user_sets_nullable_user_id() {
-        let id = EmployeeId(Uuid::new_v4());
-        let user_id = UserId(Uuid::new_v4());
-        let mut repo = MockEmployeeRepository::new();
-        repo.expect_find_by_id()
-            .with(eq(id))
-            .returning(move |_| Box::pin(async move { Ok(Some(employee(id))) }));
-        repo.expect_update().times(1).returning(|e| {
-            let employee = e.clone();
-            Box::pin(async move { Ok(employee) })
-        });
-
-        let mut service = EmployeeService::new(repo);
-        let updated = service
-            .link_employee_user(LinkEmployeeUserCommand {
-                id,
-                user_id: Some(user_id),
-            })
-            .await
-            .unwrap();
-
-        assert_eq!(updated.user_id, Some(user_id));
-    }
-
-    #[tokio::test]
-    async fn list_employees_delegates_to_repo() {
-        let org_id = OrganizationId(Uuid::new_v4());
-        let mut repo = MockEmployeeRepository::new();
-        repo.expect_list_by_organization()
-            .with(eq(org_id), eq(20), eq(40))
+        repo.expect_find_by_member_id()
+            .with(eq(member_id))
             .times(1)
-            .returning(move |_, _, _| {
-                Box::pin(async move { Ok((vec![employee(EmployeeId(Uuid::new_v4()))], 1)) })
+            .returning(move |_| {
+                let found = existing.clone();
+                Box::pin(async move { Ok(Some(found)) })
             });
-
-        let mut service = EmployeeService::new(repo);
-        let (items, total) = service.list_employees(org_id, 20, 40).await.unwrap();
-
-        assert_eq!(items.len(), 1);
-        assert_eq!(total, 1);
-    }
-
-    #[tokio::test]
-    async fn soft_delete_employee_checks_existence_then_deletes() {
-        let id = EmployeeId(Uuid::new_v4());
-        let mut repo = MockEmployeeRepository::new();
-        repo.expect_find_by_id()
-            .with(eq(id))
-            .times(1)
-            .returning(move |_| Box::pin(async move { Ok(Some(employee(id))) }));
         repo.expect_soft_delete()
-            .withf(move |deleted_id, _| *deleted_id == id)
+            .withf(move |id, _| *id == existing_id)
             .times(1)
             .returning(|_, _| Box::pin(async { Ok(()) }));
 
         let mut service = EmployeeService::new(repo);
 
-        service.soft_delete_employee(id).await.unwrap();
+        assert!(
+            service
+                .remove_employee_profile(RemoveEmployeeProfileCommand { member_id })
+                .await
+                .is_ok()
+        );
+    }
+
+    #[tokio::test]
+    async fn remove_profile_reports_not_found_when_the_member_has_none() {
+        let mut repo = MockEmployeeRepository::new();
+        repo.expect_find_by_member_id()
+            .times(1)
+            .returning(|_| Box::pin(async { Ok(None) }));
+        repo.expect_soft_delete().never();
+
+        let mut service = EmployeeService::new(repo);
+        let result = service
+            .remove_employee_profile(RemoveEmployeeProfileCommand {
+                member_id: MemberId(Uuid::new_v4()),
+            })
+            .await;
+
+        assert!(matches!(result, Err(CoreError::NotFound)));
     }
 }

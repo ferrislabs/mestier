@@ -2,9 +2,7 @@ use auth::Identity;
 use axum::{Extension, Json, extract::State};
 use chrono::{DateTime, Utc};
 use handlers::{ApiError, AppState, DataEnvelope, Response, resolve_user_id};
-use mestier_core::{
-    AssigneeRef, EmployeeId, PatchTaskCommand, TaskId, TaskLabelId, TaskStatus, UserId,
-};
+use mestier_core::{AssigneeRef, MemberId, PatchTaskCommand, TaskId, TaskLabelId, TaskStatus};
 use serde::{Deserialize, Deserializer};
 use utoipa::ToSchema;
 
@@ -25,19 +23,18 @@ where
     Deserialize::deserialize(deserializer).map(Some)
 }
 
+/// One shape, one identifier. This used to be a union tagged by `kind` —
+/// `employee` or `member` — because only an employee could be assigned and a
+/// bare member had to be resolved into one. Every member is assignable now, so
+/// there is nothing left to discriminate.
 #[derive(Debug, PartialEq, Deserialize, ToSchema)]
-#[serde(tag = "kind", rename_all = "snake_case")]
-pub enum AssigneeRefRequest {
-    Employee { employee_id: EmployeeId },
-    Member { user_id: UserId },
+pub struct AssigneeRefRequest {
+    pub member_id: MemberId,
 }
 
 impl From<AssigneeRefRequest> for AssigneeRef {
     fn from(value: AssigneeRefRequest) -> Self {
-        match value {
-            AssigneeRefRequest::Employee { employee_id } => AssigneeRef::Employee(employee_id),
-            AssigneeRefRequest::Member { user_id } => AssigneeRef::Member(user_id),
-        }
+        AssigneeRef(value.member_id)
     }
 }
 
@@ -124,7 +121,7 @@ pub async fn handler(
         .assignees
         .map(|assignees| assignees.into_iter().map(Into::into).collect());
 
-    let (task, created_employees) = state.usecase.acting_as(actor).patch_task(command).await?;
+    let task = state.usecase.acting_as(actor).patch_task(command).await?;
 
     // Reflects the task's current labels regardless of whether this PATCH
     // touched them — a PATCH that never mentions `label_ids` still needs to
@@ -140,7 +137,6 @@ pub async fn handler(
             labels: labels.into_iter().map(Into::into).collect(),
             ..task.into()
         },
-        created_employees: created_employees.into_iter().map(Into::into).collect(),
     }))
 }
 
@@ -215,49 +211,31 @@ mod tests {
         assert_eq!(request.blocks_availability, Some(false));
     }
 
-    // ── the tagged `assignees` union ────────────────────────────────────
+    // ── the `assignees` shape ───────────────────────────────────────────
 
+    /// One shape, one identifier. The three tests this replaces covered a
+    /// union tagged by `kind` — `employee` or `member` — and the rejection of
+    /// any third kind. There is nothing left to discriminate.
     #[test]
-    fn employee_kind_deserializes_to_the_employee_variant() {
-        let employee_id: EmployeeId = "11111111-1111-1111-1111-111111111111".parse().unwrap();
+    fn an_assignee_deserializes_to_the_member_it_names() {
+        let member_id: MemberId = "11111111-1111-1111-1111-111111111111".parse().unwrap();
         let parsed: AssigneeRefRequest = serde_json::from_value(json!({
-            "kind": "employee",
-            "employee_id": employee_id.0.to_string(),
+            "member_id": member_id.0.to_string(),
         }))
-        .expect("an employee assignee must deserialize");
+        .expect("an assignee must deserialize");
 
-        match AssigneeRef::from(parsed) {
-            AssigneeRef::Employee(id) => assert_eq!(id, employee_id),
-            other => panic!("expected AssigneeRef::Employee, got {other:?}"),
-        }
+        assert_eq!(AssigneeRef::from(parsed), AssigneeRef(member_id));
     }
 
+    /// A payload that names no member is a malformed payload, not an empty
+    /// assignment — it must fail rather than be silently dropped.
     #[test]
-    fn member_kind_deserializes_to_the_member_variant() {
-        let user_id: UserId = "22222222-2222-2222-2222-222222222222".parse().unwrap();
-        let parsed: AssigneeRefRequest = serde_json::from_value(json!({
-            "kind": "member",
-            "user_id": user_id.0.to_string(),
-        }))
-        .expect("a member assignee must deserialize");
-
-        match AssigneeRef::from(parsed) {
-            AssigneeRef::Member(id) => assert_eq!(id, user_id),
-            other => panic!("expected AssigneeRef::Member, got {other:?}"),
-        }
-    }
-
-    #[test]
-    fn unknown_assignee_kind_is_rejected_not_ignored() {
+    fn an_assignee_without_a_member_id_is_rejected() {
         let result: Result<AssigneeRefRequest, _> = serde_json::from_value(json!({
-            "kind": "equipment",
             "equipment_id": "33333333-3333-3333-3333-333333333333",
         }));
 
-        assert!(
-            result.is_err(),
-            "an unrecognized `kind` must fail to deserialize rather than being silently dropped"
-        );
+        assert!(result.is_err());
     }
 
     // ── empty vs. absent `assignees` ────────────────────────────────────
@@ -286,13 +264,13 @@ mod tests {
     }
 
     #[test]
-    fn assignees_carries_both_kinds_together() {
-        let employee_id: EmployeeId = "11111111-1111-1111-1111-111111111111".parse().unwrap();
-        let user_id: UserId = "22222222-2222-2222-2222-222222222222".parse().unwrap();
+    fn assignees_carries_several_members() {
+        let first: MemberId = "11111111-1111-1111-1111-111111111111".parse().unwrap();
+        let second: MemberId = "22222222-2222-2222-2222-222222222222".parse().unwrap();
         let request = parse(json!({
             "assignees": [
-                { "kind": "employee", "employee_id": employee_id.0.to_string() },
-                { "kind": "member", "user_id": user_id.0.to_string() },
+                { "member_id": first.0.to_string() },
+                { "member_id": second.0.to_string() },
             ]
         }));
 
@@ -300,8 +278,7 @@ mod tests {
         assert_eq!(assignees.len(), 2);
 
         let resolved: Vec<AssigneeRef> = assignees.into_iter().map(Into::into).collect();
-        assert!(matches!(resolved[0], AssigneeRef::Employee(id) if id == employee_id));
-        assert!(matches!(resolved[1], AssigneeRef::Member(id) if id == user_id));
+        assert_eq!(resolved, vec![AssigneeRef(first), AssigneeRef(second)]);
     }
 
     // ── empty vs. absent `label_ids` ────────────────────────────────────

@@ -5,24 +5,24 @@ use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 use uuid::Uuid;
 
-use crate::{EmployeeId, OrganizationId};
+use crate::{MemberId, OrganizationId};
 
 pub mod commands;
 pub mod ports;
 pub mod service;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, ToSchema)]
-pub struct EmployeeAbsenceId(pub Uuid);
+pub struct AbsenceId(pub Uuid);
 
-impl FromStr for EmployeeAbsenceId {
+impl FromStr for AbsenceId {
     type Err = uuid::Error;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        Uuid::from_str(s).map(EmployeeAbsenceId)
+        Uuid::from_str(s).map(AbsenceId)
     }
 }
 
-impl Display for EmployeeAbsenceId {
+impl Display for AbsenceId {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.0)
     }
@@ -69,10 +69,10 @@ impl FromStr for AbsenceKind {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct EmployeeAbsence {
-    pub id: EmployeeAbsenceId,
+pub struct Absence {
+    pub id: AbsenceId,
     pub organization_id: OrganizationId,
-    pub employee_id: EmployeeId,
+    pub member_id: MemberId,
     pub kind: AbsenceKind,
     pub starts_at: DateTime<Utc>,
     pub ends_at: DateTime<Utc>,
@@ -90,14 +90,14 @@ mod tests {
     #[test]
     fn employee_absence_id_parses_uuid() {
         let uuid = Uuid::new_v4();
-        let parsed = EmployeeAbsenceId::from_str(&uuid.to_string()).unwrap();
+        let parsed = AbsenceId::from_str(&uuid.to_string()).unwrap();
 
         assert_eq!(parsed.0, uuid);
     }
 
     #[test]
     fn employee_absence_id_rejects_invalid_uuid() {
-        assert!(EmployeeAbsenceId::from_str("not-a-uuid").is_err());
+        assert!(AbsenceId::from_str("not-a-uuid").is_err());
     }
 
     #[test]
