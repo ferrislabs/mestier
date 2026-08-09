@@ -1,7 +1,7 @@
 import { Loader2 } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { AuthProvider } from 'react-oidc-context'
-import { buildOidcProviderProps } from '#/lib/oidc'
+import { getUserManager } from '#/lib/oidc'
 import { loadRuntimeConfig } from '#/lib/runtime-config'
 
 interface ConfigGateProps {
@@ -23,10 +23,19 @@ export function ConfigGate({ children }: ConfigGateProps) {
 		)
 	}
 
-	const providerProps = buildOidcProviderProps()
-	if (!providerProps) {
+	const userManager = getUserManager()
+	if (!userManager) {
 		return <>{children}</>
 	}
 
-	return <AuthProvider {...providerProps}>{children}</AuthProvider>
+	return (
+		<AuthProvider userManager={userManager} onSigninCallback={onSigninCallback}>
+			{children}
+		</AuthProvider>
+	)
+}
+
+/** Efface `code` et `state` de l'URL une fois le retour de l'IdP consommé. */
+function onSigninCallback() {
+	window.history.replaceState({}, document.title, window.location.pathname)
 }
