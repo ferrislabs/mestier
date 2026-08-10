@@ -38,13 +38,11 @@ impl Connector for CustomerCreateConnector {
             .and_then(Value::as_str)
             .map(str::to_string);
 
-        // TODO(#201): once `Actor::Automation` exists, call this as
-        // `self.usecase.acting_as_automation(input.run_id)` instead, so the
-        // resulting `customer.created` event is attributed to the run
-        // rather than to the system. Adding `Actor::Automation` and
-        // `acting_as_automation` is out of this ticket's scope (owned by
-        // `libs/events` and `application::MestierUseCase` respectively).
-        let usecase = self.usecase.clone();
+        // Attributed to the run, not to the system: whatever this call
+        // chain writes — today `create_customer`, and anything a future
+        // connector calls at any depth — is attributable to the automation
+        // that caused it.
+        let usecase = self.usecase.acting_as_automation(input.run_id);
 
         match usecase
             .create_customer(CreateCustomerCommand {
