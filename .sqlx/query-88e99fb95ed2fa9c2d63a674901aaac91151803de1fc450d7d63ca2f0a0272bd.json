@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT wv.graph\n               FROM automation.workflow_version wv\n               JOIN automation.workflow w ON w.id = wv.workflow_id\n               WHERE w.org_id = $1 AND wv.id = $2",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "graph",
+        "type_info": "Jsonb"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "88e99fb95ed2fa9c2d63a674901aaac91151803de1fc450d7d63ca2f0a0272bd"
+}

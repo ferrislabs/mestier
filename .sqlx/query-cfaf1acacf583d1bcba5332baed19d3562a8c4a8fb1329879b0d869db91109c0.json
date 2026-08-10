@@ -1,0 +1,98 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO automation.run_step\n                   (id, run_id, connector_id, iteration_path, attempts, status, input, output,\n                    error, started_at, finished_at, created_at)\n               VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, now())\n               ON CONFLICT (run_id, connector_id, iteration_path) DO UPDATE\n               SET attempts = EXCLUDED.attempts,\n                   status = EXCLUDED.status,\n                   input = COALESCE(EXCLUDED.input, automation.run_step.input),\n                   output = EXCLUDED.output,\n                   error = EXCLUDED.error,\n                   started_at = COALESCE(automation.run_step.started_at, EXCLUDED.started_at),\n                   finished_at = EXCLUDED.finished_at\n               RETURNING id, run_id, connector_id, iteration_path, attempts, status, input, output,\n                         error, started_at, finished_at, created_at",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "run_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "connector_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "iteration_path",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "attempts",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 5,
+        "name": "status",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 6,
+        "name": "input",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 7,
+        "name": "output",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 8,
+        "name": "error",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 9,
+        "name": "started_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 10,
+        "name": "finished_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 11,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Text",
+        "Text",
+        "Int4",
+        "Text",
+        "Jsonb",
+        "Jsonb",
+        "Text",
+        "Timestamptz",
+        "Timestamptz"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      true,
+      true,
+      true,
+      true,
+      false
+    ]
+  },
+  "hash": "cfaf1acacf583d1bcba5332baed19d3562a8c4a8fb1329879b0d869db91109c0"
+}
