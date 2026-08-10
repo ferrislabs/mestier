@@ -155,6 +155,96 @@ impl MestierUseCase {
     }
 
     #[transactional(run)]
+    pub async fn find_run(
+        &self,
+        org_id: OrganizationId,
+        run_id: Uuid,
+    ) -> Result<Option<Run>, CoreError> {
+        let mut runs = run_repository;
+        runs.find_by_id(org_id, run_id).await
+    }
+
+    #[transactional(run)]
+    pub async fn list_runs(&self, org_id: OrganizationId) -> Result<Vec<Run>, CoreError> {
+        let mut runs = run_repository;
+        runs.list_by_organization(org_id).await
+    }
+
+    /// A run's steps — `input`, `output`, `error`, `attempts` and
+    /// `iteration_path` on each — for the run inspector. Scoped by `org_id`
+    /// itself (`RunRepository::steps_for_run_scoped`), not merely gated by a
+    /// prior call to [`Self::find_run`]: a defense-in-depth match for the
+    /// discipline every other automation repository already keeps, that a
+    /// cross-organization lookup reads back absent rather than trusting the
+    /// caller to have checked.
+    #[transactional(run)]
+    pub async fn list_run_steps(
+        &self,
+        org_id: OrganizationId,
+        run_id: Uuid,
+    ) -> Result<Vec<RunStep>, CoreError> {
+        let mut runs = run_repository;
+        runs.steps_for_run_scoped(org_id, run_id).await
+    }
+
+    /// Replays a run starting at `connector_id`: everything from that step
+    /// onward (`descendants_via`, branch-blind, the same reachability the
+    /// engine's own `advance` uses) loses its recorded steps and is executed
+    /// again on the next worker pass; everything upstream keeps its settled
+    /// row and is read back, never re-executed — the same resumption
+    /// discipline `process_run` already relies on, just seeded by a human
+    /// choosing where to restart instead of a crash.
+    ///
+    /// Refused while the run is still `pending` or `running`: replaying a
+    /// run the worker might be mid-slice on would race its own writes.
+    #[transactional(run)]
+    pub async fn replay_run_from_step(
+        &self,
+        org_id: OrganizationId,
+        run_id: Uuid,
+        connector_id: String,
+    ) -> Result<Run, CoreError> {
+        let mut runs = run_repository;
+
+        let run = runs
+            .find_by_id(org_id, run_id)
+            .await?
+            .ok_or(CoreError::NotFound)?;
+        if matches!(run.status, RunStatus::Pending | RunStatus::Running) {
+            return Err(CoreError::Conflict(
+                "a run still in progress cannot be replayed".to_string(),
+            ));
+        }
+
+        let graph = runs
+            .graph_for_version(org_id, run.workflow_version_id)
+            .await?
+            .ok_or_else(|| {
+                CoreError::Internal(
+                    "a run points at a workflow version whose graph cannot be found".to_string(),
+                )
+            })?;
+        let known_ids: std::collections::HashSet<&str> =
+            graph.connectors.iter().map(|c| c.id.as_str()).collect();
+        if !known_ids.contains(connector_id.as_str()) {
+            return Err(CoreError::Conflict(format!(
+                "unknown connector `{connector_id}` in this run's workflow version"
+            )));
+        }
+
+        let to_reset: Vec<String> = descendants_via(&graph, &[connector_id.as_str()])
+            .into_iter()
+            .map(str::to_owned)
+            .collect();
+        runs.delete_steps(run_id, &to_reset).await?;
+        runs.requeue_for_replay(run_id).await?;
+
+        runs.find_by_id(org_id, run_id)
+            .await?
+            .ok_or(CoreError::NotFound)
+    }
+
+    #[transactional(run)]
     async fn claim_runs(
         &self,
         worker: &str,
@@ -1394,6 +1484,306 @@ mod tests {
             .start_run(org_id, generate_uuid_v7(), json!({}))
             .await
             .expect_err("there is no workflow to run");
+
+        assert!(matches!(error, CoreError::NotFound));
+    }
+
+    // --- find_run / list_runs / list_run_steps --------------------------
+
+    #[tokio::test]
+    #[ignore = "requires live postgres"]
+    async fn finding_a_run_in_its_own_organization_returns_it() {
+        let pool = make_pool().await;
+        let org_id = seed_organization(&pool, "find-run").await;
+        let usecase = use_case(pool.clone());
+        let graph = Graph {
+            connectors: vec![condition("c1", "{{ true }}")],
+            edges: vec![],
+        };
+        let workflow_id = start_workflow(&usecase, org_id, graph).await;
+        let run_id = usecase
+            .start_run(org_id, workflow_id, json!({ "x": 1 }))
+            .await
+            .unwrap();
+
+        let found = usecase.find_run(org_id, run_id).await.unwrap();
+
+        let found = found.expect("the run belongs to this organization");
+        assert_eq!(found.id, run_id);
+        assert_eq!(found.workflow_id, workflow_id);
+        assert_eq!(found.trigger_payload, Some(json!({ "x": 1 })));
+    }
+
+    #[tokio::test]
+    #[ignore = "requires live postgres"]
+    async fn finding_a_run_from_another_organization_reads_back_absent() {
+        let pool = make_pool().await;
+        let org_id = seed_organization(&pool, "find-run-owner").await;
+        let stranger_org = seed_organization(&pool, "find-run-stranger").await;
+        let usecase = use_case(pool.clone());
+        let graph = Graph {
+            connectors: vec![condition("c1", "{{ true }}")],
+            edges: vec![],
+        };
+        let workflow_id = start_workflow(&usecase, org_id, graph).await;
+        let run_id = usecase
+            .start_run(org_id, workflow_id, json!({}))
+            .await
+            .unwrap();
+
+        let found = usecase.find_run(stranger_org, run_id).await.unwrap();
+
+        assert_eq!(
+            found, None,
+            "a run id from another organization must read back as absent, not forbidden"
+        );
+    }
+
+    #[tokio::test]
+    #[ignore = "requires live postgres"]
+    async fn listing_runs_only_returns_the_requesting_organizations_runs() {
+        let pool = make_pool().await;
+        let org_id = seed_organization(&pool, "list-runs-owner").await;
+        let other_org = seed_organization(&pool, "list-runs-other").await;
+        let usecase = use_case(pool.clone());
+        let graph = Graph {
+            connectors: vec![condition("c1", "{{ true }}")],
+            edges: vec![],
+        };
+        let workflow_id = start_workflow(&usecase, org_id, graph.clone()).await;
+        let other_workflow_id = start_workflow(&usecase, other_org, graph).await;
+        usecase
+            .start_run(org_id, workflow_id, json!({}))
+            .await
+            .unwrap();
+        usecase
+            .start_run(other_org, other_workflow_id, json!({}))
+            .await
+            .unwrap();
+
+        let listed = usecase.list_runs(org_id).await.unwrap();
+
+        assert_eq!(listed.len(), 1);
+        assert!(listed.iter().all(|r| r.org_id == org_id));
+    }
+
+    #[tokio::test]
+    #[ignore = "requires live postgres"]
+    async fn list_run_steps_exposes_each_steps_resolved_input_and_output() {
+        let _guard = RUN_CLAIM_LOCK.lock().await;
+        let pool = make_pool().await;
+        let org_id = seed_organization(&pool, "list-steps").await;
+        let usecase = use_case(pool.clone());
+        let graph = Graph {
+            connectors: vec![customer_create("c1", "Inspected Customer")],
+            edges: vec![],
+        };
+        let workflow_id = start_workflow(&usecase, org_id, graph).await;
+        let run_id = usecase
+            .start_run(org_id, workflow_id, json!({}))
+            .await
+            .unwrap();
+        let connectors = ConnectorRegistry::new(usecase.clone());
+        usecase
+            .run_engine_pass(&connectors, "worker-1", generous_schedule())
+            .await
+            .unwrap();
+
+        let steps = usecase.list_run_steps(org_id, run_id).await.unwrap();
+
+        assert_eq!(steps.len(), 1);
+        assert_eq!(steps[0].connector_id, "c1");
+        assert_eq!(steps[0].status, StepStatus::Succeeded);
+        assert_eq!(steps[0].attempts, 1);
+        let input = steps[0].input.as_ref().expect("a resolved input is kept");
+        assert_eq!(input["name"], json!("Inspected Customer"));
+        assert!(steps[0].output.is_some());
+    }
+
+    #[tokio::test]
+    #[ignore = "requires live postgres"]
+    async fn list_run_steps_for_another_organization_is_empty() {
+        let _guard = RUN_CLAIM_LOCK.lock().await;
+        let pool = make_pool().await;
+        let org_id = seed_organization(&pool, "list-steps-owner").await;
+        let stranger_org = seed_organization(&pool, "list-steps-stranger").await;
+        let usecase = use_case(pool.clone());
+        let graph = Graph {
+            connectors: vec![condition("c1", "{{ true }}")],
+            edges: vec![],
+        };
+        let workflow_id = start_workflow(&usecase, org_id, graph).await;
+        let run_id = usecase
+            .start_run(org_id, workflow_id, json!({}))
+            .await
+            .unwrap();
+        let connectors = ConnectorRegistry::new(usecase.clone());
+        usecase
+            .run_engine_pass(&connectors, "worker-1", generous_schedule())
+            .await
+            .unwrap();
+
+        let steps = usecase.list_run_steps(stranger_org, run_id).await.unwrap();
+
+        assert!(steps.is_empty());
+    }
+
+    // --- replay_run_from_step --------------------------------------------
+
+    /// The acceptance criterion the whole endpoint exists for: replaying
+    /// from a step re-executes that step and everything downstream of it,
+    /// and nothing upstream — proven by an observable side effect
+    /// (`mestier.customer.create`), not merely by step-row bookkeeping.
+    #[tokio::test]
+    #[ignore = "requires live postgres"]
+    async fn replaying_from_a_step_only_reexecutes_that_step_and_its_descendants() {
+        let _guard = RUN_CLAIM_LOCK.lock().await;
+        let pool = make_pool().await;
+        let org_id = seed_organization(&pool, "replay").await;
+        let usecase = use_case(pool.clone());
+
+        let graph = Graph {
+            connectors: vec![
+                customer_create("c1", "A"),
+                customer_create("c2", "B"),
+                customer_create("c3", "C"),
+            ],
+            edges: vec![edge("c1", "c2", None), edge("c2", "c3", None)],
+        };
+        let workflow_id = start_workflow(&usecase, org_id, graph).await;
+        let run_id = usecase
+            .start_run(org_id, workflow_id, json!({}))
+            .await
+            .unwrap();
+        let connectors = ConnectorRegistry::new(usecase.clone());
+        usecase
+            .run_engine_pass(&connectors, "worker-1", generous_schedule())
+            .await
+            .unwrap();
+        assert_eq!(run_status(&pool, run_id).await, "succeeded");
+        assert_eq!(customer_count(&pool, org_id).await, 3);
+
+        let c1_step_id_before: Uuid = sqlx::query_scalar!(
+            "SELECT id FROM automation.run_step WHERE run_id = $1 AND connector_id = 'c1'",
+            run_id,
+        )
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+
+        let replayed = usecase
+            .replay_run_from_step(org_id, run_id, "c2".to_string())
+            .await
+            .unwrap();
+        assert_eq!(replayed.status, RunStatus::Pending);
+
+        usecase
+            .run_engine_pass(&connectors, "worker-1", generous_schedule())
+            .await
+            .unwrap();
+        assert_eq!(run_status(&pool, run_id).await, "succeeded");
+
+        assert_eq!(
+            customer_count(&pool, org_id).await,
+            5,
+            "c2 and c3 ran again (2 more customers); c1 did not (still 3 + 2)"
+        );
+
+        let c1_step_id_after: Uuid = sqlx::query_scalar!(
+            "SELECT id FROM automation.run_step WHERE run_id = $1 AND connector_id = 'c1'",
+            run_id,
+        )
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+        assert_eq!(
+            c1_step_id_after, c1_step_id_before,
+            "the step upstream of the replay target must be untouched, not re-created"
+        );
+    }
+
+    #[tokio::test]
+    #[ignore = "requires live postgres"]
+    async fn replaying_an_unknown_connector_is_refused_and_names_it() {
+        let _guard = RUN_CLAIM_LOCK.lock().await;
+        let pool = make_pool().await;
+        let org_id = seed_organization(&pool, "replay-unknown").await;
+        let usecase = use_case(pool.clone());
+        let graph = Graph {
+            connectors: vec![condition("c1", "{{ true }}")],
+            edges: vec![],
+        };
+        let workflow_id = start_workflow(&usecase, org_id, graph).await;
+        let run_id = usecase
+            .start_run(org_id, workflow_id, json!({}))
+            .await
+            .unwrap();
+        let connectors = ConnectorRegistry::new(usecase.clone());
+        usecase
+            .run_engine_pass(&connectors, "worker-1", generous_schedule())
+            .await
+            .unwrap();
+
+        let error = usecase
+            .replay_run_from_step(org_id, run_id, "not-a-real-connector".to_string())
+            .await
+            .expect_err("the graph has no such connector");
+
+        assert!(matches!(error, CoreError::Conflict(_)));
+        assert!(format!("{error}").contains("not-a-real-connector"));
+    }
+
+    #[tokio::test]
+    #[ignore = "requires live postgres"]
+    async fn replaying_a_run_still_pending_is_refused() {
+        let pool = make_pool().await;
+        let org_id = seed_organization(&pool, "replay-pending").await;
+        let usecase = use_case(pool.clone());
+        let graph = Graph {
+            connectors: vec![condition("c1", "{{ true }}")],
+            edges: vec![],
+        };
+        let workflow_id = start_workflow(&usecase, org_id, graph).await;
+        let run_id = usecase
+            .start_run(org_id, workflow_id, json!({}))
+            .await
+            .unwrap();
+
+        let error = usecase
+            .replay_run_from_step(org_id, run_id, "c1".to_string())
+            .await
+            .expect_err("a run still pending has never been worked yet");
+
+        assert!(matches!(error, CoreError::Conflict(_)));
+    }
+
+    #[tokio::test]
+    #[ignore = "requires live postgres"]
+    async fn replaying_a_run_from_another_organization_is_not_found() {
+        let _guard = RUN_CLAIM_LOCK.lock().await;
+        let pool = make_pool().await;
+        let org_id = seed_organization(&pool, "replay-owner").await;
+        let stranger_org = seed_organization(&pool, "replay-stranger").await;
+        let usecase = use_case(pool.clone());
+        let graph = Graph {
+            connectors: vec![condition("c1", "{{ true }}")],
+            edges: vec![],
+        };
+        let workflow_id = start_workflow(&usecase, org_id, graph).await;
+        let run_id = usecase
+            .start_run(org_id, workflow_id, json!({}))
+            .await
+            .unwrap();
+        let connectors = ConnectorRegistry::new(usecase.clone());
+        usecase
+            .run_engine_pass(&connectors, "worker-1", generous_schedule())
+            .await
+            .unwrap();
+
+        let error = usecase
+            .replay_run_from_step(stranger_org, run_id, "c1".to_string())
+            .await
+            .expect_err("a stranger must not replay another organization's run");
 
         assert!(matches!(error, CoreError::NotFound));
     }

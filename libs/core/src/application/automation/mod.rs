@@ -7,6 +7,7 @@ use crate::{
 };
 
 mod credential;
+pub mod retention;
 pub mod run;
 mod tests;
 mod workflow;
