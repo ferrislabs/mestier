@@ -262,6 +262,7 @@ fn hostname() -> Option<String> {
 
 #[cfg(test)]
 mod tests {
+    use common::{OrganizationId, generate_uuid_v7};
     use uuid::Uuid;
 
     use super::*;
@@ -318,5 +319,110 @@ mod tests {
         let _acting = base.acting_as_automation(Uuid::from_u128(1));
 
         assert_eq!(base.actor, Actor::System);
+    }
+
+    async fn make_pool() -> PgPool {
+        let url = std::env::var("DATABASE_URL")
+            .expect("DATABASE_URL must be set to run acting_as_automation integration tests");
+        PgPool::connect(&url).await.unwrap()
+    }
+
+    async fn seed_organization(pool: &PgPool) -> OrganizationId {
+        let owner_id = generate_uuid_v7();
+        sqlx::query!(
+            r#"INSERT INTO users (id, email, username, display_name, sub)
+               VALUES ($1, $2, $3, $4, $5)"#,
+            owner_id,
+            format!("owner-{owner_id}@example.com"),
+            format!("owner-{owner_id}"),
+            "Owner User",
+            format!("sub-owner-{owner_id}"),
+        )
+        .execute(pool)
+        .await
+        .unwrap();
+
+        let org_id = generate_uuid_v7();
+        sqlx::query!(
+            r#"INSERT INTO organizations (id, name, slug, owner_id)
+               VALUES ($1, $2, $3, $4)"#,
+            org_id,
+            "Test Org",
+            format!("test-org-{org_id}"),
+            owner_id,
+        )
+        .execute(pool)
+        .await
+        .unwrap();
+
+        OrganizationId(org_id)
+    }
+
+    /// The acceptance criterion the whole mechanism exists for: an event
+    /// emitted through `acting_as_automation` carries the run id — not just
+    /// as a field on the Rust value (the two tests above), but all the way
+    /// through `#[transactional]`'s emitter and into the committed row.
+    ///
+    /// `create_quote` is the vehicle because it is the module that already
+    /// emits (`#[transactional(quote, emitter)]`); nothing about this test
+    /// is specific to quotes. `#[transactional]` builds `__event_emitter`
+    /// from `self.actor` inside its own expansion — a plain field read, not
+    /// a value threaded explicitly through each intervening call — so
+    /// whatever this handle calls, at whatever depth, emits with this actor.
+    #[tokio::test]
+    #[ignore = "requires live postgres"]
+    async fn acting_as_automation_attributes_a_persisted_event_to_the_run() {
+        let pool = make_pool().await;
+        let org_id = seed_organization(&pool).await;
+        let usecase = MestierUseCase::new(pool.clone(), default_authorizer(), EventHub::new());
+        let customer = usecase
+            .create_customer(crate::domain::customer::commands::CreateCustomerCommand {
+                organization_id: org_id,
+                status: crate::CustomerStatus::Prospect,
+                pipeline_stage: crate::CustomerPipelineStage::New,
+                name: "Automation depth customer".to_string(),
+                phone: None,
+                email: None,
+            })
+            .await
+            .unwrap();
+        let context = usecase
+            .create_customer_context(
+                crate::domain::customer_context::commands::CreateCustomerContextCommand {
+                    customer_id: customer.id,
+                    label: "Main site".to_string(),
+                    address_line: None,
+                    postal_code: None,
+                    city: None,
+                    photo_key: None,
+                },
+            )
+            .await
+            .unwrap();
+        let run_id = generate_uuid_v7();
+
+        let created = usecase
+            .acting_as_automation(run_id)
+            .create_quote(crate::domain::quote::commands::CreateQuoteCommand {
+                organization_id: org_id,
+                title: "Automated quote".to_string(),
+                customer_id: customer.id,
+                customer_context_id: context.id,
+                lines: Vec::new(),
+            })
+            .await
+            .unwrap();
+
+        let row = sqlx::query!(
+            r#"SELECT actor_kind, actor_id FROM automation.event
+               WHERE name = 'quote.created' AND subject_id = $1"#,
+            created.id.0,
+        )
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+
+        assert_eq!(row.actor_kind, "automation");
+        assert_eq!(row.actor_id, Some(run_id));
     }
 }
