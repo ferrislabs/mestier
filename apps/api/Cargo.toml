@@ -6,6 +6,7 @@ edition.workspace = true
 
 [dependencies]
 handlers = { workspace = true }
+handlers-automation = { workspace = true }
 handlers-customer = { workspace = true }
 handlers-discord = { workspace = true }
 handlers-files = { workspace = true }

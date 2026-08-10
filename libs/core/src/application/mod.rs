@@ -9,6 +9,7 @@ use sqlx::postgres::PgPoolOptions;
 
 use crate::domain::file_storage::service::FileStorageService;
 use crate::domain::role::Permissions;
+use crate::infrastructure::automation::retention::{RetentionWorkerSchedule, run_retention_worker};
 use crate::infrastructure::automation::webhook::{
     address_policy::PrivateNetworkAccess, secret::SecretCipher,
 };
@@ -264,10 +265,19 @@ fn spawn_automation_worker(usecase: MestierUseCase, config: &AutomationConfig) {
     };
 
     tokio::spawn(run_automation_worker(
-        usecase,
+        usecase.clone(),
         worker,
         WorkerSchedule::default(),
         private_network,
+    ));
+
+    // Its own loop, deliberately far slower than the engine's: retention is
+    // measured in days, and a purge that ran as often as the worker would take
+    // the same locks for nothing. Without it `automation.event` and
+    // `automation.run` grow without bound — one 500-item loop is 500 steps.
+    tokio::spawn(run_retention_worker(
+        usecase,
+        RetentionWorkerSchedule::default(),
     ));
 }
 
