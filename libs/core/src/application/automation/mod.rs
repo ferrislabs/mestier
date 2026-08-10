@@ -22,6 +22,7 @@ pub struct PassOutcome {
     pub failed: usize,
 }
 
+mod credential;
 mod tests;
 
 impl MestierUseCase {
