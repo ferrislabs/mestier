@@ -2,8 +2,6 @@ use serde_json::Value;
 
 /// What one field's raw JSON value compiles down to.
 ///
-/// `Interpolated` (a string mixing text and expressions) is not built yet:
-/// `parse_template` grows that case as the grammar is completed.
 #[derive(Debug)]
 pub(crate) enum TemplateKind {
     /// The raw value was not a string, or was a string with no `{{ }}` in
@@ -12,6 +10,10 @@ pub(crate) enum TemplateKind {
     /// The string, once trimmed, is exactly one `{{ ... }}`: evaluating it
     /// keeps the expression's own JSON type, rather than stringifying it.
     Whole(Expr),
+    /// Anything else: text and expressions are stringified and
+    /// concatenated, always producing a string — an array embedded in a
+    /// sentence never stays an array.
+    Interpolated(Vec<Part>),
 }
 
 /// One chunk of a template string while it is being split: literal text, or
@@ -177,6 +179,12 @@ impl Template {
         }
     }
 
+    pub(crate) fn interpolated(parts: Vec<Part>) -> Self {
+        Self {
+            kind: TemplateKind::Interpolated(parts),
+        }
+    }
+
     pub(crate) fn kind(&self) -> &TemplateKind {
         &self.kind
     }
@@ -187,6 +195,13 @@ impl Template {
         match &self.kind {
             TemplateKind::Literal(_) => Vec::new(),
             TemplateKind::Whole(expr) => vec![expr],
+            TemplateKind::Interpolated(parts) => parts
+                .iter()
+                .filter_map(|part| match part {
+                    Part::Expr(expr) => Some(expr),
+                    Part::Text(_) => None,
+                })
+                .collect(),
         }
     }
 }

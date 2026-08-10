@@ -1,6 +1,6 @@
 use serde_json::Value;
 
-use super::ast::{BinOp, Expr, Path, PathRoot, PathSegment, Template, TemplateKind, UnaryOp};
+use super::ast::{BinOp, Expr, Part, Path, PathRoot, PathSegment, Template, TemplateKind, UnaryOp};
 use super::context::ExpressionContext;
 use super::error::ExpressionError;
 
@@ -9,6 +9,16 @@ impl Template {
         match self.kind() {
             TemplateKind::Literal(value) => Ok(value.clone()),
             TemplateKind::Whole(expr) => eval_expr(expr, ctx),
+            TemplateKind::Interpolated(parts) => {
+                let mut out = String::new();
+                for part in parts {
+                    match part {
+                        Part::Text(text) => out.push_str(text),
+                        Part::Expr(expr) => out.push_str(&stringify(&eval_expr(expr, ctx)?)),
+                    }
+                }
+                Ok(Value::String(out))
+            }
         }
     }
 }

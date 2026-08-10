@@ -16,8 +16,7 @@ pub(crate) fn parse(raw: &Value) -> Result<Template, ExpressionError> {
 /// `TemplateKind` it is:
 /// - no expression at all -> a literal;
 /// - trimmed down to exactly one expression -> whole, keeping its type;
-/// - anything else -> interpolated, always producing a string (not built
-///   yet).
+/// - anything else -> interpolated, always producing a string.
 fn parse_string_template(s: &str) -> Result<Template, ExpressionError> {
     let mut parts: Vec<Part> = Vec::new();
     let mut cursor = 0usize;
@@ -49,17 +48,17 @@ fn parse_string_template(s: &str) -> Result<Template, ExpressionError> {
             Part::Text(text) => text.trim().is_empty(),
             Part::Expr(_) => true,
         });
+        let expr_index = parts.iter().position(|part| matches!(part, Part::Expr(_)));
         if only_whitespace_around_it {
-            if let Some(expr) = parts.into_iter().find_map(|part| match part {
-                Part::Expr(expr) => Some(expr),
-                Part::Text(_) => None,
-            }) {
-                return Ok(Template::whole(expr));
+            if let Some(index) = expr_index {
+                if let Part::Expr(expr) = parts.swap_remove(index) {
+                    return Ok(Template::whole(expr));
+                }
             }
         }
     }
 
-    unimplemented!("interpolated templates are not built yet")
+    Ok(Template::interpolated(parts))
 }
 
 /// Parses one `{{ ... }}` body starting right after the opening brace.

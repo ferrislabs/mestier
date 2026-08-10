@@ -720,4 +720,79 @@ mod tests {
         let err = template.evaluate(&ctx).expect_err("must not be caught");
         assert!(matches!(err, ExpressionError::TypeMismatch { .. }), "{err:?}");
     }
+
+    #[test]
+    fn an_array_alone_stays_an_array_but_interpolated_it_becomes_a_string() {
+        let mut connectors = BTreeMap::new();
+        connectors.insert(
+            "c1".to_string(),
+            json!({ "output": { "items": [1, 2, 3] } }),
+        );
+        let ctx = empty_context(&connectors);
+
+        let whole = parse_template(&json!("{{ connectors.c1.output.items }}")).expect("valid");
+        assert_eq!(
+            whole.evaluate(&ctx).expect("evaluates"),
+            json!([1, 2, 3]),
+            "a whole expression keeps its JSON type"
+        );
+
+        let interpolated =
+            parse_template(&json!("Items: {{ connectors.c1.output.items }}")).expect("valid");
+        assert_eq!(
+            interpolated.evaluate(&ctx).expect("evaluates"),
+            json!("Items: [1,2,3]"),
+            "the same expression in a sentence always renders a string"
+        );
+    }
+
+    #[test]
+    fn interpolation_stringifies_every_json_type_without_requoting_strings() {
+        let connectors = BTreeMap::new();
+        let ctx = empty_context(&connectors);
+
+        let cases = [
+            ("Hello {{ \"World\" }}!", "Hello World!"),
+            ("Flag: {{ true }}", "Flag: true"),
+            ("Nothing: {{ null }}", "Nothing: null"),
+            ("Count: {{ 3 }}", "Count: 3"),
+        ];
+        for (raw, expected) in cases {
+            let template =
+                parse_template(&json!(raw)).unwrap_or_else(|e| panic!("{raw} failed: {e}"));
+            let result = template
+                .evaluate(&ctx)
+                .unwrap_or_else(|e| panic!("{raw} failed: {e}"));
+            assert_eq!(result, json!(expected), "for {raw}");
+        }
+    }
+
+    #[test]
+    fn interpolation_is_not_static_and_referenced_connectors_covers_every_expression() {
+        let mut connectors = BTreeMap::new();
+        connectors.insert("c1".to_string(), json!({ "output": { "a": 1 } }));
+        connectors.insert("c2".to_string(), json!({ "output": { "b": 2 } }));
+        let ctx = empty_context(&connectors);
+
+        let template = parse_template(&json!(
+            "{{ connectors.c1.output.a }} and {{ connectors.c2.output.b }} and {{ connectors.c1.output.a }}"
+        ))
+        .expect("valid");
+
+        assert!(!template.is_static());
+        assert_eq!(
+            template.evaluate(&ctx).expect("evaluates"),
+            json!("1 and 2 and 1")
+        );
+        let ids: Vec<_> = template.referenced_connectors().into_iter().collect();
+        assert_eq!(ids, vec!["c1".to_string(), "c2".to_string()]);
+    }
+
+    #[test]
+    fn uses_loop_is_true_when_loop_is_read_inside_an_interpolated_string() {
+        let template = parse_template(&json!("Item #{{ loop.index }}: {{ loop.item.name }}"))
+            .expect("valid");
+
+        assert!(template.uses_loop());
+    }
 }
