@@ -195,7 +195,7 @@ mod tests {
         org_id: OrganizationId,
         base_url: &str,
     ) -> Uuid {
-        let credential = usecase
+        let (credential, _secret) = usecase
             .create_credential(CreateCredentialCommand {
                 org_id,
                 kind: "odoo_api".to_owned(),

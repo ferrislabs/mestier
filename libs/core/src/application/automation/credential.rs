@@ -31,11 +31,19 @@ impl MestierUseCase {
         })
     }
 
+    /// Creates a credential and returns its plaintext alongside it —
+    /// the one and only time it is ever readable through this use case again
+    /// (#203's acceptance criterion: the secret appears exactly once). For
+    /// `Supplied`, the plaintext is exactly what the caller just sent
+    /// (`serde_json::to_vec(&data)`), so a handler echoing it back reveals
+    /// nothing the caller did not already know; for `Generated`, it is the
+    /// only place Mestier's own freshly minted secret is ever visible outside
+    /// the sealed column — see [`Self::rotate_credential`] for the other one.
     #[transactional(credential)]
     pub async fn create_credential(
         &self,
         command: CreateCredentialCommand,
-    ) -> Result<Credential, CoreError> {
+    ) -> Result<(Credential, Vec<u8>), CoreError> {
         let cipher = self.require_cipher()?;
 
         let plaintext = match command.origin {
@@ -71,7 +79,8 @@ impl MestierUseCase {
         };
 
         let mut repository = credential_repository;
-        repository.insert(&credential, &sealed).await
+        let inserted = repository.insert(&credential, &sealed).await?;
+        Ok((inserted, plaintext))
     }
 
     /// Opens a credential's sealed bytes for the automation worker (#202).
@@ -194,15 +203,18 @@ impl MestierUseCase {
         credentials.delete(org_id, id).await
     }
 
-    /// Regenerates a `Generated` credential's sealed bytes. Refused for a
-    /// `Supplied` one: it has nothing of Mestier's own to regenerate, only
-    /// the user's own secret, which rotating would silently invalidate.
+    /// Regenerates a `Generated` credential's sealed bytes and returns the
+    /// fresh plaintext alongside it — the other place (with
+    /// [`Self::create_credential`]) the secret is ever visible outside the
+    /// sealed column. Refused for a `Supplied` one: it has nothing of
+    /// Mestier's own to regenerate, only the user's own secret, which
+    /// rotating would silently invalidate.
     #[transactional(credential)]
     pub async fn rotate_credential(
         &self,
         org_id: OrganizationId,
         id: Uuid,
-    ) -> Result<Credential, CoreError> {
+    ) -> Result<(Credential, Vec<u8>), CoreError> {
         let mut repository = credential_repository;
         let existing = repository
             .find_by_id(org_id, id)
@@ -214,7 +226,8 @@ impl MestierUseCase {
         let plaintext = cipher.generate_secret()?;
         let sealed = cipher.seal(&plaintext)?;
 
-        repository.update(org_id, &existing, Some(&sealed)).await
+        let updated = repository.update(org_id, &existing, Some(&sealed)).await?;
+        Ok((updated, plaintext))
     }
 }
 
@@ -295,7 +308,7 @@ mod tests {
         let org_id = seed_organization(&pool, "create").await;
         let usecase = use_case(pool);
 
-        let created = usecase
+        let (created, _secret) = usecase
             .create_credential(CreateCredentialCommand {
                 org_id,
                 kind: "odoo_api".to_owned(),
@@ -313,6 +326,60 @@ mod tests {
 
         let found = usecase.find_credential(org_id, created.id).await.unwrap();
         assert_eq!(found, Some(created));
+    }
+
+    /// The acceptance criterion (#203): the secret appears exactly once, in
+    /// the creation response. For a `Supplied` credential that plaintext is
+    /// exactly what the caller just sent — the handler can echo it back with
+    /// no further round trip and reveals nothing the caller did not already
+    /// know.
+    #[tokio::test]
+    #[ignore = "requires live postgres"]
+    async fn creating_a_supplied_credential_returns_back_exactly_what_was_sent() {
+        let pool = make_pool().await;
+        let org_id = seed_organization(&pool, "create-echo").await;
+        let usecase = use_case(pool);
+
+        let (_, secret) = usecase
+            .create_credential(CreateCredentialCommand {
+                org_id,
+                kind: "odoo_api".to_owned(),
+                name: "Production Odoo".to_owned(),
+                origin: CredentialOrigin::Supplied,
+                data: Some(odoo_data()),
+            })
+            .await
+            .unwrap();
+
+        let decoded: serde_json::Value = serde_json::from_slice(&secret).unwrap();
+        assert_eq!(decoded, odoo_data());
+    }
+
+    /// The other half of the same acceptance criterion: for a `Generated`
+    /// credential, the plaintext returned at creation is the only time
+    /// Mestier's own freshly minted secret is ever visible outside the
+    /// sealed column — proven here by checking it against what the
+    /// worker-only `open_credential` later reads back from storage.
+    #[tokio::test]
+    #[ignore = "requires live postgres"]
+    async fn creating_a_generated_credential_returns_the_secret_that_was_actually_sealed() {
+        let pool = make_pool().await;
+        let org_id = seed_organization(&pool, "create-generated-secret").await;
+        let usecase = use_case(pool);
+
+        let (created, secret) = usecase
+            .create_credential(CreateCredentialCommand {
+                org_id,
+                kind: "bearer_token".to_owned(),
+                name: "Outgoing signature".to_owned(),
+                origin: CredentialOrigin::Generated,
+                data: None,
+            })
+            .await
+            .unwrap();
+
+        let (_, opened) = usecase.open_credential(org_id, created.id).await.unwrap();
+        assert_eq!(secret, opened);
     }
 
     #[tokio::test]
@@ -424,7 +491,7 @@ mod tests {
         let stranger_org = seed_organization(&pool, "find-stranger").await;
         let usecase = use_case(pool);
 
-        let created = usecase
+        let (created, _secret) = usecase
             .create_credential(CreateCredentialCommand {
                 org_id,
                 kind: "bearer_token".to_owned(),
@@ -450,7 +517,7 @@ mod tests {
         let org_id = seed_organization(&pool, "update-rename").await;
         let usecase = use_case(pool);
 
-        let created = usecase
+        let (created, _secret) = usecase
             .create_credential(CreateCredentialCommand {
                 org_id,
                 kind: "bearer_token".to_owned(),
@@ -502,7 +569,7 @@ mod tests {
         let org_id = seed_organization(&pool, "delete").await;
         let usecase = use_case(pool);
 
-        let created = usecase
+        let (created, _secret) = usecase
             .create_credential(CreateCredentialCommand {
                 org_id,
                 kind: "bearer_token".to_owned(),
@@ -544,7 +611,7 @@ mod tests {
         let org_id = seed_organization(&pool, "delete-referenced").await;
         let usecase = use_case(pool.clone());
 
-        let created = usecase
+        let (created, _secret) = usecase
             .create_credential(CreateCredentialCommand {
                 org_id,
                 kind: "bearer_token".to_owned(),
@@ -606,7 +673,7 @@ mod tests {
         let org_id = seed_organization(&pool, "delete-unreferenced").await;
         let usecase = use_case(pool);
 
-        let created = usecase
+        let (created, _secret) = usecase
             .create_credential(CreateCredentialCommand {
                 org_id,
                 kind: "bearer_token".to_owned(),
@@ -641,7 +708,7 @@ mod tests {
         let stranger_org = seed_organization(&pool, "delete-stranger").await;
         let usecase = use_case(pool);
 
-        let created = usecase
+        let (created, _secret) = usecase
             .create_credential(CreateCredentialCommand {
                 org_id,
                 kind: "bearer_token".to_owned(),
@@ -675,7 +742,7 @@ mod tests {
         let org_id = seed_organization(&pool, "rotate-generated").await;
         let usecase = use_case(pool.clone());
 
-        let created = usecase
+        let (created, _secret) = usecase
             .create_credential(CreateCredentialCommand {
                 org_id,
                 kind: "bearer_token".to_owned(),
@@ -695,7 +762,7 @@ mod tests {
         .await
         .unwrap();
 
-        let rotated = usecase.rotate_credential(org_id, created.id).await.unwrap();
+        let (rotated, _secret) = usecase.rotate_credential(org_id, created.id).await.unwrap();
         assert_eq!(rotated.id, created.id);
 
         let after = sqlx::query!(
@@ -710,6 +777,37 @@ mod tests {
         assert_ne!(before.data_ciphertext, after.data_ciphertext);
     }
 
+    /// The acceptance criterion (#203) on the rotation half: the returned
+    /// secret is the fresh one actually sealed, different from what creation
+    /// returned, and matches what `open_credential` reads back afterwards.
+    #[tokio::test]
+    #[ignore = "requires live postgres"]
+    async fn rotating_a_generated_credential_returns_the_freshly_sealed_secret() {
+        let pool = make_pool().await;
+        let org_id = seed_organization(&pool, "rotate-returns-secret").await;
+        let usecase = use_case(pool.clone());
+
+        let (created, created_secret) = usecase
+            .create_credential(CreateCredentialCommand {
+                org_id,
+                kind: "bearer_token".to_owned(),
+                name: "Outgoing signature".to_owned(),
+                origin: CredentialOrigin::Generated,
+                data: None,
+            })
+            .await
+            .unwrap();
+
+        let (_, rotated_secret) = usecase.rotate_credential(org_id, created.id).await.unwrap();
+
+        assert_ne!(
+            rotated_secret, created_secret,
+            "a rotation must mint a genuinely new secret"
+        );
+        let (_, opened) = usecase.open_credential(org_id, created.id).await.unwrap();
+        assert_eq!(rotated_secret, opened);
+    }
+
     #[tokio::test]
     #[ignore = "requires live postgres"]
     async fn rotating_a_supplied_credential_is_refused() {
@@ -717,7 +815,7 @@ mod tests {
         let org_id = seed_organization(&pool, "rotate-supplied").await;
         let usecase = use_case(pool);
 
-        let created = usecase
+        let (created, _secret) = usecase
             .create_credential(CreateCredentialCommand {
                 org_id,
                 kind: "bearer_token".to_owned(),
@@ -743,7 +841,7 @@ mod tests {
         let org_id = seed_organization(&pool, "open-supplied").await;
         let usecase = use_case(pool);
 
-        let created = usecase
+        let (created, _secret) = usecase
             .create_credential(CreateCredentialCommand {
                 org_id,
                 kind: "odoo_api".to_owned(),
@@ -770,7 +868,7 @@ mod tests {
         let org_id = seed_organization(&pool, "open-generated").await;
         let usecase = use_case(pool.clone());
 
-        let created = usecase
+        let (created, _secret) = usecase
             .create_credential(CreateCredentialCommand {
                 org_id,
                 kind: "bearer_token".to_owned(),
@@ -798,7 +896,7 @@ mod tests {
         let stranger_org = seed_organization(&pool, "open-stranger").await;
         let usecase = use_case(pool);
 
-        let created = usecase
+        let (created, _secret) = usecase
             .create_credential(CreateCredentialCommand {
                 org_id,
                 kind: "bearer_token".to_owned(),
@@ -838,7 +936,7 @@ mod tests {
         let pool = make_pool().await;
         let org_id = seed_organization(&pool, "open-no-cipher").await;
         let usecase_with_cipher = use_case(pool.clone());
-        let created = usecase_with_cipher
+        let (created, _secret) = usecase_with_cipher
             .create_credential(CreateCredentialCommand {
                 org_id,
                 kind: "bearer_token".to_owned(),

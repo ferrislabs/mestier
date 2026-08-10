@@ -581,7 +581,7 @@ mod tests {
         let stranger_org = seed_organization(&pool, "save-cross-org-stranger").await;
         let usecase = use_case_with_cipher(pool);
 
-        let stranger_credential = usecase
+        let (stranger_credential, _secret) = usecase
             .create_credential(
                 crate::domain::automation::credential::CreateCredentialCommand {
                     org_id: stranger_org,
