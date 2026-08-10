@@ -5,26 +5,26 @@ import { buildOrgPath } from '#/modules/org-path'
 import type { ModuleTab } from '#/modules/types'
 
 interface NavTabsProps {
-	/** Décrit le scope navigué, pour les lecteurs d'écran. */
+	/** Describes the navigated scope, for screen readers. */
 	label: string
 	tabs: ModuleTab[]
-	/** Tenant dont dépendent les liens : les onglets sont déclarés relatifs. */
+	/** Tenant the links hang off: tabs are declared relative. */
 	organizationSlug: string
 }
 
-// Indicateur Material : un trait épais arrondi sous l'onglet actif, et non un
-// fond plein ou une bordure de conteneur.
+// Material indicator: a thick rounded line under the active tab, not a solid
+// background or a container border.
 const tabClassName =
 	'relative inline-flex items-center gap-1.5 whitespace-nowrap rounded-t-lg px-4 py-3.5 text-sm font-medium transition-colors after:absolute after:inset-x-0 after:bottom-0 after:h-[3px] after:rounded-t-full after:bg-primary after:opacity-0 after:transition-opacity'
 
 /**
- * Onglets de navigation d'un scope.
+ * Navigation tabs for a scope.
  *
- * Ce ne sont pas les `Tabs` de Radix : un onglet de navigation est un lien qui
- * change de route, pas un déclencheur qui révèle un `TabsContent` local. Emprunter
- * le composant imposerait un `aria-controls` pointant vers un panneau inexistant
- * et un focus roving concurrent de la navigation clavier native. On reprend donc
- * la forme visuelle de la variante `line` dans un `<nav>` de liens.
+ * These are not Radix's `Tabs`: a navigation tab is a link that changes route,
+ * not a trigger revealing a local `TabsContent`. Borrowing the component would
+ * force an `aria-controls` pointing at a panel that does not exist, and a
+ * roving focus competing with native keyboard navigation. So we take the visual
+ * shape of the `line` variant inside a `<nav>` of links.
  */
 export function NavTabs({ label, tabs, organizationSlug }: NavTabsProps) {
 	return (

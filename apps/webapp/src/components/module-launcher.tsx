@@ -22,7 +22,7 @@ const tileClassName =
 
 const markClassName = 'flex size-11 items-center justify-center rounded-full'
 
-/** Grille de neuf points : l'affordance de sélection d'application. */
+/** Nine-dot grid: the app-switching affordance. */
 function AppsGridIcon() {
 	const positions = [5, 12, 19]
 
@@ -43,12 +43,12 @@ function AppsGridIcon() {
 }
 
 /**
- * Sélecteur d'application, sur le modèle de la grille d'apps Google : un bouton
- * ouvre la liste complète des modules, disponibles comme annoncés.
+ * App launcher, modelled on Google's app grid: one button opens the full list
+ * of modules, available and announced alike.
  *
- * L'ouverture est pilotée ici plutôt que déléguée à `PopoverClose` : la
- * fermeture est déclenchée par le clic sur le lien, ce qui ne dépend plus de
- * l'ordre d'exécution entre les gestionnaires de Radix et ceux du routeur.
+ * Open state is driven here rather than delegated to `PopoverClose`: closing is
+ * triggered by the click on the link, which no longer depends on the execution
+ * order between Radix's handlers and the router's.
  */
 export function ModuleLauncher({
 	activeModuleId,

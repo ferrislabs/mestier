@@ -13,47 +13,47 @@ import {
 const TZ = 'Europe/Paris'
 
 describe('assigneeRefFromResourceId', () => {
-	it('parse un resource_id employee', () => {
+	it('parses an employee resource_id', () => {
 		expect(assigneeRefFromResourceId('employee:emp-1')).toEqual({
 			kind: 'employee',
 			employee_id: 'emp-1',
 		})
 	})
 
-	it('parse un resource_id member', () => {
+	it('parses a member resource_id', () => {
 		expect(assigneeRefFromResourceId('member:user-9')).toEqual({
 			kind: 'member',
 			user_id: 'user-9',
 		})
 	})
 
-	it('lève une erreur sur un kind inconnu — un bug amont, pas une donnée à avaler', () => {
+	it('throws on an unknown kind — an upstream bug, not data to swallow', () => {
 		expect(() => assigneeRefFromResourceId('unknown:x')).toThrow()
 	})
 })
 
 describe('shiftInstant', () => {
-	it('renvoie la même valeur pour un décalage nul', () => {
+	it('returns the same value for a zero offset', () => {
 		expect(shiftInstant('2026-08-10T08:00:00Z', 0, TZ)).toBe(
 			'2026-08-10T08:00:00Z',
 		)
 	})
 
-	it('décale de N jours en préservant l’heure locale', () => {
+	it('shifts by N days while preserving the local time', () => {
 		const shifted = shiftInstant('2026-08-10T08:00:00+02:00', 2, TZ)
 		expect(shifted).toBe(new Date('2026-08-12T08:00:00+02:00').toISOString())
 	})
 
-	it('décale correctement à travers un changement DST (fin octobre en Europe/Paris)', () => {
-		// 2026-10-24 est en CEST (+02:00), 2026-10-27 est en CET (+01:00) —
-		// franchir le changement d'heure doit conserver 08:00 heure locale.
+	it('shifts correctly across a DST change (late October in Europe/Paris)', () => {
+		// 2026-10-24 is in CEST (+02:00), 2026-10-27 is in CET (+01:00) —
+		// crossing the clock change must keep 08:00 local time.
 		const shifted = shiftInstant('2026-10-24T08:00:00+02:00', 3, TZ)
 		expect(shifted).toBe(new Date('2026-10-27T08:00:00+01:00').toISOString())
 	})
 })
 
 describe('buildAssigneesForMove', () => {
-	it('remplace la ressource source par la cible, en préservant les autres', () => {
+	it('replaces the source resource with the target, preserving the others', () => {
 		const result = buildAssigneesForMove(
 			['emp-1', 'emp-2'],
 			'employee:emp-1',
@@ -65,7 +65,7 @@ describe('buildAssigneesForMove', () => {
 		])
 	})
 
-	it('convertit vers un member quand la cible est une ressource member-only', () => {
+	it('converts to a member when the target is a member-only resource', () => {
 		const result = buildAssigneesForMove(
 			['emp-1'],
 			'employee:emp-1',
@@ -74,7 +74,7 @@ describe('buildAssigneesForMove', () => {
 		expect(result).toEqual([{ kind: 'member', user_id: 'user-9' }])
 	})
 
-	it('ne duplique pas quand la cible est déjà assignée ailleurs sur le même chantier', () => {
+	it('does not duplicate when the target is already assigned elsewhere on the same job', () => {
 		const result = buildAssigneesForMove(
 			['emp-1', 'emp-2'],
 			'employee:emp-1',
@@ -83,7 +83,7 @@ describe('buildAssigneesForMove', () => {
 		expect(result).toEqual([{ kind: 'employee', employee_id: 'emp-2' }])
 	})
 
-	it('ne touche à rien quand source et cible sont la même ressource', () => {
+	it('touches nothing when source and target are the same resource', () => {
 		const result = buildAssigneesForMove(
 			['emp-1', 'emp-2'],
 			'employee:emp-1',
@@ -97,7 +97,7 @@ describe('buildAssigneesForMove', () => {
 })
 
 describe('buildAssigneesForRemoval', () => {
-	it('retire la ressource visée et conserve les autres', () => {
+	it('removes the targeted resource and keeps the others', () => {
 		const result = buildAssigneesForRemoval(
 			['emp-1', 'emp-2'],
 			'employee:emp-1',
@@ -105,14 +105,14 @@ describe('buildAssigneesForRemoval', () => {
 		expect(result).toEqual([{ kind: 'employee', employee_id: 'emp-2' }])
 	})
 
-	it('ne change rien si la ressource ne figure pas dans la liste', () => {
+	it('changes nothing if the resource is not in the list', () => {
 		const result = buildAssigneesForRemoval(['emp-2'], 'employee:emp-1')
 		expect(result).toEqual([{ kind: 'employee', employee_id: 'emp-2' }])
 	})
 })
 
 describe('computeTaskDropPatch — jour seul', () => {
-	it('ne porte que starts_at/ends_at décalés, avec la liste complète des assignés inchangée', () => {
+	it('carries only the shifted starts_at/ends_at, with the full assignee list unchanged', () => {
 		const result = computeTaskDropPatch({
 			source: {
 				entryId: 'wo-1',
@@ -138,7 +138,7 @@ describe('computeTaskDropPatch — jour seul', () => {
 })
 
 describe('computeTaskDropPatch — ligne seule', () => {
-	it('ne porte que la liste des assignés, sans starts_at/ends_at', () => {
+	it('carries only the assignee list, without starts_at/ends_at', () => {
 		const result = computeTaskDropPatch({
 			source: {
 				entryId: 'wo-1',
@@ -163,8 +163,8 @@ describe('computeTaskDropPatch — ligne seule', () => {
 	})
 })
 
-describe('computeTaskDropPatch — jour et ligne à la fois', () => {
-	it('porte starts_at/ends_at décalés et la nouvelle liste des assignés, en un seul objet', () => {
+describe('computeTaskDropPatch — day and row at once', () => {
+	it('carries the shifted starts_at/ends_at and the new assignee list, in a single object', () => {
 		const result = computeTaskDropPatch({
 			source: {
 				entryId: 'wo-1',
@@ -189,8 +189,8 @@ describe('computeTaskDropPatch — jour et ligne à la fois', () => {
 	})
 })
 
-describe('computeTaskDropPatch — drop sans effet', () => {
-	it('ne change rien quand le drop atterrit sur la même ligne et la même date', () => {
+describe('computeTaskDropPatch — a drop with no effect', () => {
+	it('changes nothing when the drop lands on the same row and the same date', () => {
 		const result = computeTaskDropPatch({
 			source: {
 				entryId: 'wo-1',
@@ -212,7 +212,7 @@ describe('computeTaskDropPatch — drop sans effet', () => {
 })
 
 describe('computeRemoveAssigneePatch', () => {
-	it('produit la liste complète des assignés restants', () => {
+	it('produces the full list of remaining assignees', () => {
 		const result = computeRemoveAssigneePatch({
 			employeeIds: ['emp-1', 'emp-2'],
 			resourceId: 'employee:emp-1',
@@ -224,7 +224,7 @@ describe('computeRemoveAssigneePatch', () => {
 		})
 	})
 
-	it("ne change rien si la ressource visée n'est pas assignée", () => {
+	it('changes nothing if the targeted resource is not assigned', () => {
 		const result = computeRemoveAssigneePatch({
 			employeeIds: ['emp-2'],
 			resourceId: 'employee:emp-1',
@@ -236,19 +236,19 @@ describe('computeRemoveAssigneePatch', () => {
 })
 
 describe('resourceIdFromAssigneeRef', () => {
-	it('formate un AssigneeRef employee en resource_id', () => {
+	it('formats an employee AssigneeRef into a resource_id', () => {
 		expect(
 			resourceIdFromAssigneeRef({ kind: 'employee', employee_id: 'emp-1' }),
 		).toBe('employee:emp-1')
 	})
 
-	it('formate un AssigneeRef member en resource_id', () => {
+	it('formats a member AssigneeRef into a resource_id', () => {
 		expect(
 			resourceIdFromAssigneeRef({ kind: 'member', user_id: 'user-1' }),
 		).toBe('member:user-1')
 	})
 
-	it('est l’inverse exact de assigneeRefFromResourceId', () => {
+	it('is the exact inverse of assigneeRefFromResourceId', () => {
 		const resourceId = 'member:user-42'
 		expect(
 			resourceIdFromAssigneeRef(assigneeRefFromResourceId(resourceId)),
@@ -257,7 +257,7 @@ describe('resourceIdFromAssigneeRef', () => {
 })
 
 describe('toggleAssignee', () => {
-	it('ajoute une ressource absente de la sélection', () => {
+	it('adds a resource missing from the selection', () => {
 		const result = toggleAssignee(
 			[{ kind: 'employee', employee_id: 'emp-1' }],
 			'employee:emp-2',
@@ -269,7 +269,7 @@ describe('toggleAssignee', () => {
 		])
 	})
 
-	it('retire une ressource déjà sélectionnée', () => {
+	it('removes an already selected resource', () => {
 		const result = toggleAssignee(
 			[
 				{ kind: 'employee', employee_id: 'emp-1' },
@@ -281,15 +281,15 @@ describe('toggleAssignee', () => {
 		expect(result).toEqual([{ kind: 'member', user_id: 'user-1' }])
 	})
 
-	it('ne mute pas le tableau reçu', () => {
+	it('does not mutate the array it is given', () => {
 		const assignees = [{ kind: 'employee' as const, employee_id: 'emp-1' }]
 		toggleAssignee(assignees, 'employee:emp-2')
 		expect(assignees).toEqual([{ kind: 'employee', employee_id: 'emp-1' }])
 	})
 
-	it('une sous-tâche démarre sans assigné — jamais hérités du parent', () => {
-		// Rien à retirer : la sélection vide reste vide tant qu'aucun toggle
-		// n'est appelé, cf. l'invariant 7 du document de conception.
+	it('a subtask starts with no assignee — never inherited from the parent', () => {
+		// Nothing to remove: an empty selection stays empty until a toggle is
+		// called, see invariant 7 of the design doc.
 		expect(toggleAssignee([], 'employee:emp-1')).toEqual([
 			{ kind: 'employee', employee_id: 'emp-1' },
 		])

@@ -8,17 +8,17 @@ interface ScopeBarProps {
 	tabs: ModuleTab[]
 	organizationSlug: string
 	/**
-	 * Actions du scope courant — sauvegarde d'une fiche, création d'une entité.
-	 * Elles vivent ici plutôt que dans une barre flottante au-dessus du contenu.
+	 * Actions of the current scope — saving a record, creating an entity. They
+	 * live here rather than in a bar floating above the content.
 	 */
 	actions?: React.ReactNode
 }
 
 /**
- * Barre de navigation du scope actif, collée sous l'en-tête.
+ * Navigation bar for the active scope, sitting under the header.
  *
- * Un scope qui n'expose qu'un seul écran n'affiche pas de barre : le rail et le
- * fil d'Ariane suffisent à situer l'utilisateur.
+ * A scope exposing a single screen shows no bar: the rail and the breadcrumb
+ * are enough to tell the user where they are.
  */
 export function ScopeBar({
 	label,

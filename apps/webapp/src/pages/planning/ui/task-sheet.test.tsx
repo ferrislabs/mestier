@@ -79,20 +79,20 @@ function baseProps() {
 	}
 }
 
-describe('TaskSheet — création', () => {
-	it("n'affiche rien quand open est faux", () => {
+describe('TaskSheet — creation', () => {
+	it('renders nothing when open is false', () => {
 		render(<TaskSheet {...baseProps()} open={false} />)
 		expect(screen.queryByRole('dialog')).toBeNull()
 	})
 
-	it('affiche uniquement l’onglet Détails — pas de sous-tâches ni de commentaires pour une tâche pas encore créée', () => {
+	it('shows the Details tab only — no subtasks and no comments for a task not created yet', () => {
 		render(<TaskSheet {...baseProps()} />)
 
 		expect(screen.queryByRole('tab', { name: /Sous-tâches/ })).toBeNull()
 		expect(screen.queryByRole('tab', { name: /Commentaires/ })).toBeNull()
 	})
 
-	it('appelle onSubmit au clic sur créer', async () => {
+	it('calls onSubmit when create is clicked', async () => {
 		const user = userEvent.setup()
 		const onSubmit = vi.fn()
 		render(<TaskSheet {...baseProps()} onSubmit={onSubmit} />)
@@ -101,13 +101,13 @@ describe('TaskSheet — création', () => {
 		expect(onSubmit).toHaveBeenCalledTimes(1)
 	})
 
-	it("n'affiche pas de bouton supprimer en création", () => {
+	it('shows no delete button when creating', () => {
 		render(<TaskSheet {...baseProps()} />)
 		expect(screen.queryByRole('button', { name: /Supprimer/ })).toBeNull()
 	})
 })
 
-describe('TaskSheet — édition', () => {
+describe('TaskSheet — editing', () => {
 	function editProps() {
 		return {
 			...baseProps(),
@@ -120,7 +120,7 @@ describe('TaskSheet — édition', () => {
 		}
 	}
 
-	it('affiche les trois onglets', () => {
+	it('shows the three tabs', () => {
 		render(<TaskSheet {...editProps()} />)
 
 		expect(screen.getByRole('tab', { name: /Détails/ })).toBeDefined()
@@ -128,7 +128,7 @@ describe('TaskSheet — édition', () => {
 		expect(screen.getByRole('tab', { name: /Commentaires/ })).toBeDefined()
 	})
 
-	it('bascule vers l’onglet sous-tâches au clic', async () => {
+	it('switches to the subtasks tab on click', async () => {
 		const user = userEvent.setup()
 		render(<TaskSheet {...editProps()} />)
 
@@ -138,7 +138,7 @@ describe('TaskSheet — édition', () => {
 		).toBeDefined()
 	})
 
-	it('bascule vers l’onglet commentaires au clic', async () => {
+	it('switches to the comments tab on click', async () => {
 		const user = userEvent.setup()
 		render(<TaskSheet {...editProps()} />)
 
@@ -146,7 +146,7 @@ describe('TaskSheet — édition', () => {
 		expect(screen.getByLabelText('Nouveau commentaire')).toBeDefined()
 	})
 
-	it('affiche le bouton supprimer en édition, même quand la tâche a des sous-tâches — la suppression cascade côté serveur', () => {
+	it('shows the delete button when editing, even when the task has subtasks — deletion cascades server-side', () => {
 		render(
 			<TaskSheet
 				{...editProps()}
@@ -167,12 +167,12 @@ describe('TaskSheet — édition', () => {
 		expect(screen.getByRole('button', { name: /Supprimer/ })).toBeDefined()
 	})
 
-	it("masque le bouton supprimer quand aucun onDelete n'est fourni", () => {
+	it('hides the delete button when no onDelete is provided', () => {
 		render(<TaskSheet {...editProps()} onDelete={undefined} />)
 		expect(screen.queryByRole('button', { name: /Supprimer/ })).toBeNull()
 	})
 
-	it('appelle onDelete au clic sur supprimer', async () => {
+	it('calls onDelete when delete is clicked', async () => {
 		const user = userEvent.setup()
 		const onDelete = vi.fn()
 		render(<TaskSheet {...editProps()} onDelete={onDelete} />)
@@ -183,13 +183,13 @@ describe('TaskSheet — édition', () => {
 })
 
 describe('TaskSheet — erreur de sauvegarde', () => {
-	it('affiche l’erreur renvoyée par la mutation', () => {
+	it('shows the error returned by the mutation', () => {
 		render(<TaskSheet {...baseProps()} saveError="HTTP 409: conflit" />)
 		expect(screen.getByText('HTTP 409: conflit')).toBeDefined()
 	})
 })
 
-describe('TaskSheet — pas d’appel réseau', () => {
+describe('TaskSheet — no network call', () => {
 	let fetchSpy: ReturnType<typeof createFetchSpy>
 
 	function createFetchSpy() {
@@ -206,7 +206,7 @@ describe('TaskSheet — pas d’appel réseau', () => {
 		fetchSpy.mockRestore()
 	})
 
-	it('ne déclenche aucun fetch au rendu', () => {
+	it('fires no fetch on render', () => {
 		render(<TaskSheet {...baseProps()} />)
 		expect(fetchSpy).not.toHaveBeenCalled()
 	})

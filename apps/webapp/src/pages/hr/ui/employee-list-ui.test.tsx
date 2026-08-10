@@ -45,14 +45,14 @@ function baseProps() {
 	}
 }
 
-describe('EmployeeListUI — rendu du nom', () => {
-	it('affiche « {nom} {prénom} » quand le prénom est renseigné', async () => {
+describe('EmployeeListUI — name rendering', () => {
+	it('shows « {nom} {prénom} » when the given name is filled in', async () => {
 		await renderWithRouter(<EmployeeListUI {...baseProps()} />)
 
 		expect(screen.getByText('Martin Alix')).toBeDefined()
 	})
 
-	it('affiche le seul nom, sans espace résiduel, quand le prénom est absent', async () => {
+	it('shows the surname alone, with no stray space, when the given name is missing', async () => {
 		await renderWithRouter(
 			<EmployeeListUI
 				{...baseProps()}
@@ -65,8 +65,8 @@ describe('EmployeeListUI — rendu du nom', () => {
 	})
 })
 
-describe('EmployeeListUI — accès à l’écran de temps de travail', () => {
-	it('expose un lien vers le temps de travail de l’employé, pas seulement un rendu', async () => {
+describe('EmployeeListUI — access to the work time screen', () => {
+	it("exposes a link to the employee's work time, not just a rendering", async () => {
 		const user = userEvent.setup()
 		await renderWithRouter(<EmployeeListUI {...baseProps()} />)
 

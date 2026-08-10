@@ -121,14 +121,14 @@ function baseProps(
 	}
 }
 
-describe('EmployeeWorkTimeUI — rendu du nom', () => {
-	it('affiche « {nom} {prénom} » dans le titre', () => {
+describe('EmployeeWorkTimeUI — name rendering', () => {
+	it('shows « {nom} {prénom} » in the title', () => {
 		render(<EmployeeWorkTimeUI {...baseProps()} />)
 
 		expect(screen.getByText('Martin Alix')).toBeDefined()
 	})
 
-	it('affiche le seul nom, sans espace résiduel, quand le prénom est absent', () => {
+	it('shows the surname alone, with no stray space, when the given name is missing', () => {
 		render(
 			<EmployeeWorkTimeUI
 				{...baseProps({ employee: employee({ first_name: null }) })}
@@ -140,13 +140,13 @@ describe('EmployeeWorkTimeUI — rendu du nom', () => {
 })
 
 describe('EmployeeWorkTimeUI', () => {
-	it('affiche le taux horaire quand il est renseigné', () => {
+	it('shows the hourly rate when it is filled in', () => {
 		render(<EmployeeWorkTimeUI {...baseProps()} />)
 
 		expect(screen.getByText(/15,00\s*€/)).toBeDefined()
 	})
 
-	it('affiche « Non renseigné » quand le taux horaire est null, jamais un montant à 0', () => {
+	it('shows « Non renseigné » when the hourly rate is null, never an amount of 0', () => {
 		render(
 			<EmployeeWorkTimeUI
 				{...baseProps({ employee: employee({ hourly_rate_cents: null }) })}
@@ -157,7 +157,7 @@ describe('EmployeeWorkTimeUI', () => {
 		expect(screen.queryByText(/0,00\s*€/)).toBeNull()
 	})
 
-	it("affiche l'écart entre heures planifiées et base contractuelle", () => {
+	it('shows the gap between planned hours and the contractual baseline', () => {
 		render(<EmployeeWorkTimeUI {...baseProps()} />)
 
 		expect(screen.getByText(/32h00/)).toBeDefined()
@@ -165,7 +165,7 @@ describe('EmployeeWorkTimeUI', () => {
 		expect(screen.getByText(/-3h00/)).toBeDefined()
 	})
 
-	it('affiche un surplus avec un signe positif', () => {
+	it('shows a surplus with a positive sign', () => {
 		render(
 			<EmployeeWorkTimeUI
 				{...baseProps({
@@ -181,7 +181,7 @@ describe('EmployeeWorkTimeUI', () => {
 		expect(screen.getByText(/\+5h00/)).toBeDefined()
 	})
 
-	it('permet de modifier la base contractuelle et appelle onSubmit', async () => {
+	it('allows editing the contractual baseline and calls onSubmit', async () => {
 		const user = userEvent.setup()
 		const props = baseProps()
 		render(<EmployeeWorkTimeUI {...props} />)
@@ -193,7 +193,7 @@ describe('EmployeeWorkTimeUI', () => {
 		expect(props.contractForm.onSubmit).toHaveBeenCalledTimes(1)
 	})
 
-	it('appelle onAddSlot avec le bon jour de semaine', async () => {
+	it('calls onAddSlot with the right weekday', async () => {
 		const user = userEvent.setup()
 		const props = baseProps()
 		render(<EmployeeWorkTimeUI {...props} />)
@@ -206,7 +206,7 @@ describe('EmployeeWorkTimeUI', () => {
 		expect(props.rhythmSection.onAddSlot).toHaveBeenCalledWith(2)
 	})
 
-	it("appelle onSlotChange quand on modifie l'heure de début d'un créneau", async () => {
+	it("calls onSlotChange when a slot's start time is edited", async () => {
 		const user = userEvent.setup()
 		const props = baseProps()
 		render(<EmployeeWorkTimeUI {...props} />)
@@ -222,7 +222,7 @@ describe('EmployeeWorkTimeUI', () => {
 		)
 	})
 
-	it('appelle onRemoveSlot au clic sur le bouton de suppression du créneau', async () => {
+	it("calls onRemoveSlot when the slot's delete button is clicked", async () => {
 		const user = userEvent.setup()
 		const props = baseProps()
 		render(<EmployeeWorkTimeUI {...props} />)
@@ -237,7 +237,7 @@ describe('EmployeeWorkTimeUI', () => {
 		expect(props.rhythmSection.onRemoveSlot).toHaveBeenCalledWith('slot-1')
 	})
 
-	it('appelle onSubmit du rythme au clic sur Enregistrer le rythme', async () => {
+	it("calls the rhythm's onSubmit when Enregistrer le rythme is clicked", async () => {
 		const user = userEvent.setup()
 		const props = baseProps()
 		render(<EmployeeWorkTimeUI {...props} />)
@@ -249,7 +249,7 @@ describe('EmployeeWorkTimeUI', () => {
 		expect(props.rhythmSection.onSubmit).toHaveBeenCalledTimes(1)
 	})
 
-	it('désactive l’enregistrement du rythme quand il y a des erreurs de validation', () => {
+	it('disables saving the rhythm when there are validation errors', () => {
 		const props = baseProps({
 			rhythmSection: {
 				...baseProps().rhythmSection,
@@ -265,7 +265,7 @@ describe('EmployeeWorkTimeUI', () => {
 		expect(screen.getByText('La fin doit être après le début')).toBeDefined()
 	})
 
-	it("affiche un message de conflit clair (409) plutôt qu'une erreur brute", () => {
+	it('shows a clear conflict message (409) rather than a raw error', () => {
 		const props = baseProps({
 			rhythmSection: {
 				...baseProps().rhythmSection,
@@ -282,7 +282,7 @@ describe('EmployeeWorkTimeUI', () => {
 		).toBeDefined()
 	})
 
-	it('affiche les plages de travail existantes', () => {
+	it('shows the existing work ranges', () => {
 		render(<EmployeeWorkTimeUI {...baseProps()} />)
 
 		const dateInput = screen.getByLabelText(
@@ -291,7 +291,7 @@ describe('EmployeeWorkTimeUI', () => {
 		expect(dateInput.value).toBe('2026-08-05')
 	})
 
-	it('appelle onAddSlot des plages de travail au clic sur Ajouter une plage', async () => {
+	it("calls the work ranges' onAddSlot when Ajouter une plage is clicked", async () => {
 		const user = userEvent.setup()
 		const props = baseProps()
 		render(<EmployeeWorkTimeUI {...props} />)
@@ -301,7 +301,7 @@ describe('EmployeeWorkTimeUI', () => {
 		expect(props.workSlotsSection.onAddSlot).toHaveBeenCalledTimes(1)
 	})
 
-	it('appelle onSubmit des plages au clic sur Enregistrer les plages', async () => {
+	it("calls the ranges' onSubmit when Enregistrer les plages is clicked", async () => {
 		const user = userEvent.setup()
 		const props = baseProps()
 		render(<EmployeeWorkTimeUI {...props} />)
@@ -313,7 +313,7 @@ describe('EmployeeWorkTimeUI', () => {
 		expect(props.workSlotsSection.onSubmit).toHaveBeenCalledTimes(1)
 	})
 
-	it('affiche l’historique des versions de rythme précédentes', () => {
+	it('shows the history of previous rhythm versions', () => {
 		const otherRhythms: Rhythm[] = [
 			{
 				id: 'rhythm-old',
@@ -337,7 +337,7 @@ describe('EmployeeWorkTimeUI', () => {
 		expect(screen.getByText(/01\/01\/2025/)).toBeDefined()
 	})
 
-	it('affiche un état de chargement pour le rythme sans planter', () => {
+	it('shows a loading state for the rhythm without crashing', () => {
 		render(
 			<EmployeeWorkTimeUI
 				{...baseProps({
@@ -351,7 +351,7 @@ describe('EmployeeWorkTimeUI', () => {
 })
 
 describe('EmployeeWorkTimeUI — absences', () => {
-	it('rend la section des absences de l’employé', () => {
+	it("renders the employee's absences section", () => {
 		render(
 			<EmployeeWorkTimeUI
 				{...baseProps({
@@ -379,12 +379,12 @@ describe('EmployeeWorkTimeUI — absences', () => {
 		expect(screen.getByText(/Congé — 10\/08\/2026/)).toBeDefined()
 	})
 
-	it('n’affiche pas le formulaire d’absence quand le sheet est fermé', () => {
+	it('does not show the absence form when the sheet is closed', () => {
 		render(<EmployeeWorkTimeUI {...baseProps()} />)
 		expect(screen.queryByRole('dialog')).toBeNull()
 	})
 
-	it('affiche le formulaire d’absence quand absenceSheet.open est vrai', () => {
+	it('shows the absence form when absenceSheet.open is true', () => {
 		render(
 			<EmployeeWorkTimeUI
 				{...baseProps({
@@ -397,7 +397,7 @@ describe('EmployeeWorkTimeUI — absences', () => {
 	})
 })
 
-describe('EmployeeWorkTimeUI — aucun appel réseau', () => {
+describe('EmployeeWorkTimeUI — no network call', () => {
 	let fetchSpy: ReturnType<typeof createFetchSpy>
 
 	function createFetchSpy() {
@@ -414,7 +414,7 @@ describe('EmployeeWorkTimeUI — aucun appel réseau', () => {
 		fetchSpy.mockRestore()
 	})
 
-	it('ne déclenche aucun fetch au rendu ni pendant les interactions', async () => {
+	it('fires no fetch on render nor during interactions', async () => {
 		const user = userEvent.setup()
 		render(<EmployeeWorkTimeUI {...baseProps()} />)
 

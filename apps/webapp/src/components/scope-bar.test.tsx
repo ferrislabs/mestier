@@ -16,7 +16,7 @@ const tabs: ModuleTab[] = [
 ]
 
 describe('ScopeBar', () => {
-	it("ne rend rien quand le scope n'expose qu'un seul écran", async () => {
+	it('renders nothing when the scope exposes a single screen', async () => {
 		const { container } = await renderWithRouter(
 			<ScopeBar
 				label="RH"
@@ -28,7 +28,7 @@ describe('ScopeBar', () => {
 		expect(container.textContent).toBe('')
 	})
 
-	it('rend une barre dès lors que des actions sont fournies', async () => {
+	it('renders a bar as soon as actions are provided', async () => {
 		await renderWithRouter(
 			<ScopeBar
 				label="RH"
@@ -41,7 +41,7 @@ describe('ScopeBar', () => {
 		expect(screen.getByRole('button', { name: 'Enregistrer' })).toBeDefined()
 	})
 
-	it("marque l'onglet correspondant à la route courante", async () => {
+	it('marks the tab matching the current route', async () => {
 		await renderWithRouter(
 			<ScopeBar label="CRM" tabs={tabs} organizationSlug="dupont" />,
 			'/o/dupont/crm/quotes',
@@ -51,7 +51,7 @@ describe('ScopeBar', () => {
 		expect(current.textContent).toContain('Devis')
 	})
 
-	it('rend un onglet annoncé en bouton désactivé plutôt qu’en lien', async () => {
+	it('renders an announced tab as a disabled button rather than a link', async () => {
 		await renderWithRouter(
 			<ScopeBar label="CRM" tabs={tabs} organizationSlug="dupont" />,
 			'/o/dupont/crm/quotes',
@@ -64,7 +64,7 @@ describe('ScopeBar', () => {
 		expect(annonce.getAttribute('aria-disabled')).toBe('true')
 	})
 
-	it('expose la navigation sous un libellé de scope', async () => {
+	it('exposes the navigation under a scope label', async () => {
 		await renderWithRouter(
 			<ScopeBar label="CRM" tabs={tabs} organizationSlug="dupont" />,
 			'/o/dupont/crm/quotes',

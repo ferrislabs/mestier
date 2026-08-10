@@ -94,7 +94,7 @@ describe('TaskListSubtaskRows — rendu', () => {
 	})
 })
 
-describe('TaskListSubtaskRows — journée entière', () => {
+describe('TaskListSubtaskRows — full day', () => {
 	it('renders an all-day subtask window as its single date, not a midnight-to-midnight range', () => {
 		const allDaySubtask: TaskListSubtaskRowVM = {
 			id: 'sub-3',
@@ -132,7 +132,7 @@ describe('TaskListSubtaskRows — interactions', () => {
 	})
 })
 
-describe('TaskListSubtaskRows — pas d’appel réseau', () => {
+describe('TaskListSubtaskRows — no network call', () => {
 	let fetchSpy: ReturnType<typeof createFetchSpy>
 
 	function createFetchSpy() {

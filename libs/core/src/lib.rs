@@ -10,6 +10,9 @@ pub use domain::automation::connector::{
     Field, FieldKind, SelectOption, VisibleWhen, auth_scheme, auth_schemes, connector_catalogue,
 };
 pub use domain::automation::event_catalogue;
+pub use domain::automation::expression::{
+    ExpressionContext, ExpressionError, LoopFrame, Template, parse_template,
+};
 pub use domain::automation::ports::{
     DeliveryHandler, DeliveryOutcome, DispatchOutcome, DueDelivery,
 };

@@ -81,7 +81,7 @@ function minutesBetween(label: string): number {
 }
 
 describe('buildCalendarModel', () => {
-	it('produit une colonne par jour de la fenêtre', () => {
+	it('produces one column per day of the window', () => {
 		const model = build([])
 
 		expect(model.days.map((day) => day.date)).toEqual([
@@ -91,7 +91,7 @@ describe('buildCalendarModel', () => {
 		])
 	})
 
-	it('marque le jour courant et les fins de semaine', () => {
+	it('marks the current day and the weekends', () => {
 		const model = buildCalendarModel({
 			from: '2026-03-06',
 			to: '2026-03-08',
@@ -107,7 +107,7 @@ describe('buildCalendarModel', () => {
 		expect(model.days.map((day) => day.isWeekend)).toEqual([false, true, true])
 	})
 
-	it('sépare les entrées à la journée des entrées horaires', () => {
+	it('separates all-day entries from timed ones', () => {
 		const model = build([task({}), absence({})])
 
 		const lundi = model.days[0]
@@ -118,7 +118,7 @@ describe('buildCalendarModel', () => {
 		expect(mardi?.timedEvents).toHaveLength(0)
 	})
 
-	it("positionne un segment selon l'amplitude visible", () => {
+	it('positions a segment according to the visible amplitude', () => {
 		const model = build([task({})])
 		const event = model.days[0]?.timedEvents[0]
 
@@ -127,10 +127,10 @@ describe('buildCalendarModel', () => {
 		expect(event?.top ?? 0).toBeLessThan(100)
 	})
 
-	// Le libellé est exprimé en heure locale du fuseau : on vérifie sa forme et
-	// la durée qu'il couvre, pas un horodatage absolu, pour que le test ne
-	// dépende pas du fuseau de la machine qui l'exécute.
-	it('libelle la plage horaire du segment', () => {
+	// The label is expressed in the zone's local time: we check its shape and
+	// the span it covers, not an absolute timestamp, so the test does not
+	// depend on the zone of the machine running it.
+	it("labels the segment's time range", () => {
 		const model = build([task({})])
 		const label = model.days[0]?.timedEvents[0]?.timeLabel ?? ''
 
@@ -138,7 +138,7 @@ describe('buildCalendarModel', () => {
 		expect(minutesBetween(label)).toBe(120)
 	})
 
-	it('expose la durée du segment, qui pilote la densité de la carte', () => {
+	it("exposes the segment's duration, which drives the card's density", () => {
 		const model = build([
 			task({
 				starts_at: '2026-03-02T10:00:00Z',
@@ -149,7 +149,7 @@ describe('buildCalendarModel', () => {
 		expect(model.days[0]?.timedEvents[0]?.durationMinutes).toBe(30)
 	})
 
-	it('borne la durée à la portion du segment qui tombe sur le jour', () => {
+	it('clamps the duration to the part of the segment falling on that day', () => {
 		const model = build([
 			task({
 				starts_at: '2026-03-02T22:00:00Z',
@@ -163,13 +163,13 @@ describe('buildCalendarModel', () => {
 		expect(total).toBe(240)
 	})
 
-	it('libelle une entrée à la journée sans plage horaire', () => {
+	it('labels an all-day entry with no time range', () => {
 		const model = build([absence({})])
 
 		expect(model.days[1]?.allDayEvents[0]?.timeLabel).toBe('Journée entière')
 	})
 
-	it('répartit deux entrées qui se chevauchent en colonnes distinctes', () => {
+	it('spreads two overlapping entries into distinct columns', () => {
 		const model = build([
 			task({}),
 			task({
@@ -188,7 +188,7 @@ describe('buildCalendarModel', () => {
 		)
 	})
 
-	it('découpe une entrée sur plusieurs jours en un segment par jour', () => {
+	it('cuts a multi-day entry into one segment per day', () => {
 		const model = build([
 			task({
 				starts_at: '2026-03-02T16:00:00Z',
@@ -203,7 +203,7 @@ describe('buildCalendarModel', () => {
 		)
 	})
 
-	it('résout les participants depuis les ressources', () => {
+	it('resolves participants from the resources', () => {
 		const model = build([task({ employee_ids: ['e-1', 'e-2'] })])
 		const event = model.days[0]?.timedEvents[0]
 
@@ -214,7 +214,7 @@ describe('buildCalendarModel', () => {
 		expect(event?.attendees[0]?.initials).toBe('ML')
 	})
 
-	it('filtre par nature et compte ce qui est masqué', () => {
+	it('filters by kind and counts what is hidden', () => {
 		const model = build([task({}), absence({})], { filter: 'leave' })
 
 		expect(model.days[0]?.timedEvents).toHaveLength(0)
@@ -222,7 +222,7 @@ describe('buildCalendarModel', () => {
 		expect(model.hiddenCount).toBe(1)
 	})
 
-	it('filtre par employé, toute équipe quand la sélection est vide', () => {
+	it('filters by employee, whole team when the selection is empty', () => {
 		const entries = [task({}), absence({})]
 
 		expect(build(entries, { employeeIds: ['e-1'] }).hiddenCount).toBe(1)
@@ -230,8 +230,8 @@ describe('buildCalendarModel', () => {
 	})
 })
 
-describe('amplitude du calendrier', () => {
-	it('couvre les 24 h quelles que soient les entrées', () => {
+describe('calendar amplitude', () => {
+	it('covers the full 24 h whatever the entries', () => {
 		const court = build([
 			task({
 				starts_at: '2026-03-02T10:00:00Z',
@@ -244,7 +244,7 @@ describe('amplitude du calendrier', () => {
 		expect(vide.amplitude).toEqual({ startMinute: 0, endMinute: 1440 })
 	})
 
-	it('produit une marque par heure, minuit à minuit', () => {
+	it('produces one tick per hour, midnight to midnight', () => {
 		const model = build([])
 
 		expect(model.hourMarks).toHaveLength(25)
@@ -252,7 +252,7 @@ describe('amplitude du calendrier', () => {
 		expect(model.hourMarks.at(-1)).toBe(1440)
 	})
 
-	it('ouvre la vue une demi-heure avant la première entrée horaire', () => {
+	it('opens the view half an hour before the first timed entry', () => {
 		const model = build([
 			task({
 				starts_at: '2026-03-02T10:00:00Z',
@@ -264,12 +264,12 @@ describe('amplitude du calendrier', () => {
 		expect(model.scrollToMinute).toBe(premier - 30)
 	})
 
-	it("ouvre sur la journée de travail quand la période n'a aucune entrée horaire", () => {
+	it('opens on the working day when the period has no timed entry', () => {
 		expect(build([]).scrollToMinute).toBe(8 * 60)
 		expect(build([absence({})]).scrollToMinute).toBe(8 * 60)
 	})
 
-	it('ne descend pas sous minuit pour une entrée très matinale', () => {
+	it('does not go below midnight for a very early entry', () => {
 		const model = build([
 			task({
 				starts_at: '2026-03-02T00:10:00Z',
@@ -280,7 +280,7 @@ describe('amplitude du calendrier', () => {
 		expect(model.scrollToMinute).toBeGreaterThanOrEqual(0)
 	})
 
-	it('expose la plage travaillée, journée type à défaut de pointage', () => {
+	it('exposes the worked range, a typical day when there is no clocking', () => {
 		expect(build([]).workingRange).toEqual({
 			startMinute: 8 * 60,
 			endMinute: 18 * 60,
@@ -289,19 +289,19 @@ describe('amplitude du calendrier', () => {
 })
 
 describe('hourMarks', () => {
-	it('produit une marque par heure pleine, bornes comprises', () => {
+	it('produces one tick per whole hour, bounds included', () => {
 		expect(hourMarks({ startMinute: 480, endMinute: 660 })).toEqual([
 			480, 540, 600, 660,
 		])
 	})
 
-	it("démarre à l'heure pleine suivante quand l'amplitude ne commence pas rond", () => {
+	it('starts at the next whole hour when the amplitude does not begin round', () => {
 		expect(hourMarks({ startMinute: 490, endMinute: 620 })).toEqual([540, 600])
 	})
 })
 
 describe('initialsOf', () => {
-	it('prend les deux premières initiales', () => {
+	it('takes the first two initials', () => {
 		expect(initialsOf('Marie Leroy')).toBe('ML')
 		expect(initialsOf('Paul')).toBe('P')
 		expect(initialsOf('   ')).toBe('?')

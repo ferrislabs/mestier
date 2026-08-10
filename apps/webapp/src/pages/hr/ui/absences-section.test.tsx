@@ -27,25 +27,25 @@ function baseProps() {
 	}
 }
 
-describe('AbsencesSection — états', () => {
-	it('affiche un état de chargement sans planter', () => {
+describe('AbsencesSection — states', () => {
+	it('shows a loading state without crashing', () => {
 		render(<AbsencesSection {...baseProps()} isLoading={true} />)
 		expect(screen.getByText(/Chargement/)).toBeDefined()
 	})
 
-	it("affiche un message quand il n'y a aucune absence", () => {
+	it('shows a message when there is no absence', () => {
 		render(<AbsencesSection {...baseProps()} />)
 		expect(screen.getByText('Aucune absence enregistrée.')).toBeDefined()
 	})
 })
 
 describe('AbsencesSection — liste', () => {
-	it('affiche une absence journée entière sur un seul jour avec sa nature', () => {
+	it('shows a single-day full-day absence with its kind', () => {
 		render(<AbsencesSection {...baseProps()} absences={[absence()]} />)
 		expect(screen.getByText(/Congé — 10\/08\/2026/)).toBeDefined()
 	})
 
-	it('affiche la plage complète pour une absence sur plusieurs jours', () => {
+	it('shows the full range for a multi-day absence', () => {
 		render(
 			<AbsencesSection
 				{...baseProps()}
@@ -57,7 +57,7 @@ describe('AbsencesSection — liste', () => {
 		expect(screen.getByText(/10\/08\/2026 → 12\/08\/2026/)).toBeDefined()
 	})
 
-	it('affiche les heures pour une absence à créneau horaire', () => {
+	it('shows the hours for a time-slot absence', () => {
 		render(
 			<AbsencesSection
 				{...baseProps()}
@@ -74,7 +74,7 @@ describe('AbsencesSection — liste', () => {
 		expect(screen.getByText(/09:00–12:00/)).toBeDefined()
 	})
 
-	it('affiche la note quand elle est renseignée', () => {
+	it('shows the note when it is filled in', () => {
 		render(
 			<AbsencesSection
 				{...baseProps()}
@@ -84,7 +84,7 @@ describe('AbsencesSection — liste', () => {
 		expect(screen.getByText('Rendez-vous médical')).toBeDefined()
 	})
 
-	it('appelle onSelect avec l’id au clic sur une absence', async () => {
+	it('calls onSelect with the id when an absence is clicked', async () => {
 		const user = userEvent.setup()
 		const onSelect = vi.fn()
 		render(
@@ -100,8 +100,8 @@ describe('AbsencesSection — liste', () => {
 	})
 })
 
-describe('AbsencesSection — création', () => {
-	it('appelle onCreate au clic sur Ajouter une absence', async () => {
+describe('AbsencesSection — creation', () => {
+	it('calls onCreate when Ajouter une absence is clicked', async () => {
 		const user = userEvent.setup()
 		const onCreate = vi.fn()
 		render(<AbsencesSection {...baseProps()} onCreate={onCreate} />)
@@ -113,7 +113,7 @@ describe('AbsencesSection — création', () => {
 	})
 })
 
-describe('AbsencesSection — pas d’appel réseau', () => {
+describe('AbsencesSection — no network call', () => {
 	let fetchSpy: ReturnType<typeof createFetchSpy>
 
 	function createFetchSpy() {
@@ -130,7 +130,7 @@ describe('AbsencesSection — pas d’appel réseau', () => {
 		fetchSpy.mockRestore()
 	})
 
-	it('ne déclenche aucun fetch au rendu ni pendant les interactions', async () => {
+	it('fires no fetch on render nor during interactions', async () => {
 		const user = userEvent.setup()
 		render(<AbsencesSection {...baseProps()} absences={[absence()]} />)
 

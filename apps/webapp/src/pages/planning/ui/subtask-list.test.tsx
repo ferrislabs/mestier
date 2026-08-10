@@ -63,7 +63,7 @@ describe('SubtaskList — rendu', () => {
 	})
 })
 
-describe('SubtaskList — profondeur à deux niveaux', () => {
+describe('SubtaskList — two-level depth', () => {
 	it('offers to add a subtask on a root task', () => {
 		render(<SubtaskList {...baseProps()} canAddSubtask={true} />)
 		expect(
@@ -101,7 +101,7 @@ describe('SubtaskList — interactions', () => {
 	})
 })
 
-describe('SubtaskList — pas d’appel réseau', () => {
+describe('SubtaskList — no network call', () => {
 	let fetchSpy: ReturnType<typeof createFetchSpy>
 
 	function createFetchSpy() {

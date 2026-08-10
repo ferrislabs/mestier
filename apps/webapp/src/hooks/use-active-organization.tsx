@@ -4,9 +4,9 @@ import type { Organization } from '#/hooks/use-organizations'
 const LAST_ORGANIZATION_STORAGE_KEY = 'mestier.lastOrganizationSlug'
 
 /**
- * Dernier tenant visité. Ce n'est plus la source de vérité de l'organisation
- * active — c'est l'URL qui la porte — mais seulement la préférence d'entrée
- * utilisée quand on arrive sur `/`.
+ * Last visited tenant. No longer the source of truth for the active
+ * organization — the URL carries that — only the entry preference used when
+ * landing on `/`.
  */
 export function readLastOrganizationSlug(): string | null {
 	if (typeof window === 'undefined') return null

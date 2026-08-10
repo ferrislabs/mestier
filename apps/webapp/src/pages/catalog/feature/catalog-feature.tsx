@@ -80,10 +80,10 @@ const PRODUCT_UNIT_LABELS: Record<ServiceRateUnit, string> = {
 }
 
 /**
- * Catalogue des produits et des services tarifés.
+ * Catalogue of priced products and services.
  *
- * Il vivait dans les réglages de l'organisation ; on l'édite au quotidien pour
- * remplir un devis, donc il appartient au module qui les produit.
+ * It used to live in the organization settings; it is edited daily to fill in a
+ * quote, so it belongs to the module that produces them.
  */
 export function CatalogFeature() {
 	const { activeOrganization } = useActiveOrganization()

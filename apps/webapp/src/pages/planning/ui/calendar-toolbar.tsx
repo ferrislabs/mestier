@@ -55,7 +55,7 @@ export interface CalendarToolbarProps {
 	windowTo: string
 	filter: CalendarFilter
 	employees: CalendarEmployeeOption[]
-	/** Employés retenus ; vide = toute l'équipe. */
+	/** Selected employees; empty = the whole team. */
 	selectedEmployeeIds: string[]
 	onViewChange: (view: PlanningView) => void
 	onDateChange: (date: string) => void
@@ -63,13 +63,14 @@ export interface CalendarToolbarProps {
 	onToggleEmployee: (employeeId: string) => void
 	onResetEmployees: () => void
 	onCreate: (kind: CalendarCreateKind) => void
-	/** Fige « aujourd'hui » pour le raccourci — tests seulement. */
+	/** Freezes "today" for the shortcut — tests only. */
 	today?: string
 }
 
 /**
- * En-tête du calendrier : période, granularité, filtres de nature et création.
- * Purement pilotée par ses props — l'état de vue vit dans l'URL, côté feature.
+ * The calendar's header: period, granularity, kind filters and creation.
+ * Purely driven by its props — view state lives in the URL, on the feature
+ * side.
  */
 export function CalendarToolbar({
 	view,

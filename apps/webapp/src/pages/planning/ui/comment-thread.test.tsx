@@ -90,8 +90,8 @@ describe('CommentThread — rendu', () => {
 	})
 })
 
-describe('CommentThread — actions réservées à l’auteur', () => {
-	it("affiche les actions d'édition/suppression uniquement quand author_is_self est vrai", () => {
+describe('CommentThread — actions reserved for the author', () => {
+	it('shows the edit/delete actions only when author_is_self is true', () => {
 		render(<CommentThread {...baseProps()} />)
 
 		const ownComment = screen.getByTestId('comment-c1')
@@ -103,7 +103,7 @@ describe('CommentThread — actions réservées à l’auteur', () => {
 		expect(othersComment.querySelector('[aria-label="Supprimer"]')).toBeNull()
 	})
 
-	it('n’affiche jamais les actions sur un commentaire dont author_is_self est faux, quel que soit son auteur affiché', () => {
+	it('never shows the actions on a comment whose author_is_self is false, whatever author it displays', () => {
 		const sameDisplayNameButNotSelf = [
 			{
 				...COMMENTS[0],
@@ -229,7 +229,7 @@ describe('CommentThread — composition', () => {
 	})
 })
 
-describe('CommentThread — pas d’appel réseau', () => {
+describe('CommentThread — no network call', () => {
 	let fetchSpy: ReturnType<typeof createFetchSpy>
 
 	function createFetchSpy() {

@@ -4,15 +4,15 @@ import { resolveModule } from '#/modules/resolve-module'
 import type { AppModule, ModuleSection, ModuleTab } from '#/modules/types'
 
 export interface Scope {
-	/** Libellé du scope actif : la section quand il y en a une, sinon le module. */
+	/** Label of the active scope: the section when there is one, else the module. */
 	label: string
-	/** Second niveau du scope actif, rendu en onglets horizontaux. */
+	/** Second level of the active scope, rendered as horizontal tabs. */
 	tabs: ModuleTab[]
 }
 
 /**
- * Section de nav latérale qui couvre un chemin donné : la plus profonde dont le
- * chemin est un préfixe du chemin courant.
+ * Side-nav section covering a given path: the deepest one whose path is a
+ * prefix of the current path.
  */
 export function resolveSection(
 	module: AppModule,
@@ -41,11 +41,11 @@ export function resolveScope(pathname: string): Scope {
 }
 
 /**
- * Équivalent d'un chemin dans une autre organisation.
+ * A path's equivalent in another organization.
  *
- * Un écran de liste se transpose tel quel ; un écran d'entité non — l'identifiant
- * d'un client n'existe pas dans l'organisation cible. On remonte alors à la
- * section la plus profonde qui reste valide.
+ * A list screen transposes as is; an entity screen does not — a customer's id
+ * does not exist in the target organization. We then climb back to the deepest
+ * section that stays valid.
  */
 export function crossOrganizationPath(path: string): string {
 	const module = resolveModule(path)
