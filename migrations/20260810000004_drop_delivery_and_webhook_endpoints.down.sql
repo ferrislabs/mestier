@@ -1,3 +1,21 @@
+-- A rollback against a database that has actually used this feature must
+-- delete its data before it can narrow either CHECK constraint back: both
+-- `chk_automation_subscription_kind` and `chk_automation_event_actor` would
+-- otherwise reject exactly the rows this feature produces, and the whole
+-- statement runs in one transaction, so the ALTER fails outright rather than
+-- silently keeping the wider constraint. Rolling back means the feature no
+-- longer exists, so neither does its data: a workflow subscription
+-- (kind = 'workflow'), the runs it dispatched (trigger_event_id is only
+-- ever set by that dispatch — never by `start_run`), and any event a run
+-- attributed to itself (actor_kind = 'automation'). automation.run_step
+-- cascades away with its run via the FK already in place; nothing else
+-- references what is deleted here.
+DELETE FROM automation.run WHERE trigger_event_id IS NOT NULL;
+
+DELETE FROM automation.subscription WHERE kind = 'workflow';
+
+DELETE FROM automation.event WHERE actor_kind = 'automation';
+
 -- Recreates both tables empty, identical to their definitions in
 -- 20260808000004 and 20260808000002 respectively — there is no data to
 -- restore, only the schema.
