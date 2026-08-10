@@ -218,6 +218,117 @@ impl<'tx> RunRepository for PgRunRepository<'tx> {
         rows.into_iter().map(RunStep::try_from).collect()
     }
 
+    async fn steps_for_run_scoped(
+        &mut self,
+        org_id: OrganizationId,
+        run_id: Uuid,
+    ) -> Result<Vec<RunStep>, CoreError> {
+        let mut tx = self.tx.lock().await;
+
+        let rows = sqlx::query_as!(
+            RunStepRow,
+            r#"SELECT rs.id, rs.run_id, rs.connector_id, rs.iteration_path, rs.attempts,
+                      rs.status, rs.input, rs.output, rs.error, rs.started_at, rs.finished_at,
+                      rs.created_at
+               FROM automation.run_step rs
+               JOIN automation.run r ON r.id = rs.run_id
+               WHERE r.org_id = $1 AND rs.run_id = $2"#,
+            org_id.0,
+            run_id,
+        )
+        .fetch_all(&mut ***tx)
+        .await
+        .map_err(map_sqlx_error)?;
+
+        rows.into_iter().map(RunStep::try_from).collect()
+    }
+
+    async fn find_by_id(
+        &mut self,
+        org_id: OrganizationId,
+        run_id: Uuid,
+    ) -> Result<Option<Run>, CoreError> {
+        let mut tx = self.tx.lock().await;
+
+        let row = sqlx::query_as!(
+            RunRow,
+            r#"SELECT id, org_id, workflow_id, workflow_version_id, trigger_event_id,
+                      trigger_payload, status, error, next_attempt_at, locked_at, locked_by,
+                      started_at, finished_at, created_at
+               FROM automation.run WHERE org_id = $1 AND id = $2"#,
+            org_id.0,
+            run_id,
+        )
+        .fetch_optional(&mut ***tx)
+        .await
+        .map_err(map_sqlx_error)?;
+
+        row.map(Run::try_from).transpose()
+    }
+
+    async fn list_by_organization(
+        &mut self,
+        org_id: OrganizationId,
+    ) -> Result<Vec<Run>, CoreError> {
+        let mut tx = self.tx.lock().await;
+
+        let rows = sqlx::query_as!(
+            RunRow,
+            r#"SELECT id, org_id, workflow_id, workflow_version_id, trigger_event_id,
+                      trigger_payload, status, error, next_attempt_at, locked_at, locked_by,
+                      started_at, finished_at, created_at
+               FROM automation.run
+               WHERE org_id = $1
+               ORDER BY created_at DESC"#,
+            org_id.0,
+        )
+        .fetch_all(&mut ***tx)
+        .await
+        .map_err(map_sqlx_error)?;
+
+        rows.into_iter().map(Run::try_from).collect()
+    }
+
+    async fn delete_steps(
+        &mut self,
+        run_id: Uuid,
+        connector_ids: &[String],
+    ) -> Result<u64, CoreError> {
+        if connector_ids.is_empty() {
+            return Ok(0);
+        }
+
+        let mut tx = self.tx.lock().await;
+        let deleted = sqlx::query!(
+            r#"DELETE FROM automation.run_step
+               WHERE run_id = $1 AND connector_id = ANY($2::text[])"#,
+            run_id,
+            connector_ids,
+        )
+        .execute(&mut ***tx)
+        .await
+        .map_err(map_sqlx_error)?
+        .rows_affected();
+
+        Ok(deleted)
+    }
+
+    async fn requeue_for_replay(&mut self, run_id: Uuid) -> Result<(), CoreError> {
+        let mut tx = self.tx.lock().await;
+        sqlx::query!(
+            r#"UPDATE automation.run
+               SET status = 'pending', error = NULL, next_attempt_at = now(),
+                   locked_at = NULL, locked_by = NULL, finished_at = NULL
+               WHERE id = $1"#,
+            run_id,
+        )
+        .execute(&mut ***tx)
+        .await
+        .map_err(map_sqlx_error)?;
+
+        Ok(())
+    }
+
     async fn graph_for_version(
         &mut self,
         org_id: OrganizationId,
@@ -362,6 +473,43 @@ impl<'tx> RunRepository for PgRunRepository<'tx> {
         .rows_affected();
 
         Ok(released)
+    }
+
+    async fn purge_succeeded(
+        &mut self,
+        org_id: OrganizationId,
+        older_than: DateTime<Utc>,
+        batch: i64,
+    ) -> Result<u64, CoreError> {
+        let mut tx = self.tx.lock().await;
+
+        // `status = 'succeeded'` excludes every failed, cancelled, pending or
+        // running run unconditionally — see the port doc for why a failed
+        // run must survive this pass. `run_step` follows through its
+        // `ON DELETE CASCADE`. Same bounded-batch shape as
+        // `PgEventLogRepository::purge_expired`.
+        let deleted = sqlx::query!(
+            r#"
+            WITH victims AS (
+                SELECT id FROM automation.run
+                WHERE org_id = $1 AND status = 'succeeded' AND finished_at < $2
+                ORDER BY finished_at
+                LIMIT $3
+            )
+            DELETE FROM automation.run rn
+            USING victims v
+            WHERE rn.id = v.id
+            "#,
+            org_id.0,
+            older_than,
+            batch,
+        )
+        .execute(&mut ***tx)
+        .await
+        .map_err(map_sqlx_error)?
+        .rows_affected();
+
+        Ok(deleted)
     }
 }
 
@@ -958,6 +1106,476 @@ mod tests {
         assert!(
             claimable.iter().any(|r| r.id == run.id),
             "the released run is claimable again"
+        );
+    }
+
+    fn finished_run(
+        org_id: OrganizationId,
+        workflow_id: Uuid,
+        workflow_version_id: Uuid,
+        status: RunStatus,
+        finished_at: DateTime<Utc>,
+    ) -> Run {
+        Run {
+            status,
+            next_attempt_at: None,
+            started_at: Some(finished_at),
+            finished_at: Some(finished_at),
+            ..pending_run(org_id, workflow_id, workflow_version_id)
+        }
+    }
+
+    // --- find_by_id / list_by_organization ------------------------------
+
+    #[tokio::test]
+    #[ignore = "requires live postgres"]
+    async fn find_by_id_returns_a_run_in_its_own_organization() {
+        let _guard = RUN_CLAIM_LOCK.lock().await;
+        let pool = make_pool().await;
+        let org_id = seed_organization(&pool, "find-owner").await;
+        let (workflow_id, version_id) = seed_workflow_version(&pool, org_id, simple_graph()).await;
+        let run = pending_run(org_id, workflow_id, version_id);
+        with_tx(&pool, async |tx| {
+            let mut repo = PgRunRepository::new(&tx);
+            repo.create_run(&run).await
+        })
+        .await
+        .unwrap();
+
+        let found = with_tx(&pool, async |tx| {
+            let mut repo = PgRunRepository::new(&tx);
+            repo.find_by_id(org_id, run.id).await
+        })
+        .await
+        .unwrap();
+
+        assert_eq!(found, Some(run));
+    }
+
+    #[tokio::test]
+    #[ignore = "requires live postgres"]
+    async fn find_by_id_from_another_organization_reads_back_absent() {
+        let _guard = RUN_CLAIM_LOCK.lock().await;
+        let pool = make_pool().await;
+        let org_id = seed_organization(&pool, "find-real-owner").await;
+        let stranger_org = seed_organization(&pool, "find-stranger").await;
+        let (workflow_id, version_id) = seed_workflow_version(&pool, org_id, simple_graph()).await;
+        let run = pending_run(org_id, workflow_id, version_id);
+        with_tx(&pool, async |tx| {
+            let mut repo = PgRunRepository::new(&tx);
+            repo.create_run(&run).await
+        })
+        .await
+        .unwrap();
+
+        let found = with_tx(&pool, async |tx| {
+            let mut repo = PgRunRepository::new(&tx);
+            repo.find_by_id(stranger_org, run.id).await
+        })
+        .await
+        .unwrap();
+
+        assert_eq!(
+            found, None,
+            "a run id from another organization must read back as absent, not forbidden"
+        );
+    }
+
+    #[tokio::test]
+    #[ignore = "requires live postgres"]
+    async fn list_by_organization_only_returns_this_organizations_runs_most_recent_first() {
+        let _guard = RUN_CLAIM_LOCK.lock().await;
+        let pool = make_pool().await;
+        let org_id = seed_organization(&pool, "list-owner").await;
+        let other_org = seed_organization(&pool, "list-other").await;
+        let (workflow_id, version_id) = seed_workflow_version(&pool, org_id, simple_graph()).await;
+        let (other_workflow, other_version) =
+            seed_workflow_version(&pool, other_org, simple_graph()).await;
+        let first = pending_run(org_id, workflow_id, version_id);
+        let second = pending_run(org_id, workflow_id, version_id);
+        let not_mine = pending_run(other_org, other_workflow, other_version);
+        with_tx(&pool, async |tx| {
+            let mut repo = PgRunRepository::new(&tx);
+            repo.create_run(&first).await?;
+            repo.create_run(&second).await?;
+            repo.create_run(&not_mine).await
+        })
+        .await
+        .unwrap();
+
+        let listed = with_tx(&pool, async |tx| {
+            let mut repo = PgRunRepository::new(&tx);
+            repo.list_by_organization(org_id).await
+        })
+        .await
+        .unwrap();
+
+        assert_eq!(listed.len(), 2);
+        assert!(listed.iter().all(|r| r.org_id == org_id));
+    }
+
+    // --- steps_for_run_scoped / delete_steps / requeue_for_replay ------
+
+    #[tokio::test]
+    #[ignore = "requires live postgres"]
+    async fn steps_for_run_scoped_returns_nothing_for_another_organizations_run() {
+        let _guard = RUN_CLAIM_LOCK.lock().await;
+        let pool = make_pool().await;
+        let org_id = seed_organization(&pool, "steps-owner").await;
+        let stranger_org = seed_organization(&pool, "steps-stranger").await;
+        let (workflow_id, version_id) = seed_workflow_version(&pool, org_id, simple_graph()).await;
+        let run = pending_run(org_id, workflow_id, version_id);
+        with_tx(&pool, async |tx| {
+            let mut repo = PgRunRepository::new(&tx);
+            repo.create_run(&run).await?;
+            repo.upsert_step(&in_flight_step(run.id, "c1", "")).await
+        })
+        .await
+        .unwrap();
+
+        let mine = with_tx(&pool, async |tx| {
+            let mut repo = PgRunRepository::new(&tx);
+            repo.steps_for_run_scoped(org_id, run.id).await
+        })
+        .await
+        .unwrap();
+        assert_eq!(mine.len(), 1);
+
+        let stranger_view = with_tx(&pool, async |tx| {
+            let mut repo = PgRunRepository::new(&tx);
+            repo.steps_for_run_scoped(stranger_org, run.id).await
+        })
+        .await
+        .unwrap();
+        assert!(
+            stranger_view.is_empty(),
+            "a run id scoped to another organization must expose no step"
+        );
+    }
+
+    #[tokio::test]
+    #[ignore = "requires live postgres"]
+    async fn delete_steps_removes_every_iteration_of_the_named_connectors_only() {
+        let _guard = RUN_CLAIM_LOCK.lock().await;
+        let pool = make_pool().await;
+        let org_id = seed_organization(&pool, "delete-steps").await;
+        let (workflow_id, version_id) = seed_workflow_version(&pool, org_id, simple_graph()).await;
+        let run = pending_run(org_id, workflow_id, version_id);
+        with_tx(&pool, async |tx| {
+            let mut repo = PgRunRepository::new(&tx);
+            repo.create_run(&run).await?;
+            repo.upsert_step(&in_flight_step(run.id, "loop_body", "loop1[0]"))
+                .await?;
+            repo.upsert_step(&in_flight_step(run.id, "loop_body", "loop1[1]"))
+                .await?;
+            repo.upsert_step(&in_flight_step(run.id, "unrelated", ""))
+                .await
+        })
+        .await
+        .unwrap();
+
+        let deleted = with_tx(&pool, async |tx| {
+            let mut repo = PgRunRepository::new(&tx);
+            repo.delete_steps(run.id, &["loop_body".to_string()]).await
+        })
+        .await
+        .unwrap();
+        assert_eq!(deleted, 2, "both iterations of the named connector");
+
+        let remaining = with_tx(&pool, async |tx| {
+            let mut repo = PgRunRepository::new(&tx);
+            repo.steps_for_run(run.id).await
+        })
+        .await
+        .unwrap();
+        assert_eq!(remaining.len(), 1);
+        assert_eq!(remaining[0].connector_id, "unrelated");
+    }
+
+    #[tokio::test]
+    #[ignore = "requires live postgres"]
+    async fn requeue_for_replay_puts_a_finished_run_back_in_the_claimable_queue() {
+        let _guard = RUN_CLAIM_LOCK.lock().await;
+        let pool = make_pool().await;
+        let org_id = seed_organization(&pool, "requeue").await;
+        let (workflow_id, version_id) = seed_workflow_version(&pool, org_id, simple_graph()).await;
+        let run = finished_run(
+            org_id,
+            workflow_id,
+            version_id,
+            RunStatus::Succeeded,
+            Utc::now(),
+        );
+        with_tx(&pool, async |tx| {
+            let mut repo = PgRunRepository::new(&tx);
+            repo.create_run(&run).await
+        })
+        .await
+        .unwrap();
+
+        with_tx(&pool, async |tx| {
+            let mut repo = PgRunRepository::new(&tx);
+            repo.requeue_for_replay(run.id).await
+        })
+        .await
+        .unwrap();
+
+        let row = sqlx::query!(
+            "SELECT status, finished_at, next_attempt_at FROM automation.run WHERE id = $1",
+            run.id,
+        )
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+        assert_eq!(row.status, "pending");
+        assert!(row.finished_at.is_none());
+        assert!(row.next_attempt_at.is_some());
+
+        let claimable = with_tx(&pool, async |tx| {
+            let mut repo = PgRunRepository::new(&tx);
+            repo.claim_due("worker-1", 100, 100).await
+        })
+        .await
+        .unwrap();
+        assert!(claimable.iter().any(|r| r.id == run.id));
+    }
+
+    // --- purge_succeeded --------------------------------------------------
+
+    #[tokio::test]
+    #[ignore = "requires live postgres"]
+    async fn purge_succeeded_deletes_succeeded_runs_older_than_the_cutoff_and_keeps_the_rest() {
+        let pool = make_pool().await;
+        let org_id = seed_organization(&pool, "purge-succeeded").await;
+        let (workflow_id, version_id) = seed_workflow_version(&pool, org_id, simple_graph()).await;
+        let cutoff = Utc::now() - ChronoDuration::days(30);
+        let expired = finished_run(
+            org_id,
+            workflow_id,
+            version_id,
+            RunStatus::Succeeded,
+            cutoff - ChronoDuration::days(1),
+        );
+        let fresh = finished_run(
+            org_id,
+            workflow_id,
+            version_id,
+            RunStatus::Succeeded,
+            cutoff + ChronoDuration::days(1),
+        );
+        with_tx(&pool, async |tx| {
+            let mut repo = PgRunRepository::new(&tx);
+            repo.create_run(&expired).await?;
+            repo.create_run(&fresh).await
+        })
+        .await
+        .unwrap();
+
+        let deleted = with_tx(&pool, async |tx| {
+            let mut repo = PgRunRepository::new(&tx);
+            repo.purge_succeeded(org_id, cutoff, 100).await
+        })
+        .await
+        .unwrap();
+
+        assert_eq!(deleted, 1);
+        let remaining: Vec<Uuid> =
+            sqlx::query_scalar!("SELECT id FROM automation.run WHERE org_id = $1", org_id.0,)
+                .fetch_all(&pool)
+                .await
+                .unwrap();
+        assert_eq!(remaining, vec![fresh.id]);
+    }
+
+    /// The acceptance criterion the whole purge exists to uphold: a failed
+    /// run is never a candidate, however old — it is what an operator reads
+    /// to understand why an automation stopped working.
+    #[tokio::test]
+    #[ignore = "requires live postgres"]
+    async fn purge_succeeded_never_purges_a_failed_run() {
+        let pool = make_pool().await;
+        let org_id = seed_organization(&pool, "purge-keeps-failed").await;
+        let (workflow_id, version_id) = seed_workflow_version(&pool, org_id, simple_graph()).await;
+        let ancient = Utc::now() - ChronoDuration::days(3650);
+        let failed = finished_run(org_id, workflow_id, version_id, RunStatus::Failed, ancient);
+        with_tx(&pool, async |tx| {
+            let mut repo = PgRunRepository::new(&tx);
+            repo.create_run(&failed).await
+        })
+        .await
+        .unwrap();
+
+        let deleted = with_tx(&pool, async |tx| {
+            let mut repo = PgRunRepository::new(&tx);
+            repo.purge_succeeded(org_id, Utc::now(), 100).await
+        })
+        .await
+        .unwrap();
+
+        assert_eq!(deleted, 0);
+        let still_there = with_tx(&pool, async |tx| {
+            let mut repo = PgRunRepository::new(&tx);
+            repo.find_by_id(org_id, failed.id).await
+        })
+        .await
+        .unwrap();
+        assert!(
+            still_there.is_some(),
+            "a failed run must survive the succeeded-only purge"
+        );
+    }
+
+    #[tokio::test]
+    #[ignore = "requires live postgres"]
+    async fn purge_succeeded_cascades_to_its_steps() {
+        let pool = make_pool().await;
+        let org_id = seed_organization(&pool, "purge-cascade").await;
+        let (workflow_id, version_id) = seed_workflow_version(&pool, org_id, simple_graph()).await;
+        let ancient = Utc::now() - ChronoDuration::days(3650);
+        let run = finished_run(
+            org_id,
+            workflow_id,
+            version_id,
+            RunStatus::Succeeded,
+            ancient,
+        );
+        with_tx(&pool, async |tx| {
+            let mut repo = PgRunRepository::new(&tx);
+            repo.create_run(&run).await?;
+            repo.upsert_step(&in_flight_step(run.id, "c1", "")).await
+        })
+        .await
+        .unwrap();
+
+        with_tx(&pool, async |tx| {
+            let mut repo = PgRunRepository::new(&tx);
+            repo.purge_succeeded(org_id, Utc::now(), 100).await
+        })
+        .await
+        .unwrap();
+
+        let step_count = sqlx::query_scalar!(
+            "SELECT COUNT(*) FROM automation.run_step WHERE run_id = $1",
+            run.id,
+        )
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+        assert_eq!(
+            step_count,
+            Some(0),
+            "run_step must follow its run away via the existing CASCADE"
+        );
+    }
+
+    #[tokio::test]
+    #[ignore = "requires live postgres"]
+    async fn purge_succeeded_only_touches_the_given_organizations_runs() {
+        let pool = make_pool().await;
+        let org_id = seed_organization(&pool, "purge-scoped-owner").await;
+        let other_org = seed_organization(&pool, "purge-scoped-other").await;
+        let (workflow_id, version_id) = seed_workflow_version(&pool, org_id, simple_graph()).await;
+        let (other_workflow, other_version) =
+            seed_workflow_version(&pool, other_org, simple_graph()).await;
+        let ancient = Utc::now() - ChronoDuration::days(3650);
+        let mine = finished_run(
+            org_id,
+            workflow_id,
+            version_id,
+            RunStatus::Succeeded,
+            ancient,
+        );
+        let not_mine = finished_run(
+            other_org,
+            other_workflow,
+            other_version,
+            RunStatus::Succeeded,
+            ancient,
+        );
+        with_tx(&pool, async |tx| {
+            let mut repo = PgRunRepository::new(&tx);
+            repo.create_run(&mine).await?;
+            repo.create_run(&not_mine).await
+        })
+        .await
+        .unwrap();
+
+        with_tx(&pool, async |tx| {
+            let mut repo = PgRunRepository::new(&tx);
+            repo.purge_succeeded(org_id, Utc::now(), 100).await
+        })
+        .await
+        .unwrap();
+
+        let not_mine_still_there = with_tx(&pool, async |tx| {
+            let mut repo = PgRunRepository::new(&tx);
+            repo.find_by_id(other_org, not_mine.id).await
+        })
+        .await
+        .unwrap();
+        assert!(
+            not_mine_still_there.is_some(),
+            "another organization's succeeded run must survive a purge scoped to this one"
+        );
+    }
+
+    #[tokio::test]
+    #[ignore = "requires live postgres"]
+    async fn purge_succeeded_never_deletes_more_than_the_batch_in_one_call() {
+        let pool = make_pool().await;
+        let org_id = seed_organization(&pool, "purge-batch").await;
+        let (workflow_id, version_id) = seed_workflow_version(&pool, org_id, simple_graph()).await;
+        let ancient = Utc::now() - ChronoDuration::days(3650);
+        let runs = [
+            finished_run(
+                org_id,
+                workflow_id,
+                version_id,
+                RunStatus::Succeeded,
+                ancient,
+            ),
+            finished_run(
+                org_id,
+                workflow_id,
+                version_id,
+                RunStatus::Succeeded,
+                ancient,
+            ),
+            finished_run(
+                org_id,
+                workflow_id,
+                version_id,
+                RunStatus::Succeeded,
+                ancient,
+            ),
+        ];
+        with_tx(&pool, async |tx| {
+            let mut repo = PgRunRepository::new(&tx);
+            for run in &runs {
+                repo.create_run(run).await?;
+            }
+            Ok::<_, CoreError>(())
+        })
+        .await
+        .unwrap();
+
+        let deleted_first_pass = with_tx(&pool, async |tx| {
+            let mut repo = PgRunRepository::new(&tx);
+            repo.purge_succeeded(org_id, Utc::now(), 2).await
+        })
+        .await
+        .unwrap();
+        assert_eq!(deleted_first_pass, 2, "bounded to the batch size");
+
+        let deleted_second_pass = with_tx(&pool, async |tx| {
+            let mut repo = PgRunRepository::new(&tx);
+            repo.purge_succeeded(org_id, Utc::now(), 2).await
+        })
+        .await
+        .unwrap();
+        assert_eq!(
+            deleted_second_pass, 1,
+            "the next pass finishes what the first left behind"
         );
     }
 }
