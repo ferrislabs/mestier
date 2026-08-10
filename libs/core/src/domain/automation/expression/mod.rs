@@ -3,13 +3,12 @@
 //! functions. No JavaScript, no loops of their own — see the module's tests
 //! and issue #196 for the grammar this compiles.
 //!
-//! `domain` is `pub(crate)` (see `libs/core/src/lib.rs`), and this ticket
-//! (#196) deliberately has no caller yet: it builds the language, not the
-//! workflow graph or the connector that will run it (#199, #200). Until one
-//! of those lands, nothing outside this module's own tests reaches the
-//! public API below, so it reads as dead code to rustc. The allows are
-//! scoped to this module rather than silenced crate-wide.
-#![allow(dead_code, unused_imports)]
+//! `domain` is `pub(crate)` (see `libs/core/src/lib.rs`), so this module's
+//! surface reaches the outside only through the re-export there. That
+//! re-export is what #199 and #200 will consume, and it is also what keeps
+//! rustc from reading the whole language as dead code while it has no caller
+//! yet — a blanket `allow(dead_code)` would have hidden the real thing it is
+//! there to catch.
 
 mod ast;
 mod context;
@@ -739,6 +738,15 @@ mod tests {
         let err = template.evaluate(&ctx).expect_err("must not be caught");
         assert!(
             matches!(err, ExpressionError::TypeMismatch { .. }),
+            "{err:?}"
+        );
+
+        // An unknown function cannot reach `default` at all: it is refused
+        // while parsing, so no fallback can ever mask a typo in a name.
+        let err = parse_template(&json!("{{ default(nope(1), \"fallback\") }}"))
+            .expect_err("must not parse");
+        assert!(
+            matches!(err, ExpressionError::UnknownFunction { ref name } if name == "nope"),
             "{err:?}"
         );
     }

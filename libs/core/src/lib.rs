@@ -6,6 +6,9 @@ pub mod infrastructure;
 
 pub use application::*;
 pub use domain::automation::event_catalogue;
+pub use domain::automation::expression::{
+    ExpressionContext, ExpressionError, LoopFrame, Template, parse_template,
+};
 pub use domain::automation::ports::{
     DeliveryHandler, DeliveryOutcome, DispatchOutcome, DueDelivery,
 };
