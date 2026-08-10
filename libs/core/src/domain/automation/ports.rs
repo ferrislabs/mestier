@@ -114,6 +114,18 @@ pub trait AutomationSettingsRepository: Send {
         org_id: OrganizationId,
         settings: &AutomationSettings,
     ) -> impl Future<Output = Result<AutomationSettings, CoreError>> + Send;
+
+    /// Every organization that has ever configured its own settings, in one
+    /// query — the bulk counterpart to [`Self::settings_for`], which
+    /// `application::automation::retention::run_retention_pass` uses instead
+    /// of calling `settings_for` once per organization it purges. An
+    /// organization absent from the result has never configured anything and
+    /// still gets `AutomationSettings::default()`, exactly as a `settings_for`
+    /// call for it would — the caller applies that fallback, since this
+    /// method has no per-organization row to default on its own.
+    fn all_settings(
+        &mut self,
+    ) -> impl Future<Output = Result<Vec<(OrganizationId, AutomationSettings)>, CoreError>> + Send;
 }
 
 /// Organization-scoped storage for credentials: what an organization stores

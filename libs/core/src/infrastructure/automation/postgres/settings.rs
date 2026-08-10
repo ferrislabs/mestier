@@ -27,6 +27,28 @@ impl<'tx> PgAutomationSettingsRepository<'tx> {
     }
 }
 
+/// Shared by every query in this file that reads the four retention/backoff
+/// columns back — `settings_for`, `upsert`'s `RETURNING`, and `all_settings`
+/// each hit a differently-shaped anonymous row type (a fresh one per
+/// `sqlx::query!` call site), so this takes the columns already unpacked
+/// rather than one of those types.
+fn settings_from_columns(
+    event_retention_seconds: i64,
+    succeeded_run_retention_seconds: i64,
+    retry_schedule_seconds: Vec<i64>,
+    disable_target_after: Option<i32>,
+) -> AutomationSettings {
+    AutomationSettings {
+        event_retention: Duration::from_secs(event_retention_seconds.max(0) as u64),
+        succeeded_run_retention: Duration::from_secs(succeeded_run_retention_seconds.max(0) as u64),
+        retry_schedule: retry_schedule_seconds
+            .into_iter()
+            .map(|seconds| Duration::from_secs(seconds.max(0) as u64))
+            .collect(),
+        disable_target_after: disable_target_after.map(|threshold| threshold.max(0) as u32),
+    }
+}
+
 impl<'tx> AutomationSettingsRepository for PgAutomationSettingsRepository<'tx> {
     async fn settings_for(
         &mut self,
@@ -37,7 +59,7 @@ impl<'tx> AutomationSettingsRepository for PgAutomationSettingsRepository<'tx> {
         let row = sqlx::query!(
             r#"
             SELECT event_retention_seconds,
-                   succeeded_delivery_retention_seconds,
+                   succeeded_run_retention_seconds,
                    retry_schedule_seconds,
                    disable_target_after
             FROM automation.settings
@@ -55,20 +77,12 @@ impl<'tx> AutomationSettingsRepository for PgAutomationSettingsRepository<'tx> {
             return Ok(AutomationSettings::default());
         };
 
-        Ok(AutomationSettings {
-            event_retention: Duration::from_secs(row.event_retention_seconds.max(0) as u64),
-            succeeded_delivery_retention: Duration::from_secs(
-                row.succeeded_delivery_retention_seconds.max(0) as u64,
-            ),
-            retry_schedule: row
-                .retry_schedule_seconds
-                .into_iter()
-                .map(|seconds| Duration::from_secs(seconds.max(0) as u64))
-                .collect(),
-            disable_target_after: row
-                .disable_target_after
-                .map(|threshold| threshold.max(0) as u32),
-        })
+        Ok(settings_from_columns(
+            row.event_retention_seconds,
+            row.succeeded_run_retention_seconds,
+            row.retry_schedule_seconds,
+            row.disable_target_after,
+        ))
     }
 
     async fn upsert(
@@ -88,21 +102,21 @@ impl<'tx> AutomationSettingsRepository for PgAutomationSettingsRepository<'tx> {
         let row = sqlx::query!(
             r#"
             INSERT INTO automation.settings
-                (org_id, event_retention_seconds, succeeded_delivery_retention_seconds,
+                (org_id, event_retention_seconds, succeeded_run_retention_seconds,
                  retry_schedule_seconds, disable_target_after)
             VALUES ($1, $2, $3, $4, $5)
             ON CONFLICT (org_id) DO UPDATE
             SET event_retention_seconds = EXCLUDED.event_retention_seconds,
-                succeeded_delivery_retention_seconds = EXCLUDED.succeeded_delivery_retention_seconds,
+                succeeded_run_retention_seconds = EXCLUDED.succeeded_run_retention_seconds,
                 retry_schedule_seconds = EXCLUDED.retry_schedule_seconds,
                 disable_target_after = EXCLUDED.disable_target_after,
                 updated_at = now()
-            RETURNING event_retention_seconds, succeeded_delivery_retention_seconds,
+            RETURNING event_retention_seconds, succeeded_run_retention_seconds,
                       retry_schedule_seconds, disable_target_after
             "#,
             org_id.0,
             settings.event_retention.as_secs() as i64,
-            settings.succeeded_delivery_retention.as_secs() as i64,
+            settings.succeeded_run_retention.as_secs() as i64,
             &retry_schedule_seconds,
             disable_target_after,
         )
@@ -110,20 +124,47 @@ impl<'tx> AutomationSettingsRepository for PgAutomationSettingsRepository<'tx> {
         .await
         .map_err(map_sqlx_error)?;
 
-        Ok(AutomationSettings {
-            event_retention: Duration::from_secs(row.event_retention_seconds.max(0) as u64),
-            succeeded_delivery_retention: Duration::from_secs(
-                row.succeeded_delivery_retention_seconds.max(0) as u64,
-            ),
-            retry_schedule: row
-                .retry_schedule_seconds
-                .into_iter()
-                .map(|seconds| Duration::from_secs(seconds.max(0) as u64))
-                .collect(),
-            disable_target_after: row
-                .disable_target_after
-                .map(|threshold| threshold.max(0) as u32),
-        })
+        Ok(settings_from_columns(
+            row.event_retention_seconds,
+            row.succeeded_run_retention_seconds,
+            row.retry_schedule_seconds,
+            row.disable_target_after,
+        ))
+    }
+
+    async fn all_settings(
+        &mut self,
+    ) -> Result<Vec<(OrganizationId, AutomationSettings)>, CoreError> {
+        let mut tx = self.tx.lock().await;
+
+        let rows = sqlx::query!(
+            r#"
+            SELECT org_id,
+                   event_retention_seconds,
+                   succeeded_run_retention_seconds,
+                   retry_schedule_seconds,
+                   disable_target_after
+            FROM automation.settings
+            "#,
+        )
+        .fetch_all(&mut ***tx)
+        .await
+        .map_err(map_sqlx_error)?;
+
+        Ok(rows
+            .into_iter()
+            .map(|row| {
+                (
+                    OrganizationId(row.org_id),
+                    settings_from_columns(
+                        row.event_retention_seconds,
+                        row.succeeded_run_retention_seconds,
+                        row.retry_schedule_seconds,
+                        row.disable_target_after,
+                    ),
+                )
+            })
+            .collect())
     }
 }
 
@@ -222,7 +263,7 @@ mod tests {
     fn custom_settings() -> AutomationSettings {
         AutomationSettings {
             event_retention: Duration::from_secs(10 * 24 * 3600),
-            succeeded_delivery_retention: Duration::from_secs(5 * 24 * 3600),
+            succeeded_run_retention: Duration::from_secs(5 * 24 * 3600),
             retry_schedule: vec![Duration::from_secs(2), Duration::from_secs(4)],
             disable_target_after: Some(3),
         }
@@ -316,6 +357,52 @@ mod tests {
             others,
             custom_settings(),
             "another organization's row must not move"
+        );
+    }
+
+    #[tokio::test]
+    #[ignore = "requires live postgres"]
+    async fn all_settings_includes_every_configured_organization() {
+        let pool = make_pool().await;
+        let org_id = seed_organization(&pool).await;
+        with_tx(&pool, async |tx| {
+            let mut repo = PgAutomationSettingsRepository::new(&tx);
+            repo.upsert(org_id, &custom_settings()).await
+        })
+        .await
+        .unwrap();
+
+        let all = with_tx(&pool, async |tx| {
+            let mut repo = PgAutomationSettingsRepository::new(&tx);
+            repo.all_settings().await
+        })
+        .await
+        .unwrap();
+
+        let mine = all
+            .into_iter()
+            .find(|(id, _)| *id == org_id)
+            .map(|(_, settings)| settings);
+        assert_eq!(mine, Some(custom_settings()));
+    }
+
+    #[tokio::test]
+    #[ignore = "requires live postgres"]
+    async fn all_settings_omits_an_organization_that_never_configured_anything() {
+        let pool = make_pool().await;
+        let org_id = seed_organization(&pool).await;
+
+        let all = with_tx(&pool, async |tx| {
+            let mut repo = PgAutomationSettingsRepository::new(&tx);
+            repo.all_settings().await
+        })
+        .await
+        .unwrap();
+
+        assert!(
+            all.iter().all(|(id, _)| *id != org_id),
+            "an organization with no configured row has nothing to appear in the bulk read; \
+             the caller applies the default itself"
         );
     }
 }

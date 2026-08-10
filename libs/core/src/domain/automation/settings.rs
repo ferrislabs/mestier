@@ -12,7 +12,11 @@ use common::CoreError;
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AutomationSettings {
     pub event_retention: Duration,
-    pub succeeded_delivery_retention: Duration,
+    /// How long a **succeeded** run is kept. Named `_run_`, not `_delivery_`
+    /// — the webhook delivery pipeline this once belonged to was retired in
+    /// favor of workflow runs (#201); a failed run has no retention of its
+    /// own yet and survives every pass of the purge (#203).
+    pub succeeded_run_retention: Duration,
     /// How long to wait before each retry. **The number of attempts is the
     /// length of this list** — one entry fewer, one attempt fewer. A single
     /// concept, and no way to configure the two into disagreeing.
@@ -26,7 +30,7 @@ impl Default for AutomationSettings {
     fn default() -> Self {
         Self {
             event_retention: Duration::from_secs(90 * 24 * 3600),
-            succeeded_delivery_retention: Duration::from_secs(30 * 24 * 3600),
+            succeeded_run_retention: Duration::from_secs(30 * 24 * 3600),
             retry_schedule: vec![
                 Duration::from_secs(5),
                 Duration::from_secs(30),
@@ -46,7 +50,7 @@ impl Default for AutomationSettings {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct SettingsBounds {
     pub event_retention: (Duration, Duration),
-    pub succeeded_delivery_retention: (Duration, Duration),
+    pub succeeded_run_retention: (Duration, Duration),
     pub retry_interval: (Duration, Duration),
     pub max_retry_entries: usize,
     pub disable_target_after: (u32, u32),
@@ -59,7 +63,7 @@ impl Default for SettingsBounds {
                 Duration::from_secs(24 * 3600),
                 Duration::from_secs(730 * 24 * 3600),
             ),
-            succeeded_delivery_retention: (
+            succeeded_run_retention: (
                 Duration::from_secs(24 * 3600),
                 Duration::from_secs(90 * 24 * 3600),
             ),
@@ -78,9 +82,9 @@ impl AutomationSettings {
             bounds.event_retention,
         )?;
         check_range(
-            "succeeded delivery retention",
-            self.succeeded_delivery_retention,
-            bounds.succeeded_delivery_retention,
+            "succeeded run retention",
+            self.succeeded_run_retention,
+            bounds.succeeded_run_retention,
         )?;
 
         if self.retry_schedule.is_empty() {

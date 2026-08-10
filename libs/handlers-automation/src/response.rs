@@ -640,7 +640,7 @@ pub struct RunDetailResponse {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ToSchema)]
 pub struct AutomationSettingsBody {
     pub event_retention_seconds: u64,
-    pub succeeded_delivery_retention_seconds: u64,
+    pub succeeded_run_retention_seconds: u64,
     pub retry_schedule_seconds: Vec<u64>,
     pub disable_target_after: Option<u32>,
 }
@@ -649,7 +649,7 @@ impl From<AutomationSettings> for AutomationSettingsBody {
     fn from(value: AutomationSettings) -> Self {
         Self {
             event_retention_seconds: value.event_retention.as_secs(),
-            succeeded_delivery_retention_seconds: value.succeeded_delivery_retention.as_secs(),
+            succeeded_run_retention_seconds: value.succeeded_run_retention.as_secs(),
             retry_schedule_seconds: value.retry_schedule.iter().map(Duration::as_secs).collect(),
             disable_target_after: value.disable_target_after,
         }
@@ -660,9 +660,7 @@ impl From<AutomationSettingsBody> for AutomationSettings {
     fn from(value: AutomationSettingsBody) -> Self {
         Self {
             event_retention: Duration::from_secs(value.event_retention_seconds),
-            succeeded_delivery_retention: Duration::from_secs(
-                value.succeeded_delivery_retention_seconds,
-            ),
+            succeeded_run_retention: Duration::from_secs(value.succeeded_run_retention_seconds),
             retry_schedule: value
                 .retry_schedule_seconds
                 .into_iter()
@@ -836,7 +834,7 @@ mod tests {
     fn automation_settings_round_trips_through_its_wire_body() {
         let settings = AutomationSettings {
             event_retention: Duration::from_secs(1000),
-            succeeded_delivery_retention: Duration::from_secs(2000),
+            succeeded_run_retention: Duration::from_secs(2000),
             retry_schedule: vec![Duration::from_secs(5), Duration::from_secs(30)],
             disable_target_after: Some(7),
         };

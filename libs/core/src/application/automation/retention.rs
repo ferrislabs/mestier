@@ -3,7 +3,7 @@
 //! `automation.run` retention into deleted rows.
 //!
 //! `AutomationSettings` already carried `event_retention` and
-//! `succeeded_delivery_retention`, validated against `SettingsBounds` — until
+//! `succeeded_run_retention`, validated against `SettingsBounds` — until
 //! this module nothing ever applied them. `run_retention_pass` is what does:
 //! one pass over every organization with automation data, each purged under
 //! its own settings (falling back to the default the same way a plain read
@@ -84,26 +84,34 @@ impl MestierUseCase {
         repo.upsert(org_id, &settings).await
     }
 
-    #[transactional(event_log)]
-    async fn purge_expired_events_for_org(
+    /// Purges one organization's events and succeeded runs in a single
+    /// transaction — combined on purpose. `run_retention_pass` calls this
+    /// once per organization it sweeps, and a separate transaction per
+    /// table would double the round trips on every pass without buying
+    /// anything: the two purges share no state and neither depends on the
+    /// other's outcome, so nothing is lost by writing them together.
+    #[transactional(event_log, run)]
+    async fn purge_org(
         &self,
         org_id: OrganizationId,
-        older_than: DateTime<Utc>,
-        batch: i64,
-    ) -> Result<u64, CoreError> {
-        let mut repo = event_log_repository;
-        repo.purge_expired(org_id, older_than, batch).await
-    }
+        events_cutoff: DateTime<Utc>,
+        runs_cutoff: DateTime<Utc>,
+        schedule: RetentionSchedule,
+    ) -> Result<RetentionOutcome, CoreError> {
+        let mut events = event_log_repository;
+        let mut runs = run_repository;
 
-    #[transactional(run)]
-    async fn purge_succeeded_runs_for_org(
-        &self,
-        org_id: OrganizationId,
-        older_than: DateTime<Utc>,
-        batch: i64,
-    ) -> Result<u64, CoreError> {
-        let mut repo = run_repository;
-        repo.purge_succeeded(org_id, older_than, batch).await
+        let events_purged = events
+            .purge_expired(org_id, events_cutoff, schedule.event_batch)
+            .await?;
+        let succeeded_runs_purged = runs
+            .purge_succeeded(org_id, runs_cutoff, schedule.run_batch)
+            .await?;
+
+        Ok(RetentionOutcome {
+            events_purged,
+            succeeded_runs_purged,
+        })
     }
 
     #[transactional(event_log)]
@@ -112,8 +120,24 @@ impl MestierUseCase {
         repo.organizations_with_automation_data().await
     }
 
+    /// Every organization that has ever configured its own settings, in one
+    /// query — `run_retention_pass` reads this once per pass instead of
+    /// calling `get_automation_settings` once per organization it sweeps,
+    /// which is what kept an instance-wide pass to O(organizations)
+    /// transactions total rather than O(organizations) *per table*.
+    #[transactional(automation_settings)]
+    async fn all_automation_settings(
+        &self,
+    ) -> Result<std::collections::HashMap<OrganizationId, AutomationSettings>, CoreError> {
+        let mut repo = automation_settings_repository;
+        Ok(repo.all_settings().await?.into_iter().collect())
+    }
+
     /// One retention pass: every organization with automation data, purged
-    /// under its own settings. Periodic, and much less frequent than the run
+    /// under its own settings — one combined transaction per organization
+    /// ([`Self::purge_org`]), the settings for all of them read in a single
+    /// upfront query ([`Self::all_automation_settings`]) rather than one
+    /// query per organization. Periodic, and much less frequent than the run
     /// worker — see `infrastructure::automation::retention::run_retention_worker`,
     /// the only caller outside tests.
     pub async fn run_retention_pass(
@@ -121,20 +145,23 @@ impl MestierUseCase {
         schedule: RetentionSchedule,
     ) -> Result<RetentionOutcome, CoreError> {
         let org_ids = self.organizations_with_automation_data().await?;
+        let configured_settings = self.all_automation_settings().await?;
+        let now = Utc::now();
         let mut outcome = RetentionOutcome::default();
 
         for org_id in org_ids {
-            let settings = self.get_automation_settings(org_id).await?;
-            let now = Utc::now();
+            let settings = configured_settings
+                .get(&org_id)
+                .cloned()
+                .unwrap_or_default();
             let events_cutoff = now - chrono_duration(settings.event_retention);
-            let runs_cutoff = now - chrono_duration(settings.succeeded_delivery_retention);
+            let runs_cutoff = now - chrono_duration(settings.succeeded_run_retention);
 
-            outcome.events_purged += self
-                .purge_expired_events_for_org(org_id, events_cutoff, schedule.event_batch)
+            let purged = self
+                .purge_org(org_id, events_cutoff, runs_cutoff, schedule)
                 .await?;
-            outcome.succeeded_runs_purged += self
-                .purge_succeeded_runs_for_org(org_id, runs_cutoff, schedule.run_batch)
-                .await?;
+            outcome.events_purged += purged.events_purged;
+            outcome.succeeded_runs_purged += purged.succeeded_runs_purged;
         }
 
         Ok(outcome)
@@ -304,7 +331,7 @@ mod tests {
                 org_id,
                 AutomationSettings {
                     event_retention: Duration::from_secs(24 * 3600),
-                    succeeded_delivery_retention: Duration::from_secs(24 * 3600),
+                    succeeded_run_retention: Duration::from_secs(24 * 3600),
                     ..AutomationSettings::default()
                 },
             )
@@ -374,13 +401,20 @@ mod tests {
         .await
         .unwrap();
 
-        let outcome = usecase
+        // `run_retention_pass` sweeps every organization that has automation
+        // data, system-wide — not only this test's own. Under parallel test
+        // execution another test's own concurrent call can legitimately
+        // purge this test's rows first (or vice versa), so asserting a
+        // lower bound on *this* call's returned counters is exactly the
+        // cross-test contamination #210 rules out: it would pass or fail
+        // depending on scheduling, not on this test's own behavior. The
+        // outcome is not asserted on; only the rows this test created are
+        // (`event_count`/`run_count` below), which is safe regardless of
+        // which call actually did the deleting.
+        usecase
             .run_retention_pass(RetentionSchedule::default())
             .await
             .unwrap();
-
-        assert!(outcome.events_purged >= 1, "{outcome:?}");
-        assert!(outcome.succeeded_runs_purged >= 1, "{outcome:?}");
 
         let event_count = sqlx::query_scalar!(
             "SELECT COUNT(*) FROM automation.event WHERE id = $1",
@@ -419,7 +453,7 @@ mod tests {
                 AutomationSettings {
                     // The instance floor (one day) — the shortest a
                     // succeeded run's retention can legally be.
-                    succeeded_delivery_retention: Duration::from_secs(24 * 3600),
+                    succeeded_run_retention: Duration::from_secs(24 * 3600),
                     ..AutomationSettings::default()
                 },
             )
