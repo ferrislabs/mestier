@@ -90,6 +90,18 @@ pub trait CredentialRepository: Send {
         id: Uuid,
     ) -> impl Future<Output = Result<Option<Credential>, CoreError>> + Send;
 
+    /// Reads a credential's sealed bytes alongside its metadata — the one
+    /// read that carries them back out of the database, for the automation
+    /// worker (#202) to open with the process cipher. No API handler calls
+    /// this: a credential's data crosses exactly one boundary, from "stored,
+    /// sealed" to "used to authenticate an outbound call", never through a
+    /// response.
+    fn find_sealed_by_id(
+        &mut self,
+        org_id: OrganizationId,
+        id: Uuid,
+    ) -> impl Future<Output = Result<Option<(Credential, SealedSecret)>, CoreError>> + Send;
+
     /// `sealed = None` leaves the sealed bytes untouched (`COALESCE` in the
     /// Postgres adapter), which is what lets a rename skip re-supplying the
     /// secret.

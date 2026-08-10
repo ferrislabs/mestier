@@ -74,6 +74,35 @@ impl MestierUseCase {
         repository.insert(&credential, &sealed).await
     }
 
+    /// Opens a credential's sealed bytes for the automation worker (#202).
+    /// **Worker-only**: no API handler calls this, and none should ever be
+    /// added — a credential's data crosses exactly one boundary, from
+    /// "stored, sealed" to "used to authenticate an outbound call", never
+    /// through a response.
+    ///
+    /// Returns the plaintext bytes as stored, uninterpreted: a `Supplied`
+    /// credential's bytes are the JSON object `create_credential` validated
+    /// against its scheme; a `Generated` one's are the raw signing secret.
+    /// The caller knows which from `Credential::origin` and decodes
+    /// accordingly — this method has no opinion on the shape, the same way
+    /// `create_credential` accepts either without needing to.
+    #[transactional(credential)]
+    pub async fn open_credential(
+        &self,
+        org_id: OrganizationId,
+        id: Uuid,
+    ) -> Result<(Credential, Vec<u8>), CoreError> {
+        let cipher = self.require_cipher()?;
+        let mut repository = credential_repository;
+        let (credential, sealed) = repository
+            .find_sealed_by_id(org_id, id)
+            .await?
+            .ok_or(CoreError::NotFound)?;
+        let plaintext = cipher.open(&sealed)?;
+
+        Ok((credential, plaintext))
+    }
+
     #[transactional(credential)]
     pub async fn list_credentials(
         &self,
@@ -705,5 +734,127 @@ mod tests {
             .expect_err("a supplied credential has nothing of Mestier's own to regenerate");
 
         assert!(format!("{error}").contains("never rotated"), "{error}");
+    }
+
+    #[tokio::test]
+    #[ignore = "requires live postgres"]
+    async fn opening_a_supplied_credential_returns_its_validated_fields() {
+        let pool = make_pool().await;
+        let org_id = seed_organization(&pool, "open-supplied").await;
+        let usecase = use_case(pool);
+
+        let created = usecase
+            .create_credential(CreateCredentialCommand {
+                org_id,
+                kind: "odoo_api".to_owned(),
+                name: "Production Odoo".to_owned(),
+                origin: CredentialOrigin::Supplied,
+                data: Some(odoo_data()),
+            })
+            .await
+            .unwrap();
+
+        let (opened, plaintext) = usecase.open_credential(org_id, created.id).await.unwrap();
+
+        assert_eq!(opened.id, created.id);
+        let fields: serde_json::Value = serde_json::from_slice(&plaintext).unwrap();
+        assert_eq!(fields, odoo_data());
+    }
+
+    /// A `Generated` credential's plaintext is the raw signing secret, not
+    /// JSON — the same bytes `create_credential` sealed, byte for byte.
+    #[tokio::test]
+    #[ignore = "requires live postgres"]
+    async fn opening_a_generated_credential_returns_its_raw_secret_bytes() {
+        let pool = make_pool().await;
+        let org_id = seed_organization(&pool, "open-generated").await;
+        let usecase = use_case(pool.clone());
+
+        let created = usecase
+            .create_credential(CreateCredentialCommand {
+                org_id,
+                kind: "bearer_token".to_owned(),
+                name: "Outgoing signature".to_owned(),
+                origin: CredentialOrigin::Generated,
+                data: None,
+            })
+            .await
+            .unwrap();
+
+        let (_, plaintext) = usecase.open_credential(org_id, created.id).await.unwrap();
+
+        // Never valid JSON by construction (32 random bytes), which is
+        // exactly the point: a `Generated` credential's bytes are used
+        // as-is, not decoded.
+        assert_eq!(plaintext.len(), 32);
+        assert!(serde_json::from_slice::<serde_json::Value>(&plaintext).is_err());
+    }
+
+    #[tokio::test]
+    #[ignore = "requires live postgres"]
+    async fn opening_a_credential_from_another_organization_is_not_found() {
+        let pool = make_pool().await;
+        let org_id = seed_organization(&pool, "open-owner").await;
+        let stranger_org = seed_organization(&pool, "open-stranger").await;
+        let usecase = use_case(pool);
+
+        let created = usecase
+            .create_credential(CreateCredentialCommand {
+                org_id,
+                kind: "bearer_token".to_owned(),
+                name: "Token".to_owned(),
+                origin: CredentialOrigin::Supplied,
+                data: Some(serde_json::json!({ "token": "abc" })),
+            })
+            .await
+            .unwrap();
+
+        let error = usecase
+            .open_credential(stranger_org, created.id)
+            .await
+            .expect_err("a stranger must not open another organization's credential");
+
+        assert!(matches!(error, CoreError::NotFound));
+    }
+
+    #[tokio::test]
+    #[ignore = "requires live postgres"]
+    async fn opening_an_unknown_credential_is_not_found() {
+        let pool = make_pool().await;
+        let org_id = seed_organization(&pool, "open-missing").await;
+        let usecase = use_case(pool);
+
+        let error = usecase
+            .open_credential(org_id, generate_uuid_v7())
+            .await
+            .expect_err("there is nothing to open");
+
+        assert!(matches!(error, CoreError::NotFound));
+    }
+
+    #[tokio::test]
+    #[ignore = "requires live postgres"]
+    async fn opening_a_credential_without_a_configured_cipher_is_refused() {
+        let pool = make_pool().await;
+        let org_id = seed_organization(&pool, "open-no-cipher").await;
+        let usecase_with_cipher = use_case(pool.clone());
+        let created = usecase_with_cipher
+            .create_credential(CreateCredentialCommand {
+                org_id,
+                kind: "bearer_token".to_owned(),
+                name: "Token".to_owned(),
+                origin: CredentialOrigin::Supplied,
+                data: Some(serde_json::json!({ "token": "abc" })),
+            })
+            .await
+            .unwrap();
+
+        let usecase_without_cipher = use_case_without_cipher(pool);
+        let error = usecase_without_cipher
+            .open_credential(org_id, created.id)
+            .await
+            .expect_err("an instance with no automation secret key cannot open anything");
+
+        assert!(matches!(error, CoreError::Conflict(_)));
     }
 }

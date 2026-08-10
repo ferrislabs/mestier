@@ -122,6 +122,44 @@ impl<'tx> CredentialRepository for PgCredentialRepository<'tx> {
         row.map(Credential::try_from).transpose()
     }
 
+    async fn find_sealed_by_id(
+        &mut self,
+        org_id: OrganizationId,
+        id: Uuid,
+    ) -> Result<Option<(Credential, SealedSecret)>, CoreError> {
+        let mut tx = self.tx.lock().await;
+        let row = sqlx::query!(
+            r#"SELECT id, org_id, kind, name, origin, created_at, updated_at,
+                      data_nonce, data_ciphertext
+               FROM automation.credential WHERE org_id = $1 AND id = $2"#,
+            org_id.0,
+            id,
+        )
+        .fetch_optional(&mut ***tx)
+        .await
+        .map_err(map_sqlx_error)?;
+
+        let Some(row) = row else {
+            return Ok(None);
+        };
+
+        let credential = Credential::try_from(CredentialRow {
+            id: row.id,
+            org_id: row.org_id,
+            kind: row.kind,
+            name: row.name,
+            origin: row.origin,
+            created_at: row.created_at,
+            updated_at: row.updated_at,
+        })?;
+        let sealed = SealedSecret {
+            nonce: row.data_nonce,
+            ciphertext: row.data_ciphertext,
+        };
+
+        Ok(Some((credential, sealed)))
+    }
+
     // The lifetime matches the trait's, which names it for `mockall`'s sake
     // (see `CredentialRepository::update`); clippy's non-test build alone
     // would elide it.
@@ -263,6 +301,61 @@ mod tests {
         .unwrap();
 
         assert_eq!(found, Some(inserted));
+    }
+
+    #[tokio::test]
+    #[ignore = "requires live postgres"]
+    async fn find_sealed_by_id_returns_the_credential_with_its_sealed_bytes() {
+        let pool = make_pool().await;
+        let org_id = seed_organization(&pool, "sealed").await;
+        let sealed = cipher().seal(b"probe-secret").unwrap();
+        let written = credential(org_id, "bearer_token", "Sealed token");
+
+        with_tx(&pool, async |tx| {
+            let mut repo = PgCredentialRepository::new(&tx);
+            repo.insert(&written, &sealed).await
+        })
+        .await
+        .unwrap();
+
+        let found = with_tx(&pool, async |tx| {
+            let mut repo = PgCredentialRepository::new(&tx);
+            repo.find_sealed_by_id(org_id, written.id).await
+        })
+        .await
+        .unwrap();
+
+        let (credential, found_sealed) = found.expect("the inserted row is found");
+        assert_eq!(credential.id, written.id);
+        assert_eq!(credential.name, "Sealed token");
+        assert_eq!(found_sealed.nonce, sealed.nonce);
+        assert_eq!(found_sealed.ciphertext, sealed.ciphertext);
+    }
+
+    #[tokio::test]
+    #[ignore = "requires live postgres"]
+    async fn find_sealed_by_id_from_another_organization_reads_back_absent() {
+        let pool = make_pool().await;
+        let org_id = seed_organization(&pool, "sealed-owner").await;
+        let stranger_org = seed_organization(&pool, "sealed-stranger").await;
+        let sealed = cipher().seal(b"probe-secret").unwrap();
+        let written = credential(org_id, "bearer_token", "Owner's token");
+
+        with_tx(&pool, async |tx| {
+            let mut repo = PgCredentialRepository::new(&tx);
+            repo.insert(&written, &sealed).await
+        })
+        .await
+        .unwrap();
+
+        let found = with_tx(&pool, async |tx| {
+            let mut repo = PgCredentialRepository::new(&tx);
+            repo.find_sealed_by_id(stranger_org, written.id).await
+        })
+        .await
+        .unwrap();
+
+        assert_eq!(found, None);
     }
 
     #[tokio::test]
