@@ -4,6 +4,12 @@ use aws_lc_rs::{
 };
 use common::CoreError;
 
+// `SealedSecret` lives in the domain (`domain::automation::secret`) because
+// ports exchange it — the credential port among them — and the domain must
+// not depend on infrastructure. This cipher stays here: it is the
+// cryptographic adapter that produces and opens the domain's type.
+pub use crate::domain::automation::secret::SealedSecret;
+
 /// Encrypts webhook secrets at rest.
 ///
 /// AES-256-GCM rather than a bare cipher: the tag is what tells decryption
@@ -13,15 +19,6 @@ use common::CoreError;
 pub struct SecretCipher {
     key: LessSafeKey,
     rng: SystemRandom,
-}
-
-/// A stored secret: the nonce is not sensitive and travels with the
-/// ciphertext, but it must never repeat under one key — reusing a nonce with
-/// GCM discloses the keystream.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct SealedSecret {
-    pub nonce: Vec<u8>,
-    pub ciphertext: Vec<u8>,
 }
 
 impl SecretCipher {

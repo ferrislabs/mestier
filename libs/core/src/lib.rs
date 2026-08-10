@@ -9,6 +9,10 @@ pub use domain::automation::connector::{
     AuthRequirement, AuthScheme, ConnectorCatalogue, ConnectorCatalogueError, ConnectorDescriptor,
     Field, FieldKind, SelectOption, VisibleWhen, auth_scheme, auth_schemes, connector_catalogue,
 };
+pub use domain::automation::credential::{
+    CreateCredentialCommand, Credential, CredentialError, CredentialOrigin,
+    UpdateCredentialCommand, validate_credential_data,
+};
 pub use domain::automation::event_catalogue;
 pub use domain::automation::expression::{
     ExpressionContext, ExpressionError, LoopFrame, Template, parse_template,
@@ -16,6 +20,7 @@ pub use domain::automation::expression::{
 pub use domain::automation::ports::{
     DeliveryHandler, DeliveryOutcome, DispatchOutcome, DueDelivery,
 };
+pub use domain::automation::secret::SealedSecret;
 pub use domain::automation::settings::{AutomationSettings, SettingsBounds};
 pub use infrastructure::automation::webhook::{
     WebhookDeliveryHandler, address_policy::PrivateNetworkAccess, secret::SecretCipher,
