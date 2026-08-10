@@ -122,6 +122,42 @@ mod tests {
         );
     }
 
+    /// The same exact-shape guarantee as
+    /// [`envelope_serializes_to_a_stable_wire_shape`], extended to the run
+    /// engine's actor rather than routed around it: a hand-rolled assertion
+    /// on `envelope.actor` alone would miss a regression in the envelope's
+    /// own wire shape (an extra field, a renamed one) that this test exists
+    /// to catch.
+    #[test]
+    fn envelope_with_an_automation_actor_serializes_to_a_stable_wire_shape() {
+        let run_id = Uuid::from_u128(6);
+        let envelope = EventEnvelope {
+            actor: Actor::automation(run_id),
+            ..sample_envelope()
+        };
+
+        let json = serde_json::to_value(envelope).expect("envelope serializes");
+
+        assert_eq!(
+            json,
+            json!({
+                "id": "00000000-0000-0000-0000-000000000001",
+                "org_id": "00000000-0000-0000-0000-000000000002",
+                "name": "quote.accepted",
+                "version": 1,
+                "subject_kind": "quote",
+                "subject_id": "00000000-0000-0000-0000-000000000003",
+                "payload": { "quote_id": "00000000-0000-0000-0000-000000000003" },
+                "actor": {
+                    "kind": "automation",
+                    "run_id": "00000000-0000-0000-0000-000000000006"
+                },
+                "correlation_id": "00000000-0000-0000-0000-000000000005",
+                "occurred_at": "1970-01-01T00:00:00Z"
+            })
+        );
+    }
+
     #[test]
     fn envelope_round_trips_through_serde() {
         let envelope = sample_envelope();

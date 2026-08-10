@@ -5,4 +5,6 @@ pub mod webhook;
 pub mod worker;
 
 pub use emitter::TransactionalEventEmitter;
-pub use postgres::{PgDeliveryRepository, PgEventDispatchRepository, PgEventLogRepository};
+pub use postgres::{
+    PgAutomationSettingsRepository, PgEventDispatchRepository, PgEventLogRepository,
+};

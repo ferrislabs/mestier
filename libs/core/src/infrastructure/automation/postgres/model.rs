@@ -13,6 +13,7 @@ pub fn actor_columns(actor: Actor) -> (&'static str, Option<Uuid>) {
         Actor::User { id } => ("user", Some(id)),
         Actor::Client { id } => ("client", Some(id)),
         Actor::System => ("system", None),
+        Actor::Automation { run_id } => ("automation", Some(run_id)),
     }
 }
 
@@ -26,6 +27,7 @@ pub fn actor_from_columns(kind: &str, id: Option<Uuid>) -> Result<Actor, CoreErr
         ("user", Some(id)) => Ok(Actor::user(id)),
         ("client", Some(id)) => Ok(Actor::client(id)),
         ("system", None) => Ok(Actor::system()),
+        ("automation", Some(run_id)) => Ok(Actor::automation(run_id)),
         _ => Err(CoreError::Internal(format!(
             "event row has an actor the domain cannot represent: kind `{kind}`, id {id:?}"
         ))),
@@ -54,11 +56,22 @@ mod tests {
             Actor::system(),
             Actor::user(Uuid::from_u128(1)),
             Actor::client(Uuid::from_u128(2)),
+            Actor::automation(Uuid::from_u128(3)),
         ] {
             let (kind, id) = actor_columns(actor);
 
             assert_eq!(actor_from_columns(kind, id).unwrap(), actor);
         }
+    }
+
+    #[test]
+    fn an_automation_actor_carries_its_run_id() {
+        let run_id = Uuid::from_u128(3);
+
+        assert_eq!(
+            actor_columns(Actor::automation(run_id)),
+            ("automation", Some(run_id))
+        );
     }
 
     /// The CHECK constraint makes this unreachable from the application. If it
@@ -68,6 +81,7 @@ mod tests {
     fn a_pairing_the_constraint_forbids_is_an_error_not_a_guess() {
         assert!(actor_from_columns("user", None).is_err());
         assert!(actor_from_columns("system", Some(Uuid::from_u128(1))).is_err());
+        assert!(actor_from_columns("automation", None).is_err());
         assert!(actor_from_columns("wat", None).is_err());
     }
 

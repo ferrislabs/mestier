@@ -2,22 +2,21 @@ use std::sync::Arc;
 
 use auth::{AuthService, FerrisKeyRepository};
 use authz::LocalPolicyEngine;
-use common::{AutomationConfig, Config, CoreError};
+use common::{Config, CoreError};
 use rate_limit::{Quota, RateLimitService, RedisRateLimiter};
 use sqlx::PgPool;
 use sqlx::postgres::PgPoolOptions;
 
 use crate::domain::file_storage::service::FileStorageService;
 use crate::domain::role::Permissions;
-use crate::infrastructure::automation::webhook::{
-    WebhookDeliveryHandler, address_policy::PrivateNetworkAccess, secret::SecretCipher,
-};
+use crate::infrastructure::automation::webhook::secret::SecretCipher;
 use crate::infrastructure::automation::worker::{WorkerSchedule, run_automation_worker};
 use crate::infrastructure::file_storage::S3FileStorage;
 use crate::infrastructure::postgres::error::map_sqlx_error;
 use crate::infrastructure::realtime::EventHub;
 use common::UserId;
 use events::Actor;
+use uuid::Uuid;
 
 pub mod absence;
 pub mod authorization;
@@ -122,6 +121,22 @@ impl MestierUseCase {
         }
     }
 
+    /// A view of this use case whose events are attributed to the run
+    /// `run_id` — strictly the shape of [`Self::acting_as`], substituting the
+    /// run engine's identity for a human's.
+    ///
+    /// The actor lives on the value, not on a call-stack-scoped context, so
+    /// whatever this handle calls next — at any depth, through any number of
+    /// further use-case methods — emits with this actor: `#[transactional]`
+    /// always builds its emitter from `self.actor`, never from how deep the
+    /// call chain was to get there.
+    pub fn acting_as_automation(&self, run_id: Uuid) -> Self {
+        Self {
+            actor: Actor::automation(run_id),
+            ..self.clone()
+        }
+    }
+
     /// Attaches the key that seals credential data at rest.
     ///
     /// A method rather than a public field so the composition root is the only
@@ -202,7 +217,7 @@ pub async fn create_service(config: Config) -> Result<MestierService, CoreError>
     let usecase =
         MestierUseCase::new(pool.clone(), default_authorizer(), hub.clone()).with_cipher(cipher);
 
-    spawn_automation_worker(&config.automation, pool, usecase.clone())?;
+    spawn_automation_worker(usecase.clone());
 
     Ok(MestierService::new(
         auth,
@@ -214,49 +229,23 @@ pub async fn create_service(config: Config) -> Result<MestierService, CoreError>
     ))
 }
 
-/// Starts the background loop that fans events out and delivers them.
+/// Starts the background loop that fans events out into runs and executes
+/// them.
 ///
-/// Silently doing nothing when no key is configured would be the wrong
-/// failure: an operator would see events pile up with no explanation. It logs
-/// loudly instead, and the API refuses to create an endpoint for the same
-/// reason — no key means no way to store a secret.
-fn spawn_automation_worker(
-    config: &AutomationConfig,
-    pool: PgPool,
-    usecase: MestierUseCase,
-) -> Result<(), CoreError> {
-    let Some(encoded) = config.secret_key.as_deref() else {
-        tracing::warn!(
-            "no AUTOMATION_SECRET_KEY configured: the automation worker will not start and \
-             webhook endpoints cannot be created"
-        );
-        return Ok(());
-    };
-
-    let cipher = SecretCipher::from_base64(encoded)?;
-    let access = if config.allow_private_network {
-        tracing::warn!(
-            "webhooks may reach private addresses. Correct for a single-tenant instance; \
-             on a shared one a tenant can borrow this server's network rights"
-        );
-        PrivateNetworkAccess::Allowed
-    } else {
-        PrivateNetworkAccess::Denied
-    };
-
-    let handler = WebhookDeliveryHandler::new(pool, cipher, access)?;
-    // Named after the host so a delivery stuck `in_flight` points at the
-    // machine that was holding it.
+/// Unlike the webhook delivery pass it replaces, the run engine needs no
+/// `AUTOMATION_SECRET_KEY` to operate — nothing on this path decrypts a
+/// sealed secret — so the worker always starts. The key remains required
+/// elsewhere, to seal credential data at rest (see [`MestierUseCase::cipher`]).
+fn spawn_automation_worker(usecase: MestierUseCase) {
+    // Named after the host so a run stuck `running` points at the machine
+    // that was holding it.
     let worker = hostname().unwrap_or_else(|| "mestier".to_owned());
 
     tokio::spawn(run_automation_worker(
         usecase,
-        handler,
         worker,
         WorkerSchedule::default(),
     ));
-
-    Ok(())
 }
 
 fn hostname() -> Option<String> {
@@ -273,6 +262,7 @@ fn hostname() -> Option<String> {
 
 #[cfg(test)]
 mod tests {
+    use common::{OrganizationId, generate_uuid_v7};
     use uuid::Uuid;
 
     use super::*;
@@ -308,5 +298,131 @@ mod tests {
         let _acting = base.acting_as(UserId(Uuid::from_u128(1)));
 
         assert_eq!(base.actor, Actor::System);
+    }
+
+    #[tokio::test]
+    async fn acting_as_automation_attributes_events_to_that_run() {
+        let run_id = Uuid::from_u128(1);
+
+        let acting = use_case().acting_as_automation(run_id);
+
+        assert_eq!(acting.actor, Actor::automation(run_id));
+    }
+
+    /// Same discipline as [`acting_as_leaves_the_original_untouched`]: the
+    /// run engine calls this once per connector it dispatches through, and
+    /// must never mutate the shared handle every other caller holds.
+    #[tokio::test]
+    async fn acting_as_automation_leaves_the_original_untouched() {
+        let base = use_case();
+
+        let _acting = base.acting_as_automation(Uuid::from_u128(1));
+
+        assert_eq!(base.actor, Actor::System);
+    }
+
+    async fn make_pool() -> PgPool {
+        let url = std::env::var("DATABASE_URL")
+            .expect("DATABASE_URL must be set to run acting_as_automation integration tests");
+        PgPool::connect(&url).await.unwrap()
+    }
+
+    async fn seed_organization(pool: &PgPool) -> OrganizationId {
+        let owner_id = generate_uuid_v7();
+        sqlx::query!(
+            r#"INSERT INTO users (id, email, username, display_name, sub)
+               VALUES ($1, $2, $3, $4, $5)"#,
+            owner_id,
+            format!("owner-{owner_id}@example.com"),
+            format!("owner-{owner_id}"),
+            "Owner User",
+            format!("sub-owner-{owner_id}"),
+        )
+        .execute(pool)
+        .await
+        .unwrap();
+
+        let org_id = generate_uuid_v7();
+        sqlx::query!(
+            r#"INSERT INTO organizations (id, name, slug, owner_id)
+               VALUES ($1, $2, $3, $4)"#,
+            org_id,
+            "Test Org",
+            format!("test-org-{org_id}"),
+            owner_id,
+        )
+        .execute(pool)
+        .await
+        .unwrap();
+
+        OrganizationId(org_id)
+    }
+
+    /// The acceptance criterion the whole mechanism exists for: an event
+    /// emitted through `acting_as_automation` carries the run id — not just
+    /// as a field on the Rust value (the two tests above), but all the way
+    /// through `#[transactional]`'s emitter and into the committed row.
+    ///
+    /// `create_quote` is the vehicle because it is the module that already
+    /// emits (`#[transactional(quote, emitter)]`); nothing about this test
+    /// is specific to quotes. `#[transactional]` builds `__event_emitter`
+    /// from `self.actor` inside its own expansion — a plain field read, not
+    /// a value threaded explicitly through each intervening call — so
+    /// whatever this handle calls, at whatever depth, emits with this actor.
+    #[tokio::test]
+    #[ignore = "requires live postgres"]
+    async fn acting_as_automation_attributes_a_persisted_event_to_the_run() {
+        let pool = make_pool().await;
+        let org_id = seed_organization(&pool).await;
+        let usecase = MestierUseCase::new(pool.clone(), default_authorizer(), EventHub::new());
+        let customer = usecase
+            .create_customer(crate::domain::customer::commands::CreateCustomerCommand {
+                organization_id: org_id,
+                status: crate::CustomerStatus::Prospect,
+                pipeline_stage: crate::CustomerPipelineStage::New,
+                name: "Automation depth customer".to_string(),
+                phone: None,
+                email: None,
+            })
+            .await
+            .unwrap();
+        let context = usecase
+            .create_customer_context(
+                crate::domain::customer_context::commands::CreateCustomerContextCommand {
+                    customer_id: customer.id,
+                    label: "Main site".to_string(),
+                    address_line: None,
+                    postal_code: None,
+                    city: None,
+                    photo_key: None,
+                },
+            )
+            .await
+            .unwrap();
+        let run_id = generate_uuid_v7();
+
+        let created = usecase
+            .acting_as_automation(run_id)
+            .create_quote(crate::domain::quote::commands::CreateQuoteCommand {
+                organization_id: org_id,
+                title: "Automated quote".to_string(),
+                customer_id: customer.id,
+                customer_context_id: context.id,
+                lines: Vec::new(),
+            })
+            .await
+            .unwrap();
+
+        let row = sqlx::query!(
+            r#"SELECT actor_kind, actor_id FROM automation.event
+               WHERE name = 'quote.created' AND subject_id = $1"#,
+            created.id.0,
+        )
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+
+        assert_eq!(row.actor_kind, "automation");
+        assert_eq!(row.actor_id, Some(run_id));
     }
 }

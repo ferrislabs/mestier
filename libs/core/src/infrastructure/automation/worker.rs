@@ -4,8 +4,7 @@ use chrono::Utc;
 use tracing::{error, info, warn};
 
 use crate::{
-    application::{MestierUseCase, automation::PassOutcome, automation::run::EnginePassOutcome},
-    domain::automation::ports::DeliveryHandler,
+    application::{MestierUseCase, automation::run::EnginePassOutcome},
     infrastructure::automation::connectors::ConnectorRegistry,
 };
 
@@ -18,7 +17,7 @@ use crate::{
 #[derive(Debug, Clone, Copy)]
 pub struct WorkerSchedule {
     pub interval: Duration,
-    /// Deliveries (or runs) claimed per pass, across all organizations.
+    /// Runs claimed per pass, across all organizations.
     pub batch: i64,
     /// Ceiling on how much of a batch one organization may take, so a noisy
     /// tenant cannot starve the others.
@@ -50,33 +49,22 @@ impl Default for WorkerSchedule {
 /// Runs the automation loop until the process ends.
 ///
 /// Nothing here propagates an error: a failing pass must not take the process
-/// down, because the deliveries it could not make are still in the database
-/// and the next pass will find them. What it must do is say so loudly.
-pub async fn run_automation_worker<H: DeliveryHandler>(
+/// down, because the events and runs it could not process are still in the
+/// database and the next pass will find them. What it must do is say so
+/// loudly.
+pub async fn run_automation_worker(
     usecase: MestierUseCase,
-    handler: H,
     worker: String,
     schedule: WorkerSchedule,
 ) {
     info!(%worker, "automation worker started");
     let mut ticker = tokio::time::interval(schedule.interval);
     // Built once, not per tick: its only state is a clone of `usecase`, the
-    // same handle the delivery pass already carries.
+    // same handle the run-engine pass already carries.
     let connectors = ConnectorRegistry::new(usecase.clone());
 
     loop {
         ticker.tick().await;
-
-        match usecase
-            .recover_lost_deliveries(Utc::now() - chrono_from(schedule.claim_timeout))
-            .await
-        {
-            Ok(released) if released > 0 => {
-                warn!(released, "recovered deliveries from a worker that was lost");
-            }
-            Ok(_) => {}
-            Err(error) => error!(%error, "recovering lost deliveries failed"),
-        }
 
         match usecase
             .recover_lost_runs(Utc::now() - chrono_from(schedule.claim_timeout))
@@ -93,24 +81,6 @@ pub async fn run_automation_worker<H: DeliveryHandler>(
             error!(%error, "fanning events out failed");
         }
 
-        match usecase
-            .run_delivery_pass(&handler, &worker, schedule.batch, schedule.per_org)
-            .await
-        {
-            Ok(PassOutcome {
-                claimed,
-                succeeded,
-                failed,
-            }) if claimed > 0 => {
-                info!(claimed, succeeded, failed, "delivery pass");
-            }
-            Ok(_) => {}
-            Err(error) => error!(%error, "the delivery pass failed"),
-        }
-
-        // The run engine's own pass, right beside the delivery one: distinct
-        // tables, distinct claims, and a run's connector execution never
-        // holds a transaction the delivery pass could contend on.
         match usecase
             .run_engine_pass(&connectors, &worker, schedule)
             .await

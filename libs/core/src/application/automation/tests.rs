@@ -9,9 +9,10 @@ mod tests {
 
     use crate::application::{MestierUseCase, default_authorizer};
     use crate::domain::automation::ports::EventLogRepository;
+    use crate::domain::automation::workflow::{Graph, PlacedConnector};
     use crate::infrastructure::automation::postgres::PgEventLogRepository;
+    use crate::infrastructure::automation::postgres::dispatcher::DISPATCH_LOCK;
     use crate::infrastructure::postgres::with_tx;
-    use crate::infrastructure::realtime::EventHub;
 
     struct QuoteAccepted;
 
@@ -36,7 +37,10 @@ mod tests {
         PgPool::connect(&url).await.unwrap()
     }
 
-    async fn seed_organization_with_subscription(pool: &PgPool) -> OrganizationId {
+    /// A workflow with a saved current version, subscribed to
+    /// `quote.accepted` — everything `dispatch_pending_events` needs to turn
+    /// a matching event into a run.
+    async fn seed_organization_with_workflow_subscription(pool: &PgPool) -> OrganizationId {
         let owner_id = generate_uuid_v7();
         sqlx::query!(
             r#"INSERT INTO users (id, email, username, display_name, sub)
@@ -64,28 +68,64 @@ mod tests {
         .await
         .unwrap();
 
+        let org = OrganizationId(org_id);
+        let usecase = MestierUseCase::new(
+            pool.clone(),
+            default_authorizer(),
+            crate::infrastructure::realtime::EventHub::new(),
+        );
+        let workflow = usecase
+            .create_workflow(crate::domain::automation::workflow::CreateWorkflowCommand {
+                org_id: org,
+                name: "Test workflow".to_string(),
+                description: None,
+            })
+            .await
+            .unwrap();
+        let mut config = serde_json::Map::new();
+        config.insert("predicate".to_string(), json!("{{ true }}"));
+        let graph = Graph {
+            connectors: vec![PlacedConnector {
+                id: "c1".to_string(),
+                kind: "flow.condition".to_string(),
+                version: 1,
+                credential_id: None,
+                config,
+            }],
+            edges: Vec::new(),
+        };
+        usecase
+            .save_workflow_version(
+                crate::domain::automation::workflow::SaveWorkflowVersionCommand {
+                    org_id: org,
+                    workflow_id: workflow.id,
+                    graph,
+                    created_by: None,
+                },
+            )
+            .await
+            .unwrap();
+
         sqlx::query!(
             r#"INSERT INTO automation.subscription (id, org_id, kind, target_id, event_names)
-               VALUES ($1, $2, 'webhook', $3, ARRAY['quote.accepted'])"#,
+               VALUES ($1, $2, 'workflow', $3, ARRAY['quote.accepted'])"#,
             generate_uuid_v7(),
             org_id,
-            generate_uuid_v7(),
+            workflow.id,
         )
         .execute(pool)
         .await
         .unwrap();
 
-        OrganizationId(org_id)
+        org
     }
 
     #[tokio::test]
     #[ignore = "requires live postgres"]
-    async fn one_pass_fans_a_committed_event_out_to_its_subscriber() {
-        let _guard = crate::infrastructure::automation::postgres::dispatcher::DISPATCH_LOCK
-            .lock()
-            .await;
+    async fn one_pass_fans_a_committed_event_out_to_a_workflow_run() {
+        let _guard = DISPATCH_LOCK.lock().await;
         let pool = make_pool().await;
-        let org_id = seed_organization_with_subscription(&pool).await;
+        let org_id = seed_organization_with_workflow_subscription(&pool).await;
         let envelope = EventEnvelope::from_event(
             &QuoteAccepted,
             &EmissionContext {
@@ -100,18 +140,32 @@ mod tests {
         })
         .await
         .unwrap();
-        let usecase = MestierUseCase::new(pool.clone(), default_authorizer(), EventHub::new());
+        let usecase = MestierUseCase::new(
+            pool.clone(),
+            default_authorizer(),
+            crate::infrastructure::realtime::EventHub::new(),
+        );
 
         let outcome = usecase.dispatch_pending_events(100).await.unwrap();
 
-        assert!(outcome.events >= 1);
-        let deliveries = sqlx::query_scalar!(
-            "SELECT COUNT(*) FROM automation.delivery WHERE event_id = $1",
+        assert!(outcome.runs >= 1);
+        let runs = sqlx::query_scalar!(
+            "SELECT COUNT(*) FROM automation.run WHERE trigger_event_id = $1",
             envelope.id,
         )
         .fetch_one(&pool)
         .await
         .unwrap();
-        assert_eq!(deliveries, Some(1));
+        assert_eq!(runs, Some(1));
+        // Sanity: `next_attempt_at` is set so the run engine actually picks
+        // this up, rather than a row nobody will ever claim.
+        let due = sqlx::query_scalar!(
+            "SELECT next_attempt_at <= now() FROM automation.run WHERE trigger_event_id = $1",
+            envelope.id,
+        )
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+        assert_eq!(due, Some(true));
     }
 }

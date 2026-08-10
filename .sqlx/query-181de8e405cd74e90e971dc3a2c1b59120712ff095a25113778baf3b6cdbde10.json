@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "DELETE FROM automation.event WHERE id = $1",
+  "query": "UPDATE automation.event SET name = 'b.done' WHERE id = $1",
   "describe": {
     "columns": [],
     "parameters": {
@@ -10,5 +10,5 @@
     },
     "nullable": []
   },
-  "hash": "e57c3169bcde9be370b89d9b01a0919c82bbcebdd8e3cbb948e66d76ae7e5bbd"
+  "hash": "181de8e405cd74e90e971dc3a2c1b59120712ff095a25113778baf3b6cdbde10"
 }
