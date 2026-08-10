@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM automation.run_step\n               WHERE run_id = $1 AND connector_id = ANY($2::text[])",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "TextArray"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "c62fddaed1820dace5768eee87824c77ba472a8d3ae8287757d59eb256184839"
+}

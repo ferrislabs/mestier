@@ -1,0 +1,44 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO automation.settings\n                (org_id, event_retention_seconds, succeeded_run_retention_seconds,\n                 retry_schedule_seconds, disable_target_after)\n            VALUES ($1, $2, $3, $4, $5)\n            ON CONFLICT (org_id) DO UPDATE\n            SET event_retention_seconds = EXCLUDED.event_retention_seconds,\n                succeeded_run_retention_seconds = EXCLUDED.succeeded_run_retention_seconds,\n                retry_schedule_seconds = EXCLUDED.retry_schedule_seconds,\n                disable_target_after = EXCLUDED.disable_target_after,\n                updated_at = now()\n            RETURNING event_retention_seconds, succeeded_run_retention_seconds,\n                      retry_schedule_seconds, disable_target_after\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "event_retention_seconds",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 1,
+        "name": "succeeded_run_retention_seconds",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 2,
+        "name": "retry_schedule_seconds",
+        "type_info": "Int8Array"
+      },
+      {
+        "ordinal": 3,
+        "name": "disable_target_after",
+        "type_info": "Int4"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Int8",
+        "Int8",
+        "Int8Array",
+        "Int4"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      true
+    ]
+  },
+  "hash": "ad915175fa0591526ea3c125b7f2d9fed9f79466720a20735a5f452a0ab0fab7"
+}

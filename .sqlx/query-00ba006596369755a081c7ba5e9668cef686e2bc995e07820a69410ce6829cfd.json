@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE automation.run\n               SET status = 'pending', error = NULL, next_attempt_at = now(),\n                   locked_at = NULL, locked_by = NULL, finished_at = NULL\n               WHERE id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "00ba006596369755a081c7ba5e9668cef686e2bc995e07820a69410ce6829cfd"
+}
