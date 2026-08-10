@@ -2,14 +2,16 @@ use std::sync::Arc;
 
 use auth::{AuthService, FerrisKeyRepository};
 use authz::LocalPolicyEngine;
-use common::{Config, CoreError};
+use common::{AutomationConfig, Config, CoreError};
 use rate_limit::{Quota, RateLimitService, RedisRateLimiter};
 use sqlx::PgPool;
 use sqlx::postgres::PgPoolOptions;
 
 use crate::domain::file_storage::service::FileStorageService;
 use crate::domain::role::Permissions;
-use crate::infrastructure::automation::webhook::secret::SecretCipher;
+use crate::infrastructure::automation::webhook::{
+    address_policy::PrivateNetworkAccess, secret::SecretCipher,
+};
 use crate::infrastructure::automation::worker::{WorkerSchedule, run_automation_worker};
 use crate::infrastructure::file_storage::S3FileStorage;
 use crate::infrastructure::postgres::error::map_sqlx_error;
@@ -217,7 +219,7 @@ pub async fn create_service(config: Config) -> Result<MestierService, CoreError>
     let usecase =
         MestierUseCase::new(pool.clone(), default_authorizer(), hub.clone()).with_cipher(cipher);
 
-    spawn_automation_worker(usecase.clone());
+    spawn_automation_worker(usecase.clone(), &config.automation);
 
     Ok(MestierService::new(
         auth,
@@ -232,19 +234,40 @@ pub async fn create_service(config: Config) -> Result<MestierService, CoreError>
 /// Starts the background loop that fans events out into runs and executes
 /// them.
 ///
-/// Unlike the webhook delivery pass it replaces, the run engine needs no
-/// `AUTOMATION_SECRET_KEY` to operate — nothing on this path decrypts a
-/// sealed secret — so the worker always starts. The key remains required
-/// elsewhere, to seal credential data at rest (see [`MestierUseCase::cipher`]).
-fn spawn_automation_worker(usecase: MestierUseCase) {
+/// The worker always starts, unlike the webhook delivery pass it replaces:
+/// a graph made only of `flow.*` and `mestier.*` connectors runs perfectly
+/// well without a key. But a connector carrying a credential has to open it,
+/// so without `AUTOMATION_SECRET_KEY` those steps fail one by one instead of
+/// the whole loop refusing to start. That degradation is visible in the run
+/// inspector rather than silent, and it is announced here so an operator does
+/// not have to discover it one failed run at a time.
+fn spawn_automation_worker(usecase: MestierUseCase, config: &AutomationConfig) {
     // Named after the host so a run stuck `running` points at the machine
     // that was holding it.
     let worker = hostname().unwrap_or_else(|| "mestier".to_owned());
+
+    if usecase.cipher.is_none() {
+        tracing::warn!(
+            "no AUTOMATION_SECRET_KEY configured: workflows run, but any connector using a \
+             credential will fail because its secret cannot be opened"
+        );
+    }
+
+    let private_network = if config.allow_private_network {
+        tracing::warn!(
+            "workflow connectors may reach private addresses. Correct for a single-tenant \
+             instance; on a shared one a tenant can borrow this server's network rights"
+        );
+        PrivateNetworkAccess::Allowed
+    } else {
+        PrivateNetworkAccess::Denied
+    };
 
     tokio::spawn(run_automation_worker(
         usecase,
         worker,
         WorkerSchedule::default(),
+        private_network,
     ));
 }
 
