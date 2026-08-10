@@ -4,35 +4,30 @@ use common::{CoreError, OrganizationId};
 use mestier_macros::repository;
 
 use crate::{
-    domain::automation::{ports::DeliveryRepository, settings::AutomationSettings},
+    domain::automation::{ports::AutomationSettingsRepository, settings::AutomationSettings},
     infrastructure::postgres::{SharedTx, error::map_sqlx_error},
 };
 
-/// What #201 leaves of the delivery pipeline: `automation.delivery` and
-/// `automation.webhook_endpoint` are gone (see migration
-/// `20260810000004_drop_delivery_and_webhook_endpoints`), and every method
-/// that claimed, settled or delivered against them left with the table.
+/// Reads `automation.settings`. Formerly part of the delivery pipeline #201
+/// replaces (a webhook retry needed the same organization-wide backoff
+/// schedule); moved here, under its own name, once delivery was gone and
+/// `DeliveryRepository` had nothing left to do with delivery.
 ///
-/// `settings_for` alone survives, under its original name and domain marker
-/// (`registry::domain::Delivery`, owned by `infrastructure::registry` — out
-/// of this ticket's scope to rename). `application::automation::run`'s
-/// `retry_schedule_for` reuses it verbatim: the retry schedule is an
-/// organization-wide `automation.settings` row, never a delivery-specific
-/// one, so the run engine has never needed a query of its own for it — only
-/// this repository to read it through. Renaming the type or the marker would
-/// mean touching that file, which #201 does not own.
-#[repository(domain = Delivery, backend = Postgres)]
-pub struct PgDeliveryRepository<'tx> {
+/// `application::automation::run::retry_schedule_for` is why this still
+/// exists as a repository rather than a free function: it reuses this port
+/// verbatim for the run engine's own retry backoff.
+#[repository(domain = AutomationSettings, backend = Postgres)]
+pub struct PgAutomationSettingsRepository<'tx> {
     tx: SharedTx<'tx>,
 }
 
-impl<'tx> PgDeliveryRepository<'tx> {
+impl<'tx> PgAutomationSettingsRepository<'tx> {
     pub fn new(tx: &SharedTx<'tx>) -> Self {
         Self { tx: tx.clone() }
     }
 }
 
-impl<'tx> DeliveryRepository for PgDeliveryRepository<'tx> {
+impl<'tx> AutomationSettingsRepository for PgAutomationSettingsRepository<'tx> {
     async fn settings_for(
         &mut self,
         org_id: OrganizationId,
@@ -129,7 +124,7 @@ mod tests {
         let org_id = seed_organization(&pool).await;
 
         let settings = with_tx(&pool, async |tx| {
-            let mut repo = PgDeliveryRepository::new(&tx);
+            let mut repo = PgAutomationSettingsRepository::new(&tx);
             repo.settings_for(org_id).await
         })
         .await
@@ -153,7 +148,7 @@ mod tests {
         .unwrap();
 
         let settings = with_tx(&pool, async |tx| {
-            let mut repo = PgDeliveryRepository::new(&tx);
+            let mut repo = PgAutomationSettingsRepository::new(&tx);
             repo.settings_for(org_id).await
         })
         .await

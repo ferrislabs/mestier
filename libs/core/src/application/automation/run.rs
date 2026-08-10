@@ -11,7 +11,7 @@ use crate::{
     application::MestierUseCase,
     domain::automation::{
         expression::ExpressionContext,
-        ports::{DeliveryRepository, RunRepository, WorkflowRepository},
+        ports::{AutomationSettingsRepository, RunRepository, WorkflowRepository},
         run::{
             ConnectorInput, ConnectorOutcome, DueRun, LoopStackEntry, Run, RunSettlement,
             RunStatus, RunStep, StepStatus, branch_targets, connectors_by_id, descendants_via,
@@ -211,15 +211,15 @@ impl MestierUseCase {
         repo.settle_run(run_id, settlement).await
     }
 
-    /// Reuses `DeliveryRepository::settings_for`: the retry schedule is an
-    /// organization-wide automation setting, not a delivery-specific one, so
-    /// nothing here needs its own copy of that query.
-    #[transactional(delivery)]
+    /// Reuses `AutomationSettingsRepository::settings_for`: the retry
+    /// schedule is an organization-wide automation setting, not specific to
+    /// this engine, so nothing here needs its own copy of that query.
+    #[transactional(automation_settings)]
     async fn retry_schedule_for(
         &self,
         org_id: OrganizationId,
     ) -> Result<crate::domain::automation::settings::AutomationSettings, CoreError> {
-        let mut repo = delivery_repository;
+        let mut repo = automation_settings_repository;
         repo.settings_for(org_id).await
     }
 

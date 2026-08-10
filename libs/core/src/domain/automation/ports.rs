@@ -50,18 +50,15 @@ pub trait EventDispatchRepository: Send {
     ) -> impl Future<Output = Result<DispatchOutcome, CoreError>> + Send;
 }
 
-/// What survives of the delivery pipeline #201 replaces: `automation.delivery`
-/// and `automation.webhook_endpoint` are dropped, and every method that once
-/// claimed, settled or delivered against them left with the table (see
-/// `infrastructure::automation::postgres::delivery` for where they lived).
-///
-/// `settings_for` alone remains, because it is not delivery-specific: the
-/// retry schedule and the other automation settings it reads are an
-/// organization-wide `automation.settings` row, and the run engine
-/// (`application::automation::run::retry_schedule_for`) reuses this port for
-/// it rather than duplicating the query on its own.
+/// Reads an organization's `automation.settings` row: the retry schedule and
+/// the other knobs that apply across the whole automation subsystem, not to
+/// any one delivery mechanism. The delivery pipeline #201 replaces used to
+/// own this port (it read the same row to schedule a webhook retry); the run
+/// engine (`application::automation::run::retry_schedule_for`) reuses it
+/// verbatim for the same reason a retry needs backoff, rather than
+/// duplicating the query on its own.
 #[cfg_attr(test, mockall::automock)]
-pub trait DeliveryRepository: Send {
+pub trait AutomationSettingsRepository: Send {
     fn settings_for(
         &mut self,
         org_id: OrganizationId,
@@ -204,8 +201,9 @@ pub trait RunRepository: Send {
     fn create_run(&mut self, run: &Run) -> impl Future<Output = Result<Run, CoreError>> + Send;
 
     /// Claims runs that are due, marking them `running` and stamping the
-    /// worker so a crashed one can be recovered later — the same shape as
-    /// [`DeliveryRepository::claim_due`].
+    /// worker so a crashed one can be recovered later — `FOR UPDATE SKIP
+    /// LOCKED` under a per-organization quota, the same shape the delivery
+    /// pipeline #201 replaces used for its own claim.
     fn claim_due(
         &mut self,
         worker: &str,
@@ -253,8 +251,8 @@ pub trait RunRepository: Send {
     ) -> impl Future<Output = Result<(), CoreError>> + Send;
 
     /// Releases runs a worker claimed and never settled — it died in flight
-    /// — so they become claimable again instead of stranded. The same shape
-    /// as [`DeliveryRepository::release_stale_claims`].
+    /// — so they become claimable again instead of stranded. The same
+    /// recovery the delivery pipeline #201 replaces used for its own claims.
     fn release_stale_claims(
         &mut self,
         older_than: DateTime<Utc>,
