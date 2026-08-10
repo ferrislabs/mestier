@@ -28,13 +28,31 @@ impl Template {
     /// and `c1` is in this set. Used by #199 to reject a reference to a
     /// connector that does not exist, before any run happens.
     pub fn referenced_connectors(&self) -> BTreeSet<String> {
-        BTreeSet::new()
+        let mut ids = BTreeSet::new();
+        for root in self.expr_roots() {
+            ast::walk_paths(root, &mut |path| {
+                if path.root == ast::PathRoot::Connectors {
+                    if let Some(ast::PathSegment::Field(id)) = path.segments.first() {
+                        ids.insert(id.clone());
+                    }
+                }
+            });
+        }
+        ids
     }
 
     /// True when the template reads `loop.*`. Used by #199 to reject `loop`
     /// outside of a `flow.loop` connector.
     pub fn uses_loop(&self) -> bool {
-        false
+        let mut found = false;
+        for root in self.expr_roots() {
+            ast::walk_paths(root, &mut |path| {
+                if path.root == ast::PathRoot::Loop {
+                    found = true;
+                }
+            });
+        }
+        found
     }
 
     /// True when no evaluation is ever needed: the raw value was not a
@@ -160,5 +178,164 @@ mod tests {
                 message: "unterminated `{{`".to_string(),
             }
         );
+    }
+
+    #[test]
+    fn a_trigger_path_reads_a_nested_field() {
+        let trigger = json!({ "payload": { "quote": { "total": 42 } } });
+        let connectors = BTreeMap::new();
+        let ctx = ExpressionContext {
+            trigger: Some(&trigger),
+            connectors: &connectors,
+            loop_frame: None,
+            now: fixed_now(),
+        };
+        let template = parse_template(&json!("{{ trigger.payload.quote.total }}"))
+            .expect("valid path expression");
+
+        assert_eq!(template.evaluate(&ctx).expect("resolves"), json!(42));
+    }
+
+    #[test]
+    fn a_connectors_path_reads_a_nested_array_element() {
+        let mut connectors = BTreeMap::new();
+        connectors.insert(
+            "c1".to_string(),
+            json!({ "output": { "lines": [{ "total": 12 }, { "total": 34 }] } }),
+        );
+        let ctx = empty_context(&connectors);
+        let template = parse_template(&json!(
+            "{{ connectors.c1.output.lines[1].total }}"
+        ))
+        .expect("valid path expression");
+
+        assert_eq!(template.evaluate(&ctx).expect("resolves"), json!(34));
+    }
+
+    #[test]
+    fn a_bare_trigger_path_returns_the_whole_payload() {
+        let trigger = json!({ "quote_id": "q-1" });
+        let connectors = BTreeMap::new();
+        let ctx = ExpressionContext {
+            trigger: Some(&trigger),
+            connectors: &connectors,
+            loop_frame: None,
+            now: fixed_now(),
+        };
+        let template = parse_template(&json!("{{ trigger }}")).expect("valid path expression");
+
+        assert_eq!(
+            template.evaluate(&ctx).expect("resolves"),
+            json!({ "quote_id": "q-1" })
+        );
+    }
+
+    #[test]
+    fn a_missing_field_fails_naming_the_full_path() {
+        let mut connectors = BTreeMap::new();
+        connectors.insert("c1".to_string(), json!({ "output": { "total": 1 } }));
+        let ctx = empty_context(&connectors);
+        let template = parse_template(&json!("{{ connectors.c1.output.items }}"))
+            .expect("valid path expression");
+
+        let err = template.evaluate(&ctx).expect_err("the field does not exist");
+
+        assert_eq!(
+            err,
+            ExpressionError::MissingPath {
+                path: "connectors.c1.output.items".to_string(),
+            }
+        );
+    }
+
+    #[test]
+    fn an_absent_trigger_fails_naming_the_path() {
+        let connectors = BTreeMap::new();
+        let ctx = empty_context(&connectors);
+        let template =
+            parse_template(&json!("{{ trigger.quote_id }}")).expect("valid path expression");
+
+        let err = template.evaluate(&ctx).expect_err("no trigger in context");
+
+        assert_eq!(
+            err,
+            ExpressionError::MissingPath {
+                path: "trigger.quote_id".to_string(),
+            }
+        );
+    }
+
+    #[test]
+    fn an_unknown_connector_id_fails_naming_the_path() {
+        let connectors = BTreeMap::new();
+        let ctx = empty_context(&connectors);
+        let template =
+            parse_template(&json!("{{ connectors.missing.output }}")).expect("valid path");
+
+        let err = template.evaluate(&ctx).expect_err("no such connector");
+
+        assert_eq!(
+            err,
+            ExpressionError::MissingPath {
+                path: "connectors.missing.output".to_string(),
+            }
+        );
+    }
+
+    #[test]
+    fn connectors_alone_without_an_id_is_a_syntax_error() {
+        let err = parse_template(&json!("{{ connectors }}")).expect_err("no connector id");
+
+        assert!(matches!(err, ExpressionError::Syntax { .. }), "{err:?}");
+    }
+
+    #[test]
+    fn referenced_connectors_names_the_connector_id_of_a_path() {
+        let template =
+            parse_template(&json!("{{ connectors.c1.output.a }}")).expect("valid path");
+
+        let ids: Vec<_> = template.referenced_connectors().into_iter().collect();
+        assert_eq!(ids, vec!["c1".to_string()]);
+    }
+
+    #[test]
+    fn a_trigger_or_loop_path_is_never_a_referenced_connector() {
+        let template = parse_template(&json!("{{ trigger.quote_id }}")).expect("valid path");
+
+        assert!(template.referenced_connectors().is_empty());
+    }
+
+    #[test]
+    fn loop_item_and_index_resolve_inside_a_loop_frame() {
+        let item = json!({ "name": "brioche" });
+        let connectors = BTreeMap::new();
+        let ctx = ExpressionContext {
+            trigger: None,
+            connectors: &connectors,
+            loop_frame: Some(LoopFrame { item: &item, index: 3 }),
+            now: fixed_now(),
+        };
+
+        let name_template =
+            parse_template(&json!("{{ loop.item.name }}")).expect("valid loop path");
+        let index_template = parse_template(&json!("{{ loop.index }}")).expect("valid loop path");
+
+        assert!(name_template.uses_loop());
+        assert_eq!(
+            name_template.evaluate(&ctx).expect("resolves"),
+            json!("brioche")
+        );
+        assert_eq!(index_template.evaluate(&ctx).expect("resolves"), json!(3));
+    }
+
+    #[test]
+    fn loop_outside_a_loop_frame_fails_explicitly() {
+        let connectors = BTreeMap::new();
+        let ctx = empty_context(&connectors);
+        let template = parse_template(&json!("{{ loop.item }}")).expect("valid loop path");
+
+        let err = template.evaluate(&ctx).expect_err("no loop frame in context");
+
+        assert_eq!(err, ExpressionError::LoopOutsideLoop);
     }
 }

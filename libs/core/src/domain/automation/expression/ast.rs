@@ -22,11 +22,74 @@ pub(crate) enum Part {
     Expr(Expr),
 }
 
-/// A parsed `{{ ... }}` body. Only literals exist yet — paths, operators and
-/// function calls are added as the grammar is built out.
+/// A parsed `{{ ... }}` body. Operators and function calls are added as the
+/// grammar is built out.
 #[derive(Debug)]
 pub(crate) enum Expr {
     Literal(Value),
+    Path(Path),
+}
+
+/// One reference into `trigger`, `connectors` or `loop`.
+///
+/// Kept apart from the rest of [`Expr`] because two independent readers need
+/// just this piece: the evaluator resolves it against an
+/// `ExpressionContext`, and the static pass (`Template::referenced_connectors`,
+/// `Template::uses_loop`) only ever looks at the root and the first segment.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct Path {
+    pub(crate) root: PathRoot,
+    pub(crate) segments: Vec<PathSegment>,
+}
+
+impl Path {
+    /// Reconstructs the source text, e.g. `connectors.c1.output.lines[0].total`.
+    /// Used to name the path in `ExpressionError::MissingPath` and
+    /// `TypeMismatch`, so both contexts name it exactly as written.
+    pub(crate) fn to_source(&self) -> String {
+        let mut out = match self.root {
+            PathRoot::Trigger => "trigger".to_string(),
+            PathRoot::Connectors => "connectors".to_string(),
+            PathRoot::Loop => "loop".to_string(),
+        };
+        for segment in &self.segments {
+            match segment {
+                PathSegment::Field(name) => {
+                    out.push('.');
+                    out.push_str(name);
+                }
+                PathSegment::Index(index) => {
+                    out.push('[');
+                    out.push_str(&index.to_string());
+                    out.push(']');
+                }
+            }
+        }
+        out
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum PathRoot {
+    Trigger,
+    Connectors,
+    Loop,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum PathSegment {
+    Field(String),
+    Index(usize),
+}
+
+/// Visits every [`Path`] reachable from `expr`. The static pass
+/// (`referenced_connectors`, `uses_loop`) is built entirely on top of this:
+/// it never needs to know how deep a path sits inside the expression tree.
+pub(crate) fn walk_paths<'a>(expr: &'a Expr, visit: &mut impl FnMut(&'a Path)) {
+    match expr {
+        Expr::Literal(_) => {}
+        Expr::Path(path) => visit(path),
+    }
 }
 
 /// Compiled form of one field's raw JSON value. Opaque by design — evaluate
@@ -53,5 +116,14 @@ impl Template {
 
     pub(crate) fn kind(&self) -> &TemplateKind {
         &self.kind
+    }
+
+    /// Every top-level expression this template evaluates. The static pass
+    /// walks paths starting from each of these; a plain literal has none.
+    pub(crate) fn expr_roots(&self) -> Vec<&Expr> {
+        match &self.kind {
+            TemplateKind::Literal(_) => Vec::new(),
+            TemplateKind::Whole(expr) => vec![expr],
+        }
     }
 }

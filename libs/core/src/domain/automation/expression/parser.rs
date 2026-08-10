@@ -1,6 +1,6 @@
 use serde_json::Value;
 
-use super::ast::{Expr, Part, Template};
+use super::ast::{Expr, Part, Path, PathRoot, PathSegment, Template};
 use super::error::ExpressionError;
 
 /// Entry point used by `parse_template`. A non-string value is always a
@@ -443,12 +443,111 @@ impl<'a> Parser<'a> {
                 self.bump()?;
                 Ok(Expr::Literal(Value::Null))
             }
+            Tok::Ident(name) => self.parse_ident_start(name),
             _ => Err(ExpressionError::Syntax {
                 position: self.cur.pos,
                 message: "expected a value".to_string(),
             }),
         }
     }
+
+    /// An identifier starts either a path (`trigger`, `connectors`, `loop`)
+    /// or a function call. Function calls are not parsed yet, so anything
+    /// else is a syntax error naming the unknown identifier.
+    fn parse_ident_start(&mut self, name: String) -> Result<Expr, ExpressionError> {
+        let start_pos = self.cur.pos;
+        let root = match name.as_str() {
+            "trigger" => Some(PathRoot::Trigger),
+            "connectors" => Some(PathRoot::Connectors),
+            "loop" => Some(PathRoot::Loop),
+            _ => None,
+        };
+
+        if let Some(root) = root {
+            self.bump()?;
+            let segments = self.parse_path_segments()?;
+            if matches!(root, PathRoot::Connectors) && segments.is_empty() {
+                return Err(ExpressionError::Syntax {
+                    position: start_pos,
+                    message: "`connectors` requires a connector id, e.g. `connectors.c1`"
+                        .to_string(),
+                });
+            }
+            return Ok(Expr::Path(Path { root, segments }));
+        }
+
+        Err(ExpressionError::Syntax {
+            position: start_pos,
+            message: format!(
+                "unknown identifier `{name}`; expected `trigger`, `connectors`, `loop`"
+            ),
+        })
+    }
+
+    /// Consumes every trailing `.field` and `[index]` segment after a path
+    /// root. Stops, without consuming, at the first token that is neither.
+    fn parse_path_segments(&mut self) -> Result<Vec<PathSegment>, ExpressionError> {
+        let mut segments = Vec::new();
+        loop {
+            match self.cur.tok.clone() {
+                Tok::Dot => {
+                    self.bump()?;
+                    match self.cur.tok.clone() {
+                        Tok::Ident(name) => {
+                            self.bump()?;
+                            segments.push(PathSegment::Field(name));
+                        }
+                        _ => {
+                            return Err(ExpressionError::Syntax {
+                                position: self.cur.pos,
+                                message: "expected a field name after `.`".to_string(),
+                            })
+                        }
+                    }
+                }
+                Tok::LBracket => {
+                    self.bump()?;
+                    match self.cur.tok.clone() {
+                        Tok::Number(text) if is_index_literal(&text) => {
+                            let index: usize = text.parse().map_err(|_| {
+                                ExpressionError::Syntax {
+                                    position: self.cur.pos,
+                                    message: format!("invalid index `{text}`"),
+                                }
+                            })?;
+                            self.bump()?;
+                            self.expect_rbracket()?;
+                            segments.push(PathSegment::Index(index));
+                        }
+                        _ => {
+                            return Err(ExpressionError::Syntax {
+                                position: self.cur.pos,
+                                message: "expected a non-negative integer index".to_string(),
+                            })
+                        }
+                    }
+                }
+                _ => break,
+            }
+        }
+        Ok(segments)
+    }
+
+    fn expect_rbracket(&mut self) -> Result<(), ExpressionError> {
+        if matches!(self.cur.tok, Tok::RBracket) {
+            self.bump()?;
+            Ok(())
+        } else {
+            Err(ExpressionError::Syntax {
+                position: self.cur.pos,
+                message: "expected `]`".to_string(),
+            })
+        }
+    }
+}
+
+fn is_index_literal(text: &str) -> bool {
+    !text.contains('.') && !text.starts_with('-')
 }
 
 /// Renders as an integer when the source had no `.`, as a float otherwise —
