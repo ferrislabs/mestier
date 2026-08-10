@@ -2,6 +2,14 @@
 //! connector's output, compare and combine values, and call a closed list of
 //! functions. No JavaScript, no loops of their own — see the module's tests
 //! and issue #196 for the grammar this compiles.
+//!
+//! `domain` is `pub(crate)` (see `libs/core/src/lib.rs`), and this ticket
+//! (#196) deliberately has no caller yet: it builds the language, not the
+//! workflow graph or the connector that will run it (#199, #200). Until one
+//! of those lands, nothing outside this module's own tests reaches the
+//! public API below, so it reads as dead code to rustc. The allows are
+//! scoped to this module rather than silenced crate-wide.
+#![allow(dead_code, unused_imports)]
 
 mod ast;
 mod context;
