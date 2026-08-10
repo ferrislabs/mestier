@@ -121,6 +121,17 @@ impl MestierUseCase {
             ..self.clone()
         }
     }
+
+    /// Attaches the key that seals credential data at rest.
+    ///
+    /// A method rather than a public field so the composition root is the only
+    /// place that can set it, and so it reads the same way as [`Self::acting_as`]
+    /// — this type is configured by returning a new view of itself, never by
+    /// mutating one from another module.
+    pub fn with_cipher(mut self, cipher: Option<Arc<SecretCipher>>) -> Self {
+        self.cipher = cipher;
+        self
+    }
 }
 
 #[derive(Clone)]
@@ -184,11 +195,12 @@ pub async fn create_service(config: Config) -> Result<MestierService, CoreError>
     let rate_limit_quota = Quota::per_minute(config.rate_limit.per_minute);
 
     let hub = EventHub::new();
-    let mut usecase = MestierUseCase::new(pool.clone(), default_authorizer(), hub.clone());
-    usecase.cipher = match config.automation.secret_key.as_deref() {
+    let cipher = match config.automation.secret_key.as_deref() {
         Some(encoded) => Some(Arc::new(SecretCipher::from_base64(encoded)?)),
         None => None,
     };
+    let usecase =
+        MestierUseCase::new(pool.clone(), default_authorizer(), hub.clone()).with_cipher(cipher);
 
     spawn_automation_worker(&config.automation, pool, usecase.clone())?;
 
