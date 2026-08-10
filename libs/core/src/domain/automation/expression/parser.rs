@@ -177,7 +177,7 @@ impl<'a> Lexer<'a> {
                 return Ok(Spanned {
                     tok: Tok::Eof,
                     pos: start,
-                })
+                });
             }
             Some(c) => c,
         };
@@ -307,7 +307,7 @@ impl<'a> Lexer<'a> {
                     return Err(ExpressionError::Syntax {
                         position: start,
                         message: "unterminated string literal".to_string(),
-                    })
+                    });
                 }
                 Some(c) if c == quote => break,
                 Some('\\') => match self.bump_char() {
@@ -321,13 +321,13 @@ impl<'a> Lexer<'a> {
                         return Err(ExpressionError::Syntax {
                             position: start,
                             message: format!("unknown escape sequence `\\{other}`"),
-                        })
+                        });
                     }
                     None => {
                         return Err(ExpressionError::Syntax {
                             position: start,
                             message: "unterminated string literal".to_string(),
-                        })
+                        });
                     }
                 },
                 Some(c) => out.push(c),
@@ -354,8 +354,7 @@ impl<'a> Lexer<'a> {
                 break;
             }
         }
-        if self.peek_char() == Some('.')
-            && self.peek_char_at(1).is_some_and(|c| c.is_ascii_digit())
+        if self.peek_char() == Some('.') && self.peek_char_at(1).is_some_and(|c| c.is_ascii_digit())
         {
             text.push('.');
             self.bump_char();
@@ -397,8 +396,9 @@ impl<'a> Lexer<'a> {
     }
 }
 
-/// Recursive-descent parser over one `{{ ... }}` body. Only literals are
-/// handled yet; paths, operators and function calls are added next.
+/// Recursive-descent parser over one `{{ ... }}` body: literals, paths,
+/// comparisons, `and`/`or`/`not`, parenthesized sub-expressions, and calls
+/// to the closed list of functions in [`function_arity`].
 struct Parser<'a> {
     lexer: Lexer<'a>,
     cur: Spanned,
@@ -592,9 +592,8 @@ impl<'a> Parser<'a> {
         }
         self.expect_rparen()?;
 
-        let arity = function_arity(&name).ok_or_else(|| ExpressionError::UnknownFunction {
-            name: name.clone(),
-        })?;
+        let arity = function_arity(&name)
+            .ok_or_else(|| ExpressionError::UnknownFunction { name: name.clone() })?;
         check_arity(&name, arity, args.len())?;
 
         Ok(Expr::Call { name, args })
@@ -617,7 +616,7 @@ impl<'a> Parser<'a> {
                             return Err(ExpressionError::Syntax {
                                 position: self.cur.pos,
                                 message: "expected a field name after `.`".to_string(),
-                            })
+                            });
                         }
                     }
                 }
@@ -625,12 +624,11 @@ impl<'a> Parser<'a> {
                     self.bump()?;
                     match self.cur.tok.clone() {
                         Tok::Number(text) if is_index_literal(&text) => {
-                            let index: usize = text.parse().map_err(|_| {
-                                ExpressionError::Syntax {
+                            let index: usize =
+                                text.parse().map_err(|_| ExpressionError::Syntax {
                                     position: self.cur.pos,
                                     message: format!("invalid index `{text}`"),
-                                }
-                            })?;
+                                })?;
                             self.bump()?;
                             self.expect_rbracket()?;
                             segments.push(PathSegment::Index(index));
@@ -639,7 +637,7 @@ impl<'a> Parser<'a> {
                             return Err(ExpressionError::Syntax {
                                 position: self.cur.pos,
                                 message: "expected a non-negative integer index".to_string(),
-                            })
+                            });
                         }
                     }
                 }

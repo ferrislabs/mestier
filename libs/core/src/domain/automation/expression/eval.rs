@@ -87,11 +87,13 @@ fn eval_binary(
 }
 
 fn as_bool(value: &Value, source: &Expr) -> Result<bool, ExpressionError> {
-    value.as_bool().ok_or_else(|| ExpressionError::TypeMismatch {
-        path: describe(source),
-        expected: "boolean",
-        got: type_name(value),
-    })
+    value
+        .as_bool()
+        .ok_or_else(|| ExpressionError::TypeMismatch {
+            path: describe(source),
+            expected: "boolean",
+            got: type_name(value),
+        })
 }
 
 fn as_number(value: &Value, source: &Expr) -> Result<f64, ExpressionError> {
@@ -139,7 +141,11 @@ fn describe(expr: &Expr) -> String {
 /// when that specifically raises `MissingPath` — any other error, including
 /// a type mismatch or (were it possible here) a bad path deeper down, is
 /// propagated rather than swallowed.
-fn eval_call(name: &str, args: &[Expr], ctx: &ExpressionContext<'_>) -> Result<Value, ExpressionError> {
+fn eval_call(
+    name: &str,
+    args: &[Expr],
+    ctx: &ExpressionContext<'_>,
+) -> Result<Value, ExpressionError> {
     match name {
         "default" => match eval_expr(&args[0], ctx) {
             Ok(value) => Ok(value),
@@ -168,7 +174,7 @@ fn eval_call(name: &str, args: &[Expr], ctx: &ExpressionContext<'_>) -> Result<V
                         path: describe(&args[0]),
                         expected: "string, array or object",
                         got: type_name(other),
-                    })
+                    });
                 }
             };
             Ok(Value::Number(serde_json::Number::from(count)))
@@ -198,13 +204,13 @@ fn eval_call(name: &str, args: &[Expr], ctx: &ExpressionContext<'_>) -> Result<V
             let value = eval_expr(&args[0], ctx)?;
             match &value {
                 Value::Number(_) => Ok(value),
-                Value::String(s) => parse_number_string(s).ok_or_else(|| {
-                    ExpressionError::TypeMismatch {
+                Value::String(s) => {
+                    parse_number_string(s).ok_or_else(|| ExpressionError::TypeMismatch {
                         path: describe(&args[0]),
                         expected: "a numeric string",
                         got: "string",
-                    }
-                }),
+                    })
+                }
                 other => Err(ExpressionError::TypeMismatch {
                     path: describe(&args[0]),
                     expected: "number or numeric string",
@@ -335,11 +341,7 @@ fn resolve_path(path: &Path, ctx: &ExpressionContext<'_>) -> Result<Value, Expre
             // segment (the connector id) — see `parse_ident_start`.
             let id = match path.segments.first() {
                 Some(PathSegment::Field(id)) => id,
-                _ => {
-                    return Err(ExpressionError::MissingPath {
-                        path: full_path,
-                    })
-                }
+                _ => return Err(ExpressionError::MissingPath { path: full_path }),
             };
             let value = ctx
                 .connectors

@@ -15,11 +15,26 @@ use std::fmt;
 /// contract — same variants, same fields, same messages.
 #[derive(Debug, PartialEq, Eq)]
 pub enum ExpressionError {
-    Syntax { position: usize, message: String },
-    UnknownFunction { name: String },
-    Arity { function: String, expected: usize, got: usize },
-    MissingPath { path: String },
-    TypeMismatch { path: String, expected: &'static str, got: &'static str },
+    Syntax {
+        position: usize,
+        message: String,
+    },
+    UnknownFunction {
+        name: String,
+    },
+    Arity {
+        function: String,
+        expected: usize,
+        got: usize,
+    },
+    MissingPath {
+        path: String,
+    },
+    TypeMismatch {
+        path: String,
+        expected: &'static str,
+        got: &'static str,
+    },
     LoopOutsideLoop,
 }
 
@@ -34,10 +49,7 @@ impl fmt::Display for ExpressionError {
                 function,
                 expected,
                 got,
-            } => write!(
-                f,
-                "`{function}` expects {expected} argument(s), got {got}"
-            ),
+            } => write!(f, "`{function}` expects {expected} argument(s), got {got}"),
             Self::MissingPath { path } => write!(f, "missing path `{path}`"),
             Self::TypeMismatch {
                 path,

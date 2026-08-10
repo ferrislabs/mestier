@@ -67,7 +67,7 @@ mod tests {
     use std::collections::BTreeMap;
 
     use chrono::TimeZone;
-    use serde_json::{json, Value};
+    use serde_json::{Value, json};
 
     use super::*;
 
@@ -204,10 +204,8 @@ mod tests {
             json!({ "output": { "lines": [{ "total": 12 }, { "total": 34 }] } }),
         );
         let ctx = empty_context(&connectors);
-        let template = parse_template(&json!(
-            "{{ connectors.c1.output.lines[1].total }}"
-        ))
-        .expect("valid path expression");
+        let template = parse_template(&json!("{{ connectors.c1.output.lines[1].total }}"))
+            .expect("valid path expression");
 
         assert_eq!(template.evaluate(&ctx).expect("resolves"), json!(34));
     }
@@ -238,7 +236,9 @@ mod tests {
         let template = parse_template(&json!("{{ connectors.c1.output.items }}"))
             .expect("valid path expression");
 
-        let err = template.evaluate(&ctx).expect_err("the field does not exist");
+        let err = template
+            .evaluate(&ctx)
+            .expect_err("the field does not exist");
 
         assert_eq!(
             err,
@@ -291,8 +291,7 @@ mod tests {
 
     #[test]
     fn referenced_connectors_names_the_connector_id_of_a_path() {
-        let template =
-            parse_template(&json!("{{ connectors.c1.output.a }}")).expect("valid path");
+        let template = parse_template(&json!("{{ connectors.c1.output.a }}")).expect("valid path");
 
         let ids: Vec<_> = template.referenced_connectors().into_iter().collect();
         assert_eq!(ids, vec!["c1".to_string()]);
@@ -312,7 +311,10 @@ mod tests {
         let ctx = ExpressionContext {
             trigger: None,
             connectors: &connectors,
-            loop_frame: Some(LoopFrame { item: &item, index: 3 }),
+            loop_frame: Some(LoopFrame {
+                item: &item,
+                index: 3,
+            }),
             now: fixed_now(),
         };
 
@@ -334,7 +336,9 @@ mod tests {
         let ctx = empty_context(&connectors);
         let template = parse_template(&json!("{{ loop.item }}")).expect("valid loop path");
 
-        let err = template.evaluate(&ctx).expect_err("no loop frame in context");
+        let err = template
+            .evaluate(&ctx)
+            .expect_err("no loop frame in context");
 
         assert_eq!(err, ExpressionError::LoopOutsideLoop);
     }
@@ -425,8 +429,7 @@ mod tests {
         let template = parse_template(&json!("{{ not (1 == 1) }}")).expect("valid");
         assert_eq!(template.evaluate(&ctx).expect("evaluates"), json!(false));
 
-        let template =
-            parse_template(&json!("{{ (1 == 1) and (2 == 3) }}")).expect("valid");
+        let template = parse_template(&json!("{{ (1 == 1) and (2 == 3) }}")).expect("valid");
         assert_eq!(template.evaluate(&ctx).expect("evaluates"), json!(false));
     }
 
@@ -439,7 +442,10 @@ mod tests {
         let template =
             parse_template(&json!("{{ false and connectors.missing.output }}")).expect("valid");
 
-        assert_eq!(template.evaluate(&ctx).expect("short-circuits"), json!(false));
+        assert_eq!(
+            template.evaluate(&ctx).expect("short-circuits"),
+            json!(false)
+        );
     }
 
     #[test]
@@ -449,7 +455,10 @@ mod tests {
         let template =
             parse_template(&json!("{{ true or connectors.missing.output }}")).expect("valid");
 
-        assert_eq!(template.evaluate(&ctx).expect("short-circuits"), json!(true));
+        assert_eq!(
+            template.evaluate(&ctx).expect("short-circuits"),
+            json!(true)
+        );
     }
 
     #[test]
@@ -576,13 +585,11 @@ mod tests {
         let ctx = empty_context(&connectors);
 
         let template =
-            parse_template(&json!("{{ contains(connectors.c1.output.items, 2) }}"))
-                .expect("valid");
+            parse_template(&json!("{{ contains(connectors.c1.output.items, 2) }}")).expect("valid");
         assert_eq!(template.evaluate(&ctx).expect("evaluates"), json!(true));
 
         let template =
-            parse_template(&json!("{{ contains(connectors.c1.output.items, 5) }}"))
-                .expect("valid");
+            parse_template(&json!("{{ contains(connectors.c1.output.items, 5) }}")).expect("valid");
         assert_eq!(template.evaluate(&ctx).expect("evaluates"), json!(false));
     }
 
@@ -608,7 +615,10 @@ mod tests {
         let template = parse_template(&json!("{{ to_number(\"abc\") }}")).expect("valid syntax");
 
         let err = template.evaluate(&ctx).expect_err("not numeric");
-        assert!(matches!(err, ExpressionError::TypeMismatch { .. }), "{err:?}");
+        assert!(
+            matches!(err, ExpressionError::TypeMismatch { .. }),
+            "{err:?}"
+        );
     }
 
     #[test]
@@ -627,9 +637,8 @@ mod tests {
     fn concat_stringifies_and_joins_every_argument() {
         let connectors = BTreeMap::new();
         let ctx = empty_context(&connectors);
-        let template =
-            parse_template(&json!("{{ concat(\"total: \", 42, \" (\", true, \")\") }}"))
-                .expect("valid");
+        let template = parse_template(&json!("{{ concat(\"total: \", 42, \" (\", true, \")\") }}"))
+            .expect("valid");
 
         assert_eq!(
             template.evaluate(&ctx).expect("evaluates"),
@@ -642,8 +651,7 @@ mod tests {
         let mut connectors = BTreeMap::new();
         connectors.insert("c1".to_string(), json!({ "output": { "a": 1 } }));
         let ctx = empty_context(&connectors);
-        let template =
-            parse_template(&json!("{{ json(connectors.c1.output) }}")).expect("valid");
+        let template = parse_template(&json!("{{ json(connectors.c1.output) }}")).expect("valid");
 
         assert_eq!(
             template.evaluate(&ctx).expect("evaluates"),
@@ -718,7 +726,10 @@ mod tests {
         let template =
             parse_template(&json!("{{ default(1 and true, \"fallback\") }}")).expect("valid");
         let err = template.evaluate(&ctx).expect_err("must not be caught");
-        assert!(matches!(err, ExpressionError::TypeMismatch { .. }), "{err:?}");
+        assert!(
+            matches!(err, ExpressionError::TypeMismatch { .. }),
+            "{err:?}"
+        );
     }
 
     #[test]
@@ -790,8 +801,8 @@ mod tests {
 
     #[test]
     fn uses_loop_is_true_when_loop_is_read_inside_an_interpolated_string() {
-        let template = parse_template(&json!("Item #{{ loop.index }}: {{ loop.item.name }}"))
-            .expect("valid");
+        let template =
+            parse_template(&json!("Item #{{ loop.index }}: {{ loop.item.name }}")).expect("valid");
 
         assert!(template.uses_loop());
     }
