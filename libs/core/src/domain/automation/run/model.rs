@@ -22,6 +22,10 @@ pub struct Run {
     pub workflow_id: Uuid,
     pub workflow_version_id: Uuid,
     pub trigger_event_id: Option<Uuid>,
+    /// What started the run, read into `ExpressionContext.trigger`. `None`
+    /// once #201 dispatches a run from a domain event: the payload then
+    /// lives on `automation.event`, reached through `trigger_event_id`.
+    pub trigger_payload: Option<Value>,
     pub status: RunStatus,
     pub error: Option<String>,
     pub next_attempt_at: Option<DateTime<Utc>>,
@@ -156,6 +160,7 @@ pub struct DueRun {
     pub workflow_id: Uuid,
     pub workflow_version_id: Uuid,
     pub trigger_event_id: Option<Uuid>,
+    pub trigger_payload: Option<Value>,
 }
 
 /// The run-level outcome of one slice, applied by

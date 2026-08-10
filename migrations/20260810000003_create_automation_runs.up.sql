@@ -17,6 +17,12 @@ CREATE TABLE automation.run (
     -- version saved) while the run is still going.
     workflow_version_id  UUID        NOT NULL REFERENCES automation.workflow_version(id),
     trigger_event_id     UUID        NULL,
+    -- What started the run, read into `ExpressionContext.trigger` for every
+    -- connector's expressions. NULL once #201 lands and dispatches a run
+    -- from a domain event: the payload then lives on `automation.event`,
+    -- reached through `trigger_event_id`, and duplicating it here would be
+    -- one more place for the two to disagree.
+    trigger_payload      JSONB       NULL,
     status               TEXT        NOT NULL,
     error                TEXT        NULL,
     next_attempt_at      TIMESTAMPTZ NULL,

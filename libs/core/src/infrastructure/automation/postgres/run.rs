@@ -1,5 +1,5 @@
 use chrono::{DateTime, Utc};
-use common::{CoreError, OrganizationId, generate_uuid_v7};
+use common::{CoreError, OrganizationId};
 use mestier_macros::repository;
 use serde_json::Value;
 use uuid::Uuid;
@@ -12,13 +12,6 @@ use crate::{
     },
     infrastructure::postgres::{SharedTx, error::map_sqlx_error},
 };
-
-/// The bootstrapping step every run is created with: not a real connector,
-/// only a place to durably record the trigger payload so every real
-/// connector's expressions can read `trigger.*` the same way whether the run
-/// is fresh or resumed. Never looked up in the connector catalogue, never
-/// placed by the editor — an internal convention of this module alone.
-const TRIGGER_STEP_CONNECTOR_ID: &str = "$trigger";
 
 #[repository(domain = Run, backend = Postgres)]
 pub struct PgRunRepository<'tx> {
@@ -37,6 +30,7 @@ struct RunRow {
     workflow_id: Uuid,
     workflow_version_id: Uuid,
     trigger_event_id: Option<Uuid>,
+    trigger_payload: Option<Value>,
     status: String,
     error: Option<String>,
     next_attempt_at: Option<DateTime<Utc>>,
@@ -57,6 +51,7 @@ impl TryFrom<RunRow> for Run {
             workflow_id: row.workflow_id,
             workflow_version_id: row.workflow_version_id,
             trigger_event_id: row.trigger_event_id,
+            trigger_payload: row.trigger_payload,
             status: row.status.parse().map_err(CoreError::Internal)?,
             error: row.error,
             next_attempt_at: row.next_attempt_at,
@@ -107,22 +102,25 @@ impl TryFrom<RunStepRow> for RunStep {
 }
 
 impl<'tx> RunRepository for PgRunRepository<'tx> {
-    async fn create_run(&mut self, run: &Run, trigger_payload: Value) -> Result<Run, CoreError> {
+    async fn create_run(&mut self, run: &Run) -> Result<Run, CoreError> {
         let mut tx = self.tx.lock().await;
 
         let row = sqlx::query_as!(
             RunRow,
             r#"INSERT INTO automation.run
-                   (id, org_id, workflow_id, workflow_version_id, trigger_event_id, status,
-                    error, next_attempt_at, locked_at, locked_by, started_at, finished_at, created_at)
-               VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
-               RETURNING id, org_id, workflow_id, workflow_version_id, trigger_event_id, status,
-                         error, next_attempt_at, locked_at, locked_by, started_at, finished_at, created_at"#,
+                   (id, org_id, workflow_id, workflow_version_id, trigger_event_id,
+                    trigger_payload, status, error, next_attempt_at, locked_at, locked_by,
+                    started_at, finished_at, created_at)
+               VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+               RETURNING id, org_id, workflow_id, workflow_version_id, trigger_event_id,
+                         trigger_payload, status, error, next_attempt_at, locked_at, locked_by,
+                         started_at, finished_at, created_at"#,
             run.id,
             run.org_id.0,
             run.workflow_id,
             run.workflow_version_id,
             run.trigger_event_id,
+            run.trigger_payload,
             run.status.as_str(),
             run.error,
             run.next_attempt_at,
@@ -133,22 +131,6 @@ impl<'tx> RunRepository for PgRunRepository<'tx> {
             run.created_at,
         )
         .fetch_one(&mut ***tx)
-        .await
-        .map_err(map_sqlx_error)?;
-
-        let now = Utc::now();
-        sqlx::query!(
-            r#"INSERT INTO automation.run_step
-                   (id, run_id, connector_id, iteration_path, attempts, status, input, output,
-                    error, started_at, finished_at, created_at)
-               VALUES ($1, $2, $3, '', 0, 'succeeded', NULL, $4, NULL, $5, $5, $5)"#,
-            generate_uuid_v7(),
-            row.id,
-            TRIGGER_STEP_CONNECTOR_ID,
-            trigger_payload,
-            now,
-        )
-        .execute(&mut ***tx)
         .await
         .map_err(map_sqlx_error)?;
 
@@ -194,7 +176,8 @@ impl<'tx> RunRepository for PgRunRepository<'tx> {
                 started_at = COALESCE(r.started_at, now())
             FROM due
             WHERE r.id = due.id
-            RETURNING r.id, r.org_id, r.workflow_id, r.workflow_version_id, r.trigger_event_id
+            RETURNING r.id, r.org_id, r.workflow_id, r.workflow_version_id, r.trigger_event_id,
+                      r.trigger_payload
             "#,
             worker,
             batch,
@@ -212,6 +195,7 @@ impl<'tx> RunRepository for PgRunRepository<'tx> {
                 workflow_id: row.workflow_id,
                 workflow_version_id: row.workflow_version_id,
                 trigger_event_id: row.trigger_event_id,
+                trigger_payload: row.trigger_payload,
             })
             .collect())
     }
@@ -496,6 +480,7 @@ mod tests {
             workflow_id,
             workflow_version_id,
             trigger_event_id: None,
+            trigger_payload: None,
             status: RunStatus::Pending,
             error: None,
             next_attempt_at: Some(now),
@@ -509,22 +494,26 @@ mod tests {
 
     #[tokio::test]
     #[ignore = "requires live postgres"]
-    async fn creating_a_run_also_persists_its_trigger_step() {
+    async fn creating_a_run_persists_its_trigger_payload_and_starts_with_no_step() {
         let _guard = RUN_CLAIM_LOCK.lock().await;
         let pool = make_pool().await;
         let org_id = seed_organization(&pool, "create").await;
         let (workflow_id, version_id) = seed_workflow_version(&pool, org_id, simple_graph()).await;
-        let run = pending_run(org_id, workflow_id, version_id);
         let trigger_payload = json!({ "quote_id": "q-1" });
+        let run = Run {
+            trigger_payload: Some(trigger_payload.clone()),
+            ..pending_run(org_id, workflow_id, version_id)
+        };
 
         let created = with_tx(&pool, async |tx| {
             let mut repo = PgRunRepository::new(&tx);
-            repo.create_run(&run, trigger_payload.clone()).await
+            repo.create_run(&run).await
         })
         .await
         .unwrap();
 
         assert_eq!(created, run);
+        assert_eq!(created.trigger_payload, Some(trigger_payload));
 
         let steps = with_tx(&pool, async |tx| {
             let mut repo = PgRunRepository::new(&tx);
@@ -533,11 +522,29 @@ mod tests {
         .await
         .unwrap();
 
-        assert_eq!(steps.len(), 1, "only the trigger step exists so far");
-        assert_eq!(steps[0].connector_id, "$trigger");
-        assert_eq!(steps[0].iteration_path, "");
-        assert_eq!(steps[0].status, StepStatus::Succeeded);
-        assert_eq!(steps[0].output, Some(trigger_payload));
+        assert!(
+            steps.is_empty(),
+            "a run has no step until the engine executes a real connector: {steps:?}"
+        );
+    }
+
+    #[tokio::test]
+    #[ignore = "requires live postgres"]
+    async fn a_run_with_no_trigger_payload_creates_with_none() {
+        let _guard = RUN_CLAIM_LOCK.lock().await;
+        let pool = make_pool().await;
+        let org_id = seed_organization(&pool, "create-no-payload").await;
+        let (workflow_id, version_id) = seed_workflow_version(&pool, org_id, simple_graph()).await;
+        let run = pending_run(org_id, workflow_id, version_id);
+
+        let created = with_tx(&pool, async |tx| {
+            let mut repo = PgRunRepository::new(&tx);
+            repo.create_run(&run).await
+        })
+        .await
+        .unwrap();
+
+        assert_eq!(created.trigger_payload, None);
     }
 
     #[tokio::test]
@@ -550,7 +557,7 @@ mod tests {
         let run = pending_run(org_id, workflow_id, version_id);
         with_tx(&pool, async |tx| {
             let mut repo = PgRunRepository::new(&tx);
-            repo.create_run(&run, json!({})).await
+            repo.create_run(&run).await
         })
         .await
         .unwrap();
@@ -588,7 +595,7 @@ mod tests {
         run.next_attempt_at = Some(Utc::now() + ChronoDuration::hours(1));
         with_tx(&pool, async |tx| {
             let mut repo = PgRunRepository::new(&tx);
-            repo.create_run(&run, json!({})).await
+            repo.create_run(&run).await
         })
         .await
         .unwrap();
@@ -621,7 +628,7 @@ mod tests {
             let run = pending_run(noisy_org, noisy_workflow, noisy_version);
             with_tx(&pool, async |tx| {
                 let mut repo = PgRunRepository::new(&tx);
-                repo.create_run(&run, json!({})).await
+                repo.create_run(&run).await
             })
             .await
             .unwrap();
@@ -629,7 +636,7 @@ mod tests {
         let quiet_run = pending_run(quiet_org, quiet_workflow, quiet_version);
         with_tx(&pool, async |tx| {
             let mut repo = PgRunRepository::new(&tx);
-            repo.create_run(&quiet_run, json!({})).await
+            repo.create_run(&quiet_run).await
         })
         .await
         .unwrap();
@@ -711,7 +718,7 @@ mod tests {
         let run = pending_run(org_id, workflow_id, version_id);
         with_tx(&pool, async |tx| {
             let mut repo = PgRunRepository::new(&tx);
-            repo.create_run(&run, json!({})).await
+            repo.create_run(&run).await
         })
         .await
         .unwrap();
@@ -743,7 +750,7 @@ mod tests {
         let run = pending_run(org_id, workflow_id, version_id);
         with_tx(&pool, async |tx| {
             let mut repo = PgRunRepository::new(&tx);
-            repo.create_run(&run, json!({})).await
+            repo.create_run(&run).await
         })
         .await
         .unwrap();
@@ -798,7 +805,7 @@ mod tests {
         let run = pending_run(org_id, workflow_id, version_id);
         with_tx(&pool, async |tx| {
             let mut repo = PgRunRepository::new(&tx);
-            repo.create_run(&run, json!({})).await
+            repo.create_run(&run).await
         })
         .await
         .unwrap();
@@ -831,7 +838,7 @@ mod tests {
         let run = pending_run(org_id, workflow_id, version_id);
         with_tx(&pool, async |tx| {
             let mut repo = PgRunRepository::new(&tx);
-            repo.create_run(&run, json!({})).await
+            repo.create_run(&run).await
         })
         .await
         .unwrap();
@@ -871,7 +878,7 @@ mod tests {
         let run = pending_run(org_id, workflow_id, version_id);
         with_tx(&pool, async |tx| {
             let mut repo = PgRunRepository::new(&tx);
-            repo.create_run(&run, json!({})).await
+            repo.create_run(&run).await
         })
         .await
         .unwrap();
@@ -915,7 +922,7 @@ mod tests {
         let run = pending_run(org_id, workflow_id, version_id);
         with_tx(&pool, async |tx| {
             let mut repo = PgRunRepository::new(&tx);
-            repo.create_run(&run, json!({})).await
+            repo.create_run(&run).await
         })
         .await
         .unwrap();

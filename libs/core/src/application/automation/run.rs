@@ -113,7 +113,7 @@ fn reconstruct_outcome(kind: &str, output: &Value) -> ConnectorOutcome {
 impl MestierUseCase {
     /// Starts a run: pins the workflow's current version — a later edit
     /// moves `Workflow::current_version_id`, never this run's copy of it —
-    /// and persists `trigger_payload` as the run's first step.
+    /// and persists `trigger_payload` on the run itself.
     #[transactional(run, workflow)]
     pub async fn start_run(
         &self,
@@ -139,6 +139,7 @@ impl MestierUseCase {
             workflow_id,
             workflow_version_id,
             trigger_event_id: None,
+            trigger_payload: Some(trigger_payload),
             status: RunStatus::Pending,
             error: None,
             next_attempt_at: Some(now),
@@ -149,7 +150,7 @@ impl MestierUseCase {
             created_at: now,
         };
 
-        let created = runs.create_run(&run, trigger_payload).await?;
+        let created = runs.create_run(&run).await?;
         Ok(created.id)
     }
 
@@ -288,10 +289,6 @@ impl MestierUseCase {
             .map(|s| ((s.connector_id.clone(), s.iteration_path.clone()), s))
             .collect();
 
-        let trigger_payload = index
-            .get(&("$trigger".to_string(), String::new()))
-            .and_then(|s| s.output.clone());
-
         let placed_by_id: HashMap<&str, &PlacedConnector> = connectors_by_id(&graph);
         let mut connector_outputs: BTreeMap<String, Value> = BTreeMap::new();
 
@@ -389,7 +386,7 @@ impl MestierUseCase {
                     });
             let now = Utc::now();
             let ctx = ExpressionContext {
-                trigger: trigger_payload.as_ref(),
+                trigger: due.trigger_payload.as_ref(),
                 connectors: &connector_outputs,
                 loop_frame,
                 now,
@@ -874,12 +871,12 @@ mod tests {
         assert_eq!(run_status(&pool, run_id).await, "succeeded");
 
         let steps = run_steps(&pool, run_id).await;
-        let real: Vec<_> = steps
-            .iter()
-            .filter(|s| s.connector_id != "$trigger")
-            .collect();
-        assert_eq!(real.len(), 4, "one run_step row per connector: {steps:?}");
-        assert!(real.iter().all(|s| s.status == "succeeded"), "{steps:?}");
+        assert_eq!(
+            steps.len(),
+            4,
+            "one run_step row per connector, literally: {steps:?}"
+        );
+        assert!(steps.iter().all(|s| s.status == "succeeded"), "{steps:?}");
     }
 
     #[tokio::test]
@@ -1152,7 +1149,7 @@ mod tests {
         assert_eq!(
             after_first
                 .iter()
-                .filter(|s| s.connector_id != "$trigger" && s.status == "succeeded")
+                .filter(|s| s.status == "succeeded")
                 .count(),
             3,
             "{after_first:?}"
@@ -1172,7 +1169,7 @@ mod tests {
         assert_eq!(
             after_second
                 .iter()
-                .filter(|s| s.connector_id != "$trigger" && s.status == "succeeded")
+                .filter(|s| s.status == "succeeded")
                 .count(),
             5,
             "no step ran twice: {after_second:?}"

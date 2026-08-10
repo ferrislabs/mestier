@@ -1,7 +1,6 @@
 use chrono::{DateTime, Utc};
 use common::{CoreError, OrganizationId};
 use events::EventEnvelope;
-use serde_json::Value;
 use uuid::Uuid;
 
 use crate::domain::automation::credential::Credential;
@@ -264,15 +263,9 @@ pub trait WorkflowRepository: Send {
 /// [`WorkflowRepository`].
 #[cfg_attr(test, mockall::automock)]
 pub trait RunRepository: Send {
-    /// Creates the run and its first step: a bootstrapping row that records
-    /// the trigger payload, already `succeeded`, so every connector's
-    /// expressions can read `trigger.*` the same way whether the run is
-    /// fresh or resumed.
-    fn create_run(
-        &mut self,
-        run: &Run,
-        trigger_payload: Value,
-    ) -> impl Future<Output = Result<Run, CoreError>> + Send;
+    /// Creates the run, `trigger_payload` and all — a run has no step until
+    /// the engine executes its first real connector.
+    fn create_run(&mut self, run: &Run) -> impl Future<Output = Result<Run, CoreError>> + Send;
 
     /// Claims runs that are due, marking them `running` and stamping the
     /// worker so a crashed one can be recovered later — the same shape as
