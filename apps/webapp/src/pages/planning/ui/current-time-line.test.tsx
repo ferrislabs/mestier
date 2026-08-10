@@ -14,8 +14,8 @@ const WEEK_COLUMNS = [
 	'2026-08-09',
 ]
 
-describe('CurrentTimeLine — visibilité', () => {
-	it('ne rend rien quand le jour courant est hors de la période visible', () => {
+describe('CurrentTimeLine — visibility', () => {
+	it('renders nothing when the current day is outside the visible period', () => {
 		render(
 			<CurrentTimeLine
 				timeZone={TZ}
@@ -30,7 +30,7 @@ describe('CurrentTimeLine — visibilité', () => {
 		expect(screen.queryByTestId('current-time-line')).toBeNull()
 	})
 
-	it("ne rend rien quand l'heure courante est hors de l'amplitude", () => {
+	it('renders nothing when the current time is outside the amplitude', () => {
 		render(
 			<CurrentTimeLine
 				timeZone={TZ}
@@ -45,7 +45,7 @@ describe('CurrentTimeLine — visibilité', () => {
 		expect(screen.queryByTestId('current-time-line')).toBeNull()
 	})
 
-	it('rend le trait quand le jour et l’heure sont dans la période et l’amplitude', () => {
+	it('renders the line when both day and time fall in the period and the amplitude', () => {
 		render(
 			<CurrentTimeLine
 				timeZone={TZ}
@@ -62,7 +62,7 @@ describe('CurrentTimeLine — visibilité', () => {
 })
 
 describe('CurrentTimeLine — position horizontale (vue jour)', () => {
-	it('positionne le trait proportionnellement le long de l’amplitude', () => {
+	it('positions the line proportionally along the amplitude', () => {
 		render(
 			<CurrentTimeLine
 				timeZone={TZ}
@@ -80,7 +80,7 @@ describe('CurrentTimeLine — position horizontale (vue jour)', () => {
 })
 
 describe('CurrentTimeLine — position verticale (vues semaine/mois)', () => {
-	it('positionne le trait dans la colonne du jour courant', () => {
+	it("positions the line in the current day's column", () => {
 		render(
 			<CurrentTimeLine
 				timeZone={TZ}
@@ -97,7 +97,7 @@ describe('CurrentTimeLine — position verticale (vues semaine/mois)', () => {
 		expect(line.style.left).toBe(`${((2 + 0.5) / 7) * 100}%`)
 	})
 
-	it('ne rend rien si le jour courant est absent des colonnes fournies', () => {
+	it('renders nothing if the current day is absent from the given columns', () => {
 		render(
 			<CurrentTimeLine
 				timeZone={TZ}
@@ -114,7 +114,7 @@ describe('CurrentTimeLine — position verticale (vues semaine/mois)', () => {
 	})
 })
 
-describe('CurrentTimeLine — pas d’appel réseau', () => {
+describe('CurrentTimeLine — no network call', () => {
 	let fetchSpy: ReturnType<typeof createFetchSpy>
 
 	function createFetchSpy() {
@@ -131,7 +131,7 @@ describe('CurrentTimeLine — pas d’appel réseau', () => {
 		fetchSpy.mockRestore()
 	})
 
-	it('ne déclenche aucun fetch au rendu', () => {
+	it('fires no fetch on render', () => {
 		render(
 			<CurrentTimeLine
 				timeZone={TZ}

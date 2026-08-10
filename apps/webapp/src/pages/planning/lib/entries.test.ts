@@ -50,28 +50,28 @@ function unknownKindEntry(): PlanningEntry {
 }
 
 describe('entryEmployeeIds', () => {
-	it('renvoie tous les employee_ids pour un chantier', () => {
+	it('returns every employee_id for a job', () => {
 		expect(entryEmployeeIds(task())).toEqual(['employee-1', 'employee-2'])
 	})
 
-	it("renvoie l'unique employee_id pour une absence", () => {
+	it('returns the single employee_id for an absence', () => {
 		expect(entryEmployeeIds(absence())).toEqual(['employee-1'])
 	})
 
-	it('renvoie un tableau vide pour un kind inconnu, sans lever', () => {
+	it('returns an empty array for an unknown kind, without throwing', () => {
 		expect(() => entryEmployeeIds(unknownKindEntry())).not.toThrow()
 		expect(entryEmployeeIds(unknownKindEntry())).toEqual([])
 	})
 })
 
 describe('entryLabel', () => {
-	it('utilise le titre de la tâche — toujours renseigné, plus de repli sur le client', () => {
+	it('uses the task title — always filled in, no more falling back to the customer', () => {
 		expect(entryLabel(task({ title: 'Réfection toiture' }))).toBe(
 			'Réfection toiture',
 		)
 	})
 
-	it("traduit le motif d'absence en français", () => {
+	it('translates the absence reason into French', () => {
 		expect(entryLabel(absence({ absence_kind: 'LEAVE' }))).toBe('Congé')
 		expect(entryLabel(absence({ absence_kind: 'SICK' }))).toBe('Arrêt maladie')
 		expect(entryLabel(absence({ absence_kind: 'UNAVAILABLE' }))).toBe(
@@ -79,7 +79,7 @@ describe('entryLabel', () => {
 		)
 	})
 
-	it('renvoie un libellé générique pour un kind inconnu, sans lever', () => {
+	it('returns a generic label for an unknown kind, without throwing', () => {
 		expect(() => entryLabel(unknownKindEntry())).not.toThrow()
 		expect(entryLabel(unknownKindEntry())).toBe('Entrée')
 	})

@@ -1,9 +1,9 @@
 import type { PlanningEntry } from '#/pages/planning/types'
 
 /**
- * Natures d'entrée du calendrier. Elles reprennent la discrimination déjà
- * portée par l'API — `kind` puis, pour une absence, `absence_kind` — plutôt
- * que d'inventer une taxonomie parallèle côté front.
+ * Calendar entry kinds. They reuse the discrimination the API already carries —
+ * `kind`, then `absence_kind` for an absence — rather than inventing a parallel
+ * taxonomy on the front end.
  */
 export type CalendarNature = 'task' | 'leave' | 'sick' | 'unavailable'
 
@@ -39,9 +39,9 @@ export function entryNature(entry: PlanningEntry): CalendarNature | 'unknown' {
 }
 
 /**
- * Une entrée d'une nature que le front ne connaît pas encore reste visible
- * sous « Tout » : le calendrier dégrade au lieu de masquer silencieusement une
- * donnée que l'API a bien renvoyée.
+ * An entry of a kind the front end does not know yet stays visible under
+ * "Tout": the calendar degrades instead of silently hiding data the API did
+ * return.
  */
 export function matchesFilter(
 	entry: PlanningEntry,

@@ -19,25 +19,25 @@ const availableModules = MODULES.filter(
 )
 
 /**
- * Les chemins du registre sont relatifs à l'organisation ; les routes, elles,
- * sont déclarées sous le gabarit `/o/$organizationSlug`.
+ * Registry paths are relative to the organization; routes, on the other hand,
+ * are declared under the `/o/$organizationSlug` template.
  */
 function routePath(to: string): string {
 	return buildOrgPath('$organizationSlug', to)
 }
 
 describe('moduleLandingPath', () => {
-	it('renvoie la première section navigable du module', () => {
+	it("returns the module's first navigable section", () => {
 		expect(moduleLandingPath('crm')).toBe('/crm/customers')
 	})
 
-	it("s'arrête sur le basePath quand le module a une vue d'ensemble", () => {
+	it('stops at the basePath when the module has an overview', () => {
 		expect(moduleLandingPath('home')).toBe('/')
 	})
 })
 
 describe('firstLandingTarget', () => {
-	it('ignore les sections annoncées mais non navigables', () => {
+	it('ignores sections that are announced but not navigable', () => {
 		const sections: ModuleSection[] = [
 			{ id: 'a', label: 'A', to: '/module/a', status: 'coming-soon' },
 			{ id: 'b', label: 'B', to: '/module/b' },
@@ -46,7 +46,7 @@ describe('firstLandingTarget', () => {
 		expect(firstLandingTarget(sections, '/module')).toBe('/module/b')
 	})
 
-	it('ignore les sections qui pointent sur le basePath lui-même', () => {
+	it('ignores sections pointing at the basePath itself', () => {
 		const sections: ModuleSection[] = [
 			{ id: 'a', label: 'A', to: '/module' },
 			{ id: 'b', label: 'B', to: '/module/b' },
@@ -55,15 +55,15 @@ describe('firstLandingTarget', () => {
 		expect(firstLandingTarget(sections, '/module')).toBe('/module/b')
 	})
 
-	it('ne renvoie rien quand aucune section ne diffère du basePath', () => {
+	it('returns nothing when no section differs from the basePath', () => {
 		const sections: ModuleSection[] = [{ id: 'a', label: 'A', to: '/module' }]
 
 		expect(firstLandingTarget(sections, '/module')).toBeUndefined()
 	})
 })
 
-describe('routabilité des modules', () => {
-	it('chaque module disponible a un basePath qui résout vers une route réelle', () => {
+describe('module routability', () => {
+	it('every available module has a basePath resolving to a real route', () => {
 		const router = createTestRouter()
 
 		const modulesSansRoute = availableModules
@@ -76,7 +76,7 @@ describe('routabilité des modules', () => {
 		expect(modulesSansRoute).toEqual([])
 	})
 
-	it('chaque entrée de nav navigable pointe vers une route réelle', () => {
+	it('every navigable nav entry points at a real route', () => {
 		const router = createTestRouter()
 
 		const ciblesSansRoute = availableModules
@@ -94,7 +94,7 @@ describe('routabilité des modules', () => {
 		expect(ciblesSansRoute).toEqual([])
 	})
 
-	it("chaque cible d'atterrissage de module résout vers une route réelle", () => {
+	it('every module landing target resolves to a real route', () => {
 		const router = createTestRouter()
 
 		const ciblesSansRoute = availableModules
@@ -104,7 +104,7 @@ describe('routabilité des modules', () => {
 		expect(ciblesSansRoute).toEqual([])
 	})
 
-	it('expose le catalogue et le matériel dans leur module, pas dans les réglages', () => {
+	it('exposes catalog and equipment in their own module, not in settings', () => {
 		const sectionsOf = (id: AppModule['id']) =>
 			MODULES.find((module) => module.id === id)?.sections.map(
 				(section) => section.to,
@@ -115,7 +115,7 @@ describe('routabilité des modules', () => {
 		expect(sectionsOf('settings')).toEqual(['/settings'])
 	})
 
-	it("aucun module sans vue d'ensemble ne redirige vers son propre basePath", () => {
+	it('no module without an overview redirects to its own basePath', () => {
 		const modulesEnBoucle = availableModules
 			.filter((module) => !module.hasOverview && module.basePath !== '/')
 			.filter((module) => moduleLandingPath(module.id) === module.basePath)

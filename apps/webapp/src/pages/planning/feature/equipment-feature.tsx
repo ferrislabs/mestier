@@ -31,11 +31,11 @@ import {
 import type { EquipmentFormValues } from '#/pages/planning/types'
 
 /**
- * Référentiel du matériel et de son coût horaire.
+ * Reference data for equipment and its hourly cost.
  *
- * Il vivait dans les réglages de l'organisation ; c'est une donnée de travail,
- * pas un paramètre — son coût horaire alimente la rentabilité des tâches, donc
- * il appartient au module qui les planifie.
+ * It used to live in the organization settings; it is working data, not a
+ * setting — its hourly cost feeds task profitability, so it belongs to the
+ * module that schedules them.
  */
 export function EquipmentFeature() {
 	const { activeOrganization } = useActiveOrganization()

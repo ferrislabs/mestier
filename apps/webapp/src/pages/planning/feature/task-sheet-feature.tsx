@@ -241,7 +241,7 @@ export function TaskSheetFeature({
 		}
 	}
 
-	// -- Sous-tâches ----------------------------------------------------------
+	// -- Subtasks -------------------------------------------------------------
 
 	const subtasksQuery = useSubtasks(
 		organizationId,

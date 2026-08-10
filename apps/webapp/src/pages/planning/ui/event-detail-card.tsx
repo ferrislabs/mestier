@@ -34,7 +34,7 @@ const STATUS_LABELS: Record<TaskStatus, string> = {
 	CANCELLED: 'Annulée',
 }
 
-/** Statuts proposés en action rapide, dans l'ordre du cycle de vie d'une tâche. */
+/** Statuses offered as quick actions, in a task's life-cycle order. */
 const QUICK_STATUSES: TaskStatus[] = ['PLANNED', 'IN_PROGRESS', 'DONE']
 
 export interface EventDetailCardProps {
@@ -43,7 +43,7 @@ export interface EventDetailCardProps {
 	onChangeStatus?: (status: TaskStatus) => void
 	onDelete?: () => void
 	isPending?: boolean
-	/** Brouillon en cours sur cette entrée, ou `null` en lecture. */
+	/** Draft in progress on this entry, or `null` when reading. */
 	editing: EventEditState | null
 	assignees: EventAssigneeOption[]
 	selectedResourceIds: string[]
@@ -55,11 +55,11 @@ export interface EventDetailCardProps {
 }
 
 /**
- * Panneau de détail d'un événement, ouvert au clic sur sa carte.
+ * Detail panel for an event, opened by clicking its card.
  *
- * Il montre ce que l'entrée porte déjà — client, propriété, étiquettes,
- * description — plutôt que de renvoyer vers un écran pour le lire, et propose
- * en pied les seules actions qui ne méritent pas d'ouvrir la fiche.
+ * It shows what the entry already carries — customer, property, labels,
+ * description — rather than sending the user to a screen to read it, and
+ * offers in its footer the only actions not worth opening the full sheet for.
  */
 export function EventDetailCard({
 	event,

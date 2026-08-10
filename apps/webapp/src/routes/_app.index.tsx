@@ -11,8 +11,8 @@ export const Route = createFileRoute('/_app/')({
 })
 
 /**
- * Point d'entrée sans tenant : on repart sur la dernière organisation visitée,
- * à défaut la première. `OrgGate` garantit qu'il y en a au moins une.
+ * Tenant-less entry point: we resume on the last visited organization, or the
+ * first one. `OrgGate` guarantees there is at least one.
  */
 function OrganizationEntry() {
 	const organizations = useOrganizationList()

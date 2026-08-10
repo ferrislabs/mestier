@@ -14,7 +14,7 @@ function renderNav(initialPath = '/o/dupont') {
 }
 
 describe('ModuleNav', () => {
-	it('liste les sections du module actif', async () => {
+	it("lists the active module's sections", async () => {
 		await renderNav('/o/dupont/crm/customers')
 
 		for (const label of ['Clients', 'Pipeline', 'Devis', 'Factures']) {
@@ -22,28 +22,28 @@ describe('ModuleNav', () => {
 		}
 	})
 
-	it("n'expose pas les sections des autres modules", async () => {
+	it("does not expose other modules' sections", async () => {
 		await renderNav('/o/dupont/crm/customers')
 
 		expect(screen.queryByText('Employés')).toBeNull()
 		expect(screen.queryByText('Vue équipe')).toBeNull()
 	})
 
-	it('préfixe chaque lien de section par le tenant', async () => {
+	it('prefixes every section link with the tenant', async () => {
 		await renderNav('/o/dupont/crm/customers')
 
 		const lien = screen.getByRole('link', { name: /Pipeline/ })
 		expect(lien.getAttribute('href')).toBe('/o/dupont/crm/customers/pipeline')
 	})
 
-	it('marque la section courante', async () => {
+	it('marks the current section', async () => {
 		await renderNav('/o/dupont/crm/customers/pipeline')
 
 		const courant = await screen.findByRole('link', { current: 'page' })
 		expect(courant.textContent).toContain('Pipeline')
 	})
 
-	it("n'expose pas de lien pour une section annoncée, mais la laisse focusable", async () => {
+	it('exposes no link for an announced section, but keeps it focusable', async () => {
 		await renderNav('/o/dupont/crm/customers')
 
 		const liens = screen.getAllByRole('link').map((lien) => lien.textContent)
@@ -53,7 +53,7 @@ describe('ModuleNav', () => {
 		expect(annonce.getAttribute('aria-disabled')).toBe('true')
 	})
 
-	it('garde les modules utilitaires en pied de nav', async () => {
+	it('keeps utility modules at the foot of the nav', async () => {
 		const { container } = await renderNav('/o/dupont/crm/customers')
 
 		const pied = container.querySelector('[data-slot="sidebar-footer"]')
@@ -64,7 +64,7 @@ describe('ModuleNav', () => {
 		expect(corps?.textContent).not.toContain('Paramètres')
 	})
 
-	it('affiche le module courant sous la marque', async () => {
+	it('shows the current module under the brand', async () => {
 		await renderNav('/o/dupont/planning/team')
 
 		expect(screen.getByText('Mestier')).toBeDefined()

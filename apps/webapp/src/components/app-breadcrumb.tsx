@@ -20,8 +20,8 @@ import { employeeDisplayName } from '#/pages/hr/types'
 export function AppBreadcrumb() {
 	const location = useLocation()
 	const { activeOrganization } = useActiveOrganization()
-	// Les chemins reconnus ci-dessous sont relatifs à l'organisation : le tenant
-	// est retiré avant toute correspondance.
+	// The paths matched below are relative to the organization: the tenant is
+	// stripped before any matching.
 	const modulePath = splitOrgPath(location.pathname).path
 	const customerId = getCustomerId(modulePath)
 	const customer = useCustomer(customerId ?? '', Boolean(customerId))

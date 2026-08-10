@@ -33,7 +33,7 @@ export interface PlanningCalendarUIProps {
 	onToggleEmployee: (employeeId: string) => void
 	onResetEmployees: () => void
 	onCreate: (kind: CalendarCreateKind) => void
-	/** Ce que le panneau de détail d'un événement sait déclencher. */
+	/** What an event's detail panel knows how to trigger. */
 	eventCallbacks: CalendarEventCallbacks
 	onRetry: () => void
 	/** Fige l'heure courante — tests seulement. */
@@ -146,7 +146,7 @@ export function PlanningCalendarUI({
 	)
 }
 
-/** Les deux projections comptent leurs entrées masquées sous des noms différents. */
+/** The two projections count their hidden entries under different names. */
 function filteredOutCount(
 	view: PlanningView,
 	model: CalendarModel | null,

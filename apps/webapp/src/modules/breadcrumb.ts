@@ -73,9 +73,9 @@ export function buildBreadcrumbItems({
 }
 
 /**
- * Cibles de navigation dont le chemin est un préfixe du chemin courant, de la
- * plus générale à la plus précise. La cible qui redouble son parent est écartée
- * pour ne pas produire deux fois le même maillon.
+ * Navigation targets whose path is a prefix of the current one, from the most
+ * general to the most precise. A target that doubles its parent is dropped, so
+ * the same link never appears twice.
  */
 export function matchingTargets<T extends NavTarget>(
 	targets: T[],

@@ -72,7 +72,7 @@ function unknownKindEntry(): PlanningEntry {
 }
 
 describe('PlanningGrid — axe ressource', () => {
-	it('affiche une ligne par ressource, quelle que soit la vue', () => {
+	it('shows one row per resource, whatever the view', () => {
 		const resources = [
 			employeeResource(),
 			employeeResource({
@@ -99,7 +99,7 @@ describe('PlanningGrid — axe ressource', () => {
 		expect(screen.getAllByTestId('grid-row')).toHaveLength(2)
 	})
 
-	it("affiche l'état vide sans planter quand il n'y a aucune ressource", () => {
+	it('shows the empty state without crashing when there is no resource', () => {
 		render(
 			<PlanningGrid
 				view="week"
@@ -118,7 +118,7 @@ describe('PlanningGrid — axe ressource', () => {
 })
 
 describe('PlanningGrid — vue semaine', () => {
-	it('rend une colonne par jour de la fenêtre', () => {
+	it('renders one column per day of the window', () => {
 		render(
 			<PlanningGrid
 				view="week"
@@ -134,7 +134,7 @@ describe('PlanningGrid — vue semaine', () => {
 		expect(screen.getAllByTestId('grid-cell')).toHaveLength(7)
 	})
 
-	it('positionne un segment de chantier avec left/width en pourcentage', () => {
+	it('positions a job segment with left/width as percentages', () => {
 		render(
 			<PlanningGrid
 				view="week"
@@ -156,7 +156,7 @@ describe('PlanningGrid — vue semaine', () => {
 })
 
 describe('PlanningGrid — vue jour', () => {
-	it('rend une seule cellule couvrant toute la journée', () => {
+	it('renders a single cell covering the whole day', () => {
 		render(
 			<PlanningGrid
 				view="day"
@@ -172,7 +172,7 @@ describe('PlanningGrid — vue jour', () => {
 		expect(screen.getAllByTestId('grid-cell')).toHaveLength(1)
 	})
 
-	it('affiche le libellé du segment (place disponible)', () => {
+	it("shows the segment's label (room available)", () => {
 		render(
 			<PlanningGrid
 				view="day"
@@ -190,7 +190,7 @@ describe('PlanningGrid — vue jour', () => {
 })
 
 describe('PlanningGrid — vue mois', () => {
-	it('marque les cellules où une absence est en cours', () => {
+	it('marks the cells where an absence is running', () => {
 		render(
 			<PlanningGrid
 				view="month"
@@ -215,8 +215,8 @@ describe('PlanningGrid — vue mois', () => {
 	})
 })
 
-describe('PlanningGrid — empilement des chevauchements', () => {
-	it('donne une ligne distincte à chaque segment qui se chevauche', () => {
+describe('PlanningGrid — stacking overlaps', () => {
+	it('gives a distinct row to each overlapping segment', () => {
 		render(
 			<PlanningGrid
 				view="week"
@@ -247,8 +247,8 @@ describe('PlanningGrid — empilement des chevauchements', () => {
 	})
 })
 
-describe('PlanningGrid — résilience aux kinds inconnus', () => {
-	it('ne plante pas quand une entrée porte un kind inconnu, et rend le reste normalement', () => {
+describe('PlanningGrid — resilience to unknown kinds', () => {
+	it('does not crash when an entry carries an unknown kind, and renders the rest normally', () => {
 		expect(() =>
 			render(
 				<PlanningGrid
@@ -279,7 +279,7 @@ describe('PlanningGrid — drag & drop', () => {
 		]
 	}
 
-	it('un segment de chantier est draggable et transporte entryId/resourceId/date au dragstart', () => {
+	it('a job segment is draggable and carries entryId/resourceId/date on dragstart', () => {
 		render(
 			<PlanningGrid
 				view="week"
@@ -296,7 +296,7 @@ describe('PlanningGrid — drag & drop', () => {
 		expect(segment.getAttribute('draggable')).toBe('true')
 	})
 
-	it('un drop sur une autre ligne, même date, appelle onDropTask avec la ressource cible', () => {
+	it('a drop on another row, same date, calls onDropTask with the target resource', () => {
 		const onDropTask = vi.fn()
 		render(
 			<PlanningGrid
@@ -333,7 +333,7 @@ describe('PlanningGrid — drag & drop', () => {
 		})
 	})
 
-	it("un drop sur la cellule d'origine (rien ne change) appelle quand même le callback avec des cibles identiques aux sources", () => {
+	it('a drop on the origin cell (nothing changes) still calls the callback with targets identical to the sources', () => {
 		const onDropTask = vi.fn()
 		render(
 			<PlanningGrid
@@ -362,7 +362,7 @@ describe('PlanningGrid — drag & drop', () => {
 		})
 	})
 
-	it('sans onDropTask, un drop ne plante pas', () => {
+	it('without onDropTask, a drop does not crash', () => {
 		render(
 			<PlanningGrid
 				view="week"
@@ -384,8 +384,8 @@ describe('PlanningGrid — drag & drop', () => {
 	})
 })
 
-describe('PlanningGrid — retrait d’un assigné', () => {
-	it('le bouton retirer sur un segment de chantier appelle onRemoveAssignee avec entryId et resourceId de la ligne', () => {
+describe('PlanningGrid — removing an assignee', () => {
+	it("the remove button on a job segment calls onRemoveAssignee with the row's entryId and resourceId", () => {
 		const onRemoveAssignee = vi.fn()
 		render(
 			<PlanningGrid
@@ -410,7 +410,7 @@ describe('PlanningGrid — retrait d’un assigné', () => {
 		})
 	})
 
-	it("n'affiche pas de bouton retirer sans onRemoveAssignee", () => {
+	it('shows no remove button without onRemoveAssignee', () => {
 		render(
 			<PlanningGrid
 				view="week"
@@ -430,7 +430,7 @@ describe('PlanningGrid — retrait d’un assigné', () => {
 })
 
 describe('PlanningGrid — segment d’absence inerte', () => {
-	it("un clic sur un segment d'absence ne déclenche aucune interaction (pas de role bouton, pas d'onClick)", () => {
+	it('clicking an absence segment triggers no interaction (no button role, no onClick)', () => {
 		const onOpenTask = vi.fn()
 		render(
 			<PlanningGrid
@@ -455,8 +455,8 @@ describe('PlanningGrid — segment d’absence inerte', () => {
 	})
 })
 
-describe('PlanningGrid — ouverture du détail d’une tâche', () => {
-	it('un clic sur un segment de tâche appelle onOpenTask avec entryId', () => {
+describe("PlanningGrid — opening a task's detail", () => {
+	it('clicking a task segment calls onOpenTask with the entryId', () => {
 		const onOpenTask = vi.fn()
 		render(
 			<PlanningGrid
@@ -476,7 +476,7 @@ describe('PlanningGrid — ouverture du détail d’une tâche', () => {
 		expect(onOpenTask).toHaveBeenCalledWith({ entryId: 'wo-1' })
 	})
 
-	it('porte un role bouton et un tabIndex quand onOpenTask est fourni', () => {
+	it('carries a button role and a tabIndex when onOpenTask is provided', () => {
 		render(
 			<PlanningGrid
 				view="week"
@@ -495,7 +495,7 @@ describe('PlanningGrid — ouverture du détail d’une tâche', () => {
 		expect(segment.getAttribute('tabindex')).toBe('0')
 	})
 
-	it('ne porte aucun role bouton ni tabIndex sans onOpenTask, et un clic ne plante pas', () => {
+	it('carries neither button role nor tabIndex without onOpenTask, and a click does not crash', () => {
 		render(
 			<PlanningGrid
 				view="week"
@@ -514,7 +514,7 @@ describe('PlanningGrid — ouverture du détail d’une tâche', () => {
 		expect(() => fireEvent.click(segment)).not.toThrow()
 	})
 
-	it('la touche Entrée sur un segment focalisé appelle onOpenTask', () => {
+	it('the Enter key on a focused segment calls onOpenTask', () => {
 		const onOpenTask = vi.fn()
 		render(
 			<PlanningGrid
@@ -534,7 +534,7 @@ describe('PlanningGrid — ouverture du détail d’une tâche', () => {
 		expect(onOpenTask).toHaveBeenCalledWith({ entryId: 'wo-1' })
 	})
 
-	it('un clic sur le bouton retirer ne déclenche pas aussi onOpenTask (stopPropagation)', () => {
+	it('clicking the remove button does not also fire onOpenTask (stopPropagation)', () => {
 		const onOpenTask = vi.fn()
 		const onRemoveAssignee = vi.fn()
 		render(
@@ -561,7 +561,7 @@ describe('PlanningGrid — ouverture du détail d’une tâche', () => {
 })
 
 describe('PlanningGrid — pastilles de labels', () => {
-	it('affiche une pastille par label porté par la tâche', () => {
+	it('shows one dot per label the task carries', () => {
 		render(
 			<PlanningGrid
 				view="week"
@@ -590,7 +590,7 @@ describe('PlanningGrid — pastilles de labels', () => {
 		expect(screen.getByTitle('Réunion')).toBeDefined()
 	})
 
-	it('un segment sans labels ne rend aucune pastille', () => {
+	it('a segment with no labels renders no dot', () => {
 		render(
 			<PlanningGrid
 				view="week"
@@ -610,7 +610,7 @@ describe('PlanningGrid — pastilles de labels', () => {
 	})
 })
 
-describe('PlanningGrid — pas d’appel réseau', () => {
+describe('PlanningGrid — no network call', () => {
 	let fetchSpy: ReturnType<typeof createFetchSpy>
 
 	function createFetchSpy() {
@@ -627,7 +627,7 @@ describe('PlanningGrid — pas d’appel réseau', () => {
 		fetchSpy.mockRestore()
 	})
 
-	it('ne déclenche aucun fetch au rendu', () => {
+	it('fires no fetch on render', () => {
 		render(
 			<PlanningGrid
 				view="week"

@@ -9,14 +9,14 @@ import {
 const TZ = 'Europe/Paris'
 
 describe('minuteOfDayInTimeZone', () => {
-	it("convertit un instant UTC en minutes depuis minuit dans le fuseau de l'organisation", () => {
-		// 06:30 UTC est 08:30 à Paris en été (UTC+2).
+	it("converts a UTC instant into minutes since midnight in the organization's zone", () => {
+		// 06:30 UTC is 08:30 in Paris in summer (UTC+2).
 		expect(minuteOfDayInTimeZone(new Date('2026-08-10T06:30:00Z'), TZ)).toBe(
 			8 * 60 + 30,
 		)
 	})
 
-	it('gère un fuseau différent du navigateur sans dépendre de celui-ci', () => {
+	it("handles a zone different from the browser's without depending on it", () => {
 		expect(
 			minuteOfDayInTimeZone(
 				new Date('2026-08-10T06:30:00Z'),
@@ -27,8 +27,8 @@ describe('minuteOfDayInTimeZone', () => {
 })
 
 describe('isoDateInTimeZone', () => {
-	it("renvoie la date calendaire locale à l'organisation, pas celle en UTC", () => {
-		// 23:15 UTC est déjà le lendemain à Paris (01:15, été).
+	it('returns the calendar date local to the organization, not the UTC one', () => {
+		// 23:15 UTC is already the next day in Paris (01:15, summer).
 		expect(isoDateInTimeZone(new Date('2026-08-10T23:15:00Z'), TZ)).toBe(
 			'2026-08-11',
 		)
@@ -36,7 +36,7 @@ describe('isoDateInTimeZone', () => {
 })
 
 describe('computeAmplitude', () => {
-	it('cas nominal : bornes arrondies à l’heure sur les plages de travail', () => {
+	it('nominal case: bounds rounded to the hour over the work ranges', () => {
 		const amplitude = computeAmplitude(
 			[],
 			[
@@ -48,7 +48,7 @@ describe('computeAmplitude', () => {
 		expect(amplitude).toEqual({ startMinute: 9 * 60, endMinute: 17 * 60 })
 	})
 
-	it('arrondit vers le bas la borne basse et vers le haut la borne haute', () => {
+	it('rounds the lower bound down and the upper bound up', () => {
 		const amplitude = computeAmplitude(
 			[],
 			[{ startsMinute: 8 * 60 + 45, endsMinute: 17 * 60 + 10 }],
@@ -57,7 +57,7 @@ describe('computeAmplitude', () => {
 		expect(amplitude).toEqual({ startMinute: 8 * 60, endMinute: 18 * 60 })
 	})
 
-	it('replie sur 08:00–18:00 quand la période est vide', () => {
+	it('falls back to 08:00–18:00 when the period is empty', () => {
 		expect(computeAmplitude([], [], TZ)).toEqual(FALLBACK_AMPLITUDE)
 		expect(FALLBACK_AMPLITUDE).toEqual({
 			startMinute: 8 * 60,
@@ -65,7 +65,7 @@ describe('computeAmplitude', () => {
 		})
 	})
 
-	it('une entrée débordant les plages de travail élargit l’amplitude', () => {
+	it('an entry spilling past the work ranges widens the amplitude', () => {
 		const amplitude = computeAmplitude(
 			[
 				{
@@ -80,7 +80,7 @@ describe('computeAmplitude', () => {
 		expect(amplitude).toEqual({ startMinute: 7 * 60, endMinute: 21 * 60 })
 	})
 
-	it('exclut les entrées journée entière du calcul — sinon une seule absence ouvrirait l’amplitude à 24h', () => {
+	it('excludes full-day entries from the computation — otherwise a single absence would open the amplitude to 24h', () => {
 		const amplitude = computeAmplitude(
 			[
 				{
@@ -95,11 +95,11 @@ describe('computeAmplitude', () => {
 		expect(amplitude).toEqual(FALLBACK_AMPLITUDE)
 	})
 
-	it('une entrée à cheval sur minuit local étend la borne haute à 24:00', () => {
+	it('an entry straddling local midnight extends the upper bound to 24:00', () => {
 		const amplitude = computeAmplitude(
 			[
 				{
-					// 22:00 Paris à 01:00 Paris le lendemain.
+					// 22:00 Paris to 01:00 Paris the next day.
 					startsAt: '2026-08-10T20:00:00Z',
 					endsAt: '2026-08-10T23:00:00Z',
 					allDay: false,

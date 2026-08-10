@@ -17,16 +17,16 @@ import type {
 } from '#/pages/planning/ui/event-edit-form'
 
 /**
- * Ce que le calendrier sait faire d'une entrée — le reste vit dans la feature.
- * Les callbacks portent l'entrée, pas le segment qui la représente : c'est ce
- * qui permet aux vues semaine et mois, qui positionnent différemment, de
- * partager le même panneau.
+ * What the calendar knows how to do with an entry — the rest lives in the
+ * feature. The callbacks carry the entry, not the segment representing it:
+ * that is what lets the week and month views, which position differently,
+ * share the same panel.
  */
 export interface CalendarEventCallbacks {
 	onChangeStatus?: (entry: PlanningEntry, status: Schemas.TaskStatus) => void
 	onDelete?: (entry: PlanningEntry) => void
 	isPending?: boolean
-	/** Brouillon en cours, s'il porte sur cette entrée. */
+	/** Draft in progress, if it is about this entry. */
 	editing: EventEditState | null
 	assignees: EventAssigneeOption[]
 	selectedResourceIds: string[]
@@ -44,11 +44,11 @@ export interface EventPopoverProps {
 }
 
 /**
- * Panneau de détail d'une entrée, ancré sur l'élément cliqué.
+ * Detail panel for an entry, anchored on the clicked element.
  *
- * Un clic ouvre ce que l'entrée contient déjà — horaire, assignés, client,
- * étiquettes, description — au lieu d'envoyer vers un écran pour le lire. Les
- * actions de fond restent derrière « ouvrir ».
+ * One click opens what the entry already holds — time, assignees, customer,
+ * labels, description — instead of sending the user to a screen to read it.
+ * The deeper actions stay behind "ouvrir".
  */
 export function EventPopover({
 	detail,

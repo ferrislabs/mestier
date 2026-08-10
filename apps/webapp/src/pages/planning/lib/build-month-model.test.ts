@@ -15,7 +15,7 @@ const RESOURCES: PlanningResource[] = [
 	},
 ]
 
-/** Août 2026 : le 1er tombe un samedi, la grille démarre donc le lundi 27 juillet. */
+/** August 2026: the 1st is a Saturday, so the grid starts on Monday 27 July. */
 const MONTH = '2026-08'
 const GRID = computeMonthGridWindow('2026-08-15')
 
@@ -70,13 +70,13 @@ function dayOf(model: ReturnType<typeof build>, date: string) {
 }
 
 describe('computeMonthGridWindow', () => {
-	it('couvre des semaines entières autour du mois', () => {
+	it('covers whole weeks around the month', () => {
 		expect(GRID).toEqual({ from: '2026-07-27', to: '2026-09-06' })
 	})
 })
 
 describe('buildMonthModel', () => {
-	it('découpe la fenêtre en semaines de sept jours', () => {
+	it('cuts the window into seven-day weeks', () => {
 		const model = build([])
 
 		expect(model.weeks).toHaveLength(6)
@@ -92,7 +92,7 @@ describe('buildMonthModel', () => {
 		])
 	})
 
-	it('marque les jours des mois voisins, aujourd’hui et le week-end', () => {
+	it("marks neighbouring months' days, today and the weekend", () => {
 		const model = build([])
 
 		expect(dayOf(model, '2026-07-27')?.isOutsideMonth).toBe(true)
@@ -102,14 +102,14 @@ describe('buildMonthModel', () => {
 		expect(dayOf(model, '2026-08-08')?.isWeekend).toBe(true)
 	})
 
-	it('nomme le premier jour d’un mois avec son mois, comme Apple', () => {
+	it("names a month's first day with its month, the way Apple does", () => {
 		const model = build([])
 
 		expect(dayOf(model, '2026-08-01')?.dayLabel).toMatch(/^1 août$/)
 		expect(dayOf(model, '2026-08-02')?.dayLabel).toBe('2')
 	})
 
-	it('range une entrée horaire dans sa case, avec son heure de début', () => {
+	it('files a timed entry in its cell, with its start time', () => {
 		const model = build([task()])
 		const day = dayOf(model, '2026-08-05')
 
@@ -118,7 +118,7 @@ describe('buildMonthModel', () => {
 		expect(day?.entries[0]?.timeLabel).toMatch(/^\d{2}:\d{2}$/)
 	})
 
-	it('trie les entrées d’une case par heure de début', () => {
+	it("sorts a cell's entries by start time", () => {
 		const model = build([
 			task({ id: 't-late', title: 'Tonte', starts_at: '2026-08-05T14:00:00Z' }),
 			task({
@@ -134,7 +134,7 @@ describe('buildMonthModel', () => {
 		])
 	})
 
-	it('compte les entrées qui ne tiennent pas dans une case', () => {
+	it('counts the entries that do not fit in a cell', () => {
 		const model = build(
 			Array.from({ length: 6 }, (_, index) =>
 				task({
@@ -150,21 +150,21 @@ describe('buildMonthModel', () => {
 		expect(day?.hiddenCount).toBe(2)
 	})
 
-	it('étale une entrée à la journée sur les colonnes qu’elle couvre', () => {
+	it('spreads an all-day entry over the columns it covers', () => {
 		const model = build([leave()])
 		const week = model.weeks.find((week) =>
 			week.days.some((day) => day.date === '2026-08-05'),
 		)
 		const span = week?.spans[0]
 
-		// Du mercredi 5 au vendredi 7 inclus : `ends_at` est la borne exclusive.
+		// Wednesday 5 through Friday 7 inclusive: `ends_at` is the exclusive bound.
 		expect(span?.startIndex).toBe(2)
 		expect(span?.length).toBe(3)
 		expect(span?.continuesBefore).toBe(false)
 		expect(span?.continuesAfter).toBe(false)
 	})
 
-	it('coupe un congé à cheval sur deux semaines en un segment par semaine', () => {
+	it('cuts a leave straddling two weeks into one segment per week', () => {
 		const model = build([
 			leave({
 				starts_at: '2026-08-07T00:00:00Z',
@@ -178,7 +178,7 @@ describe('buildMonthModel', () => {
 		expect(withSpans[1]?.spans[0]?.continuesBefore).toBe(true)
 	})
 
-	it('empile deux bandeaux qui se chevauchent sur des rangs distincts', () => {
+	it('stacks two overlapping banners on distinct ranks', () => {
 		const model = build([
 			leave(),
 			leave({ id: 'a-2', absence_kind: 'SICK', employee_id: 'e-3' }),
@@ -189,13 +189,13 @@ describe('buildMonthModel', () => {
 		expect(week?.laneCount).toBe(2)
 	})
 
-	it('n’affiche pas une entrée à la journée comme ligne de case', () => {
+	it('does not show an all-day entry as a cell row', () => {
 		const model = build([leave()])
 
 		expect(dayOf(model, '2026-08-05')?.entries).toHaveLength(0)
 	})
 
-	it('décrit chaque ligne pour le panneau de détail', () => {
+	it('describes each row for the detail panel', () => {
 		const model = build([task()])
 		const detail = dayOf(model, '2026-08-05')?.entries[0]?.detail
 
@@ -205,7 +205,7 @@ describe('buildMonthModel', () => {
 		expect(detail?.attendees.map((a) => a.name)).toEqual(['Marie Leroy'])
 	})
 
-	it('décrit un bandeau comme une journée entière, daté de son premier jour', () => {
+	it('describes a banner as a full day, dated from its first day', () => {
 		const model = build([leave()])
 		const detail = model.weeks.find((week) => week.spans.length > 0)?.spans[0]
 			?.detail
@@ -214,14 +214,14 @@ describe('buildMonthModel', () => {
 		expect(detail?.dateLabel).toMatch(/^mercredi 5 août$/)
 	})
 
-	it('filtre par nature et compte ce qui est masqué', () => {
+	it('filters by kind and counts what is hidden', () => {
 		const model = build([task(), leave()], { filter: 'task' })
 
 		expect(model.hiddenByFilter).toBe(1)
 		expect(model.weeks.every((week) => week.spans.length === 0)).toBe(true)
 	})
 
-	it('filtre par employé', () => {
+	it('filters by employee', () => {
 		const model = build([task(), leave()], { employeeIds: ['e-1'] })
 
 		expect(model.hiddenByFilter).toBe(1)

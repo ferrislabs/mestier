@@ -41,13 +41,13 @@ function baseProps() {
 	}
 }
 
-describe('AbsenceFormSheet — création', () => {
-	it("n'affiche rien quand open est faux", () => {
+describe('AbsenceFormSheet — creation', () => {
+	it('renders nothing when open is false', () => {
 		render(<AbsenceFormSheet {...baseProps()} open={false} />)
 		expect(screen.queryByRole('dialog')).toBeNull()
 	})
 
-	it('propose le sélecteur employé et pas de bouton supprimer', () => {
+	it('offers the employee picker and no delete button', () => {
 		render(<AbsenceFormSheet {...baseProps()} />)
 
 		expect(screen.getByText('Nouvelle absence')).toBeDefined()
@@ -55,7 +55,7 @@ describe('AbsenceFormSheet — création', () => {
 		expect(screen.queryByRole('button', { name: /Supprimer/ })).toBeNull()
 	})
 
-	it('affiche « {nom} {prénom} » dans les options du sélecteur employé', async () => {
+	it('shows « {nom} {prénom} » in the employee picker options', async () => {
 		const user = userEvent.setup()
 		render(<AbsenceFormSheet {...baseProps()} />)
 
@@ -66,7 +66,7 @@ describe('AbsenceFormSheet — création', () => {
 		expect(screen.getByRole('option', { name: 'Leroy Marie' })).toBeDefined()
 	})
 
-	it('affiche le seul nom dans le sélecteur quand le prénom est absent', async () => {
+	it('shows the surname alone in the picker when the given name is missing', async () => {
 		const user = userEvent.setup()
 		render(
 			<AbsenceFormSheet
@@ -79,12 +79,12 @@ describe('AbsenceFormSheet — création', () => {
 		expect(await screen.findByRole('option', { name: 'Petit' })).toBeDefined()
 	})
 
-	it('masque les champs horaires quand journée entière est actif', () => {
+	it('hides the time fields when full day is on', () => {
 		render(<AbsenceFormSheet {...baseProps()} />)
 		expect(screen.queryByLabelText('Heure de début')).toBeNull()
 	})
 
-	it('affiche les champs horaires quand journée entière est désactivé', () => {
+	it('shows the time fields when full day is off', () => {
 		const props = baseProps()
 		render(
 			<AbsenceFormSheet
@@ -96,7 +96,7 @@ describe('AbsenceFormSheet — création', () => {
 		expect(screen.getByLabelText('Heure de fin')).toBeDefined()
 	})
 
-	it('affiche les erreurs de validation et désactive la soumission', () => {
+	it('shows validation errors and disables submission', () => {
 		render(<AbsenceFormSheet {...baseProps()} errors={['Employé requis']} />)
 
 		expect(screen.getByText('Employé requis')).toBeDefined()
@@ -106,7 +106,7 @@ describe('AbsenceFormSheet — création', () => {
 		expect(submit.disabled).toBe(true)
 	})
 
-	it('appelle onSubmit au clic sur enregistrer quand valide', async () => {
+	it('calls onSubmit on save click when valid', async () => {
 		const user = userEvent.setup()
 		const onSubmit = vi.fn()
 		render(<AbsenceFormSheet {...baseProps()} onSubmit={onSubmit} />)
@@ -115,7 +115,7 @@ describe('AbsenceFormSheet — création', () => {
 		expect(onSubmit).toHaveBeenCalledTimes(1)
 	})
 
-	it('reporte les changements de champ via onChange', async () => {
+	it('reports field changes through onChange', async () => {
 		const user = userEvent.setup()
 		const onChange = vi.fn()
 		render(<AbsenceFormSheet {...baseProps()} onChange={onChange} />)
@@ -126,7 +126,7 @@ describe('AbsenceFormSheet — création', () => {
 })
 
 describe('AbsenceFormSheet — champ de plage', () => {
-	it('affiche un seul jour quand la plage est réduite à une journée', () => {
+	it('shows a single day when the range is one day long', () => {
 		render(<AbsenceFormSheet {...baseProps()} />)
 
 		expect(screen.getByTestId('absence-range-trigger').textContent).toBe(
@@ -134,7 +134,7 @@ describe('AbsenceFormSheet — champ de plage', () => {
 		)
 	})
 
-	it('affiche les deux bornes séparées par un tiret quand la plage couvre plusieurs jours', () => {
+	it('shows both bounds separated by a dash when the range spans several days', () => {
 		const props = baseProps()
 		render(
 			<AbsenceFormSheet
@@ -151,7 +151,7 @@ describe('AbsenceFormSheet — champ de plage', () => {
 		)
 	})
 
-	it('ouvre un calendrier au clic sur le déclencheur de la période', async () => {
+	it('opens a calendar when the period trigger is clicked', async () => {
 		const user = userEvent.setup()
 		render(<AbsenceFormSheet {...baseProps()} />)
 
@@ -160,7 +160,7 @@ describe('AbsenceFormSheet — champ de plage', () => {
 	})
 })
 
-describe('AbsenceFormSheet — édition', () => {
+describe('AbsenceFormSheet — editing', () => {
 	function editProps() {
 		return {
 			...baseProps(),
@@ -169,7 +169,7 @@ describe('AbsenceFormSheet — édition', () => {
 		}
 	}
 
-	it("verrouille l'employé plutôt que de proposer un sélecteur", () => {
+	it('locks the employee instead of offering a picker', () => {
 		render(<AbsenceFormSheet {...editProps()} />)
 
 		expect(screen.getByText('Modifier l’absence')).toBeDefined()
@@ -179,7 +179,7 @@ describe('AbsenceFormSheet — édition', () => {
 		).toBeDefined()
 	})
 
-	it('affiche le bouton supprimer et le déclenche', async () => {
+	it('shows the delete button and fires it', async () => {
 		const user = userEvent.setup()
 		const onDelete = vi.fn()
 		render(<AbsenceFormSheet {...editProps()} onDelete={onDelete} />)
@@ -188,13 +188,13 @@ describe('AbsenceFormSheet — édition', () => {
 		expect(onDelete).toHaveBeenCalledTimes(1)
 	})
 
-	it("affiche l'erreur de sauvegarde renvoyée par la mutation", () => {
+	it('shows the save error returned by the mutation', () => {
 		render(<AbsenceFormSheet {...editProps()} saveError="HTTP 409: conflit" />)
 		expect(screen.getByText('HTTP 409: conflit')).toBeDefined()
 	})
 })
 
-describe('AbsenceFormSheet — pas d’appel réseau', () => {
+describe('AbsenceFormSheet — no network call', () => {
 	let fetchSpy: ReturnType<typeof createFetchSpy>
 
 	function createFetchSpy() {
@@ -211,7 +211,7 @@ describe('AbsenceFormSheet — pas d’appel réseau', () => {
 		fetchSpy.mockRestore()
 	})
 
-	it('ne déclenche aucun fetch au rendu', () => {
+	it('fires no fetch on render', () => {
 		render(<AbsenceFormSheet {...baseProps()} />)
 		expect(fetchSpy).not.toHaveBeenCalled()
 	})

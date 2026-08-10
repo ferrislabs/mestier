@@ -210,7 +210,7 @@ describe('EmployeeWorkTimeFeature', () => {
 		vi.restoreAllMocks()
 	})
 
-	it("charge et affiche le rythme actuel de l'employé", async () => {
+	it("loads and shows the employee's current rhythm", async () => {
 		renderFeature()
 
 		expect(await screen.findByText('Martin Alix')).toBeDefined()
@@ -218,7 +218,7 @@ describe('EmployeeWorkTimeFeature', () => {
 		expect(within(lundiSection).getByLabelText('Début')).toBeDefined()
 	})
 
-	it('envoie le bon payload PUT rhythm à la sauvegarde', async () => {
+	it('sends the right PUT rhythm payload on save', async () => {
 		const user = userEvent.setup()
 		const putRhythm = vi.fn().mockResolvedValue(OPEN_RHYTHM)
 		const { calls } = renderFeature({ putRhythm })
@@ -240,7 +240,7 @@ describe('EmployeeWorkTimeFeature', () => {
 		})
 	})
 
-	it('affiche un message clair — pas une erreur brute — quand le rythme renvoie un 409', async () => {
+	it('shows a clear message — not a raw error — when the rhythm returns a 409', async () => {
 		const user = userEvent.setup()
 		const conflictError: Error & { status?: number } = new Error(
 			'Conflict: cannot start a rhythm version before the one currently in effect',
@@ -265,7 +265,7 @@ describe('EmployeeWorkTimeFeature', () => {
 		).toBeNull()
 	})
 
-	it('envoie le bon payload PUT work-slots à la sauvegarde', async () => {
+	it('sends the right PUT work-slots payload on save', async () => {
 		const user = userEvent.setup()
 		const putWorkSlots = vi.fn().mockResolvedValue([])
 		const { calls } = renderFeature({ putWorkSlots })
@@ -290,7 +290,7 @@ describe('EmployeeWorkTimeFeature', () => {
 		})
 	})
 
-	it('envoie le bon payload PATCH employee pour la base contractuelle', async () => {
+	it('sends the right PATCH employee payload for the contractual baseline', async () => {
 		const user = userEvent.setup()
 		const patchEmployee = vi.fn().mockResolvedValue(EMPLOYEE)
 		const { calls } = renderFeature({ patchEmployee })
@@ -353,7 +353,7 @@ describe('EmployeeWorkTimeFeature — absences', () => {
 		}
 	}
 
-	it("affiche uniquement les absences de l'employé de la page", async () => {
+	it("shows only the absences of the page's employee", async () => {
 		renderFeature({
 			absences: [
 				absence({ id: 'ab-1', employee_id: 'employee-1' }),
@@ -366,7 +366,7 @@ describe('EmployeeWorkTimeFeature — absences', () => {
 		expect(screen.getAllByText(/Congé —/)).toHaveLength(1)
 	})
 
-	it("l'édition d'une absence pré-remplit le formulaire et envoie un PATCH sans employee_id", async () => {
+	it('editing an absence prefills the form and sends a PATCH without employee_id', async () => {
 		const user = userEvent.setup()
 		const patchAbsence = vi.fn().mockResolvedValue(absence())
 		const { calls } = renderFeature({
@@ -392,7 +392,7 @@ describe('EmployeeWorkTimeFeature — absences', () => {
 		expect(call?.params).not.toHaveProperty('body.employee_id')
 	})
 
-	it('la suppression déclenche un DELETE et ferme le formulaire', async () => {
+	it('deleting fires a DELETE and closes the form', async () => {
 		const user = userEvent.setup()
 		const deleteAbsence = vi.fn().mockResolvedValue(undefined)
 		const { calls } = renderFeature({
@@ -416,7 +416,7 @@ describe('EmployeeWorkTimeFeature — absences', () => {
 		await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
 	})
 
-	it("la création pré-remplit l'employé de la page et envoie un POST avec son employee_id", async () => {
+	it("creating prefills the page's employee and sends a POST with their employee_id", async () => {
 		const user = userEvent.setup()
 		const postAbsence = vi.fn().mockResolvedValue(absence({ id: 'ab-new' }))
 		const { calls } = renderFeature({ postAbsence })
@@ -441,7 +441,7 @@ describe('EmployeeWorkTimeFeature — absences', () => {
 		})
 	})
 
-	it('le sélecteur employé affiche « {nom} {prénom} » et le nom seul sans prénom', async () => {
+	it('the employee picker shows « {nom} {prénom} », and the last name alone without a first name', async () => {
 		const user = userEvent.setup()
 		renderFeature({ employees: [EMPLOYEE, EMPLOYEE_2] })
 
