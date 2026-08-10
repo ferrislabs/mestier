@@ -5,7 +5,7 @@ use serde_json::json;
 use thiserror::Error;
 
 use super::descriptor::{AuthRequirement, ConnectorDescriptor};
-use super::field::{Field, FieldKind};
+use super::field::{Field, FieldKind, SelectOption};
 
 /// Every connector kind the product can pose in a workflow graph, keyed by
 /// kind and version.
@@ -110,6 +110,185 @@ const CUSTOMER_CREATE_FIELDS: &[Field] = &[
     },
 ];
 
+const HTTP_REQUEST_FIELDS: &[Field] = &[
+    Field {
+        name: "method",
+        label: "Method",
+        required: true,
+        kind: FieldKind::Select {
+            options: &[
+                SelectOption {
+                    value: "GET",
+                    label: "GET",
+                },
+                SelectOption {
+                    value: "POST",
+                    label: "POST",
+                },
+                SelectOption {
+                    value: "PUT",
+                    label: "PUT",
+                },
+                SelectOption {
+                    value: "PATCH",
+                    label: "PATCH",
+                },
+                SelectOption {
+                    value: "DELETE",
+                    label: "DELETE",
+                },
+            ],
+        },
+        expression: false,
+        secret: false,
+        visible_when: None,
+    },
+    Field {
+        name: "url",
+        label: "URL",
+        required: true,
+        kind: FieldKind::Text,
+        expression: true,
+        secret: false,
+        visible_when: None,
+    },
+    Field {
+        name: "headers",
+        label: "Headers",
+        required: false,
+        kind: FieldKind::Json,
+        expression: true,
+        secret: false,
+        visible_when: None,
+    },
+    Field {
+        name: "body",
+        label: "Body",
+        required: false,
+        kind: FieldKind::Json,
+        expression: true,
+        secret: false,
+        visible_when: None,
+    },
+    Field {
+        name: "timeout_seconds",
+        label: "Timeout (seconds)",
+        required: false,
+        kind: FieldKind::Number,
+        expression: false,
+        secret: false,
+        visible_when: None,
+    },
+    Field {
+        name: "signing_credential_id",
+        label: "Signing credential",
+        required: false,
+        kind: FieldKind::Text,
+        expression: false,
+        secret: false,
+        visible_when: None,
+    },
+];
+
+const ODOO_CREATE_PARTNER_FIELDS: &[Field] = &[
+    Field {
+        name: "name",
+        label: "Name",
+        required: true,
+        kind: FieldKind::Text,
+        expression: true,
+        secret: false,
+        visible_when: None,
+    },
+    Field {
+        name: "email",
+        label: "Email",
+        required: false,
+        kind: FieldKind::Text,
+        expression: true,
+        secret: false,
+        visible_when: None,
+    },
+    Field {
+        name: "phone",
+        label: "Phone",
+        required: false,
+        kind: FieldKind::Text,
+        expression: true,
+        secret: false,
+        visible_when: None,
+    },
+];
+
+const ODOO_UPDATE_PARTNER_FIELDS: &[Field] = &[
+    Field {
+        name: "partner_id",
+        label: "Partner ID",
+        required: true,
+        kind: FieldKind::Number,
+        expression: true,
+        secret: false,
+        visible_when: None,
+    },
+    Field {
+        name: "name",
+        label: "Name",
+        required: false,
+        kind: FieldKind::Text,
+        expression: true,
+        secret: false,
+        visible_when: None,
+    },
+    Field {
+        name: "email",
+        label: "Email",
+        required: false,
+        kind: FieldKind::Text,
+        expression: true,
+        secret: false,
+        visible_when: None,
+    },
+    Field {
+        name: "phone",
+        label: "Phone",
+        required: false,
+        kind: FieldKind::Text,
+        expression: true,
+        secret: false,
+        visible_when: None,
+    },
+];
+
+const ODOO_CREATE_INVOICE_FIELDS: &[Field] = &[
+    Field {
+        name: "partner_id",
+        label: "Partner ID",
+        required: true,
+        kind: FieldKind::Number,
+        expression: true,
+        secret: false,
+        visible_when: None,
+    },
+    Field {
+        name: "description",
+        label: "Line description",
+        required: true,
+        kind: FieldKind::Text,
+        expression: true,
+        secret: false,
+        visible_when: None,
+    },
+    Field {
+        name: "amount",
+        label: "Amount",
+        required: true,
+        kind: FieldKind::Number,
+        expression: true,
+        secret: false,
+        visible_when: None,
+    },
+];
+
 /// Assembles the catalogue. Single point of extension: a module contributes
 /// a line here, never a change to the backbone.
 pub fn connector_catalogue() -> ConnectorCatalogue {
@@ -127,6 +306,8 @@ pub fn connector_catalogue() -> ConnectorCatalogue {
 fn descriptors() -> Vec<ConnectorDescriptor> {
     let mut all = flow_descriptors();
     all.extend(customer_descriptors());
+    all.extend(http_descriptors());
+    all.extend(odoo_descriptors());
     all
 }
 
@@ -171,6 +352,63 @@ fn customer_descriptors() -> Vec<ConnectorDescriptor> {
         fields: CUSTOMER_CREATE_FIELDS,
         output_example: json!({ "id": "…", "name": "…" }),
     }]
+}
+
+/// The one network connector proved by #202: an outbound call to wherever
+/// the resolved `url` points, authenticated with any of three schemes and
+/// optionally signed with a second, distinct credential
+/// (`signing_credential_id`). `credential_id` stays `Option` — an
+/// unauthenticated call is a real, supported case.
+fn http_descriptors() -> Vec<ConnectorDescriptor> {
+    vec![ConnectorDescriptor {
+        kind: "http.request",
+        version: 1,
+        family: "http",
+        label: "HTTP request",
+        auth: AuthRequirement::AnyOf(&["bearer_token", "http_basic", "http_header"]),
+        fields: HTTP_REQUEST_FIELDS,
+        output_example: json!({
+            "status": 200,
+            "headers": { "content-type": "application/json" },
+            "body": {},
+        }),
+    }]
+}
+
+/// The three Odoo actions #202 ships: each a typed envelope over the same
+/// authenticate-then-`execute_kw` HTTP call `http.request` could make by
+/// hand — named fields and an imposed `odoo_api` credential in exchange for
+/// giving up the generality.
+fn odoo_descriptors() -> Vec<ConnectorDescriptor> {
+    vec![
+        ConnectorDescriptor {
+            kind: "odoo.create_partner",
+            version: 1,
+            family: "odoo",
+            label: "Create partner",
+            auth: AuthRequirement::Exactly("odoo_api"),
+            fields: ODOO_CREATE_PARTNER_FIELDS,
+            output_example: json!({ "id": 42 }),
+        },
+        ConnectorDescriptor {
+            kind: "odoo.update_partner",
+            version: 1,
+            family: "odoo",
+            label: "Update partner",
+            auth: AuthRequirement::Exactly("odoo_api"),
+            fields: ODOO_UPDATE_PARTNER_FIELDS,
+            output_example: json!({ "id": 42, "updated": true }),
+        },
+        ConnectorDescriptor {
+            kind: "odoo.create_invoice",
+            version: 1,
+            family: "odoo",
+            label: "Create invoice",
+            auth: AuthRequirement::Exactly("odoo_api"),
+            fields: ODOO_CREATE_INVOICE_FIELDS,
+            output_example: json!({ "id": 99 }),
+        },
+    ]
 }
 
 #[cfg(test)]
@@ -271,6 +509,84 @@ mod tests {
                 .fields
                 .iter()
                 .any(|f| f.name == "name" && f.required)
+        );
+    }
+
+    /// `http.request`'s auth stays optional: `credential_id` is `Option`, so
+    /// an unauthenticated call is a supported case, not an oversight.
+    #[test]
+    fn the_catalogue_contains_the_http_request_connector() {
+        let catalogue = connector_catalogue();
+
+        let descriptor = catalogue
+            .get("http.request", 1)
+            .expect("http.request is described");
+        assert_eq!(
+            descriptor.auth,
+            AuthRequirement::AnyOf(&["bearer_token", "http_basic", "http_header"])
+        );
+        assert!(
+            descriptor
+                .fields
+                .iter()
+                .any(|f| f.name == "url" && f.required && f.expression)
+        );
+        assert!(
+            descriptor
+                .fields
+                .iter()
+                .any(|f| f.name == "method" && f.required)
+        );
+        assert!(
+            descriptor
+                .fields
+                .iter()
+                .any(|f| f.name == "signing_credential_id" && !f.required),
+            "signing is a second, distinct credential slot from `credential_id`"
+        );
+    }
+
+    /// Each Odoo action imposes exactly one auth scheme — no `AnyOf`, unlike
+    /// `http.request` — and a credential-bearing model action requires the
+    /// fields that identify what it acts on.
+    #[test]
+    fn the_catalogue_contains_the_three_odoo_connectors() {
+        let catalogue = connector_catalogue();
+
+        for kind in [
+            "odoo.create_partner",
+            "odoo.update_partner",
+            "odoo.create_invoice",
+        ] {
+            let descriptor = catalogue
+                .get(kind, 1)
+                .unwrap_or_else(|| panic!("{kind} is described"));
+            assert_eq!(descriptor.auth, AuthRequirement::Exactly("odoo_api"));
+            assert_eq!(descriptor.family, "odoo");
+        }
+
+        let create_partner = catalogue.get("odoo.create_partner", 1).unwrap();
+        assert!(
+            create_partner
+                .fields
+                .iter()
+                .any(|f| f.name == "name" && f.required)
+        );
+
+        let update_partner = catalogue.get("odoo.update_partner", 1).unwrap();
+        assert!(
+            update_partner
+                .fields
+                .iter()
+                .any(|f| f.name == "partner_id" && f.required)
+        );
+
+        let create_invoice = catalogue.get("odoo.create_invoice", 1).unwrap();
+        assert!(
+            create_invoice
+                .fields
+                .iter()
+                .any(|f| f.name == "amount" && f.required)
         );
     }
 
