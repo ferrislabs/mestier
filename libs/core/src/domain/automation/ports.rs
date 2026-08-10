@@ -158,11 +158,11 @@ pub trait CredentialRepository: Send {
     /// `sealed = None` leaves the sealed bytes untouched (`COALESCE` in the
     /// Postgres adapter), which is what lets a rename skip re-supplying the
     /// secret.
-    fn update(
+    fn update<'a>(
         &mut self,
         org_id: OrganizationId,
         credential: &Credential,
-        sealed: Option<&SealedSecret>,
+        sealed: Option<&'a SealedSecret>,
     ) -> impl Future<Output = Result<Credential, CoreError>> + Send;
 
     fn delete(
