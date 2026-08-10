@@ -24,6 +24,7 @@ pub struct PassOutcome {
 
 mod credential;
 mod tests;
+mod workflow;
 
 impl MestierUseCase {
     /// Runs one fan-out pass: read undispatched events, create a delivery per
