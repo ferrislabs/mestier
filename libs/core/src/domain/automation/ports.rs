@@ -6,6 +6,7 @@ use uuid::Uuid;
 use crate::domain::automation::credential::Credential;
 use crate::domain::automation::secret::SealedSecret;
 use crate::domain::automation::settings::AutomationSettings;
+use crate::domain::automation::workflow::{Graph, Workflow, WorkflowReference, WorkflowVersion};
 
 /// Appends events to the durable log.
 ///
@@ -175,4 +176,79 @@ pub trait CredentialRepository: Send {
         org_id: OrganizationId,
         id: Uuid,
     ) -> impl Future<Output = Result<(), CoreError>> + Send;
+}
+
+/// Workflows and their immutable versions. `org_id` is a parameter of every
+/// method that can reach someone else's row, not a promise the caller
+/// already checked — a cross-organization lookup must read back as absent,
+/// the same discipline as [`CredentialRepository`].
+#[cfg_attr(test, mockall::automock)]
+pub trait WorkflowRepository: Send {
+    fn insert(
+        &mut self,
+        workflow: &Workflow,
+    ) -> impl Future<Output = Result<Workflow, CoreError>> + Send;
+
+    fn find_by_id(
+        &mut self,
+        org_id: OrganizationId,
+        id: Uuid,
+    ) -> impl Future<Output = Result<Option<Workflow>, CoreError>> + Send;
+
+    fn list_by_organization(
+        &mut self,
+        org_id: OrganizationId,
+    ) -> impl Future<Output = Result<Vec<Workflow>, CoreError>> + Send;
+
+    /// Name, description and `enabled` only — `current_version_id` is moved
+    /// exclusively by [`Self::insert_version`].
+    fn update(
+        &mut self,
+        org_id: OrganizationId,
+        workflow: &Workflow,
+    ) -> impl Future<Output = Result<Workflow, CoreError>> + Send;
+
+    fn delete(
+        &mut self,
+        org_id: OrganizationId,
+        id: Uuid,
+    ) -> impl Future<Output = Result<(), CoreError>> + Send;
+
+    /// Inserts a new immutable version and moves `current_version_id` to
+    /// point at it, in the same transaction — never a rewrite of a version a
+    /// run (#200) might be executing. The version number is computed here,
+    /// under an advisory lock keyed by `workflow_id` (the same technique
+    /// `PgQuoteRepository::next_reference` uses for its own per-organization
+    /// counter), so two concurrent saves can never mint the same number.
+    fn insert_version(
+        &mut self,
+        org_id: OrganizationId,
+        workflow_id: Uuid,
+        graph: &Graph,
+        created_by: Option<Uuid>,
+    ) -> impl Future<Output = Result<WorkflowVersion, CoreError>> + Send;
+
+    fn find_version(
+        &mut self,
+        org_id: OrganizationId,
+        workflow_id: Uuid,
+        version: i32,
+    ) -> impl Future<Output = Result<Option<WorkflowVersion>, CoreError>> + Send;
+
+    fn list_versions(
+        &mut self,
+        org_id: OrganizationId,
+        workflow_id: Uuid,
+    ) -> impl Future<Output = Result<Vec<WorkflowVersion>, CoreError>> + Send;
+
+    /// Workflows in this organization with a version — any version, not only
+    /// the current one, since an older one can still be executing a run
+    /// (#200) — whose graph references `credential_id`. What guards
+    /// `application::automation::credential::delete_credential`: `.len()`
+    /// counts, `.name` on each entry names.
+    fn workflows_referencing_credential(
+        &mut self,
+        org_id: OrganizationId,
+        credential_id: Uuid,
+    ) -> impl Future<Output = Result<Vec<WorkflowReference>, CoreError>> + Send;
 }
