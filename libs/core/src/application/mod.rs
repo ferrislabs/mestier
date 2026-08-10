@@ -2,16 +2,14 @@ use std::sync::Arc;
 
 use auth::{AuthService, FerrisKeyRepository};
 use authz::LocalPolicyEngine;
-use common::{AutomationConfig, Config, CoreError};
+use common::{Config, CoreError};
 use rate_limit::{Quota, RateLimitService, RedisRateLimiter};
 use sqlx::PgPool;
 use sqlx::postgres::PgPoolOptions;
 
 use crate::domain::file_storage::service::FileStorageService;
 use crate::domain::role::Permissions;
-use crate::infrastructure::automation::webhook::{
-    WebhookDeliveryHandler, address_policy::PrivateNetworkAccess, secret::SecretCipher,
-};
+use crate::infrastructure::automation::webhook::secret::SecretCipher;
 use crate::infrastructure::automation::worker::{WorkerSchedule, run_automation_worker};
 use crate::infrastructure::file_storage::S3FileStorage;
 use crate::infrastructure::postgres::error::map_sqlx_error;
@@ -219,7 +217,7 @@ pub async fn create_service(config: Config) -> Result<MestierService, CoreError>
     let usecase =
         MestierUseCase::new(pool.clone(), default_authorizer(), hub.clone()).with_cipher(cipher);
 
-    spawn_automation_worker(&config.automation, pool, usecase.clone())?;
+    spawn_automation_worker(usecase.clone());
 
     Ok(MestierService::new(
         auth,
@@ -231,49 +229,23 @@ pub async fn create_service(config: Config) -> Result<MestierService, CoreError>
     ))
 }
 
-/// Starts the background loop that fans events out and delivers them.
+/// Starts the background loop that fans events out into runs and executes
+/// them.
 ///
-/// Silently doing nothing when no key is configured would be the wrong
-/// failure: an operator would see events pile up with no explanation. It logs
-/// loudly instead, and the API refuses to create an endpoint for the same
-/// reason — no key means no way to store a secret.
-fn spawn_automation_worker(
-    config: &AutomationConfig,
-    pool: PgPool,
-    usecase: MestierUseCase,
-) -> Result<(), CoreError> {
-    let Some(encoded) = config.secret_key.as_deref() else {
-        tracing::warn!(
-            "no AUTOMATION_SECRET_KEY configured: the automation worker will not start and \
-             webhook endpoints cannot be created"
-        );
-        return Ok(());
-    };
-
-    let cipher = SecretCipher::from_base64(encoded)?;
-    let access = if config.allow_private_network {
-        tracing::warn!(
-            "webhooks may reach private addresses. Correct for a single-tenant instance; \
-             on a shared one a tenant can borrow this server's network rights"
-        );
-        PrivateNetworkAccess::Allowed
-    } else {
-        PrivateNetworkAccess::Denied
-    };
-
-    let handler = WebhookDeliveryHandler::new(pool, cipher, access)?;
-    // Named after the host so a delivery stuck `in_flight` points at the
-    // machine that was holding it.
+/// Unlike the webhook delivery pass it replaces, the run engine needs no
+/// `AUTOMATION_SECRET_KEY` to operate — nothing on this path decrypts a
+/// sealed secret — so the worker always starts. The key remains required
+/// elsewhere, to seal credential data at rest (see [`MestierUseCase::cipher`]).
+fn spawn_automation_worker(usecase: MestierUseCase) {
+    // Named after the host so a run stuck `running` points at the machine
+    // that was holding it.
     let worker = hostname().unwrap_or_else(|| "mestier".to_owned());
 
     tokio::spawn(run_automation_worker(
         usecase,
-        handler,
         worker,
         WorkerSchedule::default(),
     ));
-
-    Ok(())
 }
 
 fn hostname() -> Option<String> {

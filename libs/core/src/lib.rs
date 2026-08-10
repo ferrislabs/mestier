@@ -17,9 +17,7 @@ pub use domain::automation::event_catalogue;
 pub use domain::automation::expression::{
     ExpressionContext, ExpressionError, LoopFrame, Template, parse_template,
 };
-pub use domain::automation::ports::{
-    DeliveryHandler, DeliveryOutcome, DispatchOutcome, DueDelivery,
-};
+pub use domain::automation::ports::DispatchOutcome;
 pub use domain::automation::run::{
     Connector, ConnectorInput, ConnectorOutcome, DueRun, Run, RunSettlement, RunStatus, RunStep,
     StepStatus,
@@ -33,7 +31,7 @@ pub use domain::automation::workflow::{
 };
 pub use infrastructure::automation::connectors::{ConnectorRegistry, UnknownConnectorKind};
 pub use infrastructure::automation::webhook::{
-    WebhookDeliveryHandler, address_policy::PrivateNetworkAccess, secret::SecretCipher,
+    address_policy::PrivateNetworkAccess, secret::SecretCipher,
 };
 pub use infrastructure::automation::worker::{WorkerSchedule, run_automation_worker};
 pub use infrastructure::realtime::EventHub;
