@@ -1,6 +1,6 @@
 use serde_json::Value;
 
-use super::ast::{Expr, Part, Path, PathRoot, PathSegment, Template};
+use super::ast::{BinOp, Expr, Part, Path, PathRoot, PathSegment, Template, UnaryOp};
 use super::error::ExpressionError;
 
 /// Entry point used by `parse_template`. A non-string value is always a
@@ -416,7 +416,75 @@ impl<'a> Parser<'a> {
         Ok(std::mem::replace(&mut self.cur, next))
     }
 
+    /// Precedence, loosest to tightest: `or` > `and` > comparison > `not` >
+    /// primary. `not` binding tighter than a comparison is deliberate (see
+    /// the frozen grammar): `not a == b` parses as `(not a) == b`.
     fn parse_expression(&mut self) -> Result<Expr, ExpressionError> {
+        self.parse_or()
+    }
+
+    fn parse_or(&mut self) -> Result<Expr, ExpressionError> {
+        let mut left = self.parse_and()?;
+        while matches!(self.cur.tok, Tok::Or) {
+            self.bump()?;
+            let right = self.parse_and()?;
+            left = Expr::Binary {
+                op: BinOp::Or,
+                left: Box::new(left),
+                right: Box::new(right),
+            };
+        }
+        Ok(left)
+    }
+
+    fn parse_and(&mut self) -> Result<Expr, ExpressionError> {
+        let mut left = self.parse_comparison()?;
+        while matches!(self.cur.tok, Tok::And) {
+            self.bump()?;
+            let right = self.parse_comparison()?;
+            left = Expr::Binary {
+                op: BinOp::And,
+                left: Box::new(left),
+                right: Box::new(right),
+            };
+        }
+        Ok(left)
+    }
+
+    /// Comparisons do not chain: `a == b == c` is a syntax error rather than
+    /// silently meaning `(a == b) == c`.
+    fn parse_comparison(&mut self) -> Result<Expr, ExpressionError> {
+        let left = self.parse_not()?;
+        let op = match self.cur.tok {
+            Tok::EqOp => Some(BinOp::Eq),
+            Tok::Ne => Some(BinOp::Ne),
+            Tok::Lt => Some(BinOp::Lt),
+            Tok::Le => Some(BinOp::Le),
+            Tok::Gt => Some(BinOp::Gt),
+            Tok::Ge => Some(BinOp::Ge),
+            _ => None,
+        };
+        let Some(op) = op else {
+            return Ok(left);
+        };
+        self.bump()?;
+        let right = self.parse_not()?;
+        Ok(Expr::Binary {
+            op,
+            left: Box::new(left),
+            right: Box::new(right),
+        })
+    }
+
+    fn parse_not(&mut self) -> Result<Expr, ExpressionError> {
+        if matches!(self.cur.tok, Tok::Not) {
+            self.bump()?;
+            let inner = self.parse_not()?;
+            return Ok(Expr::Unary {
+                op: UnaryOp::Not,
+                expr: Box::new(inner),
+            });
+        }
         self.parse_primary()
     }
 
@@ -444,10 +512,28 @@ impl<'a> Parser<'a> {
                 Ok(Expr::Literal(Value::Null))
             }
             Tok::Ident(name) => self.parse_ident_start(name),
+            Tok::LParen => {
+                self.bump()?;
+                let inner = self.parse_expression()?;
+                self.expect_rparen()?;
+                Ok(inner)
+            }
             _ => Err(ExpressionError::Syntax {
                 position: self.cur.pos,
                 message: "expected a value".to_string(),
             }),
+        }
+    }
+
+    fn expect_rparen(&mut self) -> Result<(), ExpressionError> {
+        if matches!(self.cur.tok, Tok::RParen) {
+            self.bump()?;
+            Ok(())
+        } else {
+            Err(ExpressionError::Syntax {
+                position: self.cur.pos,
+                message: "expected `)`".to_string(),
+            })
         }
     }
 

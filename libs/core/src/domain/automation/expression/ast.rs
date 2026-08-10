@@ -22,12 +22,61 @@ pub(crate) enum Part {
     Expr(Expr),
 }
 
-/// A parsed `{{ ... }}` body. Operators and function calls are added as the
-/// grammar is built out.
+/// A parsed `{{ ... }}` body. Function calls are added as the grammar is
+/// built out.
 #[derive(Debug)]
 pub(crate) enum Expr {
     Literal(Value),
     Path(Path),
+    Unary {
+        op: UnaryOp,
+        expr: Box<Expr>,
+    },
+    Binary {
+        op: BinOp,
+        left: Box<Expr>,
+        right: Box<Expr>,
+    },
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum UnaryOp {
+    Not,
+}
+
+impl UnaryOp {
+    pub(crate) fn keyword(self) -> &'static str {
+        match self {
+            Self::Not => "not",
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum BinOp {
+    Eq,
+    Ne,
+    Lt,
+    Le,
+    Gt,
+    Ge,
+    And,
+    Or,
+}
+
+impl BinOp {
+    pub(crate) fn symbol(self) -> &'static str {
+        match self {
+            Self::Eq => "==",
+            Self::Ne => "!=",
+            Self::Lt => "<",
+            Self::Le => "<=",
+            Self::Gt => ">",
+            Self::Ge => ">=",
+            Self::And => "and",
+            Self::Or => "or",
+        }
+    }
 }
 
 /// One reference into `trigger`, `connectors` or `loop`.
@@ -89,6 +138,11 @@ pub(crate) fn walk_paths<'a>(expr: &'a Expr, visit: &mut impl FnMut(&'a Path)) {
     match expr {
         Expr::Literal(_) => {}
         Expr::Path(path) => visit(path),
+        Expr::Unary { expr, .. } => walk_paths(expr, visit),
+        Expr::Binary { left, right, .. } => {
+            walk_paths(left, visit);
+            walk_paths(right, visit);
+        }
     }
 }
 

@@ -338,4 +338,153 @@ mod tests {
 
         assert_eq!(err, ExpressionError::LoopOutsideLoop);
     }
+
+    #[test]
+    fn comparison_operators_evaluate_on_numbers() {
+        let connectors = BTreeMap::new();
+        let ctx = empty_context(&connectors);
+
+        let cases = [
+            ("{{ 1 == 1 }}", true),
+            ("{{ 1 == 2 }}", false),
+            ("{{ 1 != 2 }}", true),
+            ("{{ 1 < 2 }}", true),
+            ("{{ 2 < 1 }}", false),
+            ("{{ 1 <= 1 }}", true),
+            ("{{ 2 <= 1 }}", false),
+            ("{{ 2 > 1 }}", true),
+            ("{{ 2 >= 2 }}", true),
+        ];
+
+        for (raw, expected) in cases {
+            let template =
+                parse_template(&json!(raw)).unwrap_or_else(|e| panic!("{raw} failed: {e}"));
+            let result = template
+                .evaluate(&ctx)
+                .unwrap_or_else(|e| panic!("{raw} failed: {e}"));
+            assert_eq!(result, json!(expected), "for {raw}");
+        }
+    }
+
+    #[test]
+    fn equality_also_works_on_strings_and_null() {
+        let connectors = BTreeMap::new();
+        let ctx = empty_context(&connectors);
+
+        let template = parse_template(&json!("{{ \"a\" == \"a\" }}")).expect("valid");
+        assert_eq!(template.evaluate(&ctx).expect("evaluates"), json!(true));
+
+        let template = parse_template(&json!("{{ null == null }}")).expect("valid");
+        assert_eq!(template.evaluate(&ctx).expect("evaluates"), json!(true));
+    }
+
+    #[test]
+    fn boolean_operators_and_not_evaluate() {
+        let connectors = BTreeMap::new();
+        let ctx = empty_context(&connectors);
+
+        let cases = [
+            ("{{ not true }}", false),
+            ("{{ not false }}", true),
+            ("{{ true and false }}", false),
+            ("{{ true and true }}", true),
+            ("{{ true or false }}", true),
+            ("{{ false or false }}", false),
+        ];
+
+        for (raw, expected) in cases {
+            let template =
+                parse_template(&json!(raw)).unwrap_or_else(|e| panic!("{raw} failed: {e}"));
+            let result = template
+                .evaluate(&ctx)
+                .unwrap_or_else(|e| panic!("{raw} failed: {e}"));
+            assert_eq!(result, json!(expected), "for {raw}");
+        }
+    }
+
+    #[test]
+    fn not_binds_tighter_than_comparisons_which_bind_tighter_than_and_which_binds_tighter_than_or()
+    {
+        let connectors = BTreeMap::new();
+        let ctx = empty_context(&connectors);
+
+        // (not false) and false == false, not `not (false and false)` == true.
+        let template = parse_template(&json!("{{ not false and false }}")).expect("valid");
+        assert_eq!(template.evaluate(&ctx).expect("evaluates"), json!(false));
+
+        // (1 == 1) or false, not `1 == (1 or false)` which would be a syntax error.
+        let template = parse_template(&json!("{{ 1 == 1 or false }}")).expect("valid");
+        assert_eq!(template.evaluate(&ctx).expect("evaluates"), json!(true));
+    }
+
+    #[test]
+    fn parentheses_override_precedence() {
+        let connectors = BTreeMap::new();
+        let ctx = empty_context(&connectors);
+
+        let template = parse_template(&json!("{{ not (1 == 1) }}")).expect("valid");
+        assert_eq!(template.evaluate(&ctx).expect("evaluates"), json!(false));
+
+        let template =
+            parse_template(&json!("{{ (1 == 1) and (2 == 3) }}")).expect("valid");
+        assert_eq!(template.evaluate(&ctx).expect("evaluates"), json!(false));
+    }
+
+    #[test]
+    fn and_short_circuits_without_evaluating_the_right_operand() {
+        let connectors = BTreeMap::new();
+        let ctx = empty_context(&connectors);
+        // connectors.missing does not exist: if the right side were
+        // evaluated, this would fail with MissingPath instead.
+        let template =
+            parse_template(&json!("{{ false and connectors.missing.output }}")).expect("valid");
+
+        assert_eq!(template.evaluate(&ctx).expect("short-circuits"), json!(false));
+    }
+
+    #[test]
+    fn or_short_circuits_without_evaluating_the_right_operand() {
+        let connectors = BTreeMap::new();
+        let ctx = empty_context(&connectors);
+        let template =
+            parse_template(&json!("{{ true or connectors.missing.output }}")).expect("valid");
+
+        assert_eq!(template.evaluate(&ctx).expect("short-circuits"), json!(true));
+    }
+
+    #[test]
+    fn comparing_a_number_to_a_string_is_a_type_mismatch() {
+        let connectors = BTreeMap::new();
+        let ctx = empty_context(&connectors);
+        let template = parse_template(&json!("{{ 1 < \"a\" }}")).expect("valid syntax");
+
+        let err = template.evaluate(&ctx).expect_err("not comparable");
+
+        assert_eq!(
+            err,
+            ExpressionError::TypeMismatch {
+                path: "\"a\"".to_string(),
+                expected: "number",
+                got: "string",
+            }
+        );
+    }
+
+    #[test]
+    fn and_on_a_non_boolean_is_a_type_mismatch() {
+        let connectors = BTreeMap::new();
+        let ctx = empty_context(&connectors);
+        let template = parse_template(&json!("{{ 1 and true }}")).expect("valid syntax");
+
+        let err = template.evaluate(&ctx).expect_err("1 is not a boolean");
+
+        assert_eq!(
+            err,
+            ExpressionError::TypeMismatch {
+                path: "1".to_string(),
+                expected: "boolean",
+                got: "number",
+            }
+        );
+    }
 }
