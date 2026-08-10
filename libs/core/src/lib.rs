@@ -14,6 +14,9 @@ pub use domain::automation::credential::{
     UpdateCredentialCommand, validate_credential_data,
 };
 pub use domain::automation::event_catalogue;
+pub use domain::automation::expression::{
+    ExpressionContext, ExpressionError, LoopFrame, Template, parse_template,
+};
 pub use domain::automation::ports::{
     DeliveryHandler, DeliveryOutcome, DispatchOutcome, DueDelivery,
 };
