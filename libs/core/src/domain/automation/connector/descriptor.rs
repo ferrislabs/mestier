@@ -63,7 +63,10 @@ pub struct ConnectorDescriptor {
 
 #[cfg(test)]
 mod tests {
+    use serde_json::{json, to_value};
+
     use super::*;
+    use crate::domain::automation::connector::{FieldKind, SelectOption, VisibleWhen};
 
     #[test]
     fn no_auth_accepts_no_scheme() {
@@ -93,6 +96,57 @@ mod tests {
         assert_eq!(
             requirement.scheme_kinds(),
             &["bearer_token", "http_header"]
+        );
+    }
+
+    /// The catalogue leaves the crate as JSON (#203): every field must
+    /// survive the trip, including the nested ones.
+    #[test]
+    fn a_descriptor_serializes_without_losing_its_fields() {
+        let descriptor = ConnectorDescriptor {
+            kind: "odoo.create_partner",
+            version: 1,
+            family: "odoo",
+            label: "Create partner",
+            auth: AuthRequirement::AnyOf(&["odoo_api", "bearer_token"]),
+            fields: &[Field {
+                name: "kind",
+                label: "Kind",
+                required: true,
+                kind: FieldKind::Select {
+                    options: &[SelectOption {
+                        value: "company",
+                        label: "Company",
+                    }],
+                },
+                expression: true,
+                secret: false,
+                visible_when: Some(VisibleWhen {
+                    field: "type",
+                    any_of: &["b2b"],
+                }),
+            }],
+            output_example: json!({ "id": 42 }),
+        };
+
+        let json = to_value(&descriptor).expect("descriptor serializes");
+
+        assert_eq!(json["kind"], "odoo.create_partner");
+        assert_eq!(json["version"], 1);
+        assert_eq!(json["family"], "odoo");
+        assert_eq!(json["output_example"], json!({ "id": 42 }));
+        assert_eq!(json["auth"], json!({ "AnyOf": ["odoo_api", "bearer_token"] }));
+        assert_eq!(json["fields"][0]["name"], "kind");
+        assert_eq!(json["fields"][0]["required"], true);
+        assert_eq!(json["fields"][0]["expression"], true);
+        assert_eq!(json["fields"][0]["secret"], false);
+        assert_eq!(
+            json["fields"][0]["kind"],
+            json!({ "Select": { "options": [{ "value": "company", "label": "Company" }] } })
+        );
+        assert_eq!(
+            json["fields"][0]["visible_when"],
+            json!({ "field": "type", "any_of": ["b2b"] })
         );
     }
 }

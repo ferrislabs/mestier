@@ -128,6 +128,8 @@ fn flow_descriptors() -> Vec<ConnectorDescriptor> {
 
 #[cfg(test)]
 mod tests {
+    use serde_json::to_value;
+
     use super::*;
     use crate::domain::automation::connector::auth_scheme;
 
@@ -233,5 +235,23 @@ mod tests {
                 descriptor.kind
             );
         }
+    }
+
+    /// The catalogue leaves the crate as JSON (#203): both registered
+    /// versions of a kind must survive the trip.
+    #[test]
+    fn the_catalogue_serializes_every_registered_descriptor() {
+        let mut catalogue = ConnectorCatalogue::new();
+        catalogue
+            .register(descriptor("flow.loop", 1))
+            .expect("version 1 registers");
+        catalogue
+            .register(descriptor("flow.loop", 2))
+            .expect("version 2 registers");
+
+        let json = to_value(&catalogue).expect("catalogue serializes");
+
+        assert_eq!(json["descriptors"]["flow.loop"]["1"]["version"], 1);
+        assert_eq!(json["descriptors"]["flow.loop"]["2"]["version"], 2);
     }
 }
