@@ -1,9 +1,11 @@
 use std::collections::HashMap;
 
 use serde::Serialize;
+use serde_json::json;
 use thiserror::Error;
 
-use super::descriptor::ConnectorDescriptor;
+use super::descriptor::{AuthRequirement, ConnectorDescriptor};
+use super::field::{Field, FieldKind};
 
 /// Every connector kind the product can pose in a workflow graph, keyed by
 /// kind and version.
@@ -58,12 +60,76 @@ pub enum ConnectorCatalogueError {
     Duplicate { kind: &'static str, version: u16 },
 }
 
+const LOOP_FIELDS: &[Field] = &[Field {
+    name: "items",
+    label: "Items",
+    required: true,
+    kind: FieldKind::Json,
+    expression: true,
+    secret: false,
+    visible_when: None,
+}];
+
+const CONDITION_FIELDS: &[Field] = &[Field {
+    name: "predicate",
+    label: "Predicate",
+    required: true,
+    kind: FieldKind::Text,
+    expression: true,
+    secret: false,
+    visible_when: None,
+}];
+
+/// Assembles the catalogue. Single point of extension: a module contributes
+/// a line here, never a change to the backbone.
+pub fn connector_catalogue() -> ConnectorCatalogue {
+    let mut catalogue = ConnectorCatalogue::new();
+
+    for descriptor in descriptors() {
+        catalogue
+            .register(descriptor)
+            .expect("the catalogue is built from static descriptors, so a clash is a bug");
+    }
+
+    catalogue
+}
+
+fn descriptors() -> Vec<ConnectorDescriptor> {
+    flow_descriptors()
+}
+
+/// The two flow-control connectors: they act on the graph itself rather than
+/// an external system, so they need no authentication and are declared here
+/// instead of being owned by a bounded context. Described now, executed in
+/// #200 — two real cases are enough to prove the descriptor shape without
+/// running anything.
+fn flow_descriptors() -> Vec<ConnectorDescriptor> {
+    vec![
+        ConnectorDescriptor {
+            kind: "flow.loop",
+            version: 1,
+            family: "flow",
+            label: "Loop",
+            auth: AuthRequirement::None,
+            fields: LOOP_FIELDS,
+            output_example: json!({ "item": "…", "index": 0 }),
+        },
+        ConnectorDescriptor {
+            kind: "flow.condition",
+            version: 1,
+            family: "flow",
+            label: "Condition",
+            auth: AuthRequirement::None,
+            fields: CONDITION_FIELDS,
+            output_example: json!({ "matched": true }),
+        },
+    ]
+}
+
 #[cfg(test)]
 mod tests {
-    use serde_json::json;
-
     use super::*;
-    use crate::domain::automation::connector::descriptor::AuthRequirement;
+    use crate::domain::automation::connector::auth_scheme;
 
     fn descriptor(kind: &'static str, version: u16) -> ConnectorDescriptor {
         ConnectorDescriptor {
@@ -129,5 +195,43 @@ mod tests {
         let catalogue = ConnectorCatalogue::new();
 
         assert_eq!(catalogue.get("flow.loop", 1), None);
+    }
+
+    #[test]
+    fn the_catalogue_contains_the_flow_connectors() {
+        let catalogue = connector_catalogue();
+
+        assert!(catalogue.get("flow.loop", 1).is_some());
+        assert!(catalogue.get("flow.condition", 1).is_some());
+    }
+
+    /// The check that keeps a typo in an `AuthRequirement` from reaching
+    /// production: a scheme named here but absent from `auth_schemes()`
+    /// would otherwise only surface once someone tries to attach a
+    /// credential to the connector.
+    #[test]
+    fn every_scheme_named_by_the_catalogue_is_a_known_auth_scheme() {
+        let catalogue = connector_catalogue();
+
+        for descriptor in catalogue.descriptors() {
+            for scheme_kind in descriptor.auth.scheme_kinds() {
+                assert!(
+                    auth_scheme(scheme_kind).is_some(),
+                    "`{}` requires unknown auth scheme `{scheme_kind}`",
+                    descriptor.kind
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn every_descriptor_carries_an_output_example() {
+        for descriptor in connector_catalogue().descriptors() {
+            assert!(
+                !descriptor.output_example.is_null(),
+                "`{}` has no output example, so nothing documents its shape",
+                descriptor.kind
+            );
+        }
     }
 }
