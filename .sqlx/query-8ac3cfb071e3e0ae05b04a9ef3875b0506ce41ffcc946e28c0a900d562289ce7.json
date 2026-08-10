@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT COALESCE(MAX(version), 0) + 1 AS \"next_version!\"\n               FROM automation.workflow_version WHERE workflow_id = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "next_version!",
+        "type_info": "Int4"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "8ac3cfb071e3e0ae05b04a9ef3875b0506ce41ffcc946e28c0a900d562289ce7"
+}

@@ -1,0 +1,29 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT DISTINCT w.id, w.name\n               FROM automation.workflow w\n               JOIN automation.workflow_version wv ON wv.workflow_id = w.id\n               WHERE w.org_id = $1\n                 AND wv.graph @> jsonb_build_object(\n                       'connectors',\n                       jsonb_build_array(jsonb_build_object('credential_id', $2::text))\n                     )\n               ORDER BY w.name",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "name",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "a12becaceea21e990f671223adf5588ec7f9f5ab2d4e5e56fb841e3e1cb64e09"
+}
