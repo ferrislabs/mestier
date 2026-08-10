@@ -49,7 +49,7 @@ mod tests {
     use std::collections::BTreeMap;
 
     use chrono::TimeZone;
-    use serde_json::json;
+    use serde_json::{json, Value};
 
     use super::*;
 
@@ -100,6 +100,65 @@ mod tests {
         assert_eq!(
             template.evaluate(&ctx).expect("a literal never fails"),
             json!("hello world")
+        );
+    }
+
+    #[test]
+    fn a_whole_expression_is_not_static() {
+        let template = parse_template(&json!("{{ 42 }}")).expect("valid expression");
+
+        assert!(
+            !template.is_static(),
+            "a whole expression always needs evaluation"
+        );
+    }
+
+    #[test]
+    fn whole_expression_literals_preserve_their_json_type() {
+        let connectors = BTreeMap::new();
+        let ctx = empty_context(&connectors);
+
+        let cases: &[(&str, Value)] = &[
+            ("{{ 42 }}", json!(42)),
+            ("{{ 3.5 }}", json!(3.5)),
+            ("{{ -7 }}", json!(-7)),
+            ("{{ \"abc\" }}", json!("abc")),
+            ("{{ 'abc' }}", json!("abc")),
+            ("{{ true }}", json!(true)),
+            ("{{ false }}", json!(false)),
+            ("{{ null }}", Value::Null),
+        ];
+
+        for (raw, expected) in cases {
+            let template = parse_template(&json!(raw))
+                .unwrap_or_else(|e| panic!("parsing `{raw}` failed: {e}"));
+            let result = template
+                .evaluate(&ctx)
+                .unwrap_or_else(|e| panic!("evaluating `{raw}` failed: {e}"));
+            assert_eq!(&result, expected, "for `{raw}`");
+        }
+    }
+
+    #[test]
+    fn surrounding_whitespace_does_not_prevent_a_whole_expression() {
+        let template = parse_template(&json!("   {{ 42 }}   ")).expect("valid expression");
+        let connectors = BTreeMap::new();
+        let ctx = empty_context(&connectors);
+
+        assert!(!template.is_static());
+        assert_eq!(template.evaluate(&ctx).expect("evaluates"), json!(42));
+    }
+
+    #[test]
+    fn an_unterminated_brace_is_a_syntax_error_naming_its_position() {
+        let err = parse_template(&json!("hello {{ 42 ")).expect_err("must fail to parse");
+
+        assert_eq!(
+            err,
+            ExpressionError::Syntax {
+                position: 6,
+                message: "unterminated `{{`".to_string(),
+            }
         );
     }
 }
