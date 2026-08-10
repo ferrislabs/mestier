@@ -8,6 +8,11 @@
 mod customer_create;
 mod flow_condition;
 mod flow_loop;
+mod http_client;
+mod http_request;
+mod odoo;
 mod registry;
+#[cfg(test)]
+mod test_support;
 
 pub use registry::{ConnectorRegistry, UnknownConnectorKind};
