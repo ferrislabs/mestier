@@ -7,7 +7,7 @@ use uuid::Uuid;
 use crate::{
     domain::automation::{
         ports::RunRepository,
-        run::{DueRun, Run, RunSettlement, RunStatus, RunStep, StepStatus},
+        run::{DueRun, Run, RunSettlement, RunStatus, RunStep},
         workflow::Graph,
     },
     infrastructure::postgres::{SharedTx, error::map_sqlx_error},
@@ -399,6 +399,7 @@ mod tests {
 
     use super::*;
     use crate::domain::automation::ports::WorkflowRepository;
+    use crate::domain::automation::run::StepStatus;
     use crate::domain::automation::workflow::{Graph, PlacedConnector, Workflow};
     use crate::infrastructure::automation::postgres::PgWorkflowRepository;
     use crate::infrastructure::postgres::with_tx;

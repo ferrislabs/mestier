@@ -23,6 +23,7 @@ pub struct PassOutcome {
 }
 
 mod credential;
+pub mod run;
 mod tests;
 mod workflow;
 

@@ -4,8 +4,9 @@ use chrono::Utc;
 use tracing::{error, info, warn};
 
 use crate::{
-    application::{MestierUseCase, automation::PassOutcome},
+    application::{MestierUseCase, automation::PassOutcome, automation::run::EnginePassOutcome},
     domain::automation::ports::DeliveryHandler,
+    infrastructure::automation::connectors::ConnectorRegistry,
 };
 
 /// How the background loop paces itself.
@@ -17,13 +18,20 @@ use crate::{
 #[derive(Debug, Clone, Copy)]
 pub struct WorkerSchedule {
     pub interval: Duration,
-    /// Deliveries claimed per pass, across all organizations.
+    /// Deliveries (or runs) claimed per pass, across all organizations.
     pub batch: i64,
     /// Ceiling on how much of a batch one organization may take, so a noisy
     /// tenant cannot starve the others.
     pub per_org: i64,
     /// A claim older than this belonged to a worker that died.
     pub claim_timeout: Duration,
+    /// How much of one run's graph a single slice may work through before
+    /// handing the run back — `pending`, not lost — for a later pass.
+    /// Bounds how long a claimed run can occupy the worker: without this a
+    /// 500-element `flow.loop` would monopolize a slot for however long the
+    /// whole loop takes, the same way a single delivery cannot.
+    pub max_steps_per_slice: usize,
+    pub max_slice_duration: Duration,
 }
 
 impl Default for WorkerSchedule {
@@ -33,6 +41,8 @@ impl Default for WorkerSchedule {
             batch: 100,
             per_org: 20,
             claim_timeout: Duration::from_secs(300),
+            max_steps_per_slice: 50,
+            max_slice_duration: Duration::from_secs(20),
         }
     }
 }
@@ -50,6 +60,9 @@ pub async fn run_automation_worker<H: DeliveryHandler>(
 ) {
     info!(%worker, "automation worker started");
     let mut ticker = tokio::time::interval(schedule.interval);
+    // Built once, not per tick: its only state is a clone of `usecase`, the
+    // same handle the delivery pass already carries.
+    let connectors = ConnectorRegistry::new(usecase.clone());
 
     loop {
         ticker.tick().await;
@@ -63,6 +76,17 @@ pub async fn run_automation_worker<H: DeliveryHandler>(
             }
             Ok(_) => {}
             Err(error) => error!(%error, "recovering lost deliveries failed"),
+        }
+
+        match usecase
+            .recover_lost_runs(Utc::now() - chrono_from(schedule.claim_timeout))
+            .await
+        {
+            Ok(released) if released > 0 => {
+                warn!(released, "recovered runs from a worker that was lost");
+            }
+            Ok(_) => {}
+            Err(error) => error!(%error, "recovering lost runs failed"),
         }
 
         if let Err(error) = usecase.dispatch_pending_events(schedule.batch).await {
@@ -82,6 +106,25 @@ pub async fn run_automation_worker<H: DeliveryHandler>(
             }
             Ok(_) => {}
             Err(error) => error!(%error, "the delivery pass failed"),
+        }
+
+        // The run engine's own pass, right beside the delivery one: distinct
+        // tables, distinct claims, and a run's connector execution never
+        // holds a transaction the delivery pass could contend on.
+        match usecase
+            .run_engine_pass(&connectors, &worker, schedule)
+            .await
+        {
+            Ok(EnginePassOutcome {
+                claimed,
+                succeeded,
+                rescheduled,
+                failed,
+            }) if claimed > 0 => {
+                info!(claimed, succeeded, rescheduled, failed, "run engine pass");
+            }
+            Ok(_) => {}
+            Err(error) => error!(%error, "the run engine pass failed"),
         }
     }
 }
