@@ -5,7 +5,9 @@ use tracing::{error, info, warn};
 
 use crate::{
     application::{MestierUseCase, automation::run::EnginePassOutcome},
-    infrastructure::automation::connectors::ConnectorRegistry,
+    infrastructure::automation::{
+        connectors::ConnectorRegistry, webhook::address_policy::PrivateNetworkAccess,
+    },
 };
 
 /// How the background loop paces itself.
@@ -56,12 +58,14 @@ pub async fn run_automation_worker(
     usecase: MestierUseCase,
     worker: String,
     schedule: WorkerSchedule,
+    private_network: PrivateNetworkAccess,
 ) {
     info!(%worker, "automation worker started");
     let mut ticker = tokio::time::interval(schedule.interval);
     // Built once, not per tick: its only state is a clone of `usecase`, the
     // same handle the run-engine pass already carries.
-    let connectors = ConnectorRegistry::new(usecase.clone());
+    let connectors =
+        ConnectorRegistry::with_private_network_access(usecase.clone(), private_network);
 
     loop {
         ticker.tick().await;

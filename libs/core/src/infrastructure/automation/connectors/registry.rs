@@ -2,10 +2,15 @@ use thiserror::Error;
 
 use crate::application::MestierUseCase;
 use crate::domain::automation::run::{Connector, ConnectorInput, ConnectorOutcome};
+use crate::infrastructure::automation::webhook::address_policy::PrivateNetworkAccess;
 
 use super::customer_create::CustomerCreateConnector;
 use super::flow_condition::FlowConditionConnector;
 use super::flow_loop::FlowLoopConnector;
+use super::http_request::HttpRequestConnector;
+use super::odoo::{
+    OdooCreateInvoiceConnector, OdooCreatePartnerConnector, OdooUpdatePartnerConnector,
+};
 
 #[derive(Debug, Error, PartialEq, Eq)]
 #[error("no connector implementation for `{kind}` version {version}")]
@@ -15,9 +20,9 @@ pub struct UnknownConnectorKind {
 }
 
 /// Every executable connector kind, dispatched by `(kind, version)`. A
-/// concrete struct rather than a `HashMap<_, Box<dyn Connector>>`: only three
-/// kinds exist in this ticket, and `Connector::execute` returning
-/// `impl Future` (not object-safe) would otherwise force boxing every call.
+/// concrete struct rather than a `HashMap<_, Box<dyn Connector>>`:
+/// `Connector::execute` returning `impl Future` (not object-safe) would
+/// otherwise force boxing every call.
 ///
 /// [`Self::known_kinds`] is the anti-drift test's other half — see
 /// `domain::automation::connector::catalogue` for the descriptors this is
@@ -28,14 +33,37 @@ pub struct ConnectorRegistry {
     flow_loop: FlowLoopConnector,
     flow_condition: FlowConditionConnector,
     customer_create: CustomerCreateConnector,
+    http_request: HttpRequestConnector,
+    odoo_create_partner: OdooCreatePartnerConnector,
+    odoo_update_partner: OdooUpdatePartnerConnector,
+    odoo_create_invoice: OdooCreateInvoiceConnector,
 }
 
 impl ConnectorRegistry {
+    /// Network connectors default to [`PrivateNetworkAccess::Denied`] — the
+    /// same fail-closed default `PrivateNetworkAccess` itself declares.
+    /// Callers who need the instance's actual `AutomationConfig`-sourced
+    /// policy build through [`Self::with_private_network_access`] instead.
     pub fn new(usecase: MestierUseCase) -> Self {
+        Self::with_private_network_access(usecase, PrivateNetworkAccess::default())
+    }
+
+    /// Builds the registry with an explicit private-network policy — see
+    /// `AutomationConfig::allow_private_network`. Only `http.request` and
+    /// the `odoo.*` connectors read it: every other kind here makes no
+    /// outbound call.
+    pub fn with_private_network_access(
+        usecase: MestierUseCase,
+        access: PrivateNetworkAccess,
+    ) -> Self {
         Self {
             flow_loop: FlowLoopConnector,
             flow_condition: FlowConditionConnector,
-            customer_create: CustomerCreateConnector::new(usecase),
+            customer_create: CustomerCreateConnector::new(usecase.clone()),
+            http_request: HttpRequestConnector::new(usecase.clone(), access),
+            odoo_create_partner: OdooCreatePartnerConnector::new(usecase.clone(), access),
+            odoo_update_partner: OdooUpdatePartnerConnector::new(usecase.clone(), access),
+            odoo_create_invoice: OdooCreateInvoiceConnector::new(usecase, access),
         }
     }
 
@@ -45,6 +73,10 @@ impl ConnectorRegistry {
             ("flow.loop", 1),
             ("flow.condition", 1),
             ("mestier.customer.create", 1),
+            ("http.request", 1),
+            ("odoo.create_partner", 1),
+            ("odoo.update_partner", 1),
+            ("odoo.create_invoice", 1),
         ]
     }
 
@@ -58,6 +90,10 @@ impl ConnectorRegistry {
             ("flow.loop", 1) => Ok(self.flow_loop.execute(input).await),
             ("flow.condition", 1) => Ok(self.flow_condition.execute(input).await),
             ("mestier.customer.create", 1) => Ok(self.customer_create.execute(input).await),
+            ("http.request", 1) => Ok(self.http_request.execute(input).await),
+            ("odoo.create_partner", 1) => Ok(self.odoo_create_partner.execute(input).await),
+            ("odoo.update_partner", 1) => Ok(self.odoo_update_partner.execute(input).await),
+            ("odoo.create_invoice", 1) => Ok(self.odoo_create_invoice.execute(input).await),
             _ => Err(UnknownConnectorKind {
                 kind: kind.to_string(),
                 version,
