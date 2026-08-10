@@ -3,6 +3,8 @@ use common::{CoreError, OrganizationId};
 use events::EventEnvelope;
 use uuid::Uuid;
 
+use crate::domain::automation::credential::Credential;
+use crate::domain::automation::secret::SealedSecret;
 use crate::domain::automation::settings::AutomationSettings;
 
 /// Appends events to the durable log.
@@ -126,4 +128,46 @@ pub trait DeliveryRepository: Send {
         &mut self,
         org_id: OrganizationId,
     ) -> impl Future<Output = Result<AutomationSettings, CoreError>> + Send;
+}
+
+/// Organization-scoped storage for credentials: what an organization stores
+/// so Mestier can authenticate itself elsewhere, and the secret Mestier
+/// generates to sign what it sends out. `org_id` is a parameter of every
+/// method that can reach someone else's row, not a promise the caller
+/// already checked — a cross-organization lookup must read back as absent,
+/// not merely refused.
+#[cfg_attr(test, mockall::automock)]
+pub trait CredentialRepository: Send {
+    fn insert(
+        &mut self,
+        credential: &Credential,
+        sealed: &SealedSecret,
+    ) -> impl Future<Output = Result<Credential, CoreError>> + Send;
+
+    fn list_by_organization(
+        &mut self,
+        org_id: OrganizationId,
+    ) -> impl Future<Output = Result<Vec<Credential>, CoreError>> + Send;
+
+    fn find_by_id(
+        &mut self,
+        org_id: OrganizationId,
+        id: Uuid,
+    ) -> impl Future<Output = Result<Option<Credential>, CoreError>> + Send;
+
+    /// `sealed = None` leaves the sealed bytes untouched (`COALESCE` in the
+    /// Postgres adapter), which is what lets a rename skip re-supplying the
+    /// secret.
+    fn update(
+        &mut self,
+        org_id: OrganizationId,
+        credential: &Credential,
+        sealed: Option<&SealedSecret>,
+    ) -> impl Future<Output = Result<Credential, CoreError>> + Send;
+
+    fn delete(
+        &mut self,
+        org_id: OrganizationId,
+        id: Uuid,
+    ) -> impl Future<Output = Result<(), CoreError>> + Send;
 }
