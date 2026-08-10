@@ -30,16 +30,20 @@ impl AuthRequirement {
 
     /// The schemes named here, for the catalogue's consistency test and for
     /// the frontend's credential picker.
-    pub fn scheme_kinds(&self) -> &'static [&'static str] {
+    /// The schemes this requirement names, for the consistency test and for
+    /// the credential picker the editor renders.
+    ///
+    /// Returns an owned `Vec` rather than a `&'static` slice: `Exactly` holds
+    /// one `&'static str`, and there is no existing static storage to borrow a
+    /// one-element slice from. The alternative — leaking a one-pointer
+    /// allocation per call — is a real leak on the API path that serves the
+    /// catalogue, where the caller is a request and the lifetime is the
+    /// process.
+    pub fn scheme_kinds(&self) -> Vec<&'static str> {
         match *self {
-            AuthRequirement::None => &[],
-            // `Exactly` carries a single `&'static str`, not a `&'static`
-            // slice: there is no existing 'static storage to borrow a
-            // one-element slice from. Leaking a one-pointer allocation turns
-            // it into one without unsafe code; `scheme_kinds` is called at
-            // catalogue-build and API-response time, never in a hot loop.
-            AuthRequirement::Exactly(kind) => vec![kind].leak(),
-            AuthRequirement::AnyOf(kinds) => kinds,
+            AuthRequirement::None => Vec::new(),
+            AuthRequirement::Exactly(kind) => vec![kind],
+            AuthRequirement::AnyOf(kinds) => kinds.to_vec(),
         }
     }
 }

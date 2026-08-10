@@ -6,8 +6,8 @@ pub mod infrastructure;
 
 pub use application::*;
 pub use domain::automation::connector::{
-    AuthRequirement, AuthScheme, ConnectorCatalogue, ConnectorDescriptor, Field, FieldKind,
-    SelectOption, VisibleWhen, auth_scheme, auth_schemes, connector_catalogue,
+    AuthRequirement, AuthScheme, ConnectorCatalogue, ConnectorCatalogueError, ConnectorDescriptor,
+    Field, FieldKind, SelectOption, VisibleWhen, auth_scheme, auth_schemes, connector_catalogue,
 };
 pub use domain::automation::event_catalogue;
 pub use domain::automation::ports::{
