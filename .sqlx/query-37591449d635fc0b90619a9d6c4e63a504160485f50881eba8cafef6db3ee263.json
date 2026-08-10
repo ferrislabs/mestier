@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO automation.run\n                (id, org_id, workflow_id, workflow_version_id, trigger_event_id,\n                 trigger_payload, status, next_attempt_at, created_at)\n            SELECT gen_random_uuid(), e.org_id, w.id, w.current_version_id, e.id, e.payload,\n                   'pending', now(), now()\n            FROM automation.event e\n            JOIN automation.subscription s\n              ON s.org_id = e.org_id\n             AND s.enabled\n             AND e.name = ANY(s.event_names)\n             AND s.kind = 'workflow'\n            JOIN automation.workflow w\n              ON w.id = s.target_id\n             AND w.current_version_id IS NOT NULL\n            LEFT JOIN automation.run r\n                   ON e.actor_kind = 'automation' AND r.id = e.actor_id\n            WHERE e.id = ANY($1)\n              AND (r.id IS NULL OR s.kind <> 'workflow' OR r.workflow_id <> s.target_id)\n            ON CONFLICT ON CONSTRAINT uq_automation_run_trigger_workflow DO NOTHING\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "UuidArray"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "37591449d635fc0b90619a9d6c4e63a504160485f50881eba8cafef6db3ee263"
+}

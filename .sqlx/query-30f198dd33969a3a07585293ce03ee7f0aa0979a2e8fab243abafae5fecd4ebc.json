@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO automation.settings (org_id, retry_schedule_seconds)\n               VALUES ($1, ARRAY[1, 2, 3]::bigint[])",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "30f198dd33969a3a07585293ce03ee7f0aa0979a2e8fab243abafae5fecd4ebc"
+}

@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT actor_kind, actor_id FROM automation.event\n               WHERE name = 'quote.created' AND subject_id = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "actor_kind",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "actor_id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      true
+    ]
+  },
+  "hash": "d8d3a2d6ebba145ed6ef77520fd55661b5b133822b31546c8dee889b900a2f32"
+}
