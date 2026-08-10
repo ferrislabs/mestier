@@ -7,6 +7,13 @@ use uuid::Uuid;
 /// client is an integration acting on its own behalf. Telling the two apart
 /// matters the day an automation has to ignore what another automation caused.
 ///
+/// `Automation` marks a write made by the workflow engine itself, carrying the
+/// `run_id` that made it — not "the system did this" but "*this run* did
+/// this". That is what lets a dispatcher refuse to retrigger a run from an
+/// event its own run emitted (an identity test, not a cycle detector), and
+/// gives the product, for free, "this customer was created by the *Odoo
+/// import* automation, not by Marie".
+///
 /// An enum rather than a `kind` field beside an optional `id`: only `System`
 /// has no identity, and a pair of fields would let a `User` without an id
 /// compile. The invariant is worth more than the flatter shape.
@@ -21,6 +28,9 @@ pub enum Actor {
     },
     /// Scheduled jobs, migrations, and anything the product does on its own.
     System,
+    Automation {
+        run_id: Uuid,
+    },
 }
 
 impl Actor {
@@ -34,6 +44,10 @@ impl Actor {
 
     pub fn system() -> Self {
         Self::System
+    }
+
+    pub fn automation(run_id: Uuid) -> Self {
+        Self::Automation { run_id }
     }
 }
 
@@ -60,6 +74,20 @@ mod tests {
         assert_eq!(
             json,
             json!({ "kind": "user", "id": "00000000-0000-0000-0000-000000000001" })
+        );
+    }
+
+    /// The run engine's own actor: `run_id`, not `id`, so a reader never
+    /// confuses it with a user or client identity — it names a run, not a
+    /// person.
+    #[test]
+    fn an_automation_actor_serializes_with_its_run_id() {
+        let json =
+            serde_json::to_value(Actor::automation(Uuid::from_u128(1))).expect("actor serializes");
+
+        assert_eq!(
+            json,
+            json!({ "kind": "automation", "run_id": "00000000-0000-0000-0000-000000000001" })
         );
     }
 }
