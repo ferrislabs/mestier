@@ -13,7 +13,7 @@ use crate::{
             CreateCredentialCommand, Credential, CredentialError, CredentialOrigin,
             UpdateCredentialCommand, validate_credential_data,
         },
-        ports::CredentialRepository,
+        ports::{CredentialRepository, WorkflowRepository},
     },
     infrastructure::automation::webhook::secret::SecretCipher,
 };
@@ -126,19 +126,43 @@ impl MestierUseCase {
             .await
     }
 
-    #[transactional(credential)]
+    /// Refuses to delete a credential a workflow still references.
+    ///
+    /// Workflows did not exist when this use case first shipped (#198), so
+    /// it deleted without looking at who used the credential. Now #199
+    /// gives it a look: the reference lives inside `workflow_version.graph`
+    /// (JSONB, no FK to protect it), so this is a domain rule rather than
+    /// something the database refuses on its own — see
+    /// `WorkflowRepository::workflows_referencing_credential`.
+    #[transactional(credential, workflow)]
     pub async fn delete_credential(
         &self,
         org_id: OrganizationId,
         id: Uuid,
     ) -> Result<(), CoreError> {
-        let mut repository = credential_repository;
-        repository
+        let mut credentials = credential_repository;
+        let mut workflows = workflow_repository;
+
+        credentials
             .find_by_id(org_id, id)
             .await?
             .ok_or(CoreError::NotFound)?;
 
-        repository.delete(org_id, id).await
+        let referencing_workflows = workflows
+            .workflows_referencing_credential(org_id, id)
+            .await?;
+        if !referencing_workflows.is_empty() {
+            let names = referencing_workflows
+                .iter()
+                .map(|workflow| workflow.name.as_str())
+                .collect::<Vec<_>>()
+                .join(", ");
+            return Err(CoreError::Conflict(format!(
+                "credential is still referenced by workflow(s): {names}"
+            )));
+        }
+
+        credentials.delete(org_id, id).await
     }
 
     /// Regenerates a `Generated` credential's sealed bytes. Refused for a
@@ -175,6 +199,7 @@ mod tests {
     use super::*;
     use crate::application::default_authorizer;
     use crate::domain::automation::credential::CredentialOrigin;
+    use crate::domain::automation::workflow::{CreateWorkflowCommand, Graph, PlacedConnector};
     use crate::infrastructure::automation::webhook::secret::SecretCipher;
     use crate::infrastructure::realtime::EventHub;
 
@@ -455,6 +480,118 @@ mod tests {
                 name: "Token".to_owned(),
                 origin: CredentialOrigin::Supplied,
                 data: Some(serde_json::json!({ "token": "abc" })),
+            })
+            .await
+            .unwrap();
+
+        usecase.delete_credential(org_id, created.id).await.unwrap();
+
+        assert_eq!(
+            usecase.find_credential(org_id, created.id).await.unwrap(),
+            None
+        );
+    }
+
+    /// The guard added in #199: a credential a workflow's graph still
+    /// references must not disappear out from under it, and the refusal
+    /// names the workflow so whoever is deleting it knows what to fix first.
+    ///
+    /// No connector in the shipped catalogue accepts a credential today
+    /// (both `flow.*` descriptors are `AuthRequirement::None`), so
+    /// `usecase.save_workflow_version` — which runs `validate_graph` — can
+    /// never be made to persist a graph that references one. The guard
+    /// itself must not care: it reads `credential_id` out of the graph's
+    /// JSON, not the catalogue, so the version is inserted directly through
+    /// `PgWorkflowRepository`, the same way the repository-level test
+    /// `workflows_referencing_credential_names_the_workflow_whose_graph_contains_it`
+    /// does.
+    #[tokio::test]
+    #[ignore = "requires live postgres"]
+    async fn deleting_a_credential_still_referenced_by_a_workflow_is_refused_and_names_it() {
+        use crate::infrastructure::automation::postgres::PgWorkflowRepository;
+        use crate::infrastructure::postgres::with_tx;
+
+        let pool = make_pool().await;
+        let org_id = seed_organization(&pool, "delete-referenced").await;
+        let usecase = use_case(pool.clone());
+
+        let created = usecase
+            .create_credential(CreateCredentialCommand {
+                org_id,
+                kind: "bearer_token".to_owned(),
+                name: "Token".to_owned(),
+                origin: CredentialOrigin::Supplied,
+                data: Some(serde_json::json!({ "token": "abc" })),
+            })
+            .await
+            .unwrap();
+
+        let workflow = usecase
+            .create_workflow(CreateWorkflowCommand {
+                org_id,
+                name: "Uses the token".to_owned(),
+                description: None,
+            })
+            .await
+            .unwrap();
+
+        let graph = Graph {
+            connectors: vec![PlacedConnector {
+                id: "c1".to_string(),
+                kind: "odoo.create_partner".to_string(),
+                version: 1,
+                credential_id: Some(created.id),
+                config: serde_json::Map::new(),
+            }],
+            edges: Vec::new(),
+        };
+        with_tx(&pool, async |tx| {
+            let mut repo = PgWorkflowRepository::new(&tx);
+            repo.insert_version(org_id, workflow.id, &graph, None).await
+        })
+        .await
+        .unwrap();
+
+        let error = usecase
+            .delete_credential(org_id, created.id)
+            .await
+            .expect_err("a referenced credential must not be deletable");
+
+        assert!(matches!(error, CoreError::Conflict(_)));
+        assert!(format!("{error}").contains("Uses the token"), "{error}");
+
+        assert!(
+            usecase
+                .find_credential(org_id, created.id)
+                .await
+                .unwrap()
+                .is_some(),
+            "the credential must still be there"
+        );
+    }
+
+    #[tokio::test]
+    #[ignore = "requires live postgres"]
+    async fn deleting_an_unreferenced_credential_still_succeeds() {
+        let pool = make_pool().await;
+        let org_id = seed_organization(&pool, "delete-unreferenced").await;
+        let usecase = use_case(pool);
+
+        let created = usecase
+            .create_credential(CreateCredentialCommand {
+                org_id,
+                kind: "bearer_token".to_owned(),
+                name: "Token".to_owned(),
+                origin: CredentialOrigin::Supplied,
+                data: Some(serde_json::json!({ "token": "abc" })),
+            })
+            .await
+            .unwrap();
+        usecase
+            .create_workflow(CreateWorkflowCommand {
+                org_id,
+                name: "Does not use it".to_owned(),
+                description: None,
             })
             .await
             .unwrap();
