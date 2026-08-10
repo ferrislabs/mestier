@@ -381,7 +381,10 @@ mod tests {
             .await
             .unwrap();
 
-        let found = usecase.find_credential(stranger_org, created.id).await.unwrap();
+        let found = usecase
+            .find_credential(stranger_org, created.id)
+            .await
+            .unwrap();
 
         assert_eq!(found, None);
     }
@@ -458,7 +461,10 @@ mod tests {
 
         usecase.delete_credential(org_id, created.id).await.unwrap();
 
-        assert_eq!(usecase.find_credential(org_id, created.id).await.unwrap(), None);
+        assert_eq!(
+            usecase.find_credential(org_id, created.id).await.unwrap(),
+            None
+        );
     }
 
     #[tokio::test]

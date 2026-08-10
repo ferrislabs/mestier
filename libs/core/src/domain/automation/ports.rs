@@ -158,6 +158,11 @@ pub trait CredentialRepository: Send {
     /// `sealed = None` leaves the sealed bytes untouched (`COALESCE` in the
     /// Postgres adapter), which is what lets a rename skip re-supplying the
     /// secret.
+    ///
+    /// The lifetime is named, not elided: `mockall::automock`'s expansion
+    /// cannot infer it for a reference nested in `Option`, only clippy's
+    /// non-test build sees it as needless.
+    #[allow(clippy::needless_lifetimes)]
     fn update<'a>(
         &mut self,
         org_id: OrganizationId,

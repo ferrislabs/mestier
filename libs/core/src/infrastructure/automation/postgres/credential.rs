@@ -122,6 +122,10 @@ impl<'tx> CredentialRepository for PgCredentialRepository<'tx> {
         row.map(Credential::try_from).transpose()
     }
 
+    // The lifetime matches the trait's, which names it for `mockall`'s sake
+    // (see `CredentialRepository::update`); clippy's non-test build alone
+    // would elide it.
+    #[allow(clippy::needless_lifetimes)]
     async fn update<'a>(
         &mut self,
         org_id: OrganizationId,
@@ -359,7 +363,10 @@ mod tests {
         .map(|row| (row.data_nonce, row.data_ciphertext))
         .unwrap();
 
-        assert_eq!(nonce, sealed.nonce, "a rename must not touch the sealed bytes");
+        assert_eq!(
+            nonce, sealed.nonce,
+            "a rename must not touch the sealed bytes"
+        );
         assert_eq!(ciphertext, sealed.ciphertext);
     }
 
