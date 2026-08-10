@@ -538,10 +538,13 @@ impl<'a> Parser<'a> {
     }
 
     /// An identifier starts either a path (`trigger`, `connectors`, `loop`)
-    /// or a function call. Function calls are not parsed yet, so anything
-    /// else is a syntax error naming the unknown identifier.
+    /// or a function call — the two are told apart by what follows it, so
+    /// the identifier itself is always consumed first. Anything else is a
+    /// syntax error naming the unknown identifier.
     fn parse_ident_start(&mut self, name: String) -> Result<Expr, ExpressionError> {
         let start_pos = self.cur.pos;
+        self.bump()?;
+
         let root = match name.as_str() {
             "trigger" => Some(PathRoot::Trigger),
             "connectors" => Some(PathRoot::Connectors),
@@ -550,7 +553,6 @@ impl<'a> Parser<'a> {
         };
 
         if let Some(root) = root {
-            self.bump()?;
             let segments = self.parse_path_segments()?;
             if matches!(root, PathRoot::Connectors) && segments.is_empty() {
                 return Err(ExpressionError::Syntax {
@@ -562,12 +564,41 @@ impl<'a> Parser<'a> {
             return Ok(Expr::Path(Path { root, segments }));
         }
 
+        if matches!(self.cur.tok, Tok::LParen) {
+            return self.parse_call(name);
+        }
+
         Err(ExpressionError::Syntax {
             position: start_pos,
             message: format!(
-                "unknown identifier `{name}`; expected `trigger`, `connectors`, `loop`"
+                "unknown identifier `{name}`; expected `trigger`, `connectors`, `loop`, or a function call"
             ),
         })
+    }
+
+    /// `name` is already known to be followed by `(`. Function names and
+    /// arities are validated here, statically, against the closed list in
+    /// [`function_arity`] — so #199 sees these errors without ever running
+    /// anything.
+    fn parse_call(&mut self, name: String) -> Result<Expr, ExpressionError> {
+        self.bump()?; // consume '('
+
+        let mut args = Vec::new();
+        if !matches!(self.cur.tok, Tok::RParen) {
+            args.push(self.parse_expression()?);
+            while matches!(self.cur.tok, Tok::Comma) {
+                self.bump()?;
+                args.push(self.parse_expression()?);
+            }
+        }
+        self.expect_rparen()?;
+
+        let arity = function_arity(&name).ok_or_else(|| ExpressionError::UnknownFunction {
+            name: name.clone(),
+        })?;
+        check_arity(&name, arity, args.len())?;
+
+        Ok(Expr::Call { name, args })
     }
 
     /// Consumes every trailing `.field` and `[index]` segment after a path
@@ -634,6 +665,46 @@ impl<'a> Parser<'a> {
 
 fn is_index_literal(text: &str) -> bool {
     !text.contains('.') && !text.starts_with('-')
+}
+
+/// How many arguments a function takes. `concat` is the only variadic one:
+/// `min` is both its floor and what `Arity::expected` reports when it is
+/// violated.
+enum Arity {
+    Fixed(usize),
+    Variadic { min: usize },
+}
+
+/// The closed list of functions from the frozen grammar. Anything not
+/// listed here is `UnknownFunction`, caught by `parse_call` before any
+/// evaluation ever happens.
+fn function_arity(name: &str) -> Option<Arity> {
+    match name {
+        "default" => Some(Arity::Fixed(2)),
+        "upper" | "lower" | "trim" | "len" | "to_number" | "to_string" | "json" => {
+            Some(Arity::Fixed(1))
+        }
+        "contains" | "starts_with" | "round" | "format_date" => Some(Arity::Fixed(2)),
+        "concat" => Some(Arity::Variadic { min: 1 }),
+        "now" => Some(Arity::Fixed(0)),
+        _ => None,
+    }
+}
+
+fn check_arity(name: &str, arity: Arity, got: usize) -> Result<(), ExpressionError> {
+    match arity {
+        Arity::Fixed(expected) if got != expected => Err(ExpressionError::Arity {
+            function: name.to_string(),
+            expected,
+            got,
+        }),
+        Arity::Variadic { min } if got < min => Err(ExpressionError::Arity {
+            function: name.to_string(),
+            expected: min,
+            got,
+        }),
+        _ => Ok(()),
+    }
 }
 
 /// Renders as an integer when the source had no `.`, as a float otherwise —

@@ -37,6 +37,10 @@ pub(crate) enum Expr {
         left: Box<Expr>,
         right: Box<Expr>,
     },
+    Call {
+        name: String,
+        args: Vec<Expr>,
+    },
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -142,6 +146,11 @@ pub(crate) fn walk_paths<'a>(expr: &'a Expr, visit: &mut impl FnMut(&'a Path)) {
         Expr::Binary { left, right, .. } => {
             walk_paths(left, visit);
             walk_paths(right, visit);
+        }
+        Expr::Call { args, .. } => {
+            for arg in args {
+                walk_paths(arg, visit);
+            }
         }
     }
 }

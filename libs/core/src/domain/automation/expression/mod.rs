@@ -487,4 +487,237 @@ mod tests {
             }
         );
     }
+
+    #[test]
+    fn an_unknown_function_name_is_rejected_at_parse_time() {
+        let err = parse_template(&json!("{{ frobnicate(1) }}")).expect_err("no such function");
+
+        assert_eq!(
+            err,
+            ExpressionError::UnknownFunction {
+                name: "frobnicate".to_string(),
+            }
+        );
+    }
+
+    #[test]
+    fn a_wrong_argument_count_is_rejected_at_parse_time() {
+        let err = parse_template(&json!("{{ upper() }}")).expect_err("upper takes 1 argument");
+        assert_eq!(
+            err,
+            ExpressionError::Arity {
+                function: "upper".to_string(),
+                expected: 1,
+                got: 0,
+            }
+        );
+
+        let err = parse_template(&json!("{{ upper(\"a\", \"b\") }}"))
+            .expect_err("upper takes 1 argument");
+        assert_eq!(
+            err,
+            ExpressionError::Arity {
+                function: "upper".to_string(),
+                expected: 1,
+                got: 2,
+            }
+        );
+    }
+
+    #[test]
+    fn string_functions_evaluate() {
+        let connectors = BTreeMap::new();
+        let ctx = empty_context(&connectors);
+
+        let cases = [
+            ("{{ upper(\"abc\") }}", json!("ABC")),
+            ("{{ lower(\"ABC\") }}", json!("abc")),
+            ("{{ trim(\"  hi  \") }}", json!("hi")),
+            ("{{ starts_with(\"hello\", \"he\") }}", json!(true)),
+            ("{{ starts_with(\"hello\", \"lo\") }}", json!(false)),
+            ("{{ contains(\"hello world\", \"wor\") }}", json!(true)),
+            ("{{ contains(\"hello world\", \"xyz\") }}", json!(false)),
+        ];
+
+        for (raw, expected) in cases {
+            let template =
+                parse_template(&json!(raw)).unwrap_or_else(|e| panic!("{raw} failed: {e}"));
+            let result = template
+                .evaluate(&ctx)
+                .unwrap_or_else(|e| panic!("{raw} failed: {e}"));
+            assert_eq!(result, expected, "for {raw}");
+        }
+    }
+
+    #[test]
+    fn len_counts_strings_arrays_and_objects() {
+        let mut connectors = BTreeMap::new();
+        connectors.insert(
+            "c1".to_string(),
+            json!({ "output": { "items": [1, 2, 3] } }),
+        );
+        let ctx = empty_context(&connectors);
+
+        let template = parse_template(&json!("{{ len(\"abc\") }}")).expect("valid");
+        assert_eq!(template.evaluate(&ctx).expect("evaluates"), json!(3));
+
+        let template =
+            parse_template(&json!("{{ len(connectors.c1.output.items) }}")).expect("valid");
+        assert_eq!(template.evaluate(&ctx).expect("evaluates"), json!(3));
+    }
+
+    #[test]
+    fn contains_also_works_on_arrays() {
+        let mut connectors = BTreeMap::new();
+        connectors.insert(
+            "c1".to_string(),
+            json!({ "output": { "items": [1, 2, 3] } }),
+        );
+        let ctx = empty_context(&connectors);
+
+        let template =
+            parse_template(&json!("{{ contains(connectors.c1.output.items, 2) }}"))
+                .expect("valid");
+        assert_eq!(template.evaluate(&ctx).expect("evaluates"), json!(true));
+
+        let template =
+            parse_template(&json!("{{ contains(connectors.c1.output.items, 5) }}"))
+                .expect("valid");
+        assert_eq!(template.evaluate(&ctx).expect("evaluates"), json!(false));
+    }
+
+    #[test]
+    fn to_number_and_to_string_convert() {
+        let connectors = BTreeMap::new();
+        let ctx = empty_context(&connectors);
+
+        let template = parse_template(&json!("{{ to_number(\"42\") }}")).expect("valid");
+        assert_eq!(template.evaluate(&ctx).expect("evaluates"), json!(42));
+
+        let template = parse_template(&json!("{{ to_number(\"3.5\") }}")).expect("valid");
+        assert_eq!(template.evaluate(&ctx).expect("evaluates"), json!(3.5));
+
+        let template = parse_template(&json!("{{ to_string(42) }}")).expect("valid");
+        assert_eq!(template.evaluate(&ctx).expect("evaluates"), json!("42"));
+    }
+
+    #[test]
+    fn to_number_on_a_non_numeric_string_is_a_type_mismatch() {
+        let connectors = BTreeMap::new();
+        let ctx = empty_context(&connectors);
+        let template = parse_template(&json!("{{ to_number(\"abc\") }}")).expect("valid syntax");
+
+        let err = template.evaluate(&ctx).expect_err("not numeric");
+        assert!(matches!(err, ExpressionError::TypeMismatch { .. }), "{err:?}");
+    }
+
+    #[test]
+    fn round_rounds_to_the_given_number_of_decimals() {
+        let connectors = BTreeMap::new();
+        let ctx = empty_context(&connectors);
+
+        let template = parse_template(&json!("{{ round(3.14159, 2) }}")).expect("valid");
+        assert_eq!(template.evaluate(&ctx).expect("evaluates"), json!(3.14));
+
+        let template = parse_template(&json!("{{ round(2.5, 0) }}")).expect("valid");
+        assert_eq!(template.evaluate(&ctx).expect("evaluates"), json!(3));
+    }
+
+    #[test]
+    fn concat_stringifies_and_joins_every_argument() {
+        let connectors = BTreeMap::new();
+        let ctx = empty_context(&connectors);
+        let template =
+            parse_template(&json!("{{ concat(\"total: \", 42, \" (\", true, \")\") }}"))
+                .expect("valid");
+
+        assert_eq!(
+            template.evaluate(&ctx).expect("evaluates"),
+            json!("total: 42 (true)")
+        );
+    }
+
+    #[test]
+    fn json_serializes_arrays_and_objects_as_a_string() {
+        let mut connectors = BTreeMap::new();
+        connectors.insert("c1".to_string(), json!({ "output": { "a": 1 } }));
+        let ctx = empty_context(&connectors);
+        let template =
+            parse_template(&json!("{{ json(connectors.c1.output) }}")).expect("valid");
+
+        assert_eq!(
+            template.evaluate(&ctx).expect("evaluates"),
+            json!("{\"a\":1}")
+        );
+    }
+
+    #[test]
+    fn now_reads_the_injected_clock_not_the_system_clock() {
+        let connectors = BTreeMap::new();
+        let ctx = empty_context(&connectors);
+        let template =
+            parse_template(&json!("{{ format_date(now(), \"%Y-%m-%d\") }}")).expect("valid");
+
+        assert_eq!(
+            template.evaluate(&ctx).expect("evaluates"),
+            json!("2026-01-01")
+        );
+    }
+
+    #[test]
+    fn format_date_formats_a_path_value_too() {
+        let trigger = json!({ "created_at": "2025-06-15T10:30:00Z" });
+        let connectors = BTreeMap::new();
+        let ctx = ExpressionContext {
+            trigger: Some(&trigger),
+            connectors: &connectors,
+            loop_frame: None,
+            now: fixed_now(),
+        };
+        let template = parse_template(&json!(
+            "{{ format_date(trigger.created_at, \"%Y/%m/%d\") }}"
+        ))
+        .expect("valid");
+
+        assert_eq!(
+            template.evaluate(&ctx).expect("evaluates"),
+            json!("2025/06/15")
+        );
+    }
+
+    #[test]
+    fn default_returns_the_fallback_only_when_the_path_is_missing() {
+        let mut connectors = BTreeMap::new();
+        connectors.insert("c1".to_string(), json!({ "output": { "name": "brioche" } }));
+        let ctx = empty_context(&connectors);
+
+        let template = parse_template(&json!(
+            "{{ default(connectors.c1.output.missing, \"fallback\") }}"
+        ))
+        .expect("valid");
+        assert_eq!(
+            template.evaluate(&ctx).expect("evaluates"),
+            json!("fallback")
+        );
+
+        let template = parse_template(&json!(
+            "{{ default(connectors.c1.output.name, \"fallback\") }}"
+        ))
+        .expect("valid");
+        assert_eq!(
+            template.evaluate(&ctx).expect("evaluates"),
+            json!("brioche")
+        );
+    }
+
+    #[test]
+    fn default_does_not_catch_a_type_mismatch_or_an_unknown_function() {
+        let connectors = BTreeMap::new();
+        let ctx = empty_context(&connectors);
+
+        let template =
+            parse_template(&json!("{{ default(1 and true, \"fallback\") }}")).expect("valid");
+        let err = template.evaluate(&ctx).expect_err("must not be caught");
+        assert!(matches!(err, ExpressionError::TypeMismatch { .. }), "{err:?}");
+    }
 }

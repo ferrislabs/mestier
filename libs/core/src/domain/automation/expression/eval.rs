@@ -26,6 +26,7 @@ fn eval_expr(expr: &Expr, ctx: &ExpressionContext<'_>) -> Result<Value, Expressi
             Ok(Value::Bool(!flag))
         }
         Expr::Binary { op, left, right } => eval_binary(*op, left, right, ctx),
+        Expr::Call { name, args } => eval_call(name, args, ctx),
     }
 }
 
@@ -115,6 +116,192 @@ fn describe(expr: &Expr) -> String {
         Expr::Binary { op, left, right } => {
             format!("({} {} {})", describe(left), op.symbol(), describe(right))
         }
+        Expr::Call { name, .. } => format!("{name}(...)"),
+    }
+}
+
+/// Dispatches one of the fifteen functions from the frozen grammar. The
+/// parser has already checked `name` and `args.len()` against
+/// `function_arity`, so every arm below can index `args` directly.
+///
+/// `default` is the one function that does not evaluate its arguments
+/// eagerly: it evaluates `args[0]` first and only falls back to `args[1]`
+/// when that specifically raises `MissingPath` — any other error, including
+/// a type mismatch or (were it possible here) a bad path deeper down, is
+/// propagated rather than swallowed.
+fn eval_call(name: &str, args: &[Expr], ctx: &ExpressionContext<'_>) -> Result<Value, ExpressionError> {
+    match name {
+        "default" => match eval_expr(&args[0], ctx) {
+            Ok(value) => Ok(value),
+            Err(ExpressionError::MissingPath { .. }) => eval_expr(&args[1], ctx),
+            Err(other) => Err(other),
+        },
+        "upper" => Ok(Value::String(
+            as_string(&eval_expr(&args[0], ctx)?, &args[0])?.to_uppercase(),
+        )),
+        "lower" => Ok(Value::String(
+            as_string(&eval_expr(&args[0], ctx)?, &args[0])?.to_lowercase(),
+        )),
+        "trim" => Ok(Value::String(
+            as_string(&eval_expr(&args[0], ctx)?, &args[0])?
+                .trim()
+                .to_string(),
+        )),
+        "len" => {
+            let value = eval_expr(&args[0], ctx)?;
+            let count = match &value {
+                Value::String(s) => s.chars().count(),
+                Value::Array(a) => a.len(),
+                Value::Object(o) => o.len(),
+                other => {
+                    return Err(ExpressionError::TypeMismatch {
+                        path: describe(&args[0]),
+                        expected: "string, array or object",
+                        got: type_name(other),
+                    })
+                }
+            };
+            Ok(Value::Number(serde_json::Number::from(count)))
+        }
+        "contains" => {
+            let haystack = eval_expr(&args[0], ctx)?;
+            let needle = eval_expr(&args[1], ctx)?;
+            match &haystack {
+                Value::String(s) => {
+                    let needle = as_string(&needle, &args[1])?;
+                    Ok(Value::Bool(s.contains(&needle)))
+                }
+                Value::Array(items) => Ok(Value::Bool(items.contains(&needle))),
+                other => Err(ExpressionError::TypeMismatch {
+                    path: describe(&args[0]),
+                    expected: "string or array",
+                    got: type_name(other),
+                }),
+            }
+        }
+        "starts_with" => {
+            let s = as_string(&eval_expr(&args[0], ctx)?, &args[0])?;
+            let prefix = as_string(&eval_expr(&args[1], ctx)?, &args[1])?;
+            Ok(Value::Bool(s.starts_with(&prefix)))
+        }
+        "to_number" => {
+            let value = eval_expr(&args[0], ctx)?;
+            match &value {
+                Value::Number(_) => Ok(value),
+                Value::String(s) => parse_number_string(s).ok_or_else(|| {
+                    ExpressionError::TypeMismatch {
+                        path: describe(&args[0]),
+                        expected: "a numeric string",
+                        got: "string",
+                    }
+                }),
+                other => Err(ExpressionError::TypeMismatch {
+                    path: describe(&args[0]),
+                    expected: "number or numeric string",
+                    got: type_name(other),
+                }),
+            }
+        }
+        "to_string" => Ok(Value::String(stringify(&eval_expr(&args[0], ctx)?))),
+        "round" => eval_round(args, ctx),
+        "concat" => {
+            let mut out = String::new();
+            for arg in args {
+                out.push_str(&stringify(&eval_expr(arg, ctx)?));
+            }
+            Ok(Value::String(out))
+        }
+        "now" => Ok(Value::String(ctx.now.to_rfc3339())),
+        "format_date" => {
+            let s = as_string(&eval_expr(&args[0], ctx)?, &args[0])?;
+            let fmt = as_string(&eval_expr(&args[1], ctx)?, &args[1])?;
+            let parsed = chrono::DateTime::parse_from_rfc3339(&s).map_err(|_| {
+                ExpressionError::TypeMismatch {
+                    path: describe(&args[0]),
+                    expected: "an RFC 3339 datetime string",
+                    got: "string",
+                }
+            })?;
+            Ok(Value::String(parsed.format(&fmt).to_string()))
+        }
+        "json" => Ok(Value::String(
+            serde_json::to_string(&eval_expr(&args[0], ctx)?).unwrap_or_default(),
+        )),
+        other => unreachable!(
+            "the parser only ever builds Expr::Call for a known function; got `{other}`"
+        ),
+    }
+}
+
+fn eval_round(args: &[Expr], ctx: &ExpressionContext<'_>) -> Result<Value, ExpressionError> {
+    let n = as_number(&eval_expr(&args[0], ctx)?, &args[0])?;
+    let decimals_value = eval_expr(&args[1], ctx)?;
+    let decimals_f = as_number(&decimals_value, &args[1])?;
+    if decimals_f < 0.0 || decimals_f.fract() != 0.0 {
+        return Err(ExpressionError::TypeMismatch {
+            path: describe(&args[1]),
+            expected: "a non-negative integer",
+            got: type_name(&decimals_value),
+        });
+    }
+    let decimals = decimals_f as i32;
+    let factor = 10f64.powi(decimals);
+    let rounded = (n * factor).round() / factor;
+
+    if decimals == 0 {
+        Ok(Value::Number(serde_json::Number::from(rounded as i64)))
+    } else {
+        serde_json::Number::from_f64(rounded)
+            .map(Value::Number)
+            .ok_or_else(|| ExpressionError::TypeMismatch {
+                path: describe(&args[0]),
+                expected: "a finite number",
+                got: "number",
+            })
+    }
+}
+
+fn as_string(value: &Value, source: &Expr) -> Result<String, ExpressionError> {
+    match value {
+        Value::String(s) => Ok(s.clone()),
+        other => Err(ExpressionError::TypeMismatch {
+            path: describe(source),
+            expected: "string",
+            got: type_name(other),
+        }),
+    }
+}
+
+/// Shared by `to_string`, `concat` and string interpolation: a string passes
+/// through unquoted, everything else renders as its JSON form (`json()`
+/// implicitly for arrays and objects) — so `{{ concat("items: ", arr) }}`
+/// never produces `"[object Object]"`.
+fn stringify(value: &Value) -> String {
+    match value {
+        Value::String(s) => s.clone(),
+        Value::Null => "null".to_string(),
+        Value::Bool(b) => b.to_string(),
+        Value::Number(n) => n.to_string(),
+        Value::Array(_) | Value::Object(_) => serde_json::to_string(value).unwrap_or_default(),
+    }
+}
+
+/// Mirrors `literal_number` in the parser: an integer string stays an
+/// integer JSON number, so `to_number("42")` compares equal to the literal
+/// `42`, not `42.0`.
+fn parse_number_string(s: &str) -> Option<Value> {
+    let trimmed = s.trim();
+    if trimmed.contains('.') {
+        trimmed
+            .parse::<f64>()
+            .ok()
+            .and_then(serde_json::Number::from_f64)
+            .map(Value::Number)
+    } else {
+        trimmed
+            .parse::<i64>()
+            .ok()
+            .map(|n| Value::Number(serde_json::Number::from(n)))
     }
 }
 
