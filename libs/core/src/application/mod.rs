@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use auth::{AuthService, FerrisKeyRepository};
 use authz::LocalPolicyEngine;
 use common::{AutomationConfig, Config, CoreError};
@@ -83,6 +85,12 @@ pub struct MestierUseCase {
     /// Who the events produced through this handle are attributed to.
     /// `System` unless a handler asked for an acting view via [`Self::acting_as`].
     pub(crate) actor: Actor,
+    /// Process-wide key sealing credential data at rest. `None` when the
+    /// instance has no `AUTOMATION_SECRET_KEY`: it still boots, and every
+    /// credential operation that needs to seal something refuses loudly
+    /// instead of silently storing plaintext — the same choice the
+    /// automation worker makes at startup.
+    pub(crate) cipher: Option<Arc<SecretCipher>>,
 }
 
 impl MestierUseCase {
@@ -92,6 +100,7 @@ impl MestierUseCase {
             authz,
             hub,
             actor: Actor::System,
+            cipher: None,
         }
     }
 
@@ -175,7 +184,11 @@ pub async fn create_service(config: Config) -> Result<MestierService, CoreError>
     let rate_limit_quota = Quota::per_minute(config.rate_limit.per_minute);
 
     let hub = EventHub::new();
-    let usecase = MestierUseCase::new(pool.clone(), default_authorizer(), hub.clone());
+    let mut usecase = MestierUseCase::new(pool.clone(), default_authorizer(), hub.clone());
+    usecase.cipher = match config.automation.secret_key.as_deref() {
+        Some(encoded) => Some(Arc::new(SecretCipher::from_base64(encoded)?)),
+        None => None,
+    };
 
     spawn_automation_worker(&config.automation, pool, usecase.clone())?;
 
