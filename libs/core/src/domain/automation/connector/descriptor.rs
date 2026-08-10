@@ -93,10 +93,7 @@ mod tests {
         assert!(requirement.accepts("bearer_token"));
         assert!(requirement.accepts("http_header"));
         assert!(!requirement.accepts("http_basic"));
-        assert_eq!(
-            requirement.scheme_kinds(),
-            &["bearer_token", "http_header"]
-        );
+        assert_eq!(requirement.scheme_kinds(), &["bearer_token", "http_header"]);
     }
 
     /// The catalogue leaves the crate as JSON (#203): every field must
@@ -135,7 +132,10 @@ mod tests {
         assert_eq!(json["version"], 1);
         assert_eq!(json["family"], "odoo");
         assert_eq!(json["output_example"], json!({ "id": 42 }));
-        assert_eq!(json["auth"], json!({ "AnyOf": ["odoo_api", "bearer_token"] }));
+        assert_eq!(
+            json["auth"],
+            json!({ "AnyOf": ["odoo_api", "bearer_token"] })
+        );
         assert_eq!(json["fields"][0]["name"], "kind");
         assert_eq!(json["fields"][0]["required"], true);
         assert_eq!(json["fields"][0]["expression"], true);
