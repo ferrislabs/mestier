@@ -41,6 +41,7 @@ pub mod domain {
     pub struct EmployeeRhythm;
     pub struct EmployeeWorkSlot;
     pub struct Workflow;
+    pub struct Run;
 }
 
 /// Backend markers — one zero-sized type per supported persistence layer.

@@ -20,6 +20,10 @@ pub use domain::automation::expression::{
 pub use domain::automation::ports::{
     DeliveryHandler, DeliveryOutcome, DispatchOutcome, DueDelivery,
 };
+pub use domain::automation::run::{
+    Connector, ConnectorInput, ConnectorOutcome, DueRun, Run, RunSettlement, RunStatus, RunStep,
+    StepStatus,
+};
 pub use domain::automation::secret::SealedSecret;
 pub use domain::automation::settings::{AutomationSettings, SettingsBounds};
 pub use domain::automation::workflow::{
@@ -27,6 +31,7 @@ pub use domain::automation::workflow::{
     SaveWorkflowVersionCommand, UpdateWorkflowCommand, Workflow, WorkflowReference,
     WorkflowVersion, validate_graph,
 };
+pub use infrastructure::automation::connectors::{ConnectorRegistry, UnknownConnectorKind};
 pub use infrastructure::automation::webhook::{
     WebhookDeliveryHandler, address_policy::PrivateNetworkAccess, secret::SecretCipher,
 };

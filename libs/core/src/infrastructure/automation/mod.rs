@@ -1,3 +1,4 @@
+pub mod connectors;
 mod emitter;
 pub mod postgres;
 pub mod webhook;

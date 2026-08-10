@@ -4,6 +4,7 @@ use events::EventEnvelope;
 use uuid::Uuid;
 
 use crate::domain::automation::credential::Credential;
+use crate::domain::automation::run::{DueRun, Run, RunSettlement, RunStep};
 use crate::domain::automation::secret::SealedSecret;
 use crate::domain::automation::settings::AutomationSettings;
 use crate::domain::automation::workflow::{Graph, Workflow, WorkflowReference, WorkflowVersion};
@@ -251,4 +252,75 @@ pub trait WorkflowRepository: Send {
         org_id: OrganizationId,
         credential_id: Uuid,
     ) -> impl Future<Output = Result<Vec<WorkflowReference>, CoreError>> + Send;
+}
+
+/// Runs and their steps — see `domain::automation::run` for the model this
+/// persists, and its module doc for the at-least-once, never-replay-a-
+/// succeeded-step discipline every method here exists to uphold. `org_id` is
+/// a parameter of every method that can reach someone else's row, not a
+/// promise the caller already checked — a cross-organization lookup must
+/// read back as absent, the same discipline as [`CredentialRepository`] and
+/// [`WorkflowRepository`].
+#[cfg_attr(test, mockall::automock)]
+pub trait RunRepository: Send {
+    /// Creates the run, `trigger_payload` and all — a run has no step until
+    /// the engine executes its first real connector.
+    fn create_run(&mut self, run: &Run) -> impl Future<Output = Result<Run, CoreError>> + Send;
+
+    /// Claims runs that are due, marking them `running` and stamping the
+    /// worker so a crashed one can be recovered later — the same shape as
+    /// [`DeliveryRepository::claim_due`].
+    fn claim_due(
+        &mut self,
+        worker: &str,
+        batch: i64,
+        per_org: i64,
+    ) -> impl Future<Output = Result<Vec<DueRun>, CoreError>> + Send;
+
+    /// Every step recorded for a run so far, in no particular order — the
+    /// engine indexes them by `(connector_id, iteration_path)` itself to
+    /// reconstruct where it left off.
+    fn steps_for_run(
+        &mut self,
+        run_id: Uuid,
+    ) -> impl Future<Output = Result<Vec<RunStep>, CoreError>> + Send;
+
+    /// The graph a specific, frozen workflow version executes.
+    /// [`WorkflowRepository::find_version`] looks a version up by its
+    /// *number* within a workflow; a run instead pins the version's own id
+    /// (`Run::workflow_version_id`), so this looks it up directly — editing
+    /// the workflow (saving a new version) afterwards moves
+    /// `Workflow::current_version_id`, never this one.
+    fn graph_for_version(
+        &mut self,
+        org_id: OrganizationId,
+        workflow_version_id: Uuid,
+    ) -> impl Future<Output = Result<Option<Graph>, CoreError>> + Send;
+
+    /// Inserts a step, or updates it in place when one already exists for
+    /// `(run_id, connector_id, iteration_path)` — the same row moves from
+    /// `in_flight` to `succeeded`/`failed` rather than a second one being
+    /// written, which is what the table's unique constraint enforces and
+    /// what makes a loop's 500 iterations each their own reprensable row
+    /// instead of 500 attempts at inserting the same one.
+    fn upsert_step(
+        &mut self,
+        step: &RunStep,
+    ) -> impl Future<Output = Result<RunStep, CoreError>> + Send;
+
+    /// Applies the run-level outcome of one slice: finished, terminally
+    /// failed, or rescheduled (retry backoff or simply "more to do").
+    fn settle_run(
+        &mut self,
+        run_id: Uuid,
+        settlement: RunSettlement,
+    ) -> impl Future<Output = Result<(), CoreError>> + Send;
+
+    /// Releases runs a worker claimed and never settled — it died in flight
+    /// — so they become claimable again instead of stranded. The same shape
+    /// as [`DeliveryRepository::release_stale_claims`].
+    fn release_stale_claims(
+        &mut self,
+        older_than: DateTime<Utc>,
+    ) -> impl Future<Output = Result<u64, CoreError>> + Send;
 }

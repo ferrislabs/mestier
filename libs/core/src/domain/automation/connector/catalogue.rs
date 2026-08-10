@@ -80,6 +80,36 @@ const CONDITION_FIELDS: &[Field] = &[Field {
     visible_when: None,
 }];
 
+const CUSTOMER_CREATE_FIELDS: &[Field] = &[
+    Field {
+        name: "name",
+        label: "Name",
+        required: true,
+        kind: FieldKind::Text,
+        expression: true,
+        secret: false,
+        visible_when: None,
+    },
+    Field {
+        name: "email",
+        label: "Email",
+        required: false,
+        kind: FieldKind::Text,
+        expression: true,
+        secret: false,
+        visible_when: None,
+    },
+    Field {
+        name: "phone",
+        label: "Phone",
+        required: false,
+        kind: FieldKind::Text,
+        expression: true,
+        secret: false,
+        visible_when: None,
+    },
+];
+
 /// Assembles the catalogue. Single point of extension: a module contributes
 /// a line here, never a change to the backbone.
 pub fn connector_catalogue() -> ConnectorCatalogue {
@@ -95,7 +125,9 @@ pub fn connector_catalogue() -> ConnectorCatalogue {
 }
 
 fn descriptors() -> Vec<ConnectorDescriptor> {
-    flow_descriptors()
+    let mut all = flow_descriptors();
+    all.extend(customer_descriptors());
+    all
 }
 
 /// The two flow-control connectors: they act on the graph itself rather than
@@ -124,6 +156,21 @@ fn flow_descriptors() -> Vec<ConnectorDescriptor> {
             output_example: json!({ "matched": true }),
         },
     ]
+}
+
+/// The one internal connector proved by the run engine (#200): it calls
+/// Mestier's own `create_customer` use case, so it needs no credential of
+/// its own — the run already acts inside this instance.
+fn customer_descriptors() -> Vec<ConnectorDescriptor> {
+    vec![ConnectorDescriptor {
+        kind: "mestier.customer.create",
+        version: 1,
+        family: "mestier",
+        label: "Create customer",
+        auth: AuthRequirement::None,
+        fields: CUSTOMER_CREATE_FIELDS,
+        output_example: json!({ "id": "…", "name": "…" }),
+    }]
 }
 
 #[cfg(test)]
@@ -205,6 +252,26 @@ mod tests {
 
         assert!(catalogue.get("flow.loop", 1).is_some());
         assert!(catalogue.get("flow.condition", 1).is_some());
+    }
+
+    /// The one internal connector the run engine (#200) proves itself
+    /// against, described here so the anti-drift test in
+    /// `infrastructure::automation::connectors` has something to match its
+    /// implementation against.
+    #[test]
+    fn the_catalogue_contains_the_customer_create_connector() {
+        let catalogue = connector_catalogue();
+
+        let descriptor = catalogue
+            .get("mestier.customer.create", 1)
+            .expect("mestier.customer.create is described");
+        assert_eq!(descriptor.auth, AuthRequirement::None);
+        assert!(
+            descriptor
+                .fields
+                .iter()
+                .any(|f| f.name == "name" && f.required)
+        );
     }
 
     /// The check that keeps a typo in an `AuthRequirement` from reaching

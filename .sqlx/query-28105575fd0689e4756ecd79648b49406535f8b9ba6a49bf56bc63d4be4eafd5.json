@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE automation.run\n               SET status = 'pending', next_attempt_at = now(), locked_at = NULL, locked_by = NULL\n               WHERE status = 'running' AND locked_at < $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Timestamptz"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "28105575fd0689e4756ecd79648b49406535f8b9ba6a49bf56bc63d4be4eafd5"
+}
