@@ -39,10 +39,10 @@ impl Template {
         let mut ids = BTreeSet::new();
         for root in self.expr_roots() {
             ast::walk_paths(root, &mut |path| {
-                if path.root == ast::PathRoot::Connectors {
-                    if let Some(ast::PathSegment::Field(id)) = path.segments.first() {
-                        ids.insert(id.clone());
-                    }
+                if path.root == ast::PathRoot::Connectors
+                    && let Some(ast::PathSegment::Field(id)) = path.segments.first()
+                {
+                    ids.insert(id.clone());
                 }
             });
         }
@@ -630,6 +630,9 @@ mod tests {
     }
 
     #[test]
+    // 3.14 here is round(3.14159, 2), not an approximation of `PI` — the
+    // collision with clippy's known-constant list is coincidental.
+    #[allow(clippy::approx_constant)]
     fn round_rounds_to_the_given_number_of_decimals() {
         let connectors = BTreeMap::new();
         let ctx = empty_context(&connectors);

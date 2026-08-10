@@ -373,12 +373,8 @@ fn walk(mut current: Value, segments: &[PathSegment]) -> Option<Value> {
     for segment in segments {
         current = match (current, segment) {
             (Value::Object(mut map), PathSegment::Field(name)) => map.remove(name)?,
-            (Value::Array(mut array), PathSegment::Index(index)) => {
-                if *index < array.len() {
-                    array.swap_remove(*index)
-                } else {
-                    return None;
-                }
+            (Value::Array(mut array), PathSegment::Index(index)) if *index < array.len() => {
+                array.swap_remove(*index)
             }
             _ => return None,
         };

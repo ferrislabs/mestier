@@ -49,12 +49,11 @@ fn parse_string_template(s: &str) -> Result<Template, ExpressionError> {
             Part::Expr(_) => true,
         });
         let expr_index = parts.iter().position(|part| matches!(part, Part::Expr(_)));
-        if only_whitespace_around_it {
-            if let Some(index) = expr_index {
-                if let Part::Expr(expr) = parts.swap_remove(index) {
-                    return Ok(Template::whole(expr));
-                }
-            }
+        if only_whitespace_around_it
+            && let Some(index) = expr_index
+            && let Part::Expr(expr) = parts.swap_remove(index)
+        {
+            return Ok(Template::whole(expr));
         }
     }
 
@@ -341,10 +340,10 @@ impl<'a> Lexer<'a> {
 
     fn lex_number(&mut self, start: usize) -> Result<Spanned, ExpressionError> {
         let mut text = String::new();
-        if self.peek_char() == Some('-') {
-            if let Some(c) = self.bump_char() {
-                text.push(c);
-            }
+        if self.peek_char() == Some('-')
+            && let Some(c) = self.bump_char()
+        {
+            text.push(c);
         }
         while let Some(c) = self.peek_char() {
             if c.is_ascii_digit() {
