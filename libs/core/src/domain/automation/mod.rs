@@ -3,6 +3,7 @@ pub mod connector;
 pub mod credential;
 pub mod expression;
 pub mod ports;
+pub mod run;
 pub mod secret;
 pub mod settings;
 pub mod workflow;
