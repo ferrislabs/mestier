@@ -18,6 +18,7 @@ use crate::infrastructure::postgres::error::map_sqlx_error;
 use crate::infrastructure::realtime::EventHub;
 use common::UserId;
 use events::Actor;
+use uuid::Uuid;
 
 pub mod absence;
 pub mod authorization;
@@ -118,6 +119,22 @@ impl MestierUseCase {
     pub fn acting_as(&self, user_id: UserId) -> Self {
         Self {
             actor: Actor::user(user_id.0),
+            ..self.clone()
+        }
+    }
+
+    /// A view of this use case whose events are attributed to the run
+    /// `run_id` — strictly the shape of [`Self::acting_as`], substituting the
+    /// run engine's identity for a human's.
+    ///
+    /// The actor lives on the value, not on a call-stack-scoped context, so
+    /// whatever this handle calls next — at any depth, through any number of
+    /// further use-case methods — emits with this actor: `#[transactional]`
+    /// always builds its emitter from `self.actor`, never from how deep the
+    /// call chain was to get there.
+    pub fn acting_as_automation(&self, run_id: Uuid) -> Self {
+        Self {
+            actor: Actor::automation(run_id),
             ..self.clone()
         }
     }
@@ -306,6 +323,27 @@ mod tests {
         let base = use_case();
 
         let _acting = base.acting_as(UserId(Uuid::from_u128(1)));
+
+        assert_eq!(base.actor, Actor::System);
+    }
+
+    #[tokio::test]
+    async fn acting_as_automation_attributes_events_to_that_run() {
+        let run_id = Uuid::from_u128(1);
+
+        let acting = use_case().acting_as_automation(run_id);
+
+        assert_eq!(acting.actor, Actor::automation(run_id));
+    }
+
+    /// Same discipline as [`acting_as_leaves_the_original_untouched`]: the
+    /// run engine calls this once per connector it dispatches through, and
+    /// must never mutate the shared handle every other caller holds.
+    #[tokio::test]
+    async fn acting_as_automation_leaves_the_original_untouched() {
+        let base = use_case();
+
+        let _acting = base.acting_as_automation(Uuid::from_u128(1));
 
         assert_eq!(base.actor, Actor::System);
     }
