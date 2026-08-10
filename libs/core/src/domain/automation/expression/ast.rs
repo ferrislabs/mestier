@@ -1,7 +1,6 @@
 use serde_json::Value;
 
 /// What one field's raw JSON value compiles down to.
-///
 #[derive(Debug)]
 pub(crate) enum TemplateKind {
     /// The raw value was not a string, or was a string with no `{{ }}` in
@@ -24,8 +23,7 @@ pub(crate) enum Part {
     Expr(Expr),
 }
 
-/// A parsed `{{ ... }}` body. Function calls are added as the grammar is
-/// built out.
+/// A parsed `{{ ... }}` body.
 #[derive(Debug)]
 pub(crate) enum Expr {
     Literal(Value),
