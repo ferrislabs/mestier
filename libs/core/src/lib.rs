@@ -22,6 +22,11 @@ pub use domain::automation::ports::{
 };
 pub use domain::automation::secret::SealedSecret;
 pub use domain::automation::settings::{AutomationSettings, SettingsBounds};
+pub use domain::automation::workflow::{
+    Branch, CreateWorkflowCommand, Edge, Graph, GraphError, PlacedConnector,
+    SaveWorkflowVersionCommand, UpdateWorkflowCommand, Workflow, WorkflowReference,
+    WorkflowVersion, validate_graph,
+};
 pub use infrastructure::automation::webhook::{
     WebhookDeliveryHandler, address_policy::PrivateNetworkAccess, secret::SecretCipher,
 };

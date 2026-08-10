@@ -5,5 +5,6 @@ pub mod expression;
 pub mod ports;
 pub mod secret;
 pub mod settings;
+pub mod workflow;
 
 pub use catalogue::event_catalogue;
