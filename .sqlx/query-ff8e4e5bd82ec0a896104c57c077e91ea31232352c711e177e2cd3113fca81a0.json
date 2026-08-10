@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            WITH victims AS (\n                SELECT id FROM automation.run\n                WHERE org_id = $1 AND status = 'succeeded' AND finished_at < $2\n                ORDER BY finished_at\n                LIMIT $3\n            )\n            DELETE FROM automation.run rn\n            USING victims v\n            WHERE rn.id = v.id\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Timestamptz",
+        "Int8"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "ff8e4e5bd82ec0a896104c57c077e91ea31232352c711e177e2cd3113fca81a0"
+}

@@ -1,4 +1,5 @@
-use common::CoreError;
+use chrono::{DateTime, Utc};
+use common::{CoreError, OrganizationId};
 use events::EventEnvelope;
 use mestier_macros::repository;
 
@@ -86,10 +87,67 @@ impl<'tx> EventLogRepository for PgEventLogRepository<'tx> {
 
         Ok(())
     }
+
+    async fn purge_expired(
+        &mut self,
+        org_id: OrganizationId,
+        older_than: DateTime<Utc>,
+        batch: i64,
+    ) -> Result<u64, CoreError> {
+        let mut tx = self.tx.lock().await;
+
+        // `LIMIT` inside the CTE, then a join back on `id`, is the same
+        // bounded-batch shape `PgRunRepository::claim_due` already uses.
+        let deleted = sqlx::query!(
+            r#"
+            WITH victims AS (
+                SELECT id FROM automation.event
+                WHERE org_id = $1 AND occurred_at < $2
+                ORDER BY occurred_at
+                LIMIT $3
+            )
+            DELETE FROM automation.event ev
+            USING victims v
+            WHERE ev.id = v.id
+            "#,
+            org_id.0,
+            older_than,
+            batch,
+        )
+        .execute(&mut ***tx)
+        .await
+        .map_err(map_sqlx_error)?
+        .rows_affected();
+
+        Ok(deleted)
+    }
+
+    async fn organizations_with_automation_data(
+        &mut self,
+    ) -> Result<Vec<OrganizationId>, CoreError> {
+        let mut tx = self.tx.lock().await;
+
+        // Unioned with `automation.run`, not only `automation.event`: an
+        // organization whose events already purged clean but still has
+        // succeeded runs awaiting their own purge must not be skipped.
+        let ids = sqlx::query_scalar!(
+            r#"
+            SELECT org_id FROM automation.event
+            UNION
+            SELECT org_id FROM automation.run WHERE status = 'succeeded'
+            "#
+        )
+        .fetch_all(&mut ***tx)
+        .await
+        .map_err(map_sqlx_error)?;
+
+        Ok(ids.into_iter().flatten().map(OrganizationId).collect())
+    }
 }
 
 #[cfg(test)]
 mod tests {
+    use chrono::Utc;
     use common::{OrganizationId, generate_uuid_v7};
     use events::{Actor, DomainEvent, EmissionContext, EventSubject};
     use serde_json::{Value, json};
@@ -169,6 +227,20 @@ mod tests {
                 correlation_id: None,
             },
         )
+    }
+
+    /// A stand-in for an event that "happened" `occurred_at` — the shape
+    /// every purge test needs, since `append` always writes whatever
+    /// `occurred_at` the envelope already carries rather than stamping its
+    /// own.
+    fn envelope_at(
+        org_id: OrganizationId,
+        occurred_at: chrono::DateTime<chrono::Utc>,
+    ) -> EventEnvelope {
+        EventEnvelope {
+            occurred_at,
+            ..envelope(org_id, generate_uuid_v7(), Actor::system())
+        }
     }
 
     #[tokio::test]
@@ -287,5 +359,156 @@ mod tests {
         .await;
 
         assert!(outcome.is_ok());
+    }
+
+    // --- purge_expired -------------------------------------------------
+
+    #[tokio::test]
+    #[ignore = "requires live postgres"]
+    async fn purging_deletes_events_older_than_the_cutoff_and_keeps_the_rest() {
+        let pool = make_pool().await;
+        let org_id = seed_organization(&pool).await;
+        let cutoff = Utc::now() - chrono::Duration::days(90);
+        let expired = envelope_at(org_id, cutoff - chrono::Duration::days(1));
+        let fresh = envelope_at(org_id, cutoff + chrono::Duration::days(1));
+        with_tx(&pool, async |tx| {
+            let mut repo = PgEventLogRepository::new(&tx);
+            repo.append(&[expired.clone(), fresh.clone()]).await
+        })
+        .await
+        .unwrap();
+
+        let deleted = with_tx(&pool, async |tx| {
+            let mut repo = PgEventLogRepository::new(&tx);
+            repo.purge_expired(org_id, cutoff, 100).await
+        })
+        .await
+        .unwrap();
+
+        assert_eq!(deleted, 1);
+        let remaining: Vec<Uuid> = sqlx::query_scalar!(
+            "SELECT id FROM automation.event WHERE org_id = $1",
+            org_id.0,
+        )
+        .fetch_all(&pool)
+        .await
+        .unwrap();
+        assert_eq!(remaining, vec![fresh.id]);
+    }
+
+    #[tokio::test]
+    #[ignore = "requires live postgres"]
+    async fn purge_expired_only_touches_the_given_organizations_events() {
+        let pool = make_pool().await;
+        let org_id = seed_organization(&pool).await;
+        let other_org = seed_organization(&pool).await;
+        let old = Utc::now() - chrono::Duration::days(100);
+        let mine = envelope_at(org_id, old);
+        let not_mine = envelope_at(other_org, old);
+        with_tx(&pool, async |tx| {
+            let mut repo = PgEventLogRepository::new(&tx);
+            repo.append(&[mine.clone(), not_mine.clone()]).await
+        })
+        .await
+        .unwrap();
+
+        with_tx(&pool, async |tx| {
+            let mut repo = PgEventLogRepository::new(&tx);
+            repo.purge_expired(org_id, Utc::now(), 100).await
+        })
+        .await
+        .unwrap();
+
+        let mine_count = sqlx::query_scalar!(
+            "SELECT COUNT(*) FROM automation.event WHERE id = $1",
+            mine.id,
+        )
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+        assert_eq!(mine_count, Some(0));
+
+        let not_mine_count = sqlx::query_scalar!(
+            "SELECT COUNT(*) FROM automation.event WHERE id = $1",
+            not_mine.id,
+        )
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+        assert_eq!(
+            not_mine_count,
+            Some(1),
+            "another organization's event must survive a purge scoped to this one"
+        );
+    }
+
+    #[tokio::test]
+    #[ignore = "requires live postgres"]
+    async fn purge_expired_never_deletes_more_than_the_batch_in_one_call() {
+        let pool = make_pool().await;
+        let org_id = seed_organization(&pool).await;
+        let old = Utc::now() - chrono::Duration::days(100);
+        let batch = vec![
+            envelope_at(org_id, old),
+            envelope_at(org_id, old),
+            envelope_at(org_id, old),
+        ];
+        with_tx(&pool, async |tx| {
+            let mut repo = PgEventLogRepository::new(&tx);
+            repo.append(&batch).await
+        })
+        .await
+        .unwrap();
+
+        let deleted_first_pass = with_tx(&pool, async |tx| {
+            let mut repo = PgEventLogRepository::new(&tx);
+            repo.purge_expired(org_id, Utc::now(), 2).await
+        })
+        .await
+        .unwrap();
+        assert_eq!(deleted_first_pass, 2, "bounded to the batch size");
+
+        let remaining_after_first_pass = sqlx::query_scalar!(
+            "SELECT COUNT(*) FROM automation.event WHERE org_id = $1",
+            org_id.0,
+        )
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+        assert_eq!(remaining_after_first_pass, Some(1));
+
+        let deleted_second_pass = with_tx(&pool, async |tx| {
+            let mut repo = PgEventLogRepository::new(&tx);
+            repo.purge_expired(org_id, Utc::now(), 2).await
+        })
+        .await
+        .unwrap();
+        assert_eq!(
+            deleted_second_pass, 1,
+            "the next pass finishes what the first left behind"
+        );
+    }
+
+    #[tokio::test]
+    #[ignore = "requires live postgres"]
+    async fn organizations_with_automation_data_includes_an_organization_with_an_event() {
+        let pool = make_pool().await;
+        let org_id = seed_organization(&pool).await;
+        with_tx(&pool, async |tx| {
+            let mut repo = PgEventLogRepository::new(&tx);
+            repo.append(&[envelope(org_id, generate_uuid_v7(), Actor::system())])
+                .await
+        })
+        .await
+        .unwrap();
+
+        let organizations = with_tx(&pool, async |tx| {
+            let mut repo = PgEventLogRepository::new(&tx);
+            repo.organizations_with_automation_data().await
+        })
+        .await
+        .unwrap();
+
+        assert!(organizations.contains(&org_id));
     }
 }

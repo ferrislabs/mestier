@@ -595,7 +595,7 @@ mod tests {
         let pool = make_pool().await;
         let org_id = seed_organization(&pool, "auth-bearer").await;
         let usecase = usecase_with_cipher(pool);
-        let credential = usecase
+        let (credential, _secret) = usecase
             .create_credential(
                 crate::domain::automation::credential::CreateCredentialCommand {
                     org_id,
@@ -637,7 +637,7 @@ mod tests {
         let pool = make_pool().await;
         let org_id = seed_organization(&pool, "auth-basic").await;
         let usecase = usecase_with_cipher(pool);
-        let credential = usecase
+        let (credential, _secret) = usecase
             .create_credential(
                 crate::domain::automation::credential::CreateCredentialCommand {
                     org_id,
@@ -681,7 +681,7 @@ mod tests {
         let pool = make_pool().await;
         let org_id = seed_organization(&pool, "auth-header").await;
         let usecase = usecase_with_cipher(pool);
-        let credential = usecase
+        let (credential, _secret) = usecase
             .create_credential(
                 crate::domain::automation::credential::CreateCredentialCommand {
                     org_id,
@@ -727,7 +727,7 @@ mod tests {
         let pool = make_pool().await;
         let org_id = seed_organization(&pool, "signing").await;
         let usecase = usecase_with_cipher(pool);
-        let signing = usecase
+        let (signing, _secret) = usecase
             .create_credential(
                 crate::domain::automation::credential::CreateCredentialCommand {
                     org_id,

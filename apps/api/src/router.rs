@@ -10,6 +10,7 @@ use utoipa_scalar::{Scalar, Servable};
 use utoipa_swagger_ui::SwaggerUi;
 
 use handlers::{ApiError, AppState};
+use handlers_automation as automation;
 use handlers_customer as customer;
 use handlers_discord as discord;
 use handlers_files as files;
@@ -70,6 +71,7 @@ pub fn router(state: AppState) -> Result<Router, ApiError> {
         .allow_credentials(true);
 
     let router = Router::new()
+        .merge(automation::router(&state))
         .merge(files::router(&state))
         .merge(customer::router(&state))
         .merge(discord::router(&state))
