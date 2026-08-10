@@ -11,8 +11,6 @@ export interface OidcConfiguration {
 	scope: string
 	silent_redirect_uri?: string
 	monitor_session?: boolean
-	automaticSilentRenew?: boolean
-	onSigninCallback?: () => void
 }
 
 declare global {
@@ -92,7 +90,6 @@ export function loadRuntimeConfig(): Promise<void> {
 				client_id: clientId,
 				redirect_uri: redirectUri,
 				scope,
-				automaticSilentRenew: true,
 			}
 		} else {
 			window.oidcConfiguration = undefined

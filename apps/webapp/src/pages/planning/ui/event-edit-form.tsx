@@ -15,14 +15,14 @@ import { ABSENCE_LABELS } from '#/pages/planning/lib/entries'
 import type { TaskFormValues } from '#/pages/planning/lib/task-form'
 
 export interface EventAssigneeOption {
-	/** `<kind>:<uuid>`, la forme que porte `PlanningResourceResponse.resource_id`. */
+	/** `<kind>:<uuid>`, the shape `PlanningResourceResponse.resource_id` carries. */
 	resourceId: string
 	displayName: string
 }
 
 /**
- * Brouillon en cours d'édition dans le panneau. La feature en est propriétaire :
- * le panneau ne fait que le refléter et remonter les intentions.
+ * The draft being edited in the panel. The feature owns it: the panel only
+ * reflects it and reports intents back.
  */
 export type EventEditState =
 	| {
@@ -43,7 +43,7 @@ export interface EventEditFormProps {
 	assignees: EventAssigneeOption[]
 	onChange: (patch: Partial<TaskFormValues & AbsenceFormValues>) => void
 	onToggleAssignee: (resourceId: string) => void
-	/** Identifiants de ressource sélectionnés, dérivés du brouillon par la feature. */
+	/** Selected resource ids, derived from the draft by the feature. */
 	selectedResourceIds: string[]
 }
 

@@ -77,8 +77,8 @@ async function openDetails(name: RegExp) {
 	return await screen.findByRole('dialog')
 }
 
-describe('CalendarGrid — panneau de détail', () => {
-	it("n'ouvre le panneau qu'au clic sur la carte", async () => {
+describe('CalendarGrid — detail panel', () => {
+	it('opens the panel on a card click only', async () => {
 		renderGrid([TASK])
 
 		expect(screen.queryByRole('dialog')).toBeNull()
@@ -87,7 +87,7 @@ describe('CalendarGrid — panneau de détail', () => {
 		expect(panel.textContent).toContain('Taille de haie')
 	})
 
-	it('montre ce que porte la tâche sans ouvrir la fiche', async () => {
+	it('shows what the task carries without opening the full sheet', async () => {
 		renderGrid([TASK])
 
 		const panel = await openDetails(/Taille de haie/)
@@ -98,7 +98,7 @@ describe('CalendarGrid — panneau de détail', () => {
 		expect(panel.textContent).toMatch(/\d{2}:\d{2} – \d{2}:\d{2}/)
 	})
 
-	it('passe le panneau en édition depuis le crayon', async () => {
+	it('switches the panel to editing from the pencil', async () => {
 		const callbacks = renderGrid([TASK])
 		await openDetails(/Taille de haie/)
 
@@ -109,7 +109,7 @@ describe('CalendarGrid — panneau de détail', () => {
 		expect(callbacks.onEdit).toHaveBeenCalledTimes(1)
 	})
 
-	it('change le statut depuis le pied du panneau', async () => {
+	it("changes the status from the panel's footer", async () => {
 		const callbacks = renderGrid([TASK])
 		await openDetails(/Taille de haie/)
 
@@ -121,7 +121,7 @@ describe('CalendarGrid — panneau de détail', () => {
 		)
 	})
 
-	it('propose la suppression sur une absence, pas de changement de statut', async () => {
+	it('offers deletion on an absence, no status change', async () => {
 		const callbacks = renderGrid([ABSENCE])
 		const panel = await openDetails(/Congé/)
 
@@ -135,7 +135,7 @@ describe('CalendarGrid — panneau de détail', () => {
 		expect(callbacks.onDelete).toHaveBeenCalledTimes(1)
 	})
 
-	it('édite dans le panneau, sans ouvrir de tiroir', async () => {
+	it('edits inside the panel, without opening a drawer', async () => {
 		const callbacks = renderGrid([TASK], {
 			editing: {
 				kind: 'task',
@@ -168,7 +168,7 @@ describe('CalendarGrid — panneau de détail', () => {
 		expect(callbacks.onEditSubmit).toHaveBeenCalledTimes(1)
 	})
 
-	it("bloque l'enregistrement tant que le brouillon est invalide", async () => {
+	it('blocks saving while the draft is invalid', async () => {
 		renderGrid([TASK], {
 			editing: {
 				kind: 'task',
@@ -200,7 +200,7 @@ describe('CalendarGrid — panneau de détail', () => {
 		).toBe(true)
 	})
 
-	it('se ferme par son bouton de fermeture', async () => {
+	it('closes through its close button', async () => {
 		renderGrid([TASK])
 		await openDetails(/Taille de haie/)
 

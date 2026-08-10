@@ -102,7 +102,7 @@ describe('TaskFormFields — client', () => {
 	})
 })
 
-describe('TaskFormFields — sous-tâche', () => {
+describe('TaskFormFields — subtask', () => {
 	it('shows the inherited-window placeholder on the date fields when provided', () => {
 		render(
 			<TaskFormFields
@@ -126,7 +126,7 @@ describe('TaskFormFields — erreurs', () => {
 	})
 })
 
-describe('TaskFormFields — pas d’appel réseau', () => {
+describe('TaskFormFields — no network call', () => {
 	let fetchSpy: ReturnType<typeof createFetchSpy>
 
 	function createFetchSpy() {

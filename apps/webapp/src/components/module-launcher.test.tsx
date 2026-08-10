@@ -20,7 +20,7 @@ async function openLauncher() {
 }
 
 describe('ModuleLauncher', () => {
-	it('liste tous les modules du registre, y compris ceux à venir', async () => {
+	it('lists every module in the registry, upcoming ones included', async () => {
 		await renderWithRouter(
 			<ModuleLauncher activeModuleId="home" organizationSlug="dupont" />,
 		)
@@ -38,10 +38,10 @@ describe('ModuleLauncher', () => {
 		}
 	})
 
-	it('marque le module courant', async () => {
-		// Le chemin doit correspondre au module actif : dans l'application, les deux
-		// viennent de la même résolution d'URL, et le routeur marque lui aussi le
-		// lien exact comme courant.
+	it('marks the current module', async () => {
+		// The path must match the active module: in the application both come
+		// from the same URL resolution, and the router also marks the exact link
+		// as current.
 		await renderWithRouter(
 			<ModuleLauncher activeModuleId="crm" organizationSlug="dupont" />,
 			'/crm',
@@ -52,7 +52,7 @@ describe('ModuleLauncher', () => {
 		expect(current.textContent).toContain('CRM')
 	})
 
-	it("n'expose pas de lien pour un module annoncé, mais le laisse focusable", async () => {
+	it('exposes no link for an announced module, but keeps it focusable', async () => {
 		await renderWithRouter(
 			<ModuleLauncher activeModuleId="home" organizationSlug="dupont" />,
 		)
@@ -65,7 +65,7 @@ describe('ModuleLauncher', () => {
 		expect(annonce.getAttribute('aria-disabled')).toBe('true')
 	})
 
-	it('navigue et ferme le sélecteur quand on choisit un module', async () => {
+	it('navigates and closes the launcher when a module is chosen', async () => {
 		await renderWithRouter(
 			<>
 				<ModuleLauncher activeModuleId="home" organizationSlug="dupont" />
@@ -84,7 +84,7 @@ describe('ModuleLauncher', () => {
 		})
 	})
 
-	it('laisse le sélecteur ouvert quand on clique sur un module annoncé', async () => {
+	it('leaves the launcher open when an announced module is clicked', async () => {
 		await renderWithRouter(
 			<ModuleLauncher activeModuleId="home" organizationSlug="dupont" />,
 		)

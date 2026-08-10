@@ -10,10 +10,10 @@ interface AuthGateProps {
 }
 
 /**
- * Sources d'erreur qui signifient « la session stockée ne peut plus être
- * prolongée » : jeton de rafraîchissement expiré, révoqué, ou consommé par un
- * autre onglet. Ce n'est pas une panne, c'est une fin de session — on repart
- * en connexion au lieu d'afficher une erreur.
+ * Error sources meaning "the stored session can no longer be extended":
+ * refresh token expired, revoked, or spent by another tab. This is not a
+ * failure, it is the end of the session — we start signing in again instead of
+ * showing an error.
  */
 const SESSION_ENDED_SOURCES: ReadonlySet<ErrorContext['source']> = new Set([
 	'renewSilent',
@@ -21,10 +21,10 @@ const SESSION_ENDED_SOURCES: ReadonlySet<ErrorContext['source']> = new Set([
 ])
 
 /**
- * Marqueur anti-boucle. Une reconnexion échouée qui repartirait aussitôt en
- * reconnexion enverrait l'utilisateur dans un aller-retour sans fin avec l'IdP,
- * bien pire que l'écran d'erreur qu'on cherche à éviter. Le marqueur survit au
- * rechargement de page, contrairement à un état React.
+ * Anti-loop marker. A failed reconnection that immediately reconnected again
+ * would send the user into an endless round trip with the IdP, far worse than
+ * the error screen we are trying to avoid. Unlike React state, the marker
+ * survives a page reload.
  */
 const RECOVERY_MARKER_KEY = 'mestier.authRecoveryAt'
 const RECOVERY_COOLDOWN_MS = 30_000
@@ -56,8 +56,8 @@ export function AuthGate({ children }: AuthGateProps) {
 			void (async () => {
 				try {
 					markRecovery()
-					// Purger l'utilisateur périmé d'abord : sans ça il reste en
-					// `localStorage` et le prochain chargement rejoue le même jeton mort.
+					// Purge the stale user first: without it they stay in
+					// `localStorage` and the next load replays the same dead token.
 					await auth.removeUser()
 					await auth.signinRedirect()
 				} catch {

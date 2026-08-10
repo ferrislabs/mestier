@@ -15,8 +15,8 @@ import { buildOrgPath, splitOrgPath } from '#/modules/org-path'
 import { crossOrganizationPath } from '#/modules/scope'
 
 /**
- * Sélecteur d'organisation, rendu à la racine du fil d'Ariane : l'organisation
- * est le premier niveau de scope, c'est donc là qu'on en change.
+ * Organization switcher, rendered at the root of the breadcrumb: the
+ * organization is the first level of scope, so that is where it is changed.
  */
 export function OrgSwitcher() {
 	const location = useLocation()
@@ -24,9 +24,9 @@ export function OrgSwitcher() {
 	const { organizations, activeOrganization, activeOrganizationId } =
 		useActiveOrganization()
 
-	// Changer d'organisation est une navigation : le tenant vit dans l'URL. On
-	// reste sur le même écran, sauf s'il désigne une entité de l'organisation
-	// quittée — un identifiant de client n'existe pas dans l'organisation cible.
+	// Switching organization is a navigation: the tenant lives in the URL. We
+	// stay on the same screen, unless it names an entity of the organization
+	// being left — a customer id does not exist in the target organization.
 	const handleOrganizationSelect = (organization: Organization) => {
 		if (organization.id === activeOrganizationId) return
 

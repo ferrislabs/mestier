@@ -57,9 +57,9 @@ export interface PlanningCalendarFeatureProps {
 }
 
 /**
- * Monte le calendrier. Comme {@link PlanningTeamFeature}, il est agnostique du
- * routeur : `view`/`date` arrivent en props depuis la route, seule à lire et
- * écrire l'URL.
+ * Mounts the calendar. Like {@link PlanningTeamFeature}, it is router-agnostic:
+ * `view`/`date` arrive as props from the route, the only place that reads and
+ * writes the URL.
  */
 export function PlanningCalendarFeature({
 	view,
@@ -125,17 +125,17 @@ function PlanningCalendarScreen({
 	onViewChange,
 	onDateChange,
 }: PlanningCalendarScreenProps) {
-	// La grille de mois affiche des semaines entières, donc quelques jours des
-	// mois voisins : elle demande une fenêtre plus large que le mois lui-même.
+	// The month grid shows whole weeks, hence a few days of the neighbouring
+	// months: it asks for a window wider than the month itself.
 	const range =
 		view === 'month' ? computeMonthGridWindow(date) : computeWindow(view, date)
 	const planningQuery = usePlanning(organizationId, range)
 	const data = planningQuery.data?.data ?? null
 	const timeZone = data?.timezone ?? DEFAULT_TIME_ZONE
 
-	// Filtres de lecture : ils ne changent pas la fenêtre demandée au serveur,
-	// donc ils vivent en état local plutôt que dans l'URL — contrairement à
-	// `view`/`date`, qui déterminent la requête.
+	// Read filters: they do not change the window asked of the server, so they
+	// live in local state rather than in the URL — unlike `view`/`date`, which
+	// determine the request.
 	const [filter, setFilter] = useState<CalendarFilter>('all')
 	const [selectedEmployeeIds, setSelectedEmployeeIds] = useState<string[]>([])
 
@@ -214,8 +214,8 @@ function PlanningCalendarScreen({
 		setAbsenceSheet({
 			mode: 'create',
 			absenceId: null,
-			// Le formulaire laisse changer le motif : « congé » et « absence »
-			// n'ouvrent pas deux formulaires, seulement deux valeurs par défaut.
+			// The form allows changing the reason: "congé" and "absence" do not
+			// open two forms, only two default values.
 			draft: { ...draft, kind: kind === 'leave' ? 'LEAVE' : 'UNAVAILABLE' },
 		})
 	}
@@ -235,7 +235,7 @@ function PlanningCalendarScreen({
 				body: { status },
 			})
 		} catch {
-			// Rendu réactivement par `patchTask.error` ; le calendrier reste en place.
+			// Rendered reactively from `patchTask.error`; the calendar stays put.
 		}
 	}
 
@@ -245,7 +245,7 @@ function PlanningCalendarScreen({
 				path: { organization_id: organizationId, absence_id: absenceId },
 			})
 		} catch {
-			// Rendu réactivement par `deleteAbsence.error`.
+			// Rendered reactively from `deleteAbsence.error`.
 		}
 	}
 
@@ -330,7 +330,7 @@ function PlanningCalendarScreen({
 				})
 				setEditing(null)
 			} catch {
-				// Rendu réactivement par `patchTask.error` ; le brouillon est gardé.
+				// Rendered reactively from `patchTask.error`; the draft is kept.
 			}
 			return
 		}
@@ -347,7 +347,7 @@ function PlanningCalendarScreen({
 			})
 			setEditing(null)
 		} catch {
-			// Rendu réactivement par `updateAbsence.error`.
+			// Rendered reactively from `updateAbsence.error`.
 		}
 	}
 
@@ -387,7 +387,7 @@ function PlanningCalendarScreen({
 				})
 				setAbsenceSheet(null)
 			} catch {
-				// Rendu réactivement par `createAbsence.error` — le brouillon est gardé.
+				// Rendered reactively from `createAbsence.error` — the draft is kept.
 			}
 			return
 		}
@@ -405,7 +405,7 @@ function PlanningCalendarScreen({
 			})
 			setAbsenceSheet(null)
 		} catch {
-			// Rendu réactivement par `updateAbsence.error`.
+			// Rendered reactively from `updateAbsence.error`.
 		}
 	}
 
@@ -420,7 +420,7 @@ function PlanningCalendarScreen({
 			})
 			setAbsenceSheet(null)
 		} catch {
-			// Rendu réactivement par `deleteAbsence.error`.
+			// Rendered reactively from `deleteAbsence.error`.
 		}
 	}
 

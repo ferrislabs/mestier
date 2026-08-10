@@ -491,7 +491,7 @@ mod tests {
             None
         );
     }
-
+  
     /// The guard added in #199: a credential a workflow's graph still
     /// references must not disappear out from under it, and the refusal
     /// names the workflow so whoever is deleting it knows what to fix first.

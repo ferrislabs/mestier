@@ -171,8 +171,8 @@ function patchTaskCalls(
 	return calls.filter((c) => c.method === 'patch' && c.path === TASK_PATH)
 }
 
-describe('TaskSheetFeature — création sans client', () => {
-	it('envoie un POST avec customer_id/customer_context_id à null et sans PATCH de suivi', async () => {
+describe('TaskSheetFeature — creation without a customer', () => {
+	it('sends a POST with customer_id/customer_context_id null and no follow-up PATCH', async () => {
 		const user = userEvent.setup()
 		const { calls, mockMutation, onOpenChange } = renderFeature()
 		mockMutation('post', TASKS_PATH, () => ({
@@ -195,8 +195,8 @@ describe('TaskSheetFeature — création sans client', () => {
 	})
 })
 
-describe('TaskSheetFeature — création avec assignés et labels', () => {
-	it('enchaîne un PATCH de suivi avec la liste complète des assignés et labels choisis', async () => {
+describe('TaskSheetFeature — creation with assignees and labels', () => {
+	it('chains a follow-up PATCH carrying the full list of chosen assignees and labels', async () => {
 		const user = userEvent.setup()
 		const { calls, mockMutation } = renderFeature()
 		mockMutation('post', TASKS_PATH, () => ({
@@ -229,7 +229,7 @@ describe('TaskSheetFeature — création avec assignés et labels', () => {
 	})
 })
 
-describe('TaskSheetFeature — édition, labels', () => {
+describe('TaskSheetFeature — editing, labels', () => {
 	function editTarget() {
 		return { mode: 'edit' as const, taskId: 'task-1' }
 	}
@@ -259,7 +259,7 @@ describe('TaskSheetFeature — édition, labels', () => {
 		mockGet(TASKS_PATH, () => ({ data: [], pagination: null }))
 	}
 
-	it('envoie label_ids vide pour retirer tous les labels existants', async () => {
+	it('sends an empty label_ids to strip every existing label', async () => {
 		const user = userEvent.setup()
 		const { calls, mockMutation } = renderFeature(
 			{ target: editTarget() },
@@ -285,8 +285,8 @@ describe('TaskSheetFeature — édition, labels', () => {
 	})
 })
 
-describe('TaskSheetFeature — fil de commentaires paginé', () => {
-	it('ne demande que la première page à l’ouverture, jamais tout l’historique', async () => {
+describe('TaskSheetFeature — paginated comment thread', () => {
+	it('asks only for the first page on open, never the whole history', async () => {
 		const { calls } = renderFeature(
 			{ target: { mode: 'edit', taskId: 'task-1' } },
 			(api) => {

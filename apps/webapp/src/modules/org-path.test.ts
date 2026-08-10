@@ -2,17 +2,17 @@ import { describe, expect, it } from 'vitest'
 import { buildOrgPath, splitOrgPath } from '#/modules/org-path'
 
 describe('buildOrgPath', () => {
-	it('préfixe un chemin de module par le tenant', () => {
+	it('prefixes a module path with the tenant', () => {
 		expect(buildOrgPath('dupont', '/crm/customers')).toBe(
 			'/o/dupont/crm/customers',
 		)
 	})
 
-	it("ne laisse pas de barre finale sur la racine de l'organisation", () => {
+	it('leaves no trailing slash on the organization root', () => {
 		expect(buildOrgPath('dupont', '/')).toBe('/o/dupont')
 	})
 
-	it('conserve les segments paramétrés du routeur', () => {
+	it('keeps the router parameter segments', () => {
 		expect(buildOrgPath('dupont', '/crm/quotes/$quoteId')).toBe(
 			'/o/dupont/crm/quotes/$quoteId',
 		)
@@ -20,32 +20,32 @@ describe('buildOrgPath', () => {
 })
 
 describe('splitOrgPath', () => {
-	it('sépare le tenant du chemin de module', () => {
+	it('splits the tenant off the module path', () => {
 		expect(splitOrgPath('/o/dupont/crm/customers')).toEqual({
 			organizationSlug: 'dupont',
 			path: '/crm/customers',
 		})
 	})
 
-	it("ramène la racine du tenant à '/'", () => {
+	it("brings the tenant root back to '/'", () => {
 		expect(splitOrgPath('/o/dupont')).toEqual({
 			organizationSlug: 'dupont',
 			path: '/',
 		})
 	})
 
-	it('décode un slug encodé', () => {
+	it('decodes an encoded slug', () => {
 		expect(splitOrgPath('/o/mon%20org/hr').organizationSlug).toBe('mon org')
 	})
 
-	it('laisse intact un chemin hors organisation', () => {
+	it('leaves a path outside any organization untouched', () => {
 		expect(splitOrgPath('/invite/abc')).toEqual({
 			organizationSlug: null,
 			path: '/invite/abc',
 		})
 	})
 
-	it('ne confond pas un préfixe qui commence par les mêmes lettres', () => {
+	it('does not mistake a prefix that starts with the same letters', () => {
 		expect(splitOrgPath('/onboarding')).toEqual({
 			organizationSlug: null,
 			path: '/onboarding',

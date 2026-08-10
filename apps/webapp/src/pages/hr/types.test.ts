@@ -21,25 +21,25 @@ import {
 } from '#/pages/hr/types'
 
 describe('employeeDisplayName', () => {
-	it('joint last_name et first_name dans cet ordre — nom puis prénom', () => {
+	it('joins last_name and first_name in that order — surname then given name', () => {
 		expect(
 			employeeDisplayName({ last_name: 'Bonnal', first_name: 'Baptiste' }),
 		).toBe('Bonnal Baptiste')
 	})
 
-	it('retombe sur le seul nom quand first_name est absent, sans espace résiduel', () => {
+	it('falls back to the surname alone when first_name is missing, with no stray space', () => {
 		expect(employeeDisplayName({ last_name: 'Bonnal', first_name: null })).toBe(
 			'Bonnal',
 		)
 	})
 
-	it('traite un first_name réduit à des espaces comme absent', () => {
+	it('treats a whitespace-only first_name as missing', () => {
 		expect(
 			employeeDisplayName({ last_name: 'Bonnal', first_name: '   ' }),
 		).toBe('Bonnal')
 	})
 
-	it('rogne les espaces parasites autour des deux parties', () => {
+	it('trims stray spaces around both parts', () => {
 		expect(
 			employeeDisplayName({
 				last_name: '  Bonnal  ',
@@ -50,38 +50,38 @@ describe('employeeDisplayName', () => {
 })
 
 describe('minutesToTime / timeToMinutes', () => {
-	it('convertit 0 minute en 00:00', () => {
+	it('converts 0 minutes to 00:00', () => {
 		expect(minutesToTime(0)).toBe('00:00')
 	})
 
-	it('convertit 1440 minutes (fin de journée) en 24:00', () => {
+	it('converts 1440 minutes (end of day) to 24:00', () => {
 		expect(minutesToTime(1440)).toBe('24:00')
 	})
 
-	it('convertit une minute quelconque', () => {
+	it('converts an arbitrary minute', () => {
 		expect(minutesToTime(480)).toBe('08:00')
 		expect(minutesToTime(570)).toBe('09:30')
 	})
 
-	it('parse 00:00 en 0', () => {
+	it('parses 00:00 as 0', () => {
 		expect(timeToMinutes('00:00')).toBe(0)
 	})
 
-	it('parse 24:00 en 1440', () => {
+	it('parses 24:00 as 1440', () => {
 		expect(timeToMinutes('24:00')).toBe(1440)
 	})
 
-	it('parse une heure quelconque', () => {
+	it('parses an arbitrary time', () => {
 		expect(timeToMinutes('09:30')).toBe(570)
 	})
 
-	it('fait un aller-retour minutes -> horaire -> minutes sans perte', () => {
+	it('round-trips minutes -> time -> minutes without loss', () => {
 		for (const minutes of [0, 1, 59, 60, 480, 719, 720, 1439, 1440]) {
 			expect(timeToMinutes(minutesToTime(minutes))).toBe(minutes)
 		}
 	})
 
-	it('rejette un horaire malformé', () => {
+	it('rejects a malformed time', () => {
 		expect(timeToMinutes('not-a-time')).toBeNull()
 		expect(timeToMinutes('25:00')).toBeNull()
 		expect(timeToMinutes('24:01')).toBeNull()
@@ -94,37 +94,37 @@ describe('formatDurationMinutes / parseDurationLabel', () => {
 		expect(formatDurationMinutes(0)).toBe('0h00')
 	})
 
-	it('formate une durée avec des minutes', () => {
+	it('formats a duration carrying minutes', () => {
 		expect(formatDurationMinutes(90)).toBe('1h30')
 	})
 
-	it('formate une durée négative avec un signe', () => {
+	it('formats a negative duration with a sign', () => {
 		expect(formatDurationMinutes(-30)).toBe('-0h30')
 	})
 
-	it('formate 1440 minutes (une journée pleine)', () => {
+	it('formats 1440 minutes (a full day)', () => {
 		expect(formatDurationMinutes(1440)).toBe('24h00')
 	})
 
-	it('parse un libellé "Xh"', () => {
+	it('parses an "Xh" label', () => {
 		expect(parseDurationLabel('35h')).toBe(2100)
 	})
 
-	it('parse un libellé "XhYY"', () => {
+	it('parses an "XhYY" label', () => {
 		expect(parseDurationLabel('35h30')).toBe(2130)
 	})
 
-	it('parse 0h00 en 0', () => {
+	it('parses 0h00 as 0', () => {
 		expect(parseDurationLabel('0h00')).toBe(0)
 	})
 
-	it('rejette un libellé invalide', () => {
+	it('rejects an invalid label', () => {
 		expect(parseDurationLabel('bogus')).toBeNull()
 		expect(parseDurationLabel('12h60')).toBeNull()
 		expect(parseDurationLabel('')).toBeNull()
 	})
 
-	it('fait un aller-retour label -> minutes -> label', () => {
+	it('round-trips label -> minutes -> label', () => {
 		for (const label of ['0h00', '7h30', '35h00', '24h00']) {
 			const minutes = parseDurationLabel(label)
 			expect(minutes).not.toBeNull()
@@ -134,7 +134,7 @@ describe('formatDurationMinutes / parseDurationLabel', () => {
 })
 
 describe('computeWeeklyGap', () => {
-	it('calcule un écart nul quand planifié == contractuel', () => {
+	it('computes a zero gap when planned == contractual', () => {
 		const gap = computeWeeklyGap(
 			[{ startTime: '08:00', endTime: '12:00' }],
 			240,
@@ -146,8 +146,8 @@ describe('computeWeeklyGap', () => {
 		})
 	})
 
-	it('calcule un déficit quand le rythme planifie moins que la base contractuelle', () => {
-		// 4 jours de 8h = 1920 minutes planifiées, base à 2100 (35h)
+	it('computes a shortfall when the rhythm plans less than the contractual baseline', () => {
+		// 4 days of 8h = 1920 minutes planned, baseline at 2100 (35h)
 		const slots = Array.from({ length: 4 }, () => ({
 			startTime: '08:00',
 			endTime: '16:00',
@@ -157,7 +157,7 @@ describe('computeWeeklyGap', () => {
 		expect(gap.deltaMinutes).toBe(-180)
 	})
 
-	it('calcule un surplus quand le rythme dépasse la base contractuelle', () => {
+	it('computes a surplus when the rhythm exceeds the contractual baseline', () => {
 		const gap = computeWeeklyGap(
 			[{ startTime: '08:00', endTime: '20:00' }],
 			240,
@@ -165,7 +165,7 @@ describe('computeWeeklyGap', () => {
 		expect(gap.deltaMinutes).toBe(480)
 	})
 
-	it('ignore les créneaux invalides dans le calcul', () => {
+	it('ignores invalid slots in the computation', () => {
 		const gap = computeWeeklyGap(
 			[
 				{ startTime: '08:00', endTime: '12:00' },
@@ -177,7 +177,7 @@ describe('computeWeeklyGap', () => {
 		expect(gap.plannedMinutes).toBe(240)
 	})
 
-	it('gère une base contractuelle nulle (pas encore renseignée)', () => {
+	it('handles a null contractual baseline (not filled in yet)', () => {
 		const gap = computeWeeklyGap([], 0)
 		expect(gap).toEqual({
 			plannedMinutes: 0,
@@ -202,31 +202,31 @@ describe('findOpenRhythm', () => {
 		}
 	}
 
-	it('retourne la version sans effective_to', () => {
+	it('returns the version without an effective_to', () => {
 		const open = rhythm({ id: 'open', effective_to: null })
 		const closed = rhythm({ id: 'closed', effective_to: '2026-06-01' })
 		expect(findOpenRhythm([closed, open])?.id).toBe('open')
 	})
 
-	it('retourne null quand aucune version nest ouverte', () => {
+	it('returns null when no version is open', () => {
 		const closed = rhythm({ effective_to: '2026-06-01' })
 		expect(findOpenRhythm([closed])).toBeNull()
 	})
 
-	it('retourne null pour une liste vide', () => {
+	it('returns null for an empty list', () => {
 		expect(findOpenRhythm([])).toBeNull()
 	})
 })
 
 describe('rhythmToDraft / draftToRhythmSlots', () => {
-	it('retombe sur un formulaire vide quand il n’y a pas de rythme', () => {
+	it('falls back to an empty form when there is no rhythm', () => {
 		const draft = rhythmToDraft(null, '2026-08-07')
 		expect(draft.effectiveFrom).toBe('2026-08-07')
 		expect(draft.effectiveTo).toBe('')
 		expect(draft.slots).toEqual([])
 	})
 
-	it('reprend les créneaux existants du rythme', () => {
+	it("picks up the rhythm's existing slots", () => {
 		const rhythm: Rhythm = {
 			id: 'rhythm-1',
 			organization_id: 'org-1',
@@ -247,7 +247,7 @@ describe('rhythmToDraft / draftToRhythmSlots', () => {
 		})
 	})
 
-	it('convertit les brouillons de créneaux en payload API', () => {
+	it('converts slot drafts into an API payload', () => {
 		const slots = draftToRhythmSlots([
 			{ key: 'a', weekday: 1, startTime: '08:00', endTime: '12:00' },
 			{ key: 'b', weekday: 3, startTime: '14:00', endTime: '18:00' },
@@ -258,14 +258,14 @@ describe('rhythmToDraft / draftToRhythmSlots', () => {
 		])
 	})
 
-	it('exclut les créneaux dont l’horaire est invalide', () => {
+	it('excludes slots whose time is invalid', () => {
 		const slots = draftToRhythmSlots([
 			{ key: 'a', weekday: 1, startTime: 'bogus', endTime: '12:00' },
 		])
 		expect(slots).toEqual([])
 	})
 
-	it('crée un créneau vide prérempli pour un jour donné', () => {
+	it('creates an empty slot prefilled for a given weekday', () => {
 		const draft = emptyRhythmSlotDraft(2)
 		expect(draft.weekday).toBe(2)
 		expect(typeof draft.key).toBe('string')
@@ -274,7 +274,7 @@ describe('rhythmToDraft / draftToRhythmSlots', () => {
 })
 
 describe('workSlotsToDraft / draftToWorkSlots', () => {
-	it('trie les plages par date puis par heure de début', () => {
+	it('sorts ranges by date then by start time', () => {
 		const slots: WorkSlot[] = [
 			{
 				id: 'b',
@@ -302,7 +302,7 @@ describe('workSlotsToDraft / draftToWorkSlots', () => {
 		expect(draft.slots.map((slot) => slot.key)).toEqual(['a', 'b'])
 	})
 
-	it('convertit les brouillons en payload API', () => {
+	it('converts drafts into an API payload', () => {
 		const slots = draftToWorkSlots([
 			{
 				key: 'a',
@@ -316,14 +316,14 @@ describe('workSlotsToDraft / draftToWorkSlots', () => {
 		])
 	})
 
-	it('crée une plage vide préremplie pour une date donnée', () => {
+	it('creates an empty range prefilled for a given date', () => {
 		const draft = emptyWorkSlotDraft('2026-08-10')
 		expect(draft.workDate).toBe('2026-08-10')
 	})
 })
 
 describe('validateRhythmDraft', () => {
-	it("n'a pas d'erreur pour un formulaire valide", () => {
+	it('reports no error for a valid form', () => {
 		const errors = validateRhythmDraft(
 			{
 				effectiveFrom: '2026-08-07',
@@ -335,7 +335,7 @@ describe('validateRhythmDraft', () => {
 		expect(errors).toEqual([])
 	})
 
-	it('signale une fin de créneau avant le début', () => {
+	it('reports a slot ending before it starts', () => {
 		const errors = validateRhythmDraft(
 			{
 				effectiveFrom: '2026-08-07',
@@ -347,7 +347,7 @@ describe('validateRhythmDraft', () => {
 		expect(errors.some((error) => error.key === 'a')).toBe(true)
 	})
 
-	it('signale une date de début antérieure à la version en cours', () => {
+	it('reports a start date earlier than the current version', () => {
 		const errors = validateRhythmDraft(
 			{ effectiveFrom: '2026-01-01', effectiveTo: '', slots: [] },
 			'2026-06-01',
@@ -355,7 +355,7 @@ describe('validateRhythmDraft', () => {
 		expect(errors.some((error) => error.key === 'effectiveFrom')).toBe(true)
 	})
 
-	it('accepte une date de début égale à la version en cours (édition sur place)', () => {
+	it('accepts a start date equal to the current version (in-place edit)', () => {
 		const errors = validateRhythmDraft(
 			{ effectiveFrom: '2026-06-01', effectiveTo: '', slots: [] },
 			'2026-06-01',
@@ -365,7 +365,7 @@ describe('validateRhythmDraft', () => {
 })
 
 describe('validateWorkSlotsDraft', () => {
-	it("n'a pas d'erreur pour un formulaire valide", () => {
+	it('reports no error for a valid form', () => {
 		const errors = validateWorkSlotsDraft({
 			from: '2026-08-03',
 			to: '2026-08-10',
@@ -381,7 +381,7 @@ describe('validateWorkSlotsDraft', () => {
 		expect(errors).toEqual([])
 	})
 
-	it('signale une plage datée hors de la période sélectionnée', () => {
+	it('reports a dated range outside the selected period', () => {
 		const errors = validateWorkSlotsDraft({
 			from: '2026-08-03',
 			to: '2026-08-10',
@@ -397,7 +397,7 @@ describe('validateWorkSlotsDraft', () => {
 		expect(errors.some((error) => error.key === 'a')).toBe(true)
 	})
 
-	it('signale une période inversée', () => {
+	it('reports an inverted period', () => {
 		const errors = validateWorkSlotsDraft({
 			from: '2026-08-10',
 			to: '2026-08-03',
@@ -408,21 +408,21 @@ describe('validateWorkSlotsDraft', () => {
 })
 
 describe('addDaysIso', () => {
-	it('ajoute des jours à une date ISO', () => {
+	it('adds days to an ISO date', () => {
 		expect(addDaysIso('2026-08-07', 1)).toBe('2026-08-08')
 	})
 
-	it('franchit un changement de mois', () => {
+	it('crosses a month boundary', () => {
 		expect(addDaysIso('2026-08-31', 1)).toBe('2026-09-01')
 	})
 
-	it('accepte un décalage négatif', () => {
+	it('accepts a negative offset', () => {
 		expect(addDaysIso('2026-08-07', -7)).toBe('2026-07-31')
 	})
 })
 
 describe('formatDateFr', () => {
-	it('formate une date ISO en jj/mm/aaaa', () => {
+	it('formats an ISO date as dd/mm/yyyy', () => {
 		expect(formatDateFr('2026-08-07')).toBe('07/08/2026')
 	})
 })

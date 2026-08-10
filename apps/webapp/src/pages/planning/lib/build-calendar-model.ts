@@ -36,34 +36,34 @@ export interface CalendarAttendeeVM {
 }
 
 /**
- * Ce dont le panneau de détail a besoin, et rien de plus. Les vues semaine et
- * mois positionnent leurs entrées différemment, mais elles les décrivent
- * pareil — c'est ce contrat qui leur permet de partager le panneau.
+ * What the detail panel needs, and nothing more. The week and month views
+ * position their entries differently, but they describe them the same way —
+ * that shared contract is what lets them share the panel.
  */
 export interface EventDetailVM {
 	title: string
-	/** Jour de l'entrée, en toutes lettres. */
+	/** The entry's day, spelled out. */
 	dateLabel: string
-	/** Plage horaire, ou « Journée entière ». */
+	/** Time range, or "Journée entière". */
 	timeLabel: string
 	attendees: CalendarAttendeeVM[]
 	entry: PlanningEntry
 }
 
 export interface CalendarEventVM extends EventDetailVM {
-	/** Identifiant de rendu : une entrée s'étalant sur plusieurs jours produit un segment par jour. */
+	/** Render id: an entry spanning several days yields one segment per day. */
 	key: string
 	entryId: string
 	nature: CalendarNature | 'unknown'
 	allDay: boolean
-	/** Minutes depuis minuit local, pour positionner le défilement d'ouverture. */
+	/** Minutes since local midnight, to position the opening scroll. */
 	startMinute: number
-	/** Durée du segment sur ce jour — c'est elle qui décide de la densité de la carte. */
+	/** The segment's duration on that day — it decides the card's density. */
 	durationMinutes: number
-	/** Position verticale, en pourcentage de l'amplitude horaire visible. */
+	/** Vertical position, as a percentage of the visible time amplitude. */
 	top: number
 	height: number
-	/** Répartition horizontale des chevauchements dans la colonne du jour. */
+	/** Horizontal spread of overlaps within the day's column. */
 	column: number
 	columnCount: number
 }
@@ -74,7 +74,7 @@ export interface CalendarDayVM {
 	dayLabel: string
 	isToday: boolean
 	isWeekend: boolean
-	/** Entrées sur la journée entière, rendues dans un bandeau au-dessus de la grille. */
+	/** All-day entries, rendered in a banner above the grid. */
 	allDayEvents: CalendarEventVM[]
 	timedEvents: CalendarEventVM[]
 }
@@ -84,14 +84,14 @@ export interface CalendarModel {
 	amplitude: MinuteRange
 	hourMarks: number[]
 	timeZone: string
-	/** Nombre d'entrées écartées par le filtre courant, pour le dire à l'utilisateur. */
+	/** Number of entries dropped by the current filter, to tell the user. */
 	hiddenCount: number
-	/** Minute sur laquelle ouvrir le défilement vertical. */
+	/** Minute the vertical scroll opens on. */
 	scrollToMinute: number
 	/**
-	 * Plage travaillée, déduite des horaires des employés — à défaut, la journée
-	 * type. Sur une grille de 24 h, c'est elle qui distingue d'un coup d'œil les
-	 * heures ouvrées du reste.
+	 * Worked range, inferred from the employees' hours — a typical day when
+	 * there are none. On a 24 h grid, it is what tells working hours from the
+	 * rest at a glance.
 	 */
 	workingRange: MinuteRange
 }
@@ -105,7 +105,7 @@ export interface BuildCalendarModelInput {
 	timeZone: string
 	today: string
 	filter: CalendarFilter
-	/** Employés retenus ; vide ou absent = toute l'équipe. */
+	/** Selected employees; empty or absent = the whole team. */
 	employeeIds?: string[]
 }
 
@@ -213,8 +213,8 @@ function toEventVM(params: {
 		params.date,
 		params.timeZone,
 	)
-	// `computeSegmentPosition` raisonne sur un axe quelconque : ici l'axe est
-	// vertical, donc `left`/`width` deviennent `top`/`height`.
+	// `computeSegmentPosition` reasons on an arbitrary axis: here the axis is
+	// vertical, so `left`/`width` become `top`/`height`.
 	const position = computeSegmentPosition(span, params.amplitude)
 
 	return {
@@ -296,30 +296,30 @@ function flattenWorkTime(workTime: PlanningWorkTime[]): MinuteInterval[] {
 }
 
 /**
- * Le calendrier rend la journée entière, de minuit à minuit.
+ * The calendar renders the whole day, midnight to midnight.
  *
- * La grille équipe se resserre au plus juste autour des entrées — utile quand
- * chaque employé n'a qu'une ligne. Un calendrier, lui, garde un cadre fixe :
- * une amplitude qui varie selon le contenu déplace les repères d'un jour à
- * l'autre, et masque les créneaux libres qu'on vient précisément y lire. La
- * hauteur qui en découle se parcourt au défilement, positionné d'emblée sur la
- * première entrée de la période.
+ * The team grid tightens as closely as it can around the entries — useful when
+ * each employee has a single row. A calendar keeps a fixed frame instead: an
+ * amplitude varying with the content shifts the landmarks from one day to the
+ * next, and hides the free slots one comes here precisely to read. The height
+ * that follows is walked by scrolling, positioned from the start on the
+ * period's first entry.
  */
 export const CALENDAR_AMPLITUDE: MinuteRange = {
 	startMinute: 0,
 	endMinute: MINUTES_PER_DAY,
 }
 
-/** Heure sur laquelle ouvrir la vue quand la période ne contient rien. */
+/** Hour the view opens on when the period holds nothing. */
 const DEFAULT_SCROLL_MINUTE = FALLBACK_AMPLITUDE.startMinute
 
-/** Ouvre la vue une demi-heure avant la première entrée, pour ne pas la coller en haut. */
+/** Opens the view half an hour before the first entry, so it is not glued to the top. */
 const SCROLL_MARGIN_MINUTES = 30
 
 /**
- * Première minute occupée de la période, marge comprise — sinon l'heure de
- * travail par défaut. Les entrées à la journée n'entrent pas dans le calcul :
- * elles vivent dans le bandeau, pas dans la grille horaire.
+ * First occupied minute of the period, margin included — otherwise the default
+ * working hour. All-day entries stay out of the computation: they live in the
+ * banner, not in the time grid.
  */
 function firstEventMinute(days: CalendarDayVM[]): number {
 	const starts = days.flatMap((day) =>
@@ -330,7 +330,7 @@ function firstEventMinute(days: CalendarDayVM[]): number {
 	return Math.max(0, Math.min(...starts) - SCROLL_MARGIN_MINUTES)
 }
 
-/** Une marque par heure pleine dans l'amplitude, bornes comprises. */
+/** One tick per whole hour within the amplitude, bounds included. */
 export function hourMarks(amplitude: MinuteRange): number[] {
 	const marks: number[] = []
 	const first = Math.ceil(amplitude.startMinute / 60) * 60

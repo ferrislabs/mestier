@@ -61,7 +61,7 @@ describe('AuthGate', () => {
 		useAuth.mockReset()
 	})
 
-	it('redirige vers le fournisseur quand aucune session n’existe', async () => {
+	it('redirects to the provider when no session exists', async () => {
 		const { signinRedirect } = mountGate({})
 
 		await waitFor(() => {
@@ -69,7 +69,7 @@ describe('AuthGate', () => {
 		})
 	})
 
-	it('traite un échec de renouvellement comme une fin de session', async () => {
+	it('treats a renewal failure as the end of the session', async () => {
 		const { removeUser, signinRedirect } = mountGate({ error: REFRESH_FAILURE })
 
 		await waitFor(() => {
@@ -83,7 +83,7 @@ describe('AuthGate', () => {
 		expect(screen.queryByText("Erreur d'authentification")).toBeNull()
 	})
 
-	it('purge le jeton périmé avant de relancer la connexion', async () => {
+	it('purges the stale token before signing in again', async () => {
 		const order: string[] = []
 		const removeUser = vi.fn(async () => {
 			order.push('removeUser')
@@ -111,7 +111,7 @@ describe('AuthGate', () => {
 		})
 	})
 
-	it('montre l’erreur sans rediriger pour un échec qui n’est pas une fin de session', async () => {
+	it('shows the error without redirecting for a failure that is not a session end', async () => {
 		const { signinRedirect } = mountGate({
 			error: errorFrom('signinCallback', 'Sign-in failed'),
 		})
@@ -121,7 +121,7 @@ describe('AuthGate', () => {
 		expect(signinRedirect).not.toHaveBeenCalled()
 	})
 
-	it('ne relance pas la reconnexion deux fois de suite', async () => {
+	it('does not retry the reconnection twice in a row', async () => {
 		window.sessionStorage.setItem('mestier.authRecoveryAt', String(Date.now()))
 
 		const { removeUser, signinRedirect } = mountGate({ error: REFRESH_FAILURE })
@@ -133,7 +133,7 @@ describe('AuthGate', () => {
 		expect(signinRedirect).not.toHaveBeenCalled()
 	})
 
-	it('laisse reprendre la main depuis l’écran d’erreur', async () => {
+	it('lets the user take over from the error screen', async () => {
 		const { removeUser, signinRedirect } = mountGate({
 			error: errorFrom('signinCallback', 'Sign-in failed'),
 		})
@@ -150,7 +150,7 @@ describe('AuthGate', () => {
 		})
 	})
 
-	it('rend l’espace de travail une fois authentifié', () => {
+	it('renders the workspace once authenticated', () => {
 		mountGate({ isAuthenticated: true })
 
 		expect(screen.getByText('Espace de travail')).toBeDefined()
