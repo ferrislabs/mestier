@@ -1,37 +1,22 @@
 import type { Schemas } from '#/api/api.client'
-import type { Employee } from '#/hooks/use-reference-catalog'
 import type { Rhythm, WorkSlot, WorkTimeRange } from '#/hooks/use-work-time'
 
-export interface EmployeeFormValues {
+export interface MemberFormValues {
 	lastName: string
 	firstName: string
 	hourlyRate: string
-	userId: string
-}
-
-export interface EmployeeListData {
-	employees: Employee[]
 }
 
 /**
- * The one display format for an employee, everywhere: "{last_name}
- * {first_name}" — last name first, then first name, per the design doc's
- * acceptance criteria. Mirrors `Employee::display_name` on the Rust side so
- * front and back never diverge on how a name is shown.
- *
- * Loosely typed on purpose (not `Employee` itself): every screen that shows
- * an employee's name should route through this function instead of
- * concatenating `last_name`/`first_name` by hand.
+ * The three states the Access column can show for a seat. `invited` has no
+ * data source yet — invitations are #185 — so {@link accessState} never
+ * returns it today; the column already knows how to render it so nothing
+ * changes here once #185 ships.
  */
-export function employeeDisplayName(employee: {
-	last_name: string
-	// Optional, not just nullable: utoipa maps `Option<String>` to an optional
-	// field, so the generated type is `first_name?: string | null | undefined`.
-	first_name?: string | null
-}): string {
-	const last = employee.last_name.trim()
-	const first = employee.first_name?.trim()
-	return first ? `${last} ${first}` : last
+export type AccessState = 'none' | 'invited' | 'linkedAccount'
+
+export function accessState(member: { account?: unknown }): AccessState {
+	return member.account ? 'linkedAccount' : 'none'
 }
 
 // -- Rythme et plages de travail -----------------------------------------

@@ -11,7 +11,7 @@ import { resolveDisplayWindow } from '#/pages/planning/lib/subtasks'
 import {
 	canGoToNextPage,
 	canGoToPreviousPage,
-	employeeNamesById,
+	memberNamesById,
 	resolveAssigneeNames,
 	resolveSubtaskAllDay,
 	taskHasChildren,
@@ -77,17 +77,17 @@ function TaskListScreen({
 
 	// Fetched solely for `resources`/`timezone` — the reused `TaskSheetFeature`
 	// needs a roster for its assignee picker, and this list view needs one to
-	// resolve `employee_ids` to names, but `PlanningResourceResponse` is only
-	// ever returned by `GET /planning` (see `lib/task-list.ts`'s
-	// `employeeNamesById` doc). A fixed "today" window is enough: the roster
-	// itself is computed range-independently server-side (`load_resources` in
-	// the planning domain service loads it once, before `range` is even
-	// consulted) — `entries`/`work_time` from this response are never read.
+	// resolve `member_ids` to names, but `PlanningResourceResponse` is only
+	// ever returned by `GET /planning`. A fixed "today" window is enough: the
+	// roster itself is computed range-independently server-side
+	// (`load_resources` in the planning domain service loads it once, before
+	// `range` is even consulted) — `entries`/`work_time` from this response
+	// are never read.
 	const resourcesWindow = computeWindow('day', todayIsoDate())
 	const planningQuery = usePlanning(organizationId, resourcesWindow)
 	const resources = planningQuery.data?.data.resources ?? []
 	const timeZone = planningQuery.data?.data.timezone ?? 'UTC'
-	const namesById = employeeNamesById(resources)
+	const namesById = memberNamesById(resources)
 
 	const [expandedIds, setExpandedIds] = useState<string[]>([])
 	const [taskSheetTarget, setTaskSheetTarget] =
@@ -105,7 +105,7 @@ function TaskListScreen({
 				? { startsAt: task.starts_at, endsAt: task.ends_at }
 				: null,
 		allDay: task.all_day,
-		assigneeNames: resolveAssigneeNames(task.employee_ids, namesById),
+		assigneeNames: resolveAssigneeNames(task.member_ids, namesById),
 		isExpanded: expandedIds.includes(task.id),
 	}))
 
@@ -237,7 +237,7 @@ function TaskListSubtasksFeature({
 				subtask.all_day,
 				rootWindow?.allDay ?? false,
 			),
-			assigneeNames: resolveAssigneeNames(subtask.employee_ids, namesById),
+			assigneeNames: resolveAssigneeNames(subtask.member_ids, namesById),
 		}
 	})
 

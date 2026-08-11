@@ -12,9 +12,9 @@ import {
 const TZ = 'Europe/Paris'
 
 describe('emptyAbsenceDraft', () => {
-	it('prefills a single-day full-day leave for a given employee', () => {
-		const draft = emptyAbsenceDraft('emp-1', '2026-08-10')
-		expect(draft.employeeId).toBe('emp-1')
+	it('prefills a single-day full-day leave for a given member', () => {
+		const draft = emptyAbsenceDraft('member-1', '2026-08-10')
+		expect(draft.memberId).toBe('member-1')
 		expect(draft.kind).toBe('LEAVE')
 		expect(draft.allDay).toBe(true)
 		expect(draft.range).toEqual({ from: '2026-08-10', to: '2026-08-10' })
@@ -22,26 +22,26 @@ describe('emptyAbsenceDraft', () => {
 })
 
 describe('validateAbsenceDraft', () => {
-	it('reports the missing employee on creation', () => {
+	it('reports the missing member on creation', () => {
 		const draft = emptyAbsenceDraft('', '2026-08-10')
-		const errors = validateAbsenceDraft(draft, { requireEmployee: true })
-		expect(errors).toContain('Employé requis')
+		const errors = validateAbsenceDraft(draft, { requireMember: true })
+		expect(errors).toContain('Personne requise')
 	})
 
-	it('does not require the employee when editing', () => {
-		const draft = emptyAbsenceDraft('emp-1', '2026-08-10')
-		const errors = validateAbsenceDraft(draft, { requireEmployee: false })
-		expect(errors).not.toContain('Employé requis')
+	it('does not require the member when editing', () => {
+		const draft = emptyAbsenceDraft('member-1', '2026-08-10')
+		const errors = validateAbsenceDraft(draft, { requireMember: false })
+		expect(errors).not.toContain('Personne requise')
 	})
 
 	it('accepts a single-day full-day absence (end == start)', () => {
-		const draft = emptyAbsenceDraft('emp-1', '2026-08-10')
+		const draft = emptyAbsenceDraft('member-1', '2026-08-10')
 		expect(validateAbsenceDraft(draft)).toEqual([])
 	})
 
 	it('rejects a full-day end before the start', () => {
 		const draft = {
-			...emptyAbsenceDraft('emp-1', '2026-08-10'),
+			...emptyAbsenceDraft('member-1', '2026-08-10'),
 			range: { from: '2026-08-10', to: '2026-08-09' },
 		}
 		expect(validateAbsenceDraft(draft).length).toBeGreaterThan(0)
@@ -49,7 +49,7 @@ describe('validateAbsenceDraft', () => {
 
 	it('rejects an invalid time when it is not a full day', () => {
 		const draft = {
-			...emptyAbsenceDraft('emp-1', '2026-08-10'),
+			...emptyAbsenceDraft('member-1', '2026-08-10'),
 			allDay: false,
 			startTime: 'nope',
 			endTime: '18:00',
@@ -59,7 +59,7 @@ describe('validateAbsenceDraft', () => {
 
 	it('rejects an end before the start on a time slot', () => {
 		const draft = {
-			...emptyAbsenceDraft('emp-1', '2026-08-10'),
+			...emptyAbsenceDraft('member-1', '2026-08-10'),
 			allDay: false,
 			startTime: '18:00',
 			endTime: '08:00',
@@ -71,14 +71,14 @@ describe('validateAbsenceDraft', () => {
 describe('draftToCreateAbsenceRequest — full day', () => {
 	it('builds starts_at/ends_at as the local window [00:00, 24:00) over the day range', () => {
 		const draft = {
-			...emptyAbsenceDraft('emp-1', '2026-08-10'),
+			...emptyAbsenceDraft('member-1', '2026-08-10'),
 			range: { from: '2026-08-10', to: '2026-08-12' },
 			note: 'Congés été',
 		}
 		const request = draftToCreateAbsenceRequest(draft, TZ)
 
 		expect(request).toEqual({
-			employee_id: 'emp-1',
+			member_id: 'member-1',
 			kind: 'LEAVE',
 			all_day: true,
 			starts_at: new Date('2026-08-10T00:00:00+02:00').toISOString(),
@@ -89,7 +89,7 @@ describe('draftToCreateAbsenceRequest — full day', () => {
 
 	it('accepts a range reduced to a single day (from === to)', () => {
 		const draft = {
-			...emptyAbsenceDraft('emp-1', '2026-08-10'),
+			...emptyAbsenceDraft('member-1', '2026-08-10'),
 			range: { from: '2026-08-10', to: '2026-08-10' },
 		}
 		const request = draftToCreateAbsenceRequest(draft, TZ)
@@ -109,7 +109,7 @@ describe('draftToCreateAbsenceRequest — full day', () => {
 describe('draftToCreateAbsenceRequest — time slot', () => {
 	it('combines local date and time into ISO instants', () => {
 		const draft = {
-			...emptyAbsenceDraft('emp-1', '2026-08-10'),
+			...emptyAbsenceDraft('member-1', '2026-08-10'),
 			allDay: false,
 			kind: 'SICK' as const,
 			startTime: '09:00',
@@ -119,7 +119,7 @@ describe('draftToCreateAbsenceRequest — time slot', () => {
 		const request = draftToCreateAbsenceRequest(draft, TZ)
 
 		expect(request).toEqual({
-			employee_id: 'emp-1',
+			member_id: 'member-1',
 			kind: 'SICK',
 			all_day: false,
 			starts_at: new Date('2026-08-10T09:00:00+02:00').toISOString(),
@@ -130,16 +130,16 @@ describe('draftToCreateAbsenceRequest — time slot', () => {
 })
 
 describe('draftToUpdateAbsenceRequest', () => {
-	it('carries no employee_id — the API rejects it when editing', () => {
-		const draft = emptyAbsenceDraft('emp-1', '2026-08-10')
+	it('carries no member_id — the API rejects it when editing', () => {
+		const draft = emptyAbsenceDraft('member-1', '2026-08-10')
 		const request = draftToUpdateAbsenceRequest(draft, TZ)
-		expect(request).not.toHaveProperty('employee_id')
+		expect(request).not.toHaveProperty('member_id')
 		expect(request).toMatchObject({ kind: 'LEAVE', all_day: true })
 	})
 
 	it('returns null when validation fails', () => {
 		const draft = {
-			...emptyAbsenceDraft('emp-1', '2026-08-10'),
+			...emptyAbsenceDraft('member-1', '2026-08-10'),
 			range: { from: '2026-08-10', to: '2026-08-01' },
 		}
 		expect(draftToUpdateAbsenceRequest(draft, TZ)).toBeNull()
@@ -150,7 +150,7 @@ describe('absenceToDraft — aller-retour', () => {
 	it('rebuilds a full-day draft consistent with the payload that produced it', () => {
 		const created = draftToCreateAbsenceRequest(
 			{
-				...emptyAbsenceDraft('emp-1', '2026-08-10'),
+				...emptyAbsenceDraft('member-1', '2026-08-10'),
 				range: { from: '2026-08-10', to: '2026-08-12' },
 				kind: 'UNAVAILABLE',
 				note: 'Formation',
@@ -161,7 +161,7 @@ describe('absenceToDraft — aller-retour', () => {
 
 		const draft = absenceToDraft(
 			{
-				employee_id: 'emp-1',
+				member_id: 'member-1',
 				absence_kind: created.kind,
 				all_day: created.all_day ?? true,
 				starts_at: created.starts_at,
@@ -172,7 +172,7 @@ describe('absenceToDraft — aller-retour', () => {
 		)
 
 		expect(draft).toMatchObject({
-			employeeId: 'emp-1',
+			memberId: 'member-1',
 			kind: 'UNAVAILABLE',
 			allDay: true,
 			range: { from: '2026-08-10', to: '2026-08-12' },
@@ -183,7 +183,7 @@ describe('absenceToDraft — aller-retour', () => {
 	it('rebuilds a single-day full-day draft (from === to)', () => {
 		const created = draftToCreateAbsenceRequest(
 			{
-				...emptyAbsenceDraft('emp-1', '2026-08-10'),
+				...emptyAbsenceDraft('member-1', '2026-08-10'),
 				range: { from: '2026-08-10', to: '2026-08-10' },
 			},
 			TZ,
@@ -192,7 +192,7 @@ describe('absenceToDraft — aller-retour', () => {
 
 		const draft = absenceToDraft(
 			{
-				employee_id: 'emp-1',
+				member_id: 'member-1',
 				absence_kind: created.kind,
 				all_day: created.all_day ?? true,
 				starts_at: created.starts_at,
@@ -208,7 +208,7 @@ describe('absenceToDraft — aller-retour', () => {
 	it('rebuilds a time-slot draft consistent with the payload that produced it', () => {
 		const created = draftToCreateAbsenceRequest(
 			{
-				...emptyAbsenceDraft('emp-1', '2026-08-10'),
+				...emptyAbsenceDraft('member-1', '2026-08-10'),
 				allDay: false,
 				startTime: '09:00',
 				endTime: '17:00',
@@ -219,7 +219,7 @@ describe('absenceToDraft — aller-retour', () => {
 
 		const draft = absenceToDraft(
 			{
-				employee_id: 'emp-1',
+				member_id: 'member-1',
 				absence_kind: created.kind,
 				all_day: created.all_day ?? false,
 				starts_at: created.starts_at,

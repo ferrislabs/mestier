@@ -45,33 +45,28 @@ describe('conflictsForResource', () => {
 		const availability: AvailabilityResponse = {
 			resources: [
 				{
-					resource_id: 'employee:employee-1',
+					resource_id: 'member:member-1',
 					available: false,
 					conflicts: [absenceConflict()],
 				},
-				{ resource_id: 'employee:employee-2', available: true, conflicts: [] },
+				{ resource_id: 'member:member-2', available: true, conflicts: [] },
 			],
 		}
 
-		expect(conflictsForResource(availability, 'employee:employee-1')).toEqual([
+		expect(conflictsForResource(availability, 'member:member-1')).toEqual([
 			absenceConflict(),
 		])
 	})
 
 	it('returns an empty list when the resource is absent from the response', () => {
 		const availability: AvailabilityResponse = { resources: [] }
-		expect(conflictsForResource(availability, 'employee:employee-1')).toEqual(
-			[],
-		)
+		expect(conflictsForResource(availability, 'member:member-1')).toEqual([])
 	})
 })
 
 describe('buildWarnings — the three kinds coming from availability', () => {
 	it('maps an absence conflict with its reason and its note', () => {
-		const warnings = buildWarnings({
-			conflicts: [absenceConflict()],
-			resourceKind: 'employee',
-		})
+		const warnings = buildWarnings({ conflicts: [absenceConflict()] })
 
 		expect(warnings).toEqual([
 			{
@@ -85,10 +80,7 @@ describe('buildWarnings — the three kinds coming from availability', () => {
 	})
 
 	it('maps an outside_work_hours conflict', () => {
-		const warnings = buildWarnings({
-			conflicts: [outsideWorkHoursConflict()],
-			resourceKind: 'employee',
-		})
+		const warnings = buildWarnings({ conflicts: [outsideWorkHoursConflict()] })
 
 		expect(warnings).toEqual([
 			{
@@ -100,10 +92,7 @@ describe('buildWarnings — the three kinds coming from availability', () => {
 	})
 
 	it('maps an overlapping_task conflict with its task_id', () => {
-		const warnings = buildWarnings({
-			conflicts: [overlappingConflict()],
-			resourceKind: 'employee',
-		})
+		const warnings = buildWarnings({ conflicts: [overlappingConflict()] })
 
 		expect(warnings).toEqual([
 			{
@@ -118,38 +107,13 @@ describe('buildWarnings — the three kinds coming from availability', () => {
 	it('an absence with no note yields note: null rather than undefined', () => {
 		const warnings = buildWarnings({
 			conflicts: [absenceConflict({ note: undefined })],
-			resourceKind: 'employee',
 		})
 
 		expect(warnings[0]).toMatchObject({ kind: 'absence', note: null })
 	})
 })
 
-describe('buildWarnings — missing_employee_record inferred from the kind', () => {
-	it('adds the warning when the resource is a member with no employee record', () => {
-		const warnings = buildWarnings({ conflicts: [], resourceKind: 'member' })
-		expect(warnings).toEqual([{ kind: 'missing_employee_record' }])
-	})
-
-	it('does not add it for an employee resource', () => {
-		const warnings = buildWarnings({ conflicts: [], resourceKind: 'employee' })
-		expect(warnings).toEqual([])
-	})
-})
-
 describe('buildWarnings — several kinds in a single list', () => {
-	it('combines an absence and missing_employee_record in the same dialog', () => {
-		const warnings = buildWarnings({
-			conflicts: [absenceConflict()],
-			resourceKind: 'member',
-		})
-
-		expect(warnings.map((warning) => warning.kind)).toEqual([
-			'absence',
-			'missing_employee_record',
-		])
-	})
-
 	it('combines all three conflict kinds at once', () => {
 		const warnings = buildWarnings({
 			conflicts: [
@@ -157,7 +121,6 @@ describe('buildWarnings — several kinds in a single list', () => {
 				outsideWorkHoursConflict(),
 				overlappingConflict(),
 			],
-			resourceKind: 'employee',
 		})
 
 		expect(warnings.map((warning) => warning.kind)).toEqual([
@@ -170,7 +133,6 @@ describe('buildWarnings — several kinds in a single list', () => {
 
 describe('warningTitle / warningDetail', () => {
 	it('gives one title per conflict kind', () => {
-		expect(warningTitle({ kind: 'missing_employee_record' })).toMatch(/fiche/i)
 		expect(
 			warningTitle({
 				kind: 'overlapping_task',
@@ -214,9 +176,13 @@ describe('warningTitle / warningDetail', () => {
 		).toBeNull()
 	})
 
-	it('flags that the hourly rate will need filling in for a missing record', () => {
-		expect(warningDetail({ kind: 'missing_employee_record' })).toMatch(
-			/taux horaire/i,
-		)
+	it('gives no detail for a conflict without one', () => {
+		expect(
+			warningDetail({
+				kind: 'outside_work_hours',
+				startsAt: 'a',
+				endsAt: 'b',
+			}),
+		).toBeNull()
 	})
 })

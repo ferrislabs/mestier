@@ -40,42 +40,36 @@ export function toggleExpandedTask(
 }
 
 interface ResourceLike {
-	employee_id?: string | null
+	member_id: string
 	display_name: string
 }
 
 /**
- * Employee id → display name, built from `GET /planning`'s resource roster
- * — see `feature/task-list-feature.tsx`'s own doc on why the list view
- * piggybacks on that endpoint rather than a second employee fetch. Only
- * `employee`-kind resources carry an `employee_id`; a task's
- * `employee_ids` can only ever reference those (a `member` assignment
- * provisions its employee record in the same transaction — see the
- * planning remodel design doc's `PATCH` semantics), so `member`-kind
- * resources are simply skipped rather than mapped under a `null` key.
+ * Member id → display name, built from `GET /planning`'s resource roster —
+ * see `feature/task-list-feature.tsx`'s own doc on why the list view
+ * piggybacks on that endpoint rather than a second member fetch.
  */
-export function employeeNamesById(
+export function memberNamesById(
 	resources: ResourceLike[],
 ): Record<string, string> {
 	const names: Record<string, string> = {}
 	for (const resource of resources) {
-		if (resource.employee_id)
-			names[resource.employee_id] = resource.display_name
+		names[resource.member_id] = resource.display_name
 	}
 	return names
 }
 
 /**
  * Resolves a task's assignee ids to display names for row rendering. An id
- * absent from `namesById` (the roster hasn't loaded yet, or the employee
- * record was deleted after assignment) falls back to a placeholder rather
- * than silently dropping the assignee from the count.
+ * absent from `namesById` (the roster hasn't loaded yet, or the member was
+ * removed after assignment) falls back to a placeholder rather than
+ * silently dropping the assignee from the count.
  */
 export function resolveAssigneeNames(
-	employeeIds: string[],
+	memberIds: string[],
 	namesById: Record<string, string>,
 ): string[] {
-	return employeeIds.map((id) => namesById[id] ?? 'Assigné inconnu')
+	return memberIds.map((id) => namesById[id] ?? 'Assigné inconnu')
 }
 
 /** The row's assignee cell text — never empty, so an unassigned task still reads as a deliberate state rather than a blank cell. */

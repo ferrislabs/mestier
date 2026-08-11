@@ -264,7 +264,7 @@ export function TaskSheetFeature({
 			id: subtask.id,
 			title: subtask.title,
 			status: subtask.status,
-			assigneeCount: subtask.employee_ids.length,
+			assigneeCount: subtask.member_ids.length,
 			inheritedWindow: resolved?.inherited ?? false,
 		}
 	})

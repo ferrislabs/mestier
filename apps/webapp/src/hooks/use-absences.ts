@@ -9,12 +9,12 @@ const PLANNING_PATH = '/api/v1/organizations/{organization_id}/planning'
 /**
  * The API paginates (`MAX_PER_PAGE = 100` — see `libs/pagination`, an
  * endpoint this workstream doesn't own and the design doc keeps
- * unchanged), and doesn't filter by employee. The HR screen fetches this
- * one page and filters by `employee_id` client-side (see
+ * unchanged), and doesn't filter by member. The HR screen fetches this
+ * one page and filters by `member_id` client-side (see
  * `EmployeeWorkTimeFeature`) — fine at artisan/SME scale, but an
  * organization with more than 100 absences on the books would silently
  * lose the tail. Flagged rather than worked around: fixing it for real
- * means either an `employee_id` filter or real pagination on the list
+ * means either a `member_id` filter or real pagination on the list
  * endpoint, both backend changes out of this workstream's scope.
  */
 const ABSENCES_LIST_PER_PAGE = 100

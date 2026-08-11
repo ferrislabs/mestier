@@ -9,7 +9,7 @@ import {
 import { useActiveOrganization } from '#/hooks/use-active-organization'
 import {
 	useReferenceCatalog,
-	useUpdateEmployee,
+	useUpsertEmployeeProfile,
 } from '#/hooks/use-reference-catalog'
 import type { Rhythm } from '#/hooks/use-work-time'
 import {
@@ -31,7 +31,6 @@ import {
 	computeWeeklyGap,
 	draftToRhythmSlots,
 	draftToWorkSlots,
-	employeeDisplayName,
 	emptyRhythmSlotDraft,
 	emptyWorkSlotDraft,
 	findOpenRhythm,
@@ -48,7 +47,7 @@ import {
 	type WorkSlotsFormValues,
 	workSlotsToDraft,
 } from '#/pages/hr/types'
-import type { AbsenceEmployeeOption } from '#/pages/hr/ui/absence-form-sheet'
+import type { AbsenceMemberOption } from '#/pages/hr/ui/absence-form-sheet'
 import { EmployeeWorkTimeUI } from '#/pages/hr/ui/employee-work-time-ui'
 
 const WORK_SLOTS_WINDOW_DAYS = 13
@@ -77,11 +76,11 @@ function browserTimeZone(): string {
 }
 
 interface EmployeeWorkTimeFeatureProps {
-	employeeId: string
+	memberId: string
 }
 
 export function EmployeeWorkTimeFeature({
-	employeeId,
+	memberId,
 }: EmployeeWorkTimeFeatureProps) {
 	const { activeOrganization } = useActiveOrganization()
 
@@ -103,10 +102,10 @@ export function EmployeeWorkTimeFeature({
 
 	return (
 		<EmployeeWorkTimeScreen
-			key={`${activeOrganization.id}:${employeeId}`}
+			key={`${activeOrganization.id}:${memberId}`}
 			organizationId={activeOrganization.id}
 			organizationName={activeOrganization.name}
-			employeeId={employeeId}
+			memberId={memberId}
 		/>
 	)
 }
@@ -114,21 +113,25 @@ export function EmployeeWorkTimeFeature({
 interface EmployeeWorkTimeScreenProps {
 	organizationId: string
 	organizationName: string
-	employeeId: string
+	memberId: string
 }
 
 function EmployeeWorkTimeScreen({
 	organizationId,
 	organizationName,
-	employeeId,
+	memberId,
 }: EmployeeWorkTimeScreenProps) {
 	const catalog = useReferenceCatalog(organizationId, {
 		equipment: false,
 		serviceRates: false,
 		products: false,
 	})
-	const employee =
-		catalog.employees.data?.data.find((item) => item.id === employeeId) ?? null
+	const member =
+		catalog.members.data?.data.find((item) => item.id === memberId) ?? null
+	const profile =
+		catalog.employeeProfiles.data?.data.find(
+			(item) => item.member_id === memberId,
+		) ?? null
 
 	const [today] = useState(() => todayIsoDate())
 	const todayRange = { from: today, to: today }
@@ -141,12 +144,12 @@ function EmployeeWorkTimeScreen({
 	// work-slots section happens to be browsing — a separate, narrow read
 	// keeps the two independent (see the planning design doc's "Rythme vs
 	// plages de travail" section).
-	const currentRhythmQuery = useWorkTime(organizationId, employeeId, todayRange)
-	const workTimeQuery = useWorkTime(organizationId, employeeId, workSlotsRange)
+	const currentRhythmQuery = useWorkTime(memberId, todayRange)
+	const workTimeQuery = useWorkTime(memberId, workSlotsRange)
 
-	const updateEmployee = useUpdateEmployee()
-	const replaceRhythm = useReplaceRhythm(employeeId)
-	const replaceWorkSlots = useReplaceWorkSlots(employeeId)
+	const upsertProfile = useUpsertEmployeeProfile()
+	const replaceRhythm = useReplaceRhythm(memberId)
+	const replaceWorkSlots = useReplaceWorkSlots(memberId)
 
 	const openRhythm = findOpenRhythm(currentRhythmQuery.data?.data.rhythms ?? [])
 	const otherRhythms = dedupeRhythms(
@@ -176,20 +179,20 @@ function EmployeeWorkTimeScreen({
 		null,
 	)
 
-	if (catalog.employees.isLoading) {
+	if (catalog.members.isLoading || catalog.employeeProfiles.isLoading) {
 		return <EmployeeWorkTimeUI.Loading />
 	}
 
-	if (!employee) {
+	if (!member) {
 		return (
 			<div className="flex flex-col items-center justify-center gap-3 p-12 text-center">
 				<div className="flex size-14 items-center justify-center rounded-lg border bg-card">
 					<UserX className="size-6 text-muted-foreground" />
 				</div>
 				<div>
-					<p className="font-semibold">Employé introuvable</p>
+					<p className="font-semibold">Personne introuvable</p>
 					<p className="text-sm text-muted-foreground">
-						Aucun employé ne correspond à cet identifiant dans cette
+						Aucune personne ne correspond à cet identifiant dans cette
 						organisation.
 					</p>
 				</div>
@@ -198,9 +201,10 @@ function EmployeeWorkTimeScreen({
 	}
 
 	const contractValue =
-		contractDraft ?? formatDurationMinutes(employee.weekly_contract_minutes)
+		contractDraft ??
+		formatDurationMinutes(profile?.weekly_contract_minutes ?? 0)
 	const contractMinutesForGap =
-		parseDurationLabel(contractValue) ?? employee.weekly_contract_minutes
+		parseDurationLabel(contractValue) ?? profile?.weekly_contract_minutes ?? 0
 	const weeklyGap = computeWeeklyGap(rhythmValues.slots, contractMinutesForGap)
 	const contractParseError =
 		contractDraft !== null && parseDurationLabel(contractDraft) === null
@@ -238,19 +242,16 @@ function EmployeeWorkTimeScreen({
 		const minutes = parseDurationLabel(contractValue)
 		if (minutes === null) return
 		try {
-			await updateEmployee.mutateAsync({
-				path: { employee_id: employee.id },
+			await upsertProfile.mutateAsync({
+				path: { member_id: memberId },
 				body: {
-					last_name: employee.last_name,
-					first_name: employee.first_name,
-					hourly_rate_cents: employee.hourly_rate_cents ?? null,
-					user_id: employee.user_id ?? null,
+					hourly_rate_cents: profile?.hourly_rate_cents ?? null,
 					weekly_contract_minutes: minutes,
 				},
 			})
 			setContractDraft(null)
 		} catch {
-			// Surfaced reactively via `updateEmployee.error` — the draft is kept
+			// Surfaced reactively via `upsertProfile.error` — the draft is kept
 			// so the user doesn't lose what they typed.
 		}
 	}
@@ -259,7 +260,7 @@ function EmployeeWorkTimeScreen({
 		if (rhythmErrors.length > 0) return
 		try {
 			await replaceRhythm.mutateAsync({
-				path: { organization_id: organizationId, employee_id: employeeId },
+				path: { member_id: memberId },
 				body: {
 					effective_from: rhythmValues.effectiveFrom,
 					effective_to: rhythmValues.effectiveTo || null,
@@ -277,7 +278,7 @@ function EmployeeWorkTimeScreen({
 		if (workSlotsErrors.length > 0) return
 		try {
 			await replaceWorkSlots.mutateAsync({
-				path: { organization_id: organizationId, employee_id: employeeId },
+				path: { member_id: memberId },
 				query: { from: workSlotsValues.from, to: workSlotsValues.to },
 				body: { slots: draftToWorkSlots(workSlotsValues.slots) },
 			})
@@ -292,15 +293,15 @@ function EmployeeWorkTimeScreen({
 	// See `browserTimeZone`'s doc for why this isn't `organizations.timezone`.
 	const timeZone = browserTimeZone()
 
-	const employeeOptions: AbsenceEmployeeOption[] = (
-		catalog.employees.data?.data ?? []
+	const memberOptions: AbsenceMemberOption[] = (
+		catalog.members.data?.data ?? []
 	).map((candidate) => ({
-		employeeId: candidate.id,
-		displayName: employeeDisplayName(candidate),
+		memberId: candidate.id,
+		displayName: candidate.display_name,
 	}))
 
-	const employeeAbsences: AbsenceListItem[] = (absencesQuery.data?.data ?? [])
-		.filter((absence) => absence.employee_id === employeeId)
+	const memberAbsences: AbsenceListItem[] = (absencesQuery.data?.data ?? [])
+		.filter((absence) => absence.member_id === memberId)
 		.map((absence) => ({
 			id: absence.id,
 			...absenceToDraft({ ...absence, absence_kind: absence.kind }, timeZone),
@@ -311,7 +312,7 @@ function EmployeeWorkTimeScreen({
 		setAbsenceSheet({
 			mode: 'create',
 			absenceId: null,
-			draft: emptyAbsenceDraft(employeeId, today),
+			draft: emptyAbsenceDraft(memberId, today),
 		})
 	}
 
@@ -391,10 +392,10 @@ function EmployeeWorkTimeScreen({
 	}
 
 	const absenceDraft =
-		absenceSheet?.draft ?? emptyAbsenceDraft(employeeId, today)
+		absenceSheet?.draft ?? emptyAbsenceDraft(memberId, today)
 	const absenceErrors = absenceSheet
 		? validateAbsenceDraft(absenceDraft, {
-				requireEmployee: absenceSheet.mode === 'create',
+				requireMember: absenceSheet.mode === 'create',
 			})
 		: []
 	const absenceSaveError =
@@ -406,12 +407,13 @@ function EmployeeWorkTimeScreen({
 	return (
 		<EmployeeWorkTimeUI
 			organizationName={organizationName}
-			employee={employee}
+			member={member}
+			hourlyRateCents={profile?.hourly_rate_cents ?? null}
 			weeklyGap={weeklyGap}
 			contractForm={{
 				value: contractValue,
-				isPending: updateEmployee.isPending,
-				error: contractParseError ?? updateEmployee.error?.message ?? null,
+				isPending: upsertProfile.isPending,
+				error: contractParseError ?? upsertProfile.error?.message ?? null,
 				onChange: setContractDraft,
 				onSubmit: () => void handleUpdateContract(),
 			}}
@@ -485,7 +487,7 @@ function EmployeeWorkTimeScreen({
 				onSubmit: () => void handleSubmitWorkSlots(),
 			}}
 			absencesSection={{
-				absences: employeeAbsences,
+				absences: memberAbsences,
 				isLoading: absencesQuery.isLoading,
 				onCreate: handleCreateAbsence,
 				onSelect: handleSelectAbsence,
@@ -494,7 +496,7 @@ function EmployeeWorkTimeScreen({
 				open: absenceSheet !== null,
 				mode: absenceSheet?.mode ?? 'create',
 				values: absenceDraft,
-				employees: employeeOptions,
+				members: memberOptions,
 				errors: absenceErrors,
 				isSaving: createAbsence.isPending || updateAbsence.isPending,
 				isDeleting: deleteAbsence.isPending,

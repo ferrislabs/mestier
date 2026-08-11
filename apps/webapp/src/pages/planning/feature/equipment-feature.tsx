@@ -68,7 +68,8 @@ function EquipmentSectionContent({
 	organizationId,
 }: EquipmentSectionContentProps) {
 	const catalog = useReferenceCatalog(organizationId, {
-		employees: false,
+		members: false,
+		employeeProfiles: false,
 		serviceRates: false,
 		products: false,
 	})

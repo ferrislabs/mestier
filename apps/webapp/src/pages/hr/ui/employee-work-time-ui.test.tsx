@@ -1,7 +1,7 @@
 import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { Employee } from '#/hooks/use-reference-catalog'
+import type { Member } from '#/hooks/use-reference-catalog'
 import type { Rhythm } from '#/hooks/use-work-time'
 import { emptyAbsenceDraft } from '#/pages/hr/lib/absences'
 import {
@@ -20,17 +20,16 @@ class ResizeObserverStub {
 // biome-ignore lint/suspicious/noExplicitAny: test-only global polyfill
 ;(globalThis as any).ResizeObserver ??= ResizeObserverStub
 
-function employee(overrides: Partial<Employee> = {}): Employee {
+function member(overrides: Partial<Member> = {}): Member {
 	return {
-		id: 'employee-1',
+		id: 'member-1',
 		organization_id: 'org-1',
 		last_name: 'Martin',
 		first_name: 'Alix',
-		hourly_rate_cents: 1500,
-		user_id: null,
-		weekly_contract_minutes: 2100,
+		display_name: 'Martin Alix',
+		account: null,
+		joined_at: null,
 		created_at: '2026-01-01T00:00:00Z',
-		updated_at: '2026-01-01T00:00:00Z',
 		...overrides,
 	}
 }
@@ -40,7 +39,8 @@ function baseProps(
 ): EmployeeWorkTimeUIProps {
 	return {
 		organizationName: 'Atelier Bois & Co',
-		employee: employee(),
+		member: member(),
+		hourlyRateCents: 1500,
 		weeklyGap: {
 			plannedMinutes: 1920,
 			contractMinutes: 2100,
@@ -107,8 +107,8 @@ function baseProps(
 		absenceSheet: {
 			open: false,
 			mode: 'create',
-			values: emptyAbsenceDraft('employee-1', '2026-08-10'),
-			employees: [],
+			values: emptyAbsenceDraft('member-1', '2026-08-10'),
+			members: [],
 			errors: [],
 			isSaving: false,
 			isDeleting: false,
@@ -131,7 +131,9 @@ describe('EmployeeWorkTimeUI — name rendering', () => {
 	it('shows the surname alone, with no stray space, when the given name is missing', () => {
 		render(
 			<EmployeeWorkTimeUI
-				{...baseProps({ employee: employee({ first_name: null }) })}
+				{...baseProps({
+					member: member({ first_name: null, display_name: 'Martin' }),
+				})}
 			/>,
 		)
 
@@ -147,11 +149,7 @@ describe('EmployeeWorkTimeUI', () => {
 	})
 
 	it('shows « Non renseigné » when the hourly rate is null, never an amount of 0', () => {
-		render(
-			<EmployeeWorkTimeUI
-				{...baseProps({ employee: employee({ hourly_rate_cents: null }) })}
-			/>,
-		)
+		render(<EmployeeWorkTimeUI {...baseProps({ hourlyRateCents: null })} />)
 
 		expect(screen.getByText('Non renseigné')).toBeDefined()
 		expect(screen.queryByText(/0,00\s*€/)).toBeNull()
@@ -359,7 +357,7 @@ describe('EmployeeWorkTimeUI — absences', () => {
 						absences: [
 							{
 								id: 'ab-1',
-								employeeId: 'employee-1',
+								memberId: 'member-1',
 								kind: 'LEAVE',
 								allDay: true,
 								range: { from: '2026-08-10', to: '2026-08-10' },

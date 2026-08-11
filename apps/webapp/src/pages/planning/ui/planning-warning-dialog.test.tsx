@@ -12,7 +12,12 @@ const ABSENCE_WARNING: Warning = {
 	endsAt: '2026-08-11T00:00:00+02:00',
 }
 
-const MISSING_RECORD_WARNING: Warning = { kind: 'missing_employee_record' }
+const OVERLAPPING_WARNING: Warning = {
+	kind: 'overlapping_task',
+	taskId: 'wo-1',
+	startsAt: '2026-08-10T08:00:00+02:00',
+	endsAt: '2026-08-10T10:00:00+02:00',
+}
 
 describe('PlanningWarningDialog', () => {
 	it('renders nothing when open is false', () => {
@@ -33,7 +38,7 @@ describe('PlanningWarningDialog', () => {
 		render(
 			<PlanningWarningDialog
 				open={true}
-				warnings={[ABSENCE_WARNING, MISSING_RECORD_WARNING]}
+				warnings={[ABSENCE_WARNING, OVERLAPPING_WARNING]}
 				isPending={false}
 				onConfirm={vi.fn()}
 				onCancel={vi.fn()}
@@ -43,8 +48,9 @@ describe('PlanningWarningDialog', () => {
 		expect(screen.getAllByRole('alertdialog')).toHaveLength(1)
 		expect(screen.getByText(/Absence : Congé/)).toBeDefined()
 		expect(screen.getByText('De retour lundi')).toBeDefined()
-		expect(screen.getByText(/Aucune fiche employé/)).toBeDefined()
-		expect(screen.getByText(/taux horaire/)).toBeDefined()
+		expect(
+			screen.getByText(/Déjà affecté à un autre chantier/),
+		).toBeDefined()
 	})
 
 	it('confirming calls onConfirm and not onCancel', async () => {
@@ -148,7 +154,7 @@ describe('PlanningWarningDialog — no network call', () => {
 		render(
 			<PlanningWarningDialog
 				open={true}
-				warnings={[ABSENCE_WARNING, MISSING_RECORD_WARNING]}
+				warnings={[ABSENCE_WARNING, OVERLAPPING_WARNING]}
 				isPending={false}
 				onConfirm={vi.fn()}
 				onCancel={vi.fn()}

@@ -27,9 +27,9 @@ export interface PlanningWarningDialogProps {
 
 /**
  * The single dialog every risky gesture on the planning grid funnels through
- * — a drop onto someone on leave, outside their hours, already busy on
- * another chantier, or without an employee record yet (see the planning
- * design doc's "Avertissements" section: one dialog per gesture, fed by one
+ * — a drop onto someone on leave, outside their hours, or already busy on
+ * another chantier (see the planning design doc's "Avertissements" section:
+ * one dialog per gesture, fed by one
  * `warnings` list, never several stacked). It never blocks: confirming
  * always applies the mutation, whatever the warnings say — the API doesn't
  * refuse an assignment for unavailability, and neither does this dialog.

@@ -5,5 +5,6 @@
 //! routes — create, list, get, patch, delete — is two, both hanging off the
 //! member they describe.
 
+pub mod list;
 pub mod remove_profile;
 pub mod upsert_profile;

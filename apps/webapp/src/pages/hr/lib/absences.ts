@@ -32,11 +32,11 @@ export interface AbsenceDateRange {
  * all-day, the time-of-day on each end. `range.to` is the last day
  * *included* (a leave "from Monday to Friday" means five days off), unlike
  * the API's `ends_at`, which is the exclusive end of a half-open window (see
- * the planning design doc's `work_orders`/`employee_absences` decision) —
+ * the planning design doc's `work_orders`/`absences` decision) —
  * {@link draftToCreateAbsenceRequest} does that conversion.
  */
 export interface AbsenceFormValues {
-	employeeId: string
+	memberId: string
 	kind: AbsenceKind
 	allDay: boolean
 	range: AbsenceDateRange
@@ -46,21 +46,21 @@ export interface AbsenceFormValues {
 }
 
 /**
- * One row of the employee's absence list (`AbsencesSection`) — the draft
+ * One row of the member's absence list (`AbsencesSection`) — the draft
  * shape plus the absence's own id. Built via {@link absenceToDraft} so the
  * list shows exactly the same range/allDay/time-of-day resolution the edit
- * form itself uses. `employeeId` rides along unused by the list (already
- * scoped to one employee, see `EmployeeWorkTimeFeature`) rather than being
+ * form itself uses. `memberId` rides along unused by the list (already
+ * scoped to one member, see `EmployeeWorkTimeFeature`) rather than being
  * stripped out — one shape, no destructure-and-discard.
  */
 export type AbsenceListItem = AbsenceFormValues & { id: string }
 
 export function emptyAbsenceDraft(
-	employeeId: string,
+	memberId: string,
 	today: string,
 ): AbsenceFormValues {
 	return {
-		employeeId,
+		memberId,
 		kind: 'LEAVE',
 		allDay: true,
 		range: { from: today, to: today },
@@ -104,17 +104,17 @@ function isValidTime(value: string): boolean {
 
 /**
  * Mirrors the backend's own `CHECK (ends_at > starts_at)` before a
- * round-trip. `requireEmployee` is `false` for the edit form — the API
- * doesn't accept changing `employee_id` on a `PATCH`, so there's nothing to
+ * round-trip. `requireMember` is `false` for the edit form — the API
+ * doesn't accept changing `member_id` on a `PATCH`, so there's nothing to
  * validate there.
  */
 export function validateAbsenceDraft(
 	draft: AbsenceFormValues,
-	options: { requireEmployee: boolean } = { requireEmployee: true },
+	options: { requireMember: boolean } = { requireMember: true },
 ): string[] {
 	const errors: string[] = []
-	if (options.requireEmployee && !draft.employeeId) {
-		errors.push('Employé requis')
+	if (options.requireMember && !draft.memberId) {
+		errors.push('Personne requise')
 	}
 	if (!draft.range.from) errors.push('Date de début requise')
 	if (!draft.range.to) errors.push('Date de fin requise')
@@ -160,7 +160,7 @@ function dateTimeToIso(
 function buildAbsencePayload(
 	draft: AbsenceFormValues,
 	timeZone: string,
-): Omit<CreateAbsenceRequest, 'employee_id'> {
+): Omit<CreateAbsenceRequest, 'member_id'> {
 	const startsAt = draft.allDay
 		? dateOnlyToIsoMidnight(draft.range.from, timeZone)
 		: dateTimeToIso(draft.range.from, draft.startTime, timeZone)
@@ -186,21 +186,21 @@ export function draftToCreateAbsenceRequest(
 	draft: AbsenceFormValues,
 	timeZone: string,
 ): CreateAbsenceRequest | null {
-	if (validateAbsenceDraft(draft, { requireEmployee: true }).length > 0) {
+	if (validateAbsenceDraft(draft, { requireMember: true }).length > 0) {
 		return null
 	}
 	return {
-		employee_id: draft.employeeId,
+		member_id: draft.memberId,
 		...buildAbsencePayload(draft, timeZone),
 	}
 }
 
-/** Same shape as {@link draftToCreateAbsenceRequest}, minus `employee_id` — the API doesn't let a `PATCH` reassign an absence to another employee. */
+/** Same shape as {@link draftToCreateAbsenceRequest}, minus `member_id` — the API doesn't let a `PATCH` reassign an absence to another member. */
 export function draftToUpdateAbsenceRequest(
 	draft: AbsenceFormValues,
 	timeZone: string,
 ): UpdateAbsenceRequest | null {
-	if (validateAbsenceDraft(draft, { requireEmployee: false }).length > 0) {
+	if (validateAbsenceDraft(draft, { requireMember: false }).length > 0) {
 		return null
 	}
 	return buildAbsencePayload(draft, timeZone)
@@ -217,7 +217,7 @@ export function draftToUpdateAbsenceRequest(
  */
 export function absenceToDraft(
 	absence: {
-		employee_id: string
+		member_id: string
 		absence_kind: AbsenceKind
 		all_day: boolean
 		starts_at: string
@@ -232,7 +232,7 @@ export function absenceToDraft(
 	if (absence.all_day) {
 		const endDateExclusive = format(endZoned, 'yyyy-MM-dd')
 		return {
-			employeeId: absence.employee_id,
+			memberId: absence.member_id,
 			kind: absence.absence_kind,
 			allDay: true,
 			range: {
@@ -246,7 +246,7 @@ export function absenceToDraft(
 	}
 
 	return {
-		employeeId: absence.employee_id,
+		memberId: absence.member_id,
 		kind: absence.absence_kind,
 		allDay: false,
 		range: {

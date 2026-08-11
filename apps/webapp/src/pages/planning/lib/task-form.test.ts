@@ -249,7 +249,7 @@ describe('needsFollowUpPatch', () => {
 	it('is true when at least one assignee was picked', () => {
 		expect(
 			needsFollowUpPatch({
-				assignees: [{ kind: 'employee', employee_id: 'emp-1' }],
+				assignees: [{ member_id: 'member-1' }],
 				labelIds: [],
 			}),
 		).toBe(true)
@@ -265,13 +265,11 @@ describe('needsFollowUpPatch', () => {
 describe('buildFollowUpPatchPayload', () => {
 	it('carries the complete assignees and label_ids lists', () => {
 		const payload = buildFollowUpPatchPayload({
-			assignees: [{ kind: 'employee', employee_id: 'emp-1' }],
+			assignees: [{ member_id: 'member-1' }],
 			labelIds: ['label-1', 'label-2'],
 		})
 
-		expect(payload.assignees).toEqual([
-			{ kind: 'employee', employee_id: 'emp-1' },
-		])
+		expect(payload.assignees).toEqual([{ member_id: 'member-1' }])
 		expect(payload.label_ids).toEqual(['label-1', 'label-2'])
 	})
 })
@@ -298,17 +296,14 @@ describe('buildPatchTaskPayload', () => {
 	it('sends assignees as the complete list, never a delta', () => {
 		const payload = buildPatchTaskPayload(
 			rootDraft({
-				assignees: [
-					{ kind: 'employee', employee_id: 'emp-1' },
-					{ kind: 'member', user_id: 'user-1' },
-				],
+				assignees: [{ member_id: 'member-1' }, { member_id: 'member-2' }],
 			}),
 			{ isSubtask: false, timeZone: TIME_ZONE },
 		)
 
 		expect(payload?.assignees).toEqual([
-			{ kind: 'employee', employee_id: 'emp-1' },
-			{ kind: 'member', user_id: 'user-1' },
+			{ member_id: 'member-1' },
+			{ member_id: 'member-2' },
 		])
 	})
 
@@ -362,7 +357,7 @@ describe('taskToDraft', () => {
 				ends_at: '2026-08-10T08:00:00.000Z',
 				blocks_availability: true,
 				labels: [],
-				employee_ids: [],
+				member_ids: [],
 			},
 			TIME_ZONE,
 		)
@@ -384,7 +379,7 @@ describe('taskToDraft', () => {
 				ends_at: '2026-08-11T22:00:00.000Z',
 				blocks_availability: true,
 				labels: [],
-				employee_ids: [],
+				member_ids: [],
 			},
 			TIME_ZONE,
 		)
@@ -393,7 +388,7 @@ describe('taskToDraft', () => {
 		expect(draft.endDate).toBe('2026-08-11')
 	})
 
-	it('maps labels to labelIds and employee_ids to employee-kind assignees', () => {
+	it('maps labels to labelIds and member_ids to assignees', () => {
 		const draft = taskToDraft(
 			{
 				title: 'Chantier',
@@ -403,15 +398,13 @@ describe('taskToDraft', () => {
 				ends_at: '2026-08-10T08:00:00.000Z',
 				blocks_availability: true,
 				labels: [{ id: 'l1' }, { id: 'l2' }],
-				employee_ids: ['emp-1'],
+				member_ids: ['member-1'],
 			},
 			TIME_ZONE,
 		)
 
 		expect(draft.labelIds).toEqual(['l1', 'l2'])
-		expect(draft.assignees).toEqual([
-			{ kind: 'employee', employee_id: 'emp-1' },
-		])
+		expect(draft.assignees).toEqual([{ member_id: 'member-1' }])
 		expect(draft.description).toBe('Toiture')
 	})
 
@@ -425,7 +418,7 @@ describe('taskToDraft', () => {
 				ends_at: null,
 				blocks_availability: true,
 				labels: [],
-				employee_ids: [],
+				member_ids: [],
 			},
 			TIME_ZONE,
 		)
@@ -444,7 +437,7 @@ describe('taskToDraft', () => {
 				ends_at: '2026-08-10T08:00:00.000Z',
 				blocks_availability: true,
 				labels: [],
-				employee_ids: [],
+				member_ids: [],
 			},
 			TIME_ZONE,
 		)

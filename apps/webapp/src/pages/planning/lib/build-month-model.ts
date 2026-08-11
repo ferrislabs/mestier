@@ -10,7 +10,7 @@ import {
 	entryNature,
 	matchesFilter,
 } from '#/pages/planning/lib/calendar-filters'
-import { entryEmployeeIds, entryLabel } from '#/pages/planning/lib/entries'
+import { entryLabel, entryMemberIds } from '#/pages/planning/lib/entries'
 import { stackOverlapping } from '#/pages/planning/lib/layout'
 import {
 	entryOccursOnDate,
@@ -95,18 +95,18 @@ export interface BuildMonthModelInput {
 	timeZone: string
 	today: string
 	filter: CalendarFilter
-	employeeIds?: string[]
+	memberIds?: string[]
 }
 
 export function buildMonthModel(input: BuildMonthModelInput): MonthModel {
 	const visible = input.entries.filter(
 		(entry) =>
 			matchesFilter(entry, input.filter) &&
-			matchesEmployees(entry, input.employeeIds),
+			matchesMembers(entry, input.memberIds),
 	)
 
 	const days = enumerateDays(input.from, input.to)
-	const attendeesByEmployee = buildAttendeeIndex(input.resources)
+	const attendeesByMember = buildAttendeeIndex(input.resources)
 	const weeks: MonthWeekVM[] = []
 
 	for (let index = 0; index < days.length; index += DAYS_PER_WEEK) {
@@ -117,7 +117,7 @@ export function buildMonthModel(input: BuildMonthModelInput): MonthModel {
 				month: input.month,
 				timeZone: input.timeZone,
 				today: input.today,
-				attendeesByEmployee,
+				attendeesByMember,
 			}),
 		)
 	}
@@ -135,7 +135,7 @@ function buildWeek(params: {
 	month: string
 	timeZone: string
 	today: string
-	attendeesByEmployee: Map<string, CalendarAttendeeVM>
+	attendeesByMember: Map<string, CalendarAttendeeVM>
 }): MonthWeekVM {
 	const spans = buildSpans(params)
 
@@ -147,7 +147,7 @@ function buildWeek(params: {
 				month: params.month,
 				timeZone: params.timeZone,
 				today: params.today,
-				attendeesByEmployee: params.attendeesByEmployee,
+				attendeesByMember: params.attendeesByMember,
 			}),
 		),
 		spans,
@@ -161,7 +161,7 @@ function buildDay(params: {
 	month: string
 	timeZone: string
 	today: string
-	attendeesByEmployee: Map<string, CalendarAttendeeVM>
+	attendeesByMember: Map<string, CalendarAttendeeVM>
 }): MonthDayVM {
 	const timed = params.entries
 		.filter((entry) => !entry.all_day)
@@ -199,7 +199,7 @@ function buildDay(params: {
 				entry,
 				date: params.date,
 				timeZone: params.timeZone,
-				attendeesByEmployee: params.attendeesByEmployee,
+				attendeesByMember: params.attendeesByMember,
 			}),
 		})),
 		hiddenCount: timed.length - shown.length,
@@ -210,7 +210,7 @@ function buildSpans(params: {
 	dates: string[]
 	entries: PlanningEntry[]
 	timeZone: string
-	attendeesByEmployee: Map<string, CalendarAttendeeVM>
+	attendeesByMember: Map<string, CalendarAttendeeVM>
 }): MonthSpanVM[] {
 	const first = params.dates[0]
 	const last = params.dates.at(-1)
@@ -261,7 +261,7 @@ function buildSpans(params: {
 			entry: item.entry,
 			date: params.dates[item.startIndex] ?? first,
 			timeZone: params.timeZone,
-			attendeesByEmployee: params.attendeesByEmployee,
+			attendeesByMember: params.attendeesByMember,
 		}),
 	}))
 }
@@ -275,7 +275,7 @@ function buildDetail(params: {
 	entry: PlanningEntry
 	date: string
 	timeZone: string
-	attendeesByEmployee: Map<string, CalendarAttendeeVM>
+	attendeesByMember: Map<string, CalendarAttendeeVM>
 }): EventDetailVM {
 	const span = minuteSpanOnDate(
 		toTimeSpan(params.entry),
@@ -289,8 +289,8 @@ function buildDetail(params: {
 		timeLabel: params.entry.all_day
 			? 'Journée entière'
 			: `${formatMinute(span.startMinute)} – ${formatMinute(span.endMinute)}`,
-		attendees: entryEmployeeIds(params.entry)
-			.map((employeeId) => params.attendeesByEmployee.get(employeeId))
+		attendees: entryMemberIds(params.entry)
+			.map((memberId) => params.attendeesByMember.get(memberId))
 			.filter((attendee) => attendee !== undefined),
 		entry: params.entry,
 	}
@@ -305,14 +305,14 @@ function formatLongDate(date: string): string {
 	}).format(new Date(`${date}T00:00:00Z`))
 }
 
-function matchesEmployees(
+function matchesMembers(
 	entry: PlanningEntry,
-	employeeIds: string[] | undefined,
+	memberIds: string[] | undefined,
 ): boolean {
-	if (!employeeIds || employeeIds.length === 0) return true
-	const ids = entryEmployeeIds(entry)
+	if (!memberIds || memberIds.length === 0) return true
+	const ids = entryMemberIds(entry)
 	if (ids.length === 0) return false
-	return ids.some((id) => employeeIds.includes(id))
+	return ids.some((id) => memberIds.includes(id))
 }
 
 function startsOnOrAfter(

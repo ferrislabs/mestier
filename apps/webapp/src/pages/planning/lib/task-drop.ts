@@ -21,7 +21,7 @@ export interface DropTarget {
 export interface TaskDropInput {
 	source: DragSource
 	target: DropTarget
-	entry: { startsAt: string; endsAt: string; employeeIds: string[] }
+	entry: { startsAt: string; endsAt: string; memberIds: string[] }
 	timeZone: string
 }
 
@@ -31,34 +31,33 @@ export interface TaskPatchResult {
 }
 
 /**
- * `employee:<uuid>` / `member:<uuid>` → the assignee ref the `PATCH` payload
- * expects. `GridResourceRowVM.resourceId` is verbatim the API's
- * `resource_id` (see the planning design doc), so any other shape is a bug
- * upstream, not data to tolerate — this throws rather than guessing.
+ * `member:<uuid>` → the assignee ref the `PATCH` payload expects.
+ * `GridResourceRowVM.resourceId` is verbatim the API's `resource_id` (see
+ * the planning design doc — every plannable resource is a member, so
+ * `resource_id()` is unconditionally `"member:{uuid}"`), so any other shape
+ * is a bug upstream, not data to tolerate — this throws rather than
+ * guessing.
  */
 export function assigneeRefFromResourceId(resourceId: string): AssigneeRef {
 	const separatorIndex = resourceId.indexOf(':')
-	if (separatorIndex === -1) {
+	if (
+		separatorIndex === -1 ||
+		resourceId.slice(0, separatorIndex) !== 'member'
+	) {
 		throw new Error(`resource_id inattendu : ${resourceId}`)
 	}
-	const kind = resourceId.slice(0, separatorIndex)
-	const id = resourceId.slice(separatorIndex + 1)
-	if (kind === 'employee') return { kind: 'employee', employee_id: id }
-	if (kind === 'member') return { kind: 'member', user_id: id }
-	throw new Error(`resource_id inattendu : ${resourceId}`)
+	return { member_id: resourceId.slice(separatorIndex + 1) }
 }
 
 /**
  * The inverse of {@link assigneeRefFromResourceId} — an `AssigneeRef` back
- * to the `<kind>:<uuid>` resource id form the grid and the assignee picker
+ * to the `member:<uuid>` resource id form the grid and the assignee picker
  * both key on. Also the identity every dedup in this file keys on
  * (`buildAssigneesForMove`/`buildAssigneesForRemoval`), so it is exported
  * under one name instead of living twice.
  */
 export function resourceIdFromAssigneeRef(ref: AssigneeRef): string {
-	return ref.kind === 'employee'
-		? `employee:${ref.employee_id}`
-		: `member:${ref.user_id}`
+	return `member:${ref.member_id}`
 }
 
 function assigneeKey(ref: AssigneeRef): string {
@@ -88,13 +87,13 @@ export function toggleAssignee(
 
 /**
  * Replaces `sourceResourceId`'s assignment with `targetResourceId`'s inside
- * `employeeIds`, preserving every other assignee and their order — the
+ * `memberIds`, preserving every other assignee and their order — the
  * complete list a drop's `PATCH` sends, never a delta (see the planning
  * design doc's "Drag & drop" decision). Dropping onto a resource already on
  * the task collapses to one assignment instead of duplicating it.
  */
 export function buildAssigneesForMove(
-	employeeIds: string[],
+	memberIds: string[],
 	sourceResourceId: string,
 	targetResourceId: string,
 ): AssigneeRef[] {
@@ -106,11 +105,8 @@ export function buildAssigneesForMove(
 	const seen = new Set<string>()
 	const result: AssigneeRef[] = []
 
-	for (const employeeId of employeeIds) {
-		const currentRef: AssigneeRef = {
-			kind: 'employee',
-			employee_id: employeeId,
-		}
+	for (const memberId of memberIds) {
+		const currentRef: AssigneeRef = { member_id: memberId }
 		const currentKeyString = assigneeKey(currentRef)
 		const isSource = currentKeyString === sourceKeyString
 		const outputRef = isSource ? targetRef : currentRef
@@ -133,20 +129,15 @@ export function buildAssigneesForMove(
  * "l'ajout comme le retrait passent par le même chemin").
  */
 export function buildAssigneesForRemoval(
-	employeeIds: string[],
+	memberIds: string[],
 	resourceId: string,
 ): AssigneeRef[] {
 	const targetKeyString = assigneeKey(assigneeRefFromResourceId(resourceId))
-	return employeeIds
+	return memberIds
 		.filter(
-			(employeeId) =>
-				assigneeKey({ kind: 'employee', employee_id: employeeId }) !==
-				targetKeyString,
+			(memberId) => assigneeKey({ member_id: memberId }) !== targetKeyString,
 		)
-		.map(
-			(employeeId) =>
-				({ kind: 'employee', employee_id: employeeId }) as AssigneeRef,
-		)
+		.map((memberId) => ({ member_id: memberId }) as AssigneeRef)
 }
 
 /**
@@ -190,7 +181,7 @@ export function computeTaskDropPatch(input: TaskDropInput): TaskPatchResult {
 	}
 
 	const assignees = buildAssigneesForMove(
-		entry.employeeIds,
+		entry.memberIds,
 		source.resourceId,
 		target.resourceId,
 	)
@@ -209,14 +200,11 @@ export function computeTaskDropPatch(input: TaskDropInput): TaskPatchResult {
  * complete-list path as a move.
  */
 export function computeRemoveAssigneePatch(input: {
-	employeeIds: string[]
+	memberIds: string[]
 	resourceId: string
 }): TaskPatchResult {
-	const assignees = buildAssigneesForRemoval(
-		input.employeeIds,
-		input.resourceId,
-	)
-	if (assignees.length === input.employeeIds.length) {
+	const assignees = buildAssigneesForRemoval(input.memberIds, input.resourceId)
+	if (assignees.length === input.memberIds.length) {
 		return { changed: false, body: {} }
 	}
 	return { changed: true, body: { assignees } }

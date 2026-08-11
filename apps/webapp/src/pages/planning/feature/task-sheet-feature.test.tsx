@@ -96,11 +96,10 @@ const LABEL_REUNION = {
 	updated_at: '2026-01-01T00:00:00Z',
 }
 
-const RESOURCE_EMPLOYEE = {
-	resource_id: 'employee:employee-1',
-	kind: 'employee' as const,
+const RESOURCE_MEMBER = {
+	resource_id: 'member:member-1',
+	member_id: 'member-1',
 	employee_id: 'employee-1',
-	user_id: null,
 	display_name: 'Alix Martin',
 	hourly_rate_cents: 1500,
 	weekly_contract_minutes: 2100,
@@ -140,7 +139,7 @@ function renderFeature(
 	const props: TaskSheetFeatureProps = {
 		organizationId: 'org-1',
 		timeZone: 'Europe/Paris',
-		resources: [RESOURCE_EMPLOYEE],
+		resources: [RESOURCE_MEMBER],
 		open: true,
 		target: { mode: 'create', parentTaskId: null },
 		onOpenChange,
@@ -204,7 +203,7 @@ describe('TaskSheetFeature — creation with assignees and labels', () => {
 			pagination: null,
 		}))
 		mockMutation('patch', TASK_PATH, () => ({
-			data: { task: { id: 'task-1' }, created_employees: [] },
+			data: { task: { id: 'task-1' } },
 			pagination: null,
 		}))
 
@@ -223,9 +222,7 @@ describe('TaskSheetFeature — creation with assignees and labels', () => {
 			patchTaskCalls(calls)[0].params as { body: Record<string, unknown> }
 		).body
 		expect(patchBody.label_ids).toEqual(['label-1'])
-		expect(patchBody.assignees).toEqual([
-			{ kind: 'employee', employee_id: 'employee-1' },
-		])
+		expect(patchBody.assignees).toEqual([{ member_id: 'member-1' }])
 	})
 })
 
@@ -252,7 +249,7 @@ describe('TaskSheetFeature — editing, labels', () => {
 				customer_context_id: null,
 				child_count: 0,
 				labels: [LABEL_REUNION],
-				employee_ids: [],
+				member_ids: [],
 			},
 			pagination: null,
 		}))
@@ -266,7 +263,7 @@ describe('TaskSheetFeature — editing, labels', () => {
 			(api) => mockEditTask(api.mockGet),
 		)
 		mockMutation('patch', TASK_PATH, () => ({
-			data: { task: { id: 'task-1' }, created_employees: [] },
+			data: { task: { id: 'task-1' } },
 			pagination: null,
 		}))
 
@@ -305,7 +302,7 @@ describe('TaskSheetFeature — paginated comment thread', () => {
 						customer_context_id: null,
 						child_count: 0,
 						labels: [],
-						employee_ids: [],
+						member_ids: [],
 					},
 					pagination: null,
 				}))

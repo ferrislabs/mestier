@@ -40,31 +40,29 @@ const ORGANIZATION: Organization = {
 	updated_at: '2026-01-01T00:00:00Z',
 }
 
-const RESOURCE_EMPLOYEE_1 = {
-	resource_id: 'employee:employee-1',
-	kind: 'employee' as const,
+const RESOURCE_MEMBER_1 = {
+	resource_id: 'member:member-1',
+	member_id: 'member-1',
 	employee_id: 'employee-1',
-	user_id: null,
 	display_name: 'Alix Martin',
 	hourly_rate_cents: 1500,
 	weekly_contract_minutes: 2100,
 }
 
-const RESOURCE_EMPLOYEE_2 = {
-	resource_id: 'employee:employee-2',
-	kind: 'employee' as const,
+const RESOURCE_MEMBER_2 = {
+	resource_id: 'member:member-2',
+	member_id: 'member-2',
 	employee_id: 'employee-2',
-	user_id: null,
 	display_name: 'Marie Leroy',
 	hourly_rate_cents: 1600,
 	weekly_contract_minutes: 2100,
 }
 
-const RESOURCE_MEMBER = {
-	resource_id: 'member:user-9',
-	kind: 'member' as const,
+/** A seat with no employee profile — still a fully plannable resource. */
+const RESOURCE_MEMBER_NO_PROFILE = {
+	resource_id: 'member:member-9',
+	member_id: 'member-9',
 	employee_id: null,
-	user_id: 'user-9',
 	display_name: 'Jules Petit',
 	hourly_rate_cents: null,
 	weekly_contract_minutes: 0,
@@ -81,7 +79,7 @@ const TASK_ENTRY = {
 	ends_at: '2026-08-03T10:00:00+02:00',
 	all_day: false,
 	status: 'PLANNED' as const,
-	employee_ids: ['employee-1'],
+	member_ids: ['member-1'],
 	customer_name: 'Client Dupont',
 	context_label: 'Chantier toiture',
 }
@@ -93,7 +91,7 @@ const ABSENCE_ENTRY = {
 	ends_at: '2026-08-04T00:00:00+02:00',
 	all_day: true,
 	absence_kind: 'LEAVE' as const,
-	employee_id: 'employee-1',
+	member_id: 'member-1',
 	note: 'Vacances',
 }
 
@@ -102,7 +100,7 @@ function planningResponse(
 ): PlanningResponse {
 	return {
 		timezone: 'Europe/Paris',
-		resources: [RESOURCE_EMPLOYEE_1],
+		resources: [RESOURCE_MEMBER_1],
 		entries: [],
 		work_time: [],
 		...overrides,
@@ -268,7 +266,7 @@ describe('PlanningTeamFeature — drag & drop without a warning', () => {
 	it('a drop changing both day and row emits a single PATCH with starts_at/ends_at and the full assignee list', async () => {
 		const { calls, mock } = renderFeature({
 			planning: planningResponse({
-				resources: [RESOURCE_EMPLOYEE_1, RESOURCE_EMPLOYEE_2],
+				resources: [RESOURCE_MEMBER_1, RESOURCE_MEMBER_2],
 				entries: [TASK_ENTRY],
 			}),
 		})
@@ -277,7 +275,7 @@ describe('PlanningTeamFeature — drag & drop without a warning', () => {
 			pagination: null,
 		}))
 		mock('patch', TASK_PATH, () => ({
-			data: { task: TASK_ENTRY, created_employees: [] },
+			data: { task: TASK_ENTRY },
 			pagination: null,
 		}))
 
@@ -289,7 +287,7 @@ describe('PlanningTeamFeature — drag & drop without a warning', () => {
 		const targetRow = screen
 			.getAllByTestId('grid-row')
 			.find(
-				(row) => row.getAttribute('data-resource-id') === 'employee:employee-2',
+				(row) => row.getAttribute('data-resource-id') === 'member:member-2',
 			)
 		if (!targetRow) throw new Error('target row not found')
 		const targetCell = within(targetRow)
@@ -304,7 +302,7 @@ describe('PlanningTeamFeature — drag & drop without a warning', () => {
 		expect(patch.params).toMatchObject({
 			path: { organization_id: 'org-1', task_id: 'wo-1' },
 			body: {
-				assignees: [{ kind: 'employee', employee_id: 'employee-2' }],
+				assignees: [{ member_id: 'member-2' }],
 			},
 		})
 		const body = (
@@ -327,11 +325,37 @@ describe('PlanningTeamFeature — drag & drop without a warning', () => {
 		})
 
 		await screen.findByText('Alix Martin')
-		dropOnResourceDate('employee:employee-1', '2026-08-03')
+		dropOnResourceDate('member:member-1', '2026-08-03')
 
 		await new Promise((resolve) => setTimeout(resolve, 0))
 		expect(calls.some((c) => c.path === AVAILABILITY_PATH)).toBe(false)
 		expect(calls.some((c) => c.path === TASK_PATH)).toBe(false)
+	})
+
+	it('a drop onto a member with no employee profile applies immediately — no warning dialog', async () => {
+		const { calls, mock } = renderFeature({
+			planning: planningResponse({
+				resources: [RESOURCE_MEMBER_1, RESOURCE_MEMBER_NO_PROFILE],
+				entries: [TASK_ENTRY],
+			}),
+		})
+		mock('get', AVAILABILITY_PATH, () => ({
+			data: { resources: [] },
+			pagination: null,
+		}))
+		mock('patch', TASK_PATH, () => ({
+			data: { task: TASK_ENTRY },
+			pagination: null,
+		}))
+
+		await screen.findByText('Alix Martin')
+		dropOnResourceDate('member:member-9', '2026-08-03')
+
+		await waitFor(() => expect(patchCallsFor(calls)).toHaveLength(1))
+		expect(patchCallsFor(calls)[0].params).toMatchObject({
+			body: { assignees: [{ member_id: 'member-9' }] },
+		})
+		expect(screen.queryByRole('alertdialog')).toBeNull()
 	})
 })
 
@@ -339,7 +363,7 @@ describe('PlanningTeamFeature — avertissements', () => {
 	it('a drop on a resource on leave opens the dialog; cancelling emits no PATCH', async () => {
 		const { calls, mock } = renderFeature({
 			planning: planningResponse({
-				resources: [RESOURCE_EMPLOYEE_1, RESOURCE_EMPLOYEE_2],
+				resources: [RESOURCE_MEMBER_1, RESOURCE_MEMBER_2],
 				entries: [TASK_ENTRY],
 			}),
 		})
@@ -347,7 +371,7 @@ describe('PlanningTeamFeature — avertissements', () => {
 			data: {
 				resources: [
 					{
-						resource_id: 'employee:employee-2',
+						resource_id: 'member:member-2',
 						available: false,
 						conflicts: [
 							{
@@ -365,7 +389,7 @@ describe('PlanningTeamFeature — avertissements', () => {
 		}))
 
 		await screen.findByText('Alix Martin')
-		dropOnResourceDate('employee:employee-2', '2026-08-05')
+		dropOnResourceDate('member:member-2', '2026-08-05')
 
 		expect(await screen.findByRole('alertdialog')).toBeDefined()
 		expect(screen.getByText(/Absence : Congé/)).toBeDefined()
@@ -380,7 +404,7 @@ describe('PlanningTeamFeature — avertissements', () => {
 	it('confirming applies the mutation — a resource on leave stays assignable once confirmed', async () => {
 		const { calls, mock } = renderFeature({
 			planning: planningResponse({
-				resources: [RESOURCE_EMPLOYEE_1, RESOURCE_EMPLOYEE_2],
+				resources: [RESOURCE_MEMBER_1, RESOURCE_MEMBER_2],
 				entries: [TASK_ENTRY],
 			}),
 		})
@@ -388,7 +412,7 @@ describe('PlanningTeamFeature — avertissements', () => {
 			data: {
 				resources: [
 					{
-						resource_id: 'employee:employee-2',
+						resource_id: 'member:member-2',
 						available: false,
 						conflicts: [
 							{
@@ -405,12 +429,12 @@ describe('PlanningTeamFeature — avertissements', () => {
 			pagination: null,
 		}))
 		mock('patch', TASK_PATH, () => ({
-			data: { task: TASK_ENTRY, created_employees: [] },
+			data: { task: TASK_ENTRY },
 			pagination: null,
 		}))
 
 		await screen.findByText('Alix Martin')
-		dropOnResourceDate('employee:employee-2', '2026-08-05')
+		dropOnResourceDate('member:member-2', '2026-08-05')
 		await screen.findByRole('alertdialog')
 
 		const user = userEvent.setup()
@@ -418,63 +442,9 @@ describe('PlanningTeamFeature — avertissements', () => {
 
 		await waitFor(() => expect(patchCallsFor(calls)).toHaveLength(1))
 		expect(patchCallsFor(calls)[0].params).toMatchObject({
-			body: { assignees: [{ kind: 'employee', employee_id: 'employee-2' }] },
+			body: { assignees: [{ member_id: 'member-2' }] },
 		})
 		await waitFor(() => expect(screen.queryByRole('alertdialog')).toBeNull())
-	})
-
-	it('a drop on a member resource with no record shows missing_employee_record; confirming creates the record and warns about the hourly rate', async () => {
-		const { calls, mock } = renderFeature({
-			planning: planningResponse({
-				resources: [RESOURCE_EMPLOYEE_1, RESOURCE_MEMBER],
-				entries: [TASK_ENTRY],
-			}),
-		})
-		mock('get', AVAILABILITY_PATH, () => ({
-			data: { resources: [] },
-			pagination: null,
-		}))
-		mock('patch', TASK_PATH, () => ({
-			data: {
-				task: TASK_ENTRY,
-				created_employees: [
-					{
-						id: 'employee-9',
-						organization_id: 'org-1',
-						// The on-the-fly provisioning path always leaves `first_name`
-						// unset — the account's `display_name` is a single free-text
-						// field, exactly like the pre-split `employees.name` was.
-						last_name: 'Jules Petit',
-						first_name: null,
-						user_id: 'user-9',
-						hourly_rate_cents: null,
-						weekly_contract_minutes: 0,
-						created_at: '2026-08-07T00:00:00Z',
-						updated_at: '2026-08-07T00:00:00Z',
-					},
-				],
-			},
-			pagination: null,
-		}))
-
-		await screen.findByText('Alix Martin')
-		dropOnResourceDate('member:user-9', '2026-08-03')
-
-		expect(await screen.findByRole('alertdialog')).toBeDefined()
-		expect(screen.getByText(/Aucune fiche employé/)).toBeDefined()
-
-		const user = userEvent.setup()
-		await user.click(screen.getByRole('button', { name: /Confirmer/ }))
-
-		await waitFor(() => expect(patchCallsFor(calls)).toHaveLength(1))
-		expect(patchCallsFor(calls)[0].params).toMatchObject({
-			body: { assignees: [{ kind: 'member', user_id: 'user-9' }] },
-		})
-
-		expect(
-			await screen.findByText(/Fiche employé créée.*Jules Petit/),
-		).toBeDefined()
-		expect(screen.getByText(/taux horaire/)).toBeDefined()
 	})
 })
 
@@ -482,14 +452,12 @@ describe('PlanningTeamFeature — removing an assignee', () => {
 	it('the remove button sends a PATCH straight away with the full list minus the removed resource, no dialog', async () => {
 		const { calls, mock } = renderFeature({
 			planning: planningResponse({
-				resources: [RESOURCE_EMPLOYEE_1, RESOURCE_EMPLOYEE_2],
-				entries: [
-					{ ...TASK_ENTRY, employee_ids: ['employee-1', 'employee-2'] },
-				],
+				resources: [RESOURCE_MEMBER_1, RESOURCE_MEMBER_2],
+				entries: [{ ...TASK_ENTRY, member_ids: ['member-1', 'member-2'] }],
 			}),
 		})
 		mock('patch', TASK_PATH, () => ({
-			data: { task: TASK_ENTRY, created_employees: [] },
+			data: { task: TASK_ENTRY },
 			pagination: null,
 		}))
 
@@ -502,7 +470,7 @@ describe('PlanningTeamFeature — removing an assignee', () => {
 
 		await waitFor(() => expect(patchCallsFor(calls)).toHaveLength(1))
 		expect(patchCallsFor(calls)[0].params).toMatchObject({
-			body: { assignees: [{ kind: 'employee', employee_id: 'employee-2' }] },
+			body: { assignees: [{ member_id: 'member-2' }] },
 		})
 		expect(screen.queryByRole('alertdialog')).toBeNull()
 		expect(calls.some((c) => c.path === AVAILABILITY_PATH)).toBe(false)

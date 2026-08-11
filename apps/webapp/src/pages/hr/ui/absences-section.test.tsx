@@ -7,7 +7,7 @@ import { AbsencesSection } from '#/pages/hr/ui/absences-section'
 function absence(overrides: Partial<AbsenceListItem> = {}): AbsenceListItem {
 	return {
 		id: 'ab-1',
-		employeeId: 'employee-1',
+		memberId: 'member-1',
 		kind: 'LEAVE',
 		allDay: true,
 		range: { from: '2026-08-10', to: '2026-08-10' },

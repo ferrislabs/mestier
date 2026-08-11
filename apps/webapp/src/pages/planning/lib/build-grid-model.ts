@@ -4,8 +4,8 @@ import {
 } from '#/pages/planning/lib/amplitude'
 import {
 	type EntryTone,
-	entryEmployeeIds,
 	entryLabel,
+	entryMemberIds,
 	entryTone,
 } from '#/pages/planning/lib/entries'
 import {
@@ -52,7 +52,6 @@ export interface GridCellVM {
 export interface GridResourceRowVM {
 	resourceId: string
 	displayName: string
-	kind: PlanningResource['kind']
 	cells: GridCellVM[]
 }
 
@@ -97,17 +96,15 @@ export function buildGridModel(input: BuildGridModelInput): GridModel {
 		input.timeZone,
 	)
 
-	const workTimeByEmployee = new Map(
-		input.workTime.map((workTime) => [workTime.employee_id, workTime]),
+	const workTimeByMember = new Map(
+		input.workTime.map((workTime) => [workTime.member_id, workTime]),
 	)
 
 	const rows = input.resources.map((resource) =>
 		buildResourceRow({
 			resource,
 			allEntries: input.entries,
-			workTime: resource.employee_id
-				? workTimeByEmployee.get(resource.employee_id)
-				: undefined,
+			workTime: workTimeByMember.get(resource.member_id),
 			columns,
 			amplitude,
 			timeZone: input.timeZone,
@@ -128,15 +125,9 @@ function buildResourceRow(params: {
 	const { resource, allEntries, workTime, columns, amplitude, timeZone } =
 		params
 
-	// A member-kind resource has no employee record yet, and entries only ever
-	// reference employees (see the planning design doc: assigning a member
-	// creates the employee record in the same transaction) — so it never
-	// carries entries, only ever a background of nothing.
-	const resourceEntries = resource.employee_id
-		? allEntries.filter((entry) =>
-				entryEmployeeIds(entry).includes(resource.employee_id as string),
-			)
-		: []
+	const resourceEntries = allEntries.filter((entry) =>
+		entryMemberIds(entry).includes(resource.member_id),
+	)
 
 	const cells = columns.map((date) =>
 		buildCell({ date, resourceEntries, workTime, amplitude, timeZone }),
@@ -145,7 +136,6 @@ function buildResourceRow(params: {
 	return {
 		resourceId: resource.resource_id,
 		displayName: resource.display_name,
-		kind: resource.kind,
 		cells,
 	}
 }

@@ -1,25 +1,49 @@
 export namespace Schemas {
   // <Schemas>
+  export type AbsenceId = string;
   export type AbsenceKind = "LEAVE" | "SICK" | "UNAVAILABLE";
-  export type EmployeeId = string;
-  export type EmployeeAbsenceId = string;
+  export type MemberId = string;
   export type OrganizationId = string;
   export type AbsenceResponse = {
     all_day: boolean;
     created_at: string;
-    employee_id: EmployeeId;
     ends_at: string;
-    id: EmployeeAbsenceId;
+    id: AbsenceId;
     kind: AbsenceKind;
+    member_id: MemberId;
     note?: (string | null) | undefined;
     organization_id: OrganizationId;
     starts_at: string;
     updated_at: string;
   };
-  export type UserId = string;
-  export type AssigneeRefRequest = { employee_id: EmployeeId; kind: "employee" } | { kind: "member"; user_id: UserId };
+  export type AssigneeRefRequest = { member_id: MemberId };
   export type AttachmentResponse = { filename: string; mime_type: string; size_bytes: number; storage_key: string };
+  export type AuthRequirementResponse = "None" | { Exactly: string } | { AnyOf: Array<string> };
+  export type SelectOptionResponse = { label: string; value: string };
+  export type FieldKindResponse =
+    | "Text"
+    | "Number"
+    | "Bool"
+    | { Select: { options: Array<SelectOptionResponse> } }
+    | "Json";
+  export type VisibleWhenResponse = { any_of: Array<string>; field: string };
+  export type FieldResponse = {
+    expression: boolean;
+    kind: FieldKindResponse;
+    label: string;
+    name: string;
+    required: boolean;
+    secret: boolean;
+    visible_when?: (null | VisibleWhenResponse) | undefined;
+  };
+  export type AuthSchemeResponse = { fields: Array<FieldResponse>; kind: string; label: string };
   export type AuthorType = "USER" | "WEBHOOK" | "SYSTEM";
+  export type AutomationSettingsBody = {
+    disable_target_after?: (number | null) | undefined;
+    event_retention_seconds: number;
+    retry_schedule_seconds: Array<number>;
+    succeeded_run_retention_seconds: number;
+  };
   export type TaskId = string;
   export type ConflictResponse =
     | { ends_at: string; kind: "absence"; note?: (string | null) | undefined; reason: AbsenceKind; starts_at: string }
@@ -31,6 +55,7 @@ export namespace Schemas {
     resource_id: string;
   };
   export type AvailabilityResponse = { resources: Array<AvailabilityResourceResponse> };
+  export type BranchDto = "Then" | "Else" | "Each" | "After";
   export type ButtonStyle = "Link";
   export type CategoryId = string;
   export type CategoryResponse = {
@@ -69,11 +94,24 @@ export namespace Schemas {
     | { divider: boolean; spacing?: (null | SeparatorSpacing) | undefined; type: "SEPARATOR" }
     | { components: Array<Component>; type: "ACTION_ROW" }
     | { emoji?: (string | null) | undefined; label: string; style: ButtonStyle; type: "BUTTON"; url: string };
+  export type ConnectorDescriptorResponse = {
+    auth: AuthRequirementResponse;
+    family: string;
+    fields: Array<FieldResponse>;
+    kind: string;
+    label: string;
+    output_example: unknown;
+    version: number;
+  };
+  export type ConnectorsResponse = {
+    auth_schemes: Array<AuthSchemeResponse>;
+    connectors: Array<ConnectorDescriptorResponse>;
+  };
   export type CreateAbsenceRequest = {
     all_day?: boolean | undefined;
-    employee_id: EmployeeId;
     ends_at: string;
     kind: AbsenceKind;
+    member_id: MemberId;
     note?: (string | null) | undefined;
     starts_at: string;
   };
@@ -83,6 +121,13 @@ export namespace Schemas {
     name: string;
     position: number;
     topic?: (string | null) | undefined;
+  };
+  export type CredentialOriginRequest = "supplied" | "generated";
+  export type CreateCredentialRequest = {
+    data?: unknown | undefined;
+    kind: string;
+    name: string;
+    origin: CredentialOriginRequest;
   };
   export type CreateCustomerContactRequest = {
     email?: (string | null) | undefined;
@@ -108,14 +153,8 @@ export namespace Schemas {
     pipeline_stage: CustomerPipelineStage;
     status: CustomerStatus;
   };
-  export type CreateEmployeeRequest = {
-    first_name?: (string | null) | undefined;
-    hourly_rate_cents?: (number | null) | undefined;
-    last_name: string;
-    user_id?: (null | UserId) | undefined;
-    weekly_contract_minutes?: number | undefined;
-  };
   export type CreateEquipmentRequest = { hourly_rate_cents: number; name: string };
+  export type CreateMemberRequest = { first_name?: (string | null) | undefined; last_name: string };
   export type CreateMessageAttachment = {
     filename: string;
     mime_type: string;
@@ -168,6 +207,17 @@ export namespace Schemas {
   };
   export type CreateThreadRequest = { name: string; origin_message_id?: (null | MessageId) | undefined };
   export type CreateWebhookRequest = { avatar_url?: (string | null) | undefined; name: string };
+  export type CreateWorkflowRequest = { description?: (string | null) | undefined; name: string };
+  export type CredentialResponse = {
+    created_at: string;
+    id: string;
+    kind: string;
+    name: string;
+    organization_id: OrganizationId;
+    origin: string;
+    updated_at: string;
+  };
+  export type CredentialWithSecretResponse = CredentialResponse & { secret: unknown };
   export type CustomerContactId = string;
   export type CustomerContactResponse = {
     created_at: string;
@@ -203,19 +253,18 @@ export namespace Schemas {
     status: CustomerStatus;
     updated_at: string;
   };
+  export type EdgeDto = { branch?: (null | BranchDto) | undefined; from: string; to: string };
+  export type EmployeeId = string;
   export type EmployeeResponse = {
     created_at: string;
-    first_name?: (string | null) | undefined;
     hourly_rate_cents?: (number | null) | undefined;
     id: EmployeeId;
-    last_name: string;
+    member_id: MemberId;
     organization_id: OrganizationId;
     updated_at: string;
-    user_id?: (null | UserId) | undefined;
     weekly_contract_minutes: number;
   };
   export type EmployeeRhythmId = string;
-  export type EmployeeWorkSlotId = string;
   export type EquipmentId = string;
   export type EquipmentResponse = {
     created_at: string;
@@ -225,9 +274,43 @@ export namespace Schemas {
     organization_id: OrganizationId;
     updated_at: string;
   };
+  export type EventDescriptorResponse = {
+    label: string;
+    name: string;
+    payload_example: unknown;
+    subject_kind: string;
+    version: number;
+  };
   export type ExecuteWebhookRequest = { components?: (Array<Component> | null) | undefined; content: string };
   export type FileUploadResponse = { key: string; mime_type: string; size_bytes: number };
+  export type PlacedConnectorDto = {
+    config: Record<string, unknown>;
+    credential_id?: (string | null) | undefined;
+    id: string;
+    kind: string;
+    version: number;
+  };
+  export type GraphDto = { connectors: Array<PlacedConnectorDto>; edges: Array<EdgeDto> };
+  export type GraphErrorResponse = {
+    connector_id?: (string | null) | undefined;
+    field?: (string | null) | undefined;
+    message: string;
+  };
+  export type GraphInvalidDetails = { errors: Array<GraphErrorResponse> };
+  export type GraphInvalidBody = { code: string; details: GraphInvalidDetails; message: string; status: number };
   export type MarkChannelReadRequest = { message_id: MessageId };
+  export type MemberAccountResponse = { email: string; name: string };
+  export type MemberResponse = {
+    account?: (null | MemberAccountResponse) | undefined;
+    created_at: string;
+    display_name: string;
+    first_name?: (string | null) | undefined;
+    id: MemberId;
+    joined_at?: (string | null) | undefined;
+    last_name: string;
+    organization_id: OrganizationId;
+  };
+  export type UserId = string;
   export type WebhookId = string;
   export type RoleId = string;
   export type ReactionCountResponse = { count: number; emoji: string; user_ids: Array<UserId> };
@@ -303,10 +386,10 @@ export namespace Schemas {
     customer_context_id?: (null | CustomerContextId) | undefined;
     customer_id?: (null | CustomerId) | undefined;
     description?: (string | null) | undefined;
-    employee_ids: Array<EmployeeId>;
     ends_at?: (string | null) | undefined;
     id: TaskId;
     labels: Array<TaskLabelResponse>;
+    member_ids: Array<MemberId>;
     organization_id: OrganizationId;
     parent_task_id?: (null | TaskId) | undefined;
     quote_id?: (null | QuoteId) | undefined;
@@ -315,7 +398,7 @@ export namespace Schemas {
     title: string;
     updated_at: string;
   };
-  export type PatchTaskResponse = { created_employees: Array<EmployeeResponse>; task: TaskResponse };
+  export type PatchTaskResponse = { task: TaskResponse };
   export type PlanningEntryResponse =
     | {
         all_day: boolean;
@@ -324,11 +407,11 @@ export namespace Schemas {
         context_label?: (string | null) | undefined;
         customer_name?: (string | null) | undefined;
         description?: (string | null) | undefined;
-        employee_ids: Array<EmployeeId>;
         ends_at: string;
         id: TaskId;
         kind: "task";
         labels: Array<TaskLabelResponse>;
+        member_ids: Array<MemberId>;
         parent_task_id?: (null | TaskId) | undefined;
         starts_at: string;
         status: TaskStatus;
@@ -337,25 +420,23 @@ export namespace Schemas {
     | {
         absence_kind: AbsenceKind;
         all_day: boolean;
-        employee_id: EmployeeId;
         ends_at: string;
-        id: EmployeeAbsenceId;
+        id: AbsenceId;
         kind: "absence";
+        member_id: MemberId;
         note?: (string | null) | undefined;
         starts_at: string;
       };
-  export type PlanningResourceKindResponse = "employee" | "member";
   export type PlanningResourceResponse = {
     display_name: string;
     employee_id?: (null | EmployeeId) | undefined;
     hourly_rate_cents?: (number | null) | undefined;
-    kind: PlanningResourceKindResponse;
+    member_id: MemberId;
     resource_id: string;
-    user_id?: (null | UserId) | undefined;
     weekly_contract_minutes: number;
   };
   export type PlanningWorkTimeDayResponse = { date: string; intervals: Array<MinuteIntervalResponse> };
-  export type PlanningWorkTimeResponse = { days: Array<PlanningWorkTimeDayResponse>; employee_id: EmployeeId };
+  export type PlanningWorkTimeResponse = { days: Array<PlanningWorkTimeDayResponse>; member_id: MemberId };
   export type PlanningResponse = {
     entries: Array<PlanningEntryResponse>;
     resources: Array<PlanningResourceResponse>;
@@ -418,6 +499,7 @@ export namespace Schemas {
     total_cents: number;
     updated_at: string;
   };
+  export type ReplayRunRequest = { connector_id: string };
   export type RhythmSlotResponse = { ends_minute: number; starts_minute: number; weekday: number };
   export type RhythmResponse = {
     created_at: string;
@@ -429,6 +511,35 @@ export namespace Schemas {
     slots: Array<RhythmSlotResponse>;
     updated_at: string;
   };
+  export type RunResponse = {
+    created_at: string;
+    error?: (string | null) | undefined;
+    finished_at?: (string | null) | undefined;
+    id: string;
+    next_attempt_at?: (string | null) | undefined;
+    organization_id: OrganizationId;
+    started_at?: (string | null) | undefined;
+    status: string;
+    trigger_event_id?: (string | null) | undefined;
+    trigger_payload?: unknown | undefined;
+    workflow_id: string;
+    workflow_version_id: string;
+  };
+  export type RunStepResponse = {
+    attempts: number;
+    connector_id: string;
+    created_at: string;
+    error?: (string | null) | undefined;
+    finished_at?: (string | null) | undefined;
+    id: string;
+    input?: unknown | undefined;
+    iteration_path: string;
+    output?: unknown | undefined;
+    started_at?: (string | null) | undefined;
+    status: string;
+  };
+  export type RunDetailResponse = RunResponse & { steps: Array<RunStepResponse> };
+  export type SaveWorkflowVersionRequest = { graph: GraphDto };
   export type ServiceRateResponse = {
     created_at: string;
     id: ServiceRateId;
@@ -439,6 +550,8 @@ export namespace Schemas {
     updated_at: string;
   };
   export type SetPresenceRequest = { status: PresenceStatus };
+  export type StartRunRequest = Partial<{ trigger_payload: unknown }>;
+  export type StartedRunResponse = { run_id: string };
   export type TaskCommentAuthorResponse = { display_name: string; id: UserId };
   export type TaskCommentId = string;
   export type TaskCommentResponse = {
@@ -466,6 +579,7 @@ export namespace Schemas {
     position: number;
     topic?: (string | null) | undefined;
   };
+  export type UpdateCredentialRequest = Partial<{ data: unknown; name: string | null }>;
   export type UpdateCustomerContactRequest = {
     email?: (string | null) | undefined;
     first_name: string;
@@ -488,14 +602,8 @@ export namespace Schemas {
     pipeline_stage: CustomerPipelineStage;
     status: CustomerStatus;
   };
-  export type UpdateEmployeeRequest = {
-    first_name?: (string | null) | undefined;
-    hourly_rate_cents?: (number | null) | undefined;
-    last_name: string;
-    user_id?: (null | UserId) | undefined;
-    weekly_contract_minutes?: number | undefined;
-  };
   export type UpdateEquipmentRequest = { hourly_rate_cents: number; name: string };
+  export type UpdateMemberRequest = Partial<{ first_name: string | null; last_name: string | null }>;
   export type UpdateMessageRequest = { content: string };
   export type UpdateOrganizationRequest = { name: string; slug: string };
   export type UpdateProductRequest = {
@@ -530,6 +638,15 @@ export namespace Schemas {
   }>;
   export type UpdateThreadRequest = { archived: boolean; name: string };
   export type UpdateWebhookRequest = { avatar_url?: (string | null) | undefined; name: string };
+  export type UpdateWorkflowRequest = Partial<{
+    description: string | null;
+    enabled: boolean | null;
+    name: string | null;
+  }>;
+  export type UpsertEmployeeProfileRequest = {
+    hourly_rate_cents?: (number | null) | undefined;
+    weekly_contract_minutes: number;
+  };
   export type UpsertOverwriteRequest = { allow: number; deny: number };
   export type WebhookCreatedResponse = {
     avatar_url?: (string | null) | undefined;
@@ -552,15 +669,44 @@ export namespace Schemas {
     organization_id: OrganizationId;
     updated_at: string;
   };
+  export type WorkSlotId = string;
   export type WorkSlotResponse = {
-    employee_id: EmployeeId;
     ends_minute: number;
-    id: EmployeeWorkSlotId;
+    id: WorkSlotId;
+    member_id: MemberId;
     organization_id: OrganizationId;
     starts_minute: number;
     work_date: string;
   };
   export type WorkTimeResponse = { rhythms: Array<RhythmResponse>; work_slots: Array<WorkSlotResponse> };
+  export type WorkflowVersionResponse = {
+    created_at: string;
+    created_by?: (string | null) | undefined;
+    graph: GraphDto;
+    id: string;
+    version: number;
+    workflow_id: string;
+  };
+  export type WorkflowDetailResponse = {
+    created_at: string;
+    current_version?: (null | WorkflowVersionResponse) | undefined;
+    description?: (string | null) | undefined;
+    enabled: boolean;
+    id: string;
+    name: string;
+    organization_id: OrganizationId;
+    updated_at: string;
+  };
+  export type WorkflowResponse = {
+    created_at: string;
+    current_version_id?: (string | null) | undefined;
+    description?: (string | null) | undefined;
+    enabled: boolean;
+    id: string;
+    name: string;
+    organization_id: OrganizationId;
+    updated_at: string;
+  };
 
   // </Schemas>
 }
@@ -1682,73 +1828,6 @@ export namespace Endpoints {
       409: unknown;
     };
   };
-  export type get_GetEmployee = {
-    method: "GET";
-    path: "/api/v1/employees/{employee_id}";
-    requestFormat: "json";
-    parameters: {
-      path: { employee_id: string };
-    };
-    responses: {
-      200: {
-        data: {
-          created_at: string;
-          first_name?: (string | null) | undefined;
-          hourly_rate_cents?: (number | null) | undefined;
-          id: Schemas.EmployeeId;
-          last_name: string;
-          organization_id: Schemas.OrganizationId;
-          updated_at: string;
-          user_id?: (null | Schemas.UserId) | undefined;
-          weekly_contract_minutes: number;
-        };
-        pagination?: (null | Schemas.PaginationMetadata) | undefined;
-      };
-      401: unknown;
-      403: unknown;
-      404: unknown;
-    };
-  };
-  export type delete_DeleteEmployee = {
-    method: "DELETE";
-    path: "/api/v1/employees/{employee_id}";
-    requestFormat: "json";
-    parameters: {
-      path: { employee_id: string };
-    };
-    responses: { 204: unknown; 401: unknown; 403: unknown; 404: unknown };
-  };
-  export type patch_UpdateEmployee = {
-    method: "PATCH";
-    path: "/api/v1/employees/{employee_id}";
-    requestFormat: "json";
-    parameters: {
-      path: { employee_id: string };
-
-      body: Schemas.UpdateEmployeeRequest;
-    };
-    responses: {
-      200: {
-        data: {
-          created_at: string;
-          first_name?: (string | null) | undefined;
-          hourly_rate_cents?: (number | null) | undefined;
-          id: Schemas.EmployeeId;
-          last_name: string;
-          organization_id: Schemas.OrganizationId;
-          updated_at: string;
-          user_id?: (null | Schemas.UserId) | undefined;
-          weekly_contract_minutes: number;
-        };
-        pagination?: (null | Schemas.PaginationMetadata) | undefined;
-      };
-      400: unknown;
-      401: unknown;
-      403: unknown;
-      404: unknown;
-      409: unknown;
-    };
-  };
   export type get_GetEquipment = {
     method: "GET";
     path: "/api/v1/equipment/{equipment_id}";
@@ -1828,6 +1907,183 @@ export namespace Endpoints {
       401: unknown;
       413: unknown;
       500: unknown;
+    };
+  };
+  export type get_GetMember = {
+    method: "GET";
+    path: "/api/v1/members/{member_id}";
+    requestFormat: "json";
+    parameters: {
+      path: { member_id: string };
+    };
+    responses: {
+      200: {
+        data: {
+          account?: (null | Schemas.MemberAccountResponse) | undefined;
+          created_at: string;
+          display_name: string;
+          first_name?: (string | null) | undefined;
+          id: Schemas.MemberId;
+          joined_at?: (string | null) | undefined;
+          last_name: string;
+          organization_id: Schemas.OrganizationId;
+        };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+      404: unknown;
+    };
+  };
+  export type delete_DeleteMember = {
+    method: "DELETE";
+    path: "/api/v1/members/{member_id}";
+    requestFormat: "json";
+    parameters: {
+      path: { member_id: string };
+    };
+    responses: { 204: unknown; 401: unknown; 403: unknown; 404: unknown };
+  };
+  export type patch_UpdateMember = {
+    method: "PATCH";
+    path: "/api/v1/members/{member_id}";
+    requestFormat: "json";
+    parameters: {
+      path: { member_id: string };
+
+      body: Schemas.UpdateMemberRequest;
+    };
+    responses: {
+      200: {
+        data: {
+          account?: (null | Schemas.MemberAccountResponse) | undefined;
+          created_at: string;
+          display_name: string;
+          first_name?: (string | null) | undefined;
+          id: Schemas.MemberId;
+          joined_at?: (string | null) | undefined;
+          last_name: string;
+          organization_id: Schemas.OrganizationId;
+        };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      400: unknown;
+      401: unknown;
+      403: unknown;
+      404: unknown;
+      409: unknown;
+    };
+  };
+  export type put_UpsertEmployeeProfile = {
+    method: "PUT";
+    path: "/api/v1/members/{member_id}/employee-profile";
+    requestFormat: "json";
+    parameters: {
+      path: { member_id: string };
+
+      body: Schemas.UpsertEmployeeProfileRequest;
+    };
+    responses: {
+      200: {
+        data: {
+          created_at: string;
+          hourly_rate_cents?: (number | null) | undefined;
+          id: Schemas.EmployeeId;
+          member_id: Schemas.MemberId;
+          organization_id: Schemas.OrganizationId;
+          updated_at: string;
+          weekly_contract_minutes: number;
+        };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      400: unknown;
+      401: unknown;
+      403: unknown;
+      404: unknown;
+    };
+  };
+  export type delete_RemoveEmployeeProfile = {
+    method: "DELETE";
+    path: "/api/v1/members/{member_id}/employee-profile";
+    requestFormat: "json";
+    parameters: {
+      path: { member_id: string };
+    };
+    responses: { 204: unknown; 401: unknown; 403: unknown; 404: unknown };
+  };
+  export type put_PutRhythm = {
+    method: "PUT";
+    path: "/api/v1/members/{member_id}/rhythm";
+    requestFormat: "json";
+    parameters: {
+      path: { member_id: string };
+
+      body: Schemas.PutRhythmRequest;
+    };
+    responses: {
+      200: {
+        data: {
+          created_at: string;
+          effective_from: string;
+          effective_to?: (string | null) | undefined;
+          employee_id: Schemas.EmployeeId;
+          id: Schemas.EmployeeRhythmId;
+          organization_id: Schemas.OrganizationId;
+          slots: Array<Schemas.RhythmSlotResponse>;
+          updated_at: string;
+        };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      400: unknown;
+      401: unknown;
+      403: unknown;
+      409: unknown;
+    };
+  };
+  export type put_PutWorkSlots = {
+    method: "PUT";
+    path: "/api/v1/members/{member_id}/work-slots";
+    requestFormat: "json";
+    parameters: {
+      query: { from: string; to: string };
+      path: { member_id: string };
+
+      body: Schemas.PutWorkSlotsRequest;
+    };
+    responses: {
+      200: {
+        data: Array<{
+          ends_minute: number;
+          id: Schemas.WorkSlotId;
+          member_id: Schemas.MemberId;
+          organization_id: Schemas.OrganizationId;
+          starts_minute: number;
+          work_date: string;
+        }>;
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      400: unknown;
+      401: unknown;
+      403: unknown;
+      409: unknown;
+    };
+  };
+  export type get_GetWorkTime = {
+    method: "GET";
+    path: "/api/v1/members/{member_id}/work-time";
+    requestFormat: "json";
+    parameters: {
+      query: { from: string; to: string };
+      path: { member_id: string };
+    };
+    responses: {
+      200: {
+        data: { rhythms: Array<Schemas.RhythmResponse>; work_slots: Array<Schemas.WorkSlotResponse> };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      400: unknown;
+      401: unknown;
+      403: unknown;
     };
   };
   export type get_ListOrganizations = {
@@ -1950,10 +2206,10 @@ export namespace Endpoints {
         data: Array<{
           all_day: boolean;
           created_at: string;
-          employee_id: Schemas.EmployeeId;
           ends_at: string;
-          id: Schemas.EmployeeAbsenceId;
+          id: Schemas.AbsenceId;
           kind: Schemas.AbsenceKind;
+          member_id: Schemas.MemberId;
           note?: (string | null) | undefined;
           organization_id: Schemas.OrganizationId;
           starts_at: string;
@@ -1979,10 +2235,10 @@ export namespace Endpoints {
         data: {
           all_day: boolean;
           created_at: string;
-          employee_id: Schemas.EmployeeId;
           ends_at: string;
-          id: Schemas.EmployeeAbsenceId;
+          id: Schemas.AbsenceId;
           kind: Schemas.AbsenceKind;
+          member_id: Schemas.MemberId;
           note?: (string | null) | undefined;
           organization_id: Schemas.OrganizationId;
           starts_at: string;
@@ -2019,10 +2275,10 @@ export namespace Endpoints {
         data: {
           all_day: boolean;
           created_at: string;
-          employee_id: Schemas.EmployeeId;
           ends_at: string;
-          id: Schemas.EmployeeAbsenceId;
+          id: Schemas.AbsenceId;
           kind: Schemas.AbsenceKind;
+          member_id: Schemas.MemberId;
           note?: (string | null) | undefined;
           organization_id: Schemas.OrganizationId;
           starts_at: string;
@@ -2035,6 +2291,425 @@ export namespace Endpoints {
       403: unknown;
       404: unknown;
       409: unknown;
+    };
+  };
+  export type get_ListConnectors = {
+    method: "GET";
+    path: "/api/v1/organizations/{organization_id}/automation/connectors";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string };
+    };
+    responses: {
+      200: {
+        data: {
+          auth_schemes: Array<Schemas.AuthSchemeResponse>;
+          connectors: Array<Schemas.ConnectorDescriptorResponse>;
+        };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+    };
+  };
+  export type get_ListAutomationCredentials = {
+    method: "GET";
+    path: "/api/v1/organizations/{organization_id}/automation/credentials";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string };
+    };
+    responses: {
+      200: {
+        data: Array<{
+          created_at: string;
+          id: string;
+          kind: string;
+          name: string;
+          organization_id: Schemas.OrganizationId;
+          origin: string;
+          updated_at: string;
+        }>;
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+    };
+  };
+  export type post_CreateAutomationCredential = {
+    method: "POST";
+    path: "/api/v1/organizations/{organization_id}/automation/credentials";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string };
+
+      body: Schemas.CreateCredentialRequest;
+    };
+    responses: {
+      201: {
+        data: Schemas.CredentialResponse & { secret: unknown };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      400: unknown;
+      401: unknown;
+      403: unknown;
+      409: unknown;
+    };
+  };
+  export type delete_DeleteAutomationCredential = {
+    method: "DELETE";
+    path: "/api/v1/organizations/{organization_id}/automation/credentials/{credential_id}";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string; credential_id: string };
+    };
+    responses: { 204: unknown; 401: unknown; 403: unknown; 404: unknown; 409: unknown };
+  };
+  export type patch_UpdateAutomationCredential = {
+    method: "PATCH";
+    path: "/api/v1/organizations/{organization_id}/automation/credentials/{credential_id}";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string; credential_id: string };
+
+      body: Schemas.UpdateCredentialRequest;
+    };
+    responses: {
+      200: {
+        data: {
+          created_at: string;
+          id: string;
+          kind: string;
+          name: string;
+          organization_id: Schemas.OrganizationId;
+          origin: string;
+          updated_at: string;
+        };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      400: unknown;
+      401: unknown;
+      403: unknown;
+      404: unknown;
+      409: unknown;
+    };
+  };
+  export type post_RotateAutomationCredential = {
+    method: "POST";
+    path: "/api/v1/organizations/{organization_id}/automation/credentials/{credential_id}/rotate";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string; credential_id: string };
+    };
+    responses: {
+      200: {
+        data: Schemas.CredentialResponse & { secret: unknown };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+      404: unknown;
+      409: unknown;
+    };
+  };
+  export type get_ListAutomationEvents = {
+    method: "GET";
+    path: "/api/v1/organizations/{organization_id}/automation/events";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string };
+    };
+    responses: {
+      200: {
+        data: Array<{ label: string; name: string; payload_example: unknown; subject_kind: string; version: number }>;
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+    };
+  };
+  export type get_ListRuns = {
+    method: "GET";
+    path: "/api/v1/organizations/{organization_id}/automation/runs";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string };
+    };
+    responses: {
+      200: {
+        data: Array<{
+          created_at: string;
+          error?: (string | null) | undefined;
+          finished_at?: (string | null) | undefined;
+          id: string;
+          next_attempt_at?: (string | null) | undefined;
+          organization_id: Schemas.OrganizationId;
+          started_at?: (string | null) | undefined;
+          status: string;
+          trigger_event_id?: (string | null) | undefined;
+          trigger_payload?: unknown | undefined;
+          workflow_id: string;
+          workflow_version_id: string;
+        }>;
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+    };
+  };
+  export type get_GetRun = {
+    method: "GET";
+    path: "/api/v1/organizations/{organization_id}/automation/runs/{run_id}";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string; run_id: string };
+    };
+    responses: {
+      200: {
+        data: Schemas.RunResponse & { steps: Array<Schemas.RunStepResponse> };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+      404: unknown;
+    };
+  };
+  export type post_ReplayRun = {
+    method: "POST";
+    path: "/api/v1/organizations/{organization_id}/automation/runs/{run_id}/replay";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string; run_id: string };
+
+      body: Schemas.ReplayRunRequest;
+    };
+    responses: {
+      200: {
+        data: {
+          created_at: string;
+          error?: (string | null) | undefined;
+          finished_at?: (string | null) | undefined;
+          id: string;
+          next_attempt_at?: (string | null) | undefined;
+          organization_id: Schemas.OrganizationId;
+          started_at?: (string | null) | undefined;
+          status: string;
+          trigger_event_id?: (string | null) | undefined;
+          trigger_payload?: unknown | undefined;
+          workflow_id: string;
+          workflow_version_id: string;
+        };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+      404: unknown;
+      409: unknown;
+    };
+  };
+  export type get_GetAutomationSettings = {
+    method: "GET";
+    path: "/api/v1/organizations/{organization_id}/automation/settings";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string };
+    };
+    responses: {
+      200: {
+        data: {
+          disable_target_after?: (number | null) | undefined;
+          event_retention_seconds: number;
+          retry_schedule_seconds: Array<number>;
+          succeeded_run_retention_seconds: number;
+        };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+    };
+  };
+  export type put_UpdateAutomationSettings = {
+    method: "PUT";
+    path: "/api/v1/organizations/{organization_id}/automation/settings";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string };
+
+      body: Schemas.AutomationSettingsBody;
+    };
+    responses: {
+      200: {
+        data: {
+          disable_target_after?: (number | null) | undefined;
+          event_retention_seconds: number;
+          retry_schedule_seconds: Array<number>;
+          succeeded_run_retention_seconds: number;
+        };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+      409: unknown;
+    };
+  };
+  export type get_ListWorkflows = {
+    method: "GET";
+    path: "/api/v1/organizations/{organization_id}/automation/workflows";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string };
+    };
+    responses: {
+      200: {
+        data: Array<{
+          created_at: string;
+          current_version_id?: (string | null) | undefined;
+          description?: (string | null) | undefined;
+          enabled: boolean;
+          id: string;
+          name: string;
+          organization_id: Schemas.OrganizationId;
+          updated_at: string;
+        }>;
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+    };
+  };
+  export type post_CreateWorkflow = {
+    method: "POST";
+    path: "/api/v1/organizations/{organization_id}/automation/workflows";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string };
+
+      body: Schemas.CreateWorkflowRequest;
+    };
+    responses: {
+      201: {
+        data: {
+          created_at: string;
+          current_version_id?: (string | null) | undefined;
+          description?: (string | null) | undefined;
+          enabled: boolean;
+          id: string;
+          name: string;
+          organization_id: Schemas.OrganizationId;
+          updated_at: string;
+        };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      400: unknown;
+      401: unknown;
+      403: unknown;
+    };
+  };
+  export type get_GetWorkflow = {
+    method: "GET";
+    path: "/api/v1/organizations/{organization_id}/automation/workflows/{workflow_id}";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string; workflow_id: string };
+    };
+    responses: {
+      200: {
+        data: {
+          created_at: string;
+          current_version?: (null | Schemas.WorkflowVersionResponse) | undefined;
+          description?: (string | null) | undefined;
+          enabled: boolean;
+          id: string;
+          name: string;
+          organization_id: Schemas.OrganizationId;
+          updated_at: string;
+        };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+      404: unknown;
+    };
+  };
+  export type delete_DeleteWorkflow = {
+    method: "DELETE";
+    path: "/api/v1/organizations/{organization_id}/automation/workflows/{workflow_id}";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string; workflow_id: string };
+    };
+    responses: { 204: unknown; 401: unknown; 403: unknown; 404: unknown };
+  };
+  export type patch_UpdateWorkflow = {
+    method: "PATCH";
+    path: "/api/v1/organizations/{organization_id}/automation/workflows/{workflow_id}";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string; workflow_id: string };
+
+      body: Schemas.UpdateWorkflowRequest;
+    };
+    responses: {
+      200: {
+        data: {
+          created_at: string;
+          current_version_id?: (string | null) | undefined;
+          description?: (string | null) | undefined;
+          enabled: boolean;
+          id: string;
+          name: string;
+          organization_id: Schemas.OrganizationId;
+          updated_at: string;
+        };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+      404: unknown;
+    };
+  };
+  export type post_StartRun = {
+    method: "POST";
+    path: "/api/v1/organizations/{organization_id}/automation/workflows/{workflow_id}/runs";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string; workflow_id: string };
+
+      body: Schemas.StartRunRequest;
+    };
+    responses: {
+      201: { data: { run_id: string }; pagination?: (null | Schemas.PaginationMetadata) | undefined };
+      401: unknown;
+      403: unknown;
+      404: unknown;
+      409: unknown;
+    };
+  };
+  export type put_SaveWorkflowVersion = {
+    method: "PUT";
+    path: "/api/v1/organizations/{organization_id}/automation/workflows/{workflow_id}/versions";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string; workflow_id: string };
+
+      body: Schemas.SaveWorkflowVersionRequest;
+    };
+    responses: {
+      201: {
+        data: {
+          created_at: string;
+          created_by?: (string | null) | undefined;
+          graph: Schemas.GraphDto;
+          id: string;
+          version: number;
+          workflow_id: string;
+        };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+      404: unknown;
+      422: { code: string; details: Schemas.GraphInvalidDetails; message: string; status: number };
     };
   };
   export type get_ListCustomers = {
@@ -2094,9 +2769,9 @@ export namespace Endpoints {
       409: unknown;
     };
   };
-  export type get_ListEmployees = {
+  export type get_ListEmployeeProfiles = {
     method: "GET";
-    path: "/api/v1/organizations/{organization_id}/employees";
+    path: "/api/v1/organizations/{organization_id}/employee-profiles";
     requestFormat: "json";
     parameters: {
       query: Partial<{ page: number; per_page: number }>;
@@ -2106,122 +2781,15 @@ export namespace Endpoints {
       200: {
         data: Array<{
           created_at: string;
-          first_name?: (string | null) | undefined;
           hourly_rate_cents?: (number | null) | undefined;
           id: Schemas.EmployeeId;
-          last_name: string;
+          member_id: Schemas.MemberId;
           organization_id: Schemas.OrganizationId;
           updated_at: string;
-          user_id?: (null | Schemas.UserId) | undefined;
           weekly_contract_minutes: number;
         }>;
         pagination?: (null | Schemas.PaginationMetadata) | undefined;
       };
-      401: unknown;
-      403: unknown;
-    };
-  };
-  export type post_CreateEmployee = {
-    method: "POST";
-    path: "/api/v1/organizations/{organization_id}/employees";
-    requestFormat: "json";
-    parameters: {
-      path: { organization_id: string };
-
-      body: Schemas.CreateEmployeeRequest;
-    };
-    responses: {
-      201: {
-        data: {
-          created_at: string;
-          first_name?: (string | null) | undefined;
-          hourly_rate_cents?: (number | null) | undefined;
-          id: Schemas.EmployeeId;
-          last_name: string;
-          organization_id: Schemas.OrganizationId;
-          updated_at: string;
-          user_id?: (null | Schemas.UserId) | undefined;
-          weekly_contract_minutes: number;
-        };
-        pagination?: (null | Schemas.PaginationMetadata) | undefined;
-      };
-      400: unknown;
-      401: unknown;
-      403: unknown;
-      409: unknown;
-    };
-  };
-  export type put_PutRhythm = {
-    method: "PUT";
-    path: "/api/v1/organizations/{organization_id}/employees/{employee_id}/rhythm";
-    requestFormat: "json";
-    parameters: {
-      path: { organization_id: string; employee_id: string };
-
-      body: Schemas.PutRhythmRequest;
-    };
-    responses: {
-      200: {
-        data: {
-          created_at: string;
-          effective_from: string;
-          effective_to?: (string | null) | undefined;
-          employee_id: Schemas.EmployeeId;
-          id: Schemas.EmployeeRhythmId;
-          organization_id: Schemas.OrganizationId;
-          slots: Array<Schemas.RhythmSlotResponse>;
-          updated_at: string;
-        };
-        pagination?: (null | Schemas.PaginationMetadata) | undefined;
-      };
-      400: unknown;
-      401: unknown;
-      403: unknown;
-      409: unknown;
-    };
-  };
-  export type put_PutWorkSlots = {
-    method: "PUT";
-    path: "/api/v1/organizations/{organization_id}/employees/{employee_id}/work-slots";
-    requestFormat: "json";
-    parameters: {
-      query: { from: string; to: string };
-      path: { organization_id: string; employee_id: string };
-
-      body: Schemas.PutWorkSlotsRequest;
-    };
-    responses: {
-      200: {
-        data: Array<{
-          employee_id: Schemas.EmployeeId;
-          ends_minute: number;
-          id: Schemas.EmployeeWorkSlotId;
-          organization_id: Schemas.OrganizationId;
-          starts_minute: number;
-          work_date: string;
-        }>;
-        pagination?: (null | Schemas.PaginationMetadata) | undefined;
-      };
-      400: unknown;
-      401: unknown;
-      403: unknown;
-      409: unknown;
-    };
-  };
-  export type get_GetWorkTime = {
-    method: "GET";
-    path: "/api/v1/organizations/{organization_id}/employees/{employee_id}/work-time";
-    requestFormat: "json";
-    parameters: {
-      query: { from: string; to: string };
-      path: { organization_id: string; employee_id: string };
-    };
-    responses: {
-      200: {
-        data: { rhythms: Array<Schemas.RhythmResponse>; work_slots: Array<Schemas.WorkSlotResponse> };
-        pagination?: (null | Schemas.PaginationMetadata) | undefined;
-      };
-      400: unknown;
       401: unknown;
       403: unknown;
     };
@@ -2268,6 +2836,61 @@ export namespace Endpoints {
           name: string;
           organization_id: Schemas.OrganizationId;
           updated_at: string;
+        };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      400: unknown;
+      401: unknown;
+      403: unknown;
+      409: unknown;
+    };
+  };
+  export type get_ListMembers = {
+    method: "GET";
+    path: "/api/v1/organizations/{organization_id}/members";
+    requestFormat: "json";
+    parameters: {
+      query: Partial<{ page: number; per_page: number }>;
+      path: { organization_id: string };
+    };
+    responses: {
+      200: {
+        data: Array<{
+          account?: (null | Schemas.MemberAccountResponse) | undefined;
+          created_at: string;
+          display_name: string;
+          first_name?: (string | null) | undefined;
+          id: Schemas.MemberId;
+          joined_at?: (string | null) | undefined;
+          last_name: string;
+          organization_id: Schemas.OrganizationId;
+        }>;
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+    };
+  };
+  export type post_CreateMember = {
+    method: "POST";
+    path: "/api/v1/organizations/{organization_id}/members";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string };
+
+      body: Schemas.CreateMemberRequest;
+    };
+    responses: {
+      201: {
+        data: {
+          account?: (null | Schemas.MemberAccountResponse) | undefined;
+          created_at: string;
+          display_name: string;
+          first_name?: (string | null) | undefined;
+          id: Schemas.MemberId;
+          joined_at?: (string | null) | undefined;
+          last_name: string;
+          organization_id: Schemas.OrganizationId;
         };
         pagination?: (null | Schemas.PaginationMetadata) | undefined;
       };
@@ -2594,10 +3217,10 @@ export namespace Endpoints {
           customer_context_id?: (null | Schemas.CustomerContextId) | undefined;
           customer_id?: (null | Schemas.CustomerId) | undefined;
           description?: (string | null) | undefined;
-          employee_ids: Array<Schemas.EmployeeId>;
           ends_at?: (string | null) | undefined;
           id: Schemas.TaskId;
           labels: Array<Schemas.TaskLabelResponse>;
+          member_ids: Array<Schemas.MemberId>;
           organization_id: Schemas.OrganizationId;
           parent_task_id?: (null | Schemas.TaskId) | undefined;
           quote_id?: (null | Schemas.QuoteId) | undefined;
@@ -2631,10 +3254,10 @@ export namespace Endpoints {
           customer_context_id?: (null | Schemas.CustomerContextId) | undefined;
           customer_id?: (null | Schemas.CustomerId) | undefined;
           description?: (string | null) | undefined;
-          employee_ids: Array<Schemas.EmployeeId>;
           ends_at?: (string | null) | undefined;
           id: Schemas.TaskId;
           labels: Array<Schemas.TaskLabelResponse>;
+          member_ids: Array<Schemas.MemberId>;
           organization_id: Schemas.OrganizationId;
           parent_task_id?: (null | Schemas.TaskId) | undefined;
           quote_id?: (null | Schemas.QuoteId) | undefined;
@@ -2668,10 +3291,10 @@ export namespace Endpoints {
           customer_context_id?: (null | Schemas.CustomerContextId) | undefined;
           customer_id?: (null | Schemas.CustomerId) | undefined;
           description?: (string | null) | undefined;
-          employee_ids: Array<Schemas.EmployeeId>;
           ends_at?: (string | null) | undefined;
           id: Schemas.TaskId;
           labels: Array<Schemas.TaskLabelResponse>;
+          member_ids: Array<Schemas.MemberId>;
           organization_id: Schemas.OrganizationId;
           parent_task_id?: (null | Schemas.TaskId) | undefined;
           quote_id?: (null | Schemas.QuoteId) | undefined;
@@ -2706,10 +3329,7 @@ export namespace Endpoints {
       body: Schemas.UpdateTaskRequest;
     };
     responses: {
-      200: {
-        data: { created_employees: Array<Schemas.EmployeeResponse>; task: Schemas.TaskResponse };
-        pagination?: (null | Schemas.PaginationMetadata) | undefined;
-      };
+      200: { data: { task: Schemas.TaskResponse }; pagination?: (null | Schemas.PaginationMetadata) | undefined };
       400: unknown;
       401: unknown;
       403: unknown;
@@ -3091,10 +3711,13 @@ export type EndpointByMethod = {
     "/api/v1/customer-contacts/{customer_contact_id}": Endpoints.delete_DeleteCustomerContact;
     "/api/v1/customer-contexts/{customer_context_id}": Endpoints.delete_DeleteCustomerContext;
     "/api/v1/customers/{customer_id}": Endpoints.delete_DeleteCustomer;
-    "/api/v1/employees/{employee_id}": Endpoints.delete_DeleteEmployee;
     "/api/v1/equipment/{equipment_id}": Endpoints.delete_DeleteEquipment;
+    "/api/v1/members/{member_id}": Endpoints.delete_DeleteMember;
+    "/api/v1/members/{member_id}/employee-profile": Endpoints.delete_RemoveEmployeeProfile;
     "/api/v1/organizations/{organization_id}": Endpoints.delete_DeleteOrganization;
     "/api/v1/organizations/{organization_id}/absences/{absence_id}": Endpoints.delete_DeleteAbsence;
+    "/api/v1/organizations/{organization_id}/automation/credentials/{credential_id}": Endpoints.delete_DeleteAutomationCredential;
+    "/api/v1/organizations/{organization_id}/automation/workflows/{workflow_id}": Endpoints.delete_DeleteWorkflow;
     "/api/v1/organizations/{organization_id}/task-labels/{label_id}": Endpoints.delete_DeleteTaskLabel;
     "/api/v1/organizations/{organization_id}/tasks/{task_id}": Endpoints.delete_DeleteTask;
     "/api/v1/organizations/{organization_id}/tasks/{task_id}/comments/{comment_id}": Endpoints.delete_DeleteTaskComment;
@@ -3111,10 +3734,12 @@ export type EndpointByMethod = {
     "/api/v1/customer-contacts/{customer_contact_id}": Endpoints.patch_UpdateCustomerContact;
     "/api/v1/customer-contexts/{customer_context_id}": Endpoints.patch_UpdateCustomerContext;
     "/api/v1/customers/{customer_id}": Endpoints.patch_UpdateCustomer;
-    "/api/v1/employees/{employee_id}": Endpoints.patch_UpdateEmployee;
     "/api/v1/equipment/{equipment_id}": Endpoints.patch_UpdateEquipment;
+    "/api/v1/members/{member_id}": Endpoints.patch_UpdateMember;
     "/api/v1/organizations/{organization_id}": Endpoints.patch_UpdateOrganization;
     "/api/v1/organizations/{organization_id}/absences/{absence_id}": Endpoints.patch_PatchAbsence;
+    "/api/v1/organizations/{organization_id}/automation/credentials/{credential_id}": Endpoints.patch_UpdateAutomationCredential;
+    "/api/v1/organizations/{organization_id}/automation/workflows/{workflow_id}": Endpoints.patch_UpdateWorkflow;
     "/api/v1/organizations/{organization_id}/task-labels/{label_id}": Endpoints.patch_UpdateTaskLabel;
     "/api/v1/organizations/{organization_id}/tasks/{task_id}": Endpoints.patch_PatchTask;
     "/api/v1/organizations/{organization_id}/tasks/{task_id}/comments/{comment_id}": Endpoints.patch_UpdateTaskComment;
@@ -3139,15 +3764,24 @@ export type EndpointByMethod = {
     "/api/v1/customers/{customer_id}": Endpoints.get_GetCustomer;
     "/api/v1/customers/{customer_id}/contacts": Endpoints.get_ListCustomerContacts;
     "/api/v1/customers/{customer_id}/customer-contexts": Endpoints.get_ListCustomerContexts;
-    "/api/v1/employees/{employee_id}": Endpoints.get_GetEmployee;
     "/api/v1/equipment/{equipment_id}": Endpoints.get_GetEquipment;
+    "/api/v1/members/{member_id}": Endpoints.get_GetMember;
+    "/api/v1/members/{member_id}/work-time": Endpoints.get_GetWorkTime;
     "/api/v1/organizations": Endpoints.get_ListOrganizations;
     "/api/v1/organizations/{organization_id}": Endpoints.get_GetOrganization;
     "/api/v1/organizations/{organization_id}/absences": Endpoints.get_ListAbsences;
+    "/api/v1/organizations/{organization_id}/automation/connectors": Endpoints.get_ListConnectors;
+    "/api/v1/organizations/{organization_id}/automation/credentials": Endpoints.get_ListAutomationCredentials;
+    "/api/v1/organizations/{organization_id}/automation/events": Endpoints.get_ListAutomationEvents;
+    "/api/v1/organizations/{organization_id}/automation/runs": Endpoints.get_ListRuns;
+    "/api/v1/organizations/{organization_id}/automation/runs/{run_id}": Endpoints.get_GetRun;
+    "/api/v1/organizations/{organization_id}/automation/settings": Endpoints.get_GetAutomationSettings;
+    "/api/v1/organizations/{organization_id}/automation/workflows": Endpoints.get_ListWorkflows;
+    "/api/v1/organizations/{organization_id}/automation/workflows/{workflow_id}": Endpoints.get_GetWorkflow;
     "/api/v1/organizations/{organization_id}/customers": Endpoints.get_ListCustomers;
-    "/api/v1/organizations/{organization_id}/employees": Endpoints.get_ListEmployees;
-    "/api/v1/organizations/{organization_id}/employees/{employee_id}/work-time": Endpoints.get_GetWorkTime;
+    "/api/v1/organizations/{organization_id}/employee-profiles": Endpoints.get_ListEmployeeProfiles;
     "/api/v1/organizations/{organization_id}/equipment": Endpoints.get_ListEquipment;
+    "/api/v1/organizations/{organization_id}/members": Endpoints.get_ListMembers;
     "/api/v1/organizations/{organization_id}/planning": Endpoints.get_GetPlanning;
     "/api/v1/organizations/{organization_id}/planning/availability": Endpoints.get_GetPlanningAvailability;
     "/api/v1/organizations/{organization_id}/products": Endpoints.get_ListProducts;
@@ -3176,9 +3810,14 @@ export type EndpointByMethod = {
     "/api/v1/files": Endpoints.post_UploadFile;
     "/api/v1/organizations": Endpoints.post_CreateOrganization;
     "/api/v1/organizations/{organization_id}/absences": Endpoints.post_CreateAbsence;
+    "/api/v1/organizations/{organization_id}/automation/credentials": Endpoints.post_CreateAutomationCredential;
+    "/api/v1/organizations/{organization_id}/automation/credentials/{credential_id}/rotate": Endpoints.post_RotateAutomationCredential;
+    "/api/v1/organizations/{organization_id}/automation/runs/{run_id}/replay": Endpoints.post_ReplayRun;
+    "/api/v1/organizations/{organization_id}/automation/workflows": Endpoints.post_CreateWorkflow;
+    "/api/v1/organizations/{organization_id}/automation/workflows/{workflow_id}/runs": Endpoints.post_StartRun;
     "/api/v1/organizations/{organization_id}/customers": Endpoints.post_CreateCustomer;
-    "/api/v1/organizations/{organization_id}/employees": Endpoints.post_CreateEmployee;
     "/api/v1/organizations/{organization_id}/equipment": Endpoints.post_CreateEquipment;
+    "/api/v1/organizations/{organization_id}/members": Endpoints.post_CreateMember;
     "/api/v1/organizations/{organization_id}/products": Endpoints.post_CreateProduct;
     "/api/v1/organizations/{organization_id}/quotes": Endpoints.post_CreateQuote;
     "/api/v1/organizations/{organization_id}/service-rates": Endpoints.post_CreateServiceRate;
@@ -3194,8 +3833,11 @@ export type EndpointByMethod = {
     "/api/v1/chat/notifications/{notification_id}/read": Endpoints.put_MarkNotificationRead;
     "/api/v1/chat/organizations/{organization_id}/notifications/read-all": Endpoints.put_MarkAllNotificationsRead;
     "/api/v1/chat/organizations/{organization_id}/presence": Endpoints.put_SetPresence;
-    "/api/v1/organizations/{organization_id}/employees/{employee_id}/rhythm": Endpoints.put_PutRhythm;
-    "/api/v1/organizations/{organization_id}/employees/{employee_id}/work-slots": Endpoints.put_PutWorkSlots;
+    "/api/v1/members/{member_id}/employee-profile": Endpoints.put_UpsertEmployeeProfile;
+    "/api/v1/members/{member_id}/rhythm": Endpoints.put_PutRhythm;
+    "/api/v1/members/{member_id}/work-slots": Endpoints.put_PutWorkSlots;
+    "/api/v1/organizations/{organization_id}/automation/settings": Endpoints.put_UpdateAutomationSettings;
+    "/api/v1/organizations/{organization_id}/automation/workflows/{workflow_id}/versions": Endpoints.put_SaveWorkflowVersion;
   };
 };
 

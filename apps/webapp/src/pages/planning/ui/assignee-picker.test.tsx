@@ -12,9 +12,9 @@ class ResizeObserverStub {
 ;(globalThis as any).ResizeObserver ??= ResizeObserverStub
 
 const OPTIONS = [
-	{ resourceId: 'employee:e1', displayName: 'Martin Alix' },
-	{ resourceId: 'employee:e2', displayName: 'Leroy Marie' },
-	{ resourceId: 'member:m1', displayName: 'Petit Sacha' },
+	{ resourceId: 'member:m1', displayName: 'Martin Alix' },
+	{ resourceId: 'member:m2', displayName: 'Leroy Marie' },
+	{ resourceId: 'member:m3', displayName: 'Petit Sacha' },
 ]
 
 function baseProps() {
@@ -33,7 +33,7 @@ describe('AssigneePicker', () => {
 
 	it('lists the assigned people on the trigger', () => {
 		render(
-			<AssigneePicker {...baseProps()} selectedResourceIds={['employee:e1']} />,
+			<AssigneePicker {...baseProps()} selectedResourceIds={['member:m1']} />,
 		)
 		expect(screen.getByText('Martin Alix')).toBeDefined()
 	})
@@ -57,13 +57,13 @@ describe('AssigneePicker', () => {
 		await user.click(screen.getByRole('button', { name: /Personne assigné/ }))
 		await user.click(screen.getByRole('option', { name: /Leroy Marie/ }))
 
-		expect(onToggle).toHaveBeenCalledWith('employee:e2')
+		expect(onToggle).toHaveBeenCalledWith('member:m2')
 	})
 
 	it('marks a selected option as checked', async () => {
 		const user = userEvent.setup()
 		render(
-			<AssigneePicker {...baseProps()} selectedResourceIds={['member:m1']} />,
+			<AssigneePicker {...baseProps()} selectedResourceIds={['member:m3']} />,
 		)
 
 		await user.click(screen.getByRole('button', { name: /Petit Sacha/ }))

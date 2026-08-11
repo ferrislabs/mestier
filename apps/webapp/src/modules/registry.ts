@@ -77,9 +77,7 @@ export const MODULES: AppModule[] = [
 		basePath: '/hr',
 		status: 'available',
 		hasOverview: false,
-		sections: [
-			{ id: 'employees', label: 'Employés', to: '/hr/employees', icon: Users },
-		],
+		sections: [{ id: 'team', label: 'Équipe', to: '/hr/team', icon: Users }],
 	},
 	{
 		id: 'planning',

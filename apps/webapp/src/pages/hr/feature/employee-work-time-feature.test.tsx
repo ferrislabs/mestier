@@ -25,14 +25,13 @@ Element.prototype.scrollIntoView ??= () => {}
 Element.prototype.hasPointerCapture ??= () => false
 Element.prototype.releasePointerCapture ??= () => {}
 
-const EMPLOYEES_PATH = '/api/v1/organizations/{organization_id}/employees'
-const EMPLOYEE_PATH = '/api/v1/employees/{employee_id}'
-const WORK_TIME_PATH =
-	'/api/v1/organizations/{organization_id}/employees/{employee_id}/work-time'
-const RHYTHM_PATH =
-	'/api/v1/organizations/{organization_id}/employees/{employee_id}/rhythm'
-const WORK_SLOTS_PATH =
-	'/api/v1/organizations/{organization_id}/employees/{employee_id}/work-slots'
+const MEMBERS_PATH = '/api/v1/organizations/{organization_id}/members'
+const EMPLOYEE_PROFILES_PATH =
+	'/api/v1/organizations/{organization_id}/employee-profiles'
+const EMPLOYEE_PROFILE_PATH = '/api/v1/members/{member_id}/employee-profile'
+const WORK_TIME_PATH = '/api/v1/members/{member_id}/work-time'
+const RHYTHM_PATH = '/api/v1/members/{member_id}/rhythm'
+const WORK_SLOTS_PATH = '/api/v1/members/{member_id}/work-slots'
 const ABSENCES_PATH = '/api/v1/organizations/{organization_id}/absences'
 const ABSENCE_PATH =
 	'/api/v1/organizations/{organization_id}/absences/{absence_id}'
@@ -46,25 +45,43 @@ const ORGANIZATION: Organization = {
 	updated_at: '2026-01-01T00:00:00Z',
 }
 
-interface FakeEmployee {
+interface FakeMember {
 	id: string
 	organization_id: string
 	last_name: string
 	first_name: string | null
-	hourly_rate_cents: number
-	user_id: string | null
+	display_name: string
+	account: { email: string; name: string } | null
+	joined_at: string | null
+	created_at: string
+}
+
+interface FakeEmployeeProfile {
+	id: string
+	organization_id: string
+	member_id: string
+	hourly_rate_cents: number | null
 	weekly_contract_minutes: number
 	created_at: string
 	updated_at: string
 }
 
-const EMPLOYEE: FakeEmployee = {
-	id: 'employee-1',
+const MEMBER: FakeMember = {
+	id: 'member-1',
 	organization_id: 'org-1',
 	last_name: 'Martin',
 	first_name: 'Alix',
+	display_name: 'Martin Alix',
+	account: null,
+	joined_at: null,
+	created_at: '2026-01-01T00:00:00Z',
+}
+
+const PROFILE: FakeEmployeeProfile = {
+	id: 'employee-1',
+	organization_id: 'org-1',
+	member_id: 'member-1',
 	hourly_rate_cents: 1500,
-	user_id: null,
 	weekly_contract_minutes: 2100,
 	created_at: '2026-01-01T00:00:00Z',
 	updated_at: '2026-01-01T00:00:00Z',
@@ -84,17 +101,19 @@ const OPEN_RHYTHM = {
 interface FakeApiHandlers {
 	putRhythm?: (params: unknown) => unknown
 	putWorkSlots?: (params: unknown) => unknown
-	patchEmployee?: (params: unknown) => unknown
+	upsertProfile?: (params: unknown) => unknown
 	postAbsence?: (params: unknown) => unknown
 	patchAbsence?: (params: unknown) => unknown
 	deleteAbsence?: (params: unknown) => unknown
-	employees?: FakeEmployee[]
+	members?: FakeMember[]
+	profiles?: FakeEmployeeProfile[]
 	absences?: Record<string, unknown>[]
 }
 
 function installFakeTanstackApi(handlers: FakeApiHandlers = {}) {
 	const calls: { method: string; path: string; params: unknown }[] = []
-	const employees = handlers.employees ?? [EMPLOYEE]
+	const members = handlers.members ?? [MEMBER]
+	const profiles = handlers.profiles ?? [PROFILE]
 	const absences = handlers.absences ?? []
 
 	function queryKeyFor(path: string, params: unknown) {
@@ -111,8 +130,11 @@ function installFakeTanstackApi(handlers: FakeApiHandlers = {}) {
 					queryKey,
 					queryFn: async () => {
 						calls.push({ method: 'get', path, params })
-						if (path === EMPLOYEES_PATH) {
-							return { data: employees, pagination: null }
+						if (path === MEMBERS_PATH) {
+							return { data: members, pagination: null }
+						}
+						if (path === EMPLOYEE_PROFILES_PATH) {
+							return { data: profiles, pagination: null }
 						}
 						if (path === WORK_TIME_PATH) {
 							return {
@@ -145,10 +167,10 @@ function installFakeTanstackApi(handlers: FakeApiHandlers = {}) {
 								throw new Error('putWorkSlots not mocked')
 							return handlers.putWorkSlots(params)
 						}
-						if (method === 'patch' && path === EMPLOYEE_PATH) {
-							if (!handlers.patchEmployee)
-								throw new Error('patchEmployee not mocked')
-							return handlers.patchEmployee(params)
+						if (method === 'put' && path === EMPLOYEE_PROFILE_PATH) {
+							if (!handlers.upsertProfile)
+								throw new Error('upsertProfile not mocked')
+							return handlers.upsertProfile(params)
 						}
 						if (method === 'post' && path === ABSENCES_PATH) {
 							if (!handlers.postAbsence)
@@ -198,7 +220,7 @@ function renderFeature(handlers: FakeApiHandlers = {}) {
 
 	render(
 		<Providers>
-			<EmployeeWorkTimeFeature employeeId="employee-1" />
+			<EmployeeWorkTimeFeature memberId="member-1" />
 		</Providers>,
 	)
 
@@ -210,7 +232,7 @@ describe('EmployeeWorkTimeFeature', () => {
 		vi.restoreAllMocks()
 	})
 
-	it("loads and shows the employee's current rhythm", async () => {
+	it("loads and shows the member's current rhythm", async () => {
 		renderFeature()
 
 		expect(await screen.findByText('Martin Alix')).toBeDefined()
@@ -231,7 +253,7 @@ describe('EmployeeWorkTimeFeature', () => {
 		await waitFor(() => expect(putRhythm).toHaveBeenCalledTimes(1))
 		const call = calls.find((c) => c.method === 'put' && c.path === RHYTHM_PATH)
 		expect(call?.params).toMatchObject({
-			path: { organization_id: 'org-1', employee_id: 'employee-1' },
+			path: { member_id: 'member-1' },
 			body: {
 				effective_from: '2026-06-01',
 				effective_to: null,
@@ -281,7 +303,7 @@ describe('EmployeeWorkTimeFeature', () => {
 			(c) => c.method === 'put' && c.path === WORK_SLOTS_PATH,
 		)
 		expect(call?.params).toMatchObject({
-			path: { organization_id: 'org-1', employee_id: 'employee-1' },
+			path: { member_id: 'member-1' },
 			query: expect.objectContaining({
 				from: expect.any(String),
 				to: expect.any(String),
@@ -290,10 +312,10 @@ describe('EmployeeWorkTimeFeature', () => {
 		})
 	})
 
-	it('sends the right PATCH employee payload for the contractual baseline', async () => {
+	it('sends the right PUT employee-profile payload for the contractual baseline, preserving the existing rate', async () => {
 		const user = userEvent.setup()
-		const patchEmployee = vi.fn().mockResolvedValue(EMPLOYEE)
-		const { calls } = renderFeature({ patchEmployee })
+		const upsertProfile = vi.fn().mockResolvedValue(PROFILE)
+		const { calls } = renderFeature({ upsertProfile })
 
 		await screen.findByText('Martin Alix')
 		const contractInput = screen.getByLabelText('Base contractuelle')
@@ -303,20 +325,27 @@ describe('EmployeeWorkTimeFeature', () => {
 			screen.getByRole('button', { name: 'Enregistrer la base contractuelle' }),
 		)
 
-		await waitFor(() => expect(patchEmployee).toHaveBeenCalledTimes(1))
+		await waitFor(() => expect(upsertProfile).toHaveBeenCalledTimes(1))
 		const call = calls.find(
-			(c) => c.method === 'patch' && c.path === EMPLOYEE_PATH,
+			(c) => c.method === 'put' && c.path === EMPLOYEE_PROFILE_PATH,
 		)
 		expect(call?.params).toMatchObject({
-			path: { employee_id: 'employee-1' },
+			path: { member_id: 'member-1' },
 			body: {
-				last_name: 'Martin',
-				first_name: 'Alix',
 				hourly_rate_cents: 1500,
-				user_id: null,
 				weekly_contract_minutes: 1800,
 			},
 		})
+	})
+
+	it('a member with no employee profile shows an unset rate and a zero contractual baseline', async () => {
+		renderFeature({ members: [MEMBER], profiles: [] })
+
+		await screen.findByText('Martin Alix')
+		expect(screen.getByText('Non renseigné')).toBeDefined()
+		expect(
+			(screen.getByLabelText('Base contractuelle') as HTMLInputElement).value,
+		).toBe('0h00')
 	})
 })
 
@@ -325,23 +354,22 @@ describe('EmployeeWorkTimeFeature — absences', () => {
 		vi.restoreAllMocks()
 	})
 
-	const EMPLOYEE_2 = {
-		id: 'employee-2',
+	const MEMBER_2: FakeMember = {
+		id: 'member-2',
 		organization_id: 'org-1',
 		last_name: 'Petit',
 		first_name: null,
-		hourly_rate_cents: 1400,
-		user_id: null,
-		weekly_contract_minutes: 2100,
+		display_name: 'Petit',
+		account: null,
+		joined_at: null,
 		created_at: '2026-01-01T00:00:00Z',
-		updated_at: '2026-01-01T00:00:00Z',
 	}
 
 	function absence(overrides: Record<string, unknown> = {}) {
 		return {
 			id: 'ab-1',
 			organization_id: 'org-1',
-			employee_id: 'employee-1',
+			member_id: 'member-1',
 			kind: 'LEAVE',
 			all_day: true,
 			starts_at: '2026-08-10T00:00:00Z',
@@ -353,11 +381,11 @@ describe('EmployeeWorkTimeFeature — absences', () => {
 		}
 	}
 
-	it("shows only the absences of the page's employee", async () => {
+	it("shows only the absences of the page's member", async () => {
 		renderFeature({
 			absences: [
-				absence({ id: 'ab-1', employee_id: 'employee-1' }),
-				absence({ id: 'ab-2', employee_id: 'employee-2' }),
+				absence({ id: 'ab-1', member_id: 'member-1' }),
+				absence({ id: 'ab-2', member_id: 'member-2' }),
 			],
 		})
 
@@ -366,7 +394,7 @@ describe('EmployeeWorkTimeFeature — absences', () => {
 		expect(screen.getAllByText(/Congé —/)).toHaveLength(1)
 	})
 
-	it('editing an absence prefills the form and sends a PATCH without employee_id', async () => {
+	it('editing an absence prefills the form and sends a PATCH without member_id', async () => {
 		const user = userEvent.setup()
 		const patchAbsence = vi.fn().mockResolvedValue(absence())
 		const { calls } = renderFeature({
@@ -389,7 +417,7 @@ describe('EmployeeWorkTimeFeature — absences', () => {
 		expect(call?.params).toMatchObject({
 			path: { organization_id: 'org-1', absence_id: 'ab-1' },
 		})
-		expect(call?.params).not.toHaveProperty('body.employee_id')
+		expect(call?.params).not.toHaveProperty('body.member_id')
 	})
 
 	it('deleting fires a DELETE and closes the form', async () => {
@@ -416,7 +444,7 @@ describe('EmployeeWorkTimeFeature — absences', () => {
 		await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
 	})
 
-	it("creating prefills the page's employee and sends a POST with their employee_id", async () => {
+	it("creating prefills the page's member and sends a POST with their member_id", async () => {
 		const user = userEvent.setup()
 		const postAbsence = vi.fn().mockResolvedValue(absence({ id: 'ab-new' }))
 		const { calls } = renderFeature({ postAbsence })
@@ -437,20 +465,20 @@ describe('EmployeeWorkTimeFeature — absences', () => {
 		)
 		expect(call?.params).toMatchObject({
 			path: { organization_id: 'org-1' },
-			body: { employee_id: 'employee-1', kind: 'LEAVE' },
+			body: { member_id: 'member-1', kind: 'LEAVE' },
 		})
 	})
 
-	it('the employee picker shows « {nom} {prénom} », and the last name alone without a first name', async () => {
+	it('the member picker shows the roster’s display name, including a member with no first name', async () => {
 		const user = userEvent.setup()
-		renderFeature({ employees: [EMPLOYEE, EMPLOYEE_2] })
+		renderFeature({ members: [MEMBER, MEMBER_2] })
 
 		await screen.findByText('Martin Alix')
 		await user.click(
 			screen.getByRole('button', { name: /Ajouter une absence/ }),
 		)
 		const sheet = await screen.findByRole('dialog')
-		await user.click(within(sheet).getByRole('combobox', { name: 'Employé' }))
+		await user.click(within(sheet).getByRole('combobox', { name: 'Personne' }))
 
 		expect(
 			await screen.findByRole('option', { name: 'Martin Alix' }),

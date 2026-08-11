@@ -59,8 +59,8 @@ describe('crossOrganizationPath', () => {
 		expect(crossOrganizationPath('/crm/customers/abc-123')).toBe(
 			'/crm/customers',
 		)
-		expect(crossOrganizationPath('/hr/employees/abc-123/work-time')).toBe(
-			'/hr/employees',
+		expect(crossOrganizationPath('/hr/team/abc-123/work-time')).toBe(
+			'/hr/team',
 		)
 	})
 

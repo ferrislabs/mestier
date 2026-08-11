@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
-	entryEmployeeIds,
 	entryLabel,
+	entryMemberIds,
 	entryTone,
 } from '#/pages/planning/lib/entries'
 import type { PlanningEntry } from '#/pages/planning/types'
@@ -18,7 +18,7 @@ function task(overrides: Partial<PlanningEntry> = {}): PlanningEntry {
 		ends_at: '2026-08-10T10:00:00Z',
 		all_day: false,
 		status: 'PLANNED',
-		employee_ids: ['employee-1', 'employee-2'],
+		member_ids: ['member-1', 'member-2'],
 		customer_name: 'Client Dupont',
 		context_label: 'Chantier toiture',
 		...overrides,
@@ -33,7 +33,7 @@ function absence(overrides: Partial<PlanningEntry> = {}): PlanningEntry {
 		ends_at: '2026-08-11T00:00:00Z',
 		all_day: true,
 		absence_kind: 'LEAVE',
-		employee_id: 'employee-1',
+		member_id: 'member-1',
 		...overrides,
 	} as PlanningEntry
 }
@@ -49,18 +49,18 @@ function unknownKindEntry(): PlanningEntry {
 	} as unknown as PlanningEntry
 }
 
-describe('entryEmployeeIds', () => {
-	it('returns every employee_id for a job', () => {
-		expect(entryEmployeeIds(task())).toEqual(['employee-1', 'employee-2'])
+describe('entryMemberIds', () => {
+	it('returns every member_id for a job', () => {
+		expect(entryMemberIds(task())).toEqual(['member-1', 'member-2'])
 	})
 
-	it('returns the single employee_id for an absence', () => {
-		expect(entryEmployeeIds(absence())).toEqual(['employee-1'])
+	it('returns the single member_id for an absence', () => {
+		expect(entryMemberIds(absence())).toEqual(['member-1'])
 	})
 
 	it('returns an empty array for an unknown kind, without throwing', () => {
-		expect(() => entryEmployeeIds(unknownKindEntry())).not.toThrow()
-		expect(entryEmployeeIds(unknownKindEntry())).toEqual([])
+		expect(() => entryMemberIds(unknownKindEntry())).not.toThrow()
+		expect(entryMemberIds(unknownKindEntry())).toEqual([])
 	})
 })
 

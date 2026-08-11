@@ -68,12 +68,8 @@ describe('buildBreadcrumbItems', () => {
 		])
 	})
 
-	it('resolves the employees trail', () => {
-		expect(labelsOf('/o/baptiste/hr/employees')).toEqual([
-			'Baptiste',
-			'RH',
-			'Employés',
-		])
+	it('resolves the team trail', () => {
+		expect(labelsOf('/o/baptiste/hr/team')).toEqual(['Baptiste', 'RH', 'Équipe'])
 	})
 
 	it('resolves the planning trail', () => {

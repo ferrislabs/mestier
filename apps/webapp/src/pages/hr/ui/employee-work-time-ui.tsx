@@ -7,12 +7,8 @@ import {
 	SectionHeader,
 	StatusBadge,
 } from '#/components/ui/surface'
-import type { Employee } from '#/hooks/use-reference-catalog'
-import {
-	employeeDisplayName,
-	formatDurationMinutes,
-	type WeeklyGap,
-} from '#/pages/hr/types'
+import type { Member } from '#/hooks/use-reference-catalog'
+import { formatDurationMinutes, type WeeklyGap } from '#/pages/hr/types'
 import {
 	AbsenceFormSheet,
 	type AbsenceFormSheetProps,
@@ -38,7 +34,9 @@ export interface ContractFormBinding {
 
 export interface EmployeeWorkTimeUIProps {
 	organizationName: string
-	employee: Employee
+	member: Member
+	/** `null` when the member has no employee profile yet. */
+	hourlyRateCents: number | null
 	weeklyGap: WeeklyGap
 	contractForm: ContractFormBinding
 	rhythmSection: RhythmSectionProps
@@ -50,7 +48,8 @@ export interface EmployeeWorkTimeUIProps {
 
 export function EmployeeWorkTimeUI({
 	organizationName,
-	employee,
+	member,
+	hourlyRateCents,
 	weeklyGap,
 	contractForm,
 	rhythmSection,
@@ -62,7 +61,7 @@ export function EmployeeWorkTimeUI({
 		<PageShell>
 			<PageHeader
 				eyebrow={organizationName}
-				title={employeeDisplayName(employee)}
+				title={member.display_name}
 				description="Base contractuelle, rythme hebdomadaire et plages de travail."
 			/>
 
@@ -76,7 +75,7 @@ export function EmployeeWorkTimeUI({
 						<span className="text-sm font-medium text-muted-foreground">
 							Taux horaire
 						</span>
-						<MoneyCell value={employee.hourly_rate_cents} suffix="/h" />
+						<MoneyCell value={hourlyRateCents} suffix="/h" />
 					</div>
 					<TextField
 						label="Base contractuelle"

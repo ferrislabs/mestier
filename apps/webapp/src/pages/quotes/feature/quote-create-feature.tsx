@@ -74,7 +74,8 @@ function QuoteWorkspace({
 		perPage: quotePageSize,
 	})
 	const catalog = useReferenceCatalog(organizationId, {
-		employees: false,
+		members: false,
+		employeeProfiles: false,
 		equipment: false,
 	})
 	const catalogItems = useCatalogItems(

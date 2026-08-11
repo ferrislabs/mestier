@@ -11,16 +11,16 @@ const TIME_ZONE = 'UTC'
 const RESOURCES: PlanningResource[] = [
 	{
 		resource_id: 'r-1',
+		member_id: 'e-1',
 		employee_id: 'e-1',
 		display_name: 'Marie Leroy',
-		kind: 'employee',
 		weekly_contract_minutes: 2100,
 	},
 	{
 		resource_id: 'r-2',
+		member_id: 'e-2',
 		employee_id: 'e-2',
 		display_name: 'Paul Bernard',
-		kind: 'employee',
 		weekly_contract_minutes: 2100,
 	},
 ]
@@ -35,7 +35,7 @@ function task(overrides: Partial<Extract<PlanningEntry, { kind: 'task' }>>) {
 		all_day: false,
 		blocks_availability: true,
 		child_count: 0,
-		employee_ids: ['e-1'],
+		member_ids: ['e-1'],
 		labels: [],
 		status: 'PLANNED',
 		...overrides,
@@ -48,7 +48,7 @@ function absence(
 	return {
 		kind: 'absence',
 		id: 'a-1',
-		employee_id: 'e-2',
+		member_id: 'e-2',
 		absence_kind: 'LEAVE',
 		starts_at: '2026-03-03T00:00:00Z',
 		ends_at: '2026-03-04T00:00:00Z',
@@ -177,7 +177,7 @@ describe('buildCalendarModel', () => {
 				title: 'Tonte',
 				starts_at: '2026-03-02T10:00:00Z',
 				ends_at: '2026-03-02T12:00:00Z',
-				employee_ids: ['e-2'],
+				member_ids: ['e-2'],
 			}),
 		])
 
@@ -204,7 +204,7 @@ describe('buildCalendarModel', () => {
 	})
 
 	it('resolves participants from the resources', () => {
-		const model = build([task({ employee_ids: ['e-1', 'e-2'] })])
+		const model = build([task({ member_ids: ['e-1', 'e-2'] })])
 		const event = model.days[0]?.timedEvents[0]
 
 		expect(event?.attendees.map((attendee) => attendee.name)).toEqual([
@@ -222,11 +222,11 @@ describe('buildCalendarModel', () => {
 		expect(model.hiddenCount).toBe(1)
 	})
 
-	it('filters by employee, whole team when the selection is empty', () => {
+	it('filters by member, whole team when the selection is empty', () => {
 		const entries = [task({}), absence({})]
 
-		expect(build(entries, { employeeIds: ['e-1'] }).hiddenCount).toBe(1)
-		expect(build(entries, { employeeIds: [] }).hiddenCount).toBe(0)
+		expect(build(entries, { memberIds: ['e-1'] }).hiddenCount).toBe(1)
+		expect(build(entries, { memberIds: [] }).hiddenCount).toBe(0)
 	})
 })
 

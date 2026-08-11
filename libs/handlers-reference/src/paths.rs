@@ -11,6 +11,15 @@ pub struct EmployeeProfilePath {
     pub member_id: MemberId,
 }
 
+/// The one bulk read over profiles, org-scoped rather than member-scoped —
+/// callers who need every profile in an organization (the HR team table)
+/// still can't address a profile on its own.
+#[derive(TypedPath, Deserialize)]
+#[typed_path("/api/v1/organizations/{organization_id}/employee-profiles")]
+pub struct EmployeeProfilesCollectionPath {
+    pub organization_id: OrganizationId,
+}
+
 #[derive(TypedPath, Deserialize)]
 #[typed_path("/api/v1/organizations/{organization_id}/equipment")]
 pub struct EquipmentCollectionPath {

@@ -109,7 +109,8 @@ function QuoteEditWorkspace({ quote }: { quote: Quote }) {
 	const { activeOrganization } = useActiveOrganization()
 	const customers = useCustomers(quote.organization_id)
 	const catalog = useReferenceCatalog(quote.organization_id, {
-		employees: false,
+		members: false,
+		employeeProfiles: false,
 		equipment: false,
 	})
 	const catalogItems = useCatalogItems(

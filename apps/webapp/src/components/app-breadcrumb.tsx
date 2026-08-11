@@ -1,4 +1,3 @@
-import { useQuery } from '@tanstack/react-query'
 import { Link, useLocation } from '@tanstack/react-router'
 import { Fragment } from 'react'
 import { OrgSwitcher } from '#/components/org-switcher'
@@ -12,10 +11,10 @@ import {
 } from '#/components/ui/breadcrumb'
 import { useActiveOrganization } from '#/hooks/use-active-organization'
 import { useCustomer } from '#/hooks/use-customers'
+import { useMember } from '#/hooks/use-reference-catalog'
 import { buildBreadcrumbItems } from '#/modules/breadcrumb'
 import { splitOrgPath } from '#/modules/org-path'
 import { customerDisplayName } from '#/pages/customers/types'
-import { employeeDisplayName } from '#/pages/hr/types'
 
 export function AppBreadcrumb() {
 	const location = useLocation()
@@ -29,22 +28,17 @@ export function AppBreadcrumb() {
 		? customerDisplayName(customer.data.data)
 		: 'Fiche client'
 
-	const employeeId = getEmployeeWorkTimeId(modulePath)
-	const employee = useQuery({
-		...window.tanstackApi.get('/api/v1/employees/{employee_id}', {
-			path: { employee_id: employeeId ?? '' },
-		}).queryOptions,
-		enabled: Boolean(employeeId),
-	})
-	const employeeLabel = employee.data?.data
-		? employeeDisplayName(employee.data.data)
+	const memberId = getMemberWorkTimeId(modulePath)
+	const member = useMember(memberId ?? '', Boolean(memberId))
+	const memberLabel = member.data?.data
+		? member.data.data.display_name
 		: 'Temps de travail'
 
 	const items = buildBreadcrumbItems({
 		pathname: location.pathname,
 		organizationName: activeOrganization.name,
 		organizationSlug: activeOrganization.slug,
-		detailLabel: getDetailLabel(modulePath, customerLabel, employeeLabel),
+		detailLabel: getDetailLabel(modulePath, customerLabel, memberLabel),
 	})
 
 	return (
@@ -80,11 +74,11 @@ export function AppBreadcrumb() {
 function getDetailLabel(
 	pathname: string,
 	customerLabel: string,
-	employeeLabel: string,
+	memberLabel: string,
 ): string | undefined {
 	if (getCustomerId(pathname)) return customerLabel
 	if (/^\/crm\/quotes\/[^/]+$/.test(pathname)) return 'Fiche devis'
-	if (getEmployeeWorkTimeId(pathname)) return employeeLabel
+	if (getMemberWorkTimeId(pathname)) return memberLabel
 	return undefined
 }
 
@@ -95,8 +89,8 @@ function getCustomerId(pathname: string): string | null {
 	return decodeURIComponent(match[1])
 }
 
-function getEmployeeWorkTimeId(pathname: string): string | null {
-	const match = /^\/hr\/employees\/([^/]+)\/work-time$/.exec(pathname)
+function getMemberWorkTimeId(pathname: string): string | null {
+	const match = /^\/hr\/team\/([^/]+)\/work-time$/.exec(pathname)
 	if (!match?.[1]) return null
 	return decodeURIComponent(match[1])
 }
