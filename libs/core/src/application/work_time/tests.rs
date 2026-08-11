@@ -6,13 +6,13 @@ mod tests {
     use common::{OrganizationId, UserId, generate_uuid_v7};
     use sqlx::PgPool;
 
-    use crate::EmployeeId;
     use crate::application::{MestierUseCase, default_authorizer};
     use crate::domain::work_time::{
         DateRange,
         commands::{ReplaceRhythmCommand, ReplaceWorkSlotsCommand, RhythmSlotInput, WorkSlotInput},
     };
     use crate::infrastructure::realtime::EventHub;
+    use crate::{EmployeeId, MemberId};
 
     fn date(y: i32, m: u32, d: u32) -> NaiveDate {
         NaiveDate::from_ymd_opt(y, m, d).unwrap()
@@ -30,6 +30,7 @@ mod tests {
 
     struct Fixture {
         organization_id: OrganizationId,
+        member_id: MemberId,
         employee_id: EmployeeId,
         owner_id: UserId,
     }
@@ -64,13 +65,25 @@ mod tests {
         .await
         .unwrap();
 
+        let member_id = generate_uuid_v7();
+        sqlx::query!(
+            r#"INSERT INTO organization_members (id, organization_id, last_name)
+               VALUES ($1, $2, $3)"#,
+            member_id,
+            org_id,
+            "Alice Employee",
+        )
+        .execute(pool)
+        .await
+        .unwrap();
+
         let employee_id = generate_uuid_v7();
         sqlx::query!(
-            r#"INSERT INTO employees (id, org_id, last_name, hourly_rate_cents, weekly_contract_minutes)
+            r#"INSERT INTO employees (id, org_id, member_id, hourly_rate_cents, weekly_contract_minutes)
                VALUES ($1, $2, $3, $4, $5)"#,
             employee_id,
             org_id,
-            "Alice Employee",
+            member_id,
             3500,
             2100,
         )
@@ -80,17 +93,18 @@ mod tests {
 
         Fixture {
             organization_id: OrganizationId(org_id),
+            member_id: MemberId(member_id),
             employee_id: EmployeeId(employee_id),
             owner_id: UserId(owner_id),
         }
     }
 
     /// Removes everything seeded under `organization_id`, cascading to
-    /// employees/employee_rhythms/employee_rhythm_slots/employee_work_slots,
+    /// employees/employee_rhythms/employee_rhythm_slots/work_slots,
     /// plus the loose user rows that outlive the organization.
     async fn cleanup(pool: &PgPool, organization_id: OrganizationId, user_ids: &[UserId]) {
         sqlx::query!(
-            "DELETE FROM employee_work_slots WHERE org_id = $1",
+            "DELETE FROM work_slots WHERE org_id = $1",
             organization_id.0
         )
         .execute(pool)
@@ -119,6 +133,15 @@ mod tests {
         }
     }
 
+    fn rhythm_slots() -> Vec<RhythmSlotInput> {
+        vec![RhythmSlotInput {
+            weekday: 1,
+            starts_minute: 480,
+            ends_minute: 720,
+        }]
+    }
+
+    #[allow(dead_code)]
     fn replace_rhythm_command(
         fixture: &Fixture,
         effective_from: NaiveDate,
@@ -144,7 +167,13 @@ mod tests {
         let usecase = make_usecase(pool.clone());
 
         let created = usecase
-            .replace_rhythm(replace_rhythm_command(&fixture, date(2026, 1, 1)))
+            .replace_rhythm(
+                fixture.organization_id,
+                fixture.member_id,
+                date(2026, 1, 1),
+                None,
+                rhythm_slots(),
+            )
             .await
             .expect("replace_rhythm must succeed");
 
@@ -167,7 +196,13 @@ mod tests {
         let usecase = make_usecase(pool.clone());
 
         let first = usecase
-            .replace_rhythm(replace_rhythm_command(&fixture, date(2026, 1, 1)))
+            .replace_rhythm(
+                fixture.organization_id,
+                fixture.member_id,
+                date(2026, 1, 1),
+                None,
+                rhythm_slots(),
+            )
             .await
             .unwrap();
 
@@ -177,7 +212,16 @@ mod tests {
             starts_minute: 540,
             ends_minute: 1020,
         }];
-        let second = usecase.replace_rhythm(second_command).await.unwrap();
+        let second = usecase
+            .replace_rhythm(
+                second_command.organization_id,
+                fixture.member_id,
+                second_command.effective_from,
+                second_command.effective_to,
+                second_command.slots,
+            )
+            .await
+            .unwrap();
 
         assert_eq!(
             second.id, first.id,
@@ -188,7 +232,7 @@ mod tests {
 
         let (rhythms, _) = usecase
             .get_work_time(
-                fixture.employee_id,
+                fixture.member_id,
                 DateRange::new(date(2025, 12, 1), date(2026, 2, 1)).unwrap(),
             )
             .await
@@ -211,12 +255,24 @@ mod tests {
         let usecase = make_usecase(pool.clone());
 
         let first = usecase
-            .replace_rhythm(replace_rhythm_command(&fixture, date(2026, 1, 1)))
+            .replace_rhythm(
+                fixture.organization_id,
+                fixture.member_id,
+                date(2026, 1, 1),
+                None,
+                rhythm_slots(),
+            )
             .await
             .unwrap();
 
         let second = usecase
-            .replace_rhythm(replace_rhythm_command(&fixture, date(2026, 9, 1)))
+            .replace_rhythm(
+                fixture.organization_id,
+                fixture.member_id,
+                date(2026, 9, 1),
+                None,
+                rhythm_slots(),
+            )
             .await
             .unwrap();
 
@@ -226,7 +282,7 @@ mod tests {
 
         let (rhythms, _) = usecase
             .get_work_time(
-                fixture.employee_id,
+                fixture.member_id,
                 DateRange::new(date(2026, 1, 1), date(2026, 9, 1)).unwrap(),
             )
             .await
@@ -251,7 +307,7 @@ mod tests {
 
         let first_command = ReplaceWorkSlotsCommand {
             organization_id: fixture.organization_id,
-            employee_id: fixture.employee_id,
+            member_id: fixture.member_id,
             from: date(2026, 8, 1),
             to: date(2026, 8, 7),
             slots: vec![WorkSlotInput {
@@ -264,7 +320,7 @@ mod tests {
 
         let second_command = ReplaceWorkSlotsCommand {
             organization_id: fixture.organization_id,
-            employee_id: fixture.employee_id,
+            member_id: fixture.member_id,
             from: date(2026, 8, 1),
             to: date(2026, 8, 7),
             slots: vec![WorkSlotInput {
@@ -280,7 +336,7 @@ mod tests {
 
         let (_, work_slots) = usecase
             .get_work_time(
-                fixture.employee_id,
+                fixture.member_id,
                 DateRange::new(date(2026, 8, 1), date(2026, 8, 7)).unwrap(),
             )
             .await
@@ -303,13 +359,19 @@ mod tests {
         let usecase = make_usecase(pool.clone());
 
         usecase
-            .replace_rhythm(replace_rhythm_command(&fixture, date(2026, 1, 1)))
+            .replace_rhythm(
+                fixture.organization_id,
+                fixture.member_id,
+                date(2026, 1, 1),
+                None,
+                rhythm_slots(),
+            )
             .await
             .unwrap();
         usecase
             .replace_work_slots(ReplaceWorkSlotsCommand {
                 organization_id: fixture.organization_id,
-                employee_id: fixture.employee_id,
+                member_id: fixture.member_id,
                 from: date(2026, 3, 1),
                 to: date(2026, 3, 7),
                 slots: vec![WorkSlotInput {
@@ -324,7 +386,7 @@ mod tests {
         usecase
             .replace_work_slots(ReplaceWorkSlotsCommand {
                 organization_id: fixture.organization_id,
-                employee_id: fixture.employee_id,
+                member_id: fixture.member_id,
                 from: date(2026, 6, 1),
                 to: date(2026, 6, 7),
                 slots: vec![WorkSlotInput {
@@ -338,7 +400,7 @@ mod tests {
 
         let (rhythms, work_slots) = usecase
             .get_work_time(
-                fixture.employee_id,
+                fixture.member_id,
                 DateRange::new(date(2026, 3, 1), date(2026, 3, 7)).unwrap(),
             )
             .await

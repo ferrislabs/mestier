@@ -11,7 +11,7 @@ use crate::absence::{AbsencePath, require_absence};
     tag = super::super::TAG,
     params(
         ("organization_id" = mestier_core::OrganizationId, Path, description = "Organization identifier"),
-        ("absence_id" = mestier_core::EmployeeAbsenceId, Path, description = "Absence identifier"),
+        ("absence_id" = mestier_core::AbsenceId, Path, description = "Absence identifier"),
     ),
     responses(
         (status = 204, description = "Absence soft-deleted"),

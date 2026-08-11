@@ -2,7 +2,7 @@ use common::CoreError;
 use mestier_macros::transactional;
 
 use crate::{
-    EmployeeAbsence, EmployeeAbsenceId, OrganizationId,
+    Absence, AbsenceId, OrganizationId,
     application::MestierUseCase,
     domain::absence::{
         commands::{CreateAbsenceCommand, PatchAbsenceCommand},
@@ -17,13 +17,13 @@ impl MestierUseCase {
     pub async fn create_absence(
         &self,
         command: CreateAbsenceCommand,
-    ) -> Result<EmployeeAbsence, CoreError> {
+    ) -> Result<Absence, CoreError> {
         let mut service = AbsenceService::new(absence_repository);
         service.create_absence(command).await
     }
 
     #[transactional(absence)]
-    pub async fn get_absence(&self, id: EmployeeAbsenceId) -> Result<EmployeeAbsence, CoreError> {
+    pub async fn get_absence(&self, id: AbsenceId) -> Result<Absence, CoreError> {
         let mut service = AbsenceService::new(absence_repository);
         service.get_absence(id).await
     }
@@ -34,22 +34,19 @@ impl MestierUseCase {
         organization_id: OrganizationId,
         limit: u64,
         offset: u64,
-    ) -> Result<(Vec<EmployeeAbsence>, u64), CoreError> {
+    ) -> Result<(Vec<Absence>, u64), CoreError> {
         let mut service = AbsenceService::new(absence_repository);
         service.list_absences(organization_id, limit, offset).await
     }
 
     #[transactional(absence)]
-    pub async fn patch_absence(
-        &self,
-        command: PatchAbsenceCommand,
-    ) -> Result<EmployeeAbsence, CoreError> {
+    pub async fn patch_absence(&self, command: PatchAbsenceCommand) -> Result<Absence, CoreError> {
         let mut service = AbsenceService::new(absence_repository);
         service.patch_absence(command).await
     }
 
     #[transactional(absence)]
-    pub async fn soft_delete_absence(&self, id: EmployeeAbsenceId) -> Result<(), CoreError> {
+    pub async fn soft_delete_absence(&self, id: AbsenceId) -> Result<(), CoreError> {
         let mut service = AbsenceService::new(absence_repository);
         service.soft_delete_absence(id).await
     }

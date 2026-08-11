@@ -1,10 +1,7 @@
 use chrono::{DateTime, NaiveDate, Utc};
 use common::CoreError;
 
-use crate::{
-    EmployeeAbsence, EmployeeRhythm, EmployeeWorkSlot, OrganizationId,
-    domain::planning::PlanningTask,
-};
+use crate::{Absence, EmployeeRhythm, OrganizationId, WorkSlot, domain::planning::PlanningTask};
 
 /// The planning read model's own repository: the tables no other aggregate
 /// already owns a suitable batched, organization-wide query for
@@ -45,7 +42,7 @@ pub trait PlanningRepository: Send {
         organization_id: OrganizationId,
         from: DateTime<Utc>,
         to: DateTime<Utc>,
-    ) -> impl Future<Output = Result<Vec<EmployeeAbsence>, CoreError>> + Send;
+    ) -> impl Future<Output = Result<Vec<Absence>, CoreError>> + Send;
 
     /// Every rhythm version (with its slots) overlapping `[from, to]`, for
     /// every employee of the organization, in one query pair (rhythms,
@@ -64,5 +61,5 @@ pub trait PlanningRepository: Send {
         organization_id: OrganizationId,
         from: NaiveDate,
         to: NaiveDate,
-    ) -> impl Future<Output = Result<Vec<EmployeeWorkSlot>, CoreError>> + Send;
+    ) -> impl Future<Output = Result<Vec<WorkSlot>, CoreError>> + Send;
 }

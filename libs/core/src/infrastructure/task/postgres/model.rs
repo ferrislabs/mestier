@@ -5,7 +5,7 @@ use common::CoreError;
 use uuid::Uuid;
 
 use crate::{
-    CustomerContextId, CustomerId, EmployeeId, OrganizationId, QuoteId, Task, TaskAssignment,
+    CustomerContextId, CustomerId, MemberId, OrganizationId, QuoteId, Task, TaskAssignment,
     TaskAssignmentId, TaskId, TaskStatus,
 };
 
@@ -61,7 +61,7 @@ pub struct TaskAssignmentRow {
     pub id: Uuid,
     pub org_id: Uuid,
     pub task_id: Uuid,
-    pub employee_id: Uuid,
+    pub member_id: Uuid,
     pub created_at: DateTime<Utc>,
 }
 
@@ -71,7 +71,7 @@ impl From<TaskAssignmentRow> for TaskAssignment {
             id: TaskAssignmentId(row.id),
             organization_id: OrganizationId(row.org_id),
             task_id: TaskId(row.task_id),
-            employee_id: EmployeeId(row.employee_id),
+            member_id: MemberId(row.member_id),
             created_at: row.created_at,
         }
     }

@@ -2,8 +2,8 @@ use chrono::NaiveDate;
 use common::CoreError;
 
 use crate::{
-    EmployeeId, OrganizationId,
-    domain::work_time::{EmployeeRhythm, EmployeeRhythmId, EmployeeWorkSlot},
+    EmployeeId, MemberId, OrganizationId,
+    domain::work_time::{EmployeeRhythm, EmployeeRhythmId, WorkSlot},
 };
 
 #[cfg_attr(test, mockall::automock)]
@@ -19,7 +19,7 @@ pub trait RhythmRepository: Send {
     /// Every rhythm version whose `[effective_from, effective_to)` window
     /// overlaps `[from, to]`, including the one currently in effect —
     /// mirrors the `GET work-time` contract, which returns whole versions
-    /// rather than windowing them like `employee_work_slots`.
+    /// rather than windowing them like `work_slots`.
     fn find_overlapping(
         &mut self,
         employee_id: EmployeeId,
@@ -54,13 +54,14 @@ pub trait RhythmRepository: Send {
 #[cfg_attr(test, mockall::automock)]
 pub trait WorkSlotRepository: Send {
     /// Work slots pinned inside `[from, to]` — windowed, unlike rhythm
-    /// versions.
+    /// versions. Keyed on the member: someone with no contract still
+    /// declares the days they work.
     fn list_in_window(
         &mut self,
-        employee_id: EmployeeId,
+        member_id: MemberId,
         from: NaiveDate,
         to: NaiveDate,
-    ) -> impl Future<Output = Result<Vec<EmployeeWorkSlot>, CoreError>> + Send;
+    ) -> impl Future<Output = Result<Vec<WorkSlot>, CoreError>> + Send;
 
     /// Full replace of the `[from, to]` window: physical delete of whatever
     /// is there, then insert of the given set — the `PUT` contract treats
@@ -68,9 +69,9 @@ pub trait WorkSlotRepository: Send {
     fn replace_window(
         &mut self,
         organization_id: OrganizationId,
-        employee_id: EmployeeId,
+        member_id: MemberId,
         from: NaiveDate,
         to: NaiveDate,
-        slots: &[EmployeeWorkSlot],
-    ) -> impl Future<Output = Result<Vec<EmployeeWorkSlot>, CoreError>> + Send;
+        slots: &[WorkSlot],
+    ) -> impl Future<Output = Result<Vec<WorkSlot>, CoreError>> + Send;
 }

@@ -12,7 +12,7 @@ mod tests {
         commands::{CreateTaskCommand, PatchTaskCommand},
     };
     use crate::infrastructure::realtime::EventHub;
-    use crate::{CustomerContextId, CustomerId, EmployeeId, TaskId, TaskStatus};
+    use crate::{CustomerContextId, CustomerId, MemberId, TaskId, TaskStatus};
 
     async fn make_pool() -> PgPool {
         let url = std::env::var("DATABASE_URL")
@@ -94,29 +94,46 @@ mod tests {
     }
 
     /// Seeds an employee record already attached to `organization_id`.
-    async fn seed_employee(pool: &PgPool, organization_id: OrganizationId) -> EmployeeId {
+    /// A member with a contractual profile attached. Returns the seat — the
+    /// profile is not what an assignment points at any more.
+    async fn seed_employee(pool: &PgPool, organization_id: OrganizationId) -> MemberId {
+        let member_id = generate_uuid_v7();
+        sqlx::query!(
+            r#"INSERT INTO organization_members (id, organization_id, last_name)
+               VALUES ($1, $2, $3)"#,
+            member_id,
+            organization_id.0,
+            "Existing Employee",
+        )
+        .execute(pool)
+        .await
+        .unwrap();
+
         let employee_id = generate_uuid_v7();
         sqlx::query!(
-            r#"INSERT INTO employees (id, org_id, last_name, hourly_rate_cents, weekly_contract_minutes)
+            r#"INSERT INTO employees (id, org_id, member_id, hourly_rate_cents, weekly_contract_minutes)
                VALUES ($1, $2, $3, $4, $5)"#,
             employee_id,
             organization_id.0,
-            "Existing Employee",
+            member_id,
             3500,
             2100,
         )
         .execute(pool)
         .await
         .unwrap();
-        EmployeeId(employee_id)
+        MemberId(member_id)
     }
 
     /// Seeds a user who is a member of `organization_id` but has no
     /// employee record yet — a "member-only" planning resource.
+    /// A seat with an occupant but no contractual profile — plannable all the
+    /// same, which is the whole point of #182. Returns both, since the caller
+    /// needs the user id only for cleanup.
     async fn seed_member_without_employee(
         pool: &PgPool,
         organization_id: OrganizationId,
-    ) -> UserId {
+    ) -> (MemberId, UserId) {
         let user_id = generate_uuid_v7();
         sqlx::query!(
             r#"INSERT INTO users (id, email, username, display_name, sub)
@@ -131,9 +148,11 @@ mod tests {
         .await
         .unwrap();
 
+        let member_id = generate_uuid_v7();
         sqlx::query!(
-            r#"INSERT INTO organization_members (organization_id, user_id, last_name)
-               VALUES ($1, $2, $3)"#,
+            r#"INSERT INTO organization_members (id, organization_id, user_id, last_name)
+               VALUES ($1, $2, $3, $4)"#,
+            member_id,
             organization_id.0,
             user_id,
             "Member Without Employee",
@@ -142,7 +161,7 @@ mod tests {
         .await
         .unwrap();
 
-        UserId(user_id)
+        (MemberId(member_id), UserId(user_id))
     }
 
     /// Removes everything seeded under `organization_id`, cascading to
@@ -362,14 +381,14 @@ mod tests {
 
         let task_a = usecase.create_task(create_command(&fixture)).await.unwrap();
         let mut patch_a = PatchTaskCommand::new(task_a.id);
-        patch_a.assignees = Some(vec![AssigneeRef::Employee(employee_a)]);
+        patch_a.assignees = Some(vec![AssigneeRef(employee_a)]);
         usecase.patch_task(patch_a).await.unwrap();
 
         let mut second_command = create_command(&fixture);
         second_command.title = "Deuxième tâche".to_owned();
         let task_b = usecase.create_task(second_command).await.unwrap();
         let mut patch_b = PatchTaskCommand::new(task_b.id);
-        patch_b.assignees = Some(vec![AssigneeRef::Employee(employee_b)]);
+        patch_b.assignees = Some(vec![AssigneeRef(employee_b)]);
         usecase.patch_task(patch_b).await.unwrap();
 
         let mut third_command = create_command(&fixture);
@@ -386,18 +405,18 @@ mod tests {
         assert_eq!(tasks.len(), 3);
 
         let find = |id: TaskId| tasks.iter().find(|task| task.id == id).unwrap();
-        let employee_ids_of = |id: TaskId| -> Vec<EmployeeId> {
+        let member_ids_of = |id: TaskId| -> Vec<MemberId> {
             find(id)
                 .assignments
                 .iter()
-                .map(|assignment| assignment.employee_id)
+                .map(|assignment| assignment.member_id)
                 .collect()
         };
 
-        assert_eq!(employee_ids_of(task_a.id), vec![employee_a]);
-        assert_eq!(employee_ids_of(task_b.id), vec![employee_b]);
+        assert_eq!(member_ids_of(task_a.id), vec![employee_a]);
+        assert_eq!(member_ids_of(task_b.id), vec![employee_b]);
         assert!(
-            employee_ids_of(task_c.id).is_empty(),
+            member_ids_of(task_c.id).is_empty(),
             "a task with no assignees must come back with an empty list, not another task's"
         );
 
@@ -432,16 +451,33 @@ mod tests {
         cleanup(&pool, fixture.organization_id, &[fixture.owner_id]).await;
     }
 
+    /// A member with no contractual profile is assignable exactly like one
+    /// with a contract, and assigning them provisions nothing.
+    ///
+    /// This test used to assert the opposite: that assigning a bare member
+    /// created an employee record on the fly, and that a second assignment
+    /// reused it rather than creating a duplicate. That whole mechanism existed
+    /// because only an employee could be assigned — #182 removed it, so what is
+    /// checked here is that `employees` stays untouched.
     #[tokio::test]
     #[ignore = "requires live postgres"]
-    async fn patch_task_reschedules_reassigns_and_provisions_a_member_employee() {
+    async fn patch_task_assigns_a_member_with_no_profile_without_provisioning_one() {
         let pool = make_pool().await;
         let fixture = seed_fixture(&pool).await;
-        let existing_employee_id = seed_employee(&pool, fixture.organization_id).await;
-        let member_user_id = seed_member_without_employee(&pool, fixture.organization_id).await;
+        let with_profile = seed_employee(&pool, fixture.organization_id).await;
+        let (without_profile, member_user_id) =
+            seed_member_without_employee(&pool, fixture.organization_id).await;
         let usecase = make_usecase(pool.clone());
 
         let created = usecase.create_task(create_command(&fixture)).await.unwrap();
+
+        let profiles_before: i64 = sqlx::query_scalar!(
+            r#"SELECT COUNT(*) AS "count!" FROM employees WHERE org_id = $1"#,
+            fixture.organization_id.0,
+        )
+        .fetch_one(&pool)
+        .await
+        .unwrap();
 
         let new_starts_at = created.starts_at.unwrap() + Duration::days(1);
         let new_ends_at = created.ends_at.unwrap() + Duration::days(1);
@@ -451,11 +487,11 @@ mod tests {
         patch.ends_at = Some(Some(new_ends_at));
         patch.status = Some(TaskStatus::InProgress);
         patch.assignees = Some(vec![
-            AssigneeRef::Employee(existing_employee_id),
-            AssigneeRef::Member(member_user_id),
+            AssigneeRef(with_profile),
+            AssigneeRef(without_profile),
         ]);
 
-        let (updated, created_employees) = usecase
+        let updated = usecase
             .patch_task(patch)
             .await
             .expect("patch_task must succeed");
@@ -464,43 +500,25 @@ mod tests {
         assert_eq!(updated.ends_at, Some(new_ends_at));
         assert_eq!(updated.status, TaskStatus::InProgress);
         assert_eq!(updated.assignments.len(), 2);
-        assert_eq!(created_employees.len(), 1);
-        assert_eq!(created_employees[0].user_id, Some(member_user_id));
-        assert_eq!(created_employees[0].hourly_rate_cents, None);
-        assert_eq!(created_employees[0].weekly_contract_minutes, 0);
 
-        let provisioned_employee_id = created_employees[0].id;
+        let assigned: Vec<MemberId> = updated
+            .assignments
+            .iter()
+            .map(|assignment| assignment.member_id)
+            .collect();
+        assert!(assigned.contains(&with_profile));
+        assert!(assigned.contains(&without_profile));
 
-        // A second PATCH carrying the same member assignee must reuse the
-        // employee record just created rather than provisioning a second
-        // one — the whole point of resolving "member" against the existing
-        // employee first.
-        let mut second_patch = PatchTaskCommand::new(created.id);
-        second_patch.assignees = Some(vec![AssigneeRef::Member(member_user_id)]);
-
-        let (reassigned, created_on_second_patch) = usecase
-            .patch_task(second_patch)
-            .await
-            .expect("second patch_task must succeed");
-
-        assert!(created_on_second_patch.is_empty());
-        assert_eq!(reassigned.assignments.len(), 1);
-        assert_eq!(
-            reassigned.assignments[0].employee_id,
-            provisioned_employee_id
-        );
-
-        let employee_count: i64 = sqlx::query_scalar!(
-            r#"SELECT COUNT(*) AS "count!" FROM employees WHERE org_id = $1 AND user_id = $2"#,
+        let profiles_after: i64 = sqlx::query_scalar!(
+            r#"SELECT COUNT(*) AS "count!" FROM employees WHERE org_id = $1"#,
             fixture.organization_id.0,
-            member_user_id.0,
         )
         .fetch_one(&pool)
         .await
         .unwrap();
         assert_eq!(
-            employee_count, 1,
-            "the member must resolve to a single employee record, not a duplicate"
+            profiles_before, profiles_after,
+            "assigning a member must never create an HR profile"
         );
 
         cleanup(
@@ -516,30 +534,30 @@ mod tests {
     async fn patch_task_rolls_back_the_whole_transaction_on_failure() {
         let pool = make_pool().await;
         let fixture = seed_fixture(&pool).await;
-        let member_user_id = seed_member_without_employee(&pool, fixture.organization_id).await;
+        let (seeded_member_id, member_user_id) =
+            seed_member_without_employee(&pool, fixture.organization_id).await;
         let usecase = make_usecase(pool.clone());
 
         let created = usecase.create_task(create_command(&fixture)).await.unwrap();
         let original_starts_at = created.starts_at;
         let original_ends_at = created.ends_at;
 
-        let bogus_employee_id = EmployeeId(generate_uuid_v7());
+        let bogus_member_id = MemberId(generate_uuid_v7());
         let mut patch = PatchTaskCommand::new(created.id);
         patch.starts_at = Some(Some(original_starts_at.unwrap() + Duration::days(1)));
         patch.ends_at = Some(Some(original_ends_at.unwrap() + Duration::days(1)));
-        // First assignee provisions a real employee record (a real write
-        // inside the transaction); the second references an employee that
-        // does not exist, which fails the whole `PATCH` after that write
-        // already happened. Nothing must survive the rollback.
+        // The first assignee is a real seat, the second is not. The whole
+        // `PATCH` must fail and leave nothing behind — the reschedule included,
+        // which lands before the assignees are resolved.
         patch.assignees = Some(vec![
-            AssigneeRef::Member(member_user_id),
-            AssigneeRef::Employee(bogus_employee_id),
+            AssigneeRef(seeded_member_id),
+            AssigneeRef(bogus_member_id),
         ]);
 
         let err = usecase
             .patch_task(patch)
             .await
-            .expect_err("patch_task must fail for an unknown employee assignee");
+            .expect_err("patch_task must fail for an unknown member assignee");
         assert!(matches!(err, common::CoreError::NotFound));
 
         let task = usecase.get_task(created.id).await.unwrap();
@@ -551,19 +569,6 @@ mod tests {
         assert!(
             task.assignments.is_empty(),
             "no assignment must have landed"
-        );
-
-        let employee_count: i64 = sqlx::query_scalar!(
-            r#"SELECT COUNT(*) AS "count!" FROM employees WHERE org_id = $1 AND user_id = $2"#,
-            fixture.organization_id.0,
-            member_user_id.0,
-        )
-        .fetch_one(&pool)
-        .await
-        .unwrap();
-        assert_eq!(
-            employee_count, 0,
-            "the on-the-fly employee provisioned before the failure must have rolled back"
         );
 
         cleanup(

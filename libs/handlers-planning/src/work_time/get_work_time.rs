@@ -6,11 +6,8 @@ use axum::{
 use handlers::{ApiError, AppState, DataEnvelope, Response};
 use mestier_core::DateRange;
 
-use crate::{
-    require_org_membership,
-    work_time::{
-        RhythmResponse, WorkSlotResponse, WorkTimePath, WorkTimeResponse, WorkTimeWindowQuery,
-    },
+use crate::work_time::{
+    RhythmResponse, WorkSlotResponse, WorkTimePath, WorkTimeResponse, WorkTimeWindowQuery,
 };
 
 /// The API's reading window is capped at 92 days: without a bound, the HR
@@ -39,16 +36,12 @@ const MAX_WINDOW_DAYS: i64 = 92;
     security(("bearer_auth" = []))
 )]
 pub async fn handler(
-    WorkTimePath {
-        organization_id,
-        employee_id,
-    }: WorkTimePath,
+    WorkTimePath { member_id }: WorkTimePath,
     State(state): State<AppState>,
     Extension(identity): Extension<Identity>,
     Query(window): Query<WorkTimeWindowQuery>,
 ) -> Result<Response<WorkTimeResponse>, ApiError> {
-    require_org_membership(&state, &identity, organization_id).await?;
-    crate::require_employee_target(&state, organization_id, employee_id).await?;
+    crate::require_member_target(&state, &identity, member_id).await?;
 
     let range = DateRange::new(window.from, window.to)?;
     if range.span_days() > MAX_WINDOW_DAYS {
@@ -57,7 +50,7 @@ pub async fn handler(
         )));
     }
 
-    let (rhythms, work_slots) = state.usecase.get_work_time(employee_id, range).await?;
+    let (rhythms, work_slots) = state.usecase.get_work_time(member_id, range).await?;
 
     Ok(Response::OK(WorkTimeResponse {
         rhythms: rhythms.into_iter().map(RhythmResponse::from).collect(),

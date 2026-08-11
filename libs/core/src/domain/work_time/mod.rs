@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 use uuid::Uuid;
 
-use crate::{EmployeeId, OrganizationId};
+use crate::{EmployeeId, MemberId, OrganizationId};
 
 pub mod commands;
 pub mod ports;
@@ -48,17 +48,17 @@ impl Display for RhythmSlotId {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, ToSchema)]
-pub struct EmployeeWorkSlotId(pub Uuid);
+pub struct WorkSlotId(pub Uuid);
 
-impl FromStr for EmployeeWorkSlotId {
+impl FromStr for WorkSlotId {
     type Err = uuid::Error;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        Uuid::from_str(s).map(EmployeeWorkSlotId)
+        Uuid::from_str(s).map(WorkSlotId)
     }
 }
 
-impl Display for EmployeeWorkSlotId {
+impl Display for WorkSlotId {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.0)
     }
@@ -97,11 +97,16 @@ pub struct EmployeeRhythm {
 /// A concrete work slot pinned to a real date. When one or more exist for a
 /// given `work_date`, they take priority over whatever the rhythm says for
 /// that weekday — see [`service::expand_work_slots`].
+///
+/// Keyed on the member, not the profile: someone with no contract still
+/// declares the days they work, and that has to show up on the planning grid.
+/// The rhythm is the opposite case — it is a contract translated into
+/// recurring slots, so it stays keyed on [`EmployeeRhythm::employee_id`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct EmployeeWorkSlot {
-    pub id: EmployeeWorkSlotId,
+pub struct WorkSlot {
+    pub id: WorkSlotId,
     pub organization_id: OrganizationId,
-    pub employee_id: EmployeeId,
+    pub member_id: MemberId,
     pub work_date: NaiveDate,
     pub starts_minute: i16,
     pub ends_minute: i16,
@@ -165,7 +170,7 @@ mod tests {
     #[test]
     fn employee_work_slot_id_parses_uuid() {
         let uuid = Uuid::new_v4();
-        let parsed = EmployeeWorkSlotId::from_str(&uuid.to_string()).unwrap();
+        let parsed = WorkSlotId::from_str(&uuid.to_string()).unwrap();
 
         assert_eq!(parsed.0, uuid);
     }

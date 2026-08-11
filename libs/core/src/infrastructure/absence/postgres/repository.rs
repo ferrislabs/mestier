@@ -3,7 +3,7 @@ use common::CoreError;
 use mestier_macros::repository;
 
 use crate::{
-    EmployeeAbsence, EmployeeAbsenceId, OrganizationId,
+    Absence, AbsenceId, OrganizationId,
     domain::absence::ports::AbsenceRepository,
     infrastructure::{
         absence::postgres::model::AbsenceRow, postgres::SharedTx, postgres::error::map_sqlx_error,
@@ -22,18 +22,18 @@ impl<'tx> PgAbsenceRepository<'tx> {
 }
 
 impl<'tx> AbsenceRepository for PgAbsenceRepository<'tx> {
-    async fn insert(&mut self, absence: &EmployeeAbsence) -> Result<EmployeeAbsence, CoreError> {
+    async fn insert(&mut self, absence: &Absence) -> Result<Absence, CoreError> {
         let mut tx = self.tx.lock().await;
         let row = sqlx::query_as!(
             AbsenceRow,
             r#"
-            INSERT INTO employee_absences (id, org_id, employee_id, kind, starts_at, ends_at, all_day, note, deleted_at, created_at, updated_at)
+            INSERT INTO absences (id, org_id, member_id, kind, starts_at, ends_at, all_day, note, deleted_at, created_at, updated_at)
             VALUES ($1, $2, $3, CAST($4 AS text)::absence_kind, $5, $6, $7, $8, $9, $10, $11)
-            RETURNING id, org_id, employee_id, kind::text AS "kind!", starts_at, ends_at, all_day, note, deleted_at, created_at, updated_at
+            RETURNING id, org_id, member_id, kind::text AS "kind!", starts_at, ends_at, all_day, note, deleted_at, created_at, updated_at
             "#,
             absence.id.0,
             absence.organization_id.0,
-            absence.employee_id.0,
+            absence.member_id.0,
             absence.kind.as_str(),
             absence.starts_at,
             absence.ends_at,
@@ -50,16 +50,13 @@ impl<'tx> AbsenceRepository for PgAbsenceRepository<'tx> {
         row.into_employee_absence()
     }
 
-    async fn find_by_id(
-        &mut self,
-        id: EmployeeAbsenceId,
-    ) -> Result<Option<EmployeeAbsence>, CoreError> {
+    async fn find_by_id(&mut self, id: AbsenceId) -> Result<Option<Absence>, CoreError> {
         let mut tx = self.tx.lock().await;
         let row = sqlx::query_as!(
             AbsenceRow,
             r#"
-            SELECT id, org_id, employee_id, kind::text AS "kind!", starts_at, ends_at, all_day, note, deleted_at, created_at, updated_at
-            FROM employee_absences
+            SELECT id, org_id, member_id, kind::text AS "kind!", starts_at, ends_at, all_day, note, deleted_at, created_at, updated_at
+            FROM absences
             WHERE id = $1 AND deleted_at IS NULL
             "#,
             id.0,
@@ -76,13 +73,13 @@ impl<'tx> AbsenceRepository for PgAbsenceRepository<'tx> {
         organization_id: OrganizationId,
         limit: u64,
         offset: u64,
-    ) -> Result<(Vec<EmployeeAbsence>, u64), CoreError> {
+    ) -> Result<(Vec<Absence>, u64), CoreError> {
         let mut tx = self.tx.lock().await;
         let rows = sqlx::query_as!(
             AbsenceRow,
             r#"
-            SELECT id, org_id, employee_id, kind::text AS "kind!", starts_at, ends_at, all_day, note, deleted_at, created_at, updated_at
-            FROM employee_absences
+            SELECT id, org_id, member_id, kind::text AS "kind!", starts_at, ends_at, all_day, note, deleted_at, created_at, updated_at
+            FROM absences
             WHERE org_id = $1 AND deleted_at IS NULL
             ORDER BY starts_at ASC, id ASC
             LIMIT $2 OFFSET $3
@@ -96,7 +93,7 @@ impl<'tx> AbsenceRepository for PgAbsenceRepository<'tx> {
         .map_err(map_sqlx_error)?;
 
         let total: i64 = sqlx::query_scalar!(
-            r#"SELECT COUNT(*) AS "count!" FROM employee_absences WHERE org_id = $1 AND deleted_at IS NULL"#,
+            r#"SELECT COUNT(*) AS "count!" FROM absences WHERE org_id = $1 AND deleted_at IS NULL"#,
             organization_id.0,
         )
         .fetch_one(&mut ***tx)
@@ -111,12 +108,12 @@ impl<'tx> AbsenceRepository for PgAbsenceRepository<'tx> {
         Ok((absences, total as u64))
     }
 
-    async fn update(&mut self, absence: &EmployeeAbsence) -> Result<EmployeeAbsence, CoreError> {
+    async fn update(&mut self, absence: &Absence) -> Result<Absence, CoreError> {
         let mut tx = self.tx.lock().await;
         let row = sqlx::query_as!(
             AbsenceRow,
             r#"
-            UPDATE employee_absences
+            UPDATE absences
             SET kind = CAST($2 AS text)::absence_kind,
                 starts_at = $3,
                 ends_at = $4,
@@ -124,7 +121,7 @@ impl<'tx> AbsenceRepository for PgAbsenceRepository<'tx> {
                 note = $6,
                 updated_at = $7
             WHERE id = $1 AND deleted_at IS NULL
-            RETURNING id, org_id, employee_id, kind::text AS "kind!", starts_at, ends_at, all_day, note, deleted_at, created_at, updated_at
+            RETURNING id, org_id, member_id, kind::text AS "kind!", starts_at, ends_at, all_day, note, deleted_at, created_at, updated_at
             "#,
             absence.id.0,
             absence.kind.as_str(),
@@ -144,13 +141,13 @@ impl<'tx> AbsenceRepository for PgAbsenceRepository<'tx> {
 
     async fn soft_delete(
         &mut self,
-        id: EmployeeAbsenceId,
+        id: AbsenceId,
         deleted_at: DateTime<Utc>,
     ) -> Result<(), CoreError> {
         let mut tx = self.tx.lock().await;
         let result = sqlx::query!(
             r#"
-            UPDATE employee_absences
+            UPDATE absences
             SET deleted_at = $2, updated_at = $2
             WHERE id = $1 AND deleted_at IS NULL
             "#,

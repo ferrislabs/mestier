@@ -1,15 +1,13 @@
 use chrono::{DateTime, Utc};
 use uuid::Uuid;
 
-use crate::{Employee, EmployeeId, OrganizationId, UserId};
+use crate::{Employee, EmployeeId, MemberId, OrganizationId};
 
 #[derive(Debug, Clone)]
 pub struct EmployeeRow {
     pub id: Uuid,
     pub org_id: Uuid,
-    pub user_id: Option<Uuid>,
-    pub last_name: String,
-    pub first_name: Option<String>,
+    pub member_id: Uuid,
     pub hourly_rate_cents: Option<i32>,
     pub weekly_contract_minutes: i32,
     pub deleted_at: Option<DateTime<Utc>>,
@@ -22,9 +20,7 @@ impl From<EmployeeRow> for Employee {
         Self {
             id: EmployeeId(row.id),
             organization_id: OrganizationId(row.org_id),
-            user_id: row.user_id.map(UserId),
-            last_name: row.last_name,
-            first_name: row.first_name,
+            member_id: MemberId(row.member_id),
             hourly_rate_cents: row.hourly_rate_cents,
             weekly_contract_minutes: row.weekly_contract_minutes,
             deleted_at: row.deleted_at,

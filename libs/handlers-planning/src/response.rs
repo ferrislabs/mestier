@@ -1,7 +1,6 @@
 use chrono::{DateTime, Utc};
 use mestier_core::{
-    CustomerContextId, CustomerId, Employee, EmployeeId, OrganizationId, QuoteId, Task, TaskId,
-    TaskStatus, UserId,
+    CustomerContextId, CustomerId, MemberId, OrganizationId, QuoteId, Task, TaskId, TaskStatus,
 };
 use serde::Serialize;
 use utoipa::ToSchema;
@@ -25,7 +24,7 @@ pub struct TaskResponse {
     pub quote_id: Option<QuoteId>,
     /// The complete set of currently assigned employees — mirrors the
     /// `PATCH` contract, where `assignees` is always the full list.
-    pub employee_ids: Vec<EmployeeId>,
+    pub member_ids: Vec<MemberId>,
     /// The number of direct children — only `GET /tasks` computes this (one
     /// grouped query per page, see `TaskRepository::count_children`); every
     /// other endpoint leaves it `None` rather than pay for an extra query
@@ -65,10 +64,10 @@ impl From<Task> for TaskResponse {
             customer_id: value.customer_id,
             customer_context_id: value.customer_context_id,
             quote_id: value.quote_id,
-            employee_ids: value
+            member_ids: value
                 .assignments
                 .into_iter()
-                .map(|assignment| assignment.employee_id)
+                .map(|assignment| assignment.member_id)
                 .collect(),
             child_count: None,
             // A task freshly loaded from `Task` alone (never labeled by
@@ -84,51 +83,16 @@ impl From<Task> for TaskResponse {
     }
 }
 
-/// A minimal employee projection for `created_employees`.
+/// Response body for the transactional `PATCH`: the task as it stands after
+/// reparenting, rescheduling or reassignment.
 ///
-/// Duplicated from `handlers-reference::response::EmployeeResponse` rather
-/// than shared: `handlers-planning` has no dependency on `handlers-reference`
-/// (and adding one is a `Cargo.toml` change outside this workstream's
-/// files), so each HTTP adapter crate owns its own response DTOs. The shape
-/// tracks `Employee` field for field.
-#[derive(Debug, Clone, PartialEq, Serialize, ToSchema)]
-pub struct EmployeeResponse {
-    pub id: EmployeeId,
-    pub organization_id: OrganizationId,
-    pub user_id: Option<UserId>,
-    pub last_name: String,
-    /// `null` means "not provided" — see `Employee::first_name`.
-    pub first_name: Option<String>,
-    /// `null` means the rate is not set yet; `0` means genuinely free.
-    pub hourly_rate_cents: Option<i32>,
-    pub weekly_contract_minutes: i32,
-    pub created_at: DateTime<Utc>,
-    pub updated_at: DateTime<Utc>,
-}
-
-impl From<Employee> for EmployeeResponse {
-    fn from(value: Employee) -> Self {
-        Self {
-            id: value.id,
-            organization_id: value.organization_id,
-            user_id: value.user_id,
-            last_name: value.last_name,
-            first_name: value.first_name,
-            hourly_rate_cents: value.hourly_rate_cents,
-            weekly_contract_minutes: value.weekly_contract_minutes,
-            created_at: value.created_at,
-            updated_at: value.updated_at,
-        }
-    }
-}
-
-/// Response body for the transactional `PATCH`: the task as it stands
-/// after reparenting/reschedule/reassignment, plus every employee record
-/// that had to be provisioned on the fly for a `member` assignee.
+/// It used to carry `created_employees` as well — every HR record provisioned
+/// on the fly because a bare member could not be assigned. Every member is
+/// assignable now, so nothing is provisioned and there is nothing to report
+/// back.
 #[derive(Debug, Clone, PartialEq, Serialize, ToSchema)]
 pub struct PatchTaskResponse {
     pub task: TaskResponse,
-    pub created_employees: Vec<EmployeeResponse>,
 }
 
 #[cfg(test)]
@@ -144,7 +108,8 @@ mod tests {
         let id: TaskId = "11111111-1111-1111-1111-111111111111".parse().unwrap();
         let organization_id: OrganizationId =
             "22222222-2222-2222-2222-222222222222".parse().unwrap();
-        let employee_id: EmployeeId = "33333333-3333-3333-3333-333333333333".parse().unwrap();
+        let member_id: mestier_core::MemberId =
+            "33333333-3333-3333-3333-333333333333".parse().unwrap();
         Task {
             id,
             organization_id,
@@ -163,7 +128,7 @@ mod tests {
                 id: "66666666-6666-6666-6666-666666666666".parse().unwrap(),
                 organization_id,
                 task_id: id,
-                employee_id,
+                member_id,
                 created_at: now,
             }],
             deleted_at: None,
@@ -173,13 +138,13 @@ mod tests {
     }
 
     #[test]
-    fn task_response_flattens_assignments_to_employee_ids() {
+    fn task_response_flattens_assignments_to_member_ids() {
         let source = task();
-        let expected_employee_id = source.assignments[0].employee_id;
+        let expected_member_id = source.assignments[0].member_id;
 
         let response: TaskResponse = source.into();
 
-        assert_eq!(response.employee_ids, vec![expected_employee_id]);
+        assert_eq!(response.member_ids, vec![expected_member_id]);
     }
 
     #[test]

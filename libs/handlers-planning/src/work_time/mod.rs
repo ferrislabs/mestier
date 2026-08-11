@@ -3,13 +3,15 @@
 //! that date. See the planning module design doc for the full model.
 //!
 //! Owns its own leaf paths (see the crate-level `paths.rs` docstring) since
-//! `organization_id` and `employee_id` are both part of every route here.
+//! Every route here is addressed by member: work time concerns the person,
+//! not their contract. The rhythm is resolved through the profile inside the
+//! use case, so no caller ever has to know whether the member has one.
 
 use axum::Router;
 use axum_extra::routing::{RouterExt, TypedPath};
 use chrono::NaiveDate;
 use handlers::AppState;
-use mestier_core::{EmployeeId, EmployeeRhythm, EmployeeWorkSlot, OrganizationId, RhythmSlot};
+use mestier_core::{EmployeeId, EmployeeRhythm, MemberId, OrganizationId, RhythmSlot, WorkSlot};
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
@@ -29,24 +31,21 @@ pub fn router(_state: &AppState) -> Router<AppState> {
 }
 
 #[derive(TypedPath, Deserialize)]
-#[typed_path("/api/v1/organizations/{organization_id}/employees/{employee_id}/work-time")]
+#[typed_path("/api/v1/members/{member_id}/work-time")]
 pub struct WorkTimePath {
-    pub organization_id: OrganizationId,
-    pub employee_id: EmployeeId,
+    pub member_id: MemberId,
 }
 
 #[derive(TypedPath, Deserialize)]
-#[typed_path("/api/v1/organizations/{organization_id}/employees/{employee_id}/rhythm")]
+#[typed_path("/api/v1/members/{member_id}/rhythm")]
 pub struct RhythmPath {
-    pub organization_id: OrganizationId,
-    pub employee_id: EmployeeId,
+    pub member_id: MemberId,
 }
 
 #[derive(TypedPath, Deserialize)]
-#[typed_path("/api/v1/organizations/{organization_id}/employees/{employee_id}/work-slots")]
+#[typed_path("/api/v1/members/{member_id}/work-slots")]
 pub struct WorkSlotsPath {
-    pub organization_id: OrganizationId,
-    pub employee_id: EmployeeId,
+    pub member_id: MemberId,
 }
 
 /// `from`/`to` are both required — mirrors the `GET work-time` and `PUT
@@ -107,20 +106,20 @@ impl From<EmployeeRhythm> for RhythmResponse {
 
 #[derive(Debug, Clone, PartialEq, Serialize, ToSchema)]
 pub struct WorkSlotResponse {
-    pub id: mestier_core::EmployeeWorkSlotId,
+    pub id: mestier_core::WorkSlotId,
     pub organization_id: OrganizationId,
-    pub employee_id: EmployeeId,
+    pub member_id: MemberId,
     pub work_date: NaiveDate,
     pub starts_minute: i16,
     pub ends_minute: i16,
 }
 
-impl From<EmployeeWorkSlot> for WorkSlotResponse {
-    fn from(value: EmployeeWorkSlot) -> Self {
+impl From<WorkSlot> for WorkSlotResponse {
+    fn from(value: WorkSlot) -> Self {
         Self {
             id: value.id,
             organization_id: value.organization_id,
-            employee_id: value.employee_id,
+            member_id: value.member_id,
             work_date: value.work_date,
             starts_minute: value.starts_minute,
             ends_minute: value.ends_minute,

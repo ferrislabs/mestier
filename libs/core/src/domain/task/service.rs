@@ -4,16 +4,14 @@ use chrono::{DateTime, Utc};
 use common::{CoreError, generate_uuid_v7};
 
 use crate::{
-    CustomerContextId, CustomerId, Employee, EmployeeId, OrganizationId, Task, TimeRange,
+    CustomerContextId, CustomerId, MemberId, OrganizationId, Task, TimeRange,
     domain::{
-        employee::ports::EmployeeRepository,
         member::ports::MemberRepository,
         task::{
             TaskAssignment, TaskAssignmentId, TaskId,
             commands::{CreateTaskCommand, PatchTaskCommand},
             ports::TaskRepository,
         },
-        user::ports::UserRepository,
     },
 };
 
@@ -102,36 +100,27 @@ pub fn validate_reparenting(child_count: i64) -> Result<(), CoreError> {
 /// `role`/`member`/`user` repositories directly: cross-aggregate
 /// orchestration lives in the domain service that owns the use case, never
 /// in the thin `#[transactional]` application layer.
-pub struct TaskService<TR, ER, UR, MR>
+pub struct TaskService<TR, MR>
 where
     TR: TaskRepository,
-    ER: EmployeeRepository,
-    UR: UserRepository,
     MR: MemberRepository,
 {
     task_repository: TR,
-    employee_repository: ER,
-    user_repository: UR,
     member_repository: MR,
 }
 
-impl<TR, ER, UR, MR> TaskService<TR, ER, UR, MR>
+impl<TR, MR> TaskService<TR, MR>
 where
     TR: TaskRepository,
-    ER: EmployeeRepository,
-    UR: UserRepository,
     MR: MemberRepository,
 {
-    pub fn new(
-        task_repository: TR,
-        employee_repository: ER,
-        user_repository: UR,
-        member_repository: MR,
-    ) -> Self {
+    /// Neither an `EmployeeRepository` nor a `UserRepository`: assigning a
+    /// task needs the member to exist in the organization, and nothing else.
+    /// The first was used to provision an HR record on the fly, the second to
+    /// name it — a seat carries its own name, so both are gone.
+    pub fn new(task_repository: TR, member_repository: MR) -> Self {
         Self {
             task_repository,
-            employee_repository,
-            user_repository,
             member_repository,
         }
     }
@@ -221,10 +210,7 @@ where
     ///
     /// Returns the updated task together with the employee records created
     /// on the fly for `member` assignees who had none yet.
-    pub async fn patch_task(
-        &mut self,
-        command: PatchTaskCommand,
-    ) -> Result<(Task, Vec<Employee>), CoreError> {
+    pub async fn patch_task(&mut self, command: PatchTaskCommand) -> Result<Task, CoreError> {
         let mut task = self.get_task(command.id).await?;
 
         if let Some(parent_choice) = command.parent_task_id {
@@ -285,17 +271,11 @@ where
         }
         task.updated_at = Utc::now();
 
-        let created_employees = if let Some(assignees) = command.assignees {
-            let (assignments, created_employees) =
-                self.resolve_assignments(&task, assignees).await?;
-            task.assignments = assignments;
-            created_employees
-        } else {
-            Vec::new()
-        };
+        if let Some(assignees) = command.assignees {
+            task.assignments = self.resolve_assignments(&task, assignees).await?;
+        }
 
-        let updated = self.task_repository.update(&task).await?;
-        Ok((updated, created_employees))
+        self.task_repository.update(&task).await
     }
 
     /// Resolves each `AssigneeRef` to a concrete, deduplicated `employee_id`
@@ -306,106 +286,62 @@ where
         &mut self,
         task: &Task,
         assignees: Vec<crate::AssigneeRef>,
-    ) -> Result<(Vec<TaskAssignment>, Vec<Employee>), CoreError> {
-        let mut created_employees = Vec::new();
+    ) -> Result<Vec<TaskAssignment>, CoreError> {
         let mut seen = HashSet::new();
-        let mut employee_ids = Vec::with_capacity(assignees.len());
+        let mut member_ids = Vec::with_capacity(assignees.len());
 
         for assignee in assignees {
-            let employee_id = self
-                .resolve_assignee(task, assignee, &mut created_employees)
-                .await?;
+            let member_id = self.resolve_assignee(task, assignee).await?;
 
-            if seen.insert(employee_id) {
-                employee_ids.push(employee_id);
+            if seen.insert(member_id) {
+                member_ids.push(member_id);
             }
         }
 
         let now = Utc::now();
-        let assignments = employee_ids
+        let assignments = member_ids
             .into_iter()
-            .map(|employee_id| TaskAssignment {
+            .map(|member_id| TaskAssignment {
                 id: TaskAssignmentId(generate_uuid_v7()),
                 organization_id: task.organization_id,
                 task_id: task.id,
-                employee_id,
+                member_id,
                 created_at: now,
             })
             .collect();
 
-        Ok((assignments, created_employees))
+        Ok(assignments)
     }
 
+    /// Checks that the assignee is a member of the task's organization, and
+    /// returns it.
+    ///
+    /// This used to branch on the reference's kind and, for a bare member,
+    /// provision an employee record on the fly — named from the account's
+    /// `display_name`, with no rate. All of that existed because only an
+    /// employee could be assigned. A member is assignable as it stands, so the
+    /// provisioning is gone and this is now a membership check, nothing more.
     async fn resolve_assignee(
         &mut self,
         task: &Task,
         assignee: crate::AssigneeRef,
-        created_employees: &mut Vec<Employee>,
-    ) -> Result<EmployeeId, CoreError> {
-        match assignee {
-            crate::AssigneeRef::Employee(employee_id) => {
-                let employee = self
-                    .employee_repository
-                    .find_by_id(employee_id)
-                    .await?
-                    .ok_or(CoreError::NotFound)?;
+    ) -> Result<MemberId, CoreError> {
+        let crate::AssigneeRef(member_id) = assignee;
 
-                if employee.organization_id != task.organization_id {
-                    return Err(CoreError::NotFound);
-                }
+        let member = self
+            .member_repository
+            .find_by_id(member_id)
+            .await?
+            .ok_or(CoreError::NotFound)?;
 
-                Ok(employee_id)
-            }
-            crate::AssigneeRef::Member(user_id) => {
-                self.member_repository
-                    .find_by_org_and_user(task.organization_id, user_id)
-                    .await?
-                    .ok_or(CoreError::NotFound)?;
-
-                if let Some(existing) = self
-                    .employee_repository
-                    .find_by_user_id(task.organization_id, user_id)
-                    .await?
-                {
-                    return Ok(existing.id);
-                }
-
-                let user = self
-                    .user_repository
-                    .find_by_id(user_id)
-                    .await?
-                    .ok_or(CoreError::NotFound)?;
-
-                let now = Utc::now();
-                let created = self
-                    .employee_repository
-                    .insert(&Employee {
-                        id: EmployeeId(generate_uuid_v7()),
-                        organization_id: task.organization_id,
-                        user_id: Some(user_id),
-                        // The account's `display_name` is a single free-text
-                        // field, exactly like the pre-split `employees.name`
-                        // was — it cannot be reliably split into a first and
-                        // last name (see the `split_employee_name`
-                        // migration), so it becomes `last_name` and
-                        // `first_name` is left unset, same as a backfilled row.
-                        last_name: user.name,
-                        first_name: None,
-                        // Never `Some(0)`: an on-the-fly record has no rate
-                        // *yet*, which is not the same as "free".
-                        hourly_rate_cents: None,
-                        weekly_contract_minutes: 0,
-                        deleted_at: None,
-                        created_at: now,
-                        updated_at: now,
-                    })
-                    .await?;
-
-                let employee_id = created.id;
-                created_employees.push(created);
-                Ok(employee_id)
-            }
+        // Checked against the task's organization, not a caller-supplied one:
+        // assigning across tenants must read as "no such member", never as a
+        // successful assignment.
+        if member.organization_id != task.organization_id {
+            return Err(CoreError::NotFound);
         }
+
+        Ok(member_id)
     }
 
     /// Soft-deletes `id` together with every direct child it has. The
@@ -511,11 +447,8 @@ fn validate_text_field(label: &str, value: &Option<String>) -> Result<(), CoreEr
 mod tests {
     use super::*;
     use crate::{
-        AssigneeRef, CustomerContextId, CustomerId, OrganizationId, TaskStatus, User, UserId,
-        domain::{
-            employee::ports::MockEmployeeRepository, member::ports::MockMemberRepository,
-            task::ports::MockTaskRepository, user::ports::MockUserRepository,
-        },
+        AssigneeRef, CustomerContextId, CustomerId, Member, MemberId, OrganizationId, TaskStatus,
+        domain::{member::ports::MockMemberRepository, task::ports::MockTaskRepository},
     };
     use mockall::predicate::eq;
     use uuid::Uuid;
@@ -546,19 +479,18 @@ mod tests {
         }
     }
 
-    fn employee(id: EmployeeId, organization_id: OrganizationId) -> Employee {
-        let now = Utc::now();
-        Employee {
+    /// An assignment points at a seat, so this is what the tests build now —
+    /// the contractual profile plays no part in resolving an assignee.
+    fn member(id: MemberId, organization_id: OrganizationId) -> Member {
+        Member {
             id,
             organization_id,
             user_id: None,
             last_name: "Alice".to_owned(),
             first_name: None,
-            hourly_rate_cents: Some(3500),
-            weekly_contract_minutes: 2100,
+            joined_at: None,
+            created_at: Utc::now(),
             deleted_at: None,
-            created_at: now,
-            updated_at: now,
         }
     }
 
@@ -671,21 +603,9 @@ mod tests {
     #[allow(clippy::type_complexity)]
     fn service(
         task_repository: MockTaskRepository,
-        employee_repository: MockEmployeeRepository,
-        user_repository: MockUserRepository,
         member_repository: MockMemberRepository,
-    ) -> TaskService<
-        MockTaskRepository,
-        MockEmployeeRepository,
-        MockUserRepository,
-        MockMemberRepository,
-    > {
-        TaskService::new(
-            task_repository,
-            employee_repository,
-            user_repository,
-            member_repository,
-        )
+    ) -> TaskService<MockTaskRepository, MockMemberRepository> {
+        TaskService::new(task_repository, member_repository)
     }
 
     fn create_command() -> CreateTaskCommand {
@@ -713,12 +633,7 @@ mod tests {
             Box::pin(async move { Ok(cloned) })
         });
 
-        let mut service = service(
-            task_repository,
-            MockEmployeeRepository::new(),
-            MockUserRepository::new(),
-            MockMemberRepository::new(),
-        );
+        let mut service = service(task_repository, MockMemberRepository::new());
 
         let created = service.create_task(create_command()).await.unwrap();
 
@@ -738,12 +653,7 @@ mod tests {
                 Box::pin(async move { Ok(cloned) })
             });
 
-        let mut service = service(
-            task_repository,
-            MockEmployeeRepository::new(),
-            MockUserRepository::new(),
-            MockMemberRepository::new(),
-        );
+        let mut service = service(task_repository, MockMemberRepository::new());
 
         let mut command = create_command();
         command.customer_id = None;
@@ -757,12 +667,7 @@ mod tests {
 
     #[tokio::test]
     async fn create_task_rejects_ends_at_before_starts_at() {
-        let mut service = service(
-            MockTaskRepository::new(),
-            MockEmployeeRepository::new(),
-            MockUserRepository::new(),
-            MockMemberRepository::new(),
-        );
+        let mut service = service(MockTaskRepository::new(), MockMemberRepository::new());
 
         let mut command = create_command();
         command.ends_at = command.starts_at;
@@ -774,12 +679,7 @@ mod tests {
 
     #[tokio::test]
     async fn create_task_rejects_blank_title() {
-        let mut service = service(
-            MockTaskRepository::new(),
-            MockEmployeeRepository::new(),
-            MockUserRepository::new(),
-            MockMemberRepository::new(),
-        );
+        let mut service = service(MockTaskRepository::new(), MockMemberRepository::new());
 
         let mut command = create_command();
         command.title = "   ".to_owned();
@@ -791,12 +691,7 @@ mod tests {
 
     #[tokio::test]
     async fn create_task_rejects_a_customer_without_a_customer_context() {
-        let mut service = service(
-            MockTaskRepository::new(),
-            MockEmployeeRepository::new(),
-            MockUserRepository::new(),
-            MockMemberRepository::new(),
-        );
+        let mut service = service(MockTaskRepository::new(), MockMemberRepository::new());
 
         let mut command = create_command();
         command.customer_context_id = None;
@@ -808,12 +703,7 @@ mod tests {
 
     #[tokio::test]
     async fn create_task_rejects_a_root_without_dates() {
-        let mut service = service(
-            MockTaskRepository::new(),
-            MockEmployeeRepository::new(),
-            MockUserRepository::new(),
-            MockMemberRepository::new(),
-        );
+        let mut service = service(MockTaskRepository::new(), MockMemberRepository::new());
 
         let mut command = create_command();
         command.starts_at = None;
@@ -843,12 +733,7 @@ mod tests {
             Box::pin(async move { Ok(cloned) })
         });
 
-        let mut service = service(
-            task_repository,
-            MockEmployeeRepository::new(),
-            MockUserRepository::new(),
-            MockMemberRepository::new(),
-        );
+        let mut service = service(task_repository, MockMemberRepository::new());
 
         let mut command = create_command();
         command.organization_id = organization_id;
@@ -885,12 +770,7 @@ mod tests {
                 Box::pin(async move { Ok(Some(parent)) })
             });
 
-        let mut service = service(
-            task_repository,
-            MockEmployeeRepository::new(),
-            MockUserRepository::new(),
-            MockMemberRepository::new(),
-        );
+        let mut service = service(task_repository, MockMemberRepository::new());
 
         let mut command = create_command();
         command.organization_id = organization_id;
@@ -919,12 +799,7 @@ mod tests {
                 Box::pin(async move { Ok(Some(parent)) })
             });
 
-        let mut service = service(
-            task_repository,
-            MockEmployeeRepository::new(),
-            MockUserRepository::new(),
-            MockMemberRepository::new(),
-        );
+        let mut service = service(task_repository, MockMemberRepository::new());
 
         let mut command = create_command();
         command.organization_id = organization_id;
@@ -946,12 +821,7 @@ mod tests {
             .with(eq(id))
             .returning(|_| Box::pin(async { Ok(None) }));
 
-        let mut service = service(
-            task_repository,
-            MockEmployeeRepository::new(),
-            MockUserRepository::new(),
-            MockMemberRepository::new(),
-        );
+        let mut service = service(task_repository, MockMemberRepository::new());
 
         let err = service.get_task(id).await.unwrap_err();
 
@@ -976,12 +846,7 @@ mod tests {
             .withf(move |ids| ids == [root_id])
             .returning(move |_| Box::pin(async move { Ok(HashMap::from([(root_id, 2)])) }));
 
-        let mut service = service(
-            task_repository,
-            MockEmployeeRepository::new(),
-            MockUserRepository::new(),
-            MockMemberRepository::new(),
-        );
+        let mut service = service(task_repository, MockMemberRepository::new());
 
         let (items, child_counts, total) = service
             .list_tasks(organization_id, None, 10, 20)
@@ -1017,22 +882,16 @@ mod tests {
                 Box::pin(async move { Ok(cloned) })
             });
 
-        let mut service = service(
-            task_repository,
-            MockEmployeeRepository::new(),
-            MockUserRepository::new(),
-            MockMemberRepository::new(),
-        );
+        let mut service = service(task_repository, MockMemberRepository::new());
 
         let mut command = PatchTaskCommand::new(id);
         command.starts_at = Some(Some(new_starts_at));
         command.ends_at = Some(Some(new_ends_at));
 
-        let (updated, created_employees) = service.patch_task(command).await.unwrap();
+        let updated = service.patch_task(command).await.unwrap();
 
         assert_eq!(updated.starts_at, Some(new_starts_at));
         assert_eq!(updated.ends_at, Some(new_ends_at));
-        assert!(created_employees.is_empty());
     }
 
     #[tokio::test]
@@ -1051,12 +910,7 @@ mod tests {
                 Box::pin(async move { Ok(Some(existing)) })
             });
 
-        let mut service = service(
-            task_repository,
-            MockEmployeeRepository::new(),
-            MockUserRepository::new(),
-            MockMemberRepository::new(),
-        );
+        let mut service = service(task_repository, MockMemberRepository::new());
 
         let mut command = PatchTaskCommand::new(id);
         command.ends_at = Some(Some(existing_starts_at - chrono::Duration::hours(1)));
@@ -1088,17 +942,12 @@ mod tests {
                 Box::pin(async move { Ok(cloned) })
             });
 
-        let mut service = service(
-            task_repository,
-            MockEmployeeRepository::new(),
-            MockUserRepository::new(),
-            MockMemberRepository::new(),
-        );
+        let mut service = service(task_repository, MockMemberRepository::new());
 
         let mut command = PatchTaskCommand::new(id);
         command.title = Some("Nouveau titre".to_owned());
 
-        let (updated, _) = service.patch_task(command).await.unwrap();
+        let updated = service.patch_task(command).await.unwrap();
 
         assert_eq!(updated.title, "Nouveau titre");
     }
@@ -1118,12 +967,7 @@ mod tests {
                 Box::pin(async move { Ok(Some(existing)) })
             });
 
-        let mut service = service(
-            task_repository,
-            MockEmployeeRepository::new(),
-            MockUserRepository::new(),
-            MockMemberRepository::new(),
-        );
+        let mut service = service(task_repository, MockMemberRepository::new());
 
         let mut command = PatchTaskCommand::new(id);
         command.title = Some("   ".to_owned());
@@ -1158,17 +1002,12 @@ mod tests {
                 Box::pin(async move { Ok(cloned) })
             });
 
-        let mut service = service(
-            task_repository,
-            MockEmployeeRepository::new(),
-            MockUserRepository::new(),
-            MockMemberRepository::new(),
-        );
+        let mut service = service(task_repository, MockMemberRepository::new());
 
         let mut command = PatchTaskCommand::new(id);
         command.description = Some(None);
 
-        let (updated, _) = service.patch_task(command).await.unwrap();
+        let updated = service.patch_task(command).await.unwrap();
 
         assert!(updated.description.is_none());
     }
@@ -1199,18 +1038,13 @@ mod tests {
                 Box::pin(async move { Ok(cloned) })
             });
 
-        let mut service = service(
-            task_repository,
-            MockEmployeeRepository::new(),
-            MockUserRepository::new(),
-            MockMemberRepository::new(),
-        );
+        let mut service = service(task_repository, MockMemberRepository::new());
 
         let mut command = PatchTaskCommand::new(id);
         command.starts_at = Some(None);
         command.ends_at = Some(None);
 
-        let (updated, _) = service.patch_task(command).await.unwrap();
+        let updated = service.patch_task(command).await.unwrap();
 
         assert!(updated.starts_at.is_none());
         assert!(updated.ends_at.is_none());
@@ -1231,12 +1065,7 @@ mod tests {
                 Box::pin(async move { Ok(Some(existing)) })
             });
 
-        let mut service = service(
-            task_repository,
-            MockEmployeeRepository::new(),
-            MockUserRepository::new(),
-            MockMemberRepository::new(),
-        );
+        let mut service = service(task_repository, MockMemberRepository::new());
 
         let mut command = PatchTaskCommand::new(id);
         command.starts_at = Some(None);
@@ -1262,12 +1091,7 @@ mod tests {
                 Box::pin(async move { Ok(Some(existing)) })
             });
 
-        let mut service = service(
-            task_repository,
-            MockEmployeeRepository::new(),
-            MockUserRepository::new(),
-            MockMemberRepository::new(),
-        );
+        let mut service = service(task_repository, MockMemberRepository::new());
 
         let mut command = PatchTaskCommand::new(id);
         command.parent_task_id = Some(Some(id));
@@ -1308,12 +1132,7 @@ mod tests {
                 Box::pin(async move { Ok(Some(parent)) })
             });
 
-        let mut service = service(
-            task_repository,
-            MockEmployeeRepository::new(),
-            MockUserRepository::new(),
-            MockMemberRepository::new(),
-        );
+        let mut service = service(task_repository, MockMemberRepository::new());
 
         let mut command = PatchTaskCommand::new(id);
         command.parent_task_id = Some(Some(candidate_parent_id));
@@ -1358,17 +1177,12 @@ mod tests {
                 Box::pin(async move { Ok(cloned) })
             });
 
-        let mut service = service(
-            task_repository,
-            MockEmployeeRepository::new(),
-            MockUserRepository::new(),
-            MockMemberRepository::new(),
-        );
+        let mut service = service(task_repository, MockMemberRepository::new());
 
         let mut command = PatchTaskCommand::new(id);
         command.parent_task_id = Some(Some(new_parent_id));
 
-        let (updated, _) = service.patch_task(command).await.unwrap();
+        let updated = service.patch_task(command).await.unwrap();
 
         assert_eq!(updated.parent_task_id, Some(new_parent_id));
     }
@@ -1396,12 +1210,7 @@ mod tests {
         // rejection must land before either — a task with children never
         // even gets to the point of checking the candidate parent.
 
-        let mut service = service(
-            task_repository,
-            MockEmployeeRepository::new(),
-            MockUserRepository::new(),
-            MockMemberRepository::new(),
-        );
+        let mut service = service(task_repository, MockMemberRepository::new());
 
         let mut command = PatchTaskCommand::new(id);
         command.parent_task_id = Some(Some(new_parent_id));
@@ -1439,29 +1248,24 @@ mod tests {
                 Box::pin(async move { Ok(cloned) })
             });
 
-        let employee_id = EmployeeId(Uuid::new_v4());
-        let target_employee = employee(employee_id, organization_id);
-        let mut employee_repository = MockEmployeeRepository::new();
-        employee_repository
+        let member_id = MemberId(Uuid::new_v4());
+        let target_member = member(member_id, organization_id);
+        let mut member_repository = MockMemberRepository::new();
+        member_repository
             .expect_find_by_id()
-            .with(eq(employee_id))
+            .with(eq(member_id))
             .returning(move |_| {
-                let e = target_employee.clone();
-                Box::pin(async move { Ok(Some(e)) })
+                let m = target_member.clone();
+                Box::pin(async move { Ok(Some(m)) })
             });
 
-        let mut service = service(
-            task_repository,
-            employee_repository,
-            MockUserRepository::new(),
-            MockMemberRepository::new(),
-        );
+        let mut service = service(task_repository, member_repository);
 
         let mut command = PatchTaskCommand::new(id);
         command.title = Some("Nouveau titre".to_owned());
-        command.assignees = Some(vec![AssigneeRef::Employee(employee_id)]);
+        command.assignees = Some(vec![AssigneeRef(member_id)]);
 
-        let (updated, _) = service.patch_task(command).await.unwrap();
+        let updated = service.patch_task(command).await.unwrap();
 
         assert_eq!(updated.title, "Nouveau titre");
         assert_eq!(updated.assignments.len(), 1);
@@ -1490,12 +1294,7 @@ mod tests {
         // No `expect_update`: turning this subtask into a dateless root must
         // be rejected before any write is attempted.
 
-        let mut service = service(
-            task_repository,
-            MockEmployeeRepository::new(),
-            MockUserRepository::new(),
-            MockMemberRepository::new(),
-        );
+        let mut service = service(task_repository, MockMemberRepository::new());
 
         let mut command = PatchTaskCommand::new(id);
         command.parent_task_id = Some(None);
@@ -1533,17 +1332,12 @@ mod tests {
                 Box::pin(async move { Ok(cloned) })
             });
 
-        let mut service = service(
-            task_repository,
-            MockEmployeeRepository::new(),
-            MockUserRepository::new(),
-            MockMemberRepository::new(),
-        );
+        let mut service = service(task_repository, MockMemberRepository::new());
 
         let mut command = PatchTaskCommand::new(id);
         command.blocks_availability = Some(false);
 
-        let (updated, _) = service.patch_task(command).await.unwrap();
+        let updated = service.patch_task(command).await.unwrap();
 
         assert!(!updated.blocks_availability);
     }
@@ -1553,8 +1347,8 @@ mod tests {
         let id = TaskId(Uuid::new_v4());
         let organization_id = OrganizationId(Uuid::new_v4());
         let existing = task(id, organization_id);
-        let employee_id = EmployeeId(Uuid::new_v4());
-        let target_employee = employee(employee_id, organization_id);
+        let member_id = MemberId(Uuid::new_v4());
+        let target_member = member(member_id, organization_id);
 
         let mut task_repository = MockTaskRepository::new();
         task_repository
@@ -1566,36 +1360,30 @@ mod tests {
             });
         task_repository
             .expect_update()
-            .withf(move |t| t.assignments.len() == 1 && t.assignments[0].employee_id == employee_id)
+            .withf(move |t| t.assignments.len() == 1 && t.assignments[0].member_id == member_id)
             .returning(|t| {
                 let cloned = t.clone();
                 Box::pin(async move { Ok(cloned) })
             });
 
-        let mut employee_repository = MockEmployeeRepository::new();
-        employee_repository
+        let mut member_repository = MockMemberRepository::new();
+        member_repository
             .expect_find_by_id()
-            .with(eq(employee_id))
+            .with(eq(member_id))
             .returning(move |_| {
-                let e = target_employee.clone();
-                Box::pin(async move { Ok(Some(e)) })
+                let m = target_member.clone();
+                Box::pin(async move { Ok(Some(m)) })
             });
 
-        let mut service = service(
-            task_repository,
-            employee_repository,
-            MockUserRepository::new(),
-            MockMemberRepository::new(),
-        );
+        let mut service = service(task_repository, member_repository);
 
         let mut command = PatchTaskCommand::new(id);
-        command.assignees = Some(vec![AssigneeRef::Employee(employee_id)]);
+        command.assignees = Some(vec![AssigneeRef(member_id)]);
 
-        let (updated, created_employees) = service.patch_task(command).await.unwrap();
+        let updated = service.patch_task(command).await.unwrap();
 
         assert_eq!(updated.assignments.len(), 1);
-        assert_eq!(updated.assignments[0].employee_id, employee_id);
-        assert!(created_employees.is_empty());
+        assert_eq!(updated.assignments[0].member_id, member_id);
     }
 
     #[tokio::test]
@@ -1604,8 +1392,8 @@ mod tests {
         let organization_id = OrganizationId(Uuid::new_v4());
         let other_org_id = OrganizationId(Uuid::new_v4());
         let existing = task(id, organization_id);
-        let employee_id = EmployeeId(Uuid::new_v4());
-        let foreign_employee = employee(employee_id, other_org_id);
+        let member_id = MemberId(Uuid::new_v4());
+        let foreign_member = member(member_id, other_org_id);
 
         let mut task_repository = MockTaskRepository::new();
         task_repository
@@ -1616,36 +1404,39 @@ mod tests {
                 Box::pin(async move { Ok(Some(existing)) })
             });
 
-        let mut employee_repository = MockEmployeeRepository::new();
-        employee_repository
+        let mut member_repository = MockMemberRepository::new();
+        member_repository
             .expect_find_by_id()
-            .with(eq(employee_id))
+            .with(eq(member_id))
             .returning(move |_| {
-                let e = foreign_employee.clone();
-                Box::pin(async move { Ok(Some(e)) })
+                let m = foreign_member.clone();
+                Box::pin(async move { Ok(Some(m)) })
             });
 
-        let mut service = service(
-            task_repository,
-            employee_repository,
-            MockUserRepository::new(),
-            MockMemberRepository::new(),
-        );
+        let mut service = service(task_repository, member_repository);
 
         let mut command = PatchTaskCommand::new(id);
-        command.assignees = Some(vec![AssigneeRef::Employee(employee_id)]);
+        command.assignees = Some(vec![AssigneeRef(member_id)]);
 
         let err = service.patch_task(command).await.unwrap_err();
 
         assert!(matches!(err, CoreError::NotFound));
     }
 
+    /// A member with no contractual profile is assignable as it stands.
+    ///
+    /// Two tests used to live here: one asserting that assigning a bare member
+    /// created an employee record on the fly, another that a second assignment
+    /// reused it. `TaskService` no longer holds an `EmployeeRepository` at all,
+    /// so what is left to check is that resolving an assignee touches the seat
+    /// and nothing else.
     #[tokio::test]
-    async fn patch_task_creates_an_employee_for_a_member_without_one() {
+    async fn patch_task_assigns_a_member_that_has_no_profile() {
         let id = TaskId(Uuid::new_v4());
         let organization_id = OrganizationId(Uuid::new_v4());
         let existing = task(id, organization_id);
-        let user_id = UserId(Uuid::new_v4());
+        let member_id = MemberId(Uuid::new_v4());
+        let seat = member(member_id, organization_id);
 
         let mut task_repository = MockTaskRepository::new();
         task_repository
@@ -1657,7 +1448,7 @@ mod tests {
             });
         task_repository
             .expect_update()
-            .withf(|t| t.assignments.len() == 1)
+            .withf(move |t| t.assignments.len() == 1 && t.assignments[0].member_id == member_id)
             .returning(|t| {
                 let cloned = t.clone();
                 Box::pin(async move { Ok(cloned) })
@@ -1665,149 +1456,22 @@ mod tests {
 
         let mut member_repository = MockMemberRepository::new();
         member_repository
-            .expect_find_by_org_and_user()
-            .with(eq(organization_id), eq(user_id))
-            .returning(move |org_id, user_id| {
-                let m = crate::Member {
-                    id: crate::MemberId(Uuid::new_v4()),
-                    organization_id: org_id,
-                    user_id: Some(user_id),
-                    last_name: "Member".to_owned(),
-                    first_name: None,
-                    joined_at: Some(Utc::now()),
-                    created_at: Utc::now(),
-                    deleted_at: None,
-                };
-                Box::pin(async move { Ok(Some(m)) })
-            });
-
-        let mut employee_repository = MockEmployeeRepository::new();
-        employee_repository
-            .expect_find_by_user_id()
-            .with(eq(organization_id), eq(user_id))
-            .returning(|_, _| Box::pin(async { Ok(None) }));
-        employee_repository
-            .expect_insert()
-            .withf(move |e| {
-                e.user_id == Some(user_id)
-                    && e.hourly_rate_cents.is_none()
-                    && e.weekly_contract_minutes == 0
-                    && e.last_name == "Bob Member"
-                    && e.first_name.is_none()
-            })
-            .times(1)
-            .returning(|e| {
-                let cloned = e.clone();
-                Box::pin(async move { Ok(cloned) })
-            });
-
-        let mut user_repository = MockUserRepository::new();
-        user_repository
             .expect_find_by_id()
-            .with(eq(user_id))
-            .returning(move |id| {
-                let now = Utc::now();
-                let user = User {
-                    id,
-                    email: "bob@example.com".to_owned(),
-                    username: "bob".to_owned(),
-                    name: "Bob Member".to_owned(),
-                    sub: "sub-bob".to_owned(),
-                    deleted_at: None,
-                    created_at: now,
-                    updated_at: now,
-                };
-                Box::pin(async move { Ok(Some(user)) })
-            });
-
-        let mut service = service(
-            task_repository,
-            employee_repository,
-            user_repository,
-            member_repository,
-        );
-
-        let mut command = PatchTaskCommand::new(id);
-        command.assignees = Some(vec![AssigneeRef::Member(user_id)]);
-
-        let (updated, created_employees) = service.patch_task(command).await.unwrap();
-
-        assert_eq!(updated.assignments.len(), 1);
-        assert_eq!(created_employees.len(), 1);
-        assert_eq!(created_employees[0].hourly_rate_cents, None);
-        assert_eq!(created_employees[0].weekly_contract_minutes, 0);
-    }
-
-    #[tokio::test]
-    async fn patch_task_reuses_an_employee_already_provisioned_for_the_member() {
-        let id = TaskId(Uuid::new_v4());
-        let organization_id = OrganizationId(Uuid::new_v4());
-        let existing = task(id, organization_id);
-        let user_id = UserId(Uuid::new_v4());
-        let employee_id = EmployeeId(Uuid::new_v4());
-        let mut existing_employee = employee(employee_id, organization_id);
-        existing_employee.user_id = Some(user_id);
-
-        let mut task_repository = MockTaskRepository::new();
-        task_repository
-            .expect_find_by_id()
-            .with(eq(id))
+            .with(eq(member_id))
             .returning(move |_| {
-                let existing = existing.clone();
-                Box::pin(async move { Ok(Some(existing)) })
-            });
-        task_repository
-            .expect_update()
-            .withf(move |t| t.assignments.len() == 1 && t.assignments[0].employee_id == employee_id)
-            .returning(|t| {
-                let cloned = t.clone();
-                Box::pin(async move { Ok(cloned) })
+                let seat = seat.clone();
+                Box::pin(async move { Ok(Some(seat)) })
             });
 
-        let mut member_repository = MockMemberRepository::new();
-        member_repository
-            .expect_find_by_org_and_user()
-            .with(eq(organization_id), eq(user_id))
-            .returning(move |org_id, user_id| {
-                let m = crate::Member {
-                    id: crate::MemberId(Uuid::new_v4()),
-                    organization_id: org_id,
-                    user_id: Some(user_id),
-                    last_name: "Member".to_owned(),
-                    first_name: None,
-                    joined_at: Some(Utc::now()),
-                    created_at: Utc::now(),
-                    deleted_at: None,
-                };
-                Box::pin(async move { Ok(Some(m)) })
-            });
-
-        let mut employee_repository = MockEmployeeRepository::new();
-        employee_repository
-            .expect_find_by_user_id()
-            .with(eq(organization_id), eq(user_id))
-            .returning(move |_, _| {
-                let e = existing_employee.clone();
-                Box::pin(async move { Ok(Some(e)) })
-            });
-        // No `expect_insert`: reusing the existing record must not create a
-        // second one for the same person.
-
-        let mut service = service(
-            task_repository,
-            employee_repository,
-            MockUserRepository::new(),
-            member_repository,
-        );
+        let mut service = service(task_repository, member_repository);
 
         let mut command = PatchTaskCommand::new(id);
-        command.assignees = Some(vec![AssigneeRef::Member(user_id)]);
+        command.assignees = Some(vec![AssigneeRef(member_id)]);
 
-        let (updated, created_employees) = service.patch_task(command).await.unwrap();
+        let updated = service.patch_task(command).await.unwrap();
 
         assert_eq!(updated.assignments.len(), 1);
-        assert_eq!(updated.assignments[0].employee_id, employee_id);
-        assert!(created_employees.is_empty());
+        assert_eq!(updated.assignments[0].member_id, member_id);
     }
 
     #[tokio::test]
@@ -1815,7 +1479,7 @@ mod tests {
         let id = TaskId(Uuid::new_v4());
         let organization_id = OrganizationId(Uuid::new_v4());
         let existing = task(id, organization_id);
-        let user_id = UserId(Uuid::new_v4());
+        let member_id = MemberId(Uuid::new_v4());
 
         let mut task_repository = MockTaskRepository::new();
         task_repository
@@ -1828,19 +1492,14 @@ mod tests {
 
         let mut member_repository = MockMemberRepository::new();
         member_repository
-            .expect_find_by_org_and_user()
-            .with(eq(organization_id), eq(user_id))
-            .returning(|_, _| Box::pin(async { Ok(None) }));
+            .expect_find_by_id()
+            .with(eq(member_id))
+            .returning(|_| Box::pin(async { Ok(None) }));
 
-        let mut service = service(
-            task_repository,
-            MockEmployeeRepository::new(),
-            MockUserRepository::new(),
-            member_repository,
-        );
+        let mut service = service(task_repository, member_repository);
 
         let mut command = PatchTaskCommand::new(id);
-        command.assignees = Some(vec![AssigneeRef::Member(user_id)]);
+        command.assignees = Some(vec![AssigneeRef(member_id)]);
 
         let err = service.patch_task(command).await.unwrap_err();
 
@@ -1852,8 +1511,8 @@ mod tests {
         let id = TaskId(Uuid::new_v4());
         let organization_id = OrganizationId(Uuid::new_v4());
         let existing = task(id, organization_id);
-        let employee_id = EmployeeId(Uuid::new_v4());
-        let target_employee = employee(employee_id, organization_id);
+        let member_id = MemberId(Uuid::new_v4());
+        let target_member = member(member_id, organization_id);
 
         let mut task_repository = MockTaskRepository::new();
         task_repository
@@ -1871,29 +1530,21 @@ mod tests {
                 Box::pin(async move { Ok(cloned) })
             });
 
-        let mut employee_repository = MockEmployeeRepository::new();
-        employee_repository
+        let mut member_repository = MockMemberRepository::new();
+        member_repository
             .expect_find_by_id()
-            .with(eq(employee_id))
+            .with(eq(member_id))
             .returning(move |_| {
-                let e = target_employee.clone();
-                Box::pin(async move { Ok(Some(e)) })
+                let m = target_member.clone();
+                Box::pin(async move { Ok(Some(m)) })
             });
 
-        let mut service = service(
-            task_repository,
-            employee_repository,
-            MockUserRepository::new(),
-            MockMemberRepository::new(),
-        );
+        let mut service = service(task_repository, member_repository);
 
         let mut command = PatchTaskCommand::new(id);
-        command.assignees = Some(vec![
-            AssigneeRef::Employee(employee_id),
-            AssigneeRef::Employee(employee_id),
-        ]);
+        command.assignees = Some(vec![AssigneeRef(member_id), AssigneeRef(member_id)]);
 
-        let (updated, _) = service.patch_task(command).await.unwrap();
+        let updated = service.patch_task(command).await.unwrap();
 
         assert_eq!(updated.assignments.len(), 1);
     }
@@ -1907,7 +1558,7 @@ mod tests {
             id: TaskAssignmentId(Uuid::new_v4()),
             organization_id,
             task_id: id,
-            employee_id: EmployeeId(Uuid::new_v4()),
+            member_id: MemberId(Uuid::new_v4()),
             created_at: Utc::now(),
         });
 
@@ -1927,17 +1578,12 @@ mod tests {
                 Box::pin(async move { Ok(cloned) })
             });
 
-        let mut service = service(
-            task_repository,
-            MockEmployeeRepository::new(),
-            MockUserRepository::new(),
-            MockMemberRepository::new(),
-        );
+        let mut service = service(task_repository, MockMemberRepository::new());
 
         let mut command = PatchTaskCommand::new(id);
         command.assignees = Some(Vec::new());
 
-        let (updated, _) = service.patch_task(command).await.unwrap();
+        let updated = service.patch_task(command).await.unwrap();
 
         assert!(updated.assignments.is_empty());
     }
@@ -1966,12 +1612,7 @@ mod tests {
             .times(1)
             .returning(|_, _| Box::pin(async { Ok(()) }));
 
-        let mut service = service(
-            task_repository,
-            MockEmployeeRepository::new(),
-            MockUserRepository::new(),
-            MockMemberRepository::new(),
-        );
+        let mut service = service(task_repository, MockMemberRepository::new());
 
         service.soft_delete_task(id).await.unwrap();
     }
@@ -2020,12 +1661,7 @@ mod tests {
                 Box::pin(async { Ok(()) })
             });
 
-        let mut service = service(
-            task_repository,
-            MockEmployeeRepository::new(),
-            MockUserRepository::new(),
-            MockMemberRepository::new(),
-        );
+        let mut service = service(task_repository, MockMemberRepository::new());
 
         service.soft_delete_task(id).await.unwrap();
 

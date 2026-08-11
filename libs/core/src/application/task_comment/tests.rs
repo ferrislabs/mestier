@@ -11,7 +11,7 @@ mod tests {
         CreateTaskCommentCommand, UpdateTaskCommentCommand,
     };
     use crate::infrastructure::realtime::EventHub;
-    use crate::{CreateEmployeeCommand, CreateTaskCommand, TaskCommentId, TaskId};
+    use crate::{CreateTaskCommand, TaskCommentId, TaskId};
 
     async fn make_pool() -> PgPool {
         let url = std::env::var("DATABASE_URL")
@@ -227,7 +227,7 @@ mod tests {
     /// of authoring a comment.
     #[tokio::test]
     #[ignore = "requires live postgres"]
-    async fn an_employee_without_a_user_account_cannot_be_an_author() {
+    async fn a_seat_without_an_account_cannot_be_an_author() {
         let pool = make_pool().await;
         let fixture = seed_fixture(&pool).await;
         let usecase = make_usecase(pool.clone());
@@ -237,17 +237,20 @@ mod tests {
             .await
             .unwrap();
 
-        let employee = usecase
-            .create_employee(CreateEmployeeCommand {
-                organization_id: fixture.organization_id,
-                user_id: None,
-                last_name: "Sans compte".to_owned(),
-                first_name: None,
-                hourly_rate_cents: None,
-                weekly_contract_minutes: 0,
-            })
-            .await
-            .expect("creating an employee with no linked user must succeed");
+        // A free seat: nobody holds it, so nothing about it can author a
+        // comment. Seeded directly — creating one is the members API's job,
+        // not this test's subject.
+        let member_id = generate_uuid_v7();
+        sqlx::query!(
+            r#"INSERT INTO organization_members (id, organization_id, last_name)
+               VALUES ($1, $2, $3)"#,
+            member_id,
+            fixture.organization_id.0,
+            "Sans compte",
+        )
+        .execute(&pool)
+        .await
+        .expect("seeding a free seat must succeed");
 
         let result = sqlx::query!(
             r#"INSERT INTO task_comments (id, org_id, task_id, author_user_id, body)
@@ -255,7 +258,7 @@ mod tests {
             generate_uuid_v7(),
             fixture.organization_id.0,
             task.id.0,
-            employee.id.0,
+            member_id,
             "Je commente en tant qu'employé",
         )
         .execute(&pool)

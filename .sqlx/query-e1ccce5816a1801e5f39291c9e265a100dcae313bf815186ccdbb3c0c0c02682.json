@@ -1,0 +1,48 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT a.id, a.org_id, a.task_id, a.member_id, a.created_at\n            FROM task_assignments a\n            JOIN tasks t ON t.id = a.task_id\n            LEFT JOIN tasks p ON p.id = t.parent_task_id AND p.deleted_at IS NULL\n            WHERE t.org_id = $1 AND t.deleted_at IS NULL\n              -- Same resolved-window predicate as above, kept in sync: an\n              -- assignment must only be attached to a task that itself made\n              -- the cut, whether that task's window is its own or inherited.\n              AND COALESCE(t.starts_at, p.starts_at) < $3\n              AND COALESCE(t.ends_at, p.ends_at) > $2\n            ORDER BY a.created_at ASC, a.id ASC\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "org_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "task_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 3,
+        "name": "member_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 4,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Timestamptz",
+        "Timestamptz"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "e1ccce5816a1801e5f39291c9e265a100dcae313bf815186ccdbb3c0c0c02682"
+}

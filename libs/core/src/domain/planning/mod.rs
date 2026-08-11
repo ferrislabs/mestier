@@ -4,8 +4,8 @@ use chrono::{DateTime, NaiveDate, Utc};
 use common::CoreError;
 
 use crate::{
-    AbsenceKind, EmployeeAbsenceId, EmployeeId, MinuteInterval, Task, TaskId, TaskLabel,
-    TaskStatus, UserId,
+    AbsenceId, AbsenceKind, EmployeeId, MemberId, MinuteInterval, Task, TaskId, TaskLabel,
+    TaskStatus,
 };
 
 pub mod ports;
@@ -21,42 +21,35 @@ pub mod service;
 /// instead (see the planning module design doc).
 pub type Tz = chrono_tz::Tz;
 
-/// One row of the planning grid — never a table, always assembled from
-/// `employees` and `organization_members` (see the planning module design
-/// doc's dedup rule). `Employee` is the rich side: it carries the hourly
-/// rate and the contractual base. `Member` is a drop target with no
-/// employee record yet — making the two variants carry different fields
-/// (rather than one flat struct with optional employee-only fields) keeps
-/// "a member has no rate" unrepresentable as anything but the absence of
-/// the field.
+/// One row of the planning grid: a member of the organization.
+///
+/// This used to be two variants — an `Employee` row and a `Member` row —
+/// because someone was only plannable once they had an HR record, and the read
+/// model had to reconcile the two rosters by `user_id`. A member is now a seat
+/// that exists on its own, so there is one kind of row and one identifier.
+///
+/// The contract is optional and stays flattened here rather than nested: a
+/// member with no HR profile carries `None`, which is exactly "no rate is set",
+/// distinct from `Some(0)` — "genuinely free" (see the planning module design
+/// doc's invariant 4).
 #[derive(Debug, Clone, PartialEq)]
-pub enum PlanningResource {
-    Employee {
-        employee_id: EmployeeId,
-        user_id: Option<UserId>,
-        display_name: String,
-        /// `None` means the rate is not set yet; `Some(0)` means genuinely
-        /// free — never conflate the two (see the planning module design
-        /// doc's invariant 4).
-        hourly_rate_cents: Option<i32>,
-        weekly_contract_minutes: i32,
-    },
-    Member {
-        user_id: UserId,
-        display_name: String,
-    },
+pub struct PlanningResource {
+    pub member_id: MemberId,
+    pub display_name: String,
+    /// The contractual profile attached to this member, when there is one.
+    pub employee_id: Option<EmployeeId>,
+    pub hourly_rate_cents: Option<i32>,
+    /// `0` when the member has no contract — nothing is planned against a
+    /// weekly base they do not have.
+    pub weekly_contract_minutes: i32,
 }
 
 impl PlanningResource {
-    /// The front's canonical key, `<kind>:<uuid>` — part of the API
-    /// contract (drag & drop, indexing). The employee side keys on
-    /// `employee_id`; the member side has none yet, so it keys on
-    /// `user_id` — the same identifier `AssigneeRef::Member` carries.
+    /// The front's canonical key, `member:<uuid>` — part of the API contract
+    /// (drag & drop, indexing). Unconditional now: there is a single kind of
+    /// row, so there is nothing left to discriminate.
     pub fn resource_id(&self) -> String {
-        match self {
-            Self::Employee { employee_id, .. } => format!("employee:{employee_id}"),
-            Self::Member { user_id, .. } => format!("member:{user_id}"),
-        }
+        format!("member:{}", self.member_id)
     }
 }
 
@@ -81,7 +74,7 @@ pub enum PlanningEntry {
         customer_name: Option<String>,
         context_label: Option<String>,
         description: Option<String>,
-        employee_ids: Vec<EmployeeId>,
+        member_ids: Vec<MemberId>,
         /// Every label currently attached to this task, built from
         /// `task_label_links` — see `MestierUseCase::get_planning`
         /// (`application/planning/mod.rs`), which batch-loads these after
@@ -92,13 +85,13 @@ pub enum PlanningEntry {
         labels: Vec<TaskLabel>,
     },
     Absence {
-        id: EmployeeAbsenceId,
+        id: AbsenceId,
         starts_at: DateTime<Utc>,
         ends_at: DateTime<Utc>,
         all_day: bool,
         absence_kind: AbsenceKind,
         note: Option<String>,
-        employee_id: EmployeeId,
+        member_id: MemberId,
     },
 }
 
@@ -117,13 +110,16 @@ pub struct PlanningTask {
     pub child_count: i64,
 }
 
-/// One employee's work time for the read window: every day
+/// One member's work time for the read window: every day
 /// `expand_work_slots` produced an entry for, keyed by calendar date. A day
 /// absent from `days` means "not worked" — never an empty `Vec` (mirrors
 /// `expand_work_slots`'s own sparse-map contract).
+///
+/// Keyed on the member, like the grid row it feeds: someone with no contract
+/// still has work slots, and their availability still has to be readable.
 #[derive(Debug, Clone, PartialEq)]
-pub struct EmployeeWorkTime {
-    pub employee_id: EmployeeId,
+pub struct MemberWorkTime {
+    pub member_id: MemberId,
     pub days: BTreeMap<NaiveDate, Vec<MinuteInterval>>,
 }
 
@@ -133,7 +129,7 @@ pub struct PlanningView {
     pub timezone: String,
     pub resources: Vec<PlanningResource>,
     pub entries: Vec<PlanningEntry>,
-    pub work_time: Vec<EmployeeWorkTime>,
+    pub work_time: Vec<MemberWorkTime>,
 }
 
 /// A UTC instant window — the unit `detect_conflicts` and the availability
@@ -222,38 +218,49 @@ mod tests {
         assert_eq!(range.ends_at, ends_at);
     }
 
-    #[test]
-    fn employee_resource_id_uses_the_employee_id() {
-        let employee_id = EmployeeId(Uuid::new_v4());
-        let resource = PlanningResource::Employee {
-            employee_id,
-            user_id: None,
+    fn resource(member_id: MemberId) -> PlanningResource {
+        PlanningResource {
+            member_id,
             display_name: "Alice".to_owned(),
-            hourly_rate_cents: Some(3500),
-            weekly_contract_minutes: 2100,
-        };
-
-        assert_eq!(resource.resource_id(), format!("employee:{employee_id}"));
+            employee_id: None,
+            hourly_rate_cents: None,
+            weekly_contract_minutes: 0,
+        }
     }
 
     #[test]
-    fn member_resource_id_uses_the_user_id() {
-        let user_id = UserId(Uuid::new_v4());
-        let resource = PlanningResource::Member {
-            user_id,
-            display_name: "Bob".to_owned(),
+    fn resource_id_keys_on_the_member() {
+        let member_id = MemberId(Uuid::new_v4());
+
+        assert_eq!(
+            resource(member_id).resource_id(),
+            format!("member:{member_id}")
+        );
+    }
+
+    /// A member with a contract keys exactly like one without: the profile is
+    /// carried, never used as the identifier. That is what let the front drop
+    /// its `employee:`/`member:` branching.
+    #[test]
+    fn resource_id_ignores_the_attached_profile() {
+        let member_id = MemberId(Uuid::new_v4());
+        let with_profile = PlanningResource {
+            employee_id: Some(EmployeeId(Uuid::new_v4())),
+            hourly_rate_cents: Some(3500),
+            weekly_contract_minutes: 2100,
+            ..resource(member_id)
         };
 
-        assert_eq!(resource.resource_id(), format!("member:{user_id}"));
+        assert_eq!(
+            with_profile.resource_id(),
+            resource(member_id).resource_id()
+        );
     }
 
     #[test]
     fn availability_report_is_available_without_conflicts() {
         let report = AvailabilityReport {
-            resource: PlanningResource::Member {
-                user_id: UserId(Uuid::new_v4()),
-                display_name: "Bob".to_owned(),
-            },
+            resource: resource(MemberId(Uuid::new_v4())),
             conflicts: Vec::new(),
         };
 
@@ -263,10 +270,7 @@ mod tests {
     #[test]
     fn availability_report_is_unavailable_with_a_conflict() {
         let report = AvailabilityReport {
-            resource: PlanningResource::Member {
-                user_id: UserId(Uuid::new_v4()),
-                display_name: "Bob".to_owned(),
-            },
+            resource: resource(MemberId(Uuid::new_v4())),
             conflicts: vec![Conflict {
                 kind: ConflictKind::OutsideWorkHours,
                 starts_at: now(),

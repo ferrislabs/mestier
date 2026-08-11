@@ -19,7 +19,7 @@ impl MestierUseCase {
     /// doc), and this thin transactional seam is where `patch_task` already
     /// composes `TaskLabelRepository` for the same reason. One grouped
     /// query for every task entry in the window — never one per task.
-    #[transactional(planning, employee, member, organization, user, task_label)]
+    #[transactional(planning, employee, member, organization, task_label)]
     pub async fn get_planning(
         &self,
         organization_id: OrganizationId,
@@ -30,7 +30,6 @@ impl MestierUseCase {
             employee_repository,
             member_repository,
             organization_repository,
-            user_repository,
         );
         let mut view = service.get_planning(organization_id, range).await?;
 
@@ -62,7 +61,7 @@ impl MestierUseCase {
     /// annotated with why it is or is not available for `window`. Never
     /// refuses anything — see invariant 1 in the planning module design
     /// doc.
-    #[transactional(planning, employee, member, organization, user)]
+    #[transactional(planning, employee, member, organization)]
     pub async fn get_availability(
         &self,
         organization_id: OrganizationId,
@@ -73,7 +72,6 @@ impl MestierUseCase {
             employee_repository,
             member_repository,
             organization_repository,
-            user_repository,
         );
         service.get_availability(organization_id, window).await
     }

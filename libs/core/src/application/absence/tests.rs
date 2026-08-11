@@ -9,7 +9,7 @@ mod tests {
     use crate::application::{MestierUseCase, default_authorizer};
     use crate::domain::absence::commands::{CreateAbsenceCommand, PatchAbsenceCommand};
     use crate::infrastructure::realtime::EventHub;
-    use crate::{AbsenceKind, EmployeeAbsenceId, EmployeeId};
+    use crate::{AbsenceId, AbsenceKind, EmployeeId, MemberId};
 
     async fn make_pool() -> PgPool {
         let url = std::env::var("DATABASE_URL")
@@ -23,6 +23,8 @@ mod tests {
 
     struct Fixture {
         organization_id: OrganizationId,
+        member_id: MemberId,
+        #[allow(dead_code)]
         employee_id: EmployeeId,
         owner_id: UserId,
     }
@@ -57,13 +59,25 @@ mod tests {
         .await
         .unwrap();
 
+        let member_id = generate_uuid_v7();
+        sqlx::query!(
+            r#"INSERT INTO organization_members (id, organization_id, last_name)
+               VALUES ($1, $2, $3)"#,
+            member_id,
+            org_id,
+            "Alice Employee",
+        )
+        .execute(pool)
+        .await
+        .unwrap();
+
         let employee_id = generate_uuid_v7();
         sqlx::query!(
-            r#"INSERT INTO employees (id, org_id, last_name, hourly_rate_cents, weekly_contract_minutes)
+            r#"INSERT INTO employees (id, org_id, member_id, hourly_rate_cents, weekly_contract_minutes)
                VALUES ($1, $2, $3, $4, $5)"#,
             employee_id,
             org_id,
-            "Alice Employee",
+            member_id,
             3500,
             2100,
         )
@@ -73,22 +87,20 @@ mod tests {
 
         Fixture {
             organization_id: OrganizationId(org_id),
+            member_id: MemberId(member_id),
             employee_id: EmployeeId(employee_id),
             owner_id: UserId(owner_id),
         }
     }
 
     /// Removes everything seeded under `organization_id`, cascading to
-    /// employees/employee_absences, plus the loose user rows that outlive
+    /// employees/absences, plus the loose user rows that outlive
     /// the organization.
     async fn cleanup(pool: &PgPool, organization_id: OrganizationId, user_ids: &[UserId]) {
-        sqlx::query!(
-            "DELETE FROM employee_absences WHERE org_id = $1",
-            organization_id.0
-        )
-        .execute(pool)
-        .await
-        .ok();
+        sqlx::query!("DELETE FROM absences WHERE org_id = $1", organization_id.0)
+            .execute(pool)
+            .await
+            .ok();
         sqlx::query!("DELETE FROM employees WHERE org_id = $1", organization_id.0)
             .execute(pool)
             .await
@@ -109,7 +121,7 @@ mod tests {
         let now = Utc::now();
         CreateAbsenceCommand {
             organization_id: fixture.organization_id,
-            employee_id: fixture.employee_id,
+            member_id: fixture.member_id,
             kind: AbsenceKind::Leave,
             starts_at: now,
             ends_at: now + Duration::hours(2),
@@ -131,7 +143,7 @@ mod tests {
             .expect("create_absence must succeed");
 
         assert_eq!(created.kind, AbsenceKind::Leave);
-        assert_eq!(created.employee_id, fixture.employee_id);
+        assert_eq!(created.member_id, fixture.member_id);
 
         let fetched = usecase
             .get_absence(created.id)
@@ -241,7 +253,7 @@ mod tests {
         assert!(items.is_empty());
 
         let row = sqlx::query!(
-            r#"SELECT deleted_at FROM employee_absences WHERE id = $1"#,
+            r#"SELECT deleted_at FROM absences WHERE id = $1"#,
             created.id.0,
         )
         .fetch_one(&pool)
@@ -253,7 +265,7 @@ mod tests {
         );
 
         let missing = usecase
-            .soft_delete_absence(EmployeeAbsenceId(generate_uuid_v7()))
+            .soft_delete_absence(AbsenceId(generate_uuid_v7()))
             .await
             .expect_err("deleting an unknown absence must fail");
         assert!(matches!(missing, common::CoreError::NotFound));

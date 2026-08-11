@@ -1,6 +1,6 @@
 use chrono::NaiveDate;
 
-use crate::{EmployeeId, OrganizationId};
+use crate::{EmployeeId, MemberId, OrganizationId};
 
 /// One slot to persist as part of a rhythm replacement — the recurring
 /// weekly model's shape, decoupled from any DB-generated id (a full replace
@@ -37,7 +37,7 @@ pub struct WorkSlotInput {
 #[derive(Debug, Clone)]
 pub struct ReplaceWorkSlotsCommand {
     pub organization_id: OrganizationId,
-    pub employee_id: EmployeeId,
+    pub member_id: MemberId,
     pub from: NaiveDate,
     pub to: NaiveDate,
     pub slots: Vec<WorkSlotInput>,

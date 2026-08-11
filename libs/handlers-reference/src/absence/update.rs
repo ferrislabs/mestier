@@ -22,7 +22,7 @@ where
 
 /// Every field is optional and, when present, replaces the current value —
 /// `note` additionally distinguishes "absent" from "present but `null`"
-/// (see [`deserialize_present`]). `employee_id` is not patchable: an
+/// (see [`deserialize_present`]). `member_id` is not patchable: an
 /// absence's owner is fixed at creation.
 #[derive(Debug, Deserialize, ToSchema)]
 pub struct UpdateAbsenceRequest {
@@ -46,7 +46,7 @@ pub struct UpdateAbsenceRequest {
     tag = super::super::TAG,
     params(
         ("organization_id" = mestier_core::OrganizationId, Path, description = "Organization identifier"),
-        ("absence_id" = mestier_core::EmployeeAbsenceId, Path, description = "Absence identifier"),
+        ("absence_id" = mestier_core::AbsenceId, Path, description = "Absence identifier"),
     ),
     request_body = UpdateAbsenceRequest,
     responses(

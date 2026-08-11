@@ -11,6 +11,7 @@ use crate::{
             commands::{
                 AddMemberCommand, AssignRoleCommand, CreateMemberCommand, UpdateMemberCommand,
             },
+            ports::MemberRepository,
             service::MemberService,
         },
         organization::OrganizationId,
@@ -73,6 +74,18 @@ impl MestierUseCase {
         service
             .list_members(actor, organization_id, limit, offset)
             .await
+    }
+
+    /// The seat as stored, with no authorization of its own.
+    ///
+    /// For guards that are handed a bare `member_id` and immediately check its
+    /// organization against the one the route already established — the check
+    /// is the caller's, so doing a second one here would only hide which is
+    /// load-bearing. Never expose this straight to a route.
+    #[transactional(member)]
+    pub async fn find_member_seat(&self, member_id: MemberId) -> Result<Option<Member>, CoreError> {
+        let mut member_repository = member_repository;
+        member_repository.find_by_id(member_id).await
     }
 
     #[transactional(member, role, user, authz)]
