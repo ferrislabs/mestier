@@ -10,15 +10,18 @@ pub enum DomainEvent {
     MessageCreated(Message),
     MessageUpdated(Message),
     MessageDeleted {
+        organization_id: OrganizationId,
         channel_id: ChannelId,
         message_id: MessageId,
     },
     ReactionAdded {
+        organization_id: OrganizationId,
         message_id: MessageId,
         emoji: String,
         user_id: UserId,
     },
     ReactionRemoved {
+        organization_id: OrganizationId,
         message_id: MessageId,
         emoji: String,
         user_id: UserId,

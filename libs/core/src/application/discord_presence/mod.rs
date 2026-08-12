@@ -7,11 +7,8 @@ use crate::application::MestierUseCase;
 impl MestierUseCase {
     #[transactional(presence, events)]
     pub async fn set_presence(&self, cmd: SetPresenceCommand) -> Result<Presence, CoreError> {
-        let org_id = cmd.organization_id;
         let mut service = PresenceService::new(presence_repository, &events);
         let result = service.set_presence(cmd).await?;
-        // best-effort flush at end of tx closure; events are reconciled via REST (spec §2)
-        events.flush(org_id);
         Ok(result)
     }
 
@@ -26,10 +23,8 @@ impl MestierUseCase {
     /// issues no repo calls.
     #[transactional(presence, events)]
     pub async fn start_typing(&self, cmd: StartTypingCommand) -> Result<(), CoreError> {
-        let org_id = cmd.organization_id;
         let mut service = PresenceService::new(presence_repository, &events);
         service.start_typing(cmd).await?;
-        events.flush(org_id);
         Ok(())
     }
 }

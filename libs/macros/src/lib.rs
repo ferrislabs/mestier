@@ -162,10 +162,12 @@ pub fn transactional(args: TokenStream, input: TokenStream) -> TokenStream {
             // Non-repository binding: a publisher scoped to *this* transaction.
             // It is built here, and nowhere else, so no two transactions can
             // ever share a buffer — which is how events used to be delivered
-            // to the wrong organization.
+            // to the wrong organization. It writes into a buffer created
+            // *outside* the closure, so the buffer survives to be flushed after
+            // the commit rather than during the transaction.
             return quote! {
                 let events = ::mestier_core::infrastructure::realtime::RealtimeEventPublisher::new(
-                    self.hub.clone(),
+                    __realtime_buffer.clone(),
                 );
             };
         }
@@ -183,6 +185,33 @@ pub fn transactional(args: TokenStream, input: TokenStream) -> TokenStream {
 
     let body_stmts = &block.stmts;
 
+    // The realtime buffer only exists when `events` is listed: `self.hub` is
+    // only required of types that ask for a publisher.
+    let emits_realtime = repos.names.iter().any(|name| name == "events");
+
+    let realtime_setup = if emits_realtime {
+        quote! {
+            let __realtime_buffer =
+                ::mestier_core::infrastructure::realtime::RealtimeBuffer::new();
+        }
+    } else {
+        quote! {}
+    };
+
+    // Flushing here, on the success arm only, is what makes the broadcast
+    // conditional on the commit. Emitting from inside the closure — as the 21
+    // hand-written call sites used to — published events for transactions that
+    // could still fail at `append` or at `commit`.
+    let realtime_flush = if emits_realtime {
+        quote! {
+            if __tx_outcome.is_ok() {
+                __realtime_buffer.flush(&self.hub);
+            }
+        }
+    } else {
+        quote! {}
+    };
+
     let expanded = quote! {
         #(#attrs)*
         #vis #sig {
@@ -194,14 +223,17 @@ pub fn transactional(args: TokenStream, input: TokenStream) -> TokenStream {
                     self.actor,
                     None,
                 );
-            ::mestier_core::infrastructure::postgres::with_tx_emitting(
+            #realtime_setup
+            let __tx_outcome = ::mestier_core::infrastructure::postgres::with_tx_emitting(
                 &self.pool,
                 &__event_emitter,
                 async |tx| {
                     #(#bindings)*
                     #(#body_stmts)*
                 },
-            ).await
+            ).await;
+            #realtime_flush
+            __tx_outcome
         }
     };
 

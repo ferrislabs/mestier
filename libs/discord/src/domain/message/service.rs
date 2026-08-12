@@ -198,6 +198,7 @@ where
         self.repo.delete(id).await?;
         self.events
             .publish(DomainEvent::MessageDeleted {
+                organization_id: existing.organization_id,
                 channel_id: existing.channel_id,
                 message_id: id,
             })
@@ -209,6 +210,10 @@ where
         if cmd.emoji.trim().is_empty() {
             return Err(CoreError::Conflict("emoji cannot be blank".to_owned()));
         }
+        // The message is the authority on which organization the reaction
+        // belongs to. Reading it here also rejects a reaction on a message that
+        // does not exist, which the previous version accepted.
+        let message = self.get_message(cmd.message_id).await?;
         let reaction = Reaction {
             message_id: cmd.message_id,
             emoji: cmd.emoji.clone(),
@@ -218,6 +223,7 @@ where
         self.repo.add_reaction(&reaction).await?;
         self.events
             .publish(DomainEvent::ReactionAdded {
+                organization_id: message.organization_id,
                 message_id: cmd.message_id,
                 emoji: cmd.emoji,
                 user_id: cmd.user_id,
@@ -227,11 +233,13 @@ where
     }
 
     pub async fn remove_reaction(&mut self, cmd: RemoveReactionCommand) -> Result<(), CoreError> {
+        let message = self.get_message(cmd.message_id).await?;
         self.repo
             .remove_reaction(cmd.message_id, &cmd.emoji, cmd.user_id)
             .await?;
         self.events
             .publish(DomainEvent::ReactionRemoved {
+                organization_id: message.organization_id,
                 message_id: cmd.message_id,
                 emoji: cmd.emoji,
                 user_id: cmd.user_id,
@@ -602,8 +610,15 @@ mod tests {
         let message_id = MessageId(Uuid::new_v4());
         let user_id = UserId(Uuid::new_v4());
         let emoji = "👍".to_owned();
+        let org = OrganizationId(Uuid::new_v4());
+        let message = make_message(message_id, org, ChannelId(Uuid::new_v4()), Some(user_id));
 
         let mut repo = MockMessageRepository::new();
+        // The message is read to learn which organization the reaction belongs to.
+        repo.expect_find_by_id().times(1).returning(move |_| {
+            let m = message.clone();
+            Box::pin(async move { Ok(Some(m)) })
+        });
         repo.expect_add_reaction()
             .times(1)
             .returning(|_| Box::pin(async { Ok(()) }));
@@ -611,7 +626,9 @@ mod tests {
         let mut events = MockEventPublisher::new();
         events
             .expect_publish()
-            .withf(|e| matches!(e, DomainEvent::ReactionAdded { .. }))
+            .withf(move |e| {
+                matches!(e, DomainEvent::ReactionAdded { organization_id, .. } if *organization_id == org)
+            })
             .times(1)
             .returning(|_| Box::pin(async { Ok(()) }));
 
@@ -630,8 +647,15 @@ mod tests {
         let message_id = MessageId(Uuid::new_v4());
         let user_id = UserId(Uuid::new_v4());
         let emoji = "👍".to_owned();
+        let org = OrganizationId(Uuid::new_v4());
+        let message = make_message(message_id, org, ChannelId(Uuid::new_v4()), Some(user_id));
 
         let mut repo = MockMessageRepository::new();
+        // The message is read to learn which organization the reaction belongs to.
+        repo.expect_find_by_id().times(1).returning(move |_| {
+            let m = message.clone();
+            Box::pin(async move { Ok(Some(m)) })
+        });
         repo.expect_remove_reaction()
             .times(1)
             .returning(|_, _, _| Box::pin(async { Ok(()) }));
@@ -639,7 +663,9 @@ mod tests {
         let mut events = MockEventPublisher::new();
         events
             .expect_publish()
-            .withf(|e| matches!(e, DomainEvent::ReactionRemoved { .. }))
+            .withf(move |e| {
+                matches!(e, DomainEvent::ReactionRemoved { organization_id, .. } if *organization_id == org)
+            })
             .times(1)
             .returning(|_| Box::pin(async { Ok(()) }));
 
