@@ -8,6 +8,7 @@ use uuid::Uuid;
 use crate::{UserId, domain::organization::OrganizationId, domain::user::User};
 
 pub mod commands;
+pub mod events;
 pub mod ports;
 pub mod service;
 

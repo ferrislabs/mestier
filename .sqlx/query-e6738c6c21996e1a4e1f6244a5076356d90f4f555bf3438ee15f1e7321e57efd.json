@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE organization_invitations\n            SET consumed_at = $2, consumed_by_user_id = $3\n            WHERE id = $1 AND consumed_at IS NULL\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Timestamptz",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "e6738c6c21996e1a4e1f6244a5076356d90f4f555bf3438ee15f1e7321e57efd"
+}

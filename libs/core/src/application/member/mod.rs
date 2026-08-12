@@ -11,6 +11,7 @@ use crate::{
             commands::{
                 AddMemberCommand, AssignRoleCommand, CreateMemberCommand, UpdateMemberCommand,
             },
+            events::MemberRemoved,
             ports::MemberRepository,
             service::MemberService,
         },
@@ -101,7 +102,7 @@ impl MestierUseCase {
 
     /// Authorization happens inside `MemberService::remove_member`, against
     /// the loaded seat's organization — never a caller-supplied one.
-    #[transactional(member, role, user, authz)]
+    #[transactional(member, role, user, authz, emitter)]
     pub async fn remove_member(
         &self,
         actor: Subject,
@@ -109,7 +110,11 @@ impl MestierUseCase {
     ) -> Result<(), CoreError> {
         let mut service =
             MemberService::new(member_repository, role_repository, user_repository, authz);
-        service.remove_member(actor, member_id).await
+        let removed = service.remove_member(actor, member_id).await?;
+
+        emitter.emit(removed.organization_id, &MemberRemoved { member: removed })?;
+
+        Ok(())
     }
 
     #[transactional(member, role, user, authz)]

@@ -278,12 +278,16 @@ where
 
     /// Loads first, then authorizes against the *loaded* seat's
     /// organization — never a caller-supplied one, mirroring `get_member`.
+    /// Returns the removed seat as it stood the instant before deletion —
+    /// its `deleted_at` is not backfilled onto the returned value, since the
+    /// caller (`MestierUseCase::remove_member`) only needs it to build the
+    /// `member.removed` event, not to display it.
     #[tracing::instrument(skip(self), fields(member_id = %member_id.0), err)]
     pub async fn remove_member(
         &mut self,
         actor: Subject,
         member_id: MemberId,
-    ) -> Result<(), CoreError> {
+    ) -> Result<Member, CoreError> {
         // 1. Load.
         let member = self
             .member_repository
@@ -310,7 +314,9 @@ where
         // 3. Mutate.
         self.member_repository
             .soft_delete(member_id, Utc::now())
-            .await
+            .await?;
+
+        Ok(member)
     }
 
     #[tracing::instrument(skip(self), fields(member_id = %command.member_id.0, role_id = %command.role_id.0), err)]
@@ -1463,7 +1469,9 @@ mod tests {
             MockUserRepository::new(),
             authz,
         );
-        service.remove_member(actor_for(uid), id).await.unwrap();
+        let removed = service.remove_member(actor_for(uid), id).await.unwrap();
+
+        assert_eq!(removed.id, id);
     }
 
     #[tokio::test]

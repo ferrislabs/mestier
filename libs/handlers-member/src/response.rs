@@ -1,5 +1,5 @@
 use chrono::{DateTime, Utc};
-use mestier_core::{Member, MemberId, MemberWithAccount, OrganizationId};
+use mestier_core::{Invitation, InvitationId, Member, MemberId, MemberWithAccount, OrganizationId};
 use serde::Serialize;
 use utoipa::ToSchema;
 
@@ -62,6 +62,43 @@ impl From<MemberWithAccount> for MemberResponse {
         response.account = account;
         response
     }
+}
+
+/// A pending invitation, projected for HTTP. Never carries the token or its
+/// hash — see `CreatedInvitationResponse` for the one response that does
+/// carry the clear value, and only once.
+#[derive(Debug, Clone, PartialEq, Serialize, ToSchema)]
+pub struct InvitationResponse {
+    pub id: InvitationId,
+    pub organization_id: OrganizationId,
+    /// `None` when acceptance will create the seat itself — see
+    /// `Invitation::member_id`.
+    pub member_id: Option<MemberId>,
+    pub expires_at: DateTime<Utc>,
+    pub created_at: DateTime<Utc>,
+}
+
+impl From<Invitation> for InvitationResponse {
+    fn from(value: Invitation) -> Self {
+        Self {
+            id: value.id,
+            organization_id: value.organization_id,
+            member_id: value.member_id,
+            expires_at: value.expires_at,
+            created_at: value.created_at,
+        }
+    }
+}
+
+/// The one response that ever carries the clear token — mirrors
+/// `handlers_automation::response::CredentialWithSecretResponse`, the same
+/// shape for the same reason: a secret shown once, flattened alongside the
+/// resource it belongs to rather than nested under it.
+#[derive(Debug, Clone, PartialEq, Serialize, ToSchema)]
+pub struct CreatedInvitationResponse {
+    #[serde(flatten)]
+    pub invitation: InvitationResponse,
+    pub token: String,
 }
 
 #[cfg(test)]

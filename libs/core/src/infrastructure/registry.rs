@@ -16,6 +16,7 @@ pub mod domain {
     pub struct Equipment;
     pub struct EventDispatch;
     pub struct EventLog;
+    pub struct Invitation;
     pub struct Organization;
     pub struct Planning;
     pub struct Product;
