@@ -1,60 +1,65 @@
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 
 use common::CoreError;
-use discord::{DomainEvent, EventPublisher, OrganizationId};
+use discord::{DomainEvent, EventPublisher};
 
 use super::{hub::EventHub, wire::from_domain};
 
 /// Per-transaction event accumulator.
-struct TxBuffer {
-    events: Vec<DomainEvent>,
+///
+/// Owned by the caller *outside* the transaction closure and shared with the
+/// [`RealtimeEventPublisher`] built inside it. That split is the whole point:
+/// the publisher must live and die with the transaction, but the flush has to
+/// happen after the commit, so the buffer has to outlive the closure while
+/// still belonging to exactly one transaction.
+#[derive(Clone, Default)]
+pub struct RealtimeBuffer {
+    events: Arc<Mutex<Vec<DomainEvent>>>,
 }
 
-impl TxBuffer {
-    fn new() -> Self {
-        Self { events: Vec::new() }
+impl RealtimeBuffer {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Drain the buffer and broadcast each event on its own organization's channel.
+    ///
+    /// Must be called **after** the enclosing transaction commits — and now it
+    /// structurally can be, because the buffer outlives the closure. Emitting
+    /// before the commit meant a subscriber could observe a message whose
+    /// transaction went on to fail.
+    ///
+    /// Each event names its own organization, so a buffer holding events for
+    /// two organizations delivers each to the right one. There is no org
+    /// argument to get wrong.
+    pub fn flush(&self, hub: &EventHub) {
+        let events = {
+            let Ok(mut buf) = self.events.lock() else {
+                // A poisoned buffer means a panic happened mid-transaction.
+                // Dropping the events is correct: that transaction did not commit.
+                return;
+            };
+            std::mem::take(&mut *buf)
+        };
+        for domain_event in events {
+            let wire = from_domain(domain_event);
+            hub.broadcast(wire.organization_id(), wire);
+        }
     }
 }
 
-/// Implements `discord::EventPublisher`.
+/// Implements `discord::EventPublisher` by buffering into a [`RealtimeBuffer`].
 ///
-/// Events are **buffered** via `publish` during a database transaction and only
-/// forwarded to the [`EventHub`] when `flush` is called after the transaction
-/// commits successfully.  If the transaction rolls back the buffer is simply
-/// dropped, emitting nothing.
-///
-/// One publisher belongs to **one transaction of one organization**. Both are
-/// fixed at construction, which is what makes a cross-organization delivery
-/// unrepresentable rather than merely unlikely: there is no way to ask this
-/// buffer to flush on behalf of somebody else. A single publisher shared by
-/// every request is exactly how events used to reach the wrong tenant.
+/// Built for **one transaction** and never shared between two: a single
+/// publisher held on the long-lived use case is exactly how one request's
+/// commit used to drain another's events.
 pub struct RealtimeEventPublisher {
-    hub: EventHub,
-    buffer: Mutex<TxBuffer>,
+    buffer: RealtimeBuffer,
 }
 
 impl RealtimeEventPublisher {
-    pub fn new(hub: EventHub) -> Self {
-        Self {
-            hub,
-            buffer: Mutex::new(TxBuffer::new()),
-        }
-    }
-
-    /// Drain the buffer and broadcast each event to the hub.
-    ///
-    /// Must be called **after** the enclosing transaction commits.  `org_id` is
-    /// the organization context for the current transaction; every buffered
-    /// event in a transaction belongs to the same org.
-    pub fn flush(&self, org_id: OrganizationId) {
-        let events = {
-            let mut buf = self.buffer.lock().unwrap();
-            std::mem::take(&mut buf.events)
-        };
-        for domain_event in events {
-            let wire = from_domain(domain_event, org_id);
-            self.hub.broadcast(org_id, wire);
-        }
+    pub fn new(buffer: RealtimeBuffer) -> Self {
+        Self { buffer }
     }
 }
 
@@ -62,9 +67,10 @@ impl EventPublisher for RealtimeEventPublisher {
     async fn publish(&self, event: DomainEvent) -> Result<(), CoreError> {
         let mut buf = self
             .buffer
+            .events
             .lock()
             .map_err(|_| CoreError::Internal("publisher buffer lock poisoned".into()))?;
-        buf.events.push(event);
+        buf.push(event);
         Ok(())
     }
 }
@@ -81,7 +87,8 @@ impl EventPublisher for &RealtimeEventPublisher {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use discord::{Category, CategoryId, ChannelId, MessageId};
+    use crate::infrastructure::realtime::wire::GatewayEvent;
+    use discord::{Category, CategoryId, ChannelId, MessageId, OrganizationId};
     use uuid::Uuid;
 
     fn org(n: u128) -> OrganizationId {
@@ -99,8 +106,9 @@ mod tests {
         })
     }
 
-    fn message_deleted() -> DomainEvent {
+    fn message_deleted(org_id: OrganizationId) -> DomainEvent {
         DomainEvent::MessageDeleted {
+            organization_id: org_id,
             channel_id: ChannelId(Uuid::from_u128(10)),
             message_id: MessageId(Uuid::from_u128(11)),
         }
@@ -111,7 +119,8 @@ mod tests {
         let hub = EventHub::new();
         let o = org(1);
         let mut rx = hub.subscribe(o);
-        let publisher = RealtimeEventPublisher::new(hub.clone());
+        let buffer = RealtimeBuffer::new();
+        let publisher = RealtimeEventPublisher::new(buffer.clone());
 
         publisher.publish(category_created(o)).await.unwrap();
 
@@ -128,49 +137,60 @@ mod tests {
         let hub = EventHub::new();
         let o = org(2);
         let mut rx = hub.subscribe(o);
-        let publisher = RealtimeEventPublisher::new(hub.clone());
+        let buffer = RealtimeBuffer::new();
+        let publisher = RealtimeEventPublisher::new(buffer.clone());
 
         publisher.publish(category_created(o)).await.unwrap();
-        publisher.flush(o);
+        buffer.flush(&hub);
 
         let received = tokio::time::timeout(std::time::Duration::from_millis(50), rx.recv())
             .await
             .expect("expected event within 50 ms")
             .unwrap();
 
-        assert!(
-            matches!(
-                received,
-                crate::infrastructure::realtime::wire::GatewayEvent::CategoryCreate(_)
-            ),
-            "expected CategoryCreate wire event"
-        );
+        assert!(matches!(received, GatewayEvent::CategoryCreate(_)));
     }
 
     /// The regression this whole change exists for.
     ///
-    /// Production used to hold one `Arc<RealtimeEventPublisher>` on the
-    /// long-lived `MestierUseCase`, so every request shared one buffer and the
-    /// first transaction to commit drained everyone's events onto its own
-    /// organization's channel — re-stamped with that organization's id.
+    /// The org used to be a `flush(org_id)` argument re-stamped onto every
+    /// buffered event, so a buffer could only ever deliver to one organization
+    /// — and delivering to the wrong one was a single mistyped argument away.
+    /// Now each event names its own, and a mixed buffer routes correctly.
     #[tokio::test]
-    async fn one_transactions_events_are_invisible_to_anothers_flush() {
+    async fn flush_routes_each_event_to_its_own_organization() {
         let hub = EventHub::new();
         let org_a = org(100);
         let org_b = org(200);
         let mut rx_a = hub.subscribe(org_a);
+        let mut rx_b = hub.subscribe(org_b);
 
-        let tx_b = RealtimeEventPublisher::new(hub.clone());
-        tx_b.publish(category_created(org_b)).await.unwrap();
+        let buffer = RealtimeBuffer::new();
+        let publisher = RealtimeEventPublisher::new(buffer.clone());
+        publisher.publish(category_created(org_a)).await.unwrap();
+        publisher.publish(message_deleted(org_b)).await.unwrap();
 
-        let tx_a = RealtimeEventPublisher::new(hub.clone());
-        tx_a.flush(org_a);
+        buffer.flush(&hub);
+
+        let a = tokio::time::timeout(std::time::Duration::from_millis(50), rx_a.recv())
+            .await
+            .expect("org A must receive its event")
+            .unwrap();
+        assert_eq!(a.organization_id(), org_a);
+        assert!(matches!(a, GatewayEvent::CategoryCreate(_)));
+
+        let b = tokio::time::timeout(std::time::Duration::from_millis(50), rx_b.recv())
+            .await
+            .expect("org B must receive its event")
+            .unwrap();
+        assert_eq!(b.organization_id(), org_b);
+        assert!(matches!(b, GatewayEvent::MessageDelete { .. }));
 
         assert!(
             tokio::time::timeout(std::time::Duration::from_millis(20), rx_a.recv())
                 .await
                 .is_err(),
-            "org A's flush must not drain org B's transaction"
+            "org A must not also receive org B's event"
         );
     }
 
@@ -181,28 +201,30 @@ mod tests {
         let mut rx = hub.subscribe(o);
 
         {
-            let publisher = RealtimeEventPublisher::new(hub.clone());
+            let buffer = RealtimeBuffer::new();
+            let publisher = RealtimeEventPublisher::new(buffer.clone());
             publisher.publish(category_created(o)).await.unwrap();
-            // publisher dropped here without flush — simulates a rolled-back tx
+            // buffer and publisher dropped without flush — simulates a rolled-back tx
         }
 
         assert!(
             tokio::time::timeout(std::time::Duration::from_millis(10), rx.recv())
                 .await
                 .is_err(),
-            "dropped publisher must not emit events"
+            "a buffer dropped without flush must emit nothing"
         );
     }
 
     #[tokio::test]
-    async fn flush_populates_organization_id_for_message_delete() {
+    async fn message_delete_carries_its_own_organization() {
         let hub = EventHub::new();
         let o = org(4);
         let mut rx = hub.subscribe(o);
-        let publisher = RealtimeEventPublisher::new(hub.clone());
+        let buffer = RealtimeBuffer::new();
+        let publisher = RealtimeEventPublisher::new(buffer.clone());
 
-        publisher.publish(message_deleted()).await.unwrap();
-        publisher.flush(o);
+        publisher.publish(message_deleted(o)).await.unwrap();
+        buffer.flush(&hub);
 
         let received = tokio::time::timeout(std::time::Duration::from_millis(50), rx.recv())
             .await
@@ -210,13 +232,10 @@ mod tests {
             .unwrap();
 
         match received {
-            crate::infrastructure::realtime::wire::GatewayEvent::MessageDelete {
-                organization_id,
-                ..
-            } => {
-                assert_eq!(organization_id, o, "organization_id must match flush org");
-            }
-            other => panic!("expected MessageDelete, got {:?}", other),
+            GatewayEvent::MessageDelete {
+                organization_id, ..
+            } => assert_eq!(organization_id, o),
+            other => panic!("expected MessageDelete, got {other:?}"),
         }
     }
 }

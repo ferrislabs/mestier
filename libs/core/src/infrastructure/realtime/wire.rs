@@ -66,36 +66,43 @@ pub enum GatewayEvent {
 const TYPING_TTL_MS: u64 = 10_000;
 
 /// Converts a `DomainEvent` into the wire representation.
-/// `org_id` must be provided by the caller for events that do not carry an
-/// `organization_id` inline (message deletes, reactions).
-pub fn from_domain(event: DomainEvent, org_id: OrganizationId) -> GatewayEvent {
+///
+/// Every `DomainEvent` variant carries its own `organization_id`, so the
+/// conversion is total and needs no caller-supplied context. This is deliberate:
+/// the org used to be a `flush(org_id)` argument re-stamped onto the three
+/// variants that lacked one, which made a cross-organization delivery a
+/// hand-written argument away rather than something the types ruled out.
+pub fn from_domain(event: DomainEvent) -> GatewayEvent {
     match event {
         DomainEvent::MessageCreated(m) => GatewayEvent::MessageCreate(m),
         DomainEvent::MessageUpdated(m) => GatewayEvent::MessageUpdate(m),
         DomainEvent::MessageDeleted {
+            organization_id,
             channel_id,
             message_id,
         } => GatewayEvent::MessageDelete {
-            organization_id: org_id,
+            organization_id,
             channel_id,
             message_id,
         },
         DomainEvent::ReactionAdded {
+            organization_id,
             message_id,
             emoji,
             user_id,
         } => GatewayEvent::ReactionAdd {
-            organization_id: org_id,
+            organization_id,
             message_id,
             emoji,
             user_id,
         },
         DomainEvent::ReactionRemoved {
+            organization_id,
             message_id,
             emoji,
             user_id,
         } => GatewayEvent::ReactionRemove {
-            organization_id: org_id,
+            organization_id,
             message_id,
             emoji,
             user_id,
@@ -163,6 +170,48 @@ pub fn from_domain(event: DomainEvent, org_id: OrganizationId) -> GatewayEvent {
 }
 
 impl GatewayEvent {
+    /// The organization this event belongs to — the hub channel it is broadcast on.
+    ///
+    /// Every variant answers from data it already carries, so routing cannot
+    /// disagree with the payload: an event delivered to an organization is by
+    /// construction an event stamped with that organization.
+    pub fn organization_id(&self) -> OrganizationId {
+        match self {
+            GatewayEvent::MessageCreate(m) | GatewayEvent::MessageUpdate(m) => m.organization_id,
+            GatewayEvent::CategoryCreate(c) | GatewayEvent::CategoryUpdate(c) => c.organization_id,
+            GatewayEvent::ChannelCreate(c)
+            | GatewayEvent::ChannelUpdate(c)
+            | GatewayEvent::ThreadCreate(c)
+            | GatewayEvent::ThreadUpdate(c) => c.organization_id,
+            GatewayEvent::PresenceUpdate(p) => p.organization_id,
+            GatewayEvent::NotificationCreate(n) => n.organization_id,
+            GatewayEvent::MessageDelete {
+                organization_id, ..
+            }
+            | GatewayEvent::ReactionAdd {
+                organization_id, ..
+            }
+            | GatewayEvent::ReactionRemove {
+                organization_id, ..
+            }
+            | GatewayEvent::CategoryDelete {
+                organization_id, ..
+            }
+            | GatewayEvent::ChannelDelete {
+                organization_id, ..
+            }
+            | GatewayEvent::ThreadDelete {
+                organization_id, ..
+            }
+            | GatewayEvent::TypingStart {
+                organization_id, ..
+            }
+            | GatewayEvent::ChannelRead {
+                organization_id, ..
+            } => *organization_id,
+        }
+    }
+
     /// Returns `Some(user_id)` for user-private events (currently only `ChannelRead`).
     /// The gateway dispatch loop uses this to skip forwarding to other users' sockets.
     pub fn target_user(&self) -> Option<UserId> {

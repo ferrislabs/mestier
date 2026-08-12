@@ -10,11 +10,8 @@ use crate::application::MestierUseCase;
 impl MestierUseCase {
     #[transactional(webhook, message, events)]
     pub async fn create_webhook(&self, cmd: CreateWebhookCommand) -> Result<Webhook, CoreError> {
-        let org_id = cmd.organization_id;
         let mut service = WebhookService::new(webhook_repository, message_repository, &events);
         let result = service.create_webhook(cmd).await?;
-        // best-effort flush at end of tx closure; events are reconciled via REST (spec §2)
-        events.flush(org_id);
         Ok(result)
     }
 
@@ -22,19 +19,13 @@ impl MestierUseCase {
     pub async fn update_webhook(&self, cmd: UpdateWebhookCommand) -> Result<Webhook, CoreError> {
         let mut service = WebhookService::new(webhook_repository, message_repository, &events);
         let result = service.update_webhook(cmd).await?;
-        events.flush(result.organization_id);
         Ok(result)
     }
 
     #[transactional(webhook, message, events)]
     pub async fn delete_webhook(&self, id: WebhookId) -> Result<(), CoreError> {
-        // Load org_id before deleting so we can flush events with the correct org.
-        let mut wh_repo = webhook_repository;
-        let existing = wh_repo.find_by_id(id).await?.ok_or(CoreError::NotFound)?;
-        let org_id = existing.organization_id;
-        let mut service = WebhookService::new(wh_repo, message_repository, &events);
+        let mut service = WebhookService::new(webhook_repository, message_repository, &events);
         service.delete_webhook(id).await?;
-        events.flush(org_id);
         Ok(())
     }
 
@@ -54,7 +45,6 @@ impl MestierUseCase {
     pub async fn execute_webhook(&self, cmd: ExecuteWebhookCommand) -> Result<Message, CoreError> {
         let mut service = WebhookService::new(webhook_repository, message_repository, &events);
         let result = service.execute_webhook(cmd).await?;
-        events.flush(result.organization_id);
         Ok(result)
     }
 }
