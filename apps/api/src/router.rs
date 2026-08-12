@@ -49,7 +49,16 @@ pub fn router(state: AppState) -> Result<Router, ApiError> {
 
     let openapi = ApiDoc::openapi();
 
-    let allowed_origins: Vec<HeaderValue> = vec![HeaderValue::from_static("http://localhost:3000")];
+    let mut allowed_origins: Vec<HeaderValue> =
+        vec![HeaderValue::from_static("http://localhost:3000")];
+    allowed_origins.extend(
+        state
+            .args
+            .server
+            .allowed_origins
+            .iter()
+            .filter_map(|origin| HeaderValue::from_str(origin).ok()),
+    );
 
     let cors = CorsLayer::new()
         .allow_methods([

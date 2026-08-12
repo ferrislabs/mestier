@@ -34,8 +34,8 @@ import {
 } from '#/pages/hr/lib/absences'
 import { formatDateFr } from '#/pages/hr/types'
 
-export interface AbsenceEmployeeOption {
-	employeeId: string
+export interface AbsenceMemberOption {
+	memberId: string
 	displayName: string
 }
 
@@ -43,7 +43,7 @@ export interface AbsenceFormSheetProps {
 	open: boolean
 	mode: 'create' | 'edit'
 	values: AbsenceFormValues
-	employees: AbsenceEmployeeOption[]
+	members: AbsenceMemberOption[]
 	errors: string[]
 	isSaving: boolean
 	isDeleting: boolean
@@ -57,17 +57,17 @@ export interface AbsenceFormSheetProps {
 /**
  * Create/edit form for an absence — pure presentation, all state lives in
  * the feature (see the planning remodel design doc's "Absences vers le
- * module RH" decision — absence management now lives on the employee's
- * work-time screen, `EmployeeWorkTimeFeature`). In edit mode the employee is
+ * module RH" decision — absence management now lives on the member's
+ * work-time screen, `EmployeeWorkTimeFeature`). In edit mode the member is
  * locked rather than offered as a select: the `PATCH /absences/{id}`
- * payload has no `employee_id` field, so there is nothing to send even if
+ * payload has no `member_id` field, so there is nothing to send even if
  * the user picked a different one.
  */
 export function AbsenceFormSheet({
 	open,
 	mode,
 	values,
-	employees,
+	members,
 	errors,
 	isSaving,
 	isDeleting,
@@ -77,9 +77,9 @@ export function AbsenceFormSheet({
 	onDelete,
 	onOpenChange,
 }: AbsenceFormSheetProps) {
-	const employeeName =
-		employees.find((employee) => employee.employeeId === values.employeeId)
-			?.displayName ?? 'Employé inconnu'
+	const memberName =
+		members.find((member) => member.memberId === values.memberId)
+			?.displayName ?? 'Personne inconnue'
 	const canSubmit = errors.length === 0 && !isSaving
 
 	return (
@@ -104,33 +104,30 @@ export function AbsenceFormSheet({
 
 					<div className="flex-1 space-y-5 overflow-y-auto p-4">
 						<div className="flex flex-col gap-2">
-							<Label htmlFor="absence-employee">Employé</Label>
+							<Label htmlFor="absence-member">Personne</Label>
 							{mode === 'create' ? (
 								<Select
-									value={values.employeeId}
-									onValueChange={(employeeId) => onChange({ employeeId })}
+									value={values.memberId}
+									onValueChange={(memberId) => onChange({ memberId })}
 								>
 									<SelectTrigger
-										id="absence-employee"
-										aria-label="Employé"
+										id="absence-member"
+										aria-label="Personne"
 										className="w-full"
 									>
-										<SelectValue placeholder="Choisir un employé" />
+										<SelectValue placeholder="Choisir une personne" />
 									</SelectTrigger>
 									<SelectContent>
-										{employees.map((employee) => (
-											<SelectItem
-												key={employee.employeeId}
-												value={employee.employeeId}
-											>
-												{employee.displayName}
+										{members.map((member) => (
+											<SelectItem key={member.memberId} value={member.memberId}>
+												{member.displayName}
 											</SelectItem>
 										))}
 									</SelectContent>
 								</Select>
 							) : (
-								<p id="absence-employee" className="text-sm font-medium">
-									{employeeName}
+								<p id="absence-member" className="text-sm font-medium">
+									{memberName}
 								</p>
 							)}
 						</div>

@@ -9,14 +9,13 @@ import type {
 
 const TZ = 'Europe/Paris'
 
-function employeeResource(
+function memberWithProfile(
 	overrides: Partial<PlanningResource> = {},
 ): PlanningResource {
 	return {
-		resource_id: 'employee:employee-1',
-		kind: 'employee',
+		resource_id: 'member:member-1',
+		member_id: 'member-1',
 		employee_id: 'employee-1',
-		user_id: null,
 		display_name: 'Alix Martin',
 		hourly_rate_cents: 1500,
 		weekly_contract_minutes: 2100,
@@ -24,14 +23,13 @@ function employeeResource(
 	}
 }
 
-function memberResource(
+function memberWithoutProfile(
 	overrides: Partial<PlanningResource> = {},
 ): PlanningResource {
 	return {
-		resource_id: 'member:user-9',
-		kind: 'member',
+		resource_id: 'member:member-9',
+		member_id: 'member-9',
 		employee_id: null,
-		user_id: 'user-9',
 		display_name: 'Sans fiche',
 		hourly_rate_cents: null,
 		weekly_contract_minutes: 0,
@@ -51,7 +49,7 @@ function task(overrides: Partial<PlanningEntry> = {}): PlanningEntry {
 		ends_at: '2026-08-10T10:00:00Z', // 12:00 Paris
 		all_day: false,
 		status: 'PLANNED',
-		employee_ids: ['employee-1'],
+		member_ids: ['member-1'],
 		customer_name: 'Client Dupont',
 		context_label: 'Chantier toiture',
 		...overrides,
@@ -66,7 +64,7 @@ function absence(overrides: Partial<PlanningEntry> = {}): PlanningEntry {
 		ends_at: '2026-08-11T00:00:00+02:00',
 		all_day: true,
 		absence_kind: 'LEAVE',
-		employee_id: 'employee-1',
+		member_id: 'member-1',
 		...overrides,
 	} as PlanningEntry
 }
@@ -83,7 +81,7 @@ function unknownKindEntry(): PlanningEntry {
 
 function workTime(overrides: Partial<PlanningWorkTime> = {}): PlanningWorkTime {
 	return {
-		employee_id: 'employee-1',
+		member_id: 'member-1',
 		days: [
 			{
 				date: '2026-08-10',
@@ -100,7 +98,7 @@ describe('buildGridModel', () => {
 			windowFrom: '2026-08-10',
 			windowTo: '2026-08-12',
 			timeZone: TZ,
-			resources: [employeeResource()],
+			resources: [memberWithProfile()],
 			entries: [],
 			workTime: [],
 		})
@@ -115,7 +113,7 @@ describe('buildGridModel', () => {
 			windowFrom: '2026-08-10',
 			windowTo: '2026-08-10',
 			timeZone: TZ,
-			resources: [employeeResource()],
+			resources: [memberWithProfile()],
 			entries: [task()],
 			workTime: [],
 		})
@@ -141,7 +139,7 @@ describe('buildGridModel', () => {
 			windowFrom: '2026-08-10',
 			windowTo: '2026-08-10',
 			timeZone: TZ,
-			resources: [employeeResource()],
+			resources: [memberWithProfile()],
 			entries: [task()],
 			workTime: [workTime()],
 		})
@@ -157,7 +155,7 @@ describe('buildGridModel', () => {
 			windowFrom: '2026-08-10',
 			windowTo: '2026-08-10',
 			timeZone: TZ,
-			resources: [employeeResource()],
+			resources: [memberWithProfile()],
 			entries: [
 				task({
 					id: 'wo-1',
@@ -184,7 +182,7 @@ describe('buildGridModel', () => {
 			windowFrom: '2026-08-10',
 			windowTo: '2026-08-10',
 			timeZone: TZ,
-			resources: [employeeResource()],
+			resources: [memberWithProfile()],
 			entries: [],
 			workTime: [],
 		})
@@ -197,7 +195,7 @@ describe('buildGridModel', () => {
 			windowFrom: '2026-08-10',
 			windowTo: '2026-08-12',
 			timeZone: TZ,
-			resources: [employeeResource()],
+			resources: [memberWithProfile()],
 			entries: [
 				absence({
 					starts_at: '2026-08-10T00:00:00+02:00',
@@ -218,17 +216,17 @@ describe('buildGridModel', () => {
 		}
 	})
 
-	it('a member resource with no employee record never carries entries', () => {
+	it('a member with no employee profile still carries its assigned entries', () => {
 		const model = buildGridModel({
 			windowFrom: '2026-08-10',
 			windowTo: '2026-08-10',
 			timeZone: TZ,
-			resources: [memberResource()],
-			entries: [task({ employee_ids: ['employee-1'] })],
+			resources: [memberWithoutProfile()],
+			entries: [task({ member_ids: ['member-9'] })],
 			workTime: [],
 		})
 
-		expect(model.rows[0]?.cells[0]?.segments).toEqual([])
+		expect(model.rows[0]?.cells[0]?.segments).toHaveLength(1)
 	})
 
 	it('falls back to the default amplitude when there is no data', () => {
@@ -236,7 +234,7 @@ describe('buildGridModel', () => {
 			windowFrom: '2026-08-10',
 			windowTo: '2026-08-10',
 			timeZone: TZ,
-			resources: [employeeResource()],
+			resources: [memberWithProfile()],
 			entries: [],
 			workTime: [],
 		})
@@ -250,7 +248,7 @@ describe('buildGridModel', () => {
 				windowFrom: '2026-08-10',
 				windowTo: '2026-08-10',
 				timeZone: TZ,
-				resources: [employeeResource()],
+				resources: [memberWithProfile()],
 				entries: [task(), unknownKindEntry()],
 				workTime: [],
 			}),
@@ -260,7 +258,7 @@ describe('buildGridModel', () => {
 			windowFrom: '2026-08-10',
 			windowTo: '2026-08-10',
 			timeZone: TZ,
-			resources: [employeeResource()],
+			resources: [memberWithProfile()],
 			entries: [task(), unknownKindEntry()],
 			workTime: [],
 		})
@@ -275,7 +273,7 @@ describe('buildGridModel', () => {
 			windowFrom: '2026-08-10',
 			windowTo: '2026-08-10',
 			timeZone: TZ,
-			resources: [employeeResource()],
+			resources: [memberWithProfile()],
 			entries: [
 				task({
 					labels: [
@@ -304,7 +302,7 @@ describe('buildGridModel', () => {
 			windowFrom: '2026-08-10',
 			windowTo: '2026-08-10',
 			timeZone: TZ,
-			resources: [employeeResource()],
+			resources: [memberWithProfile()],
 			entries: [absence()],
 			workTime: [],
 		})

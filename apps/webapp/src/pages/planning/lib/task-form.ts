@@ -260,10 +260,7 @@ export function buildPatchTaskPayload(
  * blank: they only matter on create (see this file's own doc), so there is
  * nothing to seed the edit form with even when the task has a client — see
  * `ui/task-form-fields.tsx`'s `customerName` prop for how that client is
- * actually displayed. Every existing assignment maps to an `employee`-kind
- * `AssigneeRef`: by the time a `member` assignee reaches `task_assignments`,
- * `TaskService::resolve_assignee` has already provisioned (or found) their
- * `employee_id`, so a `member`-kind ref never survives a round trip.
+ * actually displayed.
  */
 export function taskToDraft(
 	task: {
@@ -274,7 +271,7 @@ export function taskToDraft(
 		ends_at?: string | null
 		blocks_availability: boolean
 		labels: { id: string }[]
-		employee_ids: string[]
+		member_ids: string[]
 	},
 	timeZone: string,
 ): TaskFormValues {
@@ -304,9 +301,8 @@ export function taskToDraft(
 		customerId: '',
 		customerContextId: '',
 		labelIds: task.labels.map((label) => label.id),
-		assignees: task.employee_ids.map((employeeId) => ({
-			kind: 'employee' as const,
-			employee_id: employeeId,
+		assignees: task.member_ids.map((memberId) => ({
+			member_id: memberId,
 		})),
 	}
 }

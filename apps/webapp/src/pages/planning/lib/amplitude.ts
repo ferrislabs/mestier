@@ -49,7 +49,7 @@ function roundUpToHour(minute: number): number {
  * (see the planning design doc's "amplitude horaire" section) — never per
  * cell, or columns stop lining up. All-day entries carry no time-of-day
  * information — they're stored as the organization's full `[00:00, 24:00)`
- * window (see the domain doc's `tasks`/`employee_absences` decision) —
+ * window (see the domain doc's `tasks`/`absences` decision) —
  * and are excluded here, or a single all-day absence would blow the
  * amplitude open to the full day for everyone.
  */

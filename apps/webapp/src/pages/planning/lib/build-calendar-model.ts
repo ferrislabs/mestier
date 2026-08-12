@@ -12,7 +12,7 @@ import {
 	entryNature,
 	matchesFilter,
 } from '#/pages/planning/lib/calendar-filters'
-import { entryEmployeeIds, entryLabel } from '#/pages/planning/lib/entries'
+import { entryLabel, entryMemberIds } from '#/pages/planning/lib/entries'
 import {
 	computeSegmentPosition,
 	type MinuteSpan,
@@ -89,7 +89,7 @@ export interface CalendarModel {
 	/** Minute the vertical scroll opens on. */
 	scrollToMinute: number
 	/**
-	 * Worked range, inferred from the employees' hours — a typical day when
+	 * Worked range, inferred from the members' hours — a typical day when
 	 * there are none. On a 24 h grid, it is what tells working hours from the
 	 * rest at a glance.
 	 */
@@ -105,8 +105,8 @@ export interface BuildCalendarModelInput {
 	timeZone: string
 	today: string
 	filter: CalendarFilter
-	/** Selected employees; empty or absent = the whole team. */
-	employeeIds?: string[]
+	/** Selected members; empty or absent = the whole team. */
+	memberIds?: string[]
 }
 
 export function buildCalendarModel(
@@ -115,17 +115,17 @@ export function buildCalendarModel(
 	const visible = input.entries.filter(
 		(entry) =>
 			matchesFilter(entry, input.filter) &&
-			matchesEmployees(entry, input.employeeIds),
+			matchesMembers(entry, input.memberIds),
 	)
 	const amplitude = CALENDAR_AMPLITUDE
-	const attendeesByEmployee = buildAttendeeIndex(input.resources)
+	const attendeesByMember = buildAttendeeIndex(input.resources)
 
 	const days = enumerateDays(input.from, input.to).map((date) =>
 		buildDay({
 			date,
 			entries: visible,
 			amplitude,
-			attendeesByEmployee,
+			attendeesByMember,
 			timeZone: input.timeZone,
 			today: input.today,
 		}),
@@ -150,7 +150,7 @@ function buildDay(params: {
 	date: string
 	entries: PlanningEntry[]
 	amplitude: MinuteRange
-	attendeesByEmployee: Map<string, CalendarAttendeeVM>
+	attendeesByMember: Map<string, CalendarAttendeeVM>
 	timeZone: string
 	today: string
 }): CalendarDayVM {
@@ -179,7 +179,7 @@ function buildDay(params: {
 				entry,
 				date: params.date,
 				amplitude: params.amplitude,
-				attendeesByEmployee: params.attendeesByEmployee,
+				attendeesByMember: params.attendeesByMember,
 				timeZone: params.timeZone,
 				column: 0,
 				columnCount: 1,
@@ -190,7 +190,7 @@ function buildDay(params: {
 				entry: item.item,
 				date: params.date,
 				amplitude: params.amplitude,
-				attendeesByEmployee: params.attendeesByEmployee,
+				attendeesByMember: params.attendeesByMember,
 				timeZone: params.timeZone,
 				column: item.row,
 				columnCount,
@@ -203,7 +203,7 @@ function toEventVM(params: {
 	entry: PlanningEntry
 	date: string
 	amplitude: MinuteRange
-	attendeesByEmployee: Map<string, CalendarAttendeeVM>
+	attendeesByMember: Map<string, CalendarAttendeeVM>
 	timeZone: string
 	column: number
 	columnCount: number
@@ -231,21 +231,21 @@ function toEventVM(params: {
 		height: position.width,
 		column: params.column,
 		columnCount: params.columnCount,
-		attendees: entryEmployeeIds(params.entry)
-			.map((employeeId) => params.attendeesByEmployee.get(employeeId))
+		attendees: entryMemberIds(params.entry)
+			.map((memberId) => params.attendeesByMember.get(memberId))
 			.filter((attendee) => attendee !== undefined),
 		entry: params.entry,
 	}
 }
 
-function matchesEmployees(
+function matchesMembers(
 	entry: PlanningEntry,
-	employeeIds: string[] | undefined,
+	memberIds: string[] | undefined,
 ): boolean {
-	if (!employeeIds || employeeIds.length === 0) return true
-	const ids = entryEmployeeIds(entry)
+	if (!memberIds || memberIds.length === 0) return true
+	const ids = entryMemberIds(entry)
 	if (ids.length === 0) return false
-	return ids.some((id) => employeeIds.includes(id))
+	return ids.some((id) => memberIds.includes(id))
 }
 
 export function buildAttendeeIndex(
@@ -254,9 +254,8 @@ export function buildAttendeeIndex(
 	const index = new Map<string, CalendarAttendeeVM>()
 
 	for (const resource of resources) {
-		if (!resource.employee_id) continue
-		index.set(resource.employee_id, {
-			id: resource.employee_id,
+		index.set(resource.member_id, {
+			id: resource.member_id,
 			name: resource.display_name,
 			initials: initialsOf(resource.display_name),
 		})
@@ -285,8 +284,8 @@ function toTimeSpan(entry: PlanningEntry): TimeSpan {
 }
 
 function flattenWorkTime(workTime: PlanningWorkTime[]): MinuteInterval[] {
-	return workTime.flatMap((employee) =>
-		employee.days.flatMap((day) =>
+	return workTime.flatMap((member) =>
+		member.days.flatMap((day) =>
 			day.intervals.map((interval) => ({
 				startsMinute: interval.starts_minute,
 				endsMinute: interval.ends_minute,
@@ -299,7 +298,7 @@ function flattenWorkTime(workTime: PlanningWorkTime[]): MinuteInterval[] {
  * The calendar renders the whole day, midnight to midnight.
  *
  * The team grid tightens as closely as it can around the entries — useful when
- * each employee has a single row. A calendar keeps a fixed frame instead: an
+ * each member has a single row. A calendar keeps a fixed frame instead: an
  * amplitude varying with the content shifts the landmarks from one day to the
  * next, and hides the free slots one comes here precisely to read. The height
  * that follows is walked by scrolling, positioned from the start on the

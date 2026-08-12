@@ -109,7 +109,8 @@ interface CrmSectionContentProps {
 
 function CrmSectionContent({ organizationId }: CrmSectionContentProps) {
 	const catalog = useReferenceCatalog(organizationId, {
-		employees: false,
+		members: false,
+		employeeProfiles: false,
 		equipment: false,
 	})
 	const createServiceRate = useCreateServiceRate(organizationId)

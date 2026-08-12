@@ -18,7 +18,7 @@ const TASK = {
 	all_day: false,
 	blocks_availability: true,
 	child_count: 0,
-	employee_ids: [],
+	member_ids: [],
 	labels: [],
 	status: 'PLANNED',
 } as PlanningEntry
@@ -26,7 +26,7 @@ const TASK = {
 const ABSENCE = {
 	kind: 'absence',
 	id: 'a-1',
-	employee_id: 'e-1',
+	member_id: 'e-1',
 	absence_kind: 'LEAVE',
 	note: 'Vacances d’été',
 	starts_at: '2026-03-02T00:00:00Z',

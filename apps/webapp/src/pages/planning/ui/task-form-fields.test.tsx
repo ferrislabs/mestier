@@ -17,7 +17,7 @@ Element.prototype.releasePointerCapture ??= () => {}
 
 const LABELS = [{ id: 'l1', name: 'Réunion', color: '#2563EB' }]
 const ASSIGNEE_OPTIONS = [
-	{ resourceId: 'employee:e1', displayName: 'Alix Martin' },
+	{ resourceId: 'member:e1', displayName: 'Alix Martin' },
 ]
 const CUSTOMERS = [{ id: 'cust-1', displayName: 'Dupont Alice' }]
 

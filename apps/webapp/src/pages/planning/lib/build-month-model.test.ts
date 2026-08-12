@@ -8,9 +8,9 @@ const TIME_ZONE = 'UTC'
 const RESOURCES: PlanningResource[] = [
 	{
 		resource_id: 'r-1',
+		member_id: 'e-1',
 		employee_id: 'e-1',
 		display_name: 'Marie Leroy',
-		kind: 'employee',
 		weekly_contract_minutes: 2100,
 	},
 ]
@@ -29,7 +29,7 @@ function task(overrides: Record<string, unknown> = {}) {
 		all_day: false,
 		blocks_availability: true,
 		child_count: 0,
-		employee_ids: ['e-1'],
+		member_ids: ['e-1'],
 		labels: [],
 		status: 'PLANNED',
 		...overrides,
@@ -40,7 +40,7 @@ function leave(overrides: Record<string, unknown> = {}) {
 	return {
 		kind: 'absence',
 		id: 'a-1',
-		employee_id: 'e-2',
+		member_id: 'e-2',
 		absence_kind: 'LEAVE',
 		starts_at: '2026-08-05T00:00:00Z',
 		ends_at: '2026-08-08T00:00:00Z',
@@ -181,7 +181,7 @@ describe('buildMonthModel', () => {
 	it('stacks two overlapping banners on distinct ranks', () => {
 		const model = build([
 			leave(),
-			leave({ id: 'a-2', absence_kind: 'SICK', employee_id: 'e-3' }),
+			leave({ id: 'a-2', absence_kind: 'SICK', member_id: 'e-3' }),
 		])
 		const week = model.weeks.find((week) => week.spans.length > 0)
 
@@ -221,8 +221,8 @@ describe('buildMonthModel', () => {
 		expect(model.weeks.every((week) => week.spans.length === 0)).toBe(true)
 	})
 
-	it('filters by employee', () => {
-		const model = build([task(), leave()], { employeeIds: ['e-1'] })
+	it('filters by member', () => {
+		const model = build([task(), leave()], { memberIds: ['e-1'] })
 
 		expect(model.hiddenByFilter).toBe(1)
 		expect(dayOf(model, '2026-08-05')?.entries).toHaveLength(1)

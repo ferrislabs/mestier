@@ -18,12 +18,11 @@ const MAX_WINDOW_DAYS: i64 = 92;
 
 #[utoipa::path(
     get,
-    path = "/api/v1/organizations/{organization_id}/employees/{employee_id}/work-time",
+    path = "/api/v1/members/{member_id}/work-time",
     operation_id = "getWorkTime",
     tag = super::super::TAG,
     params(
-        ("organization_id" = mestier_core::OrganizationId, Path, description = "Organization identifier"),
-        ("employee_id" = mestier_core::EmployeeId, Path, description = "Employee identifier"),
+        ("member_id" = mestier_core::MemberId, Path, description = "Member identifier"),
         ("from" = chrono::NaiveDate, Query, description = "Window start (inclusive)"),
         ("to" = chrono::NaiveDate, Query, description = "Window end (inclusive)"),
     ),

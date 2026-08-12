@@ -87,6 +87,7 @@ impl Modify for SecurityAddon {
         quote::quote::update_status::handler,
         quote::quote::soft_delete::handler,
         quote::quote::export_pdf::handler,
+        reference::employee::list::handler,
         reference::employee::upsert_profile::handler,
         reference::employee::remove_profile::handler,
         reference::equipment::create::handler,

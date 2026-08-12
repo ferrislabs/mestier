@@ -8,7 +8,7 @@ import type { PlanningView } from '#/pages/planning/types'
 import { CalendarGrid } from '#/pages/planning/ui/calendar-grid'
 import {
 	type CalendarCreateKind,
-	type CalendarEmployeeOption,
+	type CalendarMemberOption,
 	CalendarToolbar,
 } from '#/pages/planning/ui/calendar-toolbar'
 import type { CalendarEventCallbacks } from '#/pages/planning/ui/event-popover'
@@ -21,8 +21,8 @@ export interface PlanningCalendarUIProps {
 	windowFrom: string
 	windowTo: string
 	filter: CalendarFilter
-	employees: CalendarEmployeeOption[]
-	selectedEmployeeIds: string[]
+	members: CalendarMemberOption[]
+	selectedMemberIds: string[]
 	isLoading: boolean
 	error: string | null
 	model: CalendarModel | null
@@ -30,8 +30,8 @@ export interface PlanningCalendarUIProps {
 	onViewChange: (view: PlanningView) => void
 	onDateChange: (date: string) => void
 	onFilterChange: (filter: CalendarFilter) => void
-	onToggleEmployee: (employeeId: string) => void
-	onResetEmployees: () => void
+	onToggleMember: (memberId: string) => void
+	onResetMembers: () => void
 	onCreate: (kind: CalendarCreateKind) => void
 	/** What an event's detail panel knows how to trigger. */
 	eventCallbacks: CalendarEventCallbacks
@@ -47,8 +47,8 @@ export function PlanningCalendarUI({
 	windowFrom,
 	windowTo,
 	filter,
-	employees,
-	selectedEmployeeIds,
+	members,
+	selectedMemberIds,
 	isLoading,
 	error,
 	model,
@@ -56,8 +56,8 @@ export function PlanningCalendarUI({
 	onViewChange,
 	onDateChange,
 	onFilterChange,
-	onToggleEmployee,
-	onResetEmployees,
+	onToggleMember,
+	onResetMembers,
 	onCreate,
 	eventCallbacks,
 	onRetry,
@@ -93,13 +93,13 @@ export function PlanningCalendarUI({
 				windowFrom={windowFrom}
 				windowTo={windowTo}
 				filter={filter}
-				employees={employees}
-				selectedEmployeeIds={selectedEmployeeIds}
+				members={members}
+				selectedMemberIds={selectedMemberIds}
 				onViewChange={onViewChange}
 				onDateChange={onDateChange}
 				onFilterChange={onFilterChange}
-				onToggleEmployee={onToggleEmployee}
-				onResetEmployees={onResetEmployees}
+				onToggleMember={onToggleMember}
+				onResetMembers={onResetMembers}
 				onCreate={onCreate}
 			/>
 

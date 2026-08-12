@@ -19,9 +19,9 @@ Element.prototype.scrollIntoView ??= () => {}
 Element.prototype.hasPointerCapture ??= () => false
 Element.prototype.releasePointerCapture ??= () => {}
 
-const EMPLOYEES = [
-	{ employeeId: 'emp-1', displayName: 'Martin Alix' },
-	{ employeeId: 'emp-2', displayName: 'Leroy Marie' },
+const MEMBERS = [
+	{ memberId: 'member-1', displayName: 'Martin Alix' },
+	{ memberId: 'member-2', displayName: 'Leroy Marie' },
 ]
 
 function baseProps() {
@@ -29,7 +29,7 @@ function baseProps() {
 		open: true,
 		mode: 'create' as const,
 		values: emptyAbsenceDraft('', '2026-08-10'),
-		employees: EMPLOYEES,
+		members: MEMBERS,
 		errors: [],
 		isSaving: false,
 		isDeleting: false,
@@ -47,19 +47,19 @@ describe('AbsenceFormSheet — creation', () => {
 		expect(screen.queryByRole('dialog')).toBeNull()
 	})
 
-	it('offers the employee picker and no delete button', () => {
+	it('offers the member picker and no delete button', () => {
 		render(<AbsenceFormSheet {...baseProps()} />)
 
 		expect(screen.getByText('Nouvelle absence')).toBeDefined()
-		expect(screen.getByRole('combobox', { name: 'Employé' })).toBeDefined()
+		expect(screen.getByRole('combobox', { name: 'Personne' })).toBeDefined()
 		expect(screen.queryByRole('button', { name: /Supprimer/ })).toBeNull()
 	})
 
-	it('shows « {nom} {prénom} » in the employee picker options', async () => {
+	it('shows « {nom} {prénom} » in the member picker options', async () => {
 		const user = userEvent.setup()
 		render(<AbsenceFormSheet {...baseProps()} />)
 
-		await user.click(screen.getByRole('combobox', { name: 'Employé' }))
+		await user.click(screen.getByRole('combobox', { name: 'Personne' }))
 		expect(
 			await screen.findByRole('option', { name: 'Martin Alix' }),
 		).toBeDefined()
@@ -71,11 +71,11 @@ describe('AbsenceFormSheet — creation', () => {
 		render(
 			<AbsenceFormSheet
 				{...baseProps()}
-				employees={[{ employeeId: 'emp-3', displayName: 'Petit' }]}
+				members={[{ memberId: 'member-3', displayName: 'Petit' }]}
 			/>,
 		)
 
-		await user.click(screen.getByRole('combobox', { name: 'Employé' }))
+		await user.click(screen.getByRole('combobox', { name: 'Personne' }))
 		expect(await screen.findByRole('option', { name: 'Petit' })).toBeDefined()
 	})
 
@@ -97,9 +97,9 @@ describe('AbsenceFormSheet — creation', () => {
 	})
 
 	it('shows validation errors and disables submission', () => {
-		render(<AbsenceFormSheet {...baseProps()} errors={['Employé requis']} />)
+		render(<AbsenceFormSheet {...baseProps()} errors={['Personne requise']} />)
 
-		expect(screen.getByText('Employé requis')).toBeDefined()
+		expect(screen.getByText('Personne requise')).toBeDefined()
 		const submit = screen.getByRole('button', {
 			name: /Créer l’absence/,
 		}) as HTMLButtonElement
@@ -165,15 +165,15 @@ describe('AbsenceFormSheet — editing', () => {
 		return {
 			...baseProps(),
 			mode: 'edit' as const,
-			values: { ...emptyAbsenceDraft('emp-1', '2026-08-10') },
+			values: { ...emptyAbsenceDraft('member-1', '2026-08-10') },
 		}
 	}
 
-	it('locks the employee instead of offering a picker', () => {
+	it('locks the member instead of offering a picker', () => {
 		render(<AbsenceFormSheet {...editProps()} />)
 
 		expect(screen.getByText('Modifier l’absence')).toBeDefined()
-		expect(screen.queryByRole('combobox', { name: 'Employé' })).toBeNull()
+		expect(screen.queryByRole('combobox', { name: 'Personne' })).toBeNull()
 		expect(
 			within(screen.getByRole('dialog')).getByText('Martin Alix'),
 		).toBeDefined()

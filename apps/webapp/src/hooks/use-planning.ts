@@ -102,4 +102,3 @@ export type AvailabilityResource = Schemas.AvailabilityResourceResponse
 export type ConflictResponse = Schemas.ConflictResponse
 export type PatchTaskResponse = Schemas.PatchTaskResponse
 export type AssigneeRef = Schemas.AssigneeRefRequest
-export type CreatedEmployee = Schemas.EmployeeResponse

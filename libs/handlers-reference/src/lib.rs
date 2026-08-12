@@ -41,6 +41,7 @@ async fn require_org_membership(
 
 pub fn router(state: &AppState) -> Router<AppState> {
     Router::new()
+        .typed_get(employee::list::handler)
         .typed_put(employee::upsert_profile::handler)
         .typed_delete(employee::remove_profile::handler)
         .typed_get(equipment::list::handler)

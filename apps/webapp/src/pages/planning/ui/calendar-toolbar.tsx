@@ -41,7 +41,7 @@ const VIEW_LABELS: Record<PlanningView, string> = {
 	month: 'Mois',
 }
 
-export interface CalendarEmployeeOption {
+export interface CalendarMemberOption {
 	id: string
 	name: string
 }
@@ -54,14 +54,14 @@ export interface CalendarToolbarProps {
 	windowFrom: string
 	windowTo: string
 	filter: CalendarFilter
-	employees: CalendarEmployeeOption[]
-	/** Selected employees; empty = the whole team. */
-	selectedEmployeeIds: string[]
+	members: CalendarMemberOption[]
+	/** Selected members; empty = the whole team. */
+	selectedMemberIds: string[]
 	onViewChange: (view: PlanningView) => void
 	onDateChange: (date: string) => void
 	onFilterChange: (filter: CalendarFilter) => void
-	onToggleEmployee: (employeeId: string) => void
-	onResetEmployees: () => void
+	onToggleMember: (memberId: string) => void
+	onResetMembers: () => void
 	onCreate: (kind: CalendarCreateKind) => void
 	/** Freezes "today" for the shortcut — tests only. */
 	today?: string
@@ -78,20 +78,20 @@ export function CalendarToolbar({
 	windowFrom,
 	windowTo,
 	filter,
-	employees,
-	selectedEmployeeIds,
+	members,
+	selectedMemberIds,
 	onViewChange,
 	onDateChange,
 	onFilterChange,
-	onToggleEmployee,
-	onResetEmployees,
+	onToggleMember,
+	onResetMembers,
 	onCreate,
 	today,
 }: CalendarToolbarProps) {
-	const employeeLabel =
-		selectedEmployeeIds.length === 0
+	const memberLabel =
+		selectedMemberIds.length === 0
 			? 'Toute l’équipe'
-			: `${selectedEmployeeIds.length} employé${selectedEmployeeIds.length > 1 ? 's' : ''}`
+			: `${selectedMemberIds.length} personne${selectedMemberIds.length > 1 ? 's' : ''}`
 
 	return (
 		<div className="flex flex-col gap-4">
@@ -151,25 +151,25 @@ export function CalendarToolbar({
 						<DropdownMenuTrigger asChild>
 							<Button type="button" variant="outline">
 								<Users />
-								{employeeLabel}
+								{memberLabel}
 							</Button>
 						</DropdownMenuTrigger>
 						<DropdownMenuContent align="end" className="w-64">
-							<DropdownMenuLabel>Filtrer par employé</DropdownMenuLabel>
+							<DropdownMenuLabel>Filtrer par personne</DropdownMenuLabel>
 							<DropdownMenuSeparator />
-							{employees.map((employee) => (
+							{members.map((member) => (
 								<DropdownMenuCheckboxItem
-									key={employee.id}
-									checked={selectedEmployeeIds.includes(employee.id)}
-									onCheckedChange={() => onToggleEmployee(employee.id)}
+									key={member.id}
+									checked={selectedMemberIds.includes(member.id)}
+									onCheckedChange={() => onToggleMember(member.id)}
 								>
-									{employee.name}
+									{member.name}
 								</DropdownMenuCheckboxItem>
 							))}
 							<DropdownMenuSeparator />
 							<DropdownMenuItem
-								disabled={selectedEmployeeIds.length === 0}
-								onClick={onResetEmployees}
+								disabled={selectedMemberIds.length === 0}
+								onClick={onResetMembers}
 							>
 								Toute l’équipe
 							</DropdownMenuItem>

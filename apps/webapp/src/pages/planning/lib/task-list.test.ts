@@ -2,8 +2,8 @@ import { describe, expect, it } from 'vitest'
 import {
 	canGoToNextPage,
 	canGoToPreviousPage,
-	employeeNamesById,
 	formatAssigneeNames,
+	memberNamesById,
 	resolveAssigneeNames,
 	resolveSubtaskAllDay,
 	taskHasChildren,
@@ -94,37 +94,29 @@ describe('toggleExpandedTask', () => {
 	})
 })
 
-describe('employeeNamesById', () => {
-	it('maps employee-kind resources by employee id', () => {
+describe('memberNamesById', () => {
+	it('maps resources by member id', () => {
 		const resources = [
-			{ employee_id: 'employee-1', display_name: 'Alix Martin' },
-			{ employee_id: 'employee-2', display_name: 'Marie Leroy' },
+			{ member_id: 'member-1', display_name: 'Alix Martin' },
+			{ member_id: 'member-2', display_name: 'Marie Leroy' },
 		]
-		expect(employeeNamesById(resources)).toEqual({
-			'employee-1': 'Alix Martin',
-			'employee-2': 'Marie Leroy',
+		expect(memberNamesById(resources)).toEqual({
+			'member-1': 'Alix Martin',
+			'member-2': 'Marie Leroy',
 		})
-	})
-
-	it('skips member-kind resources with no employee id', () => {
-		const resources = [
-			{ employee_id: null, display_name: 'Jules Petit' },
-			{ display_name: 'Sans id' },
-		]
-		expect(employeeNamesById(resources)).toEqual({})
 	})
 })
 
 describe('resolveAssigneeNames', () => {
 	it('resolves each id to its display name', () => {
-		const namesById = { 'employee-1': 'Alix Martin' }
-		expect(resolveAssigneeNames(['employee-1'], namesById)).toEqual([
+		const namesById = { 'member-1': 'Alix Martin' }
+		expect(resolveAssigneeNames(['member-1'], namesById)).toEqual([
 			'Alix Martin',
 		])
 	})
 
 	it('falls back to a placeholder for an id missing from the roster', () => {
-		expect(resolveAssigneeNames(['employee-9'], {})).toEqual([
+		expect(resolveAssigneeNames(['member-9'], {})).toEqual([
 			'Assigné inconnu',
 		])
 	})

@@ -137,7 +137,7 @@ function PlanningCalendarScreen({
 	// live in local state rather than in the URL — unlike `view`/`date`, which
 	// determine the request.
 	const [filter, setFilter] = useState<CalendarFilter>('all')
-	const [selectedEmployeeIds, setSelectedEmployeeIds] = useState<string[]>([])
+	const [selectedMemberIds, setSelectedMemberIds] = useState<string[]>([])
 
 	const [taskSheetTarget, setTaskSheetTarget] =
 		useState<TaskSheetTarget | null>(null)
@@ -162,9 +162,9 @@ function PlanningCalendarScreen({
 			timeZone: data.timezone,
 			today: todayIsoDate(),
 			filter,
-			employeeIds: selectedEmployeeIds,
+			memberIds: selectedMemberIds,
 		})
-	}, [data, range.from, range.to, filter, selectedEmployeeIds])
+	}, [data, range.from, range.to, filter, selectedMemberIds])
 
 	const monthModel = useMemo(() => {
 		if (!data || view !== 'month') return null
@@ -177,9 +177,9 @@ function PlanningCalendarScreen({
 			timeZone: data.timezone,
 			today: todayIsoDate(),
 			filter,
-			employeeIds: selectedEmployeeIds,
+			memberIds: selectedMemberIds,
 		})
-	}, [data, view, date, range.from, range.to, filter, selectedEmployeeIds])
+	}, [data, view, date, range.from, range.to, filter, selectedMemberIds])
 
 	const assigneeOptions = useMemo(
 		() =>
@@ -190,22 +190,20 @@ function PlanningCalendarScreen({
 		[data],
 	)
 
-	const employees = useMemo(
+	const members = useMemo(
 		() =>
-			(data?.resources ?? [])
-				.filter((resource) => Boolean(resource.employee_id))
-				.map((resource) => ({
-					id: resource.employee_id as string,
-					name: resource.display_name,
-				})),
+			(data?.resources ?? []).map((resource) => ({
+				id: resource.member_id,
+				name: resource.display_name,
+			})),
 		[data],
 	)
 
-	function toggleEmployee(employeeId: string) {
-		setSelectedEmployeeIds((current) =>
-			current.includes(employeeId)
-				? current.filter((id) => id !== employeeId)
-				: [...current, employeeId],
+	function toggleMember(memberId: string) {
+		setSelectedMemberIds((current) =>
+			current.includes(memberId)
+				? current.filter((id) => id !== memberId)
+				: [...current, memberId],
 		)
 	}
 
@@ -285,7 +283,7 @@ function PlanningCalendarScreen({
 						...current,
 						values: values as AbsenceFormValues,
 						errors: validateAbsence(values as AbsenceFormValues, {
-							requireEmployee: false,
+							requireMember: false,
 						}),
 					}
 		})
@@ -428,7 +426,7 @@ function PlanningCalendarScreen({
 		absenceSheet?.draft ?? emptyAbsenceDraft('', todayIsoDate())
 	const absenceErrors = absenceSheet
 		? validateAbsenceDraft(absenceDraft, {
-				requireEmployee: absenceSheet.mode === 'create',
+				requireMember: absenceSheet.mode === 'create',
 			})
 		: []
 	const absenceSaveError =
@@ -446,8 +444,8 @@ function PlanningCalendarScreen({
 				windowFrom={range.from}
 				windowTo={range.to}
 				filter={filter}
-				employees={employees}
-				selectedEmployeeIds={selectedEmployeeIds}
+				members={members}
+				selectedMemberIds={selectedMemberIds}
 				isLoading={planningQuery.isLoading}
 				error={planningQuery.error?.message ?? null}
 				model={model}
@@ -455,8 +453,8 @@ function PlanningCalendarScreen({
 				onViewChange={onViewChange}
 				onDateChange={onDateChange}
 				onFilterChange={setFilter}
-				onToggleEmployee={toggleEmployee}
-				onResetEmployees={() => setSelectedEmployeeIds([])}
+				onToggleMember={toggleMember}
+				onResetMembers={() => setSelectedMemberIds([])}
 				onCreate={handleCreate}
 				eventCallbacks={eventCallbacks}
 				onRetry={() => void planningQuery.refetch()}
@@ -480,9 +478,9 @@ function PlanningCalendarScreen({
 				open={absenceSheet !== null}
 				mode={absenceSheet?.mode ?? 'create'}
 				values={absenceDraft}
-				employees={employees.map((employee) => ({
-					employeeId: employee.id,
-					displayName: employee.name,
+				members={members.map((member) => ({
+					memberId: member.id,
+					displayName: member.name,
 				}))}
 				errors={absenceErrors}
 				isSaving={createAbsence.isPending || updateAbsence.isPending}

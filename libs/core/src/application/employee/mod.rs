@@ -125,13 +125,38 @@ impl MestierUseCase {
         service.get_employee_by_member(member_id).await
     }
 
-    #[transactional(employee)]
+    /// Rate/contract data is sensitive (see #182's note on `hourly_rate_cents`
+    /// having no read filter anywhere yet), so unlike the other reference-data
+    /// lists (equipment, products, service rates), this one gates on
+    /// `member.manage` rather than plain organization membership.
+    #[transactional(employee, member, role, authz)]
     pub async fn list_employees(
         &self,
+        actor: Subject,
         organization_id: OrganizationId,
         limit: u64,
         offset: u64,
     ) -> Result<(Vec<Employee>, u64), CoreError> {
+        // `#[transactional]` hands the repositories over immutably; the
+        // policy engine needs them mutable to walk roles.
+        let mut member_repository = member_repository;
+        let mut role_repository = role_repository;
+
+        let actor = policy::enrich_for_organization(
+            actor,
+            organization_id,
+            &mut member_repository,
+            &mut role_repository,
+        )
+        .await?;
+        policy::require(
+            &authz,
+            &actor,
+            "member.manage",
+            Resource::new("organization", organization_id.0.to_string()),
+        )
+        .await?;
+
         let mut service = EmployeeService::new(employee_repository);
         service.list_employees(organization_id, limit, offset).await
     }

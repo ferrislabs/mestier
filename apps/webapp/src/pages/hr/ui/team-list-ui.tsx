@@ -3,14 +3,28 @@ import {
 	Clock,
 	Loader2,
 	MoreHorizontal,
-	Plus,
 	Save,
 	Search,
 	Trash2,
 	Undo2,
 	Users,
 } from 'lucide-react'
-import type * as React from 'react'
+import {
+	CreateButton,
+	MoneyCell,
+	TextField,
+} from '#/components/reference-table'
+import {
+	AlertDialog,
+	AlertDialogAction,
+	AlertDialogCancel,
+	AlertDialogContent,
+	AlertDialogDescription,
+	AlertDialogFooter,
+	AlertDialogHeader,
+	AlertDialogTitle,
+	AlertDialogTrigger,
+} from '#/components/ui/alert-dialog'
 import { Button } from '#/components/ui/button'
 import {
 	DropdownMenu,
@@ -20,7 +34,6 @@ import {
 	DropdownMenuTrigger,
 } from '#/components/ui/dropdown-menu'
 import { Input } from '#/components/ui/input'
-import { Label } from '#/components/ui/label'
 import {
 	MetricCard,
 	PageHeader,
@@ -29,13 +42,21 @@ import {
 	SectionHeader,
 	StatusBadge,
 } from '#/components/ui/surface'
-import type { Employee } from '#/hooks/use-reference-catalog'
 import { buildOrgPath } from '#/modules/org-path'
-import {
-	type EmployeeFormValues,
-	type EmployeeListData,
-	employeeDisplayName,
-} from '#/pages/hr/types'
+import type { AccessState, MemberFormValues } from '#/pages/hr/types'
+import { formatDurationMinutes } from '#/pages/hr/types'
+
+const ACCESS_LABEL: Record<AccessState, string> = {
+	none: 'Aucun accès',
+	invited: 'Invité',
+	linkedAccount: 'Compte lié',
+}
+
+const ACCESS_TONE: Record<AccessState, 'neutral' | 'warning' | 'success'> = {
+	none: 'neutral',
+	invited: 'warning',
+	linkedAccount: 'success',
+}
 
 interface FormBinding<T> {
 	values: T
@@ -44,35 +65,45 @@ interface FormBinding<T> {
 	onSubmit: () => void
 }
 
-export interface EmployeeDraft {
+export interface TeamMemberRow {
 	id: string
-	values: EmployeeFormValues
+	displayName: string
+	access: AccessState
+	/** `null` when the seat has no employee profile yet. */
+	hourlyRateCents: number | null
+	/** `null` when the seat has no employee profile yet. */
+	weeklyContractMinutes: number | null
 }
 
-interface EmployeeListUIProps {
+export interface MemberDraft {
+	id: string
+	values: MemberFormValues
+}
+
+interface TeamListUIProps {
 	organizationName: string
 	organizationSlug: string
 	isLoading: boolean
 	error: string | null
-	data: EmployeeListData
+	members: TeamMemberRow[]
 	search: string
 	onSearchChange: (value: string) => void
-	createForm: FormBinding<EmployeeFormValues>
-	draft: EmployeeDraft | null
+	createForm: FormBinding<MemberFormValues>
+	draft: MemberDraft | null
 	isSaving: boolean
-	onEdit: (employee: Employee) => void
-	onDraftChange: (values: EmployeeFormValues) => void
+	onEdit: (member: TeamMemberRow) => void
+	onDraftChange: (values: MemberFormValues) => void
 	onCancelEdit: () => void
 	onSaveEdit: () => void
-	onDeleteEmployee: (employee: Employee) => Promise<unknown>
+	onDeleteMember: (member: TeamMemberRow) => Promise<unknown>
 }
 
-export function EmployeeListUI({
+export function TeamListUI({
 	organizationName,
 	organizationSlug,
 	isLoading,
 	error,
-	data,
+	members,
 	search,
 	onSearchChange,
 	createForm,
@@ -82,20 +113,20 @@ export function EmployeeListUI({
 	onDraftChange,
 	onCancelEdit,
 	onSaveEdit,
-	onDeleteEmployee,
-}: EmployeeListUIProps) {
+	onDeleteMember,
+}: TeamListUIProps) {
 	return (
 		<PageShell>
 			<PageHeader
 				eyebrow={organizationName}
-				title="Employés"
-				description="Gérez les membres de l’équipe et leurs taux horaires."
+				title="Équipe"
+				description="Gérez les membres de l’organisation, leurs accès et leurs taux horaires."
 			/>
 
 			<MetricCard
-				label="Employés"
-				value={data.employees.length}
-				hint="Taux horaires configurés"
+				label="Équipe"
+				value={members.length}
+				hint="Sièges occupés ou libres"
 				icon={<Users className="size-4" />}
 			/>
 
@@ -112,19 +143,19 @@ export function EmployeeListUI({
 						type="search"
 						value={search}
 						onChange={(event) => onSearchChange(event.target.value)}
-						placeholder="Rechercher un employé…"
+						placeholder="Rechercher dans l’équipe…"
 						className="pl-9"
 					/>
 				</div>
 			</div>
 
-			<CreateEmployeeSection form={createForm} />
+			<CreateMemberSection form={createForm} />
 
 			{isLoading ? (
-				<EmployeeListUI.Loading />
+				<TeamListUI.Loading />
 			) : (
-				<EmployeeTable
-					data={data.employees}
+				<TeamTable
+					data={members}
 					organizationSlug={organizationSlug}
 					draft={draft}
 					isSaving={isSaving}
@@ -132,37 +163,37 @@ export function EmployeeListUI({
 					onDraftChange={onDraftChange}
 					onCancel={onCancelEdit}
 					onSave={onSaveEdit}
-					onDelete={onDeleteEmployee}
+					onDelete={onDeleteMember}
 				/>
 			)}
 		</PageShell>
 	)
 }
 
-EmployeeListUI.Loading = function EmployeeListLoading() {
+TeamListUI.Loading = function TeamListLoading() {
 	return (
 		<PageShell>
 			<SectionCard className="flex min-h-72 items-center justify-center gap-3 p-8 text-sm text-muted-foreground">
 				<Loader2 className="size-5 animate-spin" />
-				Chargement des employés…
+				Chargement de l’équipe…
 			</SectionCard>
 		</PageShell>
 	)
 }
 
-interface CreateEmployeeSectionProps {
-	form: FormBinding<EmployeeFormValues>
+interface CreateMemberSectionProps {
+	form: FormBinding<MemberFormValues>
 }
 
-function CreateEmployeeSection({ form }: CreateEmployeeSectionProps) {
+function CreateMemberSection({ form }: CreateMemberSectionProps) {
 	return (
 		<SectionCard>
 			<SectionHeader
-				title="Ajouter un employé"
-				description="Les montants sont saisis en euros et stockés en centimes côté API."
+				title="Ajouter une personne"
+				description="Le taux horaire est optionnel : laissez-le vide pour un siège sans profil RH, renseignez-le pour lui en attacher un."
 			/>
 			<div className="grid grid-cols-1 gap-4 p-5 lg:grid-cols-[1fr_auto] lg:items-end">
-				<div className="grid grid-cols-1 gap-4 md:grid-cols-4">
+				<div className="grid grid-cols-1 gap-4 md:grid-cols-3">
 					<TextField
 						label="Nom"
 						value={form.values.lastName}
@@ -180,12 +211,7 @@ function CreateEmployeeSection({ form }: CreateEmployeeSectionProps) {
 						onChange={(hourlyRate) => form.onChange({ hourlyRate })}
 						inputMode="decimal"
 						suffix="€/h"
-					/>
-					<TextField
-						label="Compte Ferriskey"
-						value={form.values.userId}
-						onChange={(userId) => form.onChange({ userId })}
-						placeholder="UUID optionnel"
+						placeholder="Optionnel"
 					/>
 				</div>
 				<CreateButton isPending={form.isPending} onClick={form.onSubmit} />
@@ -194,19 +220,19 @@ function CreateEmployeeSection({ form }: CreateEmployeeSectionProps) {
 	)
 }
 
-interface EmployeeTableProps {
-	data: Employee[]
+interface TeamTableProps {
+	data: TeamMemberRow[]
 	organizationSlug: string
-	draft: EmployeeDraft | null
+	draft: MemberDraft | null
 	isSaving: boolean
-	onEdit: (employee: Employee) => void
-	onDraftChange: (values: EmployeeFormValues) => void
+	onEdit: (member: TeamMemberRow) => void
+	onDraftChange: (values: MemberFormValues) => void
 	onCancel: () => void
 	onSave: () => void
-	onDelete: (employee: Employee) => Promise<unknown>
+	onDelete: (member: TeamMemberRow) => Promise<unknown>
 }
 
-function EmployeeTable({
+function TeamTable({
 	data,
 	organizationSlug,
 	draft,
@@ -216,25 +242,28 @@ function EmployeeTable({
 	onCancel,
 	onSave,
 	onDelete,
-}: EmployeeTableProps) {
+}: TeamTableProps) {
 	return (
 		<SectionCard>
 			<SectionHeader
-				title={`Employés (${data.length})`}
-				description="Taux horaires et rattachements aux comptes utilisateurs."
+				title={`Équipe (${data.length})`}
+				description="Accès, taux horaire et base contractuelle de chaque personne."
 			/>
 			<div className="overflow-x-auto">
 				<table className="w-full min-w-[720px] border-collapse text-sm">
 					<thead>
 						<tr className="border-b bg-muted/50">
 							<th className="px-5 py-3 text-left text-xs font-semibold uppercase text-muted-foreground">
-								Employé
+								Nom
 							</th>
 							<th className="px-5 py-3 text-left text-xs font-semibold uppercase text-muted-foreground">
-								Compte
+								Accès
 							</th>
 							<th className="px-5 py-3 text-left text-xs font-semibold uppercase text-muted-foreground">
 								Taux
+							</th>
+							<th className="px-5 py-3 text-left text-xs font-semibold uppercase text-muted-foreground">
+								Base contractuelle
 							</th>
 							<th className="px-5 py-3 text-left text-xs font-semibold uppercase text-muted-foreground">
 								<span className="sr-only">Actions</span>
@@ -244,22 +273,22 @@ function EmployeeTable({
 					<tbody>
 						{data.length === 0 ? (
 							<tr>
-								<td colSpan={4} className="px-5 py-12 text-center">
+								<td colSpan={5} className="px-5 py-12 text-center">
 									<div className="mx-auto flex max-w-sm flex-col items-center gap-2">
-										<p className="font-medium">Aucun employé trouvé</p>
+										<p className="font-medium">Aucune personne trouvée</p>
 										<p className="text-sm text-muted-foreground">
-											Ajoutez un employé pour le rendre disponible dans les
+											Ajoutez une personne pour la rendre disponible dans les
 											prochains workflows opérationnels.
 										</p>
 									</div>
 								</td>
 							</tr>
 						) : (
-							data.map((employee) => {
-								const isEditing = draft?.id === employee.id
+							data.map((member) => {
+								const isEditing = draft?.id === member.id
 								return (
 									<tr
-										key={employee.id}
+										key={member.id}
 										className="group border-b transition hover:bg-muted/35 hover:shadow-xs last:border-b-0"
 									>
 										<td className="px-5 py-3 align-middle">
@@ -288,29 +317,15 @@ function EmployeeTable({
 													/>
 												</div>
 											) : (
-												<RowIdentity
-													title={employeeDisplayName(employee)}
-													id={employee.id}
-												/>
+												<p className="truncate font-medium">
+													{member.displayName}
+												</p>
 											)}
 										</td>
 										<td className="px-5 py-3 align-middle">
-											{isEditing ? (
-												<Input
-													value={draft.values.userId}
-													onChange={(event) =>
-														onDraftChange({
-															...draft.values,
-															userId: event.target.value,
-														})
-													}
-													placeholder="UUID optionnel"
-												/>
-											) : employee.user_id ? (
-												<StatusBadge tone="success">lié</StatusBadge>
-											) : (
-												<StatusBadge>non lié</StatusBadge>
-											)}
+											<StatusBadge tone={ACCESS_TONE[member.access]}>
+												{ACCESS_LABEL[member.access]}
+											</StatusBadge>
 										</td>
 										<td className="px-5 py-3 align-middle">
 											{isEditing ? (
@@ -323,24 +338,35 @@ function EmployeeTable({
 														})
 													}
 													inputMode="decimal"
+													placeholder="Optionnel"
 												/>
 											) : (
-												<MoneyCell
-													value={employee.hourly_rate_cents}
-													suffix="/h"
-												/>
+												<MoneyCell value={member.hourlyRateCents} suffix="/h" />
+											)}
+										</td>
+										<td className="px-5 py-3 align-middle">
+											{member.weeklyContractMinutes === null ? (
+												<span className="text-muted-foreground italic">
+													Sans profil RH
+												</span>
+											) : (
+												<span className="font-medium tabular-nums">
+													{formatDurationMinutes(member.weeklyContractMinutes)}
+													<span className="text-muted-foreground">/sem.</span>
+												</span>
 											)}
 										</td>
 										<td className="px-5 py-3 align-middle">
 											<RowActions
-												employeeId={employee.id}
+												memberId={member.id}
+												memberName={member.displayName}
 												organizationSlug={organizationSlug}
 												isEditing={isEditing}
 												isSaving={isSaving}
-												onEdit={() => onEdit(employee)}
+												onEdit={() => onEdit(member)}
 												onCancel={onCancel}
 												onSave={onSave}
-												onDelete={() => onDelete(employee)}
+												onDelete={() => onDelete(member)}
 											/>
 										</td>
 									</tr>
@@ -355,7 +381,8 @@ function EmployeeTable({
 }
 
 interface RowActionsProps {
-	employeeId: string
+	memberId: string
+	memberName: string
 	organizationSlug: string
 	isEditing: boolean
 	isSaving: boolean
@@ -366,7 +393,8 @@ interface RowActionsProps {
 }
 
 function RowActions({
-	employeeId,
+	memberId,
+	memberName,
 	organizationSlug,
 	isEditing,
 	isSaving,
@@ -391,128 +419,55 @@ function RowActions({
 	}
 
 	return (
-		<div className="flex justify-end opacity-0 transition group-hover:opacity-100 group-focus-within:opacity-100">
-			<DropdownMenu>
-				<DropdownMenuTrigger asChild>
-					<Button size="icon-sm" variant="ghost">
-						<MoreHorizontal />
-						<span className="sr-only">Actions</span>
-					</Button>
-				</DropdownMenuTrigger>
-				<DropdownMenuContent align="end">
-					<DropdownMenuItem onClick={onEdit}>Modifier</DropdownMenuItem>
-					<DropdownMenuItem asChild>
-						<Link
-							to={buildOrgPath(
-								organizationSlug,
-								'/hr/employees/$employeeId/work-time',
-							)}
-							params={{ employeeId }}
-						>
-							<Clock />
-							Temps de travail
-						</Link>
-					</DropdownMenuItem>
-					<DropdownMenuSeparator />
-					<DropdownMenuItem variant="destructive" onClick={onDelete}>
-						<Trash2 />
-						Supprimer
-					</DropdownMenuItem>
-				</DropdownMenuContent>
-			</DropdownMenu>
-		</div>
-	)
-}
-
-interface TextFieldProps
-	extends Omit<
-		React.InputHTMLAttributes<HTMLInputElement>,
-		'value' | 'onChange'
-	> {
-	label: string
-	value: string
-	onChange: (value: string) => void
-	suffix?: string
-}
-
-function TextField({
-	label,
-	value,
-	onChange,
-	suffix,
-	...props
-}: TextFieldProps) {
-	const id = label.toLowerCase().replace(/\s+/g, '-')
-	return (
-		<div className="flex flex-col gap-2">
-			<Label htmlFor={id}>{label}</Label>
-			<div className="relative">
-				<Input
-					id={id}
-					value={value}
-					onChange={(event) => onChange(event.target.value)}
-					className={suffix ? 'pr-14' : undefined}
-					{...props}
-				/>
-				{suffix ? (
-					<span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs font-medium text-muted-foreground">
-						{suffix}
-					</span>
-				) : null}
+		<AlertDialog>
+			<div className="flex justify-end opacity-0 transition group-hover:opacity-100 group-focus-within:opacity-100">
+				<DropdownMenu>
+					<DropdownMenuTrigger asChild>
+						<Button size="icon-sm" variant="ghost">
+							<MoreHorizontal />
+							<span className="sr-only">Actions</span>
+						</Button>
+					</DropdownMenuTrigger>
+					<DropdownMenuContent align="end">
+						<DropdownMenuItem onClick={onEdit}>Modifier</DropdownMenuItem>
+						<DropdownMenuItem asChild>
+							<Link
+								to={buildOrgPath(
+									organizationSlug,
+									'/hr/team/$memberId/work-time',
+								)}
+								params={{ memberId }}
+							>
+								<Clock />
+								Temps de travail
+							</Link>
+						</DropdownMenuItem>
+						<DropdownMenuSeparator />
+						<AlertDialogTrigger asChild>
+							<DropdownMenuItem
+								variant="destructive"
+								onSelect={(event) => event.preventDefault()}
+							>
+								<Trash2 />
+								Supprimer
+							</DropdownMenuItem>
+						</AlertDialogTrigger>
+					</DropdownMenuContent>
+				</DropdownMenu>
 			</div>
-		</div>
+			<AlertDialogContent>
+				<AlertDialogHeader>
+					<AlertDialogTitle>Supprimer {memberName} ?</AlertDialogTitle>
+					<AlertDialogDescription>
+						Cette personne sera retirée de l’organisation. Cette action est
+						irréversible.
+					</AlertDialogDescription>
+				</AlertDialogHeader>
+				<AlertDialogFooter>
+					<AlertDialogCancel>Annuler</AlertDialogCancel>
+					<AlertDialogAction onClick={onDelete}>Supprimer</AlertDialogAction>
+				</AlertDialogFooter>
+			</AlertDialogContent>
+		</AlertDialog>
 	)
-}
-
-function CreateButton({
-	isPending,
-	onClick,
-}: {
-	isPending: boolean
-	onClick: () => void
-}) {
-	return (
-		<Button onClick={onClick} disabled={isPending}>
-			{isPending ? <Loader2 className="animate-spin" /> : <Plus />}
-			Ajouter
-		</Button>
-	)
-}
-
-function RowIdentity({ title, id }: { title: string; id: string }) {
-	return (
-		<div className="min-w-0">
-			<p className="truncate font-medium">{title}</p>
-			<p className="mt-0.5 truncate font-mono text-xs text-muted-foreground">
-				id: {id}
-			</p>
-		</div>
-	)
-}
-
-function MoneyCell({
-	value,
-	suffix,
-}: {
-	/** `null` renders as "non renseigné" — an absent rate is not a free one. */
-	value: number | null | undefined
-	suffix: string
-}) {
-	if (value === null || value === undefined) {
-		return <span className="text-muted-foreground italic">Non renseigné</span>
-	}
-
-	return (
-		<span className="font-medium tabular-nums">
-			{formatMoney(value)}
-			<span className="text-muted-foreground">{suffix}</span>
-		</span>
-	)
-}
-
-function formatMoney(value: number): string {
-	return new Intl.NumberFormat('fr-FR', {
-		style: 'currency',
-		currency: 'EUR',
-	}).format(value / 100)
 }

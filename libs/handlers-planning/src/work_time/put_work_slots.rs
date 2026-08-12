@@ -27,12 +27,11 @@ pub struct PutWorkSlotsRequest {
 
 #[utoipa::path(
     put,
-    path = "/api/v1/organizations/{organization_id}/employees/{member_id}/work-slots",
+    path = "/api/v1/members/{member_id}/work-slots",
     operation_id = "putWorkSlots",
     tag = super::super::TAG,
     params(
-        ("organization_id" = mestier_core::OrganizationId, Path, description = "Organization identifier"),
-        ("member_id" = mestier_core::MemberId, Path, description = "Employee identifier"),
+        ("member_id" = mestier_core::MemberId, Path, description = "Member identifier"),
         ("from" = chrono::NaiveDate, Query, description = "Window start (inclusive)"),
         ("to" = chrono::NaiveDate, Query, description = "Window end (inclusive)"),
     ),

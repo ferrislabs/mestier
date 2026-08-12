@@ -7,7 +7,6 @@ import {
 	useMoveTask,
 	usePlanning,
 } from '#/hooks/use-planning'
-import { employeeDisplayName } from '#/pages/hr/types'
 import {
 	TaskSheetFeature,
 	type TaskSheetTarget,
@@ -115,7 +114,6 @@ function PlanningTeamScreen({
 
 	const [pendingDrop, setPendingDrop] = useState<PendingDrop | null>(null)
 	const [dropError, setDropError] = useState<string | null>(null)
-	const [createdEmployeeNames, setCreatedEmployeeNames] = useState<string[]>([])
 	const [taskSheetTarget, setTaskSheetTarget] =
 		useState<TaskSheetTarget | null>(null)
 
@@ -124,22 +122,10 @@ function PlanningTeamScreen({
 		body: Schemas.UpdateTaskRequest,
 	) {
 		try {
-			// `mutation()` resolves one envelope short of `InferResponseData`'s
-			// declared type — see `use-work-time.ts`'s `.data?.data` precedent for
-			// `useQuery`; the same extra `.data` applies here, undetected by
-			// `tsc` since the generated type lies about it too.
-			const response = await moveTask.mutateAsync({
+			await moveTask.mutateAsync({
 				path: { organization_id: organizationId, task_id: taskId },
 				body,
 			})
-			const result = response.data
-			if (result.created_employees.length > 0) {
-				setCreatedEmployeeNames(
-					result.created_employees.map((employee) =>
-						employeeDisplayName(employee),
-					),
-				)
-			}
 			setPendingDrop(null)
 			setDropError(null)
 		} catch (error) {
@@ -167,7 +153,7 @@ function PlanningTeamScreen({
 			entry: {
 				startsAt: entry.starts_at,
 				endsAt: entry.ends_at,
-				employeeIds: entry.employee_ids,
+				memberIds: entry.member_ids,
 			},
 			timeZone: data.timezone,
 		})
@@ -175,9 +161,6 @@ function PlanningTeamScreen({
 		// planning design doc's "Drag & drop" decision.
 		if (!changed) return
 
-		const targetResource = data.resources.find(
-			(resource) => resource.resource_id === event.targetResourceId,
-		)
 		const windowStartsAt = body.starts_at ?? entry.starts_at
 		const windowEndsAt = body.ends_at ?? entry.ends_at
 
@@ -194,10 +177,7 @@ function PlanningTeamScreen({
 				availabilityResponse.data,
 				event.targetResourceId,
 			)
-			const warnings = buildWarnings({
-				conflicts,
-				resourceKind: targetResource?.kind ?? 'employee',
-			})
+			const warnings = buildWarnings({ conflicts })
 
 			if (warnings.length === 0) {
 				await applyTaskPatch(event.entryId, body)
@@ -226,7 +206,7 @@ function PlanningTeamScreen({
 		// applies straight away — but through the exact same complete-list
 		// `PATCH` path a move uses (see the planning design doc).
 		const { changed, body } = computeRemoveAssigneePatch({
-			employeeIds: entry.employee_ids,
+			memberIds: entry.member_ids,
 			resourceId: event.resourceId,
 		})
 		if (!changed) return
@@ -273,8 +253,6 @@ function PlanningTeamScreen({
 				onConfirm: handleConfirmDrop,
 				onCancel: handleCancelDrop,
 			}}
-			createdEmployeeNames={createdEmployeeNames}
-			onDismissCreatedEmployees={() => setCreatedEmployeeNames([])}
 			taskSheet={
 				data && taskSheetTarget ? (
 					<TaskSheetFeature

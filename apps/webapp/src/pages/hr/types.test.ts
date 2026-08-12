@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import type { Rhythm, WorkSlot } from '#/hooks/use-work-time'
 import {
+	accessState,
 	addDaysIso,
 	computeWeeklyGap,
 	draftToRhythmSlots,
 	draftToWorkSlots,
-	employeeDisplayName,
 	emptyRhythmSlotDraft,
 	emptyWorkSlotDraft,
 	findOpenRhythm,
@@ -20,32 +20,15 @@ import {
 	workSlotsToDraft,
 } from '#/pages/hr/types'
 
-describe('employeeDisplayName', () => {
-	it('joins last_name and first_name in that order — surname then given name', () => {
+describe('accessState', () => {
+	it('is linkedAccount when the seat has an account', () => {
 		expect(
-			employeeDisplayName({ last_name: 'Bonnal', first_name: 'Baptiste' }),
-		).toBe('Bonnal Baptiste')
+			accessState({ account: { email: 'a@example.com', name: 'A' } }),
+		).toBe('linkedAccount')
 	})
 
-	it('falls back to the surname alone when first_name is missing, with no stray space', () => {
-		expect(employeeDisplayName({ last_name: 'Bonnal', first_name: null })).toBe(
-			'Bonnal',
-		)
-	})
-
-	it('treats a whitespace-only first_name as missing', () => {
-		expect(
-			employeeDisplayName({ last_name: 'Bonnal', first_name: '   ' }),
-		).toBe('Bonnal')
-	})
-
-	it('trims stray spaces around both parts', () => {
-		expect(
-			employeeDisplayName({
-				last_name: '  Bonnal  ',
-				first_name: '  Baptiste  ',
-			}),
-		).toBe('Bonnal Baptiste')
+	it('is none for a free or unlinked seat', () => {
+		expect(accessState({ account: null })).toBe('none')
 	})
 })
 
@@ -279,7 +262,7 @@ describe('workSlotsToDraft / draftToWorkSlots', () => {
 			{
 				id: 'b',
 				organization_id: 'org-1',
-				employee_id: 'emp-1',
+				member_id: 'member-1',
 				work_date: '2026-08-10',
 				starts_minute: 780,
 				ends_minute: 1020,
@@ -287,7 +270,7 @@ describe('workSlotsToDraft / draftToWorkSlots', () => {
 			{
 				id: 'a',
 				organization_id: 'org-1',
-				employee_id: 'emp-1',
+				member_id: 'member-1',
 				work_date: '2026-08-10',
 				starts_minute: 480,
 				ends_minute: 720,

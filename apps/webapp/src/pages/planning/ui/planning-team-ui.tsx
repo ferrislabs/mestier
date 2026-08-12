@@ -1,4 +1,4 @@
-import { AlertCircle, Info, Plus, X } from 'lucide-react'
+import { AlertCircle, Plus } from 'lucide-react'
 import { Button } from '#/components/ui/button'
 import { PageHeader, PageShell, SectionCard } from '#/components/ui/surface'
 import type { PlanningResponse, PlanningView } from '#/pages/planning/types'
@@ -35,9 +35,6 @@ export interface PlanningTeamUIProps {
 	onCreateTask?: () => void
 	/** The single warnings dialog a risky drop funnels through — see the planning design doc's "Avertissements" section. Not rendered when absent. */
 	warningDialog?: PlanningWarningDialogProps
-	/** Names of employee records the last `PATCH` created on the fly — see the planning design doc: `hourly_rate_cents` stays `NULL` until filled in. */
-	createdEmployeeNames?: string[]
-	onDismissCreatedEmployees?: () => void
 	/**
 	 * The task create/edit sheet, mounted by the feature layer (it needs
 	 * hooks this `ui/` component must not have — see `feature/
@@ -72,8 +69,6 @@ export function PlanningTeamUI({
 	onOpenTask,
 	onCreateTask,
 	warningDialog,
-	createdEmployeeNames,
-	onDismissCreatedEmployees,
 	taskSheet,
 }: PlanningTeamUIProps) {
 	return (
@@ -91,13 +86,6 @@ export function PlanningTeamUI({
 					) : undefined
 				}
 			/>
-
-			{createdEmployeeNames && createdEmployeeNames.length > 0 ? (
-				<CreatedEmployeesNotice
-					names={createdEmployeeNames}
-					onDismiss={onDismissCreatedEmployees}
-				/>
-			) : null}
 
 			<PlanningToolbar
 				view={view}
@@ -146,39 +134,5 @@ export function PlanningTeamUI({
 			{warningDialog ? <PlanningWarningDialog {...warningDialog} /> : null}
 			{taskSheet}
 		</PageShell>
-	)
-}
-
-function CreatedEmployeesNotice({
-	names,
-	onDismiss,
-}: {
-	names: string[]
-	onDismiss?: () => void
-}) {
-	return (
-		<div className="flex items-start gap-3 rounded-lg border border-warning/40 bg-warning-soft px-4 py-3 text-sm text-warning">
-			<Info className="mt-0.5 size-4 shrink-0" />
-			<div className="flex-1">
-				<p className="font-medium">
-					Fiche{names.length > 1 ? 's' : ''} employé créée
-					{names.length > 1 ? 's' : ''} : {names.join(', ')}
-				</p>
-				<p className="text-xs opacity-90">
-					Le taux horaire n’est pas renseigné — pensez à le compléter.
-				</p>
-			</div>
-			{onDismiss ? (
-				<Button
-					type="button"
-					variant="ghost"
-					size="icon-sm"
-					onClick={onDismiss}
-				>
-					<X />
-					<span className="sr-only">Fermer</span>
-				</Button>
-			) : null}
-		</div>
 	)
 }

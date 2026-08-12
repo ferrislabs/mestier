@@ -14,14 +14,13 @@ function fakeDataTransfer() {
 
 const TZ = 'Europe/Paris'
 
-function employeeResource(
+function memberResource(
 	overrides: Partial<PlanningResource> = {},
 ): PlanningResource {
 	return {
-		resource_id: 'employee:employee-1',
-		kind: 'employee',
+		resource_id: 'member:member-1',
+		member_id: 'member-1',
 		employee_id: 'employee-1',
-		user_id: null,
 		display_name: 'Alix Martin',
 		hourly_rate_cents: 1500,
 		weekly_contract_minutes: 2100,
@@ -41,7 +40,7 @@ function task(overrides: Partial<PlanningEntry> = {}): PlanningEntry {
 		ends_at: '2026-08-10T10:00:00Z',
 		all_day: false,
 		status: 'PLANNED',
-		employee_ids: ['employee-1'],
+		member_ids: ['member-1'],
 		customer_name: 'Client Dupont',
 		context_label: 'Chantier toiture',
 		...overrides,
@@ -56,7 +55,7 @@ function absence(overrides: Partial<PlanningEntry> = {}): PlanningEntry {
 		ends_at: '2026-08-11T00:00:00+02:00',
 		all_day: true,
 		absence_kind: 'LEAVE',
-		employee_id: 'employee-1',
+		member_id: 'member-1',
 		...overrides,
 	} as PlanningEntry
 }
@@ -74,10 +73,10 @@ function unknownKindEntry(): PlanningEntry {
 describe('PlanningGrid — axe ressource', () => {
 	it('shows one row per resource, whatever the view', () => {
 		const resources = [
-			employeeResource(),
-			employeeResource({
-				resource_id: 'employee:employee-2',
-				employee_id: 'employee-2',
+			memberResource(),
+			memberResource({
+				resource_id: 'member:member-2',
+				member_id: 'member-2',
 				display_name: 'Marie Leroy',
 			}),
 		]
@@ -125,7 +124,7 @@ describe('PlanningGrid — vue semaine', () => {
 				windowFrom="2026-08-03"
 				windowTo="2026-08-09"
 				timeZone={TZ}
-				resources={[employeeResource()]}
+				resources={[memberResource()]}
 				entries={[]}
 				workTime={[]}
 			/>,
@@ -141,7 +140,7 @@ describe('PlanningGrid — vue semaine', () => {
 				windowFrom="2026-08-10"
 				windowTo="2026-08-10"
 				timeZone={TZ}
-				resources={[employeeResource()]}
+				resources={[memberResource()]}
 				entries={[task()]}
 				workTime={[]}
 			/>,
@@ -163,7 +162,7 @@ describe('PlanningGrid — vue jour', () => {
 				windowFrom="2026-08-10"
 				windowTo="2026-08-10"
 				timeZone={TZ}
-				resources={[employeeResource()]}
+				resources={[memberResource()]}
 				entries={[]}
 				workTime={[]}
 			/>,
@@ -179,7 +178,7 @@ describe('PlanningGrid — vue jour', () => {
 				windowFrom="2026-08-10"
 				windowTo="2026-08-10"
 				timeZone={TZ}
-				resources={[employeeResource()]}
+				resources={[memberResource()]}
 				entries={[task({ title: 'Réfection toiture' })]}
 				workTime={[]}
 			/>,
@@ -197,7 +196,7 @@ describe('PlanningGrid — vue mois', () => {
 				windowFrom="2026-08-01"
 				windowTo="2026-08-31"
 				timeZone={TZ}
-				resources={[employeeResource()]}
+				resources={[memberResource()]}
 				entries={[absence()]}
 				workTime={[]}
 			/>,
@@ -223,7 +222,7 @@ describe('PlanningGrid — stacking overlaps', () => {
 				windowFrom="2026-08-10"
 				windowTo="2026-08-10"
 				timeZone={TZ}
-				resources={[employeeResource()]}
+				resources={[memberResource()]}
 				entries={[
 					task({
 						id: 'wo-1',
@@ -256,7 +255,7 @@ describe('PlanningGrid — resilience to unknown kinds', () => {
 					windowFrom="2026-08-10"
 					windowTo="2026-08-10"
 					timeZone={TZ}
-					resources={[employeeResource()]}
+					resources={[memberResource()]}
 					entries={[task(), unknownKindEntry()]}
 					workTime={[]}
 				/>,
@@ -270,10 +269,10 @@ describe('PlanningGrid — resilience to unknown kinds', () => {
 describe('PlanningGrid — drag & drop', () => {
 	function twoResources() {
 		return [
-			employeeResource(),
-			employeeResource({
-				resource_id: 'employee:employee-2',
-				employee_id: 'employee-2',
+			memberResource(),
+			memberResource({
+				resource_id: 'member:member-2',
+				member_id: 'member-2',
 				display_name: 'Marie Leroy',
 			}),
 		]
@@ -286,7 +285,7 @@ describe('PlanningGrid — drag & drop', () => {
 				windowFrom="2026-08-10"
 				windowTo="2026-08-10"
 				timeZone={TZ}
-				resources={[employeeResource()]}
+				resources={[memberResource()]}
 				entries={[task()]}
 				workTime={[]}
 			/>,
@@ -317,7 +316,7 @@ describe('PlanningGrid — drag & drop', () => {
 
 		const rows = screen.getAllByTestId('grid-row')
 		const targetRow = rows.find(
-			(row) => row.getAttribute('data-resource-id') === 'employee:employee-2',
+			(row) => row.getAttribute('data-resource-id') === 'member:member-2',
 		)
 		if (!targetRow) throw new Error('target row not found')
 		const targetCell = within(targetRow).getByTestId('grid-cell')
@@ -326,9 +325,9 @@ describe('PlanningGrid — drag & drop', () => {
 
 		expect(onDropTask).toHaveBeenCalledWith({
 			entryId: 'wo-1',
-			sourceResourceId: 'employee:employee-1',
+			sourceResourceId: 'member:member-1',
 			sourceDate: '2026-08-10',
-			targetResourceId: 'employee:employee-2',
+			targetResourceId: 'member:member-2',
 			targetDate: '2026-08-10',
 		})
 	})
@@ -341,7 +340,7 @@ describe('PlanningGrid — drag & drop', () => {
 				windowFrom="2026-08-10"
 				windowTo="2026-08-10"
 				timeZone={TZ}
-				resources={[employeeResource()]}
+				resources={[memberResource()]}
 				entries={[task()]}
 				workTime={[]}
 				onDropTask={onDropTask}
@@ -355,9 +354,9 @@ describe('PlanningGrid — drag & drop', () => {
 
 		expect(onDropTask).toHaveBeenCalledWith({
 			entryId: 'wo-1',
-			sourceResourceId: 'employee:employee-1',
+			sourceResourceId: 'member:member-1',
 			sourceDate: '2026-08-10',
-			targetResourceId: 'employee:employee-1',
+			targetResourceId: 'member:member-1',
 			targetDate: '2026-08-10',
 		})
 	})
@@ -369,7 +368,7 @@ describe('PlanningGrid — drag & drop', () => {
 				windowFrom="2026-08-10"
 				windowTo="2026-08-10"
 				timeZone={TZ}
-				resources={[employeeResource()]}
+				resources={[memberResource()]}
 				entries={[task()]}
 				workTime={[]}
 			/>,
@@ -393,7 +392,7 @@ describe('PlanningGrid — removing an assignee', () => {
 				windowFrom="2026-08-10"
 				windowTo="2026-08-10"
 				timeZone={TZ}
-				resources={[employeeResource()]}
+				resources={[memberResource()]}
 				entries={[task()]}
 				workTime={[]}
 				onRemoveAssignee={onRemoveAssignee}
@@ -406,7 +405,7 @@ describe('PlanningGrid — removing an assignee', () => {
 
 		expect(onRemoveAssignee).toHaveBeenCalledWith({
 			entryId: 'wo-1',
-			resourceId: 'employee:employee-1',
+			resourceId: 'member:member-1',
 		})
 	})
 
@@ -417,7 +416,7 @@ describe('PlanningGrid — removing an assignee', () => {
 				windowFrom="2026-08-10"
 				windowTo="2026-08-10"
 				timeZone={TZ}
-				resources={[employeeResource()]}
+				resources={[memberResource()]}
 				entries={[task()]}
 				workTime={[]}
 			/>,
@@ -438,7 +437,7 @@ describe('PlanningGrid — segment d’absence inerte', () => {
 				windowFrom="2026-08-10"
 				windowTo="2026-08-10"
 				timeZone={TZ}
-				resources={[employeeResource()]}
+				resources={[memberResource()]}
 				entries={[absence()]}
 				workTime={[]}
 				onOpenTask={onOpenTask}
@@ -464,7 +463,7 @@ describe("PlanningGrid — opening a task's detail", () => {
 				windowFrom="2026-08-10"
 				windowTo="2026-08-10"
 				timeZone={TZ}
-				resources={[employeeResource()]}
+				resources={[memberResource()]}
 				entries={[task()]}
 				workTime={[]}
 				onOpenTask={onOpenTask}
@@ -483,7 +482,7 @@ describe("PlanningGrid — opening a task's detail", () => {
 				windowFrom="2026-08-10"
 				windowTo="2026-08-10"
 				timeZone={TZ}
-				resources={[employeeResource()]}
+				resources={[memberResource()]}
 				entries={[task()]}
 				workTime={[]}
 				onOpenTask={vi.fn()}
@@ -502,7 +501,7 @@ describe("PlanningGrid — opening a task's detail", () => {
 				windowFrom="2026-08-10"
 				windowTo="2026-08-10"
 				timeZone={TZ}
-				resources={[employeeResource()]}
+				resources={[memberResource()]}
 				entries={[task()]}
 				workTime={[]}
 			/>,
@@ -522,7 +521,7 @@ describe("PlanningGrid — opening a task's detail", () => {
 				windowFrom="2026-08-10"
 				windowTo="2026-08-10"
 				timeZone={TZ}
-				resources={[employeeResource()]}
+				resources={[memberResource()]}
 				entries={[task()]}
 				workTime={[]}
 				onOpenTask={onOpenTask}
@@ -543,7 +542,7 @@ describe("PlanningGrid — opening a task's detail", () => {
 				windowFrom="2026-08-10"
 				windowTo="2026-08-10"
 				timeZone={TZ}
-				resources={[employeeResource()]}
+				resources={[memberResource()]}
 				entries={[task()]}
 				workTime={[]}
 				onOpenTask={onOpenTask}
@@ -568,7 +567,7 @@ describe('PlanningGrid — pastilles de labels', () => {
 				windowFrom="2026-08-10"
 				windowTo="2026-08-10"
 				timeZone={TZ}
-				resources={[employeeResource()]}
+				resources={[memberResource()]}
 				entries={[
 					task({
 						labels: [
@@ -597,7 +596,7 @@ describe('PlanningGrid — pastilles de labels', () => {
 				windowFrom="2026-08-10"
 				windowTo="2026-08-10"
 				timeZone={TZ}
-				resources={[employeeResource()]}
+				resources={[memberResource()]}
 				entries={[task({ labels: [] })]}
 				workTime={[]}
 			/>,
@@ -634,7 +633,7 @@ describe('PlanningGrid — no network call', () => {
 				windowFrom="2026-08-03"
 				windowTo="2026-08-09"
 				timeZone={TZ}
-				resources={[employeeResource()]}
+				resources={[memberResource()]}
 				entries={[task(), absence()]}
 				workTime={[]}
 			/>,

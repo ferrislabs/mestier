@@ -13,10 +13,9 @@ function planningResponse(
 		timezone: 'Europe/Paris',
 		resources: [
 			{
-				resource_id: 'employee:employee-1',
-				kind: 'employee',
+				resource_id: 'member:member-1',
+				member_id: 'member-1',
 				employee_id: 'employee-1',
-				user_id: null,
 				display_name: 'Alix Martin',
 				hourly_rate_cents: 1500,
 				weekly_contract_minutes: 2100,
@@ -104,7 +103,7 @@ describe('PlanningTeamUI — editing', () => {
 								ends_at: '2026-08-04T00:00:00+02:00',
 								all_day: true,
 								absence_kind: 'LEAVE',
-								employee_id: 'employee-1',
+								member_id: 'member-1',
 							},
 						],
 					},
@@ -122,7 +121,14 @@ describe('PlanningTeamUI — editing', () => {
 				{...baseProps({
 					warningDialog: {
 						open: true,
-						warnings: [{ kind: 'missing_employee_record' }],
+						warnings: [
+							{
+								kind: 'overlapping_task',
+								taskId: 'wo-1',
+								startsAt: '2026-08-03T08:00:00+02:00',
+								endsAt: '2026-08-03T10:00:00+02:00',
+							},
+						],
 						isPending: false,
 						onConfirm: vi.fn(),
 						onCancel: vi.fn(),
@@ -132,24 +138,7 @@ describe('PlanningTeamUI — editing', () => {
 		)
 
 		expect(screen.getByRole('alertdialog')).toBeDefined()
-		expect(screen.getByText(/Aucune fiche employé/)).toBeDefined()
-	})
-
-	it('shows the created employee records and lets them be dismissed', () => {
-		const onDismiss = vi.fn()
-		render(
-			<PlanningTeamUI
-				{...baseProps({
-					createdEmployeeNames: ['Marie Leroy'],
-					onDismissCreatedEmployees: onDismiss,
-				})}
-			/>,
-		)
-
-		expect(screen.getByText(/Marie Leroy/)).toBeDefined()
-		expect(screen.getByText(/taux horaire/)).toBeDefined()
-		fireEvent.click(screen.getByRole('button', { name: /Fermer/ }))
-		expect(onDismiss).toHaveBeenCalledTimes(1)
+		expect(screen.getByText(/Déjà affecté à un autre chantier/)).toBeDefined()
 	})
 })
 
@@ -187,7 +176,7 @@ describe('PlanningTeamUI — new task', () => {
 								ends_at: '2026-08-03T10:00:00+02:00',
 								all_day: false,
 								status: 'PLANNED',
-								employee_ids: ['employee-1'],
+								member_ids: ['member-1'],
 								customer_name: null,
 								context_label: null,
 							},

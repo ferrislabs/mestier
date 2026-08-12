@@ -42,11 +42,10 @@ const ORGANIZATION: Organization = {
 	updated_at: '2026-01-01T00:00:00Z',
 }
 
-const RESOURCE_EMPLOYEE = {
-	resource_id: 'employee:employee-1',
-	kind: 'employee' as const,
+const RESOURCE_MEMBER = {
+	resource_id: 'member:member-1',
+	member_id: 'member-1',
 	employee_id: 'employee-1',
-	user_id: null,
 	display_name: 'Alix Martin',
 	hourly_rate_cents: 1500,
 	weekly_contract_minutes: 2100,
@@ -68,7 +67,7 @@ function task(overrides: Record<string, unknown> = {}) {
 		quote_id: null,
 		starts_at: '2026-08-10T07:00:00+02:00',
 		ends_at: '2026-08-10T09:00:00+02:00',
-		employee_ids: ['employee-1'],
+		member_ids: ['member-1'],
 		labels: [],
 		created_at: '2026-08-01T00:00:00Z',
 		updated_at: '2026-08-01T00:00:00Z',
@@ -164,7 +163,7 @@ function renderFeature(
 	mockGet(PLANNING_PATH, () => ({
 		data: {
 			timezone: 'Europe/Paris',
-			resources: [RESOURCE_EMPLOYEE],
+			resources: [RESOURCE_MEMBER],
 			entries: [],
 			work_time: [],
 		},
@@ -347,7 +346,7 @@ describe('TaskListFeature — reference data loading', () => {
 		resolvePlanning({
 			data: {
 				timezone: 'Europe/Paris',
-				resources: [RESOURCE_EMPLOYEE],
+				resources: [RESOURCE_MEMBER],
 				entries: [],
 				work_time: [],
 			},

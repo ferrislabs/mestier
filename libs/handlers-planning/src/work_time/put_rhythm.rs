@@ -28,12 +28,11 @@ pub struct PutRhythmRequest {
 
 #[utoipa::path(
     put,
-    path = "/api/v1/organizations/{organization_id}/employees/{employee_id}/rhythm",
+    path = "/api/v1/members/{member_id}/rhythm",
     operation_id = "putRhythm",
     tag = super::super::TAG,
     params(
-        ("organization_id" = mestier_core::OrganizationId, Path, description = "Organization identifier"),
-        ("employee_id" = mestier_core::EmployeeId, Path, description = "Employee identifier"),
+        ("member_id" = mestier_core::MemberId, Path, description = "Member identifier"),
     ),
     request_body = PutRhythmRequest,
     responses(
