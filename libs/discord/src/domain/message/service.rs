@@ -224,6 +224,7 @@ where
         self.events
             .publish(DomainEvent::ReactionAdded {
                 organization_id: message.organization_id,
+                channel_id: message.channel_id,
                 message_id: cmd.message_id,
                 emoji: cmd.emoji,
                 user_id: cmd.user_id,
@@ -240,6 +241,7 @@ where
         self.events
             .publish(DomainEvent::ReactionRemoved {
                 organization_id: message.organization_id,
+                channel_id: message.channel_id,
                 message_id: cmd.message_id,
                 emoji: cmd.emoji,
                 user_id: cmd.user_id,

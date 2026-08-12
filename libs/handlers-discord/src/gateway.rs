@@ -1,8 +1,12 @@
+use std::collections::HashSet;
+
 use axum::{
     extract::State,
     extract::ws::{Message, WebSocket, WebSocketUpgrade},
     response::Response,
 };
+use discord::ChannelId;
+use mestier_core::Permissions;
 use mestier_core::infrastructure::realtime::wire::GatewayEvent;
 use serde::{Deserialize, Serialize};
 use tokio::sync::broadcast::error::RecvError;
@@ -121,6 +125,35 @@ async fn handle_socket(mut socket: WebSocket, state: AppState) {
         }
     };
 
+    // ── Phase 4b: resolve which channels this member may actually see ────────
+    // The hub is keyed by organization, which is the right granularity for a
+    // bus but far coarser than what a member is allowed to read: `EVERYONE` /
+    // `ROLE` / `MEMBER` overwrites gate individual channels, and the REST path
+    // already enforces them (`message::list` refuses without VIEW_CHANNEL).
+    // Without this set the socket contradicted that enforcement — a member who
+    // gets a 403 on `GET /messages` still received every MESSAGE_CREATE live.
+    //
+    // Resolved once, here, rather than per event: `list_visible_channels` runs
+    // a query per channel, which is affordable on connect and would not be in
+    // the dispatch loop. The cost is that the set is a snapshot — a member who
+    // loses access keeps receiving until they reconnect. Refreshing it on
+    // permission changes is the next increment.
+    let mut visible_channels: HashSet<ChannelId> = HashSet::new();
+    for org in &orgs {
+        match state.usecase.list_visible_channels(user.id, org.id).await {
+            Ok(channels) => visible_channels.extend(channels.into_iter().map(|c| c.id)),
+            Err(e) => {
+                // Failing open would leak private channels, so fail closed.
+                error!(
+                    "gateway: list_visible_channels failed for org {}: {e}",
+                    org.id
+                );
+                let _ = send_close(&mut socket, "internal error").await;
+                return;
+            }
+        }
+    }
+
     // ── Phase 5: subscribe to EventHub — one Receiver per org ────────────────
     // Merge all org streams into a single mpsc channel so the dispatch loop
     // only ever blocks on one receiver.  Each spawned forwarder task drops its
@@ -182,6 +215,44 @@ async fn handle_socket(mut socket: WebSocket, state: AppState) {
                         // the per-org broadcast in-process; we drop it here before it crosses the wire.
                         if let Some(target) = event.target_user()
                             && target != user.id
+                        {
+                            continue;
+                        }
+                        // A channel created after this socket connected cannot be in
+                        // the snapshot, so the cached set alone would hide it until
+                        // reconnect. Resolve those live and admit them to the set:
+                        // channel creation is rare enough to afford a query, which
+                        // is precisely why per-message filtering is not.
+                        if matches!(
+                            event,
+                            GatewayEvent::ChannelCreate(_) | GatewayEvent::ThreadCreate(_)
+                        ) && let Some(channel_id) = event.channel_id()
+                            && !visible_channels.contains(&channel_id)
+                        {
+                            match state
+                                .usecase
+                                .resolve_channel_permissions(user.id, channel_id)
+                                .await
+                            {
+                                Ok(perms) if perms.contains(Permissions::VIEW_CHANNEL) => {
+                                    visible_channels.insert(channel_id);
+                                }
+                                Ok(_) => continue,
+                                Err(e) => {
+                                    // Fail closed: an unresolvable permission is not a grant.
+                                    warn!(
+                                        "gateway: resolve_channel_permissions failed for {channel_id:?}: {e}"
+                                    );
+                                    continue;
+                                }
+                            }
+                        }
+                        // Channel-permission filter: an event about a channel this
+                        // member cannot view never crosses the wire. Events with no
+                        // channel (categories, presence) are organization-scoped and
+                        // carry nothing a channel overwrite could gate.
+                        if let Some(channel_id) = event.channel_id()
+                            && !visible_channels.contains(&channel_id)
                         {
                             continue;
                         }

@@ -18,12 +18,14 @@ pub enum GatewayEvent {
     },
     ReactionAdd {
         organization_id: OrganizationId,
+        channel_id: ChannelId,
         message_id: MessageId,
         emoji: String,
         user_id: UserId,
     },
     ReactionRemove {
         organization_id: OrganizationId,
+        channel_id: ChannelId,
         message_id: MessageId,
         emoji: String,
         user_id: UserId,
@@ -87,22 +89,26 @@ pub fn from_domain(event: DomainEvent) -> GatewayEvent {
         },
         DomainEvent::ReactionAdded {
             organization_id,
+            channel_id,
             message_id,
             emoji,
             user_id,
         } => GatewayEvent::ReactionAdd {
             organization_id,
+            channel_id,
             message_id,
             emoji,
             user_id,
         },
         DomainEvent::ReactionRemoved {
             organization_id,
+            channel_id,
             message_id,
             emoji,
             user_id,
         } => GatewayEvent::ReactionRemove {
             organization_id,
+            channel_id,
             message_id,
             emoji,
             user_id,
@@ -212,6 +218,37 @@ impl GatewayEvent {
         }
     }
 
+    /// The channel this event concerns, when it concerns one.
+    ///
+    /// `None` means the event is organization-scoped (categories, presence) and
+    /// carries nothing a channel-level permission could gate. The gateway uses
+    /// this to decide whether an event must clear the member's visible-channel
+    /// set before it reaches the socket — so a variant that returns `None`
+    /// bypasses that check, and adding a channel-scoped variant that forgets to
+    /// answer here would leak it. Thread events answer with the thread's own id,
+    /// matching how `list_visible_channels` builds the set.
+    pub fn channel_id(&self) -> Option<ChannelId> {
+        match self {
+            GatewayEvent::MessageCreate(m) | GatewayEvent::MessageUpdate(m) => Some(m.channel_id),
+            GatewayEvent::ChannelCreate(c)
+            | GatewayEvent::ChannelUpdate(c)
+            | GatewayEvent::ThreadCreate(c)
+            | GatewayEvent::ThreadUpdate(c) => Some(c.id),
+            GatewayEvent::NotificationCreate(n) => Some(n.channel_id),
+            GatewayEvent::MessageDelete { channel_id, .. }
+            | GatewayEvent::ReactionAdd { channel_id, .. }
+            | GatewayEvent::ReactionRemove { channel_id, .. }
+            | GatewayEvent::ChannelDelete { channel_id, .. }
+            | GatewayEvent::ThreadDelete { channel_id, .. }
+            | GatewayEvent::TypingStart { channel_id, .. }
+            | GatewayEvent::ChannelRead { channel_id, .. } => Some(*channel_id),
+            GatewayEvent::CategoryCreate(_)
+            | GatewayEvent::CategoryUpdate(_)
+            | GatewayEvent::CategoryDelete { .. }
+            | GatewayEvent::PresenceUpdate(_) => None,
+        }
+    }
+
     /// Returns `Some(user_id)` for user-private events (currently only `ChannelRead`).
     /// The gateway dispatch loop uses this to skip forwarding to other users' sockets.
     pub fn target_user(&self) -> Option<UserId> {
@@ -278,5 +315,110 @@ mod tests {
         };
         let ev = GatewayEvent::NotificationCreate(notif);
         assert_eq!(ev.target_user(), Some(UserId(Uuid::from_u128(42))));
+    }
+
+    /// `channel_id()` gates the gateway's permission filter: a variant that
+    /// answers `None` skips the visible-channel check entirely. So every
+    /// channel-scoped variant must answer `Some`, and answer with the *right*
+    /// channel — a wrong id would gate against somebody else's permissions.
+    #[test]
+    fn channel_id_is_some_for_every_channel_scoped_event() {
+        let org = OrganizationId(Uuid::from_u128(1));
+        let ch = ChannelId(Uuid::from_u128(2));
+        let user = UserId(Uuid::from_u128(3));
+        let msg = MessageId(Uuid::from_u128(9));
+
+        let cases: Vec<(&str, GatewayEvent)> = vec![
+            (
+                "MessageDelete",
+                GatewayEvent::MessageDelete {
+                    organization_id: org,
+                    channel_id: ch,
+                    message_id: msg,
+                },
+            ),
+            (
+                "ReactionAdd",
+                GatewayEvent::ReactionAdd {
+                    organization_id: org,
+                    channel_id: ch,
+                    message_id: msg,
+                    emoji: "👍".to_owned(),
+                    user_id: user,
+                },
+            ),
+            (
+                "ReactionRemove",
+                GatewayEvent::ReactionRemove {
+                    organization_id: org,
+                    channel_id: ch,
+                    message_id: msg,
+                    emoji: "👍".to_owned(),
+                    user_id: user,
+                },
+            ),
+            (
+                "ChannelDelete",
+                GatewayEvent::ChannelDelete {
+                    organization_id: org,
+                    channel_id: ch,
+                },
+            ),
+            (
+                "ThreadDelete",
+                GatewayEvent::ThreadDelete {
+                    organization_id: org,
+                    channel_id: ch,
+                },
+            ),
+            (
+                "TypingStart",
+                GatewayEvent::TypingStart {
+                    organization_id: org,
+                    channel_id: ch,
+                    user_id: user,
+                    ttl_ms: TYPING_TTL_MS,
+                },
+            ),
+            (
+                "ChannelRead",
+                GatewayEvent::ChannelRead {
+                    organization_id: org,
+                    channel_id: ch,
+                    user_id: user,
+                    last_read_message_id: None,
+                },
+            ),
+        ];
+
+        for (name, ev) in cases {
+            assert_eq!(
+                ev.channel_id(),
+                Some(ch),
+                "{name} must be gated on its own channel"
+            );
+        }
+    }
+
+    /// The mirror of the above: these carry nothing a channel overwrite could
+    /// gate, so they are organization-scoped by design rather than by oversight.
+    #[test]
+    fn channel_id_is_none_for_organization_scoped_events() {
+        use discord::{CategoryId, Presence, PresenceStatus};
+        let org = OrganizationId(Uuid::from_u128(1));
+
+        let category_delete = GatewayEvent::CategoryDelete {
+            organization_id: org,
+            category_id: CategoryId(Uuid::from_u128(7)),
+        };
+        assert_eq!(category_delete.channel_id(), None);
+
+        let presence = GatewayEvent::PresenceUpdate(Presence {
+            organization_id: org,
+            user_id: UserId(Uuid::from_u128(3)),
+            status: PresenceStatus::Online,
+            updated_at: chrono::Utc::now(),
+        });
+        assert_eq!(presence.channel_id(), None);
     }
 }
