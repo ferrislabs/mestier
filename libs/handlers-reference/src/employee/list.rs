@@ -48,8 +48,7 @@ pub async fn handler(
         .acting_as(user_id)
         .list_employees(actor, path.organization_id, per_page, offset)
         .await?;
-    let items: Vec<EmployeeResponse> =
-        employees.into_iter().map(EmployeeResponse::from).collect();
+    let items: Vec<EmployeeResponse> = employees.into_iter().map(EmployeeResponse::from).collect();
     let is_empty = items.is_empty();
     let meta = PaginationMetadata::new(per_page, page, Some(total), is_empty);
 
