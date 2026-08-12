@@ -7,6 +7,15 @@ import { getOidcConfiguration } from '#/lib/runtime-config'
 
 interface AuthGateProps {
 	children: React.ReactNode
+	/**
+	 * Carried through the OIDC round trip as `signinRedirect`'s `state` and
+	 * read back from `auth.user.state` once the IdP returns — see
+	 * `ConfigGate`'s `onSigninCallback`. `redirect_uri` is fixed to the app
+	 * origin (`getOidcConfiguration().redirect_uri`), not the page that
+	 * triggered sign-in, so a route rendered outside `/_app` (like
+	 * `/invite/$token`) would otherwise lose its own path on the way back.
+	 */
+	redirectState?: string
 }
 
 /**
@@ -31,7 +40,7 @@ const RECOVERY_COOLDOWN_MS = 30_000
 
 type RecoveryState = 'idle' | 'recovering' | 'exhausted'
 
-export function AuthGate({ children }: AuthGateProps) {
+export function AuthGate({ children, redirectState }: AuthGateProps) {
 	const auth = useAuth()
 	const isConfigured = Boolean(getOidcConfiguration())
 	const [recovery, setRecovery] = useState<RecoveryState>('idle')
@@ -59,7 +68,9 @@ export function AuthGate({ children }: AuthGateProps) {
 					// Purge the stale user first: without it they stay in
 					// `localStorage` and the next load replays the same dead token.
 					await auth.removeUser()
-					await auth.signinRedirect()
+					await auth.signinRedirect(
+						redirectState ? { state: redirectState } : undefined,
+					)
 				} catch {
 					setRecovery('exhausted')
 				}
@@ -68,9 +79,11 @@ export function AuthGate({ children }: AuthGateProps) {
 		}
 
 		if (!auth.isAuthenticated && !auth.error) {
-			void auth.signinRedirect()
+			void auth.signinRedirect(
+				redirectState ? { state: redirectState } : undefined,
+			)
 		}
-	}, [auth, isConfigured, sessionEnded, recovery])
+	}, [auth, isConfigured, sessionEnded, recovery, redirectState])
 
 	if (!isConfigured) {
 		return (

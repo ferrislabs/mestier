@@ -1,7 +1,11 @@
 import { screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
-import type { MemberDraft, TeamMemberRow } from '#/pages/hr/ui/team-list-ui'
+import type {
+	MemberDraft,
+	PendingInvitationRow,
+	TeamMemberRow,
+} from '#/pages/hr/ui/team-list-ui'
 import { TeamListUI } from '#/pages/hr/ui/team-list-ui'
 import { renderWithRouter } from '#/test/render-with-router'
 
@@ -38,6 +42,10 @@ function baseProps() {
 		onCancelEdit: vi.fn(),
 		onSaveEdit: vi.fn(),
 		onDeleteMember: vi.fn().mockResolvedValue(undefined),
+		onInvite: vi.fn(),
+		pendingInvitations: [] as PendingInvitationRow[],
+		revokingInvitationId: null as string | null,
+		onRevokeInvitation: vi.fn(),
 	}
 }
 
@@ -101,6 +109,56 @@ describe('TeamListUI — access to the work time screen', () => {
 		expect(link.getAttribute('href')).toBe(
 			'/o/atelier-bois/hr/team/member-1/work-time',
 		)
+	})
+})
+
+describe('TeamListUI — invite action', () => {
+	it('offers "Inviter" for a seat with no access, and calls onInvite with the row', async () => {
+		const user = userEvent.setup()
+		const props = baseProps()
+		await renderWithRouter(
+			<TeamListUI {...props} members={[member({ access: 'none' })]} />,
+		)
+
+		await user.click(screen.getByRole('button', { name: 'Actions' }))
+		await user.click(screen.getByRole('menuitem', { name: /Inviter/ }))
+
+		expect(props.onInvite).toHaveBeenCalledWith(member({ access: 'none' }))
+	})
+
+	it('hides "Inviter" once a seat is invited or linked', async () => {
+		const user = userEvent.setup()
+		await renderWithRouter(
+			<TeamListUI {...baseProps()} members={[member({ access: 'invited' })]} />,
+		)
+
+		await user.click(screen.getByRole('button', { name: 'Actions' }))
+
+		expect(screen.queryByRole('menuitem', { name: /Inviter/ })).toBeNull()
+	})
+})
+
+describe('TeamListUI — pending invitations panel', () => {
+	it('renders nothing when there is no pending invitation', async () => {
+		await renderWithRouter(<TeamListUI {...baseProps()} />)
+
+		expect(screen.queryByText(/Invitations en attente/)).toBeNull()
+	})
+
+	it('lists a pending invitation and revokes it on demand', async () => {
+		const user = userEvent.setup()
+		const props = baseProps()
+		props.pendingInvitations = [
+			{ id: 'invitation-1', memberName: 'Alix Nova', expiresAt: '2026-08-20' },
+		]
+		await renderWithRouter(<TeamListUI {...props} />)
+
+		expect(screen.getByText('Invitations en attente (1)')).toBeDefined()
+		expect(screen.getByText('Alix Nova')).toBeDefined()
+
+		await user.click(screen.getByRole('button', { name: /Révoquer/ }))
+
+		expect(props.onRevokeInvitation).toHaveBeenCalledWith('invitation-1')
 	})
 })
 

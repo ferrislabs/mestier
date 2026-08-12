@@ -154,6 +154,7 @@ export namespace Schemas {
     status: CustomerStatus;
   };
   export type CreateEquipmentRequest = { hourly_rate_cents: number; name: string };
+  export type CreateInvitationRequest = Partial<{ expires_at: string | null; member_id: null | MemberId }>;
   export type CreateMemberRequest = { first_name?: (string | null) | undefined; last_name: string };
   export type CreateMessageAttachment = {
     filename: string;
@@ -208,6 +209,15 @@ export namespace Schemas {
   export type CreateThreadRequest = { name: string; origin_message_id?: (null | MessageId) | undefined };
   export type CreateWebhookRequest = { avatar_url?: (string | null) | undefined; name: string };
   export type CreateWorkflowRequest = { description?: (string | null) | undefined; name: string };
+  export type InvitationId = string;
+  export type InvitationResponse = {
+    created_at: string;
+    expires_at: string;
+    id: InvitationId;
+    member_id?: (null | MemberId) | undefined;
+    organization_id: OrganizationId;
+  };
+  export type CreatedInvitationResponse = InvitationResponse & { token: string };
   export type CredentialResponse = {
     created_at: string;
     id: string;
@@ -1909,6 +1919,41 @@ export namespace Endpoints {
       500: unknown;
     };
   };
+  export type delete_RevokeInvitation = {
+    method: "DELETE";
+    path: "/api/v1/invitations/{invitation_id}";
+    requestFormat: "json";
+    parameters: {
+      path: { invitation_id: string };
+    };
+    responses: { 204: unknown; 401: unknown; 403: unknown; 404: unknown; 409: unknown };
+  };
+  export type post_AcceptInvitation = {
+    method: "POST";
+    path: "/api/v1/invitations/{token}/accept";
+    requestFormat: "json";
+    parameters: {
+      path: { token: string };
+    };
+    responses: {
+      200: {
+        data: {
+          account?: (null | Schemas.MemberAccountResponse) | undefined;
+          created_at: string;
+          display_name: string;
+          first_name?: (string | null) | undefined;
+          id: Schemas.MemberId;
+          joined_at?: (string | null) | undefined;
+          last_name: string;
+          organization_id: Schemas.OrganizationId;
+        };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      404: unknown;
+      409: unknown;
+    };
+  };
   export type get_GetMember = {
     method: "GET";
     path: "/api/v1/members/{member_id}";
@@ -2845,6 +2890,48 @@ export namespace Endpoints {
       409: unknown;
     };
   };
+  export type get_ListInvitations = {
+    method: "GET";
+    path: "/api/v1/organizations/{organization_id}/invitations";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string };
+    };
+    responses: {
+      200: {
+        data: Array<{
+          created_at: string;
+          expires_at: string;
+          id: Schemas.InvitationId;
+          member_id?: (null | Schemas.MemberId) | undefined;
+          organization_id: Schemas.OrganizationId;
+        }>;
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+    };
+  };
+  export type post_CreateInvitation = {
+    method: "POST";
+    path: "/api/v1/organizations/{organization_id}/invitations";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string };
+
+      body: Schemas.CreateInvitationRequest;
+    };
+    responses: {
+      201: {
+        data: Schemas.InvitationResponse & { token: string };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+      404: unknown;
+      409: unknown;
+    };
+  };
   export type get_ListMembers = {
     method: "GET";
     path: "/api/v1/organizations/{organization_id}/members";
@@ -3712,6 +3799,7 @@ export type EndpointByMethod = {
     "/api/v1/customer-contexts/{customer_context_id}": Endpoints.delete_DeleteCustomerContext;
     "/api/v1/customers/{customer_id}": Endpoints.delete_DeleteCustomer;
     "/api/v1/equipment/{equipment_id}": Endpoints.delete_DeleteEquipment;
+    "/api/v1/invitations/{invitation_id}": Endpoints.delete_RevokeInvitation;
     "/api/v1/members/{member_id}": Endpoints.delete_DeleteMember;
     "/api/v1/members/{member_id}/employee-profile": Endpoints.delete_RemoveEmployeeProfile;
     "/api/v1/organizations/{organization_id}": Endpoints.delete_DeleteOrganization;
@@ -3781,6 +3869,7 @@ export type EndpointByMethod = {
     "/api/v1/organizations/{organization_id}/customers": Endpoints.get_ListCustomers;
     "/api/v1/organizations/{organization_id}/employee-profiles": Endpoints.get_ListEmployeeProfiles;
     "/api/v1/organizations/{organization_id}/equipment": Endpoints.get_ListEquipment;
+    "/api/v1/organizations/{organization_id}/invitations": Endpoints.get_ListInvitations;
     "/api/v1/organizations/{organization_id}/members": Endpoints.get_ListMembers;
     "/api/v1/organizations/{organization_id}/planning": Endpoints.get_GetPlanning;
     "/api/v1/organizations/{organization_id}/planning/availability": Endpoints.get_GetPlanningAvailability;
@@ -3808,6 +3897,7 @@ export type EndpointByMethod = {
     "/api/v1/customers/{customer_id}/contacts": Endpoints.post_CreateCustomerContact;
     "/api/v1/customers/{customer_id}/customer-contexts": Endpoints.post_CreateCustomerContext;
     "/api/v1/files": Endpoints.post_UploadFile;
+    "/api/v1/invitations/{token}/accept": Endpoints.post_AcceptInvitation;
     "/api/v1/organizations": Endpoints.post_CreateOrganization;
     "/api/v1/organizations/{organization_id}/absences": Endpoints.post_CreateAbsence;
     "/api/v1/organizations/{organization_id}/automation/credentials": Endpoints.post_CreateAutomationCredential;
@@ -3817,6 +3907,7 @@ export type EndpointByMethod = {
     "/api/v1/organizations/{organization_id}/automation/workflows/{workflow_id}/runs": Endpoints.post_StartRun;
     "/api/v1/organizations/{organization_id}/customers": Endpoints.post_CreateCustomer;
     "/api/v1/organizations/{organization_id}/equipment": Endpoints.post_CreateEquipment;
+    "/api/v1/organizations/{organization_id}/invitations": Endpoints.post_CreateInvitation;
     "/api/v1/organizations/{organization_id}/members": Endpoints.post_CreateMember;
     "/api/v1/organizations/{organization_id}/products": Endpoints.post_CreateProduct;
     "/api/v1/organizations/{organization_id}/quotes": Endpoints.post_CreateQuote;
