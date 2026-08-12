@@ -26,5 +26,5 @@ export async function renderWithRouter(ui: ReactNode, initialPath = '/') {
 		if (router.state.status !== 'idle') throw new Error('router not idle')
 	})
 
-	return result
+	return { ...result, router }
 }

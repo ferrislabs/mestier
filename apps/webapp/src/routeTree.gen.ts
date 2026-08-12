@@ -11,6 +11,7 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as AppRouteImport } from './routes/_app'
 import { Route as AppIndexRouteImport } from './routes/_app.index'
+import { Route as InviteTokenRouteImport } from './routes/invite.$token'
 import { Route as AppOOrganizationSlugRouteImport } from './routes/_app.o.$organizationSlug'
 import { Route as AppOOrganizationSlugIndexRouteImport } from './routes/_app.o.$organizationSlug.index'
 import { Route as AppOOrganizationSlugSettingsRouteImport } from './routes/_app.o.$organizationSlug.settings'
@@ -38,6 +39,11 @@ const AppIndexRoute = AppIndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => AppRoute,
+} as any)
+const InviteTokenRoute = InviteTokenRouteImport.update({
+  id: '/invite/$token',
+  path: '/invite/$token',
+  getParentRoute: () => rootRouteImport,
 } as any)
 const AppOOrganizationSlugRoute = AppOOrganizationSlugRouteImport.update({
   id: '/o/$organizationSlug',
@@ -149,6 +155,7 @@ const AppOOrganizationSlugHrTeamMemberIdWorkTimeRoute =
 
 export interface FileRoutesByFullPath {
   '/': typeof AppIndexRoute
+  '/invite/$token': typeof InviteTokenRoute
   '/o/$organizationSlug': typeof AppOOrganizationSlugRouteWithChildren
   '/o/$organizationSlug/settings': typeof AppOOrganizationSlugSettingsRoute
   '/o/$organizationSlug/': typeof AppOOrganizationSlugIndexRoute
@@ -169,6 +176,7 @@ export interface FileRoutesByFullPath {
   '/o/$organizationSlug/hr/team/$memberId/work-time': typeof AppOOrganizationSlugHrTeamMemberIdWorkTimeRoute
 }
 export interface FileRoutesByTo {
+  '/invite/$token': typeof InviteTokenRoute
   '/': typeof AppIndexRoute
   '/o/$organizationSlug/settings': typeof AppOOrganizationSlugSettingsRoute
   '/o/$organizationSlug': typeof AppOOrganizationSlugIndexRoute
@@ -191,6 +199,7 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/_app': typeof AppRouteWithChildren
+  '/invite/$token': typeof InviteTokenRoute
   '/_app/': typeof AppIndexRoute
   '/_app/o/$organizationSlug': typeof AppOOrganizationSlugRouteWithChildren
   '/_app/o/$organizationSlug/settings': typeof AppOOrganizationSlugSettingsRoute
@@ -215,6 +224,7 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/invite/$token'
     | '/o/$organizationSlug'
     | '/o/$organizationSlug/settings'
     | '/o/$organizationSlug/'
@@ -235,6 +245,7 @@ export interface FileRouteTypes {
     | '/o/$organizationSlug/hr/team/$memberId/work-time'
   fileRoutesByTo: FileRoutesByTo
   to:
+    | '/invite/$token'
     | '/'
     | '/o/$organizationSlug/settings'
     | '/o/$organizationSlug'
@@ -256,6 +267,7 @@ export interface FileRouteTypes {
   id:
     | '__root__'
     | '/_app'
+    | '/invite/$token'
     | '/_app/'
     | '/_app/o/$organizationSlug'
     | '/_app/o/$organizationSlug/settings'
@@ -279,6 +291,7 @@ export interface FileRouteTypes {
 }
 export interface RootRouteChildren {
   AppRoute: typeof AppRouteWithChildren
+  InviteTokenRoute: typeof InviteTokenRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -296,6 +309,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/'
       preLoaderRoute: typeof AppIndexRouteImport
       parentRoute: typeof AppRoute
+    }
+    '/invite/$token': {
+      id: '/invite/$token'
+      path: '/invite/$token'
+      fullPath: '/invite/$token'
+      preLoaderRoute: typeof InviteTokenRouteImport
+      parentRoute: typeof rootRouteImport
     }
     '/_app/o/$organizationSlug': {
       id: '/_app/o/$organizationSlug'
@@ -505,6 +525,7 @@ const AppRouteWithChildren = AppRoute._addFileChildren(AppRouteChildren)
 
 const rootRouteChildren: RootRouteChildren = {
   AppRoute: AppRouteWithChildren,
+  InviteTokenRoute: InviteTokenRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

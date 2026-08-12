@@ -21,14 +21,18 @@ import {
 } from '#/pages/hr/types'
 
 describe('accessState', () => {
-	it('is linkedAccount when the seat has an account', () => {
+	it('is linkedAccount when the seat has an account, even with a pending invitation', () => {
 		expect(
-			accessState({ account: { email: 'a@example.com', name: 'A' } }),
+			accessState({ account: { email: 'a@example.com', name: 'A' } }, true),
 		).toBe('linkedAccount')
 	})
 
-	it('is none for a free or unlinked seat', () => {
-		expect(accessState({ account: null })).toBe('none')
+	it('is invited for a vacant seat with a pending invitation', () => {
+		expect(accessState({ account: null }, true)).toBe('invited')
+	})
+
+	it('is none for a free seat with no pending invitation', () => {
+		expect(accessState({ account: null }, false)).toBe('none')
 	})
 })
 

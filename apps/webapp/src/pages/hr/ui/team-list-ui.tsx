@@ -7,7 +7,9 @@ import {
 	Search,
 	Trash2,
 	Undo2,
+	UserPlus,
 	Users,
+	X,
 } from 'lucide-react'
 import {
 	CreateButton,
@@ -44,7 +46,7 @@ import {
 } from '#/components/ui/surface'
 import { buildOrgPath } from '#/modules/org-path'
 import type { AccessState, MemberFormValues } from '#/pages/hr/types'
-import { formatDurationMinutes } from '#/pages/hr/types'
+import { formatDateFr, formatDurationMinutes } from '#/pages/hr/types'
 
 const ACCESS_LABEL: Record<AccessState, string> = {
 	none: 'Aucun accès',
@@ -80,6 +82,12 @@ export interface MemberDraft {
 	values: MemberFormValues
 }
 
+export interface PendingInvitationRow {
+	id: string
+	memberName: string
+	expiresAt: string
+}
+
 interface TeamListUIProps {
 	organizationName: string
 	organizationSlug: string
@@ -96,6 +104,10 @@ interface TeamListUIProps {
 	onCancelEdit: () => void
 	onSaveEdit: () => void
 	onDeleteMember: (member: TeamMemberRow) => Promise<unknown>
+	onInvite: (member: TeamMemberRow) => void
+	pendingInvitations: PendingInvitationRow[]
+	revokingInvitationId: string | null
+	onRevokeInvitation: (invitationId: string) => void
 }
 
 export function TeamListUI({
@@ -114,6 +126,10 @@ export function TeamListUI({
 	onCancelEdit,
 	onSaveEdit,
 	onDeleteMember,
+	onInvite,
+	pendingInvitations,
+	revokingInvitationId,
+	onRevokeInvitation,
 }: TeamListUIProps) {
 	return (
 		<PageShell>
@@ -151,6 +167,12 @@ export function TeamListUI({
 
 			<CreateMemberSection form={createForm} />
 
+			<PendingInvitationsSection
+				invitations={pendingInvitations}
+				revokingId={revokingInvitationId}
+				onRevoke={onRevokeInvitation}
+			/>
+
 			{isLoading ? (
 				<TeamListUI.Loading />
 			) : (
@@ -164,6 +186,7 @@ export function TeamListUI({
 					onCancel={onCancelEdit}
 					onSave={onSaveEdit}
 					onDelete={onDeleteMember}
+					onInvite={onInvite}
 				/>
 			)}
 		</PageShell>
@@ -220,6 +243,59 @@ function CreateMemberSection({ form }: CreateMemberSectionProps) {
 	)
 }
 
+interface PendingInvitationsSectionProps {
+	invitations: PendingInvitationRow[]
+	revokingId: string | null
+	onRevoke: (invitationId: string) => void
+}
+
+/** Nothing to show, nothing rendered — an org with no pending invitation
+ * gets no empty-state card cluttering the page. */
+function PendingInvitationsSection({
+	invitations,
+	revokingId,
+	onRevoke,
+}: PendingInvitationsSectionProps) {
+	if (invitations.length === 0) return null
+
+	return (
+		<SectionCard>
+			<SectionHeader
+				title={`Invitations en attente (${invitations.length})`}
+				description="Liens générés mais pas encore acceptés."
+			/>
+			<ul className="divide-y">
+				{invitations.map((invitation) => (
+					<li
+						key={invitation.id}
+						className="flex items-center justify-between px-5 py-3"
+					>
+						<div>
+							<p className="font-medium">{invitation.memberName}</p>
+							<p className="text-xs text-muted-foreground">
+								Expire le {formatDateFr(invitation.expiresAt.slice(0, 10))}
+							</p>
+						</div>
+						<Button
+							variant="ghost"
+							size="sm"
+							onClick={() => onRevoke(invitation.id)}
+							disabled={revokingId === invitation.id}
+						>
+							{revokingId === invitation.id ? (
+								<Loader2 className="animate-spin" />
+							) : (
+								<X />
+							)}
+							Révoquer
+						</Button>
+					</li>
+				))}
+			</ul>
+		</SectionCard>
+	)
+}
+
 interface TeamTableProps {
 	data: TeamMemberRow[]
 	organizationSlug: string
@@ -230,6 +306,7 @@ interface TeamTableProps {
 	onCancel: () => void
 	onSave: () => void
 	onDelete: (member: TeamMemberRow) => Promise<unknown>
+	onInvite: (member: TeamMemberRow) => void
 }
 
 function TeamTable({
@@ -242,6 +319,7 @@ function TeamTable({
 	onCancel,
 	onSave,
 	onDelete,
+	onInvite,
 }: TeamTableProps) {
 	return (
 		<SectionCard>
@@ -361,12 +439,14 @@ function TeamTable({
 												memberId={member.id}
 												memberName={member.displayName}
 												organizationSlug={organizationSlug}
+												access={member.access}
 												isEditing={isEditing}
 												isSaving={isSaving}
 												onEdit={() => onEdit(member)}
 												onCancel={onCancel}
 												onSave={onSave}
 												onDelete={() => onDelete(member)}
+												onInvite={() => onInvite(member)}
 											/>
 										</td>
 									</tr>
@@ -384,24 +464,28 @@ interface RowActionsProps {
 	memberId: string
 	memberName: string
 	organizationSlug: string
+	access: AccessState
 	isEditing: boolean
 	isSaving: boolean
 	onEdit: () => void
 	onCancel: () => void
 	onSave: () => void
 	onDelete: () => void
+	onInvite: () => void
 }
 
 function RowActions({
 	memberId,
 	memberName,
 	organizationSlug,
+	access,
 	isEditing,
 	isSaving,
 	onEdit,
 	onCancel,
 	onSave,
 	onDelete,
+	onInvite,
 }: RowActionsProps) {
 	if (isEditing) {
 		return (
@@ -430,6 +514,12 @@ function RowActions({
 					</DropdownMenuTrigger>
 					<DropdownMenuContent align="end">
 						<DropdownMenuItem onClick={onEdit}>Modifier</DropdownMenuItem>
+						{access === 'none' ? (
+							<DropdownMenuItem onClick={onInvite}>
+								<UserPlus />
+								Inviter
+							</DropdownMenuItem>
+						) : null}
 						<DropdownMenuItem asChild>
 							<Link
 								to={buildOrgPath(

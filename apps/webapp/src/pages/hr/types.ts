@@ -8,15 +8,24 @@ export interface MemberFormValues {
 }
 
 /**
- * The three states the Access column can show for a seat. `invited` has no
- * data source yet — invitations are #185 — so {@link accessState} never
- * returns it today; the column already knows how to render it so nothing
- * changes here once #185 ships.
+ * The three states the Access column can show for a seat.
  */
 export type AccessState = 'none' | 'invited' | 'linkedAccount'
 
-export function accessState(member: { account?: unknown }): AccessState {
-	return member.account ? 'linkedAccount' : 'none'
+/**
+ * `hasPendingInvitation` comes from the organization's pending-invitations
+ * list (`usePendingInvitations`), matched by `member_id` — a seat can be
+ * targeted by at most one *effective* invitation at a time in the UI (the
+ * "Inviter" action is hidden once one is pending), but the backend does not
+ * enforce that itself, so this only reflects what the UI offered.
+ */
+export function accessState(
+	member: { account?: unknown },
+	hasPendingInvitation: boolean,
+): AccessState {
+	if (member.account) return 'linkedAccount'
+	if (hasPendingInvitation) return 'invited'
+	return 'none'
 }
 
 // -- Rythme et plages de travail -----------------------------------------

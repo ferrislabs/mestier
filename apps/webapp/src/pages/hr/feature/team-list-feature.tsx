@@ -2,6 +2,11 @@ import { useForm } from '@tanstack/react-form'
 import { useState } from 'react'
 import { useActiveOrganization } from '#/hooks/use-active-organization'
 import {
+	useCreateInvitation,
+	usePendingInvitations,
+	useRevokeInvitation,
+} from '#/hooks/use-invitations'
+import {
 	useCreateMember,
 	useDeleteMember,
 	useReferenceCatalog,
@@ -10,10 +15,12 @@ import {
 	useUpsertEmployeeProfile,
 } from '#/hooks/use-reference-catalog'
 import { accessState, type MemberFormValues } from '#/pages/hr/types'
+import { InviteMemberSheet } from '#/pages/hr/ui/invite-member-sheet'
 import {
 	type MemberDraft,
-	type TeamMemberRow,
+	type PendingInvitationRow,
 	TeamListUI,
+	type TeamMemberRow,
 } from '#/pages/hr/ui/team-list-ui'
 
 export function TeamListFeature() {
@@ -50,10 +57,21 @@ function TeamDirectory({
 	const deleteMember = useDeleteMember()
 	const upsertProfile = useUpsertEmployeeProfile()
 	const removeProfile = useRemoveEmployeeProfile()
+	const pendingInvitations = usePendingInvitations(organizationId)
+	const createInvitation = useCreateInvitation(organizationId)
+	const revokeInvitation = useRevokeInvitation()
 
 	const [search, setSearch] = useState('')
 	const [draft, setDraft] = useState<MemberDraft | null>(null)
 	const [isSaving, setIsSaving] = useState(false)
+	const [inviteTarget, setInviteTarget] = useState<{
+		id: string
+		name: string
+	} | null>(null)
+	const [inviteToken, setInviteToken] = useState<string | null>(null)
+	const [revokingInvitationId, setRevokingInvitationId] = useState<
+		string | null
+	>(null)
 
 	const memberForm = useForm({
 		defaultValues: {
@@ -87,15 +105,32 @@ function TeamDirectory({
 			profile,
 		]),
 	)
+	const invitations = pendingInvitations.data?.data ?? []
+	const pendingByMemberId = new Set(
+		invitations
+			.map((invitation) => invitation.member_id)
+			.filter((id): id is string => Boolean(id)),
+	)
 
 	const rows: TeamMemberRow[] = members.map((member) => {
 		const profile = profileByMember.get(member.id)
 		return {
 			id: member.id,
 			displayName: member.display_name,
-			access: accessState(member),
+			access: accessState(member, pendingByMemberId.has(member.id)),
 			hourlyRateCents: profile?.hourly_rate_cents ?? null,
 			weeklyContractMinutes: profile?.weekly_contract_minutes ?? null,
+		}
+	})
+
+	const pendingRows: PendingInvitationRow[] = invitations.map((invitation) => {
+		const member = invitation.member_id
+			? members.find((item) => item.id === invitation.member_id)
+			: undefined
+		return {
+			id: invitation.id,
+			memberName: member?.display_name ?? 'Personne inconnue',
+			expiresAt: invitation.expires_at,
 		}
 	})
 
@@ -114,7 +149,28 @@ function TeamDirectory({
 		updateMember.error ??
 		deleteMember.error ??
 		upsertProfile.error ??
-		removeProfile.error
+		removeProfile.error ??
+		revokeInvitation.error
+
+	const handleGenerateInvite = async () => {
+		if (!inviteTarget) return
+		const created = await createInvitation.mutateAsync({
+			path: { organization_id: organizationId },
+			body: { member_id: inviteTarget.id },
+		})
+		setInviteToken(created.data.token)
+	}
+
+	const handleRevokeInvitation = async (invitationId: string) => {
+		setRevokingInvitationId(invitationId)
+		try {
+			await revokeInvitation.mutateAsync({
+				path: { invitation_id: invitationId },
+			})
+		} finally {
+			setRevokingInvitationId(null)
+		}
+	}
 
 	const handleSaveDraft = async () => {
 		if (!draft) return
@@ -154,53 +210,80 @@ function TeamDirectory({
 	}
 
 	return (
-		<memberForm.Subscribe selector={(state) => state.values}>
-			{(memberValues) => (
-				<TeamListUI
-					organizationName={organizationName}
-					organizationSlug={organizationSlug}
-					isLoading={isLoading}
-					error={error?.message ?? null}
-					members={filteredRows}
-					search={search}
-					onSearchChange={setSearch}
-					createForm={{
-						values: memberValues,
-						isPending: createMember.isPending || upsertProfile.isPending,
-						onChange: (patch) => {
-							for (const key of Object.keys(
-								patch,
-							) as (keyof MemberFormValues)[]) {
-								memberForm.setFieldValue(key, patch[key] ?? '')
-							}
-						},
-						onSubmit: () => void memberForm.handleSubmit(),
-					}}
-					draft={draft}
-					isSaving={isSaving}
-					onEdit={(row) => {
-						const member = members.find((item) => item.id === row.id)
-						if (!member) return
-						setDraft({
-							id: member.id,
-							values: {
-								lastName: member.last_name,
-								firstName: member.first_name ?? '',
-								hourlyRate: centsToEuros(row.hourlyRateCents),
+		<>
+			<memberForm.Subscribe selector={(state) => state.values}>
+				{(memberValues) => (
+					<TeamListUI
+						organizationName={organizationName}
+						organizationSlug={organizationSlug}
+						isLoading={isLoading}
+						error={error?.message ?? null}
+						members={filteredRows}
+						search={search}
+						onSearchChange={setSearch}
+						createForm={{
+							values: memberValues,
+							isPending: createMember.isPending || upsertProfile.isPending,
+							onChange: (patch) => {
+								for (const key of Object.keys(
+									patch,
+								) as (keyof MemberFormValues)[]) {
+									memberForm.setFieldValue(key, patch[key] ?? '')
+								}
 							},
-						})
-					}}
-					onDraftChange={(values) =>
-						setDraft((current) => (current ? { ...current, values } : current))
+							onSubmit: () => void memberForm.handleSubmit(),
+						}}
+						draft={draft}
+						isSaving={isSaving}
+						onEdit={(row) => {
+							const member = members.find((item) => item.id === row.id)
+							if (!member) return
+							setDraft({
+								id: member.id,
+								values: {
+									lastName: member.last_name,
+									firstName: member.first_name ?? '',
+									hourlyRate: centsToEuros(row.hourlyRateCents),
+								},
+							})
+						}}
+						onDraftChange={(values) =>
+							setDraft((current) =>
+								current ? { ...current, values } : current,
+							)
+						}
+						onCancelEdit={() => setDraft(null)}
+						onSaveEdit={handleSaveDraft}
+						onDeleteMember={(row) =>
+							deleteMember.mutateAsync({ path: { member_id: row.id } })
+						}
+						onInvite={(row) => {
+							setInviteTarget({ id: row.id, name: row.displayName })
+							setInviteToken(null)
+						}}
+						pendingInvitations={pendingRows}
+						revokingInvitationId={revokingInvitationId}
+						onRevokeInvitation={(invitationId) =>
+							void handleRevokeInvitation(invitationId)
+						}
+					/>
+				)}
+			</memberForm.Subscribe>
+			<InviteMemberSheet
+				open={inviteTarget !== null}
+				memberName={inviteTarget?.name ?? ''}
+				token={inviteToken}
+				isGenerating={createInvitation.isPending}
+				error={createInvitation.error?.message ?? null}
+				onOpenChange={(open) => {
+					if (!open) {
+						setInviteTarget(null)
+						setInviteToken(null)
 					}
-					onCancelEdit={() => setDraft(null)}
-					onSaveEdit={handleSaveDraft}
-					onDeleteMember={(row) =>
-						deleteMember.mutateAsync({ path: { member_id: row.id } })
-					}
-				/>
-			)}
-		</memberForm.Subscribe>
+				}}
+				onGenerate={() => void handleGenerateInvite()}
+			/>
+		</>
 	)
 }
 

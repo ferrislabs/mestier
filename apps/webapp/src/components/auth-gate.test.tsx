@@ -23,7 +23,7 @@ interface AuthStub {
 	error?: ErrorContext
 }
 
-function mountGate(stub: AuthStub) {
+function mountGate(stub: AuthStub, redirectState?: string) {
 	const removeUser = vi.fn().mockResolvedValue(undefined)
 	const signinRedirect = vi.fn().mockResolvedValue(undefined)
 
@@ -38,7 +38,7 @@ function mountGate(stub: AuthStub) {
 	})
 
 	render(
-		<AuthGate>
+		<AuthGate redirectState={redirectState}>
 			<p>Espace de travail</p>
 		</AuthGate>,
 	)
@@ -154,5 +154,21 @@ describe('AuthGate', () => {
 		mountGate({ isAuthenticated: true })
 
 		expect(screen.getByText('Espace de travail')).toBeDefined()
+	})
+
+	it('carries redirectState through to signinRedirect, for a route outside /_app to survive the OIDC round trip', async () => {
+		const { signinRedirect } = mountGate({}, '/invite/abc123')
+
+		await waitFor(() => {
+			expect(signinRedirect).toHaveBeenCalledWith({ state: '/invite/abc123' })
+		})
+	})
+
+	it('calls signinRedirect with no options when redirectState is absent', async () => {
+		const { signinRedirect } = mountGate({})
+
+		await waitFor(() => {
+			expect(signinRedirect).toHaveBeenCalledWith(undefined)
+		})
 	})
 })
