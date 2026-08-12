@@ -37,6 +37,7 @@ pub mod discord_read_state;
 pub mod discord_webhook;
 pub mod employee;
 pub mod equipment;
+pub mod invitation;
 pub mod member;
 pub mod organization;
 pub mod planning;

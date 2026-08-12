@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            DELETE FROM organization_invitations\n            WHERE id = $1 AND consumed_at IS NULL\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "433c5cc436954d86a163a52a5323ad412b42254d7b17e319417ea5e236ae6e0a"
+}

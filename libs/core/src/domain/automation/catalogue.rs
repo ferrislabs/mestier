@@ -1,6 +1,6 @@
 use events::{EventCatalogue, EventDescriptor};
 
-use crate::domain::quote;
+use crate::domain::{invitation, member, quote};
 
 /// Every event the product can emit, assembled from the modules that own them.
 ///
@@ -19,7 +19,12 @@ pub fn event_catalogue() -> EventCatalogue {
 }
 
 fn descriptors() -> Vec<EventDescriptor> {
-    quote::events::descriptors()
+    [
+        quote::events::descriptors(),
+        member::events::descriptors(),
+        invitation::events::descriptors(),
+    ]
+    .concat()
 }
 
 #[cfg(test)]
@@ -31,17 +36,22 @@ mod tests {
     /// The check that keeps explicit emission honest.
     ///
     /// Explicit emission buys a documented, stable contract; the price is that
-    /// nothing forces a module to keep the two in step. `emitted_events`
-    /// enumerates every `DomainEvent` the quote module can construct, so an
+    /// nothing forces a module to keep the two in step. Each module's
+    /// `emitted_events` enumerates every `DomainEvent` it can construct, so an
     /// event added without a descriptor — or a descriptor left behind by an
     /// event that no longer exists — fails here rather than reaching a
     /// subscriber.
     #[test]
     fn the_catalogue_describes_exactly_what_the_modules_emit() {
-        let emitted: Vec<EventKey> = quote::events::emitted_events()
-            .iter()
-            .map(|(name, version)| EventKey::new(*name, *version))
-            .collect();
+        let emitted: Vec<EventKey> = [
+            quote::events::emitted_events(),
+            member::events::emitted_events(),
+            invitation::events::emitted_events(),
+        ]
+        .concat()
+        .iter()
+        .map(|(name, version)| EventKey::new(*name, *version))
+        .collect();
 
         let report = drift(&event_catalogue(), &emitted);
 
