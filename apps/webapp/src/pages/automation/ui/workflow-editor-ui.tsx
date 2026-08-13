@@ -221,8 +221,14 @@ interface ConnectorNodeData {
 	[key: string]: unknown
 }
 
+interface StartNodeData {
+	families: PaletteFamily[]
+	onAddFrom: (kind: string) => void
+	[key: string]: unknown
+}
+
 type ConnectorNode = Node<ConnectorNodeData, 'connector'>
-type StartNode = Node<Record<string, never>, 'start'>
+type StartNode = Node<StartNodeData, 'start'>
 type BranchEdge = Edge<{ branch: Branch | null }>
 
 function ConnectorNodeView({ data, selected }: NodeProps<ConnectorNode>) {
@@ -264,13 +270,24 @@ function ConnectorNodeView({ data, selected }: NodeProps<ConnectorNode>) {
 							<DropdownMenuTrigger asChild>
 								<button
 									type="button"
+									// React delivers bubbling by React-tree, not DOM-tree —
+									// so a portaled `DropdownMenuContent` still bubbles a
+									// click up through this button to React Flow's
+									// `onNodeClick`. Without stopping it here, opening
+									// this menu also "selects" the node, which opens the
+									// config popover (`side="right" align="start"`, same
+									// as this menu) on top of it.
+									onClick={(event) => event.stopPropagation()}
 									className="nodrag ml-auto flex size-6 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground"
 								>
 									<MoreHorizontal className="size-4" />
 									<span className="sr-only">Actions</span>
 								</button>
 							</DropdownMenuTrigger>
-							<DropdownMenuContent align="end">
+							<DropdownMenuContent
+								align="end"
+								onClick={(event) => event.stopPropagation()}
+							>
 								<DropdownMenuItem onSelect={data.onDuplicate}>
 									<Copy />
 									Dupliquer
@@ -307,13 +324,23 @@ function ConnectorNodeView({ data, selected }: NodeProps<ConnectorNode>) {
 							<button
 								type="button"
 								title="Ajouter un connecteur après celui-ci"
+								// Same reason as the "..." trigger above: this click
+								// must not also bubble into `onNodeClick` and select
+								// the node, which would pop the (same-positioned)
+								// config popover open right on top of this one.
+								onClick={(event) => event.stopPropagation()}
 								className="nodrag absolute top-1/2 -right-9 flex size-6 -translate-y-1/2 items-center justify-center rounded-full border bg-background text-muted-foreground shadow-sm transition hover:bg-muted hover:text-foreground"
 							>
 								<Plus className="size-3.5" />
 								<span className="sr-only">Ajouter après</span>
 							</button>
 						</PopoverTrigger>
-						<PopoverContent className="w-auto p-0" align="start" side="right">
+						<PopoverContent
+							className="w-auto p-0"
+							align="start"
+							side="right"
+							onClick={(event) => event.stopPropagation()}
+						>
 							<ConnectorSearchList
 								families={data.families}
 								onSelect={data.onAddFrom}
@@ -326,6 +353,7 @@ function ConnectorNodeView({ data, selected }: NodeProps<ConnectorNode>) {
 				className="w-96 p-0"
 				side="right"
 				align="start"
+				onClick={(event) => event.stopPropagation()}
 				onInteractOutside={(event) => event.preventDefault()}
 				onEscapeKeyDown={(event) => {
 					event.preventDefault()
@@ -351,12 +379,36 @@ function ConnectorNodeView({ data, selected }: NodeProps<ConnectorNode>) {
 	)
 }
 
-function StartNodeView() {
+function StartNodeView({ data }: NodeProps<StartNode>) {
 	return (
-		<div className="flex items-center gap-2 rounded-full border bg-success-soft px-4 py-2.5 text-sm font-semibold text-success shadow-sm">
+		<div className="relative flex items-center gap-2 rounded-full border bg-success-soft px-4 py-2.5 text-sm font-semibold text-success shadow-sm">
 			<Zap className="size-4" />
 			Départ
 			<Handle type="source" position={Position.Right} isConnectable={false} />
+			<Popover>
+				<PopoverTrigger asChild>
+					<button
+						type="button"
+						title="Ajouter le premier connecteur"
+						onClick={(event) => event.stopPropagation()}
+						className="nodrag absolute top-1/2 -right-9 flex size-6 -translate-y-1/2 items-center justify-center rounded-full border bg-background text-muted-foreground shadow-sm transition hover:bg-muted hover:text-foreground"
+					>
+						<Plus className="size-3.5" />
+						<span className="sr-only">Ajouter le premier connecteur</span>
+					</button>
+				</PopoverTrigger>
+				<PopoverContent
+					className="w-auto p-0"
+					align="start"
+					side="right"
+					onClick={(event) => event.stopPropagation()}
+				>
+					<ConnectorSearchList
+						families={data.families}
+						onSelect={data.onAddFrom}
+					/>
+				</PopoverContent>
+			</Popover>
 		</div>
 	)
 }
@@ -421,6 +473,7 @@ export function WorkflowEditorUI(props: WorkflowEditorUIProps) {
 		selection,
 		families,
 		rootConnectorIds,
+		onAddConnector,
 		onAddConnectorFrom,
 		onDuplicateConnector,
 		onRemoveConnector,
@@ -497,6 +550,19 @@ export function WorkflowEditorUI(props: WorkflowEditorUIProps) {
 								if (connection.source && connection.target) {
 									onConnect(connection.source, connection.target)
 								}
+							}}
+							// Without this, dragging an existing edge's endpoint to
+							// a different node does nothing — `edgesReconnectable`
+							// defaults to on, but React Flow still requires this
+							// handler before it will apply the change. A reconnect
+							// is just "drop the old edge, draw the new one":
+							// `onRemoveEdge` then `onConnect`, the same two
+							// primitives everything else on the canvas already
+							// goes through.
+							onReconnect={(oldEdge, newConnection) => {
+								if (!newConnection.source || !newConnection.target) return
+								onRemoveEdge(oldEdge.source, oldEdge.target)
+								onConnect(newConnection.source, newConnection.target)
 							}}
 							onNodeClick={(_, node) => {
 								if (node.id === START_NODE_ID) return
@@ -843,6 +909,7 @@ function useCanvasState({
 	selection,
 	families,
 	rootConnectorIds,
+	onAddConnector,
 	onAddConnectorFrom,
 	onDuplicateConnector,
 	onRemoveConnector,
@@ -862,6 +929,7 @@ function useCanvasState({
 	selection: EditorSelection | null
 	families: PaletteFamily[]
 	rootConnectorIds: string[]
+	onAddConnector: (kind: string) => void
 	onAddConnectorFrom: (fromId: string, kind: string) => void
 	onDuplicateConnector: (connectorId: string) => void
 	onRemoveConnector: (connectorId: string) => void
@@ -922,7 +990,7 @@ function useCanvasState({
 					y: startHeight / 2,
 				},
 			],
-			data: {},
+			data: { families, onAddFrom: onAddConnector },
 		}
 
 		setRfNodes([

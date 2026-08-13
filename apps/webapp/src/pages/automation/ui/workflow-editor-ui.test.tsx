@@ -193,6 +193,56 @@ describe('WorkflowEditorUI — adding a connector from an existing node', () => 
 
 		expect(onAddConnectorFrom).toHaveBeenCalledWith('c1', 'http.request')
 	})
+
+	// Same reasoning as the "..." menu's equivalent test: the "+" trigger is
+	// a plain button inside the node's own DOM, so without stopping
+	// propagation its click (and a pick from the list it opens) would also
+	// bubble to `onNodeClick` and select the source node — popping its
+	// config popover open on top of the connector list.
+	it('never also selects the source node', async () => {
+		const user = userEvent.setup()
+		const onSelectConnector = vi.fn()
+		await renderWithRouter(
+			<WorkflowEditorUI
+				{...baseProps({
+					onSelectConnector,
+					nodes: [
+						{
+							id: 'c1',
+							label: 'Mon connecteur',
+							kindLabel: 'http.request',
+							family: 'http',
+							hasError: false,
+							previewLines: [],
+						},
+					],
+					positions: new Map([['c1', { x: 0, y: 0 }]]),
+				})}
+			/>,
+		)
+
+		await user.click(screen.getByTitle('Ajouter un connecteur après celui-ci'))
+		const searchList = screen.getByTestId('connector-search-list')
+		await user.click(within(searchList).getByText('Requête HTTP'))
+
+		expect(onSelectConnector).not.toHaveBeenCalled()
+	})
+})
+
+describe('WorkflowEditorUI — Start node "+" button', () => {
+	it('opens the same searchable connector list, wired to onAddConnector', async () => {
+		const user = userEvent.setup()
+		const onAddConnector = vi.fn()
+		await renderWithRouter(
+			<WorkflowEditorUI {...baseProps({ onAddConnector })} />,
+		)
+
+		await user.click(screen.getByTitle('Ajouter le premier connecteur'))
+		const searchList = screen.getByTestId('connector-search-list')
+		await user.click(within(searchList).getByText('Requête HTTP'))
+
+		expect(onAddConnector).toHaveBeenCalledWith('http.request')
+	})
 })
 
 describe('WorkflowEditorUI — node "..." menu', () => {
@@ -237,6 +287,22 @@ describe('WorkflowEditorUI — node "..." menu', () => {
 		await user.click(screen.getByText('Supprimer'))
 
 		expect(onRemoveConnector).toHaveBeenCalledWith('c1')
+	})
+
+	// The "..." trigger sits directly inside the node's own DOM, so a click
+	// on it also bubbles to React Flow's onNodeClick unless stopped — which
+	// would select the connector and pop its (identically positioned)
+	// config popover open right on top of this menu.
+	it('opening the menu never also selects the node', async () => {
+		const user = userEvent.setup()
+		const onSelectConnector = vi.fn()
+		await renderWithRouter(
+			<WorkflowEditorUI {...singleNodeProps({ onSelectConnector })} />,
+		)
+
+		await user.click(screen.getByRole('button', { name: 'Actions' }))
+
+		expect(onSelectConnector).not.toHaveBeenCalled()
 	})
 })
 
