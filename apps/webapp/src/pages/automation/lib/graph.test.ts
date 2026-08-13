@@ -15,8 +15,10 @@ import {
 	graphErrorsByConnector,
 	groupByFamily,
 	matchesAuthRequirement,
+	previewLinesFor,
 	removeConnector,
 	removeEdge,
+	rootConnectorIds,
 	updateConnectorConfig,
 	upstreamOf,
 } from '#/pages/automation/lib/graph'
@@ -269,5 +271,95 @@ describe('credentialOptionsFor', () => {
 	it('is empty for a connector with no auth requirement', () => {
 		const connector = descriptor({ auth: 'None' })
 		expect(credentialOptionsFor(connector, [credential()])).toEqual([])
+	})
+})
+
+describe('rootConnectorIds', () => {
+	it('is every connector when there are no edges', () => {
+		const graph: Graph = {
+			connectors: [placed({ id: 'a' }), placed({ id: 'b' })],
+			edges: [],
+		}
+		expect(rootConnectorIds(graph).sort()).toEqual(['a', 'b'])
+	})
+
+	it('excludes a connector something points into', () => {
+		const graph: Graph = {
+			connectors: [placed({ id: 'a' }), placed({ id: 'b' })],
+			edges: [{ from: 'a', to: 'b' }],
+		}
+		expect(rootConnectorIds(graph)).toEqual(['a'])
+	})
+})
+
+describe('previewLinesFor', () => {
+	const urlField = {
+		name: 'url',
+		label: 'URL',
+		kind: 'Text' as const,
+		required: true,
+		expression: false,
+		secret: false,
+	}
+	const tokenField = {
+		name: 'token',
+		label: 'Token',
+		kind: 'Text' as const,
+		required: false,
+		expression: false,
+		secret: true,
+	}
+
+	it('is empty once the descriptor is unknown (a retired kind)', () => {
+		expect(previewLinesFor(placed(), undefined)).toEqual([])
+	})
+
+	it('shows a filled field as "Label: value"', () => {
+		const lines = previewLinesFor(
+			placed({ config: { url: 'https://api.example.com' } }),
+			descriptor({ fields: [urlField] }),
+		)
+		expect(lines).toEqual(['URL: https://api.example.com'])
+	})
+
+	it('skips a field with no value', () => {
+		const lines = previewLinesFor(
+			placed({ config: {} }),
+			descriptor({ fields: [urlField] }),
+		)
+		expect(lines).toEqual([])
+	})
+
+	it('never includes a secret field, even filled', () => {
+		const lines = previewLinesFor(
+			placed({ config: { token: 'sk-super-secret' } }),
+			descriptor({ fields: [tokenField] }),
+		)
+		expect(lines).toEqual([])
+	})
+
+	it('caps at two lines', () => {
+		const fields = ['a', 'b', 'c'].map((name) => ({
+			name,
+			label: name.toUpperCase(),
+			kind: 'Text' as const,
+			required: false,
+			expression: false,
+			secret: false,
+		}))
+		const lines = previewLinesFor(
+			placed({ config: { a: '1', b: '2', c: '3' } }),
+			descriptor({ fields }),
+		)
+		expect(lines).toEqual(['A: 1', 'B: 2'])
+	})
+
+	it('truncates a long value', () => {
+		const lines = previewLinesFor(
+			placed({ config: { url: 'x'.repeat(60) } }),
+			descriptor({ fields: [urlField] }),
+		)
+		expect(lines[0].length).toBeLessThan(60)
+		expect(lines[0].endsWith('…')).toBe(true)
 	})
 })

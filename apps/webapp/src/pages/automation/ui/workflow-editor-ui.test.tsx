@@ -1,14 +1,19 @@
-import { fireEvent, screen } from '@testing-library/react'
+import { fireEvent, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 import type { WorkflowEditorUIProps } from '#/pages/automation/ui/workflow-editor-ui'
 import { WorkflowEditorUI } from '#/pages/automation/ui/workflow-editor-ui'
 import { renderWithRouter } from '#/test/render-with-router'
 
-// jsdom implements neither `ResizeObserver` (React Flow measures its
-// viewport with it) nor pointer-capture/`scrollIntoView` (Radix's `Select`,
-// used by the branch picker). Scoped to this file — see `field-form.test.tsx`'s
-// identical comment for why this is not in `vitest.setup.ts`.
+// jsdom has no `ResizeObserver` at all (React Flow observes every node with
+// one, to react to size changes after the initial render). A true no-op is
+// enough: each node carries `initialWidth`/`initialHeight`
+// (`workflow-editor-ui.tsx`) precisely so React Flow never needs a real
+// measurement to consider it visible — a stub that actually invoked the
+// resize callback would reach React Flow's own `new
+// DOMMatrixReadOnly(style.transform)`, which jsdom doesn't implement
+// either. Scoped to this file — see `field-form.test.tsx`'s identical
+// comment for why this is not in `vitest.setup.ts`.
 class ResizeObserverStub {
 	observe() {}
 	unobserve() {}
@@ -47,10 +52,13 @@ function baseProps(
 			},
 		],
 		onAddConnector: vi.fn(),
+		rootConnectorIds: [],
 		nodes: [],
 		edges: [],
 		positions: new Map(),
 		onConnect: vi.fn(),
+		onAddConnectorFrom: vi.fn(),
+		onDuplicateConnector: vi.fn(),
 		onSelectConnector: vi.fn(),
 		onSelectEdge: vi.fn(),
 		onDeselect: vi.fn(),
@@ -91,6 +99,7 @@ describe('WorkflowEditorUI — canvas selection', () => {
 							kindLabel: 'http.request',
 							family: 'http',
 							hasError: false,
+							previewLines: [],
 						},
 					],
 					positions: new Map([['c1', { x: 0, y: 0 }]]),
@@ -101,6 +110,223 @@ describe('WorkflowEditorUI — canvas selection', () => {
 			fireEvent.click(screen.getByText('Ma requête'))
 			expect(onSelectConnector).toHaveBeenCalledWith('c1')
 		})
+	})
+})
+
+describe('WorkflowEditorUI — start node', () => {
+	it('always renders a Départ node, even on an empty graph', async () => {
+		await renderWithRouter(<WorkflowEditorUI {...baseProps()} />)
+
+		expect(screen.getByText('Départ')).toBeDefined()
+	})
+
+	it('right-clicking it does nothing — it is not a real connector', async () => {
+		const onDuplicateConnector = vi.fn()
+		await renderWithRouter(
+			<WorkflowEditorUI {...baseProps({ onDuplicateConnector })} />,
+		)
+
+		fireEvent.contextMenu(screen.getByText('Départ'))
+
+		expect(screen.queryByText('Dupliquer')).toBeNull()
+	})
+})
+
+describe('WorkflowEditorUI — node preview lines', () => {
+	it("shows the connector's own config preview on its card", async () => {
+		await renderWithRouter(
+			<WorkflowEditorUI
+				{...baseProps({
+					nodes: [
+						{
+							id: 'c1',
+							label: 'Requête HTTP',
+							kindLabel: 'http.request',
+							family: 'http',
+							hasError: false,
+							previewLines: ['URL: https://api.example.com'],
+						},
+					],
+					positions: new Map([['c1', { x: 0, y: 0 }]]),
+				})}
+			/>,
+		)
+
+		expect(screen.getByText('URL: https://api.example.com')).toBeDefined()
+	})
+})
+
+describe('WorkflowEditorUI — adding a connector from an existing node', () => {
+	it('the "+" button opens the search list and wires the new connector', async () => {
+		const user = userEvent.setup()
+		const onAddConnectorFrom = vi.fn()
+		await renderWithRouter(
+			<WorkflowEditorUI
+				{...baseProps({
+					onAddConnectorFrom,
+					nodes: [
+						{
+							id: 'c1',
+							label: 'Requête HTTP',
+							kindLabel: 'http.request',
+							family: 'http',
+							hasError: false,
+							previewLines: [],
+						},
+					],
+					positions: new Map([['c1', { x: 0, y: 0 }]]),
+				})}
+			/>,
+		)
+
+		// Marked `nodrag` (`workflow-editor-ui.tsx`) precisely so React Flow's
+		// own node-drag handling never reaches it — safe for a normal
+		// `userEvent.click`, unlike a click landing on the bare node itself.
+		await user.click(screen.getByTitle('Ajouter un connecteur après celui-ci'))
+		// Scoped to the search list's own container: the palette shows the
+		// same catalogue and would otherwise match "Requête HTTP" too.
+		const searchList = screen.getByTestId('connector-search-list')
+		await user.click(within(searchList).getByText('Requête HTTP'))
+
+		expect(onAddConnectorFrom).toHaveBeenCalledWith('c1', 'http.request')
+	})
+})
+
+describe('WorkflowEditorUI — node "..." menu', () => {
+	function singleNodeProps(overrides: Partial<WorkflowEditorUIProps> = {}) {
+		return baseProps({
+			nodes: [
+				{
+					id: 'c1',
+					label: 'Requête HTTP',
+					kindLabel: 'http.request',
+					family: 'http',
+					hasError: false,
+					previewLines: [],
+				},
+			],
+			positions: new Map([['c1', { x: 0, y: 0 }]]),
+			...overrides,
+		})
+	}
+
+	it('duplicates the connector', async () => {
+		const user = userEvent.setup()
+		const onDuplicateConnector = vi.fn()
+		await renderWithRouter(
+			<WorkflowEditorUI {...singleNodeProps({ onDuplicateConnector })} />,
+		)
+
+		await user.click(screen.getByRole('button', { name: 'Actions' }))
+		await user.click(screen.getByText('Dupliquer'))
+
+		expect(onDuplicateConnector).toHaveBeenCalledWith('c1')
+	})
+
+	it('removes the connector', async () => {
+		const user = userEvent.setup()
+		const onRemoveConnector = vi.fn()
+		await renderWithRouter(
+			<WorkflowEditorUI {...singleNodeProps({ onRemoveConnector })} />,
+		)
+
+		await user.click(screen.getByRole('button', { name: 'Actions' }))
+		await user.click(screen.getByText('Supprimer'))
+
+		expect(onRemoveConnector).toHaveBeenCalledWith('c1')
+	})
+})
+
+describe('WorkflowEditorUI — right-click context menus', () => {
+	it('on a node: duplicate and delete, same actions as the "..." menu', async () => {
+		const user = userEvent.setup()
+		const onRemoveConnector = vi.fn()
+		await renderWithRouter(
+			<WorkflowEditorUI
+				{...baseProps({
+					onRemoveConnector,
+					nodes: [
+						{
+							id: 'c1',
+							label: 'Mon connecteur',
+							kindLabel: 'http.request',
+							family: 'http',
+							hasError: false,
+							previewLines: [],
+						},
+					],
+					positions: new Map([['c1', { x: 0, y: 0 }]]),
+				})}
+			/>,
+		)
+
+		fireEvent.contextMenu(screen.getByText('Mon connecteur'))
+		await user.click(screen.getByText('Supprimer'))
+
+		expect(onRemoveConnector).toHaveBeenCalledWith('c1')
+	})
+
+	it('on an edge: quick branch pick and delete', async () => {
+		const user = userEvent.setup()
+		const onBranchChange = vi.fn()
+		const { container } = await renderWithRouter(
+			<WorkflowEditorUI
+				{...baseProps({
+					onBranchChange,
+					nodes: [
+						{
+							id: 'a',
+							label: 'A',
+							kindLabel: 'a.kind',
+							family: 'a',
+							hasError: false,
+							previewLines: [],
+						},
+						{
+							id: 'b',
+							label: 'B',
+							kindLabel: 'b.kind',
+							family: 'b',
+							hasError: false,
+							previewLines: [],
+						},
+					],
+					edges: [{ from: 'a', to: 'b', branch: null }],
+					positions: new Map([
+						['a', { x: 0, y: 0 }],
+						['b', { x: 300, y: 0 }],
+					]),
+				})}
+			/>,
+		)
+
+		const edge = container.querySelector('.react-flow__edge')
+		expect(edge).not.toBeNull()
+		if (!edge) return
+		fireEvent.contextMenu(edge)
+		await user.click(screen.getByText('Alors'))
+
+		expect(onBranchChange).toHaveBeenCalledWith('a', 'b', 'Then')
+	})
+
+	it('on the empty pane: adds a connector via the search list', async () => {
+		const user = userEvent.setup()
+		const onAddConnector = vi.fn()
+		const { container } = await renderWithRouter(
+			<WorkflowEditorUI {...baseProps({ onAddConnector })} />,
+		)
+
+		const pane = container.querySelector('.react-flow__pane')
+		expect(pane).not.toBeNull()
+		if (!pane) return
+		fireEvent.contextMenu(pane)
+		// Scoped for the same reason as the "+" button test above: the
+		// palette shows the same catalogue and would otherwise be an
+		// equally valid, ambiguous match.
+		const searchList = screen.getByTestId('connector-search-list')
+		await user.click(within(searchList).getByText('Requête HTTP'))
+
+		expect(onAddConnector).toHaveBeenCalledWith('http.request')
 	})
 })
 

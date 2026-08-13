@@ -23,8 +23,10 @@ import {
 	graphErrorsByConnector,
 	groupByFamily,
 	matchesAuthRequirement,
+	previewLinesFor,
 	removeConnector,
 	removeEdge,
+	rootConnectorIds,
 	updateConnectorConfig,
 	upstreamOf,
 } from '#/pages/automation/lib/graph'
@@ -140,6 +142,46 @@ function WorkflowEditor({
 		}
 		updateGraph((current) => addConnector(current, connector))
 		setSelection({ type: 'connector', id: connector.id })
+		setExpressionTargetField(null)
+	}
+
+	/** The node's own "+" button, and the right-click "Ajouter après" — adds
+	 * the connector and wires it in one step, rather than leaving the user
+	 * to draw the edge by hand afterwards. */
+	function handleAddConnectorFrom(fromId: string, kind: string) {
+		const descriptor = catalogue.find((candidate) => candidate.kind === kind)
+		if (!descriptor) return
+		const connector: PlacedConnector = {
+			id: crypto.randomUUID(),
+			kind,
+			version: descriptor.version,
+			config: {},
+			credential_id: null,
+		}
+		updateGraph((current) =>
+			addEdge(addConnector(current, connector), {
+				from: fromId,
+				to: connector.id,
+			}),
+		)
+		setSelection({ type: 'connector', id: connector.id })
+		setExpressionTargetField(null)
+	}
+
+	/** A copy with the same kind/version/config/credential, but no edges —
+	 * the duplicate starts detached, the user reconnects it deliberately
+	 * rather than inheriting a wiring that may not make sense at its new
+	 * position in the graph. */
+	function handleDuplicateConnector(connectorId: string) {
+		const source = connectorById(effectiveGraph, connectorId)
+		if (!source) return
+		const duplicate: PlacedConnector = {
+			...source,
+			id: crypto.randomUUID(),
+			config: { ...source.config },
+		}
+		updateGraph((current) => addConnector(current, duplicate))
+		setSelection({ type: 'connector', id: duplicate.id })
 		setExpressionTargetField(null)
 	}
 
@@ -287,6 +329,7 @@ function WorkflowEditor({
 			kindLabel: connector.kind,
 			family: descriptor?.family ?? '',
 			hasError: errorsByConnector.has(connector.id),
+			previewLines: previewLinesFor(connector, descriptor),
 		}
 	})
 
@@ -405,10 +448,13 @@ function WorkflowEditor({
 				onSave={() => void handleSave()}
 				families={families}
 				onAddConnector={handleAddConnector}
+				rootConnectorIds={rootConnectorIds(effectiveGraph)}
 				nodes={nodes}
 				edges={edges}
 				positions={layoutPositions(effectiveGraph)}
 				onConnect={handleConnect}
+				onAddConnectorFrom={handleAddConnectorFrom}
+				onDuplicateConnector={handleDuplicateConnector}
 				onSelectConnector={(id) => {
 					setSelection({ type: 'connector', id })
 					setExpressionTargetField(null)

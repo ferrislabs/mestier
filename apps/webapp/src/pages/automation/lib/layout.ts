@@ -5,7 +5,10 @@ export interface NodePosition {
 	y: number
 }
 
-const COLUMN_WIDTH = 280
+/** Exported so the canvas can place its Start pseudo-node one column to the
+ * left of column 0 — the one place outside this file that needs to know
+ * the grid's own spacing. */
+export const COLUMN_WIDTH = 280
 const ROW_HEIGHT = 140
 
 /**

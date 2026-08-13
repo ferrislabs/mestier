@@ -190,3 +190,55 @@ export function credentialOptionsFor(
 		)
 		.map((credential) => ({ id: credential.id, name: credential.name }))
 }
+
+/** Connectors nothing points into — the graph's entry points. The canvas's
+ * Start pseudo-node (visual only, never sent to the backend — see
+ * `workflow-editor-ui.tsx`) draws a synthetic edge to each one: the
+ * backend has no explicit "trigger" node inside the graph itself, any
+ * connector with no incoming edge is implicitly where a run begins. */
+export function rootConnectorIds(graph: Graph): string[] {
+	return graph.connectors
+		.filter(
+			(connector) => !graph.edges.some((edge) => edge.to === connector.id),
+		)
+		.map((connector) => connector.id)
+}
+
+/** Up to two non-secret, non-empty field values, in the descriptor's own
+ * field order — the "GET https://api…" style summary a node shows below
+ * its kind, so a glance at the canvas says more than just the connector's
+ * name. A secret field is never included, even masked: a canvas is more
+ * exposed (screen-shared, printed) than the config panel a secret already
+ * renders as a password input in. `undefined` descriptor (a retired kind)
+ * yields no preview — there is nothing to read fields from. */
+export function previewLinesFor(
+	connector: PlacedConnector,
+	descriptor: Connector | undefined,
+): string[] {
+	if (!descriptor) return []
+	const lines: string[] = []
+	for (const field of descriptor.fields) {
+		if (lines.length >= 2) break
+		if (field.secret) continue
+		const value = connector.config[field.name]
+		if (value === undefined || value === null || value === '') continue
+		lines.push(`${field.label}: ${truncatePreview(stringifyPreview(value))}`)
+	}
+	return lines
+}
+
+function stringifyPreview(value: unknown): string {
+	if (typeof value === 'string') return value
+	if (typeof value === 'number' || typeof value === 'boolean') {
+		return String(value)
+	}
+	try {
+		return JSON.stringify(value)
+	} catch {
+		return String(value)
+	}
+}
+
+function truncatePreview(text: string, max = 40): string {
+	return text.length > max ? `${text.slice(0, max - 1)}…` : text
+}
