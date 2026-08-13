@@ -23,8 +23,10 @@ export interface CredentialFormValues {
 	kind: string
 	name: string
 	origin: 'supplied' | 'generated'
-	/** Keyed by the chosen auth scheme's field name. Ignored when
-	 * `origin === 'generated'` — the backend fabricates the secret itself
-	 * and never reads this. */
-	data: Record<string, string>
+	/** Keyed by the chosen auth scheme's field name — `unknown` because a
+	 * `Field` can be any `FieldKind` (`FieldForm` renders all of them),
+	 * even though every auth scheme field happens to be `Text` today.
+	 * Ignored when `origin === 'generated'` — the backend fabricates the
+	 * secret itself and never reads this. */
+	data: Record<string, unknown>
 }

@@ -14,6 +14,7 @@ import {
 	Receipt,
 	Settings,
 	Users,
+	Workflow,
 } from 'lucide-react'
 import type { AppModule } from '#/modules/types'
 
@@ -126,6 +127,23 @@ export const MODULES: AppModule[] = [
 				label: 'Liste des tâches',
 				to: '/planning/tasks',
 				icon: ListTree,
+			},
+		],
+	},
+	{
+		id: 'automation',
+		label: 'Automatisations',
+		icon: Workflow,
+		basePath: '/automation',
+		status: 'available',
+		hasOverview: false,
+		sections: [
+			{
+				id: 'workflows',
+				label: 'Workflows',
+				to: '/automation',
+				icon: Workflow,
+				exact: true,
 			},
 		],
 	},

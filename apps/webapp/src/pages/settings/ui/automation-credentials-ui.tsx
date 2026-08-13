@@ -24,7 +24,8 @@ import {
 	SectionHeader,
 	StatusBadge,
 } from '#/components/ui/surface'
-import type { AuthField, AuthScheme } from '#/hooks/use-automation'
+import type { AuthScheme } from '#/hooks/use-automation'
+import { FieldForm } from '#/pages/automation/ui/field-form'
 import type { CredentialFormValues } from '#/pages/settings/types'
 
 export interface CredentialRow {
@@ -36,7 +37,10 @@ export interface CredentialRow {
 	updatedAt: string
 }
 
-interface FormBinding {
+/** Exported so the workflow editor's credential picker can reuse the exact
+ * same creation form for its inline "+ Nouvelle identification" — the issue
+ * is explicit that a second form/sheet implementation is not the design. */
+export interface FormBinding {
 	values: CredentialFormValues
 	isPending: boolean
 	onChange: (patch: Partial<CredentialFormValues>) => void
@@ -216,7 +220,7 @@ export function AutomationCredentialsUI({
 	)
 }
 
-interface CredentialFormSheetProps {
+export interface CredentialFormSheetProps {
 	open: boolean
 	mode: 'create' | 'edit'
 	authSchemes: AuthScheme[]
@@ -227,7 +231,10 @@ interface CredentialFormSheetProps {
 	onOpenChange: (open: boolean) => void
 }
 
-function CredentialFormSheet({
+/** The one credential creation/edit sheet — also used, `mode="create"`
+ * only, by the workflow editor's inline "+ Nouvelle identification" (see
+ * `credential-picker.tsx`). */
+export function CredentialFormSheet({
 	open,
 	mode,
 	authSchemes,
@@ -347,20 +354,17 @@ function CredentialFormSheet({
 							</div>
 						) : null}
 
-						{form.values.origin === 'supplied' && scheme
-							? scheme.fields.map((field) => (
-									<AuthFieldInput
-										key={field.name}
-										field={field}
-										value={form.values.data[field.name] ?? ''}
-										onChange={(value) =>
-											form.onChange({
-												data: { ...form.values.data, [field.name]: value },
-											})
-										}
-									/>
-								))
-							: null}
+						{form.values.origin === 'supplied' && scheme ? (
+							<FieldForm
+								fields={scheme.fields}
+								values={form.values.data}
+								onChange={(name, value) =>
+									form.onChange({
+										data: { ...form.values.data, [name]: value },
+									})
+								}
+							/>
+						) : null}
 
 						{errors.length > 0 ? (
 							<ul className="flex flex-col gap-1 rounded-lg border border-destructive/30 bg-destructive-soft px-4 py-3 text-sm text-destructive">
@@ -393,52 +397,6 @@ function CredentialFormSheet({
 				</form>
 			</SheetContent>
 		</Sheet>
-	)
-}
-
-function AuthFieldInput({
-	field,
-	value,
-	onChange,
-}: {
-	field: AuthField
-	value: string
-	onChange: (value: string) => void
-}) {
-	const id = `credential-field-${field.name}`
-	const kind = field.kind
-
-	if (typeof kind === 'object' && 'Select' in kind) {
-		return (
-			<div className="flex flex-col gap-2">
-				<Label htmlFor={id}>{field.label}</Label>
-				<Select value={value} onValueChange={onChange}>
-					<SelectTrigger id={id} className="w-full">
-						<SelectValue placeholder="Choisir…" />
-					</SelectTrigger>
-					<SelectContent>
-						{kind.Select.options.map((option) => (
-							<SelectItem key={option.value} value={option.value}>
-								{option.label}
-							</SelectItem>
-						))}
-					</SelectContent>
-				</Select>
-			</div>
-		)
-	}
-
-	return (
-		<div className="flex flex-col gap-2">
-			<Label htmlFor={id}>{field.label}</Label>
-			<Input
-				id={id}
-				type={field.secret ? 'password' : kind === 'Number' ? 'number' : 'text'}
-				value={value}
-				onChange={(event) => onChange(event.target.value)}
-				autoComplete="off"
-			/>
-		</div>
 	)
 }
 

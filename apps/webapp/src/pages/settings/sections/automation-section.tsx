@@ -17,6 +17,7 @@ import {
 import {
 	buildCredentialFormErrors,
 	emptyCredentialForm,
+	isFieldValueFilled,
 	parseSettingsForm,
 	settingsToFormValues,
 } from '#/pages/settings/lib/automation'
@@ -99,9 +100,7 @@ function CredentialsPanel({ organizationId }: { organizationId: string }) {
 		}
 
 		if (!editingId) return
-		const hasData = Object.values(values.data).some(
-			(value) => value.trim() !== '',
-		)
+		const hasData = Object.values(values.data).some(isFieldValueFilled)
 		await updateCredential.mutateAsync({
 			path: { organization_id: organizationId, credential_id: editingId },
 			body: {

@@ -5,6 +5,16 @@ export function emptyCredentialForm(defaultKind = ''): CredentialFormValues {
 	return { kind: defaultKind, name: '', origin: 'supplied', data: {} }
 }
 
+/** A field's value counts as "filled" once it holds something other than
+ * absence — `''`/`undefined` are the only "still empty" shapes `FieldForm`
+ * ever produces, for any `FieldKind` (a `Bool` of `false` or a `Number` of
+ * `0` are filled values, not empty ones). */
+export function isFieldValueFilled(value: unknown): boolean {
+	if (value === undefined || value === null) return false
+	if (typeof value === 'string') return value.trim() !== ''
+	return true
+}
+
 /**
  * Required-field checks against the chosen auth scheme — the same
  * validation `validate_credential_data` runs server-side, done client-side
@@ -27,13 +37,11 @@ export function buildCredentialFormErrors(
 
 	if (values.origin !== 'supplied' || !scheme) return errors
 
-	const filledAny = Object.values(values.data).some(
-		(value) => value.trim() !== '',
-	)
+	const filledAny = Object.values(values.data).some(isFieldValueFilled)
 	if (mode === 'edit' && !filledAny) return errors
 
 	for (const field of scheme.fields) {
-		if (field.required && (values.data[field.name] ?? '').trim() === '') {
+		if (field.required && !isFieldValueFilled(values.data[field.name])) {
 			errors.push(`${field.label} est requis`)
 		}
 	}

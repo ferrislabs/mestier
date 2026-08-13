@@ -14,6 +14,10 @@ const SETTINGS_PATH =
 	'/api/v1/organizations/{organization_id}/automation/settings'
 const WORKFLOWS_PATH =
 	'/api/v1/organizations/{organization_id}/automation/workflows'
+const WORKFLOW_PATH =
+	'/api/v1/organizations/{organization_id}/automation/workflows/{workflow_id}'
+const WORKFLOW_VERSIONS_PATH =
+	'/api/v1/organizations/{organization_id}/automation/workflows/{workflow_id}/versions'
 const RUNS_PATH = '/api/v1/organizations/{organization_id}/automation/runs'
 const RUN_PATH =
 	'/api/v1/organizations/{organization_id}/automation/runs/{run_id}'
@@ -137,14 +141,63 @@ export function useReplayRun() {
 	})
 }
 
-/** Fetched only to resolve `workflow_id` into a name for the run log — no
- * write path needed here, that is the workflow editor's job (#204). */
 export function useAutomationWorkflows(organizationId: string) {
 	return useQuery(
 		window.tanstackApi.get(WORKFLOWS_PATH, {
 			path: { organization_id: organizationId },
 		}).queryOptions,
 	)
+}
+
+export function useCreateWorkflow(organizationId: string) {
+	const queryClient = useQueryClient()
+	return useMutation({
+		...window.tanstackApi.mutation('post', WORKFLOWS_PATH).mutationOptions,
+		onSuccess: () => invalidate(queryClient, WORKFLOWS_PATH),
+		meta: { organizationId },
+	})
+}
+
+/** Detail, including the current version's graph — `null` `current_version`
+ * for a workflow nobody has saved a graph on yet. */
+export function useWorkflow(organizationId: string, workflowId: string) {
+	return useQuery(
+		window.tanstackApi.get(WORKFLOW_PATH, {
+			path: { organization_id: organizationId, workflow_id: workflowId },
+		}).queryOptions,
+	)
+}
+
+/** Rename, describe, enable/disable — never the graph itself, that is
+ * `useSaveWorkflowVersion`'s job (a new version, not a field on the row). */
+export function useUpdateWorkflow() {
+	const queryClient = useQueryClient()
+	return useMutation({
+		...window.tanstackApi.mutation('patch', WORKFLOW_PATH).mutationOptions,
+		onSuccess: () => invalidate(queryClient, WORKFLOWS_PATH),
+	})
+}
+
+export function useDeleteWorkflow() {
+	const queryClient = useQueryClient()
+	return useMutation({
+		...window.tanstackApi.mutation('delete', WORKFLOW_PATH).mutationOptions,
+		onSuccess: () => invalidate(queryClient, WORKFLOWS_PATH),
+	})
+}
+
+/** Saving an edit creates a version — never overwrites one — and moves the
+ * workflow's `current_version` to it. */
+export function useSaveWorkflowVersion() {
+	const queryClient = useQueryClient()
+	return useMutation({
+		...window.tanstackApi.mutation('put', WORKFLOW_VERSIONS_PATH)
+			.mutationOptions,
+		onSuccess: () => {
+			void invalidate(queryClient, WORKFLOW_PATH)
+			void invalidate(queryClient, WORKFLOWS_PATH)
+		},
+	})
 }
 
 /** A run's steps — fetched lazily, only once its detail sheet opens. */
@@ -165,3 +218,14 @@ export type Credential = Schemas.CredentialResponse
 export type CreatedCredential = Credential & { secret: unknown }
 export type AutomationSettings = Schemas.AutomationSettingsBody
 export type Run = Schemas.RunResponse
+export type RunStep = Schemas.RunStepResponse
+export type Connector = Schemas.ConnectorDescriptorResponse
+export type Workflow = Schemas.WorkflowResponse
+export type WorkflowDetail = Schemas.WorkflowDetailResponse
+export type WorkflowVersion = Schemas.WorkflowVersionResponse
+export type Graph = Schemas.GraphDto
+export type PlacedConnector = Schemas.PlacedConnectorDto
+export type GraphEdge = Schemas.EdgeDto
+export type Branch = Schemas.BranchDto
+export type GraphError = Schemas.GraphErrorResponse
+export type GraphInvalid = Schemas.GraphInvalidBody
