@@ -237,8 +237,9 @@ describe('WorkflowListFeature — creation', () => {
 		})
 
 		await screen.findByText('Relance devis')
-		await user.type(screen.getByLabelText('Nom'), 'Nouveau workflow')
 		await user.click(screen.getByRole('button', { name: 'Ajouter' }))
+		await user.type(screen.getByLabelText('Nom'), 'Nouveau workflow')
+		await user.click(screen.getByRole('button', { name: 'Créer' }))
 
 		await waitFor(() => {
 			const postCall = calls.find(

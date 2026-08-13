@@ -50,6 +50,7 @@ function WorkflowDirectory({
 
 	const [togglingId, setTogglingId] = useState<string | null>(null)
 	const [deletingId, setDeletingId] = useState<string | null>(null)
+	const [createDialogOpen, setCreateDialogOpen] = useState(false)
 
 	const workflowForm = useForm({
 		defaultValues: { name: '', description: '' } satisfies WorkflowFormValues,
@@ -62,6 +63,10 @@ function WorkflowDirectory({
 				},
 			})
 			workflowForm.reset()
+			// Closed explicitly rather than left to unmount on navigation — the
+			// route transition isn't instant, and a modal still visible behind
+			// the page that replaces it would be a rough edge, not a feature.
+			setCreateDialogOpen(false)
 			await navigate({
 				to: buildOrgPath(organizationSlug, '/automation/$workflowId'),
 				params: { workflowId: created.data.id },
@@ -132,6 +137,14 @@ function WorkflowDirectory({
 					isLoading={isLoading}
 					error={error?.message ?? null}
 					workflows={rows}
+					createDialogOpen={createDialogOpen}
+					onOpenCreateDialog={() => setCreateDialogOpen(true)}
+					onCreateDialogOpenChange={(open) => {
+						setCreateDialogOpen(open)
+						// Closing without submitting (Escape, overlay click, "Annuler")
+						// starts the next "Ajouter" from a blank form, not a stale draft.
+						if (!open) workflowForm.reset()
+					}}
 					createForm={{
 						values: formValues,
 						isPending: createWorkflow.isPending,

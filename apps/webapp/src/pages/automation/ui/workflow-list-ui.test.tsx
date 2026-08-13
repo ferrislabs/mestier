@@ -26,6 +26,9 @@ function baseProps() {
 		isLoading: false,
 		error: null,
 		workflows: [workflow()],
+		createDialogOpen: false,
+		onOpenCreateDialog: vi.fn(),
+		onCreateDialogOpenChange: vi.fn(),
 		createForm: {
 			values: { name: '', description: '' },
 			isPending: false,
@@ -117,14 +120,41 @@ describe('WorkflowListUI — deletion goes through a confirmation dialog', () =>
 	})
 })
 
-describe('WorkflowListUI — create form', () => {
-	it('submits the create form values', async () => {
+describe('WorkflowListUI — create dialog', () => {
+	it('the "Ajouter" button opens the dialog, never submits directly', async () => {
 		const user = userEvent.setup()
 		const props = baseProps()
 		await renderWithRouter(<WorkflowListUI {...props} />)
 
 		await user.click(screen.getByRole('button', { name: 'Ajouter' }))
 
+		expect(props.onOpenCreateDialog).toHaveBeenCalled()
+		expect(props.createForm.onSubmit).not.toHaveBeenCalled()
+	})
+
+	it('submits the create form from inside the open dialog', async () => {
+		const user = userEvent.setup()
+		const props = baseProps()
+		await renderWithRouter(
+			<WorkflowListUI {...props} createDialogOpen={true} />,
+		)
+
+		await user.type(screen.getByLabelText('Nom'), 'Nouveau workflow')
+		await user.click(screen.getByRole('button', { name: 'Créer' }))
+
 		expect(props.createForm.onSubmit).toHaveBeenCalled()
+	})
+
+	it('cancelling closes the dialog without submitting', async () => {
+		const user = userEvent.setup()
+		const props = baseProps()
+		await renderWithRouter(
+			<WorkflowListUI {...props} createDialogOpen={true} />,
+		)
+
+		await user.click(screen.getByRole('button', { name: 'Annuler' }))
+
+		expect(props.onCreateDialogOpenChange).toHaveBeenCalledWith(false)
+		expect(props.createForm.onSubmit).not.toHaveBeenCalled()
 	})
 })
