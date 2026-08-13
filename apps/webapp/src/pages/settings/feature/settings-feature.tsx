@@ -1,19 +1,23 @@
 import { AlertCircle } from 'lucide-react'
+import { useMemo } from 'react'
 
 import { PageHeader, PageShell } from '#/components/ui/surface'
 import { useActiveOrganization } from '#/hooks/use-active-organization'
-import { OrganizationSection } from '#/pages/settings/sections/organization-section'
+import { buildSettingsNavGroups } from '#/pages/settings/nav'
+import { SETTINGS_SECTIONS } from '#/pages/settings/registry'
+import { SettingsLayout } from '#/pages/settings/ui/settings-layout'
+import { useActiveSection } from '#/pages/settings/use-active-section'
 
 /**
- * Organization settings.
- *
- * The screen now carries only what is configured once: the catalogue and the
- * equipment, edited daily, moved to the modules that consume them. A single
- * section, hence no more anchor navigation — it will come back the day members,
- * roles or billing join it.
+ * Settings, assembled from the section registry — restored (#155) now that
+ * automation joins "Organisation": a single section needs no anchor
+ * navigation, two do. See `registry.tsx` to add another.
  */
 export function SettingsFeature() {
 	const { activeOrganization } = useActiveOrganization()
+	const groups = useMemo(() => buildSettingsNavGroups(SETTINGS_SECTIONS), [])
+	const ids = useMemo(() => SETTINGS_SECTIONS.map((section) => section.id), [])
+	const activeId = useActiveSection(ids)
 
 	if (!activeOrganization) {
 		return (
@@ -36,9 +40,13 @@ export function SettingsFeature() {
 			<PageHeader
 				eyebrow={activeOrganization.name}
 				title="Paramètres"
-				description="L'identité de votre espace de travail."
+				description="Configurez l'espace de travail et chacun des modules installés."
 			/>
-			<OrganizationSection />
+			<SettingsLayout
+				groups={groups}
+				sections={SETTINGS_SECTIONS}
+				activeId={activeId}
+			/>
 		</PageShell>
 	)
 }
