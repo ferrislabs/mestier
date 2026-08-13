@@ -285,6 +285,7 @@ function WorkflowEditor({
 			id: connector.id,
 			label: descriptor?.label ?? connector.kind,
 			kindLabel: connector.kind,
+			family: descriptor?.family ?? '',
 			hasError: errorsByConnector.has(connector.id),
 		}
 	})

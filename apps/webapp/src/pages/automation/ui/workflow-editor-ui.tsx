@@ -59,6 +59,43 @@ const BRANCH_LABEL: Record<Branch, string> = {
 	After: 'Après la boucle',
 }
 
+/** A branch label renders as a pill sitting directly on the edge — same
+ * mint treatment as `StatusBadge`'s `success` tone (`--success`/
+ * `--success-soft`), just expressed as raw SVG paint since React Flow
+ * draws edge labels with `<text>`/`<rect>`, not HTML/Tailwind. */
+const BRANCH_PILL_STYLE = {
+	labelBgPadding: [8, 4] as [number, number],
+	labelBgBorderRadius: 6,
+	labelStyle: { fill: 'var(--success)', fontWeight: 600, fontSize: 11 },
+	labelBgStyle: { fill: 'var(--success-soft)' },
+}
+
+/**
+ * A small set of generic colors assigned to a connector's `family` by
+ * hashing the string — never a lookup table keyed by specific family
+ * names. A brand-new family from a catalogue addition gets a color the
+ * same way an existing one does, with zero frontend change; a fixed
+ * name→color map would silently fall back to "no color" for it instead.
+ */
+const NODE_BADGE_COLORS = [
+	'bg-blue-100 text-blue-700',
+	'bg-purple-100 text-purple-700',
+	'bg-emerald-100 text-emerald-700',
+	'bg-orange-100 text-orange-700',
+	'bg-pink-100 text-pink-700',
+	'bg-teal-100 text-teal-700',
+	'bg-amber-100 text-amber-700',
+	'bg-indigo-100 text-indigo-700',
+]
+
+function badgeColorFor(seed: string): string {
+	let hash = 0
+	for (let i = 0; i < seed.length; i++) {
+		hash = (hash * 31 + seed.charCodeAt(i)) | 0
+	}
+	return NODE_BADGE_COLORS[Math.abs(hash) % NODE_BADGE_COLORS.length]
+}
+
 export interface PaletteConnector {
 	kind: string
 	label: string
@@ -73,6 +110,10 @@ export interface EditorNode {
 	id: string
 	label: string
 	kindLabel: string
+	/** The connector's catalogue `family` — drives the node's badge color
+	 * and, on the palette, groups it with its siblings. `''` for a placed
+	 * connector whose kind was retired from the catalogue. */
+	family: string
 	hasError: boolean
 }
 
@@ -151,6 +192,7 @@ export interface WorkflowEditorUIProps {
 interface ConnectorNodeData {
 	label: string
 	kindLabel: string
+	family: string
 	hasError: boolean
 	[key: string]: unknown
 }
@@ -162,19 +204,29 @@ function ConnectorNodeView({ data, selected }: NodeProps<ConnectorNode>) {
 	return (
 		<div
 			className={cn(
-				'min-w-40 rounded-lg border bg-card px-3 py-2 text-sm shadow-sm',
+				'min-w-52 rounded-xl border bg-card px-3 py-2.5 text-sm shadow-sm transition',
 				selected && 'ring-2 ring-primary',
 				data.hasError && 'border-destructive',
 			)}
 		>
 			<Handle type="target" position={Position.Left} />
-			<div className="flex items-center gap-1.5">
-				{data.hasError ? (
-					<AlertTriangle className="size-3.5 shrink-0 text-destructive" />
-				) : null}
+			<div className="flex items-center gap-2">
+				<span
+					className={cn(
+						'flex size-6 shrink-0 items-center justify-center rounded-md text-xs font-semibold',
+						badgeColorFor(data.family || data.kindLabel),
+					)}
+				>
+					{(data.family || data.kindLabel).charAt(0).toUpperCase()}
+				</span>
 				<p className="truncate font-medium">{data.label}</p>
+				{data.hasError ? (
+					<AlertTriangle className="ml-auto size-3.5 shrink-0 text-destructive" />
+				) : null}
 			</div>
-			<p className="truncate text-xs text-muted-foreground">{data.kindLabel}</p>
+			<p className="mt-1 truncate pl-8 text-xs text-muted-foreground">
+				{data.kindLabel}
+			</p>
 			<Handle type="source" position={Position.Right} />
 		</div>
 	)
@@ -326,10 +378,18 @@ function Palette({
 							<button
 								key={connector.kind}
 								type="button"
-								className="rounded-md px-2 py-1.5 text-left text-sm hover:bg-muted"
+								className="flex items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm hover:bg-muted"
 								onClick={() => onAddConnector(connector.kind)}
 							>
-								{connector.label}
+								<span
+									className={cn(
+										'flex size-5 shrink-0 items-center justify-center rounded-md text-[10px] font-semibold',
+										badgeColorFor(group.family),
+									)}
+								>
+									{group.family.charAt(0).toUpperCase()}
+								</span>
+								<span className="truncate">{connector.label}</span>
 							</button>
 						))}
 					</div>
@@ -507,6 +567,7 @@ function useCanvasState(
 				data: {
 					label: node.label,
 					kindLabel: node.kindLabel,
+					family: node.family,
 					hasError: node.hasError,
 				},
 			})),
@@ -520,6 +581,7 @@ function useCanvasState(
 				source: edge.from,
 				target: edge.to,
 				label: edge.branch ? BRANCH_LABEL[edge.branch] : undefined,
+				...(edge.branch ? BRANCH_PILL_STYLE : null),
 				selected:
 					selection?.type === 'edge' &&
 					selection.data.from === edge.from &&

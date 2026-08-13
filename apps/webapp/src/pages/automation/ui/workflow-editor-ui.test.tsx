@@ -89,6 +89,7 @@ describe('WorkflowEditorUI — canvas selection', () => {
 							id: 'c1',
 							label: 'Ma requête',
 							kindLabel: 'http.request',
+							family: 'http',
 							hasError: false,
 						},
 					],
