@@ -386,23 +386,8 @@ function WorkflowEditor({
 				candidate.from === selection.from && candidate.to === selection.to,
 		)
 		if (!edge) return null
-		return {
-			type: 'edge',
-			data: {
-				from: edge.from,
-				to: edge.to,
-				fromLabel: labelForConnector(edge.from),
-				toLabel: labelForConnector(edge.to),
-				branch: edge.branch ?? null,
-			},
-		}
+		return { type: 'edge', from: edge.from, to: edge.to }
 	})()
-
-	function labelForConnector(connectorId: string): string {
-		const connector = connectorById(effectiveGraph, connectorId)
-		if (!connector) return connectorId
-		return descriptorFor(connector, catalogue)?.label ?? connector.kind
-	}
 
 	const upstreamForExpression =
 		editorSelection?.type === 'connector'

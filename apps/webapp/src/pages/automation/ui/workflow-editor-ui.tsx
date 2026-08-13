@@ -41,13 +41,6 @@ import {
 	PopoverTrigger,
 } from '#/components/ui/popover'
 import {
-	Select,
-	SelectContent,
-	SelectItem,
-	SelectTrigger,
-	SelectValue,
-} from '#/components/ui/select'
-import {
 	PageHeader,
 	PageShell,
 	SectionCard,
@@ -145,17 +138,13 @@ export interface ConnectorPanelData {
 	signingCredentials: CredentialOption[]
 }
 
-export interface EdgePanelData {
-	from: string
-	to: string
-	fromLabel: string
-	toLabel: string
-	branch: Branch | null
-}
-
+/** The edge's config lives entirely in the right-click context menu now
+ * (branch quick-pick + delete) — nothing renders from `selection` for an
+ * edge beyond the `selected` highlight ring, so unlike a connector it
+ * carries no further data. */
 export type EditorSelection =
 	| { type: 'connector'; data: ConnectorPanelData }
-	| { type: 'edge'; data: EdgePanelData }
+	| { type: 'edge'; from: string; to: string }
 
 export interface WorkflowEditorUIProps {
 	organizationSlug: string
@@ -216,6 +205,19 @@ interface ConnectorNodeData {
 	onAddFrom: (kind: string) => void
 	onDuplicate: () => void
 	onRemove: () => void
+	/** Non-null exactly when this node is the selected connector — the
+	 * config `Popover`'s open state is driven directly off this, not off
+	 * separate click handling (see `ConnectorNodeView`). */
+	panel: ConnectorPanelData | null
+	onFieldChange: (fieldName: string, value: unknown) => void
+	onCredentialChange: (credentialId: string | null) => void
+	onCreateCredential: () => void
+	expressionTargetField: string | null
+	upstreamForExpression: UpstreamConnectorOption[]
+	onInsertExpression: (fieldName: string) => void
+	onInsertExpressionValue: (expression: string) => void
+	onCloseExpressionPicker: () => void
+	onDeselect: () => void
 	[key: string]: unknown
 }
 
@@ -225,85 +227,127 @@ type BranchEdge = Edge<{ branch: Branch | null }>
 
 function ConnectorNodeView({ data, selected }: NodeProps<ConnectorNode>) {
 	return (
-		<div
-			className={cn(
-				'relative min-w-56 rounded-xl border bg-card px-3 py-2.5 text-sm shadow-sm transition',
-				selected && 'ring-2 ring-primary',
-				data.hasError && 'border-destructive',
-			)}
-		>
-			<Handle type="target" position={Position.Left} />
-			<div className="flex items-center gap-2">
-				<span
+		// Open state is driven entirely by `data.panel` (non-null exactly
+		// when the feature considers this connector selected), never by this
+		// Popover's own interaction-outside logic: Radix's default dismiss-
+		// on-outside-click would otherwise fire for a click on *any* other
+		// UI — "Enregistrer", the palette, another node — deselecting this
+		// connector as a side effect of an unrelated click, so
+		// `onInteractOutside` is disabled below. Clicking the card sets
+		// selection via React Flow's `onNodeClick`, and that alone is what
+		// opens it; the pane's own click handler and Escape are the only
+		// two things that close it, both explicit.
+		<Popover open={data.panel !== null}>
+			<PopoverAnchor asChild>
+				<div
 					className={cn(
-						'flex size-6 shrink-0 items-center justify-center rounded-md text-xs font-semibold',
-						badgeColorFor(data.family || data.kindLabel),
+						'relative min-w-56 rounded-xl border bg-card px-3 py-2.5 text-sm shadow-sm transition',
+						selected && 'ring-2 ring-primary',
+						data.hasError && 'border-destructive',
 					)}
 				>
-					{(data.family || data.kindLabel).charAt(0).toUpperCase()}
-				</span>
-				<p className="truncate font-medium">{data.label}</p>
-				{data.hasError ? (
-					<AlertTriangle className="size-3.5 shrink-0 text-destructive" />
-				) : null}
-				<DropdownMenu>
-					<DropdownMenuTrigger asChild>
-						<button
-							type="button"
-							className="nodrag ml-auto flex size-6 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground"
+					<Handle type="target" position={Position.Left} />
+					<div className="flex items-center gap-2">
+						<span
+							className={cn(
+								'flex size-6 shrink-0 items-center justify-center rounded-md text-xs font-semibold',
+								badgeColorFor(data.family || data.kindLabel),
+							)}
 						>
-							<MoreHorizontal className="size-4" />
-							<span className="sr-only">Actions</span>
-						</button>
-					</DropdownMenuTrigger>
-					<DropdownMenuContent align="end">
-						<DropdownMenuItem onSelect={data.onDuplicate}>
-							<Copy />
-							Dupliquer
-						</DropdownMenuItem>
-						<DropdownMenuSeparator />
-						<DropdownMenuItem variant="destructive" onSelect={data.onRemove}>
-							<Trash2 />
-							Supprimer
-						</DropdownMenuItem>
-					</DropdownMenuContent>
-				</DropdownMenu>
-			</div>
-			<p className="mt-1 truncate pl-8 text-xs text-muted-foreground">
-				{data.kindLabel}
-			</p>
-			{data.previewLines.length > 0 ? (
-				<div className="mt-2 flex flex-col gap-0.5 rounded-md bg-muted/60 px-2 py-1.5">
-					{data.previewLines.map((line) => (
-						<p
-							key={line}
-							className="truncate font-mono text-[11px] text-muted-foreground"
-						>
-							{line}
-						</p>
-					))}
+							{(data.family || data.kindLabel).charAt(0).toUpperCase()}
+						</span>
+						<p className="truncate font-medium">{data.label}</p>
+						{data.hasError ? (
+							<AlertTriangle className="size-3.5 shrink-0 text-destructive" />
+						) : null}
+						<DropdownMenu>
+							<DropdownMenuTrigger asChild>
+								<button
+									type="button"
+									className="nodrag ml-auto flex size-6 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground"
+								>
+									<MoreHorizontal className="size-4" />
+									<span className="sr-only">Actions</span>
+								</button>
+							</DropdownMenuTrigger>
+							<DropdownMenuContent align="end">
+								<DropdownMenuItem onSelect={data.onDuplicate}>
+									<Copy />
+									Dupliquer
+								</DropdownMenuItem>
+								<DropdownMenuSeparator />
+								<DropdownMenuItem
+									variant="destructive"
+									onSelect={data.onRemove}
+								>
+									<Trash2 />
+									Supprimer
+								</DropdownMenuItem>
+							</DropdownMenuContent>
+						</DropdownMenu>
+					</div>
+					<p className="mt-1 truncate pl-8 text-xs text-muted-foreground">
+						{data.kindLabel}
+					</p>
+					{data.previewLines.length > 0 ? (
+						<div className="mt-2 flex flex-col gap-0.5 rounded-md bg-muted/60 px-2 py-1.5">
+							{data.previewLines.map((line) => (
+								<p
+									key={line}
+									className="truncate font-mono text-[11px] text-muted-foreground"
+								>
+									{line}
+								</p>
+							))}
+						</div>
+					) : null}
+					<Handle type="source" position={Position.Right} />
+					<Popover>
+						<PopoverTrigger asChild>
+							<button
+								type="button"
+								title="Ajouter un connecteur après celui-ci"
+								className="nodrag absolute top-1/2 -right-9 flex size-6 -translate-y-1/2 items-center justify-center rounded-full border bg-background text-muted-foreground shadow-sm transition hover:bg-muted hover:text-foreground"
+							>
+								<Plus className="size-3.5" />
+								<span className="sr-only">Ajouter après</span>
+							</button>
+						</PopoverTrigger>
+						<PopoverContent className="w-auto p-0" align="start" side="right">
+							<ConnectorSearchList
+								families={data.families}
+								onSelect={data.onAddFrom}
+							/>
+						</PopoverContent>
+					</Popover>
 				</div>
-			) : null}
-			<Handle type="source" position={Position.Right} />
-			<Popover>
-				<PopoverTrigger asChild>
-					<button
-						type="button"
-						title="Ajouter un connecteur après celui-ci"
-						className="nodrag absolute top-1/2 -right-9 flex size-6 -translate-y-1/2 items-center justify-center rounded-full border bg-background text-muted-foreground shadow-sm transition hover:bg-muted hover:text-foreground"
-					>
-						<Plus className="size-3.5" />
-						<span className="sr-only">Ajouter après</span>
-					</button>
-				</PopoverTrigger>
-				<PopoverContent className="w-auto p-0" align="start" side="right">
-					<ConnectorSearchList
-						families={data.families}
-						onSelect={data.onAddFrom}
+			</PopoverAnchor>
+			<PopoverContent
+				className="w-96 p-0"
+				side="right"
+				align="start"
+				onInteractOutside={(event) => event.preventDefault()}
+				onEscapeKeyDown={(event) => {
+					event.preventDefault()
+					data.onDeselect()
+				}}
+			>
+				{data.panel ? (
+					<ConnectorConfigContent
+						panel={data.panel}
+						onFieldChange={data.onFieldChange}
+						onCredentialChange={data.onCredentialChange}
+						onCreateCredential={data.onCreateCredential}
+						onRemoveConnector={data.onRemove}
+						expressionTargetField={data.expressionTargetField}
+						upstreamForExpression={data.upstreamForExpression}
+						onInsertExpression={data.onInsertExpression}
+						onInsertExpressionValue={data.onInsertExpressionValue}
+						onCloseExpressionPicker={data.onCloseExpressionPicker}
 					/>
-				</PopoverContent>
-			</Popover>
-		</div>
+				) : null}
+			</PopoverContent>
+		</Popover>
 	)
 }
 
@@ -354,10 +398,18 @@ export function WorkflowEditorUI(props: WorkflowEditorUIProps) {
 		onSelectConnector,
 		onSelectEdge,
 		onDeselect,
+		onFieldChange,
+		onCredentialChange,
 		onRemoveConnector,
+		onCreateCredential,
 		onRemoveEdge,
 		onBranchChange,
 		selection,
+		expressionTargetField,
+		upstreamForExpression,
+		onInsertExpression,
+		onInsertExpressionValue,
+		onCloseExpressionPicker,
 	} = props
 
 	const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null)
@@ -372,6 +424,15 @@ export function WorkflowEditorUI(props: WorkflowEditorUIProps) {
 		onAddConnectorFrom,
 		onDuplicateConnector,
 		onRemoveConnector,
+		onFieldChange,
+		onCredentialChange,
+		onCreateCredential,
+		onDeselect,
+		expressionTargetField,
+		upstreamForExpression,
+		onInsertExpression,
+		onInsertExpressionValue,
+		onCloseExpressionPicker,
 	})
 
 	return (
@@ -484,21 +545,6 @@ export function WorkflowEditorUI(props: WorkflowEditorUIProps) {
 							<Background gap={24} />
 							<Controls />
 						</ReactFlow>
-					</div>
-
-					<div className="w-96 shrink-0">
-						{selection === null ? (
-							<SectionCard>
-								<div className="p-5 text-sm text-muted-foreground">
-									Sélectionnez un connecteur ou une connexion pour la
-									configurer. Clic droit sur le canevas pour un accès rapide.
-								</div>
-							</SectionCard>
-						) : selection.type === 'connector' ? (
-							<ConnectorPanel {...props} data={selection.data} />
-						) : (
-							<EdgePanel {...props} data={selection.data} />
-						)}
 					</div>
 				</div>
 			)}
@@ -677,134 +723,106 @@ function Palette({
 	)
 }
 
-function ConnectorPanel(
-	props: WorkflowEditorUIProps & { data: ConnectorPanelData },
-) {
-	const { data } = props
-	const targetLabel = data.fields.find(
-		(field) => field.name === props.expressionTargetField,
+export interface ConnectorConfigContentProps {
+	panel: ConnectorPanelData
+	onFieldChange: (fieldName: string, value: unknown) => void
+	onCredentialChange: (credentialId: string | null) => void
+	onCreateCredential: () => void
+	onRemoveConnector: () => void
+	expressionTargetField: string | null
+	upstreamForExpression: UpstreamConnectorOption[]
+	onInsertExpression: (fieldName: string) => void
+	onInsertExpressionValue: (expression: string) => void
+	onCloseExpressionPicker: () => void
+}
+
+/** A connector's config, edited from a `Popover` anchored to its own card —
+ * there is no persistent side panel for it anymore (see this file's
+ * `useCanvasState` doc comment): the canvas keeps the full width, and a
+ * connector's behavior is a dropdown away, the same way its "..." menu
+ * already is. */
+export function ConnectorConfigContent({
+	panel,
+	onFieldChange,
+	onCredentialChange,
+	onCreateCredential,
+	onRemoveConnector,
+	expressionTargetField,
+	upstreamForExpression,
+	onInsertExpression,
+	onInsertExpressionValue,
+	onCloseExpressionPicker,
+}: ConnectorConfigContentProps) {
+	const targetLabel = panel.fields.find(
+		(field) => field.name === expressionTargetField,
 	)?.label
 
 	return (
-		<SectionCard>
-			<SectionHeader
-				title={data.label}
-				actions={
-					<Button
-						variant="ghost"
-						size="icon-sm"
-						title="Supprimer le connecteur"
-						onClick={() => props.onRemoveConnector(data.connectorId)}
-					>
-						<Trash2 />
-						<span className="sr-only">Supprimer</span>
-					</Button>
-				}
-			/>
-			<div className="flex flex-col gap-5 p-5">
-				{data.globalError ? (
+		<div className="flex flex-col">
+			<div className="flex items-center justify-between gap-4 border-b px-4 py-3">
+				<p className="font-medium">{panel.label}</p>
+				<Button
+					variant="ghost"
+					size="icon-sm"
+					title="Supprimer le connecteur"
+					onClick={onRemoveConnector}
+				>
+					<Trash2 />
+					<span className="sr-only">Supprimer</span>
+				</Button>
+			</div>
+			<div className="flex max-h-[70vh] flex-col gap-5 overflow-y-auto p-4">
+				{panel.globalError ? (
 					<p className="rounded-lg border border-destructive/30 bg-destructive-soft px-3 py-2 text-sm text-destructive">
-						{data.globalError}
+						{panel.globalError}
 					</p>
 				) : null}
 
-				{data.authRequired ? (
+				{panel.authRequired ? (
 					<div className="flex flex-col gap-2">
 						<Label>Identification</Label>
 						<CredentialPicker
-							options={data.credentialOptions}
-							value={data.credentialId}
-							onChange={(credentialId) =>
-								props.onCredentialChange(data.connectorId, credentialId)
-							}
-							onCreateNew={() => props.onCreateCredential(data.connectorId)}
+							options={panel.credentialOptions}
+							value={panel.credentialId}
+							onChange={onCredentialChange}
+							onCreateNew={onCreateCredential}
 						/>
 					</div>
 				) : null}
 
 				<FieldForm
-					fields={data.fields}
-					values={data.values}
-					errors={data.fieldErrors}
-					onChange={(fieldName, value) =>
-						props.onFieldChange(data.connectorId, fieldName, value)
-					}
-					onInsertExpression={props.onInsertExpression}
-					signingCredentials={data.signingCredentials}
+					fields={panel.fields}
+					values={panel.values}
+					errors={panel.fieldErrors}
+					onChange={onFieldChange}
+					onInsertExpression={onInsertExpression}
+					signingCredentials={panel.signingCredentials}
 				/>
 
-				{props.expressionTargetField ? (
+				{expressionTargetField ? (
 					<div className="flex flex-col gap-2 rounded-lg border p-2">
 						<div className="flex items-center justify-between px-1">
 							<p className="text-xs font-medium">
-								Insérer dans « {targetLabel ?? props.expressionTargetField} »
+								Insérer dans « {targetLabel ?? expressionTargetField} »
 							</p>
 							<Button
 								type="button"
 								variant="ghost"
 								size="icon-sm"
-								onClick={props.onCloseExpressionPicker}
+								onClick={onCloseExpressionPicker}
 							>
 								<X />
 								<span className="sr-only">Fermer</span>
 							</Button>
 						</div>
 						<ExpressionPickerList
-							upstream={props.upstreamForExpression}
-							onInsert={props.onInsertExpressionValue}
+							upstream={upstreamForExpression}
+							onInsert={onInsertExpressionValue}
 						/>
 					</div>
 				) : null}
 			</div>
-		</SectionCard>
-	)
-}
-
-function EdgePanel(props: WorkflowEditorUIProps & { data: EdgePanelData }) {
-	const { data } = props
-	return (
-		<SectionCard>
-			<SectionHeader
-				title="Connexion"
-				description={`${data.fromLabel} → ${data.toLabel}`}
-				actions={
-					<Button
-						variant="ghost"
-						size="icon-sm"
-						title="Supprimer la connexion"
-						onClick={() => props.onRemoveEdge(data.from, data.to)}
-					>
-						<Trash2 />
-						<span className="sr-only">Supprimer</span>
-					</Button>
-				}
-			/>
-			<div className="flex flex-col gap-2 p-5">
-				<Label htmlFor="edge-branch">Branche</Label>
-				<Select
-					value={data.branch ?? 'none'}
-					onValueChange={(next) =>
-						props.onBranchChange(
-							data.from,
-							data.to,
-							next === 'none' ? null : (next as Branch),
-						)
-					}
-				>
-					<SelectTrigger id="edge-branch" className="w-full">
-						<SelectValue />
-					</SelectTrigger>
-					<SelectContent>
-						<SelectItem value="none">Aucune</SelectItem>
-						{(Object.keys(BRANCH_LABEL) as Branch[]).map((branch) => (
-							<SelectItem key={branch} value={branch}>
-								{BRANCH_LABEL[branch]}
-							</SelectItem>
-						))}
-					</SelectContent>
-				</Select>
-			</div>
-		</SectionCard>
+		</div>
 	)
 }
 
@@ -828,6 +846,15 @@ function useCanvasState({
 	onAddConnectorFrom,
 	onDuplicateConnector,
 	onRemoveConnector,
+	onFieldChange,
+	onCredentialChange,
+	onCreateCredential,
+	onDeselect,
+	expressionTargetField,
+	upstreamForExpression,
+	onInsertExpression,
+	onInsertExpressionValue,
+	onCloseExpressionPicker,
 }: {
 	nodes: EditorNode[]
 	edges: EditorEdge[]
@@ -838,6 +865,19 @@ function useCanvasState({
 	onAddConnectorFrom: (fromId: string, kind: string) => void
 	onDuplicateConnector: (connectorId: string) => void
 	onRemoveConnector: (connectorId: string) => void
+	onFieldChange: (
+		connectorId: string,
+		fieldName: string,
+		value: unknown,
+	) => void
+	onCredentialChange: (connectorId: string, credentialId: string | null) => void
+	onCreateCredential: (connectorId: string) => void
+	onDeselect: () => void
+	expressionTargetField: string | null
+	upstreamForExpression: UpstreamConnectorOption[]
+	onInsertExpression: (fieldName: string) => void
+	onInsertExpressionValue: (expression: string) => void
+	onCloseExpressionPicker: () => void
 }) {
 	const draggedPositions = useRef(new Map<string, NodePosition>())
 	const [rfNodes, setRfNodes] = useState<Array<ConnectorNode | StartNode>>([])
@@ -925,11 +965,37 @@ function useCanvasState({
 						onAddFrom: (kind: string) => onAddConnectorFrom(node.id, kind),
 						onDuplicate: () => onDuplicateConnector(node.id),
 						onRemove: () => onRemoveConnector(node.id),
+						panel:
+							selection?.type === 'connector' &&
+							selection.data.connectorId === node.id
+								? selection.data
+								: null,
+						onFieldChange: (fieldName: string, value: unknown) =>
+							onFieldChange(node.id, fieldName, value),
+						onCredentialChange: (credentialId: string | null) =>
+							onCredentialChange(node.id, credentialId),
+						onCreateCredential: () => onCreateCredential(node.id),
+						onDeselect,
+						expressionTargetField:
+							selection?.type === 'connector' &&
+							selection.data.connectorId === node.id
+								? expressionTargetField
+								: null,
+						upstreamForExpression,
+						onInsertExpression,
+						onInsertExpressionValue,
+						onCloseExpressionPicker,
 					},
 				}
 			}),
 		])
-	}, [nodes, selection, rootConnectorIds])
+	}, [
+		nodes,
+		selection,
+		rootConnectorIds,
+		expressionTargetField,
+		upstreamForExpression,
+	])
 
 	useEffect(() => {
 		const startEdges: BranchEdge[] = rootConnectorIds.map((id) => ({
@@ -950,8 +1016,8 @@ function useCanvasState({
 				...(edge.branch ? BRANCH_PILL_STYLE : null),
 				selected:
 					selection?.type === 'edge' &&
-					selection.data.from === edge.from &&
-					selection.data.to === edge.to,
+					selection.from === edge.from &&
+					selection.to === edge.to,
 				data: { branch: edge.branch },
 			})),
 		])

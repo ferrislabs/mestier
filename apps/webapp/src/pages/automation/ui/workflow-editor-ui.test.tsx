@@ -1,7 +1,10 @@
 import { fireEvent, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
-import type { WorkflowEditorUIProps } from '#/pages/automation/ui/workflow-editor-ui'
+import type {
+	ConnectorPanelData,
+	WorkflowEditorUIProps,
+} from '#/pages/automation/ui/workflow-editor-ui'
 import { WorkflowEditorUI } from '#/pages/automation/ui/workflow-editor-ui'
 import { renderWithRouter } from '#/test/render-with-router'
 
@@ -394,39 +397,61 @@ describe('WorkflowEditorUI — save', () => {
 	})
 })
 
-describe('WorkflowEditorUI — connector panel', () => {
+// The config popover only ever renders for the node whose id matches
+// `selection.data.connectorId` (`workflow-editor-ui.tsx`'s `useCanvasState`)
+// — every test below needs a matching `nodes` entry for that popover to
+// exist at all, not just a `selection` prop on its own.
+function connectorPanelProps(
+	panelData: ConnectorPanelData,
+	overrides: Partial<WorkflowEditorUIProps> = {},
+) {
+	return baseProps({
+		nodes: [
+			{
+				id: panelData.connectorId,
+				label: panelData.label,
+				kindLabel: 'http.request',
+				family: 'http',
+				hasError: false,
+				previewLines: [],
+			},
+		],
+		positions: new Map([[panelData.connectorId, { x: 0, y: 0 }]]),
+		selection: { type: 'connector', data: panelData },
+		...overrides,
+	})
+}
+
+describe('WorkflowEditorUI — connector panel (popover)', () => {
 	it("renders the selected connector's fields and forwards edits", async () => {
 		const user = userEvent.setup()
 		const onFieldChange = vi.fn()
 		await renderWithRouter(
 			<WorkflowEditorUI
-				{...baseProps({
-					onFieldChange,
-					selection: {
-						type: 'connector',
-						data: {
-							connectorId: 'c1',
-							label: 'Requête HTTP',
-							fields: [
-								{
-									name: 'url',
-									label: 'URL',
-									kind: 'Text',
-									required: true,
-									expression: false,
-									secret: false,
-								},
-							],
-							values: {},
-							fieldErrors: {},
-							globalError: null,
-							authRequired: false,
-							credentialOptions: [],
-							credentialId: null,
-							signingCredentials: [],
-						},
+				{...connectorPanelProps(
+					{
+						connectorId: 'c1',
+						label: 'Requête HTTP',
+						fields: [
+							{
+								name: 'url',
+								label: 'URL',
+								kind: 'Text',
+								required: true,
+								expression: false,
+								secret: false,
+							},
+						],
+						values: {},
+						fieldErrors: {},
+						globalError: null,
+						authRequired: false,
+						credentialOptions: [],
+						credentialId: null,
+						signingCredentials: [],
 					},
-				})}
+					{ onFieldChange },
+				)}
 			/>,
 		)
 
@@ -438,22 +463,17 @@ describe('WorkflowEditorUI — connector panel', () => {
 	it('offers a credential picker only when the connector requires auth', async () => {
 		await renderWithRouter(
 			<WorkflowEditorUI
-				{...baseProps({
-					selection: {
-						type: 'connector',
-						data: {
-							connectorId: 'c1',
-							label: 'Lecture Odoo',
-							fields: [],
-							values: {},
-							fieldErrors: {},
-							globalError: null,
-							authRequired: true,
-							credentialOptions: [{ id: 'cred-1', name: 'Odoo prod' }],
-							credentialId: null,
-							signingCredentials: [],
-						},
-					},
+				{...connectorPanelProps({
+					connectorId: 'c1',
+					label: 'Lecture Odoo',
+					fields: [],
+					values: {},
+					fieldErrors: {},
+					globalError: null,
+					authRequired: true,
+					credentialOptions: [{ id: 'cred-1', name: 'Odoo prod' }],
+					credentialId: null,
+					signingCredentials: [],
 				})}
 			/>,
 		)
@@ -464,23 +484,17 @@ describe('WorkflowEditorUI — connector panel', () => {
 	it('shows a connector-level error message', async () => {
 		await renderWithRouter(
 			<WorkflowEditorUI
-				{...baseProps({
-					selection: {
-						type: 'connector',
-						data: {
-							connectorId: 'c1',
-							label: 'Requête HTTP',
-							fields: [],
-							values: {},
-							fieldErrors: {},
-							globalError:
-								'Ce connecteur ne peut pas être le premier du graphe',
-							authRequired: false,
-							credentialOptions: [],
-							credentialId: null,
-							signingCredentials: [],
-						},
-					},
+				{...connectorPanelProps({
+					connectorId: 'c1',
+					label: 'Requête HTTP',
+					fields: [],
+					values: {},
+					fieldErrors: {},
+					globalError: 'Ce connecteur ne peut pas être le premier du graphe',
+					authRequired: false,
+					credentialOptions: [],
+					credentialId: null,
+					signingCredentials: [],
 				})}
 			/>,
 		)
@@ -495,24 +509,21 @@ describe('WorkflowEditorUI — connector panel', () => {
 		const onRemoveConnector = vi.fn()
 		await renderWithRouter(
 			<WorkflowEditorUI
-				{...baseProps({
-					onRemoveConnector,
-					selection: {
-						type: 'connector',
-						data: {
-							connectorId: 'c1',
-							label: 'Requête HTTP',
-							fields: [],
-							values: {},
-							fieldErrors: {},
-							globalError: null,
-							authRequired: false,
-							credentialOptions: [],
-							credentialId: null,
-							signingCredentials: [],
-						},
+				{...connectorPanelProps(
+					{
+						connectorId: 'c1',
+						label: 'Requête HTTP',
+						fields: [],
+						values: {},
+						fieldErrors: {},
+						globalError: null,
+						authRequired: false,
+						credentialOptions: [],
+						credentialId: null,
+						signingCredentials: [],
 					},
-				})}
+					{ onRemoveConnector },
+				)}
 			/>,
 		)
 
@@ -529,42 +540,41 @@ describe('WorkflowEditorUI — expression insertion', () => {
 		const onCloseExpressionPicker = vi.fn()
 		await renderWithRouter(
 			<WorkflowEditorUI
-				{...baseProps({
-					expressionTargetField: 'predicate',
-					upstreamForExpression: [
-						{
-							id: 'c0',
-							label: 'Requête HTTP',
-							paths: [{ path: '', preview: '{…}' }],
-						},
-					],
-					onInsertExpressionValue,
-					onCloseExpressionPicker,
-					selection: {
-						type: 'connector',
-						data: {
-							connectorId: 'c1',
-							label: 'Condition',
-							fields: [
-								{
-									name: 'predicate',
-									label: 'Predicate',
-									kind: 'Text',
-									required: true,
-									expression: true,
-									secret: false,
-								},
-							],
-							values: {},
-							fieldErrors: {},
-							globalError: null,
-							authRequired: false,
-							credentialOptions: [],
-							credentialId: null,
-							signingCredentials: [],
-						},
+				{...connectorPanelProps(
+					{
+						connectorId: 'c1',
+						label: 'Condition',
+						fields: [
+							{
+								name: 'predicate',
+								label: 'Predicate',
+								kind: 'Text',
+								required: true,
+								expression: true,
+								secret: false,
+							},
+						],
+						values: {},
+						fieldErrors: {},
+						globalError: null,
+						authRequired: false,
+						credentialOptions: [],
+						credentialId: null,
+						signingCredentials: [],
 					},
-				})}
+					{
+						expressionTargetField: 'predicate',
+						upstreamForExpression: [
+							{
+								id: 'c0',
+								label: 'Requête HTTP',
+								paths: [{ path: '', preview: '{…}' }],
+							},
+						],
+						onInsertExpressionValue,
+						onCloseExpressionPicker,
+					},
+				)}
 			/>,
 		)
 
@@ -577,91 +587,5 @@ describe('WorkflowEditorUI — expression insertion', () => {
 
 		await user.click(screen.getByRole('button', { name: 'Fermer' }))
 		expect(onCloseExpressionPicker).toHaveBeenCalled()
-	})
-})
-
-describe('WorkflowEditorUI — edge panel', () => {
-	it("renders the connection's endpoints and current branch", async () => {
-		await renderWithRouter(
-			<WorkflowEditorUI
-				{...baseProps({
-					selection: {
-						type: 'edge',
-						data: {
-							from: 'c1',
-							to: 'c2',
-							fromLabel: 'Condition',
-							toLabel: 'Envoyer un email',
-							branch: 'Then',
-						},
-					},
-				})}
-			/>,
-		)
-
-		expect(screen.getByText('Condition → Envoyer un email')).toBeDefined()
-	})
-
-	it('changing the branch reports the new value', async () => {
-		const user = userEvent.setup()
-		const onBranchChange = vi.fn()
-		await renderWithRouter(
-			<WorkflowEditorUI
-				{...baseProps({
-					onBranchChange,
-					selection: {
-						type: 'edge',
-						data: {
-							from: 'c1',
-							to: 'c2',
-							fromLabel: 'Condition',
-							toLabel: 'Envoyer un email',
-							branch: null,
-						},
-					},
-				})}
-			/>,
-		)
-
-		await user.click(screen.getByRole('combobox'))
-		await user.click(screen.getByRole('option', { name: 'Sinon' }))
-
-		expect(onBranchChange).toHaveBeenCalledWith('c1', 'c2', 'Else')
-	})
-
-	it('removing the connection calls onRemoveEdge with both endpoints', async () => {
-		const user = userEvent.setup()
-		const onRemoveEdge = vi.fn()
-		await renderWithRouter(
-			<WorkflowEditorUI
-				{...baseProps({
-					onRemoveEdge,
-					selection: {
-						type: 'edge',
-						data: {
-							from: 'c1',
-							to: 'c2',
-							fromLabel: 'Condition',
-							toLabel: 'Envoyer un email',
-							branch: null,
-						},
-					},
-				})}
-			/>,
-		)
-
-		await user.click(screen.getByRole('button', { name: 'Supprimer' }))
-
-		expect(onRemoveEdge).toHaveBeenCalledWith('c1', 'c2')
-	})
-})
-
-describe('WorkflowEditorUI — no selection', () => {
-	it('hints to select something instead of showing a panel', async () => {
-		await renderWithRouter(<WorkflowEditorUI {...baseProps()} />)
-
-		expect(
-			screen.getByText(/Sélectionnez un connecteur ou une connexion/),
-		).toBeDefined()
 	})
 })
