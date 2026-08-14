@@ -19,6 +19,14 @@ import {
 } from '#/components/data-view'
 import { Button } from '#/components/ui/button'
 import {
+	Dialog,
+	DialogContent,
+	DialogDescription,
+	DialogFooter,
+	DialogHeader,
+	DialogTitle,
+} from '#/components/ui/dialog'
+import {
 	DropdownMenu,
 	DropdownMenuContent,
 	DropdownMenuItem,
@@ -34,14 +42,6 @@ import {
 	SelectTrigger,
 	SelectValue,
 } from '#/components/ui/select'
-import {
-	Sheet,
-	SheetContent,
-	SheetDescription,
-	SheetFooter,
-	SheetHeader,
-	SheetTitle,
-} from '#/components/ui/sheet'
 import {
 	EntityAvatar,
 	MetricCard,
@@ -267,8 +267,8 @@ export function CustomerListUI({
 				</SectionCard>
 			) : null}
 
-			<Sheet open={createOpen} onOpenChange={handleCreateOpenChange}>
-				<SheetContent className="w-full gap-0 overflow-y-auto sm:max-w-xl">
+			<Dialog open={createOpen} onOpenChange={handleCreateOpenChange}>
+				<DialogContent className="flex max-h-[85vh] flex-col gap-0 overflow-hidden sm:max-w-xl">
 					<form
 						className="flex min-h-0 flex-1 flex-col"
 						onSubmit={(event) => {
@@ -276,15 +276,15 @@ export function CustomerListUI({
 							void submitCreate()
 						}}
 					>
-						<SheetHeader className="border-b">
-							<SheetTitle>Créer un client</SheetTitle>
-							<SheetDescription>
+						<DialogHeader className="border-b pb-4">
+							<DialogTitle>Créer un client</DialogTitle>
+							<DialogDescription>
 								Ajoutez les informations de base. Les coordonnées restent
 								optionnelles.
-							</SheetDescription>
-						</SheetHeader>
+							</DialogDescription>
+						</DialogHeader>
 
-						<div className="flex-1 space-y-6 overflow-y-auto p-4">
+						<div className="flex-1 space-y-6 overflow-y-auto py-4">
 							<FormSection
 								title="Identité"
 								description="Ces champs identifient le client dans le fichier."
@@ -377,7 +377,7 @@ export function CustomerListUI({
 							</FormSection>
 						</div>
 
-						<SheetFooter className="border-t bg-background sm:flex-row sm:justify-end">
+						<DialogFooter className="border-t pt-4">
 							<Button
 								type="button"
 								variant="ghost"
@@ -391,10 +391,10 @@ export function CustomerListUI({
 								<Plus />
 								Créer le client
 							</Button>
-						</SheetFooter>
+						</DialogFooter>
 					</form>
-				</SheetContent>
-			</Sheet>
+				</DialogContent>
+			</Dialog>
 
 			<section>
 				<p className="mb-3 text-sm text-muted-foreground">Aperçu du fichier</p>
