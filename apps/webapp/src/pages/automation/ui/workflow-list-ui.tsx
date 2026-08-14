@@ -25,7 +25,6 @@ import {
 	CardAction,
 	CardContent,
 	CardDescription,
-	CardFooter,
 	CardHeader,
 	CardTitle,
 } from '#/components/ui/card'
@@ -287,13 +286,25 @@ function WorkflowCard({
 	onDelete,
 }: WorkflowCardProps) {
 	return (
-		<Card>
+		<Card className="relative transition hover:shadow-md">
+			{/* The card itself is the link to the editor — an invisible overlay
+			 * stretched over the whole card, per the standard "stretched link"
+			 * pattern: it sits *above* the plain text (title, description,
+			 * status), so clicking anywhere on those navigates, but *below*
+			 * the actual controls (`z-20` below), which punch through it to
+			 * stay clickable on their own terms. */}
+			<Link
+				to={buildOrgPath(organizationSlug, '/automation/$workflowId')}
+				params={{ workflowId: workflow.id }}
+				className="absolute inset-0 z-10 rounded-xl"
+				aria-label={`Ouvrir l’éditeur de ${workflow.name}`}
+			/>
 			<CardHeader>
 				<CardTitle className="truncate">{workflow.name}</CardTitle>
 				<CardDescription className="line-clamp-2">
 					{workflow.description ?? 'Aucune description'}
 				</CardDescription>
-				<CardAction>
+				<CardAction className="relative z-20">
 					<RowActions
 						workflow={workflow}
 						organizationSlug={organizationSlug}
@@ -303,7 +314,7 @@ function WorkflowCard({
 				</CardAction>
 			</CardHeader>
 			<CardContent className="flex flex-col gap-3">
-				<div className="flex items-center gap-2">
+				<div className="relative z-20 flex items-center gap-2">
 					<Switch
 						checked={workflow.enabled}
 						disabled={isToggling}
@@ -333,16 +344,6 @@ function WorkflowCard({
 					)}
 				</div>
 			</CardContent>
-			<CardFooter className="gap-2">
-				<Button variant="outline" size="sm" asChild className="flex-1">
-					<Link
-						to={buildOrgPath(organizationSlug, '/automation/$workflowId')}
-						params={{ workflowId: workflow.id }}
-					>
-						Ouvrir l’éditeur
-					</Link>
-				</Button>
-			</CardFooter>
 		</Card>
 	)
 }
@@ -373,15 +374,6 @@ function RowActions({
 					</button>
 				</DropdownMenuTrigger>
 				<DropdownMenuContent align="end">
-					<DropdownMenuItem asChild>
-						<Link
-							to={buildOrgPath(organizationSlug, '/automation/$workflowId')}
-							params={{ workflowId: workflow.id }}
-						>
-							<Workflow />
-							Ouvrir l’éditeur
-						</Link>
-					</DropdownMenuItem>
 					<DropdownMenuItem asChild>
 						<Link
 							to={buildOrgPath(

@@ -81,17 +81,25 @@ describe('WorkflowListUI — enable/disable toggle', () => {
 	})
 })
 
-describe('WorkflowListUI — row links', () => {
-	it('links to the editor and to the runs page for the workflow', async () => {
+describe('WorkflowListUI — card and row links', () => {
+	it('the whole card is a link to the editor', async () => {
+		await renderWithRouter(<WorkflowListUI {...baseProps()} />)
+
+		const cardLink = screen.getByRole('link', {
+			name: 'Ouvrir l’éditeur de Relance devis',
+		})
+		expect(cardLink.getAttribute('href')).toBe(
+			'/o/atelier-bois/automation/workflow-1',
+		)
+	})
+
+	it('the "..." menu still offers the runs page, but not a duplicate editor link', async () => {
 		const user = userEvent.setup()
 		await renderWithRouter(<WorkflowListUI {...baseProps()} />)
 
 		await user.click(screen.getByRole('button', { name: 'Actions' }))
 
-		const editorLink = screen.getByRole('menuitem', { name: /éditeur/ })
-		expect(editorLink.getAttribute('href')).toBe(
-			'/o/atelier-bois/automation/workflow-1',
-		)
+		expect(screen.queryByRole('menuitem', { name: /éditeur/ })).toBeNull()
 
 		const runsLink = screen.getByRole('menuitem', { name: /Voir les runs/ })
 		expect(runsLink.getAttribute('href')).toBe(
