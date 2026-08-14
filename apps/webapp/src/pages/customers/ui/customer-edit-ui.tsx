@@ -16,6 +16,14 @@ import {
 } from 'lucide-react'
 import { FloatingActionBar } from '#/components/floating-action-bar'
 import { Button } from '#/components/ui/button'
+import {
+	Dialog,
+	DialogContent,
+	DialogDescription,
+	DialogFooter,
+	DialogHeader,
+	DialogTitle,
+} from '#/components/ui/dialog'
 import { Input } from '#/components/ui/input'
 import { Label } from '#/components/ui/label'
 import {
@@ -65,6 +73,7 @@ interface CustomerEditUIProps {
 	editingCustomerContactId: string | null
 	isCustomerContactSaving: boolean
 	deletingCustomerContactId: string | null
+	contactDialogOpen: boolean
 	customerContexts: CustomerContext[]
 	customerContextsError: string | null
 	isCustomerContextsLoading: boolean
@@ -73,6 +82,7 @@ interface CustomerEditUIProps {
 	isCustomerContextSaving: boolean
 	isUploadingPhoto: boolean
 	deletingCustomerContextId: string | null
+	contextDialogOpen: boolean
 	photoPreviewUrl: string | null
 	onChange: (patch: Partial<CustomerFormValues>) => void
 	onReset: () => void
@@ -83,12 +93,14 @@ interface CustomerEditUIProps {
 	onCustomerContactCancel: () => void
 	onCustomerContactSubmit: () => void
 	onCustomerContactDelete: (customerContact: CustomerContact) => void
+	onContactDialogOpenChange: (open: boolean) => void
 	onCustomerContextChange: (patch: Partial<CustomerContextFormValues>) => void
 	onCustomerContextEdit: (customerContext: CustomerContext) => void
 	onCustomerContextCancel: () => void
 	onCustomerContextSubmit: () => void
 	onCustomerContextDelete: (customerContext: CustomerContext) => void
 	onCustomerContextPhotoChange: (file: File) => void
+	onContextDialogOpenChange: (open: boolean) => void
 	onRetryCustomerContacts: () => void
 	onRetryCustomerContexts: () => void
 }
@@ -116,6 +128,7 @@ export function CustomerEditUI({
 	editingCustomerContactId,
 	isCustomerContactSaving,
 	deletingCustomerContactId,
+	contactDialogOpen,
 	customerContexts,
 	customerContextsError,
 	isCustomerContextsLoading,
@@ -124,6 +137,7 @@ export function CustomerEditUI({
 	isCustomerContextSaving,
 	isUploadingPhoto,
 	deletingCustomerContextId,
+	contextDialogOpen,
 	photoPreviewUrl,
 	onChange,
 	onReset,
@@ -134,12 +148,14 @@ export function CustomerEditUI({
 	onCustomerContactCancel,
 	onCustomerContactSubmit,
 	onCustomerContactDelete,
+	onContactDialogOpenChange,
 	onCustomerContextChange,
 	onCustomerContextEdit,
 	onCustomerContextCancel,
 	onCustomerContextSubmit,
 	onCustomerContextDelete,
 	onCustomerContextPhotoChange,
+	onContextDialogOpenChange,
 	onRetryCustomerContacts,
 	onRetryCustomerContexts,
 }: CustomerEditUIProps) {
@@ -272,6 +288,16 @@ export function CustomerEditUI({
 					title="Contacts"
 					description="Interlocuteurs liés à ce prospect ou client"
 					className="lg:col-span-3"
+					actions={
+						<Button
+							type="button"
+							size="sm"
+							onClick={() => onContactDialogOpenChange(true)}
+						>
+							<Plus />
+							Ajouter un contact
+						</Button>
+					}
 				>
 					{customerContactsError ? (
 						<InlineError
@@ -303,82 +329,84 @@ export function CustomerEditUI({
 							))}
 						</div>
 					)}
+				</Section>
 
-					<div className="mt-1 rounded-lg border bg-muted/20">
-						<div className="flex items-center justify-between gap-4 border-b px-4 py-3">
-							<div>
-								<p className="font-medium">
-									{editingCustomerContactId
-										? 'Modifier le contact'
-										: 'Ajouter un contact'}
-								</p>
-								<p className="text-xs text-muted-foreground">
-									Nom et prénom sont requis. Le rôle aide à identifier le bon
-									interlocuteur.
-								</p>
-							</div>
-							{editingCustomerContactId ? (
-								<Button
-									type="button"
-									variant="ghost"
-									size="sm"
-									onClick={onCustomerContactCancel}
-								>
-									Annuler
-								</Button>
-							) : null}
-						</div>
-						<div className="grid gap-4 p-4 md:grid-cols-2">
-							<Field
-								label="Prénom"
-								name="customer-contact-first-name"
-								value={customerContactDraft.firstName}
-								onChange={(v) => onCustomerContactChange({ firstName: v })}
-							/>
-							<Field
-								label="Nom"
-								name="customer-contact-last-name"
-								value={customerContactDraft.lastName}
-								onChange={(v) => onCustomerContactChange({ lastName: v })}
-							/>
-							<Field
-								label="Rôle"
-								name="customer-contact-role"
-								value={customerContactDraft.role}
-								onChange={(v) => onCustomerContactChange({ role: v })}
-							/>
-							<Field
-								label="Email"
-								name="customer-contact-email"
-								type="email"
-								value={customerContactDraft.email}
-								onChange={(v) => onCustomerContactChange({ email: v })}
-							/>
-							<Field
-								label="Téléphone"
-								name="customer-contact-phone"
-								value={customerContactDraft.phone}
-								onChange={(v) => onCustomerContactChange({ phone: v })}
-							/>
-							<div className="flex items-center justify-between gap-4 rounded-lg border bg-card px-3 py-2">
-								<div>
-									<Label htmlFor="customer-contact-primary">
-										Contact principal
-									</Label>
-									<p className="text-xs text-muted-foreground">
-										Affiché en priorité dans la fiche.
-									</p>
-								</div>
-								<Switch
-									id="customer-contact-primary"
-									checked={customerContactDraft.isPrimary}
-									onCheckedChange={(isPrimary) =>
-										onCustomerContactChange({ isPrimary })
-									}
+				<Dialog
+					open={contactDialogOpen}
+					onOpenChange={onContactDialogOpenChange}
+				>
+					<DialogContent className="flex max-h-[85vh] flex-col gap-0 overflow-hidden">
+						<DialogHeader className="border-b pb-4">
+							<DialogTitle>
+								{editingCustomerContactId
+									? 'Modifier le contact'
+									: 'Ajouter un contact'}
+							</DialogTitle>
+							<DialogDescription>
+								Nom et prénom sont requis. Le rôle aide à identifier le bon
+								interlocuteur.
+							</DialogDescription>
+						</DialogHeader>
+						<div className="flex-1 overflow-y-auto py-4">
+							<div className="grid gap-4 md:grid-cols-2">
+								<Field
+									label="Prénom"
+									name="customer-contact-first-name"
+									value={customerContactDraft.firstName}
+									onChange={(v) => onCustomerContactChange({ firstName: v })}
 								/>
+								<Field
+									label="Nom"
+									name="customer-contact-last-name"
+									value={customerContactDraft.lastName}
+									onChange={(v) => onCustomerContactChange({ lastName: v })}
+								/>
+								<Field
+									label="Rôle"
+									name="customer-contact-role"
+									value={customerContactDraft.role}
+									onChange={(v) => onCustomerContactChange({ role: v })}
+								/>
+								<Field
+									label="Email"
+									name="customer-contact-email"
+									type="email"
+									value={customerContactDraft.email}
+									onChange={(v) => onCustomerContactChange({ email: v })}
+								/>
+								<Field
+									label="Téléphone"
+									name="customer-contact-phone"
+									value={customerContactDraft.phone}
+									onChange={(v) => onCustomerContactChange({ phone: v })}
+								/>
+								<div className="flex items-center justify-between gap-4 rounded-lg border bg-card px-3 py-2">
+									<div>
+										<Label htmlFor="customer-contact-primary">
+											Contact principal
+										</Label>
+										<p className="text-xs text-muted-foreground">
+											Affiché en priorité dans la fiche.
+										</p>
+									</div>
+									<Switch
+										id="customer-contact-primary"
+										checked={customerContactDraft.isPrimary}
+										onCheckedChange={(isPrimary) =>
+											onCustomerContactChange({ isPrimary })
+										}
+									/>
+								</div>
 							</div>
 						</div>
-						<div className="flex justify-end border-t p-4">
+						<DialogFooter className="border-t pt-4">
+							<Button
+								type="button"
+								variant="ghost"
+								onClick={onCustomerContactCancel}
+							>
+								Annuler
+							</Button>
 							<Button
 								type="button"
 								disabled={!canSubmitCustomerContact || isCustomerContactSaving}
@@ -387,14 +415,24 @@ export function CustomerEditUI({
 								<Plus />
 								{editingCustomerContactId ? 'Enregistrer' : 'Ajouter'}
 							</Button>
-						</div>
-					</div>
-				</Section>
+						</DialogFooter>
+					</DialogContent>
+				</Dialog>
 
 				<Section
 					title="Contextes client"
 					description="Adresses, établissements ou périmètres associés à ce client"
 					className="lg:col-span-3"
+					actions={
+						<Button
+							type="button"
+							size="sm"
+							onClick={() => onContextDialogOpenChange(true)}
+						>
+							<Plus />
+							Ajouter un contexte
+						</Button>
+					}
 				>
 					{customerContextsError ? (
 						<InlineError
@@ -426,99 +464,101 @@ export function CustomerEditUI({
 							))}
 						</div>
 					)}
+				</Section>
 
-					<div className="mt-1 rounded-lg border bg-muted/20">
-						<div className="flex items-center justify-between gap-4 border-b px-4 py-3">
-							<div>
-								<p className="font-medium">
-									{editingCustomerContextId
-										? 'Modifier le contexte'
-										: 'Ajouter un contexte'}
-								</p>
-								<p className="text-xs text-muted-foreground">
-									Le libellé suffit. L’adresse reste optionnelle selon le
-									contexte.
-								</p>
-							</div>
-							{editingCustomerContextId ? (
-								<Button
-									type="button"
-									variant="ghost"
-									size="sm"
-									onClick={onCustomerContextCancel}
-								>
-									Annuler
-								</Button>
-							) : null}
-						</div>
-						<div className="grid gap-4 p-4 md:grid-cols-2">
-							<Field
-								label="Libellé"
-								name="customer-context-label"
-								value={customerContextDraft.label}
-								onChange={(v) => onCustomerContextChange({ label: v })}
-							/>
-							<Field
-								label="Ville"
-								name="customer-context-city"
-								value={customerContextDraft.city}
-								onChange={(v) => onCustomerContextChange({ city: v })}
-							/>
-							<Field
-								label="Adresse"
-								name="customer-context-address-line"
-								value={customerContextDraft.addressLine}
-								onChange={(v) => onCustomerContextChange({ addressLine: v })}
-							/>
-							<Field
-								label="Code postal"
-								name="customer-context-postal-code"
-								value={customerContextDraft.postalCode}
-								onChange={(v) => onCustomerContextChange({ postalCode: v })}
-							/>
-						</div>
-						<div className="grid gap-4 border-t p-4 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-end">
-							<div className="flex flex-col gap-2">
-								<Label htmlFor="customer-context-photo">
-									Photo du contexte
-								</Label>
-								<div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-									<label
-										htmlFor="customer-context-photo"
-										className="inline-flex h-9 cursor-pointer items-center justify-center gap-2 rounded-lg border border-primary/40 bg-card px-4 text-sm font-medium text-primary shadow-xs hover:bg-brand-soft"
-									>
-										<Upload className="size-4" />
-										{isUploadingPhoto ? 'Téléversement…' : 'Téléverser'}
-									</label>
-									<input
-										id="customer-context-photo"
-										type="file"
-										accept="image/*"
-										className="sr-only"
-										disabled={isUploadingPhoto}
-										onChange={(event) => {
-											const file = event.target.files?.[0]
-											if (file) onCustomerContextPhotoChange(file)
-											event.currentTarget.value = ''
-										}}
-									/>
-									{customerContextDraft.photoKey ? (
-										<span className="min-w-0 truncate font-mono text-xs text-muted-foreground">
-											{customerContextDraft.photoKey}
-										</span>
-									) : null}
-								</div>
-							</div>
-
-							{photoPreviewUrl ? (
-								<img
-									src={photoPreviewUrl}
-									alt="Aperçu du contexte"
-									className="h-24 w-36 rounded-lg border object-cover"
+				<Dialog
+					open={contextDialogOpen}
+					onOpenChange={onContextDialogOpenChange}
+				>
+					<DialogContent className="flex max-h-[85vh] flex-col gap-0 overflow-hidden">
+						<DialogHeader className="border-b pb-4">
+							<DialogTitle>
+								{editingCustomerContextId
+									? 'Modifier le contexte'
+									: 'Ajouter un contexte'}
+							</DialogTitle>
+							<DialogDescription>
+								Le libellé suffit. L’adresse reste optionnelle selon le
+								contexte.
+							</DialogDescription>
+						</DialogHeader>
+						<div className="flex-1 overflow-y-auto py-4">
+							<div className="grid gap-4 md:grid-cols-2">
+								<Field
+									label="Libellé"
+									name="customer-context-label"
+									value={customerContextDraft.label}
+									onChange={(v) => onCustomerContextChange({ label: v })}
 								/>
-							) : null}
+								<Field
+									label="Ville"
+									name="customer-context-city"
+									value={customerContextDraft.city}
+									onChange={(v) => onCustomerContextChange({ city: v })}
+								/>
+								<Field
+									label="Adresse"
+									name="customer-context-address-line"
+									value={customerContextDraft.addressLine}
+									onChange={(v) => onCustomerContextChange({ addressLine: v })}
+								/>
+								<Field
+									label="Code postal"
+									name="customer-context-postal-code"
+									value={customerContextDraft.postalCode}
+									onChange={(v) => onCustomerContextChange({ postalCode: v })}
+								/>
+							</div>
+							<div className="mt-4 grid gap-4 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-end">
+								<div className="flex flex-col gap-2">
+									<Label htmlFor="customer-context-photo">
+										Photo du contexte
+									</Label>
+									<div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+										<label
+											htmlFor="customer-context-photo"
+											className="inline-flex h-9 cursor-pointer items-center justify-center gap-2 rounded-lg border border-primary/40 bg-card px-4 text-sm font-medium text-primary shadow-xs hover:bg-brand-soft"
+										>
+											<Upload className="size-4" />
+											{isUploadingPhoto ? 'Téléversement…' : 'Téléverser'}
+										</label>
+										<input
+											id="customer-context-photo"
+											type="file"
+											accept="image/*"
+											className="sr-only"
+											disabled={isUploadingPhoto}
+											onChange={(event) => {
+												const file = event.target.files?.[0]
+												if (file) onCustomerContextPhotoChange(file)
+												event.currentTarget.value = ''
+											}}
+										/>
+										{customerContextDraft.photoKey ? (
+											<span className="min-w-0 truncate font-mono text-xs text-muted-foreground">
+												{customerContextDraft.photoKey}
+											</span>
+										) : null}
+									</div>
+								</div>
+
+								{photoPreviewUrl ? (
+									<img
+										src={photoPreviewUrl}
+										alt="Aperçu du contexte"
+										className="h-24 w-36 rounded-lg border object-cover"
+									/>
+								) : null}
+							</div>
 						</div>
-						<div className="flex justify-end border-t p-4">
+						<DialogFooter className="border-t pt-4">
+							<Button
+								type="button"
+								variant="ghost"
+								onClick={onCustomerContextCancel}
+							>
+								Annuler
+							</Button>
 							<Button
 								type="button"
 								disabled={!canSubmitCustomerContext || isCustomerContextSaving}
@@ -527,9 +567,9 @@ export function CustomerEditUI({
 								<Plus />
 								{editingCustomerContextId ? 'Enregistrer' : 'Ajouter'}
 							</Button>
-						</div>
-					</div>
-				</Section>
+						</DialogFooter>
+					</DialogContent>
+				</Dialog>
 			</div>
 
 			<FloatingActionBar
@@ -565,6 +605,7 @@ interface SectionProps {
 	title: string
 	description?: string
 	className?: string
+	actions?: React.ReactNode
 	children: React.ReactNode
 }
 
@@ -572,11 +613,16 @@ function Section({
 	title,
 	description,
 	className = '',
+	actions,
 	children,
 }: SectionProps) {
 	return (
 		<SectionCard className={className}>
-			<SectionHeader title={title} description={description} />
+			<SectionHeader
+				title={title}
+				description={description}
+				actions={actions}
+			/>
 			<div className="flex flex-col gap-4 p-5">{children}</div>
 		</SectionCard>
 	)

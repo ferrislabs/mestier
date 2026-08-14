@@ -140,11 +140,13 @@ function CustomerEditInner({
 	const [editingCustomerContactId, setEditingCustomerContactId] = useState<
 		string | null
 	>(null)
+	const [contactDialogOpen, setContactDialogOpen] = useState(false)
 	const [customerContextDraft, setCustomerContextDraft] =
 		useState<CustomerContextFormValues>(EMPTY_CUSTOMER_CONTEXT_FORM)
 	const [editingCustomerContextId, setEditingCustomerContextId] = useState<
 		string | null
 	>(null)
+	const [contextDialogOpen, setContextDialogOpen] = useState(false)
 	const [photoPreviewUrl, setPhotoPreviewUrl] = useState<string | null>(null)
 
 	const form = useForm({
@@ -182,6 +184,16 @@ function CustomerEditInner({
 		setPhotoPreviewUrl(null)
 	}
 
+	const handleContactDialogOpenChange = (open: boolean) => {
+		setContactDialogOpen(open)
+		if (!open) resetCustomerContactDraft()
+	}
+
+	const handleContextDialogOpenChange = (open: boolean) => {
+		setContextDialogOpen(open)
+		if (!open) resetCustomerContextDraft()
+	}
+
 	const handleCustomerContactSubmit = async () => {
 		const body = {
 			first_name: customerContactDraft.firstName.trim(),
@@ -207,6 +219,7 @@ function CustomerEditInner({
 		}
 
 		resetCustomerContactDraft()
+		setContactDialogOpen(false)
 	}
 
 	const handleCustomerContextSubmit = async () => {
@@ -233,6 +246,7 @@ function CustomerEditInner({
 		}
 
 		resetCustomerContextDraft()
+		setContextDialogOpen(false)
 	}
 
 	const handlePhotoChange = async (file: File) => {
@@ -275,11 +289,13 @@ function CustomerEditInner({
 					isCustomerContextsLoading={isCustomerContextsLoading}
 					customerContactDraft={customerContactDraft}
 					editingCustomerContactId={editingCustomerContactId}
+					contactDialogOpen={contactDialogOpen}
 					isCustomerContactSaving={
 						createCustomerContact.isPending || updateCustomerContact.isPending
 					}
 					customerContextDraft={customerContextDraft}
 					editingCustomerContextId={editingCustomerContextId}
+					contextDialogOpen={contextDialogOpen}
 					isCustomerContextSaving={
 						createCustomerContext.isPending || updateCustomerContext.isPending
 					}
@@ -297,6 +313,8 @@ function CustomerEditInner({
 							: null
 					}
 					photoPreviewUrl={photoPreviewUrl}
+					onContactDialogOpenChange={handleContactDialogOpenChange}
+					onContextDialogOpenChange={handleContextDialogOpenChange}
 					form={form}
 					commitRef={commitRef}
 					onPromoteToClient={() => {
@@ -335,8 +353,9 @@ function CustomerEditInner({
 					onCustomerContactEdit={(customerContact) => {
 						setEditingCustomerContactId(customerContact.id)
 						setCustomerContactDraft(customerContactToForm(customerContact))
+						setContactDialogOpen(true)
 					}}
-					onCustomerContactCancel={resetCustomerContactDraft}
+					onCustomerContactCancel={() => handleContactDialogOpenChange(false)}
 					onCustomerContactSubmit={() => void handleCustomerContactSubmit()}
 					onCustomerContactDelete={(customerContact) =>
 						deleteCustomerContact.mutate({
@@ -351,8 +370,9 @@ function CustomerEditInner({
 						setCustomerContextDraft(customerContextToForm(customerContext))
 						if (photoPreviewUrl) URL.revokeObjectURL(photoPreviewUrl)
 						setPhotoPreviewUrl(null)
+						setContextDialogOpen(true)
 					}}
-					onCustomerContextCancel={resetCustomerContextDraft}
+					onCustomerContextCancel={() => handleContextDialogOpenChange(false)}
 					onCustomerContextSubmit={() => void handleCustomerContextSubmit()}
 					onCustomerContextDelete={(customerContext) =>
 						deleteCustomerContext.mutate({
@@ -380,14 +400,18 @@ interface CustomerEditFormProps {
 	isCustomerContextsLoading: boolean
 	customerContactDraft: CustomerContactFormValues
 	editingCustomerContactId: string | null
+	contactDialogOpen: boolean
 	isCustomerContactSaving: boolean
 	customerContextDraft: CustomerContextFormValues
 	editingCustomerContextId: string | null
+	contextDialogOpen: boolean
 	isCustomerContextSaving: boolean
 	isUploadingPhoto: boolean
 	deletingCustomerContactId: string | null
 	deletingCustomerContextId: string | null
 	photoPreviewUrl: string | null
+	onContactDialogOpenChange: (open: boolean) => void
+	onContextDialogOpenChange: (open: boolean) => void
 	form: AnyFormApi
 	commitRef: React.MutableRefObject<(v: CustomerFormValues) => void>
 	onCustomerContactChange: (patch: Partial<CustomerContactFormValues>) => void
@@ -418,14 +442,18 @@ function CustomerEditForm({
 	isCustomerContextsLoading,
 	customerContactDraft,
 	editingCustomerContactId,
+	contactDialogOpen,
 	isCustomerContactSaving,
 	customerContextDraft,
 	editingCustomerContextId,
+	contextDialogOpen,
 	isCustomerContextSaving,
 	isUploadingPhoto,
 	deletingCustomerContactId,
 	deletingCustomerContextId,
 	photoPreviewUrl,
+	onContactDialogOpenChange,
+	onContextDialogOpenChange,
 	form,
 	commitRef,
 	onCustomerContactChange,
@@ -468,6 +496,7 @@ function CustomerEditForm({
 			isCustomerContactsLoading={isCustomerContactsLoading}
 			customerContactDraft={customerContactDraft}
 			editingCustomerContactId={editingCustomerContactId}
+			contactDialogOpen={contactDialogOpen}
 			isCustomerContactSaving={isCustomerContactSaving}
 			deletingCustomerContactId={deletingCustomerContactId}
 			customerContexts={customerContexts}
@@ -475,10 +504,13 @@ function CustomerEditForm({
 			isCustomerContextsLoading={isCustomerContextsLoading}
 			customerContextDraft={customerContextDraft}
 			editingCustomerContextId={editingCustomerContextId}
+			contextDialogOpen={contextDialogOpen}
 			isCustomerContextSaving={isCustomerContextSaving}
 			isUploadingPhoto={isUploadingPhoto}
 			deletingCustomerContextId={deletingCustomerContextId}
 			photoPreviewUrl={photoPreviewUrl}
+			onContactDialogOpenChange={onContactDialogOpenChange}
+			onContextDialogOpenChange={onContextDialogOpenChange}
 			onChange={(patch) => {
 				for (const key of Object.keys(patch) as (keyof CustomerFormValues)[]) {
 					form.setFieldValue(key, patch[key] as never)
