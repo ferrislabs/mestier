@@ -5,7 +5,10 @@ import type {
 	ConnectorPanelData,
 	WorkflowEditorUIProps,
 } from '#/pages/automation/ui/workflow-editor-ui'
-import { WorkflowEditorUI } from '#/pages/automation/ui/workflow-editor-ui'
+import {
+	START_NODE_ID,
+	WorkflowEditorUI,
+} from '#/pages/automation/ui/workflow-editor-ui'
 import { renderWithRouter } from '#/test/render-with-router'
 
 // jsdom has no `ResizeObserver` at all (React Flow observes every node with
@@ -230,18 +233,27 @@ describe('WorkflowEditorUI — adding a connector from an existing node', () => 
 })
 
 describe('WorkflowEditorUI — Start node "+" button', () => {
-	it('opens the same searchable connector list, wired to onAddConnector', async () => {
+	// Goes through `onAddConnectorFrom(START_NODE_ID, kind)`, not
+	// `onAddConnector` — Start isn't a real connector, so the feature needs
+	// to tell this apart from a plain palette-less add (see
+	// `workflow-editor-feature.tsx`'s `handleAddConnectorFrom`: it's what
+	// lets the new connector join `startLinkedIds` instead of drawing a
+	// real edge from a sentinel that doesn't exist in the graph).
+	it('opens the same searchable connector list, wired through onAddConnectorFrom', async () => {
 		const user = userEvent.setup()
-		const onAddConnector = vi.fn()
+		const onAddConnectorFrom = vi.fn()
 		await renderWithRouter(
-			<WorkflowEditorUI {...baseProps({ onAddConnector })} />,
+			<WorkflowEditorUI {...baseProps({ onAddConnectorFrom })} />,
 		)
 
 		await user.click(screen.getByTitle('Ajouter le premier connecteur'))
 		const searchList = screen.getByTestId('connector-search-list')
 		await user.click(within(searchList).getByText('Requête HTTP'))
 
-		expect(onAddConnector).toHaveBeenCalledWith('http.request')
+		expect(onAddConnectorFrom).toHaveBeenCalledWith(
+			START_NODE_ID,
+			'http.request',
+		)
 	})
 })
 
@@ -406,21 +418,6 @@ describe('WorkflowEditorUI — loading', () => {
 		)
 
 		expect(screen.getByText('Chargement…')).toBeDefined()
-	})
-})
-
-describe('WorkflowEditorUI — palette', () => {
-	it('groups connectors by family and adds one on click', async () => {
-		const user = userEvent.setup()
-		const onAddConnector = vi.fn()
-		await renderWithRouter(
-			<WorkflowEditorUI {...baseProps({ onAddConnector })} />,
-		)
-
-		expect(screen.getByText('http')).toBeDefined()
-		await user.click(screen.getByText('Requête HTTP'))
-
-		expect(onAddConnector).toHaveBeenCalledWith('http.request')
 	})
 })
 

@@ -40,13 +40,7 @@ import {
 	PopoverContent,
 	PopoverTrigger,
 } from '#/components/ui/popover'
-import {
-	PageHeader,
-	PageShell,
-	SectionCard,
-	SectionHeader,
-	StatusBadge,
-} from '#/components/ui/surface'
+import { PageHeader, PageShell, StatusBadge } from '#/components/ui/surface'
 import type { AuthField, Branch } from '#/hooks/use-automation'
 import { cn } from '#/lib/utils'
 import { buildOrgPath } from '#/modules/org-path'
@@ -69,10 +63,13 @@ import {
 /** The canvas's entry-point pseudo-node — never sent to the backend (see
  * `lib/graph.ts`'s doc comment on `rootConnectorIds`: the graph itself has
  * no trigger node, a connector's in-degree of zero already means "a run
- * starts here"). Reserved so `onNodeClick`/`onNodeContextMenu` can
- * recognize and ignore it — it is not a `PlacedConnector` and has nothing
- * a side panel could show. */
-const START_NODE_ID = '__start__'
+ * starts here"). Recognized by `onNodeClick`/`onNodeContextMenu` so they can
+ * ignore it — it is not a `PlacedConnector` and has nothing a side panel
+ * could show. Exported so the feature can recognize it too: it's the
+ * sentinel `onAddConnectorFrom` receives from the Start node's own "+"
+ * button, the one case that adds a connector without drawing a real edge
+ * (see `workflow-editor-feature.tsx`'s `handleAddConnectorFrom`). */
+export const START_NODE_ID = '__start__'
 
 /** French label for a `BranchDto` — purely cosmetic, never the value saved
  * (the wire value stays the backend's English enum; see `lib/graph.ts`'s
@@ -159,8 +156,13 @@ export interface WorkflowEditorUIProps {
 
 	families: PaletteFamily[]
 	onAddConnector: (kind: string) => void
-	/** The very first connectors in the graph — nothing points into them,
-	 * so the canvas draws the Start pseudo-node's edges to exactly these. */
+	/** The connectors the Start pseudo-node draws its (visual-only) edge
+	 * to — always a subset of the graph's actual roots (nothing points
+	 * into them), but not every root: the feature only puts a connector
+	 * here once it's *explicitly* tied to Start (loaded that way, or added
+	 * via Start's own "+"), so a connector merely dropped on the canvas
+	 * and not yet wired to anything doesn't look connected to the
+	 * workflow's trigger by accident. */
 	rootConnectorIds: string[]
 
 	nodes: EditorNode[]
@@ -473,7 +475,6 @@ export function WorkflowEditorUI(props: WorkflowEditorUIProps) {
 		selection,
 		families,
 		rootConnectorIds,
-		onAddConnector,
 		onAddConnectorFrom,
 		onDuplicateConnector,
 		onRemoveConnector,
@@ -537,81 +538,77 @@ export function WorkflowEditorUI(props: WorkflowEditorUIProps) {
 					Chargement…
 				</div>
 			) : (
-				<div className="flex gap-6">
-					<Palette families={families} onAddConnector={onAddConnector} />
-
-					<div className="h-[calc(100vh-19rem)] min-h-[560px] flex-1 overflow-hidden rounded-xl border bg-muted/10">
-						<ReactFlow
-							nodes={rfNodes}
-							edges={rfEdges}
-							onNodesChange={onNodesChange}
-							onEdgesChange={onEdgesChange}
-							onConnect={(connection) => {
-								if (connection.source && connection.target) {
-									onConnect(connection.source, connection.target)
-								}
-							}}
-							// Without this, dragging an existing edge's endpoint to
-							// a different node does nothing — `edgesReconnectable`
-							// defaults to on, but React Flow still requires this
-							// handler before it will apply the change. A reconnect
-							// is just "drop the old edge, draw the new one":
-							// `onRemoveEdge` then `onConnect`, the same two
-							// primitives everything else on the canvas already
-							// goes through.
-							onReconnect={(oldEdge, newConnection) => {
-								if (!newConnection.source || !newConnection.target) return
-								onRemoveEdge(oldEdge.source, oldEdge.target)
-								onConnect(newConnection.source, newConnection.target)
-							}}
-							onNodeClick={(_, node) => {
-								if (node.id === START_NODE_ID) return
-								onSelectConnector(node.id)
-							}}
-							onEdgeClick={(_, edge) => onSelectEdge(edge.source, edge.target)}
-							onPaneClick={() => {
-								onDeselect()
-								setContextMenu(null)
-							}}
-							onNodeContextMenu={(event, node) => {
-								if (node.id === START_NODE_ID) return
-								event.preventDefault()
-								setContextMenu({
-									type: 'node',
-									id: node.id,
-									x: event.clientX,
-									y: event.clientY,
-								})
-							}}
-							onEdgeContextMenu={(event, edge) => {
-								event.preventDefault()
-								const branchEdge = edge as BranchEdge
-								setContextMenu({
-									type: 'edge',
-									from: branchEdge.source,
-									to: branchEdge.target,
-									branch: branchEdge.data?.branch ?? null,
-									x: event.clientX,
-									y: event.clientY,
-								})
-							}}
-							onPaneContextMenu={(event) => {
-								event.preventDefault()
-								setContextMenu({
-									type: 'pane',
-									x: (event as MouseEvent).clientX,
-									y: (event as MouseEvent).clientY,
-								})
-							}}
-							onMoveStart={() => setContextMenu(null)}
-							nodeTypes={nodeTypes}
-							defaultEdgeOptions={{ deletable: true }}
-							fitView
-						>
-							<Background gap={24} />
-							<Controls />
-						</ReactFlow>
-					</div>
+				<div className="h-[calc(100vh-16rem)] min-h-[560px] overflow-hidden rounded-xl border bg-muted/10">
+					<ReactFlow
+						nodes={rfNodes}
+						edges={rfEdges}
+						onNodesChange={onNodesChange}
+						onEdgesChange={onEdgesChange}
+						onConnect={(connection) => {
+							if (connection.source && connection.target) {
+								onConnect(connection.source, connection.target)
+							}
+						}}
+						// Without this, dragging an existing edge's endpoint to
+						// a different node does nothing — `edgesReconnectable`
+						// defaults to on, but React Flow still requires this
+						// handler before it will apply the change. A reconnect
+						// is just "drop the old edge, draw the new one":
+						// `onRemoveEdge` then `onConnect`, the same two
+						// primitives everything else on the canvas already
+						// goes through.
+						onReconnect={(oldEdge, newConnection) => {
+							if (!newConnection.source || !newConnection.target) return
+							onRemoveEdge(oldEdge.source, oldEdge.target)
+							onConnect(newConnection.source, newConnection.target)
+						}}
+						onNodeClick={(_, node) => {
+							if (node.id === START_NODE_ID) return
+							onSelectConnector(node.id)
+						}}
+						onEdgeClick={(_, edge) => onSelectEdge(edge.source, edge.target)}
+						onPaneClick={() => {
+							onDeselect()
+							setContextMenu(null)
+						}}
+						onNodeContextMenu={(event, node) => {
+							if (node.id === START_NODE_ID) return
+							event.preventDefault()
+							setContextMenu({
+								type: 'node',
+								id: node.id,
+								x: event.clientX,
+								y: event.clientY,
+							})
+						}}
+						onEdgeContextMenu={(event, edge) => {
+							event.preventDefault()
+							const branchEdge = edge as BranchEdge
+							setContextMenu({
+								type: 'edge',
+								from: branchEdge.source,
+								to: branchEdge.target,
+								branch: branchEdge.data?.branch ?? null,
+								x: event.clientX,
+								y: event.clientY,
+							})
+						}}
+						onPaneContextMenu={(event) => {
+							event.preventDefault()
+							setContextMenu({
+								type: 'pane',
+								x: (event as MouseEvent).clientX,
+								y: (event as MouseEvent).clientY,
+							})
+						}}
+						onMoveStart={() => setContextMenu(null)}
+						nodeTypes={nodeTypes}
+						defaultEdgeOptions={{ deletable: true }}
+						fitView
+					>
+						<Background gap={24} />
+						<Controls />
+					</ReactFlow>
 				</div>
 			)}
 
@@ -745,50 +742,6 @@ function ContextMenu({
 	)
 }
 
-function Palette({
-	families,
-	onAddConnector,
-}: {
-	families: PaletteFamily[]
-	onAddConnector: (kind: string) => void
-}) {
-	return (
-		<SectionCard className="h-[calc(100vh-19rem)] min-h-[560px] w-64 shrink-0 overflow-y-auto">
-			<SectionHeader
-				title="Connecteurs"
-				description="Cliquez pour ajouter, ou faites glisser depuis le « + » d’un connecteur existant."
-			/>
-			<div className="flex flex-col gap-4 p-4">
-				{families.map((group) => (
-					<div key={group.family} className="flex flex-col gap-1">
-						<p className="px-2 text-xs font-semibold uppercase text-muted-foreground">
-							{group.family}
-						</p>
-						{group.connectors.map((connector) => (
-							<button
-								key={connector.kind}
-								type="button"
-								className="flex items-center gap-2 rounded-md px-2 py-2 text-left text-sm hover:bg-muted"
-								onClick={() => onAddConnector(connector.kind)}
-							>
-								<span
-									className={cn(
-										'flex size-6 shrink-0 items-center justify-center rounded-md text-[10px] font-semibold',
-										badgeColorFor(group.family),
-									)}
-								>
-									{group.family.charAt(0).toUpperCase()}
-								</span>
-								<span className="truncate">{connector.label}</span>
-							</button>
-						))}
-					</div>
-				))}
-			</div>
-		</SectionCard>
-	)
-}
-
 export interface ConnectorConfigContentProps {
 	panel: ConnectorPanelData
 	onFieldChange: (fieldName: string, value: unknown) => void
@@ -909,7 +862,6 @@ function useCanvasState({
 	selection,
 	families,
 	rootConnectorIds,
-	onAddConnector,
 	onAddConnectorFrom,
 	onDuplicateConnector,
 	onRemoveConnector,
@@ -929,7 +881,6 @@ function useCanvasState({
 	selection: EditorSelection | null
 	families: PaletteFamily[]
 	rootConnectorIds: string[]
-	onAddConnector: (kind: string) => void
 	onAddConnectorFrom: (fromId: string, kind: string) => void
 	onDuplicateConnector: (connectorId: string) => void
 	onRemoveConnector: (connectorId: string) => void
@@ -990,7 +941,10 @@ function useCanvasState({
 					y: startHeight / 2,
 				},
 			],
-			data: { families, onAddFrom: onAddConnector },
+			data: {
+				families,
+				onAddFrom: (kind: string) => onAddConnectorFrom(START_NODE_ID, kind),
+			},
 		}
 
 		setRfNodes([

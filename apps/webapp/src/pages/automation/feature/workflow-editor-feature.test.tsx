@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { fireEvent, screen, waitFor } from '@testing-library/react'
+import { fireEvent, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import type { ReactNode } from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -202,7 +202,7 @@ describe('WorkflowEditorFeature — adding and saving a connector', () => {
 		vi.restoreAllMocks()
 	})
 
-	it('adds a connector from the palette and saves it in the graph', async () => {
+	it('adds a connector from the Start node and saves it in the graph', async () => {
 		const user = userEvent.setup()
 		const { calls } = await renderFeature({
 			saveVersion: (params) => ({
@@ -216,7 +216,9 @@ describe('WorkflowEditorFeature — adding and saving a connector', () => {
 		})
 
 		await screen.findByText('Relance devis')
-		await user.click(screen.getByText('Requête HTTP'))
+		await user.click(screen.getByTitle('Ajouter le premier connecteur'))
+		const searchList = screen.getByTestId('connector-search-list')
+		await user.click(within(searchList).getByText('Requête HTTP'))
 		await user.click(screen.getByRole('button', { name: 'Enregistrer' }))
 
 		await waitFor(() => {
@@ -249,7 +251,7 @@ describe('WorkflowEditorFeature — editing a placed connector', () => {
 		})
 
 		await screen.findByText('Relance devis')
-		fireEvent.click(screen.getAllByText('Requête HTTP')[1])
+		fireEvent.click(screen.getByText('Requête HTTP'))
 
 		expect(await screen.findByLabelText('URL')).toBeDefined()
 	})
@@ -287,10 +289,43 @@ describe('WorkflowEditorFeature — structured save error', () => {
 		})
 
 		await screen.findByText('Relance devis')
-		fireEvent.click(screen.getAllByText('Requête HTTP')[1])
+		fireEvent.click(screen.getByText('Requête HTTP'))
 		await user.click(screen.getByRole('button', { name: 'Enregistrer' }))
 
 		expect(await screen.findByText('URL requise')).toBeDefined()
+	})
+})
+
+describe('WorkflowEditorFeature — Start node linking', () => {
+	afterEach(() => {
+		vi.restoreAllMocks()
+	})
+
+	it("shows the workflow's existing entry point connected to Start, but not a connector just dropped via right-click", async () => {
+		const user = userEvent.setup()
+		const { container } = await renderFeature({
+			workflow: workflowDetail({
+				connectors: [
+					{ id: 'c1', kind: 'http.request', version: 1, config: {} },
+				],
+				edges: [],
+			}),
+		})
+
+		await screen.findByText('Relance devis')
+		// `c1` is the workflow's only connector, loaded with no incoming edge
+		// — seeded as the Start node's target on open.
+		expect(container.querySelectorAll('.react-flow__edge')).toHaveLength(1)
+
+		const pane = container.querySelector('.react-flow__pane')
+		if (!pane) throw new Error('pane not found')
+		fireEvent.contextMenu(pane)
+		const searchList = screen.getByTestId('connector-search-list')
+		await user.click(within(searchList).getByText('Requête HTTP'))
+
+		// The newly dropped connector has no incoming edge either, but it
+		// was never explicitly tied to Start — still exactly one edge.
+		expect(container.querySelectorAll('.react-flow__edge')).toHaveLength(1)
 	})
 })
 

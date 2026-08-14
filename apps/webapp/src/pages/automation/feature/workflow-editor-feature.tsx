@@ -37,7 +37,10 @@ import type {
 	EditorSelection,
 	PaletteFamily,
 } from '#/pages/automation/ui/workflow-editor-ui'
-import { WorkflowEditorUI } from '#/pages/automation/ui/workflow-editor-ui'
+import {
+	START_NODE_ID,
+	WorkflowEditorUI,
+} from '#/pages/automation/ui/workflow-editor-ui'
 import {
 	buildCredentialFormErrors,
 	emptyCredentialForm,
@@ -96,10 +99,22 @@ function WorkflowEditor({
 	// current version, never re-seeded from a background refetch: that
 	// would silently discard whatever the user is mid-editing.
 	const [graph, setGraph] = useState<Graph | null>(null)
+	// Which root connectors the Start pseudo-node draws its (purely visual,
+	// never-saved) edge to. Seeded from whatever the loaded graph's roots
+	// already are — the workflow's existing entry point(s), so reopening an
+	// established workflow still shows them connected to Start. A connector
+	// added *afterwards* only joins this set via Start's own "+" button
+	// (`handleAddConnectorFrom`'s `START_NODE_ID` case): a right-click "add
+	// connector" on the empty pane deliberately does not, so dropping an
+	// unrelated, not-yet-wired connector never makes it look connected to
+	// the workflow's trigger by accident.
+	const [startLinkedIds, setStartLinkedIds] = useState<Set<string>>(new Set())
 	const seededWorkflowId = useRef<string | null>(null)
 	useEffect(() => {
 		if (workflow && seededWorkflowId.current !== workflow.id) {
-			setGraph(workflow.current_version?.graph ?? EMPTY_GRAPH)
+			const initialGraph = workflow.current_version?.graph ?? EMPTY_GRAPH
+			setGraph(initialGraph)
+			setStartLinkedIds(new Set(rootConnectorIds(initialGraph)))
 			seededWorkflowId.current = workflow.id
 		}
 	}, [workflow])
@@ -147,7 +162,11 @@ function WorkflowEditor({
 
 	/** The node's own "+" button, and the right-click "Ajouter après" — adds
 	 * the connector and wires it in one step, rather than leaving the user
-	 * to draw the edge by hand afterwards. */
+	 * to draw the edge by hand afterwards. `fromId` can also be
+	 * `START_NODE_ID` (the Start pseudo-node's own "+"): Start isn't a real
+	 * connector, so there is no edge to draw — the new connector just joins
+	 * `startLinkedIds` instead, which is what actually draws its (visual
+	 * only) line from Start. */
 	function handleAddConnectorFrom(fromId: string, kind: string) {
 		const descriptor = catalogue.find((candidate) => candidate.kind === kind)
 		if (!descriptor) return
@@ -158,12 +177,17 @@ function WorkflowEditor({
 			config: {},
 			credential_id: null,
 		}
-		updateGraph((current) =>
-			addEdge(addConnector(current, connector), {
-				from: fromId,
-				to: connector.id,
-			}),
-		)
+		if (fromId === START_NODE_ID) {
+			updateGraph((current) => addConnector(current, connector))
+			setStartLinkedIds((current) => new Set(current).add(connector.id))
+		} else {
+			updateGraph((current) =>
+				addEdge(addConnector(current, connector), {
+					from: fromId,
+					to: connector.id,
+				}),
+			)
+		}
 		setSelection({ type: 'connector', id: connector.id })
 		setExpressionTargetField(null)
 	}
@@ -433,7 +457,9 @@ function WorkflowEditor({
 				onSave={() => void handleSave()}
 				families={families}
 				onAddConnector={handleAddConnector}
-				rootConnectorIds={rootConnectorIds(effectiveGraph)}
+				rootConnectorIds={rootConnectorIds(effectiveGraph).filter((id) =>
+					startLinkedIds.has(id),
+				)}
 				nodes={nodes}
 				edges={edges}
 				positions={layoutPositions(effectiveGraph)}
