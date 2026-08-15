@@ -73,10 +73,14 @@ function isValidTime(value: string): boolean {
 /**
  * Mirrors the backend's own checks (`chk_tasks_root_has_dates`,
  * `chk_tasks_dates_both_or_neither`, `chk_tasks_ends_at_after_starts_at`,
- * `chk_tasks_customer_both_or_neither`) ahead of a round-trip — see
+ * `chk_tasks_context_requires_customer`) ahead of a round-trip — see
  * `libs/core/src/domain/task/service.rs`'s `validate_task_dates`/
  * `validate_customer_pairing`, which this deliberately parallels without
- * importing (this workstream does not own that file).
+ * importing (this workstream does not own that file). A customer with no
+ * context is valid (linked to a client, no particular site yet); a context
+ * with no customer is not reachable through the form (the context picker
+ * only ever renders once a customer is chosen — see `ui/task-form-fields.tsx`)
+ * but is still rejected here defensively, mirroring the backend exactly.
  */
 export function validateTaskDraft(
 	values: TaskFormValues,
@@ -111,8 +115,8 @@ export function validateTaskDraft(
 		}
 	}
 
-	if (Boolean(values.customerId) !== Boolean(values.customerContextId)) {
-		errors.push('Sélectionnez un contexte pour ce client')
+	if (values.customerContextId && !values.customerId) {
+		errors.push('Un contexte requiert un client')
 	}
 
 	return errors

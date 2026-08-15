@@ -100,6 +100,45 @@ describe('TaskFormFields — client', () => {
 		render(<TaskFormFields {...baseProps()} mode="edit" customerName={null} />)
 		expect(screen.getByText(/Aucun client/)).toBeDefined()
 	})
+
+	it('offers an explicit "aucun" choice back to no customer', async () => {
+		const user = userEvent.setup()
+		const onChange = vi.fn()
+		render(
+			<TaskFormFields
+				{...baseProps()}
+				onChange={onChange}
+				values={{ ...baseProps().values, customerId: 'cust-1' }}
+			/>,
+		)
+
+		await user.click(screen.getByLabelText('Client'))
+		await user.click(
+			screen.getByRole('option', { name: /Aucun — réunion, déplacement/ }),
+		)
+
+		expect(onChange).toHaveBeenCalledWith({
+			customerId: '',
+			customerContextId: '',
+		})
+	})
+
+	it('a context is optional even once a customer is picked', async () => {
+		const user = userEvent.setup()
+		render(
+			<TaskFormFields
+				{...baseProps()}
+				values={{ ...baseProps().values, customerId: 'cust-1' }}
+			/>,
+		)
+
+		expect(screen.getByLabelText('Contexte')).toBeDefined()
+
+		await user.click(screen.getByLabelText('Contexte'))
+		expect(
+			screen.getByRole('option', { name: 'Aucun contexte précis' }),
+		).toBeDefined()
+	})
 })
 
 describe('TaskFormFields — subtask', () => {

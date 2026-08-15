@@ -80,9 +80,17 @@ describe('validateTaskDraft', () => {
 		expect(errors).toEqual([])
 	})
 
-	it('rejects a customer without a customer context', () => {
+	it('accepts a customer without a customer context', () => {
 		const errors = validateTaskDraft(
 			rootDraft({ customerId: 'cust-1', customerContextId: '' }),
+			{ isSubtask: false },
+		)
+		expect(errors).toEqual([])
+	})
+
+	it('rejects a customer context without a customer', () => {
+		const errors = validateTaskDraft(
+			rootDraft({ customerId: '', customerContextId: 'ctx-1' }),
 			{ isSubtask: false },
 		)
 		expect(errors.length).toBeGreaterThan(0)
@@ -160,6 +168,16 @@ describe('buildCreateTaskPayload — with a customer', () => {
 
 		expect(payload?.customer_id).toBe('cust-1')
 		expect(payload?.customer_context_id).toBe('ctx-1')
+	})
+
+	it('sends customer_id with a null customer_context_id when no context was picked', () => {
+		const payload = buildCreateTaskPayload(
+			rootDraft({ customerId: 'cust-1', customerContextId: '' }),
+			{ parentTaskId: null, timeZone: TIME_ZONE },
+		)
+
+		expect(payload?.customer_id).toBe('cust-1')
+		expect(payload?.customer_context_id).toBeNull()
 	})
 })
 

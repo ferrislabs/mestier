@@ -23,6 +23,12 @@ import {
 	type LabelPickerOption,
 } from '#/pages/planning/ui/label-picker'
 
+// Radix `Select.Item` forbids an empty-string `value` (reserved to mean
+// "cleared"), so the "no customer"/"no context" choices each need a
+// sentinel — mapped back to `''` in their own `onValueChange` below, which
+// is what `TaskFormValues`/`validateTaskDraft` actually key on.
+const NO_SELECTION = '__none__'
+
 export interface TaskFormFieldsProps {
 	mode: 'create' | 'edit'
 	/** Whether this draft is (or will become) a subtask — governs whether dates are required and whether the inherited-window placeholder applies. */
@@ -102,9 +108,12 @@ export function TaskFormFields({
 					<div className="flex flex-col gap-2">
 						<Label htmlFor="task-customer">Client</Label>
 						<Select
-							value={values.customerId}
+							value={values.customerId || NO_SELECTION}
 							onValueChange={(customerId) =>
-								onChange({ customerId, customerContextId: '' })
+								onChange({
+									customerId: customerId === NO_SELECTION ? '' : customerId,
+									customerContextId: '',
+								})
 							}
 						>
 							<SelectTrigger
@@ -112,9 +121,12 @@ export function TaskFormFields({
 								aria-label="Client"
 								className="w-full"
 							>
-								<SelectValue placeholder="Aucun — réunion, déplacement…" />
+								<SelectValue />
 							</SelectTrigger>
 							<SelectContent>
+								<SelectItem value={NO_SELECTION}>
+									Aucun — réunion, déplacement…
+								</SelectItem>
 								{customers.map((customer) => (
 									<SelectItem key={customer.id} value={customer.id}>
 										{customer.displayName}
@@ -128,9 +140,14 @@ export function TaskFormFields({
 						<div className="flex flex-col gap-2">
 							<Label htmlFor="task-customer-context">Contexte</Label>
 							<Select
-								value={values.customerContextId}
+								value={values.customerContextId || NO_SELECTION}
 								onValueChange={(customerContextId) =>
-									onChange({ customerContextId })
+									onChange({
+										customerContextId:
+											customerContextId === NO_SELECTION
+												? ''
+												: customerContextId,
+									})
 								}
 								disabled={isCustomerContextsLoading}
 							>
@@ -139,9 +156,12 @@ export function TaskFormFields({
 									aria-label="Contexte"
 									className="w-full"
 								>
-									<SelectValue placeholder="Choisir un contexte" />
+									<SelectValue />
 								</SelectTrigger>
 								<SelectContent>
+									<SelectItem value={NO_SELECTION}>
+										Aucun contexte précis
+									</SelectItem>
 									{customerContexts.map((context) => (
 										<SelectItem key={context.id} value={context.id}>
 											{context.label}
