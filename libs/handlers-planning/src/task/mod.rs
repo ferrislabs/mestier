@@ -15,6 +15,7 @@ use serde::Deserialize;
 
 use crate::require_org_membership;
 
+pub mod bulk_assign;
 pub mod create;
 pub mod get_one;
 pub mod list;
@@ -32,11 +33,24 @@ pub fn router(_state: &AppState) -> Router<AppState> {
         .typed_get(get_one::handler)
         .typed_patch(update::handler)
         .typed_delete(soft_delete::handler)
+        .typed_post(bulk_assign::handler)
 }
 
 #[derive(TypedPath, Deserialize)]
 #[typed_path("/api/v1/organizations/{organization_id}/tasks")]
 pub struct TasksPath {
+    pub organization_id: mestier_core::OrganizationId,
+}
+
+/// A distinct literal path rather than a query/body flag on `TasksPath`'s
+/// own `POST` (`create`): a bulk operation has a different shape end to
+/// end (a list of ids in, a list of tasks out) and a different failure
+/// contract (all-or-nothing across many tasks, not one task's validation).
+/// Static segments win over `{task_id}` in axum's router, so this never
+/// collides with `TaskPath`.
+#[derive(TypedPath, Deserialize)]
+#[typed_path("/api/v1/organizations/{organization_id}/tasks/bulk-assign")]
+pub struct TasksBulkAssignPath {
     pub organization_id: mestier_core::OrganizationId,
 }
 

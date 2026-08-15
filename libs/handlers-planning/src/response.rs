@@ -133,6 +133,14 @@ pub struct PatchTaskResponse {
     pub task: TaskResponse,
 }
 
+/// Response body for the bulk-assignment endpoint: every task named in the
+/// request, as it stands after the same `assignees` set was applied to all
+/// of them in one transaction.
+#[derive(Debug, Clone, PartialEq, Serialize, ToSchema)]
+pub struct BulkAssignTasksResponse {
+    pub tasks: Vec<TaskResponse>,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

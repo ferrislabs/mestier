@@ -32,6 +32,8 @@ const TASK_LABELS_PATH = '/api/v1/organizations/{organization_id}/task-labels'
 const CUSTOMERS_PATH = '/api/v1/organizations/{organization_id}/customers'
 const TASK_COMMENTS_PATH =
 	'/api/v1/organizations/{organization_id}/tasks/{task_id}/comments'
+const BULK_ASSIGN_TASKS_PATH =
+	'/api/v1/organizations/{organization_id}/tasks/bulk-assign'
 
 const ORGANIZATION: Organization = {
 	id: 'org-1',
@@ -405,6 +407,71 @@ describe('TaskListFeature — full day', () => {
 		const subtaskRow = await screen.findByTestId('subtask-row-sub-1')
 		expect(subtaskRow.textContent).toContain('10/08/2026')
 		expect(subtaskRow.textContent).not.toContain('00:00')
+	})
+})
+
+describe('TaskListFeature — bulk assign', () => {
+	it('shows the bulk-assign bar once a row is selected, and hides it again on cancel', async () => {
+		renderFeature((api) => api.mockGet(TASKS_PATH, tasksHandler([task()])))
+
+		await screen.findByText('Chantier toiture')
+		expect(screen.queryByText(/tâche sélectionnée/)).toBeNull()
+
+		const user = userEvent.setup()
+		await user.click(
+			screen.getByRole('checkbox', { name: 'Sélectionner Chantier toiture' }),
+		)
+		expect(await screen.findByText('1 tâche sélectionnée')).toBeDefined()
+
+		await user.click(screen.getByRole('button', { name: 'Annuler' }))
+		expect(screen.queryByText(/tâche sélectionnée/)).toBeNull()
+	})
+
+	it('applies the picked assignees to every selected task in one request, then clears the selection', async () => {
+		const { calls } = renderFeature((api) => {
+			api.mockGet(
+				TASKS_PATH,
+				tasksHandler([
+					task(),
+					task({ id: 'root-2', title: 'Réunion chantier' }),
+				]),
+			)
+			api.mockMutation('post', BULK_ASSIGN_TASKS_PATH, () => ({
+				data: { tasks: [] },
+			}))
+		})
+
+		await screen.findByText('Chantier toiture')
+		const user = userEvent.setup()
+
+		// Select both rows, then open the picker and pick the one available
+		// resource.
+		await user.click(
+			screen.getByRole('checkbox', { name: 'Sélectionner Chantier toiture' }),
+		)
+		await user.click(
+			screen.getByRole('checkbox', { name: 'Sélectionner Réunion chantier' }),
+		)
+		await user.click(screen.getByRole('button', { name: /Personne assigné/ }))
+		await user.click(screen.getByRole('option', { name: 'Alix Martin' }))
+		await user.click(screen.getByRole('button', { name: 'Assigner' }))
+
+		await waitFor(() => {
+			const call = calls.find((c) => c.path === BULK_ASSIGN_TASKS_PATH)
+			expect(call).toBeDefined()
+		})
+		const bulkCall = calls.find((c) => c.path === BULK_ASSIGN_TASKS_PATH)
+		expect(bulkCall?.params).toMatchObject({
+			path: { organization_id: 'org-1' },
+			body: { assignees: [{ member_id: 'member-1' }] },
+		})
+		const taskIds = (bulkCall?.params as { body: { task_ids: string[] } }).body
+			.task_ids
+		expect(new Set(taskIds)).toEqual(new Set(['root-1', 'root-2']))
+
+		await waitFor(() => {
+			expect(screen.queryByText(/tâche sélectionnée/)).toBeNull()
+		})
 	})
 })
 

@@ -2,12 +2,17 @@ import { AlertCircle } from 'lucide-react'
 import { useState } from 'react'
 import { useActiveOrganization } from '#/hooks/use-active-organization'
 import { usePlanning } from '#/hooks/use-planning'
-import { useRootTasks, useSubtasks } from '#/hooks/use-tasks'
+import {
+	useBulkAssignTasks,
+	useRootTasks,
+	useSubtasks,
+} from '#/hooks/use-tasks'
 import {
 	TaskSheetFeature,
 	type TaskSheetTarget,
 } from '#/pages/planning/feature/task-sheet-feature'
 import { resolveDisplayWindow } from '#/pages/planning/lib/subtasks'
+import { assigneeRefFromResourceId } from '#/pages/planning/lib/task-drop'
 import {
 	canGoToNextPage,
 	canGoToPreviousPage,
@@ -19,6 +24,7 @@ import {
 } from '#/pages/planning/lib/task-list'
 import { computeWindow } from '#/pages/planning/lib/window'
 import { todayIsoDate } from '#/pages/planning/types'
+import { BulkAssignBar } from '#/pages/planning/ui/bulk-assign-bar'
 import { TaskListSubtaskRows } from '#/pages/planning/ui/task-list-subtask-rows'
 import {
 	type TaskListRowVM,
@@ -93,6 +99,38 @@ function TaskListScreen({
 	const [taskSheetTarget, setTaskSheetTarget] =
 		useState<TaskSheetTarget | null>(null)
 
+	const [selectedTaskIds, setSelectedTaskIds] = useState<string[]>([])
+	const [draftAssigneeResourceIds, setDraftAssigneeResourceIds] = useState<
+		string[]
+	>([])
+	const [bulkAssignError, setBulkAssignError] = useState<string | null>(null)
+	const bulkAssignTasks = useBulkAssignTasks()
+	const assigneeOptions = resources.map((resource) => ({
+		resourceId: resource.resource_id,
+		displayName: resource.display_name,
+	}))
+
+	function resetBulkAssignDraft() {
+		setSelectedTaskIds([])
+		setDraftAssigneeResourceIds([])
+		setBulkAssignError(null)
+	}
+
+	async function handleApplyBulkAssign() {
+		try {
+			await bulkAssignTasks.mutateAsync({
+				path: { organization_id: organizationId },
+				body: {
+					task_ids: selectedTaskIds,
+					assignees: draftAssigneeResourceIds.map(assigneeRefFromResourceId),
+				},
+			})
+			resetBulkAssignDraft()
+		} catch (error) {
+			setBulkAssignError(errorMessage(error))
+		}
+	}
+
 	const rows: TaskListRowVM[] = rootTasks.map((task) => ({
 		id: task.id,
 		title: task.title,
@@ -164,6 +202,41 @@ function TaskListScreen({
 			onOpenTask={(taskId) => setTaskSheetTarget({ mode: 'edit', taskId })}
 			onCreateTask={() =>
 				setTaskSheetTarget({ mode: 'create', parentTaskId: null })
+			}
+			selectedTaskIds={selectedTaskIds}
+			onToggleRowSelection={(taskId) =>
+				setSelectedTaskIds((current) =>
+					current.includes(taskId)
+						? current.filter((id) => id !== taskId)
+						: [...current, taskId],
+				)
+			}
+			onToggleSelectAll={() => {
+				const rowIds = rows.map((row) => row.id)
+				const isAllSelected =
+					rowIds.length > 0 &&
+					rowIds.every((id) => selectedTaskIds.includes(id))
+				setSelectedTaskIds(isAllSelected ? [] : rowIds)
+			}}
+			bulkAssignBar={
+				selectedTaskIds.length > 0 ? (
+					<BulkAssignBar
+						selectedCount={selectedTaskIds.length}
+						assigneeOptions={assigneeOptions}
+						draftResourceIds={draftAssigneeResourceIds}
+						onToggleDraftAssignee={(resourceId) =>
+							setDraftAssigneeResourceIds((current) =>
+								current.includes(resourceId)
+									? current.filter((id) => id !== resourceId)
+									: [...current, resourceId],
+							)
+						}
+						onApply={() => void handleApplyBulkAssign()}
+						onCancel={resetBulkAssignDraft}
+						isApplying={bulkAssignTasks.isPending}
+						error={bulkAssignError}
+					/>
+				) : null
 			}
 			taskSheet={
 				taskSheetTarget ? (
@@ -256,4 +329,9 @@ function taskSheetTargetKey(target: TaskSheetTarget): string {
 	return target.mode === 'create'
 		? `create:${target.parentTaskId ?? 'root'}`
 		: `edit:${target.taskId}`
+}
+
+function errorMessage(error: unknown): string {
+	if (error instanceof Error) return error.message
+	return "L'enregistrement a échoué. Réessayez."
 }

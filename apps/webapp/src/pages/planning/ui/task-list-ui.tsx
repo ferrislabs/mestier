@@ -8,6 +8,7 @@ import {
 import { Fragment, type ReactNode } from 'react'
 import type { Schemas } from '#/api/api.client'
 import { Button } from '#/components/ui/button'
+import { Checkbox } from '#/components/ui/checkbox'
 import {
 	PageHeader,
 	PageShell,
@@ -73,6 +74,18 @@ export interface TaskListUIProps {
 	 * for its own `taskSheet` slot.
 	 */
 	taskSheet?: ReactNode
+	/** Root task ids currently selected for a bulk action — only ids of rows on the current page can ever appear checked, but a task id from another page stays selected across paging. */
+	selectedTaskIds: string[]
+	onToggleRowSelection: (taskId: string) => void
+	/** Selects every root row on the current page, or clears them if all are already selected. */
+	onToggleSelectAll: () => void
+	/**
+	 * The bulk-assign action bar, mounted by the feature layer once at least
+	 * one row is selected — same seam as `taskSheet`: this component only
+	 * ever renders the node it's handed, never the picker or the mutation
+	 * itself.
+	 */
+	bulkAssignBar?: ReactNode
 }
 
 const STATUS_TONE: Record<
@@ -107,7 +120,13 @@ export function TaskListUI({
 	onOpenTask,
 	onCreateTask,
 	taskSheet,
+	selectedTaskIds,
+	onToggleRowSelection,
+	onToggleSelectAll,
+	bulkAssignBar,
 }: TaskListUIProps) {
+	const isAllSelected =
+		rows.length > 0 && rows.every((row) => selectedTaskIds.includes(row.id))
 	return (
 		<PageShell>
 			<PageHeader
@@ -145,10 +164,18 @@ export function TaskListUI({
 				</SectionCard>
 			) : (
 				<SectionCard>
+					{bulkAssignBar}
 					<div className="overflow-x-auto">
 						<table className="w-full min-w-[880px] border-collapse text-sm">
 							<thead>
 								<tr className="border-b bg-muted/50">
+									<th className="w-10 px-5 py-3 text-left">
+										<Checkbox
+											aria-label="Sélectionner toutes les tâches"
+											checked={isAllSelected}
+											onCheckedChange={onToggleSelectAll}
+										/>
+									</th>
 									<th className="px-5 py-3 text-left text-xs font-semibold uppercase text-muted-foreground">
 										Tâche
 									</th>
@@ -169,7 +196,7 @@ export function TaskListUI({
 							<tbody>
 								{rows.length === 0 ? (
 									<tr>
-										<td colSpan={5} className="px-5 py-12 text-center">
+										<td colSpan={6} className="px-5 py-12 text-center">
 											<div className="mx-auto flex max-w-sm flex-col items-center gap-2">
 												<p className="font-medium">Aucune tâche trouvée</p>
 												<p className="text-sm text-muted-foreground">
@@ -193,6 +220,17 @@ export function TaskListUI({
 													}
 												}}
 											>
+												<td
+													className="px-5 py-3 align-middle"
+													onClick={(event) => event.stopPropagation()}
+													onKeyDown={(event) => event.stopPropagation()}
+												>
+													<Checkbox
+														aria-label={`Sélectionner ${row.title}`}
+														checked={selectedTaskIds.includes(row.id)}
+														onCheckedChange={() => onToggleRowSelection(row.id)}
+													/>
+												</td>
 												<td className="px-5 py-3 align-middle">
 													<div className="flex items-center gap-2">
 														{row.hasChildren ? (

@@ -58,6 +58,9 @@ function baseProps(overrides: Partial<TaskListUIProps> = {}): TaskListUIProps {
 		subtaskRowsByTaskId: {},
 		onOpenTask: vi.fn(),
 		onCreateTask: vi.fn(),
+		selectedTaskIds: [],
+		onToggleRowSelection: vi.fn(),
+		onToggleSelectAll: vi.fn(),
 		...overrides,
 	}
 }
@@ -182,6 +185,63 @@ describe('TaskListUI — ouverture', () => {
 			/>,
 		)
 		expect(screen.getByTestId('fake-sheet')).toBeDefined()
+	})
+})
+
+describe('TaskListUI — selection', () => {
+	it('calls onToggleRowSelection with the id, without opening the task', async () => {
+		const user = userEvent.setup()
+		const onToggleRowSelection = vi.fn()
+		const onOpenTask = vi.fn()
+		render(<TaskListUI {...baseProps({ onToggleRowSelection, onOpenTask })} />)
+
+		await user.click(
+			screen.getByRole('checkbox', { name: 'Sélectionner Chantier toiture' }),
+		)
+		expect(onToggleRowSelection).toHaveBeenCalledWith('root-1')
+		expect(onOpenTask).not.toHaveBeenCalled()
+	})
+
+	it('a selected row shows its checkbox checked', () => {
+		render(<TaskListUI {...baseProps({ selectedTaskIds: ['root-1'] })} />)
+
+		const checkbox = screen.getByRole('checkbox', {
+			name: 'Sélectionner Chantier toiture',
+		})
+		expect(checkbox.getAttribute('aria-checked')).toBe('true')
+	})
+
+	it('the select-all checkbox is checked once every row is selected', () => {
+		render(
+			<TaskListUI {...baseProps({ selectedTaskIds: ['root-1', 'root-2'] })} />,
+		)
+
+		const selectAll = screen.getByRole('checkbox', {
+			name: 'Sélectionner toutes les tâches',
+		})
+		expect(selectAll.getAttribute('aria-checked')).toBe('true')
+	})
+
+	it('calls onToggleSelectAll when the header checkbox is clicked', async () => {
+		const user = userEvent.setup()
+		const onToggleSelectAll = vi.fn()
+		render(<TaskListUI {...baseProps({ onToggleSelectAll })} />)
+
+		await user.click(
+			screen.getByRole('checkbox', { name: 'Sélectionner toutes les tâches' }),
+		)
+		expect(onToggleSelectAll).toHaveBeenCalledTimes(1)
+	})
+
+	it('renders the bulkAssignBar provided by the feature', () => {
+		render(
+			<TaskListUI
+				{...baseProps({
+					bulkAssignBar: <div data-testid="fake-bulk-assign-bar" />,
+				})}
+			/>,
+		)
+		expect(screen.getByTestId('fake-bulk-assign-bar')).toBeDefined()
 	})
 })
 
