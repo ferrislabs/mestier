@@ -3,9 +3,14 @@ import {
 	buildCreateTaskPayload,
 	buildFollowUpPatchPayload,
 	buildPatchTaskPayload,
+	calendarSelectionToDateRange,
+	dateRangeToCalendarSelection,
 	emptyTaskDraft,
+	formatDateRangeFr,
 	needsFollowUpPatch,
+	shiftEndTimeForNewStartTime,
 	taskToDraft,
+	timeOptionsWith,
 	validateTaskDraft,
 } from '#/pages/planning/lib/task-form'
 
@@ -80,9 +85,17 @@ describe('validateTaskDraft', () => {
 		expect(errors).toEqual([])
 	})
 
-	it('rejects a customer without a customer context', () => {
+	it('accepts a customer without a customer context', () => {
 		const errors = validateTaskDraft(
 			rootDraft({ customerId: 'cust-1', customerContextId: '' }),
+			{ isSubtask: false },
+		)
+		expect(errors).toEqual([])
+	})
+
+	it('rejects a customer context without a customer', () => {
+		const errors = validateTaskDraft(
+			rootDraft({ customerId: '', customerContextId: 'ctx-1' }),
 			{ isSubtask: false },
 		)
 		expect(errors.length).toBeGreaterThan(0)
@@ -160,6 +173,16 @@ describe('buildCreateTaskPayload — with a customer', () => {
 
 		expect(payload?.customer_id).toBe('cust-1')
 		expect(payload?.customer_context_id).toBe('ctx-1')
+	})
+
+	it('sends customer_id with a null customer_context_id when no context was picked', () => {
+		const payload = buildCreateTaskPayload(
+			rootDraft({ customerId: 'cust-1', customerContextId: '' }),
+			{ parentTaskId: null, timeZone: TIME_ZONE },
+		)
+
+		expect(payload?.customer_id).toBe('cust-1')
+		expect(payload?.customer_context_id).toBeNull()
 	})
 })
 
@@ -444,5 +467,121 @@ describe('taskToDraft', () => {
 
 		expect(draft.customerId).toBe('')
 		expect(draft.customerContextId).toBe('')
+	})
+})
+
+describe('timeOptionsWith', () => {
+	it('offers every half hour of the day', () => {
+		const options = timeOptionsWith('09:00')
+		expect(options[0]).toBe('00:00')
+		expect(options.at(-1)).toBe('23:30')
+		expect(options).toContain('09:00')
+		expect(options).toContain('14:30')
+	})
+
+	it('adds an odd value not already on the half-hour grid, without duplicating one that is', () => {
+		expect(timeOptionsWith('09:07')).toContain('09:07')
+		expect(
+			timeOptionsWith('09:00').filter((time) => time === '09:00'),
+		).toHaveLength(1)
+	})
+})
+
+describe('dateRangeToCalendarSelection / calendarSelectionToDateRange', () => {
+	it('round-trips a single-day range', () => {
+		const selection = dateRangeToCalendarSelection('2026-08-10', '2026-08-10')
+		expect(calendarSelectionToDateRange(selection)).toEqual({
+			startDate: '2026-08-10',
+			endDate: '2026-08-10',
+		})
+	})
+
+	it('round-trips a multi-day range', () => {
+		const selection = dateRangeToCalendarSelection('2026-08-10', '2026-08-14')
+		expect(calendarSelectionToDateRange(selection)).toEqual({
+			startDate: '2026-08-10',
+			endDate: '2026-08-14',
+		})
+	})
+
+	it('is undefined when either date is blank — a subtask inheriting its parent window', () => {
+		expect(dateRangeToCalendarSelection('', '')).toBeUndefined()
+		expect(dateRangeToCalendarSelection('2026-08-10', '')).toBeUndefined()
+	})
+
+	it('folds a from-only click (no `to` yet) into a one-day range', () => {
+		expect(
+			calendarSelectionToDateRange({ from: new Date('2026-08-10T00:00:00Z') }),
+		).toEqual({ startDate: '2026-08-10', endDate: '2026-08-10' })
+	})
+
+	it('is null with no selection at all', () => {
+		expect(calendarSelectionToDateRange(undefined)).toBeNull()
+	})
+})
+
+describe('formatDateRangeFr', () => {
+	it('shows one date for a single day', () => {
+		expect(formatDateRangeFr('2026-08-10', '2026-08-10')).toBe('10/08/2026')
+	})
+
+	it('shows a "from – to" range for a multi-day span', () => {
+		expect(formatDateRangeFr('2026-08-10', '2026-08-14')).toBe(
+			'10/08/2026 – 14/08/2026',
+		)
+	})
+})
+
+describe('shiftEndTimeForNewStartTime', () => {
+	it('preserves the duration on a single-day window', () => {
+		const shifted = shiftEndTimeForNewStartTime(
+			{
+				startDate: '2026-08-10',
+				endDate: '2026-08-10',
+				startTime: '09:00',
+				endTime: '10:00',
+			},
+			'11:00',
+		)
+		expect(shifted).toBe('12:00')
+	})
+
+	it('leaves the end time untouched on a multi-day window', () => {
+		const shifted = shiftEndTimeForNewStartTime(
+			{
+				startDate: '2026-08-10',
+				endDate: '2026-08-12',
+				startTime: '09:00',
+				endTime: '10:00',
+			},
+			'11:00',
+		)
+		expect(shifted).toBe('10:00')
+	})
+
+	it('leaves the end time untouched when the current window is already inverted', () => {
+		const shifted = shiftEndTimeForNewStartTime(
+			{
+				startDate: '2026-08-10',
+				endDate: '2026-08-10',
+				startTime: '10:00',
+				endTime: '09:00',
+			},
+			'11:00',
+		)
+		expect(shifted).toBe('09:00')
+	})
+
+	it('clamps to the last slot of the day instead of rolling into the next day', () => {
+		const shifted = shiftEndTimeForNewStartTime(
+			{
+				startDate: '2026-08-10',
+				endDate: '2026-08-10',
+				startTime: '22:00',
+				endTime: '23:00',
+			},
+			'23:30',
+		)
+		expect(shifted).toBe('23:45')
 	})
 })

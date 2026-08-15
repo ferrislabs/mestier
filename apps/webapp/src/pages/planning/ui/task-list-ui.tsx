@@ -166,10 +166,28 @@ export function TaskListUI({
 				<SectionCard>
 					{bulkAssignBar}
 					<div className="overflow-x-auto">
-						<table className="w-full min-w-[880px] border-collapse text-sm">
+						{/*
+						 * `table-fixed` plus an explicit `colgroup`, rather than the
+						 * default `table-layout: auto`: an auto table recomputes
+						 * every column's width from whatever rows are currently
+						 * rendered, so expanding a root's subtasks (different
+						 * content per column, e.g. a longer assignee list) shifted
+						 * every column's boundary — not just added rows. Fixed
+						 * layout takes its widths once, from this `colgroup`, and
+						 * never revisits them as rows come and go.
+						 */}
+						<table className="w-full min-w-[880px] table-fixed border-collapse text-sm">
+							<colgroup>
+								<col className="w-[5%]" />
+								<col className="w-[28%]" />
+								<col className="w-[15%]" />
+								<col className="w-[11%]" />
+								<col className="w-[20%]" />
+								<col className="w-[21%]" />
+							</colgroup>
 							<thead>
 								<tr className="border-b bg-muted/50">
-									<th className="w-10 px-5 py-3 text-left">
+									<th className="px-5 py-3 text-left">
 										<Checkbox
 											aria-label="Sélectionner toutes les tâches"
 											checked={isAllSelected}

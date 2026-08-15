@@ -451,16 +451,19 @@ fn validate_task_dates(
     Ok(())
 }
 
-/// Mirrors `chk_tasks_customer_both_or_neither`: a task with a customer
-/// carries both `customer_id` and `customer_context_id`, or neither.
+/// Mirrors `chk_tasks_context_requires_customer`: a `customer_context_id`
+/// always implies its `customer_id` — a customer_context belongs to exactly
+/// one customer, so naming one without the other makes no sense. The
+/// reverse is not required: a task may carry a `customer_id` with no
+/// `customer_context_id` at all — "linked to this client, no particular
+/// site yet" — distinct from no client (an internal task/meeting).
 fn validate_customer_pairing(
     customer_id: Option<CustomerId>,
     customer_context_id: Option<CustomerContextId>,
 ) -> Result<(), CoreError> {
-    if customer_id.is_some() != customer_context_id.is_some() {
+    if customer_context_id.is_some() && customer_id.is_none() {
         return Err(CoreError::Conflict(
-            "a task's customer_id and customer_context_id must be both set or both absent"
-                .to_owned(),
+            "a task's customer_context_id requires a customer_id".to_owned(),
         ));
     }
 
@@ -722,11 +725,36 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn create_task_rejects_a_customer_without_a_customer_context() {
-        let mut service = service(MockTaskRepository::new(), MockMemberRepository::new());
+    async fn create_task_allows_a_customer_without_a_customer_context() {
+        let mut task_repository = MockTaskRepository::new();
+        task_repository
+            .expect_insert()
+            .withf(|t| t.customer_id.is_some() && t.customer_context_id.is_none())
+            .returning(|t| {
+                let cloned = t.clone();
+                Box::pin(async move { Ok(cloned) })
+            });
+
+        let mut service = service(task_repository, MockMemberRepository::new());
 
         let mut command = create_command();
         command.customer_context_id = None;
+
+        let created = service.create_task(command).await.unwrap();
+
+        assert!(created.customer_id.is_some());
+        assert!(created.customer_context_id.is_none());
+    }
+
+    #[tokio::test]
+    async fn create_task_rejects_a_customer_context_without_a_customer() {
+        let mut service = service(MockTaskRepository::new(), MockMemberRepository::new());
+
+        let mut command = create_command();
+        command.customer_id = None;
+        // `customer_context_id` stays `Some(..)` from `create_command`'s default —
+        // a context always implies its customer, even though a customer no
+        // longer implies a context (see the sibling test just above).
 
         let err = service.create_task(command).await.unwrap_err();
 

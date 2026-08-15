@@ -22,6 +22,13 @@ import {
 	LabelPicker,
 	type LabelPickerOption,
 } from '#/pages/planning/ui/label-picker'
+import { TaskWindowFields } from '#/pages/planning/ui/task-window-fields'
+
+// Radix `Select.Item` forbids an empty-string `value` (reserved to mean
+// "cleared"), so the "no customer"/"no context" choices each need a
+// sentinel — mapped back to `''` in their own `onValueChange` below, which
+// is what `TaskFormValues`/`validateTaskDraft` actually key on.
+const NO_SELECTION = '__none__'
 
 export interface TaskFormFieldsProps {
 	mode: 'create' | 'edit'
@@ -102,9 +109,12 @@ export function TaskFormFields({
 					<div className="flex flex-col gap-2">
 						<Label htmlFor="task-customer">Client</Label>
 						<Select
-							value={values.customerId}
+							value={values.customerId || NO_SELECTION}
 							onValueChange={(customerId) =>
-								onChange({ customerId, customerContextId: '' })
+								onChange({
+									customerId: customerId === NO_SELECTION ? '' : customerId,
+									customerContextId: '',
+								})
 							}
 						>
 							<SelectTrigger
@@ -112,9 +122,12 @@ export function TaskFormFields({
 								aria-label="Client"
 								className="w-full"
 							>
-								<SelectValue placeholder="Aucun — réunion, déplacement…" />
+								<SelectValue />
 							</SelectTrigger>
 							<SelectContent>
+								<SelectItem value={NO_SELECTION}>
+									Aucun — réunion, déplacement…
+								</SelectItem>
 								{customers.map((customer) => (
 									<SelectItem key={customer.id} value={customer.id}>
 										{customer.displayName}
@@ -128,9 +141,14 @@ export function TaskFormFields({
 						<div className="flex flex-col gap-2">
 							<Label htmlFor="task-customer-context">Contexte</Label>
 							<Select
-								value={values.customerContextId}
+								value={values.customerContextId || NO_SELECTION}
 								onValueChange={(customerContextId) =>
-									onChange({ customerContextId })
+									onChange({
+										customerContextId:
+											customerContextId === NO_SELECTION
+												? ''
+												: customerContextId,
+									})
 								}
 								disabled={isCustomerContextsLoading}
 							>
@@ -139,9 +157,12 @@ export function TaskFormFields({
 									aria-label="Contexte"
 									className="w-full"
 								>
-									<SelectValue placeholder="Choisir un contexte" />
+									<SelectValue />
 								</SelectTrigger>
 								<SelectContent>
+									<SelectItem value={NO_SELECTION}>
+										Aucun contexte précis
+									</SelectItem>
 									{customerContexts.map((context) => (
 										<SelectItem key={context.id} value={context.id}>
 											{context.label}
@@ -165,7 +186,7 @@ export function TaskFormFields({
 				</div>
 			)}
 
-			<div className="flex items-center justify-between rounded-lg border p-3">
+			<div className="flex items-center justify-between rounded-lg border bg-card p-3">
 				<div>
 					<p className="text-sm font-medium">Journée entière</p>
 					<p className="text-xs text-muted-foreground">
@@ -179,61 +200,14 @@ export function TaskFormFields({
 				/>
 			</div>
 
-			<div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-				<div className="flex flex-col gap-2">
-					<Label htmlFor="task-start-date">Date de début</Label>
-					<Input
-						id="task-start-date"
-						type="date"
-						value={values.startDate}
-						placeholder={windowPlaceholder ?? undefined}
-						onChange={(event) => onChange({ startDate: event.target.value })}
-					/>
-				</div>
-				<div className="flex flex-col gap-2">
-					<Label htmlFor="task-end-date">Date de fin</Label>
-					<Input
-						id="task-end-date"
-						type="date"
-						value={values.endDate}
-						placeholder={windowPlaceholder ?? undefined}
-						onChange={(event) => onChange({ endDate: event.target.value })}
-					/>
-				</div>
-			</div>
+			<TaskWindowFields
+				values={values}
+				isSubtask={isSubtask}
+				windowPlaceholder={windowPlaceholder}
+				onChange={onChange}
+			/>
 
-			{!values.allDay ? (
-				<div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-					<div className="flex flex-col gap-2">
-						<Label htmlFor="task-start-time">Heure de début</Label>
-						<Input
-							id="task-start-time"
-							aria-label="Heure de début"
-							placeholder="09:00"
-							value={values.startTime}
-							onChange={(event) => onChange({ startTime: event.target.value })}
-						/>
-					</div>
-					<div className="flex flex-col gap-2">
-						<Label htmlFor="task-end-time">Heure de fin</Label>
-						<Input
-							id="task-end-time"
-							aria-label="Heure de fin"
-							placeholder="10:00"
-							value={values.endTime}
-							onChange={(event) => onChange({ endTime: event.target.value })}
-						/>
-					</div>
-				</div>
-			) : null}
-
-			{isSubtask && windowPlaceholder ? (
-				<p className="text-xs text-muted-foreground">
-					Laissez les dates vides pour hériter de la fenêtre du parent.
-				</p>
-			) : null}
-
-			<div className="flex items-center justify-between rounded-lg border p-3">
+			<div className="flex items-center justify-between rounded-lg border bg-card p-3">
 				<div>
 					<p className="text-sm font-medium">Rend indisponible</p>
 					<p className="text-xs text-muted-foreground">

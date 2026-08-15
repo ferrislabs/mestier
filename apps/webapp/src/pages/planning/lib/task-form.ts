@@ -1,5 +1,5 @@
 import { TZDate } from '@date-fns/tz'
-import { format } from 'date-fns'
+import { format, parseISO } from 'date-fns'
 import type { Schemas } from '#/api/api.client'
 import type { AssigneeRef } from '#/pages/planning/lib/task-drop'
 
@@ -62,7 +62,9 @@ export function emptyTaskDraft(options: {
 	}
 }
 
-function hasOwnDates(values: TaskFormValues): boolean {
+export function hasOwnDates(
+	values: Pick<TaskFormValues, 'startDate' | 'endDate'>,
+): boolean {
 	return values.startDate !== '' && values.endDate !== ''
 }
 
@@ -70,13 +72,119 @@ function isValidTime(value: string): boolean {
 	return /^([01]\d|2[0-3]):[0-5]\d$/.test(value.trim())
 }
 
+// ---------------------------------------------------------------------------
+// Date-range + time-of-day pickers (Google Calendar-style) — pure helpers
+// backing `ui/task-window-fields.tsx`.
+// ---------------------------------------------------------------------------
+
+/** Every pickable time-of-day, on the half-hour — mirrors Google Calendar's own event time dropdown. */
+export const TIME_OPTIONS: readonly string[] = Array.from(
+	{ length: 48 },
+	(_, index) => {
+		const totalMinutes = index * 30
+		const hours = Math.floor(totalMinutes / 60)
+		const minutes = totalMinutes % 60
+		return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`
+	},
+)
+
+/**
+ * `TIME_OPTIONS` plus `value` itself when it falls off the half-hour grid —
+ * a task created before this picker existed (or via a future API caller)
+ * may carry an odd minute, and the value must stay visible/selectable
+ * rather than silently vanishing from the list.
+ */
+export function timeOptionsWith(value: string): readonly string[] {
+	return TIME_OPTIONS.includes(value)
+		? TIME_OPTIONS
+		: [...TIME_OPTIONS, value].sort()
+}
+
+/** Feeds the `Calendar`'s `mode="range"` `selected` prop from the draft's own `startDate`/`endDate` strings — `undefined` while a subtask inherits (no dates of its own). */
+export function dateRangeToCalendarSelection(
+	startDate: string,
+	endDate: string,
+): { from: Date; to: Date } | undefined {
+	if (!startDate || !endDate) return undefined
+	return { from: parseISO(startDate), to: parseISO(endDate) }
+}
+
+/** The inverse of {@link dateRangeToCalendarSelection} — a single from-only click (no `to` yet) folds into a one-day range, mirroring `lib/absences.ts`'s `calendarSelectionToRange`. */
+export function calendarSelectionToDateRange(
+	selection: { from?: Date; to?: Date } | undefined,
+): { startDate: string; endDate: string } | null {
+	if (!selection?.from) return null
+	const startDate = format(selection.from, 'yyyy-MM-dd')
+	const endDate = selection.to ? format(selection.to, 'yyyy-MM-dd') : startDate
+	return { startDate, endDate }
+}
+
+/** `dd/MM/yyyy`, matching `apps/webapp/src/pages/hr/types.ts`'s own `formatDateFr` — duplicated rather than imported, since this workstream does not own that file. */
+function formatDateFr(iso: string): string {
+	return new Intl.DateTimeFormat('fr-FR', {
+		day: '2-digit',
+		month: '2-digit',
+		year: 'numeric',
+		timeZone: 'UTC',
+	}).format(new Date(`${iso}T00:00:00Z`))
+}
+
+/** The date-range trigger's label — a single day reads as one date, a real range as `from – to`. */
+export function formatDateRangeFr(startDate: string, endDate: string): string {
+	return startDate === endDate
+		? formatDateFr(startDate)
+		: `${formatDateFr(startDate)} – ${formatDateFr(endDate)}`
+}
+
+function timeToMinutes(time: string): number {
+	const [hours, minutes] = time.split(':').map(Number)
+	return hours * 60 + minutes
+}
+
+function minutesToTime(totalMinutes: number): string {
+	const clamped = Math.max(0, Math.min(23 * 60 + 45, totalMinutes))
+	const hours = Math.floor(clamped / 60)
+	const minutes = clamped % 60
+	return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`
+}
+
+/**
+ * Mirrors Google Calendar: editing the start time keeps the event's
+ * duration fixed by shifting the end time the same amount. Only for a
+ * single-day window (`startDate === endDate`) — a multi-day span's
+ * duration isn't a single time-of-day delta, so its end time is left
+ * untouched. A shift that would overflow past midnight clamps to the last
+ * slot of the day (23:45) rather than rolling into the next day, to avoid
+ * silently turning a single-day task into a multi-day one behind the
+ * user's back.
+ */
+export function shiftEndTimeForNewStartTime(
+	values: Pick<
+		TaskFormValues,
+		'startDate' | 'endDate' | 'startTime' | 'endTime'
+	>,
+	newStartTime: string,
+): string {
+	if (values.startDate !== values.endDate) return values.endTime
+
+	const durationMinutes =
+		timeToMinutes(values.endTime) - timeToMinutes(values.startTime)
+	if (durationMinutes <= 0) return values.endTime
+
+	return minutesToTime(timeToMinutes(newStartTime) + durationMinutes)
+}
+
 /**
  * Mirrors the backend's own checks (`chk_tasks_root_has_dates`,
  * `chk_tasks_dates_both_or_neither`, `chk_tasks_ends_at_after_starts_at`,
- * `chk_tasks_customer_both_or_neither`) ahead of a round-trip — see
+ * `chk_tasks_context_requires_customer`) ahead of a round-trip — see
  * `libs/core/src/domain/task/service.rs`'s `validate_task_dates`/
  * `validate_customer_pairing`, which this deliberately parallels without
- * importing (this workstream does not own that file).
+ * importing (this workstream does not own that file). A customer with no
+ * context is valid (linked to a client, no particular site yet); a context
+ * with no customer is not reachable through the form (the context picker
+ * only ever renders once a customer is chosen — see `ui/task-form-fields.tsx`)
+ * but is still rejected here defensively, mirroring the backend exactly.
  */
 export function validateTaskDraft(
 	values: TaskFormValues,
@@ -111,8 +219,8 @@ export function validateTaskDraft(
 		}
 	}
 
-	if (Boolean(values.customerId) !== Boolean(values.customerContextId)) {
-		errors.push('Sélectionnez un contexte pour ce client')
+	if (values.customerContextId && !values.customerId) {
+		errors.push('Un contexte requiert un client')
 	}
 
 	return errors

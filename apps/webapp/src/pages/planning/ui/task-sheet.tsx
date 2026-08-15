@@ -1,13 +1,13 @@
 import { Loader2, Trash2 } from 'lucide-react'
 import { Button } from '#/components/ui/button'
 import {
-	Sheet,
-	SheetContent,
-	SheetDescription,
-	SheetFooter,
-	SheetHeader,
-	SheetTitle,
-} from '#/components/ui/sheet'
+	Dialog,
+	DialogContent,
+	DialogDescription,
+	DialogFooter,
+	DialogHeader,
+	DialogTitle,
+} from '#/components/ui/dialog'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '#/components/ui/tabs'
 import {
 	CommentThread,
@@ -47,7 +47,7 @@ export interface TaskSheetProps {
 }
 
 /**
- * The task create/edit surface — a `Sheet` with an optional tab strip.
+ * The task create/edit surface — a `Dialog` with an optional tab strip.
  * Create mode never offers the "Sous-tâches"/"Commentaires" tabs: both
  * need a saved `task_id` the draft doesn't have yet (see the planning
  * remodel design doc). Pure presentation — all state and mutations live in
@@ -70,89 +70,86 @@ export function TaskSheet({
 	const hasTabs = mode === 'edit' && subtasksTab && commentsTab
 
 	return (
-		<Sheet open={open} onOpenChange={onOpenChange}>
-			<SheetContent className="w-full gap-0 overflow-y-auto sm:max-w-xl">
-				{/*
-				 * Deliberately not a <form>: the "Commentaires" tab renders
-				 * `CommentThread`, which owns its own composer <form> so its
-				 * "Envoyer" button submits independently of this sheet's
-				 * save action. Nesting that inside a sheet-wide <form> is
-				 * invalid HTML (a browser either hoists the inner form's
-				 * fields to the outer one or silently drops the tag,
-				 * behavior that differs across browsers) and risks a stray
-				 * click on "Envoyer" also saving the task fields. The save
-				 * button below is a plain button wired to `onSubmit`
-				 * instead.
-				 */}
-				<div className="flex min-h-0 flex-1 flex-col">
-					<SheetHeader className="border-b">
-						<SheetTitle>{title}</SheetTitle>
-						<SheetDescription>
-							Titre, dates, labels et assignés — la question de
-							l’indisponibilité est toujours posée, jamais devinée.
-						</SheetDescription>
-					</SheetHeader>
+		<Dialog open={open} onOpenChange={onOpenChange}>
+			{/*
+			 * Deliberately not a <form>: the "Commentaires" tab renders
+			 * `CommentThread`, which owns its own composer <form> so its
+			 * "Envoyer" button submits independently of this dialog's save
+			 * action. Nesting that inside a dialog-wide <form> is invalid
+			 * HTML (a browser either hoists the inner form's fields to the
+			 * outer one or silently drops the tag, behavior that differs
+			 * across browsers) and risks a stray click on "Envoyer" also
+			 * saving the task fields. The save button below is a plain
+			 * button wired to `onSubmit` instead.
+			 */}
+			<DialogContent className="flex max-h-[85vh] flex-col gap-0 overflow-hidden sm:max-w-xl">
+				<DialogHeader className="border-b pb-4">
+					<DialogTitle>{title}</DialogTitle>
+					<DialogDescription>
+						Titre, dates, labels et assignés — la question de l’indisponibilité
+						est toujours posée, jamais devinée.
+					</DialogDescription>
+				</DialogHeader>
 
-					<div className="flex-1 overflow-y-auto p-4">
-						{hasTabs ? (
-							<Tabs defaultValue="details">
-								<TabsList>
-									<TabsTrigger value="details">Détails</TabsTrigger>
-									<TabsTrigger value="subtasks">Sous-tâches</TabsTrigger>
-									<TabsTrigger value="comments">Commentaires</TabsTrigger>
-								</TabsList>
-								<TabsContent value="details" className="pt-4">
-									<TaskFormFields {...fields} />
-								</TabsContent>
-								<TabsContent value="subtasks" className="pt-4">
-									<SubtaskList {...subtasksTab} />
-								</TabsContent>
-								<TabsContent value="comments" className="pt-4">
-									<CommentThread {...commentsTab} />
-								</TabsContent>
-							</Tabs>
-						) : (
-							<TaskFormFields {...fields} />
-						)}
+				<div className="flex-1 overflow-y-auto py-4">
+					{hasTabs ? (
+						<Tabs defaultValue="details">
+							<TabsList>
+								<TabsTrigger value="details">Détails</TabsTrigger>
+								<TabsTrigger value="subtasks">Sous-tâches</TabsTrigger>
+								<TabsTrigger value="comments">Commentaires</TabsTrigger>
+							</TabsList>
+							<TabsContent value="details" className="pt-4">
+								<TaskFormFields {...fields} />
+							</TabsContent>
+							<TabsContent value="subtasks" className="pt-4">
+								<SubtaskList {...subtasksTab} />
+							</TabsContent>
+							<TabsContent value="comments" className="pt-4">
+								<CommentThread {...commentsTab} />
+							</TabsContent>
+						</Tabs>
+					) : (
+						<TaskFormFields {...fields} />
+					)}
 
-						{saveError ? (
-							<p className="mt-4 rounded-lg border border-destructive/30 bg-destructive-soft px-4 py-3 text-sm text-destructive">
-								{saveError}
-							</p>
-						) : null}
-					</div>
-
-					<SheetFooter className="border-t bg-background sm:flex-row sm:justify-between">
-						{mode === 'edit' && onDelete ? (
-							<Button
-								type="button"
-								variant="ghost"
-								className="text-destructive hover:text-destructive"
-								disabled={isDeleting}
-								onClick={onDelete}
-							>
-								{isDeleting ? <Loader2 className="animate-spin" /> : <Trash2 />}
-								Supprimer
-							</Button>
-						) : (
-							<span />
-						)}
-						<div className="flex gap-2">
-							<Button
-								type="button"
-								variant="ghost"
-								onClick={() => onOpenChange(false)}
-							>
-								Annuler
-							</Button>
-							<Button type="button" disabled={isSaving} onClick={onSubmit}>
-								{isSaving ? <Loader2 className="animate-spin" /> : null}
-								{mode === 'create' ? 'Créer' : 'Enregistrer'}
-							</Button>
-						</div>
-					</SheetFooter>
+					{saveError ? (
+						<p className="mt-4 rounded-lg border border-destructive/30 bg-destructive-soft px-4 py-3 text-sm text-destructive">
+							{saveError}
+						</p>
+					) : null}
 				</div>
-			</SheetContent>
-		</Sheet>
+
+				<DialogFooter className="border-t pt-4 sm:justify-between">
+					{mode === 'edit' && onDelete ? (
+						<Button
+							type="button"
+							variant="ghost"
+							className="text-destructive hover:text-destructive"
+							disabled={isDeleting}
+							onClick={onDelete}
+						>
+							{isDeleting ? <Loader2 className="animate-spin" /> : <Trash2 />}
+							Supprimer
+						</Button>
+					) : (
+						<span />
+					)}
+					<div className="flex gap-2">
+						<Button
+							type="button"
+							variant="ghost"
+							onClick={() => onOpenChange(false)}
+						>
+							Annuler
+						</Button>
+						<Button type="button" disabled={isSaving} onClick={onSubmit}>
+							{isSaving ? <Loader2 className="animate-spin" /> : null}
+							{mode === 'create' ? 'Créer' : 'Enregistrer'}
+						</Button>
+					</div>
+				</DialogFooter>
+			</DialogContent>
+		</Dialog>
 	)
 }

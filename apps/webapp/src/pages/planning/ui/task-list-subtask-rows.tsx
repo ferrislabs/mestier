@@ -35,7 +35,7 @@ export interface TaskListSubtaskRowsProps {
 }
 
 /** Column count of the root table this fills in under — kept in sync by hand with `ui/task-list-ui.tsx`'s `<thead>`. */
-const COLUMN_COUNT = 5
+const COLUMN_COUNT = 6
 
 /**
  * A root task's subtasks, rendered as extra `<tr>`s directly under its own
@@ -108,6 +108,11 @@ export function TaskListSubtaskRows({
 						}
 					}}
 				>
+					{/* Aligns under the root row's selection checkbox column — bulk
+					 * assignment only ever targets root tasks (see
+					 * `ui/task-list-ui.tsx`'s `TaskListUIProps.selectedTaskIds`
+					 * doc), so a subtask never gets a checkbox of its own. */}
+					<td aria-hidden="true" />
 					<td className="py-2 pr-5 pl-12">{subtask.title}</td>
 					<td className="px-5 py-2 align-middle">
 						<LabelPastilles labels={subtask.labels} />
