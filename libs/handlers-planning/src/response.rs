@@ -1,11 +1,40 @@
 use chrono::{DateTime, Utc};
 use mestier_core::{
-    CustomerContextId, CustomerId, MemberId, OrganizationId, QuoteId, Task, TaskId, TaskStatus,
+    CustomerContextId, CustomerId, Equipment, EquipmentId, MemberId, OrganizationId, QuoteId, Task,
+    TaskId, TaskStatus,
 };
 use serde::Serialize;
 use utoipa::ToSchema;
 
 use crate::task_label::TaskLabelResponse;
+
+/// The equipment attached to a task, embedded in `TaskResponse.equipment` —
+/// mirrors `TaskLabelResponse`'s own reasoning: the full object, not just an
+/// id, so the front can show name and hourly rate without a second call.
+/// Defined here rather than reused from `handlers-reference` (which owns
+/// equipment's own CRUD) since this crate does not depend on that one.
+#[derive(Debug, Clone, PartialEq, Serialize, ToSchema)]
+pub struct TaskEquipmentResponse {
+    pub id: EquipmentId,
+    pub organization_id: OrganizationId,
+    pub name: String,
+    pub hourly_rate_cents: i32,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+}
+
+impl From<Equipment> for TaskEquipmentResponse {
+    fn from(value: Equipment) -> Self {
+        Self {
+            id: value.id,
+            organization_id: value.organization_id,
+            name: value.name,
+            hourly_rate_cents: value.hourly_rate_cents,
+            created_at: value.created_at,
+            updated_at: value.updated_at,
+        }
+    }
+}
 
 #[derive(Debug, Clone, PartialEq, Serialize, ToSchema)]
 pub struct TaskResponse {
@@ -44,6 +73,11 @@ pub struct TaskResponse {
     /// `task::{create,get_one,list,update}` for how each of the four
     /// surfaces that return this type populates it.
     pub labels: Vec<TaskLabelResponse>,
+    /// The complete set of equipment currently attached to this task — same
+    /// reasoning as `labels`: always `[]`, never `null`, for a task with
+    /// none, and populated the same way (`Task` does not carry equipment
+    /// either, see `TaskEquipmentResponse`'s own doc comment).
+    pub equipment: Vec<TaskEquipmentResponse>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }
@@ -77,6 +111,10 @@ impl From<Task> for TaskResponse {
             // (a label link is only ever created by a later `PATCH`), so
             // `create.rs` leaves this default as is, no extra query.
             labels: Vec::new(),
+            // Same reasoning as `labels` just above: no caller populates
+            // equipment for a bare `Task`, and a task fresh out of `POST
+            // /tasks` cannot have any yet regardless.
+            equipment: Vec::new(),
             created_at: value.created_at,
             updated_at: value.updated_at,
         }
@@ -169,6 +207,52 @@ mod tests {
             serde_json::json!([]),
             "a task with no labels must serialize `labels` as `[]`, not `null`"
         );
+    }
+
+    #[test]
+    fn task_response_serializes_no_equipment_as_an_empty_array_not_null() {
+        let response: TaskResponse = task().into();
+        assert_eq!(response.equipment, Vec::new());
+
+        let value = serde_json::to_value(&response).unwrap();
+
+        assert_eq!(
+            value["equipment"],
+            serde_json::json!([]),
+            "a task with no equipment must serialize `equipment` as `[]`, not `null`"
+        );
+    }
+
+    #[test]
+    fn task_response_carries_both_equipment_of_a_two_equipment_task() {
+        let now = Utc::now();
+        let equipment_a = TaskEquipmentResponse {
+            id: "99999999-9999-9999-9999-999999999999".parse().unwrap(),
+            organization_id: "22222222-2222-2222-2222-222222222222".parse().unwrap(),
+            name: "Camion".to_owned(),
+            hourly_rate_cents: 1500,
+            created_at: now,
+            updated_at: now,
+        };
+        let equipment_b = TaskEquipmentResponse {
+            id: "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa".parse().unwrap(),
+            organization_id: "22222222-2222-2222-2222-222222222222".parse().unwrap(),
+            name: "Tondeuse".to_owned(),
+            hourly_rate_cents: 800,
+            created_at: now,
+            updated_at: now,
+        };
+
+        let response = TaskResponse {
+            equipment: vec![equipment_a.clone(), equipment_b.clone()],
+            ..task().into()
+        };
+
+        assert_eq!(response.equipment, vec![equipment_a, equipment_b]);
+
+        let value = serde_json::to_value(&response).unwrap();
+        assert_eq!(value["equipment"][0]["name"], "Camion");
+        assert_eq!(value["equipment"][1]["name"], "Tondeuse");
     }
 
     #[test]

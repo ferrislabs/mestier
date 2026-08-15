@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                INSERT INTO task_equipment_links (id, task_id, equipment_id, created_at)\n                VALUES ($1, $2, $3, now())\n                ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "fea6ad6119abea4b018f64dc25e88237cc0ebde23e3fbe473ad1b6086ade73a0"
+}

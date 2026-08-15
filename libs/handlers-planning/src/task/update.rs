@@ -2,7 +2,9 @@ use auth::Identity;
 use axum::{Extension, Json, extract::State};
 use chrono::{DateTime, Utc};
 use handlers::{ApiError, AppState, DataEnvelope, Response, resolve_user_id};
-use mestier_core::{AssigneeRef, MemberId, PatchTaskCommand, TaskId, TaskLabelId, TaskStatus};
+use mestier_core::{
+    AssigneeRef, EquipmentId, MemberId, PatchTaskCommand, TaskId, TaskLabelId, TaskStatus,
+};
 use serde::{Deserialize, Deserializer};
 use utoipa::ToSchema;
 
@@ -44,9 +46,10 @@ impl From<AssigneeRefRequest> for AssigneeRef {
 /// [`deserialize_present`]) — `null` clears `parent_task_id` (the task
 /// becomes a root) or `starts_at`/`ends_at` (the task reverts to inheriting
 /// its parent's window). `title` cannot be cleared (the column is `NOT
-/// NULL`), so a plain `Option<String>` is enough for it. `assignees` and
-/// `label_ids` are each the complete replacement list, never a delta: an
-/// absent key leaves the current set untouched, `[]` clears it entirely.
+/// NULL`), so a plain `Option<String>` is enough for it. `assignees`,
+/// `label_ids` and `equipment_ids` are each the complete replacement list,
+/// never a delta: an absent key leaves the current set untouched, `[]`
+/// clears it entirely.
 #[derive(Debug, Deserialize, ToSchema)]
 pub struct UpdateTaskRequest {
     #[serde(default, deserialize_with = "deserialize_present")]
@@ -73,6 +76,8 @@ pub struct UpdateTaskRequest {
     pub assignees: Option<Vec<AssigneeRefRequest>>,
     #[serde(default)]
     pub label_ids: Option<Vec<TaskLabelId>>,
+    #[serde(default)]
+    pub equipment_ids: Option<Vec<EquipmentId>>,
 }
 
 #[utoipa::path(
@@ -117,24 +122,31 @@ pub async fn handler(
     command.status = payload.status;
     command.blocks_availability = payload.blocks_availability;
     command.label_ids = payload.label_ids;
+    command.equipment_ids = payload.equipment_ids;
     command.assignees = payload
         .assignees
         .map(|assignees| assignees.into_iter().map(Into::into).collect());
 
     let task = state.usecase.acting_as(actor).patch_task(command).await?;
 
-    // Reflects the task's current labels regardless of whether this PATCH
-    // touched them — a PATCH that never mentions `label_ids` still needs to
-    // report the set it left untouched.
+    // Reflects the task's current labels/equipment regardless of whether
+    // this PATCH touched them — a PATCH that never mentions `label_ids` or
+    // `equipment_ids` still needs to report the sets it left untouched.
     let mut labels_by_task = state
         .usecase
         .list_task_labels_for_tasks(vec![task.id])
         .await?;
     let labels = labels_by_task.remove(&task.id).unwrap_or_default();
+    let mut equipment_by_task = state
+        .usecase
+        .list_equipment_for_tasks(vec![task.id])
+        .await?;
+    let equipment = equipment_by_task.remove(&task.id).unwrap_or_default();
 
     Ok(Response::OK(PatchTaskResponse {
         task: TaskResponse {
             labels: labels.into_iter().map(Into::into).collect(),
+            equipment: equipment.into_iter().map(Into::into).collect(),
             ..task.into()
         },
     }))
@@ -311,6 +323,39 @@ mod tests {
             Some(Vec::new()),
             "`label_ids: []` is a present, empty replacement list — it must drop every label, \
              not be mistaken for \"don't touch labels\""
+        );
+    }
+
+    // ── empty vs. absent `equipment_ids` ────────────────────────────────
+
+    #[test]
+    fn present_equipment_ids_sets_the_new_value() {
+        let equipment_id: EquipmentId = "77777777-7777-7777-7777-777777777778".parse().unwrap();
+        let request = parse(json!({ "equipment_ids": [equipment_id.0.to_string()] }));
+
+        assert_eq!(request.equipment_ids, Some(vec![equipment_id]));
+    }
+
+    #[test]
+    fn absent_equipment_ids_means_leave_equipment_untouched() {
+        let request = parse(json!({}));
+
+        assert_eq!(
+            request.equipment_ids, None,
+            "an absent `equipment_ids` key must leave the task's current equipment untouched, \
+             which is a different outcome than `equipment_ids: []`"
+        );
+    }
+
+    #[test]
+    fn empty_equipment_ids_array_means_clear_every_equipment() {
+        let request = parse(json!({ "equipment_ids": [] }));
+
+        assert_eq!(
+            request.equipment_ids,
+            Some(Vec::new()),
+            "`equipment_ids: []` is a present, empty replacement list — it must drop every \
+             equipment link, not be mistaken for \"don't touch equipment\""
         );
     }
 }

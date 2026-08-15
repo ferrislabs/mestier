@@ -1,0 +1,64 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT\n                lnk.task_id AS \"task_id!\",\n                e.id AS \"equipment_id!\",\n                e.org_id AS \"org_id!\",\n                e.name AS \"name!\",\n                e.hourly_rate_cents AS \"hourly_rate_cents!\",\n                e.deleted_at,\n                e.created_at AS \"created_at!\",\n                e.updated_at AS \"updated_at!\"\n            FROM task_equipment_links lnk\n            JOIN equipment e ON e.id = lnk.equipment_id\n            WHERE lnk.task_id = ANY($1)\n            ORDER BY e.name ASC\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "task_id!",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "equipment_id!",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "org_id!",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 3,
+        "name": "name!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "hourly_rate_cents!",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 5,
+        "name": "deleted_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 6,
+        "name": "created_at!",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 7,
+        "name": "updated_at!",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "UuidArray"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      false,
+      false
+    ]
+  },
+  "hash": "c3ddded505e41b3f4bc6dab7a8738a61d8e74fdc2c87d1d397b002ea476a5699"
+}

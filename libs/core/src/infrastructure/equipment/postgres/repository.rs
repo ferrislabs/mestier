@@ -1,9 +1,12 @@
+use std::collections::HashMap;
+
 use chrono::{DateTime, Utc};
-use common::CoreError;
+use common::{CoreError, generate_uuid_v7};
 use mestier_macros::repository;
+use uuid::Uuid;
 
 use crate::{
-    Equipment, EquipmentId, OrganizationId,
+    Equipment, EquipmentId, OrganizationId, TaskId,
     domain::equipment::ports::EquipmentRepository,
     infrastructure::{
         equipment::postgres::model::EquipmentRow,
@@ -146,5 +149,89 @@ impl<'tx> EquipmentRepository for PgEquipmentRepository<'tx> {
         }
 
         Ok(())
+    }
+
+    async fn replace_task_links(
+        &mut self,
+        task_id: TaskId,
+        equipment_ids: &[EquipmentId],
+    ) -> Result<(), CoreError> {
+        let mut tx = self.tx.lock().await;
+
+        sqlx::query!(
+            r#"DELETE FROM task_equipment_links WHERE task_id = $1"#,
+            task_id.0,
+        )
+        .execute(&mut ***tx)
+        .await
+        .map_err(map_sqlx_error)?;
+
+        for equipment_id in equipment_ids {
+            sqlx::query!(
+                r#"
+                INSERT INTO task_equipment_links (id, task_id, equipment_id, created_at)
+                VALUES ($1, $2, $3, now())
+                "#,
+                generate_uuid_v7(),
+                task_id.0,
+                equipment_id.0,
+            )
+            .execute(&mut ***tx)
+            .await
+            .map_err(map_sqlx_error)?;
+        }
+
+        Ok(())
+    }
+
+    async fn list_equipment_for_tasks(
+        &mut self,
+        task_ids: &[TaskId],
+    ) -> Result<HashMap<TaskId, Vec<Equipment>>, CoreError> {
+        if task_ids.is_empty() {
+            return Ok(HashMap::new());
+        }
+
+        let mut tx = self.tx.lock().await;
+        let ids: Vec<Uuid> = task_ids.iter().map(|id| id.0).collect();
+        let rows = sqlx::query!(
+            r#"
+            SELECT
+                lnk.task_id AS "task_id!",
+                e.id AS "equipment_id!",
+                e.org_id AS "org_id!",
+                e.name AS "name!",
+                e.hourly_rate_cents AS "hourly_rate_cents!",
+                e.deleted_at,
+                e.created_at AS "created_at!",
+                e.updated_at AS "updated_at!"
+            FROM task_equipment_links lnk
+            JOIN equipment e ON e.id = lnk.equipment_id
+            WHERE lnk.task_id = ANY($1)
+            ORDER BY e.name ASC
+            "#,
+            &ids,
+        )
+        .fetch_all(&mut ***tx)
+        .await
+        .map_err(map_sqlx_error)?;
+
+        let mut equipment_by_task: HashMap<TaskId, Vec<Equipment>> = HashMap::new();
+        for row in rows {
+            equipment_by_task
+                .entry(TaskId(row.task_id))
+                .or_default()
+                .push(Equipment {
+                    id: EquipmentId(row.equipment_id),
+                    organization_id: OrganizationId(row.org_id),
+                    name: row.name,
+                    hourly_rate_cents: row.hourly_rate_cents,
+                    deleted_at: row.deleted_at,
+                    created_at: row.created_at,
+                    updated_at: row.updated_at,
+                });
+        }
+
+        Ok(equipment_by_task)
     }
 }

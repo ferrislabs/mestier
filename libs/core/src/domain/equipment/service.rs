@@ -1,8 +1,10 @@
+use std::collections::HashSet;
+
 use chrono::Utc;
 use common::{CoreError, generate_uuid_v7};
 
 use crate::{
-    Equipment, EquipmentId, OrganizationId,
+    Equipment, EquipmentId, OrganizationId, TaskId,
     domain::equipment::{
         commands::{CreateEquipmentCommand, UpdateEquipmentCommand},
         ports::EquipmentRepository,
@@ -78,6 +80,42 @@ where
     pub async fn soft_delete_equipment(&mut self, id: EquipmentId) -> Result<(), CoreError> {
         self.get_equipment(id).await?;
         self.repo.soft_delete(id, Utc::now()).await
+    }
+
+    /// Replaces the complete set of equipment attached to `task_id` — never
+    /// a delta, mirroring `TaskLabelService::replace_task_labels`'s own
+    /// contract: idempotence, and a single path for both attaching and
+    /// detaching a piece of equipment. Every id in `equipment_ids` must name
+    /// equipment of `organization_id`; an unknown id, or one belonging to a
+    /// different organization, is rejected as `NotFound` before anything is
+    /// written. Repeated ids collapse to one.
+    pub async fn replace_task_equipment(
+        &mut self,
+        organization_id: OrganizationId,
+        task_id: TaskId,
+        equipment_ids: Vec<EquipmentId>,
+    ) -> Result<(), CoreError> {
+        let mut seen = HashSet::new();
+        let mut deduped = Vec::with_capacity(equipment_ids.len());
+
+        for equipment_id in equipment_ids {
+            if !seen.insert(equipment_id) {
+                continue;
+            }
+
+            let equipment = self
+                .repo
+                .find_by_id(equipment_id)
+                .await?
+                .ok_or(CoreError::NotFound)?;
+            if equipment.organization_id != organization_id {
+                return Err(CoreError::NotFound);
+            }
+
+            deduped.push(equipment_id);
+        }
+
+        self.repo.replace_task_links(task_id, &deduped).await
     }
 }
 
@@ -199,5 +237,132 @@ mod tests {
         let mut service = EquipmentService::new(repo);
 
         service.soft_delete_equipment(id).await.unwrap();
+    }
+
+    // -- replace_task_equipment ---------------------------------------------
+
+    fn equipment_in(id: EquipmentId, organization_id: OrganizationId) -> Equipment {
+        Equipment {
+            organization_id,
+            ..equipment(id)
+        }
+    }
+
+    #[tokio::test]
+    async fn replace_task_equipment_replaces_links_with_the_validated_set() {
+        let organization_id = OrganizationId(Uuid::new_v4());
+        let task_id = TaskId(Uuid::new_v4());
+        let equipment_a = EquipmentId(Uuid::new_v4());
+        let equipment_b = EquipmentId(Uuid::new_v4());
+
+        let mut repo = MockEquipmentRepository::new();
+        repo.expect_find_by_id()
+            .with(eq(equipment_a))
+            .returning(move |id| {
+                let e = equipment_in(id, organization_id);
+                Box::pin(async move { Ok(Some(e)) })
+            });
+        repo.expect_find_by_id()
+            .with(eq(equipment_b))
+            .returning(move |id| {
+                let e = equipment_in(id, organization_id);
+                Box::pin(async move { Ok(Some(e)) })
+            });
+        repo.expect_replace_task_links()
+            .withf(move |t, ids| *t == task_id && ids == [equipment_a, equipment_b])
+            .returning(|_, _| Box::pin(async { Ok(()) }));
+
+        let mut service = EquipmentService::new(repo);
+        service
+            .replace_task_equipment(organization_id, task_id, vec![equipment_a, equipment_b])
+            .await
+            .unwrap();
+    }
+
+    #[tokio::test]
+    async fn replace_task_equipment_dedupes_repeated_ids() {
+        let organization_id = OrganizationId(Uuid::new_v4());
+        let task_id = TaskId(Uuid::new_v4());
+        let equipment_a = EquipmentId(Uuid::new_v4());
+
+        let mut repo = MockEquipmentRepository::new();
+        repo.expect_find_by_id()
+            .with(eq(equipment_a))
+            .returning(move |id| {
+                let e = equipment_in(id, organization_id);
+                Box::pin(async move { Ok(Some(e)) })
+            });
+        repo.expect_replace_task_links()
+            .withf(move |t, ids| *t == task_id && ids == [equipment_a])
+            .returning(|_, _| Box::pin(async { Ok(()) }));
+
+        let mut service = EquipmentService::new(repo);
+        service
+            .replace_task_equipment(organization_id, task_id, vec![equipment_a, equipment_a])
+            .await
+            .unwrap();
+    }
+
+    #[tokio::test]
+    async fn replace_task_equipment_clears_every_link_for_an_empty_list() {
+        let organization_id = OrganizationId(Uuid::new_v4());
+        let task_id = TaskId(Uuid::new_v4());
+
+        let mut repo = MockEquipmentRepository::new();
+        repo.expect_replace_task_links()
+            .withf(move |t, ids| *t == task_id && ids.is_empty())
+            .returning(|_, _| Box::pin(async { Ok(()) }));
+
+        let mut service = EquipmentService::new(repo);
+        service
+            .replace_task_equipment(organization_id, task_id, Vec::new())
+            .await
+            .unwrap();
+    }
+
+    #[tokio::test]
+    async fn replace_task_equipment_rejects_an_unknown_equipment_id() {
+        let organization_id = OrganizationId(Uuid::new_v4());
+        let task_id = TaskId(Uuid::new_v4());
+        let unknown = EquipmentId(Uuid::new_v4());
+
+        let mut repo = MockEquipmentRepository::new();
+        repo.expect_find_by_id()
+            .with(eq(unknown))
+            .returning(|_| Box::pin(async { Ok(None) }));
+        // No `expect_replace_task_links`: nothing must be written once one id
+        // in the list fails validation.
+
+        let mut service = EquipmentService::new(repo);
+        let err = service
+            .replace_task_equipment(organization_id, task_id, vec![unknown])
+            .await
+            .unwrap_err();
+
+        assert!(matches!(err, CoreError::NotFound));
+    }
+
+    #[tokio::test]
+    async fn replace_task_equipment_rejects_equipment_from_another_organization() {
+        let organization_id = OrganizationId(Uuid::new_v4());
+        let other_org_id = OrganizationId(Uuid::new_v4());
+        let task_id = TaskId(Uuid::new_v4());
+        let foreign_equipment = EquipmentId(Uuid::new_v4());
+
+        let mut repo = MockEquipmentRepository::new();
+        repo.expect_find_by_id()
+            .with(eq(foreign_equipment))
+            .returning(move |id| {
+                let e = equipment_in(id, other_org_id);
+                Box::pin(async move { Ok(Some(e)) })
+            });
+
+        let mut service = EquipmentService::new(repo);
+        let err = service
+            .replace_task_equipment(organization_id, task_id, vec![foreign_equipment])
+            .await
+            .unwrap_err();
+
+        assert!(matches!(err, CoreError::NotFound));
     }
 }

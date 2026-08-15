@@ -6,6 +6,7 @@ use mestier_macros::transactional;
 use crate::{
     OrganizationId, Task, TaskId,
     application::MestierUseCase,
+    domain::equipment::service::EquipmentService,
     domain::task::{
         commands::{CreateTaskCommand, PatchTaskCommand},
         service::TaskService,
@@ -50,19 +51,22 @@ impl MestierUseCase {
     /// Reparents, reschedules and reassigns a task in one transaction:
     /// either every write here (the parent/schedule/status/title/description
     /// edits, the `blocks_availability` flag, the full assignment
-    /// replacement, any on-the-fly employee record, and — the piece this
-    /// workstream adds — the full label replacement) lands together, or the
-    /// whole `PATCH` rolls back.
+    /// replacement, any on-the-fly employee record, the full label
+    /// replacement, and — the piece this workstream adds — the full
+    /// equipment replacement) lands together, or the whole `PATCH` rolls
+    /// back.
     ///
-    /// Label handling lives here rather than inside `TaskService::patch_task`
-    /// on purpose: `task` and `task_label` are deliberately separate
-    /// aggregates (see the planning module design doc — T2 and T3 must not
-    /// collide on the same domain files), so composing `TaskLabelRepository`
-    /// at this thin, already-transactional seam avoids adding a dependency
-    /// from `task`'s own domain service onto a sibling aggregate's port.
-    #[transactional(task, member, task_label)]
+    /// Label and equipment handling live here rather than inside
+    /// `TaskService::patch_task` on purpose: `task`, `task_label` and
+    /// `equipment` are deliberately separate aggregates (see the planning
+    /// module design doc — T2 and T3 must not collide on the same domain
+    /// files), so composing `TaskLabelRepository`/`EquipmentRepository` at
+    /// this thin, already-transactional seam avoids adding a dependency from
+    /// `task`'s own domain service onto a sibling aggregate's port.
+    #[transactional(task, member, task_label, equipment)]
     pub async fn patch_task(&self, command: PatchTaskCommand) -> Result<Task, CoreError> {
         let label_ids = command.label_ids.clone();
+        let equipment_ids = command.equipment_ids.clone();
 
         let mut service = TaskService::new(task_repository, member_repository);
         let task = service.patch_task(command).await?;
@@ -71,6 +75,13 @@ impl MestierUseCase {
             let mut label_service = TaskLabelService::new(task_label_repository);
             label_service
                 .replace_task_labels(task.organization_id, task.id, label_ids)
+                .await?;
+        }
+
+        if let Some(equipment_ids) = equipment_ids {
+            let mut equipment_service = EquipmentService::new(equipment_repository);
+            equipment_service
+                .replace_task_equipment(task.organization_id, task.id, equipment_ids)
                 .await?;
         }
 

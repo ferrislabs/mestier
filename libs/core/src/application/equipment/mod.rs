@@ -1,14 +1,19 @@
+use std::collections::HashMap;
+
 use common::CoreError;
 use mestier_macros::transactional;
 
 use crate::{
-    Equipment, EquipmentId, OrganizationId,
+    Equipment, EquipmentId, OrganizationId, TaskId,
     application::MestierUseCase,
     domain::equipment::{
         commands::{CreateEquipmentCommand, UpdateEquipmentCommand},
+        ports::EquipmentRepository,
         service::EquipmentService,
     },
 };
+
+mod tests;
 
 impl MestierUseCase {
     #[transactional(equipment)]
@@ -50,5 +55,20 @@ impl MestierUseCase {
     pub async fn soft_delete_equipment(&self, id: EquipmentId) -> Result<(), CoreError> {
         let mut service = EquipmentService::new(equipment_repository);
         service.soft_delete_equipment(id).await
+    }
+
+    /// Every equipment attached to each id in `task_ids`, in one grouped
+    /// query — never one per task. Feeds `equipment` on every `TaskResponse`
+    /// surface (`handlers-planning/src/task/{get_one,list,update}.rs`),
+    /// mirroring `list_task_labels_for_tasks`.
+    #[transactional(equipment)]
+    pub async fn list_equipment_for_tasks(
+        &self,
+        task_ids: Vec<TaskId>,
+    ) -> Result<HashMap<TaskId, Vec<Equipment>>, CoreError> {
+        let mut equipment_repository = equipment_repository;
+        equipment_repository
+            .list_equipment_for_tasks(&task_ids)
+            .await
     }
 }
