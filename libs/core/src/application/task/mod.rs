@@ -4,7 +4,7 @@ use common::CoreError;
 use mestier_macros::transactional;
 
 use crate::{
-    OrganizationId, Task, TaskId,
+    AssigneeRef, OrganizationId, Task, TaskId,
     application::MestierUseCase,
     domain::equipment::service::EquipmentService,
     domain::task::{
@@ -92,5 +92,23 @@ impl MestierUseCase {
     pub async fn soft_delete_task(&self, id: TaskId) -> Result<(), CoreError> {
         let mut service = TaskService::new(task_repository, member_repository);
         service.soft_delete_task(id).await
+    }
+
+    /// Assigns `assignees` to every task in `task_ids` in one transaction —
+    /// all or nothing, never one HTTP call per task. See
+    /// `TaskService::bulk_assign_tasks`'s own doc for the failure contract:
+    /// the first missing or foreign task fails the whole call, rolling back
+    /// any earlier task's write in the same batch.
+    #[transactional(task, member)]
+    pub async fn bulk_assign_tasks(
+        &self,
+        organization_id: OrganizationId,
+        task_ids: Vec<TaskId>,
+        assignees: Vec<AssigneeRef>,
+    ) -> Result<Vec<Task>, CoreError> {
+        let mut service = TaskService::new(task_repository, member_repository);
+        service
+            .bulk_assign_tasks(organization_id, task_ids, assignees)
+            .await
     }
 }

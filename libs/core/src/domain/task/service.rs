@@ -344,6 +344,38 @@ where
         Ok(member_id)
     }
 
+    /// Assigns `assignees` to every task in `task_ids`, each replacing that
+    /// task's complete assignment set — same contract as `patch_task`'s own
+    /// `assignees`, applied to many tasks in one call instead of one HTTP
+    /// round trip per task. Every task must belong to `organization_id`; the
+    /// first missing task, or one from another organization, fails the
+    /// whole call before its own write and before any later task is even
+    /// looked at. Since the caller wraps this in one transaction
+    /// (`#[transactional(task, member)]` on
+    /// `MestierUseCase::bulk_assign_tasks`), a failure partway through rolls
+    /// back every earlier task's write too — never a partial batch.
+    pub async fn bulk_assign_tasks(
+        &mut self,
+        organization_id: OrganizationId,
+        task_ids: Vec<TaskId>,
+        assignees: Vec<crate::AssigneeRef>,
+    ) -> Result<Vec<Task>, CoreError> {
+        let mut updated = Vec::with_capacity(task_ids.len());
+
+        for task_id in task_ids {
+            let mut task = self.get_task(task_id).await?;
+            if task.organization_id != organization_id {
+                return Err(CoreError::NotFound);
+            }
+
+            task.assignments = self.resolve_assignments(&task, assignees.clone()).await?;
+            task.updated_at = Utc::now();
+            updated.push(self.task_repository.update(&task).await?);
+        }
+
+        Ok(updated)
+    }
+
     /// Soft-deletes `id` together with every direct child it has. The
     /// two-level nesting cap (`validate_parent_depth`) means a child never
     /// has children of its own, so cascading one level down is the whole
@@ -1586,6 +1618,159 @@ mod tests {
         let updated = service.patch_task(command).await.unwrap();
 
         assert!(updated.assignments.is_empty());
+    }
+
+    // -- bulk_assign_tasks ----------------------------------------------------
+
+    #[tokio::test]
+    async fn bulk_assign_tasks_assigns_the_same_set_to_every_task() {
+        let organization_id = OrganizationId(Uuid::new_v4());
+        let task_a_id = TaskId(Uuid::new_v4());
+        let task_b_id = TaskId(Uuid::new_v4());
+        let member_id = MemberId(Uuid::new_v4());
+        let target_member = member(member_id, organization_id);
+
+        let mut task_repository = MockTaskRepository::new();
+        task_repository
+            .expect_find_by_id()
+            .with(eq(task_a_id))
+            .returning(move |_| {
+                let t = task(task_a_id, organization_id);
+                Box::pin(async move { Ok(Some(t)) })
+            });
+        task_repository
+            .expect_find_by_id()
+            .with(eq(task_b_id))
+            .returning(move |_| {
+                let t = task(task_b_id, organization_id);
+                Box::pin(async move { Ok(Some(t)) })
+            });
+        task_repository
+            .expect_update()
+            .withf(move |t| t.assignments.len() == 1 && t.assignments[0].member_id == member_id)
+            .times(2)
+            .returning(|t| {
+                let cloned = t.clone();
+                Box::pin(async move { Ok(cloned) })
+            });
+
+        let mut member_repository = MockMemberRepository::new();
+        member_repository
+            .expect_find_by_id()
+            .with(eq(member_id))
+            .returning(move |_| {
+                let m = target_member.clone();
+                Box::pin(async move { Ok(Some(m)) })
+            });
+
+        let mut service = service(task_repository, member_repository);
+
+        let updated = service
+            .bulk_assign_tasks(
+                organization_id,
+                vec![task_a_id, task_b_id],
+                vec![AssigneeRef(member_id)],
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(updated.len(), 2);
+        assert!(updated.iter().all(|t| t.assignments.len() == 1));
+    }
+
+    /// A mock only proves the loop short-circuits — it stops calling the
+    /// repository the instant a task fails, never reaching later ids in the
+    /// list. It cannot prove the *database* rolls back `task_a`'s own write,
+    /// which already landed before the failure: that needs a real
+    /// transaction, hence `bulk_assign_tasks_rolls_back_the_whole_batch_on_a_partial_failure`
+    /// in `application::task::tests` — this test's counterpart against a
+    /// live Postgres.
+    #[tokio::test]
+    async fn bulk_assign_tasks_stops_at_the_first_missing_task_never_reaching_the_rest() {
+        let organization_id = OrganizationId(Uuid::new_v4());
+        let task_a_id = TaskId(Uuid::new_v4());
+        let missing_id = TaskId(Uuid::new_v4());
+        let member_id = MemberId(Uuid::new_v4());
+        let target_member = member(member_id, organization_id);
+
+        let mut task_repository = MockTaskRepository::new();
+        task_repository
+            .expect_find_by_id()
+            .with(eq(task_a_id))
+            .returning(move |_| {
+                let t = task(task_a_id, organization_id);
+                Box::pin(async move { Ok(Some(t)) })
+            });
+        task_repository
+            .expect_find_by_id()
+            .with(eq(missing_id))
+            .returning(|_| Box::pin(async { Ok(None) }));
+        // `task_a` is processed (and written) before `missing_id` is even
+        // looked at — the loop is sequential, so this call does happen at
+        // the mock level. Only the DB-backed test can show it doesn't
+        // survive the transaction's rollback.
+        task_repository.expect_update().times(1).returning(|t| {
+            let cloned = t.clone();
+            Box::pin(async move { Ok(cloned) })
+        });
+        // No `expect_find_by_id` for a third id: never_reached_id never
+        // even gets a lookup once `missing_id` fails — mockall panics on
+        // an unexpected call, which is exactly the assertion this relies on.
+
+        let mut member_repository = MockMemberRepository::new();
+        member_repository
+            .expect_find_by_id()
+            .with(eq(member_id))
+            .returning(move |_| {
+                let m = target_member.clone();
+                Box::pin(async move { Ok(Some(m)) })
+            });
+
+        let mut service = service(task_repository, member_repository);
+
+        let never_reached_id = TaskId(Uuid::new_v4());
+        let err = service
+            .bulk_assign_tasks(
+                organization_id,
+                vec![task_a_id, missing_id, never_reached_id],
+                vec![AssigneeRef(member_id)],
+            )
+            .await
+            .unwrap_err();
+
+        assert!(matches!(err, CoreError::NotFound));
+    }
+
+    #[tokio::test]
+    async fn bulk_assign_tasks_rejects_a_task_from_another_organization() {
+        let organization_id = OrganizationId(Uuid::new_v4());
+        let other_org_id = OrganizationId(Uuid::new_v4());
+        let foreign_task_id = TaskId(Uuid::new_v4());
+        let member_id = MemberId(Uuid::new_v4());
+
+        let mut task_repository = MockTaskRepository::new();
+        task_repository
+            .expect_find_by_id()
+            .with(eq(foreign_task_id))
+            .returning(move |_| {
+                let t = task(foreign_task_id, other_org_id);
+                Box::pin(async move { Ok(Some(t)) })
+            });
+        // No `expect_update`: a task belonging to a different organization
+        // must be rejected as `NotFound`, never written to.
+
+        let mut service = service(task_repository, MockMemberRepository::new());
+
+        let err = service
+            .bulk_assign_tasks(
+                organization_id,
+                vec![foreign_task_id],
+                vec![AssigneeRef(member_id)],
+            )
+            .await
+            .unwrap_err();
+
+        assert!(matches!(err, CoreError::NotFound));
     }
 
     #[tokio::test]

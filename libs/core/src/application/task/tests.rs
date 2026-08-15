@@ -581,6 +581,93 @@ mod tests {
 
     #[tokio::test]
     #[ignore = "requires live postgres"]
+    async fn bulk_assign_tasks_assigns_every_task_in_one_call() {
+        let pool = make_pool().await;
+        let fixture = seed_fixture(&pool).await;
+        let member_id = seed_employee(&pool, fixture.organization_id).await;
+        let usecase = make_usecase(pool.clone());
+
+        let task_a = usecase.create_task(create_command(&fixture)).await.unwrap();
+        let task_b = usecase.create_task(create_command(&fixture)).await.unwrap();
+        assert!(task_a.assignments.is_empty());
+        assert!(task_b.assignments.is_empty());
+
+        let updated = usecase
+            .bulk_assign_tasks(
+                fixture.organization_id,
+                vec![task_a.id, task_b.id],
+                vec![AssigneeRef(member_id)],
+            )
+            .await
+            .expect("bulk_assign_tasks must succeed for two valid tasks");
+
+        assert_eq!(updated.len(), 2);
+        assert!(updated.iter().all(|t| t.assignments.len() == 1));
+        assert!(
+            updated
+                .iter()
+                .all(|t| t.assignments[0].member_id == member_id)
+        );
+
+        let reloaded_a = usecase.get_task(task_a.id).await.unwrap();
+        let reloaded_b = usecase.get_task(task_b.id).await.unwrap();
+        assert_eq!(reloaded_a.assignments.len(), 1);
+        assert_eq!(reloaded_b.assignments.len(), 1);
+
+        cleanup(&pool, fixture.organization_id, &[fixture.owner_id]).await;
+    }
+
+    /// Proves the acceptance criterion: a batch naming one task from another
+    /// organization (indistinguishable, from the caller's side, from a typo'd
+    /// or deleted id — both read as `NotFound`) fails the whole call and
+    /// leaves *no* task assigned, including the ones earlier in the list
+    /// whose own `UPDATE` already ran before the failure. Only a real
+    /// transaction proves this — the mock-based
+    /// `domain::task::service::tests::bulk_assign_tasks_stops_at_the_first_missing_task_never_reaching_the_rest`
+    /// can only show the loop stops calling the repository, not that an
+    /// already-issued write gets undone.
+    #[tokio::test]
+    #[ignore = "requires live postgres"]
+    async fn bulk_assign_tasks_rolls_back_the_whole_batch_on_a_partial_failure() {
+        let pool = make_pool().await;
+        let fixture = seed_fixture(&pool).await;
+        let other_fixture = seed_fixture(&pool).await;
+        let member_id = seed_employee(&pool, fixture.organization_id).await;
+        let usecase = make_usecase(pool.clone());
+
+        let task_a = usecase.create_task(create_command(&fixture)).await.unwrap();
+        let foreign_task = usecase
+            .create_task(create_command(&other_fixture))
+            .await
+            .unwrap();
+
+        let err = usecase
+            .bulk_assign_tasks(
+                fixture.organization_id,
+                vec![task_a.id, foreign_task.id],
+                vec![AssigneeRef(member_id)],
+            )
+            .await
+            .expect_err("a task from another organization must fail the whole batch");
+        assert!(matches!(err, common::CoreError::NotFound));
+
+        let reloaded_a = usecase.get_task(task_a.id).await.unwrap();
+        assert!(
+            reloaded_a.assignments.is_empty(),
+            "task_a's own assignment, issued before the failure, must not survive the rollback"
+        );
+
+        cleanup(&pool, fixture.organization_id, &[fixture.owner_id]).await;
+        cleanup(
+            &pool,
+            other_fixture.organization_id,
+            &[other_fixture.owner_id],
+        )
+        .await;
+    }
+
+    #[tokio::test]
+    #[ignore = "requires live postgres"]
     async fn soft_delete_task_hides_it_from_get_and_list() {
         let pool = make_pool().await;
         let fixture = seed_fixture(&pool).await;
