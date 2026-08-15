@@ -4,6 +4,8 @@ import { invalidatePlanning } from '#/hooks/use-planning'
 
 const TASKS_PATH = '/api/v1/organizations/{organization_id}/tasks'
 const TASK_PATH = '/api/v1/organizations/{organization_id}/tasks/{task_id}'
+const BULK_ASSIGN_TASKS_PATH =
+	'/api/v1/organizations/{organization_id}/tasks/bulk-assign'
 
 interface QueryKeyMeta {
 	_id?: unknown
@@ -130,6 +132,29 @@ export function usePatchTask() {
 
 	return useMutation({
 		...window.tanstackApi.mutation('patch', TASK_PATH).mutationOptions,
+		onSuccess: async () => {
+			await Promise.all([
+				queryClient.invalidateQueries({
+					predicate: (query) => isTaskListQuery(query.queryKey),
+				}),
+				invalidatePlanning(queryClient),
+			])
+		},
+	})
+}
+
+/**
+ * `POST /tasks/bulk-assign` — replaces every named task's complete
+ * assignee set in one transaction, all or nothing (see the backend's
+ * `TaskService::bulk_assign_tasks`'s own doc). Same invalidation shape as
+ * {@link usePatchTask}: the task list and the grid both show assignees.
+ */
+export function useBulkAssignTasks() {
+	const queryClient = useQueryClient()
+
+	return useMutation({
+		...window.tanstackApi.mutation('post', BULK_ASSIGN_TASKS_PATH)
+			.mutationOptions,
 		onSuccess: async () => {
 			await Promise.all([
 				queryClient.invalidateQueries({
