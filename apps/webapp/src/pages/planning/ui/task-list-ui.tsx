@@ -178,15 +178,16 @@ export function TaskListUI({
 						 */}
 						<table className="w-full min-w-[880px] table-fixed border-collapse text-sm">
 							<colgroup>
-								<col className="w-[30%]" />
-								<col className="w-[16%]" />
-								<col className="w-[12%]" />
-								<col className="w-[22%]" />
+								<col className="w-[5%]" />
+								<col className="w-[28%]" />
+								<col className="w-[15%]" />
+								<col className="w-[11%]" />
 								<col className="w-[20%]" />
+								<col className="w-[21%]" />
 							</colgroup>
 							<thead>
 								<tr className="border-b bg-muted/50">
-									<th className="w-10 px-5 py-3 text-left">
+									<th className="px-5 py-3 text-left">
 										<Checkbox
 											aria-label="Sélectionner toutes les tâches"
 											checked={isAllSelected}
