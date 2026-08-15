@@ -186,7 +186,7 @@ export function TaskFormFields({
 				</div>
 			)}
 
-			<div className="flex items-center justify-between rounded-lg border p-3">
+			<div className="flex items-center justify-between rounded-lg border bg-card p-3">
 				<div>
 					<p className="text-sm font-medium">Journée entière</p>
 					<p className="text-xs text-muted-foreground">
@@ -207,7 +207,7 @@ export function TaskFormFields({
 				onChange={onChange}
 			/>
 
-			<div className="flex items-center justify-between rounded-lg border p-3">
+			<div className="flex items-center justify-between rounded-lg border bg-card p-3">
 				<div>
 					<p className="text-sm font-medium">Rend indisponible</p>
 					<p className="text-xs text-muted-foreground">

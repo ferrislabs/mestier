@@ -149,7 +149,12 @@ function TimeField({ id, label, value, onChange }: TimeFieldProps) {
 				<SelectTrigger id={id} aria-label={label} className="w-full">
 					<SelectValue />
 				</SelectTrigger>
-				<SelectContent>
+				{/* Capped rather than left to fill the available viewport space
+				 * (`SelectContent`'s own default): 48 half-hour slots would
+				 * otherwise render as one very tall list. `max-h-64` keeps
+				 * roughly 8 rows in view, like Google Calendar's own time
+				 * dropdown, and scrolls to the rest. */}
+				<SelectContent className="max-h-64">
 					{timeOptionsWith(value).map((time) => (
 						<SelectItem key={time} value={time}>
 							{time}
