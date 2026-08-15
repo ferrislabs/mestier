@@ -1,7 +1,7 @@
 use chrono::{DateTime, Utc};
 
 use crate::{
-    CustomerContextId, CustomerId, OrganizationId, QuoteId,
+    CustomerContextId, CustomerId, EquipmentId, OrganizationId, QuoteId,
     domain::task::{AssigneeRef, TaskId, TaskStatus},
     domain::task_label::TaskLabelId,
 };
@@ -58,6 +58,12 @@ pub struct PatchTaskCommand {
     /// command only so the field survives the trip from the HTTP layer; the
     /// `task` aggregate itself never reads it.
     pub label_ids: Option<Vec<TaskLabelId>>,
+    /// The complete replacement list of equipment attached to this task, or
+    /// `None` to leave it untouched. Same semantics and same reason as
+    /// `label_ids` — applied by `MestierUseCase::patch_task` via
+    /// `EquipmentService::replace_task_equipment` after `TaskService::patch_task`
+    /// returns; the `task` aggregate itself never reads it.
+    pub equipment_ids: Option<Vec<EquipmentId>>,
 }
 
 impl PatchTaskCommand {
@@ -76,6 +82,7 @@ impl PatchTaskCommand {
             blocks_availability: None,
             assignees: None,
             label_ids: None,
+            equipment_ids: None,
         }
     }
 }

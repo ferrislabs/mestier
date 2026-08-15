@@ -39,9 +39,15 @@ pub async fn handler(
         .list_task_labels_for_tasks(vec![task.id])
         .await?;
     let labels = labels_by_task.remove(&task.id).unwrap_or_default();
+    let mut equipment_by_task = state
+        .usecase
+        .list_equipment_for_tasks(vec![task.id])
+        .await?;
+    let equipment = equipment_by_task.remove(&task.id).unwrap_or_default();
 
     Ok(Response::OK(TaskResponse {
         labels: labels.into_iter().map(Into::into).collect(),
+        equipment: equipment.into_iter().map(Into::into).collect(),
         ..task.into()
     }))
 }
