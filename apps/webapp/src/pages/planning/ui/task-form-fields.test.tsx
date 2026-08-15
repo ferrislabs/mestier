@@ -142,7 +142,23 @@ describe('TaskFormFields — client', () => {
 })
 
 describe('TaskFormFields — subtask', () => {
-	it('shows the inherited-window placeholder on the date fields when provided', () => {
+	it('shows the inherited-window placeholder as the range trigger label when the subtask has no dates of its own', () => {
+		render(
+			<TaskFormFields
+				{...baseProps()}
+				isSubtask={true}
+				windowPlaceholder="Hérite du parent : 10/08/2026 09:00 – 11:00"
+				values={{ ...baseProps().values, startDate: '', endDate: '' }}
+			/>,
+		)
+		expect(
+			screen.getByRole('button', {
+				name: 'Hérite du parent : 10/08/2026 09:00 – 11:00',
+			}),
+		).toBeDefined()
+	})
+
+	it('shows the actual range, not the placeholder, once the subtask has its own dates', () => {
 		render(
 			<TaskFormFields
 				{...baseProps()}
@@ -151,10 +167,8 @@ describe('TaskFormFields — subtask', () => {
 			/>,
 		)
 		expect(
-			screen.getAllByPlaceholderText(
-				'Hérite du parent : 10/08/2026 09:00 – 11:00',
-			).length,
-		).toBe(2)
+			screen.queryByRole('button', { name: /Hérite du parent/ }),
+		).toBeNull()
 	})
 })
 

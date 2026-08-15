@@ -22,6 +22,7 @@ import {
 	LabelPicker,
 	type LabelPickerOption,
 } from '#/pages/planning/ui/label-picker'
+import { TaskWindowFields } from '#/pages/planning/ui/task-window-fields'
 
 // Radix `Select.Item` forbids an empty-string `value` (reserved to mean
 // "cleared"), so the "no customer"/"no context" choices each need a
@@ -199,59 +200,12 @@ export function TaskFormFields({
 				/>
 			</div>
 
-			<div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-				<div className="flex flex-col gap-2">
-					<Label htmlFor="task-start-date">Date de début</Label>
-					<Input
-						id="task-start-date"
-						type="date"
-						value={values.startDate}
-						placeholder={windowPlaceholder ?? undefined}
-						onChange={(event) => onChange({ startDate: event.target.value })}
-					/>
-				</div>
-				<div className="flex flex-col gap-2">
-					<Label htmlFor="task-end-date">Date de fin</Label>
-					<Input
-						id="task-end-date"
-						type="date"
-						value={values.endDate}
-						placeholder={windowPlaceholder ?? undefined}
-						onChange={(event) => onChange({ endDate: event.target.value })}
-					/>
-				</div>
-			</div>
-
-			{!values.allDay ? (
-				<div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-					<div className="flex flex-col gap-2">
-						<Label htmlFor="task-start-time">Heure de début</Label>
-						<Input
-							id="task-start-time"
-							aria-label="Heure de début"
-							placeholder="09:00"
-							value={values.startTime}
-							onChange={(event) => onChange({ startTime: event.target.value })}
-						/>
-					</div>
-					<div className="flex flex-col gap-2">
-						<Label htmlFor="task-end-time">Heure de fin</Label>
-						<Input
-							id="task-end-time"
-							aria-label="Heure de fin"
-							placeholder="10:00"
-							value={values.endTime}
-							onChange={(event) => onChange({ endTime: event.target.value })}
-						/>
-					</div>
-				</div>
-			) : null}
-
-			{isSubtask && windowPlaceholder ? (
-				<p className="text-xs text-muted-foreground">
-					Laissez les dates vides pour hériter de la fenêtre du parent.
-				</p>
-			) : null}
+			<TaskWindowFields
+				values={values}
+				isSubtask={isSubtask}
+				windowPlaceholder={windowPlaceholder}
+				onChange={onChange}
+			/>
 
 			<div className="flex items-center justify-between rounded-lg border p-3">
 				<div>
