@@ -1,24 +1,31 @@
 import { useForm } from '@tanstack/react-form'
 import type { ColumnDef } from '@tanstack/react-table'
-import { Loader2, Package, Search } from 'lucide-react'
+import { Loader2, Package, Plus, Search } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import {
 	CreateButton,
 	centsToEuros,
-	type FormBinding,
 	MoneyCell,
 	ReferenceTable,
 	RowActions,
 	RowIdentity,
 	TextField,
 } from '#/components/reference-table'
+import { Button } from '#/components/ui/button'
+import {
+	Dialog,
+	DialogContent,
+	DialogDescription,
+	DialogFooter,
+	DialogHeader,
+	DialogTitle,
+} from '#/components/ui/dialog'
 import { Input } from '#/components/ui/input'
 import {
 	MetricCard,
 	PageHeader,
 	PageShell,
 	SectionCard,
-	SectionHeader,
 } from '#/components/ui/surface'
 import { useActiveOrganization } from '#/hooks/use-active-organization'
 import type { Equipment } from '#/hooks/use-reference-catalog'
@@ -41,22 +48,17 @@ export function EquipmentFeature() {
 	const { activeOrganization } = useActiveOrganization()
 
 	return (
-		<PageShell>
-			<PageHeader
-				eyebrow={activeOrganization.name}
-				title="Matériel"
-				description="Les ressources facturables et leur coût horaire, utilisés pour calculer la rentabilité d'une tâche."
-			/>
-			<EquipmentSectionContent
-				key={activeOrganization.id}
-				organizationId={activeOrganization.id}
-			/>
-		</PageShell>
+		<EquipmentSectionContent
+			key={activeOrganization.id}
+			organizationId={activeOrganization.id}
+			organizationName={activeOrganization.name}
+		/>
 	)
 }
 
 interface EquipmentSectionContentProps {
 	organizationId: string
+	organizationName: string
 }
 
 type Draft = {
@@ -66,6 +68,7 @@ type Draft = {
 
 function EquipmentSectionContent({
 	organizationId,
+	organizationName,
 }: EquipmentSectionContentProps) {
 	const catalog = useReferenceCatalog(organizationId, {
 		members: false,
@@ -88,10 +91,17 @@ function EquipmentSectionContent({
 				},
 			})
 			equipmentForm.reset()
+			setCreateDialogOpen(false)
 		},
 	})
 
+	const handleCreateDialogOpenChange = (open: boolean) => {
+		setCreateDialogOpen(open)
+		if (!open) equipmentForm.reset()
+	}
+
 	const [search, setSearch] = useState('')
+	const [createDialogOpen, setCreateDialogOpen] = useState(false)
 	const [draft, setDraft] = useState<Draft>(null)
 	const [isSaving, setIsSaving] = useState(false)
 
@@ -136,7 +146,19 @@ function EquipmentSectionContent({
 	return (
 		<equipmentForm.Subscribe selector={(state) => state.values}>
 			{(equipmentValues) => (
-				<div className="flex flex-col gap-6">
+				<PageShell>
+					<PageHeader
+						eyebrow={organizationName}
+						title="Matériel"
+						description="Les ressources facturables et leur coût horaire, utilisés pour calculer la rentabilité d'une tâche."
+						actions={
+							<Button onClick={() => setCreateDialogOpen(true)}>
+								<Plus />
+								Ajouter une entrée
+							</Button>
+						}
+					/>
+
 					<MetricCard
 						label="Matériel"
 						value={equipment.length}
@@ -162,21 +184,6 @@ function EquipmentSectionContent({
 							/>
 						</div>
 					</div>
-
-					<CreateReferenceSection
-						equipmentForm={{
-							values: equipmentValues,
-							isPending: createEquipment.isPending,
-							onChange: (patch) => {
-								for (const key of Object.keys(
-									patch,
-								) as (keyof EquipmentFormValues)[]) {
-									equipmentForm.setFieldValue(key, patch[key] ?? '')
-								}
-							},
-							onSubmit: () => void equipmentForm.handleSubmit(),
-						}}
-					/>
 
 					{isLoading ? (
 						<SectionCard className="flex min-h-72 items-center justify-center gap-3 p-8 text-sm text-muted-foreground">
@@ -211,7 +218,55 @@ function EquipmentSectionContent({
 							}
 						/>
 					)}
-				</div>
+
+					<Dialog
+						open={createDialogOpen}
+						onOpenChange={handleCreateDialogOpenChange}
+					>
+						<DialogContent className="flex max-h-[85vh] flex-col gap-0 overflow-hidden">
+							<DialogHeader className="border-b pb-4">
+								<DialogTitle>Ajouter une entrée</DialogTitle>
+								<DialogDescription>
+									Les montants sont saisis en euros et stockés en centimes côté
+									API.
+								</DialogDescription>
+							</DialogHeader>
+							<div className="flex-1 overflow-y-auto py-4">
+								<div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+									<TextField
+										label="Nom"
+										value={equipmentValues.name}
+										onChange={(name) =>
+											equipmentForm.setFieldValue('name', name)
+										}
+									/>
+									<TextField
+										label="Coût horaire"
+										value={equipmentValues.hourlyRate}
+										onChange={(hourlyRate) =>
+											equipmentForm.setFieldValue('hourlyRate', hourlyRate)
+										}
+										inputMode="decimal"
+										suffix="€/h"
+									/>
+								</div>
+							</div>
+							<DialogFooter className="border-t pt-4">
+								<Button
+									type="button"
+									variant="ghost"
+									onClick={() => handleCreateDialogOpenChange(false)}
+								>
+									Annuler
+								</Button>
+								<CreateButton
+									isPending={createEquipment.isPending}
+									onClick={() => void equipmentForm.handleSubmit()}
+								/>
+							</DialogFooter>
+						</DialogContent>
+					</Dialog>
+				</PageShell>
 			)}
 		</equipmentForm.Subscribe>
 	)
@@ -224,43 +279,6 @@ function eurosToCents(value: string): number {
 		return 0
 	}
 	return Math.round(parsed * 100)
-}
-
-interface CreateReferenceSectionProps {
-	equipmentForm: FormBinding<EquipmentFormValues>
-}
-
-function CreateReferenceSection({
-	equipmentForm,
-}: CreateReferenceSectionProps) {
-	return (
-		<SectionCard>
-			<SectionHeader
-				title="Ajouter une entrée"
-				description="Les montants sont saisis en euros et stockés en centimes côté API."
-			/>
-			<div className="grid grid-cols-1 gap-4 p-5 lg:grid-cols-[1fr_auto] lg:items-end">
-				<div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-					<TextField
-						label="Nom"
-						value={equipmentForm.values.name}
-						onChange={(name) => equipmentForm.onChange({ name })}
-					/>
-					<TextField
-						label="Coût horaire"
-						value={equipmentForm.values.hourlyRate}
-						onChange={(hourlyRate) => equipmentForm.onChange({ hourlyRate })}
-						inputMode="decimal"
-						suffix="€/h"
-					/>
-				</div>
-				<CreateButton
-					isPending={equipmentForm.isPending}
-					onClick={equipmentForm.onSubmit}
-				/>
-			</div>
-		</SectionCard>
-	)
 }
 
 interface EquipmentTableProps {
