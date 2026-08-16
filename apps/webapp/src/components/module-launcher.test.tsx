@@ -29,7 +29,7 @@ describe('ModuleLauncher', () => {
 		for (const label of [
 			'Accueil',
 			'CRM',
-			'RH',
+			'Équipe & ressources',
 			'Planning',
 			'Discussions',
 			'Paramètres',
