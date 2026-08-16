@@ -3,7 +3,7 @@ use common::CoreError;
 
 use crate::{Absence, AbsenceId, OrganizationId};
 
-#[cfg_attr(test, mockall::automock)]
+#[cfg_attr(any(test, feature = "mock"), mockall::automock)]
 pub trait AbsenceRepository: Send {
     fn insert(
         &mut self,

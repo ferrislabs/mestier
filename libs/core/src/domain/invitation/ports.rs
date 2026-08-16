@@ -9,7 +9,7 @@ use crate::{
     },
 };
 
-#[cfg_attr(test, mockall::automock)]
+#[cfg_attr(any(test, feature = "mock"), mockall::automock)]
 pub trait InvitationRepository: Send {
     fn insert(
         &mut self,

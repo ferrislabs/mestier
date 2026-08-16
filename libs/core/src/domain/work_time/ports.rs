@@ -6,7 +6,7 @@ use crate::{
     domain::work_time::{EmployeeRhythm, EmployeeRhythmId, WorkSlot},
 };
 
-#[cfg_attr(test, mockall::automock)]
+#[cfg_attr(any(test, feature = "mock"), mockall::automock)]
 pub trait RhythmRepository: Send {
     /// The employee's currently open rhythm version (`effective_to IS
     /// NULL`), if any. By construction of `WorkTimeService::replace_rhythm`,
@@ -51,7 +51,7 @@ pub trait RhythmRepository: Send {
     ) -> impl Future<Output = Result<(), CoreError>> + Send;
 }
 
-#[cfg_attr(test, mockall::automock)]
+#[cfg_attr(any(test, feature = "mock"), mockall::automock)]
 pub trait WorkSlotRepository: Send {
     /// Work slots pinned inside `[from, to]` — windowed, unlike rhythm
     /// versions. Keyed on the member: someone with no contract still

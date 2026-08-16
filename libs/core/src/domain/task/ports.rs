@@ -5,7 +5,7 @@ use common::CoreError;
 
 use crate::{OrganizationId, Task, TaskId};
 
-#[cfg_attr(test, mockall::automock)]
+#[cfg_attr(any(test, feature = "mock"), mockall::automock)]
 pub trait TaskRepository: Send {
     fn insert(&mut self, task: &Task) -> impl Future<Output = Result<Task, CoreError>> + Send;
 

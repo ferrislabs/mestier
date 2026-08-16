@@ -4,7 +4,7 @@ use common::CoreError;
 
 use crate::{OrganizationId, TaskId, TaskLabel, TaskLabelId};
 
-#[cfg_attr(test, mockall::automock)]
+#[cfg_attr(any(test, feature = "mock"), mockall::automock)]
 pub trait TaskLabelRepository: Send {
     fn insert(
         &mut self,

@@ -6,7 +6,7 @@ use crate::{NotificationId, domain::Notification};
 
 use super::commands::CreateNotification;
 
-#[cfg_attr(test, mockall::automock)]
+#[cfg_attr(any(test, feature = "mock"), mockall::automock)]
 pub trait NotificationRepository: Send + Sync {
     fn create(
         &self,

@@ -17,7 +17,7 @@ use crate::domain::{
 /// Implementations must be safe to share across tasks (`Send + Sync`).
 /// Calls are expected to be **idempotent** when the inputs allow it
 /// (creates with a stable external id, deletes of an unknown id, ...).
-#[cfg_attr(test, mockall::automock)]
+#[cfg_attr(any(test, feature = "mock"), mockall::automock)]
 pub trait IamProvider: Send + Sync {
     // --- Users -----------------------------------------------------------
 

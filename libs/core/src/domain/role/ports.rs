@@ -2,7 +2,7 @@ use common::CoreError;
 
 use crate::domain::{organization::OrganizationId, role::Role};
 
-#[cfg_attr(test, mockall::automock)]
+#[cfg_attr(any(test, feature = "mock"), mockall::automock)]
 pub trait RoleRepository: Send {
     fn insert(&mut self, role: &Role) -> impl Future<Output = Result<Role, CoreError>> + Send;
 

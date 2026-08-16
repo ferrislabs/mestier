@@ -2,7 +2,7 @@ use common::CoreError;
 
 use crate::{Category, CategoryId, OrganizationId};
 
-#[cfg_attr(test, mockall::automock)]
+#[cfg_attr(any(test, feature = "mock"), mockall::automock)]
 pub trait CategoryRepository: Send {
     fn insert(&mut self, c: &Category) -> impl Future<Output = Result<Category, CoreError>> + Send;
 

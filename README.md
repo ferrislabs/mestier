@@ -104,17 +104,38 @@ The last one runs the Gherkin scenarios in `libs/core/tests/features/`, which
 state business rules in plain sentences so they can be arbitrated without
 reading Rust. To add one: write the scenario in a `.feature` file, then wire its
 sentences in `libs/core/tests/quote_bdd/steps.rs`. Steps call a domain service
-through its port and assert on the answer — they never hold a rule themselves,
-and they never touch a database. Repository doubles come from `mockall`, not
-from hand-written adapters: gate the port with
-`#[cfg_attr(any(test, feature = "mock"), mockall::automock)]` and follow
-`tests/quote_bdd/repository.rs`, which stubs the mock over a shared in-memory
-store. Declare any new suite as its own `[[test]]` with `harness = false`.
+through its port and assert on the answer. They never hold a rule themselves,
+and they never touch a database. Follow `tests/quote_bdd/repository.rs`, which
+stubs a mock over a shared in-memory store, and declare any new suite as its
+own `[[test]]` with `harness = false`.
 
-The `mock` feature is what makes those doubles visible outside the crate. It is
-turned on by `mestier-core`'s dev-dependency on itself, so `cargo test` has it
-and `cargo build` does not, and no test target needs `required-features` (which
-would silently skip it under `cargo test --workspace`).
+### Mocks across crates
+
+`mestier-core`, `discord`, `iam`, `rate-limit` and `authz` expose their ports'
+`mockall` doubles behind a `mock` feature, so no crate writes a fake by hand:
+
+```rust
+#[cfg_attr(any(test, feature = "mock"), mockall::automock)]
+pub trait TaskRepository { /* … */ }
+```
+
+To use one from another crate's tests, enable the feature on the dev-dependency:
+
+```toml
+[dev-dependencies]
+mestier-core = { workspace = true, features = ["mock"] }
+```
+
+For a crate's own `tests/`, it dev-depends on *itself* with the feature on,
+which is what `mestier-core` does. Either way the resolver keeps a dev-only
+feature out of `cargo build`, so mockall never reaches a production binary.
+`cargo tree -p api --edges normal -i mockall` must stay empty. Do not reach for
+`required-features` instead: it makes `cargo test --workspace` skip the target
+in silence.
+
+`mestier-core` re-exports all its mocks at the crate root, since its `domain`
+module is `pub(crate)`. Adding a port means adding one line to that gated
+`pub use` block in `libs/core/src/lib.rs`.
 
 ## Frontend
 

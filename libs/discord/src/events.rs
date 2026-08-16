@@ -65,7 +65,7 @@ pub enum DomainEvent {
     NotificationCreated(Notification),
 }
 
-#[cfg_attr(test, mockall::automock)]
+#[cfg_attr(any(test, feature = "mock"), mockall::automock)]
 pub trait EventPublisher: Send + Sync {
     fn publish(&self, event: DomainEvent) -> impl Future<Output = Result<(), CoreError>> + Send;
 }

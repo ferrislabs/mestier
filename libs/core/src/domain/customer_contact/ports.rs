@@ -3,7 +3,7 @@ use common::CoreError;
 
 use crate::{CustomerContact, CustomerContactId, CustomerId};
 
-#[cfg_attr(test, mockall::automock)]
+#[cfg_attr(any(test, feature = "mock"), mockall::automock)]
 pub trait CustomerContactRepository: Send {
     fn insert(
         &mut self,

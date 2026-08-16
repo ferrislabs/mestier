@@ -5,7 +5,7 @@ use common::CoreError;
 
 use crate::{Equipment, EquipmentId, OrganizationId, TaskId};
 
-#[cfg_attr(test, mockall::automock)]
+#[cfg_attr(any(test, feature = "mock"), mockall::automock)]
 pub trait EquipmentRepository: Send {
     fn insert(
         &mut self,

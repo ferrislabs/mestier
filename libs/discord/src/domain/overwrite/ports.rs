@@ -7,7 +7,7 @@ use crate::domain::{ChannelPermissionOverwrite, OverwriteTarget};
 
 use super::commands::UpsertChannelOverwrite;
 
-#[cfg_attr(test, mockall::automock)]
+#[cfg_attr(any(test, feature = "mock"), mockall::automock)]
 pub trait OverwriteRepository: Send + Sync {
     fn upsert(
         &self,

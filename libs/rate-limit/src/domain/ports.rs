@@ -1,6 +1,6 @@
 use crate::{Quota, RateLimitDecision, RateLimitError, RateLimitKey};
 
-#[cfg_attr(test, mockall::automock)]
+#[cfg_attr(any(test, feature = "mock"), mockall::automock)]
 pub trait RateLimiter: Send + Sync {
     fn check(
         &self,

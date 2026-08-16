@@ -4,7 +4,7 @@ use crate::User;
 use crate::UserId;
 use crate::domain::user::commands::UpsertUserBySubCommand;
 
-#[cfg_attr(test, mockall::automock)]
+#[cfg_attr(any(test, feature = "mock"), mockall::automock)]
 pub trait UserRepository: Send {
     fn upsert_by_email(
         &mut self,

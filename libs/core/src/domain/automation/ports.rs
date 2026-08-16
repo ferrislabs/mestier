@@ -14,7 +14,7 @@ use crate::domain::automation::workflow::{Graph, Workflow, WorkflowReference, Wo
 /// There is no read side and no update: the log is append-only, and the only
 /// column that ever changes afterwards is `dispatched_at`, which belongs to
 /// the dispatcher rather than to any emitter.
-#[cfg_attr(test, mockall::automock)]
+#[cfg_attr(any(test, feature = "mock"), mockall::automock)]
 pub trait EventLogRepository: Send {
     /// Append a whole transaction's events in one statement.
     ///
@@ -82,7 +82,7 @@ pub struct DispatchOutcome {
 /// Deliberately separate from executing a run: this does no connector I/O, so
 /// it cannot hang, and a run stuck mid-execution cannot delay anyone else's
 /// fan-out.
-#[cfg_attr(test, mockall::automock)]
+#[cfg_attr(any(test, feature = "mock"), mockall::automock)]
 pub trait EventDispatchRepository: Send {
     fn dispatch_pending(
         &mut self,
@@ -97,7 +97,7 @@ pub trait EventDispatchRepository: Send {
 /// engine (`application::automation::run::retry_schedule_for`) reuses it
 /// verbatim for the same reason a retry needs backoff, rather than
 /// duplicating the query on its own.
-#[cfg_attr(test, mockall::automock)]
+#[cfg_attr(any(test, feature = "mock"), mockall::automock)]
 pub trait AutomationSettingsRepository: Send {
     fn settings_for(
         &mut self,
@@ -134,7 +134,7 @@ pub trait AutomationSettingsRepository: Send {
 /// method that can reach someone else's row, not a promise the caller
 /// already checked — a cross-organization lookup must read back as absent,
 /// not merely refused.
-#[cfg_attr(test, mockall::automock)]
+#[cfg_attr(any(test, feature = "mock"), mockall::automock)]
 pub trait CredentialRepository: Send {
     fn insert(
         &mut self,
@@ -191,7 +191,7 @@ pub trait CredentialRepository: Send {
 /// method that can reach someone else's row, not a promise the caller
 /// already checked — a cross-organization lookup must read back as absent,
 /// the same discipline as [`CredentialRepository`].
-#[cfg_attr(test, mockall::automock)]
+#[cfg_attr(any(test, feature = "mock"), mockall::automock)]
 pub trait WorkflowRepository: Send {
     fn insert(
         &mut self,
@@ -269,7 +269,7 @@ pub trait WorkflowRepository: Send {
 /// promise the caller already checked — a cross-organization lookup must
 /// read back as absent, the same discipline as [`CredentialRepository`] and
 /// [`WorkflowRepository`].
-#[cfg_attr(test, mockall::automock)]
+#[cfg_attr(any(test, feature = "mock"), mockall::automock)]
 pub trait RunRepository: Send {
     /// Creates the run, `trigger_payload` and all — a run has no step until
     /// the engine executes its first real connector.

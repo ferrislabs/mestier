@@ -16,7 +16,7 @@ use crate::{Absence, EmployeeRhythm, OrganizationId, WorkSlot, domain::planning:
 /// the application layer group the result in memory: an org of 40
 /// employees must not turn into 40 queries per table (see the planning
 /// module design doc's N+1 warning).
-#[cfg_attr(test, mockall::automock)]
+#[cfg_attr(any(test, feature = "mock"), mockall::automock)]
 pub trait PlanningRepository: Send {
     /// Every task (with its assignments and its child count), enriched with
     /// `customer_name`/`context_label`, whose *effective* window overlaps

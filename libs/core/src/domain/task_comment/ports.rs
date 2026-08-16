@@ -3,7 +3,7 @@ use common::CoreError;
 
 use crate::{TaskComment, TaskCommentId, TaskId};
 
-#[cfg_attr(test, mockall::automock)]
+#[cfg_attr(any(test, feature = "mock"), mockall::automock)]
 pub trait TaskCommentRepository: Send {
     fn insert(
         &mut self,

@@ -36,12 +36,39 @@ pub use infrastructure::automation::webhook::{
 pub use infrastructure::automation::worker::{WorkerSchedule, run_automation_worker};
 pub use infrastructure::realtime::EventHub;
 
-#[cfg(feature = "mock")]
-pub use domain::quote::ports::MockQuoteRepository;
 /// Exposed for the BDD suite under `tests/`, which drives the quote service
 /// against a `mockall` double of its repository port. The port itself stays
 /// crate-private: nothing outside implements it by hand.
 pub use domain::quote::service::QuoteService;
+/// Every port's `mockall` double, for test targets outside this crate: its
+/// own `tests/`, and the handler crates. Gated so mockall never reaches a
+/// normal build.
+#[cfg(feature = "mock")]
+pub use domain::{
+    absence::ports::MockAbsenceRepository,
+    automation::ports::{
+        MockAutomationSettingsRepository, MockCredentialRepository, MockEventDispatchRepository,
+        MockEventLogRepository, MockRunRepository, MockWorkflowRepository,
+    },
+    customer::ports::MockCustomerRepository,
+    customer_contact::ports::MockCustomerContactRepository,
+    customer_context::ports::MockCustomerContextRepository,
+    employee::ports::MockEmployeeRepository,
+    equipment::ports::MockEquipmentRepository,
+    invitation::ports::MockInvitationRepository,
+    member::ports::MockMemberRepository,
+    organization::ports::MockOrganizationRepository,
+    planning::ports::MockPlanningRepository,
+    product::ports::MockProductRepository,
+    quote::ports::MockQuoteRepository,
+    role::ports::MockRoleRepository,
+    service_rate::ports::MockServiceRateRepository,
+    task::ports::MockTaskRepository,
+    task_comment::ports::MockTaskCommentRepository,
+    task_label::ports::MockTaskLabelRepository,
+    user::ports::MockUserRepository,
+    work_time::ports::{MockRhythmRepository, MockWorkSlotRepository},
+};
 
 pub use domain::{
     Absence, AbsenceId, AbsenceKind, AssigneeRef, AvailabilityReport, Conflict, ConflictKind,
