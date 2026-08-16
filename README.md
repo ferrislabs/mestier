@@ -109,6 +109,29 @@ and they never touch a database. Follow `tests/quote_bdd/repository.rs`, which
 stubs a mock over a shared in-memory store, and declare any new suite as its
 own `[[test]]` with `harness = false`.
 
+### End-to-end
+
+```bash
+docker compose up -d postgres redis rustfs
+source .env
+cargo test -p handlers-quote --test http_e2e -- --ignored
+```
+
+`libs/handlers-quote/tests/http_e2e/` drives the quote API over a real socket:
+typed routing, the rate-limit and auth middlewares, the handler, the use case,
+a Postgres transaction. Nothing in that chain is doubled except the identity
+provider, and even that is a real HTTP server publishing a real JWKS, so the
+RS256 token is genuinely fetched, verified and decoded.
+
+`AppState` is built by `handlers::state`, the same function the binary calls,
+and the router is served with `into_make_service_with_connect_info` for the
+same reason the binary does it: the rate-limit middleware keys on the peer
+address. Overriding either would make the test pass on wiring the product does
+not use.
+
+These are `#[ignore]`d, like the use-case integration tests in `libs/core`, so
+`cargo test --workspace` stays runnable with nothing installed.
+
 ### Mocks across crates
 
 `mestier-core`, `discord`, `iam`, `rate-limit` and `authz` expose their ports'
