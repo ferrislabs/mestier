@@ -36,6 +36,13 @@ pub use infrastructure::automation::webhook::{
 pub use infrastructure::automation::worker::{WorkerSchedule, run_automation_worker};
 pub use infrastructure::realtime::EventHub;
 
+#[cfg(feature = "mock")]
+pub use domain::quote::ports::MockQuoteRepository;
+/// Exposed for the BDD suite under `tests/`, which drives the quote service
+/// against a `mockall` double of its repository port. The port itself stays
+/// crate-private: nothing outside implements it by hand.
+pub use domain::quote::service::QuoteService;
+
 pub use domain::{
     Absence, AbsenceId, AbsenceKind, AssigneeRef, AvailabilityReport, Conflict, ConflictKind,
     Customer, CustomerContact, CustomerContactId, CustomerContext, CustomerContextId, CustomerId,

@@ -3,7 +3,7 @@ use common::CoreError;
 
 use crate::{OrganizationId, Quote, QuoteId, QuoteStatus};
 
-#[cfg_attr(test, mockall::automock)]
+#[cfg_attr(any(test, feature = "mock"), mockall::automock)]
 pub trait QuoteRepository: Send {
     fn next_reference(
         &mut self,

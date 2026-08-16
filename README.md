@@ -92,6 +92,30 @@ cargo install sqlx-cli --no-default-features --features rustls,postgres
 sqlx migrate run
 ```
 
+## Tests
+
+```bash
+cargo test --workspace                    # unit tests, no database
+cargo test -p mestier-core -- --ignored   # integration tests, needs DATABASE_URL
+cargo test -p mestier-core --test quote_bdd
+```
+
+The last one runs the Gherkin scenarios in `libs/core/tests/features/`, which
+state business rules in plain sentences so they can be arbitrated without
+reading Rust. To add one: write the scenario in a `.feature` file, then wire its
+sentences in `libs/core/tests/quote_bdd/steps.rs`. Steps call a domain service
+through its port and assert on the answer — they never hold a rule themselves,
+and they never touch a database. Repository doubles come from `mockall`, not
+from hand-written adapters: gate the port with
+`#[cfg_attr(any(test, feature = "mock"), mockall::automock)]` and follow
+`tests/quote_bdd/repository.rs`, which stubs the mock over a shared in-memory
+store. Declare any new suite as its own `[[test]]` with `harness = false`.
+
+The `mock` feature is what makes those doubles visible outside the crate. It is
+turned on by `mestier-core`'s dev-dependency on itself, so `cargo test` has it
+and `cargo build` does not, and no test target needs `required-features` (which
+would silently skip it under `cargo test --workspace`).
+
 ## Frontend
 
 ```bash

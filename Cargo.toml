@@ -45,6 +45,7 @@ uuid = { version = "1.19.0", features = ["serde", "v4", "v7"] }
 sqlx = { version = "0.8.6", default-features = false, features = ["runtime-tokio", "tls-rustls", "postgres", "uuid", "chrono", "macros", "json", "rust_decimal"] }
 rust_decimal = { version = "1.39.0", features = ["serde"] }
 mockall = "0.13"
+cucumber = "0.23.0"
 redis = { version = "1.2.0", default-features = false, features = ["tokio-comp", "connection-manager", "script"] }
 divan = { package = "codspeed-divan-compat", version = "3" }
 

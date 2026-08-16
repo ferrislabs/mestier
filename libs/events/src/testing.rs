@@ -14,7 +14,7 @@ use crate::{Actor, DomainEvent, EmissionContext, EventCatalogue, EventEmitter, E
 ///
 /// Lets a domain service be tested for what it publishes without a database,
 /// a transaction, or a mock whose expectations restate the implementation.
-#[derive(Default)]
+#[derive(Debug, Default)]
 pub struct RecordingEmitter {
     recorded: Mutex<Vec<EventEnvelope>>,
 }

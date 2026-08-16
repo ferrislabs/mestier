@@ -30,8 +30,22 @@ tracing = { workspace = true }
 aws-credential-types = { workspace = true }
 aws-sdk-s3 = { workspace = true }
 bytes = { workspace = true }
+mockall = { workspace = true, optional = true }
+
+[features]
+# Exposes the `automock` doubles to downstream test targets, this crate's own
+# `tests/` included. Never enabled by a normal build: only the dev-dependency
+# below turns it on, and the resolver keeps dev-only features out of `cargo build`.
+mock = ["dep:mockall"]
 
 [dev-dependencies]
+mestier-core = { path = ".", features = ["mock"] }
 authz = { workspace = true, features = ["mock"] }
+cucumber = { workspace = true }
 mockall = { workspace = true }
 tokio = { workspace = true, features = ["time"] }
+
+# Cucumber drives its own runner: the libtest harness must stay out of the way.
+[[test]]
+name = "quote_bdd"
+harness = false
