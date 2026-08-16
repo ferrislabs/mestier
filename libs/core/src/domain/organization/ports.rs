@@ -6,7 +6,7 @@ use crate::{
     domain::organization::{Organization, OrganizationId},
 };
 
-#[cfg_attr(test, mockall::automock)]
+#[cfg_attr(any(test, feature = "mock"), mockall::automock)]
 pub trait OrganizationRepository: Send {
     fn insert(
         &mut self,

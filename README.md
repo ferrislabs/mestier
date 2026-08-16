@@ -92,6 +92,74 @@ cargo install sqlx-cli --no-default-features --features rustls,postgres
 sqlx migrate run
 ```
 
+## Tests
+
+```bash
+cargo test --workspace                    # unit tests, no database
+cargo test -p mestier-core -- --ignored   # integration tests, needs DATABASE_URL
+cargo test -p mestier-core --test quote_bdd
+```
+
+The last one runs the Gherkin scenarios in `libs/core/tests/features/`, which
+state business rules in plain sentences so they can be arbitrated without
+reading Rust. To add one: write the scenario in a `.feature` file, then wire its
+sentences in `libs/core/tests/quote_bdd/steps.rs`. Steps call a domain service
+through its port and assert on the answer. They never hold a rule themselves,
+and they never touch a database. Follow `tests/quote_bdd/repository.rs`, which
+stubs a mock over a shared in-memory store, and declare any new suite as its
+own `[[test]]` with `harness = false`.
+
+### End-to-end
+
+```bash
+docker compose up -d postgres redis rustfs
+source .env
+cargo test -p handlers-quote --test http_e2e -- --ignored
+```
+
+`libs/handlers-quote/tests/http_e2e/` drives the quote API over a real socket:
+typed routing, the rate-limit and auth middlewares, the handler, the use case,
+a Postgres transaction. Nothing in that chain is doubled except the identity
+provider, and even that is a real HTTP server publishing a real JWKS, so the
+RS256 token is genuinely fetched, verified and decoded.
+
+`AppState` is built by `handlers::state`, the same function the binary calls,
+and the router is served with `into_make_service_with_connect_info` for the
+same reason the binary does it: the rate-limit middleware keys on the peer
+address. Overriding either would make the test pass on wiring the product does
+not use.
+
+These are `#[ignore]`d, like the use-case integration tests in `libs/core`, so
+`cargo test --workspace` stays runnable with nothing installed.
+
+### Mocks across crates
+
+`mestier-core`, `discord`, `iam`, `rate-limit` and `authz` expose their ports'
+`mockall` doubles behind a `mock` feature, so no crate writes a fake by hand:
+
+```rust
+#[cfg_attr(any(test, feature = "mock"), mockall::automock)]
+pub trait TaskRepository { /* … */ }
+```
+
+To use one from another crate's tests, enable the feature on the dev-dependency:
+
+```toml
+[dev-dependencies]
+mestier-core = { workspace = true, features = ["mock"] }
+```
+
+For a crate's own `tests/`, it dev-depends on *itself* with the feature on,
+which is what `mestier-core` does. Either way the resolver keeps a dev-only
+feature out of `cargo build`, so mockall never reaches a production binary.
+`cargo tree -p api --edges normal -i mockall` must stay empty. Do not reach for
+`required-features` instead: it makes `cargo test --workspace` skip the target
+in silence.
+
+`mestier-core` re-exports all its mocks at the crate root, since its `domain`
+module is `pub(crate)`. Adding a port means adding one line to that gated
+`pub use` block in `libs/core/src/lib.rs`.
+
 ## Frontend
 
 ```bash

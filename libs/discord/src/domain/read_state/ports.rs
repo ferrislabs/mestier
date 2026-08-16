@@ -6,7 +6,7 @@ use crate::{ChannelId, domain::ChannelReadState};
 
 use super::commands::MarkChannelReadCommand;
 
-#[cfg_attr(test, mockall::automock)]
+#[cfg_attr(any(test, feature = "mock"), mockall::automock)]
 pub trait ReadStateRepository: Send + Sync {
     fn upsert(
         &self,

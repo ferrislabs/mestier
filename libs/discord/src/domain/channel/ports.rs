@@ -2,7 +2,7 @@ use common::CoreError;
 
 use crate::{Channel, ChannelId, OrganizationId};
 
-#[cfg_attr(test, mockall::automock)]
+#[cfg_attr(any(test, feature = "mock"), mockall::automock)]
 pub trait ChannelRepository: Send {
     fn insert(&mut self, ch: &Channel) -> impl Future<Output = Result<Channel, CoreError>> + Send;
 

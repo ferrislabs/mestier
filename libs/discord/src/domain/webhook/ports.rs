@@ -2,7 +2,7 @@ use common::CoreError;
 
 use crate::{ChannelId, Webhook, WebhookId};
 
-#[cfg_attr(test, mockall::automock)]
+#[cfg_attr(any(test, feature = "mock"), mockall::automock)]
 pub trait WebhookRepository: Send {
     fn insert(&mut self, w: &Webhook) -> impl Future<Output = Result<Webhook, CoreError>> + Send;
 

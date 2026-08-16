@@ -10,7 +10,7 @@ use crate::{
     },
 };
 
-#[cfg_attr(test, mockall::automock)]
+#[cfg_attr(any(test, feature = "mock"), mockall::automock)]
 pub trait MemberRepository: Send {
     fn insert(&mut self, member: &Member)
     -> impl Future<Output = Result<Member, CoreError>> + Send;
