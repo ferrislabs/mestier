@@ -52,7 +52,7 @@ describe('buildSettingsNavGroups', () => {
 			section('crm-truc', 'crm'),
 		])
 
-		expect(groups.map((g) => g.label)).toEqual(['CRM', 'RH'])
+		expect(groups.map((g) => g.label)).toEqual(['CRM', 'Équipe & ressources'])
 	})
 
 	it("n'émet aucun groupe pour un module sans section", () => {

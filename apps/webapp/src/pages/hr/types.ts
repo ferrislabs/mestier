@@ -358,3 +358,20 @@ export function formatDateFr(iso: string): string {
 		timeZone: 'UTC',
 	}).format(date)
 }
+
+/**
+ * No HR screen has an organization timezone to read: `GET
+ * /organizations/{id}` doesn't expose `organizations.timezone`, only `GET
+ * /planning` does (see the planning design doc), and these screens aren't
+ * otherwise coupled to the planning module — fetching a planning window just
+ * to read a timezone field would be a strange, wasteful dependency for an
+ * HR-only page. Falls back to the browser's own zone; on a device set to a
+ * different zone than the organization's configured one, this can disagree
+ * slightly with the planning grid (which always resolves through
+ * `organizations.timezone`) for non-all-day absences, or shift the
+ * displayed day near a midnight boundary — a real, human-reviewable
+ * trade-off, not an oversight.
+ */
+export function browserTimeZone(): string {
+	return Intl.DateTimeFormat().resolvedOptions().timeZone
+}

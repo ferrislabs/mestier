@@ -3,6 +3,7 @@ import {
 	Clock,
 	Loader2,
 	MoreHorizontal,
+	Plus,
 	Save,
 	Search,
 	Trash2,
@@ -28,6 +29,14 @@ import {
 	AlertDialogTrigger,
 } from '#/components/ui/alert-dialog'
 import { Button } from '#/components/ui/button'
+import {
+	Dialog,
+	DialogContent,
+	DialogDescription,
+	DialogFooter,
+	DialogHeader,
+	DialogTitle,
+} from '#/components/ui/dialog'
 import {
 	DropdownMenu,
 	DropdownMenuContent,
@@ -97,6 +106,8 @@ interface TeamListUIProps {
 	search: string
 	onSearchChange: (value: string) => void
 	createForm: FormBinding<MemberFormValues>
+	createMemberDialogOpen: boolean
+	onCreateMemberDialogOpenChange: (open: boolean) => void
 	draft: MemberDraft | null
 	isSaving: boolean
 	onEdit: (member: TeamMemberRow) => void
@@ -119,6 +130,8 @@ export function TeamListUI({
 	search,
 	onSearchChange,
 	createForm,
+	createMemberDialogOpen,
+	onCreateMemberDialogOpenChange,
 	draft,
 	isSaving,
 	onEdit,
@@ -137,6 +150,12 @@ export function TeamListUI({
 				eyebrow={organizationName}
 				title="Équipe"
 				description="Gérez les membres de l’organisation, leurs accès et leurs taux horaires."
+				actions={
+					<Button onClick={() => onCreateMemberDialogOpenChange(true)}>
+						<Plus />
+						Ajouter une personne
+					</Button>
+				}
 			/>
 
 			<MetricCard
@@ -165,8 +184,6 @@ export function TeamListUI({
 				</div>
 			</div>
 
-			<CreateMemberSection form={createForm} />
-
 			<PendingInvitationsSection
 				invitations={pendingInvitations}
 				revokingId={revokingInvitationId}
@@ -189,6 +206,57 @@ export function TeamListUI({
 					onInvite={onInvite}
 				/>
 			)}
+
+			<Dialog
+				open={createMemberDialogOpen}
+				onOpenChange={onCreateMemberDialogOpenChange}
+			>
+				<DialogContent className="flex max-h-[85vh] flex-col gap-0 overflow-hidden">
+					<DialogHeader className="border-b pb-4">
+						<DialogTitle>Ajouter une personne</DialogTitle>
+						<DialogDescription>
+							Le taux horaire est optionnel : laissez-le vide pour un siège sans
+							profil RH, renseignez-le pour lui en attacher un.
+						</DialogDescription>
+					</DialogHeader>
+					<div className="flex-1 overflow-y-auto py-4">
+						<div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+							<TextField
+								label="Nom"
+								value={createForm.values.lastName}
+								onChange={(lastName) => createForm.onChange({ lastName })}
+							/>
+							<TextField
+								label="Prénom"
+								value={createForm.values.firstName}
+								onChange={(firstName) => createForm.onChange({ firstName })}
+								placeholder="Optionnel"
+							/>
+							<TextField
+								label="Taux horaire"
+								value={createForm.values.hourlyRate}
+								onChange={(hourlyRate) => createForm.onChange({ hourlyRate })}
+								inputMode="decimal"
+								suffix="€/h"
+								placeholder="Optionnel"
+							/>
+						</div>
+					</div>
+					<DialogFooter className="border-t pt-4">
+						<Button
+							type="button"
+							variant="ghost"
+							onClick={() => onCreateMemberDialogOpenChange(false)}
+						>
+							Annuler
+						</Button>
+						<CreateButton
+							isPending={createForm.isPending}
+							onClick={createForm.onSubmit}
+						/>
+					</DialogFooter>
+				</DialogContent>
+			</Dialog>
 		</PageShell>
 	)
 }
@@ -201,45 +269,6 @@ TeamListUI.Loading = function TeamListLoading() {
 				Chargement de l’équipe…
 			</SectionCard>
 		</PageShell>
-	)
-}
-
-interface CreateMemberSectionProps {
-	form: FormBinding<MemberFormValues>
-}
-
-function CreateMemberSection({ form }: CreateMemberSectionProps) {
-	return (
-		<SectionCard>
-			<SectionHeader
-				title="Ajouter une personne"
-				description="Le taux horaire est optionnel : laissez-le vide pour un siège sans profil RH, renseignez-le pour lui en attacher un."
-			/>
-			<div className="grid grid-cols-1 gap-4 p-5 lg:grid-cols-[1fr_auto] lg:items-end">
-				<div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-					<TextField
-						label="Nom"
-						value={form.values.lastName}
-						onChange={(lastName) => form.onChange({ lastName })}
-					/>
-					<TextField
-						label="Prénom"
-						value={form.values.firstName}
-						onChange={(firstName) => form.onChange({ firstName })}
-						placeholder="Optionnel"
-					/>
-					<TextField
-						label="Taux horaire"
-						value={form.values.hourlyRate}
-						onChange={(hourlyRate) => form.onChange({ hourlyRate })}
-						inputMode="decimal"
-						suffix="€/h"
-						placeholder="Optionnel"
-					/>
-				</div>
-				<CreateButton isPending={form.isPending} onClick={form.onSubmit} />
-			</div>
-		</SectionCard>
 	)
 }
 

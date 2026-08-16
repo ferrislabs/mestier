@@ -1,6 +1,14 @@
 import { CalendarIcon, Loader2, Trash2 } from 'lucide-react'
 import { Button } from '#/components/ui/button'
 import { Calendar } from '#/components/ui/calendar'
+import {
+	Dialog,
+	DialogContent,
+	DialogDescription,
+	DialogFooter,
+	DialogHeader,
+	DialogTitle,
+} from '#/components/ui/dialog'
 import { Input } from '#/components/ui/input'
 import { Label } from '#/components/ui/label'
 import {
@@ -15,14 +23,6 @@ import {
 	SelectTrigger,
 	SelectValue,
 } from '#/components/ui/select'
-import {
-	Sheet,
-	SheetContent,
-	SheetDescription,
-	SheetFooter,
-	SheetHeader,
-	SheetTitle,
-} from '#/components/ui/sheet'
 import { Switch } from '#/components/ui/switch'
 import { Textarea } from '#/components/ui/textarea'
 import {
@@ -83,8 +83,8 @@ export function AbsenceFormSheet({
 	const canSubmit = errors.length === 0 && !isSaving
 
 	return (
-		<Sheet open={open} onOpenChange={onOpenChange}>
-			<SheetContent className="w-full gap-0 overflow-y-auto sm:max-w-lg">
+		<Dialog open={open} onOpenChange={onOpenChange}>
+			<DialogContent className="flex max-h-[85vh] flex-col gap-0 overflow-hidden sm:max-w-lg">
 				<form
 					className="flex min-h-0 flex-1 flex-col"
 					onSubmit={(event) => {
@@ -92,17 +92,17 @@ export function AbsenceFormSheet({
 						if (canSubmit) onSubmit()
 					}}
 				>
-					<SheetHeader className="border-b">
-						<SheetTitle>
+					<DialogHeader className="border-b pb-4">
+						<DialogTitle>
 							{mode === 'create' ? 'Nouvelle absence' : 'Modifier l’absence'}
-						</SheetTitle>
-						<SheetDescription>
+						</DialogTitle>
+						<DialogDescription>
 							Congé, arrêt ou indisponibilité — l’assignation d’un chantier
 							pendant cette période n’est jamais bloquée, seulement signalée.
-						</SheetDescription>
-					</SheetHeader>
+						</DialogDescription>
+					</DialogHeader>
 
-					<div className="flex-1 space-y-5 overflow-y-auto p-4">
+					<div className="flex-1 space-y-5 overflow-y-auto py-4">
 						<div className="flex flex-col gap-2">
 							<Label htmlFor="absence-member">Personne</Label>
 							{mode === 'create' ? (
@@ -222,7 +222,7 @@ export function AbsenceFormSheet({
 						) : null}
 					</div>
 
-					<SheetFooter className="border-t bg-background sm:flex-row sm:justify-between">
+					<DialogFooter className="border-t pt-4 sm:justify-between">
 						{mode === 'edit' && onDelete ? (
 							<Button
 								type="button"
@@ -250,10 +250,10 @@ export function AbsenceFormSheet({
 								{mode === 'create' ? 'Créer l’absence' : 'Enregistrer'}
 							</Button>
 						</div>
-					</SheetFooter>
+					</DialogFooter>
 				</form>
-			</SheetContent>
-		</Sheet>
+			</DialogContent>
+		</Dialog>
 	)
 }
 

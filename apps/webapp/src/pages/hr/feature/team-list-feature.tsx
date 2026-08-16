@@ -62,6 +62,7 @@ function TeamDirectory({
 	const revokeInvitation = useRevokeInvitation()
 
 	const [search, setSearch] = useState('')
+	const [createMemberDialogOpen, setCreateMemberDialogOpen] = useState(false)
 	const [draft, setDraft] = useState<MemberDraft | null>(null)
 	const [isSaving, setIsSaving] = useState(false)
 	const [inviteTarget, setInviteTarget] = useState<{
@@ -95,8 +96,14 @@ function TeamDirectory({
 				})
 			}
 			memberForm.reset()
+			setCreateMemberDialogOpen(false)
 		},
 	})
+
+	const handleCreateMemberDialogOpenChange = (open: boolean) => {
+		setCreateMemberDialogOpen(open)
+		if (!open) memberForm.reset()
+	}
 
 	const members = catalog.members.data?.data ?? []
 	const profileByMember = new Map(
@@ -233,6 +240,8 @@ function TeamDirectory({
 							},
 							onSubmit: () => void memberForm.handleSubmit(),
 						}}
+						createMemberDialogOpen={createMemberDialogOpen}
+						onCreateMemberDialogOpenChange={handleCreateMemberDialogOpenChange}
 						draft={draft}
 						isSaving={isSaving}
 						onEdit={(row) => {
