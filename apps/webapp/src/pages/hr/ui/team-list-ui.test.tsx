@@ -35,6 +35,8 @@ function baseProps() {
 			onChange: vi.fn(),
 			onSubmit: vi.fn(),
 		},
+		createMemberDialogOpen: false,
+		onCreateMemberDialogOpenChange: vi.fn(),
 		draft: null as MemberDraft | null,
 		isSaving: false,
 		onEdit: vi.fn(),
@@ -179,5 +181,37 @@ describe('TeamListUI — deletion goes through a confirmation dialog', () => {
 		await user.click(screen.getByRole('button', { name: 'Supprimer' }))
 
 		expect(props.onDeleteMember).toHaveBeenCalledWith(member())
+	})
+})
+
+describe('TeamListUI — create member modal', () => {
+	it('is closed by default, with no create fields visible on the page', async () => {
+		await renderWithRouter(<TeamListUI {...baseProps()} />)
+
+		expect(screen.queryByLabelText('Nom')).toBeNull()
+	})
+
+	it('"Ajouter une personne" asks the feature to open the modal', async () => {
+		const user = userEvent.setup()
+		const props = baseProps()
+		await renderWithRouter(<TeamListUI {...props} />)
+
+		await user.click(
+			screen.getByRole('button', { name: 'Ajouter une personne' }),
+		)
+
+		expect(props.onCreateMemberDialogOpenChange).toHaveBeenCalledWith(true)
+	})
+
+	it('shows the create fields once open, and submits through the create form binding', async () => {
+		const user = userEvent.setup()
+		const props = { ...baseProps(), createMemberDialogOpen: true }
+		await renderWithRouter(<TeamListUI {...props} />)
+
+		expect(screen.getByLabelText('Nom')).toBeDefined()
+
+		await user.click(screen.getByRole('button', { name: 'Ajouter' }))
+
+		expect(props.createForm.onSubmit).toHaveBeenCalled()
 	})
 })
