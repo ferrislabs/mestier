@@ -31,17 +31,50 @@ impl Display for ServiceRateId {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum ServiceRateUnit {
+    /// A price for a whole job, priced once rather than per quantity.
+    FlatRate,
     Hour,
+    Day,
+    /// A count of things: fittings, fixtures, anything sold by the piece.
+    Unit,
     Ml,
     M2,
+    M3,
+    Kg,
+    Tonne,
+    Litre,
 }
 
 impl ServiceRateUnit {
+    /// Every variant, ordered the way a quote form should offer them: time,
+    /// then counts, then geometry, then mass and volume.
+    pub const ALL: [ServiceRateUnit; 10] = [
+        Self::FlatRate,
+        Self::Hour,
+        Self::Day,
+        Self::Unit,
+        Self::Ml,
+        Self::M2,
+        Self::M3,
+        Self::Kg,
+        Self::Tonne,
+        Self::Litre,
+    ];
+
+    /// The wire form. Exhaustive by construction, so a new variant cannot be
+    /// added without naming how it is stored.
     pub fn as_str(self) -> &'static str {
         match self {
+            Self::FlatRate => "FLAT_RATE",
             Self::Hour => "HOUR",
+            Self::Day => "DAY",
+            Self::Unit => "UNIT",
             Self::Ml => "ML",
             Self::M2 => "M2",
+            Self::M3 => "M3",
+            Self::Kg => "KG",
+            Self::Tonne => "TONNE",
+            Self::Litre => "LITRE",
         }
     }
 }
@@ -56,12 +89,10 @@ impl FromStr for ServiceRateUnit {
     type Err = String;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s {
-            "HOUR" => Ok(Self::Hour),
-            "ML" => Ok(Self::Ml),
-            "M2" => Ok(Self::M2),
-            other => Err(format!("invalid service rate unit `{other}`")),
-        }
+        ServiceRateUnit::ALL
+            .into_iter()
+            .find(|unit| unit.as_str() == s)
+            .ok_or_else(|| format!("invalid service rate unit `{s}`"))
     }
 }
 
@@ -81,25 +112,32 @@ pub struct ServiceRate {
 mod tests {
     use super::*;
 
+    /// Covers every variant without naming them, so widening `ALL` extends the
+    /// test instead of leaving a new unit unparsed.
     #[test]
-    fn service_rate_unit_parses_known_values() {
-        assert_eq!(
-            "HOUR".parse::<ServiceRateUnit>().unwrap(),
-            ServiceRateUnit::Hour
-        );
-        assert_eq!(
-            "ML".parse::<ServiceRateUnit>().unwrap(),
-            ServiceRateUnit::Ml
-        );
-        assert_eq!(
-            "M2".parse::<ServiceRateUnit>().unwrap(),
-            ServiceRateUnit::M2
-        );
+    fn every_service_rate_unit_round_trips_through_its_wire_form() {
+        for unit in ServiceRateUnit::ALL {
+            assert_eq!(unit.as_str().parse::<ServiceRateUnit>(), Ok(unit));
+        }
+    }
+
+    /// `as_str` is hand-written and `Serialize` is derived from `rename_all`.
+    /// Nothing makes the two agree, so a variant whose name does not
+    /// screaming-snake-case to its wire form would ship a silent mismatch
+    /// between the database column and the JSON body.
+    #[test]
+    fn the_serialized_form_is_the_stored_form() {
+        for unit in ServiceRateUnit::ALL {
+            assert_eq!(
+                serde_json::to_value(unit).expect("a unit serializes"),
+                serde_json::Value::String(unit.as_str().to_owned()),
+            );
+        }
     }
 
     #[test]
     fn service_rate_unit_rejects_unknown_values() {
-        assert!("DAY".parse::<ServiceRateUnit>().is_err());
+        assert!("FURLONG".parse::<ServiceRateUnit>().is_err());
     }
 
     #[test]
