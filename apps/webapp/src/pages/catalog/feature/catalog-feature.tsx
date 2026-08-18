@@ -58,6 +58,7 @@ import {
 	useUpdateProduct,
 	useUpdateServiceRate,
 } from '#/hooks/use-reference-catalog'
+import { formatPricePerUnit, formatUnitLong } from '#/lib/units'
 import type { ServiceRateFormValues } from '#/pages/catalog/types'
 
 type CatalogTab = 'products' | 'services'
@@ -67,16 +68,17 @@ type Draft =
 	| { tab: 'services'; id: string; values: ServiceRateFormValues }
 	| null
 
-const UNIT_LABELS: Record<ServiceRateUnit, string> = {
-	HOUR: '€/h',
-	ML: '€/ml',
-	M2: '€/m²',
+/**
+ * Derived rather than listed, so adding a unit does not need this file opened.
+ * Products keep the legacy HOUR relabelling until the rows stored before UNIT
+ * existed are migrated; see catalog-item-picker.
+ */
+function unitPriceSuffix(unit: ServiceRateUnit): string {
+	return formatPricePerUnit(unit)
 }
 
-const PRODUCT_UNIT_LABELS: Record<ServiceRateUnit, string> = {
-	HOUR: '€/unité',
-	ML: '€/ml',
-	M2: '€/m²',
+function productPriceSuffix(unit: ServiceRateUnit): string {
+	return unit === 'HOUR' ? '€/unité' : formatPricePerUnit(unit)
 }
 
 /**
@@ -566,7 +568,7 @@ function ProductCreateFields({
 					value={form.values.unitPrice}
 					onChange={(unitPrice) => form.onChange({ unitPrice })}
 					inputMode="decimal"
-					suffix={PRODUCT_UNIT_LABELS[form.values.unit]}
+					suffix={productPriceSuffix(form.values.unit)}
 				/>
 			</div>
 			<div className="flex flex-col gap-2">
@@ -605,7 +607,7 @@ function ServiceCreateFields({
 					value={form.values.rate}
 					onChange={(rate) => form.onChange({ rate })}
 					inputMode="decimal"
-					suffix={UNIT_LABELS[form.values.unit]}
+					suffix={unitPriceSuffix(form.values.unit)}
 				/>
 			</div>
 		</div>
@@ -960,14 +962,15 @@ function EmptyState({
 	)
 }
 
+/**
+ * Spelled out, with the legacy HOUR relabelling products still need. These
+ * used to fall through to "mètre carré", which meant every unit added after
+ * m2 would have been mislabelled here.
+ */
 function productUnitLabel(unit: ServiceRateUnit): string {
-	if (unit === 'HOUR') return 'unité'
-	if (unit === 'ML') return 'mètre linéaire'
-	return 'mètre carré'
+	return unit === 'HOUR' ? 'unité' : formatUnitLong(unit)
 }
 
 function serviceUnitLabel(unit: ServiceRateUnit): string {
-	if (unit === 'HOUR') return 'heure'
-	if (unit === 'ML') return 'mètre linéaire'
-	return 'mètre carré'
+	return formatUnitLong(unit)
 }

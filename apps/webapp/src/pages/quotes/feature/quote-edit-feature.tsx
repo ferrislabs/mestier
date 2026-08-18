@@ -26,9 +26,7 @@ import { Label } from '#/components/ui/label'
 import {
 	Select,
 	SelectContent,
-	SelectGroup,
 	SelectItem,
-	SelectLabel,
 	SelectTrigger,
 	SelectValue,
 } from '#/components/ui/select'
@@ -38,7 +36,6 @@ import {
 	SectionCard,
 	SectionHeader,
 } from '#/components/ui/surface'
-import { Textarea } from '#/components/ui/textarea'
 import { useActiveOrganization } from '#/hooks/use-active-organization'
 import { type CatalogItem, useCatalogItems } from '#/hooks/use-catalog-items'
 import {
@@ -48,6 +45,7 @@ import {
 	useCustomers,
 	useUploadFile,
 } from '#/hooks/use-customers'
+import { useFileUrls } from '#/hooks/use-file-url'
 import {
 	type Quote,
 	type QuoteStatus,
@@ -55,23 +53,20 @@ import {
 	useQuote,
 	useUpdateQuote,
 } from '#/hooks/use-quotes'
-import {
-	type ServiceRateUnit,
-	useReferenceCatalog,
-} from '#/hooks/use-reference-catalog'
+import { useReferenceCatalog } from '#/hooks/use-reference-catalog'
 import { buildOrgPath } from '#/modules/org-path'
 import {
 	centsToEuros,
-	customerContextDisplayName,
 	customerDisplayName,
 	emptyQuoteLine,
 	eurosToCents,
 	formatCents,
-	formatUnit,
 	type QuoteFormValues,
 	type QuoteLineFormValues,
 	quoteStatusLabel,
 } from '#/pages/quotes/types'
+import { BillingAddressField } from '#/pages/quotes/ui/billing-address-field'
+import { QuoteLineEditor } from '#/pages/quotes/ui/quote-line-editor'
 
 interface QuoteEditFeatureProps {
 	quoteId: string
@@ -348,6 +343,17 @@ function QuoteEditUI({
 	onDelete: () => void
 }) {
 	const { activeOrganization } = useActiveOrganization()
+	// Only one line open at a time, so a long quote stays readable. Opening on
+	// the first line matches the create form.
+	const [openLineId, setOpenLineId] = useState<string | null>(
+		values.lines[0]?.clientId ?? null,
+	)
+	const photoPreviews = useFileUrls(
+		values.lines.flatMap((line) => line.photoKeys),
+	)
+	const photoUrls = Object.fromEntries(
+		photoPreviews.map((preview) => [preview.key, preview.url]),
+	)
 
 	return (
 		<PageShell>
@@ -431,7 +437,7 @@ function QuoteEditUI({
 					<SectionCard>
 						<SectionHeader
 							title="Informations"
-							description="Objet, client et contexte associés au devis."
+							description="Objet, client et adresse de facturation du devis."
 						/>
 						<div className="grid gap-4 p-5 md:grid-cols-2">
 							<FieldBlock label="Objet du devis">
@@ -477,28 +483,16 @@ function QuoteEditUI({
 									</SelectContent>
 								</Select>
 							</FieldBlock>
-							<FieldBlock label="Contexte client">
-								<Select
+							<FieldBlock label="Adresse de facturation">
+								<BillingAddressField
 									value={values.customerContextId}
-									onValueChange={(customerContextId) =>
+									addresses={customerContexts}
+									hasCustomer={Boolean(values.customerId)}
+									isLoading={isLoading}
+									onChange={(customerContextId) =>
 										onChange({ customerContextId })
 									}
-									disabled={!values.customerId || isLoading}
-								>
-									<SelectTrigger className="w-full">
-										<SelectValue placeholder="Sélectionner un contexte" />
-									</SelectTrigger>
-									<SelectContent>
-										{customerContexts.map((customerContext) => (
-											<SelectItem
-												key={customerContext.id}
-												value={customerContext.id}
-											>
-												{customerContextDisplayName(customerContext)}
-											</SelectItem>
-										))}
-									</SelectContent>
-								</Select>
+								/>
 							</FieldBlock>
 						</div>
 					</SectionCard>
@@ -526,14 +520,29 @@ function QuoteEditUI({
 									index={index}
 									line={line}
 									catalogItems={catalogItems}
+									photos={line.photoKeys.map((key) => ({
+										key,
+										url: photoUrls[key],
+									}))}
+									isOpen={openLineId === line.clientId}
 									canRemove={values.lines.length > 1}
 									isUploading={isUploading}
+									onOpenChange={(open) =>
+										setOpenLineId(open ? line.clientId : null)
+									}
 									onChange={(patch) => onLineChange(index, patch)}
 									onSelectCatalogItem={(catalogItemId) =>
 										onSelectCatalogItem(index, catalogItemId)
 									}
 									onRemove={() => onRemoveLine(index)}
-									onUploadPhoto={(file) => onUploadLinePhoto(index, file)}
+									onUploadPhoto={(file) => void onUploadLinePhoto(index, file)}
+									onRemovePhoto={(key) =>
+										onLineChange(index, {
+											photoKeys: line.photoKeys.filter(
+												(photoKey) => photoKey !== key,
+											),
+										})
+									}
 								/>
 							))}
 						</div>
@@ -552,181 +561,6 @@ function QuoteEditUI({
 				</aside>
 			</div>
 		</PageShell>
-	)
-}
-
-function QuoteLineEditor({
-	index,
-	line,
-	catalogItems,
-	canRemove,
-	isUploading,
-	onChange,
-	onSelectCatalogItem,
-	onRemove,
-	onUploadPhoto,
-}: {
-	index: number
-	line: QuoteLineFormValues
-	catalogItems: CatalogItem[]
-	canRemove: boolean
-	isUploading: boolean
-	onChange: (patch: Partial<QuoteLineFormValues>) => void
-	onSelectCatalogItem: (catalogItemId: string) => void
-	onRemove: () => void
-	onUploadPhoto: (file: File) => Promise<void>
-}) {
-	const serviceItems = catalogItems.filter((item) => item.type === 'SERVICE')
-	const productItems = catalogItems.filter((item) => item.type === 'PRODUCT')
-	const selectedCatalogItem = catalogItems.find(
-		(item) => item.id === line.catalogItemId,
-	)
-
-	return (
-		<div className="bg-card p-4">
-			<div className="mb-4 flex items-center justify-between gap-3">
-				<div>
-					<p className="text-sm font-semibold">
-						{line.label.trim() || `Ligne ${index + 1}`}
-					</p>
-					<p className="text-xs text-muted-foreground">
-						{quoteLineSourceLabel(line.catalogItemType)}
-					</p>
-				</div>
-				<div className="flex items-center gap-3">
-					<p className="text-sm font-semibold">
-						{formatCents(lineTotalCents(line))}
-					</p>
-					<Button
-						type="button"
-						variant="ghost"
-						size="icon-sm"
-						disabled={!canRemove}
-						onClick={onRemove}
-					>
-						<Trash2 />
-						<span className="sr-only">Supprimer la ligne</span>
-					</Button>
-				</div>
-			</div>
-
-			<div className="grid gap-4 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)_96px_128px_128px]">
-				<div className="lg:col-span-2">
-					<FieldBlock label="Catalogue">
-						<Select
-							value={line.catalogItemId || 'custom'}
-							onValueChange={(value) =>
-								onSelectCatalogItem(value === 'custom' ? '' : value)
-							}
-						>
-							<SelectTrigger className="w-full">
-								<SelectValue placeholder="Ligne libre" />
-							</SelectTrigger>
-							<SelectContent>
-								<SelectItem value="custom">Ligne libre</SelectItem>
-								{serviceItems.length > 0 ? (
-									<SelectGroup>
-										<SelectLabel>Services</SelectLabel>
-										{serviceItems.map((item) => (
-											<SelectItem key={item.id} value={item.id}>
-												{catalogItemOptionLabel(item)}
-											</SelectItem>
-										))}
-									</SelectGroup>
-								) : null}
-								{productItems.length > 0 ? (
-									<SelectGroup>
-										<SelectLabel>Produits</SelectLabel>
-										{productItems.map((item) => (
-											<SelectItem key={item.id} value={item.id}>
-												{catalogItemOptionLabel(item)}
-											</SelectItem>
-										))}
-									</SelectGroup>
-								) : null}
-							</SelectContent>
-						</Select>
-						{selectedCatalogItem ? (
-							<p className="truncate text-xs text-muted-foreground">
-								{catalogItemDetail(selectedCatalogItem)}
-							</p>
-						) : null}
-					</FieldBlock>
-				</div>
-				<FieldBlock label="Libellé">
-					<Input
-						value={line.label}
-						onChange={(event) => onChange({ label: event.target.value })}
-					/>
-				</FieldBlock>
-				<FieldBlock label="Quantité">
-					<Input
-						inputMode="decimal"
-						value={line.quantity}
-						onChange={(event) => onChange({ quantity: event.target.value })}
-					/>
-				</FieldBlock>
-				<FieldBlock label="Prix unitaire">
-					<Input
-						inputMode="decimal"
-						value={line.unitPrice}
-						onChange={(event) => onChange({ unitPrice: event.target.value })}
-					/>
-				</FieldBlock>
-				<FieldBlock label="Unité">
-					<Select
-						value={line.unit}
-						onValueChange={(unit) =>
-							onChange({ unit: unit as ServiceRateUnit })
-						}
-					>
-						<SelectTrigger className="w-full">
-							<SelectValue />
-						</SelectTrigger>
-						<SelectContent>
-							<SelectItem value="HOUR">
-								{line.catalogItemType === 'PRODUCT'
-									? 'unité'
-									: formatUnit('HOUR')}
-							</SelectItem>
-							<SelectItem value="ML">{formatUnit('ML')}</SelectItem>
-							<SelectItem value="M2">{formatUnit('M2')}</SelectItem>
-						</SelectContent>
-					</Select>
-				</FieldBlock>
-				<div className="lg:col-span-2">
-					<FieldBlock label="Notes">
-						<Textarea
-							value={line.notes}
-							onChange={(event) => onChange({ notes: event.target.value })}
-							placeholder="Précisions utiles"
-						/>
-					</FieldBlock>
-				</div>
-				<FieldBlock label="Photos">
-					<label className="flex h-10 cursor-pointer items-center justify-center gap-2 rounded-lg border bg-card px-3 text-sm font-medium text-primary shadow-xs hover:bg-brand-soft">
-						Ajouter
-						<input
-							type="file"
-							accept="image/*"
-							className="sr-only"
-							disabled={isUploading}
-							onChange={(event) => {
-								const file = event.target.files?.[0]
-								if (file) void onUploadPhoto(file)
-								event.target.value = ''
-							}}
-						/>
-					</label>
-					{line.photoKeys.length > 0 ? (
-						<p className="truncate text-xs text-muted-foreground">
-							{line.photoKeys.length} fichier
-							{line.photoKeys.length > 1 ? 's' : ''}
-						</p>
-					) : null}
-				</FieldBlock>
-			</div>
-		</div>
 	)
 }
 
@@ -849,26 +683,4 @@ function lineTotalCents(line: QuoteLineFormValues): number {
 	const quantity = Number(line.quantity.replace(',', '.'))
 	if (!Number.isFinite(quantity) || quantity <= 0) return 0
 	return Math.round(quantity * eurosToCents(line.unitPrice))
-}
-
-function quoteLineSourceLabel(type: QuoteLineFormValues['catalogItemType']) {
-	if (type === 'SERVICE') return 'Service catalogue'
-	if (type === 'PRODUCT') return 'Produit catalogue'
-	return 'Ligne libre'
-}
-
-function catalogItemOptionLabel(item: CatalogItem): string {
-	const reference = item.sku ? ` · ${item.sku}` : ''
-	return `${item.label}${reference} · ${formatCents(item.unitPriceCents)}`
-}
-
-function catalogItemDetail(item: CatalogItem): string {
-	const unit =
-		item.type === 'PRODUCT' && item.unit === 'HOUR'
-			? 'unité'
-			: formatUnit(item.unit)
-	const description = item.description ? ` · ${item.description}` : ''
-	return `${item.type === 'PRODUCT' ? 'Produit' : 'Service'} · ${formatCents(
-		item.unitPriceCents,
-	)} / ${unit}${description}`
 }

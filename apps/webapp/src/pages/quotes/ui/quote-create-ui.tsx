@@ -3,7 +3,6 @@ import {
 	AlertCircle,
 	Calculator,
 	FileText,
-	ImagePlus,
 	MapPin,
 	MoreHorizontal,
 	Plus,
@@ -31,6 +30,14 @@ import {
 } from '#/components/ui/alert-dialog'
 import { Button } from '#/components/ui/button'
 import {
+	Dialog,
+	DialogContent,
+	DialogDescription,
+	DialogFooter,
+	DialogHeader,
+	DialogTitle,
+} from '#/components/ui/dialog'
+import {
 	DropdownMenu,
 	DropdownMenuContent,
 	DropdownMenuItem,
@@ -42,20 +49,10 @@ import { Label } from '#/components/ui/label'
 import {
 	Select,
 	SelectContent,
-	SelectGroup,
 	SelectItem,
-	SelectLabel,
 	SelectTrigger,
 	SelectValue,
 } from '#/components/ui/select'
-import {
-	Sheet,
-	SheetContent,
-	SheetDescription,
-	SheetFooter,
-	SheetHeader,
-	SheetTitle,
-} from '#/components/ui/sheet'
 import {
 	MetricCard,
 	PageHeader,
@@ -64,11 +61,9 @@ import {
 	SectionHeader,
 	StatusBadge,
 } from '#/components/ui/surface'
-import { Textarea } from '#/components/ui/textarea'
 import type { CatalogItem } from '#/hooks/use-catalog-items'
 import type { Customer, CustomerContext } from '#/hooks/use-customers'
 import type { PaginationMetadata, Quote } from '#/hooks/use-quotes'
-import type { ServiceRateUnit } from '#/hooks/use-reference-catalog'
 import { buildOrgPath } from '#/modules/org-path'
 import {
 	getQuoteListUrlState,
@@ -78,16 +73,17 @@ import {
 	writeQuoteListUrlState,
 } from '#/pages/quotes/quote-list-url-state'
 import {
-	customerContextDisplayName,
+	billingAddressLines,
 	customerDisplayName,
-	eurosToCents,
 	formatCents,
 	formatDate,
-	formatUnit,
 	type QuoteFormValues,
 	type QuoteLineFormValues,
+	quoteLineTotalCents,
 	quoteStatusLabel,
 } from '#/pages/quotes/types'
+import { BillingAddressField } from '#/pages/quotes/ui/billing-address-field'
+import { QuoteLineEditor } from '#/pages/quotes/ui/quote-line-editor'
 
 interface QuoteCreateUIProps {
 	organizationSlug: string
@@ -106,6 +102,8 @@ interface QuoteCreateUIProps {
 	isUploading?: boolean
 	deletingQuoteId?: string | null
 	isCustomerContextsLoading?: boolean
+	/** Presigned preview urls by storage key, resolved by the feature layer. */
+	photoUrls: Record<string, string | undefined>
 	onRetry?: () => void
 	onChange: (patch: Partial<QuoteFormValues>) => void
 	onLineChange: (index: number, patch: Partial<QuoteLineFormValues>) => void
@@ -136,6 +134,7 @@ export function QuoteCreateUI({
 	isUploading,
 	deletingQuoteId,
 	isCustomerContextsLoading,
+	photoUrls,
 	onRetry,
 	onChange,
 	onLineChange,
@@ -149,6 +148,12 @@ export function QuoteCreateUI({
 	onSubmit,
 }: QuoteCreateUIProps) {
 	const [createOpen, setCreateOpen] = useState(false)
+	// Only one line is expanded at a time: that is what keeps a six-line quote
+	// readable. A blank draft opens on its first line so the form is not a wall
+	// of folded rows with nothing to do.
+	const [openLineId, setOpenLineId] = useState<string | null>(
+		values.lines[0]?.clientId ?? null,
+	)
 	const [quoteToDelete, setQuoteToDelete] = useState<Quote | null>(null)
 	const [initialQuoteListState] = useState(getQuoteListUrlState)
 	const [quoteSearch, setQuoteSearch] = useState(initialQuoteListState.search)
@@ -312,8 +317,11 @@ export function QuoteCreateUI({
 				</SectionCard>
 			) : null}
 
-			<Sheet open={createOpen} onOpenChange={setCreateOpen}>
-				<SheetContent className="w-full gap-0 overflow-y-auto sm:max-w-5xl">
+			<Dialog open={createOpen} onOpenChange={setCreateOpen}>
+				<DialogContent
+					className="flex max-h-[90vh] w-full flex-col gap-0 overflow-hidden p-0 sm:max-w-5xl"
+					showCloseButton={false}
+				>
 					<form
 						className="flex min-h-0 flex-1 flex-col"
 						onSubmit={(event) => {
@@ -321,13 +329,13 @@ export function QuoteCreateUI({
 							onSubmit()
 						}}
 					>
-						<SheetHeader className="border-b">
-							<SheetTitle>Nouveau devis</SheetTitle>
-							<SheetDescription>
+						<DialogHeader className="border-b px-5 py-4">
+							<DialogTitle>Nouveau devis</DialogTitle>
+							<DialogDescription>
 								Sélectionnez le client, puis ajoutez des services, produits ou
 								lignes libres.
-							</SheetDescription>
-						</SheetHeader>
+							</DialogDescription>
+						</DialogHeader>
 
 						<div className="flex-1 overflow-y-auto bg-muted/25">
 							<div className="grid gap-5 p-5 xl:grid-cols-[minmax(0,1fr)_300px]">
@@ -368,36 +376,16 @@ export function QuoteCreateUI({
 												</Select>
 											</FieldBlock>
 
-											<FieldBlock label="Contexte client">
-												<Select
+											<FieldBlock label="Adresse de facturation">
+												<BillingAddressField
 													value={values.customerContextId}
-													onValueChange={(customerContextId) =>
+													addresses={customerContexts}
+													hasCustomer={Boolean(values.customerId)}
+													isLoading={isCustomerContextsLoading}
+													onChange={(customerContextId) =>
 														onChange({ customerContextId })
 													}
-													disabled={
-														!values.customerId || isCustomerContextsLoading
-													}
-												>
-													<SelectTrigger className="w-full">
-														<SelectValue
-															placeholder={
-																values.customerId
-																	? 'Sélectionner un contexte'
-																	: 'Choisir un client'
-															}
-														/>
-													</SelectTrigger>
-													<SelectContent>
-														{customerContexts.map((customerContext) => (
-															<SelectItem
-																key={customerContext.id}
-																value={customerContext.id}
-															>
-																{customerContextDisplayName(customerContext)}
-															</SelectItem>
-														))}
-													</SelectContent>
-												</Select>
+												/>
 											</FieldBlock>
 										</div>
 									</FormSection>
@@ -427,15 +415,30 @@ export function QuoteCreateUI({
 													index={index}
 													line={line}
 													catalogItems={catalogItems}
+													photos={line.photoKeys.map((key) => ({
+														key,
+														url: photoUrls[key],
+													}))}
+													isOpen={openLineId === line.clientId}
 													canRemove={values.lines.length > 1}
 													isUploading={isUploading}
+													onOpenChange={(open) =>
+														setOpenLineId(open ? line.clientId : null)
+													}
 													onChange={(patch) => onLineChange(index, patch)}
 													onSelectCatalogItem={(catalogItemId) =>
 														onSelectCatalogItem(index, catalogItemId)
 													}
 													onRemove={() => onRemoveLine(index)}
 													onUploadPhoto={(file) =>
-														onUploadLinePhoto(index, file)
+														void onUploadLinePhoto(index, file)
+													}
+													onRemovePhoto={(key) =>
+														onLineChange(index, {
+															photoKeys: line.photoKeys.filter(
+																(photoKey) => photoKey !== key,
+															),
+														})
 													}
 												/>
 											))}
@@ -450,10 +453,13 @@ export function QuoteCreateUI({
 											? customerDisplayName(selectedCustomer)
 											: 'Non sélectionné'
 									}
-									contextName={
+									billingAddress={
 										selectedCustomerContext
-											? customerContextDisplayName(selectedCustomerContext)
-											: 'Non sélectionné'
+											? [
+													selectedCustomerContext.label,
+													...billingAddressLines(selectedCustomerContext),
+												].join(' · ')
+											: 'Non sélectionnée'
 									}
 									lineCount={values.lines.length}
 									completedLineCount={completedLineCount}
@@ -463,7 +469,7 @@ export function QuoteCreateUI({
 							</div>
 						</div>
 
-						<SheetFooter className="border-t bg-background sm:flex-row sm:items-center sm:justify-between">
+						<DialogFooter className="border-t bg-background px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
 							<div className="flex items-center justify-between gap-4 rounded-lg bg-muted px-3 py-2 sm:min-w-64">
 								<span className="text-xs font-medium text-muted-foreground">
 									Total estimé
@@ -485,10 +491,10 @@ export function QuoteCreateUI({
 									Créer le devis
 								</Button>
 							</div>
-						</SheetFooter>
+						</DialogFooter>
 					</form>
-				</SheetContent>
-			</Sheet>
+				</DialogContent>
+			</Dialog>
 
 			<section>
 				<p className="mb-3 text-sm text-muted-foreground">Suivi des devis</p>
@@ -762,198 +768,6 @@ export function QuoteCreateUI({
 	)
 }
 
-interface QuoteLineEditorProps {
-	index: number
-	line: QuoteLineFormValues
-	catalogItems: CatalogItem[]
-	canRemove: boolean
-	isUploading?: boolean
-	onChange: (patch: Partial<QuoteLineFormValues>) => void
-	onSelectCatalogItem: (catalogItemId: string) => void
-	onRemove: () => void
-	onUploadPhoto: (file: File) => Promise<void>
-}
-
-function QuoteLineEditor({
-	index,
-	line,
-	catalogItems,
-	canRemove,
-	isUploading,
-	onChange,
-	onSelectCatalogItem,
-	onRemove,
-	onUploadPhoto,
-}: QuoteLineEditorProps) {
-	const lineTotalCents = quoteLineTotalCents(line)
-	const serviceItems = catalogItems.filter((item) => item.type === 'SERVICE')
-	const productItems = catalogItems.filter((item) => item.type === 'PRODUCT')
-	const selectedCatalogItem = catalogItems.find((item) => {
-		return item.id === line.catalogItemId
-	})
-
-	return (
-		<div className="bg-card px-4 py-4">
-			<div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-				<div className="flex min-w-0 items-center gap-3">
-					<div className="flex size-8 shrink-0 items-center justify-center rounded-md bg-muted text-muted-foreground">
-						<span className="text-sm font-semibold">{index + 1}</span>
-					</div>
-					<div className="min-w-0">
-						<p className="truncate text-sm font-semibold">
-							{line.label.trim() || `Ligne ${index + 1}`}
-						</p>
-						<p className="text-xs text-muted-foreground">
-							{quoteLineSourceLabel(line.catalogItemType)}
-						</p>
-					</div>
-				</div>
-				<div className="flex items-center justify-between gap-3 sm:justify-end">
-					<p className="text-sm font-semibold">{formatCents(lineTotalCents)}</p>
-					<Button
-						type="button"
-						variant="ghost"
-						size="icon-sm"
-						disabled={!canRemove}
-						onClick={onRemove}
-					>
-						<Trash2 />
-						<span className="sr-only">Supprimer la ligne</span>
-					</Button>
-				</div>
-			</div>
-
-			<div className="mt-4 grid gap-4 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)_96px_128px_128px]">
-				<div className="lg:col-span-2">
-					<FieldBlock label="Catalogue">
-						<Select
-							value={line.catalogItemId || 'custom'}
-							onValueChange={(value) => {
-								onSelectCatalogItem(value === 'custom' ? '' : value)
-							}}
-						>
-							<SelectTrigger className="w-full">
-								<SelectValue placeholder="Ligne libre" />
-							</SelectTrigger>
-							<SelectContent>
-								<SelectItem value="custom">Ligne libre</SelectItem>
-								{serviceItems.length > 0 ? (
-									<SelectGroup>
-										<SelectLabel>Services</SelectLabel>
-										{serviceItems.map((item) => (
-											<SelectItem key={item.id} value={item.id}>
-												{catalogItemOptionLabel(item)}
-											</SelectItem>
-										))}
-									</SelectGroup>
-								) : null}
-								{productItems.length > 0 ? (
-									<SelectGroup>
-										<SelectLabel>Produits</SelectLabel>
-										{productItems.map((item) => (
-											<SelectItem key={item.id} value={item.id}>
-												{catalogItemOptionLabel(item)}
-											</SelectItem>
-										))}
-									</SelectGroup>
-								) : null}
-							</SelectContent>
-						</Select>
-						{selectedCatalogItem ? (
-							<p className="truncate text-xs text-muted-foreground">
-								{catalogItemDetail(selectedCatalogItem)}
-							</p>
-						) : null}
-					</FieldBlock>
-				</div>
-
-				<FieldBlock label="Libellé">
-					<Input
-						value={line.label}
-						onChange={(event) => onChange({ label: event.target.value })}
-						placeholder="Libellé de ligne"
-					/>
-				</FieldBlock>
-
-				<FieldBlock label="Quantité">
-					<Input
-						inputMode="decimal"
-						value={line.quantity}
-						onChange={(event) => onChange({ quantity: event.target.value })}
-					/>
-				</FieldBlock>
-
-				<FieldBlock label="Prix unitaire">
-					<Input
-						inputMode="decimal"
-						value={line.unitPrice}
-						onChange={(event) => onChange({ unitPrice: event.target.value })}
-						placeholder="0.00"
-					/>
-				</FieldBlock>
-
-				<FieldBlock label="Unité">
-					<Select
-						value={line.unit}
-						onValueChange={(unit) =>
-							onChange({ unit: unit as ServiceRateUnit })
-						}
-					>
-						<SelectTrigger className="w-full">
-							<SelectValue />
-						</SelectTrigger>
-						<SelectContent>
-							<SelectItem value="HOUR">
-								{line.catalogItemType === 'PRODUCT'
-									? 'unité'
-									: formatUnit('HOUR')}
-							</SelectItem>
-							<SelectItem value="ML">{formatUnit('ML')}</SelectItem>
-							<SelectItem value="M2">{formatUnit('M2')}</SelectItem>
-						</SelectContent>
-					</Select>
-				</FieldBlock>
-
-				<div className="lg:col-span-2">
-					<FieldBlock label="Notes">
-						<Textarea
-							value={line.notes}
-							onChange={(event) => onChange({ notes: event.target.value })}
-							placeholder="Précisions utiles pour cadrer la prestation"
-						/>
-					</FieldBlock>
-				</div>
-
-				<div>
-					<FieldBlock label="Photos">
-						<label className="flex h-10 cursor-pointer items-center justify-center gap-2 rounded-lg border bg-card px-3 text-sm font-medium text-primary shadow-xs hover:bg-brand-soft">
-							<ImagePlus className="size-4" />
-							Ajouter
-							<input
-								type="file"
-								accept="image/*"
-								className="sr-only"
-								disabled={isUploading}
-								onChange={(event) => {
-									const file = event.target.files?.[0]
-									if (file) void onUploadPhoto(file)
-									event.target.value = ''
-								}}
-							/>
-						</label>
-						{line.photoKeys.length > 0 ? (
-							<p className="mt-2 truncate text-xs text-muted-foreground">
-								{line.photoKeys.length} fichier
-								{line.photoKeys.length > 1 ? 's' : ''}
-							</p>
-						) : null}
-					</FieldBlock>
-				</div>
-			</div>
-		</div>
-	)
-}
-
 interface FormSectionProps {
 	icon: React.ReactNode
 	title: string
@@ -995,7 +809,7 @@ function FormSection({
 interface QuoteDraftSummaryProps {
 	title: string
 	customerName: string
-	contextName: string
+	billingAddress: string
 	lineCount: number
 	completedLineCount: number
 	totalCents: number
@@ -1005,7 +819,7 @@ interface QuoteDraftSummaryProps {
 function QuoteDraftSummary({
 	title,
 	customerName,
-	contextName,
+	billingAddress,
 	lineCount,
 	completedLineCount,
 	totalCents,
@@ -1028,7 +842,11 @@ function QuoteDraftSummary({
 			<div className="mt-5 space-y-4">
 				<SummaryRow icon={<FileText />} label="Objet" value={title} />
 				<SummaryRow icon={<UserRound />} label="Client" value={customerName} />
-				<SummaryRow icon={<MapPin />} label="Contexte" value={contextName} />
+				<SummaryRow
+					icon={<MapPin />}
+					label="Adresse de facturation"
+					value={billingAddress}
+				/>
 				<SummaryRow
 					icon={<FileText />}
 					label="Lignes"
@@ -1137,36 +955,6 @@ function quoteMatchesStatusFilter(quote: Quote, filter: string): boolean {
 
 function dateValue(value: string): number {
 	return new Date(value).getTime()
-}
-
-function catalogItemOptionLabel(item: CatalogItem): string {
-	const reference = item.sku ? ` · ${item.sku}` : ''
-	return `${item.label}${reference} · ${formatCents(item.unitPriceCents)}`
-}
-
-function catalogItemDetail(item: CatalogItem): string {
-	const unit = catalogItemUnitLabel(item)
-	const description = item.description ? ` · ${item.description}` : ''
-	return `${item.type === 'PRODUCT' ? 'Produit' : 'Service'} · ${formatCents(
-		item.unitPriceCents,
-	)} / ${unit}${description}`
-}
-
-function catalogItemUnitLabel(item: CatalogItem): string {
-	if (item.type === 'PRODUCT' && item.unit === 'HOUR') return 'unité'
-	return formatUnit(item.unit)
-}
-
-function quoteLineSourceLabel(type: QuoteLineFormValues['catalogItemType']) {
-	if (type === 'SERVICE') return 'Service catalogue'
-	if (type === 'PRODUCT') return 'Produit catalogue'
-	return 'Ligne libre'
-}
-
-function quoteLineTotalCents(line: QuoteLineFormValues): number {
-	const quantity = Number(line.quantity.replace(',', '.'))
-	if (!Number.isFinite(quantity) || quantity <= 0) return 0
-	return Math.round(quantity * eurosToCents(line.unitPrice))
 }
 
 export namespace QuoteCreateUI {

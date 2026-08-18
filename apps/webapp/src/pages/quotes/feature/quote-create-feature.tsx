@@ -9,6 +9,7 @@ import {
 	useCustomers,
 	useUploadFile,
 } from '#/hooks/use-customers'
+import { useFileUrls } from '#/hooks/use-file-url'
 import {
 	type PaginationMetadata,
 	type Quote,
@@ -309,6 +310,10 @@ function QuoteWorkspaceWithValues({
 		])
 	}
 
+	const photoPreviews = useFileUrls(
+		values.lines.flatMap((line) => line.photoKeys),
+	)
+
 	const removeLine = (index: number) => {
 		const next = form.state.values.lines.filter((_line, itemIndex) => {
 			return itemIndex !== index
@@ -316,9 +321,17 @@ function QuoteWorkspaceWithValues({
 		form.setFieldValue('lines', next.length > 0 ? next : [emptyQuoteLine()])
 	}
 
+	// Resolved here rather than in the line editor: signing is a fetch, and the
+	// UI layer of this page does not fetch. One flat list of keys also means a
+	// photo shared by two lines is signed once.
+	const photoUrls = Object.fromEntries(
+		photoPreviews.map((preview) => [preview.key, preview.url]),
+	)
+
 	return (
 		<QuoteCreateUI
 			organizationSlug={organizationSlug}
+			photoUrls={photoUrls}
 			values={values}
 			customers={customers}
 			customerContexts={customerContexts.data?.data ?? []}

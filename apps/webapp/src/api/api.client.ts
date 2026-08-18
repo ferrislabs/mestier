@@ -276,7 +276,17 @@ export namespace Schemas {
 		content: string
 	}
 	export type CreateOrganizationRequest = { name: string; slug: string }
-	export type ServiceRateUnit = 'HOUR' | 'ML' | 'M2'
+	export type ServiceRateUnit =
+		| 'FLAT_RATE'
+		| 'HOUR'
+		| 'DAY'
+		| 'UNIT'
+		| 'ML'
+		| 'M2'
+		| 'M3'
+		| 'KG'
+		| 'TONNE'
+		| 'LITRE'
 	export type CreateProductRequest = {
 		description?: (string | null) | undefined
 		name: string
@@ -427,6 +437,7 @@ export namespace Schemas {
 		mime_type: string
 		size_bytes: number
 	}
+	export type FileUrlResponse = { expires_at: string; url: string }
 	export type PlacedConnectorDto = {
 		config: Record<string, unknown>
 		credential_id?: (string | null) | undefined
@@ -2095,6 +2106,22 @@ export namespace Endpoints {
 			401: unknown
 			413: unknown
 			500: unknown
+		}
+	}
+	export type get_GetFileUrl = {
+		method: 'GET'
+		path: '/api/v1/files/url'
+		requestFormat: 'json'
+		parameters: {
+			query: { key: string }
+		}
+		responses: {
+			200: {
+				data: { expires_at: string; url: string }
+				pagination?: (null | Schemas.PaginationMetadata) | undefined
+			}
+			401: unknown
+			409: unknown
 		}
 	}
 	export type delete_RevokeInvitation = {
@@ -4090,6 +4117,7 @@ export type EndpointByMethod = {
 		'/api/v1/customers/{customer_id}/contacts': Endpoints.get_ListCustomerContacts
 		'/api/v1/customers/{customer_id}/customer-contexts': Endpoints.get_ListCustomerContexts
 		'/api/v1/equipment/{equipment_id}': Endpoints.get_GetEquipment
+		'/api/v1/files/url': Endpoints.get_GetFileUrl
 		'/api/v1/members/{member_id}': Endpoints.get_GetMember
 		'/api/v1/members/{member_id}/work-time': Endpoints.get_GetWorkTime
 		'/api/v1/organizations': Endpoints.get_ListOrganizations
