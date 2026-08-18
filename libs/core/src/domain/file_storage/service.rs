@@ -1,10 +1,13 @@
 use common::{CoreError, generate_uuid_v7};
 
 use crate::domain::file_storage::{
-    FileObject, StoredFile,
+    FileObject, PresignedUrl, StoredFile,
     commands::UploadFileCommand,
     ports::{FileStorage, FileUpload},
 };
+
+/// How long a presigned read link stays valid. See `presigned_get_url`.
+const LINK_LIFETIME: std::time::Duration = std::time::Duration::from_secs(5 * 60);
 
 #[derive(Clone)]
 pub struct FileStorageService<S>
@@ -47,6 +50,19 @@ where
     pub async fn get(&self, key: &str) -> Result<FileObject, CoreError> {
         validate_key(key)?;
         self.storage.get(key).await
+    }
+
+    /// A short-lived read link for `key`.
+    ///
+    /// Five minutes is long enough for a browser to load the image it was
+    /// handed and short enough that a link copied out of devtools is stale
+    /// before it is useful. It is deliberately not configurable: the number
+    /// only matters if it is small, and an operator raising it would be
+    /// widening an exposure without being asked to think about it.
+    #[tracing::instrument(skip(self), fields(key = %key), err)]
+    pub async fn presigned_get_url(&self, key: &str) -> Result<PresignedUrl, CoreError> {
+        validate_key(key)?;
+        self.storage.presigned_get_url(key, LINK_LIFETIME).await
     }
 
     #[tracing::instrument(skip(self), fields(key = %key), err)]
@@ -149,9 +165,54 @@ mod tests {
             })
         }
 
+        /// Echoes the key and the lifetime it was given, so a test can assert
+        /// on the policy the service applied rather than on a real signature.
+        async fn presigned_get_url(
+            &self,
+            key: &str,
+            expires_in: std::time::Duration,
+        ) -> Result<PresignedUrl, CoreError> {
+            Ok(PresignedUrl {
+                url: format!("https://storage.test/{key}?ttl={}", expires_in.as_secs()),
+                expires_at: chrono::Utc::now() + expires_in,
+            })
+        }
+
         async fn delete(&self, _key: &str) -> Result<(), CoreError> {
             Ok(())
         }
+    }
+
+    #[tokio::test]
+    async fn a_read_link_is_short_lived_and_scoped_to_the_key() {
+        let service = FileStorageService::new(FakeStorage::default(), "uploads");
+
+        let link = service
+            .presigned_get_url("uploads/quotes/photo-1.jpg")
+            .await
+            .unwrap();
+
+        assert!(
+            link.url.contains("uploads/quotes/photo-1.jpg"),
+            "{}",
+            link.url
+        );
+        assert!(
+            link.url.ends_with("ttl=300"),
+            "a link must not outlive five minutes: {}",
+            link.url
+        );
+    }
+
+    /// The traversal guard `get` and `delete` already have applies here too:
+    /// a signed link is the one artefact that leaves the trust boundary.
+    #[tokio::test]
+    async fn a_read_link_is_refused_for_a_traversing_key() {
+        let service = FileStorageService::new(FakeStorage::default(), "uploads");
+
+        let outcome = service.presigned_get_url("uploads/../../etc/passwd").await;
+
+        assert!(matches!(outcome, Err(CoreError::Conflict(_))));
     }
 
     #[tokio::test]

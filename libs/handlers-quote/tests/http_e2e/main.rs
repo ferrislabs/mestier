@@ -6,8 +6,8 @@
 //! case, a Postgres transaction, and the event write that transaction commits.
 //! Nothing in that chain is doubled.
 //!
-//! That is also why they are `#[ignore]`d, like the 213 use-case integration
-//! tests already in `libs/core`: they need the compose stack up.
+//! That is also why they are `#[ignore]`d, like the use-case integration tests
+//! already in `libs/core`: they need the compose stack up.
 //!
 //! ```bash
 //! docker compose up -d postgres redis

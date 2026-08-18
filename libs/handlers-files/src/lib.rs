@@ -1,5 +1,5 @@
 use axum::{Router, extract::DefaultBodyLimit, middleware::from_fn_with_state, routing::post};
-use axum_extra::routing::TypedPath;
+use axum_extra::routing::{RouterExt, TypedPath};
 use handlers::{AppState, auth::auth_middleware, rate_limit::rate_limit_middleware};
 
 use crate::paths::FilesPath;
@@ -7,6 +7,7 @@ use crate::paths::FilesPath;
 pub mod paths;
 pub mod response;
 pub mod upload;
+pub mod url;
 
 pub const TAG: &str = "files";
 
@@ -16,6 +17,7 @@ pub fn router(state: &AppState) -> Router<AppState> {
 
     Router::new()
         .route(FilesPath::PATH, post(upload::handler))
+        .typed_get(url::handler)
         .layer(DefaultBodyLimit::max(max_upload_bytes))
         .layer(from_fn_with_state(state.clone(), rate_limit_middleware))
         .layer(from_fn_with_state(state.clone(), auth_middleware))

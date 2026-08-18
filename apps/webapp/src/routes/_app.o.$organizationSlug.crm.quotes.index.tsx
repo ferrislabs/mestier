@@ -1,6 +1,6 @@
 import { createFileRoute } from '@tanstack/react-router'
-import { QuoteCreateFeature } from '#/pages/quotes/feature/quote-create-feature'
+import { QuoteListFeature } from '#/pages/quotes/feature/quote-list-feature'
 
 export const Route = createFileRoute('/_app/o/$organizationSlug/crm/quotes/')({
-	component: QuoteCreateFeature,
+	component: QuoteListFeature,
 })

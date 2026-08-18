@@ -28,6 +28,7 @@ import { Route as AppOOrganizationSlugHrAbsencesRouteImport } from './routes/_ap
 import { Route as AppOOrganizationSlugCrmCatalogRouteImport } from './routes/_app.o.$organizationSlug.crm.catalog'
 import { Route as AppOOrganizationSlugCrmQuotesIndexRouteImport } from './routes/_app.o.$organizationSlug.crm.quotes.index'
 import { Route as AppOOrganizationSlugCrmCustomersIndexRouteImport } from './routes/_app.o.$organizationSlug.crm.customers.index'
+import { Route as AppOOrganizationSlugCrmQuotesNewRouteImport } from './routes/_app.o.$organizationSlug.crm.quotes.new'
 import { Route as AppOOrganizationSlugCrmQuotesQuoteIdRouteImport } from './routes/_app.o.$organizationSlug.crm.quotes.$quoteId'
 import { Route as AppOOrganizationSlugCrmCustomersPipelineRouteImport } from './routes/_app.o.$organizationSlug.crm.customers.pipeline'
 import { Route as AppOOrganizationSlugCrmCustomersCustomerIdRouteImport } from './routes/_app.o.$organizationSlug.crm.customers.$customerId'
@@ -142,6 +143,12 @@ const AppOOrganizationSlugCrmCustomersIndexRoute =
     path: '/crm/customers/',
     getParentRoute: () => AppOOrganizationSlugRoute,
   } as any)
+const AppOOrganizationSlugCrmQuotesNewRoute =
+  AppOOrganizationSlugCrmQuotesNewRouteImport.update({
+    id: '/crm/quotes/new',
+    path: '/crm/quotes/new',
+    getParentRoute: () => AppOOrganizationSlugRoute,
+  } as any)
 const AppOOrganizationSlugCrmQuotesQuoteIdRoute =
   AppOOrganizationSlugCrmQuotesQuoteIdRouteImport.update({
     id: '/crm/quotes/$quoteId',
@@ -187,6 +194,7 @@ export interface FileRoutesByFullPath {
   '/o/$organizationSlug/crm/customers/$customerId': typeof AppOOrganizationSlugCrmCustomersCustomerIdRoute
   '/o/$organizationSlug/crm/customers/pipeline': typeof AppOOrganizationSlugCrmCustomersPipelineRoute
   '/o/$organizationSlug/crm/quotes/$quoteId': typeof AppOOrganizationSlugCrmQuotesQuoteIdRoute
+  '/o/$organizationSlug/crm/quotes/new': typeof AppOOrganizationSlugCrmQuotesNewRoute
   '/o/$organizationSlug/crm/customers/': typeof AppOOrganizationSlugCrmCustomersIndexRoute
   '/o/$organizationSlug/crm/quotes/': typeof AppOOrganizationSlugCrmQuotesIndexRoute
   '/o/$organizationSlug/hr/team/$memberId/work-time': typeof AppOOrganizationSlugHrTeamMemberIdWorkTimeRoute
@@ -210,6 +218,7 @@ export interface FileRoutesByTo {
   '/o/$organizationSlug/crm/customers/$customerId': typeof AppOOrganizationSlugCrmCustomersCustomerIdRoute
   '/o/$organizationSlug/crm/customers/pipeline': typeof AppOOrganizationSlugCrmCustomersPipelineRoute
   '/o/$organizationSlug/crm/quotes/$quoteId': typeof AppOOrganizationSlugCrmQuotesQuoteIdRoute
+  '/o/$organizationSlug/crm/quotes/new': typeof AppOOrganizationSlugCrmQuotesNewRoute
   '/o/$organizationSlug/crm/customers': typeof AppOOrganizationSlugCrmCustomersIndexRoute
   '/o/$organizationSlug/crm/quotes': typeof AppOOrganizationSlugCrmQuotesIndexRoute
   '/o/$organizationSlug/hr/team/$memberId/work-time': typeof AppOOrganizationSlugHrTeamMemberIdWorkTimeRoute
@@ -236,6 +245,7 @@ export interface FileRoutesById {
   '/_app/o/$organizationSlug/crm/customers/$customerId': typeof AppOOrganizationSlugCrmCustomersCustomerIdRoute
   '/_app/o/$organizationSlug/crm/customers/pipeline': typeof AppOOrganizationSlugCrmCustomersPipelineRoute
   '/_app/o/$organizationSlug/crm/quotes/$quoteId': typeof AppOOrganizationSlugCrmQuotesQuoteIdRoute
+  '/_app/o/$organizationSlug/crm/quotes/new': typeof AppOOrganizationSlugCrmQuotesNewRoute
   '/_app/o/$organizationSlug/crm/customers/': typeof AppOOrganizationSlugCrmCustomersIndexRoute
   '/_app/o/$organizationSlug/crm/quotes/': typeof AppOOrganizationSlugCrmQuotesIndexRoute
   '/_app/o/$organizationSlug/hr/team/$memberId/work-time': typeof AppOOrganizationSlugHrTeamMemberIdWorkTimeRoute
@@ -262,6 +272,7 @@ export interface FileRouteTypes {
     | '/o/$organizationSlug/crm/customers/$customerId'
     | '/o/$organizationSlug/crm/customers/pipeline'
     | '/o/$organizationSlug/crm/quotes/$quoteId'
+    | '/o/$organizationSlug/crm/quotes/new'
     | '/o/$organizationSlug/crm/customers/'
     | '/o/$organizationSlug/crm/quotes/'
     | '/o/$organizationSlug/hr/team/$memberId/work-time'
@@ -285,6 +296,7 @@ export interface FileRouteTypes {
     | '/o/$organizationSlug/crm/customers/$customerId'
     | '/o/$organizationSlug/crm/customers/pipeline'
     | '/o/$organizationSlug/crm/quotes/$quoteId'
+    | '/o/$organizationSlug/crm/quotes/new'
     | '/o/$organizationSlug/crm/customers'
     | '/o/$organizationSlug/crm/quotes'
     | '/o/$organizationSlug/hr/team/$memberId/work-time'
@@ -310,6 +322,7 @@ export interface FileRouteTypes {
     | '/_app/o/$organizationSlug/crm/customers/$customerId'
     | '/_app/o/$organizationSlug/crm/customers/pipeline'
     | '/_app/o/$organizationSlug/crm/quotes/$quoteId'
+    | '/_app/o/$organizationSlug/crm/quotes/new'
     | '/_app/o/$organizationSlug/crm/customers/'
     | '/_app/o/$organizationSlug/crm/quotes/'
     | '/_app/o/$organizationSlug/hr/team/$memberId/work-time'
@@ -455,6 +468,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppOOrganizationSlugCrmCustomersIndexRouteImport
       parentRoute: typeof AppOOrganizationSlugRoute
     }
+    '/_app/o/$organizationSlug/crm/quotes/new': {
+      id: '/_app/o/$organizationSlug/crm/quotes/new'
+      path: '/crm/quotes/new'
+      fullPath: '/o/$organizationSlug/crm/quotes/new'
+      preLoaderRoute: typeof AppOOrganizationSlugCrmQuotesNewRouteImport
+      parentRoute: typeof AppOOrganizationSlugRoute
+    }
     '/_app/o/$organizationSlug/crm/quotes/$quoteId': {
       id: '/_app/o/$organizationSlug/crm/quotes/$quoteId'
       path: '/crm/quotes/$quoteId'
@@ -518,6 +538,7 @@ interface AppOOrganizationSlugRouteChildren {
   AppOOrganizationSlugCrmCustomersCustomerIdRoute: typeof AppOOrganizationSlugCrmCustomersCustomerIdRoute
   AppOOrganizationSlugCrmCustomersPipelineRoute: typeof AppOOrganizationSlugCrmCustomersPipelineRoute
   AppOOrganizationSlugCrmQuotesQuoteIdRoute: typeof AppOOrganizationSlugCrmQuotesQuoteIdRoute
+  AppOOrganizationSlugCrmQuotesNewRoute: typeof AppOOrganizationSlugCrmQuotesNewRoute
   AppOOrganizationSlugCrmCustomersIndexRoute: typeof AppOOrganizationSlugCrmCustomersIndexRoute
   AppOOrganizationSlugCrmQuotesIndexRoute: typeof AppOOrganizationSlugCrmQuotesIndexRoute
 }
@@ -545,6 +566,7 @@ const AppOOrganizationSlugRouteChildren: AppOOrganizationSlugRouteChildren = {
     AppOOrganizationSlugCrmCustomersPipelineRoute,
   AppOOrganizationSlugCrmQuotesQuoteIdRoute:
     AppOOrganizationSlugCrmQuotesQuoteIdRoute,
+  AppOOrganizationSlugCrmQuotesNewRoute: AppOOrganizationSlugCrmQuotesNewRoute,
   AppOOrganizationSlugCrmCustomersIndexRoute:
     AppOOrganizationSlugCrmCustomersIndexRoute,
   AppOOrganizationSlugCrmQuotesIndexRoute:

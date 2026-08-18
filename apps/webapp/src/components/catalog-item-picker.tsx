@@ -191,6 +191,9 @@ function catalogUnitLabel(
 	type: CatalogItemType,
 	unit: ServiceRateUnit,
 ): string {
+	// Legacy compensation: before UNIT existed, a product sold by the piece was
+	// stored as HOUR and relabelled here. Existing rows still hold HOUR, so this
+	// stays until they are migrated to UNIT, at which point it can go.
 	if (type === 'PRODUCT' && unit === 'HOUR') return 'unité'
 	return formatUnit(unit)
 }

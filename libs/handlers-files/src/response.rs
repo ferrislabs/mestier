@@ -1,4 +1,4 @@
-use mestier_core::StoredFile;
+use mestier_core::{PresignedUrl, StoredFile};
 use serde::Serialize;
 use utoipa::ToSchema;
 
@@ -15,6 +15,21 @@ impl From<StoredFile> for FileUploadResponse {
             key: value.key,
             mime_type: value.mime_type,
             size_bytes: value.size_bytes,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, ToSchema)]
+pub struct FileUrlResponse {
+    pub url: String,
+    pub expires_at: chrono::DateTime<chrono::Utc>,
+}
+
+impl From<PresignedUrl> for FileUrlResponse {
+    fn from(value: PresignedUrl) -> Self {
+        Self {
+            url: value.url,
+            expires_at: value.expires_at,
         }
     }
 }

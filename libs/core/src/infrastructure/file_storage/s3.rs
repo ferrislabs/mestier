@@ -2,12 +2,13 @@ use aws_credential_types::Credentials;
 use aws_sdk_s3::{
     Client,
     config::{BehaviorVersion, Builder as S3ConfigBuilder, Region},
+    presigning::PresigningConfig,
     primitives::ByteStream,
 };
 use common::{CoreError, FileStorageConfig};
 
 use crate::domain::file_storage::{
-    FileObject, StoredFile,
+    FileObject, PresignedUrl, StoredFile,
     ports::{FileStorage, FileUpload},
 };
 
@@ -113,6 +114,34 @@ impl FileStorage for S3FileStorage {
             mime_type,
             size_bytes,
             bytes,
+        })
+    }
+
+    #[tracing::instrument(skip(self), fields(bucket = %self.bucket, key = %key), err)]
+    async fn presigned_get_url(
+        &self,
+        key: &str,
+        expires_in: std::time::Duration,
+    ) -> Result<PresignedUrl, CoreError> {
+        // Read back from the config rather than adding `expires_in` to `now`:
+        // the signature is what actually expires, and the two would drift if
+        // the SDK ever clamped the duration.
+        let config = PresigningConfig::expires_in(expires_in)
+            .map_err(|e| CoreError::Internal(format!("invalid presigning config: {e}")))?;
+        let expires_at = chrono::DateTime::<chrono::Utc>::from(config.start_time() + expires_in);
+
+        let request = self
+            .client
+            .get_object()
+            .bucket(&self.bucket)
+            .key(key)
+            .presigned(config)
+            .await
+            .map_err(map_s3_error)?;
+
+        Ok(PresignedUrl {
+            url: request.uri().to_owned(),
+            expires_at,
         })
     }
 
