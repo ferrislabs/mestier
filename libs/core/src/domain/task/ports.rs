@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use chrono::{DateTime, Utc};
 use common::CoreError;
 
-use crate::{OrganizationId, Task, TaskId};
+use crate::{MemberId, OrganizationId, Task, TaskId};
 
 #[cfg_attr(any(test, feature = "mock"), mockall::automock)]
 pub trait TaskRepository: Send {
@@ -26,6 +26,22 @@ pub trait TaskRepository: Send {
         limit: u64,
         offset: u64,
     ) -> impl Future<Output = Result<(Vec<Task>, u64), CoreError>> + Send;
+
+    /// The tasks assigned to one member that overlap a day, for the field app.
+    ///
+    /// Deliberately narrow rather than filtering the organization's planning:
+    /// an employee's phone must not receive everyone else's schedule, and a
+    /// day's worth of one person's jobs is a handful of rows.
+    ///
+    /// A task with no window is included, since an undated job still has to be
+    /// doable; one is excluded only when its window is entirely elsewhere.
+    fn list_for_assignee_on(
+        &mut self,
+        organization_id: OrganizationId,
+        member_id: MemberId,
+        day_starts_at: DateTime<Utc>,
+        day_ends_at: DateTime<Utc>,
+    ) -> impl Future<Output = Result<Vec<Task>, CoreError>> + Send;
 
     /// The number of direct children of each id in `task_ids`, in one
     /// grouped query — never one query per task (see the planning module

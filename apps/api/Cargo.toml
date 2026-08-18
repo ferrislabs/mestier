@@ -9,6 +9,7 @@ handlers = { workspace = true }
 handlers-automation = { workspace = true }
 handlers-customer = { workspace = true }
 handlers-discord = { workspace = true }
+handlers-field = { workspace = true }
 handlers-files = { workspace = true }
 handlers-member = { workspace = true }
 handlers-organization = { workspace = true }

@@ -1,0 +1,52 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT id, org_id, time_entry_id, phase::text AS \"phase!\", storage_key, created_at\n        FROM time_entry_photos\n        WHERE time_entry_id = $1\n        ORDER BY created_at\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "org_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "time_entry_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 3,
+        "name": "phase!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "storage_key",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      null,
+      false,
+      false
+    ]
+  },
+  "hash": "7dc9728357643c1006aaf2560e94ef815f2d8dd50059a798c075563dad7d8351"
+}

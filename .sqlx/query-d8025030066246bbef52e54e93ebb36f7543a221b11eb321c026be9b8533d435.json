@@ -1,0 +1,115 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT t.id, t.org_id, t.parent_task_id, t.title, t.description, t.starts_at, t.ends_at, t.all_day, t.status::text AS \"status!\", t.blocks_availability, t.customer_id, t.customer_context_id, t.quote_id, t.deleted_at, t.created_at, t.updated_at\n            FROM tasks t\n            JOIN task_assignments a ON a.task_id = t.id\n            WHERE t.org_id = $1\n              AND a.member_id = $2\n              AND t.deleted_at IS NULL\n              AND (\n                t.starts_at IS NULL\n                OR (t.starts_at < $4 AND COALESCE(t.ends_at, t.starts_at) >= $3)\n              )\n            ORDER BY t.starts_at ASC NULLS LAST, t.id ASC\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "org_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "parent_task_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 3,
+        "name": "title",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "description",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "starts_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 6,
+        "name": "ends_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 7,
+        "name": "all_day",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 8,
+        "name": "status!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 9,
+        "name": "blocks_availability",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 10,
+        "name": "customer_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 11,
+        "name": "customer_context_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 12,
+        "name": "quote_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 13,
+        "name": "deleted_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 14,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 15,
+        "name": "updated_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Timestamptz",
+        "Timestamptz"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      true,
+      false,
+      true,
+      true,
+      true,
+      false,
+      null,
+      false,
+      true,
+      true,
+      true,
+      true,
+      false,
+      false
+    ]
+  },
+  "hash": "d8025030066246bbef52e54e93ebb36f7543a221b11eb321c026be9b8533d435"
+}

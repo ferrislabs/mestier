@@ -13,6 +13,7 @@ use handlers::{ApiError, AppState};
 use handlers_automation as automation;
 use handlers_customer as customer;
 use handlers_discord as discord;
+use handlers_field as field;
 use handlers_files as files;
 use handlers_member as member;
 use handlers_organization as organization;
@@ -81,6 +82,7 @@ pub fn router(state: AppState) -> Result<Router, ApiError> {
 
     let router = Router::new()
         .merge(automation::router(&state))
+        .merge(field::router(&state))
         .merge(files::router(&state))
         .merge(customer::router(&state))
         .merge(discord::router(&state))

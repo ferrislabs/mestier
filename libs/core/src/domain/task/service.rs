@@ -125,6 +125,22 @@ where
         }
     }
 
+    /// One member's jobs overlapping a day, for the field app.
+    ///
+    /// A read, so no authorization here: the caller has already resolved the
+    /// member from the connected account, which is the check that matters.
+    pub async fn list_assigned_to_member_on(
+        &mut self,
+        organization_id: OrganizationId,
+        member_id: MemberId,
+        day_starts_at: DateTime<Utc>,
+        day_ends_at: DateTime<Utc>,
+    ) -> Result<Vec<Task>, CoreError> {
+        self.task_repository
+            .list_for_assignee_on(organization_id, member_id, day_starts_at, day_ends_at)
+            .await
+    }
+
     pub async fn create_task(&mut self, command: CreateTaskCommand) -> Result<Task, CoreError> {
         validate_title(&command.title)?;
         validate_text_field("task description", &command.description)?;
