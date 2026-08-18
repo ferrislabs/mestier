@@ -17,6 +17,7 @@ pub(crate) mod service_rate;
 pub(crate) mod task;
 pub(crate) mod task_comment;
 pub(crate) mod task_label;
+pub(crate) mod time_entry;
 pub(crate) mod user;
 pub(crate) mod work_time;
 
@@ -38,5 +39,6 @@ pub use service_rate::*;
 pub use task::*;
 pub use task_comment::*;
 pub use task_label::*;
+pub use time_entry::*;
 pub use user::*;
 pub use work_time::*;
