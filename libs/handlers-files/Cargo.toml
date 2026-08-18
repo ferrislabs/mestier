@@ -11,6 +11,7 @@ mestier-core = { workspace = true }
 axum = { workspace = true }
 axum-extra = { workspace = true }
 http = { workspace = true }
+chrono = { workspace = true }
 serde = { workspace = true }
 tracing = { workspace = true }
 utoipa = { workspace = true }
