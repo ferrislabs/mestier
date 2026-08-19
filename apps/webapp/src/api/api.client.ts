@@ -17,6 +17,11 @@ export namespace Schemas {
 		updated_at: string
 	}
 	export type AssigneeRefRequest = { member_id: MemberId }
+	export type TimeEntryPhotoPhase = 'BEFORE' | 'DURING' | 'AFTER'
+	export type AttachPhotoRequest = {
+		phase: TimeEntryPhotoPhase
+		storage_key: string
+	}
 	export type AttachmentResponse = {
 		filename: string
 		mime_type: string
@@ -397,12 +402,20 @@ export namespace Schemas {
 		status: CustomerStatus
 		updated_at: string
 	}
+	export type DayLogId = string
+	export type EmployeeId = string
+	export type DayLogResponse = {
+		employee_id: EmployeeId
+		ended_at: string
+		id: DayLogId
+		organization_id: OrganizationId
+		work_date: string
+	}
 	export type EdgeDto = {
 		branch?: (null | BranchDto) | undefined
 		from: string
 		to: string
 	}
-	export type EmployeeId = string
 	export type EmployeeResponse = {
 		created_at: string
 		hourly_rate_cents?: (number | null) | undefined
@@ -413,6 +426,7 @@ export namespace Schemas {
 		weekly_contract_minutes: number
 	}
 	export type EmployeeRhythmId = string
+	export type EndDayRequest = Partial<{ ended_at: string | null }>
 	export type EquipmentResponse = {
 		created_at: string
 		hourly_rate_cents: number
@@ -431,6 +445,17 @@ export namespace Schemas {
 	export type ExecuteWebhookRequest = {
 		components?: (Array<Component> | null) | undefined
 		content: string
+	}
+	export type FieldTaskResponse = {
+		all_day: boolean
+		customer_context_id?: (null | CustomerContextId) | undefined
+		customer_id?: (null | CustomerId) | undefined
+		description?: (string | null) | undefined
+		ends_at?: (string | null) | undefined
+		id: TaskId
+		starts_at?: (string | null) | undefined
+		status: TaskStatus
+		title: string
 	}
 	export type FileUploadResponse = {
 		key: string
@@ -716,6 +741,7 @@ export namespace Schemas {
 	}
 	export type SetPresenceRequest = { status: PresenceStatus }
 	export type StartRunRequest = Partial<{ trigger_payload: unknown }>
+	export type StartTimeEntryRequest = { task_id: TaskId }
 	export type StartedRunResponse = { run_id: string }
 	export type TaskCommentAuthorResponse = { display_name: string; id: UserId }
 	export type TaskCommentId = string
@@ -728,6 +754,25 @@ export namespace Schemas {
 		organization_id: OrganizationId
 		task_id: TaskId
 		updated_at: string
+	}
+	export type TimeEntryId = string
+	export type TimeEntryPhotoId = string
+	export type TimeEntryPhotoResponse = {
+		created_at: string
+		id: TimeEntryPhotoId
+		phase: TimeEntryPhotoPhase
+		storage_key: string
+		time_entry_id: TimeEntryId
+	}
+	export type TimeEntryResponse = {
+		employee_id: EmployeeId
+		ended_at?: (string | null) | undefined
+		id: TimeEntryId
+		organization_id: OrganizationId
+		photos: Array<TimeEntryPhotoResponse>
+		started_at: string
+		task_id: TaskId
+		worked_minutes?: (number | null) | undefined
 	}
 	export type UnreadResponse = { channel_ids: Array<ChannelId> }
 	export type UpdateAbsenceRequest = Partial<{
@@ -2088,6 +2133,57 @@ export namespace Endpoints {
 			409: unknown
 		}
 	}
+	export type post_AttachTimeEntryPhoto = {
+		method: 'POST'
+		path: '/api/v1/field/time-entries/{time_entry_id}/photos'
+		requestFormat: 'json'
+		parameters: {
+			path: { time_entry_id: string }
+
+			body: Schemas.AttachPhotoRequest
+		}
+		responses: {
+			201: {
+				data: {
+					created_at: string
+					id: Schemas.TimeEntryPhotoId
+					phase: Schemas.TimeEntryPhotoPhase
+					storage_key: string
+					time_entry_id: Schemas.TimeEntryId
+				}
+				pagination?: (null | Schemas.PaginationMetadata) | undefined
+			}
+			401: unknown
+			404: unknown
+			409: unknown
+		}
+	}
+	export type post_StopTimeEntry = {
+		method: 'POST'
+		path: '/api/v1/field/time-entries/{time_entry_id}/stop'
+		requestFormat: 'json'
+		parameters: {
+			path: { time_entry_id: string }
+		}
+		responses: {
+			200: {
+				data: {
+					employee_id: Schemas.EmployeeId
+					ended_at?: (string | null) | undefined
+					id: Schemas.TimeEntryId
+					organization_id: Schemas.OrganizationId
+					photos: Array<Schemas.TimeEntryPhotoResponse>
+					started_at: string
+					task_id: Schemas.TaskId
+					worked_minutes?: (number | null) | undefined
+				}
+				pagination?: (null | Schemas.PaginationMetadata) | undefined
+			}
+			401: unknown
+			404: unknown
+			409: unknown
+		}
+	}
 	export type post_UploadFile = {
 		method: 'POST'
 		path: '/api/v1/files'
@@ -3124,6 +3220,111 @@ export namespace Endpoints {
 			409: unknown
 		}
 	}
+	export type get_GetCurrentTimeEntry = {
+		method: 'GET'
+		path: '/api/v1/organizations/{organization_id}/field/current'
+		requestFormat: 'json'
+		parameters: {
+			path: { organization_id: string }
+		}
+		responses: {
+			200: {
+				data: null | {
+					employee_id: Schemas.EmployeeId
+					ended_at?: (string | null) | undefined
+					id: Schemas.TimeEntryId
+					organization_id: Schemas.OrganizationId
+					photos: Array<Schemas.TimeEntryPhotoResponse>
+					started_at: string
+					task_id: Schemas.TaskId
+					worked_minutes?: (number | null) | undefined
+				}
+				pagination?: (null | Schemas.PaginationMetadata) | undefined
+			}
+			401: unknown
+			403: unknown
+		}
+	}
+	export type post_EndWorkingDay = {
+		method: 'POST'
+		path: '/api/v1/organizations/{organization_id}/field/day-end'
+		requestFormat: 'json'
+		parameters: {
+			path: { organization_id: string }
+
+			body: Schemas.EndDayRequest
+		}
+		responses: {
+			201: {
+				data: {
+					employee_id: Schemas.EmployeeId
+					ended_at: string
+					id: Schemas.DayLogId
+					organization_id: Schemas.OrganizationId
+					work_date: string
+				}
+				pagination?: (null | Schemas.PaginationMetadata) | undefined
+			}
+			401: unknown
+			403: unknown
+			409: unknown
+		}
+	}
+	export type get_ListMyFieldTasks = {
+		method: 'GET'
+		path: '/api/v1/organizations/{organization_id}/field/tasks'
+		requestFormat: 'json'
+		parameters: {
+			query: Partial<{ work_date: string }>
+			path: { organization_id: string }
+		}
+		responses: {
+			200: {
+				data: Array<{
+					all_day: boolean
+					customer_context_id?: (null | Schemas.CustomerContextId) | undefined
+					customer_id?: (null | Schemas.CustomerId) | undefined
+					description?: (string | null) | undefined
+					ends_at?: (string | null) | undefined
+					id: Schemas.TaskId
+					starts_at?: (string | null) | undefined
+					status: Schemas.TaskStatus
+					title: string
+				}>
+				pagination?: (null | Schemas.PaginationMetadata) | undefined
+			}
+			401: unknown
+			403: unknown
+		}
+	}
+	export type post_StartTimeEntry = {
+		method: 'POST'
+		path: '/api/v1/organizations/{organization_id}/field/time-entries'
+		requestFormat: 'json'
+		parameters: {
+			path: { organization_id: string }
+
+			body: Schemas.StartTimeEntryRequest
+		}
+		responses: {
+			201: {
+				data: {
+					employee_id: Schemas.EmployeeId
+					ended_at?: (string | null) | undefined
+					id: Schemas.TimeEntryId
+					organization_id: Schemas.OrganizationId
+					photos: Array<Schemas.TimeEntryPhotoResponse>
+					started_at: string
+					task_id: Schemas.TaskId
+					worked_minutes?: (number | null) | undefined
+				}
+				pagination?: (null | Schemas.PaginationMetadata) | undefined
+			}
+			401: unknown
+			403: unknown
+			409: unknown
+		}
+	}
 	export type get_ListInvitations = {
 		method: 'GET'
 		path: '/api/v1/organizations/{organization_id}/invitations'
@@ -4134,6 +4335,8 @@ export type EndpointByMethod = {
 		'/api/v1/organizations/{organization_id}/customers': Endpoints.get_ListCustomers
 		'/api/v1/organizations/{organization_id}/employee-profiles': Endpoints.get_ListEmployeeProfiles
 		'/api/v1/organizations/{organization_id}/equipment': Endpoints.get_ListEquipment
+		'/api/v1/organizations/{organization_id}/field/current': Endpoints.get_GetCurrentTimeEntry
+		'/api/v1/organizations/{organization_id}/field/tasks': Endpoints.get_ListMyFieldTasks
 		'/api/v1/organizations/{organization_id}/invitations': Endpoints.get_ListInvitations
 		'/api/v1/organizations/{organization_id}/members': Endpoints.get_ListMembers
 		'/api/v1/organizations/{organization_id}/planning': Endpoints.get_GetPlanning
@@ -4161,6 +4364,8 @@ export type EndpointByMethod = {
 		'/api/v1/chat/webhooks/{webhook_id}/{token}': Endpoints.post_ExecuteWebhook
 		'/api/v1/customers/{customer_id}/contacts': Endpoints.post_CreateCustomerContact
 		'/api/v1/customers/{customer_id}/customer-contexts': Endpoints.post_CreateCustomerContext
+		'/api/v1/field/time-entries/{time_entry_id}/photos': Endpoints.post_AttachTimeEntryPhoto
+		'/api/v1/field/time-entries/{time_entry_id}/stop': Endpoints.post_StopTimeEntry
 		'/api/v1/files': Endpoints.post_UploadFile
 		'/api/v1/invitations/{token}/accept': Endpoints.post_AcceptInvitation
 		'/api/v1/organizations': Endpoints.post_CreateOrganization
@@ -4172,6 +4377,8 @@ export type EndpointByMethod = {
 		'/api/v1/organizations/{organization_id}/automation/workflows/{workflow_id}/runs': Endpoints.post_StartRun
 		'/api/v1/organizations/{organization_id}/customers': Endpoints.post_CreateCustomer
 		'/api/v1/organizations/{organization_id}/equipment': Endpoints.post_CreateEquipment
+		'/api/v1/organizations/{organization_id}/field/day-end': Endpoints.post_EndWorkingDay
+		'/api/v1/organizations/{organization_id}/field/time-entries': Endpoints.post_StartTimeEntry
 		'/api/v1/organizations/{organization_id}/invitations': Endpoints.post_CreateInvitation
 		'/api/v1/organizations/{organization_id}/members': Endpoints.post_CreateMember
 		'/api/v1/organizations/{organization_id}/products': Endpoints.post_CreateProduct
