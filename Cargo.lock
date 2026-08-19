@@ -118,6 +118,7 @@ dependencies = [
  "handlers-planning",
  "handlers-quote",
  "handlers-reference",
+ "handlers-reporting",
  "http 1.4.0",
  "opentelemetry",
  "opentelemetry-appender-tracing",
@@ -2603,6 +2604,30 @@ dependencies = [
  "serde_json",
  "tracing",
  "utoipa",
+]
+
+[[package]]
+name = "handlers-reporting"
+version = "0.1.0"
+dependencies = [
+ "args",
+ "auth",
+ "axum",
+ "axum-extra",
+ "chrono",
+ "clap",
+ "handlers",
+ "jsonwebtoken",
+ "mestier-core",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "sqlx",
+ "tokio",
+ "tracing",
+ "url",
+ "utoipa",
+ "uuid",
 ]
 
 [[package]]

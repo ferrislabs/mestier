@@ -13,6 +13,7 @@ use handlers_organization as organization;
 use handlers_planning as planning;
 use handlers_quote as quote;
 use handlers_reference as reference;
+use handlers_reporting as reporting;
 
 pub struct SecurityAddon;
 
@@ -54,6 +55,8 @@ impl Modify for SecurityAddon {
         automation::run::start::handler,
         automation::settings::get,
         automation::settings::put,
+        reporting::reporting::profitability::handler,
+        reporting::reporting::worked_hours::handler,
         field::field::my_tasks::handler,
         field::field::current::handler,
         field::field::start::handler,
@@ -216,6 +219,9 @@ impl Modify for SecurityAddon {
         organization::create::CreateOrganizationRequest,
         organization::update::UpdateOrganizationRequest,
         organization::response::OrganizationResponse,
+        reporting::response::ProfitabilityResponse,
+        reporting::response::WorkedHoursResponse,
+        reporting::response::WorkedHoursRow,
         field::response::FieldTaskResponse,
         field::response::TimeEntryResponse,
         field::response::TimeEntryPhotoResponse,
@@ -326,6 +332,7 @@ impl Modify for SecurityAddon {
     tags(
         (name = "automation", description = "Workflow engine — connector and event catalogues, credentials, workflows, runs, settings"),
         (name = "organizations", description = "Organizations management"),
+        (name = "reporting", description = "Profitability and worked hours"),
         (name = "field", description = "Field app: clocking on and off, day end"),
         (name = "files", description = "File uploads and storage"),
         (name = "customers", description = "Customers and customer contexts management"),

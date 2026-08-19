@@ -1,0 +1,34 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT DISTINCT\n                COALESCE(t.parent_task_id, t.id) AS \"task_id!\",\n                l.equipment_id,\n                eq.hourly_rate_cents\n            FROM task_equipment_links l\n            JOIN tasks t ON t.id = l.task_id AND t.deleted_at IS NULL\n            JOIN equipment eq ON eq.id = l.equipment_id\n            WHERE t.org_id = $1\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "task_id!",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "equipment_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "hourly_rate_cents",
+        "type_info": "Int4"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null,
+      false,
+      false
+    ]
+  },
+  "hash": "e6b4ee8324bbaf9216975e50c381bc200adad6bcfc3cb8fd8d426c30e61f0e51"
+}

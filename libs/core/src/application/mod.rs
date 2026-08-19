@@ -43,6 +43,7 @@ pub mod organization;
 pub mod planning;
 pub mod policy;
 pub mod product;
+pub mod profitability;
 pub mod quote;
 pub mod role;
 pub mod service_rate;

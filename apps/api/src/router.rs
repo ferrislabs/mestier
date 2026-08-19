@@ -20,6 +20,7 @@ use handlers_organization as organization;
 use handlers_planning as planning;
 use handlers_quote as quote;
 use handlers_reference as reference;
+use handlers_reporting as reporting;
 
 use crate::openapi::ApiDoc;
 
@@ -89,6 +90,7 @@ pub fn router(state: AppState) -> Result<Router, ApiError> {
         .merge(member::router(&state))
         .merge(organization::router(&state))
         .merge(quote::router(&state))
+        .merge(reporting::router(&state))
         .merge(planning::router(&state))
         .merge(reference::router(&state))
         .merge(Scalar::with_url("/scalar", openapi.clone()))

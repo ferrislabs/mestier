@@ -1,0 +1,48 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT\n                COALESCE(t.parent_task_id, t.id) AS \"task_id!\",\n                te.employee_id,\n                e.hourly_rate_cents,\n                te.started_at,\n                te.ended_at\n            FROM time_entries te\n            JOIN tasks t ON t.id = te.task_id AND t.deleted_at IS NULL\n            JOIN employees e ON e.id = te.employee_id\n            WHERE te.org_id = $1\n              AND te.started_at >= $2\n              AND te.started_at < $3\n            ORDER BY te.started_at\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "task_id!",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "employee_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "hourly_rate_cents",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 3,
+        "name": "started_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 4,
+        "name": "ended_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Timestamptz",
+        "Timestamptz"
+      ]
+    },
+    "nullable": [
+      null,
+      false,
+      true,
+      false,
+      true
+    ]
+  },
+  "hash": "93a1e7a60f2feafd6a3d708e5aef6feefb1f4a89d34629f76626dfd0dc58af95"
+}

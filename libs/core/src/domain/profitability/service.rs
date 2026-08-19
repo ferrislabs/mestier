@@ -4,8 +4,7 @@ use chrono::{DateTime, Utc};
 use common::CoreError;
 
 use crate::{
-    DateRange, EmployeeId, EmployeeProfitability, OrganizationId, ProfitabilityReport,
-    TaskProfitability,
+    EmployeeId, EmployeeProfitability, OrganizationId, ProfitabilityReport, TaskProfitability,
     domain::profitability::{
         AssignedEquipment, ClockedTime, JobHeader, ProfitabilityFacts,
         ports::ProfitabilityRepository,
@@ -30,9 +29,10 @@ where
     pub async fn report(
         &mut self,
         organization_id: OrganizationId,
-        range: DateRange,
+        from: DateTime<Utc>,
+        to: DateTime<Utc>,
     ) -> Result<ProfitabilityReport, CoreError> {
-        let facts = self.repo.load(organization_id, range).await?;
+        let facts = self.repo.load(organization_id, from, to).await?;
 
         Ok(build_report(facts))
     }
