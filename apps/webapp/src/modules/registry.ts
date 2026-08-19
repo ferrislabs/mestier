@@ -13,6 +13,7 @@ import {
 	Package,
 	Receipt,
 	Settings,
+	TrendingUp,
 	Users,
 } from 'lucide-react'
 import type { AppModule } from '#/modules/types'
@@ -32,6 +33,12 @@ export const MODULES: AppModule[] = [
 				to: '/',
 				icon: LayoutDashboard,
 				exact: true,
+			},
+			{
+				id: 'profitability',
+				label: 'Rentabilité',
+				to: '/reporting',
+				icon: TrendingUp,
 			},
 		],
 	},
