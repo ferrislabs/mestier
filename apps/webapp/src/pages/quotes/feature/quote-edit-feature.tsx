@@ -8,7 +8,7 @@ import {
 	Trash2,
 } from 'lucide-react'
 import type * as React from 'react'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import {
 	AlertDialog,
 	AlertDialogAction,
@@ -109,8 +109,8 @@ function QuoteEditWorkspace({ quote }: { quote: Quote }) {
 		equipment: false,
 	})
 	const catalogItems = useCatalogItems(
-		catalog.serviceRates.data?.data ?? [],
-		catalog.products.data?.data ?? [],
+		catalog.serviceRates.data?.data,
+		catalog.products.data?.data,
 	)
 	const updateQuote = useUpdateQuote()
 	const deleteQuote = useDeleteQuote(quote.organization_id)
@@ -124,7 +124,16 @@ function QuoteEditWorkspace({ quote }: { quote: Quote }) {
 		Boolean(values.customerId),
 	)
 
+	// Reloads the form when the server's quote changes, and only then. The
+	// catalogue is in the dependencies because `quoteToForm` reads it, but it
+	// resolves on its own schedule: without this guard, a catalogue arriving
+	// after the quote overwrote whatever the user had already typed.
+	const loadedVersion = useRef<string | null>(null)
 	useEffect(() => {
+		const version = `${quote.id}:${quote.updated_at}`
+		if (loadedVersion.current === version) return
+		loadedVersion.current = version
+
 		setStatus(quote.status)
 		setValues(quoteToForm(quote, catalogItems))
 	}, [catalogItems, quote])
