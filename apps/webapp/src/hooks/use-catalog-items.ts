@@ -26,12 +26,22 @@ export interface CatalogItem {
 	sku?: string
 }
 
+/**
+ * Accepts the raw query data, `undefined` included, and defaults inside the
+ * memo.
+ *
+ * Callers used to write `data?.data ?? []`, which builds a fresh array on every
+ * render until the query resolves. That invalidated this memo each time, and the
+ * quote edit screen has an effect keyed on the result that calls `setValues`:
+ * a new identity per render made it an infinite render loop, which surfaced as
+ * "Maximum update depth exceeded" whenever the catalogue was slow or failing.
+ */
 export function useCatalogItems(
-	serviceRates: ServiceRate[],
-	products: Product[],
+	serviceRates: ServiceRate[] | undefined,
+	products: Product[] | undefined,
 ): CatalogItem[] {
 	return useMemo(
-		() => buildCatalogItems(serviceRates, products),
+		() => buildCatalogItems(serviceRates ?? [], products ?? []),
 		[products, serviceRates],
 	)
 }

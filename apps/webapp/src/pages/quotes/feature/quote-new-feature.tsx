@@ -65,8 +65,8 @@ function QuoteNewWorkspace({
 	})
 	const customers = useCustomers(organizationId)
 	const catalogItems = useCatalogItems(
-		catalog.serviceRates.data?.data ?? [],
-		catalog.products.data?.data ?? [],
+		catalog.serviceRates.data?.data,
+		catalog.products.data?.data,
 	)
 	const createQuote = useCreateQuote(organizationId)
 	const uploadFile = useUploadFile()
