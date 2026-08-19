@@ -16,6 +16,7 @@ import { Route as AppOOrganizationSlugRouteImport } from './routes/_app.o.$organ
 import { Route as AppFieldOrganizationSlugRouteImport } from './routes/_app.field.$organizationSlug'
 import { Route as AppOOrganizationSlugIndexRouteImport } from './routes/_app.o.$organizationSlug.index'
 import { Route as AppOOrganizationSlugSettingsRouteImport } from './routes/_app.o.$organizationSlug.settings'
+import { Route as AppOOrganizationSlugReportingRouteImport } from './routes/_app.o.$organizationSlug.reporting'
 import { Route as AppOOrganizationSlugPlanningIndexRouteImport } from './routes/_app.o.$organizationSlug.planning.index'
 import { Route as AppOOrganizationSlugHrIndexRouteImport } from './routes/_app.o.$organizationSlug.hr.index'
 import { Route as AppOOrganizationSlugCrmIndexRouteImport } from './routes/_app.o.$organizationSlug.crm.index'
@@ -70,6 +71,12 @@ const AppOOrganizationSlugSettingsRoute =
   AppOOrganizationSlugSettingsRouteImport.update({
     id: '/settings',
     path: '/settings',
+    getParentRoute: () => AppOOrganizationSlugRoute,
+  } as any)
+const AppOOrganizationSlugReportingRoute =
+  AppOOrganizationSlugReportingRouteImport.update({
+    id: '/reporting',
+    path: '/reporting',
     getParentRoute: () => AppOOrganizationSlugRoute,
   } as any)
 const AppOOrganizationSlugPlanningIndexRoute =
@@ -186,6 +193,7 @@ export interface FileRoutesByFullPath {
   '/invite/$token': typeof InviteTokenRoute
   '/field/$organizationSlug': typeof AppFieldOrganizationSlugRoute
   '/o/$organizationSlug': typeof AppOOrganizationSlugRouteWithChildren
+  '/o/$organizationSlug/reporting': typeof AppOOrganizationSlugReportingRoute
   '/o/$organizationSlug/settings': typeof AppOOrganizationSlugSettingsRoute
   '/o/$organizationSlug/': typeof AppOOrganizationSlugIndexRoute
   '/o/$organizationSlug/crm/catalog': typeof AppOOrganizationSlugCrmCatalogRoute
@@ -211,6 +219,7 @@ export interface FileRoutesByTo {
   '/invite/$token': typeof InviteTokenRoute
   '/': typeof AppIndexRoute
   '/field/$organizationSlug': typeof AppFieldOrganizationSlugRoute
+  '/o/$organizationSlug/reporting': typeof AppOOrganizationSlugReportingRoute
   '/o/$organizationSlug/settings': typeof AppOOrganizationSlugSettingsRoute
   '/o/$organizationSlug': typeof AppOOrganizationSlugIndexRoute
   '/o/$organizationSlug/crm/catalog': typeof AppOOrganizationSlugCrmCatalogRoute
@@ -239,6 +248,7 @@ export interface FileRoutesById {
   '/_app/': typeof AppIndexRoute
   '/_app/field/$organizationSlug': typeof AppFieldOrganizationSlugRoute
   '/_app/o/$organizationSlug': typeof AppOOrganizationSlugRouteWithChildren
+  '/_app/o/$organizationSlug/reporting': typeof AppOOrganizationSlugReportingRoute
   '/_app/o/$organizationSlug/settings': typeof AppOOrganizationSlugSettingsRoute
   '/_app/o/$organizationSlug/': typeof AppOOrganizationSlugIndexRoute
   '/_app/o/$organizationSlug/crm/catalog': typeof AppOOrganizationSlugCrmCatalogRoute
@@ -267,6 +277,7 @@ export interface FileRouteTypes {
     | '/invite/$token'
     | '/field/$organizationSlug'
     | '/o/$organizationSlug'
+    | '/o/$organizationSlug/reporting'
     | '/o/$organizationSlug/settings'
     | '/o/$organizationSlug/'
     | '/o/$organizationSlug/crm/catalog'
@@ -292,6 +303,7 @@ export interface FileRouteTypes {
     | '/invite/$token'
     | '/'
     | '/field/$organizationSlug'
+    | '/o/$organizationSlug/reporting'
     | '/o/$organizationSlug/settings'
     | '/o/$organizationSlug'
     | '/o/$organizationSlug/crm/catalog'
@@ -319,6 +331,7 @@ export interface FileRouteTypes {
     | '/_app/'
     | '/_app/field/$organizationSlug'
     | '/_app/o/$organizationSlug'
+    | '/_app/o/$organizationSlug/reporting'
     | '/_app/o/$organizationSlug/settings'
     | '/_app/o/$organizationSlug/'
     | '/_app/o/$organizationSlug/crm/catalog'
@@ -395,6 +408,13 @@ declare module '@tanstack/react-router' {
       path: '/settings'
       fullPath: '/o/$organizationSlug/settings'
       preLoaderRoute: typeof AppOOrganizationSlugSettingsRouteImport
+      parentRoute: typeof AppOOrganizationSlugRoute
+    }
+    '/_app/o/$organizationSlug/reporting': {
+      id: '/_app/o/$organizationSlug/reporting'
+      path: '/reporting'
+      fullPath: '/o/$organizationSlug/reporting'
+      preLoaderRoute: typeof AppOOrganizationSlugReportingRouteImport
       parentRoute: typeof AppOOrganizationSlugRoute
     }
     '/_app/o/$organizationSlug/planning/': {
@@ -542,6 +562,7 @@ const AppOOrganizationSlugHrTeamRouteWithChildren =
   )
 
 interface AppOOrganizationSlugRouteChildren {
+  AppOOrganizationSlugReportingRoute: typeof AppOOrganizationSlugReportingRoute
   AppOOrganizationSlugSettingsRoute: typeof AppOOrganizationSlugSettingsRoute
   AppOOrganizationSlugIndexRoute: typeof AppOOrganizationSlugIndexRoute
   AppOOrganizationSlugCrmCatalogRoute: typeof AppOOrganizationSlugCrmCatalogRoute
@@ -564,6 +585,7 @@ interface AppOOrganizationSlugRouteChildren {
 }
 
 const AppOOrganizationSlugRouteChildren: AppOOrganizationSlugRouteChildren = {
+  AppOOrganizationSlugReportingRoute: AppOOrganizationSlugReportingRoute,
   AppOOrganizationSlugSettingsRoute: AppOOrganizationSlugSettingsRoute,
   AppOOrganizationSlugIndexRoute: AppOOrganizationSlugIndexRoute,
   AppOOrganizationSlugCrmCatalogRoute: AppOOrganizationSlugCrmCatalogRoute,

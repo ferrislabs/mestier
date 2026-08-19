@@ -416,6 +416,13 @@ export namespace Schemas {
 		from: string
 		to: string
 	}
+	export type EmployeeProfitability = {
+		employee_id: EmployeeId
+		labour_cost_cents: number
+		open_entries: number
+		rate_missing: boolean
+		worked_minutes: number
+	}
 	export type EmployeeResponse = {
 		created_at: string
 		hourly_rate_cents?: (number | null) | undefined
@@ -632,6 +639,26 @@ export namespace Schemas {
 		unit: ServiceRateUnit
 		unit_price_cents: number
 		updated_at: string
+	}
+	export type TaskProfitability = {
+		customer_id: CustomerId
+		employees_without_rate: Array<EmployeeId>
+		equipment_cost_cents: number
+		labour_cost_cents: number
+		margin_cents?: (number | null) | undefined
+		occupied_minutes: number
+		open_entries: number
+		quoted_cents?: (number | null) | undefined
+		task_id: TaskId
+		title: string
+		worked_minutes: number
+	}
+	export type ProfitabilityResponse = {
+		employees: Array<EmployeeProfitability>
+		incomplete: Array<TaskProfitability>
+		jobs: Array<TaskProfitability>
+		least_profitable: Array<TaskProfitability>
+		most_profitable: Array<TaskProfitability>
 	}
 	export type RhythmSlotRequest = {
 		ends_minute: number
@@ -908,6 +935,15 @@ export namespace Schemas {
 	export type WorkTimeResponse = {
 		rhythms: Array<RhythmResponse>
 		work_slots: Array<WorkSlotResponse>
+	}
+	export type WorkedHoursRow = {
+		employee_id: EmployeeId
+		open_entries: number
+		worked_minutes: number
+	}
+	export type WorkedHoursResponse = {
+		employees: Array<WorkedHoursRow>
+		total_worked_minutes: number
 	}
 	export type WorkflowVersionResponse = {
 		created_at: string
@@ -3585,6 +3621,51 @@ export namespace Endpoints {
 			409: unknown
 		}
 	}
+	export type get_GetProfitability = {
+		method: 'GET'
+		path: '/api/v1/organizations/{organization_id}/reporting/profitability'
+		requestFormat: 'json'
+		parameters: {
+			query: { from: string; to: string }
+			path: { organization_id: string }
+		}
+		responses: {
+			200: {
+				data: {
+					employees: Array<Schemas.EmployeeProfitability>
+					incomplete: Array<Schemas.TaskProfitability>
+					jobs: Array<Schemas.TaskProfitability>
+					least_profitable: Array<Schemas.TaskProfitability>
+					most_profitable: Array<Schemas.TaskProfitability>
+				}
+				pagination?: (null | Schemas.PaginationMetadata) | undefined
+			}
+			401: unknown
+			403: unknown
+			409: unknown
+		}
+	}
+	export type get_GetWorkedHours = {
+		method: 'GET'
+		path: '/api/v1/organizations/{organization_id}/reporting/worked-hours'
+		requestFormat: 'json'
+		parameters: {
+			query: { from: string; to: string }
+			path: { organization_id: string }
+		}
+		responses: {
+			200: {
+				data: {
+					employees: Array<Schemas.WorkedHoursRow>
+					total_worked_minutes: number
+				}
+				pagination?: (null | Schemas.PaginationMetadata) | undefined
+			}
+			401: unknown
+			403: unknown
+			409: unknown
+		}
+	}
 	export type get_ListServiceRates = {
 		method: 'GET'
 		path: '/api/v1/organizations/{organization_id}/service-rates'
@@ -4343,6 +4424,8 @@ export type EndpointByMethod = {
 		'/api/v1/organizations/{organization_id}/planning/availability': Endpoints.get_GetPlanningAvailability
 		'/api/v1/organizations/{organization_id}/products': Endpoints.get_ListProducts
 		'/api/v1/organizations/{organization_id}/quotes': Endpoints.get_ListQuotes
+		'/api/v1/organizations/{organization_id}/reporting/profitability': Endpoints.get_GetProfitability
+		'/api/v1/organizations/{organization_id}/reporting/worked-hours': Endpoints.get_GetWorkedHours
 		'/api/v1/organizations/{organization_id}/service-rates': Endpoints.get_ListServiceRates
 		'/api/v1/organizations/{organization_id}/task-labels': Endpoints.get_ListTaskLabels
 		'/api/v1/organizations/{organization_id}/tasks': Endpoints.get_ListTasks
