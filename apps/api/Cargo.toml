@@ -14,6 +14,7 @@ handlers-files = { workspace = true }
 handlers-member = { workspace = true }
 handlers-organization = { workspace = true }
 handlers-quote = { workspace = true }
+handlers-reporting = { workspace = true }
 handlers-planning = { workspace = true }
 handlers-reference = { workspace = true }
 server = { workspace = true }

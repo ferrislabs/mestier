@@ -1,0 +1,42 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT r.id, r.title, r.customer_id AS \"customer_id!\", q.total_cents AS \"total_cents?\"\n            FROM tasks r\n            LEFT JOIN quotes q ON q.id = r.quote_id AND q.deleted_at IS NULL\n            WHERE r.org_id = $1\n              AND r.parent_task_id IS NULL\n              AND r.customer_id IS NOT NULL\n              AND r.deleted_at IS NULL\n              AND EXISTS (\n                SELECT 1\n                FROM time_entries te\n                JOIN tasks t ON t.id = te.task_id AND t.deleted_at IS NULL\n                WHERE COALESCE(t.parent_task_id, t.id) = r.id\n                  AND te.started_at >= $2\n                  AND te.started_at < $3\n              )\n            ORDER BY r.starts_at DESC NULLS LAST, r.id\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "title",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "customer_id!",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 3,
+        "name": "total_cents?",
+        "type_info": "Int4"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Timestamptz",
+        "Timestamptz"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      true,
+      false
+    ]
+  },
+  "hash": "c1a0e5f03b56a620602fcf79c4c04c35b351ba1b867f2164e7da42ea7f38e304"
+}
