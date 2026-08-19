@@ -82,10 +82,65 @@ export function centsToEuros(cents: number): string {
 	return (cents / 100).toFixed(2)
 }
 
+/**
+ * A decimal amount typed by hand, in exact cents.
+ *
+ * Integer arithmetic rather than `Number(value) * 100`, which is inexact: in
+ * floating point `1.005 * 100` is `100.49999999999999`. A third decimal on a
+ * euro amount has no authority to match, since the backend receives cents
+ * already; it rounds the same way as everything else here, to even, so the file
+ * has one rule rather than two.
+ */
 export function eurosToCents(value: string): number {
+	const parsed = parseDecimal(value)
+	if (!parsed) return 0
+
+	return Number(scaleTo(parsed.digits, parsed.scale, 2))
+}
+
+/**
+ * A hand-typed decimal, split into digits and scale: `"12,50"` becomes
+ * `{ digits: 1250n, scale: 2 }`. `null` when there is nothing usable to read.
+ *
+ * Only non-negative values: a quantity must be positive and a price cannot be
+ * negative, both enforced by the domain, so a sign here would be a bug
+ * upstream rather than something to interpret.
+ */
+function parseDecimal(value: string): { digits: bigint; scale: number } | null {
 	const normalized = value.replace(',', '.').trim()
-	if (!normalized) return 0
-	return Math.round(Number(normalized) * 100)
+	if (!/^\d*\.?\d*$/.test(normalized) || normalized === '.' || !normalized) {
+		return null
+	}
+
+	const [whole = '', fraction = ''] = normalized.split('.')
+	const digits = `${whole}${fraction}`
+	if (!digits) return null
+
+	return { digits: BigInt(digits), scale: fraction.length }
+}
+
+/**
+ * Restates `digits × 10^-scale` at `targetScale`, rounding halves to even.
+ *
+ * Banker's rounding, because that is what `rust_decimal`'s `round_dp` does by
+ * default and the backend computes the stored total with it. Verified rather
+ * than assumed: on the backend `0.5` rounds to `0`, `1.5` to `2` and `2.5` to
+ * `2`. `Math.round` rounds halves up instead, which is what made the preview
+ * and the saved quote disagree by a cent about once every fifty lines.
+ */
+function scaleTo(digits: bigint, scale: number, targetScale: number): bigint {
+	if (scale <= targetScale) {
+		return digits * 10n ** BigInt(targetScale - scale)
+	}
+
+	const divisor = 10n ** BigInt(scale - targetScale)
+	const quotient = digits / divisor
+	const doubled = (digits % divisor) * 2n
+
+	if (doubled > divisor) return quotient + 1n
+	if (doubled < divisor) return quotient
+	// Exactly a half: land on the even neighbour.
+	return quotient % 2n === 0n ? quotient : quotient + 1n
 }
 
 export function formatCents(cents: number): string {
@@ -112,10 +167,23 @@ export function quoteStatusLabel(status: string): string {
 	return status
 }
 
+/**
+ * The line's total, to the cent, computed the way the backend computes it.
+ *
+ * The stored total has always come from `domain::quote::service`, which
+ * multiplies with `Decimal` and rounds halves to even. This preview used to
+ * multiply with floats and round halves up, and the two disagreed by a cent
+ * about once every fifty lines. Impossible to explain to a customer when it
+ * lands, so this does the same integer arithmetic instead. `types.test.ts` pins
+ * cases that used to diverge, and `domain::quote::service` pins the same ones.
+ */
 export function quoteLineTotalCents(line: QuoteLineFormValues): number {
-	const quantity = Number(line.quantity.replace(',', '.'))
-	if (!Number.isFinite(quantity) || quantity <= 0) return 0
-	return Math.round(quantity * eurosToCents(line.unitPrice))
+	const quantity = parseDecimal(line.quantity)
+	if (!quantity || quantity.digits === 0n) return 0
+
+	const unitPriceCents = BigInt(eurosToCents(line.unitPrice))
+
+	return Number(scaleTo(quantity.digits * unitPriceCents, quantity.scale, 0))
 }
 
 export function quoteLineSourceLabel(
