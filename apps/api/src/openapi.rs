@@ -6,6 +6,7 @@ use utoipa::{
 use handlers_automation as automation;
 use handlers_customer as customer;
 use handlers_discord as discord;
+use handlers_field as field;
 use handlers_files as files;
 use handlers_member as member;
 use handlers_organization as organization;
@@ -53,6 +54,12 @@ impl Modify for SecurityAddon {
         automation::run::start::handler,
         automation::settings::get,
         automation::settings::put,
+        field::field::my_tasks::handler,
+        field::field::current::handler,
+        field::field::start::handler,
+        field::field::stop::handler,
+        field::field::attach_photo::handler,
+        field::field::end_day::handler,
         files::upload::handler,
         files::url::handler,
         customer::customer::create::handler,
@@ -209,6 +216,13 @@ impl Modify for SecurityAddon {
         organization::create::CreateOrganizationRequest,
         organization::update::UpdateOrganizationRequest,
         organization::response::OrganizationResponse,
+        field::response::FieldTaskResponse,
+        field::response::TimeEntryResponse,
+        field::response::TimeEntryPhotoResponse,
+        field::response::DayLogResponse,
+        field::field::start::StartTimeEntryRequest,
+        field::field::attach_photo::AttachPhotoRequest,
+        field::field::end_day::EndDayRequest,
         files::response::FileUploadResponse,
         files::response::FileUrlResponse,
         customer::customer::create::CreateCustomerRequest,
@@ -312,6 +326,7 @@ impl Modify for SecurityAddon {
     tags(
         (name = "automation", description = "Workflow engine — connector and event catalogues, credentials, workflows, runs, settings"),
         (name = "organizations", description = "Organizations management"),
+        (name = "field", description = "Field app: clocking on and off, day end"),
         (name = "files", description = "File uploads and storage"),
         (name = "customers", description = "Customers and customer contexts management"),
         (name = "quotes", description = "Quotes and quote lines management"),

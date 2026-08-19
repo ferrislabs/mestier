@@ -1,5 +1,5 @@
 [workspace]
-members = ["apps/api", "libs/args", "libs/auth", "libs/authz", "libs/common", "libs/core", "libs/discord", "libs/events", "libs/handlers", "libs/handlers-automation", "libs/handlers-customer", "libs/handlers-discord", "libs/handlers-files", "libs/handlers-member", "libs/handlers-organization", "libs/handlers-planning", "libs/handlers-quote", "libs/handlers-reference", "libs/iam", "libs/macros", "libs/pagination", "libs/rate-limit", "libs/server"]
+members = ["apps/api", "libs/args", "libs/auth", "libs/authz", "libs/common", "libs/core", "libs/discord", "libs/events", "libs/handlers", "libs/handlers-automation", "libs/handlers-customer", "libs/handlers-discord", "libs/handlers-field", "libs/handlers-files", "libs/handlers-member", "libs/handlers-organization", "libs/handlers-planning", "libs/handlers-quote", "libs/handlers-reference", "libs/iam", "libs/macros", "libs/pagination", "libs/rate-limit", "libs/server"]
 resolver = "3"
 
 [workspace.package]
@@ -61,6 +61,7 @@ handlers = { path = "libs/handlers" }
 handlers-automation = { path = "libs/handlers-automation" }
 handlers-customer = { path = "libs/handlers-customer" }
 handlers-discord = { path = "libs/handlers-discord" }
+handlers-field = { path = "libs/handlers-field" }
 handlers-files = { path = "libs/handlers-files" }
 handlers-member = { path = "libs/handlers-member" }
 handlers-organization = { path = "libs/handlers-organization" }

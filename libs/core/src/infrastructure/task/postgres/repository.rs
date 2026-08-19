@@ -7,7 +7,7 @@ use sqlx::PgConnection;
 use uuid::Uuid;
 
 use crate::{
-    OrganizationId, Task, TaskAssignment, TaskId,
+    MemberId, OrganizationId, Task, TaskAssignment, TaskId,
     domain::task::ports::TaskRepository,
     infrastructure::{
         postgres::{SharedTx, error::map_sqlx_error},
@@ -143,6 +143,49 @@ impl<'tx> TaskRepository for PgTaskRepository<'tx> {
         }
 
         Ok((tasks, total as u64))
+    }
+
+    async fn list_for_assignee_on(
+        &mut self,
+        organization_id: OrganizationId,
+        member_id: MemberId,
+        day_starts_at: DateTime<Utc>,
+        day_ends_at: DateTime<Utc>,
+    ) -> Result<Vec<Task>, CoreError> {
+        let mut tx = self.tx.lock().await;
+        let rows = sqlx::query_as!(
+            TaskRow,
+            r#"
+            SELECT t.id, t.org_id, t.parent_task_id, t.title, t.description, t.starts_at, t.ends_at, t.all_day, t.status::text AS "status!", t.blocks_availability, t.customer_id, t.customer_context_id, t.quote_id, t.deleted_at, t.created_at, t.updated_at
+            FROM tasks t
+            JOIN task_assignments a ON a.task_id = t.id
+            WHERE t.org_id = $1
+              AND a.member_id = $2
+              AND t.deleted_at IS NULL
+              AND (
+                t.starts_at IS NULL
+                OR (t.starts_at < $4 AND COALESCE(t.ends_at, t.starts_at) >= $3)
+              )
+            ORDER BY t.starts_at ASC NULLS LAST, t.id ASC
+            "#,
+            organization_id.0,
+            member_id.0,
+            day_starts_at,
+            day_ends_at,
+        )
+        .fetch_all(&mut ***tx)
+        .await
+        .map_err(map_sqlx_error)?;
+
+        let ids: Vec<Uuid> = rows.iter().map(|row| row.id).collect();
+        let mut assignments_by_task = fetch_assignments_for_tasks(&mut tx, &ids).await?;
+
+        rows.into_iter()
+            .map(|row| {
+                let assignments = assignments_by_task.remove(&row.id).unwrap_or_default();
+                row.into_task(assignments)
+            })
+            .collect()
     }
 
     async fn count_children(

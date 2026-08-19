@@ -141,6 +141,31 @@ where
             .await
     }
 
+    /// The entry the employee is clocked on to, if any.
+    ///
+    /// The field app asks on every load: it decides whether the screen offers
+    /// "start" or "stop", and getting it wrong is what lets a second job open.
+    pub async fn find(&mut self, id: TimeEntryId) -> Result<Option<TimeEntry>, CoreError> {
+        self.entries.find_by_id(id).await
+    }
+
+    pub async fn running_for(
+        &mut self,
+        employee_id: crate::EmployeeId,
+    ) -> Result<Option<TimeEntry>, CoreError> {
+        self.entries.find_running_for_employee(employee_id).await
+    }
+
+    pub async fn list_for_employee_on(
+        &mut self,
+        employee_id: crate::EmployeeId,
+        work_date: chrono::NaiveDate,
+    ) -> Result<Vec<TimeEntry>, CoreError> {
+        self.entries
+            .list_for_employee_on(employee_id, work_date)
+            .await
+    }
+
     /// Declares the day over, closing whatever the employee left running.
     ///
     /// The closing time is the one they declared, not now: someone filling

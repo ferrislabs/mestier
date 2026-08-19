@@ -41,6 +41,8 @@ pub mod domain {
     pub struct TaskLabel;
     pub struct EmployeeRhythm;
     pub struct WorkSlot;
+    pub struct TimeEntry;
+    pub struct DayLog;
     pub struct Workflow;
     pub struct Run;
 }
