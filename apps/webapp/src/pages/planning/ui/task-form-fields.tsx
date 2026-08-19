@@ -51,6 +51,13 @@ export interface TaskFormFieldsProps {
 	customers: { id: string; displayName: string }[]
 	customerContexts: { id: string; label: string }[]
 	isCustomerContextsLoading?: boolean
+	/**
+	 * Create mode only, and only the accepted quotes of the chosen customer: a
+	 * chantier bills against a quote the customer agreed to, and offering a
+	 * draft would invite a margin computed from a number nobody signed.
+	 */
+	quotes: { id: string; label: string }[]
+	isQuotesLoading?: boolean
 	labels: LabelPickerOption[]
 	isCreatingLabel?: boolean
 	onCreateLabel: (name: string) => void
@@ -75,6 +82,8 @@ export function TaskFormFields({
 	customers,
 	customerContexts,
 	isCustomerContextsLoading,
+	quotes,
+	isQuotesLoading,
 	labels,
 	isCreatingLabel,
 	onCreateLabel,
@@ -170,6 +179,41 @@ export function TaskFormFields({
 									))}
 								</SelectContent>
 							</Select>
+						</div>
+					) : null}
+
+					{values.customerId ? (
+						<div className="flex flex-col gap-2">
+							<Label htmlFor="task-quote">Devis</Label>
+							<Select
+								value={values.quoteId || NO_SELECTION}
+								onValueChange={(quoteId) =>
+									onChange({
+										quoteId: quoteId === NO_SELECTION ? '' : quoteId,
+									})
+								}
+								disabled={isQuotesLoading}
+							>
+								<SelectTrigger
+									id="task-quote"
+									aria-label="Devis"
+									className="w-full"
+								>
+									<SelectValue placeholder="Aucun devis" />
+								</SelectTrigger>
+								<SelectContent>
+									<SelectItem value={NO_SELECTION}>Aucun devis</SelectItem>
+									{quotes.map((quote) => (
+										<SelectItem key={quote.id} value={quote.id}>
+											{quote.label}
+										</SelectItem>
+									))}
+								</SelectContent>
+							</Select>
+							<p className="text-xs text-muted-foreground">
+								Sans devis rattaché, la rentabilité de ce chantier affichera son
+								coût mais aucune marge.
+							</p>
 						</div>
 					) : null}
 				</div>

@@ -31,6 +31,15 @@ export interface TaskFormValues {
 	blocksAvailability: boolean
 	customerId: string
 	customerContextId: string
+	/**
+	 * The accepted quote this chantier bills against, or `''` for none.
+	 *
+	 * Picked at creation only, like the customer and for the same reason:
+	 * `PATCH /tasks/{id}` carries no `quote_id`. Without it the profitability
+	 * report can state a cost but never a margin, since it reads the quote
+	 * through this link.
+	 */
+	quoteId: string
 	labelIds: string[]
 	assignees: AssigneeRef[]
 }
@@ -57,6 +66,7 @@ export function emptyTaskDraft(options: {
 		blocksAvailability: true,
 		customerId: '',
 		customerContextId: '',
+		quoteId: '',
 		labelIds: [],
 		assignees: [],
 	}
@@ -305,6 +315,7 @@ export function buildCreateTaskPayload(
 		blocks_availability: values.blocksAvailability,
 		customer_id: values.customerId || null,
 		customer_context_id: values.customerContextId || null,
+		quote_id: values.quoteId || null,
 		parent_task_id: options.parentTaskId,
 	}
 }
@@ -408,6 +419,7 @@ export function taskToDraft(
 		blocksAvailability: task.blocks_availability,
 		customerId: '',
 		customerContextId: '',
+		quoteId: '',
 		labelIds: task.labels.map((label) => label.id),
 		assignees: task.member_ids.map((memberId) => ({
 			member_id: memberId,

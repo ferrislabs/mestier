@@ -118,6 +118,32 @@ describe('validateTaskDraft', () => {
 	})
 })
 
+describe('buildCreateTaskPayload — devis', () => {
+	/**
+	 * The link the profitability report reads to state a margin. Asserted on the
+	 * payload rather than on the form, because the field can render perfectly and
+	 * still not be transmitted, which is exactly what happened before this test
+	 * existed.
+	 */
+	it('carries the chosen quote', () => {
+		const payload = buildCreateTaskPayload(rootDraft({ quoteId: 'quote-1' }), {
+			parentTaskId: null,
+			timeZone: TIME_ZONE,
+		})
+
+		expect(payload?.quote_id).toBe('quote-1')
+	})
+
+	it('sends null rather than an empty string when none was chosen', () => {
+		const payload = buildCreateTaskPayload(rootDraft({ quoteId: '' }), {
+			parentTaskId: null,
+			timeZone: TIME_ZONE,
+		})
+
+		expect(payload?.quote_id).toBeNull()
+	})
+})
+
 describe('buildCreateTaskPayload — without a customer', () => {
 	it('sends null customer_id/customer_context_id for a task with no client', () => {
 		const payload = buildCreateTaskPayload(rootDraft(), {

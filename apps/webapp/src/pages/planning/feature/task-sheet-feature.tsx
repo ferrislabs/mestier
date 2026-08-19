@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useCustomerContexts, useCustomers } from '#/hooks/use-customers'
 import type { PlanningResource } from '#/hooks/use-planning'
+import { useQuotes } from '#/hooks/use-quotes'
 import {
 	useCreateTaskComment,
 	useDeleteTaskComment,
@@ -38,6 +39,7 @@ import {
 } from '#/pages/planning/lib/task-form'
 import { todayIsoDate } from '#/pages/planning/types'
 import { TaskSheet } from '#/pages/planning/ui/task-sheet'
+import { formatCents } from '#/pages/quotes/types'
 
 export type TaskSheetTarget =
 	| { mode: 'create'; parentTaskId: string | null }
@@ -129,6 +131,12 @@ export function TaskSheetFeature({
 		values.customerId,
 		Boolean(values.customerId),
 	)
+
+	// The organization's quotes, narrowed to the chosen customer's accepted ones
+	// below. No per-customer endpoint exists, so this reads the same page the
+	// quote list does and filters client-side; fine at this size, and it shares
+	// the cache with the quotes screen rather than adding a request.
+	const quotesQuery = useQuotes(organizationId, { page: 1, perPage: 100 })
 
 	const labelsQuery = useTaskLabels(organizationId)
 	const createLabel = useCreateTaskLabel(organizationId)
@@ -353,6 +361,18 @@ export function TaskSheetFeature({
 			label: context.label,
 		}),
 	)
+	// Only the accepted quotes of the chosen customer. A chantier bills against
+	// something the customer agreed to, and offering a draft would invite a
+	// margin computed from a number nobody signed.
+	const quotes = (quotesQuery.data?.data ?? [])
+		.filter(
+			(quote) =>
+				quote.customer_id === values.customerId && quote.status === 'ACCEPTED',
+		)
+		.map((quote) => ({
+			id: quote.id,
+			label: `${quote.reference} · ${formatCents(quote.total_cents)}`,
+		}))
 	const customerOptions = (customersQuery.data?.data ?? []).map((customer) => ({
 		id: customer.id,
 		displayName: customer.name.trim(),
@@ -387,6 +407,8 @@ export function TaskSheetFeature({
 				customerName: editCustomerName,
 				customers: customerOptions,
 				customerContexts,
+				quotes,
+				isQuotesLoading: quotesQuery.isLoading,
 				isCustomerContextsLoading: customerContextsQuery.isLoading,
 				labels: labels.map((label) => ({
 					id: label.id,
