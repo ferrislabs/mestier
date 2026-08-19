@@ -60,6 +60,7 @@ import {
 } from '#/hooks/use-reference-catalog'
 import { formatPricePerUnit, formatUnitLong } from '#/lib/units'
 import type { ServiceRateFormValues } from '#/pages/catalog/types'
+import { eurosToCents } from '#/pages/quotes/types'
 
 type CatalogTab = 'products' | 'services'
 
@@ -507,13 +508,6 @@ function CrmSectionContent({ organizationId }: CrmSectionContentProps) {
 			)}
 		</serviceRateForm.Subscribe>
 	)
-}
-
-function eurosToCents(value: string): number {
-	const normalized = value.replace(',', '.').trim()
-	const parsed = Number.parseFloat(normalized)
-	if (!Number.isFinite(parsed)) return 0
-	return Math.round(parsed * 100)
 }
 
 function SegmentButton({

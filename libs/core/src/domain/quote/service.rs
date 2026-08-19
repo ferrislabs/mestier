@@ -498,6 +498,38 @@ mod tests {
         service.soft_delete_quote(id).await.unwrap();
     }
 
+    /// The same vectors the webapp pins in `pages/quotes/types.test.ts`.
+    ///
+    /// The draft total shown while typing is computed in the browser, so two
+    /// implementations of one pricing rule exist. These are what stops them
+    /// drifting: every product below lands exactly on a half cent, which is
+    /// where the rounding mode decides the answer. `round_dp` rounds halves to
+    /// even, so each one goes to the even neighbour rather than up. Change a
+    /// number here and the webapp's copy has to change with it.
+    #[test]
+    fn products_landing_on_a_half_cent_round_to_even() {
+        for (quantity, unit_price_cents, expected) in [
+            ("631.9", 38_875, 24_565_112),
+            ("1723.1", 5_455, 9_399_510),
+            ("710.1", 13_485, 9_575_698),
+            ("1274.7", 13_895, 17_711_956),
+            ("1024.5", 37_525, 38_444_362),
+            ("1744.9", 26_385, 46_039_186),
+        ] {
+            let line = QuoteLine {
+                quantity: quantity.parse().expect("a decimal quantity"),
+                unit_price_cents,
+                ..quote(QuoteId(Uuid::new_v4())).lines.remove(0)
+            };
+
+            assert_eq!(
+                calculate_total_cents(&[line]).expect("a total within bounds"),
+                expected,
+                "{quantity} x {unit_price_cents} cents"
+            );
+        }
+    }
+
     #[tokio::test]
     async fn rejects_invalid_line_input() {
         let mut repo = MockQuoteRepository::new();
