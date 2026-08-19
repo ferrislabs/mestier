@@ -40,6 +40,13 @@ pub use infrastructure::realtime::EventHub;
 /// against a `mockall` double of its repository port. The port itself stays
 /// crate-private: nothing outside implements it by hand.
 pub use domain::quote::service::QuoteService;
+
+/// The profitability calculation, and the port it reads through. Exposed so the
+/// use case in `application` can drive it, and so the report types are usable
+/// from the handler crates.
+pub use domain::profitability::{
+    ports::ProfitabilityRepository, service::ProfitabilityService, service::build_report,
+};
 /// Every port's `mockall` double, for test targets outside this crate: its
 /// own `tests/`, and the handler crates. Gated so mockall never reaches a
 /// normal build.
@@ -74,13 +81,14 @@ pub use domain::{
     Absence, AbsenceId, AbsenceKind, AssigneeRef, AvailabilityReport, Conflict, ConflictKind,
     Customer, CustomerContact, CustomerContactId, CustomerContext, CustomerContextId, CustomerId,
     CustomerPipelineStage, CustomerStatus, DateRange, DayLog, DayLogId, Employee, EmployeeId,
-    EmployeeRhythm, EmployeeRhythmId, Equipment, EquipmentId, FileObject, Invitation, InvitationId,
-    Member, MemberId, MemberWithAccount, MemberWorkTime, MinuteInterval, Organization,
-    OrganizationId, Permissions, PlanningEntry, PlanningResource, PlanningTask, PlanningView,
-    PresignedUrl, Product, ProductId, Quote, QuoteId, QuoteLine, QuoteLineId, QuoteStatus,
-    RhythmSlot, RhythmSlotId, Role, RoleId, ServiceRate, ServiceRateId, ServiceRateUnit,
-    StoredFile, Task, TaskAssignment, TaskAssignmentId, TaskComment, TaskCommentId, TaskId,
-    TaskLabel, TaskLabelId, TaskStatus, TimeEntry, TimeEntryId, TimeEntryPhoto, TimeEntryPhotoId,
+    EmployeeProfitability, EmployeeRhythm, EmployeeRhythmId, Equipment, EquipmentId, FileObject,
+    Invitation, InvitationId, Member, MemberId, MemberWithAccount, MemberWorkTime, MinuteInterval,
+    Organization, OrganizationId, Permissions, PlanningEntry, PlanningResource, PlanningTask,
+    PlanningView, PresignedUrl, Product, ProductId, ProfitabilityFacts, ProfitabilityReport, Quote,
+    QuoteId, QuoteLine, QuoteLineId, QuoteStatus, RhythmSlot, RhythmSlotId, Role, RoleId,
+    ServiceRate, ServiceRateId, ServiceRateUnit, StoredFile, Task, TaskAssignment,
+    TaskAssignmentId, TaskComment, TaskCommentId, TaskId, TaskLabel, TaskLabelId,
+    TaskProfitability, TaskStatus, TimeEntry, TimeEntryId, TimeEntryPhoto, TimeEntryPhotoId,
     TimeEntryPhotoPhase, TimeRange, Tz, User, UserId, WorkSlot, WorkSlotId,
     absence::commands::{CreateAbsenceCommand, PatchAbsenceCommand},
     customer::commands::{CreateCustomerCommand, UpdateCustomerCommand},
