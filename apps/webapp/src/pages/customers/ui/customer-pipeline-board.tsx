@@ -1,4 +1,4 @@
-import { ArrowRight, GripVertical } from 'lucide-react'
+import { ArrowRight, GripVertical, ThumbsDown, ThumbsUp } from 'lucide-react'
 import { Button } from '#/components/ui/button'
 import { StatusBadge } from '#/components/ui/surface'
 import type { Customer, CustomerPipelineStage } from '#/hooks/use-customers'
@@ -16,6 +16,23 @@ export const CUSTOMER_PIPELINE_STAGES: CustomerPipelineStage[] = [
 	'WON',
 	'LOST',
 ]
+
+/**
+ * The stages a card advances through with the sequential arrows. `WON` and
+ * `LOST` are deliberately excluded: they are terminal, reached only through
+ * the explicit "Marquer gagné"/"Marquer perdu" actions below, never through a
+ * neighbour-arrow misclick.
+ */
+const PIPELINE_SEQUENCE_STAGES: CustomerPipelineStage[] = [
+	'NEW',
+	'CONTACTED',
+	'QUALIFIED',
+	'QUOTE_SENT',
+]
+
+function isTerminalPipelineStage(stage: CustomerPipelineStage): boolean {
+	return stage === 'WON' || stage === 'LOST'
+}
 
 interface CustomerPipelineBoardProps {
 	customers: Customer[]
@@ -121,9 +138,16 @@ function PipelineCustomerCard({
 	onMove,
 	onOpen,
 }: PipelineCustomerCardProps) {
-	const currentIndex = CUSTOMER_PIPELINE_STAGES.indexOf(customer.pipeline_stage)
-	const previousStage = CUSTOMER_PIPELINE_STAGES[currentIndex - 1]
-	const nextStage = CUSTOMER_PIPELINE_STAGES[currentIndex + 1]
+	const isTerminal = isTerminalPipelineStage(customer.pipeline_stage)
+	const sequenceIndex = PIPELINE_SEQUENCE_STAGES.indexOf(
+		customer.pipeline_stage,
+	)
+	const previousStage =
+		sequenceIndex > 0 ? PIPELINE_SEQUENCE_STAGES[sequenceIndex - 1] : undefined
+	const nextStage =
+		sequenceIndex >= 0 && sequenceIndex < PIPELINE_SEQUENCE_STAGES.length - 1
+			? PIPELINE_SEQUENCE_STAGES[sequenceIndex + 1]
+			: undefined
 
 	return (
 		<article
@@ -178,6 +202,32 @@ function PipelineCustomerCard({
 							<ArrowRight />
 							<span className="sr-only">Avancer</span>
 						</Button>
+					) : null}
+					{!isTerminal ? (
+						<>
+							<Button
+								type="button"
+								size="icon-sm"
+								variant="ghost"
+								title="Marquer gagné"
+								disabled={isMoving}
+								onClick={() => onMove(customer, 'WON')}
+							>
+								<ThumbsUp className="text-success" />
+								<span className="sr-only">Marquer gagné</span>
+							</Button>
+							<Button
+								type="button"
+								size="icon-sm"
+								variant="ghost"
+								title="Marquer perdu"
+								disabled={isMoving}
+								onClick={() => onMove(customer, 'LOST')}
+							>
+								<ThumbsDown className="text-destructive" />
+								<span className="sr-only">Marquer perdu</span>
+							</Button>
+						</>
 					) : null}
 				</div>
 			</div>

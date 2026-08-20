@@ -63,6 +63,7 @@ import {
 	formatCents,
 	type QuoteFormValues,
 	type QuoteLineFormValues,
+	quoteLineTotalCents,
 	quoteStatusLabel,
 } from '#/pages/quotes/types'
 import { BillingAddressField } from '#/pages/quotes/ui/billing-address-field'
@@ -223,7 +224,7 @@ function QuoteEditWorkspace({ quote }: { quote: Quote }) {
 		})
 
 	const totalCents = values.lines.reduce(
-		(sum, line) => sum + lineTotalCents(line),
+		(sum, line) => sum + quoteLineTotalCents(line),
 		0,
 	)
 	const error =
@@ -565,7 +566,11 @@ function QuoteEditUI({
 						<SummaryRow label="Statut" value={quoteStatusLabel(status)} />
 						<SummaryRow label="Objet" value={values.title || 'Non renseigné'} />
 						<SummaryRow label="Lignes" value={String(values.lines.length)} />
-						<SummaryRow label="Total" value={formatCents(totalCents)} strong />
+						<SummaryRow
+							label="Total HT"
+							value={formatCents(totalCents)}
+							strong
+						/>
 					</div>
 				</aside>
 			</div>
@@ -686,10 +691,4 @@ function SummaryRow({
 			</span>
 		</div>
 	)
-}
-
-function lineTotalCents(line: QuoteLineFormValues): number {
-	const quantity = Number(line.quantity.replace(',', '.'))
-	if (!Number.isFinite(quantity) || quantity <= 0) return 0
-	return Math.round(quantity * eurosToCents(line.unitPrice))
 }
