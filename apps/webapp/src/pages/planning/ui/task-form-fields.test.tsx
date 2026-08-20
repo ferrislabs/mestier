@@ -33,6 +33,8 @@ function baseProps() {
 		customers: CUSTOMERS,
 		customerContexts: [{ id: 'ctx-1', label: 'Chantier principal' }],
 		isCustomerContextsLoading: false,
+		quotes: [{ id: 'quote-1', label: 'DEV-2026-0001 · 4 200,00 €' }],
+		isQuotesLoading: false,
 		labels: LABELS,
 		isCreatingLabel: false,
 		onCreateLabel: vi.fn(),
@@ -199,5 +201,66 @@ describe('TaskFormFields — no network call', () => {
 	it('never triggers fetch at render', () => {
 		render(<TaskFormFields {...baseProps()} />)
 		expect(fetchSpy).not.toHaveBeenCalled()
+	})
+})
+
+describe('TaskFormFields — devis', () => {
+	/**
+	 * Without this link the profitability report can state a chantier's cost but
+	 * never its margin, which is the whole point of M6. The field is the only
+	 * place in the product that sets `tasks.quote_id`.
+	 */
+	it('offers the customer quotes once a customer is chosen', async () => {
+		const props = baseProps()
+		render(
+			<TaskFormFields
+				{...props}
+				values={{ ...props.values, customerId: CUSTOMERS[0].id }}
+			/>,
+		)
+
+		expect(screen.getByLabelText('Devis')).toBeDefined()
+	})
+
+	it('says what is lost by leaving it empty', async () => {
+		const props = baseProps()
+		render(
+			<TaskFormFields
+				{...props}
+				values={{ ...props.values, customerId: CUSTOMERS[0].id }}
+			/>,
+		)
+
+		expect(screen.getByText(/aucune marge/i)).toBeDefined()
+	})
+
+	/** A quote belongs to a customer, so there is nothing to choose from yet. */
+	it('is absent until a customer is chosen', async () => {
+		const props = baseProps()
+		render(
+			<TaskFormFields
+				{...props}
+				values={{ ...props.values, customerId: '' }}
+			/>,
+		)
+
+		expect(screen.queryByLabelText('Devis')).toBeNull()
+	})
+
+	/**
+	 * Edit mode shows no quote selector, for the same reason it shows no customer
+	 * selector: `PATCH /tasks/{id}` carries neither field.
+	 */
+	it('is absent in edit mode', async () => {
+		const props = baseProps()
+		render(
+			<TaskFormFields
+				{...props}
+				mode="edit"
+				values={{ ...props.values, customerId: CUSTOMERS[0].id }}
+			/>,
+		)
+
+		expect(screen.queryByLabelText('Devis')).toBeNull()
 	})
 })
