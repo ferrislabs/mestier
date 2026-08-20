@@ -5,6 +5,7 @@ import {
 	formatMarginRate,
 	formatMinutes,
 	incompleteReason,
+	isCompleteJob,
 	marginRate,
 	realCostCents,
 	recollectedNote,
@@ -84,6 +85,25 @@ describe('incompleteReason', () => {
 				}),
 			),
 		).toBe('1 salarié sans taux horaire, et 2 pointages non clôturés')
+	})
+})
+
+describe('isCompleteJob', () => {
+	/**
+	 * The rule the three headline tiles (Devisé, Coût réel, Marge) all share:
+	 * this is exactly `incompleteReason(job) === null`, kept as a named check
+	 * rather than three inline comparisons.
+	 */
+	it('is true exactly when incompleteReason is null', () => {
+		expect(isCompleteJob(job())).toBe(true)
+		expect(
+			isCompleteJob(
+				job({ employees_without_rate: ['e1'], margin_cents: null }),
+			),
+		).toBe(false)
+		expect(isCompleteJob(job({ open_entries: 1, margin_cents: null }))).toBe(
+			false,
+		)
 	})
 })
 

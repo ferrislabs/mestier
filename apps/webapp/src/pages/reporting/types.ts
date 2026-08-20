@@ -46,6 +46,18 @@ export function incompleteReason(job: JobProfitability): string | null {
 }
 
 /**
+ * Whether a job's figures rest on complete data — the rule the headline
+ * tiles (Devisé, Coût réel, Marge) all use to decide what to sum.
+ *
+ * Mirrors the backend's `TaskProfitability::is_complete`: `null` is exactly
+ * `incompleteReason(job) === null`, kept as its own named check so the three
+ * tiles can share one call site instead of three inline comparisons.
+ */
+export function isCompleteJob(job: JobProfitability): boolean {
+	return incompleteReason(job) === null
+}
+
+/**
  * How much of a job's time was declared after the fact, in words, or `null`
  * when none was.
  *
