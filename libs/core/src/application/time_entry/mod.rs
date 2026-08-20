@@ -121,6 +121,32 @@ impl MestierUseCase {
         service.running_for(employee_id).await
     }
 
+    /// What the field app needs on load: the running entry, if any, and the
+    /// day log for today, if the employee already declared the day over.
+    ///
+    /// Resolves the organization's timezone the same way `profitability_report`
+    /// does, because deciding what "today" means is the same question in both
+    /// places, and answering it differently here would file the day boundary
+    /// somewhere the rest of the system does not agree with.
+    #[transactional(time_entry, day_log, organization, emitter)]
+    pub async fn find_field_status(
+        &self,
+        organization_id: OrganizationId,
+        employee_id: EmployeeId,
+    ) -> Result<(Option<TimeEntry>, Option<DayLog>), CoreError> {
+        let mut organization_repository = organization_repository;
+        let timezone = resolve_timezone(&mut organization_repository, organization_id).await?;
+        let now = Utc::now();
+        let mut service = TimeEntryService::new(time_entry_repository, day_log_repository, emitter);
+
+        let running = service.running_for(employee_id).await?;
+        let day_log = service
+            .day_log_for_today(employee_id, now, timezone)
+            .await?;
+
+        Ok((running, day_log))
+    }
+
     #[transactional(time_entry, day_log, emitter)]
     pub async fn list_time_entries_for_employee_on(
         &self,
