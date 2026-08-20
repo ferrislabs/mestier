@@ -35,6 +35,11 @@ pub struct ClockedTime {
     /// `None` for an entry nobody clocked off. It contributes no time, and is
     /// counted in [`TaskProfitability::open_entries`] so the figure can say so.
     pub ended_at: Option<DateTime<Utc>>,
+    /// Set when `ended_at` was declared on a later day than the work: a
+    /// recollection rather than a measurement. Counted normally in cost and
+    /// margin — see [`TaskProfitability::recollected_minutes`] for why it is
+    /// surfaced rather than excluded or treated as incomplete.
+    pub closed_after_the_fact: bool,
 }
 
 /// A machine on a job, with what an hour of it costs.
@@ -91,6 +96,16 @@ pub struct TaskProfitability {
     /// Entries nobody clocked off. They contribute nothing, and their presence
     /// says the figure is missing time rather than that the time was free.
     pub open_entries: u32,
+    /// Minutes from stretches closed after the fact, already included in
+    /// [`Self::worked_minutes`] and [`Self::labour_cost_cents`].
+    ///
+    /// A declared end time is a recollection, not a measurement — see the
+    /// `closed_after_the_fact` migration's own reasoning — but a crew that
+    /// forgets to clock off is routine, not exceptional. Excluding it would
+    /// undercount real cost; blocking the margin on it would mark most
+    /// chantiers incomplete for a normal human lapse. So it counts exactly
+    /// like measured time, and this figure is the only thing that says so.
+    pub recollected_minutes: i64,
 }
 
 impl TaskProfitability {

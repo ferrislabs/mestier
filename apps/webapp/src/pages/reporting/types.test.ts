@@ -5,8 +5,10 @@ import {
 	formatMarginRate,
 	formatMinutes,
 	incompleteReason,
+	isCompleteJob,
 	marginRate,
 	realCostCents,
+	recollectedNote,
 } from '#/pages/reporting/types'
 
 function job(overrides: Partial<JobProfitability> = {}): JobProfitability {
@@ -22,6 +24,7 @@ function job(overrides: Partial<JobProfitability> = {}): JobProfitability {
 		margin_cents: 405_900,
 		employees_without_rate: [],
 		open_entries: 0,
+		recollected_minutes: 0,
 		...overrides,
 	}
 }
@@ -82,6 +85,41 @@ describe('incompleteReason', () => {
 				}),
 			),
 		).toBe('1 salarié sans taux horaire, et 2 pointages non clôturés')
+	})
+})
+
+describe('isCompleteJob', () => {
+	/**
+	 * The rule the three headline tiles (Devisé, Coût réel, Marge) all share:
+	 * this is exactly `incompleteReason(job) === null`, kept as a named check
+	 * rather than three inline comparisons.
+	 */
+	it('is true exactly when incompleteReason is null', () => {
+		expect(isCompleteJob(job())).toBe(true)
+		expect(
+			isCompleteJob(
+				job({ employees_without_rate: ['e1'], margin_cents: null }),
+			),
+		).toBe(false)
+		expect(isCompleteJob(job({ open_entries: 1, margin_cents: null }))).toBe(
+			false,
+		)
+	})
+})
+
+describe('recollectedNote', () => {
+	it('says nothing when nothing was declared after the fact', () => {
+		expect(recollectedNote(job())).toBeNull()
+	})
+
+	/**
+	 * Recollected time still counts fully in the cost and the margin — this note
+	 * is informational, never a warning like `incompleteReason`.
+	 */
+	it('names the recollected time without withholding anything', () => {
+		expect(recollectedNote(job({ recollected_minutes: 45 }))).toBe(
+			'dont 45 min déclarées a posteriori',
+		)
 	})
 })
 

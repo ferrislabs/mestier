@@ -86,7 +86,8 @@ impl<'tx> ProfitabilityRepository for PgProfitabilityRepository<'tx> {
                 te.employee_id,
                 e.hourly_rate_cents,
                 te.started_at,
-                te.ended_at
+                te.ended_at,
+                te.closed_after_the_fact
             FROM time_entries te
             JOIN tasks t ON t.id = te.task_id AND t.deleted_at IS NULL
             JOIN employees e ON e.id = te.employee_id
@@ -109,6 +110,7 @@ impl<'tx> ProfitabilityRepository for PgProfitabilityRepository<'tx> {
             hourly_rate_cents: row.hourly_rate_cents,
             started_at: row.started_at,
             ended_at: row.ended_at,
+            closed_after_the_fact: row.closed_after_the_fact,
         })
         .collect();
 

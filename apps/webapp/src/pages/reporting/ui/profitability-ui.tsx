@@ -1,5 +1,7 @@
+import { Link } from '@tanstack/react-router'
 import {
 	AlertCircle,
+	ArrowUpRight,
 	Clock,
 	Euro,
 	TrendingDown,
@@ -16,26 +18,30 @@ import {
 	SectionHeader,
 } from '#/components/ui/surface'
 import type {
+	EmployeeProfitability,
 	JobProfitability,
 	Period,
-	WorkedHoursRow,
 } from '#/hooks/use-reporting'
+import { cn } from '#/lib/utils'
+import { buildOrgPath } from '#/modules/org-path'
 import {
 	formatCents,
 	formatMarginRate,
 	formatMinutes,
 	incompleteReason,
+	isCompleteJob,
 	realCostCents,
+	recollectedNote,
 } from '#/pages/reporting/types'
 
 interface ProfitabilityUIProps {
 	period: Period
+	organizationSlug: string
 	jobs: JobProfitability[]
 	mostProfitable: JobProfitability[]
 	leastProfitable: JobProfitability[]
 	incomplete: JobProfitability[]
-	workedHours: WorkedHoursRow[]
-	totalWorkedMinutes: number
+	employees: EmployeeProfitability[]
 	/** Resolves an employee id into a name, or `null` while unknown. */
 	employeeName: (employeeId: string) => string | null
 	isLoading: boolean
@@ -52,23 +58,35 @@ interface ProfitabilityUIProps {
  */
 export function ProfitabilityUI({
 	period,
+	organizationSlug,
 	jobs,
 	mostProfitable,
 	leastProfitable,
 	incomplete,
-	workedHours,
-	totalWorkedMinutes,
+	employees,
 	employeeName,
 	isLoading,
 	error,
 	onPeriodChange,
 	onRetry,
 }: ProfitabilityUIProps) {
-	const quoted = jobs.reduce((sum, job) => sum + (job.quoted_cents ?? 0), 0)
-	const cost = jobs.reduce((sum, job) => sum + realCostCents(job), 0)
-	// Only the jobs with a stated margin, so an incomplete one cannot flatter
-	// or spoil the total.
-	const margin = jobs.reduce((sum, job) => sum + (job.margin_cents ?? 0), 0)
+	// Only the jobs with complete figures, so an incomplete one — cost is a
+	// floor, margin unstated — cannot flatter or spoil a total that reads as
+	// trustworthy. The three headline tiles below share this exact rule.
+	const completeJobs = jobs.filter(isCompleteJob)
+	const quoted = completeJobs.reduce(
+		(sum, job) => sum + (job.quoted_cents ?? 0),
+		0,
+	)
+	const cost = completeJobs.reduce((sum, job) => sum + realCostCents(job), 0)
+	const margin = completeJobs.reduce(
+		(sum, job) => sum + (job.margin_cents ?? 0),
+		0,
+	)
+	const totalWorkedMinutes = employees.reduce(
+		(sum, employee) => sum + employee.worked_minutes,
+		0,
+	)
 
 	return (
 		<PageShell>
@@ -125,13 +143,13 @@ export function ProfitabilityUI({
 				<MetricCard
 					label="Devisé"
 					value={formatCents(quoted)}
-					hint={`${jobs.length} chantier${jobs.length > 1 ? 's' : ''}`}
+					hint="Chantiers complets uniquement"
 					icon={<Euro className="size-4" />}
 				/>
 				<MetricCard
 					label="Coût réel"
 					value={formatCents(cost)}
-					hint="Main d'œuvre et matériel"
+					hint="Main d'œuvre et matériel, chantiers complets uniquement"
 				/>
 				<MetricCard
 					label="Marge"
@@ -161,7 +179,11 @@ export function ProfitabilityUI({
 							<ul className="space-y-1 text-sm">
 								{incomplete.map((job) => (
 									<li key={job.task_id} className="flex flex-wrap gap-x-2">
-										<span className="font-medium">{job.title}</span>
+										<JobTitleLink
+											title={job.title}
+											organizationSlug={organizationSlug}
+											className="font-medium"
+										/>
 										<span className="text-muted-foreground">
 											{incompleteReason(job)}
 										</span>
@@ -178,11 +200,13 @@ export function ProfitabilityUI({
 					title="Les plus rentables"
 					icon={<TrendingUp className="size-4 text-primary" />}
 					jobs={mostProfitable}
+					organizationSlug={organizationSlug}
 				/>
 				<RankingCard
 					title="Les moins rentables"
 					icon={<TrendingDown className="size-4 text-destructive" />}
 					jobs={leastProfitable}
+					organizationSlug={organizationSlug}
 				/>
 			</div>
 
@@ -206,10 +230,19 @@ export function ProfitabilityUI({
 								className="grid gap-2 px-5 py-4 sm:grid-cols-[minmax(0,1fr)_repeat(4,110px)] sm:items-center"
 							>
 								<div className="min-w-0">
-									<p className="truncate font-medium">{job.title}</p>
+									<JobTitleLink
+										title={job.title}
+										organizationSlug={organizationSlug}
+										className="font-medium"
+									/>
 									{incompleteReason(job) ? (
 										<p className="truncate text-xs text-amber-600 dark:text-amber-500">
 											{incompleteReason(job)}
+										</p>
+									) : null}
+									{recollectedNote(job) ? (
+										<p className="truncate text-xs text-muted-foreground">
+											{recollectedNote(job)}
 										</p>
 									) : null}
 								</div>
@@ -246,13 +279,13 @@ export function ProfitabilityUI({
 					title="Par salarié"
 					description="Heures pointées et coût sur la période, pour la paie comme pour le suivi."
 				/>
-				{workedHours.length === 0 ? (
+				{employees.length === 0 ? (
 					<p className="p-5 text-sm text-muted-foreground">
 						Aucun pointage sur cette période.
 					</p>
 				) : (
 					<ul className="divide-y">
-						{workedHours.map((row) => (
+						{employees.map((row) => (
 							<li
 								key={row.employee_id}
 								className="flex flex-wrap items-center justify-between gap-3 px-5 py-4"
@@ -261,6 +294,11 @@ export function ProfitabilityUI({
 									<p className="truncate font-medium">
 										{employeeName(row.employee_id) ?? 'Salarié'}
 									</p>
+									{row.rate_missing ? (
+										<p className="text-xs text-amber-600 dark:text-amber-500">
+											Taux horaire manquant, coût non calculé
+										</p>
+									) : null}
 									{row.open_entries > 0 ? (
 										<p className="text-xs text-amber-600 dark:text-amber-500">
 											{row.open_entries} pointage
@@ -269,9 +307,14 @@ export function ProfitabilityUI({
 										</p>
 									) : null}
 								</div>
-								<p className="font-semibold tabular-nums">
-									{formatMinutes(row.worked_minutes)}
-								</p>
+								<div className="shrink-0 text-right">
+									<p className="font-semibold tabular-nums">
+										{formatMinutes(row.worked_minutes)}
+									</p>
+									<p className="text-xs text-muted-foreground tabular-nums">
+										{formatCents(row.labour_cost_cents)}
+									</p>
+								</div>
 							</li>
 						))}
 					</ul>
@@ -285,10 +328,12 @@ function RankingCard({
 	title,
 	icon,
 	jobs,
+	organizationSlug,
 }: {
 	title: string
 	icon: React.ReactNode
 	jobs: JobProfitability[]
+	organizationSlug: string
 }) {
 	return (
 		<SectionCard>
@@ -306,9 +351,11 @@ function RankingCard({
 						>
 							<div className="flex min-w-0 items-center gap-2">
 								{icon}
-								<span className="truncate text-sm font-medium">
-									{job.title}
-								</span>
+								<JobTitleLink
+									title={job.title}
+									organizationSlug={organizationSlug}
+									className="truncate text-sm font-medium"
+								/>
 							</div>
 							<div className="shrink-0 text-right">
 								<p className="font-semibold tabular-nums">
@@ -325,6 +372,39 @@ function RankingCard({
 				</ul>
 			)}
 		</SectionCard>
+	)
+}
+
+/**
+ * A job title that opens the Planning module's task list.
+ *
+ * Not a deep link to the exact task: neither an existing cross-module
+ * deep-link pattern nor a `taskId` query param read by the task list exists
+ * to open one directly (see the workstream report). Landing on the list is
+ * still strictly better than plain text — it is where a manager would go
+ * next to act on what this screen just told them.
+ */
+function JobTitleLink({
+	title,
+	organizationSlug,
+	className,
+}: {
+	title: string
+	organizationSlug: string
+	className?: string
+}) {
+	return (
+		<Link
+			to={buildOrgPath(organizationSlug, '/planning/tasks')}
+			title="Ouvrir la liste des tâches du planning pour retrouver ce chantier"
+			className={cn(
+				'group inline-flex min-w-0 items-center gap-1 hover:underline',
+				className,
+			)}
+		>
+			<span className="truncate">{title}</span>
+			<ArrowUpRight className="size-3 shrink-0 text-muted-foreground opacity-0 group-hover:opacity-100" />
+		</Link>
 	)
 }
 

@@ -2,11 +2,7 @@ import { AlertCircle } from 'lucide-react'
 import { useState } from 'react'
 import { useActiveOrganization } from '#/hooks/use-active-organization'
 import { useReferenceCatalog } from '#/hooks/use-reference-catalog'
-import {
-	type Period,
-	useProfitability,
-	useWorkedHours,
-} from '#/hooks/use-reporting'
+import { type Period, useProfitability } from '#/hooks/use-reporting'
 import { currentMonthPeriod } from '#/pages/reporting/types'
 import { ProfitabilityUI } from '#/pages/reporting/ui/profitability-ui'
 
@@ -25,13 +21,20 @@ export function ProfitabilityFeature() {
 		)
 	}
 
-	return <ProfitabilityWorkspace organizationId={activeOrganization.id} />
+	return (
+		<ProfitabilityWorkspace
+			organizationId={activeOrganization.id}
+			organizationSlug={activeOrganization.slug}
+		/>
+	)
 }
 
 function ProfitabilityWorkspace({
 	organizationId,
+	organizationSlug,
 }: {
 	organizationId: string
+	organizationSlug: string
 }) {
 	// The current month, which is the question a foreman actually asks. Held in
 	// state rather than the url: this is a dashboard, not a link people send.
@@ -40,7 +43,6 @@ function ProfitabilityWorkspace({
 	)
 
 	const profitability = useProfitability(organizationId, period)
-	const workedHours = useWorkedHours(organizationId, period)
 	// Employees carry a rate and a member id, members carry the name. Both are
 	// needed to put a name next to an hour count.
 	const catalog = useReferenceCatalog(organizationId, {
@@ -50,7 +52,6 @@ function ProfitabilityWorkspace({
 	})
 
 	const report = (profitability.data as ProfitabilityAnswer | undefined)?.data
-	const hours = (workedHours.data as WorkedHoursAnswer | undefined)?.data
 
 	const memberByEmployee = new Map<string, string>()
 	for (const employee of catalog.employeeProfiles.data?.data ?? []) {
@@ -63,19 +64,18 @@ function ProfitabilityWorkspace({
 	return (
 		<ProfitabilityUI
 			period={period}
+			organizationSlug={organizationSlug}
 			jobs={report?.jobs ?? []}
 			mostProfitable={report?.most_profitable ?? []}
 			leastProfitable={report?.least_profitable ?? []}
 			incomplete={report?.incomplete ?? []}
-			workedHours={hours?.employees ?? []}
-			totalWorkedMinutes={hours?.total_worked_minutes ?? 0}
+			employees={report?.employees ?? []}
 			employeeName={(employeeId) => memberByEmployee.get(employeeId) ?? null}
-			isLoading={profitability.isLoading || workedHours.isLoading}
-			error={profitability.error?.message ?? workedHours.error?.message ?? null}
+			isLoading={profitability.isLoading}
+			error={profitability.error?.message ?? null}
 			onPeriodChange={setPeriod}
 			onRetry={() => {
 				void profitability.refetch()
-				void workedHours.refetch()
 			}}
 		/>
 	)
@@ -87,12 +87,6 @@ type ProfitabilityAnswer = {
 		most_profitable: import('#/hooks/use-reporting').JobProfitability[]
 		least_profitable: import('#/hooks/use-reporting').JobProfitability[]
 		incomplete: import('#/hooks/use-reporting').JobProfitability[]
-	}
-}
-
-type WorkedHoursAnswer = {
-	data?: {
-		employees: import('#/hooks/use-reporting').WorkedHoursRow[]
-		total_worked_minutes: number
+		employees: import('#/hooks/use-reporting').EmployeeProfitability[]
 	}
 }
