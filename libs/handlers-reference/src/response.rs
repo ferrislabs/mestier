@@ -16,6 +16,8 @@ pub struct EmployeeResponse {
     pub member_id: MemberId,
     /// `null` means the rate is not set yet; `0` means genuinely free.
     pub hourly_rate_cents: Option<i32>,
+    /// True when this person is not costed by the hour at all.
+    pub is_salaried: bool,
     pub weekly_contract_minutes: i32,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
@@ -28,6 +30,7 @@ impl From<Employee> for EmployeeResponse {
             organization_id: value.organization_id,
             member_id: value.member_id,
             hourly_rate_cents: value.hourly_rate_cents,
+            is_salaried: value.is_salaried,
             weekly_contract_minutes: value.weekly_contract_minutes,
             created_at: value.created_at,
             updated_at: value.updated_at,

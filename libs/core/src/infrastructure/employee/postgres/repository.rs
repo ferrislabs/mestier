@@ -28,14 +28,15 @@ impl<'tx> EmployeeRepository for PgEmployeeRepository<'tx> {
         let row = sqlx::query_as!(
             EmployeeRow,
             r#"
-            INSERT INTO employees (id, org_id, member_id, hourly_rate_cents, weekly_contract_minutes, deleted_at, created_at, updated_at)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-            RETURNING id, org_id, member_id, hourly_rate_cents, weekly_contract_minutes, deleted_at, created_at, updated_at
+            INSERT INTO employees (id, org_id, member_id, hourly_rate_cents, is_salaried, weekly_contract_minutes, deleted_at, created_at, updated_at)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+            RETURNING id, org_id, member_id, hourly_rate_cents, is_salaried, weekly_contract_minutes, deleted_at, created_at, updated_at
             "#,
             employee.id.0,
             employee.organization_id.0,
             employee.member_id.0,
             employee.hourly_rate_cents,
+            employee.is_salaried,
             employee.weekly_contract_minutes,
             employee.deleted_at,
             employee.created_at,
@@ -53,7 +54,7 @@ impl<'tx> EmployeeRepository for PgEmployeeRepository<'tx> {
         let row = sqlx::query_as!(
             EmployeeRow,
             r#"
-            SELECT id, org_id, member_id, hourly_rate_cents, weekly_contract_minutes, deleted_at, created_at, updated_at
+            SELECT id, org_id, member_id, hourly_rate_cents, is_salaried, weekly_contract_minutes, deleted_at, created_at, updated_at
             FROM employees
             WHERE id = $1 AND deleted_at IS NULL
             "#,
@@ -74,7 +75,7 @@ impl<'tx> EmployeeRepository for PgEmployeeRepository<'tx> {
         let row = sqlx::query_as!(
             EmployeeRow,
             r#"
-            SELECT id, org_id, member_id, hourly_rate_cents, weekly_contract_minutes, deleted_at, created_at, updated_at
+            SELECT id, org_id, member_id, hourly_rate_cents, is_salaried, weekly_contract_minutes, deleted_at, created_at, updated_at
             FROM employees
             WHERE member_id = $1 AND deleted_at IS NULL
             "#,
@@ -101,7 +102,7 @@ impl<'tx> EmployeeRepository for PgEmployeeRepository<'tx> {
         let rows = sqlx::query_as!(
             EmployeeRow,
             r#"
-            SELECT e.id, e.org_id, e.member_id, e.hourly_rate_cents, e.weekly_contract_minutes, e.deleted_at, e.created_at, e.updated_at
+            SELECT e.id, e.org_id, e.member_id, e.hourly_rate_cents, e.is_salaried, e.weekly_contract_minutes, e.deleted_at, e.created_at, e.updated_at
             FROM employees e
             JOIN organization_members m ON m.id = e.member_id
             WHERE e.org_id = $1 AND e.deleted_at IS NULL
@@ -135,7 +136,7 @@ impl<'tx> EmployeeRepository for PgEmployeeRepository<'tx> {
         let rows = sqlx::query_as!(
             EmployeeRow,
             r#"
-            SELECT e.id, e.org_id, e.member_id, e.hourly_rate_cents, e.weekly_contract_minutes, e.deleted_at, e.created_at, e.updated_at
+            SELECT e.id, e.org_id, e.member_id, e.hourly_rate_cents, e.is_salaried, e.weekly_contract_minutes, e.deleted_at, e.created_at, e.updated_at
             FROM employees e
             JOIN organization_members m ON m.id = e.member_id
             WHERE e.org_id = $1 AND e.deleted_at IS NULL
@@ -158,12 +159,13 @@ impl<'tx> EmployeeRepository for PgEmployeeRepository<'tx> {
             EmployeeRow,
             r#"
             UPDATE employees
-            SET hourly_rate_cents = $2, weekly_contract_minutes = $3, updated_at = $4
+            SET hourly_rate_cents = $2, is_salaried = $3, weekly_contract_minutes = $4, updated_at = $5
             WHERE id = $1 AND deleted_at IS NULL
-            RETURNING id, org_id, member_id, hourly_rate_cents, weekly_contract_minutes, deleted_at, created_at, updated_at
+            RETURNING id, org_id, member_id, hourly_rate_cents, is_salaried, weekly_contract_minutes, deleted_at, created_at, updated_at
             "#,
             employee.id.0,
             employee.hourly_rate_cents,
+            employee.is_salaried,
             employee.weekly_contract_minutes,
             employee.updated_at,
         )

@@ -85,6 +85,7 @@ impl<'tx> ProfitabilityRepository for PgProfitabilityRepository<'tx> {
                 COALESCE(t.parent_task_id, t.id) AS "task_id!",
                 te.employee_id,
                 e.hourly_rate_cents,
+                e.is_salaried,
                 te.started_at,
                 te.ended_at,
                 te.closed_after_the_fact
@@ -108,6 +109,7 @@ impl<'tx> ProfitabilityRepository for PgProfitabilityRepository<'tx> {
             task_id: TaskId(row.task_id),
             employee_id: EmployeeId(row.employee_id),
             hourly_rate_cents: row.hourly_rate_cents,
+            is_salaried: row.is_salaried,
             started_at: row.started_at,
             ended_at: row.ended_at,
             closed_after_the_fact: row.closed_after_the_fact,

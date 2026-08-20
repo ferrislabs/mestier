@@ -16,6 +16,11 @@ pub struct UpsertEmployeeProfileRequest {
     /// the first and happily produces zero for the second.
     #[serde(default)]
     pub hourly_rate_cents: Option<i32>,
+    /// True when this person is not costed by the hour at all. Any
+    /// `hourly_rate_cents` given alongside this is not stored — see
+    /// `EmployeeService::upsert_employee_profile`.
+    #[serde(default)]
+    pub is_salaried: bool,
     pub weekly_contract_minutes: i32,
 }
 
@@ -61,6 +66,7 @@ pub async fn handler(
             actor,
             path.member_id,
             payload.hourly_rate_cents,
+            payload.is_salaried,
             payload.weekly_contract_minutes,
         )
         .await?;

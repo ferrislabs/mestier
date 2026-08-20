@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT e.id, e.org_id, e.member_id, e.hourly_rate_cents, e.weekly_contract_minutes, e.deleted_at, e.created_at, e.updated_at\n            FROM employees e\n            JOIN organization_members m ON m.id = e.member_id\n            WHERE e.org_id = $1 AND e.deleted_at IS NULL\n            ORDER BY m.last_name ASC, m.first_name ASC, e.created_at ASC\n            ",
+  "query": "\n            SELECT id, org_id, member_id, hourly_rate_cents, is_salaried, weekly_contract_minutes, deleted_at, created_at, updated_at\n            FROM employees\n            WHERE id = $1 AND deleted_at IS NULL\n            ",
   "describe": {
     "columns": [
       {
@@ -25,21 +25,26 @@
       },
       {
         "ordinal": 4,
+        "name": "is_salaried",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 5,
         "name": "weekly_contract_minutes",
         "type_info": "Int4"
       },
       {
-        "ordinal": 5,
+        "ordinal": 6,
         "name": "deleted_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 6,
+        "ordinal": 7,
         "name": "created_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 7,
+        "ordinal": 8,
         "name": "updated_at",
         "type_info": "Timestamptz"
       }
@@ -55,10 +60,11 @@
       false,
       true,
       false,
+      false,
       true,
       false,
       false
     ]
   },
-  "hash": "ade23036b0d31058d3fc2a0b80c0f10ef0bb3c307499da45ec90899ead513c7f"
+  "hash": "1a5e0ed588ea3e0cff5eebdb4fcf1667904d2e1d95434faf66e0ee48c48fc532"
 }

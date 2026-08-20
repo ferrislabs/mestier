@@ -31,6 +31,11 @@ pub struct ClockedTime {
     /// `None` when the employee has no rate yet. Never treated as zero: see
     /// [`TaskProfitability::employees_without_rate`].
     pub hourly_rate_cents: Option<i32>,
+    /// True when this employee is not costed by the hour at all. Their time
+    /// still counts as worked, but at zero labour cost, and it is never
+    /// mistaken for a missing rate — see
+    /// [`TaskProfitability::employees_without_rate`].
+    pub is_salaried: bool,
     pub started_at: DateTime<Utc>,
     /// `None` for an entry nobody clocked off. It contributes no time, and is
     /// counted in [`TaskProfitability::open_entries`] so the figure can say so.

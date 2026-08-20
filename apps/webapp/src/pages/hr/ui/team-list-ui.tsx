@@ -45,6 +45,7 @@ import {
 	DropdownMenuTrigger,
 } from '#/components/ui/dropdown-menu'
 import { Input } from '#/components/ui/input'
+import { Label } from '#/components/ui/label'
 import {
 	MetricCard,
 	PageHeader,
@@ -53,6 +54,7 @@ import {
 	SectionHeader,
 	StatusBadge,
 } from '#/components/ui/surface'
+import { Switch } from '#/components/ui/switch'
 import { buildOrgPath } from '#/modules/org-path'
 import type { AccessState, MemberFormValues } from '#/pages/hr/types'
 import { formatDateFr, formatDurationMinutes } from '#/pages/hr/types'
@@ -82,6 +84,8 @@ export interface TeamMemberRow {
 	access: AccessState
 	/** `null` when the seat has no employee profile yet. */
 	hourlyRateCents: number | null
+	/** False both when the seat has no profile and when it has an hourly one. */
+	isSalaried: boolean
 	/** `null` when the seat has no employee profile yet. */
 	weeklyContractMinutes: number | null
 }
@@ -215,8 +219,10 @@ export function TeamListUI({
 					<DialogHeader className="border-b pb-4">
 						<DialogTitle>Ajouter une personne</DialogTitle>
 						<DialogDescription>
-							Le taux horaire est optionnel : laissez-le vide pour un siège sans
-							profil RH, renseignez-le pour lui en attacher un.
+							Le profil RH est optionnel : laissez le taux horaire vide pour un
+							siège sans profil, renseignez-le pour lui en attacher un — ou
+							marquez la personne comme salariée si elle n'a pas de coût
+							horaire.
 						</DialogDescription>
 					</DialogHeader>
 					<div className="flex-1 overflow-y-auto py-4">
@@ -239,7 +245,23 @@ export function TeamListUI({
 								inputMode="decimal"
 								suffix="€/h"
 								placeholder="Optionnel"
+								disabled={createForm.values.isSalaried}
 							/>
+						</div>
+						<div className="mt-4 flex items-center gap-2">
+							<Switch
+								id="create-member-salaried"
+								checked={createForm.values.isSalaried}
+								onCheckedChange={(isSalaried) =>
+									createForm.onChange({ isSalaried, hourlyRate: '' })
+								}
+							/>
+							<Label
+								htmlFor="create-member-salaried"
+								className="text-sm font-normal"
+							>
+								Salarié (pas de taux horaire)
+							</Label>
 						</div>
 					</div>
 					<DialogFooter className="border-t pt-4">
@@ -436,17 +458,44 @@ function TeamTable({
 										</td>
 										<td className="px-5 py-3 align-middle">
 											{isEditing ? (
-												<Input
-													value={draft.values.hourlyRate}
-													onChange={(event) =>
-														onDraftChange({
-															...draft.values,
-															hourlyRate: event.target.value,
-														})
-													}
-													inputMode="decimal"
-													placeholder="Optionnel"
-												/>
+												<div className="flex flex-col gap-1.5">
+													<Input
+														value={draft.values.hourlyRate}
+														onChange={(event) =>
+															onDraftChange({
+																...draft.values,
+																hourlyRate: event.target.value,
+															})
+														}
+														inputMode="decimal"
+														placeholder="Optionnel"
+														disabled={draft.values.isSalaried}
+													/>
+													<div className="flex items-center gap-1.5">
+														<Switch
+															id={`salaried-${member.id}`}
+															size="sm"
+															checked={draft.values.isSalaried}
+															onCheckedChange={(isSalaried) =>
+																onDraftChange({
+																	...draft.values,
+																	isSalaried,
+																	hourlyRate: '',
+																})
+															}
+														/>
+														<Label
+															htmlFor={`salaried-${member.id}`}
+															className="text-xs font-normal text-muted-foreground"
+														>
+															Salarié
+														</Label>
+													</div>
+												</div>
+											) : member.isSalaried ? (
+												<span className="text-sm text-muted-foreground">
+													Salarié
+												</span>
 											) : (
 												<MoneyCell value={member.hourlyRateCents} suffix="/h" />
 											)}

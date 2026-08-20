@@ -5,6 +5,8 @@ export interface MemberFormValues {
 	lastName: string
 	firstName: string
 	hourlyRate: string
+	/** Salaried: no hourly figure, the rate field is disabled and ignored. */
+	isSalaried: boolean
 }
 
 /**

@@ -9,7 +9,9 @@ pub struct UpsertEmployeeProfileCommand {
     pub organization_id: OrganizationId,
     pub member_id: MemberId,
     /// `None` means the rate is not set yet; `Some(0)` means genuinely free.
+    /// Ignored when `is_salaried` is set — see [`super::service::validate_rate`].
     pub hourly_rate_cents: Option<i32>,
+    pub is_salaried: bool,
     pub weekly_contract_minutes: i32,
 }
 

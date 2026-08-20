@@ -38,11 +38,22 @@ where
         validate_rate(command.hourly_rate_cents)?;
         validate_weekly_contract_minutes(command.weekly_contract_minutes)?;
 
+        // A salaried person has no meaningful hourly figure. Clearing it here,
+        // rather than merely ignoring it downstream, keeps the stored row
+        // honest: a rate that lingers unused would read as forgotten-to-clear
+        // the next time someone looks at it.
+        let hourly_rate_cents = if command.is_salaried {
+            None
+        } else {
+            command.hourly_rate_cents
+        };
+
         let now = Utc::now();
 
         match self.repo.find_by_member_id(command.member_id).await? {
             Some(mut existing) => {
-                existing.hourly_rate_cents = command.hourly_rate_cents;
+                existing.hourly_rate_cents = hourly_rate_cents;
+                existing.is_salaried = command.is_salaried;
                 existing.weekly_contract_minutes = command.weekly_contract_minutes;
                 existing.updated_at = now;
 
@@ -53,7 +64,8 @@ where
                     id: EmployeeId(generate_uuid_v7()),
                     organization_id: command.organization_id,
                     member_id: command.member_id,
-                    hourly_rate_cents: command.hourly_rate_cents,
+                    hourly_rate_cents,
+                    is_salaried: command.is_salaried,
                     weekly_contract_minutes: command.weekly_contract_minutes,
                     deleted_at: None,
                     created_at: now,
@@ -145,6 +157,7 @@ mod tests {
             organization_id: OrganizationId(Uuid::new_v4()),
             member_id,
             hourly_rate_cents: Some(3500),
+            is_salaried: false,
             weekly_contract_minutes: 2100,
             deleted_at: None,
             created_at: now,
@@ -157,6 +170,7 @@ mod tests {
             organization_id: OrganizationId(Uuid::new_v4()),
             member_id,
             hourly_rate_cents: Some(3500),
+            is_salaried: false,
             weekly_contract_minutes: 2100,
         }
     }
@@ -247,6 +261,67 @@ mod tests {
             .unwrap();
 
         assert_eq!(created.hourly_rate_cents, None);
+    }
+
+    /// A salaried person has no meaningful hourly figure, so a rate provided
+    /// alongside `is_salaried` is not stored — the two would otherwise say
+    /// different things about the same person.
+    #[tokio::test]
+    async fn upsert_clears_the_rate_when_the_employee_is_salaried() {
+        let member_id = MemberId(Uuid::new_v4());
+        let mut repo = MockEmployeeRepository::new();
+        repo.expect_find_by_member_id()
+            .times(1)
+            .returning(|_| Box::pin(async { Ok(None) }));
+        repo.expect_insert().times(1).returning(|e| {
+            let employee = e.clone();
+            Box::pin(async move { Ok(employee) })
+        });
+
+        let mut service = EmployeeService::new(repo);
+        let created = service
+            .upsert_employee_profile(UpsertEmployeeProfileCommand {
+                hourly_rate_cents: Some(3500),
+                is_salaried: true,
+                ..upsert_command(member_id)
+            })
+            .await
+            .unwrap();
+
+        assert_eq!(created.hourly_rate_cents, None);
+        assert!(created.is_salaried);
+    }
+
+    /// Turning an hourly profile salaried must drop the rate it already had,
+    /// not just refuse a new one.
+    #[tokio::test]
+    async fn upsert_clears_an_existing_rate_when_turned_salaried() {
+        let member_id = MemberId(Uuid::new_v4());
+        let existing = employee(EmployeeId(Uuid::new_v4()), member_id);
+
+        let mut repo = MockEmployeeRepository::new();
+        repo.expect_find_by_member_id()
+            .times(1)
+            .returning(move |_| {
+                let found = existing.clone();
+                Box::pin(async move { Ok(Some(found)) })
+            });
+        repo.expect_update().times(1).returning(|e| {
+            let employee = e.clone();
+            Box::pin(async move { Ok(employee) })
+        });
+
+        let mut service = EmployeeService::new(repo);
+        let updated = service
+            .upsert_employee_profile(UpsertEmployeeProfileCommand {
+                is_salaried: true,
+                ..upsert_command(member_id)
+            })
+            .await
+            .unwrap();
+
+        assert_eq!(updated.hourly_rate_cents, None);
+        assert!(updated.is_salaried);
     }
 
     #[tokio::test]

@@ -931,6 +931,7 @@ mod tests {
             organization_id: OrganizationId(Uuid::new_v4()),
             member_id,
             hourly_rate_cents: Some(3500),
+            is_salaried: false,
             weekly_contract_minutes: 2100,
             deleted_at: None,
             created_at: now,

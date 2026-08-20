@@ -15,6 +15,7 @@ function member(overrides: Partial<TeamMemberRow> = {}): TeamMemberRow {
 		displayName: 'Martin Alix',
 		access: 'none',
 		hourlyRateCents: 1500,
+		isSalaried: false,
 		weeklyContractMinutes: 2100,
 		...overrides,
 	}
@@ -30,7 +31,12 @@ function baseProps() {
 		search: '',
 		onSearchChange: vi.fn(),
 		createForm: {
-			values: { lastName: '', firstName: '', hourlyRate: '' },
+			values: {
+				lastName: '',
+				firstName: '',
+				hourlyRate: '',
+				isSalaried: false,
+			},
 			isPending: false,
 			onChange: vi.fn(),
 			onSubmit: vi.fn(),
@@ -213,5 +219,67 @@ describe('TeamListUI — create member modal', () => {
 		await user.click(screen.getByRole('button', { name: 'Ajouter' }))
 
 		expect(props.createForm.onSubmit).toHaveBeenCalled()
+	})
+
+	/**
+	 * A salaried person has no hourly figure — toggling the switch must clear
+	 * whatever the rate field held, not leave a stale value behind it.
+	 */
+	it('clears the hourly rate when "Salarié" is toggled on', async () => {
+		const user = userEvent.setup()
+		const props = {
+			...baseProps(),
+			createMemberDialogOpen: true,
+			createForm: {
+				...baseProps().createForm,
+				values: {
+					lastName: '',
+					firstName: '',
+					hourlyRate: '35',
+					isSalaried: false,
+				},
+			},
+		}
+		await renderWithRouter(<TeamListUI {...props} />)
+
+		await user.click(screen.getByRole('switch', { name: /Salarié/ }))
+
+		expect(props.createForm.onChange).toHaveBeenCalledWith({
+			isSalaried: true,
+			hourlyRate: '',
+		})
+	})
+
+	it('disables the hourly rate field while "Salarié" is on', async () => {
+		const props = {
+			...baseProps(),
+			createMemberDialogOpen: true,
+			createForm: {
+				...baseProps().createForm,
+				values: {
+					lastName: '',
+					firstName: '',
+					hourlyRate: '',
+					isSalaried: true,
+				},
+			},
+		}
+		await renderWithRouter(<TeamListUI {...props} />)
+
+		expect(
+			(screen.getByLabelText('Taux horaire') as HTMLInputElement).disabled,
+		).toBe(true)
+	})
+})
+
+describe('TeamListUI — salaried row display', () => {
+	it('shows "Salarié" instead of an hourly rate for a salaried member', async () => {
+		const props = {
+			...baseProps(),
+			members: [member({ isSalaried: true, hourlyRateCents: null })],
+		}
+		await renderWithRouter(<TeamListUI {...props} />)
+
+		expect(screen.getByText('Salarié')).toBeDefined()
 	})
 })
