@@ -19,13 +19,6 @@ import { Button } from '#/components/ui/button'
 import { Input } from '#/components/ui/input'
 import { Label } from '#/components/ui/label'
 import {
-	Select,
-	SelectContent,
-	SelectItem,
-	SelectTrigger,
-	SelectValue,
-} from '#/components/ui/select'
-import {
 	Sheet,
 	SheetContent,
 	SheetDescription,
@@ -61,6 +54,7 @@ import {
 import { formatPricePerUnit, formatUnitLong } from '#/lib/units'
 import type { ServiceRateFormValues } from '#/pages/catalog/types'
 import { eurosToCents } from '#/pages/quotes/types'
+import { UnitSelect } from '#/pages/quotes/ui/unit-select'
 
 type CatalogTab = 'products' | 'services'
 
@@ -555,7 +549,6 @@ function ProductCreateFields({
 				<UnitField
 					value={form.values.unit}
 					onChange={(unit) => form.onChange({ unit })}
-					product
 				/>
 				<WideSuffixTextField
 					label="Prix"
@@ -731,7 +724,6 @@ function ProductDraftFields({
 			<UnitField
 				value={values.unit}
 				onChange={(unit) => onChange({ ...values, unit })}
-				product
 			/>
 			<Input
 				value={values.unitPrice}
@@ -851,32 +843,23 @@ function ServiceList({
 	)
 }
 
+/**
+ * The catalogue's unit picker, delegating to the same `UnitSelect` the quote
+ * line editor uses so both offer the full ten-unit set — this used to
+ * hardcode three (`HOUR`, `ML`, `M2`), silently hiding the other seven from
+ * anyone pricing a product or a service.
+ */
 function UnitField({
 	value,
 	onChange,
-	product,
 }: {
 	value: ServiceRateUnit
 	onChange: (unit: ServiceRateUnit) => void
-	product?: boolean
 }) {
 	return (
 		<div className="flex flex-col gap-2">
 			<Label>Unité</Label>
-			<Select
-				value={value}
-				onValueChange={(unit) => onChange(unit as ServiceRateUnit)}
-			>
-				<SelectTrigger className="w-full">
-					<SelectValue />
-				</SelectTrigger>
-				<SelectContent>
-					{product ? <SelectItem value="HOUR">Unité</SelectItem> : null}
-					{!product ? <SelectItem value="HOUR">Heure</SelectItem> : null}
-					<SelectItem value="ML">Mètre linéaire</SelectItem>
-					<SelectItem value="M2">Mètre carré</SelectItem>
-				</SelectContent>
-			</Select>
+			<UnitSelect value={value} onChange={onChange} />
 		</div>
 	)
 }

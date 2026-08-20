@@ -384,7 +384,7 @@ function QuoteDraftSummary({
 
 			<div className="mt-5 rounded-lg bg-muted p-4">
 				<p className="text-xs font-medium text-muted-foreground">
-					Total estimé
+					Total HT estimé
 				</p>
 				<p className="mt-1 text-2xl font-bold">{formatCents(totalCents)}</p>
 			</div>
