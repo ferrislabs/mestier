@@ -83,7 +83,7 @@ export function warningTitle(warning: Warning): string {
 		case 'outside_work_hours':
 			return 'Hors des plages de travail habituelles'
 		case 'overlapping_task':
-			return 'Déjà affecté à un autre chantier sur ce créneau'
+			return 'Déjà affecté à un autre projet sur ce créneau'
 	}
 }
 

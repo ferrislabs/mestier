@@ -225,7 +225,7 @@ export function QuoteLineEditor({
 								className="min-h-28 resize-y"
 								value={line.notes}
 								onChange={(event) => onChange({ notes: event.target.value })}
-								placeholder="Accès, contraintes de chantier, matériaux imposés, tout ce qui explique le prix"
+								placeholder="Accès, contraintes de projet, matériaux imposés, tout ce qui explique le prix"
 							/>
 						</Field>
 						<Field label="Photos">

@@ -31,7 +31,7 @@ describe('fieldErrorMessage', () => {
 			fieldErrorMessage(
 				'Conflict: employee is already clocked on to task 3fae1c9e-1234-4c00-9c00-abcdefabcdef',
 			),
-		).toBe('Vous êtes déjà pointé sur un autre chantier.')
+		).toBe('Vous êtes déjà pointé sur un autre projet.')
 	})
 
 	it('falls back to a generic French message for anything unmapped', () => {

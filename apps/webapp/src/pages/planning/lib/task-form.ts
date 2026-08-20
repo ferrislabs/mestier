@@ -32,7 +32,7 @@ export interface TaskFormValues {
 	customerId: string
 	customerContextId: string
 	/**
-	 * The accepted quote this chantier bills against, or `''` for none.
+	 * The accepted quote this projet bills against, or `''` for none.
 	 *
 	 * Picked at creation only, like the customer and for the same reason:
 	 * `PATCH /tasks/{id}` carries no `quote_id`. Without it the profitability
@@ -45,7 +45,7 @@ export interface TaskFormValues {
 }
 
 /**
- * A blank draft. A root task defaults its date fields to `today` (a chantier
+ * A blank draft. A root task defaults its date fields to `today` (a projet
  * or meeting has to start somewhere); a subtask defaults them to `''` —
  * inheriting the parent's window is the natural starting point, not an
  * afterthought the user has to discover by clearing the fields themselves.

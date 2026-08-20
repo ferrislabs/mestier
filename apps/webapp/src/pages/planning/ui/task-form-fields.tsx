@@ -53,7 +53,7 @@ export interface TaskFormFieldsProps {
 	isCustomerContextsLoading?: boolean
 	/**
 	 * Create mode only, and only the accepted quotes of the chosen customer: a
-	 * chantier bills against a quote the customer agreed to, and offering a
+	 * projet bills against a quote the customer agreed to, and offering a
 	 * draft would invite a margin computed from a number nobody signed.
 	 */
 	quotes: { id: string; label: string }[]
@@ -99,7 +99,7 @@ export function TaskFormFields({
 					id="task-title"
 					value={values.title}
 					onChange={(event) => onChange({ title: event.target.value })}
-					placeholder="Réunion de chantier, livraison, formation…"
+					placeholder="Réunion de projet, livraison, formation…"
 				/>
 			</div>
 
@@ -211,7 +211,7 @@ export function TaskFormFields({
 								</SelectContent>
 							</Select>
 							<p className="text-xs text-muted-foreground">
-								Sans devis rattaché, la rentabilité de ce chantier affichera son
+								Sans devis rattaché, la rentabilité de ce projet affichera son
 								coût mais aucune marge.
 							</p>
 						</div>

@@ -20,7 +20,7 @@ function task(overrides: Partial<PlanningEntry> = {}): PlanningEntry {
 		status: 'PLANNED',
 		member_ids: ['member-1', 'member-2'],
 		customer_name: 'Client Dupont',
-		context_label: 'Chantier toiture',
+		context_label: 'Projet toiture',
 		...overrides,
 	} as PlanningEntry
 }
@@ -86,7 +86,7 @@ describe('entryLabel', () => {
 })
 
 describe('entryTone', () => {
-	it('distingue chantier, absence et inconnu', () => {
+	it('distingue projet, absence et inconnu', () => {
 		expect(entryTone(task())).toBe('task')
 		expect(entryTone(absence())).toBe('absence')
 		expect(entryTone(unknownKindEntry())).toBe('unknown')

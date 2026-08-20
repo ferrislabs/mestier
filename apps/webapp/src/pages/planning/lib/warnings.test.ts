@@ -140,7 +140,7 @@ describe('warningTitle / warningDetail', () => {
 				startsAt: 'a',
 				endsAt: 'b',
 			}),
-		).toMatch(/chantier/i)
+		).toMatch(/projet/i)
 		expect(
 			warningTitle({ kind: 'outside_work_hours', startsAt: 'a', endsAt: 'b' }),
 		).toMatch(/plages/i)

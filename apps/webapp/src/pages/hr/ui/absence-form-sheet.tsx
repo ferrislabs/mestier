@@ -97,7 +97,7 @@ export function AbsenceFormSheet({
 							{mode === 'create' ? 'Nouvelle absence' : 'Modifier l’absence'}
 						</DialogTitle>
 						<DialogDescription>
-							Congé, arrêt ou indisponibilité — l’assignation d’un chantier
+							Congé, arrêt ou indisponibilité — l’assignation d’un projet
 							pendant cette période n’est jamais bloquée, seulement signalée.
 						</DialogDescription>
 					</DialogHeader>

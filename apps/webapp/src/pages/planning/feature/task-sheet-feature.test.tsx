@@ -179,7 +179,7 @@ describe('TaskSheetFeature — creation without a customer', () => {
 			pagination: null,
 		}))
 
-		await user.type(screen.getByLabelText('Titre'), 'Réunion de chantier')
+		await user.type(screen.getByLabelText('Titre'), 'Réunion de projet')
 		await user.click(screen.getByRole('button', { name: 'Créer' }))
 
 		await waitFor(() => expect(postTaskCalls(calls)).toHaveLength(1))
@@ -207,7 +207,7 @@ describe('TaskSheetFeature — creation with assignees and labels', () => {
 			pagination: null,
 		}))
 
-		await user.type(screen.getByLabelText('Titre'), 'Chantier toiture')
+		await user.type(screen.getByLabelText('Titre'), 'Projet toiture')
 
 		await user.click(screen.getByRole('button', { name: /Aucun label/ }))
 		await user.click(screen.getByRole('option', { name: /Réunion/ }))
@@ -237,7 +237,7 @@ describe('TaskSheetFeature — editing, labels', () => {
 		mockGet(TASK_PATH, () => ({
 			data: {
 				id: 'task-1',
-				title: 'Chantier toiture',
+				title: 'Projet toiture',
 				description: null,
 				all_day: false,
 				starts_at: '2026-08-10T07:00:00.000Z',
@@ -267,7 +267,7 @@ describe('TaskSheetFeature — editing, labels', () => {
 			pagination: null,
 		}))
 
-		expect(await screen.findByDisplayValue('Chantier toiture')).toBeDefined()
+		expect(await screen.findByDisplayValue('Projet toiture')).toBeDefined()
 		// The one seeded label starts selected — deselect it.
 		await user.click(screen.getByRole('button', { name: /Réunion/ }))
 		await user.click(screen.getByRole('option', { name: /Réunion/ }))
@@ -290,7 +290,7 @@ describe('TaskSheetFeature — paginated comment thread', () => {
 				api.mockGet(TASK_PATH, () => ({
 					data: {
 						id: 'task-1',
-						title: 'Chantier',
+						title: 'Projet',
 						description: null,
 						all_day: false,
 						starts_at: '2026-08-10T07:00:00.000Z',
@@ -333,7 +333,7 @@ describe('TaskSheetFeature — paginated comment thread', () => {
 			},
 		)
 
-		await screen.findByDisplayValue('Chantier')
+		await screen.findByDisplayValue('Projet')
 		const user = userEvent.setup()
 		await user.click(screen.getByRole('tab', { name: /Commentaires/ }))
 

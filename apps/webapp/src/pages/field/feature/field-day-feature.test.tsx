@@ -200,7 +200,7 @@ describe('FieldDayFeature — messages d’erreur', () => {
 		})
 
 		const stopButton = await screen.findByRole('button', {
-			name: /clôturer ce chantier/i,
+			name: /clôturer ce projet/i,
 		})
 		await userEvent.click(stopButton)
 
@@ -222,7 +222,7 @@ describe('FieldDayFeature — messages d’erreur', () => {
 		})
 
 		await userEvent.click(
-			await screen.findByRole('button', { name: /clôturer ce chantier/i }),
+			await screen.findByRole('button', { name: /clôturer ce projet/i }),
 		)
 
 		expect(
@@ -231,7 +231,7 @@ describe('FieldDayFeature — messages d’erreur', () => {
 	})
 })
 
-describe('FieldDayFeature — bascule entre chantiers', () => {
+describe('FieldDayFeature — bascule entre projets', () => {
 	/**
 	 * Switching jobs stops the running entry, then starts the new one. If the
 	 * start half fails after the stop half already went through, the worker is
@@ -258,13 +258,13 @@ describe('FieldDayFeature — bascule entre chantiers', () => {
 		})
 
 		const switchButton = await screen.findByRole('button', {
-			name: /basculer sur ce chantier/i,
+			name: /basculer sur ce projet/i,
 		})
 		await userEvent.click(switchButton)
 
 		expect(
 			await screen.findByText(
-				/vous êtes maintenant décroché de tout chantier/i,
+				/vous êtes maintenant décroché de tout projet/i,
 			),
 		).toBeDefined()
 	})
@@ -282,7 +282,7 @@ describe('FieldDayFeature — échec de chargement', () => {
 		expect(
 			await screen.findByText(/échec du chargement — réessayer/i),
 		).toBeDefined()
-		expect(screen.queryByText(/aucun chantier ne vous est assigné/i)).toBeNull()
+		expect(screen.queryByText(/aucun projet ne vous est assigné/i)).toBeNull()
 	})
 
 	it('retrying the task list re-issues the request', async () => {

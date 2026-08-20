@@ -5,7 +5,7 @@
  * The backend keeps its messages in English on purpose, for logs, and the
  * product decision was to map them here rather than add an error-code field
  * to the shared `ApiError` contract every other module also uses (see
- * `docs/chantiers/ux-simplification.md`). `ApiError`'s wire format wraps a
+ * `docs/projets/ux-simplification.md`). `ApiError`'s wire format wraps a
  * `CoreError::Conflict` in a `"Conflict: {0}"` display, so matching is done
  * with `includes` rather than an exact comparison — a wording change on the
  * backend still fails loudly here (it stops matching) rather than silently,
@@ -34,7 +34,7 @@ const KNOWN_MESSAGES: { needle: string; translation: string }[] = [
 	},
 	{
 		needle: 'employee is already clocked on to task ',
-		translation: 'Vous êtes déjà pointé sur un autre chantier.',
+		translation: 'Vous êtes déjà pointé sur un autre projet.',
 	},
 ]
 

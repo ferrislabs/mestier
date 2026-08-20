@@ -57,7 +57,7 @@ function task(overrides: Record<string, unknown> = {}) {
 	return {
 		id: 'root-1',
 		organization_id: 'org-1',
-		title: 'Chantier toiture',
+		title: 'Projet toiture',
 		description: null,
 		status: 'PLANNED' as const,
 		all_day: false,
@@ -219,7 +219,7 @@ describe('TaskListFeature — chargement', () => {
 			api.mockGet(TASKS_PATH, tasksHandler([task()])),
 		)
 
-		expect(await screen.findByText('Chantier toiture')).toBeDefined()
+		expect(await screen.findByText('Projet toiture')).toBeDefined()
 		const call = calls.find(
 			(c) =>
 				c.path === TASKS_PATH &&
@@ -256,7 +256,7 @@ describe('TaskListFeature — lazy expansion', () => {
 			}),
 		)
 
-		await screen.findByText('Chantier toiture')
+		await screen.findByText('Projet toiture')
 		expect(
 			calls.some(
 				(c) =>
@@ -308,7 +308,7 @@ describe('TaskListFeature — pagination', () => {
 			}),
 		)
 
-		await screen.findByText('Chantier toiture')
+		await screen.findByText('Projet toiture')
 		const user = userEvent.setup()
 		await user.click(screen.getByRole('button', { name: 'Suivant' }))
 
@@ -398,7 +398,7 @@ describe('TaskListFeature — full day', () => {
 			pagination: null,
 		}))
 
-		await screen.findByText('Chantier toiture')
+		await screen.findByText('Projet toiture')
 		const user = userEvent.setup()
 		await user.click(
 			screen.getByRole('button', { name: 'Afficher les sous-tâches' }),
@@ -414,12 +414,12 @@ describe('TaskListFeature — bulk assign', () => {
 	it('shows the bulk-assign bar once a row is selected, and hides it again on cancel', async () => {
 		renderFeature((api) => api.mockGet(TASKS_PATH, tasksHandler([task()])))
 
-		await screen.findByText('Chantier toiture')
+		await screen.findByText('Projet toiture')
 		expect(screen.queryByText(/tâche sélectionnée/)).toBeNull()
 
 		const user = userEvent.setup()
 		await user.click(
-			screen.getByRole('checkbox', { name: 'Sélectionner Chantier toiture' }),
+			screen.getByRole('checkbox', { name: 'Sélectionner Projet toiture' }),
 		)
 		expect(await screen.findByText('1 tâche sélectionnée')).toBeDefined()
 
@@ -435,7 +435,7 @@ describe('TaskListFeature — bulk assign', () => {
 					task({ member_ids: [] }),
 					task({
 						id: 'root-2',
-						title: 'Réunion chantier',
+						title: 'Réunion projet',
 						member_ids: ['member-9'],
 					}),
 				]),
@@ -449,16 +449,16 @@ describe('TaskListFeature — bulk assign', () => {
 			}))
 		})
 
-		await screen.findByText('Chantier toiture')
+		await screen.findByText('Projet toiture')
 		const user = userEvent.setup()
 
 		// Select both rows, then open the picker and pick the one available
 		// resource.
 		await user.click(
-			screen.getByRole('checkbox', { name: 'Sélectionner Chantier toiture' }),
+			screen.getByRole('checkbox', { name: 'Sélectionner Projet toiture' }),
 		)
 		await user.click(
-			screen.getByRole('checkbox', { name: 'Sélectionner Réunion chantier' }),
+			screen.getByRole('checkbox', { name: 'Sélectionner Réunion projet' }),
 		)
 		await user.click(screen.getByRole('button', { name: /Personne assigné/ }))
 		await user.click(screen.getByRole('option', { name: 'Alix Martin' }))
@@ -503,7 +503,7 @@ describe('TaskListFeature — bulk assign', () => {
 				TASKS_PATH,
 				tasksHandler([
 					task(),
-					task({ id: 'root-2', title: 'Réunion chantier' }),
+					task({ id: 'root-2', title: 'Réunion projet' }),
 				]),
 			)
 			api.mockMutation('patch', TASK_PATH, (params) => {
@@ -515,22 +515,22 @@ describe('TaskListFeature — bulk assign', () => {
 			})
 		})
 
-		await screen.findByText('Chantier toiture')
+		await screen.findByText('Projet toiture')
 		const user = userEvent.setup()
 
 		await user.click(
-			screen.getByRole('checkbox', { name: 'Sélectionner Chantier toiture' }),
+			screen.getByRole('checkbox', { name: 'Sélectionner Projet toiture' }),
 		)
 		await user.click(
-			screen.getByRole('checkbox', { name: 'Sélectionner Réunion chantier' }),
+			screen.getByRole('checkbox', { name: 'Sélectionner Réunion projet' }),
 		)
 		await user.click(screen.getByRole('button', { name: /Personne assigné/ }))
 		await user.click(screen.getByRole('option', { name: 'Alix Martin' }))
 		await user.click(screen.getByRole('button', { name: 'Assigner' }))
 
 		const error = await screen.findByText(/Échec de l'affectation pour/)
-		expect(error.textContent).toContain('Réunion chantier')
-		expect(error.textContent).not.toContain('Chantier toiture')
+		expect(error.textContent).toContain('Réunion projet')
+		expect(error.textContent).not.toContain('Projet toiture')
 
 		// The bar stays open — the successful task's PATCH already went
 		// through, but the selection is kept so the failed one can be retried.
@@ -550,7 +550,7 @@ describe('TaskListFeature — opening the Sheet', () => {
 			pagination: null,
 		}))
 
-		await screen.findByText('Chantier toiture')
+		await screen.findByText('Projet toiture')
 		const user = userEvent.setup()
 		await user.click(screen.getByTestId('task-row-root-1'))
 
@@ -596,7 +596,7 @@ describe('TaskListFeature — opening the Sheet', () => {
 			pagination: null,
 		}))
 
-		await screen.findByText('Chantier toiture')
+		await screen.findByText('Projet toiture')
 		const user = userEvent.setup()
 		await user.click(
 			screen.getByRole('button', { name: 'Afficher les sous-tâches' }),

@@ -76,7 +76,7 @@ export function PlanningTeamUI({
 			<PageHeader
 				eyebrow={organizationName}
 				title="Planning"
-				description="Chantiers, absences et plages de travail de l'équipe."
+				description="Projets, absences et plages de travail de l'équipe."
 				actions={
 					onCreateTask ? (
 						<Button type="button" className="gap-1.5" onClick={onCreateTask}>

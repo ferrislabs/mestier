@@ -24,7 +24,7 @@ import { FieldDayUI } from '#/pages/field/ui/field-day-ui'
  * generic mutation error: the shared banner would only say the start failed,
  * and not that the earlier stop already went through. */
 const SWITCH_ROLLBACK_MESSAGE =
-	'Vous êtes maintenant décroché de tout chantier — réessayez de démarrer.'
+	'Vous êtes maintenant décroché de tout projet — réessayez de démarrer.'
 
 interface FieldDayFeatureProps {
 	organizationSlug: string

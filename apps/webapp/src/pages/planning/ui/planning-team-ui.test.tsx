@@ -138,7 +138,7 @@ describe('PlanningTeamUI — editing', () => {
 		)
 
 		expect(screen.getByRole('alertdialog')).toBeDefined()
-		expect(screen.getByText(/Déjà affecté à un autre chantier/)).toBeDefined()
+		expect(screen.getByText(/Déjà affecté à un autre projet/)).toBeDefined()
 	})
 })
 
