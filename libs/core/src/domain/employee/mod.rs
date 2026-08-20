@@ -54,6 +54,11 @@ pub struct Employee {
     /// figure for someone whose rate was never entered, rather than silently
     /// sum it as zero.
     pub hourly_rate_cents: Option<i32>,
+    /// True when this person is not costed by the hour at all. Their clocked
+    /// time still counts — profitability needs to know they worked — but at
+    /// zero labour cost, and it never blocks a margin the way a genuinely
+    /// missing rate does: the two are different kinds of absence.
+    pub is_salaried: bool,
     /// Contractual weekly base. Deliberately not derived from the sum of the
     /// member's work slots — the gap between the two is the information.
     pub weekly_contract_minutes: i32,

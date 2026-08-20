@@ -33,6 +33,7 @@ impl MestierUseCase {
         actor: Subject,
         member_id: MemberId,
         hourly_rate_cents: Option<i32>,
+        is_salaried: bool,
         weekly_contract_minutes: i32,
     ) -> Result<Employee, CoreError> {
         // `#[transactional]` hands the repositories over immutably; the
@@ -66,6 +67,7 @@ impl MestierUseCase {
                 organization_id: member.organization_id,
                 member_id,
                 hourly_rate_cents,
+                is_salaried,
                 weekly_contract_minutes,
             })
             .await

@@ -79,6 +79,7 @@ function TeamDirectory({
 			lastName: '',
 			firstName: '',
 			hourlyRate: '',
+			isSalaried: false,
 		} satisfies MemberFormValues,
 		onSubmit: async ({ value }) => {
 			const created = await createMember.mutateAsync({
@@ -89,10 +90,14 @@ function TeamDirectory({
 				},
 			})
 			const rateCents = eurosToCents(value.hourlyRate)
-			if (rateCents !== null) {
+			if (rateCents !== null || value.isSalaried) {
 				await upsertProfile.mutateAsync({
 					path: { member_id: created.data.id },
-					body: { hourly_rate_cents: rateCents, weekly_contract_minutes: 0 },
+					body: {
+						hourly_rate_cents: rateCents,
+						is_salaried: value.isSalaried,
+						weekly_contract_minutes: 0,
+					},
 				})
 			}
 			memberForm.reset()
@@ -126,6 +131,7 @@ function TeamDirectory({
 			displayName: member.display_name,
 			access: accessState(member, pendingByMemberId.has(member.id)),
 			hourlyRateCents: profile?.hourly_rate_cents ?? null,
+			isSalaried: profile?.is_salaried ?? false,
 			weeklyContractMinutes: profile?.weekly_contract_minutes ?? null,
 		}
 	})
@@ -195,11 +201,12 @@ function TeamDirectory({
 
 				const rateCents = eurosToCents(draft.values.hourlyRate)
 				const existingProfile = profileByMember.get(member.id)
-				if (rateCents !== null) {
+				if (rateCents !== null || draft.values.isSalaried) {
 					await upsertProfile.mutateAsync({
 						path: { member_id: member.id },
 						body: {
 							hourly_rate_cents: rateCents,
+							is_salaried: draft.values.isSalaried,
 							weekly_contract_minutes:
 								existingProfile?.weekly_contract_minutes ?? 0,
 						},
@@ -253,6 +260,7 @@ function TeamDirectory({
 									lastName: member.last_name,
 									firstName: member.first_name ?? '',
 									hourlyRate: centsToEuros(row.hourlyRateCents),
+									isSalaried: row.isSalaried,
 								},
 							})
 						}}

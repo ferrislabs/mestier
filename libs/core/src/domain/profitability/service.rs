@@ -81,14 +81,22 @@ fn job_profitability(
         if entry.closed_after_the_fact {
             recollected_minutes += minutes;
         }
-        match entry.hourly_rate_cents {
-            Some(rate) => labour_cost_cents += cost_of(minutes, i64::from(rate)),
-            // Recorded once per employee, not once per entry: the reader needs
-            // to know who to go and set a rate for, not how many times it hurt.
-            None if !employees_without_rate.contains(&entry.employee_id) => {
-                employees_without_rate.push(entry.employee_id);
+        // A salaried employee costs nothing by design, not by omission: their
+        // time counts above, but never adds to the bill and never lands them
+        // in `employees_without_rate` — that list is for a rate nobody
+        // entered yet, which is a different absence than one that was never
+        // going to exist.
+        if !entry.is_salaried {
+            match entry.hourly_rate_cents {
+                Some(rate) => labour_cost_cents += cost_of(minutes, i64::from(rate)),
+                // Recorded once per employee, not once per entry: the reader
+                // needs to know who to go and set a rate for, not how many
+                // times it hurt.
+                None if !employees_without_rate.contains(&entry.employee_id) => {
+                    employees_without_rate.push(entry.employee_id);
+                }
+                None => {}
             }
-            None => {}
         }
     }
 
@@ -141,16 +149,19 @@ fn employee_profitability(clocked: &[ClockedTime]) -> Vec<EmployeeProfitability>
                 employee_id: entry.employee_id,
                 worked_minutes: 0,
                 labour_cost_cents: 0,
-                rate_missing: entry.hourly_rate_cents.is_none(),
+                rate_missing: !entry.is_salaried && entry.hourly_rate_cents.is_none(),
                 open_entries: 0,
             });
 
-        row.rate_missing = row.rate_missing || entry.hourly_rate_cents.is_none();
+        row.rate_missing =
+            row.rate_missing || (!entry.is_salaried && entry.hourly_rate_cents.is_none());
 
         match closed_minutes(entry) {
             Some(minutes) => {
                 row.worked_minutes += minutes;
-                if let Some(rate) = entry.hourly_rate_cents {
+                if !entry.is_salaried
+                    && let Some(rate) = entry.hourly_rate_cents
+                {
                     row.labour_cost_cents += cost_of(minutes, i64::from(rate));
                 }
             }
@@ -272,6 +283,7 @@ mod tests {
             task_id,
             employee_id,
             hourly_rate_cents: rate,
+            is_salaried: false,
             started_at: at(from.0, from.1),
             ended_at: to.map(|(h, m)| at(h, m)),
             closed_after_the_fact: false,
@@ -290,6 +302,20 @@ mod tests {
         ClockedTime {
             closed_after_the_fact: true,
             ..clocked(task_id, employee_id, rate, from, Some(to))
+        }
+    }
+
+    /// A salaried employee's stretch: no rate, no cost, never a missing-rate
+    /// error.
+    fn salaried(
+        task_id: TaskId,
+        employee_id: EmployeeId,
+        from: (u32, u32),
+        to: Option<(u32, u32)>,
+    ) -> ClockedTime {
+        ClockedTime {
+            is_salaried: true,
+            ..clocked(task_id, employee_id, None, from, to)
         }
     }
 
@@ -628,6 +654,87 @@ mod tests {
         };
 
         assert_eq!(build_report(facts).jobs[0].recollected_minutes, 0);
+    }
+
+    /// A salaried employee costs nothing, by design — never a floor pending a
+    /// rate, and never a reason the margin is withheld.
+    #[test]
+    fn a_salaried_employee_costs_nothing_and_never_withholds_the_margin() {
+        let job = job(Some(100_000));
+        let salaried_worker = employee();
+        let hourly_worker = employee();
+        let facts = ProfitabilityFacts {
+            jobs: vec![job.clone()],
+            clocked: vec![
+                salaried(job.task_id, salaried_worker, (8, 0), Some((12, 0))),
+                clocked(
+                    job.task_id,
+                    hourly_worker,
+                    Some(3500),
+                    (8, 0),
+                    Some((10, 0)),
+                ),
+            ],
+            equipment: vec![],
+        };
+
+        let result = &build_report(facts).jobs[0];
+
+        assert_eq!(
+            result.worked_minutes, 360,
+            "the salaried stretch still counts as time worked"
+        );
+        assert_eq!(
+            result.labour_cost_cents, 7_000,
+            "only the hourly worker's rated time costs anything"
+        );
+        assert!(
+            result.employees_without_rate.is_empty(),
+            "a salaried employee is never reported as missing a rate"
+        );
+        assert_eq!(
+            result.margin_cents,
+            Some(100_000 - 7_000),
+            "a salaried employee never withholds the margin"
+        );
+        assert!(result.is_complete());
+    }
+
+    /// The invariant a rate-missing hourly worker still needs: salaried status
+    /// does not somehow launder an hourly worker's actual gap.
+    #[test]
+    fn a_salaried_flag_does_not_excuse_an_hourly_worker_s_missing_rate() {
+        let job = job(Some(100_000));
+        let unrated = employee();
+        let facts = ProfitabilityFacts {
+            jobs: vec![job.clone()],
+            clocked: vec![clocked(job.task_id, unrated, None, (8, 0), Some((10, 0)))],
+            equipment: vec![],
+        };
+
+        let result = &build_report(facts).jobs[0];
+
+        assert_eq!(result.employees_without_rate, vec![unrated]);
+        assert_eq!(result.margin_cents, None);
+    }
+
+    /// The employee-level answer mirrors the job-level one: no rate flagged,
+    /// no cost, time still counted.
+    #[test]
+    fn employee_totals_never_flag_a_salaried_worker_as_rate_missing() {
+        let job = job(None);
+        let worker = employee();
+        let facts = ProfitabilityFacts {
+            jobs: vec![job.clone()],
+            clocked: vec![salaried(job.task_id, worker, (8, 0), Some((10, 0)))],
+            equipment: vec![],
+        };
+
+        let row = &build_report(facts).employees[0];
+
+        assert_eq!(row.worked_minutes, 120);
+        assert_eq!(row.labour_cost_cents, 0);
+        assert!(!row.rate_missing);
     }
 
     #[test]

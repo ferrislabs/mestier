@@ -427,6 +427,7 @@ export namespace Schemas {
 		created_at: string
 		hourly_rate_cents?: (number | null) | undefined
 		id: EmployeeId
+		is_salaried: boolean
 		member_id: MemberId
 		organization_id: OrganizationId
 		updated_at: string
@@ -901,6 +902,7 @@ export namespace Schemas {
 	}>
 	export type UpsertEmployeeProfileRequest = {
 		hourly_rate_cents?: (number | null) | undefined
+		is_salaried?: boolean | undefined
 		weekly_contract_minutes: number
 	}
 	export type UpsertOverwriteRequest = { allow: number; deny: number }
@@ -2407,6 +2409,7 @@ export namespace Endpoints {
 					created_at: string
 					hourly_rate_cents?: (number | null) | undefined
 					id: Schemas.EmployeeId
+					is_salaried: boolean
 					member_id: Schemas.MemberId
 					organization_id: Schemas.OrganizationId
 					updated_at: string
@@ -3224,6 +3227,7 @@ export namespace Endpoints {
 					created_at: string
 					hourly_rate_cents?: (number | null) | undefined
 					id: Schemas.EmployeeId
+					is_salaried: boolean
 					member_id: Schemas.MemberId
 					organization_id: Schemas.OrganizationId
 					updated_at: string

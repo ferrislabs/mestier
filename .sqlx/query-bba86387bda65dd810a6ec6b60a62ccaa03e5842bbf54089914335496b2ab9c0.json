@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT e.id, e.org_id, e.member_id, e.hourly_rate_cents, e.weekly_contract_minutes, e.deleted_at, e.created_at, e.updated_at\n            FROM employees e\n            JOIN organization_members m ON m.id = e.member_id\n            WHERE e.org_id = $1 AND e.deleted_at IS NULL\n            ORDER BY m.last_name ASC, m.first_name ASC, e.created_at ASC\n            LIMIT $2 OFFSET $3\n            ",
+  "query": "\n            INSERT INTO employees (id, org_id, member_id, hourly_rate_cents, is_salaried, weekly_contract_minutes, deleted_at, created_at, updated_at)\n            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)\n            RETURNING id, org_id, member_id, hourly_rate_cents, is_salaried, weekly_contract_minutes, deleted_at, created_at, updated_at\n            ",
   "describe": {
     "columns": [
       {
@@ -25,21 +25,26 @@
       },
       {
         "ordinal": 4,
+        "name": "is_salaried",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 5,
         "name": "weekly_contract_minutes",
         "type_info": "Int4"
       },
       {
-        "ordinal": 5,
+        "ordinal": 6,
         "name": "deleted_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 6,
+        "ordinal": 7,
         "name": "created_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 7,
+        "ordinal": 8,
         "name": "updated_at",
         "type_info": "Timestamptz"
       }
@@ -47,8 +52,14 @@
     "parameters": {
       "Left": [
         "Uuid",
-        "Int8",
-        "Int8"
+        "Uuid",
+        "Uuid",
+        "Int4",
+        "Bool",
+        "Int4",
+        "Timestamptz",
+        "Timestamptz",
+        "Timestamptz"
       ]
     },
     "nullable": [
@@ -57,10 +68,11 @@
       false,
       true,
       false,
+      false,
       true,
       false,
       false
     ]
   },
-  "hash": "dd16c7f6ca50d51651c10e74a817e69852a0d0a95b47f61678d26930b5b51e9c"
+  "hash": "bba86387bda65dd810a6ec6b60a62ccaa03e5842bbf54089914335496b2ab9c0"
 }
