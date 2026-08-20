@@ -5,6 +5,8 @@ const TASKS_PATH = '/api/v1/organizations/{organization_id}/field/tasks'
 const CURRENT_PATH = '/api/v1/organizations/{organization_id}/field/current'
 const ENTRIES_PATH =
 	'/api/v1/organizations/{organization_id}/field/time-entries'
+const DECLARE_PATH =
+	'/api/v1/organizations/{organization_id}/field/time-entries/declare'
 const STOP_PATH = '/api/v1/field/time-entries/{time_entry_id}/stop'
 const PHOTOS_PATH = '/api/v1/field/time-entries/{time_entry_id}/photos'
 const RECOVER_PATH = '/api/v1/field/time-entries/{time_entry_id}/recover'
@@ -85,6 +87,23 @@ export function useStopTimeEntry(organizationId: string) {
 
 	return useMutation({
 		...window.tanstackApi.mutation('post', STOP_PATH).mutationOptions,
+		onSuccess: async () => {
+			await invalidate()
+		},
+	})
+}
+
+/**
+ * Declares a stretch of work that was never clocked live at all — the rush
+ * that left no time to press "start". Distinct from `useRecoverTimeEntry`,
+ * which only closes an entry that is already open; this one has nothing
+ * open to begin with, so both ends are given at once.
+ */
+export function useDeclareTimeEntry(organizationId: string) {
+	const invalidate = useInvalidateField(organizationId)
+
+	return useMutation({
+		...window.tanstackApi.mutation('post', DECLARE_PATH).mutationOptions,
 		onSuccess: async () => {
 			await invalidate()
 		},

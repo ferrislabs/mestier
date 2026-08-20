@@ -1,4 +1,5 @@
 import { Package, Receipt, TrendingUp, Users } from 'lucide-react'
+import type * as React from 'react'
 import {
 	EntityAvatar,
 	MetricCard,
@@ -17,9 +18,11 @@ interface HomeUIProps {
 		invoices: number
 		revenueMonth: number
 	}
+	/** The self-service pointage card, composed in by the feature layer. */
+	todayTasks?: React.ReactNode
 }
 
-export function HomeUI({ userName, stats }: HomeUIProps) {
+export function HomeUI({ userName, stats, todayTasks }: HomeUIProps) {
 	return (
 		<PageShell>
 			<PageHeader
@@ -94,6 +97,8 @@ export function HomeUI({ userName, stats }: HomeUIProps) {
 						/>
 					</ul>
 				</SectionCard>
+
+				{todayTasks ? <div className="lg:col-span-1">{todayTasks}</div> : null}
 			</section>
 		</PageShell>
 	)

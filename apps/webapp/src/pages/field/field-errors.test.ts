@@ -34,6 +34,23 @@ describe('fieldErrorMessage', () => {
 		).toBe('Vous êtes déjà pointé sur un autre chantier.')
 	})
 
+	it('maps a declared end in the future', () => {
+		expect(
+			fieldErrorMessage('Conflict: a time entry cannot end in the future'),
+		).toBe("L'heure de fin ne peut pas être dans le futur.")
+	})
+
+	/** Also carries a dynamic task id suffix. */
+	it('maps a declared stretch overlapping a job still running, regardless of the task id it names', () => {
+		expect(
+			fieldErrorMessage(
+				'Conflict: declared stretch overlaps the job the employee is still clocked on to, task 3fae1c9e-1234-4c00-9c00-abcdefabcdef',
+			),
+		).toBe(
+			'Ce temps chevauche un chantier sur lequel vous êtes encore pointé. Clôturez-le avant de déclarer ce temps.',
+		)
+	})
+
 	it('falls back to a generic French message for anything unmapped', () => {
 		expect(fieldErrorMessage('Conflict: something entirely unexpected')).toBe(
 			'Une erreur est survenue, réessayez.',

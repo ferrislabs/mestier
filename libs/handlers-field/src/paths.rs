@@ -22,6 +22,13 @@ pub struct FieldTimeEntriesPath {
     pub organization_id: OrganizationId,
 }
 
+/// Declaring a stretch of work that was never clocked live at all.
+#[derive(TypedPath, Deserialize)]
+#[typed_path("/api/v1/organizations/{organization_id}/field/time-entries/declare")]
+pub struct FieldDeclarePath {
+    pub organization_id: OrganizationId,
+}
+
 #[derive(TypedPath, Deserialize)]
 #[typed_path("/api/v1/field/time-entries/{time_entry_id}/stop")]
 pub struct FieldStopPath {
