@@ -143,7 +143,8 @@ export function useUpsertEmployeeProfile() {
 			'put',
 			'/api/v1/members/{member_id}/employee-profile',
 		).mutationOptions,
-		onSuccess: () => invalidateReferenceList(queryClient, EMPLOYEE_PROFILES_PATH),
+		onSuccess: () =>
+			invalidateReferenceList(queryClient, EMPLOYEE_PROFILES_PATH),
 	})
 }
 
@@ -155,7 +156,8 @@ export function useRemoveEmployeeProfile() {
 			'delete',
 			'/api/v1/members/{member_id}/employee-profile',
 		).mutationOptions,
-		onSuccess: () => invalidateReferenceList(queryClient, EMPLOYEE_PROFILES_PATH),
+		onSuccess: () =>
+			invalidateReferenceList(queryClient, EMPLOYEE_PROFILES_PATH),
 	})
 }
 

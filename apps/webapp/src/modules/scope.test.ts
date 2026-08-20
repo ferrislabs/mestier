@@ -59,9 +59,7 @@ describe('crossOrganizationPath', () => {
 		expect(crossOrganizationPath('/crm/customers/abc-123')).toBe(
 			'/crm/customers',
 		)
-		expect(crossOrganizationPath('/hr/team/abc-123/work-time')).toBe(
-			'/hr/team',
-		)
+		expect(crossOrganizationPath('/hr/team/abc-123/work-time')).toBe('/hr/team')
 	})
 
 	it('keeps the root of a module that has an overview', () => {
