@@ -187,10 +187,16 @@ function PlanningTeamScreen({
 			setDropError(null)
 			setPendingDrop({ taskId: event.entryId, body, warnings })
 		} catch (error) {
-			console.error(
-				'[planning] échec de la vérification de disponibilité',
-				error,
-			)
+			// The availability check itself failed — this used to only log to
+			// the console, leaving the drop silently a no-op from the user's
+			// point of view. Reuses the same warning dialog every other risky
+			// drop funnels through (see `PlanningWarningDialog`'s own doc): no
+			// warnings to list, but its `error` slot renders exactly this kind
+			// of message, and "Confirmer quand même" gives a way to apply the
+			// move without the check that just failed, rather than forcing a
+			// re-drag.
+			setPendingDrop({ taskId: event.entryId, body, warnings: [] })
+			setDropError(availabilityCheckErrorMessage(error))
 		}
 	}
 
@@ -287,4 +293,9 @@ function taskSheetTargetKey(target: TaskSheetTarget): string {
 function errorMessage(error: unknown): string {
 	if (error instanceof Error) return error.message
 	return 'La confirmation a échoué. Réessayez.'
+}
+
+function availabilityCheckErrorMessage(error: unknown): string {
+	if (error instanceof Error) return error.message
+	return 'La vérification de disponibilité a échoué. Réessayez.'
 }

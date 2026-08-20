@@ -116,9 +116,7 @@ describe('resolveAssigneeNames', () => {
 	})
 
 	it('falls back to a placeholder for an id missing from the roster', () => {
-		expect(resolveAssigneeNames(['member-9'], {})).toEqual([
-			'Assigné inconnu',
-		])
+		expect(resolveAssigneeNames(['member-9'], {})).toEqual(['Assigné inconnu'])
 	})
 })
 

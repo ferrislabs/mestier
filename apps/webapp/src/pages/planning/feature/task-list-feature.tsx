@@ -2,17 +2,13 @@ import { AlertCircle } from 'lucide-react'
 import { useState } from 'react'
 import { useActiveOrganization } from '#/hooks/use-active-organization'
 import { usePlanning } from '#/hooks/use-planning'
-import {
-	useBulkAssignTasks,
-	useRootTasks,
-	useSubtasks,
-} from '#/hooks/use-tasks'
+import { usePatchTask, useRootTasks, useSubtasks } from '#/hooks/use-tasks'
 import {
 	TaskSheetFeature,
 	type TaskSheetTarget,
 } from '#/pages/planning/feature/task-sheet-feature'
 import { resolveDisplayWindow } from '#/pages/planning/lib/subtasks'
-import { assigneeRefFromResourceId } from '#/pages/planning/lib/task-drop'
+import { buildAssigneesForBulkAdd } from '#/pages/planning/lib/task-drop'
 import {
 	canGoToNextPage,
 	canGoToPreviousPage,
@@ -104,7 +100,8 @@ function TaskListScreen({
 		string[]
 	>([])
 	const [bulkAssignError, setBulkAssignError] = useState<string | null>(null)
-	const bulkAssignTasks = useBulkAssignTasks()
+	const [isBulkAssigning, setIsBulkAssigning] = useState(false)
+	const patchTask = usePatchTask()
 	const assigneeOptions = resources.map((resource) => ({
 		resourceId: resource.resource_id,
 		displayName: resource.display_name,
@@ -116,18 +113,63 @@ function TaskListScreen({
 		setBulkAssignError(null)
 	}
 
+	/**
+	 * "Assigner" in the bulk-assign bar is additive, unlike the backend's
+	 * `POST /tasks/bulk-assign` (a full-replace of every named task's
+	 * assignee set — see `TaskService::bulk_assign_tasks`'s own doc, kept
+	 * unchanged on purpose). So this never calls that route: it sends one
+	 * `PATCH /tasks/{id}` per selected task, each carrying the union of that
+	 * task's own current `member_ids` (already in `rootTasks`, no extra
+	 * fetch needed) and the newly picked assignees — see
+	 * `lib/task-drop.ts`'s `buildAssigneesForBulkAdd`. The PATCHes run in
+	 * parallel; a failure in one must not roll back or hide the others, so
+	 * each is caught individually and only the tasks that actually failed
+	 * are named in the error, by title rather than by opaque id.
+	 */
 	async function handleApplyBulkAssign() {
+		setBulkAssignError(null)
+		setIsBulkAssigning(true)
 		try {
-			await bulkAssignTasks.mutateAsync({
-				path: { organization_id: organizationId },
-				body: {
-					task_ids: selectedTaskIds,
-					assignees: draftAssigneeResourceIds.map(assigneeRefFromResourceId),
-				},
-			})
-			resetBulkAssignDraft()
-		} catch (error) {
-			setBulkAssignError(errorMessage(error))
+			const targets = selectedTaskIds
+				.map((taskId) => rootTasks.find((task) => task.id === taskId))
+				.filter(
+					(task): task is (typeof rootTasks)[number] => task !== undefined,
+				)
+
+			const outcomes = await Promise.all(
+				targets.map(async (task) => {
+					try {
+						await patchTask.mutateAsync({
+							path: { organization_id: organizationId, task_id: task.id },
+							body: {
+								assignees: buildAssigneesForBulkAdd(
+									task.member_ids,
+									draftAssigneeResourceIds,
+								),
+							},
+						})
+						return null
+					} catch (error) {
+						return { title: task.title, error }
+					}
+				}),
+			)
+
+			const failures = outcomes.filter(
+				(outcome): outcome is { title: string; error: unknown } =>
+					outcome !== null,
+			)
+			if (failures.length === 0) {
+				resetBulkAssignDraft()
+				return
+			}
+			setBulkAssignError(
+				`Échec de l'affectation pour : ${failures
+					.map((failure) => failure.title)
+					.join(', ')} (${errorMessage(failures[0].error)})`,
+			)
+		} finally {
+			setIsBulkAssigning(false)
 		}
 	}
 
@@ -233,7 +275,7 @@ function TaskListScreen({
 						}
 						onApply={() => void handleApplyBulkAssign()}
 						onCancel={resetBulkAssignDraft}
-						isApplying={bulkAssignTasks.isPending}
+						isApplying={isBulkAssigning}
 						error={bulkAssignError}
 					/>
 				) : null
