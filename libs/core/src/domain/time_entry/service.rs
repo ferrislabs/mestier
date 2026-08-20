@@ -6,10 +6,10 @@ use crate::{
     DayLog, DayLogId, TimeEntry, TimeEntryId, TimeEntryPhoto, TimeEntryPhotoId, Tz,
     domain::time_entry::{
         commands::{
-            AttachTimeEntryPhotoCommand, EndDayCommand, RecoverTimeEntryCommand,
-            StartTimeEntryCommand, StopTimeEntryCommand,
+            AttachTimeEntryPhotoCommand, DeclareTimeEntryCommand, EndDayCommand,
+            RecoverTimeEntryCommand, StartTimeEntryCommand, StopTimeEntryCommand,
         },
-        events::{DayEnded, TimeEntryStarted, TimeEntryStopped},
+        events::{DayEnded, TimeEntryDeclared, TimeEntryStarted, TimeEntryStopped},
         ports::{DayLogRepository, TimeEntryRepository},
     },
 };
@@ -150,6 +150,71 @@ where
         )?;
 
         Ok(stopped)
+    }
+
+    /// Declares a stretch of work that was never clocked live at all.
+    ///
+    /// `recover_forgotten` only helps once something is already open; a rush
+    /// that left no time to press "start" has nothing open to recover. Both
+    /// ends are given at once, and the entry is closed the moment it exists —
+    /// always marked `closed_after_the_fact`, exactly like a recovered one, so
+    /// a report never mistakes either for a live measurement.
+    ///
+    /// Refuses an end before the start, an end in the future, or a declared
+    /// stretch reaching into a job the employee is currently, genuinely
+    /// clocked on to: the live entry's actual end is not known yet, so the two
+    /// cannot be told apart from double-counting the same time.
+    pub async fn declare(
+        &mut self,
+        command: DeclareTimeEntryCommand,
+    ) -> Result<TimeEntry, CoreError> {
+        if command.ended_at <= command.started_at {
+            return Err(CoreError::Conflict(
+                "a time entry cannot end before it started".to_owned(),
+            ));
+        }
+        if command.ended_at > command.now {
+            return Err(CoreError::Conflict(
+                "a time entry cannot end in the future".to_owned(),
+            ));
+        }
+
+        if let Some(running) = self
+            .entries
+            .find_running_for_employee(command.employee_id)
+            .await?
+            && command.ended_at > running.started_at
+        {
+            return Err(CoreError::Conflict(format!(
+                "declared stretch overlaps the job the employee is still clocked on to, task {}",
+                running.task_id
+            )));
+        }
+
+        let entry = self
+            .entries
+            .insert(&TimeEntry {
+                id: TimeEntryId(generate_uuid_v7()),
+                organization_id: command.organization_id,
+                task_id: command.task_id,
+                employee_id: command.employee_id,
+                started_at: command.started_at,
+                ended_at: Some(command.ended_at),
+                photos: vec![],
+                closed_after_the_fact: true,
+                created_at: command.now,
+                updated_at: command.now,
+            })
+            .await?;
+
+        self.emitter.emit(
+            entry.organization_id,
+            &TimeEntryDeclared {
+                entry: entry.clone(),
+            },
+        )?;
+
+        Ok(entry)
     }
 
     /// Attaches a photo to an entry.
@@ -813,6 +878,134 @@ mod tests {
         assert!(entry.is_stale(at(7, 30), PARIS));
         // Still the same stretch, judged against a moment on its own day.
         assert!(!entry.is_stale(yesterday(20), PARIS));
+    }
+
+    fn declare_command(employee_id: EmployeeId) -> DeclareTimeEntryCommand {
+        DeclareTimeEntryCommand {
+            organization_id: OrganizationId(Uuid::new_v4()),
+            task_id: TaskId(Uuid::new_v4()),
+            employee_id,
+            started_at: at(8, 0),
+            ended_at: at(12, 0),
+            now: at(14, 0),
+        }
+    }
+
+    /// The rush-hour case `recover_forgotten` cannot help with: nothing was
+    /// ever open to close, because "start" was never pressed.
+    #[tokio::test]
+    async fn declaring_records_a_closed_entry_marked_after_the_fact() {
+        let employee_id = employee();
+        let mut entries = MockTimeEntryRepository::new();
+        entries
+            .expect_find_running_for_employee()
+            .returning(|_| Box::pin(async { Ok(None) }));
+        entries.expect_insert().returning(|e| {
+            let e = e.clone();
+            Box::pin(async move { Ok(e) })
+        });
+        let emitter = RecordingEmitter::new();
+        let mut service = TimeEntryService::new(entries, MockDayLogRepository::new(), &emitter);
+
+        let declared = service.declare(declare_command(employee_id)).await.unwrap();
+
+        assert_eq!(declared.started_at, at(8, 0));
+        assert_eq!(declared.ended_at, Some(at(12, 0)));
+        assert_eq!(declared.worked_minutes(), Some(240));
+        assert!(
+            declared.closed_after_the_fact,
+            "a declaration is a recollection, never a live measurement"
+        );
+        assert_eq!(emitter.names(), vec!["time_entry.declared"]);
+    }
+
+    #[tokio::test]
+    async fn a_declared_stretch_cannot_end_before_it_started() {
+        let employee_id = employee();
+        let mut entries = MockTimeEntryRepository::new();
+        entries
+            .expect_find_running_for_employee()
+            .returning(|_| Box::pin(async { Ok(None) }));
+        let emitter = RecordingEmitter::new();
+        let mut service = TimeEntryService::new(entries, MockDayLogRepository::new(), &emitter);
+
+        let mut command = declare_command(employee_id);
+        command.ended_at = at(7, 0);
+
+        let outcome = service.declare(command).await;
+
+        assert!(matches!(outcome, Err(CoreError::Conflict(_))));
+        assert!(emitter.names().is_empty());
+    }
+
+    #[tokio::test]
+    async fn a_declared_stretch_cannot_end_in_the_future() {
+        let employee_id = employee();
+        let mut entries = MockTimeEntryRepository::new();
+        entries
+            .expect_find_running_for_employee()
+            .returning(|_| Box::pin(async { Ok(None) }));
+        let emitter = RecordingEmitter::new();
+        let mut service = TimeEntryService::new(entries, MockDayLogRepository::new(), &emitter);
+
+        let mut command = declare_command(employee_id);
+        command.now = at(10, 0);
+
+        let outcome = service.declare(command).await;
+
+        assert!(matches!(outcome, Err(CoreError::Conflict(_))));
+        assert!(emitter.names().is_empty());
+    }
+
+    /// A live job is still running and its real end is unknown, so a
+    /// declared stretch reaching into it would risk double-counting the same
+    /// time rather than filling in a gap.
+    #[tokio::test]
+    async fn a_declared_stretch_cannot_overlap_a_job_still_running() {
+        let employee_id = employee();
+        let mut running = entry(TimeEntryId(Uuid::new_v4()), employee_id, None);
+        running.started_at = at(11, 0);
+        let mut entries = MockTimeEntryRepository::new();
+        entries
+            .expect_find_running_for_employee()
+            .returning(move |_| {
+                let running = running.clone();
+                Box::pin(async move { Ok(Some(running)) })
+            });
+        let emitter = RecordingEmitter::new();
+        let mut service = TimeEntryService::new(entries, MockDayLogRepository::new(), &emitter);
+
+        let outcome = service.declare(declare_command(employee_id)).await;
+
+        assert!(matches!(outcome, Err(CoreError::Conflict(_))));
+        assert!(emitter.names().is_empty());
+    }
+
+    /// A running job that only started after the declared stretch already
+    /// ended is not a double count, so it must not block the declaration.
+    #[tokio::test]
+    async fn a_declared_stretch_ending_before_the_running_job_started_is_accepted() {
+        let employee_id = employee();
+        let mut running = entry(TimeEntryId(Uuid::new_v4()), employee_id, None);
+        running.started_at = at(13, 0);
+        let mut entries = MockTimeEntryRepository::new();
+        entries
+            .expect_find_running_for_employee()
+            .returning(move |_| {
+                let running = running.clone();
+                Box::pin(async move { Ok(Some(running)) })
+            });
+        entries.expect_insert().returning(|e| {
+            let e = e.clone();
+            Box::pin(async move { Ok(e) })
+        });
+        let emitter = RecordingEmitter::new();
+        let mut service = TimeEntryService::new(entries, MockDayLogRepository::new(), &emitter);
+
+        let outcome = service.declare(declare_command(employee_id)).await;
+
+        assert!(outcome.is_ok());
+        assert_eq!(emitter.names(), vec!["time_entry.declared"]);
     }
 
     #[tokio::test]

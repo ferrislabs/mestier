@@ -36,6 +36,16 @@ const KNOWN_MESSAGES: { needle: string; translation: string }[] = [
 		needle: 'employee is already clocked on to task ',
 		translation: 'Vous êtes déjà pointé sur un autre chantier.',
 	},
+	{
+		needle: 'a time entry cannot end in the future',
+		translation: "L'heure de fin ne peut pas être dans le futur.",
+	},
+	{
+		needle:
+			'declared stretch overlaps the job the employee is still clocked on to',
+		translation:
+			'Ce temps chevauche un chantier sur lequel vous êtes encore pointé. Clôturez-le avant de déclarer ce temps.',
+	},
 ]
 
 const GENERIC_FALLBACK = 'Une erreur est survenue, réessayez.'

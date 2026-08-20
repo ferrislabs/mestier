@@ -411,6 +411,11 @@ export namespace Schemas {
 		organization_id: OrganizationId
 		work_date: string
 	}
+	export type DeclareTimeEntryRequest = {
+		ended_at: string
+		started_at: string
+		task_id: TaskId
+	}
 	export type EdgeDto = {
 		branch?: (null | BranchDto) | undefined
 		from: string
@@ -3389,6 +3394,34 @@ export namespace Endpoints {
 			409: unknown
 		}
 	}
+	export type post_DeclareTimeEntry = {
+		method: 'POST'
+		path: '/api/v1/organizations/{organization_id}/field/time-entries/declare'
+		requestFormat: 'json'
+		parameters: {
+			path: { organization_id: string }
+
+			body: Schemas.DeclareTimeEntryRequest
+		}
+		responses: {
+			201: {
+				data: {
+					employee_id: Schemas.EmployeeId
+					ended_at?: (string | null) | undefined
+					id: Schemas.TimeEntryId
+					organization_id: Schemas.OrganizationId
+					photos: Array<Schemas.TimeEntryPhotoResponse>
+					started_at: string
+					task_id: Schemas.TaskId
+					worked_minutes?: (number | null) | undefined
+				}
+				pagination?: (null | Schemas.PaginationMetadata) | undefined
+			}
+			401: unknown
+			403: unknown
+			409: unknown
+		}
+	}
 	export type get_ListInvitations = {
 		method: 'GET'
 		path: '/api/v1/organizations/{organization_id}/invitations'
@@ -4491,6 +4524,7 @@ export type EndpointByMethod = {
 		'/api/v1/organizations/{organization_id}/equipment': Endpoints.post_CreateEquipment
 		'/api/v1/organizations/{organization_id}/field/day-end': Endpoints.post_EndWorkingDay
 		'/api/v1/organizations/{organization_id}/field/time-entries': Endpoints.post_StartTimeEntry
+		'/api/v1/organizations/{organization_id}/field/time-entries/declare': Endpoints.post_DeclareTimeEntry
 		'/api/v1/organizations/{organization_id}/invitations': Endpoints.post_CreateInvitation
 		'/api/v1/organizations/{organization_id}/members': Endpoints.post_CreateMember
 		'/api/v1/organizations/{organization_id}/products': Endpoints.post_CreateProduct

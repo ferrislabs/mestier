@@ -56,6 +56,38 @@ impl DomainEvent for TimeEntryStopped {
     }
 }
 
+/// A stretch of work declared after the fact, with no live start ever having
+/// happened.
+///
+/// Not `TimeEntryStarted` followed by `TimeEntryStopped`: an automation that
+/// notifies a foreman "so-and-so just started" would be lying, since the
+/// work is already over by the time this fires. One event, carrying the whole
+/// closed stretch, is the honest shape for something reported after it ended.
+pub struct TimeEntryDeclared {
+    pub entry: TimeEntry,
+}
+
+impl DomainEvent for TimeEntryDeclared {
+    fn name(&self) -> &'static str {
+        "time_entry.declared"
+    }
+
+    fn version(&self) -> u16 {
+        1
+    }
+
+    fn subject(&self) -> EventSubject {
+        EventSubject::new("time_entry", self.entry.id.0)
+    }
+
+    fn payload(&self) -> Value {
+        json!({
+            "time_entry": entry_payload(&self.entry),
+            "worked_minutes": self.entry.worked_minutes(),
+        })
+    }
+}
+
 pub struct DayEnded {
     pub day_log: DayLog,
     /// How many running entries the declaration had to close. Zero is the
@@ -133,6 +165,16 @@ pub fn descriptors() -> Vec<EventDescriptor> {
             }),
         },
         EventDescriptor {
+            name: "time_entry.declared",
+            version: 1,
+            label: "Temps déclaré après coup",
+            subject_kind: "time_entry",
+            payload_example: json!({
+                "time_entry": closed_example,
+                "worked_minutes": 255,
+            }),
+        },
+        EventDescriptor {
             name: "day.ended",
             version: 1,
             label: "Journée terminée",
@@ -157,6 +199,7 @@ pub fn emitted_events() -> Vec<(&'static str, u16)> {
     vec![
         ("time_entry.started", 1),
         ("time_entry.stopped", 1),
+        ("time_entry.declared", 1),
         ("day.ended", 1),
     ]
 }

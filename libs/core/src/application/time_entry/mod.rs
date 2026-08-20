@@ -8,8 +8,8 @@ use crate::{
     domain::task::service::TaskService,
     domain::time_entry::{
         commands::{
-            AttachTimeEntryPhotoCommand, EndDayCommand, RecoverTimeEntryCommand,
-            StartTimeEntryCommand, StopTimeEntryCommand,
+            AttachTimeEntryPhotoCommand, DeclareTimeEntryCommand, EndDayCommand,
+            RecoverTimeEntryCommand, StartTimeEntryCommand, StopTimeEntryCommand,
         },
         service::TimeEntryService,
     },
@@ -42,6 +42,19 @@ impl MestierUseCase {
         service
             .stop(StopTimeEntryCommand { id, at, timezone })
             .await
+    }
+
+    /// Declares a stretch of work that was never clocked live at all — the
+    /// rush that left no time to press "start". Server-stamps `now` for the
+    /// same reason `start_time_entry` server-stamps `at`: a client clock is
+    /// trusted only once the offline mode exists to justify it.
+    #[transactional(time_entry, day_log, emitter)]
+    pub async fn declare_time_entry(
+        &self,
+        command: DeclareTimeEntryCommand,
+    ) -> Result<TimeEntry, CoreError> {
+        let mut service = TimeEntryService::new(time_entry_repository, day_log_repository, emitter);
+        service.declare(command).await
     }
 
     /// Closes a stretch the employee forgot, at the time they now declare.

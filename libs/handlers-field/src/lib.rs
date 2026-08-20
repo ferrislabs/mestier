@@ -62,6 +62,7 @@ pub fn router(state: &AppState) -> Router<AppState> {
         .typed_get(field::my_tasks::handler)
         .typed_get(field::current::handler)
         .typed_post(field::start::handler)
+        .typed_post(field::declare::handler)
         .typed_post(field::stop::handler)
         .typed_post(field::recover::handler)
         .typed_post(field::attach_photo::handler)

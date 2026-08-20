@@ -24,6 +24,24 @@ pub struct StopTimeEntryCommand {
     pub timezone: Tz,
 }
 
+/// Declares a stretch of work that was never clocked live at all.
+///
+/// Distinct from `RecoverTimeEntryCommand`: that one closes an entry that is
+/// already open, from the forgotten clock-off. This one has nothing open to
+/// close — a rush that left no time to press "start" — so both ends are
+/// given at once, and the result is closed from the moment it is created.
+#[derive(Debug, Clone, Copy)]
+pub struct DeclareTimeEntryCommand {
+    pub organization_id: OrganizationId,
+    pub task_id: TaskId,
+    pub employee_id: EmployeeId,
+    pub started_at: DateTime<Utc>,
+    pub ended_at: DateTime<Utc>,
+    /// Against which "not in the future" is judged. Passed rather than read
+    /// so a test can pin it.
+    pub now: DateTime<Utc>,
+}
+
 /// Closes a stretch the employee forgot, at the time they now declare.
 #[derive(Debug, Clone, Copy)]
 pub struct RecoverTimeEntryCommand {

@@ -113,7 +113,8 @@ pub use domain::{
     task_comment::commands::{CreateTaskCommentCommand, UpdateTaskCommentCommand},
     task_label::commands::{CreateTaskLabelCommand, UpdateTaskLabelCommand},
     time_entry::commands::{
-        AttachTimeEntryPhotoCommand, EndDayCommand, StartTimeEntryCommand, StopTimeEntryCommand,
+        AttachTimeEntryPhotoCommand, DeclareTimeEntryCommand, EndDayCommand, StartTimeEntryCommand,
+        StopTimeEntryCommand,
     },
     time_entry::service::TimeEntryService,
     user::commands::{CreateUserCommand, UpsertUserBySubCommand},

@@ -70,7 +70,11 @@ async fn a_worker_clocks_on_photographs_the_job_and_ends_the_day() {
         .json()
         .await
         .expect("/current is json");
-    assert_eq!(current["data"], json!(null), "{current}");
+    assert_eq!(
+        current["data"],
+        json!({ "running": null, "day_ended_at": null }),
+        "{current}"
+    );
 
     let started = client
         .post(app.url("/time-entries"))
@@ -143,9 +147,125 @@ async fn a_worker_clocks_on_photographs_the_job_and_ends_the_day() {
         .await
         .expect("/current is json");
     assert_eq!(
-        after["data"],
+        after["data"]["running"],
         json!(null),
         "the day is over, so nothing should still be running: {after}"
+    );
+    assert!(
+        after["data"]["day_ended_at"].is_string(),
+        "the day-end just declared must be reflected on the next read: {after}"
+    );
+
+    app.cleanup().await;
+}
+
+/// The rush-hour case: work happened, nothing was ever clocked live, and
+/// there is nothing open to recover — so the employee declares both ends at
+/// once instead.
+#[tokio::test]
+#[ignore = "requires live postgres and redis"]
+async fn a_stretch_never_clocked_live_is_declared_after_the_fact() {
+    let app = harness::start().await;
+    let client = reqwest::Client::new();
+
+    let now = chrono::Utc::now();
+    let started_at = (now - chrono::Duration::hours(3)).to_rfc3339();
+    let ended_at = (now - chrono::Duration::hours(2)).to_rfc3339();
+
+    let raw = client
+        .post(app.url("/time-entries/declare"))
+        .bearer_auth(&app.token)
+        .json(&json!({
+            "task_id": app.task_id,
+            "started_at": started_at,
+            "ended_at": ended_at,
+        }))
+        .send()
+        .await
+        .expect("the api answers the declare call")
+        .text()
+        .await
+        .expect("the declare answer has a body");
+    let body: serde_json::Value = serde_json::from_str(&raw)
+        .unwrap_or_else(|e| panic!("the declare answer is json: {e}: {raw}"));
+
+    assert_eq!(
+        body["data"]["worked_minutes"],
+        json!(60),
+        "one hour, as declared: {body}"
+    );
+    let returned_ended_at: chrono::DateTime<chrono::Utc> = body["data"]["ended_at"]
+        .as_str()
+        .expect("ended_at is a string")
+        .parse()
+        .expect("ended_at is a valid instant");
+    assert_eq!(
+        returned_ended_at,
+        ended_at.parse::<chrono::DateTime<chrono::Utc>>().unwrap(),
+        "closed the moment it was created: {body}"
+    );
+
+    // A declared end before its own start is refused, same rule as `stop`.
+    let backwards = client
+        .post(app.url("/time-entries/declare"))
+        .bearer_auth(&app.token)
+        .json(&json!({
+            "task_id": app.task_id,
+            "started_at": ended_at,
+            "ended_at": started_at,
+        }))
+        .send()
+        .await
+        .expect("the api answers the declare call");
+    assert_eq!(backwards.status(), 409, "an end before its own start");
+
+    // A declared end in the future is refused: nobody can recollect work
+    // that has not happened yet.
+    let in_the_future = client
+        .post(app.url("/time-entries/declare"))
+        .bearer_auth(&app.token)
+        .json(&json!({
+            "task_id": app.task_id,
+            "started_at": started_at,
+            "ended_at": (now + chrono::Duration::hours(1)).to_rfc3339(),
+        }))
+        .send()
+        .await
+        .expect("the api answers the declare call");
+    assert_eq!(in_the_future.status(), 409, "an end still in the future");
+
+    // Clocking on live, then declaring a stretch reaching into that open job,
+    // would double-count the same time — refused for the same reason `start`
+    // refuses a second live job.
+    let live = client
+        .post(app.url("/time-entries"))
+        .bearer_auth(&app.token)
+        .json(&json!({ "task_id": app.task_id }))
+        .send()
+        .await
+        .expect("the api answers the start call");
+    assert!(live.status().is_success(), "{}", live.status());
+    // Captured after the live entry started, so a declared end at this
+    // instant is unambiguously later than `running.started_at` — otherwise
+    // network latency between this test and the server could land the
+    // declared end a hair before the live entry actually opened.
+    let after_live_started = chrono::Utc::now();
+
+    let overlapping = client
+        .post(app.url("/time-entries/declare"))
+        .bearer_auth(&app.token)
+        .json(&json!({
+            "task_id": app.task_id,
+            "started_at": (after_live_started - chrono::Duration::hours(1)).to_rfc3339(),
+            "ended_at": after_live_started.to_rfc3339(),
+        }))
+        .send()
+        .await
+        .expect("the api answers the declare call");
+    assert_eq!(
+        overlapping.status(),
+        409,
+        "a declared stretch reaching into the still-running job"
     );
 
     app.cleanup().await;
