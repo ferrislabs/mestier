@@ -137,6 +137,13 @@ pub struct TimeEntry {
     pub started_at: DateTime<Utc>,
     pub ended_at: Option<DateTime<Utc>>,
     pub photos: Vec<TimeEntryPhoto>,
+    /// True when `ended_at` was declared on a later day than the work itself.
+    ///
+    /// An employee who forgets to clock off cannot be clocked off truthfully:
+    /// the moment is gone. Asking them the next morning is the best source
+    /// there is, but it is a recollection, and the profitability report says so
+    /// rather than presenting it as a measurement.
+    pub closed_after_the_fact: bool,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }
@@ -144,6 +151,24 @@ pub struct TimeEntry {
 impl TimeEntry {
     pub fn is_running(&self) -> bool {
         self.ended_at.is_none()
+    }
+
+    /// Whether this stretch began on a day before `now`, in the organization's
+    /// timezone.
+    ///
+    /// A running entry in this state is the forgotten clock-off: the employee
+    /// cannot start anything else, because at most one entry may be open, and
+    /// closing it at today's time would record hours nobody worked.
+    pub fn is_stale(&self, now: DateTime<Utc>, timezone: crate::Tz) -> bool {
+        use chrono::TimeZone;
+
+        let day_of = |instant: DateTime<Utc>| {
+            timezone
+                .from_utc_datetime(&instant.naive_utc())
+                .date_naive()
+        };
+
+        self.is_running() && day_of(self.started_at) < day_of(now)
     }
 
     /// Minutes worked, or `None` while the entry is still running.

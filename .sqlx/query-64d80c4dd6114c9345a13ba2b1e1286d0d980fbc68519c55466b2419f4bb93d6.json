@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT id, org_id, task_id, employee_id, started_at, ended_at, created_at, updated_at\n            FROM time_entries\n            WHERE id = $1\n            ",
+  "query": "\n            SELECT id, org_id, task_id, employee_id, started_at, ended_at, closed_after_the_fact, created_at, updated_at\n            FROM time_entries\n            WHERE employee_id = $1 AND ended_at IS NULL\n            ",
   "describe": {
     "columns": [
       {
@@ -35,11 +35,16 @@
       },
       {
         "ordinal": 6,
+        "name": "closed_after_the_fact",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 7,
         "name": "created_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 7,
+        "ordinal": 8,
         "name": "updated_at",
         "type_info": "Timestamptz"
       }
@@ -57,8 +62,9 @@
       false,
       true,
       false,
+      false,
       false
     ]
   },
-  "hash": "2f558de010eb9a39561103675fe0d8feebfebb1bf1710d2cb3c0aaa61b20b191"
+  "hash": "64d80c4dd6114c9345a13ba2b1e1286d0d980fbc68519c55466b2419f4bb93d6"
 }

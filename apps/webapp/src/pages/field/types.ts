@@ -75,3 +75,31 @@ export function instantFromTimeInput(
 
 	return instant.toISOString()
 }
+
+/**
+ * Whether a running stretch began before today, in the browser's own clock.
+ *
+ * The server is the authority on this, and refuses to close such a stretch
+ * normally. This is only what decides whether the screen asks the question, so
+ * a phone an hour off shows the prompt a little early or late rather than
+ * getting an answer wrong.
+ */
+export function isFromAnEarlierDay(startedAt: string, now: number): boolean {
+	const start = new Date(startedAt)
+	const today = new Date(now)
+
+	return (
+		start.getFullYear() !== today.getFullYear() ||
+		start.getMonth() !== today.getMonth() ||
+		start.getDate() !== today.getDate()
+	)
+}
+
+/** `lundi 8 h 00`, to remind the worker which stretch is being asked about. */
+export function startedAtLabel(startedAt: string): string {
+	return new Intl.DateTimeFormat('fr-FR', {
+		weekday: 'long',
+		hour: '2-digit',
+		minute: '2-digit',
+	}).format(new Date(startedAt))
+}

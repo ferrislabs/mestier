@@ -10,13 +10,29 @@ import { Button } from '#/components/ui/button'
 import { Input } from '#/components/ui/input'
 import { Label } from '#/components/ui/label'
 import type { FieldTask, PhotoPhase, TimeEntry } from '#/hooks/use-field'
-import { elapsedLabel, runningTask, taskWindowLabel } from '../types'
+import {
+	elapsedLabel,
+	runningTask,
+	startedAtLabel,
+	taskWindowLabel,
+} from '../types'
 import { FieldPhotoPicker } from './field-photo-picker'
 
 interface FieldDayUIProps {
 	organizationName: string
 	tasks: FieldTask[]
 	running: TimeEntry | null
+	/**
+	 * The running stretch when it began before today: the forgotten clock-off.
+	 *
+	 * Handed down separately rather than derived here, because the server is the
+	 * authority on which day a stretch belongs to and this file does no date
+	 * arithmetic of its own.
+	 */
+	staleEntry: TimeEntry | null
+	staleTaskTitle: string | null
+	recoverTime: string
+	isRecovering: boolean
 	dayEndedAt: string | null
 	/** Re-rendered every minute so the running clock advances. */
 	now: number
@@ -26,6 +42,8 @@ interface FieldDayUIProps {
 	pendingPhotoPhase: PhotoPhase | null
 	isStopping: boolean
 	isEndingDay: boolean
+	onRecoverTimeChange: (value: string) => void
+	onRecover: () => void
 	onStart: (taskId: string) => void
 	onStop: () => void
 	onCapturePhoto: (phase: PhotoPhase, file: File) => void
@@ -45,6 +63,10 @@ export function FieldDayUI({
 	organizationName,
 	tasks,
 	running,
+	staleEntry,
+	staleTaskTitle,
+	recoverTime,
+	isRecovering,
 	dayEndedAt,
 	now,
 	dayEndTime,
@@ -53,6 +75,8 @@ export function FieldDayUI({
 	pendingPhotoPhase,
 	isStopping,
 	isEndingDay,
+	onRecoverTimeChange,
+	onRecover,
 	onStart,
 	onStop,
 	onCapturePhoto,
@@ -77,7 +101,46 @@ export function FieldDayUI({
 				</div>
 			) : null}
 
-			{running ? (
+			{staleEntry ? (
+				<section className="rounded-xl border-2 border-amber-500 bg-card p-4">
+					<p className="text-xs font-semibold uppercase tracking-wide text-amber-600 dark:text-amber-500">
+						Chantier non clôturé
+					</p>
+					<p className="mt-1 text-xl font-bold leading-tight">
+						{staleTaskTitle ?? 'Chantier'}
+					</p>
+					<p className="mt-1 text-sm text-muted-foreground">
+						Démarré {startedAtLabel(staleEntry.started_at)}. À quelle heure
+						avez-vous terminé&nbsp;?
+					</p>
+
+					<div className="mt-4 flex gap-2">
+						<Input
+							type="time"
+							aria-label="Heure de fin"
+							className="h-14 w-28 text-base"
+							value={recoverTime}
+							onChange={(event) => onRecoverTimeChange(event.target.value)}
+						/>
+						<Button
+							type="button"
+							size="lg"
+							className="h-14 flex-1 text-base"
+							disabled={isRecovering}
+							onClick={onRecover}
+						>
+							{isRecovering ? <Loader2 className="animate-spin" /> : null}
+							Clôturer
+						</Button>
+					</div>
+					<p className="mt-2 text-xs text-muted-foreground">
+						Tant que ce chantier n'est pas clôturé, vous ne pouvez pas en
+						démarrer un autre.
+					</p>
+				</section>
+			) : null}
+
+			{running && !staleEntry ? (
 				<section className="rounded-xl border-2 border-primary bg-card p-4">
 					<p className="text-xs font-semibold uppercase tracking-wide text-primary">
 						En cours depuis {elapsedLabel(running.started_at, now)}
@@ -112,75 +175,79 @@ export function FieldDayUI({
 				</section>
 			) : null}
 
-			<section className="space-y-2">
-				<p className="text-sm font-semibold text-muted-foreground">
-					Mes chantiers du jour
-				</p>
-
-				{tasks.length === 0 ? (
-					<p className="rounded-xl border bg-card p-4 text-sm text-muted-foreground">
-						Aucun chantier ne vous est assigné aujourd'hui.
+			{staleEntry ? null : (
+				<section className="space-y-2">
+					<p className="text-sm font-semibold text-muted-foreground">
+						Mes chantiers du jour
 					</p>
-				) : (
-					tasks.map((task) => {
-						const isCurrent = running?.task_id === task.id
-						const window = taskWindowLabel(task)
 
-						return (
-							<div
-								key={task.id}
-								className="rounded-xl border bg-card p-4 data-[current=true]:border-primary"
-								data-current={isCurrent}
-							>
-								<div className="flex items-start justify-between gap-3">
-									<div className="min-w-0">
-										<p className="font-semibold leading-tight">{task.title}</p>
-										{window ? (
-											<p className="mt-0.5 text-sm text-muted-foreground">
-												{window}
+					{tasks.length === 0 ? (
+						<p className="rounded-xl border bg-card p-4 text-sm text-muted-foreground">
+							Aucun chantier ne vous est assigné aujourd'hui.
+						</p>
+					) : (
+						tasks.map((task) => {
+							const isCurrent = running?.task_id === task.id
+							const window = taskWindowLabel(task)
+
+							return (
+								<div
+									key={task.id}
+									className="rounded-xl border bg-card p-4 data-[current=true]:border-primary"
+									data-current={isCurrent}
+								>
+									<div className="flex items-start justify-between gap-3">
+										<div className="min-w-0">
+											<p className="font-semibold leading-tight">
+												{task.title}
 											</p>
+											{window ? (
+												<p className="mt-0.5 text-sm text-muted-foreground">
+													{window}
+												</p>
+											) : null}
+										</div>
+										{isCurrent ? (
+											<CheckCircle2 className="size-5 shrink-0 text-primary" />
 										) : null}
 									</div>
-									{isCurrent ? (
-										<CheckCircle2 className="size-5 shrink-0 text-primary" />
+
+									{task.description ? (
+										<p className="mt-2 whitespace-pre-wrap text-sm text-muted-foreground">
+											{task.description}
+										</p>
+									) : null}
+
+									{task.customer_context_id ? (
+										<p className="mt-2 flex items-center gap-1.5 text-xs text-muted-foreground">
+											<MapPin className="size-3.5 shrink-0" />
+											Adresse renseignée sur le chantier
+										</p>
+									) : null}
+
+									{!isCurrent ? (
+										<Button
+											type="button"
+											size="lg"
+											variant={running ? 'outline' : 'default'}
+											className="mt-3 h-12 w-full"
+											disabled={pendingTaskId !== null}
+											onClick={() => onStart(task.id)}
+										>
+											{pendingTaskId === task.id ? (
+												<Loader2 className="animate-spin" />
+											) : (
+												<Play className="fill-current" />
+											)}
+											{running ? 'Basculer sur ce chantier' : 'Démarrer'}
+										</Button>
 									) : null}
 								</div>
-
-								{task.description ? (
-									<p className="mt-2 whitespace-pre-wrap text-sm text-muted-foreground">
-										{task.description}
-									</p>
-								) : null}
-
-								{task.customer_context_id ? (
-									<p className="mt-2 flex items-center gap-1.5 text-xs text-muted-foreground">
-										<MapPin className="size-3.5 shrink-0" />
-										Adresse renseignée sur le chantier
-									</p>
-								) : null}
-
-								{!isCurrent ? (
-									<Button
-										type="button"
-										size="lg"
-										variant={running ? 'outline' : 'default'}
-										className="mt-3 h-12 w-full"
-										disabled={pendingTaskId !== null}
-										onClick={() => onStart(task.id)}
-									>
-										{pendingTaskId === task.id ? (
-											<Loader2 className="animate-spin" />
-										) : (
-											<Play className="fill-current" />
-										)}
-										{running ? 'Basculer sur ce chantier' : 'Démarrer'}
-									</Button>
-								) : null}
-							</div>
-						)
-					})
-				)}
-			</section>
+							)
+						})
+					)}
+				</section>
+			)}
 
 			<section className="mt-auto rounded-xl border bg-card p-4">
 				{dayEndedAt ? (

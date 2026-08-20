@@ -4,10 +4,8 @@ use mestier_macros::transactional;
 
 use crate::{
     OrganizationId, ProfitabilityReport, Tz,
-    application::MestierUseCase,
-    domain::{
-        organization::ports::OrganizationRepository, profitability::service::ProfitabilityService,
-    },
+    application::{MestierUseCase, organization::resolve_timezone},
+    domain::profitability::service::ProfitabilityService,
 };
 
 impl MestierUseCase {
@@ -38,27 +36,6 @@ impl MestierUseCase {
 
         service.report(organization_id, starts_at, ends_at).await
     }
-}
-
-/// The organization's timezone, refused rather than defaulted when unusable.
-///
-/// Falling back to UTC would look like it worked and shift a period's boundary
-/// by an hour or two, which is enough to move an evening's work into the wrong
-/// month.
-async fn resolve_timezone(
-    organizations: &mut impl OrganizationRepository,
-    organization_id: OrganizationId,
-) -> Result<Tz, CoreError> {
-    let name = organizations
-        .find_timezone(organization_id)
-        .await?
-        .ok_or(CoreError::NotFound)?;
-
-    name.parse::<Tz>().map_err(|_| {
-        CoreError::Internal(format!(
-            "organization timezone `{name}` is not an IANA zone"
-        ))
-    })
 }
 
 /// The half-open instant window covering `from` through `to` inclusive.
