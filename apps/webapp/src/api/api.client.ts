@@ -3295,16 +3295,10 @@ export namespace Endpoints {
 		}
 		responses: {
 			200: {
-				data: null | {
-					employee_id: Schemas.EmployeeId
-					ended_at?: (string | null) | undefined
-					id: Schemas.TimeEntryId
-					organization_id: Schemas.OrganizationId
-					photos: Array<Schemas.TimeEntryPhotoResponse>
-					started_at: string
-					task_id: Schemas.TaskId
-					worked_minutes?: (number | null) | undefined
-				}
+				data: Partial<{
+					day_ended_at: string | null
+					running: null | Schemas.TimeEntryResponse
+				}>
 				pagination?: (null | Schemas.PaginationMetadata) | undefined
 			}
 			401: unknown

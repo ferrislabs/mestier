@@ -40,7 +40,11 @@ function baseProps() {
 	return {
 		organizationName: 'Paysages Bonnal',
 		tasks: [task()],
+		tasksLoadFailed: false,
+		onRetryTasks: vi.fn(),
 		running: null,
+		currentLoadFailed: false,
+		onRetryCurrent: vi.fn(),
 		staleEntry: null,
 		staleTaskTitle: null,
 		recoverTime: '17:30',
@@ -188,5 +192,29 @@ describe('FieldDayUI', () => {
 
 		expect(screen.queryByText(/chantier non clôturé/i)).toBeNull()
 		expect(screen.getByText(/en cours depuis/i)).toBeDefined()
+	})
+
+	/** A failed fetch and a genuinely empty day must not look the same. */
+	it('offers a retry instead of the empty state when the task list failed to load', async () => {
+		const props = { ...baseProps(), tasks: [], tasksLoadFailed: true }
+		await renderWithRouter(<FieldDayUI {...props} />)
+
+		expect(screen.getByText(/échec du chargement — réessayer/i)).toBeDefined()
+		expect(screen.queryByText(/aucun chantier ne vous est assigné/i)).toBeNull()
+
+		await userEvent.click(screen.getByRole('button', { name: /réessayer/i }))
+		expect(props.onRetryTasks).toHaveBeenCalled()
+	})
+
+	it('warns when the current status failed to load, with a way to retry', async () => {
+		const props = { ...baseProps(), currentLoadFailed: true }
+		await renderWithRouter(<FieldDayUI {...props} />)
+
+		expect(
+			screen.getByText(/échec du chargement de votre pointage en cours/i),
+		).toBeDefined()
+
+		await userEvent.click(screen.getByRole('button', { name: /réessayer/i }))
+		expect(props.onRetryCurrent).toHaveBeenCalled()
 	})
 })

@@ -201,6 +201,23 @@ where
         self.entries.find_running_for_employee(employee_id).await
     }
 
+    /// The day log for today, if the employee already declared it over.
+    ///
+    /// Thin pass-through, symmetrical with `running_for`: the field app asks
+    /// both on every load, and neither needs anything beyond what the
+    /// repository already knows.
+    pub async fn day_log_for_today(
+        &mut self,
+        employee_id: crate::EmployeeId,
+        now: DateTime<Utc>,
+        timezone: Tz,
+    ) -> Result<Option<DayLog>, CoreError> {
+        let work_date = local_date(now, timezone);
+        self.day_logs
+            .find_for_employee_on(employee_id, work_date)
+            .await
+    }
+
     pub async fn list_for_employee_on(
         &mut self,
         employee_id: crate::EmployeeId,

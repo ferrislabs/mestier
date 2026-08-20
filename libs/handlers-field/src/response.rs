@@ -80,6 +80,19 @@ impl From<DayLog> for DayLogResponse {
     }
 }
 
+/// What the field app needs on load: what the caller is clocked on to, and
+/// whether they have already declared the day over.
+///
+/// Bundled into one response because both answer the same question — "where
+/// do things stand right now" — and the app would otherwise need a second
+/// round trip just to learn the day is already closed, which is exactly the
+/// trip a bad connection on a job site can lose.
+#[derive(Debug, Clone, PartialEq, Serialize, ToSchema)]
+pub struct FieldCurrentResponse {
+    pub running: Option<TimeEntryResponse>,
+    pub day_ended_at: Option<DateTime<Utc>>,
+}
+
 /// A job as the field app needs it: what to do, when, and for whom.
 ///
 /// Carries ids for the customer and the site rather than their addresses. The

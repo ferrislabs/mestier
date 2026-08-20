@@ -4,6 +4,7 @@ import {
 	Loader2,
 	MapPin,
 	Play,
+	RefreshCw,
 	Square,
 } from 'lucide-react'
 import { Button } from '#/components/ui/button'
@@ -21,7 +22,16 @@ import { FieldPhotoPicker } from './field-photo-picker'
 interface FieldDayUIProps {
 	organizationName: string
 	tasks: FieldTask[]
+	/** The task list failed to load — distinct from it having loaded empty. */
+	tasksLoadFailed: boolean
+	onRetryTasks: () => void
 	running: TimeEntry | null
+	/**
+	 * `/field/current` failed to load: the screen genuinely does not know
+	 * whether a job is running, so it must not default to offering "start".
+	 */
+	currentLoadFailed: boolean
+	onRetryCurrent: () => void
 	/**
 	 * The running stretch when it began before today: the forgotten clock-off.
 	 *
@@ -62,7 +72,11 @@ interface FieldDayUIProps {
 export function FieldDayUI({
 	organizationName,
 	tasks,
+	tasksLoadFailed,
+	onRetryTasks,
 	running,
+	currentLoadFailed,
+	onRetryCurrent,
 	staleEntry,
 	staleTaskTitle,
 	recoverTime,
@@ -98,6 +112,27 @@ export function FieldDayUI({
 				<div className="flex items-start gap-3 rounded-xl border border-destructive/30 bg-destructive-soft p-4 text-destructive">
 					<AlertCircle className="mt-0.5 size-5 shrink-0" />
 					<p className="text-sm font-medium">{error}</p>
+				</div>
+			) : null}
+
+			{currentLoadFailed ? (
+				<div className="flex items-start gap-3 rounded-xl border border-destructive/30 bg-destructive-soft p-4 text-destructive">
+					<AlertCircle className="mt-0.5 size-5 shrink-0" />
+					<div className="flex-1">
+						<p className="text-sm font-medium">
+							Échec du chargement de votre pointage en cours.
+						</p>
+						<Button
+							type="button"
+							size="sm"
+							variant="outline"
+							className="mt-2"
+							onClick={onRetryCurrent}
+						>
+							<RefreshCw className="size-3.5" />
+							Réessayer
+						</Button>
+					</div>
 				</div>
 			) : null}
 
@@ -181,7 +216,23 @@ export function FieldDayUI({
 						Mes chantiers du jour
 					</p>
 
-					{tasks.length === 0 ? (
+					{tasksLoadFailed ? (
+						<div className="rounded-xl border border-destructive/30 bg-card p-4 text-sm">
+							<p className="font-medium text-destructive">
+								Échec du chargement — réessayer
+							</p>
+							<Button
+								type="button"
+								size="sm"
+								variant="outline"
+								className="mt-2"
+								onClick={onRetryTasks}
+							>
+								<RefreshCw className="size-3.5" />
+								Réessayer
+							</Button>
+						</div>
+					) : tasks.length === 0 ? (
 						<p className="rounded-xl border bg-card p-4 text-sm text-muted-foreground">
 							Aucun chantier ne vous est assigné aujourd'hui.
 						</p>

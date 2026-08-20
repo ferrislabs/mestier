@@ -12,12 +12,19 @@ import {
 	useStartTimeEntry,
 	useStopTimeEntry,
 } from '#/hooks/use-field'
+import { fieldErrorMessage } from '#/pages/field/field-errors'
 import {
 	instantFromTimeInput,
 	isFromAnEarlierDay,
 	timeInputValue,
 } from '#/pages/field/types'
 import { FieldDayUI } from '#/pages/field/ui/field-day-ui'
+
+/** Shown when a job switch leaves the worker unclocked, distinct from the
+ * generic mutation error: the shared banner would only say the start failed,
+ * and not that the earlier stop already went through. */
+const SWITCH_ROLLBACK_MESSAGE =
+	'Vous êtes maintenant décroché de tout chantier — réessayez de démarrer.'
 
 interface FieldDayFeatureProps {
 	organizationSlug: string
@@ -75,18 +82,30 @@ function FieldDayWorkspace({
 
 	const [dayEndTime, setDayEndTime] = useState(() => timeInputValue(new Date()))
 	const [recoverTime, setRecoverTime] = useState('17:30')
-	// Kept from the mutation's answer rather than read back: there is no route
-	// for "today's day log", and adding one to show a confirmation the worker
-	// just caused would be a round trip for nothing.
-	const [dayEndedAt, setDayEndedAt] = useState<string | null>(null)
+	// Optimistic overlay only: the server's answer, carried on `/field/current`,
+	// is the source of truth. This exists purely so the screen doesn't flicker
+	// back to the clock-in form for the instant between the mutation resolving
+	// and the query it invalidates refetching — a reload always falls back to
+	// the query, never to this.
+	const [optimisticDayEndedAt, setOptimisticDayEndedAt] = useState<
+		string | null
+	>(null)
 	const [pendingTaskId, setPendingTaskId] = useState<string | null>(null)
 	const [pendingPhotoPhase, setPendingPhotoPhase] = useState<PhotoPhase | null>(
 		null,
 	)
+	const [switchRollbackMessage, setSwitchRollbackMessage] = useState<
+		string | null
+	>(null)
 
 	const recoverEntry = useRecoverTimeEntry(organizationId)
-	const running =
-		(current.data as { data?: FieldEntry | null } | undefined)?.data ?? null
+	const currentStatus = (
+		current.data as
+			| { data?: { running?: FieldEntry | null; day_ended_at?: string | null } }
+			| undefined
+	)?.data
+	const running = currentStatus?.running ?? null
+	const dayEndedAt = currentStatus?.day_ended_at ?? optimisticDayEndedAt ?? null
 	const taskList =
 		(tasks.data as { data?: FieldTaskRow[] } | undefined)?.data ?? []
 
@@ -102,19 +121,31 @@ function FieldDayWorkspace({
 
 	/// Switching jobs is stop-then-start, because the API refuses a second open
 	/// entry. Done in this order so a failure leaves nothing running rather than
-	/// two things running.
+	/// two things running. If the start half fails after the stop half already
+	/// went through, the worker is now unclocked and must be told so distinctly:
+	/// the generic mutation-error banner would only mention the failed start.
 	const startTask = async (taskId: string) => {
 		setPendingTaskId(taskId)
+		setSwitchRollbackMessage(null)
 		try {
 			if (running) {
 				await stopEntry.mutateAsync({
 					path: { time_entry_id: running.id },
 				} as never)
+				try {
+					await startEntry.mutateAsync({
+						path: { organization_id: organizationId },
+						body: { task_id: taskId },
+					} as never)
+				} catch {
+					setSwitchRollbackMessage(SWITCH_ROLLBACK_MESSAGE)
+				}
+			} else {
+				await startEntry.mutateAsync({
+					path: { organization_id: organizationId },
+					body: { task_id: taskId },
+				} as never)
 			}
-			await startEntry.mutateAsync({
-				path: { organization_id: organizationId },
-				body: { task_id: taskId },
-			} as never)
 		} finally {
 			setPendingTaskId(null)
 		}
@@ -134,11 +165,38 @@ function FieldDayWorkspace({
 		}
 	}
 
+	// Mutation failures only. Query failures (below) are a different situation
+	// — nothing was attempted and nothing to blame on the worker's last action
+	// — so they get their own, distinct treatment rather than sharing this
+	// banner.
+	const rawMutationErrorMessage =
+		recoverEntry.error?.message ??
+		startEntry.error?.message ??
+		stopEntry.error?.message ??
+		attachPhoto.error?.message ??
+		uploadFile.error?.message ??
+		endDay.error?.message ??
+		null
+	const mutationError =
+		switchRollbackMessage ??
+		(rawMutationErrorMessage
+			? fieldErrorMessage(rawMutationErrorMessage)
+			: null)
+
+	// Whether the current entry could not be loaded at all: distinct from
+	// there being nothing running, since the screen must not offer to start a
+	// second job when it simply failed to ask whether one is already open.
+	const currentLoadFailed = current.isError
+
 	return (
 		<FieldDayUI
 			organizationName={organizationName}
 			tasks={taskList}
+			tasksLoadFailed={tasks.isError}
+			onRetryTasks={() => void tasks.refetch()}
 			running={running}
+			currentLoadFailed={currentLoadFailed}
+			onRetryCurrent={() => void current.refetch()}
 			staleEntry={staleEntry}
 			staleTaskTitle={staleTaskTitle}
 			recoverTime={recoverTime}
@@ -146,17 +204,7 @@ function FieldDayWorkspace({
 			dayEndedAt={dayEndedAt}
 			now={now}
 			dayEndTime={dayEndTime}
-			error={
-				recoverEntry.error?.message ??
-				startEntry.error?.message ??
-				stopEntry.error?.message ??
-				attachPhoto.error?.message ??
-				uploadFile.error?.message ??
-				endDay.error?.message ??
-				tasks.error?.message ??
-				current.error?.message ??
-				null
-			}
+			error={mutationError}
 			pendingTaskId={pendingTaskId}
 			pendingPhotoPhase={pendingPhotoPhase}
 			isStopping={stopEntry.isPending && pendingTaskId === null}
@@ -171,17 +219,27 @@ function FieldDayWorkspace({
 					new Date(staleEntry.started_at),
 				)
 				if (!ended_at) return
-				void recoverEntry.mutateAsync({
-					path: { time_entry_id: staleEntry.id },
-					body: { ended_at },
-				} as never)
+				recoverEntry
+					.mutateAsync({
+						path: { time_entry_id: staleEntry.id },
+						body: { ended_at },
+					} as never)
+					.catch(() => {
+						// Surfaced reactively via `recoverEntry.error` above; this
+						// catch only keeps the rejection from going unhandled.
+					})
 			}}
 			onStart={(taskId) => void startTask(taskId)}
 			onStop={() => {
 				if (running) {
-					void stopEntry.mutateAsync({
-						path: { time_entry_id: running.id },
-					} as never)
+					stopEntry
+						.mutateAsync({
+							path: { time_entry_id: running.id },
+						} as never)
+						.catch(() => {
+							// Surfaced reactively via `stopEntry.error` above; this catch
+							// only keeps the rejection from going unhandled.
+						})
 				}
 			}}
 			onCapturePhoto={(phase, file) => void capturePhoto(phase, file)}
@@ -190,16 +248,20 @@ function FieldDayWorkspace({
 				// A time the browser could not parse is left to the server rather
 				// than sent wrong.
 				const ended_at = instantFromTimeInput(dayEndTime, new Date())
-				void endDay
+				endDay
 					.mutateAsync({
 						path: { organization_id: organizationId },
 						body: ended_at ? { ended_at } : {},
 					} as never)
 					.then((answer) => {
-						setDayEndedAt(
+						setOptimisticDayEndedAt(
 							(answer as { data?: { ended_at?: string } } | undefined)?.data
 								?.ended_at ?? null,
 						)
+					})
+					.catch(() => {
+						// Surfaced reactively via `endDay.error` above; this catch only
+						// keeps the rejection from going unhandled.
 					})
 			}}
 		/>
