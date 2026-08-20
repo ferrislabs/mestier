@@ -19,7 +19,7 @@ const TIME_ZONE = 'Europe/Paris'
 function rootDraft(overrides: Partial<ReturnType<typeof emptyTaskDraft>> = {}) {
 	return {
 		...emptyTaskDraft({ parentTaskId: null, today: '2026-08-10' }),
-		title: 'Réunion de chantier',
+		title: 'Réunion de projet',
 		startDate: '2026-08-10',
 		endDate: '2026-08-10',
 		startTime: '09:00',
@@ -191,7 +191,7 @@ describe('buildCreateTaskPayload — without a customer', () => {
 })
 
 describe('buildCreateTaskPayload — with a customer', () => {
-	it('sends both customer_id and customer_context_id for a chantier', () => {
+	it('sends both customer_id and customer_context_id for a projet', () => {
 		const payload = buildCreateTaskPayload(
 			rootDraft({ customerId: 'cust-1', customerContextId: 'ctx-1' }),
 			{ parentTaskId: null, timeZone: TIME_ZONE },
@@ -440,7 +440,7 @@ describe('taskToDraft', () => {
 	it('maps labels to labelIds and member_ids to assignees', () => {
 		const draft = taskToDraft(
 			{
-				title: 'Chantier',
+				title: 'Projet',
 				description: 'Toiture',
 				all_day: false,
 				starts_at: '2026-08-10T07:00:00.000Z',
@@ -479,7 +479,7 @@ describe('taskToDraft', () => {
 	it('never carries a customerId/customerContextId — the edit form never lets them be touched', () => {
 		const draft = taskToDraft(
 			{
-				title: 'Chantier',
+				title: 'Projet',
 				description: null,
 				all_day: false,
 				starts_at: '2026-08-10T07:00:00.000Z',

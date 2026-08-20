@@ -90,7 +90,7 @@ describe('FieldDayUI', () => {
 
 		expect(screen.queryByRole('button', { name: /^démarrer$/i })).toBeNull()
 		expect(
-			screen.getByRole('button', { name: /clôturer ce chantier/i }),
+			screen.getByRole('button', { name: /clôturer ce projet/i }),
 		).toBeDefined()
 	})
 
@@ -100,7 +100,7 @@ describe('FieldDayUI', () => {
 		await renderWithRouter(<FieldDayUI {...baseProps()} running={entry()} />)
 
 		expect(
-			screen.getByText(/le chantier en cours sera clôturé à cette heure/i),
+			screen.getByText(/le projet en cours sera clôturé à cette heure/i),
 		).toBeDefined()
 	})
 
@@ -120,7 +120,7 @@ describe('FieldDayUI', () => {
 		)
 
 		expect(
-			screen.getByRole('button', { name: /basculer sur ce chantier/i }),
+			screen.getByRole('button', { name: /basculer sur ce projet/i }),
 		).toBeDefined()
 	})
 
@@ -139,7 +139,7 @@ describe('FieldDayUI', () => {
 		await renderWithRouter(<FieldDayUI {...baseProps()} tasks={[]} />)
 
 		expect(
-			screen.getByText(/aucun chantier ne vous est assigné/i),
+			screen.getByText(/aucun projet ne vous est assigné/i),
 		).toBeDefined()
 	})
 
@@ -159,7 +159,7 @@ describe('FieldDayUI', () => {
 			/>,
 		)
 
-		expect(screen.getByText(/chantier non clôturé/i)).toBeDefined()
+		expect(screen.getByText(/projet non clôturé/i)).toBeDefined()
 		expect(screen.getByLabelText(/heure de fin/i)).toBeDefined()
 		expect(screen.getByRole('button', { name: /^clôturer$/i })).toBeDefined()
 	})
@@ -182,7 +182,7 @@ describe('FieldDayUI', () => {
 			<FieldDayUI {...baseProps()} running={stale} staleEntry={stale} />,
 		)
 
-		expect(screen.queryByText(/mes chantiers du jour/i)).toBeNull()
+		expect(screen.queryByText(/mes projets du jour/i)).toBeNull()
 	})
 
 	it('shows the normal running card when the stretch is from today', async () => {
@@ -190,7 +190,7 @@ describe('FieldDayUI', () => {
 			<FieldDayUI {...baseProps()} running={entry()} staleEntry={null} />,
 		)
 
-		expect(screen.queryByText(/chantier non clôturé/i)).toBeNull()
+		expect(screen.queryByText(/projet non clôturé/i)).toBeNull()
 		expect(screen.getByText(/en cours depuis/i)).toBeDefined()
 	})
 
@@ -200,7 +200,7 @@ describe('FieldDayUI', () => {
 		await renderWithRouter(<FieldDayUI {...props} />)
 
 		expect(screen.getByText(/échec du chargement — réessayer/i)).toBeDefined()
-		expect(screen.queryByText(/aucun chantier ne vous est assigné/i)).toBeNull()
+		expect(screen.queryByText(/aucun projet ne vous est assigné/i)).toBeNull()
 
 		await userEvent.click(screen.getByRole('button', { name: /réessayer/i }))
 		expect(props.onRetryTasks).toHaveBeenCalled()

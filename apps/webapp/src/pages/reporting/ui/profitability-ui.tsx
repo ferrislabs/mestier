@@ -51,7 +51,7 @@ interface ProfitabilityUIProps {
 }
 
 /**
- * The payoff screen: what each chantier cost against what it was quoted.
+ * The payoff screen: what each projet cost against what it was quoted.
  *
  * Presentational only. Every figure here was computed by the backend, including
  * the rankings, so this file never decides what "least profitable" means.
@@ -92,7 +92,7 @@ export function ProfitabilityUI({
 		<PageShell>
 			<PageHeader
 				title="Rentabilité"
-				description="Ce que chaque chantier a coûté, comparé à ce qui a été devisé."
+				description="Ce que chaque projet a coûté, comparé à ce qui a été devisé."
 				actions={
 					<div className="flex flex-wrap items-end gap-2">
 						<div className="space-y-1">
@@ -143,18 +143,18 @@ export function ProfitabilityUI({
 				<MetricCard
 					label="Devisé"
 					value={formatCents(quoted)}
-					hint="Chantiers complets uniquement"
+					hint="Projets complets uniquement"
 					icon={<Euro className="size-4" />}
 				/>
 				<MetricCard
 					label="Coût réel"
 					value={formatCents(cost)}
-					hint="Main d'œuvre et matériel, chantiers complets uniquement"
+					hint="Main d'œuvre et matériel, projets complets uniquement"
 				/>
 				<MetricCard
 					label="Marge"
 					value={formatCents(margin)}
-					hint="Chantiers complets uniquement"
+					hint="Projets complets uniquement"
 				/>
 				<MetricCard
 					label="Heures travaillées"
@@ -169,7 +169,7 @@ export function ProfitabilityUI({
 						<AlertCircle className="mt-0.5 size-5 shrink-0 text-amber-600 dark:text-amber-500" />
 						<div className="min-w-0 space-y-2">
 							<p className="text-sm font-semibold">
-								{incomplete.length} chantier
+								{incomplete.length} projet
 								{incomplete.length > 1 ? 's' : ''} sans marge calculable
 							</p>
 							<p className="text-sm text-muted-foreground">
@@ -212,14 +212,14 @@ export function ProfitabilityUI({
 
 			<SectionCard>
 				<SectionHeader
-					title={`Chantiers (${jobs.length})`}
+					title={`Projets (${jobs.length})`}
 					description="Coût réel, marge et temps passé sur la période."
 				/>
 				{isLoading ? (
 					<p className="p-5 text-sm text-muted-foreground">Chargement…</p>
 				) : jobs.length === 0 ? (
 					<p className="p-5 text-sm text-muted-foreground">
-						Aucun temps pointé sur cette période. Un chantier n'apparaît ici
+						Aucun temps pointé sur cette période. Un projet n'apparaît ici
 						qu'à partir du moment où quelqu'un y a travaillé.
 					</p>
 				) : (
@@ -340,7 +340,7 @@ function RankingCard({
 			<SectionHeader title={title} />
 			{jobs.length === 0 ? (
 				<p className="p-5 text-sm text-muted-foreground">
-					Aucun chantier n'a de marge calculable sur cette période.
+					Aucun projet n'a de marge calculable sur cette période.
 				</p>
 			) : (
 				<ul className="divide-y">
@@ -396,7 +396,7 @@ function JobTitleLink({
 	return (
 		<Link
 			to={buildOrgPath(organizationSlug, '/planning/tasks')}
-			title="Ouvrir la liste des tâches du planning pour retrouver ce chantier"
+			title="Ouvrir la liste des tâches du planning pour retrouver ce projet"
 			className={cn(
 				'group inline-flex min-w-0 items-center gap-1 hover:underline',
 				className,

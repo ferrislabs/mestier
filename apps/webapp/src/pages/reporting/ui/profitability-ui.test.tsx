@@ -82,7 +82,7 @@ describe('ProfitabilityUI', () => {
 			/>,
 		)
 
-		expect(screen.getByText(/1 chantier sans marge calculable/i)).toBeDefined()
+		expect(screen.getByText(/1 projet sans marge calculable/i)).toBeDefined()
 		expect(
 			screen.getAllByText(/sans taux horaire renseigné/i).length,
 		).toBeGreaterThan(0)
@@ -153,7 +153,7 @@ describe('ProfitabilityUI', () => {
 
 		// All three headline tiles now state the same inclusion rule.
 		expect(
-			screen.getAllByText('Chantiers complets uniquement').length,
+			screen.getAllByText('Projets complets uniquement').length,
 		).toBeGreaterThanOrEqual(2)
 	})
 

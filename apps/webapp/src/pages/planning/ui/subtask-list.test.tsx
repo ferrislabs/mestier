@@ -13,7 +13,7 @@ const SUBTASKS = [
 	},
 	{
 		id: 'sub-2',
-		title: 'Nettoyer le chantier',
+		title: 'Nettoyer le projet',
 		status: 'DONE' as const,
 		assigneeCount: 0,
 		inheritedWindow: true,
@@ -35,7 +35,7 @@ describe('SubtaskList — rendu', () => {
 	it('renders every subtask title', () => {
 		render(<SubtaskList {...baseProps()} />)
 		expect(screen.getByText('Poser les tuiles')).toBeDefined()
-		expect(screen.getByText('Nettoyer le chantier')).toBeDefined()
+		expect(screen.getByText('Nettoyer le projet')).toBeDefined()
 	})
 
 	it('flags a subtask whose window is inherited from the parent', () => {

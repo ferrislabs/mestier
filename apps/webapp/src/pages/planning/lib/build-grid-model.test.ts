@@ -51,7 +51,7 @@ function task(overrides: Partial<PlanningEntry> = {}): PlanningEntry {
 		status: 'PLANNED',
 		member_ids: ['member-1'],
 		customer_name: 'Client Dupont',
-		context_label: 'Chantier toiture',
+		context_label: 'Projet toiture',
 		...overrides,
 	} as PlanningEntry
 }

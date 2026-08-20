@@ -139,10 +139,10 @@ export function FieldDayUI({
 			{staleEntry ? (
 				<section className="rounded-xl border-2 border-amber-500 bg-card p-4">
 					<p className="text-xs font-semibold uppercase tracking-wide text-amber-600 dark:text-amber-500">
-						Chantier non clôturé
+						Projet non clôturé
 					</p>
 					<p className="mt-1 text-xl font-bold leading-tight">
-						{staleTaskTitle ?? 'Chantier'}
+						{staleTaskTitle ?? 'Projet'}
 					</p>
 					<p className="mt-1 text-sm text-muted-foreground">
 						Démarré {startedAtLabel(staleEntry.started_at)}. À quelle heure
@@ -169,7 +169,7 @@ export function FieldDayUI({
 						</Button>
 					</div>
 					<p className="mt-2 text-xs text-muted-foreground">
-						Tant que ce chantier n'est pas clôturé, vous ne pouvez pas en
+						Tant que ce projet n'est pas clôturé, vous ne pouvez pas en
 						démarrer un autre.
 					</p>
 				</section>
@@ -181,7 +181,7 @@ export function FieldDayUI({
 						En cours depuis {elapsedLabel(running.started_at, now)}
 					</p>
 					<p className="mt-1 text-xl font-bold leading-tight">
-						{current?.title ?? 'Chantier'}
+						{current?.title ?? 'Projet'}
 					</p>
 
 					<div className="mt-4">
@@ -205,7 +205,7 @@ export function FieldDayUI({
 						) : (
 							<Square className="fill-current" />
 						)}
-						Clôturer ce chantier
+						Clôturer ce projet
 					</Button>
 				</section>
 			) : null}
@@ -213,7 +213,7 @@ export function FieldDayUI({
 			{staleEntry ? null : (
 				<section className="space-y-2">
 					<p className="text-sm font-semibold text-muted-foreground">
-						Mes chantiers du jour
+						Mes projets du jour
 					</p>
 
 					{tasksLoadFailed ? (
@@ -234,7 +234,7 @@ export function FieldDayUI({
 						</div>
 					) : tasks.length === 0 ? (
 						<p className="rounded-xl border bg-card p-4 text-sm text-muted-foreground">
-							Aucun chantier ne vous est assigné aujourd'hui.
+							Aucun projet ne vous est assigné aujourd'hui.
 						</p>
 					) : (
 						tasks.map((task) => {
@@ -272,7 +272,7 @@ export function FieldDayUI({
 									{task.customer_context_id ? (
 										<p className="mt-2 flex items-center gap-1.5 text-xs text-muted-foreground">
 											<MapPin className="size-3.5 shrink-0" />
-											Adresse renseignée sur le chantier
+											Adresse renseignée sur le projet
 										</p>
 									) : null}
 
@@ -290,7 +290,7 @@ export function FieldDayUI({
 											) : (
 												<Play className="fill-current" />
 											)}
-											{running ? 'Basculer sur ce chantier' : 'Démarrer'}
+											{running ? 'Basculer sur ce projet' : 'Démarrer'}
 										</Button>
 									) : null}
 								</div>
@@ -340,7 +340,7 @@ export function FieldDayUI({
 						</div>
 						{running ? (
 							<p className="mt-2 text-xs text-amber-600 dark:text-amber-500">
-								Le chantier en cours sera clôturé à cette heure.
+								Le projet en cours sera clôturé à cette heure.
 							</p>
 						) : null}
 					</>

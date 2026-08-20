@@ -22,7 +22,7 @@ const SUBTASKS: TaskListSubtaskRowVM[] = [
 	},
 	{
 		id: 'sub-2',
-		title: 'Nettoyer le chantier',
+		title: 'Nettoyer le projet',
 		status: 'DONE',
 		labels: [],
 		window: {
@@ -57,7 +57,7 @@ describe('TaskListSubtaskRows — rendu', () => {
 	it('renders every subtask title', () => {
 		renderInTable(<TaskListSubtaskRows {...baseProps()} />)
 		expect(screen.getByText('Poser les tuiles')).toBeDefined()
-		expect(screen.getByText('Nettoyer le chantier')).toBeDefined()
+		expect(screen.getByText('Nettoyer le projet')).toBeDefined()
 	})
 
 	it("flags a subtask's inherited window", () => {

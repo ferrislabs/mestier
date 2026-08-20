@@ -31,7 +31,7 @@ export function AbsencesSection({
 		<SectionCard>
 			<SectionHeader
 				title="Absences"
-				description="Congés, arrêts et indisponibilités de cet employé. L’assignation d’un chantier pendant cette période n’est jamais bloquée, seulement signalée."
+				description="Congés, arrêts et indisponibilités de cet employé. L’assignation d’un projet pendant cette période n’est jamais bloquée, seulement signalée."
 			/>
 			<div className="flex flex-col gap-4 p-5">
 				{isLoading ? (

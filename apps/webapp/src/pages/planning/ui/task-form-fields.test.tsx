@@ -31,7 +31,7 @@ function baseProps() {
 		windowPlaceholder: null as string | null,
 		customerName: null as string | null,
 		customers: CUSTOMERS,
-		customerContexts: [{ id: 'ctx-1', label: 'Chantier principal' }],
+		customerContexts: [{ id: 'ctx-1', label: 'Projet principal' }],
 		isCustomerContextsLoading: false,
 		quotes: [{ id: 'quote-1', label: 'DEV-2026-0001 · 4 200,00 €' }],
 		isQuotesLoading: false,
@@ -206,7 +206,7 @@ describe('TaskFormFields — no network call', () => {
 
 describe('TaskFormFields — devis', () => {
 	/**
-	 * Without this link the profitability report can state a chantier's cost but
+	 * Without this link the profitability report can state a projet's cost but
 	 * never its margin, which is the whole point of M6. The field is the only
 	 * place in the product that sets `tasks.quote_id`.
 	 */

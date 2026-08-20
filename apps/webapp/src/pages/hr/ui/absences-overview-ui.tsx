@@ -89,7 +89,7 @@ export function AbsencesOverviewUI({
 			<PageHeader
 				eyebrow={organizationName}
 				title="Absences"
-				description="Congés, arrêts et indisponibilités de toute l’organisation. L’assignation d’un chantier pendant cette période n’est jamais bloquée, seulement signalée."
+				description="Congés, arrêts et indisponibilités de toute l’organisation. L’assignation d’un projet pendant cette période n’est jamais bloquée, seulement signalée."
 				actions={
 					<Button onClick={onCreate}>
 						<Plus />

@@ -9,7 +9,7 @@ import {
 
 const ROOT_WITH_CHILDREN: TaskListRowVM = {
 	id: 'root-1',
-	title: 'Chantier toiture',
+	title: 'Projet toiture',
 	status: 'PLANNED',
 	labels: [{ id: 'l1', name: 'Réunion', color: '#2563EB' }],
 	childCount: 2,
@@ -68,7 +68,7 @@ function baseProps(overrides: Partial<TaskListUIProps> = {}): TaskListUIProps {
 describe('TaskListUI — row rendering', () => {
 	it('shows every root task with its title and its assignees', () => {
 		render(<TaskListUI {...baseProps()} />)
-		expect(screen.getByText('Chantier toiture')).toBeDefined()
+		expect(screen.getByText('Projet toiture')).toBeDefined()
 		expect(screen.getByText('Réunion hebdo')).toBeDefined()
 		expect(screen.getByText('Alix Martin')).toBeDefined()
 	})
@@ -196,7 +196,7 @@ describe('TaskListUI — selection', () => {
 		render(<TaskListUI {...baseProps({ onToggleRowSelection, onOpenTask })} />)
 
 		await user.click(
-			screen.getByRole('checkbox', { name: 'Sélectionner Chantier toiture' }),
+			screen.getByRole('checkbox', { name: 'Sélectionner Projet toiture' }),
 		)
 		expect(onToggleRowSelection).toHaveBeenCalledWith('root-1')
 		expect(onOpenTask).not.toHaveBeenCalled()
@@ -206,7 +206,7 @@ describe('TaskListUI — selection', () => {
 		render(<TaskListUI {...baseProps({ selectedTaskIds: ['root-1'] })} />)
 
 		const checkbox = screen.getByRole('checkbox', {
-			name: 'Sélectionner Chantier toiture',
+			name: 'Sélectionner Projet toiture',
 		})
 		expect(checkbox.getAttribute('aria-checked')).toBe('true')
 	})

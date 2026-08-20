@@ -361,7 +361,7 @@ export function TaskSheetFeature({
 			label: context.label,
 		}),
 	)
-	// Only the accepted quotes of the chosen customer. A chantier bills against
+	// Only the accepted quotes of the chosen customer. A projet bills against
 	// something the customer agreed to, and offering a draft would invite a
 	// margin computed from a number nobody signed.
 	const quotes = (quotesQuery.data?.data ?? [])

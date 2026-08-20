@@ -368,8 +368,8 @@ function GridCell({
 							<button
 								type="button"
 								className="absolute top-0 right-0 hidden size-3.5 items-center justify-center rounded-bl-sm bg-black/20 hover:bg-black/40 group-hover:flex"
-								title="Retirer cette personne du chantier"
-								aria-label="Retirer cette personne du chantier"
+								title="Retirer cette personne du projet"
+								aria-label="Retirer cette personne du projet"
 								onClick={(event) => {
 									event.stopPropagation()
 									onRemoveAssignee({ entryId: segment.entryId, resourceId })
