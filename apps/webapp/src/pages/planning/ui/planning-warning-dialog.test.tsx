@@ -48,9 +48,7 @@ describe('PlanningWarningDialog', () => {
 		expect(screen.getAllByRole('alertdialog')).toHaveLength(1)
 		expect(screen.getByText(/Absence : Congé/)).toBeDefined()
 		expect(screen.getByText('De retour lundi')).toBeDefined()
-		expect(
-			screen.getByText(/Déjà affecté à un autre chantier/),
-		).toBeDefined()
+		expect(screen.getByText(/Déjà affecté à un autre chantier/)).toBeDefined()
 	})
 
 	it('confirming calls onConfirm and not onCancel', async () => {

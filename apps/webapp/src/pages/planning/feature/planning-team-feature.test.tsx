@@ -286,9 +286,7 @@ describe('PlanningTeamFeature — drag & drop without a warning', () => {
 
 		const targetRow = screen
 			.getAllByTestId('grid-row')
-			.find(
-				(row) => row.getAttribute('data-resource-id') === 'member:member-2',
-			)
+			.find((row) => row.getAttribute('data-resource-id') === 'member:member-2')
 		if (!targetRow) throw new Error('target row not found')
 		const targetCell = within(targetRow)
 			.getAllByTestId('grid-cell')
