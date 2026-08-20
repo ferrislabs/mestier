@@ -150,3 +150,76 @@ async fn a_worker_clocks_on_photographs_the_job_and_ends_the_day() {
 
     app.cleanup().await;
 }
+
+/// The forgotten clock-off, end to end.
+///
+/// A stretch begun thirty hours ago and never closed. Clocking off now would
+/// record thirty hours nobody worked, so the API refuses and the employee is
+/// asked for the real time instead.
+#[tokio::test]
+#[ignore = "requires live postgres and redis"]
+async fn a_forgotten_stretch_is_recovered_at_the_declared_time_not_at_now() {
+    let app = harness::start().await;
+    let entry_id = harness::seed_forgotten_entry(&app.pool, &app).await;
+    let client = reqwest::Client::new();
+
+    // Clocking off now would turn a day's work into thirty hours.
+    let stopped = client
+        .post(app.entry_url(&entry_id.to_string(), "/stop"))
+        .bearer_auth(&app.token)
+        .send()
+        .await
+        .expect("the api answers the stop call");
+    assert_eq!(
+        stopped.status(),
+        409,
+        "a stretch from an earlier day must not be closed at today's time"
+    );
+
+    // Starting a new job is blocked too, which is what would strand the worker.
+    let blocked = client
+        .post(app.url("/time-entries"))
+        .bearer_auth(&app.token)
+        .json(&json!({ "task_id": app.task_id }))
+        .send()
+        .await
+        .expect("the api answers the start call");
+    assert_eq!(blocked.status(), 409, "one open stretch at a time");
+
+    // The employee says when they actually finished.
+    let declared = (chrono::Utc::now() - chrono::Duration::hours(23)).to_rfc3339();
+    let raw = client
+        .post(app.entry_url(&entry_id.to_string(), "/recover"))
+        .bearer_auth(&app.token)
+        .json(&json!({ "ended_at": declared }))
+        .send()
+        .await
+        .expect("the api answers the recover call")
+        .text()
+        .await
+        .expect("the recover answer has a body");
+    let body: serde_json::Value = serde_json::from_str(&raw)
+        .unwrap_or_else(|e| panic!("the recover answer is json: {e}: {raw}"));
+
+    assert_eq!(
+        body["data"]["worked_minutes"],
+        json!(420),
+        "seven hours, as declared, not thirty: {body}"
+    );
+
+    // And now the day can start.
+    let started = client
+        .post(app.url("/time-entries"))
+        .bearer_auth(&app.token)
+        .json(&json!({ "task_id": app.task_id }))
+        .send()
+        .await
+        .expect("the api answers the start call");
+    assert!(
+        started.status().is_success(),
+        "the worker is unblocked once yesterday is settled: {}",
+        started.status()
+    );
+
+    app.cleanup().await;
+}

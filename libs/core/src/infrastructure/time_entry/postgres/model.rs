@@ -17,6 +17,7 @@ pub struct TimeEntryRow {
     pub employee_id: Uuid,
     pub started_at: DateTime<Utc>,
     pub ended_at: Option<DateTime<Utc>>,
+    pub closed_after_the_fact: bool,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }
@@ -33,6 +34,7 @@ impl TimeEntryRow {
             started_at: self.started_at,
             ended_at: self.ended_at,
             photos,
+            closed_after_the_fact: self.closed_after_the_fact,
             created_at: self.created_at,
             updated_at: self.updated_at,
         }

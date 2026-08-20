@@ -63,6 +63,7 @@ pub fn router(state: &AppState) -> Router<AppState> {
         .typed_get(field::current::handler)
         .typed_post(field::start::handler)
         .typed_post(field::stop::handler)
+        .typed_post(field::recover::handler)
         .typed_post(field::attach_photo::handler)
         .typed_post(field::end_day::handler)
         .layer(from_fn_with_state(state.clone(), rate_limit_middleware))

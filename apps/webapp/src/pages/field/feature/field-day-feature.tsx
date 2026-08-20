@@ -8,10 +8,15 @@ import {
 	useCurrentTimeEntry,
 	useEndWorkingDay,
 	useMyFieldTasks,
+	useRecoverTimeEntry,
 	useStartTimeEntry,
 	useStopTimeEntry,
 } from '#/hooks/use-field'
-import { instantFromTimeInput, timeInputValue } from '#/pages/field/types'
+import {
+	instantFromTimeInput,
+	isFromAnEarlierDay,
+	timeInputValue,
+} from '#/pages/field/types'
 import { FieldDayUI } from '#/pages/field/ui/field-day-ui'
 
 interface FieldDayFeatureProps {
@@ -69,6 +74,7 @@ function FieldDayWorkspace({
 	}, [])
 
 	const [dayEndTime, setDayEndTime] = useState(() => timeInputValue(new Date()))
+	const [recoverTime, setRecoverTime] = useState('17:30')
 	// Kept from the mutation's answer rather than read back: there is no route
 	// for "today's day log", and adding one to show a confirmation the worker
 	// just caused would be a round trip for nothing.
@@ -78,10 +84,21 @@ function FieldDayWorkspace({
 		null,
 	)
 
+	const recoverEntry = useRecoverTimeEntry(organizationId)
 	const running =
 		(current.data as { data?: FieldEntry | null } | undefined)?.data ?? null
 	const taskList =
 		(tasks.data as { data?: FieldTaskRow[] } | undefined)?.data ?? []
+
+	// A stretch begun before today is the forgotten clock-off. The server
+	// refuses to close it at the current time, because that would record hours
+	// nobody worked, so the screen asks the employee when they actually
+	// finished.
+	const staleEntry =
+		running && isFromAnEarlierDay(running.started_at, now) ? running : null
+	const staleTaskTitle = staleEntry
+		? (taskList.find((task) => task.id === staleEntry.task_id)?.title ?? null)
+		: null
 
 	/// Switching jobs is stop-then-start, because the API refuses a second open
 	/// entry. Done in this order so a failure leaves nothing running rather than
@@ -122,10 +139,15 @@ function FieldDayWorkspace({
 			organizationName={organizationName}
 			tasks={taskList}
 			running={running}
+			staleEntry={staleEntry}
+			staleTaskTitle={staleTaskTitle}
+			recoverTime={recoverTime}
+			isRecovering={recoverEntry.isPending}
 			dayEndedAt={dayEndedAt}
 			now={now}
 			dayEndTime={dayEndTime}
 			error={
+				recoverEntry.error?.message ??
 				startEntry.error?.message ??
 				stopEntry.error?.message ??
 				attachPhoto.error?.message ??
@@ -139,6 +161,21 @@ function FieldDayWorkspace({
 			pendingPhotoPhase={pendingPhotoPhase}
 			isStopping={stopEntry.isPending && pendingTaskId === null}
 			isEndingDay={endDay.isPending}
+			onRecoverTimeChange={setRecoverTime}
+			onRecover={() => {
+				if (!staleEntry) return
+				// The declared time belongs to the day the stretch started, not to
+				// today: that is the whole point of asking.
+				const ended_at = instantFromTimeInput(
+					recoverTime,
+					new Date(staleEntry.started_at),
+				)
+				if (!ended_at) return
+				void recoverEntry.mutateAsync({
+					path: { time_entry_id: staleEntry.id },
+					body: { ended_at },
+				} as never)
+			}}
 			onStart={(taskId) => void startTask(taskId)}
 			onStop={() => {
 				if (running) {

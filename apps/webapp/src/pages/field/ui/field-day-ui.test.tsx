@@ -41,6 +41,10 @@ function baseProps() {
 		organizationName: 'Paysages Bonnal',
 		tasks: [task()],
 		running: null,
+		staleEntry: null,
+		staleTaskTitle: null,
+		recoverTime: '17:30',
+		isRecovering: false,
 		dayEndedAt: null,
 		now: NOW,
 		dayEndTime: '18:00',
@@ -49,6 +53,8 @@ function baseProps() {
 		pendingPhotoPhase: null,
 		isStopping: false,
 		isEndingDay: false,
+		onRecoverTimeChange: vi.fn(),
+		onRecover: vi.fn(),
 		onStart: vi.fn(),
 		onStop: vi.fn(),
 		onCapturePhoto: vi.fn(),
@@ -131,5 +137,56 @@ describe('FieldDayUI', () => {
 		expect(
 			screen.getByText(/aucun chantier ne vous est assigné/i),
 		).toBeDefined()
+	})
+
+	/**
+	 * The forgotten clock-off. Yesterday's stretch has to be settled before
+	 * anything else, because the server will not let another job start while it
+	 * is open, and it cannot be closed at today's time without inventing hours.
+	 */
+	it('asks when an unfinished stretch from an earlier day actually ended', async () => {
+		const stale = entry({ started_at: '2026-08-18T06:00:00Z' })
+		await renderWithRouter(
+			<FieldDayUI
+				{...baseProps()}
+				running={stale}
+				staleEntry={stale}
+				staleTaskTitle="Taille de haie"
+			/>,
+		)
+
+		expect(screen.getByText(/chantier non clôturé/i)).toBeDefined()
+		expect(screen.getByLabelText(/heure de fin/i)).toBeDefined()
+		expect(screen.getByRole('button', { name: /^clôturer$/i })).toBeDefined()
+	})
+
+	it('says why nothing else can start until it is settled', async () => {
+		const stale = entry({ started_at: '2026-08-18T06:00:00Z' })
+		await renderWithRouter(
+			<FieldDayUI {...baseProps()} running={stale} staleEntry={stale} />,
+		)
+
+		expect(
+			screen.getByText(/vous ne pouvez pas en démarrer un autre/i),
+		).toBeDefined()
+	})
+
+	/** One decision at a time: the day's jobs come back once yesterday is closed. */
+	it('hides the day list while an earlier stretch is open', async () => {
+		const stale = entry({ started_at: '2026-08-18T06:00:00Z' })
+		await renderWithRouter(
+			<FieldDayUI {...baseProps()} running={stale} staleEntry={stale} />,
+		)
+
+		expect(screen.queryByText(/mes chantiers du jour/i)).toBeNull()
+	})
+
+	it('shows the normal running card when the stretch is from today', async () => {
+		await renderWithRouter(
+			<FieldDayUI {...baseProps()} running={entry()} staleEntry={null} />,
+		)
+
+		expect(screen.queryByText(/chantier non clôturé/i)).toBeNull()
+		expect(screen.getByText(/en cours depuis/i)).toBeDefined()
 	})
 })

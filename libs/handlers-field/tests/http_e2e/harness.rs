@@ -75,6 +75,11 @@ pub async fn start() -> App {
 }
 
 impl App {
+    /// The user the token authenticates as, for fixtures that need their employee.
+    pub fn owner_user_id(&self) -> Uuid {
+        self.user_id
+    }
+
     pub fn url(&self, suffix: &str) -> String {
         format!(
             "{}/api/v1/organizations/{}/field{suffix}",
@@ -122,6 +127,28 @@ impl App {
                 .expect("clear the fixture user");
         }
     }
+}
+
+/// An entry begun yesterday and never closed: the forgotten clock-off.
+pub async fn seed_forgotten_entry(pool: &PgPool, app: &App) -> Uuid {
+    let id = Uuid::now_v7();
+    sqlx::query(
+        "INSERT INTO time_entries (id, org_id, task_id, employee_id, started_at, ended_at)
+         VALUES ($1, $2, $3, (SELECT e.id FROM employees e
+                              JOIN organization_members m ON m.id = e.member_id
+                              JOIN users u ON u.id = m.user_id
+                              WHERE u.id = $4), $5, NULL)",
+    )
+    .bind(id)
+    .bind(app.organization_id)
+    .bind(app.task_id)
+    .bind(app.owner_user_id())
+    .bind(Utc::now() - Duration::hours(30))
+    .execute(pool)
+    .await
+    .expect("seed the forgotten entry");
+
+    id
 }
 
 struct Fixture {

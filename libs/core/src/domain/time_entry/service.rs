@@ -6,7 +6,8 @@ use crate::{
     DayLog, DayLogId, TimeEntry, TimeEntryId, TimeEntryPhoto, TimeEntryPhotoId, Tz,
     domain::time_entry::{
         commands::{
-            AttachTimeEntryPhotoCommand, EndDayCommand, StartTimeEntryCommand, StopTimeEntryCommand,
+            AttachTimeEntryPhotoCommand, EndDayCommand, RecoverTimeEntryCommand,
+            StartTimeEntryCommand, StopTimeEntryCommand,
         },
         events::{DayEnded, TimeEntryStarted, TimeEntryStopped},
         ports::{DayLogRepository, TimeEntryRepository},
@@ -66,6 +67,7 @@ where
                 started_at: command.at,
                 ended_at: None,
                 photos: vec![],
+                closed_after_the_fact: false,
                 created_at: command.at,
                 updated_at: command.at,
             })
@@ -94,8 +96,51 @@ where
             .ok_or(CoreError::NotFound)?;
 
         validate_close(&existing, command.at)?;
+        refuse_stale(&existing, command.at, command.timezone)?;
 
-        let stopped = self.entries.close(existing.id, command.at).await?;
+        let stopped = self.entries.close(existing.id, command.at, false).await?;
+
+        self.emitter.emit(
+            stopped.organization_id,
+            &TimeEntryStopped {
+                entry: stopped.clone(),
+            },
+        )?;
+
+        Ok(stopped)
+    }
+
+    /// Closes a stretch the employee forgot, at the time they now declare.
+    ///
+    /// The only path allowed to accept an end on a later day than the start,
+    /// because it is the only one where somebody is stating a fact rather than
+    /// pressing a button at the moment it happens. The entry is marked, so no
+    /// reader mistakes the recollection for a measurement.
+    ///
+    /// Refuses an entry that is not actually stale: a running job from today is
+    /// stopped, not recovered, and letting this route close it would put a
+    /// declared time where a measured one belongs.
+    pub async fn recover_forgotten(
+        &mut self,
+        command: RecoverTimeEntryCommand,
+    ) -> Result<TimeEntry, CoreError> {
+        let existing = self
+            .entries
+            .find_by_id(command.id)
+            .await?
+            .ok_or(CoreError::NotFound)?;
+
+        validate_close(&existing, command.ended_at)?;
+        if !existing.is_stale(command.now, command.timezone) {
+            return Err(CoreError::Conflict(
+                "this stretch is from today, so it is stopped rather than recovered".to_owned(),
+            ));
+        }
+
+        let stopped = self
+            .entries
+            .close(existing.id, command.ended_at, true)
+            .await?;
 
         self.emitter.emit(
             stopped.organization_id,
@@ -181,7 +226,11 @@ where
             .await?
         {
             validate_close(&running, command.ended_at)?;
-            let stopped = self.entries.close(running.id, command.ended_at).await?;
+            refuse_stale(&running, command.ended_at, command.timezone)?;
+            let stopped = self
+                .entries
+                .close(running.id, command.ended_at, false)
+                .await?;
             closed_entries += 1;
 
             self.emitter.emit(
@@ -234,6 +283,22 @@ fn validate_close(entry: &TimeEntry, at: DateTime<Utc>) -> Result<(), CoreError>
     Ok(())
 }
 
+/// Refuses to close a stretch that began on an earlier local day.
+///
+/// This is the forgotten clock-off, and closing it at the current time is how a
+/// three-hour job became thirty-four: `validate_close` only checks that the end
+/// follows the start, which a whole day later satisfies. The employee is asked
+/// for the real time instead, through `recover_forgotten`.
+fn refuse_stale(entry: &TimeEntry, at: DateTime<Utc>, timezone: Tz) -> Result<(), CoreError> {
+    if entry.is_stale(at, timezone) {
+        return Err(CoreError::Conflict(
+            "this stretch began on an earlier day and needs its end time declared".to_owned(),
+        ));
+    }
+
+    Ok(())
+}
+
 /// The calendar day an instant falls in, for the organization.
 ///
 /// A day ended at 23:30 in Paris is 21:30 UTC and belongs to that day; read
@@ -278,6 +343,7 @@ mod tests {
             started_at: at(8, 0),
             ended_at,
             photos: vec![],
+            closed_after_the_fact: false,
             created_at: at(8, 0),
             updated_at: at(8, 0),
         }
@@ -354,7 +420,7 @@ mod tests {
             let e = entry(id, employee_id, None);
             Box::pin(async move { Ok(Some(e)) })
         });
-        entries.expect_close().returning(move |_, ended_at| {
+        entries.expect_close().returning(move |_, ended_at, _| {
             let mut e = entry(id, employee_id, Some(ended_at));
             e.updated_at = ended_at;
             Box::pin(async move { Ok(e) })
@@ -363,7 +429,11 @@ mod tests {
         let mut service = TimeEntryService::new(entries, MockDayLogRepository::new(), &emitter);
 
         let stopped = service
-            .stop(StopTimeEntryCommand { id, at: at(12, 15) })
+            .stop(StopTimeEntryCommand {
+                id,
+                at: at(12, 15),
+                timezone: chrono_tz::Europe::Paris,
+            })
             .await
             .unwrap();
 
@@ -387,7 +457,11 @@ mod tests {
         let mut service = TimeEntryService::new(entries, MockDayLogRepository::new(), &emitter);
 
         let outcome = service
-            .stop(StopTimeEntryCommand { id, at: at(12, 0) })
+            .stop(StopTimeEntryCommand {
+                id,
+                at: at(12, 0),
+                timezone: chrono_tz::Europe::Paris,
+            })
             .await;
 
         assert!(matches!(outcome, Err(CoreError::Conflict(_))));
@@ -407,7 +481,11 @@ mod tests {
         let mut service = TimeEntryService::new(entries, MockDayLogRepository::new(), &emitter);
 
         let outcome = service
-            .stop(StopTimeEntryCommand { id, at: at(7, 0) })
+            .stop(StopTimeEntryCommand {
+                id,
+                at: at(7, 0),
+                timezone: chrono_tz::Europe::Paris,
+            })
             .await;
 
         assert!(matches!(outcome, Err(CoreError::Conflict(_))));
@@ -427,7 +505,7 @@ mod tests {
                 let e = entry(id, employee_id, None);
                 Box::pin(async move { Ok(Some(e)) })
             });
-        entries.expect_close().returning(move |_, ended_at| {
+        entries.expect_close().returning(move |_, ended_at, _| {
             let e = entry(id, employee_id, Some(ended_at));
             Box::pin(async move { Ok(e) })
         });
@@ -528,6 +606,196 @@ mod tests {
             chrono::NaiveDate::from_ymd_opt(2026, 8, 19).expect("a valid date"),
             "22:30 UTC is 00:30 the next day in Paris"
         );
+    }
+
+    /// Yesterday's instant, so an entry can be made stale without waiting a day.
+    fn yesterday(hour: u32) -> DateTime<Utc> {
+        Utc.with_ymd_and_hms(2026, 8, 17, hour, 0, 0)
+            .single()
+            .expect("a valid test instant")
+    }
+
+    const PARIS: chrono_tz::Tz = chrono_tz::Europe::Paris;
+
+    fn stale_entry(id: TimeEntryId, employee_id: EmployeeId) -> TimeEntry {
+        let mut entry = entry(id, employee_id, None);
+        entry.started_at = yesterday(8);
+        entry
+    }
+
+    /// The bug this whole change exists for. Closing a stretch begun yesterday
+    /// at today's time turned three hours of work into thirty-four, and
+    /// `validate_close` waved it through because the end does follow the start.
+    #[tokio::test]
+    async fn stopping_a_stretch_begun_yesterday_is_refused_rather_than_inflated() {
+        let id = TimeEntryId(Uuid::new_v4());
+        let employee_id = employee();
+        let mut entries = MockTimeEntryRepository::new();
+        entries.expect_find_by_id().returning(move |_| {
+            let e = stale_entry(id, employee_id);
+            Box::pin(async move { Ok(Some(e)) })
+        });
+        let emitter = RecordingEmitter::new();
+        let mut service = TimeEntryService::new(entries, MockDayLogRepository::new(), &emitter);
+
+        let outcome = service
+            .stop(StopTimeEntryCommand {
+                id,
+                at: at(18, 0),
+                timezone: PARIS,
+            })
+            .await;
+
+        assert!(
+            matches!(outcome, Err(CoreError::Conflict(_))),
+            "{outcome:?}"
+        );
+        assert!(emitter.names().is_empty(), "a refused stop emits nothing");
+    }
+
+    /// The same hole, reached through the other door: the field app's "end my
+    /// day" button used to close yesterday's forgotten stretch at this evening's
+    /// time, which is where the phantom hours actually came from.
+    #[tokio::test]
+    async fn ending_the_day_will_not_close_a_stretch_begun_yesterday() {
+        let employee_id = employee();
+        let id = TimeEntryId(Uuid::new_v4());
+        let mut entries = MockTimeEntryRepository::new();
+        entries
+            .expect_find_running_for_employee()
+            .returning(move |_| {
+                let e = stale_entry(id, employee_id);
+                Box::pin(async move { Ok(Some(e)) })
+            });
+        let emitter = RecordingEmitter::new();
+        let mut service = TimeEntryService::new(entries, MockDayLogRepository::new(), &emitter);
+
+        let outcome = service
+            .end_day(EndDayCommand {
+                organization_id: OrganizationId(Uuid::new_v4()),
+                employee_id,
+                ended_at: at(18, 0),
+                timezone: PARIS,
+            })
+            .await;
+
+        assert!(
+            matches!(outcome, Err(CoreError::Conflict(_))),
+            "{outcome:?}"
+        );
+        assert!(
+            emitter.names().is_empty(),
+            "no day is declared over while a forgotten stretch is open"
+        );
+    }
+
+    #[tokio::test]
+    async fn recovering_a_forgotten_stretch_records_the_declared_end_and_marks_it() {
+        let id = TimeEntryId(Uuid::new_v4());
+        let employee_id = employee();
+        let mut entries = MockTimeEntryRepository::new();
+        entries.expect_find_by_id().returning(move |_| {
+            let e = stale_entry(id, employee_id);
+            Box::pin(async move { Ok(Some(e)) })
+        });
+        entries
+            .expect_close()
+            .returning(move |_, ended_at, after_the_fact| {
+                let mut e = stale_entry(id, employee_id);
+                e.ended_at = Some(ended_at);
+                e.closed_after_the_fact = after_the_fact;
+                Box::pin(async move { Ok(e) })
+            });
+        let emitter = RecordingEmitter::new();
+        let mut service = TimeEntryService::new(entries, MockDayLogRepository::new(), &emitter);
+
+        let recovered = service
+            .recover_forgotten(RecoverTimeEntryCommand {
+                id,
+                ended_at: yesterday(17),
+                now: at(7, 30),
+                timezone: PARIS,
+            })
+            .await
+            .unwrap();
+
+        assert_eq!(recovered.ended_at, Some(yesterday(17)));
+        assert_eq!(
+            recovered.worked_minutes(),
+            Some(540),
+            "nine hours, as declared"
+        );
+        assert!(
+            recovered.closed_after_the_fact,
+            "a recollection must not read as a measurement"
+        );
+        assert_eq!(emitter.names(), vec!["time_entry.stopped"]);
+    }
+
+    /// A running job from today is stopped, not recovered. Allowing this route
+    /// to close it would put a declared time where a measured one belongs, and
+    /// mark an honest entry as reconstructed.
+    #[tokio::test]
+    async fn a_stretch_from_today_cannot_be_recovered() {
+        let id = TimeEntryId(Uuid::new_v4());
+        let employee_id = employee();
+        let mut entries = MockTimeEntryRepository::new();
+        entries.expect_find_by_id().returning(move |_| {
+            let e = entry(id, employee_id, None);
+            Box::pin(async move { Ok(Some(e)) })
+        });
+        let emitter = RecordingEmitter::new();
+        let mut service = TimeEntryService::new(entries, MockDayLogRepository::new(), &emitter);
+
+        let outcome = service
+            .recover_forgotten(RecoverTimeEntryCommand {
+                id,
+                ended_at: at(12, 0),
+                now: at(14, 0),
+                timezone: PARIS,
+            })
+            .await;
+
+        assert!(
+            matches!(outcome, Err(CoreError::Conflict(_))),
+            "{outcome:?}"
+        );
+    }
+
+    #[tokio::test]
+    async fn a_declared_end_before_the_start_is_still_refused() {
+        let id = TimeEntryId(Uuid::new_v4());
+        let employee_id = employee();
+        let mut entries = MockTimeEntryRepository::new();
+        entries.expect_find_by_id().returning(move |_| {
+            let e = stale_entry(id, employee_id);
+            Box::pin(async move { Ok(Some(e)) })
+        });
+        let emitter = RecordingEmitter::new();
+        let mut service = TimeEntryService::new(entries, MockDayLogRepository::new(), &emitter);
+
+        let outcome = service
+            .recover_forgotten(RecoverTimeEntryCommand {
+                id,
+                ended_at: yesterday(7),
+                now: at(7, 30),
+                timezone: PARIS,
+            })
+            .await;
+
+        assert!(matches!(outcome, Err(CoreError::Conflict(_))));
+    }
+
+    /// Staleness is a local-day question, so it follows the organization's
+    /// timezone like every other day boundary in this module.
+    #[tokio::test]
+    async fn staleness_is_judged_in_the_organization_timezone() {
+        let entry = stale_entry(TimeEntryId(Uuid::new_v4()), employee());
+
+        // 2026-08-17 08:00 UTC is the 17th in Paris, and `now` is the 18th.
+        assert!(entry.is_stale(at(7, 30), PARIS));
+        // Still the same stretch, judged against a moment on its own day.
+        assert!(!entry.is_stale(yesterday(20), PARIS));
     }
 
     #[tokio::test]

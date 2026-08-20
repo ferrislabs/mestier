@@ -710,6 +710,7 @@ export namespace Schemas {
 		total_cents: number
 		updated_at: string
 	}
+	export type RecoverTimeEntryRequest = { ended_at: string }
 	export type ReplayRunRequest = { connector_id: string }
 	export type RhythmSlotResponse = {
 		ends_minute: number
@@ -2186,6 +2187,34 @@ export namespace Endpoints {
 					phase: Schemas.TimeEntryPhotoPhase
 					storage_key: string
 					time_entry_id: Schemas.TimeEntryId
+				}
+				pagination?: (null | Schemas.PaginationMetadata) | undefined
+			}
+			401: unknown
+			404: unknown
+			409: unknown
+		}
+	}
+	export type post_RecoverTimeEntry = {
+		method: 'POST'
+		path: '/api/v1/field/time-entries/{time_entry_id}/recover'
+		requestFormat: 'json'
+		parameters: {
+			path: { time_entry_id: string }
+
+			body: Schemas.RecoverTimeEntryRequest
+		}
+		responses: {
+			200: {
+				data: {
+					employee_id: Schemas.EmployeeId
+					ended_at?: (string | null) | undefined
+					id: Schemas.TimeEntryId
+					organization_id: Schemas.OrganizationId
+					photos: Array<Schemas.TimeEntryPhotoResponse>
+					started_at: string
+					task_id: Schemas.TaskId
+					worked_minutes?: (number | null) | undefined
 				}
 				pagination?: (null | Schemas.PaginationMetadata) | undefined
 			}
@@ -4448,6 +4477,7 @@ export type EndpointByMethod = {
 		'/api/v1/customers/{customer_id}/contacts': Endpoints.post_CreateCustomerContact
 		'/api/v1/customers/{customer_id}/customer-contexts': Endpoints.post_CreateCustomerContext
 		'/api/v1/field/time-entries/{time_entry_id}/photos': Endpoints.post_AttachTimeEntryPhoto
+		'/api/v1/field/time-entries/{time_entry_id}/recover': Endpoints.post_RecoverTimeEntry
 		'/api/v1/field/time-entries/{time_entry_id}/stop': Endpoints.post_StopTimeEntry
 		'/api/v1/files': Endpoints.post_UploadFile
 		'/api/v1/invitations/{token}/accept': Endpoints.post_AcceptInvitation

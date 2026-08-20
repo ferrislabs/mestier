@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            UPDATE time_entries\n            SET ended_at = $2, updated_at = $2\n            WHERE id = $1 AND ended_at IS NULL\n            RETURNING id, org_id, task_id, employee_id, started_at, ended_at, created_at, updated_at\n            ",
+  "query": "\n            SELECT id, org_id, task_id, employee_id, started_at, ended_at, closed_after_the_fact, created_at, updated_at\n            FROM time_entries\n            WHERE employee_id = $1 AND started_at::date = $2\n            ORDER BY started_at\n            ",
   "describe": {
     "columns": [
       {
@@ -35,11 +35,16 @@
       },
       {
         "ordinal": 6,
+        "name": "closed_after_the_fact",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 7,
         "name": "created_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 7,
+        "ordinal": 8,
         "name": "updated_at",
         "type_info": "Timestamptz"
       }
@@ -47,7 +52,7 @@
     "parameters": {
       "Left": [
         "Uuid",
-        "Timestamptz"
+        "Date"
       ]
     },
     "nullable": [
@@ -58,8 +63,9 @@
       false,
       true,
       false,
+      false,
       false
     ]
   },
-  "hash": "8cb8e0967c2f2434fe76f4fd326e212958d9f9356c78bcc3fb771335661b1a3a"
+  "hash": "80afab5a5b224829ad264ee3e12f06b8af05199f5b3045b3a3079396d9d0eb6b"
 }

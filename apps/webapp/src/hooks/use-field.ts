@@ -7,6 +7,7 @@ const ENTRIES_PATH =
 	'/api/v1/organizations/{organization_id}/field/time-entries'
 const STOP_PATH = '/api/v1/field/time-entries/{time_entry_id}/stop'
 const PHOTOS_PATH = '/api/v1/field/time-entries/{time_entry_id}/photos'
+const RECOVER_PATH = '/api/v1/field/time-entries/{time_entry_id}/recover'
 const DAY_END_PATH = '/api/v1/organizations/{organization_id}/field/day-end'
 
 export type FieldTask = Schemas.FieldTaskResponse
@@ -95,6 +96,24 @@ export function useAttachFieldPhoto(organizationId: string) {
 
 	return useMutation({
 		...window.tanstackApi.mutation('post', PHOTOS_PATH).mutationOptions,
+		onSuccess: async () => {
+			await invalidate()
+		},
+	})
+}
+
+/**
+ * Closes a stretch the worker forgot, at the time they now declare.
+ *
+ * Separate from `useStopTimeEntry` because the API keeps them apart: stopping
+ * records the moment it happens, recovering records a moment being recalled,
+ * and the second is marked so no report reads it as the first.
+ */
+export function useRecoverTimeEntry(organizationId: string) {
+	const invalidate = useInvalidateField(organizationId)
+
+	return useMutation({
+		...window.tanstackApi.mutation('post', RECOVER_PATH).mutationOptions,
 		onSuccess: async () => {
 			await invalidate()
 		},

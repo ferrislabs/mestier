@@ -119,3 +119,29 @@ impl MestierUseCase {
         service.leave_organization(organization_id, user_id).await
     }
 }
+
+/// The organization's timezone, refused rather than defaulted when unusable.
+///
+/// Shared by every read that turns a calendar day into instants: field
+/// clocking, profitability, worked hours. Falling back to UTC would look like
+/// it worked and quietly file evening work under the wrong day, which is the
+/// bug the column exists to prevent.
+///
+/// Takes the repository rather than `&self` so a caller already inside a
+/// `#[transactional]` block reuses that transaction instead of opening a
+/// second one.
+pub(crate) async fn resolve_timezone(
+    organizations: &mut impl crate::domain::organization::ports::OrganizationRepository,
+    organization_id: OrganizationId,
+) -> Result<crate::Tz, CoreError> {
+    let name = organizations
+        .find_timezone(organization_id)
+        .await?
+        .ok_or(CoreError::NotFound)?;
+
+    name.parse::<crate::Tz>().map_err(|_| {
+        CoreError::Internal(format!(
+            "organization timezone `{name}` is not an IANA zone"
+        ))
+    })
+}

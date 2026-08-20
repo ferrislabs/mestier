@@ -4,12 +4,12 @@ use mestier_macros::transactional;
 
 use crate::{
     DayLog, EmployeeId, MemberId, OrganizationId, Task, TimeEntry, TimeEntryId, TimeEntryPhoto,
-    application::MestierUseCase,
-    domain::organization::ports::OrganizationRepository,
+    application::{MestierUseCase, organization::resolve_timezone},
     domain::task::service::TaskService,
     domain::time_entry::{
         commands::{
-            AttachTimeEntryPhotoCommand, EndDayCommand, StartTimeEntryCommand, StopTimeEntryCommand,
+            AttachTimeEntryPhotoCommand, EndDayCommand, RecoverTimeEntryCommand,
+            StartTimeEntryCommand, StopTimeEntryCommand,
         },
         service::TimeEntryService,
     },
@@ -25,13 +25,46 @@ impl MestierUseCase {
         service.start(command).await
     }
 
-    #[transactional(time_entry, day_log, emitter)]
+    /// Resolves the timezone here: whether a stretch is a normal clock-off or a
+    /// forgotten one is a question about calendar days, and the HTTP layer has
+    /// no business answering it.
+    #[transactional(time_entry, day_log, organization, emitter)]
     pub async fn stop_time_entry(
         &self,
-        command: StopTimeEntryCommand,
+        organization_id: OrganizationId,
+        id: TimeEntryId,
+        at: DateTime<Utc>,
     ) -> Result<TimeEntry, CoreError> {
+        let mut organization_repository = organization_repository;
+        let timezone = resolve_timezone(&mut organization_repository, organization_id).await?;
         let mut service = TimeEntryService::new(time_entry_repository, day_log_repository, emitter);
-        service.stop(command).await
+
+        service
+            .stop(StopTimeEntryCommand { id, at, timezone })
+            .await
+    }
+
+    /// Closes a stretch the employee forgot, at the time they now declare.
+    #[transactional(time_entry, day_log, organization, emitter)]
+    pub async fn recover_forgotten_time_entry(
+        &self,
+        organization_id: OrganizationId,
+        id: TimeEntryId,
+        ended_at: DateTime<Utc>,
+        now: DateTime<Utc>,
+    ) -> Result<TimeEntry, CoreError> {
+        let mut organization_repository = organization_repository;
+        let timezone = resolve_timezone(&mut organization_repository, organization_id).await?;
+        let mut service = TimeEntryService::new(time_entry_repository, day_log_repository, emitter);
+
+        service
+            .recover_forgotten(RecoverTimeEntryCommand {
+                id,
+                ended_at,
+                now,
+                timezone,
+            })
+            .await
     }
 
     #[transactional(time_entry, day_log, emitter)]
@@ -124,27 +157,6 @@ impl MestierUseCase {
             .list_assigned_to_member_on(organization_id, member_id, starts_at, ends_at)
             .await
     }
-}
-
-/// The organization's timezone, refused rather than defaulted when unusable.
-///
-/// Falling back to UTC would look like it worked and quietly file evening
-/// work under the wrong day, which is exactly the bug the column exists to
-/// prevent.
-async fn resolve_timezone(
-    organizations: &mut impl OrganizationRepository,
-    organization_id: OrganizationId,
-) -> Result<crate::Tz, CoreError> {
-    let name = organizations
-        .find_timezone(organization_id)
-        .await?
-        .ok_or(CoreError::NotFound)?;
-
-    name.parse::<crate::Tz>().map_err(|_| {
-        CoreError::Internal(format!(
-            "organization timezone `{name}` is not an IANA zone"
-        ))
-    })
 }
 
 /// The instants a local calendar day starts and ends at.

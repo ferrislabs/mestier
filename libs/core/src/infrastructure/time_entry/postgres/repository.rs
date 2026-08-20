@@ -31,7 +31,7 @@ impl<'tx> TimeEntryRepository for PgTimeEntryRepository<'tx> {
             r#"
             INSERT INTO time_entries (id, org_id, task_id, employee_id, started_at, ended_at, created_at, updated_at)
             VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-            RETURNING id, org_id, task_id, employee_id, started_at, ended_at, created_at, updated_at
+            RETURNING id, org_id, task_id, employee_id, started_at, ended_at, closed_after_the_fact, created_at, updated_at
             "#,
             entry.id.0,
             entry.organization_id.0,
@@ -55,7 +55,7 @@ impl<'tx> TimeEntryRepository for PgTimeEntryRepository<'tx> {
         let row = sqlx::query_as!(
             TimeEntryRow,
             r#"
-            SELECT id, org_id, task_id, employee_id, started_at, ended_at, created_at, updated_at
+            SELECT id, org_id, task_id, employee_id, started_at, ended_at, closed_after_the_fact, created_at, updated_at
             FROM time_entries
             WHERE id = $1
             "#,
@@ -84,7 +84,7 @@ impl<'tx> TimeEntryRepository for PgTimeEntryRepository<'tx> {
         let row = sqlx::query_as!(
             TimeEntryRow,
             r#"
-            SELECT id, org_id, task_id, employee_id, started_at, ended_at, created_at, updated_at
+            SELECT id, org_id, task_id, employee_id, started_at, ended_at, closed_after_the_fact, created_at, updated_at
             FROM time_entries
             WHERE employee_id = $1 AND ended_at IS NULL
             "#,
@@ -114,7 +114,7 @@ impl<'tx> TimeEntryRepository for PgTimeEntryRepository<'tx> {
         let rows = sqlx::query_as!(
             TimeEntryRow,
             r#"
-            SELECT id, org_id, task_id, employee_id, started_at, ended_at, created_at, updated_at
+            SELECT id, org_id, task_id, employee_id, started_at, ended_at, closed_after_the_fact, created_at, updated_at
             FROM time_entries
             WHERE employee_id = $1 AND started_at::date = $2
             ORDER BY started_at
@@ -139,18 +139,20 @@ impl<'tx> TimeEntryRepository for PgTimeEntryRepository<'tx> {
         &mut self,
         id: TimeEntryId,
         ended_at: DateTime<Utc>,
+        after_the_fact: bool,
     ) -> Result<TimeEntry, CoreError> {
         let mut tx = self.tx.lock().await;
         let row = sqlx::query_as!(
             TimeEntryRow,
             r#"
             UPDATE time_entries
-            SET ended_at = $2, updated_at = $2
+            SET ended_at = $2, closed_after_the_fact = $3, updated_at = now()
             WHERE id = $1 AND ended_at IS NULL
-            RETURNING id, org_id, task_id, employee_id, started_at, ended_at, created_at, updated_at
+            RETURNING id, org_id, task_id, employee_id, started_at, ended_at, closed_after_the_fact, created_at, updated_at
             "#,
             id.0,
             ended_at,
+            after_the_fact,
         )
         .fetch_optional(&mut ***tx)
         .await

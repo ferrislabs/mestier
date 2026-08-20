@@ -31,10 +31,15 @@ pub trait TimeEntryRepository: Send {
         work_date: NaiveDate,
     ) -> impl Future<Output = Result<Vec<TimeEntry>, CoreError>> + Send;
 
+    /// Closes a running entry.
+    ///
+    /// `after_the_fact` records that the end was declared on a later day than
+    /// the work, so a reader can tell a recollection from a measurement.
     fn close(
         &mut self,
         id: TimeEntryId,
         ended_at: DateTime<Utc>,
+        after_the_fact: bool,
     ) -> impl Future<Output = Result<TimeEntry, CoreError>> + Send;
 
     fn attach_photo(

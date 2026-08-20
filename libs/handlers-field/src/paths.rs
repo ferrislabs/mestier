@@ -39,3 +39,10 @@ pub struct FieldPhotosPath {
 pub struct FieldDayEndPath {
     pub organization_id: OrganizationId,
 }
+
+/// Closing a stretch the employee forgot, at the time they now declare.
+#[derive(TypedPath, Deserialize)]
+#[typed_path("/api/v1/field/time-entries/{time_entry_id}/recover")]
+pub struct FieldRecoverPath {
+    pub time_entry_id: TimeEntryId,
+}

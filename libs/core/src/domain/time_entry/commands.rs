@@ -19,6 +19,21 @@ pub struct StartTimeEntryCommand {
 pub struct StopTimeEntryCommand {
     pub id: TimeEntryId,
     pub at: DateTime<Utc>,
+    /// Decides which calendar day `at` falls in, which is what tells a normal
+    /// clock-off from a forgotten one.
+    pub timezone: Tz,
+}
+
+/// Closes a stretch the employee forgot, at the time they now declare.
+#[derive(Debug, Clone, Copy)]
+pub struct RecoverTimeEntryCommand {
+    pub id: TimeEntryId,
+    /// When the employee says they actually finished.
+    pub ended_at: DateTime<Utc>,
+    /// Now, against which staleness is judged. Passed rather than read so a
+    /// test can pin it.
+    pub now: DateTime<Utc>,
+    pub timezone: Tz,
 }
 
 #[derive(Debug, Clone)]
