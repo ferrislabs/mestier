@@ -124,6 +124,43 @@ export function buildAssigneesForMove(
 }
 
 /**
+ * The union of `memberIds` (a task's current assignees, straight off
+ * `TaskResponse.member_ids`) and `resourceIds` (freshly picked ones) as the
+ * `AssigneeRef[]` a `PATCH` expects — the task list's additive bulk-assign
+ * (see the planning remodel design doc's "Bulk-assign" decision): the
+ * bulk-assign bar's "Assigner" no longer calls the replace-everything
+ * `POST /tasks/bulk-assign`, it sends one full-set `PATCH` per selected
+ * task, carrying that task's own current assignees forward instead of
+ * overwriting them. Order-preserving and de-duplicated like every other
+ * assignee list built in this file.
+ */
+export function buildAssigneesForBulkAdd(
+	memberIds: string[],
+	resourceIds: string[],
+): AssigneeRef[] {
+	const seen = new Set<string>()
+	const result: AssigneeRef[] = []
+
+	for (const memberId of memberIds) {
+		const ref: AssigneeRef = { member_id: memberId }
+		const key = assigneeKey(ref)
+		if (seen.has(key)) continue
+		seen.add(key)
+		result.push(ref)
+	}
+
+	for (const resourceId of resourceIds) {
+		const ref = assigneeRefFromResourceId(resourceId)
+		const key = assigneeKey(ref)
+		if (seen.has(key)) continue
+		seen.add(key)
+		result.push(ref)
+	}
+
+	return result
+}
+
+/**
  * Drops `resourceId`'s assignment, keeping every other assignee untouched —
  * the same complete-list path a move uses (see the planning design doc:
  * "l'ajout comme le retrait passent par le même chemin").

@@ -35,6 +35,16 @@ export interface CalendarEventCallbacks {
 	onToggleAssignee: (resourceId: string) => void
 	onEditSubmit: () => void
 	onEditCancel: () => void
+	/** Opens the same full `TaskSheetFeature` the Team and Task-list views use — task entries only. */
+	onOpenDetail?: (entry: PlanningEntry) => void
+	/**
+	 * Surfaces a failed `onChangeStatus`/`onDelete` — see
+	 * `feature/planning-calendar-feature.tsx`'s own doc. Scoped to the entry
+	 * it happened on, the same way `editing` is (below): closing that entry's
+	 * popover and opening a different one must not show a stale error about
+	 * an action the newly opened entry never attempted.
+	 */
+	quickActionError?: { entryId: string; message: string } | null
 }
 
 export interface EventPopoverProps {
@@ -89,13 +99,29 @@ export function EventPopover({
 							? (status) => callbacks.onChangeStatus?.(detail.entry, status)
 							: undefined
 					}
+					// Does not close the popover itself, unlike `onOpenDetail`
+					// below: a delete can fail, and closing eagerly would hide
+					// `quickActionError` the instant it appears. On success the
+					// entry disappears from `data.entries` once the planning
+					// query is invalidated, unmounting this popover along with
+					// it — closing it "for real" rather than pre-emptively.
 					onDelete={
 						callbacks.onDelete
+							? () => callbacks.onDelete?.(detail.entry)
+							: undefined
+					}
+					onOpenDetail={
+						callbacks.onOpenDetail
 							? () => {
 									setOpen(false)
-									callbacks.onDelete?.(detail.entry)
+									callbacks.onOpenDetail?.(detail.entry)
 								}
 							: undefined
+					}
+					quickActionError={
+						callbacks.quickActionError?.entryId === detail.entry.id
+							? callbacks.quickActionError.message
+							: null
 					}
 				/>
 			</PopoverContent>

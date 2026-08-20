@@ -286,9 +286,7 @@ describe('PlanningTeamFeature — drag & drop without a warning', () => {
 
 		const targetRow = screen
 			.getAllByTestId('grid-row')
-			.find(
-				(row) => row.getAttribute('data-resource-id') === 'member:member-2',
-			)
+			.find((row) => row.getAttribute('data-resource-id') === 'member:member-2')
 		if (!targetRow) throw new Error('target row not found')
 		const targetCell = within(targetRow)
 			.getAllByTestId('grid-cell')
@@ -436,6 +434,40 @@ describe('PlanningTeamFeature — avertissements', () => {
 		await screen.findByText('Alix Martin')
 		dropOnResourceDate('member:member-2', '2026-08-05')
 		await screen.findByRole('alertdialog')
+
+		const user = userEvent.setup()
+		await user.click(screen.getByRole('button', { name: /Confirmer/ }))
+
+		await waitFor(() => expect(patchCallsFor(calls)).toHaveLength(1))
+		expect(patchCallsFor(calls)[0].params).toMatchObject({
+			body: { assignees: [{ member_id: 'member-2' }] },
+		})
+		await waitFor(() => expect(screen.queryByRole('alertdialog')).toBeNull())
+	})
+})
+
+describe('PlanningTeamFeature — availability check failure', () => {
+	it('surfaces the failure in the warning dialog instead of only logging it, and lets the user apply the move anyway', async () => {
+		const { calls, mock } = renderFeature({
+			planning: planningResponse({
+				resources: [RESOURCE_MEMBER_1, RESOURCE_MEMBER_2],
+				entries: [TASK_ENTRY],
+			}),
+		})
+		mock('get', AVAILABILITY_PATH, () => {
+			throw new Error('HTTP 503: Service Unavailable')
+		})
+		mock('patch', TASK_PATH, () => ({
+			data: { task: TASK_ENTRY },
+			pagination: null,
+		}))
+
+		await screen.findByText('Alix Martin')
+		dropOnResourceDate('member:member-2', '2026-08-05')
+
+		expect(await screen.findByRole('alertdialog')).toBeDefined()
+		expect(screen.getByText('HTTP 503: Service Unavailable')).toBeDefined()
+		expect(patchCallsFor(calls)).toHaveLength(0)
 
 		const user = userEvent.setup()
 		await user.click(screen.getByRole('button', { name: /Confirmer/ }))

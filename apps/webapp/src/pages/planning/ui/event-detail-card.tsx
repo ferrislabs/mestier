@@ -52,6 +52,15 @@ export interface EventDetailCardProps {
 	onToggleAssignee: (resourceId: string) => void
 	onEditSubmit: () => void
 	onEditCancel: () => void
+	/**
+	 * Opens the same full `TaskSheetFeature` the Team and Task-list views use
+	 * on this entry — task-only, since an absence has no such sheet (its
+	 * editor is `AbsenceFormSheet`, reached from the HR module, not from
+	 * here). Absent when the caller has nowhere to send it to, e.g. this
+	 * entry has no sheet counterpart.
+	 */
+	onOpenDetail?: () => void
+	quickActionError?: string | null
 }
 
 /**
@@ -75,6 +84,8 @@ export function EventDetailCard({
 	onToggleAssignee,
 	onEditSubmit,
 	onEditCancel,
+	onOpenDetail,
+	quickActionError,
 }: EventDetailCardProps) {
 	const entry = event.entry
 	const isTask = entry.kind === 'task'
@@ -147,8 +158,15 @@ export function EventDetailCard({
 					isPending={isPending}
 					onChangeStatus={onChangeStatus}
 					onDelete={onDelete}
+					onOpenDetail={isTask ? onOpenDetail : undefined}
 				/>
 			)}
+
+			{quickActionError ? (
+				<p className="rounded-lg border border-destructive/30 bg-destructive-soft px-4 py-3 text-sm text-destructive">
+					{quickActionError}
+				</p>
+			) : null}
 		</div>
 	)
 }
@@ -159,6 +177,7 @@ interface ReadViewProps {
 	isPending?: boolean
 	onChangeStatus?: (status: TaskStatus) => void
 	onDelete?: () => void
+	onOpenDetail?: () => void
 }
 
 function ReadView({
@@ -167,12 +186,29 @@ function ReadView({
 	isPending,
 	onChangeStatus,
 	onDelete,
+	onOpenDetail,
 }: ReadViewProps) {
 	return (
 		<>
 			<h3 className="text-xl font-medium leading-tight text-foreground">
 				{event.title}
 			</h3>
+
+			{onOpenDetail ? (
+				// The door into the same full task sheet the Team and Task-list
+				// views use — this popover only ever offers a status shortcut,
+				// never the complete editor (customer, quote, labels, subtasks,
+				// comments…), so every field beyond it needs an explicit way out.
+				<Button
+					type="button"
+					variant="link"
+					size="sm"
+					className="h-auto self-start px-0"
+					onClick={onOpenDetail}
+				>
+					Modifier en détail
+				</Button>
+			) : null}
 
 			<p className="flex items-center gap-2 text-sm text-foreground">
 				<CalendarDays className="size-4 shrink-0 text-muted-foreground" />

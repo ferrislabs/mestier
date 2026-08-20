@@ -427,17 +427,25 @@ describe('TaskListFeature — bulk assign', () => {
 		expect(screen.queryByText(/tâche sélectionnée/)).toBeNull()
 	})
 
-	it('applies the picked assignees to every selected task in one request, then clears the selection', async () => {
+	it('applies the picked assignee to every selected task via one PATCH per task, merged with each task’s own existing assignees — never the replace-everything bulk-assign route', async () => {
 		const { calls } = renderFeature((api) => {
 			api.mockGet(
 				TASKS_PATH,
 				tasksHandler([
-					task(),
-					task({ id: 'root-2', title: 'Réunion chantier' }),
+					task({ member_ids: [] }),
+					task({
+						id: 'root-2',
+						title: 'Réunion chantier',
+						member_ids: ['member-9'],
+					}),
 				]),
 			)
-			api.mockMutation('post', BULK_ASSIGN_TASKS_PATH, () => ({
-				data: { tasks: [] },
+			api.mockMutation('patch', TASK_PATH, (params) => ({
+				data: {
+					task: task({
+						id: (params as { path: { task_id: string } }).path.task_id,
+					}),
+				},
 			}))
 		})
 
@@ -457,21 +465,76 @@ describe('TaskListFeature — bulk assign', () => {
 		await user.click(screen.getByRole('button', { name: 'Assigner' }))
 
 		await waitFor(() => {
-			const call = calls.find((c) => c.path === BULK_ASSIGN_TASKS_PATH)
-			expect(call).toBeDefined()
+			const patchCalls = calls.filter(
+				(c) => c.method === 'patch' && c.path === TASK_PATH,
+			)
+			expect(patchCalls).toHaveLength(2)
 		})
-		const bulkCall = calls.find((c) => c.path === BULK_ASSIGN_TASKS_PATH)
-		expect(bulkCall?.params).toMatchObject({
-			path: { organization_id: 'org-1' },
-			body: { assignees: [{ member_id: 'member-1' }] },
-		})
-		const taskIds = (bulkCall?.params as { body: { task_ids: string[] } }).body
-			.task_ids
-		expect(new Set(taskIds)).toEqual(new Set(['root-1', 'root-2']))
+
+		expect(calls.some((c) => c.path === BULK_ASSIGN_TASKS_PATH)).toBe(false)
+
+		const patchCalls = calls.filter(
+			(c) => c.method === 'patch' && c.path === TASK_PATH,
+		)
+		const assigneesByTaskId = new Map(
+			patchCalls.map((call) => [
+				(call.params as { path: { task_id: string } }).path.task_id,
+				(call.params as { body: { assignees: { member_id: string }[] } }).body
+					.assignees,
+			]),
+		)
+		// root-1 had no assignee: the picked one is simply added.
+		expect(assigneesByTaskId.get('root-1')).toEqual([{ member_id: 'member-1' }])
+		// root-2 already had member-9: the picked assignee is appended, not
+		// used to replace it.
+		expect(assigneesByTaskId.get('root-2')).toEqual([
+			{ member_id: 'member-9' },
+			{ member_id: 'member-1' },
+		])
 
 		await waitFor(() => {
 			expect(screen.queryByText(/tâche sélectionnée/)).toBeNull()
 		})
+	})
+
+	it('names the task that failed instead of a generic error, and keeps the selection so the user can retry', async () => {
+		renderFeature((api) => {
+			api.mockGet(
+				TASKS_PATH,
+				tasksHandler([
+					task(),
+					task({ id: 'root-2', title: 'Réunion chantier' }),
+				]),
+			)
+			api.mockMutation('patch', TASK_PATH, (params) => {
+				const taskId = (params as { path: { task_id: string } }).path.task_id
+				if (taskId === 'root-2') {
+					throw new Error('HTTP 409: Conflict')
+				}
+				return { data: { task: task({ id: taskId }) } }
+			})
+		})
+
+		await screen.findByText('Chantier toiture')
+		const user = userEvent.setup()
+
+		await user.click(
+			screen.getByRole('checkbox', { name: 'Sélectionner Chantier toiture' }),
+		)
+		await user.click(
+			screen.getByRole('checkbox', { name: 'Sélectionner Réunion chantier' }),
+		)
+		await user.click(screen.getByRole('button', { name: /Personne assigné/ }))
+		await user.click(screen.getByRole('option', { name: 'Alix Martin' }))
+		await user.click(screen.getByRole('button', { name: 'Assigner' }))
+
+		const error = await screen.findByText(/Échec de l'affectation pour/)
+		expect(error.textContent).toContain('Réunion chantier')
+		expect(error.textContent).not.toContain('Chantier toiture')
+
+		// The bar stays open — the successful task's PATCH already went
+		// through, but the selection is kept so the failed one can be retried.
+		expect(screen.getByText('2 tâches sélectionnées')).toBeDefined()
 	})
 })
 

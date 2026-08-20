@@ -145,6 +145,16 @@ function PlanningCalendarScreen({
 		null,
 	)
 	const [editing, setEditing] = useState<EventEditState | null>(null)
+	/**
+	 * A failed `changeTaskStatus`/`removeAbsence`, scoped to the entry it
+	 * happened on — see `ui/event-popover.tsx`'s `CalendarEventCallbacks.
+	 * quickActionError` doc. Distinct from `dropError` on
+	 * `PlanningTeamScreen`: this calendar has no drag & drop of its own.
+	 */
+	const [quickActionError, setQuickActionError] = useState<{
+		entryId: string
+		message: string
+	} | null>(null)
 
 	const patchTask = useMoveTask()
 	const createAbsence = useCreateAbsence()
@@ -227,23 +237,35 @@ function PlanningCalendarScreen({
 	}
 
 	async function changeTaskStatus(taskId: string, status: TaskStatus) {
+		setQuickActionError(null)
 		try {
 			await patchTask.mutateAsync({
 				path: { organization_id: organizationId, task_id: taskId },
 				body: { status },
 			})
-		} catch {
-			// Rendered reactively from `patchTask.error`; the calendar stays put.
+		} catch (error) {
+			// Surfaced through `quickActionError`, in the same popover the
+			// action was triggered from — this used to be swallowed silently
+			// (a comment claiming it was "rendered reactively from
+			// `patchTask.error`", which nothing actually read).
+			setQuickActionError({
+				entryId: taskId,
+				message: quickActionErrorMessage(error),
+			})
 		}
 	}
 
 	async function removeAbsence(absenceId: string) {
+		setQuickActionError(null)
 		try {
 			await deleteAbsence.mutateAsync({
 				path: { organization_id: organizationId, absence_id: absenceId },
 			})
-		} catch {
-			// Rendered reactively from `deleteAbsence.error`.
+		} catch (error) {
+			setQuickActionError({
+				entryId: absenceId,
+				message: quickActionErrorMessage(error),
+			})
 		}
 	}
 
@@ -369,6 +391,16 @@ function PlanningCalendarScreen({
 			if (entry.kind !== 'absence') return
 			void removeAbsence(entry.id)
 		},
+		onOpenDetail: (entry) => {
+			if (entry.kind !== 'task') return
+			// The popover this came from is closed by `EventPopover` itself
+			// (see its `onOpenDetail` wiring); cancelling any inline draft here
+			// avoids a stale `editing` state fighting with the sheet over the
+			// same task.
+			setEditing(null)
+			setTaskSheetTarget({ mode: 'edit', taskId: entry.id })
+		},
+		quickActionError,
 		isPending: patchTask.isPending || deleteAbsence.isPending,
 	}
 
@@ -505,4 +537,9 @@ function PlanningCalendarScreen({
 			/>
 		</>
 	)
+}
+
+function quickActionErrorMessage(error: unknown): string {
+	if (error instanceof Error) return error.message
+	return "L'action a échoué. Réessayez."
 }

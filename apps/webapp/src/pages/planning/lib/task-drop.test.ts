@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
 	assigneeRefFromResourceId,
+	buildAssigneesForBulkAdd,
 	buildAssigneesForMove,
 	buildAssigneesForRemoval,
 	computeRemoveAssigneePatch,
@@ -91,6 +92,44 @@ describe('buildAssigneesForRemoval', () => {
 	it('changes nothing if the resource is not in the list', () => {
 		const result = buildAssigneesForRemoval(['member-2'], 'member:member-1')
 		expect(result).toEqual([{ member_id: 'member-2' }])
+	})
+})
+
+describe('buildAssigneesForBulkAdd', () => {
+	it('adds the newly picked resource to an unassigned task', () => {
+		const result = buildAssigneesForBulkAdd([], ['member:member-1'])
+		expect(result).toEqual([{ member_id: 'member-1' }])
+	})
+
+	it('keeps the task’s current assignees and appends the new one — additive, not a replacement', () => {
+		const result = buildAssigneesForBulkAdd(['member-1'], ['member:member-2'])
+		expect(result).toEqual([
+			{ member_id: 'member-1' },
+			{ member_id: 'member-2' },
+		])
+	})
+
+	it('does not duplicate a picked resource already assigned to the task', () => {
+		const result = buildAssigneesForBulkAdd(
+			['member-1', 'member-2'],
+			['member:member-1'],
+		)
+		expect(result).toEqual([
+			{ member_id: 'member-1' },
+			{ member_id: 'member-2' },
+		])
+	})
+
+	it('supports picking several resources at once', () => {
+		const result = buildAssigneesForBulkAdd(
+			['member-1'],
+			['member:member-2', 'member:member-3'],
+		)
+		expect(result).toEqual([
+			{ member_id: 'member-1' },
+			{ member_id: 'member-2' },
+			{ member_id: 'member-3' },
+		])
 	})
 })
 
