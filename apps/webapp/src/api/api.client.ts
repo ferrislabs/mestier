@@ -649,6 +649,7 @@ export namespace Schemas {
 		occupied_minutes: number
 		open_entries: number
 		quoted_cents?: (number | null) | undefined
+		recollected_minutes: number
 		task_id: TaskId
 		title: string
 		worked_minutes: number

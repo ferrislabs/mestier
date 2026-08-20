@@ -7,6 +7,7 @@ import {
 	incompleteReason,
 	marginRate,
 	realCostCents,
+	recollectedNote,
 } from '#/pages/reporting/types'
 
 function job(overrides: Partial<JobProfitability> = {}): JobProfitability {
@@ -22,6 +23,7 @@ function job(overrides: Partial<JobProfitability> = {}): JobProfitability {
 		margin_cents: 405_900,
 		employees_without_rate: [],
 		open_entries: 0,
+		recollected_minutes: 0,
 		...overrides,
 	}
 }
@@ -82,6 +84,22 @@ describe('incompleteReason', () => {
 				}),
 			),
 		).toBe('1 salarié sans taux horaire, et 2 pointages non clôturés')
+	})
+})
+
+describe('recollectedNote', () => {
+	it('says nothing when nothing was declared after the fact', () => {
+		expect(recollectedNote(job())).toBeNull()
+	})
+
+	/**
+	 * Recollected time still counts fully in the cost and the margin — this note
+	 * is informational, never a warning like `incompleteReason`.
+	 */
+	it('names the recollected time without withholding anything', () => {
+		expect(recollectedNote(job({ recollected_minutes: 45 }))).toBe(
+			'dont 45 min déclarées a posteriori',
+		)
 	})
 })
 

@@ -46,6 +46,20 @@ export function incompleteReason(job: JobProfitability): string | null {
 }
 
 /**
+ * How much of a job's time was declared after the fact, in words, or `null`
+ * when none was.
+ *
+ * Unlike `incompleteReason`, this never means the figures are withheld: the
+ * time already counts in the cost and the margin above. It only says which
+ * part of it was a recollection rather than a measurement.
+ */
+export function recollectedNote(job: JobProfitability): string | null {
+	if (job.recollected_minutes <= 0) return null
+
+	return `dont ${formatMinutes(job.recollected_minutes)} déclarées a posteriori`
+}
+
+/**
  * The margin as a share of what was quoted, or `null` when either is unknown.
  *
  * Guards a zero quote as well as an absent one: dividing by it would produce an

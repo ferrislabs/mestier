@@ -17,6 +17,7 @@ function job(overrides: Partial<JobProfitability> = {}): JobProfitability {
 		margin_cents: 405_900,
 		employees_without_rate: [],
 		open_entries: 0,
+		recollected_minutes: 0,
 		...overrides,
 	}
 }
@@ -83,6 +84,22 @@ describe('ProfitabilityUI', () => {
 	it('says nothing about incompleteness when everything is known', async () => {
 		await renderWithRouter(<ProfitabilityUI {...baseProps()} />)
 
+		expect(screen.queryByText(/sans marge calculable/i)).toBeNull()
+	})
+
+	/**
+	 * Recollected time is informational, never a reason the margin is missing:
+	 * the job in `baseProps` has a stated margin and still shows the note.
+	 */
+	it('notes recollected time without treating the job as incomplete', async () => {
+		await renderWithRouter(
+			<ProfitabilityUI
+				{...baseProps()}
+				jobs={[job({ recollected_minutes: 45 })]}
+			/>,
+		)
+
+		expect(screen.getByText(/45 min déclarées a posteriori/i)).toBeDefined()
 		expect(screen.queryByText(/sans marge calculable/i)).toBeNull()
 	})
 

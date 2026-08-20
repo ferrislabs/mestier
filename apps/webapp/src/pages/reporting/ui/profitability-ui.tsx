@@ -26,6 +26,7 @@ import {
 	formatMinutes,
 	incompleteReason,
 	realCostCents,
+	recollectedNote,
 } from '#/pages/reporting/types'
 
 interface ProfitabilityUIProps {
@@ -210,6 +211,11 @@ export function ProfitabilityUI({
 									{incompleteReason(job) ? (
 										<p className="truncate text-xs text-amber-600 dark:text-amber-500">
 											{incompleteReason(job)}
+										</p>
+									) : null}
+									{recollectedNote(job) ? (
+										<p className="truncate text-xs text-muted-foreground">
+											{recollectedNote(job)}
 										</p>
 									) : null}
 								</div>

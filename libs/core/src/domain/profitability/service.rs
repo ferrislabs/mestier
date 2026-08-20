@@ -67,6 +67,7 @@ fn job_profitability(
 
     let mut labour_cost_cents = 0_i64;
     let mut worked_minutes = 0_i64;
+    let mut recollected_minutes = 0_i64;
     let mut open_entries = 0_u32;
     let mut employees_without_rate: Vec<EmployeeId> = Vec::new();
 
@@ -77,6 +78,9 @@ fn job_profitability(
         };
 
         worked_minutes += minutes;
+        if entry.closed_after_the_fact {
+            recollected_minutes += minutes;
+        }
         match entry.hourly_rate_cents {
             Some(rate) => labour_cost_cents += cost_of(minutes, i64::from(rate)),
             // Recorded once per employee, not once per entry: the reader needs
@@ -119,6 +123,7 @@ fn job_profitability(
         margin_cents,
         employees_without_rate,
         open_entries,
+        recollected_minutes,
     }
 }
 
@@ -269,6 +274,22 @@ mod tests {
             hourly_rate_cents: rate,
             started_at: at(from.0, from.1),
             ended_at: to.map(|(h, m)| at(h, m)),
+            closed_after_the_fact: false,
+        }
+    }
+
+    /// A stretch recovered the next day: closed on a declared end time rather
+    /// than a measured one.
+    fn recollected(
+        task_id: TaskId,
+        employee_id: EmployeeId,
+        rate: Option<i32>,
+        from: (u32, u32),
+        to: (u32, u32),
+    ) -> ClockedTime {
+        ClockedTime {
+            closed_after_the_fact: true,
+            ..clocked(task_id, employee_id, rate, from, Some(to))
         }
     }
 
@@ -551,6 +572,62 @@ mod tests {
         assert!(row.rate_missing);
         assert_eq!(row.labour_cost_cents, 7_000, "only the rated stretch costs");
         assert_eq!(row.worked_minutes, 180, "but both were worked");
+    }
+
+    /// A stretch closed on a declared time rather than a measured one still
+    /// costs and margins exactly like any other: the KPI is not withheld for
+    /// it, only annotated.
+    #[test]
+    fn recollected_time_counts_normally_but_is_reported_separately() {
+        let job = job(Some(100_000));
+        let facts = ProfitabilityFacts {
+            jobs: vec![job.clone()],
+            clocked: vec![
+                clocked(job.task_id, employee(), Some(3500), (8, 0), Some((10, 0))),
+                recollected(job.task_id, employee(), Some(3500), (14, 0), (15, 0)),
+            ],
+            equipment: vec![],
+        };
+
+        let result = &build_report(facts).jobs[0];
+
+        assert_eq!(result.worked_minutes, 180, "both stretches were worked");
+        assert_eq!(
+            result.labour_cost_cents,
+            3500 * 3,
+            "the recollected hour costs exactly as much as a measured one"
+        );
+        assert_eq!(
+            result.recollected_minutes, 60,
+            "only the declared stretch is flagged"
+        );
+        assert_eq!(
+            result.margin_cents,
+            Some(100_000 - 3500 * 3),
+            "recollected time never withholds the margin"
+        );
+        assert!(
+            result.is_complete(),
+            "recollection is not the same kind of gap as a missing rate or an open entry"
+        );
+    }
+
+    #[test]
+    fn a_job_with_no_recollected_time_reports_zero() {
+        let job = job(None);
+        let facts = ProfitabilityFacts {
+            jobs: vec![job.clone()],
+            clocked: vec![clocked(
+                job.task_id,
+                employee(),
+                Some(3500),
+                (8, 0),
+                Some((10, 0)),
+            )],
+            equipment: vec![],
+        };
+
+        assert_eq!(build_report(facts).jobs[0].recollected_minutes, 0);
     }
 
     #[test]
