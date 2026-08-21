@@ -545,6 +545,8 @@ function TeamTable({
 													effectiveHourlyRateCents={
 														member.effectiveHourlyRateCents
 													}
+													memberId={member.id}
+													organizationSlug={organizationSlug}
 												/>
 											) : (
 												<MoneyCell value={member.hourlyRateCents} suffix="/h" />
@@ -705,9 +707,13 @@ function RowActions({
 function SalariedRateCell({
 	monthlyCostCents,
 	effectiveHourlyRateCents,
+	memberId,
+	organizationSlug,
 }: {
 	monthlyCostCents: number | null
 	effectiveHourlyRateCents: number | null
+	memberId: string
+	organizationSlug: string
 }) {
 	if (monthlyCostCents === null) {
 		return (
@@ -722,9 +728,16 @@ function SalariedRateCell({
 			<MoneyCell value={monthlyCostCents} suffix="/mois" />
 			<span className="text-xs text-muted-foreground">
 				{effectiveHourlyRateCents === null ? (
-					<span className="text-amber-600 dark:text-amber-500">
-						Heures contractuelles manquantes, coût horaire incalculable
-					</span>
+					// The gap that stranded somebody: they had entered the salary and
+					// the message named the salary. The contract is edited on another
+					// screen, so this says which one.
+					<Link
+						to={buildOrgPath(organizationSlug, '/hr/team/$memberId/work-time')}
+						params={{ memberId }}
+						className="text-amber-600 underline dark:text-amber-500"
+					>
+						Heures contractuelles à renseigner
+					</Link>
 				) : (
 					`soit ${formatMoney(effectiveHourlyRateCents)}/h`
 				)}

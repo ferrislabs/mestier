@@ -34,6 +34,7 @@ import {
 	formatMinutes,
 	incompleteReason,
 	isCompleteProject,
+	missingCostLabel,
 	overlapNote,
 	plannedCostCents,
 } from '#/pages/reporting/types'
@@ -362,10 +363,9 @@ export function ProfitabilityUI({
 									<p className="truncate font-medium">
 										{memberName(row.member_id) ?? 'Membre'}
 									</p>
-									{row.rate_missing ? (
+									{row.missing_cost ? (
 										<p className="text-xs text-amber-600 dark:text-amber-500">
-											Coût horaire manquant : taux horaire ou salaire non
-											renseigné
+											{missingCostLabel(row.missing_cost)}
 										</p>
 									) : null}
 								</div>

@@ -1,4 +1,4 @@
-import type { ProjectProfitability } from '#/hooks/use-reporting'
+import type { MissingCost, ProjectProfitability } from '#/hooks/use-reporting'
 
 /** `3 h 45`, the way a foreman reads a timesheet. */
 export function formatMinutes(minutes: number): string {
@@ -110,4 +110,24 @@ export function currentMonthPeriod(today: Date): { from: string; to: string } {
 
 export function isoDate(date: Date): string {
 	return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
+}
+
+/**
+ * What to go and fill in, in words, for a person whose cost could not be
+ * computed.
+ *
+ * Three gaps fixed in three different places, so the sentence names one rather
+ * than listing candidates. The previous wording said "hourly rate or salary
+ * missing" and was shown to somebody who had just entered the salary: what was
+ * actually missing was the contract, on another screen entirely.
+ */
+export function missingCostLabel(missing: MissingCost): string {
+	switch (missing) {
+		case 'HOURLY_RATE':
+			return 'Taux horaire non renseigné'
+		case 'MONTHLY_COST':
+			return 'Salarié, coût mensuel non renseigné'
+		case 'CONTRACTED_HOURS':
+			return 'Heures contractuelles à renseigner pour répartir le salaire'
+	}
 }

@@ -34,7 +34,7 @@ function member(
 		member_id: 'member-1',
 		planned_minutes: 180,
 		labour_cost_cents: 10_500,
-		rate_missing: false,
+		missing_cost: null,
 		...overrides,
 	}
 }
@@ -213,11 +213,11 @@ describe('ProfitabilityUI', () => {
 			<ProfitabilityUI
 				{...baseProps()}
 				members={[
-					member({ labour_cost_cents: 12_345, rate_missing: false }),
+					member({ labour_cost_cents: 12_345 }),
 					member({
 						member_id: 'member-2',
 						labour_cost_cents: 0,
-						rate_missing: true,
+						missing_cost: 'MONTHLY_COST',
 					}),
 				]}
 				memberName={(id) =>
@@ -227,7 +227,30 @@ describe('ProfitabilityUI', () => {
 		)
 
 		expect(screen.getByText('123,45 €')).toBeDefined()
-		expect(screen.getByText(/coût horaire manquant/i)).toBeDefined()
+		expect(screen.getByText(/coût mensuel non renseigné/i)).toBeDefined()
+	})
+
+	/**
+	 * The message used to read "hourly rate or salary missing" whatever the cause,
+	 * and was shown to somebody who had just entered the salary — what was
+	 * actually missing was the contract, on another screen. Each gap now names
+	 * itself.
+	 */
+	it('names which figure is missing rather than listing candidates', async () => {
+		await renderWithRouter(
+			<ProfitabilityUI
+				{...baseProps()}
+				members={[
+					member({ member_id: 'member-1', missing_cost: 'HOURLY_RATE' }),
+					member({ member_id: 'member-2', missing_cost: 'CONTRACTED_HOURS' }),
+				]}
+			/>,
+		)
+
+		expect(screen.getByText(/taux horaire non renseigné/i)).toBeDefined()
+		expect(
+			screen.getByText(/heures contractuelles à renseigner/i),
+		).toBeDefined()
 	})
 
 	/** The hours are the plan's now, and a payroll screen has to say so. */

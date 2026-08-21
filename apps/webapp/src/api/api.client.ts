@@ -391,11 +391,12 @@ export namespace Schemas {
   export type GraphInvalidBody = { code: string; details: GraphInvalidDetails; message: string; status: number };
   export type MarkChannelReadRequest = { message_id: MessageId };
   export type MemberAccountResponse = { email: string; name: string };
+  export type MissingCost = "HOURLY_RATE" | "MONTHLY_COST" | "CONTRACTED_HOURS";
   export type MemberProfitability = {
     labour_cost_cents: number;
     member_id: MemberId;
+    missing_cost?: (null | MissingCost) | undefined;
     planned_minutes: number;
-    rate_missing: boolean;
   };
   export type MemberResponse = {
     account?: (null | MemberAccountResponse) | undefined;
@@ -777,7 +778,7 @@ export namespace Schemas {
   }>;
   export type UpsertEmployeeProfileRequest = {
     hourly_rate_cents?: (number | null) | undefined;
-    is_salaried?: boolean | undefined;
+    is_salaried: boolean;
     monthly_cost_cents?: (number | null) | undefined;
     weekly_contract_minutes: number;
   };
@@ -813,7 +814,11 @@ export namespace Schemas {
     work_date: string;
   };
   export type WorkTimeResponse = { rhythms: Array<RhythmResponse>; work_slots: Array<WorkSlotResponse> };
-  export type WorkedHoursRow = { member_id: MemberId; planned_minutes: number; rate_missing: boolean };
+  export type WorkedHoursRow = {
+    member_id: MemberId;
+    missing_cost?: (null | MissingCost) | undefined;
+    planned_minutes: number;
+  };
   export type WorkedHoursResponse = { members: Array<WorkedHoursRow>; total_planned_minutes: number };
   export type WorkflowVersionResponse = {
     created_at: string;
