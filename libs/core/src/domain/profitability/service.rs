@@ -1,227 +1,439 @@
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
 
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, Duration, NaiveDate, TimeZone, Utc};
 use common::CoreError;
 
 use crate::{
-    EmployeeId, EmployeeProfitability, OrganizationId, ProfitabilityReport, TaskProfitability,
-    domain::profitability::{
-        AssignedEquipment, ClockedTime, JobHeader, ProfitabilityFacts,
-        ports::ProfitabilityRepository,
+    DateRange, EmployeeRhythm, MemberId, MinuteInterval, OrganizationId, Tz, WorkSlot,
+    domain::{
+        planning::ports::PlanningRepository,
+        profitability::{
+            AssignedEquipment, MemberProfitability, PlannedAssignment, ProfitabilityFacts,
+            ProfitabilityReport, ProjectHeader, ProjectProfitability, ReportPeriod, TaskExpense,
+            WorkTime, ports::ProfitabilityRepository,
+        },
+        work_time::service::expand_work_slots,
     },
 };
 
-pub struct ProfitabilityService<R>
+/// Composes the profitability adapter with the planning one.
+///
+/// The second is there only for all-day tasks, whose duration comes from the
+/// member's work slots. `PlanningRepository` already loads rhythms and slots for
+/// a whole organization in a fixed number of queries, and reimplementing that in
+/// the profitability adapter would be a second copy of the same SQL, free to
+/// drift. Cross-aggregate composition in the domain service that owns the use
+/// case is the same shape `PlanningService` already uses.
+pub struct ProfitabilityService<R, P>
 where
     R: ProfitabilityRepository,
+    P: PlanningRepository,
 {
     repo: R,
+    planning: P,
 }
 
-impl<R> ProfitabilityService<R>
+impl<R, P> ProfitabilityService<R, P>
 where
     R: ProfitabilityRepository,
+    P: PlanningRepository,
 {
-    pub fn new(repo: R) -> Self {
-        Self { repo }
+    pub fn new(repo: R, planning: P) -> Self {
+        Self { repo, planning }
     }
 
     pub async fn report(
         &mut self,
         organization_id: OrganizationId,
-        from: DateTime<Utc>,
-        to: DateTime<Utc>,
+        period: ReportPeriod,
     ) -> Result<ProfitabilityReport, CoreError> {
-        let facts = self.repo.load(organization_id, from, to).await?;
+        let facts = self
+            .repo
+            .load(organization_id, period.from, period.to)
+            .await?;
 
-        Ok(build_report(facts))
+        // Only all-day tasks need work time, and most periods contain none.
+        // Two queries skipped is worth the branch on a report that fans out
+        // over every project in the organization.
+        let work_time = if facts.assignments.iter().any(|entry| entry.all_day) {
+            let range = local_date_range(period);
+
+            WorkTime {
+                rhythms: self
+                    .planning
+                    .list_rhythms_for_organization(organization_id, range.from, range.to)
+                    .await?,
+                work_slots: self
+                    .planning
+                    .list_work_slots_for_organization(organization_id, range.from, range.to)
+                    .await?,
+            }
+        } else {
+            WorkTime::default()
+        };
+
+        Ok(build_report(facts, work_time, period))
     }
 }
 
 /// The whole calculation, pure and separately testable.
-pub fn build_report(facts: ProfitabilityFacts) -> ProfitabilityReport {
+pub fn build_report(
+    facts: ProfitabilityFacts,
+    work_time: WorkTime,
+    period: ReportPeriod,
+) -> ProfitabilityReport {
     let ProfitabilityFacts {
-        jobs,
-        clocked,
+        projects,
+        assignments,
+        expenses,
         equipment,
     } = facts;
 
+    let expanded = expand_for_members(&assignments, &work_time, period);
+    // Resolved once per assignment and indexed alongside it: every project and
+    // every member below reads the same spans, and expanding an all-day task
+    // twice would be both slower and a chance for the two answers to disagree.
+    let spans: Vec<Vec<Span>> = assignments
+        .iter()
+        .map(|assignment| spans_of(assignment, &expanded, period))
+        .collect();
+
     ProfitabilityReport {
-        jobs: jobs
+        projects: projects
             .iter()
-            .map(|job| job_profitability(job, &clocked, &equipment))
+            .map(|project| {
+                project_profitability(project, &assignments, &spans, &expenses, &equipment, period)
+            })
             .collect(),
-        employees: employee_profitability(&clocked),
+        members: member_profitability(&assignments, &spans),
     }
 }
 
-fn job_profitability(
-    job: &JobHeader,
-    clocked: &[ClockedTime],
-    equipment: &[AssignedEquipment],
-) -> TaskProfitability {
-    let entries: Vec<&ClockedTime> = clocked
-        .iter()
-        .filter(|entry| entry.task_id == job.task_id)
-        .collect();
+/// A stretch of real time somebody is booked for.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+struct Span {
+    starts_at: DateTime<Utc>,
+    ends_at: DateTime<Utc>,
+}
 
-    let mut labour_cost_cents = 0_i64;
-    let mut worked_minutes = 0_i64;
-    let mut recollected_minutes = 0_i64;
-    let mut open_entries = 0_u32;
-    let mut employees_without_rate: Vec<EmployeeId> = Vec::new();
+impl Span {
+    fn minutes(self) -> i64 {
+        (self.ends_at - self.starts_at).num_minutes()
+    }
+}
 
-    for entry in &entries {
-        let Some(minutes) = closed_minutes(entry) else {
-            open_entries += 1;
+/// The calendar days the period touches, in the organization's timezone.
+///
+/// `to` is exclusive as an instant, so the last day is the one containing the
+/// instant just before it. Asking for `to`'s own day would pull in a day the
+/// period does not cover.
+fn local_date_range(period: ReportPeriod) -> DateRange {
+    DateRange {
+        from: period.from.with_timezone(&period.timezone).date_naive(),
+        to: (period.to - Duration::milliseconds(1))
+            .with_timezone(&period.timezone)
+            .date_naive(),
+    }
+}
+
+/// Work time expanded per member, for the members who need it.
+///
+/// Filtered per member the way `build_work_time` does it in the planning
+/// service: rhythms belong to an employee record, dated slots to a member, and
+/// someone with no contract has no rhythm but may still have slots.
+fn expand_for_members(
+    assignments: &[PlannedAssignment],
+    work_time: &WorkTime,
+    period: ReportPeriod,
+) -> HashMap<MemberId, BTreeMap<NaiveDate, Vec<MinuteInterval>>> {
+    let range = local_date_range(period);
+    let mut expanded = HashMap::new();
+
+    for assignment in assignments.iter().filter(|entry| entry.all_day) {
+        if expanded.contains_key(&assignment.member_id) {
             continue;
-        };
-
-        worked_minutes += minutes;
-        if entry.closed_after_the_fact {
-            recollected_minutes += minutes;
         }
-        // A salaried employee costs nothing by design, not by omission: their
-        // time counts above, but never adds to the bill and never lands them
-        // in `employees_without_rate` — that list is for a rate nobody
-        // entered yet, which is a different absence than one that was never
-        // going to exist.
-        if !entry.is_salaried {
-            match entry.hourly_rate_cents {
-                Some(rate) => labour_cost_cents += cost_of(minutes, i64::from(rate)),
-                // Recorded once per employee, not once per entry: the reader
-                // needs to know who to go and set a rate for, not how many
-                // times it hurt.
-                None if !employees_without_rate.contains(&entry.employee_id) => {
-                    employees_without_rate.push(entry.employee_id);
-                }
-                None => {}
+
+        let rhythms: Vec<EmployeeRhythm> = match assignment.employee_id {
+            Some(employee_id) => work_time
+                .rhythms
+                .iter()
+                .filter(|rhythm| rhythm.employee_id == employee_id)
+                .cloned()
+                .collect(),
+            None => Vec::new(),
+        };
+        let slots: Vec<WorkSlot> = work_time
+            .work_slots
+            .iter()
+            .filter(|slot| slot.member_id == assignment.member_id)
+            .cloned()
+            .collect();
+
+        expanded.insert(
+            assignment.member_id,
+            expand_work_slots(&rhythms, &slots, range),
+        );
+    }
+
+    expanded
+}
+
+/// Every stretch one assignment contributes, clipped to the period.
+///
+/// A timed task gives one span. An all-day task gives one per work slot on each
+/// day it covers, which is why a 9-12 / 13-17 day costs 420 minutes and the
+/// lunch break is never billed: `expand_work_slots` returns the intervals, not
+/// the amplitude.
+fn spans_of(
+    assignment: &PlannedAssignment,
+    expanded: &HashMap<MemberId, BTreeMap<NaiveDate, Vec<MinuteInterval>>>,
+    period: ReportPeriod,
+) -> Vec<Span> {
+    if !assignment.all_day {
+        return clip(
+            Span {
+                starts_at: assignment.starts_at,
+                ends_at: assignment.ends_at,
+            },
+            period,
+        )
+        .into_iter()
+        .collect();
+    }
+
+    // No expanded day means no contract and no dated slot: nothing is planned
+    // against a week this person does not have, so the task costs nothing rather
+    // than a guessed seven hours.
+    let Some(days) = expanded.get(&assignment.member_id) else {
+        return Vec::new();
+    };
+
+    let first = assignment
+        .starts_at
+        .with_timezone(&period.timezone)
+        .date_naive();
+    let last = (assignment.ends_at - Duration::milliseconds(1))
+        .with_timezone(&period.timezone)
+        .date_naive();
+
+    let mut spans = Vec::new();
+    for (date, intervals) in days.range(first..=last) {
+        for interval in intervals {
+            if let Some(span) =
+                slot_span(*date, *interval, period.timezone).and_then(|span| clip(span, period))
+            {
+                spans.push(span);
             }
         }
     }
 
-    // The machines ran for as long as somebody was on site, which is the union
-    // of the clocked stretches rather than their sum: two people working the
-    // same hour is one hour of mower, not two.
-    let occupied_minutes = occupied_minutes(&entries);
+    spans
+}
+
+/// One minute-of-day interval turned into real instants.
+///
+/// Built by adding minutes to local midnight rather than by constructing an hour
+/// and a minute: a slot may legitimately end at 1440, and `and_hms_opt(24, ..)`
+/// has no answer for that.
+///
+/// `.earliest()` rather than `.single()`: on a spring-forward night the wall
+/// clock skips an hour and the exact local time does not exist. Same choice the
+/// period bounds already make in `period_bounds`.
+fn slot_span(date: NaiveDate, interval: MinuteInterval, timezone: Tz) -> Option<Span> {
+    let midnight = date.and_hms_opt(0, 0, 0)?;
+    let starts_local = midnight + Duration::minutes(i64::from(interval.starts_minute));
+    let ends_local = midnight + Duration::minutes(i64::from(interval.ends_minute));
+
+    let starts_at = timezone
+        .from_local_datetime(&starts_local)
+        .earliest()?
+        .with_timezone(&Utc);
+    let ends_at = timezone
+        .from_local_datetime(&ends_local)
+        .earliest()?
+        .with_timezone(&Utc);
+
+    (ends_at > starts_at).then_some(Span { starts_at, ends_at })
+}
+
+/// A task straddling the period boundary contributes only the minutes inside
+/// it, so consecutive periods add up to the whole task and never double it.
+fn clip(span: Span, period: ReportPeriod) -> Option<Span> {
+    let starts_at = span.starts_at.max(period.from);
+    let ends_at = span.ends_at.min(period.to);
+
+    (ends_at > starts_at).then_some(Span { starts_at, ends_at })
+}
+
+/// Wall-clock minutes covered by at least one span: their union, not their sum.
+fn union_minutes(spans: &[Span]) -> i64 {
+    let mut sorted = spans.to_vec();
+    sorted.sort_unstable();
+
+    let mut total = 0_i64;
+    let mut open: Option<Span> = None;
+
+    for span in sorted {
+        open = match open {
+            Some(current) if span.starts_at <= current.ends_at => Some(Span {
+                starts_at: current.starts_at,
+                ends_at: current.ends_at.max(span.ends_at),
+            }),
+            Some(current) => {
+                total += current.minutes();
+                Some(span)
+            }
+            None => Some(span),
+        };
+    }
+
+    total + open.map_or(0, Span::minutes)
+}
+
+fn project_profitability(
+    project: &ProjectHeader,
+    assignments: &[PlannedAssignment],
+    spans: &[Vec<Span>],
+    expenses: &[TaskExpense],
+    equipment: &[AssignedEquipment],
+    period: ReportPeriod,
+) -> ProjectProfitability {
+    let mut labour_cost_cents = 0_i64;
+    let mut planned_minutes = 0_i64;
+    let mut members_without_rate: Vec<MemberId> = Vec::new();
+    let mut project_spans: Vec<Span> = Vec::new();
+    let mut by_member: HashMap<MemberId, Vec<Span>> = HashMap::new();
+
+    for (assignment, assignment_spans) in assignments.iter().zip(spans) {
+        if assignment.project_id != Some(project.project_id) || assignment_spans.is_empty() {
+            continue;
+        }
+
+        let minutes: i64 = assignment_spans.iter().map(|span| span.minutes()).sum();
+        planned_minutes += minutes;
+        project_spans.extend(assignment_spans.iter().copied());
+        by_member
+            .entry(assignment.member_id)
+            .or_default()
+            .extend(assignment_spans.iter().copied());
+
+        // A salaried person costs nothing by design, not by omission: their time
+        // counts above, never adds to the bill, and never lands them in
+        // `members_without_rate` — that list is for a rate nobody entered, which
+        // is a different absence from one that was never going to exist.
+        if assignment.is_salaried {
+            continue;
+        }
+
+        match assignment.hourly_rate_cents {
+            Some(rate) => labour_cost_cents += cost_of(minutes, i64::from(rate)),
+            // Recorded once per person, not once per assignment: the reader needs
+            // to know who to go and set a rate for, not how many times it hurt.
+            None if !members_without_rate.contains(&assignment.member_id) => {
+                members_without_rate.push(assignment.member_id);
+            }
+            None => {}
+        }
+    }
+
+    // Per person, the gap between what is billed and the wall clock they
+    // actually occupy. Summed across people, because two of them overlapping
+    // each other is normal teamwork rather than a double booking.
+    let overlapping_minutes: i64 = by_member
+        .values()
+        .map(|spans| spans.iter().map(|span| span.minutes()).sum::<i64>() - union_minutes(spans))
+        .sum();
+
+    // The machines run for as long as somebody is on the project, which is the
+    // union of the spans rather than their sum: two people over the same hour is
+    // one hour of mower, not two.
+    let occupied_minutes = union_minutes(&project_spans);
     let equipment_rate_cents: i64 = equipment
         .iter()
-        .filter(|item| item.task_id == job.task_id)
+        .filter(|item| item.project_id == project.project_id)
         .map(|item| i64::from(item.hourly_rate_cents))
         .sum();
     let equipment_cost_cents = cost_of(occupied_minutes, equipment_rate_cents);
 
-    // Withheld while anything is missing. A margin built on a floor reads as
-    // fact and is not one, and this screen exists to be trusted.
-    let is_complete = employees_without_rate.is_empty() && open_entries == 0;
-    let margin_cents = job
-        .quoted_cents
-        .filter(|_| is_complete)
-        .map(|quoted| i64::from(quoted) - (labour_cost_cents + equipment_cost_cents));
+    let expenses_cents: i64 = expenses
+        .iter()
+        .filter(|expense| {
+            expense.project_id == project.project_id
+                && expense.starts_at >= period.from
+                && expense.starts_at < period.to
+        })
+        .map(|expense| i64::from(expense.expenses_cents))
+        .sum();
 
-    TaskProfitability {
-        task_id: job.task_id,
-        title: job.title.clone(),
-        customer_id: job.customer_id,
-        quoted_cents: job.quoted_cents,
+    // Withheld while a rate is missing. A margin built on a floor reads as fact
+    // and is not one, and this screen exists to be trusted.
+    let margin_cents = project
+        .quoted_cents
+        .filter(|_| members_without_rate.is_empty())
+        .map(|quoted| {
+            i64::from(quoted) - (labour_cost_cents + equipment_cost_cents + expenses_cents)
+        });
+
+    ProjectProfitability {
+        project_id: project.project_id,
+        name: project.name.clone(),
+        customer_id: project.customer_id,
+        quoted_cents: project.quoted_cents,
         labour_cost_cents,
         equipment_cost_cents,
-        worked_minutes,
+        expenses_cents,
+        planned_minutes,
         occupied_minutes,
+        overlapping_minutes,
         margin_cents,
-        employees_without_rate,
-        open_entries,
-        recollected_minutes,
+        members_without_rate,
     }
 }
 
-/// Per-employee totals across every job in the period.
+/// Per-person totals across every assignment in the period, project or not.
 ///
 /// Ordered by id so the answer is stable: a ranking that reshuffles between two
-/// identical requests is a ranking nobody believes.
-fn employee_profitability(clocked: &[ClockedTime]) -> Vec<EmployeeProfitability> {
-    let mut by_employee: BTreeMap<uuid::Uuid, EmployeeProfitability> = BTreeMap::new();
+/// identical requests is a ranking nobody trusts.
+fn member_profitability(
+    assignments: &[PlannedAssignment],
+    spans: &[Vec<Span>],
+) -> Vec<MemberProfitability> {
+    let mut totals: HashMap<MemberId, MemberProfitability> = HashMap::new();
 
-    for entry in clocked {
-        let row = by_employee
-            .entry(entry.employee_id.0)
-            .or_insert_with(|| EmployeeProfitability {
-                employee_id: entry.employee_id,
-                worked_minutes: 0,
+    for (assignment, assignment_spans) in assignments.iter().zip(spans) {
+        if assignment_spans.is_empty() {
+            continue;
+        }
+
+        let minutes: i64 = assignment_spans.iter().map(|span| span.minutes()).sum();
+        let total = totals
+            .entry(assignment.member_id)
+            .or_insert_with(|| MemberProfitability {
+                member_id: assignment.member_id,
+                planned_minutes: 0,
                 labour_cost_cents: 0,
-                rate_missing: !entry.is_salaried && entry.hourly_rate_cents.is_none(),
-                open_entries: 0,
+                rate_missing: false,
             });
 
-        row.rate_missing =
-            row.rate_missing || (!entry.is_salaried && entry.hourly_rate_cents.is_none());
+        total.planned_minutes += minutes;
 
-        match closed_minutes(entry) {
-            Some(minutes) => {
-                row.worked_minutes += minutes;
-                if !entry.is_salaried
-                    && let Some(rate) = entry.hourly_rate_cents
-                {
-                    row.labour_cost_cents += cost_of(minutes, i64::from(rate));
-                }
-            }
-            None => row.open_entries += 1,
+        if assignment.is_salaried {
+            continue;
+        }
+
+        match assignment.hourly_rate_cents {
+            Some(rate) => total.labour_cost_cents += cost_of(minutes, i64::from(rate)),
+            None => total.rate_missing = true,
         }
     }
 
-    by_employee.into_values().collect()
+    let mut members: Vec<MemberProfitability> = totals.into_values().collect();
+    members.sort_by_key(|member| member.member_id.0);
+
+    members
 }
 
-/// Minutes of a closed entry, or `None` while it is still running.
-///
-/// Truncating, as `TimeEntry::worked_minutes` does: a cost must never claim
-/// more time than was recorded.
-fn closed_minutes(entry: &ClockedTime) -> Option<i64> {
-    entry
-        .ended_at
-        .map(|ended_at| (ended_at - entry.started_at).num_minutes().max(0))
-}
-
-/// Wall-clock minutes covered by at least one entry.
-///
-/// Overlaps merged rather than summed, which is what makes this the time the
-/// site was occupied rather than the man-hours spent on it.
-fn occupied_minutes(entries: &[&ClockedTime]) -> i64 {
-    let mut spans: Vec<(DateTime<Utc>, DateTime<Utc>)> = entries
-        .iter()
-        .filter_map(|entry| entry.ended_at.map(|ended_at| (entry.started_at, ended_at)))
-        .filter(|(start, end)| end > start)
-        .collect();
-    spans.sort_by_key(|(start, _)| *start);
-
-    let mut total = 0_i64;
-    let mut current: Option<(DateTime<Utc>, DateTime<Utc>)> = None;
-
-    for (start, end) in spans {
-        match current {
-            Some((open_start, open_end)) if start <= open_end => {
-                current = Some((open_start, open_end.max(end)));
-            }
-            Some((open_start, open_end)) => {
-                total += (open_end - open_start).num_minutes();
-                current = Some((start, end));
-            }
-            None => current = Some((start, end)),
-        }
-    }
-
-    if let Some((open_start, open_end)) = current {
-        total += (open_end - open_start).num_minutes();
-    }
-
-    total
-}
-
-/// `minutes × rate_per_hour`, in cents.
-///
-/// Exact integers, halves to even, the same rule the quote total uses. Seven
-/// minutes at 35 €/h is 408.33 cents, and a product where every screen rounds
-/// differently is a product whose figures never quite add up.
 fn cost_of(minutes: i64, hourly_rate_cents: i64) -> i64 {
     div_round_half_even(minutes * hourly_rate_cents, 60)
 }
@@ -251,497 +463,423 @@ fn div_round_half_even(numerator: i64, denominator: i64) -> i64 {
 
 #[cfg(test)]
 mod tests {
-    use chrono::TimeZone;
+    use chrono::NaiveDate;
     use uuid::Uuid;
 
     use super::*;
-    use crate::{CustomerId, EquipmentId, TaskId};
+    use crate::{
+        CustomerId, EmployeeId, EmployeeRhythmId, EquipmentId, ProjectId, RhythmSlot, RhythmSlotId,
+        TaskId, WorkSlotId,
+    };
 
-    fn at(hour: u32, minute: u32) -> DateTime<Utc> {
-        Utc.with_ymd_and_hms(2026, 8, 20, hour, minute, 0)
-            .single()
-            .expect("a valid test instant")
+    const PARIS: &str = "Europe/Paris";
+
+    fn timezone() -> Tz {
+        PARIS.parse().expect("Europe/Paris is an IANA zone")
     }
 
-    fn job(quoted_cents: Option<i32>) -> JobHeader {
-        JobHeader {
-            task_id: TaskId(Uuid::new_v4()),
-            title: "Jardin Duval".to_owned(),
-            customer_id: CustomerId(Uuid::new_v4()),
+    /// Monday 2026-06-01, 09:00 Paris, as a UTC instant.
+    fn monday(hour: u32, minute: u32) -> DateTime<Utc> {
+        NaiveDate::from_ymd_opt(2026, 6, 1)
+            .and_then(|date| date.and_hms_opt(hour, minute, 0))
+            .map(|naive| {
+                timezone()
+                    .from_local_datetime(&naive)
+                    .earliest()
+                    .expect("a valid local time")
+                    .with_timezone(&Utc)
+            })
+            .expect("a representable instant")
+    }
+
+    fn june() -> ReportPeriod {
+        ReportPeriod {
+            from: monday(0, 0),
+            to: monday(0, 0) + Duration::days(7),
+            timezone: timezone(),
+        }
+    }
+
+    fn project(quoted_cents: Option<i32>, customer: bool) -> ProjectHeader {
+        ProjectHeader {
+            project_id: ProjectId(Uuid::from_u128(1)),
+            name: "Entretien".to_owned(),
+            customer_id: customer.then(|| CustomerId(Uuid::from_u128(9))),
             quoted_cents,
         }
     }
 
-    fn clocked(
-        task_id: TaskId,
-        employee_id: EmployeeId,
-        rate: Option<i32>,
-        from: (u32, u32),
-        to: Option<(u32, u32)>,
-    ) -> ClockedTime {
-        ClockedTime {
-            task_id,
-            employee_id,
+    fn assignment(member: u128, rate: Option<i32>) -> PlannedAssignment {
+        PlannedAssignment {
+            project_id: Some(ProjectId(Uuid::from_u128(1))),
+            task_id: TaskId(Uuid::from_u128(100)),
+            member_id: MemberId(Uuid::from_u128(member)),
+            employee_id: Some(EmployeeId(Uuid::from_u128(member + 1000))),
             hourly_rate_cents: rate,
             is_salaried: false,
-            started_at: at(from.0, from.1),
-            ended_at: to.map(|(h, m)| at(h, m)),
-            closed_after_the_fact: false,
+            starts_at: monday(9, 0),
+            ends_at: monday(11, 0),
+            all_day: false,
         }
     }
 
-    /// A stretch recovered the next day: closed on a declared end time rather
-    /// than a measured one.
-    fn recollected(
-        task_id: TaskId,
-        employee_id: EmployeeId,
-        rate: Option<i32>,
-        from: (u32, u32),
-        to: (u32, u32),
-    ) -> ClockedTime {
-        ClockedTime {
-            closed_after_the_fact: true,
-            ..clocked(task_id, employee_id, rate, from, Some(to))
+    fn facts(
+        assignments: Vec<PlannedAssignment>,
+        projects: Vec<ProjectHeader>,
+    ) -> ProfitabilityFacts {
+        ProfitabilityFacts {
+            projects,
+            assignments,
+            expenses: Vec::new(),
+            equipment: Vec::new(),
         }
     }
 
-    /// A salaried employee's stretch: no rate, no cost, never a missing-rate
-    /// error.
-    fn salaried(
-        task_id: TaskId,
-        employee_id: EmployeeId,
-        from: (u32, u32),
-        to: Option<(u32, u32)>,
-    ) -> ClockedTime {
-        ClockedTime {
-            is_salaried: true,
-            ..clocked(task_id, employee_id, None, from, to)
-        }
+    fn only_project(report: &ProfitabilityReport) -> &ProjectProfitability {
+        report.projects.first().expect("one project")
     }
 
-    fn employee() -> EmployeeId {
-        EmployeeId(Uuid::new_v4())
-    }
-
+    /// The example the whole change exists for: a two-hour meeting with three
+    /// people costs six person-hours.
     #[test]
-    fn labour_cost_is_time_times_the_rate_that_applied() {
-        let job = job(None);
-        let facts = ProfitabilityFacts {
-            jobs: vec![job.clone()],
-            // 3 h at 35 €/h, then 2 h at 28 €/h.
-            clocked: vec![
-                clocked(job.task_id, employee(), Some(3500), (8, 0), Some((11, 0))),
-                clocked(job.task_id, employee(), Some(2800), (13, 0), Some((15, 0))),
-            ],
-            equipment: vec![],
-        };
+    fn three_people_for_two_hours_cost_six_person_hours() {
+        let assignments = vec![
+            assignment(1, Some(3_000)),
+            assignment(2, Some(3_000)),
+            assignment(3, Some(3_000)),
+        ];
 
-        let report = build_report(facts);
-        let result = &report.jobs[0];
-
-        assert_eq!(result.worked_minutes, 300);
-        assert_eq!(result.labour_cost_cents, 3500 * 3 + 2800 * 2);
-        assert_eq!(result.equipment_cost_cents, 0);
-    }
-
-    /// The reason equipment time is a union rather than a sum. Two people on the
-    /// same hour is one hour of mower, and summing would bill it twice.
-    #[test]
-    fn equipment_is_charged_for_the_time_the_site_was_occupied_not_the_man_hours() {
-        let job = job(None);
-        let facts = ProfitabilityFacts {
-            jobs: vec![job.clone()],
-            clocked: vec![
-                clocked(job.task_id, employee(), Some(0), (9, 0), Some((12, 0))),
-                clocked(job.task_id, employee(), Some(0), (10, 0), Some((11, 0))),
-            ],
-            equipment: vec![AssignedEquipment {
-                task_id: job.task_id,
-                equipment_id: EquipmentId(Uuid::new_v4()),
-                hourly_rate_cents: 1200,
-            }],
-        };
-
-        let result = &build_report(facts).jobs[0];
-
-        assert_eq!(result.worked_minutes, 240, "four man-hours were worked");
-        assert_eq!(
-            result.occupied_minutes, 180,
-            "but the site was busy for three"
+        let report = build_report(
+            facts(assignments, vec![project(None, false)]),
+            WorkTime::default(),
+            june(),
         );
-        assert_eq!(result.equipment_cost_cents, 3600, "three hours of mower");
-    }
+        let project = only_project(&report);
 
-    #[test]
-    fn two_separate_stretches_are_both_counted() {
-        let job = job(None);
-        let worker = employee();
-        let facts = ProfitabilityFacts {
-            jobs: vec![job.clone()],
-            clocked: vec![
-                clocked(job.task_id, worker, Some(0), (8, 0), Some((10, 0))),
-                clocked(job.task_id, worker, Some(0), (14, 0), Some((16, 0))),
-            ],
-            equipment: vec![],
-        };
-
-        assert_eq!(build_report(facts).jobs[0].occupied_minutes, 240);
-    }
-
-    #[test]
-    fn margin_is_the_quote_less_what_it_cost() {
-        let job = job(Some(420_000));
-        let facts = ProfitabilityFacts {
-            jobs: vec![job.clone()],
-            clocked: vec![clocked(
-                job.task_id,
-                employee(),
-                Some(3500),
-                (8, 0),
-                Some((13, 0)),
-            )],
-            equipment: vec![AssignedEquipment {
-                task_id: job.task_id,
-                equipment_id: EquipmentId(Uuid::new_v4()),
-                hourly_rate_cents: 1200,
-            }],
-        };
-
-        let result = &build_report(facts).jobs[0];
-
-        assert_eq!(result.labour_cost_cents, 17_500);
-        assert_eq!(result.equipment_cost_cents, 6_000);
-        assert_eq!(result.real_cost_cents(), 23_500);
-        assert_eq!(result.margin_cents, Some(420_000 - 23_500));
-    }
-
-    /// The invariant `Employee::hourly_rate_cents` documents: a cost must refuse
-    /// to produce a figure for someone whose rate was never entered, rather
-    /// than silently sum it as zero.
-    #[test]
-    fn an_employee_without_a_rate_makes_the_cost_a_floor_and_withholds_the_margin() {
-        let job = job(Some(420_000));
-        let unrated = employee();
-        let facts = ProfitabilityFacts {
-            jobs: vec![job.clone()],
-            clocked: vec![
-                clocked(job.task_id, employee(), Some(3500), (8, 0), Some((10, 0))),
-                clocked(job.task_id, unrated, None, (8, 0), Some((10, 0))),
-            ],
-            equipment: vec![],
-        };
-
-        let result = &build_report(facts).jobs[0];
-
+        assert_eq!(project.planned_minutes, 360);
+        assert_eq!(project.labour_cost_cents, 18_000);
         assert_eq!(
-            result.labour_cost_cents, 7_000,
-            "only the rated hours count"
+            project.occupied_minutes, 120,
+            "three people over the same two hours occupy two hours"
         );
-        assert_eq!(result.employees_without_rate, vec![unrated]);
         assert_eq!(
-            result.margin_cents, None,
+            project.overlapping_minutes, 0,
+            "different people sharing a slot is teamwork, not a double booking"
+        );
+    }
+
+    #[test]
+    fn a_salaried_person_adds_time_and_no_cost() {
+        let mut salaried = assignment(2, None);
+        salaried.is_salaried = true;
+
+        let report = build_report(
+            facts(
+                vec![assignment(1, Some(3_000)), salaried],
+                vec![project(Some(100_000), true)],
+            ),
+            WorkTime::default(),
+            june(),
+        );
+        let project = only_project(&report);
+
+        assert_eq!(project.planned_minutes, 240);
+        assert_eq!(project.labour_cost_cents, 6_000);
+        assert!(
+            project.members_without_rate.is_empty(),
+            "a salaried person is not a missing rate"
+        );
+        assert_eq!(project.margin_cents, Some(94_000));
+    }
+
+    #[test]
+    fn a_missing_rate_withholds_the_margin_and_names_the_person() {
+        let report = build_report(
+            facts(
+                vec![assignment(1, Some(3_000)), assignment(2, None)],
+                vec![project(Some(100_000), true)],
+            ),
+            WorkTime::default(),
+            june(),
+        );
+        let project = only_project(&report);
+
+        assert_eq!(
+            project.members_without_rate,
+            vec![MemberId(Uuid::from_u128(2))]
+        );
+        assert!(!project.is_complete());
+        assert_eq!(
+            project.margin_cents, None,
             "a margin built on a floor reads as fact and is not one"
         );
-        assert!(!result.is_complete());
     }
 
     #[test]
-    fn the_same_unrated_employee_is_reported_once_however_many_stretches() {
-        let job = job(None);
-        let unrated = employee();
-        let facts = ProfitabilityFacts {
-            jobs: vec![job.clone()],
-            clocked: vec![
-                clocked(job.task_id, unrated, None, (8, 0), Some((10, 0))),
-                clocked(job.task_id, unrated, None, (11, 0), Some((12, 0))),
-            ],
-            equipment: vec![],
+    fn one_person_booked_twice_over_is_billed_twice_and_reported() {
+        let first = assignment(1, Some(3_000));
+        let mut second = assignment(1, Some(3_000));
+        second.task_id = TaskId(Uuid::from_u128(101));
+        second.starts_at = monday(10, 0);
+        second.ends_at = monday(12, 0);
+
+        let report = build_report(
+            facts(vec![first, second], vec![project(None, false)]),
+            WorkTime::default(),
+            june(),
+        );
+        let project = only_project(&report);
+
+        assert_eq!(project.planned_minutes, 240, "both bookings are billed");
+        assert_eq!(project.occupied_minutes, 180, "09:00 to 12:00 in the round");
+        assert_eq!(
+            project.overlapping_minutes, 60,
+            "the hour billed twice is surfaced rather than silently collapsed"
+        );
+        assert!(
+            project.is_complete(),
+            "an overlap is a planning problem, not missing data"
+        );
+    }
+
+    #[test]
+    fn an_all_day_task_costs_the_work_slots_and_never_the_lunch_break() {
+        let employee_id = EmployeeId(Uuid::from_u128(1001));
+        let rhythm_id = EmployeeRhythmId(Uuid::from_u128(7));
+
+        let mut all_day = assignment(1, Some(3_000));
+        all_day.all_day = true;
+        all_day.starts_at = monday(0, 0);
+        all_day.ends_at = monday(0, 0) + Duration::days(1);
+
+        // 09:00-12:00 then 13:00-17:00 on a Monday: seven hours worked, one hour
+        // of lunch that nobody bills.
+        let work_time = WorkTime {
+            rhythms: vec![EmployeeRhythm {
+                id: rhythm_id,
+                organization_id: crate::OrganizationId(Uuid::from_u128(50)),
+                employee_id,
+                effective_from: NaiveDate::from_ymd_opt(2026, 1, 1).expect("a date"),
+                effective_to: None,
+                slots: vec![
+                    RhythmSlot {
+                        id: RhythmSlotId(Uuid::from_u128(11)),
+                        rhythm_id,
+                        weekday: 1,
+                        starts_minute: 9 * 60,
+                        ends_minute: 12 * 60,
+                    },
+                    RhythmSlot {
+                        id: RhythmSlotId(Uuid::from_u128(12)),
+                        rhythm_id,
+                        weekday: 1,
+                        starts_minute: 13 * 60,
+                        ends_minute: 17 * 60,
+                    },
+                ],
+                created_at: monday(0, 0),
+                updated_at: monday(0, 0),
+            }],
+            work_slots: Vec::new(),
         };
+
+        let report = build_report(
+            facts(vec![all_day], vec![project(None, false)]),
+            work_time,
+            june(),
+        );
+        let project = only_project(&report);
 
         assert_eq!(
-            build_report(facts).jobs[0].employees_without_rate,
-            vec![unrated]
+            project.planned_minutes, 420,
+            "seven hours, not the eight a naive amplitude would give"
         );
+        assert_eq!(project.labour_cost_cents, 21_000);
     }
 
-    /// An entry nobody clocked off has no duration, so it cannot be costed. It
-    /// is reported rather than ignored: the figure is missing time, which is not
-    /// the same as the time having been free.
+    /// A dated slot beats the rhythm for that day, which is what makes a
+    /// one-off schedule change costable.
     #[test]
-    fn an_entry_never_clocked_off_is_reported_rather_than_costed() {
-        let job = job(Some(100_000));
-        let facts = ProfitabilityFacts {
-            jobs: vec![job.clone()],
-            clocked: vec![
-                clocked(job.task_id, employee(), Some(3500), (8, 0), Some((10, 0))),
-                clocked(job.task_id, employee(), Some(3500), (14, 0), None),
-            ],
-            equipment: vec![],
-        };
+    fn a_dated_work_slot_overrides_the_rhythm_for_that_day() {
+        let mut all_day = assignment(1, Some(3_000));
+        all_day.all_day = true;
+        all_day.starts_at = monday(0, 0);
+        all_day.ends_at = monday(0, 0) + Duration::days(1);
 
-        let result = &build_report(facts).jobs[0];
-
-        assert_eq!(result.open_entries, 1);
-        assert_eq!(result.worked_minutes, 120, "the open stretch adds nothing");
-        assert_eq!(result.margin_cents, None);
-        assert!(!result.is_complete());
-    }
-
-    #[test]
-    fn a_job_with_no_quote_has_a_cost_but_no_margin() {
-        let job = job(None);
-        let facts = ProfitabilityFacts {
-            jobs: vec![job.clone()],
-            clocked: vec![clocked(
-                job.task_id,
-                employee(),
-                Some(3500),
-                (8, 0),
-                Some((10, 0)),
-            )],
-            equipment: vec![],
-        };
-
-        let result = &build_report(facts).jobs[0];
-
-        assert_eq!(result.labour_cost_cents, 7_000);
-        assert_eq!(result.margin_cents, None);
-        assert!(
-            result.is_complete(),
-            "nothing is missing, there is just no quote"
-        );
-    }
-
-    #[test]
-    fn one_job_never_borrows_another_s_time_or_equipment() {
-        let mine = job(None);
-        let theirs = job(None);
-        let facts = ProfitabilityFacts {
-            jobs: vec![mine.clone(), theirs.clone()],
-            clocked: vec![clocked(
-                theirs.task_id,
-                employee(),
-                Some(3500),
-                (8, 0),
-                Some((10, 0)),
-            )],
-            equipment: vec![AssignedEquipment {
-                task_id: theirs.task_id,
-                equipment_id: EquipmentId(Uuid::new_v4()),
-                hourly_rate_cents: 1200,
+        let work_time = WorkTime {
+            rhythms: Vec::new(),
+            work_slots: vec![WorkSlot {
+                id: WorkSlotId(Uuid::from_u128(21)),
+                organization_id: crate::OrganizationId(Uuid::from_u128(50)),
+                member_id: MemberId(Uuid::from_u128(1)),
+                work_date: NaiveDate::from_ymd_opt(2026, 6, 1).expect("a date"),
+                starts_minute: 8 * 60,
+                ends_minute: 10 * 60,
             }],
         };
 
-        let report = build_report(facts);
-        let mine = report
-            .jobs
+        let report = build_report(
+            facts(vec![all_day], vec![project(None, false)]),
+            work_time,
+            june(),
+        );
+
+        assert_eq!(only_project(&report).planned_minutes, 120);
+    }
+
+    #[test]
+    fn an_all_day_task_for_someone_with_no_schedule_costs_nothing() {
+        let mut all_day = assignment(1, Some(3_000));
+        all_day.all_day = true;
+        all_day.starts_at = monday(0, 0);
+        all_day.ends_at = monday(0, 0) + Duration::days(1);
+
+        let report = build_report(
+            facts(vec![all_day], vec![project(None, false)]),
+            WorkTime::default(),
+            june(),
+        );
+        let project = only_project(&report);
+
+        assert_eq!(
+            project.planned_minutes, 0,
+            "nothing is planned against a week this person does not have"
+        );
+        assert_eq!(project.labour_cost_cents, 0);
+    }
+
+    #[test]
+    fn a_task_straddling_the_period_boundary_contributes_only_what_is_inside() {
+        let mut straddling = assignment(1, Some(3_000));
+        straddling.starts_at = monday(0, 0) - Duration::hours(2);
+        straddling.ends_at = monday(0, 0) + Duration::hours(3);
+
+        let report = build_report(
+            facts(vec![straddling], vec![project(None, false)]),
+            WorkTime::default(),
+            june(),
+        );
+
+        assert_eq!(
+            only_project(&report).planned_minutes,
+            180,
+            "the two hours before the period belong to the period before it"
+        );
+    }
+
+    #[test]
+    fn an_internal_project_reports_a_cost_and_no_margin() {
+        let report = build_report(
+            facts(vec![assignment(1, Some(3_000))], vec![project(None, false)]),
+            WorkTime::default(),
+            june(),
+        );
+        let project = only_project(&report);
+
+        assert_eq!(project.customer_id, None);
+        assert_eq!(project.labour_cost_cents, 6_000);
+        assert_eq!(project.quoted_cents, None);
+        assert_eq!(project.margin_cents, None);
+        assert!(
+            project.is_complete(),
+            "having no quote is not incomplete data"
+        );
+    }
+
+    #[test]
+    fn expenses_and_equipment_join_the_cost_and_the_margin() {
+        let mut facts = facts(
+            vec![assignment(1, Some(3_000))],
+            vec![project(Some(100_000), true)],
+        );
+        facts.expenses = vec![TaskExpense {
+            project_id: ProjectId(Uuid::from_u128(1)),
+            task_id: TaskId(Uuid::from_u128(100)),
+            expenses_cents: 4_500,
+            starts_at: monday(9, 0),
+        }];
+        facts.equipment = vec![AssignedEquipment {
+            project_id: ProjectId(Uuid::from_u128(1)),
+            equipment_id: EquipmentId(Uuid::from_u128(30)),
+            hourly_rate_cents: 1_200,
+        }];
+
+        let report = build_report(facts, WorkTime::default(), june());
+        let project = only_project(&report);
+
+        assert_eq!(project.expenses_cents, 4_500);
+        // The machine ran as long as somebody was there: two hours at 12 euros.
+        assert_eq!(project.equipment_cost_cents, 2_400);
+        assert_eq!(project.planned_cost_cents(), 6_000 + 2_400 + 4_500);
+        assert_eq!(project.margin_cents, Some(100_000 - 6_000 - 2_400 - 4_500));
+    }
+
+    #[test]
+    fn an_expense_on_a_task_starting_outside_the_period_is_left_out() {
+        let mut facts = facts(
+            vec![assignment(1, Some(3_000))],
+            vec![project(Some(100_000), true)],
+        );
+        facts.expenses = vec![TaskExpense {
+            project_id: ProjectId(Uuid::from_u128(1)),
+            task_id: TaskId(Uuid::from_u128(100)),
+            expenses_cents: 4_500,
+            starts_at: monday(0, 0) - Duration::days(1),
+        }];
+
+        let report = build_report(facts, WorkTime::default(), june());
+
+        assert_eq!(only_project(&report).expenses_cents, 0);
+    }
+
+    /// A task attached to no project still costs the person's time. Payroll
+    /// cares about the hours whether or not somebody filed them under a subject.
+    #[test]
+    fn a_task_with_no_project_counts_for_the_person_and_for_nobody_else() {
+        let mut orphan = assignment(1, Some(3_000));
+        orphan.project_id = None;
+
+        let report = build_report(
+            facts(
+                vec![assignment(2, Some(3_000)), orphan],
+                vec![project(None, false)],
+            ),
+            WorkTime::default(),
+            june(),
+        );
+
+        assert_eq!(
+            only_project(&report).planned_minutes,
+            120,
+            "only the assignment naming the project is charged to it"
+        );
+        let orphan_member = report
+            .members
             .iter()
-            .find(|row| row.task_id == mine.task_id)
-            .expect("both jobs are reported");
-
-        assert_eq!(mine.labour_cost_cents, 0);
-        assert_eq!(mine.equipment_cost_cents, 0);
-        assert_eq!(mine.worked_minutes, 0);
-    }
-
-    /// Seven minutes at 35 €/h is 408.33 cents. The rule is the one the quote
-    /// total uses, so no two screens round the same money differently.
-    #[test]
-    fn a_part_hour_rounds_the_way_the_quote_total_does() {
-        assert_eq!(cost_of(7, 3500), 408);
-        assert_eq!(cost_of(1, 3500), 58, "58.33 rounds down");
-        assert_eq!(cost_of(1, 3600), 60, "an exact minute needs no rounding");
-        // Exact halves land on the even neighbour, both directions.
-        assert_eq!(cost_of(1, 30), 0, "0.5 goes to 0");
-        assert_eq!(cost_of(3, 30), 2, "1.5 goes to 2");
-        assert_eq!(cost_of(5, 30), 2, "2.5 goes to 2");
-        assert_eq!(cost_of(7, 30), 4, "3.5 goes to 4");
+            .find(|member| member.member_id == MemberId(Uuid::from_u128(1)))
+            .expect("the person still appears");
+        assert_eq!(orphan_member.planned_minutes, 120);
+        assert_eq!(orphan_member.labour_cost_cents, 6_000);
     }
 
     #[test]
-    fn employee_totals_span_every_job_and_stay_in_a_stable_order() {
-        let first = job(None);
-        let second = job(None);
-        let worker = employee();
-        let facts = ProfitabilityFacts {
-            jobs: vec![first.clone(), second.clone()],
-            clocked: vec![
-                clocked(first.task_id, worker, Some(3500), (8, 0), Some((10, 0))),
-                clocked(second.task_id, worker, Some(3500), (14, 0), Some((15, 0))),
-            ],
-            equipment: vec![],
-        };
-
-        let report = build_report(facts);
-
-        assert_eq!(report.employees.len(), 1, "one person, two jobs");
-        assert_eq!(report.employees[0].worked_minutes, 180);
-        assert_eq!(report.employees[0].labour_cost_cents, 3500 * 3);
-        assert!(!report.employees[0].rate_missing);
-    }
-
-    #[test]
-    fn an_employee_is_flagged_when_any_of_their_stretches_has_no_rate() {
-        let job = job(None);
-        let worker = employee();
-        let facts = ProfitabilityFacts {
-            jobs: vec![job.clone()],
-            clocked: vec![
-                clocked(job.task_id, worker, Some(3500), (8, 0), Some((10, 0))),
-                clocked(job.task_id, worker, None, (14, 0), Some((15, 0))),
-            ],
-            equipment: vec![],
-        };
-
-        let row = &build_report(facts).employees[0];
-
-        assert!(row.rate_missing);
-        assert_eq!(row.labour_cost_cents, 7_000, "only the rated stretch costs");
-        assert_eq!(row.worked_minutes, 180, "but both were worked");
-    }
-
-    /// A stretch closed on a declared time rather than a measured one still
-    /// costs and margins exactly like any other: the KPI is not withheld for
-    /// it, only annotated.
-    #[test]
-    fn recollected_time_counts_normally_but_is_reported_separately() {
-        let job = job(Some(100_000));
-        let facts = ProfitabilityFacts {
-            jobs: vec![job.clone()],
-            clocked: vec![
-                clocked(job.task_id, employee(), Some(3500), (8, 0), Some((10, 0))),
-                recollected(job.task_id, employee(), Some(3500), (14, 0), (15, 0)),
-            ],
-            equipment: vec![],
-        };
-
-        let result = &build_report(facts).jobs[0];
-
-        assert_eq!(result.worked_minutes, 180, "both stretches were worked");
-        assert_eq!(
-            result.labour_cost_cents,
-            3500 * 3,
-            "the recollected hour costs exactly as much as a measured one"
+    fn member_totals_are_ordered_by_id_so_the_answer_is_stable() {
+        let report = build_report(
+            facts(
+                vec![assignment(3, Some(3_000)), assignment(1, None)],
+                vec![project(None, false)],
+            ),
+            WorkTime::default(),
+            june(),
         );
-        assert_eq!(
-            result.recollected_minutes, 60,
-            "only the declared stretch is flagged"
-        );
-        assert_eq!(
-            result.margin_cents,
-            Some(100_000 - 3500 * 3),
-            "recollected time never withholds the margin"
-        );
-        assert!(
-            result.is_complete(),
-            "recollection is not the same kind of gap as a missing rate or an open entry"
-        );
-    }
 
-    #[test]
-    fn a_job_with_no_recollected_time_reports_zero() {
-        let job = job(None);
-        let facts = ProfitabilityFacts {
-            jobs: vec![job.clone()],
-            clocked: vec![clocked(
-                job.task_id,
-                employee(),
-                Some(3500),
-                (8, 0),
-                Some((10, 0)),
-            )],
-            equipment: vec![],
-        };
-
-        assert_eq!(build_report(facts).jobs[0].recollected_minutes, 0);
-    }
-
-    /// A salaried employee costs nothing, by design — never a floor pending a
-    /// rate, and never a reason the margin is withheld.
-    #[test]
-    fn a_salaried_employee_costs_nothing_and_never_withholds_the_margin() {
-        let job = job(Some(100_000));
-        let salaried_worker = employee();
-        let hourly_worker = employee();
-        let facts = ProfitabilityFacts {
-            jobs: vec![job.clone()],
-            clocked: vec![
-                salaried(job.task_id, salaried_worker, (8, 0), Some((12, 0))),
-                clocked(
-                    job.task_id,
-                    hourly_worker,
-                    Some(3500),
-                    (8, 0),
-                    Some((10, 0)),
-                ),
-            ],
-            equipment: vec![],
-        };
-
-        let result = &build_report(facts).jobs[0];
-
-        assert_eq!(
-            result.worked_minutes, 360,
-            "the salaried stretch still counts as time worked"
-        );
-        assert_eq!(
-            result.labour_cost_cents, 7_000,
-            "only the hourly worker's rated time costs anything"
-        );
-        assert!(
-            result.employees_without_rate.is_empty(),
-            "a salaried employee is never reported as missing a rate"
-        );
-        assert_eq!(
-            result.margin_cents,
-            Some(100_000 - 7_000),
-            "a salaried employee never withholds the margin"
-        );
-        assert!(result.is_complete());
-    }
-
-    /// The invariant a rate-missing hourly worker still needs: salaried status
-    /// does not somehow launder an hourly worker's actual gap.
-    #[test]
-    fn a_salaried_flag_does_not_excuse_an_hourly_worker_s_missing_rate() {
-        let job = job(Some(100_000));
-        let unrated = employee();
-        let facts = ProfitabilityFacts {
-            jobs: vec![job.clone()],
-            clocked: vec![clocked(job.task_id, unrated, None, (8, 0), Some((10, 0)))],
-            equipment: vec![],
-        };
-
-        let result = &build_report(facts).jobs[0];
-
-        assert_eq!(result.employees_without_rate, vec![unrated]);
-        assert_eq!(result.margin_cents, None);
-    }
-
-    /// The employee-level answer mirrors the job-level one: no rate flagged,
-    /// no cost, time still counted.
-    #[test]
-    fn employee_totals_never_flag_a_salaried_worker_as_rate_missing() {
-        let job = job(None);
-        let worker = employee();
-        let facts = ProfitabilityFacts {
-            jobs: vec![job.clone()],
-            clocked: vec![salaried(job.task_id, worker, (8, 0), Some((10, 0)))],
-            equipment: vec![],
-        };
-
-        let row = &build_report(facts).employees[0];
-
-        assert_eq!(row.worked_minutes, 120);
-        assert_eq!(row.labour_cost_cents, 0);
-        assert!(!row.rate_missing);
-    }
-
-    #[test]
-    fn an_empty_period_reports_nothing_rather_than_failing() {
-        let report = build_report(ProfitabilityFacts::default());
-
-        assert!(report.jobs.is_empty());
-        assert!(report.employees.is_empty());
+        let ids: Vec<Uuid> = report
+            .members
+            .iter()
+            .map(|member| member.member_id.0)
+            .collect();
+        assert_eq!(ids, vec![Uuid::from_u128(1), Uuid::from_u128(3)]);
+        assert!(report.members[0].rate_missing);
+        assert!(!report.members[1].rate_missing);
     }
 }

@@ -7,17 +7,19 @@ use crate::{OrganizationId, domain::profitability::ProfitabilityFacts};
 pub trait ProfitabilityRepository: Send {
     /// Every fact the calculation needs, for one organization over one window.
     ///
-    /// One call rather than a method per list: the three sets are read together
+    /// One call rather than a method per list: the four sets are read together
     /// or not at all, and an adapter that split them would open the door to a
-    /// per-job query.
+    /// per-project query.
     ///
     /// Bounds are instants rather than dates, because a calendar day only means
     /// something once a timezone is chosen and that is the use case's job, not
-    /// the adapter's. Half-open, `from` included and `to` excluded, so
-    /// consecutive periods neither overlap nor leave a gap.
+    /// the adapter's. Half-open, `from` included and `to` excluded.
     ///
-    /// Filtering is on when the work *happened*, not on when the job was
-    /// planned: a chantier planned in June and worked in July belongs to July.
+    /// A project is in scope when at least one of its planned tasks overlaps the
+    /// window. Filtering is on when the work is *planned*, not on when the
+    /// project was created: a project opened in June and worked in July belongs
+    /// to July. Cancelled tasks are excluded — a task that will not happen costs
+    /// nothing.
     fn load(
         &mut self,
         organization_id: OrganizationId,
