@@ -339,7 +339,7 @@ describe('TeamListUI — salaried row display', () => {
 		// A link, not just a sentence: the contract is edited on another screen and
 		// the row has to say which one.
 		const link = screen.getByRole('link', {
-			name: /heures contractuelles à renseigner/i,
+			name: /base contractuelle à renseigner/i,
 		})
 		expect(link.getAttribute('href')).toContain('/work-time')
 	})

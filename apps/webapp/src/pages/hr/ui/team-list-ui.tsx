@@ -730,13 +730,15 @@ function SalariedRateCell({
 				{effectiveHourlyRateCents === null ? (
 					// The gap that stranded somebody: they had entered the salary and
 					// the message named the salary. The contract is edited on another
-					// screen, so this says which one.
+					// screen, under the exact words used here — "base contractuelle",
+					// not "heures contractuelles", because a pointer that renames its
+					// destination is a pointer nobody can follow.
 					<Link
 						to={buildOrgPath(organizationSlug, '/hr/team/$memberId/work-time')}
 						params={{ memberId }}
 						className="text-amber-600 underline dark:text-amber-500"
 					>
-						Heures contractuelles à renseigner
+						Base contractuelle à renseigner
 					</Link>
 				) : (
 					`soit ${formatMoney(effectiveHourlyRateCents)}/h`

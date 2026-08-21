@@ -398,6 +398,9 @@ function EmployeeWorkTimeScreen({
 			organizationName={organizationName}
 			member={member}
 			hourlyRateCents={profile?.hourly_rate_cents ?? null}
+			isSalaried={profile?.is_salaried ?? false}
+			monthlyCostCents={profile?.monthly_cost_cents ?? null}
+			effectiveHourlyRateCents={profile?.effective_hourly_rate_cents ?? null}
 			weeklyGap={weeklyGap}
 			contractForm={{
 				value: contractValue,
