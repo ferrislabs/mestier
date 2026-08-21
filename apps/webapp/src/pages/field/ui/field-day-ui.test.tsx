@@ -138,9 +138,7 @@ describe('FieldDayUI', () => {
 	it('says so plainly when nothing is assigned', async () => {
 		await renderWithRouter(<FieldDayUI {...baseProps()} tasks={[]} />)
 
-		expect(
-			screen.getByText(/aucun projet ne vous est assigné/i),
-		).toBeDefined()
+		expect(screen.getByText(/aucun projet ne vous est assigné/i)).toBeDefined()
 	})
 
 	/**

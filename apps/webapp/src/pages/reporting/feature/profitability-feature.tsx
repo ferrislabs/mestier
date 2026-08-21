@@ -2,6 +2,10 @@ import { AlertCircle } from 'lucide-react'
 import { useState } from 'react'
 import { useActiveOrganization } from '#/hooks/use-active-organization'
 import { useReferenceCatalog } from '#/hooks/use-reference-catalog'
+import type {
+	MemberProfitability,
+	ProjectProfitability,
+} from '#/hooks/use-reporting'
 import { type Period, useProfitability } from '#/hooks/use-reporting'
 import { currentMonthPeriod } from '#/pages/reporting/types'
 import { ProfitabilityUI } from '#/pages/reporting/ui/profitability-ui'
@@ -36,16 +40,16 @@ function ProfitabilityWorkspace({
 	organizationId: string
 	organizationSlug: string
 }) {
-	// The current month, which is the question a foreman actually asks. Held in
-	// state rather than the url: this is a dashboard, not a link people send.
 	const [period, setPeriod] = useState<Period>(() =>
 		currentMonthPeriod(new Date()),
 	)
 
 	const profitability = useProfitability(organizationId, period)
-	// Employees carry a rate and a member id, members carry the name. Both are
-	// needed to put a name next to an hour count.
+	// Members only. The report keys on the seat now, not on the employee
+	// profile, so there is no second roster to reconcile — which is also why
+	// somebody with no profile at all can finally be named.
 	const catalog = useReferenceCatalog(organizationId, {
+		employeeProfiles: false,
 		equipment: false,
 		serviceRates: false,
 		products: false,
@@ -53,24 +57,22 @@ function ProfitabilityWorkspace({
 
 	const report = (profitability.data as ProfitabilityAnswer | undefined)?.data
 
-	const memberByEmployee = new Map<string, string>()
-	for (const employee of catalog.employeeProfiles.data?.data ?? []) {
-		const member = (catalog.members.data?.data ?? []).find(
-			(candidate) => candidate.id === employee.member_id,
-		)
-		if (member) memberByEmployee.set(employee.id, member.display_name)
+	const nameByMember = new Map<string, string>()
+	for (const member of catalog.members.data?.data ?? []) {
+		nameByMember.set(member.id, member.display_name)
 	}
 
 	return (
 		<ProfitabilityUI
 			period={period}
 			organizationSlug={organizationSlug}
-			jobs={report?.jobs ?? []}
+			projects={report?.projects ?? []}
 			mostProfitable={report?.most_profitable ?? []}
 			leastProfitable={report?.least_profitable ?? []}
 			incomplete={report?.incomplete ?? []}
-			employees={report?.employees ?? []}
-			employeeName={(employeeId) => memberByEmployee.get(employeeId) ?? null}
+			doubleBooked={report?.double_booked ?? []}
+			members={report?.members ?? []}
+			memberName={(memberId) => nameByMember.get(memberId) ?? null}
 			isLoading={profitability.isLoading}
 			error={profitability.error?.message ?? null}
 			onPeriodChange={setPeriod}
@@ -83,10 +85,11 @@ function ProfitabilityWorkspace({
 
 type ProfitabilityAnswer = {
 	data?: {
-		jobs: import('#/hooks/use-reporting').JobProfitability[]
-		most_profitable: import('#/hooks/use-reporting').JobProfitability[]
-		least_profitable: import('#/hooks/use-reporting').JobProfitability[]
-		incomplete: import('#/hooks/use-reporting').JobProfitability[]
-		employees: import('#/hooks/use-reporting').EmployeeProfitability[]
+		projects: ProjectProfitability[]
+		most_profitable: ProjectProfitability[]
+		least_profitable: ProjectProfitability[]
+		incomplete: ProjectProfitability[]
+		double_booked: ProjectProfitability[]
+		members: MemberProfitability[]
 	}
 }

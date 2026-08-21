@@ -58,6 +58,13 @@ export interface TaskFormFieldsProps {
 	 */
 	quotes: { id: string; label: string }[]
 	isQuotesLoading?: boolean
+	/**
+	 * Both modes, unlike the customer: `PATCH /tasks/{id}` carries `project_id`,
+	 * and it is the only way a task joins or leaves a project. Internal projects
+	 * are in this list too — that is what lets a meeting be costed.
+	 */
+	projects: { id: string; label: string; isInternal: boolean }[]
+	isProjectsLoading?: boolean
 	labels: LabelPickerOption[]
 	isCreatingLabel?: boolean
 	onCreateLabel: (name: string) => void
@@ -84,6 +91,8 @@ export function TaskFormFields({
 	isCustomerContextsLoading,
 	quotes,
 	isQuotesLoading,
+	projects,
+	isProjectsLoading,
 	labels,
 	isCreatingLabel,
 	onCreateLabel,
@@ -229,6 +238,70 @@ export function TaskFormFields({
 					</p>
 				</div>
 			)}
+
+			<div className="flex flex-col gap-2">
+				<Label htmlFor="task-project">Projet</Label>
+				<Select
+					value={values.projectId || NO_SELECTION}
+					onValueChange={(projectId) =>
+						onChange({
+							projectId: projectId === NO_SELECTION ? '' : projectId,
+						})
+					}
+					disabled={isProjectsLoading}
+				>
+					<SelectTrigger
+						id="task-project"
+						aria-label="Projet"
+						className="w-full"
+					>
+						<SelectValue placeholder="Aucun projet" />
+					</SelectTrigger>
+					<SelectContent>
+						<SelectItem value={NO_SELECTION}>Aucun projet</SelectItem>
+						{projects.map((project) => (
+							<SelectItem key={project.id} value={project.id}>
+								{project.isInternal
+									? `${project.label} (interne)`
+									: project.label}
+							</SelectItem>
+						))}
+					</SelectContent>
+				</Select>
+				<p className="text-xs text-muted-foreground">
+					Sans projet, le temps de cette tâche compte pour la personne mais
+					n'est rattaché à aucun sujet.
+				</p>
+			</div>
+
+			<div className="flex flex-col gap-2">
+				<Label htmlFor="task-expenses">Frais</Label>
+				<div className="flex flex-col gap-2 sm:flex-row">
+					<Input
+						id="task-expenses"
+						inputMode="decimal"
+						placeholder="0,00"
+						className="sm:w-32"
+						value={values.expensesEuros}
+						onChange={(event) =>
+							onChange({ expensesEuros: event.target.value })
+						}
+					/>
+					<Input
+						aria-label="Motif des frais"
+						placeholder="Déplacement, benne, repas…"
+						value={values.expensesLabel}
+						onChange={(event) =>
+							onChange({ expensesLabel: event.target.value })
+						}
+						disabled={values.expensesEuros.trim() === ''}
+					/>
+				</div>
+				<p className="text-xs text-muted-foreground">
+					En euros. Un montant doit être justifié : sans motif, il serait
+					impossible à retrouver dans trois mois.
+				</p>
+			</div>
 
 			<div className="flex items-center justify-between rounded-lg border bg-card p-3">
 				<div>

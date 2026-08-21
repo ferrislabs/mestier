@@ -27,6 +27,7 @@ function fieldsProps() {
 		customers: [],
 		customerContexts: [],
 		quotes: [],
+		projects: [],
 		labels: [],
 		onCreateLabel: vi.fn(),
 		assigneeOptions: [],

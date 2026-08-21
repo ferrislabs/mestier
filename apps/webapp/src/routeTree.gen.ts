@@ -22,6 +22,7 @@ import { Route as AppOOrganizationSlugHrIndexRouteImport } from './routes/_app.o
 import { Route as AppOOrganizationSlugCrmIndexRouteImport } from './routes/_app.o.$organizationSlug.crm.index'
 import { Route as AppOOrganizationSlugPlanningTeamRouteImport } from './routes/_app.o.$organizationSlug.planning.team'
 import { Route as AppOOrganizationSlugPlanningTasksRouteImport } from './routes/_app.o.$organizationSlug.planning.tasks'
+import { Route as AppOOrganizationSlugPlanningProjectsRouteImport } from './routes/_app.o.$organizationSlug.planning.projects'
 import { Route as AppOOrganizationSlugPlanningCalendarRouteImport } from './routes/_app.o.$organizationSlug.planning.calendar'
 import { Route as AppOOrganizationSlugHrWorkTimeRouteImport } from './routes/_app.o.$organizationSlug.hr.work-time'
 import { Route as AppOOrganizationSlugHrTeamRouteImport } from './routes/_app.o.$organizationSlug.hr.team'
@@ -107,6 +108,12 @@ const AppOOrganizationSlugPlanningTasksRoute =
   AppOOrganizationSlugPlanningTasksRouteImport.update({
     id: '/planning/tasks',
     path: '/planning/tasks',
+    getParentRoute: () => AppOOrganizationSlugRoute,
+  } as any)
+const AppOOrganizationSlugPlanningProjectsRoute =
+  AppOOrganizationSlugPlanningProjectsRouteImport.update({
+    id: '/planning/projects',
+    path: '/planning/projects',
     getParentRoute: () => AppOOrganizationSlugRoute,
   } as any)
 const AppOOrganizationSlugPlanningCalendarRoute =
@@ -202,6 +209,7 @@ export interface FileRoutesByFullPath {
   '/o/$organizationSlug/hr/team': typeof AppOOrganizationSlugHrTeamRouteWithChildren
   '/o/$organizationSlug/hr/work-time': typeof AppOOrganizationSlugHrWorkTimeRoute
   '/o/$organizationSlug/planning/calendar': typeof AppOOrganizationSlugPlanningCalendarRoute
+  '/o/$organizationSlug/planning/projects': typeof AppOOrganizationSlugPlanningProjectsRoute
   '/o/$organizationSlug/planning/tasks': typeof AppOOrganizationSlugPlanningTasksRoute
   '/o/$organizationSlug/planning/team': typeof AppOOrganizationSlugPlanningTeamRoute
   '/o/$organizationSlug/crm/': typeof AppOOrganizationSlugCrmIndexRoute
@@ -228,6 +236,7 @@ export interface FileRoutesByTo {
   '/o/$organizationSlug/hr/team': typeof AppOOrganizationSlugHrTeamRouteWithChildren
   '/o/$organizationSlug/hr/work-time': typeof AppOOrganizationSlugHrWorkTimeRoute
   '/o/$organizationSlug/planning/calendar': typeof AppOOrganizationSlugPlanningCalendarRoute
+  '/o/$organizationSlug/planning/projects': typeof AppOOrganizationSlugPlanningProjectsRoute
   '/o/$organizationSlug/planning/tasks': typeof AppOOrganizationSlugPlanningTasksRoute
   '/o/$organizationSlug/planning/team': typeof AppOOrganizationSlugPlanningTeamRoute
   '/o/$organizationSlug/crm': typeof AppOOrganizationSlugCrmIndexRoute
@@ -257,6 +266,7 @@ export interface FileRoutesById {
   '/_app/o/$organizationSlug/hr/team': typeof AppOOrganizationSlugHrTeamRouteWithChildren
   '/_app/o/$organizationSlug/hr/work-time': typeof AppOOrganizationSlugHrWorkTimeRoute
   '/_app/o/$organizationSlug/planning/calendar': typeof AppOOrganizationSlugPlanningCalendarRoute
+  '/_app/o/$organizationSlug/planning/projects': typeof AppOOrganizationSlugPlanningProjectsRoute
   '/_app/o/$organizationSlug/planning/tasks': typeof AppOOrganizationSlugPlanningTasksRoute
   '/_app/o/$organizationSlug/planning/team': typeof AppOOrganizationSlugPlanningTeamRoute
   '/_app/o/$organizationSlug/crm/': typeof AppOOrganizationSlugCrmIndexRoute
@@ -286,6 +296,7 @@ export interface FileRouteTypes {
     | '/o/$organizationSlug/hr/team'
     | '/o/$organizationSlug/hr/work-time'
     | '/o/$organizationSlug/planning/calendar'
+    | '/o/$organizationSlug/planning/projects'
     | '/o/$organizationSlug/planning/tasks'
     | '/o/$organizationSlug/planning/team'
     | '/o/$organizationSlug/crm/'
@@ -312,6 +323,7 @@ export interface FileRouteTypes {
     | '/o/$organizationSlug/hr/team'
     | '/o/$organizationSlug/hr/work-time'
     | '/o/$organizationSlug/planning/calendar'
+    | '/o/$organizationSlug/planning/projects'
     | '/o/$organizationSlug/planning/tasks'
     | '/o/$organizationSlug/planning/team'
     | '/o/$organizationSlug/crm'
@@ -340,6 +352,7 @@ export interface FileRouteTypes {
     | '/_app/o/$organizationSlug/hr/team'
     | '/_app/o/$organizationSlug/hr/work-time'
     | '/_app/o/$organizationSlug/planning/calendar'
+    | '/_app/o/$organizationSlug/planning/projects'
     | '/_app/o/$organizationSlug/planning/tasks'
     | '/_app/o/$organizationSlug/planning/team'
     | '/_app/o/$organizationSlug/crm/'
@@ -450,6 +463,13 @@ declare module '@tanstack/react-router' {
       path: '/planning/tasks'
       fullPath: '/o/$organizationSlug/planning/tasks'
       preLoaderRoute: typeof AppOOrganizationSlugPlanningTasksRouteImport
+      parentRoute: typeof AppOOrganizationSlugRoute
+    }
+    '/_app/o/$organizationSlug/planning/projects': {
+      id: '/_app/o/$organizationSlug/planning/projects'
+      path: '/planning/projects'
+      fullPath: '/o/$organizationSlug/planning/projects'
+      preLoaderRoute: typeof AppOOrganizationSlugPlanningProjectsRouteImport
       parentRoute: typeof AppOOrganizationSlugRoute
     }
     '/_app/o/$organizationSlug/planning/calendar': {
@@ -571,6 +591,7 @@ interface AppOOrganizationSlugRouteChildren {
   AppOOrganizationSlugHrTeamRoute: typeof AppOOrganizationSlugHrTeamRouteWithChildren
   AppOOrganizationSlugHrWorkTimeRoute: typeof AppOOrganizationSlugHrWorkTimeRoute
   AppOOrganizationSlugPlanningCalendarRoute: typeof AppOOrganizationSlugPlanningCalendarRoute
+  AppOOrganizationSlugPlanningProjectsRoute: typeof AppOOrganizationSlugPlanningProjectsRoute
   AppOOrganizationSlugPlanningTasksRoute: typeof AppOOrganizationSlugPlanningTasksRoute
   AppOOrganizationSlugPlanningTeamRoute: typeof AppOOrganizationSlugPlanningTeamRoute
   AppOOrganizationSlugCrmIndexRoute: typeof AppOOrganizationSlugCrmIndexRoute
@@ -595,6 +616,8 @@ const AppOOrganizationSlugRouteChildren: AppOOrganizationSlugRouteChildren = {
   AppOOrganizationSlugHrWorkTimeRoute: AppOOrganizationSlugHrWorkTimeRoute,
   AppOOrganizationSlugPlanningCalendarRoute:
     AppOOrganizationSlugPlanningCalendarRoute,
+  AppOOrganizationSlugPlanningProjectsRoute:
+    AppOOrganizationSlugPlanningProjectsRoute,
   AppOOrganizationSlugPlanningTasksRoute:
     AppOOrganizationSlugPlanningTasksRoute,
   AppOOrganizationSlugPlanningTeamRoute: AppOOrganizationSlugPlanningTeamRoute,

@@ -40,6 +40,21 @@ export interface TaskFormValues {
 	 * through this link.
 	 */
 	quoteId: string
+	/**
+	 * The project this task is costed against, or `''` for none.
+	 *
+	 * Unlike the customer and the quote, this *is* editable after creation:
+	 * `PATCH /tasks/{id}` carries `project_id`, which is the single way a task
+	 * joins or leaves a project.
+	 */
+	projectId: string
+	/**
+	 * Expenses in euros as typed, `''` for none. Converted to cents at the
+	 * boundary like every other money field in the app.
+	 */
+	expensesEuros: string
+	/** Required as soon as `expensesEuros` is not zero — see {@link validateTaskDraft}. */
+	expensesLabel: string
 	labelIds: string[]
 	assignees: AssigneeRef[]
 }
@@ -67,6 +82,9 @@ export function emptyTaskDraft(options: {
 		customerId: '',
 		customerContextId: '',
 		quoteId: '',
+		projectId: '',
+		expensesEuros: '',
+		expensesLabel: '',
 		labelIds: [],
 		assignees: [],
 	}
@@ -196,6 +214,42 @@ export function shiftEndTimeForNewStartTime(
  * only ever renders once a customer is chosen — see `ui/task-form-fields.tsx`)
  * but is still rejected here defensively, mirroring the backend exactly.
  */
+/**
+ * Euros as typed into cents, or `null` when the text is not a number.
+ *
+ * `''` is zero rather than invalid: an empty expense field means there is
+ * nothing to declare, which is the common case.
+ */
+export function expensesToCents(value: string): number | null {
+	const trimmed = value.trim()
+	if (trimmed === '') return 0
+
+	const parsed = Number(trimmed.replace(',', '.'))
+	if (!Number.isFinite(parsed) || parsed < 0) return null
+
+	return Math.round(parsed * 100)
+}
+
+function centsToEuros(cents: number): string {
+	return (cents / 100).toFixed(2).replace('.', ',')
+}
+
+/**
+ * The two expense fields as the API wants them, kept together because they are
+ * one value: zero carries no label, and the backend enforces the same pairing.
+ */
+function expensesPayload(values: TaskFormValues): {
+	expenses_cents: number
+	expenses_label: string | null
+} {
+	const cents = expensesToCents(values.expensesEuros) ?? 0
+
+	return {
+		expenses_cents: cents,
+		expenses_label: cents > 0 ? values.expensesLabel.trim() : null,
+	}
+}
+
 export function validateTaskDraft(
 	values: TaskFormValues,
 	options: { isSubtask: boolean },
@@ -231,6 +285,16 @@ export function validateTaskDraft(
 
 	if (values.customerContextId && !values.customerId) {
 		errors.push('Un contexte requiert un client')
+	}
+
+	const expenses = expensesToCents(values.expensesEuros)
+	if (expenses === null) {
+		errors.push('Montant de frais invalide')
+	} else if (expenses > 0 && !values.expensesLabel.trim()) {
+		// The API refuses this with a 409, and a form should say so inline rather
+		// than let the user discover it on submit: an amount with no reason cannot
+		// be audited three months later.
+		errors.push('Un montant de frais doit être justifié')
 	}
 
 	return errors
@@ -317,6 +381,8 @@ export function buildCreateTaskPayload(
 		customer_context_id: values.customerContextId || null,
 		quote_id: values.quoteId || null,
 		parent_task_id: options.parentTaskId,
+		project_id: values.projectId || null,
+		...expensesPayload(values),
 	}
 }
 
@@ -370,6 +436,8 @@ export function buildPatchTaskPayload(
 		blocks_availability: values.blocksAvailability,
 		label_ids: values.labelIds,
 		assignees: values.assignees,
+		project_id: values.projectId || null,
+		...expensesPayload(values),
 	}
 }
 
@@ -391,6 +459,10 @@ export function taskToDraft(
 		blocks_availability: boolean
 		labels: { id: string }[]
 		member_ids: string[]
+		project_id?: string | null
+		/** Absent on the planning read model, which does not carry expenses. */
+		expenses_cents?: number
+		expenses_label?: string | null
 	},
 	timeZone: string,
 ): TaskFormValues {
@@ -420,6 +492,12 @@ export function taskToDraft(
 		customerId: '',
 		customerContextId: '',
 		quoteId: '',
+		projectId: task.project_id ?? '',
+		expensesEuros:
+			task.expenses_cents && task.expenses_cents > 0
+				? centsToEuros(task.expenses_cents)
+				: '',
+		expensesLabel: task.expenses_label ?? '',
 		labelIds: task.labels.map((label) => label.id),
 		assignees: task.member_ids.map((memberId) => ({
 			member_id: memberId,

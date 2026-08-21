@@ -6,6 +6,7 @@ import {
 	calendarSelectionToDateRange,
 	dateRangeToCalendarSelection,
 	emptyTaskDraft,
+	expensesToCents,
 	formatDateRangeFr,
 	needsFollowUpPatch,
 	shiftEndTimeForNewStartTime,
@@ -609,5 +610,93 @@ describe('shiftEndTimeForNewStartTime', () => {
 			'23:30',
 		)
 		expect(shifted).toBe('23:45')
+	})
+})
+
+describe('expensesToCents', () => {
+	/** An empty field is "nothing to declare", which is the common case. */
+	it('reads an empty field as zero', () => {
+		expect(expensesToCents('')).toBe(0)
+		expect(expensesToCents('   ')).toBe(0)
+	})
+
+	it('accepts a comma as the decimal separator', () => {
+		expect(expensesToCents('45,50')).toBe(4550)
+		expect(expensesToCents('45.50')).toBe(4550)
+	})
+
+	it('refuses what is not a positive number', () => {
+		expect(expensesToCents('quarante-cinq')).toBeNull()
+		expect(expensesToCents('-1')).toBeNull()
+	})
+})
+
+describe('expenses on the task payloads', () => {
+	const draft = () => ({
+		...emptyTaskDraft({ parentTaskId: null, today: '2026-08-10' }),
+		title: 'Mission Clermont',
+	})
+
+	it('refuses an amount with no reason', () => {
+		const errors = validateTaskDraft(
+			{ ...draft(), expensesEuros: '45' },
+			{ isSubtask: false },
+		)
+
+		expect(errors).toContain('Un montant de frais doit être justifié')
+	})
+
+	it('accepts an amount once it is justified', () => {
+		const errors = validateTaskDraft(
+			{ ...draft(), expensesEuros: '45', expensesLabel: 'Déplacement' },
+			{ isSubtask: false },
+		)
+
+		expect(errors).toEqual([])
+	})
+
+	it('carries the amount, its label and the project on create', () => {
+		const payload = buildCreateTaskPayload(
+			{
+				...draft(),
+				projectId: 'project-1',
+				expensesEuros: '45',
+				expensesLabel: 'Déplacement',
+			},
+			{ parentTaskId: null, timeZone: 'Europe/Paris' },
+		)
+
+		expect(payload?.project_id).toBe('project-1')
+		expect(payload?.expenses_cents).toBe(4500)
+		expect(payload?.expenses_label).toBe('Déplacement')
+	})
+
+	/**
+	 * Unlike the customer and the quote, the project is editable after
+	 * creation — `PATCH /tasks/{id}` is the single way a task joins or leaves
+	 * one.
+	 */
+	it('carries the project on patch, and detaches with null', () => {
+		const attached = buildPatchTaskPayload(
+			{ ...draft(), projectId: 'project-1' },
+			{ isSubtask: false, timeZone: 'Europe/Paris' },
+		)
+		expect(attached?.project_id).toBe('project-1')
+
+		const detached = buildPatchTaskPayload(draft(), {
+			isSubtask: false,
+			timeZone: 'Europe/Paris',
+		})
+		expect(detached?.project_id).toBeNull()
+	})
+
+	it('drops the label when the amount goes back to zero', () => {
+		const payload = buildPatchTaskPayload(
+			{ ...draft(), expensesEuros: '', expensesLabel: 'Déplacement' },
+			{ isSubtask: false, timeZone: 'Europe/Paris' },
+		)
+
+		expect(payload?.expenses_cents).toBe(0)
+		expect(payload?.expenses_label).toBeNull()
 	})
 })
