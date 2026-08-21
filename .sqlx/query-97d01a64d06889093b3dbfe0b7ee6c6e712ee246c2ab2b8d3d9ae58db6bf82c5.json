@@ -1,0 +1,78 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO projects (id, org_id, name, customer_id, customer_context_id, quote_id, archived_at, created_at, updated_at)\n            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)\n            RETURNING id, org_id, name, customer_id, customer_context_id, quote_id, archived_at, created_at, updated_at\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "org_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "customer_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 4,
+        "name": "customer_context_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 5,
+        "name": "quote_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 6,
+        "name": "archived_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 7,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 8,
+        "name": "updated_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Text",
+        "Uuid",
+        "Uuid",
+        "Uuid",
+        "Timestamptz",
+        "Timestamptz",
+        "Timestamptz"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      true,
+      true,
+      true,
+      true,
+      false,
+      false
+    ]
+  },
+  "hash": "97d01a64d06889093b3dbfe0b7ee6c6e712ee246c2ab2b8d3d9ae58db6bf82c5"
+}

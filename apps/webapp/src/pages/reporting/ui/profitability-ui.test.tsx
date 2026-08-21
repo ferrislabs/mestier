@@ -1,39 +1,40 @@
 import { screen } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 import type {
-	EmployeeProfitability,
-	JobProfitability,
+	MemberProfitability,
+	ProjectProfitability,
 } from '#/hooks/use-reporting'
 import { ProfitabilityUI } from '#/pages/reporting/ui/profitability-ui'
 import { renderWithRouter } from '#/test/render-with-router'
 
-function job(overrides: Partial<JobProfitability> = {}): JobProfitability {
+function project(
+	overrides: Partial<ProjectProfitability> = {},
+): ProjectProfitability {
 	return {
-		task_id: 'task-1',
-		title: 'Jardin Duval',
+		project_id: 'project-1',
+		name: 'Jardin Duval',
 		customer_id: 'customer-1',
 		quoted_cents: 420_000,
 		labour_cost_cents: 10_500,
 		equipment_cost_cents: 3_600,
-		worked_minutes: 180,
+		expenses_cents: 0,
+		planned_minutes: 180,
 		occupied_minutes: 180,
+		overlapping_minutes: 0,
 		margin_cents: 405_900,
-		employees_without_rate: [],
-		open_entries: 0,
-		recollected_minutes: 0,
+		members_without_rate: [],
 		...overrides,
 	}
 }
 
-function employee(
-	overrides: Partial<EmployeeProfitability> = {},
-): EmployeeProfitability {
+function member(
+	overrides: Partial<MemberProfitability> = {},
+): MemberProfitability {
 	return {
-		employee_id: 'employee-1',
-		worked_minutes: 180,
+		member_id: 'member-1',
+		planned_minutes: 180,
 		labour_cost_cents: 10_500,
-		rate_missing: false,
-		open_entries: 0,
+		missing_cost: null,
 		...overrides,
 	}
 }
@@ -42,12 +43,13 @@ function baseProps() {
 	return {
 		period: { from: '2026-08-01', to: '2026-08-20' },
 		organizationSlug: 'atelier-vert',
-		jobs: [job()],
-		mostProfitable: [job()],
-		leastProfitable: [job()],
+		projects: [project()],
+		mostProfitable: [project()],
+		leastProfitable: [project()],
 		incomplete: [],
-		employees: [employee()],
-		employeeName: () => 'Martin Alix',
+		doubleBooked: [],
+		members: [member()],
+		memberName: () => 'Martin Alix',
 		isLoading: false,
 		error: null,
 		onPeriodChange: vi.fn(),
@@ -56,10 +58,10 @@ function baseProps() {
 }
 
 describe('ProfitabilityUI', () => {
-	it('shows a job with its cost, margin and time', async () => {
+	it('shows a project with its cost, margin and time', async () => {
 		await renderWithRouter(<ProfitabilityUI {...baseProps()} />)
 
-		// The same job legitimately appears in the list and in both rankings,
+		// The same project legitimately appears in the list and in both rankings,
 		// which is what the API returns, so this counts rather than expecting one.
 		expect(screen.getAllByText('Jardin Duval').length).toBeGreaterThan(0)
 		expect(screen.getAllByText(/3 h 00/).length).toBeGreaterThan(0)
@@ -69,22 +71,22 @@ describe('ProfitabilityUI', () => {
 	 * The point of the whole screen: the API withholds a margin it cannot state,
 	 * and this has to explain the hole rather than print a dash and move on.
 	 */
-	it('explains why a job has no margin', async () => {
-		const incomplete = job({
+	it('explains why a project has no margin', async () => {
+		const incomplete = project({
 			margin_cents: null,
-			employees_without_rate: ['employee-9'],
+			members_without_rate: ['member-9'],
 		})
 		await renderWithRouter(
 			<ProfitabilityUI
 				{...baseProps()}
-				jobs={[incomplete]}
+				projects={[incomplete]}
 				incomplete={[incomplete]}
 			/>,
 		)
 
 		expect(screen.getByText(/1 projet sans marge calculable/i)).toBeDefined()
 		expect(
-			screen.getAllByText(/sans taux horaire renseigné/i).length,
+			screen.getAllByText(/sans coût horaire renseigné/i).length,
 		).toBeGreaterThan(0)
 	})
 
@@ -95,148 +97,204 @@ describe('ProfitabilityUI', () => {
 	})
 
 	/**
-	 * Recollected time is informational, never a reason the margin is missing:
-	 * the job in `baseProps` has a stated margin and still shows the note.
+	 * The headline change: work that bills nobody used to be invisible, because
+	 * the report only knew chantiers with a customer. A meeting now has a row,
+	 * a cost, and a badge saying why it has no margin.
 	 */
-	it('notes recollected time without treating the job as incomplete', async () => {
+	it('marks an internal project and still shows its cost', async () => {
+		const meeting = project({
+			project_id: 'project-internal',
+			name: 'Réunion hebdo',
+			customer_id: null,
+			quoted_cents: null,
+			margin_cents: null,
+			labour_cost_cents: 14_000,
+			equipment_cost_cents: 0,
+			planned_minutes: 240,
+		})
+
 		await renderWithRouter(
 			<ProfitabilityUI
 				{...baseProps()}
-				jobs={[job({ recollected_minutes: 45 })]}
+				projects={[meeting]}
+				mostProfitable={[]}
+				leastProfitable={[]}
 			/>,
 		)
 
-		expect(screen.getByText(/45 min déclarées a posteriori/i)).toBeDefined()
+		expect(screen.getByText('Interne')).toBeDefined()
+		expect(screen.getAllByText('140,00 €').length).toBeGreaterThan(0)
 		expect(screen.queryByText(/sans marge calculable/i)).toBeNull()
 	})
 
 	/**
-	 * Devisé and Coût réel used to sum every job, incomplete ones included,
-	 * while Marge already excluded them — three headline figures disagreeing
-	 * on what counts. They now share the exact same rule.
+	 * An overlap is not incomplete data — the minutes are known, they are just
+	 * charged twice. It gets its own warning, and the project keeps its margin.
 	 */
-	it('excludes an incomplete job from Devisé and Coût réel, like Marge already excludes it', async () => {
-		const complete = job({
-			task_id: 'task-complete',
+	it('warns about double-booked time without withholding the margin', async () => {
+		const overlapping = project({ overlapping_minutes: 60 })
+
+		await renderWithRouter(
+			<ProfitabilityUI
+				{...baseProps()}
+				projects={[overlapping]}
+				doubleBooked={[overlapping]}
+			/>,
+		)
+
+		expect(
+			screen.getByText(/1 projet avec du temps compté deux fois/i),
+		).toBeDefined()
+		expect(screen.getAllByText(/comptées deux fois/i).length).toBeGreaterThan(0)
+		expect(screen.queryByText(/sans marge calculable/i)).toBeNull()
+	})
+
+	it('shows expenses as their own figure', async () => {
+		await renderWithRouter(
+			<ProfitabilityUI
+				{...baseProps()}
+				projects={[project({ expenses_cents: 4_500 })]}
+				mostProfitable={[]}
+				leastProfitable={[]}
+			/>,
+		)
+
+		expect(screen.getAllByText('45,00 €').length).toBeGreaterThan(0)
+	})
+
+	/**
+	 * Devisé, Coût planifié and Marge share one inclusion rule, so the three
+	 * headline figures cannot disagree about what counts.
+	 */
+	it('excludes an incomplete project from every headline tile', async () => {
+		const complete = project({
+			project_id: 'project-complete',
 			quoted_cents: 100_000,
 			labour_cost_cents: 10_000,
 			equipment_cost_cents: 0,
 			margin_cents: 90_000,
 		})
-		const incomplete = job({
-			task_id: 'task-incomplete',
+		const incomplete = project({
+			project_id: 'project-incomplete',
 			quoted_cents: 500_000,
 			labour_cost_cents: 99_900,
 			equipment_cost_cents: 0,
 			margin_cents: null,
-			employees_without_rate: ['employee-9'],
+			members_without_rate: ['member-9'],
 		})
 
 		await renderWithRouter(
 			<ProfitabilityUI
 				{...baseProps()}
-				jobs={[complete, incomplete]}
+				projects={[complete, incomplete]}
 				mostProfitable={[complete]}
 				leastProfitable={[complete]}
 				incomplete={[incomplete]}
 			/>,
 		)
 
-		// Only the complete job's figures reach the totals: 1 000,00 € quoted,
-		// 100,00 € cost — the incomplete job's 5 000 € quote and its cost never
-		// make it into either tile.
-		// Each value also appears in the row's own "Devisé"/"Coût" figure, so
-		// this counts occurrences rather than expecting exactly one.
 		expect(screen.getAllByText('1 000,00 €').length).toBeGreaterThan(0)
 		expect(screen.getAllByText('100,00 €').length).toBeGreaterThan(0)
 		expect(screen.queryByText('6 000,00 €')).toBeNull()
-
-		// All three headline tiles now state the same inclusion rule.
 		expect(
 			screen.getAllByText('Projets complets uniquement').length,
 		).toBeGreaterThanOrEqual(2)
 	})
 
-	it('warns that a payroll total is short when a clock-in is open', async () => {
-		await renderWithRouter(
-			<ProfitabilityUI
-				{...baseProps()}
-				employees={[employee({ open_entries: 2 })]}
-			/>,
-		)
-
-		expect(screen.getByText(/ce total est incomplet/i)).toBeDefined()
-	})
-
-	it('names the employee rather than showing an id', async () => {
+	it('names the person rather than showing an id', async () => {
 		await renderWithRouter(<ProfitabilityUI {...baseProps()} />)
 
 		expect(screen.getAllByText('Martin Alix').length).toBeGreaterThan(0)
-		expect(screen.queryByText('employee-1')).toBeNull()
+		expect(screen.queryByText('member-1')).toBeNull()
 	})
 
-	/**
-	 * The profitability response already carries per-employee cost and a
-	 * precise missing-rate flag — this screen used to fetch hours only and
-	 * silently drop both.
-	 */
-	it("shows each employee's cost and a precise missing-rate warning", async () => {
+	it("shows each person's cost and a precise missing-rate warning", async () => {
 		await renderWithRouter(
 			<ProfitabilityUI
 				{...baseProps()}
-				employees={[
-					employee({ labour_cost_cents: 12_345, rate_missing: false }),
-					employee({
-						employee_id: 'employee-2',
+				members={[
+					member({ labour_cost_cents: 12_345 }),
+					member({
+						member_id: 'member-2',
 						labour_cost_cents: 0,
-						rate_missing: true,
+						missing_cost: 'MONTHLY_COST',
 					}),
 				]}
-				employeeName={(id) =>
-					id === 'employee-1' ? 'Martin Alix' : 'Chloé Renard'
+				memberName={(id) =>
+					id === 'member-1' ? 'Martin Alix' : 'Chloé Renard'
 				}
 			/>,
 		)
 
 		expect(screen.getByText('123,45 €')).toBeDefined()
-		expect(screen.getByText(/taux horaire manquant/i)).toBeDefined()
+		expect(screen.getByText(/coût mensuel non renseigné/i)).toBeDefined()
 	})
 
-	it('says so plainly when no time was clocked in the period', async () => {
+	/**
+	 * The message used to read "hourly rate or salary missing" whatever the cause,
+	 * and was shown to somebody who had just entered the salary — what was
+	 * actually missing was the contract, on another screen. Each gap now names
+	 * itself.
+	 */
+	it('names which figure is missing rather than listing candidates', async () => {
 		await renderWithRouter(
 			<ProfitabilityUI
 				{...baseProps()}
-				jobs={[]}
+				members={[
+					member({ member_id: 'member-1', missing_cost: 'HOURLY_RATE' }),
+					member({ member_id: 'member-2', missing_cost: 'CONTRACTED_HOURS' }),
+				]}
+			/>,
+		)
+
+		expect(screen.getByText(/taux horaire non renseigné/i)).toBeDefined()
+		expect(
+			screen.getByText(/heures contractuelles à renseigner/i),
+		).toBeDefined()
+	})
+
+	/** The hours are the plan's now, and a payroll screen has to say so. */
+	it('labels the hours as planned rather than clocked', async () => {
+		await renderWithRouter(<ProfitabilityUI {...baseProps()} />)
+
+		expect(screen.getByText('Heures planifiées')).toBeDefined()
+		expect(
+			screen.getByText(/heures du planning, pas des pointages/i),
+		).toBeDefined()
+	})
+
+	it('says so plainly when nothing was planned in the period', async () => {
+		await renderWithRouter(
+			<ProfitabilityUI
+				{...baseProps()}
+				projects={[]}
 				mostProfitable={[]}
 				leastProfitable={[]}
-				employees={[]}
+				members={[]}
 			/>,
 		)
 
 		expect(
-			screen.getByText(/aucun temps pointé sur cette période/i),
+			screen.getByText(/rien de planifié sur cette période/i),
 		).toBeDefined()
 	})
 
 	/**
-	 * Job rows used to be plain text: a manager reading "sans taux horaire"
-	 * had no way to act on it from this screen. The title is now a link into
-	 * Planning's task list — not a deep link to the exact task (nothing in
-	 * the app opens one from outside Planning yet), but still somewhere to go
-	 * rather than something to memorize.
+	 * A project is an addressable thing now, so the title links at its own page
+	 * instead of dumping the reader on the planning task list.
 	 */
-	it('links a job title into the Planning task list, in the list, both rankings and the incomplete banner', async () => {
-		const incomplete = job({
-			task_id: 'task-incomplete',
-			title: 'Terrasse Bernard',
+	it('links a project name at its own page, in the list, both rankings and the banner', async () => {
+		const incomplete = project({
+			project_id: 'project-incomplete',
+			name: 'Terrasse Bernard',
 			margin_cents: null,
-			employees_without_rate: ['employee-9'],
+			members_without_rate: ['member-9'],
 		})
 
 		await renderWithRouter(
 			<ProfitabilityUI
 				{...baseProps()}
-				jobs={[job(), incomplete]}
+				projects={[project(), incomplete]}
 				incomplete={[incomplete]}
 			/>,
 		)
@@ -244,7 +302,10 @@ describe('ProfitabilityUI', () => {
 		const jardinLinks = screen.getAllByRole('link', { name: /Jardin Duval/i })
 		expect(jardinLinks.length).toBeGreaterThan(0)
 		for (const link of jardinLinks) {
-			expect(link.getAttribute('href')).toBe('/o/atelier-vert/planning/tasks')
+			expect(link.getAttribute('href')).toContain(
+				'/o/atelier-vert/planning/projects',
+			)
+			expect(link.getAttribute('href')).toContain('projectId=project-1')
 		}
 
 		const terrasseLinks = screen.getAllByRole('link', {

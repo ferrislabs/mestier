@@ -1,0 +1,75 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE projects\n            SET name = $2, customer_id = $3, customer_context_id = $4, quote_id = $5, updated_at = $6\n            WHERE id = $1\n            RETURNING id, org_id, name, customer_id, customer_context_id, quote_id, archived_at, created_at, updated_at\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "org_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "customer_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 4,
+        "name": "customer_context_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 5,
+        "name": "quote_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 6,
+        "name": "archived_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 7,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 8,
+        "name": "updated_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Uuid",
+        "Uuid",
+        "Uuid",
+        "Timestamptz"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      true,
+      true,
+      true,
+      true,
+      false,
+      false
+    ]
+  },
+  "hash": "c61cb8c57a3f0afaa4339a8f6b1134ce4ff91dc47f5b52a8c31a9bb42cfac4d7"
+}

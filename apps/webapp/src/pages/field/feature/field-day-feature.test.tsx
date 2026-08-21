@@ -263,9 +263,7 @@ describe('FieldDayFeature — bascule entre projets', () => {
 		await userEvent.click(switchButton)
 
 		expect(
-			await screen.findByText(
-				/vous êtes maintenant décroché de tout projet/i,
-			),
+			await screen.findByText(/vous êtes maintenant décroché de tout projet/i),
 		).toBeDefined()
 	})
 })

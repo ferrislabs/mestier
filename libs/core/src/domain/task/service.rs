@@ -56,6 +56,38 @@ pub fn resolve_task_window(task: &Task, parent: Option<&Task>) -> TimeRange {
 /// lives here, in the domain, not in the schema — lifting it later is a
 /// validation-rule change, not a migration (see the planning module design
 /// doc).
+/// Settles the amount and its reason together, because neither means anything
+/// alone.
+///
+/// A negative amount is refused rather than clamped: it is a typo, and silently
+/// turning it into zero would hide a cost somebody meant to record. Zero clears
+/// the label, which is why this returns the pair instead of validating in
+/// place — asking a caller to remember that rule is how the two drift apart.
+/// `chk_tasks_expenses_label_required` enforces the same pairing one layer
+/// down.
+pub fn normalize_expenses(
+    expenses_cents: i32,
+    expenses_label: Option<String>,
+) -> Result<(i32, Option<String>), CoreError> {
+    if expenses_cents < 0 {
+        return Err(CoreError::Conflict(
+            "task expenses cannot be negative".to_owned(),
+        ));
+    }
+
+    if expenses_cents == 0 {
+        return Ok((0, None));
+    }
+
+    let expenses_label = expenses_label
+        .filter(|label| !label.trim().is_empty())
+        .ok_or_else(|| {
+            CoreError::Conflict("task expenses need a label saying what they were".to_owned())
+        })?;
+
+    Ok((expenses_cents, Some(expenses_label)))
+}
+
 pub fn validate_parent_depth(parent: Option<&Task>) -> Result<(), CoreError> {
     match parent {
         Some(parent) if parent.parent_task_id.is_some() => Err(CoreError::Conflict(
@@ -163,6 +195,9 @@ where
             command.ends_at,
         )?;
 
+        let (expenses_cents, expenses_label) =
+            normalize_expenses(command.expenses_cents, command.expenses_label)?;
+
         let now = Utc::now();
         self.task_repository
             .insert(&Task {
@@ -179,6 +214,9 @@ where
                 customer_id: command.customer_id,
                 customer_context_id: command.customer_context_id,
                 quote_id: command.quote_id,
+                project_id: command.project_id,
+                expenses_cents,
+                expenses_label,
                 assignments: Vec::new(),
                 deleted_at: None,
                 created_at: now,
@@ -285,6 +323,17 @@ where
         if let Some(blocks_availability) = command.blocks_availability {
             task.blocks_availability = blocks_availability;
         }
+        if let Some(project_id) = command.project_id {
+            task.project_id = project_id;
+        }
+        let (expenses_cents, expenses_label) = normalize_expenses(
+            command.expenses_cents.unwrap_or(task.expenses_cents),
+            command
+                .expenses_label
+                .unwrap_or_else(|| task.expenses_label.clone()),
+        )?;
+        task.expenses_cents = expenses_cents;
+        task.expenses_label = expenses_label;
         task.updated_at = Utc::now();
 
         if let Some(assignees) = command.assignees {
@@ -523,6 +572,9 @@ mod tests {
             customer_id: Some(CustomerId(Uuid::new_v4())),
             customer_context_id: Some(CustomerContextId(Uuid::new_v4())),
             quote_id: None,
+            project_id: None,
+            expenses_cents: 0,
+            expenses_label: None,
             assignments: Vec::new(),
             deleted_at: None,
             created_at: now,
@@ -673,6 +725,9 @@ mod tests {
             customer_id: Some(CustomerId(Uuid::new_v4())),
             customer_context_id: Some(CustomerContextId(Uuid::new_v4())),
             quote_id: None,
+            project_id: None,
+            expenses_cents: 0,
+            expenses_label: None,
         }
     }
 
@@ -1910,5 +1965,42 @@ mod tests {
         // way (see this method's own doc), so this isn't a correctness
         // requirement, just what the implementation actually does.
         assert_eq!(deleted.last(), Some(&id));
+    }
+
+    #[test]
+    fn expenses_of_zero_carry_no_label() {
+        let (cents, label) = normalize_expenses(0, Some("Déplacement".to_owned())).unwrap();
+
+        assert_eq!(cents, 0);
+        assert_eq!(label, None, "clearing the amount clears the reason");
+    }
+
+    #[test]
+    fn an_amount_needs_a_label() {
+        let err = normalize_expenses(4500, None).unwrap_err();
+
+        assert!(matches!(err, CoreError::Conflict(_)));
+    }
+
+    #[test]
+    fn a_blank_label_counts_as_no_label() {
+        let err = normalize_expenses(4500, Some("   ".to_owned())).unwrap_err();
+
+        assert!(matches!(err, CoreError::Conflict(_)));
+    }
+
+    #[test]
+    fn a_negative_amount_is_refused_rather_than_clamped() {
+        let err = normalize_expenses(-1, Some("Déplacement".to_owned())).unwrap_err();
+
+        assert!(matches!(err, CoreError::Conflict(_)));
+    }
+
+    #[test]
+    fn an_amount_with_a_label_passes_through() {
+        let (cents, label) = normalize_expenses(4500, Some("Clermont".to_owned())).unwrap();
+
+        assert_eq!(cents, 4500);
+        assert_eq!(label.as_deref(), Some("Clermont"));
     }
 }

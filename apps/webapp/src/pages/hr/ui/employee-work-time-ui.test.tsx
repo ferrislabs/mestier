@@ -41,6 +41,9 @@ function baseProps(
 		organizationName: 'Atelier Bois & Co',
 		member: member(),
 		hourlyRateCents: 1500,
+		isSalaried: false,
+		monthlyCostCents: null,
+		effectiveHourlyRateCents: 1500,
 		weeklyGap: {
 			plannedMinutes: 1920,
 			contractMinutes: 2100,
@@ -427,5 +430,43 @@ describe('EmployeeWorkTimeUI — no network call', () => {
 		)
 
 		expect(fetchSpy).not.toHaveBeenCalled()
+	})
+})
+
+describe('EmployeeWorkTimeUI — coût employeur', () => {
+	/**
+	 * This page is where the team list sends somebody whose salary cannot be
+	 * divided yet. It used to greet them with "Taux horaire : Non renseigné",
+	 * repeating the misreading they came here to fix.
+	 */
+	it('shows a salaried employee their monthly cost, not a missing hourly rate', async () => {
+		render(
+			<EmployeeWorkTimeUI
+				{...baseProps()}
+				hourlyRateCents={null}
+				isSalaried
+				monthlyCostCents={230_000}
+				effectiveHourlyRateCents={null}
+			/>,
+		)
+
+		expect(screen.getByText('Coût employeur')).toBeDefined()
+		expect(screen.getByText(/2 300,00/)).toBeDefined()
+		expect(screen.queryByText('Taux horaire')).toBeNull()
+	})
+
+	it('shows the hourly equivalent once the contract can divide the salary', async () => {
+		render(
+			<EmployeeWorkTimeUI
+				{...baseProps()}
+				hourlyRateCents={null}
+				isSalaried
+				monthlyCostCents={230_000}
+				effectiveHourlyRateCents={1_517}
+			/>,
+		)
+
+		expect(screen.getByText(/soit/)).toBeDefined()
+		expect(screen.getByText(/15,17/)).toBeDefined()
 	})
 })

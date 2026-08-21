@@ -1,7 +1,7 @@
 use chrono::{DateTime, Utc};
 
 use crate::{
-    CustomerContextId, CustomerId, EquipmentId, OrganizationId, QuoteId,
+    CustomerContextId, CustomerId, EquipmentId, OrganizationId, ProjectId, QuoteId,
     domain::task::{AssigneeRef, TaskId, TaskStatus},
     domain::task_label::TaskLabelId,
 };
@@ -27,6 +27,12 @@ pub struct CreateTaskCommand {
     pub customer_id: Option<CustomerId>,
     pub customer_context_id: Option<CustomerContextId>,
     pub quote_id: Option<QuoteId>,
+    /// The project this task is costed against. Independent of
+    /// `parent_task_id`: a subtask can name a project its parent does not.
+    pub project_id: Option<ProjectId>,
+    /// `0` with no label when the task costs nothing beyond time.
+    pub expenses_cents: i32,
+    pub expenses_label: Option<String>,
 }
 
 /// Carries a `PATCH`: every field is optional and only the ones present are
@@ -64,6 +70,16 @@ pub struct PatchTaskCommand {
     /// `EquipmentService::replace_task_equipment` after `TaskService::patch_task`
     /// returns; the `task` aggregate itself never reads it.
     pub equipment_ids: Option<Vec<EquipmentId>>,
+    /// `None` leaves the attachment alone, `Some(None)` detaches the task from
+    /// its project, `Some(Some(id))` attaches it. Validated at the application
+    /// seam rather than in `TaskService`, which owns no project port — see
+    /// `MestierUseCase::patch_task`.
+    pub project_id: Option<Option<ProjectId>>,
+    /// The amount is `NOT NULL` in the schema, so a single `Option` says it
+    /// all: `None` leaves it alone, `Some(0)` clears the expense. The label
+    /// needs the double option like every other nullable column.
+    pub expenses_cents: Option<i32>,
+    pub expenses_label: Option<Option<String>>,
 }
 
 impl PatchTaskCommand {
@@ -83,6 +99,9 @@ impl PatchTaskCommand {
             assignees: None,
             label_ids: None,
             equipment_ids: None,
+            project_id: None,
+            expenses_cents: None,
+            expenses_label: None,
         }
     }
 }

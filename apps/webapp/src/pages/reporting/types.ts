@@ -1,4 +1,4 @@
-import type { JobProfitability } from '#/hooks/use-reporting'
+import type { MissingCost, ProjectProfitability } from '#/hooks/use-reporting'
 
 /** `3 h 45`, the way a foreman reads a timesheet. */
 export function formatMinutes(minutes: number): string {
@@ -17,58 +17,63 @@ export function formatCents(cents: number): string {
 	}).format(cents / 100)
 }
 
-export function realCostCents(job: JobProfitability): number {
-	return job.labour_cost_cents + job.equipment_cost_cents
+/** Labour, machines and expenses. Mirrors `ProjectProfitability::planned_cost_cents`. */
+export function plannedCostCents(project: ProjectProfitability): number {
+	return (
+		project.labour_cost_cents +
+		project.equipment_cost_cents +
+		project.expenses_cents
+	)
 }
 
 /**
- * Why a job's figures cannot be trusted, in words, or `null` when they can.
+ * Why a project's figures cannot be trusted, in words, or `null` when they can.
  *
- * The API says what is missing; this turns it into the sentence a foreman needs
- * in order to fix it. A margin is withheld rather than approximated, so the
- * screen has to explain the hole instead of showing a number with an asterisk.
+ * One cause, three shapes: an hourly rate nobody set, a salaried person with no
+ * monthly amount, or a salary with no contracted hours to spread over. The
+ * wording covers all three rather than naming only the hourly case, which is how
+ * a salaried person's hour came to read as 0,00 € with nothing said about it.
+ *
+ * The clocked model also withheld a margin for a pointage left open, its most
+ * common cause; there is no clock left to leave open.
  */
-export function incompleteReason(job: JobProfitability): string | null {
-	const missingRates = job.employees_without_rate.length
-	const open = job.open_entries
+export function incompleteReason(project: ProjectProfitability): string | null {
+	const missingRates = project.members_without_rate.length
+	if (missingRates === 0) return null
 
-	if (missingRates > 0 && open > 0) {
-		return `${missingRates} salarié${missingRates > 1 ? 's' : ''} sans taux horaire, et ${open} pointage${open > 1 ? 's' : ''} non clôturé${open > 1 ? 's' : ''}`
-	}
-	if (missingRates > 0) {
-		return `${missingRates} salarié${missingRates > 1 ? 's' : ''} sans taux horaire renseigné`
-	}
-	if (open > 0) {
-		return `${open} pointage${open > 1 ? 's' : ''} jamais clôturé${open > 1 ? 's' : ''}`
-	}
-
-	return null
+	return `${missingRates} personne${missingRates > 1 ? 's' : ''} sans coût horaire renseigné`
 }
 
 /**
- * Whether a job's figures rest on complete data — the rule the headline
- * tiles (Devisé, Coût réel, Marge) all use to decide what to sum.
+ * Whether a project's figures rest on complete data — the rule the headline
+ * tiles (Devisé, Coût planifié, Marge) all use to decide what to sum.
  *
- * Mirrors the backend's `TaskProfitability::is_complete`: `null` is exactly
- * `incompleteReason(job) === null`, kept as its own named check so the three
- * tiles can share one call site instead of three inline comparisons.
+ * Mirrors the backend's `ProjectProfitability::is_complete`.
  */
-export function isCompleteJob(job: JobProfitability): boolean {
-	return incompleteReason(job) === null
+export function isCompleteProject(project: ProjectProfitability): boolean {
+	return incompleteReason(project) === null
 }
 
 /**
- * How much of a job's time was declared after the fact, in words, or `null`
- * when none was.
+ * How much of a project's time is booked twice over, in words, or `null` when
+ * none is.
  *
- * Unlike `incompleteReason`, this never means the figures are withheld: the
- * time already counts in the cost and the margin above. It only says which
- * part of it was a recollection rather than a measurement.
+ * Unlike `incompleteReason` this never withholds a figure: the minutes are
+ * known, they are simply charged twice because one person is on two tasks at
+ * once. That is a calendar to fix, not a number to distrust, so it reads as its
+ * own warning rather than joining the incomplete list.
  */
-export function recollectedNote(job: JobProfitability): string | null {
-	if (job.recollected_minutes <= 0) return null
+export function overlapNote(project: ProjectProfitability): string | null {
+	if (project.overlapping_minutes <= 0) return null
 
-	return `dont ${formatMinutes(job.recollected_minutes)} déclarées a posteriori`
+	return `dont ${formatMinutes(project.overlapping_minutes)} comptées deux fois (chevauchement)`
+}
+
+/** `null` when there is nothing to declare, so the caller can skip a row. */
+export function expensesNote(project: ProjectProfitability): string | null {
+	if (project.expenses_cents <= 0) return null
+
+	return `${formatCents(project.expenses_cents)} de frais`
 }
 
 /**
@@ -77,15 +82,17 @@ export function recollectedNote(job: JobProfitability): string | null {
  * Guards a zero quote as well as an absent one: dividing by it would produce an
  * infinity that renders as a percentage.
  */
-export function marginRate(job: JobProfitability): number | null {
-	if (job.margin_cents === null || job.margin_cents === undefined) return null
-	if (!job.quoted_cents) return null
+export function marginRate(project: ProjectProfitability): number | null {
+	if (project.margin_cents === null || project.margin_cents === undefined) {
+		return null
+	}
+	if (!project.quoted_cents) return null
 
-	return job.margin_cents / job.quoted_cents
+	return project.margin_cents / project.quoted_cents
 }
 
-export function formatMarginRate(job: JobProfitability): string {
-	const rate = marginRate(job)
+export function formatMarginRate(project: ProjectProfitability): string {
+	const rate = marginRate(project)
 	if (rate === null) return '—'
 
 	return new Intl.NumberFormat('fr-FR', {
@@ -103,4 +110,24 @@ export function currentMonthPeriod(today: Date): { from: string; to: string } {
 
 export function isoDate(date: Date): string {
 	return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
+}
+
+/**
+ * What to go and fill in, in words, for a person whose cost could not be
+ * computed.
+ *
+ * Three gaps fixed in three different places, so the sentence names one rather
+ * than listing candidates. The previous wording said "hourly rate or salary
+ * missing" and was shown to somebody who had just entered the salary: what was
+ * actually missing was the contract, on another screen entirely.
+ */
+export function missingCostLabel(missing: MissingCost): string {
+	switch (missing) {
+		case 'HOURLY_RATE':
+			return 'Taux horaire non renseigné'
+		case 'MONTHLY_COST':
+			return 'Salarié, coût mensuel non renseigné'
+		case 'CONTRACTED_HOURS':
+			return 'Heures contractuelles à renseigner pour répartir le salaire'
+	}
 }

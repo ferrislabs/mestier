@@ -5,8 +5,8 @@ use common::CoreError;
 use uuid::Uuid;
 
 use crate::{
-    CustomerContextId, CustomerId, MemberId, OrganizationId, QuoteId, Task, TaskAssignment,
-    TaskAssignmentId, TaskId, TaskStatus,
+    CustomerContextId, CustomerId, MemberId, OrganizationId, ProjectId, QuoteId, Task,
+    TaskAssignment, TaskAssignmentId, TaskId, TaskStatus,
 };
 
 #[derive(Debug, Clone)]
@@ -24,6 +24,9 @@ pub struct TaskRow {
     pub customer_id: Option<Uuid>,
     pub customer_context_id: Option<Uuid>,
     pub quote_id: Option<Uuid>,
+    pub project_id: Option<Uuid>,
+    pub expenses_cents: i32,
+    pub expenses_label: Option<String>,
     pub deleted_at: Option<DateTime<Utc>>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
@@ -48,6 +51,9 @@ impl TaskRow {
             customer_id: self.customer_id.map(CustomerId),
             customer_context_id: self.customer_context_id.map(CustomerContextId),
             quote_id: self.quote_id.map(QuoteId),
+            project_id: self.project_id.map(ProjectId),
+            expenses_cents: self.expenses_cents,
+            expenses_label: self.expenses_label,
             assignments,
             deleted_at: self.deleted_at,
             created_at: self.created_at,

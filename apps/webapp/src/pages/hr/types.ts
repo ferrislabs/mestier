@@ -5,8 +5,13 @@ export interface MemberFormValues {
 	lastName: string
 	firstName: string
 	hourlyRate: string
-	/** Salaried: no hourly figure, the rate field is disabled and ignored. */
+	/**
+	 * Salaried: costed from {@link monthlyCost} instead of an hourly rate, which
+	 * is why the rate field is disabled. It never means the time is free.
+	 */
 	isSalaried: boolean
+	/** Monthly employer cost in euros as typed. Only read when salaried. */
+	monthlyCost: string
 }
 
 /**

@@ -169,8 +169,8 @@ export function FieldDayUI({
 						</Button>
 					</div>
 					<p className="mt-2 text-xs text-muted-foreground">
-						Tant que ce projet n'est pas clôturé, vous ne pouvez pas en
-						démarrer un autre.
+						Tant que ce projet n'est pas clôturé, vous ne pouvez pas en démarrer
+						un autre.
 					</p>
 				</section>
 			) : null}

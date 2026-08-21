@@ -124,6 +124,9 @@ mod tests {
             customer_id: None,
             customer_context_id: None,
             quote_id: None,
+            project_id: None,
+            expenses_cents: 0,
+            expenses_label: None,
         }
     }
 

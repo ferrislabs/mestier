@@ -19,9 +19,14 @@ pub struct App {
     pub token: String,
     pub pool: PgPool,
     pub organization_id: Uuid,
-    pub task_id: Uuid,
-    /// A second employee's job, used to prove one worker cannot touch another's.
-    pub other_task_id: Uuid,
+    /// A customer project with a quote: one three-hour task and one expense.
+    pub project_id: Uuid,
+    /// A project with no customer and no quote — the case the old clocked model
+    /// could not express at all.
+    pub internal_project_id: Uuid,
+    /// A project whose only task sits two months back, so the period must not
+    /// report it.
+    pub stale_project_id: Uuid,
     user_id: Uuid,
     other_user_id: Uuid,
 }
@@ -67,8 +72,9 @@ pub async fn start() -> App {
         token: issuer::mint(&fixture.sub),
         pool,
         organization_id: fixture.organization_id,
-        task_id: fixture.task_id,
-        other_task_id: fixture.other_task_id,
+        project_id: fixture.project_id,
+        internal_project_id: fixture.internal_project_id,
+        stale_project_id: fixture.stale_project_id,
         user_id: fixture.user_id,
         other_user_id: fixture.other_user_id,
     }
@@ -95,6 +101,7 @@ impl App {
             "DELETE FROM time_entries WHERE org_id = $1",
             "DELETE FROM day_logs WHERE org_id = $1",
             "DELETE FROM tasks WHERE org_id = $1",
+            "DELETE FROM projects WHERE org_id = $1",
             "DELETE FROM quotes WHERE org_id = $1",
             "DELETE FROM employees WHERE org_id = $1",
             "DELETE FROM organization_members WHERE organization_id = $1",
@@ -124,16 +131,25 @@ struct Fixture {
     user_id: Uuid,
     other_user_id: Uuid,
     organization_id: Uuid,
-    task_id: Uuid,
-    other_task_id: Uuid,
+    project_id: Uuid,
+    internal_project_id: Uuid,
+    stale_project_id: Uuid,
 }
 
-/// Two employees, each with a job today. The second exists so the suite can
-/// show that one worker's routes cannot reach the other's entry.
+/// Three projects and two people, with nothing clocked anywhere.
+///
+/// Anchored on yesterday at fixed hours rather than on `Utc::now()` plus an
+/// offset: the cost now comes from the task's own window, so a fixture running
+/// near midnight would have its window clipped by the period and the numbers
+/// below would stop being stateable.
 async fn seed(pool: &PgPool) -> Fixture {
     let organization_id = Uuid::now_v7();
-    let (user_id, sub, member_id, employee_id) = seed_person(pool, organization_id, true).await;
-    let (other_user_id, _, other_member_id, _) = seed_person(pool, organization_id, false).await;
+    let (user_id, sub, member_id, employee_id) =
+        seed_person(pool, organization_id, true, CostBasis::Hourly).await;
+    // Salaried, on the exact shape that read as 0,00 €: 3 500 € a month on a
+    // 35 h contract, which is 23,08 € an hour.
+    let (other_user_id, _, other_member_id, _) =
+        seed_person(pool, organization_id, false, CostBasis::Salaried).await;
     let _ = employee_id;
 
     let customer_id = Uuid::now_v7();
@@ -145,48 +161,105 @@ async fn seed(pool: &PgPool) -> Fixture {
         .await
         .expect("seed the customer");
 
-    let now = Utc::now();
+    let yesterday = (Utc::now() - Duration::days(1))
+        .date_naive()
+        .and_hms_opt(9, 0, 0)
+        .expect("09:00 exists")
+        .and_utc();
+
     let quote_id = seed_quote(pool, organization_id, customer_id).await;
-    let task_id = seed_task(
+    let project_id = seed_project(
         pool,
         organization_id,
-        customer_id,
-        member_id,
-        now,
+        "Entretien annuel",
+        Some(customer_id),
         Some(quote_id),
     )
     .await;
-    let other_task_id = seed_task(
+    let internal_project_id = seed_project(pool, organization_id, "Vie interne", None, None).await;
+    let stale_project_id = seed_project(
         pool,
         organization_id,
-        customer_id,
-        other_member_id,
-        now,
+        "Chantier terminé",
+        Some(customer_id),
         None,
     )
     .await;
 
-    // Three hours already clocked and closed, so the report has something to
-    // compute rather than an empty period.
-    seed_closed_entry(pool, organization_id, task_id, employee_id, now).await;
+    // Three hours for one person, plus 45 euros of travel on the same task.
+    seed_task(
+        pool,
+        organization_id,
+        project_id,
+        &[member_id],
+        yesterday,
+        yesterday + Duration::hours(3),
+        "Taille de haie",
+        4_500,
+        Some("Déplacement Clermont"),
+    )
+    .await;
+
+    // Two hours with two people on it: the six-person-hour meeting the clocked
+    // model reported as nothing at all.
+    seed_task(
+        pool,
+        organization_id,
+        internal_project_id,
+        &[member_id, other_member_id],
+        yesterday + Duration::hours(5),
+        yesterday + Duration::hours(7),
+        "Réunion hebdo",
+        0,
+        None,
+    )
+    .await;
+
+    // Outside the period entirely.
+    seed_task(
+        pool,
+        organization_id,
+        stale_project_id,
+        &[member_id],
+        yesterday - Duration::days(60),
+        yesterday - Duration::days(60) + Duration::hours(4),
+        "Chantier de printemps",
+        0,
+        None,
+    )
+    .await;
+
+    // Nine hours clocked, to prove the report ignores them. Nine rather than a
+    // number the plan also produces: a coincidence would make the assertion
+    // pass for the wrong reason.
+    seed_stray_time_entry(pool, organization_id, project_id, employee_id, yesterday).await;
 
     Fixture {
         sub,
         user_id,
         other_user_id,
         organization_id,
-        task_id,
-        other_task_id,
+        project_id,
+        internal_project_id,
+        stale_project_id,
     }
 }
 
 /// A user, their organization seat, and the employee profile that carries the
 /// hourly rate. The field routes refuse a member without that profile, so all
 /// three rows are needed for the caller to get past authorization.
+/// How the seeded person is costed. Both bases are exercised because the report
+/// has to agree with itself across them.
+enum CostBasis {
+    Hourly,
+    Salaried,
+}
+
 async fn seed_person(
     pool: &PgPool,
     organization_id: Uuid,
     owns_organization: bool,
+    cost_basis: CostBasis,
 ) -> (Uuid, String, Uuid, Uuid) {
     let user_id = Uuid::now_v7();
     let sub = format!("sub-field-{user_id}");
@@ -226,13 +299,20 @@ async fn seed_person(
     .expect("seed the membership");
 
     let employee_id = Uuid::now_v7();
+    let (hourly_rate_cents, is_salaried, monthly_cost_cents) = match cost_basis {
+        CostBasis::Hourly => (Some(3_500_i32), false, None),
+        CostBasis::Salaried => (None, true, Some(350_000_i32)),
+    };
     sqlx::query(
-        "INSERT INTO employees (id, org_id, member_id, hourly_rate_cents, weekly_contract_minutes) VALUES ($1, $2, $3, $4, $5)",
+        "INSERT INTO employees (id, org_id, member_id, hourly_rate_cents, is_salaried, monthly_cost_cents, weekly_contract_minutes)
+         VALUES ($1, $2, $3, $4, $5, $6, $7)",
     )
     .bind(employee_id)
     .bind(organization_id)
     .bind(member_id)
-    .bind(3500)
+    .bind(hourly_rate_cents)
+    .bind(is_salaried)
+    .bind(monthly_cost_cents)
     .bind(2100)
     .execute(pool)
     .await
@@ -271,14 +351,49 @@ async fn seed_quote(pool: &PgPool, organization_id: Uuid, customer_id: Uuid) -> 
     quote_id
 }
 
-/// One closed stretch: three hours, at the rate the fixture gave the employee.
-async fn seed_closed_entry(
+async fn seed_project(
+    pool: &PgPool,
+    organization_id: Uuid,
+    name: &str,
+    customer_id: Option<Uuid>,
+    quote_id: Option<Uuid>,
+) -> Uuid {
+    let project_id = Uuid::now_v7();
+    sqlx::query(
+        "INSERT INTO projects (id, org_id, name, customer_id, quote_id) VALUES ($1, $2, $3, $4, $5)",
+    )
+    .bind(project_id)
+    .bind(organization_id)
+    .bind(name)
+    .bind(customer_id)
+    .bind(quote_id)
+    .execute(pool)
+    .await
+    .expect("seed the project");
+
+    project_id
+}
+
+/// Time clocked on the task, which nothing reads for money any more.
+async fn seed_stray_time_entry(
     pool: &PgPool,
     organization_id: Uuid,
     task_id: Uuid,
     employee_id: Uuid,
-    now: DateTime<Utc>,
+    anchor: DateTime<Utc>,
 ) {
+    let task_id: Option<Uuid> =
+        sqlx::query_scalar("SELECT id FROM tasks WHERE org_id = $1 AND project_id = $2 LIMIT 1")
+            .bind(organization_id)
+            .bind(task_id)
+            .fetch_optional(pool)
+            .await
+            .expect("look up the task to clock against");
+
+    let Some(task_id) = task_id else {
+        return;
+    };
+
     sqlx::query(
         "INSERT INTO time_entries (id, org_id, task_id, employee_id, started_at, ended_at)
          VALUES ($1, $2, $3, $4, $5, $6)",
@@ -287,48 +402,55 @@ async fn seed_closed_entry(
     .bind(organization_id)
     .bind(task_id)
     .bind(employee_id)
-    .bind(now - Duration::hours(4))
-    .bind(now - Duration::hours(1))
+    .bind(anchor)
+    .bind(anchor + Duration::hours(9))
     .execute(pool)
     .await
-    .expect("seed the closed time entry");
+    .expect("seed the stray time entry");
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn seed_task(
     pool: &PgPool,
     organization_id: Uuid,
-    customer_id: Uuid,
-    member_id: Uuid,
-    now: DateTime<Utc>,
-    quote_id: Option<Uuid>,
+    project_id: Uuid,
+    member_ids: &[Uuid],
+    starts_at: DateTime<Utc>,
+    ends_at: DateTime<Utc>,
+    title: &str,
+    expenses_cents: i32,
+    expenses_label: Option<&str>,
 ) -> Uuid {
     let task_id = Uuid::now_v7();
     sqlx::query(
-        "INSERT INTO tasks (id, org_id, customer_id, quote_id, starts_at, ends_at, all_day, status, title)
-         VALUES ($1, $2, $3, $4, $5, $6, false, CAST($7 AS text)::task_status, $8)",
+        "INSERT INTO tasks (id, org_id, project_id, starts_at, ends_at, all_day, status, title, expenses_cents, expenses_label)
+         VALUES ($1, $2, $3, $4, $5, false, CAST($6 AS text)::task_status, $7, $8, $9)",
     )
     .bind(task_id)
     .bind(organization_id)
-    .bind(customer_id)
-    .bind(quote_id)
-    .bind(now - Duration::hours(5))
-    .bind(now + Duration::hours(4))
+    .bind(project_id)
+    .bind(starts_at)
+    .bind(ends_at)
     .bind("PLANNED")
-    .bind("Taille de haie")
+    .bind(title)
+    .bind(expenses_cents)
+    .bind(expenses_label)
     .execute(pool)
     .await
     .expect("seed the task");
 
-    sqlx::query(
-        "INSERT INTO task_assignments (id, org_id, task_id, member_id) VALUES ($1, $2, $3, $4)",
-    )
-    .bind(Uuid::now_v7())
-    .bind(organization_id)
-    .bind(task_id)
-    .bind(member_id)
-    .execute(pool)
-    .await
-    .expect("seed the assignment");
+    for member_id in member_ids {
+        sqlx::query(
+            "INSERT INTO task_assignments (id, org_id, task_id, member_id) VALUES ($1, $2, $3, $4)",
+        )
+        .bind(Uuid::now_v7())
+        .bind(organization_id)
+        .bind(task_id)
+        .bind(member_id)
+        .execute(pool)
+        .await
+        .expect("seed the assignment");
+    }
 
     task_id
 }

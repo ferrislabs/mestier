@@ -2,7 +2,7 @@ use auth::Identity;
 use axum::{Extension, Json, extract::State};
 use chrono::{DateTime, Utc};
 use handlers::{ApiError, AppState, DataEnvelope, Response, resolve_user_id};
-use mestier_core::{CreateTaskCommand, CustomerContextId, CustomerId, QuoteId, TaskId};
+use mestier_core::{CreateTaskCommand, CustomerContextId, CustomerId, ProjectId, QuoteId, TaskId};
 use serde::Deserialize;
 use utoipa::ToSchema;
 
@@ -35,6 +35,17 @@ pub struct CreateTaskRequest {
     pub customer_context_id: Option<CustomerContextId>,
     #[serde(default)]
     pub quote_id: Option<QuoteId>,
+    /// The project this task is costed against. Unrelated to `parent_task_id`:
+    /// a subtask may name a project its parent does not.
+    #[serde(default)]
+    pub project_id: Option<ProjectId>,
+    /// What the task costs beyond somebody's time, and why. A non-zero amount
+    /// without a label is refused (409): an amount with no reason cannot be
+    /// audited later.
+    #[serde(default)]
+    pub expenses_cents: i32,
+    #[serde(default)]
+    pub expenses_label: Option<String>,
 }
 
 #[utoipa::path(
@@ -87,6 +98,9 @@ pub async fn handler(
             customer_id: payload.customer_id,
             customer_context_id: payload.customer_context_id,
             quote_id: payload.quote_id,
+            project_id: payload.project_id,
+            expenses_cents: payload.expenses_cents,
+            expenses_label: payload.expenses_label,
         })
         .await?;
 

@@ -36,6 +36,14 @@ pub use infrastructure::automation::webhook::{
 pub use infrastructure::automation::worker::{WorkerSchedule, run_automation_worker};
 pub use infrastructure::realtime::EventHub;
 
+/// The rule that turns a salaried person's monthly cost into an hourly one.
+///
+/// Exposed because three layers need the same arithmetic and none of them may
+/// re-derive it: the profitability calculation costs their time with it, the
+/// employee response sends the equivalent back so a form can show it, and a
+/// migration comment points at it.
+pub use domain::employee::service::salaried_hourly_rate_cents;
+
 /// Exposed for the BDD suite under `tests/`, which drives the quote service
 /// against a `mockall` double of its repository port. The port itself stays
 /// crate-private: nothing outside implements it by hand.
@@ -67,6 +75,7 @@ pub use domain::{
     organization::ports::MockOrganizationRepository,
     planning::ports::MockPlanningRepository,
     product::ports::MockProductRepository,
+    project::ports::MockProjectRepository,
     quote::ports::MockQuoteRepository,
     role::ports::MockRoleRepository,
     service_rate::ports::MockServiceRateRepository,
@@ -81,15 +90,16 @@ pub use domain::{
     Absence, AbsenceId, AbsenceKind, AssigneeRef, AvailabilityReport, Conflict, ConflictKind,
     Customer, CustomerContact, CustomerContactId, CustomerContext, CustomerContextId, CustomerId,
     CustomerPipelineStage, CustomerStatus, DateRange, DayLog, DayLogId, Employee, EmployeeId,
-    EmployeeProfitability, EmployeeRhythm, EmployeeRhythmId, Equipment, EquipmentId, FileObject,
-    Invitation, InvitationId, Member, MemberId, MemberWithAccount, MemberWorkTime, MinuteInterval,
-    Organization, OrganizationId, Permissions, PlanningEntry, PlanningResource, PlanningTask,
-    PlanningView, PresignedUrl, Product, ProductId, ProfitabilityFacts, ProfitabilityReport, Quote,
-    QuoteId, QuoteLine, QuoteLineId, QuoteStatus, RhythmSlot, RhythmSlotId, Role, RoleId,
-    ServiceRate, ServiceRateId, ServiceRateUnit, StoredFile, Task, TaskAssignment,
-    TaskAssignmentId, TaskComment, TaskCommentId, TaskId, TaskLabel, TaskLabelId,
-    TaskProfitability, TaskStatus, TimeEntry, TimeEntryId, TimeEntryPhoto, TimeEntryPhotoId,
-    TimeEntryPhotoPhase, TimeRange, Tz, User, UserId, WorkSlot, WorkSlotId,
+    EmployeeRhythm, EmployeeRhythmId, Equipment, EquipmentId, FileObject, Invitation, InvitationId,
+    Member, MemberId, MemberProfitability, MemberWithAccount, MemberWorkTime, MinuteInterval,
+    MissingCost, Organization, OrganizationId, Permissions, PlannedAssignment, PlanningEntry,
+    PlanningResource, PlanningTask, PlanningView, PresignedUrl, Product, ProductId,
+    ProfitabilityFacts, ProfitabilityReport, Project, ProjectId, ProjectProfitability, Quote,
+    QuoteId, QuoteLine, QuoteLineId, QuoteStatus, ReportPeriod, RhythmSlot, RhythmSlotId, Role,
+    RoleId, ServiceRate, ServiceRateId, ServiceRateUnit, StoredFile, Task, TaskAssignment,
+    TaskAssignmentId, TaskComment, TaskCommentId, TaskExpense, TaskId, TaskLabel, TaskLabelId,
+    TaskStatus, TimeEntry, TimeEntryId, TimeEntryPhoto, TimeEntryPhotoId, TimeEntryPhotoPhase,
+    TimeRange, Tz, User, UserId, WorkSlot, WorkSlotId,
     absence::commands::{CreateAbsenceCommand, PatchAbsenceCommand},
     customer::commands::{CreateCustomerCommand, UpdateCustomerCommand},
     customer_contact::commands::{CreateCustomerContactCommand, UpdateCustomerContactCommand},
@@ -104,6 +114,7 @@ pub use domain::{
     organization::commands::{CreateOrganizationCommand, UpdateOrganizationCommand},
     planning::service::detect_conflicts,
     product::commands::{CreateProductCommand, UpdateProductCommand},
+    project::commands::{CreateProjectCommand, UpdateProjectCommand},
     quote::commands::{
         CreateQuoteCommand, QuoteLineCommand, UpdateQuoteCommand, UpdateQuoteStatusCommand,
     },

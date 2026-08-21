@@ -5,7 +5,7 @@ use mestier_macros::transactional;
 use crate::{
     OrganizationId, ProfitabilityReport, Tz,
     application::{MestierUseCase, organization::resolve_timezone},
-    domain::profitability::service::ProfitabilityService,
+    domain::profitability::{ReportPeriod, service::ProfitabilityService},
 };
 
 impl MestierUseCase {
@@ -13,9 +13,13 @@ impl MestierUseCase {
     ///
     /// The dates are resolved into instants here, in the organization's
     /// timezone, for the same reason the field app does it: a period is a
-    /// business notion and UTC is not where the business lives. A day of work
-    /// finished at 00:30 local belongs to the day it started.
-    #[transactional(profitability, organization)]
+    /// business notion and UTC is not where the business lives. The timezone
+    /// then travels with the period, because an all-day task has no duration
+    /// until one is chosen.
+    ///
+    /// `planning` is listed for its two organization-wide work-time queries,
+    /// which only all-day tasks need — see `ProfitabilityService`.
+    #[transactional(profitability, planning, organization)]
     pub async fn profitability_report(
         &self,
         organization_id: OrganizationId,
@@ -32,9 +36,18 @@ impl MestierUseCase {
         let timezone = resolve_timezone(&mut organization_repository, organization_id).await?;
         let (starts_at, ends_at) = period_bounds(from, to, timezone)?;
 
-        let mut service = ProfitabilityService::new(profitability_repository);
+        let mut service = ProfitabilityService::new(profitability_repository, planning_repository);
 
-        service.report(organization_id, starts_at, ends_at).await
+        service
+            .report(
+                organization_id,
+                ReportPeriod {
+                    from: starts_at,
+                    to: ends_at,
+                    timezone,
+                },
+            )
+            .await
     }
 }
 
