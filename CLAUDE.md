@@ -9,7 +9,7 @@ Cargo workspace plus a pnpm app:
 - `apps/api` — the Axum binary. Assembles the router and the OpenAPI document; holds no business logic.
 - `apps/webapp` — React 19 + TanStack (Router, Query, Table, Form).
 - `libs/core` — the whole backend domain, split `domain/` (entities, ports, pure services) → `application/` (use cases) → `infrastructure/` (adapters). One directory per bounded context in each layer.
-- `libs/handlers-*` — HTTP handlers, one crate per bounded context. `libs/handlers` holds `AppState` and the shared error type.
+- `libs/handlers-*` — HTTP handlers, one crate per **area**, not per bounded context: `handlers-planning` holds task/project/label/work-time, `handlers-reference` holds the referentials. Each crate is split by aggregate into submodules, and adding one touches two lines of its `lib.rs` (a `pub mod` and a `.merge(...)`). `libs/handlers` holds `AppState` and the shared error type.
 - `libs/events` — the `DomainEvent` trait, the persisted envelope and the event catalogue. Depends on nothing in `libs/core`.
 - `libs/macros` — `#[transactional]` and `#[repository]`. Read it before touching a use case.
 - Others: `args`, `auth` (FerrisKey), `authz`, `common` (ids, `CoreError`, config), `discord` (chat domain), `iam`, `pagination`, `rate-limit`, `server`.
