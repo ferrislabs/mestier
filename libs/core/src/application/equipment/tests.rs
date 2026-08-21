@@ -118,6 +118,7 @@ mod tests {
             customer_id: None,
             customer_context_id: None,
             quote_id: None,
+            project_id: None,
         }
     }
 

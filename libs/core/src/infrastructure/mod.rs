@@ -19,6 +19,7 @@ pub mod postgres;
 pub mod presence;
 pub mod product;
 pub mod profitability;
+pub mod project;
 pub mod quote;
 pub mod read_state;
 pub mod realtime;

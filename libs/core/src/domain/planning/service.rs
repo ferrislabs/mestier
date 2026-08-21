@@ -668,6 +668,7 @@ mod tests {
             customer_id: Some(CustomerId(Uuid::new_v4())),
             customer_context_id: Some(CustomerContextId(Uuid::new_v4())),
             quote_id: None::<QuoteId>,
+            project_id: None,
             assignments: Vec::new(),
             deleted_at: None,
             created_at: starts_at,
