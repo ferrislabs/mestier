@@ -1,7 +1,7 @@
 use chrono::{DateTime, Utc};
 use mestier_core::{
-    CustomerContextId, CustomerId, Equipment, EquipmentId, MemberId, OrganizationId, QuoteId, Task,
-    TaskId, TaskStatus,
+    CustomerContextId, CustomerId, Equipment, EquipmentId, MemberId, OrganizationId, Project,
+    ProjectId, QuoteId, Task, TaskId, TaskStatus,
 };
 use serde::Serialize;
 use utoipa::ToSchema;
@@ -51,6 +51,13 @@ pub struct TaskResponse {
     pub customer_id: Option<CustomerId>,
     pub customer_context_id: Option<CustomerContextId>,
     pub quote_id: Option<QuoteId>,
+    /// The project this task is costed against, if any. Independent of
+    /// `parent_task_id`: a subtask may name a project its parent does not.
+    pub project_id: Option<ProjectId>,
+    /// What the task costs beyond somebody's time. `0` with no label when there
+    /// is nothing to declare.
+    pub expenses_cents: i32,
+    pub expenses_label: Option<String>,
     /// The complete set of currently assigned employees — mirrors the
     /// `PATCH` contract, where `assignees` is always the full list.
     pub member_ids: Vec<MemberId>,
@@ -98,6 +105,9 @@ impl From<Task> for TaskResponse {
             customer_id: value.customer_id,
             customer_context_id: value.customer_context_id,
             quote_id: value.quote_id,
+            project_id: value.project_id,
+            expenses_cents: value.expenses_cents,
+            expenses_label: value.expenses_label,
             member_ids: value
                 .assignments
                 .into_iter()
@@ -296,5 +306,97 @@ mod tests {
         let value = serde_json::to_value(&response).unwrap();
         assert_eq!(value["labels"][0]["name"], "Urgent");
         assert_eq!(value["labels"][1]["name"], "Réunion");
+    }
+
+    fn project(customer: bool) -> Project {
+        let now = Utc::now();
+
+        Project {
+            id: "77777777-7777-7777-7777-777777777777".parse().unwrap(),
+            organization_id: "22222222-2222-2222-2222-222222222222".parse().unwrap(),
+            name: "Réunion hebdo".to_owned(),
+            customer_id: customer.then(|| "44444444-4444-4444-4444-444444444444".parse().unwrap()),
+            customer_context_id: None,
+            quote_id: None,
+            archived_at: None,
+            created_at: now,
+            updated_at: now,
+        }
+    }
+
+    #[test]
+    fn a_project_with_no_customer_is_reported_as_internal() {
+        let response: ProjectResponse = project(false).into();
+
+        assert!(
+            response.is_internal,
+            "the front should not have to know that internal means customer-less"
+        );
+        assert_eq!(response.customer_id, None);
+    }
+
+    #[test]
+    fn a_project_with_a_customer_is_not_internal() {
+        let response: ProjectResponse = project(true).into();
+
+        assert!(!response.is_internal);
+    }
+
+    #[test]
+    fn task_response_carries_the_project_and_the_expenses() {
+        let mut source = task();
+        source.project_id = Some("77777777-7777-7777-7777-777777777777".parse().unwrap());
+        source.expenses_cents = 4_500;
+        source.expenses_label = Some("Déplacement Clermont".to_owned());
+
+        let response: TaskResponse = source.into();
+
+        assert_eq!(
+            response.project_id,
+            Some("77777777-7777-7777-7777-777777777777".parse().unwrap())
+        );
+        assert_eq!(response.expenses_cents, 4_500);
+        assert_eq!(
+            response.expenses_label.as_deref(),
+            Some("Déplacement Clermont")
+        );
+    }
+}
+
+/// A project as the API returns it.
+///
+/// `customer_id` is `null` for internal work, and that is a state rather than
+/// missing data: it is what lets a recurring meeting be a cost centre.
+/// `archived_at` carries the whole lifecycle — there is no separate status.
+#[derive(Debug, Clone, PartialEq, Serialize, ToSchema)]
+pub struct ProjectResponse {
+    pub id: ProjectId,
+    pub organization_id: OrganizationId,
+    pub name: String,
+    pub customer_id: Option<CustomerId>,
+    pub customer_context_id: Option<CustomerContextId>,
+    pub quote_id: Option<QuoteId>,
+    pub archived_at: Option<DateTime<Utc>>,
+    /// Derived rather than stored, so the front does not have to know that
+    /// "internal" means "no customer".
+    pub is_internal: bool,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+}
+
+impl From<Project> for ProjectResponse {
+    fn from(value: Project) -> Self {
+        Self {
+            is_internal: value.is_internal(),
+            id: value.id,
+            organization_id: value.organization_id,
+            name: value.name,
+            customer_id: value.customer_id,
+            customer_context_id: value.customer_context_id,
+            quote_id: value.quote_id,
+            archived_at: value.archived_at,
+            created_at: value.created_at,
+            updated_at: value.updated_at,
+        }
     }
 }

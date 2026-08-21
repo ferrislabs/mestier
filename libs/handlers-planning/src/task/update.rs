@@ -3,7 +3,8 @@ use axum::{Extension, Json, extract::State};
 use chrono::{DateTime, Utc};
 use handlers::{ApiError, AppState, DataEnvelope, Response, resolve_user_id};
 use mestier_core::{
-    AssigneeRef, EquipmentId, MemberId, PatchTaskCommand, TaskId, TaskLabelId, TaskStatus,
+    AssigneeRef, EquipmentId, MemberId, PatchTaskCommand, ProjectId, TaskId, TaskLabelId,
+    TaskStatus,
 };
 use serde::{Deserialize, Deserializer};
 use utoipa::ToSchema;
@@ -78,6 +79,19 @@ pub struct UpdateTaskRequest {
     pub label_ids: Option<Vec<TaskLabelId>>,
     #[serde(default)]
     pub equipment_ids: Option<Vec<EquipmentId>>,
+    /// `null` detaches the task from its project. A project belonging to another
+    /// organization is a 404, not a 500: the composite foreign key would refuse
+    /// it as a raw database error, so the application layer resolves it first.
+    #[serde(default, deserialize_with = "deserialize_present")]
+    #[schema(value_type = Option<ProjectId>, nullable)]
+    pub project_id: Option<Option<ProjectId>>,
+    /// The amount is `NOT NULL` in the schema, so a plain `Option` says it all:
+    /// absent leaves it alone, `0` clears the expense and its label with it.
+    #[serde(default)]
+    pub expenses_cents: Option<i32>,
+    #[serde(default, deserialize_with = "deserialize_present")]
+    #[schema(value_type = Option<String>, nullable)]
+    pub expenses_label: Option<Option<String>>,
 }
 
 #[utoipa::path(
@@ -123,6 +137,9 @@ pub async fn handler(
     command.blocks_availability = payload.blocks_availability;
     command.label_ids = payload.label_ids;
     command.equipment_ids = payload.equipment_ids;
+    command.project_id = payload.project_id;
+    command.expenses_cents = payload.expenses_cents;
+    command.expenses_label = payload.expenses_label;
     command.assignees = payload
         .assignees
         .map(|assignees| assignees.into_iter().map(Into::into).collect());
@@ -356,6 +373,49 @@ mod tests {
             Some(Vec::new()),
             "`equipment_ids: []` is a present, empty replacement list — it must drop every \
              equipment link, not be mistaken for \"don't touch equipment\""
+        );
+    }
+
+    /// The absent/null distinction the whole `deserialize_present` dance exists
+    /// for, on the two fields this workstream added.
+    #[test]
+    fn an_absent_project_id_leaves_the_attachment_alone() {
+        let payload: UpdateTaskRequest = serde_json::from_str("{}").unwrap();
+
+        assert_eq!(payload.project_id, None);
+        assert_eq!(payload.expenses_cents, None);
+        assert_eq!(payload.expenses_label, None);
+    }
+
+    #[test]
+    fn an_explicit_null_project_id_detaches_the_task() {
+        let payload: UpdateTaskRequest = serde_json::from_str(r#"{"project_id": null}"#).unwrap();
+
+        assert_eq!(
+            payload.project_id,
+            Some(None),
+            "null means detach, not leave alone"
+        );
+    }
+
+    #[test]
+    fn expenses_round_trip_as_an_amount_and_a_label() {
+        let payload: UpdateTaskRequest =
+            serde_json::from_str(r#"{"expenses_cents": 4500, "expenses_label": "Déplacement"}"#)
+                .unwrap();
+
+        assert_eq!(payload.expenses_cents, Some(4_500));
+        assert_eq!(payload.expenses_label, Some(Some("Déplacement".to_owned())));
+    }
+
+    #[test]
+    fn clearing_the_amount_needs_no_label_key() {
+        let payload: UpdateTaskRequest = serde_json::from_str(r#"{"expenses_cents": 0}"#).unwrap();
+
+        assert_eq!(payload.expenses_cents, Some(0));
+        assert_eq!(
+            payload.expenses_label, None,
+            "the service drops the label when the amount is zero"
         );
     }
 }
