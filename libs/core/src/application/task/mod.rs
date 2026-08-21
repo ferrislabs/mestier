@@ -7,6 +7,7 @@ use crate::{
     AssigneeRef, OrganizationId, Task, TaskId,
     application::MestierUseCase,
     domain::equipment::service::EquipmentService,
+    domain::project::service::ProjectService,
     domain::task::{
         commands::{CreateTaskCommand, PatchTaskCommand},
         service::TaskService,
@@ -17,8 +18,16 @@ use crate::{
 mod tests;
 
 impl MestierUseCase {
-    #[transactional(task, member)]
+    #[transactional(task, member, project)]
     pub async fn create_task(&self, command: CreateTaskCommand) -> Result<Task, CoreError> {
+        if let Some(project_id) = command.project_id {
+            let mut project_service = ProjectService::new(project_repository);
+            let project = project_service.get_project(project_id).await?;
+            if project.organization_id != command.organization_id {
+                return Err(CoreError::NotFound);
+            }
+        }
+
         let mut service = TaskService::new(task_repository, member_repository);
         service.create_task(command).await
     }
@@ -63,12 +72,32 @@ impl MestierUseCase {
     /// files), so composing `TaskLabelRepository`/`EquipmentRepository` at
     /// this thin, already-transactional seam avoids adding a dependency from
     /// `task`'s own domain service onto a sibling aggregate's port.
-    #[transactional(task, member, task_label, equipment)]
+    #[transactional(task, member, task_label, equipment, project)]
     pub async fn patch_task(&self, command: PatchTaskCommand) -> Result<Task, CoreError> {
         let label_ids = command.label_ids.clone();
         let equipment_ids = command.equipment_ids.clone();
 
+        // Resolved before anything is written. The composite foreign key on
+        // `(project_id, org_id)` already makes a cross-organization attachment
+        // impossible, but it fails as a plain database error, which surfaces as
+        // a 500. One indexed read inside the transaction buys the 404 the
+        // caller deserves. Mirrors `replace_task_equipment`'s own rule: an
+        // unknown id, or one from another organization, is `NotFound`.
         let mut service = TaskService::new(task_repository, member_repository);
+
+        if let Some(Some(project_id)) = command.project_id {
+            let organization_id = service.get_task(command.id).await?.organization_id;
+            let mut project_service = ProjectService::new(project_repository);
+            if project_service
+                .get_project(project_id)
+                .await?
+                .organization_id
+                != organization_id
+            {
+                return Err(CoreError::NotFound);
+            }
+        }
+
         let task = service.patch_task(command).await?;
 
         if let Some(label_ids) = label_ids {

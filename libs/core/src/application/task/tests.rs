@@ -213,6 +213,7 @@ mod tests {
             customer_id: Some(fixture.customer_id),
             customer_context_id: Some(fixture.customer_context_id),
             quote_id: None,
+            project_id: None,
         }
     }
 

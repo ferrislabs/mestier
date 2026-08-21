@@ -179,6 +179,7 @@ where
                 customer_id: command.customer_id,
                 customer_context_id: command.customer_context_id,
                 quote_id: command.quote_id,
+                project_id: command.project_id,
                 assignments: Vec::new(),
                 deleted_at: None,
                 created_at: now,
@@ -284,6 +285,9 @@ where
         }
         if let Some(blocks_availability) = command.blocks_availability {
             task.blocks_availability = blocks_availability;
+        }
+        if let Some(project_id) = command.project_id {
+            task.project_id = project_id;
         }
         task.updated_at = Utc::now();
 
@@ -523,6 +527,7 @@ mod tests {
             customer_id: Some(CustomerId(Uuid::new_v4())),
             customer_context_id: Some(CustomerContextId(Uuid::new_v4())),
             quote_id: None,
+            project_id: None,
             assignments: Vec::new(),
             deleted_at: None,
             created_at: now,
@@ -673,6 +678,7 @@ mod tests {
             customer_id: Some(CustomerId(Uuid::new_v4())),
             customer_context_id: Some(CustomerContextId(Uuid::new_v4())),
             quote_id: None,
+            project_id: None,
         }
     }
 

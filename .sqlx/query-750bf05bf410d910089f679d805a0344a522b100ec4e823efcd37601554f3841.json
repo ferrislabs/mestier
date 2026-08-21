@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            INSERT INTO tasks (id, org_id, parent_task_id, title, description, starts_at, ends_at, all_day, status, blocks_availability, customer_id, customer_context_id, quote_id, deleted_at, created_at, updated_at)\n            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, CAST($9 AS text)::task_status, $10, $11, $12, $13, $14, $15, $16)\n            RETURNING id, org_id, parent_task_id, title, description, starts_at, ends_at, all_day, status::text AS \"status!\", blocks_availability, customer_id, customer_context_id, quote_id, deleted_at, created_at, updated_at\n            ",
+  "query": "\n            SELECT id, org_id, parent_task_id, title, description, starts_at, ends_at, all_day, status::text AS \"status!\", blocks_availability, customer_id, customer_context_id, quote_id, project_id, deleted_at, created_at, updated_at\n            FROM tasks\n            WHERE org_id = $1 AND deleted_at IS NULL\n              AND (\n                ($2::uuid IS NULL AND parent_task_id IS NULL)\n                OR parent_task_id = $2\n              )\n            ORDER BY starts_at ASC NULLS LAST, id ASC\n            LIMIT $3 OFFSET $4\n            ",
   "describe": {
     "columns": [
       {
@@ -70,16 +70,21 @@
       },
       {
         "ordinal": 13,
+        "name": "project_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 14,
         "name": "deleted_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 14,
+        "ordinal": 15,
         "name": "created_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 15,
+        "ordinal": 16,
         "name": "updated_at",
         "type_info": "Timestamptz"
       }
@@ -88,20 +93,8 @@
       "Left": [
         "Uuid",
         "Uuid",
-        "Uuid",
-        "Text",
-        "Text",
-        "Timestamptz",
-        "Timestamptz",
-        "Bool",
-        "Text",
-        "Bool",
-        "Uuid",
-        "Uuid",
-        "Uuid",
-        "Timestamptz",
-        "Timestamptz",
-        "Timestamptz"
+        "Int8",
+        "Int8"
       ]
     },
     "nullable": [
@@ -119,9 +112,10 @@
       true,
       true,
       true,
+      true,
       false,
       false
     ]
   },
-  "hash": "a2cda0c2e47cd26126cff970dbe74eb2efd351e2319294353cb1d76f13ec0d85"
+  "hash": "750bf05bf410d910089f679d805a0344a522b100ec4e823efcd37601554f3841"
 }

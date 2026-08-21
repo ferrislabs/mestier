@@ -170,6 +170,7 @@ mod tests {
             customer_id: Some("44444444-4444-4444-4444-444444444444".parse().unwrap()),
             customer_context_id: Some("55555555-5555-5555-5555-555555555555".parse().unwrap()),
             quote_id: None,
+            project_id: None,
             assignments: vec![TaskAssignment {
                 id: "66666666-6666-6666-6666-666666666666".parse().unwrap(),
                 organization_id,
