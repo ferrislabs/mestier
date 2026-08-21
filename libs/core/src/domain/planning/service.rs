@@ -935,6 +935,7 @@ mod tests {
             member_id,
             hourly_rate_cents: Some(3500),
             is_salaried: false,
+            monthly_cost_cents: None,
             weekly_contract_minutes: 2100,
             deleted_at: None,
             created_at: now,

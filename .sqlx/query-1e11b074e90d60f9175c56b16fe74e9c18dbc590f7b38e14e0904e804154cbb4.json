@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT id, org_id, member_id, hourly_rate_cents, is_salaried, weekly_contract_minutes, deleted_at, created_at, updated_at\n            FROM employees\n            WHERE member_id = $1 AND deleted_at IS NULL\n            ",
+  "query": "\n            UPDATE employees\n            SET hourly_rate_cents = $2, is_salaried = $3, monthly_cost_cents = $4, weekly_contract_minutes = $5, updated_at = $6\n            WHERE id = $1 AND deleted_at IS NULL\n            RETURNING id, org_id, member_id, hourly_rate_cents, is_salaried, monthly_cost_cents, weekly_contract_minutes, deleted_at, created_at, updated_at\n            ",
   "describe": {
     "columns": [
       {
@@ -30,28 +30,38 @@
       },
       {
         "ordinal": 5,
-        "name": "weekly_contract_minutes",
+        "name": "monthly_cost_cents",
         "type_info": "Int4"
       },
       {
         "ordinal": 6,
+        "name": "weekly_contract_minutes",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 7,
         "name": "deleted_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 7,
+        "ordinal": 8,
         "name": "created_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 8,
+        "ordinal": 9,
         "name": "updated_at",
         "type_info": "Timestamptz"
       }
     ],
     "parameters": {
       "Left": [
-        "Uuid"
+        "Uuid",
+        "Int4",
+        "Bool",
+        "Int4",
+        "Int4",
+        "Timestamptz"
       ]
     },
     "nullable": [
@@ -60,11 +70,12 @@
       false,
       true,
       false,
+      true,
       false,
       true,
       false,
       false
     ]
   },
-  "hash": "fde8a4344931f7de1d34833e62aa2e0e96cd97c796654ad868763c378824a710"
+  "hash": "1e11b074e90d60f9175c56b16fe74e9c18dbc590f7b38e14e0904e804154cbb4"
 }

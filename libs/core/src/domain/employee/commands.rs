@@ -12,6 +12,8 @@ pub struct UpsertEmployeeProfileCommand {
     /// Ignored when `is_salaried` is set — see [`super::service::validate_rate`].
     pub hourly_rate_cents: Option<i32>,
     pub is_salaried: bool,
+    /// Ignored unless `is_salaried` is set — the two cost bases are exclusive.
+    pub monthly_cost_cents: Option<i32>,
     pub weekly_contract_minutes: i32,
 }
 

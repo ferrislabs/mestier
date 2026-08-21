@@ -16,6 +16,7 @@ use utoipa::ToSchema;
 
 use crate::{
     CustomerId, EmployeeId, EmployeeRhythm, EquipmentId, MemberId, ProjectId, TaskId, Tz, WorkSlot,
+    domain::employee::service::salaried_hourly_rate_cents,
 };
 
 pub mod ports;
@@ -52,11 +53,24 @@ pub struct PlannedAssignment {
     /// [`ProjectProfitability::members_without_rate`], because both mean the
     /// same thing to the reader: go and set a rate for this person.
     pub employee_id: Option<EmployeeId>,
+    /// Set for someone costed by the hour. `None` for a salaried person, whose
+    /// hourly cost is derived instead — see
+    /// [`Self::effective_hourly_rate_cents`].
     pub hourly_rate_cents: Option<i32>,
-    /// True when this person is not costed by the hour at all. Their time still
-    /// counts as planned, at zero labour cost, and it is never mistaken for a
-    /// missing rate.
+    /// True when this person is costed from [`Self::monthly_cost_cents`].
+    ///
+    /// This used to mean "costs nothing", and their time was counted at zero.
+    /// That was wrong: a salaried person costs a salary every month, and zeroing
+    /// them understated every project they touched, silently, because they were
+    /// deliberately kept out of `members_without_rate`. A salaried person is now
+    /// simply someone whose rate is computed rather than typed.
     pub is_salaried: bool,
+    /// Monthly employer cost, for a salaried person.
+    pub monthly_cost_cents: Option<i32>,
+    /// The contract the monthly cost is spread over. `0` for someone with no
+    /// contract, which is why a salary alone is not enough to state an hourly
+    /// cost.
+    pub weekly_contract_minutes: i32,
     /// The task's effective window: its own, or its parent's when a subtask
     /// inherits it. Resolved by the adapter in SQL, so the calculation never
     /// walks the hierarchy.
@@ -66,6 +80,42 @@ pub struct PlannedAssignment {
     /// member's work slots on each day it covers — see
     /// [`service::build_report`].
     pub all_day: bool,
+}
+
+/// Why an hour of somebody's time cannot be priced.
+///
+/// Three distinct gaps, and the reader has to be told which one: a screen that
+/// says "hourly rate or salary missing" when what is actually missing is the
+/// contract sends somebody looking in the wrong place. That happened.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, ToSchema)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum MissingCost {
+    /// Costed by the hour, and no rate was entered.
+    HourlyRate,
+    /// Costed from a salary, and no amount was entered.
+    MonthlyCost,
+    /// An amount was entered, but there are no contracted hours to spread it
+    /// over, so it has no hourly equivalent.
+    ContractedHours,
+}
+
+impl PlannedAssignment {
+    /// What an hour of this person costs, or which figure is missing.
+    ///
+    /// One accessor rather than a branch at each call site: the project total and
+    /// the per-person total must never disagree about what somebody costs, and
+    /// two copies of this rule is how they would. Returning the *reason* rather
+    /// than a bare `None` is what lets the screen name the field to go and fill.
+    pub fn hourly_cost_cents(&self) -> Result<i32, MissingCost> {
+        if !self.is_salaried {
+            return self.hourly_rate_cents.ok_or(MissingCost::HourlyRate);
+        }
+
+        let monthly_cost_cents = self.monthly_cost_cents.ok_or(MissingCost::MonthlyCost)?;
+
+        salaried_hourly_rate_cents(Some(monthly_cost_cents), self.weekly_contract_minutes)
+            .ok_or(MissingCost::ContractedHours)
+    }
 }
 
 /// Money a task cost beyond somebody's time.
@@ -153,10 +203,10 @@ pub struct ProjectProfitability {
     /// `None` when the project has no quote, or when a rate is missing: a
     /// margin computed from a floor reads as fact and is not one.
     pub margin_cents: Option<i64>,
-    /// People booked on this project whose hourly rate is not set, either
-    /// because their contract leaves it blank or because they have no contract.
-    /// While this is not empty the cost is a lower bound, and no margin is
-    /// stated.
+    /// People booked on this project whose hourly cost cannot be stated: an
+    /// hourly rate nobody entered, no contract at all, or a salary with no
+    /// contracted hours to spread it over. While this is not empty the cost is a
+    /// lower bound, and no margin is stated.
     pub members_without_rate: Vec<MemberId>,
 }
 
@@ -185,9 +235,10 @@ pub struct MemberProfitability {
     pub member_id: MemberId,
     pub planned_minutes: i64,
     pub labour_cost_cents: i64,
-    /// True when no rate is set, in which case the cost is zero because it is
-    /// unknown, not because the time is free.
-    pub rate_missing: bool,
+    /// Which figure is missing, when the cost could not be computed. `None`
+    /// means it was. The cost above is zero because it is unknown, never because
+    /// the time is free.
+    pub missing_cost: Option<MissingCost>,
 }
 
 /// The whole answer for one organization over one period.

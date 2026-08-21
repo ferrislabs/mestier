@@ -1,4 +1,4 @@
-import type { ProjectProfitability } from '#/hooks/use-reporting'
+import type { MissingCost, ProjectProfitability } from '#/hooks/use-reporting'
 
 /** `3 h 45`, the way a foreman reads a timesheet. */
 export function formatMinutes(minutes: number): string {
@@ -29,15 +29,19 @@ export function plannedCostCents(project: ProjectProfitability): number {
 /**
  * Why a project's figures cannot be trusted, in words, or `null` when they can.
  *
- * Only one thing lands a project here now: a rate nobody has set. The clocked
- * model also withheld a margin for a pointage left open, which was its most
+ * One cause, three shapes: an hourly rate nobody set, a salaried person with no
+ * monthly amount, or a salary with no contracted hours to spread over. The
+ * wording covers all three rather than naming only the hourly case, which is how
+ * a salaried person's hour came to read as 0,00 € with nothing said about it.
+ *
+ * The clocked model also withheld a margin for a pointage left open, its most
  * common cause; there is no clock left to leave open.
  */
 export function incompleteReason(project: ProjectProfitability): string | null {
 	const missingRates = project.members_without_rate.length
 	if (missingRates === 0) return null
 
-	return `${missingRates} personne${missingRates > 1 ? 's' : ''} sans taux horaire renseigné`
+	return `${missingRates} personne${missingRates > 1 ? 's' : ''} sans coût horaire renseigné`
 }
 
 /**
@@ -106,4 +110,24 @@ export function currentMonthPeriod(today: Date): { from: string; to: string } {
 
 export function isoDate(date: Date): string {
 	return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
+}
+
+/**
+ * What to go and fill in, in words, for a person whose cost could not be
+ * computed.
+ *
+ * Three gaps fixed in three different places, so the sentence names one rather
+ * than listing candidates. The previous wording said "hourly rate or salary
+ * missing" and was shown to somebody who had just entered the salary: what was
+ * actually missing was the contract, on another screen entirely.
+ */
+export function missingCostLabel(missing: MissingCost): string {
+	switch (missing) {
+		case 'HOURLY_RATE':
+			return 'Taux horaire non renseigné'
+		case 'MONTHLY_COST':
+			return 'Salarié, coût mensuel non renseigné'
+		case 'CONTRACTED_HOURS':
+			return 'Heures contractuelles à renseigner pour répartir le salaire'
+	}
 }

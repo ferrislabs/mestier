@@ -97,6 +97,8 @@ impl<'tx> ProfitabilityRepository for PgProfitabilityRepository<'tx> {
                 e.id AS "employee_id?",
                 e.hourly_rate_cents,
                 COALESCE(e.is_salaried, false) AS "is_salaried!",
+                e.monthly_cost_cents,
+                COALESCE(e.weekly_contract_minutes, 0) AS "weekly_contract_minutes!",
                 COALESCE(t.starts_at, pt.starts_at) AS "starts_at!",
                 COALESCE(t.ends_at, pt.ends_at) AS "ends_at!",
                 t.all_day
@@ -128,6 +130,8 @@ impl<'tx> ProfitabilityRepository for PgProfitabilityRepository<'tx> {
             employee_id: row.employee_id.map(EmployeeId),
             hourly_rate_cents: row.hourly_rate_cents,
             is_salaried: row.is_salaried,
+            monthly_cost_cents: row.monthly_cost_cents,
+            weekly_contract_minutes: row.weekly_contract_minutes,
             starts_at: row.starts_at,
             ends_at: row.ends_at,
             all_day: row.all_day,

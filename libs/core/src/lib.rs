@@ -36,6 +36,14 @@ pub use infrastructure::automation::webhook::{
 pub use infrastructure::automation::worker::{WorkerSchedule, run_automation_worker};
 pub use infrastructure::realtime::EventHub;
 
+/// The rule that turns a salaried person's monthly cost into an hourly one.
+///
+/// Exposed because three layers need the same arithmetic and none of them may
+/// re-derive it: the profitability calculation costs their time with it, the
+/// employee response sends the equivalent back so a form can show it, and a
+/// migration comment points at it.
+pub use domain::employee::service::salaried_hourly_rate_cents;
+
 /// Exposed for the BDD suite under `tests/`, which drives the quote service
 /// against a `mockall` double of its repository port. The port itself stays
 /// crate-private: nothing outside implements it by hand.
@@ -84,14 +92,14 @@ pub use domain::{
     CustomerPipelineStage, CustomerStatus, DateRange, DayLog, DayLogId, Employee, EmployeeId,
     EmployeeRhythm, EmployeeRhythmId, Equipment, EquipmentId, FileObject, Invitation, InvitationId,
     Member, MemberId, MemberProfitability, MemberWithAccount, MemberWorkTime, MinuteInterval,
-    Organization, OrganizationId, Permissions, PlannedAssignment, PlanningEntry, PlanningResource,
-    PlanningTask, PlanningView, PresignedUrl, Product, ProductId, ProfitabilityFacts,
-    ProfitabilityReport, Project, ProjectId, ProjectProfitability, Quote, QuoteId, QuoteLine,
-    QuoteLineId, QuoteStatus, ReportPeriod, RhythmSlot, RhythmSlotId, Role, RoleId, ServiceRate,
-    ServiceRateId, ServiceRateUnit, StoredFile, Task, TaskAssignment, TaskAssignmentId,
-    TaskComment, TaskCommentId, TaskExpense, TaskId, TaskLabel, TaskLabelId, TaskStatus, TimeEntry,
-    TimeEntryId, TimeEntryPhoto, TimeEntryPhotoId, TimeEntryPhotoPhase, TimeRange, Tz, User,
-    UserId, WorkSlot, WorkSlotId,
+    MissingCost, Organization, OrganizationId, Permissions, PlannedAssignment, PlanningEntry,
+    PlanningResource, PlanningTask, PlanningView, PresignedUrl, Product, ProductId,
+    ProfitabilityFacts, ProfitabilityReport, Project, ProjectId, ProjectProfitability, Quote,
+    QuoteId, QuoteLine, QuoteLineId, QuoteStatus, ReportPeriod, RhythmSlot, RhythmSlotId, Role,
+    RoleId, ServiceRate, ServiceRateId, ServiceRateUnit, StoredFile, Task, TaskAssignment,
+    TaskAssignmentId, TaskComment, TaskCommentId, TaskExpense, TaskId, TaskLabel, TaskLabelId,
+    TaskStatus, TimeEntry, TimeEntryId, TimeEntryPhoto, TimeEntryPhotoId, TimeEntryPhotoPhase,
+    TimeRange, Tz, User, UserId, WorkSlot, WorkSlotId,
     absence::commands::{CreateAbsenceCommand, PatchAbsenceCommand},
     customer::commands::{CreateCustomerCommand, UpdateCustomerCommand},
     customer_contact::commands::{CreateCustomerContactCommand, UpdateCustomerContactCommand},

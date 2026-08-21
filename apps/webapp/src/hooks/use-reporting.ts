@@ -9,6 +9,7 @@ const WORKED_HOURS_PATH =
 export type ProjectProfitability = Schemas.ProjectProfitability
 export type MemberProfitability = Schemas.MemberProfitability
 export type WorkedHoursRow = Schemas.WorkedHoursRow
+export type MissingCost = Schemas.MissingCost
 
 export interface Period {
 	/** Both ends included, as the API reads them. */

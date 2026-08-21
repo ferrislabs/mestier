@@ -54,11 +54,24 @@ pub struct Employee {
     /// figure for someone whose rate was never entered, rather than silently
     /// sum it as zero.
     pub hourly_rate_cents: Option<i32>,
-    /// True when this person is not costed by the hour at all. Their clocked
-    /// time still counts — profitability needs to know they worked — but at
-    /// zero labour cost, and it never blocks a margin the way a genuinely
-    /// missing rate does: the two are different kinds of absence.
+    /// True when this person is costed from [`Self::monthly_cost_cents`] rather
+    /// than from an hourly rate.
+    ///
+    /// It used to mean "costs nothing", which was simply wrong: a salaried
+    /// person costs their employer a salary every month, and zeroing them
+    /// understated every project they touched. The flag now selects which of the
+    /// two figures applies, never whether there is one.
     pub is_salaried: bool,
+    /// Monthly employer cost, loaded with contributions, for a salaried person.
+    ///
+    /// The loaded cost rather than the gross: a margin has to be computed
+    /// against what the company actually pays. `None` means not set, and
+    /// profitability refuses to cost it rather than treating the time as free.
+    ///
+    /// The hourly equivalent is derived from this and
+    /// [`Self::weekly_contract_minutes`], never stored — see
+    /// [`service::salaried_hourly_rate_cents`].
+    pub monthly_cost_cents: Option<i32>,
     /// Contractual weekly base. Deliberately not derived from the sum of the
     /// member's work slots — the gap between the two is the information.
     pub weekly_contract_minutes: i32,

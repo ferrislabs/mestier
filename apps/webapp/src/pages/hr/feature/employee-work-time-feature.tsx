@@ -226,10 +226,16 @@ function EmployeeWorkTimeScreen({
 		const minutes = parseDurationLabel(contractValue)
 		if (minutes === null) return
 		try {
+			// The whole profile, not just the contract: this is a `PUT`, so every
+			// field left out is a field cleared. Omitting `is_salaried` used to
+			// move a salaried person back onto an hourly basis and wipe the
+			// monthly amount they had just entered.
 			await upsertProfile.mutateAsync({
 				path: { member_id: memberId },
 				body: {
 					hourly_rate_cents: profile?.hourly_rate_cents ?? null,
+					is_salaried: profile?.is_salaried ?? false,
+					monthly_cost_cents: profile?.monthly_cost_cents ?? null,
 					weekly_contract_minutes: minutes,
 				},
 			})
@@ -392,6 +398,9 @@ function EmployeeWorkTimeScreen({
 			organizationName={organizationName}
 			member={member}
 			hourlyRateCents={profile?.hourly_rate_cents ?? null}
+			isSalaried={profile?.is_salaried ?? false}
+			monthlyCostCents={profile?.monthly_cost_cents ?? null}
+			effectiveHourlyRateCents={profile?.effective_hourly_rate_cents ?? null}
 			weeklyGap={weeklyGap}
 			contractForm={{
 				value: contractValue,

@@ -1,4 +1,4 @@
-import { MoneyCell, TextField } from '#/components/reference-table'
+import { formatMoney, MoneyCell, TextField } from '#/components/reference-table'
 import { Button } from '#/components/ui/button'
 import {
 	PageHeader,
@@ -37,6 +37,15 @@ export interface EmployeeWorkTimeUIProps {
 	member: Member
 	/** `null` when the member has no employee profile yet. */
 	hourlyRateCents: number | null
+	/** Costed from a monthly amount rather than by the hour. */
+	isSalaried: boolean
+	monthlyCostCents: number | null
+	/**
+	 * The hourly figure profitability actually uses, computed server-side. `null`
+	 * when it cannot be stated — which, on this page, means the field just below
+	 * is the one to fill.
+	 */
+	effectiveHourlyRateCents: number | null
 	weeklyGap: WeeklyGap
 	contractForm: ContractFormBinding
 	rhythmSection: RhythmSectionProps
@@ -50,6 +59,9 @@ export function EmployeeWorkTimeUI({
 	organizationName,
 	member,
 	hourlyRateCents,
+	isSalaried,
+	monthlyCostCents,
+	effectiveHourlyRateCents,
 	weeklyGap,
 	contractForm,
 	rhythmSection,
@@ -73,9 +85,24 @@ export function EmployeeWorkTimeUI({
 				<div className="grid grid-cols-1 items-end gap-4 p-5 sm:grid-cols-3">
 					<div className="flex flex-col gap-1.5">
 						<span className="text-sm font-medium text-muted-foreground">
-							Taux horaire
+							{isSalaried ? 'Coût employeur' : 'Taux horaire'}
 						</span>
-						<MoneyCell value={hourlyRateCents} suffix="/h" />
+						{isSalaried ? (
+							// Without this branch the page said "Taux horaire : Non
+							// renseigné" for a salaried person — the same misreading the
+							// team list had, on the very page they are sent to in order to
+							// fix it.
+							<div className="flex flex-col">
+								<MoneyCell value={monthlyCostCents} suffix="/mois" />
+								{effectiveHourlyRateCents === null ? null : (
+									<span className="text-xs text-muted-foreground">
+										soit {formatMoney(effectiveHourlyRateCents)}/h
+									</span>
+								)}
+							</div>
+						) : (
+							<MoneyCell value={hourlyRateCents} suffix="/h" />
+						)}
 					</div>
 					<TextField
 						label="Base contractuelle"

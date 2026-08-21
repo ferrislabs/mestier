@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT e.id, e.org_id, e.member_id, e.hourly_rate_cents, e.is_salaried, e.weekly_contract_minutes, e.deleted_at, e.created_at, e.updated_at\n            FROM employees e\n            JOIN organization_members m ON m.id = e.member_id\n            WHERE e.org_id = $1 AND e.deleted_at IS NULL\n            ORDER BY m.last_name ASC, m.first_name ASC, e.created_at ASC\n            LIMIT $2 OFFSET $3\n            ",
+  "query": "\n            SELECT id, org_id, member_id, hourly_rate_cents, is_salaried, monthly_cost_cents, weekly_contract_minutes, deleted_at, created_at, updated_at\n            FROM employees\n            WHERE member_id = $1 AND deleted_at IS NULL\n            ",
   "describe": {
     "columns": [
       {
@@ -30,30 +30,33 @@
       },
       {
         "ordinal": 5,
-        "name": "weekly_contract_minutes",
+        "name": "monthly_cost_cents",
         "type_info": "Int4"
       },
       {
         "ordinal": 6,
+        "name": "weekly_contract_minutes",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 7,
         "name": "deleted_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 7,
+        "ordinal": 8,
         "name": "created_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 8,
+        "ordinal": 9,
         "name": "updated_at",
         "type_info": "Timestamptz"
       }
     ],
     "parameters": {
       "Left": [
-        "Uuid",
-        "Int8",
-        "Int8"
+        "Uuid"
       ]
     },
     "nullable": [
@@ -62,11 +65,12 @@
       false,
       true,
       false,
+      true,
       false,
       true,
       false,
       false
     ]
   },
-  "hash": "dce700aad0340152da482168f52459704ace556ff9a2f471602ed1e6fe41343a"
+  "hash": "b89d1d0284ed9fd24505b0843fefba99c4366776d5530cc1a1a05d4d651c11e1"
 }

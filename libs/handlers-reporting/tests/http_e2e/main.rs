@@ -3,8 +3,12 @@
 //! Real socket, real database, real auth. The fixture plans, and clocks nothing
 //! that counts: a three-hour task with 45 € of travel on a project quoted at
 //! 4 200 €, a two-hour meeting with two people on an internal project, and nine
-//! hours of pointage that must not move any number. Employee rate is 35 €/h, so
-//! every figure below is one this file states rather than merely accepts.
+//! hours of pointage that must not move any number.
+//!
+//! The two people are costed on different bases on purpose: one at 35 €/h, one
+//! salaried at 3 500 € a month on a 35 h contract, which is 23,08 € an hour. A
+//! salaried person used to cost 0,00 € here, so every figure below is one this
+//! file states rather than merely accepts.
 //!
 //! ```bash
 //! docker compose up -d postgres redis rustfs
@@ -137,8 +141,15 @@ async fn an_internal_project_is_costed_even_though_it_bills_nobody() {
     );
     assert_eq!(
         meeting["labour_cost_cents"],
-        serde_json::json!(14_000),
-        "{meeting}"
+        // Two hours each: 70,00 € for the hourly person, 46,16 € for the salaried
+        // one. That second figure was 0,00 € before the monthly cost existed.
+        serde_json::json!(7_000 + 4_616),
+        "a salaried attendee costs their derived rate, not nothing: {meeting}"
+    );
+    assert_eq!(
+        meeting["members_without_rate"],
+        serde_json::json!([]),
+        "both cost bases are stateable, so nothing is withheld: {meeting}"
     );
     assert_eq!(
         meeting["customer_id"],

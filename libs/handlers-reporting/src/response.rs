@@ -1,4 +1,4 @@
-use mestier_core::{MemberProfitability, ProfitabilityReport, ProjectProfitability};
+use mestier_core::{MemberProfitability, MissingCost, ProfitabilityReport, ProjectProfitability};
 use serde::Serialize;
 use utoipa::ToSchema;
 
@@ -79,10 +79,14 @@ impl From<ProfitabilityReport> for ProfitabilityResponse {
 pub struct WorkedHoursRow {
     pub member_id: mestier_core::MemberId,
     pub planned_minutes: i64,
-    /// True when this person has no hourly rate set, so their cost is zero
-    /// because it is unknown rather than because their time is free. Payroll
-    /// needs to know that before it pays on the number.
-    pub rate_missing: bool,
+    /// Which figure is missing when this person's cost could not be computed:
+    /// an hourly rate, a monthly amount, or the contracted hours to divide it by.
+    /// `null` when the cost is known.
+    ///
+    /// The reason rather than a flag, because the three are fixed in three
+    /// different places and a screen that guesses between them sends somebody to
+    /// a field they already filled in.
+    pub missing_cost: Option<MissingCost>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, ToSchema)]
@@ -106,7 +110,7 @@ impl From<ProfitabilityReport> for WorkedHoursResponse {
                 .map(|member| WorkedHoursRow {
                     member_id: member.member_id,
                     planned_minutes: member.planned_minutes,
-                    rate_missing: member.rate_missing,
+                    missing_cost: member.missing_cost,
                 })
                 .collect(),
             total_planned_minutes,

@@ -144,8 +144,12 @@ struct Fixture {
 /// below would stop being stateable.
 async fn seed(pool: &PgPool) -> Fixture {
     let organization_id = Uuid::now_v7();
-    let (user_id, sub, member_id, employee_id) = seed_person(pool, organization_id, true).await;
-    let (other_user_id, _, other_member_id, _) = seed_person(pool, organization_id, false).await;
+    let (user_id, sub, member_id, employee_id) =
+        seed_person(pool, organization_id, true, CostBasis::Hourly).await;
+    // Salaried, on the exact shape that read as 0,00 €: 3 500 € a month on a
+    // 35 h contract, which is 23,08 € an hour.
+    let (other_user_id, _, other_member_id, _) =
+        seed_person(pool, organization_id, false, CostBasis::Salaried).await;
     let _ = employee_id;
 
     let customer_id = Uuid::now_v7();
@@ -244,10 +248,18 @@ async fn seed(pool: &PgPool) -> Fixture {
 /// A user, their organization seat, and the employee profile that carries the
 /// hourly rate. The field routes refuse a member without that profile, so all
 /// three rows are needed for the caller to get past authorization.
+/// How the seeded person is costed. Both bases are exercised because the report
+/// has to agree with itself across them.
+enum CostBasis {
+    Hourly,
+    Salaried,
+}
+
 async fn seed_person(
     pool: &PgPool,
     organization_id: Uuid,
     owns_organization: bool,
+    cost_basis: CostBasis,
 ) -> (Uuid, String, Uuid, Uuid) {
     let user_id = Uuid::now_v7();
     let sub = format!("sub-field-{user_id}");
@@ -287,13 +299,20 @@ async fn seed_person(
     .expect("seed the membership");
 
     let employee_id = Uuid::now_v7();
+    let (hourly_rate_cents, is_salaried, monthly_cost_cents) = match cost_basis {
+        CostBasis::Hourly => (Some(3_500_i32), false, None),
+        CostBasis::Salaried => (None, true, Some(350_000_i32)),
+    };
     sqlx::query(
-        "INSERT INTO employees (id, org_id, member_id, hourly_rate_cents, weekly_contract_minutes) VALUES ($1, $2, $3, $4, $5)",
+        "INSERT INTO employees (id, org_id, member_id, hourly_rate_cents, is_salaried, monthly_cost_cents, weekly_contract_minutes)
+         VALUES ($1, $2, $3, $4, $5, $6, $7)",
     )
     .bind(employee_id)
     .bind(organization_id)
     .bind(member_id)
-    .bind(3500)
+    .bind(hourly_rate_cents)
+    .bind(is_salaried)
+    .bind(monthly_cost_cents)
     .bind(2100)
     .execute(pool)
     .await

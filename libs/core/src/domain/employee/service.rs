@@ -36,16 +36,18 @@ where
         command: UpsertEmployeeProfileCommand,
     ) -> Result<Employee, CoreError> {
         validate_rate(command.hourly_rate_cents)?;
+        validate_monthly_cost(command.monthly_cost_cents)?;
         validate_weekly_contract_minutes(command.weekly_contract_minutes)?;
 
-        // A salaried person has no meaningful hourly figure. Clearing it here,
-        // rather than merely ignoring it downstream, keeps the stored row
-        // honest: a rate that lingers unused would read as forgotten-to-clear
-        // the next time someone looks at it.
-        let hourly_rate_cents = if command.is_salaried {
-            None
+        // The two cost bases are exclusive, and the unused one is cleared rather
+        // than merely ignored downstream: a figure that lingers unused reads as
+        // forgotten-to-update the next time somebody looks at the row. The
+        // `chk_employees_one_cost_basis` constraint enforces the same thing one
+        // layer down.
+        let (hourly_rate_cents, monthly_cost_cents) = if command.is_salaried {
+            (None, command.monthly_cost_cents)
         } else {
-            command.hourly_rate_cents
+            (command.hourly_rate_cents, None)
         };
 
         let now = Utc::now();
@@ -54,6 +56,7 @@ where
             Some(mut existing) => {
                 existing.hourly_rate_cents = hourly_rate_cents;
                 existing.is_salaried = command.is_salaried;
+                existing.monthly_cost_cents = monthly_cost_cents;
                 existing.weekly_contract_minutes = command.weekly_contract_minutes;
                 existing.updated_at = now;
 
@@ -66,6 +69,7 @@ where
                     member_id: command.member_id,
                     hourly_rate_cents,
                     is_salaried: command.is_salaried,
+                    monthly_cost_cents,
                     weekly_contract_minutes: command.weekly_contract_minutes,
                     deleted_at: None,
                     created_at: now,
@@ -117,6 +121,53 @@ where
     }
 }
 
+/// Weeks in a year over months in a year: the factor that turns a weekly
+/// contract into a monthly one. 35 h a week is 151,67 h a month, not 140.
+const WEEKS_PER_MONTH_NUMERATOR: i64 = 52;
+const WEEKS_PER_MONTH_DENOMINATOR: i64 = 12;
+
+/// What an hour of a salaried person costs, or `None` when it cannot be said.
+///
+/// `None` for a missing amount, and equally for a contract of zero hours: a
+/// salary spread over no contracted time has no hourly equivalent, and inventing
+/// one would be worse than admitting the gap. Profitability treats both the same
+/// way it treats an unset hourly rate — it refuses to cost the time rather than
+/// counting it as free.
+///
+/// Derived on every read rather than stored, so a contract change cannot leave a
+/// stale rate behind.
+pub fn salaried_hourly_rate_cents(
+    monthly_cost_cents: Option<i32>,
+    weekly_contract_minutes: i32,
+) -> Option<i32> {
+    let monthly_cost_cents = i64::from(monthly_cost_cents?);
+    if weekly_contract_minutes <= 0 {
+        return None;
+    }
+
+    // Monthly contracted minutes, kept in minutes so the only division is the
+    // last one: an intermediate "hours per month" would round twice.
+    let monthly_minutes = i64::from(weekly_contract_minutes) * WEEKS_PER_MONTH_NUMERATOR
+        / WEEKS_PER_MONTH_DENOMINATOR;
+    if monthly_minutes <= 0 {
+        return None;
+    }
+
+    let hourly = (monthly_cost_cents * 60 + monthly_minutes / 2) / monthly_minutes;
+
+    i32::try_from(hourly).ok()
+}
+
+fn validate_monthly_cost(monthly_cost_cents: Option<i32>) -> Result<(), CoreError> {
+    if monthly_cost_cents.is_some_and(|cents| cents < 0) {
+        return Err(CoreError::Conflict(
+            "employee monthly cost cannot be negative".to_owned(),
+        ));
+    }
+
+    Ok(())
+}
+
 fn validate_rate(rate_cents: Option<i32>) -> Result<(), CoreError> {
     if rate_cents.is_some_and(|cents| cents < 0) {
         return Err(CoreError::Conflict(
@@ -158,6 +209,7 @@ mod tests {
             member_id,
             hourly_rate_cents: Some(3500),
             is_salaried: false,
+            monthly_cost_cents: None,
             weekly_contract_minutes: 2100,
             deleted_at: None,
             created_at: now,
@@ -171,6 +223,7 @@ mod tests {
             member_id,
             hourly_rate_cents: Some(3500),
             is_salaried: false,
+            monthly_cost_cents: None,
             weekly_contract_minutes: 2100,
         }
     }
@@ -283,6 +336,7 @@ mod tests {
             .upsert_employee_profile(UpsertEmployeeProfileCommand {
                 hourly_rate_cents: Some(3500),
                 is_salaried: true,
+                monthly_cost_cents: None,
                 ..upsert_command(member_id)
             })
             .await
@@ -315,6 +369,7 @@ mod tests {
         let updated = service
             .upsert_employee_profile(UpsertEmployeeProfileCommand {
                 is_salaried: true,
+                monthly_cost_cents: None,
                 ..upsert_command(member_id)
             })
             .await
@@ -403,5 +458,45 @@ mod tests {
             .await;
 
         assert!(matches!(result, Err(CoreError::NotFound)));
+    }
+
+    /// 3 500 € a month on a 35 h contract: 151,67 h, so 23,08 € an hour. The
+    /// figure a foreman can check on a calculator.
+    #[test]
+    fn a_full_time_salary_becomes_its_hourly_equivalent() {
+        assert_eq!(
+            salaried_hourly_rate_cents(Some(350_000), 2_100),
+            Some(2_308)
+        );
+    }
+
+    /// Same salary, half the contract: an hour of that person costs about twice
+    /// as much. This is why the divisor is the contract and not a flat 151,67.
+    #[test]
+    fn a_half_time_contract_doubles_the_hourly_cost() {
+        assert_eq!(
+            salaried_hourly_rate_cents(Some(350_000), 1_050),
+            Some(4_615)
+        );
+    }
+
+    #[test]
+    fn no_amount_means_no_hourly_equivalent() {
+        assert_eq!(salaried_hourly_rate_cents(None, 2_100), None);
+    }
+
+    /// A salary spread over no contracted time has no hourly equivalent, and
+    /// inventing one would be worse than admitting the gap.
+    #[test]
+    fn no_contracted_time_means_no_hourly_equivalent() {
+        assert_eq!(salaried_hourly_rate_cents(Some(350_000), 0), None);
+        assert_eq!(salaried_hourly_rate_cents(Some(350_000), -1), None);
+    }
+
+    /// `Some(0)` is a real answer: an intern paid nothing costs nothing, which
+    /// is different from a salary nobody entered.
+    #[test]
+    fn a_salary_of_zero_costs_zero_rather_than_nothing_known() {
+        assert_eq!(salaried_hourly_rate_cents(Some(0), 2_100), Some(0));
     }
 }

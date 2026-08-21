@@ -80,6 +80,7 @@ function TeamDirectory({
 			firstName: '',
 			hourlyRate: '',
 			isSalaried: false,
+			monthlyCost: '',
 		} satisfies MemberFormValues,
 		onSubmit: async ({ value }) => {
 			const created = await createMember.mutateAsync({
@@ -90,12 +91,14 @@ function TeamDirectory({
 				},
 			})
 			const rateCents = eurosToCents(value.hourlyRate)
+			const monthlyCents = eurosToCents(value.monthlyCost)
 			if (rateCents !== null || value.isSalaried) {
 				await upsertProfile.mutateAsync({
 					path: { member_id: created.data.id },
 					body: {
 						hourly_rate_cents: rateCents,
 						is_salaried: value.isSalaried,
+						monthly_cost_cents: value.isSalaried ? monthlyCents : null,
 						weekly_contract_minutes: 0,
 					},
 				})
@@ -132,6 +135,10 @@ function TeamDirectory({
 			access: accessState(member, pendingByMemberId.has(member.id)),
 			hourlyRateCents: profile?.hourly_rate_cents ?? null,
 			isSalaried: profile?.is_salaried ?? false,
+			monthlyCostCents: profile?.monthly_cost_cents ?? null,
+			// Computed by the backend rather than divided here: the same rule feeds
+			// the profitability report, and two copies of it would drift.
+			effectiveHourlyRateCents: profile?.effective_hourly_rate_cents ?? null,
 			weeklyContractMinutes: profile?.weekly_contract_minutes ?? null,
 		}
 	})
@@ -200,6 +207,7 @@ function TeamDirectory({
 				})
 
 				const rateCents = eurosToCents(draft.values.hourlyRate)
+				const monthlyCents = eurosToCents(draft.values.monthlyCost)
 				const existingProfile = profileByMember.get(member.id)
 				if (rateCents !== null || draft.values.isSalaried) {
 					await upsertProfile.mutateAsync({
@@ -207,6 +215,7 @@ function TeamDirectory({
 						body: {
 							hourly_rate_cents: rateCents,
 							is_salaried: draft.values.isSalaried,
+							monthly_cost_cents: draft.values.isSalaried ? monthlyCents : null,
 							weekly_contract_minutes:
 								existingProfile?.weekly_contract_minutes ?? 0,
 						},
@@ -261,6 +270,7 @@ function TeamDirectory({
 									firstName: member.first_name ?? '',
 									hourlyRate: centsToEuros(row.hourlyRateCents),
 									isSalaried: row.isSalaried,
+									monthlyCost: centsToEuros(row.monthlyCostCents),
 								},
 							})
 						}}
