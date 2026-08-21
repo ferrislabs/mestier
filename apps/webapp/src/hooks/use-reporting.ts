@@ -6,8 +6,8 @@ const PROFITABILITY_PATH =
 const WORKED_HOURS_PATH =
 	'/api/v1/organizations/{organization_id}/reporting/worked-hours'
 
-export type JobProfitability = Schemas.TaskProfitability
-export type EmployeeProfitability = Schemas.EmployeeProfitability
+export type ProjectProfitability = Schemas.ProjectProfitability
+export type MemberProfitability = Schemas.MemberProfitability
 export type WorkedHoursRow = Schemas.WorkedHoursRow
 
 export interface Period {
@@ -22,6 +22,10 @@ export interface Period {
  * The period is sent as two dates and turned into instants server-side, in the
  * organization's timezone. The browser deliberately does not do that
  * conversion: a laptop set to another zone would shift a month's boundary.
+ *
+ * Every figure comes from the plan, not from a clock. Nobody points any more,
+ * so a task that was scheduled and assigned is a cost whether or not somebody
+ * registered anything.
  */
 export function useProfitability(organizationId: string, period: Period) {
 	return useQuery({

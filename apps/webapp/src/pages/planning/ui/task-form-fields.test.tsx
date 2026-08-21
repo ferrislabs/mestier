@@ -20,6 +20,10 @@ const ASSIGNEE_OPTIONS = [
 	{ resourceId: 'member:e1', displayName: 'Alix Martin' },
 ]
 const CUSTOMERS = [{ id: 'cust-1', displayName: 'Dupont Alice' }]
+const PROJECTS = [
+	{ id: 'proj-1', label: 'Jardin Duval', isInternal: false },
+	{ id: 'proj-2', label: 'Vie interne', isInternal: true },
+]
 
 function baseProps() {
 	return {
@@ -35,6 +39,8 @@ function baseProps() {
 		isCustomerContextsLoading: false,
 		quotes: [{ id: 'quote-1', label: 'DEV-2026-0001 · 4 200,00 €' }],
 		isQuotesLoading: false,
+		projects: PROJECTS,
+		isProjectsLoading: false,
 		labels: LABELS,
 		isCreatingLabel: false,
 		onCreateLabel: vi.fn(),

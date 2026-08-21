@@ -501,10 +501,7 @@ describe('TaskListFeature — bulk assign', () => {
 		renderFeature((api) => {
 			api.mockGet(
 				TASKS_PATH,
-				tasksHandler([
-					task(),
-					task({ id: 'root-2', title: 'Réunion projet' }),
-				]),
+				tasksHandler([task(), task({ id: 'root-2', title: 'Réunion projet' })]),
 			)
 			api.mockMutation('patch', TASK_PATH, (params) => {
 				const taskId = (params as { path: { task_id: string } }).path.task_id

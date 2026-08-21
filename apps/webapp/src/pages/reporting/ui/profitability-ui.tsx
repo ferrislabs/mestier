@@ -2,11 +2,14 @@ import { Link } from '@tanstack/react-router'
 import {
 	AlertCircle,
 	ArrowUpRight,
+	Building2,
 	Clock,
 	Euro,
 	TrendingDown,
 	TrendingUp,
+	Users,
 } from 'lucide-react'
+import { Badge } from '#/components/ui/badge'
 import { Button } from '#/components/ui/button'
 import { Input } from '#/components/ui/input'
 import { Label } from '#/components/ui/label'
@@ -18,32 +21,34 @@ import {
 	SectionHeader,
 } from '#/components/ui/surface'
 import type {
-	EmployeeProfitability,
-	JobProfitability,
+	MemberProfitability,
 	Period,
+	ProjectProfitability,
 } from '#/hooks/use-reporting'
 import { cn } from '#/lib/utils'
 import { buildOrgPath } from '#/modules/org-path'
 import {
+	expensesNote,
 	formatCents,
 	formatMarginRate,
 	formatMinutes,
 	incompleteReason,
-	isCompleteJob,
-	realCostCents,
-	recollectedNote,
+	isCompleteProject,
+	overlapNote,
+	plannedCostCents,
 } from '#/pages/reporting/types'
 
 interface ProfitabilityUIProps {
 	period: Period
 	organizationSlug: string
-	jobs: JobProfitability[]
-	mostProfitable: JobProfitability[]
-	leastProfitable: JobProfitability[]
-	incomplete: JobProfitability[]
-	employees: EmployeeProfitability[]
-	/** Resolves an employee id into a name, or `null` while unknown. */
-	employeeName: (employeeId: string) => string | null
+	projects: ProjectProfitability[]
+	mostProfitable: ProjectProfitability[]
+	leastProfitable: ProjectProfitability[]
+	incomplete: ProjectProfitability[]
+	doubleBooked: ProjectProfitability[]
+	members: MemberProfitability[]
+	/** Resolves a member id into a name, or `null` while unknown. */
+	memberName: (memberId: string) => string | null
 	isLoading: boolean
 	error: string | null
 	onPeriodChange: (period: Period) => void
@@ -51,7 +56,8 @@ interface ProfitabilityUIProps {
 }
 
 /**
- * The payoff screen: what each projet cost against what it was quoted.
+ * The payoff screen: what each project is planned to cost against what it was
+ * quoted.
  *
  * Presentational only. Every figure here was computed by the backend, including
  * the rankings, so this file never decides what "least profitable" means.
@@ -59,32 +65,33 @@ interface ProfitabilityUIProps {
 export function ProfitabilityUI({
 	period,
 	organizationSlug,
-	jobs,
+	projects,
 	mostProfitable,
 	leastProfitable,
 	incomplete,
-	employees,
-	employeeName,
+	doubleBooked,
+	members,
+	memberName,
 	isLoading,
 	error,
 	onPeriodChange,
 	onRetry,
 }: ProfitabilityUIProps) {
-	// Only the jobs with complete figures, so an incomplete one — cost is a
-	// floor, margin unstated — cannot flatter or spoil a total that reads as
-	// trustworthy. The three headline tiles below share this exact rule.
-	const completeJobs = jobs.filter(isCompleteJob)
-	const quoted = completeJobs.reduce(
-		(sum, job) => sum + (job.quoted_cents ?? 0),
+	const completeProjects = projects.filter(isCompleteProject)
+	const quoted = completeProjects.reduce(
+		(sum, project) => sum + (project.quoted_cents ?? 0),
 		0,
 	)
-	const cost = completeJobs.reduce((sum, job) => sum + realCostCents(job), 0)
-	const margin = completeJobs.reduce(
-		(sum, job) => sum + (job.margin_cents ?? 0),
+	const cost = completeProjects.reduce(
+		(sum, project) => sum + plannedCostCents(project),
 		0,
 	)
-	const totalWorkedMinutes = employees.reduce(
-		(sum, employee) => sum + employee.worked_minutes,
+	const margin = completeProjects.reduce(
+		(sum, project) => sum + (project.margin_cents ?? 0),
+		0,
+	)
+	const totalPlannedMinutes = members.reduce(
+		(sum, member) => sum + member.planned_minutes,
 		0,
 	)
 
@@ -92,7 +99,7 @@ export function ProfitabilityUI({
 		<PageShell>
 			<PageHeader
 				title="Rentabilité"
-				description="Ce que chaque projet a coûté, comparé à ce qui a été devisé."
+				description="Ce que chaque projet coûte d'après le planning, comparé à ce qui a été devisé."
 				actions={
 					<div className="flex flex-wrap items-end gap-2">
 						<div className="space-y-1">
@@ -147,9 +154,9 @@ export function ProfitabilityUI({
 					icon={<Euro className="size-4" />}
 				/>
 				<MetricCard
-					label="Coût réel"
+					label="Coût planifié"
 					value={formatCents(cost)}
-					hint="Main d'œuvre et matériel, projets complets uniquement"
+					hint="Main d'œuvre, matériel et frais, projets complets uniquement"
 				/>
 				<MetricCard
 					label="Marge"
@@ -157,8 +164,9 @@ export function ProfitabilityUI({
 					hint="Projets complets uniquement"
 				/>
 				<MetricCard
-					label="Heures travaillées"
-					value={formatMinutes(totalWorkedMinutes)}
+					label="Heures planifiées"
+					value={formatMinutes(totalPlannedMinutes)}
+					hint="D'après le planning, personne ne pointe"
 					icon={<Clock className="size-4" />}
 				/>
 			</section>
@@ -177,15 +185,54 @@ export function ProfitabilityUI({
 								affichée pour eux, plutôt qu'une marge fausse.
 							</p>
 							<ul className="space-y-1 text-sm">
-								{incomplete.map((job) => (
-									<li key={job.task_id} className="flex flex-wrap gap-x-2">
-										<JobTitleLink
-											title={job.title}
+								{incomplete.map((project) => (
+									<li
+										key={project.project_id}
+										className="flex flex-wrap gap-x-2"
+									>
+										<ProjectTitleLink
+											project={project}
 											organizationSlug={organizationSlug}
 											className="font-medium"
 										/>
 										<span className="text-muted-foreground">
-											{incompleteReason(job)}
+											{incompleteReason(project)}
+										</span>
+									</li>
+								))}
+							</ul>
+						</div>
+					</div>
+				</SectionCard>
+			) : null}
+
+			{doubleBooked.length > 0 ? (
+				<SectionCard className="border-sky-500/30 bg-sky-50 p-5 dark:bg-sky-950/20">
+					<div className="flex items-start gap-3">
+						<Users className="mt-0.5 size-5 shrink-0 text-sky-600 dark:text-sky-500" />
+						<div className="min-w-0 space-y-2">
+							<p className="text-sm font-semibold">
+								{doubleBooked.length} projet
+								{doubleBooked.length > 1 ? 's' : ''} avec du temps compté deux
+								fois
+							</p>
+							<p className="text-sm text-muted-foreground">
+								Quelqu'un est affecté à deux tâches en même temps. Les chiffres
+								ci-dessous sont exacts, c'est le planning qui est à corriger.
+							</p>
+							<ul className="space-y-1 text-sm">
+								{doubleBooked.map((project) => (
+									<li
+										key={project.project_id}
+										className="flex flex-wrap gap-x-2"
+									>
+										<ProjectTitleLink
+											project={project}
+											organizationSlug={organizationSlug}
+											className="font-medium"
+										/>
+										<span className="text-muted-foreground">
+											{formatMinutes(project.overlapping_minutes)} en double
 										</span>
 									</li>
 								))}
@@ -199,74 +246,95 @@ export function ProfitabilityUI({
 				<RankingCard
 					title="Les plus rentables"
 					icon={<TrendingUp className="size-4 text-primary" />}
-					jobs={mostProfitable}
+					projects={mostProfitable}
 					organizationSlug={organizationSlug}
 				/>
 				<RankingCard
 					title="Les moins rentables"
 					icon={<TrendingDown className="size-4 text-destructive" />}
-					jobs={leastProfitable}
+					projects={leastProfitable}
 					organizationSlug={organizationSlug}
 				/>
 			</div>
 
 			<SectionCard>
 				<SectionHeader
-					title={`Projets (${jobs.length})`}
-					description="Coût réel, marge et temps passé sur la période."
+					title={`Projets (${projects.length})`}
+					description="Coût planifié, marge et temps sur la période. Les projets internes y figurent aussi : une réunion coûte."
 				/>
 				{isLoading ? (
 					<p className="p-5 text-sm text-muted-foreground">Chargement…</p>
-				) : jobs.length === 0 ? (
+				) : projects.length === 0 ? (
 					<p className="p-5 text-sm text-muted-foreground">
-						Aucun temps pointé sur cette période. Un projet n'apparaît ici
-						qu'à partir du moment où quelqu'un y a travaillé.
+						Rien de planifié sur cette période. Un projet apparaît ici dès
+						qu'une de ses tâches y tombe, sans attendre que quelqu'un pointe.
 					</p>
 				) : (
 					<ul className="divide-y">
-						{jobs.map((job) => (
+						{projects.map((project) => (
 							<li
-								key={job.task_id}
-								className="grid gap-2 px-5 py-4 sm:grid-cols-[minmax(0,1fr)_repeat(4,110px)] sm:items-center"
+								key={project.project_id}
+								className="grid gap-2 px-5 py-4 sm:grid-cols-[minmax(0,1fr)_repeat(5,100px)] sm:items-center"
 							>
 								<div className="min-w-0">
-									<JobTitleLink
-										title={job.title}
-										organizationSlug={organizationSlug}
-										className="font-medium"
-									/>
-									{incompleteReason(job) ? (
+									<div className="flex min-w-0 flex-wrap items-center gap-2">
+										<ProjectTitleLink
+											project={project}
+											organizationSlug={organizationSlug}
+											className="font-medium"
+										/>
+										{project.customer_id ? null : (
+											<Badge variant="secondary" className="gap-1">
+												<Building2 className="size-3" />
+												Interne
+											</Badge>
+										)}
+									</div>
+									{incompleteReason(project) ? (
 										<p className="truncate text-xs text-amber-600 dark:text-amber-500">
-											{incompleteReason(job)}
+											{incompleteReason(project)}
 										</p>
 									) : null}
-									{recollectedNote(job) ? (
-										<p className="truncate text-xs text-muted-foreground">
-											{recollectedNote(job)}
+									{overlapNote(project) ? (
+										<p className="truncate text-xs text-sky-600 dark:text-sky-500">
+											{overlapNote(project)}
 										</p>
 									) : null}
 								</div>
 								<Figure
 									label="Devisé"
 									value={
-										job.quoted_cents === null || job.quoted_cents === undefined
+										project.quoted_cents === null ||
+										project.quoted_cents === undefined
 											? '—'
-											: formatCents(job.quoted_cents)
+											: formatCents(project.quoted_cents)
 									}
 								/>
-								<Figure label="Coût" value={formatCents(realCostCents(job))} />
+								<Figure
+									label="Coût"
+									value={formatCents(plannedCostCents(project))}
+								/>
+								<Figure
+									label="Frais"
+									value={
+										project.expenses_cents > 0
+											? formatCents(project.expenses_cents)
+											: '—'
+									}
+								/>
 								<Figure
 									label="Marge"
 									value={
-										job.margin_cents === null || job.margin_cents === undefined
+										project.margin_cents === null ||
+										project.margin_cents === undefined
 											? '—'
-											: formatCents(job.margin_cents)
+											: formatCents(project.margin_cents)
 									}
 									strong
 								/>
 								<Figure
 									label="Temps"
-									value={formatMinutes(job.worked_minutes)}
+									value={formatMinutes(project.planned_minutes)}
 								/>
 							</li>
 						))}
@@ -276,40 +344,33 @@ export function ProfitabilityUI({
 
 			<SectionCard>
 				<SectionHeader
-					title="Par salarié"
-					description="Heures pointées et coût sur la période, pour la paie comme pour le suivi."
+					title="Par personne"
+					description="Heures planifiées et coût sur la période, pour la paie comme pour le suivi. Ce sont les heures du planning, pas des pointages."
 				/>
-				{employees.length === 0 ? (
+				{members.length === 0 ? (
 					<p className="p-5 text-sm text-muted-foreground">
-						Aucun pointage sur cette période.
+						Personne n'est affecté sur cette période.
 					</p>
 				) : (
 					<ul className="divide-y">
-						{employees.map((row) => (
+						{members.map((row) => (
 							<li
-								key={row.employee_id}
+								key={row.member_id}
 								className="flex flex-wrap items-center justify-between gap-3 px-5 py-4"
 							>
 								<div className="min-w-0">
 									<p className="truncate font-medium">
-										{employeeName(row.employee_id) ?? 'Salarié'}
+										{memberName(row.member_id) ?? 'Membre'}
 									</p>
 									{row.rate_missing ? (
 										<p className="text-xs text-amber-600 dark:text-amber-500">
 											Taux horaire manquant, coût non calculé
 										</p>
 									) : null}
-									{row.open_entries > 0 ? (
-										<p className="text-xs text-amber-600 dark:text-amber-500">
-											{row.open_entries} pointage
-											{row.open_entries > 1 ? 's' : ''} non clôturé
-											{row.open_entries > 1 ? 's' : ''}, ce total est incomplet
-										</p>
-									) : null}
 								</div>
 								<div className="shrink-0 text-right">
 									<p className="font-semibold tabular-nums">
-										{formatMinutes(row.worked_minutes)}
+										{formatMinutes(row.planned_minutes)}
 									</p>
 									<p className="text-xs text-muted-foreground tabular-nums">
 										{formatCents(row.labour_cost_cents)}
@@ -327,44 +388,45 @@ export function ProfitabilityUI({
 function RankingCard({
 	title,
 	icon,
-	jobs,
+	projects,
 	organizationSlug,
 }: {
 	title: string
 	icon: React.ReactNode
-	jobs: JobProfitability[]
+	projects: ProjectProfitability[]
 	organizationSlug: string
 }) {
 	return (
 		<SectionCard>
 			<SectionHeader title={title} />
-			{jobs.length === 0 ? (
+			{projects.length === 0 ? (
 				<p className="p-5 text-sm text-muted-foreground">
 					Aucun projet n'a de marge calculable sur cette période.
 				</p>
 			) : (
 				<ul className="divide-y">
-					{jobs.map((job) => (
+					{projects.map((project) => (
 						<li
-							key={job.task_id}
+							key={project.project_id}
 							className="flex items-center justify-between gap-3 px-5 py-3"
 						>
 							<div className="flex min-w-0 items-center gap-2">
 								{icon}
-								<JobTitleLink
-									title={job.title}
+								<ProjectTitleLink
+									project={project}
 									organizationSlug={organizationSlug}
 									className="truncate text-sm font-medium"
 								/>
 							</div>
 							<div className="shrink-0 text-right">
 								<p className="font-semibold tabular-nums">
-									{job.margin_cents === null || job.margin_cents === undefined
+									{project.margin_cents === null ||
+									project.margin_cents === undefined
 										? '—'
-										: formatCents(job.margin_cents)}
+										: formatCents(project.margin_cents)}
 								</p>
 								<p className="text-xs text-muted-foreground">
-									{formatMarginRate(job)}
+									{formatMarginRate(project)}
 								</p>
 							</div>
 						</li>
@@ -376,33 +438,34 @@ function RankingCard({
 }
 
 /**
- * A job title that opens the Planning module's task list.
+ * A project name that opens its own page.
  *
- * Not a deep link to the exact task: neither an existing cross-module
- * deep-link pattern nor a `taskId` query param read by the task list exists
- * to open one directly (see the workstream report). Landing on the list is
- * still strictly better than plain text — it is where a manager would go
- * next to act on what this screen just told them.
+ * Unlike the old version of this screen, which could only land a reader on the
+ * planning task list because a chantier was not an addressable thing, a project
+ * now has a page of its own.
  */
-function JobTitleLink({
-	title,
+function ProjectTitleLink({
+	project,
 	organizationSlug,
 	className,
 }: {
-	title: string
+	project: ProjectProfitability
 	organizationSlug: string
 	className?: string
 }) {
+	const expenses = expensesNote(project)
+
 	return (
 		<Link
-			to={buildOrgPath(organizationSlug, '/planning/tasks')}
-			title="Ouvrir la liste des tâches du planning pour retrouver ce projet"
+			to={buildOrgPath(organizationSlug, '/planning/projects')}
+			search={{ projectId: project.project_id }}
+			title={expenses ? `Ouvrir le projet : ${expenses}` : 'Ouvrir le projet'}
 			className={cn(
 				'group inline-flex min-w-0 items-center gap-1 hover:underline',
 				className,
 			)}
 		>
-			<span className="truncate">{title}</span>
+			<span className="truncate">{project.name}</span>
 			<ArrowUpRight className="size-3 shrink-0 text-muted-foreground opacity-0 group-hover:opacity-100" />
 		</Link>
 	)

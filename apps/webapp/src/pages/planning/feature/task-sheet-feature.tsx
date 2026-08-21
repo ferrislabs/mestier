@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useCustomerContexts, useCustomers } from '#/hooks/use-customers'
 import type { PlanningResource } from '#/hooks/use-planning'
+import { useProjects } from '#/hooks/use-projects'
 import { useQuotes } from '#/hooks/use-quotes'
 import {
 	useCreateTaskComment,
@@ -137,6 +138,9 @@ export function TaskSheetFeature({
 	// quote list does and filters client-side; fine at this size, and it shares
 	// the cache with the quotes screen rather than adding a request.
 	const quotesQuery = useQuotes(organizationId, { page: 1, perPage: 100 })
+	// Live projects only: attaching a task to an archived one would resurrect a
+	// subject somebody deliberately retired.
+	const projectsQuery = useProjects(organizationId, { includeArchived: false })
 
 	const labelsQuery = useTaskLabels(organizationId)
 	const createLabel = useCreateTaskLabel(organizationId)
@@ -373,6 +377,13 @@ export function TaskSheetFeature({
 			id: quote.id,
 			label: `${quote.reference} · ${formatCents(quote.total_cents)}`,
 		}))
+	// Internal projects are offered like any other — a meeting has to be
+	// attachable, that is the point of them existing.
+	const projects = (projectsQuery.data?.data ?? []).map((project) => ({
+		id: project.id,
+		label: project.name,
+		isInternal: project.is_internal,
+	}))
 	const customerOptions = (customersQuery.data?.data ?? []).map((customer) => ({
 		id: customer.id,
 		displayName: customer.name.trim(),
@@ -409,6 +420,8 @@ export function TaskSheetFeature({
 				customerContexts,
 				quotes,
 				isQuotesLoading: quotesQuery.isLoading,
+				projects,
+				isProjectsLoading: projectsQuery.isLoading,
 				isCustomerContextsLoading: customerContextsQuery.isLoading,
 				labels: labels.map((label) => ({
 					id: label.id,
