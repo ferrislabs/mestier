@@ -1,0 +1,42 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT\n                t.project_id AS \"project_id!\",\n                t.id AS task_id,\n                t.expenses_cents,\n                COALESCE(t.starts_at, pt.starts_at) AS \"starts_at!\"\n            FROM tasks t\n            LEFT JOIN tasks pt ON pt.id = t.parent_task_id AND pt.deleted_at IS NULL\n            WHERE t.org_id = $1\n              AND t.deleted_at IS NULL\n              AND t.project_id IS NOT NULL\n              AND t.status <> 'CANCELLED'::task_status\n              AND t.expenses_cents > 0\n              AND COALESCE(t.starts_at, pt.starts_at) >= $2\n              AND COALESCE(t.starts_at, pt.starts_at) < $3\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "project_id!",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "task_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "expenses_cents",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 3,
+        "name": "starts_at!",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Timestamptz",
+        "Timestamptz"
+      ]
+    },
+    "nullable": [
+      true,
+      false,
+      false,
+      null
+    ]
+  },
+  "hash": "c69fa35716217c6f7e9a476c3857344f0633f506c26dde8e295b339ad3600cd1"
+}
