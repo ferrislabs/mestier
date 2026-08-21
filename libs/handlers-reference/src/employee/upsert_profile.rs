@@ -16,11 +16,17 @@ pub struct UpsertEmployeeProfileRequest {
     /// the first and happily produces zero for the second.
     #[serde(default)]
     pub hourly_rate_cents: Option<i32>,
-    /// True when this person is not costed by the hour at all. Any
-    /// `hourly_rate_cents` given alongside this is not stored — see
-    /// `EmployeeService::upsert_employee_profile`.
+    /// True when this person is costed from `monthly_cost_cents` rather than by
+    /// the hour. Never means their time is free: an `hourly_rate_cents` given
+    /// alongside this is not stored, and neither is a `monthly_cost_cents` given
+    /// without it — see `EmployeeService::upsert_employee_profile`.
     #[serde(default)]
     pub is_salaried: bool,
+    /// Monthly employer cost, loaded with contributions, for a salaried person.
+    /// The hourly equivalent is derived from this and `weekly_contract_minutes`,
+    /// never stored.
+    #[serde(default)]
+    pub monthly_cost_cents: Option<i32>,
     pub weekly_contract_minutes: i32,
 }
 
@@ -67,6 +73,7 @@ pub async fn handler(
             path.member_id,
             payload.hourly_rate_cents,
             payload.is_salaried,
+            payload.monthly_cost_cents,
             payload.weekly_contract_minutes,
         )
         .await?;

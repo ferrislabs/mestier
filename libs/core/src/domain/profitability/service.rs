@@ -318,18 +318,14 @@ fn project_profitability(
             .or_default()
             .extend(assignment_spans.iter().copied());
 
-        // A salaried person costs nothing by design, not by omission: their time
-        // counts above, never adds to the bill, and never lands them in
-        // `members_without_rate` — that list is for a rate nobody entered, which
-        // is a different absence from one that was never going to exist.
-        if assignment.is_salaried {
-            continue;
-        }
-
-        match assignment.hourly_rate_cents {
+        // No special case for a salaried person: their rate is derived rather
+        // than typed, and an unstateable one is an unstateable one whichever
+        // basis it came from. This branch used to skip them entirely and count
+        // their time at zero.
+        match assignment.effective_hourly_rate_cents() {
             Some(rate) => labour_cost_cents += cost_of(minutes, i64::from(rate)),
             // Recorded once per person, not once per assignment: the reader needs
-            // to know who to go and set a rate for, not how many times it hurt.
+            // to know who to go and set a figure for, not how many times it hurt.
             None if !members_without_rate.contains(&assignment.member_id) => {
                 members_without_rate.push(assignment.member_id);
             }
@@ -418,11 +414,7 @@ fn member_profitability(
 
         total.planned_minutes += minutes;
 
-        if assignment.is_salaried {
-            continue;
-        }
-
-        match assignment.hourly_rate_cents {
+        match assignment.effective_hourly_rate_cents() {
             Some(rate) => total.labour_cost_cents += cost_of(minutes, i64::from(rate)),
             None => total.rate_missing = true,
         }
@@ -517,6 +509,8 @@ mod tests {
             employee_id: Some(EmployeeId(Uuid::from_u128(member + 1000))),
             hourly_rate_cents: rate,
             is_salaried: false,
+            monthly_cost_cents: None,
+            weekly_contract_minutes: 2_100,
             starts_at: monday(9, 0),
             ends_at: monday(11, 0),
             all_day: false,
@@ -568,8 +562,38 @@ mod tests {
         );
     }
 
+    /// 3 500 € a month on a 35 h contract is 23,08 € an hour, so two hours cost
+    /// 46,16 €. This used to be 0,00 €, and nothing on the screen said so.
     #[test]
-    fn a_salaried_person_adds_time_and_no_cost() {
+    fn a_salaried_person_costs_their_derived_hourly_rate() {
+        let mut salaried = assignment(2, None);
+        salaried.is_salaried = true;
+        salaried.monthly_cost_cents = Some(350_000);
+
+        let report = build_report(
+            facts(
+                vec![assignment(1, Some(3_000)), salaried],
+                vec![project(Some(100_000), true)],
+            ),
+            WorkTime::default(),
+            june(),
+        );
+        let project = only_project(&report);
+
+        assert_eq!(project.planned_minutes, 240);
+        assert_eq!(project.labour_cost_cents, 6_000 + 4_616);
+        assert!(
+            project.members_without_rate.is_empty(),
+            "a salary is a cost basis, not a missing one"
+        );
+        assert_eq!(project.margin_cents, Some(100_000 - 6_000 - 4_616));
+    }
+
+    /// The regression this fixes. A salaried person with no amount entered was
+    /// costed at zero and deliberately kept out of `members_without_rate`, so an
+    /// hour of their time read as free and the margin was stated as fact.
+    #[test]
+    fn a_salaried_person_with_no_salary_is_a_missing_cost_not_a_free_one() {
         let mut salaried = assignment(2, None);
         salaried.is_salaried = true;
 
@@ -583,13 +607,56 @@ mod tests {
         );
         let project = only_project(&report);
 
-        assert_eq!(project.planned_minutes, 240);
-        assert_eq!(project.labour_cost_cents, 6_000);
-        assert!(
-            project.members_without_rate.is_empty(),
-            "a salaried person is not a missing rate"
+        assert_eq!(
+            project.members_without_rate,
+            vec![MemberId(Uuid::from_u128(2))]
         );
-        assert_eq!(project.margin_cents, Some(94_000));
+        assert_eq!(project.margin_cents, None);
+        assert_eq!(
+            project.planned_minutes, 240,
+            "their time is still planned, it is only the cost that is unknown"
+        );
+    }
+
+    /// A salary with no contracted hours has no hourly equivalent, so it lands in
+    /// the same place as an amount nobody entered.
+    #[test]
+    fn a_salary_with_no_contract_cannot_be_costed_either() {
+        let mut salaried = assignment(2, None);
+        salaried.is_salaried = true;
+        salaried.monthly_cost_cents = Some(350_000);
+        salaried.weekly_contract_minutes = 0;
+
+        let report = build_report(
+            facts(vec![salaried], vec![project(Some(100_000), true)]),
+            WorkTime::default(),
+            june(),
+        );
+
+        assert_eq!(
+            only_project(&report).members_without_rate,
+            vec![MemberId(Uuid::from_u128(2))]
+        );
+    }
+
+    /// The per-person section and the project total read the same rule, so they
+    /// cannot disagree about what a salaried person costs.
+    #[test]
+    fn a_salaried_person_costs_the_same_in_both_totals() {
+        let mut salaried = assignment(2, None);
+        salaried.is_salaried = true;
+        salaried.monthly_cost_cents = Some(350_000);
+
+        let report = build_report(
+            facts(vec![salaried], vec![project(None, false)]),
+            WorkTime::default(),
+            june(),
+        );
+
+        let member = report.members.first().expect("one person");
+        assert_eq!(member.labour_cost_cents, 4_616);
+        assert!(!member.rate_missing);
+        assert_eq!(only_project(&report).labour_cost_cents, 4_616);
     }
 
     #[test]

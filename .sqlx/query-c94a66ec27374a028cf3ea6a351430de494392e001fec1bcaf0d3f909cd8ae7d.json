@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            UPDATE employees\n            SET hourly_rate_cents = $2, is_salaried = $3, weekly_contract_minutes = $4, updated_at = $5\n            WHERE id = $1 AND deleted_at IS NULL\n            RETURNING id, org_id, member_id, hourly_rate_cents, is_salaried, weekly_contract_minutes, deleted_at, created_at, updated_at\n            ",
+  "query": "\n            SELECT e.id, e.org_id, e.member_id, e.hourly_rate_cents, e.is_salaried, e.monthly_cost_cents, e.weekly_contract_minutes, e.deleted_at, e.created_at, e.updated_at\n            FROM employees e\n            JOIN organization_members m ON m.id = e.member_id\n            WHERE e.org_id = $1 AND e.deleted_at IS NULL\n            ORDER BY m.last_name ASC, m.first_name ASC, e.created_at ASC\n            ",
   "describe": {
     "columns": [
       {
@@ -30,32 +30,33 @@
       },
       {
         "ordinal": 5,
-        "name": "weekly_contract_minutes",
+        "name": "monthly_cost_cents",
         "type_info": "Int4"
       },
       {
         "ordinal": 6,
+        "name": "weekly_contract_minutes",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 7,
         "name": "deleted_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 7,
+        "ordinal": 8,
         "name": "created_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 8,
+        "ordinal": 9,
         "name": "updated_at",
         "type_info": "Timestamptz"
       }
     ],
     "parameters": {
       "Left": [
-        "Uuid",
-        "Int4",
-        "Bool",
-        "Int4",
-        "Timestamptz"
+        "Uuid"
       ]
     },
     "nullable": [
@@ -64,11 +65,12 @@
       false,
       true,
       false,
+      true,
       false,
       true,
       false,
       false
     ]
   },
-  "hash": "d7548c8cc2b6d496254b5c991742956e2aaca26007d15d80482474176492371e"
+  "hash": "c94a66ec27374a028cf3ea6a351430de494392e001fec1bcaf0d3f909cd8ae7d"
 }
