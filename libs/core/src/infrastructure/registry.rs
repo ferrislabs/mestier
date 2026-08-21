@@ -20,6 +20,7 @@ pub mod domain {
     pub struct Organization;
     pub struct Planning;
     pub struct Product;
+    pub struct Project;
     pub struct Credential;
     pub struct CustomerContext;
     pub struct AutomationSettings;
