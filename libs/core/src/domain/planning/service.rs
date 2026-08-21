@@ -669,6 +669,8 @@ mod tests {
             customer_context_id: Some(CustomerContextId(Uuid::new_v4())),
             quote_id: None::<QuoteId>,
             project_id: None,
+            expenses_cents: 0,
+            expenses_label: None,
             assignments: Vec::new(),
             deleted_at: None,
             created_at: starts_at,

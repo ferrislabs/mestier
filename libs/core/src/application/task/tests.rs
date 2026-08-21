@@ -3,7 +3,7 @@
 mod tests {
 
     use chrono::{Duration, Utc};
-    use common::{OrganizationId, UserId, generate_uuid_v7};
+    use common::{CoreError, OrganizationId, UserId, generate_uuid_v7};
     use sqlx::PgPool;
 
     use crate::application::{MestierUseCase, default_authorizer};
@@ -214,6 +214,8 @@ mod tests {
             customer_context_id: Some(fixture.customer_context_id),
             quote_id: None,
             project_id: None,
+            expenses_cents: 0,
+            expenses_label: None,
         }
     }
 
@@ -897,5 +899,93 @@ mod tests {
             .execute(&admin_pool)
             .await
             .ok();
+    }
+
+    #[tokio::test]
+    #[ignore = "requires live postgres"]
+    async fn patching_expenses_persists_the_amount_and_its_label() {
+        let pool = make_pool().await;
+        let fixture = seed_fixture(&pool).await;
+        let usecase = make_usecase(pool.clone());
+
+        let created = usecase.create_task(create_command(&fixture)).await.unwrap();
+        assert_eq!(created.expenses_cents, 0);
+        assert_eq!(created.expenses_label, None);
+
+        let mut patch = PatchTaskCommand::new(created.id);
+        patch.expenses_cents = Some(4500);
+        patch.expenses_label = Some(Some("Déplacement Clermont".to_owned()));
+
+        let patched = usecase.patch_task(patch).await.unwrap();
+        assert_eq!(patched.expenses_cents, 4500);
+        assert_eq!(
+            patched.expenses_label.as_deref(),
+            Some("Déplacement Clermont")
+        );
+
+        let fetched = usecase.get_task(created.id).await.unwrap();
+        assert_eq!(fetched.expenses_cents, 4500);
+
+        cleanup(&pool, fixture.organization_id, &[fixture.owner_id]).await;
+    }
+
+    /// The check constraint would catch this too, but it would surface as a
+    /// database error and render as a 500. The service refuses it first.
+    #[tokio::test]
+    #[ignore = "requires live postgres"]
+    async fn an_amount_with_no_label_is_a_conflict_not_a_database_error() {
+        let pool = make_pool().await;
+        let fixture = seed_fixture(&pool).await;
+        let usecase = make_usecase(pool.clone());
+
+        let created = usecase.create_task(create_command(&fixture)).await.unwrap();
+
+        let mut patch = PatchTaskCommand::new(created.id);
+        patch.expenses_cents = Some(4500);
+
+        let err = usecase.patch_task(patch).await.unwrap_err();
+        assert!(matches!(err, CoreError::Conflict(_)), "got {err:?}");
+
+        let mut negative = PatchTaskCommand::new(created.id);
+        negative.expenses_cents = Some(-1);
+        negative.expenses_label = Some(Some("Déplacement".to_owned()));
+        assert!(matches!(
+            usecase.patch_task(negative).await.unwrap_err(),
+            CoreError::Conflict(_)
+        ));
+
+        // Neither attempt wrote anything.
+        let fetched = usecase.get_task(created.id).await.unwrap();
+        assert_eq!(fetched.expenses_cents, 0);
+        assert_eq!(fetched.expenses_label, None);
+
+        cleanup(&pool, fixture.organization_id, &[fixture.owner_id]).await;
+    }
+
+    #[tokio::test]
+    #[ignore = "requires live postgres"]
+    async fn clearing_the_amount_clears_the_label_with_it() {
+        let pool = make_pool().await;
+        let fixture = seed_fixture(&pool).await;
+        let usecase = make_usecase(pool.clone());
+
+        let created = usecase.create_task(create_command(&fixture)).await.unwrap();
+
+        let mut patch = PatchTaskCommand::new(created.id);
+        patch.expenses_cents = Some(4500);
+        patch.expenses_label = Some(Some("Déplacement".to_owned()));
+        usecase.patch_task(patch).await.unwrap();
+
+        let mut clear = PatchTaskCommand::new(created.id);
+        clear.expenses_cents = Some(0);
+
+        let cleared = usecase.patch_task(clear).await.unwrap();
+        assert_eq!(cleared.expenses_cents, 0);
+        assert_eq!(
+            cleared.expenses_label, None,
+            "an amount of zero must not keep a reason nobody can reconcile"
+        );
+
+        cleanup(&pool, fixture.organization_id, &[fixture.owner_id]).await;
     }
 }

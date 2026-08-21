@@ -143,6 +143,17 @@ pub struct Task {
     /// `None` costs nobody's project, and still counts towards the person who
     /// was assigned to it.
     pub project_id: Option<ProjectId>,
+    /// What the task costs beyond somebody's time: travel, a skip, a parking
+    /// fee. Free-form on purpose — a kilometric scale is fairer and only works
+    /// if distances actually get entered (see ADR 0002). `0` means no expense,
+    /// and carries no label: see [`Self::expenses_label`].
+    pub expenses_cents: i32,
+    /// Why the money was spent. Present exactly when `expenses_cents` is
+    /// non-zero, enforced both here (`TaskService`) and by
+    /// `chk_tasks_expenses_label_required`. An amount with no reason cannot be
+    /// audited three months later, and clearing the amount clears the reason
+    /// with it.
+    pub expenses_label: Option<String>,
     /// The complete set of employees currently assigned. Always loaded and
     /// persisted as a whole — see the `PATCH` contract: `assignees` is the
     /// full list, never a delta. A subtask never inherits its parent's

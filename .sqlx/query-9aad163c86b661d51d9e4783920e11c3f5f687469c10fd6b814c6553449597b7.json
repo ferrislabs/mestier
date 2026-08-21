@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT id, org_id, parent_task_id, title, description, starts_at, ends_at, all_day, status::text AS \"status!\", blocks_availability, customer_id, customer_context_id, quote_id, project_id, deleted_at, created_at, updated_at\n            FROM tasks\n            WHERE org_id = $1 AND deleted_at IS NULL\n              AND (\n                ($2::uuid IS NULL AND parent_task_id IS NULL)\n                OR parent_task_id = $2\n              )\n            ORDER BY starts_at ASC NULLS LAST, id ASC\n            LIMIT $3 OFFSET $4\n            ",
+  "query": "\n            SELECT id, org_id, parent_task_id, title, description, starts_at, ends_at, all_day, status::text AS \"status!\", blocks_availability, customer_id, customer_context_id, quote_id, project_id, expenses_cents, expenses_label, deleted_at, created_at, updated_at\n            FROM tasks\n            WHERE org_id = $1 AND deleted_at IS NULL\n              AND (\n                ($2::uuid IS NULL AND parent_task_id IS NULL)\n                OR parent_task_id = $2\n              )\n            ORDER BY starts_at ASC NULLS LAST, id ASC\n            LIMIT $3 OFFSET $4\n            ",
   "describe": {
     "columns": [
       {
@@ -75,16 +75,26 @@
       },
       {
         "ordinal": 14,
+        "name": "expenses_cents",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 15,
+        "name": "expenses_label",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 16,
         "name": "deleted_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 15,
+        "ordinal": 17,
         "name": "created_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 16,
+        "ordinal": 18,
         "name": "updated_at",
         "type_info": "Timestamptz"
       }
@@ -112,10 +122,12 @@
       true,
       true,
       true,
+      false,
+      true,
       true,
       false,
       false
     ]
   },
-  "hash": "750bf05bf410d910089f679d805a0344a522b100ec4e823efcd37601554f3841"
+  "hash": "9aad163c86b661d51d9e4783920e11c3f5f687469c10fd6b814c6553449597b7"
 }
