@@ -171,6 +171,8 @@ mod tests {
             customer_context_id: Some("55555555-5555-5555-5555-555555555555".parse().unwrap()),
             quote_id: None,
             project_id: None,
+            expenses_cents: 0,
+            expenses_label: None,
             assignments: vec![TaskAssignment {
                 id: "66666666-6666-6666-6666-666666666666".parse().unwrap(),
                 organization_id,

@@ -88,6 +88,8 @@ pub async fn handler(
             customer_context_id: payload.customer_context_id,
             quote_id: payload.quote_id,
             project_id: None,
+            expenses_cents: 0,
+            expenses_label: None,
         })
         .await?;
 

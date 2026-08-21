@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT id, org_id, parent_task_id, title, description, starts_at, ends_at, all_day, status::text AS \"status!\", blocks_availability, customer_id, customer_context_id, quote_id, project_id, deleted_at, created_at, updated_at\n            FROM tasks\n            WHERE id = $1 AND deleted_at IS NULL\n            ",
+  "query": "\n            SELECT id, org_id, parent_task_id, title, description, starts_at, ends_at, all_day, status::text AS \"status!\", blocks_availability, customer_id, customer_context_id, quote_id, project_id, expenses_cents, expenses_label, deleted_at, created_at, updated_at\n            FROM tasks\n            WHERE id = $1 AND deleted_at IS NULL\n            ",
   "describe": {
     "columns": [
       {
@@ -75,16 +75,26 @@
       },
       {
         "ordinal": 14,
+        "name": "expenses_cents",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 15,
+        "name": "expenses_label",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 16,
         "name": "deleted_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 15,
+        "ordinal": 17,
         "name": "created_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 16,
+        "ordinal": 18,
         "name": "updated_at",
         "type_info": "Timestamptz"
       }
@@ -109,10 +119,12 @@
       true,
       true,
       true,
+      false,
+      true,
       true,
       false,
       false
     ]
   },
-  "hash": "8897151249f2d10a1a35f564e994d36d5c18e6108ec14fabe5fd6357486625f4"
+  "hash": "cbd81f23cf335314eabcdb0d440b98035fb290dcd136425e432ef1f7286a1aad"
 }

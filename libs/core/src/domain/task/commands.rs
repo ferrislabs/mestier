@@ -30,6 +30,9 @@ pub struct CreateTaskCommand {
     /// The project this task is costed against. Independent of
     /// `parent_task_id`: a subtask can name a project its parent does not.
     pub project_id: Option<ProjectId>,
+    /// `0` with no label when the task costs nothing beyond time.
+    pub expenses_cents: i32,
+    pub expenses_label: Option<String>,
 }
 
 /// Carries a `PATCH`: every field is optional and only the ones present are
@@ -72,6 +75,11 @@ pub struct PatchTaskCommand {
     /// seam rather than in `TaskService`, which owns no project port — see
     /// `MestierUseCase::patch_task`.
     pub project_id: Option<Option<ProjectId>>,
+    /// The amount is `NOT NULL` in the schema, so a single `Option` says it
+    /// all: `None` leaves it alone, `Some(0)` clears the expense. The label
+    /// needs the double option like every other nullable column.
+    pub expenses_cents: Option<i32>,
+    pub expenses_label: Option<Option<String>>,
 }
 
 impl PatchTaskCommand {
@@ -92,6 +100,8 @@ impl PatchTaskCommand {
             label_ids: None,
             equipment_ids: None,
             project_id: None,
+            expenses_cents: None,
+            expenses_label: None,
         }
     }
 }

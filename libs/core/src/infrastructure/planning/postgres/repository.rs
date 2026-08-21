@@ -72,6 +72,7 @@ impl<'tx> PlanningRepository for PgPlanningRepository<'tx> {
                 COALESCE(t.ends_at, p.ends_at) AS ends_at,
                 t.all_day, t.status::text AS "status!", t.blocks_availability,
                 t.customer_id, t.customer_context_id, t.quote_id, t.project_id,
+                t.expenses_cents, t.expenses_label,
                 t.deleted_at, t.created_at, t.updated_at,
                 -- Postgres's own nullability analysis of a concatenation
                 -- over a `LEFT JOIN`ed table is not reliable enough to trust
