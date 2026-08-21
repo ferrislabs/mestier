@@ -364,7 +364,8 @@ export function ProfitabilityUI({
 									</p>
 									{row.rate_missing ? (
 										<p className="text-xs text-amber-600 dark:text-amber-500">
-											Taux horaire manquant, coût non calculé
+											Coût horaire manquant : taux horaire ou salaire non
+											renseigné
 										</p>
 									) : null}
 								</div>

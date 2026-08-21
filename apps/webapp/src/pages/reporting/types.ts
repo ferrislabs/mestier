@@ -29,15 +29,19 @@ export function plannedCostCents(project: ProjectProfitability): number {
 /**
  * Why a project's figures cannot be trusted, in words, or `null` when they can.
  *
- * Only one thing lands a project here now: a rate nobody has set. The clocked
- * model also withheld a margin for a pointage left open, which was its most
+ * One cause, three shapes: an hourly rate nobody set, a salaried person with no
+ * monthly amount, or a salary with no contracted hours to spread over. The
+ * wording covers all three rather than naming only the hourly case, which is how
+ * a salaried person's hour came to read as 0,00 € with nothing said about it.
+ *
+ * The clocked model also withheld a margin for a pointage left open, its most
  * common cause; there is no clock left to leave open.
  */
 export function incompleteReason(project: ProjectProfitability): string | null {
 	const missingRates = project.members_without_rate.length
 	if (missingRates === 0) return null
 
-	return `${missingRates} personne${missingRates > 1 ? 's' : ''} sans taux horaire renseigné`
+	return `${missingRates} personne${missingRates > 1 ? 's' : ''} sans coût horaire renseigné`
 }
 
 /**

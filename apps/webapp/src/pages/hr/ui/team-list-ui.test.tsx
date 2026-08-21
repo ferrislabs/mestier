@@ -16,6 +16,8 @@ function member(overrides: Partial<TeamMemberRow> = {}): TeamMemberRow {
 		access: 'none',
 		hourlyRateCents: 1500,
 		isSalaried: false,
+		monthlyCostCents: null,
+		effectiveHourlyRateCents: 1500,
 		weeklyContractMinutes: 2100,
 		...overrides,
 	}
@@ -36,6 +38,7 @@ function baseProps() {
 				firstName: '',
 				hourlyRate: '',
 				isSalaried: false,
+				monthlyCost: '',
 			},
 			isPending: false,
 			onChange: vi.fn(),
@@ -237,6 +240,7 @@ describe('TeamListUI — create member modal', () => {
 					firstName: '',
 					hourlyRate: '35',
 					isSalaried: false,
+					monthlyCost: '',
 				},
 			},
 		}
@@ -247,6 +251,7 @@ describe('TeamListUI — create member modal', () => {
 		expect(props.createForm.onChange).toHaveBeenCalledWith({
 			isSalaried: true,
 			hourlyRate: '',
+			monthlyCost: '',
 		})
 	})
 
@@ -261,6 +266,7 @@ describe('TeamListUI — create member modal', () => {
 					firstName: '',
 					hourlyRate: '',
 					isSalaried: true,
+					monthlyCost: '',
 				},
 			},
 		}
@@ -273,13 +279,63 @@ describe('TeamListUI — create member modal', () => {
 })
 
 describe('TeamListUI — salaried row display', () => {
-	it('shows "Salarié" instead of an hourly rate for a salaried member', async () => {
+	/**
+	 * The regression. This column used to read just "Salarié", which said nothing
+	 * about cost, and profitability counted their hours at 0,00 €. It now shows
+	 * the monthly amount and the hourly figure derived from it.
+	 */
+	it('shows a salaried member on both bases: monthly, and the hourly equivalent', async () => {
 		const props = {
 			...baseProps(),
-			members: [member({ isSalaried: true, hourlyRateCents: null })],
+			members: [
+				member({
+					isSalaried: true,
+					hourlyRateCents: null,
+					monthlyCostCents: 350_000,
+					effectiveHourlyRateCents: 2_308,
+				}),
+			],
 		}
 		await renderWithRouter(<TeamListUI {...props} />)
 
-		expect(screen.getByText('Salarié')).toBeDefined()
+		expect(screen.getByText(/3 500,00/)).toBeDefined()
+		expect(screen.getByText(/soit/)).toBeDefined()
+		expect(screen.getByText(/23,08/)).toBeDefined()
+	})
+
+	it('says outright when a salaried member has no amount entered', async () => {
+		const props = {
+			...baseProps(),
+			members: [
+				member({
+					isSalaried: true,
+					hourlyRateCents: null,
+					monthlyCostCents: null,
+					effectiveHourlyRateCents: null,
+				}),
+			],
+		}
+		await renderWithRouter(<TeamListUI {...props} />)
+
+		expect(screen.getByText(/coût mensuel non renseigné/i)).toBeDefined()
+	})
+
+	/** A salary needs a contract to be spread over. */
+	it('says outright when the contract cannot divide the salary', async () => {
+		const props = {
+			...baseProps(),
+			members: [
+				member({
+					isSalaried: true,
+					hourlyRateCents: null,
+					monthlyCostCents: 350_000,
+					effectiveHourlyRateCents: null,
+					weeklyContractMinutes: 0,
+				}),
+			],
+		}
+		await renderWithRouter(<TeamListUI {...props} />)
+
+		expect(screen.getByText(/heures contractuelles manquantes/i)).toBeDefined()
 	})
 })

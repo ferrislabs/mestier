@@ -59,7 +59,7 @@ describe('incompleteReason', () => {
 			project({ members_without_rate: ['member-1'], margin_cents: null }),
 		)
 
-		expect(reason).toBe('1 personne sans taux horaire renseigné')
+		expect(reason).toBe('1 personne sans coût horaire renseigné')
 	})
 
 	it('pluralises several missing rates', () => {
@@ -67,7 +67,7 @@ describe('incompleteReason', () => {
 			project({ members_without_rate: ['member-1', 'member-2'] }),
 		)
 
-		expect(reason).toBe('2 personnes sans taux horaire renseigné')
+		expect(reason).toBe('2 personnes sans coût horaire renseigné')
 	})
 
 	/// An overlap is a calendar to fix, not a figure to distrust.

@@ -86,7 +86,7 @@ describe('ProfitabilityUI', () => {
 
 		expect(screen.getByText(/1 projet sans marge calculable/i)).toBeDefined()
 		expect(
-			screen.getAllByText(/sans taux horaire renseigné/i).length,
+			screen.getAllByText(/sans coût horaire renseigné/i).length,
 		).toBeGreaterThan(0)
 	})
 
@@ -227,7 +227,7 @@ describe('ProfitabilityUI', () => {
 		)
 
 		expect(screen.getByText('123,45 €')).toBeDefined()
-		expect(screen.getByText(/taux horaire manquant/i)).toBeDefined()
+		expect(screen.getByText(/coût horaire manquant/i)).toBeDefined()
 	})
 
 	/** The hours are the plan's now, and a payroll screen has to say so. */

@@ -14,6 +14,7 @@ import {
 } from 'lucide-react'
 import {
 	CreateButton,
+	formatMoney,
 	MoneyCell,
 	TextField,
 } from '#/components/reference-table'
@@ -86,6 +87,14 @@ export interface TeamMemberRow {
 	hourlyRateCents: number | null
 	/** False both when the seat has no profile and when it has an hourly one. */
 	isSalaried: boolean
+	/** `null` when not set, or when the seat is not salaried. */
+	monthlyCostCents: number | null
+	/**
+	 * What an hour of this person costs on whichever basis they are on, computed
+	 * by the backend so the browser never re-implements the division. `null`
+	 * means it cannot be stated, which the row has to say rather than imply.
+	 */
+	effectiveHourlyRateCents: number | null
 	/** `null` when the seat has no employee profile yet. */
 	weeklyContractMinutes: number | null
 }
@@ -247,22 +256,45 @@ export function TeamListUI({
 								placeholder="Optionnel"
 								disabled={createForm.values.isSalaried}
 							/>
+							{createForm.values.isSalaried ? (
+								<TextField
+									label="Coût employeur mensuel"
+									value={createForm.values.monthlyCost}
+									onChange={(monthlyCost) =>
+										createForm.onChange({ monthlyCost })
+									}
+									inputMode="decimal"
+									suffix="€/mois"
+									placeholder="Salaire chargé"
+								/>
+							) : null}
 						</div>
 						<div className="mt-4 flex items-center gap-2">
 							<Switch
 								id="create-member-salaried"
 								checked={createForm.values.isSalaried}
 								onCheckedChange={(isSalaried) =>
-									createForm.onChange({ isSalaried, hourlyRate: '' })
+									createForm.onChange({
+										isSalaried,
+										hourlyRate: '',
+										monthlyCost: '',
+									})
 								}
 							/>
 							<Label
 								htmlFor="create-member-salaried"
 								className="text-sm font-normal"
 							>
-								Salarié (pas de taux horaire)
+								Salarié (coût mensuel plutôt qu'horaire)
 							</Label>
 						</div>
+						{createForm.values.isSalaried ? (
+							<p className="mt-2 text-xs text-muted-foreground">
+								Le coût horaire est calculé à partir de ce montant et des heures
+								contractuelles. Sans montant, la rentabilité refuse de chiffrer
+								son temps plutôt que de le compter gratuit.
+							</p>
+						) : null}
 					</div>
 					<DialogFooter className="border-t pt-4">
 						<Button
@@ -471,6 +503,20 @@ function TeamTable({
 														placeholder="Optionnel"
 														disabled={draft.values.isSalaried}
 													/>
+													{draft.values.isSalaried ? (
+														<Input
+															aria-label="Coût employeur mensuel"
+															value={draft.values.monthlyCost}
+															onChange={(event) =>
+																onDraftChange({
+																	...draft.values,
+																	monthlyCost: event.target.value,
+																})
+															}
+															inputMode="decimal"
+															placeholder="€/mois chargé"
+														/>
+													) : null}
 													<div className="flex items-center gap-1.5">
 														<Switch
 															id={`salaried-${member.id}`}
@@ -481,6 +527,7 @@ function TeamTable({
 																	...draft.values,
 																	isSalaried,
 																	hourlyRate: '',
+																	monthlyCost: '',
 																})
 															}
 														/>
@@ -493,9 +540,12 @@ function TeamTable({
 													</div>
 												</div>
 											) : member.isSalaried ? (
-												<span className="text-sm text-muted-foreground">
-													Salarié
-												</span>
+												<SalariedRateCell
+													monthlyCostCents={member.monthlyCostCents}
+													effectiveHourlyRateCents={
+														member.effectiveHourlyRateCents
+													}
+												/>
 											) : (
 												<MoneyCell value={member.hourlyRateCents} suffix="/h" />
 											)}
@@ -637,5 +687,48 @@ function RowActions({
 				</AlertDialogFooter>
 			</AlertDialogContent>
 		</AlertDialog>
+	)
+}
+
+/**
+ * A salaried person's cost, on both bases at once.
+ *
+ * The monthly amount is what was typed; the hourly figure beside it is what
+ * profitability will actually use, computed server-side. Showing only the first
+ * would leave the reader unable to sanity-check the number that ends up on a
+ * margin, and showing only the second would hide what they entered.
+ *
+ * When the equivalent cannot be stated — no amount, or no contracted hours to
+ * spread it over — the cell says so outright. This column used to read just
+ * "Salarié", which is how an hour of somebody's time came to show up as 0,00 €.
+ */
+function SalariedRateCell({
+	monthlyCostCents,
+	effectiveHourlyRateCents,
+}: {
+	monthlyCostCents: number | null
+	effectiveHourlyRateCents: number | null
+}) {
+	if (monthlyCostCents === null) {
+		return (
+			<span className="text-sm text-amber-600 dark:text-amber-500">
+				Salarié, coût mensuel non renseigné
+			</span>
+		)
+	}
+
+	return (
+		<div className="flex flex-col">
+			<MoneyCell value={monthlyCostCents} suffix="/mois" />
+			<span className="text-xs text-muted-foreground">
+				{effectiveHourlyRateCents === null ? (
+					<span className="text-amber-600 dark:text-amber-500">
+						Heures contractuelles manquantes, coût horaire incalculable
+					</span>
+				) : (
+					`soit ${formatMoney(effectiveHourlyRateCents)}/h`
+				)}
+			</span>
+		</div>
 	)
 }

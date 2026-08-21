@@ -333,10 +333,12 @@ export namespace Schemas {
   export type EdgeDto = { branch?: (null | BranchDto) | undefined; from: string; to: string };
   export type EmployeeResponse = {
     created_at: string;
+    effective_hourly_rate_cents?: (number | null) | undefined;
     hourly_rate_cents?: (number | null) | undefined;
     id: EmployeeId;
     is_salaried: boolean;
     member_id: MemberId;
+    monthly_cost_cents?: (number | null) | undefined;
     organization_id: OrganizationId;
     updated_at: string;
     weekly_contract_minutes: number;
@@ -776,6 +778,7 @@ export namespace Schemas {
   export type UpsertEmployeeProfileRequest = {
     hourly_rate_cents?: (number | null) | undefined;
     is_salaried?: boolean | undefined;
+    monthly_cost_cents?: (number | null) | undefined;
     weekly_contract_minutes: number;
   };
   export type UpsertOverwriteRequest = { allow: number; deny: number };
@@ -2247,10 +2250,12 @@ export namespace Endpoints {
       200: {
         data: {
           created_at: string;
+          effective_hourly_rate_cents?: (number | null) | undefined;
           hourly_rate_cents?: (number | null) | undefined;
           id: Schemas.EmployeeId;
           is_salaried: boolean;
           member_id: Schemas.MemberId;
+          monthly_cost_cents?: (number | null) | undefined;
           organization_id: Schemas.OrganizationId;
           updated_at: string;
           weekly_contract_minutes: number;
@@ -3042,10 +3047,12 @@ export namespace Endpoints {
       200: {
         data: Array<{
           created_at: string;
+          effective_hourly_rate_cents?: (number | null) | undefined;
           hourly_rate_cents?: (number | null) | undefined;
           id: Schemas.EmployeeId;
           is_salaried: boolean;
           member_id: Schemas.MemberId;
+          monthly_cost_cents?: (number | null) | undefined;
           organization_id: Schemas.OrganizationId;
           updated_at: string;
           weekly_contract_minutes: number;
