@@ -128,6 +128,12 @@ impl Modify for SecurityAddon {
         planning::task::update::handler,
         planning::task::soft_delete::handler,
         planning::task::bulk_assign::handler,
+        planning::project::create::handler,
+        planning::project::list::handler,
+        planning::project::get_one::handler,
+        planning::project::update::handler,
+        planning::project::archive::handler,
+        planning::project::restore::handler,
         planning::task_label::create::handler,
         planning::task_label::list::handler,
         planning::task_label::update::handler,
@@ -267,6 +273,9 @@ impl Modify for SecurityAddon {
         planning::task::create::CreateTaskRequest,
         planning::task::update::UpdateTaskRequest,
         planning::task::bulk_assign::BulkAssignTasksRequest,
+        planning::project::create::CreateProjectRequest,
+        planning::project::update::UpdateProjectRequest,
+        planning::response::ProjectResponse,
         planning::response::TaskResponse,
         planning::response::BulkAssignTasksResponse,
         planning::task_label::create::CreateTaskLabelRequest,
@@ -348,3 +357,72 @@ impl Modify for SecurityAddon {
     )
 )]
 pub struct ApiDoc;
+
+#[cfg(test)]
+mod tests {
+    use utoipa::OpenApi;
+
+    use super::ApiDoc;
+
+    /// The `paths(...)` list is hand-maintained, so a route can ship and never
+    /// reach the document — and the webapp's client is generated from the
+    /// document, not from the router. This catches the omission here rather
+    /// than as a missing function three commits later.
+    #[test]
+    fn every_project_route_reaches_the_document() {
+        let document = ApiDoc::openapi();
+        let paths = &document.paths.paths;
+
+        let collection = "/api/v1/organizations/{organization_id}/projects";
+        let item = "/api/v1/organizations/{organization_id}/projects/{project_id}";
+        let restore = "/api/v1/organizations/{organization_id}/projects/{project_id}/restore";
+
+        for path in [collection, item, restore] {
+            assert!(
+                paths.contains_key(path),
+                "{path} is missing from the document"
+            );
+        }
+
+        // Serialized rather than walked: `PathItem`'s operation map is not part
+        // of utoipa's stable surface, and the JSON is what the client generator
+        // reads anyway.
+        let json = serde_json::to_string(&document).expect("the document serializes");
+        for operation_id in [
+            "createProject",
+            "listProjects",
+            "getProject",
+            "patchProject",
+            "archiveProject",
+            "restoreProject",
+        ] {
+            assert!(
+                json.contains(&format!("\"operationId\":\"{operation_id}\"")),
+                "{operation_id} is missing from the document"
+            );
+        }
+    }
+
+    /// The task routes are how a task joins a project, so the field has to be
+    /// in the generated schema or the front cannot send it.
+    #[test]
+    fn the_task_patch_schema_carries_the_project_and_the_expenses() {
+        let document = ApiDoc::openapi();
+        let schemas = &document
+            .components
+            .as_ref()
+            .expect("the document has components")
+            .schemas;
+
+        let schema = serde_json::to_string(
+            schemas
+                .get("UpdateTaskRequest")
+                .expect("UpdateTaskRequest is registered"),
+        )
+        .expect("the schema serializes");
+
+        for field in ["project_id", "expenses_cents", "expenses_label"] {
+            assert!(schema.contains(field), "{field} is missing from {schema}");
+        }
+    }
+}
