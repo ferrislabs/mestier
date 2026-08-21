@@ -322,14 +322,16 @@ fn project_profitability(
         // than typed, and an unstateable one is an unstateable one whichever
         // basis it came from. This branch used to skip them entirely and count
         // their time at zero.
-        match assignment.effective_hourly_rate_cents() {
-            Some(rate) => labour_cost_cents += cost_of(minutes, i64::from(rate)),
+        match assignment.hourly_cost_cents() {
+            Ok(rate) => labour_cost_cents += cost_of(minutes, i64::from(rate)),
             // Recorded once per person, not once per assignment: the reader needs
             // to know who to go and set a figure for, not how many times it hurt.
-            None if !members_without_rate.contains(&assignment.member_id) => {
+            // Which figure it is lives on the per-person total, where there is
+            // room to say it.
+            Err(_) if !members_without_rate.contains(&assignment.member_id) => {
                 members_without_rate.push(assignment.member_id);
             }
-            None => {}
+            Err(_) => {}
         }
     }
 
@@ -409,14 +411,16 @@ fn member_profitability(
                 member_id: assignment.member_id,
                 planned_minutes: 0,
                 labour_cost_cents: 0,
-                rate_missing: false,
+                missing_cost: None,
             });
 
         total.planned_minutes += minutes;
 
-        match assignment.effective_hourly_rate_cents() {
-            Some(rate) => total.labour_cost_cents += cost_of(minutes, i64::from(rate)),
-            None => total.rate_missing = true,
+        match assignment.hourly_cost_cents() {
+            Ok(rate) => total.labour_cost_cents += cost_of(minutes, i64::from(rate)),
+            // Kept if already set: one gap named is enough to act on, and the
+            // first one found is as good as any.
+            Err(missing) => total.missing_cost = total.missing_cost.or(Some(missing)),
         }
     }
 
@@ -460,8 +464,8 @@ mod tests {
 
     use super::*;
     use crate::{
-        CustomerId, EmployeeId, EmployeeRhythmId, EquipmentId, ProjectId, RhythmSlot, RhythmSlotId,
-        TaskId, WorkSlotId,
+        CustomerId, EmployeeId, EmployeeRhythmId, EquipmentId, MissingCost, ProjectId, RhythmSlot,
+        RhythmSlotId, TaskId, WorkSlotId,
     };
 
     const PARIS: &str = "Europe/Paris";
@@ -616,6 +620,17 @@ mod tests {
             project.planned_minutes, 240,
             "their time is still planned, it is only the cost that is unknown"
         );
+
+        let salaried_total = report
+            .members
+            .iter()
+            .find(|member| member.member_id == MemberId(Uuid::from_u128(2)))
+            .expect("the person appears");
+        assert_eq!(
+            salaried_total.missing_cost,
+            Some(MissingCost::MonthlyCost),
+            "the screen has to name the amount, not guess between two fields"
+        );
     }
 
     /// A salary with no contracted hours has no hourly equivalent, so it lands in
@@ -637,6 +652,12 @@ mod tests {
             only_project(&report).members_without_rate,
             vec![MemberId(Uuid::from_u128(2))]
         );
+        // The gap the report used to describe as a missing salary, which sent
+        // somebody looking at a field they had already filled in.
+        assert_eq!(
+            report.members[0].missing_cost,
+            Some(MissingCost::ContractedHours)
+        );
     }
 
     /// The per-person section and the project total read the same rule, so they
@@ -655,7 +676,7 @@ mod tests {
 
         let member = report.members.first().expect("one person");
         assert_eq!(member.labour_cost_cents, 4_616);
-        assert!(!member.rate_missing);
+        assert_eq!(member.missing_cost, None);
         assert_eq!(only_project(&report).labour_cost_cents, 4_616);
     }
 
@@ -946,7 +967,10 @@ mod tests {
             .map(|member| member.member_id.0)
             .collect();
         assert_eq!(ids, vec![Uuid::from_u128(1), Uuid::from_u128(3)]);
-        assert!(report.members[0].rate_missing);
-        assert!(!report.members[1].rate_missing);
+        assert_eq!(
+            report.members[0].missing_cost,
+            Some(MissingCost::HourlyRate)
+        );
+        assert_eq!(report.members[1].missing_cost, None);
     }
 }

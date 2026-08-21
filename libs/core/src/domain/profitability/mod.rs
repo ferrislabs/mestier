@@ -82,19 +82,39 @@ pub struct PlannedAssignment {
     pub all_day: bool,
 }
 
+/// Why an hour of somebody's time cannot be priced.
+///
+/// Three distinct gaps, and the reader has to be told which one: a screen that
+/// says "hourly rate or salary missing" when what is actually missing is the
+/// contract sends somebody looking in the wrong place. That happened.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, ToSchema)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum MissingCost {
+    /// Costed by the hour, and no rate was entered.
+    HourlyRate,
+    /// Costed from a salary, and no amount was entered.
+    MonthlyCost,
+    /// An amount was entered, but there are no contracted hours to spread it
+    /// over, so it has no hourly equivalent.
+    ContractedHours,
+}
+
 impl PlannedAssignment {
-    /// What an hour of this person costs, whichever basis they are on, or `None`
-    /// when it cannot be stated.
+    /// What an hour of this person costs, or which figure is missing.
     ///
     /// One accessor rather than a branch at each call site: the project total and
     /// the per-person total must never disagree about what somebody costs, and
-    /// two copies of this rule is how they would.
-    pub fn effective_hourly_rate_cents(&self) -> Option<i32> {
-        if self.is_salaried {
-            salaried_hourly_rate_cents(self.monthly_cost_cents, self.weekly_contract_minutes)
-        } else {
-            self.hourly_rate_cents
+    /// two copies of this rule is how they would. Returning the *reason* rather
+    /// than a bare `None` is what lets the screen name the field to go and fill.
+    pub fn hourly_cost_cents(&self) -> Result<i32, MissingCost> {
+        if !self.is_salaried {
+            return self.hourly_rate_cents.ok_or(MissingCost::HourlyRate);
         }
+
+        let monthly_cost_cents = self.monthly_cost_cents.ok_or(MissingCost::MonthlyCost)?;
+
+        salaried_hourly_rate_cents(Some(monthly_cost_cents), self.weekly_contract_minutes)
+            .ok_or(MissingCost::ContractedHours)
     }
 }
 
@@ -215,9 +235,10 @@ pub struct MemberProfitability {
     pub member_id: MemberId,
     pub planned_minutes: i64,
     pub labour_cost_cents: i64,
-    /// True when no rate is set, in which case the cost is zero because it is
-    /// unknown, not because the time is free.
-    pub rate_missing: bool,
+    /// Which figure is missing, when the cost could not be computed. `None`
+    /// means it was. The cost above is zero because it is unknown, never because
+    /// the time is free.
+    pub missing_cost: Option<MissingCost>,
 }
 
 /// The whole answer for one organization over one period.
