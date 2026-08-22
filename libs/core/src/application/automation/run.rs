@@ -724,13 +724,11 @@ mod tests {
 
     use super::*;
     use crate::application::default_authorizer;
+    use crate::application::test_support::automation_pool;
     use crate::domain::automation::workflow::{
         CreateWorkflowCommand, Edge, SaveWorkflowVersionCommand,
     };
     use crate::infrastructure::automation::postgres::run::RUN_CLAIM_LOCK;
-    use tokio::sync::OnceCell;
-
-    use crate::application::test_support::scratch_pool;
     use crate::infrastructure::realtime::EventHub;
 
     /// A database of this suite's own, not the shared development one.
@@ -752,10 +750,8 @@ mod tests {
     ///
     /// Its own database settles both at once — nothing else claims its runs, and
     /// nothing it leaves behind outlives the run.
-    static SCRATCH_URL: OnceCell<String> = OnceCell::const_new();
-
     async fn make_pool() -> PgPool {
-        scratch_pool("mestier_automation_test_", &SCRATCH_URL).await
+        automation_pool().await
     }
 
     async fn seed_organization(pool: &PgPool, label: &str) -> OrganizationId {

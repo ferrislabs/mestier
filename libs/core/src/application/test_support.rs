@@ -106,3 +106,38 @@ pub async fn scratch_pool(prefix: &'static str, cell: &'static OnceCell<String>)
         .await
         .unwrap_or_else(|error| panic!("connecting to the scratch database failed: {error}"))
 }
+
+/// The automation aggregate's own database, shared by its five test modules.
+///
+/// One database for the whole aggregate rather than one per module: they are
+/// serialised anyway, and five databases would be five things to prune. What
+/// matters is that no worker outside this process claims their runs — see
+/// [`scratch_pool`].
+static AUTOMATION_SCRATCH: OnceCell<String> = OnceCell::const_new();
+
+pub async fn automation_pool() -> PgPool {
+    let pool = scratch_pool("mestier_automation_test_", &AUTOMATION_SCRATCH).await;
+
+    // Every automation test starts on an empty queue.
+    //
+    // `run_engine_pass` claims every *due* run in the database, not just the one
+    // the test just started, so runs left behind by earlier tests — a failed one
+    // waiting on its backoff, a deliberately unfinished one — get claimed instead
+    // and the test's own run is still `pending` when it asserts. `RUN_CLAIM_LOCK`
+    // serialises the tests against each other; it does not empty the queue
+    // between them.
+    //
+    // Wiping it here rather than cleaning up in each of the twenty tests puts the
+    // invariant in one place, and this database belongs to no one else.
+    for statement in [
+        "DELETE FROM automation.run_step",
+        "DELETE FROM automation.run",
+    ] {
+        sqlx::query(statement)
+            .execute(&pool)
+            .await
+            .unwrap_or_else(|error| panic!("clearing the run queue failed: {error}"));
+    }
+
+    pool
+}

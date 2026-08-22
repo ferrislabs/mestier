@@ -165,14 +165,13 @@ mod tests {
 
     use super::*;
     use crate::application::default_authorizer;
+    use crate::application::test_support::automation_pool;
     use crate::domain::automation::workflow::{Graph, PlacedConnector};
     use crate::infrastructure::automation::webhook::secret::SecretCipher;
     use crate::infrastructure::realtime::EventHub;
 
     async fn make_pool() -> PgPool {
-        let url = std::env::var("DATABASE_URL")
-            .expect("DATABASE_URL must be set to run workflow use case integration tests");
-        PgPool::connect(&url).await.unwrap()
+        automation_pool().await
     }
 
     async fn seed_organization(pool: &PgPool, label: &str) -> OrganizationId {
