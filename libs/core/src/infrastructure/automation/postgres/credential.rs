@@ -214,14 +214,13 @@ mod tests {
     use sqlx::PgPool;
 
     use super::*;
+    use crate::application::test_support::automation_pool;
     use crate::domain::automation::credential::CredentialOrigin;
     use crate::infrastructure::automation::webhook::secret::SecretCipher;
     use crate::infrastructure::postgres::with_tx;
 
     async fn make_pool() -> PgPool {
-        let url = std::env::var("DATABASE_URL")
-            .expect("DATABASE_URL must be set to run credential integration tests");
-        PgPool::connect(&url).await.unwrap()
+        automation_pool().await
     }
 
     async fn seed_organization(pool: &PgPool, label: &str) -> OrganizationId {

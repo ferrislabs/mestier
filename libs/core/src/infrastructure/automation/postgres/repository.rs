@@ -155,6 +155,7 @@ mod tests {
     use uuid::Uuid;
 
     use super::*;
+    use crate::application::test_support::automation_pool;
     use crate::infrastructure::postgres::with_tx;
 
     struct QuoteAccepted {
@@ -180,9 +181,7 @@ mod tests {
     }
 
     async fn make_pool() -> PgPool {
-        let url = std::env::var("DATABASE_URL")
-            .expect("DATABASE_URL must be set to run event log integration tests");
-        PgPool::connect(&url).await.unwrap()
+        automation_pool().await
     }
 
     /// The log has a foreign key on `organizations`, so an event needs a real
