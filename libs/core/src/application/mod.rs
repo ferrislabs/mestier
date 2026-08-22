@@ -304,6 +304,8 @@ mod tests {
     use common::{OrganizationId, generate_uuid_v7};
     use uuid::Uuid;
 
+    use crate::application::test_support::purge;
+
     use super::*;
 
     /// `connect_lazy` builds a pool without touching the network, so the actor
@@ -463,5 +465,27 @@ mod tests {
 
         assert_eq!(row.actor_kind, "automation");
         assert_eq!(row.actor_id, Some(run_id));
+
+        // This test had no cleanup at all, and left an organization, a user, a
+        // customer, a context, a quote and an event behind on every run. Once the
+        // automation suites moved to their own database it was the last fixture
+        // still leaking into the shared one.
+        let owner_id: Uuid =
+            sqlx::query_scalar!("SELECT owner_id FROM organizations WHERE id = $1", org_id.0)
+                .fetch_one(&pool)
+                .await
+                .unwrap();
+
+        for statement in [
+            "DELETE FROM automation.event WHERE org_id = $1",
+            "DELETE FROM quote_lines WHERE org_id = $1",
+            "DELETE FROM quotes WHERE org_id = $1",
+            "DELETE FROM customer_contexts WHERE customer_id IN (SELECT id FROM customers WHERE org_id = $1)",
+            "DELETE FROM customers WHERE org_id = $1",
+            "DELETE FROM organizations WHERE id = $1",
+        ] {
+            purge(&pool, statement, org_id.0).await;
+        }
+        purge(&pool, "DELETE FROM users WHERE id = $1", owner_id).await;
     }
 }
