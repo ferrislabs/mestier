@@ -40,6 +40,10 @@ mock = ["dep:mockall"]
 
 [dev-dependencies]
 mestier-core = { path = ".", features = ["mock"] }
+# `migrate` only for the tests: the integration suites that cannot share the dev
+# database build their own from the embedded migrations, which keeps the `sqlx`
+# CLI off the prerequisite list.
+sqlx = { workspace = true, features = ["migrate"] }
 authz = { workspace = true, features = ["mock"] }
 cucumber = { workspace = true }
 mockall = { workspace = true }

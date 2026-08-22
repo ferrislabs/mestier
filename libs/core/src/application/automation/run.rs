@@ -728,12 +728,34 @@ mod tests {
         CreateWorkflowCommand, Edge, SaveWorkflowVersionCommand,
     };
     use crate::infrastructure::automation::postgres::run::RUN_CLAIM_LOCK;
+    use tokio::sync::OnceCell;
+
+    use crate::application::test_support::scratch_pool;
     use crate::infrastructure::realtime::EventHub;
 
+    /// A database of this suite's own, not the shared development one.
+    ///
+    /// Two reasons, both observed rather than anticipated.
+    ///
+    /// These tests drive the worker themselves, but `run_engine_pass` claims
+    /// every *due* run in the database. Any other worker pointed at the same one
+    /// — a dev API left running, most often — races them for their own runs and
+    /// executes them with its own build, leaving a run `pending` and the
+    /// assertion flapping: ten failures one minute, twenty passes the next, with
+    /// nothing changed in between. A suite that passes depending on whether
+    /// somebody's server happens to be up cannot gate a merge.
+    ///
+    /// And this suite was the largest single source of stray fixtures: it seeds
+    /// an organization per test and never deleted one. Most of the 5 128
+    /// abandoned organizations found in the dev database came from here, which in
+    /// turn is what made the run queue crowded enough to break other things.
+    ///
+    /// Its own database settles both at once — nothing else claims its runs, and
+    /// nothing it leaves behind outlives the run.
+    static SCRATCH_URL: OnceCell<String> = OnceCell::const_new();
+
     async fn make_pool() -> PgPool {
-        let url = std::env::var("DATABASE_URL")
-            .expect("DATABASE_URL must be set to run run-engine integration tests");
-        PgPool::connect(&url).await.unwrap()
+        scratch_pool("mestier_automation_test_", &SCRATCH_URL).await
     }
 
     async fn seed_organization(pool: &PgPool, label: &str) -> OrganizationId {
