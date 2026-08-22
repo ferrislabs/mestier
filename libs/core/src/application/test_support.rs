@@ -12,7 +12,9 @@
 //! So a failed cleanup panics here, loudly, naming the statement. A test that
 //! cannot tidy up after itself has found a real problem, not a nuisance.
 
+use chrono::{DateTime, SubsecRound, Utc};
 use sqlx::PgPool;
+use sqlx::postgres::PgPoolOptions;
 use tokio::sync::OnceCell;
 use uuid::Uuid;
 
@@ -140,4 +142,57 @@ pub async fn automation_pool() -> PgPool {
     }
 
     pool
+}
+
+/// A pool on the development database, from `DATABASE_URL`.
+///
+/// Every fixture used to build this itself, and seven of them hard-coded
+/// `postgres://ferriskey:ferriskey@localhost:5433/mestier` — the port of one
+/// developer's local postgres. Those suites could only ever pass on that
+/// machine, and did: CI put postgres on 5432 and they timed out waiting for a
+/// server that was not there.
+///
+/// Connections are capped well below postgres' default of 100. With
+/// `--test-threads=1` a handful is plenty, and 122 tests each holding ten would
+/// exhaust the server long before the last one runs.
+pub async fn dev_pool() -> PgPool {
+    let url = std::env::var("DATABASE_URL")
+        .expect("DATABASE_URL must be set to run the integration tests");
+
+    PgPoolOptions::new()
+        .max_connections(5)
+        .connect(&url)
+        .await
+        .unwrap_or_else(|error| panic!("connecting to the test database failed: {error}"))
+}
+
+/// `Utc::now()`, truncated to what postgres can actually store.
+///
+/// `timestamptz` keeps microseconds. `Utc::now()` yields nanoseconds on Linux
+/// and microseconds on macOS, so a fixture that seeds an instant and then
+/// asserts on the value read back passes on one platform and fails on the other:
+///
+/// ```text
+/// left:  2026-08-22T11:17:27.990160Z      what postgres returned
+/// right: 2026-08-22T11:17:27.990160758Z   what the test still held
+/// ```
+///
+/// Green on a developer's laptop for as long as those tests existed, red on the
+/// first CI run. Seed with this whenever the instant will be compared after a
+/// round trip.
+pub fn now_storable() -> DateTime<Utc> {
+    Utc::now().trunc_subsecs(6)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The platform trap, asserted rather than trusted: this passes on macOS
+    /// whether or not the truncation happens, so the check has to be on the
+    /// value's shape and not on a round trip.
+    #[test]
+    fn now_storable_carries_no_sub_microsecond_digits() {
+        assert_eq!(now_storable().timestamp_subsec_nanos() % 1_000, 0);
+    }
 }

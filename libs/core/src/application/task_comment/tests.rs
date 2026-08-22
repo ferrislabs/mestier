@@ -6,7 +6,7 @@ mod tests {
     use common::{CoreError, OrganizationId, UserId, generate_uuid_v7};
     use sqlx::PgPool;
 
-    use crate::application::test_support::purge;
+    use crate::application::test_support::{dev_pool, purge};
     use crate::application::{MestierUseCase, default_authorizer};
     use crate::domain::task_comment::commands::{
         CreateTaskCommentCommand, UpdateTaskCommentCommand,
@@ -15,9 +15,7 @@ mod tests {
     use crate::{CreateTaskCommand, TaskCommentId, TaskId};
 
     async fn make_pool() -> PgPool {
-        let url = std::env::var("DATABASE_URL")
-            .expect("DATABASE_URL must be set to run task comment integration tests");
-        PgPool::connect(&url).await.unwrap()
+        dev_pool().await
     }
 
     fn make_usecase(pool: PgPool) -> MestierUseCase {

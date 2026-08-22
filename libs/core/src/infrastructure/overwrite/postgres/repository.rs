@@ -161,14 +161,13 @@ impl<'tx> OverwriteRepository for PgOverwriteRepository<'tx> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::application::test_support::dev_pool;
     use common::{RoleId, generate_uuid_v7};
     use discord::{OrganizationId, UserId};
     use sqlx::PgPool;
 
     async fn make_pool() -> PgPool {
-        PgPool::connect("postgres://ferriskey:ferriskey@localhost:5433/mestier")
-            .await
-            .unwrap()
+        dev_pool().await
     }
 
     async fn seed_org_user_channel(

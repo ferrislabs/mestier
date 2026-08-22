@@ -140,15 +140,14 @@ impl<'tx> ChannelRepository for PgChannelRepository<'tx> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::application::test_support::dev_pool;
     use chrono::Utc;
     use common::{OrganizationId, generate_uuid_v7};
     use discord::{Channel, ChannelId, ChannelType};
     use sqlx::PgPool;
 
     async fn make_pool() -> PgPool {
-        PgPool::connect("postgres://ferriskey:ferriskey@localhost:5433/mestier")
-            .await
-            .unwrap()
+        dev_pool().await
     }
 
     /// Seeds a throwaway user + organization inside the current transaction so

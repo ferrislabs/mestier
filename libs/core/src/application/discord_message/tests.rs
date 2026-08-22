@@ -7,14 +7,13 @@ mod tests {
     use discord::{ChannelId, MessageAuthor};
     use sqlx::PgPool;
 
+    use crate::application::test_support::dev_pool;
     use crate::application::test_support::purge;
     use crate::application::{MestierUseCase, default_authorizer};
     use crate::infrastructure::realtime::EventHub;
 
     async fn make_pool() -> PgPool {
-        PgPool::connect("postgres://ferriskey:ferriskey@localhost:5433/mestier")
-            .await
-            .unwrap()
+        dev_pool().await
     }
 
     /// Seeds an author user, an organization, and a channel directly on `pool`
