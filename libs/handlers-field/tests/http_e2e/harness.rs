@@ -7,7 +7,7 @@
 use std::{net::SocketAddr, sync::Arc};
 
 use args::Args;
-use chrono::{DateTime, Duration, Utc};
+use chrono::{DateTime, Duration, SubsecRound, Utc};
 use clap::Parser;
 use sqlx::PgPool;
 use uuid::Uuid;
@@ -177,7 +177,9 @@ async fn seed(pool: &PgPool) -> Fixture {
         .await
         .expect("seed the customer");
 
-    let now = Utc::now();
+    // Storable, like everything else here: nothing compares this instant back
+    // today, but the next assertion that does would fail on Linux only.
+    let now = now_storable();
     let task_id = seed_task(pool, organization_id, customer_id, member_id, now).await;
     let other_task_id = seed_task(pool, organization_id, customer_id, other_member_id, now).await;
 
@@ -316,4 +318,23 @@ fn args_for(database_url: &str, redis_url: &str, issuer_url: &str) -> Vec<String
         "--file-storage-auto-create-bucket".to_owned(),
         "false".to_owned(),
     ]
+}
+
+/// `Utc::now()`, truncated to what postgres can store.
+///
+/// `timestamptz` keeps microseconds; `Utc::now()` yields nanoseconds on Linux
+/// and microseconds on macOS. An instant sent through the API and compared
+/// against the value that comes back therefore matches on one platform and not
+/// the other:
+///
+/// ```text
+/// left:  2026-08-22T09:47:38.583068Z      what the API returned
+/// right: 2026-08-22T09:47:38.583068314Z   what the test still held
+/// ```
+///
+/// Green on a developer's laptop, red on the first Linux CI run. Mirrors
+/// `mestier_core`'s own test helper, which cannot be reached from here: it is
+/// crate-private and `#[cfg(test)]`.
+pub fn now_storable() -> DateTime<Utc> {
+    Utc::now().trunc_subsecs(6)
 }
