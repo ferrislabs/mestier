@@ -1,22 +1,8 @@
-import { TZDate } from '@date-fns/tz'
+import { zonedStartOfDay } from '#/lib/zoned-time'
 import { MINUTES_PER_DAY, type TimeSpan } from '#/pages/planning/lib/amplitude'
 import type { MinuteSpan } from '#/pages/planning/lib/layout'
 
 const ONE_DAY_MS = MINUTES_PER_DAY * 60_000
-
-/**
- * The instant of local midnight, in `timeZone`, for calendar day `date`.
- *
- * Built from date parts, not from a string: `new TZDate('2026-08-08T00:00:00',
- * tz)` parses the wall time in the *system* zone and merely displays it in
- * `tz`, so every day boundary was off by the offset between the two whenever
- * they differed — stretching a three-day leave to four in a month grid.
- */
-function startOfDayInTimeZone(date: string, timeZone: string): Date {
-	const [year, month, day] = date.split('-').map(Number)
-
-	return TZDate.tz(timeZone, year ?? 1970, (month ?? 1) - 1, day ?? 1)
-}
 
 /**
  * Whether `span` intersects calendar day `date` in `timeZone`. A half-open
@@ -29,7 +15,7 @@ export function entryOccursOnDate(
 	date: string,
 	timeZone: string,
 ): boolean {
-	const dayStart = startOfDayInTimeZone(date, timeZone).getTime()
+	const dayStart = zonedStartOfDay(date, timeZone).getTime()
 	const dayEnd = dayStart + ONE_DAY_MS
 	const start = new Date(span.startsAt).getTime()
 	const end = new Date(span.endsAt).getTime()
@@ -50,7 +36,7 @@ export function minuteSpanOnDate(
 ): MinuteSpan {
 	if (span.allDay) return { startMinute: 0, endMinute: MINUTES_PER_DAY }
 
-	const dayStart = startOfDayInTimeZone(date, timeZone).getTime()
+	const dayStart = zonedStartOfDay(date, timeZone).getTime()
 	const dayEnd = dayStart + ONE_DAY_MS
 	const start = Math.max(new Date(span.startsAt).getTime(), dayStart)
 	const end = Math.min(new Date(span.endsAt).getTime(), dayEnd)
