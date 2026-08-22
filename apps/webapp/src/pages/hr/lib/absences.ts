@@ -1,6 +1,11 @@
 import { TZDate } from '@date-fns/tz'
 import { addDays, format, parseISO } from 'date-fns'
 import type { Schemas } from '#/api/api.client'
+import {
+	toNormalizedIso,
+	zonedInstant,
+	zonedStartOfDay,
+} from '#/lib/zoned-time'
 
 export type AbsenceKind = Schemas.AbsenceKind
 export type CreateAbsenceRequest = Schemas.CreateAbsenceRequest
@@ -138,15 +143,8 @@ function addDaysIso(date: string, days: number): string {
 	return format(addDays(parseISO(date), days), 'yyyy-MM-dd')
 }
 
-// `TZDate#toISOString` renders with its own zone's offset (correct, but not
-// the `Z`-suffixed form the rest of the API traffic uses) — wrapping in a
-// plain `Date` before formatting normalizes it without touching the instant.
-function toNormalizedIso(zoned: TZDate): string {
-	return new Date(zoned.getTime()).toISOString()
-}
-
 function dateOnlyToIsoMidnight(dateStr: string, timeZone: string): string {
-	return toNormalizedIso(new TZDate(`${dateStr}T00:00:00`, timeZone))
+	return toNormalizedIso(zonedStartOfDay(dateStr, timeZone))
 }
 
 function dateTimeToIso(
@@ -154,7 +152,7 @@ function dateTimeToIso(
 	timeStr: string,
 	timeZone: string,
 ): string {
-	return toNormalizedIso(new TZDate(`${dateStr}T${timeStr}:00`, timeZone))
+	return toNormalizedIso(zonedInstant(dateStr, timeStr, timeZone))
 }
 
 function buildAbsencePayload(

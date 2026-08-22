@@ -7,16 +7,14 @@ mod tests {
     use sqlx::PgPool;
     use uuid::Uuid;
 
-    use crate::application::test_support::purge;
+    use crate::application::test_support::{dev_pool, now_storable, purge};
     use crate::application::{MestierUseCase, default_authorizer};
     use crate::domain::planning::TimeRange;
     use crate::infrastructure::realtime::EventHub;
     use crate::{CustomerContextId, CustomerId, DateRange, MemberId};
 
     async fn make_pool() -> PgPool {
-        let url = std::env::var("DATABASE_URL")
-            .expect("DATABASE_URL must be set to run planning integration tests");
-        PgPool::connect(&url).await.unwrap()
+        dev_pool().await
     }
 
     fn make_usecase(pool: PgPool) -> MestierUseCase {
@@ -464,7 +462,7 @@ mod tests {
         let pool = make_pool().await;
         let fixture = seed_fixture(&pool).await;
         let member_id = seed_employee(&pool, fixture.organization_id).await;
-        let now = Utc::now();
+        let now = now_storable();
         seed_task(&pool, &fixture, member_id, now, now + Duration::hours(2)).await;
         seed_absence(
             &pool,
@@ -515,7 +513,7 @@ mod tests {
         let pool = make_pool().await;
         let fixture = seed_fixture(&pool).await;
         let member_id = seed_employee(&pool, fixture.organization_id).await;
-        let now = Utc::now();
+        let now = now_storable();
         let parent_task_id =
             seed_task(&pool, &fixture, member_id, now, now + Duration::hours(4)).await;
         let subtask_id = seed_dateless_subtask(&pool, &fixture, parent_task_id, member_id).await;
@@ -570,7 +568,7 @@ mod tests {
         let pool = make_pool().await;
         let fixture = seed_fixture(&pool).await;
         let member_id = seed_employee(&pool, fixture.organization_id).await;
-        let now = Utc::now();
+        let now = now_storable();
         let parent_task_id =
             seed_task(&pool, &fixture, member_id, now, now + Duration::hours(4)).await;
         let subtask_id = seed_dateless_subtask(&pool, &fixture, parent_task_id, member_id).await;
@@ -622,7 +620,7 @@ mod tests {
         let pool = make_pool().await;
         let fixture = seed_fixture(&pool).await;
         let member_id = seed_employee(&pool, fixture.organization_id).await;
-        let now = Utc::now();
+        let now = now_storable();
         seed_absence(
             &pool,
             fixture.organization_id,

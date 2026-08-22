@@ -58,9 +58,15 @@ pub struct FileStorageArgs {
     )]
     pub force_path_style: bool,
 
+    // `ArgAction::Set`, so the option takes a value. As a bare flag it could
+    // only ever be turned *on*, and it already defaults to on — there was no way
+    // to say no from the command line, which made a reachable object store a
+    // prerequisite for anything that builds the service, the end-to-end suites
+    // included. The environment variable keeps working unchanged.
     #[arg(
         long = "file-storage-auto-create-bucket",
         env = "FILE_STORAGE_AUTO_CREATE_BUCKET",
+        action = clap::ArgAction::Set,
         default_value_t = true,
         name = "FILE_STORAGE_AUTO_CREATE_BUCKET",
         long_help = "Create the configured bucket at startup when missing"

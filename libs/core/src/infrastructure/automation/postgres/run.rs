@@ -530,6 +530,8 @@ mod tests {
     use sqlx::PgPool;
 
     use super::*;
+    use crate::application::test_support::automation_pool;
+    use crate::application::test_support::now_storable;
     use crate::domain::automation::ports::WorkflowRepository;
     use crate::domain::automation::run::StepStatus;
     use crate::domain::automation::workflow::{Graph, PlacedConnector, Workflow};
@@ -537,9 +539,7 @@ mod tests {
     use crate::infrastructure::postgres::with_tx;
 
     async fn make_pool() -> PgPool {
-        let url = std::env::var("DATABASE_URL")
-            .expect("DATABASE_URL must be set to run run-repository integration tests");
-        PgPool::connect(&url).await.unwrap()
+        automation_pool().await
     }
 
     async fn seed_organization(pool: &PgPool, label: &str) -> OrganizationId {
@@ -583,7 +583,7 @@ mod tests {
     ) -> (Uuid, Uuid) {
         with_tx(pool, async |tx| {
             let mut repo = PgWorkflowRepository::new(&tx);
-            let now = Utc::now();
+            let now = now_storable();
             let workflow = repo
                 .insert(&Workflow {
                     id: generate_uuid_v7(),
@@ -621,7 +621,7 @@ mod tests {
     }
 
     fn pending_run(org_id: OrganizationId, workflow_id: Uuid, workflow_version_id: Uuid) -> Run {
-        let now = Utc::now();
+        let now = now_storable();
         Run {
             id: generate_uuid_v7(),
             org_id,
@@ -839,7 +839,7 @@ mod tests {
     }
 
     fn in_flight_step(run_id: Uuid, connector_id: &str, iteration_path: &str) -> RunStep {
-        let now = Utc::now();
+        let now = now_storable();
         RunStep {
             id: generate_uuid_v7(),
             run_id,

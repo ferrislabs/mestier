@@ -1,6 +1,11 @@
 import { TZDate } from '@date-fns/tz'
 import { format, parseISO } from 'date-fns'
 import type { Schemas } from '#/api/api.client'
+import {
+	toNormalizedIso,
+	zonedInstant,
+	zonedStartOfDay,
+} from '#/lib/zoned-time'
 import type { AssigneeRef } from '#/pages/planning/lib/task-drop'
 
 export type CreateTaskRequest = Schemas.CreateTaskRequest
@@ -300,13 +305,6 @@ export function validateTaskDraft(
 	return errors
 }
 
-// `TZDate#toISOString` renders with its own zone's offset (correct, but not
-// the `Z`-suffixed form the rest of the API traffic uses) — wrapping in a
-// plain `Date` before formatting normalizes it without touching the instant.
-function toNormalizedIso(zoned: TZDate): string {
-	return new Date(zoned.getTime()).toISOString()
-}
-
 function addDaysIso(date: string, days: number): string {
 	const [year, month, day] = date.split('-').map(Number)
 	const base = new Date(Date.UTC(year, month - 1, day))
@@ -333,21 +331,19 @@ function resolveWindow(
 
 	if (values.allDay) {
 		return {
-			starts_at: toNormalizedIso(
-				new TZDate(`${values.startDate}T00:00:00`, timeZone),
-			),
+			starts_at: toNormalizedIso(zonedStartOfDay(values.startDate, timeZone)),
 			ends_at: toNormalizedIso(
-				new TZDate(`${addDaysIso(values.endDate, 1)}T00:00:00`, timeZone),
+				zonedStartOfDay(addDaysIso(values.endDate, 1), timeZone),
 			),
 		}
 	}
 
 	return {
 		starts_at: toNormalizedIso(
-			new TZDate(`${values.startDate}T${values.startTime}:00`, timeZone),
+			zonedInstant(values.startDate, values.startTime, timeZone),
 		),
 		ends_at: toNormalizedIso(
-			new TZDate(`${values.endDate}T${values.endTime}:00`, timeZone),
+			zonedInstant(values.endDate, values.endTime, timeZone),
 		),
 	}
 }

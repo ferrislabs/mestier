@@ -7,7 +7,7 @@
 //! provider, and even that is a real HTTP server publishing a real JWKS.
 //!
 //! ```bash
-//! docker compose up -d postgres redis rustfs
+//! docker compose up -d postgres redis
 //! source .env
 //! cargo test -p handlers-field --test http_e2e -- --ignored
 //! ```
@@ -168,7 +168,7 @@ async fn a_stretch_never_clocked_live_is_declared_after_the_fact() {
     let app = harness::start().await;
     let client = reqwest::Client::new();
 
-    let now = chrono::Utc::now();
+    let now = harness::now_storable();
     let started_at = (now - chrono::Duration::hours(3)).to_rfc3339();
     let ended_at = (now - chrono::Duration::hours(2)).to_rfc3339();
 
@@ -249,7 +249,7 @@ async fn a_stretch_never_clocked_live_is_declared_after_the_fact() {
     // instant is unambiguously later than `running.started_at` — otherwise
     // network latency between this test and the server could land the
     // declared end a hair before the live entry actually opened.
-    let after_live_started = chrono::Utc::now();
+    let after_live_started = harness::now_storable();
 
     let overlapping = client
         .post(app.url("/time-entries/declare"))
@@ -307,7 +307,7 @@ async fn a_forgotten_stretch_is_recovered_at_the_declared_time_not_at_now() {
     assert_eq!(blocked.status(), 409, "one open stretch at a time");
 
     // The employee says when they actually finished.
-    let declared = (chrono::Utc::now() - chrono::Duration::hours(23)).to_rfc3339();
+    let declared = (harness::now_storable() - chrono::Duration::hours(23)).to_rfc3339();
     let raw = client
         .post(app.entry_url(&entry_id.to_string(), "/recover"))
         .bearer_auth(&app.token)

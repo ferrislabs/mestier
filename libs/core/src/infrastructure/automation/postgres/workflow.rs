@@ -340,13 +340,13 @@ mod tests {
     use sqlx::PgPool;
 
     use super::*;
+    use crate::application::test_support::automation_pool;
+    use crate::application::test_support::now_storable;
     use crate::domain::automation::workflow::{Branch, Edge, PlacedConnector};
     use crate::infrastructure::postgres::with_tx;
 
     async fn make_pool() -> PgPool {
-        let url = std::env::var("DATABASE_URL")
-            .expect("DATABASE_URL must be set to run workflow integration tests");
-        PgPool::connect(&url).await.unwrap()
+        automation_pool().await
     }
 
     async fn seed_user(pool: &PgPool, label: &str) -> Uuid {
@@ -398,7 +398,7 @@ mod tests {
     }
 
     fn workflow(org_id: OrganizationId, name: &str) -> Workflow {
-        let now = chrono::Utc::now();
+        let now = now_storable();
         Workflow {
             id: generate_uuid_v7(),
             org_id,

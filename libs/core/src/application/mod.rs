@@ -304,7 +304,7 @@ mod tests {
     use common::{OrganizationId, generate_uuid_v7};
     use uuid::Uuid;
 
-    use crate::application::test_support::purge;
+    use crate::application::test_support::{dev_pool, purge};
 
     use super::*;
 
@@ -363,9 +363,7 @@ mod tests {
     }
 
     async fn make_pool() -> PgPool {
-        let url = std::env::var("DATABASE_URL")
-            .expect("DATABASE_URL must be set to run acting_as_automation integration tests");
-        PgPool::connect(&url).await.unwrap()
+        dev_pool().await
     }
 
     async fn seed_organization(pool: &PgPool) -> OrganizationId {

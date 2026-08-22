@@ -174,12 +174,11 @@ mod tests {
     use sqlx::PgPool;
 
     use super::*;
+    use crate::application::test_support::automation_pool;
     use crate::infrastructure::postgres::with_tx;
 
     async fn make_pool() -> PgPool {
-        let url = std::env::var("DATABASE_URL")
-            .expect("DATABASE_URL must be set to run settings integration tests");
-        PgPool::connect(&url).await.unwrap()
+        automation_pool().await
     }
 
     async fn seed_organization(pool: &PgPool) -> OrganizationId {

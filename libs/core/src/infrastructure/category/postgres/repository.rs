@@ -111,15 +111,14 @@ impl<'tx> CategoryRepository for PgCategoryRepository<'tx> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::application::test_support::dev_pool;
     use chrono::Utc;
     use common::{OrganizationId, generate_uuid_v7};
     use discord::{Category, CategoryId};
     use sqlx::PgPool;
 
     async fn make_pool() -> PgPool {
-        PgPool::connect("postgres://ferriskey:ferriskey@localhost:5433/mestier")
-            .await
-            .unwrap()
+        dev_pool().await
     }
 
     #[tokio::test]
