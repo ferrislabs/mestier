@@ -308,5 +308,12 @@ fn args_for(database_url: &str, redis_url: &str, issuer_url: &str) -> Vec<String
         redis_url.to_owned(),
         "--auth-issuer".to_owned(),
         issuer_url.to_owned(),
+        // None of these suites touch object storage, but `create_service`
+        // creates the bucket at startup by default, which turned a reachable S3
+        // into a prerequisite for running them at all. Saying no here drops
+        // `rustfs` from the list — and is what lets them run in CI against two
+        // service containers instead of three.
+        "--file-storage-auto-create-bucket".to_owned(),
+        "false".to_owned(),
     ]
 }

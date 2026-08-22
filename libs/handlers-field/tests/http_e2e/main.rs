@@ -7,7 +7,7 @@
 //! provider, and even that is a real HTTP server publishing a real JWKS.
 //!
 //! ```bash
-//! docker compose up -d postgres redis rustfs
+//! docker compose up -d postgres redis
 //! source .env
 //! cargo test -p handlers-field --test http_e2e -- --ignored
 //! ```
