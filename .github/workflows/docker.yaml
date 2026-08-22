@@ -73,8 +73,113 @@ jobs:
           SQLX_OFFLINE: "true"
         run: ${{ matrix.cmd }}
 
+  # The suites that need a database. `rust-check`'s `cargo test --workspace` runs
+  # the unit tests only: the 122 integration tests and the 8 end-to-end ones are
+  # `#[ignore]`d because they need postgres, so nothing ran them until now.
+  integration:
+    name: rust (integration)
+    runs-on: ubuntu-24.04
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: ferriskey
+          POSTGRES_PASSWORD: ferriskey
+          POSTGRES_DB: mestier
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U ferriskey -d mestier"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+      redis:
+        image: redis:8.6.2-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      DATABASE_URL: postgres://ferriskey:ferriskey@localhost:5432/mestier
+      RATE_LIMIT_REDIS_URL: redis://localhost:6379
+    steps:
+      - name: checkout
+        uses: actions/checkout@v5
+
+      - name: install rust toolchain
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: 1.95.0
+
+      - name: cache cargo + target
+        uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: rust-integration
+          cache-on-failure: true
+
+      # One integration test drives the migrations through the CLI to check a
+      # backfill, so it has to be on PATH — see `migration_backfills_title_and_
+      # renames_note_to_description`. Installing it also gives us the command to
+      # bring the database up before anything runs.
+      - name: install sqlx-cli
+        run: >-
+          cargo install sqlx-cli --version 0.8.6 --no-default-features
+          --features rustls,postgres --locked
+
+      - name: migrate
+        run: sqlx migrate run --source migrations
+
+      # `--test-threads=1` is not caution: these suites share one database and
+      # serialise deliberately. The automation suites build their own database and
+      # would fight over it in parallel.
+      - name: integration tests
+        run: >-
+          cargo test -p mestier-core --lib --locked --
+          --ignored --test-threads=1 application::
+
+      - name: end-to-end tests
+        run: |
+          for crate in handlers-field handlers-quote handlers-reporting; do
+            cargo test -p "$crate" --test http_e2e --locked -- --ignored --test-threads=1
+          done
+
+  # `pnpm check` was red on `main` for days before this job existed, and nobody
+  # knew: nothing ran it. `tsc` is deliberately absent — it has four pre-existing
+  # errors, and a check that starts red gates nothing. See the follow-up issue.
+  webapp:
+    name: webapp
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: apps/webapp
+    steps:
+      - name: checkout
+        uses: actions/checkout@v5
+
+      - name: install pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: install node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: apps/webapp/pnpm-lock.yaml
+
+      - name: install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: check
+        run: pnpm check
+
+      - name: test
+        run: pnpm test
+
   build:
-    needs: rust-check
+    needs: [rust-check, integration, webapp]
     runs-on: ${{ matrix.runner.name }}
     strategy:
       matrix:
