@@ -340,6 +340,7 @@ mod tests {
     use sqlx::PgPool;
 
     use super::*;
+    use crate::application::test_support::now_storable;
     use crate::domain::automation::workflow::{Branch, Edge, PlacedConnector};
     use crate::infrastructure::postgres::with_tx;
 
@@ -398,7 +399,7 @@ mod tests {
     }
 
     fn workflow(org_id: OrganizationId, name: &str) -> Workflow {
-        let now = chrono::Utc::now();
+        let now = now_storable();
         Workflow {
             id: generate_uuid_v7(),
             org_id,
