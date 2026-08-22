@@ -135,10 +135,14 @@ jobs:
       # `--test-threads=1` is not caution: these suites share one database and
       # serialise deliberately. The automation suites build their own database and
       # would fight over it in parallel.
+      # No path filter: every `#[ignore]`d test in the crate, not just the ones
+      # under `application::`. The 95 chat tests in `infrastructure::` had never
+      # run anywhere — they hard-coded one developer's postgres port, so they
+      # could only ever have passed on that machine.
       - name: integration tests
         run: >-
           cargo test -p mestier-core --lib --locked --
-          --ignored --test-threads=1 application::
+          --ignored --test-threads=1
 
       - name: end-to-end tests
         run: |
@@ -159,8 +163,14 @@ jobs:
       - name: checkout
         uses: actions/checkout@v5
 
+      # The action reads `packageManager` from a package.json, and there is none
+      # at the repository root — `defaults.run.working-directory` moves `run:`
+      # steps, not actions. Pointing it at the app's manifest keeps the version in
+      # one place instead of pinning it twice.
       - name: install pnpm
         uses: pnpm/action-setup@v4
+        with:
+          package_json_file: apps/webapp/package.json
 
       - name: install node
         uses: actions/setup-node@v4
