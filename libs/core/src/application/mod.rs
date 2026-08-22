@@ -51,6 +51,8 @@ pub mod service_rate;
 pub mod task;
 pub mod task_comment;
 pub mod task_label;
+#[cfg(test)]
+pub(crate) mod test_support;
 pub mod time_entry;
 pub mod user;
 pub mod work_time;

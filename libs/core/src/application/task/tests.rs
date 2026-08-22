@@ -6,6 +6,7 @@ mod tests {
     use common::{CoreError, OrganizationId, UserId, generate_uuid_v7};
     use sqlx::PgPool;
 
+    use crate::application::test_support::purge;
     use crate::application::{MestierUseCase, default_authorizer};
     use crate::domain::task::{
         AssigneeRef,
@@ -168,34 +169,38 @@ mod tests {
     /// customers/customer_contexts/employees/tasks/task_assignments/members,
     /// plus the loose user rows that outlive the organization.
     async fn cleanup(pool: &PgPool, organization_id: OrganizationId, user_ids: &[UserId]) {
-        sqlx::query!(
+        purge(
+            pool,
             "DELETE FROM task_assignments WHERE org_id = $1",
-            organization_id.0
+            organization_id.0,
         )
-        .execute(pool)
-        .await
-        .ok();
-        sqlx::query!("DELETE FROM tasks WHERE org_id = $1", organization_id.0)
-            .execute(pool)
-            .await
-            .ok();
-        sqlx::query!("DELETE FROM employees WHERE org_id = $1", organization_id.0)
-            .execute(pool)
-            .await
-            .ok();
-        sqlx::query!("DELETE FROM customers WHERE org_id = $1", organization_id.0)
-            .execute(pool)
-            .await
-            .ok();
-        sqlx::query!("DELETE FROM organizations WHERE id = $1", organization_id.0)
-            .execute(pool)
-            .await
-            .ok();
+        .await;
+        purge(
+            pool,
+            "DELETE FROM tasks WHERE org_id = $1",
+            organization_id.0,
+        )
+        .await;
+        purge(
+            pool,
+            "DELETE FROM employees WHERE org_id = $1",
+            organization_id.0,
+        )
+        .await;
+        purge(
+            pool,
+            "DELETE FROM customers WHERE org_id = $1",
+            organization_id.0,
+        )
+        .await;
+        purge(
+            pool,
+            "DELETE FROM organizations WHERE id = $1",
+            organization_id.0,
+        )
+        .await;
         for uid in user_ids {
-            sqlx::query!("DELETE FROM users WHERE id = $1", uid.0)
-                .execute(pool)
-                .await
-                .ok();
+            purge(pool, "DELETE FROM users WHERE id = $1", uid.0).await;
         }
     }
 
@@ -895,10 +900,13 @@ mod tests {
         assert_eq!(titled_row.1, None);
 
         scratch_pool.close().await;
+        // Loud, like every other cleanup here: a scratch database left behind is
+        // the same leak as a stray fixture, one that also costs disk until
+        // somebody notices.
         sqlx::query(&format!(r#"DROP DATABASE IF EXISTS "{scratch_db}""#))
             .execute(&admin_pool)
             .await
-            .ok();
+            .unwrap_or_else(|error| panic!("dropping {scratch_db} failed: {error}"));
     }
 
     #[tokio::test]

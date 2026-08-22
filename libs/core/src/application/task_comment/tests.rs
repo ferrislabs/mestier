@@ -6,6 +6,7 @@ mod tests {
     use common::{CoreError, OrganizationId, UserId, generate_uuid_v7};
     use sqlx::PgPool;
 
+    use crate::application::test_support::purge;
     use crate::application::{MestierUseCase, default_authorizer};
     use crate::domain::task_comment::commands::{
         CreateTaskCommentCommand, UpdateTaskCommentCommand,
@@ -76,37 +77,38 @@ mod tests {
     /// `employees`, the organization and its loose users need explicit
     /// cleanup.
     async fn cleanup(pool: &PgPool, organization_id: OrganizationId, user_ids: &[UserId]) {
-        sqlx::query!(
+        purge(
+            pool,
             "DELETE FROM task_comments WHERE org_id = $1",
-            organization_id.0
+            organization_id.0,
         )
-        .execute(pool)
-        .await
-        .ok();
-        sqlx::query!(
+        .await;
+        purge(
+            pool,
             "DELETE FROM task_assignments WHERE org_id = $1",
-            organization_id.0
+            organization_id.0,
         )
-        .execute(pool)
-        .await
-        .ok();
-        sqlx::query!("DELETE FROM employees WHERE org_id = $1", organization_id.0)
-            .execute(pool)
-            .await
-            .ok();
-        sqlx::query!("DELETE FROM tasks WHERE org_id = $1", organization_id.0)
-            .execute(pool)
-            .await
-            .ok();
-        sqlx::query!("DELETE FROM organizations WHERE id = $1", organization_id.0)
-            .execute(pool)
-            .await
-            .ok();
+        .await;
+        purge(
+            pool,
+            "DELETE FROM employees WHERE org_id = $1",
+            organization_id.0,
+        )
+        .await;
+        purge(
+            pool,
+            "DELETE FROM tasks WHERE org_id = $1",
+            organization_id.0,
+        )
+        .await;
+        purge(
+            pool,
+            "DELETE FROM organizations WHERE id = $1",
+            organization_id.0,
+        )
+        .await;
         for uid in user_ids {
-            sqlx::query!("DELETE FROM users WHERE id = $1", uid.0)
-                .execute(pool)
-                .await
-                .ok();
+            purge(pool, "DELETE FROM users WHERE id = $1", uid.0).await;
         }
     }
 

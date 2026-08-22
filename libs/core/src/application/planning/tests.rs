@@ -7,6 +7,7 @@ mod tests {
     use sqlx::PgPool;
     use uuid::Uuid;
 
+    use crate::application::test_support::purge;
     use crate::application::{MestierUseCase, default_authorizer};
     use crate::domain::planning::TimeRange;
     use crate::infrastructure::realtime::EventHub;
@@ -334,43 +335,49 @@ mod tests {
     /// user rows that outlive the organization.
     async fn cleanup(pool: &PgPool, organization_id: OrganizationId, user_ids: &[UserId]) {
         for table in ["absences", "work_slots", "task_assignments", "tasks"] {
-            sqlx::query(&format!("DELETE FROM {table} WHERE org_id = $1"))
-                .bind(organization_id.0)
-                .execute(pool)
-                .await
-                .ok();
+            purge(
+                pool,
+                &format!("DELETE FROM {table} WHERE org_id = $1"),
+                organization_id.0,
+            )
+            .await;
         }
-        sqlx::query!(
-            r#"DELETE FROM employee_rhythms WHERE org_id = $1"#,
-            organization_id.0
+        purge(
+            pool,
+            "DELETE FROM employee_rhythms WHERE org_id = $1",
+            organization_id.0,
         )
-        .execute(pool)
-        .await
-        .ok();
-        sqlx::query!(
+        .await;
+        // `employees` before `organization_members`: `fk_employees_member` points
+        // the other way. Reversed until now, and the failure was invisible
+        // because the statement's error was swallowed — so every run of this
+        // fixture leaked a seat and a profile into the shared database.
+        purge(
+            pool,
+            "DELETE FROM employees WHERE org_id = $1",
+            organization_id.0,
+        )
+        .await;
+        purge(
+            pool,
             "DELETE FROM organization_members WHERE organization_id = $1",
-            organization_id.0
+            organization_id.0,
         )
-        .execute(pool)
-        .await
-        .ok();
-        sqlx::query!("DELETE FROM employees WHERE org_id = $1", organization_id.0)
-            .execute(pool)
-            .await
-            .ok();
-        sqlx::query!("DELETE FROM customers WHERE org_id = $1", organization_id.0)
-            .execute(pool)
-            .await
-            .ok();
-        sqlx::query!("DELETE FROM organizations WHERE id = $1", organization_id.0)
-            .execute(pool)
-            .await
-            .ok();
+        .await;
+        purge(
+            pool,
+            "DELETE FROM customers WHERE org_id = $1",
+            organization_id.0,
+        )
+        .await;
+        purge(
+            pool,
+            "DELETE FROM organizations WHERE id = $1",
+            organization_id.0,
+        )
+        .await;
         for uid in user_ids {
-            sqlx::query!("DELETE FROM users WHERE id = $1", uid.0)
-                .execute(pool)
-                .await
-                .ok();
+            purge(pool, "DELETE FROM users WHERE id = $1", uid.0).await;
         }
     }
 
