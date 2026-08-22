@@ -6,6 +6,7 @@ mod tests {
     use common::{CoreError, OrganizationId, UserId, generate_uuid_v7};
     use sqlx::PgPool;
 
+    use crate::application::test_support::purge;
     use crate::application::{MestierUseCase, default_authorizer};
     use crate::domain::project::commands::{CreateProjectCommand, UpdateProjectCommand};
     use crate::domain::task::commands::{CreateTaskCommand, PatchTaskCommand};
@@ -63,23 +64,26 @@ mod tests {
     }
 
     async fn cleanup(pool: &PgPool, organization_id: OrganizationId, user_ids: &[UserId]) {
-        sqlx::query!("DELETE FROM tasks WHERE org_id = $1", organization_id.0)
-            .execute(pool)
-            .await
-            .ok();
-        sqlx::query!("DELETE FROM projects WHERE org_id = $1", organization_id.0)
-            .execute(pool)
-            .await
-            .ok();
-        sqlx::query!("DELETE FROM organizations WHERE id = $1", organization_id.0)
-            .execute(pool)
-            .await
-            .ok();
+        purge(
+            pool,
+            "DELETE FROM tasks WHERE org_id = $1",
+            organization_id.0,
+        )
+        .await;
+        purge(
+            pool,
+            "DELETE FROM projects WHERE org_id = $1",
+            organization_id.0,
+        )
+        .await;
+        purge(
+            pool,
+            "DELETE FROM organizations WHERE id = $1",
+            organization_id.0,
+        )
+        .await;
         for uid in user_ids {
-            sqlx::query!("DELETE FROM users WHERE id = $1", uid.0)
-                .execute(pool)
-                .await
-                .ok();
+            purge(pool, "DELETE FROM users WHERE id = $1", uid.0).await;
         }
     }
 

@@ -7,6 +7,7 @@ mod tests {
     use discord::{ChannelId, MessageAuthor};
     use sqlx::PgPool;
 
+    use crate::application::test_support::purge;
     use crate::application::{MestierUseCase, default_authorizer};
     use crate::infrastructure::realtime::EventHub;
 
@@ -86,15 +87,9 @@ mod tests {
     /// Removes all rows seeded by a single test run, keyed by org_id (cascade
     /// deletes channels + messages + notifications) and the loose user rows.
     async fn cleanup(pool: &PgPool, org_id: OrganizationId, user_ids: &[UserId]) {
-        sqlx::query!("DELETE FROM organizations WHERE id = $1", org_id.0)
-            .execute(pool)
-            .await
-            .ok();
+        purge(pool, "DELETE FROM organizations WHERE id = $1", org_id.0).await;
         for uid in user_ids {
-            sqlx::query!("DELETE FROM users WHERE id = $1", uid.0)
-                .execute(pool)
-                .await
-                .ok();
+            purge(pool, "DELETE FROM users WHERE id = $1", uid.0).await;
         }
     }
 

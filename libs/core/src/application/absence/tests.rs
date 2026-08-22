@@ -6,6 +6,7 @@ mod tests {
     use common::{OrganizationId, UserId, generate_uuid_v7};
     use sqlx::PgPool;
 
+    use crate::application::test_support::purge;
     use crate::application::{MestierUseCase, default_authorizer};
     use crate::domain::absence::commands::{CreateAbsenceCommand, PatchAbsenceCommand};
     use crate::infrastructure::realtime::EventHub;
@@ -97,23 +98,26 @@ mod tests {
     /// employees/absences, plus the loose user rows that outlive
     /// the organization.
     async fn cleanup(pool: &PgPool, organization_id: OrganizationId, user_ids: &[UserId]) {
-        sqlx::query!("DELETE FROM absences WHERE org_id = $1", organization_id.0)
-            .execute(pool)
-            .await
-            .ok();
-        sqlx::query!("DELETE FROM employees WHERE org_id = $1", organization_id.0)
-            .execute(pool)
-            .await
-            .ok();
-        sqlx::query!("DELETE FROM organizations WHERE id = $1", organization_id.0)
-            .execute(pool)
-            .await
-            .ok();
+        purge(
+            pool,
+            "DELETE FROM absences WHERE org_id = $1",
+            organization_id.0,
+        )
+        .await;
+        purge(
+            pool,
+            "DELETE FROM employees WHERE org_id = $1",
+            organization_id.0,
+        )
+        .await;
+        purge(
+            pool,
+            "DELETE FROM organizations WHERE id = $1",
+            organization_id.0,
+        )
+        .await;
         for uid in user_ids {
-            sqlx::query!("DELETE FROM users WHERE id = $1", uid.0)
-                .execute(pool)
-                .await
-                .ok();
+            purge(pool, "DELETE FROM users WHERE id = $1", uid.0).await;
         }
     }
 
