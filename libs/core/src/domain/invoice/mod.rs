@@ -363,6 +363,23 @@ pub struct CustomerOutstandingBalance {
     pub oldest_due_at: Option<DateTime<Utc>>,
 }
 
+/// "What was quoted, what has been billed, what remains" for one project —
+/// #319's billing-summary read, the API surface this issue adds since
+/// nothing in `application/invoice` exposed it before. A second,
+/// independent reader of `quote.net_cents`, alongside
+/// `ProjectProfitability::quoted_cents` (`domain::profitability`) — the two
+/// must never be merged, see `InvoiceService::project_billing_summary`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ProjectBillingSummary {
+    pub project_id: ProjectId,
+    /// `None` when the project has no quote — nothing to compare against,
+    /// not a zero.
+    pub quoted_cents: Option<i32>,
+    pub billed_cents: i64,
+    /// `None` under the same condition as `quoted_cents`.
+    pub remaining_cents: Option<i64>,
+}
+
 /// The only type a mutation can land on. Obtained exclusively through
 /// [`DraftInvoice::try_from_invoice`] (existing invoice, checked once) or
 /// [`DraftInvoice::new`] (brand new, always a draft by construction) — there

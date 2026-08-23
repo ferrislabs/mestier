@@ -9,7 +9,8 @@ use serde_json::{Value, json};
 use crate::{
     CustomerContextId, CustomerId, CustomerOutstandingBalance, DraftInvoice, Invoice, InvoiceId,
     InvoiceKind, InvoiceLine, InvoiceLineId, InvoicePayment, InvoicePaymentId, InvoiceStatus,
-    InvoiceVatBreakdownLine, LegalIdentity, Organization, OrganizationId, Project, ProjectId,
+    InvoiceVatBreakdownLine, LegalIdentity, Organization, OrganizationId, Project,
+    ProjectBillingSummary, ProjectId,
     domain::{
         invoice::{
             commands::{
@@ -396,6 +397,21 @@ where
         self.repo.list_payments(invoice_id).await
     }
 
+    /// Resolves one payment on its own, `None` if it never existed or was
+    /// already soft-deleted. Not needed by #320's own use cases — every one
+    /// of them already holds the invoice, or the payment id plus an actor —
+    /// but #319's delete-by-payment-id HTTP route has only the payment id
+    /// and needs its organization for the membership check before it can
+    /// call `delete_payment` at all. `InvoiceRepository::find_payment_by_id`
+    /// already existed for `Self::delete_payment`'s own precondition; this
+    /// is just the thin read the application layer had no way to reach.
+    pub async fn find_payment_by_id(
+        &mut self,
+        id: InvoicePaymentId,
+    ) -> Result<Option<InvoicePayment>, CoreError> {
+        self.repo.find_payment_by_id(id).await
+    }
+
     /// One row per customer with an outstanding balance — a SQL aggregate,
     /// never assembled client-side (CLAUDE.md is explicit that money math
     /// lives in the backend).
@@ -416,6 +432,53 @@ where
         as_of: DateTime<Utc>,
     ) -> Result<Vec<Invoice>, CoreError> {
         self.repo.list_overdue(organization_id, as_of).await
+    }
+
+    /// "What was quoted, what has been billed, what remains" for one
+    /// project (#319) — reuses [`Self::sum_already_issued_cents`], the same
+    /// sum `issue_final_invoice`'s own remainder and `issue_now`'s
+    /// over-issuance check are computed from, so a partial refund (a credit
+    /// note) is reflected here exactly the way it already is for those.
+    /// `quoted_cents`/`remaining_cents` are `None` together, when the
+    /// project carries no quote: nothing to compare against, not a zero.
+    pub async fn project_billing_summary<P, Q>(
+        &mut self,
+        project_id: ProjectId,
+        mut project_repository: P,
+        mut quote_repository: Q,
+    ) -> Result<ProjectBillingSummary, CoreError>
+    where
+        P: ProjectRepository,
+        Q: QuoteRepository,
+    {
+        let project = project_repository
+            .find_by_id(project_id)
+            .await?
+            .ok_or(CoreError::NotFound)?;
+
+        let billed_cents = self.sum_already_issued_cents(project_id).await?;
+
+        let quoted_cents = match project.quote_id {
+            Some(quote_id) => {
+                let quote = quote_repository
+                    .find_by_id(quote_id)
+                    .await?
+                    .ok_or(CoreError::NotFound)?;
+                Some(quote.net_cents)
+            }
+            None => None,
+        };
+
+        let remaining_cents = quoted_cents
+            .map(|quoted| remaining_to_bill_cents(quoted, billed_cents))
+            .transpose()?;
+
+        Ok(ProjectBillingSummary {
+            project_id,
+            quoted_cents,
+            billed_cents,
+            remaining_cents,
+        })
     }
 
     /// The generic issuing transition, usable on any draft regardless of

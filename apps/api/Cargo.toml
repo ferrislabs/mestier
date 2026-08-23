@@ -11,6 +11,7 @@ handlers-customer = { workspace = true }
 handlers-discord = { workspace = true }
 handlers-field = { workspace = true }
 handlers-files = { workspace = true }
+handlers-invoice = { workspace = true }
 handlers-member = { workspace = true }
 handlers-organization = { workspace = true }
 handlers-quote = { workspace = true }

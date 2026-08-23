@@ -15,6 +15,7 @@ use handlers_customer as customer;
 use handlers_discord as discord;
 use handlers_field as field;
 use handlers_files as files;
+use handlers_invoice as invoice;
 use handlers_member as member;
 use handlers_organization as organization;
 use handlers_planning as planning;
@@ -87,6 +88,7 @@ pub fn router(state: AppState) -> Result<Router, ApiError> {
         .merge(files::router(&state))
         .merge(customer::router(&state))
         .merge(discord::router(&state))
+        .merge(invoice::router(&state))
         .merge(member::router(&state))
         .merge(organization::router(&state))
         .merge(quote::router(&state))

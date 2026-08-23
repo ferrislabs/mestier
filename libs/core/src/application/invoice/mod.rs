@@ -3,7 +3,8 @@ use common::CoreError;
 use mestier_macros::transactional;
 
 use crate::{
-    CustomerOutstandingBalance, Invoice, InvoiceId, InvoicePayment, OrganizationId, ProjectId,
+    CustomerOutstandingBalance, Invoice, InvoiceId, InvoicePayment, InvoicePaymentId,
+    OrganizationId, ProjectBillingSummary, ProjectId,
     application::MestierUseCase,
     domain::invoice::{
         commands::{
@@ -195,6 +196,21 @@ impl MestierUseCase {
         service.list_payments(invoice_id).await
     }
 
+    /// Not registered by #320: every one of its own use cases already holds
+    /// the invoice, or a payment id plus an actor. #319's delete-by-
+    /// payment-id HTTP route has only the payment id, and needs this to
+    /// resolve the payment's own organization for the membership check
+    /// before it can call `delete_invoice_payment` at all — the same
+    /// "unavoidable one more file" #317/#318/#320 each flagged.
+    #[transactional(invoice, emitter)]
+    pub async fn find_payment_by_id(
+        &self,
+        id: InvoicePaymentId,
+    ) -> Result<Option<InvoicePayment>, CoreError> {
+        let mut service = InvoiceService::new(invoice_repository, emitter);
+        service.find_payment_by_id(id).await
+    }
+
     #[transactional(invoice, emitter)]
     pub async fn outstanding_balance_by_customer(
         &self,
@@ -212,5 +228,22 @@ impl MestierUseCase {
     ) -> Result<Vec<Invoice>, CoreError> {
         let mut service = InvoiceService::new(invoice_repository, emitter);
         service.overdue_invoices(organization_id, as_of).await
+    }
+
+    /// #319: "what was quoted, what has been billed, what remains" for one
+    /// project — nothing in this module exposed it before, even though
+    /// `InvoiceService`'s own `sum_already_issued_cents` did all the work
+    /// privately. `project`/`quote` resolve the same two reads
+    /// `issue_deposit`/`issue_final_invoice` already need for the same
+    /// reason.
+    #[transactional(invoice, project, quote, emitter)]
+    pub async fn project_billing_summary(
+        &self,
+        project_id: ProjectId,
+    ) -> Result<ProjectBillingSummary, CoreError> {
+        let mut service = InvoiceService::new(invoice_repository, emitter);
+        service
+            .project_billing_summary(project_id, project_repository, quote_repository)
+            .await
     }
 }
