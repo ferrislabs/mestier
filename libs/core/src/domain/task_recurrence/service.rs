@@ -14,7 +14,7 @@ use crate::{
 };
 
 /// How far ahead a recurrence is materialized, in days, absent an
-/// organization-level override (`organizations.task_recurrence_horizon_days`,
+/// organization-level override (`task_recurrence_horizon_settings.horizon_days`,
 /// added by #293's migration — a setting, not a constant, because a shop
 /// with a lot of monthly recurrences and a slow horizon-extension worker
 /// needs more margin than the default gives).
@@ -431,7 +431,114 @@ where
 
         Ok(materialized)
     }
+
+    /// Moves `recurrence`'s watermark to `horizon_filled_to` — never called
+    /// except right after [`Self::materialize_range`] accounted for
+    /// everything up to that date, and always in the same transaction as
+    /// that call, which is what keeps the watermark from ever running ahead
+    /// of what was actually persisted.
+    pub async fn advance_horizon(
+        &mut self,
+        id: TaskRecurrenceId,
+        horizon_filled_to: NaiveDate,
+    ) -> Result<(), CoreError> {
+        self.recurrence_repository
+            .advance_horizon(id, horizon_filled_to)
+            .await
+    }
+
+    /// The organization's configured horizon, in days, falling back to
+    /// [`DEFAULT_HORIZON_DAYS`] when it has never set one.
+    pub async fn horizon_days_for(
+        &mut self,
+        organization_id: OrganizationId,
+    ) -> Result<i64, CoreError> {
+        Ok(self
+            .recurrence_repository
+            .horizon_days_for_organization(organization_id)
+            .await?
+            .map(i64::from)
+            .unwrap_or(DEFAULT_HORIZON_DAYS))
+    }
+
+    /// Every organization with at least one recurrence whose watermark is
+    /// getting close to today — what the horizon-extension pass (#293)
+    /// schedules a run for. `today` is a coarse, UTC-calendar approximation
+    /// (this only decides *whether* a pass is due soon, never the actual
+    /// fill target, which `extend_organization_horizons` computes precisely
+    /// per recurrence in its own timezone) — see
+    /// [`RECURRENCE_HORIZON_REFILL_TRIGGER_DAYS`]'s own doc for why that
+    /// approximation is safe.
+    pub async fn organizations_needing_extension(
+        &mut self,
+        today: NaiveDate,
+    ) -> Result<Vec<OrganizationId>, CoreError> {
+        let threshold = today + Duration::days(RECURRENCE_HORIZON_REFILL_TRIGGER_DAYS);
+        self.recurrence_repository
+            .organizations_needing_horizon_extension(today, threshold)
+            .await
+    }
+
+    /// Extends every one of `organization_id`'s recurrences whose horizon
+    /// needs pushing forward, and moves each one's watermark in the same
+    /// transaction as the rows it accounts for — a failure partway through
+    /// (an unlikely but possible I/O error) rolls the whole call back, so
+    /// the next pass redoes it rather than resuming from a half-moved
+    /// watermark. A recurrence whose `ends_on` has already passed, or whose
+    /// horizon is already filled past the target, is skipped.
+    ///
+    /// Returns how many occurrences were newly materialized, across every
+    /// recurrence — `0` is a legitimate answer (every recurrence was
+    /// already filled, or none needed visiting), never a caller error.
+    pub async fn extend_organization_horizons(
+        &mut self,
+        organization_id: OrganizationId,
+    ) -> Result<u64, CoreError> {
+        let horizon_days = self.horizon_days_for(organization_id).await?;
+        let recurrences = self.list_recurrences(organization_id).await?;
+        let now = Utc::now();
+        let today = now.date_naive();
+        let mut materialized = 0u64;
+
+        for recurrence in recurrences {
+            if let Some(ends_on) = recurrence.ends_on
+                && ends_on < today
+            {
+                continue;
+            }
+
+            let target = target_horizon(
+                now,
+                recurrence.timezone,
+                recurrence.starts_on,
+                recurrence.ends_on,
+                horizon_days,
+            );
+            if target <= recurrence.horizon_filled_to {
+                continue;
+            }
+
+            let from = recurrence.horizon_filled_to + Duration::days(1);
+            materialized += self.materialize_range(&recurrence, from, target).await?;
+            self.advance_horizon(recurrence.id, target).await?;
+        }
+
+        Ok(materialized)
+    }
 }
+
+/// How close to today a recurrence's `horizon_filled_to` has to be before a
+/// run is scheduled to push it forward.
+///
+/// Deliberately independent from any organization's actual
+/// `horizon_days` setting (which can only be read per-recurrence, inside the
+/// transaction that visits it) — this is a coarse, cheap, index-friendly
+/// trigger for "a pass is due soon", not the fill target itself. Any value
+/// comfortably smaller than [`DEFAULT_HORIZON_DAYS`] keeps a refill from
+/// ever running the watermark down to zero before a pass catches it; half of
+/// the default leaves a wide margin even for an organization whose worker
+/// only ticks once a day.
+pub const RECURRENCE_HORIZON_REFILL_TRIGGER_DAYS: i64 = DEFAULT_HORIZON_DAYS / 2;
 
 #[cfg(test)]
 mod tests {
@@ -772,5 +879,150 @@ mod tests {
     #[test]
     fn a_daily_rule_is_always_valid() {
         assert!(validate_rule(&RecurrenceRule::Daily).is_ok());
+    }
+
+    // -- TaskRecurrenceService::extend_organization_horizons -----------------
+
+    mod extend_organization_horizons_tests {
+        use super::*;
+        use crate::domain::member::ports::MockMemberRepository;
+        use crate::domain::task::ports::MockTaskRepository;
+        use crate::domain::task_recurrence::ports::MockTaskRecurrenceRepository;
+
+        fn service(
+            recurrence_repository: MockTaskRecurrenceRepository,
+        ) -> TaskRecurrenceService<
+            MockTaskRecurrenceRepository,
+            MockTaskRepository,
+            MockMemberRepository,
+        > {
+            TaskRecurrenceService::new(
+                recurrence_repository,
+                MockTaskRepository::new(),
+                MockMemberRepository::new(),
+            )
+        }
+
+        #[tokio::test]
+        async fn a_recurrence_whose_ends_on_has_passed_is_skipped_entirely() {
+            let organization_id = OrganizationId(Uuid::new_v4());
+            let today = Utc::now().date_naive();
+            let finished = TaskRecurrence {
+                ends_on: Some(today - Duration::days(1)),
+                horizon_filled_to: today - Duration::days(1),
+                ..recurrence(RecurrenceRule::Daily, today - Duration::days(100), None)
+            };
+
+            let mut recurrence_repository = MockTaskRecurrenceRepository::new();
+            recurrence_repository
+                .expect_horizon_days_for_organization()
+                .returning(|_| Box::pin(async { Ok(None) }));
+            recurrence_repository
+                .expect_list_by_organization()
+                .returning(move |_| {
+                    let finished = finished.clone();
+                    Box::pin(async move { Ok(vec![finished]) })
+                });
+            // No `expect_advance_horizon`: mockall panics on the unexpected
+            // call, which is exactly the assertion that a finished series
+            // is never visited.
+
+            let mut service = service(recurrence_repository);
+
+            let materialized = service
+                .extend_organization_horizons(organization_id)
+                .await
+                .unwrap();
+
+            assert_eq!(materialized, 0);
+        }
+
+        #[tokio::test]
+        async fn a_recurrence_already_filled_past_the_target_is_skipped() {
+            let organization_id = OrganizationId(Uuid::new_v4());
+            let today = Utc::now().date_naive();
+            // Filled far beyond even a generous horizon: nothing to do.
+            let already_filled = TaskRecurrence {
+                horizon_filled_to: today + Duration::days(400),
+                ..recurrence(RecurrenceRule::Daily, today - Duration::days(10), None)
+            };
+
+            let mut recurrence_repository = MockTaskRecurrenceRepository::new();
+            recurrence_repository
+                .expect_horizon_days_for_organization()
+                .returning(|_| Box::pin(async { Ok(None) }));
+            recurrence_repository
+                .expect_list_by_organization()
+                .returning(move |_| {
+                    let already_filled = already_filled.clone();
+                    Box::pin(async move { Ok(vec![already_filled]) })
+                });
+            // No `expect_advance_horizon`: an already-filled recurrence must
+            // never move its own watermark backward or redundantly forward.
+
+            let mut service = service(recurrence_repository);
+
+            let materialized = service
+                .extend_organization_horizons(organization_id)
+                .await
+                .unwrap();
+
+            assert_eq!(materialized, 0);
+        }
+
+        /// The organization-level setting is honored, not just read: with a
+        /// configured 10-day override, a recurrence filled only up to today
+        /// is pushed exactly 10 days forward — proven by asserting on the
+        /// horizon `advance_horizon` is actually called with, not merely on
+        /// the returned count.
+        #[tokio::test]
+        async fn a_configured_horizon_override_changes_the_target() {
+            let organization_id = OrganizationId(Uuid::new_v4());
+            let today = Utc::now().date_naive();
+            let due = TaskRecurrence {
+                horizon_filled_to: today,
+                ..recurrence(RecurrenceRule::Daily, today - Duration::days(10), None)
+            };
+            let due_id = due.id;
+
+            let mut recurrence_repository = MockTaskRecurrenceRepository::new();
+            recurrence_repository
+                .expect_horizon_days_for_organization()
+                .returning(|_| Box::pin(async { Ok(Some(10)) }));
+            recurrence_repository
+                .expect_list_by_organization()
+                .returning(move |_| {
+                    let due = due.clone();
+                    Box::pin(async move { Ok(vec![due]) })
+                });
+            recurrence_repository
+                .expect_advance_horizon()
+                .withf(move |id, horizon_filled_to| {
+                    *id == due_id && *horizon_filled_to == today + Duration::days(10)
+                })
+                .returning(|_, _| Box::pin(async { Ok(()) }));
+
+            // Ten days of gap (`horizon_filled_to + 1` through the new
+            // target, inclusive): one `insert_occurrence_if_absent` call per
+            // date, every one reporting a fresh insert.
+            let mut task_repository = MockTaskRepository::new();
+            task_repository
+                .expect_insert_occurrence_if_absent()
+                .times(10)
+                .returning(|_| Box::pin(async { Ok(true) }));
+
+            let mut service = TaskRecurrenceService::new(
+                recurrence_repository,
+                task_repository,
+                MockMemberRepository::new(),
+            );
+
+            let materialized = service
+                .extend_organization_horizons(organization_id)
+                .await
+                .unwrap();
+
+            assert_eq!(materialized, 10);
+        }
     }
 }

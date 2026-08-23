@@ -320,4 +320,281 @@ mod tests {
         cleanup(&pool, mine.organization_id, &[mine.owner_id]).await;
         cleanup(&pool, theirs.organization_id, &[theirs.owner_id]).await;
     }
+
+    // -- ensure_recurrence_horizon_runs / the horizon-extension pass (#293) --
+    //
+    // Its own database (`automation_pool`), not `dev_pool`: `ensure_recurrence_
+    // horizon_runs` creates `automation.run` rows, and `run_engine_pass` claims
+    // every *due* run system-wide — see `application::automation::run`'s own
+    // note on why that suite needs an empty queue nobody else fills. The
+    // fixtures below live in the automation scratch database too, so a
+    // recurrence's org/member rows are seeded and torn down there directly
+    // rather than shared with the `dev_pool` fixtures above.
+
+    mod horizon_extension_tests {
+        use std::time::Duration as StdDuration;
+
+        use chrono::{Duration as ChronoDuration, Utc};
+
+        use super::*;
+        use crate::application::test_support::automation_pool;
+        use crate::infrastructure::automation::connectors::ConnectorRegistry;
+        use crate::infrastructure::automation::postgres::run::RUN_CLAIM_LOCK;
+        use crate::infrastructure::automation::worker::WorkerSchedule;
+
+        async fn make_automation_pool() -> PgPool {
+            automation_pool().await
+        }
+
+        fn generous_schedule() -> WorkerSchedule {
+            WorkerSchedule {
+                interval: StdDuration::from_secs(5),
+                batch: 100,
+                per_org: 100,
+                claim_timeout: StdDuration::from_secs(300),
+                max_steps_per_slice: 10_000,
+                max_slice_duration: StdDuration::from_secs(120),
+            }
+        }
+
+        async fn run_count_for_org(pool: &PgPool, org_id: OrganizationId) -> i64 {
+            sqlx::query_scalar!(
+                "SELECT COUNT(*) FROM automation.run WHERE org_id = $1",
+                org_id.0,
+            )
+            .fetch_one(pool)
+            .await
+            .unwrap()
+            .unwrap_or(0)
+        }
+
+        async fn total_run_count(pool: &PgPool) -> i64 {
+            sqlx::query_scalar!("SELECT COUNT(*) FROM automation.run")
+                .fetch_one(pool)
+                .await
+                .unwrap()
+                .unwrap_or(0)
+        }
+
+        async fn push_horizon_filled_to(pool: &PgPool, recurrence_id: uuid::Uuid, date: NaiveDate) {
+            sqlx::query!(
+                "UPDATE task_recurrences SET horizon_filled_to = $2 WHERE id = $1",
+                recurrence_id,
+                date,
+            )
+            .execute(pool)
+            .await
+            .unwrap();
+        }
+
+        /// The acceptance criterion the whole scheduling half of #293 rests
+        /// on: an organization that has never created a recurrence must
+        /// never produce a run. Asserted against the whole queue, not merely
+        /// "no run for my org" — this suite has a history of only passing on
+        /// a queue somebody else's test already filled (see
+        /// `application::automation::run`'s own tests for the same
+        /// discipline).
+        #[tokio::test]
+        #[ignore = "requires live postgres"]
+        async fn an_organization_with_no_recurrences_produces_no_run() {
+            let pool = make_automation_pool().await;
+            let fixture = seed_fixture(&pool).await;
+            let usecase = make_usecase(pool.clone());
+
+            let created = usecase.ensure_recurrence_horizon_runs().await.unwrap();
+
+            assert_eq!(created, 0);
+            assert_eq!(total_run_count(&pool).await, 0);
+
+            cleanup(&pool, fixture.organization_id, &[fixture.owner_id]).await;
+        }
+
+        /// A recurrence whose watermark is comfortably far in the future
+        /// (freshly created, filled to the full default horizon) does not
+        /// need a run yet either.
+        #[tokio::test]
+        #[ignore = "requires live postgres"]
+        async fn a_freshly_created_recurrence_does_not_need_a_run_yet() {
+            let pool = make_automation_pool().await;
+            let fixture = seed_fixture(&pool).await;
+            let usecase = make_usecase(pool.clone());
+            usecase
+                .create_task_recurrence(daily_command(
+                    &fixture,
+                    NaiveDate::from_ymd_opt(2026, 8, 24).unwrap(),
+                ))
+                .await
+                .unwrap();
+
+            let created = usecase.ensure_recurrence_horizon_runs().await.unwrap();
+
+            assert_eq!(created, 0);
+            assert_eq!(run_count_for_org(&pool, fixture.organization_id).await, 0);
+
+            cleanup(&pool, fixture.organization_id, &[fixture.owner_id]).await;
+        }
+
+        /// The core loop: a recurrence whose horizon is getting close to
+        /// today gets exactly one run, running it advances the watermark and
+        /// materializes the missing occurrences, and asking again right
+        /// after does not queue a second run for the same, now-satisfied,
+        /// need.
+        #[tokio::test]
+        #[ignore = "requires live postgres"]
+        async fn a_due_recurrence_gets_one_run_that_extends_it_and_stops_asking() {
+            let _guard = RUN_CLAIM_LOCK.lock().await;
+            let pool = make_automation_pool().await;
+            let fixture = seed_fixture(&pool).await;
+            let usecase = make_usecase(pool.clone());
+            let created_recurrence = usecase
+                .create_task_recurrence(daily_command(
+                    &fixture,
+                    NaiveDate::from_ymd_opt(2026, 1, 1).unwrap(),
+                ))
+                .await
+                .unwrap();
+            let today = Utc::now().date_naive();
+            // Simulates time passing: the horizon is now only 10 days out,
+            // well inside the refill trigger window.
+            push_horizon_filled_to(
+                &pool,
+                created_recurrence.id.0,
+                today + ChronoDuration::days(10),
+            )
+            .await;
+
+            let created = usecase.ensure_recurrence_horizon_runs().await.unwrap();
+            assert_eq!(created, 1, "exactly one run for the one due recurrence");
+            assert_eq!(run_count_for_org(&pool, fixture.organization_id).await, 1);
+
+            // Asking again before the run is worked must not queue a second
+            // one for the same still-pending need.
+            let created_again = usecase.ensure_recurrence_horizon_runs().await.unwrap();
+            assert_eq!(created_again, 0);
+            assert_eq!(run_count_for_org(&pool, fixture.organization_id).await, 1);
+
+            let connectors = ConnectorRegistry::new(usecase.clone());
+            usecase
+                .run_engine_pass(&connectors, "worker-1", generous_schedule())
+                .await
+                .unwrap();
+
+            let after = usecase
+                .get_task_recurrence(created_recurrence.id)
+                .await
+                .unwrap();
+            assert!(
+                after.horizon_filled_to > today + ChronoDuration::days(10),
+                "the watermark actually moved: {:?}",
+                after.horizon_filled_to
+            );
+
+            let task_count: i64 = sqlx::query_scalar!(
+                "SELECT COUNT(*) FROM tasks WHERE recurrence_id = $1 AND occurrence_date > $2",
+                created_recurrence.id.0,
+                today + ChronoDuration::days(10),
+            )
+            .fetch_one(&pool)
+            .await
+            .unwrap()
+            .unwrap_or(0);
+            assert!(task_count > 0, "new occurrences were materialized");
+
+            // Now comfortably filled again: no further run is queued.
+            let settled = usecase.ensure_recurrence_horizon_runs().await.unwrap();
+            assert_eq!(settled, 0);
+
+            cleanup(&pool, fixture.organization_id, &[fixture.owner_id]).await;
+        }
+
+        /// Idempotency at the SQL layer: running the extension twice over
+        /// the same range — the scenario a retried or double-claimed run
+        /// produces — never creates a duplicate occurrence, thanks to
+        /// `insert_occurrence_if_absent`'s `ON CONFLICT ... DO NOTHING`.
+        #[tokio::test]
+        #[ignore = "requires live postgres"]
+        async fn extending_the_same_range_twice_materializes_nothing_the_second_time() {
+            let pool = make_automation_pool().await;
+            let fixture = seed_fixture(&pool).await;
+            let usecase = make_usecase(pool.clone());
+            let today = Utc::now().date_naive();
+            let created_recurrence = usecase
+                .create_task_recurrence(daily_command(&fixture, today))
+                .await
+                .unwrap();
+            // Creation already filled [today, today + 60]. Rewinding the
+            // watermark to `today` and deleting the rows it would otherwise
+            // find already there is what makes the first pass below have
+            // real work to do, rather than finding the whole range already
+            // filled from creation and never reaching `insert_occurrence_if_absent`
+            // at all.
+            push_horizon_filled_to(&pool, created_recurrence.id.0, today).await;
+            sqlx::query!(
+                "DELETE FROM tasks WHERE recurrence_id = $1 AND occurrence_date > $2",
+                created_recurrence.id.0,
+                today,
+            )
+            .execute(&pool)
+            .await
+            .unwrap();
+
+            let first = usecase
+                .extend_recurrence_horizons_for_organization(fixture.organization_id)
+                .await
+                .unwrap();
+            assert!(first > 0, "the deleted dates are re-materialized");
+
+            // Force the watermark back down over the exact same range, this
+            // time without deleting anything: every date is already there.
+            push_horizon_filled_to(&pool, created_recurrence.id.0, today).await;
+
+            let second = usecase
+                .extend_recurrence_horizons_for_organization(fixture.organization_id)
+                .await
+                .unwrap();
+            assert_eq!(
+                second, 0,
+                "every date in the range was already filled by the first pass"
+            );
+
+            cleanup(&pool, fixture.organization_id, &[fixture.owner_id]).await;
+        }
+
+        /// `ends_on` in the past stops a recurrence from being visited at
+        /// all, even when its watermark is far behind.
+        #[tokio::test]
+        #[ignore = "requires live postgres"]
+        async fn a_recurrence_whose_ends_on_has_passed_produces_no_run() {
+            let pool = make_automation_pool().await;
+            let fixture = seed_fixture(&pool).await;
+            let usecase = make_usecase(pool.clone());
+            let today = Utc::now().date_naive();
+
+            let mut command = daily_command(&fixture, today - ChronoDuration::days(100));
+            command.ends_on = Some(today - ChronoDuration::days(50));
+            let created_recurrence = usecase.create_task_recurrence(command).await.unwrap();
+            push_horizon_filled_to(
+                &pool,
+                created_recurrence.id.0,
+                today - ChronoDuration::days(60),
+            )
+            .await;
+
+            let created = usecase.ensure_recurrence_horizon_runs().await.unwrap();
+
+            assert_eq!(created, 0);
+            assert_eq!(run_count_for_org(&pool, fixture.organization_id).await, 0);
+
+            let extended = usecase
+                .extend_recurrence_horizons_for_organization(fixture.organization_id)
+                .await
+                .unwrap();
+            assert_eq!(
+                extended, 0,
+                "a finished series is never materialized further, even called directly"
+            );
+
+            cleanup(&pool, fixture.organization_id, &[fixture.owner_id]).await;
+        }
+    }
 }

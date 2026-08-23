@@ -258,4 +258,47 @@ impl<'tx> TaskRecurrenceRepository for PgTaskRecurrenceRepository<'tx> {
 
         Ok(())
     }
+
+    async fn organizations_needing_horizon_extension(
+        &mut self,
+        today: NaiveDate,
+        threshold: NaiveDate,
+    ) -> Result<Vec<OrganizationId>, CoreError> {
+        let mut tx = self.tx.lock().await;
+        let rows = sqlx::query!(
+            r#"
+            SELECT DISTINCT org_id
+            FROM task_recurrences
+            WHERE deleted_at IS NULL
+              AND horizon_filled_to <= $2
+              AND (ends_on IS NULL OR ends_on >= $1)
+            "#,
+            today,
+            threshold,
+        )
+        .fetch_all(&mut ***tx)
+        .await
+        .map_err(map_sqlx_error)?;
+
+        Ok(rows
+            .into_iter()
+            .map(|row| OrganizationId(row.org_id))
+            .collect())
+    }
+
+    async fn horizon_days_for_organization(
+        &mut self,
+        organization_id: OrganizationId,
+    ) -> Result<Option<i32>, CoreError> {
+        let mut tx = self.tx.lock().await;
+        let horizon_days = sqlx::query_scalar!(
+            r#"SELECT horizon_days FROM task_recurrence_horizon_settings WHERE org_id = $1"#,
+            organization_id.0,
+        )
+        .fetch_optional(&mut ***tx)
+        .await
+        .map_err(map_sqlx_error)?;
+
+        Ok(horizon_days.map(|days| days as i32))
+    }
 }

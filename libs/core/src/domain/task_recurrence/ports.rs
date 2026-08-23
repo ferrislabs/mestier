@@ -50,4 +50,30 @@ pub trait TaskRecurrenceRepository: Send {
         id: TaskRecurrenceId,
         deleted_at: chrono::DateTime<chrono::Utc>,
     ) -> impl Future<Output = Result<(), CoreError>> + Send;
+
+    /// Every organization with at least one non-deleted recurrence whose
+    /// `horizon_filled_to` no longer clears `threshold` — what the
+    /// horizon-extension pass (#293) scans to decide which organizations
+    /// need a run at all. An organization with zero recurrences, or whose
+    /// every recurrence is already filled past `threshold`, is absent from
+    /// the result — never merely empty-handled downstream — which is what
+    /// keeps a quiet organization from ever producing a run.
+    ///
+    /// `today` excludes a recurrence whose `ends_on` has already passed: a
+    /// finished series stops being visited, exactly as `ends_on` promises.
+    fn organizations_needing_horizon_extension(
+        &mut self,
+        today: NaiveDate,
+        threshold: NaiveDate,
+    ) -> impl Future<Output = Result<Vec<OrganizationId>, CoreError>> + Send;
+
+    /// The organization's configured horizon, in days, or `None` when it has
+    /// never set one — the caller falls back to
+    /// `service::DEFAULT_HORIZON_DAYS`, exactly as
+    /// `AutomationSettingsRepository::settings_for` defaults an
+    /// unconfigured organization's automation settings.
+    fn horizon_days_for_organization(
+        &mut self,
+        organization_id: OrganizationId,
+    ) -> impl Future<Output = Result<Option<i32>, CoreError>> + Send;
 }
