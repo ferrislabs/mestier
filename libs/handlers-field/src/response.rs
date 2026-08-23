@@ -1,7 +1,9 @@
 use chrono::{DateTime, NaiveDate, Utc};
 use mestier_core::{
-    CustomerContextId, CustomerId, DayLog, DayLogId, EmployeeId, OrganizationId, Task, TaskId,
-    TaskStatus, TimeEntry, TimeEntryId, TimeEntryPhoto, TimeEntryPhotoId, TimeEntryPhotoPhase,
+    AssignmentReport, AssignmentReportId, AssignmentReportResolution, CustomerContextId,
+    CustomerId, DayLog, DayLogId, EmployeeId, MemberId, OrganizationId, Task, TaskAssignmentId,
+    TaskId, TaskStatus, TimeEntry, TimeEntryId, TimeEntryPhoto, TimeEntryPhotoId,
+    TimeEntryPhotoPhase,
 };
 use serde::Serialize;
 use utoipa::ToSchema;
@@ -109,20 +111,81 @@ pub struct FieldTaskResponse {
     pub status: TaskStatus,
     pub customer_id: Option<CustomerId>,
     pub customer_context_id: Option<CustomerContextId>,
+    /// The caller's own assignment on this task — what `POST
+    /// .../field/assignments/{task_assignment_id}/report` is addressed by.
+    /// Always present: `list_for_assignee_on` only ever returns tasks the
+    /// caller is actually assigned to.
+    pub task_assignment_id: TaskAssignmentId,
 }
 
-impl From<Task> for FieldTaskResponse {
-    fn from(value: Task) -> Self {
+/// The worker's report of an assignment's actual duration, and whatever a
+/// manager has decided about it so far — never a rate or a cost. See
+/// `field-day-feature.tsx`'s "minutes, not money" rule: this screen has
+/// nothing to say about anyone's salary.
+#[derive(Debug, Clone, PartialEq, Serialize, ToSchema)]
+pub struct AssignmentReportResponse {
+    pub id: AssignmentReportId,
+    pub organization_id: OrganizationId,
+    pub task_assignment_id: TaskAssignmentId,
+    pub reported_minutes: u32,
+    pub comment: Option<String>,
+    pub reported_by: MemberId,
+    pub resolution: AssignmentReportResolution,
+    pub resolved_by: Option<MemberId>,
+    pub resolved_at: Option<DateTime<Utc>>,
+    pub resolution_note: Option<String>,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+}
+
+impl From<AssignmentReport> for AssignmentReportResponse {
+    fn from(value: AssignmentReport) -> Self {
         Self {
             id: value.id,
-            title: value.title,
-            description: value.description,
-            starts_at: value.starts_at,
-            ends_at: value.ends_at,
-            all_day: value.all_day,
-            status: value.status,
-            customer_id: value.customer_id,
-            customer_context_id: value.customer_context_id,
+            organization_id: value.organization_id,
+            task_assignment_id: value.task_assignment_id,
+            reported_minutes: value.reported_minutes,
+            comment: value.comment,
+            reported_by: value.reported_by,
+            resolution: value.resolution,
+            resolved_by: value.resolved_by,
+            resolved_at: value.resolved_at,
+            resolution_note: value.resolution_note,
+            created_at: value.created_at,
+            updated_at: value.updated_at,
+        }
+    }
+}
+
+impl FieldTaskResponse {
+    /// Resolves `task_assignment_id` from `task.assignments` — which, unlike
+    /// this response, carries every assignee of the task, not just the
+    /// caller's own. `member_id` is trusted from `resolve_field_actor`, never
+    /// from the request, so this can only ever surface the caller's own
+    /// assignment.
+    pub fn for_member(task: Task, member_id: MemberId) -> Self {
+        // Provably present: `TaskRepository::list_for_assignee_on` joins
+        // `task_assignments` on `member_id` to select the task in the first
+        // place, so every task reaching this constructor carries at least
+        // one assignment for `member_id`.
+        let task_assignment_id = task
+            .assignments
+            .iter()
+            .find(|assignment| assignment.member_id == member_id)
+            .map(|assignment| assignment.id)
+            .expect("list_for_assignee_on only returns tasks assigned to member_id");
+
+        Self {
+            id: task.id,
+            title: task.title,
+            description: task.description,
+            starts_at: task.starts_at,
+            ends_at: task.ends_at,
+            all_day: task.all_day,
+            status: task.status,
+            customer_id: task.customer_id,
+            customer_context_id: task.customer_context_id,
+            task_assignment_id,
         }
     }
 }

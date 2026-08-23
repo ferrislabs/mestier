@@ -52,5 +52,10 @@ pub async fn handler(
         .list_tasks_assigned_to_member_on(organization_id, actor.member_id, query.work_date)
         .await?;
 
-    Ok(Response::OK(tasks.into_iter().map(Into::into).collect()))
+    Ok(Response::OK(
+        tasks
+            .into_iter()
+            .map(|task| crate::response::FieldTaskResponse::for_member(task, actor.member_id))
+            .collect(),
+    ))
 }

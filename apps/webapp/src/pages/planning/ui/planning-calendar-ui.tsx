@@ -13,9 +13,14 @@ import {
 } from '#/pages/planning/ui/calendar-toolbar'
 import type { CalendarEventCallbacks } from '#/pages/planning/ui/event-popover'
 import { MonthGrid } from '#/pages/planning/ui/month-grid'
+import { PendingReportsBadge } from '#/pages/planning/ui/pending-reports-badge'
 
 export interface PlanningCalendarUIProps {
 	organizationName: string
+	organizationSlug: string
+	/** `null` while the count is still loading — see
+	 * `PlanningTeamUIProps.pendingReportsCount`'s own doc. */
+	pendingReportsCount: number | null
 	view: PlanningView
 	date: string
 	windowFrom: string
@@ -42,6 +47,8 @@ export interface PlanningCalendarUIProps {
 
 export function PlanningCalendarUI({
 	organizationName,
+	organizationSlug,
+	pendingReportsCount,
 	view,
 	date,
 	windowFrom,
@@ -85,7 +92,18 @@ export function PlanningCalendarUI({
 
 	return (
 		<PageShell className="max-w-none">
-			<PageHeader eyebrow={organizationName} title="Calendrier" />
+			<PageHeader
+				eyebrow={organizationName}
+				title="Calendrier"
+				actions={
+					pendingReportsCount ? (
+						<PendingReportsBadge
+							organizationSlug={organizationSlug}
+							count={pendingReportsCount}
+						/>
+					) : undefined
+				}
+			/>
 
 			<CalendarToolbar
 				view={view}

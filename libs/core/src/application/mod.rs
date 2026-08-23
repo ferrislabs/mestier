@@ -22,6 +22,7 @@ use events::Actor;
 use uuid::Uuid;
 
 pub mod absence;
+pub mod assignment_report;
 pub mod authorization;
 pub mod automation;
 pub mod customer;

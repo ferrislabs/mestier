@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT id, name, slug, owner_id,\n                legal_name, legal_form, registration_number,\n                vat_status, vat_number, vat_exemption_basis,\n                share_capital_cents,\n                address_line1, address_line2, address_postal_code, address_city, address_country,\n                contact_email, contact_phone, insurance_mention,\n                quote_number_prefix,\n                deleted_at, created_at, updated_at\n            FROM organizations\n            WHERE deleted_at IS NULL\n            ORDER BY created_at ASC\n            LIMIT $1 OFFSET $2\n            ",
+  "query": "\n            SELECT id, name, slug, owner_id,\n                legal_name, legal_form, registration_number,\n                vat_status, vat_number, vat_exemption_basis,\n                share_capital_cents,\n                address_line1, address_line2, address_postal_code, address_city, address_country,\n                contact_email, contact_phone, insurance_mention,\n                quote_number_prefix,\n                field_clock_enabled,\n                deleted_at, created_at, updated_at\n            FROM organizations\n            WHERE deleted_at IS NULL\n            ORDER BY created_at ASC\n            LIMIT $1 OFFSET $2\n            ",
   "describe": {
     "columns": [
       {
@@ -105,16 +105,21 @@
       },
       {
         "ordinal": 20,
+        "name": "field_clock_enabled",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 21,
         "name": "deleted_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 21,
+        "ordinal": 22,
         "name": "created_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 22,
+        "ordinal": 23,
         "name": "updated_at",
         "type_info": "Timestamptz"
       }
@@ -146,10 +151,11 @@
       true,
       true,
       false,
+      false,
       true,
       false,
       false
     ]
   },
-  "hash": "7b60a0536001fc7cd447527fce23f2bfbc011a26ad1728bd68709856c007c815"
+  "hash": "e690b40afdbd6a069bbf61910e6eca76a008af117210d871f63518407364409a"
 }

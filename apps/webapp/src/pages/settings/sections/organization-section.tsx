@@ -3,6 +3,7 @@ import {
 	AlertTriangle,
 	Building2,
 	CheckCircle2,
+	Clock,
 	Loader2,
 	Save,
 } from 'lucide-react'
@@ -21,6 +22,7 @@ import {
 	SectionHeader,
 	StatusBadge,
 } from '#/components/ui/surface'
+import { Switch } from '#/components/ui/switch'
 import { useActiveOrganization } from '#/hooks/use-active-organization'
 import {
 	type Organization,
@@ -66,6 +68,7 @@ function OrganizationSectionContent({
 		defaultValues: {
 			name: organization.name,
 			slug: organization.slug,
+			fieldClockEnabled: organization.field_clock_enabled,
 		} satisfies OrganizationFormValues,
 		onSubmit: async ({ value }) => {
 			await updateOrganization.mutateAsync({
@@ -73,6 +76,7 @@ function OrganizationSectionContent({
 				body: {
 					name: value.name.trim(),
 					slug: normalizeSlugForPayload(value.slug),
+					field_clock_enabled: value.fieldClockEnabled,
 				},
 			})
 		},
@@ -96,7 +100,8 @@ function OrganizationSectionContent({
 
 				const hasChanges =
 					form.values.name.trim() !== organization.name ||
-					form.values.slug.trim() !== organization.slug
+					form.values.slug.trim() !== organization.slug ||
+					form.values.fieldClockEnabled !== organization.field_clock_enabled
 
 				return (
 					<div className="flex flex-col gap-6">
@@ -134,6 +139,59 @@ function OrganizationSectionContent({
 										className="font-mono text-sm"
 									/>
 								</div>
+								<Button
+									type="button"
+									onClick={form.onSubmit}
+									disabled={form.isPending || !hasChanges}
+									className="gap-2"
+								>
+									{form.isPending ? (
+										<Loader2 className="size-4 animate-spin" />
+									) : (
+										<Save className="size-4" />
+									)}
+									Enregistrer
+								</Button>
+							</div>
+						</SectionCard>
+
+						<SectionCard>
+							<SectionHeader
+								title="Application terrain"
+								description="Ce que l'application mobile propose aux équipes sur le chantier."
+								actions={
+									<StatusBadge tone="neutral">
+										<Clock className="mr-1 size-3" />
+										Pointeuse
+									</StatusBadge>
+								}
+							/>
+							<div className="flex items-center justify-between gap-4 p-5">
+								<div>
+									<Label
+										htmlFor="field-clock-enabled"
+										className="text-sm font-medium"
+									>
+										Pointeuse
+									</Label>
+									<p className="mt-1 text-sm text-muted-foreground">
+										Depuis la refonte de la rentabilité, le pointage n'entre
+										plus dans le calcul des marges — seul le planning compte.
+										Activez cette option si votre organisation a quand même
+										besoin d'une pointeuse, pour la paie ou pour vos clients :
+										l'écran terrain s'ouvre alors sur l'horloge plutôt que sur
+										la liste des projets du jour.
+									</p>
+								</div>
+								<Switch
+									id="field-clock-enabled"
+									checked={form.values.fieldClockEnabled}
+									onCheckedChange={(fieldClockEnabled) =>
+										form.onChange({ fieldClockEnabled })
+									}
+								/>
+							</div>
+							<div className="flex justify-end p-5 pt-0">
 								<Button
 									type="button"
 									onClick={form.onSubmit}

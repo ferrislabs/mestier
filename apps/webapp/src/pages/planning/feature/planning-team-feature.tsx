@@ -2,6 +2,7 @@ import { AlertCircle } from 'lucide-react'
 import { useState } from 'react'
 import type { Schemas } from '#/api/api.client'
 import { useActiveOrganization } from '#/hooks/use-active-organization'
+import { usePendingAssignmentReportsCount } from '#/hooks/use-assignment-reports'
 import {
 	useCheckAvailability,
 	useMoveTask,
@@ -72,6 +73,7 @@ export function PlanningTeamFeature({
 			key={activeOrganization.id}
 			organizationId={activeOrganization.id}
 			organizationName={activeOrganization.name}
+			organizationSlug={activeOrganization.slug}
 			view={view}
 			date={date}
 			onViewChange={onViewChange}
@@ -83,6 +85,7 @@ export function PlanningTeamFeature({
 interface PlanningTeamScreenProps {
 	organizationId: string
 	organizationName: string
+	organizationSlug: string
 	view: PlanningView
 	date: string
 	onViewChange: (view: PlanningView) => void
@@ -98,6 +101,7 @@ interface PendingDrop {
 function PlanningTeamScreen({
 	organizationId,
 	organizationName,
+	organizationSlug,
 	view,
 	date,
 	onViewChange,
@@ -108,6 +112,7 @@ function PlanningTeamScreen({
 	const range = computeWindow(view, date)
 	const planningQuery = usePlanning(organizationId, range)
 	const data = planningQuery.data?.data ?? null
+	const pendingReportsCount = usePendingAssignmentReportsCount(organizationId)
 
 	const checkAvailability = useCheckAvailability()
 	const moveTask = useMoveTask()
@@ -236,6 +241,8 @@ function PlanningTeamScreen({
 	return (
 		<PlanningTeamUI
 			organizationName={organizationName}
+			organizationSlug={organizationSlug}
+			pendingReportsCount={pendingReportsCount}
 			view={view}
 			date={date}
 			windowFrom={range.from}

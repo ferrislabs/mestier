@@ -1,0 +1,88 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT\n                id, org_id, task_assignment_id, reported_minutes, comment, reported_by,\n                resolution::text AS \"resolution!\", resolved_by, resolved_at, resolution_note,\n                created_at, updated_at\n            FROM assignment_reports\n            WHERE id = $1\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "org_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "task_assignment_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 3,
+        "name": "reported_minutes",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 4,
+        "name": "comment",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "reported_by",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 6,
+        "name": "resolution!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 7,
+        "name": "resolved_by",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 8,
+        "name": "resolved_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 9,
+        "name": "resolution_note",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 10,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 11,
+        "name": "updated_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      true,
+      false,
+      null,
+      true,
+      true,
+      true,
+      false,
+      false
+    ]
+  },
+  "hash": "1a454bb31fffdd2fef21767cb784f7ff93888dfb71788d5e3fc3adcf31b66c4f"
+}

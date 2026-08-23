@@ -10,17 +10,30 @@ import {
 import { Button } from '#/components/ui/button'
 import { Input } from '#/components/ui/input'
 import { Label } from '#/components/ui/label'
-import type { FieldTask, PhotoPhase, TimeEntry } from '#/hooks/use-field'
+import type {
+	AssignmentReport,
+	FieldTask,
+	PhotoPhase,
+	TimeEntry,
+} from '#/hooks/use-field'
 import {
 	elapsedLabel,
+	reportForAssignment,
 	runningTask,
 	startedAtLabel,
 	taskWindowLabel,
 } from '../types'
 import { FieldPhotoPicker } from './field-photo-picker'
+import { TaskReportPanel } from './task-report-panel'
 
 interface FieldDayUIProps {
 	organizationName: string
+	/** The organization's own choice — off by default since ADR 0002.
+	 * Nothing that touches the clock (starting, stopping, the running-job
+	 * card, the forgotten-clock-off prompt, day-end) renders while this is
+	 * false; the task list and its report control are the screen either
+	 * way. */
+	clockEnabled: boolean
 	tasks: FieldTask[]
 	/** The task list failed to load — distinct from it having loaded empty. */
 	tasksLoadFailed: boolean
@@ -59,6 +72,27 @@ interface FieldDayUIProps {
 	onCapturePhoto: (phase: PhotoPhase, file: File) => void
 	onDayEndTimeChange: (value: string) => void
 	onEndDay: () => void
+	/** Every report the caller has filed, most recent first — the raw list;
+	 * `reportForAssignment` picks the one relevant to each row. */
+	reports: AssignmentReport[]
+	/** The `task_assignment_id` whose report form is open — at most one at a
+	 * time. */
+	editingAssignmentId: string | null
+	draftMinutes: string
+	draftComment: string
+	isSubmittingReport: boolean
+	/** The id of the report currently being withdrawn, if any. */
+	withdrawingReportId: string | null
+	reportError: string | null
+	onOpenReportForm: (
+		taskAssignmentId: string,
+		existing: AssignmentReport | null,
+	) => void
+	onCancelReportForm: () => void
+	onDraftMinutesChange: (value: string) => void
+	onDraftCommentChange: (value: string) => void
+	onSubmitReport: () => void
+	onWithdrawReport: (reportId: string) => void
 }
 
 /**
@@ -71,6 +105,7 @@ interface FieldDayUIProps {
  */
 export function FieldDayUI({
 	organizationName,
+	clockEnabled,
 	tasks,
 	tasksLoadFailed,
 	onRetryTasks,
@@ -96,6 +131,19 @@ export function FieldDayUI({
 	onCapturePhoto,
 	onDayEndTimeChange,
 	onEndDay,
+	reports,
+	editingAssignmentId,
+	draftMinutes,
+	draftComment,
+	isSubmittingReport,
+	withdrawingReportId,
+	reportError,
+	onOpenReportForm,
+	onCancelReportForm,
+	onDraftMinutesChange,
+	onDraftCommentChange,
+	onSubmitReport,
+	onWithdrawReport,
 }: FieldDayUIProps) {
 	const current = runningTask(tasks, running)
 
@@ -115,7 +163,7 @@ export function FieldDayUI({
 				</div>
 			) : null}
 
-			{currentLoadFailed ? (
+			{clockEnabled && currentLoadFailed ? (
 				<div className="flex items-start gap-3 rounded-xl border border-destructive/30 bg-destructive-soft p-4 text-destructive">
 					<AlertCircle className="mt-0.5 size-5 shrink-0" />
 					<div className="flex-1">
@@ -136,7 +184,7 @@ export function FieldDayUI({
 				</div>
 			) : null}
 
-			{staleEntry ? (
+			{clockEnabled && staleEntry ? (
 				<section className="rounded-xl border-2 border-amber-500 bg-card p-4">
 					<p className="text-xs font-semibold uppercase tracking-wide text-amber-600 dark:text-amber-500">
 						Projet non clôturé
@@ -175,7 +223,7 @@ export function FieldDayUI({
 				</section>
 			) : null}
 
-			{running && !staleEntry ? (
+			{clockEnabled && running && !staleEntry ? (
 				<section className="rounded-xl border-2 border-primary bg-card p-4">
 					<p className="text-xs font-semibold uppercase tracking-wide text-primary">
 						En cours depuis {elapsedLabel(running.started_at, now)}
@@ -210,7 +258,7 @@ export function FieldDayUI({
 				</section>
 			) : null}
 
-			{staleEntry ? null : (
+			{clockEnabled && staleEntry ? null : (
 				<section className="space-y-2">
 					<p className="text-sm font-semibold text-muted-foreground">
 						Mes projets du jour
@@ -276,7 +324,7 @@ export function FieldDayUI({
 										</p>
 									) : null}
 
-									{!isCurrent ? (
+									{clockEnabled && !isCurrent ? (
 										<Button
 											type="button"
 											size="lg"
@@ -293,6 +341,44 @@ export function FieldDayUI({
 											{running ? 'Basculer sur ce projet' : 'Démarrer'}
 										</Button>
 									) : null}
+
+									<TaskReportPanel
+										task={task}
+										report={reportForAssignment(
+											reports,
+											task.task_assignment_id,
+										)}
+										isEditing={editingAssignmentId === task.task_assignment_id}
+										draftMinutes={draftMinutes}
+										draftComment={draftComment}
+										isSubmitting={isSubmittingReport}
+										isWithdrawing={
+											withdrawingReportId ===
+											reportForAssignment(reports, task.task_assignment_id)?.id
+										}
+										error={
+											editingAssignmentId === task.task_assignment_id
+												? reportError
+												: null
+										}
+										onOpen={() =>
+											onOpenReportForm(
+												task.task_assignment_id,
+												reportForAssignment(reports, task.task_assignment_id),
+											)
+										}
+										onCancel={onCancelReportForm}
+										onDraftMinutesChange={onDraftMinutesChange}
+										onDraftCommentChange={onDraftCommentChange}
+										onSubmit={onSubmitReport}
+										onWithdraw={() => {
+											const existing = reportForAssignment(
+												reports,
+												task.task_assignment_id,
+											)
+											if (existing) onWithdrawReport(existing.id)
+										}}
+									/>
 								</div>
 							)
 						})
@@ -300,52 +386,54 @@ export function FieldDayUI({
 				</section>
 			)}
 
-			<section className="mt-auto rounded-xl border bg-card p-4">
-				{dayEndedAt ? (
-					<p className="flex items-center gap-2 text-sm font-medium text-primary">
-						<CheckCircle2 className="size-5 shrink-0" />
-						Journée terminée à{' '}
-						{new Intl.DateTimeFormat('fr-FR', {
-							hour: '2-digit',
-							minute: '2-digit',
-						}).format(new Date(dayEndedAt))}
-					</p>
-				) : (
-					<>
-						<Label htmlFor="day-end-time" className="text-sm font-semibold">
-							Fin de journée
-						</Label>
-						<p className="mt-1 text-xs text-muted-foreground">
-							L'heure que vous indiquez est celle qui compte, même si vous
-							remplissez ceci plus tard.
+			{clockEnabled ? (
+				<section className="mt-auto rounded-xl border bg-card p-4">
+					{dayEndedAt ? (
+						<p className="flex items-center gap-2 text-sm font-medium text-primary">
+							<CheckCircle2 className="size-5 shrink-0" />
+							Journée terminée à{' '}
+							{new Intl.DateTimeFormat('fr-FR', {
+								hour: '2-digit',
+								minute: '2-digit',
+							}).format(new Date(dayEndedAt))}
 						</p>
-						<div className="mt-3 flex gap-2">
-							<Input
-								id="day-end-time"
-								type="time"
-								className="h-12 w-28 text-base"
-								value={dayEndTime}
-								onChange={(event) => onDayEndTimeChange(event.target.value)}
-							/>
-							<Button
-								type="button"
-								size="lg"
-								className="h-12 flex-1"
-								disabled={isEndingDay}
-								onClick={onEndDay}
-							>
-								{isEndingDay ? <Loader2 className="animate-spin" /> : null}
-								Terminer ma journée
-							</Button>
-						</div>
-						{running ? (
-							<p className="mt-2 text-xs text-amber-600 dark:text-amber-500">
-								Le projet en cours sera clôturé à cette heure.
+					) : (
+						<>
+							<Label htmlFor="day-end-time" className="text-sm font-semibold">
+								Fin de journée
+							</Label>
+							<p className="mt-1 text-xs text-muted-foreground">
+								L'heure que vous indiquez est celle qui compte, même si vous
+								remplissez ceci plus tard.
 							</p>
-						) : null}
-					</>
-				)}
-			</section>
+							<div className="mt-3 flex gap-2">
+								<Input
+									id="day-end-time"
+									type="time"
+									className="h-12 w-28 text-base"
+									value={dayEndTime}
+									onChange={(event) => onDayEndTimeChange(event.target.value)}
+								/>
+								<Button
+									type="button"
+									size="lg"
+									className="h-12 flex-1"
+									disabled={isEndingDay}
+									onClick={onEndDay}
+								>
+									{isEndingDay ? <Loader2 className="animate-spin" /> : null}
+									Terminer ma journée
+								</Button>
+							</div>
+							{running ? (
+								<p className="mt-2 text-xs text-amber-600 dark:text-amber-500">
+									Le projet en cours sera clôturé à cette heure.
+								</p>
+							) : null}
+						</>
+					)}
+				</section>
+			) : null}
 		</div>
 	)
 }

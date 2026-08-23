@@ -46,6 +46,21 @@ const KNOWN_MESSAGES: { needle: string; translation: string }[] = [
 		translation:
 			'Ce temps chevauche un chantier sur lequel vous êtes encore pointé. Clôturez-le avant de déclarer ce temps.',
 	},
+	{
+		needle: 'a resolved report can no longer be amended',
+		translation:
+			'Ce signalement a déjà été traité par un responsable, vous ne pouvez plus le modifier.',
+	},
+	{
+		needle: 'a resolved report can no longer be withdrawn',
+		translation:
+			'Ce signalement a déjà été traité par un responsable, vous ne pouvez plus le retirer.',
+	},
+	{
+		needle: 'uq_assignment_reports_pending_per_assignment',
+		translation:
+			'Vous avez déjà un signalement en attente sur ce projet — modifiez-le plutôt que d’en créer un second.',
+	},
 ]
 
 const GENERIC_FALLBACK = 'Une erreur est survenue, réessayez.'

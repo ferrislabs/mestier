@@ -61,6 +61,7 @@ pub use domain::profitability::{
 #[cfg(feature = "mock")]
 pub use domain::{
     absence::ports::MockAbsenceRepository,
+    assignment_report::ports::MockAssignmentReportRepository,
     automation::ports::{
         MockAutomationSettingsRepository, MockCredentialRepository, MockEventDispatchRepository,
         MockEventLogRepository, MockRunRepository, MockWorkflowRepository,
@@ -87,8 +88,9 @@ pub use domain::{
 };
 
 pub use domain::{
-    Absence, AbsenceId, AbsenceKind, AssigneeRef, AvailabilityReport, Conflict, ConflictKind,
-    Customer, CustomerContact, CustomerContactId, CustomerContext, CustomerContextId, CustomerId,
+    Absence, AbsenceId, AbsenceKind, AssigneeRef, AssignmentReport, AssignmentReportId,
+    AssignmentReportResolution, AvailabilityReport, Conflict, ConflictKind, Customer,
+    CustomerContact, CustomerContactId, CustomerContext, CustomerContextId, CustomerId,
     CustomerPipelineStage, CustomerStatus, DateRange, DayLog, DayLogId, Employee, EmployeeId,
     EmployeeRhythm, EmployeeRhythmId, Equipment, EquipmentId, FileObject, Invitation, InvitationId,
     LegalIdentity, Member, MemberId, MemberProfitability, MemberWithAccount, MemberWorkTime,
@@ -102,6 +104,10 @@ pub use domain::{
     TimeEntryId, TimeEntryPhoto, TimeEntryPhotoId, TimeEntryPhotoPhase, TimeRange, Tz, User,
     UserId, VatStatus, WorkSlot, WorkSlotId,
     absence::commands::{CreateAbsenceCommand, PatchAbsenceCommand},
+    assignment_report::commands::{
+        AmendAssignmentReportCommand, ReportAssignmentCommand, ResolveAssignmentReportCommand,
+        WithdrawAssignmentReportCommand,
+    },
     customer::commands::{CreateCustomerCommand, UpdateCustomerCommand},
     customer_contact::commands::{CreateCustomerContactCommand, UpdateCustomerContactCommand},
     customer_context::commands::{CreateCustomerContextCommand, UpdateCustomerContextCommand},

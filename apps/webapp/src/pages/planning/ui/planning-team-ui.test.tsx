@@ -32,6 +32,8 @@ function baseProps(
 ): PlanningTeamUIProps {
 	return {
 		organizationName: 'Atelier Bois & Co',
+		organizationSlug: 'atelier-bois',
+		pendingReportsCount: null,
 		view: 'week',
 		date: '2026-08-07',
 		windowFrom: '2026-08-03',

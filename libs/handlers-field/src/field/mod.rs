@@ -1,8 +1,12 @@
+pub mod amend_report;
 pub mod attach_photo;
 pub mod current;
 pub mod declare;
 pub mod end_day;
+pub mod list_reports;
 pub mod my_tasks;
 pub mod recover;
+pub mod report_assignment;
 pub mod start;
 pub mod stop;
+pub mod withdraw_report;

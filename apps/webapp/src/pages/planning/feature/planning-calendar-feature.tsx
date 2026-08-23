@@ -7,6 +7,7 @@ import {
 	useUpdateAbsence,
 } from '#/hooks/use-absences'
 import { useActiveOrganization } from '#/hooks/use-active-organization'
+import { usePendingAssignmentReportsCount } from '#/hooks/use-assignment-reports'
 import { useMoveTask, usePlanning } from '#/hooks/use-planning'
 import {
 	type AbsenceFormValues,
@@ -90,6 +91,7 @@ export function PlanningCalendarFeature({
 			key={activeOrganization.id}
 			organizationId={activeOrganization.id}
 			organizationName={activeOrganization.name}
+			organizationSlug={activeOrganization.slug}
 			view={view}
 			date={date}
 			onViewChange={onViewChange}
@@ -101,6 +103,7 @@ export function PlanningCalendarFeature({
 interface PlanningCalendarScreenProps {
 	organizationId: string
 	organizationName: string
+	organizationSlug: string
 	view: PlanningView
 	date: string
 	onViewChange: (view: PlanningView) => void
@@ -120,6 +123,7 @@ const DEFAULT_TIME_ZONE = 'Europe/Paris'
 function PlanningCalendarScreen({
 	organizationId,
 	organizationName,
+	organizationSlug,
 	view,
 	date,
 	onViewChange,
@@ -132,6 +136,7 @@ function PlanningCalendarScreen({
 	const planningQuery = usePlanning(organizationId, range)
 	const data = planningQuery.data?.data ?? null
 	const timeZone = data?.timezone ?? DEFAULT_TIME_ZONE
+	const pendingReportsCount = usePendingAssignmentReportsCount(organizationId)
 
 	// Read filters: they do not change the window asked of the server, so they
 	// live in local state rather than in the URL — unlike `view`/`date`, which
@@ -471,6 +476,8 @@ function PlanningCalendarScreen({
 		<>
 			<PlanningCalendarUI
 				organizationName={organizationName}
+				organizationSlug={organizationSlug}
+				pendingReportsCount={pendingReportsCount}
 				view={view}
 				date={date}
 				windowFrom={range.from}

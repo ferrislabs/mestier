@@ -1,4 +1,9 @@
 import { useState } from 'react'
+import {
+	type AssignmentReport,
+	useAssignmentReports,
+	useResolveAssignmentReport,
+} from '#/hooks/use-assignment-reports'
 import { useCustomerContexts, useCustomers } from '#/hooks/use-customers'
 import type { PlanningResource } from '#/hooks/use-planning'
 import { useProjects } from '#/hooks/use-projects'
@@ -23,6 +28,12 @@ import {
 	nextPageAfterCreate,
 } from '#/pages/planning/lib/comments'
 import { nextLabelColor } from '#/pages/planning/lib/labels'
+import {
+	appliedWindowFields,
+	minutesLabel,
+	plannedMinutes,
+	reportsForTask,
+} from '#/pages/planning/lib/pending-reports'
 import {
 	canAddSubtask,
 	formatWindowPlaceholder,
@@ -102,6 +113,73 @@ export function TaskSheetFeature({
 		open && needsParentWindow && parentTaskId !== null,
 	)
 	const parent = parentQuery.data?.data ?? null
+
+	// -- Correction loop (assignment reports) ----------------------------------
+
+	// Org-wide, then narrowed to this task's own assignments below
+	// (`reportsForTask`): the backend has no "reports for this task" filter
+	// (a report carries `task_assignment_id`, not `task_id`), and a
+	// manager's pending queue is small enough that one page covers it — see
+	// `use-assignment-reports.ts`'s own doc.
+	const pendingReportsQuery = useAssignmentReports(
+		organizationId,
+		'PENDING',
+		1,
+		100,
+		open && target.mode === 'edit',
+	)
+	const pendingReportsForTask = reportsForTask(
+		pendingReportsQuery.data?.data ?? [],
+		task?.assignments ?? [],
+	)
+	const resolveReport = useResolveAssignmentReport(organizationId)
+	const [applyingReportId, setApplyingReportId] = useState<string | null>(null)
+	const [dismissingReportId, setDismissingReportId] = useState<string | null>(
+		null,
+	)
+	const [dismissNote, setDismissNote] = useState('')
+
+	function memberName(memberId: string): string {
+		return (
+			resources.find((resource) => resource.member_id === memberId)
+				?.display_name ?? 'Membre inconnu'
+		)
+	}
+
+	function handleApplyReport(report: AssignmentReport) {
+		if (!task) return
+		const fields = appliedWindowFields(
+			task.starts_at ?? null,
+			report.reported_minutes,
+			timeZone,
+		)
+		if (!fields) return
+		setValues((current) => ({ ...current, ...fields }))
+		setApplyingReportId(report.id)
+		setDismissingReportId(null)
+	}
+
+	function handleStartDismissReport(report: AssignmentReport) {
+		setDismissingReportId(report.id)
+		setDismissNote('')
+		setApplyingReportId(null)
+	}
+
+	async function handleConfirmDismissReport(report: AssignmentReport) {
+		try {
+			await resolveReport.mutateAsync({
+				path: { assignment_report_id: report.id },
+				body: {
+					resolution: 'DISMISSED',
+					resolution_note: dismissNote.trim() || null,
+				},
+			})
+			setDismissingReportId(null)
+			setDismissNote('')
+		} catch {
+			// Surfaced via `resolveReport.error` in the panel.
+		}
+	}
 
 	const [values, setValues] = useState<TaskFormValues>(() =>
 		target.mode === 'create'
@@ -235,10 +313,30 @@ export function TaskSheetFeature({
 				path: { organization_id: organizationId, task_id: taskId },
 				body: patchPayload,
 			})
-			onOpenChange(false)
 		} catch (error) {
 			setSaveError(errorMessage(error))
+			return
 		}
+
+		// Two calls, in that order: the report is only marked applied once
+		// the task edit above actually succeeded — see the issue's own
+		// warning against marking a report applied against a task that
+		// never moved. A failure here leaves the sheet open rather than
+		// closing over an error the manager would otherwise never see: the
+		// task already moved, and the report can be resolved again from
+		// this same panel.
+		if (applyingReportId) {
+			try {
+				await resolveReport.mutateAsync({
+					path: { assignment_report_id: applyingReportId },
+					body: { resolution: 'APPLIED', resolution_note: null },
+				})
+			} catch {
+				return
+			}
+		}
+
+		onOpenChange(false)
 	}
 
 	async function handleDelete() {
@@ -396,6 +494,13 @@ export function TaskSheetFeature({
 		? (customerOptions.find((customer) => customer.id === task.customer_id)
 				?.displayName ?? null)
 		: null
+	const taskPlannedMinutes = task
+		? plannedMinutes(task.starts_at ?? null, task.ends_at ?? null)
+		: null
+	const plannedLabel =
+		taskPlannedMinutes === null
+			? 'Durée non planifiée'
+			: minutesLabel(taskPlannedMinutes)
 
 	return (
 		<TaskSheet
@@ -473,6 +578,28 @@ export function TaskSheetFeature({
 							onLoadOlder: () =>
 								setCommentsPage((page) => Math.max(1, page - 1)),
 							onLoadMore: () => setCommentsPage((page) => page + 1),
+						}
+					: undefined
+			}
+			pendingReportPanel={
+				target.mode === 'edit' && pendingReportsForTask.length > 0
+					? {
+							reports: pendingReportsForTask,
+							memberName,
+							plannedLabel,
+							reportedLabel: minutesLabel,
+							applyingReportId,
+							onApply: handleApplyReport,
+							onCancelApply: () => setApplyingReportId(null),
+							isResolving: resolveReport.isPending,
+							resolveError: resolveReport.error?.message ?? null,
+							dismissingReportId,
+							dismissNote,
+							onStartDismiss: handleStartDismissReport,
+							onCancelDismiss: () => setDismissingReportId(null),
+							onDismissNoteChange: setDismissNote,
+							onConfirmDismiss: (report) =>
+								void handleConfirmDismissReport(report),
 						}
 					: undefined
 			}

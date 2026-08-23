@@ -11,6 +11,10 @@ use crate::{paths::OrganizationPath, resolve_identity_user, response::Organizati
 pub struct UpdateOrganizationRequest {
     pub name: String,
     pub slug: String,
+    /// Whether the field app's home screen offers clocking in/out — see
+    /// `Organization::field_clock_enabled`'s own doc. Echoed on every save,
+    /// like `name`/`slug`: this is a full replace, not a `PATCH` delta.
+    pub field_clock_enabled: bool,
 }
 
 #[utoipa::path(
@@ -54,6 +58,7 @@ pub async fn handler(
             id: organization_id,
             name: payload.name,
             slug: payload.slug,
+            field_clock_enabled: payload.field_clock_enabled,
         })
         .await?;
 

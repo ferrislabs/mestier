@@ -1,4 +1,5 @@
 pub(crate) mod absence;
+pub(crate) mod assignment_report;
 pub(crate) mod automation;
 pub(crate) mod customer;
 pub(crate) mod customer_contact;
@@ -24,6 +25,7 @@ pub(crate) mod user;
 pub(crate) mod work_time;
 
 pub use absence::*;
+pub use assignment_report::*;
 pub use customer::*;
 pub use customer_contact::*;
 pub use customer_context::*;

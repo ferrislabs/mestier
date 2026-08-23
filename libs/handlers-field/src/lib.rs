@@ -67,6 +67,10 @@ pub fn router(state: &AppState) -> Router<AppState> {
         .typed_post(field::recover::handler)
         .typed_post(field::attach_photo::handler)
         .typed_post(field::end_day::handler)
+        .typed_post(field::report_assignment::handler)
+        .typed_patch(field::amend_report::handler)
+        .typed_delete(field::withdraw_report::handler)
+        .typed_get(field::list_reports::handler)
         .layer(from_fn_with_state(state.clone(), rate_limit_middleware))
         .layer(from_fn_with_state(state.clone(), auth_middleware))
 }

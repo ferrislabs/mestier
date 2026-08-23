@@ -1,0 +1,92 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT\n                id, org_id, task_assignment_id, reported_minutes, comment, reported_by,\n                resolution::text AS \"resolution!\", resolved_by, resolved_at, resolution_note,\n                created_at, updated_at\n            FROM assignment_reports\n            WHERE org_id = $1\n              AND reported_by = $2\n              AND ($3::text IS NULL OR resolution::text = $3)\n            ORDER BY created_at DESC, id DESC\n            LIMIT $4 OFFSET $5\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "org_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "task_assignment_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 3,
+        "name": "reported_minutes",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 4,
+        "name": "comment",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "reported_by",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 6,
+        "name": "resolution!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 7,
+        "name": "resolved_by",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 8,
+        "name": "resolved_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 9,
+        "name": "resolution_note",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 10,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 11,
+        "name": "updated_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Text",
+        "Int8",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      true,
+      false,
+      null,
+      true,
+      true,
+      true,
+      false,
+      false
+    ]
+  },
+  "hash": "3bc38ba2f50c428fa472a901411cf0f98060b69d9d0cf299bfdd60507d1b957e"
+}

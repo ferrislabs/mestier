@@ -12,6 +12,12 @@ const CURRENT_PATH = '/api/v1/organizations/{organization_id}/field/current'
 const ENTRIES_PATH =
 	'/api/v1/organizations/{organization_id}/field/time-entries'
 const STOP_PATH = '/api/v1/field/time-entries/{time_entry_id}/stop'
+const ASSIGNMENT_REPORTS_PATH =
+	'/api/v1/organizations/{organization_id}/field/assignment-reports'
+const REPORT_ASSIGNMENT_PATH =
+	'/api/v1/organizations/{organization_id}/field/assignments/{task_assignment_id}/report'
+const ASSIGNMENT_REPORT_PATH =
+	'/api/v1/field/assignment-reports/{assignment_report_id}'
 
 const ORGANIZATION: Organization = {
 	id: 'org-1',
@@ -19,6 +25,10 @@ const ORGANIZATION: Organization = {
 	owner_id: 'user-1',
 	missing_legal_identity_fields: [],
 	slug: 'paysages-bonnal',
+	// Every existing test in this suite predates the clock demotion and
+	// exercises the clock itself — see the dedicated
+	// "pointeuse désactivée" describe block below for the demoted case.
+	field_clock_enabled: true,
 	created_at: '2026-01-01T00:00:00Z',
 	updated_at: '2026-01-01T00:00:00Z',
 }
@@ -86,7 +96,9 @@ function installFakeTanstackApi() {
 
 function renderFeature(
 	configure: (api: ReturnType<typeof installFakeTanstackApi>) => void,
+	organizationOverrides: Partial<Organization> = {},
 ) {
+	const organization = { ...ORGANIZATION, ...organizationOverrides }
 	const api = installFakeTanstackApi()
 	const { mockGet } = api
 	mockGet(TASKS_PATH, () => ({ data: [], pagination: null }))
@@ -94,6 +106,7 @@ function renderFeature(
 		data: { running: null, day_ended_at: null },
 		pagination: null,
 	}))
+	mockGet(ASSIGNMENT_REPORTS_PATH, () => ({ data: [], pagination: null }))
 	configure(api)
 
 	const queryClient = new QueryClient({
@@ -103,7 +116,7 @@ function renderFeature(
 	function Providers({ children }: { children: ReactNode }) {
 		return (
 			<QueryClientProvider client={queryClient}>
-				<OrganizationListProvider organizations={[ORGANIZATION]}>
+				<OrganizationListProvider organizations={[organization]}>
 					{children}
 				</OrganizationListProvider>
 			</QueryClientProvider>
@@ -112,7 +125,7 @@ function renderFeature(
 
 	render(
 		<Providers>
-			<FieldDayFeature organizationSlug={ORGANIZATION.slug} />
+			<FieldDayFeature organizationSlug={organization.slug} />
 		</Providers>,
 	)
 
@@ -130,6 +143,25 @@ function task(overrides: Record<string, unknown> = {}) {
 		status: 'PLANNED',
 		customer_id: null,
 		customer_context_id: null,
+		task_assignment_id: 'assignment-1',
+		...overrides,
+	}
+}
+
+function assignmentReport(overrides: Record<string, unknown> = {}) {
+	return {
+		id: 'report-1',
+		organization_id: 'org-1',
+		task_assignment_id: 'assignment-1',
+		reported_minutes: 300,
+		comment: null,
+		reported_by: 'member-1',
+		resolution: 'PENDING',
+		resolved_by: null,
+		resolved_at: null,
+		resolution_note: null,
+		created_at: '2026-08-19T14:00:00Z',
+		updated_at: '2026-08-19T14:00:00Z',
 		...overrides,
 	}
 }
@@ -300,5 +332,161 @@ describe('FieldDayFeature — échec de chargement', () => {
 
 		await waitFor(() => expect(attempts).toBeGreaterThan(1))
 		expect(await screen.findByText('Taille de haie')).toBeDefined()
+	})
+})
+
+describe('FieldDayFeature — boucle de correction', () => {
+	it('filing a report posts the assignment id, closes the form, and the new report appears once the server answered', async () => {
+		let posted: unknown = null
+		const filedReports: unknown[] = []
+		renderFeature((api) => {
+			api.mockGet(TASKS_PATH, () => ({ data: [task()], pagination: null }))
+			api.mockGet(ASSIGNMENT_REPORTS_PATH, () => ({
+				data: filedReports,
+				pagination: null,
+			}))
+			api.mockMutation('post', REPORT_ASSIGNMENT_PATH, (params) => {
+				posted = params
+				const created = assignmentReport()
+				filedReports.push(created)
+				return { data: created, pagination: null }
+			})
+		})
+
+		await userEvent.click(
+			await screen.findByRole('button', { name: /signaler un écart/i }),
+		)
+		await userEvent.type(screen.getByLabelText(/durée réelle/i), '300')
+		await userEvent.click(screen.getByRole('button', { name: /^déclarer$/i }))
+
+		await waitFor(() => expect(posted).not.toBeNull())
+		expect(posted).toMatchObject({
+			path: {
+				organization_id: 'org-1',
+				task_assignment_id: 'assignment-1',
+			},
+			body: { reported_minutes: 300, comment: null },
+		})
+		// The form closes once the server actually answered — no optimistic
+		// write, per the issue's own acceptance criterion.
+		expect(screen.queryByLabelText(/durée réelle/i)).toBeNull()
+
+		// The mutation's own `onSuccess` invalidates the reports list, which
+		// refetches from the (now updated) fake backend above.
+		expect(await screen.findByText(/en attente de validation/i)).toBeDefined()
+	})
+
+	it('amending a pending report pre-fills the form and PATCHes its own id', async () => {
+		let patched: unknown = null
+		renderFeature((api) => {
+			api.mockGet(TASKS_PATH, () => ({ data: [task()], pagination: null }))
+			api.mockGet(ASSIGNMENT_REPORTS_PATH, () => ({
+				data: [assignmentReport({ reported_minutes: 300 })],
+				pagination: null,
+			}))
+			api.mockMutation('patch', ASSIGNMENT_REPORT_PATH, (params) => {
+				patched = params
+				return {
+					data: assignmentReport({ reported_minutes: 240 }),
+					pagination: null,
+				}
+			})
+		})
+
+		const modifyButton = await screen.findByRole('button', {
+			name: /^modifier$/i,
+		})
+		await userEvent.click(modifyButton)
+
+		const minutesInput = screen.getByLabelText(
+			/durée réelle/i,
+		) as HTMLInputElement
+		expect(minutesInput.value).toBe('300')
+
+		await userEvent.clear(minutesInput)
+		await userEvent.type(minutesInput, '240')
+		await userEvent.click(screen.getByRole('button', { name: /enregistrer/i }))
+
+		await waitFor(() => expect(patched).not.toBeNull())
+		expect(patched).toMatchObject({
+			path: { assignment_report_id: 'report-1' },
+			body: { reported_minutes: 240, comment: null },
+		})
+	})
+
+	it('withdrawing a pending report DELETEs it by its own id', async () => {
+		let withdrawnPath: unknown = null
+		renderFeature((api) => {
+			api.mockGet(TASKS_PATH, () => ({ data: [task()], pagination: null }))
+			api.mockGet(ASSIGNMENT_REPORTS_PATH, () => ({
+				data: [assignmentReport()],
+				pagination: null,
+			}))
+			api.mockMutation('delete', ASSIGNMENT_REPORT_PATH, (params) => {
+				withdrawnPath = (params as { path?: unknown }).path
+				return { data: undefined, pagination: null }
+			})
+		})
+
+		await userEvent.click(
+			await screen.findByRole('button', { name: /^retirer$/i }),
+		)
+
+		await waitFor(() =>
+			expect(withdrawnPath).toEqual({ assignment_report_id: 'report-1' }),
+		)
+	})
+
+	/** "Somebody already resolved this" — the race an amend can lose to a
+	 * manager's decision landing first. */
+	it('translates the already-resolved conflict when an amend loses the race', async () => {
+		renderFeature((api) => {
+			api.mockGet(TASKS_PATH, () => ({ data: [task()], pagination: null }))
+			api.mockGet(ASSIGNMENT_REPORTS_PATH, () => ({
+				data: [assignmentReport()],
+				pagination: null,
+			}))
+			api.mockMutation('patch', ASSIGNMENT_REPORT_PATH, () => {
+				throw new Error('Conflict: a resolved report can no longer be amended')
+			})
+		})
+
+		await userEvent.click(
+			await screen.findByRole('button', { name: /^modifier$/i }),
+		)
+		await userEvent.click(screen.getByRole('button', { name: /enregistrer/i }))
+
+		expect(
+			await screen.findByText(
+				/déjà été traité par un responsable, vous ne pouvez plus le modifier/i,
+			),
+		).toBeDefined()
+	})
+})
+
+describe('FieldDayFeature — pointeuse désactivée', () => {
+	it('shows the tasks and no clock, and never polls /field/current', async () => {
+		let currentRequests = 0
+		renderFeature(
+			(api) => {
+				api.mockGet(TASKS_PATH, () => ({ data: [task()], pagination: null }))
+				api.mockGet(CURRENT_PATH, () => {
+					currentRequests += 1
+					return {
+						data: { running: null, day_ended_at: null },
+						pagination: null,
+					}
+				})
+			},
+			{ field_clock_enabled: false },
+		)
+
+		expect(await screen.findByText('Taille de haie')).toBeDefined()
+		expect(screen.queryByRole('button', { name: /^démarrer$/i })).toBeNull()
+		expect(
+			screen.queryByRole('button', { name: /terminer ma journée/i }),
+		).toBeNull()
+		// Nothing polls a running entry the screen would never show or act on.
+		expect(currentRequests).toBe(0)
 	})
 })

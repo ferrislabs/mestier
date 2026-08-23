@@ -1,0 +1,91 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT\n                id, org_id, task_assignment_id, reported_minutes, comment, reported_by,\n                resolution::text AS \"resolution!\", resolved_by, resolved_at, resolution_note,\n                created_at, updated_at\n            FROM assignment_reports\n            WHERE org_id = $1\n              AND ($2::text IS NULL OR resolution::text = $2)\n            ORDER BY created_at DESC, id DESC\n            LIMIT $3 OFFSET $4\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "org_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "task_assignment_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 3,
+        "name": "reported_minutes",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 4,
+        "name": "comment",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "reported_by",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 6,
+        "name": "resolution!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 7,
+        "name": "resolved_by",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 8,
+        "name": "resolved_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 9,
+        "name": "resolution_note",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 10,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 11,
+        "name": "updated_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Int8",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      true,
+      false,
+      null,
+      true,
+      true,
+      true,
+      false,
+      false
+    ]
+  },
+  "hash": "5e9637885c8d2f06ed52fc7c44393c3a85536d80e8d8b53b2ac93b1739cffa48"
+}

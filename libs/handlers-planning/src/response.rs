@@ -1,7 +1,7 @@
 use chrono::{DateTime, Utc};
 use mestier_core::{
     CustomerContextId, CustomerId, Equipment, EquipmentId, MemberId, OrganizationId, Project,
-    ProjectId, QuoteId, Task, TaskId, TaskStatus,
+    ProjectId, QuoteId, Task, TaskAssignmentId, TaskId, TaskStatus,
 };
 use serde::Serialize;
 use utoipa::ToSchema;
@@ -36,6 +36,15 @@ impl From<Equipment> for TaskEquipmentResponse {
     }
 }
 
+/// One assignee, with the id of the assignment itself — see
+/// `TaskResponse::assignments`'s own doc comment for why this exists
+/// alongside `member_ids`.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, ToSchema)]
+pub struct TaskAssignmentSummary {
+    pub id: TaskAssignmentId,
+    pub member_id: MemberId,
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, ToSchema)]
 pub struct TaskResponse {
     pub id: TaskId,
@@ -61,6 +70,13 @@ pub struct TaskResponse {
     /// The complete set of currently assigned employees — mirrors the
     /// `PATCH` contract, where `assignees` is always the full list.
     pub member_ids: Vec<MemberId>,
+    /// Same set as `member_ids`, carrying each assignment's own id
+    /// alongside its member — what `assignment_report`'s `PATCH
+    /// .../resolution` and the task sheet's pending-report panel need to
+    /// tell one assignee's correction from another's on a multi-assignee
+    /// task. Kept as a separate field rather than folded into `member_ids`
+    /// to avoid a wire-format break for the existing readers of that field.
+    pub assignments: Vec<TaskAssignmentSummary>,
     /// The number of direct children — only `GET /tasks` computes this (one
     /// grouped query per page, see `TaskRepository::count_children`); every
     /// other endpoint leaves it `None` rather than pay for an extra query
@@ -110,8 +126,16 @@ impl From<Task> for TaskResponse {
             expenses_label: value.expenses_label,
             member_ids: value
                 .assignments
-                .into_iter()
+                .iter()
                 .map(|assignment| assignment.member_id)
+                .collect(),
+            assignments: value
+                .assignments
+                .into_iter()
+                .map(|assignment| TaskAssignmentSummary {
+                    id: assignment.id,
+                    member_id: assignment.member_id,
+                })
                 .collect(),
             child_count: None,
             // A task freshly loaded from `Task` alone (never labeled by
@@ -204,6 +228,23 @@ mod tests {
         let response: TaskResponse = source.into();
 
         assert_eq!(response.member_ids, vec![expected_member_id]);
+    }
+
+    /// The acceptance criterion `TaskResponse::assignments`'s own doc
+    /// comment states: unlike `member_ids`, each entry also carries its own
+    /// assignment id — what the task sheet needs to tell one assignee's
+    /// pending report from another's.
+    #[test]
+    fn task_response_carries_each_assignment_id_alongside_its_member() {
+        let source = task();
+        let expected_id = source.assignments[0].id;
+        let expected_member_id = source.assignments[0].member_id;
+
+        let response: TaskResponse = source.into();
+
+        assert_eq!(response.assignments.len(), 1);
+        assert_eq!(response.assignments[0].id, expected_id);
+        assert_eq!(response.assignments[0].member_id, expected_member_id);
     }
 
     #[test]

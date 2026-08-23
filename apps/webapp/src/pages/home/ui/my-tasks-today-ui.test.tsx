@@ -17,6 +17,7 @@ function task(overrides: Partial<FieldTask> = {}): FieldTask {
 		status: 'PLANNED',
 		customer_id: null,
 		customer_context_id: null,
+		task_assignment_id: 'assignment-1',
 		...overrides,
 	}
 }

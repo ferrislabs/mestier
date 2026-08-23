@@ -12,6 +12,7 @@
 //! cargo test -p handlers-field --test http_e2e -- --ignored
 //! ```
 
+mod assignment_reports;
 mod harness;
 mod issuer;
 

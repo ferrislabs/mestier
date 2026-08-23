@@ -16,7 +16,25 @@ export namespace Schemas {
     starts_at: string;
     updated_at: string;
   };
+  export type AmendAssignmentReportRequest = { comment?: (string | null) | undefined; reported_minutes: number };
   export type AssigneeRefRequest = { member_id: MemberId };
+  export type AssignmentReportId = string;
+  export type AssignmentReportResolution = "PENDING" | "APPLIED" | "DISMISSED";
+  export type TaskAssignmentId = string;
+  export type AssignmentReportResponse = {
+    comment?: (string | null) | undefined;
+    created_at: string;
+    id: AssignmentReportId;
+    organization_id: OrganizationId;
+    reported_by: MemberId;
+    reported_minutes: number;
+    resolution: AssignmentReportResolution;
+    resolution_note?: (string | null) | undefined;
+    resolved_at?: (string | null) | undefined;
+    resolved_by?: (null | MemberId) | undefined;
+    task_assignment_id: TaskAssignmentId;
+    updated_at: string;
+  };
   export type TimeEntryPhotoPhase = "BEFORE" | "DURING" | "AFTER";
   export type AttachPhotoRequest = { phase: TimeEntryPhotoPhase; storage_key: string };
   export type AttachmentResponse = { filename: string; mime_type: string; size_bytes: number; storage_key: string };
@@ -59,6 +77,7 @@ export namespace Schemas {
   export type AvailabilityResponse = { resources: Array<AvailabilityResourceResponse> };
   export type BranchDto = "Then" | "Else" | "Each" | "After";
   export type BulkAssignTasksRequest = { assignees: Array<AssigneeRefRequest>; task_ids: Array<TaskId> };
+  export type TaskAssignmentSummary = { id: TaskAssignmentId; member_id: MemberId };
   export type CustomerContextId = string;
   export type CustomerId = string;
   export type EquipmentId = string;
@@ -84,6 +103,7 @@ export namespace Schemas {
   export type TaskStatus = "PLANNED" | "IN_PROGRESS" | "DONE" | "CANCELLED";
   export type TaskResponse = {
     all_day: boolean;
+    assignments: Array<TaskAssignmentSummary>;
     blocks_availability: boolean;
     child_count?: (number | null) | undefined;
     created_at: string;
@@ -377,6 +397,7 @@ export namespace Schemas {
     id: TaskId;
     starts_at?: (string | null) | undefined;
     status: TaskStatus;
+    task_assignment_id: TaskAssignmentId;
     title: string;
   };
   export type FileUploadResponse = { key: string; mime_type: string; size_bytes: number };
@@ -458,6 +479,7 @@ export namespace Schemas {
     contact_email?: (string | null) | undefined;
     contact_phone?: (string | null) | undefined;
     created_at: string;
+    field_clock_enabled: boolean;
     id: OrganizationId;
     insurance_mention?: (string | null) | undefined;
     legal_form?: (string | null) | undefined;
@@ -631,6 +653,11 @@ export namespace Schemas {
   };
   export type RecoverTimeEntryRequest = { ended_at: string };
   export type ReplayRunRequest = { connector_id: string };
+  export type ReportAssignmentRequest = { comment?: (string | null) | undefined; reported_minutes: number };
+  export type ResolveAssignmentReportRequest = {
+    resolution: AssignmentReportResolution;
+    resolution_note?: (string | null) | undefined;
+  };
   export type RhythmSlotResponse = { ends_minute: number; starts_minute: number; weekday: number };
   export type RhythmResponse = {
     created_at: string;
@@ -773,7 +800,7 @@ export namespace Schemas {
   }>;
   export type UpdateMemberRequest = Partial<{ first_name: string | null; last_name: string | null }>;
   export type UpdateMessageRequest = { content: string };
-  export type UpdateOrganizationRequest = { name: string; slug: string };
+  export type UpdateOrganizationRequest = { field_clock_enabled: boolean; name: string; slug: string };
   export type UpdateProductRequest = {
     default_vat_rate_bp?: (number | null) | undefined;
     description?: (string | null) | undefined;
@@ -906,6 +933,40 @@ export namespace Schemas {
 export namespace Endpoints {
   // <Endpoints>
 
+  export type patch_ResolveAssignmentReport = {
+    method: "PATCH";
+    path: "/api/v1/assignment-reports/{assignment_report_id}/resolution";
+    requestFormat: "json";
+    parameters: {
+      path: { assignment_report_id: string };
+
+      body: Schemas.ResolveAssignmentReportRequest;
+    };
+    responses: {
+      200: {
+        data: {
+          comment?: (string | null) | undefined;
+          created_at: string;
+          id: Schemas.AssignmentReportId;
+          organization_id: Schemas.OrganizationId;
+          reported_by: Schemas.MemberId;
+          reported_minutes: number;
+          resolution: Schemas.AssignmentReportResolution;
+          resolution_note?: (string | null) | undefined;
+          resolved_at?: (string | null) | undefined;
+          resolved_by?: (null | Schemas.MemberId) | undefined;
+          task_assignment_id: Schemas.TaskAssignmentId;
+          updated_at: string;
+        };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      400: unknown;
+      401: unknown;
+      403: unknown;
+      404: unknown;
+      409: unknown;
+    };
+  };
   export type delete_DeleteCategory = {
     method: "DELETE";
     path: "/api/v1/chat/categories/{category_id}";
@@ -2081,6 +2142,47 @@ export namespace Endpoints {
       409: unknown;
     };
   };
+  export type delete_WithdrawAssignmentReport = {
+    method: "DELETE";
+    path: "/api/v1/field/assignment-reports/{assignment_report_id}";
+    requestFormat: "json";
+    parameters: {
+      path: { assignment_report_id: string };
+    };
+    responses: { 204: unknown; 401: unknown; 404: unknown; 409: unknown };
+  };
+  export type patch_AmendAssignmentReport = {
+    method: "PATCH";
+    path: "/api/v1/field/assignment-reports/{assignment_report_id}";
+    requestFormat: "json";
+    parameters: {
+      path: { assignment_report_id: string };
+
+      body: Schemas.AmendAssignmentReportRequest;
+    };
+    responses: {
+      200: {
+        data: {
+          comment?: (string | null) | undefined;
+          created_at: string;
+          id: Schemas.AssignmentReportId;
+          organization_id: Schemas.OrganizationId;
+          reported_by: Schemas.MemberId;
+          reported_minutes: number;
+          resolution: Schemas.AssignmentReportResolution;
+          resolution_note?: (string | null) | undefined;
+          resolved_at?: (string | null) | undefined;
+          resolved_by?: (null | Schemas.MemberId) | undefined;
+          task_assignment_id: Schemas.TaskAssignmentId;
+          updated_at: string;
+        };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      404: unknown;
+      409: unknown;
+    };
+  };
   export type post_AttachTimeEntryPhoto = {
     method: "POST";
     path: "/api/v1/field/time-entries/{time_entry_id}/photos";
@@ -2426,6 +2528,7 @@ export namespace Endpoints {
           contact_email?: (string | null) | undefined;
           contact_phone?: (string | null) | undefined;
           created_at: string;
+          field_clock_enabled: boolean;
           id: Schemas.OrganizationId;
           insurance_mention?: (string | null) | undefined;
           legal_form?: (string | null) | undefined;
@@ -2462,6 +2565,7 @@ export namespace Endpoints {
           contact_email?: (string | null) | undefined;
           contact_phone?: (string | null) | undefined;
           created_at: string;
+          field_clock_enabled: boolean;
           id: Schemas.OrganizationId;
           insurance_mention?: (string | null) | undefined;
           legal_form?: (string | null) | undefined;
@@ -2500,6 +2604,7 @@ export namespace Endpoints {
           contact_email?: (string | null) | undefined;
           contact_phone?: (string | null) | undefined;
           created_at: string;
+          field_clock_enabled: boolean;
           id: Schemas.OrganizationId;
           insurance_mention?: (string | null) | undefined;
           legal_form?: (string | null) | undefined;
@@ -2549,6 +2654,7 @@ export namespace Endpoints {
           contact_email?: (string | null) | undefined;
           contact_phone?: (string | null) | undefined;
           created_at: string;
+          field_clock_enabled: boolean;
           id: Schemas.OrganizationId;
           insurance_mention?: (string | null) | undefined;
           legal_form?: (string | null) | undefined;
@@ -2669,6 +2775,36 @@ export namespace Endpoints {
       403: unknown;
       404: unknown;
       409: unknown;
+    };
+  };
+  export type get_ListAssignmentReports = {
+    method: "GET";
+    path: "/api/v1/organizations/{organization_id}/assignment-reports";
+    requestFormat: "json";
+    parameters: {
+      query: Partial<{ resolution: "PENDING" | "APPLIED" | "DISMISSED"; page: number; per_page: number }>;
+      path: { organization_id: string };
+    };
+    responses: {
+      200: {
+        data: Array<{
+          comment?: (string | null) | undefined;
+          created_at: string;
+          id: Schemas.AssignmentReportId;
+          organization_id: Schemas.OrganizationId;
+          reported_by: Schemas.MemberId;
+          reported_minutes: number;
+          resolution: Schemas.AssignmentReportResolution;
+          resolution_note?: (string | null) | undefined;
+          resolved_at?: (string | null) | undefined;
+          resolved_by?: (null | Schemas.MemberId) | undefined;
+          task_assignment_id: Schemas.TaskAssignmentId;
+          updated_at: string;
+        }>;
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
     };
   };
   export type get_ListConnectors = {
@@ -3226,6 +3362,69 @@ export namespace Endpoints {
       409: unknown;
     };
   };
+  export type get_ListMyAssignmentReports = {
+    method: "GET";
+    path: "/api/v1/organizations/{organization_id}/field/assignment-reports";
+    requestFormat: "json";
+    parameters: {
+      query: Partial<{ resolution: "PENDING" | "APPLIED" | "DISMISSED"; page: number; per_page: number }>;
+      path: { organization_id: string };
+    };
+    responses: {
+      200: {
+        data: Array<{
+          comment?: (string | null) | undefined;
+          created_at: string;
+          id: Schemas.AssignmentReportId;
+          organization_id: Schemas.OrganizationId;
+          reported_by: Schemas.MemberId;
+          reported_minutes: number;
+          resolution: Schemas.AssignmentReportResolution;
+          resolution_note?: (string | null) | undefined;
+          resolved_at?: (string | null) | undefined;
+          resolved_by?: (null | Schemas.MemberId) | undefined;
+          task_assignment_id: Schemas.TaskAssignmentId;
+          updated_at: string;
+        }>;
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+    };
+  };
+  export type post_ReportAssignment = {
+    method: "POST";
+    path: "/api/v1/organizations/{organization_id}/field/assignments/{task_assignment_id}/report";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string; task_assignment_id: string };
+
+      body: Schemas.ReportAssignmentRequest;
+    };
+    responses: {
+      201: {
+        data: {
+          comment?: (string | null) | undefined;
+          created_at: string;
+          id: Schemas.AssignmentReportId;
+          organization_id: Schemas.OrganizationId;
+          reported_by: Schemas.MemberId;
+          reported_minutes: number;
+          resolution: Schemas.AssignmentReportResolution;
+          resolution_note?: (string | null) | undefined;
+          resolved_at?: (string | null) | undefined;
+          resolved_by?: (null | Schemas.MemberId) | undefined;
+          task_assignment_id: Schemas.TaskAssignmentId;
+          updated_at: string;
+        };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+      404: unknown;
+      409: unknown;
+    };
+  };
   export type get_GetCurrentTimeEntry = {
     method: "GET";
     path: "/api/v1/organizations/{organization_id}/field/current";
@@ -3286,6 +3485,7 @@ export namespace Endpoints {
           id: Schemas.TaskId;
           starts_at?: (string | null) | undefined;
           status: Schemas.TaskStatus;
+          task_assignment_id: Schemas.TaskAssignmentId;
           title: string;
         }>;
         pagination?: (null | Schemas.PaginationMetadata) | undefined;
@@ -3412,6 +3612,7 @@ export namespace Endpoints {
           contact_email?: (string | null) | undefined;
           contact_phone?: (string | null) | undefined;
           created_at: string;
+          field_clock_enabled: boolean;
           id: Schemas.OrganizationId;
           insurance_mention?: (string | null) | undefined;
           legal_form?: (string | null) | undefined;
@@ -4004,6 +4205,7 @@ export namespace Endpoints {
       200: {
         data: Array<{
           all_day: boolean;
+          assignments: Array<Schemas.TaskAssignmentSummary>;
           blocks_availability: boolean;
           child_count?: (number | null) | undefined;
           created_at: string;
@@ -4045,6 +4247,7 @@ export namespace Endpoints {
       201: {
         data: {
           all_day: boolean;
+          assignments: Array<Schemas.TaskAssignmentSummary>;
           blocks_availability: boolean;
           child_count?: (number | null) | undefined;
           created_at: string;
@@ -4106,6 +4309,7 @@ export namespace Endpoints {
       200: {
         data: {
           all_day: boolean;
+          assignments: Array<Schemas.TaskAssignmentSummary>;
           blocks_availability: boolean;
           child_count?: (number | null) | undefined;
           created_at: string;
@@ -4524,6 +4728,7 @@ export namespace Endpoints {
           contact_email?: (string | null) | undefined;
           contact_phone?: (string | null) | undefined;
           created_at: string;
+          field_clock_enabled: boolean;
           id: Schemas.OrganizationId;
           insurance_mention?: (string | null) | undefined;
           legal_form?: (string | null) | undefined;
@@ -4548,35 +4753,8 @@ export namespace Endpoints {
 
 // <EndpointByMethod>
 export type EndpointByMethod = {
-  delete: {
-    "/api/v1/chat/categories/{category_id}": Endpoints.delete_DeleteCategory;
-    "/api/v1/chat/channels/{channel_id}": Endpoints.delete_DeleteChannel;
-    "/api/v1/chat/channels/{channel_id}/permissions/everyone": Endpoints.delete_DeleteEveryoneOverwrite;
-    "/api/v1/chat/channels/{channel_id}/permissions/{target_type}/{target_id}": Endpoints.delete_DeleteTargetOverwrite;
-    "/api/v1/chat/messages/{message_id}": Endpoints.delete_DeleteMessage;
-    "/api/v1/chat/messages/{message_id}/reactions/{emoji}": Endpoints.delete_RemoveReaction;
-    "/api/v1/chat/threads/{channel_id}": Endpoints.delete_DeleteThread;
-    "/api/v1/chat/webhooks/{webhook_id}": Endpoints.delete_DeleteWebhook;
-    "/api/v1/customer-contacts/{customer_contact_id}": Endpoints.delete_DeleteCustomerContact;
-    "/api/v1/customer-contexts/{customer_context_id}": Endpoints.delete_DeleteCustomerContext;
-    "/api/v1/customers/{customer_id}": Endpoints.delete_DeleteCustomer;
-    "/api/v1/equipment/{equipment_id}": Endpoints.delete_DeleteEquipment;
-    "/api/v1/invitations/{invitation_id}": Endpoints.delete_RevokeInvitation;
-    "/api/v1/members/{member_id}": Endpoints.delete_DeleteMember;
-    "/api/v1/members/{member_id}/employee-profile": Endpoints.delete_RemoveEmployeeProfile;
-    "/api/v1/organizations/{organization_id}": Endpoints.delete_DeleteOrganization;
-    "/api/v1/organizations/{organization_id}/absences/{absence_id}": Endpoints.delete_DeleteAbsence;
-    "/api/v1/organizations/{organization_id}/automation/credentials/{credential_id}": Endpoints.delete_DeleteAutomationCredential;
-    "/api/v1/organizations/{organization_id}/automation/workflows/{workflow_id}": Endpoints.delete_DeleteWorkflow;
-    "/api/v1/organizations/{organization_id}/projects/{project_id}": Endpoints.delete_ArchiveProject;
-    "/api/v1/organizations/{organization_id}/task-labels/{label_id}": Endpoints.delete_DeleteTaskLabel;
-    "/api/v1/organizations/{organization_id}/tasks/{task_id}": Endpoints.delete_DeleteTask;
-    "/api/v1/organizations/{organization_id}/tasks/{task_id}/comments/{comment_id}": Endpoints.delete_DeleteTaskComment;
-    "/api/v1/products/{product_id}": Endpoints.delete_DeleteProduct;
-    "/api/v1/quotes/{quote_id}": Endpoints.delete_DeleteQuote;
-    "/api/v1/service-rates/{service_rate_id}": Endpoints.delete_DeleteServiceRate;
-  };
   patch: {
+    "/api/v1/assignment-reports/{assignment_report_id}/resolution": Endpoints.patch_ResolveAssignmentReport;
     "/api/v1/chat/categories/{category_id}": Endpoints.patch_UpdateCategory;
     "/api/v1/chat/channels/{channel_id}": Endpoints.patch_UpdateChannel;
     "/api/v1/chat/messages/{message_id}": Endpoints.patch_UpdateMessage;
@@ -4586,6 +4764,7 @@ export type EndpointByMethod = {
     "/api/v1/customer-contexts/{customer_context_id}": Endpoints.patch_UpdateCustomerContext;
     "/api/v1/customers/{customer_id}": Endpoints.patch_UpdateCustomer;
     "/api/v1/equipment/{equipment_id}": Endpoints.patch_UpdateEquipment;
+    "/api/v1/field/assignment-reports/{assignment_report_id}": Endpoints.patch_AmendAssignmentReport;
     "/api/v1/members/{member_id}": Endpoints.patch_UpdateMember;
     "/api/v1/organizations/{organization_id}": Endpoints.patch_UpdateOrganization;
     "/api/v1/organizations/{organization_id}/absences/{absence_id}": Endpoints.patch_PatchAbsence;
@@ -4600,6 +4779,35 @@ export type EndpointByMethod = {
     "/api/v1/quotes/{quote_id}": Endpoints.patch_UpdateQuote;
     "/api/v1/quotes/{quote_id}/status": Endpoints.patch_UpdateQuoteStatus;
     "/api/v1/service-rates/{service_rate_id}": Endpoints.patch_UpdateServiceRate;
+  };
+  delete: {
+    "/api/v1/chat/categories/{category_id}": Endpoints.delete_DeleteCategory;
+    "/api/v1/chat/channels/{channel_id}": Endpoints.delete_DeleteChannel;
+    "/api/v1/chat/channels/{channel_id}/permissions/everyone": Endpoints.delete_DeleteEveryoneOverwrite;
+    "/api/v1/chat/channels/{channel_id}/permissions/{target_type}/{target_id}": Endpoints.delete_DeleteTargetOverwrite;
+    "/api/v1/chat/messages/{message_id}": Endpoints.delete_DeleteMessage;
+    "/api/v1/chat/messages/{message_id}/reactions/{emoji}": Endpoints.delete_RemoveReaction;
+    "/api/v1/chat/threads/{channel_id}": Endpoints.delete_DeleteThread;
+    "/api/v1/chat/webhooks/{webhook_id}": Endpoints.delete_DeleteWebhook;
+    "/api/v1/customer-contacts/{customer_contact_id}": Endpoints.delete_DeleteCustomerContact;
+    "/api/v1/customer-contexts/{customer_context_id}": Endpoints.delete_DeleteCustomerContext;
+    "/api/v1/customers/{customer_id}": Endpoints.delete_DeleteCustomer;
+    "/api/v1/equipment/{equipment_id}": Endpoints.delete_DeleteEquipment;
+    "/api/v1/field/assignment-reports/{assignment_report_id}": Endpoints.delete_WithdrawAssignmentReport;
+    "/api/v1/invitations/{invitation_id}": Endpoints.delete_RevokeInvitation;
+    "/api/v1/members/{member_id}": Endpoints.delete_DeleteMember;
+    "/api/v1/members/{member_id}/employee-profile": Endpoints.delete_RemoveEmployeeProfile;
+    "/api/v1/organizations/{organization_id}": Endpoints.delete_DeleteOrganization;
+    "/api/v1/organizations/{organization_id}/absences/{absence_id}": Endpoints.delete_DeleteAbsence;
+    "/api/v1/organizations/{organization_id}/automation/credentials/{credential_id}": Endpoints.delete_DeleteAutomationCredential;
+    "/api/v1/organizations/{organization_id}/automation/workflows/{workflow_id}": Endpoints.delete_DeleteWorkflow;
+    "/api/v1/organizations/{organization_id}/projects/{project_id}": Endpoints.delete_ArchiveProject;
+    "/api/v1/organizations/{organization_id}/task-labels/{label_id}": Endpoints.delete_DeleteTaskLabel;
+    "/api/v1/organizations/{organization_id}/tasks/{task_id}": Endpoints.delete_DeleteTask;
+    "/api/v1/organizations/{organization_id}/tasks/{task_id}/comments/{comment_id}": Endpoints.delete_DeleteTaskComment;
+    "/api/v1/products/{product_id}": Endpoints.delete_DeleteProduct;
+    "/api/v1/quotes/{quote_id}": Endpoints.delete_DeleteQuote;
+    "/api/v1/service-rates/{service_rate_id}": Endpoints.delete_DeleteServiceRate;
   };
   get: {
     "/api/v1/chat/channels/{channel_id}": Endpoints.get_GetChannel;
@@ -4624,6 +4832,7 @@ export type EndpointByMethod = {
     "/api/v1/organizations": Endpoints.get_ListOrganizations;
     "/api/v1/organizations/{organization_id}": Endpoints.get_GetOrganization;
     "/api/v1/organizations/{organization_id}/absences": Endpoints.get_ListAbsences;
+    "/api/v1/organizations/{organization_id}/assignment-reports": Endpoints.get_ListAssignmentReports;
     "/api/v1/organizations/{organization_id}/automation/connectors": Endpoints.get_ListConnectors;
     "/api/v1/organizations/{organization_id}/automation/credentials": Endpoints.get_ListAutomationCredentials;
     "/api/v1/organizations/{organization_id}/automation/events": Endpoints.get_ListAutomationEvents;
@@ -4635,6 +4844,7 @@ export type EndpointByMethod = {
     "/api/v1/organizations/{organization_id}/customers": Endpoints.get_ListCustomers;
     "/api/v1/organizations/{organization_id}/employee-profiles": Endpoints.get_ListEmployeeProfiles;
     "/api/v1/organizations/{organization_id}/equipment": Endpoints.get_ListEquipment;
+    "/api/v1/organizations/{organization_id}/field/assignment-reports": Endpoints.get_ListMyAssignmentReports;
     "/api/v1/organizations/{organization_id}/field/current": Endpoints.get_GetCurrentTimeEntry;
     "/api/v1/organizations/{organization_id}/field/tasks": Endpoints.get_ListMyFieldTasks;
     "/api/v1/organizations/{organization_id}/invitations": Endpoints.get_ListInvitations;
@@ -4682,6 +4892,7 @@ export type EndpointByMethod = {
     "/api/v1/organizations/{organization_id}/automation/workflows/{workflow_id}/runs": Endpoints.post_StartRun;
     "/api/v1/organizations/{organization_id}/customers": Endpoints.post_CreateCustomer;
     "/api/v1/organizations/{organization_id}/equipment": Endpoints.post_CreateEquipment;
+    "/api/v1/organizations/{organization_id}/field/assignments/{task_assignment_id}/report": Endpoints.post_ReportAssignment;
     "/api/v1/organizations/{organization_id}/field/day-end": Endpoints.post_EndWorkingDay;
     "/api/v1/organizations/{organization_id}/field/time-entries": Endpoints.post_StartTimeEntry;
     "/api/v1/organizations/{organization_id}/field/time-entries/declare": Endpoints.post_DeclareTimeEntry;
@@ -4716,8 +4927,8 @@ export type EndpointByMethod = {
 // </EndpointByMethod>
 
 // <EndpointByMethod.Shorthands>
-export type DeleteEndpoints = EndpointByMethod["delete"];
 export type PatchEndpoints = EndpointByMethod["patch"];
+export type DeleteEndpoints = EndpointByMethod["delete"];
 export type GetEndpoints = EndpointByMethod["get"];
 export type PostEndpoints = EndpointByMethod["post"];
 export type PutEndpoints = EndpointByMethod["put"];
@@ -4953,37 +5164,6 @@ export class ApiClient {
     return;
   };
 
-  // <ApiClient.delete>
-  delete<Path extends keyof DeleteEndpoints, TEndpoint extends DeleteEndpoints[Path]>(
-    path: Path,
-    ...params: MaybeOptionalArg<
-      TEndpoint extends { parameters: infer UParams }
-        ? NotNever<UParams> extends true
-          ? UParams & { overrides?: RequestInit; withResponse?: false; throwOnStatusError?: boolean }
-          : { overrides?: RequestInit; withResponse?: false; throwOnStatusError?: boolean }
-        : { overrides?: RequestInit; withResponse?: false; throwOnStatusError?: boolean }
-    >
-  ): Promise<Extract<InferResponseByStatus<TEndpoint, SuccessStatusCode>, { data: {} }>["data"]>;
-
-  delete<Path extends keyof DeleteEndpoints, TEndpoint extends DeleteEndpoints[Path]>(
-    path: Path,
-    ...params: MaybeOptionalArg<
-      TEndpoint extends { parameters: infer UParams }
-        ? NotNever<UParams> extends true
-          ? UParams & { overrides?: RequestInit; withResponse?: true; throwOnStatusError?: boolean }
-          : { overrides?: RequestInit; withResponse?: true; throwOnStatusError?: boolean }
-        : { overrides?: RequestInit; withResponse?: true; throwOnStatusError?: boolean }
-    >
-  ): Promise<SafeApiResponse<TEndpoint>>;
-
-  delete<Path extends keyof DeleteEndpoints, _TEndpoint extends DeleteEndpoints[Path]>(
-    path: Path,
-    ...params: MaybeOptionalArg<any>
-  ): Promise<any> {
-    return this.request("delete", path, ...params);
-  }
-  // </ApiClient.delete>
-
   // <ApiClient.patch>
   patch<Path extends keyof PatchEndpoints, TEndpoint extends PatchEndpoints[Path]>(
     path: Path,
@@ -5014,6 +5194,37 @@ export class ApiClient {
     return this.request("patch", path, ...params);
   }
   // </ApiClient.patch>
+
+  // <ApiClient.delete>
+  delete<Path extends keyof DeleteEndpoints, TEndpoint extends DeleteEndpoints[Path]>(
+    path: Path,
+    ...params: MaybeOptionalArg<
+      TEndpoint extends { parameters: infer UParams }
+        ? NotNever<UParams> extends true
+          ? UParams & { overrides?: RequestInit; withResponse?: false; throwOnStatusError?: boolean }
+          : { overrides?: RequestInit; withResponse?: false; throwOnStatusError?: boolean }
+        : { overrides?: RequestInit; withResponse?: false; throwOnStatusError?: boolean }
+    >
+  ): Promise<Extract<InferResponseByStatus<TEndpoint, SuccessStatusCode>, { data: {} }>["data"]>;
+
+  delete<Path extends keyof DeleteEndpoints, TEndpoint extends DeleteEndpoints[Path]>(
+    path: Path,
+    ...params: MaybeOptionalArg<
+      TEndpoint extends { parameters: infer UParams }
+        ? NotNever<UParams> extends true
+          ? UParams & { overrides?: RequestInit; withResponse?: true; throwOnStatusError?: boolean }
+          : { overrides?: RequestInit; withResponse?: true; throwOnStatusError?: boolean }
+        : { overrides?: RequestInit; withResponse?: true; throwOnStatusError?: boolean }
+    >
+  ): Promise<SafeApiResponse<TEndpoint>>;
+
+  delete<Path extends keyof DeleteEndpoints, _TEndpoint extends DeleteEndpoints[Path]>(
+    path: Path,
+    ...params: MaybeOptionalArg<any>
+  ): Promise<any> {
+    return this.request("delete", path, ...params);
+  }
+  // </ApiClient.delete>
 
   // <ApiClient.get>
   get<Path extends keyof GetEndpoints, TEndpoint extends GetEndpoints[Path]>(

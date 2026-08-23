@@ -40,6 +40,12 @@ pub struct Organization {
     /// unlike the legal-identity fields above: it blocks nothing, so
     /// giving it one is free.
     pub quote_number_prefix: String,
+    /// Whether the field app's home screen offers clocking in/out at all —
+    /// `false` by default since ADR 0002: nothing computes money from
+    /// `time_entries` any more, so a punch clock is opt-in, not a worker's
+    /// first impression of the product. See the migration comment on
+    /// `organizations.field_clock_enabled`.
+    pub field_clock_enabled: bool,
     pub deleted_at: Option<DateTime<Utc>>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,

@@ -174,6 +174,59 @@ describe('TaskSheet — editing', () => {
 		expect(screen.queryByRole('button', { name: /Supprimer/ })).toBeNull()
 	})
 
+	it('shows nothing about pending reports when none are provided', () => {
+		render(<TaskSheet {...editProps()} />)
+		expect(screen.queryByText(/écart signalé/i)).toBeNull()
+	})
+
+	/** The panel sits above the tabs, not inside "Détails" — it must stay
+	 * visible whichever tab is active. */
+	it('shows the pending-report panel above the tabs, regardless of the active tab', async () => {
+		const user = userEvent.setup()
+		render(
+			<TaskSheet
+				{...editProps()}
+				pendingReportPanel={{
+					reports: [
+						{
+							id: 'report-1',
+							organization_id: 'org-1',
+							task_assignment_id: 'assignment-1',
+							reported_minutes: 300,
+							comment: null,
+							reported_by: 'member-1',
+							resolution: 'PENDING',
+							resolved_by: null,
+							resolved_at: null,
+							resolution_note: null,
+							created_at: '2026-08-10T08:00:00Z',
+							updated_at: '2026-08-10T08:00:00Z',
+						},
+					],
+					memberName: () => 'Alix Martin',
+					plannedLabel: '4 h 00',
+					reportedLabel: () => '5 h 00',
+					applyingReportId: null,
+					onApply: vi.fn(),
+					onCancelApply: vi.fn(),
+					isResolving: false,
+					resolveError: null,
+					dismissingReportId: null,
+					dismissNote: '',
+					onStartDismiss: vi.fn(),
+					onCancelDismiss: vi.fn(),
+					onDismissNoteChange: vi.fn(),
+					onConfirmDismiss: vi.fn(),
+				}}
+			/>,
+		)
+
+		expect(screen.getByText(/écart signalé/i)).toBeDefined()
+
+		await user.click(screen.getByRole('tab', { name: /Sous-tâches/ }))
+		expect(screen.getByText(/écart signalé/i)).toBeDefined()
+	})
+
 	it('calls onDelete when delete is clicked', async () => {
 		const user = userEvent.setup()
 		const onDelete = vi.fn()

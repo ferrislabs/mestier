@@ -14,6 +14,10 @@ import {
 	type CommentThreadProps,
 } from '#/pages/planning/ui/comment-thread'
 import {
+	PendingReportPanel,
+	type PendingReportPanelProps,
+} from '#/pages/planning/ui/pending-report-panel'
+import {
 	SubtaskList,
 	type SubtaskListProps,
 } from '#/pages/planning/ui/subtask-list'
@@ -44,6 +48,13 @@ export interface TaskSheetProps {
 	/** Present only in edit mode — a task not yet created has no subtasks and no comment thread to show. */
 	subtasksTab?: SubtaskListProps
 	commentsTab?: CommentThreadProps
+	/**
+	 * The correction loop's manager half — rendered above the tabs, not
+	 * inside "Détails", so it stays visible whichever tab is active.
+	 * Present only in edit mode, and only carries reports when there are
+	 * any (`PendingReportPanel` itself renders nothing for an empty list).
+	 */
+	pendingReportPanel?: PendingReportPanelProps
 }
 
 /**
@@ -66,6 +77,7 @@ export function TaskSheet({
 	onOpenChange,
 	subtasksTab,
 	commentsTab,
+	pendingReportPanel,
 }: TaskSheetProps) {
 	const hasTabs = mode === 'edit' && subtasksTab && commentsTab
 
@@ -92,6 +104,10 @@ export function TaskSheet({
 				</DialogHeader>
 
 				<div className="flex-1 overflow-y-auto py-4">
+					{pendingReportPanel ? (
+						<PendingReportPanel {...pendingReportPanel} />
+					) : null}
+
 					{hasTabs ? (
 						<Tabs defaultValue="details">
 							<TabsList>

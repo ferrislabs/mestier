@@ -21,6 +21,11 @@ pub struct UpdateOrganizationCommand {
     pub id: OrganizationId,
     pub name: String,
     pub slug: String,
+    /// Whether the field app's home screen offers clocking in/out — see
+    /// `Organization::field_clock_enabled`'s own doc. Not a `PATCH`-style
+    /// double-Option: this command mirrors `name`/`slug` in always being a
+    /// full replace, echoed by the caller on every save.
+    pub field_clock_enabled: bool,
 }
 
 /// Replaces the whole legal-identity block in one call: the settings
