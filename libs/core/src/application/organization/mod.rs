@@ -6,7 +6,9 @@ use crate::{
     application::MestierUseCase,
     domain::organization::{
         Organization, OrganizationId,
-        commands::{CreateOrganizationCommand, UpdateOrganizationCommand},
+        commands::{
+            CreateOrganizationCommand, UpdateLegalIdentityCommand, UpdateOrganizationCommand,
+        },
         service::OrganizationService,
     },
 };
@@ -89,6 +91,21 @@ impl MestierUseCase {
             authz,
         );
         service.update_organization(command).await
+    }
+
+    #[transactional(organization, role, member, user, authz)]
+    pub async fn update_legal_identity(
+        &self,
+        command: UpdateLegalIdentityCommand,
+    ) -> Result<Organization, CoreError> {
+        let mut service = OrganizationService::new(
+            organization_repository,
+            role_repository,
+            member_repository,
+            user_repository,
+            authz,
+        );
+        service.update_legal_identity(command).await
     }
 
     #[transactional(organization, role, member, user, authz)]

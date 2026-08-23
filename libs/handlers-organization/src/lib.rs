@@ -4,7 +4,10 @@ use axum_extra::routing::TypedPath;
 use handlers::{ApiError, AppState, auth::auth_middleware, rate_limit::rate_limit_middleware};
 use mestier_core::{OrganizationId, User};
 
-use crate::paths::{CurrentUserOrganizationsPath, OrganizationPath, OrganizationsPath};
+use crate::paths::{
+    CurrentUserOrganizationsPath, OrganizationLegalIdentityPath, OrganizationPath,
+    OrganizationsPath,
+};
 
 pub mod create;
 pub mod get_one;
@@ -14,6 +17,7 @@ pub mod paths;
 pub mod response;
 pub mod soft_delete;
 pub mod update;
+pub mod update_legal_identity;
 
 pub const TAG: &str = "organizations";
 
@@ -56,6 +60,10 @@ pub fn router(state: &AppState) -> Router<AppState> {
                 .delete(soft_delete::handler),
         )
         .route(CurrentUserOrganizationsPath::PATH, get(list_mine::handler))
+        .route(
+            OrganizationLegalIdentityPath::PATH,
+            axum::routing::patch(update_legal_identity::handler),
+        )
         .layer(from_fn_with_state(state.clone(), rate_limit_middleware))
         .layer(from_fn_with_state(state.clone(), auth_middleware))
 }

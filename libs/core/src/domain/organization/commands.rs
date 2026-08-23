@@ -1,6 +1,9 @@
 use authz::Subject;
 
-use crate::{UserId, domain::organization::OrganizationId};
+use crate::{
+    UserId,
+    domain::organization::{OrganizationId, legal_identity::VatStatus},
+};
 
 #[derive(Debug, Clone)]
 pub struct CreateOrganizationCommand {
@@ -18,4 +21,27 @@ pub struct UpdateOrganizationCommand {
     pub id: OrganizationId,
     pub name: String,
     pub slug: String,
+}
+
+/// Replaces the whole legal-identity block in one call: the settings
+/// section (#311) is a single form covering identity, address, VAT and
+/// insurance, so a field left `None` here means "clear it", not "leave
+/// unchanged" — the caller always resends the section in full.
+#[derive(Debug, Clone)]
+pub struct UpdateLegalIdentityCommand {
+    pub actor: Subject,
+    pub id: OrganizationId,
+    pub legal_name: Option<String>,
+    pub legal_form: Option<String>,
+    pub registration_number: Option<String>,
+    pub vat_status: Option<VatStatus>,
+    pub share_capital_cents: Option<i64>,
+    pub address_line1: Option<String>,
+    pub address_line2: Option<String>,
+    pub address_postal_code: Option<String>,
+    pub address_city: Option<String>,
+    pub address_country: Option<String>,
+    pub contact_email: Option<String>,
+    pub contact_phone: Option<String>,
+    pub insurance_mention: Option<String>,
 }

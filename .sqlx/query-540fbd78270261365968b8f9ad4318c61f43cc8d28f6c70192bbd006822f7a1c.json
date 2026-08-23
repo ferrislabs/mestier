@@ -1,0 +1,169 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO organizations (\n                id, name, slug, owner_id,\n                legal_name, legal_form, registration_number,\n                vat_status, vat_number, vat_exemption_basis,\n                share_capital_cents,\n                address_line1, address_line2, address_postal_code, address_city, address_country,\n                contact_email, contact_phone, insurance_mention,\n                deleted_at, created_at, updated_at\n            )\n            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22)\n            RETURNING\n                id, name, slug, owner_id,\n                legal_name, legal_form, registration_number,\n                vat_status, vat_number, vat_exemption_basis,\n                share_capital_cents,\n                address_line1, address_line2, address_postal_code, address_city, address_country,\n                contact_email, contact_phone, insurance_mention,\n                deleted_at, created_at, updated_at\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "slug",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "owner_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 4,
+        "name": "legal_name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "legal_form",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 6,
+        "name": "registration_number",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 7,
+        "name": "vat_status",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 8,
+        "name": "vat_number",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 9,
+        "name": "vat_exemption_basis",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 10,
+        "name": "share_capital_cents",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 11,
+        "name": "address_line1",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 12,
+        "name": "address_line2",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 13,
+        "name": "address_postal_code",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 14,
+        "name": "address_city",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 15,
+        "name": "address_country",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 16,
+        "name": "contact_email",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 17,
+        "name": "contact_phone",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 18,
+        "name": "insurance_mention",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 19,
+        "name": "deleted_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 20,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 21,
+        "name": "updated_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Text",
+        "Uuid",
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Int8",
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Timestamptz",
+        "Timestamptz",
+        "Timestamptz"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      false,
+      false
+    ]
+  },
+  "hash": "540fbd78270261365968b8f9ad4318c61f43cc8d28f6c70192bbd006822f7a1c"
+}

@@ -1,0 +1,33 @@
+ALTER TABLE organizations
+    DROP CONSTRAINT IF EXISTS chk_organizations_insurance_mention_not_blank,
+    DROP CONSTRAINT IF EXISTS chk_organizations_contact_phone_not_blank,
+    DROP CONSTRAINT IF EXISTS chk_organizations_contact_email_not_blank,
+    DROP CONSTRAINT IF EXISTS chk_organizations_address_country_not_blank,
+    DROP CONSTRAINT IF EXISTS chk_organizations_address_city_not_blank,
+    DROP CONSTRAINT IF EXISTS chk_organizations_address_postal_code_not_blank,
+    DROP CONSTRAINT IF EXISTS chk_organizations_address_line2_not_blank,
+    DROP CONSTRAINT IF EXISTS chk_organizations_address_line1_not_blank,
+    DROP CONSTRAINT IF EXISTS chk_organizations_share_capital_cents_non_negative,
+    DROP CONSTRAINT IF EXISTS chk_organizations_vat_exemption_basis_when_not_subject,
+    DROP CONSTRAINT IF EXISTS chk_organizations_vat_number_when_subject,
+    DROP CONSTRAINT IF EXISTS chk_organizations_vat_status,
+    DROP CONSTRAINT IF EXISTS chk_organizations_registration_number_not_blank,
+    DROP CONSTRAINT IF EXISTS chk_organizations_legal_form_not_blank,
+    DROP CONSTRAINT IF EXISTS chk_organizations_legal_name_not_blank;
+
+ALTER TABLE organizations
+    DROP COLUMN IF EXISTS insurance_mention,
+    DROP COLUMN IF EXISTS contact_phone,
+    DROP COLUMN IF EXISTS contact_email,
+    DROP COLUMN IF EXISTS address_country,
+    DROP COLUMN IF EXISTS address_city,
+    DROP COLUMN IF EXISTS address_postal_code,
+    DROP COLUMN IF EXISTS address_line2,
+    DROP COLUMN IF EXISTS address_line1,
+    DROP COLUMN IF EXISTS share_capital_cents,
+    DROP COLUMN IF EXISTS vat_exemption_basis,
+    DROP COLUMN IF EXISTS vat_number,
+    DROP COLUMN IF EXISTS vat_status,
+    DROP COLUMN IF EXISTS registration_number,
+    DROP COLUMN IF EXISTS legal_form,
+    DROP COLUMN IF EXISTS legal_name;
