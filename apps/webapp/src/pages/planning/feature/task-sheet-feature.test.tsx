@@ -28,6 +28,10 @@ const TASK_LABELS_PATH = '/api/v1/organizations/{organization_id}/task-labels'
 const CUSTOMERS_PATH = '/api/v1/organizations/{organization_id}/customers'
 const TASK_COMMENTS_PATH =
 	'/api/v1/organizations/{organization_id}/tasks/{task_id}/comments'
+const ASSIGNMENT_REPORTS_PATH =
+	'/api/v1/organizations/{organization_id}/assignment-reports'
+const ASSIGNMENT_REPORT_RESOLUTION_PATH =
+	'/api/v1/assignment-reports/{assignment_report_id}/resolution'
 
 type Handler = (params: unknown) => unknown
 
@@ -350,5 +354,208 @@ describe('TaskSheetFeature — paginated comment thread', () => {
 		// The "load more" control must be present rather than the thread
 		// silently fetching page 2 itself.
 		expect(screen.getByRole('button', { name: /plus récents/i })).toBeDefined()
+	})
+})
+
+describe('TaskSheetFeature — correction loop', () => {
+	function editTarget() {
+		return { mode: 'edit' as const, taskId: 'task-1' }
+	}
+
+	const PENDING_REPORT = {
+		id: 'report-1',
+		organization_id: 'org-1',
+		task_assignment_id: 'assignment-1',
+		reported_minutes: 300,
+		comment: 'Chantier plus long que prévu',
+		reported_by: 'member-1',
+		resolution: 'PENDING',
+		resolved_by: null,
+		resolved_at: null,
+		resolution_note: null,
+		created_at: '2026-08-10T08:00:00Z',
+		updated_at: '2026-08-10T08:00:00Z',
+	}
+
+	function mockEditTaskWithAssignment(
+		mockGet: ReturnType<typeof installFakeTanstackApi>['mockGet'],
+	) {
+		mockGet(TASK_PATH, () => ({
+			data: {
+				id: 'task-1',
+				title: 'Projet toiture',
+				description: null,
+				all_day: false,
+				starts_at: '2026-08-10T07:00:00.000Z',
+				ends_at: '2026-08-10T11:00:00.000Z',
+				blocks_availability: true,
+				status: 'PLANNED',
+				parent_task_id: null,
+				customer_id: null,
+				customer_context_id: null,
+				child_count: 0,
+				labels: [],
+				member_ids: ['member-1'],
+				assignments: [{ id: 'assignment-1', member_id: 'member-1' }],
+			},
+			pagination: null,
+		}))
+		mockGet(TASKS_PATH, () => ({ data: [], pagination: null }))
+	}
+
+	function resolutionCalls(
+		calls: { method: string; path: string; params: unknown }[],
+	) {
+		return calls.filter(
+			(c) =>
+				c.method === 'patch' && c.path === ASSIGNMENT_REPORT_RESOLUTION_PATH,
+		)
+	}
+
+	it('shows the pending report with what was planned and what was reported', async () => {
+		renderFeature({ target: editTarget() }, (api) => {
+			mockEditTaskWithAssignment(api.mockGet)
+			api.mockGet(ASSIGNMENT_REPORTS_PATH, () => ({
+				data: [PENDING_REPORT],
+				pagination: null,
+			}))
+		})
+
+		expect(await screen.findByText(/prévu : 4 h 00/i)).toBeDefined()
+		expect(screen.getByText(/déclaré : 5 h 00/i)).toBeDefined()
+		expect(screen.getByText(/par alix martin/i)).toBeDefined()
+	})
+
+	/**
+	 * The issue's own acceptance criterion: two calls, task then report, and
+	 * the report is only marked applied once the task edit actually
+	 * succeeded.
+	 */
+	it('applying prefills the end time, then PATCHes the task before resolving the report as applied', async () => {
+		const user = userEvent.setup()
+		const { calls, mockMutation } = renderFeature(
+			{ target: editTarget() },
+			(api) => {
+				mockEditTaskWithAssignment(api.mockGet)
+				api.mockGet(ASSIGNMENT_REPORTS_PATH, () => ({
+					data: [PENDING_REPORT],
+					pagination: null,
+				}))
+			},
+		)
+		mockMutation('patch', TASK_PATH, () => ({
+			data: { task: { id: 'task-1' } },
+			pagination: null,
+		}))
+		mockMutation('patch', ASSIGNMENT_REPORT_RESOLUTION_PATH, () => ({
+			data: { ...PENDING_REPORT, resolution: 'APPLIED' },
+			pagination: null,
+		}))
+
+		await screen.findByText(/prévu : 4 h 00/i)
+		await user.click(screen.getByRole('button', { name: /^appliquer$/i }))
+
+		// 07:00 UTC + 300 minutes (5h) in Europe/Paris (UTC+2 in August) = 14:00.
+		await waitFor(() =>
+			expect(
+				screen.getByRole('combobox', { name: 'Heure de fin' }).textContent,
+			).toBe('14:00'),
+		)
+
+		await user.click(screen.getByRole('button', { name: 'Enregistrer' }))
+
+		await waitFor(() => expect(resolutionCalls(calls)).toHaveLength(1))
+		const resolveCall = resolutionCalls(calls)[0]
+		expect(resolveCall.params).toMatchObject({
+			path: { assignment_report_id: 'report-1' },
+			body: { resolution: 'APPLIED' },
+		})
+
+		// The two calls landed in order: the task PATCH before the resolve.
+		const taskPatchIndex = calls.findIndex(
+			(c) => c.method === 'patch' && c.path === TASK_PATH,
+		)
+		const resolveIndex = calls.findIndex(
+			(c) =>
+				c.method === 'patch' && c.path === ASSIGNMENT_REPORT_RESOLUTION_PATH,
+		)
+		expect(taskPatchIndex).toBeGreaterThanOrEqual(0)
+		expect(taskPatchIndex).toBeLessThan(resolveIndex)
+	})
+
+	/** The failure mode the issue explicitly designs against: a report must
+	 * never read as applied against a task that never moved — asserted here
+	 * from the other side, a task PATCH failure must never even attempt the
+	 * resolve call. */
+	it('never resolves the report when the task PATCH itself fails', async () => {
+		const user = userEvent.setup()
+		const { calls, mockMutation } = renderFeature(
+			{ target: editTarget() },
+			(api) => {
+				mockEditTaskWithAssignment(api.mockGet)
+				api.mockGet(ASSIGNMENT_REPORTS_PATH, () => ({
+					data: [PENDING_REPORT],
+					pagination: null,
+				}))
+			},
+		)
+		mockMutation('patch', TASK_PATH, () => {
+			throw new Error('Conflict: boom')
+		})
+		mockMutation('patch', ASSIGNMENT_REPORT_RESOLUTION_PATH, () => ({
+			data: { ...PENDING_REPORT, resolution: 'APPLIED' },
+			pagination: null,
+		}))
+
+		await screen.findByText(/prévu : 4 h 00/i)
+		await user.click(screen.getByRole('button', { name: /^appliquer$/i }))
+		await user.click(screen.getByRole('button', { name: 'Enregistrer' }))
+
+		await waitFor(() =>
+			expect(
+				calls.some((c) => c.method === 'patch' && c.path === TASK_PATH),
+			).toBe(true),
+		)
+		expect(resolutionCalls(calls)).toHaveLength(0)
+	})
+
+	it('dismissing sends the note and resolves as dismissed, without touching the task', async () => {
+		const user = userEvent.setup()
+		const { calls, mockMutation } = renderFeature(
+			{ target: editTarget() },
+			(api) => {
+				mockEditTaskWithAssignment(api.mockGet)
+				api.mockGet(ASSIGNMENT_REPORTS_PATH, () => ({
+					data: [PENDING_REPORT],
+					pagination: null,
+				}))
+			},
+		)
+		mockMutation('patch', ASSIGNMENT_REPORT_RESOLUTION_PATH, () => ({
+			data: { ...PENDING_REPORT, resolution: 'DISMISSED' },
+			pagination: null,
+		}))
+
+		await screen.findByText(/prévu : 4 h 00/i)
+		await user.click(screen.getByRole('button', { name: /^rejeter$/i }))
+		await user.type(
+			screen.getByPlaceholderText(/note pour le déclarant/i),
+			'Déjà couvert par un avenant',
+		)
+		await user.click(
+			screen.getByRole('button', { name: /confirmer le rejet/i }),
+		)
+
+		await waitFor(() => expect(resolutionCalls(calls)).toHaveLength(1))
+		expect(resolutionCalls(calls)[0].params).toMatchObject({
+			path: { assignment_report_id: 'report-1' },
+			body: {
+				resolution: 'DISMISSED',
+				resolution_note: 'Déjà couvert par un avenant',
+			},
+		})
+		expect(
+			calls.some((c) => c.method === 'patch' && c.path === TASK_PATH),
+		).toBe(false)
 	})
 })

@@ -291,6 +291,7 @@ impl Modify for SecurityAddon {
         planning::project::update::UpdateProjectRequest,
         planning::response::ProjectResponse,
         planning::response::TaskResponse,
+        planning::response::TaskAssignmentSummary,
         planning::response::BulkAssignTasksResponse,
         planning::task_label::create::CreateTaskLabelRequest,
         planning::task_label::update::UpdateTaskLabelRequest,

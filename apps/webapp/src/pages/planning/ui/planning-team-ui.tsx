@@ -2,6 +2,7 @@ import { AlertCircle, Plus } from 'lucide-react'
 import { Button } from '#/components/ui/button'
 import { PageHeader, PageShell, SectionCard } from '#/components/ui/surface'
 import type { PlanningResponse, PlanningView } from '#/pages/planning/types'
+import { PendingReportsBadge } from '#/pages/planning/ui/pending-reports-badge'
 import {
 	type OpenTaskEvent,
 	PlanningGrid,
@@ -16,6 +17,10 @@ import {
 
 export interface PlanningTeamUIProps {
 	organizationName: string
+	organizationSlug: string
+	/** `null` while the count is still loading — the badge stays absent
+	 * either way, since zero and "unknown yet" render the same (nothing). */
+	pendingReportsCount: number | null
 	view: PlanningView
 	date: string
 	windowFrom: string
@@ -55,6 +60,8 @@ export interface PlanningTeamUIProps {
  */
 export function PlanningTeamUI({
 	organizationName,
+	organizationSlug,
+	pendingReportsCount,
 	view,
 	date,
 	windowFrom,
@@ -78,12 +85,20 @@ export function PlanningTeamUI({
 				title="Planning"
 				description="Projets, absences et plages de travail de l'équipe."
 				actions={
-					onCreateTask ? (
-						<Button type="button" className="gap-1.5" onClick={onCreateTask}>
-							<Plus className="size-4" />
-							Nouvelle tâche
-						</Button>
-					) : undefined
+					<div className="flex items-center gap-2">
+						{pendingReportsCount ? (
+							<PendingReportsBadge
+								organizationSlug={organizationSlug}
+								count={pendingReportsCount}
+							/>
+						) : null}
+						{onCreateTask ? (
+							<Button type="button" className="gap-1.5" onClick={onCreateTask}>
+								<Plus className="size-4" />
+								Nouvelle tâche
+							</Button>
+						) : null}
+					</div>
 				}
 			/>
 

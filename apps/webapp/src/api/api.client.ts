@@ -59,6 +59,7 @@ export namespace Schemas {
   export type AvailabilityResponse = { resources: Array<AvailabilityResourceResponse> };
   export type BranchDto = "Then" | "Else" | "Each" | "After";
   export type BulkAssignTasksRequest = { assignees: Array<AssigneeRefRequest>; task_ids: Array<TaskId> };
+  export type TaskAssignmentSummary = { id: TaskAssignmentId; member_id: MemberId };
   export type CustomerContextId = string;
   export type CustomerId = string;
   export type EquipmentId = string;
@@ -84,6 +85,7 @@ export namespace Schemas {
   export type TaskStatus = "PLANNED" | "IN_PROGRESS" | "DONE" | "CANCELLED";
   export type TaskResponse = {
     all_day: boolean;
+    assignments: Array<TaskAssignmentSummary>;
     blocks_availability: boolean;
     child_count?: (number | null) | undefined;
     created_at: string;
@@ -4006,6 +4008,7 @@ export namespace Endpoints {
       200: {
         data: Array<{
           all_day: boolean;
+          assignments: Array<Schemas.TaskAssignmentSummary>;
           blocks_availability: boolean;
           child_count?: (number | null) | undefined;
           created_at: string;
@@ -4047,6 +4050,7 @@ export namespace Endpoints {
       201: {
         data: {
           all_day: boolean;
+          assignments: Array<Schemas.TaskAssignmentSummary>;
           blocks_availability: boolean;
           child_count?: (number | null) | undefined;
           created_at: string;
@@ -4108,6 +4112,7 @@ export namespace Endpoints {
       200: {
         data: {
           all_day: boolean;
+          assignments: Array<Schemas.TaskAssignmentSummary>;
           blocks_availability: boolean;
           child_count?: (number | null) | undefined;
           created_at: string;
