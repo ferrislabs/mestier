@@ -61,13 +61,16 @@ import {
 	emptyQuoteLine,
 	eurosToCents,
 	formatCents,
+	formatVatRateBp,
 	type QuoteFormValues,
 	type QuoteLineFormValues,
 	quoteLineTotalCents,
+	quoteReferenceLabel,
 	quoteStatusLabel,
 } from '#/pages/quotes/types'
 import { BillingAddressField } from '#/pages/quotes/ui/billing-address-field'
 import { QuoteLineEditor } from '#/pages/quotes/ui/quote-line-editor'
+import { LEGAL_IDENTITY_FIELD_LABELS } from '#/pages/settings/types'
 
 interface QuoteEditFeatureProps {
 	quoteId: string
@@ -113,6 +116,8 @@ function QuoteEditWorkspace({ quote }: { quote: Quote }) {
 		catalog.serviceRates.data?.data,
 		catalog.products.data?.data,
 	)
+	const missingLegalIdentityFields =
+		activeOrganization.missing_legal_identity_fields
 	const updateQuote = useUpdateQuote()
 	const deleteQuote = useDeleteQuote(quote.organization_id)
 	const uploadFile = useUploadFile()
@@ -171,6 +176,10 @@ function QuoteEditWorkspace({ quote }: { quote: Quote }) {
 			label: catalogItem.label,
 			unit: catalogItem.unit,
 			unitPrice: centsToEuros(catalogItem.unitPriceCents),
+			vatRateBp:
+				catalogItem.defaultVatRateBp !== null
+					? String(catalogItem.defaultVatRateBp)
+					: values.lines[index]?.vatRateBp || '',
 			notes: catalogItem.description || values.lines[index]?.notes || '',
 		})
 	}
@@ -208,10 +217,20 @@ function QuoteEditWorkspace({ quote }: { quote: Quote }) {
 		})
 	}
 
+	// Sending is refused server-side when the organization's legal identity
+	// is incomplete (#310, enforced again on export by #314) — caught here
+	// too so the button is disabled before the request is even sent, rather
+	// than only after a refusal comes back.
+	const blockedBySentIdentity =
+		status === 'SENT' &&
+		!quote.reference &&
+		missingLegalIdentityFields.length > 0
+
 	const canSave =
 		Boolean(values.title.trim()) &&
 		Boolean(values.customerId) &&
 		Boolean(values.customerContextId) &&
+		!blockedBySentIdentity &&
 		values.lines.every((line) => {
 			const quantity = Number(line.quantity.replace(',', '.'))
 			return (
@@ -252,6 +271,7 @@ function QuoteEditWorkspace({ quote }: { quote: Quote }) {
 					quantity: line.quantity.replace(',', '.').trim(),
 					unit: line.unit,
 					unit_price_cents: eurosToCents(line.unitPrice),
+					vat_rate_bp: line.vatRateBp === '' ? null : Number(line.vatRateBp),
 					notes: line.notes.trim() || null,
 					photo_keys: line.photoKeys,
 				})),
@@ -353,6 +373,13 @@ function QuoteEditUI({
 	onDelete: () => void
 }) {
 	const { activeOrganization } = useActiveOrganization()
+	const vatEnabled = activeOrganization.vat_status?.type === 'subject'
+	const missingLegalIdentityFields =
+		activeOrganization.missing_legal_identity_fields
+	const blockedBySentIdentity =
+		status === 'SENT' &&
+		!quote.reference &&
+		missingLegalIdentityFields.length > 0
 	// Only one line open at a time, so a long quote stays readable. Opening on
 	// the first line matches the create form.
 	const [openLineId, setOpenLineId] = useState<string | null>(
@@ -368,7 +395,7 @@ function QuoteEditUI({
 	return (
 		<PageShell>
 			<PageHeader
-				eyebrow={quote.reference}
+				eyebrow={quoteReferenceLabel(quote.reference)}
 				title={quote.title}
 				description="Visualisez et modifiez le contenu du devis."
 				actions={
@@ -398,8 +425,8 @@ function QuoteEditUI({
 								<AlertDialogHeader>
 									<AlertDialogTitle>Supprimer ce devis ?</AlertDialogTitle>
 									<AlertDialogDescription>
-										Le devis {quote.reference} sera supprimé de la liste. Cette
-										action est irréversible.
+										Le devis {quoteReferenceLabel(quote.reference)} sera
+										supprimé de la liste. Cette action est irréversible.
 									</AlertDialogDescription>
 								</AlertDialogHeader>
 								<AlertDialogFooter>
@@ -439,6 +466,26 @@ function QuoteEditUI({
 			{error ? (
 				<div className="rounded-lg border border-destructive/30 bg-destructive-soft px-4 py-3 text-sm text-destructive">
 					{error}
+				</div>
+			) : null}
+
+			{blockedBySentIdentity ? (
+				<div className="flex items-start gap-3 rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-800 dark:text-amber-300">
+					<AlertCircle className="mt-0.5 size-4 shrink-0" />
+					<p>
+						Ce devis ne peut pas être envoyé : l'identité légale de
+						l'organisation est incomplète. Il manque{' '}
+						{missingLegalIdentityFields
+							.map((field) => LEGAL_IDENTITY_FIELD_LABELS[field] ?? field)
+							.join(', ')}
+						.{' '}
+						<a
+							href={`${buildOrgPath(activeOrganization.slug, '/settings')}#organisation`}
+							className="font-medium underline underline-offset-2"
+						>
+							Compléter dans les paramètres
+						</a>
+					</p>
 				</div>
 			) : null}
 
@@ -537,6 +584,7 @@ function QuoteEditUI({
 									isOpen={openLineId === line.clientId}
 									canRemove={values.lines.length > 1}
 									isUploading={isUploading}
+									vatEnabled={vatEnabled}
 									onOpenChange={(open) =>
 										setOpenLineId(open ? line.clientId : null)
 									}
@@ -562,13 +610,43 @@ function QuoteEditUI({
 				<aside className="h-fit rounded-lg border bg-card p-5 shadow-sm xl:sticky xl:top-5">
 					<p className="text-sm font-semibold">Résumé</p>
 					<div className="mt-4 space-y-3 text-sm">
-						<SummaryRow label="Référence" value={quote.reference} />
+						<SummaryRow
+							label="Référence"
+							value={quoteReferenceLabel(quote.reference)}
+						/>
 						<SummaryRow label="Statut" value={quoteStatusLabel(status)} />
 						<SummaryRow label="Objet" value={values.title || 'Non renseigné'} />
 						<SummaryRow label="Lignes" value={String(values.lines.length)} />
 						<SummaryRow
-							label="Total HT"
+							label="Total HT (aperçu, non enregistré)"
 							value={formatCents(totalCents)}
+						/>
+					</div>
+
+					{/* The quote's actual totals — read from what was last saved,
+					    never recomputed here (CLAUDE.md): the screen and the PDF must
+					    never be able to disagree. */}
+					<div className="mt-5 space-y-2 rounded-lg bg-muted p-4 text-sm">
+						<p className="text-xs font-medium text-muted-foreground">
+							Totaux enregistrés
+						</p>
+						<SummaryRow label="Total HT" value={formatCents(quote.net_cents)} />
+						{quote.vat_breakdown.length > 0 ? (
+							quote.vat_breakdown.map((breakdown) => (
+								<SummaryRow
+									key={breakdown.rate_bp}
+									label={`TVA ${formatVatRateBp(breakdown.rate_bp)}`}
+									value={formatCents(breakdown.vat_cents)}
+								/>
+							))
+						) : activeOrganization.vat_status?.type === 'not_subject' ? (
+							<p className="text-xs text-muted-foreground">
+								TVA non applicable, {activeOrganization.vat_status.basis}
+							</p>
+						) : null}
+						<SummaryRow
+							label="Total TTC"
+							value={formatCents(quote.gross_cents)}
 							strong
 						/>
 					</div>
@@ -599,6 +677,7 @@ function quoteToForm(
 			quantity: line.quantity,
 			unit: line.unit,
 			unitPrice: centsToEuros(line.unit_price_cents),
+			vatRateBp: line.vat_rate_bp != null ? String(line.vat_rate_bp) : '',
 			notes: line.notes ?? '',
 			photoKeys: line.photo_keys,
 		}

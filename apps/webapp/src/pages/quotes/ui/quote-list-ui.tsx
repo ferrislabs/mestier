@@ -55,6 +55,7 @@ import {
 	customerDisplayName,
 	formatCents,
 	formatDate,
+	quoteReferenceLabel,
 	quoteStatusLabel,
 } from '#/pages/quotes/types'
 
@@ -114,7 +115,7 @@ export function QuoteListUI({
 			accepted: quotes.filter((quote) => quote.status === 'ACCEPTED').length,
 			revenue: quotes
 				.filter((quote) => quote.status === 'ACCEPTED')
-				.reduce((sum, quote) => sum + quote.total_cents, 0),
+				.reduce((sum, quote) => sum + quote.gross_cents, 0),
 		}
 	}, [quotes, quotesPagination])
 
@@ -245,7 +246,7 @@ export function QuoteListUI({
 						hint="Validés client"
 					/>
 					<MetricCard
-						label="Accepté HT"
+						label="Accepté TTC"
 						value={formatCents(stats.revenue)}
 						hint="D'après l'API"
 					/>
@@ -338,7 +339,8 @@ export function QuoteListUI({
 											<div className="min-w-0">
 												<div className="flex min-w-0 items-center gap-2">
 													<p className="truncate font-semibold">
-														{quote.reference} · {quote.title}
+														{quoteReferenceLabel(quote.reference)} ·{' '}
+														{quote.title}
 													</p>
 													<StatusBadge tone={statusTone(quote.status)}>
 														{quoteStatusLabel(quote.status)}
@@ -363,7 +365,7 @@ export function QuoteListUI({
 										</div>
 
 										<p className="text-lg font-bold sm:text-right">
-											{formatCents(quote.total_cents)}
+											{formatCents(quote.gross_cents)}
 										</p>
 									</Link>
 
@@ -493,12 +495,12 @@ const QUOTE_SORT_OPTIONS: DataViewSortOption<Quote>[] = [
 	{
 		value: 'total-desc',
 		label: 'Montant décroissant',
-		compare: (a, b) => b.total_cents - a.total_cents,
+		compare: (a, b) => b.gross_cents - a.gross_cents,
 	},
 	{
 		value: 'total-asc',
 		label: 'Montant croissant',
-		compare: (a, b) => a.total_cents - b.total_cents,
+		compare: (a, b) => a.gross_cents - b.gross_cents,
 	},
 ]
 
@@ -513,10 +515,10 @@ function quoteMatchesSearch(
 		: ''
 	return (
 		quote.id.toLowerCase().includes(query) ||
-		quote.reference.toLowerCase().includes(query) ||
+		(quote.reference?.toLowerCase().includes(query) ?? false) ||
 		quote.title.toLowerCase().includes(query) ||
 		quoteStatusLabel(quote.status).toLowerCase().includes(query) ||
-		formatCents(quote.total_cents).toLowerCase().includes(query) ||
+		formatCents(quote.gross_cents).toLowerCase().includes(query) ||
 		customerName.includes(query)
 	)
 }

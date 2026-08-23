@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import {
 	eurosToCents,
+	formatVatRateBp,
 	type QuoteLineFormValues,
 	quoteLineTotalCents,
+	quoteReferenceLabel,
 } from '#/pages/quotes/types'
 
 function line(quantity: string, unitPrice: string): QuoteLineFormValues {
@@ -15,6 +17,7 @@ function line(quantity: string, unitPrice: string): QuoteLineFormValues {
 		quantity,
 		unit: 'HOUR',
 		unitPrice,
+		vatRateBp: '',
 		notes: '',
 		photoKeys: [],
 	}
@@ -90,5 +93,32 @@ describe('quoteLineTotalCents', () => {
 
 	it('is nothing when the price has not been entered', () => {
 		expect(quoteLineTotalCents(line('4', ''))).toBe(0)
+	})
+})
+
+describe('formatVatRateBp', () => {
+	it('reads basis points as a percentage', () => {
+		expect(formatVatRateBp(2000)).toBe('20 %')
+		expect(formatVatRateBp(1000)).toBe('10 %')
+		expect(formatVatRateBp(0)).toBe('0 %')
+	})
+
+	it('keeps the fractional part for a rate that has one', () => {
+		expect(formatVatRateBp(550)).toBe('5.50 %')
+		expect(formatVatRateBp(210)).toBe('2.10 %')
+	})
+})
+
+describe('quoteReferenceLabel', () => {
+	it('reads the allocated reference as-is', () => {
+		expect(quoteReferenceLabel('DEV-2026-0001')).toBe('DEV-2026-0001')
+	})
+
+	/** #313: a draft has no number until it is sent — `null` here is a fact,
+	 * not a missing value, and the label says so rather than showing a
+	 * blank. */
+	it('explains a draft rather than showing a blank', () => {
+		expect(quoteReferenceLabel(null)).toBe('Numéro attribué à l’envoi')
+		expect(quoteReferenceLabel(undefined)).toBe('Numéro attribué à l’envoi')
 	})
 })

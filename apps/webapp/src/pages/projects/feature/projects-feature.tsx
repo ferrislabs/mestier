@@ -17,6 +17,7 @@ import {
 } from '#/pages/projects/types'
 import { ProjectFormDialog } from '#/pages/projects/ui/project-form-dialog'
 import { ProjectsList } from '#/pages/projects/ui/projects-list'
+import { quoteReferenceLabel } from '#/pages/quotes/types'
 
 export interface ProjectsFeatureProps {
 	/** From `?projectId=`, so the profitability screen can link at one row. */
@@ -91,7 +92,7 @@ function ProjectsWorkspace({
 			.filter((quote) => quote.customer_id === draft.values.customerId)
 			.map((quote) => ({
 				id: quote.id,
-				label: `${quote.reference} — ${quote.title}`,
+				label: `${quoteReferenceLabel(quote.reference)} — ${quote.title}`,
 			}))
 	}, [draft, quoteRows])
 

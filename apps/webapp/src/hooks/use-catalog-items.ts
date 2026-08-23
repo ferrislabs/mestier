@@ -24,6 +24,10 @@ export interface CatalogItem {
 	unitPriceCents: number
 	description: string
 	sku?: string
+	/** Prefills a quote line's VAT rate when this item is picked — never
+	 * re-read afterwards, so editing it later does not rewrite a line
+	 * already built from it. `null` when the referential has none set. */
+	defaultVatRateBp: number | null
 }
 
 /**
@@ -59,6 +63,7 @@ export function buildCatalogItems(
 			unit: serviceRate.unit,
 			unitPriceCents: serviceRate.rate_cents,
 			description: '',
+			defaultVatRateBp: serviceRate.default_vat_rate_bp ?? null,
 		})),
 		...products.map((product) => ({
 			id: `product:${product.id}`,
@@ -69,6 +74,7 @@ export function buildCatalogItems(
 			unitPriceCents: product.unit_price_cents,
 			description: product.description ?? '',
 			sku: product.sku ?? '',
+			defaultVatRateBp: product.default_vat_rate_bp ?? null,
 		})),
 	]
 }
