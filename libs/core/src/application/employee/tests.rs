@@ -241,4 +241,113 @@ mod tests {
 
         cleanup(&pool, fixture.organization_id, &[fixture.owner_id]).await;
     }
+
+    // -- list/set/correct_employee_cost_basis -------------------------------
+
+    #[tokio::test]
+    #[ignore = "requires live postgres"]
+    async fn set_employee_cost_basis_dates_a_change_and_list_returns_the_whole_history() {
+        let pool = make_pool().await;
+        let fixture = seed_fixture(&pool).await;
+        let usecase = make_usecase(pool.clone());
+
+        let employee = usecase
+            .upsert_employee_profile(
+                Subject::system(),
+                fixture.member_id,
+                Some(3500),
+                false,
+                None,
+                2100,
+            )
+            .await
+            .unwrap();
+
+        let future_date = Utc::now().date_naive() + chrono::Duration::days(30);
+        usecase
+            .set_employee_cost_basis(
+                Subject::system(),
+                employee.id,
+                future_date,
+                false,
+                Some(4200),
+                None,
+                2100,
+            )
+            .await
+            .expect("a future-dated change must be accepted");
+
+        let history = usecase
+            .list_employee_cost_bases(Subject::system(), employee.id)
+            .await
+            .unwrap();
+
+        assert_eq!(history.len(), 2, "the original version plus the dated one");
+        assert_eq!(history[0].effective_to, Some(future_date));
+        assert_eq!(history[1].effective_from, future_date);
+        assert_eq!(history[1].hourly_rate_cents, Some(4_200));
+
+        cleanup(&pool, fixture.organization_id, &[fixture.owner_id]).await;
+    }
+
+    /// The regression #302 exists to close: `map_sqlx_error` used to turn
+    /// the exclusion constraint's violation into a bare `CoreError::Database`
+    /// (an HTTP 500 once it reaches a handler), because it only ever
+    /// special-cased unique violations.
+    #[tokio::test]
+    #[ignore = "requires live postgres"]
+    async fn correcting_a_version_to_overlap_another_is_a_conflict_not_a_database_error() {
+        let pool = make_pool().await;
+        let fixture = seed_fixture(&pool).await;
+        let usecase = make_usecase(pool.clone());
+
+        let employee = usecase
+            .upsert_employee_profile(
+                Subject::system(),
+                fixture.member_id,
+                Some(3500),
+                false,
+                None,
+                2100,
+            )
+            .await
+            .unwrap();
+
+        let future_date = Utc::now().date_naive() + chrono::Duration::days(30);
+        let raised = usecase
+            .set_employee_cost_basis(
+                Subject::system(),
+                employee.id,
+                future_date,
+                false,
+                Some(4_200),
+                None,
+                2_100,
+            )
+            .await
+            .unwrap();
+
+        // Corrects the raised version to start before the first one closed —
+        // overlapping the version it was supposed to follow.
+        let err = usecase
+            .correct_employee_cost_basis(
+                Subject::system(),
+                raised.id,
+                Utc::now().date_naive(),
+                None,
+                false,
+                Some(4_200),
+                None,
+                2_100,
+            )
+            .await
+            .unwrap_err();
+
+        assert!(
+            matches!(err, common::CoreError::Conflict(_)),
+            "an overlap must surface as a conflict, not {err:?}"
+        );
+
+        cleanup(&pool, fixture.organization_id, &[fixture.owner_id]).await;
+    }
 }

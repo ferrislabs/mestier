@@ -113,7 +113,8 @@ pub use domain::{
     customer_contact::commands::{CreateCustomerContactCommand, UpdateCustomerContactCommand},
     customer_context::commands::{CreateCustomerContextCommand, UpdateCustomerContextCommand},
     employee::commands::{
-        RemoveEmployeeProfileCommand, SetEmployeeCostBasisCommand, UpsertEmployeeProfileCommand,
+        CorrectEmployeeCostBasisCommand, RemoveEmployeeProfileCommand, SetEmployeeCostBasisCommand,
+        UpsertEmployeeProfileCommand,
     },
     equipment::commands::{CreateEquipmentCommand, UpdateEquipmentCommand},
     file_storage::commands::UploadFileCommand,

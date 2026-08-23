@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            UPDATE employee_cost_bases\n            SET is_salaried = $2, hourly_rate_cents = $3, monthly_cost_cents = $4, weekly_contract_minutes = $5, updated_at = $6\n            WHERE id = $1\n            RETURNING id, org_id, employee_id, effective_from, effective_to, is_salaried, hourly_rate_cents, monthly_cost_cents, weekly_contract_minutes, created_at, updated_at\n            ",
+  "query": "\n            UPDATE employee_cost_bases\n            SET effective_from = $2, effective_to = $3, is_salaried = $4, hourly_rate_cents = $5, monthly_cost_cents = $6, weekly_contract_minutes = $7, updated_at = $8\n            WHERE id = $1\n            RETURNING id, org_id, employee_id, effective_from, effective_to, is_salaried, hourly_rate_cents, monthly_cost_cents, weekly_contract_minutes, created_at, updated_at\n            ",
   "describe": {
     "columns": [
       {
@@ -62,6 +62,8 @@
     "parameters": {
       "Left": [
         "Uuid",
+        "Date",
+        "Date",
         "Bool",
         "Int4",
         "Int4",
@@ -83,5 +85,5 @@
       false
     ]
   },
-  "hash": "1df49b69ff5e8636c854982c57686edab1bee00aa0773022da99b130e28b5eb4"
+  "hash": "0c4daff9a80da04eef1fe009ec888f301c2531ee14312eb46a7b7883f0c45b5f"
 }

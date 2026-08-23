@@ -178,6 +178,14 @@ export namespace Schemas {
     auth_schemes: Array<AuthSchemeResponse>;
     connectors: Array<ConnectorDescriptorResponse>;
   };
+  export type CorrectEmployeeCostBasisRequest = {
+    effective_from: string;
+    effective_to?: (string | null) | undefined;
+    hourly_rate_cents?: (number | null) | undefined;
+    is_salaried: boolean;
+    monthly_cost_cents?: (number | null) | undefined;
+    weekly_contract_minutes: number;
+  };
   export type CreateAbsenceRequest = {
     all_day?: boolean | undefined;
     ends_at: string;
@@ -358,6 +366,21 @@ export namespace Schemas {
   };
   export type DeclareTimeEntryRequest = { ended_at: string; started_at: string; task_id: TaskId };
   export type EdgeDto = { branch?: (null | BranchDto) | undefined; from: string; to: string };
+  export type EmployeeCostBasisId = string;
+  export type EmployeeCostBasisResponse = {
+    created_at: string;
+    effective_from: string;
+    effective_hourly_rate_cents?: (number | null) | undefined;
+    effective_to?: (string | null) | undefined;
+    employee_id: EmployeeId;
+    hourly_rate_cents?: (number | null) | undefined;
+    id: EmployeeCostBasisId;
+    is_salaried: boolean;
+    monthly_cost_cents?: (number | null) | undefined;
+    organization_id: OrganizationId;
+    updated_at: string;
+    weekly_contract_minutes: number;
+  };
   export type EmployeeResponse = {
     created_at: string;
     effective_hourly_rate_cents?: (number | null) | undefined;
@@ -419,7 +442,7 @@ export namespace Schemas {
   export type GraphInvalidBody = { code: string; details: GraphInvalidDetails; message: string; status: number };
   export type MarkChannelReadRequest = { message_id: MessageId };
   export type MemberAccountResponse = { email: string; name: string };
-  export type MissingCost = "HOURLY_RATE" | "MONTHLY_COST" | "CONTRACTED_HOURS";
+  export type MissingCost = "HOURLY_RATE" | "MONTHLY_COST" | "CONTRACTED_HOURS" | "NO_COST_BASIS";
   export type MemberProfitability = {
     labour_cost_cents: number;
     member_id: MemberId;
@@ -707,6 +730,13 @@ export namespace Schemas {
     rate_cents: number;
     unit: ServiceRateUnit;
     updated_at: string;
+  };
+  export type SetEmployeeCostBasisRequest = {
+    effective_from: string;
+    hourly_rate_cents?: (number | null) | undefined;
+    is_salaried: boolean;
+    monthly_cost_cents?: (number | null) | undefined;
+    weekly_contract_minutes: number;
   };
   export type SetPresenceRequest = { status: PresenceStatus };
   export type StartRunRequest = Partial<{ trigger_payload: unknown }>;
@@ -1758,6 +1788,40 @@ export namespace Endpoints {
       404: unknown;
     };
   };
+  export type patch_CorrectEmployeeCostBasis = {
+    method: "PATCH";
+    path: "/api/v1/cost-bases/{cost_basis_id}";
+    requestFormat: "json";
+    parameters: {
+      path: { cost_basis_id: string };
+
+      body: Schemas.CorrectEmployeeCostBasisRequest;
+    };
+    responses: {
+      200: {
+        data: {
+          created_at: string;
+          effective_from: string;
+          effective_hourly_rate_cents?: (number | null) | undefined;
+          effective_to?: (string | null) | undefined;
+          employee_id: Schemas.EmployeeId;
+          hourly_rate_cents?: (number | null) | undefined;
+          id: Schemas.EmployeeCostBasisId;
+          is_salaried: boolean;
+          monthly_cost_cents?: (number | null) | undefined;
+          organization_id: Schemas.OrganizationId;
+          updated_at: string;
+          weekly_contract_minutes: number;
+        };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      400: unknown;
+      401: unknown;
+      403: unknown;
+      404: unknown;
+      409: unknown;
+    };
+  };
   export type get_GetCustomerContact = {
     method: "GET";
     path: "/api/v1/customer-contacts/{customer_contact_id}";
@@ -2071,6 +2135,70 @@ export namespace Endpoints {
           photo_key?: (string | null) | undefined;
           postal_code?: (string | null) | undefined;
           updated_at: string;
+        };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      400: unknown;
+      401: unknown;
+      403: unknown;
+      404: unknown;
+      409: unknown;
+    };
+  };
+  export type get_ListEmployeeCostBases = {
+    method: "GET";
+    path: "/api/v1/employees/{employee_id}/cost-bases";
+    requestFormat: "json";
+    parameters: {
+      path: { employee_id: string };
+    };
+    responses: {
+      200: {
+        data: Array<{
+          created_at: string;
+          effective_from: string;
+          effective_hourly_rate_cents?: (number | null) | undefined;
+          effective_to?: (string | null) | undefined;
+          employee_id: Schemas.EmployeeId;
+          hourly_rate_cents?: (number | null) | undefined;
+          id: Schemas.EmployeeCostBasisId;
+          is_salaried: boolean;
+          monthly_cost_cents?: (number | null) | undefined;
+          organization_id: Schemas.OrganizationId;
+          updated_at: string;
+          weekly_contract_minutes: number;
+        }>;
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+      404: unknown;
+    };
+  };
+  export type post_SetEmployeeCostBasis = {
+    method: "POST";
+    path: "/api/v1/employees/{employee_id}/cost-bases";
+    requestFormat: "json";
+    parameters: {
+      path: { employee_id: string };
+
+      body: Schemas.SetEmployeeCostBasisRequest;
+    };
+    responses: {
+      201: {
+        data: {
+          created_at: string;
+          effective_from: string;
+          effective_hourly_rate_cents?: (number | null) | undefined;
+          effective_to?: (string | null) | undefined;
+          employee_id: Schemas.EmployeeId;
+          hourly_rate_cents?: (number | null) | undefined;
+          id: Schemas.EmployeeCostBasisId;
+          is_salaried: boolean;
+          monthly_cost_cents?: (number | null) | undefined;
+          organization_id: Schemas.OrganizationId;
+          updated_at: string;
+          weekly_contract_minutes: number;
         };
         pagination?: (null | Schemas.PaginationMetadata) | undefined;
       };
@@ -4760,6 +4888,7 @@ export type EndpointByMethod = {
     "/api/v1/chat/messages/{message_id}": Endpoints.patch_UpdateMessage;
     "/api/v1/chat/threads/{channel_id}": Endpoints.patch_UpdateThread;
     "/api/v1/chat/webhooks/{webhook_id}": Endpoints.patch_UpdateWebhook;
+    "/api/v1/cost-bases/{cost_basis_id}": Endpoints.patch_CorrectEmployeeCostBasis;
     "/api/v1/customer-contacts/{customer_contact_id}": Endpoints.patch_UpdateCustomerContact;
     "/api/v1/customer-contexts/{customer_context_id}": Endpoints.patch_UpdateCustomerContext;
     "/api/v1/customers/{customer_id}": Endpoints.patch_UpdateCustomer;
@@ -4825,6 +4954,7 @@ export type EndpointByMethod = {
     "/api/v1/customers/{customer_id}": Endpoints.get_GetCustomer;
     "/api/v1/customers/{customer_id}/contacts": Endpoints.get_ListCustomerContacts;
     "/api/v1/customers/{customer_id}/customer-contexts": Endpoints.get_ListCustomerContexts;
+    "/api/v1/employees/{employee_id}/cost-bases": Endpoints.get_ListEmployeeCostBases;
     "/api/v1/equipment/{equipment_id}": Endpoints.get_GetEquipment;
     "/api/v1/files/url": Endpoints.get_GetFileUrl;
     "/api/v1/members/{member_id}": Endpoints.get_GetMember;
@@ -4878,6 +5008,7 @@ export type EndpointByMethod = {
     "/api/v1/chat/webhooks/{webhook_id}/{token}": Endpoints.post_ExecuteWebhook;
     "/api/v1/customers/{customer_id}/contacts": Endpoints.post_CreateCustomerContact;
     "/api/v1/customers/{customer_id}/customer-contexts": Endpoints.post_CreateCustomerContext;
+    "/api/v1/employees/{employee_id}/cost-bases": Endpoints.post_SetEmployeeCostBasis;
     "/api/v1/field/time-entries/{time_entry_id}/photos": Endpoints.post_AttachTimeEntryPhoto;
     "/api/v1/field/time-entries/{time_entry_id}/recover": Endpoints.post_RecoverTimeEntry;
     "/api/v1/field/time-entries/{time_entry_id}/stop": Endpoints.post_StopTimeEntry;

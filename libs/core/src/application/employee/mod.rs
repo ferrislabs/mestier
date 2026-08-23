@@ -1,17 +1,18 @@
 use authz::{Resource, Subject};
-use chrono::Utc;
+use chrono::{NaiveDate, Utc};
 use common::CoreError;
 use mestier_macros::transactional;
 
 use crate::{
-    Employee, EmployeeId, MemberId, OrganizationId,
+    Employee, EmployeeCostBasis, EmployeeCostBasisId, EmployeeId, MemberId, OrganizationId,
     application::{MestierUseCase, policy},
     domain::{
         employee::{
             commands::{
-                RemoveEmployeeProfileCommand, SetEmployeeCostBasisCommand,
-                UpsertEmployeeProfileCommand,
+                CorrectEmployeeCostBasisCommand, RemoveEmployeeProfileCommand,
+                SetEmployeeCostBasisCommand, UpsertEmployeeProfileCommand,
             },
+            ports::EmployeeRepository,
             service::{EmployeeCostBasisService, EmployeeService},
         },
         member::ports::MemberRepository,
@@ -192,5 +193,153 @@ impl MestierUseCase {
 
         let mut service = EmployeeService::new(employee_repository);
         service.list_employees(organization_id, limit, offset).await
+    }
+
+    /// The whole cost history of one employee, oldest first. Same gate as
+    /// [`Self::list_employees`]: this is the same sensitive figure, just
+    /// versioned.
+    #[transactional(employee, employee_cost_basis, member, role, authz)]
+    pub async fn list_employee_cost_bases(
+        &self,
+        actor: Subject,
+        employee_id: EmployeeId,
+    ) -> Result<Vec<EmployeeCostBasis>, CoreError> {
+        let mut member_repository = member_repository;
+        let mut role_repository = role_repository;
+        let mut employee_repository = employee_repository;
+
+        let employee = employee_repository
+            .find_by_id(employee_id)
+            .await?
+            .ok_or(CoreError::NotFound)?;
+
+        let actor = policy::enrich_for_organization(
+            actor,
+            employee.organization_id,
+            &mut member_repository,
+            &mut role_repository,
+        )
+        .await?;
+        policy::require(
+            &authz,
+            &actor,
+            "member.manage",
+            Resource::new("member", employee.member_id.0.to_string()),
+        )
+        .await?;
+
+        let mut service = EmployeeCostBasisService::new(employee_cost_basis_repository);
+        service.list_cost_bases(employee_id).await
+    }
+
+    /// Dates a cost basis change: closes the open version at `effective_from`
+    /// and opens a new one, or edits the open version in place when
+    /// `effective_from` matches it exactly. The standalone counterpart of the
+    /// dating [`Self::upsert_employee_profile`] does implicitly for "today" —
+    /// this is the one that lets a caller say "from this date" instead.
+    #[allow(clippy::too_many_arguments)]
+    #[transactional(employee, employee_cost_basis, member, role, authz)]
+    pub async fn set_employee_cost_basis(
+        &self,
+        actor: Subject,
+        employee_id: EmployeeId,
+        effective_from: NaiveDate,
+        is_salaried: bool,
+        hourly_rate_cents: Option<i32>,
+        monthly_cost_cents: Option<i32>,
+        weekly_contract_minutes: i32,
+    ) -> Result<EmployeeCostBasis, CoreError> {
+        let mut member_repository = member_repository;
+        let mut role_repository = role_repository;
+        let mut employee_repository = employee_repository;
+
+        let employee = employee_repository
+            .find_by_id(employee_id)
+            .await?
+            .ok_or(CoreError::NotFound)?;
+
+        let actor = policy::enrich_for_organization(
+            actor,
+            employee.organization_id,
+            &mut member_repository,
+            &mut role_repository,
+        )
+        .await?;
+        policy::require(
+            &authz,
+            &actor,
+            "member.manage",
+            Resource::new("member", employee.member_id.0.to_string()),
+        )
+        .await?;
+
+        let mut service = EmployeeCostBasisService::new(employee_cost_basis_repository);
+        service
+            .set_cost_basis(SetEmployeeCostBasisCommand {
+                organization_id: employee.organization_id,
+                employee_id,
+                effective_from,
+                is_salaried,
+                hourly_rate_cents,
+                monthly_cost_cents,
+                weekly_contract_minutes,
+            })
+            .await
+    }
+
+    /// Corrects a cost basis version that was entered wrong — the dangerous
+    /// verb, because it rewrites history on purpose rather than dating a new
+    /// change.
+    ///
+    /// The version is loaded first and authorization runs against *its own*
+    /// `organization_id`, never one taken from the request path: a bare
+    /// `/cost-bases/{id}` route has no organization to trust otherwise, the
+    /// same reason `upsert_employee_profile` loads the seat before
+    /// authorizing.
+    #[allow(clippy::too_many_arguments)]
+    #[transactional(employee_cost_basis, member, role, authz)]
+    pub async fn correct_employee_cost_basis(
+        &self,
+        actor: Subject,
+        id: EmployeeCostBasisId,
+        effective_from: NaiveDate,
+        effective_to: Option<NaiveDate>,
+        is_salaried: bool,
+        hourly_rate_cents: Option<i32>,
+        monthly_cost_cents: Option<i32>,
+        weekly_contract_minutes: i32,
+    ) -> Result<EmployeeCostBasis, CoreError> {
+        let mut member_repository = member_repository;
+        let mut role_repository = role_repository;
+
+        let mut service = EmployeeCostBasisService::new(employee_cost_basis_repository);
+        let current = service.get_cost_basis(id).await?;
+
+        let actor = policy::enrich_for_organization(
+            actor,
+            current.organization_id,
+            &mut member_repository,
+            &mut role_repository,
+        )
+        .await?;
+        policy::require(
+            &authz,
+            &actor,
+            "member.manage",
+            Resource::new("member", current.employee_id.0.to_string()),
+        )
+        .await?;
+
+        service
+            .correct_cost_basis(CorrectEmployeeCostBasisCommand {
+                id,
+                effective_from,
+                effective_to,
+                is_salaried,
+                hourly_rate_cents,
+                monthly_cost_cents,
+                weekly_contract_minutes,
+            })
+            .await
     }
 }

@@ -70,16 +70,39 @@ pub trait EmployeeCostBasisRepository: Send {
         employee_id: EmployeeId,
     ) -> impl Future<Output = Result<Option<EmployeeCostBasis>, CoreError>> + Send;
 
+    /// One version by its own id — the "bare id derives its organization from
+    /// the loaded row" pattern: a `PATCH /cost-bases/{id}` route has no
+    /// organization in its path to trust, so the row loaded here is what
+    /// authorization runs against.
+    fn find_by_id(
+        &mut self,
+        id: EmployeeCostBasisId,
+    ) -> impl Future<Output = Result<Option<EmployeeCostBasis>, CoreError>> + Send;
+
+    /// Every version of `employee_id`'s history, oldest first — the whole
+    /// point of keeping past versions instead of overwriting them.
+    fn list_by_employee(
+        &mut self,
+        employee_id: EmployeeId,
+    ) -> impl Future<Output = Result<Vec<EmployeeCostBasis>, CoreError>> + Send;
+
     /// Persists a brand new cost basis version.
     fn insert(
         &mut self,
         basis: &EmployeeCostBasis,
     ) -> impl Future<Output = Result<EmployeeCostBasis, CoreError>> + Send;
 
-    /// Replaces an existing version's own fields in place — used when the
-    /// same `effective_from` is set again, so calling `set_cost_basis` twice
-    /// in a row for the same date edits one row rather than accumulating a
-    /// second.
+    /// Replaces an existing version's own fields in place, `effective_from`
+    /// and `effective_to` included.
+    ///
+    /// Two callers rely on different halves of that: `set_cost_basis`'s
+    /// same-day edit only ever passes back the row's own unchanged dates, so
+    /// for it this is indistinguishable from a narrower update that left them
+    /// alone. `correct_cost_basis` is the one that actually moves them — the
+    /// dangerous verb, because it rewrites history on purpose rather than
+    /// dating a new change. The exclusion constraint on
+    /// `employee_cost_bases` is what stands between a wrong correction and a
+    /// silently overlapping history.
     fn update(
         &mut self,
         basis: &EmployeeCostBasis,

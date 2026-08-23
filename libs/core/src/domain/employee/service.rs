@@ -5,7 +5,8 @@ use crate::{
     Employee, EmployeeCostBasis, EmployeeCostBasisId, EmployeeId, MemberId, OrganizationId,
     domain::employee::{
         commands::{
-            RemoveEmployeeProfileCommand, SetEmployeeCostBasisCommand, UpsertEmployeeProfileCommand,
+            CorrectEmployeeCostBasisCommand, RemoveEmployeeProfileCommand,
+            SetEmployeeCostBasisCommand, UpsertEmployeeProfileCommand,
         },
         ports::{EmployeeCostBasisRepository, EmployeeRepository},
     },
@@ -215,6 +216,64 @@ where
                 "cannot set a cost basis version before the one currently in effect".to_owned(),
             )),
         }
+    }
+
+    /// The whole history of `employee_id`, oldest first.
+    pub async fn list_cost_bases(
+        &mut self,
+        employee_id: EmployeeId,
+    ) -> Result<Vec<EmployeeCostBasis>, CoreError> {
+        self.repo.list_by_employee(employee_id).await
+    }
+
+    /// One version by its own id, or [`CoreError::NotFound`]. The read half
+    /// of the "bare id derives its organization from the loaded row"
+    /// pattern: a caller keyed on a cost basis id alone loads the row here
+    /// before it can know which organization to authorize against.
+    pub async fn get_cost_basis(
+        &mut self,
+        id: EmployeeCostBasisId,
+    ) -> Result<EmployeeCostBasis, CoreError> {
+        self.repo.find_by_id(id).await?.ok_or(CoreError::NotFound)
+    }
+
+    /// Corrects a version that was entered wrong — the dangerous verb. Unlike
+    /// [`Self::set_cost_basis`] this never opens a new version or closes
+    /// another one: it rewrites the named version in place, dates included,
+    /// and the database's exclusion constraint is what refuses a correction
+    /// that would make two versions overlap.
+    pub async fn correct_cost_basis(
+        &mut self,
+        command: CorrectEmployeeCostBasisCommand,
+    ) -> Result<EmployeeCostBasis, CoreError> {
+        validate_rate(command.hourly_rate_cents)?;
+        validate_monthly_cost(command.monthly_cost_cents)?;
+        validate_weekly_contract_minutes(command.weekly_contract_minutes)?;
+        if let Some(effective_to) = command.effective_to
+            && effective_to <= command.effective_from
+        {
+            return Err(CoreError::Conflict(
+                "cost basis effective_to must be after effective_from".to_owned(),
+            ));
+        }
+
+        let mut basis = self.get_cost_basis(command.id).await?;
+
+        let (hourly_rate_cents, monthly_cost_cents) = if command.is_salaried {
+            (None, command.monthly_cost_cents)
+        } else {
+            (command.hourly_rate_cents, None)
+        };
+
+        basis.effective_from = command.effective_from;
+        basis.effective_to = command.effective_to;
+        basis.is_salaried = command.is_salaried;
+        basis.hourly_rate_cents = hourly_rate_cents;
+        basis.monthly_cost_cents = monthly_cost_cents;
+        basis.weekly_contract_minutes = command.weekly_contract_minutes;
+        basis.updated_at = Utc::now();
+
+        self.repo.update(&basis).await
     }
 }
 

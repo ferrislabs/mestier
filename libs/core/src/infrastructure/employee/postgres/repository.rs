@@ -240,6 +240,49 @@ impl<'tx> EmployeeCostBasisRepository for PgEmployeeCostBasisRepository<'tx> {
         Ok(row.map(Into::into))
     }
 
+    async fn find_by_id(
+        &mut self,
+        id: EmployeeCostBasisId,
+    ) -> Result<Option<EmployeeCostBasis>, CoreError> {
+        let mut tx = self.tx.lock().await;
+        let row = sqlx::query_as!(
+            EmployeeCostBasisRow,
+            r#"
+            SELECT id, org_id, employee_id, effective_from, effective_to, is_salaried, hourly_rate_cents, monthly_cost_cents, weekly_contract_minutes, created_at, updated_at
+            FROM employee_cost_bases
+            WHERE id = $1
+            "#,
+            id.0,
+        )
+        .fetch_optional(&mut ***tx)
+        .await
+        .map_err(map_sqlx_error)?;
+
+        Ok(row.map(Into::into))
+    }
+
+    async fn list_by_employee(
+        &mut self,
+        employee_id: EmployeeId,
+    ) -> Result<Vec<EmployeeCostBasis>, CoreError> {
+        let mut tx = self.tx.lock().await;
+        let rows = sqlx::query_as!(
+            EmployeeCostBasisRow,
+            r#"
+            SELECT id, org_id, employee_id, effective_from, effective_to, is_salaried, hourly_rate_cents, monthly_cost_cents, weekly_contract_minutes, created_at, updated_at
+            FROM employee_cost_bases
+            WHERE employee_id = $1
+            ORDER BY effective_from ASC
+            "#,
+            employee_id.0,
+        )
+        .fetch_all(&mut ***tx)
+        .await
+        .map_err(map_sqlx_error)?;
+
+        Ok(rows.into_iter().map(Into::into).collect())
+    }
+
     async fn insert(&mut self, basis: &EmployeeCostBasis) -> Result<EmployeeCostBasis, CoreError> {
         let mut tx = self.tx.lock().await;
         let row = sqlx::query_as!(
@@ -274,11 +317,13 @@ impl<'tx> EmployeeCostBasisRepository for PgEmployeeCostBasisRepository<'tx> {
             EmployeeCostBasisRow,
             r#"
             UPDATE employee_cost_bases
-            SET is_salaried = $2, hourly_rate_cents = $3, monthly_cost_cents = $4, weekly_contract_minutes = $5, updated_at = $6
+            SET effective_from = $2, effective_to = $3, is_salaried = $4, hourly_rate_cents = $5, monthly_cost_cents = $6, weekly_contract_minutes = $7, updated_at = $8
             WHERE id = $1
             RETURNING id, org_id, employee_id, effective_from, effective_to, is_salaried, hourly_rate_cents, monthly_cost_cents, weekly_contract_minutes, created_at, updated_at
             "#,
             basis.id.0,
+            basis.effective_from,
+            basis.effective_to,
             basis.is_salaried,
             basis.hourly_rate_cents,
             basis.monthly_cost_cents,

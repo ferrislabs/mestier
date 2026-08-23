@@ -1,6 +1,6 @@
 use chrono::NaiveDate;
 
-use crate::{EmployeeId, MemberId, OrganizationId};
+use crate::{EmployeeCostBasisId, EmployeeId, MemberId, OrganizationId};
 
 /// Attaches a contractual profile to a member, or updates the one already
 /// there. One command for both because the caller's intent is the same —
@@ -40,6 +40,25 @@ pub struct SetEmployeeCostBasisCommand {
     pub organization_id: OrganizationId,
     pub employee_id: EmployeeId,
     pub effective_from: NaiveDate,
+    pub is_salaried: bool,
+    /// `None` means the rate is not set yet; `Some(0)` means genuinely free.
+    /// Ignored when `is_salaried` is set.
+    pub hourly_rate_cents: Option<i32>,
+    /// Ignored unless `is_salaried` is set — the two cost bases are exclusive.
+    pub monthly_cost_cents: Option<i32>,
+    pub weekly_contract_minutes: i32,
+}
+
+/// Corrects a cost basis version that was entered wrong — the dangerous verb,
+/// because unlike [`SetEmployeeCostBasisCommand`] it rewrites history on
+/// purpose rather than dating a new change. Every field of the version can be
+/// corrected, including its own `effective_from`/`effective_to`: a typo in
+/// the date is exactly the kind of mistake this exists to fix.
+#[derive(Debug, Clone)]
+pub struct CorrectEmployeeCostBasisCommand {
+    pub id: EmployeeCostBasisId,
+    pub effective_from: NaiveDate,
+    pub effective_to: Option<NaiveDate>,
     pub is_salaried: bool,
     /// `None` means the rate is not set yet; `Some(0)` means genuinely free.
     /// Ignored when `is_salaried` is set.
