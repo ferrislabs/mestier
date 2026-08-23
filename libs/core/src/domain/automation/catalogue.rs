@@ -1,6 +1,6 @@
 use events::{EventCatalogue, EventDescriptor};
 
-use crate::domain::{assignment_report, invitation, member, quote, time_entry};
+use crate::domain::{assignment_report, invitation, invoice, member, quote, time_entry};
 
 /// Every event the product can emit, assembled from the modules that own them.
 ///
@@ -21,6 +21,7 @@ pub fn event_catalogue() -> EventCatalogue {
 fn descriptors() -> Vec<EventDescriptor> {
     [
         quote::events::descriptors(),
+        invoice::events::descriptors(),
         member::events::descriptors(),
         invitation::events::descriptors(),
         time_entry::events::descriptors(),
@@ -47,6 +48,7 @@ mod tests {
     fn the_catalogue_describes_exactly_what_the_modules_emit() {
         let emitted: Vec<EventKey> = [
             quote::events::emitted_events(),
+            invoice::events::emitted_events(),
             member::events::emitted_events(),
             invitation::events::emitted_events(),
             time_entry::events::emitted_events(),
