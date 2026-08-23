@@ -10,6 +10,7 @@ import {
 	FolderKanban,
 	KanbanSquare,
 	LayoutDashboard,
+	LayoutTemplate,
 	ListTree,
 	MessagesSquare,
 	Package,
@@ -141,6 +142,12 @@ export const MODULES: AppModule[] = [
 				label: 'Projets',
 				to: '/planning/projects',
 				icon: FolderKanban,
+			},
+			{
+				id: 'project-templates',
+				label: 'Modèles de projet',
+				to: '/planning/project-templates',
+				icon: LayoutTemplate,
 			},
 			{
 				id: 'reports',

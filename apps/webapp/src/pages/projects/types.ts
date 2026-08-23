@@ -33,3 +33,24 @@ export function optionalId(value: string): string | null {
 
 	return trimmed === '' ? null : trimmed
 }
+
+/** "Start a project from a template" — picks the template, then the same name/customer/quote shape a blank project asks for, plus a start date every task shape's offset resolves against. */
+export interface InstantiateTemplateFormValues {
+	templateId: string
+	name: string
+	startDate: string
+	customerId: string
+	quoteId: string
+}
+
+export function emptyInstantiateTemplateForm(
+	today: string,
+): InstantiateTemplateFormValues {
+	return {
+		templateId: '',
+		name: '',
+		startDate: today,
+		customerId: '',
+		quoteId: '',
+	}
+}

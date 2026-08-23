@@ -1,5 +1,12 @@
 import type { ColumnDef } from '@tanstack/react-table'
-import { Building2, FolderKanban, Loader2, Plus, Search } from 'lucide-react'
+import {
+	Building2,
+	FolderKanban,
+	LayoutTemplate,
+	Loader2,
+	Plus,
+	Search,
+} from 'lucide-react'
 import { useMemo } from 'react'
 import {
 	ReferenceTable,
@@ -32,14 +39,18 @@ export interface ProjectsListProps {
 	error: string | null
 	editingId: string | null
 	isSaving: boolean
+	/** True while a project's tasks are being loaded to seed "save as template". */
+	isBuildingTemplate: boolean
 	onSearchChange: (search: string) => void
 	onIncludeArchivedChange: (includeArchived: boolean) => void
 	onCreate: () => void
+	onStartFromTemplate: () => void
 	onEdit: (project: Project) => void
 	onCancelEdit: () => void
 	onSaveEdit: () => void
 	onArchive: (project: Project) => void
 	onRestore: (project: Project) => void
+	onSaveAsTemplate: (project: Project) => void
 }
 
 /**
@@ -57,14 +68,17 @@ export function ProjectsList({
 	error,
 	editingId,
 	isSaving,
+	isBuildingTemplate,
 	onSearchChange,
 	onIncludeArchivedChange,
 	onCreate,
+	onStartFromTemplate,
 	onEdit,
 	onCancelEdit,
 	onSaveEdit,
 	onArchive,
 	onRestore,
+	onSaveAsTemplate,
 }: ProjectsListProps) {
 	const internalCount = projects.filter((project) => project.is_internal).length
 
@@ -137,14 +151,26 @@ export function ProjectsList({
 							</Button>
 						</div>
 					) : (
-						<RowActions
-							isEditing={editingId === row.original.id}
-							isSaving={isSaving}
-							onEdit={() => onEdit(row.original)}
-							onCancel={onCancelEdit}
-							onSave={onSaveEdit}
-							onDelete={() => onArchive(row.original)}
-						/>
+						<div className="flex items-center justify-end gap-1">
+							<Button
+								variant="ghost"
+								size="icon"
+								disabled={isBuildingTemplate}
+								onClick={() => onSaveAsTemplate(row.original)}
+								aria-label="Enregistrer comme modèle"
+								title="Enregistrer comme modèle"
+							>
+								<LayoutTemplate className="size-4" />
+							</Button>
+							<RowActions
+								isEditing={editingId === row.original.id}
+								isSaving={isSaving}
+								onEdit={() => onEdit(row.original)}
+								onCancel={onCancelEdit}
+								onSave={onSaveEdit}
+								onDelete={() => onArchive(row.original)}
+							/>
+						</div>
 					),
 			},
 		],
@@ -152,11 +178,13 @@ export function ProjectsList({
 			customerName,
 			editingId,
 			highlightedProjectId,
+			isBuildingTemplate,
 			isSaving,
 			onArchive,
 			onCancelEdit,
 			onEdit,
 			onRestore,
+			onSaveAsTemplate,
 			onSaveEdit,
 		],
 	)
@@ -168,10 +196,16 @@ export function ProjectsList({
 				title="Projets"
 				description="Le sujet auquel un coût est rattaché. Un projet sans client est un projet interne : une réunion récurrente coûte, et doit se voir."
 				actions={
-					<Button onClick={onCreate}>
-						<Plus />
-						Nouveau projet
-					</Button>
+					<div className="flex gap-2">
+						<Button variant="outline" onClick={onStartFromTemplate}>
+							<LayoutTemplate />
+							Depuis un modèle
+						</Button>
+						<Button onClick={onCreate}>
+							<Plus />
+							Nouveau projet
+						</Button>
+					</div>
 				}
 			/>
 
