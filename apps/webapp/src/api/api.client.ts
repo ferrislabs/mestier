@@ -277,6 +277,24 @@ export namespace Schemas {
     name: string;
     tasks?: Array<ProjectTemplateTaskShapeRequest> | undefined;
   };
+  export type QuoteLineId = string;
+  export type PlannedTaskRequest = {
+    all_day?: boolean | undefined;
+    blocks_availability: boolean;
+    description?: (string | null) | undefined;
+    ends_at?: (string | null) | undefined;
+    expenses_cents?: number | undefined;
+    expenses_label?: (string | null) | undefined;
+    parent_index?: (number | null) | undefined;
+    quote_line_ids?: Array<QuoteLineId> | undefined;
+    starts_at?: (string | null) | undefined;
+    title: string;
+  };
+  export type CreateQuotePlanRequest = {
+    force_new?: boolean | undefined;
+    name: string;
+    tasks?: Array<PlannedTaskRequest> | undefined;
+  };
   export type ServiceRateId = string;
   export type QuoteLineRequest = {
     label: string;
@@ -594,6 +612,28 @@ export namespace Schemas {
     total?: (number | null) | undefined;
   };
   export type PatchTaskResponse = { detached: boolean; task: TaskResponse };
+  export type PlannedProjectResponse = {
+    created_at: string;
+    customer_context_id?: (null | CustomerContextId) | undefined;
+    customer_id?: (null | CustomerId) | undefined;
+    id: ProjectId;
+    name: string;
+    organization_id: OrganizationId;
+    quote_id?: (null | QuoteId) | undefined;
+    updated_at: string;
+  };
+  export type PlannedTaskResponse = {
+    all_day: boolean;
+    description?: (string | null) | undefined;
+    ends_at?: (string | null) | undefined;
+    expenses_cents: number;
+    expenses_label?: (string | null) | undefined;
+    id: TaskId;
+    parent_task_id?: (null | TaskId) | undefined;
+    project_id?: (null | ProjectId) | undefined;
+    starts_at?: (string | null) | undefined;
+    title: string;
+  };
   export type PlanningEntryResponse =
     | {
         all_day: boolean;
@@ -717,7 +757,6 @@ export namespace Schemas {
   };
   export type WorkSlotRequest = { ends_minute: number; starts_minute: number; work_date: string };
   export type PutWorkSlotsRequest = { slots: Array<WorkSlotRequest> };
-  export type QuoteLineId = string;
   export type QuoteLineResponse = {
     created_at: string;
     id: QuoteLineId;
@@ -750,6 +789,13 @@ export namespace Schemas {
     updated_at: string;
     vat_breakdown: Array<QuoteVatBreakdownLineResponse>;
   };
+  export type TaskProposalResponse = {
+    quote_line_id: QuoteLineId;
+    suggested_minutes?: (number | null) | undefined;
+    title: string;
+  };
+  export type QuotePlanProposalResponse = { quote: QuoteResponse; tasks: Array<TaskProposalResponse> };
+  export type QuotePlanResponse = { project: PlannedProjectResponse; tasks: Array<PlannedTaskResponse> };
   export type RecoverTimeEntryRequest = { ended_at: string };
   export type RecurrenceRuleResponse =
     | { frequency: "DAILY" }
@@ -5138,6 +5184,44 @@ export namespace Endpoints {
     };
     responses: { 200: unknown; 401: unknown; 403: unknown; 404: unknown; 409: unknown };
   };
+  export type post_CreateQuotePlan = {
+    method: "POST";
+    path: "/api/v1/quotes/{quote_id}/plan";
+    requestFormat: "json";
+    parameters: {
+      path: { quote_id: string };
+
+      body: Schemas.CreateQuotePlanRequest;
+    };
+    responses: {
+      201: {
+        data: { project: Schemas.PlannedProjectResponse; tasks: Array<Schemas.PlannedTaskResponse> };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+      404: unknown;
+      409: unknown;
+    };
+  };
+  export type get_GetQuotePlanProposal = {
+    method: "GET";
+    path: "/api/v1/quotes/{quote_id}/plan-proposal";
+    requestFormat: "json";
+    parameters: {
+      path: { quote_id: string };
+    };
+    responses: {
+      200: {
+        data: { quote: Schemas.QuoteResponse; tasks: Array<Schemas.TaskProposalResponse> };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+      404: unknown;
+      409: unknown;
+    };
+  };
   export type patch_UpdateQuoteStatus = {
     method: "PATCH";
     path: "/api/v1/quotes/{quote_id}/status";
@@ -5448,6 +5532,7 @@ export type EndpointByMethod = {
     "/api/v1/products/{product_id}": Endpoints.get_GetProduct;
     "/api/v1/quotes/{quote_id}": Endpoints.get_GetQuote;
     "/api/v1/quotes/{quote_id}/pdf": Endpoints.get_ExportQuotePdf;
+    "/api/v1/quotes/{quote_id}/plan-proposal": Endpoints.get_GetQuotePlanProposal;
     "/api/v1/service-rates/{service_rate_id}": Endpoints.get_GetServiceRate;
     "/api/v1/users/@me/organizations": Endpoints.get_ListMyOrganizations;
   };
@@ -5495,6 +5580,7 @@ export type EndpointByMethod = {
     "/api/v1/organizations/{organization_id}/tasks": Endpoints.post_CreateTask;
     "/api/v1/organizations/{organization_id}/tasks/bulk-assign": Endpoints.post_BulkAssignTasks;
     "/api/v1/organizations/{organization_id}/tasks/{task_id}/comments": Endpoints.post_CreateTaskComment;
+    "/api/v1/quotes/{quote_id}/plan": Endpoints.post_CreateQuotePlan;
   };
   put: {
     "/api/v1/chat/channels/{channel_id}/permissions/everyone": Endpoints.put_UpsertEveryoneOverwrite;
