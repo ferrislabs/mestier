@@ -83,19 +83,41 @@ impl App {
         )
     }
 
-    /// Drops the fixture. Deleting the organization cascades to its quotes and
-    /// customers; the user row outlives it and goes separately.
+    pub fn plan_proposal_url(&self, quote_id: &str) -> String {
+        format!("{}/api/v1/quotes/{quote_id}/plan-proposal", self.base_url)
+    }
+
+    pub fn plan_url(&self, quote_id: &str) -> String {
+        format!("{}/api/v1/quotes/{quote_id}/plan", self.base_url)
+    }
+
+    /// Drops the fixture. `org_id`/`customer_id`/`quote_id` foreign keys are
+    /// `NO ACTION`, not `CASCADE` (checked directly against the live schema),
+    /// so tasks and projects the plan endpoint created have to go before the
+    /// organization does — explicit and ordered rather than relying on a
+    /// cascade that isn't actually there, mirroring
+    /// `handlers-planning`'s own harness.
     pub async fn cleanup(&self) {
         for statement in [
+            "DELETE FROM tasks WHERE org_id = $1",
+            "DELETE FROM projects WHERE org_id = $1",
+            "DELETE FROM quote_lines WHERE org_id = $1",
+            "DELETE FROM quotes WHERE org_id = $1",
+            "DELETE FROM customer_contexts WHERE customer_id IN (SELECT id FROM customers WHERE org_id = $1)",
+            "DELETE FROM customers WHERE org_id = $1",
+            "DELETE FROM organization_members WHERE organization_id = $1",
             "DELETE FROM organizations WHERE id = $1",
-            "DELETE FROM users WHERE id = $2",
         ] {
             let _ = sqlx::query(statement)
                 .bind(self.organization_id)
-                .bind(self.user_id)
                 .execute(&self.pool)
                 .await;
         }
+
+        let _ = sqlx::query("DELETE FROM users WHERE id = $1")
+            .bind(self.user_id)
+            .execute(&self.pool)
+            .await;
     }
 }
 

@@ -270,6 +270,203 @@ async fn pdf_export_refuses_an_incomplete_legal_identity_naming_the_missing_fiel
     app.cleanup().await;
 }
 
+/// Creates a quote with one hourly line and one per-square-meter line, and
+/// accepts it — the fixture every #298 test below starts from.
+async fn create_and_accept_a_quote(app: &harness::App) -> (String, serde_json::Value) {
+    let created: serde_json::Value = reqwest::Client::new()
+        .post(app.quotes_url())
+        .bearer_auth(&app.token)
+        .json(&json!({
+            "title": "Terrasse Dupont",
+            "customer_id": app.customer_id,
+            "customer_context_id": app.customer_context_id,
+            "lines": [
+                { "label": "Terrassement", "quantity": "3", "unit": "HOUR", "unit_price_cents": 4500, "photo_keys": [] },
+                { "label": "Pose de dalles", "quantity": "10", "unit": "M2", "unit_price_cents": 3800, "photo_keys": [] }
+            ]
+        }))
+        .send()
+        .await
+        .expect("the api answers the create call")
+        .json()
+        .await
+        .expect("the create answer is json");
+    let quote_id = created["data"]["id"].as_str().expect("an id").to_owned();
+
+    let accepted = reqwest::Client::new()
+        .patch(format!("{}/api/v1/quotes/{quote_id}/status", app.base_url))
+        .bearer_auth(&app.token)
+        .json(&json!({ "status": "ACCEPTED" }))
+        .send()
+        .await
+        .expect("the api answers the status update call");
+    assert!(accepted.status().is_success(), "{}", accepted.status());
+
+    (quote_id, created["data"].clone())
+}
+
+/// The proposal names a duration for the hourly line and none for the
+/// per-square-meter one, and the confirmed plan turns into a real project
+/// carrying the quote, with a real task under it — #298's whole point.
+#[tokio::test]
+#[ignore = "requires live postgres and redis"]
+async fn an_accepted_quote_proposes_and_then_plans_a_project() {
+    let app = harness::start().await;
+    let (quote_id, quote) = create_and_accept_a_quote(&app).await;
+    let lines = quote["lines"].as_array().expect("the quote carries lines");
+    let hourly_line_id = lines[0]["id"].as_str().expect("a line id").to_owned();
+    let per_unit_line_id = lines[1]["id"].as_str().expect("a line id").to_owned();
+
+    let proposal: serde_json::Value = reqwest::Client::new()
+        .get(app.plan_proposal_url(&quote_id))
+        .bearer_auth(&app.token)
+        .send()
+        .await
+        .expect("the api answers the plan-proposal call")
+        .json()
+        .await
+        .expect("the plan-proposal answer is json");
+
+    let tasks = proposal["data"]["tasks"]
+        .as_array()
+        .expect("the proposal carries an array of tasks");
+    let hourly_proposal = tasks
+        .iter()
+        .find(|task| task["quote_line_id"] == json!(hourly_line_id))
+        .expect("the hourly line has a proposal");
+    assert_eq!(
+        hourly_proposal["suggested_minutes"],
+        json!(180),
+        "3 hours must suggest 180 minutes: {proposal}"
+    );
+    let per_unit_proposal = tasks
+        .iter()
+        .find(|task| task["quote_line_id"] == json!(per_unit_line_id))
+        .expect("the per-unit line has a proposal");
+    assert_eq!(
+        per_unit_proposal["suggested_minutes"],
+        json!(null),
+        "a per-unit line must suggest no duration rather than a guess: {proposal}"
+    );
+
+    let planned = reqwest::Client::new()
+        .post(app.plan_url(&quote_id))
+        .bearer_auth(&app.token)
+        .json(&json!({
+            "name": "Terrasse Dupont",
+            "tasks": [
+                {
+                    "title": "Terrassement",
+                    "starts_at": "2026-09-01T08:00:00Z",
+                    "ends_at": "2026-09-01T11:00:00Z",
+                    "all_day": false,
+                    "blocks_availability": true,
+                    "quote_line_ids": [hourly_line_id],
+                }
+            ]
+        }))
+        .send()
+        .await
+        .expect("the api answers the plan call");
+    let status = planned.status();
+    let body: serde_json::Value = planned
+        .json()
+        .await
+        .unwrap_or_else(|e| panic!("the plan answer is json: {e}"));
+    assert!(status.is_success(), "plan failed with {status}: {body}");
+
+    assert_eq!(body["data"]["project"]["quote_id"], json!(quote_id));
+    assert_eq!(
+        body["data"]["project"]["customer_id"],
+        json!(app.customer_id)
+    );
+    let created_tasks = body["data"]["tasks"]
+        .as_array()
+        .expect("the plan carries an array of tasks");
+    assert_eq!(created_tasks.len(), 1);
+    assert_eq!(created_tasks[0]["title"], json!("Terrassement"));
+    assert_eq!(
+        created_tasks[0]["project_id"],
+        body["data"]["project"]["id"]
+    );
+
+    app.cleanup().await;
+}
+
+/// A quote that is not accepted is refused with its own 409, on both the
+/// proposal and the plan — never a 500, and never silently ignored.
+#[tokio::test]
+#[ignore = "requires live postgres and redis"]
+async fn a_quote_that_is_not_accepted_refuses_both_proposal_and_plan() {
+    let app = harness::start().await;
+    let quote_id = create_a_quote(&app).await; // stays DRAFT
+
+    let proposal = reqwest::Client::new()
+        .get(app.plan_proposal_url(&quote_id))
+        .bearer_auth(&app.token)
+        .send()
+        .await
+        .expect("the api answers the plan-proposal call");
+    assert_eq!(proposal.status(), 409, "a draft quote has no plan-proposal");
+
+    let planned = reqwest::Client::new()
+        .post(app.plan_url(&quote_id))
+        .bearer_auth(&app.token)
+        .json(&json!({ "name": "Terrasse Dupont", "tasks": [] }))
+        .send()
+        .await
+        .expect("the api answers the plan call");
+    assert_eq!(planned.status(), 409, "a draft quote cannot be planned");
+
+    app.cleanup().await;
+}
+
+/// Two projects on one quote makes the margin ambiguous (#260), so a second
+/// plan is refused unless the caller explicitly asks for one.
+#[tokio::test]
+#[ignore = "requires live postgres and redis"]
+async fn a_second_plan_is_refused_without_an_explicit_force_new() {
+    let app = harness::start().await;
+    let (quote_id, _quote) = create_and_accept_a_quote(&app).await;
+
+    let first = reqwest::Client::new()
+        .post(app.plan_url(&quote_id))
+        .bearer_auth(&app.token)
+        .json(&json!({ "name": "Terrasse Dupont", "tasks": [] }))
+        .send()
+        .await
+        .expect("the api answers the first plan call");
+    assert!(first.status().is_success(), "{}", first.status());
+
+    let second = reqwest::Client::new()
+        .post(app.plan_url(&quote_id))
+        .bearer_auth(&app.token)
+        .json(&json!({ "name": "Terrasse Dupont (bis)", "tasks": [] }))
+        .send()
+        .await
+        .expect("the api answers the second plan call");
+    assert_eq!(
+        second.status(),
+        409,
+        "a second project on the same quote must be refused by default"
+    );
+
+    let forced = reqwest::Client::new()
+        .post(app.plan_url(&quote_id))
+        .bearer_auth(&app.token)
+        .json(&json!({ "name": "Terrasse Dupont (bis)", "force_new": true, "tasks": [] }))
+        .send()
+        .await
+        .expect("the api answers the forced plan call");
+    assert!(
+        forced.status().is_success(),
+        "force_new must allow a second project: {}",
+        forced.status()
+    );
+
+    app.cleanup().await;
+}
+
 /// The other side of the same rule: once every field
 /// `LegalIdentity::try_from_organization` requires is filled in, the export
 /// actually produces a PDF. Written straight to the row rather than through

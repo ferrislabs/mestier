@@ -109,6 +109,8 @@ impl Modify for SecurityAddon {
         quote::quote::update_status::handler,
         quote::quote::soft_delete::handler,
         quote::quote::export_pdf::handler,
+        quote::quote::plan_proposal::handler,
+        quote::quote::plan::handler,
         reference::employee::list::handler,
         reference::employee::upsert_profile::handler,
         reference::employee::remove_profile::handler,
@@ -282,9 +284,16 @@ impl Modify for SecurityAddon {
         quote::quote::create::QuoteLineRequest,
         quote::quote::update::UpdateQuoteRequest,
         quote::quote::update_status::UpdateQuoteStatusRequest,
+        quote::quote::plan::CreateQuotePlanRequest,
+        quote::quote::plan::PlannedTaskRequest,
         quote::response::QuoteLineResponse,
         quote::response::QuoteVatBreakdownLineResponse,
         quote::response::QuoteResponse,
+        quote::response::TaskProposalResponse,
+        quote::response::QuotePlanProposalResponse,
+        quote::response::PlannedProjectResponse,
+        quote::response::PlannedTaskResponse,
+        quote::response::QuotePlanResponse,
         member::member::create::CreateMemberRequest,
         member::member::update::UpdateMemberRequest,
         member::response::MemberResponse,
@@ -512,6 +521,32 @@ mod tests {
 
         for field in ["project_id", "expenses_cents", "expenses_label"] {
             assert!(schema.contains(field), "{field} is missing from {schema}");
+        }
+    }
+
+    /// Same discipline as `every_project_template_route_reaches_the_document`,
+    /// for the quote-handover stack #298 adds.
+    #[test]
+    fn every_quote_plan_route_reaches_the_document() {
+        let document = ApiDoc::openapi();
+        let paths = &document.paths.paths;
+
+        let proposal = "/api/v1/quotes/{quote_id}/plan-proposal";
+        let plan = "/api/v1/quotes/{quote_id}/plan";
+
+        for path in [proposal, plan] {
+            assert!(
+                paths.contains_key(path),
+                "{path} is missing from the document"
+            );
+        }
+
+        let json = serde_json::to_string(&document).expect("the document serializes");
+        for operation_id in ["getQuotePlanProposal", "createQuotePlan"] {
+            assert!(
+                json.contains(&format!("\"operationId\":\"{operation_id}\"")),
+                "{operation_id} is missing from the document"
+            );
         }
     }
 }

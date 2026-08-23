@@ -2,10 +2,13 @@ use chrono::Utc;
 use common::{CoreError, generate_uuid_v7};
 
 use crate::{
-    CustomerContextId, CustomerId, OrganizationId, Project, ProjectId,
-    domain::project::{
-        commands::{CreateProjectCommand, UpdateProjectCommand},
-        ports::ProjectRepository,
+    CustomerContextId, CustomerId, OrganizationId, Project, ProjectId, Task, TaskId, TaskStatus,
+    domain::{
+        project::{
+            commands::{CreateProjectCommand, PlannedTaskCommand, UpdateProjectCommand},
+            ports::ProjectRepository,
+        },
+        task::service::normalize_expenses,
     },
 };
 
@@ -130,6 +133,111 @@ fn validate_customer_pairing(
     Ok(())
 }
 
+// ---------------------------------------------------------------------------
+// #298 — turning a confirmed quote-handover plan into real tasks. Pure, no
+// I/O: every task gets its own freshly generated id up front so a subtask
+// can reference its root's id before either is persisted, mirroring
+// `ProjectTemplateService`'s own `instantiate_tasks`.
+// ---------------------------------------------------------------------------
+
+/// Builds the tasks a confirmed plan produces, attached to `project_id`.
+/// Validates the same invariants `TaskService::create_task` enforces per
+/// task (a title, a root's own dates, `ends_at` after `starts_at`, the
+/// expenses/label pairing) plus the batch-local hierarchy check
+/// `ProjectTemplateService::build_shapes` uses for the same reason: none of
+/// these tasks have a persisted id yet to check `parent_task_id` against.
+pub fn build_planned_tasks(
+    commands: &[PlannedTaskCommand],
+    project_id: ProjectId,
+    organization_id: OrganizationId,
+) -> Result<Vec<Task>, CoreError> {
+    let now = Utc::now();
+    let ids: Vec<TaskId> = commands
+        .iter()
+        .map(|_| TaskId(generate_uuid_v7()))
+        .collect();
+
+    commands
+        .iter()
+        .enumerate()
+        .map(|(index, command)| {
+            if command.title.trim().is_empty() {
+                return Err(CoreError::Conflict(
+                    "a planned task needs a title".to_owned(),
+                ));
+            }
+
+            let parent_task_id = match command.parent_index {
+                Some(parent_index) => {
+                    if parent_index == index {
+                        return Err(CoreError::Conflict(
+                            "a planned task cannot be its own parent".to_owned(),
+                        ));
+                    }
+                    let parent = commands.get(parent_index).ok_or_else(|| {
+                        CoreError::Conflict(
+                            "a planned task's parent_index does not name another task of the \
+                             same plan"
+                                .to_owned(),
+                        )
+                    })?;
+                    if parent.parent_index.is_some() {
+                        return Err(CoreError::Conflict(
+                            "a planned task's parent cannot itself be a subtask".to_owned(),
+                        ));
+                    }
+                    Some(ids[parent_index])
+                }
+                None => None,
+            };
+
+            if command.starts_at.is_some() != command.ends_at.is_some() {
+                return Err(CoreError::Conflict(
+                    "starts_at and ends_at must be given together".to_owned(),
+                ));
+            }
+            if parent_task_id.is_none() && command.starts_at.is_none() {
+                return Err(CoreError::Conflict(
+                    "a root task needs its own dates".to_owned(),
+                ));
+            }
+            if let (Some(starts_at), Some(ends_at)) = (command.starts_at, command.ends_at)
+                && ends_at <= starts_at
+            {
+                return Err(CoreError::Conflict(
+                    "ends_at must be after starts_at".to_owned(),
+                ));
+            }
+
+            let (expenses_cents, expenses_label) =
+                normalize_expenses(command.expenses_cents, command.expenses_label.clone())?;
+
+            Ok(Task {
+                id: ids[index],
+                organization_id,
+                parent_task_id,
+                title: command.title.trim().to_owned(),
+                description: command.description.clone(),
+                starts_at: command.starts_at,
+                ends_at: command.ends_at,
+                all_day: command.all_day,
+                status: TaskStatus::Planned,
+                blocks_availability: command.blocks_availability,
+                customer_id: None,
+                customer_context_id: None,
+                quote_id: None,
+                project_id: Some(project_id),
+                expenses_cents,
+                expenses_label,
+                assignments: Vec::new(),
+                deleted_at: None,
+                created_at: now,
+                updated_at: now,
+            })
+        })
+        .collect()
+}
+
 #[cfg(test)]
 mod tests {
     use uuid::Uuid;
@@ -205,5 +313,121 @@ mod tests {
 
         assert!(!project.is_internal());
         assert!(project.customer_context_id.is_none());
+    }
+
+    // -----------------------------------------------------------------
+    // #298 — build_planned_tasks
+    // -----------------------------------------------------------------
+
+    fn root_task(title: &str) -> PlannedTaskCommand {
+        let now = Utc::now();
+        PlannedTaskCommand {
+            parent_index: None,
+            title: title.to_owned(),
+            description: None,
+            starts_at: Some(now),
+            ends_at: Some(now + chrono::Duration::hours(2)),
+            all_day: false,
+            blocks_availability: true,
+            expenses_cents: 0,
+            expenses_label: None,
+            quote_line_ids: Vec::new(),
+        }
+    }
+
+    #[test]
+    fn a_root_task_needs_its_own_dates() {
+        let mut command = root_task("Terrassement");
+        command.starts_at = None;
+        command.ends_at = None;
+
+        let err = build_planned_tasks(
+            &[command],
+            ProjectId(Uuid::new_v4()),
+            OrganizationId(Uuid::new_v4()),
+        )
+        .unwrap_err();
+
+        assert!(matches!(err, CoreError::Conflict(_)));
+    }
+
+    #[test]
+    fn a_subtask_can_inherit_its_root_window() {
+        let mut child = root_task("Préparer le matériel");
+        child.parent_index = Some(0);
+        child.starts_at = None;
+        child.ends_at = None;
+
+        let tasks = build_planned_tasks(
+            &[root_task("Terrassement"), child],
+            ProjectId(Uuid::new_v4()),
+            OrganizationId(Uuid::new_v4()),
+        )
+        .unwrap();
+
+        assert_eq!(tasks[1].parent_task_id, Some(tasks[0].id));
+        assert!(tasks[1].starts_at.is_none());
+    }
+
+    #[test]
+    fn ends_at_before_starts_at_is_refused() {
+        let mut command = root_task("Terrassement");
+        command.ends_at = command.starts_at;
+
+        let err = build_planned_tasks(
+            &[command],
+            ProjectId(Uuid::new_v4()),
+            OrganizationId(Uuid::new_v4()),
+        )
+        .unwrap_err();
+
+        assert!(matches!(err, CoreError::Conflict(_)));
+    }
+
+    #[test]
+    fn a_three_level_hierarchy_is_refused() {
+        let mut middle = root_task("Étape 2");
+        middle.parent_index = Some(0);
+        let mut grandchild = root_task("Étape 3");
+        grandchild.parent_index = Some(1);
+
+        let err = build_planned_tasks(
+            &[root_task("Étape 1"), middle, grandchild],
+            ProjectId(Uuid::new_v4()),
+            OrganizationId(Uuid::new_v4()),
+        )
+        .unwrap_err();
+
+        assert!(matches!(err, CoreError::Conflict(_)));
+    }
+
+    #[test]
+    fn every_planned_task_attaches_to_the_project_and_never_the_quote() {
+        let project_id = ProjectId(Uuid::new_v4());
+
+        let tasks = build_planned_tasks(
+            &[root_task("Terrassement")],
+            project_id,
+            OrganizationId(Uuid::new_v4()),
+        )
+        .unwrap();
+
+        assert_eq!(tasks[0].project_id, Some(project_id));
+        assert_eq!(tasks[0].quote_id, None);
+    }
+
+    #[test]
+    fn an_expense_with_no_label_is_refused() {
+        let mut command = root_task("Terrassement");
+        command.expenses_cents = 4500;
+
+        let err = build_planned_tasks(
+            &[command],
+            ProjectId(Uuid::new_v4()),
+            OrganizationId(Uuid::new_v4()),
+        )
+        .unwrap_err();
+
+        assert!(matches!(err, CoreError::Conflict(_)));
     }
 }

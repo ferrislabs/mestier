@@ -77,6 +77,8 @@ pub fn router(state: &AppState) -> Router<AppState> {
         .typed_patch(quote::update_status::handler)
         .typed_delete(quote::soft_delete::handler)
         .typed_get(quote::export_pdf::handler)
+        .typed_get(quote::plan_proposal::handler)
+        .typed_post(quote::plan::handler)
         .layer(from_fn_with_state(state.clone(), rate_limit_middleware))
         .layer(from_fn_with_state(state.clone(), auth_middleware))
 }

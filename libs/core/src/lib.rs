@@ -49,6 +49,14 @@ pub use domain::employee::service::salaried_hourly_rate_cents;
 /// crate-private: nothing outside implements it by hand.
 pub use domain::quote::service::QuoteService;
 
+/// Turning an accepted quote into a project's proposed tasks (#298) — the
+/// proposal type and the guards a handler needs to answer `GET
+/// .../plan-proposal` and refuse an invalid `POST .../plan` with its own
+/// error rather than a 500.
+pub use domain::quote::service::{
+    TaskProposal, propose_tasks_from_quote, require_quote_accepted, validate_quote_plannable,
+};
+
 /// The profitability calculation, and the port it reads through. Exposed so the
 /// use case in `application` can drive it, and so the report types are usable
 /// from the handler crates.
@@ -131,7 +139,11 @@ pub use domain::{
     },
     planning::service::detect_conflicts,
     product::commands::{CreateProductCommand, UpdateProductCommand},
-    project::commands::{CreateProjectCommand, UpdateProjectCommand},
+    project::commands::{
+        CreateProjectCommand, CreateProjectFromQuoteCommand, PlannedTaskCommand,
+        UpdateProjectCommand,
+    },
+    project::service::build_planned_tasks,
     project_template::commands::{
         CreateProjectTemplateCommand, InstantiateProjectTemplateCommand,
         ProjectTemplateTaskShapeCommand, ReplaceProjectTemplateTasksCommand,

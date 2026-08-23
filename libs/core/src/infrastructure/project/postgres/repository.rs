@@ -3,7 +3,7 @@ use common::CoreError;
 use mestier_macros::repository;
 
 use crate::{
-    CustomerId, OrganizationId, Project, ProjectId,
+    CustomerId, OrganizationId, Project, ProjectId, QuoteId,
     domain::project::ports::ProjectRepository,
     infrastructure::{
         postgres::{SharedTx, error::map_sqlx_error},
@@ -172,5 +172,18 @@ impl<'tx> ProjectRepository for PgProjectRepository<'tx> {
         }
 
         Ok(())
+    }
+
+    async fn exists_for_quote(&mut self, quote_id: QuoteId) -> Result<bool, CoreError> {
+        let mut tx = self.tx.lock().await;
+        let exists = sqlx::query_scalar!(
+            r#"SELECT EXISTS(SELECT 1 FROM projects WHERE quote_id = $1) AS "exists!""#,
+            quote_id.0,
+        )
+        .fetch_one(&mut ***tx)
+        .await
+        .map_err(map_sqlx_error)?;
+
+        Ok(exists)
     }
 }
