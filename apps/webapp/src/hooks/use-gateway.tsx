@@ -82,6 +82,20 @@ export function useGatewayConnectionState(): GatewayConnectionState {
 	return state
 }
 
+/** The caller's own `user_id`, once known (after the first `ready`) — `null`
+ * before that. Used to tell "my own message" from anyone else's. */
+export function useGatewayUserId(): string | null {
+	const client = useGatewayClient()
+	const [userId, setUserId] = useState(client.getUserId())
+
+	useEffect(
+		() => client.onStateChange(() => setUserId(client.getUserId())),
+		[client],
+	)
+
+	return userId
+}
+
 /**
  * Subscribes to one gateway event type for the lifetime of the calling
  * component. The handler is kept in a ref so callers can pass an inline

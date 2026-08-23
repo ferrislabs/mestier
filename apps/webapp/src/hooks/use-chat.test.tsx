@@ -85,10 +85,14 @@ describe('useChannels', () => {
 		const queryClient = new QueryClient({
 			defaultOptions: { queries: { staleTime: Number.POSITIVE_INFINITY } },
 		})
-		queryClient.setQueryData(channelsKey('org-1'), [
-			channel({ id: 'ch-1', channel_type: 'TEXT' }),
-			channel({ id: 'ch-2', channel_type: 'THREAD', parent_id: 'ch-1' }),
-		])
+		// The real endpoint wraps its payload in `{ data, pagination }` — the
+		// cache holds that raw envelope; `select` unwraps it for the caller.
+		queryClient.setQueryData(channelsKey('org-1'), {
+			data: [
+				channel({ id: 'ch-1', channel_type: 'TEXT' }),
+				channel({ id: 'ch-2', channel_type: 'THREAD', parent_id: 'ch-1' }),
+			],
+		})
 
 		const { result } = renderHook(() => useChannels('org-1'), {
 			wrapper: createWrapper(queryClient),
@@ -103,7 +107,9 @@ describe('useChatListGatewaySync', () => {
 		const queryClient = new QueryClient({
 			defaultOptions: { queries: { staleTime: Number.POSITIVE_INFINITY } },
 		})
-		queryClient.setQueryData(channelsKey('org-1'), [channel({ id: 'ch-1' })])
+		queryClient.setQueryData(channelsKey('org-1'), {
+			data: [channel({ id: 'ch-1' })],
+		})
 
 		renderHook(() => useChatListGatewaySync('org-1'), {
 			wrapper: createWrapper(queryClient),
@@ -123,7 +129,8 @@ describe('useChatListGatewaySync', () => {
 		})
 
 		expect(
-			queryClient.getQueryData<{ id: string }[]>(channelsKey('org-1')),
+			queryClient.getQueryData<{ data: { id: string }[] }>(channelsKey('org-1'))
+				?.data,
 		).toHaveLength(2)
 	})
 
@@ -131,10 +138,9 @@ describe('useChatListGatewaySync', () => {
 		const queryClient = new QueryClient({
 			defaultOptions: { queries: { staleTime: Number.POSITIVE_INFINITY } },
 		})
-		queryClient.setQueryData(channelsKey('org-1'), [
-			channel({ id: 'ch-1' }),
-			channel({ id: 'ch-2' }),
-		])
+		queryClient.setQueryData(channelsKey('org-1'), {
+			data: [channel({ id: 'ch-1' }), channel({ id: 'ch-2' })],
+		})
 
 		renderHook(() => useChatListGatewaySync('org-1'), {
 			wrapper: createWrapper(queryClient),
@@ -154,7 +160,8 @@ describe('useChatListGatewaySync', () => {
 		})
 
 		expect(
-			queryClient.getQueryData<{ id: string }[]>(channelsKey('org-1')),
+			queryClient.getQueryData<{ data: { id: string }[] }>(channelsKey('org-1'))
+				?.data,
 		).toEqual([channel({ id: 'ch-1' })])
 	})
 
@@ -162,7 +169,9 @@ describe('useChatListGatewaySync', () => {
 		const queryClient = new QueryClient({
 			defaultOptions: { queries: { staleTime: Number.POSITIVE_INFINITY } },
 		})
-		queryClient.setQueryData(channelsKey('org-1'), [channel({ id: 'ch-1' })])
+		queryClient.setQueryData(channelsKey('org-1'), {
+			data: [channel({ id: 'ch-1' })],
+		})
 
 		renderHook(() => useChatListGatewaySync('org-1'), {
 			wrapper: createWrapper(queryClient),
@@ -182,7 +191,8 @@ describe('useChatListGatewaySync', () => {
 		})
 
 		expect(
-			queryClient.getQueryData<{ id: string }[]>(channelsKey('org-1')),
+			queryClient.getQueryData<{ data: { id: string }[] }>(channelsKey('org-1'))
+				?.data,
 		).toHaveLength(1)
 	})
 })

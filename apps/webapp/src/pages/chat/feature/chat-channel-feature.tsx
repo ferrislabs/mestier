@@ -1,21 +1,195 @@
-import { useChannel } from '#/hooks/use-chat'
-import { useTypingUsers } from '#/hooks/use-typing'
+import type { UIEvent } from 'react'
+import { useLayoutEffect, useRef, useState } from 'react'
+import {
+	type MessageAttachment,
+	useChannel,
+	useMessages,
+} from '#/hooks/use-chat'
+import { useUploadFile } from '#/hooks/use-customers'
+import { useFileUrls } from '#/hooks/use-file-url'
+import { useGatewayUserId } from '#/hooks/use-gateway'
+import { useSendTyping, useTypingUsers } from '#/hooks/use-typing'
 import { ChatChannelHeaderUI } from '#/pages/chat/ui/chat-channel-header-ui'
+import {
+	MessageComposerUI,
+	type PendingAttachment,
+} from '#/pages/chat/ui/message-composer-ui'
+import { MessageListUI } from '#/pages/chat/ui/message-list-ui'
 import { TypingIndicatorUI } from '#/pages/chat/ui/typing-indicator-ui'
 
 export interface ChatChannelFeatureProps {
 	channelId: string
 }
 
-/**
- * The active channel's own pane. For now this only renders the header and
- * the typing indicator — the message thread itself is #325's scope, stacked
- * on top of this route. `useSendTyping` (in `use-typing.ts`) is ready for
- * #325's composer to call; there is no text input here to drive it yet.
- */
+interface PendingAttachmentState extends PendingAttachment {
+	ref?: MessageAttachment
+}
+
+/** How close to the bottom (px) still counts as "was at the bottom" — the
+ * threshold for auto-scrolling to a newly arrived message. */
+const NEAR_BOTTOM_THRESHOLD_PX = 80
+/** How close to the top (px) triggers loading the previous page. */
+const NEAR_TOP_THRESHOLD_PX = 60
+
 export function ChatChannelFeature({ channelId }: ChatChannelFeatureProps) {
 	const channel = useChannel(channelId)
+	const currentUserId = useGatewayUserId()
+	const {
+		messages,
+		hasMoreOlder,
+		isLoadingOlder,
+		isLoadingInitial,
+		initialError,
+		loadOlder,
+		sendMessage,
+		retrySend,
+		editMessage,
+		deleteMessage,
+	} = useMessages(channelId, currentUserId)
 	const typingUserIds = useTypingUsers(channelId)
+	const notifyTyping = useSendTyping(channelId)
+	const uploadFile = useUploadFile()
+
+	const [draft, setDraft] = useState('')
+	const [pendingAttachments, setPendingAttachments] = useState<
+		PendingAttachmentState[]
+	>([])
+	const [editingMessageId, setEditingMessageId] = useState<string | null>(null)
+	const [editDraft, setEditDraft] = useState('')
+
+	const scrollContainerRef = useRef<HTMLDivElement>(null)
+	const previousScrollHeightRef = useRef<number | null>(null)
+	const previousMessageCountRef = useRef(0)
+	const wasNearBottomRef = useRef(true)
+
+	// Keeps the reader's view stable when older messages are prepended, and
+	// auto-scrolls to a newly arrived message only when they were already at
+	// the bottom — so reading old messages is never interrupted by a new one.
+	useLayoutEffect(() => {
+		const container = scrollContainerRef.current
+		if (!container) return
+
+		if (previousScrollHeightRef.current !== null) {
+			container.scrollTop +=
+				container.scrollHeight - previousScrollHeightRef.current
+			previousScrollHeightRef.current = null
+			previousMessageCountRef.current = messages.length
+			return
+		}
+
+		const grew = messages.length > previousMessageCountRef.current
+		previousMessageCountRef.current = messages.length
+		if (grew && wasNearBottomRef.current) {
+			container.scrollTop = container.scrollHeight
+		}
+	}, [messages.length])
+
+	function handleScroll(event: UIEvent<HTMLDivElement>) {
+		const container = event.currentTarget
+		wasNearBottomRef.current =
+			container.scrollHeight - container.scrollTop - container.clientHeight <
+			NEAR_BOTTOM_THRESHOLD_PX
+
+		if (
+			container.scrollTop < NEAR_TOP_THRESHOLD_PX &&
+			hasMoreOlder &&
+			!isLoadingOlder
+		) {
+			previousScrollHeightRef.current = container.scrollHeight
+			loadOlder()
+		}
+	}
+
+	const attachmentKeys = Array.from(
+		new Set(
+			messages.flatMap((entry) =>
+				entry.message.attachments.map((attachment) => attachment.storage_key),
+			),
+		),
+	)
+	const fileUrls = useFileUrls(attachmentKeys)
+	function resolveAttachmentUrl(storageKey: string) {
+		return fileUrls.find((preview) => preview.key === storageKey)?.url
+	}
+
+	function handleAttachFiles(files: FileList) {
+		for (const file of Array.from(files)) {
+			const id = crypto.randomUUID()
+			setPendingAttachments((previous) => [
+				...previous,
+				{ id, filename: file.name, status: 'uploading' },
+			])
+			uploadFile.mutate(file, {
+				onSuccess: (result) => {
+					// `useUploadFile` returns the raw `DataEnvelope` too — see
+					// `customer-edit-feature.tsx`'s `uploaded.data.key` for the
+					// same unwrap.
+					setPendingAttachments((previous) =>
+						previous.map((attachment) =>
+							attachment.id === id
+								? {
+										...attachment,
+										status: 'ready',
+										ref: {
+											storage_key: result.data.key,
+											filename: file.name,
+											mime_type: result.data.mime_type,
+											size_bytes: result.data.size_bytes,
+										},
+									}
+								: attachment,
+						),
+					)
+				},
+				onError: () => {
+					setPendingAttachments((previous) =>
+						previous.map((attachment) =>
+							attachment.id === id
+								? { ...attachment, status: 'failed' }
+								: attachment,
+						),
+					)
+				},
+			})
+		}
+	}
+
+	function handleRemoveAttachment(id: string) {
+		setPendingAttachments((previous) =>
+			previous.filter((attachment) => attachment.id !== id),
+		)
+	}
+
+	function handleSend() {
+		const attachments = pendingAttachments
+			.filter(
+				(
+					attachment,
+				): attachment is PendingAttachmentState & { ref: MessageAttachment } =>
+					attachment.status === 'ready' && attachment.ref !== undefined,
+			)
+			.map((attachment) => attachment.ref)
+		sendMessage(draft.trim(), attachments)
+		setDraft('')
+		setPendingAttachments([])
+	}
+
+	function handleStartEdit(messageId: string, content: string) {
+		setEditingMessageId(messageId)
+		setEditDraft(content)
+	}
+
+	function handleConfirmEdit() {
+		if (!editingMessageId) return
+		void editMessage(editingMessageId, editDraft)
+		setEditingMessageId(null)
+		setEditDraft('')
+	}
+
+	function handleCancelEdit() {
+		setEditingMessageId(null)
+		setEditDraft('')
+	}
 
 	return (
 		<div className="flex min-h-0 flex-1 flex-col">
@@ -25,8 +199,35 @@ export function ChatChannelFeature({ channelId }: ChatChannelFeatureProps) {
 				isLoading={channel.isLoading}
 				isError={channel.isError}
 			/>
-			<div className="flex-1" />
+			<MessageListUI
+				messages={messages}
+				currentUserId={currentUserId}
+				isLoadingInitial={isLoadingInitial}
+				initialError={initialError}
+				isLoadingOlder={isLoadingOlder}
+				hasMoreOlder={hasMoreOlder}
+				editingMessageId={editingMessageId}
+				editDraft={editDraft}
+				scrollContainerRef={scrollContainerRef}
+				onScroll={handleScroll}
+				onRetry={retrySend}
+				onStartEdit={handleStartEdit}
+				onChangeEditDraft={setEditDraft}
+				onConfirmEdit={handleConfirmEdit}
+				onCancelEdit={handleCancelEdit}
+				onDelete={deleteMessage}
+				resolveAttachmentUrl={resolveAttachmentUrl}
+			/>
 			<TypingIndicatorUI typingCount={typingUserIds.size} />
+			<MessageComposerUI
+				value={draft}
+				onChange={setDraft}
+				onSend={handleSend}
+				onTyping={notifyTyping}
+				pendingAttachments={pendingAttachments}
+				onAttachFiles={handleAttachFiles}
+				onRemoveAttachment={handleRemoveAttachment}
+			/>
 		</div>
 	)
 }

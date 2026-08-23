@@ -83,6 +83,17 @@ describe('GatewayClient', () => {
 		expect(states.at(-1)).toBe('open')
 	})
 
+	it('exposes the user id resolved by ready', () => {
+		const client = createClient()
+		expect(client.getUserId()).toBeNull()
+
+		client.connect()
+		lastSocket().open()
+		lastSocket().receive({ op: 'ready', user_id: 'user-42' })
+
+		expect(client.getUserId()).toBe('user-42')
+	})
+
 	it('acks a server heartbeat immediately', () => {
 		const client = createClient()
 		client.connect()

@@ -50,6 +50,7 @@ export class GatewayClient {
 	private attempt = 0
 	private reconnectTimer: ReturnType<typeof setTimeout> | null = null
 	private explicitlyClosed = false
+	private userId: string | null = null
 	private readonly stateHandlers = new Set<StateHandler>()
 	private readonly eventHandlers = new Map<
 		GatewayEventType,
@@ -60,6 +61,13 @@ export class GatewayClient {
 
 	getState(): GatewayConnectionState {
 		return this.state
+	}
+
+	/** The `user_id` the server resolved at identify time — `null` until the
+	 * first `ready`. Used to tell "my own message" from anyone else's,
+	 * notably to reconcile an optimistic send against its own gateway echo. */
+	getUserId(): string | null {
+		return this.userId
 	}
 
 	connect(): void {
@@ -153,6 +161,7 @@ export class GatewayClient {
 		switch (message.op) {
 			case 'ready': {
 				this.attempt = 0
+				this.userId = message.user_id
 				this.setState('open')
 				return
 			}

@@ -9,5 +9,8 @@ export const Route = createFileRoute(
 
 function ChatChannelPage() {
 	const { channelId } = Route.useParams()
-	return <ChatChannelFeature channelId={channelId} />
+	// Keyed by channelId: switching channels must start the message thread
+	// fresh (new reducer state, new scroll position) rather than carrying
+	// the previous channel's history and edit/composer state over.
+	return <ChatChannelFeature key={channelId} channelId={channelId} />
 }

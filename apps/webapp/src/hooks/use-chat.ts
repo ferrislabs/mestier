@@ -1,15 +1,29 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { useCallback, useEffect, useReducer, useRef, useState } from 'react'
 import type { Schemas } from '#/api/api.client'
 import { useGatewayEvent } from '#/hooks/use-gateway'
+import {
+	initialMessagesState,
+	messagesReducer,
+} from '#/pages/chat/lib/messages-reducer'
 
 const ORG_CATEGORIES_PATH =
 	'/api/v1/chat/organizations/{organization_id}/categories'
 const ORG_CHANNELS_PATH =
 	'/api/v1/chat/organizations/{organization_id}/channels'
 const CHANNEL_PATH = '/api/v1/chat/channels/{channel_id}'
+const CHANNEL_MESSAGES_PATH = '/api/v1/chat/channels/{channel_id}/messages'
+const MESSAGE_PATH = '/api/v1/chat/messages/{message_id}'
+
+/** Server caps `limit` at 100 (`MessageCursorQuery::effective_limit`); 50
+ * matches its own default. Also doubles as the "did that page run out"
+ * signal: a page shorter than this is the last one. */
+const MESSAGES_PAGE_SIZE = 50
 
 export type Category = Schemas.CategoryResponse
 export type Channel = Schemas.ChannelResponse
+export type Message = Schemas.MessageResponse
+export type MessageAttachment = Schemas.CreateMessageAttachment
 
 function categoriesKey(organizationId: string) {
 	return window.tanstackApi.get(ORG_CATEGORIES_PATH, {
@@ -28,6 +42,11 @@ export function useCategories(organizationId: string) {
 		...window.tanstackApi.get(ORG_CATEGORIES_PATH, {
 			path: { organization_id: organizationId },
 		}).queryOptions,
+		// Every list/get endpoint on this backend wraps its payload in a
+		// `DataEnvelope` (`{ data, pagination }`) — `select` unwraps it once,
+		// here, rather than every caller reaching for `.data.data` (the
+		// pattern the raw, un-abstracted hooks like `useCustomers` use).
+		select: (response) => response.data,
 		enabled: Boolean(organizationId),
 	})
 }
@@ -39,17 +58,14 @@ export function useCategories(organizationId: string) {
  * return threads; the filter here is a cheap, harmless belt-and-braces.
  */
 export function useChannels(organizationId: string) {
-	const query = useQuery({
+	return useQuery({
 		...window.tanstackApi.get(ORG_CHANNELS_PATH, {
 			path: { organization_id: organizationId },
 		}).queryOptions,
+		select: (response) =>
+			response.data.filter((channel) => channel.channel_type === 'TEXT'),
 		enabled: Boolean(organizationId),
 	})
-
-	return {
-		...query,
-		data: query.data?.filter((channel) => channel.channel_type === 'TEXT'),
-	}
 }
 
 /** A single channel by id — used for the channel header once one is active. */
@@ -58,6 +74,7 @@ export function useChannel(channelId: string) {
 		...window.tanstackApi.get(CHANNEL_PATH, {
 			path: { channel_id: channelId },
 		}).queryOptions,
+		select: (response) => response.data,
 		enabled: Boolean(channelId),
 	})
 }
@@ -105,18 +122,26 @@ export function useChatListGatewaySync(organizationId: string) {
 	})
 }
 
+/** The shape every list query actually caches — the raw `DataEnvelope`, not
+ * the `select`-unwrapped array a `useQuery` caller sees (`select` runs on
+ * read; the cache itself is never transformed by it). */
+interface ListEnvelope<T> {
+	data: T[]
+	pagination?: unknown
+}
+
 function upsertInList<T extends { id: string }>(
 	queryClient: ReturnType<typeof useQueryClient>,
 	key: readonly unknown[],
 	item: T,
 ) {
-	queryClient.setQueryData<T[]>(key, (old) => {
-		if (!old) return [item]
-		const index = old.findIndex((existing) => existing.id === item.id)
-		if (index === -1) return [...old, item]
-		const next = [...old]
+	queryClient.setQueryData<ListEnvelope<T>>(key, (old) => {
+		if (!old) return { data: [item] }
+		const index = old.data.findIndex((existing) => existing.id === item.id)
+		if (index === -1) return { ...old, data: [...old.data, item] }
+		const next = [...old.data]
 		next[index] = item
-		return next
+		return { ...old, data: next }
 	})
 }
 
@@ -125,7 +150,213 @@ function removeFromList(
 	key: readonly unknown[],
 	id: string,
 ) {
-	queryClient.setQueryData<{ id: string }[]>(key, (old) =>
-		old?.filter((item) => item.id !== id),
+	queryClient.setQueryData<ListEnvelope<{ id: string }>>(key, (old) =>
+		old ? { ...old, data: old.data.filter((item) => item.id !== id) } : old,
 	)
+}
+
+// ── Messages ──────────────────────────────────────────────────────────────
+
+function createTempId(): string {
+	return `temp:${crypto.randomUUID()}`
+}
+
+async function fetchMessagesPage(
+	channelId: string,
+	before?: string,
+): Promise<Message[]> {
+	// `window.api` (unlike `window.tanstackApi`) has no `select` to unwrap
+	// the `DataEnvelope` — every endpoint here wraps its payload in
+	// `{ data, pagination }`, so `.data` is read out by hand.
+	const response = (await window.api.get(CHANNEL_MESSAGES_PATH, {
+		path: { channel_id: channelId },
+		query: { limit: MESSAGES_PAGE_SIZE, ...(before ? { before } : {}) },
+	} as never)) as { data: Message[] }
+	return response.data
+}
+
+/**
+ * A channel's message thread: paginated history, optimistic sending
+ * reconciled against its own gateway echo (see `messages-reducer.ts`, where
+ * that reconciliation is unit-tested directly), editing and deleting one's
+ * own messages, and live updates from the gateway. One instance per channel
+ * — callers should mount it keyed by `channelId` (e.g. `key={channelId}` on
+ * the route's channel component) so switching channels starts fresh rather
+ * than carrying over another channel's history.
+ */
+export function useMessages(channelId: string, currentUserId: string | null) {
+	const [state, dispatch] = useReducer(messagesReducer, initialMessagesState)
+	const [isLoadingInitial, setIsLoadingInitial] = useState(true)
+	const [initialError, setInitialError] = useState<string | null>(null)
+	const oldestIdRef = useRef<string | null>(null)
+	oldestIdRef.current = state.messages[0]?.message.id ?? null
+
+	useEffect(() => {
+		let cancelled = false
+		setIsLoadingInitial(true)
+		setInitialError(null)
+
+		fetchMessagesPage(channelId)
+			.then((messages) => {
+				if (cancelled) return
+				dispatch({
+					type: 'initial-page-loaded',
+					messages,
+					hasMore: messages.length === MESSAGES_PAGE_SIZE,
+				})
+			})
+			.catch(() => {
+				if (!cancelled) setInitialError('load-failed')
+			})
+			.finally(() => {
+				if (!cancelled) setIsLoadingInitial(false)
+			})
+
+		return () => {
+			cancelled = true
+		}
+	}, [channelId])
+
+	const loadOlder = useCallback(() => {
+		const before = oldestIdRef.current
+		if (!before || state.isLoadingOlder || !state.hasMoreOlder) return
+
+		dispatch({ type: 'older-page-requested' })
+		fetchMessagesPage(channelId, before)
+			.then((messages) => {
+				dispatch({
+					type: 'older-page-loaded',
+					messages,
+					hasMore: messages.length === MESSAGES_PAGE_SIZE,
+				})
+			})
+			.catch(() => {
+				// Stay put rather than silently dropping "hasMoreOlder": the
+				// reader can retry by scrolling up again.
+				dispatch({ type: 'older-page-loaded', messages: [], hasMore: true })
+			})
+	}, [channelId, state.isLoadingOlder, state.hasMoreOlder])
+
+	const sendMessage = useCallback(
+		(content: string, attachments: MessageAttachment[] = []) => {
+			const tempId = createTempId()
+			const optimistic: Message = {
+				id: tempId,
+				organization_id: '',
+				channel_id: channelId,
+				author_type: 'USER',
+				author_user_id: currentUserId ?? '',
+				author_webhook_id: null,
+				content,
+				components: null,
+				mention_user_ids: [],
+				mention_role_ids: [],
+				mention_channel_ids: [],
+				mention_everyone: false,
+				reactions: [],
+				attachments: attachments.map((a) => ({ ...a })),
+				edited_at: null,
+				created_at: new Date().toISOString(),
+			}
+			dispatch({ type: 'optimistic-send', tempId, message: optimistic })
+
+			window.api
+				.post(CHANNEL_MESSAGES_PATH, {
+					path: { channel_id: channelId },
+					body: { content, attachments },
+				} as never)
+				.then((response) => {
+					dispatch({
+						type: 'send-succeeded',
+						tempId,
+						message: (response as { data: Message }).data,
+					})
+				})
+				.catch(() => {
+					dispatch({ type: 'send-failed', tempId })
+				})
+		},
+		[channelId, currentUserId],
+	)
+
+	const retrySend = useCallback(
+		(tempId: string) => {
+			const entry = state.messages.find((e) => e.tempId === tempId)
+			if (!entry) return
+
+			dispatch({ type: 'retry-send', tempId })
+			window.api
+				.post(CHANNEL_MESSAGES_PATH, {
+					path: { channel_id: channelId },
+					body: {
+						content: entry.message.content,
+						attachments: entry.message.attachments.map((a) => ({
+							storage_key: a.storage_key,
+							filename: a.filename,
+							mime_type: a.mime_type,
+							size_bytes: a.size_bytes,
+						})),
+					},
+				} as never)
+				.then((response) => {
+					dispatch({
+						type: 'send-succeeded',
+						tempId,
+						message: (response as { data: Message }).data,
+					})
+				})
+				.catch(() => {
+					dispatch({ type: 'send-failed', tempId })
+				})
+		},
+		[channelId, state.messages],
+	)
+
+	const editMessage = useCallback((messageId: string, content: string) => {
+		return window.api
+			.patch(MESSAGE_PATH, {
+				path: { message_id: messageId },
+				body: { content },
+			} as never)
+			.then((response) => {
+				dispatch({
+					type: 'remote-update',
+					message: (response as { data: Message }).data,
+				})
+			})
+	}, [])
+
+	const deleteMessage = useCallback((messageId: string) => {
+		return window.api
+			.delete(MESSAGE_PATH, { path: { message_id: messageId } } as never)
+			.then(() => {
+				dispatch({ type: 'remote-delete', messageId })
+			})
+	}, [])
+
+	useGatewayEvent('MESSAGE_CREATE', (event) => {
+		if (event.data.channel_id !== channelId) return
+		dispatch({ type: 'remote-create', message: event.data })
+	})
+	useGatewayEvent('MESSAGE_UPDATE', (event) => {
+		if (event.data.channel_id !== channelId) return
+		dispatch({ type: 'remote-update', message: event.data })
+	})
+	useGatewayEvent('MESSAGE_DELETE', (event) => {
+		if (event.data.channel_id !== channelId) return
+		dispatch({ type: 'remote-delete', messageId: event.data.message_id })
+	})
+
+	return {
+		messages: state.messages,
+		hasMoreOlder: state.hasMoreOlder,
+		isLoadingOlder: state.isLoadingOlder,
+		isLoadingInitial,
+		initialError,
+		loadOlder,
+		sendMessage,
+		retrySend,
+		editMessage,
+		deleteMessage,
+	}
 }
