@@ -251,3 +251,131 @@ describe('messagesReducer — remote updates and deletes', () => {
 		expect(deleted.messages.map((entry) => entry.message.id)).toEqual(['m-2'])
 	})
 })
+
+describe('messagesReducer — reactions', () => {
+	function withMessage() {
+		return messagesReducer(initialMessagesState, {
+			type: 'initial-page-loaded',
+			messages: [message({ id: 'm-1', reactions: [] })],
+			hasMore: false,
+		})
+	}
+
+	it('adds a new reaction group on the first reaction for an emoji', () => {
+		const state = messagesReducer(withMessage(), {
+			type: 'reaction-add',
+			messageId: 'm-1',
+			emoji: '👍',
+			userId: 'alice',
+		})
+
+		expect(state.messages[0]?.message.reactions).toEqual([
+			{ emoji: '👍', count: 1, user_ids: ['alice'] },
+		])
+	})
+
+	it('adds a second user to an existing reaction group', () => {
+		const withOne = messagesReducer(withMessage(), {
+			type: 'reaction-add',
+			messageId: 'm-1',
+			emoji: '👍',
+			userId: 'alice',
+		})
+		const withTwo = messagesReducer(withOne, {
+			type: 'reaction-add',
+			messageId: 'm-1',
+			emoji: '👍',
+			userId: 'bob',
+		})
+
+		expect(withTwo.messages[0]?.message.reactions).toEqual([
+			{ emoji: '👍', count: 2, user_ids: ['alice', 'bob'] },
+		])
+	})
+
+	it('is idempotent — adding the same user twice does not double count', () => {
+		const once = messagesReducer(withMessage(), {
+			type: 'reaction-add',
+			messageId: 'm-1',
+			emoji: '👍',
+			userId: 'alice',
+		})
+		const twice = messagesReducer(once, {
+			type: 'reaction-add',
+			messageId: 'm-1',
+			emoji: '👍',
+			userId: 'alice',
+		})
+
+		expect(twice.messages[0]?.message.reactions).toEqual([
+			{ emoji: '👍', count: 1, user_ids: ['alice'] },
+		])
+	})
+
+	it('removes the user from the group, dropping the group at zero', () => {
+		const added = messagesReducer(withMessage(), {
+			type: 'reaction-add',
+			messageId: 'm-1',
+			emoji: '👍',
+			userId: 'alice',
+		})
+		const removed = messagesReducer(added, {
+			type: 'reaction-remove',
+			messageId: 'm-1',
+			emoji: '👍',
+			userId: 'alice',
+		})
+
+		expect(removed.messages[0]?.message.reactions).toEqual([])
+	})
+
+	it('leaves the group in place when another user still has it', () => {
+		const state = [
+			{ type: 'reaction-add' as const, userId: 'alice' },
+			{ type: 'reaction-add' as const, userId: 'bob' },
+			{ type: 'reaction-remove' as const, userId: 'alice' },
+		].reduce(
+			(acc, step) =>
+				messagesReducer(acc, {
+					type: step.type,
+					messageId: 'm-1',
+					emoji: '👍',
+					userId: step.userId,
+				}),
+			withMessage(),
+		)
+
+		expect(state.messages[0]?.message.reactions).toEqual([
+			{ emoji: '👍', count: 1, user_ids: ['bob'] },
+		])
+	})
+
+	it('applying the same gateway echo twice is a no-op (idempotent reconciliation)', () => {
+		const once = messagesReducer(withMessage(), {
+			type: 'reaction-add',
+			messageId: 'm-1',
+			emoji: '👍',
+			userId: 'alice',
+		})
+		// The optimistic click and the gateway's own echo of it dispatch the
+		// exact same action — applying it again must not change anything.
+		const echoed = messagesReducer(once, {
+			type: 'reaction-add',
+			messageId: 'm-1',
+			emoji: '👍',
+			userId: 'alice',
+		})
+
+		expect(echoed).toEqual(once)
+	})
+
+	it('ignores a reaction for a message not currently loaded', () => {
+		const state = messagesReducer(initialMessagesState, {
+			type: 'reaction-add',
+			messageId: 'unknown',
+			emoji: '👍',
+			userId: 'alice',
+		})
+		expect(state.messages).toHaveLength(0)
+	})
+})

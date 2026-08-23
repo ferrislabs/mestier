@@ -1,8 +1,18 @@
-import { AlertCircle, Loader2, Paperclip, RotateCw } from 'lucide-react'
+import {
+	AlertCircle,
+	Loader2,
+	MessageSquare,
+	Paperclip,
+	RotateCw,
+} from 'lucide-react'
 import type { RefObject } from 'react'
 import { Skeleton } from '#/components/ui/skeleton'
 import { cn } from '#/lib/utils'
 import type { DisplayMessage } from '#/pages/chat/lib/messages-reducer'
+
+/** A small, fixed palette rather than a full emoji picker — keeps the
+ * quick-react row usable without pulling in a picker library. */
+const QUICK_REACTIONS = ['👍', '❤️', '😄', '🎉', '👀']
 
 export interface MessageListUIProps {
 	messages: DisplayMessage[]
@@ -13,6 +23,9 @@ export interface MessageListUIProps {
 	hasMoreOlder: boolean
 	editingMessageId: string | null
 	editDraft: string
+	/** Message ids that already have a thread — drives "Fil de discussion"
+	 * vs. "Répondre dans un fil" on the thread action. */
+	threadedMessageIds: ReadonlySet<string>
 	scrollContainerRef: RefObject<HTMLDivElement | null>
 	onScroll: (event: React.UIEvent<HTMLDivElement>) => void
 	onRetry: (tempId: string) => void
@@ -21,6 +34,12 @@ export interface MessageListUIProps {
 	onConfirmEdit: () => void
 	onCancelEdit: () => void
 	onDelete: (messageId: string) => void
+	onToggleReaction: (
+		messageId: string,
+		emoji: string,
+		currentlyReacted: boolean,
+	) => void
+	onOpenThread: (messageId: string) => void
 	resolveAttachmentUrl: (storageKey: string) => string | undefined
 }
 
@@ -33,6 +52,7 @@ export function MessageListUI({
 	hasMoreOlder,
 	editingMessageId,
 	editDraft,
+	threadedMessageIds,
 	scrollContainerRef,
 	onScroll,
 	onRetry,
@@ -41,6 +61,8 @@ export function MessageListUI({
 	onConfirmEdit,
 	onCancelEdit,
 	onDelete,
+	onToggleReaction,
+	onOpenThread,
 	resolveAttachmentUrl,
 }: MessageListUIProps) {
 	if (isLoadingInitial) {
@@ -104,7 +126,11 @@ export function MessageListUI({
 					onConfirmEdit={onConfirmEdit}
 					onCancelEdit={onCancelEdit}
 					onDelete={onDelete}
+					onToggleReaction={onToggleReaction}
+					hasThread={threadedMessageIds.has(entry.message.id)}
+					onOpenThread={onOpenThread}
 					resolveAttachmentUrl={resolveAttachmentUrl}
+					currentUserId={currentUserId}
 				/>
 			))}
 		</div>
@@ -116,12 +142,20 @@ interface MessageRowProps {
 	isOwn: boolean
 	isEditing: boolean
 	editDraft: string
+	hasThread: boolean
+	currentUserId: string | null
 	onRetry: (tempId: string) => void
 	onStartEdit: (messageId: string, content: string) => void
 	onChangeEditDraft: (value: string) => void
 	onConfirmEdit: () => void
 	onCancelEdit: () => void
 	onDelete: (messageId: string) => void
+	onToggleReaction: (
+		messageId: string,
+		emoji: string,
+		currentlyReacted: boolean,
+	) => void
+	onOpenThread: (messageId: string) => void
 	resolveAttachmentUrl: (storageKey: string) => string | undefined
 }
 
@@ -130,13 +164,17 @@ function MessageRow({
 	isOwn,
 	isEditing,
 	editDraft,
+	hasThread,
 	onRetry,
 	onStartEdit,
 	onChangeEditDraft,
 	onConfirmEdit,
 	onCancelEdit,
 	onDelete,
+	onToggleReaction,
+	onOpenThread,
 	resolveAttachmentUrl,
+	currentUserId,
 }: MessageRowProps) {
 	const { message, status } = entry
 
@@ -239,22 +277,82 @@ function MessageRow({
 				</button>
 			) : null}
 
-			{isOwn && status === 'sent' && !isEditing ? (
-				<div className="hidden gap-2 text-xs opacity-70 group-hover:flex">
+			{status === 'sent' && message.reactions.length > 0 ? (
+				<div className="flex flex-wrap gap-1">
+					{message.reactions.map((reaction) => {
+						const reacted =
+							currentUserId !== null &&
+							reaction.user_ids.includes(currentUserId)
+						return (
+							<button
+								key={reaction.emoji}
+								type="button"
+								aria-label={`${reacted ? 'Retirer' : 'Ajouter'} la réaction ${reaction.emoji}`}
+								onClick={() =>
+									onToggleReaction(message.id, reaction.emoji, reacted)
+								}
+								className={cn(
+									'flex items-center gap-1 rounded-full border px-1.5 py-0.5 text-xs',
+									reacted
+										? 'border-primary bg-primary/10'
+										: 'border-transparent bg-background/40',
+								)}
+							>
+								<span>{reaction.emoji}</span>
+								<span>{reaction.count}</span>
+							</button>
+						)
+					})}
+				</div>
+			) : null}
+
+			{status === 'sent' && !isEditing ? (
+				<div className="hidden flex-wrap items-center gap-2 text-xs opacity-70 group-hover:flex">
+					{QUICK_REACTIONS.map((emoji) => {
+						const reacted =
+							currentUserId !== null &&
+							message.reactions.some(
+								(reaction) =>
+									reaction.emoji === emoji &&
+									reaction.user_ids.includes(currentUserId),
+							)
+						return (
+							<button
+								key={emoji}
+								type="button"
+								aria-label={`Réagir avec ${emoji}`}
+								onClick={() => onToggleReaction(message.id, emoji, reacted)}
+							>
+								{emoji}
+							</button>
+						)
+					})}
 					<button
 						type="button"
-						onClick={() => onStartEdit(message.id, message.content)}
-						className="underline"
+						onClick={() => onOpenThread(message.id)}
+						className="flex items-center gap-1 underline"
 					>
-						Modifier
+						<MessageSquare className="size-3" />
+						{hasThread ? 'Fil de discussion' : 'Répondre dans un fil'}
 					</button>
-					<button
-						type="button"
-						onClick={() => onDelete(message.id)}
-						className="underline"
-					>
-						Supprimer
-					</button>
+					{isOwn ? (
+						<>
+							<button
+								type="button"
+								onClick={() => onStartEdit(message.id, message.content)}
+								className="underline"
+							>
+								Modifier
+							</button>
+							<button
+								type="button"
+								onClick={() => onDelete(message.id)}
+								className="underline"
+							>
+								Supprimer
+							</button>
+						</>
+					) : null}
 				</div>
 			) : null}
 		</div>

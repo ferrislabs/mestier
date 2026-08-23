@@ -1,4 +1,4 @@
-import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useCallback, useEffect, useReducer, useRef, useState } from 'react'
 import type { Schemas } from '#/api/api.client'
 import { useGatewayEvent } from '#/hooks/use-gateway'
@@ -14,6 +14,8 @@ const ORG_CHANNELS_PATH =
 const CHANNEL_PATH = '/api/v1/chat/channels/{channel_id}'
 const CHANNEL_MESSAGES_PATH = '/api/v1/chat/channels/{channel_id}/messages'
 const MESSAGE_PATH = '/api/v1/chat/messages/{message_id}'
+const REACTION_PATH = '/api/v1/chat/messages/{message_id}/reactions/{emoji}'
+const CHANNEL_THREADS_PATH = '/api/v1/chat/channels/{channel_id}/threads'
 
 /** Server caps `limit` at 100 (`MessageCursorQuery::effective_limit`); 50
  * matches its own default. Also doubles as the "did that page run out"
@@ -153,6 +155,53 @@ function removeFromList(
 	queryClient.setQueryData<ListEnvelope<{ id: string }>>(key, (old) =>
 		old ? { ...old, data: old.data.filter((item) => item.id !== id) } : old,
 	)
+}
+
+// ── Threads ───────────────────────────────────────────────────────────────
+// A thread is a `Channel` (`channel_type: 'THREAD'`) with `parent_id` and
+// `origin_message_id` set — the server's model, per `response.rs`; the
+// frontend reuses the channel/message endpoints wholesale rather than
+// inventing a parallel "thread message" concept.
+
+function threadsKey(channelId: string) {
+	return window.tanstackApi.get(CHANNEL_THREADS_PATH, {
+		path: { channel_id: channelId },
+	}).queryKey
+}
+
+/** Threads spawned from messages in this channel. */
+export function useThreads(channelId: string) {
+	return useQuery({
+		...window.tanstackApi.get(CHANNEL_THREADS_PATH, {
+			path: { channel_id: channelId },
+		}).queryOptions,
+		select: (response) => response.data,
+		enabled: Boolean(channelId),
+	})
+}
+
+export function useCreateThread() {
+	return useMutation({
+		...window.tanstackApi.mutation('post', CHANNEL_THREADS_PATH)
+			.mutationOptions,
+	})
+}
+
+/** Mirrors `useChatListGatewaySync`, scoped to one channel's threads. */
+export function useThreadsGatewaySync(channelId: string) {
+	const queryClient = useQueryClient()
+
+	useGatewayEvent('THREAD_CREATE', (event) => {
+		if (event.data.parent_id !== channelId) return
+		upsertInList(queryClient, threadsKey(channelId), event.data)
+	})
+	useGatewayEvent('THREAD_UPDATE', (event) => {
+		if (event.data.parent_id !== channelId) return
+		upsertInList(queryClient, threadsKey(channelId), event.data)
+	})
+	useGatewayEvent('THREAD_DELETE', (event) => {
+		removeFromList(queryClient, threadsKey(channelId), event.data.channel_id)
+	})
 }
 
 // ── Messages ──────────────────────────────────────────────────────────────
@@ -334,6 +383,37 @@ export function useMessages(channelId: string, currentUserId: string | null) {
 			})
 	}, [])
 
+	/**
+	 * Reactions are a set-membership toggle keyed by (message, emoji, user) —
+	 * there is no id to reconcile against a gateway echo the way a new
+	 * message has, so applying the same action twice (the optimistic click,
+	 * then its own echo) is simply a no-op. See the reducer's comment on
+	 * `reaction-add` for the detail. A failed request reverts by dispatching
+	 * the opposite action — cheap, per the issue's own framing.
+	 */
+	const toggleReaction = useCallback(
+		(messageId: string, emoji: string, currentlyReacted: boolean) => {
+			if (!currentUserId) return
+			const apply = currentlyReacted ? 'reaction-remove' : 'reaction-add'
+			const revert = currentlyReacted ? 'reaction-add' : 'reaction-remove'
+
+			dispatch({ type: apply, messageId, emoji, userId: currentUserId })
+
+			const request = currentlyReacted
+				? window.api.delete(REACTION_PATH, {
+						path: { message_id: messageId, emoji },
+					} as never)
+				: window.api.put(REACTION_PATH, {
+						path: { message_id: messageId, emoji },
+					} as never)
+
+			request.catch(() => {
+				dispatch({ type: revert, messageId, emoji, userId: currentUserId })
+			})
+		},
+		[currentUserId],
+	)
+
 	useGatewayEvent('MESSAGE_CREATE', (event) => {
 		if (event.data.channel_id !== channelId) return
 		dispatch({ type: 'remote-create', message: event.data })
@@ -345,6 +425,24 @@ export function useMessages(channelId: string, currentUserId: string | null) {
 	useGatewayEvent('MESSAGE_DELETE', (event) => {
 		if (event.data.channel_id !== channelId) return
 		dispatch({ type: 'remote-delete', messageId: event.data.message_id })
+	})
+	useGatewayEvent('REACTION_ADD', (event) => {
+		if (event.data.channel_id !== channelId) return
+		dispatch({
+			type: 'reaction-add',
+			messageId: event.data.message_id,
+			emoji: event.data.emoji,
+			userId: event.data.user_id,
+		})
+	})
+	useGatewayEvent('REACTION_REMOVE', (event) => {
+		if (event.data.channel_id !== channelId) return
+		dispatch({
+			type: 'reaction-remove',
+			messageId: event.data.message_id,
+			emoji: event.data.emoji,
+			userId: event.data.user_id,
+		})
 	})
 
 	return {
@@ -358,5 +456,6 @@ export function useMessages(channelId: string, currentUserId: string | null) {
 		retrySend,
 		editMessage,
 		deleteMessage,
+		toggleReaction,
 	}
 }

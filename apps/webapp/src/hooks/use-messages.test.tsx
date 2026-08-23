@@ -51,6 +51,7 @@ let apiGet: ReturnType<typeof vi.fn>
 let apiPost: ReturnType<typeof vi.fn>
 let apiPatch: ReturnType<typeof vi.fn>
 let apiDelete: ReturnType<typeof vi.fn>
+let apiPut: ReturnType<typeof vi.fn>
 
 beforeEach(() => {
 	vi.stubGlobal('WebSocket', FakeWebSocket)
@@ -59,11 +60,13 @@ beforeEach(() => {
 	apiPost = vi.fn().mockResolvedValue(envelope(message()))
 	apiPatch = vi.fn().mockResolvedValue(envelope(message()))
 	apiDelete = vi.fn().mockResolvedValue(undefined)
+	apiPut = vi.fn().mockResolvedValue(undefined)
 	window.api = {
 		get: apiGet,
 		post: apiPost,
 		patch: apiPatch,
 		delete: apiDelete,
+		put: apiPut,
 	} as never
 })
 
@@ -200,5 +203,49 @@ describe('useMessages — editing and deleting', () => {
 		})
 
 		expect(result.current.messages).toHaveLength(0)
+	})
+})
+
+describe('useMessages — reactions', () => {
+	it('adds a reaction optimistically and confirms it via PUT', async () => {
+		apiGet.mockResolvedValueOnce(
+			envelope([message({ id: 'm-1', reactions: [] })]),
+		)
+
+		const { result } = renderHook(() => useMessages('ch-1', 'me'), {
+			wrapper,
+		})
+		await waitFor(() => expect(result.current.isLoadingInitial).toBe(false))
+
+		act(() => result.current.toggleReaction('m-1', '👍', false))
+
+		expect(result.current.messages[0]?.message.reactions).toEqual([
+			{ emoji: '👍', count: 1, user_ids: ['me'] },
+		])
+		expect(apiPut).toHaveBeenCalledWith(
+			'/api/v1/chat/messages/{message_id}/reactions/{emoji}',
+			expect.objectContaining({
+				path: { message_id: 'm-1', emoji: '👍' },
+			}),
+		)
+	})
+
+	it('reverts an optimistic reaction when the request fails', async () => {
+		apiGet.mockResolvedValueOnce(
+			envelope([message({ id: 'm-1', reactions: [] })]),
+		)
+		apiPut.mockRejectedValueOnce(new Error('network'))
+
+		const { result } = renderHook(() => useMessages('ch-1', 'me'), {
+			wrapper,
+		})
+		await waitFor(() => expect(result.current.isLoadingInitial).toBe(false))
+
+		act(() => result.current.toggleReaction('m-1', '👍', false))
+		expect(result.current.messages[0]?.message.reactions).toHaveLength(1)
+
+		await waitFor(() =>
+			expect(result.current.messages[0]?.message.reactions).toEqual([]),
+		)
 	})
 })

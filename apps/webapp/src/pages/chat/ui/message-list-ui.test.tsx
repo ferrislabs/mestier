@@ -50,6 +50,7 @@ function baseProps(
 		hasMoreOlder: false,
 		editingMessageId: null,
 		editDraft: '',
+		threadedMessageIds: new Set(),
 		scrollContainerRef: createRef(),
 		onScroll: vi.fn(),
 		onRetry: vi.fn(),
@@ -58,6 +59,8 @@ function baseProps(
 		onConfirmEdit: vi.fn(),
 		onCancelEdit: vi.fn(),
 		onDelete: vi.fn(),
+		onToggleReaction: vi.fn(),
+		onOpenThread: vi.fn(),
 		resolveAttachmentUrl: () => undefined,
 		...overrides,
 	}
@@ -146,5 +149,75 @@ describe('MessageListUI', () => {
 		)
 		// no crash, and the "scroll up" hint is replaced by the spinner (no text)
 		expect(screen.queryByText(/Faites défiler/)).toBeNull()
+	})
+})
+
+describe('MessageListUI — reactions', () => {
+	it('shows existing reaction groups with counts', () => {
+		const messages = [
+			displayMessage({
+				message: {
+					id: 'm-1',
+					reactions: [{ emoji: '👍', count: 2, user_ids: ['me', 'alice'] }],
+				},
+			}),
+		]
+		render(<MessageListUI {...baseProps({ messages })} />)
+
+		expect(screen.getByLabelText('Retirer la réaction 👍')).toBeDefined()
+		expect(screen.getByText('2')).toBeDefined()
+	})
+
+	it('toggles a reaction when clicking an existing group', async () => {
+		const user = userEvent.setup()
+		const onToggleReaction = vi.fn()
+		const messages = [
+			displayMessage({
+				message: {
+					id: 'm-1',
+					reactions: [{ emoji: '👍', count: 1, user_ids: ['me'] }],
+				},
+			}),
+		]
+		render(<MessageListUI {...baseProps({ messages, onToggleReaction })} />)
+
+		await user.click(screen.getByLabelText('Retirer la réaction 👍'))
+
+		expect(onToggleReaction).toHaveBeenCalledWith('m-1', '👍', true)
+	})
+
+	it('adds a new reaction from the quick-react row', async () => {
+		const user = userEvent.setup()
+		const onToggleReaction = vi.fn()
+		const messages = [displayMessage({ message: { id: 'm-1' } })]
+		render(<MessageListUI {...baseProps({ messages, onToggleReaction })} />)
+
+		await user.click(screen.getByLabelText('Réagir avec ❤️'))
+
+		expect(onToggleReaction).toHaveBeenCalledWith('m-1', '❤️', false)
+	})
+})
+
+describe('MessageListUI — threads', () => {
+	it('offers to reply in a thread when none exists yet', async () => {
+		const user = userEvent.setup()
+		const onOpenThread = vi.fn()
+		const messages = [displayMessage({ message: { id: 'm-1' } })]
+		render(<MessageListUI {...baseProps({ messages, onOpenThread })} />)
+
+		await user.click(screen.getByText('Répondre dans un fil'))
+
+		expect(onOpenThread).toHaveBeenCalledWith('m-1')
+	})
+
+	it('shows the thread is already open once one exists', () => {
+		const messages = [displayMessage({ message: { id: 'm-1' } })]
+		render(
+			<MessageListUI
+				{...baseProps({ messages, threadedMessageIds: new Set(['m-1']) })}
+			/>,
+		)
+
+		expect(screen.getByText('Fil de discussion')).toBeDefined()
 	})
 })

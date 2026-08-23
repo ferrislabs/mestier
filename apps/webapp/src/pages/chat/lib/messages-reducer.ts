@@ -48,6 +48,13 @@ export type MessagesAction =
 	| { type: 'remote-create'; message: Schemas.MessageResponse }
 	| { type: 'remote-update'; message: Schemas.MessageResponse }
 	| { type: 'remote-delete'; messageId: string }
+	| { type: 'reaction-add'; messageId: string; emoji: string; userId: string }
+	| {
+			type: 'reaction-remove'
+			messageId: string
+			emoji: string
+			userId: string
+	  }
 
 export function messagesReducer(
 	state: MessagesState,
@@ -181,9 +188,72 @@ export function messagesReducer(
 			}
 		}
 
+		// Reactions are a set-membership toggle, not a created resource with a
+		// fresh id — (message, emoji, user) is the whole identity. That makes
+		// applying it idempotent: the same action from an optimistic click and
+		// from its own gateway echo lands on the same state either way, so
+		// there is no id to reconcile and no separate echo-matching path like
+		// `remote-create`'s. Reverting a failed optimistic add is just
+		// dispatching the opposite action.
+		case 'reaction-add': {
+			return {
+				...state,
+				messages: state.messages.map((entry) =>
+					entry.message.id === action.messageId
+						? { ...entry, message: withReaction(entry.message, action, true) }
+						: entry,
+				),
+			}
+		}
+
+		case 'reaction-remove': {
+			return {
+				...state,
+				messages: state.messages.map((entry) =>
+					entry.message.id === action.messageId
+						? { ...entry, message: withReaction(entry.message, action, false) }
+						: entry,
+				),
+			}
+		}
+
 		default:
 			return state
 	}
+}
+
+function withReaction(
+	message: Schemas.MessageResponse,
+	action: { emoji: string; userId: string },
+	add: boolean,
+): Schemas.MessageResponse {
+	const groups = message.reactions
+	const index = groups.findIndex((group) => group.emoji === action.emoji)
+	const existing = index === -1 ? null : groups[index]
+
+	const userIds = new Set(existing?.user_ids ?? [])
+	if (add) userIds.add(action.userId)
+	else userIds.delete(action.userId)
+
+	if (userIds.size === 0) {
+		if (index === -1) return message
+		return {
+			...message,
+			reactions: groups.filter((_, i) => i !== index),
+		}
+	}
+
+	const nextGroup = {
+		emoji: action.emoji,
+		count: userIds.size,
+		user_ids: [...userIds],
+	}
+	const nextGroups =
+		index === -1
+			? [...groups, nextGroup]
+			: groups.map((group, i) => (i === index ? nextGroup : group))
+
+	return { ...message, reactions: nextGroups }
 }
 
 function toSent(message: Schemas.MessageResponse): DisplayMessage {
