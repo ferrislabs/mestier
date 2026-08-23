@@ -6,10 +6,42 @@ import {
 	zonedInstant,
 	zonedStartOfDay,
 } from '#/lib/zoned-time'
+import { MINUTES_PER_DAY } from '#/pages/planning/lib/amplitude'
 import type { AssigneeRef } from '#/pages/planning/lib/task-drop'
 
 export type CreateTaskRequest = Schemas.CreateTaskRequest
 export type UpdateTaskRequest = Schemas.UpdateTaskRequest
+export type CreateTaskRecurrenceRequest = Schemas.CreateTaskRecurrenceRequest
+
+export type RecurrenceFrequency = 'DAILY' | 'WEEKLY' | 'MONTHLY'
+
+/**
+ * The recurrence control's own draft — a sub-shape of {@link TaskFormValues},
+ * present on every draft (create or edit) but only ever read on create: an
+ * occurrence's `PATCH` never touches the rule (editing one detaches it from
+ * the series instead — see the backend's `TaskService::patch_task` doc), and
+ * {@link taskToDraft} always seeds it disabled.
+ */
+export interface RecurrenceDraft {
+	enabled: boolean
+	frequency: RecurrenceFrequency
+	/** ISO weekday numbers, 1 (Monday) through 7 (Sunday). Only read for `WEEKLY`. */
+	weekdays: number[]
+	/** 1 through 31, clamped to the month's own last day server-side. Only read for `MONTHLY`. */
+	dayOfMonth: number
+	/** `''` for no end date. */
+	endsOn: string
+}
+
+export function emptyRecurrenceDraft(): RecurrenceDraft {
+	return {
+		enabled: false,
+		frequency: 'DAILY',
+		weekdays: [],
+		dayOfMonth: 1,
+		endsOn: '',
+	}
+}
 
 /**
  * The task form's own shape — one draft covers both create and edit, root
@@ -62,6 +94,13 @@ export interface TaskFormValues {
 	expensesLabel: string
 	labelIds: string[]
 	assignees: AssigneeRef[]
+	/**
+	 * Only ever acted on when creating a root task (see
+	 * {@link buildCreateTaskRecurrencePayload}) — a subtask cannot repeat
+	 * (materialization always produces root tasks), and an occurrence's own
+	 * edit form never renders the control at all.
+	 */
+	recurrence: RecurrenceDraft
 }
 
 /**
@@ -92,6 +131,7 @@ export function emptyTaskDraft(options: {
 		expensesLabel: '',
 		labelIds: [],
 		assignees: [],
+		recurrence: emptyRecurrenceDraft(),
 	}
 }
 
@@ -302,6 +342,29 @@ export function validateTaskDraft(
 		errors.push('Un montant de frais doit être justifié')
 	}
 
+	if (values.recurrence.enabled) {
+		if (options.isSubtask) {
+			errors.push('Une sous-tâche ne peut pas se répéter')
+		}
+		if (
+			values.recurrence.frequency === 'WEEKLY' &&
+			values.recurrence.weekdays.length === 0
+		) {
+			errors.push('Choisissez au moins un jour de la semaine')
+		}
+		if (
+			values.recurrence.frequency === 'MONTHLY' &&
+			(values.recurrence.dayOfMonth < 1 || values.recurrence.dayOfMonth > 31)
+		) {
+			errors.push('Le jour du mois doit être entre 1 et 31')
+		}
+		if (values.recurrence.endsOn && values.startDate) {
+			if (values.recurrence.endsOn < values.startDate) {
+				errors.push('La date de fin de la répétition doit suivre le début')
+			}
+		}
+	}
+
 	return errors
 }
 
@@ -380,6 +443,78 @@ export function buildCreateTaskPayload(
 		project_id: values.projectId || null,
 		...expensesPayload(values),
 	}
+}
+
+/**
+ * A recurrence's one time-of-day duration, in minutes — every occurrence it
+ * materializes shares it (see `CreateTaskRecurrenceCommand::duration_minutes`
+ * on the backend). All-day covers the whole calendar day; otherwise it is
+ * `endTime - startTime`, floored at one minute so a mistyped equal pair
+ * never reaches the API as a non-positive duration (`validateTaskDraft`
+ * already refuses `endTime <= startTime` for a same-day window, but a
+ * recurrence's own occurrence is always same-day, so this floor is the last
+ * line of defense, not the first).
+ */
+function recurrenceDurationMinutes(values: TaskFormValues): number {
+	if (values.allDay) return MINUTES_PER_DAY
+
+	const [startHour, startMinute] = values.startTime.split(':').map(Number)
+	const [endHour, endMinute] = values.endTime.split(':').map(Number)
+	const start = (startHour ?? 0) * 60 + (startMinute ?? 0)
+	const end = (endHour ?? 0) * 60 + (endMinute ?? 0)
+	return Math.max(1, end - start)
+}
+
+/**
+ * `POST /task-recurrences`'s payload — `null` when the draft doesn't
+ * validate, is disabled, or has no window of its own (a recurrence always
+ * creates root tasks — see `RecurrenceDraft`'s own doc, and `hasOwnDates`
+ * for why a subtask never reaches here regardless: `validateTaskDraft`
+ * already refuses `recurrence.enabled` on a subtask draft).
+ *
+ * Carries `assignee_member_ids` directly — unlike {@link buildCreateTaskPayload},
+ * there is no follow-up `PATCH`: `CreateTaskRecurrenceCommand` has a field
+ * for the template's assignees, applied to every materialized occurrence at
+ * creation. It carries no `label_ids`: a label attaches to one task, and
+ * there is no "every future occurrence" label endpoint — a label picked on
+ * this form would only ever apply to whichever occurrence is edited by hand
+ * later, so the control is not offered at all for a recurring draft (see
+ * `ui/task-form-fields.tsx`).
+ */
+export function buildCreateTaskRecurrencePayload(
+	values: TaskFormValues,
+	options: { timeZone: string },
+): CreateTaskRecurrenceRequest | null {
+	if (!values.recurrence.enabled) return null
+	if (validateTaskDraft(values, { isSubtask: false }).length > 0) return null
+	if (!hasOwnDates(values)) return null
+
+	const rule =
+		values.recurrence.frequency === 'WEEKLY'
+			? { frequency: 'WEEKLY' as const, weekdays: values.recurrence.weekdays }
+			: values.recurrence.frequency === 'MONTHLY'
+				? {
+						frequency: 'MONTHLY' as const,
+						day_of_month: values.recurrence.dayOfMonth,
+					}
+				: { frequency: 'DAILY' as const }
+
+	return {
+		...rule,
+		starts_on: values.startDate,
+		ends_on: values.recurrence.endsOn || null,
+		timezone: options.timeZone,
+		start_time: values.allDay ? '00:00:00' : `${values.startTime}:00`,
+		duration_minutes: recurrenceDurationMinutes(values),
+		all_day: values.allDay,
+		title: values.title.trim(),
+		description: values.description.trim() || null,
+		blocks_availability: values.blocksAvailability,
+		customer_id: values.customerId || null,
+		customer_context_id: values.customerContextId || null,
+		project_id: values.projectId || null,
+		assignee_member_ids: values.assignees.map((assignee) => assignee.member_id),
+	} as CreateTaskRecurrenceRequest
 }
 
 /** Whether a freshly created task needs an immediate follow-up `PATCH` to carry the assignees and/or labels picked on the create form. */
@@ -498,5 +633,10 @@ export function taskToDraft(
 		assignees: task.member_ids.map((memberId) => ({
 			member_id: memberId,
 		})),
+		// Always disabled: an occurrence's edit form never offers the
+		// recurrence control at all (see `RecurrenceDraft`'s own doc) — its
+		// series is shown as a notice instead, driven by `task.recurrence_id`
+		// directly rather than through this draft.
+		recurrence: emptyRecurrenceDraft(),
 	}
 }

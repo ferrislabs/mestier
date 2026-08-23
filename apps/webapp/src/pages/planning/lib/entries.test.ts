@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+	entryIsRecurring,
 	entryLabel,
 	entryMemberIds,
 	entryTone,
@@ -90,5 +91,28 @@ describe('entryTone', () => {
 		expect(entryTone(task())).toBe('task')
 		expect(entryTone(absence())).toBe('absence')
 		expect(entryTone(unknownKindEntry())).toBe('unknown')
+	})
+})
+
+describe('entryIsRecurring', () => {
+	it('is true for a task carrying a recurrence_id', () => {
+		expect(entryIsRecurring(task({ recurrence_id: 'recurrence-1' }))).toBe(true)
+	})
+
+	it('is false for a task with no recurrence_id', () => {
+		expect(entryIsRecurring(task({ recurrence_id: null }))).toBe(false)
+	})
+
+	it('is false for a task that never sent the field at all', () => {
+		expect(entryIsRecurring(task())).toBe(false)
+	})
+
+	it('is false for an absence, which never carries a recurrence', () => {
+		expect(entryIsRecurring(absence())).toBe(false)
+	})
+
+	it('is false for an unknown kind, without throwing', () => {
+		expect(() => entryIsRecurring(unknownKindEntry())).not.toThrow()
+		expect(entryIsRecurring(unknownKindEntry())).toBe(false)
 	})
 })

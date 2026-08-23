@@ -310,4 +310,30 @@ describe('buildGridModel', () => {
 		const segment = model.rows[0]?.cells[0]?.segments[0]
 		expect(segment?.labels).toEqual([])
 	})
+
+	it('marks a segment as recurring when its task carries a recurrence_id', () => {
+		const model = buildGridModel({
+			windowFrom: '2026-08-10',
+			windowTo: '2026-08-10',
+			timeZone: TZ,
+			resources: [memberWithProfile()],
+			entries: [task({ recurrence_id: 'recurrence-1' })],
+			workTime: [],
+		})
+
+		expect(model.rows[0]?.cells[0]?.segments[0]?.isRecurring).toBe(true)
+	})
+
+	it('an absence segment is never recurring', () => {
+		const model = buildGridModel({
+			windowFrom: '2026-08-10',
+			windowTo: '2026-08-10',
+			timeZone: TZ,
+			resources: [memberWithProfile()],
+			entries: [absence()],
+			workTime: [],
+		})
+
+		expect(model.rows[0]?.cells[0]?.segments[0]?.isRecurring).toBe(false)
+	})
 })

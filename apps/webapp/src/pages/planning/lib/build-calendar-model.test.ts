@@ -286,6 +286,26 @@ describe('calendar amplitude', () => {
 			endMinute: 18 * 60,
 		})
 	})
+
+	it('marks an event as recurring when its task carries a recurrence_id', () => {
+		const model = build([task({ recurrence_id: 'recurrence-1' })])
+
+		const event = model.days
+			.flatMap((day) => day.timedEvents)
+			.find((event) => event.entryId === 't-1')
+
+		expect(event?.isRecurring).toBe(true)
+	})
+
+	it('does not mark a one-off task as recurring', () => {
+		const model = build([task({ recurrence_id: null })])
+
+		const event = model.days
+			.flatMap((day) => day.timedEvents)
+			.find((event) => event.entryId === 't-1')
+
+		expect(event?.isRecurring).toBe(false)
+	})
 })
 
 describe('hourMarks', () => {

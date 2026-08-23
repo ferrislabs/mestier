@@ -16,6 +16,10 @@ import {
 } from '#/hooks/use-task-comments'
 import { useCreateTaskLabel, useTaskLabels } from '#/hooks/use-task-labels'
 import {
+	useCreateTaskRecurrence,
+	useDeleteTaskRecurrence,
+} from '#/hooks/use-task-recurrences'
+import {
 	useCreateTask,
 	useDeleteTask,
 	usePatchTask,
@@ -41,6 +45,7 @@ import {
 } from '#/pages/planning/lib/subtasks'
 import {
 	buildCreateTaskPayload,
+	buildCreateTaskRecurrencePayload,
 	buildFollowUpPatchPayload,
 	buildPatchTaskPayload,
 	emptyTaskDraft,
@@ -244,6 +249,8 @@ export function TaskSheetFeature({
 	const createTask = useCreateTask(organizationId)
 	const patchTask = usePatchTask()
 	const deleteTask = useDeleteTask()
+	const createTaskRecurrence = useCreateTaskRecurrence(organizationId)
+	const deleteTaskRecurrence = useDeleteTaskRecurrence()
 
 	const windowPlaceholder = formatWindowPlaceholder(
 		parent
@@ -257,6 +264,28 @@ export function TaskSheetFeature({
 
 	async function handleSubmit() {
 		setSaveError(null)
+
+		if (target.mode === 'create' && values.recurrence.enabled) {
+			const recurrencePayload = buildCreateTaskRecurrencePayload(values, {
+				timeZone,
+			})
+			if (!recurrencePayload) return
+
+			try {
+				// One request: `CreateTaskRecurrenceCommand` carries the
+				// template's assignees directly, unlike a bare task's `POST`
+				// — see `buildCreateTaskRecurrencePayload`'s own doc for why
+				// there is no follow-up `PATCH` here.
+				await createTaskRecurrence.mutateAsync({
+					path: { organization_id: organizationId },
+					body: recurrencePayload,
+				})
+				onOpenChange(false)
+			} catch (error) {
+				setSaveError(errorMessage(error))
+			}
+			return
+		}
 
 		if (target.mode === 'create') {
 			const createPayload = buildCreateTaskPayload(values, {
@@ -344,6 +373,41 @@ export function TaskSheetFeature({
 		try {
 			await deleteTask.mutateAsync({
 				path: { organization_id: organizationId, task_id: taskId },
+			})
+			onOpenChange(false)
+		} catch (error) {
+			setSaveError(errorMessage(error))
+		}
+	}
+
+	/**
+	 * The three scopes a `DELETE` on a recurring occurrence can take — see
+	 * `ui/task-sheet.tsx`'s `deleteSeriesOptions` doc. `thisAndFollowing`
+	 * hits the same `DELETE /tasks/{id}` endpoint as a plain delete, only
+	 * with `?scope=` added; the whole-series choice hits
+	 * `DELETE /task-recurrences/{id}` instead, a different aggregate
+	 * entirely.
+	 */
+	async function handleDeleteOccurrence(
+		scope: 'THIS_OCCURRENCE' | 'THIS_AND_FOLLOWING',
+	) {
+		if (!taskId) return
+		try {
+			await deleteTask.mutateAsync({
+				path: { organization_id: organizationId, task_id: taskId },
+				query: { scope },
+			})
+			onOpenChange(false)
+		} catch (error) {
+			setSaveError(errorMessage(error))
+		}
+	}
+
+	async function handleDeleteWholeSeries() {
+		if (!task?.recurrence_id) return
+		try {
+			await deleteTaskRecurrence.mutateAsync({
+				path: { task_recurrence_id: task.recurrence_id },
 			})
 			onOpenChange(false)
 		} catch (error) {
@@ -501,17 +565,37 @@ export function TaskSheetFeature({
 		taskPlannedMinutes === null
 			? 'Durée non planifiée'
 			: minutesLabel(taskPlannedMinutes)
+	const isPartOfSeries = Boolean(task?.recurrence_id)
 
 	return (
 		<TaskSheet
 			open={open}
 			mode={target.mode}
 			title={sheetTitle(target.mode, isSubtask)}
-			isSaving={createTask.isPending || patchTask.isPending}
-			isDeleting={deleteTask.isPending}
+			isSaving={
+				createTask.isPending ||
+				patchTask.isPending ||
+				createTaskRecurrence.isPending
+			}
+			isDeleting={deleteTask.isPending || deleteTaskRecurrence.isPending}
 			saveError={saveError}
 			onSubmit={() => void handleSubmit()}
-			onDelete={target.mode === 'edit' ? () => void handleDelete() : undefined}
+			onDelete={
+				target.mode === 'edit' && !isPartOfSeries
+					? () => void handleDelete()
+					: undefined
+			}
+			deleteSeriesOptions={
+				target.mode === 'edit' && isPartOfSeries
+					? {
+							onThisOccurrence: () =>
+								void handleDeleteOccurrence('THIS_OCCURRENCE'),
+							onThisAndFollowing: () =>
+								void handleDeleteOccurrence('THIS_AND_FOLLOWING'),
+							onWholeSeries: () => void handleDeleteWholeSeries(),
+						}
+					: undefined
+			}
 			onOpenChange={onOpenChange}
 			fields={{
 				mode: target.mode,
@@ -520,6 +604,7 @@ export function TaskSheetFeature({
 				onChange: (patch) => setValues((current) => ({ ...current, ...patch })),
 				errors,
 				windowPlaceholder,
+				isPartOfSeries,
 				customerName: editCustomerName,
 				customers: customerOptions,
 				customerContexts,

@@ -29,6 +29,17 @@ export function entryLabel(entry: PlanningEntry): string {
 	return 'Entrée'
 }
 
+/**
+ * Whether `entry` follows a recurrence — what the calendar, team grid and
+ * month view all mark with a repeat icon (see `mestier_core::Task::recurrence_id`'s
+ * own doc: `null` covers both "never part of a series" and "detached from
+ * one by an edit", and either way there is nothing to mark). Only a `task`
+ * entry can carry one; an absence never does.
+ */
+export function entryIsRecurring(entry: PlanningEntry): boolean {
+	return entry.kind === 'task' && entry.recurrence_id != null
+}
+
 export type EntryTone = 'task' | 'absence' | 'unknown'
 
 /** Drives the segment's styling — see {@link entryMemberIds} on the unknown-kind fallback. */

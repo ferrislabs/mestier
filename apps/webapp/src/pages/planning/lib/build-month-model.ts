@@ -10,7 +10,11 @@ import {
 	entryNature,
 	matchesFilter,
 } from '#/pages/planning/lib/calendar-filters'
-import { entryLabel, entryMemberIds } from '#/pages/planning/lib/entries'
+import {
+	entryIsRecurring,
+	entryLabel,
+	entryMemberIds,
+} from '#/pages/planning/lib/entries'
 import { stackOverlapping } from '#/pages/planning/lib/layout'
 import {
 	entryOccursOnDate,
@@ -33,6 +37,8 @@ export interface MonthEntryVM {
 	entryId: string
 	nature: CalendarNature | 'unknown'
 	title: string
+	/** Whether this task still follows a recurrence — see `entryIsRecurring`. */
+	isRecurring: boolean
 	/** Start time on that day, empty for an entry carried over from the day before. */
 	timeLabel: string
 	entry: PlanningEntry
@@ -45,6 +51,8 @@ export interface MonthSpanVM {
 	entryId: string
 	nature: CalendarNature | 'unknown'
 	title: string
+	/** Whether this task still follows a recurrence — see `entryIsRecurring`. */
+	isRecurring: boolean
 	/** Starting column within the week, 0 = Monday. */
 	startIndex: number
 	/** Number of columns covered within this week. */
@@ -191,6 +199,7 @@ function buildDay(params: {
 			entryId: entry.id,
 			nature: entryNature(entry),
 			title: entryLabel(entry),
+			isRecurring: entryIsRecurring(entry),
 			timeLabel: startsOnOrAfter(entry, params.date, params.timeZone)
 				? formatMinute(startMinute)
 				: '',
@@ -251,6 +260,7 @@ function buildSpans(params: {
 		entryId: item.entry.id,
 		nature: entryNature(item.entry),
 		title: entryLabel(item.entry),
+		isRecurring: entryIsRecurring(item.entry),
 		startIndex: item.startIndex,
 		length: item.length,
 		lane: row,

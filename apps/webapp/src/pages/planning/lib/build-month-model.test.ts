@@ -227,4 +227,30 @@ describe('buildMonthModel', () => {
 		expect(model.hiddenByFilter).toBe(1)
 		expect(dayOf(model, '2026-08-05')?.entries).toHaveLength(1)
 	})
+
+	it('marks a timed entry as recurring when its task carries a recurrence_id', () => {
+		const model = build([task({ recurrence_id: 'recurrence-1' })])
+
+		expect(dayOf(model, '2026-08-05')?.entries[0]?.isRecurring).toBe(true)
+	})
+
+	it('marks a banner as recurring when its all-day task carries a recurrence_id', () => {
+		const model = build([
+			task({
+				all_day: true,
+				starts_at: '2026-08-05T00:00:00Z',
+				ends_at: '2026-08-08T00:00:00Z',
+				recurrence_id: 'recurrence-1',
+			}),
+		])
+		const span = model.weeks.find((week) => week.spans.length > 0)?.spans[0]
+
+		expect(span?.isRecurring).toBe(true)
+	})
+
+	it('does not mark a one-off task as recurring', () => {
+		const model = build([task()])
+
+		expect(dayOf(model, '2026-08-05')?.entries[0]?.isRecurring).toBe(false)
+	})
 })
