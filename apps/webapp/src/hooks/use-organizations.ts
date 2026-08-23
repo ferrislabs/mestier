@@ -3,6 +3,8 @@ import type { Schemas } from '#/api/api.client'
 
 const MY_ORGS_KEY = '/api/v1/users/@me/organizations'
 const ORGANIZATION_PATH = '/api/v1/organizations/{organization_id}'
+const LEGAL_IDENTITY_PATH =
+	'/api/v1/organizations/{organization_id}/legal-identity'
 
 interface QueryKeyMeta {
 	_id?: unknown
@@ -59,6 +61,26 @@ export function useUpdateOrganization(organizationId: string) {
 	})
 }
 
+/** Replaces the whole legal-identity block — see
+ * `UpdateLegalIdentityRequest`: a field left out clears it, so the caller
+ * always resends the section in full. */
+export function useUpdateLegalIdentity(organizationId: string) {
+	const queryClient = useQueryClient()
+
+	return useMutation({
+		...window.tanstackApi.mutation('patch', LEGAL_IDENTITY_PATH)
+			.mutationOptions,
+		onSuccess: () => {
+			void queryClient.invalidateQueries({
+				predicate: (query) =>
+					queryKeyMeta(query.queryKey)?._id === MY_ORGS_KEY ||
+					queryKeyMeta(query.queryKey)?._id === ORGANIZATION_PATH,
+			})
+		},
+		meta: { organizationId },
+	})
+}
+
 export function useDeleteOrganization() {
 	const queryClient = useQueryClient()
 
@@ -75,3 +97,4 @@ export function useDeleteOrganization() {
 }
 
 export type Organization = Schemas.OrganizationResponse
+export type VatStatus = Schemas.VatStatusResponse
