@@ -68,8 +68,12 @@ async fn a_quote_posted_over_http_is_priced_persisted_and_listed() {
     let body = &envelope["data"];
 
     // The total is the server's, computed from the lines. A client that sent
-    // its own would be ignored, which is the rule this asserts.
-    assert_eq!(body["total_cents"], json!(87_500), "{envelope}");
+    // its own would be ignored, which is the rule this asserts. No VAT
+    // status is set on the test organization, so gross equals net and the
+    // breakdown is empty.
+    assert_eq!(body["net_cents"], json!(87_500), "{envelope}");
+    assert_eq!(body["gross_cents"], json!(87_500), "{envelope}");
+    assert_eq!(body["vat_breakdown"], json!([]), "{envelope}");
     assert_eq!(body["status"], json!("DRAFT"), "{envelope}");
     let reference = body["reference"].as_str().expect("a reference").to_owned();
     assert!(reference.starts_with("DEV-"), "{reference}");

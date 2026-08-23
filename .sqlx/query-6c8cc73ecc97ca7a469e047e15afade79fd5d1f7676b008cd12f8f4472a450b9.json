@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            UPDATE quotes\n            SET title = $2,\n                customer_id = $3,\n                customer_context_id = $4,\n                status = CAST($5 AS text)::quote_status,\n                total_cents = $6,\n                updated_at = $7\n            WHERE id = $1 AND deleted_at IS NULL\n            RETURNING id, org_id, reference, title, customer_id, customer_context_id, status::text AS \"status!\", total_cents, deleted_at, created_at, updated_at\n            ",
+  "query": "\n            UPDATE quotes\n            SET status = CAST($2 AS text)::quote_status, updated_at = $3\n            WHERE id = $1 AND deleted_at IS NULL\n            RETURNING id, org_id, reference, title, customer_id, customer_context_id, status::text AS \"status!\", net_cents, vat_breakdown, gross_cents, deleted_at, created_at, updated_at\n            ",
   "describe": {
     "columns": [
       {
@@ -40,21 +40,31 @@
       },
       {
         "ordinal": 7,
-        "name": "total_cents",
+        "name": "net_cents",
         "type_info": "Int4"
       },
       {
         "ordinal": 8,
+        "name": "vat_breakdown",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 9,
+        "name": "gross_cents",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 10,
         "name": "deleted_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 9,
+        "ordinal": 11,
         "name": "created_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 10,
+        "ordinal": 12,
         "name": "updated_at",
         "type_info": "Timestamptz"
       }
@@ -63,10 +73,6 @@
       "Left": [
         "Uuid",
         "Text",
-        "Uuid",
-        "Uuid",
-        "Text",
-        "Int4",
         "Timestamptz"
       ]
     },
@@ -79,10 +85,12 @@
       false,
       null,
       false,
+      false,
+      false,
       true,
       false,
       false
     ]
   },
-  "hash": "ede1c26be89a2128a3fdfea7436d207a74653997d2206c66cbe19c9ff7922fee"
+  "hash": "6c8cc73ecc97ca7a469e047e15afade79fd5d1f7676b008cd12f8f4472a450b9"
 }

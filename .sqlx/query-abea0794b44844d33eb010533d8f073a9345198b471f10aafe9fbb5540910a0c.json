@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT id, org_id, name, sku, unit, unit_price_cents, description, deleted_at, created_at, updated_at\n            FROM products\n            WHERE org_id = $1 AND deleted_at IS NULL\n            ORDER BY name ASC, created_at ASC\n            LIMIT $2 OFFSET $3\n            ",
+  "query": "\n            SELECT id, org_id, label, unit, rate_cents, default_vat_rate_bp, deleted_at, created_at, updated_at\n            FROM service_rates\n            WHERE id = $1 AND deleted_at IS NULL\n            ",
   "describe": {
     "columns": [
       {
@@ -15,57 +15,49 @@
       },
       {
         "ordinal": 2,
-        "name": "name",
+        "name": "label",
         "type_info": "Text"
       },
       {
         "ordinal": 3,
-        "name": "sku",
-        "type_info": "Text"
-      },
-      {
-        "ordinal": 4,
         "name": "unit",
         "type_info": "Text"
       },
       {
+        "ordinal": 4,
+        "name": "rate_cents",
+        "type_info": "Int4"
+      },
+      {
         "ordinal": 5,
-        "name": "unit_price_cents",
+        "name": "default_vat_rate_bp",
         "type_info": "Int4"
       },
       {
         "ordinal": 6,
-        "name": "description",
-        "type_info": "Text"
-      },
-      {
-        "ordinal": 7,
         "name": "deleted_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 8,
+        "ordinal": 7,
         "name": "created_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 9,
+        "ordinal": 8,
         "name": "updated_at",
         "type_info": "Timestamptz"
       }
     ],
     "parameters": {
       "Left": [
-        "Uuid",
-        "Int8",
-        "Int8"
+        "Uuid"
       ]
     },
     "nullable": [
       false,
       false,
       false,
-      true,
       false,
       false,
       true,
@@ -74,5 +66,5 @@
       false
     ]
   },
-  "hash": "c7682f7a1402bc3527c4a6d83f42ca717a62a3e213270ca50a4518b6216cb54e"
+  "hash": "abea0794b44844d33eb010533d8f073a9345198b471f10aafe9fbb5540910a0c"
 }

@@ -259,6 +259,7 @@ impl Modify for SecurityAddon {
         quote::quote::update::UpdateQuoteRequest,
         quote::quote::update_status::UpdateQuoteStatusRequest,
         quote::response::QuoteLineResponse,
+        quote::response::QuoteVatBreakdownLineResponse,
         quote::response::QuoteResponse,
         member::member::create::CreateMemberRequest,
         member::member::update::UpdateMemberRequest,

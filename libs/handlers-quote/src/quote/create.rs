@@ -22,6 +22,8 @@ pub struct QuoteLineRequest {
     pub quantity: String,
     pub unit: ServiceRateUnit,
     pub unit_price_cents: i32,
+    #[serde(default)]
+    pub vat_rate_bp: Option<i32>,
     pub notes: Option<String>,
     pub photo_keys: Vec<String>,
 }
@@ -39,6 +41,7 @@ impl TryFrom<QuoteLineRequest> for QuoteLineCommand {
             quantity,
             unit: value.unit,
             unit_price_cents: value.unit_price_cents,
+            vat_rate_bp: value.vat_rate_bp,
             notes: value.notes,
             photo_keys: value.photo_keys,
         })

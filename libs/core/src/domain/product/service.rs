@@ -30,6 +30,7 @@ where
     ) -> Result<Product, CoreError> {
         validate_name(&command.name)?;
         validate_price(command.unit_price_cents)?;
+        validate_vat_rate_bp(command.default_vat_rate_bp)?;
 
         let now = Utc::now();
         self.repo
@@ -40,6 +41,7 @@ where
                 sku: normalize_optional(command.sku),
                 unit: command.unit,
                 unit_price_cents: command.unit_price_cents,
+                default_vat_rate_bp: command.default_vat_rate_bp,
                 description: normalize_optional(command.description),
                 deleted_at: None,
                 created_at: now,
@@ -69,12 +71,14 @@ where
     ) -> Result<Product, CoreError> {
         validate_name(&command.name)?;
         validate_price(command.unit_price_cents)?;
+        validate_vat_rate_bp(command.default_vat_rate_bp)?;
 
         let mut product = self.get_product(command.id).await?;
         product.name = command.name;
         product.sku = normalize_optional(command.sku);
         product.unit = command.unit;
         product.unit_price_cents = command.unit_price_cents;
+        product.default_vat_rate_bp = command.default_vat_rate_bp;
         product.description = normalize_optional(command.description);
         product.updated_at = Utc::now();
 
@@ -101,6 +105,16 @@ fn validate_price(unit_price_cents: i32) -> Result<(), CoreError> {
     if unit_price_cents < 0 {
         return Err(CoreError::Conflict(
             "product price cannot be negative".to_owned(),
+        ));
+    }
+
+    Ok(())
+}
+
+fn validate_vat_rate_bp(default_vat_rate_bp: Option<i32>) -> Result<(), CoreError> {
+    if default_vat_rate_bp.is_some_and(|rate_bp| !(0..=10_000).contains(&rate_bp)) {
+        return Err(CoreError::Conflict(
+            "default vat rate must be between 0 and 10000 basis points".to_owned(),
         ));
     }
 

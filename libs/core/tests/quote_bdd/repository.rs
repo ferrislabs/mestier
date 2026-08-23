@@ -11,8 +11,10 @@
 
 use std::sync::{Arc, Mutex, MutexGuard};
 
+use chrono::Utc;
 use common::CoreError;
-use mestier_core::{MockQuoteRepository, Quote};
+use mestier_core::{MockOrganizationRepository, MockQuoteRepository, Organization, Quote, UserId};
+use uuid::Uuid;
 
 /// Shared between the `World` and every mock built from it.
 pub type Store = Arc<Mutex<Vec<Quote>>>;
@@ -78,5 +80,40 @@ pub fn stubbed(store: &Store) -> MockQuoteRepository {
             Box::pin(async move { outcome })
         });
 
+    repo
+}
+
+/// A stub for the one thing `QuoteService` reads off the organization: its
+/// VAT status. No scenario in `quote.feature` states one, so every company
+/// here is unregistered for VAT — the same "not stated yet" default the
+/// domain applies.
+pub fn stubbed_organization() -> MockOrganizationRepository {
+    let mut repo = MockOrganizationRepository::new();
+    repo.expect_find_by_id().returning(move |id| {
+        let now = Utc::now();
+        let organization = Organization {
+            id,
+            name: "Scenario company".into(),
+            slug: "scenario-company".into(),
+            owner_id: UserId(Uuid::new_v4()),
+            legal_name: None,
+            legal_form: None,
+            registration_number: None,
+            vat_status: None,
+            share_capital_cents: None,
+            address_line1: None,
+            address_line2: None,
+            address_postal_code: None,
+            address_city: None,
+            address_country: None,
+            contact_email: None,
+            contact_phone: None,
+            insurance_mention: None,
+            deleted_at: None,
+            created_at: now,
+            updated_at: now,
+        };
+        Box::pin(async move { Ok(Some(organization)) })
+    });
     repo
 }

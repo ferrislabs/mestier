@@ -62,7 +62,7 @@ fn render_quote_pdf(quote: &Quote) -> Vec<u8> {
         format!("Client: {}", quote.customer_id.0),
         format!("Contexte: {}", quote.customer_context_id.0),
         format!("Statut: {}", quote.status.as_str()),
-        format!("Total: {}", format_cents(quote.total_cents)),
+        format!("Total: {}", format_cents(quote.gross_cents)),
         String::new(),
         "Lignes".to_owned(),
     ];

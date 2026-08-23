@@ -139,7 +139,12 @@ fn quote_payload(quote: &Quote) -> Value {
         "customer_id": quote.customer_id.0,
         "customer_context_id": quote.customer_context_id.0,
         "status": quote.status.as_str(),
-        "total_cents": quote.total_cents,
+        "net_cents": quote.net_cents,
+        "vat_breakdown": quote.vat_breakdown.iter().map(|line| json!({
+            "rate_bp": line.rate_bp,
+            "vat_cents": line.vat_cents,
+        })).collect::<Vec<_>>(),
+        "gross_cents": quote.gross_cents,
         "created_at": quote.created_at,
         "updated_at": quote.updated_at,
     })
@@ -178,7 +183,9 @@ pub fn descriptors() -> Vec<EventDescriptor> {
         "customer_id": "018f3b2a-0000-7000-8000-000000000003",
         "customer_context_id": "018f3b2a-0000-7000-8000-000000000004",
         "status": "DRAFT",
-        "total_cents": 550_000,
+        "net_cents": 550_000,
+        "vat_breakdown": [],
+        "gross_cents": 550_000,
         "created_at": "2026-08-08T09:00:00Z",
         "updated_at": "2026-08-08T09:00:00Z",
     });

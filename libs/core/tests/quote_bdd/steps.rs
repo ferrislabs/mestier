@@ -53,7 +53,9 @@ async fn an_existing_quote(world: &mut QuoteWorld, title: String, status: String
         customer_id: world.customer_id(),
         customer_context_id: world.customer_context_id(),
         status: parse_status(&status),
-        total_cents: 87_500,
+        net_cents: 87_500,
+        vat_breakdown: Vec::new(),
+        gross_cents: 87_500,
         lines: vec![QuoteLine {
             id: QuoteLineId(generate_uuid_v7()),
             organization_id,
@@ -63,6 +65,7 @@ async fn an_existing_quote(world: &mut QuoteWorld, title: String, status: String
             quantity: Decimal::new(125, 1),
             unit: ServiceRateUnit::M2,
             unit_price_cents: 3_800,
+            vat_rate_bp: None,
             notes: None,
             photo_keys: vec![],
             deleted_at: None,
@@ -88,7 +91,10 @@ async fn the_artisan_creates_a_quote(world: &mut QuoteWorld, step: &Step, title:
         lines: quote_lines(step),
     };
 
-    let outcome = world.service().create_quote(command).await;
+    let outcome = world
+        .service()
+        .create_quote(command, repository::stubbed_organization())
+        .await;
 
     world.record(outcome);
 }
@@ -112,7 +118,7 @@ async fn the_quote_carries_the_reference(world: &mut QuoteWorld, expected: Strin
 
 #[then(expr = "the total of the quote is {string}")]
 async fn the_quote_total_is(world: &mut QuoteWorld, expected: String) {
-    assert_eq!(format_euros(world.current_quote().total_cents), expected);
+    assert_eq!(format_euros(world.current_quote().net_cents), expected);
 }
 
 #[then(expr = "the quote is in status {string}")]
@@ -189,6 +195,7 @@ fn quote_lines(step: &Step) -> Vec<QuoteLineCommand> {
             quantity: parse_decimal(&row[quantity]),
             unit: parse_unit(&row[unit]),
             unit_price_cents: parse_euros(&row[price]),
+            vat_rate_bp: None,
             notes: None,
             photo_keys: vec![],
         })

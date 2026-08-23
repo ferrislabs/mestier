@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            UPDATE service_rates\n            SET label = $2, unit = $3, rate_cents = $4, updated_at = $5\n            WHERE id = $1 AND deleted_at IS NULL\n            RETURNING id, org_id, label, unit, rate_cents, deleted_at, created_at, updated_at\n            ",
+  "query": "\n            SELECT id, org_id, label, unit, rate_cents, default_vat_rate_bp, deleted_at, created_at, updated_at\n            FROM service_rates\n            WHERE org_id = $1 AND deleted_at IS NULL\n            ORDER BY label ASC, created_at ASC\n            LIMIT $2 OFFSET $3\n            ",
   "describe": {
     "columns": [
       {
@@ -30,16 +30,21 @@
       },
       {
         "ordinal": 5,
+        "name": "default_vat_rate_bp",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 6,
         "name": "deleted_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 6,
+        "ordinal": 7,
         "name": "created_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 7,
+        "ordinal": 8,
         "name": "updated_at",
         "type_info": "Timestamptz"
       }
@@ -47,10 +52,8 @@
     "parameters": {
       "Left": [
         "Uuid",
-        "Text",
-        "Text",
-        "Int4",
-        "Timestamptz"
+        "Int8",
+        "Int8"
       ]
     },
     "nullable": [
@@ -60,9 +63,10 @@
       false,
       false,
       true,
+      true,
       false,
       false
     ]
   },
-  "hash": "c77387af69f7566f6b3bc3e49503ae2a4f62b54afbf7d19ce33da5dc3a93c902"
+  "hash": "c29a035d3fb92eeb5f60dcee7371d9a77a5257dab420ed95d8826b80714528a9"
 }

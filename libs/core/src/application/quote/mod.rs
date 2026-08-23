@@ -11,10 +11,14 @@ use crate::{
 };
 
 impl MestierUseCase {
-    #[transactional(quote, emitter)]
+    /// `organization` reads only the organization's VAT status — see
+    /// `QuoteService::create_quote`. Listed here and on `update_quote` only:
+    /// the other quote use cases below stay unaware of the organization
+    /// aggregate.
+    #[transactional(quote, organization, emitter)]
     pub async fn create_quote(&self, command: CreateQuoteCommand) -> Result<Quote, CoreError> {
         let mut service = QuoteService::new(quote_repository, emitter);
-        service.create_quote(command).await
+        service.create_quote(command, organization_repository).await
     }
 
     #[transactional(quote, emitter)]
@@ -34,10 +38,10 @@ impl MestierUseCase {
         service.list_quotes(organization_id, limit, offset).await
     }
 
-    #[transactional(quote, emitter)]
+    #[transactional(quote, organization, emitter)]
     pub async fn update_quote(&self, command: UpdateQuoteCommand) -> Result<Quote, CoreError> {
         let mut service = QuoteService::new(quote_repository, emitter);
-        service.update_quote(command).await
+        service.update_quote(command, organization_repository).await
     }
 
     #[transactional(quote, emitter)]

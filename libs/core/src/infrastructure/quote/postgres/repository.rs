@@ -8,7 +8,7 @@ use crate::{
     domain::quote::ports::QuoteRepository,
     infrastructure::{
         postgres::{SharedTx, error::map_sqlx_error},
-        quote::postgres::model::{QuoteLineRow, QuoteRow},
+        quote::postgres::model::{QuoteLineRow, QuoteRow, vat_breakdown_to_json},
     },
 };
 
@@ -59,12 +59,13 @@ impl<'tx> QuoteRepository for PgQuoteRepository<'tx> {
 
     async fn insert(&mut self, quote: &Quote) -> Result<Quote, CoreError> {
         let mut tx = self.tx.lock().await;
+        let vat_breakdown = vat_breakdown_to_json(&quote.vat_breakdown);
         let row = sqlx::query_as!(
             QuoteRow,
             r#"
-            INSERT INTO quotes (id, org_id, reference, title, customer_id, customer_context_id, status, total_cents, deleted_at, created_at, updated_at)
-            VALUES ($1, $2, $3, $4, $5, $6, CAST($7 AS text)::quote_status, $8, $9, $10, $11)
-            RETURNING id, org_id, reference, title, customer_id, customer_context_id, status::text AS "status!", total_cents, deleted_at, created_at, updated_at
+            INSERT INTO quotes (id, org_id, reference, title, customer_id, customer_context_id, status, net_cents, vat_breakdown, gross_cents, deleted_at, created_at, updated_at)
+            VALUES ($1, $2, $3, $4, $5, $6, CAST($7 AS text)::quote_status, $8, $9, $10, $11, $12, $13)
+            RETURNING id, org_id, reference, title, customer_id, customer_context_id, status::text AS "status!", net_cents, vat_breakdown, gross_cents, deleted_at, created_at, updated_at
             "#,
             quote.id.0,
             quote.organization_id.0,
@@ -73,7 +74,9 @@ impl<'tx> QuoteRepository for PgQuoteRepository<'tx> {
             quote.customer_id.0,
             quote.customer_context_id.0,
             quote.status.as_str(),
-            quote.total_cents,
+            quote.net_cents,
+            vat_breakdown,
+            quote.gross_cents,
             quote.deleted_at,
             quote.created_at,
             quote.updated_at,
@@ -91,7 +94,7 @@ impl<'tx> QuoteRepository for PgQuoteRepository<'tx> {
         let row = sqlx::query_as!(
             QuoteRow,
             r#"
-            SELECT id, org_id, reference, title, customer_id, customer_context_id, status::text AS "status!", total_cents, deleted_at, created_at, updated_at
+            SELECT id, org_id, reference, title, customer_id, customer_context_id, status::text AS "status!", net_cents, vat_breakdown, gross_cents, deleted_at, created_at, updated_at
             FROM quotes
             WHERE id = $1 AND deleted_at IS NULL
             "#,
@@ -120,7 +123,7 @@ impl<'tx> QuoteRepository for PgQuoteRepository<'tx> {
         let rows = sqlx::query_as!(
             QuoteRow,
             r#"
-            SELECT id, org_id, reference, title, customer_id, customer_context_id, status::text AS "status!", total_cents, deleted_at, created_at, updated_at
+            SELECT id, org_id, reference, title, customer_id, customer_context_id, status::text AS "status!", net_cents, vat_breakdown, gross_cents, deleted_at, created_at, updated_at
             FROM quotes
             WHERE org_id = $1 AND deleted_at IS NULL
             ORDER BY created_at DESC, id DESC
@@ -153,6 +156,7 @@ impl<'tx> QuoteRepository for PgQuoteRepository<'tx> {
 
     async fn update(&mut self, quote: &Quote) -> Result<Quote, CoreError> {
         let mut tx = self.tx.lock().await;
+        let vat_breakdown = vat_breakdown_to_json(&quote.vat_breakdown);
         let row = sqlx::query_as!(
             QuoteRow,
             r#"
@@ -161,17 +165,21 @@ impl<'tx> QuoteRepository for PgQuoteRepository<'tx> {
                 customer_id = $3,
                 customer_context_id = $4,
                 status = CAST($5 AS text)::quote_status,
-                total_cents = $6,
-                updated_at = $7
+                net_cents = $6,
+                vat_breakdown = $7,
+                gross_cents = $8,
+                updated_at = $9
             WHERE id = $1 AND deleted_at IS NULL
-            RETURNING id, org_id, reference, title, customer_id, customer_context_id, status::text AS "status!", total_cents, deleted_at, created_at, updated_at
+            RETURNING id, org_id, reference, title, customer_id, customer_context_id, status::text AS "status!", net_cents, vat_breakdown, gross_cents, deleted_at, created_at, updated_at
             "#,
             quote.id.0,
             quote.title,
             quote.customer_id.0,
             quote.customer_context_id.0,
             quote.status.as_str(),
-            quote.total_cents,
+            quote.net_cents,
+            vat_breakdown,
+            quote.gross_cents,
             quote.updated_at,
         )
         .fetch_optional(&mut ***tx)
@@ -210,7 +218,7 @@ impl<'tx> QuoteRepository for PgQuoteRepository<'tx> {
             UPDATE quotes
             SET status = CAST($2 AS text)::quote_status, updated_at = $3
             WHERE id = $1 AND deleted_at IS NULL
-            RETURNING id, org_id, reference, title, customer_id, customer_context_id, status::text AS "status!", total_cents, deleted_at, created_at, updated_at
+            RETURNING id, org_id, reference, title, customer_id, customer_context_id, status::text AS "status!", net_cents, vat_breakdown, gross_cents, deleted_at, created_at, updated_at
             "#,
             id.0,
             status.as_str(),
@@ -272,7 +280,7 @@ async fn fetch_lines(
     let rows = sqlx::query_as!(
         QuoteLineRow,
         r#"
-        SELECT id, org_id, quote_id, service_rate_id, label, quantity, unit, unit_price_cents, notes, photo_keys, deleted_at, created_at, updated_at
+        SELECT id, org_id, quote_id, service_rate_id, label, quantity, unit, unit_price_cents, vat_rate_bp, notes, photo_keys, deleted_at, created_at, updated_at
         FROM quote_lines
         WHERE quote_id = $1 AND deleted_at IS NULL
         ORDER BY created_at ASC, id ASC
@@ -299,13 +307,14 @@ async fn insert_lines(conn: &mut PgConnection, lines: &[QuoteLine]) -> Result<()
                 quantity,
                 unit,
                 unit_price_cents,
+                vat_rate_bp,
                 notes,
                 photo_keys,
                 deleted_at,
                 created_at,
                 updated_at
             )
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
             "#,
             line.id.0,
             line.organization_id.0,
@@ -315,6 +324,7 @@ async fn insert_lines(conn: &mut PgConnection, lines: &[QuoteLine]) -> Result<()
             line.quantity,
             line.unit.as_str(),
             line.unit_price_cents,
+            line.vat_rate_bp,
             line.notes,
             &line.photo_keys,
             line.deleted_at,

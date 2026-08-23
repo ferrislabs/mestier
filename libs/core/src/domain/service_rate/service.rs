@@ -30,6 +30,7 @@ where
     ) -> Result<ServiceRate, CoreError> {
         validate_label(&command.label)?;
         validate_rate(command.rate_cents)?;
+        validate_vat_rate_bp(command.default_vat_rate_bp)?;
 
         let now = Utc::now();
         self.repo
@@ -39,6 +40,7 @@ where
                 label: command.label,
                 unit: command.unit,
                 rate_cents: command.rate_cents,
+                default_vat_rate_bp: command.default_vat_rate_bp,
                 deleted_at: None,
                 created_at: now,
                 updated_at: now,
@@ -67,11 +69,13 @@ where
     ) -> Result<ServiceRate, CoreError> {
         validate_label(&command.label)?;
         validate_rate(command.rate_cents)?;
+        validate_vat_rate_bp(command.default_vat_rate_bp)?;
 
         let mut service_rate = self.get_service_rate(command.id).await?;
         service_rate.label = command.label;
         service_rate.unit = command.unit;
         service_rate.rate_cents = command.rate_cents;
+        service_rate.default_vat_rate_bp = command.default_vat_rate_bp;
         service_rate.updated_at = Utc::now();
 
         self.repo.update(&service_rate).await
@@ -103,6 +107,16 @@ fn validate_rate(rate_cents: i32) -> Result<(), CoreError> {
     Ok(())
 }
 
+fn validate_vat_rate_bp(default_vat_rate_bp: Option<i32>) -> Result<(), CoreError> {
+    if default_vat_rate_bp.is_some_and(|rate_bp| !(0..=10_000).contains(&rate_bp)) {
+        return Err(CoreError::Conflict(
+            "default vat rate must be between 0 and 10000 basis points".to_owned(),
+        ));
+    }
+
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -118,6 +132,7 @@ mod tests {
             label: "Taille".to_owned(),
             unit: ServiceRateUnit::Hour,
             rate_cents: 5500,
+            default_vat_rate_bp: None,
             deleted_at: None,
             created_at: now,
             updated_at: now,
@@ -139,6 +154,7 @@ mod tests {
                 label: "Taille".to_owned(),
                 unit: ServiceRateUnit::Hour,
                 rate_cents: 5500,
+                default_vat_rate_bp: Some(2000),
             })
             .await
             .unwrap();
@@ -165,6 +181,7 @@ mod tests {
                 label: "Haie".to_owned(),
                 unit: ServiceRateUnit::Ml,
                 rate_cents: 1200,
+                default_vat_rate_bp: None,
             })
             .await
             .unwrap();

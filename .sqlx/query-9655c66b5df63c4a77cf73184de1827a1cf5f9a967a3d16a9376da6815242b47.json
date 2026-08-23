@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            INSERT INTO quotes (id, org_id, reference, title, customer_id, customer_context_id, status, total_cents, deleted_at, created_at, updated_at)\n            VALUES ($1, $2, $3, $4, $5, $6, CAST($7 AS text)::quote_status, $8, $9, $10, $11)\n            RETURNING id, org_id, reference, title, customer_id, customer_context_id, status::text AS \"status!\", total_cents, deleted_at, created_at, updated_at\n            ",
+  "query": "\n            SELECT id, org_id, reference, title, customer_id, customer_context_id, status::text AS \"status!\", net_cents, vat_breakdown, gross_cents, deleted_at, created_at, updated_at\n            FROM quotes\n            WHERE org_id = $1 AND deleted_at IS NULL\n            ORDER BY created_at DESC, id DESC\n            LIMIT $2 OFFSET $3\n            ",
   "describe": {
     "columns": [
       {
@@ -40,21 +40,31 @@
       },
       {
         "ordinal": 7,
-        "name": "total_cents",
+        "name": "net_cents",
         "type_info": "Int4"
       },
       {
         "ordinal": 8,
+        "name": "vat_breakdown",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 9,
+        "name": "gross_cents",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 10,
         "name": "deleted_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 9,
+        "ordinal": 11,
         "name": "created_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 10,
+        "ordinal": 12,
         "name": "updated_at",
         "type_info": "Timestamptz"
       }
@@ -62,16 +72,8 @@
     "parameters": {
       "Left": [
         "Uuid",
-        "Uuid",
-        "Text",
-        "Text",
-        "Uuid",
-        "Uuid",
-        "Text",
-        "Int4",
-        "Timestamptz",
-        "Timestamptz",
-        "Timestamptz"
+        "Int8",
+        "Int8"
       ]
     },
     "nullable": [
@@ -83,10 +85,12 @@
       false,
       null,
       false,
+      false,
+      false,
       true,
       false,
       false
     ]
   },
-  "hash": "0a6a637166a42cb76344de07aa637b3214130157de4ebd2aeec5a8a2fe0fdbaa"
+  "hash": "9655c66b5df63c4a77cf73184de1827a1cf5f9a967a3d16a9376da6815242b47"
 }
