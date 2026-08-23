@@ -17,6 +17,7 @@ import {
 	useActiveOrganization,
 	useOrganizationList,
 } from '#/hooks/use-active-organization'
+import { PresenceProvider } from '#/hooks/use-presence'
 import { resolveScope } from '#/modules/scope'
 
 export const Route = createFileRoute('/_app/o/$organizationSlug')({
@@ -50,7 +51,9 @@ function OrganizationLayout() {
 
 	return (
 		<ActiveOrganizationProvider activeOrganization={organization}>
-			<AppShell />
+			<PresenceProvider organizationId={organization.id}>
+				<AppShell />
+			</PresenceProvider>
 		</ActiveOrganizationProvider>
 	)
 }

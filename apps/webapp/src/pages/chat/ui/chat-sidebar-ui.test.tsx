@@ -42,6 +42,7 @@ function baseProps(
 		onToggleCategory: vi.fn(),
 		isLoading: false,
 		isError: false,
+		onlineCount: 0,
 		...overrides,
 	}
 }

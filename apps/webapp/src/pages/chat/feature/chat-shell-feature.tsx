@@ -6,6 +6,7 @@ import {
 	useChannels,
 	useChatListGatewaySync,
 } from '#/hooks/use-chat'
+import { useOnlineCount } from '#/hooks/use-presence'
 import { groupChannelsByCategory } from '#/pages/chat/lib/group-channels'
 import { ChatSidebarUI } from '#/pages/chat/ui/chat-sidebar-ui'
 
@@ -25,6 +26,7 @@ export function ChatShellFeature() {
 	const categories = useCategories(activeOrganization.id)
 	const channels = useChannels(activeOrganization.id)
 	useChatListGatewaySync(activeOrganization.id)
+	const onlineCount = useOnlineCount()
 
 	const groups = groupChannelsByCategory(
 		categories.data ?? [],
@@ -50,6 +52,7 @@ export function ChatShellFeature() {
 				activeChannelId={channelId}
 				isLoading={categories.isLoading || channels.isLoading}
 				isError={categories.isError || channels.isError}
+				onlineCount={onlineCount}
 			/>
 			<div className="flex min-w-0 flex-1 flex-col">
 				<Outlet />

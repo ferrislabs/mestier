@@ -14,6 +14,7 @@ import { Skeleton } from '#/components/ui/skeleton'
 import { cn } from '#/lib/utils'
 import { buildOrgPath } from '#/modules/org-path'
 import type { ChannelGroup } from '#/pages/chat/lib/group-channels'
+import { PresenceSummaryUI } from '#/pages/chat/ui/presence-summary-ui'
 
 export interface ChatSidebarUIProps {
 	organizationSlug: string
@@ -23,6 +24,7 @@ export interface ChatSidebarUIProps {
 	activeChannelId?: string
 	isLoading: boolean
 	isError: boolean
+	onlineCount: number
 }
 
 export function ChatSidebarUI({
@@ -33,6 +35,7 @@ export function ChatSidebarUI({
 	activeChannelId,
 	isLoading,
 	isError,
+	onlineCount,
 }: ChatSidebarUIProps) {
 	return (
 		<nav
@@ -42,6 +45,8 @@ export function ChatSidebarUI({
 			<div className="px-4 py-4">
 				<h2 className="text-sm font-semibold text-foreground">Discussions</h2>
 			</div>
+
+			<PresenceSummaryUI onlineCount={onlineCount} />
 
 			{isLoading ? <SidebarSkeleton /> : null}
 
