@@ -3,11 +3,14 @@ import type { Rhythm, WorkSlot } from '#/hooks/use-work-time'
 import {
 	accessState,
 	addDaysIso,
+	centsToEurosInput,
 	computeWeeklyGap,
 	draftToRhythmSlots,
 	draftToWorkSlots,
+	emptyCostBasisDraft,
 	emptyRhythmSlotDraft,
 	emptyWorkSlotDraft,
+	eurosToCents,
 	findOpenRhythm,
 	formatDateFr,
 	formatDurationMinutes,
@@ -15,6 +18,7 @@ import {
 	parseDurationLabel,
 	rhythmToDraft,
 	timeToMinutes,
+	validateCostBasisDraft,
 	validateRhythmDraft,
 	validateWorkSlotsDraft,
 	workSlotsToDraft,
@@ -411,5 +415,91 @@ describe('addDaysIso', () => {
 describe('formatDateFr', () => {
 	it('formats an ISO date as dd/mm/yyyy', () => {
 		expect(formatDateFr('2026-08-07')).toBe('07/08/2026')
+	})
+})
+
+describe('eurosToCents / centsToEurosInput', () => {
+	it('parses a comma decimal as cents', () => {
+		expect(eurosToCents('23,08')).toBe(2308)
+	})
+
+	it('parses a dot decimal as cents', () => {
+		expect(eurosToCents('23.08')).toBe(2308)
+	})
+
+	it('treats an empty string as not set, never zero', () => {
+		expect(eurosToCents('')).toBeNull()
+		expect(eurosToCents('   ')).toBeNull()
+	})
+
+	it('treats unparsable input as not set', () => {
+		expect(eurosToCents('abc')).toBeNull()
+	})
+
+	it('accepts a genuinely free rate of zero', () => {
+		expect(eurosToCents('0')).toBe(0)
+	})
+
+	it('round-trips through centsToEurosInput', () => {
+		expect(centsToEurosInput(eurosToCents('23,08'))).toBe('23,08')
+	})
+
+	it('renders null as an empty field, not "0"', () => {
+		expect(centsToEurosInput(null)).toBe('')
+	})
+})
+
+describe('emptyCostBasisDraft', () => {
+	it('defaults the effective date to today and seeds the current basis', () => {
+		const draft = emptyCostBasisDraft('2026-08-07', {
+			isSalaried: false,
+			hourlyRateCents: 3500,
+			monthlyCostCents: null,
+		})
+
+		expect(draft).toEqual({
+			effectiveFrom: '2026-08-07',
+			isSalaried: false,
+			hourlyRate: '35,00',
+			monthlyCost: '',
+		})
+	})
+
+	it('seeds a salaried employee from their monthly cost', () => {
+		const draft = emptyCostBasisDraft('2026-08-07', {
+			isSalaried: true,
+			hourlyRateCents: null,
+			monthlyCostCents: 350_000,
+		})
+
+		expect(draft.isSalaried).toBe(true)
+		expect(draft.monthlyCost).toBe('3500,00')
+		expect(draft.hourlyRate).toBe('')
+	})
+})
+
+describe('validateCostBasisDraft', () => {
+	it('requires an effective date', () => {
+		const errors = validateCostBasisDraft({
+			effectiveFrom: '',
+			isSalaried: false,
+			hourlyRate: '35,00',
+			monthlyCost: '',
+		})
+
+		expect(errors).toEqual([
+			{ key: 'effectiveFrom', message: 'Date d’effet requise' },
+		])
+	})
+
+	it('accepts an empty rate — it means "not set", which is valid input', () => {
+		const errors = validateCostBasisDraft({
+			effectiveFrom: '2026-08-07',
+			isSalaried: false,
+			hourlyRate: '',
+			monthlyCost: '',
+		})
+
+		expect(errors).toEqual([])
 	})
 })

@@ -8,7 +8,9 @@ import {
 } from '#/hooks/use-absences'
 import { useActiveOrganization } from '#/hooks/use-active-organization'
 import {
+	useEmployeeCostBases,
 	useReferenceCatalog,
+	useSetEmployeeCostBasis,
 	useUpsertEmployeeProfile,
 } from '#/hooks/use-reference-catalog'
 import type { Rhythm } from '#/hooks/use-work-time'
@@ -29,11 +31,15 @@ import {
 import {
 	addDaysIso,
 	browserTimeZone,
+	type CostBasisEntry,
+	type CostBasisFormValues,
 	computeWeeklyGap,
 	draftToRhythmSlots,
 	draftToWorkSlots,
+	emptyCostBasisDraft,
 	emptyRhythmSlotDraft,
 	emptyWorkSlotDraft,
+	eurosToCents,
 	findOpenRhythm,
 	formatDateFr,
 	formatDurationMinutes,
@@ -42,6 +48,7 @@ import {
 	type RhythmSlotDraft,
 	rhythmToDraft,
 	todayIsoDate,
+	validateCostBasisDraft,
 	validateRhythmDraft,
 	validateWorkSlotsDraft,
 	type WorkSlotDraft,
@@ -134,6 +141,11 @@ function EmployeeWorkTimeScreen({
 	const upsertProfile = useUpsertEmployeeProfile()
 	const replaceRhythm = useReplaceRhythm(memberId)
 	const replaceWorkSlots = useReplaceWorkSlots(memberId)
+	const costBasesQuery = useEmployeeCostBases(
+		profile?.id ?? '',
+		Boolean(profile),
+	)
+	const setCostBasis = useSetEmployeeCostBasis()
 
 	const openRhythm = findOpenRhythm(currentRhythmQuery.data?.data.rhythms ?? [])
 	const otherRhythms = dedupeRhythms(
@@ -154,6 +166,16 @@ function EmployeeWorkTimeScreen({
 		workSlotsToDraft(workTimeQuery.data?.data.work_slots ?? [], workSlotsRange)
 
 	const [contractDraft, setContractDraft] = useState<string | null>(null)
+
+	const [costBasisDraft, setCostBasisDraft] =
+		useState<CostBasisFormValues | null>(null)
+	const costBasisValues =
+		costBasisDraft ??
+		emptyCostBasisDraft(today, {
+			isSalaried: profile?.is_salaried ?? false,
+			hourlyRateCents: profile?.hourly_rate_cents ?? null,
+			monthlyCostCents: profile?.monthly_cost_cents ?? null,
+		})
 
 	const absencesQuery = useAbsences(organizationId)
 	const createAbsence = useCreateAbsence()
@@ -221,6 +243,43 @@ function EmployeeWorkTimeScreen({
 			? rhythmConflictMessage(openRhythm?.effective_from ?? null)
 			: replaceRhythm.error.message
 		: null
+
+	const costBasisErrors = validateCostBasisDraft(costBasisValues)
+	const costHistory: CostBasisEntry[] = (costBasesQuery.data?.data ?? []).map(
+		(entry) => ({
+			id: entry.id,
+			effectiveFrom: entry.effective_from,
+			effectiveTo: entry.effective_to ?? null,
+			isSalaried: entry.is_salaried,
+			hourlyRateCents: entry.hourly_rate_cents ?? null,
+			monthlyCostCents: entry.monthly_cost_cents ?? null,
+			effectiveHourlyRateCents: entry.effective_hourly_rate_cents ?? null,
+		}),
+	)
+	const openCostBasis =
+		costHistory.find((entry) => entry.effectiveTo === null) ?? null
+
+	const handleSubmitCostBasis = async () => {
+		if (!profile || costBasisErrors.length > 0) return
+		try {
+			await setCostBasis.mutateAsync({
+				path: { employee_id: profile.id },
+				body: {
+					effective_from: costBasisValues.effectiveFrom,
+					is_salaried: costBasisValues.isSalaried,
+					hourly_rate_cents: eurosToCents(costBasisValues.hourlyRate),
+					monthly_cost_cents: costBasisValues.isSalaried
+						? eurosToCents(costBasisValues.monthlyCost)
+						: null,
+					weekly_contract_minutes: profile.weekly_contract_minutes,
+				},
+			})
+			setCostBasisDraft(null)
+		} catch {
+			// Surfaced reactively via `setCostBasis.error` — the draft is kept so
+			// the user doesn't lose what they typed.
+		}
+	}
 
 	const handleUpdateContract = async () => {
 		const minutes = parseDurationLabel(contractValue)
@@ -401,6 +460,7 @@ function EmployeeWorkTimeScreen({
 			isSalaried={profile?.is_salaried ?? false}
 			monthlyCostCents={profile?.monthly_cost_cents ?? null}
 			effectiveHourlyRateCents={profile?.effective_hourly_rate_cents ?? null}
+			openCostBasisEffectiveFrom={openCostBasis?.effectiveFrom ?? null}
 			weeklyGap={weeklyGap}
 			contractForm={{
 				value: contractValue,
@@ -408,6 +468,19 @@ function EmployeeWorkTimeScreen({
 				error: contractParseError ?? upsertProfile.error?.message ?? null,
 				onChange: setContractDraft,
 				onSubmit: () => void handleUpdateContract(),
+			}}
+			costHistorySection={{
+				history: costHistory,
+				isLoading: costBasesQuery.isLoading,
+				form: {
+					values: costBasisValues,
+					errors: costBasisErrors,
+					isSaving: setCostBasis.isPending,
+					saveError: setCostBasis.error?.message ?? null,
+					onChange: (patch) =>
+						setCostBasisDraft({ ...costBasisValues, ...patch }),
+					onSubmit: () => void handleSubmitCostBasis(),
+				},
 			}}
 			rhythmSection={{
 				values: rhythmValues,

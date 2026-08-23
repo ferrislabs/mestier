@@ -8,7 +8,11 @@ import {
 	StatusBadge,
 } from '#/components/ui/surface'
 import type { Member } from '#/hooks/use-reference-catalog'
-import { formatDurationMinutes, type WeeklyGap } from '#/pages/hr/types'
+import {
+	formatDateFr,
+	formatDurationMinutes,
+	type WeeklyGap,
+} from '#/pages/hr/types'
 import {
 	AbsenceFormSheet,
 	type AbsenceFormSheetProps,
@@ -17,6 +21,10 @@ import {
 	AbsencesSection,
 	type AbsencesSectionProps,
 } from '#/pages/hr/ui/absences-section'
+import {
+	CostHistorySection,
+	type CostHistorySectionProps,
+} from '#/pages/hr/ui/cost-history-section'
 import {
 	RhythmSection,
 	type RhythmSectionProps,
@@ -46,8 +54,11 @@ export interface EmployeeWorkTimeUIProps {
 	 * is the one to fill.
 	 */
 	effectiveHourlyRateCents: number | null
+	/** The date the currently open cost basis version took effect, `null` when there is none yet. */
+	openCostBasisEffectiveFrom: string | null
 	weeklyGap: WeeklyGap
 	contractForm: ContractFormBinding
+	costHistorySection: CostHistorySectionProps
 	rhythmSection: RhythmSectionProps
 	workSlotsSection: WorkSlotsSectionProps
 	absencesSection: AbsencesSectionProps
@@ -62,8 +73,10 @@ export function EmployeeWorkTimeUI({
 	isSalaried,
 	monthlyCostCents,
 	effectiveHourlyRateCents,
+	openCostBasisEffectiveFrom,
 	weeklyGap,
 	contractForm,
+	costHistorySection,
 	rhythmSection,
 	workSlotsSection,
 	absencesSection,
@@ -103,6 +116,11 @@ export function EmployeeWorkTimeUI({
 						) : (
 							<MoneyCell value={hourlyRateCents} suffix="/h" />
 						)}
+						{openCostBasisEffectiveFrom ? (
+							<span className="text-xs text-muted-foreground">
+								En vigueur depuis le {formatDateFr(openCostBasisEffectiveFrom)}
+							</span>
+						) : null}
 					</div>
 					<TextField
 						label="Base contractuelle"
@@ -124,6 +142,8 @@ export function EmployeeWorkTimeUI({
 					</p>
 				) : null}
 			</SectionCard>
+
+			<CostHistorySection {...costHistorySection} />
 
 			<WeeklyGapBanner gap={weeklyGap} />
 

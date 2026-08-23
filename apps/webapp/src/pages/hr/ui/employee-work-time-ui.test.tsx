@@ -44,6 +44,7 @@ function baseProps(
 		isSalaried: false,
 		monthlyCostCents: null,
 		effectiveHourlyRateCents: 1500,
+		openCostBasisEffectiveFrom: '2026-01-01',
 		weeklyGap: {
 			plannedMinutes: 1920,
 			contractMinutes: 2100,
@@ -55,6 +56,23 @@ function baseProps(
 			error: null,
 			onChange: vi.fn(),
 			onSubmit: vi.fn(),
+		},
+		costHistorySection: {
+			history: [],
+			isLoading: false,
+			form: {
+				values: {
+					effectiveFrom: '2026-08-01',
+					isSalaried: false,
+					hourlyRate: '15,00',
+					monthlyCost: '',
+				},
+				errors: [],
+				isSaving: false,
+				saveError: null,
+				onChange: vi.fn(),
+				onSubmit: vi.fn(),
+			},
 		},
 		rhythmSection: {
 			values: {
