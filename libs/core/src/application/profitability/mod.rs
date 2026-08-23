@@ -8,6 +8,8 @@ use crate::{
     domain::profitability::{ReportPeriod, service::ProfitabilityService},
 };
 
+mod tests;
+
 impl MestierUseCase {
     /// Profitability for one organization over one calendar period.
     ///

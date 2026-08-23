@@ -1,10 +1,12 @@
+use std::collections::HashSet;
+
 use chrono::{DateTime, Utc};
 use common::CoreError;
 use mestier_macros::repository;
 
 use crate::{
-    CustomerId, EmployeeId, EquipmentId, MemberId, OrganizationId, ProfitabilityFacts, ProjectId,
-    TaskId,
+    CustomerId, EmployeeCostBasis, EmployeeCostBasisId, EmployeeId, EquipmentId, MemberId,
+    OrganizationId, ProfitabilityFacts, ProjectId, TaskId,
     domain::profitability::{
         AssignedEquipment, PlannedAssignment, ProjectHeader, TaskExpense,
         ports::ProfitabilityRepository,
@@ -88,17 +90,25 @@ impl<'tx> ProfitabilityRepository for PgProfitabilityRepository<'tx> {
         // whose profile was replaced would join twice and have their time counted
         // twice. A member with no live profile reads as "no rate set", which is
         // what it is.
-        let assignments = sqlx::query!(
+        //
+        // The cost fields come from `employee_cost_bases`, not from `employees`'
+        // live columns: the version joined is the one covering the task's own
+        // start date, cast to a UTC calendar date the same way a cost basis
+        // version's own `effective_from`/`effective_to` are set (see
+        // `SetEmployeeCostBasisCommand`). A raise entered today must not move
+        // what a task planned before it already cost. `e.id` still anchors the
+        // join — a member with no live profile has no version to find either.
+        let assignments: Vec<PlannedAssignment> = sqlx::query!(
             r#"
             SELECT
                 t.project_id,
                 t.id AS task_id,
                 a.member_id,
                 e.id AS "employee_id?",
-                e.hourly_rate_cents,
-                COALESCE(e.is_salaried, false) AS "is_salaried!",
-                e.monthly_cost_cents,
-                COALESCE(e.weekly_contract_minutes, 0) AS "weekly_contract_minutes!",
+                cb.hourly_rate_cents,
+                COALESCE(cb.is_salaried, false) AS "is_salaried!",
+                cb.monthly_cost_cents,
+                COALESCE(cb.weekly_contract_minutes, 0) AS "weekly_contract_minutes!",
                 COALESCE(t.starts_at, pt.starts_at) AS "starts_at!",
                 COALESCE(t.ends_at, pt.ends_at) AS "ends_at!",
                 t.all_day
@@ -109,6 +119,10 @@ impl<'tx> ProfitabilityRepository for PgProfitabilityRepository<'tx> {
                 ON e.member_id = a.member_id
                AND e.org_id = t.org_id
                AND e.deleted_at IS NULL
+            LEFT JOIN employee_cost_bases cb
+                ON cb.employee_id = e.id
+               AND cb.effective_from <= ((COALESCE(t.starts_at, pt.starts_at)) AT TIME ZONE 'UTC')::date
+               AND (cb.effective_to IS NULL OR cb.effective_to > ((COALESCE(t.starts_at, pt.starts_at)) AT TIME ZONE 'UTC')::date)
             WHERE t.org_id = $1
               AND t.status <> 'CANCELLED'::task_status
               AND COALESCE(t.starts_at, pt.starts_at) < $3
@@ -137,6 +151,54 @@ impl<'tx> ProfitabilityRepository for PgProfitabilityRepository<'tx> {
             all_day: row.all_day,
         })
         .collect();
+
+        // All-day tasks need the whole version history for the days they
+        // cover, not just the one version anchored on their start date above
+        // — see `cost_of_assignment`. Scoped to the employees who actually
+        // have an all-day assignment in this window, most reports have none.
+        let all_day_employee_ids: Vec<uuid::Uuid> = assignments
+            .iter()
+            .filter(|assignment| assignment.all_day)
+            .filter_map(|assignment| assignment.employee_id)
+            .map(|employee_id| employee_id.0)
+            .collect::<HashSet<_>>()
+            .into_iter()
+            .collect();
+
+        let cost_bases = if all_day_employee_ids.is_empty() {
+            Vec::new()
+        } else {
+            sqlx::query!(
+                r#"
+                SELECT id, org_id, employee_id, effective_from, effective_to, is_salaried, hourly_rate_cents, monthly_cost_cents, weekly_contract_minutes, created_at, updated_at
+                FROM employee_cost_bases
+                WHERE employee_id = ANY($1)
+                  AND effective_from < (($3) AT TIME ZONE 'UTC')::date
+                  AND (effective_to IS NULL OR effective_to > (($2) AT TIME ZONE 'UTC')::date)
+                "#,
+                &all_day_employee_ids,
+                from,
+                to,
+            )
+            .fetch_all(&mut ***tx)
+            .await
+            .map_err(map_sqlx_error)?
+            .into_iter()
+            .map(|row| EmployeeCostBasis {
+                id: EmployeeCostBasisId(row.id),
+                organization_id: OrganizationId(row.org_id),
+                employee_id: EmployeeId(row.employee_id),
+                effective_from: row.effective_from,
+                effective_to: row.effective_to,
+                is_salaried: row.is_salaried,
+                hourly_rate_cents: row.hourly_rate_cents,
+                monthly_cost_cents: row.monthly_cost_cents,
+                weekly_contract_minutes: row.weekly_contract_minutes,
+                created_at: row.created_at,
+                updated_at: row.updated_at,
+            })
+            .collect()
+        };
 
         // Filtered on the task's *start*, not on overlap: an expense is spent
         // once, so it belongs whole to one period rather than being split across
@@ -213,6 +275,7 @@ impl<'tx> ProfitabilityRepository for PgProfitabilityRepository<'tx> {
             assignments,
             expenses,
             equipment,
+            cost_bases,
         })
     }
 }

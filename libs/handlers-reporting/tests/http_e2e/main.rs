@@ -209,6 +209,53 @@ async fn worked_hours_reports_the_same_time_the_costing_used() {
     app.cleanup().await;
 }
 
+/// The regression #301 exists to close: a raise entered today must not
+/// change what a task planned before it already cost.
+#[tokio::test]
+#[ignore = "requires live postgres and redis"]
+async fn a_raise_does_not_change_the_cost_of_a_task_already_planned() {
+    let app = harness::start().await;
+    let client = reqwest::Client::new();
+
+    let before: serde_json::Value = client
+        .get(format!("{}?{}", app.url("/profitability"), period()))
+        .bearer_auth(&app.token)
+        .send()
+        .await
+        .expect("the api answers the profitability call")
+        .json()
+        .await
+        .expect("the answer is json");
+    let labour_before = project_named(&before, app.project_id)
+        .unwrap_or_else(|| panic!("the planned project is missing from {before}"))["labour_cost_cents"]
+        .clone();
+    assert_eq!(
+        labour_before,
+        serde_json::json!(10_500),
+        "the fixture's stated figure, before any raise"
+    );
+
+    harness::raise(&app.pool, app.organization_id, app.employee_id, 5_000).await;
+
+    let after: serde_json::Value = client
+        .get(format!("{}?{}", app.url("/profitability"), period()))
+        .bearer_auth(&app.token)
+        .send()
+        .await
+        .expect("the api answers the profitability call")
+        .json()
+        .await
+        .expect("the answer is json");
+    let labour_after = &project_named(&after, app.project_id)
+        .unwrap_or_else(|| panic!("the planned project is missing from {after}"))["labour_cost_cents"];
+    assert_eq!(
+        labour_after, &labour_before,
+        "the task was planned before the raise took effect, so its cost must not move: {after}"
+    );
+
+    app.cleanup().await;
+}
+
 #[tokio::test]
 #[ignore = "requires live postgres and redis"]
 async fn a_period_that_ends_before_it_starts_is_refused() {
