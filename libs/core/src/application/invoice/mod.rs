@@ -1,14 +1,15 @@
+use chrono::{DateTime, Utc};
 use common::CoreError;
 use mestier_macros::transactional;
 
 use crate::{
-    Invoice, InvoiceId, OrganizationId, ProjectId,
+    CustomerOutstandingBalance, Invoice, InvoiceId, InvoicePayment, OrganizationId, ProjectId,
     application::MestierUseCase,
     domain::invoice::{
         commands::{
-            CancelInvoiceCommand, CreateInvoiceCommand, IssueCreditNoteCommand,
-            IssueDepositCommand, IssueFinalInvoiceCommand, IssueInvoiceCommand,
-            UpdateInvoiceCommand,
+            CancelInvoiceCommand, CreateInvoiceCommand, DeleteInvoicePaymentCommand,
+            IssueCreditNoteCommand, IssueDepositCommand, IssueFinalInvoiceCommand,
+            IssueInvoiceCommand, RecordInvoicePaymentCommand, UpdateInvoiceCommand,
         },
         service::InvoiceService,
     },
@@ -162,5 +163,54 @@ impl MestierUseCase {
                 quote_repository,
             )
             .await
+    }
+
+    /// #320: records a payment against an issued invoice. No other
+    /// bindings needed — this reads nothing from `organization`/`project`/
+    /// `quote`.
+    #[transactional(invoice, emitter)]
+    pub async fn record_invoice_payment(
+        &self,
+        command: RecordInvoicePaymentCommand,
+    ) -> Result<InvoicePayment, CoreError> {
+        let mut service = InvoiceService::new(invoice_repository, emitter);
+        service.record_payment(command).await
+    }
+
+    #[transactional(invoice, emitter)]
+    pub async fn delete_invoice_payment(
+        &self,
+        command: DeleteInvoicePaymentCommand,
+    ) -> Result<(), CoreError> {
+        let mut service = InvoiceService::new(invoice_repository, emitter);
+        service.delete_payment(command).await
+    }
+
+    #[transactional(invoice, emitter)]
+    pub async fn list_invoice_payments(
+        &self,
+        invoice_id: InvoiceId,
+    ) -> Result<Vec<InvoicePayment>, CoreError> {
+        let mut service = InvoiceService::new(invoice_repository, emitter);
+        service.list_payments(invoice_id).await
+    }
+
+    #[transactional(invoice, emitter)]
+    pub async fn outstanding_balance_by_customer(
+        &self,
+        organization_id: OrganizationId,
+    ) -> Result<Vec<CustomerOutstandingBalance>, CoreError> {
+        let mut service = InvoiceService::new(invoice_repository, emitter);
+        service.outstanding_by_customer(organization_id).await
+    }
+
+    #[transactional(invoice, emitter)]
+    pub async fn overdue_invoices(
+        &self,
+        organization_id: OrganizationId,
+        as_of: DateTime<Utc>,
+    ) -> Result<Vec<Invoice>, CoreError> {
+        let mut service = InvoiceService::new(invoice_repository, emitter);
+        service.overdue_invoices(organization_id, as_of).await
     }
 }

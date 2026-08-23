@@ -1,14 +1,15 @@
 use std::str::FromStr;
 
-use chrono::{DateTime, Utc};
-use common::CoreError;
+use chrono::{DateTime, NaiveDate, Utc};
+use common::{CoreError, UserId};
 use rust_decimal::Decimal;
 use uuid::Uuid;
 
 use crate::{
-    CustomerContextId, CustomerId, Invoice, InvoiceId, InvoiceKind, InvoiceLine, InvoiceLineId,
-    InvoiceStatus, InvoiceVatBreakdownLine, LegalIdentity, OperationNature, OrganizationAddress,
-    OrganizationId, ProjectId, VatStatus,
+    CustomerContextId, CustomerId, CustomerOutstandingBalance, Invoice, InvoiceId, InvoiceKind,
+    InvoiceLine, InvoiceLineId, InvoicePayment, InvoicePaymentId, InvoiceStatus,
+    InvoiceVatBreakdownLine, LegalIdentity, OperationNature, OrganizationAddress, OrganizationId,
+    ProjectId, VatStatus,
 };
 
 #[derive(Debug, Clone)]
@@ -258,6 +259,66 @@ fn parse_legal_identity(value: serde_json::Value) -> Result<LegalIdentity, CoreE
         contact_phone: parsed.contact_phone,
         insurance_mention: parsed.insurance_mention,
     })
+}
+
+#[derive(Debug, Clone)]
+pub struct InvoicePaymentRow {
+    pub id: Uuid,
+    pub org_id: Uuid,
+    pub invoice_id: Uuid,
+    pub amount_cents: i32,
+    pub paid_on: NaiveDate,
+    pub method: String,
+    pub reference: Option<String>,
+    pub note: Option<String>,
+    pub recorded_by: Uuid,
+    pub deleted_by: Option<Uuid>,
+    pub deleted_at: Option<DateTime<Utc>>,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+}
+
+impl TryFrom<InvoicePaymentRow> for InvoicePayment {
+    type Error = CoreError;
+
+    fn try_from(row: InvoicePaymentRow) -> Result<Self, Self::Error> {
+        Ok(Self {
+            id: InvoicePaymentId(row.id),
+            organization_id: OrganizationId(row.org_id),
+            invoice_id: InvoiceId(row.invoice_id),
+            amount_cents: row.amount_cents,
+            paid_on: row.paid_on,
+            method: row.method,
+            reference: row.reference,
+            note: row.note,
+            recorded_by: UserId(row.recorded_by),
+            deleted_at: row.deleted_at,
+            deleted_by: row.deleted_by.map(UserId),
+            created_at: row.created_at,
+            updated_at: row.updated_at,
+        })
+    }
+}
+
+/// The result shape of `list_outstanding_by_customer`'s aggregate query —
+/// `sqlx::query_as!` needs a plain struct of its own rather than
+/// `InvoiceRow`, since this is not a row of `invoices` but one summary per
+/// customer.
+#[derive(Debug, Clone)]
+pub struct CustomerOutstandingBalanceRow {
+    pub customer_id: Uuid,
+    pub outstanding_cents: i64,
+    pub oldest_due_at: Option<DateTime<Utc>>,
+}
+
+impl From<CustomerOutstandingBalanceRow> for CustomerOutstandingBalance {
+    fn from(row: CustomerOutstandingBalanceRow) -> Self {
+        Self {
+            customer_id: CustomerId(row.customer_id),
+            outstanding_cents: row.outstanding_cents,
+            oldest_due_at: row.oldest_due_at,
+        }
+    }
 }
 
 impl TryFrom<InvoiceLineRow> for InvoiceLine {

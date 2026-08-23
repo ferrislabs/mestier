@@ -1,23 +1,27 @@
 use std::collections::BTreeMap;
 
-use chrono::{Datelike, Utc};
+use chrono::{DateTime, Datelike, Utc};
 use common::{CoreError, generate_uuid_v7};
 use events::EventEmitter;
 use rust_decimal::{Decimal, prelude::ToPrimitive};
 use serde_json::{Value, json};
 
 use crate::{
-    CustomerContextId, CustomerId, DraftInvoice, Invoice, InvoiceId, InvoiceKind, InvoiceLine,
-    InvoiceLineId, InvoiceStatus, InvoiceVatBreakdownLine, LegalIdentity, Organization,
-    OrganizationId, Project, ProjectId,
+    CustomerContextId, CustomerId, CustomerOutstandingBalance, DraftInvoice, Invoice, InvoiceId,
+    InvoiceKind, InvoiceLine, InvoiceLineId, InvoicePayment, InvoicePaymentId, InvoiceStatus,
+    InvoiceVatBreakdownLine, LegalIdentity, Organization, OrganizationId, Project, ProjectId,
     domain::{
         invoice::{
             commands::{
-                CancelInvoiceCommand, CreateInvoiceCommand, InvoiceLineCommand,
-                IssueCreditNoteCommand, IssueDepositCommand, IssueFinalInvoiceCommand,
-                IssueInvoiceCommand, UpdateInvoiceCommand,
+                CancelInvoiceCommand, CreateInvoiceCommand, DeleteInvoicePaymentCommand,
+                InvoiceLineCommand, IssueCreditNoteCommand, IssueDepositCommand,
+                IssueFinalInvoiceCommand, IssueInvoiceCommand, RecordInvoicePaymentCommand,
+                UpdateInvoiceCommand,
             },
-            events::{InvoiceCreated, InvoiceDeleted, InvoiceTransitioned, InvoiceUpdated},
+            events::{
+                InvoiceCreated, InvoiceDeleted, InvoicePaymentDeleted, InvoicePaymentRecorded,
+                InvoiceTransitioned, InvoiceUpdated,
+            },
             ports::InvoiceRepository,
         },
         organization::{legal_identity::VatStatus, ports::OrganizationRepository},
@@ -97,8 +101,12 @@ where
         Ok(created)
     }
 
+    /// `Paid`/`PartiallyPaid` are never persisted (see the doc comment on
+    /// `InvoiceStatus`) — [`Self::decorate_status`] is what reinterprets
+    /// `status` for a reader, here and on every other listing below.
     pub async fn get_invoice(&mut self, id: InvoiceId) -> Result<Invoice, CoreError> {
-        self.repo.find_by_id(id).await?.ok_or(CoreError::NotFound)
+        let invoice = self.repo.find_by_id(id).await?.ok_or(CoreError::NotFound)?;
+        self.decorate_status(invoice).await
     }
 
     pub async fn list_invoices(
@@ -107,16 +115,60 @@ where
         limit: u64,
         offset: u64,
     ) -> Result<(Vec<Invoice>, u64), CoreError> {
-        self.repo
+        let (invoices, total) = self
+            .repo
             .list_by_organization(organization_id, limit, offset)
-            .await
+            .await?;
+
+        // One decoration per row: two extra queries (credit notes,
+        // payments) for every `Issued` invoice in the page. A real N+1 for
+        // a large page, accepted here — the fix is a dedicated aggregate
+        // query, which is a performance pass on its own, not a reason to
+        // leave `Paid`/`PartiallyPaid` unobservable on this listing today.
+        let mut decorated = Vec::with_capacity(invoices.len());
+        for invoice in invoices {
+            decorated.push(self.decorate_status(invoice).await?);
+        }
+
+        Ok((decorated, total))
     }
 
     pub async fn list_invoices_by_project(
         &mut self,
         project_id: crate::ProjectId,
     ) -> Result<Vec<Invoice>, CoreError> {
-        self.repo.list_by_project(project_id).await
+        let invoices = self.repo.list_by_project(project_id).await?;
+
+        // Same accepted N+1 as `list_invoices`, same reason.
+        let mut decorated = Vec::with_capacity(invoices.len());
+        for invoice in invoices {
+            decorated.push(self.decorate_status(invoice).await?);
+        }
+
+        Ok(decorated)
+    }
+
+    /// Reinterprets `invoice.status` for a reader without ever writing it:
+    /// a no-op, and no extra query, for anything whose persisted status is
+    /// not `Issued` — `derive_invoice_status` would return it unchanged
+    /// regardless, but skipping the credit-note/payment lookups for the
+    /// common case (a draft mid-edit, a cancelled invoice) avoids two
+    /// queries most reads do not need.
+    async fn decorate_status(&mut self, mut invoice: Invoice) -> Result<Invoice, CoreError> {
+        if invoice.status != InvoiceStatus::Issued {
+            return Ok(invoice);
+        }
+
+        let credit_notes = self.repo.list_by_source_invoice(invoice.id).await?;
+        let payments = self.repo.list_payments(invoice.id).await?;
+        invoice.status = derive_invoice_status(
+            invoice.status,
+            invoice.gross_cents,
+            &credit_notes,
+            &payments,
+        );
+
+        Ok(invoice)
     }
 
     /// Every credit note issued against one source invoice — the read
@@ -223,6 +275,147 @@ where
 
         self.emitter
             .emit(existing.organization_id, &InvoiceDeleted { invoice_id: id })
+    }
+
+    /// Records a payment against an issued invoice (#320). Reads the
+    /// **persisted** status directly off `self.repo.find_by_id`, not
+    /// through [`Self::get_invoice`]: the persisted status column is only
+    /// ever `Draft`, `Issued` or `Cancelled` (`Paid`/`PartiallyPaid` are
+    /// derived on read, never written), so refusing on anything but
+    /// `Issued` here already refuses exactly a draft (nothing owed yet) or
+    /// a cancelled invoice (nothing to collect) — an invoice already fully
+    /// or partially paid is still persisted as `Issued` and reaches this
+    /// point, which is exactly what lets a second instalment be recorded
+    /// against it.
+    pub async fn record_payment(
+        &mut self,
+        command: RecordInvoicePaymentCommand,
+    ) -> Result<InvoicePayment, CoreError> {
+        validate_payment(&command)?;
+
+        let invoice = self
+            .repo
+            .find_by_id(command.invoice_id)
+            .await?
+            .ok_or(CoreError::NotFound)?;
+
+        if invoice.status != InvoiceStatus::Issued {
+            return Err(CoreError::Conflict(format!(
+                "invoice {} is {} and cannot receive a payment; only an issued invoice can",
+                invoice.id, invoice.status
+            )));
+        }
+
+        let credit_notes = self.repo.list_by_source_invoice(invoice.id).await?;
+        let payments = self.repo.list_payments(invoice.id).await?;
+
+        // Payments track what the customer actually pays — VAT-inclusive
+        // gross — deliberately a different figure from
+        // `net_of_credit_notes_cents`'s net-only bookkeeping, which
+        // #317/#318 use for the project-quote-total checks.
+        let owed_cents = gross_of_credit_notes_cents(invoice.gross_cents, &credit_notes);
+        let already_paid_cents: i64 = payments
+            .iter()
+            .map(|payment| i64::from(payment.amount_cents))
+            .sum();
+        let total_after_cents = already_paid_cents + i64::from(command.amount_cents);
+
+        if total_after_cents > owed_cents && !command.allow_exceeding_total {
+            return Err(CoreError::Conflict(format!(
+                "recording {} cents against invoice {} would bring the total paid to {} cents, \
+                 exceeding its gross total net of credit notes of {} cents",
+                command.amount_cents, invoice.id, total_after_cents, owed_cents
+            )));
+        }
+
+        let now = Utc::now();
+        let payment = InvoicePayment {
+            id: InvoicePaymentId(generate_uuid_v7()),
+            organization_id: invoice.organization_id,
+            invoice_id: invoice.id,
+            amount_cents: command.amount_cents,
+            paid_on: command.paid_on,
+            method: command.method.trim().to_owned(),
+            reference: command.reference.map(|value| value.trim().to_owned()),
+            note: command.note.map(|value| value.trim().to_owned()),
+            recorded_by: command.recorded_by,
+            deleted_at: None,
+            deleted_by: None,
+            created_at: now,
+            updated_at: now,
+        };
+
+        let inserted = self.repo.insert_payment(&payment).await?;
+
+        self.emitter.emit(
+            inserted.organization_id,
+            &InvoicePaymentRecorded {
+                payment: inserted.clone(),
+            },
+        )?;
+
+        Ok(inserted)
+    }
+
+    /// Soft-deletes a recorded payment. `NotFound` if the payment never
+    /// existed, or was already deleted — `find_payment_by_id` reads a
+    /// deleted row as absent, same rule as every other `find_by_id` here.
+    pub async fn delete_payment(
+        &mut self,
+        command: DeleteInvoicePaymentCommand,
+    ) -> Result<(), CoreError> {
+        let payment = self
+            .repo
+            .find_payment_by_id(command.id)
+            .await?
+            .ok_or(CoreError::NotFound)?;
+
+        let deleted_at = Utc::now();
+        self.repo
+            .soft_delete_payment(command.id, deleted_at, command.deleted_by)
+            .await?;
+
+        self.emitter.emit(
+            payment.organization_id,
+            &InvoicePaymentDeleted {
+                payment_id: command.id,
+                invoice_id: payment.invoice_id,
+                deleted_by: command.deleted_by,
+            },
+        )
+    }
+
+    /// Every non-deleted payment against one invoice, ordered by `paid_on`
+    /// then `created_at`. Exposed on its own so #319's API surface has
+    /// something to call — this issue stops at the application layer, no
+    /// HTTP route of its own.
+    pub async fn list_payments(
+        &mut self,
+        invoice_id: InvoiceId,
+    ) -> Result<Vec<InvoicePayment>, CoreError> {
+        self.repo.list_payments(invoice_id).await
+    }
+
+    /// One row per customer with an outstanding balance — a SQL aggregate,
+    /// never assembled client-side (CLAUDE.md is explicit that money math
+    /// lives in the backend).
+    pub async fn outstanding_by_customer(
+        &mut self,
+        organization_id: OrganizationId,
+    ) -> Result<Vec<CustomerOutstandingBalance>, CoreError> {
+        self.repo
+            .list_outstanding_by_customer(organization_id)
+            .await
+    }
+
+    /// Every issued invoice past its due date with a balance still owed as
+    /// of `as_of`, oldest first.
+    pub async fn overdue_invoices(
+        &mut self,
+        organization_id: OrganizationId,
+        as_of: DateTime<Utc>,
+    ) -> Result<Vec<Invoice>, CoreError> {
+        self.repo.list_overdue(organization_id, as_of).await
     }
 
     /// The generic issuing transition, usable on any draft regardless of
@@ -1113,12 +1306,18 @@ pub(crate) fn calculate_totals(
     })
 }
 
-/// The source invoice's `net_cents` minus every non-draft, non-cancelled
-/// credit note issued against it. Can be zero (fully credited) but nothing
-/// here ever sets the source's own `status` to anything — "fully credited"
-/// is read, never stored; #320 folds this into the derived payment status
-/// alongside recorded payments.
-pub fn net_of_credit_notes_cents(source_net_cents: i32, credit_notes: &[Invoice]) -> i64 {
+/// Shared arithmetic behind [`net_of_credit_notes_cents`] and
+/// [`gross_of_credit_notes_cents`]: a source amount minus every non-draft,
+/// non-cancelled credit note's own contribution, read through `amount_cents`
+/// so each caller can pick the field that matches what it is computing —
+/// generalized rather than duplicating the filter-and-sum twice, chosen
+/// over a second near-identical function because the two differ in exactly
+/// one line (which field they read off a credit note).
+fn amount_net_of_credit_notes_cents(
+    source_amount_cents: i32,
+    credit_notes: &[Invoice],
+    amount_cents: impl Fn(&Invoice) -> i32,
+) -> i64 {
     let credited_cents: i64 = credit_notes
         .iter()
         .filter(|credit_note| {
@@ -1127,10 +1326,117 @@ pub fn net_of_credit_notes_cents(source_net_cents: i32, credit_notes: &[Invoice]
                 InvoiceStatus::Draft | InvoiceStatus::Cancelled
             )
         })
-        .map(|credit_note| i64::from(credit_note.net_cents))
+        .map(|credit_note| i64::from(amount_cents(credit_note)))
         .sum();
 
-    i64::from(source_net_cents) - credited_cents
+    i64::from(source_amount_cents) - credited_cents
+}
+
+/// The source invoice's `net_cents` minus every non-draft, non-cancelled
+/// credit note issued against it. Can be zero (fully credited) but nothing
+/// here ever sets the source's own `status` to anything — "fully credited"
+/// is read, never stored; #320 folds this into the derived payment status
+/// alongside recorded payments.
+///
+/// Net-only bookkeeping: what #317/#318 check a project's already-issued
+/// total against. Payments (below) track a different figure —
+/// VAT-inclusive gross, what the customer actually pays — so this is
+/// deliberately not reused for that check.
+pub fn net_of_credit_notes_cents(source_net_cents: i32, credit_notes: &[Invoice]) -> i64 {
+    amount_net_of_credit_notes_cents(source_net_cents, credit_notes, |credit_note| {
+        credit_note.net_cents
+    })
+}
+
+/// The source invoice's `gross_cents` minus every non-draft, non-cancelled
+/// credit note's own `gross_cents` — the gross-based sibling of
+/// [`net_of_credit_notes_cents`] that [`InvoiceService::record_payment`]
+/// and [`derive_invoice_status`] need: what a customer owes is VAT-inclusive,
+/// unlike the net-only figure #317/#318 check a quote's total against.
+pub fn gross_of_credit_notes_cents(source_gross_cents: i32, credit_notes: &[Invoice]) -> i64 {
+    amount_net_of_credit_notes_cents(source_gross_cents, credit_notes, |credit_note| {
+        credit_note.gross_cents
+    })
+}
+
+/// One cent is the tolerance: a payment that settles within a cent of
+/// what's owed (the last cent of a rounding chain three partial invoices
+/// upstream, see #317's own deposit/final rounding test) counts as fully
+/// paid rather than leaving the invoice permanently `PartiallyPaid` over a
+/// cent nobody will ever collect.
+const SETTLEMENT_TOLERANCE_CENTS: i64 = 1;
+
+/// Reinterprets an invoice's status for a reader, from its persisted
+/// status plus what has actually happened to it since. Only `Issued` is
+/// ever reinterpreted — `Draft` and `Cancelled` are set by an explicit act
+/// (#316/#317) and payments/credits never override them; nothing here ever
+/// *writes* a status, this only decides what a reader sees (see the doc
+/// comment on `InvoiceStatus`).
+///
+/// Owed is `gross_cents` net of credit notes ([`gross_of_credit_notes_cents`],
+/// reused rather than re-derived); paid-so-far is the sum of non-deleted
+/// payments' `amount_cents`. Within [`SETTLEMENT_TOLERANCE_CENTS`] of owed
+/// counts as `Paid`.
+pub fn derive_invoice_status(
+    persisted_status: InvoiceStatus,
+    gross_cents: i32,
+    credit_notes: &[Invoice],
+    payments: &[InvoicePayment],
+) -> InvoiceStatus {
+    if persisted_status != InvoiceStatus::Issued {
+        return persisted_status;
+    }
+
+    let owed_cents = gross_of_credit_notes_cents(gross_cents, credit_notes);
+    let paid_so_far_cents: i64 = payments
+        .iter()
+        .filter(|payment| payment.deleted_at.is_none())
+        .map(|payment| i64::from(payment.amount_cents))
+        .sum();
+
+    if owed_cents - paid_so_far_cents <= SETTLEMENT_TOLERANCE_CENTS {
+        InvoiceStatus::Paid
+    } else if paid_so_far_cents > 0 {
+        InvoiceStatus::PartiallyPaid
+    } else {
+        InvoiceStatus::Issued
+    }
+}
+
+fn validate_payment(command: &RecordInvoicePaymentCommand) -> Result<(), CoreError> {
+    if command.amount_cents <= 0 {
+        return Err(CoreError::Conflict(
+            "invoice payment amount must be positive".to_owned(),
+        ));
+    }
+
+    if command.method.trim().is_empty() {
+        return Err(CoreError::Conflict(
+            "invoice payment method cannot be empty".to_owned(),
+        ));
+    }
+
+    if command
+        .reference
+        .as_deref()
+        .is_some_and(|reference| reference.trim().is_empty())
+    {
+        return Err(CoreError::Conflict(
+            "invoice payment reference cannot be blank when present".to_owned(),
+        ));
+    }
+
+    if command
+        .note
+        .as_deref()
+        .is_some_and(|note| note.trim().is_empty())
+    {
+        return Err(CoreError::Conflict(
+            "invoice payment note cannot be blank when present".to_owned(),
+        ));
+    }
+
+    Ok(())
 }
 
 /// Divides, rounding a half to the even neighbour. Duplicated from
@@ -1449,6 +1755,13 @@ mod tests {
             let issued = issued.clone();
             Box::pin(async move { Ok(Some(issued)) })
         });
+        // `self.get_invoice` decorates an `Issued` invoice's status before
+        // this call ever inspects it, so `decorate_status` needs both
+        // stubbed, even though neither credit note nor payment exists here.
+        repo.expect_list_by_source_invoice()
+            .returning(|_| Box::pin(async { Ok(Vec::new()) }));
+        repo.expect_list_payments()
+            .returning(|_| Box::pin(async { Ok(Vec::new()) }));
         // No `expect_update_draft`: the call must never reach the
         // repository, it has to be refused before that.
 
@@ -1533,6 +1846,12 @@ mod tests {
             let issued = issued.clone();
             Box::pin(async move { Ok(Some(issued)) })
         });
+        // Same decoration as `update_invoice_refuses_an_issued_invoice`:
+        // `self.get_invoice` needs both stubbed for an `Issued` fixture.
+        repo.expect_list_by_source_invoice()
+            .returning(|_| Box::pin(async { Ok(Vec::new()) }));
+        repo.expect_list_payments()
+            .returning(|_| Box::pin(async { Ok(Vec::new()) }));
         // No `expect_soft_delete`: must be refused before the repository is
         // reached.
 
@@ -1759,6 +2078,12 @@ mod tests {
                     .collect::<Vec<_>>();
                 Box::pin(async move { Ok(credit_notes) })
             });
+
+        // No test built on this fixture seeds a payment: every invoice it
+        // holds reads back with none, which is exactly what `decorate_status`
+        // needs to leave a freshly issued invoice's status alone.
+        repo.expect_list_payments()
+            .returning(move |_| Box::pin(async move { Ok(Vec::new()) }));
 
         let insert_store = store.clone();
         repo.expect_insert_draft().returning(move |draft| {
@@ -2476,5 +2801,130 @@ mod tests {
         ];
 
         assert_eq!(net_of_credit_notes_cents(10_000, &credit_notes), 8_000);
+    }
+
+    fn payment(amount_cents: i32, deleted: bool) -> InvoicePayment {
+        let now = Utc::now();
+        InvoicePayment {
+            id: InvoicePaymentId(Uuid::new_v4()),
+            organization_id: OrganizationId(Uuid::new_v4()),
+            invoice_id: InvoiceId(Uuid::new_v4()),
+            amount_cents,
+            paid_on: now.date_naive(),
+            method: "Virement".to_owned(),
+            reference: None,
+            note: None,
+            recorded_by: UserId(Uuid::new_v4()),
+            deleted_at: deleted.then_some(now),
+            deleted_by: deleted.then_some(UserId(Uuid::new_v4())),
+            created_at: now,
+            updated_at: now,
+        }
+    }
+
+    #[test]
+    fn derive_invoice_status_with_no_payments_stays_issued() {
+        assert_eq!(
+            derive_invoice_status(InvoiceStatus::Issued, 10_000, &[], &[]),
+            InvoiceStatus::Issued
+        );
+    }
+
+    #[test]
+    fn derive_invoice_status_with_a_partial_payment_is_partially_paid() {
+        let payments = [payment(4_000, false)];
+
+        assert_eq!(
+            derive_invoice_status(InvoiceStatus::Issued, 10_000, &[], &payments),
+            InvoiceStatus::PartiallyPaid
+        );
+    }
+
+    #[test]
+    fn derive_invoice_status_landing_exactly_on_owed_is_paid() {
+        let payments = [payment(10_000, false)];
+
+        assert_eq!(
+            derive_invoice_status(InvoiceStatus::Issued, 10_000, &[], &payments),
+            InvoiceStatus::Paid
+        );
+    }
+
+    #[test]
+    fn derive_invoice_status_one_cent_short_is_paid_within_tolerance() {
+        let payments = [payment(9_999, false)];
+
+        assert_eq!(
+            derive_invoice_status(InvoiceStatus::Issued, 10_000, &[], &payments),
+            InvoiceStatus::Paid
+        );
+    }
+
+    #[test]
+    fn derive_invoice_status_two_cents_short_is_partially_paid() {
+        let payments = [payment(9_998, false)];
+
+        assert_eq!(
+            derive_invoice_status(InvoiceStatus::Issued, 10_000, &[], &payments),
+            InvoiceStatus::PartiallyPaid
+        );
+    }
+
+    #[test]
+    fn derive_invoice_status_ignores_a_deleted_payment() {
+        // Deleted for the full amount: as far as the derivation is
+        // concerned this is the zero-payments case, not the fully-paid one.
+        let payments = [payment(10_000, true)];
+
+        assert_eq!(
+            derive_invoice_status(InvoiceStatus::Issued, 10_000, &[], &payments),
+            InvoiceStatus::Issued
+        );
+    }
+
+    #[test]
+    fn derive_invoice_status_credit_notes_reducing_owed_to_paid_flips_to_paid() {
+        // `credit_note` only sets `net_cents`; `gross_cents` is overridden
+        // separately here since `derive_invoice_status` reads the gross
+        // figure (see `gross_of_credit_notes_cents`).
+        let credit_notes = [Invoice {
+            gross_cents: 4_000,
+            ..credit_note(InvoiceStatus::Issued, 4_000)
+        }];
+        let payments = [payment(6_000, false)];
+
+        assert_eq!(
+            derive_invoice_status(InvoiceStatus::Issued, 10_000, &credit_notes, &payments),
+            InvoiceStatus::Paid
+        );
+    }
+
+    #[test]
+    fn derive_invoice_status_never_overrides_a_draft_or_cancelled_persisted_status() {
+        let payments = [payment(10_000, false)];
+
+        assert_eq!(
+            derive_invoice_status(InvoiceStatus::Draft, 10_000, &[], &payments),
+            InvoiceStatus::Draft
+        );
+        assert_eq!(
+            derive_invoice_status(InvoiceStatus::Cancelled, 10_000, &[], &payments),
+            InvoiceStatus::Cancelled
+        );
+    }
+
+    #[test]
+    fn gross_of_credit_notes_cents_returns_the_full_amount_when_there_are_no_credit_notes() {
+        assert_eq!(gross_of_credit_notes_cents(10_000, &[]), 10_000);
+    }
+
+    #[test]
+    fn gross_of_credit_notes_cents_subtracts_a_partial_credit_note() {
+        let credit_notes = [Invoice {
+            gross_cents: 3_000,
+            ..credit_note(InvoiceStatus::Issued, 3_000)
+        }];
+
+        assert_eq!(gross_of_credit_notes_cents(10_000, &credit_notes), 7_000);
     }
 }

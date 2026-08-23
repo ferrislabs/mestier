@@ -1,0 +1,34 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT\n                i.customer_id AS \"customer_id!\",\n                SUM(i.gross_cents - COALESCE(p.paid, 0) - COALESCE(c.credited, 0))::BIGINT AS \"outstanding_cents!\",\n                MIN(i.due_at) AS oldest_due_at\n            FROM invoices i\n            LEFT JOIN (\n                SELECT invoice_id, SUM(amount_cents) AS paid\n                FROM invoice_payments\n                WHERE deleted_at IS NULL\n                GROUP BY invoice_id\n            ) p ON p.invoice_id = i.id\n            LEFT JOIN (\n                SELECT source_invoice_id, SUM(gross_cents) AS credited\n                FROM invoices\n                WHERE deleted_at IS NULL AND status NOT IN ('DRAFT', 'CANCELLED')\n                    AND source_invoice_id IS NOT NULL\n                GROUP BY source_invoice_id\n            ) c ON c.source_invoice_id = i.id\n            -- `i.kind != 'CREDIT_NOTE'`: a credit note is itself a row in\n            -- `invoices` with `status = 'ISSUED'` (see #318's header\n            -- comment — it is not a fifth table), so without this filter\n            -- it would be picked up twice: once correctly subtracted from\n            -- its source through the `c` join above, and once counted\n            -- again as its own positive outstanding balance because\n            -- nothing else in this query distinguishes \"a document a\n            -- customer owes on\" from \"a document that corrects one\".\n            WHERE i.org_id = $1 AND i.deleted_at IS NULL AND i.status = 'ISSUED'\n                AND i.kind != 'CREDIT_NOTE'\n            GROUP BY i.customer_id\n            HAVING SUM(i.gross_cents - COALESCE(p.paid, 0) - COALESCE(c.credited, 0)) > 1\n            ORDER BY oldest_due_at ASC NULLS LAST\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "customer_id!",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "outstanding_cents!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 2,
+        "name": "oldest_due_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      null,
+      null
+    ]
+  },
+  "hash": "feb9672119f2aeec145a4a337290c6d5df79bb3941c1e4bc1223554c38d3bcc6"
+}

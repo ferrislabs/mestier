@@ -1,8 +1,9 @@
 use chrono::{DateTime, Utc};
-use common::CoreError;
+use common::{CoreError, UserId};
 
 use crate::{
-    DraftInvoice, Invoice, InvoiceId, InvoiceStatus, LegalIdentity, OrganizationId, ProjectId,
+    CustomerOutstandingBalance, DraftInvoice, Invoice, InvoiceId, InvoicePayment, InvoicePaymentId,
+    InvoiceStatus, LegalIdentity, OrganizationId, ProjectId,
 };
 
 #[cfg_attr(any(test, feature = "mock"), mockall::automock)]
@@ -98,4 +99,54 @@ pub trait InvoiceRepository: Send {
         id: InvoiceId,
         deleted_at: DateTime<Utc>,
     ) -> impl Future<Output = Result<(), CoreError>> + Send;
+
+    /// A payment recorded against an invoice (#320) — a sub-resource of
+    /// this same aggregate, not a new repository. Not in the issue's own
+    /// file list, but unavoidable, same as #317 and #318 both had to
+    /// extend this trait too.
+    fn insert_payment(
+        &mut self,
+        payment: &InvoicePayment,
+    ) -> impl Future<Output = Result<InvoicePayment, CoreError>> + Send;
+
+    /// `None` for a payment that never existed, or was already
+    /// soft-deleted: same "not found or deleted reads as absent" rule
+    /// every other `find_by_id` in this codebase follows.
+    fn find_payment_by_id(
+        &mut self,
+        id: InvoicePaymentId,
+    ) -> impl Future<Output = Result<Option<InvoicePayment>, CoreError>> + Send;
+
+    /// Every non-deleted payment against one invoice, ordered by
+    /// `paid_on` then `created_at` — what `derive_invoice_status` and
+    /// `InvoiceService::record_payment`'s own limit check both read.
+    fn list_payments(
+        &mut self,
+        invoice_id: InvoiceId,
+    ) -> impl Future<Output = Result<Vec<InvoicePayment>, CoreError>> + Send;
+
+    /// The audit trail #320 asks for: the row survives with who deleted it
+    /// and when, it is never hard-deleted.
+    fn soft_delete_payment(
+        &mut self,
+        id: InvoicePaymentId,
+        deleted_at: DateTime<Utc>,
+        deleted_by: UserId,
+    ) -> impl Future<Output = Result<(), CoreError>> + Send;
+
+    /// One row per customer with an outstanding balance, computed as a SQL
+    /// aggregate — the dunning list #320 asks for. See
+    /// `CustomerOutstandingBalance`.
+    fn list_outstanding_by_customer(
+        &mut self,
+        organization_id: OrganizationId,
+    ) -> impl Future<Output = Result<Vec<CustomerOutstandingBalance>, CoreError>> + Send;
+
+    /// Every issued invoice past its due date with a balance still owed as
+    /// of `as_of`, oldest first.
+    fn list_overdue(
+        &mut self,
+        organization_id: OrganizationId,
+        as_of: DateTime<Utc>,
+    ) -> impl Future<Output = Result<Vec<Invoice>, CoreError>> + Send;
 }

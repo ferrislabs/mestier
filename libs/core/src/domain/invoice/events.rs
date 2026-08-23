@@ -2,10 +2,11 @@
 //! content, status transition, and (once #317/#318/#320 land) business acts
 //! never overlap.
 
+use common::UserId;
 use events::{DomainEvent, EventDescriptor, EventSubject};
 use serde_json::{Value, json};
 
-use crate::{Invoice, InvoiceId, InvoiceStatus};
+use crate::{Invoice, InvoiceId, InvoicePayment, InvoicePaymentId, InvoiceStatus};
 
 pub struct InvoiceCreated {
     pub invoice: Invoice,
@@ -123,6 +124,59 @@ impl DomainEvent for InvoiceTransitioned {
     }
 }
 
+/// A payment recorded against an invoice (#320).
+pub struct InvoicePaymentRecorded {
+    pub payment: InvoicePayment,
+}
+
+impl DomainEvent for InvoicePaymentRecorded {
+    fn name(&self) -> &'static str {
+        "invoice_payment.recorded"
+    }
+
+    fn version(&self) -> u16 {
+        1
+    }
+
+    fn subject(&self) -> EventSubject {
+        EventSubject::new("invoice_payment", self.payment.id.0)
+    }
+
+    fn payload(&self) -> Value {
+        json!({ "payment": payment_payload(&self.payment) })
+    }
+}
+
+/// A recorded payment soft-deleted (#320) — the row survives with who
+/// deleted it and when, this event just announces the act.
+pub struct InvoicePaymentDeleted {
+    pub payment_id: InvoicePaymentId,
+    pub invoice_id: InvoiceId,
+    pub deleted_by: UserId,
+}
+
+impl DomainEvent for InvoicePaymentDeleted {
+    fn name(&self) -> &'static str {
+        "invoice_payment.deleted"
+    }
+
+    fn version(&self) -> u16 {
+        1
+    }
+
+    fn subject(&self) -> EventSubject {
+        EventSubject::new("invoice_payment", self.payment_id.0)
+    }
+
+    fn payload(&self) -> Value {
+        json!({
+            "payment_id": self.payment_id.0,
+            "invoice_id": self.invoice_id.0,
+            "deleted_by": self.deleted_by.0,
+        })
+    }
+}
+
 /// The serialized domain model, never the database row: renaming a column
 /// must not reach a subscriber's automation.
 fn invoice_payload(invoice: &Invoice) -> Value {
@@ -148,6 +202,24 @@ fn invoice_payload(invoice: &Invoice) -> Value {
     })
 }
 
+/// The serialized domain model, never the database row — same rule as
+/// `invoice_payload`.
+fn payment_payload(payment: &InvoicePayment) -> Value {
+    json!({
+        "id": payment.id.0,
+        "organization_id": payment.organization_id.0,
+        "invoice_id": payment.invoice_id.0,
+        "amount_cents": payment.amount_cents,
+        "paid_on": payment.paid_on,
+        "method": payment.method,
+        "reference": payment.reference,
+        "note": payment.note,
+        "recorded_by": payment.recorded_by.0,
+        "created_at": payment.created_at,
+        "updated_at": payment.updated_at,
+    })
+}
+
 /// Every event this module can construct, as `(name, version)`. Test-only:
 /// compared against the catalogue by the drift check in
 /// `domain::automation::catalogue`.
@@ -157,6 +229,8 @@ pub fn emitted_events() -> Vec<(&'static str, u16)> {
         ("invoice.created", 1),
         ("invoice.updated", 1),
         ("invoice.deleted", 1),
+        ("invoice_payment.recorded", 1),
+        ("invoice_payment.deleted", 1),
     ];
 
     emitted.extend(
@@ -233,6 +307,39 @@ pub fn descriptors() -> Vec<EventDescriptor> {
             }),
         });
     }
+
+    let payment_example = json!({
+        "id": "018f3b2a-0000-7000-8000-000000000006",
+        "organization_id": "018f3b2a-0000-7000-8000-000000000002",
+        "invoice_id": "018f3b2a-0000-7000-8000-000000000001",
+        "amount_cents": 275_000,
+        "paid_on": "2026-09-01",
+        "method": "Virement",
+        "reference": "VIR-2026-0912",
+        "note": null,
+        "recorded_by": "018f3b2a-0000-7000-8000-000000000007",
+        "created_at": "2026-09-01T09:00:00Z",
+        "updated_at": "2026-09-01T09:00:00Z",
+    });
+
+    descriptors.push(EventDescriptor {
+        name: "invoice_payment.recorded",
+        version: 1,
+        label: "Paiement enregistré",
+        subject_kind: "invoice_payment",
+        payload_example: json!({ "payment": payment_example }),
+    });
+    descriptors.push(EventDescriptor {
+        name: "invoice_payment.deleted",
+        version: 1,
+        label: "Paiement supprimé",
+        subject_kind: "invoice_payment",
+        payload_example: json!({
+            "payment_id": "018f3b2a-0000-7000-8000-000000000006",
+            "invoice_id": "018f3b2a-0000-7000-8000-000000000001",
+            "deleted_by": "018f3b2a-0000-7000-8000-000000000007",
+        }),
+    });
 
     descriptors
 }

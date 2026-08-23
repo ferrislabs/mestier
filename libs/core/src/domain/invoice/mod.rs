@@ -17,8 +17,8 @@
 
 use std::{fmt::Display, str::FromStr};
 
-use chrono::{DateTime, Utc};
-use common::CoreError;
+use chrono::{DateTime, NaiveDate, Utc};
+use common::{CoreError, UserId};
 use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
@@ -305,6 +305,62 @@ pub struct Invoice {
     pub deleted_at: Option<DateTime<Utc>>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, ToSchema)]
+pub struct InvoicePaymentId(pub Uuid);
+
+impl FromStr for InvoicePaymentId {
+    type Err = uuid::Error;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Uuid::from_str(s).map(InvoicePaymentId)
+    }
+}
+
+impl Display for InvoicePaymentId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
+/// A payment recorded against an invoice (#320). A sub-resource of the
+/// invoice aggregate, managed through the same `InvoiceRepository` — no
+/// separate mockable repository, same treatment as `InvoiceLine` and, from
+/// #318, a credit note.
+///
+/// Soft-deleted, never hard-deleted: `deleted_at`/`deleted_by` are the
+/// audit trail #320 asks for, set together or not at all. A refund is a
+/// credit note (#318), never a negative `amount_cents` — enforced at the
+/// database (`chk_invoice_payments_amount_cents_positive`) and again in
+/// `InvoiceService::record_payment`.
+#[derive(Debug, Clone, PartialEq)]
+pub struct InvoicePayment {
+    pub id: InvoicePaymentId,
+    pub organization_id: OrganizationId,
+    pub invoice_id: InvoiceId,
+    pub amount_cents: i32,
+    pub paid_on: NaiveDate,
+    pub method: String,
+    pub reference: Option<String>,
+    pub note: Option<String>,
+    pub recorded_by: UserId,
+    pub deleted_at: Option<DateTime<Utc>>,
+    pub deleted_by: Option<UserId>,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+}
+
+/// How much one customer still owes across every issued invoice, and the
+/// oldest due date among them — the two reads a dunning list needs.
+/// Computed as a SQL aggregate (`InvoiceRepository::list_outstanding_by_customer`),
+/// never assembled client-side: CLAUDE.md is explicit that money math lives
+/// in the backend.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct CustomerOutstandingBalance {
+    pub customer_id: CustomerId,
+    pub outstanding_cents: i64,
+    pub oldest_due_at: Option<DateTime<Utc>>,
 }
 
 /// The only type a mutation can land on. Obtained exclusively through

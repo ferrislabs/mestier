@@ -1,9 +1,10 @@
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, NaiveDate, Utc};
+use common::UserId;
 use rust_decimal::Decimal;
 
 use crate::{
-    CustomerContextId, CustomerId, InvoiceId, InvoiceKind, OperationNature, OrganizationAddress,
-    OrganizationId, ProjectId,
+    CustomerContextId, CustomerId, InvoiceId, InvoiceKind, InvoicePaymentId, OperationNature,
+    OrganizationAddress, OrganizationId, ProjectId,
 };
 
 /// Issues any draft invoice, whatever `InvoiceKind` built it — a manually
@@ -107,4 +108,28 @@ pub struct IssueCreditNoteCommand {
 #[derive(Debug, Clone, Copy)]
 pub struct CancelInvoiceCommand {
     pub id: InvoiceId,
+}
+
+/// Records a payment against an issued invoice (#320).
+#[derive(Debug, Clone)]
+pub struct RecordInvoicePaymentCommand {
+    pub invoice_id: InvoiceId,
+    pub amount_cents: i32,
+    pub paid_on: NaiveDate,
+    pub method: String,
+    pub reference: Option<String>,
+    pub note: Option<String>,
+    pub recorded_by: UserId,
+    /// Refuses when this payment would push the recorded total past the
+    /// invoice's gross amount net of credit notes, unless explicitly
+    /// allowed — mirrors `allow_exceeding_total` on the issuing commands.
+    pub allow_exceeding_total: bool,
+}
+
+/// Soft-deletes a recorded payment, keeping who and when as its audit
+/// trail (#320) — the row is never hard-deleted.
+#[derive(Debug, Clone, Copy)]
+pub struct DeleteInvoicePaymentCommand {
+    pub id: InvoicePaymentId,
+    pub deleted_by: UserId,
 }
