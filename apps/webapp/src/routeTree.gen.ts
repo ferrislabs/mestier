@@ -17,9 +17,11 @@ import { Route as AppFieldOrganizationSlugRouteImport } from './routes/_app.fiel
 import { Route as AppOOrganizationSlugIndexRouteImport } from './routes/_app.o.$organizationSlug.index'
 import { Route as AppOOrganizationSlugSettingsRouteImport } from './routes/_app.o.$organizationSlug.settings'
 import { Route as AppOOrganizationSlugReportingRouteImport } from './routes/_app.o.$organizationSlug.reporting'
+import { Route as AppOOrganizationSlugChatRouteImport } from './routes/_app.o.$organizationSlug.chat'
 import { Route as AppOOrganizationSlugPlanningIndexRouteImport } from './routes/_app.o.$organizationSlug.planning.index'
 import { Route as AppOOrganizationSlugHrIndexRouteImport } from './routes/_app.o.$organizationSlug.hr.index'
 import { Route as AppOOrganizationSlugCrmIndexRouteImport } from './routes/_app.o.$organizationSlug.crm.index'
+import { Route as AppOOrganizationSlugChatIndexRouteImport } from './routes/_app.o.$organizationSlug.chat.index'
 import { Route as AppOOrganizationSlugPlanningTeamRouteImport } from './routes/_app.o.$organizationSlug.planning.team'
 import { Route as AppOOrganizationSlugPlanningTasksRouteImport } from './routes/_app.o.$organizationSlug.planning.tasks'
 import { Route as AppOOrganizationSlugPlanningProjectsRouteImport } from './routes/_app.o.$organizationSlug.planning.projects'
@@ -28,6 +30,7 @@ import { Route as AppOOrganizationSlugHrWorkTimeRouteImport } from './routes/_ap
 import { Route as AppOOrganizationSlugHrEquipmentRouteImport } from './routes/_app.o.$organizationSlug.hr.equipment'
 import { Route as AppOOrganizationSlugHrAbsencesRouteImport } from './routes/_app.o.$organizationSlug.hr.absences'
 import { Route as AppOOrganizationSlugCrmCatalogRouteImport } from './routes/_app.o.$organizationSlug.crm.catalog'
+import { Route as AppOOrganizationSlugChatChannelIdRouteImport } from './routes/_app.o.$organizationSlug.chat.$channelId'
 import { Route as AppOOrganizationSlugHrTeamIndexRouteImport } from './routes/_app.o.$organizationSlug.hr.team.index'
 import { Route as AppOOrganizationSlugCrmQuotesIndexRouteImport } from './routes/_app.o.$organizationSlug.crm.quotes.index'
 import { Route as AppOOrganizationSlugCrmCustomersIndexRouteImport } from './routes/_app.o.$organizationSlug.crm.customers.index'
@@ -80,6 +83,12 @@ const AppOOrganizationSlugReportingRoute =
     path: '/reporting',
     getParentRoute: () => AppOOrganizationSlugRoute,
   } as any)
+const AppOOrganizationSlugChatRoute =
+  AppOOrganizationSlugChatRouteImport.update({
+    id: '/chat',
+    path: '/chat',
+    getParentRoute: () => AppOOrganizationSlugRoute,
+  } as any)
 const AppOOrganizationSlugPlanningIndexRoute =
   AppOOrganizationSlugPlanningIndexRouteImport.update({
     id: '/planning/',
@@ -97,6 +106,12 @@ const AppOOrganizationSlugCrmIndexRoute =
     id: '/crm/',
     path: '/crm/',
     getParentRoute: () => AppOOrganizationSlugRoute,
+  } as any)
+const AppOOrganizationSlugChatIndexRoute =
+  AppOOrganizationSlugChatIndexRouteImport.update({
+    id: '/',
+    path: '/',
+    getParentRoute: () => AppOOrganizationSlugChatRoute,
   } as any)
 const AppOOrganizationSlugPlanningTeamRoute =
   AppOOrganizationSlugPlanningTeamRouteImport.update({
@@ -145,6 +160,12 @@ const AppOOrganizationSlugCrmCatalogRoute =
     id: '/crm/catalog',
     path: '/crm/catalog',
     getParentRoute: () => AppOOrganizationSlugRoute,
+  } as any)
+const AppOOrganizationSlugChatChannelIdRoute =
+  AppOOrganizationSlugChatChannelIdRouteImport.update({
+    id: '/$channelId',
+    path: '/$channelId',
+    getParentRoute: () => AppOOrganizationSlugChatRoute,
   } as any)
 const AppOOrganizationSlugHrTeamIndexRoute =
   AppOOrganizationSlugHrTeamIndexRouteImport.update({
@@ -200,9 +221,11 @@ export interface FileRoutesByFullPath {
   '/invite/$token': typeof InviteTokenRoute
   '/field/$organizationSlug': typeof AppFieldOrganizationSlugRoute
   '/o/$organizationSlug': typeof AppOOrganizationSlugRouteWithChildren
+  '/o/$organizationSlug/chat': typeof AppOOrganizationSlugChatRouteWithChildren
   '/o/$organizationSlug/reporting': typeof AppOOrganizationSlugReportingRoute
   '/o/$organizationSlug/settings': typeof AppOOrganizationSlugSettingsRoute
   '/o/$organizationSlug/': typeof AppOOrganizationSlugIndexRoute
+  '/o/$organizationSlug/chat/$channelId': typeof AppOOrganizationSlugChatChannelIdRoute
   '/o/$organizationSlug/crm/catalog': typeof AppOOrganizationSlugCrmCatalogRoute
   '/o/$organizationSlug/hr/absences': typeof AppOOrganizationSlugHrAbsencesRoute
   '/o/$organizationSlug/hr/equipment': typeof AppOOrganizationSlugHrEquipmentRoute
@@ -211,6 +234,7 @@ export interface FileRoutesByFullPath {
   '/o/$organizationSlug/planning/projects': typeof AppOOrganizationSlugPlanningProjectsRoute
   '/o/$organizationSlug/planning/tasks': typeof AppOOrganizationSlugPlanningTasksRoute
   '/o/$organizationSlug/planning/team': typeof AppOOrganizationSlugPlanningTeamRoute
+  '/o/$organizationSlug/chat/': typeof AppOOrganizationSlugChatIndexRoute
   '/o/$organizationSlug/crm/': typeof AppOOrganizationSlugCrmIndexRoute
   '/o/$organizationSlug/hr/': typeof AppOOrganizationSlugHrIndexRoute
   '/o/$organizationSlug/planning/': typeof AppOOrganizationSlugPlanningIndexRoute
@@ -230,6 +254,7 @@ export interface FileRoutesByTo {
   '/o/$organizationSlug/reporting': typeof AppOOrganizationSlugReportingRoute
   '/o/$organizationSlug/settings': typeof AppOOrganizationSlugSettingsRoute
   '/o/$organizationSlug': typeof AppOOrganizationSlugIndexRoute
+  '/o/$organizationSlug/chat/$channelId': typeof AppOOrganizationSlugChatChannelIdRoute
   '/o/$organizationSlug/crm/catalog': typeof AppOOrganizationSlugCrmCatalogRoute
   '/o/$organizationSlug/hr/absences': typeof AppOOrganizationSlugHrAbsencesRoute
   '/o/$organizationSlug/hr/equipment': typeof AppOOrganizationSlugHrEquipmentRoute
@@ -238,6 +263,7 @@ export interface FileRoutesByTo {
   '/o/$organizationSlug/planning/projects': typeof AppOOrganizationSlugPlanningProjectsRoute
   '/o/$organizationSlug/planning/tasks': typeof AppOOrganizationSlugPlanningTasksRoute
   '/o/$organizationSlug/planning/team': typeof AppOOrganizationSlugPlanningTeamRoute
+  '/o/$organizationSlug/chat': typeof AppOOrganizationSlugChatIndexRoute
   '/o/$organizationSlug/crm': typeof AppOOrganizationSlugCrmIndexRoute
   '/o/$organizationSlug/hr': typeof AppOOrganizationSlugHrIndexRoute
   '/o/$organizationSlug/planning': typeof AppOOrganizationSlugPlanningIndexRoute
@@ -257,9 +283,11 @@ export interface FileRoutesById {
   '/_app/': typeof AppIndexRoute
   '/_app/field/$organizationSlug': typeof AppFieldOrganizationSlugRoute
   '/_app/o/$organizationSlug': typeof AppOOrganizationSlugRouteWithChildren
+  '/_app/o/$organizationSlug/chat': typeof AppOOrganizationSlugChatRouteWithChildren
   '/_app/o/$organizationSlug/reporting': typeof AppOOrganizationSlugReportingRoute
   '/_app/o/$organizationSlug/settings': typeof AppOOrganizationSlugSettingsRoute
   '/_app/o/$organizationSlug/': typeof AppOOrganizationSlugIndexRoute
+  '/_app/o/$organizationSlug/chat/$channelId': typeof AppOOrganizationSlugChatChannelIdRoute
   '/_app/o/$organizationSlug/crm/catalog': typeof AppOOrganizationSlugCrmCatalogRoute
   '/_app/o/$organizationSlug/hr/absences': typeof AppOOrganizationSlugHrAbsencesRoute
   '/_app/o/$organizationSlug/hr/equipment': typeof AppOOrganizationSlugHrEquipmentRoute
@@ -268,6 +296,7 @@ export interface FileRoutesById {
   '/_app/o/$organizationSlug/planning/projects': typeof AppOOrganizationSlugPlanningProjectsRoute
   '/_app/o/$organizationSlug/planning/tasks': typeof AppOOrganizationSlugPlanningTasksRoute
   '/_app/o/$organizationSlug/planning/team': typeof AppOOrganizationSlugPlanningTeamRoute
+  '/_app/o/$organizationSlug/chat/': typeof AppOOrganizationSlugChatIndexRoute
   '/_app/o/$organizationSlug/crm/': typeof AppOOrganizationSlugCrmIndexRoute
   '/_app/o/$organizationSlug/hr/': typeof AppOOrganizationSlugHrIndexRoute
   '/_app/o/$organizationSlug/planning/': typeof AppOOrganizationSlugPlanningIndexRoute
@@ -287,9 +316,11 @@ export interface FileRouteTypes {
     | '/invite/$token'
     | '/field/$organizationSlug'
     | '/o/$organizationSlug'
+    | '/o/$organizationSlug/chat'
     | '/o/$organizationSlug/reporting'
     | '/o/$organizationSlug/settings'
     | '/o/$organizationSlug/'
+    | '/o/$organizationSlug/chat/$channelId'
     | '/o/$organizationSlug/crm/catalog'
     | '/o/$organizationSlug/hr/absences'
     | '/o/$organizationSlug/hr/equipment'
@@ -298,6 +329,7 @@ export interface FileRouteTypes {
     | '/o/$organizationSlug/planning/projects'
     | '/o/$organizationSlug/planning/tasks'
     | '/o/$organizationSlug/planning/team'
+    | '/o/$organizationSlug/chat/'
     | '/o/$organizationSlug/crm/'
     | '/o/$organizationSlug/hr/'
     | '/o/$organizationSlug/planning/'
@@ -317,6 +349,7 @@ export interface FileRouteTypes {
     | '/o/$organizationSlug/reporting'
     | '/o/$organizationSlug/settings'
     | '/o/$organizationSlug'
+    | '/o/$organizationSlug/chat/$channelId'
     | '/o/$organizationSlug/crm/catalog'
     | '/o/$organizationSlug/hr/absences'
     | '/o/$organizationSlug/hr/equipment'
@@ -325,6 +358,7 @@ export interface FileRouteTypes {
     | '/o/$organizationSlug/planning/projects'
     | '/o/$organizationSlug/planning/tasks'
     | '/o/$organizationSlug/planning/team'
+    | '/o/$organizationSlug/chat'
     | '/o/$organizationSlug/crm'
     | '/o/$organizationSlug/hr'
     | '/o/$organizationSlug/planning'
@@ -343,9 +377,11 @@ export interface FileRouteTypes {
     | '/_app/'
     | '/_app/field/$organizationSlug'
     | '/_app/o/$organizationSlug'
+    | '/_app/o/$organizationSlug/chat'
     | '/_app/o/$organizationSlug/reporting'
     | '/_app/o/$organizationSlug/settings'
     | '/_app/o/$organizationSlug/'
+    | '/_app/o/$organizationSlug/chat/$channelId'
     | '/_app/o/$organizationSlug/crm/catalog'
     | '/_app/o/$organizationSlug/hr/absences'
     | '/_app/o/$organizationSlug/hr/equipment'
@@ -354,6 +390,7 @@ export interface FileRouteTypes {
     | '/_app/o/$organizationSlug/planning/projects'
     | '/_app/o/$organizationSlug/planning/tasks'
     | '/_app/o/$organizationSlug/planning/team'
+    | '/_app/o/$organizationSlug/chat/'
     | '/_app/o/$organizationSlug/crm/'
     | '/_app/o/$organizationSlug/hr/'
     | '/_app/o/$organizationSlug/planning/'
@@ -430,6 +467,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppOOrganizationSlugReportingRouteImport
       parentRoute: typeof AppOOrganizationSlugRoute
     }
+    '/_app/o/$organizationSlug/chat': {
+      id: '/_app/o/$organizationSlug/chat'
+      path: '/chat'
+      fullPath: '/o/$organizationSlug/chat'
+      preLoaderRoute: typeof AppOOrganizationSlugChatRouteImport
+      parentRoute: typeof AppOOrganizationSlugRoute
+    }
     '/_app/o/$organizationSlug/planning/': {
       id: '/_app/o/$organizationSlug/planning/'
       path: '/planning'
@@ -450,6 +494,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/o/$organizationSlug/crm/'
       preLoaderRoute: typeof AppOOrganizationSlugCrmIndexRouteImport
       parentRoute: typeof AppOOrganizationSlugRoute
+    }
+    '/_app/o/$organizationSlug/chat/': {
+      id: '/_app/o/$organizationSlug/chat/'
+      path: '/'
+      fullPath: '/o/$organizationSlug/chat/'
+      preLoaderRoute: typeof AppOOrganizationSlugChatIndexRouteImport
+      parentRoute: typeof AppOOrganizationSlugChatRoute
     }
     '/_app/o/$organizationSlug/planning/team': {
       id: '/_app/o/$organizationSlug/planning/team'
@@ -506,6 +557,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/o/$organizationSlug/crm/catalog'
       preLoaderRoute: typeof AppOOrganizationSlugCrmCatalogRouteImport
       parentRoute: typeof AppOOrganizationSlugRoute
+    }
+    '/_app/o/$organizationSlug/chat/$channelId': {
+      id: '/_app/o/$organizationSlug/chat/$channelId'
+      path: '/$channelId'
+      fullPath: '/o/$organizationSlug/chat/$channelId'
+      preLoaderRoute: typeof AppOOrganizationSlugChatChannelIdRouteImport
+      parentRoute: typeof AppOOrganizationSlugChatRoute
     }
     '/_app/o/$organizationSlug/hr/team/': {
       id: '/_app/o/$organizationSlug/hr/team/'
@@ -566,7 +624,25 @@ declare module '@tanstack/react-router' {
   }
 }
 
+interface AppOOrganizationSlugChatRouteChildren {
+  AppOOrganizationSlugChatChannelIdRoute: typeof AppOOrganizationSlugChatChannelIdRoute
+  AppOOrganizationSlugChatIndexRoute: typeof AppOOrganizationSlugChatIndexRoute
+}
+
+const AppOOrganizationSlugChatRouteChildren: AppOOrganizationSlugChatRouteChildren =
+  {
+    AppOOrganizationSlugChatChannelIdRoute:
+      AppOOrganizationSlugChatChannelIdRoute,
+    AppOOrganizationSlugChatIndexRoute: AppOOrganizationSlugChatIndexRoute,
+  }
+
+const AppOOrganizationSlugChatRouteWithChildren =
+  AppOOrganizationSlugChatRoute._addFileChildren(
+    AppOOrganizationSlugChatRouteChildren,
+  )
+
 interface AppOOrganizationSlugRouteChildren {
+  AppOOrganizationSlugChatRoute: typeof AppOOrganizationSlugChatRouteWithChildren
   AppOOrganizationSlugReportingRoute: typeof AppOOrganizationSlugReportingRoute
   AppOOrganizationSlugSettingsRoute: typeof AppOOrganizationSlugSettingsRoute
   AppOOrganizationSlugIndexRoute: typeof AppOOrganizationSlugIndexRoute
@@ -592,6 +668,7 @@ interface AppOOrganizationSlugRouteChildren {
 }
 
 const AppOOrganizationSlugRouteChildren: AppOOrganizationSlugRouteChildren = {
+  AppOOrganizationSlugChatRoute: AppOOrganizationSlugChatRouteWithChildren,
   AppOOrganizationSlugReportingRoute: AppOOrganizationSlugReportingRoute,
   AppOOrganizationSlugSettingsRoute: AppOOrganizationSlugSettingsRoute,
   AppOOrganizationSlugIndexRoute: AppOOrganizationSlugIndexRoute,

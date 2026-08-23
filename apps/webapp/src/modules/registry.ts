@@ -148,9 +148,16 @@ export const MODULES: AppModule[] = [
 		label: 'Discussions',
 		icon: MessagesSquare,
 		basePath: '/chat',
-		status: 'coming-soon',
-		hasOverview: false,
-		sections: [],
+		status: 'available',
+		hasOverview: true,
+		sections: [
+			{
+				id: 'channels',
+				label: 'Canaux',
+				to: '/chat',
+				icon: MessagesSquare,
+			},
+		],
 	},
 	{
 		id: 'settings',
