@@ -15,6 +15,9 @@ const PROJECT_INVOICE_DEPOSIT_PATH =
 	'/api/v1/projects/{project_id}/invoices/deposit'
 const PROJECT_INVOICE_FINAL_PATH =
 	'/api/v1/projects/{project_id}/invoices/final'
+const PROJECT_INVOICES_PATH = '/api/v1/projects/{project_id}/invoices'
+const PROJECT_BILLING_SUMMARY_PATH =
+	'/api/v1/projects/{project_id}/billing-summary'
 
 interface InvoiceListParams {
 	page: number
@@ -77,6 +80,39 @@ function invoicePaymentsKey(invoiceId: string) {
 	return window.tanstackApi.get(INVOICE_PAYMENTS_PATH, {
 		path: { invoice_id: invoiceId },
 	}).queryKey
+}
+
+function projectBillingSummaryKey(projectId: string) {
+	return window.tanstackApi.get(PROJECT_BILLING_SUMMARY_PATH, {
+		path: { project_id: projectId },
+	}).queryKey
+}
+
+function projectInvoicesKey(projectId: string) {
+	return window.tanstackApi.get(PROJECT_INVOICES_PATH, {
+		path: { project_id: projectId },
+	}).queryKey
+}
+
+/**
+ * `billed_cents`/`remaining_cents` on the project's billing summary move on
+ * issuing, cancelling or crediting an invoice (see `sum_already_issued_cents`
+ * in `domain::invoice::service`) — never on recording or deleting a payment,
+ * which is why `useRecordPayment`/`useDeletePayment` do not call this. Not
+ * called when `projectId` is absent: most invoices carry no project at all.
+ */
+function invalidateProjectInvoicing(
+	queryClient: ReturnType<typeof useQueryClient>,
+	projectId?: string | null,
+) {
+	if (!projectId) return Promise.resolve()
+
+	return Promise.all([
+		queryClient.invalidateQueries({
+			queryKey: projectBillingSummaryKey(projectId),
+		}),
+		queryClient.invalidateQueries({ queryKey: projectInvoicesKey(projectId) }),
+	])
 }
 
 function invalidateInvoicesList(
@@ -200,6 +236,7 @@ export function useCreateInvoice(organizationId: string) {
 				queryClient.invalidateQueries({
 					queryKey: invoiceKey(invoice.data.id),
 				}),
+				invalidateProjectInvoicing(queryClient, invoice.data.project_id),
 			])
 		},
 		meta: { organizationId },
@@ -234,6 +271,7 @@ export function useIssueInvoice() {
 				invalidateInvoicesList(queryClient, invoice.data.organization_id),
 				invalidateOutstanding(queryClient, invoice.data.organization_id),
 				invalidateInvoiceDetail(queryClient, invoice.data.id),
+				invalidateProjectInvoicing(queryClient, invoice.data.project_id),
 			])
 		},
 	})
@@ -249,6 +287,7 @@ export function useCancelInvoice() {
 				invalidateInvoicesList(queryClient, invoice.data.organization_id),
 				invalidateOutstanding(queryClient, invoice.data.organization_id),
 				invalidateInvoiceDetail(queryClient, invoice.data.id),
+				invalidateProjectInvoicing(queryClient, invoice.data.project_id),
 			])
 		},
 	})
@@ -269,6 +308,7 @@ export function useIssueCreditNote() {
 				invalidateInvoicesList(queryClient, creditNote.data.organization_id),
 				invalidateOutstanding(queryClient, creditNote.data.organization_id),
 				invalidateInvoiceDetail(queryClient, variables.path.invoice_id),
+				invalidateProjectInvoicing(queryClient, creditNote.data.project_id),
 			])
 		},
 	})
@@ -317,7 +357,9 @@ export function useDeletePayment(invoiceId: string, organizationId?: string) {
  * Project-scoped issuance built now because it lives in this same file, not
  * because #321 has a screen for it yet — #322 ("invoice a project") is the
  * first caller. Invalidates the organization's invoice list and outstanding
- * total the same way the invoice-scoped issuing hooks do.
+ * total the same way the invoice-scoped issuing hooks do, plus the project's
+ * own billing summary and invoice list, which is what the project detail
+ * page actually reads.
  */
 export function useIssueDeposit() {
 	const queryClient = useQueryClient()
@@ -325,10 +367,11 @@ export function useIssueDeposit() {
 	return useMutation({
 		...window.tanstackApi.mutation('post', PROJECT_INVOICE_DEPOSIT_PATH)
 			.mutationOptions,
-		onSuccess: async (invoice) => {
+		onSuccess: async (invoice, variables) => {
 			await Promise.all([
 				invalidateInvoicesList(queryClient, invoice.data.organization_id),
 				invalidateOutstanding(queryClient, invoice.data.organization_id),
+				invalidateProjectInvoicing(queryClient, variables.path.project_id),
 			])
 		},
 	})
@@ -340,12 +383,36 @@ export function useIssueFinalInvoice() {
 	return useMutation({
 		...window.tanstackApi.mutation('post', PROJECT_INVOICE_FINAL_PATH)
 			.mutationOptions,
-		onSuccess: async (invoice) => {
+		onSuccess: async (invoice, variables) => {
 			await Promise.all([
 				invalidateInvoicesList(queryClient, invoice.data.organization_id),
 				invalidateOutstanding(queryClient, invoice.data.organization_id),
+				invalidateProjectInvoicing(queryClient, variables.path.project_id),
 			])
 		},
+	})
+}
+
+/** What was quoted, what has been billed, what remains — computed
+ * backend-side (`InvoiceService::project_billing_summary`), never
+ * recomputed here from a list of invoices. */
+export function useProjectBillingSummary(projectId: string, enabled = true) {
+	return useQuery({
+		...window.tanstackApi.get(PROJECT_BILLING_SUMMARY_PATH, {
+			path: { project_id: projectId },
+		}).queryOptions,
+		enabled: enabled && Boolean(projectId),
+	})
+}
+
+/** Every non-deleted invoice against one project, drafts included — the
+ * project detail page's own invoice list. */
+export function useInvoicesByProject(projectId: string, enabled = true) {
+	return useQuery({
+		...window.tanstackApi.get(PROJECT_INVOICES_PATH, {
+			path: { project_id: projectId },
+		}).queryOptions,
+		enabled: enabled && Boolean(projectId),
 	})
 }
 
@@ -365,4 +432,5 @@ export type IssueCreditNotePayload = Schemas.IssueCreditNoteRequest
 export type RecordInvoicePaymentPayload = Schemas.RecordInvoicePaymentRequest
 export type IssueDepositPayload = Schemas.IssueDepositRequest
 export type IssueFinalInvoicePayload = Schemas.IssueFinalInvoiceRequest
+export type ProjectBillingSummary = Schemas.ProjectBillingSummaryResponse
 export type PaginationMetadata = Schemas.PaginationMetadata

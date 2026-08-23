@@ -3,7 +3,7 @@ import { ProjectsFeature } from '#/pages/projects/feature/projects-feature'
 import { projectsSearchSchema } from '#/pages/projects/types'
 
 export const Route = createFileRoute(
-	'/_app/o/$organizationSlug/planning/projects',
+	'/_app/o/$organizationSlug/planning/projects/',
 )({
 	validateSearch: (search) => projectsSearchSchema.parse(search),
 	component: ProjectsPage,

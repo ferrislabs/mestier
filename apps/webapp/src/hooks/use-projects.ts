@@ -39,11 +39,29 @@ export function useProjects(organizationId: string, filters: ProjectFilters) {
 }
 
 /**
- * Invalidates the project list and the profitability report together.
+ * One project, for the detail page — `useProjects` fetches the whole
+ * organization's set, which the list already had a reason to (search,
+ * picker); the detail page only ever needs the one row its route names.
+ */
+export function useProject(organizationId: string, projectId: string) {
+	return useQuery({
+		...window.tanstackApi.get(PROJECT_PATH, {
+			path: { organization_id: organizationId, project_id: projectId },
+		}).queryOptions,
+		enabled: Boolean(organizationId) && Boolean(projectId),
+	})
+}
+
+/**
+ * Invalidates the project list, the single-project read and the
+ * profitability report together.
  *
  * The report groups on the project, so archiving one or moving its customer
  * changes what the numbers are attached to. A stale report is worse than a slow
  * one here: it shows a real cost against the wrong subject and reads as fact.
+ * `useProject` (added for the detail page, #322) is invalidated the same way:
+ * editing a project from its own detail page must not leave that same page
+ * showing the pre-edit row.
  */
 function useProjectInvalidation() {
 	const queryClient = useQueryClient()
@@ -51,7 +69,9 @@ function useProjectInvalidation() {
 	return () =>
 		Promise.all([
 			queryClient.invalidateQueries({
-				predicate: (query) => query.queryKey.includes(PROJECTS_PATH),
+				predicate: (query) =>
+					query.queryKey.includes(PROJECTS_PATH) ||
+					query.queryKey.includes(PROJECT_PATH),
 			}),
 			queryClient.invalidateQueries({
 				predicate: (query) => query.queryKey.includes(PROFITABILITY_PATH),

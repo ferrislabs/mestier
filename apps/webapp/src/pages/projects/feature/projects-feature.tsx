@@ -2,7 +2,7 @@ import { useQueryClient } from '@tanstack/react-query'
 import { useMemo, useState } from 'react'
 import type { Schemas } from '#/api/api.client'
 import { useActiveOrganization } from '#/hooks/use-active-organization'
-import { useCustomers } from '#/hooks/use-customers'
+import { useCustomerContexts, useCustomers } from '#/hooks/use-customers'
 import { usePlanning } from '#/hooks/use-planning'
 import {
 	useCreateProjectTemplate,
@@ -107,6 +107,10 @@ function ProjectsWorkspace({
 		computeWindow('day', todayIsoDate()),
 	)
 	const timeZone = planningQuery.data?.data.timezone ?? 'UTC'
+	const draftCustomerContexts = useCustomerContexts(
+		draft?.values.customerId ?? '',
+		Boolean(draft?.values.customerId),
+	)
 
 	const createProject = useCreateProject()
 	const patchProject = usePatchProject()
@@ -179,7 +183,7 @@ function ProjectsWorkspace({
 		const body = {
 			name: draft.values.name.trim(),
 			customer_id: optionalId(draft.values.customerId),
-			customer_context_id: null,
+			customer_context_id: optionalId(draft.values.customerContextId),
 			quote_id: optionalId(draft.values.quoteId),
 		}
 
@@ -312,6 +316,7 @@ function ProjectsWorkspace({
 							name: project.name,
 							customerId: project.customer_id ?? '',
 							quoteId: project.quote_id ?? '',
+							customerContextId: project.customer_context_id ?? '',
 						},
 					})
 				}
@@ -353,6 +358,8 @@ function ProjectsWorkspace({
 					label: customer.name,
 				}))}
 				quotes={quotesForDraft}
+				customerContexts={draftCustomerContexts.data?.data ?? []}
+				isCustomerContextsLoading={draftCustomerContexts.isLoading}
 				isPending={isPending}
 				error={error?.message ?? null}
 				onOpenChange={(open) => {
