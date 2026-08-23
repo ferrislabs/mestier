@@ -54,6 +54,7 @@ impl<'tx> OrganizationRepository for PgOrganizationRepository<'tx> {
                 share_capital_cents,
                 address_line1, address_line2, address_postal_code, address_city, address_country,
                 contact_email, contact_phone, insurance_mention,
+                quote_number_prefix,
                 deleted_at, created_at, updated_at
             "#,
             organization.id.0,
@@ -98,6 +99,7 @@ impl<'tx> OrganizationRepository for PgOrganizationRepository<'tx> {
                 share_capital_cents,
                 address_line1, address_line2, address_postal_code, address_city, address_country,
                 contact_email, contact_phone, insurance_mention,
+                quote_number_prefix,
                 deleted_at, created_at, updated_at
             FROM organizations
             WHERE id = $1 AND deleted_at IS NULL
@@ -138,6 +140,7 @@ impl<'tx> OrganizationRepository for PgOrganizationRepository<'tx> {
                 o.share_capital_cents,
                 o.address_line1, o.address_line2, o.address_postal_code, o.address_city, o.address_country,
                 o.contact_email, o.contact_phone, o.insurance_mention,
+                o.quote_number_prefix,
                 o.deleted_at, o.created_at, o.updated_at
             FROM organizations o
             INNER JOIN organization_members m ON m.organization_id = o.id
@@ -171,6 +174,7 @@ impl<'tx> OrganizationRepository for PgOrganizationRepository<'tx> {
                 share_capital_cents,
                 address_line1, address_line2, address_postal_code, address_city, address_country,
                 contact_email, contact_phone, insurance_mention,
+                quote_number_prefix,
                 deleted_at, created_at, updated_at
             FROM organizations
             WHERE deleted_at IS NULL
@@ -234,6 +238,7 @@ impl<'tx> OrganizationRepository for PgOrganizationRepository<'tx> {
                 share_capital_cents,
                 address_line1, address_line2, address_postal_code, address_city, address_country,
                 contact_email, contact_phone, insurance_mention,
+                quote_number_prefix,
                 deleted_at, created_at, updated_at
             "#,
             organization.id.0,

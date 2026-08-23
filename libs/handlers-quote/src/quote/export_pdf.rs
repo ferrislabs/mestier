@@ -37,7 +37,13 @@ pub async fn handler(
 ) -> Result<Response, ApiError> {
     let quote = require_quote_membership(&state, &identity, quote_id).await?;
     let pdf = render_quote_pdf(&quote);
-    let filename = format!("{}.pdf", quote.reference);
+    // A draft has no number yet; the technical id keeps the filename
+    // meaningful until one is allocated (see #313).
+    let filename_stem = quote
+        .reference
+        .clone()
+        .unwrap_or_else(|| quote.id.0.to_string());
+    let filename = format!("{filename_stem}.pdf");
 
     Ok((
         StatusCode::OK,
@@ -56,7 +62,10 @@ pub async fn handler(
 fn render_quote_pdf(quote: &Quote) -> Vec<u8> {
     let mut text_lines = vec![
         "Mestier - Devis".to_owned(),
-        format!("Reference: {}", quote.reference),
+        format!(
+            "Reference: {}",
+            quote.reference.as_deref().unwrap_or("(brouillon)")
+        ),
         format!("Objet: {}", quote.title),
         format!("Identifiant technique: {}", quote.id.0),
         format!("Client: {}", quote.customer_id.0),

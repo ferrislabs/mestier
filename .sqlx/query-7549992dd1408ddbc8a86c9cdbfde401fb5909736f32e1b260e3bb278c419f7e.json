@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT o.id, o.name, o.slug, o.owner_id,\n                o.legal_name, o.legal_form, o.registration_number,\n                o.vat_status, o.vat_number, o.vat_exemption_basis,\n                o.share_capital_cents,\n                o.address_line1, o.address_line2, o.address_postal_code, o.address_city, o.address_country,\n                o.contact_email, o.contact_phone, o.insurance_mention,\n                o.deleted_at, o.created_at, o.updated_at\n            FROM organizations o\n            INNER JOIN organization_members m ON m.organization_id = o.id\n            WHERE m.user_id = $1 AND o.deleted_at IS NULL\n            ORDER BY o.created_at ASC\n            ",
+  "query": "\n            INSERT INTO organizations (\n                id, name, slug, owner_id,\n                legal_name, legal_form, registration_number,\n                vat_status, vat_number, vat_exemption_basis,\n                share_capital_cents,\n                address_line1, address_line2, address_postal_code, address_city, address_country,\n                contact_email, contact_phone, insurance_mention,\n                deleted_at, created_at, updated_at\n            )\n            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22)\n            RETURNING\n                id, name, slug, owner_id,\n                legal_name, legal_form, registration_number,\n                vat_status, vat_number, vat_exemption_basis,\n                share_capital_cents,\n                address_line1, address_line2, address_postal_code, address_city, address_country,\n                contact_email, contact_phone, insurance_mention,\n                quote_number_prefix,\n                deleted_at, created_at, updated_at\n            ",
   "describe": {
     "columns": [
       {
@@ -100,23 +100,49 @@
       },
       {
         "ordinal": 19,
+        "name": "quote_number_prefix",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 20,
         "name": "deleted_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 20,
+        "ordinal": 21,
         "name": "created_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 21,
+        "ordinal": 22,
         "name": "updated_at",
         "type_info": "Timestamptz"
       }
     ],
     "parameters": {
       "Left": [
-        "Uuid"
+        "Uuid",
+        "Text",
+        "Text",
+        "Uuid",
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Int8",
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Timestamptz",
+        "Timestamptz",
+        "Timestamptz"
       ]
     },
     "nullable": [
@@ -139,10 +165,11 @@
       true,
       true,
       true,
+      false,
       true,
       false,
       false
     ]
   },
-  "hash": "96c54695b973f23cfebd62f1644ec3f6d7dd871172aa9e58d0a4c2229e5b30bd"
+  "hash": "7549992dd1408ddbc8a86c9cdbfde401fb5909736f32e1b260e3bb278c419f7e"
 }

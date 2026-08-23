@@ -166,6 +166,7 @@ mod tests {
             contact_email: None,
             contact_phone: None,
             insurance_mention: None,
+            quote_number_prefix: "DEV".to_owned(),
             deleted_at: None,
             created_at: now,
             updated_at: now,

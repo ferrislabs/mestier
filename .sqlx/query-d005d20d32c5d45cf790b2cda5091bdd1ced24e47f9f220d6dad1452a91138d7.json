@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            UPDATE quotes\n            SET title = $2,\n                customer_id = $3,\n                customer_context_id = $4,\n                status = CAST($5 AS text)::quote_status,\n                net_cents = $6,\n                vat_breakdown = $7,\n                gross_cents = $8,\n                updated_at = $9\n            WHERE id = $1 AND deleted_at IS NULL\n            RETURNING id, org_id, reference, title, customer_id, customer_context_id, status::text AS \"status!\", net_cents, vat_breakdown, gross_cents, deleted_at, created_at, updated_at\n            ",
+  "query": "\n            UPDATE quotes\n            SET reference = $2,\n                title = $3,\n                customer_id = $4,\n                customer_context_id = $5,\n                status = CAST($6 AS text)::quote_status,\n                net_cents = $7,\n                vat_breakdown = $8,\n                gross_cents = $9,\n                updated_at = $10\n            WHERE id = $1 AND deleted_at IS NULL\n            RETURNING id, org_id, reference, title, customer_id, customer_context_id, status::text AS \"status!\", net_cents, vat_breakdown, gross_cents, deleted_at, created_at, updated_at\n            ",
   "describe": {
     "columns": [
       {
@@ -73,6 +73,7 @@
       "Left": [
         "Uuid",
         "Text",
+        "Text",
         "Uuid",
         "Uuid",
         "Text",
@@ -85,7 +86,7 @@
     "nullable": [
       false,
       false,
-      false,
+      true,
       false,
       false,
       false,
@@ -98,5 +99,5 @@
       false
     ]
   },
-  "hash": "50863538f2dc84c77e0ec54d3e7e758f5d5a8ab7b7d93b5b59ddf4c87afa1d19"
+  "hash": "d005d20d32c5d45cf790b2cda5091bdd1ced24e47f9f220d6dad1452a91138d7"
 }

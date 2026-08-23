@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            INSERT INTO organizations (\n                id, name, slug, owner_id,\n                legal_name, legal_form, registration_number,\n                vat_status, vat_number, vat_exemption_basis,\n                share_capital_cents,\n                address_line1, address_line2, address_postal_code, address_city, address_country,\n                contact_email, contact_phone, insurance_mention,\n                deleted_at, created_at, updated_at\n            )\n            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22)\n            RETURNING\n                id, name, slug, owner_id,\n                legal_name, legal_form, registration_number,\n                vat_status, vat_number, vat_exemption_basis,\n                share_capital_cents,\n                address_line1, address_line2, address_postal_code, address_city, address_country,\n                contact_email, contact_phone, insurance_mention,\n                deleted_at, created_at, updated_at\n            ",
+  "query": "\n            SELECT id, name, slug, owner_id,\n                legal_name, legal_form, registration_number,\n                vat_status, vat_number, vat_exemption_basis,\n                share_capital_cents,\n                address_line1, address_line2, address_postal_code, address_city, address_country,\n                contact_email, contact_phone, insurance_mention,\n                quote_number_prefix,\n                deleted_at, created_at, updated_at\n            FROM organizations\n            WHERE id = $1 AND deleted_at IS NULL\n            ",
   "describe": {
     "columns": [
       {
@@ -100,44 +100,28 @@
       },
       {
         "ordinal": 19,
+        "name": "quote_number_prefix",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 20,
         "name": "deleted_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 20,
+        "ordinal": 21,
         "name": "created_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 21,
+        "ordinal": 22,
         "name": "updated_at",
         "type_info": "Timestamptz"
       }
     ],
     "parameters": {
       "Left": [
-        "Uuid",
-        "Text",
-        "Text",
-        "Uuid",
-        "Text",
-        "Text",
-        "Text",
-        "Text",
-        "Text",
-        "Text",
-        "Int8",
-        "Text",
-        "Text",
-        "Text",
-        "Text",
-        "Text",
-        "Text",
-        "Text",
-        "Text",
-        "Timestamptz",
-        "Timestamptz",
-        "Timestamptz"
+        "Uuid"
       ]
     },
     "nullable": [
@@ -160,10 +144,11 @@
       true,
       true,
       true,
+      false,
       true,
       false,
       false
     ]
   },
-  "hash": "540fbd78270261365968b8f9ad4318c61f43cc8d28f6c70192bbd006822f7a1c"
+  "hash": "e2b87aa7191c5a676fa30d165f8cb53cce9f792e6627a4632acf4d578e67f99b"
 }

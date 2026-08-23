@@ -8,7 +8,8 @@ use events::EventEmitter;
 use serde_json::{Value, json};
 
 use crate::{
-    OrganizationId, Quote, QuoteId, QuoteLine, QuoteLineId, QuoteVatBreakdownLine,
+    Organization, OrganizationId, Quote, QuoteId, QuoteLine, QuoteLineId, QuoteStatus,
+    QuoteVatBreakdownLine,
     domain::{
         organization::{legal_identity::VatStatus, ports::OrganizationRepository},
         quote::{
@@ -54,21 +55,19 @@ where
         let now = Utc::now();
         let quote_id = QuoteId(generate_uuid_v7());
         validate_title(&command.title)?;
-        let reference = self
-            .repo
-            .next_reference(command.organization_id, now.year())
-            .await?;
-        let vat_status =
-            organization_vat_status(&mut organization_repository, command.organization_id).await?;
+        let organization =
+            resolve_organization(&mut organization_repository, command.organization_id).await?;
         let lines = build_quote_lines(command.organization_id, quote_id, command.lines, now)?;
-        let totals = calculate_totals(&lines, vat_status.as_ref())?;
+        let totals = calculate_totals(&lines, organization.vat_status.as_ref())?;
 
         let created = self
             .repo
             .insert(&Quote {
                 id: quote_id,
                 organization_id: command.organization_id,
-                reference,
+                // Allocated when the quote first leaves `Draft`, not here:
+                // see `QuoteRepository::allocate_number`.
+                reference: None,
                 title: command.title.trim().to_owned(),
                 customer_id: command.customer_id,
                 customer_context_id: command.customer_context_id,
@@ -119,17 +118,24 @@ where
         let existing = self.get_quote(command.id).await?;
         let now = Utc::now();
         validate_title(&command.title)?;
-        let vat_status =
-            organization_vat_status(&mut organization_repository, existing.organization_id).await?;
+        let organization =
+            resolve_organization(&mut organization_repository, existing.organization_id).await?;
         let lines = build_quote_lines(existing.organization_id, existing.id, command.lines, now)?;
-        let totals = calculate_totals(&lines, vat_status.as_ref())?;
+        let totals = calculate_totals(&lines, organization.vat_status.as_ref())?;
+        let newly_allocated = self
+            .allocate_reference_if_entering_sent(&existing, &organization, command.status)
+            .await?;
 
         let updated = self
             .repo
             .update(&Quote {
                 id: existing.id,
                 organization_id: existing.organization_id,
-                reference: existing.reference.clone(),
+                // Whichever number the quote already carries, or the one
+                // just allocated — the two can never both be `Some`,
+                // because `allocate_reference_if_entering_sent` never
+                // allocates a second one.
+                reference: existing.reference.clone().or(newly_allocated),
                 title: command.title.trim().to_owned(),
                 customer_id: command.customer_id,
                 customer_context_id: command.customer_context_id,
@@ -163,19 +169,55 @@ where
         Ok(updated)
     }
 
-    pub async fn update_quote_status(
+    pub async fn update_quote_status<O>(
         &mut self,
         command: UpdateQuoteStatusCommand,
-    ) -> Result<Quote, CoreError> {
+        mut organization_repository: O,
+    ) -> Result<Quote, CoreError>
+    where
+        O: OrganizationRepository,
+    {
         let existing = self.get_quote(command.id).await?;
+        let organization =
+            resolve_organization(&mut organization_repository, existing.organization_id).await?;
+        let reference = self
+            .allocate_reference_if_entering_sent(&existing, &organization, command.status)
+            .await?;
+
         let updated = self
             .repo
-            .update_status(command.id, command.status, Utc::now())
+            .update_status(command.id, command.status, reference, Utc::now())
             .await?;
 
         self.emit_transition(existing.status, &updated)?;
 
         Ok(updated)
+    }
+
+    /// `Some` only on the one call that allocates a fresh number — the
+    /// transition into `Sent` on a quote that has none yet. `None` in
+    /// every other case: already numbered, or not entering `Sent` at all.
+    /// Mirrors `QuoteRepository::update_status`'s contract exactly, so its
+    /// result can be handed straight to that port method; `update_quote`
+    /// still has to fold it with the quote's existing reference itself,
+    /// since it persists the whole struct rather than a `COALESCE`.
+    async fn allocate_reference_if_entering_sent(
+        &mut self,
+        existing: &Quote,
+        organization: &Organization,
+        target_status: QuoteStatus,
+    ) -> Result<Option<String>, CoreError> {
+        if existing.reference.is_some() || target_status != QuoteStatus::Sent {
+            return Ok(None);
+        }
+
+        let year = Utc::now().year();
+        let number = self
+            .repo
+            .allocate_number(organization.id, &organization.quote_number_prefix, year)
+            .await?;
+
+        Ok(Some(number))
     }
 
     /// Emits the named event for a landed transition. Silent when the status
@@ -203,20 +245,18 @@ where
     }
 }
 
-/// The organization's VAT status, or `None` when the organization has not
-/// stated one yet — treated the same as "not subject" for totals: quote
+/// The organization a quote belongs to — its VAT status (`None` when not
+/// stated yet, treated the same as "not subject" for totals: quote
 /// drafting must not block on legal-identity completeness, only issuing a
-/// document does (see #314).
-async fn organization_vat_status(
+/// document does, see #314) and its quote number prefix.
+async fn resolve_organization(
     organization_repository: &mut impl OrganizationRepository,
     organization_id: OrganizationId,
-) -> Result<Option<VatStatus>, CoreError> {
-    let organization = organization_repository
+) -> Result<Organization, CoreError> {
+    organization_repository
         .find_by_id(organization_id)
         .await?
-        .ok_or(CoreError::NotFound)?;
-
-    Ok(organization.vat_status)
+        .ok_or(CoreError::NotFound)
 }
 
 /// Which content fields moved, and what they held before.
@@ -520,7 +560,8 @@ mod tests {
         Quote {
             id,
             organization_id,
-            reference: "DEV-2026-0001".to_owned(),
+            // A draft has no number yet — see `Quote::reference`.
+            reference: None,
             title: "Rénovation cuisine".to_owned(),
             customer_id: CustomerId(Uuid::new_v4()),
             customer_context_id: CustomerContextId(Uuid::new_v4()),
@@ -570,6 +611,7 @@ mod tests {
             contact_email: None,
             contact_phone: None,
             insurance_mention: None,
+            quote_number_prefix: "DEV".to_owned(),
             deleted_at: None,
             created_at: now,
             updated_at: now,
@@ -598,9 +640,6 @@ mod tests {
     async fn create_quote_calculates_total_from_lines() {
         let organization_id = OrganizationId(Uuid::new_v4());
         let mut repo = MockQuoteRepository::new();
-        repo.expect_next_reference()
-            .times(1)
-            .returning(|_, _| Box::pin(async { Ok("DEV-2026-0001".to_owned()) }));
         repo.expect_insert().times(1).returning(|q| {
             let quote = q.clone();
             Box::pin(async move { Ok(quote) })
@@ -625,7 +664,10 @@ mod tests {
             .unwrap();
 
         assert_eq!(created.status, QuoteStatus::Draft);
-        assert_eq!(created.reference, "DEV-2026-0001");
+        assert_eq!(
+            created.reference, None,
+            "a draft has no number until it is sent"
+        );
         assert_eq!(created.title, "Rénovation cuisine");
         assert_eq!(created.net_cents, 3500);
         assert_eq!(created.gross_cents, 3500);
@@ -636,9 +678,6 @@ mod tests {
     async fn create_quote_breaks_vat_down_per_rate_for_a_subject_organization() {
         let organization_id = OrganizationId(Uuid::new_v4());
         let mut repo = MockQuoteRepository::new();
-        repo.expect_next_reference()
-            .times(1)
-            .returning(|_, _| Box::pin(async { Ok("DEV-2026-0001".to_owned()) }));
         repo.expect_insert().times(1).returning(|q| {
             let quote = q.clone();
             Box::pin(async move { Ok(quote) })
@@ -691,9 +730,6 @@ mod tests {
             ..organization_without_vat_status(organization_id)
         };
         let mut repo = MockQuoteRepository::new();
-        repo.expect_next_reference()
-            .times(1)
-            .returning(|_, _| Box::pin(async { Ok("DEV-2026-0001".to_owned()) }));
         repo.expect_insert().times(1).returning(|q| {
             let quote = q.clone();
             Box::pin(async move { Ok(quote) })
@@ -730,9 +766,6 @@ mod tests {
     async fn three_half_cent_vat_lines_round_per_line_then_sum() {
         let organization_id = OrganizationId(Uuid::new_v4());
         let mut repo = MockQuoteRepository::new();
-        repo.expect_next_reference()
-            .times(1)
-            .returning(|_, _| Box::pin(async { Ok("DEV-2026-0001".to_owned()) }));
         repo.expect_insert().times(1).returning(|q| {
             let quote = q.clone();
             Box::pin(async move { Ok(quote) })
@@ -788,6 +821,51 @@ mod tests {
                     title: "Version ajustée".to_owned(),
                     customer_id: CustomerId(Uuid::new_v4()),
                     customer_context_id: CustomerContextId(Uuid::new_v4()),
+                    status: QuoteStatus::Draft,
+                    lines: vec![line_command(Decimal::new(3, 0), 2000)],
+                },
+                mock_organization_repository(organization_without_vat_status(organization_id)),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(updated.status, QuoteStatus::Draft);
+        assert_eq!(
+            updated.reference, None,
+            "staying in draft allocates nothing"
+        );
+        assert_eq!(updated.title, "Version ajustée");
+        assert_eq!(updated.net_cents, 6000);
+    }
+
+    #[tokio::test]
+    async fn update_quote_allocates_a_number_when_it_first_enters_sent() {
+        let id = QuoteId(Uuid::new_v4());
+        let mut repo = MockQuoteRepository::new();
+        repo.expect_find_by_id()
+            .with(eq(id))
+            .returning(move |_| Box::pin(async move { Ok(Some(quote(id))) }));
+        repo.expect_allocate_number()
+            .withf(|_, prefix, year| prefix == "DEV" && *year == chrono::Utc::now().year())
+            .times(1)
+            .returning(|_, prefix, year| {
+                let reference = format!("{prefix}-{year}-0001");
+                Box::pin(async move { Ok(reference) })
+            });
+        repo.expect_update().times(1).returning(|q| {
+            let quote = q.clone();
+            Box::pin(async move { Ok(quote) })
+        });
+
+        let organization_id = quote(id).organization_id;
+        let mut service = QuoteService::new(repo, events::testing::RecordingEmitter::new());
+        let updated = service
+            .update_quote(
+                UpdateQuoteCommand {
+                    id,
+                    title: "Version ajustée".to_owned(),
+                    customer_id: CustomerId(Uuid::new_v4()),
+                    customer_context_id: CustomerContextId(Uuid::new_v4()),
                     status: QuoteStatus::Sent,
                     lines: vec![line_command(Decimal::new(3, 0), 2000)],
                 },
@@ -797,9 +875,8 @@ mod tests {
             .unwrap();
 
         assert_eq!(updated.status, QuoteStatus::Sent);
-        assert_eq!(updated.reference, "DEV-2026-0001");
-        assert_eq!(updated.title, "Version ajustée");
-        assert_eq!(updated.net_cents, 6000);
+        let year = chrono::Utc::now().year();
+        assert_eq!(updated.reference, Some(format!("DEV-{year}-0001")));
     }
 
     #[tokio::test]
@@ -809,19 +886,112 @@ mod tests {
         repo.expect_find_by_id()
             .with(eq(id))
             .returning(move |_| Box::pin(async move { Ok(Some(quote(id))) }));
+        // No `expect_allocate_number`: `Accepted` is not `Sent`, so nothing
+        // is allocated — a call the mock has not been told to expect would
+        // panic and fail this test.
         repo.expect_update_status()
-            .withf(move |quote_id, status, _| *quote_id == id && *status == QuoteStatus::Accepted)
-            .returning(move |_, _, _| Box::pin(async move { Ok(quote(id)) }));
+            .withf(move |quote_id, status, reference, _| {
+                *quote_id == id && *status == QuoteStatus::Accepted && reference.is_none()
+            })
+            .returning(move |_, _, _, _| Box::pin(async move { Ok(quote(id)) }));
 
+        let organization_id = quote(id).organization_id;
         let mut service = QuoteService::new(repo, events::testing::RecordingEmitter::new());
 
         service
-            .update_quote_status(UpdateQuoteStatusCommand {
-                id,
-                status: QuoteStatus::Accepted,
-            })
+            .update_quote_status(
+                UpdateQuoteStatusCommand {
+                    id,
+                    status: QuoteStatus::Accepted,
+                },
+                mock_organization_repository(organization_without_vat_status(organization_id)),
+            )
             .await
             .unwrap();
+    }
+
+    #[tokio::test]
+    async fn update_quote_status_allocates_a_number_when_it_first_enters_sent() {
+        let id = QuoteId(Uuid::new_v4());
+        let mut repo = MockQuoteRepository::new();
+        repo.expect_find_by_id()
+            .with(eq(id))
+            .returning(move |_| Box::pin(async move { Ok(Some(quote(id))) }));
+        repo.expect_allocate_number()
+            .times(1)
+            .returning(|_, prefix, year| {
+                let reference = format!("{prefix}-{year}-0001");
+                Box::pin(async move { Ok(reference) })
+            });
+        repo.expect_update_status()
+            .withf(move |quote_id, status, reference, _| {
+                *quote_id == id && *status == QuoteStatus::Sent && reference.is_some()
+            })
+            .returning(move |_, status, reference, _| {
+                let mut q = quote(id);
+                q.status = status;
+                q.reference = reference;
+                Box::pin(async move { Ok(q) })
+            });
+
+        let organization_id = quote(id).organization_id;
+        let mut service = QuoteService::new(repo, events::testing::RecordingEmitter::new());
+
+        let updated = service
+            .update_quote_status(
+                UpdateQuoteStatusCommand {
+                    id,
+                    status: QuoteStatus::Sent,
+                },
+                mock_organization_repository(organization_without_vat_status(organization_id)),
+            )
+            .await
+            .unwrap();
+
+        assert!(updated.reference.is_some());
+    }
+
+    #[tokio::test]
+    async fn a_quote_that_already_carries_a_number_never_gets_a_second_one() {
+        let id = QuoteId(Uuid::new_v4());
+        let already_sent = Quote {
+            status: QuoteStatus::Sent,
+            reference: Some("DEV-2026-0007".to_owned()),
+            ..quote(id)
+        };
+        let mut repo = MockQuoteRepository::new();
+        repo.expect_find_by_id().with(eq(id)).returning(move |_| {
+            let q = already_sent.clone();
+            Box::pin(async move { Ok(Some(q)) })
+        });
+        // No `expect_allocate_number`: restating `Sent` on an already-sent
+        // quote must not reallocate.
+        repo.expect_update_status()
+            .withf(|_, _, reference, _| reference.is_none())
+            .returning(move |_, _, _, _| {
+                let q = Quote {
+                    status: QuoteStatus::Sent,
+                    reference: Some("DEV-2026-0007".to_owned()),
+                    ..quote(id)
+                };
+                Box::pin(async move { Ok(q) })
+            });
+
+        let organization_id = quote(id).organization_id;
+        let mut service = QuoteService::new(repo, events::testing::RecordingEmitter::new());
+
+        let updated = service
+            .update_quote_status(
+                UpdateQuoteStatusCommand {
+                    id,
+                    status: QuoteStatus::Sent,
+                },
+                mock_organization_repository(organization_without_vat_status(organization_id)),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(updated.reference.as_deref(), Some("DEV-2026-0007"));
     }
 
     #[tokio::test]
@@ -892,10 +1062,7 @@ mod tests {
     #[tokio::test]
     async fn rejects_invalid_line_input() {
         let organization_id = OrganizationId(Uuid::new_v4());
-        let mut repo = MockQuoteRepository::new();
-        repo.expect_next_reference()
-            .times(1)
-            .returning(|_, _| Box::pin(async { Ok("DEV-2026-0001".to_owned()) }));
+        let repo = MockQuoteRepository::new();
         let mut service = QuoteService::new(repo, events::testing::RecordingEmitter::new());
         let result = service
             .create_quote(
@@ -916,10 +1083,7 @@ mod tests {
     #[tokio::test]
     async fn rejects_a_vat_rate_outside_the_valid_range() {
         let organization_id = OrganizationId(Uuid::new_v4());
-        let mut repo = MockQuoteRepository::new();
-        repo.expect_next_reference()
-            .times(1)
-            .returning(|_, _| Box::pin(async { Ok("DEV-2026-0001".to_owned()) }));
+        let repo = MockQuoteRepository::new();
         let mut service = QuoteService::new(repo, events::testing::RecordingEmitter::new());
         let mut line = line_command(Decimal::new(1, 0), 1000);
         line.vat_rate_bp = Some(10_001);
@@ -1032,6 +1196,7 @@ mod emission_tests {
                 contact_email: None,
                 contact_phone: None,
                 insurance_mention: None,
+                quote_number_prefix: "DEV".to_owned(),
                 deleted_at: None,
                 created_at: now,
                 updated_at: now,
@@ -1045,8 +1210,6 @@ mod emission_tests {
     async fn creating_a_quote_emits_created_and_nothing_else() {
         let organization_id = OrganizationId(Uuid::new_v4());
         let mut repo = MockQuoteRepository::new();
-        repo.expect_next_reference()
-            .returning(|_, _| Box::pin(async { Ok("DEV-2026-0001".to_owned()) }));
         repo.expect_insert().returning(|q| {
             let q = q.clone();
             Box::pin(async move { Ok(q) })
@@ -1143,6 +1306,12 @@ mod emission_tests {
             let q = stored.clone();
             Box::pin(async move { Ok(Some(q)) })
         });
+        repo.expect_allocate_number()
+            .times(1)
+            .returning(|_, prefix, year| {
+                let reference = format!("{prefix}-{year}-0001");
+                Box::pin(async move { Ok(reference) })
+            });
         repo.expect_update().returning(|q| {
             let q = q.clone();
             Box::pin(async move { Ok(q) })
@@ -1188,7 +1357,15 @@ mod emission_tests {
             });
             let mut landed = existing.clone();
             landed.status = status;
-            repo.expect_update_status().returning(move |_, _, _| {
+            // Only reached when `status` is `Sent`, on the one iteration
+            // whose starting quote (`quote(id)`, a draft) has no number yet
+            // — the mock permits any number of calls, including zero, when
+            // `.times()` is not stated.
+            repo.expect_allocate_number().returning(|_, prefix, year| {
+                let reference = format!("{prefix}-{year}-0001");
+                Box::pin(async move { Ok(reference) })
+            });
+            repo.expect_update_status().returning(move |_, _, _, _| {
                 let q = landed.clone();
                 Box::pin(async move { Ok(q) })
             });
@@ -1196,7 +1373,10 @@ mod emission_tests {
             let mut service = QuoteService::new(repo, &emitter);
 
             service
-                .update_quote_status(UpdateQuoteStatusCommand { id, status })
+                .update_quote_status(
+                    UpdateQuoteStatusCommand { id, status },
+                    no_vat_status_repo(),
+                )
                 .await
                 .unwrap();
 
@@ -1215,7 +1395,7 @@ mod emission_tests {
             Box::pin(async move { Ok(Some(q)) })
         });
         let landed = existing.clone();
-        repo.expect_update_status().returning(move |_, _, _| {
+        repo.expect_update_status().returning(move |_, _, _, _| {
             let q = landed.clone();
             Box::pin(async move { Ok(q) })
         });
@@ -1223,10 +1403,13 @@ mod emission_tests {
         let mut service = QuoteService::new(repo, &emitter);
 
         service
-            .update_quote_status(UpdateQuoteStatusCommand {
-                id,
-                status: existing.status,
-            })
+            .update_quote_status(
+                UpdateQuoteStatusCommand {
+                    id,
+                    status: existing.status,
+                },
+                no_vat_status_repo(),
+            )
             .await
             .unwrap();
 
@@ -1256,8 +1439,6 @@ mod emission_tests {
     async fn a_write_that_fails_emits_nothing() {
         let organization_id = OrganizationId(Uuid::new_v4());
         let mut repo = MockQuoteRepository::new();
-        repo.expect_next_reference()
-            .returning(|_, _| Box::pin(async { Ok("DEV-2026-0001".to_owned()) }));
         repo.expect_insert()
             .returning(|_| Box::pin(async { Err(CoreError::Conflict("nope".into())) }));
         let emitter = RecordingEmitter::new();

@@ -35,6 +35,11 @@ pub struct Organization {
     pub contact_email: Option<String>,
     pub contact_phone: Option<String>,
     pub insurance_mention: Option<String>,
+    /// The `{prefix}` in a quote number's `{prefix}-{year}-{counter}`
+    /// shape. Always present — `DEV` by default, from the column default —
+    /// unlike the legal-identity fields above: it blocks nothing, so
+    /// giving it one is free.
+    pub quote_number_prefix: String,
     pub deleted_at: Option<DateTime<Utc>>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,

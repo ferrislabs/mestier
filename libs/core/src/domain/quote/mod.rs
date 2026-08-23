@@ -137,7 +137,11 @@ pub struct QuoteVatBreakdownLine {
 pub struct Quote {
     pub id: QuoteId,
     pub organization_id: OrganizationId,
-    pub reference: String,
+    /// Allocated when the quote first leaves `Draft`, gapless and unique
+    /// per organization, and never reallocated afterwards — not on edit,
+    /// not on a further status change, not on a soft delete. `None` on a
+    /// draft: a deleted draft must not leave a hole in the sequence.
+    pub reference: Option<String>,
     pub title: String,
     pub customer_id: CustomerId,
     pub customer_context_id: CustomerContextId,

@@ -14,7 +14,7 @@ use crate::{
 pub struct QuoteRow {
     pub id: Uuid,
     pub org_id: Uuid,
-    pub reference: String,
+    pub reference: Option<String>,
     pub title: String,
     pub customer_id: Uuid,
     pub customer_context_id: Uuid,

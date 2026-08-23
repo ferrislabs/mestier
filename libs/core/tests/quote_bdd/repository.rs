@@ -33,19 +33,27 @@ pub fn quotes(store: &Store) -> MutexGuard<'_, Vec<Quote>> {
 pub fn stubbed(store: &Store) -> MockQuoteRepository {
     let mut repo = MockQuoteRepository::new();
 
-    // Same `DEV-<year>-NNNN` shape as the Postgres adapter, and derived from
-    // what the store holds, so the scenario stating a clean year is what
-    // produces `0001` rather than the stub asserting its own constant.
+    // Same `{prefix}-{year}-NNNN` shape as the Postgres adapter, and derived
+    // from what the store holds, so the scenario stating a clean year is
+    // what produces `0001` rather than the stub asserting its own constant.
     let store_ref = store.clone();
-    repo.expect_next_reference().returning(move |org, year| {
-        let prefix = format!("DEV-{year}-");
-        let count = quotes(&store_ref)
-            .iter()
-            .filter(|quote| quote.organization_id == org && quote.reference.starts_with(&prefix))
-            .count();
+    repo.expect_allocate_number()
+        .returning(move |org, prefix, year| {
+            let needle = format!("{prefix}-{year}-");
+            let count = quotes(&store_ref)
+                .iter()
+                .filter(|quote| {
+                    quote.organization_id == org
+                        && quote
+                            .reference
+                            .as_ref()
+                            .is_some_and(|reference| reference.starts_with(&needle))
+                })
+                .count();
+            let reference = format!("{needle}{:04}", count + 1);
 
-        Box::pin(async move { Ok(format!("{prefix}{:04}", count + 1)) })
-    });
+            Box::pin(async move { Ok(reference) })
+        });
 
     let store_ref = store.clone();
     repo.expect_insert().returning(move |quote| {
@@ -67,10 +75,13 @@ pub fn stubbed(store: &Store) -> MockQuoteRepository {
 
     let store_ref = store.clone();
     repo.expect_update_status()
-        .returning(move |id, status, updated_at| {
+        .returning(move |id, status, reference, updated_at| {
             let outcome = match quotes(&store_ref).iter_mut().find(|quote| quote.id == id) {
                 Some(quote) => {
                     quote.status = status;
+                    if let Some(reference) = reference {
+                        quote.reference = Some(reference);
+                    }
                     quote.updated_at = updated_at;
                     Ok(quote.clone())
                 }
@@ -109,6 +120,7 @@ pub fn stubbed_organization() -> MockOrganizationRepository {
             contact_email: None,
             contact_phone: None,
             insurance_mention: None,
+            quote_number_prefix: "DEV".to_owned(),
             deleted_at: None,
             created_at: now,
             updated_at: now,

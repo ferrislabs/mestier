@@ -62,7 +62,8 @@ impl From<QuoteVatBreakdownLine> for QuoteVatBreakdownLineResponse {
 pub struct QuoteResponse {
     pub id: QuoteId,
     pub organization_id: OrganizationId,
-    pub reference: String,
+    /// `None` on a draft: no number is allocated until the quote is sent.
+    pub reference: Option<String>,
     pub title: String,
     pub customer_id: CustomerId,
     pub customer_context_id: CustomerContextId,

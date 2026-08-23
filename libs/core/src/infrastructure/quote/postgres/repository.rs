@@ -24,37 +24,39 @@ impl<'tx> PgQuoteRepository<'tx> {
 }
 
 impl<'tx> QuoteRepository for PgQuoteRepository<'tx> {
-    async fn next_reference(
+    async fn allocate_number(
         &mut self,
         organization_id: OrganizationId,
+        prefix: &str,
         year: i32,
     ) -> Result<String, CoreError> {
         let mut tx = self.tx.lock().await;
 
-        sqlx::query!(
-            r#"SELECT pg_advisory_xact_lock(hashtextextended($1::text, 0))"#,
-            organization_id.0.to_string(),
-        )
-        .execute(&mut ***tx)
-        .await
-        .map_err(map_sqlx_error)?;
-
-        let prefix = format!("DEV-{year}-");
+        // `INSERT ... ON CONFLICT DO UPDATE` takes a row lock on the
+        // counter as soon as it detects the conflict, and holds it until
+        // this transaction commits or rolls back. A second allocation for
+        // the same organization and year — from a genuinely concurrent
+        // transaction — blocks on that lock rather than reading a stale
+        // `next_number`, which is what makes this safe under contention
+        // without a separate `SELECT ... FOR UPDATE` step.
         let next_number: i32 = sqlx::query_scalar!(
             r#"
-            SELECT COALESCE(MAX(substring(reference FROM $2)::INTEGER), 0) + 1 AS "next_number!"
-            FROM quotes
-            WHERE org_id = $1 AND reference LIKE $3
+            INSERT INTO quote_number_counters (organization_id, year, next_number)
+            VALUES ($1, $2, 1)
+            ON CONFLICT (organization_id, year)
+            DO UPDATE SET
+                next_number = quote_number_counters.next_number + 1,
+                updated_at = now()
+            RETURNING next_number
             "#,
             organization_id.0,
-            (prefix.len() + 1) as i32,
-            format!("{prefix}%"),
+            year,
         )
         .fetch_one(&mut ***tx)
         .await
         .map_err(map_sqlx_error)?;
 
-        Ok(format!("{prefix}{next_number:04}"))
+        Ok(format!("{prefix}-{year}-{next_number:04}"))
     }
 
     async fn insert(&mut self, quote: &Quote) -> Result<Quote, CoreError> {
@@ -161,18 +163,20 @@ impl<'tx> QuoteRepository for PgQuoteRepository<'tx> {
             QuoteRow,
             r#"
             UPDATE quotes
-            SET title = $2,
-                customer_id = $3,
-                customer_context_id = $4,
-                status = CAST($5 AS text)::quote_status,
-                net_cents = $6,
-                vat_breakdown = $7,
-                gross_cents = $8,
-                updated_at = $9
+            SET reference = $2,
+                title = $3,
+                customer_id = $4,
+                customer_context_id = $5,
+                status = CAST($6 AS text)::quote_status,
+                net_cents = $7,
+                vat_breakdown = $8,
+                gross_cents = $9,
+                updated_at = $10
             WHERE id = $1 AND deleted_at IS NULL
             RETURNING id, org_id, reference, title, customer_id, customer_context_id, status::text AS "status!", net_cents, vat_breakdown, gross_cents, deleted_at, created_at, updated_at
             "#,
             quote.id.0,
+            quote.reference,
             quote.title,
             quote.customer_id.0,
             quote.customer_context_id.0,
@@ -209,6 +213,7 @@ impl<'tx> QuoteRepository for PgQuoteRepository<'tx> {
         &mut self,
         id: QuoteId,
         status: QuoteStatus,
+        reference: Option<String>,
         updated_at: DateTime<Utc>,
     ) -> Result<Quote, CoreError> {
         let mut tx = self.tx.lock().await;
@@ -216,12 +221,15 @@ impl<'tx> QuoteRepository for PgQuoteRepository<'tx> {
             QuoteRow,
             r#"
             UPDATE quotes
-            SET status = CAST($2 AS text)::quote_status, updated_at = $3
+            SET status = CAST($2 AS text)::quote_status,
+                reference = COALESCE($3, reference),
+                updated_at = $4
             WHERE id = $1 AND deleted_at IS NULL
             RETURNING id, org_id, reference, title, customer_id, customer_context_id, status::text AS "status!", net_cents, vat_breakdown, gross_cents, deleted_at, created_at, updated_at
             "#,
             id.0,
             status.as_str(),
+            reference,
             updated_at,
         )
         .fetch_optional(&mut ***tx)
@@ -337,4 +345,140 @@ async fn insert_lines(conn: &mut PgConnection, lines: &[QuoteLine]) -> Result<()
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use common::generate_uuid_v7;
+    use sqlx::PgPool;
+
+    use super::*;
+    use crate::application::test_support::{dev_pool, purge};
+    use crate::infrastructure::postgres::with_tx;
+
+    async fn seed_organization(pool: &PgPool, label: &str) -> OrganizationId {
+        let owner_id = generate_uuid_v7();
+        sqlx::query!(
+            r#"INSERT INTO users (id, email, username, display_name, sub)
+               VALUES ($1, $2, $3, $4, $5)"#,
+            owner_id,
+            format!("owner-{owner_id}@example.com"),
+            format!("owner-{owner_id}"),
+            "Owner User",
+            format!("sub-owner-{owner_id}"),
+        )
+        .execute(pool)
+        .await
+        .unwrap();
+
+        let org_id = generate_uuid_v7();
+        sqlx::query!(
+            r#"INSERT INTO organizations (id, name, slug, owner_id)
+               VALUES ($1, $2, $3, $4)"#,
+            org_id,
+            format!("{label} Org"),
+            format!("{label}-{org_id}"),
+            owner_id,
+        )
+        .execute(pool)
+        .await
+        .unwrap();
+
+        OrganizationId(org_id)
+    }
+
+    async fn cleanup(pool: &PgPool, org_id: OrganizationId, owner_id: uuid::Uuid) {
+        purge(
+            pool,
+            "DELETE FROM quote_number_counters WHERE organization_id = $1",
+            org_id.0,
+        )
+        .await;
+        purge(pool, "DELETE FROM organizations WHERE id = $1", org_id.0).await;
+        purge(pool, "DELETE FROM users WHERE id = $1", owner_id).await;
+    }
+
+    #[tokio::test]
+    #[ignore = "requires live postgres"]
+    async fn allocate_number_is_gapless_and_sequential_within_one_transaction() {
+        let pool = dev_pool().await;
+        let org_id = seed_organization(&pool, "sequential").await;
+
+        let first = with_tx(&pool, async |tx| {
+            let mut repo = PgQuoteRepository::new(&tx);
+            repo.allocate_number(org_id, "DEV", 2026).await
+        })
+        .await
+        .unwrap();
+        let second = with_tx(&pool, async |tx| {
+            let mut repo = PgQuoteRepository::new(&tx);
+            repo.allocate_number(org_id, "DEV", 2026).await
+        })
+        .await
+        .unwrap();
+        let different_year = with_tx(&pool, async |tx| {
+            let mut repo = PgQuoteRepository::new(&tx);
+            repo.allocate_number(org_id, "DEV", 2027).await
+        })
+        .await
+        .unwrap();
+
+        assert_eq!(first, "DEV-2026-0001");
+        assert_eq!(second, "DEV-2026-0002");
+        assert_eq!(
+            different_year, "DEV-2027-0001",
+            "the counter is per year, not just per organization"
+        );
+
+        let owner_id =
+            sqlx::query_scalar!("SELECT owner_id FROM organizations WHERE id = $1", org_id.0)
+                .fetch_one(&pool)
+                .await
+                .unwrap();
+        cleanup(&pool, org_id, owner_id).await;
+    }
+
+    /// The rule that makes this safe: `INSERT ... ON CONFLICT DO UPDATE`
+    /// takes a row lock on the counter as soon as it detects the conflict,
+    /// and holds it until the transaction that took it commits or rolls
+    /// back. Two allocations for the same organization and year, started at
+    /// the same instant from two different connections, must therefore
+    /// still land on two different numbers — asserted here against a real
+    /// database under real contention, not asserted in a comment.
+    #[tokio::test]
+    #[ignore = "requires live postgres"]
+    async fn concurrent_allocations_for_the_same_organization_and_year_never_collide() {
+        let pool = dev_pool().await;
+        let org_id = seed_organization(&pool, "contention").await;
+
+        let pool_a = pool.clone();
+        let pool_b = pool.clone();
+
+        let (a, b) = tokio::join!(
+            with_tx(&pool_a, async |tx| {
+                let mut repo = PgQuoteRepository::new(&tx);
+                repo.allocate_number(org_id, "DEV", 2026).await
+            }),
+            with_tx(&pool_b, async |tx| {
+                let mut repo = PgQuoteRepository::new(&tx);
+                repo.allocate_number(org_id, "DEV", 2026).await
+            }),
+        );
+
+        let mut numbers = [a.unwrap(), b.unwrap()];
+        numbers.sort();
+
+        assert_eq!(
+            numbers,
+            ["DEV-2026-0001".to_owned(), "DEV-2026-0002".to_owned()],
+            "two concurrent allocations for the same organization and year must never collide"
+        );
+
+        let owner_id =
+            sqlx::query_scalar!("SELECT owner_id FROM organizations WHERE id = $1", org_id.0)
+                .fetch_one(&pool)
+                .await
+                .unwrap();
+        cleanup(&pool, org_id, owner_id).await;
+    }
 }
