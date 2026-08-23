@@ -15,6 +15,7 @@ use axum::{Router, middleware::from_fn_with_state};
 use handlers::{ApiError, AppState, auth::auth_middleware, rate_limit::rate_limit_middleware};
 use mestier_core::OrganizationId;
 
+pub mod assignment_report;
 pub mod paths;
 pub mod planning;
 pub mod project;
@@ -83,6 +84,7 @@ pub(crate) async fn require_member_target(
 
 pub fn router(state: &AppState) -> Router<AppState> {
     Router::new()
+        .merge(assignment_report::router(state))
         .merge(task::router(state))
         .merge(task_comment::router(state))
         .merge(task_label::router(state))

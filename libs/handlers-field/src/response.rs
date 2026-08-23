@@ -1,7 +1,9 @@
 use chrono::{DateTime, NaiveDate, Utc};
 use mestier_core::{
-    CustomerContextId, CustomerId, DayLog, DayLogId, EmployeeId, OrganizationId, Task, TaskId,
-    TaskStatus, TimeEntry, TimeEntryId, TimeEntryPhoto, TimeEntryPhotoId, TimeEntryPhotoPhase,
+    AssignmentReport, AssignmentReportId, AssignmentReportResolution, CustomerContextId,
+    CustomerId, DayLog, DayLogId, EmployeeId, MemberId, OrganizationId, Task, TaskAssignmentId,
+    TaskId, TaskStatus, TimeEntry, TimeEntryId, TimeEntryPhoto, TimeEntryPhotoId,
+    TimeEntryPhotoPhase,
 };
 use serde::Serialize;
 use utoipa::ToSchema;
@@ -109,6 +111,45 @@ pub struct FieldTaskResponse {
     pub status: TaskStatus,
     pub customer_id: Option<CustomerId>,
     pub customer_context_id: Option<CustomerContextId>,
+}
+
+/// The worker's report of an assignment's actual duration, and whatever a
+/// manager has decided about it so far — never a rate or a cost. See
+/// `field-day-feature.tsx`'s "minutes, not money" rule: this screen has
+/// nothing to say about anyone's salary.
+#[derive(Debug, Clone, PartialEq, Serialize, ToSchema)]
+pub struct AssignmentReportResponse {
+    pub id: AssignmentReportId,
+    pub organization_id: OrganizationId,
+    pub task_assignment_id: TaskAssignmentId,
+    pub reported_minutes: u32,
+    pub comment: Option<String>,
+    pub reported_by: MemberId,
+    pub resolution: AssignmentReportResolution,
+    pub resolved_by: Option<MemberId>,
+    pub resolved_at: Option<DateTime<Utc>>,
+    pub resolution_note: Option<String>,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+}
+
+impl From<AssignmentReport> for AssignmentReportResponse {
+    fn from(value: AssignmentReport) -> Self {
+        Self {
+            id: value.id,
+            organization_id: value.organization_id,
+            task_assignment_id: value.task_assignment_id,
+            reported_minutes: value.reported_minutes,
+            comment: value.comment,
+            reported_by: value.reported_by,
+            resolution: value.resolution,
+            resolved_by: value.resolved_by,
+            resolved_at: value.resolved_at,
+            resolution_note: value.resolution_note,
+            created_at: value.created_at,
+            updated_at: value.updated_at,
+        }
+    }
 }
 
 impl From<Task> for FieldTaskResponse {

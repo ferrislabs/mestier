@@ -22,6 +22,10 @@ pub struct App {
     pub task_id: Uuid,
     /// A second employee's job, used to prove one worker cannot touch another's.
     pub other_task_id: Uuid,
+    pub task_assignment_id: Uuid,
+    /// The assignment of `other_task_id` to the second employee — used to
+    /// prove reporting on someone else's assignment is refused.
+    pub other_task_assignment_id: Uuid,
     user_id: Uuid,
     other_user_id: Uuid,
 }
@@ -69,6 +73,8 @@ pub async fn start() -> App {
         organization_id: fixture.organization_id,
         task_id: fixture.task_id,
         other_task_id: fixture.other_task_id,
+        task_assignment_id: fixture.task_assignment_id,
+        other_task_assignment_id: fixture.other_task_assignment_id,
         user_id: fixture.user_id,
         other_user_id: fixture.other_user_id,
     }
@@ -90,6 +96,20 @@ impl App {
     pub fn entry_url(&self, entry_id: &str, suffix: &str) -> String {
         format!(
             "{}/api/v1/field/time-entries/{entry_id}{suffix}",
+            self.base_url
+        )
+    }
+
+    pub fn report_assignment_url(&self, task_assignment_id: Uuid) -> String {
+        format!(
+            "{}/api/v1/organizations/{}/field/assignments/{task_assignment_id}/report",
+            self.base_url, self.organization_id
+        )
+    }
+
+    pub fn assignment_report_url(&self, assignment_report_id: &str) -> String {
+        format!(
+            "{}/api/v1/field/assignment-reports/{assignment_report_id}",
             self.base_url
         )
     }
@@ -158,6 +178,8 @@ struct Fixture {
     organization_id: Uuid,
     task_id: Uuid,
     other_task_id: Uuid,
+    task_assignment_id: Uuid,
+    other_task_assignment_id: Uuid,
 }
 
 /// Two employees, each with a job today. The second exists so the suite can
@@ -180,8 +202,10 @@ async fn seed(pool: &PgPool) -> Fixture {
     // Storable, like everything else here: nothing compares this instant back
     // today, but the next assertion that does would fail on Linux only.
     let now = now_storable();
-    let task_id = seed_task(pool, organization_id, customer_id, member_id, now).await;
-    let other_task_id = seed_task(pool, organization_id, customer_id, other_member_id, now).await;
+    let (task_id, task_assignment_id) =
+        seed_task(pool, organization_id, customer_id, member_id, now).await;
+    let (other_task_id, other_task_assignment_id) =
+        seed_task(pool, organization_id, customer_id, other_member_id, now).await;
 
     Fixture {
         sub,
@@ -190,6 +214,8 @@ async fn seed(pool: &PgPool) -> Fixture {
         organization_id,
         task_id,
         other_task_id,
+        task_assignment_id,
+        other_task_assignment_id,
     }
 }
 
@@ -260,7 +286,7 @@ async fn seed_task(
     customer_id: Uuid,
     member_id: Uuid,
     now: DateTime<Utc>,
-) -> Uuid {
+) -> (Uuid, Uuid) {
     let task_id = Uuid::now_v7();
     sqlx::query(
         "INSERT INTO tasks (id, org_id, customer_id, starts_at, ends_at, all_day, status, title)
@@ -277,10 +303,11 @@ async fn seed_task(
     .await
     .expect("seed the task");
 
+    let task_assignment_id = Uuid::now_v7();
     sqlx::query(
         "INSERT INTO task_assignments (id, org_id, task_id, member_id) VALUES ($1, $2, $3, $4)",
     )
-    .bind(Uuid::now_v7())
+    .bind(task_assignment_id)
     .bind(organization_id)
     .bind(task_id)
     .bind(member_id)
@@ -288,7 +315,7 @@ async fn seed_task(
     .await
     .expect("seed the assignment");
 
-    task_id
+    (task_id, task_assignment_id)
 }
 
 fn args_for(database_url: &str, redis_url: &str, issuer_url: &str) -> Vec<String> {
