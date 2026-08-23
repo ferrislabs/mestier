@@ -36,6 +36,8 @@ pub struct Product {
     pub sku: Option<String>,
     pub unit: ServiceRateUnit,
     pub unit_price_cents: i32,
+    /// Basis points a quote line prefills from when it picks this product.
+    pub default_vat_rate_bp: Option<i32>,
     pub description: Option<String>,
     pub deleted_at: Option<DateTime<Utc>>,
     pub created_at: DateTime<Utc>,

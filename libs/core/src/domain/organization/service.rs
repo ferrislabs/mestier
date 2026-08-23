@@ -26,7 +26,9 @@ use crate::{
         member::{Member, MemberId, ports::MemberRepository},
         organization::{
             Organization, OrganizationId,
-            commands::{CreateOrganizationCommand, UpdateOrganizationCommand},
+            commands::{
+                CreateOrganizationCommand, UpdateLegalIdentityCommand, UpdateOrganizationCommand,
+            },
             ports::OrganizationRepository,
         },
         role::{
@@ -154,6 +156,55 @@ where
             .map_err(map_organization_conflict)
     }
 
+    /// Replaces the legal-identity block in full — see
+    /// `UpdateLegalIdentityCommand` for why a `None` field clears rather
+    /// than skips. Gated by the same `organization.update` permission as
+    /// name/slug: both are organization-level administration.
+    #[tracing::instrument(skip(self), fields(organization_id = %command.id.0), err)]
+    pub async fn update_legal_identity(
+        &mut self,
+        command: UpdateLegalIdentityCommand,
+    ) -> Result<Organization, CoreError> {
+        let mut organization = self
+            .organization_repository
+            .find_by_id(command.id)
+            .await?
+            .ok_or(CoreError::NotFound)?;
+
+        let actor = policy::enrich_for_organization(
+            command.actor,
+            organization.id,
+            &mut self.member_repository,
+            &mut self.role_repository,
+        )
+        .await?;
+        policy::require(
+            &self.authz,
+            &actor,
+            "organization.update",
+            Resource::new("organization", organization.id.0.to_string())
+                .with_property("mestier.slug", organization.slug.clone()),
+        )
+        .await?;
+
+        organization.legal_name = command.legal_name;
+        organization.legal_form = command.legal_form;
+        organization.registration_number = command.registration_number;
+        organization.vat_status = command.vat_status;
+        organization.share_capital_cents = command.share_capital_cents;
+        organization.address_line1 = command.address_line1;
+        organization.address_line2 = command.address_line2;
+        organization.address_postal_code = command.address_postal_code;
+        organization.address_city = command.address_city;
+        organization.address_country = command.address_country;
+        organization.contact_email = command.contact_email;
+        organization.contact_phone = command.contact_phone;
+        organization.insurance_mention = command.insurance_mention;
+        organization.updated_at = Utc::now();
+
+        self.organization_repository.update(&organization).await
+    }
+
     #[tracing::instrument(skip(self), fields(organization_id = %id.0), err)]
     pub async fn soft_delete_organization(&mut self, id: OrganizationId) -> Result<(), CoreError> {
         self.organization_repository
@@ -204,6 +255,20 @@ where
                 name: command.name,
                 slug: command.slug,
                 owner_id: user.id,
+                legal_name: None,
+                legal_form: None,
+                registration_number: None,
+                vat_status: None,
+                share_capital_cents: None,
+                address_line1: None,
+                address_line2: None,
+                address_postal_code: None,
+                address_city: None,
+                address_country: None,
+                contact_email: None,
+                contact_phone: None,
+                insurance_mention: None,
+                quote_number_prefix: "DEV".to_owned(),
                 deleted_at: None,
                 created_at: now,
                 updated_at: now,
@@ -330,6 +395,20 @@ mod tests {
             name: "Acme".into(),
             slug: "acme".into(),
             owner_id: UserId(Uuid::new_v4()),
+            legal_name: None,
+            legal_form: None,
+            registration_number: None,
+            vat_status: None,
+            share_capital_cents: None,
+            address_line1: None,
+            address_line2: None,
+            address_postal_code: None,
+            address_city: None,
+            address_country: None,
+            contact_email: None,
+            contact_phone: None,
+            insurance_mention: None,
+            quote_number_prefix: "DEV".to_owned(),
             deleted_at: None,
             created_at: now,
             updated_at: now,
@@ -470,15 +549,7 @@ mod tests {
             .expect_update()
             .times(1)
             .returning(|o| {
-                let cloned = Organization {
-                    id: o.id,
-                    name: o.name.clone(),
-                    slug: o.slug.clone(),
-                    owner_id: o.owner_id,
-                    deleted_at: o.deleted_at,
-                    created_at: o.created_at,
-                    updated_at: o.updated_at,
-                };
+                let cloned = o.clone();
                 Box::pin(async move { Ok(cloned) })
             });
 
@@ -651,6 +722,155 @@ mod tests {
         assert!(matches!(err, CoreError::Forbidden { .. }));
     }
 
+    fn legal_identity_command(
+        id: OrganizationId,
+        actor: authz::Subject,
+    ) -> UpdateLegalIdentityCommand {
+        UpdateLegalIdentityCommand {
+            actor,
+            id,
+            legal_name: Some("Acme SARL".into()),
+            legal_form: Some("SARL".into()),
+            registration_number: Some("123 456 789 00012".into()),
+            vat_status: Some(
+                crate::domain::organization::legal_identity::VatStatus::Subject {
+                    vat_number: "FR12345678901".into(),
+                },
+            ),
+            share_capital_cents: Some(1_000_000),
+            address_line1: Some("12 rue des Artisans".into()),
+            address_line2: None,
+            address_postal_code: Some("75001".into()),
+            address_city: Some("Paris".into()),
+            address_country: Some("FR".into()),
+            contact_email: Some("contact@acme.fr".into()),
+            contact_phone: None,
+            insurance_mention: Some("RC Pro n°123456 - MAAF Assurances".into()),
+        }
+    }
+
+    #[tokio::test]
+    async fn update_legal_identity_mutates_and_saves() {
+        let id = OrganizationId(Uuid::new_v4());
+        let user_id = UserId(Uuid::new_v4());
+        let member_id = MemberId(Uuid::new_v4());
+
+        let mut organization_repository = MockOrganizationRepository::new();
+        let mut role_repository = MockRoleRepository::new();
+        let mut member_repository = MockMemberRepository::new();
+        let user_repository = MockUserRepository::new();
+
+        organization_repository
+            .expect_find_by_id()
+            .with(eq(id))
+            .times(1)
+            .returning(move |id| {
+                let org = fixture(id);
+                Box::pin(async move { Ok(Some(org)) })
+            });
+        stage_org_membership(
+            &mut member_repository,
+            &mut role_repository,
+            id,
+            user_id,
+            member_id,
+        );
+        organization_repository
+            .expect_update()
+            .times(1)
+            .returning(|o| {
+                let cloned = o.clone();
+                Box::pin(async move { Ok(cloned) })
+            });
+
+        let mut authz = MockAuthorizer::new();
+        authz
+            .expect_evaluate()
+            .times(1)
+            .returning(|_| Box::pin(async { Ok(Decision::allow()) }));
+
+        let mut service = OrganizationService::new(
+            organization_repository,
+            role_repository,
+            member_repository,
+            user_repository,
+            authz,
+        );
+
+        let updated = service
+            .update_legal_identity(legal_identity_command(id, actor_for(user_id)))
+            .await
+            .unwrap();
+
+        assert_eq!(updated.legal_name.as_deref(), Some("Acme SARL"));
+        assert_eq!(
+            updated.vat_status,
+            Some(
+                crate::domain::organization::legal_identity::VatStatus::Subject {
+                    vat_number: "FR12345678901".into()
+                }
+            )
+        );
+        assert_eq!(updated.address_city.as_deref(), Some("Paris"));
+    }
+
+    #[tokio::test]
+    async fn update_legal_identity_clears_fields_left_none() {
+        let id = OrganizationId(Uuid::new_v4());
+        let user_id = UserId(Uuid::new_v4());
+        let member_id = MemberId(Uuid::new_v4());
+
+        let mut organization_repository = MockOrganizationRepository::new();
+        let mut role_repository = MockRoleRepository::new();
+        let mut member_repository = MockMemberRepository::new();
+        let user_repository = MockUserRepository::new();
+
+        organization_repository
+            .expect_find_by_id()
+            .with(eq(id))
+            .times(1)
+            .returning(move |id| {
+                let mut org = fixture(id);
+                org.legal_name = Some("Old Name".into());
+                Box::pin(async move { Ok(Some(org)) })
+            });
+        stage_org_membership(
+            &mut member_repository,
+            &mut role_repository,
+            id,
+            user_id,
+            member_id,
+        );
+        organization_repository
+            .expect_update()
+            .times(1)
+            .returning(|o| {
+                let cloned = o.clone();
+                Box::pin(async move { Ok(cloned) })
+            });
+
+        let mut authz = MockAuthorizer::new();
+        authz
+            .expect_evaluate()
+            .times(1)
+            .returning(|_| Box::pin(async { Ok(Decision::allow()) }));
+
+        let mut service = OrganizationService::new(
+            organization_repository,
+            role_repository,
+            member_repository,
+            user_repository,
+            authz,
+        );
+
+        let mut command = legal_identity_command(id, actor_for(user_id));
+        command.legal_name = None;
+
+        let updated = service.update_legal_identity(command).await.unwrap();
+
+        assert_eq!(updated.legal_name, None);
+    }
+
     #[tokio::test]
     async fn soft_delete_organization_calls_repo() {
         let id = OrganizationId(Uuid::new_v4());
@@ -799,15 +1019,7 @@ mod tests {
             .expect_insert()
             .times(1)
             .returning(|o| {
-                let cloned = Organization {
-                    id: o.id,
-                    name: o.name.clone(),
-                    slug: o.slug.clone(),
-                    owner_id: o.owner_id,
-                    deleted_at: o.deleted_at,
-                    created_at: o.created_at,
-                    updated_at: o.updated_at,
-                };
+                let cloned = o.clone();
                 Box::pin(async move { Ok(cloned) })
             });
 
@@ -890,15 +1102,7 @@ mod tests {
             .expect_insert()
             .times(1)
             .returning(|o| {
-                let cloned = Organization {
-                    id: o.id,
-                    name: o.name.clone(),
-                    slug: o.slug.clone(),
-                    owner_id: o.owner_id,
-                    deleted_at: o.deleted_at,
-                    created_at: o.created_at,
-                    updated_at: o.updated_at,
-                };
+                let cloned = o.clone();
                 Box::pin(async move { Ok(cloned) })
             });
         role_repository.expect_insert().times(3).returning(|r| {
@@ -1040,6 +1244,20 @@ mod tests {
                     name: "Acme".into(),
                     slug: "acme".into(),
                     owner_id,
+                    legal_name: None,
+                    legal_form: None,
+                    registration_number: None,
+                    vat_status: None,
+                    share_capital_cents: None,
+                    address_line1: None,
+                    address_line2: None,
+                    address_postal_code: None,
+                    address_city: None,
+                    address_country: None,
+                    contact_email: None,
+                    contact_phone: None,
+                    insurance_mention: None,
+                    quote_number_prefix: "DEV".to_owned(),
                     deleted_at: None,
                     created_at: now,
                     updated_at: now,
@@ -1087,6 +1305,20 @@ mod tests {
                     name: "Acme".into(),
                     slug: "acme".into(),
                     owner_id,
+                    legal_name: None,
+                    legal_form: None,
+                    registration_number: None,
+                    vat_status: None,
+                    share_capital_cents: None,
+                    address_line1: None,
+                    address_line2: None,
+                    address_postal_code: None,
+                    address_city: None,
+                    address_country: None,
+                    contact_email: None,
+                    contact_phone: None,
+                    insurance_mention: None,
+                    quote_number_prefix: "DEV".to_owned(),
                     deleted_at: None,
                     created_at: now,
                     updated_at: now,

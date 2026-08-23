@@ -13,6 +13,8 @@ pub struct UpdateProductRequest {
     pub sku: Option<String>,
     pub unit: ServiceRateUnit,
     pub unit_price_cents: i32,
+    #[serde(default)]
+    pub default_vat_rate_bp: Option<i32>,
     pub description: Option<String>,
 }
 
@@ -54,6 +56,7 @@ pub async fn handler(
             sku: payload.sku,
             unit: payload.unit,
             unit_price_cents: payload.unit_price_cents,
+            default_vat_rate_bp: payload.default_vat_rate_bp,
             description: payload.description,
         })
         .await?;

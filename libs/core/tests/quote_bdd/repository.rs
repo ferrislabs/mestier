@@ -11,8 +11,10 @@
 
 use std::sync::{Arc, Mutex, MutexGuard};
 
+use chrono::Utc;
 use common::CoreError;
-use mestier_core::{MockQuoteRepository, Quote};
+use mestier_core::{MockOrganizationRepository, MockQuoteRepository, Organization, Quote, UserId};
+use uuid::Uuid;
 
 /// Shared between the `World` and every mock built from it.
 pub type Store = Arc<Mutex<Vec<Quote>>>;
@@ -31,19 +33,27 @@ pub fn quotes(store: &Store) -> MutexGuard<'_, Vec<Quote>> {
 pub fn stubbed(store: &Store) -> MockQuoteRepository {
     let mut repo = MockQuoteRepository::new();
 
-    // Same `DEV-<year>-NNNN` shape as the Postgres adapter, and derived from
-    // what the store holds, so the scenario stating a clean year is what
-    // produces `0001` rather than the stub asserting its own constant.
+    // Same `{prefix}-{year}-NNNN` shape as the Postgres adapter, and derived
+    // from what the store holds, so the scenario stating a clean year is
+    // what produces `0001` rather than the stub asserting its own constant.
     let store_ref = store.clone();
-    repo.expect_next_reference().returning(move |org, year| {
-        let prefix = format!("DEV-{year}-");
-        let count = quotes(&store_ref)
-            .iter()
-            .filter(|quote| quote.organization_id == org && quote.reference.starts_with(&prefix))
-            .count();
+    repo.expect_allocate_number()
+        .returning(move |org, prefix, year| {
+            let needle = format!("{prefix}-{year}-");
+            let count = quotes(&store_ref)
+                .iter()
+                .filter(|quote| {
+                    quote.organization_id == org
+                        && quote
+                            .reference
+                            .as_ref()
+                            .is_some_and(|reference| reference.starts_with(&needle))
+                })
+                .count();
+            let reference = format!("{needle}{:04}", count + 1);
 
-        Box::pin(async move { Ok(format!("{prefix}{:04}", count + 1)) })
-    });
+            Box::pin(async move { Ok(reference) })
+        });
 
     let store_ref = store.clone();
     repo.expect_insert().returning(move |quote| {
@@ -65,10 +75,13 @@ pub fn stubbed(store: &Store) -> MockQuoteRepository {
 
     let store_ref = store.clone();
     repo.expect_update_status()
-        .returning(move |id, status, updated_at| {
+        .returning(move |id, status, reference, updated_at| {
             let outcome = match quotes(&store_ref).iter_mut().find(|quote| quote.id == id) {
                 Some(quote) => {
                     quote.status = status;
+                    if let Some(reference) = reference {
+                        quote.reference = Some(reference);
+                    }
                     quote.updated_at = updated_at;
                     Ok(quote.clone())
                 }
@@ -78,5 +91,41 @@ pub fn stubbed(store: &Store) -> MockQuoteRepository {
             Box::pin(async move { outcome })
         });
 
+    repo
+}
+
+/// A stub for the one thing `QuoteService` reads off the organization: its
+/// VAT status. No scenario in `quote.feature` states one, so every company
+/// here is unregistered for VAT — the same "not stated yet" default the
+/// domain applies.
+pub fn stubbed_organization() -> MockOrganizationRepository {
+    let mut repo = MockOrganizationRepository::new();
+    repo.expect_find_by_id().returning(move |id| {
+        let now = Utc::now();
+        let organization = Organization {
+            id,
+            name: "Scenario company".into(),
+            slug: "scenario-company".into(),
+            owner_id: UserId(Uuid::new_v4()),
+            legal_name: None,
+            legal_form: None,
+            registration_number: None,
+            vat_status: None,
+            share_capital_cents: None,
+            address_line1: None,
+            address_line2: None,
+            address_postal_code: None,
+            address_city: None,
+            address_country: None,
+            contact_email: None,
+            contact_phone: None,
+            insurance_mention: None,
+            quote_number_prefix: "DEV".to_owned(),
+            deleted_at: None,
+            created_at: now,
+            updated_at: now,
+        };
+        Box::pin(async move { Ok(Some(organization)) })
+    });
     repo
 }

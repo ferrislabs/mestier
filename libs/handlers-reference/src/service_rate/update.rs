@@ -12,6 +12,8 @@ pub struct UpdateServiceRateRequest {
     pub label: String,
     pub unit: ServiceRateUnit,
     pub rate_cents: i32,
+    #[serde(default)]
+    pub default_vat_rate_bp: Option<i32>,
 }
 
 #[utoipa::path(
@@ -51,6 +53,7 @@ pub async fn handler(
             label: payload.label,
             unit: payload.unit,
             rate_cents: payload.rate_cents,
+            default_vat_rate_bp: payload.default_vat_rate_bp,
         })
         .await?;
 

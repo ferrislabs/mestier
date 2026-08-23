@@ -13,5 +13,11 @@ pub struct OrganizationPath {
 }
 
 #[derive(TypedPath, Deserialize)]
+#[typed_path("/api/v1/organizations/{organization_id}/legal-identity")]
+pub struct OrganizationLegalIdentityPath {
+    pub organization_id: OrganizationId,
+}
+
+#[derive(TypedPath, Deserialize)]
 #[typed_path("/api/v1/users/@me/organizations")]
 pub struct CurrentUserOrganizationsPath;

@@ -68,11 +68,17 @@ async fn a_quote_posted_over_http_is_priced_persisted_and_listed() {
     let body = &envelope["data"];
 
     // The total is the server's, computed from the lines. A client that sent
-    // its own would be ignored, which is the rule this asserts.
-    assert_eq!(body["total_cents"], json!(87_500), "{envelope}");
+    // its own would be ignored, which is the rule this asserts. No VAT
+    // status is set on the test organization, so gross equals net and the
+    // breakdown is empty.
+    assert_eq!(body["net_cents"], json!(87_500), "{envelope}");
+    assert_eq!(body["gross_cents"], json!(87_500), "{envelope}");
+    assert_eq!(body["vat_breakdown"], json!([]), "{envelope}");
     assert_eq!(body["status"], json!("DRAFT"), "{envelope}");
-    let reference = body["reference"].as_str().expect("a reference").to_owned();
-    assert!(reference.starts_with("DEV-"), "{reference}");
+    // A draft has no number yet: it is allocated when the quote is sent,
+    // not when it is created (see #313).
+    assert_eq!(body["reference"], json!(null), "{envelope}");
+    let quote_id = body["id"].as_str().expect("an id").to_owned();
 
     let listed: serde_json::Value = reqwest::Client::new()
         .get(app.quotes_url())
@@ -88,8 +94,263 @@ async fn a_quote_posted_over_http_is_priced_persisted_and_listed() {
         .as_array()
         .expect("the list answer carries an array")
         .iter()
-        .any(|quote| quote["reference"] == json!(reference));
+        .any(|quote| quote["id"] == json!(quote_id));
     assert!(found, "the quote just created is missing from {listed}");
+
+    // Sending the quote is what allocates its number (see #313).
+    let sent: serde_json::Value = reqwest::Client::new()
+        .patch(format!("{}/api/v1/quotes/{quote_id}/status", app.base_url))
+        .bearer_auth(&app.token)
+        .json(&json!({ "status": "SENT" }))
+        .send()
+        .await
+        .expect("the api answers the status update call")
+        .json()
+        .await
+        .expect("the status update answer is json");
+
+    let reference = sent["data"]["reference"]
+        .as_str()
+        .expect("a reference once sent")
+        .to_owned();
+    assert!(reference.starts_with("DEV-"), "{reference}");
+
+    app.cleanup().await;
+}
+
+/// The general edit endpoint (`PATCH /quotes/{id}`) can move a quote to
+/// `Sent` in the same call that edits its content — the emission tests in
+/// `domain::quote::service` cover that this reports as both a content
+/// change and a transition. This end-to-end pass is for a different bug
+/// class: the repository's `update` writes a whole row, and a column left
+/// out of its `SET` clause is a silent no-op that no mock can catch, only a
+/// real database can.
+#[tokio::test]
+#[ignore = "requires live postgres and redis"]
+async fn editing_a_quote_into_sent_persists_the_allocated_reference() {
+    let app = harness::start().await;
+
+    let created: serde_json::Value = reqwest::Client::new()
+        .post(app.quotes_url())
+        .bearer_auth(&app.token)
+        .json(&json!({
+            "title": "Roof repair",
+            "customer_id": app.customer_id,
+            "customer_context_id": app.customer_context_id,
+            "lines": [
+                { "label": "Replace tiles", "quantity": "1", "unit": "FLAT_RATE", "unit_price_cents": 50_000, "photo_keys": [] }
+            ]
+        }))
+        .send()
+        .await
+        .expect("the api answers the create call")
+        .json()
+        .await
+        .expect("the create answer is json");
+    let quote_id = created["data"]["id"].as_str().expect("an id").to_owned();
+    assert_eq!(created["data"]["reference"], json!(null));
+
+    let edited: serde_json::Value = reqwest::Client::new()
+        .patch(format!("{}/api/v1/quotes/{quote_id}", app.base_url))
+        .bearer_auth(&app.token)
+        .json(&json!({
+            "title": "Roof repair - revised",
+            "customer_id": app.customer_id,
+            "customer_context_id": app.customer_context_id,
+            "status": "SENT",
+            "lines": [
+                { "label": "Replace tiles", "quantity": "1", "unit": "FLAT_RATE", "unit_price_cents": 50_000, "photo_keys": [] }
+            ]
+        }))
+        .send()
+        .await
+        .expect("the api answers the update call")
+        .json()
+        .await
+        .expect("the update answer is json");
+
+    assert_eq!(edited["data"]["status"], json!("SENT"), "{edited}");
+    let reference = edited["data"]["reference"]
+        .as_str()
+        .unwrap_or_else(|| {
+            panic!("the reference allocated by this edit was not persisted: {edited}")
+        })
+        .to_owned();
+    assert!(reference.starts_with("DEV-"), "{reference}");
+
+    // Reading it back confirms `update`'s `RETURNING` was not the only
+    // place the number appeared — a bug where `SET` never wrote the
+    // column but `RETURNING` echoed back the input struct would pass the
+    // assertion above and fail here.
+    let refetched: serde_json::Value = reqwest::Client::new()
+        .get(format!("{}/api/v1/quotes/{quote_id}", app.base_url))
+        .bearer_auth(&app.token)
+        .send()
+        .await
+        .expect("the api answers the get call")
+        .json()
+        .await
+        .expect("the get answer is json");
+    assert_eq!(
+        refetched["data"]["reference"],
+        json!(reference),
+        "{refetched}"
+    );
+
+    app.cleanup().await;
+}
+
+/// Creates a minimal quote and returns its id. Shared by the two PDF tests
+/// below, neither of which cares about pricing — only about whether the
+/// export is allowed to happen at all.
+async fn create_a_quote(app: &harness::App) -> String {
+    let created: serde_json::Value = reqwest::Client::new()
+        .post(app.quotes_url())
+        .bearer_auth(&app.token)
+        .json(&json!({
+            "title": "Kitchen renovation",
+            "customer_id": app.customer_id,
+            "customer_context_id": app.customer_context_id,
+            "lines": [
+                { "label": "Strip out existing", "quantity": "4", "unit": "HOUR", "unit_price_cents": 4500, "photo_keys": [] }
+            ]
+        }))
+        .send()
+        .await
+        .expect("the api answers the create call")
+        .json()
+        .await
+        .expect("the create answer is json");
+
+    created["data"]["id"].as_str().expect("an id").to_owned()
+}
+
+/// The seeded test organization (`harness::seed`) carries no legal
+/// identity — that is the point of this test. #310 makes completeness a
+/// type-level fact (`LegalIdentity::try_from_organization`); this proves
+/// the refusal actually reaches an HTTP caller as a 409 naming what is
+/// missing, not as a blank PDF or a 500.
+#[tokio::test]
+#[ignore = "requires live postgres and redis"]
+async fn pdf_export_refuses_an_incomplete_legal_identity_naming_the_missing_fields() {
+    let app = harness::start().await;
+    let quote_id = create_a_quote(&app).await;
+
+    let response = reqwest::Client::new()
+        .get(format!("{}/api/v1/quotes/{quote_id}/pdf", app.base_url))
+        .bearer_auth(&app.token)
+        .send()
+        .await
+        .expect("the api answers the pdf call");
+
+    assert_eq!(
+        response.status(),
+        409,
+        "an incomplete identity is a 409, not a 200 or a 500"
+    );
+    let body: serde_json::Value = response.json().await.expect("a json error body");
+    let message = body["message"].as_str().unwrap_or_default();
+    for field in [
+        "legal_name",
+        "legal_form",
+        "registration_number",
+        "insurance_mention",
+        "vat_status",
+        "address_line1",
+        "address_postal_code",
+        "address_city",
+        "address_country",
+    ] {
+        assert!(
+            message.contains(field),
+            "the refusal must name `{field}` as missing: {message}"
+        );
+    }
+
+    app.cleanup().await;
+}
+
+/// The other side of the same rule: once every field
+/// `LegalIdentity::try_from_organization` requires is filled in, the export
+/// actually produces a PDF. Written straight to the row rather than through
+/// the settings endpoint (#311, a different crate) — this suite already
+/// seeds fixtures with raw SQL, and the legal-identity columns are exactly
+/// the ones #310 added.
+#[tokio::test]
+#[ignore = "requires live postgres and redis"]
+async fn pdf_export_renders_once_the_legal_identity_is_complete() {
+    let app = harness::start().await;
+
+    sqlx::query(
+        r#"UPDATE organizations SET
+            legal_name = $2,
+            legal_form = $3,
+            registration_number = $4,
+            vat_status = $5,
+            vat_exemption_basis = $6,
+            insurance_mention = $7,
+            address_line1 = $8,
+            address_postal_code = $9,
+            address_city = $10,
+            address_country = $11
+        WHERE id = $1"#,
+    )
+    .bind(app.organization_id)
+    .bind("Acme SARL")
+    .bind("SARL")
+    .bind("123 456 789 00012")
+    .bind("not_subject")
+    .bind("Article 293 B du CGI")
+    .bind("RC Pro n. 123456 - MAAF Assurances")
+    .bind("12 rue des Artisans")
+    .bind("75001")
+    .bind("Paris")
+    .bind("FR")
+    .execute(&app.pool)
+    .await
+    .expect("seed the legal identity");
+
+    let quote_id = create_a_quote(&app).await;
+
+    let response = reqwest::Client::new()
+        .get(format!("{}/api/v1/quotes/{quote_id}/pdf", app.base_url))
+        .bearer_auth(&app.token)
+        .send()
+        .await
+        .expect("the api answers the pdf call");
+
+    assert_eq!(
+        response.status(),
+        200,
+        "a complete identity must be allowed to export"
+    );
+    assert_eq!(
+        response
+            .headers()
+            .get("content-type")
+            .and_then(|v| v.to_str().ok()),
+        Some("application/pdf")
+    );
+    let bytes = response.bytes().await.expect("the pdf body");
+    assert!(
+        bytes.starts_with(b"%PDF-1.4"),
+        "the response must be an actual PDF, not a placeholder"
+    );
+    // A test that only asserts the bytes are non-empty proves nothing about
+    // a document somebody sends to a customer — check that the mentions
+    // this issue names actually made it into the page content stream.
+    let text = String::from_utf8_lossy(&bytes);
+    for expected in [
+        "Acme SARL",
+        "SARL",
+        "123 456 789 00012",
+        "Article 293 B du CGI",
+    ] {
+        assert!(
+            text.contains(expected),
+            "the pdf content stream must carry `{expected}`"
+        );
+    }
 
     app.cleanup().await;
 }

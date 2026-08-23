@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT id, org_id, reference, title, customer_id, customer_context_id, status::text AS \"status!\", total_cents, deleted_at, created_at, updated_at\n            FROM quotes\n            WHERE org_id = $1 AND deleted_at IS NULL\n            ORDER BY created_at DESC, id DESC\n            LIMIT $2 OFFSET $3\n            ",
+  "query": "\n            UPDATE quotes\n            SET reference = $2,\n                title = $3,\n                customer_id = $4,\n                customer_context_id = $5,\n                status = CAST($6 AS text)::quote_status,\n                net_cents = $7,\n                vat_breakdown = $8,\n                gross_cents = $9,\n                updated_at = $10\n            WHERE id = $1 AND deleted_at IS NULL\n            RETURNING id, org_id, reference, title, customer_id, customer_context_id, status::text AS \"status!\", net_cents, vat_breakdown, gross_cents, deleted_at, created_at, updated_at\n            ",
   "describe": {
     "columns": [
       {
@@ -40,21 +40,31 @@
       },
       {
         "ordinal": 7,
-        "name": "total_cents",
+        "name": "net_cents",
         "type_info": "Int4"
       },
       {
         "ordinal": 8,
+        "name": "vat_breakdown",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 9,
+        "name": "gross_cents",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 10,
         "name": "deleted_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 9,
+        "ordinal": 11,
         "name": "created_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 10,
+        "ordinal": 12,
         "name": "updated_at",
         "type_info": "Timestamptz"
       }
@@ -62,23 +72,32 @@
     "parameters": {
       "Left": [
         "Uuid",
-        "Int8",
-        "Int8"
+        "Text",
+        "Text",
+        "Uuid",
+        "Uuid",
+        "Text",
+        "Int4",
+        "Jsonb",
+        "Int4",
+        "Timestamptz"
       ]
     },
     "nullable": [
       false,
       false,
-      false,
+      true,
       false,
       false,
       false,
       null,
+      false,
+      false,
       false,
       true,
       false,
       false
     ]
   },
-  "hash": "f7cfc56b9ccc6ca8e0b6229f0593992519da4034397e1748276fcff989fa219f"
+  "hash": "d005d20d32c5d45cf790b2cda5091bdd1ced24e47f9f220d6dad1452a91138d7"
 }

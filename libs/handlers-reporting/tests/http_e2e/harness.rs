@@ -333,8 +333,8 @@ async fn seed_quote(pool: &PgPool, organization_id: Uuid, customer_id: Uuid) -> 
 
     let quote_id = Uuid::now_v7();
     sqlx::query(
-        "INSERT INTO quotes (id, org_id, customer_id, customer_context_id, reference, title, status, total_cents)
-         VALUES ($1, $2, $3, $4, $5, $6, CAST($7 AS text)::quote_status, $8)",
+        "INSERT INTO quotes (id, org_id, customer_id, customer_context_id, reference, title, status, net_cents, gross_cents)
+         VALUES ($1, $2, $3, $4, $5, $6, CAST($7 AS text)::quote_status, $8, $8)",
     )
     .bind(quote_id)
     .bind(organization_id)

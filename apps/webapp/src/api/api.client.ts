@@ -217,6 +217,7 @@ export namespace Schemas {
   export type CreateOrganizationRequest = { name: string; slug: string };
   export type ServiceRateUnit = "FLAT_RATE" | "HOUR" | "DAY" | "UNIT" | "ML" | "M2" | "M3" | "KG" | "TONNE" | "LITRE";
   export type CreateProductRequest = {
+    default_vat_rate_bp?: (number | null) | undefined;
     description?: (string | null) | undefined;
     name: string;
     sku?: (string | null) | undefined;
@@ -238,6 +239,7 @@ export namespace Schemas {
     service_rate_id?: (null | ServiceRateId) | undefined;
     unit: ServiceRateUnit;
     unit_price_cents: number;
+    vat_rate_bp?: (number | null) | undefined;
   };
   export type CreateQuoteRequest = {
     customer_context_id: CustomerContextId;
@@ -245,7 +247,12 @@ export namespace Schemas {
     lines: Array<QuoteLineRequest>;
     title: string;
   };
-  export type CreateServiceRateRequest = { label: string; rate_cents: number; unit: ServiceRateUnit };
+  export type CreateServiceRateRequest = {
+    default_vat_rate_bp?: (number | null) | undefined;
+    label: string;
+    rate_cents: number;
+    unit: ServiceRateUnit;
+  };
   export type CreateTaskCommentRequest = { body: string };
   export type CreateTaskLabelRequest = { color: string; name: string };
   export type CreateTaskRequest = {
@@ -440,13 +447,29 @@ export namespace Schemas {
     message_id: MessageId;
     read_at?: (string | null) | undefined;
   };
+  export type str = string;
+  export type VatStatusResponse = { type: "subject"; vat_number: string } | { basis: string; type: "not_subject" };
   export type OrganizationResponse = {
+    address_city?: (string | null) | undefined;
+    address_country?: (string | null) | undefined;
+    address_line1?: (string | null) | undefined;
+    address_line2?: (string | null) | undefined;
+    address_postal_code?: (string | null) | undefined;
+    contact_email?: (string | null) | undefined;
+    contact_phone?: (string | null) | undefined;
     created_at: string;
     id: OrganizationId;
+    insurance_mention?: (string | null) | undefined;
+    legal_form?: (string | null) | undefined;
+    legal_name?: (string | null) | undefined;
+    missing_legal_identity_fields: Array<str>;
     name: string;
     owner_id: UserId;
+    registration_number?: (string | null) | undefined;
+    share_capital_cents?: (number | null) | undefined;
     slug: string;
     updated_at: string;
+    vat_status?: (null | VatStatusResponse) | undefined;
   };
   export type OverwriteResponse = {
     allow: number;
@@ -521,6 +544,7 @@ export namespace Schemas {
   export type ProductId = string;
   export type ProductResponse = {
     created_at: string;
+    default_vat_rate_bp?: (number | null) | undefined;
     description?: (string | null) | undefined;
     id: ProductId;
     name: string;
@@ -586,20 +610,24 @@ export namespace Schemas {
     unit: ServiceRateUnit;
     unit_price_cents: number;
     updated_at: string;
+    vat_rate_bp?: (number | null) | undefined;
   };
   export type QuoteStatus = "DRAFT" | "SENT" | "ACCEPTED" | "DECLINED" | "CANCELLED";
+  export type QuoteVatBreakdownLineResponse = { rate_bp: number; vat_cents: number };
   export type QuoteResponse = {
     created_at: string;
     customer_context_id: CustomerContextId;
     customer_id: CustomerId;
+    gross_cents: number;
     id: QuoteId;
     lines: Array<QuoteLineResponse>;
+    net_cents: number;
     organization_id: OrganizationId;
-    reference: string;
+    reference?: (string | null) | undefined;
     status: QuoteStatus;
     title: string;
-    total_cents: number;
     updated_at: string;
+    vat_breakdown: Array<QuoteVatBreakdownLineResponse>;
   };
   export type RecoverTimeEntryRequest = { ended_at: string };
   export type ReplayRunRequest = { connector_id: string };
@@ -645,6 +673,7 @@ export namespace Schemas {
   export type SaveWorkflowVersionRequest = { graph: GraphDto };
   export type ServiceRateResponse = {
     created_at: string;
+    default_vat_rate_bp?: (number | null) | undefined;
     id: ServiceRateId;
     label: string;
     organization_id: OrganizationId;
@@ -726,10 +755,27 @@ export namespace Schemas {
     status: CustomerStatus;
   };
   export type UpdateEquipmentRequest = { hourly_rate_cents: number; name: string };
+  export type VatStatusRequest = { type: "subject"; vat_number: string } | { basis: string; type: "not_subject" };
+  export type UpdateLegalIdentityRequest = Partial<{
+    address_city: string | null;
+    address_country: string | null;
+    address_line1: string | null;
+    address_line2: string | null;
+    address_postal_code: string | null;
+    contact_email: string | null;
+    contact_phone: string | null;
+    insurance_mention: string | null;
+    legal_form: string | null;
+    legal_name: string | null;
+    registration_number: string | null;
+    share_capital_cents: number | null;
+    vat_status: null | VatStatusRequest;
+  }>;
   export type UpdateMemberRequest = Partial<{ first_name: string | null; last_name: string | null }>;
   export type UpdateMessageRequest = { content: string };
   export type UpdateOrganizationRequest = { name: string; slug: string };
   export type UpdateProductRequest = {
+    default_vat_rate_bp?: (number | null) | undefined;
     description?: (string | null) | undefined;
     name: string;
     sku?: (string | null) | undefined;
@@ -750,7 +796,12 @@ export namespace Schemas {
     title: string;
   };
   export type UpdateQuoteStatusRequest = { status: QuoteStatus };
-  export type UpdateServiceRateRequest = { label: string; rate_cents: number; unit: ServiceRateUnit };
+  export type UpdateServiceRateRequest = {
+    default_vat_rate_bp?: (number | null) | undefined;
+    label: string;
+    rate_cents: number;
+    unit: ServiceRateUnit;
+  };
   export type UpdateTaskCommentRequest = { body: string };
   export type UpdateTaskLabelRequest = { color: string; name: string };
   export type UpdateTaskRequest = Partial<{
@@ -2367,12 +2418,26 @@ export namespace Endpoints {
     responses: {
       200: {
         data: Array<{
+          address_city?: (string | null) | undefined;
+          address_country?: (string | null) | undefined;
+          address_line1?: (string | null) | undefined;
+          address_line2?: (string | null) | undefined;
+          address_postal_code?: (string | null) | undefined;
+          contact_email?: (string | null) | undefined;
+          contact_phone?: (string | null) | undefined;
           created_at: string;
           id: Schemas.OrganizationId;
+          insurance_mention?: (string | null) | undefined;
+          legal_form?: (string | null) | undefined;
+          legal_name?: (string | null) | undefined;
+          missing_legal_identity_fields: Array<Schemas.str>;
           name: string;
           owner_id: Schemas.UserId;
+          registration_number?: (string | null) | undefined;
+          share_capital_cents?: (number | null) | undefined;
           slug: string;
           updated_at: string;
+          vat_status?: (null | Schemas.VatStatusResponse) | undefined;
         }>;
         pagination?: (null | Schemas.PaginationMetadata) | undefined;
       };
@@ -2389,12 +2454,26 @@ export namespace Endpoints {
     responses: {
       201: {
         data: {
+          address_city?: (string | null) | undefined;
+          address_country?: (string | null) | undefined;
+          address_line1?: (string | null) | undefined;
+          address_line2?: (string | null) | undefined;
+          address_postal_code?: (string | null) | undefined;
+          contact_email?: (string | null) | undefined;
+          contact_phone?: (string | null) | undefined;
           created_at: string;
           id: Schemas.OrganizationId;
+          insurance_mention?: (string | null) | undefined;
+          legal_form?: (string | null) | undefined;
+          legal_name?: (string | null) | undefined;
+          missing_legal_identity_fields: Array<Schemas.str>;
           name: string;
           owner_id: Schemas.UserId;
+          registration_number?: (string | null) | undefined;
+          share_capital_cents?: (number | null) | undefined;
           slug: string;
           updated_at: string;
+          vat_status?: (null | Schemas.VatStatusResponse) | undefined;
         };
         pagination?: (null | Schemas.PaginationMetadata) | undefined;
       };
@@ -2413,12 +2492,26 @@ export namespace Endpoints {
     responses: {
       200: {
         data: {
+          address_city?: (string | null) | undefined;
+          address_country?: (string | null) | undefined;
+          address_line1?: (string | null) | undefined;
+          address_line2?: (string | null) | undefined;
+          address_postal_code?: (string | null) | undefined;
+          contact_email?: (string | null) | undefined;
+          contact_phone?: (string | null) | undefined;
           created_at: string;
           id: Schemas.OrganizationId;
+          insurance_mention?: (string | null) | undefined;
+          legal_form?: (string | null) | undefined;
+          legal_name?: (string | null) | undefined;
+          missing_legal_identity_fields: Array<Schemas.str>;
           name: string;
           owner_id: Schemas.UserId;
+          registration_number?: (string | null) | undefined;
+          share_capital_cents?: (number | null) | undefined;
           slug: string;
           updated_at: string;
+          vat_status?: (null | Schemas.VatStatusResponse) | undefined;
         };
         pagination?: (null | Schemas.PaginationMetadata) | undefined;
       };
@@ -2448,12 +2541,26 @@ export namespace Endpoints {
     responses: {
       200: {
         data: {
+          address_city?: (string | null) | undefined;
+          address_country?: (string | null) | undefined;
+          address_line1?: (string | null) | undefined;
+          address_line2?: (string | null) | undefined;
+          address_postal_code?: (string | null) | undefined;
+          contact_email?: (string | null) | undefined;
+          contact_phone?: (string | null) | undefined;
           created_at: string;
           id: Schemas.OrganizationId;
+          insurance_mention?: (string | null) | undefined;
+          legal_form?: (string | null) | undefined;
+          legal_name?: (string | null) | undefined;
+          missing_legal_identity_fields: Array<Schemas.str>;
           name: string;
           owner_id: Schemas.UserId;
+          registration_number?: (string | null) | undefined;
+          share_capital_cents?: (number | null) | undefined;
           slug: string;
           updated_at: string;
+          vat_status?: (null | Schemas.VatStatusResponse) | undefined;
         };
         pagination?: (null | Schemas.PaginationMetadata) | undefined;
       };
@@ -3285,6 +3392,47 @@ export namespace Endpoints {
       409: unknown;
     };
   };
+  export type patch_UpdateOrganizationLegalIdentity = {
+    method: "PATCH";
+    path: "/api/v1/organizations/{organization_id}/legal-identity";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string };
+
+      body: Schemas.UpdateLegalIdentityRequest;
+    };
+    responses: {
+      200: {
+        data: {
+          address_city?: (string | null) | undefined;
+          address_country?: (string | null) | undefined;
+          address_line1?: (string | null) | undefined;
+          address_line2?: (string | null) | undefined;
+          address_postal_code?: (string | null) | undefined;
+          contact_email?: (string | null) | undefined;
+          contact_phone?: (string | null) | undefined;
+          created_at: string;
+          id: Schemas.OrganizationId;
+          insurance_mention?: (string | null) | undefined;
+          legal_form?: (string | null) | undefined;
+          legal_name?: (string | null) | undefined;
+          missing_legal_identity_fields: Array<Schemas.str>;
+          name: string;
+          owner_id: Schemas.UserId;
+          registration_number?: (string | null) | undefined;
+          share_capital_cents?: (number | null) | undefined;
+          slug: string;
+          updated_at: string;
+          vat_status?: (null | Schemas.VatStatusResponse) | undefined;
+        };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      400: unknown;
+      401: unknown;
+      403: unknown;
+      404: unknown;
+    };
+  };
   export type get_ListMembers = {
     method: "GET";
     path: "/api/v1/organizations/{organization_id}/members";
@@ -3393,6 +3541,7 @@ export namespace Endpoints {
       200: {
         data: Array<{
           created_at: string;
+          default_vat_rate_bp?: (number | null) | undefined;
           description?: (string | null) | undefined;
           id: Schemas.ProductId;
           name: string;
@@ -3421,6 +3570,7 @@ export namespace Endpoints {
       201: {
         data: {
           created_at: string;
+          default_vat_rate_bp?: (number | null) | undefined;
           description?: (string | null) | undefined;
           id: Schemas.ProductId;
           name: string;
@@ -3606,14 +3756,16 @@ export namespace Endpoints {
           created_at: string;
           customer_context_id: Schemas.CustomerContextId;
           customer_id: Schemas.CustomerId;
+          gross_cents: number;
           id: Schemas.QuoteId;
           lines: Array<Schemas.QuoteLineResponse>;
+          net_cents: number;
           organization_id: Schemas.OrganizationId;
-          reference: string;
+          reference?: (string | null) | undefined;
           status: Schemas.QuoteStatus;
           title: string;
-          total_cents: number;
           updated_at: string;
+          vat_breakdown: Array<Schemas.QuoteVatBreakdownLineResponse>;
         }>;
         pagination?: (null | Schemas.PaginationMetadata) | undefined;
       };
@@ -3636,14 +3788,16 @@ export namespace Endpoints {
           created_at: string;
           customer_context_id: Schemas.CustomerContextId;
           customer_id: Schemas.CustomerId;
+          gross_cents: number;
           id: Schemas.QuoteId;
           lines: Array<Schemas.QuoteLineResponse>;
+          net_cents: number;
           organization_id: Schemas.OrganizationId;
-          reference: string;
+          reference?: (string | null) | undefined;
           status: Schemas.QuoteStatus;
           title: string;
-          total_cents: number;
           updated_at: string;
+          vat_breakdown: Array<Schemas.QuoteVatBreakdownLineResponse>;
         };
         pagination?: (null | Schemas.PaginationMetadata) | undefined;
       };
@@ -3708,6 +3862,7 @@ export namespace Endpoints {
       200: {
         data: Array<{
           created_at: string;
+          default_vat_rate_bp?: (number | null) | undefined;
           id: Schemas.ServiceRateId;
           label: string;
           organization_id: Schemas.OrganizationId;
@@ -3734,6 +3889,7 @@ export namespace Endpoints {
       201: {
         data: {
           created_at: string;
+          default_vat_rate_bp?: (number | null) | undefined;
           id: Schemas.ServiceRateId;
           label: string;
           organization_id: Schemas.OrganizationId;
@@ -4111,6 +4267,7 @@ export namespace Endpoints {
       200: {
         data: {
           created_at: string;
+          default_vat_rate_bp?: (number | null) | undefined;
           description?: (string | null) | undefined;
           id: Schemas.ProductId;
           name: string;
@@ -4149,6 +4306,7 @@ export namespace Endpoints {
       200: {
         data: {
           created_at: string;
+          default_vat_rate_bp?: (number | null) | undefined;
           description?: (string | null) | undefined;
           id: Schemas.ProductId;
           name: string;
@@ -4180,14 +4338,16 @@ export namespace Endpoints {
           created_at: string;
           customer_context_id: Schemas.CustomerContextId;
           customer_id: Schemas.CustomerId;
+          gross_cents: number;
           id: Schemas.QuoteId;
           lines: Array<Schemas.QuoteLineResponse>;
+          net_cents: number;
           organization_id: Schemas.OrganizationId;
-          reference: string;
+          reference?: (string | null) | undefined;
           status: Schemas.QuoteStatus;
           title: string;
-          total_cents: number;
           updated_at: string;
+          vat_breakdown: Array<Schemas.QuoteVatBreakdownLineResponse>;
         };
         pagination?: (null | Schemas.PaginationMetadata) | undefined;
       };
@@ -4220,14 +4380,16 @@ export namespace Endpoints {
           created_at: string;
           customer_context_id: Schemas.CustomerContextId;
           customer_id: Schemas.CustomerId;
+          gross_cents: number;
           id: Schemas.QuoteId;
           lines: Array<Schemas.QuoteLineResponse>;
+          net_cents: number;
           organization_id: Schemas.OrganizationId;
-          reference: string;
+          reference?: (string | null) | undefined;
           status: Schemas.QuoteStatus;
           title: string;
-          total_cents: number;
           updated_at: string;
+          vat_breakdown: Array<Schemas.QuoteVatBreakdownLineResponse>;
         };
         pagination?: (null | Schemas.PaginationMetadata) | undefined;
       };
@@ -4245,7 +4407,7 @@ export namespace Endpoints {
     parameters: {
       path: { quote_id: string };
     };
-    responses: { 200: unknown; 401: unknown; 403: unknown; 404: unknown };
+    responses: { 200: unknown; 401: unknown; 403: unknown; 404: unknown; 409: unknown };
   };
   export type patch_UpdateQuoteStatus = {
     method: "PATCH";
@@ -4262,14 +4424,16 @@ export namespace Endpoints {
           created_at: string;
           customer_context_id: Schemas.CustomerContextId;
           customer_id: Schemas.CustomerId;
+          gross_cents: number;
           id: Schemas.QuoteId;
           lines: Array<Schemas.QuoteLineResponse>;
+          net_cents: number;
           organization_id: Schemas.OrganizationId;
-          reference: string;
+          reference?: (string | null) | undefined;
           status: Schemas.QuoteStatus;
           title: string;
-          total_cents: number;
           updated_at: string;
+          vat_breakdown: Array<Schemas.QuoteVatBreakdownLineResponse>;
         };
         pagination?: (null | Schemas.PaginationMetadata) | undefined;
       };
@@ -4290,6 +4454,7 @@ export namespace Endpoints {
       200: {
         data: {
           created_at: string;
+          default_vat_rate_bp?: (number | null) | undefined;
           id: Schemas.ServiceRateId;
           label: string;
           organization_id: Schemas.OrganizationId;
@@ -4326,6 +4491,7 @@ export namespace Endpoints {
       200: {
         data: {
           created_at: string;
+          default_vat_rate_bp?: (number | null) | undefined;
           id: Schemas.ServiceRateId;
           label: string;
           organization_id: Schemas.OrganizationId;
@@ -4350,12 +4516,26 @@ export namespace Endpoints {
     responses: {
       200: {
         data: Array<{
+          address_city?: (string | null) | undefined;
+          address_country?: (string | null) | undefined;
+          address_line1?: (string | null) | undefined;
+          address_line2?: (string | null) | undefined;
+          address_postal_code?: (string | null) | undefined;
+          contact_email?: (string | null) | undefined;
+          contact_phone?: (string | null) | undefined;
           created_at: string;
           id: Schemas.OrganizationId;
+          insurance_mention?: (string | null) | undefined;
+          legal_form?: (string | null) | undefined;
+          legal_name?: (string | null) | undefined;
+          missing_legal_identity_fields: Array<Schemas.str>;
           name: string;
           owner_id: Schemas.UserId;
+          registration_number?: (string | null) | undefined;
+          share_capital_cents?: (number | null) | undefined;
           slug: string;
           updated_at: string;
+          vat_status?: (null | Schemas.VatStatusResponse) | undefined;
         }>;
         pagination?: (null | Schemas.PaginationMetadata) | undefined;
       };
@@ -4411,6 +4591,7 @@ export type EndpointByMethod = {
     "/api/v1/organizations/{organization_id}/absences/{absence_id}": Endpoints.patch_PatchAbsence;
     "/api/v1/organizations/{organization_id}/automation/credentials/{credential_id}": Endpoints.patch_UpdateAutomationCredential;
     "/api/v1/organizations/{organization_id}/automation/workflows/{workflow_id}": Endpoints.patch_UpdateWorkflow;
+    "/api/v1/organizations/{organization_id}/legal-identity": Endpoints.patch_UpdateOrganizationLegalIdentity;
     "/api/v1/organizations/{organization_id}/projects/{project_id}": Endpoints.patch_PatchProject;
     "/api/v1/organizations/{organization_id}/task-labels/{label_id}": Endpoints.patch_UpdateTaskLabel;
     "/api/v1/organizations/{organization_id}/tasks/{task_id}": Endpoints.patch_PatchTask;

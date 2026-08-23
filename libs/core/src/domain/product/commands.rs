@@ -7,6 +7,7 @@ pub struct CreateProductCommand {
     pub sku: Option<String>,
     pub unit: ServiceRateUnit,
     pub unit_price_cents: i32,
+    pub default_vat_rate_bp: Option<i32>,
     pub description: Option<String>,
 }
 
@@ -17,5 +18,6 @@ pub struct UpdateProductCommand {
     pub sku: Option<String>,
     pub unit: ServiceRateUnit,
     pub unit_price_cents: i32,
+    pub default_vat_rate_bp: Option<i32>,
     pub description: Option<String>,
 }

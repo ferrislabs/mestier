@@ -16,8 +16,29 @@ export interface QuoteLineFormValues {
 	quantity: string
 	unit: ServiceRateUnit
 	unitPrice: string
+	/** Basis points as a string for the input, `''` when unset. Only ever read
+	 * by the server when the organization is subject to VAT — an organization
+	 * that is not never sends this field, see `vatEnabled`. */
+	vatRateBp: string
 	notes: string
 	photoKeys: string[]
+}
+
+/** The rates offered as one-click choices before an artisan types a custom
+ * one — the standard French VAT schedule, most-charged first. */
+export const COMMON_VAT_RATES_BP = [2000, 1000, 550, 210, 0] as const
+
+export function formatVatRateBp(rateBp: number): string {
+	const value = rateBp / 100
+	return `${Number.isInteger(value) ? value : value.toFixed(2)} %`
+}
+
+/** `null` reads as "not yet sent", not as "the field is missing" — the
+ * number is allocated only once the quote leaves Draft (#313). */
+export function quoteReferenceLabel(
+	reference: string | null | undefined,
+): string {
+	return reference ?? 'Numéro attribué à l’envoi'
 }
 
 export interface QuoteFormValues {
@@ -37,6 +58,7 @@ export function emptyQuoteLine(clientId = 'line-1'): QuoteLineFormValues {
 		quantity: '1',
 		unit: 'HOUR',
 		unitPrice: '',
+		vatRateBp: '',
 		notes: '',
 		photoKeys: [],
 	}

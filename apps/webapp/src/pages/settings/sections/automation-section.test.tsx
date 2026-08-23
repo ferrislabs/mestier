@@ -52,6 +52,7 @@ const ORGANIZATION = {
 	name: 'Atelier Bois & Co',
 	slug: 'atelier-bois',
 	owner_id: 'user-1',
+	missing_legal_identity_fields: [],
 	created_at: '2026-01-01T00:00:00Z',
 	updated_at: '2026-01-01T00:00:00Z',
 }

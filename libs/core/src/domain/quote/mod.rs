@@ -111,6 +111,12 @@ pub struct QuoteLine {
     pub quantity: Decimal,
     pub unit: ServiceRateUnit,
     pub unit_price_cents: i32,
+    /// Basis points (2000 = 20 %, 550 = 5.5 %). Travels with the line —
+    /// never looked up from a referential at render time — so a document
+    /// already sent cannot change because a rate was edited afterwards.
+    /// `None` on an organization not subject to VAT, or on a line created
+    /// before this field existed.
+    pub vat_rate_bp: Option<i32>,
     pub notes: Option<String>,
     pub photo_keys: Vec<String>,
     pub deleted_at: Option<DateTime<Utc>>,
@@ -118,16 +124,37 @@ pub struct QuoteLine {
     pub updated_at: DateTime<Utc>,
 }
 
+/// One rate's contribution to a quote's VAT, grouped and summed across every
+/// line at that rate. A quote can carry more than one — renovation work at
+/// the reduced rate, supply at the standard one, on the same job.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct QuoteVatBreakdownLine {
+    pub rate_bp: i32,
+    pub vat_cents: i32,
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct Quote {
     pub id: QuoteId,
     pub organization_id: OrganizationId,
-    pub reference: String,
+    /// Allocated when the quote first leaves `Draft`, gapless and unique
+    /// per organization, and never reallocated afterwards — not on edit,
+    /// not on a further status change, not on a soft delete. `None` on a
+    /// draft: a deleted draft must not leave a hole in the sequence.
+    pub reference: Option<String>,
     pub title: String,
     pub customer_id: CustomerId,
     pub customer_context_id: CustomerContextId,
     pub status: QuoteStatus,
-    pub total_cents: i32,
+    /// Sum of the lines, before VAT.
+    pub net_cents: i32,
+    /// Per rate, not a single figure: a document has to show the
+    /// breakdown. Empty — never a list of zeros — when the organization is
+    /// not subject to VAT (see `QuoteVatBreakdownLine`).
+    pub vat_breakdown: Vec<QuoteVatBreakdownLine>,
+    /// `net_cents` plus the VAT breakdown's total. Equal to `net_cents`
+    /// when the organization is not subject to VAT.
+    pub gross_cents: i32,
     pub lines: Vec<QuoteLine>,
     pub deleted_at: Option<DateTime<Utc>>,
     pub created_at: DateTime<Utc>,

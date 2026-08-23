@@ -46,6 +46,7 @@ export function QuoteNewFeature() {
 			key={activeOrganization.id}
 			organizationId={activeOrganization.id}
 			organizationSlug={activeOrganization.slug}
+			vatEnabled={activeOrganization.vat_status?.type === 'subject'}
 		/>
 	)
 }
@@ -53,9 +54,11 @@ export function QuoteNewFeature() {
 function QuoteNewWorkspace({
 	organizationId,
 	organizationSlug,
+	vatEnabled,
 }: {
 	organizationId: string
 	organizationSlug: string
+	vatEnabled: boolean
 }) {
 	const navigate = useNavigate()
 	const catalog = useReferenceCatalog(organizationId, {
@@ -91,6 +94,7 @@ function QuoteNewWorkspace({
 						quantity: line.quantity.replace(',', '.').trim(),
 						unit: line.unit,
 						unit_price_cents: eurosToCents(line.unitPrice),
+						vat_rate_bp: line.vatRateBp === '' ? null : Number(line.vatRateBp),
 						notes: line.notes.trim() || null,
 						photo_keys: line.photoKeys,
 					})),
@@ -117,6 +121,7 @@ function QuoteNewWorkspace({
 					form={form}
 					customers={customers.data?.data ?? []}
 					catalogItems={catalogItems}
+					vatEnabled={vatEnabled}
 					isCreating={createQuote.isPending}
 					isUploading={uploadFile.isPending}
 					error={
@@ -157,6 +162,7 @@ interface QuoteNewFormProps {
 	form: QuoteFormApi
 	customers: Customer[]
 	catalogItems: CatalogItem[]
+	vatEnabled: boolean
 	isCreating: boolean
 	isUploading: boolean
 	error: string | null
@@ -173,6 +179,7 @@ function QuoteNewForm({
 	form,
 	customers,
 	catalogItems,
+	vatEnabled,
 	isCreating,
 	isUploading,
 	error,
@@ -232,6 +239,10 @@ function QuoteNewForm({
 			label: catalogItem.label,
 			unit: catalogItem.unit,
 			unitPrice: centsToEuros(catalogItem.unitPriceCents),
+			vatRateBp:
+				catalogItem.defaultVatRateBp !== null
+					? String(catalogItem.defaultVatRateBp)
+					: form.state.values.lines[index]?.vatRateBp || '',
 			notes:
 				catalogItem.description || form.state.values.lines[index]?.notes || '',
 		})
@@ -249,6 +260,7 @@ function QuoteNewForm({
 			isCreating={isCreating}
 			isUploading={isUploading}
 			isCustomerContextsLoading={customerContexts.isLoading}
+			vatEnabled={vatEnabled}
 			onChange={updateValues}
 			onLineChange={updateLine}
 			onSelectCatalogItem={selectCatalogItem}

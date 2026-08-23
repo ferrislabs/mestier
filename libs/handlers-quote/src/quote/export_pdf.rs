@@ -10,7 +10,7 @@ use http::{
     StatusCode,
     header::{CONTENT_DISPOSITION, CONTENT_TYPE},
 };
-use mestier_core::{Quote, QuoteId};
+use mestier_core::{Customer, LegalIdentity, Organization, Quote, QuoteId, VatStatus};
 
 use crate::{paths::QuotePdfPath, require_quote_membership};
 
@@ -27,6 +27,7 @@ use crate::{paths::QuotePdfPath, require_quote_membership};
         (status = 401, description = "Unauthorized"),
         (status = 403, description = "Forbidden"),
         (status = 404, description = "Quote not found"),
+        (status = 409, description = "The organization's legal identity is incomplete; the response names every missing field"),
     ),
     security(("bearer_auth" = []))
 )]
@@ -36,8 +37,28 @@ pub async fn handler(
     Extension(identity): Extension<Identity>,
 ) -> Result<Response, ApiError> {
     let quote = require_quote_membership(&state, &identity, quote_id).await?;
-    let pdf = render_quote_pdf(&quote);
-    let filename = format!("{}.pdf", quote.reference);
+    let organization = state
+        .usecase
+        .get_organization(quote.organization_id)
+        .await?;
+    let customer = state.usecase.get_customer(quote.customer_id).await?;
+
+    // Refuse rather than render a blank: a PDF with an empty SIRET line
+    // looks fine and is not. The settings section (#311) is where the
+    // artisan goes to fix whatever is named here.
+    let identity = LegalIdentity::try_from_organization(&organization).map_err(|missing| {
+        ApiError::Conflict(format!(
+            "cannot issue a document: the organization's legal identity is missing {}",
+            missing.join(", ")
+        ))
+    })?;
+
+    let pdf = render_quote_pdf(&quote, &identity, &organization, &customer);
+    let filename_stem = quote
+        .reference
+        .clone()
+        .unwrap_or_else(|| quote.id.0.to_string());
+    let filename = format!("{filename_stem}.pdf");
 
     Ok((
         StatusCode::OK,
@@ -53,28 +74,79 @@ pub async fn handler(
         .into_response())
 }
 
-fn render_quote_pdf(quote: &Quote) -> Vec<u8> {
+/// Renders the figures the domain already computed; it must not compute any
+/// of its own, per `CLAUDE.md` — a total the PDF derives independently is a
+/// total that can disagree with the one the screen shows.
+fn render_quote_pdf(
+    quote: &Quote,
+    identity: &LegalIdentity,
+    organization: &Organization,
+    customer: &Customer,
+) -> Vec<u8> {
     let mut text_lines = vec![
         "Mestier - Devis".to_owned(),
-        format!("Reference: {}", quote.reference),
-        format!("Objet: {}", quote.title),
-        format!("Identifiant technique: {}", quote.id.0),
-        format!("Client: {}", quote.customer_id.0),
-        format!("Contexte: {}", quote.customer_context_id.0),
-        format!("Statut: {}", quote.status.as_str()),
-        format!("Total: {}", format_cents(quote.total_cents)),
+        format!("N. {}", quote.reference.as_deref().unwrap_or("(brouillon)")),
+        format!("Date: {}", quote.created_at.format("%d/%m/%Y")),
         String::new(),
-        "Lignes".to_owned(),
+        "Emetteur".to_owned(),
+        organization.name.clone(),
+        identity.legal_name.clone(),
+        format!(
+            "{} - SIRET {}",
+            identity.legal_form, identity.registration_number
+        ),
+        identity.address.line1.clone(),
     ];
 
+    if let Some(line2) = &identity.address.line2 {
+        text_lines.push(line2.clone());
+    }
+    text_lines.push(format!(
+        "{} {}, {}",
+        identity.address.postal_code, identity.address.city, identity.address.country
+    ));
+    text_lines.push(vat_status_mention(&identity.vat_status));
+    if let Some(capital) = identity.share_capital_cents {
+        text_lines.push(format!("Capital social: {}", format_cents_i64(capital)));
+    }
+    text_lines.push(format!(
+        "Assurance professionnelle: {}",
+        identity.insurance_mention
+    ));
+    if let Some(email) = &identity.contact_email {
+        text_lines.push(format!("Email: {email}"));
+    }
+    if let Some(phone) = &identity.contact_phone {
+        text_lines.push(format!("Tel: {phone}"));
+    }
+
+    text_lines.push(String::new());
+    text_lines.push("Client".to_owned());
+    text_lines.push(customer.name.clone());
+
+    text_lines.push(String::new());
+    text_lines.push(format!("Objet: {}", quote.title));
+    text_lines.push(String::new());
+    text_lines.push("Lignes".to_owned());
+
+    let subject_to_vat = matches!(identity.vat_status, VatStatus::Subject { .. });
+
     for (index, line) in quote.lines.iter().enumerate() {
+        let rate = if subject_to_vat {
+            format!(", TVA {}", format_rate_bp(line.vat_rate_bp.unwrap_or(0)))
+        } else {
+            String::new()
+        };
+
         text_lines.push(format!(
-            "{}. {} - {} x {} = {}",
+            "{}. {} - {} {} x {}{} = {}",
             index + 1,
             line.label,
             line.quantity.normalize(),
+            line.unit.as_str(),
             format_cents(line.unit_price_cents),
-            format_cents(line_total_cents(line.quantity, line.unit_price_cents)),
+            rate,
+            format_cents(line_net_cents(line.quantity, line.unit_price_cents)),
         ));
 
         if let Some(notes) = &line.notes {
@@ -86,11 +158,50 @@ fn render_quote_pdf(quote: &Quote) -> Vec<u8> {
         }
     }
 
+    text_lines.push(String::new());
+    text_lines.push("Totaux".to_owned());
+    text_lines.push(format!("Total HT: {}", format_cents(quote.net_cents)));
+
+    if quote.vat_breakdown.is_empty() {
+        // Never a breakdown of zeros: this line only appears for an
+        // organization that stated it charges no VAT, and says why.
+        if let VatStatus::NotSubject { basis } = &identity.vat_status {
+            text_lines.push(format!("TVA non applicable, {basis}"));
+        }
+    } else {
+        for breakdown in &quote.vat_breakdown {
+            text_lines.push(format!(
+                "TVA {}: {}",
+                format_rate_bp(breakdown.rate_bp),
+                format_cents(breakdown.vat_cents)
+            ));
+        }
+    }
+
+    text_lines.push(format!("Total TTC: {}", format_cents(quote.gross_cents)));
+
     let content = render_pdf_text_stream(&text_lines);
     build_pdf(content.as_bytes())
 }
 
-fn line_total_cents(quantity: rust_decimal::Decimal, unit_price_cents: i32) -> i32 {
+/// The mention a document must carry either way: the VAT number when the
+/// organization charges VAT, the legal basis for the exemption when it does
+/// not. Never a blank — see #310.
+fn vat_status_mention(status: &VatStatus) -> String {
+    match status {
+        VatStatus::Subject { vat_number } => format!("N. TVA intracommunautaire: {vat_number}"),
+        VatStatus::NotSubject { basis } => format!("TVA non applicable, {basis}"),
+    }
+}
+
+/// Basis points to a percentage string: 2000 -> "20.00%", 550 -> "5.50%".
+fn format_rate_bp(rate_bp: i32) -> String {
+    let whole = rate_bp / 100;
+    let hundredths = rate_bp % 100;
+    format!("{whole}.{hundredths:02}%")
+}
+
+fn line_net_cents(quantity: rust_decimal::Decimal, unit_price_cents: i32) -> i32 {
     use rust_decimal::prelude::ToPrimitive;
 
     (quantity * rust_decimal::Decimal::from(unit_price_cents))
@@ -100,13 +211,17 @@ fn line_total_cents(quantity: rust_decimal::Decimal, unit_price_cents: i32) -> i
 }
 
 fn format_cents(cents: i32) -> String {
+    format_cents_i64(i64::from(cents))
+}
+
+fn format_cents_i64(cents: i64) -> String {
     let euros = cents / 100;
     let remainder = cents.abs() % 100;
     format!("{euros}.{remainder:02} EUR")
 }
 
 fn render_pdf_text_stream(lines: &[String]) -> String {
-    let mut stream = String::from("BT\n/F1 12 Tf\n50 790 Td\n14 TL\n");
+    let mut stream = String::from("BT\n/F1 10 Tf\n40 800 Td\n12 TL\n");
 
     for line in lines {
         stream.push('(');

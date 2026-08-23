@@ -48,7 +48,7 @@ impl<'tx> ProfitabilityRepository for PgProfitabilityRepository<'tx> {
         // listing every one of them would bury the ones that do.
         let projects = sqlx::query!(
             r#"
-            SELECT p.id, p.name, p.customer_id, q.total_cents AS "total_cents?"
+            SELECT p.id, p.name, p.customer_id, q.net_cents AS "net_cents?"
             FROM projects p
             LEFT JOIN quotes q ON q.id = p.quote_id AND q.deleted_at IS NULL
             WHERE p.org_id = $1
@@ -76,7 +76,7 @@ impl<'tx> ProfitabilityRepository for PgProfitabilityRepository<'tx> {
             project_id: ProjectId(row.id),
             name: row.name,
             customer_id: row.customer_id.map(CustomerId),
-            quoted_cents: row.total_cents,
+            quoted_cents: row.net_cents,
         })
         .collect();
 

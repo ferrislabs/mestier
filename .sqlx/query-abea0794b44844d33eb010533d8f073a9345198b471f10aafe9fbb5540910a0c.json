@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT id, name, slug, owner_id, deleted_at, created_at, updated_at\n            FROM organizations\n            WHERE deleted_at IS NULL\n            ORDER BY created_at ASC\n            LIMIT $1 OFFSET $2\n            ",
+  "query": "\n            SELECT id, org_id, label, unit, rate_cents, default_vat_rate_bp, deleted_at, created_at, updated_at\n            FROM service_rates\n            WHERE id = $1 AND deleted_at IS NULL\n            ",
   "describe": {
     "columns": [
       {
@@ -10,39 +10,48 @@
       },
       {
         "ordinal": 1,
-        "name": "name",
-        "type_info": "Text"
+        "name": "org_id",
+        "type_info": "Uuid"
       },
       {
         "ordinal": 2,
-        "name": "slug",
+        "name": "label",
         "type_info": "Text"
       },
       {
         "ordinal": 3,
-        "name": "owner_id",
-        "type_info": "Uuid"
+        "name": "unit",
+        "type_info": "Text"
       },
       {
         "ordinal": 4,
+        "name": "rate_cents",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 5,
+        "name": "default_vat_rate_bp",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 6,
         "name": "deleted_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 5,
+        "ordinal": 7,
         "name": "created_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 6,
+        "ordinal": 8,
         "name": "updated_at",
         "type_info": "Timestamptz"
       }
     ],
     "parameters": {
       "Left": [
-        "Int8",
-        "Int8"
+        "Uuid"
       ]
     },
     "nullable": [
@@ -50,10 +59,12 @@
       false,
       false,
       false,
+      false,
+      true,
       true,
       false,
       false
     ]
   },
-  "hash": "87921aa0cadaefb85c8e5970ef3b59fb756150e94539ae43eb659370f7ff98bb"
+  "hash": "abea0794b44844d33eb010533d8f073a9345198b471f10aafe9fbb5540910a0c"
 }

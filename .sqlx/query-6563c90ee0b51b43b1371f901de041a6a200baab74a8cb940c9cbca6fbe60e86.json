@@ -1,0 +1,42 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT p.id, p.name, p.customer_id, q.net_cents AS \"net_cents?\"\n            FROM projects p\n            LEFT JOIN quotes q ON q.id = p.quote_id AND q.deleted_at IS NULL\n            WHERE p.org_id = $1\n              AND EXISTS (\n                SELECT 1\n                FROM tasks t\n                LEFT JOIN tasks pt ON pt.id = t.parent_task_id AND pt.deleted_at IS NULL\n                WHERE t.project_id = p.id\n                  AND t.deleted_at IS NULL\n                  AND t.status <> 'CANCELLED'::task_status\n                  AND COALESCE(t.starts_at, pt.starts_at) < $3\n                  AND COALESCE(t.ends_at, pt.ends_at) > $2\n              )\n            ORDER BY p.name ASC, p.id\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "customer_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 3,
+        "name": "net_cents?",
+        "type_info": "Int4"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Timestamptz",
+        "Timestamptz"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      true,
+      false
+    ]
+  },
+  "hash": "6563c90ee0b51b43b1371f901de041a6a200baab74a8cb940c9cbca6fbe60e86"
+}

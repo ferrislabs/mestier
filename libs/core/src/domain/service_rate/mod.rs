@@ -103,6 +103,10 @@ pub struct ServiceRate {
     pub label: String,
     pub unit: ServiceRateUnit,
     pub rate_cents: i32,
+    /// Basis points a quote line prefills from when it picks this rate.
+    /// Prefills, not derives: editing this later never rewrites a line
+    /// already built from it.
+    pub default_vat_rate_bp: Option<i32>,
     pub deleted_at: Option<DateTime<Utc>>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,

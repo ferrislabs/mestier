@@ -43,6 +43,8 @@ interface QuoteNewUIProps {
 	catalogItems: CatalogItem[]
 	/** Presigned preview urls by storage key, resolved by the feature layer. */
 	photoUrls: Record<string, string | undefined>
+	/** Whether the active organization charges VAT — see `QuoteLineEditor`. */
+	vatEnabled: boolean
 	error?: string | null
 	isCreating?: boolean
 	isUploading?: boolean
@@ -70,6 +72,7 @@ export function QuoteNewUI({
 	customerContexts,
 	catalogItems,
 	photoUrls,
+	vatEnabled,
 	error,
 	isCreating,
 	isUploading,
@@ -244,6 +247,7 @@ export function QuoteNewUI({
 										isOpen={openLineId === line.clientId}
 										canRemove={values.lines.length > 1}
 										isUploading={isUploading}
+										vatEnabled={vatEnabled}
 										onOpenChange={(open) =>
 											setOpenLineId(open ? line.clientId : null)
 										}

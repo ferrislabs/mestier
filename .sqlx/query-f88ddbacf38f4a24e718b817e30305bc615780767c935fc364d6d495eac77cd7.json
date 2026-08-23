@@ -1,0 +1,154 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT o.id, o.name, o.slug, o.owner_id,\n                o.legal_name, o.legal_form, o.registration_number,\n                o.vat_status, o.vat_number, o.vat_exemption_basis,\n                o.share_capital_cents,\n                o.address_line1, o.address_line2, o.address_postal_code, o.address_city, o.address_country,\n                o.contact_email, o.contact_phone, o.insurance_mention,\n                o.quote_number_prefix,\n                o.deleted_at, o.created_at, o.updated_at\n            FROM organizations o\n            INNER JOIN organization_members m ON m.organization_id = o.id\n            WHERE m.user_id = $1 AND o.deleted_at IS NULL\n            ORDER BY o.created_at ASC\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "slug",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "owner_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 4,
+        "name": "legal_name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "legal_form",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 6,
+        "name": "registration_number",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 7,
+        "name": "vat_status",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 8,
+        "name": "vat_number",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 9,
+        "name": "vat_exemption_basis",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 10,
+        "name": "share_capital_cents",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 11,
+        "name": "address_line1",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 12,
+        "name": "address_line2",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 13,
+        "name": "address_postal_code",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 14,
+        "name": "address_city",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 15,
+        "name": "address_country",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 16,
+        "name": "contact_email",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 17,
+        "name": "contact_phone",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 18,
+        "name": "insurance_mention",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 19,
+        "name": "quote_number_prefix",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 20,
+        "name": "deleted_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 21,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 22,
+        "name": "updated_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      false,
+      true,
+      false,
+      false
+    ]
+  },
+  "hash": "f88ddbacf38f4a24e718b817e30305bc615780767c935fc364d6d495eac77cd7"
+}

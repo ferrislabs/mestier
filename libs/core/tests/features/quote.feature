@@ -16,10 +16,20 @@ Feature: Pricing and accepting a quote
       | Strip out existing    | 4        | hour | €45.00     |
       | Lay wall tiles        | 12.5     | m2   | €38.00     |
       | Fit skirting boards   | 8        | ml   | €27.50     |
-    Then the quote carries the reference "DEV-2026-0001"
+    Then the quote has no reference yet
     And the total of the quote is "€875.00"
     And the quote is in status "draft"
     And the company is notified of the event "quote.created"
+
+  Scenario: A reference is allocated only when the quote is sent, and never again afterwards
+    Given a company that has not issued any quote in 2026
+    When the artisan creates the quote "Kitchen renovation" with the following lines:
+      | work               | quantity | unit | unit price |
+      | Strip out existing | 4        | hour | €45.00     |
+    And the artisan sends the quote
+    Then the quote carries the reference "DEV-2026-0001"
+    When the artisan sends the quote again
+    Then the quote carries the reference "DEV-2026-0001"
 
   Scenario: A quote accepted by the customer changes status and notifies the company
     Given a quote "Kitchen renovation" in status "sent"

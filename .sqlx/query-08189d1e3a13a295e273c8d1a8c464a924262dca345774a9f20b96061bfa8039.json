@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n        SELECT id, org_id, quote_id, service_rate_id, label, quantity, unit, unit_price_cents, notes, photo_keys, deleted_at, created_at, updated_at\n        FROM quote_lines\n        WHERE quote_id = $1 AND deleted_at IS NULL\n        ORDER BY created_at ASC, id ASC\n        ",
+  "query": "\n        SELECT id, org_id, quote_id, service_rate_id, label, quantity, unit, unit_price_cents, vat_rate_bp, notes, photo_keys, deleted_at, created_at, updated_at\n        FROM quote_lines\n        WHERE quote_id = $1 AND deleted_at IS NULL\n        ORDER BY created_at ASC, id ASC\n        ",
   "describe": {
     "columns": [
       {
@@ -45,26 +45,31 @@
       },
       {
         "ordinal": 8,
+        "name": "vat_rate_bp",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 9,
         "name": "notes",
         "type_info": "Text"
       },
       {
-        "ordinal": 9,
+        "ordinal": 10,
         "name": "photo_keys",
         "type_info": "TextArray"
       },
       {
-        "ordinal": 10,
+        "ordinal": 11,
         "name": "deleted_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 11,
+        "ordinal": 12,
         "name": "created_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 12,
+        "ordinal": 13,
         "name": "updated_at",
         "type_info": "Timestamptz"
       }
@@ -84,11 +89,12 @@
       false,
       false,
       true,
+      true,
       false,
       true,
       false,
       false
     ]
   },
-  "hash": "4f916663d85080da01b25a5ed34f8b0db85af1d0be07f0938cf36411f8262ef8"
+  "hash": "08189d1e3a13a295e273c8d1a8c464a924262dca345774a9f20b96061bfa8039"
 }

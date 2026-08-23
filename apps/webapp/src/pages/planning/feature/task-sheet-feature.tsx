@@ -40,7 +40,7 @@ import {
 } from '#/pages/planning/lib/task-form'
 import { todayIsoDate } from '#/pages/planning/types'
 import { TaskSheet } from '#/pages/planning/ui/task-sheet'
-import { formatCents } from '#/pages/quotes/types'
+import { formatCents, quoteReferenceLabel } from '#/pages/quotes/types'
 
 export type TaskSheetTarget =
 	| { mode: 'create'; parentTaskId: string | null }
@@ -375,7 +375,7 @@ export function TaskSheetFeature({
 		)
 		.map((quote) => ({
 			id: quote.id,
-			label: `${quote.reference} · ${formatCents(quote.total_cents)}`,
+			label: `${quoteReferenceLabel(quote.reference)} · ${formatCents(quote.gross_cents)}`,
 		}))
 	// Internal projects are offered like any other — a meeting has to be
 	// attachable, that is the point of them existing.

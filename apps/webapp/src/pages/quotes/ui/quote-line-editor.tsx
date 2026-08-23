@@ -21,8 +21,10 @@ import type { CatalogItem } from '#/hooks/use-catalog-items'
 import type { FilePreview } from '#/hooks/use-file-url'
 import { cn } from '#/lib/utils'
 import {
+	COMMON_VAT_RATES_BP,
 	formatCents,
 	formatUnit,
+	formatVatRateBp,
 	type QuoteLineFormValues,
 	quoteLineSourceLabel,
 	quoteLineSummary,
@@ -39,6 +41,10 @@ interface QuoteLineEditorProps {
 	isOpen: boolean
 	canRemove: boolean
 	isUploading?: boolean
+	/** The organization's VAT status, read once at the page level
+	 * (`activeOrganization.vat_status`). An organization not subject to VAT
+	 * gets no rate column at all — not a column of zeros. */
+	vatEnabled: boolean
 	onOpenChange: (open: boolean) => void
 	onChange: (patch: Partial<QuoteLineFormValues>) => void
 	onSelectCatalogItem: (catalogItemId: string) => void
@@ -63,6 +69,7 @@ export function QuoteLineEditor({
 	isOpen,
 	canRemove,
 	isUploading,
+	vatEnabled,
 	onOpenChange,
 	onChange,
 	onSelectCatalogItem,
@@ -182,7 +189,14 @@ export function QuoteLineEditor({
 
 					{/* What it costs. Kept on one row so the arithmetic reads left to
 					    right and the total sits where the eye lands last. */}
-					<div className="grid items-end gap-4 sm:grid-cols-[1fr_1fr_1fr_auto]">
+					<div
+						className={cn(
+							'grid items-end gap-4',
+							vatEnabled
+								? 'sm:grid-cols-[1fr_1fr_1fr_1fr_auto]'
+								: 'sm:grid-cols-[1fr_1fr_1fr_auto]',
+						)}
+					>
 						<Field label="Quantité" htmlFor={`quantity-${line.clientId}`}>
 							<Input
 								id={`quantity-${line.clientId}`}
@@ -208,6 +222,15 @@ export function QuoteLineEditor({
 								placeholder="0,00"
 							/>
 						</Field>
+						{vatEnabled ? (
+							<Field label="TVA" htmlFor={`vat-${line.clientId}`}>
+								<VatRateField
+									id={`vat-${line.clientId}`}
+									valueBp={line.vatRateBp}
+									onChange={(vatRateBp) => onChange({ vatRateBp })}
+								/>
+							</Field>
+						) : null}
 						<div className="rounded-lg bg-muted px-4 py-2 text-right sm:min-w-32">
 							<p className="text-xs text-muted-foreground">Total ligne</p>
 							<p className="font-semibold tabular-nums">
@@ -240,6 +263,71 @@ export function QuoteLineEditor({
 				</div>
 			</CollapsibleContent>
 		</Collapsible>
+	)
+}
+
+const CUSTOM_VAT_RATE = 'custom'
+
+/**
+ * The organization's usual rates as one-click choices, with a free entry for
+ * the rest — never a blank that could mean either "no VAT" and "not decided
+ * yet" (see #310's `VatStatus`).
+ */
+function VatRateField({
+	id,
+	valueBp,
+	onChange,
+}: {
+	id: string
+	valueBp: string
+	onChange: (valueBp: string) => void
+}) {
+	const isCommonRate =
+		valueBp !== '' &&
+		(COMMON_VAT_RATES_BP as readonly number[]).includes(Number(valueBp))
+	const selectValue =
+		valueBp === '' ? '' : isCommonRate ? valueBp : CUSTOM_VAT_RATE
+
+	return (
+		<div className="space-y-1.5">
+			<Select
+				value={selectValue}
+				onValueChange={(next) => {
+					if (next === CUSTOM_VAT_RATE) {
+						onChange(valueBp || '0')
+						return
+					}
+					onChange(next)
+				}}
+			>
+				<SelectTrigger id={id} className="w-full">
+					<SelectValue placeholder="Taux" />
+				</SelectTrigger>
+				<SelectContent>
+					{COMMON_VAT_RATES_BP.map((rateBp) => (
+						<SelectItem key={rateBp} value={String(rateBp)}>
+							{formatVatRateBp(rateBp)}
+						</SelectItem>
+					))}
+					<SelectItem value={CUSTOM_VAT_RATE}>Autre…</SelectItem>
+				</SelectContent>
+			</Select>
+			{selectValue === CUSTOM_VAT_RATE ? (
+				<Input
+					inputMode="decimal"
+					value={valueBp === '' ? '' : String(Number(valueBp) / 100)}
+					onChange={(event) => {
+						const percent = Number(event.target.value.replace(',', '.'))
+						onChange(
+							Number.isFinite(percent)
+								? String(Math.round(percent * 100))
+								: '0',
+						)
+					}}
+					placeholder="Taux en %"
+				/>
+			) : null}
+		</div>
 	)
 }
 

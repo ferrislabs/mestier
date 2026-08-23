@@ -33,9 +33,12 @@ async fn a_customer_of_that_company(world: &mut QuoteWorld, _name: String) {
 async fn no_quote_issued_yet(world: &mut QuoteWorld, year: i32) {
     let prefix = format!("DEV-{year}-");
     assert!(
-        repository::quotes(&world.store)
-            .iter()
-            .all(|quote| !quote.reference.starts_with(&prefix)),
+        repository::quotes(&world.store).iter().all(|quote| {
+            !quote
+                .reference
+                .as_ref()
+                .is_some_and(|reference| reference.starts_with(&prefix))
+        }),
         "the scenario claims a clean year but the store already holds a quote for {year}"
     );
 }
@@ -45,15 +48,20 @@ async fn an_existing_quote(world: &mut QuoteWorld, title: String, status: String
     let now = chrono::Utc::now();
     let organization_id = world.organization_id();
     let id = QuoteId(generate_uuid_v7());
+    let status = parse_status(&status);
     let quote = Quote {
         id,
         organization_id,
-        reference: "DEV-2026-0001".to_owned(),
+        // Every status this step is asked for so far is past `Draft`, so
+        // it already carries the number a real quote would have.
+        reference: (status != QuoteStatus::Draft).then(|| "DEV-2026-0001".to_owned()),
         title,
         customer_id: world.customer_id(),
         customer_context_id: world.customer_context_id(),
-        status: parse_status(&status),
-        total_cents: 87_500,
+        status,
+        net_cents: 87_500,
+        vat_breakdown: Vec::new(),
+        gross_cents: 87_500,
         lines: vec![QuoteLine {
             id: QuoteLineId(generate_uuid_v7()),
             organization_id,
@@ -63,6 +71,7 @@ async fn an_existing_quote(world: &mut QuoteWorld, title: String, status: String
             quantity: Decimal::new(125, 1),
             unit: ServiceRateUnit::M2,
             unit_price_cents: 3_800,
+            vat_rate_bp: None,
             notes: None,
             photo_keys: vec![],
             deleted_at: None,
@@ -88,7 +97,10 @@ async fn the_artisan_creates_a_quote(world: &mut QuoteWorld, step: &Step, title:
         lines: quote_lines(step),
     };
 
-    let outcome = world.service().create_quote(command).await;
+    let outcome = world
+        .service()
+        .create_quote(command, repository::stubbed_organization())
+        .await;
 
     world.record(outcome);
 }
@@ -100,19 +112,54 @@ async fn the_customer_accepts(world: &mut QuoteWorld) {
         status: QuoteStatus::Accepted,
     };
 
-    let outcome = world.service().update_quote_status(command).await;
+    let outcome = world
+        .service()
+        .update_quote_status(command, repository::stubbed_organization())
+        .await;
 
     world.record(outcome);
 }
 
+/// Shared by both "sends the quote" phrasings: the second sending must be
+/// exactly as valid as the first, and must not allocate a second number
+/// (see #313).
+async fn send_quote(world: &mut QuoteWorld) {
+    let command = UpdateQuoteStatusCommand {
+        id: world.current_quote().id,
+        status: QuoteStatus::Sent,
+    };
+
+    let outcome = world
+        .service()
+        .update_quote_status(command, repository::stubbed_organization())
+        .await;
+
+    world.record(outcome);
+}
+
+#[when("the artisan sends the quote")]
+async fn the_artisan_sends_the_quote(world: &mut QuoteWorld) {
+    send_quote(world).await;
+}
+
+#[when("the artisan sends the quote again")]
+async fn the_artisan_sends_the_quote_again(world: &mut QuoteWorld) {
+    send_quote(world).await;
+}
+
 #[then(expr = "the quote carries the reference {string}")]
 async fn the_quote_carries_the_reference(world: &mut QuoteWorld, expected: String) {
-    assert_eq!(world.current_quote().reference, expected);
+    assert_eq!(world.current_quote().reference, Some(expected));
+}
+
+#[then("the quote has no reference yet")]
+async fn the_quote_has_no_reference_yet(world: &mut QuoteWorld) {
+    assert_eq!(world.current_quote().reference, None);
 }
 
 #[then(expr = "the total of the quote is {string}")]
 async fn the_quote_total_is(world: &mut QuoteWorld, expected: String) {
-    assert_eq!(format_euros(world.current_quote().total_cents), expected);
+    assert_eq!(format_euros(world.current_quote().net_cents), expected);
 }
 
 #[then(expr = "the quote is in status {string}")]
@@ -189,6 +236,7 @@ fn quote_lines(step: &Step) -> Vec<QuoteLineCommand> {
             quantity: parse_decimal(&row[quantity]),
             unit: parse_unit(&row[unit]),
             unit_price_cents: parse_euros(&row[price]),
+            vat_rate_bp: None,
             notes: None,
             photo_keys: vec![],
         })

@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            INSERT INTO products (id, org_id, name, sku, unit, unit_price_cents, description, deleted_at, created_at, updated_at)\n            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)\n            RETURNING id, org_id, name, sku, unit, unit_price_cents, description, deleted_at, created_at, updated_at\n            ",
+  "query": "\n            SELECT id, org_id, label, unit, rate_cents, default_vat_rate_bp, deleted_at, created_at, updated_at\n            FROM service_rates\n            WHERE org_id = $1 AND deleted_at IS NULL\n            ORDER BY label ASC, created_at ASC\n            LIMIT $2 OFFSET $3\n            ",
   "describe": {
     "columns": [
       {
@@ -15,41 +15,36 @@
       },
       {
         "ordinal": 2,
-        "name": "name",
+        "name": "label",
         "type_info": "Text"
       },
       {
         "ordinal": 3,
-        "name": "sku",
-        "type_info": "Text"
-      },
-      {
-        "ordinal": 4,
         "name": "unit",
         "type_info": "Text"
       },
       {
+        "ordinal": 4,
+        "name": "rate_cents",
+        "type_info": "Int4"
+      },
+      {
         "ordinal": 5,
-        "name": "unit_price_cents",
+        "name": "default_vat_rate_bp",
         "type_info": "Int4"
       },
       {
         "ordinal": 6,
-        "name": "description",
-        "type_info": "Text"
-      },
-      {
-        "ordinal": 7,
         "name": "deleted_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 8,
+        "ordinal": 7,
         "name": "created_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 9,
+        "ordinal": 8,
         "name": "updated_at",
         "type_info": "Timestamptz"
       }
@@ -57,22 +52,14 @@
     "parameters": {
       "Left": [
         "Uuid",
-        "Uuid",
-        "Text",
-        "Text",
-        "Text",
-        "Int4",
-        "Text",
-        "Timestamptz",
-        "Timestamptz",
-        "Timestamptz"
+        "Int8",
+        "Int8"
       ]
     },
     "nullable": [
       false,
       false,
       false,
-      true,
       false,
       false,
       true,
@@ -81,5 +68,5 @@
       false
     ]
   },
-  "hash": "0f72ce9e2b9f18fe6f0632c78485fafcfd3a3c9ef2f036a1eb3cfd782f0c8c35"
+  "hash": "c29a035d3fb92eeb5f60dcee7371d9a77a5257dab420ed95d8826b80714528a9"
 }

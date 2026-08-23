@@ -28,15 +28,16 @@ impl<'tx> ServiceRateRepository for PgServiceRateRepository<'tx> {
         let row = sqlx::query_as!(
             ServiceRateRow,
             r#"
-            INSERT INTO service_rates (id, org_id, label, unit, rate_cents, deleted_at, created_at, updated_at)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-            RETURNING id, org_id, label, unit, rate_cents, deleted_at, created_at, updated_at
+            INSERT INTO service_rates (id, org_id, label, unit, rate_cents, default_vat_rate_bp, deleted_at, created_at, updated_at)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+            RETURNING id, org_id, label, unit, rate_cents, default_vat_rate_bp, deleted_at, created_at, updated_at
             "#,
             service_rate.id.0,
             service_rate.organization_id.0,
             service_rate.label,
             service_rate.unit.as_str(),
             service_rate.rate_cents,
+            service_rate.default_vat_rate_bp,
             service_rate.deleted_at,
             service_rate.created_at,
             service_rate.updated_at,
@@ -53,7 +54,7 @@ impl<'tx> ServiceRateRepository for PgServiceRateRepository<'tx> {
         let row = sqlx::query_as!(
             ServiceRateRow,
             r#"
-            SELECT id, org_id, label, unit, rate_cents, deleted_at, created_at, updated_at
+            SELECT id, org_id, label, unit, rate_cents, default_vat_rate_bp, deleted_at, created_at, updated_at
             FROM service_rates
             WHERE id = $1 AND deleted_at IS NULL
             "#,
@@ -76,7 +77,7 @@ impl<'tx> ServiceRateRepository for PgServiceRateRepository<'tx> {
         let rows = sqlx::query_as!(
             ServiceRateRow,
             r#"
-            SELECT id, org_id, label, unit, rate_cents, deleted_at, created_at, updated_at
+            SELECT id, org_id, label, unit, rate_cents, default_vat_rate_bp, deleted_at, created_at, updated_at
             FROM service_rates
             WHERE org_id = $1 AND deleted_at IS NULL
             ORDER BY label ASC, created_at ASC
@@ -112,14 +113,15 @@ impl<'tx> ServiceRateRepository for PgServiceRateRepository<'tx> {
             ServiceRateRow,
             r#"
             UPDATE service_rates
-            SET label = $2, unit = $3, rate_cents = $4, updated_at = $5
+            SET label = $2, unit = $3, rate_cents = $4, default_vat_rate_bp = $5, updated_at = $6
             WHERE id = $1 AND deleted_at IS NULL
-            RETURNING id, org_id, label, unit, rate_cents, deleted_at, created_at, updated_at
+            RETURNING id, org_id, label, unit, rate_cents, default_vat_rate_bp, deleted_at, created_at, updated_at
             "#,
             service_rate.id.0,
             service_rate.label,
             service_rate.unit.as_str(),
             service_rate.rate_cents,
+            service_rate.default_vat_rate_bp,
             service_rate.updated_at,
         )
         .fetch_optional(&mut ***tx)
