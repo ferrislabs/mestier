@@ -65,3 +65,38 @@ pub async fn handler(
 
     Ok(Response::Created(credit_note.into()))
 }
+
+/// A document has few corrections, so this reads the full list rather than
+/// paginating it — same call `list_handler` mirrors from
+/// `payment::list::handler`.
+#[utoipa::path(
+    get,
+    path = "/api/v1/invoices/{invoice_id}/credit-notes",
+    operation_id = "listInvoiceCreditNotes",
+    tag = super::super::TAG,
+    params(
+        ("invoice_id" = InvoiceId, Path, description = "Source invoice identifier"),
+    ),
+    responses(
+        (status = 200, description = "Every credit note issued against this invoice", body = inline(DataEnvelope<Vec<InvoiceResponse>>)),
+        (status = 401, description = "Unauthorized"),
+        (status = 403, description = "Forbidden"),
+        (status = 404, description = "Source invoice not found"),
+    ),
+    security(("bearer_auth" = []))
+)]
+pub async fn list_handler(
+    InvoiceCreditNotesPath { invoice_id }: InvoiceCreditNotesPath,
+    State(state): State<AppState>,
+    Extension(identity): Extension<Identity>,
+) -> Result<Response<Vec<InvoiceResponse>>, ApiError> {
+    require_invoice_membership(&state, &identity, invoice_id).await?;
+
+    let credit_notes = state.usecase.get_invoice_credit_notes(invoice_id).await?;
+    let items: Vec<InvoiceResponse> = credit_notes
+        .into_iter()
+        .map(InvoiceResponse::from)
+        .collect();
+
+    Ok(Response::OK(items))
+}

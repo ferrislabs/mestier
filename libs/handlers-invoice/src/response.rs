@@ -184,12 +184,10 @@ impl From<InvoicePayment> for InvoicePaymentResponse {
     }
 }
 
-/// Mirrors `CustomerOutstandingBalance`. No route reads this yet — see the
-/// commit message: only `issue_deposit`/`issue_final_invoice` were named as
-/// unreachable domain capabilities to wire up in this issue, the dunning
-/// list (`outstanding_balance_by_customer`) is left for its own follow-up —
-/// but the response shape is defined alongside the rest of this crate's DTOs
-/// so that follow-up is a route, not a type.
+/// Mirrors `CustomerOutstandingBalance`. Read by
+/// `GET /organizations/{organization_id}/invoices/outstanding`
+/// (`invoice::outstanding::handler`) — the dunning list #320 built and #319
+/// left unwired.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, ToSchema)]
 pub struct CustomerOutstandingBalanceResponse {
     pub customer_id: CustomerId,
@@ -205,6 +203,18 @@ impl From<CustomerOutstandingBalance> for CustomerOutstandingBalanceResponse {
             oldest_due_at: value.oldest_due_at,
         }
     }
+}
+
+/// What remains to be collected on one invoice, computed here rather than in
+/// the browser (CLAUDE.md: money math lives in the backend) from the
+/// invoice's own `gross_cents`, its non-draft-non-cancelled credit notes and
+/// its non-deleted payments.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, ToSchema)]
+pub struct InvoiceBalanceResponse {
+    pub gross_cents: i32,
+    pub credited_cents: i64,
+    pub paid_cents: i64,
+    pub remaining_cents: i64,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, ToSchema)]

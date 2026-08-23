@@ -8,6 +8,14 @@ pub struct OrganizationInvoicesPath {
     pub organization_id: OrganizationId,
 }
 
+/// The dunning read #320 built (`outstanding_balance_by_customer`) and #319
+/// left unwired — see `invoice::outstanding`.
+#[derive(TypedPath, Deserialize)]
+#[typed_path("/api/v1/organizations/{organization_id}/invoices/outstanding")]
+pub struct OrganizationInvoicesOutstandingPath {
+    pub organization_id: OrganizationId,
+}
+
 /// Bare — an invoice's organization is derived from the loaded row, never
 /// from the path (see `require_invoice_membership`).
 #[derive(TypedPath, Deserialize)]
@@ -43,6 +51,13 @@ pub struct InvoicePdfPath {
 #[derive(TypedPath, Deserialize)]
 #[typed_path("/api/v1/invoices/{invoice_id}/payments")]
 pub struct InvoicePaymentsPath {
+    pub invoice_id: InvoiceId,
+}
+
+/// What remains to be collected on this invoice — see `invoice::balance`.
+#[derive(TypedPath, Deserialize)]
+#[typed_path("/api/v1/invoices/{invoice_id}/balance")]
+pub struct InvoiceBalancePath {
     pub invoice_id: InvoiceId,
 }
 
