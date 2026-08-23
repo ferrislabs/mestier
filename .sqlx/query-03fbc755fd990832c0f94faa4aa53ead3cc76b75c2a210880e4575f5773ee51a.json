@@ -1,0 +1,24 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT COUNT(*) AS \"count!\"\n            FROM assignment_reports\n            WHERE org_id = $1\n              AND reported_by = $2\n              AND ($3::text IS NULL OR resolution::text = $3)\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "count!",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "03fbc755fd990832c0f94faa4aa53ead3cc76b75c2a210880e4575f5773ee51a"
+}
