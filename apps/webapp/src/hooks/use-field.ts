@@ -49,12 +49,12 @@ export function useMyFieldTasks(organizationId: string) {
  * Refetched when the tab regains focus: a worker who locked their phone during
  * a job comes back to a screen that must not offer to start another one.
  */
-export function useCurrentTimeEntry(organizationId: string) {
+export function useCurrentTimeEntry(organizationId: string, enabled = true) {
 	return useQuery({
 		...window.tanstackApi.get(CURRENT_PATH, {
 			path: { organization_id: organizationId },
 		}).queryOptions,
-		enabled: Boolean(organizationId),
+		enabled: enabled && Boolean(organizationId),
 		refetchOnWindowFocus: true,
 	})
 }

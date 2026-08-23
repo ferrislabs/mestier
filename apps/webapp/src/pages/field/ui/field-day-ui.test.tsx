@@ -60,6 +60,11 @@ function entry(overrides: Partial<TimeEntry> = {}): TimeEntry {
 function baseProps() {
 	return {
 		organizationName: 'Paysages Bonnal',
+		// Every existing test in this suite predates the correction-loop
+		// clock demotion and exercises the clock itself, so the default here
+		// keeps it on; the dedicated `clockEnabled: false` describe block
+		// below covers the demoted screen.
+		clockEnabled: true,
 		tasks: [task()],
 		tasksLoadFailed: false,
 		onRetryTasks: vi.fn(),
@@ -354,5 +359,59 @@ describe('FieldDayUI — signaler un écart', () => {
 
 		await userEvent.click(screen.getByRole('button', { name: /^déclarer$/i }))
 		expect(props.onSubmitReport).toHaveBeenCalled()
+	})
+})
+
+describe('FieldDayUI — pointeuse désactivée', () => {
+	it('shows the day’s tasks and their report control without any clock', async () => {
+		await renderWithRouter(<FieldDayUI {...baseProps()} clockEnabled={false} />)
+
+		expect(screen.getByText('Taille de haie')).toBeDefined()
+		expect(
+			screen.getByRole('button', { name: /signaler un écart/i }),
+		).toBeDefined()
+	})
+
+	it('offers no way to start a job', async () => {
+		await renderWithRouter(<FieldDayUI {...baseProps()} clockEnabled={false} />)
+
+		expect(screen.queryByRole('button', { name: /^démarrer$/i })).toBeNull()
+	})
+
+	it('shows no running-job card even when the server reports one running', async () => {
+		await renderWithRouter(
+			<FieldDayUI {...baseProps()} clockEnabled={false} running={entry()} />,
+		)
+
+		expect(screen.queryByText(/en cours depuis/i)).toBeNull()
+		expect(
+			screen.queryByRole('button', { name: /clôturer ce projet/i }),
+		).toBeNull()
+	})
+
+	it('shows no forgotten-clock-off prompt even for a stale entry', async () => {
+		const stale = entry({ started_at: '2026-08-18T06:00:00Z' })
+		await renderWithRouter(
+			<FieldDayUI
+				{...baseProps()}
+				clockEnabled={false}
+				running={stale}
+				staleEntry={stale}
+			/>,
+		)
+
+		expect(screen.queryByText(/projet non clôturé/i)).toBeNull()
+		// The task list still shows, unlike the clock-enabled case where a
+		// stale entry hides it until settled.
+		expect(screen.getByText('Taille de haie')).toBeDefined()
+	})
+
+	it('shows no day-end section', async () => {
+		await renderWithRouter(<FieldDayUI {...baseProps()} clockEnabled={false} />)
+
+		expect(screen.queryByText(/fin de journée/i)).toBeNull()
+		expect(
+			screen.queryByRole('button', { name: /terminer ma journée/i }),
+		).toBeNull()
 	})
 })

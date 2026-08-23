@@ -58,6 +58,7 @@ export function FieldDayFeature({ organizationSlug }: FieldDayFeatureProps) {
 			key={organization.id}
 			organizationId={organization.id}
 			organizationName={organization.name}
+			clockEnabled={organization.field_clock_enabled}
 		/>
 	)
 }
@@ -65,12 +66,16 @@ export function FieldDayFeature({ organizationSlug }: FieldDayFeatureProps) {
 function FieldDayWorkspace({
 	organizationId,
 	organizationName,
+	clockEnabled,
 }: {
 	organizationId: string
 	organizationName: string
+	clockEnabled: boolean
 }) {
 	const tasks = useMyFieldTasks(organizationId)
-	const current = useCurrentTimeEntry(organizationId)
+	// No point polling for a running entry the screen won't show or act on
+	// — see `field-day-ui.tsx`'s own `clockEnabled` gating.
+	const current = useCurrentTimeEntry(organizationId, clockEnabled)
 	const startEntry = useStartTimeEntry(organizationId)
 	const stopEntry = useStopTimeEntry(organizationId)
 	const attachPhoto = useAttachFieldPhoto(organizationId)
@@ -287,6 +292,7 @@ function FieldDayWorkspace({
 	return (
 		<FieldDayUI
 			organizationName={organizationName}
+			clockEnabled={clockEnabled}
 			tasks={taskList}
 			tasksLoadFailed={tasks.isError}
 			onRetryTasks={() => void tasks.refetch()}

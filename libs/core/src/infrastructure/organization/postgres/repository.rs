@@ -44,9 +44,10 @@ impl<'tx> OrganizationRepository for PgOrganizationRepository<'tx> {
                 share_capital_cents,
                 address_line1, address_line2, address_postal_code, address_city, address_country,
                 contact_email, contact_phone, insurance_mention,
+                field_clock_enabled,
                 deleted_at, created_at, updated_at
             )
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23)
             RETURNING
                 id, name, slug, owner_id,
                 legal_name, legal_form, registration_number,
@@ -55,6 +56,7 @@ impl<'tx> OrganizationRepository for PgOrganizationRepository<'tx> {
                 address_line1, address_line2, address_postal_code, address_city, address_country,
                 contact_email, contact_phone, insurance_mention,
                 quote_number_prefix,
+                field_clock_enabled,
                 deleted_at, created_at, updated_at
             "#,
             organization.id.0,
@@ -76,6 +78,7 @@ impl<'tx> OrganizationRepository for PgOrganizationRepository<'tx> {
             organization.contact_email,
             organization.contact_phone,
             organization.insurance_mention,
+            organization.field_clock_enabled,
             organization.deleted_at,
             organization.created_at,
             organization.updated_at,
@@ -100,6 +103,7 @@ impl<'tx> OrganizationRepository for PgOrganizationRepository<'tx> {
                 address_line1, address_line2, address_postal_code, address_city, address_country,
                 contact_email, contact_phone, insurance_mention,
                 quote_number_prefix,
+                field_clock_enabled,
                 deleted_at, created_at, updated_at
             FROM organizations
             WHERE id = $1 AND deleted_at IS NULL
@@ -141,6 +145,7 @@ impl<'tx> OrganizationRepository for PgOrganizationRepository<'tx> {
                 o.address_line1, o.address_line2, o.address_postal_code, o.address_city, o.address_country,
                 o.contact_email, o.contact_phone, o.insurance_mention,
                 o.quote_number_prefix,
+                o.field_clock_enabled,
                 o.deleted_at, o.created_at, o.updated_at
             FROM organizations o
             INNER JOIN organization_members m ON m.organization_id = o.id
@@ -175,6 +180,7 @@ impl<'tx> OrganizationRepository for PgOrganizationRepository<'tx> {
                 address_line1, address_line2, address_postal_code, address_city, address_country,
                 contact_email, contact_phone, insurance_mention,
                 quote_number_prefix,
+                field_clock_enabled,
                 deleted_at, created_at, updated_at
             FROM organizations
             WHERE deleted_at IS NULL
@@ -229,7 +235,8 @@ impl<'tx> OrganizationRepository for PgOrganizationRepository<'tx> {
                 contact_email = $16,
                 contact_phone = $17,
                 insurance_mention = $18,
-                updated_at = $19
+                field_clock_enabled = $19,
+                updated_at = $20
             WHERE id = $1 AND deleted_at IS NULL
             RETURNING
                 id, name, slug, owner_id,
@@ -239,6 +246,7 @@ impl<'tx> OrganizationRepository for PgOrganizationRepository<'tx> {
                 address_line1, address_line2, address_postal_code, address_city, address_country,
                 contact_email, contact_phone, insurance_mention,
                 quote_number_prefix,
+                field_clock_enabled,
                 deleted_at, created_at, updated_at
             "#,
             organization.id.0,
@@ -259,6 +267,7 @@ impl<'tx> OrganizationRepository for PgOrganizationRepository<'tx> {
             organization.contact_email,
             organization.contact_phone,
             organization.insurance_mention,
+            organization.field_clock_enabled,
             organization.updated_at,
         )
         .fetch_optional(&mut ***tx)

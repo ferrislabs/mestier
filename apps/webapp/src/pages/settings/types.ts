@@ -17,6 +17,9 @@ export interface SettingsSection {
 export interface OrganizationFormValues {
 	name: string
 	slug: string
+	/** Whether the field app's home screen offers clocking in/out — off by
+	 * default since ADR 0002 (see `Organization.field_clock_enabled`). */
+	fieldClockEnabled: boolean
 }
 
 /** `vatChoice` never carries a blank meaning "either" (#310's `VatStatus`):

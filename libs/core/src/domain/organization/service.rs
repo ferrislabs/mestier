@@ -148,6 +148,7 @@ where
         // 3. Mutate.
         organization.name = command.name;
         organization.slug = command.slug;
+        organization.field_clock_enabled = command.field_clock_enabled;
         organization.updated_at = Utc::now();
 
         self.organization_repository
@@ -269,6 +270,7 @@ where
                 contact_phone: None,
                 insurance_mention: None,
                 quote_number_prefix: "DEV".to_owned(),
+                field_clock_enabled: false,
                 deleted_at: None,
                 created_at: now,
                 updated_at: now,
@@ -409,6 +411,7 @@ mod tests {
             contact_phone: None,
             insurance_mention: None,
             quote_number_prefix: "DEV".to_owned(),
+            field_clock_enabled: false,
             deleted_at: None,
             created_at: now,
             updated_at: now,
@@ -573,12 +576,87 @@ mod tests {
                 id,
                 name: "Acme Inc.".into(),
                 slug: "acme-inc".into(),
+                field_clock_enabled: false,
             })
             .await
             .unwrap();
 
         assert_eq!(updated.name, "Acme Inc.");
         assert_eq!(updated.slug, "acme-inc");
+    }
+
+    /// `fixture()` starts with the clock off; the command flips it on and
+    /// the saved entity must carry that through, same as `name`/`slug`.
+    #[tokio::test]
+    async fn update_organization_flips_field_clock_enabled() {
+        let id = OrganizationId(Uuid::new_v4());
+        let user_id = UserId(Uuid::new_v4());
+        let member_id = MemberId(Uuid::new_v4());
+
+        let mut organization_repository = MockOrganizationRepository::new();
+        let mut role_repository = MockRoleRepository::new();
+        let mut member_repository = MockMemberRepository::new();
+        let user_repository = MockUserRepository::new();
+
+        organization_repository
+            .expect_find_by_id()
+            .with(eq(id))
+            .times(1)
+            .returning(move |id| {
+                let org = fixture(id);
+                Box::pin(async move { Ok(Some(org)) })
+            });
+        stage_org_membership(
+            &mut member_repository,
+            &mut role_repository,
+            id,
+            user_id,
+            member_id,
+        );
+        organization_repository
+            .expect_update()
+            .times(1)
+            .withf(|o| o.field_clock_enabled)
+            .returning(|o| {
+                let cloned = Organization {
+                    id: o.id,
+                    name: o.name.clone(),
+                    slug: o.slug.clone(),
+                    owner_id: o.owner_id,
+                    field_clock_enabled: o.field_clock_enabled,
+                    deleted_at: o.deleted_at,
+                    created_at: o.created_at,
+                    updated_at: o.updated_at,
+                };
+                Box::pin(async move { Ok(cloned) })
+            });
+
+        let mut authz = MockAuthorizer::new();
+        authz
+            .expect_evaluate()
+            .times(1)
+            .returning(|_| Box::pin(async { Ok(Decision::allow()) }));
+
+        let mut service = OrganizationService::new(
+            organization_repository,
+            role_repository,
+            member_repository,
+            user_repository,
+            authz,
+        );
+
+        let updated = service
+            .update_organization(UpdateOrganizationCommand {
+                actor: actor_for(user_id),
+                id,
+                name: "Acme".into(),
+                slug: "acme".into(),
+                field_clock_enabled: true,
+            })
+            .await
+            .unwrap();
+
+        assert!(updated.field_clock_enabled);
     }
 
     #[tokio::test]
@@ -610,6 +688,7 @@ mod tests {
                 id,
                 name: "Whatever".into(),
                 slug: "whatever".into(),
+                field_clock_enabled: false,
             })
             .await
             .unwrap_err();
@@ -655,6 +734,7 @@ mod tests {
                 id,
                 name: "Acme Inc.".into(),
                 slug: "acme-inc".into(),
+                field_clock_enabled: false,
             })
             .await
             .unwrap_err();
@@ -715,6 +795,7 @@ mod tests {
                 id,
                 name: "Acme Inc.".into(),
                 slug: "acme-inc".into(),
+                field_clock_enabled: false,
             })
             .await
             .unwrap_err();
@@ -1070,6 +1151,10 @@ mod tests {
         assert_eq!(org.name, "Acme");
         assert_eq!(org.slug, "acme");
         assert!(org.deleted_at.is_none());
+        assert!(
+            !org.field_clock_enabled,
+            "a freshly created organization starts with the clock off"
+        );
     }
 
     /// The preset names/colors themselves — `create_organization_seeds_roles_and_owner_membership`
@@ -1258,6 +1343,7 @@ mod tests {
                     contact_phone: None,
                     insurance_mention: None,
                     quote_number_prefix: "DEV".to_owned(),
+                    field_clock_enabled: false,
                     deleted_at: None,
                     created_at: now,
                     updated_at: now,
@@ -1319,6 +1405,7 @@ mod tests {
                     contact_phone: None,
                     insurance_mention: None,
                     quote_number_prefix: "DEV".to_owned(),
+                    field_clock_enabled: false,
                     deleted_at: None,
                     created_at: now,
                     updated_at: now,

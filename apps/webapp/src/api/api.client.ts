@@ -461,6 +461,7 @@ export namespace Schemas {
     contact_email?: (string | null) | undefined;
     contact_phone?: (string | null) | undefined;
     created_at: string;
+    field_clock_enabled: boolean;
     id: OrganizationId;
     insurance_mention?: (string | null) | undefined;
     legal_form?: (string | null) | undefined;
@@ -776,7 +777,7 @@ export namespace Schemas {
   }>;
   export type UpdateMemberRequest = Partial<{ first_name: string | null; last_name: string | null }>;
   export type UpdateMessageRequest = { content: string };
-  export type UpdateOrganizationRequest = { name: string; slug: string };
+  export type UpdateOrganizationRequest = { field_clock_enabled: boolean; name: string; slug: string };
   export type UpdateProductRequest = {
     default_vat_rate_bp?: (number | null) | undefined;
     description?: (string | null) | undefined;
@@ -2429,6 +2430,7 @@ export namespace Endpoints {
           contact_email?: (string | null) | undefined;
           contact_phone?: (string | null) | undefined;
           created_at: string;
+          field_clock_enabled: boolean;
           id: Schemas.OrganizationId;
           insurance_mention?: (string | null) | undefined;
           legal_form?: (string | null) | undefined;
@@ -2465,6 +2467,7 @@ export namespace Endpoints {
           contact_email?: (string | null) | undefined;
           contact_phone?: (string | null) | undefined;
           created_at: string;
+          field_clock_enabled: boolean;
           id: Schemas.OrganizationId;
           insurance_mention?: (string | null) | undefined;
           legal_form?: (string | null) | undefined;
@@ -2503,6 +2506,7 @@ export namespace Endpoints {
           contact_email?: (string | null) | undefined;
           contact_phone?: (string | null) | undefined;
           created_at: string;
+          field_clock_enabled: boolean;
           id: Schemas.OrganizationId;
           insurance_mention?: (string | null) | undefined;
           legal_form?: (string | null) | undefined;
@@ -2552,6 +2556,7 @@ export namespace Endpoints {
           contact_email?: (string | null) | undefined;
           contact_phone?: (string | null) | undefined;
           created_at: string;
+          field_clock_enabled: boolean;
           id: Schemas.OrganizationId;
           insurance_mention?: (string | null) | undefined;
           legal_form?: (string | null) | undefined;
@@ -4531,6 +4536,7 @@ export namespace Endpoints {
           contact_email?: (string | null) | undefined;
           contact_phone?: (string | null) | undefined;
           created_at: string;
+          field_clock_enabled: boolean;
           id: Schemas.OrganizationId;
           insurance_mention?: (string | null) | undefined;
           legal_form?: (string | null) | undefined;

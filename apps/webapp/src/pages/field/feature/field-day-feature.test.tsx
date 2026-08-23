@@ -25,6 +25,10 @@ const ORGANIZATION: Organization = {
 	owner_id: 'user-1',
 	missing_legal_identity_fields: [],
 	slug: 'paysages-bonnal',
+	// Every existing test in this suite predates the clock demotion and
+	// exercises the clock itself — see the dedicated
+	// "pointeuse désactivée" describe block below for the demoted case.
+	field_clock_enabled: true,
 	created_at: '2026-01-01T00:00:00Z',
 	updated_at: '2026-01-01T00:00:00Z',
 }
@@ -92,7 +96,9 @@ function installFakeTanstackApi() {
 
 function renderFeature(
 	configure: (api: ReturnType<typeof installFakeTanstackApi>) => void,
+	organizationOverrides: Partial<Organization> = {},
 ) {
+	const organization = { ...ORGANIZATION, ...organizationOverrides }
 	const api = installFakeTanstackApi()
 	const { mockGet } = api
 	mockGet(TASKS_PATH, () => ({ data: [], pagination: null }))
@@ -110,7 +116,7 @@ function renderFeature(
 	function Providers({ children }: { children: ReactNode }) {
 		return (
 			<QueryClientProvider client={queryClient}>
-				<OrganizationListProvider organizations={[ORGANIZATION]}>
+				<OrganizationListProvider organizations={[organization]}>
 					{children}
 				</OrganizationListProvider>
 			</QueryClientProvider>
@@ -119,7 +125,7 @@ function renderFeature(
 
 	render(
 		<Providers>
-			<FieldDayFeature organizationSlug={ORGANIZATION.slug} />
+			<FieldDayFeature organizationSlug={organization.slug} />
 		</Providers>,
 	)
 
@@ -455,5 +461,32 @@ describe('FieldDayFeature — boucle de correction', () => {
 				/déjà été traité par un responsable, vous ne pouvez plus le modifier/i,
 			),
 		).toBeDefined()
+	})
+})
+
+describe('FieldDayFeature — pointeuse désactivée', () => {
+	it('shows the tasks and no clock, and never polls /field/current', async () => {
+		let currentRequests = 0
+		renderFeature(
+			(api) => {
+				api.mockGet(TASKS_PATH, () => ({ data: [task()], pagination: null }))
+				api.mockGet(CURRENT_PATH, () => {
+					currentRequests += 1
+					return {
+						data: { running: null, day_ended_at: null },
+						pagination: null,
+					}
+				})
+			},
+			{ field_clock_enabled: false },
+		)
+
+		expect(await screen.findByText('Taille de haie')).toBeDefined()
+		expect(screen.queryByRole('button', { name: /^démarrer$/i })).toBeNull()
+		expect(
+			screen.queryByRole('button', { name: /terminer ma journée/i }),
+		).toBeNull()
+		// Nothing polls a running entry the screen would never show or act on.
+		expect(currentRequests).toBe(0)
 	})
 })

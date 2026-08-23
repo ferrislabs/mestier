@@ -46,6 +46,9 @@ pub struct OrganizationResponse {
     /// uses — so the settings page (#311) can link straight to the field
     /// named in either place. Empty once the identity is complete.
     pub missing_legal_identity_fields: Vec<MissingLegalIdentityField>,
+    /// Whether the field app's home screen offers clocking in/out — see
+    /// `Organization::field_clock_enabled`'s own doc.
+    pub field_clock_enabled: bool,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }
@@ -76,6 +79,7 @@ impl From<Organization> for OrganizationResponse {
             contact_phone: org.contact_phone,
             insurance_mention: org.insurance_mention,
             missing_legal_identity_fields,
+            field_clock_enabled: org.field_clock_enabled,
             created_at: org.created_at,
             updated_at: org.updated_at,
         }
