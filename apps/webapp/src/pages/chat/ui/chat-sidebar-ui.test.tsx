@@ -43,6 +43,8 @@ function baseProps(
 		isLoading: false,
 		isError: false,
 		onlineCount: 0,
+		unreadChannelIds: new Set(),
+		mentionCount: 0,
 		...overrides,
 	}
 }
@@ -111,5 +113,35 @@ describe('ChatSidebarUI', () => {
 		await user.click(screen.getByText('cat-1'))
 
 		expect(onToggleCategory).toHaveBeenCalledWith('cat-1', true)
+	})
+})
+
+describe('ChatSidebarUI — unread and mentions', () => {
+	it('shows an unread indicator only for channels with unread content', async () => {
+		const groups = [
+			{
+				category: category('cat-1'),
+				channels: [channel('ch-1', 'cat-1'), channel('ch-2', 'cat-1')],
+			},
+		]
+		await renderWithRouter(
+			<ChatSidebarUI
+				{...baseProps({ groups, unreadChannelIds: new Set(['ch-1']) })}
+			/>,
+		)
+
+		expect(screen.getAllByText('Non lu')).toHaveLength(1)
+	})
+
+	it('shows no mention badge when there are no unread mentions', async () => {
+		await renderWithRouter(<ChatSidebarUI {...baseProps()} />)
+		expect(screen.queryByText(/mentions non lues/)).toBeNull()
+	})
+
+	it('shows the mention count badge when there are unread mentions', async () => {
+		await renderWithRouter(
+			<ChatSidebarUI {...baseProps({ mentionCount: 3 })} />,
+		)
+		expect(screen.getByLabelText('3 mentions non lues')).toBeDefined()
 	})
 })

@@ -5,6 +5,9 @@ import {
 	useCategories,
 	useChannels,
 	useChatListGatewaySync,
+	useReadStateGatewaySync,
+	useUnreadChannels,
+	useUnreadMentionCount,
 } from '#/hooks/use-chat'
 import { useOnlineCount } from '#/hooks/use-presence'
 import { groupChannelsByCategory } from '#/pages/chat/lib/group-channels'
@@ -26,7 +29,10 @@ export function ChatShellFeature() {
 	const categories = useCategories(activeOrganization.id)
 	const channels = useChannels(activeOrganization.id)
 	useChatListGatewaySync(activeOrganization.id)
+	useReadStateGatewaySync(activeOrganization.id)
 	const onlineCount = useOnlineCount()
+	const unreadChannelIds = useUnreadChannels(activeOrganization.id)
+	const mentionCount = useUnreadMentionCount(activeOrganization.id)
 
 	const groups = groupChannelsByCategory(
 		categories.data ?? [],
@@ -53,6 +59,8 @@ export function ChatShellFeature() {
 				isLoading={categories.isLoading || channels.isLoading}
 				isError={categories.isError || channels.isError}
 				onlineCount={onlineCount}
+				unreadChannelIds={unreadChannelIds.data ?? new Set()}
+				mentionCount={mentionCount}
 			/>
 			<div className="flex min-w-0 flex-1 flex-col">
 				<Outlet />

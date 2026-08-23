@@ -25,6 +25,8 @@ export interface ChatSidebarUIProps {
 	isLoading: boolean
 	isError: boolean
 	onlineCount: number
+	unreadChannelIds: ReadonlySet<string>
+	mentionCount: number
 }
 
 export function ChatSidebarUI({
@@ -36,14 +38,24 @@ export function ChatSidebarUI({
 	isLoading,
 	isError,
 	onlineCount,
+	unreadChannelIds,
+	mentionCount,
 }: ChatSidebarUIProps) {
 	return (
 		<nav
 			aria-label="Canaux"
 			className="flex h-full w-64 shrink-0 flex-col overflow-y-auto border-r bg-card/50"
 		>
-			<div className="px-4 py-4">
+			<div className="flex items-center justify-between px-4 py-4">
 				<h2 className="text-sm font-semibold text-foreground">Discussions</h2>
+				{mentionCount > 0 ? (
+					<output
+						aria-label={`${mentionCount} mentions non lues`}
+						className="flex min-w-5 items-center justify-center rounded-full bg-destructive px-1.5 py-0.5 text-xs font-semibold text-destructive-foreground"
+					>
+						{mentionCount}
+					</output>
+				) : null}
 			</div>
 
 			<PresenceSummaryUI onlineCount={onlineCount} />
@@ -73,6 +85,7 @@ export function ChatSidebarUI({
 									: false
 							}
 							onToggleCategory={onToggleCategory}
+							unreadChannelIds={unreadChannelIds}
 						/>
 					))}
 				</div>
@@ -111,6 +124,7 @@ interface CategoryGroupProps {
 	activeChannelId?: string
 	collapsed: boolean
 	onToggleCategory: (categoryId: string, collapsed: boolean) => void
+	unreadChannelIds: ReadonlySet<string>
 }
 
 function CategoryGroup({
@@ -119,24 +133,36 @@ function CategoryGroup({
 	activeChannelId,
 	collapsed,
 	onToggleCategory,
+	unreadChannelIds,
 }: CategoryGroupProps) {
 	const channelList = (
 		<ul className="flex flex-col gap-0.5">
-			{group.channels.map((chan) => (
-				<li key={chan.id}>
-					<Link
-						to={buildOrgPath(organizationSlug, `/chat/${chan.id}`)}
-						className={cn(
-							'flex items-center gap-1.5 rounded-md px-2 py-1.5 text-sm text-muted-foreground hover:bg-accent hover:text-accent-foreground',
-							chan.id === activeChannelId &&
-								'bg-accent font-medium text-accent-foreground',
-						)}
-					>
-						<Hash className="size-3.5 shrink-0" />
-						<span className="truncate">{chan.name}</span>
-					</Link>
-				</li>
-			))}
+			{group.channels.map((chan) => {
+				const unread = unreadChannelIds.has(chan.id)
+				return (
+					<li key={chan.id}>
+						<Link
+							to={buildOrgPath(organizationSlug, `/chat/${chan.id}`)}
+							className={cn(
+								'flex items-center gap-1.5 rounded-md px-2 py-1.5 text-sm text-muted-foreground hover:bg-accent hover:text-accent-foreground',
+								chan.id === activeChannelId &&
+									'bg-accent font-medium text-accent-foreground',
+								unread && 'font-semibold text-foreground',
+							)}
+						>
+							<Hash className="size-3.5 shrink-0" />
+							<span className="truncate">{chan.name}</span>
+							{unread ? (
+								<span
+									aria-hidden="true"
+									className="ml-auto size-1.5 shrink-0 rounded-full bg-primary"
+								/>
+							) : null}
+							{unread ? <span className="sr-only">Non lu</span> : null}
+						</Link>
+					</li>
+				)
+			})}
 		</ul>
 	)
 

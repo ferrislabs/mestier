@@ -53,6 +53,8 @@ function baseProps(
 		threadedMessageIds: new Set(),
 		scrollContainerRef: createRef(),
 		onScroll: vi.fn(),
+		onWheel: vi.fn(),
+		onTouchMove: vi.fn(),
 		onRetry: vi.fn(),
 		onStartEdit: vi.fn(),
 		onChangeEditDraft: vi.fn(),

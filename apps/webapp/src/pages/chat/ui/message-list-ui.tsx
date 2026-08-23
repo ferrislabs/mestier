@@ -28,6 +28,11 @@ export interface MessageListUIProps {
 	threadedMessageIds: ReadonlySet<string>
 	scrollContainerRef: RefObject<HTMLDivElement | null>
 	onScroll: (event: React.UIEvent<HTMLDivElement>) => void
+	/** Real reader input (as opposed to the `scroll` event, which also fires
+	 * for the programmatic auto-scroll-to-bottom on mount) — see
+	 * `use-message-thread-ui.ts`'s `handleInteraction` doc comment. */
+	onWheel: (event: React.UIEvent<HTMLDivElement>) => void
+	onTouchMove: (event: React.UIEvent<HTMLDivElement>) => void
 	onRetry: (tempId: string) => void
 	onStartEdit: (messageId: string, content: string) => void
 	onChangeEditDraft: (value: string) => void
@@ -55,6 +60,8 @@ export function MessageListUI({
 	threadedMessageIds,
 	scrollContainerRef,
 	onScroll,
+	onWheel,
+	onTouchMove,
 	onRetry,
 	onStartEdit,
 	onChangeEditDraft,
@@ -96,6 +103,8 @@ export function MessageListUI({
 		<div
 			ref={scrollContainerRef}
 			onScroll={onScroll}
+			onWheel={onWheel}
+			onTouchMove={onTouchMove}
 			className="flex flex-1 flex-col gap-3 overflow-y-auto p-4"
 		>
 			{hasMoreOlder ? (

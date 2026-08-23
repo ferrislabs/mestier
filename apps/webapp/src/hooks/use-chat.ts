@@ -16,6 +16,14 @@ const CHANNEL_MESSAGES_PATH = '/api/v1/chat/channels/{channel_id}/messages'
 const MESSAGE_PATH = '/api/v1/chat/messages/{message_id}'
 const REACTION_PATH = '/api/v1/chat/messages/{message_id}/reactions/{emoji}'
 const CHANNEL_THREADS_PATH = '/api/v1/chat/channels/{channel_id}/threads'
+const ORG_UNREAD_PATH = '/api/v1/chat/organizations/{organization_id}/unread'
+const CHANNEL_READ_PATH = '/api/v1/chat/channels/{channel_id}/read'
+const ORG_NOTIFICATIONS_PATH =
+	'/api/v1/chat/organizations/{organization_id}/notifications'
+const NOTIFICATION_READ_PATH =
+	'/api/v1/chat/notifications/{notification_id}/read'
+const ORG_NOTIFICATIONS_READ_ALL_PATH =
+	'/api/v1/chat/organizations/{organization_id}/notifications/read-all'
 
 /** Server caps `limit` at 100 (`MessageCursorQuery::effective_limit`); 50
  * matches its own default. Also doubles as the "did that page run out"
@@ -26,6 +34,7 @@ export type Category = Schemas.CategoryResponse
 export type Channel = Schemas.ChannelResponse
 export type Message = Schemas.MessageResponse
 export type MessageAttachment = Schemas.CreateMessageAttachment
+export type Notification = Schemas.NotificationResponse
 
 function categoriesKey(organizationId: string) {
 	return window.tanstackApi.get(ORG_CATEGORIES_PATH, {
@@ -458,4 +467,154 @@ export function useMessages(channelId: string, currentUserId: string | null) {
 		deleteMessage,
 		toggleReaction,
 	}
+}
+
+// ── Read state, unread channels, and mentions ───────────────────────────────
+// `chat.channel_read_state` is per member and per channel, and the server
+// owns it — this file only reports a position (`markChannelRead`) and
+// renders what the server hands back (`useUnreadChannels`). It never
+// derives "unread" from the message cache: that would disagree with every
+// other device the same person is signed in on.
+//
+// There is no REST snapshot of *where* reading stopped (`read_state/` only
+// exposes `PUT .../read` and `GET .../unread`, the latter a plain
+// `{ channel_ids }` presence list — no per-channel count, no
+// `last_read_message_id`). So a numeric "N unread" per channel and a
+// pixel-accurate "new messages" marker are not achievable without a new
+// endpoint; flagged rather than derived from the message cache. What *is*
+// implemented: a per-channel unread indicator (boolean, from the real
+// list), and a "new messages since you left" banner in the thread itself.
+
+function unreadKey(organizationId: string) {
+	return window.tanstackApi.get(ORG_UNREAD_PATH, {
+		path: { organization_id: organizationId },
+	}).queryKey
+}
+
+/** Channels with unread content, for this member, in this org. */
+export function useUnreadChannels(organizationId: string) {
+	return useQuery({
+		...window.tanstackApi.get(ORG_UNREAD_PATH, {
+			path: { organization_id: organizationId },
+		}).queryOptions,
+		select: (response) => new Set(response.channel_ids),
+		enabled: Boolean(organizationId),
+	})
+}
+
+export function useMarkChannelRead() {
+	return useMutation({
+		...window.tanstackApi.mutation('put', CHANNEL_READ_PATH).mutationOptions,
+	})
+}
+
+function notificationsKey(organizationId: string) {
+	// `unread_only` / `before` / `limit` belong in `query`, but the generator
+	// folded `NotificationListQuery` into `path` instead (a quirk in how it
+	// reads an `IntoParams` query struct alongside a path param) — values
+	// placed there that aren't part of the URL template are silently
+	// dropped, so this endpoint cannot actually be filtered server-side
+	// through this client. Always fetches the default page and filters
+	// client-side below; the notification records themselves are still
+	// server-authoritative, only the filtering moved.
+	return window.tanstackApi.get(ORG_NOTIFICATIONS_PATH, {
+		path: {
+			organization_id: organizationId,
+			unread_only: null,
+			before: null,
+			limit: null,
+		},
+	} as never).queryKey
+}
+
+export function useNotifications(organizationId: string) {
+	return useQuery({
+		...window.tanstackApi.get(ORG_NOTIFICATIONS_PATH, {
+			path: {
+				organization_id: organizationId,
+				unread_only: null,
+				before: null,
+				limit: null,
+			},
+		} as never).queryOptions,
+		select: (response: { data: Notification[] }) => response.data,
+		enabled: Boolean(organizationId),
+	})
+}
+
+/** Unread mentions — the notifications somebody actually needs to act on,
+ * counted apart from ordinary channel unreads. */
+export function useUnreadMentionCount(organizationId: string): number {
+	const notifications = useNotifications(organizationId)
+	return (notifications.data ?? []).filter(
+		(notification) => notification.kind === 'MENTION' && !notification.read_at,
+	).length
+}
+
+export function useMarkNotificationRead() {
+	return useMutation({
+		...window.tanstackApi.mutation('put', NOTIFICATION_READ_PATH)
+			.mutationOptions,
+	})
+}
+
+export function useMarkAllNotificationsRead() {
+	return useMutation({
+		...window.tanstackApi.mutation('put', ORG_NOTIFICATIONS_READ_ALL_PATH)
+			.mutationOptions,
+	})
+}
+
+/**
+ * Converges read state and mentions across tabs/devices over the gateway,
+ * per the issue — a `CHANNEL_READ` from this same user (self-scoped by the
+ * server, see `gateway.rs`'s `target_user`) clears that channel's unread
+ * flag here too, and a live `NOTIFICATION_CREATE` both appends to the
+ * notification list and marks its channel unread, without a refetch.
+ */
+export function useReadStateGatewaySync(organizationId: string) {
+	const queryClient = useQueryClient()
+
+	useGatewayEvent('CHANNEL_READ', (event) => {
+		if (event.data.organization_id !== organizationId) return
+		queryClient.setQueryData<{ channel_ids: string[] }>(
+			unreadKey(organizationId),
+			(old) =>
+				old
+					? {
+							channel_ids: old.channel_ids.filter(
+								(id) => id !== event.data.channel_id,
+							),
+						}
+					: old,
+		)
+	})
+
+	useGatewayEvent('NOTIFICATION_CREATE', (event) => {
+		if (event.data.organization_id !== organizationId) return
+		const notification: Notification = {
+			id: event.data.id,
+			channel_id: event.data.channel_id,
+			message_id: event.data.message_id,
+			kind: event.data.kind,
+			read_at: event.data.read_at,
+			created_at: event.data.created_at,
+		}
+		queryClient.setQueryData<{ data: Notification[] }>(
+			notificationsKey(organizationId),
+			(old) => {
+				if (!old) return { data: [notification] }
+				if (old.data.some((n) => n.id === notification.id)) return old
+				return { ...old, data: [notification, ...old.data] }
+			},
+		)
+		queryClient.setQueryData<{ channel_ids: string[] }>(
+			unreadKey(organizationId),
+			(old) => {
+				if (!old) return { channel_ids: [event.data.channel_id] }
+				if (old.channel_ids.includes(event.data.channel_id)) return old
+				return { channel_ids: [...old.channel_ids, event.data.channel_id] }
+			},
+		)
+	})
 }

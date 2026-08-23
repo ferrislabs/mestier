@@ -1,6 +1,10 @@
 import type { UIEvent } from 'react'
 import { useLayoutEffect, useRef, useState } from 'react'
-import { type MessageAttachment, useMessages } from '#/hooks/use-chat'
+import {
+	type MessageAttachment,
+	useMarkChannelRead,
+	useMessages,
+} from '#/hooks/use-chat'
 import { useUploadFile } from '#/hooks/use-customers'
 import { useFileUrls } from '#/hooks/use-file-url'
 import { useGatewayUserId } from '#/hooks/use-gateway'
@@ -55,6 +59,41 @@ export function useMessageThreadUi(channelId: string) {
 	const previousMessageCountRef = useRef(0)
 	const wasNearBottomRef = useRef(true)
 
+	// Read state only advances once the reader has genuinely engaged with the
+	// thread and reached its bottom — never on mount, even though the effect
+	// below auto-scrolls there visually. "Marking read on mount is how people
+	// lose messages" (the issue's own words), so a plain `scroll` event isn't
+	// enough signal on its own: it fires for that same programmatic
+	// auto-scroll too. `wheel`/`touchmove` only fire for the reader's own
+	// input, which is what `hasUserInteractedRef` gates on.
+	const hasUserInteractedRef = useRef(false)
+	const lastMarkedReadIdRef = useRef<string | null>(null)
+	const markChannelRead = useMarkChannelRead()
+
+	function maybeMarkRead(atBottom: boolean) {
+		if (!hasUserInteractedRef.current || !atBottom) return
+		const latest = messages.at(-1)?.message.id
+		if (!latest || latest === lastMarkedReadIdRef.current) return
+		lastMarkedReadIdRef.current = latest
+		markChannelRead.mutate({
+			path: { channel_id: channelId },
+			body: { message_id: latest },
+		} as never)
+	}
+
+	/** Fired for `wheel`/`touchmove` on the scroll container — real reader
+	 * input, unlike the `scroll` event, which also fires for the programmatic
+	 * auto-scroll-to-bottom on mount and would otherwise mark a channel read
+	 * the instant it opens. */
+	function handleInteraction(event: UIEvent<HTMLDivElement>) {
+		hasUserInteractedRef.current = true
+		const container = event.currentTarget
+		const atBottom =
+			container.scrollHeight - container.scrollTop - container.clientHeight <
+			NEAR_BOTTOM_THRESHOLD_PX
+		maybeMarkRead(atBottom)
+	}
+
 	// Keeps the reader's view stable when older messages are prepended, and
 	// auto-scrolls to a newly arrived message only when they were already at
 	// the bottom — so reading old messages is never interrupted by a new one.
@@ -79,9 +118,11 @@ export function useMessageThreadUi(channelId: string) {
 
 	function handleScroll(event: UIEvent<HTMLDivElement>) {
 		const container = event.currentTarget
-		wasNearBottomRef.current =
+		const atBottom =
 			container.scrollHeight - container.scrollTop - container.clientHeight <
 			NEAR_BOTTOM_THRESHOLD_PX
+		wasNearBottomRef.current = atBottom
+		maybeMarkRead(atBottom)
 
 		if (
 			container.scrollTop < NEAR_TOP_THRESHOLD_PX &&
@@ -198,6 +239,8 @@ export function useMessageThreadUi(channelId: string) {
 			editDraft,
 			scrollContainerRef,
 			onScroll: handleScroll,
+			onWheel: handleInteraction,
+			onTouchMove: handleInteraction,
 			onRetry: retrySend,
 			onStartEdit: handleStartEdit,
 			onChangeEditDraft: setEditDraft,
