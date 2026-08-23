@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            INSERT INTO tasks (id, org_id, parent_task_id, title, description, starts_at, ends_at, all_day, status, blocks_availability, customer_id, customer_context_id, quote_id, project_id, expenses_cents, expenses_label, deleted_at, created_at, updated_at)\n            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, CAST($9 AS text)::task_status, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)\n            RETURNING id, org_id, parent_task_id, title, description, starts_at, ends_at, all_day, status::text AS \"status!\", blocks_availability, customer_id, customer_context_id, quote_id, project_id, expenses_cents, expenses_label, deleted_at, created_at, updated_at\n            ",
+  "query": "\n            SELECT id, org_id, parent_task_id, title, description, starts_at, ends_at, all_day, status::text AS \"status!\", blocks_availability, customer_id, customer_context_id, quote_id, project_id, expenses_cents, expenses_label, recurrence_id, occurrence_date, deleted_at, created_at, updated_at\n            FROM tasks\n            WHERE id = $1 AND deleted_at IS NULL\n            ",
   "describe": {
     "columns": [
       {
@@ -85,41 +85,33 @@
       },
       {
         "ordinal": 16,
+        "name": "recurrence_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 17,
+        "name": "occurrence_date",
+        "type_info": "Date"
+      },
+      {
+        "ordinal": 18,
         "name": "deleted_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 17,
+        "ordinal": 19,
         "name": "created_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 18,
+        "ordinal": 20,
         "name": "updated_at",
         "type_info": "Timestamptz"
       }
     ],
     "parameters": {
       "Left": [
-        "Uuid",
-        "Uuid",
-        "Uuid",
-        "Text",
-        "Text",
-        "Timestamptz",
-        "Timestamptz",
-        "Bool",
-        "Text",
-        "Bool",
-        "Uuid",
-        "Uuid",
-        "Uuid",
-        "Uuid",
-        "Int4",
-        "Text",
-        "Timestamptz",
-        "Timestamptz",
-        "Timestamptz"
+        "Uuid"
       ]
     },
     "nullable": [
@@ -140,9 +132,11 @@
       false,
       true,
       true,
+      true,
+      true,
       false,
       false
     ]
   },
-  "hash": "24523cb5ec75f571039250cb8aea992df1d9a5e439755f022afaef3fe83c803d"
+  "hash": "95b3fff655797fa2f985d0e8883b056f7afa1c336283f8a5cc830296182774e7"
 }

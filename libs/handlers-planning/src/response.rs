@@ -214,6 +214,8 @@ mod tests {
                 member_id,
                 created_at: now,
             }],
+            recurrence_id: None,
+            occurrence_date: None,
             deleted_at: None,
             created_at: now,
             updated_at: now,

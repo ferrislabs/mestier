@@ -1,11 +1,13 @@
 use std::{fmt::Display, str::FromStr};
 
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, NaiveDate, Utc};
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 use uuid::Uuid;
 
-use crate::{CustomerContextId, CustomerId, MemberId, OrganizationId, ProjectId, QuoteId};
+use crate::{
+    CustomerContextId, CustomerId, MemberId, OrganizationId, ProjectId, QuoteId, TaskRecurrenceId,
+};
 
 pub mod commands;
 pub mod ports;
@@ -159,6 +161,20 @@ pub struct Task {
     /// full list, never a delta. A subtask never inherits its parent's
     /// assignees: without one of its own, it is assigned to nobody.
     pub assignments: Vec<TaskAssignment>,
+    /// The series this occurrence was materialized from, when it still
+    /// follows one. `PATCH`ing any of this task's own fields sets this to
+    /// `None` — see `service::TaskService::patch_task`'s detach-on-edit
+    /// rule: an edited occurrence stops following the rule and keeps its
+    /// own life. Never set by `TaskService::create_task`; only
+    /// `TaskRecurrenceService::materialize_range` produces a task carrying
+    /// this.
+    pub recurrence_id: Option<TaskRecurrenceId>,
+    /// The calendar date this occurrence was materialized for, in the
+    /// recurrence's own timezone. Kept even after `recurrence_id` is
+    /// cleared by an edit, so the occurrence's own history stays readable —
+    /// it answers "which Tuesday was this" long after the task stopped
+    /// following the series.
+    pub occurrence_date: Option<NaiveDate>,
     pub deleted_at: Option<DateTime<Utc>>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,

@@ -1,0 +1,148 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT id, org_id, frequency::text AS \"frequency!\", weekly_weekdays, monthly_day,\n                starts_on, ends_on, horizon_filled_to, timezone, start_time, duration_minutes,\n                all_day, title, description, blocks_availability, customer_id,\n                customer_context_id, project_id, assignee_member_ids, deleted_at, created_at,\n                updated_at\n            FROM task_recurrences\n            WHERE id = $1 AND deleted_at IS NULL\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "org_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "frequency!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "weekly_weekdays",
+        "type_info": "Int2Array"
+      },
+      {
+        "ordinal": 4,
+        "name": "monthly_day",
+        "type_info": "Int2"
+      },
+      {
+        "ordinal": 5,
+        "name": "starts_on",
+        "type_info": "Date"
+      },
+      {
+        "ordinal": 6,
+        "name": "ends_on",
+        "type_info": "Date"
+      },
+      {
+        "ordinal": 7,
+        "name": "horizon_filled_to",
+        "type_info": "Date"
+      },
+      {
+        "ordinal": 8,
+        "name": "timezone",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 9,
+        "name": "start_time",
+        "type_info": "Time"
+      },
+      {
+        "ordinal": 10,
+        "name": "duration_minutes",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 11,
+        "name": "all_day",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 12,
+        "name": "title",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 13,
+        "name": "description",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 14,
+        "name": "blocks_availability",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 15,
+        "name": "customer_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 16,
+        "name": "customer_context_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 17,
+        "name": "project_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 18,
+        "name": "assignee_member_ids",
+        "type_info": "UuidArray"
+      },
+      {
+        "ordinal": 19,
+        "name": "deleted_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 20,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 21,
+        "name": "updated_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      null,
+      true,
+      true,
+      false,
+      true,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      false,
+      true,
+      true,
+      true,
+      false,
+      true,
+      false,
+      false
+    ]
+  },
+  "hash": "a20c84818497aaf7bd72b6c853279df248f720b4e858770545303701119f7a0a"
+}

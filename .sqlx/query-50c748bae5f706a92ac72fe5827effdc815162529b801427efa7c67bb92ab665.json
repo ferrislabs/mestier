@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT id, org_id, parent_task_id, title, description, starts_at, ends_at, all_day, status::text AS \"status!\", blocks_availability, customer_id, customer_context_id, quote_id, project_id, expenses_cents, expenses_label, deleted_at, created_at, updated_at\n            FROM tasks\n            WHERE org_id = $1 AND deleted_at IS NULL\n              AND (\n                ($2::uuid IS NULL AND parent_task_id IS NULL)\n                OR parent_task_id = $2\n              )\n            ORDER BY starts_at ASC NULLS LAST, id ASC\n            LIMIT $3 OFFSET $4\n            ",
+  "query": "\n            INSERT INTO tasks (id, org_id, parent_task_id, title, description, starts_at, ends_at, all_day, status, blocks_availability, customer_id, customer_context_id, quote_id, project_id, expenses_cents, expenses_label, recurrence_id, occurrence_date, deleted_at, created_at, updated_at)\n            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, CAST($9 AS text)::task_status, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21)\n            RETURNING id, org_id, parent_task_id, title, description, starts_at, ends_at, all_day, status::text AS \"status!\", blocks_availability, customer_id, customer_context_id, quote_id, project_id, expenses_cents, expenses_label, recurrence_id, occurrence_date, deleted_at, created_at, updated_at\n            ",
   "describe": {
     "columns": [
       {
@@ -85,16 +85,26 @@
       },
       {
         "ordinal": 16,
+        "name": "recurrence_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 17,
+        "name": "occurrence_date",
+        "type_info": "Date"
+      },
+      {
+        "ordinal": 18,
         "name": "deleted_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 17,
+        "ordinal": 19,
         "name": "created_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 18,
+        "ordinal": 20,
         "name": "updated_at",
         "type_info": "Timestamptz"
       }
@@ -103,8 +113,25 @@
       "Left": [
         "Uuid",
         "Uuid",
-        "Int8",
-        "Int8"
+        "Uuid",
+        "Text",
+        "Text",
+        "Timestamptz",
+        "Timestamptz",
+        "Bool",
+        "Text",
+        "Bool",
+        "Uuid",
+        "Uuid",
+        "Uuid",
+        "Uuid",
+        "Int4",
+        "Text",
+        "Uuid",
+        "Date",
+        "Timestamptz",
+        "Timestamptz",
+        "Timestamptz"
       ]
     },
     "nullable": [
@@ -125,9 +152,11 @@
       false,
       true,
       true,
+      true,
+      true,
       false,
       false
     ]
   },
-  "hash": "9aad163c86b661d51d9e4783920e11c3f5f687469c10fd6b814c6553449597b7"
+  "hash": "50c748bae5f706a92ac72fe5827effdc815162529b801427efa7c67bb92ab665"
 }

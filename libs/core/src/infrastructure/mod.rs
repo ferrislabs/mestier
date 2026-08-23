@@ -30,6 +30,7 @@ pub mod service_rate;
 pub mod task;
 pub mod task_comment;
 pub mod task_label;
+pub mod task_recurrence;
 pub mod time_entry;
 pub mod user;
 pub mod webhook;

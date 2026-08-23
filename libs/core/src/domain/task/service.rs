@@ -218,6 +218,8 @@ where
                 expenses_cents,
                 expenses_label,
                 assignments: Vec::new(),
+                recurrence_id: None,
+                occurrence_date: None,
                 deleted_at: None,
                 created_at: now,
                 updated_at: now,
@@ -266,6 +268,14 @@ where
     /// on the fly for `member` assignees who had none yet.
     pub async fn patch_task(&mut self, command: PatchTaskCommand) -> Result<Task, CoreError> {
         let mut task = self.get_task(command.id).await?;
+        // Detach-on-edit: an occurrence that follows a recurrence stops
+        // following it the moment somebody edits it directly — see
+        // `Task::recurrence_id`'s own doc. Captured before any field below
+        // is touched, and applied unconditionally at the end of this
+        // method, so it holds whatever the `PATCH` actually changed (even a
+        // no-op patch detaches, matching "editing one occurrence" at the
+        // API level, which never calls this with nothing to change).
+        let was_in_series = task.recurrence_id.is_some();
 
         if let Some(parent_choice) = command.parent_task_id {
             match parent_choice {
@@ -338,6 +348,10 @@ where
 
         if let Some(assignees) = command.assignees {
             task.assignments = self.resolve_assignments(&task, assignees).await?;
+        }
+
+        if was_in_series {
+            task.recurrence_id = None;
         }
 
         self.task_repository.update(&task).await
@@ -576,6 +590,8 @@ mod tests {
             expenses_cents: 0,
             expenses_label: None,
             assignments: Vec::new(),
+            recurrence_id: None,
+            occurrence_date: None,
             deleted_at: None,
             created_at: now,
             updated_at: now,
@@ -1471,6 +1487,83 @@ mod tests {
         let updated = service.patch_task(command).await.unwrap();
 
         assert!(!updated.blocks_availability);
+    }
+
+    #[tokio::test]
+    async fn patch_task_detaches_an_occurrence_from_its_recurrence() {
+        let id = TaskId(Uuid::new_v4());
+        let organization_id = OrganizationId(Uuid::new_v4());
+        let existing = Task {
+            recurrence_id: Some(crate::TaskRecurrenceId(Uuid::new_v4())),
+            occurrence_date: Some(chrono::NaiveDate::from_ymd_opt(2026, 8, 25).unwrap()),
+            ..task(id, organization_id)
+        };
+
+        let mut task_repository = MockTaskRepository::new();
+        task_repository
+            .expect_find_by_id()
+            .with(eq(id))
+            .returning(move |_| {
+                let existing = existing.clone();
+                Box::pin(async move { Ok(Some(existing)) })
+            });
+        task_repository
+            .expect_update()
+            .withf(|t| t.recurrence_id.is_none() && t.title == "Nouveau titre")
+            .returning(|t| {
+                let cloned = t.clone();
+                Box::pin(async move { Ok(cloned) })
+            });
+
+        let mut service = service(task_repository, MockMemberRepository::new());
+
+        let mut command = PatchTaskCommand::new(id);
+        command.title = Some("Nouveau titre".to_owned());
+
+        let updated = service.patch_task(command).await.unwrap();
+
+        assert!(
+            updated.recurrence_id.is_none(),
+            "editing an occurrence must detach it from its series"
+        );
+        assert_eq!(
+            updated.occurrence_date,
+            Some(chrono::NaiveDate::from_ymd_opt(2026, 8, 25).unwrap()),
+            "the occurrence date itself is kept, only the link to the series is cleared"
+        );
+    }
+
+    #[tokio::test]
+    async fn patch_task_leaves_a_task_with_no_series_untouched() {
+        let id = TaskId(Uuid::new_v4());
+        let organization_id = OrganizationId(Uuid::new_v4());
+        let existing = task(id, organization_id);
+        assert!(existing.recurrence_id.is_none());
+
+        let mut task_repository = MockTaskRepository::new();
+        task_repository
+            .expect_find_by_id()
+            .with(eq(id))
+            .returning(move |_| {
+                let existing = existing.clone();
+                Box::pin(async move { Ok(Some(existing)) })
+            });
+        task_repository
+            .expect_update()
+            .withf(|t| t.recurrence_id.is_none())
+            .returning(|t| {
+                let cloned = t.clone();
+                Box::pin(async move { Ok(cloned) })
+            });
+
+        let mut service = service(task_repository, MockMemberRepository::new());
+
+        let mut command = PatchTaskCommand::new(id);
+        command.title = Some("Nouveau titre".to_owned());
+
+        let updated = service.patch_task(command).await.unwrap();
+
+        assert!(updated.recurrence_id.is_none());
     }
 
     #[tokio::test]

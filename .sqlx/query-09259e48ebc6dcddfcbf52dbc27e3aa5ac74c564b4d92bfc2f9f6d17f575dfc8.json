@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT t.id, t.org_id, t.parent_task_id, t.title, t.description, t.starts_at, t.ends_at, t.all_day, t.status::text AS \"status!\", t.blocks_availability, t.customer_id, t.customer_context_id, t.quote_id, t.project_id, t.expenses_cents, t.expenses_label, t.deleted_at, t.created_at, t.updated_at\n            FROM tasks t\n            JOIN task_assignments a ON a.task_id = t.id\n            WHERE t.org_id = $1\n              AND a.member_id = $2\n              AND t.deleted_at IS NULL\n              AND (\n                t.starts_at IS NULL\n                OR (t.starts_at < $4 AND COALESCE(t.ends_at, t.starts_at) >= $3)\n              )\n            ORDER BY t.starts_at ASC NULLS LAST, t.id ASC\n            ",
+  "query": "\n            SELECT id, org_id, parent_task_id, title, description, starts_at, ends_at, all_day, status::text AS \"status!\", blocks_availability, customer_id, customer_context_id, quote_id, project_id, expenses_cents, expenses_label, recurrence_id, occurrence_date, deleted_at, created_at, updated_at\n            FROM tasks\n            WHERE org_id = $1 AND deleted_at IS NULL\n              AND (\n                ($2::uuid IS NULL AND parent_task_id IS NULL)\n                OR parent_task_id = $2\n              )\n            ORDER BY starts_at ASC NULLS LAST, id ASC\n            LIMIT $3 OFFSET $4\n            ",
   "describe": {
     "columns": [
       {
@@ -85,16 +85,26 @@
       },
       {
         "ordinal": 16,
+        "name": "recurrence_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 17,
+        "name": "occurrence_date",
+        "type_info": "Date"
+      },
+      {
+        "ordinal": 18,
         "name": "deleted_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 17,
+        "ordinal": 19,
         "name": "created_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 18,
+        "ordinal": 20,
         "name": "updated_at",
         "type_info": "Timestamptz"
       }
@@ -103,8 +113,8 @@
       "Left": [
         "Uuid",
         "Uuid",
-        "Timestamptz",
-        "Timestamptz"
+        "Int8",
+        "Int8"
       ]
     },
     "nullable": [
@@ -125,9 +135,11 @@
       false,
       true,
       true,
+      true,
+      true,
       false,
       false
     ]
   },
-  "hash": "fe4ded3a434df4fd38c7358673c367878fad25f575818e179e5a4d3837dc04be"
+  "hash": "09259e48ebc6dcddfcbf52dbc27e3aa5ac74c564b4d92bfc2f9f6d17f575dfc8"
 }

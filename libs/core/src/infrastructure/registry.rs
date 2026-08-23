@@ -42,6 +42,7 @@ pub mod domain {
     pub struct Task;
     pub struct TaskComment;
     pub struct TaskLabel;
+    pub struct TaskRecurrence;
     pub struct EmployeeRhythm;
     pub struct WorkSlot;
     pub struct Profitability;

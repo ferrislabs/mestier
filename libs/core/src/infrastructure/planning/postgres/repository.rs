@@ -73,6 +73,7 @@ impl<'tx> PlanningRepository for PgPlanningRepository<'tx> {
                 t.all_day, t.status::text AS "status!", t.blocks_availability,
                 t.customer_id, t.customer_context_id, t.quote_id, t.project_id,
                 t.expenses_cents, t.expenses_label,
+                t.recurrence_id, t.occurrence_date,
                 t.deleted_at, t.created_at, t.updated_at,
                 -- Postgres's own nullability analysis of a concatenation
                 -- over a `LEFT JOIN`ed table is not reliable enough to trust
