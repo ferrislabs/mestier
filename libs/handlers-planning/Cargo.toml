@@ -13,6 +13,7 @@ pagination = { workspace = true }
 axum = { workspace = true }
 axum-extra = { workspace = true }
 chrono = { workspace = true }
+chrono-tz = { workspace = true }
 http = { workspace = true }
 serde = { workspace = true }
 tracing = { workspace = true }

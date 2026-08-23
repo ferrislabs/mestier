@@ -1,13 +1,13 @@
 use std::collections::HashMap;
 
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, NaiveDate, Utc};
 use common::CoreError;
 use mestier_macros::repository;
 use sqlx::PgConnection;
 use uuid::Uuid;
 
 use crate::{
-    MemberId, OrganizationId, Task, TaskAssignment, TaskId,
+    MemberId, OrganizationId, Task, TaskAssignment, TaskId, TaskRecurrenceId,
     domain::task::ports::TaskRepository,
     infrastructure::{
         postgres::{SharedTx, error::map_sqlx_error},
@@ -338,6 +338,30 @@ impl<'tx> TaskRepository for PgTaskRepository<'tx> {
         }
 
         Ok(())
+    }
+
+    async fn soft_delete_recurrence_occurrences_from(
+        &mut self,
+        recurrence_id: TaskRecurrenceId,
+        from: NaiveDate,
+        deleted_at: DateTime<Utc>,
+    ) -> Result<u64, CoreError> {
+        let mut tx = self.tx.lock().await;
+        let result = sqlx::query!(
+            r#"
+            UPDATE tasks
+            SET deleted_at = $3, updated_at = $3
+            WHERE recurrence_id = $1 AND occurrence_date >= $2 AND deleted_at IS NULL
+            "#,
+            recurrence_id.0,
+            from,
+            deleted_at,
+        )
+        .execute(&mut ***tx)
+        .await
+        .map_err(map_sqlx_error)?;
+
+        Ok(result.rows_affected())
     }
 }
 

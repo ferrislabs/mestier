@@ -30,6 +30,24 @@ impl Display for TaskId {
     }
 }
 
+/// How much of a series a `DELETE` on one occurrence removes.
+///
+/// A single verb (soft-delete) with a scope, not two endpoints: the caller
+/// genuinely has to choose, and a scope parameter keeps that choice at one
+/// call site instead of two routes that would otherwise duplicate every
+/// other check `soft_delete_occurrence` makes.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DeleteScope {
+    /// Only this occurrence — the default, and the only meaningful choice
+    /// for a task that never belonged to a series.
+    ThisOccurrence,
+    /// This occurrence and every later one in the same series, identified by
+    /// `occurrence_date`. A task that does not belong to a series falls back
+    /// to [`Self::ThisOccurrence`]'s own behavior — there is no "later" to
+    /// reach for.
+    ThisAndFollowing,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, ToSchema)]
 pub struct TaskAssignmentId(pub Uuid);
 

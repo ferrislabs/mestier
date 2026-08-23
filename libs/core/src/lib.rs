@@ -92,7 +92,7 @@ pub use domain::{
     Absence, AbsenceId, AbsenceKind, AssigneeRef, AssignmentReport, AssignmentReportId,
     AssignmentReportResolution, AvailabilityReport, Conflict, ConflictKind, Customer,
     CustomerContact, CustomerContactId, CustomerContext, CustomerContextId, CustomerId,
-    CustomerPipelineStage, CustomerStatus, DateRange, DayLog, DayLogId, Employee,
+    CustomerPipelineStage, CustomerStatus, DateRange, DayLog, DayLogId, DeleteScope, Employee,
     EmployeeCostBasis, EmployeeCostBasisId, EmployeeId, EmployeeRhythm, EmployeeRhythmId,
     Equipment, EquipmentId, FileObject, Invitation, InvitationId, LegalIdentity, Member, MemberId,
     MemberProfitability, MemberWithAccount, MemberWorkTime, MinuteInterval, MissingCost,

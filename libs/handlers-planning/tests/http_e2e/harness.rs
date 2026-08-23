@@ -27,6 +27,7 @@ pub struct App {
     pub pool: PgPool,
     pub organization_id: Uuid,
     pub task_assignment_id: Uuid,
+    pub assignee_member_id: Uuid,
     manager_user_id: Uuid,
     assignee_user_id: Uuid,
 }
@@ -71,6 +72,7 @@ pub async fn start() -> App {
         pool,
         organization_id: fixture.organization_id,
         task_assignment_id: fixture.task_assignment_id,
+        assignee_member_id: fixture.assignee_member_id,
         manager_user_id: fixture.manager_user_id,
         assignee_user_id: fixture.assignee_user_id,
     }
@@ -89,6 +91,42 @@ impl App {
             "{}/api/v1/assignment-reports/{assignment_report_id}/resolution",
             self.base_url
         )
+    }
+
+    pub fn recurrences_url(&self, suffix: &str) -> String {
+        format!(
+            "{}/api/v1/organizations/{}/task-recurrences{suffix}",
+            self.base_url, self.organization_id
+        )
+    }
+
+    pub fn recurrence_url(&self, task_recurrence_id: &str) -> String {
+        format!(
+            "{}/api/v1/task-recurrences/{task_recurrence_id}",
+            self.base_url
+        )
+    }
+
+    pub fn task_url(&self, task_id: &str) -> String {
+        format!(
+            "{}/api/v1/organizations/{}/tasks/{task_id}",
+            self.base_url, self.organization_id
+        )
+    }
+
+    /// The materialized occurrences of `recurrence_id`, oldest first — reads
+    /// straight from the database rather than through the API, since the
+    /// suite needs an occurrence's own id before it can address it by URL.
+    pub async fn occurrence_task_ids(&self, recurrence_id: &str) -> Vec<Uuid> {
+        let recurrence_id: Uuid = recurrence_id.parse().expect("a valid recurrence id");
+        sqlx::query_scalar(
+            "SELECT id FROM tasks WHERE recurrence_id = $1 AND deleted_at IS NULL \
+             ORDER BY occurrence_date ASC",
+        )
+        .bind(recurrence_id)
+        .fetch_all(&self.pool)
+        .await
+        .expect("read the materialized occurrences")
     }
 
     /// A pending report on the fixture's own assignment, seeded directly:
@@ -119,6 +157,7 @@ impl App {
             "DELETE FROM assignment_reports WHERE org_id = $1",
             "DELETE FROM task_assignments WHERE org_id = $1",
             "DELETE FROM tasks WHERE org_id = $1",
+            "DELETE FROM task_recurrences WHERE org_id = $1",
             "DELETE FROM organization_members WHERE organization_id = $1",
             "DELETE FROM organizations WHERE id = $1",
         ] {
@@ -145,6 +184,7 @@ struct Fixture {
     assignee_user_id: Uuid,
     organization_id: Uuid,
     task_assignment_id: Uuid,
+    assignee_member_id: Uuid,
 }
 
 /// An organization, its owner (the manager, the caller for every test), a
@@ -244,6 +284,7 @@ async fn seed(pool: &PgPool) -> Fixture {
         assignee_user_id,
         organization_id,
         task_assignment_id,
+        assignee_member_id,
     }
 }
 

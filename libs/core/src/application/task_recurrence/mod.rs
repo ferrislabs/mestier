@@ -9,7 +9,7 @@ use crate::{
     SaveWorkflowVersionCommand, TaskRecurrence, TaskRecurrenceId,
     application::MestierUseCase,
     domain::task_recurrence::{
-        commands::CreateTaskRecurrenceCommand,
+        commands::{CreateTaskRecurrenceCommand, PatchTaskRecurrenceCommand},
         service::{DEFAULT_HORIZON_DAYS, TaskRecurrenceService},
     },
 };
@@ -71,6 +71,31 @@ impl MestierUseCase {
             member_repository,
         );
         service.list_recurrences(organization_id).await
+    }
+
+    #[transactional(task_recurrence, task, member)]
+    pub async fn patch_task_recurrence(
+        &self,
+        command: PatchTaskRecurrenceCommand,
+    ) -> Result<TaskRecurrence, CoreError> {
+        let mut service = TaskRecurrenceService::new(
+            task_recurrence_repository,
+            task_repository,
+            member_repository,
+        );
+        service.patch_recurrence(command).await
+    }
+
+    /// Soft-deletes the recurrence and its future occurrences, in one
+    /// transaction — see `TaskRecurrenceService::delete_recurrence`.
+    #[transactional(task_recurrence, task, member)]
+    pub async fn delete_task_recurrence(&self, id: TaskRecurrenceId) -> Result<(), CoreError> {
+        let mut service = TaskRecurrenceService::new(
+            task_recurrence_repository,
+            task_repository,
+            member_repository,
+        );
+        service.delete_recurrence(id).await
     }
 
     /// Extends every one of `organization_id`'s recurrences whose horizon

@@ -8,7 +8,8 @@ use crate::{
         task::ports::TaskRepository,
         task_recurrence::{
             RecurrenceRule, TaskRecurrence, TaskRecurrenceId,
-            commands::CreateTaskRecurrenceCommand, ports::TaskRecurrenceRepository,
+            commands::{CreateTaskRecurrenceCommand, PatchTaskRecurrenceCommand},
+            ports::TaskRecurrenceRepository,
         },
     },
 };
@@ -359,6 +360,95 @@ where
         self.recurrence_repository
             .list_by_organization(organization_id)
             .await
+    }
+
+    /// Applies a `PATCH` to the rule/template. Every field is optional and
+    /// only the ones present are applied — same "leave unset fields alone"
+    /// contract as `task::commands::PatchTaskCommand`. Never touches
+    /// `horizon_filled_to` or already-materialized occurrences: this changes
+    /// what gets materialized *from here on*, not what already exists (see
+    /// `TaskRecurrence`'s own doc).
+    pub async fn patch_recurrence(
+        &mut self,
+        command: PatchTaskRecurrenceCommand,
+    ) -> Result<TaskRecurrence, CoreError> {
+        let mut recurrence = self.get_recurrence(command.id).await?;
+
+        if let Some(rule) = command.rule {
+            validate_rule(&rule)?;
+            recurrence.rule = rule;
+        }
+        if let Some(ends_on) = command.ends_on {
+            if let Some(end) = ends_on
+                && end < recurrence.starts_on
+            {
+                return Err(CoreError::Conflict(
+                    "a recurrence's ends_on cannot be before its starts_on".to_owned(),
+                ));
+            }
+            recurrence.ends_on = ends_on;
+        }
+        if let Some(start_time) = command.start_time {
+            recurrence.start_time = start_time;
+        }
+        if let Some(duration_minutes) = command.duration_minutes {
+            if duration_minutes <= 0 {
+                return Err(CoreError::Conflict(
+                    "a recurrence's duration must be positive".to_owned(),
+                ));
+            }
+            recurrence.duration_minutes = duration_minutes;
+        }
+        if let Some(all_day) = command.all_day {
+            recurrence.all_day = all_day;
+        }
+        if let Some(title) = command.title {
+            validate_title(&title)?;
+            recurrence.title = title;
+        }
+        if let Some(description) = command.description {
+            recurrence.description = description;
+        }
+        if let Some(blocks_availability) = command.blocks_availability {
+            recurrence.blocks_availability = blocks_availability;
+        }
+        if let Some(project_id) = command.project_id {
+            recurrence.project_id = project_id;
+        }
+        if let Some(assignee_member_ids) = command.assignee_member_ids {
+            for member_id in &assignee_member_ids {
+                let member = self
+                    .member_repository
+                    .find_by_id(*member_id)
+                    .await?
+                    .ok_or(CoreError::NotFound)?;
+                if member.organization_id != recurrence.organization_id {
+                    return Err(CoreError::NotFound);
+                }
+            }
+            recurrence.assignee_member_ids = assignee_member_ids;
+        }
+        recurrence.updated_at = Utc::now();
+
+        self.recurrence_repository.update(&recurrence).await
+    }
+
+    /// Soft-deletes the recurrence and every one of its future occurrences —
+    /// `occurrence_date >= today` — leaving past ones untouched, exactly the
+    /// "deleting the recurrence takes future occurrences with it and leaves
+    /// past ones alone" contract. Today itself counts as future: it has not
+    /// happened yet from the moment this runs.
+    pub async fn delete_recurrence(&mut self, id: TaskRecurrenceId) -> Result<(), CoreError> {
+        // Existence is checked first so a deleted or foreign id reads back
+        // `NotFound` rather than a silent no-op affecting zero rows.
+        self.get_recurrence(id).await?;
+
+        let now = Utc::now();
+        let today = now.date_naive();
+        self.task_repository
+            .soft_delete_recurrence_occurrences_from(id, today, now)
+            .await?;
+        self.recurrence_repository.soft_delete(id, now).await
     }
 
     /// Materializes every occurrence of `recurrence` in `[from, to]`, one

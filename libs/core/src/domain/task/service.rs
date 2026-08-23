@@ -8,7 +8,7 @@ use crate::{
     domain::{
         member::ports::MemberRepository,
         task::{
-            TaskAssignment, TaskAssignmentId, TaskId,
+            DeleteScope, TaskAssignment, TaskAssignmentId, TaskId,
             commands::{CreateTaskCommand, PatchTaskCommand},
             ports::TaskRepository,
         },
@@ -488,6 +488,38 @@ where
         }
 
         self.task_repository.soft_delete(id, now).await
+    }
+
+    /// The scope-aware `DELETE`: `ThisOccurrence` is exactly
+    /// [`Self::soft_delete_task`] (children cascade included);
+    /// `ThisAndFollowing` removes this occurrence and every later one in the
+    /// same series in one statement, keyed by `occurrence_date` rather than
+    /// walking each row — a task that does not actually belong to a series
+    /// falls back to `ThisOccurrence`'s behavior, since there is no series to
+    /// reach forward into.
+    pub async fn soft_delete_occurrence(
+        &mut self,
+        id: TaskId,
+        scope: DeleteScope,
+    ) -> Result<(), CoreError> {
+        if scope == DeleteScope::ThisOccurrence {
+            return self.soft_delete_task(id).await;
+        }
+
+        let task = self.get_task(id).await?;
+        match (task.recurrence_id, task.occurrence_date) {
+            (Some(recurrence_id), Some(occurrence_date)) => {
+                self.task_repository
+                    .soft_delete_recurrence_occurrences_from(
+                        recurrence_id,
+                        occurrence_date,
+                        Utc::now(),
+                    )
+                    .await?;
+                Ok(())
+            }
+            _ => self.soft_delete_task(id).await,
+        }
     }
 }
 
