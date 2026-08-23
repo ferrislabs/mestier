@@ -146,6 +146,14 @@ impl Modify for SecurityAddon {
         planning::project::update::handler,
         planning::project::archive::handler,
         planning::project::restore::handler,
+        planning::project_template::create::handler,
+        planning::project_template::list::handler,
+        planning::project_template::get_one::handler,
+        planning::project_template::update::handler,
+        planning::project_template::replace_tasks::handler,
+        planning::project_template::archive::handler,
+        planning::project_template::restore::handler,
+        planning::project_template::instantiate::handler,
         planning::task_label::create::handler,
         planning::task_label::list::handler,
         planning::task_label::update::handler,
@@ -305,6 +313,14 @@ impl Modify for SecurityAddon {
         planning::response::TaskRecurrenceResponse,
         planning::project::create::CreateProjectRequest,
         planning::project::update::UpdateProjectRequest,
+        planning::project_template::create::CreateProjectTemplateRequest,
+        planning::project_template::create::ProjectTemplateTaskShapeRequest,
+        planning::project_template::update::UpdateProjectTemplateRequest,
+        planning::project_template::replace_tasks::ReplaceProjectTemplateTasksRequest,
+        planning::project_template::instantiate::InstantiateProjectTemplateRequest,
+        planning::response::ProjectTemplateResponse,
+        planning::response::ProjectTemplateTaskResponse,
+        planning::response::InstantiateProjectTemplateResponse,
         planning::response::ProjectResponse,
         planning::response::TaskResponse,
         planning::response::TaskAssignmentSummary,
@@ -428,6 +444,46 @@ mod tests {
             "patchProject",
             "archiveProject",
             "restoreProject",
+        ] {
+            assert!(
+                json.contains(&format!("\"operationId\":\"{operation_id}\"")),
+                "{operation_id} is missing from the document"
+            );
+        }
+    }
+
+    /// Same discipline as `every_project_route_reaches_the_document`, for the
+    /// template stack #296 adds.
+    #[test]
+    fn every_project_template_route_reaches_the_document() {
+        let document = ApiDoc::openapi();
+        let paths = &document.paths.paths;
+
+        let collection = "/api/v1/organizations/{organization_id}/project-templates";
+        let item =
+            "/api/v1/organizations/{organization_id}/project-templates/{project_template_id}";
+        let tasks =
+            "/api/v1/organizations/{organization_id}/project-templates/{project_template_id}/tasks";
+        let restore = "/api/v1/organizations/{organization_id}/project-templates/{project_template_id}/restore";
+        let instantiate = "/api/v1/organizations/{organization_id}/project-templates/{project_template_id}/instantiate";
+
+        for path in [collection, item, tasks, restore, instantiate] {
+            assert!(
+                paths.contains_key(path),
+                "{path} is missing from the document"
+            );
+        }
+
+        let json = serde_json::to_string(&document).expect("the document serializes");
+        for operation_id in [
+            "createProjectTemplate",
+            "listProjectTemplates",
+            "getProjectTemplate",
+            "patchProjectTemplate",
+            "replaceProjectTemplateTasks",
+            "archiveProjectTemplate",
+            "restoreProjectTemplate",
+            "instantiateProjectTemplate",
         ] {
             assert!(
                 json.contains(&format!("\"operationId\":\"{operation_id}\"")),

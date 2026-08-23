@@ -1,0 +1,100 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT id, org_id, template_id, title, description, day_offset,\n                starts_minute, ends_minute, all_day, blocks_availability,\n                expenses_cents, expenses_label, parent_index, position\n            FROM project_template_tasks\n            WHERE template_id = $1\n            ORDER BY position ASC\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "org_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "template_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 3,
+        "name": "title",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "description",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "day_offset",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 6,
+        "name": "starts_minute",
+        "type_info": "Int2"
+      },
+      {
+        "ordinal": 7,
+        "name": "ends_minute",
+        "type_info": "Int2"
+      },
+      {
+        "ordinal": 8,
+        "name": "all_day",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 9,
+        "name": "blocks_availability",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 10,
+        "name": "expenses_cents",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 11,
+        "name": "expenses_label",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 12,
+        "name": "parent_index",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 13,
+        "name": "position",
+        "type_info": "Int4"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      true,
+      false,
+      true,
+      true,
+      false,
+      false,
+      false,
+      true,
+      true,
+      false
+    ]
+  },
+  "hash": "42ae2925c2f5ccc6db6602cbb71024497659500f67a36ec3a1d45f3d9f083fcc"
+}

@@ -318,3 +318,208 @@ async fn editing_an_occurrence_detaches_it_and_deleting_the_series_leaves_it_sta
 
     app.cleanup().await;
 }
+
+/// A template is created with a two-level hierarchy, instantiated against a
+/// start date, and produces a project whose tasks resolve every offset —
+/// the whole point of #296.
+#[tokio::test]
+#[ignore = "requires live postgres and redis"]
+async fn a_template_instantiates_into_a_project_whose_tasks_resolve_every_offset() {
+    let app = harness::start().await;
+    let client = reqwest::Client::new();
+
+    let created = client
+        .post(app.project_templates_url(""))
+        .bearer_auth(&app.token)
+        .json(&json!({
+            "name": "Pose de terrasse",
+            "description": "Chantier type",
+            "tasks": [
+                {
+                    "title": "Préparer le chantier",
+                    "day_offset": 0,
+                    "starts_minute": 480,
+                    "ends_minute": 720,
+                    "all_day": false,
+                    "blocks_availability": true,
+                },
+                {
+                    "title": "Livraison matériel",
+                    "day_offset": 0,
+                    "all_day": true,
+                    "blocks_availability": false,
+                    "parent_index": 0,
+                },
+                {
+                    "title": "Poser la terrasse",
+                    "day_offset": 1,
+                    "starts_minute": 480,
+                    "ends_minute": 1020,
+                    "all_day": false,
+                    "blocks_availability": true,
+                    "expenses_cents": 4500,
+                    "expenses_label": "Location compacteur",
+                },
+            ],
+        }))
+        .send()
+        .await
+        .expect("the api answers the create call");
+    let status = created.status();
+    let body: serde_json::Value = created
+        .json()
+        .await
+        .unwrap_or_else(|e| panic!("the create answer is json: {e}"));
+    assert!(status.is_success(), "create failed with {status}: {body}");
+    let template_id = body["data"]["id"]
+        .as_str()
+        .expect("the created template carries an id")
+        .to_owned();
+    assert_eq!(body["data"]["tasks"].as_array().unwrap().len(), 3);
+
+    let fetched: serde_json::Value = client
+        .get(app.project_templates_url(&format!("/{template_id}")))
+        .bearer_auth(&app.token)
+        .send()
+        .await
+        .expect("the api answers the get call")
+        .json()
+        .await
+        .expect("the get answer is json");
+    assert_eq!(fetched["data"]["tasks"].as_array().unwrap().len(), 3);
+
+    let listed: serde_json::Value = client
+        .get(app.project_templates_url(""))
+        .bearer_auth(&app.token)
+        .send()
+        .await
+        .expect("the api answers the list call")
+        .json()
+        .await
+        .expect("the list answer is json");
+    let ids: Vec<&str> = listed["data"]
+        .as_array()
+        .expect("the list carries an array")
+        .iter()
+        .filter_map(|template| template["id"].as_str())
+        .collect();
+    assert!(ids.contains(&template_id.as_str()), "{listed}");
+
+    let instantiated = client
+        .post(app.project_templates_url(&format!("/{template_id}/instantiate")))
+        .bearer_auth(&app.token)
+        .json(&json!({
+            "name": "Terrasse Dupont",
+            "start_date": "2026-09-01",
+        }))
+        .send()
+        .await
+        .expect("the api answers the instantiate call");
+    let status = instantiated.status();
+    let body: serde_json::Value = instantiated
+        .json()
+        .await
+        .unwrap_or_else(|e| panic!("the instantiate answer is json: {e}"));
+    assert!(
+        status.is_success(),
+        "instantiate failed with {status}: {body}"
+    );
+
+    assert_eq!(body["data"]["project"]["name"], "Terrasse Dupont");
+    let tasks = body["data"]["tasks"]
+        .as_array()
+        .expect("the instantiated tasks are an array");
+    assert_eq!(tasks.len(), 3);
+
+    let root = tasks
+        .iter()
+        .find(|task| task["title"] == "Préparer le chantier")
+        .expect("the root task is present");
+    assert!(root["parent_task_id"].is_null());
+    assert!(
+        root["starts_at"]
+            .as_str()
+            .unwrap()
+            .starts_with("2026-09-01"),
+        "{root}"
+    );
+
+    let child = tasks
+        .iter()
+        .find(|task| task["title"] == "Livraison matériel")
+        .expect("the subtask is present");
+    assert_eq!(child["parent_task_id"], root["id"]);
+    assert_eq!(child["all_day"], true);
+
+    let next_day = tasks
+        .iter()
+        .find(|task| task["title"] == "Poser la terrasse")
+        .expect("the second-day task is present");
+    assert!(
+        next_day["starts_at"]
+            .as_str()
+            .unwrap()
+            .starts_with("2026-09-02"),
+        "day_offset = 1 must land on the day after start_date: {next_day}"
+    );
+    assert_eq!(next_day["expenses_cents"], 4500);
+
+    let archived = client
+        .delete(app.project_templates_url(&format!("/{template_id}")))
+        .bearer_auth(&app.token)
+        .send()
+        .await
+        .expect("the api answers the archive call");
+    assert_eq!(archived.status(), 204);
+
+    let refused = client
+        .post(app.project_templates_url(&format!("/{template_id}/instantiate")))
+        .bearer_auth(&app.token)
+        .json(&json!({ "name": "Encore une terrasse", "start_date": "2026-09-10" }))
+        .send()
+        .await
+        .expect("the api answers the second instantiate call");
+    assert_eq!(
+        refused.status(),
+        409,
+        "an archived template must refuse instantiation"
+    );
+
+    let restored = client
+        .post(app.project_templates_url(&format!("/{template_id}/restore")))
+        .bearer_auth(&app.token)
+        .send()
+        .await
+        .expect("the api answers the restore call");
+    assert!(restored.status().is_success());
+
+    app.cleanup().await;
+}
+
+/// A subtask cannot itself be a parent — the same two-level cap `tasks`
+/// enforces, applied while the shapes have no id yet to check it against.
+#[tokio::test]
+#[ignore = "requires live postgres and redis"]
+async fn a_three_level_template_hierarchy_is_refused() {
+    let app = harness::start().await;
+    let client = reqwest::Client::new();
+
+    let response = client
+        .post(app.project_templates_url(""))
+        .bearer_auth(&app.token)
+        .json(&json!({
+            "name": "Hiérarchie invalide",
+            "tasks": [
+                { "title": "Racine", "day_offset": 0, "starts_minute": 480, "ends_minute": 600, "blocks_availability": true },
+                { "title": "Enfant", "day_offset": 0, "starts_minute": 480, "ends_minute": 600, "blocks_availability": true, "parent_index": 0 },
+                { "title": "Petit-enfant", "day_offset": 0, "starts_minute": 480, "ends_minute": 600, "blocks_availability": true, "parent_index": 1 },
+            ],
+        }))
+        .send()
+        .await
+        .expect("the api answers the create call");
+
+    assert_eq!(response.status(), 409);
+
+    app.cleanup().await;
+}

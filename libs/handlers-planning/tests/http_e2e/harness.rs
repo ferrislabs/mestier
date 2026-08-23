@@ -100,6 +100,13 @@ impl App {
         )
     }
 
+    pub fn project_templates_url(&self, suffix: &str) -> String {
+        format!(
+            "{}/api/v1/organizations/{}/project-templates{suffix}",
+            self.base_url, self.organization_id
+        )
+    }
+
     pub fn recurrence_url(&self, task_recurrence_id: &str) -> String {
         format!(
             "{}/api/v1/task-recurrences/{task_recurrence_id}",
@@ -158,6 +165,9 @@ impl App {
             "DELETE FROM task_assignments WHERE org_id = $1",
             "DELETE FROM tasks WHERE org_id = $1",
             "DELETE FROM task_recurrences WHERE org_id = $1",
+            "DELETE FROM projects WHERE org_id = $1",
+            // Cascades to `project_template_tasks`.
+            "DELETE FROM project_templates WHERE org_id = $1",
             "DELETE FROM organization_members WHERE organization_id = $1",
             "DELETE FROM organizations WHERE id = $1",
         ] {

@@ -1,8 +1,9 @@
 use chrono::{DateTime, NaiveDate, NaiveTime, Utc};
 use mestier_core::{
     CustomerContextId, CustomerId, Equipment, EquipmentId, MemberId, OrganizationId, Project,
-    ProjectId, QuoteId, Task, TaskAssignmentId, TaskId, TaskRecurrence, TaskRecurrenceId,
-    TaskStatus, weekday_to_iso,
+    ProjectId, ProjectTemplate, ProjectTemplateId, ProjectTemplateTask, ProjectTemplateTaskId,
+    QuoteId, Task, TaskAssignmentId, TaskId, TaskRecurrence, TaskRecurrenceId, TaskStatus,
+    weekday_to_iso,
 };
 use serde::Serialize;
 use utoipa::ToSchema;
@@ -605,4 +606,91 @@ impl From<Project> for ProjectResponse {
             updated_at: value.updated_at,
         }
     }
+}
+
+/// One task shape of a template, as the API returns it. Never carries an
+/// assignee or a status — those only exist once instantiation turns it into
+/// a real task.
+#[derive(Debug, Clone, PartialEq, Serialize, ToSchema)]
+pub struct ProjectTemplateTaskResponse {
+    pub id: ProjectTemplateTaskId,
+    pub organization_id: OrganizationId,
+    pub template_id: ProjectTemplateId,
+    pub title: String,
+    pub description: Option<String>,
+    pub day_offset: i32,
+    pub starts_minute: Option<i16>,
+    pub ends_minute: Option<i16>,
+    pub all_day: bool,
+    pub blocks_availability: bool,
+    pub expenses_cents: i32,
+    pub expenses_label: Option<String>,
+    /// The `position` of another task shape of the same template, or `null`
+    /// for a root shape. See `ProjectTemplateTask::parent_index`'s own doc
+    /// comment for why this is an index rather than an id.
+    pub parent_index: Option<i32>,
+    pub position: i32,
+}
+
+impl From<ProjectTemplateTask> for ProjectTemplateTaskResponse {
+    fn from(value: ProjectTemplateTask) -> Self {
+        Self {
+            id: value.id,
+            organization_id: value.organization_id,
+            template_id: value.template_id,
+            title: value.title,
+            description: value.description,
+            day_offset: value.day_offset,
+            starts_minute: value.starts_minute,
+            ends_minute: value.ends_minute,
+            all_day: value.all_day,
+            blocks_availability: value.blocks_availability,
+            expenses_cents: value.expenses_cents,
+            expenses_label: value.expenses_label,
+            parent_index: value.parent_index,
+            position: value.position,
+        }
+    }
+}
+
+/// A project template as the API returns it. `tasks` is `None` on every
+/// surface that does not load the full shape list (list, create, update) and
+/// `Some` on `GET .../project-templates/{id}` — the one screen a caller
+/// builds or reviews the shapes on, so the tasks travel with the template
+/// rather than needing a second call.
+#[derive(Debug, Clone, PartialEq, Serialize, ToSchema)]
+pub struct ProjectTemplateResponse {
+    pub id: ProjectTemplateId,
+    pub organization_id: OrganizationId,
+    pub name: String,
+    pub description: Option<String>,
+    pub archived_at: Option<DateTime<Utc>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tasks: Option<Vec<ProjectTemplateTaskResponse>>,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+}
+
+impl From<ProjectTemplate> for ProjectTemplateResponse {
+    fn from(value: ProjectTemplate) -> Self {
+        Self {
+            id: value.id,
+            organization_id: value.organization_id,
+            name: value.name,
+            description: value.description,
+            archived_at: value.archived_at,
+            tasks: None,
+            created_at: value.created_at,
+            updated_at: value.updated_at,
+        }
+    }
+}
+
+/// The result of instantiating a template: the project it produced, and
+/// every task created under it, in the order they were built (roots
+/// interleaved with their children in template order).
+#[derive(Debug, Clone, PartialEq, Serialize, ToSchema)]
+pub struct InstantiateProjectTemplateResponse {
+    pub project: ProjectResponse,
+    pub tasks: Vec<TaskResponse>,
 }
