@@ -158,6 +158,7 @@ function CustomerEditInner({
 					status: value.status,
 					pipeline_stage: value.pipelineStage,
 					name: value.name.trim(),
+					registration_number: value.registrationNumber.trim() || null,
 					email: value.email.trim() || null,
 					phone: value.phone.trim() || null,
 				},
@@ -331,6 +332,8 @@ function CustomerEditInner({
 									status: promotedValues.status,
 									pipeline_stage: promotedValues.pipelineStage,
 									name: promotedValues.name.trim(),
+									registration_number:
+										promotedValues.registrationNumber.trim() || null,
 									email: promotedValues.email.trim() || null,
 									phone: promotedValues.phone.trim() || null,
 								},

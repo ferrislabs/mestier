@@ -24,7 +24,9 @@ use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 use uuid::Uuid;
 
-use crate::{CustomerContextId, CustomerId, LegalIdentity, OrganizationId, ProjectId};
+use crate::{
+    CustomerContextId, CustomerId, LegalIdentity, OrganizationAddress, OrganizationId, ProjectId,
+};
 
 pub mod commands;
 pub mod events;
@@ -180,6 +182,53 @@ impl FromStr for InvoiceKind {
     }
 }
 
+/// The nature of the operation an invoice bills for — one of the mentions
+/// the e-invoicing reform effective 1 September 2026 requires (#341).
+/// `None` on the invoice until the caller states it; nothing here defaults
+/// to a guess.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum OperationNature {
+    Goods,
+    Services,
+    Both,
+}
+
+impl OperationNature {
+    pub const ALL: [OperationNature; 3] = [
+        OperationNature::Goods,
+        OperationNature::Services,
+        OperationNature::Both,
+    ];
+
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Goods => "GOODS",
+            Self::Services => "SERVICES",
+            Self::Both => "BOTH",
+        }
+    }
+}
+
+impl Display for OperationNature {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.as_str())
+    }
+}
+
+impl FromStr for OperationNature {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "GOODS" => Ok(Self::Goods),
+            "SERVICES" => Ok(Self::Services),
+            "BOTH" => Ok(Self::Both),
+            other => Err(format!("invalid invoice operation nature `{other}`")),
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct InvoiceLine {
     pub id: InvoiceLineId,
@@ -229,6 +278,15 @@ pub struct Invoice {
     pub issued_at: Option<DateTime<Utc>>,
     pub due_at: Option<DateTime<Utc>>,
     pub notes: Option<String>,
+    /// The nature of the operation this invoice bills for — see
+    /// `OperationNature`. `None` until the caller states it; #341 adds this
+    /// nullable so existing invoices, and drafts still being edited, are
+    /// not forced to guess.
+    pub operation_nature: Option<OperationNature>,
+    /// Where the goods or services were delivered, only when it differs
+    /// from the customer's own address — the fourth e-invoicing mention
+    /// #341 adds. `None` means "same as the customer", not "unknown".
+    pub delivery_address: Option<OrganizationAddress>,
     pub net_cents: i32,
     pub vat_breakdown: Vec<InvoiceVatBreakdownLine>,
     pub gross_cents: i32,
@@ -298,6 +356,14 @@ impl DraftInvoice {
 
     pub fn set_notes(&mut self, notes: Option<String>) {
         self.0.notes = notes;
+    }
+
+    pub fn set_operation_nature(&mut self, operation_nature: Option<OperationNature>) {
+        self.0.operation_nature = operation_nature;
+    }
+
+    pub fn set_delivery_address(&mut self, delivery_address: Option<OrganizationAddress>) {
+        self.0.delivery_address = delivery_address;
     }
 
     /// Replaces the lines and their computed totals in one step: the two

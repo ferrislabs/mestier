@@ -424,6 +424,7 @@ mod tests {
                 status: crate::CustomerStatus::Prospect,
                 pipeline_stage: crate::CustomerPipelineStage::New,
                 name: "Automation depth customer".to_string(),
+                registration_number: None,
                 phone: None,
                 email: None,
             })

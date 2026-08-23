@@ -8,7 +8,8 @@ use crate::{
     domain::invoice::ports::InvoiceRepository,
     infrastructure::{
         invoice::postgres::model::{
-            InvoiceLineRow, InvoiceRow, legal_identity_to_json, vat_breakdown_to_json,
+            InvoiceLineRow, InvoiceRow, delivery_address_columns, legal_identity_to_json,
+            vat_breakdown_to_json,
         },
         postgres::{SharedTx, error::map_sqlx_error},
     },
@@ -63,22 +64,34 @@ impl<'tx> InvoiceRepository for PgInvoiceRepository<'tx> {
         let mut tx = self.tx.lock().await;
         let vat_breakdown = vat_breakdown_to_json(&invoice.vat_breakdown);
         let issuer_identity = invoice.issuer_identity.as_ref().map(legal_identity_to_json);
+        let operation_nature = invoice.operation_nature.map(|nature| nature.as_str());
+        let (delivery_line1, delivery_line2, delivery_postal_code, delivery_city, delivery_country) =
+            delivery_address_columns(&invoice.delivery_address);
         let row = sqlx::query_as!(
             InvoiceRow,
             r#"
             INSERT INTO invoices (
                 id, org_id, number, kind, project_id, customer_id, customer_context_id,
-                status, issued_at, due_at, notes, net_cents, vat_breakdown, gross_cents,
+                status, issued_at, due_at, notes, operation_nature,
+                delivery_address_line1, delivery_address_line2, delivery_address_postal_code,
+                delivery_address_city, delivery_address_country,
+                net_cents, vat_breakdown, gross_cents,
                 issuer_identity, deleted_at, created_at, updated_at
             )
             VALUES (
                 $1, $2, $3, CAST($4 AS text)::invoice_kind, $5, $6, $7,
-                CAST($8 AS text)::invoice_status, $9, $10, $11, $12, $13, $14,
-                $15, $16, $17, $18
+                CAST($8 AS text)::invoice_status, $9, $10, $11,
+                CAST($12 AS text)::invoice_operation_nature,
+                $13, $14, $15, $16, $17,
+                $18, $19, $20,
+                $21, $22, $23, $24
             )
             RETURNING
                 id, org_id, number, kind::text AS "kind!", project_id, customer_id,
                 customer_context_id, status::text AS "status!", issued_at, due_at, notes,
+                operation_nature::text,
+                delivery_address_line1, delivery_address_line2, delivery_address_postal_code,
+                delivery_address_city, delivery_address_country,
                 net_cents, vat_breakdown, gross_cents, issuer_identity, deleted_at,
                 created_at, updated_at
             "#,
@@ -93,6 +106,12 @@ impl<'tx> InvoiceRepository for PgInvoiceRepository<'tx> {
             invoice.issued_at,
             invoice.due_at,
             invoice.notes,
+            operation_nature,
+            delivery_line1,
+            delivery_line2,
+            delivery_postal_code,
+            delivery_city,
+            delivery_country,
             invoice.net_cents,
             vat_breakdown,
             invoice.gross_cents,
@@ -117,6 +136,9 @@ impl<'tx> InvoiceRepository for PgInvoiceRepository<'tx> {
             SELECT
                 id, org_id, number, kind::text AS "kind!", project_id, customer_id,
                 customer_context_id, status::text AS "status!", issued_at, due_at, notes,
+                operation_nature::text,
+                delivery_address_line1, delivery_address_line2, delivery_address_postal_code,
+                delivery_address_city, delivery_address_country,
                 net_cents, vat_breakdown, gross_cents, issuer_identity, deleted_at,
                 created_at, updated_at
             FROM invoices
@@ -150,6 +172,9 @@ impl<'tx> InvoiceRepository for PgInvoiceRepository<'tx> {
             SELECT
                 id, org_id, number, kind::text AS "kind!", project_id, customer_id,
                 customer_context_id, status::text AS "status!", issued_at, due_at, notes,
+                operation_nature::text,
+                delivery_address_line1, delivery_address_line2, delivery_address_postal_code,
+                delivery_address_city, delivery_address_country,
                 net_cents, vat_breakdown, gross_cents, issuer_identity, deleted_at,
                 created_at, updated_at
             FROM invoices
@@ -190,6 +215,9 @@ impl<'tx> InvoiceRepository for PgInvoiceRepository<'tx> {
             SELECT
                 id, org_id, number, kind::text AS "kind!", project_id, customer_id,
                 customer_context_id, status::text AS "status!", issued_at, due_at, notes,
+                operation_nature::text,
+                delivery_address_line1, delivery_address_line2, delivery_address_postal_code,
+                delivery_address_city, delivery_address_country,
                 net_cents, vat_breakdown, gross_cents, issuer_identity, deleted_at,
                 created_at, updated_at
             FROM invoices
@@ -215,6 +243,9 @@ impl<'tx> InvoiceRepository for PgInvoiceRepository<'tx> {
         let invoice = draft.invoice();
         let mut tx = self.tx.lock().await;
         let vat_breakdown = vat_breakdown_to_json(&invoice.vat_breakdown);
+        let operation_nature = invoice.operation_nature.map(|nature| nature.as_str());
+        let (delivery_line1, delivery_line2, delivery_postal_code, delivery_city, delivery_country) =
+            delivery_address_columns(&invoice.delivery_address);
         let row = sqlx::query_as!(
             InvoiceRow,
             r#"
@@ -224,14 +255,23 @@ impl<'tx> InvoiceRepository for PgInvoiceRepository<'tx> {
                 customer_context_id = $4,
                 due_at = $5,
                 notes = $6,
-                net_cents = $7,
-                vat_breakdown = $8,
-                gross_cents = $9,
-                updated_at = $10
+                operation_nature = CAST($7 AS text)::invoice_operation_nature,
+                delivery_address_line1 = $8,
+                delivery_address_line2 = $9,
+                delivery_address_postal_code = $10,
+                delivery_address_city = $11,
+                delivery_address_country = $12,
+                net_cents = $13,
+                vat_breakdown = $14,
+                gross_cents = $15,
+                updated_at = $16
             WHERE id = $1 AND deleted_at IS NULL AND status = 'DRAFT'
             RETURNING
                 id, org_id, number, kind::text AS "kind!", project_id, customer_id,
                 customer_context_id, status::text AS "status!", issued_at, due_at, notes,
+                operation_nature::text,
+                delivery_address_line1, delivery_address_line2, delivery_address_postal_code,
+                delivery_address_city, delivery_address_country,
                 net_cents, vat_breakdown, gross_cents, issuer_identity, deleted_at,
                 created_at, updated_at
             "#,
@@ -241,6 +281,12 @@ impl<'tx> InvoiceRepository for PgInvoiceRepository<'tx> {
             invoice.customer_context_id.0,
             invoice.due_at,
             invoice.notes,
+            operation_nature,
+            delivery_line1,
+            delivery_line2,
+            delivery_postal_code,
+            delivery_city,
+            delivery_country,
             invoice.net_cents,
             vat_breakdown,
             invoice.gross_cents,
@@ -286,6 +332,9 @@ impl<'tx> InvoiceRepository for PgInvoiceRepository<'tx> {
             RETURNING
                 id, org_id, number, kind::text AS "kind!", project_id, customer_id,
                 customer_context_id, status::text AS "status!", issued_at, due_at, notes,
+                operation_nature::text,
+                delivery_address_line1, delivery_address_line2, delivery_address_postal_code,
+                delivery_address_city, delivery_address_country,
                 net_cents, vat_breakdown, gross_cents, issuer_identity, deleted_at,
                 created_at, updated_at
             "#,

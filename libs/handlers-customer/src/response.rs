@@ -13,6 +13,9 @@ pub struct CustomerResponse {
     pub status: CustomerStatus,
     pub pipeline_stage: CustomerPipelineStage,
     pub name: String,
+    /// The customer's own SIREN (or equivalent) — see
+    /// `mestier_core::Customer::registration_number`'s own doc.
+    pub registration_number: Option<String>,
     pub phone: Option<String>,
     pub email: Option<String>,
     pub created_at: DateTime<Utc>,
@@ -27,6 +30,7 @@ impl From<Customer> for CustomerResponse {
             status: value.status,
             pipeline_stage: value.pipeline_stage,
             name: value.name,
+            registration_number: value.registration_number,
             phone: value.phone,
             email: value.email,
             created_at: value.created_at,

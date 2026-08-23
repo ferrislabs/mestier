@@ -49,6 +49,9 @@ pub struct OrganizationResponse {
     /// Whether the field app's home screen offers clocking in/out — see
     /// `Organization::field_clock_enabled`'s own doc.
     pub field_clock_enabled: bool,
+    /// Whether this organization's VAT is due on invoicing rather than on
+    /// collection — see `Organization::vat_on_debits`'s own doc.
+    pub vat_on_debits: bool,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }
@@ -80,6 +83,7 @@ impl From<Organization> for OrganizationResponse {
             insurance_mention: org.insurance_mention,
             missing_legal_identity_fields,
             field_clock_enabled: org.field_clock_enabled,
+            vat_on_debits: org.vat_on_debits,
             created_at: org.created_at,
             updated_at: org.updated_at,
         }

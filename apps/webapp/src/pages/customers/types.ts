@@ -11,6 +11,12 @@ export interface CustomerFormValues {
 	pipelineStage: CustomerPipelineStage
 	/** Legal or full name — a customer is an entity, not a person. */
 	name: string
+	/**
+	 * The customer's own SIREN (or equivalent) — required on an invoice
+	 * transmitted electronically once the customer is itself VAT-subject,
+	 * per the reform effective 1 September 2026.
+	 */
+	registrationNumber: string
 	email: string
 	phone: string
 }
@@ -56,6 +62,7 @@ export function customerToForm(customer: Customer): CustomerFormValues {
 		status: customer.status,
 		pipelineStage: customer.pipeline_stage,
 		name: customer.name,
+		registrationNumber: customer.registration_number ?? '',
 		email: customer.email ?? '',
 		phone: customer.phone ?? '',
 	}

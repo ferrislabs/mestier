@@ -1,7 +1,10 @@
 use chrono::{DateTime, Utc};
 use rust_decimal::Decimal;
 
-use crate::{CustomerContextId, CustomerId, InvoiceId, InvoiceKind, OrganizationId, ProjectId};
+use crate::{
+    CustomerContextId, CustomerId, InvoiceId, InvoiceKind, OperationNature, OrganizationAddress,
+    OrganizationId, ProjectId,
+};
 
 #[derive(Debug, Clone)]
 pub struct InvoiceLineCommand {
@@ -20,6 +23,8 @@ pub struct CreateInvoiceCommand {
     pub customer_context_id: CustomerContextId,
     pub due_at: Option<DateTime<Utc>>,
     pub notes: Option<String>,
+    pub operation_nature: Option<OperationNature>,
+    pub delivery_address: Option<OrganizationAddress>,
     pub lines: Vec<InvoiceLineCommand>,
 }
 
@@ -31,6 +36,8 @@ pub struct UpdateInvoiceCommand {
     pub customer_context_id: CustomerContextId,
     pub due_at: Option<DateTime<Utc>>,
     pub notes: Option<String>,
+    pub operation_nature: Option<OperationNature>,
+    pub delivery_address: Option<OrganizationAddress>,
     pub lines: Vec<InvoiceLineCommand>,
 }
 

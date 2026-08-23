@@ -201,6 +201,7 @@ where
         organization.contact_email = command.contact_email;
         organization.contact_phone = command.contact_phone;
         organization.insurance_mention = command.insurance_mention;
+        organization.vat_on_debits = command.vat_on_debits;
         organization.updated_at = Utc::now();
 
         self.organization_repository.update(&organization).await
@@ -271,6 +272,7 @@ where
                 insurance_mention: None,
                 quote_number_prefix: "DEV".to_owned(),
                 field_clock_enabled: false,
+                vat_on_debits: false,
                 deleted_at: None,
                 created_at: now,
                 updated_at: now,
@@ -412,6 +414,7 @@ mod tests {
             insurance_mention: None,
             quote_number_prefix: "DEV".to_owned(),
             field_clock_enabled: false,
+            vat_on_debits: false,
             deleted_at: None,
             created_at: now,
             updated_at: now,
@@ -818,6 +821,7 @@ mod tests {
             contact_email: Some("contact@acme.fr".into()),
             contact_phone: None,
             insurance_mention: Some("RC Pro n°123456 - MAAF Assurances".into()),
+            vat_on_debits: false,
         }
     }
 
@@ -1335,6 +1339,7 @@ mod tests {
                     insurance_mention: None,
                     quote_number_prefix: "DEV".to_owned(),
                     field_clock_enabled: false,
+                    vat_on_debits: false,
                     deleted_at: None,
                     created_at: now,
                     updated_at: now,
@@ -1397,6 +1402,7 @@ mod tests {
                     insurance_mention: None,
                     quote_number_prefix: "DEV".to_owned(),
                     field_clock_enabled: false,
+                    vat_on_debits: false,
                     deleted_at: None,
                     created_at: now,
                     updated_at: now,

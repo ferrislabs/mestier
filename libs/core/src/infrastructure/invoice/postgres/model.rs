@@ -7,8 +7,8 @@ use uuid::Uuid;
 
 use crate::{
     CustomerContextId, CustomerId, Invoice, InvoiceId, InvoiceKind, InvoiceLine, InvoiceLineId,
-    InvoiceStatus, InvoiceVatBreakdownLine, LegalIdentity, OrganizationAddress, OrganizationId,
-    ProjectId, VatStatus,
+    InvoiceStatus, InvoiceVatBreakdownLine, LegalIdentity, OperationNature, OrganizationAddress,
+    OrganizationId, ProjectId, VatStatus,
 };
 
 #[derive(Debug, Clone)]
@@ -24,6 +24,12 @@ pub struct InvoiceRow {
     pub issued_at: Option<DateTime<Utc>>,
     pub due_at: Option<DateTime<Utc>>,
     pub notes: Option<String>,
+    pub operation_nature: Option<String>,
+    pub delivery_address_line1: Option<String>,
+    pub delivery_address_line2: Option<String>,
+    pub delivery_address_postal_code: Option<String>,
+    pub delivery_address_city: Option<String>,
+    pub delivery_address_country: Option<String>,
     pub net_cents: i32,
     pub vat_breakdown: serde_json::Value,
     pub gross_cents: i32,
@@ -56,6 +62,22 @@ impl InvoiceRow {
             .map_err(|e| CoreError::Internal(format!("invalid invoice kind in database: {e}")))?;
         let vat_breakdown = parse_vat_breakdown(self.vat_breakdown)?;
         let issuer_identity = self.issuer_identity.map(parse_legal_identity).transpose()?;
+        let operation_nature = self
+            .operation_nature
+            .map(|value| OperationNature::from_str(&value))
+            .transpose()
+            .map_err(|e| {
+                CoreError::Internal(format!("invalid invoice operation_nature in database: {e}"))
+            })?;
+        let delivery_address = self
+            .delivery_address_line1
+            .map(|line1| OrganizationAddress {
+                line1,
+                line2: self.delivery_address_line2,
+                postal_code: self.delivery_address_postal_code.unwrap_or_default(),
+                city: self.delivery_address_city.unwrap_or_default(),
+                country: self.delivery_address_country.unwrap_or_default(),
+            });
 
         Ok(Invoice {
             id: InvoiceId(self.id),
@@ -69,6 +91,8 @@ impl InvoiceRow {
             issued_at: self.issued_at,
             due_at: self.due_at,
             notes: self.notes,
+            operation_nature,
+            delivery_address,
             net_cents: self.net_cents,
             vat_breakdown,
             gross_cents: self.gross_cents,
@@ -117,6 +141,36 @@ pub fn vat_breakdown_to_json(breakdown: &[InvoiceVatBreakdownLine]) -> serde_jso
             .collect::<Vec<_>>(),
     )
     .expect("a vec of plain structs always serializes")
+}
+
+/// The five `delivery_address_*` columns, in the order every query below
+/// binds them: line1, line2, postal code, city, country.
+type DeliveryAddressColumns<'a> = (
+    Option<&'a str>,
+    Option<&'a str>,
+    Option<&'a str>,
+    Option<&'a str>,
+    Option<&'a str>,
+);
+
+/// The five `delivery_address_*` columns to bind, or `NULL` all around when
+/// the invoice carries none — mirrors `vat_status_columns` on the
+/// organization repository: one function decides how an `Option<Struct>`
+/// spreads across several nullable columns, used by every query that
+/// writes it.
+pub fn delivery_address_columns(
+    address: &Option<OrganizationAddress>,
+) -> DeliveryAddressColumns<'_> {
+    match address {
+        Some(address) => (
+            Some(address.line1.as_str()),
+            address.line2.as_deref(),
+            Some(address.postal_code.as_str()),
+            Some(address.city.as_str()),
+            Some(address.country.as_str()),
+        ),
+        None => (None, None, None, None, None),
+    }
 }
 
 /// The JSON mirror of `LegalIdentity`, kept private to this module for the

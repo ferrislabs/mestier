@@ -6,6 +6,7 @@ pub struct CreateCustomerCommand {
     pub status: CustomerStatus,
     pub pipeline_stage: CustomerPipelineStage,
     pub name: String,
+    pub registration_number: Option<String>,
     pub phone: Option<String>,
     pub email: Option<String>,
 }
@@ -16,6 +17,7 @@ pub struct UpdateCustomerCommand {
     pub status: CustomerStatus,
     pub pipeline_stage: CustomerPipelineStage,
     pub name: String,
+    pub registration_number: Option<String>,
     pub phone: Option<String>,
     pub email: Option<String>,
 }

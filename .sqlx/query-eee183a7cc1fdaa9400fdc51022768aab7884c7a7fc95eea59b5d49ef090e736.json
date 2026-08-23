@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            UPDATE invoices\n            SET project_id = $2,\n                customer_id = $3,\n                customer_context_id = $4,\n                due_at = $5,\n                notes = $6,\n                net_cents = $7,\n                vat_breakdown = $8,\n                gross_cents = $9,\n                updated_at = $10\n            WHERE id = $1 AND deleted_at IS NULL AND status = 'DRAFT'\n            RETURNING\n                id, org_id, number, kind::text AS \"kind!\", project_id, customer_id,\n                customer_context_id, status::text AS \"status!\", issued_at, due_at, notes,\n                net_cents, vat_breakdown, gross_cents, issuer_identity, deleted_at,\n                created_at, updated_at\n            ",
+  "query": "\n            SELECT\n                id, org_id, number, kind::text AS \"kind!\", project_id, customer_id,\n                customer_context_id, status::text AS \"status!\", issued_at, due_at, notes,\n                operation_nature::text,\n                delivery_address_line1, delivery_address_line2, delivery_address_postal_code,\n                delivery_address_city, delivery_address_country,\n                net_cents, vat_breakdown, gross_cents, issuer_identity, deleted_at,\n                created_at, updated_at\n            FROM invoices\n            WHERE project_id = $1 AND deleted_at IS NULL\n            ORDER BY created_at ASC, id ASC\n            ",
   "describe": {
     "columns": [
       {
@@ -60,52 +60,73 @@
       },
       {
         "ordinal": 11,
+        "name": "operation_nature",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 12,
+        "name": "delivery_address_line1",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 13,
+        "name": "delivery_address_line2",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 14,
+        "name": "delivery_address_postal_code",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 15,
+        "name": "delivery_address_city",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 16,
+        "name": "delivery_address_country",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 17,
         "name": "net_cents",
         "type_info": "Int4"
       },
       {
-        "ordinal": 12,
+        "ordinal": 18,
         "name": "vat_breakdown",
         "type_info": "Jsonb"
       },
       {
-        "ordinal": 13,
+        "ordinal": 19,
         "name": "gross_cents",
         "type_info": "Int4"
       },
       {
-        "ordinal": 14,
+        "ordinal": 20,
         "name": "issuer_identity",
         "type_info": "Jsonb"
       },
       {
-        "ordinal": 15,
+        "ordinal": 21,
         "name": "deleted_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 16,
+        "ordinal": 22,
         "name": "created_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 17,
+        "ordinal": 23,
         "name": "updated_at",
         "type_info": "Timestamptz"
       }
     ],
     "parameters": {
       "Left": [
-        "Uuid",
-        "Uuid",
-        "Uuid",
-        "Uuid",
-        "Timestamptz",
-        "Text",
-        "Int4",
-        "Jsonb",
-        "Int4",
-        "Timestamptz"
+        "Uuid"
       ]
     },
     "nullable": [
@@ -120,6 +141,12 @@
       true,
       true,
       true,
+      null,
+      true,
+      true,
+      true,
+      true,
+      true,
       false,
       false,
       false,
@@ -129,5 +156,5 @@
       false
     ]
   },
-  "hash": "3e34d177125e4386914c5b679d178031e309b40480953cb6f4c8a55e4647f36e"
+  "hash": "eee183a7cc1fdaa9400fdc51022768aab7884c7a7fc95eea59b5d49ef090e736"
 }

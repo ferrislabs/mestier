@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT id, name, slug, owner_id,\n                legal_name, legal_form, registration_number,\n                vat_status, vat_number, vat_exemption_basis,\n                share_capital_cents,\n                address_line1, address_line2, address_postal_code, address_city, address_country,\n                contact_email, contact_phone, insurance_mention,\n                quote_number_prefix,\n                field_clock_enabled,\n                deleted_at, created_at, updated_at\n            FROM organizations\n            WHERE deleted_at IS NULL\n            ORDER BY created_at ASC\n            LIMIT $1 OFFSET $2\n            ",
+  "query": "\n            SELECT id, name, slug, owner_id,\n                legal_name, legal_form, registration_number,\n                vat_status, vat_number, vat_exemption_basis,\n                share_capital_cents,\n                address_line1, address_line2, address_postal_code, address_city, address_country,\n                contact_email, contact_phone, insurance_mention,\n                quote_number_prefix,\n                field_clock_enabled,\n                vat_on_debits,\n                deleted_at, created_at, updated_at\n            FROM organizations\n            WHERE id = $1 AND deleted_at IS NULL\n            ",
   "describe": {
     "columns": [
       {
@@ -110,24 +110,28 @@
       },
       {
         "ordinal": 21,
+        "name": "vat_on_debits",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 22,
         "name": "deleted_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 22,
+        "ordinal": 23,
         "name": "created_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 23,
+        "ordinal": 24,
         "name": "updated_at",
         "type_info": "Timestamptz"
       }
     ],
     "parameters": {
       "Left": [
-        "Int8",
-        "Int8"
+        "Uuid"
       ]
     },
     "nullable": [
@@ -152,10 +156,11 @@
       true,
       false,
       false,
+      false,
       true,
       false,
       false
     ]
   },
-  "hash": "e690b40afdbd6a069bbf61910e6eca76a008af117210d871f63518407364409a"
+  "hash": "ebd7dfb935193f4e8784b5d45ba65301edec16f8cbcdd4c80a165eee691a50af"
 }

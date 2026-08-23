@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            INSERT INTO organizations (\n                id, name, slug, owner_id,\n                legal_name, legal_form, registration_number,\n                vat_status, vat_number, vat_exemption_basis,\n                share_capital_cents,\n                address_line1, address_line2, address_postal_code, address_city, address_country,\n                contact_email, contact_phone, insurance_mention,\n                field_clock_enabled,\n                deleted_at, created_at, updated_at\n            )\n            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23)\n            RETURNING\n                id, name, slug, owner_id,\n                legal_name, legal_form, registration_number,\n                vat_status, vat_number, vat_exemption_basis,\n                share_capital_cents,\n                address_line1, address_line2, address_postal_code, address_city, address_country,\n                contact_email, contact_phone, insurance_mention,\n                quote_number_prefix,\n                field_clock_enabled,\n                deleted_at, created_at, updated_at\n            ",
+  "query": "\n            UPDATE organizations\n            SET name = $2,\n                slug = $3,\n                legal_name = $4,\n                legal_form = $5,\n                registration_number = $6,\n                vat_status = $7,\n                vat_number = $8,\n                vat_exemption_basis = $9,\n                share_capital_cents = $10,\n                address_line1 = $11,\n                address_line2 = $12,\n                address_postal_code = $13,\n                address_city = $14,\n                address_country = $15,\n                contact_email = $16,\n                contact_phone = $17,\n                insurance_mention = $18,\n                field_clock_enabled = $19,\n                vat_on_debits = $20,\n                updated_at = $21\n            WHERE id = $1 AND deleted_at IS NULL\n            RETURNING\n                id, name, slug, owner_id,\n                legal_name, legal_form, registration_number,\n                vat_status, vat_number, vat_exemption_basis,\n                share_capital_cents,\n                address_line1, address_line2, address_postal_code, address_city, address_country,\n                contact_email, contact_phone, insurance_mention,\n                quote_number_prefix,\n                field_clock_enabled,\n                vat_on_debits,\n                deleted_at, created_at, updated_at\n            ",
   "describe": {
     "columns": [
       {
@@ -110,16 +110,21 @@
       },
       {
         "ordinal": 21,
+        "name": "vat_on_debits",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 22,
         "name": "deleted_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 22,
+        "ordinal": 23,
         "name": "created_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 23,
+        "ordinal": 24,
         "name": "updated_at",
         "type_info": "Timestamptz"
       }
@@ -129,7 +134,6 @@
         "Uuid",
         "Text",
         "Text",
-        "Uuid",
         "Text",
         "Text",
         "Text",
@@ -146,8 +150,7 @@
         "Text",
         "Text",
         "Bool",
-        "Timestamptz",
-        "Timestamptz",
+        "Bool",
         "Timestamptz"
       ]
     },
@@ -173,10 +176,11 @@
       true,
       false,
       false,
+      false,
       true,
       false,
       false
     ]
   },
-  "hash": "cef76039f372565bc09588f7da22912d5424cc4d499eccea963e8614a75c17d5"
+  "hash": "6c4fa02b7ddaf0d3328a5186958e207a2355f795997633e3054d049277e1fe34"
 }

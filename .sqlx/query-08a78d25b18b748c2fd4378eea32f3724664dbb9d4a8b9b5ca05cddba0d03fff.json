@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT o.id, o.name, o.slug, o.owner_id,\n                o.legal_name, o.legal_form, o.registration_number,\n                o.vat_status, o.vat_number, o.vat_exemption_basis,\n                o.share_capital_cents,\n                o.address_line1, o.address_line2, o.address_postal_code, o.address_city, o.address_country,\n                o.contact_email, o.contact_phone, o.insurance_mention,\n                o.quote_number_prefix,\n                o.field_clock_enabled,\n                o.deleted_at, o.created_at, o.updated_at\n            FROM organizations o\n            INNER JOIN organization_members m ON m.organization_id = o.id\n            WHERE m.user_id = $1 AND o.deleted_at IS NULL\n            ORDER BY o.created_at ASC\n            ",
+  "query": "\n            SELECT id, name, slug, owner_id,\n                legal_name, legal_form, registration_number,\n                vat_status, vat_number, vat_exemption_basis,\n                share_capital_cents,\n                address_line1, address_line2, address_postal_code, address_city, address_country,\n                contact_email, contact_phone, insurance_mention,\n                quote_number_prefix,\n                field_clock_enabled,\n                vat_on_debits,\n                deleted_at, created_at, updated_at\n            FROM organizations\n            WHERE deleted_at IS NULL\n            ORDER BY created_at ASC\n            LIMIT $1 OFFSET $2\n            ",
   "describe": {
     "columns": [
       {
@@ -110,23 +110,29 @@
       },
       {
         "ordinal": 21,
+        "name": "vat_on_debits",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 22,
         "name": "deleted_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 22,
+        "ordinal": 23,
         "name": "created_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 23,
+        "ordinal": 24,
         "name": "updated_at",
         "type_info": "Timestamptz"
       }
     ],
     "parameters": {
       "Left": [
-        "Uuid"
+        "Int8",
+        "Int8"
       ]
     },
     "nullable": [
@@ -151,10 +157,11 @@
       true,
       false,
       false,
+      false,
       true,
       false,
       false
     ]
   },
-  "hash": "d04c3de431c46f5a1dadec1011e1cf35c5826f6cdbbebebf6332faa889575645"
+  "hash": "08a78d25b18b748c2fd4378eea32f3724664dbb9d4a8b9b5ca05cddba0d03fff"
 }

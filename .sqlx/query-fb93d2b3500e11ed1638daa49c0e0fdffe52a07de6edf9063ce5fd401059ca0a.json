@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT id, org_id, status, pipeline_stage, name, phone, email, deleted_at, created_at, updated_at\n            FROM customers\n            WHERE org_id = $1 AND deleted_at IS NULL\n            ORDER BY name ASC, created_at ASC\n            LIMIT $2 OFFSET $3\n            ",
+  "query": "\n            INSERT INTO customers (id, org_id, status, pipeline_stage, name, registration_number, phone, email, deleted_at, created_at, updated_at)\n            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)\n            RETURNING id, org_id, status, pipeline_stage, name, registration_number, phone, email, deleted_at, created_at, updated_at\n            ",
   "describe": {
     "columns": [
       {
@@ -30,26 +30,31 @@
       },
       {
         "ordinal": 5,
-        "name": "phone",
+        "name": "registration_number",
         "type_info": "Text"
       },
       {
         "ordinal": 6,
-        "name": "email",
+        "name": "phone",
         "type_info": "Text"
       },
       {
         "ordinal": 7,
+        "name": "email",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 8,
         "name": "deleted_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 8,
+        "ordinal": 9,
         "name": "created_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 9,
+        "ordinal": 10,
         "name": "updated_at",
         "type_info": "Timestamptz"
       }
@@ -57,8 +62,16 @@
     "parameters": {
       "Left": [
         "Uuid",
-        "Int8",
-        "Int8"
+        "Uuid",
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Timestamptz",
+        "Timestamptz",
+        "Timestamptz"
       ]
     },
     "nullable": [
@@ -70,9 +83,10 @@
       true,
       true,
       true,
+      true,
       false,
       false
     ]
   },
-  "hash": "c7ebdb6e9c1f9110110799152849d1f3af91e07f837677daedc0fe50593950fa"
+  "hash": "fb93d2b3500e11ed1638daa49c0e0fdffe52a07de6edf9063ce5fd401059ca0a"
 }

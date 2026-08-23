@@ -59,6 +59,12 @@ pub struct UpdateLegalIdentityRequest {
     pub contact_phone: Option<String>,
     #[serde(default)]
     pub insurance_mention: Option<String>,
+    /// Not optional, unlike the fields above: a VAT regime choice is
+    /// always either debits or encaissements. Defaults to `false`
+    /// (encaissements) so existing clients that do not yet send this field
+    /// keep today's behaviour rather than failing to deserialize.
+    #[serde(default)]
+    pub vat_on_debits: bool,
 }
 
 #[utoipa::path(
@@ -112,6 +118,7 @@ pub async fn handler(
             contact_email: payload.contact_email,
             contact_phone: payload.contact_phone,
             insurance_mention: payload.insurance_mention,
+            vat_on_debits: payload.vat_on_debits,
         })
         .await?;
 

@@ -122,6 +122,7 @@ pub fn stubbed_organization() -> MockOrganizationRepository {
             insurance_mention: None,
             quote_number_prefix: "DEV".to_owned(),
             field_clock_enabled: false,
+            vat_on_debits: false,
             deleted_at: None,
             created_at: now,
             updated_at: now,

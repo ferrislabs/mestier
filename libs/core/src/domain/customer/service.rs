@@ -29,6 +29,7 @@ where
         command: CreateCustomerCommand,
     ) -> Result<Customer, CoreError> {
         validate_customer(&command.name, &command.phone, &command.email)?;
+        validate_optional("customer registration number", &command.registration_number)?;
 
         let now = Utc::now();
         self.repo
@@ -38,6 +39,7 @@ where
                 status: command.status,
                 pipeline_stage: command.pipeline_stage,
                 name: command.name,
+                registration_number: command.registration_number,
                 phone: command.phone,
                 email: command.email,
                 deleted_at: None,
@@ -67,11 +69,13 @@ where
         command: UpdateCustomerCommand,
     ) -> Result<Customer, CoreError> {
         validate_customer(&command.name, &command.phone, &command.email)?;
+        validate_optional("customer registration number", &command.registration_number)?;
 
         let mut customer = self.get_customer(command.id).await?;
         customer.status = command.status;
         customer.pipeline_stage = command.pipeline_stage;
         customer.name = command.name;
+        customer.registration_number = command.registration_number;
         customer.phone = command.phone;
         customer.email = command.email;
         customer.updated_at = Utc::now();
@@ -127,6 +131,7 @@ mod tests {
             status: crate::CustomerStatus::Prospect,
             pipeline_stage: crate::CustomerPipelineStage::New,
             name: "Alice Dupont".to_owned(),
+            registration_number: None,
             phone: Some("+33123456789".to_owned()),
             email: Some("alice@example.com".to_owned()),
             deleted_at: None,
@@ -150,6 +155,7 @@ mod tests {
                 status: crate::CustomerStatus::Prospect,
                 pipeline_stage: crate::CustomerPipelineStage::New,
                 name: "Alice Dupont".to_owned(),
+                registration_number: None,
                 phone: None,
                 email: None,
             })
@@ -178,6 +184,7 @@ mod tests {
                 status: crate::CustomerStatus::Client,
                 pipeline_stage: crate::CustomerPipelineStage::Won,
                 name: "Syndic Martin".to_owned(),
+                registration_number: None,
                 phone: Some("0102030405".to_owned()),
                 email: None,
             })
@@ -233,6 +240,53 @@ mod tests {
                 status: crate::CustomerStatus::Prospect,
                 pipeline_stage: crate::CustomerPipelineStage::New,
                 name: " ".to_owned(),
+                registration_number: None,
+                phone: None,
+                email: None,
+            })
+            .await
+            .unwrap_err();
+
+        assert!(matches!(err, CoreError::Conflict(_)));
+    }
+
+    #[tokio::test]
+    async fn create_customer_persists_a_registration_number() {
+        let mut repo = MockCustomerRepository::new();
+        repo.expect_insert().times(1).returning(|c| {
+            let customer = c.clone();
+            Box::pin(async move { Ok(customer) })
+        });
+
+        let mut service = CustomerService::new(repo);
+        let created = service
+            .create_customer(CreateCustomerCommand {
+                organization_id: OrganizationId(Uuid::new_v4()),
+                status: crate::CustomerStatus::Prospect,
+                pipeline_stage: crate::CustomerPipelineStage::New,
+                name: "Alice Dupont".to_owned(),
+                registration_number: Some("123 456 789".to_owned()),
+                phone: None,
+                email: None,
+            })
+            .await
+            .unwrap();
+
+        assert_eq!(created.registration_number.as_deref(), Some("123 456 789"));
+    }
+
+    #[tokio::test]
+    async fn create_customer_rejects_a_blank_registration_number() {
+        let repo = MockCustomerRepository::new();
+        let mut service = CustomerService::new(repo);
+
+        let err = service
+            .create_customer(CreateCustomerCommand {
+                organization_id: OrganizationId(Uuid::new_v4()),
+                status: crate::CustomerStatus::Prospect,
+                pipeline_stage: crate::CustomerPipelineStage::New,
+                name: "Alice Dupont".to_owned(),
+                registration_number: Some(" ".to_owned()),
                 phone: None,
                 email: None,
             })

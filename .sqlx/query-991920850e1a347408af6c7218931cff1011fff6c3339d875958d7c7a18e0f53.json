@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            INSERT INTO customers (id, org_id, status, pipeline_stage, name, phone, email, deleted_at, created_at, updated_at)\n            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)\n            RETURNING id, org_id, status, pipeline_stage, name, phone, email, deleted_at, created_at, updated_at\n            ",
+  "query": "\n            SELECT id, org_id, status, pipeline_stage, name, registration_number, phone, email, deleted_at, created_at, updated_at\n            FROM customers\n            WHERE id = $1 AND deleted_at IS NULL\n            ",
   "describe": {
     "columns": [
       {
@@ -30,42 +30,38 @@
       },
       {
         "ordinal": 5,
-        "name": "phone",
+        "name": "registration_number",
         "type_info": "Text"
       },
       {
         "ordinal": 6,
-        "name": "email",
+        "name": "phone",
         "type_info": "Text"
       },
       {
         "ordinal": 7,
+        "name": "email",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 8,
         "name": "deleted_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 8,
+        "ordinal": 9,
         "name": "created_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 9,
+        "ordinal": 10,
         "name": "updated_at",
         "type_info": "Timestamptz"
       }
     ],
     "parameters": {
       "Left": [
-        "Uuid",
-        "Uuid",
-        "Text",
-        "Text",
-        "Text",
-        "Text",
-        "Text",
-        "Timestamptz",
-        "Timestamptz",
-        "Timestamptz"
+        "Uuid"
       ]
     },
     "nullable": [
@@ -77,9 +73,10 @@
       true,
       true,
       true,
+      true,
       false,
       false
     ]
   },
-  "hash": "e125ebec8e271d48d8a59ccda151c4e95078509f289cf6bd8fb3feb0bf959926"
+  "hash": "991920850e1a347408af6c7218931cff1011fff6c3339d875958d7c7a18e0f53"
 }

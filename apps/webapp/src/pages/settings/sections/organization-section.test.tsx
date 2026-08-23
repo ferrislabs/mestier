@@ -32,6 +32,7 @@ const ORGANIZATION = {
 	insurance_mention: null,
 	missing_legal_identity_fields: [],
 	field_clock_enabled: false,
+	vat_on_debits: false,
 	created_at: '2026-01-01T00:00:00Z',
 	updated_at: '2026-01-01T00:00:00Z',
 }

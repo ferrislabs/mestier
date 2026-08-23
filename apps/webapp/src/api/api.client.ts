@@ -232,6 +232,7 @@ export namespace Schemas {
     name: string;
     phone?: (string | null) | undefined;
     pipeline_stage: CustomerPipelineStage;
+    registration_number?: (string | null) | undefined;
     status: CustomerStatus;
   };
   export type CreateEquipmentRequest = { hourly_rate_cents: number; name: string };
@@ -408,6 +409,7 @@ export namespace Schemas {
     organization_id: OrganizationId;
     phone?: (string | null) | undefined;
     pipeline_stage: CustomerPipelineStage;
+    registration_number?: (string | null) | undefined;
     status: CustomerStatus;
     updated_at: string;
   };
@@ -591,6 +593,7 @@ export namespace Schemas {
     share_capital_cents?: (number | null) | undefined;
     slug: string;
     updated_at: string;
+    vat_on_debits: boolean;
     vat_status?: (null | VatStatusResponse) | undefined;
   };
   export type OverwriteResponse = {
@@ -956,6 +959,7 @@ export namespace Schemas {
     name: string;
     phone?: (string | null) | undefined;
     pipeline_stage: CustomerPipelineStage;
+    registration_number?: (string | null) | undefined;
     status: CustomerStatus;
   };
   export type UpdateEquipmentRequest = { hourly_rate_cents: number; name: string };
@@ -973,6 +977,7 @@ export namespace Schemas {
     legal_name: string | null;
     registration_number: string | null;
     share_capital_cents: number | null;
+    vat_on_debits: boolean;
     vat_status: null | VatStatusRequest;
   }>;
   export type UpdateMemberRequest = Partial<{ first_name: string | null; last_name: string | null }>;
@@ -2135,6 +2140,7 @@ export namespace Endpoints {
           organization_id: Schemas.OrganizationId;
           phone?: (string | null) | undefined;
           pipeline_stage: Schemas.CustomerPipelineStage;
+          registration_number?: (string | null) | undefined;
           status: Schemas.CustomerStatus;
           updated_at: string;
         };
@@ -2173,6 +2179,7 @@ export namespace Endpoints {
           organization_id: Schemas.OrganizationId;
           phone?: (string | null) | undefined;
           pipeline_stage: Schemas.CustomerPipelineStage;
+          registration_number?: (string | null) | undefined;
           status: Schemas.CustomerStatus;
           updated_at: string;
         };
@@ -2828,6 +2835,7 @@ export namespace Endpoints {
           share_capital_cents?: (number | null) | undefined;
           slug: string;
           updated_at: string;
+          vat_on_debits: boolean;
           vat_status?: (null | Schemas.VatStatusResponse) | undefined;
         }>;
         pagination?: (null | Schemas.PaginationMetadata) | undefined;
@@ -2865,6 +2873,7 @@ export namespace Endpoints {
           share_capital_cents?: (number | null) | undefined;
           slug: string;
           updated_at: string;
+          vat_on_debits: boolean;
           vat_status?: (null | Schemas.VatStatusResponse) | undefined;
         };
         pagination?: (null | Schemas.PaginationMetadata) | undefined;
@@ -2904,6 +2913,7 @@ export namespace Endpoints {
           share_capital_cents?: (number | null) | undefined;
           slug: string;
           updated_at: string;
+          vat_on_debits: boolean;
           vat_status?: (null | Schemas.VatStatusResponse) | undefined;
         };
         pagination?: (null | Schemas.PaginationMetadata) | undefined;
@@ -2954,6 +2964,7 @@ export namespace Endpoints {
           share_capital_cents?: (number | null) | undefined;
           slug: string;
           updated_at: string;
+          vat_on_debits: boolean;
           vat_status?: (null | Schemas.VatStatusResponse) | undefined;
         };
         pagination?: (null | Schemas.PaginationMetadata) | undefined;
@@ -3532,6 +3543,7 @@ export namespace Endpoints {
           organization_id: Schemas.OrganizationId;
           phone?: (string | null) | undefined;
           pipeline_stage: Schemas.CustomerPipelineStage;
+          registration_number?: (string | null) | undefined;
           status: Schemas.CustomerStatus;
           updated_at: string;
         }>;
@@ -3560,6 +3572,7 @@ export namespace Endpoints {
           organization_id: Schemas.OrganizationId;
           phone?: (string | null) | undefined;
           pipeline_stage: Schemas.CustomerPipelineStage;
+          registration_number?: (string | null) | undefined;
           status: Schemas.CustomerStatus;
           updated_at: string;
         };
@@ -3912,6 +3925,7 @@ export namespace Endpoints {
           share_capital_cents?: (number | null) | undefined;
           slug: string;
           updated_at: string;
+          vat_on_debits: boolean;
           vat_status?: (null | Schemas.VatStatusResponse) | undefined;
         };
         pagination?: (null | Schemas.PaginationMetadata) | undefined;
@@ -5398,6 +5412,7 @@ export namespace Endpoints {
           share_capital_cents?: (number | null) | undefined;
           slug: string;
           updated_at: string;
+          vat_on_debits: boolean;
           vat_status?: (null | Schemas.VatStatusResponse) | undefined;
         }>;
         pagination?: (null | Schemas.PaginationMetadata) | undefined;

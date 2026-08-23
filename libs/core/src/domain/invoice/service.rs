@@ -67,6 +67,8 @@ where
             issued_at: None,
             due_at: command.due_at,
             notes: command.notes,
+            operation_nature: command.operation_nature,
+            delivery_address: command.delivery_address,
             net_cents: totals.net_cents,
             vat_breakdown: totals.vat_breakdown,
             gross_cents: totals.gross_cents,
@@ -135,6 +137,8 @@ where
         draft.set_customer(command.customer_id, command.customer_context_id);
         draft.set_due_at(command.due_at);
         draft.set_notes(command.notes);
+        draft.set_operation_nature(command.operation_nature);
+        draft.set_delivery_address(command.delivery_address);
         draft.set_lines_and_totals(
             lines,
             totals.net_cents,
@@ -261,6 +265,20 @@ fn content_diff(existing: &Invoice, updated: &Invoice) -> (Vec<&'static str>, Va
     if existing.notes != updated.notes {
         changed.push("notes");
         previous.insert("notes".to_owned(), json!(existing.notes));
+    }
+    if existing.operation_nature != updated.operation_nature {
+        changed.push("operation_nature");
+        previous.insert(
+            "operation_nature".to_owned(),
+            json!(existing.operation_nature.map(|n| n.as_str())),
+        );
+    }
+    if existing.delivery_address != updated.delivery_address {
+        changed.push("delivery_address");
+        previous.insert(
+            "delivery_address".to_owned(),
+            json!(existing.delivery_address.is_some()),
+        );
     }
     if line_projection(existing) != line_projection(updated) {
         changed.push("lines");
@@ -500,6 +518,8 @@ mod tests {
             issued_at: None,
             due_at: None,
             notes: None,
+            operation_nature: None,
+            delivery_address: None,
             net_cents: 5500,
             vat_breakdown: Vec::new(),
             gross_cents: 5500,
@@ -545,6 +565,7 @@ mod tests {
             insurance_mention: None,
             quote_number_prefix: "DEV".to_owned(),
             field_clock_enabled: false,
+            vat_on_debits: false,
             deleted_at: None,
             created_at: now,
             updated_at: now,
@@ -591,6 +612,8 @@ mod tests {
                     customer_context_id: CustomerContextId(Uuid::new_v4()),
                     due_at: None,
                     notes: None,
+                    operation_nature: None,
+                    delivery_address: None,
                     lines: vec![
                         line_command(Decimal::new(25, 1), 1200),
                         line_command(Decimal::new(1, 0), 500),
@@ -632,6 +655,8 @@ mod tests {
                     customer_context_id: CustomerContextId(Uuid::new_v4()),
                     due_at: None,
                     notes: None,
+                    operation_nature: None,
+                    delivery_address: None,
                     lines: vec![reduced_rate, standard_rate],
                 },
                 mock_organization_repository(organization_subject_to_vat(organization_id)),
@@ -672,6 +697,8 @@ mod tests {
                     customer_context_id: CustomerContextId(Uuid::new_v4()),
                     due_at: None,
                     notes: None,
+                    operation_nature: None,
+                    delivery_address: None,
                     lines: vec![],
                 },
                 mock_organization_repository(organization_without_vat_status(organization_id)),
@@ -704,6 +731,8 @@ mod tests {
                     customer_context_id: CustomerContextId(Uuid::new_v4()),
                     due_at: None,
                     notes: Some("Merci".to_owned()),
+                    operation_nature: None,
+                    delivery_address: None,
                     lines: vec![line_command(Decimal::new(3, 0), 2000)],
                 },
                 mock_organization_repository(organization_without_vat_status(organization_id)),
@@ -743,6 +772,8 @@ mod tests {
                     customer_context_id: CustomerContextId(Uuid::new_v4()),
                     due_at: None,
                     notes: None,
+                    operation_nature: None,
+                    delivery_address: None,
                     lines: vec![line_command(Decimal::new(1, 0), 1000)],
                 },
                 mock_organization_repository(organization_without_vat_status(organization_id)),
@@ -864,6 +895,8 @@ mod tests {
                     customer_context_id: CustomerContextId(Uuid::new_v4()),
                     due_at: None,
                     notes: None,
+                    operation_nature: None,
+                    delivery_address: None,
                     lines: vec![line.clone(), line.clone(), line],
                 },
                 mock_organization_repository(organization_subject_to_vat(organization_id)),
