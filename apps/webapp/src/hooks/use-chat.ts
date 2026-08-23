@@ -618,3 +618,173 @@ export function useReadStateGatewaySync(organizationId: string) {
 		)
 	})
 }
+
+// ── Channel & category administration ───────────────────────────────────────
+// "Configuration, not conversation" (the issue's own framing) — plain
+// CRUD mutations invalidating the same list queries the sidebar already
+// reads, no optimism needed here.
+
+const CHANNEL_PERMISSIONS_PATH =
+	'/api/v1/chat/channels/{channel_id}/permissions'
+const CHANNEL_PERMISSIONS_EVERYONE_PATH =
+	'/api/v1/chat/channels/{channel_id}/permissions/everyone'
+const CHANNEL_PERMISSIONS_TARGET_PATH =
+	'/api/v1/chat/channels/{channel_id}/permissions/{target_type}/{target_id}'
+const CHANNEL_WEBHOOKS_PATH = '/api/v1/chat/channels/{channel_id}/webhooks'
+const WEBHOOK_PATH = '/api/v1/chat/webhooks/{webhook_id}'
+const CATEGORY_PATH = '/api/v1/chat/categories/{category_id}'
+
+export type Overwrite = Schemas.OverwriteResponse
+export type Webhook = Schemas.WebhookResponse
+export type WebhookCreated = Schemas.WebhookCreatedResponse
+
+function invalidateOnSettled(
+	queryClient: ReturnType<typeof useQueryClient>,
+	key: readonly unknown[],
+) {
+	return () => queryClient.invalidateQueries({ queryKey: key })
+}
+
+export function useCreateCategory(organizationId: string) {
+	const queryClient = useQueryClient()
+	return useMutation({
+		...window.tanstackApi.mutation('post', ORG_CATEGORIES_PATH).mutationOptions,
+		onSuccess: invalidateOnSettled(queryClient, categoriesKey(organizationId)),
+	})
+}
+
+export function useUpdateCategory(organizationId: string) {
+	const queryClient = useQueryClient()
+	return useMutation({
+		...window.tanstackApi.mutation('patch', CATEGORY_PATH).mutationOptions,
+		onSuccess: invalidateOnSettled(queryClient, categoriesKey(organizationId)),
+	})
+}
+
+export function useDeleteCategory(organizationId: string) {
+	const queryClient = useQueryClient()
+	return useMutation({
+		...window.tanstackApi.mutation('delete', CATEGORY_PATH).mutationOptions,
+		onSuccess: invalidateOnSettled(queryClient, categoriesKey(organizationId)),
+	})
+}
+
+export function useCreateChannel(organizationId: string) {
+	const queryClient = useQueryClient()
+	return useMutation({
+		...window.tanstackApi.mutation('post', ORG_CHANNELS_PATH).mutationOptions,
+		onSuccess: invalidateOnSettled(queryClient, channelsKey(organizationId)),
+	})
+}
+
+export function useUpdateChannel(organizationId: string) {
+	const queryClient = useQueryClient()
+	return useMutation({
+		...window.tanstackApi.mutation('patch', CHANNEL_PATH).mutationOptions,
+		onSuccess: invalidateOnSettled(queryClient, channelsKey(organizationId)),
+	})
+}
+
+export function useDeleteChannel(organizationId: string) {
+	const queryClient = useQueryClient()
+	return useMutation({
+		...window.tanstackApi.mutation('delete', CHANNEL_PATH).mutationOptions,
+		onSuccess: invalidateOnSettled(queryClient, channelsKey(organizationId)),
+	})
+}
+
+function channelPermissionsKey(channelId: string) {
+	return window.tanstackApi.get(CHANNEL_PERMISSIONS_PATH, {
+		path: { channel_id: channelId },
+	}).queryKey
+}
+
+/**
+ * The raw overwrites for a channel — allow/deny per target, `everyone`
+ * included. Not the *effective* result (org-role bits adjusted by these
+ * overwrites): that resolution lives server-side in
+ * `discord_overwrite::resolve_channel_permissions` and is never exposed by a
+ * GET route (only used internally by `require_channel_permission`). "Show
+ * the effective result... ask the server rather than deriving it" is the
+ * issue's own instruction — since there is nothing to ask, this shows the
+ * overwrite state (still accurate, still real) rather than reimplementing
+ * that resolution client-side, which the issue explicitly rules out.
+ */
+export function useChannelPermissions(channelId: string) {
+	return useQuery({
+		...window.tanstackApi.get(CHANNEL_PERMISSIONS_PATH, {
+			path: { channel_id: channelId },
+		}).queryOptions,
+		select: (response) => response.data,
+		enabled: Boolean(channelId),
+	})
+}
+
+export function useUpsertEveryoneOverwrite(channelId: string) {
+	const queryClient = useQueryClient()
+	return useMutation({
+		...window.tanstackApi.mutation('put', CHANNEL_PERMISSIONS_EVERYONE_PATH)
+			.mutationOptions,
+		onSuccess: invalidateOnSettled(
+			queryClient,
+			channelPermissionsKey(channelId),
+		),
+	})
+}
+
+export function useDeleteEveryoneOverwrite(channelId: string) {
+	const queryClient = useQueryClient()
+	return useMutation({
+		...window.tanstackApi.mutation('delete', CHANNEL_PERMISSIONS_EVERYONE_PATH)
+			.mutationOptions,
+		onSuccess: invalidateOnSettled(
+			queryClient,
+			channelPermissionsKey(channelId),
+		),
+	})
+}
+
+export function useDeleteTargetOverwrite(channelId: string) {
+	const queryClient = useQueryClient()
+	return useMutation({
+		...window.tanstackApi.mutation('delete', CHANNEL_PERMISSIONS_TARGET_PATH)
+			.mutationOptions,
+		onSuccess: invalidateOnSettled(
+			queryClient,
+			channelPermissionsKey(channelId),
+		),
+	})
+}
+
+function channelWebhooksKey(channelId: string) {
+	return window.tanstackApi.get(CHANNEL_WEBHOOKS_PATH, {
+		path: { channel_id: channelId },
+	}).queryKey
+}
+
+export function useChannelWebhooks(channelId: string) {
+	return useQuery({
+		...window.tanstackApi.get(CHANNEL_WEBHOOKS_PATH, {
+			path: { channel_id: channelId },
+		}).queryOptions,
+		select: (response) => response.data,
+		enabled: Boolean(channelId),
+	})
+}
+
+export function useCreateWebhook(channelId: string) {
+	const queryClient = useQueryClient()
+	return useMutation({
+		...window.tanstackApi.mutation('post', CHANNEL_WEBHOOKS_PATH)
+			.mutationOptions,
+		onSuccess: invalidateOnSettled(queryClient, channelWebhooksKey(channelId)),
+	})
+}
+
+export function useDeleteWebhook(channelId: string) {
+	const queryClient = useQueryClient()
+	return useMutation({
+		...window.tanstackApi.mutation('delete', WEBHOOK_PATH).mutationOptions,
+		onSuccess: invalidateOnSettled(queryClient, channelWebhooksKey(channelId)),
+	})
+}

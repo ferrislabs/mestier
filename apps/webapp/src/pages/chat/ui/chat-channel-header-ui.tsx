@@ -1,4 +1,5 @@
-import { AlertCircle, Hash } from 'lucide-react'
+import { AlertCircle, Hash, Settings } from 'lucide-react'
+import { Button } from '#/components/ui/button'
 import { Skeleton } from '#/components/ui/skeleton'
 
 export interface ChatChannelHeaderUIProps {
@@ -6,6 +7,7 @@ export interface ChatChannelHeaderUIProps {
 	topic?: string | null
 	isLoading: boolean
 	isError: boolean
+	onOpenAdmin: () => void
 }
 
 export function ChatChannelHeaderUI({
@@ -13,6 +15,7 @@ export function ChatChannelHeaderUI({
 	topic,
 	isLoading,
 	isError,
+	onOpenAdmin,
 }: ChatChannelHeaderUIProps) {
 	if (isError) {
 		return (
@@ -42,6 +45,16 @@ export function ChatChannelHeaderUI({
 					<p className="truncate text-sm text-muted-foreground">{topic}</p>
 				</>
 			) : null}
+			<Button
+				type="button"
+				variant="ghost"
+				size="icon"
+				aria-label="Paramètres du canal"
+				className="ml-auto"
+				onClick={onOpenAdmin}
+			>
+				<Settings className="size-4" />
+			</Button>
 		</div>
 	)
 }

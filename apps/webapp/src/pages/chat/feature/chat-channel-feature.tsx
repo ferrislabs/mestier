@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import { useActiveOrganization } from '#/hooks/use-active-organization'
 import {
 	useChannel,
 	useCreateThread,
@@ -9,6 +10,7 @@ import { ChatChannelHeaderUI } from '#/pages/chat/ui/chat-channel-header-ui'
 import { MessageComposerUI } from '#/pages/chat/ui/message-composer-ui'
 import { MessageListUI } from '#/pages/chat/ui/message-list-ui'
 import { TypingIndicatorUI } from '#/pages/chat/ui/typing-indicator-ui'
+import { ChannelAdminFeature } from './channel-admin-feature'
 import { ChatThreadPanelFeature } from './chat-thread-panel-feature'
 import { useMessageThreadUi } from './use-message-thread-ui'
 
@@ -17,6 +19,7 @@ export interface ChatChannelFeatureProps {
 }
 
 export function ChatChannelFeature({ channelId }: ChatChannelFeatureProps) {
+	const { activeOrganization } = useActiveOrganization()
 	const channel = useChannel(channelId)
 	const { messageListProps, composerProps, typingCount } =
 		useMessageThreadUi(channelId)
@@ -27,6 +30,7 @@ export function ChatChannelFeature({ channelId }: ChatChannelFeatureProps) {
 	const [openThreadChannelId, setOpenThreadChannelId] = useState<string | null>(
 		null,
 	)
+	const [adminOpen, setAdminOpen] = useState(false)
 
 	const threadByOriginMessageId = useMemo(() => {
 		const map = new Map<string, string>()
@@ -66,6 +70,7 @@ export function ChatChannelFeature({ channelId }: ChatChannelFeatureProps) {
 					topic={channel.data?.topic}
 					isLoading={channel.isLoading}
 					isError={channel.isError}
+					onOpenAdmin={() => setAdminOpen(true)}
 				/>
 				<MessageListUI
 					{...messageListProps}
@@ -82,6 +87,12 @@ export function ChatChannelFeature({ channelId }: ChatChannelFeatureProps) {
 					onClose={() => setOpenThreadChannelId(null)}
 				/>
 			) : null}
+			<ChannelAdminFeature
+				channelId={channelId}
+				organizationId={activeOrganization.id}
+				open={adminOpen}
+				onOpenChange={setAdminOpen}
+			/>
 		</div>
 	)
 }

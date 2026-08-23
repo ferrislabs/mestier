@@ -4,7 +4,9 @@ import {
 	ChevronRight,
 	Hash,
 	MessageSquarePlus,
+	Plus,
 } from 'lucide-react'
+import { Button } from '#/components/ui/button'
 import {
 	Collapsible,
 	CollapsibleContent,
@@ -27,6 +29,7 @@ export interface ChatSidebarUIProps {
 	onlineCount: number
 	unreadChannelIds: ReadonlySet<string>
 	mentionCount: number
+	onRequestNewChannel: () => void
 }
 
 export function ChatSidebarUI({
@@ -40,6 +43,7 @@ export function ChatSidebarUI({
 	onlineCount,
 	unreadChannelIds,
 	mentionCount,
+	onRequestNewChannel,
 }: ChatSidebarUIProps) {
 	return (
 		<nav
@@ -48,14 +52,25 @@ export function ChatSidebarUI({
 		>
 			<div className="flex items-center justify-between px-4 py-4">
 				<h2 className="text-sm font-semibold text-foreground">Discussions</h2>
-				{mentionCount > 0 ? (
-					<output
-						aria-label={`${mentionCount} mentions non lues`}
-						className="flex min-w-5 items-center justify-center rounded-full bg-destructive px-1.5 py-0.5 text-xs font-semibold text-destructive-foreground"
+				<div className="flex items-center gap-1">
+					{mentionCount > 0 ? (
+						<output
+							aria-label={`${mentionCount} mentions non lues`}
+							className="flex min-w-5 items-center justify-center rounded-full bg-destructive px-1.5 py-0.5 text-xs font-semibold text-destructive-foreground"
+						>
+							{mentionCount}
+						</output>
+					) : null}
+					<Button
+						type="button"
+						variant="ghost"
+						size="icon"
+						aria-label="Créer un canal ou une catégorie"
+						onClick={onRequestNewChannel}
 					>
-						{mentionCount}
-					</output>
-				) : null}
+						<Plus className="size-4" />
+					</Button>
+				</div>
 			</div>
 
 			<PresenceSummaryUI onlineCount={onlineCount} />

@@ -12,6 +12,7 @@ import {
 import { useOnlineCount } from '#/hooks/use-presence'
 import { groupChannelsByCategory } from '#/pages/chat/lib/group-channels'
 import { ChatSidebarUI } from '#/pages/chat/ui/chat-sidebar-ui'
+import { NewChannelFeature } from './new-channel-feature'
 
 /**
  * The chat layout: sidebar (categories + channels) on the left, the active
@@ -33,6 +34,7 @@ export function ChatShellFeature() {
 	const onlineCount = useOnlineCount()
 	const unreadChannelIds = useUnreadChannels(activeOrganization.id)
 	const mentionCount = useUnreadMentionCount(activeOrganization.id)
+	const [newChannelDialogOpen, setNewChannelDialogOpen] = useState(false)
 
 	const groups = groupChannelsByCategory(
 		categories.data ?? [],
@@ -61,10 +63,16 @@ export function ChatShellFeature() {
 				onlineCount={onlineCount}
 				unreadChannelIds={unreadChannelIds.data ?? new Set()}
 				mentionCount={mentionCount}
+				onRequestNewChannel={() => setNewChannelDialogOpen(true)}
 			/>
 			<div className="flex min-w-0 flex-1 flex-col">
 				<Outlet />
 			</div>
+			<NewChannelFeature
+				organizationId={activeOrganization.id}
+				open={newChannelDialogOpen}
+				onOpenChange={setNewChannelDialogOpen}
+			/>
 		</div>
 	)
 }

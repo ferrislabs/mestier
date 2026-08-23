@@ -45,6 +45,7 @@ function baseProps(
 		onlineCount: 0,
 		unreadChannelIds: new Set(),
 		mentionCount: 0,
+		onRequestNewChannel: vi.fn(),
 		...overrides,
 	}
 }
