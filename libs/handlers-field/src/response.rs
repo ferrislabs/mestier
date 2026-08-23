@@ -111,6 +111,11 @@ pub struct FieldTaskResponse {
     pub status: TaskStatus,
     pub customer_id: Option<CustomerId>,
     pub customer_context_id: Option<CustomerContextId>,
+    /// The caller's own assignment on this task — what `POST
+    /// .../field/assignments/{task_assignment_id}/report` is addressed by.
+    /// Always present: `list_for_assignee_on` only ever returns tasks the
+    /// caller is actually assigned to.
+    pub task_assignment_id: TaskAssignmentId,
 }
 
 /// The worker's report of an assignment's actual duration, and whatever a
@@ -152,18 +157,35 @@ impl From<AssignmentReport> for AssignmentReportResponse {
     }
 }
 
-impl From<Task> for FieldTaskResponse {
-    fn from(value: Task) -> Self {
+impl FieldTaskResponse {
+    /// Resolves `task_assignment_id` from `task.assignments` — which, unlike
+    /// this response, carries every assignee of the task, not just the
+    /// caller's own. `member_id` is trusted from `resolve_field_actor`, never
+    /// from the request, so this can only ever surface the caller's own
+    /// assignment.
+    pub fn for_member(task: Task, member_id: MemberId) -> Self {
+        // Provably present: `TaskRepository::list_for_assignee_on` joins
+        // `task_assignments` on `member_id` to select the task in the first
+        // place, so every task reaching this constructor carries at least
+        // one assignment for `member_id`.
+        let task_assignment_id = task
+            .assignments
+            .iter()
+            .find(|assignment| assignment.member_id == member_id)
+            .map(|assignment| assignment.id)
+            .expect("list_for_assignee_on only returns tasks assigned to member_id");
+
         Self {
-            id: value.id,
-            title: value.title,
-            description: value.description,
-            starts_at: value.starts_at,
-            ends_at: value.ends_at,
-            all_day: value.all_day,
-            status: value.status,
-            customer_id: value.customer_id,
-            customer_context_id: value.customer_context_id,
+            id: task.id,
+            title: task.title,
+            description: task.description,
+            starts_at: task.starts_at,
+            ends_at: task.ends_at,
+            all_day: task.all_day,
+            status: task.status,
+            customer_id: task.customer_id,
+            customer_context_id: task.customer_context_id,
+            task_assignment_id,
         }
     }
 }

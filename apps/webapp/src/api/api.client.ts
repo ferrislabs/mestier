@@ -377,6 +377,7 @@ export namespace Schemas {
     id: TaskId;
     starts_at?: (string | null) | undefined;
     status: TaskStatus;
+    task_assignment_id: TaskAssignmentId;
     title: string;
   };
   export type FileUploadResponse = { key: string; mime_type: string; size_bytes: number };
@@ -3286,6 +3287,7 @@ export namespace Endpoints {
           id: Schemas.TaskId;
           starts_at?: (string | null) | undefined;
           status: Schemas.TaskStatus;
+          task_assignment_id: Schemas.TaskAssignmentId;
           title: string;
         }>;
         pagination?: (null | Schemas.PaginationMetadata) | undefined;

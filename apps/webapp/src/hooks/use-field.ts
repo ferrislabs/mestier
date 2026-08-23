@@ -11,12 +11,20 @@ const STOP_PATH = '/api/v1/field/time-entries/{time_entry_id}/stop'
 const PHOTOS_PATH = '/api/v1/field/time-entries/{time_entry_id}/photos'
 const RECOVER_PATH = '/api/v1/field/time-entries/{time_entry_id}/recover'
 const DAY_END_PATH = '/api/v1/organizations/{organization_id}/field/day-end'
+const REPORT_ASSIGNMENT_PATH =
+	'/api/v1/organizations/{organization_id}/field/assignments/{task_assignment_id}/report'
+const ASSIGNMENT_REPORT_PATH =
+	'/api/v1/field/assignment-reports/{assignment_report_id}'
+const ASSIGNMENT_REPORTS_PATH =
+	'/api/v1/organizations/{organization_id}/field/assignment-reports'
 
 export type FieldTask = Schemas.FieldTaskResponse
 export type TimeEntry = Schemas.TimeEntryResponse
 export type TimeEntryPhoto = Schemas.TimeEntryPhotoResponse
 export type PhotoPhase = Schemas.TimeEntryPhotoPhase
 export type DayLog = Schemas.DayLogResponse
+export type AssignmentReport = Schemas.AssignmentReportResponse
+export type AssignmentReportResolution = Schemas.AssignmentReportResolution
 
 /**
  * The caller's jobs for a day.
@@ -147,5 +155,83 @@ export function useEndWorkingDay(organizationId: string) {
 		onSuccess: async () => {
 			await invalidate()
 		},
+	})
+}
+
+interface AssignmentReportsQueryKeyMeta {
+	_id?: unknown
+	path?: { organization_id?: unknown }
+}
+
+function isAssignmentReportsListQuery(
+	queryKey: readonly unknown[],
+	organizationId: string,
+) {
+	const meta = queryKey[0]
+	if (typeof meta !== 'object' || meta === null) return false
+	const { _id, path } = meta as AssignmentReportsQueryKeyMeta
+	return (
+		_id === ASSIGNMENT_REPORTS_PATH &&
+		(path as { organization_id?: unknown } | undefined)?.organization_id ===
+			organizationId
+	)
+}
+
+/**
+ * The caller's own reports — resolved ones included, so a worker can see
+ * that their word was acted on. One page is enough for a day's worth of
+ * jobs, so this deliberately does not paginate the way `useTaskComments`
+ * does for a whole thread.
+ */
+export function useMyAssignmentReports(organizationId: string) {
+	return useQuery({
+		...window.tanstackApi.get(ASSIGNMENT_REPORTS_PATH, {
+			path: { organization_id: organizationId },
+			query: { page: 1, per_page: 100 },
+		}).queryOptions,
+		enabled: Boolean(organizationId),
+	})
+}
+
+function invalidateAssignmentReports(
+	queryClient: ReturnType<typeof useQueryClient>,
+	organizationId: string,
+) {
+	return queryClient.invalidateQueries({
+		predicate: (query) =>
+			isAssignmentReportsListQuery(query.queryKey, organizationId),
+	})
+}
+
+export function useReportAssignment(organizationId: string) {
+	const queryClient = useQueryClient()
+
+	return useMutation({
+		...window.tanstackApi.mutation('post', REPORT_ASSIGNMENT_PATH)
+			.mutationOptions,
+		onSuccess: () => invalidateAssignmentReports(queryClient, organizationId),
+	})
+}
+
+/** `PATCH` — the backend refuses once a manager has resolved the report (see
+ * `AssignmentReportService::amend_report`); the UI only offers this while
+ * the report it targets is still pending. */
+export function useAmendAssignmentReport(organizationId: string) {
+	const queryClient = useQueryClient()
+
+	return useMutation({
+		...window.tanstackApi.mutation('patch', ASSIGNMENT_REPORT_PATH)
+			.mutationOptions,
+		onSuccess: () => invalidateAssignmentReports(queryClient, organizationId),
+	})
+}
+
+export function useWithdrawAssignmentReport(organizationId: string) {
+	const queryClient = useQueryClient()
+
+	return useMutation({
+		...window.tanstackApi.mutation('delete', ASSIGNMENT_REPORT_PATH)
+			.mutationOptions,
+		onSuccess: () => invalidateAssignmentReports(queryClient, organizationId),
 	})
 }

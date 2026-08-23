@@ -1,4 +1,9 @@
-import type { FieldTask, PhotoPhase, TimeEntry } from '#/hooks/use-field'
+import type {
+	AssignmentReport,
+	FieldTask,
+	PhotoPhase,
+	TimeEntry,
+} from '#/hooks/use-field'
 
 /** The three moments a field photo can document, in the order they happen. */
 export const PHOTO_PHASES: { phase: PhotoPhase; label: string }[] = [
@@ -102,4 +107,67 @@ export function startedAtLabel(startedAt: string): string {
 		hour: '2-digit',
 		minute: '2-digit',
 	}).format(new Date(startedAt))
+}
+
+/**
+ * The planned duration, in minutes — the figure a report is a comparison
+ * against, so it has to be computable whenever the task carries a window.
+ * `null` for an all-day or undated task, neither of which has a duration to
+ * compare a report to.
+ */
+export function plannedMinutes(task: FieldTask): number | null {
+	if (task.all_day || !task.starts_at || !task.ends_at) return null
+	const minutes = Math.round(
+		(new Date(task.ends_at).getTime() - new Date(task.starts_at).getTime()) /
+			60_000,
+	)
+	return minutes >= 0 ? minutes : null
+}
+
+/**
+ * A duration in minutes, as a worker reads a clock: `2 h 10`, or `45 min`
+ * under an hour. Zero is phrased as "did not happen" rather than as a
+ * duration of nothing — see the issue's own acceptance criterion — so this
+ * is only ever called for a strictly positive figure; callers branch on zero
+ * separately (`reportedMinutesLabel` below does).
+ */
+export function durationLabel(minutes: number): string {
+	const hours = Math.floor(minutes / 60)
+	return hours > 0
+		? `${hours} h ${String(minutes % 60).padStart(2, '0')}`
+		: `${minutes} min`
+}
+
+/** The planned figure, always rendered even when there is nothing to compare
+ * it to yet — "a form that hides what you are comparing against gets
+ * guessed at". */
+export function plannedMinutesLabel(task: FieldTask): string {
+	const minutes = plannedMinutes(task)
+	return minutes === null ? 'Durée non planifiée' : durationLabel(minutes)
+}
+
+/** Zero is a legitimate answer, phrased as the job not happening rather than
+ * as `0 min`. */
+export function reportedMinutesLabel(minutes: number): string {
+	return minutes === 0 ? "Le projet n'a pas eu lieu" : durationLabel(minutes)
+}
+
+/** The one report that matters for a given assignment: the still-pending
+ * one if there is one (there can be at most one, enforced by the database),
+ * otherwise the most recently resolved one, so a worker keeps seeing what
+ * was decided rather than the row vanishing the moment it is acted on.
+ * `reports` is expected most-recent-first, the order the API already
+ * returns. */
+export function reportForAssignment(
+	reports: AssignmentReport[],
+	taskAssignmentId: string,
+): AssignmentReport | null {
+	const forThisAssignment = reports.filter(
+		(report) => report.task_assignment_id === taskAssignmentId,
+	)
+	return (
+		forThisAssignment.find((report) => report.resolution === 'PENDING') ??
+		forThisAssignment[0] ??
+		null
+	)
 }

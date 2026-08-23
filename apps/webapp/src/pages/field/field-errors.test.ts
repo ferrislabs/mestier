@@ -51,6 +51,42 @@ describe('fieldErrorMessage', () => {
 		)
 	})
 
+	/** "Somebody already resolved this" — the race an amend/withdraw can lose
+	 * to a manager's decision landing first. */
+	it('maps a resolved report refusing an amend or a withdraw', () => {
+		expect(
+			fieldErrorMessage('Conflict: a resolved report can no longer be amended'),
+		).toBe(
+			'Ce signalement a déjà été traité par un responsable, vous ne pouvez plus le modifier.',
+		)
+		expect(
+			fieldErrorMessage(
+				'Conflict: a resolved report can no longer be withdrawn',
+			),
+		).toBe(
+			'Ce signalement a déjà été traité par un responsable, vous ne pouvez plus le retirer.',
+		)
+	})
+
+	it('maps the database constraint behind a second pending report', () => {
+		expect(
+			fieldErrorMessage(
+				'Conflict: uq_assignment_reports_pending_per_assignment',
+			),
+		).toBe(
+			'Vous avez déjà un signalement en attente sur ce projet — modifiez-le plutôt que d’en créer un second.',
+		)
+	})
+
+	/** `ApiError::Forbidden` carries no reason on the wire — only "Forbidden" —
+	 * so a 403 (reporting on someone else's assignment, among others) falls
+	 * through to the generic message rather than a specific one. */
+	it('falls back to a generic French message for a forbidden response', () => {
+		expect(fieldErrorMessage('Forbidden')).toBe(
+			'Une erreur est survenue, réessayez.',
+		)
+	})
+
 	it('falls back to a generic French message for anything unmapped', () => {
 		expect(fieldErrorMessage('Conflict: something entirely unexpected')).toBe(
 			'Une erreur est survenue, réessayez.',

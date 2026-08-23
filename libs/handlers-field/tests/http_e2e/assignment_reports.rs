@@ -18,6 +18,30 @@ async fn a_worker_files_and_amends_a_report_then_sees_it_in_their_own_list() {
     let app = harness::start().await;
     let client = reqwest::Client::new();
 
+    // `GET /field/tasks` must itself carry `task_assignment_id`: it is the
+    // only place the app learns which assignment to file a report against.
+    let tasks: serde_json::Value = client
+        .get(app.url("/tasks"))
+        .bearer_auth(&app.token)
+        .send()
+        .await
+        .expect("the api answers the task list")
+        .json()
+        .await
+        .expect("the task list is json");
+    let listed_assignment_id = tasks["data"]
+        .as_array()
+        .expect("the list carries an array")
+        .iter()
+        .find(|task| task["id"] == json!(app.task_id))
+        .and_then(|task| task["task_assignment_id"].as_str())
+        .expect("the caller's own job carries its task_assignment_id");
+    assert_eq!(
+        listed_assignment_id,
+        app.task_assignment_id.to_string(),
+        "{tasks}"
+    );
+
     let filed = client
         .post(app.report_assignment_url(app.task_assignment_id))
         .bearer_auth(&app.token)

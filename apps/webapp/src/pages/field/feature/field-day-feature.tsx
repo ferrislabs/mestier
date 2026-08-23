@@ -3,14 +3,19 @@ import { useEffect, useState } from 'react'
 import { useOrganizationList } from '#/hooks/use-active-organization'
 import { useUploadFile } from '#/hooks/use-customers'
 import {
+	type AssignmentReport,
 	type PhotoPhase,
+	useAmendAssignmentReport,
 	useAttachFieldPhoto,
 	useCurrentTimeEntry,
 	useEndWorkingDay,
+	useMyAssignmentReports,
 	useMyFieldTasks,
 	useRecoverTimeEntry,
+	useReportAssignment,
 	useStartTimeEntry,
 	useStopTimeEntry,
+	useWithdrawAssignmentReport,
 } from '#/hooks/use-field'
 import { fieldErrorMessage } from '#/pages/field/field-errors'
 import {
@@ -71,6 +76,10 @@ function FieldDayWorkspace({
 	const attachPhoto = useAttachFieldPhoto(organizationId)
 	const uploadFile = useUploadFile()
 	const endDay = useEndWorkingDay(organizationId)
+	const assignmentReports = useMyAssignmentReports(organizationId)
+	const reportAssignment = useReportAssignment(organizationId)
+	const amendReport = useAmendAssignmentReport(organizationId)
+	const withdrawReport = useWithdrawAssignmentReport(organizationId)
 
 	// The running clock has to advance on its own, so the screen ticks once a
 	// minute. Seconds would be noise on a job measured in hours.
@@ -98,6 +107,17 @@ function FieldDayWorkspace({
 		string | null
 	>(null)
 
+	// At most one report form open at a time, across the whole day — mirrors
+	// `staleEntry`'s own single-form convention on this screen.
+	const [editingAssignmentId, setEditingAssignmentId] = useState<string | null>(
+		null,
+	)
+	const [draftMinutes, setDraftMinutes] = useState('')
+	const [draftComment, setDraftComment] = useState('')
+	const [withdrawingReportId, setWithdrawingReportId] = useState<string | null>(
+		null,
+	)
+
 	const recoverEntry = useRecoverTimeEntry(organizationId)
 	const currentStatus = (
 		current.data as
@@ -108,6 +128,9 @@ function FieldDayWorkspace({
 	const dayEndedAt = currentStatus?.day_ended_at ?? optimisticDayEndedAt ?? null
 	const taskList =
 		(tasks.data as { data?: FieldTaskRow[] } | undefined)?.data ?? []
+	const reportList =
+		(assignmentReports.data as { data?: AssignmentReport[] } | undefined)
+			?.data ?? []
 
 	// A stretch begun before today is the forgotten clock-off. The server
 	// refuses to close it at the current time, because that would record hours
@@ -165,6 +188,69 @@ function FieldDayWorkspace({
 		}
 	}
 
+	const openReportForm = (
+		taskAssignmentId: string,
+		existing: AssignmentReport | null,
+	) => {
+		setEditingAssignmentId(taskAssignmentId)
+		const prefillFrom = existing?.resolution === 'PENDING' ? existing : null
+		setDraftMinutes(prefillFrom ? String(prefillFrom.reported_minutes) : '')
+		setDraftComment(prefillFrom?.comment ?? '')
+	}
+
+	const closeReportForm = () => {
+		setEditingAssignmentId(null)
+		setDraftMinutes('')
+		setDraftComment('')
+	}
+
+	// No optimistic write: the form only closes once the server has actually
+	// answered, so a report the worker believes was filed and was not is not
+	// possible — see the issue's own acceptance criterion.
+	const submitReport = async () => {
+		if (!editingAssignmentId) return
+		const minutes = Number(draftMinutes)
+		if (!Number.isFinite(minutes) || minutes < 0) return
+		const comment = draftComment.trim() ? draftComment.trim() : null
+		const existing = reportList.find(
+			(report) =>
+				report.task_assignment_id === editingAssignmentId &&
+				report.resolution === 'PENDING',
+		)
+
+		try {
+			if (existing) {
+				await amendReport.mutateAsync({
+					path: { assignment_report_id: existing.id },
+					body: { reported_minutes: minutes, comment },
+				} as never)
+			} else {
+				await reportAssignment.mutateAsync({
+					path: {
+						organization_id: organizationId,
+						task_assignment_id: editingAssignmentId,
+					},
+					body: { reported_minutes: minutes, comment },
+				} as never)
+			}
+			closeReportForm()
+		} catch {
+			// Surfaced reactively via `reportAssignment.error`/`amendReport.error`
+			// below; this catch only keeps the rejection from going unhandled.
+		}
+	}
+
+	const withdrawReportById = async (reportId: string) => {
+		setWithdrawingReportId(reportId)
+		try {
+			await withdrawReport.mutateAsync({
+				path: { assignment_report_id: reportId },
+			} as never)
+		} finally {
+			setWithdrawingReportId(null)
+		}
+	}
+
 	// Mutation failures only. Query failures (below) are a different situation
 	// — nothing was attempted and nothing to blame on the worker's last action
 	// — so they get their own, distinct treatment rather than sharing this
@@ -176,12 +262,22 @@ function FieldDayWorkspace({
 		attachPhoto.error?.message ??
 		uploadFile.error?.message ??
 		endDay.error?.message ??
+		withdrawReport.error?.message ??
 		null
 	const mutationError =
 		switchRollbackMessage ??
 		(rawMutationErrorMessage
 			? fieldErrorMessage(rawMutationErrorMessage)
 			: null)
+
+	// Kept apart from `mutationError`: this one belongs to whichever report
+	// form is open, not to the shared banner, so it never orphans itself next
+	// to a form the worker already closed.
+	const rawReportErrorMessage =
+		reportAssignment.error?.message ?? amendReport.error?.message ?? null
+	const reportError = rawReportErrorMessage
+		? fieldErrorMessage(rawReportErrorMessage)
+		: null
 
 	// Whether the current entry could not be loaded at all: distinct from
 	// there being nothing running, since the screen must not offer to start a
@@ -264,6 +360,19 @@ function FieldDayWorkspace({
 						// keeps the rejection from going unhandled.
 					})
 			}}
+			reports={reportList}
+			editingAssignmentId={editingAssignmentId}
+			draftMinutes={draftMinutes}
+			draftComment={draftComment}
+			isSubmittingReport={reportAssignment.isPending || amendReport.isPending}
+			withdrawingReportId={withdrawingReportId}
+			reportError={reportError}
+			onOpenReportForm={openReportForm}
+			onCancelReportForm={closeReportForm}
+			onDraftMinutesChange={setDraftMinutes}
+			onDraftCommentChange={setDraftComment}
+			onSubmitReport={() => void submitReport()}
+			onWithdrawReport={(reportId) => void withdrawReportById(reportId)}
 		/>
 	)
 }

@@ -10,14 +10,21 @@ import {
 import { Button } from '#/components/ui/button'
 import { Input } from '#/components/ui/input'
 import { Label } from '#/components/ui/label'
-import type { FieldTask, PhotoPhase, TimeEntry } from '#/hooks/use-field'
+import type {
+	AssignmentReport,
+	FieldTask,
+	PhotoPhase,
+	TimeEntry,
+} from '#/hooks/use-field'
 import {
 	elapsedLabel,
+	reportForAssignment,
 	runningTask,
 	startedAtLabel,
 	taskWindowLabel,
 } from '../types'
 import { FieldPhotoPicker } from './field-photo-picker'
+import { TaskReportPanel } from './task-report-panel'
 
 interface FieldDayUIProps {
 	organizationName: string
@@ -59,6 +66,27 @@ interface FieldDayUIProps {
 	onCapturePhoto: (phase: PhotoPhase, file: File) => void
 	onDayEndTimeChange: (value: string) => void
 	onEndDay: () => void
+	/** Every report the caller has filed, most recent first — the raw list;
+	 * `reportForAssignment` picks the one relevant to each row. */
+	reports: AssignmentReport[]
+	/** The `task_assignment_id` whose report form is open — at most one at a
+	 * time. */
+	editingAssignmentId: string | null
+	draftMinutes: string
+	draftComment: string
+	isSubmittingReport: boolean
+	/** The id of the report currently being withdrawn, if any. */
+	withdrawingReportId: string | null
+	reportError: string | null
+	onOpenReportForm: (
+		taskAssignmentId: string,
+		existing: AssignmentReport | null,
+	) => void
+	onCancelReportForm: () => void
+	onDraftMinutesChange: (value: string) => void
+	onDraftCommentChange: (value: string) => void
+	onSubmitReport: () => void
+	onWithdrawReport: (reportId: string) => void
 }
 
 /**
@@ -96,6 +124,19 @@ export function FieldDayUI({
 	onCapturePhoto,
 	onDayEndTimeChange,
 	onEndDay,
+	reports,
+	editingAssignmentId,
+	draftMinutes,
+	draftComment,
+	isSubmittingReport,
+	withdrawingReportId,
+	reportError,
+	onOpenReportForm,
+	onCancelReportForm,
+	onDraftMinutesChange,
+	onDraftCommentChange,
+	onSubmitReport,
+	onWithdrawReport,
 }: FieldDayUIProps) {
 	const current = runningTask(tasks, running)
 
@@ -293,6 +334,44 @@ export function FieldDayUI({
 											{running ? 'Basculer sur ce projet' : 'Démarrer'}
 										</Button>
 									) : null}
+
+									<TaskReportPanel
+										task={task}
+										report={reportForAssignment(
+											reports,
+											task.task_assignment_id,
+										)}
+										isEditing={editingAssignmentId === task.task_assignment_id}
+										draftMinutes={draftMinutes}
+										draftComment={draftComment}
+										isSubmitting={isSubmittingReport}
+										isWithdrawing={
+											withdrawingReportId ===
+											reportForAssignment(reports, task.task_assignment_id)?.id
+										}
+										error={
+											editingAssignmentId === task.task_assignment_id
+												? reportError
+												: null
+										}
+										onOpen={() =>
+											onOpenReportForm(
+												task.task_assignment_id,
+												reportForAssignment(reports, task.task_assignment_id),
+											)
+										}
+										onCancel={onCancelReportForm}
+										onDraftMinutesChange={onDraftMinutesChange}
+										onDraftCommentChange={onDraftCommentChange}
+										onSubmit={onSubmitReport}
+										onWithdraw={() => {
+											const existing = reportForAssignment(
+												reports,
+												task.task_assignment_id,
+											)
+											if (existing) onWithdrawReport(existing.id)
+										}}
+									/>
 								</div>
 							)
 						})
