@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            UPDATE invoices\n            SET number = $2,\n                status = 'ISSUED'::invoice_status,\n                issued_at = $3,\n                issuer_identity = $4,\n                updated_at = $5\n            WHERE id = $1 AND deleted_at IS NULL AND status = 'DRAFT'\n            RETURNING\n                id, org_id, number, kind::text AS \"kind!\", project_id, customer_id,\n                customer_context_id, status::text AS \"status!\", issued_at, due_at, notes,\n                operation_nature::text,\n                delivery_address_line1, delivery_address_line2, delivery_address_postal_code,\n                delivery_address_city, delivery_address_country,\n                net_cents, vat_breakdown, gross_cents, issuer_identity, deleted_at,\n                created_at, updated_at\n            ",
+  "query": "\n            UPDATE invoices\n            SET project_id = $2,\n                customer_id = $3,\n                customer_context_id = $4,\n                due_at = $5,\n                notes = $6,\n                operation_nature = CAST($7 AS text)::invoice_operation_nature,\n                delivery_address_line1 = $8,\n                delivery_address_line2 = $9,\n                delivery_address_postal_code = $10,\n                delivery_address_city = $11,\n                delivery_address_country = $12,\n                net_cents = $13,\n                vat_breakdown = $14,\n                gross_cents = $15,\n                updated_at = $16\n            WHERE id = $1 AND deleted_at IS NULL AND status = 'DRAFT'\n            RETURNING\n                id, org_id, number, kind::text AS \"kind!\", project_id, customer_id,\n                customer_context_id, status::text AS \"status!\", issued_at, due_at, notes,\n                operation_nature::text,\n                delivery_address_line1, delivery_address_line2, delivery_address_postal_code,\n                delivery_address_city, delivery_address_country,\n                net_cents, vat_breakdown, gross_cents, issuer_identity, source_invoice_id,\n                deleted_at, created_at, updated_at\n            ",
   "describe": {
     "columns": [
       {
@@ -110,16 +110,21 @@
       },
       {
         "ordinal": 21,
+        "name": "source_invoice_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 22,
         "name": "deleted_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 22,
+        "ordinal": 23,
         "name": "created_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 23,
+        "ordinal": 24,
         "name": "updated_at",
         "type_info": "Timestamptz"
       }
@@ -127,9 +132,20 @@
     "parameters": {
       "Left": [
         "Uuid",
-        "Text",
+        "Uuid",
+        "Uuid",
+        "Uuid",
         "Timestamptz",
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Int4",
         "Jsonb",
+        "Int4",
         "Timestamptz"
       ]
     },
@@ -156,9 +172,10 @@
       false,
       true,
       true,
+      true,
       false,
       false
     ]
   },
-  "hash": "118a79566247da930a8c305e6a748dca54d8fd33bc0f776ec82694c615b596cb"
+  "hash": "96eba56e89fabc4dbcd7a508538fdd46b341886ffe6f081cbd7da90e9f880ef7"
 }

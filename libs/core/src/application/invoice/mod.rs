@@ -6,8 +6,9 @@ use crate::{
     application::MestierUseCase,
     domain::invoice::{
         commands::{
-            CancelInvoiceCommand, CreateInvoiceCommand, IssueDepositCommand,
-            IssueFinalInvoiceCommand, IssueInvoiceCommand, UpdateInvoiceCommand,
+            CancelInvoiceCommand, CreateInvoiceCommand, IssueCreditNoteCommand,
+            IssueDepositCommand, IssueFinalInvoiceCommand, IssueInvoiceCommand,
+            UpdateInvoiceCommand,
         },
         service::InvoiceService,
     },
@@ -52,6 +53,15 @@ impl MestierUseCase {
     ) -> Result<Vec<Invoice>, CoreError> {
         let mut service = InvoiceService::new(invoice_repository, emitter);
         service.list_invoices_by_project(project_id).await
+    }
+
+    #[transactional(invoice, emitter)]
+    pub async fn get_invoice_credit_notes(
+        &self,
+        source_invoice_id: InvoiceId,
+    ) -> Result<Vec<Invoice>, CoreError> {
+        let mut service = InvoiceService::new(invoice_repository, emitter);
+        service.get_invoice_credit_notes(source_invoice_id).await
     }
 
     #[transactional(invoice, organization, emitter)]
@@ -124,6 +134,28 @@ impl MestierUseCase {
         let mut service = InvoiceService::new(invoice_repository, emitter);
         service
             .issue_final_invoice(
+                command,
+                organization_repository,
+                project_repository,
+                quote_repository,
+            )
+            .await
+    }
+
+    /// `project`/`quote` are listed even though a credit note's own path
+    /// skips the quote-total check (see `InvoiceService::issue_credit_note`
+    /// and `refuse_if_project_exceeds_total`'s credit-note skip) — the
+    /// binding still needs to exist because `issue_now`, which this calls,
+    /// is generic over `P: ProjectRepository, Q: QuoteRepository`
+    /// regardless of which invoice kind is being issued.
+    #[transactional(invoice, organization, project, quote, emitter)]
+    pub async fn issue_credit_note(
+        &self,
+        command: IssueCreditNoteCommand,
+    ) -> Result<Invoice, CoreError> {
+        let mut service = InvoiceService::new(invoice_repository, emitter);
+        service
+            .issue_credit_note(
                 command,
                 organization_repository,
                 project_repository,

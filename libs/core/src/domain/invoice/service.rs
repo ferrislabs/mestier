@@ -14,8 +14,8 @@ use crate::{
         invoice::{
             commands::{
                 CancelInvoiceCommand, CreateInvoiceCommand, InvoiceLineCommand,
-                IssueDepositCommand, IssueFinalInvoiceCommand, IssueInvoiceCommand,
-                UpdateInvoiceCommand,
+                IssueCreditNoteCommand, IssueDepositCommand, IssueFinalInvoiceCommand,
+                IssueInvoiceCommand, UpdateInvoiceCommand,
             },
             events::{InvoiceCreated, InvoiceDeleted, InvoiceTransitioned, InvoiceUpdated},
             ports::InvoiceRepository,
@@ -78,6 +78,7 @@ where
             gross_cents: totals.gross_cents,
             issuer_identity: None,
             lines,
+            source_invoice_id: None,
             deleted_at: None,
             created_at: now,
             updated_at: now,
@@ -116,6 +117,17 @@ where
         project_id: crate::ProjectId,
     ) -> Result<Vec<Invoice>, CoreError> {
         self.repo.list_by_project(project_id).await
+    }
+
+    /// Every credit note issued against one source invoice — the read
+    /// [`net_of_credit_notes_cents`] needs to tell "fully credited", exposed
+    /// on its own so #319's API surface has something to call (this issue
+    /// stops at the application layer, no HTTP route of its own).
+    pub async fn get_invoice_credit_notes(
+        &mut self,
+        source_invoice_id: InvoiceId,
+    ) -> Result<Vec<Invoice>, CoreError> {
+        self.repo.list_by_source_invoice(source_invoice_id).await
     }
 
     /// Refused, by [`DraftInvoice::try_from_invoice`], on anything but a
@@ -418,6 +430,127 @@ where
         .await
     }
 
+    /// The only way to correct an issued invoice (#318): `Invoice` has no
+    /// mutating methods, so a mistake is corrected by issuing a document
+    /// against it, never by editing it. Builds its lines and totals exactly
+    /// like [`Self::create_invoice`] does — a credit note is priced like any
+    /// other document, not derived from the source's own lines — but takes
+    /// its counterparty and project from the source invoice, never from the
+    /// caller: a credit note corrects one specific document, so its
+    /// customer cannot differ from it. Same one-transaction shape as
+    /// [`Self::issue_deposit`]/[`Self::issue_final_invoice`]: build the
+    /// draft, insert it, then issue it through [`Self::issue_now`], number
+    /// allocated in the same transaction as the draft's own creation.
+    pub async fn issue_credit_note<O, P, Q>(
+        &mut self,
+        command: IssueCreditNoteCommand,
+        mut organization_repository: O,
+        project_repository: P,
+        quote_repository: Q,
+    ) -> Result<Invoice, CoreError>
+    where
+        O: OrganizationRepository,
+        P: ProjectRepository,
+        Q: QuoteRepository,
+    {
+        let source = self.get_invoice(command.source_invoice_id).await?;
+
+        // No chains of credit notes against credit notes: "what does this
+        // correct" must always stay a single hop back to the original
+        // commercial document, never to another correction, or the
+        // question "what document does this actually adjust" stops having
+        // one answer.
+        if source.kind == InvoiceKind::CreditNote {
+            return Err(CoreError::Conflict(format!(
+                "invoice {} is itself a credit note and cannot be credited",
+                source.id
+            )));
+        }
+
+        if !matches!(
+            source.status,
+            InvoiceStatus::Issued | InvoiceStatus::Paid | InvoiceStatus::PartiallyPaid
+        ) {
+            return Err(CoreError::Conflict(format!(
+                "invoice {} is {} and cannot be credited; only an issued, paid or partially \
+                 paid invoice can be (a draft is simply edited instead)",
+                source.id, source.status
+            )));
+        }
+
+        let now = Utc::now();
+        let invoice_id = InvoiceId(generate_uuid_v7());
+        let organization =
+            resolve_organization(&mut organization_repository, source.organization_id).await?;
+        let lines = build_invoice_lines(source.organization_id, invoice_id, command.lines, now)?;
+        let totals = calculate_totals(&lines, organization.vat_status.as_ref())?;
+
+        let existing_credit_notes = self.repo.list_by_source_invoice(source.id).await?;
+        let already_credited_cents = i64::from(source.net_cents)
+            - net_of_credit_notes_cents(source.net_cents, &existing_credit_notes);
+        let total_credited_cents = already_credited_cents + i64::from(totals.net_cents);
+
+        if total_credited_cents > i64::from(source.net_cents)
+            && !command.allow_exceeding_invoice_total
+        {
+            return Err(CoreError::Conflict(format!(
+                "crediting {} cents against invoice {} would bring the total credited to {} \
+                 cents, exceeding its net_cents of {} cents",
+                totals.net_cents, source.id, total_credited_cents, source.net_cents
+            )));
+        }
+
+        let draft = DraftInvoice::try_from_invoice(Invoice {
+            id: invoice_id,
+            organization_id: source.organization_id,
+            number: None,
+            kind: InvoiceKind::CreditNote,
+            project_id: source.project_id,
+            customer_id: source.customer_id,
+            customer_context_id: source.customer_context_id,
+            status: InvoiceStatus::Draft,
+            issued_at: None,
+            due_at: None,
+            notes: command.notes,
+            operation_nature: None,
+            delivery_address: None,
+            net_cents: totals.net_cents,
+            vat_breakdown: totals.vat_breakdown,
+            gross_cents: totals.gross_cents,
+            issuer_identity: None,
+            lines,
+            source_invoice_id: Some(source.id),
+            deleted_at: None,
+            created_at: now,
+            updated_at: now,
+        })
+        .expect("just constructed with status Draft");
+
+        let inserted = self.repo.insert_draft(&draft).await?;
+        self.emitter.emit(
+            inserted.organization_id,
+            &InvoiceCreated {
+                invoice: inserted.clone(),
+            },
+        )?;
+        let inserted_draft =
+            DraftInvoice::try_from_invoice(inserted).expect("insert_draft returns a draft");
+
+        self.issue_now(
+            inserted_draft,
+            // Irrelevant either way: `refuse_if_project_exceeds_total`
+            // skips its check entirely for `InvoiceKind::CreditNote`. `false`
+            // here just avoids smuggling `allow_exceeding_invoice_total` — a
+            // different limit, already enforced above — through a parameter
+            // that means something else.
+            false,
+            organization_repository,
+            project_repository,
+            quote_repository,
+        )
+        .await
+    }
+
     /// The shared primitive behind [`Self::issue_invoice`],
     /// [`Self::issue_deposit`] and [`Self::issue_final_invoice`]: resolves
     /// the issuer's identity (refused by type, not by check — the
@@ -495,6 +628,18 @@ where
         project_repository: &mut impl ProjectRepository,
         quote_repository: &mut impl QuoteRepository,
     ) -> Result<(), CoreError> {
+        // Deliberate skip, not a gap: this check exists to stop *billing*
+        // past the quote. A credit note does the opposite — it reduces net
+        // billed via the now-negative term `sum_already_issued_cents`
+        // subtracts for it — so running it through unmodified would refuse
+        // issuing a credit note exactly when the project is at or near its
+        // quoted total, which is the usual reason to issue one. A credit
+        // note's own limit (it cannot exceed its source invoice's
+        // net_cents) is enforced separately, in `issue_credit_note`.
+        if invoice.kind == InvoiceKind::CreditNote {
+            return Ok(());
+        }
+
         let Some(project_id) = invoice.project_id else {
             return Ok(());
         };
@@ -552,10 +697,13 @@ where
     }
 
     /// Every non-draft, non-cancelled invoice already on the project,
-    /// summed. Deposits and finals already issued count in full — credit
-    /// notes don't exist until #318, so nothing is netted out yet; #318
-    /// will need to revisit this sum to subtract issued credit notes, or a
-    /// partial refund will not reduce what counts as "already invoiced".
+    /// netted: `Standard`/`Deposit`/`Final` count in full, and `CreditNote`
+    /// is subtracted — `net_cents` is always non-negative (see
+    /// `InvoiceKind::CreditNote`'s doc), so a credit note reduces "already
+    /// invoiced" rather than adding to it. This is the sum both
+    /// `issue_final_invoice`'s remainder and `issue_now`'s over-issuance
+    /// check are computed from, so this is the one place a partial refund
+    /// has to be reflected for both to stay correct.
     async fn sum_already_issued_cents(&mut self, project_id: ProjectId) -> Result<i64, CoreError> {
         let invoices = self.repo.list_by_project(project_id).await?;
 
@@ -567,7 +715,12 @@ where
                     InvoiceStatus::Draft | InvoiceStatus::Cancelled
                 )
             })
-            .map(|invoice| i64::from(invoice.net_cents))
+            .map(|invoice| match invoice.kind {
+                InvoiceKind::CreditNote => -i64::from(invoice.net_cents),
+                InvoiceKind::Standard | InvoiceKind::Deposit | InvoiceKind::Final => {
+                    i64::from(invoice.net_cents)
+                }
+            })
             .sum())
     }
 
@@ -863,6 +1016,12 @@ fn build_single_line_draft(
         gross_cents: amount_cents,
         issuer_identity: None,
         lines: vec![line],
+        // Never set here: a deposit/final draft never corrects another
+        // invoice. Reserved for `issue_credit_note`, which builds its own
+        // multi-line draft via `build_invoice_lines`/`calculate_totals`
+        // instead of this single-line helper, since a credit note's lines
+        // are not a fixed one-liner the way a deposit/final amount is.
+        source_invoice_id: None,
         deleted_at: None,
         created_at: now,
         updated_at: now,
@@ -954,6 +1113,26 @@ pub(crate) fn calculate_totals(
     })
 }
 
+/// The source invoice's `net_cents` minus every non-draft, non-cancelled
+/// credit note issued against it. Can be zero (fully credited) but nothing
+/// here ever sets the source's own `status` to anything — "fully credited"
+/// is read, never stored; #320 folds this into the derived payment status
+/// alongside recorded payments.
+pub fn net_of_credit_notes_cents(source_net_cents: i32, credit_notes: &[Invoice]) -> i64 {
+    let credited_cents: i64 = credit_notes
+        .iter()
+        .filter(|credit_note| {
+            !matches!(
+                credit_note.status,
+                InvoiceStatus::Draft | InvoiceStatus::Cancelled
+            )
+        })
+        .map(|credit_note| i64::from(credit_note.net_cents))
+        .sum();
+
+    i64::from(source_net_cents) - credited_cents
+}
+
 /// Divides, rounding a half to the even neighbour. Duplicated from
 /// `quote::service::div_round_half_even` — two occurrences, not yet a
 /// pattern worth sharing.
@@ -1030,6 +1209,7 @@ mod tests {
                 created_at: now,
                 updated_at: now,
             }],
+            source_invoice_id: None,
             deleted_at: None,
             created_at: now,
             updated_at: now,
@@ -1080,6 +1260,23 @@ mod tests {
     ) -> crate::domain::organization::ports::MockOrganizationRepository {
         let mut repo = crate::domain::organization::ports::MockOrganizationRepository::new();
         repo.expect_find_by_id().times(1).returning(move |_| {
+            let organization = organization.clone();
+            Box::pin(async move { Ok(Some(organization)) })
+        });
+        repo
+    }
+
+    /// Same as `mock_organization_repository`, but without a call-count
+    /// expectation: `issue_credit_note` resolves the organization twice
+    /// (once for its own totals, once inside `issue_now` for the legal
+    /// identity), unlike every other issuing path this module already
+    /// tests, so a fixed `.times(1)` would fail these tests for a reason
+    /// that has nothing to do with what they assert.
+    fn mock_organization_repository_any_calls(
+        organization: Organization,
+    ) -> crate::domain::organization::ports::MockOrganizationRepository {
+        let mut repo = crate::domain::organization::ports::MockOrganizationRepository::new();
+        repo.expect_find_by_id().returning(move |_| {
             let organization = organization.clone();
             Box::pin(async move { Ok(Some(organization)) })
         });
@@ -1533,11 +1730,35 @@ mod tests {
     ) -> crate::domain::invoice::ports::MockInvoiceRepository {
         let mut repo = crate::domain::invoice::ports::MockInvoiceRepository::new();
 
+        let find_store = store.clone();
+        repo.expect_find_by_id().returning(move |id| {
+            let found = find_store
+                .lock()
+                .unwrap()
+                .iter()
+                .find(|invoice| invoice.id == id)
+                .cloned();
+            Box::pin(async move { Ok(found) })
+        });
+
         let list_store = store.clone();
         repo.expect_list_by_project().returning(move |_| {
             let invoices = list_store.lock().unwrap().clone();
             Box::pin(async move { Ok(invoices) })
         });
+
+        let source_store = store.clone();
+        repo.expect_list_by_source_invoice()
+            .returning(move |source_invoice_id| {
+                let credit_notes = source_store
+                    .lock()
+                    .unwrap()
+                    .iter()
+                    .filter(|invoice| invoice.source_invoice_id == Some(source_invoice_id))
+                    .cloned()
+                    .collect::<Vec<_>>();
+                Box::pin(async move { Ok(credit_notes) })
+            });
 
         let insert_store = store.clone();
         repo.expect_insert_draft().returning(move |draft| {
@@ -1661,6 +1882,336 @@ mod tests {
         );
         assert_eq!(deposit1.kind, InvoiceKind::Deposit);
         assert_eq!(final_invoice.kind, InvoiceKind::Final);
+    }
+
+    /// #317 and #318 wired together, not just correct in isolation: after
+    /// the deposit/deposit/final sequence above reaches a zero remainder,
+    /// crediting one of the issued invoices must move the remainder back
+    /// out by exactly the credited amount. This exercises both the
+    /// `sum_already_issued_cents` fix (subtracting the credit note) and
+    /// `refuse_if_project_exceeds_total`'s credit-note skip (issuing the
+    /// credit note itself must not be refused for "exceeding" a project
+    /// that is already fully billed).
+    #[tokio::test]
+    async fn crediting_an_issued_invoice_moves_the_remainder_by_the_credited_amount() {
+        let organization_id = OrganizationId(Uuid::new_v4());
+        let quote_id = QuoteId(Uuid::new_v4());
+        let customer_id = CustomerId(Uuid::new_v4());
+        let customer_context_id = CustomerContextId(Uuid::new_v4());
+        let quoted_cents = 100_007;
+
+        let project =
+            project_with_quote(organization_id, quote_id, customer_id, customer_context_id);
+        let quote = quote_with_net_cents(
+            quote_id,
+            organization_id,
+            customer_id,
+            customer_context_id,
+            quoted_cents,
+        );
+        let organization = complete_organization(organization_id);
+
+        let store: Arc<Mutex<Vec<Invoice>>> = Arc::new(Mutex::new(Vec::new()));
+        let mut service = InvoiceService::new(
+            invoice_repository_over(store.clone()),
+            events::testing::RecordingEmitter::new(),
+        );
+
+        let deposit_command = || IssueDepositCommand {
+            project_id: project.id,
+            percentage_bp: 3000,
+            due_at: None,
+            notes: None,
+            allow_exceeding_total: false,
+        };
+
+        let deposit1 = service
+            .issue_deposit(
+                deposit_command(),
+                mock_organization_repository_any_calls(organization.clone()),
+                project_repo_with(project.clone()),
+                quote_repo_with(quote.clone()),
+            )
+            .await
+            .unwrap();
+
+        service
+            .issue_deposit(
+                deposit_command(),
+                mock_organization_repository_any_calls(organization.clone()),
+                project_repo_with(project.clone()),
+                quote_repo_with(quote.clone()),
+            )
+            .await
+            .unwrap();
+
+        service
+            .issue_final_invoice(
+                IssueFinalInvoiceCommand {
+                    project_id: project.id,
+                    due_at: None,
+                    notes: None,
+                    allow_exceeding_total: false,
+                },
+                mock_organization_repository_any_calls(organization.clone()),
+                project_repo_with(project.clone()),
+                quote_repo_with(quote.clone()),
+            )
+            .await
+            .unwrap();
+
+        let already_issued_before_credit =
+            service.sum_already_issued_cents(project.id).await.unwrap();
+        assert_eq!(
+            remaining_to_bill_cents(quoted_cents, already_issued_before_credit).unwrap(),
+            0,
+            "the deposit/final sequence must still round to a zero remainder before any credit"
+        );
+
+        let credited_cents = 12_345;
+        let credit_note = service
+            .issue_credit_note(
+                IssueCreditNoteCommand {
+                    source_invoice_id: deposit1.id,
+                    lines: vec![line_command(Decimal::new(1, 0), credited_cents)],
+                    notes: None,
+                    allow_exceeding_invoice_total: false,
+                },
+                mock_organization_repository_any_calls(organization),
+                MockProjectRepository::new(),
+                MockQuoteRepository::new(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(credit_note.kind, InvoiceKind::CreditNote);
+        assert_eq!(credit_note.net_cents, credited_cents);
+        assert_eq!(credit_note.source_invoice_id, Some(deposit1.id));
+
+        let already_issued_after_credit =
+            service.sum_already_issued_cents(project.id).await.unwrap();
+        let remaining_after_credit =
+            remaining_to_bill_cents(quoted_cents, already_issued_after_credit).unwrap();
+
+        assert_eq!(
+            remaining_after_credit,
+            i64::from(credited_cents),
+            "crediting must move the remainder out by exactly the credited amount"
+        );
+    }
+
+    #[tokio::test]
+    async fn issue_credit_note_refuses_a_draft_source() {
+        let organization_id = OrganizationId(Uuid::new_v4());
+        let source_id = InvoiceId(Uuid::new_v4());
+        let source = Invoice {
+            organization_id,
+            status: InvoiceStatus::Draft,
+            ..invoice(source_id)
+        };
+
+        let store: Arc<Mutex<Vec<Invoice>>> = Arc::new(Mutex::new(vec![source]));
+        let mut service = InvoiceService::new(
+            invoice_repository_over(store),
+            events::testing::RecordingEmitter::new(),
+        );
+
+        let result = service
+            .issue_credit_note(
+                IssueCreditNoteCommand {
+                    source_invoice_id: source_id,
+                    lines: vec![line_command(Decimal::new(1, 0), 1_000)],
+                    notes: None,
+                    allow_exceeding_invoice_total: false,
+                },
+                crate::domain::organization::ports::MockOrganizationRepository::new(),
+                MockProjectRepository::new(),
+                MockQuoteRepository::new(),
+            )
+            .await;
+
+        assert!(matches!(result, Err(CoreError::Conflict(_))));
+    }
+
+    #[tokio::test]
+    async fn issue_credit_note_refuses_a_cancelled_source() {
+        let organization_id = OrganizationId(Uuid::new_v4());
+        let source_id = InvoiceId(Uuid::new_v4());
+        let source = Invoice {
+            organization_id,
+            status: InvoiceStatus::Cancelled,
+            ..invoice(source_id)
+        };
+
+        let store: Arc<Mutex<Vec<Invoice>>> = Arc::new(Mutex::new(vec![source]));
+        let mut service = InvoiceService::new(
+            invoice_repository_over(store),
+            events::testing::RecordingEmitter::new(),
+        );
+
+        let result = service
+            .issue_credit_note(
+                IssueCreditNoteCommand {
+                    source_invoice_id: source_id,
+                    lines: vec![line_command(Decimal::new(1, 0), 1_000)],
+                    notes: None,
+                    allow_exceeding_invoice_total: false,
+                },
+                crate::domain::organization::ports::MockOrganizationRepository::new(),
+                MockProjectRepository::new(),
+                MockQuoteRepository::new(),
+            )
+            .await;
+
+        assert!(matches!(result, Err(CoreError::Conflict(_))));
+    }
+
+    /// No chains of credit notes against credit notes: "what does this
+    /// correct" must always stay a single hop back to the original
+    /// commercial document.
+    #[tokio::test]
+    async fn issue_credit_note_refuses_a_source_that_is_itself_a_credit_note() {
+        let organization_id = OrganizationId(Uuid::new_v4());
+        let source_id = InvoiceId(Uuid::new_v4());
+        let source = Invoice {
+            organization_id,
+            kind: InvoiceKind::CreditNote,
+            status: InvoiceStatus::Issued,
+            number: Some("FAC-2026-0001".to_owned()),
+            issued_at: Some(Utc::now()),
+            ..invoice(source_id)
+        };
+
+        let store: Arc<Mutex<Vec<Invoice>>> = Arc::new(Mutex::new(vec![source]));
+        let mut service = InvoiceService::new(
+            invoice_repository_over(store),
+            events::testing::RecordingEmitter::new(),
+        );
+
+        let result = service
+            .issue_credit_note(
+                IssueCreditNoteCommand {
+                    source_invoice_id: source_id,
+                    lines: vec![line_command(Decimal::new(1, 0), 1_000)],
+                    notes: None,
+                    allow_exceeding_invoice_total: false,
+                },
+                crate::domain::organization::ports::MockOrganizationRepository::new(),
+                MockProjectRepository::new(),
+                MockQuoteRepository::new(),
+            )
+            .await;
+
+        assert!(matches!(result, Err(CoreError::Conflict(_))));
+    }
+
+    #[tokio::test]
+    async fn issue_credit_note_within_the_source_total_succeeds() {
+        let organization_id = OrganizationId(Uuid::new_v4());
+        let source_id = InvoiceId(Uuid::new_v4());
+        let source = Invoice {
+            organization_id,
+            status: InvoiceStatus::Issued,
+            number: Some("FAC-2026-0001".to_owned()),
+            issued_at: Some(Utc::now()),
+            net_cents: 10_000,
+            gross_cents: 10_000,
+            ..invoice(source_id)
+        };
+        let organization = complete_organization(organization_id);
+
+        let store: Arc<Mutex<Vec<Invoice>>> = Arc::new(Mutex::new(vec![source]));
+        let mut service = InvoiceService::new(
+            invoice_repository_over(store),
+            events::testing::RecordingEmitter::new(),
+        );
+
+        let credit_note = service
+            .issue_credit_note(
+                IssueCreditNoteCommand {
+                    source_invoice_id: source_id,
+                    lines: vec![line_command(Decimal::new(1, 0), 4_000)],
+                    notes: None,
+                    allow_exceeding_invoice_total: false,
+                },
+                mock_organization_repository_any_calls(organization),
+                MockProjectRepository::new(),
+                MockQuoteRepository::new(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(credit_note.status, InvoiceStatus::Issued);
+        assert_eq!(credit_note.kind, InvoiceKind::CreditNote);
+        assert_eq!(credit_note.net_cents, 4_000);
+        assert_eq!(credit_note.source_invoice_id, Some(source_id));
+    }
+
+    #[tokio::test]
+    async fn a_second_credit_note_refuses_to_exceed_the_source_total_unless_allowed() {
+        let organization_id = OrganizationId(Uuid::new_v4());
+        let source_id = InvoiceId(Uuid::new_v4());
+        let source = Invoice {
+            organization_id,
+            status: InvoiceStatus::Issued,
+            number: Some("FAC-2026-0001".to_owned()),
+            issued_at: Some(Utc::now()),
+            net_cents: 10_000,
+            gross_cents: 10_000,
+            ..invoice(source_id)
+        };
+        let organization = complete_organization(organization_id);
+
+        let store: Arc<Mutex<Vec<Invoice>>> = Arc::new(Mutex::new(vec![source]));
+        let mut service = InvoiceService::new(
+            invoice_repository_over(store.clone()),
+            events::testing::RecordingEmitter::new(),
+        );
+
+        let credit_command = |amount_cents, allow_exceeding_invoice_total| IssueCreditNoteCommand {
+            source_invoice_id: source_id,
+            lines: vec![line_command(Decimal::new(1, 0), amount_cents)],
+            notes: None,
+            allow_exceeding_invoice_total,
+        };
+
+        service
+            .issue_credit_note(
+                credit_command(6_000, false),
+                mock_organization_repository_any_calls(organization.clone()),
+                MockProjectRepository::new(),
+                MockQuoteRepository::new(),
+            )
+            .await
+            .unwrap();
+
+        let refused = service
+            .issue_credit_note(
+                credit_command(6_000, false),
+                mock_organization_repository_any_calls(organization.clone()),
+                MockProjectRepository::new(),
+                MockQuoteRepository::new(),
+            )
+            .await;
+
+        assert!(matches!(refused, Err(CoreError::Conflict(_))));
+        assert_eq!(
+            store.lock().unwrap().len(),
+            2,
+            "a refused credit note must not leave a half-created draft behind"
+        );
+
+        let allowed = service
+            .issue_credit_note(
+                credit_command(6_000, true),
+                mock_organization_repository_any_calls(organization),
+                MockProjectRepository::new(),
+                MockQuoteRepository::new(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(allowed.status, InvoiceStatus::Issued);
     }
 
     #[tokio::test]
@@ -1879,5 +2430,51 @@ mod tests {
 
         assert_eq!(issued.status, InvoiceStatus::Issued);
         assert!(issued.number.is_some());
+    }
+
+    fn credit_note(status: InvoiceStatus, net_cents: i32) -> Invoice {
+        Invoice {
+            status,
+            kind: InvoiceKind::CreditNote,
+            net_cents,
+            ..invoice(InvoiceId(Uuid::new_v4()))
+        }
+    }
+
+    #[test]
+    fn net_of_credit_notes_cents_returns_the_full_amount_when_there_are_no_credit_notes() {
+        assert_eq!(net_of_credit_notes_cents(10_000, &[]), 10_000);
+    }
+
+    #[test]
+    fn net_of_credit_notes_cents_subtracts_a_partial_credit_note() {
+        let credit_notes = [credit_note(InvoiceStatus::Issued, 3_000)];
+
+        assert_eq!(net_of_credit_notes_cents(10_000, &credit_notes), 7_000);
+    }
+
+    #[test]
+    fn net_of_credit_notes_cents_is_zero_when_credit_notes_sum_to_the_source_amount() {
+        let credit_notes = [
+            credit_note(InvoiceStatus::Issued, 4_000),
+            credit_note(InvoiceStatus::PartiallyPaid, 6_000),
+        ];
+
+        assert_eq!(net_of_credit_notes_cents(10_000, &credit_notes), 0);
+    }
+
+    /// A draft or cancelled credit note corrects nothing, and should not
+    /// normally exist against an already-issued source — but the function
+    /// itself is pure arithmetic and has to handle it defensively rather
+    /// than assume its caller always filters first.
+    #[test]
+    fn net_of_credit_notes_cents_ignores_a_draft_or_cancelled_credit_note() {
+        let credit_notes = [
+            credit_note(InvoiceStatus::Draft, 3_000),
+            credit_note(InvoiceStatus::Cancelled, 5_000),
+            credit_note(InvoiceStatus::Issued, 2_000),
+        ];
+
+        assert_eq!(net_of_credit_notes_cents(10_000, &credit_notes), 8_000);
     }
 }

@@ -83,6 +83,24 @@ pub struct UpdateInvoiceCommand {
     pub lines: Vec<InvoiceLineCommand>,
 }
 
+/// Issues a credit note against a source invoice — the only way to correct
+/// an issued invoice (#318), since `Invoice` itself has no mutating methods.
+/// The credit note's `customer_id`/`customer_context_id`/`project_id` are
+/// not on this command: they are copied from the source invoice, never
+/// supplied by the caller, because a credit note corrects one specific
+/// document and its counterparty cannot differ from it.
+#[derive(Debug, Clone)]
+pub struct IssueCreditNoteCommand {
+    pub source_invoice_id: InvoiceId,
+    pub lines: Vec<InvoiceLineCommand>,
+    pub notes: Option<String>,
+    /// Refuses when the sum of this credit note and every other
+    /// non-draft, non-cancelled credit note already issued against the
+    /// same source would exceed the source invoice's net_cents, unless
+    /// the caller explicitly says this is fine.
+    pub allow_exceeding_invoice_total: bool,
+}
+
 /// Cancels an invoice, draft or issued. Never used to reach `Issued`,
 /// `Paid` or `PartiallyPaid`: those are set by issuing (#317) and by
 /// recording payments (#320), never by hand.

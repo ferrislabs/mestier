@@ -47,6 +47,14 @@ pub trait InvoiceRepository: Send {
         project_id: ProjectId,
     ) -> impl Future<Output = Result<Vec<Invoice>, CoreError>> + Send;
 
+    /// Every non-deleted credit note referencing one source invoice —
+    /// what `InvoiceService::issue_credit_note`'s own limit check sums, and
+    /// what `net_of_credit_notes_cents` reads to tell "fully credited" (#318).
+    fn list_by_source_invoice(
+        &mut self,
+        source_invoice_id: InvoiceId,
+    ) -> impl Future<Output = Result<Vec<Invoice>, CoreError>> + Send;
+
     /// Only ever called with a [`DraftInvoice`]: the type that carries the
     /// guarantee this row is still a draft.
     fn update_draft(

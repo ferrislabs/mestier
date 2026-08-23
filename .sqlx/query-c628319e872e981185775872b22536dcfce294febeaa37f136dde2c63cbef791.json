@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT\n                id, org_id, number, kind::text AS \"kind!\", project_id, customer_id,\n                customer_context_id, status::text AS \"status!\", issued_at, due_at, notes,\n                operation_nature::text,\n                delivery_address_line1, delivery_address_line2, delivery_address_postal_code,\n                delivery_address_city, delivery_address_country,\n                net_cents, vat_breakdown, gross_cents, issuer_identity, deleted_at,\n                created_at, updated_at\n            FROM invoices\n            WHERE project_id = $1 AND deleted_at IS NULL\n            ORDER BY created_at ASC, id ASC\n            ",
+  "query": "\n            SELECT\n                id, org_id, number, kind::text AS \"kind!\", project_id, customer_id,\n                customer_context_id, status::text AS \"status!\", issued_at, due_at, notes,\n                operation_nature::text,\n                delivery_address_line1, delivery_address_line2, delivery_address_postal_code,\n                delivery_address_city, delivery_address_country,\n                net_cents, vat_breakdown, gross_cents, issuer_identity, source_invoice_id,\n                deleted_at, created_at, updated_at\n            FROM invoices\n            WHERE id = $1 AND deleted_at IS NULL\n            ",
   "describe": {
     "columns": [
       {
@@ -110,16 +110,21 @@
       },
       {
         "ordinal": 21,
+        "name": "source_invoice_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 22,
         "name": "deleted_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 22,
+        "ordinal": 23,
         "name": "created_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 23,
+        "ordinal": 24,
         "name": "updated_at",
         "type_info": "Timestamptz"
       }
@@ -152,9 +157,10 @@
       false,
       true,
       true,
+      true,
       false,
       false
     ]
   },
-  "hash": "eee183a7cc1fdaa9400fdc51022768aab7884c7a7fc95eea59b5d49ef090e736"
+  "hash": "c628319e872e981185775872b22536dcfce294febeaa37f136dde2c63cbef791"
 }

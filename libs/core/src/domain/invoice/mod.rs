@@ -296,6 +296,12 @@ pub struct Invoice {
     /// document already sent. `None` on a draft.
     pub issuer_identity: Option<LegalIdentity>,
     pub lines: Vec<InvoiceLine>,
+    /// The invoice this one corrects, set exactly when `kind` is
+    /// `CreditNote` and `None` for every other kind — see #318. Set once at
+    /// construction, never through `DraftInvoice`: a credit note's target is
+    /// fixed the instant it is built, not something an edit-in-place flow
+    /// ever needs to change.
+    pub source_invoice_id: Option<InvoiceId>,
     pub deleted_at: Option<DateTime<Utc>>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,

@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT\n                id, org_id, number, kind::text AS \"kind!\", project_id, customer_id,\n                customer_context_id, status::text AS \"status!\", issued_at, due_at, notes,\n                operation_nature::text,\n                delivery_address_line1, delivery_address_line2, delivery_address_postal_code,\n                delivery_address_city, delivery_address_country,\n                net_cents, vat_breakdown, gross_cents, issuer_identity, deleted_at,\n                created_at, updated_at\n            FROM invoices\n            WHERE id = $1 AND deleted_at IS NULL\n            ",
+  "query": "\n            SELECT\n                id, org_id, number, kind::text AS \"kind!\", project_id, customer_id,\n                customer_context_id, status::text AS \"status!\", issued_at, due_at, notes,\n                operation_nature::text,\n                delivery_address_line1, delivery_address_line2, delivery_address_postal_code,\n                delivery_address_city, delivery_address_country,\n                net_cents, vat_breakdown, gross_cents, issuer_identity, source_invoice_id,\n                deleted_at, created_at, updated_at\n            FROM invoices\n            WHERE org_id = $1 AND deleted_at IS NULL\n            ORDER BY created_at DESC, id DESC\n            LIMIT $2 OFFSET $3\n            ",
   "describe": {
     "columns": [
       {
@@ -110,23 +110,30 @@
       },
       {
         "ordinal": 21,
+        "name": "source_invoice_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 22,
         "name": "deleted_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 22,
+        "ordinal": 23,
         "name": "created_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 23,
+        "ordinal": 24,
         "name": "updated_at",
         "type_info": "Timestamptz"
       }
     ],
     "parameters": {
       "Left": [
-        "Uuid"
+        "Uuid",
+        "Int8",
+        "Int8"
       ]
     },
     "nullable": [
@@ -152,9 +159,10 @@
       false,
       true,
       true,
+      true,
       false,
       false
     ]
   },
-  "hash": "93056d9664f68d42ee6b7d9e79923469cce0d28074c348599af13698fab15b26"
+  "hash": "d6fca2bafea8bc79bf90a6bb941edcaffe524e2a4820598508a6777ac1a84a71"
 }

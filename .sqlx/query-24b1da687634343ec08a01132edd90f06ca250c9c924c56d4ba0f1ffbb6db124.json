@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            INSERT INTO invoices (\n                id, org_id, number, kind, project_id, customer_id, customer_context_id,\n                status, issued_at, due_at, notes, operation_nature,\n                delivery_address_line1, delivery_address_line2, delivery_address_postal_code,\n                delivery_address_city, delivery_address_country,\n                net_cents, vat_breakdown, gross_cents,\n                issuer_identity, deleted_at, created_at, updated_at\n            )\n            VALUES (\n                $1, $2, $3, CAST($4 AS text)::invoice_kind, $5, $6, $7,\n                CAST($8 AS text)::invoice_status, $9, $10, $11,\n                CAST($12 AS text)::invoice_operation_nature,\n                $13, $14, $15, $16, $17,\n                $18, $19, $20,\n                $21, $22, $23, $24\n            )\n            RETURNING\n                id, org_id, number, kind::text AS \"kind!\", project_id, customer_id,\n                customer_context_id, status::text AS \"status!\", issued_at, due_at, notes,\n                operation_nature::text,\n                delivery_address_line1, delivery_address_line2, delivery_address_postal_code,\n                delivery_address_city, delivery_address_country,\n                net_cents, vat_breakdown, gross_cents, issuer_identity, deleted_at,\n                created_at, updated_at\n            ",
+  "query": "\n            SELECT\n                id, org_id, number, kind::text AS \"kind!\", project_id, customer_id,\n                customer_context_id, status::text AS \"status!\", issued_at, due_at, notes,\n                operation_nature::text,\n                delivery_address_line1, delivery_address_line2, delivery_address_postal_code,\n                delivery_address_city, delivery_address_country,\n                net_cents, vat_breakdown, gross_cents, issuer_identity, source_invoice_id,\n                deleted_at, created_at, updated_at\n            FROM invoices\n            WHERE source_invoice_id = $1 AND deleted_at IS NULL\n            ORDER BY created_at ASC, id ASC\n            ",
   "describe": {
     "columns": [
       {
@@ -110,46 +110,28 @@
       },
       {
         "ordinal": 21,
+        "name": "source_invoice_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 22,
         "name": "deleted_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 22,
+        "ordinal": 23,
         "name": "created_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 23,
+        "ordinal": 24,
         "name": "updated_at",
         "type_info": "Timestamptz"
       }
     ],
     "parameters": {
       "Left": [
-        "Uuid",
-        "Uuid",
-        "Text",
-        "Text",
-        "Uuid",
-        "Uuid",
-        "Uuid",
-        "Text",
-        "Timestamptz",
-        "Timestamptz",
-        "Text",
-        "Text",
-        "Text",
-        "Text",
-        "Text",
-        "Text",
-        "Text",
-        "Int4",
-        "Jsonb",
-        "Int4",
-        "Jsonb",
-        "Timestamptz",
-        "Timestamptz",
-        "Timestamptz"
+        "Uuid"
       ]
     },
     "nullable": [
@@ -175,9 +157,10 @@
       false,
       true,
       true,
+      true,
       false,
       false
     ]
   },
-  "hash": "1c0851f76119a747eb37181fcd25a71420e0b9f95e9d27b104a5852858900647"
+  "hash": "24b1da687634343ec08a01132edd90f06ca250c9c924c56d4ba0f1ffbb6db124"
 }

@@ -135,8 +135,8 @@ pub use domain::{
     file_storage::commands::UploadFileCommand,
     invitation::commands::{AcceptInvitationCommand, InviteMemberCommand, RevokeInvitationCommand},
     invoice::commands::{
-        CancelInvoiceCommand, CreateInvoiceCommand, InvoiceLineCommand, IssueDepositCommand,
-        IssueFinalInvoiceCommand, IssueInvoiceCommand, UpdateInvoiceCommand,
+        CancelInvoiceCommand, CreateInvoiceCommand, InvoiceLineCommand, IssueCreditNoteCommand,
+        IssueDepositCommand, IssueFinalInvoiceCommand, IssueInvoiceCommand, UpdateInvoiceCommand,
     },
     member::commands::{
         AddMemberCommand, AssignRoleCommand, CreateMemberCommand, UpdateMemberCommand,
