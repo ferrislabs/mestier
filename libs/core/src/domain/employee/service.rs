@@ -2,10 +2,13 @@ use chrono::Utc;
 use common::{CoreError, generate_uuid_v7};
 
 use crate::{
-    Employee, EmployeeId, MemberId, OrganizationId,
+    Employee, EmployeeCostBasis, EmployeeCostBasisId, EmployeeId, MemberId, OrganizationId,
     domain::employee::{
-        commands::{RemoveEmployeeProfileCommand, UpsertEmployeeProfileCommand},
-        ports::EmployeeRepository,
+        commands::{
+            CorrectEmployeeCostBasisCommand, RemoveEmployeeProfileCommand,
+            SetEmployeeCostBasisCommand, UpsertEmployeeProfileCommand,
+        },
+        ports::{EmployeeCostBasisRepository, EmployeeRepository},
     },
 };
 
@@ -121,6 +124,180 @@ where
     }
 }
 
+/// Versions what an employee costs. Kept separate from [`EmployeeService`]
+/// rather than folded into it: the two repositories serve different
+/// concerns (the contractual profile itself vs. its dated history), and
+/// composing them is the application layer's job — the same reasoning
+/// `upsert_employee_profile`'s use case gives for joining the profile and
+/// the seat, and the reason [`WorkTimeService`](crate::domain::work_time::service::WorkTimeService)
+/// merges its two repositories only because both serve the very same
+/// `get_work_time` read.
+pub struct EmployeeCostBasisService<C>
+where
+    C: EmployeeCostBasisRepository,
+{
+    repo: C,
+}
+
+impl<C> EmployeeCostBasisService<C>
+where
+    C: EmployeeCostBasisRepository,
+{
+    pub fn new(repo: C) -> Self {
+        Self { repo }
+    }
+
+    /// Sets what `command.employee_id` costs from `command.effective_from`
+    /// onward.
+    ///
+    /// - No open version exists yet: the command becomes the employee's
+    ///   first cost basis version.
+    /// - An open version exists and shares `command.effective_from`: the
+    ///   same version is being corrected the same day — its fields are
+    ///   replaced in place, so calling this twice running never accumulates
+    ///   a second row.
+    /// - An open version exists and `command.effective_from` is later: a
+    ///   genuinely new version starts, so the open one is closed
+    ///   (`effective_to` set to the new version's start) rather than
+    ///   overwritten — the old version stays in the database as history.
+    /// - An open version exists and `command.effective_from` is earlier:
+    ///   rejected — refusing is what keeps history from being silently
+    ///   reordered.
+    pub async fn set_cost_basis(
+        &mut self,
+        command: SetEmployeeCostBasisCommand,
+    ) -> Result<EmployeeCostBasis, CoreError> {
+        validate_rate(command.hourly_rate_cents)?;
+        validate_monthly_cost(command.monthly_cost_cents)?;
+        validate_weekly_contract_minutes(command.weekly_contract_minutes)?;
+
+        // The two cost bases are exclusive, same rule as
+        // `EmployeeService::upsert_employee_profile`.
+        let (hourly_rate_cents, monthly_cost_cents) = if command.is_salaried {
+            (None, command.monthly_cost_cents)
+        } else {
+            (command.hourly_rate_cents, None)
+        };
+
+        let now = Utc::now();
+        match self.repo.find_open_by_employee(command.employee_id).await? {
+            None => {
+                self.repo
+                    .insert(&new_basis(
+                        &command,
+                        hourly_rate_cents,
+                        monthly_cost_cents,
+                        now,
+                    ))
+                    .await
+            }
+            Some(mut open) if open.effective_from == command.effective_from => {
+                open.is_salaried = command.is_salaried;
+                open.hourly_rate_cents = hourly_rate_cents;
+                open.monthly_cost_cents = monthly_cost_cents;
+                open.weekly_contract_minutes = command.weekly_contract_minutes;
+                open.updated_at = now;
+                self.repo.update(&open).await
+            }
+            Some(open) if command.effective_from > open.effective_from => {
+                self.repo
+                    .set_effective_to(open.id, command.effective_from)
+                    .await?;
+                self.repo
+                    .insert(&new_basis(
+                        &command,
+                        hourly_rate_cents,
+                        monthly_cost_cents,
+                        now,
+                    ))
+                    .await
+            }
+            Some(_) => Err(CoreError::Conflict(
+                "cannot set a cost basis version before the one currently in effect".to_owned(),
+            )),
+        }
+    }
+
+    /// The whole history of `employee_id`, oldest first.
+    pub async fn list_cost_bases(
+        &mut self,
+        employee_id: EmployeeId,
+    ) -> Result<Vec<EmployeeCostBasis>, CoreError> {
+        self.repo.list_by_employee(employee_id).await
+    }
+
+    /// One version by its own id, or [`CoreError::NotFound`]. The read half
+    /// of the "bare id derives its organization from the loaded row"
+    /// pattern: a caller keyed on a cost basis id alone loads the row here
+    /// before it can know which organization to authorize against.
+    pub async fn get_cost_basis(
+        &mut self,
+        id: EmployeeCostBasisId,
+    ) -> Result<EmployeeCostBasis, CoreError> {
+        self.repo.find_by_id(id).await?.ok_or(CoreError::NotFound)
+    }
+
+    /// Corrects a version that was entered wrong — the dangerous verb. Unlike
+    /// [`Self::set_cost_basis`] this never opens a new version or closes
+    /// another one: it rewrites the named version in place, dates included,
+    /// and the database's exclusion constraint is what refuses a correction
+    /// that would make two versions overlap.
+    pub async fn correct_cost_basis(
+        &mut self,
+        command: CorrectEmployeeCostBasisCommand,
+    ) -> Result<EmployeeCostBasis, CoreError> {
+        validate_rate(command.hourly_rate_cents)?;
+        validate_monthly_cost(command.monthly_cost_cents)?;
+        validate_weekly_contract_minutes(command.weekly_contract_minutes)?;
+        if let Some(effective_to) = command.effective_to
+            && effective_to <= command.effective_from
+        {
+            return Err(CoreError::Conflict(
+                "cost basis effective_to must be after effective_from".to_owned(),
+            ));
+        }
+
+        let mut basis = self.get_cost_basis(command.id).await?;
+
+        let (hourly_rate_cents, monthly_cost_cents) = if command.is_salaried {
+            (None, command.monthly_cost_cents)
+        } else {
+            (command.hourly_rate_cents, None)
+        };
+
+        basis.effective_from = command.effective_from;
+        basis.effective_to = command.effective_to;
+        basis.is_salaried = command.is_salaried;
+        basis.hourly_rate_cents = hourly_rate_cents;
+        basis.monthly_cost_cents = monthly_cost_cents;
+        basis.weekly_contract_minutes = command.weekly_contract_minutes;
+        basis.updated_at = Utc::now();
+
+        self.repo.update(&basis).await
+    }
+}
+
+fn new_basis(
+    command: &SetEmployeeCostBasisCommand,
+    hourly_rate_cents: Option<i32>,
+    monthly_cost_cents: Option<i32>,
+    now: chrono::DateTime<Utc>,
+) -> EmployeeCostBasis {
+    EmployeeCostBasis {
+        id: EmployeeCostBasisId(generate_uuid_v7()),
+        organization_id: command.organization_id,
+        employee_id: command.employee_id,
+        effective_from: command.effective_from,
+        effective_to: None,
+        is_salaried: command.is_salaried,
+        hourly_rate_cents,
+        monthly_cost_cents,
+        weekly_contract_minutes: command.weekly_contract_minutes,
+        created_at: now,
+        updated_at: now,
+    }
+}
+
 /// Weeks in a year over months in a year: the factor that turns a weekly
 /// contract into a monthly one. 35 h a week is 151,67 h a month, not 140.
 const WEEKS_PER_MONTH_NUMERATOR: i64 = 52;
@@ -197,7 +374,8 @@ fn validate_weekly_contract_minutes(minutes: i32) -> Result<(), CoreError> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::domain::employee::ports::MockEmployeeRepository;
+    use crate::domain::employee::ports::{MockEmployeeCostBasisRepository, MockEmployeeRepository};
+    use chrono::NaiveDate;
     use mockall::predicate::eq;
     use uuid::Uuid;
 
@@ -498,5 +676,225 @@ mod tests {
     #[test]
     fn a_salary_of_zero_costs_zero_rather_than_nothing_known() {
         assert_eq!(salaried_hourly_rate_cents(Some(0), 2_100), Some(0));
+    }
+
+    // -- EmployeeCostBasisService::set_cost_basis --------------------------
+
+    fn date(y: i32, m: u32, d: u32) -> NaiveDate {
+        NaiveDate::from_ymd_opt(y, m, d).unwrap()
+    }
+
+    fn cost_basis_command(
+        employee_id: EmployeeId,
+        effective_from: NaiveDate,
+    ) -> SetEmployeeCostBasisCommand {
+        SetEmployeeCostBasisCommand {
+            organization_id: OrganizationId(Uuid::new_v4()),
+            employee_id,
+            effective_from,
+            is_salaried: false,
+            hourly_rate_cents: Some(3500),
+            monthly_cost_cents: None,
+            weekly_contract_minutes: 2100,
+        }
+    }
+
+    fn cost_basis(
+        employee_id: EmployeeId,
+        effective_from: NaiveDate,
+        effective_to: Option<NaiveDate>,
+    ) -> EmployeeCostBasis {
+        let now = Utc::now();
+        EmployeeCostBasis {
+            id: EmployeeCostBasisId(Uuid::new_v4()),
+            organization_id: OrganizationId(Uuid::new_v4()),
+            employee_id,
+            effective_from,
+            effective_to,
+            is_salaried: false,
+            hourly_rate_cents: Some(3000),
+            monthly_cost_cents: None,
+            weekly_contract_minutes: 2100,
+            created_at: now,
+            updated_at: now,
+        }
+    }
+
+    #[tokio::test]
+    async fn set_cost_basis_inserts_a_first_version_when_none_is_open() {
+        let employee_id = EmployeeId(Uuid::new_v4());
+        let mut repo = MockEmployeeCostBasisRepository::new();
+        repo.expect_find_open_by_employee()
+            .with(eq(employee_id))
+            .times(1)
+            .returning(|_| Box::pin(async { Ok(None) }));
+        repo.expect_insert().times(1).returning(|b| {
+            let basis = b.clone();
+            Box::pin(async move { Ok(basis) })
+        });
+
+        let mut service = EmployeeCostBasisService::new(repo);
+        let created = service
+            .set_cost_basis(cost_basis_command(employee_id, date(2026, 1, 1)))
+            .await
+            .unwrap();
+
+        assert_eq!(created.employee_id, employee_id);
+        assert_eq!(created.effective_from, date(2026, 1, 1));
+        assert_eq!(created.effective_to, None);
+        assert_eq!(created.hourly_rate_cents, Some(3500));
+    }
+
+    /// The whole point of dating a change: calling it twice with the same
+    /// `effective_from` must edit the same row, never accumulate a second
+    /// version — `uq_employee_cost_bases_open_version` would reject it
+    /// anyway, and turning a constraint violation into normal behaviour is
+    /// not a design.
+    #[tokio::test]
+    async fn set_cost_basis_with_the_same_effective_from_replaces_in_place() {
+        let employee_id = EmployeeId(Uuid::new_v4());
+        let existing_id = EmployeeCostBasisId(Uuid::new_v4());
+        let mut existing = cost_basis(employee_id, date(2026, 1, 1), None);
+        existing.id = existing_id;
+
+        let mut repo = MockEmployeeCostBasisRepository::new();
+        repo.expect_find_open_by_employee()
+            .with(eq(employee_id))
+            .times(1)
+            .returning(move |_| {
+                let existing = existing.clone();
+                Box::pin(async move { Ok(Some(existing)) })
+            });
+        repo.expect_update()
+            .withf(move |b| b.id == existing_id && b.hourly_rate_cents == Some(3500))
+            .times(1)
+            .returning(|b| {
+                let basis = b.clone();
+                Box::pin(async move { Ok(basis) })
+            });
+        // No `expect_insert`: the same version must be edited in place, not
+        // duplicated.
+
+        let mut service = EmployeeCostBasisService::new(repo);
+        let updated = service
+            .set_cost_basis(cost_basis_command(employee_id, date(2026, 1, 1)))
+            .await
+            .unwrap();
+
+        assert_eq!(updated.id, existing_id);
+        assert_eq!(updated.hourly_rate_cents, Some(3500));
+    }
+
+    #[tokio::test]
+    async fn set_cost_basis_with_a_later_effective_from_closes_the_open_version_and_opens_a_new_one()
+     {
+        let employee_id = EmployeeId(Uuid::new_v4());
+        let existing_id = EmployeeCostBasisId(Uuid::new_v4());
+        let mut existing = cost_basis(employee_id, date(2026, 1, 1), None);
+        existing.id = existing_id;
+
+        let mut repo = MockEmployeeCostBasisRepository::new();
+        repo.expect_find_open_by_employee()
+            .with(eq(employee_id))
+            .times(1)
+            .returning(move |_| {
+                let existing = existing.clone();
+                Box::pin(async move { Ok(Some(existing)) })
+            });
+        repo.expect_set_effective_to()
+            .withf(move |id, effective_to| *id == existing_id && *effective_to == date(2026, 6, 1))
+            .times(1)
+            .returning(|_, _| Box::pin(async { Ok(()) }));
+        repo.expect_insert()
+            .withf(|b| b.effective_from == date(2026, 6, 1))
+            .times(1)
+            .returning(|b| {
+                let basis = b.clone();
+                Box::pin(async move { Ok(basis) })
+            });
+
+        let mut service = EmployeeCostBasisService::new(repo);
+        let created = service
+            .set_cost_basis(cost_basis_command(employee_id, date(2026, 6, 1)))
+            .await
+            .unwrap();
+
+        assert_eq!(created.effective_from, date(2026, 6, 1));
+        assert_eq!(created.effective_to, None);
+    }
+
+    #[tokio::test]
+    async fn set_cost_basis_rejects_an_effective_from_before_the_open_version() {
+        let employee_id = EmployeeId(Uuid::new_v4());
+        let existing = cost_basis(employee_id, date(2026, 6, 1), None);
+
+        let mut repo = MockEmployeeCostBasisRepository::new();
+        repo.expect_find_open_by_employee()
+            .with(eq(employee_id))
+            .times(1)
+            .returning(move |_| {
+                let existing = existing.clone();
+                Box::pin(async move { Ok(Some(existing)) })
+            });
+        repo.expect_insert().never();
+        repo.expect_update().never();
+        repo.expect_set_effective_to().never();
+
+        let mut service = EmployeeCostBasisService::new(repo);
+        let err = service
+            .set_cost_basis(cost_basis_command(employee_id, date(2026, 1, 1)))
+            .await
+            .unwrap_err();
+
+        assert!(matches!(err, CoreError::Conflict(_)));
+    }
+
+    /// A salaried version has no meaningful hourly figure, mirroring
+    /// `EmployeeService::upsert_employee_profile`'s own rule.
+    #[tokio::test]
+    async fn set_cost_basis_clears_the_rate_when_the_version_is_salaried() {
+        let employee_id = EmployeeId(Uuid::new_v4());
+        let mut repo = MockEmployeeCostBasisRepository::new();
+        repo.expect_find_open_by_employee()
+            .times(1)
+            .returning(|_| Box::pin(async { Ok(None) }));
+        repo.expect_insert().times(1).returning(|b| {
+            let basis = b.clone();
+            Box::pin(async move { Ok(basis) })
+        });
+
+        let mut service = EmployeeCostBasisService::new(repo);
+        let created = service
+            .set_cost_basis(SetEmployeeCostBasisCommand {
+                is_salaried: true,
+                hourly_rate_cents: Some(3500),
+                monthly_cost_cents: Some(350_000),
+                ..cost_basis_command(employee_id, date(2026, 1, 1))
+            })
+            .await
+            .unwrap();
+
+        assert_eq!(created.hourly_rate_cents, None);
+        assert_eq!(created.monthly_cost_cents, Some(350_000));
+        assert!(created.is_salaried);
+    }
+
+    #[tokio::test]
+    async fn set_cost_basis_rejects_a_negative_rate() {
+        let employee_id = EmployeeId(Uuid::new_v4());
+        let mut repo = MockEmployeeCostBasisRepository::new();
+        repo.expect_find_open_by_employee().never();
+        repo.expect_insert().never();
+
+        let mut service = EmployeeCostBasisService::new(repo);
+        let err = service
+            .set_cost_basis(SetEmployeeCostBasisCommand {
+                hourly_rate_cents: Some(-1),
+                ..cost_basis_command(employee_id, date(2026, 1, 1))
+            })
+            .await
+            .unwrap_err();
+
+        assert!(matches!(err, CoreError::Conflict(_)));
     }
 }

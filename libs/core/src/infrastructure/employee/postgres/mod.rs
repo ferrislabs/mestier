@@ -1,4 +1,4 @@
 pub mod model;
 pub mod repository;
 
-pub use repository::PgEmployeeRepository;
+pub use repository::{PgEmployeeCostBasisRepository, PgEmployeeRepository};

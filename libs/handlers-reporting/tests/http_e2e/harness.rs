@@ -7,7 +7,7 @@
 use std::{net::SocketAddr, sync::Arc};
 
 use args::Args;
-use chrono::{DateTime, Duration, Utc};
+use chrono::{DateTime, Duration, NaiveDate, Utc};
 use clap::Parser;
 use sqlx::PgPool;
 use uuid::Uuid;
@@ -27,6 +27,9 @@ pub struct App {
     /// A project whose only task sits two months back, so the period must not
     /// report it.
     pub stale_project_id: Uuid,
+    /// The hourly-costed person's employee id, for the test that raises their
+    /// rate mid-period and checks the already-planned task did not move.
+    pub employee_id: Uuid,
     user_id: Uuid,
     other_user_id: Uuid,
 }
@@ -75,6 +78,7 @@ pub async fn start() -> App {
         project_id: fixture.project_id,
         internal_project_id: fixture.internal_project_id,
         stale_project_id: fixture.stale_project_id,
+        employee_id: fixture.employee_id,
         user_id: fixture.user_id,
         other_user_id: fixture.other_user_id,
     }
@@ -103,6 +107,7 @@ impl App {
             "DELETE FROM tasks WHERE org_id = $1",
             "DELETE FROM projects WHERE org_id = $1",
             "DELETE FROM quotes WHERE org_id = $1",
+            "DELETE FROM employee_cost_bases WHERE org_id = $1",
             "DELETE FROM employees WHERE org_id = $1",
             "DELETE FROM organization_members WHERE organization_id = $1",
             "DELETE FROM customer_contexts WHERE customer_id IN (SELECT id FROM customers WHERE org_id = $1)",
@@ -134,6 +139,7 @@ struct Fixture {
     project_id: Uuid,
     internal_project_id: Uuid,
     stale_project_id: Uuid,
+    employee_id: Uuid,
 }
 
 /// Three projects and two people, with nothing clocked anywhere.
@@ -150,7 +156,6 @@ async fn seed(pool: &PgPool) -> Fixture {
     // 35 h contract, which is 23,08 € an hour.
     let (other_user_id, _, other_member_id, _) =
         seed_person(pool, organization_id, false, CostBasis::Salaried).await;
-    let _ = employee_id;
 
     let customer_id = Uuid::now_v7();
     sqlx::query("INSERT INTO customers (id, org_id, name) VALUES ($1, $2, $3)")
@@ -242,6 +247,7 @@ async fn seed(pool: &PgPool) -> Fixture {
         project_id,
         internal_project_id,
         stale_project_id,
+        employee_id,
     }
 }
 
@@ -318,7 +324,86 @@ async fn seed_person(
     .await
     .expect("seed the employee profile");
 
+    // Profitability now costs from `employee_cost_bases`, not from these
+    // columns directly (#301) — a profile with no version at all would read
+    // as if nobody had entered a rate. Far enough in the past to cover every
+    // task this fixture plants, including the one two months back.
+    seed_cost_basis(
+        pool,
+        organization_id,
+        employee_id,
+        NaiveDate::from_ymd_opt(2020, 1, 1).expect("a date"),
+        None,
+        hourly_rate_cents,
+        is_salaried,
+        monthly_cost_cents,
+    )
+    .await;
+
     (user_id, sub, member_id, employee_id)
+}
+
+#[allow(clippy::too_many_arguments)]
+async fn seed_cost_basis(
+    pool: &PgPool,
+    organization_id: Uuid,
+    employee_id: Uuid,
+    effective_from: NaiveDate,
+    effective_to: Option<NaiveDate>,
+    hourly_rate_cents: Option<i32>,
+    is_salaried: bool,
+    monthly_cost_cents: Option<i32>,
+) {
+    sqlx::query(
+        "INSERT INTO employee_cost_bases (id, org_id, employee_id, effective_from, effective_to, hourly_rate_cents, is_salaried, monthly_cost_cents, weekly_contract_minutes)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)",
+    )
+    .bind(Uuid::now_v7())
+    .bind(organization_id)
+    .bind(employee_id)
+    .bind(effective_from)
+    .bind(effective_to)
+    .bind(hourly_rate_cents)
+    .bind(is_salaried)
+    .bind(monthly_cost_cents)
+    .bind(2100)
+    .execute(pool)
+    .await
+    .expect("seed the cost basis version");
+}
+
+/// Closes the employee's open cost basis version today and opens a new one
+/// at `hourly_rate_cents` — a raise, dated the way the application layer
+/// dates one. Used by the test proving a raise entered after a task was
+/// planned does not change what that task already cost.
+pub async fn raise(
+    pool: &PgPool,
+    organization_id: Uuid,
+    employee_id: Uuid,
+    hourly_rate_cents: i32,
+) {
+    let today = Utc::now().date_naive();
+
+    sqlx::query(
+        "UPDATE employee_cost_bases SET effective_to = $1 WHERE employee_id = $2 AND effective_to IS NULL",
+    )
+    .bind(today)
+    .bind(employee_id)
+    .execute(pool)
+    .await
+    .expect("close the open cost basis version");
+
+    seed_cost_basis(
+        pool,
+        organization_id,
+        employee_id,
+        today,
+        None,
+        Some(hourly_rate_cents),
+        false,
+        None,
+    )
+    .await;
 }
 
 async fn seed_quote(pool: &PgPool, organization_id: Uuid, customer_id: Uuid) -> Uuid {

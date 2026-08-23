@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE employee_cost_bases\n            SET effective_to = $2, updated_at = now()\n            WHERE id = $1 AND effective_to IS NULL\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Date"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "6c18ff065725b4ca49bc149b54c073a01d33ae581f313e7f3650f0e5004d367f"
+}

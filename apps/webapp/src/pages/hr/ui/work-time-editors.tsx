@@ -351,14 +351,14 @@ export function WorkSlotsSection({
 
 // -- Shared fields --------------------------------------------------------
 
-interface DateFieldProps {
+export interface DateFieldProps {
 	label: string
 	value: string
 	onChange: (value: string) => void
 	error?: string
 }
 
-function DateField({ label, value, onChange, error }: DateFieldProps) {
+export function DateField({ label, value, onChange, error }: DateFieldProps) {
 	return (
 		<div className="flex flex-col gap-1.5">
 			<span className="text-sm font-medium">{label}</span>

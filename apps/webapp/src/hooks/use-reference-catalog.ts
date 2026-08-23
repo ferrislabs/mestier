@@ -161,6 +161,40 @@ export function useRemoveEmployeeProfile() {
 	})
 }
 
+const EMPLOYEE_COST_BASES_PATH = '/api/v1/employees/{employee_id}/cost-bases'
+
+/** An employee's whole cost history, oldest first — see `MestierUseCase::list_employee_cost_bases`. */
+export function useEmployeeCostBases(employeeId: string, enabled = true) {
+	return useQuery({
+		...window.tanstackApi.get(EMPLOYEE_COST_BASES_PATH, {
+			path: { employee_id: employeeId },
+		}).queryOptions,
+		enabled: enabled && Boolean(employeeId),
+	})
+}
+
+/**
+ * Dates a cost basis change: closes the open version at the given date and
+ * opens a new one, or edits it in place when the date matches it exactly —
+ * see `EmployeeCostBasisService::set_cost_basis`. Also refreshes the plain
+ * employee-profiles list: its columns mirror the open version.
+ */
+export function useSetEmployeeCostBasis() {
+	const queryClient = useQueryClient()
+
+	return useMutation({
+		...window.tanstackApi.mutation('post', EMPLOYEE_COST_BASES_PATH)
+			.mutationOptions,
+		onSuccess: () => {
+			queryClient.invalidateQueries({
+				predicate: (query) =>
+					queryKeyMeta(query.queryKey)?._id === EMPLOYEE_COST_BASES_PATH,
+			})
+			invalidateReferenceList(queryClient, EMPLOYEE_PROFILES_PATH)
+		},
+	})
+}
+
 export function useCreateEquipment(organizationId: string) {
 	const queryClient = useQueryClient()
 
@@ -257,6 +291,7 @@ export function useDeleteProduct() {
 
 export type Member = Schemas.MemberResponse
 export type EmployeeProfile = Schemas.EmployeeResponse
+export type EmployeeCostBasis = Schemas.EmployeeCostBasisResponse
 export type Equipment = Schemas.EquipmentResponse
 export type Product = Schemas.ProductResponse
 export type ServiceRate = Schemas.ServiceRateResponse

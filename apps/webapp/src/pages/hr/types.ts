@@ -366,6 +366,81 @@ export function formatDateFr(iso: string): string {
 	}).format(date)
 }
 
+// -- Historique du coût --------------------------------------------------
+
+export interface CostBasisFormValues {
+	effectiveFrom: string
+	/** Salaried: costed from {@link monthlyCost} instead of an hourly rate. */
+	isSalaried: boolean
+	/** Euros as typed. Empty means "not set", never zero — see {@link eurosToCents}. */
+	hourlyRate: string
+	/** Euros as typed. Only read when {@link isSalaried}. */
+	monthlyCost: string
+}
+
+export interface CostBasisEntry {
+	id: string
+	effectiveFrom: string
+	/** `null` means this is the currently open version. */
+	effectiveTo: string | null
+	isSalaried: boolean
+	hourlyRateCents: number | null
+	monthlyCostCents: number | null
+	/** Computed server-side, never re-derived here — see `MoneyCell`'s callers. */
+	effectiveHourlyRateCents: number | null
+}
+
+/**
+ * Seeded from the version currently in effect, not left blank: dating a
+ * change usually means "the same basis, from a different day" (a raise) more
+ * often than "a wholly new one", and pre-filling saves re-typing the figure
+ * that isn't changing.
+ */
+export function emptyCostBasisDraft(
+	today: string,
+	current: {
+		isSalaried: boolean
+		hourlyRateCents: number | null
+		monthlyCostCents: number | null
+	},
+): CostBasisFormValues {
+	return {
+		effectiveFrom: today,
+		isSalaried: current.isSalaried,
+		hourlyRate: centsToEurosInput(current.hourlyRateCents),
+		monthlyCost: centsToEurosInput(current.monthlyCostCents),
+	}
+}
+
+export function validateCostBasisDraft(
+	values: CostBasisFormValues,
+): SlotValidationError[] {
+	const errors: SlotValidationError[] = []
+	if (!values.effectiveFrom) {
+		errors.push({ key: 'effectiveFrom', message: 'Date d’effet requise' })
+	}
+	return errors
+}
+
+/**
+ * An empty field means "rate not set", not "free" — collapsing it to 0 would
+ * feed a wrong cost into the profitability computation instead of an absent
+ * one, which is why `hourly_rate_cents`/`monthly_cost_cents` are nullable.
+ */
+export function eurosToCents(value: string): number | null {
+	const normalized = value.replace(',', '.').trim()
+	if (normalized === '') return null
+	const parsed = Number.parseFloat(normalized)
+	if (!Number.isFinite(parsed)) return null
+	return Math.round(parsed * 100)
+}
+
+/** Inverse of {@link eurosToCents}. `null` renders as an empty field, not `0`. */
+export function centsToEurosInput(value: number | null): string {
+	if (value === null) return ''
+	return (value / 100).toFixed(2).replace('.', ',')
+}
+
 /**
  * No HR screen has an organization timezone to read: `GET
  * /organizations/{id}` doesn't expose `organizations.timezone`, only `GET

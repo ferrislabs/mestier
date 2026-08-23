@@ -1,7 +1,9 @@
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, NaiveDate, Utc};
 use common::CoreError;
 
-use crate::{Employee, EmployeeId, MemberId, OrganizationId};
+use crate::{
+    Employee, EmployeeCostBasis, EmployeeCostBasisId, EmployeeId, MemberId, OrganizationId,
+};
 
 #[cfg_attr(any(test, feature = "mock"), mockall::automock)]
 pub trait EmployeeRepository: Send {
@@ -49,5 +51,68 @@ pub trait EmployeeRepository: Send {
         &mut self,
         id: EmployeeId,
         deleted_at: DateTime<Utc>,
+    ) -> impl Future<Output = Result<(), CoreError>> + Send;
+}
+
+/// Persists the versioned history of what an employee costs. Mirrors
+/// [`crate::domain::work_time::ports::RhythmRepository`]'s shape: an
+/// employee's history is versions of the same kind of fact a rhythm is,
+/// closed and reopened the same way.
+#[cfg_attr(any(test, feature = "mock"), mockall::automock)]
+pub trait EmployeeCostBasisRepository: Send {
+    /// The employee's currently open cost basis version (`effective_to IS
+    /// NULL`), if any. By construction of
+    /// `EmployeeCostBasisService::set_cost_basis`, at most one open version
+    /// exists per employee at a time — the database enforces it too, via
+    /// `uq_employee_cost_bases_open_version`.
+    fn find_open_by_employee(
+        &mut self,
+        employee_id: EmployeeId,
+    ) -> impl Future<Output = Result<Option<EmployeeCostBasis>, CoreError>> + Send;
+
+    /// One version by its own id — the "bare id derives its organization from
+    /// the loaded row" pattern: a `PATCH /cost-bases/{id}` route has no
+    /// organization in its path to trust, so the row loaded here is what
+    /// authorization runs against.
+    fn find_by_id(
+        &mut self,
+        id: EmployeeCostBasisId,
+    ) -> impl Future<Output = Result<Option<EmployeeCostBasis>, CoreError>> + Send;
+
+    /// Every version of `employee_id`'s history, oldest first — the whole
+    /// point of keeping past versions instead of overwriting them.
+    fn list_by_employee(
+        &mut self,
+        employee_id: EmployeeId,
+    ) -> impl Future<Output = Result<Vec<EmployeeCostBasis>, CoreError>> + Send;
+
+    /// Persists a brand new cost basis version.
+    fn insert(
+        &mut self,
+        basis: &EmployeeCostBasis,
+    ) -> impl Future<Output = Result<EmployeeCostBasis, CoreError>> + Send;
+
+    /// Replaces an existing version's own fields in place, `effective_from`
+    /// and `effective_to` included.
+    ///
+    /// Two callers rely on different halves of that: `set_cost_basis`'s
+    /// same-day edit only ever passes back the row's own unchanged dates, so
+    /// for it this is indistinguishable from a narrower update that left them
+    /// alone. `correct_cost_basis` is the one that actually moves them — the
+    /// dangerous verb, because it rewrites history on purpose rather than
+    /// dating a new change. The exclusion constraint on
+    /// `employee_cost_bases` is what stands between a wrong correction and a
+    /// silently overlapping history.
+    fn update(
+        &mut self,
+        basis: &EmployeeCostBasis,
+    ) -> impl Future<Output = Result<EmployeeCostBasis, CoreError>> + Send;
+
+    /// Closes an open version by setting `effective_to` — used when a later
+    /// version takes over, so the closed version survives as history.
+    fn set_effective_to(
+        &mut self,
+        id: EmployeeCostBasisId,
+        effective_to: NaiveDate,
     ) -> impl Future<Output = Result<(), CoreError>> + Send;
 }

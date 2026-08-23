@@ -14,6 +14,7 @@ pub mod domain {
     pub struct Customer;
     pub struct CustomerContact;
     pub struct Employee;
+    pub struct EmployeeCostBasis;
     pub struct Equipment;
     pub struct EventDispatch;
     pub struct EventLog;

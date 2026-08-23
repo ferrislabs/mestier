@@ -15,8 +15,8 @@ use serde::Serialize;
 use utoipa::ToSchema;
 
 use crate::{
-    CustomerId, EmployeeId, EmployeeRhythm, EquipmentId, MemberId, ProjectId, TaskId, Tz, WorkSlot,
-    domain::employee::service::salaried_hourly_rate_cents,
+    CustomerId, EmployeeCostBasis, EmployeeId, EmployeeRhythm, EquipmentId, MemberId, ProjectId,
+    TaskId, Tz, WorkSlot, domain::employee::service::salaried_hourly_rate_cents,
 };
 
 pub mod ports;
@@ -39,7 +39,18 @@ pub struct ReportPeriod {
 /// One person booked on one planned task, carrying the rate that applied.
 ///
 /// The rate travels with the fact rather than being looked up later: someone's
-/// rate can change, and a cost has to be built from what was true.
+/// rate can change, and a cost has to be built from what was true. This is no
+/// longer an aspiration — the adapter resolves these fields from
+/// `employee_cost_bases`, the version covering the task's own start date, not
+/// from `employees`' live columns. A raise entered today no longer moves a
+/// number this struct already carried for a task planned before it.
+///
+/// An all-day task's own days can straddle a version boundary the timed
+/// task's single start date cannot, so [`service::build_report`] does not use
+/// these fields for one: it resolves each covered day against
+/// [`ProfitabilityFacts::cost_bases`] instead. These fields still describe the
+/// version in effect on the task's start date, kept populated for whichever
+/// caller wants that anchor.
 #[derive(Debug, Clone, PartialEq)]
 pub struct PlannedAssignment {
     /// `None` for a task attached to no project. Such a task still costs the
@@ -97,6 +108,13 @@ pub enum MissingCost {
     /// An amount was entered, but there are no contracted hours to spread it
     /// over, so it has no hourly equivalent.
     ContractedHours,
+    /// No cost basis version covers this date at all — for instance a task
+    /// planned before the employee's very first version. Kept distinct from
+    /// [`Self::HourlyRate`] rather than folded into it: that variant means a
+    /// figure was left blank on an existing basis, this one means there was
+    /// no basis to read from on that day, and the two send a reader to
+    /// different screens.
+    NoCostBasis,
 }
 
 impl PlannedAssignment {
@@ -107,15 +125,33 @@ impl PlannedAssignment {
     /// two copies of this rule is how they would. Returning the *reason* rather
     /// than a bare `None` is what lets the screen name the field to go and fill.
     pub fn hourly_cost_cents(&self) -> Result<i32, MissingCost> {
-        if !self.is_salaried {
-            return self.hourly_rate_cents.ok_or(MissingCost::HourlyRate);
-        }
-
-        let monthly_cost_cents = self.monthly_cost_cents.ok_or(MissingCost::MonthlyCost)?;
-
-        salaried_hourly_rate_cents(Some(monthly_cost_cents), self.weekly_contract_minutes)
-            .ok_or(MissingCost::ContractedHours)
+        hourly_cost_cents_from(
+            self.is_salaried,
+            self.hourly_rate_cents,
+            self.monthly_cost_cents,
+            self.weekly_contract_minutes,
+        )
     }
+}
+
+/// The shared rule behind [`PlannedAssignment::hourly_cost_cents`] and
+/// [`service::cost_basis_hourly_cost_cents`]: an assignment and a cost basis
+/// version carry the same four fields, and the arithmetic over them must not
+/// be written twice to drift apart.
+pub(crate) fn hourly_cost_cents_from(
+    is_salaried: bool,
+    hourly_rate_cents: Option<i32>,
+    monthly_cost_cents: Option<i32>,
+    weekly_contract_minutes: i32,
+) -> Result<i32, MissingCost> {
+    if !is_salaried {
+        return hourly_rate_cents.ok_or(MissingCost::HourlyRate);
+    }
+
+    let monthly_cost_cents = monthly_cost_cents.ok_or(MissingCost::MonthlyCost)?;
+
+    salaried_hourly_rate_cents(Some(monthly_cost_cents), weekly_contract_minutes)
+        .ok_or(MissingCost::ContractedHours)
 }
 
 /// Money a task cost beyond somebody's time.
@@ -162,6 +198,15 @@ pub struct ProfitabilityFacts {
     pub assignments: Vec<PlannedAssignment>,
     pub expenses: Vec<TaskExpense>,
     pub equipment: Vec<AssignedEquipment>,
+    /// Cost basis versions for every employee with an all-day assignment in
+    /// scope, overlapping the report window. A timed task needs none of
+    /// these — its one date already resolved a single version into
+    /// [`PlannedAssignment`]'s own fields — but an all-day task's days can
+    /// straddle a version boundary its own start date does not see, so
+    /// [`service::build_report`] resolves each covered day against this list
+    /// instead. Not part of [`PlannedAssignment`]'s frozen shape on purpose:
+    /// this is history for a lookup, not a fact carried per assignment.
+    pub cost_bases: Vec<EmployeeCostBasis>,
 }
 
 /// What all-day tasks need in order to have a duration at all.

@@ -1,0 +1,84 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                SELECT id, org_id, employee_id, effective_from, effective_to, is_salaried, hourly_rate_cents, monthly_cost_cents, weekly_contract_minutes, created_at, updated_at\n                FROM employee_cost_bases\n                WHERE employee_id = ANY($1)\n                  AND effective_from < (($3) AT TIME ZONE 'UTC')::date\n                  AND (effective_to IS NULL OR effective_to > (($2) AT TIME ZONE 'UTC')::date)\n                ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "org_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "employee_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 3,
+        "name": "effective_from",
+        "type_info": "Date"
+      },
+      {
+        "ordinal": 4,
+        "name": "effective_to",
+        "type_info": "Date"
+      },
+      {
+        "ordinal": 5,
+        "name": "is_salaried",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 6,
+        "name": "hourly_rate_cents",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 7,
+        "name": "monthly_cost_cents",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 8,
+        "name": "weekly_contract_minutes",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 9,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 10,
+        "name": "updated_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "UuidArray",
+        "Timestamptz",
+        "Timestamptz"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      true,
+      false,
+      true,
+      true,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "acf7341fb7692347f9a69b4ffcf279261f1a15efc561dfab6cf8c94a678eb24f"
+}

@@ -4,13 +4,14 @@ use chrono::{DateTime, Duration, NaiveDate, TimeZone, Utc};
 use common::CoreError;
 
 use crate::{
-    DateRange, EmployeeRhythm, MemberId, MinuteInterval, OrganizationId, Tz, WorkSlot,
+    DateRange, EmployeeCostBasis, EmployeeId, EmployeeRhythm, MemberId, MinuteInterval,
+    MissingCost, OrganizationId, Tz, WorkSlot,
     domain::{
         planning::ports::PlanningRepository,
         profitability::{
             AssignedEquipment, MemberProfitability, PlannedAssignment, ProfitabilityFacts,
             ProfitabilityReport, ProjectHeader, ProjectProfitability, ReportPeriod, TaskExpense,
-            WorkTime, ports::ProfitabilityRepository,
+            WorkTime, hourly_cost_cents_from, ports::ProfitabilityRepository,
         },
         work_time::service::expand_work_slots,
     },
@@ -87,6 +88,7 @@ pub fn build_report(
         assignments,
         expenses,
         equipment,
+        cost_bases,
     } = facts;
 
     let expanded = expand_for_members(&assignments, &work_time, period);
@@ -97,16 +99,101 @@ pub fn build_report(
         .iter()
         .map(|assignment| spans_of(assignment, &expanded, period))
         .collect();
+    // Same reasoning as `spans`: the cost of an all-day task depends on which
+    // day each of its spans falls on, so it is resolved once here rather than
+    // inside both `project_profitability` and `member_profitability`, which
+    // would otherwise have to agree on it independently.
+    let costs: Vec<Result<i64, MissingCost>> = assignments
+        .iter()
+        .zip(&spans)
+        .map(|(assignment, assignment_spans)| {
+            cost_of_assignment(assignment, assignment_spans, &cost_bases, period.timezone)
+        })
+        .collect();
 
     ProfitabilityReport {
         projects: projects
             .iter()
             .map(|project| {
-                project_profitability(project, &assignments, &spans, &expenses, &equipment, period)
+                project_profitability(
+                    project,
+                    &assignments,
+                    &spans,
+                    &costs,
+                    &expenses,
+                    &equipment,
+                    period,
+                )
             })
             .collect(),
-        members: member_profitability(&assignments, &spans),
+        members: member_profitability(&assignments, &spans, &costs),
     }
+}
+
+/// The version of `employee_id`'s cost basis in effect on `date`, if any.
+fn cost_basis_for(
+    cost_bases: &[EmployeeCostBasis],
+    employee_id: EmployeeId,
+    date: NaiveDate,
+) -> Option<&EmployeeCostBasis> {
+    cost_bases.iter().find(|basis| {
+        basis.employee_id == employee_id
+            && basis.effective_from <= date
+            && basis
+                .effective_to
+                .is_none_or(|effective_to| effective_to > date)
+    })
+}
+
+/// What an hour under this cost basis version costs, or which figure is
+/// missing — the same rule [`PlannedAssignment::hourly_cost_cents`] applies,
+/// read from a version instead of from the assignment's own anchor fields.
+pub(crate) fn cost_basis_hourly_cost_cents(basis: &EmployeeCostBasis) -> Result<i32, MissingCost> {
+    hourly_cost_cents_from(
+        basis.is_salaried,
+        basis.hourly_rate_cents,
+        basis.monthly_cost_cents,
+        basis.weekly_contract_minutes,
+    )
+}
+
+/// The whole cost of one assignment's spans.
+///
+/// A timed task gives exactly one span, already anchored to the version
+/// covering its own start date by the adapter — one rate for the whole
+/// assignment, same as before this issue. An all-day task can give one span
+/// per day it covers, and those days can straddle a version boundary the same
+/// way a report period can, so each is resolved against `cost_bases`
+/// individually rather than all being costed at the assignment's single
+/// anchor rate.
+fn cost_of_assignment(
+    assignment: &PlannedAssignment,
+    assignment_spans: &[Span],
+    cost_bases: &[EmployeeCostBasis],
+    timezone: Tz,
+) -> Result<i64, MissingCost> {
+    if !assignment.all_day {
+        let minutes: i64 = assignment_spans.iter().copied().map(Span::minutes).sum();
+        return assignment
+            .hourly_cost_cents()
+            .map(|rate| cost_of(minutes, i64::from(rate)));
+    }
+
+    // No employee profile at all is the same gap a timed task reports as
+    // `HourlyRate` by default — there is no basis to look up per day either
+    // way.
+    let employee_id = assignment.employee_id.ok_or(MissingCost::HourlyRate)?;
+
+    let mut total = 0_i64;
+    for span in assignment_spans {
+        let date = span.starts_at.with_timezone(&timezone).date_naive();
+        let basis =
+            cost_basis_for(cost_bases, employee_id, date).ok_or(MissingCost::NoCostBasis)?;
+        let rate = cost_basis_hourly_cost_cents(basis)?;
+        total += cost_of(span.minutes(), i64::from(rate));
+    }
+
+    Ok(total)
 }
 
 /// A stretch of real time somebody is booked for.
@@ -291,10 +378,12 @@ fn union_minutes(spans: &[Span]) -> i64 {
     total + open.map_or(0, Span::minutes)
 }
 
+#[allow(clippy::too_many_arguments)]
 fn project_profitability(
     project: &ProjectHeader,
     assignments: &[PlannedAssignment],
     spans: &[Vec<Span>],
+    costs: &[Result<i64, MissingCost>],
     expenses: &[TaskExpense],
     equipment: &[AssignedEquipment],
     period: ReportPeriod,
@@ -305,7 +394,7 @@ fn project_profitability(
     let mut project_spans: Vec<Span> = Vec::new();
     let mut by_member: HashMap<MemberId, Vec<Span>> = HashMap::new();
 
-    for (assignment, assignment_spans) in assignments.iter().zip(spans) {
+    for ((assignment, assignment_spans), cost) in assignments.iter().zip(spans).zip(costs) {
         if assignment.project_id != Some(project.project_id) || assignment_spans.is_empty() {
             continue;
         }
@@ -322,8 +411,8 @@ fn project_profitability(
         // than typed, and an unstateable one is an unstateable one whichever
         // basis it came from. This branch used to skip them entirely and count
         // their time at zero.
-        match assignment.hourly_cost_cents() {
-            Ok(rate) => labour_cost_cents += cost_of(minutes, i64::from(rate)),
+        match cost {
+            Ok(cost_cents) => labour_cost_cents += cost_cents,
             // Recorded once per person, not once per assignment: the reader needs
             // to know who to go and set a figure for, not how many times it hurt.
             // Which figure it is lives on the per-person total, where there is
@@ -396,10 +485,11 @@ fn project_profitability(
 fn member_profitability(
     assignments: &[PlannedAssignment],
     spans: &[Vec<Span>],
+    costs: &[Result<i64, MissingCost>],
 ) -> Vec<MemberProfitability> {
     let mut totals: HashMap<MemberId, MemberProfitability> = HashMap::new();
 
-    for (assignment, assignment_spans) in assignments.iter().zip(spans) {
+    for ((assignment, assignment_spans), cost) in assignments.iter().zip(spans).zip(costs) {
         if assignment_spans.is_empty() {
             continue;
         }
@@ -416,11 +506,11 @@ fn member_profitability(
 
         total.planned_minutes += minutes;
 
-        match assignment.hourly_cost_cents() {
-            Ok(rate) => total.labour_cost_cents += cost_of(minutes, i64::from(rate)),
+        match cost {
+            Ok(cost_cents) => total.labour_cost_cents += cost_cents,
             // Kept if already set: one gap named is enough to act on, and the
             // first one found is as good as any.
-            Err(missing) => total.missing_cost = total.missing_cost.or(Some(missing)),
+            Err(missing) => total.missing_cost = total.missing_cost.or(Some(*missing)),
         }
     }
 
@@ -464,8 +554,8 @@ mod tests {
 
     use super::*;
     use crate::{
-        CustomerId, EmployeeId, EmployeeRhythmId, EquipmentId, MissingCost, ProjectId, RhythmSlot,
-        RhythmSlotId, TaskId, WorkSlotId,
+        CustomerId, EmployeeCostBasisId, EmployeeId, EmployeeRhythmId, EquipmentId, MissingCost,
+        ProjectId, RhythmSlot, RhythmSlotId, TaskId, WorkSlotId,
     };
 
     const PARIS: &str = "Europe/Paris";
@@ -521,6 +611,32 @@ mod tests {
         }
     }
 
+    #[allow(clippy::too_many_arguments)]
+    fn cost_basis(
+        employee_id: EmployeeId,
+        effective_from: NaiveDate,
+        effective_to: Option<NaiveDate>,
+        is_salaried: bool,
+        hourly_rate_cents: Option<i32>,
+        monthly_cost_cents: Option<i32>,
+        weekly_contract_minutes: i32,
+    ) -> EmployeeCostBasis {
+        let now = Utc::now();
+        EmployeeCostBasis {
+            id: EmployeeCostBasisId(Uuid::new_v4()),
+            organization_id: crate::OrganizationId(Uuid::from_u128(50)),
+            employee_id,
+            effective_from,
+            effective_to,
+            is_salaried,
+            hourly_rate_cents,
+            monthly_cost_cents,
+            weekly_contract_minutes,
+            created_at: now,
+            updated_at: now,
+        }
+    }
+
     fn facts(
         assignments: Vec<PlannedAssignment>,
         projects: Vec<ProjectHeader>,
@@ -530,6 +646,7 @@ mod tests {
             assignments,
             expenses: Vec::new(),
             equipment: Vec::new(),
+            cost_bases: Vec::new(),
         }
     }
 
@@ -771,11 +888,18 @@ mod tests {
             work_slots: Vec::new(),
         };
 
-        let report = build_report(
-            facts(vec![all_day], vec![project(None, false)]),
-            work_time,
-            june(),
-        );
+        let mut all_day_facts = facts(vec![all_day], vec![project(None, false)]);
+        all_day_facts.cost_bases = vec![cost_basis(
+            employee_id,
+            NaiveDate::from_ymd_opt(2026, 1, 1).expect("a date"),
+            None,
+            false,
+            Some(3_000),
+            None,
+            2_100,
+        )];
+
+        let report = build_report(all_day_facts, work_time, june());
         let project = only_project(&report);
 
         assert_eq!(
@@ -972,5 +1096,115 @@ mod tests {
             Some(MissingCost::HourlyRate)
         );
         assert_eq!(report.members[1].missing_cost, None);
+    }
+
+    // -- Per-day costing against `employee_cost_bases` ---------------------
+
+    fn all_day_rhythm(employee_id: EmployeeId, weekdays: &[i16]) -> WorkTime {
+        let rhythm_id = EmployeeRhythmId(Uuid::from_u128(7));
+        WorkTime {
+            rhythms: vec![EmployeeRhythm {
+                id: rhythm_id,
+                organization_id: crate::OrganizationId(Uuid::from_u128(50)),
+                employee_id,
+                effective_from: NaiveDate::from_ymd_opt(2026, 1, 1).expect("a date"),
+                effective_to: None,
+                slots: weekdays
+                    .iter()
+                    .map(|&weekday| RhythmSlot {
+                        id: RhythmSlotId(Uuid::new_v4()),
+                        rhythm_id,
+                        weekday,
+                        starts_minute: 9 * 60,
+                        ends_minute: 17 * 60,
+                    })
+                    .collect(),
+                created_at: monday(0, 0),
+                updated_at: monday(0, 0),
+            }],
+            work_slots: Vec::new(),
+        }
+    }
+
+    /// The bug this issue exists to fix, at the all-day boundary: a raise
+    /// taking effect partway through a two-day all-day task must cost the
+    /// first day at the old rate and the second at the new one, never one
+    /// rate blended or wrongly applied to both.
+    #[test]
+    fn an_all_day_task_straddling_a_rate_change_costs_each_day_at_its_own_rate() {
+        let employee_id = EmployeeId(Uuid::from_u128(1001));
+        let raise_day = NaiveDate::from_ymd_opt(2026, 6, 2).expect("a date");
+
+        let mut all_day = assignment(1, None);
+        all_day.all_day = true;
+        all_day.starts_at = monday(0, 0);
+        all_day.ends_at = monday(0, 0) + Duration::days(2); // Monday and Tuesday.
+
+        let mut facts = facts(vec![all_day], vec![project(None, false)]);
+        facts.cost_bases = vec![
+            cost_basis(
+                employee_id,
+                NaiveDate::from_ymd_opt(2026, 1, 1).expect("a date"),
+                Some(raise_day),
+                false,
+                Some(3_000),
+                None,
+                2_100,
+            ),
+            cost_basis(
+                employee_id,
+                raise_day,
+                None,
+                false,
+                Some(4_000),
+                None,
+                2_100,
+            ),
+        ];
+
+        let report = build_report(facts, all_day_rhythm(employee_id, &[1, 2]), june());
+        let project = only_project(&report);
+
+        // Monday: 8h at 30,00 €/h = 240,00 €. Tuesday: 8h at 40,00 €/h = 320,00 €.
+        assert_eq!(project.labour_cost_cents, 24_000 + 32_000);
+        assert!(
+            project.members_without_rate.is_empty(),
+            "both days had a version to cost from"
+        );
+    }
+
+    /// A task planned before the employee's very first cost basis version
+    /// finds no version to read on that day, which is a different gap from a
+    /// version that exists with a blank figure — the reader has to be sent to
+    /// a different place for each.
+    #[test]
+    fn an_all_day_task_on_a_date_no_version_covers_is_a_distinct_missing_cost() {
+        let employee_id = EmployeeId(Uuid::from_u128(1001));
+
+        let mut all_day = assignment(1, None);
+        all_day.all_day = true;
+        all_day.starts_at = monday(0, 0);
+        all_day.ends_at = monday(0, 0) + Duration::days(1);
+
+        let mut facts = facts(vec![all_day], vec![project(None, false)]);
+        // The only version on file starts after the task's own day.
+        facts.cost_bases = vec![cost_basis(
+            employee_id,
+            NaiveDate::from_ymd_opt(2026, 12, 1).expect("a date"),
+            None,
+            false,
+            Some(3_000),
+            None,
+            2_100,
+        )];
+
+        let report = build_report(facts, all_day_rhythm(employee_id, &[1]), june());
+
+        assert_eq!(
+            report.members[0].missing_cost,
+            Some(MissingCost::NoCostBasis),
+            "conflating this with `HourlyRate` would send somebody to check a \
+             figure that was never the problem"
+        );
     }
 }
