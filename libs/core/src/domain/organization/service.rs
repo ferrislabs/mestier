@@ -618,16 +618,7 @@ mod tests {
             .times(1)
             .withf(|o| o.field_clock_enabled)
             .returning(|o| {
-                let cloned = Organization {
-                    id: o.id,
-                    name: o.name.clone(),
-                    slug: o.slug.clone(),
-                    owner_id: o.owner_id,
-                    field_clock_enabled: o.field_clock_enabled,
-                    deleted_at: o.deleted_at,
-                    created_at: o.created_at,
-                    updated_at: o.updated_at,
-                };
+                let cloned = o.clone();
                 Box::pin(async move { Ok(cloned) })
             });
 
