@@ -1,6 +1,6 @@
 use std::{fmt::Display, str::FromStr};
 
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, NaiveDate, Utc};
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 use uuid::Uuid;
@@ -80,6 +80,51 @@ pub struct Employee {
     pub updated_at: DateTime<Utc>,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, ToSchema)]
+pub struct EmployeeCostBasisId(pub Uuid);
+
+impl FromStr for EmployeeCostBasisId {
+    type Err = uuid::Error;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Uuid::from_str(s).map(EmployeeCostBasisId)
+    }
+}
+
+impl Display for EmployeeCostBasisId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
+/// One version of what an employee costs, effective over
+/// `[effective_from, effective_to)`. `effective_to = None` means the version
+/// is currently open — the one in effect until a later version closes it.
+///
+/// Shaped exactly like [`crate::EmployeeRhythm`] (see its doc comment): an
+/// employee's history keeps every past version rather than overwriting it,
+/// so a profitability report computed for a past period keeps the numbers it
+/// had after a later raise. This is the employee aggregate's own history,
+/// not a new bounded context — the way a rhythm is the planning module's.
+#[derive(Debug, Clone, PartialEq)]
+pub struct EmployeeCostBasis {
+    pub id: EmployeeCostBasisId,
+    pub organization_id: OrganizationId,
+    pub employee_id: EmployeeId,
+    pub effective_from: NaiveDate,
+    pub effective_to: Option<NaiveDate>,
+    /// See [`Employee::is_salaried`] — same meaning, one version at a time.
+    pub is_salaried: bool,
+    /// See [`Employee::hourly_rate_cents`].
+    pub hourly_rate_cents: Option<i32>,
+    /// See [`Employee::monthly_cost_cents`].
+    pub monthly_cost_cents: Option<i32>,
+    /// See [`Employee::weekly_contract_minutes`].
+    pub weekly_contract_minutes: i32,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -95,5 +140,18 @@ mod tests {
     #[test]
     fn employee_id_rejects_invalid_uuid() {
         assert!(EmployeeId::from_str("not-a-uuid").is_err());
+    }
+
+    #[test]
+    fn employee_cost_basis_id_parses_uuid() {
+        let uuid = Uuid::new_v4();
+        let parsed = EmployeeCostBasisId::from_str(&uuid.to_string()).unwrap();
+
+        assert_eq!(parsed.0, uuid);
+    }
+
+    #[test]
+    fn employee_cost_basis_id_rejects_invalid_uuid() {
+        assert!(EmployeeCostBasisId::from_str("not-a-uuid").is_err());
     }
 }

@@ -1,12 +1,12 @@
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, NaiveDate, Utc};
 use common::CoreError;
 use mestier_macros::repository;
 
 use crate::{
-    Employee, EmployeeId, MemberId, OrganizationId,
-    domain::employee::ports::EmployeeRepository,
+    Employee, EmployeeCostBasis, EmployeeCostBasisId, EmployeeId, MemberId, OrganizationId,
+    domain::employee::ports::{EmployeeCostBasisRepository, EmployeeRepository},
     infrastructure::{
-        employee::postgres::model::EmployeeRow,
+        employee::postgres::model::{EmployeeCostBasisRow, EmployeeRow},
         postgres::{SharedTx, error::map_sqlx_error},
     },
 };
@@ -192,6 +192,120 @@ impl<'tx> EmployeeRepository for PgEmployeeRepository<'tx> {
             "#,
             id.0,
             deleted_at,
+        )
+        .execute(&mut ***tx)
+        .await
+        .map_err(map_sqlx_error)?;
+
+        if result.rows_affected() == 0 {
+            return Err(CoreError::NotFound);
+        }
+
+        Ok(())
+    }
+}
+
+#[repository(domain = EmployeeCostBasis, backend = Postgres)]
+pub struct PgEmployeeCostBasisRepository<'tx> {
+    tx: SharedTx<'tx>,
+}
+
+impl<'tx> PgEmployeeCostBasisRepository<'tx> {
+    pub fn new(tx: &SharedTx<'tx>) -> Self {
+        Self { tx: tx.clone() }
+    }
+}
+
+impl<'tx> EmployeeCostBasisRepository for PgEmployeeCostBasisRepository<'tx> {
+    async fn find_open_by_employee(
+        &mut self,
+        employee_id: EmployeeId,
+    ) -> Result<Option<EmployeeCostBasis>, CoreError> {
+        let mut tx = self.tx.lock().await;
+        let row = sqlx::query_as!(
+            EmployeeCostBasisRow,
+            r#"
+            SELECT id, org_id, employee_id, effective_from, effective_to, is_salaried, hourly_rate_cents, monthly_cost_cents, weekly_contract_minutes, created_at, updated_at
+            FROM employee_cost_bases
+            WHERE employee_id = $1 AND effective_to IS NULL
+            ORDER BY effective_from DESC
+            LIMIT 1
+            "#,
+            employee_id.0,
+        )
+        .fetch_optional(&mut ***tx)
+        .await
+        .map_err(map_sqlx_error)?;
+
+        Ok(row.map(Into::into))
+    }
+
+    async fn insert(&mut self, basis: &EmployeeCostBasis) -> Result<EmployeeCostBasis, CoreError> {
+        let mut tx = self.tx.lock().await;
+        let row = sqlx::query_as!(
+            EmployeeCostBasisRow,
+            r#"
+            INSERT INTO employee_cost_bases (id, org_id, employee_id, effective_from, effective_to, is_salaried, hourly_rate_cents, monthly_cost_cents, weekly_contract_minutes, created_at, updated_at)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+            RETURNING id, org_id, employee_id, effective_from, effective_to, is_salaried, hourly_rate_cents, monthly_cost_cents, weekly_contract_minutes, created_at, updated_at
+            "#,
+            basis.id.0,
+            basis.organization_id.0,
+            basis.employee_id.0,
+            basis.effective_from,
+            basis.effective_to,
+            basis.is_salaried,
+            basis.hourly_rate_cents,
+            basis.monthly_cost_cents,
+            basis.weekly_contract_minutes,
+            basis.created_at,
+            basis.updated_at,
+        )
+        .fetch_one(&mut ***tx)
+        .await
+        .map_err(map_sqlx_error)?;
+
+        Ok(row.into())
+    }
+
+    async fn update(&mut self, basis: &EmployeeCostBasis) -> Result<EmployeeCostBasis, CoreError> {
+        let mut tx = self.tx.lock().await;
+        let row = sqlx::query_as!(
+            EmployeeCostBasisRow,
+            r#"
+            UPDATE employee_cost_bases
+            SET is_salaried = $2, hourly_rate_cents = $3, monthly_cost_cents = $4, weekly_contract_minutes = $5, updated_at = $6
+            WHERE id = $1
+            RETURNING id, org_id, employee_id, effective_from, effective_to, is_salaried, hourly_rate_cents, monthly_cost_cents, weekly_contract_minutes, created_at, updated_at
+            "#,
+            basis.id.0,
+            basis.is_salaried,
+            basis.hourly_rate_cents,
+            basis.monthly_cost_cents,
+            basis.weekly_contract_minutes,
+            basis.updated_at,
+        )
+        .fetch_optional(&mut ***tx)
+        .await
+        .map_err(map_sqlx_error)?;
+
+        row.map(Into::into).ok_or(CoreError::NotFound)
+    }
+
+    async fn set_effective_to(
+        &mut self,
+        id: EmployeeCostBasisId,
+        effective_to: NaiveDate,
+    ) -> Result<(), CoreError> {
+        let mut tx = self.tx.lock().await;
+        let result = sqlx::query!(
+            r#"
+            UPDATE employee_cost_bases
+            SET effective_to = $2, updated_at = now()
+            WHERE id = $1 AND effective_to IS NULL
+            "#,
+            id.0,
+            effective_to,
         )
         .execute(&mut ***tx)
         .await

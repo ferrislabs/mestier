@@ -1,0 +1,87 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE employee_cost_bases\n            SET is_salaried = $2, hourly_rate_cents = $3, monthly_cost_cents = $4, weekly_contract_minutes = $5, updated_at = $6\n            WHERE id = $1\n            RETURNING id, org_id, employee_id, effective_from, effective_to, is_salaried, hourly_rate_cents, monthly_cost_cents, weekly_contract_minutes, created_at, updated_at\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "org_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "employee_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 3,
+        "name": "effective_from",
+        "type_info": "Date"
+      },
+      {
+        "ordinal": 4,
+        "name": "effective_to",
+        "type_info": "Date"
+      },
+      {
+        "ordinal": 5,
+        "name": "is_salaried",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 6,
+        "name": "hourly_rate_cents",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 7,
+        "name": "monthly_cost_cents",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 8,
+        "name": "weekly_contract_minutes",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 9,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 10,
+        "name": "updated_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Bool",
+        "Int4",
+        "Int4",
+        "Int4",
+        "Timestamptz"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      true,
+      false,
+      true,
+      true,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "1df49b69ff5e8636c854982c57686edab1bee00aa0773022da99b130e28b5eb4"
+}
