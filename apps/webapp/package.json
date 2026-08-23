@@ -10,6 +10,7 @@
     "build": "vite build",
     "preview": "vite preview",
     "test": "vitest run",
+    "gen:api": "typed-openapi \"${API_URL:-http://localhost:3456/api-docs/openapi.json}\" -o src/api/api.client.ts --tanstack=api.tanstack.ts",
     "format": "biome format",
     "lint": "biome lint",
     "check": "biome check"
