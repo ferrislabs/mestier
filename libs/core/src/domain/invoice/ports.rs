@@ -1,7 +1,9 @@
 use chrono::{DateTime, Utc};
 use common::CoreError;
 
-use crate::{DraftInvoice, Invoice, InvoiceId, InvoiceStatus, OrganizationId, ProjectId};
+use crate::{
+    DraftInvoice, Invoice, InvoiceId, InvoiceStatus, LegalIdentity, OrganizationId, ProjectId,
+};
 
 #[cfg_attr(any(test, feature = "mock"), mockall::automock)]
 pub trait InvoiceRepository: Send {
@@ -11,11 +13,8 @@ pub trait InvoiceRepository: Send {
     /// `invoice_number_counters`), deliberately: invoice numbering is
     /// stricter than quote numbering, a gap is a real problem, so it reuses
     /// a pattern already proven safe under contention rather than a new one.
-    /// Not exercised by this issue's own service — #317 is the first caller
-    /// — but the table and this method exist from #316 so #317 does not
-    /// need a migration of its own. `allow(dead_code)` until then: nothing
-    /// outside the ignored integration test below calls it yet.
-    #[allow(dead_code)]
+    /// The table and this method exist from #316; #317's `issue_invoice` is
+    /// the first production caller.
     fn allocate_number(
         &mut self,
         organization_id: OrganizationId,
@@ -64,6 +63,22 @@ pub trait InvoiceRepository: Send {
         &mut self,
         id: InvoiceId,
         status: InvoiceStatus,
+        updated_at: DateTime<Utc>,
+    ) -> impl Future<Output = Result<Invoice, CoreError>> + Send;
+
+    /// The transition out of `Draft`: sets the allocated number, the frozen
+    /// issuer identity, `issued_at`, and the `Issued` status, all at once.
+    /// Deliberately not folded into `update_status` — issuing carries
+    /// content, not a bare status — and not reachable through
+    /// `update_draft`, which by design cannot leave `Draft`. Only ever
+    /// called against a row still `Draft`; the implementation's `WHERE`
+    /// clause enforces that independently of the service-level check.
+    fn issue(
+        &mut self,
+        id: InvoiceId,
+        number: String,
+        issued_at: DateTime<Utc>,
+        issuer_identity: &LegalIdentity,
         updated_at: DateTime<Utc>,
     ) -> impl Future<Output = Result<Invoice, CoreError>> + Send;
 

@@ -41,6 +41,12 @@ pub struct Organization {
     /// unlike the legal-identity fields above: it blocks nothing, so
     /// giving it one is free.
     pub quote_number_prefix: String,
+    /// The `{prefix}` in an invoice number's `{prefix}-{year}-{counter}`
+    /// shape — `invoice_number_prefix`'s counterpart on the quote side.
+    /// `FAC` by default, from the column default added alongside
+    /// `invoice_number_counters` in #316; wired through here in #317, the
+    /// first issue that actually allocates an invoice number.
+    pub invoice_number_prefix: String,
     /// Whether the field app's home screen offers clocking in/out at all —
     /// `false` by default since ADR 0002: nothing computes money from
     /// `time_entries` any more, so a punch clock is opt-in, not a worker's

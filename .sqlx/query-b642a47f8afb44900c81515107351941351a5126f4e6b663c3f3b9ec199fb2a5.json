@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT o.id, o.name, o.slug, o.owner_id,\n                o.legal_name, o.legal_form, o.registration_number,\n                o.vat_status, o.vat_number, o.vat_exemption_basis,\n                o.share_capital_cents,\n                o.address_line1, o.address_line2, o.address_postal_code, o.address_city, o.address_country,\n                o.contact_email, o.contact_phone, o.insurance_mention,\n                o.quote_number_prefix,\n                o.field_clock_enabled,\n                o.vat_on_debits,\n                o.deleted_at, o.created_at, o.updated_at\n            FROM organizations o\n            INNER JOIN organization_members m ON m.organization_id = o.id\n            WHERE m.user_id = $1 AND o.deleted_at IS NULL\n            ORDER BY o.created_at ASC\n            ",
+  "query": "\n            UPDATE organizations\n            SET name = $2,\n                slug = $3,\n                legal_name = $4,\n                legal_form = $5,\n                registration_number = $6,\n                vat_status = $7,\n                vat_number = $8,\n                vat_exemption_basis = $9,\n                share_capital_cents = $10,\n                address_line1 = $11,\n                address_line2 = $12,\n                address_postal_code = $13,\n                address_city = $14,\n                address_country = $15,\n                contact_email = $16,\n                contact_phone = $17,\n                insurance_mention = $18,\n                field_clock_enabled = $19,\n                vat_on_debits = $20,\n                updated_at = $21\n            WHERE id = $1 AND deleted_at IS NULL\n            RETURNING\n                id, name, slug, owner_id,\n                legal_name, legal_form, registration_number,\n                vat_status, vat_number, vat_exemption_basis,\n                share_capital_cents,\n                address_line1, address_line2, address_postal_code, address_city, address_country,\n                contact_email, contact_phone, insurance_mention,\n                quote_number_prefix,\n                invoice_number_prefix,\n                field_clock_enabled,\n                vat_on_debits,\n                deleted_at, created_at, updated_at\n            ",
   "describe": {
     "columns": [
       {
@@ -105,33 +105,58 @@
       },
       {
         "ordinal": 20,
+        "name": "invoice_number_prefix",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 21,
         "name": "field_clock_enabled",
         "type_info": "Bool"
       },
       {
-        "ordinal": 21,
+        "ordinal": 22,
         "name": "vat_on_debits",
         "type_info": "Bool"
       },
       {
-        "ordinal": 22,
+        "ordinal": 23,
         "name": "deleted_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 23,
+        "ordinal": 24,
         "name": "created_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 24,
+        "ordinal": 25,
         "name": "updated_at",
         "type_info": "Timestamptz"
       }
     ],
     "parameters": {
       "Left": [
-        "Uuid"
+        "Uuid",
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Int8",
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Bool",
+        "Bool",
+        "Timestamptz"
       ]
     },
     "nullable": [
@@ -157,10 +182,11 @@
       false,
       false,
       false,
+      false,
       true,
       false,
       false
     ]
   },
-  "hash": "ef82dc9e01d3186cc6e6c73302d6e054d63bf72043042ced54a3488da4603c2b"
+  "hash": "b642a47f8afb44900c81515107351941351a5126f4e6b663c3f3b9ec199fb2a5"
 }

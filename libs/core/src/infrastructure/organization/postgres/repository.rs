@@ -57,6 +57,7 @@ impl<'tx> OrganizationRepository for PgOrganizationRepository<'tx> {
                 address_line1, address_line2, address_postal_code, address_city, address_country,
                 contact_email, contact_phone, insurance_mention,
                 quote_number_prefix,
+                invoice_number_prefix,
                 field_clock_enabled,
                 vat_on_debits,
                 deleted_at, created_at, updated_at
@@ -106,6 +107,7 @@ impl<'tx> OrganizationRepository for PgOrganizationRepository<'tx> {
                 address_line1, address_line2, address_postal_code, address_city, address_country,
                 contact_email, contact_phone, insurance_mention,
                 quote_number_prefix,
+                invoice_number_prefix,
                 field_clock_enabled,
                 vat_on_debits,
                 deleted_at, created_at, updated_at
@@ -149,6 +151,7 @@ impl<'tx> OrganizationRepository for PgOrganizationRepository<'tx> {
                 o.address_line1, o.address_line2, o.address_postal_code, o.address_city, o.address_country,
                 o.contact_email, o.contact_phone, o.insurance_mention,
                 o.quote_number_prefix,
+                o.invoice_number_prefix,
                 o.field_clock_enabled,
                 o.vat_on_debits,
                 o.deleted_at, o.created_at, o.updated_at
@@ -185,6 +188,7 @@ impl<'tx> OrganizationRepository for PgOrganizationRepository<'tx> {
                 address_line1, address_line2, address_postal_code, address_city, address_country,
                 contact_email, contact_phone, insurance_mention,
                 quote_number_prefix,
+                invoice_number_prefix,
                 field_clock_enabled,
                 vat_on_debits,
                 deleted_at, created_at, updated_at
@@ -253,6 +257,7 @@ impl<'tx> OrganizationRepository for PgOrganizationRepository<'tx> {
                 address_line1, address_line2, address_postal_code, address_city, address_country,
                 contact_email, contact_phone, insurance_mention,
                 quote_number_prefix,
+                invoice_number_prefix,
                 field_clock_enabled,
                 vat_on_debits,
                 deleted_at, created_at, updated_at

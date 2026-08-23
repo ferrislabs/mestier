@@ -5,7 +5,10 @@ use crate::{
     Invoice, InvoiceId, OrganizationId, ProjectId,
     application::MestierUseCase,
     domain::invoice::{
-        commands::{CancelInvoiceCommand, CreateInvoiceCommand, UpdateInvoiceCommand},
+        commands::{
+            CancelInvoiceCommand, CreateInvoiceCommand, IssueDepositCommand,
+            IssueFinalInvoiceCommand, IssueInvoiceCommand, UpdateInvoiceCommand,
+        },
         service::InvoiceService,
     },
 };
@@ -75,5 +78,57 @@ impl MestierUseCase {
     pub async fn soft_delete_invoice(&self, id: InvoiceId) -> Result<(), CoreError> {
         let mut service = InvoiceService::new(invoice_repository, emitter);
         service.soft_delete_invoice(id).await
+    }
+
+    /// `project` and `quote` resolve the invoice's project and that
+    /// project's quote, when it has one — the reads `issue_invoice` needs to
+    /// refuse an over-issuance, and `organization` resolves the issuer's
+    /// legal identity and invoice number prefix, same reason `create_invoice`
+    /// lists `organization`.
+    #[transactional(invoice, organization, project, quote, emitter)]
+    pub async fn issue_invoice(&self, command: IssueInvoiceCommand) -> Result<Invoice, CoreError> {
+        let mut service = InvoiceService::new(invoice_repository, emitter);
+        service
+            .issue_invoice(
+                command,
+                organization_repository,
+                project_repository,
+                quote_repository,
+            )
+            .await
+    }
+
+    /// Builds a deposit draft and issues it, both inside this one
+    /// transaction — the draft's number is allocated in the same
+    /// transaction as its own creation, never in a second use-case call.
+    #[transactional(invoice, organization, project, quote, emitter)]
+    pub async fn issue_deposit(&self, command: IssueDepositCommand) -> Result<Invoice, CoreError> {
+        let mut service = InvoiceService::new(invoice_repository, emitter);
+        service
+            .issue_deposit(
+                command,
+                organization_repository,
+                project_repository,
+                quote_repository,
+            )
+            .await
+    }
+
+    /// Same one-transaction shape as `issue_deposit`, for the invoice that
+    /// bills exactly what remains on the project's quote.
+    #[transactional(invoice, organization, project, quote, emitter)]
+    pub async fn issue_final_invoice(
+        &self,
+        command: IssueFinalInvoiceCommand,
+    ) -> Result<Invoice, CoreError> {
+        let mut service = InvoiceService::new(invoice_repository, emitter);
+        service
+            .issue_final_invoice(
+                command,
+                organization_repository,
+                project_repository,
+                quote_repository,
+            )
+            .await
     }
 }

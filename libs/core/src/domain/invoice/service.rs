@@ -1,24 +1,28 @@
 use std::collections::BTreeMap;
 
-use chrono::Utc;
+use chrono::{Datelike, Utc};
 use common::{CoreError, generate_uuid_v7};
 use events::EventEmitter;
 use rust_decimal::{Decimal, prelude::ToPrimitive};
 use serde_json::{Value, json};
 
 use crate::{
-    DraftInvoice, Invoice, InvoiceId, InvoiceLine, InvoiceLineId, InvoiceStatus,
-    InvoiceVatBreakdownLine, Organization, OrganizationId,
+    CustomerContextId, CustomerId, DraftInvoice, Invoice, InvoiceId, InvoiceKind, InvoiceLine,
+    InvoiceLineId, InvoiceStatus, InvoiceVatBreakdownLine, LegalIdentity, Organization,
+    OrganizationId, Project, ProjectId,
     domain::{
         invoice::{
             commands::{
                 CancelInvoiceCommand, CreateInvoiceCommand, InvoiceLineCommand,
+                IssueDepositCommand, IssueFinalInvoiceCommand, IssueInvoiceCommand,
                 UpdateInvoiceCommand,
             },
             events::{InvoiceCreated, InvoiceDeleted, InvoiceTransitioned, InvoiceUpdated},
             ports::InvoiceRepository,
         },
         organization::{legal_identity::VatStatus, ports::OrganizationRepository},
+        project::{ports::ProjectRepository, service::remaining_to_bill_cents},
+        quote::ports::QuoteRepository,
     },
 };
 
@@ -209,6 +213,364 @@ where
             .emit(existing.organization_id, &InvoiceDeleted { invoice_id: id })
     }
 
+    /// The generic issuing transition, usable on any draft regardless of
+    /// `kind` — a `Standard` draft from #316's `create_invoice`, or a
+    /// `Deposit`/`Final` draft this service builds itself. Refused,
+    /// through [`DraftInvoice::try_from_invoice`], on anything but a draft:
+    /// no parallel status check, that compile-time-enforced path is reused
+    /// as-is.
+    pub async fn issue_invoice<O, P, Q>(
+        &mut self,
+        command: IssueInvoiceCommand,
+        organization_repository: O,
+        project_repository: P,
+        quote_repository: Q,
+    ) -> Result<Invoice, CoreError>
+    where
+        O: OrganizationRepository,
+        P: ProjectRepository,
+        Q: QuoteRepository,
+    {
+        let existing = self.get_invoice(command.id).await?;
+        let draft = DraftInvoice::try_from_invoice(existing)?;
+
+        self.issue_now(
+            draft,
+            command.allow_exceeding_total,
+            organization_repository,
+            project_repository,
+            quote_repository,
+        )
+        .await
+    }
+
+    /// Builds a deposit line for `percentage_bp` of the project's quoted
+    /// net total and issues it in one transaction. Needs a quote to compute
+    /// a percentage against — specific to this act, not a general rule:
+    /// `create_invoice`/`issue_invoice` still work with no project, or a
+    /// project with no quote.
+    pub async fn issue_deposit<O, P, Q>(
+        &mut self,
+        command: IssueDepositCommand,
+        organization_repository: O,
+        mut project_repository: P,
+        mut quote_repository: Q,
+    ) -> Result<Invoice, CoreError>
+    where
+        O: OrganizationRepository,
+        P: ProjectRepository,
+        Q: QuoteRepository,
+    {
+        validate_percentage_bp(command.percentage_bp)?;
+
+        let project = project_repository
+            .find_by_id(command.project_id)
+            .await?
+            .ok_or(CoreError::NotFound)?;
+        let quote_id = project.quote_id.ok_or_else(|| {
+            CoreError::Conflict(format!(
+                "project {} has no quote; a deposit needs a total to compute a percentage against",
+                project.id
+            ))
+        })?;
+        let (customer_id, customer_context_id) = required_customer_fields(&project)?;
+        let quote = quote_repository
+            .find_by_id(quote_id)
+            .await?
+            .ok_or(CoreError::NotFound)?;
+
+        let amount_cents = deposit_amount_cents(command.percentage_bp, quote.net_cents)?;
+
+        // Fail fast, before any row is created: a deposit's amount is a
+        // percentage of the whole quote, not of what remains, so it can
+        // land past the quote's total on its own even though a final
+        // invoice's amount (computed from `remaining_to_bill_cents`
+        // directly) structurally cannot.
+        self.refuse_if_exceeding_total(
+            project.id,
+            quote.net_cents,
+            amount_cents,
+            command.allow_exceeding_total,
+        )
+        .await?;
+
+        let now = Utc::now();
+        let invoice_id = InvoiceId(generate_uuid_v7());
+        let label = format!("Acompte ({})", format_percentage_bp(command.percentage_bp));
+        let draft = build_single_line_draft(
+            invoice_id,
+            project.organization_id,
+            InvoiceKind::Deposit,
+            Some(project.id),
+            customer_id,
+            customer_context_id,
+            command.due_at,
+            command.notes,
+            label,
+            amount_cents,
+            now,
+        );
+
+        let inserted = self.repo.insert_draft(&draft).await?;
+        self.emitter.emit(
+            inserted.organization_id,
+            &InvoiceCreated {
+                invoice: inserted.clone(),
+            },
+        )?;
+        let inserted_draft =
+            DraftInvoice::try_from_invoice(inserted).expect("insert_draft returns a draft");
+
+        self.issue_now(
+            inserted_draft,
+            command.allow_exceeding_total,
+            organization_repository,
+            project_repository,
+            quote_repository,
+        )
+        .await
+    }
+
+    /// Builds a line for exactly what remains to bill on the project's
+    /// quote and issues it in one transaction. Same quote requirement, and
+    /// the same reason, as [`Self::issue_deposit`].
+    pub async fn issue_final_invoice<O, P, Q>(
+        &mut self,
+        command: IssueFinalInvoiceCommand,
+        organization_repository: O,
+        mut project_repository: P,
+        mut quote_repository: Q,
+    ) -> Result<Invoice, CoreError>
+    where
+        O: OrganizationRepository,
+        P: ProjectRepository,
+        Q: QuoteRepository,
+    {
+        let project = project_repository
+            .find_by_id(command.project_id)
+            .await?
+            .ok_or(CoreError::NotFound)?;
+        let quote_id = project.quote_id.ok_or_else(|| {
+            CoreError::Conflict(format!(
+                "project {} has no quote; a final invoice needs a total to compute the remainder against",
+                project.id
+            ))
+        })?;
+        let (customer_id, customer_context_id) = required_customer_fields(&project)?;
+        let quote = quote_repository
+            .find_by_id(quote_id)
+            .await?
+            .ok_or(CoreError::NotFound)?;
+
+        let already_issued = self.sum_already_issued_cents(project.id).await?;
+        let remaining = remaining_to_bill_cents(quote.net_cents, already_issued)?;
+        // A final invoice's amount is, by construction, exactly what
+        // remains: already_issued + remaining always equals the quoted
+        // total, so this can never itself push the project past it. The
+        // one case worth a named refusal is nothing (or less than nothing)
+        // left to bill — a prior deposit already reached or exceeded the
+        // quote, which `allow_exceeding_total` on an earlier act, not this
+        // one, is what let happen.
+        if remaining <= 0 {
+            return Err(CoreError::Conflict(format!(
+                "project {} has nothing left to bill: already issued {already_issued} cents \
+                 against a quoted total of {} cents",
+                project.id, quote.net_cents
+            )));
+        }
+        let amount_cents = i32::try_from(remaining).map_err(|_| {
+            CoreError::Conflict("remaining amount to bill is outside supported bounds".to_owned())
+        })?;
+
+        let now = Utc::now();
+        let invoice_id = InvoiceId(generate_uuid_v7());
+        let draft = build_single_line_draft(
+            invoice_id,
+            project.organization_id,
+            InvoiceKind::Final,
+            Some(project.id),
+            customer_id,
+            customer_context_id,
+            command.due_at,
+            command.notes,
+            "Solde".to_owned(),
+            amount_cents,
+            now,
+        );
+
+        let inserted = self.repo.insert_draft(&draft).await?;
+        self.emitter.emit(
+            inserted.organization_id,
+            &InvoiceCreated {
+                invoice: inserted.clone(),
+            },
+        )?;
+        let inserted_draft =
+            DraftInvoice::try_from_invoice(inserted).expect("insert_draft returns a draft");
+
+        self.issue_now(
+            inserted_draft,
+            command.allow_exceeding_total,
+            organization_repository,
+            project_repository,
+            quote_repository,
+        )
+        .await
+    }
+
+    /// The shared primitive behind [`Self::issue_invoice`],
+    /// [`Self::issue_deposit`] and [`Self::issue_final_invoice`]: resolves
+    /// the issuer's identity (refused by type, not by check — the
+    /// `LegalIdentity` either builds or it doesn't), refuses an
+    /// over-issuance the caller has not explicitly allowed, allocates the
+    /// number and persists the transition, all inside the one transaction
+    /// the enclosing `#[transactional]` use case already opened. Numbering
+    /// happening here, rather than one call up, is what makes a
+    /// draft-build-then-issue sequence for deposit/final allocate its
+    /// number in the same transaction as the draft it belongs to.
+    async fn issue_now<O, P, Q>(
+        &mut self,
+        draft: DraftInvoice,
+        allow_exceeding_total: bool,
+        mut organization_repository: O,
+        mut project_repository: P,
+        mut quote_repository: Q,
+    ) -> Result<Invoice, CoreError>
+    where
+        O: OrganizationRepository,
+        P: ProjectRepository,
+        Q: QuoteRepository,
+    {
+        let invoice = draft.into_invoice();
+
+        let organization =
+            resolve_organization(&mut organization_repository, invoice.organization_id).await?;
+        let legal_identity =
+            LegalIdentity::try_from_organization(&organization).map_err(|missing_fields| {
+                CoreError::Conflict(format!(
+                    "cannot issue invoice {}: the organization's legal identity is missing {}",
+                    invoice.id,
+                    missing_fields.join(", ")
+                ))
+            })?;
+
+        self.refuse_if_project_exceeds_total(
+            &invoice,
+            allow_exceeding_total,
+            &mut project_repository,
+            &mut quote_repository,
+        )
+        .await?;
+
+        let year = Utc::now().year();
+        let number = self
+            .repo
+            .allocate_number(
+                invoice.organization_id,
+                &organization.invoice_number_prefix,
+                year,
+            )
+            .await?;
+        let now = Utc::now();
+
+        let issued = self
+            .repo
+            .issue(invoice.id, number, now, &legal_identity, now)
+            .await?;
+
+        self.emit_transition(InvoiceStatus::Draft, &issued)?;
+
+        Ok(issued)
+    }
+
+    /// The check [`IssueInvoiceCommand::allow_exceeding_total`] guards: does
+    /// this invoice, added to every other non-draft non-cancelled invoice
+    /// already on its project, push the total past the project's quote? A
+    /// no-op when the invoice carries no project, or the project no quote —
+    /// there is nothing to compare against either way.
+    async fn refuse_if_project_exceeds_total(
+        &mut self,
+        invoice: &Invoice,
+        allow_exceeding_total: bool,
+        project_repository: &mut impl ProjectRepository,
+        quote_repository: &mut impl QuoteRepository,
+    ) -> Result<(), CoreError> {
+        let Some(project_id) = invoice.project_id else {
+            return Ok(());
+        };
+        let project = project_repository
+            .find_by_id(project_id)
+            .await?
+            .ok_or(CoreError::NotFound)?;
+        let Some(quote_id) = project.quote_id else {
+            return Ok(());
+        };
+        let quote = quote_repository
+            .find_by_id(quote_id)
+            .await?
+            .ok_or(CoreError::NotFound)?;
+
+        // The invoice being issued right now is either not persisted yet
+        // (issue_deposit/issue_final_invoice) or still `Draft` (any other
+        // caller of issue_invoice, since this only runs on a draft) — either
+        // way `sum_already_issued_cents`, called inside
+        // `refuse_if_exceeding_total`, excludes it on its own, no filter by
+        // id needed here.
+        self.refuse_if_exceeding_total(
+            project_id,
+            quote.net_cents,
+            invoice.net_cents,
+            allow_exceeding_total,
+        )
+        .await
+    }
+
+    /// Refuses when `amount_cents`, added to what the project has already
+    /// been invoiced for, would land past `quoted_cents` — unless the
+    /// caller explicitly allows it. The one place both the generic issuing
+    /// check and `issue_deposit`'s own pre-check land, so neither re-derives
+    /// the subtraction independently.
+    async fn refuse_if_exceeding_total(
+        &mut self,
+        project_id: ProjectId,
+        quoted_cents: i32,
+        amount_cents: i32,
+        allow_exceeding_total: bool,
+    ) -> Result<(), CoreError> {
+        let already_issued = self.sum_already_issued_cents(project_id).await?;
+        let remaining = remaining_to_bill_cents(quoted_cents, already_issued)?;
+
+        if i64::from(amount_cents) > remaining && !allow_exceeding_total {
+            return Err(CoreError::Conflict(format!(
+                "issuing {amount_cents} cents against project {project_id} would exceed its \
+                 quoted total of {quoted_cents} cents: {already_issued} cents already issued, \
+                 {remaining} cents remaining"
+            )));
+        }
+
+        Ok(())
+    }
+
+    /// Every non-draft, non-cancelled invoice already on the project,
+    /// summed. Deposits and finals already issued count in full — credit
+    /// notes don't exist until #318, so nothing is netted out yet; #318
+    /// will need to revisit this sum to subtract issued credit notes, or a
+    /// partial refund will not reduce what counts as "already invoiced".
+    async fn sum_already_issued_cents(&mut self, project_id: ProjectId) -> Result<i64, CoreError> {
+        let invoices = self.repo.list_by_project(project_id).await?;
+
+        Ok(invoices
+            .into_iter()
+            .filter(|invoice| {
+                !matches!(
+                    invoice.status,
+                    InvoiceStatus::Draft | InvoiceStatus::Cancelled
+                )
+            })
+            .map(|invoice| i64::from(invoice.net_cents))
+            .sum())
+    }
+
     fn emit_transition(&self, from: InvoiceStatus, invoice: &Invoice) -> Result<(), CoreError> {
         if from == invoice.status || InvoiceTransitioned::event_name(invoice.status).is_none() {
             return Ok(());
@@ -382,6 +744,132 @@ fn validate_line(command: &InvoiceLineCommand) -> Result<(), CoreError> {
     Ok(())
 }
 
+/// The two customer fields a project must carry before `issue_deposit` or
+/// `issue_final_invoice` can build an invoice from it. `customer_id` absent
+/// means an internal project — nothing to invoice (see
+/// `Project::is_internal`). `customer_context_id` absent is refused too,
+/// even though the field stays optional on `Project` itself (a customer
+/// without a pinned site is a legitimate project state):
+/// `Invoice::customer_context_id` is not optional, so a context has to be
+/// pinned before either act can proceed.
+fn required_customer_fields(
+    project: &Project,
+) -> Result<(CustomerId, CustomerContextId), CoreError> {
+    let customer_id = project.customer_id.ok_or_else(|| {
+        CoreError::Conflict(format!(
+            "project {} has no customer; nothing to invoice",
+            project.id
+        ))
+    })?;
+    let customer_context_id = project.customer_context_id.ok_or_else(|| {
+        CoreError::Conflict(format!(
+            "project {} has a customer but no pinned customer context; an invoice needs one",
+            project.id
+        ))
+    })?;
+
+    Ok((customer_id, customer_context_id))
+}
+
+fn validate_percentage_bp(percentage_bp: i32) -> Result<(), CoreError> {
+    if !(1..=10_000).contains(&percentage_bp) {
+        return Err(CoreError::Conflict(
+            "deposit percentage must be between 1 and 10000 basis points".to_owned(),
+        ));
+    }
+
+    Ok(())
+}
+
+/// `percentage_bp` of `quoted_cents`, rounded half to even — reuses
+/// `div_round_half_even`, the one function in this module that already
+/// knows how to round a basis-points fraction of a cents amount, rather
+/// than re-deriving the rounding rule for a deposit.
+fn deposit_amount_cents(percentage_bp: i32, quoted_cents: i32) -> Result<i32, CoreError> {
+    let amount = div_round_half_even(i64::from(percentage_bp) * i64::from(quoted_cents), 10_000);
+
+    i32::try_from(amount)
+        .map_err(|_| CoreError::Conflict("deposit amount is outside supported bounds".to_owned()))
+}
+
+/// Basis points to a percentage string for a deposit's label: 3000 ->
+/// "30%", 3333 -> "33.33%". Trailing zero hundredths are dropped so a round
+/// deposit reads "30%", not "30.00%".
+fn format_percentage_bp(percentage_bp: i32) -> String {
+    let whole = percentage_bp / 100;
+    let hundredths = percentage_bp % 100;
+
+    if hundredths == 0 {
+        format!("{whole}%")
+    } else {
+        format!("{whole}.{hundredths:02}%")
+    }
+}
+
+/// Builds the single-line draft `issue_deposit` and `issue_final_invoice`
+/// both persist before handing off to `issue_now`. `vat_rate_basis_points`
+/// is deliberately `None`: a deposit or a final amount is a portion of an
+/// already-VAT-computed quote total, not a fresh basis to re-derive a VAT
+/// breakdown from. `calculate_totals`'s equivalent (not called here, since
+/// there is only ever one line and its totals are already known) would
+/// price a `None`-rate line at the implicit 0bp rate, so `net_cents` and
+/// `gross_cents` are set equal here regardless of the organization's VAT
+/// status — a known simplification, not a silent one: a deposit/final line
+/// showing its own VAT breakdown is a real gap, left for a follow-up.
+#[allow(clippy::too_many_arguments)]
+fn build_single_line_draft(
+    invoice_id: InvoiceId,
+    organization_id: OrganizationId,
+    kind: InvoiceKind,
+    project_id: Option<ProjectId>,
+    customer_id: CustomerId,
+    customer_context_id: CustomerContextId,
+    due_at: Option<chrono::DateTime<Utc>>,
+    notes: Option<String>,
+    label: String,
+    amount_cents: i32,
+    now: chrono::DateTime<Utc>,
+) -> DraftInvoice {
+    let line = InvoiceLine {
+        id: InvoiceLineId(generate_uuid_v7()),
+        organization_id,
+        invoice_id,
+        label,
+        quantity: Decimal::ONE,
+        unit_price_cents: amount_cents,
+        vat_rate_basis_points: None,
+        position: 0,
+        deleted_at: None,
+        created_at: now,
+        updated_at: now,
+    };
+
+    DraftInvoice::try_from_invoice(Invoice {
+        id: invoice_id,
+        organization_id,
+        number: None,
+        kind,
+        project_id,
+        customer_id,
+        customer_context_id,
+        status: InvoiceStatus::Draft,
+        issued_at: None,
+        due_at,
+        notes,
+        operation_nature: None,
+        delivery_address: None,
+        net_cents: amount_cents,
+        vat_breakdown: Vec::new(),
+        gross_cents: amount_cents,
+        issuer_identity: None,
+        lines: vec![line],
+        deleted_at: None,
+        created_at: now,
+        updated_at: now,
+    })
+    .expect("just constructed with status Draft")
+}
+
 pub(crate) struct InvoiceTotals {
     pub net_cents: i32,
     pub vat_breakdown: Vec<InvoiceVatBreakdownLine>,
@@ -489,8 +977,13 @@ fn div_round_half_even(numerator: i64, denominator: i64) -> i64 {
 
 #[cfg(test)]
 mod tests {
+    use std::sync::{Arc, Mutex};
+
     use super::*;
-    use crate::{CustomerContextId, CustomerId, InvoiceKind, Organization, UserId};
+    use crate::{
+        CustomerContextId, CustomerId, InvoiceKind, MockProjectRepository, MockQuoteRepository,
+        Organization, Quote, QuoteId, QuoteStatus, UserId,
+    };
     use mockall::predicate::eq;
     use uuid::Uuid;
 
@@ -564,6 +1057,7 @@ mod tests {
             contact_phone: None,
             insurance_mention: None,
             quote_number_prefix: "DEV".to_owned(),
+            invoice_number_prefix: "FAC".to_owned(),
             field_clock_enabled: false,
             vat_on_debits: false,
             deleted_at: None,
@@ -913,5 +1407,477 @@ mod tests {
             }]
         );
         assert_eq!(created.gross_cents, 345);
+    }
+
+    fn complete_organization(id: OrganizationId) -> Organization {
+        Organization {
+            legal_name: Some("Acme SARL".into()),
+            legal_form: Some("SARL".into()),
+            registration_number: Some("123 456 789 00012".into()),
+            vat_status: Some(VatStatus::Subject {
+                vat_number: "FR12345678901".into(),
+            }),
+            share_capital_cents: Some(1_000_000),
+            address_line1: Some("12 rue des Artisans".into()),
+            address_postal_code: Some("75001".into()),
+            address_city: Some("Paris".into()),
+            address_country: Some("FR".into()),
+            insurance_mention: Some("RC Pro n°123456 - MAAF Assurances".into()),
+            ..organization_without_vat_status(id)
+        }
+    }
+
+    fn quote_with_net_cents(
+        id: QuoteId,
+        organization_id: OrganizationId,
+        customer_id: CustomerId,
+        customer_context_id: CustomerContextId,
+        net_cents: i32,
+    ) -> Quote {
+        let now = Utc::now();
+        Quote {
+            id,
+            organization_id,
+            reference: Some("DEV-2026-0001".to_owned()),
+            title: "Chantier".to_owned(),
+            customer_id,
+            customer_context_id,
+            status: QuoteStatus::Accepted,
+            net_cents,
+            vat_breakdown: Vec::new(),
+            gross_cents: net_cents,
+            lines: Vec::new(),
+            deleted_at: None,
+            created_at: now,
+            updated_at: now,
+        }
+    }
+
+    fn project_with_quote(
+        organization_id: OrganizationId,
+        quote_id: QuoteId,
+        customer_id: CustomerId,
+        customer_context_id: CustomerContextId,
+    ) -> Project {
+        let now = Utc::now();
+        Project {
+            id: ProjectId(Uuid::new_v4()),
+            organization_id,
+            name: "Chantier".to_owned(),
+            customer_id: Some(customer_id),
+            customer_context_id: Some(customer_context_id),
+            quote_id: Some(quote_id),
+            archived_at: None,
+            created_at: now,
+            updated_at: now,
+        }
+    }
+
+    fn project_without_quote(organization_id: OrganizationId) -> Project {
+        let now = Utc::now();
+        Project {
+            id: ProjectId(Uuid::new_v4()),
+            organization_id,
+            name: "Chantier".to_owned(),
+            customer_id: Some(CustomerId(Uuid::new_v4())),
+            customer_context_id: Some(CustomerContextId(Uuid::new_v4())),
+            quote_id: None,
+            archived_at: None,
+            created_at: now,
+            updated_at: now,
+        }
+    }
+
+    fn issued_invoice_stub(
+        organization_id: OrganizationId,
+        project_id: ProjectId,
+        net_cents: i32,
+    ) -> Invoice {
+        Invoice {
+            status: InvoiceStatus::Issued,
+            number: Some("FAC-2026-0001".to_owned()),
+            issued_at: Some(Utc::now()),
+            project_id: Some(project_id),
+            net_cents,
+            gross_cents: net_cents,
+            organization_id,
+            ..invoice(InvoiceId(Uuid::new_v4()))
+        }
+    }
+
+    fn project_repo_with(project: Project) -> MockProjectRepository {
+        let mut repo = MockProjectRepository::new();
+        repo.expect_find_by_id().returning(move |_| {
+            let project = project.clone();
+            Box::pin(async move { Ok(Some(project)) })
+        });
+        repo
+    }
+
+    fn quote_repo_with(quote: Quote) -> MockQuoteRepository {
+        let mut repo = MockQuoteRepository::new();
+        repo.expect_find_by_id().returning(move |_| {
+            let quote = quote.clone();
+            Box::pin(async move { Ok(Some(quote)) })
+        });
+        repo
+    }
+
+    /// A fake `InvoiceRepository` over a shared, growing store — needed
+    /// because the rounding-invariant test below issues three invoices in
+    /// sequence against the same project and each one has to see what the
+    /// previous ones actually landed at, not a value the test precomputed
+    /// independently.
+    fn invoice_repository_over(
+        store: Arc<Mutex<Vec<Invoice>>>,
+    ) -> crate::domain::invoice::ports::MockInvoiceRepository {
+        let mut repo = crate::domain::invoice::ports::MockInvoiceRepository::new();
+
+        let list_store = store.clone();
+        repo.expect_list_by_project().returning(move |_| {
+            let invoices = list_store.lock().unwrap().clone();
+            Box::pin(async move { Ok(invoices) })
+        });
+
+        let insert_store = store.clone();
+        repo.expect_insert_draft().returning(move |draft| {
+            let invoice = draft.invoice().clone();
+            insert_store.lock().unwrap().push(invoice.clone());
+            Box::pin(async move { Ok(invoice) })
+        });
+
+        let mut next_number = 0u32;
+        repo.expect_allocate_number()
+            .returning(move |_, prefix, year| {
+                next_number += 1;
+                let number = format!("{prefix}-{year}-{next_number:04}");
+                Box::pin(async move { Ok(number) })
+            });
+
+        let issue_store = store.clone();
+        repo.expect_issue()
+            .returning(move |id, number, issued_at, issuer_identity, updated_at| {
+                let mut invoices = issue_store.lock().unwrap();
+                let invoice = invoices
+                    .iter_mut()
+                    .find(|invoice| invoice.id == id)
+                    .expect("issue called on an invoice that was never inserted");
+                invoice.number = Some(number);
+                invoice.status = InvoiceStatus::Issued;
+                invoice.issued_at = Some(issued_at);
+                invoice.issuer_identity = Some(issuer_identity.clone());
+                invoice.updated_at = updated_at;
+                let result = invoice.clone();
+                Box::pin(async move { Ok(result) })
+            });
+
+        repo
+    }
+
+    /// The rounding invariant this issue exists to protect: 100_007 divides
+    /// evenly by neither 10 nor 3, so a 30% deposit cannot land on a whole
+    /// number of cents (30% of 100_007 is 30_002.1) and genuinely exercises
+    /// rounding rather than getting lucky with a round quote. Two such
+    /// deposits round independently, but the final invoice's amount is not
+    /// its own independent percentage — it is exactly what
+    /// `remaining_to_bill_cents` says is left — so whatever the deposits'
+    /// rounding cost or gained, the three invoices sum to the quote's
+    /// `net_cents` exactly, to the cent.
+    #[tokio::test]
+    async fn deposits_then_final_invoice_round_to_a_zero_remainder() {
+        let organization_id = OrganizationId(Uuid::new_v4());
+        let quote_id = QuoteId(Uuid::new_v4());
+        let customer_id = CustomerId(Uuid::new_v4());
+        let customer_context_id = CustomerContextId(Uuid::new_v4());
+        let quoted_cents = 100_007;
+
+        let project =
+            project_with_quote(organization_id, quote_id, customer_id, customer_context_id);
+        let quote = quote_with_net_cents(
+            quote_id,
+            organization_id,
+            customer_id,
+            customer_context_id,
+            quoted_cents,
+        );
+        let organization = complete_organization(organization_id);
+
+        let store: Arc<Mutex<Vec<Invoice>>> = Arc::new(Mutex::new(Vec::new()));
+        let mut service = InvoiceService::new(
+            invoice_repository_over(store.clone()),
+            events::testing::RecordingEmitter::new(),
+        );
+
+        let deposit_command = || IssueDepositCommand {
+            project_id: project.id,
+            percentage_bp: 3000,
+            due_at: None,
+            notes: None,
+            allow_exceeding_total: false,
+        };
+
+        let deposit1 = service
+            .issue_deposit(
+                deposit_command(),
+                mock_organization_repository(organization.clone()),
+                project_repo_with(project.clone()),
+                quote_repo_with(quote.clone()),
+            )
+            .await
+            .unwrap();
+
+        let deposit2 = service
+            .issue_deposit(
+                deposit_command(),
+                mock_organization_repository(organization.clone()),
+                project_repo_with(project.clone()),
+                quote_repo_with(quote.clone()),
+            )
+            .await
+            .unwrap();
+
+        let final_invoice = service
+            .issue_final_invoice(
+                IssueFinalInvoiceCommand {
+                    project_id: project.id,
+                    due_at: None,
+                    notes: None,
+                    allow_exceeding_total: false,
+                },
+                mock_organization_repository(organization),
+                project_repo_with(project.clone()),
+                quote_repo_with(quote),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(deposit1.net_cents, 30_002);
+        assert_eq!(deposit2.net_cents, 30_002);
+        assert_eq!(final_invoice.net_cents, 40_003);
+        assert_eq!(
+            deposit1.net_cents + deposit2.net_cents + final_invoice.net_cents,
+            quoted_cents,
+            "the remainder after every invoice must round to exactly zero"
+        );
+        assert_eq!(deposit1.kind, InvoiceKind::Deposit);
+        assert_eq!(final_invoice.kind, InvoiceKind::Final);
+    }
+
+    #[tokio::test]
+    async fn issue_deposit_refuses_to_exceed_the_quoted_total_unless_allowed() {
+        let organization_id = OrganizationId(Uuid::new_v4());
+        let quote_id = QuoteId(Uuid::new_v4());
+        let customer_id = CustomerId(Uuid::new_v4());
+        let customer_context_id = CustomerContextId(Uuid::new_v4());
+        let quoted_cents = 10_000;
+
+        let project =
+            project_with_quote(organization_id, quote_id, customer_id, customer_context_id);
+        let quote = quote_with_net_cents(
+            quote_id,
+            organization_id,
+            customer_id,
+            customer_context_id,
+            quoted_cents,
+        );
+        let organization = complete_organization(organization_id);
+
+        // 90% already issued; an 80% deposit on top would reach 170%.
+        let store: Arc<Mutex<Vec<Invoice>>> = Arc::new(Mutex::new(vec![issued_invoice_stub(
+            organization_id,
+            project.id,
+            9_000,
+        )]));
+        let mut service = InvoiceService::new(
+            invoice_repository_over(store.clone()),
+            events::testing::RecordingEmitter::new(),
+        );
+
+        let refused = service
+            .issue_deposit(
+                IssueDepositCommand {
+                    project_id: project.id,
+                    percentage_bp: 8000,
+                    due_at: None,
+                    notes: None,
+                    allow_exceeding_total: false,
+                },
+                // Never reached: the pre-check refuses before the
+                // organization is ever resolved.
+                crate::domain::organization::ports::MockOrganizationRepository::new(),
+                project_repo_with(project.clone()),
+                quote_repo_with(quote.clone()),
+            )
+            .await;
+
+        assert!(matches!(refused, Err(CoreError::Conflict(_))));
+        assert_eq!(
+            store.lock().unwrap().len(),
+            1,
+            "a refused deposit must not leave a half-created draft behind"
+        );
+
+        let allowed = service
+            .issue_deposit(
+                IssueDepositCommand {
+                    project_id: project.id,
+                    percentage_bp: 8000,
+                    due_at: None,
+                    notes: None,
+                    allow_exceeding_total: true,
+                },
+                mock_organization_repository(organization),
+                project_repo_with(project.clone()),
+                quote_repo_with(quote),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(allowed.status, InvoiceStatus::Issued);
+    }
+
+    #[tokio::test]
+    async fn issue_invoice_refuses_an_incomplete_organization_legal_identity() {
+        let id = InvoiceId(Uuid::new_v4());
+        let organization_id = OrganizationId(Uuid::new_v4());
+        let draft = Invoice {
+            organization_id,
+            ..invoice(id)
+        };
+
+        let mut repo = crate::domain::invoice::ports::MockInvoiceRepository::new();
+        repo.expect_find_by_id().with(eq(id)).returning(move |_| {
+            let draft = draft.clone();
+            Box::pin(async move { Ok(Some(draft)) })
+        });
+        // No `expect_allocate_number`/`expect_issue`: the call must never
+        // reach them, refused before that on the legal identity alone.
+
+        let mut service = InvoiceService::new(repo, events::testing::RecordingEmitter::new());
+
+        let result = service
+            .issue_invoice(
+                IssueInvoiceCommand {
+                    id,
+                    allow_exceeding_total: false,
+                },
+                mock_organization_repository(organization_without_vat_status(organization_id)),
+                MockProjectRepository::new(),
+                MockQuoteRepository::new(),
+            )
+            .await;
+
+        assert!(matches!(result, Err(CoreError::Conflict(_))));
+    }
+
+    #[tokio::test]
+    async fn issue_deposit_refuses_a_project_with_no_quote() {
+        let organization_id = OrganizationId(Uuid::new_v4());
+        let project = project_without_quote(organization_id);
+        let project_id = project.id;
+
+        let repo = crate::domain::invoice::ports::MockInvoiceRepository::new();
+        let mut service = InvoiceService::new(repo, events::testing::RecordingEmitter::new());
+
+        let result = service
+            .issue_deposit(
+                IssueDepositCommand {
+                    project_id,
+                    percentage_bp: 3000,
+                    due_at: None,
+                    notes: None,
+                    allow_exceeding_total: false,
+                },
+                crate::domain::organization::ports::MockOrganizationRepository::new(),
+                project_repo_with(project),
+                MockQuoteRepository::new(),
+            )
+            .await;
+
+        assert!(matches!(result, Err(CoreError::Conflict(_))));
+    }
+
+    #[tokio::test]
+    async fn issue_final_invoice_refuses_a_project_with_no_quote() {
+        let organization_id = OrganizationId(Uuid::new_v4());
+        let project = project_without_quote(organization_id);
+        let project_id = project.id;
+
+        let repo = crate::domain::invoice::ports::MockInvoiceRepository::new();
+        let mut service = InvoiceService::new(repo, events::testing::RecordingEmitter::new());
+
+        let result = service
+            .issue_final_invoice(
+                IssueFinalInvoiceCommand {
+                    project_id,
+                    due_at: None,
+                    notes: None,
+                    allow_exceeding_total: false,
+                },
+                crate::domain::organization::ports::MockOrganizationRepository::new(),
+                project_repo_with(project),
+                MockQuoteRepository::new(),
+            )
+            .await;
+
+        assert!(matches!(result, Err(CoreError::Conflict(_))));
+    }
+
+    /// Nothing about `create_invoice`/`issue_invoice` requires a project or
+    /// a quote — that requirement is specific to `issue_deposit` and
+    /// `issue_final_invoice`, which need a total to compute a percentage or
+    /// a remainder against. A manually created, project-less draft issues
+    /// exactly like one with a quote-backed project, minus the over-issuance
+    /// check (nothing to compare against).
+    #[tokio::test]
+    async fn issue_invoice_does_not_require_a_project_or_a_quote() {
+        let id = InvoiceId(Uuid::new_v4());
+        let organization_id = OrganizationId(Uuid::new_v4());
+        let draft = Invoice {
+            organization_id,
+            project_id: None,
+            ..invoice(id)
+        };
+
+        let mut repo = crate::domain::invoice::ports::MockInvoiceRepository::new();
+        repo.expect_find_by_id().with(eq(id)).returning(move |_| {
+            let draft = draft.clone();
+            Box::pin(async move { Ok(Some(draft)) })
+        });
+        repo.expect_allocate_number().returning(|_, prefix, year| {
+            let number = format!("{prefix}-{year}-0001");
+            Box::pin(async move { Ok(number) })
+        });
+        repo.expect_issue().returning(
+            move |issued_id, number, issued_at, issuer_identity, updated_at| {
+                let mut issued = invoice(issued_id);
+                issued.project_id = None;
+                issued.status = InvoiceStatus::Issued;
+                issued.number = Some(number);
+                issued.issued_at = Some(issued_at);
+                issued.issuer_identity = Some(issuer_identity.clone());
+                issued.updated_at = updated_at;
+                Box::pin(async move { Ok(issued) })
+            },
+        );
+
+        let mut service = InvoiceService::new(repo, events::testing::RecordingEmitter::new());
+
+        let issued = service
+            .issue_invoice(
+                IssueInvoiceCommand {
+                    id,
+                    allow_exceeding_total: false,
+                },
+                mock_organization_repository(complete_organization(organization_id)),
+                // Never reached: the invoice carries no project.
+                MockProjectRepository::new(),
+                MockQuoteRepository::new(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(issued.status, InvoiceStatus::Issued);
+        assert!(issued.number.is_some());
     }
 }

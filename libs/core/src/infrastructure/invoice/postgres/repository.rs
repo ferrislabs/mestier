@@ -4,7 +4,8 @@ use mestier_macros::repository;
 use sqlx::PgConnection;
 
 use crate::{
-    DraftInvoice, Invoice, InvoiceId, InvoiceLine, InvoiceStatus, OrganizationId, ProjectId,
+    DraftInvoice, Invoice, InvoiceId, InvoiceLine, InvoiceStatus, LegalIdentity, OrganizationId,
+    ProjectId,
     domain::invoice::ports::InvoiceRepository,
     infrastructure::{
         invoice::postgres::model::{
@@ -340,6 +341,50 @@ impl<'tx> InvoiceRepository for PgInvoiceRepository<'tx> {
             "#,
             id.0,
             status.as_str(),
+            updated_at,
+        )
+        .fetch_optional(&mut ***tx)
+        .await
+        .map_err(map_sqlx_error)?;
+
+        let row = row.ok_or(CoreError::NotFound)?;
+        let lines = fetch_lines(&mut tx, id).await?;
+        row.into_invoice(lines)
+    }
+
+    async fn issue(
+        &mut self,
+        id: InvoiceId,
+        number: String,
+        issued_at: DateTime<Utc>,
+        issuer_identity: &LegalIdentity,
+        updated_at: DateTime<Utc>,
+    ) -> Result<Invoice, CoreError> {
+        let mut tx = self.tx.lock().await;
+        let issuer_identity_json = legal_identity_to_json(issuer_identity);
+        let row = sqlx::query_as!(
+            InvoiceRow,
+            r#"
+            UPDATE invoices
+            SET number = $2,
+                status = 'ISSUED'::invoice_status,
+                issued_at = $3,
+                issuer_identity = $4,
+                updated_at = $5
+            WHERE id = $1 AND deleted_at IS NULL AND status = 'DRAFT'
+            RETURNING
+                id, org_id, number, kind::text AS "kind!", project_id, customer_id,
+                customer_context_id, status::text AS "status!", issued_at, due_at, notes,
+                operation_nature::text,
+                delivery_address_line1, delivery_address_line2, delivery_address_postal_code,
+                delivery_address_city, delivery_address_country,
+                net_cents, vat_breakdown, gross_cents, issuer_identity, deleted_at,
+                created_at, updated_at
+            "#,
+            id.0,
+            number,
+            issued_at,
+            issuer_identity_json,
             updated_at,
         )
         .fetch_optional(&mut ***tx)

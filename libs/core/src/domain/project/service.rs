@@ -12,6 +12,28 @@ use crate::{
     },
 };
 
+/// What is left to bill on a project measured against a quote: the quote's
+/// net total minus what has already been invoiced (every non-draft,
+/// non-cancelled invoice's `net_cents`, summed by the caller). Shared by two
+/// callers that must never re-derive this subtraction independently:
+/// `InvoiceService::issue_invoice`'s over-issuance check, and
+/// `issue_deposit`/`issue_final_invoice`'s own target-amount math.
+///
+/// `Err` on overflow only — the subtraction itself is allowed to go
+/// negative (a project already over-billed still has a well-defined, if
+/// negative, remainder; refusing that read would hide the very situation
+/// `allow_exceeding_total` exists to let a caller see and confirm).
+pub fn remaining_to_bill_cents(
+    quoted_cents: i32,
+    already_issued_cents: i64,
+) -> Result<i64, CoreError> {
+    i64::from(quoted_cents)
+        .checked_sub(already_issued_cents)
+        .ok_or_else(|| {
+            CoreError::Conflict("remaining amount to bill is outside supported bounds".to_owned())
+        })
+}
+
 pub struct ProjectService<R>
 where
     R: ProjectRepository,
@@ -431,5 +453,29 @@ mod tests {
         .unwrap_err();
 
         assert!(matches!(err, CoreError::Conflict(_)));
+    }
+
+    #[test]
+    fn remaining_to_bill_is_the_quote_minus_what_is_already_issued() {
+        assert_eq!(remaining_to_bill_cents(100_007, 60_004).unwrap(), 40_003);
+    }
+
+    #[test]
+    fn remaining_to_bill_is_the_whole_quote_when_nothing_was_issued_yet() {
+        assert_eq!(remaining_to_bill_cents(100_007, 0).unwrap(), 100_007);
+    }
+
+    #[test]
+    fn remaining_to_bill_is_zero_once_the_quote_is_fully_invoiced() {
+        assert_eq!(remaining_to_bill_cents(100_007, 100_007).unwrap(), 0);
+    }
+
+    #[test]
+    fn remaining_to_bill_goes_negative_when_already_over_issued() {
+        // Deliberately not refused here: a project already billed past its
+        // quote still has a well-defined remainder, and it is the caller
+        // (`InvoiceService`'s over-issuance check) that decides whether a
+        // negative remainder blocks anything, not this pure arithmetic.
+        assert_eq!(remaining_to_bill_cents(100_007, 150_000).unwrap(), -49_993);
     }
 }
