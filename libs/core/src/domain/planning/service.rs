@@ -494,6 +494,7 @@ fn build_entries(tasks: &[PlanningTask], absences: &[Absence]) -> Vec<PlanningEn
         entries.push(PlanningEntry::Task {
             id: task.id,
             parent_task_id: task.parent_task_id,
+            recurrence_id: task.recurrence_id,
             starts_at,
             ends_at,
             all_day: task.all_day,
