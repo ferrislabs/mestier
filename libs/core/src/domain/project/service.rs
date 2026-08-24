@@ -230,6 +230,8 @@ pub fn build_planned_tasks(
                 expenses_cents,
                 expenses_label,
                 assignments: Vec::new(),
+                recurrence_id: None,
+                occurrence_date: None,
                 deleted_at: None,
                 created_at: now,
                 updated_at: now,
