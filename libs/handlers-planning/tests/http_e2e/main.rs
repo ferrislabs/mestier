@@ -180,3 +180,141 @@ async fn resolving_into_pending_is_refused() {
 
     app.cleanup().await;
 }
+
+/// The acceptance criterion #294 exists for: a series is created and
+/// materializes real tasks; editing one occurrence detaches it and the
+/// response says so; deleting the series removes its future occurrences but
+/// leaves the detached one — no longer part of any series — standing.
+#[tokio::test]
+#[ignore = "requires live postgres and redis"]
+async fn editing_an_occurrence_detaches_it_and_deleting_the_series_leaves_it_standing() {
+    let app = harness::start().await;
+    let client = reqwest::Client::new();
+
+    let starts_on = chrono::Utc::now().date_naive();
+    let created = client
+        .post(app.recurrences_url(""))
+        .bearer_auth(&app.token)
+        .json(&json!({
+            "frequency": "DAILY",
+            "starts_on": starts_on.to_string(),
+            "timezone": "Europe/Paris",
+            "start_time": "09:00:00",
+            "duration_minutes": 60,
+            "all_day": false,
+            "title": "Réunion hebdo",
+            "blocks_availability": true,
+            "assignee_member_ids": [app.assignee_member_id.to_string()],
+        }))
+        .send()
+        .await
+        .expect("the api answers the creation call");
+    let status = created.status();
+    let created: serde_json::Value = created
+        .json()
+        .await
+        .unwrap_or_else(|e| panic!("the creation answer is json: {e}"));
+    assert!(status.is_success(), "creation failed: {created}");
+    let recurrence_id = created["data"]["id"]
+        .as_str()
+        .expect("the created recurrence carries an id")
+        .to_owned();
+
+    // The recurrence now shows up in the organization's list.
+    let listed: serde_json::Value = client
+        .get(app.recurrences_url(""))
+        .bearer_auth(&app.token)
+        .send()
+        .await
+        .expect("the api answers the list call")
+        .json()
+        .await
+        .expect("the list answer is json");
+    let listed_ids: Vec<&str> = listed["data"]
+        .as_array()
+        .expect("the list carries an array")
+        .iter()
+        .filter_map(|r| r["id"].as_str())
+        .collect();
+    assert!(listed_ids.contains(&recurrence_id.as_str()), "{listed}");
+
+    // Real `tasks` rows exist — materialization actually happened.
+    let occurrences = app.occurrence_task_ids(&recurrence_id).await;
+    assert!(
+        occurrences.len() > 1,
+        "a daily recurrence materializes more than one occurrence: {occurrences:?}"
+    );
+    let first_occurrence = occurrences[0];
+    let later_occurrence = *occurrences.last().unwrap();
+
+    // Editing the first occurrence detaches it, and the response says so.
+    let patched = client
+        .patch(app.task_url(&first_occurrence.to_string()))
+        .bearer_auth(&app.token)
+        .json(&json!({ "title": "Réunion déplacée" }))
+        .send()
+        .await
+        .expect("the api answers the patch call");
+    let patch_status = patched.status();
+    let patched: serde_json::Value = patched
+        .json()
+        .await
+        .unwrap_or_else(|e| panic!("the patch answer is json: {e}"));
+    assert!(patch_status.is_success(), "patch failed: {patched}");
+    assert_eq!(
+        patched["data"]["detached"],
+        json!(true),
+        "editing an occurrence must report that it detached: {patched}"
+    );
+    assert_eq!(
+        patched["data"]["task"]["recurrence_id"],
+        serde_json::Value::Null,
+        "a detached task no longer names its series: {patched}"
+    );
+
+    // Deleting the series removes its future occurrences...
+    let deleted = client
+        .delete(app.recurrence_url(&recurrence_id))
+        .bearer_auth(&app.token)
+        .send()
+        .await
+        .expect("the api answers the delete call");
+    assert!(
+        deleted.status().is_success(),
+        "deleting the series failed: {}",
+        deleted.status()
+    );
+
+    let later = client
+        .get(app.task_url(&later_occurrence.to_string()))
+        .bearer_auth(&app.token)
+        .send()
+        .await
+        .expect("the api answers the get call");
+    assert_eq!(
+        later.status(),
+        404,
+        "a future occurrence must be gone once the series is deleted"
+    );
+
+    // ...but the detached occurrence — no longer part of any series — is
+    // left standing.
+    let standing = client
+        .get(app.task_url(&first_occurrence.to_string()))
+        .bearer_auth(&app.token)
+        .send()
+        .await
+        .expect("the api answers the get call");
+    let standing_status = standing.status();
+    let standing: serde_json::Value = standing
+        .json()
+        .await
+        .unwrap_or_else(|e| panic!("the get answer is json: {e}"));
+    assert!(
+        standing_status.is_success(),
+        "the detached occurrence must still exist: {standing}"
+    );
+    assert_eq!(standing["data"]["title"], json!("Réunion déplacée"));
+
+    app.cleanup().await;
+}

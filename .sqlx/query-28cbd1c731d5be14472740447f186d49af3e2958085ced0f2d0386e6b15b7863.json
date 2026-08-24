@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT id, org_id, parent_task_id, title, description, starts_at, ends_at, all_day, status::text AS \"status!\", blocks_availability, customer_id, customer_context_id, quote_id, project_id, expenses_cents, expenses_label, deleted_at, created_at, updated_at\n            FROM tasks\n            WHERE id = $1 AND deleted_at IS NULL\n            ",
+  "query": "\n            SELECT t.id, t.org_id, t.parent_task_id, t.title, t.description, t.starts_at, t.ends_at, t.all_day, t.status::text AS \"status!\", t.blocks_availability, t.customer_id, t.customer_context_id, t.quote_id, t.project_id, t.expenses_cents, t.expenses_label, t.recurrence_id, t.occurrence_date, t.deleted_at, t.created_at, t.updated_at\n            FROM tasks t\n            JOIN task_assignments a ON a.task_id = t.id\n            WHERE t.org_id = $1\n              AND a.member_id = $2\n              AND t.deleted_at IS NULL\n              AND (\n                t.starts_at IS NULL\n                OR (t.starts_at < $4 AND COALESCE(t.ends_at, t.starts_at) >= $3)\n              )\n            ORDER BY t.starts_at ASC NULLS LAST, t.id ASC\n            ",
   "describe": {
     "columns": [
       {
@@ -85,23 +85,36 @@
       },
       {
         "ordinal": 16,
+        "name": "recurrence_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 17,
+        "name": "occurrence_date",
+        "type_info": "Date"
+      },
+      {
+        "ordinal": 18,
         "name": "deleted_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 17,
+        "ordinal": 19,
         "name": "created_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 18,
+        "ordinal": 20,
         "name": "updated_at",
         "type_info": "Timestamptz"
       }
     ],
     "parameters": {
       "Left": [
-        "Uuid"
+        "Uuid",
+        "Uuid",
+        "Timestamptz",
+        "Timestamptz"
       ]
     },
     "nullable": [
@@ -122,9 +135,11 @@
       false,
       true,
       true,
+      true,
+      true,
       false,
       false
     ]
   },
-  "hash": "cbd81f23cf335314eabcdb0d440b98035fb290dcd136425e432ef1f7286a1aad"
+  "hash": "28cbd1c731d5be14472740447f186d49af3e2958085ced0f2d0386e6b15b7863"
 }

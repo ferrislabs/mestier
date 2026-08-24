@@ -1,7 +1,8 @@
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, NaiveDate, NaiveTime, Utc};
 use mestier_core::{
     CustomerContextId, CustomerId, Equipment, EquipmentId, MemberId, OrganizationId, Project,
-    ProjectId, QuoteId, Task, TaskAssignmentId, TaskId, TaskStatus,
+    ProjectId, QuoteId, Task, TaskAssignmentId, TaskId, TaskRecurrence, TaskRecurrenceId,
+    TaskStatus, weekday_to_iso,
 };
 use serde::Serialize;
 use utoipa::ToSchema;
@@ -63,6 +64,11 @@ pub struct TaskResponse {
     /// The project this task is costed against, if any. Independent of
     /// `parent_task_id`: a subtask may name a project its parent does not.
     pub project_id: Option<ProjectId>,
+    /// The series this task was materialized from, when it still follows
+    /// one. `None` for a task that never belonged to a series, or for one
+    /// that did and was detached by an edit — see `PatchTaskResponse::detached`
+    /// for the moment that transition is reported.
+    pub recurrence_id: Option<TaskRecurrenceId>,
     /// What the task costs beyond somebody's time. `0` with no label when there
     /// is nothing to declare.
     pub expenses_cents: i32,
@@ -122,6 +128,7 @@ impl From<Task> for TaskResponse {
             customer_context_id: value.customer_context_id,
             quote_id: value.quote_id,
             project_id: value.project_id,
+            recurrence_id: value.recurrence_id,
             expenses_cents: value.expenses_cents,
             expenses_label: value.expenses_label,
             member_ids: value
@@ -165,6 +172,12 @@ impl From<Task> for TaskResponse {
 #[derive(Debug, Clone, PartialEq, Serialize, ToSchema)]
 pub struct PatchTaskResponse {
     pub task: TaskResponse,
+    /// Whether this `PATCH` detached the task from the series it belonged
+    /// to before the call — the screen's only way to explain why editing
+    /// this occurrence did not also change next Tuesday's. `false` for a
+    /// task that was never part of a series, or one already detached before
+    /// this call.
+    pub detached: bool,
 }
 
 /// Response body for the bulk-assignment endpoint: every task named in the
@@ -173,6 +186,156 @@ pub struct PatchTaskResponse {
 #[derive(Debug, Clone, PartialEq, Serialize, ToSchema)]
 pub struct BulkAssignTasksResponse {
     pub tasks: Vec<TaskResponse>,
+}
+
+/// The rule, on the wire: `frequency` discriminates, and only the field the
+/// chosen frequency actually needs is present — mirrors
+/// `mestier_core::RecurrenceRule`'s own shape, and the same reasoning: an
+/// RRULE string would let a `WEEKLY` rule show up with no weekday, this
+/// cannot.
+#[derive(Debug, Clone, PartialEq, Serialize, ToSchema)]
+#[serde(tag = "frequency", rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum RecurrenceRuleResponse {
+    Daily,
+    /// ISO weekday numbers, 1 (Monday) through 7 (Sunday).
+    Weekly {
+        weekdays: Vec<i16>,
+    },
+    /// 1 through 31, clamped to the month's own last day when it is shorter
+    /// — see `mestier_core`'s `expand_occurrences`.
+    Monthly {
+        day_of_month: u8,
+    },
+}
+
+impl From<mestier_core::RecurrenceRule> for RecurrenceRuleResponse {
+    fn from(value: mestier_core::RecurrenceRule) -> Self {
+        match value {
+            mestier_core::RecurrenceRule::Daily => Self::Daily,
+            mestier_core::RecurrenceRule::Weekly { weekdays } => Self::Weekly {
+                weekdays: weekdays.into_iter().map(weekday_to_iso).collect(),
+            },
+            mestier_core::RecurrenceRule::Monthly { day_of_month } => {
+                Self::Monthly { day_of_month }
+            }
+        }
+    }
+}
+
+/// A recurrence, and the template every occurrence it materializes copies —
+/// see `mestier_core::TaskRecurrence`'s own doc. `RecurrenceFrequency` is
+/// re-derivable from `rule` but not sent separately: `rule`'s own `frequency`
+/// tag already carries it, and a second field would just be one more way for
+/// the two to disagree.
+#[derive(Debug, Clone, PartialEq, Serialize, ToSchema)]
+pub struct TaskRecurrenceResponse {
+    pub id: TaskRecurrenceId,
+    pub organization_id: OrganizationId,
+    #[serde(flatten)]
+    pub rule: RecurrenceRuleResponse,
+    pub starts_on: NaiveDate,
+    pub ends_on: Option<NaiveDate>,
+    /// Every occurrence up to and including this date already exists as a
+    /// `tasks` row.
+    pub horizon_filled_to: NaiveDate,
+    /// IANA zone name (e.g. `Europe/Paris`) `start_time` is interpreted in.
+    pub timezone: String,
+    pub start_time: NaiveTime,
+    pub duration_minutes: i32,
+    pub all_day: bool,
+    pub title: String,
+    pub description: Option<String>,
+    pub blocks_availability: bool,
+    pub customer_id: Option<CustomerId>,
+    pub customer_context_id: Option<CustomerContextId>,
+    pub project_id: Option<ProjectId>,
+    pub assignee_member_ids: Vec<MemberId>,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+}
+
+impl From<TaskRecurrence> for TaskRecurrenceResponse {
+    fn from(value: TaskRecurrence) -> Self {
+        Self {
+            id: value.id,
+            organization_id: value.organization_id,
+            rule: value.rule.into(),
+            starts_on: value.starts_on,
+            ends_on: value.ends_on,
+            horizon_filled_to: value.horizon_filled_to,
+            timezone: value.timezone.to_string(),
+            start_time: value.start_time,
+            duration_minutes: value.duration_minutes,
+            all_day: value.all_day,
+            title: value.title,
+            description: value.description,
+            blocks_availability: value.blocks_availability,
+            customer_id: value.customer_id,
+            customer_context_id: value.customer_context_id,
+            project_id: value.project_id,
+            assignee_member_ids: value.assignee_member_ids,
+            created_at: value.created_at,
+            updated_at: value.updated_at,
+        }
+    }
+}
+
+#[cfg(test)]
+mod recurrence_response_tests {
+    use super::*;
+    use chrono::NaiveDate;
+
+    fn recurrence() -> TaskRecurrence {
+        let now = Utc::now();
+        TaskRecurrence {
+            id: "77777777-7777-7777-7777-777777777777".parse().unwrap(),
+            organization_id: "22222222-2222-2222-2222-222222222222".parse().unwrap(),
+            rule: mestier_core::RecurrenceRule::Weekly {
+                weekdays: vec![chrono::Weekday::Tue],
+            },
+            starts_on: NaiveDate::from_ymd_opt(2026, 8, 1).unwrap(),
+            ends_on: None,
+            horizon_filled_to: NaiveDate::from_ymd_opt(2026, 9, 30).unwrap(),
+            timezone: chrono_tz::Europe::Paris,
+            start_time: NaiveTime::from_hms_opt(9, 0, 0).unwrap(),
+            duration_minutes: 60,
+            all_day: false,
+            title: "Réunion hebdo".to_owned(),
+            description: None,
+            blocks_availability: true,
+            customer_id: None,
+            customer_context_id: None,
+            project_id: None,
+            assignee_member_ids: Vec::new(),
+            deleted_at: None,
+            created_at: now,
+            updated_at: now,
+        }
+    }
+
+    #[test]
+    fn a_weekly_rule_reports_its_iso_weekdays() {
+        let response: TaskRecurrenceResponse = recurrence().into();
+
+        assert_eq!(
+            response.rule,
+            RecurrenceRuleResponse::Weekly { weekdays: vec![2] }
+        );
+    }
+
+    #[test]
+    fn the_rule_is_flattened_onto_the_top_level_object() {
+        let response: TaskRecurrenceResponse = recurrence().into();
+
+        let value = serde_json::to_value(&response).unwrap();
+
+        assert_eq!(value["frequency"], "WEEKLY");
+        assert_eq!(value["weekdays"], serde_json::json!([2]));
+        assert!(
+            value.get("rule").is_none(),
+            "the rule is flattened, not nested under its own key"
+        );
+    }
 }
 
 #[cfg(test)]
@@ -214,6 +377,8 @@ mod tests {
                 member_id,
                 created_at: now,
             }],
+            recurrence_id: None,
+            occurrence_date: None,
             deleted_at: None,
             created_at: now,
             updated_at: now,

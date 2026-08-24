@@ -1,0 +1,34 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT t.id, t.occurrence_date, a.member_id\n               FROM tasks t\n               LEFT JOIN task_assignments a ON a.task_id = t.id\n               WHERE t.recurrence_id = $1\n               ORDER BY t.occurrence_date ASC\n               LIMIT 1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "occurrence_date",
+        "type_info": "Date"
+      },
+      {
+        "ordinal": 2,
+        "name": "member_id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      true,
+      false
+    ]
+  },
+  "hash": "1606f32527ecf1f58a3af36c0de1227a6b771c890f99ec6c1896208db09d534d"
+}

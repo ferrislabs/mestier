@@ -1,13 +1,29 @@
 use std::collections::HashMap;
 
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, NaiveDate, Utc};
 use common::CoreError;
 
-use crate::{MemberId, OrganizationId, Task, TaskId};
+use crate::{MemberId, OrganizationId, Task, TaskId, TaskRecurrenceId};
 
 #[cfg_attr(any(test, feature = "mock"), mockall::automock)]
 pub trait TaskRepository: Send {
     fn insert(&mut self, task: &Task) -> impl Future<Output = Result<Task, CoreError>> + Send;
+
+    /// Inserts a materialized recurrence occurrence, or does nothing when
+    /// its `(recurrence_id, occurrence_date)` is already taken by a
+    /// non-deleted row — the arbiter is the partial unique index
+    /// `uq_tasks_recurrence_occurrence`. Returns whether a row was actually
+    /// inserted, which is what makes a horizon extension idempotent: a retry
+    /// or a double claim finds every date already filled and inserts
+    /// nothing, rather than erroring or double-booking.
+    ///
+    /// `task.id` must already be set by the caller (unlike [`Self::insert`],
+    /// there is no ambiguity to resolve: on conflict, the id offered is
+    /// simply discarded along with the rest of the row).
+    fn insert_occurrence_if_absent(
+        &mut self,
+        task: &Task,
+    ) -> impl Future<Output = Result<bool, CoreError>> + Send;
 
     fn find_by_id(
         &mut self,
@@ -64,4 +80,17 @@ pub trait TaskRepository: Send {
         id: TaskId,
         deleted_at: DateTime<Utc>,
     ) -> impl Future<Output = Result<(), CoreError>> + Send;
+
+    /// Soft-deletes every non-deleted occurrence of `recurrence_id` whose
+    /// `occurrence_date` is `>= from` — the scope-aware half of a `DELETE`
+    /// asking for "this occurrence and every later one", and what
+    /// `TaskRecurrenceService::delete_recurrence` uses to remove a deleted
+    /// series' future occurrences while leaving its past ones alone.
+    /// Returns how many rows were affected.
+    fn soft_delete_recurrence_occurrences_from(
+        &mut self,
+        recurrence_id: TaskRecurrenceId,
+        from: NaiveDate,
+        deleted_at: DateTime<Utc>,
+    ) -> impl Future<Output = Result<u64, CoreError>> + Send;
 }

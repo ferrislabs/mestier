@@ -11,6 +11,7 @@ use super::http_request::HttpRequestConnector;
 use super::odoo::{
     OdooCreateInvoiceConnector, OdooCreatePartnerConnector, OdooUpdatePartnerConnector,
 };
+use super::task_recurrence_extend_horizon::TaskRecurrenceExtendHorizonConnector;
 
 #[derive(Debug, Error, PartialEq, Eq)]
 #[error("no connector implementation for `{kind}` version {version}")]
@@ -37,6 +38,7 @@ pub struct ConnectorRegistry {
     odoo_create_partner: OdooCreatePartnerConnector,
     odoo_update_partner: OdooUpdatePartnerConnector,
     odoo_create_invoice: OdooCreateInvoiceConnector,
+    task_recurrence_extend_horizon: TaskRecurrenceExtendHorizonConnector,
 }
 
 impl ConnectorRegistry {
@@ -63,7 +65,8 @@ impl ConnectorRegistry {
             http_request: HttpRequestConnector::new(usecase.clone(), access),
             odoo_create_partner: OdooCreatePartnerConnector::new(usecase.clone(), access),
             odoo_update_partner: OdooUpdatePartnerConnector::new(usecase.clone(), access),
-            odoo_create_invoice: OdooCreateInvoiceConnector::new(usecase, access),
+            odoo_create_invoice: OdooCreateInvoiceConnector::new(usecase.clone(), access),
+            task_recurrence_extend_horizon: TaskRecurrenceExtendHorizonConnector::new(usecase),
         }
     }
 
@@ -77,6 +80,7 @@ impl ConnectorRegistry {
             ("odoo.create_partner", 1),
             ("odoo.update_partner", 1),
             ("odoo.create_invoice", 1),
+            ("mestier.task_recurrence.extend_horizon", 1),
         ]
     }
 
@@ -94,6 +98,9 @@ impl ConnectorRegistry {
             ("odoo.create_partner", 1) => Ok(self.odoo_create_partner.execute(input).await),
             ("odoo.update_partner", 1) => Ok(self.odoo_update_partner.execute(input).await),
             ("odoo.create_invoice", 1) => Ok(self.odoo_create_invoice.execute(input).await),
+            ("mestier.task_recurrence.extend_horizon", 1) => {
+                Ok(self.task_recurrence_extend_horizon.execute(input).await)
+            }
             _ => Err(UnknownConnectorKind {
                 kind: kind.to_string(),
                 version,

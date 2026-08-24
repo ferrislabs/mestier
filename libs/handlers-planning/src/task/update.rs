@@ -123,7 +123,12 @@ pub async fn handler(
     Extension(identity): Extension<Identity>,
     Json(payload): Json<UpdateTaskRequest>,
 ) -> Result<Response<PatchTaskResponse>, ApiError> {
-    require_task(&state, &identity, organization_id, task_id).await?;
+    let before = require_task(&state, &identity, organization_id, task_id).await?;
+    // Captured before the patch: `TaskService::patch_task` unconditionally
+    // detaches an occurrence from its series (see its own doc), so whether
+    // this call detached anything is exactly whether it was still attached
+    // going in.
+    let was_in_series = before.recurrence_id.is_some();
     let actor = resolve_user_id(&state, &identity).await?;
 
     let mut command = PatchTaskCommand::new(task_id);
@@ -161,6 +166,7 @@ pub async fn handler(
     let equipment = equipment_by_task.remove(&task.id).unwrap_or_default();
 
     Ok(Response::OK(PatchTaskResponse {
+        detached: was_in_series,
         task: TaskResponse {
             labels: labels.into_iter().map(Into::into).collect(),
             equipment: equipment.into_iter().map(Into::into).collect(),

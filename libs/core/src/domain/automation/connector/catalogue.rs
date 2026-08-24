@@ -308,6 +308,7 @@ fn descriptors() -> Vec<ConnectorDescriptor> {
     all.extend(customer_descriptors());
     all.extend(http_descriptors());
     all.extend(odoo_descriptors());
+    all.extend(task_recurrence_descriptors());
     all
 }
 
@@ -411,6 +412,28 @@ fn odoo_descriptors() -> Vec<ConnectorDescriptor> {
     ]
 }
 
+/// The one connector the horizon-extension pass (#293) runs: no fields, no
+/// credential — it reads `org_id` off the run itself and extends whatever
+/// that organization's recurrences need, the same "calls an existing use
+/// case, so every business rule already enforced there applies here too"
+/// shape as `mestier.customer.create`. Placed by
+/// `MestierUseCase::find_or_create_recurrence_horizon_workflow`, never by a
+/// human dragging it into a graph — but described here anyway, like every
+/// other kind, so the anti-drift test in `infrastructure::automation::connectors`
+/// still catches an implementation with no matching descriptor or the
+/// reverse.
+fn task_recurrence_descriptors() -> Vec<ConnectorDescriptor> {
+    vec![ConnectorDescriptor {
+        kind: "mestier.task_recurrence.extend_horizon",
+        version: 1,
+        family: "mestier",
+        label: "Extend recurrence horizon",
+        auth: AuthRequirement::None,
+        fields: &[],
+        output_example: json!({ "materialized": 0 }),
+    }]
+}
+
 #[cfg(test)]
 mod tests {
     use serde_json::to_value;
@@ -510,6 +533,19 @@ mod tests {
                 .iter()
                 .any(|f| f.name == "name" && f.required)
         );
+    }
+
+    /// The connector the horizon-extension pass (#293) drives — no fields,
+    /// no credential, since it acts on the run's own `org_id`.
+    #[test]
+    fn the_catalogue_contains_the_recurrence_horizon_connector() {
+        let catalogue = connector_catalogue();
+
+        let descriptor = catalogue
+            .get("mestier.task_recurrence.extend_horizon", 1)
+            .expect("mestier.task_recurrence.extend_horizon is described");
+        assert_eq!(descriptor.auth, AuthRequirement::None);
+        assert!(descriptor.fields.is_empty());
     }
 
     /// `http.request`'s auth stays optional: `credential_id` is `Option`, so

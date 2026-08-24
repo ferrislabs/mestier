@@ -9,6 +9,7 @@ use crate::{
     domain::equipment::service::EquipmentService,
     domain::project::service::ProjectService,
     domain::task::{
+        DeleteScope,
         commands::{CreateTaskCommand, PatchTaskCommand},
         service::TaskService,
     },
@@ -121,6 +122,20 @@ impl MestierUseCase {
     pub async fn soft_delete_task(&self, id: TaskId) -> Result<(), CoreError> {
         let mut service = TaskService::new(task_repository, member_repository);
         service.soft_delete_task(id).await
+    }
+
+    /// The scope-aware `DELETE`: `ThisOccurrence` behaves exactly like
+    /// [`Self::soft_delete_task`]; `ThisAndFollowing` also removes every
+    /// later occurrence in the same series — see
+    /// `TaskService::soft_delete_occurrence`.
+    #[transactional(task, member)]
+    pub async fn soft_delete_task_occurrence(
+        &self,
+        id: TaskId,
+        scope: DeleteScope,
+    ) -> Result<(), CoreError> {
+        let mut service = TaskService::new(task_repository, member_repository);
+        service.soft_delete_occurrence(id, scope).await
     }
 
     /// Assigns `assignees` to every task in `task_ids` in one transaction —

@@ -100,6 +100,7 @@ export namespace Schemas {
   };
   export type ProjectId = string;
   export type QuoteId = string;
+  export type TaskRecurrenceId = string;
   export type TaskStatus = "PLANNED" | "IN_PROGRESS" | "DONE" | "CANCELLED";
   export type TaskResponse = {
     all_day: boolean;
@@ -121,6 +122,7 @@ export namespace Schemas {
     parent_task_id?: (null | TaskId) | undefined;
     project_id?: (null | ProjectId) | undefined;
     quote_id?: (null | QuoteId) | undefined;
+    recurrence_id?: (null | TaskRecurrenceId) | undefined;
     starts_at?: (string | null) | undefined;
     status: TaskStatus;
     title: string;
@@ -283,6 +285,25 @@ export namespace Schemas {
   };
   export type CreateTaskCommentRequest = { body: string };
   export type CreateTaskLabelRequest = { color: string; name: string };
+  export type RecurrenceRuleRequest =
+    | { frequency: "DAILY" }
+    | { frequency: "WEEKLY"; weekdays: Array<number> }
+    | { day_of_month: number; frequency: "MONTHLY" };
+  export type CreateTaskRecurrenceRequest = RecurrenceRuleRequest & {
+    all_day?: boolean | undefined;
+    assignee_member_ids?: Array<MemberId> | undefined;
+    blocks_availability: boolean;
+    customer_context_id?: (null | CustomerContextId) | undefined;
+    customer_id?: (null | CustomerId) | undefined;
+    description?: (string | null) | undefined;
+    duration_minutes: number;
+    ends_on?: (string | null) | undefined;
+    project_id?: (null | ProjectId) | undefined;
+    start_time: string;
+    starts_on: string;
+    timezone: string;
+    title: string;
+  };
   export type CreateTaskRequest = {
     all_day?: boolean | undefined;
     blocks_availability: boolean;
@@ -365,6 +386,7 @@ export namespace Schemas {
     work_date: string;
   };
   export type DeclareTimeEntryRequest = { ended_at: string; started_at: string; task_id: TaskId };
+  export type DeleteScopeRequest = "THIS_OCCURRENCE" | "THIS_AND_FOLLOWING";
   export type EdgeDto = { branch?: (null | BranchDto) | undefined; from: string; to: string };
   export type EmployeeCostBasisId = string;
   export type EmployeeCostBasisResponse = {
@@ -534,7 +556,7 @@ export namespace Schemas {
     prev_page?: (number | null) | undefined;
     total?: (number | null) | undefined;
   };
-  export type PatchTaskResponse = { task: TaskResponse };
+  export type PatchTaskResponse = { detached: boolean; task: TaskResponse };
   export type PlanningEntryResponse =
     | {
         all_day: boolean;
@@ -549,6 +571,7 @@ export namespace Schemas {
         labels: Array<TaskLabelResponse>;
         member_ids: Array<MemberId>;
         parent_task_id?: (null | TaskId) | undefined;
+        recurrence_id?: (null | TaskRecurrenceId) | undefined;
         starts_at: string;
         status: TaskStatus;
         title: string;
@@ -675,6 +698,10 @@ export namespace Schemas {
     vat_breakdown: Array<QuoteVatBreakdownLineResponse>;
   };
   export type RecoverTimeEntryRequest = { ended_at: string };
+  export type RecurrenceRuleResponse =
+    | { frequency: "DAILY" }
+    | { frequency: "WEEKLY"; weekdays: Array<number> }
+    | { day_of_month: number; frequency: "MONTHLY" };
   export type ReplayRunRequest = { connector_id: string };
   export type ReportAssignmentRequest = { comment?: (string | null) | undefined; reported_minutes: number };
   export type ResolveAssignmentReportRequest = {
@@ -752,6 +779,26 @@ export namespace Schemas {
     id: TaskCommentId;
     organization_id: OrganizationId;
     task_id: TaskId;
+    updated_at: string;
+  };
+  export type TaskRecurrenceResponse = RecurrenceRuleResponse & {
+    all_day: boolean;
+    assignee_member_ids: Array<MemberId>;
+    blocks_availability: boolean;
+    created_at: string;
+    customer_context_id?: (null | CustomerContextId) | undefined;
+    customer_id?: (null | CustomerId) | undefined;
+    description?: (string | null) | undefined;
+    duration_minutes: number;
+    ends_on?: (string | null) | undefined;
+    horizon_filled_to: string;
+    id: TaskRecurrenceId;
+    organization_id: OrganizationId;
+    project_id?: (null | ProjectId) | undefined;
+    start_time: string;
+    starts_on: string;
+    timezone: string;
+    title: string;
     updated_at: string;
   };
   export type TimeEntryId = string;
@@ -861,6 +908,18 @@ export namespace Schemas {
   };
   export type UpdateTaskCommentRequest = { body: string };
   export type UpdateTaskLabelRequest = { color: string; name: string };
+  export type UpdateTaskRecurrenceRequest = (null | RecurrenceRuleRequest) &
+    Partial<{
+      all_day: boolean | null;
+      assignee_member_ids: Array<MemberId> | null;
+      blocks_availability: boolean | null;
+      description: string | null;
+      duration_minutes: number | null;
+      ends_on: string | null;
+      project_id: null | ProjectId;
+      start_time: string | null;
+      title: string | null;
+    }>;
   export type UpdateTaskRequest = Partial<{
     all_day: boolean | null;
     assignees: Array<AssigneeRefRequest> | null;
@@ -4321,6 +4380,83 @@ export namespace Endpoints {
       409: unknown;
     };
   };
+  export type get_ListTaskRecurrences = {
+    method: "GET";
+    path: "/api/v1/organizations/{organization_id}/task-recurrences";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string };
+    };
+    responses: {
+      200: {
+        data: Array<
+          Schemas.RecurrenceRuleResponse & {
+            all_day: boolean;
+            assignee_member_ids: Array<Schemas.MemberId>;
+            blocks_availability: boolean;
+            created_at: string;
+            customer_context_id?: (null | Schemas.CustomerContextId) | undefined;
+            customer_id?: (null | Schemas.CustomerId) | undefined;
+            description?: (string | null) | undefined;
+            duration_minutes: number;
+            ends_on?: (string | null) | undefined;
+            horizon_filled_to: string;
+            id: Schemas.TaskRecurrenceId;
+            organization_id: Schemas.OrganizationId;
+            project_id?: (null | Schemas.ProjectId) | undefined;
+            start_time: string;
+            starts_on: string;
+            timezone: string;
+            title: string;
+            updated_at: string;
+          }
+        >;
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+    };
+  };
+  export type post_CreateTaskRecurrence = {
+    method: "POST";
+    path: "/api/v1/organizations/{organization_id}/task-recurrences";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string };
+
+      body: Schemas.CreateTaskRecurrenceRequest;
+    };
+    responses: {
+      201: {
+        data: Schemas.RecurrenceRuleResponse & {
+          all_day: boolean;
+          assignee_member_ids: Array<Schemas.MemberId>;
+          blocks_availability: boolean;
+          created_at: string;
+          customer_context_id?: (null | Schemas.CustomerContextId) | undefined;
+          customer_id?: (null | Schemas.CustomerId) | undefined;
+          description?: (string | null) | undefined;
+          duration_minutes: number;
+          ends_on?: (string | null) | undefined;
+          horizon_filled_to: string;
+          id: Schemas.TaskRecurrenceId;
+          organization_id: Schemas.OrganizationId;
+          project_id?: (null | Schemas.ProjectId) | undefined;
+          start_time: string;
+          starts_on: string;
+          timezone: string;
+          title: string;
+          updated_at: string;
+        };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      400: unknown;
+      401: unknown;
+      403: unknown;
+      404: unknown;
+      409: unknown;
+    };
+  };
   export type get_ListTasks = {
     method: "GET";
     path: "/api/v1/organizations/{organization_id}/tasks";
@@ -4351,6 +4487,7 @@ export namespace Endpoints {
           parent_task_id?: (null | Schemas.TaskId) | undefined;
           project_id?: (null | Schemas.ProjectId) | undefined;
           quote_id?: (null | Schemas.QuoteId) | undefined;
+          recurrence_id?: (null | Schemas.TaskRecurrenceId) | undefined;
           starts_at?: (string | null) | undefined;
           status: Schemas.TaskStatus;
           title: string;
@@ -4393,6 +4530,7 @@ export namespace Endpoints {
           parent_task_id?: (null | Schemas.TaskId) | undefined;
           project_id?: (null | Schemas.ProjectId) | undefined;
           quote_id?: (null | Schemas.QuoteId) | undefined;
+          recurrence_id?: (null | Schemas.TaskRecurrenceId) | undefined;
           starts_at?: (string | null) | undefined;
           status: Schemas.TaskStatus;
           title: string;
@@ -4455,6 +4593,7 @@ export namespace Endpoints {
           parent_task_id?: (null | Schemas.TaskId) | undefined;
           project_id?: (null | Schemas.ProjectId) | undefined;
           quote_id?: (null | Schemas.QuoteId) | undefined;
+          recurrence_id?: (null | Schemas.TaskRecurrenceId) | undefined;
           starts_at?: (string | null) | undefined;
           status: Schemas.TaskStatus;
           title: string;
@@ -4472,6 +4611,7 @@ export namespace Endpoints {
     path: "/api/v1/organizations/{organization_id}/tasks/{task_id}";
     requestFormat: "json";
     parameters: {
+      query: Partial<{ scope: "THIS_OCCURRENCE" | "THIS_AND_FOLLOWING" }>;
       path: { organization_id: string; task_id: string };
     };
     responses: { 204: unknown; 401: unknown; 403: unknown; 404: unknown };
@@ -4486,7 +4626,10 @@ export namespace Endpoints {
       body: Schemas.UpdateTaskRequest;
     };
     responses: {
-      200: { data: { task: Schemas.TaskResponse }; pagination?: (null | Schemas.PaginationMetadata) | undefined };
+      200: {
+        data: { detached: boolean; task: Schemas.TaskResponse };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
       400: unknown;
       401: unknown;
       403: unknown;
@@ -4840,6 +4983,55 @@ export namespace Endpoints {
       409: unknown;
     };
   };
+  export type delete_DeleteTaskRecurrence = {
+    method: "DELETE";
+    path: "/api/v1/task-recurrences/{task_recurrence_id}";
+    requestFormat: "json";
+    parameters: {
+      path: { task_recurrence_id: string };
+    };
+    responses: { 204: unknown; 401: unknown; 403: unknown; 404: unknown };
+  };
+  export type patch_PatchTaskRecurrence = {
+    method: "PATCH";
+    path: "/api/v1/task-recurrences/{task_recurrence_id}";
+    requestFormat: "json";
+    parameters: {
+      path: { task_recurrence_id: string };
+
+      body: Schemas.UpdateTaskRecurrenceRequest;
+    };
+    responses: {
+      200: {
+        data: Schemas.RecurrenceRuleResponse & {
+          all_day: boolean;
+          assignee_member_ids: Array<Schemas.MemberId>;
+          blocks_availability: boolean;
+          created_at: string;
+          customer_context_id?: (null | Schemas.CustomerContextId) | undefined;
+          customer_id?: (null | Schemas.CustomerId) | undefined;
+          description?: (string | null) | undefined;
+          duration_minutes: number;
+          ends_on?: (string | null) | undefined;
+          horizon_filled_to: string;
+          id: Schemas.TaskRecurrenceId;
+          organization_id: Schemas.OrganizationId;
+          project_id?: (null | Schemas.ProjectId) | undefined;
+          start_time: string;
+          starts_on: string;
+          timezone: string;
+          title: string;
+          updated_at: string;
+        };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      400: unknown;
+      401: unknown;
+      403: unknown;
+      404: unknown;
+      409: unknown;
+    };
+  };
   export type get_ListMyOrganizations = {
     method: "GET";
     path: "/api/v1/users/@me/organizations";
@@ -4908,6 +5100,7 @@ export type EndpointByMethod = {
     "/api/v1/quotes/{quote_id}": Endpoints.patch_UpdateQuote;
     "/api/v1/quotes/{quote_id}/status": Endpoints.patch_UpdateQuoteStatus;
     "/api/v1/service-rates/{service_rate_id}": Endpoints.patch_UpdateServiceRate;
+    "/api/v1/task-recurrences/{task_recurrence_id}": Endpoints.patch_PatchTaskRecurrence;
   };
   delete: {
     "/api/v1/chat/categories/{category_id}": Endpoints.delete_DeleteCategory;
@@ -4937,6 +5130,7 @@ export type EndpointByMethod = {
     "/api/v1/products/{product_id}": Endpoints.delete_DeleteProduct;
     "/api/v1/quotes/{quote_id}": Endpoints.delete_DeleteQuote;
     "/api/v1/service-rates/{service_rate_id}": Endpoints.delete_DeleteServiceRate;
+    "/api/v1/task-recurrences/{task_recurrence_id}": Endpoints.delete_DeleteTaskRecurrence;
   };
   get: {
     "/api/v1/chat/channels/{channel_id}": Endpoints.get_GetChannel;
@@ -4989,6 +5183,7 @@ export type EndpointByMethod = {
     "/api/v1/organizations/{organization_id}/reporting/worked-hours": Endpoints.get_GetWorkedHours;
     "/api/v1/organizations/{organization_id}/service-rates": Endpoints.get_ListServiceRates;
     "/api/v1/organizations/{organization_id}/task-labels": Endpoints.get_ListTaskLabels;
+    "/api/v1/organizations/{organization_id}/task-recurrences": Endpoints.get_ListTaskRecurrences;
     "/api/v1/organizations/{organization_id}/tasks": Endpoints.get_ListTasks;
     "/api/v1/organizations/{organization_id}/tasks/{task_id}": Endpoints.get_GetTask;
     "/api/v1/organizations/{organization_id}/tasks/{task_id}/comments": Endpoints.get_ListTaskComments;
@@ -5035,6 +5230,7 @@ export type EndpointByMethod = {
     "/api/v1/organizations/{organization_id}/quotes": Endpoints.post_CreateQuote;
     "/api/v1/organizations/{organization_id}/service-rates": Endpoints.post_CreateServiceRate;
     "/api/v1/organizations/{organization_id}/task-labels": Endpoints.post_CreateTaskLabel;
+    "/api/v1/organizations/{organization_id}/task-recurrences": Endpoints.post_CreateTaskRecurrence;
     "/api/v1/organizations/{organization_id}/tasks": Endpoints.post_CreateTask;
     "/api/v1/organizations/{organization_id}/tasks/bulk-assign": Endpoints.post_BulkAssignTasks;
     "/api/v1/organizations/{organization_id}/tasks/{task_id}/comments": Endpoints.post_CreateTaskComment;

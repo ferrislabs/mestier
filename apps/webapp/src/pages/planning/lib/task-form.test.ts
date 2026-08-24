@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
 	buildCreateTaskPayload,
+	buildCreateTaskRecurrencePayload,
 	buildFollowUpPatchPayload,
 	buildPatchTaskPayload,
 	calendarSelectionToDateRange,
@@ -698,5 +699,238 @@ describe('expenses on the task payloads', () => {
 
 		expect(payload?.expenses_cents).toBe(0)
 		expect(payload?.expenses_label).toBeNull()
+	})
+})
+
+describe('validateTaskDraft — recurrence', () => {
+	it('is silent when the recurrence control is left off', () => {
+		expect(validateTaskDraft(rootDraft(), { isSubtask: false })).toEqual([])
+	})
+
+	it('refuses a subtask draft with recurrence enabled', () => {
+		const draft = rootDraft({
+			recurrence: {
+				enabled: true,
+				frequency: 'DAILY',
+				weekdays: [],
+				dayOfMonth: 1,
+				endsOn: '',
+			},
+		})
+
+		expect(validateTaskDraft(draft, { isSubtask: true })).toContain(
+			'Une sous-tâche ne peut pas se répéter',
+		)
+	})
+
+	it('requires at least one weekday for a weekly recurrence', () => {
+		const draft = rootDraft({
+			recurrence: {
+				enabled: true,
+				frequency: 'WEEKLY',
+				weekdays: [],
+				dayOfMonth: 1,
+				endsOn: '',
+			},
+		})
+
+		expect(validateTaskDraft(draft, { isSubtask: false })).toContain(
+			'Choisissez au moins un jour de la semaine',
+		)
+	})
+
+	it('accepts a weekly recurrence once a weekday is chosen', () => {
+		const draft = rootDraft({
+			recurrence: {
+				enabled: true,
+				frequency: 'WEEKLY',
+				weekdays: [2],
+				dayOfMonth: 1,
+				endsOn: '',
+			},
+		})
+
+		expect(validateTaskDraft(draft, { isSubtask: false })).toEqual([])
+	})
+
+	it('rejects a monthly day of month out of range', () => {
+		const draft = rootDraft({
+			recurrence: {
+				enabled: true,
+				frequency: 'MONTHLY',
+				weekdays: [],
+				dayOfMonth: 32,
+				endsOn: '',
+			},
+		})
+
+		expect(validateTaskDraft(draft, { isSubtask: false })).toContain(
+			'Le jour du mois doit être entre 1 et 31',
+		)
+	})
+
+	it('rejects an end date before the start date', () => {
+		const draft = rootDraft({
+			recurrence: {
+				enabled: true,
+				frequency: 'DAILY',
+				weekdays: [],
+				dayOfMonth: 1,
+				endsOn: '2026-08-01',
+			},
+		})
+
+		expect(validateTaskDraft(draft, { isSubtask: false })).toContain(
+			'La date de fin de la répétition doit suivre le début',
+		)
+	})
+})
+
+describe('buildCreateTaskRecurrencePayload', () => {
+	it('returns null when the recurrence control is disabled', () => {
+		expect(
+			buildCreateTaskRecurrencePayload(rootDraft(), {
+				timeZone: TIME_ZONE,
+			}),
+		).toBeNull()
+	})
+
+	it('returns null when the draft does not validate', () => {
+		const draft = rootDraft({
+			title: '',
+			recurrence: {
+				enabled: true,
+				frequency: 'DAILY',
+				weekdays: [],
+				dayOfMonth: 1,
+				endsOn: '',
+			},
+		})
+
+		expect(
+			buildCreateTaskRecurrencePayload(draft, { timeZone: TIME_ZONE }),
+		).toBeNull()
+	})
+
+	it('builds a daily payload with the duration derived from the window', () => {
+		const draft = rootDraft({
+			recurrence: {
+				enabled: true,
+				frequency: 'DAILY',
+				weekdays: [],
+				dayOfMonth: 1,
+				endsOn: '',
+			},
+		})
+
+		const payload = buildCreateTaskRecurrencePayload(draft, {
+			timeZone: TIME_ZONE,
+		})
+
+		expect(payload).toMatchObject({
+			frequency: 'DAILY',
+			starts_on: '2026-08-10',
+			ends_on: null,
+			timezone: TIME_ZONE,
+			start_time: '09:00:00',
+			duration_minutes: 60,
+			title: 'Réunion de projet',
+			blocks_availability: true,
+		})
+	})
+
+	it('carries the chosen weekdays for a weekly recurrence', () => {
+		const draft = rootDraft({
+			recurrence: {
+				enabled: true,
+				frequency: 'WEEKLY',
+				weekdays: [1, 3],
+				dayOfMonth: 1,
+				endsOn: '',
+			},
+		})
+
+		const payload = buildCreateTaskRecurrencePayload(draft, {
+			timeZone: TIME_ZONE,
+		}) as { frequency: string; weekdays: number[] }
+
+		expect(payload.frequency).toBe('WEEKLY')
+		expect(payload.weekdays).toEqual([1, 3])
+	})
+
+	it('carries the day of month for a monthly recurrence', () => {
+		const draft = rootDraft({
+			recurrence: {
+				enabled: true,
+				frequency: 'MONTHLY',
+				weekdays: [],
+				dayOfMonth: 15,
+				endsOn: '',
+			},
+		})
+
+		const payload = buildCreateTaskRecurrencePayload(draft, {
+			timeZone: TIME_ZONE,
+		}) as { frequency: string; day_of_month: number }
+
+		expect(payload.frequency).toBe('MONTHLY')
+		expect(payload.day_of_month).toBe(15)
+	})
+
+	it('carries the end date when one is set', () => {
+		const draft = rootDraft({
+			recurrence: {
+				enabled: true,
+				frequency: 'DAILY',
+				weekdays: [],
+				dayOfMonth: 1,
+				endsOn: '2026-12-31',
+			},
+		})
+
+		const payload = buildCreateTaskRecurrencePayload(draft, {
+			timeZone: TIME_ZONE,
+		})
+
+		expect(payload?.ends_on).toBe('2026-12-31')
+	})
+
+	it('carries the assignees directly — no follow-up patch is needed', () => {
+		const draft = rootDraft({
+			assignees: [{ member_id: 'member-1' }, { member_id: 'member-2' }],
+			recurrence: {
+				enabled: true,
+				frequency: 'DAILY',
+				weekdays: [],
+				dayOfMonth: 1,
+				endsOn: '',
+			},
+		})
+
+		const payload = buildCreateTaskRecurrencePayload(draft, {
+			timeZone: TIME_ZONE,
+		})
+
+		expect(payload?.assignee_member_ids).toEqual(['member-1', 'member-2'])
+	})
+
+	it('resolves an all-day recurrence to midnight and a full day duration', () => {
+		const draft = rootDraft({
+			allDay: true,
+			recurrence: {
+				enabled: true,
+				frequency: 'DAILY',
+				weekdays: [],
+				dayOfMonth: 1,
+				endsOn: '',
+			},
+		})
+
+		const payload = buildCreateTaskRecurrencePayload(draft, {
+			timeZone: TIME_ZONE,
+		})
+
+		expect(payload?.start_time).toBe('00:00:00')
+		expect(payload?.duration_minutes).toBe(1440)
 	})
 })

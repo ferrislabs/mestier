@@ -60,6 +60,10 @@ pub enum PlanningEntryResponse {
     Task {
         id: TaskId,
         parent_task_id: Option<TaskId>,
+        /// The series this occurrence follows, when it still follows one —
+        /// what lets the calendar/team/month views mark a task as part of a
+        /// series without a second call.
+        recurrence_id: Option<mestier_core::TaskRecurrenceId>,
         starts_at: DateTime<Utc>,
         ends_at: DateTime<Utc>,
         all_day: bool,
@@ -90,6 +94,7 @@ impl From<PlanningEntry> for PlanningEntryResponse {
             PlanningEntry::Task {
                 id,
                 parent_task_id,
+                recurrence_id,
                 starts_at,
                 ends_at,
                 all_day,
@@ -105,6 +110,7 @@ impl From<PlanningEntry> for PlanningEntryResponse {
             } => Self::Task {
                 id,
                 parent_task_id,
+                recurrence_id,
                 starts_at,
                 ends_at,
                 all_day,
@@ -365,6 +371,7 @@ mod tests {
         let entry: PlanningEntryResponse = PlanningEntry::Task {
             id: "33333333-3333-3333-3333-333333333333".parse().unwrap(),
             parent_task_id: None,
+            recurrence_id: None,
             starts_at: Utc::now(),
             ends_at: Utc::now(),
             all_day: false,
@@ -394,6 +401,7 @@ mod tests {
         let entry: PlanningEntryResponse = PlanningEntry::Task {
             id: "33333333-3333-3333-3333-333333333333".parse().unwrap(),
             parent_task_id: None,
+            recurrence_id: None,
             starts_at: Utc::now(),
             ends_at: Utc::now(),
             all_day: false,

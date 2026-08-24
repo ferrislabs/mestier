@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE task_recurrences\n            SET horizon_filled_to = $2, updated_at = now()\n            WHERE id = $1 AND deleted_at IS NULL\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Date"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "e4e05cc771a8255a327d3bd74fe15f1ec57b04bd9af4e15a1070a225d2c9028e"
+}

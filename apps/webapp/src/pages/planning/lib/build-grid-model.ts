@@ -4,6 +4,7 @@ import {
 } from '#/pages/planning/lib/amplitude'
 import {
 	type EntryTone,
+	entryIsRecurring,
 	entryLabel,
 	entryMemberIds,
 	entryTone,
@@ -39,6 +40,8 @@ export interface GridSegmentVM {
 	width: number
 	/** A task's labels, carried through for the grid's pastille display — always empty for an absence (see the planning remodel design doc's "Label picker and label display on the task form and on grid entries" scope). */
 	labels: GridSegmentLabelVM[]
+	/** Whether this task still follows a recurrence — see `entryIsRecurring`. */
+	isRecurring: boolean
 }
 
 export interface GridCellVM {
@@ -177,6 +180,7 @@ function buildCell(params: {
 							color: label.color,
 						}))
 					: [],
+			isRecurring: entryIsRecurring(item),
 		}
 	})
 

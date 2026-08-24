@@ -23,6 +23,7 @@ pub mod response;
 pub mod task;
 pub mod task_comment;
 pub mod task_label;
+pub mod task_recurrence;
 pub mod work_time;
 
 pub const TAG: &str = "planning";
@@ -88,6 +89,7 @@ pub fn router(state: &AppState) -> Router<AppState> {
         .merge(task::router(state))
         .merge(task_comment::router(state))
         .merge(task_label::router(state))
+        .merge(task_recurrence::router(state))
         .merge(work_time::router(state))
         .merge(planning::router(state))
         .merge(project::router(state))

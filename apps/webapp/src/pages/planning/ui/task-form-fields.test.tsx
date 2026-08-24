@@ -270,3 +270,132 @@ describe('TaskFormFields — devis', () => {
 		expect(screen.queryByLabelText('Devis')).toBeNull()
 	})
 })
+
+describe('TaskFormFields — recurrence', () => {
+	it('offers the "Se répète" control on a create, root draft', () => {
+		render(<TaskFormFields {...baseProps()} />)
+
+		expect(screen.getByLabelText('Se répète')).toBeDefined()
+	})
+
+	it('does not offer the recurrence control for a subtask', () => {
+		render(<TaskFormFields {...baseProps()} isSubtask />)
+
+		expect(screen.queryByLabelText('Se répète')).toBeNull()
+	})
+
+	it('does not offer the recurrence control in edit mode', () => {
+		render(<TaskFormFields {...baseProps()} mode="edit" />)
+
+		expect(screen.queryByLabelText('Se répète')).toBeNull()
+	})
+
+	it('has no frequency picker while the toggle is off, and reports enabling it', async () => {
+		const onChange = vi.fn()
+		const user = userEvent.setup()
+		render(<TaskFormFields {...baseProps()} onChange={onChange} />)
+
+		expect(screen.queryByLabelText('Fréquence')).toBeNull()
+		await user.click(screen.getByLabelText('Se répète'))
+
+		expect(onChange).toHaveBeenCalledWith({
+			recurrence: {
+				enabled: true,
+				frequency: 'DAILY',
+				weekdays: [],
+				dayOfMonth: 1,
+				endsOn: '',
+			},
+		})
+	})
+
+	it('shows the frequency picker once the draft carries an enabled recurrence', () => {
+		const props = baseProps()
+		render(
+			<TaskFormFields
+				{...props}
+				values={{
+					...props.values,
+					recurrence: {
+						enabled: true,
+						frequency: 'DAILY',
+						weekdays: [],
+						dayOfMonth: 1,
+						endsOn: '',
+					},
+				}}
+			/>,
+		)
+
+		expect(screen.getByLabelText('Fréquence')).toBeDefined()
+	})
+
+	it('offers a weekday picker for a weekly recurrence, and reports a toggle', async () => {
+		const onChange = vi.fn()
+		const props = baseProps()
+		render(
+			<TaskFormFields
+				{...props}
+				onChange={onChange}
+				values={{
+					...props.values,
+					recurrence: {
+						enabled: true,
+						frequency: 'WEEKLY',
+						weekdays: [],
+						dayOfMonth: 1,
+						endsOn: '',
+					},
+				}}
+			/>,
+		)
+
+		const user = userEvent.setup()
+		await user.click(screen.getByText('Mar'))
+
+		expect(onChange).toHaveBeenCalledWith({
+			recurrence: {
+				enabled: true,
+				frequency: 'WEEKLY',
+				weekdays: [2],
+				dayOfMonth: 1,
+				endsOn: '',
+			},
+		})
+	})
+
+	it('offers a day-of-month field for a monthly recurrence', () => {
+		const props = baseProps()
+		render(
+			<TaskFormFields
+				{...props}
+				values={{
+					...props.values,
+					recurrence: {
+						enabled: true,
+						frequency: 'MONTHLY',
+						weekdays: [],
+						dayOfMonth: 1,
+						endsOn: '',
+					},
+				}}
+			/>,
+		)
+
+		expect(screen.getByLabelText('Jour du mois')).toBeDefined()
+	})
+
+	it('shows the detach notice when editing an occurrence that is part of a series', () => {
+		render(<TaskFormFields {...baseProps()} mode="edit" isPartOfSeries />)
+
+		expect(screen.getByText(/fait partie d'une série/)).toBeDefined()
+	})
+
+	it('shows no notice when editing a task that never belonged to a series', () => {
+		render(
+			<TaskFormFields {...baseProps()} mode="edit" isPartOfSeries={false} />,
+		)
+
+		expect(screen.queryByText(/fait partie d'une série/)).toBeNull()
+	})
+})

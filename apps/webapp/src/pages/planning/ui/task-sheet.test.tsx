@@ -174,6 +174,66 @@ describe('TaskSheet — editing', () => {
 		expect(screen.queryByRole('button', { name: /Supprimer/ })).toBeNull()
 	})
 
+	describe('deleting a recurring occurrence', () => {
+		function deleteSeriesOptions() {
+			return {
+				onThisOccurrence: vi.fn(),
+				onThisAndFollowing: vi.fn(),
+				onWholeSeries: vi.fn(),
+			}
+		}
+
+		it('offers a menu with the three scopes instead of a plain delete button', async () => {
+			const user = userEvent.setup()
+			render(
+				<TaskSheet
+					{...editProps()}
+					deleteSeriesOptions={deleteSeriesOptions()}
+				/>,
+			)
+
+			await user.click(screen.getByRole('button', { name: /Supprimer/ }))
+
+			expect(
+				screen.getByRole('menuitem', { name: 'Cette occurrence seulement' }),
+			).toBeDefined()
+			expect(
+				screen.getByRole('menuitem', {
+					name: 'Cette occurrence et les suivantes',
+				}),
+			).toBeDefined()
+			expect(
+				screen.getByRole('menuitem', { name: 'Toute la série' }),
+			).toBeDefined()
+		})
+
+		it('calls onThisOccurrence when that choice is picked', async () => {
+			const user = userEvent.setup()
+			const options = deleteSeriesOptions()
+			render(<TaskSheet {...editProps()} deleteSeriesOptions={options} />)
+
+			await user.click(screen.getByRole('button', { name: /Supprimer/ }))
+			await user.click(
+				screen.getByRole('menuitem', { name: 'Cette occurrence seulement' }),
+			)
+
+			expect(options.onThisOccurrence).toHaveBeenCalledTimes(1)
+			expect(options.onThisAndFollowing).not.toHaveBeenCalled()
+			expect(options.onWholeSeries).not.toHaveBeenCalled()
+		})
+
+		it('calls onWholeSeries when that choice is picked', async () => {
+			const user = userEvent.setup()
+			const options = deleteSeriesOptions()
+			render(<TaskSheet {...editProps()} deleteSeriesOptions={options} />)
+
+			await user.click(screen.getByRole('button', { name: /Supprimer/ }))
+			await user.click(screen.getByRole('menuitem', { name: 'Toute la série' }))
+
+			expect(options.onWholeSeries).toHaveBeenCalledTimes(1)
+		})
+	})
+
 	it('shows nothing about pending reports when none are provided', () => {
 		render(<TaskSheet {...editProps()} />)
 		expect(screen.queryByText(/écart signalé/i)).toBeNull()

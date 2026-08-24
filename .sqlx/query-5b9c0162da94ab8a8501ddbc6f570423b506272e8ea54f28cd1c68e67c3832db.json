@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM tasks WHERE recurrence_id = $1 AND occurrence_date > $2",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Date"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "5b9c0162da94ab8a8501ddbc6f570423b506272e8ea54f28cd1c68e67c3832db"
+}

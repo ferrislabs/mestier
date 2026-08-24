@@ -32,6 +32,8 @@ const ASSIGNMENT_REPORTS_PATH =
 	'/api/v1/organizations/{organization_id}/assignment-reports'
 const ASSIGNMENT_REPORT_RESOLUTION_PATH =
 	'/api/v1/assignment-reports/{assignment_report_id}/resolution'
+const TASK_RECURRENCES_PATH =
+	'/api/v1/organizations/{organization_id}/task-recurrences'
 
 type Handler = (params: unknown) => unknown
 
@@ -227,6 +229,31 @@ describe('TaskSheetFeature — creation with assignees and labels', () => {
 		).body
 		expect(patchBody.label_ids).toEqual(['label-1'])
 		expect(patchBody.assignees).toEqual([{ member_id: 'member-1' }])
+	})
+})
+
+describe('TaskSheetFeature — recurrence', () => {
+	it('enabling the recurrence control sends POST /task-recurrences instead of POST /tasks', async () => {
+		const user = userEvent.setup()
+		const { calls, mockMutation, onOpenChange } = renderFeature()
+		mockMutation('post', TASK_RECURRENCES_PATH, () => ({
+			data: { id: 'recurrence-1' },
+			pagination: null,
+		}))
+
+		await user.type(screen.getByLabelText('Titre'), 'Réunion hebdo')
+		await user.click(screen.getByLabelText('Se répète'))
+		await user.click(screen.getByRole('button', { name: 'Créer' }))
+
+		await waitFor(() =>
+			expect(
+				calls.filter(
+					(c) => c.method === 'post' && c.path === TASK_RECURRENCES_PATH,
+				),
+			).toHaveLength(1),
+		)
+		expect(postTaskCalls(calls)).toHaveLength(0)
+		await waitFor(() => expect(onOpenChange).toHaveBeenCalledWith(false))
 	})
 })
 

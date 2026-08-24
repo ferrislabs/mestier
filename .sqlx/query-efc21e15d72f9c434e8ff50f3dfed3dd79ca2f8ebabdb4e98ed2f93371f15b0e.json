@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT DISTINCT org_id\n            FROM task_recurrences\n            WHERE deleted_at IS NULL\n              AND horizon_filled_to <= $2\n              AND (ends_on IS NULL OR ends_on >= $1)\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "org_id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Date",
+        "Date"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "efc21e15d72f9c434e8ff50f3dfed3dd79ca2f8ebabdb4e98ed2f93371f15b0e"
+}

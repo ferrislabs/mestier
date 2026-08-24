@@ -1,4 +1,4 @@
-import { Loader2, Trash2 } from 'lucide-react'
+import { ChevronDown, Loader2, Trash2 } from 'lucide-react'
 import { Button } from '#/components/ui/button'
 import {
 	Dialog,
@@ -8,6 +8,12 @@ import {
 	DialogHeader,
 	DialogTitle,
 } from '#/components/ui/dialog'
+import {
+	DropdownMenu,
+	DropdownMenuContent,
+	DropdownMenuItem,
+	DropdownMenuTrigger,
+} from '#/components/ui/dropdown-menu'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '#/components/ui/tabs'
 import {
 	CommentThread,
@@ -44,6 +50,20 @@ export interface TaskSheetProps {
 	 * exactly as cleanly as one without.
 	 */
 	onDelete?: () => void
+	/**
+	 * Present only when the task being edited still belongs to a series —
+	 * replaces the plain delete button with a menu offering the three scopes
+	 * a `DELETE` on a recurring occurrence can take (see the backend's
+	 * `DeleteScope`: `THIS_OCCURRENCE`/`THIS_AND_FOLLOWING` on the task
+	 * itself, or the whole series via `DELETE /task-recurrences/{id}`).
+	 * Two verbs would be wrong at this call site — the caller genuinely has
+	 * to choose which one they mean.
+	 */
+	deleteSeriesOptions?: {
+		onThisOccurrence: () => void
+		onThisAndFollowing: () => void
+		onWholeSeries: () => void
+	}
 	onOpenChange: (open: boolean) => void
 	/** Present only in edit mode — a task not yet created has no subtasks and no comment thread to show. */
 	subtasksTab?: SubtaskListProps
@@ -74,6 +94,7 @@ export function TaskSheet({
 	saveError,
 	onSubmit,
 	onDelete,
+	deleteSeriesOptions,
 	onOpenChange,
 	subtasksTab,
 	commentsTab,
@@ -137,7 +158,41 @@ export function TaskSheet({
 				</div>
 
 				<DialogFooter className="border-t pt-4 sm:justify-between">
-					{mode === 'edit' && onDelete ? (
+					{mode === 'edit' && deleteSeriesOptions ? (
+						<DropdownMenu>
+							<DropdownMenuTrigger asChild>
+								<Button
+									type="button"
+									variant="ghost"
+									className="text-destructive hover:text-destructive"
+									disabled={isDeleting}
+								>
+									{isDeleting ? (
+										<Loader2 className="animate-spin" />
+									) : (
+										<Trash2 />
+									)}
+									Supprimer
+									<ChevronDown className="size-3.5" />
+								</Button>
+							</DropdownMenuTrigger>
+							<DropdownMenuContent align="start">
+								<DropdownMenuItem
+									onClick={deleteSeriesOptions.onThisOccurrence}
+								>
+									Cette occurrence seulement
+								</DropdownMenuItem>
+								<DropdownMenuItem
+									onClick={deleteSeriesOptions.onThisAndFollowing}
+								>
+									Cette occurrence et les suivantes
+								</DropdownMenuItem>
+								<DropdownMenuItem onClick={deleteSeriesOptions.onWholeSeries}>
+									Toute la série
+								</DropdownMenuItem>
+							</DropdownMenuContent>
+						</DropdownMenu>
+					) : mode === 'edit' && onDelete ? (
 						<Button
 							type="button"
 							variant="ghost"

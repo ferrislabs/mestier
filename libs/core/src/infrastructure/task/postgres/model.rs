@@ -1,12 +1,12 @@
 use std::str::FromStr;
 
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, NaiveDate, Utc};
 use common::CoreError;
 use uuid::Uuid;
 
 use crate::{
     CustomerContextId, CustomerId, MemberId, OrganizationId, ProjectId, QuoteId, Task,
-    TaskAssignment, TaskAssignmentId, TaskId, TaskStatus,
+    TaskAssignment, TaskAssignmentId, TaskId, TaskRecurrenceId, TaskStatus,
 };
 
 #[derive(Debug, Clone)]
@@ -27,6 +27,8 @@ pub struct TaskRow {
     pub project_id: Option<Uuid>,
     pub expenses_cents: i32,
     pub expenses_label: Option<String>,
+    pub recurrence_id: Option<Uuid>,
+    pub occurrence_date: Option<NaiveDate>,
     pub deleted_at: Option<DateTime<Utc>>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
@@ -55,6 +57,8 @@ impl TaskRow {
             expenses_cents: self.expenses_cents,
             expenses_label: self.expenses_label,
             assignments,
+            recurrence_id: self.recurrence_id.map(TaskRecurrenceId),
+            occurrence_date: self.occurrence_date,
             deleted_at: self.deleted_at,
             created_at: self.created_at,
             updated_at: self.updated_at,

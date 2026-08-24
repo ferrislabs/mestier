@@ -494,6 +494,7 @@ fn build_entries(tasks: &[PlanningTask], absences: &[Absence]) -> Vec<PlanningEn
         entries.push(PlanningEntry::Task {
             id: task.id,
             parent_task_id: task.parent_task_id,
+            recurrence_id: task.recurrence_id,
             starts_at,
             ends_at,
             all_day: task.all_day,
@@ -672,6 +673,8 @@ mod tests {
             expenses_cents: 0,
             expenses_label: None,
             assignments: Vec::new(),
+            recurrence_id: None,
+            occurrence_date: None,
             deleted_at: None,
             created_at: starts_at,
             updated_at: starts_at,

@@ -85,6 +85,19 @@ pub async fn run_automation_worker(
             error!(%error, "fanning events out failed");
         }
 
+        // Same shape as the event fan-out just above: turns state that
+        // needs attention (a recurrence whose horizon is getting close to
+        // today) into `automation.run` rows, on the same tick, through the
+        // same queue `run_engine_pass` already claims from below — never a
+        // second scheduler.
+        match usecase.ensure_recurrence_horizon_runs().await {
+            Ok(created) if created > 0 => {
+                info!(created, "queued recurrence horizon extension runs");
+            }
+            Ok(_) => {}
+            Err(error) => error!(%error, "scheduling recurrence horizon extension runs failed"),
+        }
+
         match usecase
             .run_engine_pass(&connectors, &worker, schedule)
             .await

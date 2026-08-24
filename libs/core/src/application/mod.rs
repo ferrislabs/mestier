@@ -52,6 +52,7 @@ pub mod service_rate;
 pub mod task;
 pub mod task_comment;
 pub mod task_label;
+pub mod task_recurrence;
 #[cfg(test)]
 pub(crate) mod test_support;
 pub mod time_entry;

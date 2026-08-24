@@ -5,7 +5,7 @@ use common::CoreError;
 
 use crate::{
     AbsenceId, AbsenceKind, EmployeeId, MemberId, MinuteInterval, Task, TaskId, TaskLabel,
-    TaskStatus,
+    TaskRecurrenceId, TaskStatus,
 };
 
 pub mod ports;
@@ -62,6 +62,11 @@ pub enum PlanningEntry {
     Task {
         id: TaskId,
         parent_task_id: Option<TaskId>,
+        /// The series this occurrence follows, when it still follows one —
+        /// what lets the calendar/team/month views mark a task as part of a
+        /// series without a second call. See `crate::Task::recurrence_id`'s
+        /// own doc for the detach-on-edit rule that clears it.
+        recurrence_id: Option<TaskRecurrenceId>,
         starts_at: DateTime<Utc>,
         ends_at: DateTime<Utc>,
         all_day: bool,

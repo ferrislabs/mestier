@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            UPDATE tasks\n            SET parent_task_id = $2,\n                title = $3,\n                description = $4,\n                starts_at = $5,\n                ends_at = $6,\n                all_day = $7,\n                status = CAST($8 AS text)::task_status,\n                blocks_availability = $9,\n                updated_at = $10,\n                project_id = $11,\n                expenses_cents = $12,\n                expenses_label = $13\n            WHERE id = $1 AND deleted_at IS NULL\n            RETURNING id, org_id, parent_task_id, title, description, starts_at, ends_at, all_day, status::text AS \"status!\", blocks_availability, customer_id, customer_context_id, quote_id, project_id, expenses_cents, expenses_label, deleted_at, created_at, updated_at\n            ",
+  "query": "\n            INSERT INTO tasks (id, org_id, parent_task_id, title, description, starts_at, ends_at, all_day, status, blocks_availability, customer_id, customer_context_id, quote_id, project_id, expenses_cents, expenses_label, recurrence_id, occurrence_date, deleted_at, created_at, updated_at)\n            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, CAST($9 AS text)::task_status, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21)\n            ON CONFLICT (recurrence_id, occurrence_date) WHERE recurrence_id IS NOT NULL AND deleted_at IS NULL\n            DO NOTHING\n            RETURNING id, org_id, parent_task_id, title, description, starts_at, ends_at, all_day, status::text AS \"status!\", blocks_availability, customer_id, customer_context_id, quote_id, project_id, expenses_cents, expenses_label, recurrence_id, occurrence_date, deleted_at, created_at, updated_at\n            ",
   "describe": {
     "columns": [
       {
@@ -85,16 +85,26 @@
       },
       {
         "ordinal": 16,
+        "name": "recurrence_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 17,
+        "name": "occurrence_date",
+        "type_info": "Date"
+      },
+      {
+        "ordinal": 18,
         "name": "deleted_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 17,
+        "ordinal": 19,
         "name": "created_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 18,
+        "ordinal": 20,
         "name": "updated_at",
         "type_info": "Timestamptz"
       }
@@ -103,6 +113,7 @@
       "Left": [
         "Uuid",
         "Uuid",
+        "Uuid",
         "Text",
         "Text",
         "Timestamptz",
@@ -110,10 +121,17 @@
         "Bool",
         "Text",
         "Bool",
-        "Timestamptz",
+        "Uuid",
+        "Uuid",
+        "Uuid",
         "Uuid",
         "Int4",
-        "Text"
+        "Text",
+        "Uuid",
+        "Date",
+        "Timestamptz",
+        "Timestamptz",
+        "Timestamptz"
       ]
     },
     "nullable": [
@@ -134,9 +152,11 @@
       false,
       true,
       true,
+      true,
+      true,
       false,
       false
     ]
   },
-  "hash": "70b3605909a4a52076bffb3084b55d480d6b413e9012a2d0939a28942b1e5789"
+  "hash": "0c62beca48ca3cda09f12dab68d1a9a662243cccdead621237c65ff818a7f685"
 }

@@ -12,7 +12,11 @@ import {
 	entryNature,
 	matchesFilter,
 } from '#/pages/planning/lib/calendar-filters'
-import { entryLabel, entryMemberIds } from '#/pages/planning/lib/entries'
+import {
+	entryIsRecurring,
+	entryLabel,
+	entryMemberIds,
+} from '#/pages/planning/lib/entries'
 import {
 	computeSegmentPosition,
 	type MinuteSpan,
@@ -55,6 +59,8 @@ export interface CalendarEventVM extends EventDetailVM {
 	key: string
 	entryId: string
 	nature: CalendarNature | 'unknown'
+	/** Whether this task still follows a recurrence — see {@link entryIsRecurring}. */
+	isRecurring: boolean
 	allDay: boolean
 	/** Minutes since local midnight, to position the opening scroll. */
 	startMinute: number
@@ -221,6 +227,7 @@ function toEventVM(params: {
 		key: `${params.entry.id}-${params.date}`,
 		entryId: params.entry.id,
 		nature: entryNature(params.entry),
+		isRecurring: entryIsRecurring(params.entry),
 		title: entryLabel(params.entry),
 		timeLabel: formatSpanLabel(span, params.entry.all_day),
 		allDay: params.entry.all_day,

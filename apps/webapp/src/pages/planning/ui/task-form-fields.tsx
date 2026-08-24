@@ -13,7 +13,11 @@ import {
 	resourceIdFromAssigneeRef,
 	toggleAssignee,
 } from '#/pages/planning/lib/task-drop'
-import type { TaskFormValues } from '#/pages/planning/lib/task-form'
+import type {
+	RecurrenceDraft,
+	RecurrenceFrequency,
+	TaskFormValues,
+} from '#/pages/planning/lib/task-form'
 import {
 	type AssigneeOption,
 	AssigneePicker,
@@ -69,6 +73,29 @@ export interface TaskFormFieldsProps {
 	isCreatingLabel?: boolean
 	onCreateLabel: (name: string) => void
 	assigneeOptions: AssigneeOption[]
+	/**
+	 * Edit mode only: whether the loaded task still follows a series —
+	 * drives the detach notice, shown *before* saving so the screen can
+	 * explain up front that this edit will not touch next Tuesday's
+	 * occurrence, not after the fact.
+	 */
+	isPartOfSeries?: boolean
+}
+
+const WEEKDAY_OPTIONS: { iso: number; label: string }[] = [
+	{ iso: 1, label: 'Lun' },
+	{ iso: 2, label: 'Mar' },
+	{ iso: 3, label: 'Mer' },
+	{ iso: 4, label: 'Jeu' },
+	{ iso: 5, label: 'Ven' },
+	{ iso: 6, label: 'Sam' },
+	{ iso: 7, label: 'Dim' },
+]
+
+const RECURRENCE_FREQUENCY_LABELS: Record<RecurrenceFrequency, string> = {
+	DAILY: 'Tous les jours',
+	WEEKLY: 'Toutes les semaines',
+	MONTHLY: 'Tous les mois',
 }
 
 /**
@@ -97,11 +124,20 @@ export function TaskFormFields({
 	isCreatingLabel,
 	onCreateLabel,
 	assigneeOptions,
+	isPartOfSeries,
 }: TaskFormFieldsProps) {
 	const selectedResourceIds = values.assignees.map(resourceIdFromAssigneeRef)
 
 	return (
 		<div className="flex flex-col gap-5">
+			{mode === 'edit' && isPartOfSeries ? (
+				<p className="rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+					Cette tâche fait partie d'une série. Modifier ce formulaire ne change
+					que cette occurrence : elle cessera de suivre la série, et les autres
+					occurrences resteront inchangées.
+				</p>
+			) : null}
+
 			<div className="flex flex-col gap-2">
 				<Label htmlFor="task-title">Titre</Label>
 				<Input
@@ -341,6 +377,13 @@ export function TaskFormFields({
 				/>
 			</div>
 
+			{mode === 'create' && !isSubtask ? (
+				<RecurrenceFields
+					recurrence={values.recurrence}
+					onChange={(recurrence) => onChange({ recurrence })}
+				/>
+			) : null}
+
 			<div className="flex flex-col gap-2">
 				<Label>Labels</Label>
 				<LabelPicker
@@ -382,6 +425,149 @@ export function TaskFormFields({
 						<li key={error}>{error}</li>
 					))}
 				</ul>
+			) : null}
+		</div>
+	)
+}
+
+/**
+ * The "repeat" control — create mode, root tasks only (see
+ * `TaskFormFieldsProps.isPartOfSeries`'s own doc: an occurrence's edit form
+ * never renders this, it renders the detach notice instead). Daily, weekly
+ * on a set of weekdays, or monthly on a day number, with an optional end
+ * date — mirrors the backend's `RecurrenceRule` exactly: an RRULE string was
+ * rejected there for the same reason this is three concrete shapes rather
+ * than one free-form field.
+ */
+function RecurrenceFields({
+	recurrence,
+	onChange,
+}: {
+	recurrence: RecurrenceDraft
+	onChange: (recurrence: RecurrenceDraft) => void
+}) {
+	return (
+		<div className="flex flex-col gap-3 rounded-lg border bg-card p-3">
+			<div className="flex items-center justify-between">
+				<div>
+					<p className="text-sm font-medium">Se répète</p>
+					<p className="text-xs text-muted-foreground">
+						Crée automatiquement les prochaines occurrences.
+					</p>
+				</div>
+				<Switch
+					checked={recurrence.enabled}
+					onCheckedChange={(enabled) => onChange({ ...recurrence, enabled })}
+					aria-label="Se répète"
+				/>
+			</div>
+
+			{recurrence.enabled ? (
+				<div className="flex flex-col gap-3">
+					<div className="flex flex-col gap-2">
+						<Label htmlFor="task-recurrence-frequency">Fréquence</Label>
+						<Select
+							value={recurrence.frequency}
+							onValueChange={(frequency) =>
+								onChange({
+									...recurrence,
+									frequency: frequency as RecurrenceFrequency,
+								})
+							}
+						>
+							<SelectTrigger
+								id="task-recurrence-frequency"
+								aria-label="Fréquence"
+								className="w-full"
+							>
+								<SelectValue />
+							</SelectTrigger>
+							<SelectContent>
+								{(
+									Object.keys(
+										RECURRENCE_FREQUENCY_LABELS,
+									) as RecurrenceFrequency[]
+								).map((frequency) => (
+									<SelectItem key={frequency} value={frequency}>
+										{RECURRENCE_FREQUENCY_LABELS[frequency]}
+									</SelectItem>
+								))}
+							</SelectContent>
+						</Select>
+					</div>
+
+					{recurrence.frequency === 'WEEKLY' ? (
+						<div className="flex flex-col gap-2">
+							<Label>Jours de la semaine</Label>
+							<div className="flex flex-wrap gap-1.5">
+								{WEEKDAY_OPTIONS.map((weekday) => {
+									const selected = recurrence.weekdays.includes(weekday.iso)
+									return (
+										<button
+											key={weekday.iso}
+											type="button"
+											aria-pressed={selected}
+											onClick={() =>
+												onChange({
+													...recurrence,
+													weekdays: selected
+														? recurrence.weekdays.filter(
+																(iso) => iso !== weekday.iso,
+															)
+														: [...recurrence.weekdays, weekday.iso].sort(),
+												})
+											}
+											className={`rounded-md border px-2.5 py-1 text-xs font-medium transition-colors ${
+												selected
+													? 'border-primary bg-primary text-primary-foreground'
+													: 'border-input bg-background text-foreground'
+											}`}
+										>
+											{weekday.label}
+										</button>
+									)
+								})}
+							</div>
+						</div>
+					) : null}
+
+					{recurrence.frequency === 'MONTHLY' ? (
+						<div className="flex flex-col gap-2">
+							<Label htmlFor="task-recurrence-day-of-month">Jour du mois</Label>
+							<Input
+								id="task-recurrence-day-of-month"
+								type="number"
+								min={1}
+								max={31}
+								className="w-24"
+								value={recurrence.dayOfMonth}
+								onChange={(event) =>
+									onChange({
+										...recurrence,
+										dayOfMonth: Number(event.target.value) || 1,
+									})
+								}
+							/>
+						</div>
+					) : null}
+
+					<div className="flex flex-col gap-2">
+						<Label htmlFor="task-recurrence-ends-on">
+							Fin de la répétition
+						</Label>
+						<Input
+							id="task-recurrence-ends-on"
+							type="date"
+							value={recurrence.endsOn}
+							onChange={(event) =>
+								onChange({ ...recurrence, endsOn: event.target.value })
+							}
+						/>
+						<p className="text-xs text-muted-foreground">
+							Laissez vide pour une répétition sans fin.
+						</p>
+					</div>
+				</div>
 			) : null}
 		</div>
 	)
