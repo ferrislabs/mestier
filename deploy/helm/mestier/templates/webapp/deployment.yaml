@@ -1,0 +1,86 @@
+{{- if .Values.webapp.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "mestier.fullname" . }}-webapp
+  labels:
+    {{- include "mestier.labels" . | nindent 4 }}
+    app.kubernetes.io/component: webapp
+spec:
+  {{- if not .Values.webapp.autoscaling.enabled }}
+  replicas: {{ .Values.webapp.replicaCount }}
+  {{- end }}
+  selector:
+    matchLabels:
+      {{- include "mestier.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: webapp
+  template:
+    metadata:
+      {{- with .Values.webapp.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      labels:
+        {{- include "mestier.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: webapp
+        {{- with .Values.webapp.podLabels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+    spec:
+      {{- with .Values.global.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ include "mestier.serviceAccountName" . }}
+      {{- with .Values.webapp.podSecurityContext }}
+      securityContext:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: webapp
+          image: {{ include "mestier.image" (dict "image" .Values.webapp.image "chart" .Chart) }}
+          imagePullPolicy: {{ .Values.webapp.image.pullPolicy }}
+          {{- with .Values.webapp.securityContext }}
+          securityContext:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          ports:
+            - name: http
+              containerPort: {{ .Values.webapp.service.port }}
+              protocol: TCP
+          env:
+            {{- range $key, $value := .Values.webapp.env }}
+            - name: {{ $key }}
+              value: {{ $value | quote }}
+            {{- end }}
+          livenessProbe:
+            httpGet:
+              path: {{ .Values.webapp.probes.liveness.path }}
+              port: http
+            initialDelaySeconds: {{ .Values.webapp.probes.liveness.initialDelaySeconds }}
+            periodSeconds: {{ .Values.webapp.probes.liveness.periodSeconds }}
+            timeoutSeconds: {{ .Values.webapp.probes.liveness.timeoutSeconds }}
+            failureThreshold: {{ .Values.webapp.probes.liveness.failureThreshold }}
+          readinessProbe:
+            httpGet:
+              path: {{ .Values.webapp.probes.readiness.path }}
+              port: http
+            initialDelaySeconds: {{ .Values.webapp.probes.readiness.initialDelaySeconds }}
+            periodSeconds: {{ .Values.webapp.probes.readiness.periodSeconds }}
+            timeoutSeconds: {{ .Values.webapp.probes.readiness.timeoutSeconds }}
+            failureThreshold: {{ .Values.webapp.probes.readiness.failureThreshold }}
+          resources:
+            {{- toYaml .Values.webapp.resources | nindent 12 }}
+      {{- with .Values.webapp.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.webapp.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.webapp.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+{{- end }}

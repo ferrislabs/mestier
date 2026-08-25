@@ -1,0 +1,216 @@
+# -- Default values for the mestier chart.
+# Every setting below is variabilized on purpose: nothing in templates/ is
+# hardcoded. See README.md for the full ingress vs. gateway-api walkthrough.
+
+global:
+  # -- Image registry pull secrets, shared by both api and webapp pods.
+  imagePullSecrets: []
+  # -- Labels applied to every resource in the release, on top of the chart's own.
+  labels: {}
+
+# ---------------------------------------------------------------------------
+# api — the Axum backend (apps/api)
+# ---------------------------------------------------------------------------
+api:
+  enabled: true
+  replicaCount: 1
+
+  image:
+    repository: ghcr.io/ferrislabs/mestier-api
+    tag: ""  # defaults to .Chart.AppVersion
+    pullPolicy: IfNotPresent
+
+  # -- Overrides the container command/args. Leave empty to use the image's ENTRYPOINT.
+  command: []
+  args: []
+
+  service:
+    type: ClusterIP
+    # -- Public application port (SERVER_PORT).
+    port: 3456
+    # -- Internal port serving /health and /metrics (SERVER_INTERNAL_PORT). Not exposed
+    # through ingress/gateway by default — scrape it in-cluster only.
+    internalPort: 3457
+
+  resources: {}
+    # requests:
+    #   cpu: 100m
+    #   memory: 128Mi
+    # limits:
+    #   cpu: 500m
+    #   memory: 512Mi
+
+  autoscaling:
+    enabled: false
+    minReplicas: 1
+    maxReplicas: 5
+    targetCPUUtilizationPercentage: 80
+
+  podAnnotations: {}
+  podLabels: {}
+  podSecurityContext: {}
+  securityContext: {}
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+
+  probes:
+    liveness:
+      path: /health
+      initialDelaySeconds: 5
+      periodSeconds: 10
+      timeoutSeconds: 3
+      failureThreshold: 3
+    readiness:
+      path: /health
+      initialDelaySeconds: 5
+      periodSeconds: 10
+      timeoutSeconds: 3
+      failureThreshold: 3
+
+  # -- Non-sensitive configuration, rendered into a ConfigMap and consumed via envFrom.
+  # Keys mirror libs/args exactly (see libs/args/src/*.rs); values here are the
+  # same defaults clap applies, spelled out so they are visible and overridable.
+  env:
+    LOG_FILTER: "info"
+    LOG_JSON: "false"
+    DATABASE_HOST: "postgres"
+    DATABASE_NAME: "mestier"
+    DATABASE_USER: "mestier"
+    DATABASE_PORT: "5432"
+    AUTH_ISSUER: "http://localhost:3333/realms/mestier"
+    AUTH_CLIENT_ID: "mestier"
+    ALLOWED_ORIGINS: ""
+    SERVER_HOST: "0.0.0.0"
+    SERVER_PORT: "3456"
+    SERVER_INTERNAL_PORT: "3457"
+    ACTIVE_OBSERVABILITY: "false"
+    OTLP_ENDPOINT: ""
+    METRICS_ENDPOINT: ""
+    RATE_LIMIT_REDIS_URL: "redis://redis:6379"
+    RATE_LIMIT_PER_MINUTE: "120"
+    FILE_STORAGE_BUCKET: "mestier-files"
+    FILE_STORAGE_ENDPOINT: "http://rustfs:9000"
+    FILE_STORAGE_REGION: "us-east-1"
+    FILE_STORAGE_FORCE_PATH_STYLE: "true"
+    FILE_STORAGE_AUTO_CREATE_BUCKET: "true"
+    FILE_STORAGE_KEY_PREFIX: "uploads"
+    FILE_STORAGE_MAX_UPLOAD_BYTES: "10485760"
+    AUTOMATION_ALLOW_PRIVATE_NETWORK: "false"
+
+  # -- Sensitive configuration. By default the chart creates a Secret from the
+  # values below (empty strings on purpose — fill them via -f/--set on install,
+  # never commit real secrets into values.yaml).
+  # Set secret.existingSecret to consume a Secret you manage yourself instead;
+  # in that case the values below are ignored and the keys must already match
+  # (same names as env above, uppercase — see templates/api/secret.yaml).
+  secret:
+    create: true
+    existingSecret: ""
+    DATABASE_PASSWORD: ""
+    AUTH_CLIENT_SECRET: ""
+    FILE_STORAGE_ACCESS_KEY_ID: ""
+    FILE_STORAGE_SECRET_ACCESS_KEY: ""
+    AUTOMATION_SECRET_KEY: ""
+
+# ---------------------------------------------------------------------------
+# webapp — the React app served by nginx (apps/webapp)
+# ---------------------------------------------------------------------------
+webapp:
+  enabled: true
+  replicaCount: 1
+
+  image:
+    repository: ghcr.io/ferrislabs/mestier-webapp
+    tag: ""  # defaults to .Chart.AppVersion
+    pullPolicy: IfNotPresent
+
+  service:
+    type: ClusterIP
+    port: 80
+
+  resources: {}
+
+  autoscaling:
+    enabled: false
+    minReplicas: 1
+    maxReplicas: 5
+    targetCPUUtilizationPercentage: 80
+
+  podAnnotations: {}
+  podLabels: {}
+  podSecurityContext: {}
+  securityContext: {}
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+
+  probes:
+    liveness:
+      path: /
+      initialDelaySeconds: 5
+      periodSeconds: 10
+      timeoutSeconds: 3
+      failureThreshold: 3
+    readiness:
+      path: /
+      initialDelaySeconds: 5
+      periodSeconds: 10
+      timeoutSeconds: 3
+      failureThreshold: 3
+
+  # -- Injected at container start into public/config.json (see
+  # apps/webapp/docker-entrypoint.sh) — not build-time, so this is a plain
+  # env var pair, no secret involved.
+  env:
+    API_URL: ""
+    ISSUER_URL: ""
+
+serviceAccount:
+  # -- Whether a ServiceAccount is created, shared by api and webapp pods.
+  create: true
+  annotations: {}
+  name: ""
+
+# ---------------------------------------------------------------------------
+# Ingress — classic nginx/traefik/... Ingress controller.
+# Mutually independent from gatewayApi below: enable one, the other, or both.
+# ---------------------------------------------------------------------------
+ingress:
+  enabled: false
+  className: ""
+  annotations: {}
+  # -- TLS blocks, passed through verbatim to the Ingress resource.
+  tls: []
+  #   - secretName: mestier-tls
+  #     hosts:
+  #       - app.mestier.example.com
+  #       - api.mestier.example.com
+  api:
+    host: api.mestier.example.com
+    path: /
+    pathType: Prefix
+  webapp:
+    host: app.mestier.example.com
+    path: /
+    pathType: Prefix
+
+# ---------------------------------------------------------------------------
+# Gateway API — HTTPRoute attached to an existing Gateway (not created here;
+# the Gateway and its GatewayClass are cluster infrastructure, out of scope).
+# ---------------------------------------------------------------------------
+gatewayApi:
+  enabled: false
+  parentRefs:
+    - name: mestier-gateway
+      namespace: gateway-system
+      # sectionName: http  # uncomment to bind a specific Gateway listener
+  annotations: {}
+  api:
+    hostnames:
+      - api.mestier.example.com
+    path: /
+  webapp:
+    hostnames:
+      - app.mestier.example.com
+    path: /
