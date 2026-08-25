@@ -25,3 +25,15 @@ pub struct QuoteStatusPath {
 pub struct QuotePdfPath {
     pub quote_id: QuoteId,
 }
+
+#[derive(TypedPath, Deserialize)]
+#[typed_path("/api/v1/quotes/{quote_id}/plan-proposal")]
+pub struct QuotePlanProposalPath {
+    pub quote_id: QuoteId,
+}
+
+#[derive(TypedPath, Deserialize)]
+#[typed_path("/api/v1/quotes/{quote_id}/plan")]
+pub struct QuotePlanPath {
+    pub quote_id: QuoteId,
+}

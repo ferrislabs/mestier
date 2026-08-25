@@ -1,7 +1,7 @@
 use chrono::{DateTime, Utc};
 use common::CoreError;
 
-use crate::{CustomerId, OrganizationId, Project, ProjectId};
+use crate::{CustomerId, OrganizationId, Project, ProjectId, QuoteId};
 
 #[cfg_attr(any(test, feature = "mock"), mockall::automock)]
 pub trait ProjectRepository: Send {
@@ -46,4 +46,14 @@ pub trait ProjectRepository: Send {
         id: ProjectId,
         archived_at: Option<DateTime<Utc>>,
     ) -> impl Future<Output = Result<(), CoreError>> + Send;
+
+    /// Whether any project (archived included — a retired one still makes
+    /// the margin ambiguous) already carries this quote. Backs
+    /// `validate_quote_plannable`'s "a quote already turned into a project
+    /// is refused unless the caller says explicitly they want a second
+    /// one" rule (#298).
+    fn exists_for_quote(
+        &mut self,
+        quote_id: QuoteId,
+    ) -> impl Future<Output = Result<bool, CoreError>> + Send;
 }

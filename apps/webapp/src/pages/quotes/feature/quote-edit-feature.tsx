@@ -2,6 +2,7 @@ import { Link, useNavigate } from '@tanstack/react-router'
 import {
 	AlertCircle,
 	ArrowLeft,
+	ArrowRightLeft,
 	FileText,
 	Loader2,
 	Plus,
@@ -406,6 +407,19 @@ function QuoteEditUI({
 								Retour
 							</Link>
 						</Button>
+						{quote.status === 'ACCEPTED' ? (
+							<Button asChild variant="outline">
+								<Link
+									to={buildOrgPath(
+										activeOrganization.slug,
+										`/crm/quotes/${quote.id}/handover`,
+									)}
+								>
+									<ArrowRightLeft />
+									Transformer en projet
+								</Link>
+							</Button>
+						) : null}
 						<AlertDialog>
 							<AlertDialogTrigger asChild>
 								<Button

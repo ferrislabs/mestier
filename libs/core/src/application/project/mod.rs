@@ -1,12 +1,19 @@
+use std::collections::HashSet;
+
 use common::CoreError;
 use mestier_macros::transactional;
 
 use crate::{
-    CustomerId, OrganizationId, Project, ProjectId,
+    CustomerId, OrganizationId, Project, ProjectId, Task,
     application::MestierUseCase,
-    domain::project::{
-        commands::{CreateProjectCommand, UpdateProjectCommand},
-        service::ProjectService,
+    domain::{
+        project::{
+            commands::{CreateProjectCommand, CreateProjectFromQuoteCommand, UpdateProjectCommand},
+            ports::ProjectRepository,
+            service::{ProjectService, build_planned_tasks},
+        },
+        quote::ports::QuoteRepository,
+        task::ports::TaskRepository,
     },
 };
 
@@ -68,5 +75,70 @@ impl MestierUseCase {
     pub async fn restore_project(&self, id: ProjectId) -> Result<(), CoreError> {
         let mut service = ProjectService::new(project_repository);
         service.restore_project(id).await
+    }
+
+    /// Turns an accepted quote into a project with the tasks a human
+    /// confirmed from `GET .../plan-proposal`, in one transaction. The
+    /// project carries the quote's customer and the quote itself — that
+    /// attachment is what gives `ProjectProfitability::quoted_cents` its
+    /// denominator (see #298, and #260 for why `quote_id` lives here and
+    /// not on the task).
+    #[transactional(project, quote, task)]
+    pub async fn create_project_from_quote(
+        &self,
+        command: CreateProjectFromQuoteCommand,
+    ) -> Result<(Project, Vec<Task>), CoreError> {
+        let mut quote_repository = quote_repository;
+        let quote = quote_repository
+            .find_by_id(command.quote_id)
+            .await?
+            .ok_or(CoreError::NotFound)?;
+
+        let mut project_repository = project_repository;
+        let already_has_project = project_repository
+            .exists_for_quote(command.quote_id)
+            .await?;
+        crate::domain::quote::service::validate_quote_plannable(
+            &quote,
+            already_has_project,
+            command.force_new,
+        )?;
+
+        // A planned task may point at zero or more quote lines; the ones it
+        // does must actually belong to this quote — a wrong id here is a
+        // caller bug worth refusing loudly rather than silently accepting.
+        let quote_line_ids: HashSet<_> = quote.lines.iter().map(|line| line.id).collect();
+        for task in &command.tasks {
+            if task
+                .quote_line_ids
+                .iter()
+                .any(|line_id| !quote_line_ids.contains(line_id))
+            {
+                return Err(CoreError::Conflict(
+                    "a planned task references a quote line that does not belong to this quote"
+                        .to_owned(),
+                ));
+            }
+        }
+
+        let mut project_service = ProjectService::new(project_repository);
+        let project = project_service
+            .create_project(CreateProjectCommand {
+                organization_id: quote.organization_id,
+                name: command.name,
+                customer_id: Some(quote.customer_id),
+                customer_context_id: Some(quote.customer_context_id),
+                quote_id: Some(quote.id),
+            })
+            .await?;
+
+        let planned_tasks = build_planned_tasks(&command.tasks, project.id, quote.organization_id)?;
+        let mut task_repository = task_repository;
+        let mut created_tasks = Vec::with_capacity(planned_tasks.len());
+        for task in &planned_tasks {
+            created_tasks.push(task_repository.insert(task).await?);
+        }
+
+        Ok((project, created_tasks))
     }
 }

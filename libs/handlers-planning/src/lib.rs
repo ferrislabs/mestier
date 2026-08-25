@@ -19,6 +19,7 @@ pub mod assignment_report;
 pub mod paths;
 pub mod planning;
 pub mod project;
+pub mod project_template;
 pub mod response;
 pub mod task;
 pub mod task_comment;
@@ -93,6 +94,7 @@ pub fn router(state: &AppState) -> Router<AppState> {
         .merge(work_time::router(state))
         .merge(planning::router(state))
         .merge(project::router(state))
+        .merge(project_template::router(state))
         .layer(from_fn_with_state(state.clone(), rate_limit_middleware))
         .layer(from_fn_with_state(state.clone(), auth_middleware))
 }

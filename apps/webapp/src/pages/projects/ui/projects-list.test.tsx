@@ -31,14 +31,17 @@ function baseProps() {
 		error: null,
 		editingId: null,
 		isSaving: false,
+		isBuildingTemplate: false,
 		onSearchChange: vi.fn(),
 		onIncludeArchivedChange: vi.fn(),
 		onCreate: vi.fn(),
+		onStartFromTemplate: vi.fn(),
 		onEdit: vi.fn(),
 		onCancelEdit: vi.fn(),
 		onSaveEdit: vi.fn(),
 		onArchive: vi.fn(),
 		onRestore: vi.fn(),
+		onSaveAsTemplate: vi.fn(),
 	}
 }
 

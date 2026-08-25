@@ -260,6 +260,41 @@ export namespace Schemas {
     name: string;
     quote_id?: (null | QuoteId) | undefined;
   };
+  export type ProjectTemplateTaskShapeRequest = {
+    all_day?: boolean | undefined;
+    blocks_availability: boolean;
+    day_offset: number;
+    description?: (string | null) | undefined;
+    ends_minute?: (number | null) | undefined;
+    expenses_cents?: number | undefined;
+    expenses_label?: (string | null) | undefined;
+    parent_index?: (number | null) | undefined;
+    starts_minute?: (number | null) | undefined;
+    title: string;
+  };
+  export type CreateProjectTemplateRequest = {
+    description?: (string | null) | undefined;
+    name: string;
+    tasks?: Array<ProjectTemplateTaskShapeRequest> | undefined;
+  };
+  export type QuoteLineId = string;
+  export type PlannedTaskRequest = {
+    all_day?: boolean | undefined;
+    blocks_availability: boolean;
+    description?: (string | null) | undefined;
+    ends_at?: (string | null) | undefined;
+    expenses_cents?: number | undefined;
+    expenses_label?: (string | null) | undefined;
+    parent_index?: (number | null) | undefined;
+    quote_line_ids?: Array<QuoteLineId> | undefined;
+    starts_at?: (string | null) | undefined;
+    title: string;
+  };
+  export type CreateQuotePlanRequest = {
+    force_new?: boolean | undefined;
+    name: string;
+    tasks?: Array<PlannedTaskRequest> | undefined;
+  };
   export type ServiceRateId = string;
   export type QuoteLineRequest = {
     label: string;
@@ -462,6 +497,26 @@ export namespace Schemas {
   };
   export type GraphInvalidDetails = { errors: Array<GraphErrorResponse> };
   export type GraphInvalidBody = { code: string; details: GraphInvalidDetails; message: string; status: number };
+  export type InstantiateProjectTemplateRequest = {
+    customer_context_id?: (null | CustomerContextId) | undefined;
+    customer_id?: (null | CustomerId) | undefined;
+    name: string;
+    quote_id?: (null | QuoteId) | undefined;
+    start_date: string;
+  };
+  export type ProjectResponse = {
+    archived_at?: (string | null) | undefined;
+    created_at: string;
+    customer_context_id?: (null | CustomerContextId) | undefined;
+    customer_id?: (null | CustomerId) | undefined;
+    id: ProjectId;
+    is_internal: boolean;
+    name: string;
+    organization_id: OrganizationId;
+    quote_id?: (null | QuoteId) | undefined;
+    updated_at: string;
+  };
+  export type InstantiateProjectTemplateResponse = { project: ProjectResponse; tasks: Array<TaskResponse> };
   export type MarkChannelReadRequest = { message_id: MessageId };
   export type MemberAccountResponse = { email: string; name: string };
   export type MissingCost = "HOURLY_RATE" | "MONTHLY_COST" | "CONTRACTED_HOURS" | "NO_COST_BASIS";
@@ -557,6 +612,28 @@ export namespace Schemas {
     total?: (number | null) | undefined;
   };
   export type PatchTaskResponse = { detached: boolean; task: TaskResponse };
+  export type PlannedProjectResponse = {
+    created_at: string;
+    customer_context_id?: (null | CustomerContextId) | undefined;
+    customer_id?: (null | CustomerId) | undefined;
+    id: ProjectId;
+    name: string;
+    organization_id: OrganizationId;
+    quote_id?: (null | QuoteId) | undefined;
+    updated_at: string;
+  };
+  export type PlannedTaskResponse = {
+    all_day: boolean;
+    description?: (string | null) | undefined;
+    ends_at?: (string | null) | undefined;
+    expenses_cents: number;
+    expenses_label?: (string | null) | undefined;
+    id: TaskId;
+    parent_task_id?: (null | TaskId) | undefined;
+    project_id?: (null | ProjectId) | undefined;
+    starts_at?: (string | null) | undefined;
+    title: string;
+  };
   export type PlanningEntryResponse =
     | {
         all_day: boolean;
@@ -644,17 +721,33 @@ export namespace Schemas {
     most_profitable: Array<ProjectProfitability>;
     projects: Array<ProjectProfitability>;
   };
-  export type ProjectResponse = {
+  export type ProjectTemplateId = string;
+  export type ProjectTemplateResponse = {
     archived_at?: (string | null) | undefined;
     created_at: string;
-    customer_context_id?: (null | CustomerContextId) | undefined;
-    customer_id?: (null | CustomerId) | undefined;
-    id: ProjectId;
-    is_internal: boolean;
+    description?: (string | null) | undefined;
+    id: ProjectTemplateId;
     name: string;
     organization_id: OrganizationId;
-    quote_id?: (null | QuoteId) | undefined;
+    tasks?: (Array<ProjectTemplateTaskResponse> | null) | undefined;
     updated_at: string;
+  };
+  export type ProjectTemplateTaskId = string;
+  export type ProjectTemplateTaskResponse = {
+    all_day: boolean;
+    blocks_availability: boolean;
+    day_offset: number;
+    description?: (string | null) | undefined;
+    ends_minute?: (number | null) | undefined;
+    expenses_cents: number;
+    expenses_label?: (string | null) | undefined;
+    id: ProjectTemplateTaskId;
+    organization_id: OrganizationId;
+    parent_index?: (number | null) | undefined;
+    position: number;
+    starts_minute?: (number | null) | undefined;
+    template_id: ProjectTemplateId;
+    title: string;
   };
   export type RhythmSlotRequest = { ends_minute: number; starts_minute: number; weekday: number };
   export type PutRhythmRequest = {
@@ -664,7 +757,6 @@ export namespace Schemas {
   };
   export type WorkSlotRequest = { ends_minute: number; starts_minute: number; work_date: string };
   export type PutWorkSlotsRequest = { slots: Array<WorkSlotRequest> };
-  export type QuoteLineId = string;
   export type QuoteLineResponse = {
     created_at: string;
     id: QuoteLineId;
@@ -697,11 +789,19 @@ export namespace Schemas {
     updated_at: string;
     vat_breakdown: Array<QuoteVatBreakdownLineResponse>;
   };
+  export type TaskProposalResponse = {
+    quote_line_id: QuoteLineId;
+    suggested_minutes?: (number | null) | undefined;
+    title: string;
+  };
+  export type QuotePlanProposalResponse = { quote: QuoteResponse; tasks: Array<TaskProposalResponse> };
+  export type QuotePlanResponse = { project: PlannedProjectResponse; tasks: Array<PlannedTaskResponse> };
   export type RecoverTimeEntryRequest = { ended_at: string };
   export type RecurrenceRuleResponse =
     | { frequency: "DAILY" }
     | { frequency: "WEEKLY"; weekdays: Array<number> }
     | { day_of_month: number; frequency: "MONTHLY" };
+  export type ReplaceProjectTemplateTasksRequest = { tasks: Array<ProjectTemplateTaskShapeRequest> };
   export type ReplayRunRequest = { connector_id: string };
   export type ReportAssignmentRequest = { comment?: (string | null) | undefined; reported_minutes: number };
   export type ResolveAssignmentReportRequest = {
@@ -892,6 +992,7 @@ export namespace Schemas {
     name: string;
     quote_id?: (null | QuoteId) | undefined;
   };
+  export type UpdateProjectTemplateRequest = { description?: (string | null) | undefined; name: string };
   export type UpdateQuoteRequest = {
     customer_context_id: CustomerContextId;
     customer_id: CustomerId;
@@ -3976,6 +4077,205 @@ export namespace Endpoints {
       409: unknown;
     };
   };
+  export type get_ListProjectTemplates = {
+    method: "GET";
+    path: "/api/v1/organizations/{organization_id}/project-templates";
+    requestFormat: "json";
+    parameters: {
+      query: Partial<{ page: number; per_page: number; include_archived: boolean }>;
+      path: { organization_id: string };
+    };
+    responses: {
+      200: {
+        data: Array<{
+          archived_at?: (string | null) | undefined;
+          created_at: string;
+          description?: (string | null) | undefined;
+          id: Schemas.ProjectTemplateId;
+          name: string;
+          organization_id: Schemas.OrganizationId;
+          tasks?: (Array<Schemas.ProjectTemplateTaskResponse> | null) | undefined;
+          updated_at: string;
+        }>;
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+    };
+  };
+  export type post_CreateProjectTemplate = {
+    method: "POST";
+    path: "/api/v1/organizations/{organization_id}/project-templates";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string };
+
+      body: Schemas.CreateProjectTemplateRequest;
+    };
+    responses: {
+      201: {
+        data: {
+          archived_at?: (string | null) | undefined;
+          created_at: string;
+          description?: (string | null) | undefined;
+          id: Schemas.ProjectTemplateId;
+          name: string;
+          organization_id: Schemas.OrganizationId;
+          tasks?: (Array<Schemas.ProjectTemplateTaskResponse> | null) | undefined;
+          updated_at: string;
+        };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+      409: unknown;
+    };
+  };
+  export type get_GetProjectTemplate = {
+    method: "GET";
+    path: "/api/v1/organizations/{organization_id}/project-templates/{project_template_id}";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string; project_template_id: string };
+    };
+    responses: {
+      200: {
+        data: {
+          archived_at?: (string | null) | undefined;
+          created_at: string;
+          description?: (string | null) | undefined;
+          id: Schemas.ProjectTemplateId;
+          name: string;
+          organization_id: Schemas.OrganizationId;
+          tasks?: (Array<Schemas.ProjectTemplateTaskResponse> | null) | undefined;
+          updated_at: string;
+        };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+      404: unknown;
+    };
+  };
+  export type delete_ArchiveProjectTemplate = {
+    method: "DELETE";
+    path: "/api/v1/organizations/{organization_id}/project-templates/{project_template_id}";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string; project_template_id: string };
+    };
+    responses: { 204: unknown; 401: unknown; 403: unknown; 404: unknown };
+  };
+  export type patch_PatchProjectTemplate = {
+    method: "PATCH";
+    path: "/api/v1/organizations/{organization_id}/project-templates/{project_template_id}";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string; project_template_id: string };
+
+      body: Schemas.UpdateProjectTemplateRequest;
+    };
+    responses: {
+      200: {
+        data: {
+          archived_at?: (string | null) | undefined;
+          created_at: string;
+          description?: (string | null) | undefined;
+          id: Schemas.ProjectTemplateId;
+          name: string;
+          organization_id: Schemas.OrganizationId;
+          tasks?: (Array<Schemas.ProjectTemplateTaskResponse> | null) | undefined;
+          updated_at: string;
+        };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+      404: unknown;
+      409: unknown;
+    };
+  };
+  export type post_InstantiateProjectTemplate = {
+    method: "POST";
+    path: "/api/v1/organizations/{organization_id}/project-templates/{project_template_id}/instantiate";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string; project_template_id: string };
+
+      body: Schemas.InstantiateProjectTemplateRequest;
+    };
+    responses: {
+      201: {
+        data: { project: Schemas.ProjectResponse; tasks: Array<Schemas.TaskResponse> };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+      404: unknown;
+      409: unknown;
+    };
+  };
+  export type post_RestoreProjectTemplate = {
+    method: "POST";
+    path: "/api/v1/organizations/{organization_id}/project-templates/{project_template_id}/restore";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string; project_template_id: string };
+    };
+    responses: {
+      200: {
+        data: {
+          archived_at?: (string | null) | undefined;
+          created_at: string;
+          description?: (string | null) | undefined;
+          id: Schemas.ProjectTemplateId;
+          name: string;
+          organization_id: Schemas.OrganizationId;
+          tasks?: (Array<Schemas.ProjectTemplateTaskResponse> | null) | undefined;
+          updated_at: string;
+        };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+      404: unknown;
+    };
+  };
+  export type put_ReplaceProjectTemplateTasks = {
+    method: "PUT";
+    path: "/api/v1/organizations/{organization_id}/project-templates/{project_template_id}/tasks";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string; project_template_id: string };
+
+      body: Schemas.ReplaceProjectTemplateTasksRequest;
+    };
+    responses: {
+      200: {
+        data: Array<{
+          all_day: boolean;
+          blocks_availability: boolean;
+          day_offset: number;
+          description?: (string | null) | undefined;
+          ends_minute?: (number | null) | undefined;
+          expenses_cents: number;
+          expenses_label?: (string | null) | undefined;
+          id: Schemas.ProjectTemplateTaskId;
+          organization_id: Schemas.OrganizationId;
+          parent_index?: (number | null) | undefined;
+          position: number;
+          starts_minute?: (number | null) | undefined;
+          template_id: Schemas.ProjectTemplateId;
+          title: string;
+        }>;
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+      404: unknown;
+      409: unknown;
+    };
+  };
   export type get_ListProjects = {
     method: "GET";
     path: "/api/v1/organizations/{organization_id}/projects";
@@ -4884,6 +5184,44 @@ export namespace Endpoints {
     };
     responses: { 200: unknown; 401: unknown; 403: unknown; 404: unknown; 409: unknown };
   };
+  export type post_CreateQuotePlan = {
+    method: "POST";
+    path: "/api/v1/quotes/{quote_id}/plan";
+    requestFormat: "json";
+    parameters: {
+      path: { quote_id: string };
+
+      body: Schemas.CreateQuotePlanRequest;
+    };
+    responses: {
+      201: {
+        data: { project: Schemas.PlannedProjectResponse; tasks: Array<Schemas.PlannedTaskResponse> };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+      404: unknown;
+      409: unknown;
+    };
+  };
+  export type get_GetQuotePlanProposal = {
+    method: "GET";
+    path: "/api/v1/quotes/{quote_id}/plan-proposal";
+    requestFormat: "json";
+    parameters: {
+      path: { quote_id: string };
+    };
+    responses: {
+      200: {
+        data: { quote: Schemas.QuoteResponse; tasks: Array<Schemas.TaskProposalResponse> };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+      404: unknown;
+      409: unknown;
+    };
+  };
   export type patch_UpdateQuoteStatus = {
     method: "PATCH";
     path: "/api/v1/quotes/{quote_id}/status";
@@ -5092,6 +5430,7 @@ export type EndpointByMethod = {
     "/api/v1/organizations/{organization_id}/automation/credentials/{credential_id}": Endpoints.patch_UpdateAutomationCredential;
     "/api/v1/organizations/{organization_id}/automation/workflows/{workflow_id}": Endpoints.patch_UpdateWorkflow;
     "/api/v1/organizations/{organization_id}/legal-identity": Endpoints.patch_UpdateOrganizationLegalIdentity;
+    "/api/v1/organizations/{organization_id}/project-templates/{project_template_id}": Endpoints.patch_PatchProjectTemplate;
     "/api/v1/organizations/{organization_id}/projects/{project_id}": Endpoints.patch_PatchProject;
     "/api/v1/organizations/{organization_id}/task-labels/{label_id}": Endpoints.patch_UpdateTaskLabel;
     "/api/v1/organizations/{organization_id}/tasks/{task_id}": Endpoints.patch_PatchTask;
@@ -5123,6 +5462,7 @@ export type EndpointByMethod = {
     "/api/v1/organizations/{organization_id}/absences/{absence_id}": Endpoints.delete_DeleteAbsence;
     "/api/v1/organizations/{organization_id}/automation/credentials/{credential_id}": Endpoints.delete_DeleteAutomationCredential;
     "/api/v1/organizations/{organization_id}/automation/workflows/{workflow_id}": Endpoints.delete_DeleteWorkflow;
+    "/api/v1/organizations/{organization_id}/project-templates/{project_template_id}": Endpoints.delete_ArchiveProjectTemplate;
     "/api/v1/organizations/{organization_id}/projects/{project_id}": Endpoints.delete_ArchiveProject;
     "/api/v1/organizations/{organization_id}/task-labels/{label_id}": Endpoints.delete_DeleteTaskLabel;
     "/api/v1/organizations/{organization_id}/tasks/{task_id}": Endpoints.delete_DeleteTask;
@@ -5176,6 +5516,8 @@ export type EndpointByMethod = {
     "/api/v1/organizations/{organization_id}/planning": Endpoints.get_GetPlanning;
     "/api/v1/organizations/{organization_id}/planning/availability": Endpoints.get_GetPlanningAvailability;
     "/api/v1/organizations/{organization_id}/products": Endpoints.get_ListProducts;
+    "/api/v1/organizations/{organization_id}/project-templates": Endpoints.get_ListProjectTemplates;
+    "/api/v1/organizations/{organization_id}/project-templates/{project_template_id}": Endpoints.get_GetProjectTemplate;
     "/api/v1/organizations/{organization_id}/projects": Endpoints.get_ListProjects;
     "/api/v1/organizations/{organization_id}/projects/{project_id}": Endpoints.get_GetProject;
     "/api/v1/organizations/{organization_id}/quotes": Endpoints.get_ListQuotes;
@@ -5190,6 +5532,7 @@ export type EndpointByMethod = {
     "/api/v1/products/{product_id}": Endpoints.get_GetProduct;
     "/api/v1/quotes/{quote_id}": Endpoints.get_GetQuote;
     "/api/v1/quotes/{quote_id}/pdf": Endpoints.get_ExportQuotePdf;
+    "/api/v1/quotes/{quote_id}/plan-proposal": Endpoints.get_GetQuotePlanProposal;
     "/api/v1/service-rates/{service_rate_id}": Endpoints.get_GetServiceRate;
     "/api/v1/users/@me/organizations": Endpoints.get_ListMyOrganizations;
   };
@@ -5225,6 +5568,9 @@ export type EndpointByMethod = {
     "/api/v1/organizations/{organization_id}/invitations": Endpoints.post_CreateInvitation;
     "/api/v1/organizations/{organization_id}/members": Endpoints.post_CreateMember;
     "/api/v1/organizations/{organization_id}/products": Endpoints.post_CreateProduct;
+    "/api/v1/organizations/{organization_id}/project-templates": Endpoints.post_CreateProjectTemplate;
+    "/api/v1/organizations/{organization_id}/project-templates/{project_template_id}/instantiate": Endpoints.post_InstantiateProjectTemplate;
+    "/api/v1/organizations/{organization_id}/project-templates/{project_template_id}/restore": Endpoints.post_RestoreProjectTemplate;
     "/api/v1/organizations/{organization_id}/projects": Endpoints.post_CreateProject;
     "/api/v1/organizations/{organization_id}/projects/{project_id}/restore": Endpoints.post_RestoreProject;
     "/api/v1/organizations/{organization_id}/quotes": Endpoints.post_CreateQuote;
@@ -5234,6 +5580,7 @@ export type EndpointByMethod = {
     "/api/v1/organizations/{organization_id}/tasks": Endpoints.post_CreateTask;
     "/api/v1/organizations/{organization_id}/tasks/bulk-assign": Endpoints.post_BulkAssignTasks;
     "/api/v1/organizations/{organization_id}/tasks/{task_id}/comments": Endpoints.post_CreateTaskComment;
+    "/api/v1/quotes/{quote_id}/plan": Endpoints.post_CreateQuotePlan;
   };
   put: {
     "/api/v1/chat/channels/{channel_id}/permissions/everyone": Endpoints.put_UpsertEveryoneOverwrite;
@@ -5248,6 +5595,7 @@ export type EndpointByMethod = {
     "/api/v1/members/{member_id}/work-slots": Endpoints.put_PutWorkSlots;
     "/api/v1/organizations/{organization_id}/automation/settings": Endpoints.put_UpdateAutomationSettings;
     "/api/v1/organizations/{organization_id}/automation/workflows/{workflow_id}/versions": Endpoints.put_SaveWorkflowVersion;
+    "/api/v1/organizations/{organization_id}/project-templates/{project_template_id}/tasks": Endpoints.put_ReplaceProjectTemplateTasks;
   };
 };
 

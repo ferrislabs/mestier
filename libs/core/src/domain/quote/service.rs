@@ -322,6 +322,88 @@ fn validate_title(title: &str) -> Result<(), CoreError> {
     Ok(())
 }
 
+// ---------------------------------------------------------------------------
+// Turning an accepted quote into a project's proposed tasks (#298). Pure,
+// I/O-free — the read (`propose_tasks_from_quote`) and the two write-side
+// guards (`require_quote_accepted`, `validate_quote_plannable`) all operate
+// on data the caller already loaded.
+// ---------------------------------------------------------------------------
+
+/// One quote line's suggested task, before a human confirms anything.
+///
+/// `suggested_minutes` is `None` whenever a duration cannot be read off the
+/// line rather than guessed — a line priced by the hour has one, a line
+/// priced per unit, per square meter, or flat does not. Inventing a number
+/// for those would be a suggestion the caller cannot audit, which is worse
+/// than no suggestion (see #298's own brief).
+#[derive(Debug, Clone, PartialEq)]
+pub struct TaskProposal {
+    pub quote_line_id: QuoteLineId,
+    pub title: String,
+    pub suggested_minutes: Option<i32>,
+}
+
+/// Builds one proposal per quote line, in line order. Never refuses: a
+/// draft or declined quote still has lines worth previewing, even though
+/// only an accepted one can actually be turned into a project (see
+/// [`require_quote_accepted`], enforced by the read use case instead of
+/// here, so this stays a pure projection).
+pub fn propose_tasks_from_quote(quote: &Quote) -> Vec<TaskProposal> {
+    quote
+        .lines
+        .iter()
+        .map(|line| TaskProposal {
+            quote_line_id: line.id,
+            title: line.label.clone(),
+            suggested_minutes: line_suggested_minutes(line),
+        })
+        .collect()
+}
+
+/// A hard 60 minutes to the hour — the only unit this reads a duration from.
+fn line_suggested_minutes(line: &QuoteLine) -> Option<i32> {
+    if line.unit != crate::ServiceRateUnit::Hour {
+        return None;
+    }
+
+    (line.quantity * Decimal::from(60)).round().to_i32()
+}
+
+/// Refuses a quote that has not been accepted, with its own conflict rather
+/// than a generic failure — a quote is a commercial unit, a task is a
+/// scheduling unit, and turning a draft's *guesses* into a plan is not what
+/// this endpoint is for.
+pub fn require_quote_accepted(quote: &Quote) -> Result<(), CoreError> {
+    if quote.status != QuoteStatus::Accepted {
+        return Err(CoreError::Conflict(
+            "only an accepted quote can be turned into a project".to_owned(),
+        ));
+    }
+
+    Ok(())
+}
+
+/// The write-side gate: accepted, and either the first project on this
+/// quote or an explicit second one. Two projects on one quote makes the
+/// margin ambiguous, which #260 rejected when it moved `quote_id` up from
+/// the task onto the project — `force_new` is the caller saying, in so many
+/// words, that they know that and want it anyway.
+pub fn validate_quote_plannable(
+    quote: &Quote,
+    already_has_project: bool,
+    force_new: bool,
+) -> Result<(), CoreError> {
+    require_quote_accepted(quote)?;
+
+    if already_has_project && !force_new {
+        return Err(CoreError::Conflict(
+            "this quote already has a project; pass force_new to create a second one".to_owned(),
+        ));
+    }
+
+    Ok(())
+}
+
 fn build_quote_lines(
     organization_id: OrganizationId,
     quote_id: QuoteId,
@@ -1138,7 +1220,7 @@ mod emission_tests {
     use super::tests::{line_command, quote};
     use super::*;
     use crate::{
-        CustomerContextId, CustomerId, QuoteStatus,
+        CustomerContextId, CustomerId, QuoteStatus, ServiceRateUnit,
         domain::{
             organization::ports::MockOrganizationRepository, quote::ports::MockQuoteRepository,
         },
@@ -1461,5 +1543,95 @@ mod emission_tests {
 
         assert!(outcome.is_err());
         assert!(emitter.names().is_empty());
+    }
+
+    // -----------------------------------------------------------------
+    // #298 — propose_tasks_from_quote / require_quote_accepted /
+    // validate_quote_plannable
+    // -----------------------------------------------------------------
+
+    #[test]
+    fn an_hourly_line_proposes_its_duration_in_minutes() {
+        let mut source = quote(QuoteId(Uuid::new_v4()));
+        source.lines[0].unit = ServiceRateUnit::Hour;
+        source.lines[0].quantity = Decimal::new(25, 1); // 2.5 hours
+
+        let proposals = propose_tasks_from_quote(&source);
+
+        assert_eq!(proposals.len(), 1);
+        assert_eq!(proposals[0].quote_line_id, source.lines[0].id);
+        assert_eq!(proposals[0].title, source.lines[0].label);
+        assert_eq!(proposals[0].suggested_minutes, Some(150));
+    }
+
+    #[test]
+    fn a_per_unit_line_proposes_no_duration_rather_than_a_guess() {
+        let mut source = quote(QuoteId(Uuid::new_v4()));
+        source.lines[0].unit = ServiceRateUnit::Unit;
+        source.lines[0].quantity = Decimal::new(10, 0);
+
+        let proposals = propose_tasks_from_quote(&source);
+
+        assert_eq!(proposals[0].suggested_minutes, None);
+    }
+
+    #[test]
+    fn a_flat_rate_line_proposes_no_duration() {
+        let mut source = quote(QuoteId(Uuid::new_v4()));
+        source.lines[0].unit = ServiceRateUnit::FlatRate;
+
+        let proposals = propose_tasks_from_quote(&source);
+
+        assert_eq!(proposals[0].suggested_minutes, None);
+    }
+
+    #[test]
+    fn a_draft_quote_is_not_plannable() {
+        let mut source = quote(QuoteId(Uuid::new_v4()));
+        source.status = QuoteStatus::Draft;
+
+        let err = require_quote_accepted(&source).unwrap_err();
+        assert!(matches!(err, CoreError::Conflict(_)));
+    }
+
+    #[test]
+    fn an_accepted_quote_is_plannable() {
+        let mut source = quote(QuoteId(Uuid::new_v4()));
+        source.status = QuoteStatus::Accepted;
+
+        assert!(require_quote_accepted(&source).is_ok());
+    }
+
+    #[test]
+    fn a_second_project_is_refused_without_force_new() {
+        let mut source = quote(QuoteId(Uuid::new_v4()));
+        source.status = QuoteStatus::Accepted;
+
+        let err = validate_quote_plannable(&source, true, false).unwrap_err();
+        assert!(matches!(err, CoreError::Conflict(_)));
+    }
+
+    #[test]
+    fn a_second_project_is_accepted_with_force_new() {
+        let mut source = quote(QuoteId(Uuid::new_v4()));
+        source.status = QuoteStatus::Accepted;
+
+        assert!(validate_quote_plannable(&source, true, true).is_ok());
+    }
+
+    #[test]
+    fn a_first_project_needs_no_force_new() {
+        let mut source = quote(QuoteId(Uuid::new_v4()));
+        source.status = QuoteStatus::Accepted;
+
+        assert!(validate_quote_plannable(&source, false, false).is_ok());
+    }
+
+    #[test]
+    fn planning_a_non_accepted_quote_is_refused_even_with_force_new() {
+        let source = quote(QuoteId(Uuid::new_v4())); // Draft by default
+
+        let err = validate_quote_plannable(&source, false, true).unwrap_err();
+        assert!(matches!(err, CoreError::Conflict(_)));
     }
 }

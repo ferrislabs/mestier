@@ -2,11 +2,11 @@ use common::CoreError;
 use mestier_macros::transactional;
 
 use crate::{
-    OrganizationId, Quote, QuoteId,
+    OrganizationId, Quote, QuoteId, TaskProposal,
     application::MestierUseCase,
     domain::quote::{
         commands::{CreateQuoteCommand, UpdateQuoteCommand, UpdateQuoteStatusCommand},
-        service::QuoteService,
+        service::{QuoteService, propose_tasks_from_quote, require_quote_accepted},
     },
 };
 
@@ -60,5 +60,22 @@ impl MestierUseCase {
     pub async fn soft_delete_quote(&self, id: QuoteId) -> Result<(), CoreError> {
         let mut service = QuoteService::new(quote_repository, emitter);
         service.soft_delete_quote(id).await
+    }
+
+    /// `GET .../plan-proposal`: one suggested task per quote line, and
+    /// nothing more — a read the caller reviews before `POST .../plan`
+    /// confirms anything (#298). Refuses a quote that isn't accepted with
+    /// its own conflict rather than a 500.
+    #[transactional(quote, emitter)]
+    pub async fn get_quote_plan_proposal(
+        &self,
+        id: QuoteId,
+    ) -> Result<(Quote, Vec<TaskProposal>), CoreError> {
+        let mut service = QuoteService::new(quote_repository, emitter);
+        let quote = service.get_quote(id).await?;
+        require_quote_accepted(&quote)?;
+        let proposal = propose_tasks_from_quote(&quote);
+
+        Ok((quote, proposal))
     }
 }
