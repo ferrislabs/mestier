@@ -62,8 +62,29 @@ spec:
           envFrom:
             - configMapRef:
                 name: {{ include "mestier.fullname" . }}-api
-            - secretRef:
-                name: {{ include "mestier.api.secretName" . }}
+          env:
+            {{- range $key := list "DATABASE_PASSWORD" "AUTH_CLIENT_SECRET" "FILE_STORAGE_ACCESS_KEY_ID" "FILE_STORAGE_SECRET_ACCESS_KEY" "AUTOMATION_SECRET_KEY" }}
+            {{- $override := index $.Values.api.secret.valueFrom $key }}
+            {{- $plain := index $.Values.api.secret $key }}
+            {{- /* Nothing to reference: no override, no external secret to trust, and
+                   no plain value set — omit the env var entirely rather than point at
+                   a key that doesn't exist in the rendered Secret. This is what lets
+                   an unset, non-mandatory secret (e.g. AUTOMATION_SECRET_KEY) come up
+                   as unset (None) on the Rust side instead of an empty string, which
+                   the app treats as "configured with a 0-byte value" and fails on. */}}
+            {{- if or $override $.Values.api.secret.existingSecret $plain }}
+            - name: {{ $key }}
+              valueFrom:
+                secretKeyRef:
+                  {{- if $override }}
+                  name: {{ $override.secretName }}
+                  key: {{ $override.key }}
+                  {{- else }}
+                  name: {{ include "mestier.api.secretName" $ }}
+                  key: {{ $key }}
+                  {{- end }}
+            {{- end }}
+            {{- end }}
           livenessProbe:
             httpGet:
               path: {{ .Values.api.probes.liveness.path }}
