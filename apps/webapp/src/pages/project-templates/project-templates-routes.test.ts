@@ -27,7 +27,7 @@ describe('project template routes', () => {
 	 */
 	it('does not swallow a sibling planning route', () => {
 		expect(routeIdFor('/o/acme/planning/projects')).toBe(
-			'/_app/o/$organizationSlug/planning/projects',
+			'/_app/o/$organizationSlug/planning/projects/',
 		)
 	})
 })
