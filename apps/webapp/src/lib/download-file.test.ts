@@ -1,3 +1,4 @@
+import { Blob } from 'node:buffer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { downloadAuthenticatedFile } from '#/lib/download-file'
 import { authStore, clearAuth, setAuth } from '#/store/auth.store'
