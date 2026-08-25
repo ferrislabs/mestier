@@ -1,0 +1,68 @@
+name: helm-chart-release
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "deploy/helm/mestier/**"
+  workflow_dispatch:
+
+# Two pushes to deploy/helm/mestier/** close together would otherwise race:
+# both runs would see the same version as "not yet published" and both would
+# attempt the push. Queuing (not cancelling) keeps that check-then-push
+# sequence atomic across runs instead of just within one.
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  release:
+    name: package and push
+    runs-on: ubuntu-24.04
+    steps:
+      - name: checkout
+        uses: actions/checkout@v5
+
+      - name: log-in to ghcr
+        run: |
+          echo "${{ secrets.GITHUB_TOKEN }}" | helm registry login ghcr.io \
+            -u ${{ github.actor }} --password-stdin
+
+      - name: read chart version
+        id: chart
+        run: |
+          version=$(yq -r .version deploy/helm/mestier/Chart.yaml)
+          if [ -z "$version" ] || [ "$version" = "null" ]; then
+            echo "could not read .version from deploy/helm/mestier/Chart.yaml" >&2
+            exit 1
+          fi
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
+
+      # `helm show chart` against an OCI ref succeeds iff that exact version is
+      # already pushed. That makes it a cheap existence check: no need to list
+      # tags or hit the GHCR API directly.
+      - name: check if already published
+        id: check
+        run: |
+          if helm show chart "oci://ghcr.io/ferrislabs/charts/mestier" \
+            --version "${{ steps.chart.outputs.version }}" >/dev/null 2>&1; then
+            echo "mestier ${{ steps.chart.outputs.version }} is already published, skipping"
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: package chart
+        if: steps.check.outputs.skip != 'true'
+        run: helm package deploy/helm/mestier -d /tmp/chart
+
+      - name: push chart
+        if: steps.check.outputs.skip != 'true'
+        run: |
+          helm push "/tmp/chart/mestier-${{ steps.chart.outputs.version }}.tgz" \
+            oci://ghcr.io/ferrislabs/charts
