@@ -8,7 +8,8 @@ pub mod ports;
 pub mod service;
 
 pub use legal_identity::{
-    LegalIdentity, MissingLegalIdentityField, OrganizationAddress, VatStatus,
+    ElectronicInvoicingFacts, LegalIdentity, MissingElectronicInvoicingFact,
+    MissingLegalIdentityField, OrganizationAddress, VatStatus,
 };
 
 #[derive(Debug, Clone)]
@@ -40,12 +41,26 @@ pub struct Organization {
     /// unlike the legal-identity fields above: it blocks nothing, so
     /// giving it one is free.
     pub quote_number_prefix: String,
+    /// The `{prefix}` in an invoice number's `{prefix}-{year}-{counter}`
+    /// shape — `invoice_number_prefix`'s counterpart on the quote side.
+    /// `FAC` by default, from the column default added alongside
+    /// `invoice_number_counters` in #316; wired through here in #317, the
+    /// first issue that actually allocates an invoice number.
+    pub invoice_number_prefix: String,
     /// Whether the field app's home screen offers clocking in/out at all —
     /// `false` by default since ADR 0002: nothing computes money from
     /// `time_entries` any more, so a punch clock is opt-in, not a worker's
     /// first impression of the product. See the migration comment on
     /// `organizations.field_clock_enabled`.
     pub field_clock_enabled: bool,
+    /// Whether this organization's VAT is due on invoicing ("debits")
+    /// rather than on collection ("encaissements", the default under
+    /// `false`). A property of the issuer's VAT regime, not a fact that can
+    /// be missing — always `false` until set, never `Option`. The
+    /// e-invoicing reform effective 1 September 2026 requires stating this
+    /// explicitly on the invoice; see #341 and
+    /// `legal_identity::ElectronicInvoicingFacts`.
+    pub vat_on_debits: bool,
     pub deleted_at: Option<DateTime<Utc>>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,

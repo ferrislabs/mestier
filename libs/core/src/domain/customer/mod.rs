@@ -118,6 +118,14 @@ pub struct Customer {
     pub status: CustomerStatus,
     pub pipeline_stage: CustomerPipelineStage,
     pub name: String,
+    /// The customer's own SIREN (or equivalent), never carried before #341:
+    /// the September 2026 e-invoicing reform requires at least one mention
+    /// about the *customer*, not just the issuer. `None` for every
+    /// customer that existed before this field, and for any customer that
+    /// simply hasn't stated it — an invoice cannot be transmitted
+    /// electronically to one until it does, see
+    /// `organization::legal_identity::ElectronicInvoicingFacts`.
+    pub registration_number: Option<String>,
     pub phone: Option<String>,
     pub email: Option<String>,
     pub deleted_at: Option<DateTime<Utc>>,

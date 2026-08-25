@@ -27,8 +27,10 @@ describe('resolveSection', () => {
 		expect(resolveSection(moduleById('crm'), '/crm')).toBeUndefined()
 	})
 
-	it('ignores a section announced but not navigable', () => {
-		expect(resolveSection(moduleById('crm'), '/crm/invoices')).toBeUndefined()
+	it('resolves a section once it is navigable', () => {
+		expect(resolveSection(moduleById('crm'), '/crm/invoices')?.id).toBe(
+			'invoices',
+		)
 	})
 })
 

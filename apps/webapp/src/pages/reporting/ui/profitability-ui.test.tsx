@@ -281,7 +281,10 @@ describe('ProfitabilityUI', () => {
 
 	/**
 	 * A project is an addressable thing now, so the title links at its own page
-	 * instead of dumping the reader on the planning task list.
+	 * instead of dumping the reader on the planning task list. #322 goes one
+	 * step further: straight at the project detail page, not the list with a
+	 * `?projectId=` highlight — that page is where "billed against quoted"
+	 * actually lives, with no per-row fetch on this report table.
 	 */
 	it('links a project name at its own page, in the list, both rankings and the banner', async () => {
 		const incomplete = project({
@@ -302,15 +305,19 @@ describe('ProfitabilityUI', () => {
 		const jardinLinks = screen.getAllByRole('link', { name: /Jardin Duval/i })
 		expect(jardinLinks.length).toBeGreaterThan(0)
 		for (const link of jardinLinks) {
-			expect(link.getAttribute('href')).toContain(
-				'/o/atelier-vert/planning/projects',
+			expect(link.getAttribute('href')).toBe(
+				'/o/atelier-vert/planning/projects/project-1',
 			)
-			expect(link.getAttribute('href')).toContain('projectId=project-1')
 		}
 
 		const terrasseLinks = screen.getAllByRole('link', {
 			name: /Terrasse Bernard/i,
 		})
 		expect(terrasseLinks.length).toBeGreaterThan(0)
+		for (const link of terrasseLinks) {
+			expect(link.getAttribute('href')).toBe(
+				'/o/atelier-vert/planning/projects/project-incomplete',
+			)
+		}
 	})
 })

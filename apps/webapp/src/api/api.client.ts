@@ -232,10 +232,37 @@ export namespace Schemas {
     name: string;
     phone?: (string | null) | undefined;
     pipeline_stage: CustomerPipelineStage;
+    registration_number?: (string | null) | undefined;
     status: CustomerStatus;
   };
   export type CreateEquipmentRequest = { hourly_rate_cents: number; name: string };
   export type CreateInvitationRequest = Partial<{ expires_at: string | null; member_id: null | MemberId }>;
+  export type DeliveryAddressRequest = {
+    city: string;
+    country: string;
+    line1: string;
+    line2?: (string | null) | undefined;
+    postal_code: string;
+  };
+  export type InvoiceKind = "STANDARD" | "DEPOSIT" | "FINAL" | "CREDIT_NOTE";
+  export type InvoiceLineRequest = {
+    label: string;
+    quantity: string;
+    unit_price_cents: number;
+    vat_rate_basis_points?: (number | null) | undefined;
+  };
+  export type OperationNature = "GOODS" | "SERVICES" | "BOTH";
+  export type CreateInvoiceRequest = {
+    customer_context_id: CustomerContextId;
+    customer_id: CustomerId;
+    delivery_address?: (null | DeliveryAddressRequest) | undefined;
+    due_at?: (string | null) | undefined;
+    kind: InvoiceKind;
+    lines: Array<InvoiceLineRequest>;
+    notes?: (string | null) | undefined;
+    operation_nature?: (null | OperationNature) | undefined;
+    project_id?: (null | ProjectId) | undefined;
+  };
   export type CreateMemberRequest = { first_name?: (string | null) | undefined; last_name: string };
   export type CreateMessageAttachment = {
     filename: string;
@@ -400,6 +427,11 @@ export namespace Schemas {
     postal_code?: (string | null) | undefined;
     updated_at: string;
   };
+  export type CustomerOutstandingBalanceResponse = {
+    customer_id: CustomerId;
+    oldest_due_at?: (string | null) | undefined;
+    outstanding_cents: number;
+  };
   export type CustomerResponse = {
     created_at: string;
     email?: (string | null) | undefined;
@@ -408,6 +440,7 @@ export namespace Schemas {
     organization_id: OrganizationId;
     phone?: (string | null) | undefined;
     pipeline_stage: CustomerPipelineStage;
+    registration_number?: (string | null) | undefined;
     status: CustomerStatus;
     updated_at: string;
   };
@@ -422,6 +455,13 @@ export namespace Schemas {
   };
   export type DeclareTimeEntryRequest = { ended_at: string; started_at: string; task_id: TaskId };
   export type DeleteScopeRequest = "THIS_OCCURRENCE" | "THIS_AND_FOLLOWING";
+  export type DeliveryAddressResponse = {
+    city: string;
+    country: string;
+    line1: string;
+    line2?: (string | null) | undefined;
+    postal_code: string;
+  };
   export type EdgeDto = { branch?: (null | BranchDto) | undefined; from: string; to: string };
   export type EmployeeCostBasisId = string;
   export type EmployeeCostBasisResponse = {
@@ -517,6 +557,84 @@ export namespace Schemas {
     updated_at: string;
   };
   export type InstantiateProjectTemplateResponse = { project: ProjectResponse; tasks: Array<TaskResponse> };
+  export type InvoiceBalanceResponse = {
+    credited_cents: number;
+    gross_cents: number;
+    paid_cents: number;
+    remaining_cents: number;
+  };
+  export type InvoiceId = string;
+  export type InvoiceLineId = string;
+  export type InvoiceLineResponse = {
+    created_at: string;
+    id: InvoiceLineId;
+    invoice_id: InvoiceId;
+    label: string;
+    organization_id: OrganizationId;
+    position: number;
+    quantity: string;
+    unit_price_cents: number;
+    updated_at: string;
+    vat_rate_basis_points?: (number | null) | undefined;
+  };
+  export type InvoicePaymentId = string;
+  export type UserId = string;
+  export type InvoicePaymentResponse = {
+    amount_cents: number;
+    created_at: string;
+    deleted_at?: (string | null) | undefined;
+    deleted_by?: (null | UserId) | undefined;
+    id: InvoicePaymentId;
+    invoice_id: InvoiceId;
+    method: string;
+    note?: (string | null) | undefined;
+    organization_id: OrganizationId;
+    paid_on: string;
+    recorded_by: UserId;
+    reference?: (string | null) | undefined;
+    updated_at: string;
+  };
+  export type InvoiceStatus = "DRAFT" | "ISSUED" | "PAID" | "PARTIALLY_PAID" | "CANCELLED";
+  export type InvoiceVatBreakdownLineResponse = { rate_bp: number; vat_cents: number };
+  export type InvoiceResponse = {
+    created_at: string;
+    customer_context_id: CustomerContextId;
+    customer_id: CustomerId;
+    delivery_address?: (null | DeliveryAddressResponse) | undefined;
+    due_at?: (string | null) | undefined;
+    gross_cents: number;
+    id: InvoiceId;
+    issued_at?: (string | null) | undefined;
+    kind: InvoiceKind;
+    lines: Array<InvoiceLineResponse>;
+    net_cents: number;
+    notes?: (string | null) | undefined;
+    number?: (string | null) | undefined;
+    operation_nature?: (null | OperationNature) | undefined;
+    organization_id: OrganizationId;
+    project_id?: (null | ProjectId) | undefined;
+    source_invoice_id?: (null | InvoiceId) | undefined;
+    status: InvoiceStatus;
+    updated_at: string;
+    vat_breakdown: Array<InvoiceVatBreakdownLineResponse>;
+  };
+  export type IssueCreditNoteRequest = {
+    allow_exceeding_invoice_total?: boolean | undefined;
+    lines: Array<InvoiceLineRequest>;
+    notes?: (string | null) | undefined;
+  };
+  export type IssueDepositRequest = {
+    allow_exceeding_total?: boolean | undefined;
+    due_at?: (string | null) | undefined;
+    notes?: (string | null) | undefined;
+    percentage_bp: number;
+  };
+  export type IssueFinalInvoiceRequest = Partial<{
+    allow_exceeding_total: boolean;
+    due_at: string | null;
+    notes: string | null;
+  }>;
+  export type IssueInvoiceRequest = Partial<{ allow_exceeding_total: boolean }>;
   export type MarkChannelReadRequest = { message_id: MessageId };
   export type MemberAccountResponse = { email: string; name: string };
   export type MissingCost = "HOURLY_RATE" | "MONTHLY_COST" | "CONTRACTED_HOURS" | "NO_COST_BASIS";
@@ -536,7 +654,6 @@ export namespace Schemas {
     last_name: string;
     organization_id: OrganizationId;
   };
-  export type UserId = string;
   export type WebhookId = string;
   export type RoleId = string;
   export type ReactionCountResponse = { count: number; emoji: string; user_ids: Array<UserId> };
@@ -591,6 +708,7 @@ export namespace Schemas {
     share_capital_cents?: (number | null) | undefined;
     slug: string;
     updated_at: string;
+    vat_on_debits: boolean;
     vat_status?: (null | VatStatusResponse) | undefined;
   };
   export type OverwriteResponse = {
@@ -721,6 +839,12 @@ export namespace Schemas {
     most_profitable: Array<ProjectProfitability>;
     projects: Array<ProjectProfitability>;
   };
+  export type ProjectBillingSummaryResponse = {
+    billed_cents: number;
+    project_id: ProjectId;
+    quoted_cents?: (number | null) | undefined;
+    remaining_cents?: (number | null) | undefined;
+  };
   export type ProjectTemplateId = string;
   export type ProjectTemplateResponse = {
     archived_at?: (string | null) | undefined;
@@ -796,6 +920,14 @@ export namespace Schemas {
   };
   export type QuotePlanProposalResponse = { quote: QuoteResponse; tasks: Array<TaskProposalResponse> };
   export type QuotePlanResponse = { project: PlannedProjectResponse; tasks: Array<PlannedTaskResponse> };
+  export type RecordInvoicePaymentRequest = {
+    allow_exceeding_total?: boolean | undefined;
+    amount_cents: number;
+    method: string;
+    note?: (string | null) | undefined;
+    paid_on: string;
+    reference?: (string | null) | undefined;
+  };
   export type RecoverTimeEntryRequest = { ended_at: string };
   export type RecurrenceRuleResponse =
     | { frequency: "DAILY" }
@@ -956,9 +1088,20 @@ export namespace Schemas {
     name: string;
     phone?: (string | null) | undefined;
     pipeline_stage: CustomerPipelineStage;
+    registration_number?: (string | null) | undefined;
     status: CustomerStatus;
   };
   export type UpdateEquipmentRequest = { hourly_rate_cents: number; name: string };
+  export type UpdateInvoiceRequest = {
+    customer_context_id: CustomerContextId;
+    customer_id: CustomerId;
+    delivery_address?: (null | DeliveryAddressRequest) | undefined;
+    due_at?: (string | null) | undefined;
+    lines: Array<InvoiceLineRequest>;
+    notes?: (string | null) | undefined;
+    operation_nature?: (null | OperationNature) | undefined;
+    project_id?: (null | ProjectId) | undefined;
+  };
   export type VatStatusRequest = { type: "subject"; vat_number: string } | { basis: string; type: "not_subject" };
   export type UpdateLegalIdentityRequest = Partial<{
     address_city: string | null;
@@ -973,6 +1116,7 @@ export namespace Schemas {
     legal_name: string | null;
     registration_number: string | null;
     share_capital_cents: number | null;
+    vat_on_debits: boolean;
     vat_status: null | VatStatusRequest;
   }>;
   export type UpdateMemberRequest = Partial<{ first_name: string | null; last_name: string | null }>;
@@ -2135,6 +2279,7 @@ export namespace Endpoints {
           organization_id: Schemas.OrganizationId;
           phone?: (string | null) | undefined;
           pipeline_stage: Schemas.CustomerPipelineStage;
+          registration_number?: (string | null) | undefined;
           status: Schemas.CustomerStatus;
           updated_at: string;
         };
@@ -2173,6 +2318,7 @@ export namespace Endpoints {
           organization_id: Schemas.OrganizationId;
           phone?: (string | null) | undefined;
           pipeline_stage: Schemas.CustomerPipelineStage;
+          registration_number?: (string | null) | undefined;
           status: Schemas.CustomerStatus;
           updated_at: string;
         };
@@ -2618,6 +2764,347 @@ export namespace Endpoints {
       409: unknown;
     };
   };
+  export type delete_DeleteInvoicePayment = {
+    method: "DELETE";
+    path: "/api/v1/invoice-payments/{invoice_payment_id}";
+    requestFormat: "json";
+    parameters: {
+      path: { invoice_payment_id: string };
+    };
+    responses: { 204: unknown; 401: unknown; 403: unknown; 404: unknown };
+  };
+  export type get_GetInvoice = {
+    method: "GET";
+    path: "/api/v1/invoices/{invoice_id}";
+    requestFormat: "json";
+    parameters: {
+      path: { invoice_id: string };
+    };
+    responses: {
+      200: {
+        data: {
+          created_at: string;
+          customer_context_id: Schemas.CustomerContextId;
+          customer_id: Schemas.CustomerId;
+          delivery_address?: (null | Schemas.DeliveryAddressResponse) | undefined;
+          due_at?: (string | null) | undefined;
+          gross_cents: number;
+          id: Schemas.InvoiceId;
+          issued_at?: (string | null) | undefined;
+          kind: Schemas.InvoiceKind;
+          lines: Array<Schemas.InvoiceLineResponse>;
+          net_cents: number;
+          notes?: (string | null) | undefined;
+          number?: (string | null) | undefined;
+          operation_nature?: (null | Schemas.OperationNature) | undefined;
+          organization_id: Schemas.OrganizationId;
+          project_id?: (null | Schemas.ProjectId) | undefined;
+          source_invoice_id?: (null | Schemas.InvoiceId) | undefined;
+          status: Schemas.InvoiceStatus;
+          updated_at: string;
+          vat_breakdown: Array<Schemas.InvoiceVatBreakdownLineResponse>;
+        };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+      404: unknown;
+    };
+  };
+  export type patch_UpdateInvoice = {
+    method: "PATCH";
+    path: "/api/v1/invoices/{invoice_id}";
+    requestFormat: "json";
+    parameters: {
+      path: { invoice_id: string };
+
+      body: Schemas.UpdateInvoiceRequest;
+    };
+    responses: {
+      200: {
+        data: {
+          created_at: string;
+          customer_context_id: Schemas.CustomerContextId;
+          customer_id: Schemas.CustomerId;
+          delivery_address?: (null | Schemas.DeliveryAddressResponse) | undefined;
+          due_at?: (string | null) | undefined;
+          gross_cents: number;
+          id: Schemas.InvoiceId;
+          issued_at?: (string | null) | undefined;
+          kind: Schemas.InvoiceKind;
+          lines: Array<Schemas.InvoiceLineResponse>;
+          net_cents: number;
+          notes?: (string | null) | undefined;
+          number?: (string | null) | undefined;
+          operation_nature?: (null | Schemas.OperationNature) | undefined;
+          organization_id: Schemas.OrganizationId;
+          project_id?: (null | Schemas.ProjectId) | undefined;
+          source_invoice_id?: (null | Schemas.InvoiceId) | undefined;
+          status: Schemas.InvoiceStatus;
+          updated_at: string;
+          vat_breakdown: Array<Schemas.InvoiceVatBreakdownLineResponse>;
+        };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      400: unknown;
+      401: unknown;
+      403: unknown;
+      404: unknown;
+      409: unknown;
+    };
+  };
+  export type get_GetInvoiceBalance = {
+    method: "GET";
+    path: "/api/v1/invoices/{invoice_id}/balance";
+    requestFormat: "json";
+    parameters: {
+      path: { invoice_id: string };
+    };
+    responses: {
+      200: {
+        data: { credited_cents: number; gross_cents: number; paid_cents: number; remaining_cents: number };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+      404: unknown;
+    };
+  };
+  export type post_CancelInvoice = {
+    method: "POST";
+    path: "/api/v1/invoices/{invoice_id}/cancel";
+    requestFormat: "json";
+    parameters: {
+      path: { invoice_id: string };
+    };
+    responses: {
+      200: {
+        data: {
+          created_at: string;
+          customer_context_id: Schemas.CustomerContextId;
+          customer_id: Schemas.CustomerId;
+          delivery_address?: (null | Schemas.DeliveryAddressResponse) | undefined;
+          due_at?: (string | null) | undefined;
+          gross_cents: number;
+          id: Schemas.InvoiceId;
+          issued_at?: (string | null) | undefined;
+          kind: Schemas.InvoiceKind;
+          lines: Array<Schemas.InvoiceLineResponse>;
+          net_cents: number;
+          notes?: (string | null) | undefined;
+          number?: (string | null) | undefined;
+          operation_nature?: (null | Schemas.OperationNature) | undefined;
+          organization_id: Schemas.OrganizationId;
+          project_id?: (null | Schemas.ProjectId) | undefined;
+          source_invoice_id?: (null | Schemas.InvoiceId) | undefined;
+          status: Schemas.InvoiceStatus;
+          updated_at: string;
+          vat_breakdown: Array<Schemas.InvoiceVatBreakdownLineResponse>;
+        };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+      404: unknown;
+      409: unknown;
+    };
+  };
+  export type get_ListInvoiceCreditNotes = {
+    method: "GET";
+    path: "/api/v1/invoices/{invoice_id}/credit-notes";
+    requestFormat: "json";
+    parameters: {
+      path: { invoice_id: string };
+    };
+    responses: {
+      200: {
+        data: Array<{
+          created_at: string;
+          customer_context_id: Schemas.CustomerContextId;
+          customer_id: Schemas.CustomerId;
+          delivery_address?: (null | Schemas.DeliveryAddressResponse) | undefined;
+          due_at?: (string | null) | undefined;
+          gross_cents: number;
+          id: Schemas.InvoiceId;
+          issued_at?: (string | null) | undefined;
+          kind: Schemas.InvoiceKind;
+          lines: Array<Schemas.InvoiceLineResponse>;
+          net_cents: number;
+          notes?: (string | null) | undefined;
+          number?: (string | null) | undefined;
+          operation_nature?: (null | Schemas.OperationNature) | undefined;
+          organization_id: Schemas.OrganizationId;
+          project_id?: (null | Schemas.ProjectId) | undefined;
+          source_invoice_id?: (null | Schemas.InvoiceId) | undefined;
+          status: Schemas.InvoiceStatus;
+          updated_at: string;
+          vat_breakdown: Array<Schemas.InvoiceVatBreakdownLineResponse>;
+        }>;
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+      404: unknown;
+    };
+  };
+  export type post_IssueCreditNote = {
+    method: "POST";
+    path: "/api/v1/invoices/{invoice_id}/credit-notes";
+    requestFormat: "json";
+    parameters: {
+      path: { invoice_id: string };
+
+      body: Schemas.IssueCreditNoteRequest;
+    };
+    responses: {
+      201: {
+        data: {
+          created_at: string;
+          customer_context_id: Schemas.CustomerContextId;
+          customer_id: Schemas.CustomerId;
+          delivery_address?: (null | Schemas.DeliveryAddressResponse) | undefined;
+          due_at?: (string | null) | undefined;
+          gross_cents: number;
+          id: Schemas.InvoiceId;
+          issued_at?: (string | null) | undefined;
+          kind: Schemas.InvoiceKind;
+          lines: Array<Schemas.InvoiceLineResponse>;
+          net_cents: number;
+          notes?: (string | null) | undefined;
+          number?: (string | null) | undefined;
+          operation_nature?: (null | Schemas.OperationNature) | undefined;
+          organization_id: Schemas.OrganizationId;
+          project_id?: (null | Schemas.ProjectId) | undefined;
+          source_invoice_id?: (null | Schemas.InvoiceId) | undefined;
+          status: Schemas.InvoiceStatus;
+          updated_at: string;
+          vat_breakdown: Array<Schemas.InvoiceVatBreakdownLineResponse>;
+        };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      400: unknown;
+      401: unknown;
+      403: unknown;
+      404: unknown;
+      409: unknown;
+    };
+  };
+  export type post_IssueInvoice = {
+    method: "POST";
+    path: "/api/v1/invoices/{invoice_id}/issue";
+    requestFormat: "json";
+    parameters: {
+      path: { invoice_id: string };
+
+      body: Schemas.IssueInvoiceRequest;
+    };
+    responses: {
+      200: {
+        data: {
+          created_at: string;
+          customer_context_id: Schemas.CustomerContextId;
+          customer_id: Schemas.CustomerId;
+          delivery_address?: (null | Schemas.DeliveryAddressResponse) | undefined;
+          due_at?: (string | null) | undefined;
+          gross_cents: number;
+          id: Schemas.InvoiceId;
+          issued_at?: (string | null) | undefined;
+          kind: Schemas.InvoiceKind;
+          lines: Array<Schemas.InvoiceLineResponse>;
+          net_cents: number;
+          notes?: (string | null) | undefined;
+          number?: (string | null) | undefined;
+          operation_nature?: (null | Schemas.OperationNature) | undefined;
+          organization_id: Schemas.OrganizationId;
+          project_id?: (null | Schemas.ProjectId) | undefined;
+          source_invoice_id?: (null | Schemas.InvoiceId) | undefined;
+          status: Schemas.InvoiceStatus;
+          updated_at: string;
+          vat_breakdown: Array<Schemas.InvoiceVatBreakdownLineResponse>;
+        };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+      404: unknown;
+      409: unknown;
+    };
+  };
+  export type get_ListInvoicePayments = {
+    method: "GET";
+    path: "/api/v1/invoices/{invoice_id}/payments";
+    requestFormat: "json";
+    parameters: {
+      path: { invoice_id: string };
+    };
+    responses: {
+      200: {
+        data: Array<{
+          amount_cents: number;
+          created_at: string;
+          deleted_at?: (string | null) | undefined;
+          deleted_by?: (null | Schemas.UserId) | undefined;
+          id: Schemas.InvoicePaymentId;
+          invoice_id: Schemas.InvoiceId;
+          method: string;
+          note?: (string | null) | undefined;
+          organization_id: Schemas.OrganizationId;
+          paid_on: string;
+          recorded_by: Schemas.UserId;
+          reference?: (string | null) | undefined;
+          updated_at: string;
+        }>;
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+      404: unknown;
+    };
+  };
+  export type post_RecordInvoicePayment = {
+    method: "POST";
+    path: "/api/v1/invoices/{invoice_id}/payments";
+    requestFormat: "json";
+    parameters: {
+      path: { invoice_id: string };
+
+      body: Schemas.RecordInvoicePaymentRequest;
+    };
+    responses: {
+      201: {
+        data: {
+          amount_cents: number;
+          created_at: string;
+          deleted_at?: (string | null) | undefined;
+          deleted_by?: (null | Schemas.UserId) | undefined;
+          id: Schemas.InvoicePaymentId;
+          invoice_id: Schemas.InvoiceId;
+          method: string;
+          note?: (string | null) | undefined;
+          organization_id: Schemas.OrganizationId;
+          paid_on: string;
+          recorded_by: Schemas.UserId;
+          reference?: (string | null) | undefined;
+          updated_at: string;
+        };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      400: unknown;
+      401: unknown;
+      403: unknown;
+      404: unknown;
+      409: unknown;
+    };
+  };
+  export type get_ExportInvoicePdf = {
+    method: "GET";
+    path: "/api/v1/invoices/{invoice_id}/pdf";
+    requestFormat: "json";
+    parameters: {
+      path: { invoice_id: string };
+    };
+    responses: { 200: unknown; 401: unknown; 403: unknown; 404: unknown; 409: unknown };
+  };
   export type get_GetMember = {
     method: "GET";
     path: "/api/v1/members/{member_id}";
@@ -2828,6 +3315,7 @@ export namespace Endpoints {
           share_capital_cents?: (number | null) | undefined;
           slug: string;
           updated_at: string;
+          vat_on_debits: boolean;
           vat_status?: (null | Schemas.VatStatusResponse) | undefined;
         }>;
         pagination?: (null | Schemas.PaginationMetadata) | undefined;
@@ -2865,6 +3353,7 @@ export namespace Endpoints {
           share_capital_cents?: (number | null) | undefined;
           slug: string;
           updated_at: string;
+          vat_on_debits: boolean;
           vat_status?: (null | Schemas.VatStatusResponse) | undefined;
         };
         pagination?: (null | Schemas.PaginationMetadata) | undefined;
@@ -2904,6 +3393,7 @@ export namespace Endpoints {
           share_capital_cents?: (number | null) | undefined;
           slug: string;
           updated_at: string;
+          vat_on_debits: boolean;
           vat_status?: (null | Schemas.VatStatusResponse) | undefined;
         };
         pagination?: (null | Schemas.PaginationMetadata) | undefined;
@@ -2954,6 +3444,7 @@ export namespace Endpoints {
           share_capital_cents?: (number | null) | undefined;
           slug: string;
           updated_at: string;
+          vat_on_debits: boolean;
           vat_status?: (null | Schemas.VatStatusResponse) | undefined;
         };
         pagination?: (null | Schemas.PaginationMetadata) | undefined;
@@ -3532,6 +4023,7 @@ export namespace Endpoints {
           organization_id: Schemas.OrganizationId;
           phone?: (string | null) | undefined;
           pipeline_stage: Schemas.CustomerPipelineStage;
+          registration_number?: (string | null) | undefined;
           status: Schemas.CustomerStatus;
           updated_at: string;
         }>;
@@ -3560,6 +4052,7 @@ export namespace Endpoints {
           organization_id: Schemas.OrganizationId;
           phone?: (string | null) | undefined;
           pipeline_stage: Schemas.CustomerPipelineStage;
+          registration_number?: (string | null) | undefined;
           status: Schemas.CustomerStatus;
           updated_at: string;
         };
@@ -3880,6 +4373,105 @@ export namespace Endpoints {
       409: unknown;
     };
   };
+  export type get_ListInvoices = {
+    method: "GET";
+    path: "/api/v1/organizations/{organization_id}/invoices";
+    requestFormat: "json";
+    parameters: {
+      query: Partial<{ page: number; per_page: number }>;
+      path: { organization_id: string };
+    };
+    responses: {
+      200: {
+        data: Array<{
+          created_at: string;
+          customer_context_id: Schemas.CustomerContextId;
+          customer_id: Schemas.CustomerId;
+          delivery_address?: (null | Schemas.DeliveryAddressResponse) | undefined;
+          due_at?: (string | null) | undefined;
+          gross_cents: number;
+          id: Schemas.InvoiceId;
+          issued_at?: (string | null) | undefined;
+          kind: Schemas.InvoiceKind;
+          lines: Array<Schemas.InvoiceLineResponse>;
+          net_cents: number;
+          notes?: (string | null) | undefined;
+          number?: (string | null) | undefined;
+          operation_nature?: (null | Schemas.OperationNature) | undefined;
+          organization_id: Schemas.OrganizationId;
+          project_id?: (null | Schemas.ProjectId) | undefined;
+          source_invoice_id?: (null | Schemas.InvoiceId) | undefined;
+          status: Schemas.InvoiceStatus;
+          updated_at: string;
+          vat_breakdown: Array<Schemas.InvoiceVatBreakdownLineResponse>;
+        }>;
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+    };
+  };
+  export type post_CreateInvoice = {
+    method: "POST";
+    path: "/api/v1/organizations/{organization_id}/invoices";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string };
+
+      body: Schemas.CreateInvoiceRequest;
+    };
+    responses: {
+      201: {
+        data: {
+          created_at: string;
+          customer_context_id: Schemas.CustomerContextId;
+          customer_id: Schemas.CustomerId;
+          delivery_address?: (null | Schemas.DeliveryAddressResponse) | undefined;
+          due_at?: (string | null) | undefined;
+          gross_cents: number;
+          id: Schemas.InvoiceId;
+          issued_at?: (string | null) | undefined;
+          kind: Schemas.InvoiceKind;
+          lines: Array<Schemas.InvoiceLineResponse>;
+          net_cents: number;
+          notes?: (string | null) | undefined;
+          number?: (string | null) | undefined;
+          operation_nature?: (null | Schemas.OperationNature) | undefined;
+          organization_id: Schemas.OrganizationId;
+          project_id?: (null | Schemas.ProjectId) | undefined;
+          source_invoice_id?: (null | Schemas.InvoiceId) | undefined;
+          status: Schemas.InvoiceStatus;
+          updated_at: string;
+          vat_breakdown: Array<Schemas.InvoiceVatBreakdownLineResponse>;
+        };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      400: unknown;
+      401: unknown;
+      403: unknown;
+      409: unknown;
+    };
+  };
+  export type get_ListOutstandingBalanceByCustomer = {
+    method: "GET";
+    path: "/api/v1/organizations/{organization_id}/invoices/outstanding";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string };
+    };
+    responses: {
+      200: {
+        data: Array<{
+          customer_id: Schemas.CustomerId;
+          oldest_due_at?: (string | null) | undefined;
+          outstanding_cents: number;
+        }>;
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+    };
+  };
   export type patch_UpdateOrganizationLegalIdentity = {
     method: "PATCH";
     path: "/api/v1/organizations/{organization_id}/legal-identity";
@@ -3912,6 +4504,7 @@ export namespace Endpoints {
           share_capital_cents?: (number | null) | undefined;
           slug: string;
           updated_at: string;
+          vat_on_debits: boolean;
           vat_status?: (null | Schemas.VatStatusResponse) | undefined;
         };
         pagination?: (null | Schemas.PaginationMetadata) | undefined;
@@ -5100,6 +5693,150 @@ export namespace Endpoints {
       409: unknown;
     };
   };
+  export type get_GetProjectBillingSummary = {
+    method: "GET";
+    path: "/api/v1/projects/{project_id}/billing-summary";
+    requestFormat: "json";
+    parameters: {
+      path: { project_id: string };
+    };
+    responses: {
+      200: {
+        data: {
+          billed_cents: number;
+          project_id: Schemas.ProjectId;
+          quoted_cents?: (number | null) | undefined;
+          remaining_cents?: (number | null) | undefined;
+        };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+      404: unknown;
+    };
+  };
+  export type get_ListProjectInvoices = {
+    method: "GET";
+    path: "/api/v1/projects/{project_id}/invoices";
+    requestFormat: "json";
+    parameters: {
+      path: { project_id: string };
+    };
+    responses: {
+      200: {
+        data: Array<{
+          created_at: string;
+          customer_context_id: Schemas.CustomerContextId;
+          customer_id: Schemas.CustomerId;
+          delivery_address?: (null | Schemas.DeliveryAddressResponse) | undefined;
+          due_at?: (string | null) | undefined;
+          gross_cents: number;
+          id: Schemas.InvoiceId;
+          issued_at?: (string | null) | undefined;
+          kind: Schemas.InvoiceKind;
+          lines: Array<Schemas.InvoiceLineResponse>;
+          net_cents: number;
+          notes?: (string | null) | undefined;
+          number?: (string | null) | undefined;
+          operation_nature?: (null | Schemas.OperationNature) | undefined;
+          organization_id: Schemas.OrganizationId;
+          project_id?: (null | Schemas.ProjectId) | undefined;
+          source_invoice_id?: (null | Schemas.InvoiceId) | undefined;
+          status: Schemas.InvoiceStatus;
+          updated_at: string;
+          vat_breakdown: Array<Schemas.InvoiceVatBreakdownLineResponse>;
+        }>;
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+      404: unknown;
+    };
+  };
+  export type post_IssueProjectDeposit = {
+    method: "POST";
+    path: "/api/v1/projects/{project_id}/invoices/deposit";
+    requestFormat: "json";
+    parameters: {
+      path: { project_id: string };
+
+      body: Schemas.IssueDepositRequest;
+    };
+    responses: {
+      201: {
+        data: {
+          created_at: string;
+          customer_context_id: Schemas.CustomerContextId;
+          customer_id: Schemas.CustomerId;
+          delivery_address?: (null | Schemas.DeliveryAddressResponse) | undefined;
+          due_at?: (string | null) | undefined;
+          gross_cents: number;
+          id: Schemas.InvoiceId;
+          issued_at?: (string | null) | undefined;
+          kind: Schemas.InvoiceKind;
+          lines: Array<Schemas.InvoiceLineResponse>;
+          net_cents: number;
+          notes?: (string | null) | undefined;
+          number?: (string | null) | undefined;
+          operation_nature?: (null | Schemas.OperationNature) | undefined;
+          organization_id: Schemas.OrganizationId;
+          project_id?: (null | Schemas.ProjectId) | undefined;
+          source_invoice_id?: (null | Schemas.InvoiceId) | undefined;
+          status: Schemas.InvoiceStatus;
+          updated_at: string;
+          vat_breakdown: Array<Schemas.InvoiceVatBreakdownLineResponse>;
+        };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      400: unknown;
+      401: unknown;
+      403: unknown;
+      404: unknown;
+      409: unknown;
+    };
+  };
+  export type post_IssueProjectFinalInvoice = {
+    method: "POST";
+    path: "/api/v1/projects/{project_id}/invoices/final";
+    requestFormat: "json";
+    parameters: {
+      path: { project_id: string };
+
+      body: Schemas.IssueFinalInvoiceRequest;
+    };
+    responses: {
+      201: {
+        data: {
+          created_at: string;
+          customer_context_id: Schemas.CustomerContextId;
+          customer_id: Schemas.CustomerId;
+          delivery_address?: (null | Schemas.DeliveryAddressResponse) | undefined;
+          due_at?: (string | null) | undefined;
+          gross_cents: number;
+          id: Schemas.InvoiceId;
+          issued_at?: (string | null) | undefined;
+          kind: Schemas.InvoiceKind;
+          lines: Array<Schemas.InvoiceLineResponse>;
+          net_cents: number;
+          notes?: (string | null) | undefined;
+          number?: (string | null) | undefined;
+          operation_nature?: (null | Schemas.OperationNature) | undefined;
+          organization_id: Schemas.OrganizationId;
+          project_id?: (null | Schemas.ProjectId) | undefined;
+          source_invoice_id?: (null | Schemas.InvoiceId) | undefined;
+          status: Schemas.InvoiceStatus;
+          updated_at: string;
+          vat_breakdown: Array<Schemas.InvoiceVatBreakdownLineResponse>;
+        };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      400: unknown;
+      401: unknown;
+      403: unknown;
+      404: unknown;
+      409: unknown;
+    };
+  };
   export type get_GetQuote = {
     method: "GET";
     path: "/api/v1/quotes/{quote_id}";
@@ -5398,6 +6135,7 @@ export namespace Endpoints {
           share_capital_cents?: (number | null) | undefined;
           slug: string;
           updated_at: string;
+          vat_on_debits: boolean;
           vat_status?: (null | Schemas.VatStatusResponse) | undefined;
         }>;
         pagination?: (null | Schemas.PaginationMetadata) | undefined;
@@ -5424,6 +6162,7 @@ export type EndpointByMethod = {
     "/api/v1/customers/{customer_id}": Endpoints.patch_UpdateCustomer;
     "/api/v1/equipment/{equipment_id}": Endpoints.patch_UpdateEquipment;
     "/api/v1/field/assignment-reports/{assignment_report_id}": Endpoints.patch_AmendAssignmentReport;
+    "/api/v1/invoices/{invoice_id}": Endpoints.patch_UpdateInvoice;
     "/api/v1/members/{member_id}": Endpoints.patch_UpdateMember;
     "/api/v1/organizations/{organization_id}": Endpoints.patch_UpdateOrganization;
     "/api/v1/organizations/{organization_id}/absences/{absence_id}": Endpoints.patch_PatchAbsence;
@@ -5456,6 +6195,7 @@ export type EndpointByMethod = {
     "/api/v1/equipment/{equipment_id}": Endpoints.delete_DeleteEquipment;
     "/api/v1/field/assignment-reports/{assignment_report_id}": Endpoints.delete_WithdrawAssignmentReport;
     "/api/v1/invitations/{invitation_id}": Endpoints.delete_RevokeInvitation;
+    "/api/v1/invoice-payments/{invoice_payment_id}": Endpoints.delete_DeleteInvoicePayment;
     "/api/v1/members/{member_id}": Endpoints.delete_DeleteMember;
     "/api/v1/members/{member_id}/employee-profile": Endpoints.delete_RemoveEmployeeProfile;
     "/api/v1/organizations/{organization_id}": Endpoints.delete_DeleteOrganization;
@@ -5491,6 +6231,11 @@ export type EndpointByMethod = {
     "/api/v1/employees/{employee_id}/cost-bases": Endpoints.get_ListEmployeeCostBases;
     "/api/v1/equipment/{equipment_id}": Endpoints.get_GetEquipment;
     "/api/v1/files/url": Endpoints.get_GetFileUrl;
+    "/api/v1/invoices/{invoice_id}": Endpoints.get_GetInvoice;
+    "/api/v1/invoices/{invoice_id}/balance": Endpoints.get_GetInvoiceBalance;
+    "/api/v1/invoices/{invoice_id}/credit-notes": Endpoints.get_ListInvoiceCreditNotes;
+    "/api/v1/invoices/{invoice_id}/payments": Endpoints.get_ListInvoicePayments;
+    "/api/v1/invoices/{invoice_id}/pdf": Endpoints.get_ExportInvoicePdf;
     "/api/v1/members/{member_id}": Endpoints.get_GetMember;
     "/api/v1/members/{member_id}/work-time": Endpoints.get_GetWorkTime;
     "/api/v1/organizations": Endpoints.get_ListOrganizations;
@@ -5512,6 +6257,8 @@ export type EndpointByMethod = {
     "/api/v1/organizations/{organization_id}/field/current": Endpoints.get_GetCurrentTimeEntry;
     "/api/v1/organizations/{organization_id}/field/tasks": Endpoints.get_ListMyFieldTasks;
     "/api/v1/organizations/{organization_id}/invitations": Endpoints.get_ListInvitations;
+    "/api/v1/organizations/{organization_id}/invoices": Endpoints.get_ListInvoices;
+    "/api/v1/organizations/{organization_id}/invoices/outstanding": Endpoints.get_ListOutstandingBalanceByCustomer;
     "/api/v1/organizations/{organization_id}/members": Endpoints.get_ListMembers;
     "/api/v1/organizations/{organization_id}/planning": Endpoints.get_GetPlanning;
     "/api/v1/organizations/{organization_id}/planning/availability": Endpoints.get_GetPlanningAvailability;
@@ -5530,6 +6277,8 @@ export type EndpointByMethod = {
     "/api/v1/organizations/{organization_id}/tasks/{task_id}": Endpoints.get_GetTask;
     "/api/v1/organizations/{organization_id}/tasks/{task_id}/comments": Endpoints.get_ListTaskComments;
     "/api/v1/products/{product_id}": Endpoints.get_GetProduct;
+    "/api/v1/projects/{project_id}/billing-summary": Endpoints.get_GetProjectBillingSummary;
+    "/api/v1/projects/{project_id}/invoices": Endpoints.get_ListProjectInvoices;
     "/api/v1/quotes/{quote_id}": Endpoints.get_GetQuote;
     "/api/v1/quotes/{quote_id}/pdf": Endpoints.get_ExportQuotePdf;
     "/api/v1/quotes/{quote_id}/plan-proposal": Endpoints.get_GetQuotePlanProposal;
@@ -5552,6 +6301,10 @@ export type EndpointByMethod = {
     "/api/v1/field/time-entries/{time_entry_id}/stop": Endpoints.post_StopTimeEntry;
     "/api/v1/files": Endpoints.post_UploadFile;
     "/api/v1/invitations/{token}/accept": Endpoints.post_AcceptInvitation;
+    "/api/v1/invoices/{invoice_id}/cancel": Endpoints.post_CancelInvoice;
+    "/api/v1/invoices/{invoice_id}/credit-notes": Endpoints.post_IssueCreditNote;
+    "/api/v1/invoices/{invoice_id}/issue": Endpoints.post_IssueInvoice;
+    "/api/v1/invoices/{invoice_id}/payments": Endpoints.post_RecordInvoicePayment;
     "/api/v1/organizations": Endpoints.post_CreateOrganization;
     "/api/v1/organizations/{organization_id}/absences": Endpoints.post_CreateAbsence;
     "/api/v1/organizations/{organization_id}/automation/credentials": Endpoints.post_CreateAutomationCredential;
@@ -5566,6 +6319,7 @@ export type EndpointByMethod = {
     "/api/v1/organizations/{organization_id}/field/time-entries": Endpoints.post_StartTimeEntry;
     "/api/v1/organizations/{organization_id}/field/time-entries/declare": Endpoints.post_DeclareTimeEntry;
     "/api/v1/organizations/{organization_id}/invitations": Endpoints.post_CreateInvitation;
+    "/api/v1/organizations/{organization_id}/invoices": Endpoints.post_CreateInvoice;
     "/api/v1/organizations/{organization_id}/members": Endpoints.post_CreateMember;
     "/api/v1/organizations/{organization_id}/products": Endpoints.post_CreateProduct;
     "/api/v1/organizations/{organization_id}/project-templates": Endpoints.post_CreateProjectTemplate;
@@ -5580,6 +6334,8 @@ export type EndpointByMethod = {
     "/api/v1/organizations/{organization_id}/tasks": Endpoints.post_CreateTask;
     "/api/v1/organizations/{organization_id}/tasks/bulk-assign": Endpoints.post_BulkAssignTasks;
     "/api/v1/organizations/{organization_id}/tasks/{task_id}/comments": Endpoints.post_CreateTaskComment;
+    "/api/v1/projects/{project_id}/invoices/deposit": Endpoints.post_IssueProjectDeposit;
+    "/api/v1/projects/{project_id}/invoices/final": Endpoints.post_IssueProjectFinalInvoice;
     "/api/v1/quotes/{quote_id}/plan": Endpoints.post_CreateQuotePlan;
   };
   put: {

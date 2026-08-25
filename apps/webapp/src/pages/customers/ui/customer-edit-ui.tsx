@@ -218,6 +218,13 @@ export function CustomerEditUI({
 						onChange={(v) => onChange({ name: v })}
 						changed={changedKeys.includes('name')}
 					/>
+					<Field
+						label="SIREN"
+						name="registration-number"
+						value={form.registrationNumber}
+						onChange={(v) => onChange({ registrationNumber: v })}
+						changed={changedKeys.includes('registrationNumber')}
+					/>
 					<div className="flex flex-col gap-2">
 						<Label htmlFor="customer-status">
 							Statut CRM

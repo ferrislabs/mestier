@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO customer_contexts (id, customer_id, label) VALUES ($1, $2, $3)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "88e36c97d4d3a89a532c4007b7df5f1fc5f0b4a06bf4c29c5102b69d1aa86e1f"
+}

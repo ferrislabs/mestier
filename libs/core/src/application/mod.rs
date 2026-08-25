@@ -39,6 +39,7 @@ pub mod discord_webhook;
 pub mod employee;
 pub mod equipment;
 pub mod invitation;
+pub mod invoice;
 pub mod member;
 pub mod organization;
 pub mod planning;
@@ -423,6 +424,7 @@ mod tests {
                 status: crate::CustomerStatus::Prospect,
                 pipeline_stage: crate::CustomerPipelineStage::New,
                 name: "Automation depth customer".to_string(),
+                registration_number: None,
                 phone: None,
                 email: None,
             })

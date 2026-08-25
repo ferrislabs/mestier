@@ -1,7 +1,9 @@
 import { screen } from '@testing-library/react'
-import { describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { ModuleNav } from '#/components/module-nav'
 import { SidebarProvider } from '#/components/ui/sidebar'
+import { MODULES } from '#/modules/registry'
+import type { ModuleSection } from '#/modules/types'
 import { renderWithRouter } from '#/test/render-with-router'
 
 function renderNav(initialPath = '/o/dupont') {
@@ -12,6 +14,36 @@ function renderNav(initialPath = '/o/dupont') {
 		initialPath,
 	)
 }
+
+/**
+ * The registry has no permanently `coming-soon` section left in `crm`
+ * (invoices shipped in #321) — the nav's "announced section" behavior still
+ * needs a fixture to exercise it against, so one is appended to the `crm`
+ * module for the duration of this file, same reason
+ * `module-launcher.test.tsx`'s own `announcedFixture` exists.
+ */
+const announcedSectionFixture: ModuleSection = {
+	id: 'test-announced-section-fixture',
+	label: 'Section annoncée',
+	to: '/crm/test-announced-section-fixture',
+	status: 'coming-soon',
+}
+
+function crmModule() {
+	const module = MODULES.find((module) => module.id === 'crm')
+	if (!module) throw new Error('registry: crm module missing')
+	return module
+}
+
+beforeEach(() => {
+	crmModule().sections.push(announcedSectionFixture)
+})
+
+afterEach(() => {
+	const sections = crmModule().sections
+	const index = sections.indexOf(announcedSectionFixture)
+	if (index !== -1) sections.splice(index, 1)
+})
 
 describe('ModuleNav', () => {
 	it("lists the active module's sections", async () => {
@@ -47,9 +79,11 @@ describe('ModuleNav', () => {
 		await renderNav('/o/dupont/crm/customers')
 
 		const liens = screen.getAllByRole('link').map((lien) => lien.textContent)
-		expect(liens.some((texte) => texte?.includes('Factures'))).toBe(false)
+		expect(liens.some((texte) => texte?.includes('Section annoncée'))).toBe(
+			false,
+		)
 
-		const annonce = screen.getByRole('button', { name: /Factures/ })
+		const annonce = screen.getByRole('button', { name: /Section annoncée/ })
 		expect(annonce.getAttribute('aria-disabled')).toBe('true')
 	})
 

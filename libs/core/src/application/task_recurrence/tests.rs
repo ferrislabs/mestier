@@ -149,11 +149,12 @@ mod tests {
         let fixture = seed_fixture(&pool).await;
         let usecase = make_usecase(pool.clone());
 
+        // `target_horizon` fills to `horizon_days` out from *today*, or
+        // `starts_on`, whichever is later — a fixed past date would make the
+        // assertion below drift by however many days have passed since it
+        // was written, so `starts_on` is today's date, always the later one.
         let created = usecase
-            .create_task_recurrence(daily_command(
-                &fixture,
-                NaiveDate::from_ymd_opt(2026, 8, 24).unwrap(),
-            ))
+            .create_task_recurrence(daily_command(&fixture, chrono::Utc::now().date_naive()))
             .await
             .unwrap();
 

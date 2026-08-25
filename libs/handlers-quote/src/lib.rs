@@ -5,6 +5,7 @@ use handlers::{ApiError, AppState, auth::auth_middleware, rate_limit::rate_limit
 use mestier_core::{CustomerContextId, CustomerId, OrganizationId, QuoteId};
 
 pub mod paths;
+pub mod pdf;
 pub mod quote;
 pub mod response;
 

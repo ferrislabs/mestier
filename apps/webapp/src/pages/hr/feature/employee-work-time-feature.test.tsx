@@ -43,6 +43,7 @@ const ORGANIZATION: Organization = {
 	missing_legal_identity_fields: [],
 	slug: 'atelier-bois',
 	field_clock_enabled: false,
+	vat_on_debits: false,
 	created_at: '2026-01-01T00:00:00Z',
 	updated_at: '2026-01-01T00:00:00Z',
 }

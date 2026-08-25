@@ -10,7 +10,9 @@ import {
 	DialogTitle,
 } from '#/components/ui/dialog'
 import { Label } from '#/components/ui/label'
+import type { CustomerContext } from '#/hooks/use-customers'
 import type { ProjectFormValues } from '#/pages/projects/types'
+import { BillingAddressField } from '#/pages/quotes/ui/billing-address-field'
 
 export interface ProjectOption {
 	id: string
@@ -25,6 +27,9 @@ export interface ProjectFormDialogProps {
 	customers: ProjectOption[]
 	/** Quotes already narrowed to the picked customer by the feature. */
 	quotes: ProjectOption[]
+	/** Addresses already narrowed to the picked customer by the feature. */
+	customerContexts: CustomerContext[]
+	isCustomerContextsLoading: boolean
 	isPending: boolean
 	error: string | null
 	onOpenChange: (open: boolean) => void
@@ -46,6 +51,8 @@ export function ProjectFormDialog({
 	values,
 	customers,
 	quotes,
+	customerContexts,
+	isCustomerContextsLoading,
 	isPending,
 	error,
 	onOpenChange,
@@ -82,9 +89,14 @@ export function ProjectFormDialog({
 							className="h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm"
 							value={values.customerId}
 							onChange={(event) =>
-								// Changing the customer drops the quote: a quote belongs to one
-								// customer, and keeping it would let the two disagree.
-								onChange({ customerId: event.target.value, quoteId: '' })
+								// Changing the customer drops the quote and the pinned
+								// address: both belong to one customer, and keeping either
+								// would let it disagree with the new one.
+								onChange({
+									customerId: event.target.value,
+									quoteId: '',
+									customerContextId: '',
+								})
 							}
 						>
 							<option value="">Aucun — projet interne</option>
@@ -94,6 +106,23 @@ export function ProjectFormDialog({
 								</option>
 							))}
 						</select>
+					</div>
+
+					<div className="space-y-1">
+						<Label htmlFor="project-billing-address">
+							Adresse de facturation
+						</Label>
+						<BillingAddressField
+							value={values.customerContextId}
+							addresses={customerContexts}
+							hasCustomer={Boolean(values.customerId)}
+							isLoading={isCustomerContextsLoading}
+							onChange={(customerContextId) => onChange({ customerContextId })}
+						/>
+						<p className="text-xs text-muted-foreground">
+							Requise pour émettre un acompte ou un solde depuis ce projet ; une
+							facture à montant libre peut toujours en choisir une autre.
+						</p>
 					</div>
 
 					<div className="space-y-1">

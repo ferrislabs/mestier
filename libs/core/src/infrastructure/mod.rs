@@ -10,6 +10,7 @@ pub mod employee;
 pub mod equipment;
 pub mod file_storage;
 pub mod invitation;
+pub mod invoice;
 pub mod member;
 pub mod message;
 pub mod notification;

@@ -441,9 +441,12 @@ function RankingCard({
 /**
  * A project name that opens its own page.
  *
- * Unlike the old version of this screen, which could only land a reader on the
- * planning task list because a chantier was not an addressable thing, a project
- * now has a page of its own.
+ * Links straight at the project detail page (#322) rather than at the list
+ * with a `?projectId=` highlight: "billed against quoted" only lives there
+ * — the billing summary is a per-project read with no batch endpoint, so
+ * fetching it for every row of this report would be an N+1 this table does
+ * not otherwise pay for. Landing on the project's own page costs one extra
+ * click instead of one extra request per row.
  */
 function ProjectTitleLink({
 	project,
@@ -458,9 +461,13 @@ function ProjectTitleLink({
 
 	return (
 		<Link
-			to={buildOrgPath(organizationSlug, '/planning/projects')}
-			search={{ projectId: project.project_id }}
-			title={expenses ? `Ouvrir le projet : ${expenses}` : 'Ouvrir le projet'}
+			to={buildOrgPath(organizationSlug, '/planning/projects/$projectId')}
+			params={{ projectId: project.project_id }}
+			title={
+				expenses
+					? `Ouvrir le projet : ${expenses}`
+					: 'Ouvrir le projet : facturé, restant à facturer'
+			}
 			className={cn(
 				'group inline-flex min-w-0 items-center gap-1 hover:underline',
 				className,

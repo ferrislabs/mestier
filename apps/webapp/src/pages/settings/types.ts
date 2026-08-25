@@ -42,6 +42,11 @@ export interface LegalIdentityFormValues {
 	contactEmail: string
 	contactPhone: string
 	insuranceMention: string
+	/** Whether VAT is due on invoicing ("debits") rather than on collection
+	 * ("encaissements", the default). One of the mentions the e-invoicing
+	 * reform effective 1 September 2026 requires stating explicitly — see
+	 * `Organization.vat_on_debits`. */
+	vatOnDebits: boolean
 }
 
 /** French labels for the field names `missing_legal_identity_fields`

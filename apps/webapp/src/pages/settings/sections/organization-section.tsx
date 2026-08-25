@@ -264,6 +264,7 @@ function organizationToLegalIdentityForm(
 		contactEmail: organization.contact_email ?? '',
 		contactPhone: organization.contact_phone ?? '',
 		insuranceMention: organization.insurance_mention ?? '',
+		vatOnDebits: organization.vat_on_debits,
 	}
 }
 
@@ -320,6 +321,7 @@ function LegalIdentitySection({ organization }: LegalIdentitySectionProps) {
 					contact_email: blankToNull(value.contactEmail),
 					contact_phone: blankToNull(value.contactPhone),
 					insurance_mention: blankToNull(value.insuranceMention),
+					vat_on_debits: value.vatOnDebits,
 				},
 			})
 		},
@@ -516,6 +518,23 @@ function LegalIdentitySection({ organization }: LegalIdentitySectionProps) {
 										placeholder="Article 293 B du CGI"
 									/>
 								) : null}
+								<div className="flex items-center justify-between gap-4 rounded-lg border bg-card px-3 py-2 md:col-span-2">
+									<div>
+										<Label htmlFor="vat_on_debits">TVA sur les débits</Label>
+										<p className="text-xs text-muted-foreground">
+											Mention obligatoire sur la facture électronique à compter
+											du 1er septembre 2026. Désactivé, la TVA reste due sur les
+											encaissements.
+										</p>
+									</div>
+									<Switch
+										id="vat_on_debits"
+										checked={binding.values.vatOnDebits}
+										onCheckedChange={(vatOnDebits) =>
+											binding.onChange({ vatOnDebits })
+										}
+									/>
+								</div>
 							</FieldGroup>
 
 							<FieldGroup title="Assurance et contact">

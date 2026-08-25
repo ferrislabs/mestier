@@ -50,6 +50,7 @@ impl Connector for CustomerCreateConnector {
                 status: CustomerStatus::Prospect,
                 pipeline_stage: CustomerPipelineStage::New,
                 name: name.to_string(),
+                registration_number: None,
                 phone,
                 email,
             })

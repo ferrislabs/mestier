@@ -12,6 +12,8 @@ pub struct CreateCustomerRequest {
     pub status: CustomerStatus,
     pub pipeline_stage: CustomerPipelineStage,
     pub name: String,
+    #[serde(default)]
+    pub registration_number: Option<String>,
     pub phone: Option<String>,
     pub email: Option<String>,
 }
@@ -51,6 +53,7 @@ pub async fn handler(
             status: payload.status,
             pipeline_stage: payload.pipeline_stage,
             name: payload.name,
+            registration_number: payload.registration_number,
             phone: payload.phone,
             email: payload.email,
         })

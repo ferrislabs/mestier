@@ -1,0 +1,173 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT id, name, slug, owner_id,\n                legal_name, legal_form, registration_number,\n                vat_status, vat_number, vat_exemption_basis,\n                share_capital_cents,\n                address_line1, address_line2, address_postal_code, address_city, address_country,\n                contact_email, contact_phone, insurance_mention,\n                quote_number_prefix,\n                invoice_number_prefix,\n                field_clock_enabled,\n                vat_on_debits,\n                deleted_at, created_at, updated_at\n            FROM organizations\n            WHERE deleted_at IS NULL\n            ORDER BY created_at ASC\n            LIMIT $1 OFFSET $2\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "slug",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "owner_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 4,
+        "name": "legal_name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "legal_form",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 6,
+        "name": "registration_number",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 7,
+        "name": "vat_status",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 8,
+        "name": "vat_number",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 9,
+        "name": "vat_exemption_basis",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 10,
+        "name": "share_capital_cents",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 11,
+        "name": "address_line1",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 12,
+        "name": "address_line2",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 13,
+        "name": "address_postal_code",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 14,
+        "name": "address_city",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 15,
+        "name": "address_country",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 16,
+        "name": "contact_email",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 17,
+        "name": "contact_phone",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 18,
+        "name": "insurance_mention",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 19,
+        "name": "quote_number_prefix",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 20,
+        "name": "invoice_number_prefix",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 21,
+        "name": "field_clock_enabled",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 22,
+        "name": "vat_on_debits",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 23,
+        "name": "deleted_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 24,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 25,
+        "name": "updated_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      false,
+      false,
+      false,
+      false,
+      true,
+      false,
+      false
+    ]
+  },
+  "hash": "d4c0292e9cd08b42a1c49a2e866bf461a58a1beef2182292b350bc59867df2ef"
+}

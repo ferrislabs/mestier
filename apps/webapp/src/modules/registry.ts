@@ -72,7 +72,6 @@ export const MODULES: AppModule[] = [
 				label: 'Factures',
 				to: '/crm/invoices',
 				icon: Receipt,
-				status: 'coming-soon',
 			},
 			{
 				id: 'catalog',

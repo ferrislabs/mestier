@@ -1,4 +1,4 @@
-use crate::domain::organization::Organization;
+use crate::domain::{customer::Customer, organization::Organization};
 
 /// Whether an organization charges VAT on what it issues, and — either way —
 /// the fact that makes the document valid without it: the number when it
@@ -139,6 +139,66 @@ fn require(
     }
 }
 
+/// The name of a fact missing before an invoice can actually be
+/// transmitted electronically — `MissingLegalIdentityField`'s counterpart
+/// for the facts #341 adds on top of `LegalIdentity`.
+pub type MissingElectronicInvoicingFact = &'static str;
+
+/// The facts an electronically-transmitted invoice needs beyond
+/// `LegalIdentity`: a complete issuer identity, and the customer's own
+/// SIREN. Built only through [`Self::try_new`] — same device as
+/// `LegalIdentity::try_from_organization` — so "this invoice cannot be
+/// transmitted, the customer has no SIREN" is a type-level fact rather
+/// than a check a PDF export or a PDP transmission path can separately
+/// forget.
+///
+/// Whether the customer's SIREN is actually *required* depends on the
+/// customer itself being VAT-subject, per the reform text verified in
+/// #341's migration comment — this codebase does not yet track a
+/// customer's own VAT status, so today this always requires the SIREN
+/// when present on the invoice's counterparty. Narrowing that to "only
+/// when the customer is VAT-subject" is an explicit follow-up, not
+/// something this type gets right yet.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ElectronicInvoicingFacts {
+    pub issuer: LegalIdentity,
+    pub customer_registration_number: String,
+}
+
+impl ElectronicInvoicingFacts {
+    pub fn try_new(
+        organization: &Organization,
+        customer: &Customer,
+    ) -> Result<Self, Vec<MissingElectronicInvoicingFact>> {
+        let mut missing: Vec<MissingElectronicInvoicingFact> = Vec::new();
+
+        let issuer = match LegalIdentity::try_from_organization(organization) {
+            Ok(issuer) => Some(issuer),
+            Err(fields) => {
+                missing.extend(fields);
+                None
+            }
+        };
+
+        let customer_registration_number = match &customer.registration_number {
+            Some(value) if !value.trim().is_empty() => Some(value.clone()),
+            _ => {
+                missing.push("customer_registration_number");
+                None
+            }
+        };
+
+        if !missing.is_empty() {
+            return Err(missing);
+        }
+
+        Ok(Self {
+            issuer: issuer.expect("checked above"),
+            customer_registration_number: customer_registration_number.expect("checked above"),
+        })
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -167,7 +227,9 @@ mod tests {
             contact_phone: None,
             insurance_mention: None,
             quote_number_prefix: "DEV".to_owned(),
+            invoice_number_prefix: "FAC".to_owned(),
             field_clock_enabled: false,
+            vat_on_debits: false,
             deleted_at: None,
             created_at: now,
             updated_at: now,
@@ -283,5 +345,57 @@ mod tests {
         let identity = LegalIdentity::try_from_organization(&organization).unwrap();
 
         assert_eq!(identity.share_capital_cents, None);
+    }
+
+    fn customer_with_registration_number(value: Option<&str>) -> Customer {
+        let now = Utc::now();
+        Customer {
+            id: crate::CustomerId(Uuid::new_v4()),
+            organization_id: crate::OrganizationId(Uuid::new_v4()),
+            status: crate::CustomerStatus::Client,
+            pipeline_stage: crate::CustomerPipelineStage::Won,
+            name: "Jean Dupont".into(),
+            registration_number: value.map(str::to_owned),
+            phone: None,
+            email: None,
+            deleted_at: None,
+            created_at: now,
+            updated_at: now,
+        }
+    }
+
+    #[test]
+    fn electronic_invoicing_facts_build_from_a_complete_pair() {
+        let facts = ElectronicInvoicingFacts::try_new(
+            &complete_organization(),
+            &customer_with_registration_number(Some("123 456 789")),
+        )
+        .unwrap();
+
+        assert_eq!(facts.issuer.legal_name, "Acme SARL");
+        assert_eq!(facts.customer_registration_number, "123 456 789");
+    }
+
+    #[test]
+    fn electronic_invoicing_facts_report_a_missing_customer_siren() {
+        let err = ElectronicInvoicingFacts::try_new(
+            &complete_organization(),
+            &customer_with_registration_number(None),
+        )
+        .unwrap_err();
+
+        assert_eq!(err, vec!["customer_registration_number"]);
+    }
+
+    #[test]
+    fn electronic_invoicing_facts_report_both_missing_sides_at_once() {
+        let err = ElectronicInvoicingFacts::try_new(
+            &blank_organization(),
+            &customer_with_registration_number(None),
+        )
+        .unwrap_err();
+
+        assert!(err.contains(&"legal_name"));
+        assert!(err.contains(&"customer_registration_number"));
     }
 }

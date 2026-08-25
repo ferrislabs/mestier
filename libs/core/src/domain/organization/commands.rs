@@ -49,4 +49,8 @@ pub struct UpdateLegalIdentityCommand {
     pub contact_email: Option<String>,
     pub contact_phone: Option<String>,
     pub insurance_mention: Option<String>,
+    /// Not an `Option`, unlike its neighbours above: a VAT regime choice is
+    /// always either debits or encaissements, never "not stated yet" — see
+    /// `Organization::vat_on_debits`.
+    pub vat_on_debits: bool,
 }
