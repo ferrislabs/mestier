@@ -1,0 +1,45 @@
+Mestier has been deployed.
+
+{{- if .Values.webapp.enabled }}
+
+Webapp service: {{ include "mestier.fullname" . }}-webapp:{{ .Values.webapp.service.port }}
+{{- end }}
+{{- if .Values.api.enabled }}
+API service:    {{ include "mestier.fullname" . }}-api:{{ .Values.api.service.port }} (health/metrics on :{{ .Values.api.service.internalPort }})
+{{- end }}
+
+{{- if .Values.ingress.enabled }}
+
+Ingress is enabled:
+{{- if .Values.webapp.enabled }}
+  - http://{{ .Values.ingress.webapp.host }}{{ .Values.ingress.webapp.path }}
+{{- end }}
+{{- if .Values.api.enabled }}
+  - http://{{ .Values.ingress.api.host }}{{ .Values.ingress.api.path }}
+{{- end }}
+{{- end }}
+
+{{- if .Values.gatewayApi.enabled }}
+
+Gateway API HTTPRoutes are enabled, attached to:
+{{- range .Values.gatewayApi.parentRefs }}
+  - {{ .name }}{{ if .namespace }}.{{ .namespace }}{{ end }}
+{{- end }}
+{{- end }}
+
+{{- if not (or .Values.ingress.enabled .Values.gatewayApi.enabled) }}
+
+Neither ingress nor gatewayApi is enabled — services are only reachable
+in-cluster. Set ingress.enabled=true or gatewayApi.enabled=true to expose
+them, or port-forward for a quick check:
+  kubectl port-forward svc/{{ include "mestier.fullname" . }}-webapp 8080:{{ .Values.webapp.service.port }}
+{{- end }}
+
+{{- if .Values.api.secret.create }}
+{{- if or (not .Values.api.secret.AUTH_CLIENT_SECRET) (not .Values.api.secret.DATABASE_PASSWORD) }}
+
+WARNING: api.secret is chart-managed but one or more sensitive values are
+still empty in values.yaml (AUTH_CLIENT_SECRET, DATABASE_PASSWORD, ...).
+Set them via --set or a values override file before relying on this release.
+{{- end }}
+{{- end }}

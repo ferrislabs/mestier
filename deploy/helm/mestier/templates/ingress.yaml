@@ -1,0 +1,45 @@
+{{- if .Values.ingress.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ include "mestier.fullname" . }}
+  labels:
+    {{- include "mestier.labels" . | nindent 4 }}
+  {{- with .Values.ingress.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  {{- if .Values.ingress.className }}
+  ingressClassName: {{ .Values.ingress.className }}
+  {{- end }}
+  {{- with .Values.ingress.tls }}
+  tls:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+  rules:
+    {{- if .Values.webapp.enabled }}
+    - host: {{ .Values.ingress.webapp.host }}
+      http:
+        paths:
+          - path: {{ .Values.ingress.webapp.path }}
+            pathType: {{ .Values.ingress.webapp.pathType }}
+            backend:
+              service:
+                name: {{ include "mestier.fullname" . }}-webapp
+                port:
+                  number: {{ .Values.webapp.service.port }}
+    {{- end }}
+    {{- if .Values.api.enabled }}
+    - host: {{ .Values.ingress.api.host }}
+      http:
+        paths:
+          - path: {{ .Values.ingress.api.path }}
+            pathType: {{ .Values.ingress.api.pathType }}
+            backend:
+              service:
+                name: {{ include "mestier.fullname" . }}-api
+                port:
+                  number: {{ .Values.api.service.port }}
+    {{- end }}
+{{- end }}

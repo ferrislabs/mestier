@@ -1,0 +1,60 @@
+{{/*
+Gateway API HTTPRoutes. These attach to a Gateway that already exists in the
+cluster (gatewayApi.parentRefs) — the chart does not create the Gateway or
+GatewayClass, those are cluster infrastructure.
+*/}}
+{{- if .Values.gatewayApi.enabled }}
+{{- if .Values.webapp.enabled }}
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: {{ include "mestier.fullname" . }}-webapp
+  labels:
+    {{- include "mestier.labels" . | nindent 4 }}
+    app.kubernetes.io/component: webapp
+  {{- with .Values.gatewayApi.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  parentRefs:
+    {{- toYaml .Values.gatewayApi.parentRefs | nindent 4 }}
+  hostnames:
+    {{- toYaml .Values.gatewayApi.webapp.hostnames | nindent 4 }}
+  rules:
+    - matches:
+        - path:
+            type: PathPrefix
+            value: {{ .Values.gatewayApi.webapp.path }}
+      backendRefs:
+        - name: {{ include "mestier.fullname" . }}-webapp
+          port: {{ .Values.webapp.service.port }}
+---
+{{- end }}
+{{- if .Values.api.enabled }}
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: {{ include "mestier.fullname" . }}-api
+  labels:
+    {{- include "mestier.labels" . | nindent 4 }}
+    app.kubernetes.io/component: api
+  {{- with .Values.gatewayApi.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  parentRefs:
+    {{- toYaml .Values.gatewayApi.parentRefs | nindent 4 }}
+  hostnames:
+    {{- toYaml .Values.gatewayApi.api.hostnames | nindent 4 }}
+  rules:
+    - matches:
+        - path:
+            type: PathPrefix
+            value: {{ .Values.gatewayApi.api.path }}
+      backendRefs:
+        - name: {{ include "mestier.fullname" . }}-api
+          port: {{ .Values.api.service.port }}
+{{- end }}
+{{- end }}
