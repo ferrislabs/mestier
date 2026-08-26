@@ -101,7 +101,7 @@ See `values.yaml` for the full, commented list. Highlights:
 | `api.env` | Non-sensitive API config (mirrors `libs/args`), rendered into a ConfigMap |
 | `api.secret` | Sensitive API config (DB password, auth secret, storage keys), rendered into a Secret unless `existingSecret` is set. Per-key `valueFrom` overrides source a given env var from a different Secret/key (see above) |
 | `api.service.internalPort` | Health (`/health`) and metrics port, probed by the Deployment, not exposed via ingress/gateway |
-| `webapp.env` | `API_URL` / `ISSUER_URL`, injected at container start into `config.json` (see `apps/webapp/docker-entrypoint.sh`) |
+| `webapp.env` | `API_URL` / `ISSUER_URL` / `OIDC_CLIENT_ID`, injected at container start into `config.json` (see `apps/webapp/docker-entrypoint.sh`) — set `OIDC_CLIENT_ID` to the same value the API's `AUTH_CLIENT_ID` uses; it's a public identifier, not a secret |
 | `api.autoscaling` / `webapp.autoscaling` | Optional HPA per component |
 | `api.migrations` | Runs `sqlx migrate run` as an ArgoCD PreSync hook before api/webapp sync (see below) |
 

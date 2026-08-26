@@ -189,10 +189,13 @@ webapp:
 
   # -- Injected at container start into public/config.json (see
   # apps/webapp/docker-entrypoint.sh) — not build-time, so this is a plain
-  # env var pair, no secret involved.
+  # env var pair, no secret involved. OIDC_CLIENT_ID is not sensitive (it is
+  # a public OAuth client identifier, not a secret) — do not confuse it with
+  # api.secret.AUTH_CLIENT_SECRET, which is.
   env:
     API_URL: ""
     ISSUER_URL: ""
+    OIDC_CLIENT_ID: ""
 
 serviceAccount:
   # -- Whether a ServiceAccount is created, shared by api and webapp pods.
