@@ -1,0 +1,59 @@
+{{- if and .Values.api.enabled .Values.api.migrations.enabled }}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "mestier.fullname" . }}-migrations
+  labels:
+    {{- include "mestier.labels" . | nindent 4 }}
+    app.kubernetes.io/component: migrations
+  annotations:
+    # Runs before the api/webapp Deployments sync, so the schema is ready
+    # before any pod starts querying it. Deleted on success so re-syncs
+    # don't pile up completed Jobs; a failed run is left for inspection
+    # (no hook-failed policy) — ArgoCD reports the sync as failed either way.
+    argocd.argoproj.io/hook: PreSync
+    argocd.argoproj.io/hook-delete-policy: HookSucceeded
+spec:
+  backoffLimit: {{ .Values.api.migrations.backoffLimit }}
+  template:
+    metadata:
+      labels:
+        {{- include "mestier.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: migrations
+    spec:
+      restartPolicy: Never
+      {{- with .Values.global.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      # No dedicated ServiceAccount: this Job never talks to the Kubernetes
+      # API, only to Postgres, so the namespace's default SA is enough — and
+      # sidesteps the ordering problem a hook-scoped SA would otherwise need
+      # (a PreSync hook's own dependencies must be hooks too, or they only
+      # land in the main Sync phase, after this Job already needs them).
+      containers:
+        - name: migrate
+          image: {{ include "mestier.image" (dict "image" .Values.api.image "chart" .Chart) }}
+          imagePullPolicy: {{ .Values.api.image.pullPolicy }}
+          # The image bundles both the migrations directory and the sqlx-cli
+          # binary for exactly this purpose (see the root Dockerfile's `api`
+          # target) — sqlx-cli reads $DATABASE_URL, which the app itself
+          # doesn't use (it builds its own connection from the discrete
+          # DATABASE_* vars below), so this composes one from those before
+          # handing off. Composed in a shell, not passed as a --database-url
+          # argument, so the password never appears in argv (env vars aren't
+          # visible via `ps` the way command-line arguments are).
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              set -eu
+              export DATABASE_URL="postgres://${DATABASE_USER}:${DATABASE_PASSWORD}@${DATABASE_HOST}:${DATABASE_PORT}/${DATABASE_NAME}"
+              exec sqlx migrate run --source /usr/local/mestier/migrations
+          envFrom:
+            - configMapRef:
+                name: {{ include "mestier.fullname" . }}-api
+          env:
+            {{- include "mestier.api.secretEnvEntry" (dict "root" $ "key" "DATABASE_PASSWORD") | nindent 12 }}
+          resources:
+            {{- toYaml .Values.api.migrations.resources | nindent 12 }}
+{{- end }}

@@ -103,9 +103,26 @@ See `values.yaml` for the full, commented list. Highlights:
 | `api.service.internalPort` | Health (`/health`) and metrics port, probed by the Deployment, not exposed via ingress/gateway |
 | `webapp.env` | `API_URL` / `ISSUER_URL`, injected at container start into `config.json` (see `apps/webapp/docker-entrypoint.sh`) |
 | `api.autoscaling` / `webapp.autoscaling` | Optional HPA per component |
+| `api.migrations` | Runs `sqlx migrate run` as an ArgoCD PreSync hook before api/webapp sync (see below) |
 
 TLS termination inside the API pod (`SERVER_TLS_CERT`/`SERVER_TLS_KEY`) is
 out of scope for this chart — terminate TLS at the Ingress or Gateway.
+
+## Database migrations
+
+The chart runs migrations itself: a Job, annotated as an ArgoCD `PreSync`
+hook, using the same `api` image (it already bundles the `migrations/`
+directory and the `sqlx-cli` binary — see the root `Dockerfile`). It syncs
+before the api/webapp Deployments and deletes itself on success.
+
+This isn't optional plumbing you can skip by installing with plain
+`helm install` outside ArgoCD — without a PreSync-aware controller, the hook
+annotation is a no-op, and the API fails on the first query against a table
+that was never created. Either deploy through ArgoCD, or run
+`sqlx migrate run --source migrations` yourself before the API starts.
+
+Set `api.migrations.enabled: false` only if migrations are deliberately run
+out-of-band (e.g. a separate CI/CD pipeline step).
 
 ## Verify
 

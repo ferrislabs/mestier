@@ -20,6 +20,15 @@ api:
     tag: ""  # defaults to .Chart.AppVersion
     pullPolicy: IfNotPresent
 
+  # -- Runs `sqlx migrate run` as an ArgoCD PreSync hook before api/webapp
+  # sync, using the same image (it already bundles the migrations directory
+  # and the sqlx-cli binary — see the root Dockerfile). Disable only if
+  # migrations are deliberately run out-of-band.
+  migrations:
+    enabled: true
+    backoffLimit: 3
+    resources: {}
+
   # -- Overrides the container command/args. Leave empty to use the image's ENTRYPOINT.
   command: []
   args: []
