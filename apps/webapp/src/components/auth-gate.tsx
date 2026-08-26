@@ -41,16 +41,24 @@ const RECOVERY_COOLDOWN_MS = 30_000
 type RecoveryState = 'idle' | 'recovering' | 'exhausted'
 
 export function AuthGate({ children, redirectState }: AuthGateProps) {
+	// `useAuth()` returns `undefined` (with a console warning, not a throw)
+	// when there is no ancestor `<AuthProvider>` — which is exactly what
+	// `ConfigGate` renders when `getOidcConfiguration()` is unset. The two
+	// checks below are therefore the same fact seen from two places; treat
+	// them as one so a config problem always surfaces as the message this
+	// component already has ready for it, never as a crash on `auth.error`.
 	const auth = useAuth()
 	const isConfigured = Boolean(getOidcConfiguration())
 	const [recovery, setRecovery] = useState<RecoveryState>('idle')
 
 	const sessionEnded =
-		auth.error !== undefined && SESSION_ENDED_SOURCES.has(auth.error.source)
+		auth !== undefined &&
+		auth.error !== undefined &&
+		SESSION_ENDED_SOURCES.has(auth.error.source)
 	const isRecovering = sessionEnded && recovery !== 'exhausted'
 
 	useEffect(() => {
-		if (!isConfigured) return
+		if (!isConfigured || !auth) return
 		if (auth.isLoading || auth.activeNavigator) return
 
 		if (sessionEnded) {
@@ -85,12 +93,12 @@ export function AuthGate({ children, redirectState }: AuthGateProps) {
 		}
 	}, [auth, isConfigured, sessionEnded, recovery, redirectState])
 
-	if (!isConfigured) {
+	if (!isConfigured || !auth) {
 		return (
 			<FullscreenMessage
 				icon={<ShieldAlert className="size-8" />}
 				title="Authentification non configurée"
-				message="Définissez VITE_OIDC_AUTHORITY (dev) ou issuer_url dans /config.json (prod), ainsi que VITE_OIDC_CLIENT_ID."
+				message="Définissez VITE_OIDC_AUTHORITY (dev) ou issuer_url dans /config.json (prod), ainsi que VITE_OIDC_CLIENT_ID (dev) ou client_id dans /config.json (prod)."
 			/>
 		)
 	}

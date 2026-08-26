@@ -19,6 +19,11 @@ if [ -f "$CONFIG_FILE" ]; then
   escaped_issuer_url=$(printf '%s' "$issuer_url" | sed -e 's/[\/&|]/\\&/g')
   # shellcheck disable=SC2016
   sed -i "s|\${ISSUER_URL}|$escaped_issuer_url|g" "$CONFIG_FILE"
+
+  oidc_client_id="${OIDC_CLIENT_ID:-}"
+  escaped_oidc_client_id=$(printf '%s' "$oidc_client_id" | sed -e 's/[\/&|]/\\&/g')
+  # shellcheck disable=SC2016
+  sed -i "s|\${OIDC_CLIENT_ID}|$escaped_oidc_client_id|g" "$CONFIG_FILE"
 fi
 
 exec "$@"

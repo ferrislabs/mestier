@@ -27,6 +27,7 @@ declare global {
 interface RawConfig {
 	api_url?: string
 	issuer_url?: string
+	client_id?: string
 }
 
 let loadingPromise: Promise<void> | null = null
@@ -53,10 +54,12 @@ export function loadRuntimeConfig(): Promise<void> {
 
 		let apiUrl: string | undefined
 		let issuerUrl: string | undefined
+		let clientId: string | undefined
 
 		if (isDev) {
 			apiUrl = import.meta.env.VITE_API_URL as string | undefined
 			issuerUrl = import.meta.env.VITE_OIDC_AUTHORITY as string | undefined
+			clientId = import.meta.env.VITE_OIDC_CLIENT_ID as string | undefined
 		} else {
 			try {
 				const res = await fetch('/config.json', { cache: 'no-store' })
@@ -66,6 +69,7 @@ export function loadRuntimeConfig(): Promise<void> {
 					issuerUrl = isPlaceholder(data.issuer_url)
 						? undefined
 						: data.issuer_url
+					clientId = isPlaceholder(data.client_id) ? undefined : data.client_id
 				}
 			} catch (err) {
 				console.error('Failed to load /config.json', err)
@@ -76,7 +80,6 @@ export function loadRuntimeConfig(): Promise<void> {
 		window.issuerUrl = issuerUrl
 		await initializeApiClients(apiUrl ?? '')
 
-		const clientId = import.meta.env.VITE_OIDC_CLIENT_ID as string | undefined
 		const scope =
 			(import.meta.env.VITE_OIDC_SCOPE as string | undefined) ??
 			'openid profile email'

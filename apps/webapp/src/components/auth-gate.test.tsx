@@ -5,16 +5,17 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { AuthGate } from '#/components/auth-gate'
 
 const useAuth = vi.hoisted(() => vi.fn())
-vi.mock('react-oidc-context', () => ({ useAuth }))
-vi.mock('#/components/auth-token-sync', () => ({ AuthTokenSync: () => null }))
-vi.mock('#/lib/runtime-config', () => ({
-	getOidcConfiguration: () => ({
+const getOidcConfiguration = vi.hoisted(() =>
+	vi.fn().mockReturnValue({
 		authority: 'http://idp.test/realms/mestier',
 		client_id: 'mestier-webapp',
 		redirect_uri: 'http://app.test/',
 		scope: 'openid',
 	}),
-}))
+)
+vi.mock('react-oidc-context', () => ({ useAuth }))
+vi.mock('#/components/auth-token-sync', () => ({ AuthTokenSync: () => null }))
+vi.mock('#/lib/runtime-config', () => ({ getOidcConfiguration }))
 
 interface AuthStub {
 	isLoading?: boolean
@@ -59,6 +60,34 @@ describe('AuthGate', () => {
 	beforeEach(() => {
 		window.sessionStorage.clear()
 		useAuth.mockReset()
+		getOidcConfiguration.mockReturnValue({
+			authority: 'http://idp.test/realms/mestier',
+			client_id: 'mestier-webapp',
+			redirect_uri: 'http://app.test/',
+			scope: 'openid',
+		})
+	})
+
+	// Regression test: an unconfigured deployment (client_id missing — see
+	// the `mestier.api.env`/`webapp.env` OIDC wiring) makes `ConfigGate`
+	// render its children without an ancestor `<AuthProvider>`. `useAuth()`
+	// then returns `undefined` (a warning, not a throw — see
+	// react-oidc-context's own implementation), which used to crash this
+	// component on `auth.error` before it ever reached the "not configured"
+	// message it already had ready for exactly this case.
+	it('shows the not-configured message instead of crashing when there is no AuthProvider', () => {
+		getOidcConfiguration.mockReturnValue(undefined)
+		useAuth.mockReturnValue(undefined)
+
+		expect(() =>
+			render(
+				<AuthGate>
+					<p>Espace de travail</p>
+				</AuthGate>,
+			),
+		).not.toThrow()
+
+		expect(screen.getByText('Authentification non configurée')).toBeDefined()
 	})
 
 	it('redirects to the provider when no session exists', async () => {
