@@ -6,6 +6,13 @@ metadata:
   labels:
     {{- include "mestier.labels" . | nindent 4 }}
     app.kubernetes.io/component: api
+  annotations:
+    # Also a PreSync hook, one wave ahead of the migrations Job (wave "0"):
+    # without this, ArgoCD only creates it in the ordinary Sync phase, which
+    # runs *after* PreSync — the Job's `envFrom` on this ConfigMap would then
+    # reference a resource that doesn't exist yet on a fresh install.
+    argocd.argoproj.io/hook: PreSync
+    argocd.argoproj.io/sync-wave: "-1"
 data:
   {{- range $key, $value := .Values.api.env }}
   {{ $key }}: {{ $value | quote }}
