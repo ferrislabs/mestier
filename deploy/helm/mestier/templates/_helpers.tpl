@@ -65,3 +65,34 @@ Usage: include "mestier.image" (dict "image" .Values.api.image "chart" .Chart)
 {{- define "mestier.image" -}}
 {{- printf "%s:%s" .image.repository (.image.tag | default .chart.AppVersion) -}}
 {{- end -}}
+
+{{/*
+Renders one `env:` entry for a single api.secret key, resolving it the same
+way templates/api/secret.yaml decides what to put in the chart-managed
+Secret: a per-key valueFrom override wins, then an existingSecret (assumed
+to carry every key), then the chart-managed Secret — and if none of those
+apply (no override, no existingSecret, and the plain value is empty), no
+entry is rendered at all. Keep this the single place that resolution lives:
+deployment.yaml and the migrations Job both call it, so a key sourced two
+different ways in two different templates can't drift again — see the
+api.secret.valueFrom fix on why "drift" here isn't hypothetical.
+Usage: include "mestier.api.secretEnvEntry" (dict "root" $ "key" "DATABASE_PASSWORD")
+*/}}
+{{- define "mestier.api.secretEnvEntry" -}}
+{{- $root := .root -}}
+{{- $key := .key -}}
+{{- $override := index $root.Values.api.secret.valueFrom $key -}}
+{{- $plain := index $root.Values.api.secret $key -}}
+{{- if or $override $root.Values.api.secret.existingSecret $plain }}
+- name: {{ $key }}
+  valueFrom:
+    secretKeyRef:
+      {{- if $override }}
+      name: {{ $override.secretName }}
+      key: {{ $override.key }}
+      {{- else }}
+      name: {{ include "mestier.api.secretName" $root }}
+      key: {{ $key }}
+      {{- end }}
+{{- end }}
+{{- end -}}
