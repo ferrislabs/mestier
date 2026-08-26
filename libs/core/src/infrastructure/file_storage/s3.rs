@@ -2,6 +2,7 @@ use aws_credential_types::Credentials;
 use aws_sdk_s3::{
     Client,
     config::{BehaviorVersion, Builder as S3ConfigBuilder, Region},
+    error::ProvideErrorMetadata,
     presigning::PresigningConfig,
     primitives::ByteStream,
 };
@@ -159,25 +160,106 @@ impl FileStorage for S3FileStorage {
     }
 }
 
+// `SdkError<E, R>::to_string()` is deliberately opaque — for the
+// `ServiceError` variant it prints the literal string "service error",
+// never the inner error's code or message (see aws-smithy-runtime-api's
+// `Display for SdkError`). String-matching that output for "NotFound" /
+// "NoSuchKey" never actually worked: a real 404 from `head_bucket` (which
+// has no response body to embed a code in) rendered as "service error" and
+// fell straight into the `Internal` branch, so `ensure_bucket` could never
+// take its "create the bucket" path and instead crashed the caller that
+// unwraps `create_service` — a real incident, not a hypothetical.
+// `ProvideErrorMetadata::code()` reads the AWS error code straight from the
+// parsed response metadata, bypassing that broken hop entirely: `SdkError`
+// delegates `.meta()` to the inner error for the `ServiceError` variant, so
+// this works uniformly across every error type this module deals with.
 fn map_s3_error<E>(err: E) -> CoreError
 where
-    E: std::fmt::Display,
+    E: ProvideErrorMetadata + std::fmt::Debug,
 {
-    let message = err.to_string();
-    if is_not_found_message(&message) {
+    if is_not_found_code(err.code()) {
         return CoreError::NotFound;
     }
 
-    CoreError::Internal(format!("file storage error: {message}"))
+    let detail = match (err.code(), err.message()) {
+        (Some(code), Some(message)) => format!("{code}: {message}"),
+        (Some(code), None) => code.to_owned(),
+        // No code at all means this isn't a modeled service error (e.g. a
+        // dispatch failure or timeout) — Debug is verbose but it's the only
+        // source of detail left at that point.
+        (None, _) => format!("{err:?}"),
+    };
+
+    CoreError::Internal(format!("file storage error: {detail}"))
 }
 
 fn is_not_found_error<E>(err: &E) -> bool
 where
-    E: std::fmt::Display,
+    E: ProvideErrorMetadata,
 {
-    is_not_found_message(&err.to_string())
+    is_not_found_code(err.code())
 }
 
-fn is_not_found_message(message: &str) -> bool {
-    message.contains("NoSuchKey") || message.contains("NotFound") || message.contains("404")
+fn is_not_found_code(code: Option<&str>) -> bool {
+    matches!(
+        code,
+        Some("NoSuchKey") | Some("NoSuchBucket") | Some("NotFound")
+    )
+}
+
+#[cfg(test)]
+mod tests {
+    use aws_sdk_s3::{
+        error::{ErrorMetadata, SdkError},
+        operation::head_bucket::HeadBucketError,
+        types::error::NotFound,
+    };
+
+    use super::*;
+
+    #[test]
+    fn is_not_found_code_matches_the_known_s3_codes() {
+        assert!(is_not_found_code(Some("NoSuchKey")));
+        assert!(is_not_found_code(Some("NoSuchBucket")));
+        assert!(is_not_found_code(Some("NotFound")));
+        assert!(!is_not_found_code(Some("InternalError")));
+        assert!(!is_not_found_code(None));
+    }
+
+    // Regression test for the incident this module caused: `head_bucket` on a
+    // missing bucket has no response body, so the SDK can't attach a code to
+    // `SdkError`'s own `Display` (it always prints "service error", see the
+    // comment above `map_s3_error`) — only `ProvideErrorMetadata::code()`,
+    // read through the delegation `SdkError` does to the inner service
+    // error, actually carries "NotFound" through.
+    #[test]
+    fn a_head_bucket_not_found_service_error_is_recognized_as_not_found() {
+        // Mirrors what the SDK's own response deserializer does (see
+        // `de_head_bucket_http_error` in aws-sdk-s3): the parsed HTTP-status-
+        // derived metadata is attached to the `NotFound` payload via
+        // `.meta(generic)`, not left as the builder's empty default.
+        let meta = ErrorMetadata::builder().code("NotFound").build();
+        let err: SdkError<HeadBucketError, ()> = SdkError::service_error(
+            HeadBucketError::NotFound(NotFound::builder().meta(meta).build()),
+            (),
+        );
+
+        assert!(is_not_found_error(&err));
+        assert!(matches!(map_s3_error(err), CoreError::NotFound));
+    }
+
+    #[test]
+    fn a_different_service_error_is_not_mistaken_for_not_found() {
+        let meta = ErrorMetadata::builder()
+            .code("InternalError")
+            .message("something else broke")
+            .build();
+        let err: SdkError<HeadBucketError, ()> =
+            SdkError::service_error(HeadBucketError::generic(meta), ());
+
+        assert!(!is_not_found_error(&err));
+        assert!(
+            matches!(map_s3_error(err), CoreError::Internal(msg) if msg.contains("InternalError"))
+        );
+    }
 }
