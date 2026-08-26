@@ -51,6 +51,7 @@ pub mod project_template;
 pub mod quote;
 pub mod role;
 pub mod service_rate;
+pub mod supplier_invoice;
 pub mod task;
 pub mod task_comment;
 pub mod task_label;
