@@ -2,10 +2,31 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import type { ReactNode } from 'react'
-import { describe, expect, it } from 'vitest'
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 import { OrganizationListProvider } from '#/hooks/use-active-organization'
 import type { Organization } from '#/hooks/use-organizations'
 import { FieldDayFeature } from '#/pages/field/feature/field-day-feature'
+
+// `entry()` below reads real `Date.now()` to build "started 2 hours ago" —
+// deliberately, per its own comment, to avoid a fixture that reads as
+// "started on a previous day" once the suite outlives a hardcoded date. But
+// real time crossing midnight while the suite runs recreates exactly that
+// problem for roughly two hours a day: this failed in CI at 00:47 UTC, "2
+// hours ago" landing on the previous calendar day. Freezing the clock at a
+// safe midday UTC fixes both problems at once — never near a day boundary,
+// and never stale relative to any date literal. `shouldAdvanceTime: true`
+// keeps real timers ticking underneath the frozen `Date`, so `waitFor` /
+// `findBy*` (which poll on real timeouts) still work.
+beforeAll(() => {
+	vi.useFakeTimers({
+		now: new Date('2026-08-19T12:00:00Z'),
+		shouldAdvanceTime: true,
+	})
+})
+
+afterAll(() => {
+	vi.useRealTimers()
+})
 
 const TASKS_PATH = '/api/v1/organizations/{organization_id}/field/tasks'
 const CURRENT_PATH = '/api/v1/organizations/{organization_id}/field/current'
@@ -170,7 +191,8 @@ function assignmentReport(overrides: Record<string, unknown> = {}) {
 // Two hours ago rather than a fixed date: the feature reads `Date.now()`
 // itself (there is no `now` prop to control here, unlike `FieldDayUI`'s own
 // tests), and a hardcoded date would read as "from an earlier day" — the
-// forgotten clock-off flow — the moment this suite outlives that date.
+// forgotten clock-off flow — the moment this suite outlives that date. Safe
+// against a midnight crossing too, now that `Date.now()` is frozen above.
 function entry(overrides: Record<string, unknown> = {}) {
 	return {
 		id: 'entry-1',
