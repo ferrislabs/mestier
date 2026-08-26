@@ -1,0 +1,136 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT\n                id, org_id, supplier_id, supplier_name, supplier_registration_number,\n                supplier_vat_number, number, issued_on, due_on, received_at, source,\n                status::text AS \"status!\", currency, notes, net_cents, vat_breakdown,\n                gross_cents, deleted_at, created_at, updated_at\n            FROM supplier_invoices\n            WHERE id = $1 AND deleted_at IS NULL\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "org_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "supplier_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 3,
+        "name": "supplier_name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "supplier_registration_number",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "supplier_vat_number",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 6,
+        "name": "number",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 7,
+        "name": "issued_on",
+        "type_info": "Date"
+      },
+      {
+        "ordinal": 8,
+        "name": "due_on",
+        "type_info": "Date"
+      },
+      {
+        "ordinal": 9,
+        "name": "received_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 10,
+        "name": "source",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 11,
+        "name": "status!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 12,
+        "name": "currency",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 13,
+        "name": "notes",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 14,
+        "name": "net_cents",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 15,
+        "name": "vat_breakdown",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 16,
+        "name": "gross_cents",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 17,
+        "name": "deleted_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 18,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 19,
+        "name": "updated_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      true,
+      false,
+      true,
+      true,
+      false,
+      false,
+      true,
+      false,
+      false,
+      null,
+      false,
+      true,
+      false,
+      false,
+      false,
+      true,
+      false,
+      false
+    ]
+  },
+  "hash": "8b1099fe3a95fe825aedad6451c6a60e67a593b85ea112219786130d67902e80"
+}

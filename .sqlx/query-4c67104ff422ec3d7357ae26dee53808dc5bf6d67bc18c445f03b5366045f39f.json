@@ -1,0 +1,94 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT id, org_id, supplier_invoice_id, label, quantity, unit, unit_price_cents,\n               line_total_cents, vat_rate_basis_points, position, deleted_at, created_at, updated_at\n        FROM supplier_invoice_lines\n        WHERE supplier_invoice_id = $1 AND deleted_at IS NULL\n        ORDER BY position ASC, id ASC\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "org_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "supplier_invoice_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 3,
+        "name": "label",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "quantity",
+        "type_info": "Numeric"
+      },
+      {
+        "ordinal": 5,
+        "name": "unit",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 6,
+        "name": "unit_price_cents",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 7,
+        "name": "line_total_cents",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 8,
+        "name": "vat_rate_basis_points",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 9,
+        "name": "position",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 10,
+        "name": "deleted_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 11,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 12,
+        "name": "updated_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      false,
+      false,
+      true,
+      false,
+      true,
+      false,
+      false
+    ]
+  },
+  "hash": "4c67104ff422ec3d7357ae26dee53808dc5bf6d67bc18c445f03b5366045f39f"
+}
