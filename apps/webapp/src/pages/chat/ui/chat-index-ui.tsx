@@ -20,8 +20,8 @@ export function ChatIndexUI({ state }: ChatIndexUIProps) {
 						Aucun canal pour le moment
 					</p>
 					<p className="mt-1 max-w-sm text-sm">
-						Un administrateur peut créer le premier canal depuis
-						l’administration des canaux.
+						Créez le premier canal avec le bouton “+” en haut de la barre
+						latérale.
 					</p>
 				</div>
 			</div>

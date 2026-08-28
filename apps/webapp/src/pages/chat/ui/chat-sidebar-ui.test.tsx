@@ -46,6 +46,7 @@ function baseProps(
 		unreadChannelIds: new Set(),
 		mentionCount: 0,
 		onRequestNewChannel: vi.fn(),
+		onOpenChannelAdmin: vi.fn(),
 		...overrides,
 	}
 }
@@ -66,6 +67,18 @@ describe('ChatSidebarUI', () => {
 	it('shows guidance when the organization has no channel', async () => {
 		await renderWithRouter(<ChatSidebarUI {...baseProps()} />)
 		expect(screen.getByText(/Aucun canal pour le moment/)).toBeDefined()
+	})
+
+	it('lets a request for a new channel start right from the empty state', async () => {
+		const user = userEvent.setup()
+		const onRequestNewChannel = vi.fn()
+		await renderWithRouter(
+			<ChatSidebarUI {...baseProps({ onRequestNewChannel })} />,
+		)
+
+		await user.click(screen.getByRole('button', { name: 'Créer un canal' }))
+
+		expect(onRequestNewChannel).toHaveBeenCalled()
 	})
 
 	it('lists channels grouped by category', async () => {
@@ -114,6 +127,28 @@ describe('ChatSidebarUI', () => {
 		await user.click(screen.getByText('cat-1'))
 
 		expect(onToggleCategory).toHaveBeenCalledWith('cat-1', true)
+	})
+})
+
+describe('ChatSidebarUI — per-channel management (#372)', () => {
+	it('opens the channel admin sheet for that channel from the sidebar itself', async () => {
+		const user = userEvent.setup()
+		const onOpenChannelAdmin = vi.fn()
+		const groups = [
+			{ category: category('cat-1'), channels: [channel('ch-1', 'cat-1')] },
+		]
+		await renderWithRouter(
+			<ChatSidebarUI {...baseProps({ groups, onOpenChannelAdmin })} />,
+		)
+
+		await user.click(
+			screen.getByRole('button', { name: 'Gérer le canal ch-1' }),
+		)
+		await user.click(
+			screen.getByRole('menuitem', { name: /Paramètres du canal/ }),
+		)
+
+		expect(onOpenChannelAdmin).toHaveBeenCalledWith('ch-1')
 	})
 })
 

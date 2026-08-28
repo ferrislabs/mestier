@@ -4,7 +4,9 @@ import {
 	ChevronRight,
 	Hash,
 	MessageSquarePlus,
+	MoreHorizontal,
 	Plus,
+	Settings,
 } from 'lucide-react'
 import { Button } from '#/components/ui/button'
 import {
@@ -12,6 +14,12 @@ import {
 	CollapsibleContent,
 	CollapsibleTrigger,
 } from '#/components/ui/collapsible'
+import {
+	DropdownMenu,
+	DropdownMenuContent,
+	DropdownMenuItem,
+	DropdownMenuTrigger,
+} from '#/components/ui/dropdown-menu'
 import { Skeleton } from '#/components/ui/skeleton'
 import { cn } from '#/lib/utils'
 import { buildOrgPath } from '#/modules/org-path'
@@ -30,6 +38,9 @@ export interface ChatSidebarUIProps {
 	unreadChannelIds: ReadonlySet<string>
 	mentionCount: number
 	onRequestNewChannel: () => void
+	/** Opens the channel admin sheet for one channel — see #372: channel
+	 * management now starts here, not only from inside the channel itself. */
+	onOpenChannelAdmin: (channelId: string) => void
 }
 
 export function ChatSidebarUI({
@@ -44,6 +55,7 @@ export function ChatSidebarUI({
 	unreadChannelIds,
 	mentionCount,
 	onRequestNewChannel,
+	onOpenChannelAdmin,
 }: ChatSidebarUIProps) {
 	return (
 		<nav
@@ -84,7 +96,9 @@ export function ChatSidebarUI({
 				</div>
 			) : null}
 
-			{!isLoading && !isError && groups.length === 0 ? <EmptyState /> : null}
+			{!isLoading && !isError && groups.length === 0 ? (
+				<EmptyState onRequestNewChannel={onRequestNewChannel} />
+			) : null}
 
 			{!isLoading && !isError && groups.length > 0 ? (
 				<div className="flex flex-col gap-1 px-2 pb-4">
@@ -101,6 +115,7 @@ export function ChatSidebarUI({
 							}
 							onToggleCategory={onToggleCategory}
 							unreadChannelIds={unreadChannelIds}
+							onOpenChannelAdmin={onOpenChannelAdmin}
 						/>
 					))}
 				</div>
@@ -121,14 +136,19 @@ function SidebarSkeleton() {
 	)
 }
 
-function EmptyState() {
+function EmptyState({
+	onRequestNewChannel,
+}: {
+	onRequestNewChannel: () => void
+}) {
 	return (
 		<div className="flex flex-col items-start gap-2 px-4 py-3 text-sm text-muted-foreground">
 			<MessageSquarePlus className="size-5" />
-			<p>
-				Aucun canal pour le moment. Un administrateur peut en créer un depuis
-				l’administration du canal.
-			</p>
+			<p>Aucun canal pour le moment.</p>
+			<Button variant="outline" size="sm" onClick={onRequestNewChannel}>
+				<Plus className="size-4" />
+				Créer un canal
+			</Button>
 		</div>
 	)
 }
@@ -140,6 +160,7 @@ interface CategoryGroupProps {
 	collapsed: boolean
 	onToggleCategory: (categoryId: string, collapsed: boolean) => void
 	unreadChannelIds: ReadonlySet<string>
+	onOpenChannelAdmin: (channelId: string) => void
 }
 
 function CategoryGroup({
@@ -149,17 +170,18 @@ function CategoryGroup({
 	collapsed,
 	onToggleCategory,
 	unreadChannelIds,
+	onOpenChannelAdmin,
 }: CategoryGroupProps) {
 	const channelList = (
 		<ul className="flex flex-col gap-0.5">
 			{group.channels.map((chan) => {
 				const unread = unreadChannelIds.has(chan.id)
 				return (
-					<li key={chan.id}>
+					<li key={chan.id} className="group/channel relative">
 						<Link
 							to={buildOrgPath(organizationSlug, `/chat/${chan.id}`)}
 							className={cn(
-								'flex items-center gap-1.5 rounded-md px-2 py-1.5 text-sm text-muted-foreground hover:bg-accent hover:text-accent-foreground',
+								'flex items-center gap-1.5 rounded-md py-1.5 pr-8 pl-2 text-sm text-muted-foreground hover:bg-accent hover:text-accent-foreground',
 								chan.id === activeChannelId &&
 									'bg-accent font-medium text-accent-foreground',
 								unread && 'font-semibold text-foreground',
@@ -175,6 +197,25 @@ function CategoryGroup({
 							) : null}
 							{unread ? <span className="sr-only">Non lu</span> : null}
 						</Link>
+						<DropdownMenu>
+							<DropdownMenuTrigger asChild>
+								<Button
+									type="button"
+									variant="ghost"
+									size="icon"
+									aria-label={`Gérer le canal ${chan.name}`}
+									className="absolute top-1/2 right-1 size-6 -translate-y-1/2 opacity-0 focus-visible:opacity-100 group-hover/channel:opacity-100"
+								>
+									<MoreHorizontal className="size-3.5" />
+								</Button>
+							</DropdownMenuTrigger>
+							<DropdownMenuContent align="start">
+								<DropdownMenuItem onSelect={() => onOpenChannelAdmin(chan.id)}>
+									<Settings className="size-4" />
+									Paramètres du canal
+								</DropdownMenuItem>
+							</DropdownMenuContent>
+						</DropdownMenu>
 					</li>
 				)
 			})}

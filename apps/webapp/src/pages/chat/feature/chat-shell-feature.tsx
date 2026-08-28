@@ -12,6 +12,10 @@ import {
 import { useOnlineCount } from '#/hooks/use-presence'
 import { groupChannelsByCategory } from '#/pages/chat/lib/group-channels'
 import { ChatSidebarUI } from '#/pages/chat/ui/chat-sidebar-ui'
+import {
+	ChannelAdminDialogProvider,
+	useChannelAdminDialog,
+} from './channel-admin-dialog-context'
 import { NewChannelFeature } from './new-channel-feature'
 
 /**
@@ -19,21 +23,37 @@ import { NewChannelFeature } from './new-channel-feature'
  * channel's own route rendered through `Outlet` on the right. Mounted once
  * per organization visit — queries and the gateway subscription live here so
  * switching channels never re-fetches the channel list itself.
+ *
+ * `ChannelAdminDialogProvider` wraps the whole layout so the admin sheet can
+ * be opened for any channel from anywhere under it — the sidebar's
+ * per-channel menu, or the active channel's own header (`ChatChannelFeature`)
+ * — without threading a callback through the router's `Outlet`.
  */
 export function ChatShellFeature() {
 	const { activeOrganization } = useActiveOrganization()
+
+	return (
+		<ChannelAdminDialogProvider>
+			<ChatShellLayout organizationId={activeOrganization.id} />
+		</ChannelAdminDialogProvider>
+	)
+}
+
+function ChatShellLayout({ organizationId }: { organizationId: string }) {
+	const { activeOrganization } = useActiveOrganization()
 	const { channelId } = useParams({ strict: false })
+	const { openChannelAdmin } = useChannelAdminDialog()
 	const [collapsedCategoryIds, setCollapsedCategoryIds] = useState<Set<string>>(
 		new Set(),
 	)
 
-	const categories = useCategories(activeOrganization.id)
-	const channels = useChannels(activeOrganization.id)
-	useChatListGatewaySync(activeOrganization.id)
-	useReadStateGatewaySync(activeOrganization.id)
+	const categories = useCategories(organizationId)
+	const channels = useChannels(organizationId)
+	useChatListGatewaySync(organizationId)
+	useReadStateGatewaySync(organizationId)
 	const onlineCount = useOnlineCount()
-	const unreadChannelIds = useUnreadChannels(activeOrganization.id)
-	const mentionCount = useUnreadMentionCount(activeOrganization.id)
+	const unreadChannelIds = useUnreadChannels(organizationId)
+	const mentionCount = useUnreadMentionCount(organizationId)
 	const [newChannelDialogOpen, setNewChannelDialogOpen] = useState(false)
 
 	const groups = groupChannelsByCategory(
@@ -64,12 +84,13 @@ export function ChatShellFeature() {
 				unreadChannelIds={unreadChannelIds.data ?? new Set()}
 				mentionCount={mentionCount}
 				onRequestNewChannel={() => setNewChannelDialogOpen(true)}
+				onOpenChannelAdmin={openChannelAdmin}
 			/>
 			<div className="flex min-w-0 flex-1 flex-col">
 				<Outlet />
 			</div>
 			<NewChannelFeature
-				organizationId={activeOrganization.id}
+				organizationId={organizationId}
 				open={newChannelDialogOpen}
 				onOpenChange={setNewChannelDialogOpen}
 			/>
