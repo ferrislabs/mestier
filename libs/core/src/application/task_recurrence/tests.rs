@@ -153,8 +153,17 @@ mod tests {
         // `starts_on`, whichever is later — a fixed past date would make the
         // assertion below drift by however many days have passed since it
         // was written, so `starts_on` is today's date, always the later one.
+        // "Today" has to be read in the recurrence's own timezone (`daily_command`
+        // sets `Europe::Paris`), the same one `target_horizon` converts `now`
+        // into: reading it in UTC instead drifts by a day for part of every
+        // day Paris's calendar date has already rolled over ahead of UTC's.
         let created = usecase
-            .create_task_recurrence(daily_command(&fixture, chrono::Utc::now().date_naive()))
+            .create_task_recurrence(daily_command(
+                &fixture,
+                chrono::Utc::now()
+                    .with_timezone(&Europe::Paris)
+                    .date_naive(),
+            ))
             .await
             .unwrap();
 

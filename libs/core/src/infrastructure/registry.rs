@@ -33,6 +33,7 @@ pub mod domain {
     pub struct Member;
     pub struct ServiceRate;
     pub struct SupplierInvoice;
+    pub struct SupplierInvoiceAllocation;
     pub struct User;
     pub struct Category;
     pub struct Channel;

@@ -193,6 +193,46 @@ impl<'tx> SupplierInvoiceRepository for PgSupplierInvoiceRepository<'tx> {
         let lines = fetch_lines(&mut tx, invoice.id).await?;
         row.into_supplier_invoice(lines)
     }
+
+    /// A dynamic (non-`query!`) query, deliberately: #337 lands in the same
+    /// branch as a sibling workstream that owns the `.sqlx` offline cache's
+    /// stability, and this crate's checkout has no guaranteed live database
+    /// to run `cargo sqlx prepare` against for a brand-new query. The
+    /// `COALESCE` mirrors [`crate::domain::supplier_invoice::ports::supplier_identifier`]'s
+    /// preference order exactly — registration number, then VAT number,
+    /// then name — so a row stored under any of the three still matches an
+    /// `identifier` computed the same way from a freshly parsed document.
+    async fn exists_with_duplicate_key(
+        &mut self,
+        organization_id: OrganizationId,
+        number: &str,
+        identifier: &str,
+    ) -> Result<bool, CoreError> {
+        let mut tx = self.tx.lock().await;
+        let exists: bool = sqlx::query_scalar(
+            r#"
+            SELECT EXISTS (
+                SELECT 1 FROM supplier_invoices
+                WHERE org_id = $1
+                  AND number = $2
+                  AND deleted_at IS NULL
+                  AND COALESCE(
+                        NULLIF(TRIM(supplier_registration_number), ''),
+                        NULLIF(TRIM(supplier_vat_number), ''),
+                        supplier_name
+                      ) = $3
+            )
+            "#,
+        )
+        .bind(organization_id.0)
+        .bind(number)
+        .bind(identifier)
+        .fetch_one(&mut ***tx)
+        .await
+        .map_err(map_sqlx_error)?;
+
+        Ok(exists)
+    }
 }
 
 async fn fetch_lines(

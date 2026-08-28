@@ -174,6 +174,29 @@ pub struct AssignedEquipment {
     pub hourly_rate_cents: i32,
 }
 
+/// One project's share of a confirmed supplier invoice line, in scope for
+/// the report's period — see #338.
+///
+/// Filtered by the adapter on the invoice's own `issued_on` falling in the
+/// period, and on the invoice's `status` being `Confirmed`: a `Received`
+/// document is a proposal and must never move a number, and a project's own
+/// work dates or the invoice's reception date were both considered and
+/// rejected as the period key, because either can differ from `issued_on`
+/// by months — see [`service::supplier_cost_cents`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct SupplierCostAllocation {
+    pub project_id: ProjectId,
+    /// Net of VAT, a slice of its line's own `line_total_cents` — never the
+    /// gross figure. Turned into a real cost by
+    /// [`service::supplier_cost_cents`], which adds the rate back in when
+    /// the organization cannot recover it.
+    pub net_amount_cents: i32,
+    /// The rate to add back in when VAT is not recoverable. `None` for a
+    /// line the supplier printed no rate on, read as 0 bp: a rateless line
+    /// is exactly as costly net as gross.
+    pub vat_rate_basis_points: Option<i32>,
+}
+
 /// A project as the calculation needs to know it, before any arithmetic.
 #[derive(Debug, Clone, PartialEq)]
 pub struct ProjectHeader {
@@ -207,6 +230,17 @@ pub struct ProfitabilityFacts {
     /// instead. Not part of [`PlannedAssignment`]'s frozen shape on purpose:
     /// this is history for a lookup, not a fact carried per assignment.
     pub cost_bases: Vec<EmployeeCostBasis>,
+    /// Every allocation of a confirmed supplier invoice line falling in the
+    /// report's period — see [`SupplierCostAllocation`].
+    pub supplier_costs: Vec<SupplierCostAllocation>,
+    /// Whether the organization can recover VAT on what it buys — read from
+    /// the same `VatStatus` an invoice's own totals are computed from (see
+    /// `invoice::service::calculate_totals`), reused here rather than a
+    /// second source of truth. `true` only for `VatStatus::Subject`; `None`
+    /// (legal identity incomplete) and `VatStatus::NotSubject` both mean
+    /// `false` — the organization cannot recover the VAT it pays, so that
+    /// VAT is exactly as real a cost as the net price.
+    pub organization_vat_subject: bool,
 }
 
 /// What all-day tasks need in order to have a duration at all.
@@ -231,6 +265,11 @@ pub struct ProjectProfitability {
     pub labour_cost_cents: i64,
     pub equipment_cost_cents: i64,
     pub expenses_cents: i64,
+    /// What confirmed supplier invoices allocated to this project cost in
+    /// the period — net of VAT when the organization can recover it, gross
+    /// when it cannot. See [`SupplierCostAllocation`] and
+    /// [`service::supplier_cost_cents`].
+    pub supplier_cost_cents: i64,
     /// Sum of everyone's planned minutes. Two people for an hour is 120.
     pub planned_minutes: i64,
     /// Wall-clock minutes at least one person is booked on the project. Two
@@ -257,7 +296,10 @@ pub struct ProjectProfitability {
 
 impl ProjectProfitability {
     pub fn planned_cost_cents(&self) -> i64 {
-        self.labour_cost_cents + self.equipment_cost_cents + self.expenses_cents
+        self.labour_cost_cents
+            + self.equipment_cost_cents
+            + self.expenses_cents
+            + self.supplier_cost_cents
     }
 
     /// Whether every figure here rests on complete data.

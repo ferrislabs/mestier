@@ -10,6 +10,11 @@
 //! salaried person used to cost 0,00 € here, so every figure below is one this
 //! file states rather than merely accepts.
 //!
+//! The customer project also carries a confirmed supplier invoice: one line,
+//! 200,00 € net at 20 % VAT, fully allocated to it (#338). The fixture's
+//! organization has no VAT status on file, the same as a franchise, so the
+//! real cost is the grossed-up figure — 240,00 €, not the 200,00 € net.
+//!
 //! ```bash
 //! docker compose up -d postgres redis
 //! source .env
@@ -89,6 +94,13 @@ async fn a_planned_project_is_costed_and_compared_to_its_quote() {
         serde_json::json!(4_500),
         "{project}"
     );
+    // 200,00 € net at 20 % VAT, grossed up because this organization has no
+    // VAT status on file and so cannot recover it (#338).
+    assert_eq!(
+        project["supplier_cost_cents"],
+        serde_json::json!(24_000),
+        "{project}"
+    );
     assert_eq!(
         project["quoted_cents"],
         serde_json::json!(420_000),
@@ -96,8 +108,8 @@ async fn a_planned_project_is_costed_and_compared_to_its_quote() {
     );
     assert_eq!(
         project["margin_cents"],
-        serde_json::json!(420_000 - 10_500 - 4_500),
-        "the margin is the quote less labour and expenses: {project}"
+        serde_json::json!(420_000 - 10_500 - 4_500 - 24_000),
+        "the margin is the quote less labour, expenses and the grossed-up supplier cost: {project}"
     );
     assert_eq!(
         project["overlapping_minutes"],
