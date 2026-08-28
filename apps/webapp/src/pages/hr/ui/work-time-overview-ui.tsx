@@ -34,6 +34,15 @@ interface WorkTimeOverviewUIProps {
 	organizationSlug: string
 	isLoading: boolean
 	error: string | null
+	/**
+	 * True when the caller lacks the permission to read employee profiles
+	 * (`member.manage`) — an expected access boundary, not a failure. Every
+	 * row's `weeklyContractMinutes` is `null` in that case regardless of
+	 * whether the seat actually has a profile, so the table says "not
+	 * visible to you" rather than the misleading "no profile" it would
+	 * otherwise show for everyone. See #371.
+	 */
+	hrDataRestricted: boolean
 	rows: WorkTimeOverviewRow[]
 }
 
@@ -42,6 +51,7 @@ export function WorkTimeOverviewUI({
 	organizationSlug,
 	isLoading,
 	error,
+	hrDataRestricted,
 	rows,
 }: WorkTimeOverviewUIProps) {
 	return (
@@ -65,10 +75,21 @@ export function WorkTimeOverviewUI({
 				</div>
 			) : null}
 
+			{!error && hrDataRestricted ? (
+				<div className="rounded-lg border border-border bg-muted/50 px-4 py-3 text-sm text-muted-foreground">
+					Vous n’avez pas la permission de consulter les bases contractuelles de
+					l’équipe.
+				</div>
+			) : null}
+
 			{isLoading ? (
 				<WorkTimeOverviewUI.Loading />
 			) : (
-				<WorkTimeTable rows={rows} organizationSlug={organizationSlug} />
+				<WorkTimeTable
+					rows={rows}
+					organizationSlug={organizationSlug}
+					hrDataRestricted={hrDataRestricted}
+				/>
 			)}
 		</PageShell>
 	)
@@ -88,9 +109,14 @@ WorkTimeOverviewUI.Loading = function WorkTimeOverviewLoading() {
 interface WorkTimeTableProps {
 	rows: WorkTimeOverviewRow[]
 	organizationSlug: string
+	hrDataRestricted: boolean
 }
 
-function WorkTimeTable({ rows, organizationSlug }: WorkTimeTableProps) {
+function WorkTimeTable({
+	rows,
+	organizationSlug,
+	hrDataRestricted,
+}: WorkTimeTableProps) {
 	return (
 		<SectionCard>
 			<SectionHeader
@@ -140,7 +166,9 @@ function WorkTimeTable({ rows, organizationSlug }: WorkTimeTableProps) {
 									<td className="px-5 py-3 align-middle">
 										{row.weeklyContractMinutes === null ? (
 											<span className="text-muted-foreground italic">
-												Sans profil RH
+												{hrDataRestricted
+													? 'Non consultable'
+													: 'Sans profil RH'}
 											</span>
 										) : (
 											<span className="font-medium tabular-nums">

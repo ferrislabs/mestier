@@ -115,6 +115,15 @@ interface TeamListUIProps {
 	organizationSlug: string
 	isLoading: boolean
 	error: string | null
+	/**
+	 * True when the caller lacks the permission to read employee profiles
+	 * (`member.manage`) — an expected access boundary, not a failure. Rates
+	 * and contract bases come back `null` for every row in that case
+	 * regardless of whether the seat actually has a profile, so the table
+	 * says "not visible to you" rather than the misleading "no profile" it
+	 * would otherwise show for everyone. See #371.
+	 */
+	hrDataRestricted: boolean
 	members: TeamMemberRow[]
 	search: string
 	onSearchChange: (value: string) => void
@@ -139,6 +148,7 @@ export function TeamListUI({
 	organizationSlug,
 	isLoading,
 	error,
+	hrDataRestricted,
 	members,
 	search,
 	onSearchChange,
@@ -184,6 +194,13 @@ export function TeamListUI({
 				</div>
 			) : null}
 
+			{!error && hrDataRestricted ? (
+				<div className="rounded-lg border border-border bg-muted/50 px-4 py-3 text-sm text-muted-foreground">
+					Vous n’avez pas la permission de consulter les taux horaires et bases
+					contractuelles de l’équipe.
+				</div>
+			) : null}
+
 			<div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
 				<div className="relative w-full lg:w-80">
 					<Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
@@ -209,6 +226,7 @@ export function TeamListUI({
 				<TeamTable
 					data={members}
 					organizationSlug={organizationSlug}
+					hrDataRestricted={hrDataRestricted}
 					draft={draft}
 					isSaving={isSaving}
 					onEdit={onEdit}
@@ -382,6 +400,7 @@ function PendingInvitationsSection({
 interface TeamTableProps {
 	data: TeamMemberRow[]
 	organizationSlug: string
+	hrDataRestricted: boolean
 	draft: MemberDraft | null
 	isSaving: boolean
 	onEdit: (member: TeamMemberRow) => void
@@ -395,6 +414,7 @@ interface TeamTableProps {
 function TeamTable({
 	data,
 	organizationSlug,
+	hrDataRestricted,
 	draft,
 	isSaving,
 	onEdit,
@@ -555,7 +575,9 @@ function TeamTable({
 										<td className="px-5 py-3 align-middle">
 											{member.weeklyContractMinutes === null ? (
 												<span className="text-muted-foreground italic">
-													Sans profil RH
+													{hrDataRestricted
+														? 'Non consultable'
+														: 'Sans profil RH'}
 												</span>
 											) : (
 												<span className="font-medium tabular-nums">

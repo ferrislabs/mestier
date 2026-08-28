@@ -4,6 +4,7 @@ import type { Absence } from '#/hooks/use-absences'
 import { useAbsences } from '#/hooks/use-absences'
 import { useActiveOrganization } from '#/hooks/use-active-organization'
 import { useReferenceCatalog } from '#/hooks/use-reference-catalog'
+import { isForbiddenError } from '#/lib/api-error'
 import { browserTimeZone } from '#/pages/hr/types'
 import type {
 	WorkTimeOverviewNextAbsence,
@@ -47,8 +48,15 @@ function WorkTimeOverviewScreen({
 		catalog.employeeProfiles.isLoading ||
 		absences.isLoading
 
+	// See team-list-feature.tsx: `employee-profiles` is gated on a stricter
+	// permission than `members`, so a 403 here is an expected access
+	// boundary, not a page failure. See #371.
+	const hrDataRestricted = isForbiddenError(catalog.employeeProfiles.error)
+
 	const error =
-		catalog.members.error ?? catalog.employeeProfiles.error ?? absences.error
+		catalog.members.error ??
+		(hrDataRestricted ? null : catalog.employeeProfiles.error) ??
+		absences.error
 
 	const members = catalog.members.data?.data ?? []
 	const profileByMember = new Map(
@@ -83,6 +91,7 @@ function WorkTimeOverviewScreen({
 			organizationSlug={organizationSlug}
 			isLoading={isLoading}
 			error={error?.message ?? null}
+			hrDataRestricted={hrDataRestricted}
 			rows={rows}
 		/>
 	)
