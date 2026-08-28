@@ -105,6 +105,9 @@ impl App {
             "DELETE FROM time_entries WHERE org_id = $1",
             "DELETE FROM day_logs WHERE org_id = $1",
             "DELETE FROM tasks WHERE org_id = $1",
+            "DELETE FROM supplier_invoice_line_allocations WHERE org_id = $1",
+            "DELETE FROM supplier_invoice_lines WHERE org_id = $1",
+            "DELETE FROM supplier_invoices WHERE org_id = $1",
             "DELETE FROM projects WHERE org_id = $1",
             "DELETE FROM quotes WHERE org_id = $1",
             "DELETE FROM employee_cost_bases WHERE org_id = $1",
@@ -238,6 +241,12 @@ async fn seed(pool: &PgPool) -> Fixture {
     // number the plan also produces: a coincidence would make the assertion
     // pass for the wrong reason.
     seed_stray_time_entry(pool, organization_id, project_id, employee_id, yesterday).await;
+
+    // A confirmed supplier invoice, its one line fully allocated to the
+    // customer project — #338. The organization here carries no VAT status
+    // (`NULL`, the same as a franchise), so the real cost is the grossed-up
+    // figure, not the net one: 200,00 € net at 20 % is 240,00 €.
+    seed_supplier_cost(pool, organization_id, project_id, yesterday.date_naive()).await;
 
     Fixture {
         sub,
@@ -457,6 +466,72 @@ async fn seed_project(
     .expect("seed the project");
 
     project_id
+}
+
+/// A confirmed supplier invoice with one line, fully allocated to
+/// `project_id` — #338. 200,00 € net at 20 % VAT, so the fixture states two
+/// figures depending on the organization's own VAT status: 20 000 net, or
+/// 24 000 grossed up when (as here) it cannot recover the VAT.
+async fn seed_supplier_cost(
+    pool: &PgPool,
+    organization_id: Uuid,
+    project_id: Uuid,
+    issued_on: NaiveDate,
+) {
+    let supplier_invoice_id = Uuid::now_v7();
+    sqlx::query(
+        "INSERT INTO supplier_invoices (
+            id, org_id, supplier_name, number, issued_on, source, status,
+            currency, net_cents, gross_cents
+         ) VALUES ($1, $2, $3, $4, $5, $6, CAST($7 AS text)::supplier_invoice_status, $8, $9, $10)",
+    )
+    .bind(supplier_invoice_id)
+    .bind(organization_id)
+    .bind("Point P")
+    .bind(format!("F-{supplier_invoice_id}"))
+    .bind(issued_on)
+    .bind("MANUAL")
+    .bind("CONFIRMED")
+    .bind("EUR")
+    .bind(20_000_i32)
+    .bind(24_000_i32)
+    .execute(pool)
+    .await
+    .expect("seed the supplier invoice");
+
+    let line_id = Uuid::now_v7();
+    sqlx::query(
+        "INSERT INTO supplier_invoice_lines (
+            id, org_id, supplier_invoice_id, label, quantity, unit_price_cents,
+            line_total_cents, vat_rate_basis_points, position
+         ) VALUES ($1, $2, $3, $4, $5::numeric, $6, $7, $8, $9)",
+    )
+    .bind(line_id)
+    .bind(organization_id)
+    .bind(supplier_invoice_id)
+    .bind("Plaques de plâtre")
+    .bind(1_i32)
+    .bind(20_000_i32)
+    .bind(20_000_i32)
+    .bind(2_000_i32)
+    .bind(0_i32)
+    .execute(pool)
+    .await
+    .expect("seed the supplier invoice line");
+
+    sqlx::query(
+        "INSERT INTO supplier_invoice_line_allocations (
+            id, org_id, supplier_invoice_line_id, project_id, amount_cents
+         ) VALUES ($1, $2, $3, $4, $5)",
+    )
+    .bind(Uuid::now_v7())
+    .bind(organization_id)
+    .bind(line_id)
+    .bind(project_id)
+    .bind(20_000_i32)
+    .execute(pool)
+    .await
+    .expect("seed the supplier invoice line allocation");
 }
 
 /// Time clocked on the task, which nothing reads for money any more.

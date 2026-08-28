@@ -22,7 +22,7 @@ use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 use uuid::Uuid;
 
-use crate::OrganizationId;
+use crate::{OrganizationId, ProjectId};
 
 pub mod commands;
 pub mod events;
@@ -254,6 +254,50 @@ pub struct SupplierInvoice {
     pub updated_at: DateTime<Utc>,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, ToSchema)]
+pub struct SupplierInvoiceLineAllocationId(pub Uuid);
+
+impl FromStr for SupplierInvoiceLineAllocationId {
+    type Err = uuid::Error;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Uuid::from_str(s).map(SupplierInvoiceLineAllocationId)
+    }
+}
+
+impl Display for SupplierInvoiceLineAllocationId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
+/// One project's share of a supplier invoice line's own cost — see #338.
+///
+/// `amount_cents` is net of VAT, a slice of the line's own
+/// `line_total_cents`, never the gross figure: whether the real cost is
+/// this net amount or a grossed-up one depends on the organization's own
+/// VAT status, and that decision is made once, at report time, by
+/// `profitability::service` — not carried per allocation.
+///
+/// A line may be split across several projects, or left partly (or wholly)
+/// unallocated — general overhead the business absorbs, not a project's own
+/// cost. The one invariant, that a line's allocations never exceed what it
+/// is worth, is enforced by a database trigger
+/// (`supplier_invoice_line_allocations_enforce_line_total`) rather than at
+/// this type's construction: a per-row check has no way to see the sum
+/// across a line's siblings, only an aggregate query does, and the
+/// database already runs one on every write.
+#[derive(Debug, Clone, PartialEq)]
+pub struct SupplierInvoiceLineAllocation {
+    pub id: SupplierInvoiceLineAllocationId,
+    pub organization_id: OrganizationId,
+    pub supplier_invoice_line_id: SupplierInvoiceLineId,
+    pub project_id: ProjectId,
+    pub amount_cents: i32,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+}
+
 /// The only type a mutation can land on. Unlike `invoice::DraftInvoice`,
 /// construction carries no runtime check — any status can take a note, so
 /// there is no "wrong state to review" the way there is a "wrong state to
@@ -325,6 +369,14 @@ mod tests {
     fn supplier_invoice_id_parses_uuid() {
         let uuid = Uuid::new_v4();
         let parsed = SupplierInvoiceId::from_str(&uuid.to_string()).unwrap();
+
+        assert_eq!(parsed.0, uuid);
+    }
+
+    #[test]
+    fn supplier_invoice_line_allocation_id_parses_uuid() {
+        let uuid = Uuid::new_v4();
+        let parsed = SupplierInvoiceLineAllocationId::from_str(&uuid.to_string()).unwrap();
 
         assert_eq!(parsed.0, uuid);
     }

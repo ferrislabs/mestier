@@ -6,15 +6,18 @@ use events::EventEmitter;
 use rust_decimal::Decimal;
 
 use crate::{
-    OrganizationId, SupplierInvoice, SupplierInvoiceId, SupplierInvoiceLine, SupplierInvoiceLineId,
+    OrganizationId, ProjectId, SupplierInvoice, SupplierInvoiceId, SupplierInvoiceLine,
+    SupplierInvoiceLineAllocation, SupplierInvoiceLineAllocationId, SupplierInvoiceLineId,
     SupplierInvoiceReview, SupplierInvoiceStatus, SupplierInvoiceVatBreakdownLine,
     domain::supplier_invoice::{
         commands::{
-            ConfirmSupplierInvoiceCommand, CreateSupplierInvoiceCommand,
-            RejectSupplierInvoiceCommand, SupplierInvoiceLineCommand,
+            AllocateSupplierInvoiceLineCommand, ConfirmSupplierInvoiceCommand,
+            CreateSupplierInvoiceCommand, RejectSupplierInvoiceCommand, SupplierInvoiceLineCommand,
         },
-        events::{SupplierInvoiceReceived, SupplierInvoiceTransitioned},
-        ports::SupplierInvoiceRepository,
+        events::{
+            SupplierInvoiceLineAllocated, SupplierInvoiceReceived, SupplierInvoiceTransitioned,
+        },
+        ports::{SupplierInvoiceAllocationRepository, SupplierInvoiceRepository},
     },
 };
 
@@ -119,6 +122,123 @@ where
     ) -> Result<SupplierInvoice, CoreError> {
         self.transition(command.id, SupplierInvoiceStatus::Rejected, command.notes)
             .await
+    }
+
+    /// Attributes part (or all) of a line's own cost to a project — #338.
+    ///
+    /// `allocation_repo` is a method-level generic, the same shape
+    /// `InvoiceService::create_invoice` takes its `organization_repository`
+    /// argument: this service is not generic over a second repository type
+    /// at the struct level, because every other constructor of
+    /// [`SupplierInvoiceService`] — five of them, across this file's own
+    /// tests and every use case in `application::supplier_invoice` — would
+    /// otherwise need a matching type argument for a repository they never
+    /// touch.
+    ///
+    /// Refuses an overflow itself, with a `CoreError::Conflict` naming the
+    /// figures, before ever reaching the database: the trigger on
+    /// `supplier_invoice_line_allocations` enforces the same bound and is
+    /// what makes it true regardless of this check, but a bare constraint
+    /// violation surfacing through `map_sqlx_error` would tell a caller far
+    /// less than this can.
+    pub async fn allocate_line<A>(
+        &mut self,
+        command: AllocateSupplierInvoiceLineCommand,
+        mut allocation_repo: A,
+    ) -> Result<SupplierInvoiceLineAllocation, CoreError>
+    where
+        A: SupplierInvoiceAllocationRepository,
+    {
+        if command.amount_cents == 0 {
+            return Err(CoreError::Conflict(
+                "an allocation cannot be zero".to_owned(),
+            ));
+        }
+
+        let invoice = self
+            .get_supplier_invoice(command.supplier_invoice_id)
+            .await?;
+        if invoice.organization_id != command.organization_id {
+            return Err(CoreError::NotFound);
+        }
+
+        let line = invoice
+            .lines
+            .iter()
+            .find(|line| line.id == command.supplier_invoice_line_id)
+            .ok_or(CoreError::NotFound)?;
+
+        // Same sign as the line: a credit/rebate line can only be allocated
+        // as a credit, never flipped into a positive cost by the act of
+        // allocating it.
+        if (line.line_total_cents >= 0) != (command.amount_cents >= 0) {
+            return Err(CoreError::Conflict(format!(
+                "allocation {} cents must have the same sign as line {}'s total of {} cents",
+                command.amount_cents, line.id, line.line_total_cents
+            )));
+        }
+
+        let already_allocated = allocation_repo.sum_allocated_for_line(line.id).await?;
+        let new_total = i64::from(already_allocated) + i64::from(command.amount_cents);
+        let overflows = if line.line_total_cents >= 0 {
+            new_total > i64::from(line.line_total_cents)
+        } else {
+            new_total < i64::from(line.line_total_cents)
+        };
+        if overflows {
+            return Err(CoreError::Conflict(format!(
+                "allocating {} cents would bring line {}'s allocations to {} cents, beyond its \
+                 {} cent total",
+                command.amount_cents, line.id, new_total, line.line_total_cents
+            )));
+        }
+
+        let now = Utc::now();
+        let allocation = SupplierInvoiceLineAllocation {
+            id: SupplierInvoiceLineAllocationId(generate_uuid_v7()),
+            organization_id: command.organization_id,
+            supplier_invoice_line_id: line.id,
+            project_id: command.project_id,
+            amount_cents: command.amount_cents,
+            created_at: now,
+            updated_at: now,
+        };
+
+        let created = allocation_repo.insert(&allocation).await?;
+
+        self.emitter.emit(
+            command.organization_id,
+            &SupplierInvoiceLineAllocated {
+                allocation: created.clone(),
+            },
+        )?;
+
+        Ok(created)
+    }
+
+    /// The net sum of every allocation recorded against one project so far
+    /// — the query #338 asks for on its own, independent of a full
+    /// profitability report. Deliberately *not* the same figure a
+    /// profitability report states: this is a plain net sum across every
+    /// invoice regardless of status or period, useful for a line's own
+    /// screen ("X of Y allocated"), while the report folds in only
+    /// `Confirmed` invoices, only the report's own period, and grosses the
+    /// figure up when the organization cannot recover VAT (see
+    /// `profitability::service::build_report`).
+    pub async fn allocated_cost_for_project<A>(
+        &mut self,
+        project_id: ProjectId,
+        mut allocation_repo: A,
+    ) -> Result<i64, CoreError>
+    where
+        A: SupplierInvoiceAllocationRepository,
+    {
+        let allocations = allocation_repo.list_by_project(project_id).await?;
+
+        Ok(allocations
+            .iter()
+            .map(|allocation| i64::from(allocation.amount_cents))
+            .sum())
     }
 
     async fn transition(
@@ -367,7 +487,10 @@ mod tests {
     use mockall::predicate::always;
 
     use super::*;
-    use crate::{MockSupplierInvoiceRepository, OrganizationId, SupplierInvoiceSource};
+    use crate::{
+        MockSupplierInvoiceAllocationRepository, MockSupplierInvoiceRepository, OrganizationId,
+        ProjectId, SupplierInvoiceSource,
+    };
 
     fn line(
         line_total_cents: i32,
@@ -487,5 +610,260 @@ mod tests {
             created_at: now,
             updated_at: now,
         }
+    }
+
+    /// A `Received` invoice carrying one line, for the `allocate_line` tests
+    /// below — `Received` on purpose: allocating is allowed before review,
+    /// see the doc comment on `AllocateSupplierInvoiceLineCommand`.
+    fn invoice_with_line(
+        organization_id: OrganizationId,
+        invoice_id: SupplierInvoiceId,
+        line_id: SupplierInvoiceLineId,
+        line_total_cents: i32,
+    ) -> SupplierInvoice {
+        let now = Utc::now();
+        SupplierInvoice {
+            id: invoice_id,
+            organization_id,
+            supplier_id: None,
+            supplier_name: "Point P".to_owned(),
+            supplier_registration_number: None,
+            supplier_vat_number: None,
+            number: "F-2026-4471".to_owned(),
+            issued_on: NaiveDate::from_ymd_opt(2026, 8, 20).unwrap(),
+            due_on: None,
+            received_at: now,
+            source: SupplierInvoiceSource::Manual,
+            status: SupplierInvoiceStatus::Received,
+            currency: "EUR".to_owned(),
+            notes: None,
+            net_cents: line_total_cents,
+            vat_breakdown: vec![],
+            gross_cents: line_total_cents,
+            lines: vec![SupplierInvoiceLine {
+                id: line_id,
+                organization_id,
+                supplier_invoice_id: invoice_id,
+                label: "Plaques de plâtre".to_owned(),
+                quantity: Decimal::from(10),
+                unit: Some("u".to_owned()),
+                unit_price_cents: line_total_cents / 10,
+                line_total_cents,
+                vat_rate_basis_points: Some(2000),
+                position: 0,
+                deleted_at: None,
+                created_at: now,
+                updated_at: now,
+            }],
+            deleted_at: None,
+            created_at: now,
+            updated_at: now,
+        }
+    }
+
+    fn allocate_command(
+        organization_id: OrganizationId,
+        invoice_id: SupplierInvoiceId,
+        line_id: SupplierInvoiceLineId,
+        amount_cents: i32,
+    ) -> AllocateSupplierInvoiceLineCommand {
+        AllocateSupplierInvoiceLineCommand {
+            organization_id,
+            supplier_invoice_id: invoice_id,
+            supplier_invoice_line_id: line_id,
+            project_id: ProjectId(uuid::Uuid::new_v4()),
+            amount_cents,
+        }
+    }
+
+    #[tokio::test]
+    async fn allocate_line_persists_within_bound_and_emits() {
+        let organization_id = OrganizationId(uuid::Uuid::new_v4());
+        let invoice_id = SupplierInvoiceId(uuid::Uuid::new_v4());
+        let line_id = SupplierInvoiceLineId(uuid::Uuid::new_v4());
+        let invoice = invoice_with_line(organization_id, invoice_id, line_id, 10_000);
+
+        let mut repo = MockSupplierInvoiceRepository::new();
+        repo.expect_find_by_id().with(always()).returning(move |_| {
+            let invoice = invoice.clone();
+            Box::pin(async move { Ok(Some(invoice)) })
+        });
+
+        let mut allocation_repo = MockSupplierInvoiceAllocationRepository::new();
+        allocation_repo
+            .expect_sum_allocated_for_line()
+            .with(always())
+            .returning(|_| Box::pin(async move { Ok(4_000) }));
+        allocation_repo
+            .expect_insert()
+            .withf(|allocation| allocation.amount_cents == 6_000)
+            .returning(|allocation| {
+                let allocation = allocation.clone();
+                Box::pin(async move { Ok(allocation) })
+            });
+
+        let emitter = RecordingEmitter::new();
+        let mut service = SupplierInvoiceService::new(repo, &emitter);
+        let command = allocate_command(organization_id, invoice_id, line_id, 6_000);
+
+        let created = service
+            .allocate_line(command, allocation_repo)
+            .await
+            .unwrap();
+
+        assert_eq!(created.amount_cents, 6_000);
+        assert_eq!(created.supplier_invoice_line_id, line_id);
+        assert_eq!(
+            emitter.names(),
+            vec!["supplier_invoice_line_allocation.recorded"]
+        );
+    }
+
+    #[tokio::test]
+    async fn allocate_line_refuses_an_overflow() {
+        let organization_id = OrganizationId(uuid::Uuid::new_v4());
+        let invoice_id = SupplierInvoiceId(uuid::Uuid::new_v4());
+        let line_id = SupplierInvoiceLineId(uuid::Uuid::new_v4());
+        let invoice = invoice_with_line(organization_id, invoice_id, line_id, 10_000);
+
+        let mut repo = MockSupplierInvoiceRepository::new();
+        repo.expect_find_by_id().with(always()).returning(move |_| {
+            let invoice = invoice.clone();
+            Box::pin(async move { Ok(Some(invoice)) })
+        });
+
+        let mut allocation_repo = MockSupplierInvoiceAllocationRepository::new();
+        allocation_repo
+            .expect_sum_allocated_for_line()
+            .with(always())
+            .returning(|_| Box::pin(async move { Ok(9_000) }));
+        // `insert` is deliberately given no expectation: the overflow must be
+        // refused before the service ever reaches for it.
+
+        let emitter = RecordingEmitter::new();
+        let mut service = SupplierInvoiceService::new(repo, &emitter);
+        let command = allocate_command(organization_id, invoice_id, line_id, 2_000);
+
+        let result = service.allocate_line(command, allocation_repo).await;
+
+        assert!(matches!(result, Err(CoreError::Conflict(_))));
+        assert!(emitter.names().is_empty());
+    }
+
+    #[tokio::test]
+    async fn allocate_line_refuses_a_zero_amount() {
+        let organization_id = OrganizationId(uuid::Uuid::new_v4());
+        let invoice_id = SupplierInvoiceId(uuid::Uuid::new_v4());
+        let line_id = SupplierInvoiceLineId(uuid::Uuid::new_v4());
+
+        // No expectations set on either mock: a zero amount is refused before
+        // either repository is ever touched.
+        let repo = MockSupplierInvoiceRepository::new();
+        let allocation_repo = MockSupplierInvoiceAllocationRepository::new();
+
+        let emitter = RecordingEmitter::new();
+        let mut service = SupplierInvoiceService::new(repo, &emitter);
+        let command = allocate_command(organization_id, invoice_id, line_id, 0);
+
+        let result = service.allocate_line(command, allocation_repo).await;
+
+        assert!(matches!(result, Err(CoreError::Conflict(_))));
+    }
+
+    #[tokio::test]
+    async fn allocate_line_refuses_a_sign_mismatch_with_a_credit_line() {
+        let organization_id = OrganizationId(uuid::Uuid::new_v4());
+        let invoice_id = SupplierInvoiceId(uuid::Uuid::new_v4());
+        let line_id = SupplierInvoiceLineId(uuid::Uuid::new_v4());
+        // A credit/rebate line: a negative total.
+        let invoice = invoice_with_line(organization_id, invoice_id, line_id, -5_000);
+
+        let mut repo = MockSupplierInvoiceRepository::new();
+        repo.expect_find_by_id().with(always()).returning(move |_| {
+            let invoice = invoice.clone();
+            Box::pin(async move { Ok(Some(invoice)) })
+        });
+
+        let allocation_repo = MockSupplierInvoiceAllocationRepository::new();
+
+        let emitter = RecordingEmitter::new();
+        let mut service = SupplierInvoiceService::new(repo, &emitter);
+        // A positive allocation against a negative (credit) line.
+        let command = allocate_command(organization_id, invoice_id, line_id, 1_000);
+
+        let result = service.allocate_line(command, allocation_repo).await;
+
+        assert!(matches!(result, Err(CoreError::Conflict(_))));
+    }
+
+    #[tokio::test]
+    async fn allocate_line_refuses_a_line_the_invoice_does_not_carry() {
+        let organization_id = OrganizationId(uuid::Uuid::new_v4());
+        let invoice_id = SupplierInvoiceId(uuid::Uuid::new_v4());
+        let line_id = SupplierInvoiceLineId(uuid::Uuid::new_v4());
+        let invoice = invoice_with_line(organization_id, invoice_id, line_id, 10_000);
+
+        let mut repo = MockSupplierInvoiceRepository::new();
+        repo.expect_find_by_id().with(always()).returning(move |_| {
+            let invoice = invoice.clone();
+            Box::pin(async move { Ok(Some(invoice)) })
+        });
+
+        let allocation_repo = MockSupplierInvoiceAllocationRepository::new();
+
+        let emitter = RecordingEmitter::new();
+        let mut service = SupplierInvoiceService::new(repo, &emitter);
+        let other_line_id = SupplierInvoiceLineId(uuid::Uuid::new_v4());
+        let command = allocate_command(organization_id, invoice_id, other_line_id, 1_000);
+
+        let result = service.allocate_line(command, allocation_repo).await;
+
+        assert!(matches!(result, Err(CoreError::NotFound)));
+    }
+
+    #[tokio::test]
+    async fn allocated_cost_for_project_sums_the_recorded_allocations() {
+        let project_id = ProjectId(uuid::Uuid::new_v4());
+        let organization_id = OrganizationId(uuid::Uuid::new_v4());
+        let now = Utc::now();
+
+        let mut allocation_repo = MockSupplierInvoiceAllocationRepository::new();
+        allocation_repo
+            .expect_list_by_project()
+            .with(always())
+            .returning(move |project_id| {
+                let rows = vec![
+                    SupplierInvoiceLineAllocation {
+                        id: SupplierInvoiceLineAllocationId(uuid::Uuid::new_v4()),
+                        organization_id,
+                        supplier_invoice_line_id: SupplierInvoiceLineId(uuid::Uuid::new_v4()),
+                        project_id,
+                        amount_cents: 6_000,
+                        created_at: now,
+                        updated_at: now,
+                    },
+                    SupplierInvoiceLineAllocation {
+                        id: SupplierInvoiceLineAllocationId(uuid::Uuid::new_v4()),
+                        organization_id,
+                        supplier_invoice_line_id: SupplierInvoiceLineId(uuid::Uuid::new_v4()),
+                        project_id,
+                        amount_cents: 4_000,
+                        created_at: now,
+                        updated_at: now,
+                    },
+                ];
+                Box::pin(async move { Ok(rows) })
+            });
+
+        let repo = MockSupplierInvoiceRepository::new();
+        let emitter = RecordingEmitter::new();
+        let mut service = SupplierInvoiceService::new(repo, &emitter);
+
+        let total = service
+            .allocated_cost_for_project(project_id, allocation_repo)
+            .await
+            .unwrap();
+
+        assert_eq!(total, 10_000);
     }
 }

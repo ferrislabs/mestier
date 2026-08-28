@@ -4,7 +4,7 @@
 use events::{DomainEvent, EventDescriptor, EventSubject};
 use serde_json::{Value, json};
 
-use crate::{SupplierInvoice, SupplierInvoiceStatus};
+use crate::{SupplierInvoice, SupplierInvoiceLineAllocation, SupplierInvoiceStatus};
 
 pub struct SupplierInvoiceReceived {
     pub invoice: SupplierInvoice,
@@ -72,6 +72,44 @@ impl DomainEvent for SupplierInvoiceTransitioned {
     }
 }
 
+/// One project's share of a supplier invoice line, allocated (#338) —
+/// mirrors `InvoicePaymentRecorded` one directory over: a subordinate
+/// entity gets its own `subject_kind`, keyed by its own id, rather than
+/// the parent invoice's.
+pub struct SupplierInvoiceLineAllocated {
+    pub allocation: SupplierInvoiceLineAllocation,
+}
+
+impl DomainEvent for SupplierInvoiceLineAllocated {
+    fn name(&self) -> &'static str {
+        "supplier_invoice_line_allocation.recorded"
+    }
+
+    fn version(&self) -> u16 {
+        1
+    }
+
+    fn subject(&self) -> EventSubject {
+        EventSubject::new("supplier_invoice_line_allocation", self.allocation.id.0)
+    }
+
+    fn payload(&self) -> Value {
+        json!({ "allocation": allocation_payload(&self.allocation) })
+    }
+}
+
+fn allocation_payload(allocation: &SupplierInvoiceLineAllocation) -> Value {
+    json!({
+        "id": allocation.id.0,
+        "organization_id": allocation.organization_id.0,
+        "supplier_invoice_line_id": allocation.supplier_invoice_line_id.0,
+        "project_id": allocation.project_id.0,
+        "amount_cents": allocation.amount_cents,
+        "created_at": allocation.created_at,
+        "updated_at": allocation.updated_at,
+    })
+}
+
 /// The serialized domain model, never the database row: renaming a column
 /// must not reach a subscriber's automation.
 fn supplier_invoice_payload(invoice: &SupplierInvoice) -> Value {
@@ -103,7 +141,10 @@ fn supplier_invoice_payload(invoice: &SupplierInvoice) -> Value {
 /// `domain::automation::catalogue`.
 #[cfg(test)]
 pub fn emitted_events() -> Vec<(&'static str, u16)> {
-    let mut emitted = vec![("supplier_invoice.received", 1)];
+    let mut emitted = vec![
+        ("supplier_invoice.received", 1),
+        ("supplier_invoice_line_allocation.recorded", 1),
+    ];
 
     emitted.extend(
         SupplierInvoiceStatus::ALL
@@ -135,13 +176,32 @@ pub fn descriptors() -> Vec<EventDescriptor> {
         "updated_at": "2026-08-25T09:00:00Z",
     });
 
-    let mut descriptors = vec![EventDescriptor {
-        name: "supplier_invoice.received",
-        version: 1,
-        label: "Facture fournisseur reçue",
-        subject_kind: "supplier_invoice",
-        payload_example: json!({ "supplier_invoice": supplier_invoice_example }),
-    }];
+    let allocation_example = json!({
+        "id": "018f3b2a-0000-7000-8000-000000000011",
+        "organization_id": "018f3b2a-0000-7000-8000-000000000002",
+        "supplier_invoice_line_id": "018f3b2a-0000-7000-8000-000000000012",
+        "project_id": "018f3b2a-0000-7000-8000-000000000013",
+        "amount_cents": 20_000,
+        "created_at": "2026-08-28T09:00:00Z",
+        "updated_at": "2026-08-28T09:00:00Z",
+    });
+
+    let mut descriptors = vec![
+        EventDescriptor {
+            name: "supplier_invoice.received",
+            version: 1,
+            label: "Facture fournisseur reçue",
+            subject_kind: "supplier_invoice",
+            payload_example: json!({ "supplier_invoice": supplier_invoice_example }),
+        },
+        EventDescriptor {
+            name: "supplier_invoice_line_allocation.recorded",
+            version: 1,
+            label: "Coût fournisseur attribué à un projet",
+            subject_kind: "supplier_invoice_line_allocation",
+            payload_example: json!({ "allocation": allocation_example }),
+        },
+    ];
 
     for status in SupplierInvoiceStatus::ALL {
         let Some(name) = SupplierInvoiceTransitioned::event_name(status) else {

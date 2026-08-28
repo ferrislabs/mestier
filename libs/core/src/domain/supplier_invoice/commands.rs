@@ -1,7 +1,9 @@
 use chrono::NaiveDate;
 use rust_decimal::Decimal;
 
-use crate::{OrganizationId, SupplierInvoiceId, SupplierInvoiceSource};
+use crate::{
+    OrganizationId, ProjectId, SupplierInvoiceId, SupplierInvoiceLineId, SupplierInvoiceSource,
+};
 
 #[derive(Debug, Clone)]
 pub struct SupplierInvoiceLineCommand {
@@ -53,4 +55,27 @@ pub struct RejectSupplierInvoiceCommand {
     /// Why, if the reviewer said so. Unlike confirming, a rejection with no
     /// explanation is usually a gap, but this issue does not force one.
     pub notes: Option<String>,
+}
+
+/// Attributes part (or all) of a line's cost to a project — see #338.
+///
+/// `supplier_invoice_id` is carried alongside the line id rather than
+/// looked up from it, the same shape `RecordInvoicePaymentCommand` and its
+/// siblings already use: the caller already has the invoice loaded to pick
+/// a line from, and the service uses it to fetch the line through
+/// `SupplierInvoiceRepository`'s existing `find_by_id`, needing no new
+/// query on the frozen supplier invoice port. Allowed on a document of any
+/// status, `Received` included: entering an allocation is bookkeeping,
+/// independent of whether the invoice itself has been reviewed yet — only
+/// a `Confirmed` invoice's allocations ever move a profitability number
+/// (see `profitability::service::build_report`).
+#[derive(Debug, Clone)]
+pub struct AllocateSupplierInvoiceLineCommand {
+    pub organization_id: OrganizationId,
+    pub supplier_invoice_id: SupplierInvoiceId,
+    pub supplier_invoice_line_id: SupplierInvoiceLineId,
+    pub project_id: ProjectId,
+    /// Net of VAT, same sign as the target line's own `line_total_cents` —
+    /// see the doc comment on `SupplierInvoiceLineAllocation::amount_cents`.
+    pub amount_cents: i32,
 }

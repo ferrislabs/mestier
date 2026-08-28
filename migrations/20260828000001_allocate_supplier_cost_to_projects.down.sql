@@ -1,0 +1,5 @@
+DROP TRIGGER IF EXISTS trg_supplier_invoice_line_allocations_enforce_line_total
+    ON supplier_invoice_line_allocations;
+DROP FUNCTION IF EXISTS supplier_invoice_line_allocations_enforce_line_total();
+DROP TABLE IF EXISTS supplier_invoice_line_allocations;
+ALTER TABLE supplier_invoice_lines DROP CONSTRAINT IF EXISTS uq_supplier_invoice_lines_id_org;

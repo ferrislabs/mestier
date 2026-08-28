@@ -10,8 +10,9 @@ use crate::{
         planning::ports::PlanningRepository,
         profitability::{
             AssignedEquipment, MemberProfitability, PlannedAssignment, ProfitabilityFacts,
-            ProfitabilityReport, ProjectHeader, ProjectProfitability, ReportPeriod, TaskExpense,
-            WorkTime, hourly_cost_cents_from, ports::ProfitabilityRepository,
+            ProfitabilityReport, ProjectHeader, ProjectProfitability, ReportPeriod,
+            SupplierCostAllocation, TaskExpense, WorkTime, hourly_cost_cents_from,
+            ports::ProfitabilityRepository,
         },
         work_time::service::expand_work_slots,
     },
@@ -89,6 +90,8 @@ pub fn build_report(
         expenses,
         equipment,
         cost_bases,
+        supplier_costs,
+        organization_vat_subject,
     } = facts;
 
     let expanded = expand_for_members(&assignments, &work_time, period);
@@ -122,12 +125,36 @@ pub fn build_report(
                     &costs,
                     &expenses,
                     &equipment,
+                    &supplier_costs,
+                    organization_vat_subject,
                     period,
                 )
             })
             .collect(),
         members: member_profitability(&assignments, &spans, &costs),
     }
+}
+
+/// The real cost of one supplier cost allocation: net when the organization
+/// can recover the VAT, gross — the rate added back in — when it cannot.
+///
+/// The sharpest call #338 makes: VAT paid and never recovered is exactly as
+/// much a cost as the net price it sits on top of, so a non-subject
+/// organization's number has to include it, while a subject one's number
+/// would overstate the true cost by folding in VAT that comes straight back
+/// as a credit. Rounded the same half-even way `SupplierInvoiceService`
+/// computes VAT on a line, `net.abs()` so a credit line's negative amount
+/// grosses up correctly instead of flipping sign.
+fn supplier_cost_of(allocation: &SupplierCostAllocation, vat_subject: bool) -> i64 {
+    let net = i64::from(allocation.net_amount_cents);
+    if vat_subject {
+        return net;
+    }
+
+    let rate_bp = i64::from(allocation.vat_rate_basis_points.unwrap_or(0));
+    let vat_magnitude = div_round_half_even(net.abs() * rate_bp, 10_000);
+
+    net + net.signum() * vat_magnitude
 }
 
 /// The version of `employee_id`'s cost basis in effect on `date`, if any.
@@ -386,6 +413,8 @@ fn project_profitability(
     costs: &[Result<i64, MissingCost>],
     expenses: &[TaskExpense],
     equipment: &[AssignedEquipment],
+    supplier_costs: &[SupplierCostAllocation],
+    organization_vat_subject: bool,
     period: ReportPeriod,
 ) -> ProjectProfitability {
     let mut labour_cost_cents = 0_i64;
@@ -453,13 +482,20 @@ fn project_profitability(
         .map(|expense| i64::from(expense.expenses_cents))
         .sum();
 
+    let supplier_cost_cents: i64 = supplier_costs
+        .iter()
+        .filter(|allocation| allocation.project_id == project.project_id)
+        .map(|allocation| supplier_cost_of(allocation, organization_vat_subject))
+        .sum();
+
     // Withheld while a rate is missing. A margin built on a floor reads as fact
     // and is not one, and this screen exists to be trusted.
     let margin_cents = project
         .quoted_cents
         .filter(|_| members_without_rate.is_empty())
         .map(|quoted| {
-            i64::from(quoted) - (labour_cost_cents + equipment_cost_cents + expenses_cents)
+            i64::from(quoted)
+                - (labour_cost_cents + equipment_cost_cents + expenses_cents + supplier_cost_cents)
         });
 
     ProjectProfitability {
@@ -470,6 +506,7 @@ fn project_profitability(
         labour_cost_cents,
         equipment_cost_cents,
         expenses_cents,
+        supplier_cost_cents,
         planned_minutes,
         occupied_minutes,
         overlapping_minutes,
@@ -647,6 +684,10 @@ mod tests {
             expenses: Vec::new(),
             equipment: Vec::new(),
             cost_bases: Vec::new(),
+            supplier_costs: Vec::new(),
+            // Irrelevant while `supplier_costs` is empty; the dedicated
+            // supplier-cost tests below set both explicitly.
+            organization_vat_subject: true,
         }
     }
 
@@ -1206,5 +1247,97 @@ mod tests {
             "conflating this with `HourlyRate` would send somebody to check a \
              figure that was never the problem"
         );
+    }
+
+    // -- Supplier cost (#338) -----------------------------------------------
+
+    #[test]
+    fn supplier_cost_is_net_when_the_organization_can_recover_vat() {
+        let mut facts = facts(vec![], vec![project(Some(100_000), true)]);
+        facts.organization_vat_subject = true;
+        facts.supplier_costs = vec![SupplierCostAllocation {
+            project_id: ProjectId(Uuid::from_u128(1)),
+            net_amount_cents: 20_000,
+            vat_rate_basis_points: Some(2000),
+        }];
+
+        let report = build_report(facts, WorkTime::default(), june());
+        let project = only_project(&report);
+
+        assert_eq!(
+            project.supplier_cost_cents, 20_000,
+            "a subject organization recovers the VAT, so only the net price is a real cost"
+        );
+        assert_eq!(project.margin_cents, Some(100_000 - 20_000));
+    }
+
+    #[test]
+    fn supplier_cost_is_grossed_up_when_the_organization_cannot_recover_vat() {
+        let mut facts = facts(vec![], vec![project(Some(100_000), true)]);
+        facts.organization_vat_subject = false;
+        facts.supplier_costs = vec![SupplierCostAllocation {
+            project_id: ProjectId(Uuid::from_u128(1)),
+            net_amount_cents: 20_000,
+            vat_rate_basis_points: Some(2000),
+        }];
+
+        let report = build_report(facts, WorkTime::default(), june());
+        let project = only_project(&report);
+
+        // 20 000 net + 20% VAT that is never coming back = 24 000.
+        assert_eq!(
+            project.supplier_cost_cents, 24_000,
+            "VAT paid and never recovered is exactly as much a cost as the net price"
+        );
+        assert_eq!(project.margin_cents, Some(100_000 - 24_000));
+        assert_eq!(project.planned_cost_cents(), 24_000);
+    }
+
+    #[test]
+    fn a_rateless_supplier_line_costs_the_same_net_or_gross() {
+        let mut facts = facts(vec![], vec![project(None, false)]);
+        facts.organization_vat_subject = false;
+        facts.supplier_costs = vec![SupplierCostAllocation {
+            project_id: ProjectId(Uuid::from_u128(1)),
+            net_amount_cents: 5_000,
+            vat_rate_basis_points: None,
+        }];
+
+        let report = build_report(facts, WorkTime::default(), june());
+
+        assert_eq!(only_project(&report).supplier_cost_cents, 5_000);
+    }
+
+    /// A credit/rebate line allocated as a credit must gross up towards a
+    /// larger *debt* to the organization, never flip sign into a positive
+    /// cost.
+    #[test]
+    fn a_credit_allocation_grosses_up_without_flipping_sign() {
+        let mut facts = facts(vec![], vec![project(None, false)]);
+        facts.organization_vat_subject = false;
+        facts.supplier_costs = vec![SupplierCostAllocation {
+            project_id: ProjectId(Uuid::from_u128(1)),
+            net_amount_cents: -10_000,
+            vat_rate_basis_points: Some(2000),
+        }];
+
+        let report = build_report(facts, WorkTime::default(), june());
+
+        assert_eq!(only_project(&report).supplier_cost_cents, -12_000);
+    }
+
+    #[test]
+    fn supplier_cost_on_another_project_does_not_leak_in() {
+        let mut facts = facts(vec![], vec![project(None, false)]);
+        facts.organization_vat_subject = true;
+        facts.supplier_costs = vec![SupplierCostAllocation {
+            project_id: ProjectId(Uuid::from_u128(999)),
+            net_amount_cents: 20_000,
+            vat_rate_basis_points: None,
+        }];
+
+        let report = build_report(facts, WorkTime::default(), june());
+
+        assert_eq!(only_project(&report).supplier_cost_cents, 0);
     }
 }

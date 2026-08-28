@@ -32,6 +32,25 @@ aws-sdk-s3 = { workspace = true }
 bytes = { workspace = true }
 mockall = { workspace = true, optional = true }
 
+# #337: Factur-X reception. Pinned directly here (not `workspace = true`) per
+# the M11 orchestrator's split -- the workspace root is owned by a sibling
+# workstream while this lands. `lopdf` reads the PDF/A-3 object model
+# directly (Root/Names/EmbeddedFiles), which is exactly what extracting an
+# attached file needs and no higher-level crate on crates.io wraps; `quick-xml`
+# with its `serialize` feature deserializes the embedded CII XML through
+# `serde`, so only the subset of the schema this product reads (see
+# `infrastructure::supplier_invoice::facturx::cii`) needs writing by hand,
+# not a parser for the whole multi-hundred-page CII spec.
+# `default-features = false`: lopdf's default features pull in date-object
+# helpers (`chrono`/`jiff`/`time`) this adapter never touches — extraction
+# only walks the object graph (`Document`/`Dictionary`/`Stream`) — and, as
+# of this pin, the `time`-feature code path does not even compile against
+# the `time` version this workspace resolves to (an upstream lopdf/time
+# incompatibility, not something this crate can fix). Disabling defaults
+# sidesteps that broken path entirely.
+lopdf = { version = "0.44.0", default-features = false }
+quick-xml = { version = "0.42.0", features = ["serialize"] }
+
 [features]
 # Exposes the `automock` doubles to downstream test targets, this crate's own
 # `tests/` included. Never enabled by a normal build: only the dev-dependency

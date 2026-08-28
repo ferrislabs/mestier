@@ -8,7 +8,7 @@ use crate::{
     CustomerId, EmployeeCostBasis, EmployeeCostBasisId, EmployeeId, EquipmentId, MemberId,
     OrganizationId, ProfitabilityFacts, ProjectId, TaskId,
     domain::profitability::{
-        AssignedEquipment, PlannedAssignment, ProjectHeader, TaskExpense,
+        AssignedEquipment, PlannedAssignment, ProjectHeader, SupplierCostAllocation, TaskExpense,
         ports::ProfitabilityRepository,
     },
     infrastructure::postgres::{SharedTx, error::map_sqlx_error},
@@ -270,12 +270,68 @@ impl<'tx> ProfitabilityRepository for PgProfitabilityRepository<'tx> {
         })
         .collect();
 
+        // Only a `CONFIRMED` invoice's cost is real: `RECEIVED` is a
+        // proposal, `REJECTED` means it never happened. Filtered on the
+        // invoice's own `issued_on` — the one date both the supplier and
+        // the accountant agree on, per #338 — cast the same `AT TIME ZONE
+        // 'UTC'` way the all-day cost-basis lookups above already treat an
+        // instant as a calendar day, for the same reason: a plain `::date`
+        // cast depends on the session's own timezone setting, and this
+        // adapter never wants that.
+        let supplier_costs = sqlx::query!(
+            r#"
+            SELECT
+                a.project_id AS "project_id!",
+                a.amount_cents AS "net_amount_cents!",
+                l.vat_rate_basis_points
+            FROM supplier_invoice_line_allocations a
+            JOIN supplier_invoice_lines l
+                ON l.id = a.supplier_invoice_line_id AND l.org_id = a.org_id
+            JOIN supplier_invoices si
+                ON si.id = l.supplier_invoice_id AND si.org_id = a.org_id
+            WHERE a.org_id = $1
+              AND si.status = 'CONFIRMED'::supplier_invoice_status
+              AND si.issued_on >= ($2 AT TIME ZONE 'UTC')::date
+              AND si.issued_on < ($3 AT TIME ZONE 'UTC')::date
+            "#,
+            organization_id.0,
+            from,
+            to,
+        )
+        .fetch_all(&mut ***tx)
+        .await
+        .map_err(map_sqlx_error)?
+        .into_iter()
+        .map(|row| SupplierCostAllocation {
+            project_id: ProjectId(row.project_id),
+            net_amount_cents: row.net_amount_cents,
+            vat_rate_basis_points: row.vat_rate_basis_points,
+        })
+        .collect();
+
+        // The same `VatStatus` an invoice's own totals are computed from
+        // (`invoice::service::calculate_totals`), reused here rather than a
+        // second source of truth: only `'subject'` recovers VAT, an
+        // incomplete legal identity (`NULL`) reads the same as
+        // `'not_subject'` — both cannot recover it.
+        let vat_status: Option<String> = sqlx::query_scalar!(
+            r#"SELECT vat_status FROM organizations WHERE id = $1"#,
+            organization_id.0,
+        )
+        .fetch_optional(&mut ***tx)
+        .await
+        .map_err(map_sqlx_error)?
+        .flatten();
+        let organization_vat_subject = vat_status.as_deref() == Some("subject");
+
         Ok(ProfitabilityFacts {
             projects,
             assignments,
             expenses,
             equipment,
             cost_bases,
+            supplier_costs,
+            organization_vat_subject,
         })
     }
 }
