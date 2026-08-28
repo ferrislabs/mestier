@@ -1068,7 +1068,12 @@ mod tests {
         #[tokio::test]
         async fn a_configured_horizon_override_changes_the_target() {
             let organization_id = OrganizationId(Uuid::new_v4());
-            let today = Utc::now().date_naive();
+            // `target_horizon` reads "today" in the recurrence's own timezone
+            // (`Europe::Paris` here, via the `recurrence()` helper) — reading
+            // it in UTC instead drifts the target (and the expected call
+            // count below) by a day for part of every day Paris's calendar
+            // date has already rolled over ahead of UTC's.
+            let today = Utc::now().with_timezone(&Europe::Paris).date_naive();
             let due = TaskRecurrence {
                 horizon_filled_to: today,
                 ..recurrence(RecurrenceRule::Daily, today - Duration::days(10), None)
