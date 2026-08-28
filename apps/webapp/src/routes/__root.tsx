@@ -24,6 +24,21 @@ export const Route = createRootRouteWithContext<MyRouterContext>()({
 				name: 'viewport',
 				content: 'width=device-width, initial-scale=1',
 			},
+			// Chrome's auto-translate mutates the DOM (wraps text nodes in
+			// <font>/<span>) independently of React, so a Select/Dialog/
+			// Popover opening or closing right after can leave React holding
+			// a node reference Chrome already rewrote — React's cleanup then
+			// throws removeChild's "not a child of this node". `translate="no"`
+			// on <html> stops Chrome from doing that once a translation is
+			// active; this meta is the companion piece that stops Chrome
+			// from offering the "Translate this page?" prompt in the first
+			// place. See https://github.com/radix-ui/primitives/issues/2578
+			// and https://github.com/radix-ui/primitives/issues/3795 — the
+			// same crash reported directly against Radix's own portals.
+			{
+				name: 'google',
+				content: 'notranslate',
+			},
 			{
 				title: 'Mestier · Console',
 			},
@@ -62,7 +77,7 @@ export const Route = createRootRouteWithContext<MyRouterContext>()({
 
 function RootDocument({ children }: { children: React.ReactNode }) {
 	return (
-		<html lang="en">
+		<html lang="fr" translate="no">
 			<head>
 				<HeadContent />
 			</head>
