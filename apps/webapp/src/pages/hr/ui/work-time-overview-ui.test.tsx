@@ -22,6 +22,7 @@ function baseProps() {
 		organizationSlug: 'atelier-bois',
 		isLoading: false,
 		error: null as string | null,
+		hrDataRestricted: false,
 		rows: [row()],
 	}
 }
@@ -66,6 +67,29 @@ describe('WorkTimeOverviewUI — weekly contract duration', () => {
 			/>,
 		)
 		expect(screen.getByText('Sans profil RH')).toBeDefined()
+	})
+})
+
+describe('WorkTimeOverviewUI — HR data forbidden (#371)', () => {
+	it('shows a neutral notice instead of the red error banner', async () => {
+		await renderWithRouter(
+			<WorkTimeOverviewUI {...baseProps()} hrDataRestricted={true} />,
+		)
+		expect(
+			screen.getByText(/n’avez pas la permission de consulter/),
+		).toBeDefined()
+	})
+
+	it('says "Non consultable", never "Sans profil RH", when HR data is restricted', async () => {
+		await renderWithRouter(
+			<WorkTimeOverviewUI
+				{...baseProps()}
+				hrDataRestricted={true}
+				rows={[row({ weeklyContractMinutes: null })]}
+			/>,
+		)
+		expect(screen.getByText('Non consultable')).toBeDefined()
+		expect(screen.queryByText('Sans profil RH')).toBeNull()
 	})
 })
 

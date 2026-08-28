@@ -14,6 +14,7 @@ import {
 	useUpdateMember,
 	useUpsertEmployeeProfile,
 } from '#/hooks/use-reference-catalog'
+import { isForbiddenError } from '#/lib/api-error'
 import { accessState, type MemberFormValues } from '#/pages/hr/types'
 import { InviteMemberSheet } from '#/pages/hr/ui/invite-member-sheet'
 import {
@@ -162,9 +163,18 @@ function TeamDirectory({
 	const isLoading =
 		catalog.members.isLoading || catalog.employeeProfiles.isLoading
 
+	// `employee-profiles` is gated on `member.manage`, a stricter permission
+	// than the plain organization membership `members` itself checks — see
+	// `libs/core/src/application/employee/mod.rs`. A 403 here is an expected
+	// access boundary for a seat without that permission, not a page failure:
+	// it must not join the fatal error banner below, and the rows built from
+	// an empty profile map must say so rather than claim nobody has a
+	// profile. See #371.
+	const hrDataRestricted = isForbiddenError(catalog.employeeProfiles.error)
+
 	const error =
 		catalog.members.error ??
-		catalog.employeeProfiles.error ??
+		(hrDataRestricted ? null : catalog.employeeProfiles.error) ??
 		createMember.error ??
 		updateMember.error ??
 		deleteMember.error ??
@@ -241,6 +251,7 @@ function TeamDirectory({
 						organizationSlug={organizationSlug}
 						isLoading={isLoading}
 						error={error?.message ?? null}
+						hrDataRestricted={hrDataRestricted}
 						members={filteredRows}
 						search={search}
 						onSearchChange={setSearch}

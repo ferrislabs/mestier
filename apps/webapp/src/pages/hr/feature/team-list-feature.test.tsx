@@ -36,6 +36,8 @@ interface FakeApiHandlers {
 	invitations?: unknown[]
 	postInvitation?: (params: unknown) => unknown
 	deleteInvitation?: (params: unknown) => unknown
+	/** Mirrors a real 403 from `member.manage` gating on employee-profiles. */
+	employeeProfilesForbidden?: boolean
 }
 
 function installFakeTanstackApi(handlers: FakeApiHandlers = {}) {
@@ -60,6 +62,16 @@ function installFakeTanstackApi(handlers: FakeApiHandlers = {}) {
 							return { data: [MEMBER], pagination: null }
 						}
 						if (path === EMPLOYEE_PROFILES_PATH) {
+							if (handlers.employeeProfilesForbidden) {
+								throw Object.assign(new Error('Forbidden'), {
+									status: 403,
+									data: {
+										code: 'E_FORBIDDEN',
+										message: 'Forbidden',
+										status: 403,
+									},
+								})
+							}
 							return { data: [], pagination: null }
 						}
 						if (path === INVITATIONS_PATH) {
@@ -215,6 +227,29 @@ describe('TeamListFeature — pending invitations', () => {
 				path: { invitation_id: 'invitation-1' },
 			})
 		})
+	})
+})
+
+describe('TeamListFeature — employee profiles forbidden (#371)', () => {
+	afterEach(() => {
+		vi.restoreAllMocks()
+	})
+
+	it('shows the team and a neutral notice instead of a fatal error banner', async () => {
+		await renderFeature({ employeeProfilesForbidden: true })
+
+		expect(await screen.findByText('Nova Alix')).toBeDefined()
+		expect(
+			screen.getByText(/n’avez pas la permission de consulter/),
+		).toBeDefined()
+		expect(screen.queryByText('Forbidden')).toBeNull()
+	})
+
+	it('says "Non consultable" rather than the misleading "Sans profil RH"', async () => {
+		await renderFeature({ employeeProfilesForbidden: true })
+
+		expect(await screen.findByText('Non consultable')).toBeDefined()
+		expect(screen.queryByText('Sans profil RH')).toBeNull()
 	})
 })
 

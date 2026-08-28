@@ -29,6 +29,7 @@ function baseProps() {
 		organizationSlug: 'atelier-bois',
 		isLoading: false,
 		error: null,
+		hrDataRestricted: false,
 		members: [member()],
 		search: '',
 		onSearchChange: vi.fn(),
@@ -103,6 +104,48 @@ describe('TeamListUI — rate and contract', () => {
 
 		expect(screen.getByText('Non renseigné')).toBeDefined()
 		expect(screen.getByText('Sans profil RH')).toBeDefined()
+	})
+})
+
+describe('TeamListUI — HR data forbidden (#371)', () => {
+	it('shows a neutral notice instead of the red error banner', async () => {
+		await renderWithRouter(
+			<TeamListUI {...baseProps()} hrDataRestricted={true} />,
+		)
+
+		expect(
+			screen.getByText(/n’avez pas la permission de consulter/),
+		).toBeDefined()
+	})
+
+	it('says "Non consultable", never "Sans profil RH", when HR data is restricted', async () => {
+		await renderWithRouter(
+			<TeamListUI
+				{...baseProps()}
+				hrDataRestricted={true}
+				members={[
+					member({ hourlyRateCents: null, weeklyContractMinutes: null }),
+				]}
+			/>,
+		)
+
+		expect(screen.getByText('Non consultable')).toBeDefined()
+		expect(screen.queryByText('Sans profil RH')).toBeNull()
+	})
+
+	it('still shows the real error banner when there is an actual failure', async () => {
+		await renderWithRouter(
+			<TeamListUI
+				{...baseProps()}
+				error="Impossible de contacter le serveur"
+				hrDataRestricted={true}
+			/>,
+		)
+
+		expect(screen.getByText('Impossible de contacter le serveur')).toBeDefined()
+		expect(
+			screen.queryByText(/n’avez pas la permission de consulter/),
+		).toBeNull()
 	})
 })
 
