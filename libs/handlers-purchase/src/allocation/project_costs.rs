@@ -4,13 +4,14 @@ use handlers::{ApiError, AppState, DataEnvelope, Response};
 use mestier_core::ProjectId;
 
 use crate::{
-    paths::ProjectSupplierCostsPath, require_project_membership,
-    response::ProjectSupplierCostsResponse,
+    paths::ProjectSupplierCostsPath,
+    require_project_membership,
+    response::{ProjectSupplierCostLineResponse, ProjectSupplierCostsResponse},
 };
 
 /// The plain net sum of every allocation recorded against this project so
-/// far — see [`ProjectSupplierCostsResponse`]'s own doc comment for why
-/// this is not the same figure a profitability report states.
+/// far, itemized — see [`ProjectSupplierCostsResponse`]'s own doc comment
+/// for why the sum is not the same figure a profitability report states.
 #[utoipa::path(
     get,
     path = "/api/v1/projects/{project_id}/supplier-costs",
@@ -38,9 +39,17 @@ pub async fn handler(
         .usecase
         .allocated_supplier_cost_for_project(project_id)
         .await?;
+    let lines = state
+        .usecase
+        .project_supplier_cost_lines(project_id)
+        .await?;
 
     Ok(Response::OK(ProjectSupplierCostsResponse {
         project_id,
         allocated_cents,
+        lines: lines
+            .into_iter()
+            .map(ProjectSupplierCostLineResponse::from)
+            .collect(),
     }))
 }

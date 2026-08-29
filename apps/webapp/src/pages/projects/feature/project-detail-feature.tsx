@@ -15,6 +15,7 @@ import {
 } from '#/hooks/use-invoices'
 import { type Project, useProject } from '#/hooks/use-projects'
 import { useProfitability } from '#/hooks/use-reporting'
+import { useProjectSupplierCosts } from '#/hooks/use-supplier-invoices'
 import { buildOrgPath } from '#/modules/org-path'
 import { eurosToCents } from '#/pages/invoices/types'
 import {
@@ -80,6 +81,7 @@ function ProjectDetailWorkspace({
 	// Never recomputed from a list of invoices — see `useProjectBillingSummary`.
 	const billingSummary = useProjectBillingSummary(project.id)
 	const invoices = useInvoicesByProject(project.id)
+	const supplierCosts = useProjectSupplierCosts(project.id)
 	const customer = useCustomer(project.customer_id ?? '', hasCustomer)
 
 	// The report is period-scoped; a project detail page can pick its own
@@ -222,6 +224,8 @@ function ProjectDetailWorkspace({
 			isCostLoading={profitability.isLoading}
 			invoices={invoices.data?.data ?? []}
 			isInvoicesLoading={invoices.isLoading}
+			supplierCosts={supplierCosts.data?.data ?? null}
+			isSupplierCostsLoading={supplierCosts.isLoading}
 			hasCustomer={hasCustomer}
 			hasPinnedAddress={hasPinnedAddress}
 			hasQuote={hasQuote}

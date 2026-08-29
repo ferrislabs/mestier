@@ -1,6 +1,13 @@
 import type { LucideIcon } from 'lucide-react'
 
-export type ModuleId = 'home' | 'crm' | 'hr' | 'planning' | 'chat' | 'settings'
+export type ModuleId =
+	| 'home'
+	| 'crm'
+	| 'purchase'
+	| 'hr'
+	| 'planning'
+	| 'chat'
+	| 'settings'
 
 /**
  * `coming-soon`: module announced but not navigable — it stays visible, greyed

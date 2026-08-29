@@ -16,6 +16,7 @@ import {
 	Package,
 	Receipt,
 	Settings,
+	ShoppingCart,
 	TrendingUp,
 	Users,
 } from 'lucide-react'
@@ -78,6 +79,22 @@ export const MODULES: AppModule[] = [
 				label: 'Catalogue',
 				to: '/crm/catalog',
 				icon: Boxes,
+			},
+		],
+	},
+	{
+		id: 'purchase',
+		label: 'Achats',
+		icon: ShoppingCart,
+		basePath: '/purchase',
+		status: 'available',
+		hasOverview: false,
+		sections: [
+			{
+				id: 'supplier-invoices',
+				label: 'Factures fournisseurs',
+				to: '/purchase/supplier-invoices',
+				icon: FileWarning,
 			},
 		],
 	},

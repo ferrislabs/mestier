@@ -167,6 +167,7 @@ export namespace Schemas {
     | { divider: boolean; spacing?: (null | SeparatorSpacing) | undefined; type: "SEPARATOR" }
     | { components: Array<Component>; type: "ACTION_ROW" }
     | { emoji?: (string | null) | undefined; label: string; style: ButtonStyle; type: "BUTTON"; url: string };
+  export type ConfirmSupplierInvoiceRequest = Partial<{ notes: string | null }>;
   export type ConnectorDescriptorResponse = {
     auth: AuthRequirementResponse;
     family: string;
@@ -537,6 +538,73 @@ export namespace Schemas {
   };
   export type GraphInvalidDetails = { errors: Array<GraphErrorResponse> };
   export type GraphInvalidBody = { code: string; details: GraphInvalidDetails; message: string; status: number };
+  export type SupplierInvoiceId = string;
+  export type SupplierInvoiceLineAllocationId = string;
+  export type SupplierInvoiceLineId = string;
+  export type SupplierInvoiceLineAllocationResponse = {
+    amount_cents: number;
+    created_at: string;
+    id: SupplierInvoiceLineAllocationId;
+    organization_id: OrganizationId;
+    project_id: ProjectId;
+    supplier_invoice_line_id: SupplierInvoiceLineId;
+    updated_at: string;
+  };
+  export type SupplierInvoiceLineResponse = {
+    allocations: Array<SupplierInvoiceLineAllocationResponse>;
+    created_at: string;
+    id: SupplierInvoiceLineId;
+    label: string;
+    line_total_cents: number;
+    position: number;
+    quantity: string;
+    supplier_invoice_id: SupplierInvoiceId;
+    unit?: (string | null) | undefined;
+    unit_price_cents: number;
+    updated_at: string;
+    vat_rate_basis_points?: (number | null) | undefined;
+  };
+  export type SupplierInvoiceSource = "MANUAL" | "FACTUR_X";
+  export type SupplierInvoiceStatus = "RECEIVED" | "CONFIRMED" | "REJECTED";
+  export type SupplierId = string;
+  export type SupplierInvoiceVatBreakdownLineResponse = { rate_bp: number; vat_cents: number };
+  export type SupplierInvoiceResponse = {
+    created_at: string;
+    currency: string;
+    due_on?: (string | null) | undefined;
+    gross_cents: number;
+    id: SupplierInvoiceId;
+    issued_on: string;
+    lines: Array<SupplierInvoiceLineResponse>;
+    net_cents: number;
+    notes?: (string | null) | undefined;
+    number: string;
+    organization_id: OrganizationId;
+    received_at: string;
+    source: SupplierInvoiceSource;
+    source_file_key?: (string | null) | undefined;
+    source_file_mime_type?: (string | null) | undefined;
+    status: SupplierInvoiceStatus;
+    supplier_id?: (null | SupplierId) | undefined;
+    supplier_name: string;
+    supplier_registration_number?: (string | null) | undefined;
+    supplier_vat_number?: (string | null) | undefined;
+    updated_at: string;
+    vat_breakdown: Array<SupplierInvoiceVatBreakdownLineResponse>;
+  };
+  export type TotalsMismatchResponse = {
+    recomputed_gross_cents: number;
+    recomputed_net_cents: number;
+    stated_gross_cents: number;
+    stated_net_cents: number;
+  };
+  export type ImportSupplierInvoiceResponse =
+    | {
+        invoice: SupplierInvoiceResponse;
+        outcome: "created";
+        totals_mismatch?: (null | TotalsMismatchResponse) | undefined;
+      }
+    | { outcome: "parse_failed"; reason: string };
   export type InstantiateProjectTemplateRequest = {
     customer_context_id?: (null | CustomerContextId) | undefined;
     customer_id?: (null | CustomerId) | undefined;
@@ -635,6 +703,7 @@ export namespace Schemas {
     notes: string | null;
   }>;
   export type IssueInvoiceRequest = Partial<{ allow_exceeding_total: boolean }>;
+  export type LineAllocationShareRequest = { amount_cents: number; project_id: ProjectId };
   export type MarkChannelReadRequest = { message_id: MessageId };
   export type MemberAccountResponse = { email: string; name: string };
   export type MissingCost = "HOURLY_RATE" | "MONTHLY_COST" | "CONTRACTED_HOURS" | "NO_COST_BASIS";
@@ -830,6 +899,7 @@ export namespace Schemas {
     planned_minutes: number;
     project_id: ProjectId;
     quoted_cents?: (number | null) | undefined;
+    supplier_cost_cents: number;
   };
   export type ProfitabilityResponse = {
     double_booked: Array<ProjectProfitability>;
@@ -844,6 +914,21 @@ export namespace Schemas {
     project_id: ProjectId;
     quoted_cents?: (number | null) | undefined;
     remaining_cents?: (number | null) | undefined;
+  };
+  export type ProjectSupplierCostLineResponse = {
+    allocation_id: SupplierInvoiceLineAllocationId;
+    amount_cents: number;
+    created_at: string;
+    line_label: string;
+    supplier_invoice_id: SupplierInvoiceId;
+    supplier_invoice_line_id: SupplierInvoiceLineId;
+    supplier_invoice_number: string;
+    supplier_name: string;
+  };
+  export type ProjectSupplierCostsResponse = {
+    allocated_cents: number;
+    lines: Array<ProjectSupplierCostLineResponse>;
+    project_id: ProjectId;
   };
   export type ProjectTemplateId = string;
   export type ProjectTemplateResponse = {
@@ -933,6 +1018,8 @@ export namespace Schemas {
     | { frequency: "DAILY" }
     | { frequency: "WEEKLY"; weekdays: Array<number> }
     | { day_of_month: number; frequency: "MONTHLY" };
+  export type RejectSupplierInvoiceRequest = Partial<{ notes: string | null }>;
+  export type ReplaceLineAllocationsRequest = { allocations: Array<LineAllocationShareRequest> };
   export type ReplaceProjectTemplateTasksRequest = { tasks: Array<ProjectTemplateTaskShapeRequest> };
   export type ReplayRunRequest = { connector_id: string };
   export type ReportAssignmentRequest = { comment?: (string | null) | undefined; reported_minutes: number };
@@ -1151,6 +1238,7 @@ export namespace Schemas {
     rate_cents: number;
     unit: ServiceRateUnit;
   };
+  export type UpdateSupplierInvoiceRequest = Partial<{ notes: string | null }>;
   export type UpdateTaskCommentRequest = { body: string };
   export type UpdateTaskLabelRequest = { color: string; name: string };
   export type UpdateTaskRecurrenceRequest = (null | RecurrenceRuleRequest) &
@@ -5186,6 +5274,83 @@ export namespace Endpoints {
       409: unknown;
     };
   };
+  export type get_ListSupplierInvoices = {
+    method: "GET";
+    path: "/api/v1/organizations/{organization_id}/supplier-invoices";
+    requestFormat: "json";
+    parameters: {
+      query: Partial<{ page: number; per_page: number }>;
+      path: { organization_id: string };
+    };
+    responses: {
+      200: {
+        data: Array<{
+          created_at: string;
+          currency: string;
+          due_on?: (string | null) | undefined;
+          gross_cents: number;
+          id: Schemas.SupplierInvoiceId;
+          issued_on: string;
+          lines: Array<Schemas.SupplierInvoiceLineResponse>;
+          net_cents: number;
+          notes?: (string | null) | undefined;
+          number: string;
+          organization_id: Schemas.OrganizationId;
+          received_at: string;
+          source: Schemas.SupplierInvoiceSource;
+          source_file_key?: (string | null) | undefined;
+          source_file_mime_type?: (string | null) | undefined;
+          status: Schemas.SupplierInvoiceStatus;
+          supplier_id?: (null | Schemas.SupplierId) | undefined;
+          supplier_name: string;
+          supplier_registration_number?: (string | null) | undefined;
+          supplier_vat_number?: (string | null) | undefined;
+          updated_at: string;
+          vat_breakdown: Array<Schemas.SupplierInvoiceVatBreakdownLineResponse>;
+        }>;
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+    };
+  };
+  export type post_ImportSupplierInvoice = {
+    method: "POST";
+    path: "/api/v1/organizations/{organization_id}/supplier-invoices/import";
+    requestFormat: "binary";
+    parameters: {
+      path: { organization_id: string };
+
+      body: Array<number>;
+    };
+    responses: {
+      200: {
+        data:
+          | {
+              invoice: Schemas.SupplierInvoiceResponse;
+              outcome: "created";
+              totals_mismatch?: (null | Schemas.TotalsMismatchResponse) | undefined;
+            }
+          | { outcome: "parse_failed"; reason: string };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      201: {
+        data:
+          | {
+              invoice: Schemas.SupplierInvoiceResponse;
+              outcome: "created";
+              totals_mismatch?: (null | Schemas.TotalsMismatchResponse) | undefined;
+            }
+          | { outcome: "parse_failed"; reason: string };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      400: unknown;
+      401: unknown;
+      403: unknown;
+      409: unknown;
+      413: unknown;
+    };
+  };
   export type get_ListTaskLabels = {
     method: "GET";
     path: "/api/v1/organizations/{organization_id}/task-labels";
@@ -5837,6 +6002,27 @@ export namespace Endpoints {
       409: unknown;
     };
   };
+  export type get_GetProjectSupplierCosts = {
+    method: "GET";
+    path: "/api/v1/projects/{project_id}/supplier-costs";
+    requestFormat: "json";
+    parameters: {
+      path: { project_id: string };
+    };
+    responses: {
+      200: {
+        data: {
+          allocated_cents: number;
+          lines: Array<Schemas.ProjectSupplierCostLineResponse>;
+          project_id: Schemas.ProjectId;
+        };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+      404: unknown;
+    };
+  };
   export type get_GetQuote = {
     method: "GET";
     path: "/api/v1/quotes/{quote_id}";
@@ -6058,6 +6244,203 @@ export namespace Endpoints {
       409: unknown;
     };
   };
+  export type put_ReplaceSupplierInvoiceLineAllocations = {
+    method: "PUT";
+    path: "/api/v1/supplier-invoice-lines/{supplier_invoice_line_id}/allocations";
+    requestFormat: "json";
+    parameters: {
+      path: { supplier_invoice_line_id: string };
+
+      body: Schemas.ReplaceLineAllocationsRequest;
+    };
+    responses: {
+      200: {
+        data: Array<{
+          amount_cents: number;
+          created_at: string;
+          id: Schemas.SupplierInvoiceLineAllocationId;
+          organization_id: Schemas.OrganizationId;
+          project_id: Schemas.ProjectId;
+          supplier_invoice_line_id: Schemas.SupplierInvoiceLineId;
+          updated_at: string;
+        }>;
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      400: unknown;
+      401: unknown;
+      403: unknown;
+      404: unknown;
+      409: unknown;
+    };
+  };
+  export type get_GetSupplierInvoice = {
+    method: "GET";
+    path: "/api/v1/supplier-invoices/{supplier_invoice_id}";
+    requestFormat: "json";
+    parameters: {
+      path: { supplier_invoice_id: string };
+    };
+    responses: {
+      200: {
+        data: {
+          created_at: string;
+          currency: string;
+          due_on?: (string | null) | undefined;
+          gross_cents: number;
+          id: Schemas.SupplierInvoiceId;
+          issued_on: string;
+          lines: Array<Schemas.SupplierInvoiceLineResponse>;
+          net_cents: number;
+          notes?: (string | null) | undefined;
+          number: string;
+          organization_id: Schemas.OrganizationId;
+          received_at: string;
+          source: Schemas.SupplierInvoiceSource;
+          source_file_key?: (string | null) | undefined;
+          source_file_mime_type?: (string | null) | undefined;
+          status: Schemas.SupplierInvoiceStatus;
+          supplier_id?: (null | Schemas.SupplierId) | undefined;
+          supplier_name: string;
+          supplier_registration_number?: (string | null) | undefined;
+          supplier_vat_number?: (string | null) | undefined;
+          updated_at: string;
+          vat_breakdown: Array<Schemas.SupplierInvoiceVatBreakdownLineResponse>;
+        };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+      404: unknown;
+    };
+  };
+  export type patch_UpdateSupplierInvoiceNotes = {
+    method: "PATCH";
+    path: "/api/v1/supplier-invoices/{supplier_invoice_id}";
+    requestFormat: "json";
+    parameters: {
+      path: { supplier_invoice_id: string };
+
+      body: Schemas.UpdateSupplierInvoiceRequest;
+    };
+    responses: {
+      200: {
+        data: {
+          created_at: string;
+          currency: string;
+          due_on?: (string | null) | undefined;
+          gross_cents: number;
+          id: Schemas.SupplierInvoiceId;
+          issued_on: string;
+          lines: Array<Schemas.SupplierInvoiceLineResponse>;
+          net_cents: number;
+          notes?: (string | null) | undefined;
+          number: string;
+          organization_id: Schemas.OrganizationId;
+          received_at: string;
+          source: Schemas.SupplierInvoiceSource;
+          source_file_key?: (string | null) | undefined;
+          source_file_mime_type?: (string | null) | undefined;
+          status: Schemas.SupplierInvoiceStatus;
+          supplier_id?: (null | Schemas.SupplierId) | undefined;
+          supplier_name: string;
+          supplier_registration_number?: (string | null) | undefined;
+          supplier_vat_number?: (string | null) | undefined;
+          updated_at: string;
+          vat_breakdown: Array<Schemas.SupplierInvoiceVatBreakdownLineResponse>;
+        };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+      404: unknown;
+    };
+  };
+  export type post_ConfirmSupplierInvoice = {
+    method: "POST";
+    path: "/api/v1/supplier-invoices/{supplier_invoice_id}/confirm";
+    requestFormat: "json";
+    parameters: {
+      path: { supplier_invoice_id: string };
+
+      body: Schemas.ConfirmSupplierInvoiceRequest;
+    };
+    responses: {
+      200: {
+        data: {
+          created_at: string;
+          currency: string;
+          due_on?: (string | null) | undefined;
+          gross_cents: number;
+          id: Schemas.SupplierInvoiceId;
+          issued_on: string;
+          lines: Array<Schemas.SupplierInvoiceLineResponse>;
+          net_cents: number;
+          notes?: (string | null) | undefined;
+          number: string;
+          organization_id: Schemas.OrganizationId;
+          received_at: string;
+          source: Schemas.SupplierInvoiceSource;
+          source_file_key?: (string | null) | undefined;
+          source_file_mime_type?: (string | null) | undefined;
+          status: Schemas.SupplierInvoiceStatus;
+          supplier_id?: (null | Schemas.SupplierId) | undefined;
+          supplier_name: string;
+          supplier_registration_number?: (string | null) | undefined;
+          supplier_vat_number?: (string | null) | undefined;
+          updated_at: string;
+          vat_breakdown: Array<Schemas.SupplierInvoiceVatBreakdownLineResponse>;
+        };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+      404: unknown;
+      409: unknown;
+    };
+  };
+  export type post_RejectSupplierInvoice = {
+    method: "POST";
+    path: "/api/v1/supplier-invoices/{supplier_invoice_id}/reject";
+    requestFormat: "json";
+    parameters: {
+      path: { supplier_invoice_id: string };
+
+      body: Schemas.RejectSupplierInvoiceRequest;
+    };
+    responses: {
+      200: {
+        data: {
+          created_at: string;
+          currency: string;
+          due_on?: (string | null) | undefined;
+          gross_cents: number;
+          id: Schemas.SupplierInvoiceId;
+          issued_on: string;
+          lines: Array<Schemas.SupplierInvoiceLineResponse>;
+          net_cents: number;
+          notes?: (string | null) | undefined;
+          number: string;
+          organization_id: Schemas.OrganizationId;
+          received_at: string;
+          source: Schemas.SupplierInvoiceSource;
+          source_file_key?: (string | null) | undefined;
+          source_file_mime_type?: (string | null) | undefined;
+          status: Schemas.SupplierInvoiceStatus;
+          supplier_id?: (null | Schemas.SupplierId) | undefined;
+          supplier_name: string;
+          supplier_registration_number?: (string | null) | undefined;
+          supplier_vat_number?: (string | null) | undefined;
+          updated_at: string;
+          vat_breakdown: Array<Schemas.SupplierInvoiceVatBreakdownLineResponse>;
+        };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+      404: unknown;
+      409: unknown;
+    };
+  };
   export type delete_DeleteTaskRecurrence = {
     method: "DELETE";
     path: "/api/v1/task-recurrences/{task_recurrence_id}";
@@ -6178,6 +6561,7 @@ export type EndpointByMethod = {
     "/api/v1/quotes/{quote_id}": Endpoints.patch_UpdateQuote;
     "/api/v1/quotes/{quote_id}/status": Endpoints.patch_UpdateQuoteStatus;
     "/api/v1/service-rates/{service_rate_id}": Endpoints.patch_UpdateServiceRate;
+    "/api/v1/supplier-invoices/{supplier_invoice_id}": Endpoints.patch_UpdateSupplierInvoiceNotes;
     "/api/v1/task-recurrences/{task_recurrence_id}": Endpoints.patch_PatchTaskRecurrence;
   };
   delete: {
@@ -6271,6 +6655,7 @@ export type EndpointByMethod = {
     "/api/v1/organizations/{organization_id}/reporting/profitability": Endpoints.get_GetProfitability;
     "/api/v1/organizations/{organization_id}/reporting/worked-hours": Endpoints.get_GetWorkedHours;
     "/api/v1/organizations/{organization_id}/service-rates": Endpoints.get_ListServiceRates;
+    "/api/v1/organizations/{organization_id}/supplier-invoices": Endpoints.get_ListSupplierInvoices;
     "/api/v1/organizations/{organization_id}/task-labels": Endpoints.get_ListTaskLabels;
     "/api/v1/organizations/{organization_id}/task-recurrences": Endpoints.get_ListTaskRecurrences;
     "/api/v1/organizations/{organization_id}/tasks": Endpoints.get_ListTasks;
@@ -6279,10 +6664,12 @@ export type EndpointByMethod = {
     "/api/v1/products/{product_id}": Endpoints.get_GetProduct;
     "/api/v1/projects/{project_id}/billing-summary": Endpoints.get_GetProjectBillingSummary;
     "/api/v1/projects/{project_id}/invoices": Endpoints.get_ListProjectInvoices;
+    "/api/v1/projects/{project_id}/supplier-costs": Endpoints.get_GetProjectSupplierCosts;
     "/api/v1/quotes/{quote_id}": Endpoints.get_GetQuote;
     "/api/v1/quotes/{quote_id}/pdf": Endpoints.get_ExportQuotePdf;
     "/api/v1/quotes/{quote_id}/plan-proposal": Endpoints.get_GetQuotePlanProposal;
     "/api/v1/service-rates/{service_rate_id}": Endpoints.get_GetServiceRate;
+    "/api/v1/supplier-invoices/{supplier_invoice_id}": Endpoints.get_GetSupplierInvoice;
     "/api/v1/users/@me/organizations": Endpoints.get_ListMyOrganizations;
   };
   post: {
@@ -6329,6 +6716,7 @@ export type EndpointByMethod = {
     "/api/v1/organizations/{organization_id}/projects/{project_id}/restore": Endpoints.post_RestoreProject;
     "/api/v1/organizations/{organization_id}/quotes": Endpoints.post_CreateQuote;
     "/api/v1/organizations/{organization_id}/service-rates": Endpoints.post_CreateServiceRate;
+    "/api/v1/organizations/{organization_id}/supplier-invoices/import": Endpoints.post_ImportSupplierInvoice;
     "/api/v1/organizations/{organization_id}/task-labels": Endpoints.post_CreateTaskLabel;
     "/api/v1/organizations/{organization_id}/task-recurrences": Endpoints.post_CreateTaskRecurrence;
     "/api/v1/organizations/{organization_id}/tasks": Endpoints.post_CreateTask;
@@ -6337,6 +6725,8 @@ export type EndpointByMethod = {
     "/api/v1/projects/{project_id}/invoices/deposit": Endpoints.post_IssueProjectDeposit;
     "/api/v1/projects/{project_id}/invoices/final": Endpoints.post_IssueProjectFinalInvoice;
     "/api/v1/quotes/{quote_id}/plan": Endpoints.post_CreateQuotePlan;
+    "/api/v1/supplier-invoices/{supplier_invoice_id}/confirm": Endpoints.post_ConfirmSupplierInvoice;
+    "/api/v1/supplier-invoices/{supplier_invoice_id}/reject": Endpoints.post_RejectSupplierInvoice;
   };
   put: {
     "/api/v1/chat/channels/{channel_id}/permissions/everyone": Endpoints.put_UpsertEveryoneOverwrite;
@@ -6352,6 +6742,7 @@ export type EndpointByMethod = {
     "/api/v1/organizations/{organization_id}/automation/settings": Endpoints.put_UpdateAutomationSettings;
     "/api/v1/organizations/{organization_id}/automation/workflows/{workflow_id}/versions": Endpoints.put_SaveWorkflowVersion;
     "/api/v1/organizations/{organization_id}/project-templates/{project_template_id}/tasks": Endpoints.put_ReplaceProjectTemplateTasks;
+    "/api/v1/supplier-invoice-lines/{supplier_invoice_line_id}/allocations": Endpoints.put_ReplaceSupplierInvoiceLineAllocations;
   };
 };
 
