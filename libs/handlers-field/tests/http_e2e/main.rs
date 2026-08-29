@@ -15,6 +15,7 @@
 mod assignment_reports;
 mod harness;
 mod issuer;
+mod no_money_leak;
 
 use serde_json::json;
 
@@ -343,4 +344,110 @@ async fn a_forgotten_stretch_is_recovered_at_the_declared_time_not_at_now() {
     );
 
     app.cleanup().await;
+}
+
+/// The cross-tenant case `POST /field/time-entries/{id}/stop` exists to
+/// guard against: the route carries no organization in the path, so a member
+/// of a *different* organization must not be able to close somebody else's
+/// entry — the handler has to derive the organization from the row itself,
+/// never trust one supplied by the caller. Mirrors
+/// `a_member_of_a_different_organization_cannot_amend_the_report`.
+#[tokio::test]
+#[ignore = "requires live postgres and redis"]
+async fn a_member_of_a_different_organization_cannot_stop_the_entry() {
+    let app = harness::start().await;
+    let client = reqwest::Client::new();
+
+    let started: serde_json::Value = client
+        .post(app.url("/time-entries"))
+        .bearer_auth(&app.token)
+        .json(&json!({ "task_id": app.task_id }))
+        .send()
+        .await
+        .expect("the api answers the start call")
+        .json()
+        .await
+        .expect("the start answer is json");
+    let entry_id = started["data"]["id"]
+        .as_str()
+        .expect("an entry id")
+        .to_owned();
+
+    let intruder = assignment_reports::seed_intruder_in_another_organization(&app.pool).await;
+
+    let attempt = client
+        .post(app.entry_url(&entry_id, "/stop"))
+        .bearer_auth(&intruder.token)
+        .send()
+        .await
+        .expect("the api answers the stop call");
+    assert_eq!(
+        attempt.status(),
+        403,
+        "a member of another organization must not reach this entry"
+    );
+
+    // Untouched: the intruder's rejected attempt must not have closed it.
+    let current: serde_json::Value = client
+        .get(app.url("/current"))
+        .bearer_auth(&app.token)
+        .send()
+        .await
+        .expect("the api answers /current")
+        .json()
+        .await
+        .expect("/current is json");
+    assert_eq!(
+        current["data"]["running"]["id"],
+        json!(entry_id),
+        "the entry must still be running: {current}"
+    );
+
+    app.cleanup().await;
+    intruder.cleanup(&app.pool).await;
+}
+
+/// Same guard as above, for `POST /field/time-entries/{id}/recover`.
+#[tokio::test]
+#[ignore = "requires live postgres and redis"]
+async fn a_member_of_a_different_organization_cannot_recover_the_entry() {
+    let app = harness::start().await;
+    let entry_id = harness::seed_forgotten_entry(&app.pool, &app).await;
+    let client = reqwest::Client::new();
+
+    let intruder = assignment_reports::seed_intruder_in_another_organization(&app.pool).await;
+
+    let declared = (harness::now_storable() - chrono::Duration::hours(23)).to_rfc3339();
+    let attempt = client
+        .post(app.entry_url(&entry_id.to_string(), "/recover"))
+        .bearer_auth(&intruder.token)
+        .json(&json!({ "ended_at": declared }))
+        .send()
+        .await
+        .expect("the api answers the recover call");
+    assert_eq!(
+        attempt.status(),
+        403,
+        "a member of another organization must not reach this entry"
+    );
+
+    // Untouched: still the stale, unclosed entry `recover` exists to close —
+    // proven by `stop` still refusing it for the reason a forgotten
+    // clock-off always does, which only holds if the intruder never
+    // recovered it.
+    let stopped = client
+        .post(app.entry_url(&entry_id.to_string(), "/stop"))
+        .bearer_auth(&app.token)
+        .send()
+        .await
+        .expect("the api answers the stop call");
+    assert_eq!(
+        stopped.status(),
+        409,
+        "still stale and unclosed, untouched by the intruder's rejected attempt: {}",
+        stopped.status()
+    );
+
+    app.cleanup().await;
+    intruder.cleanup(&app.pool).await;
 }

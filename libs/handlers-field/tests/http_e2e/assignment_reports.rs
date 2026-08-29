@@ -235,14 +235,71 @@ async fn a_member_of_a_different_organization_cannot_amend_the_report() {
     intruder.cleanup(&app.pool).await;
 }
 
-struct Intruder {
-    token: String,
+/// Same guard as the `PATCH` case above, for `DELETE
+/// /field/assignment-reports/{id}`: a member of a different organization
+/// must be refused with a 403, not a 404 (which would leak that the id
+/// exists) and not a 200 (which would let them destroy someone else's row).
+#[tokio::test]
+#[ignore = "requires live postgres and redis"]
+async fn a_member_of_a_different_organization_cannot_withdraw_the_report() {
+    let app = harness::start().await;
+    let client = reqwest::Client::new();
+
+    let filed: serde_json::Value = client
+        .post(app.report_assignment_url(app.task_assignment_id))
+        .bearer_auth(&app.token)
+        .json(&json!({ "reported_minutes": 45, "comment": null }))
+        .send()
+        .await
+        .expect("the api answers the report call")
+        .json()
+        .await
+        .expect("the report answer is json");
+    let report_id = filed["data"]["id"]
+        .as_str()
+        .expect("a report id")
+        .to_owned();
+
+    let intruder = seed_intruder_in_another_organization(&app.pool).await;
+
+    let attempt = client
+        .delete(app.assignment_report_url(&report_id))
+        .bearer_auth(&intruder.token)
+        .send()
+        .await
+        .expect("the api answers the withdraw call");
+    assert_eq!(
+        attempt.status(),
+        403,
+        "a member of another organization must not reach this report"
+    );
+
+    // Untouched: still there, and still withdrawable by its rightful owner.
+    let withdrawn = client
+        .delete(app.assignment_report_url(&report_id))
+        .bearer_auth(&app.token)
+        .send()
+        .await
+        .expect("the api answers the withdraw call");
+    assert_eq!(
+        withdrawn.status(),
+        204,
+        "the intruder's rejected attempt must not have withdrawn it: {}",
+        withdrawn.status()
+    );
+
+    app.cleanup().await;
+    intruder.cleanup(&app.pool).await;
+}
+
+pub(crate) struct Intruder {
+    pub(crate) token: String,
     organization_id: Uuid,
     user_id: Uuid,
 }
 
 impl Intruder {
-    async fn cleanup(&self, pool: &PgPool) {
+    pub(crate) async fn cleanup(&self, pool: &PgPool) {
         for statement in [
             "DELETE FROM organization_members WHERE organization_id = $1",
             "DELETE FROM organizations WHERE id = $1",
@@ -266,7 +323,7 @@ impl Intruder {
 /// enough for the auth middleware and `resolve_field_actor` to resolve a
 /// real identity that belongs to *no* organization the fixture's own report
 /// lives in.
-async fn seed_intruder_in_another_organization(pool: &PgPool) -> Intruder {
+pub(crate) async fn seed_intruder_in_another_organization(pool: &PgPool) -> Intruder {
     let user_id = Uuid::now_v7();
     let sub = format!("sub-intruder-{user_id}");
     sqlx::query(
