@@ -7,6 +7,7 @@ import {
 	ActiveOrganizationProvider,
 	OrganizationListProvider,
 } from '#/hooks/use-active-organization'
+import type { Role } from '#/hooks/use-roles'
 import { TeamListFeature } from '#/pages/hr/feature/team-list-feature'
 import { renderWithRouter } from '#/test/render-with-router'
 
@@ -14,6 +15,23 @@ const MEMBERS_PATH = '/api/v1/organizations/{organization_id}/members'
 const EMPLOYEE_PROFILES_PATH =
 	'/api/v1/organizations/{organization_id}/employee-profiles'
 const INVITATIONS_PATH = '/api/v1/organizations/{organization_id}/invitations'
+const MY_PERMISSIONS_PATH =
+	'/api/v1/organizations/{organization_id}/members/me/permissions'
+const ROLES_PATH = '/api/v1/organizations/{organization_id}/roles'
+const MEMBER_ROLES_PATH = '/api/v1/members/{member_id}/roles'
+
+function role(overrides: Partial<Role> = {}): Role {
+	return {
+		id: 'role-1',
+		organization_id: 'org-1',
+		name: 'Administrateur',
+		permissions: [],
+		is_seeded: false,
+		created_at: '2026-01-01T00:00:00Z',
+		updated_at: '2026-01-01T00:00:00Z',
+		...overrides,
+	}
+}
 
 const ORGANIZATION = {
 	id: 'org-1',
@@ -38,11 +56,25 @@ interface FakeApiHandlers {
 	deleteInvitation?: (params: unknown) => unknown
 	/** Mirrors a real 403 from `member.manage` gating on employee-profiles. */
 	employeeProfilesForbidden?: boolean
+	/** Grants every bit by default — none of these tests exercise permission
+	 * gating itself (covered by `team-list-ui.test.tsx` and
+	 * `require-permission.test.tsx`). */
+	permissions?: string[]
+	roles?: Role[]
+	/** member id -> role ids held. */
+	memberRoleIds?: Record<string, string[]>
+	assignRole?: (params: {
+		path: { member_id: string }
+		body: { role_id: string }
+	}) => unknown
 }
 
 function installFakeTanstackApi(handlers: FakeApiHandlers = {}) {
 	const calls: { method: string; path: string; params: unknown }[] = []
 	const invitations = handlers.invitations ?? []
+	const permissions = handlers.permissions ?? ['MANAGE_MEMBERS', 'MANAGE_ROLES']
+	const roles = handlers.roles ?? []
+	const memberRoleIds = handlers.memberRoleIds ?? {}
 
 	function queryKeyFor(path: string, params: unknown) {
 		const p = (params ?? {}) as { path?: unknown; query?: unknown }
@@ -77,6 +109,21 @@ function installFakeTanstackApi(handlers: FakeApiHandlers = {}) {
 						if (path === INVITATIONS_PATH) {
 							return { data: invitations, pagination: null }
 						}
+						if (path === MY_PERMISSIONS_PATH) {
+							return { data: { permissions }, pagination: null }
+						}
+						if (path === ROLES_PATH) {
+							return { data: roles, pagination: null }
+						}
+						if (path === MEMBER_ROLES_PATH) {
+							const memberId = (
+								params as { path?: { member_id?: string } } | undefined
+							)?.path?.member_id
+							return {
+								data: { role_ids: memberRoleIds[memberId ?? ''] ?? [] },
+								pagination: null,
+							}
+						}
 						throw new Error(`unmocked GET ${path}`)
 					},
 				},
@@ -104,6 +151,17 @@ function installFakeTanstackApi(handlers: FakeApiHandlers = {}) {
 								throw new Error('deleteInvitation not mocked')
 							}
 							return handlers.deleteInvitation(params)
+						}
+						if (method === 'post' && path === MEMBER_ROLES_PATH) {
+							if (!handlers.assignRole) {
+								throw new Error('assignRole not mocked')
+							}
+							return handlers.assignRole(
+								params as {
+									path: { member_id: string }
+									body: { role_id: string }
+								},
+							)
 						}
 						throw new Error(`unmocked mutation ${method} ${path}`)
 					},
@@ -250,6 +308,54 @@ describe('TeamListFeature — employee profiles forbidden (#371)', () => {
 
 		expect(await screen.findByText('Non consultable')).toBeDefined()
 		expect(screen.queryByText('Sans profil RH')).toBeNull()
+	})
+})
+
+describe('TeamListFeature — role assignment (#308)', () => {
+	afterEach(() => {
+		vi.restoreAllMocks()
+	})
+
+	it('shows the held role and assigns a new one through the whole page', async () => {
+		const user = userEvent.setup()
+		const memberRoleIds: Record<string, string[]> = {
+			'member-1': ['role-admin'],
+		}
+		const { calls } = await renderFeature({
+			roles: [
+				role({ id: 'role-admin', name: 'Administrateur' }),
+				role({ id: 'role-compta', name: 'Comptabilité' }),
+			],
+			memberRoleIds,
+			assignRole: (params) => {
+				memberRoleIds[params.path.member_id] = [
+					...(memberRoleIds[params.path.member_id] ?? []),
+					params.body.role_id,
+				]
+				return { data: undefined }
+			},
+		})
+
+		expect(await screen.findByText('Administrateur')).toBeDefined()
+
+		await user.click(
+			await screen.findByRole('button', { name: 'Assigner un rôle' }),
+		)
+		await user.click(
+			await screen.findByRole('button', { name: 'Comptabilité' }),
+		)
+
+		await waitFor(() => {
+			const assignCall = calls.find(
+				(c) => c.method === 'post' && c.path === MEMBER_ROLES_PATH,
+			)
+			expect(assignCall?.params).toMatchObject({
+				path: { member_id: 'member-1' },
+				body: { role_id: 'role-compta' },
+			})
+		})
+
+		expect(await screen.findByText('Comptabilité')).toBeDefined()
 	})
 })
 
