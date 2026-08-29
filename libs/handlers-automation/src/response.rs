@@ -293,6 +293,20 @@ impl From<Workflow> for WorkflowResponse {
     }
 }
 
+/// The event(s) a workflow currently triggers from (#225) — `event_names`
+/// empty means no subscription, not an error: a freshly created workflow, or
+/// one whose trigger was just cleared, both read back this way.
+#[derive(Debug, Clone, PartialEq, Serialize, ToSchema)]
+pub struct WorkflowTriggerResponse {
+    pub event_names: Vec<String>,
+}
+
+impl From<Vec<String>> for WorkflowTriggerResponse {
+    fn from(event_names: Vec<String>) -> Self {
+        Self { event_names }
+    }
+}
+
 /// Mirrors `mestier_core::Branch`'s default `Serialize` shape (its own
 /// variant name, bare: `"Then"`, `"Else"`, `"Each"`, `"After"`).
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, ToSchema)]

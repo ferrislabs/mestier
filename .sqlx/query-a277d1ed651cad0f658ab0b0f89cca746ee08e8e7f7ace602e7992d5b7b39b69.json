@@ -1,0 +1,25 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO automation.subscription (id, org_id, kind, target_id, event_names, enabled)\n            VALUES ($1, $2, 'workflow', $3, $4, true)\n            RETURNING event_names\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "event_names",
+        "type_info": "TextArray"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Uuid",
+        "TextArray"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "a277d1ed651cad0f658ab0b0f89cca746ee08e8e7f7ace602e7992d5b7b39b69"
+}

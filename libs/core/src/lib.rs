@@ -25,6 +25,7 @@ pub use domain::automation::run::{
 };
 pub use domain::automation::secret::SealedSecret;
 pub use domain::automation::settings::{AutomationSettings, SettingsBounds};
+pub use domain::automation::subscription::SetWorkflowTriggerCommand;
 pub use domain::automation::workflow::{
     Branch, CreateWorkflowCommand, Edge, Graph, GraphError, PlacedConnector,
     SaveWorkflowVersionCommand, UpdateWorkflowCommand, Workflow, WorkflowReference,
@@ -74,7 +75,8 @@ pub use domain::{
     assignment_report::ports::MockAssignmentReportRepository,
     automation::ports::{
         MockAutomationSettingsRepository, MockCredentialRepository, MockEventDispatchRepository,
-        MockEventLogRepository, MockRunRepository, MockWorkflowRepository,
+        MockEventLogRepository, MockRunRepository, MockSubscriptionRepository,
+        MockWorkflowRepository,
     },
     customer::ports::MockCustomerRepository,
     customer_contact::ports::MockCustomerContactRepository,

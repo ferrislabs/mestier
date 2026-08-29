@@ -54,6 +54,7 @@ pub mod domain {
     pub struct DayLog;
     pub struct Workflow;
     pub struct Run;
+    pub struct Subscription;
 }
 
 /// Backend markers — one zero-sized type per supported persistence layer.
