@@ -46,6 +46,8 @@ pub struct UpdateMemberCommand {
 
 #[derive(Debug, Clone)]
 pub struct AssignRoleCommand {
+    /// Authenticated actor performing the assignment.
+    pub actor: Subject,
     pub member_id: MemberId,
     pub role_id: RoleId,
 }

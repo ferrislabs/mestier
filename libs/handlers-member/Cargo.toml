@@ -18,4 +18,16 @@ tracing = { workspace = true }
 utoipa = { workspace = true }
 
 [dev-dependencies]
+args = { workspace = true }
+clap = { workspace = true }
+jsonwebtoken = { workspace = true }
+reqwest = { workspace = true }
 serde_json = { workspace = true }
+sqlx = { workspace = true }
+tokio = { workspace = true }
+url = { workspace = true }
+uuid = { workspace = true }
+
+[[test]]
+name = "http_e2e"
+path = "tests/http_e2e/main.rs"

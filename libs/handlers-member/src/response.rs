@@ -1,5 +1,7 @@
 use chrono::{DateTime, Utc};
-use mestier_core::{Invitation, InvitationId, Member, MemberId, MemberWithAccount, OrganizationId};
+use mestier_core::{
+    Invitation, InvitationId, Member, MemberId, MemberWithAccount, OrganizationId, Role, RoleId,
+};
 use serde::Serialize;
 use utoipa::ToSchema;
 
@@ -109,6 +111,50 @@ pub struct CreatedInvitationResponse {
 #[derive(Debug, Clone, PartialEq, Serialize, ToSchema)]
 pub struct MyPermissionsResponse {
     pub permissions: Vec<String>,
+}
+
+/// An organization's role, projected for HTTP (#308). `permissions` is bit
+/// names, the same shape as [`MyPermissionsResponse`] — the frontend owns
+/// the French wording per name, this stays a plain, extensible list.
+#[derive(Debug, Clone, PartialEq, Serialize, ToSchema)]
+pub struct RoleResponse {
+    pub id: RoleId,
+    pub organization_id: OrganizationId,
+    pub name: String,
+    pub permissions: Vec<String>,
+    /// `owner`/`admin`/`member`, seeded at organization creation — its name
+    /// is fixed and it cannot be deleted, but its permissions are editable
+    /// like any other role. See `mestier_core::domain::role::Role::is_seeded`.
+    pub is_seeded: bool,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+}
+
+impl From<Role> for RoleResponse {
+    fn from(value: Role) -> Self {
+        Self {
+            id: value.id,
+            organization_id: value.organization_id,
+            name: value.name,
+            permissions: value
+                .permissions
+                .granted_names()
+                .into_iter()
+                .map(str::to_owned)
+                .collect(),
+            is_seeded: value.is_seeded,
+            created_at: value.created_at,
+            updated_at: value.updated_at,
+        }
+    }
+}
+
+/// The role ids a member holds (#308) — ids only, not the roles themselves:
+/// the caller already has the organization's role list (from
+/// `GET /organizations/{id}/roles`) to resolve a name against.
+#[derive(Debug, Clone, PartialEq, Serialize, ToSchema)]
+pub struct MemberRoleIdsResponse {
+    pub role_ids: Vec<RoleId>,
 }
 
 #[cfg(test)]

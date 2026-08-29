@@ -1,5 +1,5 @@
 use axum_extra::routing::TypedPath;
-use mestier_core::{InvitationId, MemberId, OrganizationId};
+use mestier_core::{InvitationId, MemberId, OrganizationId, RoleId};
 use serde::Deserialize;
 
 #[derive(TypedPath, Deserialize)]
@@ -11,6 +11,27 @@ pub struct MembersPath {
 #[derive(TypedPath, Deserialize)]
 #[typed_path("/api/v1/members/{member_id}")]
 pub struct MemberPath {
+    pub member_id: MemberId,
+}
+
+#[derive(TypedPath, Deserialize)]
+#[typed_path("/api/v1/organizations/{organization_id}/roles")]
+pub struct RolesPath {
+    pub organization_id: OrganizationId,
+}
+
+#[derive(TypedPath, Deserialize)]
+#[typed_path("/api/v1/roles/{role_id}")]
+pub struct RolePath {
+    pub role_id: RoleId,
+}
+
+/// Which roles a member holds, and assigning one — #308. Nested under the
+/// member rather than the role: a role can be listed once and assigned to
+/// many members, but this is always read/written from one member's side.
+#[derive(TypedPath, Deserialize)]
+#[typed_path("/api/v1/members/{member_id}/roles")]
+pub struct MemberRolesPath {
     pub member_id: MemberId,
 }
 

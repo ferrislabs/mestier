@@ -6,12 +6,14 @@ import {
 	Plus,
 	Save,
 	Search,
+	ShieldPlus,
 	Trash2,
 	Undo2,
 	UserPlus,
 	Users,
 	X,
 } from 'lucide-react'
+import { useState } from 'react'
 import {
 	CreateButton,
 	formatMoney,
@@ -30,6 +32,7 @@ import {
 	AlertDialogTitle,
 	AlertDialogTrigger,
 } from '#/components/ui/alert-dialog'
+import { Badge } from '#/components/ui/badge'
 import { Button } from '#/components/ui/button'
 import {
 	Dialog,
@@ -49,6 +52,12 @@ import {
 import { Input } from '#/components/ui/input'
 import { Label } from '#/components/ui/label'
 import {
+	Popover,
+	PopoverContent,
+	PopoverTitle,
+	PopoverTrigger,
+} from '#/components/ui/popover'
+import {
 	MetricCard,
 	PageHeader,
 	PageShell,
@@ -57,6 +66,9 @@ import {
 	StatusBadge,
 } from '#/components/ui/surface'
 import { Switch } from '#/components/ui/switch'
+import { useActiveOrganization } from '#/hooks/use-active-organization'
+import { useAssignRole, useMemberRoleIds, useRoles } from '#/hooks/use-roles'
+import { mutationErrorMessage } from '#/lib/api-error'
 import { buildOrgPath } from '#/modules/org-path'
 import type { AccessState, MemberFormValues } from '#/pages/hr/types'
 import { formatDateFr, formatDurationMinutes } from '#/pages/hr/types'
@@ -444,6 +456,9 @@ function TeamTable({
 								Accès
 							</th>
 							<th className="px-5 py-3 text-left text-xs font-semibold uppercase text-muted-foreground">
+								Rôles
+							</th>
+							<th className="px-5 py-3 text-left text-xs font-semibold uppercase text-muted-foreground">
 								Taux
 							</th>
 							<th className="px-5 py-3 text-left text-xs font-semibold uppercase text-muted-foreground">
@@ -457,7 +472,7 @@ function TeamTable({
 					<tbody>
 						{data.length === 0 ? (
 							<tr>
-								<td colSpan={5} className="px-5 py-12 text-center">
+								<td colSpan={6} className="px-5 py-12 text-center">
 									<div className="mx-auto flex max-w-sm flex-col items-center gap-2">
 										<p className="font-medium">Aucune personne trouvée</p>
 										<p className="text-sm text-muted-foreground">
@@ -510,6 +525,9 @@ function TeamTable({
 											<StatusBadge tone={ACCESS_TONE[member.access]}>
 												{ACCESS_LABEL[member.access]}
 											</StatusBadge>
+										</td>
+										<td className="px-5 py-3 align-middle">
+											<MemberRoleCell memberId={member.id} />
 										</td>
 										<td className="px-5 py-3 align-middle">
 											{isEditing ? (
@@ -714,6 +732,112 @@ function RowActions({
 				</AlertDialogFooter>
 			</AlertDialogContent>
 		</AlertDialog>
+	)
+}
+
+/**
+ * The role(s) a member holds, plus — behind `MANAGE_ROLES` — a small popover
+ * to assign one more (#308).
+ *
+ * Assignment only: there is no "remove a role from a member" endpoint on the
+ * backend yet, so this never offers to unassign one. `useRoles` and
+ * `useMemberRoleIds` are read directly here rather than threaded down as
+ * props, the same way `RequirePermission` already resolves its own
+ * permission read inside this file — a per-row, per-member query has no
+ * natural place in a plain `TeamMemberRow` without turning every row's shape
+ * into an N+1 fetch plan owned by the parent.
+ */
+function MemberRoleCell({ memberId }: { memberId: string }) {
+	const { activeOrganizationId } = useActiveOrganization()
+	const rolesQuery = useRoles(activeOrganizationId)
+	const memberRolesQuery = useMemberRoleIds(memberId)
+	const assignRole = useAssignRole()
+	const [open, setOpen] = useState(false)
+
+	// Neither read has resolved yet (or one of them 403'd) — say nothing
+	// rather than flash "Aucun rôle" and then have it change once the read
+	// comes back.
+	const isKnown = rolesQuery.isSuccess && memberRolesQuery.isSuccess
+
+	const roles = rolesQuery.data?.data ?? []
+	const heldIds = new Set(memberRolesQuery.data?.data.role_ids ?? [])
+	const heldRoles = roles.filter((role) => heldIds.has(role.id))
+	const assignableRoles = roles.filter((role) => !heldIds.has(role.id))
+
+	return (
+		<div className="flex flex-wrap items-center gap-1.5">
+			{isKnown ? (
+				heldRoles.length === 0 ? (
+					<span className="text-sm italic text-muted-foreground">
+						Aucun rôle
+					</span>
+				) : (
+					heldRoles.map((role) => (
+						<Badge key={role.id} variant="outline">
+							{role.name}
+						</Badge>
+					))
+				)
+			) : (
+				<Loader2 className="size-3.5 animate-spin text-muted-foreground" />
+			)}
+			<RequirePermission permission="MANAGE_ROLES">
+				{isKnown && assignableRoles.length === 0 ? (
+					<Button
+						size="icon-sm"
+						variant="ghost"
+						disabled
+						aria-label="Ce membre a déjà tous les rôles"
+					>
+						<ShieldPlus />
+					</Button>
+				) : (
+					<Popover open={open} onOpenChange={setOpen}>
+						<PopoverTrigger asChild>
+							<Button
+								size="icon-sm"
+								variant="ghost"
+								disabled={!isKnown}
+								aria-label="Assigner un rôle"
+							>
+								<ShieldPlus />
+							</Button>
+						</PopoverTrigger>
+						<PopoverContent align="start" className="w-56 p-2">
+							<PopoverTitle className="px-2 pb-1">
+								Assigner un rôle
+							</PopoverTitle>
+							<div className="flex flex-col">
+								{assignableRoles.map((role) => (
+									<Button
+										key={role.id}
+										variant="ghost"
+										className="justify-start"
+										disabled={assignRole.isPending}
+										onClick={() =>
+											assignRole.mutate(
+												{
+													path: { member_id: memberId },
+													body: { role_id: role.id },
+												},
+												{ onSuccess: () => setOpen(false) },
+											)
+										}
+									>
+										{role.name}
+									</Button>
+								))}
+							</div>
+							{assignRole.isError ? (
+								<p className="px-2 pt-1 text-xs text-destructive">
+									{mutationErrorMessage(assignRole.error)}
+								</p>
+							) : null}
+						</PopoverContent>
+					</Popover>
+				)}
+			</RequirePermission>
+		</div>
 	)
 }
 

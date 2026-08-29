@@ -321,13 +321,59 @@ where
 
     #[tracing::instrument(skip(self), fields(member_id = %command.member_id.0, role_id = %command.role_id.0), err)]
     pub async fn assign_role(&mut self, command: AssignRoleCommand) -> Result<(), CoreError> {
+        let member = self
+            .member_repository
+            .find_by_id(command.member_id)
+            .await?
+            .ok_or(CoreError::NotFound)?;
+
+        let actor = policy::enrich_for_organization(
+            command.actor,
+            member.organization_id,
+            &mut self.member_repository,
+            &mut self.role_repository,
+        )
+        .await?;
+        policy::require(
+            &self.authz,
+            &actor,
+            "role.assign",
+            Resource::new("organization", member.organization_id.0.to_string()),
+        )
+        .await?;
+
         self.member_repository
             .assign_role(command.member_id, command.role_id)
             .await
     }
 
-    #[tracing::instrument(skip(self), fields(member_id = %member_id.0), err)]
-    pub async fn list_role_ids(&mut self, member_id: MemberId) -> Result<Vec<RoleId>, CoreError> {
+    #[tracing::instrument(skip(self, actor), fields(member_id = %member_id.0), err)]
+    pub async fn list_role_ids(
+        &mut self,
+        member_id: MemberId,
+        actor: Subject,
+    ) -> Result<Vec<RoleId>, CoreError> {
+        let member = self
+            .member_repository
+            .find_by_id(member_id)
+            .await?
+            .ok_or(CoreError::NotFound)?;
+
+        let actor = policy::enrich_for_organization(
+            actor,
+            member.organization_id,
+            &mut self.member_repository,
+            &mut self.role_repository,
+        )
+        .await?;
+        policy::require(
+            &self.authz,
+            &actor,
+            "role.manage",
+            Resource::new("organization", member.organization_id.0.to_string()),
+        )
+        .await?;
+
         self.member_repository.list_role_ids(member_id).await
     }
 
@@ -1568,26 +1614,45 @@ mod tests {
         assert!(matches!(err, CoreError::Forbidden { .. }));
     }
 
+    fn allow_once(authz: &mut MockAuthorizer) {
+        authz
+            .expect_evaluate()
+            .times(1)
+            .returning(|_| Box::pin(async { Ok(Decision::allow()) }));
+    }
+
     #[tokio::test]
     async fn assign_role_calls_repo() {
+        let organization_id = org_id();
         let mid = MemberId(Uuid::new_v4());
         let rid = RoleId(Uuid::new_v4());
 
         let mut member_repository = MockMemberRepository::new();
         member_repository
+            .expect_find_by_id()
+            .with(eq(mid))
+            .times(1)
+            .returning(move |_| {
+                let m = member(mid, organization_id);
+                Box::pin(async move { Ok(Some(m)) })
+            });
+        member_repository
             .expect_assign_role()
             .with(eq(mid), eq(rid))
             .times(1)
             .returning(|_, _| Box::pin(async { Ok(()) }));
+        let mut authz = MockAuthorizer::new();
+        allow_once(&mut authz);
 
         let mut service = MemberService::new(
             member_repository,
             MockRoleRepository::new(),
             MockUserRepository::new(),
-            MockAuthorizer::new(),
+            authz,
         );
         service
             .assign_role(AssignRoleCommand {
+                actor: Subject::system(),
                 member_id: mid,
                 role_id: rid,
             })
@@ -1597,23 +1662,34 @@ mod tests {
 
     #[tokio::test]
     async fn list_role_ids_delegates_to_repo() {
+        let organization_id = org_id();
         let mid = MemberId(Uuid::new_v4());
         let returned = RoleId(Uuid::new_v4());
 
         let mut member_repository = MockMemberRepository::new();
         member_repository
+            .expect_find_by_id()
+            .with(eq(mid))
+            .times(1)
+            .returning(move |_| {
+                let m = member(mid, organization_id);
+                Box::pin(async move { Ok(Some(m)) })
+            });
+        member_repository
             .expect_list_role_ids()
             .with(eq(mid))
             .times(1)
             .returning(move |_| Box::pin(async move { Ok(vec![returned]) }));
+        let mut authz = MockAuthorizer::new();
+        allow_once(&mut authz);
 
         let mut service = MemberService::new(
             member_repository,
             MockRoleRepository::new(),
             MockUserRepository::new(),
-            MockAuthorizer::new(),
+            authz,
         );
-        let ids = service.list_role_ids(mid).await.unwrap();
+        let ids = service.list_role_ids(mid, Subject::system()).await.unwrap();
 
         assert_eq!(ids, vec![returned]);
     }
