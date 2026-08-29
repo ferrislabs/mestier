@@ -376,6 +376,110 @@ async fn a_member_without_view_cost_reads_the_same_period_with_costs_redacted() 
     app.cleanup().await;
 }
 
+/// #309: holding exactly `VIEW_REPORTS | VIEW_COST` — no `MANAGE_ORG`, no
+/// `MANAGE_MEMBERS`, no `MANAGE_ROLES`, no chat bits, nothing else — reads
+/// real money for the same period the restricted caller reads redacted.
+/// The existing redaction test proves `Permissions::ALL` reads real money
+/// too, but that only shows every bit together works; this is the claim the
+/// issue actually makes, isolated in its own test.
+#[tokio::test]
+#[ignore = "requires live postgres and redis"]
+async fn a_caller_holding_exactly_view_reports_and_view_cost_sees_real_money() {
+    let app = harness::start().await;
+    let client = reqwest::Client::new();
+
+    let restricted: serde_json::Value = client
+        .get(format!("{}?{}", app.url("/profitability"), period()))
+        .bearer_auth(&app.restricted_token)
+        .send()
+        .await
+        .expect("the api answers the restricted member's profitability call")
+        .json()
+        .await
+        .expect("the answer is json");
+    assert_eq!(
+        restricted["data"]["costs_redacted"],
+        serde_json::json!(true),
+        "{restricted}"
+    );
+
+    let minimal: serde_json::Value = client
+        .get(format!("{}?{}", app.url("/profitability"), period()))
+        .bearer_auth(&app.minimal_token)
+        .send()
+        .await
+        .expect("the api answers the minimal-pair member's profitability call")
+        .json()
+        .await
+        .expect("the answer is json");
+    assert_eq!(
+        minimal["data"]["costs_redacted"],
+        serde_json::json!(false),
+        "holding exactly VIEW_REPORTS | VIEW_COST must not be redacted: {minimal}"
+    );
+    let minimal_project = project_named(&minimal, app.project_id)
+        .unwrap_or_else(|| panic!("the planned project is missing from {minimal}"));
+    assert_eq!(
+        minimal_project["labour_cost_cents"],
+        serde_json::json!(10_500),
+        "the minimal-pair caller reads the real figure, same as the owner: {minimal_project}"
+    );
+    assert_eq!(
+        minimal_project["equipment_cost_cents"],
+        serde_json::json!(0),
+        "{minimal_project}"
+    );
+    assert_eq!(
+        minimal_project["expenses_cents"],
+        serde_json::json!(4_500),
+        "{minimal_project}"
+    );
+    assert_eq!(
+        minimal_project["supplier_cost_cents"],
+        serde_json::json!(24_000),
+        "{minimal_project}"
+    );
+    assert_eq!(
+        minimal_project["quoted_cents"],
+        serde_json::json!(420_000),
+        "{minimal_project}"
+    );
+    assert_eq!(
+        minimal_project["margin_cents"],
+        serde_json::json!(420_000 - 10_500 - 4_500 - 24_000),
+        "{minimal_project}"
+    );
+    assert!(
+        !minimal["data"]["most_profitable"]
+            .as_array()
+            .expect("a ranking, not withheld for this caller")
+            .is_empty(),
+        "{minimal}"
+    );
+
+    let worked_hours: serde_json::Value = client
+        .get(format!("{}?{}", app.url("/worked-hours"), period()))
+        .bearer_auth(&app.minimal_token)
+        .send()
+        .await
+        .expect("the api answers the minimal-pair member's worked-hours call")
+        .json()
+        .await
+        .expect("the answer is json");
+    assert_eq!(
+        worked_hours["data"]["costs_redacted"],
+        serde_json::json!(false),
+        "{worked_hours}"
+    );
+    assert_eq!(
+        worked_hours["data"]["total_planned_minutes"],
+        serde_json::json!(420),
+        "{worked_hours}"
+    );
+
+    app.cleanup().await;
+}
+
 /// `VIEW_REPORTS` gates the endpoint outright — a member with no role at
 /// all (so no bit whatsoever) is refused before any redaction question
 /// even arises.
