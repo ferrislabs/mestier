@@ -239,6 +239,7 @@ mod tests {
             organization_id: org_id,
             name: "test".to_string(),
             permissions: perms,
+            is_seeded: false,
             created_at: Utc::now(),
             updated_at: Utc::now(),
         }

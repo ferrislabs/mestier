@@ -12,6 +12,7 @@ pub struct RoleRow {
     pub organization_id: Uuid,
     pub name: String,
     pub permissions: i64,
+    pub is_seeded: bool,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }
@@ -23,6 +24,7 @@ impl From<RoleRow> for Role {
             organization_id: OrganizationId(row.organization_id),
             name: row.name,
             permissions: Permissions(row.permissions),
+            is_seeded: row.is_seeded,
             created_at: row.created_at,
             updated_at: row.updated_at,
         }

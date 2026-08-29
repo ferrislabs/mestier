@@ -86,6 +86,24 @@ impl Permissions {
             .map(|(name, _)| *name)
             .collect()
     }
+
+    /// Inverse of [`Self::granted_names`]: reconstructs a `Permissions`
+    /// value from bit names. Rejects any name absent from [`Self::NAMED`]
+    /// rather than silently ignoring it — #308's role editor posts back
+    /// exactly what it read, so an unknown name here means a stale client
+    /// or a typo, not a bit to drop quietly.
+    pub fn from_names<S: AsRef<str>>(names: &[S]) -> Result<Permissions, String> {
+        let mut result = Permissions::NONE;
+        for name in names {
+            let name = name.as_ref();
+            let (_, bit) = Permissions::NAMED
+                .iter()
+                .find(|(known, _)| *known == name)
+                .ok_or_else(|| format!("unknown permission name: {name}"))?;
+            result |= *bit;
+        }
+        Ok(result)
+    }
 }
 
 impl BitOr for Permissions {
@@ -116,6 +134,15 @@ pub struct Role {
     pub organization_id: OrganizationId,
     pub name: String,
     pub permissions: Permissions,
+    /// Set once, at organization creation, for exactly the three roles
+    /// [`OWNER_ROLE_NAME`]/[`ADMIN_ROLE_NAME`]/[`MEMBER_ROLE_NAME`] seed —
+    /// never by a caller. #308: the earlier name-only match (see
+    /// `migrations/20260829000002_grant_business_permissions.up.sql`'s own
+    /// comment) let an org rename `owner` away and delete it right after,
+    /// locking itself out. A seeded role's name is fixed and it cannot be
+    /// deleted; its permissions stay editable — redefining what `admin`
+    /// means is the point of #308.
+    pub is_seeded: bool,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }
@@ -328,5 +355,39 @@ mod tests {
     #[test]
     fn granted_names_is_empty_for_none() {
         assert!(Permissions::NONE.granted_names().is_empty());
+    }
+
+    #[test]
+    fn from_names_reconstructs_the_combined_bits() {
+        let names = ["VIEW_REPORTS", "VIEW_PLANNING"];
+
+        let permissions = Permissions::from_names(&names).unwrap();
+
+        assert!(permissions.contains(Permissions::VIEW_REPORTS));
+        assert!(permissions.contains(Permissions::VIEW_PLANNING));
+        assert!(!permissions.contains(Permissions::VIEW_COST));
+    }
+
+    #[test]
+    fn from_names_is_the_inverse_of_granted_names() {
+        let original = Permissions::VIEW_REPORTS | Permissions::MANAGE_QUOTES;
+
+        let roundtripped = Permissions::from_names(&original.granted_names()).unwrap();
+
+        assert_eq!(roundtripped, original);
+    }
+
+    #[test]
+    fn from_names_rejects_an_unknown_name() {
+        let names = ["VIEW_REPORTS", "NOT_A_REAL_BIT"];
+
+        assert!(Permissions::from_names(&names).is_err());
+    }
+
+    #[test]
+    fn from_names_of_empty_list_is_none() {
+        let names: [&str; 0] = [];
+
+        assert_eq!(Permissions::from_names(&names).unwrap(), Permissions::NONE);
     }
 }

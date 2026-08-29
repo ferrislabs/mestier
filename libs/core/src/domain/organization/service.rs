@@ -289,6 +289,7 @@ where
                 organization_id: organization.id,
                 name: OWNER_ROLE_NAME.into(),
                 permissions: Permissions::ALL,
+                is_seeded: true,
                 created_at: now,
                 updated_at: now,
             })
@@ -300,6 +301,7 @@ where
                 organization_id: organization.id,
                 name: ADMIN_ROLE_NAME.into(),
                 permissions: Permissions::MANAGE_MEMBERS | default_admin_business_permissions(),
+                is_seeded: true,
                 created_at: now,
                 updated_at: now,
             })
@@ -311,6 +313,7 @@ where
                 organization_id: organization.id,
                 name: MEMBER_ROLE_NAME.into(),
                 permissions: default_member_business_permissions(),
+                is_seeded: true,
                 created_at: now,
                 updated_at: now,
             })
@@ -1108,6 +1111,7 @@ mod tests {
                 organization_id: r.organization_id,
                 name: r.name.clone(),
                 permissions: r.permissions,
+                is_seeded: r.is_seeded,
                 created_at: r.created_at,
                 updated_at: r.updated_at,
             };
@@ -1194,6 +1198,7 @@ mod tests {
                 organization_id: r.organization_id,
                 name: r.name.clone(),
                 permissions: r.permissions,
+                is_seeded: r.is_seeded,
                 created_at: r.created_at,
                 updated_at: r.updated_at,
             };
