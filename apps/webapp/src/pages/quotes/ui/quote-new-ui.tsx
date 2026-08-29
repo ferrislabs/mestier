@@ -11,8 +11,8 @@ import {
 } from 'lucide-react'
 import { useState } from 'react'
 import { Button } from '#/components/ui/button'
+import { Field } from '#/components/ui/field'
 import { Input } from '#/components/ui/input'
-import { Label } from '#/components/ui/label'
 import {
 	Select,
 	SelectContent,
@@ -173,7 +173,7 @@ export function QuoteNewUI({
 						>
 							<div className="grid gap-4 md:grid-cols-2">
 								<div className="md:col-span-2">
-									<FieldBlock label="Objet du devis">
+									<Field label="Objet du devis">
 										<Input
 											value={values.title}
 											onChange={(event) =>
@@ -181,9 +181,9 @@ export function QuoteNewUI({
 											}
 											placeholder="Ex. Rénovation salle de bain"
 										/>
-									</FieldBlock>
+									</Field>
 								</div>
-								<FieldBlock label="Client">
+								<Field label="Client">
 									<Select
 										value={values.customerId}
 										onValueChange={(customerId) => onChange({ customerId })}
@@ -199,9 +199,9 @@ export function QuoteNewUI({
 											))}
 										</SelectContent>
 									</Select>
-								</FieldBlock>
+								</Field>
 
-								<FieldBlock label="Adresse de facturation">
+								<Field label="Adresse de facturation">
 									<BillingAddressField
 										value={values.customerContextId}
 										addresses={customerContexts}
@@ -211,7 +211,7 @@ export function QuoteNewUI({
 											onChange({ customerContextId })
 										}
 									/>
-								</FieldBlock>
+								</Field>
 							</div>
 						</FormSection>
 
@@ -410,21 +410,6 @@ function SummaryRow({ icon, label, value }: SummaryRowProps) {
 				<p className="text-xs font-medium text-muted-foreground">{label}</p>
 				<p className="truncate text-sm font-medium">{value}</p>
 			</div>
-		</div>
-	)
-}
-
-interface FieldBlockProps {
-	label: string
-	children: React.ReactNode
-}
-
-function FieldBlock({ label, children }: FieldBlockProps) {
-	const id = label.toLowerCase().replaceAll(/\s+/g, '-')
-	return (
-		<div className="flex min-w-0 flex-col gap-2">
-			<Label htmlFor={id}>{label}</Label>
-			{children}
 		</div>
 	)
 }

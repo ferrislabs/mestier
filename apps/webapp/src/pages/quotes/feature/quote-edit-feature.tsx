@@ -8,7 +8,6 @@ import {
 	Plus,
 	Trash2,
 } from 'lucide-react'
-import type * as React from 'react'
 import { useEffect, useRef, useState } from 'react'
 import {
 	AlertDialog,
@@ -22,8 +21,8 @@ import {
 	AlertDialogTrigger,
 } from '#/components/ui/alert-dialog'
 import { Button } from '#/components/ui/button'
+import { Field } from '#/components/ui/field'
 import { Input } from '#/components/ui/input'
-import { Label } from '#/components/ui/label'
 import {
 	Select,
 	SelectContent,
@@ -511,14 +510,14 @@ function QuoteEditUI({
 							description="Objet, client et adresse de facturation du devis."
 						/>
 						<div className="grid gap-4 p-5 md:grid-cols-2">
-							<FieldBlock label="Objet du devis">
+							<Field label="Objet du devis" htmlFor={null}>
 								<Input
 									value={values.title}
 									onChange={(event) => onChange({ title: event.target.value })}
 									placeholder="Ex. Rénovation salle de bain"
 								/>
-							</FieldBlock>
-							<FieldBlock label="Statut">
+							</Field>
+							<Field label="Statut" htmlFor={null}>
 								<Select
 									value={status}
 									onValueChange={(value) =>
@@ -536,8 +535,8 @@ function QuoteEditUI({
 										<SelectItem value="CANCELLED">Annulé</SelectItem>
 									</SelectContent>
 								</Select>
-							</FieldBlock>
-							<FieldBlock label="Client">
+							</Field>
+							<Field label="Client" htmlFor={null}>
 								<Select
 									value={values.customerId}
 									onValueChange={(customerId) => onChange({ customerId })}
@@ -553,8 +552,8 @@ function QuoteEditUI({
 										))}
 									</SelectContent>
 								</Select>
-							</FieldBlock>
-							<FieldBlock label="Adresse de facturation">
+							</Field>
+							<Field label="Adresse de facturation" htmlFor={null}>
 								<BillingAddressField
 									value={values.customerContextId}
 									addresses={customerContexts}
@@ -564,7 +563,7 @@ function QuoteEditUI({
 										onChange({ customerContextId })
 									}
 								/>
-							</FieldBlock>
+							</Field>
 						</div>
 					</SectionCard>
 
@@ -749,21 +748,6 @@ function QuoteEditError({
 				</div>
 			</SectionCard>
 		</PageShell>
-	)
-}
-
-function FieldBlock({
-	label,
-	children,
-}: {
-	label: string
-	children: React.ReactNode
-}) {
-	return (
-		<div className="flex min-w-0 flex-col gap-2">
-			<Label>{label}</Label>
-			{children}
-		</div>
 	)
 }
 
