@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            DELETE FROM automation.subscription\n            WHERE org_id = $1 AND kind = 'workflow' AND target_id = $2\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "ecd10ef265a97a280c3f8087bb9ad861a04ec378f6f6a29c38d24b2e113b972c"
+}
