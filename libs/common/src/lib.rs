@@ -155,6 +155,27 @@ impl Display for RoleId {
     }
 }
 
+/// Lives here, not in `mestier-core`'s own project module, so that
+/// `discord` — a pure domain crate that depends on nothing but `common` — can
+/// tie a `Channel` to a project without depending on the whole core crate
+/// (which itself depends on `discord`; that dependency cannot run both ways).
+/// Same shared-kernel treatment as `UserId`/`OrganizationId`/`RoleId` above.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, ToSchema)]
+pub struct ProjectId(pub Uuid);
+
+impl FromStr for ProjectId {
+    type Err = uuid::Error;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Uuid::from_str(s).map(ProjectId)
+    }
+}
+
+impl Display for ProjectId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

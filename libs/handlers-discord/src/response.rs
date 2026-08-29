@@ -1,5 +1,5 @@
 use chrono::{DateTime, Utc};
-use common::{OrganizationId, RoleId, UserId};
+use common::{OrganizationId, ProjectId, RoleId, UserId};
 use discord::components::Component;
 use discord::{
     Attachment, AuthorType, Category, CategoryId, Channel, ChannelId, ChannelPermissionOverwrite,
@@ -49,8 +49,14 @@ pub struct ChannelResponse {
     pub parent_id: Option<ChannelId>,
     /// Thread only: message that spawned this thread.
     pub origin_message_id: Option<MessageId>,
-    /// Thread only: whether the thread is archived.
+    /// For a project's channel: whether the *project* is archived (see
+    /// `MestierUseCase::archive_project`'s cascade). For a thread: whether the
+    /// thread itself is archived. `false` for any other TEXT channel.
     pub archived: bool,
+    /// The project this channel belongs to. Present if and only if this is a
+    /// project's channel — the one field that makes such a channel visibly
+    /// different from an ordinary one, and lets the caller link back to it.
+    pub project_id: Option<ProjectId>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }
@@ -68,6 +74,7 @@ impl From<Channel> for ChannelResponse {
             parent_id: c.parent_id,
             origin_message_id: c.origin_message_id,
             archived: c.archived,
+            project_id: c.project_id,
             created_at: c.created_at,
             updated_at: c.updated_at,
         }

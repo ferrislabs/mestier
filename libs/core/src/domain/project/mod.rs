@@ -10,12 +10,7 @@
 //! customer and a quote, and that is all. Everything expensive about it lives
 //! on the tasks attached to it: their windows, their assignees, their expenses.
 
-use std::{fmt::Display, str::FromStr};
-
 use chrono::{DateTime, Utc};
-use serde::{Deserialize, Serialize};
-use utoipa::ToSchema;
-use uuid::Uuid;
 
 use crate::{CustomerContextId, CustomerId, OrganizationId, QuoteId};
 
@@ -23,22 +18,11 @@ pub mod commands;
 pub mod ports;
 pub mod service;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, ToSchema)]
-pub struct ProjectId(pub Uuid);
-
-impl FromStr for ProjectId {
-    type Err = uuid::Error;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        Uuid::from_str(s).map(ProjectId)
-    }
-}
-
-impl Display for ProjectId {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.0)
-    }
-}
+/// Defined in `common`, not here: `discord` — a pure domain crate — needs it
+/// too, to tie a `Channel` back to the project it belongs to, and `discord`
+/// cannot depend on this crate (this crate already depends on `discord`).
+/// See `common::ProjectId`'s own doc comment.
+pub use common::ProjectId;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Project {
@@ -78,6 +62,10 @@ impl Project {
 
 #[cfg(test)]
 mod tests {
+    use std::str::FromStr;
+
+    use uuid::Uuid;
+
     use super::*;
 
     fn project(customer_id: Option<CustomerId>) -> Project {

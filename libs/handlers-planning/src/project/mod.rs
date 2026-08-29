@@ -21,6 +21,7 @@ use serde::Deserialize;
 use crate::require_org_membership;
 
 pub mod archive;
+pub mod channel;
 pub mod create;
 pub mod get_one;
 pub mod list;
@@ -30,7 +31,7 @@ pub mod update;
 /// This aggregate's routes, unlayered — the crate-level `router` in `lib.rs`
 /// merges every aggregate submodule's router before applying the shared
 /// rate-limit/auth middleware once.
-pub fn router(_state: &AppState) -> Router<AppState> {
+pub fn router(state: &AppState) -> Router<AppState> {
     Router::new()
         .typed_get(list::handler)
         .typed_post(create::handler)
@@ -38,6 +39,7 @@ pub fn router(_state: &AppState) -> Router<AppState> {
         .typed_patch(update::handler)
         .typed_delete(archive::handler)
         .typed_post(restore::handler)
+        .merge(channel::router(state))
 }
 
 #[derive(TypedPath, Deserialize)]

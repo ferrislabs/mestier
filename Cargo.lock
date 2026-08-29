@@ -2670,6 +2670,7 @@ dependencies = [
  "chrono",
  "chrono-tz",
  "clap",
+ "discord",
  "handlers",
  "http 1.4.0",
  "jsonwebtoken",

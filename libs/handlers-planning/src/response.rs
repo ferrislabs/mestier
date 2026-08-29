@@ -1,4 +1,5 @@
 use chrono::{DateTime, NaiveDate, NaiveTime, Utc};
+use discord::{Channel, ChannelId};
 use mestier_core::{
     CustomerContextId, CustomerId, Equipment, EquipmentId, MemberId, OrganizationId, Project,
     ProjectId, ProjectTemplate, ProjectTemplateId, ProjectTemplateTask, ProjectTemplateTaskId,
@@ -549,6 +550,52 @@ mod tests {
         assert!(!response.is_internal);
     }
 
+    fn project_channel(project_id_str: &str) -> Channel {
+        use discord::ChannelType;
+
+        let now = Utc::now();
+        Channel {
+            id: "88888888-8888-8888-8888-888888888888".parse().unwrap(),
+            organization_id: "22222222-2222-2222-2222-222222222222".parse().unwrap(),
+            channel_type: ChannelType::Text,
+            name: "Réunion hebdo".to_owned(),
+            topic: None,
+            position: 0,
+            category_id: None,
+            parent_id: None,
+            origin_message_id: None,
+            archived: false,
+            project_id: Some(project_id_str.parse().unwrap()),
+            created_at: now,
+            updated_at: now,
+        }
+    }
+
+    #[test]
+    fn project_channel_response_links_back_to_the_project() {
+        let response: ProjectChannelResponse =
+            project_channel("77777777-7777-7777-7777-777777777777").into();
+
+        assert_eq!(
+            response.project_id,
+            Some("77777777-7777-7777-7777-777777777777".parse().unwrap())
+        );
+        assert!(!response.archived);
+    }
+
+    #[test]
+    fn project_channel_response_carries_the_archived_flag() {
+        let mut source = project_channel("77777777-7777-7777-7777-777777777777");
+        source.archived = true;
+
+        let response: ProjectChannelResponse = source.into();
+
+        assert!(
+            response.archived,
+            "an archived project's channel must report archived: true"
+        );
+    }
+
     #[test]
     fn task_response_carries_the_project_and_the_expenses() {
         let mut source = task();
@@ -602,6 +649,43 @@ impl From<Project> for ProjectResponse {
             customer_context_id: value.customer_context_id,
             quote_id: value.quote_id,
             archived_at: value.archived_at,
+            created_at: value.created_at,
+            updated_at: value.updated_at,
+        }
+    }
+}
+
+/// A project's own channel, as this crate returns it — a thin projection of
+/// `discord::Channel` (this crate does not depend on `handlers-discord`'s own
+/// `ChannelResponse`; see that crate's own copy for the full chat-facing
+/// shape). `create_project_channel`/`get_project_channel` only ever resolve a
+/// channel found *by* its `project_id` (`find_by_project_id`), so `project_id`
+/// is always `Some` in practice — kept `Option` rather than unwrapped here so
+/// this conversion stays infallible regardless.
+#[derive(Debug, Clone, PartialEq, Serialize, ToSchema)]
+pub struct ProjectChannelResponse {
+    pub id: ChannelId,
+    pub organization_id: OrganizationId,
+    pub project_id: Option<ProjectId>,
+    pub name: String,
+    pub topic: Option<String>,
+    /// Follows the project's own lifecycle: archiving the project archives
+    /// this, restoring it un-archives this. The conversation stays fully
+    /// readable either way.
+    pub archived: bool,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+}
+
+impl From<Channel> for ProjectChannelResponse {
+    fn from(value: Channel) -> Self {
+        Self {
+            id: value.id,
+            organization_id: value.organization_id,
+            project_id: value.project_id,
+            name: value.name,
+            topic: value.topic,
+            archived: value.archived,
             created_at: value.created_at,
             updated_at: value.updated_at,
         }

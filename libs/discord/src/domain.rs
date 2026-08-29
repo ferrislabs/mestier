@@ -1,5 +1,5 @@
 use chrono::{DateTime, Utc};
-use common::{OrganizationId, RoleId, UserId};
+use common::{OrganizationId, ProjectId, RoleId, UserId};
 use serde::Serialize;
 
 use crate::{
@@ -29,7 +29,19 @@ pub struct Channel {
     pub category_id: Option<CategoryId>,      // TEXT only
     pub parent_id: Option<ChannelId>,         // THREAD only
     pub origin_message_id: Option<MessageId>, // THREAD only
-    pub archived: bool,                       // THREAD only (false for TEXT)
+    /// A TEXT channel starts unarchived and stays that way unless it is a
+    /// project's channel, in which case it follows the project's own
+    /// lifecycle (see `chk_channels_thread_no_project`): archiving the
+    /// project archives this, restoring it un-archives this. A THREAD's own
+    /// archived flag is unrelated and always independent of any project.
+    pub archived: bool,
+    /// The project this channel belongs to, if any. At most one channel may
+    /// carry a given project id (`uq_channels_project_id`), and only a TEXT
+    /// channel may carry one at all (`chk_channels_thread_no_project`) — a
+    /// project with several channels would be a category, a bigger idea than
+    /// this field. Immutable after creation: nothing moves a channel from one
+    /// project to another.
+    pub project_id: Option<ProjectId>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }
