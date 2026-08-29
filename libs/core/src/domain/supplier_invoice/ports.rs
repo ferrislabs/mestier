@@ -3,8 +3,9 @@ use common::CoreError;
 use rust_decimal::Decimal;
 
 use crate::{
-    OrganizationId, ProjectId, SupplierInvoice, SupplierInvoiceId, SupplierInvoiceLineAllocation,
-    SupplierInvoiceLineId, SupplierInvoiceReview,
+    OrganizationId, ProjectId, SupplierInvoice, SupplierInvoiceId, SupplierInvoiceLine,
+    SupplierInvoiceLineAllocation, SupplierInvoiceLineAllocationId, SupplierInvoiceLineId,
+    SupplierInvoiceReview,
 };
 
 #[cfg_attr(any(test, feature = "mock"), mockall::automock)]
@@ -51,6 +52,18 @@ pub trait SupplierInvoiceRepository: Send {
         number: &str,
         identifier: &str,
     ) -> impl Future<Output = Result<bool, CoreError>> + Send;
+
+    /// Resolves a line on its own, `None` if it never existed or its
+    /// parent invoice was soft-deleted — #339's full-replace `PUT
+    /// .../supplier-invoice-lines/{line_id}/allocations` has only the bare
+    /// line id (CLAUDE.md: bare ids derive their organization from the
+    /// loaded row) and needs the line's own `organization_id` and
+    /// `supplier_invoice_id` before it can build a
+    /// [`crate::ReplaceSupplierInvoiceLineAllocationsCommand`].
+    fn find_line_by_id(
+        &mut self,
+        line_id: SupplierInvoiceLineId,
+    ) -> impl Future<Output = Result<Option<SupplierInvoiceLine>, CoreError>> + Send;
 }
 
 /// A document read out of a supplier's file — Factur-X today, see
@@ -177,6 +190,25 @@ pub trait SupplierInvoiceAllocationRepository: Send {
         &mut self,
         project_id: ProjectId,
     ) -> impl Future<Output = Result<Vec<SupplierInvoiceLineAllocation>, CoreError>> + Send;
+
+    /// Every allocation recorded against one line — what #339's full-replace
+    /// `PUT .../allocations` reads before deciding what to delete and what
+    /// to keep.
+    fn list_by_line(
+        &mut self,
+        line_id: SupplierInvoiceLineId,
+    ) -> impl Future<Output = Result<Vec<SupplierInvoiceLineAllocation>, CoreError>> + Send;
+
+    /// Removes one allocation outright — never a soft delete. Unlike a
+    /// supplier invoice itself, an allocation is our own bookkeeping, not
+    /// somebody else's document; #339's full-replace semantics means a
+    /// share dropped from the new list must stop counting immediately; a
+    /// tombstone would keep costing a project #338 refuses to attribute it
+    /// to anymore.
+    fn delete(
+        &mut self,
+        id: SupplierInvoiceLineAllocationId,
+    ) -> impl Future<Output = Result<(), CoreError>> + Send;
 }
 
 #[cfg(test)]

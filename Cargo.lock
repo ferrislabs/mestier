@@ -128,6 +128,7 @@ dependencies = [
  "handlers-member",
  "handlers-organization",
  "handlers-planning",
+ "handlers-purchase",
  "handlers-quote",
  "handlers-reference",
  "handlers-reporting",
@@ -2657,6 +2658,32 @@ dependencies = [
  "mestier-core",
  "pagination",
  "reqwest",
+ "serde",
+ "serde_json",
+ "sqlx",
+ "tokio",
+ "tracing",
+ "url",
+ "utoipa",
+ "uuid",
+]
+
+[[package]]
+name = "handlers-purchase"
+version = "0.1.0"
+dependencies = [
+ "args",
+ "auth",
+ "axum",
+ "axum-extra",
+ "chrono",
+ "clap",
+ "handlers",
+ "http 1.4.0",
+ "jsonwebtoken",
+ "mestier-core",
+ "reqwest",
+ "rust_decimal",
  "serde",
  "serde_json",
  "sqlx",

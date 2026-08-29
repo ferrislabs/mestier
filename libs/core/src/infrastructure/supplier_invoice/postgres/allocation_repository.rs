@@ -114,4 +114,54 @@ impl<'tx> SupplierInvoiceAllocationRepository for PgSupplierInvoiceAllocationRep
             })
             .collect())
     }
+
+    async fn list_by_line(
+        &mut self,
+        line_id: SupplierInvoiceLineId,
+    ) -> Result<Vec<SupplierInvoiceLineAllocation>, CoreError> {
+        let mut tx = self.tx.lock().await;
+        let rows = sqlx::query!(
+            r#"
+            SELECT id, org_id, supplier_invoice_line_id, project_id, amount_cents,
+                   created_at, updated_at
+            FROM supplier_invoice_line_allocations
+            WHERE supplier_invoice_line_id = $1
+            ORDER BY created_at ASC, id ASC
+            "#,
+            line_id.0,
+        )
+        .fetch_all(&mut ***tx)
+        .await
+        .map_err(map_sqlx_error)?;
+
+        Ok(rows
+            .into_iter()
+            .map(|row| SupplierInvoiceLineAllocation {
+                id: SupplierInvoiceLineAllocationId(row.id),
+                organization_id: OrganizationId(row.org_id),
+                supplier_invoice_line_id: SupplierInvoiceLineId(row.supplier_invoice_line_id),
+                project_id: ProjectId(row.project_id),
+                amount_cents: row.amount_cents,
+                created_at: row.created_at,
+                updated_at: row.updated_at,
+            })
+            .collect())
+    }
+
+    async fn delete(&mut self, id: SupplierInvoiceLineAllocationId) -> Result<(), CoreError> {
+        let mut tx = self.tx.lock().await;
+        let result = sqlx::query!(
+            "DELETE FROM supplier_invoice_line_allocations WHERE id = $1",
+            id.0,
+        )
+        .execute(&mut ***tx)
+        .await
+        .map_err(map_sqlx_error)?;
+
+        if result.rows_affected() == 0 {
+            return Err(CoreError::NotFound);
+        }
+
+        Ok(())
+    }
 }

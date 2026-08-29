@@ -12,7 +12,9 @@ use crate::{
     domain::supplier_invoice::{
         commands::{
             AllocateSupplierInvoiceLineCommand, ConfirmSupplierInvoiceCommand,
-            CreateSupplierInvoiceCommand, RejectSupplierInvoiceCommand, SupplierInvoiceLineCommand,
+            CreateSupplierInvoiceCommand, RejectSupplierInvoiceCommand,
+            ReplaceSupplierInvoiceLineAllocationsCommand, SupplierInvoiceLineCommand,
+            UpdateSupplierInvoiceNotesCommand,
         },
         events::{
             SupplierInvoiceLineAllocated, SupplierInvoiceReceived, SupplierInvoiceTransitioned,
@@ -64,6 +66,8 @@ where
             source: command.source,
             status: SupplierInvoiceStatus::Received,
             currency: command.currency.to_uppercase(),
+            source_file_key: command.source_file_key,
+            source_file_mime_type: command.source_file_mime_type,
             notes: None,
             net_cents: totals.net_cents,
             vat_breakdown: totals.vat_breakdown,
@@ -124,6 +128,22 @@ where
             .await
     }
 
+    /// Edits `notes` alone — #339's metadata-only `PATCH`. No status guard,
+    /// unlike `confirm`/`reject`: a note is our own commentary, editable
+    /// regardless of where the document's own review stands, never the
+    /// one-shot act a status transition is.
+    pub async fn update_notes(
+        &mut self,
+        command: UpdateSupplierInvoiceNotesCommand,
+    ) -> Result<SupplierInvoice, CoreError> {
+        let existing = self.get_supplier_invoice(command.id).await?;
+        let mut review = SupplierInvoiceReview::new(existing);
+        review.set_notes(non_blank_option(command.notes)?);
+        review.touch(Utc::now());
+
+        self.repo.update_review(&review).await
+    }
+
     /// Attributes part (or all) of a line's own cost to a project — #338.
     ///
     /// `allocation_repo` is a method-level generic, the same shape
@@ -168,30 +188,11 @@ where
             .find(|line| line.id == command.supplier_invoice_line_id)
             .ok_or(CoreError::NotFound)?;
 
-        // Same sign as the line: a credit/rebate line can only be allocated
-        // as a credit, never flipped into a positive cost by the act of
-        // allocating it.
-        if (line.line_total_cents >= 0) != (command.amount_cents >= 0) {
-            return Err(CoreError::Conflict(format!(
-                "allocation {} cents must have the same sign as line {}'s total of {} cents",
-                command.amount_cents, line.id, line.line_total_cents
-            )));
-        }
+        refuse_sign_mismatch(line, command.amount_cents)?;
 
         let already_allocated = allocation_repo.sum_allocated_for_line(line.id).await?;
         let new_total = i64::from(already_allocated) + i64::from(command.amount_cents);
-        let overflows = if line.line_total_cents >= 0 {
-            new_total > i64::from(line.line_total_cents)
-        } else {
-            new_total < i64::from(line.line_total_cents)
-        };
-        if overflows {
-            return Err(CoreError::Conflict(format!(
-                "allocating {} cents would bring line {}'s allocations to {} cents, beyond its \
-                 {} cent total",
-                command.amount_cents, line.id, new_total, line.line_total_cents
-            )));
-        }
+        refuse_if_overflows(line, new_total)?;
 
         let now = Utc::now();
         let allocation = SupplierInvoiceLineAllocation {
@@ -239,6 +240,119 @@ where
             .iter()
             .map(|allocation| i64::from(allocation.amount_cents))
             .sum())
+    }
+
+    /// Full-replace of one line's allocations — #339's `PUT
+    /// .../supplier-invoice-lines/{line_id}/allocations`, mirroring
+    /// `Task::assignments`'s own contract: the body is the complete list
+    /// for the line, not a delta.
+    ///
+    /// Diffs against what is already recorded rather than deleting
+    /// everything and reinserting the new set: a share that survives the
+    /// replace unchanged keeps its own `id`/`created_at`, which matters to
+    /// anything that already refers to that allocation by id (the events
+    /// this emits, an audit trail reading `created_at`). Only shares no
+    /// longer present are deleted; only genuinely new ones are inserted.
+    pub async fn replace_line_allocations<A>(
+        &mut self,
+        command: ReplaceSupplierInvoiceLineAllocationsCommand,
+        mut allocation_repo: A,
+    ) -> Result<Vec<SupplierInvoiceLineAllocation>, CoreError>
+    where
+        A: SupplierInvoiceAllocationRepository,
+    {
+        if command
+            .allocations
+            .iter()
+            .any(|share| share.amount_cents == 0)
+        {
+            return Err(CoreError::Conflict(
+                "an allocation cannot be zero".to_owned(),
+            ));
+        }
+
+        let invoice = self
+            .get_supplier_invoice(command.supplier_invoice_id)
+            .await?;
+        if invoice.organization_id != command.organization_id {
+            return Err(CoreError::NotFound);
+        }
+
+        let line = invoice
+            .lines
+            .iter()
+            .find(|line| line.id == command.supplier_invoice_line_id)
+            .ok_or(CoreError::NotFound)?;
+
+        for share in &command.allocations {
+            refuse_sign_mismatch(line, share.amount_cents)?;
+        }
+
+        let candidate_total: i64 = command
+            .allocations
+            .iter()
+            .map(|share| i64::from(share.amount_cents))
+            .sum();
+        refuse_if_overflows(line, candidate_total)?;
+
+        let mut remaining_existing = allocation_repo.list_by_line(line.id).await?;
+        let now = Utc::now();
+        let mut result = Vec::with_capacity(command.allocations.len());
+
+        for share in command.allocations {
+            // Matched by project alone rather than by amount too: a line
+            // rarely carries more than one share per project, and a caller
+            // who really did mean to split one project's share into two
+            // would already be misusing "the complete list for this line"
+            // as something other than a flat set.
+            let previous = remaining_existing
+                .iter()
+                .position(|allocation| allocation.project_id == share.project_id)
+                .map(|index| remaining_existing.remove(index));
+
+            // A byte-identical share (same project, same amount) is left
+            // exactly as it was — no repository call, no new event. There
+            // is no `update` on this port: an amount that did change is a
+            // delete-then-recreate, the same "not sent as it was, so not
+            // kept as it was" rule applied one level down from a whole
+            // dropped share.
+            if let Some(previous) = &previous
+                && previous.amount_cents == share.amount_cents
+            {
+                result.push(previous.clone());
+                continue;
+            }
+            if let Some(previous) = previous {
+                allocation_repo.delete(previous.id).await?;
+            }
+
+            let allocation = SupplierInvoiceLineAllocation {
+                id: SupplierInvoiceLineAllocationId(generate_uuid_v7()),
+                organization_id: command.organization_id,
+                supplier_invoice_line_id: line.id,
+                project_id: share.project_id,
+                amount_cents: share.amount_cents,
+                created_at: now,
+                updated_at: now,
+            };
+            let created = allocation_repo.insert(&allocation).await?;
+            self.emitter.emit(
+                command.organization_id,
+                &SupplierInvoiceLineAllocated {
+                    allocation: created.clone(),
+                },
+            )?;
+            result.push(created);
+        }
+
+        // Whatever is left in `remaining_existing` had no matching share in
+        // the new list — the same "not sent, so not wanted" rule
+        // `Task::assignments` applies to a dropped assignee.
+        for stale in remaining_existing {
+            allocation_repo.delete(stale.id).await?;
+        }
+
+        Ok(result)
     }
 
     async fn transition(
@@ -389,6 +503,44 @@ fn validate_line(command: &SupplierInvoiceLineCommand) -> Result<(), CoreError> 
     Ok(())
 }
 
+/// Same sign as the line: a credit/rebate line can only be allocated as a
+/// credit, never flipped into a positive cost by the act of allocating it.
+/// Shared by [`SupplierInvoiceService::allocate_line`] and
+/// [`SupplierInvoiceService::replace_line_allocations`] — the same rule,
+/// checked once from either entry point.
+fn refuse_sign_mismatch(line: &SupplierInvoiceLine, amount_cents: i32) -> Result<(), CoreError> {
+    if (line.line_total_cents >= 0) != (amount_cents >= 0) {
+        return Err(CoreError::Conflict(format!(
+            "allocation {} cents must have the same sign as line {}'s total of {} cents",
+            amount_cents, line.id, line.line_total_cents
+        )));
+    }
+
+    Ok(())
+}
+
+/// Refuses a candidate allocation total that would push a line past its own
+/// `line_total_cents`, in either direction (a negative/credit line overflows
+/// downward, a positive one upward) — the same domain-level check the
+/// database's own trigger enforces as its last line of defence, not its
+/// first. Shared by the same two callers as [`refuse_sign_mismatch`].
+fn refuse_if_overflows(line: &SupplierInvoiceLine, candidate_total: i64) -> Result<(), CoreError> {
+    let overflows = if line.line_total_cents >= 0 {
+        candidate_total > i64::from(line.line_total_cents)
+    } else {
+        candidate_total < i64::from(line.line_total_cents)
+    };
+    if overflows {
+        return Err(CoreError::Conflict(format!(
+            "allocating to line {} would bring its allocations to {} cents, beyond its {} cent \
+             total",
+            line.id, candidate_total, line.line_total_cents
+        )));
+    }
+
+    Ok(())
+}
+
 pub(crate) struct SupplierInvoiceTotals {
     pub net_cents: i32,
     pub vat_breakdown: Vec<SupplierInvoiceVatBreakdownLine>,
@@ -488,8 +640,8 @@ mod tests {
 
     use super::*;
     use crate::{
-        MockSupplierInvoiceAllocationRepository, MockSupplierInvoiceRepository, OrganizationId,
-        ProjectId, SupplierInvoiceSource,
+        LineAllocationShare, MockSupplierInvoiceAllocationRepository,
+        MockSupplierInvoiceRepository, OrganizationId, ProjectId, SupplierInvoiceSource,
     };
 
     fn line(
@@ -518,6 +670,8 @@ mod tests {
             source: SupplierInvoiceSource::Manual,
             currency: "eur".to_owned(),
             lines,
+            source_file_key: None,
+            source_file_mime_type: None,
         }
     }
 
@@ -601,6 +755,8 @@ mod tests {
             source: SupplierInvoiceSource::Manual,
             status: SupplierInvoiceStatus::Confirmed,
             currency: "EUR".to_owned(),
+            source_file_key: None,
+            source_file_mime_type: None,
             notes: None,
             net_cents: 45_000,
             vat_breakdown: vec![],
@@ -636,6 +792,8 @@ mod tests {
             source: SupplierInvoiceSource::Manual,
             status: SupplierInvoiceStatus::Received,
             currency: "EUR".to_owned(),
+            source_file_key: None,
+            source_file_mime_type: None,
             notes: None,
             net_cents: line_total_cents,
             vat_breakdown: vec![],
@@ -865,5 +1023,161 @@ mod tests {
             .unwrap();
 
         assert_eq!(total, 10_000);
+    }
+
+    #[tokio::test]
+    async fn update_notes_persists_regardless_of_status() {
+        let mut repo = MockSupplierInvoiceRepository::new();
+        repo.expect_find_by_id()
+            .with(always())
+            .returning(|id| Box::pin(async move { Ok(Some(confirmed_fixture(id))) }));
+        repo.expect_update_review().returning(|review| {
+            let invoice = review.invoice().clone();
+            Box::pin(async move { Ok(invoice) })
+        });
+
+        let emitter = RecordingEmitter::new();
+        let mut service = SupplierInvoiceService::new(repo, &emitter);
+        let updated = service
+            .update_notes(UpdateSupplierInvoiceNotesCommand {
+                id: SupplierInvoiceId(uuid::Uuid::new_v4()),
+                notes: Some("À vérifier avec le fournisseur".to_owned()),
+            })
+            .await
+            .unwrap();
+
+        // The fixture is `Confirmed` — a status update_notes must not touch.
+        assert_eq!(updated.status, SupplierInvoiceStatus::Confirmed);
+    }
+
+    #[tokio::test]
+    async fn replace_line_allocations_keeps_unchanged_inserts_new_and_drops_missing() {
+        let organization_id = OrganizationId(uuid::Uuid::new_v4());
+        let invoice_id = SupplierInvoiceId(uuid::Uuid::new_v4());
+        let line_id = SupplierInvoiceLineId(uuid::Uuid::new_v4());
+        let invoice = invoice_with_line(organization_id, invoice_id, line_id, 10_000);
+
+        let mut repo = MockSupplierInvoiceRepository::new();
+        repo.expect_find_by_id().with(always()).returning(move |_| {
+            let invoice = invoice.clone();
+            Box::pin(async move { Ok(Some(invoice)) })
+        });
+
+        let kept_project_id = ProjectId(uuid::Uuid::new_v4());
+        let dropped_project_id = ProjectId(uuid::Uuid::new_v4());
+        let new_project_id = ProjectId(uuid::Uuid::new_v4());
+        let now = Utc::now();
+        let kept_id = SupplierInvoiceLineAllocationId(uuid::Uuid::new_v4());
+        let dropped_id = SupplierInvoiceLineAllocationId(uuid::Uuid::new_v4());
+
+        let mut allocation_repo = MockSupplierInvoiceAllocationRepository::new();
+        allocation_repo
+            .expect_list_by_line()
+            .with(always())
+            .returning(move |_| {
+                let rows = vec![
+                    SupplierInvoiceLineAllocation {
+                        id: kept_id,
+                        organization_id,
+                        supplier_invoice_line_id: line_id,
+                        project_id: kept_project_id,
+                        amount_cents: 4_000,
+                        created_at: now,
+                        updated_at: now,
+                    },
+                    SupplierInvoiceLineAllocation {
+                        id: dropped_id,
+                        organization_id,
+                        supplier_invoice_line_id: line_id,
+                        project_id: dropped_project_id,
+                        amount_cents: 2_000,
+                        created_at: now,
+                        updated_at: now,
+                    },
+                ];
+                Box::pin(async move { Ok(rows) })
+            });
+        allocation_repo
+            .expect_delete()
+            .withf(move |id| *id == dropped_id)
+            .returning(|_| Box::pin(async move { Ok(()) }));
+        allocation_repo
+            .expect_insert()
+            .withf(move |allocation| {
+                allocation.project_id == new_project_id && allocation.amount_cents == 3_000
+            })
+            .returning(|allocation| {
+                let allocation = allocation.clone();
+                Box::pin(async move { Ok(allocation) })
+            });
+
+        let emitter = RecordingEmitter::new();
+        let mut service = SupplierInvoiceService::new(repo, &emitter);
+        let result = service
+            .replace_line_allocations(
+                ReplaceSupplierInvoiceLineAllocationsCommand {
+                    organization_id,
+                    supplier_invoice_id: invoice_id,
+                    supplier_invoice_line_id: line_id,
+                    allocations: vec![
+                        LineAllocationShare {
+                            project_id: kept_project_id,
+                            amount_cents: 4_000,
+                        },
+                        LineAllocationShare {
+                            project_id: new_project_id,
+                            amount_cents: 3_000,
+                        },
+                    ],
+                },
+                allocation_repo,
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(result.len(), 2);
+        assert!(result.iter().any(|a| a.id == kept_id));
+        assert!(result.iter().any(|a| a.project_id == new_project_id));
+        assert_eq!(
+            emitter.names(),
+            vec!["supplier_invoice_line_allocation.recorded"]
+        );
+    }
+
+    #[tokio::test]
+    async fn replace_line_allocations_refuses_a_set_that_overflows_the_line() {
+        let organization_id = OrganizationId(uuid::Uuid::new_v4());
+        let invoice_id = SupplierInvoiceId(uuid::Uuid::new_v4());
+        let line_id = SupplierInvoiceLineId(uuid::Uuid::new_v4());
+        let invoice = invoice_with_line(organization_id, invoice_id, line_id, 10_000);
+
+        let mut repo = MockSupplierInvoiceRepository::new();
+        repo.expect_find_by_id().with(always()).returning(move |_| {
+            let invoice = invoice.clone();
+            Box::pin(async move { Ok(Some(invoice)) })
+        });
+
+        // No expectations on the allocation mock: an overflowing set must be
+        // refused before it is ever read or written.
+        let allocation_repo = MockSupplierInvoiceAllocationRepository::new();
+
+        let emitter = RecordingEmitter::new();
+        let mut service = SupplierInvoiceService::new(repo, &emitter);
+        let result = service
+            .replace_line_allocations(
+                ReplaceSupplierInvoiceLineAllocationsCommand {
+                    organization_id,
+                    supplier_invoice_id: invoice_id,
+                    supplier_invoice_line_id: line_id,
+                    allocations: vec![LineAllocationShare {
+                        project_id: ProjectId(uuid::Uuid::new_v4()),
+                        amount_cents: 10_001,
+                    }],
+                },
+                allocation_repo,
+            )
+            .await;
+
+        assert!(matches!(result, Err(CoreError::Conflict(_))));
     }
 }
