@@ -12,6 +12,7 @@ import {
 import { useFileUrls } from '#/hooks/use-file-url'
 import { useCreateQuote } from '#/hooks/use-quotes'
 import { useReferenceCatalog } from '#/hooks/use-reference-catalog'
+import { mutationErrorMessage } from '#/lib/api-error'
 import { buildOrgPath } from '#/modules/org-path'
 import {
 	centsToEuros,
@@ -125,9 +126,9 @@ function QuoteNewWorkspace({
 					isCreating={createQuote.isPending}
 					isUploading={uploadFile.isPending}
 					error={
-						createQuote.error?.message ??
-						uploadFile.error?.message ??
-						customers.error?.message ??
+						mutationErrorMessage(createQuote.error) ??
+						mutationErrorMessage(uploadFile.error) ??
+						mutationErrorMessage(customers.error) ??
 						null
 					}
 					uploadFile={async (lineIndex, file) => {

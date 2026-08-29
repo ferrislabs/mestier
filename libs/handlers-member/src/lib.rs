@@ -17,6 +17,7 @@ pub fn router(state: &AppState) -> Router<AppState> {
         .typed_get(member::list::handler)
         .typed_post(member::create::handler)
         .typed_get(member::get_one::handler)
+        .typed_get(member::permissions::handler)
         .typed_patch(member::update::handler)
         .typed_delete(member::soft_delete::handler)
         .typed_get(invitation::list::handler)

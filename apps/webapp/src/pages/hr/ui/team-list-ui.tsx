@@ -18,6 +18,7 @@ import {
 	MoneyCell,
 	TextField,
 } from '#/components/reference-table'
+import { RequirePermission } from '#/components/require-permission'
 import {
 	AlertDialog,
 	AlertDialogAction,
@@ -174,10 +175,12 @@ export function TeamListUI({
 				title="Équipe"
 				description="Gérez les membres de l’organisation, leurs accès et leurs taux horaires."
 				actions={
-					<Button onClick={() => onCreateMemberDialogOpenChange(true)}>
-						<Plus />
-						Ajouter une personne
-					</Button>
+					<RequirePermission permission="MANAGE_MEMBERS">
+						<Button onClick={() => onCreateMemberDialogOpenChange(true)}>
+							<Plus />
+							Ajouter une personne
+						</Button>
+					</RequirePermission>
 				}
 			/>
 

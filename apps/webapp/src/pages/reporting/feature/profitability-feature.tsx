@@ -2,10 +2,6 @@ import { AlertCircle } from 'lucide-react'
 import { useState } from 'react'
 import { useActiveOrganization } from '#/hooks/use-active-organization'
 import { useReferenceCatalog } from '#/hooks/use-reference-catalog'
-import type {
-	MemberProfitability,
-	ProjectProfitability,
-} from '#/hooks/use-reporting'
 import { type Period, useProfitability } from '#/hooks/use-reporting'
 import { currentMonthPeriod } from '#/pages/reporting/types'
 import { ProfitabilityUI } from '#/pages/reporting/ui/profitability-ui'
@@ -55,7 +51,7 @@ function ProfitabilityWorkspace({
 		products: false,
 	})
 
-	const report = (profitability.data as ProfitabilityAnswer | undefined)?.data
+	const report = profitability.data?.data
 
 	const nameByMember = new Map<string, string>()
 	for (const member of catalog.members.data?.data ?? []) {
@@ -73,6 +69,11 @@ function ProfitabilityWorkspace({
 			doubleBooked={report?.double_booked ?? []}
 			members={report?.members ?? []}
 			memberName={(memberId) => nameByMember.get(memberId) ?? null}
+			// Defaults to redacted while the read is still in flight: the
+			// money tiles appearing then disappearing once the real answer
+			// resolves would be its own small leak (a flash of a real figure
+			// even for a caller about to be told they may not see it).
+			costsRedacted={report?.costs_redacted ?? true}
 			isLoading={profitability.isLoading}
 			error={profitability.error?.message ?? null}
 			onPeriodChange={setPeriod}
@@ -81,15 +82,4 @@ function ProfitabilityWorkspace({
 			}}
 		/>
 	)
-}
-
-type ProfitabilityAnswer = {
-	data?: {
-		projects: ProjectProfitability[]
-		most_profitable: ProjectProfitability[]
-		least_profitable: ProjectProfitability[]
-		incomplete: ProjectProfitability[]
-		double_booked: ProjectProfitability[]
-		members: MemberProfitability[]
-	}
 }

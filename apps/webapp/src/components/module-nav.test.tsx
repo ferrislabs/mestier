@@ -1,16 +1,96 @@
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { screen } from '@testing-library/react'
+import type { ReactNode } from 'react'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { ModuleNav } from '#/components/module-nav'
 import { SidebarProvider } from '#/components/ui/sidebar'
+import {
+	ActiveOrganizationProvider,
+	OrganizationListProvider,
+} from '#/hooks/use-active-organization'
 import { MODULES } from '#/modules/registry'
 import type { ModuleSection } from '#/modules/types'
 import { renderWithRouter } from '#/test/render-with-router'
 
-function renderNav(initialPath = '/o/dupont') {
+const ORGANIZATION = { id: 'org-1', name: 'Dupont', slug: 'dupont' }
+
+const MY_PERMISSIONS_PATH =
+	'/api/v1/organizations/{organization_id}/members/me/permissions'
+
+/** `permissions` defaults to every bit: none of the sections exercised by
+ * the pre-existing tests in this file (`crm`, `planning`) carry a
+ * `requiredPermission`, so a permissive default keeps them passing without
+ * each having to mock the read explicitly. */
+function installFakePermissionsApi(
+	permissions: string[] = [
+		'MANAGE_ORG',
+		'MANAGE_MEMBERS',
+		'MANAGE_ROLES',
+		'MANAGE_CHANNELS',
+		'MANAGE_WEBHOOKS',
+		'VIEW_CHANNEL',
+		'SEND_MESSAGES',
+		'VIEW_PLANNING',
+		'MANAGE_PLANNING',
+		'VIEW_COST',
+		'MANAGE_COST',
+		'VIEW_REPORTS',
+		'MANAGE_CUSTOMERS',
+		'MANAGE_QUOTES',
+		'MANAGE_REFERENCE',
+	],
+) {
+	const fakeApi = {
+		get(path: string, params: unknown) {
+			const queryKey = [
+				{ _id: path, path: (params as { path?: unknown })?.path },
+			]
+			return {
+				queryKey,
+				queryOptions: {
+					queryKey,
+					queryFn: async () => {
+						if (path === MY_PERMISSIONS_PATH) {
+							return { data: { permissions }, pagination: null }
+						}
+						throw new Error(`unmocked GET ${path}`)
+					},
+				},
+			}
+		},
+		mutation() {
+			throw new Error('unmocked mutation')
+		},
+	}
+
+	// biome-ignore lint/suspicious/noExplicitAny: test-only fake, shape matches TanstackQueryApiClient's used surface
+	;(window as any).tanstackApi = fakeApi
+}
+
+function renderNav(initialPath = '/o/dupont', permissions?: string[]) {
+	installFakePermissionsApi(permissions)
+	const queryClient = new QueryClient({
+		defaultOptions: { queries: { retry: false } },
+	})
+
+	function Providers({ children }: { children: ReactNode }) {
+		return (
+			<QueryClientProvider client={queryClient}>
+				<OrganizationListProvider organizations={[ORGANIZATION]}>
+					<ActiveOrganizationProvider activeOrganization={ORGANIZATION}>
+						{children}
+					</ActiveOrganizationProvider>
+				</OrganizationListProvider>
+			</QueryClientProvider>
+		)
+	}
+
 	return renderWithRouter(
-		<SidebarProvider defaultOpen>
-			<ModuleNav organizationSlug="dupont" />
-		</SidebarProvider>,
+		<Providers>
+			<SidebarProvider defaultOpen>
+				<ModuleNav organizationSlug="dupont" />
+			</SidebarProvider>
+		</Providers>,
 		initialPath,
 	)
 }
@@ -103,5 +183,23 @@ describe('ModuleNav', () => {
 
 		expect(screen.getByText('Mestier')).toBeDefined()
 		expect(screen.getByText('Planning')).toBeDefined()
+	})
+
+	/**
+	 * #307: a section gated by a bit the caller does not hold is hidden
+	 * outright, not greyed out — `profitability` (`Rentabilité`) is the one
+	 * section in the registry that carries a `requiredPermission` today.
+	 */
+	it('hides a section the caller lacks the permission for', async () => {
+		await renderNav('/o/dupont', [])
+
+		expect(await screen.findByText('Vue d’ensemble')).toBeDefined()
+		expect(screen.queryByText('Rentabilité')).toBeNull()
+	})
+
+	it('shows the section once the caller holds the bit', async () => {
+		await renderNav('/o/dupont', ['VIEW_REPORTS'])
+
+		expect(await screen.findByText('Rentabilité')).toBeDefined()
 	})
 })

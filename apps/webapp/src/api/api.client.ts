@@ -707,8 +707,8 @@ export namespace Schemas {
   export type MarkChannelReadRequest = { message_id: MessageId };
   export type MemberAccountResponse = { email: string; name: string };
   export type MissingCost = "HOURLY_RATE" | "MONTHLY_COST" | "CONTRACTED_HOURS" | "NO_COST_BASIS";
-  export type MemberProfitability = {
-    labour_cost_cents: number;
+  export type MemberProfitabilityResponse = {
+    labour_cost_cents?: (number | null) | undefined;
     member_id: MemberId;
     missing_cost?: (null | MissingCost) | undefined;
     planned_minutes: number;
@@ -745,6 +745,7 @@ export namespace Schemas {
     reactions: Array<ReactionCountResponse>;
   };
   export type MinuteIntervalResponse = { ends_minute: number; starts_minute: number };
+  export type MyPermissionsResponse = { permissions: Array<string> };
   export type NotificationId = string;
   export type NotificationResponse = {
     channel_id: ChannelId;
@@ -886,11 +887,11 @@ export namespace Schemas {
     unit_price_cents: number;
     updated_at: string;
   };
-  export type ProjectProfitability = {
+  export type ProjectProfitabilityResponse = {
     customer_id?: (null | CustomerId) | undefined;
-    equipment_cost_cents: number;
-    expenses_cents: number;
-    labour_cost_cents: number;
+    equipment_cost_cents?: (number | null) | undefined;
+    expenses_cents?: (number | null) | undefined;
+    labour_cost_cents?: (number | null) | undefined;
     margin_cents?: (number | null) | undefined;
     members_without_rate: Array<MemberId>;
     name: string;
@@ -899,15 +900,16 @@ export namespace Schemas {
     planned_minutes: number;
     project_id: ProjectId;
     quoted_cents?: (number | null) | undefined;
-    supplier_cost_cents: number;
+    supplier_cost_cents?: (number | null) | undefined;
   };
   export type ProfitabilityResponse = {
-    double_booked: Array<ProjectProfitability>;
-    incomplete: Array<ProjectProfitability>;
-    least_profitable: Array<ProjectProfitability>;
-    members: Array<MemberProfitability>;
-    most_profitable: Array<ProjectProfitability>;
-    projects: Array<ProjectProfitability>;
+    costs_redacted: boolean;
+    double_booked: Array<ProjectProfitabilityResponse>;
+    incomplete: Array<ProjectProfitabilityResponse>;
+    least_profitable: Array<ProjectProfitabilityResponse>;
+    members: Array<MemberProfitabilityResponse>;
+    most_profitable: Array<ProjectProfitabilityResponse>;
+    projects: Array<ProjectProfitabilityResponse>;
   };
   export type ProjectBillingSummaryResponse = {
     billed_cents: number;
@@ -1319,7 +1321,11 @@ export namespace Schemas {
     missing_cost?: (null | MissingCost) | undefined;
     planned_minutes: number;
   };
-  export type WorkedHoursResponse = { members: Array<WorkedHoursRow>; total_planned_minutes: number };
+  export type WorkedHoursResponse = {
+    costs_redacted: boolean;
+    members: Array<WorkedHoursRow>;
+    total_planned_minutes: number;
+  };
   export type WorkflowVersionResponse = {
     created_at: string;
     created_by?: (string | null) | undefined;
@@ -4658,6 +4664,19 @@ export namespace Endpoints {
       409: unknown;
     };
   };
+  export type get_GetMyPermissions = {
+    method: "GET";
+    path: "/api/v1/organizations/{organization_id}/members/me/permissions";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string };
+    };
+    responses: {
+      200: { data: { permissions: Array<string> }; pagination?: (null | Schemas.PaginationMetadata) | undefined };
+      401: unknown;
+      403: unknown;
+    };
+  };
   export type get_GetPlanning = {
     method: "GET";
     path: "/api/v1/organizations/{organization_id}/planning";
@@ -5187,12 +5206,13 @@ export namespace Endpoints {
     responses: {
       200: {
         data: {
-          double_booked: Array<Schemas.ProjectProfitability>;
-          incomplete: Array<Schemas.ProjectProfitability>;
-          least_profitable: Array<Schemas.ProjectProfitability>;
-          members: Array<Schemas.MemberProfitability>;
-          most_profitable: Array<Schemas.ProjectProfitability>;
-          projects: Array<Schemas.ProjectProfitability>;
+          costs_redacted: boolean;
+          double_booked: Array<Schemas.ProjectProfitabilityResponse>;
+          incomplete: Array<Schemas.ProjectProfitabilityResponse>;
+          least_profitable: Array<Schemas.ProjectProfitabilityResponse>;
+          members: Array<Schemas.MemberProfitabilityResponse>;
+          most_profitable: Array<Schemas.ProjectProfitabilityResponse>;
+          projects: Array<Schemas.ProjectProfitabilityResponse>;
         };
         pagination?: (null | Schemas.PaginationMetadata) | undefined;
       };
@@ -5211,7 +5231,7 @@ export namespace Endpoints {
     };
     responses: {
       200: {
-        data: { members: Array<Schemas.WorkedHoursRow>; total_planned_minutes: number };
+        data: { costs_redacted: boolean; members: Array<Schemas.WorkedHoursRow>; total_planned_minutes: number };
         pagination?: (null | Schemas.PaginationMetadata) | undefined;
       };
       401: unknown;
@@ -6644,6 +6664,7 @@ export type EndpointByMethod = {
     "/api/v1/organizations/{organization_id}/invoices": Endpoints.get_ListInvoices;
     "/api/v1/organizations/{organization_id}/invoices/outstanding": Endpoints.get_ListOutstandingBalanceByCustomer;
     "/api/v1/organizations/{organization_id}/members": Endpoints.get_ListMembers;
+    "/api/v1/organizations/{organization_id}/members/me/permissions": Endpoints.get_GetMyPermissions;
     "/api/v1/organizations/{organization_id}/planning": Endpoints.get_GetPlanning;
     "/api/v1/organizations/{organization_id}/planning/availability": Endpoints.get_GetPlanningAvailability;
     "/api/v1/organizations/{organization_id}/products": Endpoints.get_ListProducts;

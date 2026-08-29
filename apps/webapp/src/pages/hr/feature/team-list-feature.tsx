@@ -14,7 +14,7 @@ import {
 	useUpdateMember,
 	useUpsertEmployeeProfile,
 } from '#/hooks/use-reference-catalog'
-import { isForbiddenError } from '#/lib/api-error'
+import { isForbiddenError, mutationErrorMessage } from '#/lib/api-error'
 import { accessState, type MemberFormValues } from '#/pages/hr/types'
 import { InviteMemberSheet } from '#/pages/hr/ui/invite-member-sheet'
 import {
@@ -250,7 +250,7 @@ function TeamDirectory({
 						organizationName={organizationName}
 						organizationSlug={organizationSlug}
 						isLoading={isLoading}
-						error={error?.message ?? null}
+						error={mutationErrorMessage(error)}
 						hrDataRestricted={hrDataRestricted}
 						members={filteredRows}
 						search={search}
@@ -312,7 +312,7 @@ function TeamDirectory({
 				memberName={inviteTarget?.name ?? ''}
 				token={inviteToken}
 				isGenerating={createInvitation.isPending}
-				error={createInvitation.error?.message ?? null}
+				error={mutationErrorMessage(createInvitation.error)}
 				onOpenChange={(open) => {
 					if (!open) {
 						setInviteTarget(null)

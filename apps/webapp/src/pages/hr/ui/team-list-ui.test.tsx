@@ -1,13 +1,68 @@
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import type { ReactNode } from 'react'
 import { describe, expect, it, vi } from 'vitest'
+import {
+	ActiveOrganizationProvider,
+	OrganizationListProvider,
+} from '#/hooks/use-active-organization'
 import type {
 	MemberDraft,
 	PendingInvitationRow,
 	TeamMemberRow,
 } from '#/pages/hr/ui/team-list-ui'
 import { TeamListUI } from '#/pages/hr/ui/team-list-ui'
-import { renderWithRouter } from '#/test/render-with-router'
+import { renderWithRouter as renderWithRouterBase } from '#/test/render-with-router'
+
+const ORGANIZATION = { id: 'org-1', name: 'Atelier Bois & Co', slug: 'atelier-bois' }
+
+/**
+ * `TeamListUI` renders its "Ajouter une personne" action behind
+ * `RequirePermission` (#307), which needs an active organization and a
+ * resolved permission read — grants every bit by default since none of
+ * these tests exercise gating itself (covered by `require-permission.test.tsx`).
+ */
+function installFakePermissionsApi() {
+	const fakeApi = {
+		get(path: string) {
+			const queryKey = [{ _id: path }]
+			return {
+				queryKey,
+				queryOptions: {
+					queryKey,
+					queryFn: async () => ({
+						data: { permissions: ['MANAGE_MEMBERS'] },
+						pagination: null,
+					}),
+				},
+			}
+		},
+		mutation() {
+			throw new Error('unmocked mutation')
+		},
+	}
+
+	// biome-ignore lint/suspicious/noExplicitAny: test-only fake, shape matches TanstackQueryApiClient's used surface
+	;(window as any).tanstackApi = fakeApi
+}
+
+function renderWithRouter(ui: ReactNode, initialPath?: string) {
+	installFakePermissionsApi()
+	const queryClient = new QueryClient({
+		defaultOptions: { queries: { retry: false } },
+	})
+	return renderWithRouterBase(
+		<QueryClientProvider client={queryClient}>
+			<OrganizationListProvider organizations={[ORGANIZATION]}>
+				<ActiveOrganizationProvider activeOrganization={ORGANIZATION}>
+					{ui}
+				</ActiveOrganizationProvider>
+			</OrganizationListProvider>
+		</QueryClientProvider>,
+		initialPath,
+	)
+}
 
 function member(overrides: Partial<TeamMemberRow> = {}): TeamMemberRow {
 	return {
