@@ -1,10 +1,10 @@
 use auth::Identity;
 use axum::{Extension, extract::Query, extract::State};
 use handlers::{ApiError, AppState, DataEnvelope, Response};
-use mestier_core::OrganizationId;
+use mestier_core::{OrganizationId, Permissions};
 
 use crate::{
-    paths::ProfitabilityPath, reporting::PeriodQuery, require_org_membership,
+    paths::ProfitabilityPath, reporting::PeriodQuery, require_view_reports,
     response::ProfitabilityResponse,
 };
 
@@ -23,9 +23,9 @@ use crate::{
         PeriodQuery,
     ),
     responses(
-        (status = 200, description = "Profitability over the period", body = inline(DataEnvelope<ProfitabilityResponse>)),
+        (status = 200, description = "Profitability over the period, money fields redacted without VIEW_COST", body = inline(DataEnvelope<ProfitabilityResponse>)),
         (status = 401, description = "Unauthorized"),
-        (status = 403, description = "Not a member of this organization"),
+        (status = 403, description = "Not a member of this organization, or missing VIEW_REPORTS"),
         (status = 409, description = "The period ends before it starts"),
     ),
     security(("bearer_auth" = []))
@@ -36,12 +36,16 @@ pub async fn handler(
     Extension(identity): Extension<Identity>,
     Query(period): Query<PeriodQuery>,
 ) -> Result<Response<ProfitabilityResponse>, ApiError> {
-    require_org_membership(&state, &identity, organization_id).await?;
+    let permissions = require_view_reports(&state, &identity, organization_id).await?;
 
     let report = state
         .usecase
         .profitability_report(organization_id, period.from, period.to)
         .await?;
+    let costs_redacted = !permissions.contains(Permissions::VIEW_COST);
 
-    Ok(Response::OK(report.into()))
+    Ok(Response::OK(ProfitabilityResponse::from_report(
+        report,
+        costs_redacted,
+    )))
 }

@@ -283,6 +283,8 @@ impl Modify for SecurityAddon {
         organization::response::OrganizationResponse,
         organization::response::VatStatusResponse,
         reporting::response::ProfitabilityResponse,
+        reporting::response::ProjectProfitabilityResponse,
+        reporting::response::MemberProfitabilityResponse,
         reporting::response::WorkedHoursResponse,
         reporting::response::WorkedHoursRow,
         field::response::FieldTaskResponse,
