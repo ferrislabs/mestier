@@ -17,6 +17,8 @@ export namespace Schemas {
     updated_at: string;
   };
   export type AmendAssignmentReportRequest = { comment?: (string | null) | undefined; reported_minutes: number };
+  export type RoleId = string;
+  export type AssignRoleRequest = { role_id: RoleId };
   export type AssigneeRefRequest = { member_id: MemberId };
   export type AssignmentReportId = string;
   export type AssignmentReportResolution = "PENDING" | "APPLIED" | "DISMISSED";
@@ -340,6 +342,7 @@ export namespace Schemas {
     lines: Array<QuoteLineRequest>;
     title: string;
   };
+  export type CreateRoleRequest = { name: string; permissions: Array<string> };
   export type CreateServiceRateRequest = {
     default_vat_rate_bp?: (number | null) | undefined;
     label: string;
@@ -723,8 +726,8 @@ export namespace Schemas {
     last_name: string;
     organization_id: OrganizationId;
   };
+  export type MemberRoleIdsResponse = { role_ids: Array<RoleId> };
   export type WebhookId = string;
-  export type RoleId = string;
   export type ReactionCountResponse = { count: number; emoji: string; user_ids: Array<UserId> };
   export type MessageResponse = {
     attachments: Array<AttachmentResponse>;
@@ -1040,6 +1043,15 @@ export namespace Schemas {
     slots: Array<RhythmSlotResponse>;
     updated_at: string;
   };
+  export type RoleResponse = {
+    created_at: string;
+    id: RoleId;
+    is_seeded: boolean;
+    name: string;
+    organization_id: OrganizationId;
+    permissions: Array<string>;
+    updated_at: string;
+  };
   export type RunResponse = {
     created_at: string;
     error?: (string | null) | undefined;
@@ -1234,6 +1246,7 @@ export namespace Schemas {
     title: string;
   };
   export type UpdateQuoteStatusRequest = { status: QuoteStatus };
+  export type UpdateRoleRequest = { name: string; permissions: Array<string> };
   export type UpdateServiceRateRequest = {
     default_vat_rate_bp?: (number | null) | undefined;
     label: string;
@@ -3333,6 +3346,31 @@ export namespace Endpoints {
       409: unknown;
     };
   };
+  export type get_ListMemberRoles = {
+    method: "GET";
+    path: "/api/v1/members/{member_id}/roles";
+    requestFormat: "json";
+    parameters: {
+      path: { member_id: string };
+    };
+    responses: {
+      200: { data: { role_ids: Array<Schemas.RoleId> }; pagination?: (null | Schemas.PaginationMetadata) | undefined };
+      401: unknown;
+      403: unknown;
+      404: unknown;
+    };
+  };
+  export type post_AssignRole = {
+    method: "POST";
+    path: "/api/v1/members/{member_id}/roles";
+    requestFormat: "json";
+    parameters: {
+      path: { member_id: string };
+
+      body: Schemas.AssignRoleRequest;
+    };
+    responses: { 204: unknown; 401: unknown; 403: unknown; 404: unknown };
+  };
   export type put_PutWorkSlots = {
     method: "PUT";
     path: "/api/v1/members/{member_id}/work-slots";
@@ -5239,6 +5277,58 @@ export namespace Endpoints {
       409: unknown;
     };
   };
+  export type get_ListRoles = {
+    method: "GET";
+    path: "/api/v1/organizations/{organization_id}/roles";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string };
+    };
+    responses: {
+      200: {
+        data: Array<{
+          created_at: string;
+          id: Schemas.RoleId;
+          is_seeded: boolean;
+          name: string;
+          organization_id: Schemas.OrganizationId;
+          permissions: Array<string>;
+          updated_at: string;
+        }>;
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+    };
+  };
+  export type post_CreateRole = {
+    method: "POST";
+    path: "/api/v1/organizations/{organization_id}/roles";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string };
+
+      body: Schemas.CreateRoleRequest;
+    };
+    responses: {
+      201: {
+        data: {
+          created_at: string;
+          id: Schemas.RoleId;
+          is_seeded: boolean;
+          name: string;
+          organization_id: Schemas.OrganizationId;
+          permissions: Array<string>;
+          updated_at: string;
+        };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      400: unknown;
+      401: unknown;
+      403: unknown;
+      409: unknown;
+    };
+  };
   export type get_ListServiceRates = {
     method: "GET";
     path: "/api/v1/organizations/{organization_id}/service-rates";
@@ -6199,6 +6289,44 @@ export namespace Endpoints {
       404: unknown;
     };
   };
+  export type delete_DeleteRole = {
+    method: "DELETE";
+    path: "/api/v1/roles/{role_id}";
+    requestFormat: "json";
+    parameters: {
+      path: { role_id: string };
+    };
+    responses: { 204: unknown; 401: unknown; 403: unknown; 404: unknown; 409: unknown };
+  };
+  export type patch_UpdateRole = {
+    method: "PATCH";
+    path: "/api/v1/roles/{role_id}";
+    requestFormat: "json";
+    parameters: {
+      path: { role_id: string };
+
+      body: Schemas.UpdateRoleRequest;
+    };
+    responses: {
+      200: {
+        data: {
+          created_at: string;
+          id: Schemas.RoleId;
+          is_seeded: boolean;
+          name: string;
+          organization_id: Schemas.OrganizationId;
+          permissions: Array<string>;
+          updated_at: string;
+        };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      400: unknown;
+      401: unknown;
+      403: unknown;
+      404: unknown;
+      409: unknown;
+    };
+  };
   export type get_GetServiceRate = {
     method: "GET";
     path: "/api/v1/service-rates/{service_rate_id}";
@@ -6580,6 +6708,7 @@ export type EndpointByMethod = {
     "/api/v1/products/{product_id}": Endpoints.patch_UpdateProduct;
     "/api/v1/quotes/{quote_id}": Endpoints.patch_UpdateQuote;
     "/api/v1/quotes/{quote_id}/status": Endpoints.patch_UpdateQuoteStatus;
+    "/api/v1/roles/{role_id}": Endpoints.patch_UpdateRole;
     "/api/v1/service-rates/{service_rate_id}": Endpoints.patch_UpdateServiceRate;
     "/api/v1/supplier-invoices/{supplier_invoice_id}": Endpoints.patch_UpdateSupplierInvoiceNotes;
     "/api/v1/task-recurrences/{task_recurrence_id}": Endpoints.patch_PatchTaskRecurrence;
@@ -6613,6 +6742,7 @@ export type EndpointByMethod = {
     "/api/v1/organizations/{organization_id}/tasks/{task_id}/comments/{comment_id}": Endpoints.delete_DeleteTaskComment;
     "/api/v1/products/{product_id}": Endpoints.delete_DeleteProduct;
     "/api/v1/quotes/{quote_id}": Endpoints.delete_DeleteQuote;
+    "/api/v1/roles/{role_id}": Endpoints.delete_DeleteRole;
     "/api/v1/service-rates/{service_rate_id}": Endpoints.delete_DeleteServiceRate;
     "/api/v1/task-recurrences/{task_recurrence_id}": Endpoints.delete_DeleteTaskRecurrence;
   };
@@ -6641,6 +6771,7 @@ export type EndpointByMethod = {
     "/api/v1/invoices/{invoice_id}/payments": Endpoints.get_ListInvoicePayments;
     "/api/v1/invoices/{invoice_id}/pdf": Endpoints.get_ExportInvoicePdf;
     "/api/v1/members/{member_id}": Endpoints.get_GetMember;
+    "/api/v1/members/{member_id}/roles": Endpoints.get_ListMemberRoles;
     "/api/v1/members/{member_id}/work-time": Endpoints.get_GetWorkTime;
     "/api/v1/organizations": Endpoints.get_ListOrganizations;
     "/api/v1/organizations/{organization_id}": Endpoints.get_GetOrganization;
@@ -6675,6 +6806,7 @@ export type EndpointByMethod = {
     "/api/v1/organizations/{organization_id}/quotes": Endpoints.get_ListQuotes;
     "/api/v1/organizations/{organization_id}/reporting/profitability": Endpoints.get_GetProfitability;
     "/api/v1/organizations/{organization_id}/reporting/worked-hours": Endpoints.get_GetWorkedHours;
+    "/api/v1/organizations/{organization_id}/roles": Endpoints.get_ListRoles;
     "/api/v1/organizations/{organization_id}/service-rates": Endpoints.get_ListServiceRates;
     "/api/v1/organizations/{organization_id}/supplier-invoices": Endpoints.get_ListSupplierInvoices;
     "/api/v1/organizations/{organization_id}/task-labels": Endpoints.get_ListTaskLabels;
@@ -6713,6 +6845,7 @@ export type EndpointByMethod = {
     "/api/v1/invoices/{invoice_id}/credit-notes": Endpoints.post_IssueCreditNote;
     "/api/v1/invoices/{invoice_id}/issue": Endpoints.post_IssueInvoice;
     "/api/v1/invoices/{invoice_id}/payments": Endpoints.post_RecordInvoicePayment;
+    "/api/v1/members/{member_id}/roles": Endpoints.post_AssignRole;
     "/api/v1/organizations": Endpoints.post_CreateOrganization;
     "/api/v1/organizations/{organization_id}/absences": Endpoints.post_CreateAbsence;
     "/api/v1/organizations/{organization_id}/automation/credentials": Endpoints.post_CreateAutomationCredential;
@@ -6736,6 +6869,7 @@ export type EndpointByMethod = {
     "/api/v1/organizations/{organization_id}/projects": Endpoints.post_CreateProject;
     "/api/v1/organizations/{organization_id}/projects/{project_id}/restore": Endpoints.post_RestoreProject;
     "/api/v1/organizations/{organization_id}/quotes": Endpoints.post_CreateQuote;
+    "/api/v1/organizations/{organization_id}/roles": Endpoints.post_CreateRole;
     "/api/v1/organizations/{organization_id}/service-rates": Endpoints.post_CreateServiceRate;
     "/api/v1/organizations/{organization_id}/supplier-invoices/import": Endpoints.post_ImportSupplierInvoice;
     "/api/v1/organizations/{organization_id}/task-labels": Endpoints.post_CreateTaskLabel;

@@ -15,7 +15,11 @@ import type {
 import { TeamListUI } from '#/pages/hr/ui/team-list-ui'
 import { renderWithRouter as renderWithRouterBase } from '#/test/render-with-router'
 
-const ORGANIZATION = { id: 'org-1', name: 'Atelier Bois & Co', slug: 'atelier-bois' }
+const ORGANIZATION = {
+	id: 'org-1',
+	name: 'Atelier Bois & Co',
+	slug: 'atelier-bois',
+}
 
 /**
  * `TeamListUI` renders its "Ajouter une personne" action behind
