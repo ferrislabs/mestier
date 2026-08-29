@@ -18,6 +18,7 @@ import { Route as AppOOrganizationSlugIndexRouteImport } from './routes/_app.o.$
 import { Route as AppOOrganizationSlugSettingsRouteImport } from './routes/_app.o.$organizationSlug.settings'
 import { Route as AppOOrganizationSlugReportingRouteImport } from './routes/_app.o.$organizationSlug.reporting'
 import { Route as AppOOrganizationSlugChatRouteImport } from './routes/_app.o.$organizationSlug.chat'
+import { Route as AppOOrganizationSlugPurchaseIndexRouteImport } from './routes/_app.o.$organizationSlug.purchase.index'
 import { Route as AppOOrganizationSlugPlanningIndexRouteImport } from './routes/_app.o.$organizationSlug.planning.index'
 import { Route as AppOOrganizationSlugHrIndexRouteImport } from './routes/_app.o.$organizationSlug.hr.index'
 import { Route as AppOOrganizationSlugCrmIndexRouteImport } from './routes/_app.o.$organizationSlug.crm.index'
@@ -96,6 +97,12 @@ const AppOOrganizationSlugChatRoute =
   AppOOrganizationSlugChatRouteImport.update({
     id: '/chat',
     path: '/chat',
+    getParentRoute: () => AppOOrganizationSlugRoute,
+  } as any)
+const AppOOrganizationSlugPurchaseIndexRoute =
+  AppOOrganizationSlugPurchaseIndexRouteImport.update({
+    id: '/purchase/',
+    path: '/purchase/',
     getParentRoute: () => AppOOrganizationSlugRoute,
   } as any)
 const AppOOrganizationSlugPlanningIndexRoute =
@@ -304,6 +311,7 @@ export interface FileRoutesByFullPath {
   '/o/$organizationSlug/crm/': typeof AppOOrganizationSlugCrmIndexRoute
   '/o/$organizationSlug/hr/': typeof AppOOrganizationSlugHrIndexRoute
   '/o/$organizationSlug/planning/': typeof AppOOrganizationSlugPlanningIndexRoute
+  '/o/$organizationSlug/purchase/': typeof AppOOrganizationSlugPurchaseIndexRoute
   '/o/$organizationSlug/crm/customers/$customerId': typeof AppOOrganizationSlugCrmCustomersCustomerIdRoute
   '/o/$organizationSlug/crm/customers/pipeline': typeof AppOOrganizationSlugCrmCustomersPipelineRoute
   '/o/$organizationSlug/crm/invoices/$invoiceId': typeof AppOOrganizationSlugCrmInvoicesInvoiceIdRoute
@@ -342,6 +350,7 @@ export interface FileRoutesByTo {
   '/o/$organizationSlug/crm': typeof AppOOrganizationSlugCrmIndexRoute
   '/o/$organizationSlug/hr': typeof AppOOrganizationSlugHrIndexRoute
   '/o/$organizationSlug/planning': typeof AppOOrganizationSlugPlanningIndexRoute
+  '/o/$organizationSlug/purchase': typeof AppOOrganizationSlugPurchaseIndexRoute
   '/o/$organizationSlug/crm/customers/$customerId': typeof AppOOrganizationSlugCrmCustomersCustomerIdRoute
   '/o/$organizationSlug/crm/customers/pipeline': typeof AppOOrganizationSlugCrmCustomersPipelineRoute
   '/o/$organizationSlug/crm/invoices/$invoiceId': typeof AppOOrganizationSlugCrmInvoicesInvoiceIdRoute
@@ -384,6 +393,7 @@ export interface FileRoutesById {
   '/_app/o/$organizationSlug/crm/': typeof AppOOrganizationSlugCrmIndexRoute
   '/_app/o/$organizationSlug/hr/': typeof AppOOrganizationSlugHrIndexRoute
   '/_app/o/$organizationSlug/planning/': typeof AppOOrganizationSlugPlanningIndexRoute
+  '/_app/o/$organizationSlug/purchase/': typeof AppOOrganizationSlugPurchaseIndexRoute
   '/_app/o/$organizationSlug/crm/customers/$customerId': typeof AppOOrganizationSlugCrmCustomersCustomerIdRoute
   '/_app/o/$organizationSlug/crm/customers/pipeline': typeof AppOOrganizationSlugCrmCustomersPipelineRoute
   '/_app/o/$organizationSlug/crm/invoices/$invoiceId': typeof AppOOrganizationSlugCrmInvoicesInvoiceIdRoute
@@ -426,6 +436,7 @@ export interface FileRouteTypes {
     | '/o/$organizationSlug/crm/'
     | '/o/$organizationSlug/hr/'
     | '/o/$organizationSlug/planning/'
+    | '/o/$organizationSlug/purchase/'
     | '/o/$organizationSlug/crm/customers/$customerId'
     | '/o/$organizationSlug/crm/customers/pipeline'
     | '/o/$organizationSlug/crm/invoices/$invoiceId'
@@ -464,6 +475,7 @@ export interface FileRouteTypes {
     | '/o/$organizationSlug/crm'
     | '/o/$organizationSlug/hr'
     | '/o/$organizationSlug/planning'
+    | '/o/$organizationSlug/purchase'
     | '/o/$organizationSlug/crm/customers/$customerId'
     | '/o/$organizationSlug/crm/customers/pipeline'
     | '/o/$organizationSlug/crm/invoices/$invoiceId'
@@ -505,6 +517,7 @@ export interface FileRouteTypes {
     | '/_app/o/$organizationSlug/crm/'
     | '/_app/o/$organizationSlug/hr/'
     | '/_app/o/$organizationSlug/planning/'
+    | '/_app/o/$organizationSlug/purchase/'
     | '/_app/o/$organizationSlug/crm/customers/$customerId'
     | '/_app/o/$organizationSlug/crm/customers/pipeline'
     | '/_app/o/$organizationSlug/crm/invoices/$invoiceId'
@@ -591,6 +604,13 @@ declare module '@tanstack/react-router' {
       path: '/chat'
       fullPath: '/o/$organizationSlug/chat'
       preLoaderRoute: typeof AppOOrganizationSlugChatRouteImport
+      parentRoute: typeof AppOOrganizationSlugRoute
+    }
+    '/_app/o/$organizationSlug/purchase/': {
+      id: '/_app/o/$organizationSlug/purchase/'
+      path: '/purchase'
+      fullPath: '/o/$organizationSlug/purchase/'
+      preLoaderRoute: typeof AppOOrganizationSlugPurchaseIndexRouteImport
       parentRoute: typeof AppOOrganizationSlugRoute
     }
     '/_app/o/$organizationSlug/planning/': {
@@ -855,6 +875,7 @@ interface AppOOrganizationSlugRouteChildren {
   AppOOrganizationSlugCrmIndexRoute: typeof AppOOrganizationSlugCrmIndexRoute
   AppOOrganizationSlugHrIndexRoute: typeof AppOOrganizationSlugHrIndexRoute
   AppOOrganizationSlugPlanningIndexRoute: typeof AppOOrganizationSlugPlanningIndexRoute
+  AppOOrganizationSlugPurchaseIndexRoute: typeof AppOOrganizationSlugPurchaseIndexRoute
   AppOOrganizationSlugCrmCustomersCustomerIdRoute: typeof AppOOrganizationSlugCrmCustomersCustomerIdRoute
   AppOOrganizationSlugCrmCustomersPipelineRoute: typeof AppOOrganizationSlugCrmCustomersPipelineRoute
   AppOOrganizationSlugCrmInvoicesInvoiceIdRoute: typeof AppOOrganizationSlugCrmInvoicesInvoiceIdRoute
@@ -894,6 +915,8 @@ const AppOOrganizationSlugRouteChildren: AppOOrganizationSlugRouteChildren = {
   AppOOrganizationSlugHrIndexRoute: AppOOrganizationSlugHrIndexRoute,
   AppOOrganizationSlugPlanningIndexRoute:
     AppOOrganizationSlugPlanningIndexRoute,
+  AppOOrganizationSlugPurchaseIndexRoute:
+    AppOOrganizationSlugPurchaseIndexRoute,
   AppOOrganizationSlugCrmCustomersCustomerIdRoute:
     AppOOrganizationSlugCrmCustomersCustomerIdRoute,
   AppOOrganizationSlugCrmCustomersPipelineRoute:
