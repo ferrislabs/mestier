@@ -1,10 +1,10 @@
 use auth::Identity;
 use axum::{Extension, extract::State};
-use handlers::{ApiError, AppState, resolve_user_id};
+use handlers::{ApiError, AppState, resolve_actor};
 use http::StatusCode;
 use mestier_core::OrganizationId;
 
-use crate::{paths::OrganizationPath, require_org_membership};
+use crate::paths::OrganizationPath;
 
 #[utoipa::path(
     delete,
@@ -27,18 +27,12 @@ pub async fn handler(
     State(state): State<AppState>,
     Extension(identity): Extension<Identity>,
 ) -> Result<StatusCode, ApiError> {
-    let user = require_org_membership(&state, &identity, organization_id).await?;
-    let actor = resolve_user_id(&state, &identity).await?;
-    let organization = state.usecase.get_organization(organization_id).await?;
-
-    if organization.owner_id != user.id {
-        return Err(ApiError::Forbidden);
-    }
+    let (user_id, actor) = resolve_actor(&state, &identity).await?;
 
     state
         .usecase
-        .acting_as(actor)
-        .soft_delete_organization(organization_id)
+        .acting_as(user_id)
+        .soft_delete_organization(organization_id, actor)
         .await?;
 
     Ok(StatusCode::NO_CONTENT)

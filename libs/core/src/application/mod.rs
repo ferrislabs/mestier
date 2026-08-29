@@ -87,15 +87,23 @@ pub fn default_authorizer() -> MestierAuthorizer {
         .action("channel.manage", Permissions::MANAGE_CHANNELS.0)
         .action("message.delete_any", Permissions::MANAGE_CHANNELS.0)
         .action("webhook.manage", Permissions::MANAGE_WEBHOOKS.0)
-        // #283/#304: the business verbs the action map never had. Not
-        // enforced by any handler yet, on purpose — see the doc comment on
-        // the bits themselves in `domain::role::Permissions`. #305 is what
-        // wires a handler to one of these names.
-        .action("planning.view", Permissions::VIEW_PLANNING.0)
         .action("planning.manage", Permissions::MANAGE_PLANNING.0)
-        .action("cost.view", Permissions::VIEW_COST.0)
-        .action("cost.manage", Permissions::MANAGE_COST.0)
-        .action("report.view", Permissions::VIEW_REPORTS.0)
+        // #309: `planning.view`, `cost.view`, `cost.manage` and
+        // `report.view` used to be registered here too, from #304, on the
+        // assumption a handler would eventually call
+        // `policy::require(..., "cost.view", ...)` the same way every other
+        // action in this map does. #305/#306 shipped a different, more
+        // precise design instead: the reporting handlers read the
+        // `VIEW_COST`/`VIEW_REPORTS`/`MANAGE_COST` bits straight off the
+        // aggregated bitfield to decide what to redact, never through a
+        // boolean require() gate — a redaction is not a refusal, so there
+        // is no action for it to be. Reads elsewhere (planning included)
+        // are membership-gated only, by design (see #305/#307's own note
+        // that only writes are permission-gated). These four names were
+        // never passed to `policy::require` anywhere and never will be
+        // under that design, which is exactly the "action map entry no use
+        // case ever passes" bug class #309's reachability test exists to
+        // catch — removed rather than left to rot.
         .action("customer.manage", Permissions::MANAGE_CUSTOMERS.0)
         .action("quote.manage", Permissions::MANAGE_QUOTES.0)
         .action("reference.manage", Permissions::MANAGE_REFERENCE.0)
@@ -508,5 +516,74 @@ mod tests {
             purge(&pool, statement, org_id.0).await;
         }
         purge(&pool, "DELETE FROM users WHERE id = $1", owner_id).await;
+    }
+
+    /// #309: the action map in `default_authorizer` is hand-maintained, and
+    /// an action name no use case ever passes to `policy::require` (or, for
+    /// Discord, `require_permission`) is a rule that does not run. This
+    /// walks the registered map and asserts every name appears, quoted,
+    /// somewhere in this crate's or a handler crate's source — the exact
+    /// bug class this epic starts from: #304 registered `organization.delete`
+    /// and four business-report actions that #305/#306 never ended up
+    /// wiring to `policy::require` (`organization.delete` sat behind a
+    /// hardcoded owner check instead; the other four were superseded by a
+    /// different, redact-not-refuse design and have since been removed from
+    /// the map entirely — see this file's own comment on that removal).
+    ///
+    /// Mirrors `handlers_field`'s `every_field_handler_resolves_its_own_actor`:
+    /// a plain substring search over real source files, not an AST walk. A
+    /// comment that happens to mention an action name would also satisfy
+    /// this, same limitation that structural test accepts — the point is to
+    /// catch an entry nobody wired at all, not to prove precisely where.
+    #[test]
+    fn every_registered_action_is_passed_to_policy_require_somewhere() {
+        let authorizer = default_authorizer();
+        let workspace_root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+
+        let mut source_dirs = vec![workspace_root.join("libs/core/src")];
+        for entry in std::fs::read_dir(workspace_root.join("libs")).expect("read libs dir") {
+            let entry = entry.expect("read dir entry");
+            let name = entry.file_name();
+            if name.to_string_lossy().starts_with("handlers") {
+                source_dirs.push(entry.path().join("src"));
+            }
+        }
+
+        let mut combined_source = String::new();
+        for dir in &source_dirs {
+            collect_rust_source(dir, &mut combined_source);
+        }
+
+        let unreachable: Vec<&str> = authorizer
+            .action_names()
+            .filter(|name| !combined_source.contains(&format!("\"{name}\"")))
+            .collect();
+
+        assert!(
+            unreachable.is_empty(),
+            "these action-map entries are never passed to policy::require (or \
+             require_permission) anywhere in the source tree: {unreachable:?} — \
+             either wire a use case to the name or remove it from \
+             default_authorizer, the same way `cost.view`/`cost.manage`/\
+             `report.view`/`planning.view` were"
+        );
+    }
+
+    fn collect_rust_source(dir: &std::path::Path, out: &mut String) {
+        let Ok(entries) = std::fs::read_dir(dir) else {
+            return;
+        };
+        for entry in entries {
+            let entry = entry.expect("read dir entry");
+            let path = entry.path();
+            if path.is_dir() {
+                collect_rust_source(&path, out);
+            } else if path.extension().and_then(|e| e.to_str()) == Some("rs")
+                && let Ok(content) = std::fs::read_to_string(&path)
+            {
+                out.push_str(&content);
+                out.push('\n');
+            }
+        }
     }
 }

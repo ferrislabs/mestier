@@ -242,6 +242,16 @@ fn args_for(database_url: &str, redis_url: &str, issuer_url: &str) -> Vec<String
         db.path().trim_start_matches('/').to_owned(),
         "--rate-limit-redis-url".to_owned(),
         redis_url.to_owned(),
+        // The rate limiter keys on client IP alone, and every test in this
+        // suite calls in from the same loopback address through the same
+        // Redis — so the sliding window is shared across every test in a
+        // run, and across a run and the one before it if run twice inside
+        // the same window. The production default of 120/minute is a
+        // limit on one real caller, not on an entire suite's worth of
+        // fixtures; a value that low turned a second consecutive run of a
+        // clean suite into a false failure.
+        "--rate-limit-per-minute".to_owned(),
+        "100000".to_owned(),
         "--auth-issuer".to_owned(),
         issuer_url.to_owned(),
         // None of these suites touch object storage, but `create_service`
