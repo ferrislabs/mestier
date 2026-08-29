@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT id, org_id, channel_type::text AS \"channel_type!\", name, topic, position, category_id, parent_id, origin_message_id, archived, created_at, updated_at\n            FROM chat.channels WHERE parent_id = $1 AND channel_type = 'THREAD'\n            ORDER BY id ASC\n            ",
+  "query": "\n            UPDATE chat.channels\n            SET name = $2, topic = $3, position = $4, category_id = $5, archived = $6, updated_at = $7\n            WHERE id = $1\n            RETURNING id, org_id, channel_type::text AS \"channel_type!\", name, topic, position, category_id, parent_id, origin_message_id, archived, project_id, created_at, updated_at\n            ",
   "describe": {
     "columns": [
       {
@@ -55,18 +55,29 @@
       },
       {
         "ordinal": 10,
+        "name": "project_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 11,
         "name": "created_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 11,
+        "ordinal": 12,
         "name": "updated_at",
         "type_info": "Timestamptz"
       }
     ],
     "parameters": {
       "Left": [
-        "Uuid"
+        "Uuid",
+        "Text",
+        "Text",
+        "Int4",
+        "Uuid",
+        "Bool",
+        "Timestamptz"
       ]
     },
     "nullable": [
@@ -80,9 +91,10 @@
       true,
       true,
       false,
+      true,
       false,
       false
     ]
   },
-  "hash": "004c544d2ea05dee7343e3a0ae30df3b4530731f740fdbd934a2538401b1c58b"
+  "hash": "59c1065bc495f4e79b502bc76feb70ac34a1f690068284a8a411428ef4c3427e"
 }

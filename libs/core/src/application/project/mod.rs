@@ -2,6 +2,7 @@ use std::collections::HashSet;
 
 use authz::Resource;
 use common::CoreError;
+use discord::{Channel, ChannelRepository, ChannelService, CreateProjectChannelCommand};
 use mestier_macros::transactional;
 
 use crate::{
@@ -110,7 +111,15 @@ impl MestierUseCase {
         service.update_project(command).await
     }
 
-    #[transactional(project, role, member, authz)]
+    /// Archiving cascades into the project's channel, if it has one: the
+    /// conversation about a job is part of the record of that job, the same
+    /// way its cost is (#345). This does *not* delete anything, the channel
+    /// stays fully readable, only `archived` flips, and it is the only
+    /// lifecycle-ending operation a project has at all: this codebase has no
+    /// hard-delete for a project (`DELETE /projects/{id}` archives, see
+    /// `handlers-planning`'s `archive.rs`), so there is no separate "deleting
+    /// a project" case to additionally guard here.
+    #[transactional(project, channel, role, member, authz, events)]
     pub async fn archive_project(
         &self,
         actor: authz::Subject,
@@ -141,10 +150,19 @@ impl MestierUseCase {
         .await?;
 
         let mut service = ProjectService::new(project_repository);
-        service.archive_project(id).await
+        service.archive_project(id).await?;
+
+        let mut channel_service = ChannelService::new(channel_repository, &events);
+        channel_service
+            .set_project_channel_archived(id, true)
+            .await?;
+        Ok(())
     }
 
-    #[transactional(project, role, member, authz)]
+    /// Symmetric with `archive_project`: restoring a project un-archives its
+    /// channel too, so the two never end up disagreeing about whether the
+    /// job is still active.
+    #[transactional(project, channel, role, member, authz, events)]
     pub async fn restore_project(
         &self,
         actor: authz::Subject,
@@ -175,12 +193,56 @@ impl MestierUseCase {
         .await?;
 
         let mut service = ProjectService::new(project_repository);
-        service.restore_project(id).await
+        service.restore_project(id).await?;
+
+        let mut channel_service = ChannelService::new(channel_repository, &events);
+        channel_service
+            .set_project_channel_archived(id, false)
+            .await?;
+        Ok(())
+    }
+
+    /// Creates the project's one channel, named from the project when the
+    /// caller does not give an explicit name. See `uq_channels_project_id`
+    /// and `ChannelService::create_project_channel` for why a project cannot
+    /// grow a second one.
+    #[transactional(project, channel, events)]
+    pub async fn create_project_channel(
+        &self,
+        project_id: ProjectId,
+        name: Option<String>,
+    ) -> Result<Channel, CoreError> {
+        let mut project_service = ProjectService::new(project_repository);
+        let project = project_service.get_project(project_id).await?;
+
+        let mut channel_service = ChannelService::new(channel_repository, &events);
+        channel_service
+            .create_project_channel(CreateProjectChannelCommand {
+                organization_id: project.organization_id,
+                project_id: project.id,
+                name: name.unwrap_or(project.name),
+            })
+            .await
+    }
+
+    /// The project's channel, if it has grown one. `404`s both when the
+    /// project itself does not exist and when it exists but has no channel,
+    /// most projects never do.
+    #[transactional(project, channel)]
+    pub async fn get_project_channel(&self, project_id: ProjectId) -> Result<Channel, CoreError> {
+        let mut project_service = ProjectService::new(project_repository);
+        project_service.get_project(project_id).await?;
+
+        let mut channel_repository = channel_repository;
+        channel_repository
+            .find_by_project_id(project_id)
+            .await?
+            .ok_or(CoreError::NotFound)
     }
 
     /// Turns an accepted quote into a project with the tasks a human
     /// confirmed from `GET .../plan-proposal`, in one transaction. The
-    /// project carries the quote's customer and the quote itself — that
+    /// project carries the quote's customer and the quote itself, that
     /// attachment is what gives `ProjectProfitability::quoted_cents` its
     /// denominator (see #298, and #260 for why `quote_id` lives here and
     /// not on the task).
@@ -224,7 +286,7 @@ impl MestierUseCase {
         )?;
 
         // A planned task may point at zero or more quote lines; the ones it
-        // does must actually belong to this quote — a wrong id here is a
+        // does must actually belong to this quote, a wrong id here is a
         // caller bug worth refusing loudly rather than silently accepting.
         let quote_line_ids: HashSet<_> = quote.lines.iter().map(|line| line.id).collect();
         for task in &command.tasks {

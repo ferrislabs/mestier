@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT id, org_id, channel_type::text AS \"channel_type!\", name, topic, position, category_id, parent_id, origin_message_id, archived, created_at, updated_at\n            FROM chat.channels WHERE id = $1\n            ",
+  "query": "\n            INSERT INTO chat.channels (id, org_id, channel_type, name, topic, position, category_id, parent_id, origin_message_id, archived, project_id, created_at, updated_at)\n            VALUES ($1, $2, CAST($3 AS text)::chat.channel_type, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)\n            RETURNING id, org_id, channel_type::text AS \"channel_type!\", name, topic, position, category_id, parent_id, origin_message_id, archived, project_id, created_at, updated_at\n            ",
   "describe": {
     "columns": [
       {
@@ -55,18 +55,35 @@
       },
       {
         "ordinal": 10,
+        "name": "project_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 11,
         "name": "created_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 11,
+        "ordinal": 12,
         "name": "updated_at",
         "type_info": "Timestamptz"
       }
     ],
     "parameters": {
       "Left": [
-        "Uuid"
+        "Uuid",
+        "Uuid",
+        "Text",
+        "Text",
+        "Text",
+        "Int4",
+        "Uuid",
+        "Uuid",
+        "Uuid",
+        "Bool",
+        "Uuid",
+        "Timestamptz",
+        "Timestamptz"
       ]
     },
     "nullable": [
@@ -80,9 +97,10 @@
       true,
       true,
       false,
+      true,
       false,
       false
     ]
   },
-  "hash": "f5bba787b3f3d8afedc3bef19e1cab42ef6b0def515969753959cd9eb9e5881a"
+  "hash": "52b1b70709bb2bbc9ad840bcac2d56121028d9e0f62db770e59c8352c54e6508"
 }

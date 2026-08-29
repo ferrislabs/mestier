@@ -26,7 +26,7 @@ pub use mentions::{ParsedMentions, parse_mentions};
 pub mod events;
 pub use events::{DomainEvent, EventPublisher};
 
-pub use common::{OrganizationId, RoleId, UserId};
+pub use common::{OrganizationId, ProjectId, RoleId, UserId};
 
 // Flat re-exports of each aggregate's port, service, and commands so consumers
 // (Plan 2 infra/application) can import them directly from the crate root.
@@ -34,8 +34,8 @@ pub use domain::category::{
     CategoryRepository, CategoryService, CreateCategoryCommand, UpdateCategoryCommand,
 };
 pub use domain::channel::{
-    ChannelRepository, ChannelService, CreateChannelCommand, CreateThreadCommand,
-    UpdateChannelCommand, UpdateThreadCommand,
+    ChannelRepository, ChannelService, CreateChannelCommand, CreateProjectChannelCommand,
+    CreateThreadCommand, UpdateChannelCommand, UpdateThreadCommand,
 };
 pub use domain::message::{
     AddReactionCommand, AttachmentInput, CreateMessageCommand, MessageAuthor, MessageRepository,

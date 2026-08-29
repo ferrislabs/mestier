@@ -70,6 +70,12 @@ mod tests {
         .await;
         purge(
             pool,
+            "DELETE FROM chat.channels WHERE org_id = $1",
+            organization_id.0,
+        )
+        .await;
+        purge(
+            pool,
             "DELETE FROM projects WHERE org_id = $1",
             organization_id.0,
         )
@@ -292,6 +298,136 @@ mod tests {
 
         assert_eq!(updated.name, "Projet renommé");
         assert!(updated.is_internal());
+
+        cleanup(&pool, fixture.organization_id, &[fixture.owner_id]).await;
+    }
+
+    // -----------------------------------------------------------------
+    // #345 — a project's one channel
+    // -----------------------------------------------------------------
+
+    #[tokio::test]
+    #[ignore = "requires live postgres"]
+    async fn creating_a_projects_channel_names_it_from_the_project_by_default() {
+        let pool = make_pool().await;
+        let fixture = seed_fixture(&pool).await;
+        let usecase = make_usecase(pool.clone());
+
+        let project = usecase
+            .create_project(create_command(&fixture, "Toiture Dupont"))
+            .await
+            .unwrap();
+
+        let channel = usecase
+            .create_project_channel(project.id, None)
+            .await
+            .unwrap();
+
+        assert_eq!(channel.name, "Toiture Dupont");
+        assert_eq!(channel.project_id, Some(project.id));
+        assert!(!channel.archived);
+
+        let fetched = usecase.get_project_channel(project.id).await.unwrap();
+        assert_eq!(fetched.id, channel.id);
+
+        cleanup(&pool, fixture.organization_id, &[fixture.owner_id]).await;
+    }
+
+    #[tokio::test]
+    #[ignore = "requires live postgres"]
+    async fn a_project_cannot_grow_a_second_channel() {
+        let pool = make_pool().await;
+        let fixture = seed_fixture(&pool).await;
+        let usecase = make_usecase(pool.clone());
+
+        let project = usecase
+            .create_project(create_command(&fixture, "Chantier Martin"))
+            .await
+            .unwrap();
+
+        usecase
+            .create_project_channel(project.id, None)
+            .await
+            .unwrap();
+
+        let err = usecase
+            .create_project_channel(project.id, Some("second-channel".to_owned()))
+            .await
+            .unwrap_err();
+
+        assert!(matches!(err, CoreError::Conflict(_)), "got {err:?}");
+
+        cleanup(&pool, fixture.organization_id, &[fixture.owner_id]).await;
+    }
+
+    #[tokio::test]
+    #[ignore = "requires live postgres"]
+    async fn archiving_a_project_archives_its_channel_and_restoring_reverses_it() {
+        let pool = make_pool().await;
+        let fixture = seed_fixture(&pool).await;
+        let usecase = make_usecase(pool.clone());
+
+        let project = usecase
+            .create_project(create_command(&fixture, "Chantier Leroy"))
+            .await
+            .unwrap();
+        usecase
+            .create_project_channel(project.id, None)
+            .await
+            .unwrap();
+
+        usecase
+            .archive_project(authz::Subject::system(), project.id)
+            .await
+            .unwrap();
+        assert!(
+            usecase
+                .get_project_channel(project.id)
+                .await
+                .unwrap()
+                .archived,
+            "archiving the project must archive its channel"
+        );
+
+        usecase
+            .restore_project(authz::Subject::system(), project.id)
+            .await
+            .unwrap();
+        assert!(
+            !usecase
+                .get_project_channel(project.id)
+                .await
+                .unwrap()
+                .archived,
+            "restoring the project must un-archive its channel"
+        );
+
+        cleanup(&pool, fixture.organization_id, &[fixture.owner_id]).await;
+    }
+
+    /// Most projects never grow a channel — archiving one must not fail or
+    /// try to reach a channel that does not exist.
+    #[tokio::test]
+    #[ignore = "requires live postgres"]
+    async fn archiving_a_project_with_no_channel_is_unaffected() {
+        let pool = make_pool().await;
+        let fixture = seed_fixture(&pool).await;
+        let usecase = make_usecase(pool.clone());
+
+        let project = usecase
+            .create_project(create_command(&fixture, "Projet sans canal"))
+            .await
+            .unwrap();
+
+        usecase
+            .archive_project(authz::Subject::system(), project.id)
+            .await
+            .unwrap();
+        assert!(usecase.get_project(project.id).await.unwrap().is_archived());
+        assert!(matches!(
+            usecase.get_project_channel(project.id).await.unwrap_err(),
+            CoreError::NotFound
+        ));
 
         cleanup(&pool, fixture.organization_id, &[fixture.owner_id]).await;
     }
