@@ -1,3 +1,4 @@
+use authz::Resource;
 use common::CoreError;
 use mestier_macros::transactional;
 
@@ -5,7 +6,7 @@ use chrono::NaiveDate;
 
 use crate::{
     DateRange, EmployeeRhythm, MemberId, OrganizationId, WorkSlot,
-    application::MestierUseCase,
+    application::{MestierUseCase, policy},
     domain::{
         employee::ports::EmployeeRepository,
         work_time::{
@@ -47,9 +48,10 @@ impl MestierUseCase {
     /// translation of a *contract* into recurring slots: a member with no
     /// profile has nothing to translate, and that is a `NotFound` rather than
     /// an empty rhythm silently created on their behalf.
-    #[transactional(employee_rhythm, work_slot, employee)]
+    #[transactional(employee_rhythm, work_slot, employee, role, member, authz)]
     pub async fn replace_rhythm(
         &self,
+        actor: authz::Subject,
         organization_id: OrganizationId,
         member_id: MemberId,
         effective_from: NaiveDate,
@@ -57,6 +59,24 @@ impl MestierUseCase {
         slots: Vec<RhythmSlotInput>,
     ) -> Result<EmployeeRhythm, CoreError> {
         let mut employee_repository = employee_repository;
+        let mut member_repository = member_repository;
+        let mut role_repository = role_repository;
+
+        let actor = policy::enrich_for_organization(
+            actor,
+            organization_id,
+            &mut member_repository,
+            &mut role_repository,
+        )
+        .await?;
+        policy::require(
+            &authz,
+            &actor,
+            "planning.manage",
+            Resource::new("organization", organization_id.0.to_string()),
+        )
+        .await?;
+
         let employee_id = employee_repository
             .find_by_member_id(member_id)
             .await?
@@ -66,6 +86,7 @@ impl MestierUseCase {
         let mut service = WorkTimeService::new(employee_rhythm_repository, work_slot_repository);
         service
             .replace_rhythm(ReplaceRhythmCommand {
+                actor,
                 organization_id,
                 employee_id,
                 effective_from,
@@ -76,11 +97,29 @@ impl MestierUseCase {
     }
 
     /// Replaces the `[from, to]` work-slots window wholesale.
-    #[transactional(employee_rhythm, work_slot)]
+    #[transactional(employee_rhythm, work_slot, role, member, authz)]
     pub async fn replace_work_slots(
         &self,
         command: ReplaceWorkSlotsCommand,
     ) -> Result<Vec<WorkSlot>, CoreError> {
+        let mut member_repository = member_repository;
+        let mut role_repository = role_repository;
+
+        let actor = policy::enrich_for_organization(
+            command.actor.clone(),
+            command.organization_id,
+            &mut member_repository,
+            &mut role_repository,
+        )
+        .await?;
+        policy::require(
+            &authz,
+            &actor,
+            "planning.manage",
+            Resource::new("organization", command.organization_id.0.to_string()),
+        )
+        .await?;
+
         let mut service = WorkTimeService::new(employee_rhythm_repository, work_slot_repository);
         service.replace_work_slots(command).await
     }

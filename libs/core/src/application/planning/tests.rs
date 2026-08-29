@@ -592,7 +592,7 @@ mod tests {
         );
 
         usecase
-            .soft_delete_task(crate::TaskId(parent_task_id))
+            .soft_delete_task(authz::Subject::system(), crate::TaskId(parent_task_id))
             .await
             .expect("soft_delete_task must succeed");
 

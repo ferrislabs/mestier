@@ -1,7 +1,7 @@
 use auth::Identity;
 use axum::{Extension, Json, extract::State};
 use chrono::{DateTime, Utc};
-use handlers::{ApiError, AppState, DataEnvelope, Response, resolve_user_id};
+use handlers::{ApiError, AppState, DataEnvelope, Response, resolve_actor};
 use mestier_core::{CreateProjectFromQuoteCommand, PlannedTaskCommand, QuoteLineId};
 use serde::Deserialize;
 use utoipa::ToSchema;
@@ -95,12 +95,13 @@ pub async fn handler(
     Json(payload): Json<CreateQuotePlanRequest>,
 ) -> Result<Response<QuotePlanResponse>, ApiError> {
     require_quote_membership(&state, &identity, quote_id).await?;
-    let actor = resolve_user_id(&state, &identity).await?;
+    let (user_id, actor) = resolve_actor(&state, &identity).await?;
 
     let (project, tasks) = state
         .usecase
-        .acting_as(actor)
+        .acting_as(user_id)
         .create_project_from_quote(CreateProjectFromQuoteCommand {
+            actor,
             quote_id,
             name: payload.name,
             force_new: payload.force_new,

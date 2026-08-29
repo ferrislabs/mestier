@@ -74,3 +74,47 @@ pub fn router(state: &AppState) -> Router<AppState> {
         .layer(from_fn_with_state(state.clone(), rate_limit_middleware))
         .layer(from_fn_with_state(state.clone(), auth_middleware))
 }
+
+#[cfg(test)]
+mod tests {
+    /// #305's own scope note: "handlers-field: reads and writes the
+    /// caller's own data only, so it needs no new bit. Assert that rather
+    /// than assume it." A route here refuses by *resolving no actor at
+    /// all* (`resolve_field_actor` returns `Forbidden` unless the caller
+    /// is themselves the employee), not by checking a business
+    /// permission — there is nothing to grant or withhold, and adding a
+    /// bit would be a second, redundant guard next to a check that
+    /// already reads no wider than "you are you". This is a structural
+    /// regression guard, not a comment promising it: a future route added
+    /// under `field/` that skips `resolve_field_actor` — and so might
+    /// read or write on someone else's behalf — fails this test rather
+    /// than silently regressing the invariant.
+    #[test]
+    fn every_field_handler_resolves_its_own_actor() {
+        let field_dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src/field");
+        let mut checked = 0;
+
+        for entry in std::fs::read_dir(&field_dir).expect("read src/field") {
+            let entry = entry.expect("read dir entry");
+            let path = entry.path();
+            if path.file_name().and_then(|n| n.to_str()) == Some("mod.rs") {
+                continue;
+            }
+            if path.extension().and_then(|e| e.to_str()) != Some("rs") {
+                continue;
+            }
+
+            let source = std::fs::read_to_string(&path)
+                .unwrap_or_else(|e| panic!("read {}: {e}", path.display()));
+            assert!(
+                source.contains("resolve_field_actor"),
+                "{} does not call resolve_field_actor — a field route must resolve \
+                 its own caller, never act on an id taken from the request",
+                path.display()
+            );
+            checked += 1;
+        }
+
+        assert!(checked > 0, "no field handler files were found to check");
+    }
+}

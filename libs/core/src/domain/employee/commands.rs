@@ -8,6 +8,10 @@ use crate::{EmployeeCostBasisId, EmployeeId, MemberId, OrganizationId};
 /// later call is an implementation detail of the repository, not of the domain.
 #[derive(Debug, Clone)]
 pub struct UpsertEmployeeProfileCommand {
+    /// Authenticated actor performing the update. Built by the handler from
+    /// the request `Identity`; carries the AuthZen-shaped subject the policy
+    /// engine consumes.
+    pub actor: authz::Subject,
     pub organization_id: OrganizationId,
     pub member_id: MemberId,
     /// `None` means the rate is not set yet; `Some(0)` means genuinely free.
@@ -23,6 +27,10 @@ pub struct UpsertEmployeeProfileCommand {
 /// its absences and its work slots all survive — only the contract goes.
 #[derive(Debug, Clone)]
 pub struct RemoveEmployeeProfileCommand {
+    /// Authenticated actor performing the update. Built by the handler from
+    /// the request `Identity`; carries the AuthZen-shaped subject the policy
+    /// engine consumes.
+    pub actor: authz::Subject,
     pub member_id: MemberId,
 }
 
@@ -37,6 +45,10 @@ pub struct RemoveEmployeeProfileCommand {
 /// refused rather than silently reordering history.
 #[derive(Debug, Clone)]
 pub struct SetEmployeeCostBasisCommand {
+    /// Authenticated actor performing the update. Built by the handler from
+    /// the request `Identity`; carries the AuthZen-shaped subject the policy
+    /// engine consumes.
+    pub actor: authz::Subject,
     pub organization_id: OrganizationId,
     pub employee_id: EmployeeId,
     pub effective_from: NaiveDate,
@@ -56,6 +68,10 @@ pub struct SetEmployeeCostBasisCommand {
 /// the date is exactly the kind of mistake this exists to fix.
 #[derive(Debug, Clone)]
 pub struct CorrectEmployeeCostBasisCommand {
+    /// Authenticated actor performing the update. Built by the handler from
+    /// the request `Identity`; carries the AuthZen-shaped subject the policy
+    /// engine consumes.
+    pub actor: authz::Subject,
     pub id: EmployeeCostBasisId,
     pub effective_from: NaiveDate,
     pub effective_to: Option<NaiveDate>,

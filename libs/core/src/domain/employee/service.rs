@@ -397,6 +397,7 @@ mod tests {
 
     fn upsert_command(member_id: MemberId) -> UpsertEmployeeProfileCommand {
         UpsertEmployeeProfileCommand {
+            actor: authz::Subject::system(),
             organization_id: OrganizationId(Uuid::new_v4()),
             member_id,
             hourly_rate_cents: Some(3500),
@@ -614,7 +615,10 @@ mod tests {
 
         assert!(
             service
-                .remove_employee_profile(RemoveEmployeeProfileCommand { member_id })
+                .remove_employee_profile(RemoveEmployeeProfileCommand {
+                    actor: authz::Subject::system(),
+                    member_id,
+                })
                 .await
                 .is_ok()
         );
@@ -631,6 +635,7 @@ mod tests {
         let mut service = EmployeeService::new(repo);
         let result = service
             .remove_employee_profile(RemoveEmployeeProfileCommand {
+                actor: authz::Subject::system(),
                 member_id: MemberId(Uuid::new_v4()),
             })
             .await;
@@ -689,6 +694,7 @@ mod tests {
         effective_from: NaiveDate,
     ) -> SetEmployeeCostBasisCommand {
         SetEmployeeCostBasisCommand {
+            actor: authz::Subject::system(),
             organization_id: OrganizationId(Uuid::new_v4()),
             employee_id,
             effective_from,

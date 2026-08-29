@@ -7,6 +7,10 @@ use crate::{
 
 #[derive(Debug, Clone)]
 pub struct CreateAbsenceCommand {
+    /// Authenticated actor performing the update. Built by the handler from
+    /// the request `Identity`; carries the AuthZen-shaped subject the policy
+    /// engine consumes.
+    pub actor: authz::Subject,
     pub organization_id: OrganizationId,
     pub member_id: MemberId,
     pub kind: AbsenceKind,
@@ -24,6 +28,10 @@ pub struct CreateAbsenceCommand {
 /// customer/context are — only its schedule, kind and note can move.
 #[derive(Debug, Clone)]
 pub struct PatchAbsenceCommand {
+    /// Authenticated actor performing the update. Built by the handler from
+    /// the request `Identity`; carries the AuthZen-shaped subject the policy
+    /// engine consumes.
+    pub actor: authz::Subject,
     pub id: AbsenceId,
     pub kind: Option<AbsenceKind>,
     pub starts_at: Option<DateTime<Utc>>,
@@ -35,8 +43,9 @@ pub struct PatchAbsenceCommand {
 impl PatchAbsenceCommand {
     /// A no-op patch targeting `id`: every field left unset. Tests and
     /// callers flip on only the fields they mean to change.
-    pub fn new(id: AbsenceId) -> Self {
+    pub fn new(id: AbsenceId, actor: authz::Subject) -> Self {
         Self {
+            actor,
             id,
             kind: None,
             starts_at: None,

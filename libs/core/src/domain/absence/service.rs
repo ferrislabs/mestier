@@ -138,6 +138,7 @@ mod tests {
     fn create_command() -> CreateAbsenceCommand {
         let now = Utc::now();
         CreateAbsenceCommand {
+            actor: authz::Subject::system(),
             organization_id: OrganizationId(Uuid::new_v4()),
             member_id: MemberId(Uuid::new_v4()),
             kind: crate::AbsenceKind::Leave,
@@ -269,7 +270,7 @@ mod tests {
 
         let mut service = service(absence_repository);
 
-        let mut command = PatchAbsenceCommand::new(id);
+        let mut command = PatchAbsenceCommand::new(id, authz::Subject::system());
         command.starts_at = Some(new_starts_at);
         command.ends_at = Some(new_ends_at);
         command.kind = Some(crate::AbsenceKind::Sick);
@@ -299,7 +300,7 @@ mod tests {
 
         let mut service = service(absence_repository);
 
-        let mut command = PatchAbsenceCommand::new(id);
+        let mut command = PatchAbsenceCommand::new(id, authz::Subject::system());
         command.ends_at = Some(existing_starts_at - chrono::Duration::hours(1));
 
         let err = service.patch_absence(command).await.unwrap_err();
@@ -331,7 +332,7 @@ mod tests {
 
         let mut service = service(absence_repository);
 
-        let mut command = PatchAbsenceCommand::new(id);
+        let mut command = PatchAbsenceCommand::new(id, authz::Subject::system());
         command.note = Some(None);
 
         let updated = service.patch_absence(command).await.unwrap();
@@ -356,7 +357,7 @@ mod tests {
 
         let mut service = service(absence_repository);
 
-        let mut command = PatchAbsenceCommand::new(id);
+        let mut command = PatchAbsenceCommand::new(id, authz::Subject::system());
         command.note = Some(Some("   ".to_owned()));
 
         let err = service.patch_absence(command).await.unwrap_err();

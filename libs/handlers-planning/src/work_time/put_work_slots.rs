@@ -4,7 +4,7 @@ use axum::{
     extract::{Query, State},
 };
 use chrono::NaiveDate;
-use handlers::{ApiError, AppState, DataEnvelope, Response, resolve_user_id};
+use handlers::{ApiError, AppState, DataEnvelope, Response, resolve_actor};
 use mestier_core::{ReplaceWorkSlotsCommand, WorkSlotInput};
 use serde::Deserialize;
 use utoipa::ToSchema;
@@ -52,13 +52,14 @@ pub async fn handler(
     Query(window): Query<WorkTimeWindowQuery>,
     Json(payload): Json<PutWorkSlotsRequest>,
 ) -> Result<Response<Vec<WorkSlotResponse>>, ApiError> {
-    let actor = resolve_user_id(&state, &identity).await?;
+    let (user_id, actor) = resolve_actor(&state, &identity).await?;
     let organization_id = crate::require_member_target(&state, &identity, member_id).await?;
 
     let work_slots = state
         .usecase
-        .acting_as(actor)
+        .acting_as(user_id)
         .replace_work_slots(ReplaceWorkSlotsCommand {
+            actor,
             organization_id,
             member_id,
             from: window.from,

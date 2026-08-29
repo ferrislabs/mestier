@@ -1,6 +1,6 @@
 use auth::Identity;
 use axum::{Extension, extract::State};
-use handlers::{ApiError, AppState, Response, resolve_user_id};
+use handlers::{ApiError, AppState, Response};
 use mestier_core::CustomerContextId;
 
 use crate::{EmptyResponse, paths::CustomerContextPath, require_customer_membership};
@@ -33,11 +33,11 @@ pub async fn handler(
         .get_customer_context(customer_context_id)
         .await?;
     require_customer_membership(&state, &identity, current.customer_id).await?;
-    let actor = resolve_user_id(&state, &identity).await?;
+    let (user_id, actor) = handlers::resolve_actor(&state, &identity).await?;
     state
         .usecase
-        .acting_as(actor)
-        .soft_delete_customer_context(customer_context_id)
+        .acting_as(user_id)
+        .soft_delete_customer_context(customer_context_id, actor)
         .await?;
 
     Ok(Response::NoContent)

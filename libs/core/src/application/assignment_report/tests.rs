@@ -86,6 +86,7 @@ mod tests {
         let now = Utc::now();
         let task = usecase
             .create_task(CreateTaskCommand {
+                actor: authz::Subject::system(),
                 organization_id,
                 parent_task_id: None,
                 title: "Réunion de chantier".to_owned(),
@@ -107,7 +108,7 @@ mod tests {
         let patched = usecase
             .patch_task(PatchTaskCommand {
                 assignees: Some(vec![AssigneeRef(assignee_member_id)]),
-                ..PatchTaskCommand::new(task.id)
+                ..PatchTaskCommand::new(task.id, authz::Subject::system())
             })
             .await
             .unwrap();

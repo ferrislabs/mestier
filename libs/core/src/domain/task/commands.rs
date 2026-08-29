@@ -1,3 +1,4 @@
+use authz::Subject;
 use chrono::{DateTime, Utc};
 
 use crate::{
@@ -8,6 +9,10 @@ use crate::{
 
 #[derive(Debug, Clone)]
 pub struct CreateTaskCommand {
+    /// Authenticated actor performing the update. Built by the handler
+    /// from the request `Identity`; carries the AuthZen-shaped subject
+    /// the policy engine consumes.
+    pub actor: Subject,
     pub organization_id: OrganizationId,
     /// `None` for a root task. `Some` marks this as a subtask — its
     /// candidate parent must itself be a root (see
@@ -43,6 +48,10 @@ pub struct CreateTaskCommand {
 /// a single `Option` is enough for it.
 #[derive(Debug, Clone)]
 pub struct PatchTaskCommand {
+    /// Authenticated actor performing the update. Built by the handler
+    /// from the request `Identity`; carries the AuthZen-shaped subject
+    /// the policy engine consumes.
+    pub actor: Subject,
     pub id: TaskId,
     pub parent_task_id: Option<Option<TaskId>>,
     pub title: Option<String>,
@@ -85,8 +94,9 @@ pub struct PatchTaskCommand {
 impl PatchTaskCommand {
     /// A no-op patch targeting `id`: every field left unset. Tests and
     /// callers flip on only the fields they mean to change.
-    pub fn new(id: TaskId) -> Self {
+    pub fn new(id: TaskId, actor: Subject) -> Self {
         Self {
+            actor,
             id,
             parent_task_id: None,
             title: None,

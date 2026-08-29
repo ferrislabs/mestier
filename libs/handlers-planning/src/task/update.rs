@@ -1,7 +1,7 @@
 use auth::Identity;
 use axum::{Extension, Json, extract::State};
 use chrono::{DateTime, Utc};
-use handlers::{ApiError, AppState, DataEnvelope, Response, resolve_user_id};
+use handlers::{ApiError, AppState, DataEnvelope, Response, resolve_actor};
 use mestier_core::{
     AssigneeRef, EquipmentId, MemberId, PatchTaskCommand, ProjectId, TaskId, TaskLabelId,
     TaskStatus,
@@ -129,9 +129,9 @@ pub async fn handler(
     // this call detached anything is exactly whether it was still attached
     // going in.
     let was_in_series = before.recurrence_id.is_some();
-    let actor = resolve_user_id(&state, &identity).await?;
+    let (user_id, actor) = resolve_actor(&state, &identity).await?;
 
-    let mut command = PatchTaskCommand::new(task_id);
+    let mut command = PatchTaskCommand::new(task_id, actor);
     command.parent_task_id = payload.parent_task_id;
     command.title = payload.title;
     command.description = payload.description;
@@ -149,7 +149,7 @@ pub async fn handler(
         .assignees
         .map(|assignees| assignees.into_iter().map(Into::into).collect());
 
-    let task = state.usecase.acting_as(actor).patch_task(command).await?;
+    let task = state.usecase.acting_as(user_id).patch_task(command).await?;
 
     // Reflects the task's current labels/equipment regardless of whether
     // this PATCH touched them — a PATCH that never mentions `label_ids` or

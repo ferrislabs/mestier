@@ -156,6 +156,51 @@ async fn correcting_a_version_to_overlap_another_is_refused_as_a_conflict() {
     app.cleanup().await;
 }
 
+/// #305: a member with no role at all is refused (403) on a
+/// reference-data write — `equipment` stands in for every other
+/// reference-data write gated on `reference.manage` (service rates,
+/// products, absences, employee profiles/cost bases) — while the fixture's
+/// own owner, whose seeded role carries the bit, still succeeds.
+#[tokio::test]
+#[ignore = "requires live postgres and redis"]
+async fn reference_manage_gates_equipment_writes() {
+    let app = harness::start().await;
+    let client = reqwest::Client::new();
+
+    let body = serde_json::json!({
+        "name": "Camion",
+        "hourly_rate_cents": 1_200,
+    });
+
+    let refused = client
+        .post(app.url(&format!("/organizations/{}/equipment", app.organization_id)))
+        .bearer_auth(&app.restricted_token)
+        .json(&body)
+        .send()
+        .await
+        .expect("the api answers the create call");
+    assert_eq!(
+        refused.status(),
+        403,
+        "a member with no role must be refused on a reference-data write"
+    );
+
+    let created = client
+        .post(app.url(&format!("/organizations/{}/equipment", app.organization_id)))
+        .bearer_auth(&app.token)
+        .json(&body)
+        .send()
+        .await
+        .expect("the api answers the create call");
+    assert_eq!(
+        created.status(),
+        201,
+        "the fixture's own owner, whose role carries reference.manage, must still succeed"
+    );
+
+    app.cleanup().await;
+}
+
 /// The cross-tenant refusal: a bare `employee_id`/`cost_basis_id` from
 /// another organization must never be reachable through this token, whatever
 /// the exact status code — the loaded row's own organization is what

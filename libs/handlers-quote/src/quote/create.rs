@@ -2,7 +2,7 @@ use std::str::FromStr;
 
 use auth::Identity;
 use axum::{Extension, Json, extract::State};
-use handlers::{ApiError, AppState, DataEnvelope, Response, resolve_user_id};
+use handlers::{ApiError, AppState, DataEnvelope, Response, resolve_actor};
 use mestier_core::{
     CreateQuoteCommand, CustomerContextId, CustomerId, QuoteLineCommand, ServiceRateId,
     ServiceRateUnit,
@@ -85,7 +85,7 @@ pub async fn handler(
     Json(payload): Json<CreateQuoteRequest>,
 ) -> Result<Response<QuoteResponse>, ApiError> {
     require_org_membership(&state, &identity, path.organization_id).await?;
-    let actor = resolve_user_id(&state, &identity).await?;
+    let (user_id, actor) = resolve_actor(&state, &identity).await?;
     require_quote_targets(
         &state,
         path.organization_id,
@@ -96,14 +96,17 @@ pub async fn handler(
 
     let quote = state
         .usecase
-        .acting_as(actor)
-        .create_quote(CreateQuoteCommand {
-            organization_id: path.organization_id,
-            title: payload.title,
-            customer_id: payload.customer_id,
-            customer_context_id: payload.customer_context_id,
-            lines: into_line_commands(payload.lines)?,
-        })
+        .acting_as(user_id)
+        .create_quote(
+            CreateQuoteCommand {
+                organization_id: path.organization_id,
+                title: payload.title,
+                customer_id: payload.customer_id,
+                customer_context_id: payload.customer_context_id,
+                lines: into_line_commands(payload.lines)?,
+            },
+            actor,
+        )
         .await?;
 
     Ok(Response::Created(quote.into()))

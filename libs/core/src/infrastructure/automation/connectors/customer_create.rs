@@ -46,6 +46,12 @@ impl Connector for CustomerCreateConnector {
 
         match usecase
             .create_customer(CreateCustomerCommand {
+                // Attributed to the run rather than to a human actor:
+                // `authz::Subject::system()` short-circuits
+                // `policy::enrich_for_organization` and is allowed every
+                // action by the default policy engine, matching the
+                // automation semantics documented above.
+                actor: authz::Subject::system(),
                 organization_id: input.org_id,
                 status: CustomerStatus::Prospect,
                 pipeline_stage: CustomerPipelineStage::New,

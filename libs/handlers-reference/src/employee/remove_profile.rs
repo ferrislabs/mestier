@@ -1,7 +1,6 @@
 use auth::Identity;
 use axum::{Extension, extract::State};
-use handlers::{ApiError, AppState, Response, resolve_user_id};
-use mestier_core::application::policy;
+use handlers::{ApiError, AppState, Response, resolve_actor};
 
 use crate::{EmptyResponse, paths::EmployeeProfilePath};
 
@@ -30,9 +29,7 @@ pub async fn handler(
     State(state): State<AppState>,
     Extension(identity): Extension<Identity>,
 ) -> Result<Response<EmptyResponse>, ApiError> {
-    let user_id = resolve_user_id(&state, &identity).await?;
-    // TODO: thread JWT realm roles once Identity exposes them.
-    let actor = policy::user_subject(user_id, Vec::new());
+    let (user_id, actor) = resolve_actor(&state, &identity).await?;
 
     state
         .usecase

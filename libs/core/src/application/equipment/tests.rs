@@ -99,6 +99,7 @@ mod tests {
         name: &str,
     ) -> CreateEquipmentCommand {
         CreateEquipmentCommand {
+            actor: authz::Subject::system(),
             organization_id,
             name: name.to_owned(),
             hourly_rate_cents: 1200,
@@ -108,6 +109,7 @@ mod tests {
     fn create_task_command(fixture: &Fixture, title: &str) -> CreateTaskCommand {
         let now = Utc::now();
         CreateTaskCommand {
+            actor: authz::Subject::system(),
             organization_id: fixture.organization_id,
             parent_task_id: None,
             title: title.to_owned(),
@@ -167,7 +169,7 @@ mod tests {
             .await
             .unwrap();
 
-        let mut first_patch = PatchTaskCommand::new(task.id);
+        let mut first_patch = PatchTaskCommand::new(task.id, authz::Subject::system());
         first_patch.equipment_ids = Some(vec![truck.id, mower.id]);
         usecase.patch_task(first_patch).await.unwrap();
 
@@ -177,7 +179,7 @@ mod tests {
 
         // A second PATCH names only `trailer` — `truck`/`mower` must be
         // dropped, not merged with the new set.
-        let mut second_patch = PatchTaskCommand::new(task.id);
+        let mut second_patch = PatchTaskCommand::new(task.id, authz::Subject::system());
         second_patch.equipment_ids = Some(vec![trailer.id]);
         usecase.patch_task(second_patch).await.unwrap();
 
@@ -191,13 +193,13 @@ mod tests {
 
         // A patch that never mentions `equipment_ids` leaves the current set
         // untouched — mirrors `assignees: None`.
-        let mut untouched_patch = PatchTaskCommand::new(task.id);
+        let mut untouched_patch = PatchTaskCommand::new(task.id, authz::Subject::system());
         untouched_patch.title = Some("Chantier renommé".to_owned());
         usecase.patch_task(untouched_patch).await.unwrap();
         assert_eq!(count_links_for_equipment(&pool, trailer.id).await, 1);
 
         // An empty `equipment_ids` clears the set entirely.
-        let mut clearing_patch = PatchTaskCommand::new(task.id);
+        let mut clearing_patch = PatchTaskCommand::new(task.id, authz::Subject::system());
         clearing_patch.equipment_ids = Some(Vec::new());
         usecase.patch_task(clearing_patch).await.unwrap();
         assert_eq!(
@@ -232,7 +234,7 @@ mod tests {
             .await
             .unwrap();
 
-        let mut patch = PatchTaskCommand::new(task.id);
+        let mut patch = PatchTaskCommand::new(task.id, authz::Subject::system());
         patch.equipment_ids = Some(vec![foreign_equipment.id]);
         let err = usecase.patch_task(patch).await.unwrap_err();
 

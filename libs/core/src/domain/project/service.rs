@@ -271,6 +271,7 @@ mod tests {
 
     fn create(name: &str) -> CreateProjectCommand {
         CreateProjectCommand {
+            actor: authz::Subject::system(),
             organization_id: OrganizationId(Uuid::new_v4()),
             name: name.to_owned(),
             customer_id: None,
