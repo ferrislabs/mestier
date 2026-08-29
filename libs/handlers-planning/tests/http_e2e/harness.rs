@@ -14,6 +14,7 @@ use std::{net::SocketAddr, sync::Arc};
 
 use args::Args;
 use clap::Parser;
+use mestier_core::Permissions;
 use sqlx::PgPool;
 use uuid::Uuid;
 
@@ -22,14 +23,22 @@ use crate::issuer;
 pub struct App {
     pub base_url: String,
     /// The manager's token — the organization's owner, so every route this
-    /// suite calls passes membership.
+    /// suite calls passes membership. Carries a role with `Permissions::ALL`
+    /// (see `seed`), so `planning.manage` (#305) never blocks this suite's
+    /// existing coverage.
     pub token: String,
+    /// A member of the same organization holding no role at all — passes
+    /// `require_org_membership` (the field app's own membership check) but
+    /// carries no `planning.manage`, the case #305's write-enforcement
+    /// tests refuse.
+    pub no_permission_token: String,
     pub pool: PgPool,
     pub organization_id: Uuid,
     pub task_assignment_id: Uuid,
     pub assignee_member_id: Uuid,
     manager_user_id: Uuid,
     assignee_user_id: Uuid,
+    no_permission_user_id: Uuid,
 }
 
 pub async fn start() -> App {
@@ -69,12 +78,14 @@ pub async fn start() -> App {
     App {
         base_url: format!("http://{addr}"),
         token: issuer::mint(&fixture.manager_sub),
+        no_permission_token: issuer::mint(&fixture.no_permission_sub),
         pool,
         organization_id: fixture.organization_id,
         task_assignment_id: fixture.task_assignment_id,
         assignee_member_id: fixture.assignee_member_id,
         manager_user_id: fixture.manager_user_id,
         assignee_user_id: fixture.assignee_user_id,
+        no_permission_user_id: fixture.no_permission_user_id,
     }
 }
 
@@ -117,6 +128,13 @@ impl App {
     pub fn task_url(&self, task_id: &str) -> String {
         format!(
             "{}/api/v1/organizations/{}/tasks/{task_id}",
+            self.base_url, self.organization_id
+        )
+    }
+
+    pub fn tasks_url(&self) -> String {
+        format!(
+            "{}/api/v1/organizations/{}/tasks",
             self.base_url, self.organization_id
         )
     }
@@ -178,7 +196,11 @@ impl App {
                 .unwrap_or_else(|e| panic!("cleanup failed on `{statement}`: {e}"));
         }
 
-        for user_id in [self.manager_user_id, self.assignee_user_id] {
+        for user_id in [
+            self.manager_user_id,
+            self.assignee_user_id,
+            self.no_permission_user_id,
+        ] {
             sqlx::query("DELETE FROM users WHERE id = $1")
                 .bind(user_id)
                 .execute(&self.pool)
@@ -195,6 +217,8 @@ struct Fixture {
     organization_id: Uuid,
     task_assignment_id: Uuid,
     assignee_member_id: Uuid,
+    no_permission_sub: String,
+    no_permission_user_id: Uuid,
 }
 
 /// An organization, its owner (the manager, the caller for every test), a
@@ -224,16 +248,25 @@ async fn seed(pool: &PgPool) -> Fixture {
         .await
         .expect("seed the organization");
 
+    let manager_member_id = Uuid::now_v7();
     sqlx::query(
         "INSERT INTO organization_members (id, organization_id, user_id, last_name) VALUES ($1, $2, $3, $4)",
     )
-    .bind(Uuid::now_v7())
+    .bind(manager_member_id)
     .bind(organization_id)
     .bind(manager_user_id)
     .bind("Manager")
     .execute(pool)
     .await
     .expect("seed the manager's own membership");
+
+    // #305: every write this suite exercises now needs `planning.manage`.
+    // `Permissions::ALL` for the manager keeps every existing assertion in
+    // this suite unchanged — see `no_permission_sub` below for the refused
+    // case.
+    let manager_role_id =
+        seed_role(pool, organization_id, "test-manager", Permissions::ALL.0).await;
+    assign_role(pool, manager_member_id, manager_role_id).await;
 
     let assignee_user_id = Uuid::now_v7();
     sqlx::query(
@@ -288,6 +321,33 @@ async fn seed(pool: &PgPool) -> Fixture {
     .await
     .expect("seed the assignment");
 
+    // A member of the organization holding no role at all — proves
+    // `planning.manage` is enforced, not just membership.
+    let no_permission_user_id = Uuid::now_v7();
+    let no_permission_sub = format!("sub-planning-no-permission-{no_permission_user_id}");
+    sqlx::query(
+        "INSERT INTO users (id, email, username, display_name, sub) VALUES ($1, $2, $3, $4, $5)",
+    )
+    .bind(no_permission_user_id)
+    .bind(format!("no-permission-{no_permission_user_id}@example.com"))
+    .bind(format!("no-permission-{no_permission_user_id}"))
+    .bind("No Permission")
+    .bind(&no_permission_sub)
+    .execute(pool)
+    .await
+    .expect("seed the no-permission user");
+
+    sqlx::query(
+        "INSERT INTO organization_members (id, organization_id, user_id, last_name) VALUES ($1, $2, $3, $4)",
+    )
+    .bind(Uuid::now_v7())
+    .bind(organization_id)
+    .bind(no_permission_user_id)
+    .bind("No Permission")
+    .execute(pool)
+    .await
+    .expect("seed the no-permission member");
+
     Fixture {
         manager_sub,
         manager_user_id,
@@ -295,7 +355,37 @@ async fn seed(pool: &PgPool) -> Fixture {
         organization_id,
         task_assignment_id,
         assignee_member_id,
+        no_permission_sub,
+        no_permission_user_id,
     }
+}
+
+/// A role carrying exactly the given bits — mirrors
+/// `libs/handlers-reporting/tests/http_e2e/harness.rs`'s own `seed_role`.
+async fn seed_role(pool: &PgPool, organization_id: Uuid, name: &str, permissions: i64) -> Uuid {
+    let role_id = Uuid::now_v7();
+    sqlx::query(
+        "INSERT INTO roles (id, organization_id, name, permissions) VALUES ($1, $2, $3, $4)",
+    )
+    .bind(role_id)
+    .bind(organization_id)
+    .bind(name)
+    .bind(permissions)
+    .execute(pool)
+    .await
+    .expect("seed the role");
+
+    role_id
+}
+
+async fn assign_role(pool: &PgPool, member_id: Uuid, role_id: Uuid) {
+    sqlx::query("INSERT INTO member_roles (id, member_id, role_id) VALUES ($1, $2, $3)")
+        .bind(Uuid::now_v7())
+        .bind(member_id)
+        .bind(role_id)
+        .execute(pool)
+        .await
+        .expect("assign the role");
 }
 
 fn args_for(database_url: &str, redis_url: &str, issuer_url: &str) -> Vec<String> {

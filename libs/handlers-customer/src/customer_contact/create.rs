@@ -1,6 +1,6 @@
 use auth::Identity;
 use axum::{Extension, Json, extract::State};
-use handlers::{ApiError, AppState, DataEnvelope, Response, resolve_user_id};
+use handlers::{ApiError, AppState, DataEnvelope, Response};
 use mestier_core::CreateCustomerContactCommand;
 use serde::Deserialize;
 use utoipa::ToSchema;
@@ -45,12 +45,13 @@ pub async fn handler(
     Json(payload): Json<CreateCustomerContactRequest>,
 ) -> Result<Response<CustomerContactResponse>, ApiError> {
     require_customer_membership(&state, &identity, path.customer_id).await?;
-    let actor = resolve_user_id(&state, &identity).await?;
+    let (user_id, actor) = handlers::resolve_actor(&state, &identity).await?;
 
     let customer_contact = state
         .usecase
-        .acting_as(actor)
+        .acting_as(user_id)
         .create_customer_contact(CreateCustomerContactCommand {
+            actor,
             customer_id: path.customer_id,
             first_name: payload.first_name,
             last_name: payload.last_name,

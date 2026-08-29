@@ -145,6 +145,7 @@ mod tests {
         effective_from: NaiveDate,
     ) -> ReplaceRhythmCommand {
         ReplaceRhythmCommand {
+            actor: authz::Subject::system(),
             organization_id: fixture.organization_id,
             employee_id: fixture.employee_id,
             effective_from,
@@ -166,6 +167,7 @@ mod tests {
 
         let created = usecase
             .replace_rhythm(
+                authz::Subject::system(),
                 fixture.organization_id,
                 fixture.member_id,
                 date(2026, 1, 1),
@@ -195,6 +197,7 @@ mod tests {
 
         let first = usecase
             .replace_rhythm(
+                authz::Subject::system(),
                 fixture.organization_id,
                 fixture.member_id,
                 date(2026, 1, 1),
@@ -212,6 +215,7 @@ mod tests {
         }];
         let second = usecase
             .replace_rhythm(
+                authz::Subject::system(),
                 second_command.organization_id,
                 fixture.member_id,
                 second_command.effective_from,
@@ -254,6 +258,7 @@ mod tests {
 
         let first = usecase
             .replace_rhythm(
+                authz::Subject::system(),
                 fixture.organization_id,
                 fixture.member_id,
                 date(2026, 1, 1),
@@ -265,6 +270,7 @@ mod tests {
 
         let second = usecase
             .replace_rhythm(
+                authz::Subject::system(),
                 fixture.organization_id,
                 fixture.member_id,
                 date(2026, 9, 1),
@@ -304,6 +310,7 @@ mod tests {
         let usecase = make_usecase(pool.clone());
 
         let first_command = ReplaceWorkSlotsCommand {
+            actor: authz::Subject::system(),
             organization_id: fixture.organization_id,
             member_id: fixture.member_id,
             from: date(2026, 8, 1),
@@ -317,6 +324,7 @@ mod tests {
         usecase.replace_work_slots(first_command).await.unwrap();
 
         let second_command = ReplaceWorkSlotsCommand {
+            actor: authz::Subject::system(),
             organization_id: fixture.organization_id,
             member_id: fixture.member_id,
             from: date(2026, 8, 1),
@@ -358,6 +366,7 @@ mod tests {
 
         usecase
             .replace_rhythm(
+                authz::Subject::system(),
                 fixture.organization_id,
                 fixture.member_id,
                 date(2026, 1, 1),
@@ -368,6 +377,7 @@ mod tests {
             .unwrap();
         usecase
             .replace_work_slots(ReplaceWorkSlotsCommand {
+                actor: authz::Subject::system(),
                 organization_id: fixture.organization_id,
                 member_id: fixture.member_id,
                 from: date(2026, 3, 1),
@@ -383,6 +393,7 @@ mod tests {
         // Outside the queried window: must not come back.
         usecase
             .replace_work_slots(ReplaceWorkSlotsCommand {
+                actor: authz::Subject::system(),
                 organization_id: fixture.organization_id,
                 member_id: fixture.member_id,
                 from: date(2026, 6, 1),

@@ -1,7 +1,6 @@
 use auth::Identity;
 use axum::{Extension, Json, extract::State};
-use handlers::{ApiError, AppState, DataEnvelope, Response, resolve_user_id};
-use mestier_core::application::policy;
+use handlers::{ApiError, AppState, DataEnvelope, Response, resolve_actor};
 use serde::Deserialize;
 use utoipa::ToSchema;
 
@@ -63,9 +62,7 @@ pub async fn handler(
     Extension(identity): Extension<Identity>,
     Json(payload): Json<UpsertEmployeeProfileRequest>,
 ) -> Result<Response<EmployeeResponse>, ApiError> {
-    let user_id = resolve_user_id(&state, &identity).await?;
-    // TODO: thread JWT realm roles once Identity exposes them.
-    let actor = policy::user_subject(user_id, Vec::new());
+    let (user_id, actor) = resolve_actor(&state, &identity).await?;
 
     // The seat is loaded and authorized against inside the use case, never
     // against an organization taken from the path — see

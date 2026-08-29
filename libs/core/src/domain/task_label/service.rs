@@ -177,6 +177,7 @@ mod tests {
 
     fn create_command(organization_id: OrganizationId) -> CreateTaskLabelCommand {
         CreateTaskLabelCommand {
+            actor: authz::Subject::system(),
             organization_id,
             name: "Réunion".to_owned(),
             color: "#2563EB".to_owned(),
@@ -338,6 +339,7 @@ mod tests {
         let mut service = TaskLabelService::new(repo);
         let updated = service
             .update_task_label(UpdateTaskLabelCommand {
+                actor: authz::Subject::system(),
                 id,
                 name: "Chantier extérieur".to_owned(),
                 color: "#059669".to_owned(),
@@ -355,6 +357,7 @@ mod tests {
 
         let err = service
             .update_task_label(UpdateTaskLabelCommand {
+                actor: authz::Subject::system(),
                 id: TaskLabelId(Uuid::new_v4()),
                 name: "  ".to_owned(),
                 color: "#2563EB".to_owned(),
@@ -383,6 +386,7 @@ mod tests {
         let mut service = TaskLabelService::new(repo);
         let err = service
             .update_task_label(UpdateTaskLabelCommand {
+                actor: authz::Subject::system(),
                 id,
                 name: "Déplacement".to_owned(),
                 color: "#059669".to_owned(),

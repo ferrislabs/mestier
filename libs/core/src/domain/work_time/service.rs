@@ -651,6 +651,7 @@ mod tests {
 
     fn replace_rhythm_command(employee_id: EmployeeId) -> ReplaceRhythmCommand {
         ReplaceRhythmCommand {
+            actor: authz::Subject::system(),
             organization_id: OrganizationId(Uuid::new_v4()),
             employee_id,
             effective_from: date(2026, 1, 1),
@@ -876,6 +877,7 @@ mod tests {
         let mut service = service(MockRhythmRepository::new(), work_slot_repository);
 
         let command = ReplaceWorkSlotsCommand {
+            actor: authz::Subject::system(),
             organization_id,
             member_id,
             from,
@@ -898,6 +900,7 @@ mod tests {
         let mut service = service(MockRhythmRepository::new(), MockWorkSlotRepository::new());
 
         let command = ReplaceWorkSlotsCommand {
+            actor: authz::Subject::system(),
             organization_id: OrganizationId(Uuid::new_v4()),
             member_id,
             from: date(2026, 8, 7),
@@ -916,6 +919,7 @@ mod tests {
         let mut service = service(MockRhythmRepository::new(), MockWorkSlotRepository::new());
 
         let command = ReplaceWorkSlotsCommand {
+            actor: authz::Subject::system(),
             organization_id: OrganizationId(Uuid::new_v4()),
             member_id,
             from: date(2026, 8, 1),

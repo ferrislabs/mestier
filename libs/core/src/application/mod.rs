@@ -433,6 +433,7 @@ mod tests {
         let usecase = MestierUseCase::new(pool.clone(), default_authorizer(), EventHub::new());
         let customer = usecase
             .create_customer(crate::domain::customer::commands::CreateCustomerCommand {
+                actor: authz::Subject::system(),
                 organization_id: org_id,
                 status: crate::CustomerStatus::Prospect,
                 pipeline_stage: crate::CustomerPipelineStage::New,
@@ -446,6 +447,7 @@ mod tests {
         let context = usecase
             .create_customer_context(
                 crate::domain::customer_context::commands::CreateCustomerContextCommand {
+                    actor: authz::Subject::system(),
                     customer_id: customer.id,
                     label: "Main site".to_string(),
                     address_line: None,
@@ -460,13 +462,16 @@ mod tests {
 
         let created = usecase
             .acting_as_automation(run_id)
-            .create_quote(crate::domain::quote::commands::CreateQuoteCommand {
-                organization_id: org_id,
-                title: "Automated quote".to_string(),
-                customer_id: customer.id,
-                customer_context_id: context.id,
-                lines: Vec::new(),
-            })
+            .create_quote(
+                crate::domain::quote::commands::CreateQuoteCommand {
+                    organization_id: org_id,
+                    title: "Automated quote".to_string(),
+                    customer_id: customer.id,
+                    customer_context_id: context.id,
+                    lines: Vec::new(),
+                },
+                authz::Subject::system(),
+            )
             .await
             .unwrap();
 

@@ -113,6 +113,7 @@ mod tests {
     fn create_task_command(fixture: &Fixture, title: &str) -> CreateTaskCommand {
         let now = Utc::now();
         CreateTaskCommand {
+            actor: authz::Subject::system(),
             organization_id: fixture.organization_id,
             parent_task_id: None,
             title: title.to_owned(),
@@ -136,6 +137,7 @@ mod tests {
         body: &str,
     ) -> CreateTaskCommentCommand {
         CreateTaskCommentCommand {
+            actor: authz::Subject::system(),
             organization_id: fixture.organization_id,
             task_id,
             author_user_id: fixture.owner_id,
@@ -379,6 +381,7 @@ mod tests {
 
         let updated = usecase
             .update_task_comment(UpdateTaskCommentCommand {
+                actor: authz::Subject::system(),
                 id: created.id,
                 acting_user_id: fixture.owner_id,
                 body: "Édité".to_owned(),
@@ -414,6 +417,7 @@ mod tests {
 
         let err = usecase
             .update_task_comment(UpdateTaskCommentCommand {
+                actor: authz::Subject::system(),
                 id: created.id,
                 acting_user_id: other_user_id,
                 body: "Je réécris ton message".to_owned(),
@@ -456,7 +460,7 @@ mod tests {
             .unwrap();
 
         let err = usecase
-            .delete_task_comment(created.id, other_user_id)
+            .delete_task_comment(authz::Subject::system(), created.id, other_user_id)
             .await
             .expect_err("a non-author must not be able to delete the comment");
 
@@ -497,7 +501,7 @@ mod tests {
             .unwrap();
 
         usecase
-            .delete_task_comment(created.id, fixture.owner_id)
+            .delete_task_comment(authz::Subject::system(), created.id, fixture.owner_id)
             .await
             .expect("the author must be able to delete their own comment");
 
@@ -588,6 +592,7 @@ mod tests {
             .unwrap();
         usecase
             .create_task_comment(CreateTaskCommentCommand {
+                actor: authz::Subject::system(),
                 organization_id: fixture.organization_id,
                 task_id: task.id,
                 author_user_id: second_author_id,

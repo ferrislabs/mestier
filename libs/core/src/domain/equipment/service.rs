@@ -170,6 +170,7 @@ mod tests {
         let mut service = EquipmentService::new(repo);
         let created = service
             .create_equipment(CreateEquipmentCommand {
+                actor: authz::Subject::system(),
                 organization_id: OrganizationId(Uuid::new_v4()),
                 name: "Truck".to_owned(),
                 hourly_rate_cents: 1200,
@@ -195,6 +196,7 @@ mod tests {
         let mut service = EquipmentService::new(repo);
         let updated = service
             .update_equipment(UpdateEquipmentCommand {
+                actor: authz::Subject::system(),
                 id,
                 name: "Mower".to_owned(),
                 hourly_rate_cents: 900,

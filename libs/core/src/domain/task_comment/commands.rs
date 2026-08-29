@@ -1,3 +1,5 @@
+use authz::Subject;
+
 use crate::{OrganizationId, TaskId, UserId, domain::task_comment::TaskCommentId};
 
 /// `author_user_id` is resolved by the caller from the authenticated
@@ -7,6 +9,10 @@ use crate::{OrganizationId, TaskId, UserId, domain::task_comment::TaskCommentId}
 /// "Décision" on `task_comments.author_user_id`.
 #[derive(Debug, Clone)]
 pub struct CreateTaskCommentCommand {
+    /// Authenticated actor performing the update. Built by the handler
+    /// from the request `Identity`; carries the AuthZen-shaped subject
+    /// the policy engine consumes.
+    pub actor: Subject,
     pub organization_id: OrganizationId,
     pub task_id: TaskId,
     pub author_user_id: UserId,
@@ -19,6 +25,10 @@ pub struct CreateTaskCommentCommand {
 /// — only the author may edit their own comment.
 #[derive(Debug, Clone)]
 pub struct UpdateTaskCommentCommand {
+    /// Authenticated actor performing the update. Built by the handler
+    /// from the request `Identity`; carries the AuthZen-shaped subject
+    /// the policy engine consumes.
+    pub actor: Subject,
     pub id: TaskCommentId,
     pub acting_user_id: UserId,
     pub body: String,

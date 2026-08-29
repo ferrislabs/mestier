@@ -205,6 +205,7 @@ mod tests {
     fn create_command(fixture: &Fixture) -> CreateTaskCommand {
         let now = Utc::now();
         CreateTaskCommand {
+            actor: authz::Subject::system(),
             organization_id: fixture.organization_id,
             parent_task_id: None,
             title: "Réfection toiture".to_owned(),
@@ -386,14 +387,14 @@ mod tests {
         let usecase = make_usecase(pool.clone());
 
         let task_a = usecase.create_task(create_command(&fixture)).await.unwrap();
-        let mut patch_a = PatchTaskCommand::new(task_a.id);
+        let mut patch_a = PatchTaskCommand::new(task_a.id, authz::Subject::system());
         patch_a.assignees = Some(vec![AssigneeRef(employee_a)]);
         usecase.patch_task(patch_a).await.unwrap();
 
         let mut second_command = create_command(&fixture);
         second_command.title = "Deuxième tâche".to_owned();
         let task_b = usecase.create_task(second_command).await.unwrap();
-        let mut patch_b = PatchTaskCommand::new(task_b.id);
+        let mut patch_b = PatchTaskCommand::new(task_b.id, authz::Subject::system());
         patch_b.assignees = Some(vec![AssigneeRef(employee_b)]);
         usecase.patch_task(patch_b).await.unwrap();
 
@@ -488,7 +489,7 @@ mod tests {
         let new_starts_at = created.starts_at.unwrap() + Duration::days(1);
         let new_ends_at = created.ends_at.unwrap() + Duration::days(1);
 
-        let mut patch = PatchTaskCommand::new(created.id);
+        let mut patch = PatchTaskCommand::new(created.id, authz::Subject::system());
         patch.starts_at = Some(Some(new_starts_at));
         patch.ends_at = Some(Some(new_ends_at));
         patch.status = Some(TaskStatus::InProgress);
@@ -549,7 +550,7 @@ mod tests {
         let original_ends_at = created.ends_at;
 
         let bogus_member_id = MemberId(generate_uuid_v7());
-        let mut patch = PatchTaskCommand::new(created.id);
+        let mut patch = PatchTaskCommand::new(created.id, authz::Subject::system());
         patch.starts_at = Some(Some(original_starts_at.unwrap() + Duration::days(1)));
         patch.ends_at = Some(Some(original_ends_at.unwrap() + Duration::days(1)));
         // The first assignee is a real seat, the second is not. The whole
@@ -600,6 +601,7 @@ mod tests {
 
         let updated = usecase
             .bulk_assign_tasks(
+                authz::Subject::system(),
                 fixture.organization_id,
                 vec![task_a.id, task_b.id],
                 vec![AssigneeRef(member_id)],
@@ -649,6 +651,7 @@ mod tests {
 
         let err = usecase
             .bulk_assign_tasks(
+                authz::Subject::system(),
                 fixture.organization_id,
                 vec![task_a.id, foreign_task.id],
                 vec![AssigneeRef(member_id)],
@@ -682,7 +685,7 @@ mod tests {
         let created = usecase.create_task(create_command(&fixture)).await.unwrap();
 
         usecase
-            .soft_delete_task(created.id)
+            .soft_delete_task(authz::Subject::system(), created.id)
             .await
             .expect("soft_delete_task must succeed");
 
@@ -700,7 +703,7 @@ mod tests {
         assert!(items.is_empty());
 
         let missing = usecase
-            .soft_delete_task(TaskId(generate_uuid_v7()))
+            .soft_delete_task(authz::Subject::system(), TaskId(generate_uuid_v7()))
             .await
             .expect_err("deleting an unknown task must fail");
         assert!(matches!(missing, common::CoreError::NotFound));
@@ -918,7 +921,7 @@ mod tests {
         assert_eq!(created.expenses_cents, 0);
         assert_eq!(created.expenses_label, None);
 
-        let mut patch = PatchTaskCommand::new(created.id);
+        let mut patch = PatchTaskCommand::new(created.id, authz::Subject::system());
         patch.expenses_cents = Some(4500);
         patch.expenses_label = Some(Some("Déplacement Clermont".to_owned()));
 
@@ -946,13 +949,13 @@ mod tests {
 
         let created = usecase.create_task(create_command(&fixture)).await.unwrap();
 
-        let mut patch = PatchTaskCommand::new(created.id);
+        let mut patch = PatchTaskCommand::new(created.id, authz::Subject::system());
         patch.expenses_cents = Some(4500);
 
         let err = usecase.patch_task(patch).await.unwrap_err();
         assert!(matches!(err, CoreError::Conflict(_)), "got {err:?}");
 
-        let mut negative = PatchTaskCommand::new(created.id);
+        let mut negative = PatchTaskCommand::new(created.id, authz::Subject::system());
         negative.expenses_cents = Some(-1);
         negative.expenses_label = Some(Some("Déplacement".to_owned()));
         assert!(matches!(
@@ -977,12 +980,12 @@ mod tests {
 
         let created = usecase.create_task(create_command(&fixture)).await.unwrap();
 
-        let mut patch = PatchTaskCommand::new(created.id);
+        let mut patch = PatchTaskCommand::new(created.id, authz::Subject::system());
         patch.expenses_cents = Some(4500);
         patch.expenses_label = Some(Some("Déplacement".to_owned()));
         usecase.patch_task(patch).await.unwrap();
 
-        let mut clear = PatchTaskCommand::new(created.id);
+        let mut clear = PatchTaskCommand::new(created.id, authz::Subject::system());
         clear.expenses_cents = Some(0);
 
         let cleared = usecase.patch_task(clear).await.unwrap();

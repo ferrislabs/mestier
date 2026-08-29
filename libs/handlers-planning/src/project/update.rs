@@ -1,6 +1,6 @@
 use auth::Identity;
 use axum::{Extension, Json, extract::State};
-use handlers::{ApiError, AppState, DataEnvelope, Response};
+use handlers::{ApiError, AppState, DataEnvelope, Response, resolve_actor};
 use mestier_core::{CustomerContextId, CustomerId, QuoteId, UpdateProjectCommand};
 use serde::Deserialize;
 use utoipa::ToSchema;
@@ -60,10 +60,13 @@ pub async fn handler(
         payload.quote_id,
     )
     .await?;
+    let (user_id, actor) = resolve_actor(&state, &identity).await?;
 
     let project = state
         .usecase
+        .acting_as(user_id)
         .update_project(UpdateProjectCommand {
+            actor,
             id: project_id,
             name: payload.name,
             customer_id: payload.customer_id,

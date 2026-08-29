@@ -122,6 +122,7 @@ mod tests {
     fn create_command(fixture: &Fixture) -> CreateAbsenceCommand {
         let now = Utc::now();
         CreateAbsenceCommand {
+            actor: authz::Subject::system(),
             organization_id: fixture.organization_id,
             member_id: fixture.member_id,
             kind: AbsenceKind::Leave,
@@ -202,7 +203,7 @@ mod tests {
         let new_starts_at = created.starts_at + Duration::days(1);
         let new_ends_at = created.ends_at + Duration::days(1);
 
-        let mut patch = PatchAbsenceCommand::new(created.id);
+        let mut patch = PatchAbsenceCommand::new(created.id, authz::Subject::system());
         patch.starts_at = Some(new_starts_at);
         patch.ends_at = Some(new_ends_at);
         patch.kind = Some(AbsenceKind::Sick);
@@ -237,7 +238,7 @@ mod tests {
             .unwrap();
 
         usecase
-            .soft_delete_absence(created.id)
+            .soft_delete_absence(authz::Subject::system(), created.id)
             .await
             .expect("soft_delete_absence must succeed");
 
@@ -267,7 +268,7 @@ mod tests {
         );
 
         let missing = usecase
-            .soft_delete_absence(AbsenceId(generate_uuid_v7()))
+            .soft_delete_absence(authz::Subject::system(), AbsenceId(generate_uuid_v7()))
             .await
             .expect_err("deleting an unknown absence must fail");
         assert!(matches!(missing, common::CoreError::NotFound));

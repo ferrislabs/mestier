@@ -1,7 +1,7 @@
 use auth::Identity;
 use axum::{Extension, Json, extract::State};
 use chrono::NaiveDate;
-use handlers::{ApiError, AppState, DataEnvelope, Response, resolve_user_id};
+use handlers::{ApiError, AppState, DataEnvelope, Response, resolve_actor};
 use mestier_core::RhythmSlotInput;
 use serde::Deserialize;
 use utoipa::ToSchema;
@@ -51,12 +51,13 @@ pub async fn handler(
     Json(payload): Json<PutRhythmRequest>,
 ) -> Result<Response<RhythmResponse>, ApiError> {
     let organization_id = crate::require_member_target(&state, &identity, member_id).await?;
-    let actor = resolve_user_id(&state, &identity).await?;
+    let (user_id, actor) = resolve_actor(&state, &identity).await?;
 
     let rhythm = state
         .usecase
-        .acting_as(actor)
+        .acting_as(user_id)
         .replace_rhythm(
+            actor,
             organization_id,
             member_id,
             payload.effective_from,

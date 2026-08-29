@@ -1,6 +1,6 @@
 use auth::Identity;
 use axum::{Extension, extract::State};
-use handlers::{ApiError, AppState, Response, resolve_user_id};
+use handlers::{ApiError, AppState, Response, resolve_actor};
 
 use crate::absence::{AbsencePath, require_absence};
 
@@ -30,11 +30,11 @@ pub async fn handler(
     Extension(identity): Extension<Identity>,
 ) -> Result<Response<()>, ApiError> {
     require_absence(&state, &identity, organization_id, absence_id).await?;
-    let actor = resolve_user_id(&state, &identity).await?;
+    let (user_id, actor) = resolve_actor(&state, &identity).await?;
     state
         .usecase
-        .acting_as(actor)
-        .soft_delete_absence(absence_id)
+        .acting_as(user_id)
+        .soft_delete_absence(actor, absence_id)
         .await?;
 
     Ok(Response::NoContent)

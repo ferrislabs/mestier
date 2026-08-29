@@ -1,6 +1,6 @@
 use auth::Identity;
 use axum::{Extension, extract::State};
-use handlers::{ApiError, AppState, Response, resolve_user_id};
+use handlers::{ApiError, AppState, Response, resolve_actor};
 use mestier_core::EquipmentId;
 
 use crate::{EmptyResponse, paths::EquipmentPath, require_org_membership};
@@ -28,11 +28,11 @@ pub async fn handler(
 ) -> Result<Response<EmptyResponse>, ApiError> {
     let current = state.usecase.get_equipment(equipment_id).await?;
     require_org_membership(&state, &identity, current.organization_id).await?;
-    let actor = resolve_user_id(&state, &identity).await?;
+    let (user_id, actor) = resolve_actor(&state, &identity).await?;
     state
         .usecase
-        .acting_as(actor)
-        .soft_delete_equipment(equipment_id)
+        .acting_as(user_id)
+        .soft_delete_equipment(actor, equipment_id)
         .await?;
 
     Ok(Response::NoContent)

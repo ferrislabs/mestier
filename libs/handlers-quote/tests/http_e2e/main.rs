@@ -200,6 +200,42 @@ async fn editing_a_quote_into_sent_persists_the_allocated_reference() {
     app.cleanup().await;
 }
 
+/// #305: a member with `quote.manage` (the fixture's main caller, seeded a
+/// role carrying `Permissions::ALL`) can create a quote — the positive case
+/// already covered above by
+/// `a_quote_posted_over_http_is_priced_persisted_and_listed`. This is the
+/// negative one: a member of the same organization with a membership row
+/// but no role assignment at all gets turned away with a 403 on a write,
+/// never a 500 and never silently allowed through.
+#[tokio::test]
+#[ignore = "requires live postgres and redis"]
+async fn a_member_without_quote_manage_is_refused_creating_a_quote() {
+    let app = harness::start().await;
+
+    let refused = reqwest::Client::new()
+        .post(app.quotes_url())
+        .bearer_auth(&app.no_role_token)
+        .json(&json!({
+            "title": "Kitchen renovation",
+            "customer_id": app.customer_id,
+            "customer_context_id": app.customer_context_id,
+            "lines": [
+                { "label": "Strip out existing", "quantity": "4", "unit": "HOUR", "unit_price_cents": 4500, "photo_keys": [] }
+            ]
+        }))
+        .send()
+        .await
+        .expect("the api answers the create call");
+
+    assert_eq!(
+        refused.status(),
+        403,
+        "a member without `quote.manage` must be refused, not silently allowed through"
+    );
+
+    app.cleanup().await;
+}
+
 /// Creates a minimal quote and returns its id. Shared by the two PDF tests
 /// below, neither of which cares about pricing — only about whether the
 /// export is allowed to happen at all.

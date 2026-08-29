@@ -1,6 +1,6 @@
 use auth::Identity;
 use axum::{Extension, Json, extract::State};
-use handlers::{ApiError, AppState, DataEnvelope, Response};
+use handlers::{ApiError, AppState, DataEnvelope, Response, resolve_actor};
 use mestier_core::UpdateTaskCommentCommand;
 use serde::Deserialize;
 use utoipa::ToSchema;
@@ -44,7 +44,8 @@ pub async fn handler(
 ) -> Result<Response<TaskCommentResponse>, ApiError> {
     require_task_comment(&state, &identity, organization_id, task_id, comment_id).await?;
 
-    let actor = state
+    let (user_id, actor) = resolve_actor(&state, &identity).await?;
+    let author = state
         .usecase
         .find_user_by_sub(identity.id())
         .await?
@@ -52,20 +53,23 @@ pub async fn handler(
 
     let comment = state
         .usecase
-        .acting_as(actor.id)
+        .acting_as(user_id)
         .update_task_comment(UpdateTaskCommentCommand {
+            actor,
             id: comment_id,
-            acting_user_id: actor.id,
+            acting_user_id: author.id,
             body: payload.body,
         })
         .await?;
 
-    // `update_task_comment` only ever succeeds when `actor.id` matches the
+    // `update_task_comment` only ever succeeds when `author.id` matches the
     // comment's own author (anything else comes back `Forbidden` above), so
-    // `actor.name` is always the right display name here — no second
+    // `author.name` is always the right display name here — no second
     // lookup needed — and `author_is_self` is always `true` for the same
     // reason.
     Ok(Response::OK(TaskCommentResponse::new(
-        comment, actor.name, true,
+        comment,
+        author.name,
+        true,
     )))
 }

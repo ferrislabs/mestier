@@ -3,7 +3,7 @@ use axum::{
     Extension,
     extract::{Query, State},
 };
-use handlers::{ApiError, AppState, Response, resolve_user_id};
+use handlers::{ApiError, AppState, Response, resolve_actor};
 use mestier_core::DeleteScope;
 use serde::Deserialize;
 use utoipa::{IntoParams, ToSchema};
@@ -64,15 +64,15 @@ pub async fn handler(
     Query(query): Query<DeleteTaskQuery>,
 ) -> Result<Response<()>, ApiError> {
     require_task(&state, &identity, organization_id, task_id).await?;
-    let actor = resolve_user_id(&state, &identity).await?;
+    let (user_id, actor) = resolve_actor(&state, &identity).await?;
     let scope = query
         .scope
         .map(DeleteScope::from)
         .unwrap_or(DeleteScope::ThisOccurrence);
     state
         .usecase
-        .acting_as(actor)
-        .soft_delete_task_occurrence(task_id, scope)
+        .acting_as(user_id)
+        .soft_delete_task_occurrence(actor, task_id, scope)
         .await?;
 
     Ok(Response::NoContent)

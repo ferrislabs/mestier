@@ -1,9 +1,14 @@
+use authz::Subject;
 use chrono::{DateTime, Utc};
 
 use crate::{CustomerContextId, CustomerId, OrganizationId, ProjectId, QuoteId, QuoteLineId};
 
 #[derive(Debug, Clone)]
 pub struct CreateProjectCommand {
+    /// Authenticated actor performing the update. Built by the handler
+    /// from the request `Identity`; carries the AuthZen-shaped subject
+    /// the policy engine consumes.
+    pub actor: Subject,
     pub organization_id: OrganizationId,
     pub name: String,
     pub customer_id: Option<CustomerId>,
@@ -44,6 +49,10 @@ pub struct PlannedTaskCommand {
 /// simply have no task.
 #[derive(Debug, Clone)]
 pub struct CreateProjectFromQuoteCommand {
+    /// Authenticated actor performing the update. Built by the handler
+    /// from the request `Identity`; carries the AuthZen-shaped subject
+    /// the policy engine consumes.
+    pub actor: Subject,
     pub quote_id: QuoteId,
     pub name: String,
     /// A quote already turned into a project refuses a second one unless
@@ -57,6 +66,10 @@ pub struct CreateProjectFromQuoteCommand {
 /// `assignees` as the full list.
 #[derive(Debug, Clone)]
 pub struct UpdateProjectCommand {
+    /// Authenticated actor performing the update. Built by the handler
+    /// from the request `Identity`; carries the AuthZen-shaped subject
+    /// the policy engine consumes.
+    pub actor: Subject,
     pub id: ProjectId,
     pub name: String,
     pub customer_id: Option<CustomerId>,

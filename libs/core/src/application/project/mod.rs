@@ -1,11 +1,12 @@
 use std::collections::HashSet;
 
+use authz::Resource;
 use common::CoreError;
 use mestier_macros::transactional;
 
 use crate::{
     CustomerId, OrganizationId, Project, ProjectId, Task,
-    application::MestierUseCase,
+    application::{MestierUseCase, policy},
     domain::{
         project::{
             commands::{CreateProjectCommand, CreateProjectFromQuoteCommand, UpdateProjectCommand},
@@ -20,11 +21,29 @@ use crate::{
 mod tests;
 
 impl MestierUseCase {
-    #[transactional(project)]
+    #[transactional(project, role, member, authz)]
     pub async fn create_project(
         &self,
         command: CreateProjectCommand,
     ) -> Result<Project, CoreError> {
+        let mut member_repository = member_repository;
+        let mut role_repository = role_repository;
+
+        let actor = policy::enrich_for_organization(
+            command.actor.clone(),
+            command.organization_id,
+            &mut member_repository,
+            &mut role_repository,
+        )
+        .await?;
+        policy::require(
+            &authz,
+            &actor,
+            "planning.manage",
+            Resource::new("organization", command.organization_id.0.to_string()),
+        )
+        .await?;
+
         let mut service = ProjectService::new(project_repository);
         service.create_project(command).await
     }
@@ -56,23 +75,105 @@ impl MestierUseCase {
             .await
     }
 
-    #[transactional(project)]
+    #[transactional(project, role, member, authz)]
     pub async fn update_project(
         &self,
         command: UpdateProjectCommand,
     ) -> Result<Project, CoreError> {
+        let mut project_repository = project_repository;
+        let mut member_repository = member_repository;
+        let mut role_repository = role_repository;
+
+        // A bare id derives its organization from the loaded row, never from
+        // the command.
+        let existing = project_repository
+            .find_by_id(command.id)
+            .await?
+            .ok_or(CoreError::NotFound)?;
+
+        let actor = policy::enrich_for_organization(
+            command.actor.clone(),
+            existing.organization_id,
+            &mut member_repository,
+            &mut role_repository,
+        )
+        .await?;
+        policy::require(
+            &authz,
+            &actor,
+            "planning.manage",
+            Resource::new("organization", existing.organization_id.0.to_string()),
+        )
+        .await?;
+
         let mut service = ProjectService::new(project_repository);
         service.update_project(command).await
     }
 
-    #[transactional(project)]
-    pub async fn archive_project(&self, id: ProjectId) -> Result<(), CoreError> {
+    #[transactional(project, role, member, authz)]
+    pub async fn archive_project(
+        &self,
+        actor: authz::Subject,
+        id: ProjectId,
+    ) -> Result<(), CoreError> {
+        let mut project_repository = project_repository;
+        let mut member_repository = member_repository;
+        let mut role_repository = role_repository;
+
+        let existing = project_repository
+            .find_by_id(id)
+            .await?
+            .ok_or(CoreError::NotFound)?;
+
+        let actor = policy::enrich_for_organization(
+            actor,
+            existing.organization_id,
+            &mut member_repository,
+            &mut role_repository,
+        )
+        .await?;
+        policy::require(
+            &authz,
+            &actor,
+            "planning.manage",
+            Resource::new("organization", existing.organization_id.0.to_string()),
+        )
+        .await?;
+
         let mut service = ProjectService::new(project_repository);
         service.archive_project(id).await
     }
 
-    #[transactional(project)]
-    pub async fn restore_project(&self, id: ProjectId) -> Result<(), CoreError> {
+    #[transactional(project, role, member, authz)]
+    pub async fn restore_project(
+        &self,
+        actor: authz::Subject,
+        id: ProjectId,
+    ) -> Result<(), CoreError> {
+        let mut project_repository = project_repository;
+        let mut member_repository = member_repository;
+        let mut role_repository = role_repository;
+
+        let existing = project_repository
+            .find_by_id(id)
+            .await?
+            .ok_or(CoreError::NotFound)?;
+
+        let actor = policy::enrich_for_organization(
+            actor,
+            existing.organization_id,
+            &mut member_repository,
+            &mut role_repository,
+        )
+        .await?;
+        policy::require(
+            &authz,
+            &actor,
+            "planning.manage",
+            Resource::new("organization", existing.organization_id.0.to_string()),
+        )
+        .await?;
+
         let mut service = ProjectService::new(project_repository);
         service.restore_project(id).await
     }
@@ -83,16 +184,34 @@ impl MestierUseCase {
     /// attachment is what gives `ProjectProfitability::quoted_cents` its
     /// denominator (see #298, and #260 for why `quote_id` lives here and
     /// not on the task).
-    #[transactional(project, quote, task)]
+    #[transactional(project, quote, task, role, member, authz)]
     pub async fn create_project_from_quote(
         &self,
         command: CreateProjectFromQuoteCommand,
     ) -> Result<(Project, Vec<Task>), CoreError> {
         let mut quote_repository = quote_repository;
+        let mut member_repository = member_repository;
+        let mut role_repository = role_repository;
+
         let quote = quote_repository
             .find_by_id(command.quote_id)
             .await?
             .ok_or(CoreError::NotFound)?;
+
+        let actor = policy::enrich_for_organization(
+            command.actor.clone(),
+            quote.organization_id,
+            &mut member_repository,
+            &mut role_repository,
+        )
+        .await?;
+        policy::require(
+            &authz,
+            &actor,
+            "planning.manage",
+            Resource::new("organization", quote.organization_id.0.to_string()),
+        )
+        .await?;
 
         let mut project_repository = project_repository;
         let already_has_project = project_repository
@@ -124,6 +243,7 @@ impl MestierUseCase {
         let mut project_service = ProjectService::new(project_repository);
         let project = project_service
             .create_project(CreateProjectCommand {
+                actor: command.actor.clone(),
                 organization_id: quote.organization_id,
                 name: command.name,
                 customer_id: Some(quote.customer_id),
