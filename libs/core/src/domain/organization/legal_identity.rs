@@ -197,6 +197,32 @@ impl ElectronicInvoicingFacts {
             customer_registration_number: customer_registration_number.expect("checked above"),
         })
     }
+
+    /// As [`Self::try_new`], but from an issuer identity already frozen —
+    /// an issued invoice's own `issuer_identity` — rather than a fresh
+    /// `Organization` lookup.
+    ///
+    /// This is the constructor #342's `DocumentFormat` port is built
+    /// against: generating an electronic document for an invoice already
+    /// sent must read the facts as they were the instant it was issued, not
+    /// the organization's current row, which may have changed since (a
+    /// corrected address, a VAT status update) in a way that would make the
+    /// regenerated file disagree with the one the customer already holds.
+    /// `try_new` stays the right constructor everywhere a *live* lookup is
+    /// actually wanted — a draft's own PDF preview, the settings page's own
+    /// completeness banner — this one is not a replacement for it.
+    pub fn from_frozen_issuer(
+        issuer: LegalIdentity,
+        customer: &Customer,
+    ) -> Result<Self, Vec<MissingElectronicInvoicingFact>> {
+        match &customer.registration_number {
+            Some(value) if !value.trim().is_empty() => Ok(Self {
+                issuer,
+                customer_registration_number: value.clone(),
+            }),
+            _ => Err(vec!["customer_registration_number"]),
+        }
+    }
 }
 
 #[cfg(test)]
@@ -397,5 +423,32 @@ mod tests {
 
         assert!(err.contains(&"legal_name"));
         assert!(err.contains(&"customer_registration_number"));
+    }
+
+    #[test]
+    fn from_frozen_issuer_builds_from_an_already_complete_identity() {
+        let issuer = LegalIdentity::try_from_organization(&complete_organization()).unwrap();
+
+        let facts = ElectronicInvoicingFacts::from_frozen_issuer(
+            issuer,
+            &customer_with_registration_number(Some("123 456 789")),
+        )
+        .unwrap();
+
+        assert_eq!(facts.issuer.legal_name, "Acme SARL");
+        assert_eq!(facts.customer_registration_number, "123 456 789");
+    }
+
+    #[test]
+    fn from_frozen_issuer_reports_a_missing_customer_siren() {
+        let issuer = LegalIdentity::try_from_organization(&complete_organization()).unwrap();
+
+        let err = ElectronicInvoicingFacts::from_frozen_issuer(
+            issuer,
+            &customer_with_registration_number(None),
+        )
+        .unwrap_err();
+
+        assert_eq!(err, vec!["customer_registration_number"]);
     }
 }

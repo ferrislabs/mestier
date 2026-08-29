@@ -35,6 +35,7 @@ pub use infrastructure::automation::webhook::{
     address_policy::PrivateNetworkAccess, secret::SecretCipher,
 };
 pub use infrastructure::automation::worker::{WorkerSchedule, run_automation_worker};
+pub use infrastructure::invoice::facturx::FacturXDocumentFormat;
 pub use infrastructure::realtime::EventHub;
 pub use infrastructure::supplier_invoice::facturx::FacturXParser;
 
@@ -82,7 +83,7 @@ pub use domain::{
     employee::ports::{MockEmployeeCostBasisRepository, MockEmployeeRepository},
     equipment::ports::MockEquipmentRepository,
     invitation::ports::MockInvitationRepository,
-    invoice::ports::MockInvoiceRepository,
+    invoice::ports::{MockDocumentFormat, MockInvoiceRepository},
     member::ports::MockMemberRepository,
     organization::ports::MockOrganizationRepository,
     planning::ports::MockPlanningRepository,
@@ -110,8 +111,9 @@ pub use domain::{
     CustomerOutstandingBalance, CustomerPipelineStage, CustomerStatus, DateRange, DayLog, DayLogId,
     DeleteScope, DraftInvoice, ElectronicInvoicingFacts, Employee, EmployeeCostBasis,
     EmployeeCostBasisId, EmployeeId, EmployeeRhythm, EmployeeRhythmId, Equipment, EquipmentId,
-    FileObject, Invitation, InvitationId, Invoice, InvoiceId, InvoiceKind, InvoiceLine,
-    InvoiceLineId, InvoicePayment, InvoicePaymentId, InvoiceStatus, InvoiceVatBreakdownLine,
+    FileObject, GeneratedInvoiceDocument, Invitation, InvitationId, Invoice, InvoiceId,
+    InvoiceKind, InvoiceLine, InvoiceLineId, InvoicePayment, InvoicePaymentId, InvoiceStatus,
+    InvoiceVatBreakdownLine,
     LegalIdentity, Member, MemberId, MemberProfitability, MemberWithAccount, MemberWorkTime,
     MinuteInterval, MissingCost, MissingElectronicInvoicingFact, MissingLegalIdentityField,
     OperationNature, Organization, OrganizationAddress, OrganizationId, Permissions,
@@ -147,6 +149,9 @@ pub use domain::{
         CancelInvoiceCommand, CreateInvoiceCommand, DeleteInvoicePaymentCommand,
         InvoiceLineCommand, IssueCreditNoteCommand, IssueDepositCommand, IssueFinalInvoiceCommand,
         IssueInvoiceCommand, RecordInvoicePaymentCommand, UpdateInvoiceCommand,
+    },
+    invoice::ports::{
+        DocumentFormat, DocumentFormatError, GeneratedDocument, InvoiceDocumentRequest,
     },
     member::commands::{
         AddMemberCommand, AssignRoleCommand, CreateMemberCommand, UpdateMemberCommand,

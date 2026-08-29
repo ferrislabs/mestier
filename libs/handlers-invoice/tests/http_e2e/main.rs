@@ -639,3 +639,76 @@ async fn pdf_export_renders_once_the_legal_identity_is_complete() {
 
     app.cleanup().await;
 }
+
+/// #342's `?format=facturx` reaches the handler and is refused with a
+/// precise 409 — not a 200, not a 500 — because the harness's seeded
+/// customer carries no SIREN. This is the real, current state of the
+/// feature end to end: the organization side of `ElectronicInvoicingFacts`
+/// is satisfiable (the harness seeds a complete legal identity), the
+/// customer side is not, and the invoice must be issued first regardless.
+/// See `infrastructure::invoice::facturx::cii`'s own module doc comment in
+/// `mestier-core` for the sibling gap this does not reach in this
+/// particular fixture (the buyer's postal address): here the request is
+/// refused one check earlier, on the SIREN, before the EN 16931 validator
+/// is ever invoked.
+#[tokio::test]
+#[ignore = "requires live postgres and redis"]
+async fn facturx_export_refuses_a_customer_with_no_siren() {
+    let app = harness::start().await;
+    let created = create_single_line_draft(&app, 10_000).await;
+    let invoice_id = created["data"]["id"].as_str().expect("an id").to_owned();
+    issue(&app, &invoice_id).await;
+
+    let response = client()
+        .get(format!(
+            "{}/pdf?format=facturx",
+            app.invoice_url(&invoice_id)
+        ))
+        .bearer_auth(&app.token)
+        .send()
+        .await
+        .expect("the api answers the pdf call");
+
+    assert_eq!(
+        response.status(),
+        409,
+        "a customer with no SIREN must be a named refusal, not a 200, a 422 or a 500"
+    );
+    let body: Value = response.json().await.expect("a json error body");
+    let message = body["message"].as_str().unwrap_or_default();
+    assert!(
+        message.contains("customer_registration_number"),
+        "the refusal must name the missing SIREN: {message}"
+    );
+
+    app.cleanup().await;
+}
+
+/// The plain `?format=pdf` (and the bare default) must still work exactly
+/// as before #342 touched this route — the format parameter is additive,
+/// never a behaviour change for a caller that never asks for it.
+#[tokio::test]
+#[ignore = "requires live postgres and redis"]
+async fn pdf_export_default_format_is_unchanged_by_the_new_query_parameter() {
+    let app = harness::start().await;
+    let created = create_single_line_draft(&app, 10_000).await;
+    let invoice_id = created["data"]["id"].as_str().expect("an id").to_owned();
+
+    let explicit = client()
+        .get(format!("{}/pdf?format=pdf", app.invoice_url(&invoice_id)))
+        .bearer_auth(&app.token)
+        .send()
+        .await
+        .expect("the api answers the pdf call");
+    assert_eq!(explicit.status(), 200);
+
+    let bare = client()
+        .get(format!("{}/pdf", app.invoice_url(&invoice_id)))
+        .bearer_auth(&app.token)
+        .send()
+        .await
+        .expect("the api answers the pdf call");
+    assert_eq!(bare.status(), 200);
+
+    app.cleanup().await;
+}

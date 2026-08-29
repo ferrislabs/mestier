@@ -51,6 +51,43 @@ mockall = { workspace = true, optional = true }
 lopdf = { version = "0.44.0", default-features = false }
 quick-xml = { version = "0.42.0", features = ["serialize"] }
 
+# #342: Factur-X emission. Also pinned directly (see the comment above) for
+# the same reason -- this lands alongside sibling workstreams touching the
+# same crate. Evaluated first, per the issue's own "do not hand-roll the
+# format" rule:
+# - `en16931` (hupe1980): the EN 16931 semantic model *and* its business-rule
+#   validation engine, as Rust types -- no XML, no I/O. Its own README claims,
+#   and its test suite checks, agreement with CEN's own conformance corpus and
+#   KoSIT's published Schematron (223/223 CEN syntax-independent EN 16931 core
+#   rules). That is the "reference validator" the issue asks for: not veraPDF
+#   and not Chorus Pro (neither reachable from here), but a materially
+#   stronger claim than "validated against our own reading of the spec", which
+#   is the thing this issue explicitly distrusts.
+# - `en16931-formats`: the CII (and UBL) *writer* over that same semantic
+#   model, `cii` feature only (`ubl` and its default-on `serde`/`zugferd`
+#   extras are not needed here and `zugferd` alone would triple the
+#   dependency graph with AES/ChaCha20/SHA-2 this adapter never touches).
+#   `cii::to_string_for(&invoice, profile)` both validates against the engine
+#   above and serialises, refusing rather than handing back XML for an
+#   invoice that does not satisfy the profile.
+#
+# What neither crate does, confirmed by `en16931-formats`'s own module
+# documentation (`src/zugferd/mod.rs`, "Writing: out of scope, and not for
+# want of effort"): embedding that XML into a PDF/A-3 container. Its authors
+# describe exactly the trap this issue warns about -- an `/AF` array, an
+# `/AFRelationship` value no published guidance agrees on, an XMP packet
+# whose namespace casing and extension-schema merging are both load-bearing
+# and "checkable only against veraPDF, not a Rust test" -- and ship a reader
+# only. `infrastructure::invoice::facturx::pdfa` is this adapter's own
+# hand-written answer to that one remaining half, against the same `lopdf`
+# object model #337's reader already walks; see that module's doc comment for
+# what it does and, as honestly as the crate it learned this from, what it
+# cannot verify from inside this sandbox.
+en16931 = { version = "0.6.0", features = ["chrono"] }
+en16931-formats = { version = "0.6.0", default-features = false, features = [
+    "cii",
+] }
+
 [features]
 # Exposes the `automock` doubles to downstream test targets, this crate's own
 # `tests/` included. Never enabled by a normal build: only the dev-dependency

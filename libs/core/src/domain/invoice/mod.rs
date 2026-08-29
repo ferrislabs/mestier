@@ -259,6 +259,24 @@ pub struct InvoiceVatBreakdownLine {
     pub vat_cents: i32,
 }
 
+/// The file a [`crate::domain::invoice::ports::DocumentFormat`] adapter
+/// actually generated for this invoice, and the fact that it is durably
+/// stored (#342) — Factur-X today, `format` stays a plain string rather than
+/// an enum so a second adapter (UBL) never needs a migration of its own.
+///
+/// Set at most once per invoice: see this field's own column comment in
+/// `20260830000001_invoice_generated_document` for why regenerating must
+/// never silently replace what `file_key` points at, and
+/// `InvoiceRepository::record_generated_document`'s own doc comment for
+/// where that is actually enforced.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct GeneratedInvoiceDocument {
+    pub format: String,
+    pub file_key: String,
+    pub mime_type: String,
+    pub generated_at: DateTime<Utc>,
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct Invoice {
     pub id: InvoiceId,
@@ -295,6 +313,11 @@ pub struct Invoice {
     /// later change to the organization's legal details cannot rewrite a
     /// document already sent. `None` on a draft.
     pub issuer_identity: Option<LegalIdentity>,
+    /// The Factur-X (or, later, another format) file actually generated for
+    /// this invoice — see [`GeneratedInvoiceDocument`]. `None` until one has
+    /// been generated; never populated for a draft, since generation itself
+    /// requires `issuer_identity` to be `Some`.
+    pub generated_document: Option<GeneratedInvoiceDocument>,
     pub lines: Vec<InvoiceLine>,
     /// The invoice this one corrects, set exactly when `kind` is
     /// `CreditNote` and `None` for every other kind — see #318. Set once at

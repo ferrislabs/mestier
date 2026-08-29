@@ -339,6 +339,7 @@ impl Modify for SecurityAddon {
         invoice::response::InvoiceBalanceResponse,
         invoice::response::CustomerOutstandingBalanceResponse,
         invoice::response::ProjectBillingSummaryResponse,
+        invoice::invoice::export_pdf::InvoiceDocumentFormatQuery,
         purchase::supplier_invoice::update::UpdateSupplierInvoiceRequest,
         purchase::supplier_invoice::confirm::ConfirmSupplierInvoiceRequest,
         purchase::supplier_invoice::reject::RejectSupplierInvoiceRequest,
