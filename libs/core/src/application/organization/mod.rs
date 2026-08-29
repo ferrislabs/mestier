@@ -162,3 +162,6 @@ pub(crate) async fn resolve_timezone(
         ))
     })
 }
+
+#[cfg(test)]
+mod tests;
