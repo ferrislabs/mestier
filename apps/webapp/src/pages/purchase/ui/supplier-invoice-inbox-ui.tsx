@@ -16,16 +16,19 @@ import {
 	SectionHeader,
 	StatusBadge,
 } from '#/components/ui/surface'
-import type { PaginationMetadata, SupplierInvoice } from '#/hooks/use-supplier-invoices'
+import type {
+	PaginationMetadata,
+	SupplierInvoice,
+} from '#/hooks/use-supplier-invoices'
 import { buildOrgPath } from '#/modules/org-path'
 import type { ImportOutcome } from '#/pages/purchase/feature/supplier-invoice-inbox-feature'
-import { SupplierInvoiceDropZone } from '#/pages/purchase/ui/supplier-invoice-drop-zone'
 import {
 	formatDate,
 	formatMoney,
 	supplierInvoiceSourceLabel,
 	supplierInvoiceStatusLabel,
 } from '#/pages/purchase/types'
+import { SupplierInvoiceDropZone } from '#/pages/purchase/ui/supplier-invoice-drop-zone'
 
 interface SupplierInvoiceInboxUIProps {
 	organizationSlug: string
@@ -98,8 +101,9 @@ export function SupplierInvoiceInboxUI({
 	const stats = useMemo(
 		() => ({
 			total: pagination?.total ?? supplierInvoices.length,
-			pending: supplierInvoices.filter((invoice) => invoice.status === 'RECEIVED')
-				.length,
+			pending: supplierInvoices.filter(
+				(invoice) => invoice.status === 'RECEIVED',
+			).length,
 		}),
 		[supplierInvoices, pagination],
 	)
@@ -308,7 +312,10 @@ function statusTone(status: SupplierInvoice['status']) {
 	return 'brand' as const
 }
 
-function invoiceMatchesSearch(invoice: SupplierInvoice, query: string): boolean {
+function invoiceMatchesSearch(
+	invoice: SupplierInvoice,
+	query: string,
+): boolean {
 	return (
 		invoice.supplier_name.toLowerCase().includes(query) ||
 		invoice.number.toLowerCase().includes(query)

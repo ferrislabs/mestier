@@ -24,6 +24,7 @@ import type { CustomerContext } from '#/hooks/use-customers'
 import type { Invoice, ProjectBillingSummary } from '#/hooks/use-invoices'
 import type { Project } from '#/hooks/use-projects'
 import type { Period, ProjectProfitability } from '#/hooks/use-reporting'
+import type { ProjectSupplierCosts } from '#/hooks/use-supplier-invoices'
 import { buildOrgPath } from '#/modules/org-path'
 import {
 	eurosToCents,
@@ -51,6 +52,13 @@ export interface ProjectDetailUIProps {
 
 	invoices: Invoice[]
 	isInvoicesLoading: boolean
+
+	/** `null` while loading, or if the caller has no view onto supplier
+	 * costs at all. Itemized so each line can point back at the invoice it
+	 * came from (#340) — the reason this screen shows it in the first
+	 * place. */
+	supplierCosts: ProjectSupplierCosts | null
+	isSupplierCostsLoading: boolean
 
 	hasCustomer: boolean
 	hasPinnedAddress: boolean
@@ -102,6 +110,8 @@ export function ProjectDetailUI({
 	isCostLoading,
 	invoices,
 	isInvoicesLoading,
+	supplierCosts,
+	isSupplierCostsLoading,
 	hasCustomer,
 	hasPinnedAddress,
 	hasQuote,
@@ -336,6 +346,56 @@ export function ProjectDetailUI({
 							</li>
 						))}
 					</ul>
+				)}
+			</SectionCard>
+
+			<SectionCard>
+				<SectionHeader
+					title="Coûts fournisseurs"
+					description="Ce que des factures fournisseur attribuent à ce chantier — chaque ligne renvoie à sa facture."
+				/>
+				{isSupplierCostsLoading ? (
+					<p className="p-5 text-sm text-muted-foreground">Chargement…</p>
+				) : !supplierCosts || supplierCosts.lines.length === 0 ? (
+					<p className="p-5 text-sm text-muted-foreground">
+						Aucun coût fournisseur attribué pour l'instant.
+					</p>
+				) : (
+					<>
+						<ul className="divide-y">
+							{supplierCosts.lines.map((line) => (
+								<li key={line.allocation_id}>
+									<Link
+										to={buildOrgPath(
+											organizationSlug,
+											'/purchase/supplier-invoices/$supplierInvoiceId',
+										)}
+										params={{ supplierInvoiceId: line.supplier_invoice_id }}
+										className="flex items-center justify-between gap-4 px-5 py-3 text-sm transition hover:bg-muted/40"
+									>
+										<div className="min-w-0">
+											<p className="truncate font-medium">
+												{line.supplier_name} · {line.line_label}
+											</p>
+											<p className="text-xs text-muted-foreground">
+												Facture {line.supplier_invoice_number} ·{' '}
+												{formatDate(line.created_at)}
+											</p>
+										</div>
+										<p className="shrink-0 font-semibold tabular-nums">
+											{formatMoney(line.amount_cents)}
+										</p>
+									</Link>
+								</li>
+							))}
+						</ul>
+						<div className="flex items-center justify-between border-t px-5 py-3 text-sm font-semibold">
+							<span>Total</span>
+							<span className="tabular-nums">
+								{formatMoney(supplierCosts.allocated_cents)}
+							</span>
+						</div>
+					</>
 				)}
 			</SectionCard>
 		</PageShell>

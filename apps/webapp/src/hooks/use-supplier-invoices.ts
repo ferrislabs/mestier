@@ -12,7 +12,8 @@ const SUPPLIER_INVOICE_REJECT_PATH =
 	'/api/v1/supplier-invoices/{supplier_invoice_id}/reject'
 const LINE_ALLOCATIONS_PATH =
 	'/api/v1/supplier-invoice-lines/{supplier_invoice_line_id}/allocations'
-const PROJECT_SUPPLIER_COSTS_PATH = '/api/v1/projects/{project_id}/supplier-costs'
+const PROJECT_SUPPLIER_COSTS_PATH =
+	'/api/v1/projects/{project_id}/supplier-costs'
 
 interface SupplierInvoiceListParams {
 	page: number
@@ -51,19 +52,17 @@ function supplierInvoiceKey(supplierInvoiceId: string) {
 	}).queryKey
 }
 
-function projectSupplierCostsKey(projectId: string) {
-	return window.tanstackApi.get(PROJECT_SUPPLIER_COSTS_PATH, {
-		path: { project_id: projectId },
-	}).queryKey
-}
-
 function invalidateSupplierInvoicesList(
 	queryClient: ReturnType<typeof useQueryClient>,
 	organizationId?: string,
 ) {
 	return queryClient.invalidateQueries({
 		predicate: (query) =>
-			isOrganizationQuery(SUPPLIER_INVOICES_PATH, query.queryKey, organizationId),
+			isOrganizationQuery(
+				SUPPLIER_INVOICES_PATH,
+				query.queryKey,
+				organizationId,
+			),
 	})
 }
 
@@ -140,7 +139,10 @@ export function useUpdateSupplierInvoiceNotes() {
 			.mutationOptions,
 		onSuccess: async (invoice) => {
 			await Promise.all([
-				invalidateSupplierInvoicesList(queryClient, invoice.data.organization_id),
+				invalidateSupplierInvoicesList(
+					queryClient,
+					invoice.data.organization_id,
+				),
 				invalidateSupplierInvoiceDetail(queryClient, invoice.data.id),
 			])
 		},
@@ -155,7 +157,10 @@ export function useConfirmSupplierInvoice() {
 			.mutationOptions,
 		onSuccess: async (invoice) => {
 			await Promise.all([
-				invalidateSupplierInvoicesList(queryClient, invoice.data.organization_id),
+				invalidateSupplierInvoicesList(
+					queryClient,
+					invoice.data.organization_id,
+				),
 				invalidateSupplierInvoiceDetail(queryClient, invoice.data.id),
 			])
 		},
@@ -170,7 +175,10 @@ export function useRejectSupplierInvoice() {
 			.mutationOptions,
 		onSuccess: async (invoice) => {
 			await Promise.all([
-				invalidateSupplierInvoicesList(queryClient, invoice.data.organization_id),
+				invalidateSupplierInvoicesList(
+					queryClient,
+					invoice.data.organization_id,
+				),
 				invalidateSupplierInvoiceDetail(queryClient, invoice.data.id),
 			])
 		},
@@ -179,28 +187,25 @@ export function useRejectSupplierInvoice() {
 
 /**
  * Full-replace of one line's allocations (#339, mirroring `Task::assignments`'s
- * own `PUT`). Invalidates every project any of the *previous* allocations
- * pointed at as well as the new ones: a share moved off a project must stop
- * counting on that project's own read, not just start counting on the new
- * one.
+ * own `PUT`). Invalidates every cached project-costs read regardless of
+ * which project it is for, not just the ones in the new allocation list: a
+ * share moved *off* a project must stop counting there too, and this one
+ * mutation hook is shared across every line's editor, each with its own
+ * previous targets we would otherwise have to thread through.
  */
-export function useReplaceLineAllocations(previousProjectIds: string[] = []) {
+export function useReplaceLineAllocations() {
 	const queryClient = useQueryClient()
 
 	return useMutation({
-		...window.tanstackApi.mutation('put', LINE_ALLOCATIONS_PATH).mutationOptions,
-		onSuccess: async (allocations) => {
-			const projectIds = new Set(previousProjectIds)
-			for (const allocation of allocations.data) {
-				projectIds.add(allocation.project_id)
-			}
-			await Promise.all(
-				Array.from(projectIds, (projectId) =>
-					queryClient.invalidateQueries({
-						queryKey: projectSupplierCostsKey(projectId),
-					}),
-				),
-			)
+		...window.tanstackApi.mutation('put', LINE_ALLOCATIONS_PATH)
+			.mutationOptions,
+		onSuccess: async () => {
+			await queryClient.invalidateQueries({
+				predicate: (query) => {
+					const meta = queryKeyMeta(query.queryKey)
+					return meta?._id === PROJECT_SUPPLIER_COSTS_PATH
+				},
+			})
 		},
 	})
 }
@@ -224,7 +229,8 @@ export type SupplierInvoiceSource = Schemas.SupplierInvoiceSource
 export type ImportSupplierInvoiceOutcome = Schemas.ImportSupplierInvoiceResponse
 export type SupplierInvoiceLineAllocation =
 	Schemas.SupplierInvoiceLineAllocationResponse
-export type ReplaceLineAllocationsPayload = Schemas.ReplaceLineAllocationsRequest
+export type ReplaceLineAllocationsPayload =
+	Schemas.ReplaceLineAllocationsRequest
 export type LineAllocationShare = Schemas.LineAllocationShareRequest
 export type ProjectSupplierCosts = Schemas.ProjectSupplierCostsResponse
 export type ProjectSupplierCostLine = Schemas.ProjectSupplierCostLineResponse

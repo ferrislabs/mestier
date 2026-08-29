@@ -32,11 +32,13 @@ import { Route as AppOOrganizationSlugHrEquipmentRouteImport } from './routes/_a
 import { Route as AppOOrganizationSlugHrAbsencesRouteImport } from './routes/_app.o.$organizationSlug.hr.absences'
 import { Route as AppOOrganizationSlugCrmCatalogRouteImport } from './routes/_app.o.$organizationSlug.crm.catalog'
 import { Route as AppOOrganizationSlugChatChannelIdRouteImport } from './routes/_app.o.$organizationSlug.chat.$channelId'
+import { Route as AppOOrganizationSlugPurchaseSupplierInvoicesIndexRouteImport } from './routes/_app.o.$organizationSlug.purchase.supplier-invoices.index'
 import { Route as AppOOrganizationSlugPlanningProjectsIndexRouteImport } from './routes/_app.o.$organizationSlug.planning.projects.index'
 import { Route as AppOOrganizationSlugHrTeamIndexRouteImport } from './routes/_app.o.$organizationSlug.hr.team.index'
 import { Route as AppOOrganizationSlugCrmQuotesIndexRouteImport } from './routes/_app.o.$organizationSlug.crm.quotes.index'
 import { Route as AppOOrganizationSlugCrmInvoicesIndexRouteImport } from './routes/_app.o.$organizationSlug.crm.invoices.index'
 import { Route as AppOOrganizationSlugCrmCustomersIndexRouteImport } from './routes/_app.o.$organizationSlug.crm.customers.index'
+import { Route as AppOOrganizationSlugPurchaseSupplierInvoicesSupplierInvoiceIdRouteImport } from './routes/_app.o.$organizationSlug.purchase.supplier-invoices.$supplierInvoiceId'
 import { Route as AppOOrganizationSlugPlanningProjectsProjectIdRouteImport } from './routes/_app.o.$organizationSlug.planning.projects.$projectId'
 import { Route as AppOOrganizationSlugCrmQuotesNewRouteImport } from './routes/_app.o.$organizationSlug.crm.quotes.new'
 import { Route as AppOOrganizationSlugCrmQuotesQuoteIdRouteImport } from './routes/_app.o.$organizationSlug.crm.quotes.$quoteId'
@@ -180,6 +182,12 @@ const AppOOrganizationSlugChatChannelIdRoute =
     path: '/$channelId',
     getParentRoute: () => AppOOrganizationSlugChatRoute,
   } as any)
+const AppOOrganizationSlugPurchaseSupplierInvoicesIndexRoute =
+  AppOOrganizationSlugPurchaseSupplierInvoicesIndexRouteImport.update({
+    id: '/purchase/supplier-invoices/',
+    path: '/purchase/supplier-invoices/',
+    getParentRoute: () => AppOOrganizationSlugRoute,
+  } as any)
 const AppOOrganizationSlugPlanningProjectsIndexRoute =
   AppOOrganizationSlugPlanningProjectsIndexRouteImport.update({
     id: '/planning/projects/',
@@ -210,6 +218,14 @@ const AppOOrganizationSlugCrmCustomersIndexRoute =
     path: '/crm/customers/',
     getParentRoute: () => AppOOrganizationSlugRoute,
   } as any)
+const AppOOrganizationSlugPurchaseSupplierInvoicesSupplierInvoiceIdRoute =
+  AppOOrganizationSlugPurchaseSupplierInvoicesSupplierInvoiceIdRouteImport.update(
+    {
+      id: '/purchase/supplier-invoices/$supplierInvoiceId',
+      path: '/purchase/supplier-invoices/$supplierInvoiceId',
+      getParentRoute: () => AppOOrganizationSlugRoute,
+    } as any,
+  )
 const AppOOrganizationSlugPlanningProjectsProjectIdRoute =
   AppOOrganizationSlugPlanningProjectsProjectIdRouteImport.update({
     id: '/planning/projects/$projectId',
@@ -295,11 +311,13 @@ export interface FileRoutesByFullPath {
   '/o/$organizationSlug/crm/quotes/$quoteId': typeof AppOOrganizationSlugCrmQuotesQuoteIdRouteWithChildren
   '/o/$organizationSlug/crm/quotes/new': typeof AppOOrganizationSlugCrmQuotesNewRoute
   '/o/$organizationSlug/planning/projects/$projectId': typeof AppOOrganizationSlugPlanningProjectsProjectIdRoute
+  '/o/$organizationSlug/purchase/supplier-invoices/$supplierInvoiceId': typeof AppOOrganizationSlugPurchaseSupplierInvoicesSupplierInvoiceIdRoute
   '/o/$organizationSlug/crm/customers/': typeof AppOOrganizationSlugCrmCustomersIndexRoute
   '/o/$organizationSlug/crm/invoices/': typeof AppOOrganizationSlugCrmInvoicesIndexRoute
   '/o/$organizationSlug/crm/quotes/': typeof AppOOrganizationSlugCrmQuotesIndexRoute
   '/o/$organizationSlug/hr/team/': typeof AppOOrganizationSlugHrTeamIndexRoute
   '/o/$organizationSlug/planning/projects/': typeof AppOOrganizationSlugPlanningProjectsIndexRoute
+  '/o/$organizationSlug/purchase/supplier-invoices/': typeof AppOOrganizationSlugPurchaseSupplierInvoicesIndexRoute
   '/o/$organizationSlug/crm/quotes/$quoteId/handover': typeof AppOOrganizationSlugCrmQuotesQuoteIdHandoverRoute
   '/o/$organizationSlug/hr/team/$memberId/work-time': typeof AppOOrganizationSlugHrTeamMemberIdWorkTimeRoute
 }
@@ -331,11 +349,13 @@ export interface FileRoutesByTo {
   '/o/$organizationSlug/crm/quotes/$quoteId': typeof AppOOrganizationSlugCrmQuotesQuoteIdRouteWithChildren
   '/o/$organizationSlug/crm/quotes/new': typeof AppOOrganizationSlugCrmQuotesNewRoute
   '/o/$organizationSlug/planning/projects/$projectId': typeof AppOOrganizationSlugPlanningProjectsProjectIdRoute
+  '/o/$organizationSlug/purchase/supplier-invoices/$supplierInvoiceId': typeof AppOOrganizationSlugPurchaseSupplierInvoicesSupplierInvoiceIdRoute
   '/o/$organizationSlug/crm/customers': typeof AppOOrganizationSlugCrmCustomersIndexRoute
   '/o/$organizationSlug/crm/invoices': typeof AppOOrganizationSlugCrmInvoicesIndexRoute
   '/o/$organizationSlug/crm/quotes': typeof AppOOrganizationSlugCrmQuotesIndexRoute
   '/o/$organizationSlug/hr/team': typeof AppOOrganizationSlugHrTeamIndexRoute
   '/o/$organizationSlug/planning/projects': typeof AppOOrganizationSlugPlanningProjectsIndexRoute
+  '/o/$organizationSlug/purchase/supplier-invoices': typeof AppOOrganizationSlugPurchaseSupplierInvoicesIndexRoute
   '/o/$organizationSlug/crm/quotes/$quoteId/handover': typeof AppOOrganizationSlugCrmQuotesQuoteIdHandoverRoute
   '/o/$organizationSlug/hr/team/$memberId/work-time': typeof AppOOrganizationSlugHrTeamMemberIdWorkTimeRoute
 }
@@ -371,11 +391,13 @@ export interface FileRoutesById {
   '/_app/o/$organizationSlug/crm/quotes/$quoteId': typeof AppOOrganizationSlugCrmQuotesQuoteIdRouteWithChildren
   '/_app/o/$organizationSlug/crm/quotes/new': typeof AppOOrganizationSlugCrmQuotesNewRoute
   '/_app/o/$organizationSlug/planning/projects/$projectId': typeof AppOOrganizationSlugPlanningProjectsProjectIdRoute
+  '/_app/o/$organizationSlug/purchase/supplier-invoices/$supplierInvoiceId': typeof AppOOrganizationSlugPurchaseSupplierInvoicesSupplierInvoiceIdRoute
   '/_app/o/$organizationSlug/crm/customers/': typeof AppOOrganizationSlugCrmCustomersIndexRoute
   '/_app/o/$organizationSlug/crm/invoices/': typeof AppOOrganizationSlugCrmInvoicesIndexRoute
   '/_app/o/$organizationSlug/crm/quotes/': typeof AppOOrganizationSlugCrmQuotesIndexRoute
   '/_app/o/$organizationSlug/hr/team/': typeof AppOOrganizationSlugHrTeamIndexRoute
   '/_app/o/$organizationSlug/planning/projects/': typeof AppOOrganizationSlugPlanningProjectsIndexRoute
+  '/_app/o/$organizationSlug/purchase/supplier-invoices/': typeof AppOOrganizationSlugPurchaseSupplierInvoicesIndexRoute
   '/_app/o/$organizationSlug/crm/quotes/$quoteId/handover': typeof AppOOrganizationSlugCrmQuotesQuoteIdHandoverRoute
   '/_app/o/$organizationSlug/hr/team/$memberId/work-time': typeof AppOOrganizationSlugHrTeamMemberIdWorkTimeRoute
 }
@@ -411,11 +433,13 @@ export interface FileRouteTypes {
     | '/o/$organizationSlug/crm/quotes/$quoteId'
     | '/o/$organizationSlug/crm/quotes/new'
     | '/o/$organizationSlug/planning/projects/$projectId'
+    | '/o/$organizationSlug/purchase/supplier-invoices/$supplierInvoiceId'
     | '/o/$organizationSlug/crm/customers/'
     | '/o/$organizationSlug/crm/invoices/'
     | '/o/$organizationSlug/crm/quotes/'
     | '/o/$organizationSlug/hr/team/'
     | '/o/$organizationSlug/planning/projects/'
+    | '/o/$organizationSlug/purchase/supplier-invoices/'
     | '/o/$organizationSlug/crm/quotes/$quoteId/handover'
     | '/o/$organizationSlug/hr/team/$memberId/work-time'
   fileRoutesByTo: FileRoutesByTo
@@ -447,11 +471,13 @@ export interface FileRouteTypes {
     | '/o/$organizationSlug/crm/quotes/$quoteId'
     | '/o/$organizationSlug/crm/quotes/new'
     | '/o/$organizationSlug/planning/projects/$projectId'
+    | '/o/$organizationSlug/purchase/supplier-invoices/$supplierInvoiceId'
     | '/o/$organizationSlug/crm/customers'
     | '/o/$organizationSlug/crm/invoices'
     | '/o/$organizationSlug/crm/quotes'
     | '/o/$organizationSlug/hr/team'
     | '/o/$organizationSlug/planning/projects'
+    | '/o/$organizationSlug/purchase/supplier-invoices'
     | '/o/$organizationSlug/crm/quotes/$quoteId/handover'
     | '/o/$organizationSlug/hr/team/$memberId/work-time'
   id:
@@ -486,11 +512,13 @@ export interface FileRouteTypes {
     | '/_app/o/$organizationSlug/crm/quotes/$quoteId'
     | '/_app/o/$organizationSlug/crm/quotes/new'
     | '/_app/o/$organizationSlug/planning/projects/$projectId'
+    | '/_app/o/$organizationSlug/purchase/supplier-invoices/$supplierInvoiceId'
     | '/_app/o/$organizationSlug/crm/customers/'
     | '/_app/o/$organizationSlug/crm/invoices/'
     | '/_app/o/$organizationSlug/crm/quotes/'
     | '/_app/o/$organizationSlug/hr/team/'
     | '/_app/o/$organizationSlug/planning/projects/'
+    | '/_app/o/$organizationSlug/purchase/supplier-invoices/'
     | '/_app/o/$organizationSlug/crm/quotes/$quoteId/handover'
     | '/_app/o/$organizationSlug/hr/team/$memberId/work-time'
   fileRoutesById: FileRoutesById
@@ -663,6 +691,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppOOrganizationSlugChatChannelIdRouteImport
       parentRoute: typeof AppOOrganizationSlugChatRoute
     }
+    '/_app/o/$organizationSlug/purchase/supplier-invoices/': {
+      id: '/_app/o/$organizationSlug/purchase/supplier-invoices/'
+      path: '/purchase/supplier-invoices'
+      fullPath: '/o/$organizationSlug/purchase/supplier-invoices/'
+      preLoaderRoute: typeof AppOOrganizationSlugPurchaseSupplierInvoicesIndexRouteImport
+      parentRoute: typeof AppOOrganizationSlugRoute
+    }
     '/_app/o/$organizationSlug/planning/projects/': {
       id: '/_app/o/$organizationSlug/planning/projects/'
       path: '/planning/projects'
@@ -696,6 +731,13 @@ declare module '@tanstack/react-router' {
       path: '/crm/customers'
       fullPath: '/o/$organizationSlug/crm/customers/'
       preLoaderRoute: typeof AppOOrganizationSlugCrmCustomersIndexRouteImport
+      parentRoute: typeof AppOOrganizationSlugRoute
+    }
+    '/_app/o/$organizationSlug/purchase/supplier-invoices/$supplierInvoiceId': {
+      id: '/_app/o/$organizationSlug/purchase/supplier-invoices/$supplierInvoiceId'
+      path: '/purchase/supplier-invoices/$supplierInvoiceId'
+      fullPath: '/o/$organizationSlug/purchase/supplier-invoices/$supplierInvoiceId'
+      preLoaderRoute: typeof AppOOrganizationSlugPurchaseSupplierInvoicesSupplierInvoiceIdRouteImport
       parentRoute: typeof AppOOrganizationSlugRoute
     }
     '/_app/o/$organizationSlug/planning/projects/$projectId': {
@@ -820,11 +862,13 @@ interface AppOOrganizationSlugRouteChildren {
   AppOOrganizationSlugCrmQuotesQuoteIdRoute: typeof AppOOrganizationSlugCrmQuotesQuoteIdRouteWithChildren
   AppOOrganizationSlugCrmQuotesNewRoute: typeof AppOOrganizationSlugCrmQuotesNewRoute
   AppOOrganizationSlugPlanningProjectsProjectIdRoute: typeof AppOOrganizationSlugPlanningProjectsProjectIdRoute
+  AppOOrganizationSlugPurchaseSupplierInvoicesSupplierInvoiceIdRoute: typeof AppOOrganizationSlugPurchaseSupplierInvoicesSupplierInvoiceIdRoute
   AppOOrganizationSlugCrmCustomersIndexRoute: typeof AppOOrganizationSlugCrmCustomersIndexRoute
   AppOOrganizationSlugCrmInvoicesIndexRoute: typeof AppOOrganizationSlugCrmInvoicesIndexRoute
   AppOOrganizationSlugCrmQuotesIndexRoute: typeof AppOOrganizationSlugCrmQuotesIndexRoute
   AppOOrganizationSlugHrTeamIndexRoute: typeof AppOOrganizationSlugHrTeamIndexRoute
   AppOOrganizationSlugPlanningProjectsIndexRoute: typeof AppOOrganizationSlugPlanningProjectsIndexRoute
+  AppOOrganizationSlugPurchaseSupplierInvoicesIndexRoute: typeof AppOOrganizationSlugPurchaseSupplierInvoicesIndexRoute
   AppOOrganizationSlugHrTeamMemberIdWorkTimeRoute: typeof AppOOrganizationSlugHrTeamMemberIdWorkTimeRoute
 }
 
@@ -863,6 +907,8 @@ const AppOOrganizationSlugRouteChildren: AppOOrganizationSlugRouteChildren = {
   AppOOrganizationSlugCrmQuotesNewRoute: AppOOrganizationSlugCrmQuotesNewRoute,
   AppOOrganizationSlugPlanningProjectsProjectIdRoute:
     AppOOrganizationSlugPlanningProjectsProjectIdRoute,
+  AppOOrganizationSlugPurchaseSupplierInvoicesSupplierInvoiceIdRoute:
+    AppOOrganizationSlugPurchaseSupplierInvoicesSupplierInvoiceIdRoute,
   AppOOrganizationSlugCrmCustomersIndexRoute:
     AppOOrganizationSlugCrmCustomersIndexRoute,
   AppOOrganizationSlugCrmInvoicesIndexRoute:
@@ -872,6 +918,8 @@ const AppOOrganizationSlugRouteChildren: AppOOrganizationSlugRouteChildren = {
   AppOOrganizationSlugHrTeamIndexRoute: AppOOrganizationSlugHrTeamIndexRoute,
   AppOOrganizationSlugPlanningProjectsIndexRoute:
     AppOOrganizationSlugPlanningProjectsIndexRoute,
+  AppOOrganizationSlugPurchaseSupplierInvoicesIndexRoute:
+    AppOOrganizationSlugPurchaseSupplierInvoicesIndexRoute,
   AppOOrganizationSlugHrTeamMemberIdWorkTimeRoute:
     AppOOrganizationSlugHrTeamMemberIdWorkTimeRoute,
 }
