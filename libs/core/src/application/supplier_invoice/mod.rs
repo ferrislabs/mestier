@@ -2,8 +2,9 @@ use common::CoreError;
 use mestier_macros::transactional;
 
 use crate::{
-    OrganizationId, ProjectId, SupplierInvoice, SupplierInvoiceId, SupplierInvoiceLine,
-    SupplierInvoiceLineAllocation, SupplierInvoiceLineId, SupplierInvoiceSource,
+    OrganizationId, ProjectId, ProjectSupplierCostLine, SupplierInvoice, SupplierInvoiceId,
+    SupplierInvoiceLine, SupplierInvoiceLineAllocation, SupplierInvoiceLineId,
+    SupplierInvoiceSource,
     application::MestierUseCase,
     domain::supplier_invoice::{
         commands::{
@@ -287,6 +288,20 @@ impl MestierUseCase {
         let mut service = SupplierInvoiceService::new(supplier_invoice_repository, emitter);
         service
             .allocated_cost_for_project(project_id, supplier_invoice_allocation_repository)
+            .await
+    }
+
+    /// #340's itemized read: same allocations as
+    /// [`allocated_supplier_cost_for_project`](Self::allocated_supplier_cost_for_project),
+    /// each carrying the invoice it belongs to.
+    #[transactional(supplier_invoice, supplier_invoice_allocation, emitter)]
+    pub async fn project_supplier_cost_lines(
+        &self,
+        project_id: ProjectId,
+    ) -> Result<Vec<ProjectSupplierCostLine>, CoreError> {
+        let mut service = SupplierInvoiceService::new(supplier_invoice_repository, emitter);
+        service
+            .project_supplier_cost_lines(project_id, supplier_invoice_allocation_repository)
             .await
     }
 }

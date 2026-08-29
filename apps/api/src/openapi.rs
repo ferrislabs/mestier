@@ -350,6 +350,7 @@ impl Modify for SecurityAddon {
         purchase::response::TotalsMismatchResponse,
         purchase::response::ImportSupplierInvoiceResponse,
         purchase::response::SupplierInvoiceLineAllocationResponse,
+        purchase::response::ProjectSupplierCostLineResponse,
         purchase::response::ProjectSupplierCostsResponse,
         member::member::create::CreateMemberRequest,
         member::member::update::UpdateMemberRequest,

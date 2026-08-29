@@ -1,0 +1,64 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT\n                a.id AS allocation_id, a.amount_cents, a.created_at,\n                si.id AS supplier_invoice_id, si.number AS supplier_invoice_number,\n                si.supplier_name, sil.id AS supplier_invoice_line_id, sil.label AS line_label\n            FROM supplier_invoice_line_allocations a\n            JOIN supplier_invoice_lines sil ON sil.id = a.supplier_invoice_line_id\n            JOIN supplier_invoices si ON si.id = sil.supplier_invoice_id\n            WHERE a.project_id = $1\n            ORDER BY a.created_at DESC, a.id ASC\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "allocation_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "amount_cents",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 2,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 3,
+        "name": "supplier_invoice_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 4,
+        "name": "supplier_invoice_number",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "supplier_name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 6,
+        "name": "supplier_invoice_line_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 7,
+        "name": "line_label",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "1e845924417f65d91c373449199420adf9038c6d81418efe3622809291d703da"
+}

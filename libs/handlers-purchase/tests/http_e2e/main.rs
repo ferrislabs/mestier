@@ -310,6 +310,20 @@ async fn replacing_line_allocations_is_reflected_in_the_project_s_supplier_costs
         json!(line_total_cents),
         "{costs}"
     );
+    // #340's own requirement: each cost line links back to the invoice it
+    // came from, not just a bare total.
+    let cost_lines = costs["data"]["lines"].as_array().expect("an array");
+    assert_eq!(cost_lines.len(), 1, "{costs}");
+    assert_eq!(
+        cost_lines[0]["supplier_invoice_number"],
+        json!("F20260023"),
+        "{costs}"
+    );
+    assert_eq!(
+        cost_lines[0]["amount_cents"],
+        json!(line_total_cents),
+        "{costs}"
+    );
 
     // Full-replace with an empty list must clear the allocation and the
     // project's cost along with it.
@@ -341,6 +355,14 @@ async fn replacing_line_allocations_is_reflected_in_the_project_s_supplier_costs
     assert_eq!(
         costs_after_clear["data"]["allocated_cents"],
         json!(0),
+        "{costs_after_clear}"
+    );
+    assert_eq!(
+        costs_after_clear["data"]["lines"]
+            .as_array()
+            .expect("an array")
+            .len(),
+        0,
         "{costs_after_clear}"
     );
 

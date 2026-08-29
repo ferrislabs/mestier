@@ -3,9 +3,9 @@ use common::CoreError;
 use rust_decimal::Decimal;
 
 use crate::{
-    OrganizationId, ProjectId, SupplierInvoice, SupplierInvoiceId, SupplierInvoiceLine,
-    SupplierInvoiceLineAllocation, SupplierInvoiceLineAllocationId, SupplierInvoiceLineId,
-    SupplierInvoiceReview,
+    OrganizationId, ProjectId, ProjectSupplierCostLine, SupplierInvoice, SupplierInvoiceId,
+    SupplierInvoiceLine, SupplierInvoiceLineAllocation, SupplierInvoiceLineAllocationId,
+    SupplierInvoiceLineId, SupplierInvoiceReview,
 };
 
 #[cfg_attr(any(test, feature = "mock"), mockall::automock)]
@@ -209,6 +209,15 @@ pub trait SupplierInvoiceAllocationRepository: Send {
         &mut self,
         id: SupplierInvoiceLineAllocationId,
     ) -> impl Future<Output = Result<(), CoreError>> + Send;
+
+    /// Same rows as [`list_by_project`](Self::list_by_project), joined out
+    /// to the line and invoice each one belongs to — #340's project screen
+    /// reads this, not the bare list, since a cost with no way back to its
+    /// invoice is not auditable.
+    fn list_detailed_by_project(
+        &mut self,
+        project_id: ProjectId,
+    ) -> impl Future<Output = Result<Vec<ProjectSupplierCostLine>, CoreError>> + Send;
 }
 
 #[cfg(test)]

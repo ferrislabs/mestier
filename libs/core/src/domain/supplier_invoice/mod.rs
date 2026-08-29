@@ -308,6 +308,25 @@ pub struct SupplierInvoiceLineAllocation {
     pub updated_at: DateTime<Utc>,
 }
 
+/// One project's allocation, enriched with just enough of its parent line
+/// and invoice to render a link back to it — #340's own reason for this
+/// screen to exist ("that link is what makes the margin auditable three
+/// months later"). [`SupplierInvoiceLineAllocation`] alone cannot do this:
+/// it carries a bare `supplier_invoice_line_id`, not the invoice it belongs
+/// to, so a caller wanting the invoice would otherwise pay an N+1 read per
+/// allocation.
+#[derive(Debug, Clone, PartialEq)]
+pub struct ProjectSupplierCostLine {
+    pub allocation_id: SupplierInvoiceLineAllocationId,
+    pub supplier_invoice_id: SupplierInvoiceId,
+    pub supplier_invoice_number: String,
+    pub supplier_name: String,
+    pub supplier_invoice_line_id: SupplierInvoiceLineId,
+    pub line_label: String,
+    pub amount_cents: i32,
+    pub created_at: DateTime<Utc>,
+}
+
 /// The only type a mutation can land on. Unlike `invoice::DraftInvoice`,
 /// construction carries no runtime check — any status can take a note, so
 /// there is no "wrong state to review" the way there is a "wrong state to

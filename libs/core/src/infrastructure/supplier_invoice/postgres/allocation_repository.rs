@@ -6,8 +6,8 @@ use common::CoreError;
 use mestier_macros::repository;
 
 use crate::{
-    OrganizationId, ProjectId, SupplierInvoiceLineAllocation, SupplierInvoiceLineAllocationId,
-    SupplierInvoiceLineId,
+    OrganizationId, ProjectId, ProjectSupplierCostLine, SupplierInvoiceId,
+    SupplierInvoiceLineAllocation, SupplierInvoiceLineAllocationId, SupplierInvoiceLineId,
     domain::supplier_invoice::ports::SupplierInvoiceAllocationRepository,
     infrastructure::postgres::{SharedTx, error::map_sqlx_error},
 };
@@ -144,6 +144,44 @@ impl<'tx> SupplierInvoiceAllocationRepository for PgSupplierInvoiceAllocationRep
                 amount_cents: row.amount_cents,
                 created_at: row.created_at,
                 updated_at: row.updated_at,
+            })
+            .collect())
+    }
+
+    async fn list_detailed_by_project(
+        &mut self,
+        project_id: ProjectId,
+    ) -> Result<Vec<ProjectSupplierCostLine>, CoreError> {
+        let mut tx = self.tx.lock().await;
+        let rows = sqlx::query!(
+            r#"
+            SELECT
+                a.id AS allocation_id, a.amount_cents, a.created_at,
+                si.id AS supplier_invoice_id, si.number AS supplier_invoice_number,
+                si.supplier_name, sil.id AS supplier_invoice_line_id, sil.label AS line_label
+            FROM supplier_invoice_line_allocations a
+            JOIN supplier_invoice_lines sil ON sil.id = a.supplier_invoice_line_id
+            JOIN supplier_invoices si ON si.id = sil.supplier_invoice_id
+            WHERE a.project_id = $1
+            ORDER BY a.created_at DESC, a.id ASC
+            "#,
+            project_id.0,
+        )
+        .fetch_all(&mut ***tx)
+        .await
+        .map_err(map_sqlx_error)?;
+
+        Ok(rows
+            .into_iter()
+            .map(|row| ProjectSupplierCostLine {
+                allocation_id: SupplierInvoiceLineAllocationId(row.allocation_id),
+                supplier_invoice_id: SupplierInvoiceId(row.supplier_invoice_id),
+                supplier_invoice_number: row.supplier_invoice_number,
+                supplier_name: row.supplier_name,
+                supplier_invoice_line_id: SupplierInvoiceLineId(row.supplier_invoice_line_id),
+                line_label: row.line_label,
+                amount_cents: row.amount_cents,
+                created_at: row.created_at,
             })
             .collect())
     }

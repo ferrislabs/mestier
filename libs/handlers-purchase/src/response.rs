@@ -1,8 +1,9 @@
 use chrono::{DateTime, NaiveDate, Utc};
 use mestier_core::{
-    OrganizationId, ProjectId, SupplierId, SupplierInvoice, SupplierInvoiceId, SupplierInvoiceLine,
-    SupplierInvoiceLineAllocation, SupplierInvoiceLineAllocationId, SupplierInvoiceLineId,
-    SupplierInvoiceSource, SupplierInvoiceStatus, SupplierInvoiceVatBreakdownLine,
+    OrganizationId, ProjectId, ProjectSupplierCostLine, SupplierId, SupplierInvoice,
+    SupplierInvoiceId, SupplierInvoiceLine, SupplierInvoiceLineAllocation,
+    SupplierInvoiceLineAllocationId, SupplierInvoiceLineId, SupplierInvoiceSource,
+    SupplierInvoiceStatus, SupplierInvoiceVatBreakdownLine,
     application::supplier_invoice::TotalsMismatch,
 };
 use serde::Serialize;
@@ -189,13 +190,44 @@ impl From<SupplierInvoiceLineAllocation> for SupplierInvoiceLineAllocationRespon
     }
 }
 
+/// One line of a project's supplier cost, with enough of its parent invoice
+/// to link back to it — see [`ProjectSupplierCostLine`]'s own doc comment.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, ToSchema)]
+pub struct ProjectSupplierCostLineResponse {
+    pub allocation_id: SupplierInvoiceLineAllocationId,
+    pub supplier_invoice_id: SupplierInvoiceId,
+    pub supplier_invoice_number: String,
+    pub supplier_name: String,
+    pub supplier_invoice_line_id: SupplierInvoiceLineId,
+    pub line_label: String,
+    pub amount_cents: i32,
+    pub created_at: DateTime<Utc>,
+}
+
+impl From<ProjectSupplierCostLine> for ProjectSupplierCostLineResponse {
+    fn from(value: ProjectSupplierCostLine) -> Self {
+        Self {
+            allocation_id: value.allocation_id,
+            supplier_invoice_id: value.supplier_invoice_id,
+            supplier_invoice_number: value.supplier_invoice_number,
+            supplier_name: value.supplier_name,
+            supplier_invoice_line_id: value.supplier_invoice_line_id,
+            line_label: value.line_label,
+            amount_cents: value.amount_cents,
+            created_at: value.created_at,
+        }
+    }
+}
+
 /// What a project's supplier costs look like on its own screen — the plain
 /// net sum `SupplierInvoiceService::allocated_cost_for_project` computes,
 /// deliberately not the same figure the profitability report states (see
 /// that method's own doc comment: this one is unfiltered by status or
-/// period, the report's is not).
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, ToSchema)]
+/// period, the report's is not). `lines` is the same total, itemized: #340
+/// links each cost back to the invoice it came from.
+#[derive(Debug, Clone, PartialEq, Serialize, ToSchema)]
 pub struct ProjectSupplierCostsResponse {
     pub project_id: ProjectId,
     pub allocated_cents: i64,
+    pub lines: Vec<ProjectSupplierCostLineResponse>,
 }

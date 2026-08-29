@@ -6,9 +6,10 @@ use events::EventEmitter;
 use rust_decimal::Decimal;
 
 use crate::{
-    OrganizationId, ProjectId, SupplierInvoice, SupplierInvoiceId, SupplierInvoiceLine,
-    SupplierInvoiceLineAllocation, SupplierInvoiceLineAllocationId, SupplierInvoiceLineId,
-    SupplierInvoiceReview, SupplierInvoiceStatus, SupplierInvoiceVatBreakdownLine,
+    OrganizationId, ProjectId, ProjectSupplierCostLine, SupplierInvoice, SupplierInvoiceId,
+    SupplierInvoiceLine, SupplierInvoiceLineAllocation, SupplierInvoiceLineAllocationId,
+    SupplierInvoiceLineId, SupplierInvoiceReview, SupplierInvoiceStatus,
+    SupplierInvoiceVatBreakdownLine,
     domain::supplier_invoice::{
         commands::{
             AllocateSupplierInvoiceLineCommand, ConfirmSupplierInvoiceCommand,
@@ -240,6 +241,21 @@ where
             .iter()
             .map(|allocation| i64::from(allocation.amount_cents))
             .sum())
+    }
+
+    /// Same rows [`allocated_cost_for_project`](Self::allocated_cost_for_project)
+    /// sums, but itemized and joined out to the invoice each one belongs to
+    /// — #340's project screen, where a cost with no way back to its
+    /// invoice would not be auditable.
+    pub async fn project_supplier_cost_lines<A>(
+        &mut self,
+        project_id: ProjectId,
+        mut allocation_repo: A,
+    ) -> Result<Vec<ProjectSupplierCostLine>, CoreError>
+    where
+        A: SupplierInvoiceAllocationRepository,
+    {
+        allocation_repo.list_detailed_by_project(project_id).await
     }
 
     /// Full-replace of one line's allocations — #339's `PUT
@@ -1023,6 +1039,45 @@ mod tests {
             .unwrap();
 
         assert_eq!(total, 10_000);
+    }
+
+    #[tokio::test]
+    async fn project_supplier_cost_lines_forwards_the_repository_s_joined_rows() {
+        let project_id = ProjectId(uuid::Uuid::new_v4());
+        let invoice_id = SupplierInvoiceId(uuid::Uuid::new_v4());
+        let now = Utc::now();
+
+        let mut allocation_repo = MockSupplierInvoiceAllocationRepository::new();
+        allocation_repo
+            .expect_list_detailed_by_project()
+            .with(always())
+            .returning(move |project_id| {
+                let rows = vec![ProjectSupplierCostLine {
+                    allocation_id: SupplierInvoiceLineAllocationId(uuid::Uuid::new_v4()),
+                    supplier_invoice_id: invoice_id,
+                    supplier_invoice_number: "F-2026-0012".to_owned(),
+                    supplier_name: "Point P".to_owned(),
+                    supplier_invoice_line_id: SupplierInvoiceLineId(uuid::Uuid::new_v4()),
+                    line_label: "Ciment".to_owned(),
+                    amount_cents: 6_000,
+                    created_at: now,
+                }];
+                let _ = project_id;
+                Box::pin(async move { Ok(rows) })
+            });
+
+        let repo = MockSupplierInvoiceRepository::new();
+        let emitter = RecordingEmitter::new();
+        let mut service = SupplierInvoiceService::new(repo, &emitter);
+
+        let lines = service
+            .project_supplier_cost_lines(project_id, allocation_repo)
+            .await
+            .unwrap();
+
+        assert_eq!(lines.len(), 1);
+        assert_eq!(lines[0].supplier_invoice_id, invoice_id);
+        assert_eq!(lines[0].amount_cents, 6_000);
     }
 
     #[tokio::test]
