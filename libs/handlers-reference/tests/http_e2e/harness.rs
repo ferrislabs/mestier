@@ -27,8 +27,14 @@ pub struct App {
     /// refusal test: `token` above must never be able to read or correct it.
     pub other_cost_basis_id: Uuid,
     pub other_employee_id: Uuid,
+    /// A member of `organization_id` with no role assigned at all — #305's
+    /// `reference.manage` gate now refuses this token on every reference-data
+    /// write, while `token` above (whose seeded role carries the bit)
+    /// keeps working.
+    pub restricted_token: String,
     user_id: Uuid,
     other_user_id: Uuid,
+    restricted_user_id: Uuid,
 }
 
 pub async fn start() -> App {
@@ -68,6 +74,7 @@ pub async fn start() -> App {
     App {
         base_url: format!("http://{addr}"),
         token: issuer::mint(&fixture.sub),
+        restricted_token: issuer::mint(&fixture.restricted_sub),
         pool,
         organization_id: fixture.organization_id,
         employee_id: fixture.employee_id,
@@ -76,6 +83,7 @@ pub async fn start() -> App {
         other_employee_id: fixture.other_employee_id,
         user_id: fixture.user_id,
         other_user_id: fixture.other_user_id,
+        restricted_user_id: fixture.restricted_user_id,
     }
 }
 
@@ -90,6 +98,7 @@ impl App {
             for statement in [
                 "DELETE FROM employee_cost_bases WHERE org_id = $1",
                 "DELETE FROM employees WHERE org_id = $1",
+                "DELETE FROM equipment WHERE org_id = $1",
                 "DELETE FROM organization_members WHERE organization_id = $1",
                 "DELETE FROM organizations WHERE id = $1",
             ] {
@@ -101,7 +110,7 @@ impl App {
             }
         }
 
-        for user_id in [self.user_id, self.other_user_id] {
+        for user_id in [self.user_id, self.other_user_id, self.restricted_user_id] {
             sqlx::query("DELETE FROM users WHERE id = $1")
                 .bind(user_id)
                 .execute(&self.pool)
@@ -126,6 +135,8 @@ struct Fixture {
     sub: String,
     user_id: Uuid,
     other_user_id: Uuid,
+    restricted_sub: String,
+    restricted_user_id: Uuid,
     organization_id: Uuid,
     employee_id: Uuid,
     cost_basis_id: Uuid,
@@ -136,11 +147,14 @@ struct Fixture {
 /// One organization with an owner and an hourly employee already on an open
 /// cost basis, plus a second organization's employee — used only as the
 /// target of the cross-tenant refusal test, never reachable through the
-/// first token.
+/// first token. Also a member of the first organization with no role at
+/// all, for the #305 `reference.manage` refusal test.
 async fn seed(pool: &PgPool) -> Fixture {
     let organization_id = Uuid::now_v7();
     let (user_id, sub, employee_id, cost_basis_id) =
         seed_org_owner_and_employee(pool, organization_id).await;
+    let (restricted_user_id, restricted_sub) =
+        seed_member_without_role(pool, organization_id).await;
 
     let other_organization_id = Uuid::now_v7();
     let (other_user_id, _, other_employee_id, other_cost_basis_id) =
@@ -150,12 +164,47 @@ async fn seed(pool: &PgPool) -> Fixture {
         sub,
         user_id,
         other_user_id,
+        restricted_sub,
+        restricted_user_id,
         organization_id,
         employee_id,
         cost_basis_id,
         other_cost_basis_id,
         other_employee_id,
     }
+}
+
+/// A member of `organization_id` with no role assigned at all — the bare
+/// "belongs to the organization" case #305's `reference.manage` gate now
+/// refuses on every reference-data write, mirroring `handlers-reporting`'s
+/// own `no_role_token`.
+async fn seed_member_without_role(pool: &PgPool, organization_id: Uuid) -> (Uuid, String) {
+    let user_id = Uuid::now_v7();
+    let sub = format!("sub-reference-no-role-{user_id}");
+    sqlx::query(
+        "INSERT INTO users (id, email, username, display_name, sub) VALUES ($1, $2, $3, $4, $5)",
+    )
+    .bind(user_id)
+    .bind(format!("member-{user_id}@example.com"))
+    .bind(format!("member-{user_id}"))
+    .bind("No Role Member")
+    .bind(&sub)
+    .execute(pool)
+    .await
+    .expect("seed the user");
+
+    sqlx::query(
+        "INSERT INTO organization_members (id, organization_id, user_id, last_name) VALUES ($1, $2, $3, $4)",
+    )
+    .bind(Uuid::now_v7())
+    .bind(organization_id)
+    .bind(user_id)
+    .bind("No Role")
+    .execute(pool)
+    .await
+    .expect("seed the membership");
+
+    (user_id, sub)
 }
 
 /// A user who owns `organization_id`, their seat, an hourly employee profile
@@ -201,10 +250,12 @@ async fn seed_org_owner_and_employee(
     .await
     .expect("seed the membership");
 
-    // `member.manage`, the bit cost-basis routes gate on: `organizations.
-    // owner_id` alone carries no permissions, `create_organization` is what
-    // normally seeds this role and assigns it to the owner's seat.
+    // `member.manage`/`reference.manage`, the bits cost-basis and
+    // reference-data write routes gate on: `organizations.owner_id` alone
+    // carries no permissions, `create_organization` is what normally seeds
+    // this role and assigns it to the owner's seat.
     const MANAGE_MEMBERS: i64 = 1 << 1;
+    const MANAGE_REFERENCE: i64 = 1 << 14;
     let role_id = Uuid::now_v7();
     sqlx::query(
         "INSERT INTO roles (id, organization_id, name, permissions) VALUES ($1, $2, $3, $4)",
@@ -212,7 +263,7 @@ async fn seed_org_owner_and_employee(
     .bind(role_id)
     .bind(organization_id)
     .bind("Owner")
-    .bind(MANAGE_MEMBERS)
+    .bind(MANAGE_MEMBERS | MANAGE_REFERENCE)
     .execute(pool)
     .await
     .expect("seed the owner role");
@@ -274,6 +325,16 @@ fn args_for(database_url: &str, redis_url: &str, issuer_url: &str) -> Vec<String
         db.path().trim_start_matches('/').to_owned(),
         "--rate-limit-redis-url".to_owned(),
         redis_url.to_owned(),
+        // The rate limiter keys on client IP alone, and every test in this
+        // suite calls in from the same loopback address through the same
+        // Redis — so the sliding window is shared across every test in a
+        // run, and across a run and the one before it if run twice inside
+        // the same window. The production default of 120/minute is a
+        // limit on one real caller, not on an entire suite's worth of
+        // fixtures; a value that low turned a second consecutive run of a
+        // clean suite into a false failure.
+        "--rate-limit-per-minute".to_owned(),
+        "100000".to_owned(),
         "--auth-issuer".to_owned(),
         issuer_url.to_owned(),
         "--file-storage-auto-create-bucket".to_owned(),

@@ -1,6 +1,6 @@
 use auth::Identity;
 use axum::{Extension, extract::State};
-use handlers::{ApiError, AppState, DataEnvelope, Response};
+use handlers::{ApiError, AppState, DataEnvelope, Response, resolve_actor};
 
 use crate::{
     project::{ProjectRestorePath, require_project},
@@ -35,8 +35,13 @@ pub async fn handler(
     Extension(identity): Extension<Identity>,
 ) -> Result<Response<ProjectResponse>, ApiError> {
     require_project(&state, &identity, organization_id, project_id).await?;
+    let (user_id, actor) = resolve_actor(&state, &identity).await?;
 
-    state.usecase.restore_project(project_id).await?;
+    state
+        .usecase
+        .acting_as(user_id)
+        .restore_project(actor, project_id)
+        .await?;
     let project = state.usecase.get_project(project_id).await?;
 
     Ok(Response::OK(project.into()))

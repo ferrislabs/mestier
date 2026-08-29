@@ -1,6 +1,6 @@
 use auth::Identity;
 use axum::{Extension, Json, extract::State};
-use handlers::{ApiError, AppState, DataEnvelope, Response, resolve_user_id};
+use handlers::{ApiError, AppState, DataEnvelope, Response, resolve_actor};
 use mestier_core::{CustomerContextId, CustomerId, QuoteId, QuoteStatus, UpdateQuoteCommand};
 use serde::Deserialize;
 use utoipa::ToSchema;
@@ -47,7 +47,7 @@ pub async fn handler(
     Json(payload): Json<UpdateQuoteRequest>,
 ) -> Result<Response<QuoteResponse>, ApiError> {
     let current = require_quote_membership(&state, &identity, quote_id).await?;
-    let actor = resolve_user_id(&state, &identity).await?;
+    let (user_id, actor) = resolve_actor(&state, &identity).await?;
     require_quote_targets(
         &state,
         current.organization_id,
@@ -58,15 +58,18 @@ pub async fn handler(
 
     let quote = state
         .usecase
-        .acting_as(actor)
-        .update_quote(UpdateQuoteCommand {
-            id: quote_id,
-            title: payload.title,
-            customer_id: payload.customer_id,
-            customer_context_id: payload.customer_context_id,
-            status: payload.status,
-            lines: into_line_commands(payload.lines)?,
-        })
+        .acting_as(user_id)
+        .update_quote(
+            UpdateQuoteCommand {
+                id: quote_id,
+                title: payload.title,
+                customer_id: payload.customer_id,
+                customer_context_id: payload.customer_context_id,
+                status: payload.status,
+                lines: into_line_commands(payload.lines)?,
+            },
+            actor,
+        )
         .await?;
 
     Ok(Response::OK(quote.into()))

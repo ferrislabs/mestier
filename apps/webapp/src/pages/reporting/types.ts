@@ -17,8 +17,21 @@ export function formatCents(cents: number): string {
 	}).format(cents / 100)
 }
 
-/** Labour, machines and expenses. Mirrors `ProjectProfitability::planned_cost_cents`. */
-export function plannedCostCents(project: ProjectProfitability): number {
+/**
+ * Labour, machines and expenses. Mirrors
+ * `ProjectProfitability::planned_cost_cents` — `null` when any of the three
+ * is (#306's redaction nulls all three together, never one alone, but this
+ * stays defensive rather than assuming that pairing holds forever).
+ */
+export function plannedCostCents(project: ProjectProfitability): number | null {
+	if (
+		project.labour_cost_cents == null ||
+		project.equipment_cost_cents == null ||
+		project.expenses_cents == null
+	) {
+		return null
+	}
+
 	return (
 		project.labour_cost_cents +
 		project.equipment_cost_cents +
@@ -69,9 +82,10 @@ export function overlapNote(project: ProjectProfitability): string | null {
 	return `dont ${formatMinutes(project.overlapping_minutes)} comptées deux fois (chevauchement)`
 }
 
-/** `null` when there is nothing to declare, so the caller can skip a row. */
+/** `null` when there is nothing to declare, or redacted, so the caller can
+ * skip a row. */
 export function expensesNote(project: ProjectProfitability): string | null {
-	if (project.expenses_cents <= 0) return null
+	if (!project.expenses_cents || project.expenses_cents <= 0) return null
 
 	return `${formatCents(project.expenses_cents)} de frais`
 }

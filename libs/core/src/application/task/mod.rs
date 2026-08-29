@@ -1,16 +1,18 @@
 use std::collections::HashMap;
 
+use authz::Resource;
 use common::CoreError;
 use mestier_macros::transactional;
 
 use crate::{
     AssigneeRef, OrganizationId, Task, TaskId,
-    application::MestierUseCase,
+    application::{MestierUseCase, policy},
     domain::equipment::service::EquipmentService,
     domain::project::service::ProjectService,
     domain::task::{
         DeleteScope,
         commands::{CreateTaskCommand, PatchTaskCommand},
+        ports::TaskRepository,
         service::TaskService,
     },
     domain::task_label::service::TaskLabelService,
@@ -19,8 +21,26 @@ use crate::{
 mod tests;
 
 impl MestierUseCase {
-    #[transactional(task, member, project)]
+    #[transactional(task, member, project, role, authz)]
     pub async fn create_task(&self, command: CreateTaskCommand) -> Result<Task, CoreError> {
+        let mut member_repository = member_repository;
+        let mut role_repository = role_repository;
+
+        let actor = policy::enrich_for_organization(
+            command.actor.clone(),
+            command.organization_id,
+            &mut member_repository,
+            &mut role_repository,
+        )
+        .await?;
+        policy::require(
+            &authz,
+            &actor,
+            "planning.manage",
+            Resource::new("organization", command.organization_id.0.to_string()),
+        )
+        .await?;
+
         if let Some(project_id) = command.project_id {
             let mut project_service = ProjectService::new(project_repository);
             let project = project_service.get_project(project_id).await?;
@@ -73,10 +93,38 @@ impl MestierUseCase {
     /// files), so composing `TaskLabelRepository`/`EquipmentRepository` at
     /// this thin, already-transactional seam avoids adding a dependency from
     /// `task`'s own domain service onto a sibling aggregate's port.
-    #[transactional(task, member, task_label, equipment, project)]
+    #[transactional(task, member, task_label, equipment, project, role, authz)]
     pub async fn patch_task(&self, command: PatchTaskCommand) -> Result<Task, CoreError> {
         let label_ids = command.label_ids.clone();
         let equipment_ids = command.equipment_ids.clone();
+
+        let mut task_repository = task_repository;
+        let mut member_repository = member_repository;
+        let mut role_repository = role_repository;
+
+        // A bare id derives its organization from the loaded row, never from
+        // the command — see the module doc. Loaded before `TaskService` takes
+        // ownership of `task_repository`/`member_repository`, so this can
+        // still borrow them for the authorization check below.
+        let existing = task_repository
+            .find_by_id(command.id)
+            .await?
+            .ok_or(CoreError::NotFound)?;
+
+        let actor = policy::enrich_for_organization(
+            command.actor.clone(),
+            existing.organization_id,
+            &mut member_repository,
+            &mut role_repository,
+        )
+        .await?;
+        policy::require(
+            &authz,
+            &actor,
+            "planning.manage",
+            Resource::new("organization", existing.organization_id.0.to_string()),
+        )
+        .await?;
 
         // Resolved before anything is written. The composite foreign key on
         // `(project_id, org_id)` already makes a cross-organization attachment
@@ -87,13 +135,12 @@ impl MestierUseCase {
         let mut service = TaskService::new(task_repository, member_repository);
 
         if let Some(Some(project_id)) = command.project_id {
-            let organization_id = service.get_task(command.id).await?.organization_id;
             let mut project_service = ProjectService::new(project_repository);
             if project_service
                 .get_project(project_id)
                 .await?
                 .organization_id
-                != organization_id
+                != existing.organization_id
             {
                 return Err(CoreError::NotFound);
             }
@@ -118,8 +165,36 @@ impl MestierUseCase {
         Ok(task)
     }
 
-    #[transactional(task, member)]
-    pub async fn soft_delete_task(&self, id: TaskId) -> Result<(), CoreError> {
+    #[transactional(task, member, role, authz)]
+    pub async fn soft_delete_task(
+        &self,
+        actor: authz::Subject,
+        id: TaskId,
+    ) -> Result<(), CoreError> {
+        let mut task_repository = task_repository;
+        let mut member_repository = member_repository;
+        let mut role_repository = role_repository;
+
+        let existing = task_repository
+            .find_by_id(id)
+            .await?
+            .ok_or(CoreError::NotFound)?;
+
+        let actor = policy::enrich_for_organization(
+            actor,
+            existing.organization_id,
+            &mut member_repository,
+            &mut role_repository,
+        )
+        .await?;
+        policy::require(
+            &authz,
+            &actor,
+            "planning.manage",
+            Resource::new("organization", existing.organization_id.0.to_string()),
+        )
+        .await?;
+
         let mut service = TaskService::new(task_repository, member_repository);
         service.soft_delete_task(id).await
     }
@@ -128,12 +203,37 @@ impl MestierUseCase {
     /// [`Self::soft_delete_task`]; `ThisAndFollowing` also removes every
     /// later occurrence in the same series — see
     /// `TaskService::soft_delete_occurrence`.
-    #[transactional(task, member)]
+    #[transactional(task, member, role, authz)]
     pub async fn soft_delete_task_occurrence(
         &self,
+        actor: authz::Subject,
         id: TaskId,
         scope: DeleteScope,
     ) -> Result<(), CoreError> {
+        let mut task_repository = task_repository;
+        let mut member_repository = member_repository;
+        let mut role_repository = role_repository;
+
+        let existing = task_repository
+            .find_by_id(id)
+            .await?
+            .ok_or(CoreError::NotFound)?;
+
+        let actor = policy::enrich_for_organization(
+            actor,
+            existing.organization_id,
+            &mut member_repository,
+            &mut role_repository,
+        )
+        .await?;
+        policy::require(
+            &authz,
+            &actor,
+            "planning.manage",
+            Resource::new("organization", existing.organization_id.0.to_string()),
+        )
+        .await?;
+
         let mut service = TaskService::new(task_repository, member_repository);
         service.soft_delete_occurrence(id, scope).await
     }
@@ -143,13 +243,32 @@ impl MestierUseCase {
     /// `TaskService::bulk_assign_tasks`'s own doc for the failure contract:
     /// the first missing or foreign task fails the whole call, rolling back
     /// any earlier task's write in the same batch.
-    #[transactional(task, member)]
+    #[transactional(task, member, role, authz)]
     pub async fn bulk_assign_tasks(
         &self,
+        actor: authz::Subject,
         organization_id: OrganizationId,
         task_ids: Vec<TaskId>,
         assignees: Vec<AssigneeRef>,
     ) -> Result<Vec<Task>, CoreError> {
+        let mut member_repository = member_repository;
+        let mut role_repository = role_repository;
+
+        let actor = policy::enrich_for_organization(
+            actor,
+            organization_id,
+            &mut member_repository,
+            &mut role_repository,
+        )
+        .await?;
+        policy::require(
+            &authz,
+            &actor,
+            "planning.manage",
+            Resource::new("organization", organization_id.0.to_string()),
+        )
+        .await?;
+
         let mut service = TaskService::new(task_repository, member_repository);
         service
             .bulk_assign_tasks(organization_id, task_ids, assignees)

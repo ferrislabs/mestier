@@ -15,6 +15,7 @@ import {
 	formatMoney,
 	RowActions,
 } from '#/components/reference-table'
+import { RequirePermission } from '#/components/require-permission'
 import { Button } from '#/components/ui/button'
 import { Input } from '#/components/ui/input'
 import { Label } from '#/components/ui/label'
@@ -51,6 +52,7 @@ import {
 	useUpdateProduct,
 	useUpdateServiceRate,
 } from '#/hooks/use-reference-catalog'
+import { mutationErrorMessage } from '#/lib/api-error'
 import { formatPricePerUnit, formatUnitLong } from '#/lib/units'
 import type { ServiceRateFormValues } from '#/pages/catalog/types'
 import { eurosToCents } from '#/pages/quotes/types'
@@ -292,21 +294,23 @@ function CrmSectionContent({ organizationId }: CrmSectionContentProps) {
 								<div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
 									<h2 className="font-semibold text-foreground">Catalogue</h2>
 									<div className="flex flex-col gap-2 sm:flex-row">
-										<Button
-											type="button"
-											variant="outline"
-											onClick={() => openCreate('services')}
-										>
-											<BriefcaseBusiness />
-											Nouveau service
-										</Button>
-										<Button
-											type="button"
-											onClick={() => openCreate('products')}
-										>
-											<Plus />
-											Nouveau produit
-										</Button>
+										<RequirePermission permission="MANAGE_REFERENCE">
+											<Button
+												type="button"
+												variant="outline"
+												onClick={() => openCreate('services')}
+											>
+												<BriefcaseBusiness />
+												Nouveau service
+											</Button>
+											<Button
+												type="button"
+												onClick={() => openCreate('products')}
+											>
+												<Plus />
+												Nouveau produit
+											</Button>
+										</RequirePermission>
 									</div>
 								</div>
 
@@ -333,7 +337,7 @@ function CrmSectionContent({ organizationId }: CrmSectionContentProps) {
 
 								{error ? (
 									<div className="rounded-lg border border-destructive/30 bg-destructive-soft px-4 py-3 text-sm text-destructive">
-										{error.message}
+										{mutationErrorMessage(error)}
 									</div>
 								) : null}
 

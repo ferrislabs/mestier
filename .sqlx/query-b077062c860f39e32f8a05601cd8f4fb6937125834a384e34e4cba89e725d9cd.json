@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            INSERT INTO roles (id, organization_id, name, permissions, created_at, updated_at)\n            VALUES ($1, $2, $3, $4, $5, $6)\n            RETURNING id, organization_id, name, permissions, created_at, updated_at\n            ",
+  "query": "\n            UPDATE roles\n            SET name = $2, permissions = $3, updated_at = $4\n            WHERE id = $1\n            RETURNING id, organization_id, name, permissions, is_seeded, created_at, updated_at\n            ",
   "describe": {
     "columns": [
       {
@@ -25,11 +25,16 @@
       },
       {
         "ordinal": 4,
+        "name": "is_seeded",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 5,
         "name": "created_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 5,
+        "ordinal": 6,
         "name": "updated_at",
         "type_info": "Timestamptz"
       }
@@ -37,10 +42,8 @@
     "parameters": {
       "Left": [
         "Uuid",
-        "Uuid",
         "Text",
         "Int8",
-        "Timestamptz",
         "Timestamptz"
       ]
     },
@@ -50,8 +53,9 @@
       false,
       false,
       false,
+      false,
       false
     ]
   },
-  "hash": "e7511a933f83e2c97f71084cd9d123f2ae685459e224c6317b6ef87481220fc7"
+  "hash": "b077062c860f39e32f8a05601cd8f4fb6937125834a384e34e4cba89e725d9cd"
 }

@@ -1,6 +1,6 @@
 use auth::Identity;
 use axum::{Extension, extract::State};
-use handlers::{ApiError, AppState, Response, resolve_user_id};
+use handlers::{ApiError, AppState, Response, resolve_actor};
 
 use crate::task_comment::{TaskCommentPath, require_task_comment};
 
@@ -32,12 +32,12 @@ pub async fn handler(
     Extension(identity): Extension<Identity>,
 ) -> Result<Response<()>, ApiError> {
     require_task_comment(&state, &identity, organization_id, task_id, comment_id).await?;
-    let actor = resolve_user_id(&state, &identity).await?;
+    let (user_id, actor) = resolve_actor(&state, &identity).await?;
 
     state
         .usecase
-        .acting_as(actor)
-        .delete_task_comment(comment_id, actor)
+        .acting_as(user_id)
+        .delete_task_comment(actor, comment_id, user_id)
         .await?;
 
     Ok(Response::NoContent)

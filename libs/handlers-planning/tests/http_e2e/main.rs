@@ -16,7 +16,9 @@
 
 mod harness;
 mod issuer;
+mod work_time;
 
+use chrono::{Duration, Utc};
 use serde_json::json;
 
 /// The list defaults to pending, and resolving moves a report out of it —
@@ -520,6 +522,54 @@ async fn a_three_level_template_hierarchy_is_refused() {
         .expect("the api answers the create call");
 
     assert_eq!(response.status(), 409);
+
+    app.cleanup().await;
+}
+
+/// #305: a member of the organization who holds no `planning.manage`
+/// permission is refused on a write — membership alone is not enough —
+/// while the fixture's main caller, who carries a role with
+/// `Permissions::ALL` (see `harness::seed`), keeps working exactly as
+/// before this enforcement landed.
+#[tokio::test]
+#[ignore = "requires live postgres and redis"]
+async fn creating_a_task_needs_planning_manage_not_just_membership() {
+    let app = harness::start().await;
+    let client = reqwest::Client::new();
+
+    let starts_at = Utc::now() + Duration::days(1);
+    let payload = json!({
+        "title": "Réfection toiture",
+        "starts_at": starts_at,
+        "ends_at": starts_at + Duration::hours(2),
+        "blocks_availability": true,
+    });
+
+    let refused = client
+        .post(app.tasks_url())
+        .bearer_auth(&app.no_permission_token)
+        .json(&payload)
+        .send()
+        .await
+        .expect("the api answers the create call for the member with no role");
+    assert_eq!(
+        refused.status(),
+        403,
+        "a member with no planning.manage permission must be refused"
+    );
+
+    let allowed = client
+        .post(app.tasks_url())
+        .bearer_auth(&app.token)
+        .json(&payload)
+        .send()
+        .await
+        .expect("the api answers the create call for the manager");
+    assert_eq!(
+        allowed.status(),
+        201,
+        "the manager's role carries planning.manage and must keep working"
+    );
 
     app.cleanup().await;
 }

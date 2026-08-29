@@ -43,6 +43,7 @@ export const MODULES: AppModule[] = [
 				label: 'Rentabilité',
 				to: '/reporting',
 				icon: TrendingUp,
+				requiredPermission: 'VIEW_REPORTS',
 			},
 		],
 	},

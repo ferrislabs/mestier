@@ -268,7 +268,7 @@ mod tests {
         .unwrap();
         let occurrence_id = crate::TaskId(occurrence_id);
 
-        let mut patch = PatchTaskCommand::new(occurrence_id);
+        let mut patch = PatchTaskCommand::new(occurrence_id, authz::Subject::system());
         patch.title = Some("Réunion déplacée".to_owned());
 
         let patched = usecase.patch_task(patch).await.unwrap();

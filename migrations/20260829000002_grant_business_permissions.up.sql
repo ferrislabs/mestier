@@ -1,0 +1,25 @@
+-- #283/#304: backfill the business permission bits onto every existing
+-- organization's default `admin` and `member` roles. `owner` needs no
+-- backfill: it is seeded (and stays seeded) as Permissions::ALL
+-- (i64::MAX), which already contains any bit added here or later, by
+-- construction.
+--
+-- Matched by role name: the same signal the seeding code
+-- (domain::organization::service) and the rest of the codebase already
+-- rely on to mean "this org's default X role" — `roles` carries no
+-- separate is-default flag, and a custom role a user renamed to "admin"
+-- or "member" is indistinguishable from the seeded one either way.
+--
+-- Bit values must stay in lockstep with
+-- domain::role::default_admin_business_permissions /
+-- default_member_business_permissions:
+--   admin:  VIEW_PLANNING (128) | MANAGE_PLANNING (256) | VIEW_REPORTS (2048)
+--         | MANAGE_CUSTOMERS (4096) | MANAGE_QUOTES (8192) | MANAGE_REFERENCE (16384)
+--         = 31104
+--   member: VIEW_PLANNING (128) | MANAGE_PLANNING (256) = 384
+-- VIEW_COST/MANAGE_COST are deliberately absent from both: this backfill
+-- closes the payroll leak #283 exists to close, it does not carry it
+-- forward under a new name. An owner who wants to grant a colleague cost
+-- visibility does so explicitly, after this ships.
+UPDATE roles SET permissions = permissions | 31104::bigint WHERE name = 'admin';
+UPDATE roles SET permissions = permissions | 384::bigint WHERE name = 'member';

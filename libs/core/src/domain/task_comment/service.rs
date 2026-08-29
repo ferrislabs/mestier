@@ -135,6 +135,7 @@ mod tests {
 
     fn create_command(author_user_id: UserId) -> CreateTaskCommentCommand {
         CreateTaskCommentCommand {
+            actor: authz::Subject::system(),
             organization_id: OrganizationId(Uuid::new_v4()),
             task_id: TaskId(Uuid::new_v4()),
             author_user_id,
@@ -264,6 +265,7 @@ mod tests {
         let mut service = TaskCommentService::new(repo);
         let updated = service
             .update_task_comment(UpdateTaskCommentCommand {
+                actor: authz::Subject::system(),
                 id,
                 acting_user_id: author_user_id,
                 body: "Édité".to_owned(),
@@ -280,6 +282,7 @@ mod tests {
 
         let err = service
             .update_task_comment(UpdateTaskCommentCommand {
+                actor: authz::Subject::system(),
                 id: TaskCommentId(Uuid::new_v4()),
                 acting_user_id: UserId(Uuid::new_v4()),
                 body: "   ".to_owned(),
@@ -311,6 +314,7 @@ mod tests {
         let mut service = TaskCommentService::new(repo);
         let err = service
             .update_task_comment(UpdateTaskCommentCommand {
+                actor: authz::Subject::system(),
                 id,
                 acting_user_id: other_user_id,
                 body: "Je réécris ton message".to_owned(),

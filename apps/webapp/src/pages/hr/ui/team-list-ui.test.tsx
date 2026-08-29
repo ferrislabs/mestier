@@ -1,13 +1,144 @@
-import { screen } from '@testing-library/react'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import type { ReactNode } from 'react'
 import { describe, expect, it, vi } from 'vitest'
+import {
+	ActiveOrganizationProvider,
+	OrganizationListProvider,
+} from '#/hooks/use-active-organization'
+import type { Role } from '#/hooks/use-roles'
 import type {
 	MemberDraft,
 	PendingInvitationRow,
 	TeamMemberRow,
 } from '#/pages/hr/ui/team-list-ui'
 import { TeamListUI } from '#/pages/hr/ui/team-list-ui'
-import { renderWithRouter } from '#/test/render-with-router'
+import { renderWithRouter as renderWithRouterBase } from '#/test/render-with-router'
+
+const ORGANIZATION = {
+	id: 'org-1',
+	name: 'Atelier Bois & Co',
+	slug: 'atelier-bois',
+}
+
+const MY_PERMISSIONS_PATH =
+	'/api/v1/organizations/{organization_id}/members/me/permissions'
+const ROLES_PATH = '/api/v1/organizations/{organization_id}/roles'
+const MEMBER_ROLES_PATH = '/api/v1/members/{member_id}/roles'
+
+function role(overrides: Partial<Role> = {}): Role {
+	return {
+		id: 'role-1',
+		organization_id: 'org-1',
+		name: 'Administrateur',
+		permissions: [],
+		is_seeded: false,
+		created_at: '2026-01-01T00:00:00Z',
+		updated_at: '2026-01-01T00:00:00Z',
+		...overrides,
+	}
+}
+
+interface FakeApiOptions {
+	permissions?: string[]
+	roles?: Role[]
+	/** member id -> role ids held. */
+	memberRoleIds?: Record<string, string[]>
+	onAssignRole?: (params: {
+		path: { member_id: string }
+		body: { role_id: string }
+	}) => unknown
+}
+
+/**
+ * `TeamListUI` renders its "Ajouter une personne" action, and the per-row
+ * role assignment control, behind `RequirePermission` (#307, #308), and
+ * resolves a member's role badges through `useRoles`/`useMemberRoleIds`
+ * directly (see `MemberRoleCell`) — all three need a fake `tanstackApi`.
+ * Grants every bit by default since most of these tests don't exercise
+ * gating itself (covered by `require-permission.test.tsx`).
+ */
+function installFakePermissionsApi(options: FakeApiOptions = {}) {
+	const permissions = options.permissions ?? ['MANAGE_MEMBERS', 'MANAGE_ROLES']
+	const roles = options.roles ?? []
+	const memberRoleIds = options.memberRoleIds ?? {}
+
+	const fakeApi = {
+		get(path: string, params?: { path?: { member_id?: string } }) {
+			const queryKey = [{ _id: path, path: params?.path }]
+			return {
+				queryKey,
+				queryOptions: {
+					queryKey,
+					queryFn: async () => {
+						if (path === MY_PERMISSIONS_PATH) {
+							return { data: { permissions }, pagination: null }
+						}
+						if (path === ROLES_PATH) {
+							return { data: roles, pagination: null }
+						}
+						if (path === MEMBER_ROLES_PATH) {
+							const memberId = params?.path?.member_id ?? ''
+							return {
+								data: { role_ids: memberRoleIds[memberId] ?? [] },
+								pagination: null,
+							}
+						}
+						throw new Error(`unmocked GET ${path}`)
+					},
+				},
+			}
+		},
+		mutation(method: string, path: string) {
+			const mutationKey = [{ method, path }]
+			return {
+				mutationKey,
+				mutationOptions: {
+					mutationKey,
+					mutationFn: async (params: unknown) => {
+						if (method === 'post' && path === MEMBER_ROLES_PATH) {
+							if (!options.onAssignRole) {
+								throw new Error('onAssignRole not mocked')
+							}
+							return options.onAssignRole(
+								params as {
+									path: { member_id: string }
+									body: { role_id: string }
+								},
+							)
+						}
+						throw new Error(`unmocked mutation ${method} ${path}`)
+					},
+				},
+			}
+		},
+	}
+
+	// biome-ignore lint/suspicious/noExplicitAny: test-only fake, shape matches TanstackQueryApiClient's used surface
+	;(window as any).tanstackApi = fakeApi
+}
+
+function renderWithRouter(
+	ui: ReactNode,
+	initialPath?: string,
+	apiOptions?: FakeApiOptions,
+) {
+	installFakePermissionsApi(apiOptions)
+	const queryClient = new QueryClient({
+		defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+	})
+	return renderWithRouterBase(
+		<QueryClientProvider client={queryClient}>
+			<OrganizationListProvider organizations={[ORGANIZATION]}>
+				<ActiveOrganizationProvider activeOrganization={ORGANIZATION}>
+					{ui}
+				</ActiveOrganizationProvider>
+			</OrganizationListProvider>
+		</QueryClientProvider>,
+		initialPath,
+	)
+}
 
 function member(overrides: Partial<TeamMemberRow> = {}): TeamMemberRow {
 	return {
@@ -385,5 +516,118 @@ describe('TeamListUI — salaried row display', () => {
 			name: /base contractuelle à renseigner/i,
 		})
 		expect(link.getAttribute('href')).toContain('/work-time')
+	})
+})
+
+describe('TeamListUI — role assignment (#308)', () => {
+	it("renders a member's held roles as badges, resolved against the organization's role list", async () => {
+		await renderWithRouter(<TeamListUI {...baseProps()} />, undefined, {
+			roles: [
+				role({ id: 'role-admin', name: 'Administrateur' }),
+				role({ id: 'role-compta', name: 'Comptabilité' }),
+			],
+			memberRoleIds: { 'member-1': ['role-admin'] },
+		})
+
+		expect(await screen.findByText('Administrateur')).toBeDefined()
+		expect(screen.queryByText('Comptabilité')).toBeNull()
+	})
+
+	it('says "Aucun rôle" outright for a member holding none, rather than a blank cell', async () => {
+		await renderWithRouter(<TeamListUI {...baseProps()} />, undefined, {
+			roles: [role({ id: 'role-admin', name: 'Administrateur' })],
+			memberRoleIds: {},
+		})
+
+		expect(await screen.findByText('Aucun rôle')).toBeDefined()
+	})
+
+	it('offers the assign control when the fixture grants MANAGE_ROLES', async () => {
+		await renderWithRouter(<TeamListUI {...baseProps()} />, undefined, {
+			permissions: ['MANAGE_ROLES'],
+			roles: [role({ id: 'role-admin', name: 'Administrateur' })],
+		})
+
+		expect(
+			await screen.findByRole('button', { name: 'Assigner un rôle' }),
+		).toBeDefined()
+	})
+
+	it('hides the assign control when the fixture does not grant MANAGE_ROLES', async () => {
+		await renderWithRouter(<TeamListUI {...baseProps()} />, undefined, {
+			permissions: ['MANAGE_MEMBERS'],
+			roles: [role({ id: 'role-admin', name: 'Administrateur' })],
+		})
+
+		// Let the roles read resolve, then assert the control never appears —
+		// there is nothing else to `findBy` on to synchronize with here.
+		expect(await screen.findByText('Aucun rôle')).toBeDefined()
+		expect(
+			screen.queryByRole('button', { name: 'Assigner un rôle' }),
+		).toBeNull()
+		expect(
+			screen.queryByRole('button', { name: /déjà tous les rôles/ }),
+		).toBeNull()
+	})
+
+	it('calls the assign mutation with the right member and role id, and the row picks up the new badge', async () => {
+		const user = userEvent.setup()
+		const memberRoleIds: Record<string, string[]> = { 'member-1': [] }
+		const onAssignRole = vi.fn(
+			(params: { path: { member_id: string }; body: { role_id: string } }) => {
+				memberRoleIds[params.path.member_id] = [
+					...(memberRoleIds[params.path.member_id] ?? []),
+					params.body.role_id,
+				]
+				return { data: undefined }
+			},
+		)
+
+		await renderWithRouter(<TeamListUI {...baseProps()} />, undefined, {
+			permissions: ['MANAGE_ROLES'],
+			roles: [role({ id: 'role-compta', name: 'Comptabilité' })],
+			memberRoleIds,
+			onAssignRole,
+		})
+
+		await user.click(
+			await screen.findByRole('button', { name: 'Assigner un rôle' }),
+		)
+		await user.click(
+			await screen.findByRole('button', { name: 'Comptabilité' }),
+		)
+
+		await waitFor(() => {
+			expect(onAssignRole).toHaveBeenCalledWith({
+				path: { member_id: 'member-1' },
+				body: { role_id: 'role-compta' },
+			})
+		})
+
+		expect(await screen.findByText('Comptabilité')).toBeDefined()
+		expect(screen.queryByText('Aucun rôle')).toBeNull()
+	})
+
+	it('does not offer an empty picker once a member already holds every role', async () => {
+		const user = userEvent.setup()
+		await renderWithRouter(<TeamListUI {...baseProps()} />, undefined, {
+			permissions: ['MANAGE_ROLES'],
+			roles: [role({ id: 'role-admin', name: 'Administrateur' })],
+			memberRoleIds: { 'member-1': ['role-admin'] },
+		})
+
+		const button = await screen.findByRole('button', {
+			name: 'Ce membre a déjà tous les rôles',
+		})
+		expect((button as HTMLButtonElement).disabled).toBe(true)
+		expect(
+			screen.queryByRole('button', { name: 'Assigner un rôle' }),
+		).toBeNull()
+
+		// Disabled: clicking it must not open a picker or call anything.
+		await user.click(button)
+		expect(
+			screen.queryByText('Administrateur', { selector: 'button' }),
+		).toBeNull()
 	})
 })

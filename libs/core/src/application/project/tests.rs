@@ -87,6 +87,7 @@ mod tests {
 
     fn create_command(fixture: &Fixture, name: &str) -> CreateProjectCommand {
         CreateProjectCommand {
+            actor: authz::Subject::system(),
             organization_id: fixture.organization_id,
             name: name.to_owned(),
             customer_id: None,
@@ -99,6 +100,7 @@ mod tests {
         let now = Utc::now();
 
         CreateTaskCommand {
+            actor: authz::Subject::system(),
             organization_id: fixture.organization_id,
             parent_task_id: None,
             title: title.to_owned(),
@@ -154,7 +156,10 @@ mod tests {
             .await
             .unwrap();
 
-        usecase.archive_project(retired.id).await.unwrap();
+        usecase
+            .archive_project(authz::Subject::system(), retired.id)
+            .await
+            .unwrap();
 
         let (active, active_total) = usecase
             .list_projects(fixture.organization_id, None, false, 20, 0)
@@ -174,7 +179,10 @@ mod tests {
         let fetched = usecase.get_project(retired.id).await.unwrap();
         assert!(fetched.is_archived());
 
-        usecase.restore_project(retired.id).await.unwrap();
+        usecase
+            .restore_project(authz::Subject::system(), retired.id)
+            .await
+            .unwrap();
         assert!(!usecase.get_project(retired.id).await.unwrap().is_archived());
         let _ = all;
 
@@ -231,7 +239,7 @@ mod tests {
             .await
             .unwrap();
 
-        let mut patch = PatchTaskCommand::new(task.id);
+        let mut patch = PatchTaskCommand::new(task.id, authz::Subject::system());
         patch.project_id = Some(Some(foreign_project.id));
 
         let err = usecase.patch_task(patch).await.unwrap_err();
@@ -272,6 +280,7 @@ mod tests {
 
         let updated = usecase
             .update_project(UpdateProjectCommand {
+                actor: authz::Subject::system(),
                 id: created.id,
                 name: "Projet renommé".to_owned(),
                 customer_id: None,

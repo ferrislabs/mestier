@@ -8,6 +8,7 @@ import {
 	useCustomers,
 	useDeleteCustomer,
 } from '#/hooks/use-customers'
+import { mutationErrorMessage } from '#/lib/api-error'
 import { buildOrgPath } from '#/modules/org-path'
 import { getCustomerListUrlState } from '#/pages/customers/customer-list-url-state'
 import { CustomerListUI } from '#/pages/customers/ui/customer-list-ui'
@@ -70,9 +71,9 @@ function CustomerList({
 			page={page}
 			pageSize={pageSize}
 			error={
-				customers.error?.message ??
-				createCustomer.error?.message ??
-				deleteCustomer.error?.message ??
+				mutationErrorMessage(customers.error) ??
+				mutationErrorMessage(createCustomer.error) ??
+				mutationErrorMessage(deleteCustomer.error) ??
 				null
 			}
 			isLoading={customers.isLoading}

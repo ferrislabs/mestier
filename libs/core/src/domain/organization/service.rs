@@ -17,7 +17,7 @@ fn map_organization_conflict(err: CoreError) -> CoreError {
     }
 }
 
-use authz::{Authorizer, Resource};
+use authz::{Authorizer, Resource, Subject};
 
 use crate::{
     UserId,
@@ -33,6 +33,7 @@ use crate::{
         },
         role::{
             ADMIN_ROLE_NAME, MEMBER_ROLE_NAME, OWNER_ROLE_NAME, Permissions, Role, RoleId,
+            default_admin_business_permissions, default_member_business_permissions,
             ports::RoleRepository,
         },
         task_label::{PRESET_TASK_LABELS, TaskLabel, TaskLabelId, ports::TaskLabelRepository},
@@ -207,12 +208,40 @@ where
         self.organization_repository.update(&organization).await
     }
 
+    /// Gated on `organization.delete` (#309): the handler used to authorize
+    /// this by a hardcoded `organization.owner_id == caller` check instead
+    /// of ever consulting the action map, so a custom role granting
+    /// `MANAGE_ORG` (the bit this action already maps to) could never
+    /// actually delete an organization — the exact "an action name that no
+    /// use case passes is a rule that does not run" bug class #309 exists
+    /// to catch. `MANAGE_ORG` still covers the owner by construction
+    /// (`Permissions::ALL`), so this changes no caller's actual outcome.
     #[tracing::instrument(skip(self), fields(organization_id = %id.0), err)]
-    pub async fn soft_delete_organization(&mut self, id: OrganizationId) -> Result<(), CoreError> {
-        self.organization_repository
+    pub async fn soft_delete_organization(
+        &mut self,
+        id: OrganizationId,
+        actor: Subject,
+    ) -> Result<(), CoreError> {
+        let organization = self
+            .organization_repository
             .find_by_id(id)
             .await?
             .ok_or(CoreError::NotFound)?;
+
+        let actor = policy::enrich_for_organization(
+            actor,
+            organization.id,
+            &mut self.member_repository,
+            &mut self.role_repository,
+        )
+        .await?;
+        policy::require(
+            &self.authz,
+            &actor,
+            "organization.delete",
+            Resource::new("organization", organization.id.0.to_string()),
+        )
+        .await?;
 
         self.organization_repository
             .soft_delete(id, Utc::now())
@@ -288,6 +317,7 @@ where
                 organization_id: organization.id,
                 name: OWNER_ROLE_NAME.into(),
                 permissions: Permissions::ALL,
+                is_seeded: true,
                 created_at: now,
                 updated_at: now,
             })
@@ -298,7 +328,8 @@ where
                 id: RoleId(generate_uuid_v7()),
                 organization_id: organization.id,
                 name: ADMIN_ROLE_NAME.into(),
-                permissions: Permissions::MANAGE_MEMBERS,
+                permissions: Permissions::MANAGE_MEMBERS | default_admin_business_permissions(),
+                is_seeded: true,
                 created_at: now,
                 updated_at: now,
             })
@@ -309,7 +340,8 @@ where
                 id: RoleId(generate_uuid_v7()),
                 organization_id: organization.id,
                 name: MEMBER_ROLE_NAME.into(),
-                permissions: Permissions::NONE,
+                permissions: default_member_business_permissions(),
+                is_seeded: true,
                 created_at: now,
                 updated_at: now,
             })
@@ -361,7 +393,13 @@ where
         let organization = self.get_organization(organization_id).await?;
 
         if organization.owner_id == user_id {
-            return self.soft_delete_organization(organization_id).await;
+            // The owner leaving is what authorizes this, not a separate
+            // `organization.delete` grant on their own role — the org being
+            // deleted is a mechanical consequence of nobody being left to
+            // own it, not the caller invoking delete directly.
+            return self
+                .soft_delete_organization(organization_id, Subject::system())
+                .await;
         }
 
         let member = self
@@ -973,15 +1011,24 @@ mod tests {
             .times(1)
             .returning(|_, _| Box::pin(async { Ok(()) }));
 
+        let mut authz = MockAuthorizer::new();
+        authz
+            .expect_evaluate()
+            .times(1)
+            .returning(|_| Box::pin(async { Ok(Decision::allow()) }));
+
         let mut service = OrganizationService::new(
             organization_repository,
             role_repository,
             member_repository,
             user_repository,
-            MockAuthorizer::new(),
+            authz,
         );
 
-        service.soft_delete_organization(id).await.unwrap();
+        service
+            .soft_delete_organization(id, authz::Subject::system())
+            .await
+            .unwrap();
     }
 
     #[tokio::test]
@@ -1007,9 +1054,71 @@ mod tests {
             MockAuthorizer::new(),
         );
 
-        let err = service.soft_delete_organization(id).await.unwrap_err();
+        let err = service
+            .soft_delete_organization(id, authz::Subject::system())
+            .await
+            .unwrap_err();
 
         assert!(matches!(err, CoreError::NotFound));
+    }
+
+    /// #309: `organization.delete` used to be registered in the action map
+    /// but never passed to `policy::require` anywhere (the handler
+    /// authorized by a hardcoded `owner_id` check instead) — this is the
+    /// coverage that would have caught it.
+    #[tokio::test]
+    async fn soft_delete_organization_returns_forbidden_when_authz_denies() {
+        let id = OrganizationId(Uuid::new_v4());
+        let user_id = UserId(Uuid::new_v4());
+        let member_id = MemberId(Uuid::new_v4());
+
+        let mut organization_repository = MockOrganizationRepository::new();
+        let mut role_repository = MockRoleRepository::new();
+        let mut member_repository = MockMemberRepository::new();
+        let user_repository = MockUserRepository::new();
+
+        organization_repository
+            .expect_find_by_id()
+            .with(eq(id))
+            .times(1)
+            .returning(move |id| {
+                let org = fixture(id);
+                Box::pin(async move { Ok(Some(org)) })
+            });
+        stage_org_membership(
+            &mut member_repository,
+            &mut role_repository,
+            id,
+            user_id,
+            member_id,
+        );
+        // No `expect_soft_delete` — the call must short-circuit before mutation.
+
+        let mut authz = MockAuthorizer::new();
+        authz
+            .expect_evaluate()
+            .withf(move |req| {
+                req.action.name == "organization.delete"
+                    && req.resource.r#type == "organization"
+                    && req.resource.id == id.0.to_string()
+            })
+            .times(1)
+            .returning(|_| Box::pin(async { Ok(Decision::deny()) }));
+
+        let mut service = OrganizationService::new(
+            organization_repository,
+            role_repository,
+            member_repository,
+            user_repository,
+            authz,
+        );
+
+        let err = service
+            .soft_delete_organization(id, actor_for(user_id))
+            .await
+            .unwrap_err();
+
+        assert!(matches!(err, CoreError::Forbidden { .. }));
     }
 
     #[tokio::test]
@@ -1107,6 +1216,7 @@ mod tests {
                 organization_id: r.organization_id,
                 name: r.name.clone(),
                 permissions: r.permissions,
+                is_seeded: r.is_seeded,
                 created_at: r.created_at,
                 updated_at: r.updated_at,
             };
@@ -1193,6 +1303,7 @@ mod tests {
                 organization_id: r.organization_id,
                 name: r.name.clone(),
                 permissions: r.permissions,
+                is_seeded: r.is_seeded,
                 created_at: r.created_at,
                 updated_at: r.updated_at,
             };
@@ -1356,12 +1467,22 @@ mod tests {
             .times(1)
             .returning(|_, _| Box::pin(async { Ok(()) }));
 
+        // The owner leaving authorizes the cascade delete on its own — see
+        // `leave_organization`'s own doc — but `policy::require` still asks
+        // the authorizer even for a system actor, so this still needs an
+        // allow.
+        let mut authz = MockAuthorizer::new();
+        authz
+            .expect_evaluate()
+            .times(1)
+            .returning(|_| Box::pin(async { Ok(Decision::allow()) }));
+
         let mut service = OrganizationService::new(
             organization_repository,
             role_repository,
             member_repository,
             user_repository,
-            MockAuthorizer::new(),
+            authz,
         );
 
         service.leave_organization(org_id, owner_id).await.unwrap();

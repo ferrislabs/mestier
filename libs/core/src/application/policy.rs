@@ -182,6 +182,48 @@ pub fn user_subject(user_id: UserId, iam_roles: Vec<String>) -> Subject {
         .with_property(SUBJECT_IAM_ROLES_KEY, json!(iam_roles))
 }
 
+impl crate::application::MestierUseCase {
+    /// The caller's aggregated [`Permissions`] in one organization — a
+    /// read, never a refusal. Reused wherever a response has to *change
+    /// shape* by capability rather than be refused outright: #306's
+    /// profitability redaction is the first caller, deciding per request
+    /// whether to null the money fields, not whether to serve the report
+    /// at all.
+    ///
+    /// Same three-step load [`resolve_channel_permissions`] and
+    /// [`list_visible_channels`] already do for chat: member, their role
+    /// ids, the org's roles, OR-folded. `CoreError::Forbidden` when the
+    /// caller has no membership at all — callers that already checked
+    /// membership can still call this safely, it just repeats a cheap read.
+    #[mestier_macros::transactional(member, role)]
+    pub async fn member_permissions(
+        &self,
+        user_id: UserId,
+        organization_id: OrganizationId,
+    ) -> Result<Permissions, CoreError> {
+        let mut member_repository = member_repository;
+        let mut role_repository = role_repository;
+
+        let member = member_repository
+            .find_by_org_and_user(organization_id, user_id)
+            .await?
+            .ok_or(CoreError::Forbidden {
+                reason: Some("not a member of this organization".to_owned()),
+            })?;
+
+        let member_role_ids = member_repository.list_role_ids(member.id).await?;
+        let org_roles = role_repository
+            .list_by_organization(organization_id)
+            .await?;
+
+        Ok(resolve_org_permissions(
+            &member,
+            &member_role_ids,
+            &org_roles,
+        ))
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -197,6 +239,7 @@ mod tests {
             organization_id: org_id,
             name: "test".to_string(),
             permissions: perms,
+            is_seeded: false,
             created_at: Utc::now(),
             updated_at: Utc::now(),
         }

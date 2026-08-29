@@ -50,6 +50,11 @@ interface ProfitabilityUIProps {
 	members: MemberProfitability[]
 	/** Resolves a member id into a name, or `null` while unknown. */
 	memberName: (memberId: string) => string | null
+	/** #306/#307: the caller lacks `VIEW_COST` — every money field above is
+	 * `null` on that account. Minutes stay real either way; this decides
+	 * whether a money tile/column renders at all, never whether it renders
+	 * a dash. A table with an empty column reads as a bug. */
+	costsRedacted: boolean
 	isLoading: boolean
 	error: string | null
 	onPeriodChange: (period: Period) => void
@@ -73,6 +78,7 @@ export function ProfitabilityUI({
 	doubleBooked,
 	members,
 	memberName,
+	costsRedacted,
 	isLoading,
 	error,
 	onPeriodChange,
@@ -84,7 +90,7 @@ export function ProfitabilityUI({
 		0,
 	)
 	const cost = completeProjects.reduce(
-		(sum, project) => sum + plannedCostCents(project),
+		(sum, project) => sum + (plannedCostCents(project) ?? 0),
 		0,
 	)
 	const margin = completeProjects.reduce(
@@ -147,23 +153,32 @@ export function ProfitabilityUI({
 				</SectionCard>
 			) : null}
 
-			<section className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-				<MetricCard
-					label="Devisé"
-					value={formatCents(quoted)}
-					hint="Projets complets uniquement"
-					icon={<Euro className="size-4" />}
-				/>
-				<MetricCard
-					label="Coût planifié"
-					value={formatCents(cost)}
-					hint="Main d'œuvre, matériel et frais, projets complets uniquement"
-				/>
-				<MetricCard
-					label="Marge"
-					value={formatCents(margin)}
-					hint="Projets complets uniquement"
-				/>
+			<section
+				className={cn(
+					'grid grid-cols-2 gap-4',
+					costsRedacted ? 'lg:grid-cols-1' : 'lg:grid-cols-4',
+				)}
+			>
+				{costsRedacted ? null : (
+					<>
+						<MetricCard
+							label="Devisé"
+							value={formatCents(quoted)}
+							hint="Projets complets uniquement"
+							icon={<Euro className="size-4" />}
+						/>
+						<MetricCard
+							label="Coût planifié"
+							value={formatCents(cost)}
+							hint="Main d'œuvre, matériel et frais, projets complets uniquement"
+						/>
+						<MetricCard
+							label="Marge"
+							value={formatCents(margin)}
+							hint="Projets complets uniquement"
+						/>
+					</>
+				)}
 				<MetricCard
 					label="Heures planifiées"
 					value={formatMinutes(totalPlannedMinutes)}
@@ -243,20 +258,22 @@ export function ProfitabilityUI({
 				</SectionCard>
 			) : null}
 
-			<div className="grid gap-4 lg:grid-cols-2">
-				<RankingCard
-					title="Les plus rentables"
-					icon={<TrendingUp className="size-4 text-primary" />}
-					projects={mostProfitable}
-					organizationSlug={organizationSlug}
-				/>
-				<RankingCard
-					title="Les moins rentables"
-					icon={<TrendingDown className="size-4 text-destructive" />}
-					projects={leastProfitable}
-					organizationSlug={organizationSlug}
-				/>
-			</div>
+			{costsRedacted ? null : (
+				<div className="grid gap-4 lg:grid-cols-2">
+					<RankingCard
+						title="Les plus rentables"
+						icon={<TrendingUp className="size-4 text-primary" />}
+						projects={mostProfitable}
+						organizationSlug={organizationSlug}
+					/>
+					<RankingCard
+						title="Les moins rentables"
+						icon={<TrendingDown className="size-4 text-destructive" />}
+						projects={leastProfitable}
+						organizationSlug={organizationSlug}
+					/>
+				</div>
+			)}
 
 			<SectionCard>
 				<SectionHeader
@@ -275,7 +292,12 @@ export function ProfitabilityUI({
 						{projects.map((project) => (
 							<li
 								key={project.project_id}
-								className="grid gap-2 px-5 py-4 sm:grid-cols-[minmax(0,1fr)_repeat(5,100px)] sm:items-center"
+								className={cn(
+									'grid gap-2 px-5 py-4 sm:items-center',
+									costsRedacted
+										? 'sm:grid-cols-[minmax(0,1fr)_100px]'
+										: 'sm:grid-cols-[minmax(0,1fr)_repeat(5,100px)]',
+								)}
 							>
 								<div className="min-w-0">
 									<div className="flex min-w-0 flex-wrap items-center gap-2">
@@ -302,37 +324,44 @@ export function ProfitabilityUI({
 										</p>
 									) : null}
 								</div>
-								<Figure
-									label="Devisé"
-									value={
-										project.quoted_cents === null ||
-										project.quoted_cents === undefined
-											? '—'
-											: formatCents(project.quoted_cents)
-									}
-								/>
-								<Figure
-									label="Coût"
-									value={formatCents(plannedCostCents(project))}
-								/>
-								<Figure
-									label="Frais"
-									value={
-										project.expenses_cents > 0
-											? formatCents(project.expenses_cents)
-											: '—'
-									}
-								/>
-								<Figure
-									label="Marge"
-									value={
-										project.margin_cents === null ||
-										project.margin_cents === undefined
-											? '—'
-											: formatCents(project.margin_cents)
-									}
-									strong
-								/>
+								{costsRedacted ? null : (
+									<>
+										<Figure
+											label="Devisé"
+											value={
+												project.quoted_cents === null ||
+												project.quoted_cents === undefined
+													? '—'
+													: formatCents(project.quoted_cents)
+											}
+										/>
+										<Figure
+											label="Coût"
+											value={(() => {
+												const cost = plannedCostCents(project)
+												return cost === null ? '—' : formatCents(cost)
+											})()}
+										/>
+										<Figure
+											label="Frais"
+											value={
+												project.expenses_cents
+													? formatCents(project.expenses_cents)
+													: '—'
+											}
+										/>
+										<Figure
+											label="Marge"
+											value={
+												project.margin_cents === null ||
+												project.margin_cents === undefined
+													? '—'
+													: formatCents(project.margin_cents)
+											}
+											strong
+										/>
+									</>
+								)}
 								<Figure
 									label="Temps"
 									value={formatMinutes(project.planned_minutes)}
@@ -373,9 +402,11 @@ export function ProfitabilityUI({
 									<p className="font-semibold tabular-nums">
 										{formatMinutes(row.planned_minutes)}
 									</p>
-									<p className="text-xs text-muted-foreground tabular-nums">
-										{formatCents(row.labour_cost_cents)}
-									</p>
+									{costsRedacted || row.labour_cost_cents == null ? null : (
+										<p className="text-xs text-muted-foreground tabular-nums">
+											{formatCents(row.labour_cost_cents)}
+										</p>
+									)}
 								</div>
 							</li>
 						))}

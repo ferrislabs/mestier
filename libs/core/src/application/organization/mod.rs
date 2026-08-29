@@ -1,3 +1,4 @@
+use authz::Subject;
 use common::CoreError;
 use mestier_macros::transactional;
 
@@ -109,7 +110,11 @@ impl MestierUseCase {
     }
 
     #[transactional(organization, role, member, user, authz)]
-    pub async fn soft_delete_organization(&self, id: OrganizationId) -> Result<(), CoreError> {
+    pub async fn soft_delete_organization(
+        &self,
+        id: OrganizationId,
+        actor: Subject,
+    ) -> Result<(), CoreError> {
         let mut service = OrganizationService::new(
             organization_repository,
             role_repository,
@@ -117,7 +122,7 @@ impl MestierUseCase {
             user_repository,
             authz,
         );
-        service.soft_delete_organization(id).await
+        service.soft_delete_organization(id, actor).await
     }
 
     #[transactional(organization, role, member, user, authz)]
@@ -162,3 +167,6 @@ pub(crate) async fn resolve_timezone(
         ))
     })
 }
+
+#[cfg(test)]
+mod tests;

@@ -1,11 +1,12 @@
 use std::collections::HashMap;
 
+use authz::Resource;
 use common::CoreError;
 use mestier_macros::transactional;
 
 use crate::{
     OrganizationId, TaskId, TaskLabel, TaskLabelId,
-    application::MestierUseCase,
+    application::{MestierUseCase, policy},
     domain::task_label::{
         commands::{CreateTaskLabelCommand, UpdateTaskLabelCommand},
         ports::TaskLabelRepository,
@@ -16,11 +17,29 @@ use crate::{
 mod tests;
 
 impl MestierUseCase {
-    #[transactional(task_label)]
+    #[transactional(task_label, role, member, authz)]
     pub async fn create_task_label(
         &self,
         command: CreateTaskLabelCommand,
     ) -> Result<TaskLabel, CoreError> {
+        let mut member_repository = member_repository;
+        let mut role_repository = role_repository;
+
+        let actor = policy::enrich_for_organization(
+            command.actor.clone(),
+            command.organization_id,
+            &mut member_repository,
+            &mut role_repository,
+        )
+        .await?;
+        policy::require(
+            &authz,
+            &actor,
+            "planning.manage",
+            Resource::new("organization", command.organization_id.0.to_string()),
+        )
+        .await?;
+
         let mut service = TaskLabelService::new(task_label_repository);
         service.create_task_label(command).await
     }
@@ -40,17 +59,71 @@ impl MestierUseCase {
         service.list_task_labels(organization_id).await
     }
 
-    #[transactional(task_label)]
+    #[transactional(task_label, role, member, authz)]
     pub async fn update_task_label(
         &self,
         command: UpdateTaskLabelCommand,
     ) -> Result<TaskLabel, CoreError> {
+        let mut task_label_repository = task_label_repository;
+        let mut member_repository = member_repository;
+        let mut role_repository = role_repository;
+
+        // A bare id derives its organization from the loaded row, never from
+        // the command.
+        let existing = task_label_repository
+            .find_by_id(command.id)
+            .await?
+            .ok_or(CoreError::NotFound)?;
+
+        let actor = policy::enrich_for_organization(
+            command.actor.clone(),
+            existing.organization_id,
+            &mut member_repository,
+            &mut role_repository,
+        )
+        .await?;
+        policy::require(
+            &authz,
+            &actor,
+            "planning.manage",
+            Resource::new("organization", existing.organization_id.0.to_string()),
+        )
+        .await?;
+
         let mut service = TaskLabelService::new(task_label_repository);
         service.update_task_label(command).await
     }
 
-    #[transactional(task_label)]
-    pub async fn delete_task_label(&self, id: TaskLabelId) -> Result<(), CoreError> {
+    #[transactional(task_label, role, member, authz)]
+    pub async fn delete_task_label(
+        &self,
+        actor: authz::Subject,
+        id: TaskLabelId,
+    ) -> Result<(), CoreError> {
+        let mut task_label_repository = task_label_repository;
+        let mut member_repository = member_repository;
+        let mut role_repository = role_repository;
+
+        let existing = task_label_repository
+            .find_by_id(id)
+            .await?
+            .ok_or(CoreError::NotFound)?;
+
+        let actor = policy::enrich_for_organization(
+            actor,
+            existing.organization_id,
+            &mut member_repository,
+            &mut role_repository,
+        )
+        .await?;
+        policy::require(
+            &authz,
+            &actor,
+            "planning.manage",
+            Resource::new("organization", existing.organization_id.0.to_string()),
+        )
+        .await?;
+
         let mut service = TaskLabelService::new(task_label_repository);
         service.delete_task_label(id).await
     }

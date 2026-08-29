@@ -1,6 +1,6 @@
 use auth::Identity;
 use axum::{Extension, extract::State, http::StatusCode};
-use handlers::{ApiError, AppState};
+use handlers::{ApiError, AppState, resolve_actor};
 
 use crate::project::{ProjectPath, require_project};
 
@@ -35,8 +35,13 @@ pub async fn handler(
     Extension(identity): Extension<Identity>,
 ) -> Result<StatusCode, ApiError> {
     require_project(&state, &identity, organization_id, project_id).await?;
+    let (user_id, actor) = resolve_actor(&state, &identity).await?;
 
-    state.usecase.archive_project(project_id).await?;
+    state
+        .usecase
+        .acting_as(user_id)
+        .archive_project(actor, project_id)
+        .await?;
 
     Ok(StatusCode::NO_CONTENT)
 }

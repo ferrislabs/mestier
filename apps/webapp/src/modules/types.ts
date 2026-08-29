@@ -1,4 +1,5 @@
 import type { LucideIcon } from 'lucide-react'
+import type { PermissionName } from '#/hooks/use-permissions'
 
 export type ModuleId =
 	| 'home'
@@ -28,6 +29,14 @@ export interface NavTarget {
 	exact?: boolean
 	status?: NavStatus
 	badge?: string | number
+	/**
+	 * #307: hidden entirely, not greyed out, for a caller who does not hold
+	 * this bit — unlike `status: 'coming-soon'`, which is a placeholder
+	 * everyone sees. Presentation only: the API refuses regardless of
+	 * whether this hides the link, see `hooks/use-permissions.ts`'s own
+	 * doc comment.
+	 */
+	requiredPermission?: PermissionName
 }
 
 /** Second level: horizontal tabs, under the breadcrumb. */

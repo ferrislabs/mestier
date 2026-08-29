@@ -1,7 +1,7 @@
 use auth::Identity;
 use axum::{Extension, Json, extract::State};
 use chrono::{DateTime, Utc};
-use handlers::{ApiError, AppState, DataEnvelope, Response, resolve_user_id};
+use handlers::{ApiError, AppState, DataEnvelope, Response, resolve_actor};
 use mestier_core::{CreateTaskCommand, CustomerContextId, CustomerId, ProjectId, QuoteId, TaskId};
 use serde::Deserialize;
 use utoipa::ToSchema;
@@ -81,12 +81,13 @@ pub async fn handler(
         payload.quote_id,
     )
     .await?;
-    let actor = resolve_user_id(&state, &identity).await?;
+    let (user_id, actor) = resolve_actor(&state, &identity).await?;
 
     let task = state
         .usecase
-        .acting_as(actor)
+        .acting_as(user_id)
         .create_task(CreateTaskCommand {
+            actor,
             organization_id: path.organization_id,
             parent_task_id: payload.parent_task_id,
             title: payload.title,

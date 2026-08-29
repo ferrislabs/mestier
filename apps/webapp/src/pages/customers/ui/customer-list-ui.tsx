@@ -17,6 +17,7 @@ import {
 	getPaginationViewModel,
 	useDataView,
 } from '#/components/data-view'
+import { RequirePermission } from '#/components/require-permission'
 import { Button } from '#/components/ui/button'
 import {
 	Dialog,
@@ -245,10 +246,12 @@ export function CustomerListUI({
 								Pipeline
 							</Link>
 						</Button>
-						<Button onClick={() => setCreateOpen(true)}>
-							<Plus />
-							Nouveau client
-						</Button>
+						<RequirePermission permission="MANAGE_CUSTOMERS">
+							<Button onClick={() => setCreateOpen(true)}>
+								<Plus />
+								Nouveau client
+							</Button>
+						</RequirePermission>
 					</div>
 				}
 			/>
@@ -472,10 +475,12 @@ export function CustomerListUI({
 							</p>
 						</div>
 						{!search && contactFilter === 'all' ? (
-							<Button onClick={() => setCreateOpen(true)} variant="outline">
-								<Plus />
-								Ajouter un client
-							</Button>
+							<RequirePermission permission="MANAGE_CUSTOMERS">
+								<Button onClick={() => setCreateOpen(true)} variant="outline">
+									<Plus />
+									Ajouter un client
+								</Button>
+							</RequirePermission>
 						) : null}
 					</SectionCard>
 				) : (

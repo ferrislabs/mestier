@@ -50,6 +50,7 @@ function baseProps() {
 		doubleBooked: [],
 		members: [member()],
 		memberName: () => 'Martin Alix',
+		costsRedacted: false,
 		isLoading: false,
 		error: null,
 		onPeriodChange: vi.fn(),
@@ -319,5 +320,41 @@ describe('ProfitabilityUI', () => {
 				'/o/atelier-vert/planning/projects/project-incomplete',
 			)
 		}
+	})
+
+	/**
+	 * #306/#307's own binding test: a caller with `VIEW_REPORTS` and without
+	 * `VIEW_COST` sees minutes and no money. Not a dash where a figure used
+	 * to be — the column, the tile and the rankings are absent outright, a
+	 * table with an empty column reads as a bug.
+	 */
+	it('shows minutes and no money when costs are redacted', async () => {
+		const redactedProject = project({
+			quoted_cents: null,
+			labour_cost_cents: null,
+			equipment_cost_cents: null,
+			expenses_cents: null,
+			margin_cents: null,
+		})
+		const redactedMember = member({ labour_cost_cents: null })
+
+		await renderWithRouter(
+			<ProfitabilityUI
+				{...baseProps()}
+				projects={[redactedProject]}
+				mostProfitable={[redactedProject]}
+				leastProfitable={[redactedProject]}
+				members={[redactedMember]}
+				costsRedacted={true}
+			/>,
+		)
+
+		expect(screen.getAllByText(/3 h 00/).length).toBeGreaterThan(0)
+		expect(screen.queryByText('Devisé')).toBeNull()
+		expect(screen.queryByText('Coût planifié')).toBeNull()
+		expect(screen.queryByText('Marge')).toBeNull()
+		expect(screen.queryByText('Les plus rentables')).toBeNull()
+		expect(screen.queryByText('Les moins rentables')).toBeNull()
+		expect(screen.getByText('Heures planifiées')).toBeDefined()
 	})
 })

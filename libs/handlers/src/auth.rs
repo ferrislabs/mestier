@@ -1,13 +1,14 @@
 use std::str::FromStr;
 
 use auth::Identity;
+use authz::Subject;
 use axum::{
     extract::{Request, State},
     middleware::Next,
     response::Response,
 };
 use http::{HeaderValue, header::AUTHORIZATION};
-use mestier_core::{CreateUserCommand, UserId};
+use mestier_core::{CreateUserCommand, UserId, application::policy};
 use tracing::error;
 
 use crate::{
@@ -40,6 +41,24 @@ pub async fn resolve_user_id(state: &AppState, identity: &Identity) -> Result<Us
         .ok_or(ApiError::Forbidden)?;
 
     Ok(user.id)
+}
+
+/// The local `UserId` plus the AuthZen [`Subject`] a policy-checked write
+/// command carries as its `actor` field (#305) — the pairing every
+/// enforcing handler needs, so this is the one call site for it rather
+/// than each handler repeating the `match identity { User(u) => u.roles,
+/// Client(c) => c.roles }` that building the subject needs.
+pub async fn resolve_actor(
+    state: &AppState,
+    identity: &Identity,
+) -> Result<(UserId, Subject), ApiError> {
+    let user_id = resolve_user_id(state, identity).await?;
+    let iam_roles = match identity {
+        Identity::User(u) => u.roles.clone(),
+        Identity::Client(c) => c.roles.clone(),
+    };
+
+    Ok((user_id, policy::user_subject(user_id, iam_roles)))
 }
 
 pub async fn auth_middleware(

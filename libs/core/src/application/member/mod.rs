@@ -125,9 +125,13 @@ impl MestierUseCase {
     }
 
     #[transactional(member, role, user, authz)]
-    pub async fn list_role_ids(&self, member_id: MemberId) -> Result<Vec<RoleId>, CoreError> {
+    pub async fn list_role_ids(
+        &self,
+        member_id: MemberId,
+        actor: Subject,
+    ) -> Result<Vec<RoleId>, CoreError> {
         let mut service =
             MemberService::new(member_repository, role_repository, user_repository, authz);
-        service.list_role_ids(member_id).await
+        service.list_role_ids(member_id, actor).await
     }
 }

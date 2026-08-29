@@ -1,7 +1,7 @@
 use auth::Identity;
 use axum::{Extension, Json, extract::State};
 use chrono::{DateTime, Utc};
-use handlers::{ApiError, AppState, DataEnvelope, Response, resolve_user_id};
+use handlers::{ApiError, AppState, DataEnvelope, Response, resolve_actor};
 use mestier_core::{AbsenceKind, CreateAbsenceCommand, MemberId};
 use serde::Deserialize;
 use utoipa::ToSchema;
@@ -49,12 +49,13 @@ pub async fn handler(
 ) -> Result<Response<AbsenceResponse>, ApiError> {
     require_org_membership(&state, &identity, path.organization_id).await?;
     require_member_target(&state, path.organization_id, payload.member_id).await?;
-    let actor = resolve_user_id(&state, &identity).await?;
+    let (user_id, actor) = resolve_actor(&state, &identity).await?;
 
     let absence = state
         .usecase
-        .acting_as(actor)
+        .acting_as(user_id)
         .create_absence(CreateAbsenceCommand {
+            actor,
             organization_id: path.organization_id,
             member_id: payload.member_id,
             kind: payload.kind,

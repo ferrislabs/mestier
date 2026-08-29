@@ -169,6 +169,7 @@ pub use domain::{
     quote::commands::{
         CreateQuoteCommand, QuoteLineCommand, UpdateQuoteCommand, UpdateQuoteStatusCommand,
     },
+    role::commands::{CreateRoleCommand, UpdateRoleCommand},
     service_rate::commands::{CreateServiceRateCommand, UpdateServiceRateCommand},
     supplier_invoice::commands::{
         AllocateSupplierInvoiceLineCommand, ConfirmSupplierInvoiceCommand,

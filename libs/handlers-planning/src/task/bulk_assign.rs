@@ -1,6 +1,6 @@
 use auth::Identity;
 use axum::{Extension, Json, extract::State};
-use handlers::{ApiError, AppState, DataEnvelope, Response, resolve_user_id};
+use handlers::{ApiError, AppState, DataEnvelope, Response, resolve_actor};
 use mestier_core::TaskId;
 use serde::Deserialize;
 use utoipa::ToSchema;
@@ -46,13 +46,13 @@ pub async fn handler(
     Json(payload): Json<BulkAssignTasksRequest>,
 ) -> Result<Response<BulkAssignTasksResponse>, ApiError> {
     require_org_membership(&state, &identity, organization_id).await?;
-    let actor = resolve_user_id(&state, &identity).await?;
+    let (user_id, actor) = resolve_actor(&state, &identity).await?;
 
     let assignees = payload.assignees.into_iter().map(Into::into).collect();
     let tasks = state
         .usecase
-        .acting_as(actor)
-        .bulk_assign_tasks(organization_id, payload.task_ids, assignees)
+        .acting_as(user_id)
+        .bulk_assign_tasks(actor, organization_id, payload.task_ids, assignees)
         .await?;
 
     // Same batched-fetch reasoning as `task::list`: one grouped query for

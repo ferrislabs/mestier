@@ -6,8 +6,10 @@ const PROFITABILITY_PATH =
 const WORKED_HOURS_PATH =
 	'/api/v1/organizations/{organization_id}/reporting/worked-hours'
 
-export type ProjectProfitability = Schemas.ProjectProfitability
-export type MemberProfitability = Schemas.MemberProfitability
+/** #306: money fields are `null` when the caller lacks `VIEW_COST` — see
+ * `ProfitabilityResponse::costs_redacted` on the response itself. */
+export type ProjectProfitability = Schemas.ProjectProfitabilityResponse
+export type MemberProfitability = Schemas.MemberProfitabilityResponse
 export type WorkedHoursRow = Schemas.WorkedHoursRow
 export type MissingCost = Schemas.MissingCost
 

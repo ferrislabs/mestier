@@ -97,6 +97,7 @@ mod tests {
 
     fn create_label_command(organization_id: OrganizationId, name: &str) -> CreateTaskLabelCommand {
         CreateTaskLabelCommand {
+            actor: authz::Subject::system(),
             organization_id,
             name: name.to_owned(),
             color: "#DC2626".to_owned(),
@@ -106,6 +107,7 @@ mod tests {
     fn create_task_command(fixture: &Fixture, title: &str) -> CreateTaskCommand {
         let now = Utc::now();
         CreateTaskCommand {
+            actor: authz::Subject::system(),
             organization_id: fixture.organization_id,
             parent_task_id: None,
             title: title.to_owned(),
@@ -231,6 +233,7 @@ mod tests {
 
         let updated = usecase
             .update_task_label(UpdateTaskLabelCommand {
+                actor: authz::Subject::system(),
                 id: created.id,
                 name: "Prioritaire".to_owned(),
                 color: "#059669".to_owned(),
@@ -257,7 +260,7 @@ mod tests {
             .unwrap();
 
         usecase
-            .delete_task_label(created.id)
+            .delete_task_label(authz::Subject::system(), created.id)
             .await
             .expect("delete_task_label must succeed");
 
@@ -293,14 +296,17 @@ mod tests {
             .await
             .unwrap();
 
-        let mut patch = PatchTaskCommand::new(task.id);
+        let mut patch = PatchTaskCommand::new(task.id, authz::Subject::system());
         patch.label_ids = Some(vec![label_a.id, label_b.id]);
         usecase.patch_task(patch).await.unwrap();
 
         assert_eq!(count_links_for_label(&pool, label_a.id).await, 1);
         assert_eq!(count_links_for_label(&pool, label_b.id).await, 1);
 
-        usecase.delete_task_label(label_a.id).await.unwrap();
+        usecase
+            .delete_task_label(authz::Subject::system(), label_a.id)
+            .await
+            .unwrap();
 
         assert_eq!(
             count_links_for_label(&pool, label_a.id).await,
@@ -348,7 +354,7 @@ mod tests {
             .await
             .unwrap();
 
-        let mut first_patch = PatchTaskCommand::new(task.id);
+        let mut first_patch = PatchTaskCommand::new(task.id, authz::Subject::system());
         first_patch.label_ids = Some(vec![label_a.id, label_b.id]);
         usecase.patch_task(first_patch).await.unwrap();
 
@@ -358,7 +364,7 @@ mod tests {
 
         // A second PATCH names only `label_c` — `label_a`/`label_b` must be
         // dropped, not merged with the new set.
-        let mut second_patch = PatchTaskCommand::new(task.id);
+        let mut second_patch = PatchTaskCommand::new(task.id, authz::Subject::system());
         second_patch.label_ids = Some(vec![label_c.id]);
         usecase.patch_task(second_patch).await.unwrap();
 
@@ -372,13 +378,13 @@ mod tests {
 
         // A patch that never mentions `label_ids` leaves the current set
         // untouched — mirrors `assignees: None`.
-        let mut untouched_patch = PatchTaskCommand::new(task.id);
+        let mut untouched_patch = PatchTaskCommand::new(task.id, authz::Subject::system());
         untouched_patch.title = Some("Chantier renommé".to_owned());
         usecase.patch_task(untouched_patch).await.unwrap();
         assert_eq!(count_links_for_label(&pool, label_c.id).await, 1);
 
         // An empty `label_ids` clears the set entirely.
-        let mut clearing_patch = PatchTaskCommand::new(task.id);
+        let mut clearing_patch = PatchTaskCommand::new(task.id, authz::Subject::system());
         clearing_patch.label_ids = Some(Vec::new());
         usecase.patch_task(clearing_patch).await.unwrap();
         assert_eq!(
@@ -468,7 +474,7 @@ mod tests {
             .await
             .unwrap();
 
-        let mut patch = PatchTaskCommand::new(task.id);
+        let mut patch = PatchTaskCommand::new(task.id, authz::Subject::system());
         patch.label_ids = Some(vec![label_a.id, label_b.id]);
         usecase.patch_task(patch).await.unwrap();
 
@@ -557,11 +563,11 @@ mod tests {
             .await
             .unwrap();
 
-        let mut patch_a = PatchTaskCommand::new(task_a.id);
+        let mut patch_a = PatchTaskCommand::new(task_a.id, authz::Subject::system());
         patch_a.label_ids = Some(vec![shared_label.id]);
         usecase.patch_task(patch_a).await.unwrap();
 
-        let mut patch_b = PatchTaskCommand::new(task_b.id);
+        let mut patch_b = PatchTaskCommand::new(task_b.id, authz::Subject::system());
         patch_b.label_ids = Some(vec![shared_label.id, solo_label.id]);
         usecase.patch_task(patch_b).await.unwrap();
         // task_c is left unpatched — no labels.

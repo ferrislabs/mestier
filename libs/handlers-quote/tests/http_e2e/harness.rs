@@ -10,6 +10,7 @@ use std::{net::SocketAddr, sync::Arc};
 
 use args::Args;
 use clap::Parser;
+use mestier_core::Permissions;
 use sqlx::PgPool;
 use uuid::Uuid;
 
@@ -23,7 +24,12 @@ pub struct App {
     pub organization_id: Uuid,
     pub customer_id: Uuid,
     pub customer_context_id: Uuid,
+    /// A second member of the same organization, holding membership but no
+    /// role assignment at all — #305's `quote.manage` gate refuses this one
+    /// outright on every write.
+    pub no_role_token: String,
     user_id: Uuid,
+    no_role_user_id: Uuid,
 }
 
 /// Panics rather than skipping when the stack is down: the test is `#[ignore]`d,
@@ -67,11 +73,13 @@ pub async fn start() -> App {
     App {
         base_url: format!("http://{addr}"),
         token: issuer::mint(&fixture.sub),
+        no_role_token: issuer::mint(&fixture.no_role_sub),
         pool,
         organization_id: fixture.organization_id,
         customer_id: fixture.customer_id,
         customer_context_id: fixture.customer_context_id,
         user_id: fixture.user_id,
+        no_role_user_id: fixture.no_role_user_id,
     }
 }
 
@@ -114,16 +122,20 @@ impl App {
                 .await;
         }
 
-        let _ = sqlx::query("DELETE FROM users WHERE id = $1")
-            .bind(self.user_id)
-            .execute(&self.pool)
-            .await;
+        for user_id in [self.user_id, self.no_role_user_id] {
+            let _ = sqlx::query("DELETE FROM users WHERE id = $1")
+                .bind(user_id)
+                .execute(&self.pool)
+                .await;
+        }
     }
 }
 
 struct Fixture {
     sub: String,
     user_id: Uuid,
+    no_role_sub: String,
+    no_role_user_id: Uuid,
     organization_id: Uuid,
     customer_id: Uuid,
     customer_context_id: Uuid,
@@ -161,16 +173,52 @@ async fn seed(pool: &PgPool) -> Fixture {
         .await
         .expect("seed the organization");
 
+    let member_id = Uuid::now_v7();
     sqlx::query(
         "INSERT INTO organization_members (id, organization_id, user_id, last_name) VALUES ($1, $2, $3, $4)",
     )
-    .bind(Uuid::now_v7())
+    .bind(member_id)
     .bind(organization_id)
     .bind(user_id)
     .bind("Artisan Test")
     .execute(pool)
     .await
     .expect("seed the membership");
+
+    // #305: every write on the quote API now gates on `quote.manage`. The
+    // fixture's main caller (`app.token`) needs it, or every existing test
+    // in this suite would start seeing 403 instead of the answer it asserts
+    // on — `Permissions::ALL` keeps that unchanged, the same choice
+    // `handlers-reporting`'s harness made for its own main caller.
+    let owner_role_id = seed_role(pool, organization_id, "test-owner", Permissions::ALL.0).await;
+    assign_role(pool, member_id, owner_role_id).await;
+
+    // A second member with membership but no role assignment at all — the
+    // bare case `quote.manage` now refuses outright on a write.
+    let no_role_user_id = Uuid::now_v7();
+    let no_role_sub = format!("sub-e2e-{no_role_user_id}");
+    sqlx::query(
+        "INSERT INTO users (id, email, username, display_name, sub) VALUES ($1, $2, $3, $4, $5)",
+    )
+    .bind(no_role_user_id)
+    .bind(format!("artisan-{no_role_user_id}@example.com"))
+    .bind(format!("artisan-{no_role_user_id}"))
+    .bind("Artisan No Role")
+    .bind(&no_role_sub)
+    .execute(pool)
+    .await
+    .expect("seed the no-role user");
+
+    sqlx::query(
+        "INSERT INTO organization_members (id, organization_id, user_id, last_name) VALUES ($1, $2, $3, $4)",
+    )
+    .bind(Uuid::now_v7())
+    .bind(organization_id)
+    .bind(no_role_user_id)
+    .bind("Artisan No Role")
+    .execute(pool)
+    .await
+    .expect("seed the no-role membership");
 
     let customer_id = Uuid::now_v7();
     sqlx::query("INSERT INTO customers (id, org_id, name) VALUES ($1, $2, $3)")
@@ -193,10 +241,40 @@ async fn seed(pool: &PgPool) -> Fixture {
     Fixture {
         sub,
         user_id,
+        no_role_sub,
+        no_role_user_id,
         organization_id,
         customer_id,
         customer_context_id,
     }
+}
+
+/// A role carrying exactly the given bits — mirrors
+/// `handlers-reporting`'s own harness helper of the same name.
+async fn seed_role(pool: &PgPool, organization_id: Uuid, name: &str, permissions: i64) -> Uuid {
+    let role_id = Uuid::now_v7();
+    sqlx::query(
+        "INSERT INTO roles (id, organization_id, name, permissions) VALUES ($1, $2, $3, $4)",
+    )
+    .bind(role_id)
+    .bind(organization_id)
+    .bind(name)
+    .bind(permissions)
+    .execute(pool)
+    .await
+    .expect("seed the role");
+
+    role_id
+}
+
+async fn assign_role(pool: &PgPool, member_id: Uuid, role_id: Uuid) {
+    sqlx::query("INSERT INTO member_roles (id, member_id, role_id) VALUES ($1, $2, $3)")
+        .bind(Uuid::now_v7())
+        .bind(member_id)
+        .bind(role_id)
+        .execute(pool)
+        .await
+        .expect("assign the role");
 }
 
 /// Only the three endpoints the test controls are overridden. Everything else,
@@ -220,6 +298,16 @@ fn args_for(database_url: &str, redis_url: &str, issuer_url: &str) -> Vec<String
         db.path().trim_start_matches('/').to_owned(),
         "--rate-limit-redis-url".to_owned(),
         redis_url.to_owned(),
+        // The rate limiter keys on client IP alone, and every test in this
+        // suite calls in from the same loopback address through the same
+        // Redis — so the sliding window is shared across every test in a
+        // run, and across a run and the one before it if run twice inside
+        // the same window. The production default of 120/minute is a
+        // limit on one real caller, not on an entire suite's worth of
+        // fixtures; a value that low turned a second consecutive run of a
+        // clean suite into a false failure.
+        "--rate-limit-per-minute".to_owned(),
+        "100000".to_owned(),
         "--auth-issuer".to_owned(),
         issuer_url.to_owned(),
         // None of these suites touch object storage, but `create_service`

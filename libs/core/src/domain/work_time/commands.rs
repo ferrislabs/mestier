@@ -1,3 +1,4 @@
+use authz::Subject;
 use chrono::NaiveDate;
 
 use crate::{EmployeeId, MemberId, OrganizationId};
@@ -17,6 +18,10 @@ pub struct RhythmSlotInput {
 /// it — see `WorkTimeService::replace_rhythm`.
 #[derive(Debug, Clone)]
 pub struct ReplaceRhythmCommand {
+    /// Authenticated actor performing the update. Built by the handler
+    /// from the request `Identity`; carries the AuthZen-shaped subject
+    /// the policy engine consumes.
+    pub actor: Subject,
     pub organization_id: OrganizationId,
     pub employee_id: EmployeeId,
     pub effective_from: NaiveDate,
@@ -36,6 +41,10 @@ pub struct WorkSlotInput {
 /// wholesale.
 #[derive(Debug, Clone)]
 pub struct ReplaceWorkSlotsCommand {
+    /// Authenticated actor performing the update. Built by the handler
+    /// from the request `Identity`; carries the AuthZen-shaped subject
+    /// the policy engine consumes.
+    pub actor: Subject,
     pub organization_id: OrganizationId,
     pub member_id: MemberId,
     pub from: NaiveDate,

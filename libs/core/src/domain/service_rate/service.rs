@@ -150,6 +150,7 @@ mod tests {
         let mut service = ServiceRateService::new(repo);
         let created = service
             .create_service_rate(CreateServiceRateCommand {
+                actor: authz::Subject::system(),
                 organization_id: OrganizationId(Uuid::new_v4()),
                 label: "Taille".to_owned(),
                 unit: ServiceRateUnit::Hour,
@@ -177,6 +178,7 @@ mod tests {
         let mut service = ServiceRateService::new(repo);
         let updated = service
             .update_service_rate(UpdateServiceRateCommand {
+                actor: authz::Subject::system(),
                 id,
                 label: "Haie".to_owned(),
                 unit: ServiceRateUnit::Ml,

@@ -76,10 +76,20 @@ impl MestierUseCase {
             Resource::new("member", member.id.0.to_string()),
         )
         .await?;
+        // #305: writing an employee's contract/cost data is reference-data
+        // management on top of managing the member itself.
+        policy::require(
+            &authz,
+            &actor,
+            "reference.manage",
+            Resource::new("organization", member.organization_id.0.to_string()),
+        )
+        .await?;
 
         let mut service = EmployeeService::new(employee_repository);
         let employee = service
             .upsert_employee_profile(UpsertEmployeeProfileCommand {
+                actor: actor.clone(),
                 organization_id: member.organization_id,
                 member_id,
                 hourly_rate_cents,
@@ -92,6 +102,7 @@ impl MestierUseCase {
         let mut cost_basis_service = EmployeeCostBasisService::new(employee_cost_basis_repository);
         cost_basis_service
             .set_cost_basis(SetEmployeeCostBasisCommand {
+                actor,
                 organization_id: employee.organization_id,
                 employee_id: employee.id,
                 effective_from: Utc::now().date_naive(),
@@ -137,10 +148,19 @@ impl MestierUseCase {
             Resource::new("member", member.id.0.to_string()),
         )
         .await?;
+        // #305: writing an employee's contract/cost data is reference-data
+        // management on top of managing the member itself.
+        policy::require(
+            &authz,
+            &actor,
+            "reference.manage",
+            Resource::new("organization", member.organization_id.0.to_string()),
+        )
+        .await?;
 
         let mut service = EmployeeService::new(employee_repository);
         service
-            .remove_employee_profile(RemoveEmployeeProfileCommand { member_id })
+            .remove_employee_profile(RemoveEmployeeProfileCommand { actor, member_id })
             .await
     }
 
@@ -272,10 +292,20 @@ impl MestierUseCase {
             Resource::new("member", employee.member_id.0.to_string()),
         )
         .await?;
+        // #305: writing an employee's contract/cost data is reference-data
+        // management on top of managing the member itself.
+        policy::require(
+            &authz,
+            &actor,
+            "reference.manage",
+            Resource::new("organization", employee.organization_id.0.to_string()),
+        )
+        .await?;
 
         let mut service = EmployeeCostBasisService::new(employee_cost_basis_repository);
         service
             .set_cost_basis(SetEmployeeCostBasisCommand {
+                actor,
                 organization_id: employee.organization_id,
                 employee_id,
                 effective_from,
@@ -329,9 +359,19 @@ impl MestierUseCase {
             Resource::new("member", current.employee_id.0.to_string()),
         )
         .await?;
+        // #305: writing an employee's contract/cost data is reference-data
+        // management on top of managing the member itself.
+        policy::require(
+            &authz,
+            &actor,
+            "reference.manage",
+            Resource::new("organization", current.organization_id.0.to_string()),
+        )
+        .await?;
 
         service
             .correct_cost_basis(CorrectEmployeeCostBasisCommand {
+                actor,
                 id,
                 effective_from,
                 effective_to,

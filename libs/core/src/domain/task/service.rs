@@ -762,6 +762,7 @@ mod tests {
     fn create_command() -> CreateTaskCommand {
         let now = Utc::now();
         CreateTaskCommand {
+            actor: authz::Subject::system(),
             organization_id: OrganizationId(Uuid::new_v4()),
             parent_task_id: None,
             title: "Toiture".to_owned(),
@@ -1063,7 +1064,7 @@ mod tests {
 
         let mut service = service(task_repository, MockMemberRepository::new());
 
-        let mut command = PatchTaskCommand::new(id);
+        let mut command = PatchTaskCommand::new(id, authz::Subject::system());
         command.starts_at = Some(Some(new_starts_at));
         command.ends_at = Some(Some(new_ends_at));
 
@@ -1091,7 +1092,7 @@ mod tests {
 
         let mut service = service(task_repository, MockMemberRepository::new());
 
-        let mut command = PatchTaskCommand::new(id);
+        let mut command = PatchTaskCommand::new(id, authz::Subject::system());
         command.ends_at = Some(Some(existing_starts_at - chrono::Duration::hours(1)));
 
         let err = service.patch_task(command).await.unwrap_err();
@@ -1123,7 +1124,7 @@ mod tests {
 
         let mut service = service(task_repository, MockMemberRepository::new());
 
-        let mut command = PatchTaskCommand::new(id);
+        let mut command = PatchTaskCommand::new(id, authz::Subject::system());
         command.title = Some("Nouveau titre".to_owned());
 
         let updated = service.patch_task(command).await.unwrap();
@@ -1148,7 +1149,7 @@ mod tests {
 
         let mut service = service(task_repository, MockMemberRepository::new());
 
-        let mut command = PatchTaskCommand::new(id);
+        let mut command = PatchTaskCommand::new(id, authz::Subject::system());
         command.title = Some("   ".to_owned());
 
         let err = service.patch_task(command).await.unwrap_err();
@@ -1183,7 +1184,7 @@ mod tests {
 
         let mut service = service(task_repository, MockMemberRepository::new());
 
-        let mut command = PatchTaskCommand::new(id);
+        let mut command = PatchTaskCommand::new(id, authz::Subject::system());
         command.description = Some(None);
 
         let updated = service.patch_task(command).await.unwrap();
@@ -1219,7 +1220,7 @@ mod tests {
 
         let mut service = service(task_repository, MockMemberRepository::new());
 
-        let mut command = PatchTaskCommand::new(id);
+        let mut command = PatchTaskCommand::new(id, authz::Subject::system());
         command.starts_at = Some(None);
         command.ends_at = Some(None);
 
@@ -1246,7 +1247,7 @@ mod tests {
 
         let mut service = service(task_repository, MockMemberRepository::new());
 
-        let mut command = PatchTaskCommand::new(id);
+        let mut command = PatchTaskCommand::new(id, authz::Subject::system());
         command.starts_at = Some(None);
         command.ends_at = Some(None);
 
@@ -1272,7 +1273,7 @@ mod tests {
 
         let mut service = service(task_repository, MockMemberRepository::new());
 
-        let mut command = PatchTaskCommand::new(id);
+        let mut command = PatchTaskCommand::new(id, authz::Subject::system());
         command.parent_task_id = Some(Some(id));
 
         let err = service.patch_task(command).await.unwrap_err();
@@ -1313,7 +1314,7 @@ mod tests {
 
         let mut service = service(task_repository, MockMemberRepository::new());
 
-        let mut command = PatchTaskCommand::new(id);
+        let mut command = PatchTaskCommand::new(id, authz::Subject::system());
         command.parent_task_id = Some(Some(candidate_parent_id));
 
         let err = service.patch_task(command).await.unwrap_err();
@@ -1358,7 +1359,7 @@ mod tests {
 
         let mut service = service(task_repository, MockMemberRepository::new());
 
-        let mut command = PatchTaskCommand::new(id);
+        let mut command = PatchTaskCommand::new(id, authz::Subject::system());
         command.parent_task_id = Some(Some(new_parent_id));
 
         let updated = service.patch_task(command).await.unwrap();
@@ -1391,7 +1392,7 @@ mod tests {
 
         let mut service = service(task_repository, MockMemberRepository::new());
 
-        let mut command = PatchTaskCommand::new(id);
+        let mut command = PatchTaskCommand::new(id, authz::Subject::system());
         command.parent_task_id = Some(Some(new_parent_id));
 
         let err = service.patch_task(command).await.unwrap_err();
@@ -1440,7 +1441,7 @@ mod tests {
 
         let mut service = service(task_repository, member_repository);
 
-        let mut command = PatchTaskCommand::new(id);
+        let mut command = PatchTaskCommand::new(id, authz::Subject::system());
         command.title = Some("Nouveau titre".to_owned());
         command.assignees = Some(vec![AssigneeRef(member_id)]);
 
@@ -1475,7 +1476,7 @@ mod tests {
 
         let mut service = service(task_repository, MockMemberRepository::new());
 
-        let mut command = PatchTaskCommand::new(id);
+        let mut command = PatchTaskCommand::new(id, authz::Subject::system());
         command.parent_task_id = Some(None);
 
         let err = service.patch_task(command).await.unwrap_err();
@@ -1513,7 +1514,7 @@ mod tests {
 
         let mut service = service(task_repository, MockMemberRepository::new());
 
-        let mut command = PatchTaskCommand::new(id);
+        let mut command = PatchTaskCommand::new(id, authz::Subject::system());
         command.blocks_availability = Some(false);
 
         let updated = service.patch_task(command).await.unwrap();
@@ -1549,7 +1550,7 @@ mod tests {
 
         let mut service = service(task_repository, MockMemberRepository::new());
 
-        let mut command = PatchTaskCommand::new(id);
+        let mut command = PatchTaskCommand::new(id, authz::Subject::system());
         command.title = Some("Nouveau titre".to_owned());
 
         let updated = service.patch_task(command).await.unwrap();
@@ -1590,7 +1591,7 @@ mod tests {
 
         let mut service = service(task_repository, MockMemberRepository::new());
 
-        let mut command = PatchTaskCommand::new(id);
+        let mut command = PatchTaskCommand::new(id, authz::Subject::system());
         command.title = Some("Nouveau titre".to_owned());
 
         let updated = service.patch_task(command).await.unwrap();
@@ -1633,7 +1634,7 @@ mod tests {
 
         let mut service = service(task_repository, member_repository);
 
-        let mut command = PatchTaskCommand::new(id);
+        let mut command = PatchTaskCommand::new(id, authz::Subject::system());
         command.assignees = Some(vec![AssigneeRef(member_id)]);
 
         let updated = service.patch_task(command).await.unwrap();
@@ -1671,7 +1672,7 @@ mod tests {
 
         let mut service = service(task_repository, member_repository);
 
-        let mut command = PatchTaskCommand::new(id);
+        let mut command = PatchTaskCommand::new(id, authz::Subject::system());
         command.assignees = Some(vec![AssigneeRef(member_id)]);
 
         let err = service.patch_task(command).await.unwrap_err();
@@ -1721,7 +1722,7 @@ mod tests {
 
         let mut service = service(task_repository, member_repository);
 
-        let mut command = PatchTaskCommand::new(id);
+        let mut command = PatchTaskCommand::new(id, authz::Subject::system());
         command.assignees = Some(vec![AssigneeRef(member_id)]);
 
         let updated = service.patch_task(command).await.unwrap();
@@ -1754,7 +1755,7 @@ mod tests {
 
         let mut service = service(task_repository, member_repository);
 
-        let mut command = PatchTaskCommand::new(id);
+        let mut command = PatchTaskCommand::new(id, authz::Subject::system());
         command.assignees = Some(vec![AssigneeRef(member_id)]);
 
         let err = service.patch_task(command).await.unwrap_err();
@@ -1797,7 +1798,7 @@ mod tests {
 
         let mut service = service(task_repository, member_repository);
 
-        let mut command = PatchTaskCommand::new(id);
+        let mut command = PatchTaskCommand::new(id, authz::Subject::system());
         command.assignees = Some(vec![AssigneeRef(member_id), AssigneeRef(member_id)]);
 
         let updated = service.patch_task(command).await.unwrap();
@@ -1836,7 +1837,7 @@ mod tests {
 
         let mut service = service(task_repository, MockMemberRepository::new());
 
-        let mut command = PatchTaskCommand::new(id);
+        let mut command = PatchTaskCommand::new(id, authz::Subject::system());
         command.assignees = Some(Vec::new());
 
         let updated = service.patch_task(command).await.unwrap();

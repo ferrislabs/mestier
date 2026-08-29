@@ -14,6 +14,7 @@ use std::{net::SocketAddr, sync::Arc};
 
 use args::Args;
 use clap::Parser;
+use mestier_core::Permissions;
 use sqlx::PgPool;
 use uuid::Uuid;
 
@@ -22,14 +23,22 @@ use crate::issuer;
 pub struct App {
     pub base_url: String,
     /// The manager's token — the organization's owner, so every route this
-    /// suite calls passes membership.
+    /// suite calls passes membership. Carries a role with `Permissions::ALL`
+    /// (see `seed`), so `planning.manage` (#305) never blocks this suite's
+    /// existing coverage.
     pub token: String,
+    /// A member of the same organization holding no role at all — passes
+    /// `require_org_membership` (the field app's own membership check) but
+    /// carries no `planning.manage`, the case #305's write-enforcement
+    /// tests refuse.
+    pub no_permission_token: String,
     pub pool: PgPool,
     pub organization_id: Uuid,
     pub task_assignment_id: Uuid,
     pub assignee_member_id: Uuid,
     manager_user_id: Uuid,
     assignee_user_id: Uuid,
+    no_permission_user_id: Uuid,
 }
 
 pub async fn start() -> App {
@@ -69,12 +78,14 @@ pub async fn start() -> App {
     App {
         base_url: format!("http://{addr}"),
         token: issuer::mint(&fixture.manager_sub),
+        no_permission_token: issuer::mint(&fixture.no_permission_sub),
         pool,
         organization_id: fixture.organization_id,
         task_assignment_id: fixture.task_assignment_id,
         assignee_member_id: fixture.assignee_member_id,
         manager_user_id: fixture.manager_user_id,
         assignee_user_id: fixture.assignee_user_id,
+        no_permission_user_id: fixture.no_permission_user_id,
     }
 }
 
@@ -118,6 +129,35 @@ impl App {
         format!(
             "{}/api/v1/organizations/{}/tasks/{task_id}",
             self.base_url, self.organization_id
+        )
+    }
+
+    pub fn tasks_url(&self) -> String {
+        format!(
+            "{}/api/v1/organizations/{}/tasks",
+            self.base_url, self.organization_id
+        )
+    }
+
+    /// Bare `member_id` in the path, deliberately no organization — the
+    /// shape #309 exists to guard: the caller's own membership is checked
+    /// against whichever organization the target member's seat actually
+    /// belongs to, not one taken from the URL.
+    pub fn work_time_url(&self, member_id: Uuid, suffix: &str) -> String {
+        format!(
+            "{}/api/v1/members/{member_id}/work-time{suffix}",
+            self.base_url
+        )
+    }
+
+    pub fn rhythm_url(&self, member_id: Uuid) -> String {
+        format!("{}/api/v1/members/{member_id}/rhythm", self.base_url)
+    }
+
+    pub fn work_slots_url(&self, member_id: Uuid, suffix: &str) -> String {
+        format!(
+            "{}/api/v1/members/{member_id}/work-slots{suffix}",
+            self.base_url
         )
     }
 
@@ -168,6 +208,10 @@ impl App {
             "DELETE FROM projects WHERE org_id = $1",
             // Cascades to `project_template_tasks`.
             "DELETE FROM project_templates WHERE org_id = $1",
+            "DELETE FROM work_slots WHERE org_id = $1",
+            // Cascades to `employee_rhythm_slots`.
+            "DELETE FROM employee_rhythms WHERE org_id = $1",
+            "DELETE FROM employees WHERE org_id = $1",
             "DELETE FROM organization_members WHERE organization_id = $1",
             "DELETE FROM organizations WHERE id = $1",
         ] {
@@ -178,7 +222,11 @@ impl App {
                 .unwrap_or_else(|e| panic!("cleanup failed on `{statement}`: {e}"));
         }
 
-        for user_id in [self.manager_user_id, self.assignee_user_id] {
+        for user_id in [
+            self.manager_user_id,
+            self.assignee_user_id,
+            self.no_permission_user_id,
+        ] {
             sqlx::query("DELETE FROM users WHERE id = $1")
                 .bind(user_id)
                 .execute(&self.pool)
@@ -195,6 +243,8 @@ struct Fixture {
     organization_id: Uuid,
     task_assignment_id: Uuid,
     assignee_member_id: Uuid,
+    no_permission_sub: String,
+    no_permission_user_id: Uuid,
 }
 
 /// An organization, its owner (the manager, the caller for every test), a
@@ -224,16 +274,25 @@ async fn seed(pool: &PgPool) -> Fixture {
         .await
         .expect("seed the organization");
 
+    let manager_member_id = Uuid::now_v7();
     sqlx::query(
         "INSERT INTO organization_members (id, organization_id, user_id, last_name) VALUES ($1, $2, $3, $4)",
     )
-    .bind(Uuid::now_v7())
+    .bind(manager_member_id)
     .bind(organization_id)
     .bind(manager_user_id)
     .bind("Manager")
     .execute(pool)
     .await
     .expect("seed the manager's own membership");
+
+    // #305: every write this suite exercises now needs `planning.manage`.
+    // `Permissions::ALL` for the manager keeps every existing assertion in
+    // this suite unchanged — see `no_permission_sub` below for the refused
+    // case.
+    let manager_role_id =
+        seed_role(pool, organization_id, "test-manager", Permissions::ALL.0).await;
+    assign_role(pool, manager_member_id, manager_role_id).await;
 
     let assignee_user_id = Uuid::now_v7();
     sqlx::query(
@@ -259,6 +318,23 @@ async fn seed(pool: &PgPool) -> Fixture {
     .execute(pool)
     .await
     .expect("seed the assignee's own membership");
+
+    // A contract for the assignee: `PUT .../rhythm` resolves the rhythm
+    // through this profile (`EmployeeRepository::find_by_member_id`) and
+    // refuses `NotFound` for a member with none — the work-time suite needs
+    // a real one to exercise the owning organization's happy path.
+    let assignee_employee_id = Uuid::now_v7();
+    sqlx::query(
+        "INSERT INTO employees (id, org_id, member_id, hourly_rate_cents, weekly_contract_minutes) VALUES ($1, $2, $3, $4, $5)",
+    )
+    .bind(assignee_employee_id)
+    .bind(organization_id)
+    .bind(assignee_member_id)
+    .bind(2000)
+    .bind(2100)
+    .execute(pool)
+    .await
+    .expect("seed the assignee's employee profile");
 
     let task_id = Uuid::now_v7();
     let now = chrono::Utc::now();
@@ -288,6 +364,33 @@ async fn seed(pool: &PgPool) -> Fixture {
     .await
     .expect("seed the assignment");
 
+    // A member of the organization holding no role at all — proves
+    // `planning.manage` is enforced, not just membership.
+    let no_permission_user_id = Uuid::now_v7();
+    let no_permission_sub = format!("sub-planning-no-permission-{no_permission_user_id}");
+    sqlx::query(
+        "INSERT INTO users (id, email, username, display_name, sub) VALUES ($1, $2, $3, $4, $5)",
+    )
+    .bind(no_permission_user_id)
+    .bind(format!("no-permission-{no_permission_user_id}@example.com"))
+    .bind(format!("no-permission-{no_permission_user_id}"))
+    .bind("No Permission")
+    .bind(&no_permission_sub)
+    .execute(pool)
+    .await
+    .expect("seed the no-permission user");
+
+    sqlx::query(
+        "INSERT INTO organization_members (id, organization_id, user_id, last_name) VALUES ($1, $2, $3, $4)",
+    )
+    .bind(Uuid::now_v7())
+    .bind(organization_id)
+    .bind(no_permission_user_id)
+    .bind("No Permission")
+    .execute(pool)
+    .await
+    .expect("seed the no-permission member");
+
     Fixture {
         manager_sub,
         manager_user_id,
@@ -295,7 +398,37 @@ async fn seed(pool: &PgPool) -> Fixture {
         organization_id,
         task_assignment_id,
         assignee_member_id,
+        no_permission_sub,
+        no_permission_user_id,
     }
+}
+
+/// A role carrying exactly the given bits — mirrors
+/// `libs/handlers-reporting/tests/http_e2e/harness.rs`'s own `seed_role`.
+async fn seed_role(pool: &PgPool, organization_id: Uuid, name: &str, permissions: i64) -> Uuid {
+    let role_id = Uuid::now_v7();
+    sqlx::query(
+        "INSERT INTO roles (id, organization_id, name, permissions) VALUES ($1, $2, $3, $4)",
+    )
+    .bind(role_id)
+    .bind(organization_id)
+    .bind(name)
+    .bind(permissions)
+    .execute(pool)
+    .await
+    .expect("seed the role");
+
+    role_id
+}
+
+async fn assign_role(pool: &PgPool, member_id: Uuid, role_id: Uuid) {
+    sqlx::query("INSERT INTO member_roles (id, member_id, role_id) VALUES ($1, $2, $3)")
+        .bind(Uuid::now_v7())
+        .bind(member_id)
+        .bind(role_id)
+        .execute(pool)
+        .await
+        .expect("assign the role");
 }
 
 fn args_for(database_url: &str, redis_url: &str, issuer_url: &str) -> Vec<String> {
@@ -315,6 +448,16 @@ fn args_for(database_url: &str, redis_url: &str, issuer_url: &str) -> Vec<String
         db.path().trim_start_matches('/').to_owned(),
         "--rate-limit-redis-url".to_owned(),
         redis_url.to_owned(),
+        // The rate limiter keys on client IP alone, and every test in this
+        // suite calls in from the same loopback address through the same
+        // Redis — so the sliding window is shared across every test in a
+        // run, and across a run and the one before it if run twice inside
+        // the same window. The production default of 120/minute is a
+        // limit on one real caller, not on an entire suite's worth of
+        // fixtures; a value that low turned a second consecutive run of a
+        // clean suite into a false failure.
+        "--rate-limit-per-minute".to_owned(),
+        "100000".to_owned(),
         "--auth-issuer".to_owned(),
         issuer_url.to_owned(),
         "--file-storage-auto-create-bucket".to_owned(),

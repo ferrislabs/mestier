@@ -9,6 +9,7 @@ use std::{net::SocketAddr, sync::Arc};
 use args::Args;
 use chrono::{DateTime, Duration, NaiveDate, Utc};
 use clap::Parser;
+use mestier_core::Permissions;
 use sqlx::PgPool;
 use uuid::Uuid;
 
@@ -30,8 +31,25 @@ pub struct App {
     /// The hourly-costed person's employee id, for the test that raises their
     /// rate mid-period and checks the already-planned task did not move.
     pub employee_id: Uuid,
+    /// A second member of the same organization, holding `VIEW_REPORTS` but
+    /// not `VIEW_COST` (#306) — sees the same period, with every money
+    /// field redacted.
+    pub restricted_token: String,
+    /// A third member with membership but no role assignment at all — the
+    /// bare "belongs to the organization" case #306's `VIEW_REPORTS` gate
+    /// now refuses outright.
+    pub no_role_token: String,
+    /// A fourth member holding exactly `VIEW_REPORTS | VIEW_COST` — nothing
+    /// else, no `MANAGE_ORG`/`MANAGE_MEMBERS`/`MANAGE_ROLES` or any other
+    /// bit — proving it is those two bits the redaction check keys off,
+    /// not incidentally every bit the way `app.token`'s `Permissions::ALL`
+    /// role does (#309).
+    pub minimal_token: String,
     user_id: Uuid,
     other_user_id: Uuid,
+    restricted_user_id: Uuid,
+    no_role_user_id: Uuid,
+    minimal_user_id: Uuid,
 }
 
 pub async fn start() -> App {
@@ -73,12 +91,18 @@ pub async fn start() -> App {
     App {
         base_url: format!("http://{addr}"),
         token: issuer::mint(&fixture.sub),
+        restricted_token: issuer::mint(&fixture.restricted_sub),
+        no_role_token: issuer::mint(&fixture.no_role_sub),
+        minimal_token: issuer::mint(&fixture.minimal_sub),
         pool,
         organization_id: fixture.organization_id,
         project_id: fixture.project_id,
         internal_project_id: fixture.internal_project_id,
         stale_project_id: fixture.stale_project_id,
         employee_id: fixture.employee_id,
+        restricted_user_id: fixture.restricted_user_id,
+        no_role_user_id: fixture.no_role_user_id,
+        minimal_user_id: fixture.minimal_user_id,
         user_id: fixture.user_id,
         other_user_id: fixture.other_user_id,
     }
@@ -124,7 +148,13 @@ impl App {
                 .unwrap_or_else(|e| panic!("cleanup failed on `{statement}`: {e}"));
         }
 
-        for user_id in [self.user_id, self.other_user_id] {
+        for user_id in [
+            self.user_id,
+            self.other_user_id,
+            self.restricted_user_id,
+            self.no_role_user_id,
+            self.minimal_user_id,
+        ] {
             sqlx::query("DELETE FROM users WHERE id = $1")
                 .bind(user_id)
                 .execute(&self.pool)
@@ -138,6 +168,12 @@ struct Fixture {
     sub: String,
     user_id: Uuid,
     other_user_id: Uuid,
+    restricted_sub: String,
+    restricted_user_id: Uuid,
+    no_role_sub: String,
+    no_role_user_id: Uuid,
+    minimal_sub: String,
+    minimal_user_id: Uuid,
     organization_id: Uuid,
     project_id: Uuid,
     internal_project_id: Uuid,
@@ -159,6 +195,47 @@ async fn seed(pool: &PgPool) -> Fixture {
     // 35 h contract, which is 23,08 € an hour.
     let (other_user_id, _, other_member_id, _) =
         seed_person(pool, organization_id, false, CostBasis::Salaried).await;
+
+    // #306: the caller needs `VIEW_REPORTS` to reach either report at all,
+    // and `VIEW_COST` on top of it to read the money rather than a redacted
+    // shape. `Permissions::ALL` for the fixture's main caller (`app.token`)
+    // keeps every existing assertion in this suite unchanged; a second,
+    // deliberately narrower role is what the redaction test below reads
+    // from `app.restricted_token`.
+    let owner_role_id = seed_role(pool, organization_id, "test-owner", Permissions::ALL.0).await;
+    assign_role(pool, member_id, owner_role_id).await;
+
+    let restricted_role_id = seed_role(
+        pool,
+        organization_id,
+        "test-restricted",
+        Permissions::VIEW_REPORTS.0,
+    )
+    .await;
+    let (restricted_user_id, restricted_sub, restricted_member_id, _) =
+        seed_person(pool, organization_id, false, CostBasis::Hourly).await;
+    assign_role(pool, restricted_member_id, restricted_role_id).await;
+
+    // Membership, no role assignment at all — the bare case `VIEW_REPORTS`
+    // now refuses outright.
+    let (no_role_user_id, no_role_sub, _, _) =
+        seed_person(pool, organization_id, false, CostBasis::Hourly).await;
+
+    // #309: a fourth caller holding exactly `VIEW_REPORTS | VIEW_COST` and
+    // nothing else — no `MANAGE_ORG`, no `MANAGE_MEMBERS`, no `MANAGE_ROLES`,
+    // no chat bits. `app.token`'s `Permissions::ALL` role proves every bit
+    // together reads real money; this proves the minimal pair alone does
+    // too, which is what the issue actually asks for.
+    let minimal_role_id = seed_role(
+        pool,
+        organization_id,
+        "test-minimal",
+        (Permissions::VIEW_REPORTS | Permissions::VIEW_COST).0,
+    )
+    .await;
+    let (minimal_user_id, minimal_sub, minimal_member_id, _) =
+        seed_person(pool, organization_id, false, CostBasis::Hourly).await;
+    assign_role(pool, minimal_member_id, minimal_role_id).await;
 
     let customer_id = Uuid::now_v7();
     sqlx::query("INSERT INTO customers (id, org_id, name) VALUES ($1, $2, $3)")
@@ -252,12 +329,47 @@ async fn seed(pool: &PgPool) -> Fixture {
         sub,
         user_id,
         other_user_id,
+        restricted_sub,
+        restricted_user_id,
+        no_role_sub,
+        no_role_user_id,
+        minimal_sub,
+        minimal_user_id,
         organization_id,
         project_id,
         internal_project_id,
         stale_project_id,
         employee_id,
     }
+}
+
+/// A role carrying exactly the given bits — #306's redaction test needs one
+/// with `VIEW_REPORTS` and not `VIEW_COST`, distinct from the fixture's
+/// main caller, who gets `Permissions::ALL`.
+async fn seed_role(pool: &PgPool, organization_id: Uuid, name: &str, permissions: i64) -> Uuid {
+    let role_id = Uuid::now_v7();
+    sqlx::query(
+        "INSERT INTO roles (id, organization_id, name, permissions) VALUES ($1, $2, $3, $4)",
+    )
+    .bind(role_id)
+    .bind(organization_id)
+    .bind(name)
+    .bind(permissions)
+    .execute(pool)
+    .await
+    .expect("seed the role");
+
+    role_id
+}
+
+async fn assign_role(pool: &PgPool, member_id: Uuid, role_id: Uuid) {
+    sqlx::query("INSERT INTO member_roles (id, member_id, role_id) VALUES ($1, $2, $3)")
+        .bind(Uuid::now_v7())
+        .bind(member_id)
+        .bind(role_id)
+        .execute(pool)
+        .await
+        .expect("assign the role");
 }
 
 /// A user, their organization seat, and the employee profile that carries the
@@ -632,6 +744,16 @@ fn args_for(database_url: &str, redis_url: &str, issuer_url: &str) -> Vec<String
         db.path().trim_start_matches('/').to_owned(),
         "--rate-limit-redis-url".to_owned(),
         redis_url.to_owned(),
+        // The rate limiter keys on client IP alone, and every test in this
+        // suite calls in from the same loopback address through the same
+        // Redis — so the sliding window is shared across every test in a
+        // run, and across a run and the one before it if run twice inside
+        // the same window. The production default of 120/minute is a
+        // limit on one real caller, not on an entire suite's worth of
+        // fixtures; a value that low turned a second consecutive run of a
+        // clean suite into a false failure.
+        "--rate-limit-per-minute".to_owned(),
+        "100000".to_owned(),
         "--auth-issuer".to_owned(),
         issuer_url.to_owned(),
         // None of these suites touch object storage, but `create_service`

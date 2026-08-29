@@ -7,6 +7,7 @@ import {
 } from 'lucide-react'
 import { Fragment, type ReactNode } from 'react'
 import type { Schemas } from '#/api/api.client'
+import { RequirePermission } from '#/components/require-permission'
 import { Button } from '#/components/ui/button'
 import { Checkbox } from '#/components/ui/checkbox'
 import {
@@ -134,10 +135,12 @@ export function TaskListUI({
 				title="Tâches"
 				description="Toutes les tâches racines, avec leurs sous-tâches à la demande."
 				actions={
-					<Button type="button" className="gap-1.5" onClick={onCreateTask}>
-						<Plus className="size-4" />
-						Nouvelle tâche
-					</Button>
+					<RequirePermission permission="MANAGE_PLANNING">
+						<Button type="button" className="gap-1.5" onClick={onCreateTask}>
+							<Plus className="size-4" />
+							Nouvelle tâche
+						</Button>
+					</RequirePermission>
 				}
 			/>
 
