@@ -376,7 +376,10 @@ mod tests {
             .await
             .unwrap();
 
-        usecase.archive_project(project.id).await.unwrap();
+        usecase
+            .archive_project(authz::Subject::system(), project.id)
+            .await
+            .unwrap();
         assert!(
             usecase
                 .get_project_channel(project.id)
@@ -386,7 +389,10 @@ mod tests {
             "archiving the project must archive its channel"
         );
 
-        usecase.restore_project(project.id).await.unwrap();
+        usecase
+            .restore_project(authz::Subject::system(), project.id)
+            .await
+            .unwrap();
         assert!(
             !usecase
                 .get_project_channel(project.id)
@@ -413,7 +419,10 @@ mod tests {
             .await
             .unwrap();
 
-        usecase.archive_project(project.id).await.unwrap();
+        usecase
+            .archive_project(authz::Subject::system(), project.id)
+            .await
+            .unwrap();
         assert!(usecase.get_project(project.id).await.unwrap().is_archived());
         assert!(matches!(
             usecase.get_project_channel(project.id).await.unwrap_err(),
