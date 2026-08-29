@@ -4,8 +4,9 @@ use mestier_macros::repository;
 use sqlx::PgConnection;
 
 use crate::{
-    CustomerOutstandingBalance, DraftInvoice, Invoice, InvoiceId, InvoiceLine, InvoicePayment,
-    InvoicePaymentId, InvoiceStatus, LegalIdentity, OrganizationId, ProjectId,
+    CustomerOutstandingBalance, DraftInvoice, GeneratedInvoiceDocument, Invoice, InvoiceId,
+    InvoiceLine, InvoicePayment, InvoicePaymentId, InvoiceStatus, LegalIdentity, OrganizationId,
+    ProjectId,
     domain::invoice::ports::InvoiceRepository,
     infrastructure::{
         invoice::postgres::model::{
@@ -93,7 +94,9 @@ impl<'tx> InvoiceRepository for PgInvoiceRepository<'tx> {
                 operation_nature::text,
                 delivery_address_line1, delivery_address_line2, delivery_address_postal_code,
                 delivery_address_city, delivery_address_country,
-                net_cents, vat_breakdown, gross_cents, issuer_identity, source_invoice_id,
+                net_cents, vat_breakdown, gross_cents, issuer_identity,
+                document_format, document_file_key, document_mime_type, document_generated_at,
+                source_invoice_id,
                 deleted_at, created_at, updated_at
             "#,
             invoice.id.0,
@@ -141,7 +144,9 @@ impl<'tx> InvoiceRepository for PgInvoiceRepository<'tx> {
                 operation_nature::text,
                 delivery_address_line1, delivery_address_line2, delivery_address_postal_code,
                 delivery_address_city, delivery_address_country,
-                net_cents, vat_breakdown, gross_cents, issuer_identity, source_invoice_id,
+                net_cents, vat_breakdown, gross_cents, issuer_identity,
+                document_format, document_file_key, document_mime_type, document_generated_at,
+                source_invoice_id,
                 deleted_at, created_at, updated_at
             FROM invoices
             WHERE id = $1 AND deleted_at IS NULL
@@ -177,7 +182,9 @@ impl<'tx> InvoiceRepository for PgInvoiceRepository<'tx> {
                 operation_nature::text,
                 delivery_address_line1, delivery_address_line2, delivery_address_postal_code,
                 delivery_address_city, delivery_address_country,
-                net_cents, vat_breakdown, gross_cents, issuer_identity, source_invoice_id,
+                net_cents, vat_breakdown, gross_cents, issuer_identity,
+                document_format, document_file_key, document_mime_type, document_generated_at,
+                source_invoice_id,
                 deleted_at, created_at, updated_at
             FROM invoices
             WHERE org_id = $1 AND deleted_at IS NULL
@@ -220,7 +227,9 @@ impl<'tx> InvoiceRepository for PgInvoiceRepository<'tx> {
                 operation_nature::text,
                 delivery_address_line1, delivery_address_line2, delivery_address_postal_code,
                 delivery_address_city, delivery_address_country,
-                net_cents, vat_breakdown, gross_cents, issuer_identity, source_invoice_id,
+                net_cents, vat_breakdown, gross_cents, issuer_identity,
+                document_format, document_file_key, document_mime_type, document_generated_at,
+                source_invoice_id,
                 deleted_at, created_at, updated_at
             FROM invoices
             WHERE project_id = $1 AND deleted_at IS NULL
@@ -255,7 +264,9 @@ impl<'tx> InvoiceRepository for PgInvoiceRepository<'tx> {
                 operation_nature::text,
                 delivery_address_line1, delivery_address_line2, delivery_address_postal_code,
                 delivery_address_city, delivery_address_country,
-                net_cents, vat_breakdown, gross_cents, issuer_identity, source_invoice_id,
+                net_cents, vat_breakdown, gross_cents, issuer_identity,
+                document_format, document_file_key, document_mime_type, document_generated_at,
+                source_invoice_id,
                 deleted_at, created_at, updated_at
             FROM invoices
             WHERE source_invoice_id = $1 AND deleted_at IS NULL
@@ -309,7 +320,9 @@ impl<'tx> InvoiceRepository for PgInvoiceRepository<'tx> {
                 operation_nature::text,
                 delivery_address_line1, delivery_address_line2, delivery_address_postal_code,
                 delivery_address_city, delivery_address_country,
-                net_cents, vat_breakdown, gross_cents, issuer_identity, source_invoice_id,
+                net_cents, vat_breakdown, gross_cents, issuer_identity,
+                document_format, document_file_key, document_mime_type, document_generated_at,
+                source_invoice_id,
                 deleted_at, created_at, updated_at
             "#,
             invoice.id.0,
@@ -372,7 +385,9 @@ impl<'tx> InvoiceRepository for PgInvoiceRepository<'tx> {
                 operation_nature::text,
                 delivery_address_line1, delivery_address_line2, delivery_address_postal_code,
                 delivery_address_city, delivery_address_country,
-                net_cents, vat_breakdown, gross_cents, issuer_identity, source_invoice_id,
+                net_cents, vat_breakdown, gross_cents, issuer_identity,
+                document_format, document_file_key, document_mime_type, document_generated_at,
+                source_invoice_id,
                 deleted_at, created_at, updated_at
             "#,
             id.0,
@@ -414,7 +429,9 @@ impl<'tx> InvoiceRepository for PgInvoiceRepository<'tx> {
                 operation_nature::text,
                 delivery_address_line1, delivery_address_line2, delivery_address_postal_code,
                 delivery_address_city, delivery_address_country,
-                net_cents, vat_breakdown, gross_cents, issuer_identity, source_invoice_id,
+                net_cents, vat_breakdown, gross_cents, issuer_identity,
+                document_format, document_file_key, document_mime_type, document_generated_at,
+                source_invoice_id,
                 deleted_at, created_at, updated_at
             "#,
             id.0,
@@ -428,6 +445,60 @@ impl<'tx> InvoiceRepository for PgInvoiceRepository<'tx> {
         .map_err(map_sqlx_error)?;
 
         let row = row.ok_or(CoreError::NotFound)?;
+        let lines = fetch_lines(&mut tx, id).await?;
+        row.into_invoice(lines)
+    }
+
+    async fn record_generated_document(
+        &mut self,
+        id: InvoiceId,
+        document: &GeneratedInvoiceDocument,
+        updated_at: DateTime<Utc>,
+    ) -> Result<Invoice, CoreError> {
+        let mut tx = self.tx.lock().await;
+        // `AND document_file_key IS NULL` is the actual enforcement of
+        // "set at most once" — see `GeneratedInvoiceDocument`'s own doc
+        // comment. `trg_invoices_forbid_document_reassignment` is the
+        // second, independent line of defence (any writer, not only this
+        // one), so a row already carrying a document is simply not among
+        // the rows this `UPDATE` matches, rather than reached and rejected.
+        let row = sqlx::query_as!(
+            InvoiceRow,
+            r#"
+            UPDATE invoices
+            SET document_format = $2,
+                document_file_key = $3,
+                document_mime_type = $4,
+                document_generated_at = $5,
+                updated_at = $6
+            WHERE id = $1 AND deleted_at IS NULL AND document_file_key IS NULL
+            RETURNING
+                id, org_id, number, kind::text AS "kind!", project_id, customer_id,
+                customer_context_id, status::text AS "status!", issued_at, due_at, notes,
+                operation_nature::text,
+                delivery_address_line1, delivery_address_line2, delivery_address_postal_code,
+                delivery_address_city, delivery_address_country,
+                net_cents, vat_breakdown, gross_cents, issuer_identity,
+                document_format, document_file_key, document_mime_type, document_generated_at,
+                source_invoice_id,
+                deleted_at, created_at, updated_at
+            "#,
+            id.0,
+            document.format,
+            document.file_key,
+            document.mime_type,
+            document.generated_at,
+            updated_at,
+        )
+        .fetch_optional(&mut ***tx)
+        .await
+        .map_err(map_sqlx_error)?;
+
+        let row = row.ok_or_else(|| {
+            CoreError::Conflict(format!(
+                "invoice {id} was not found, or already has a generated document"
+            ))
+        })?;
         let lines = fetch_lines(&mut tx, id).await?;
         row.into_invoice(lines)
     }
@@ -660,7 +731,9 @@ impl<'tx> InvoiceRepository for PgInvoiceRepository<'tx> {
                 operation_nature::text,
                 delivery_address_line1, delivery_address_line2, delivery_address_postal_code,
                 delivery_address_city, delivery_address_country,
-                net_cents, vat_breakdown, gross_cents, issuer_identity, source_invoice_id,
+                net_cents, vat_breakdown, gross_cents, issuer_identity,
+                document_format, document_file_key, document_mime_type, document_generated_at,
+                source_invoice_id,
                 deleted_at, created_at, updated_at
             FROM invoices i
             WHERE i.org_id = $1
@@ -1000,6 +1073,7 @@ mod tests {
             vat_breakdown: Vec::new(),
             gross_cents: amount_cents,
             issuer_identity: None,
+            generated_document: None,
             lines: vec![line],
             source_invoice_id,
             deleted_at: None,
@@ -1225,6 +1299,97 @@ mod tests {
             "10_000 gross, minus a 4_000 payment, minus a 1_000 credit note"
         );
         assert_eq!(balance.oldest_due_at, Some(due_at));
+
+        cleanup_with_customer(&pool, org_id, customer_id, owner_id).await;
+    }
+
+    /// #342's own invariant: `record_generated_document` succeeds exactly
+    /// once against a given invoice, and a second call — even with a
+    /// different document — is refused rather than silently replacing what
+    /// the first one stored. `trg_invoices_forbid_document_reassignment`
+    /// (the migration's own trigger) is the belt behind this method's
+    /// `WHERE document_file_key IS NULL`; this test exercises the method,
+    /// not the trigger directly, the same way `chk_invoices_issued_state`
+    /// is exercised through `issue` rather than with a raw `UPDATE`.
+    #[tokio::test]
+    #[ignore = "requires live postgres"]
+    async fn record_generated_document_is_refused_the_second_time() {
+        let pool = dev_pool().await;
+        let org_id = seed_organization(&pool, "invoice-document").await;
+        let customer_id = seed_customer(&pool, org_id, "invoice-document").await;
+        let customer_context_id = seed_customer_context(&pool, customer_id).await;
+        let owner_id =
+            sqlx::query_scalar!("SELECT owner_id FROM organizations WHERE id = $1", org_id.0)
+                .fetch_one(&pool)
+                .await
+                .unwrap();
+
+        let invoice_id = seed_issued_invoice(
+            &pool,
+            org_id,
+            customer_id,
+            customer_context_id,
+            InvoiceKind::Standard,
+            None,
+            None,
+            10_000,
+            "FAC-2026-9201",
+        )
+        .await;
+
+        let now = Utc::now().trunc_subsecs(6);
+        let first_document = GeneratedInvoiceDocument {
+            format: "FACTURX".to_owned(),
+            file_key: "invoices/first.pdf".to_owned(),
+            mime_type: "application/pdf".to_owned(),
+            generated_at: now,
+        };
+
+        let updated = with_tx(&pool, async |tx| {
+            let mut repo = PgInvoiceRepository::new(&tx);
+            repo.record_generated_document(invoice_id, &first_document, now)
+                .await
+        })
+        .await
+        .unwrap();
+
+        let stored = updated
+            .generated_document
+            .expect("the document was just recorded");
+        assert_eq!(stored.file_key, "invoices/first.pdf");
+        assert_eq!(stored.format, "FACTURX");
+
+        let second_document = GeneratedInvoiceDocument {
+            format: "FACTURX".to_owned(),
+            file_key: "invoices/second.pdf".to_owned(),
+            mime_type: "application/pdf".to_owned(),
+            generated_at: now,
+        };
+        let result = with_tx(&pool, async |tx| {
+            let mut repo = PgInvoiceRepository::new(&tx);
+            repo.record_generated_document(invoice_id, &second_document, now)
+                .await
+        })
+        .await;
+
+        assert!(
+            matches!(result, Err(CoreError::Conflict(_))),
+            "a second document must be refused, not silently replace the first: {result:?}"
+        );
+
+        // The first document is still exactly what is stored — the refused
+        // second call must not have touched the row at all.
+        let reloaded = with_tx(&pool, async |tx| {
+            let mut repo = PgInvoiceRepository::new(&tx);
+            repo.find_by_id(invoice_id).await
+        })
+        .await
+        .unwrap()
+        .unwrap();
+        assert_eq!(
+            reloaded.generated_document.unwrap().file_key,
+            "invoices/first.pdf"
+        );
 
         cleanup_with_customer(&pool, org_id, customer_id, owner_id).await;
     }

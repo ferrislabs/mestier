@@ -6,10 +6,10 @@ use rust_decimal::Decimal;
 use uuid::Uuid;
 
 use crate::{
-    CustomerContextId, CustomerId, CustomerOutstandingBalance, Invoice, InvoiceId, InvoiceKind,
-    InvoiceLine, InvoiceLineId, InvoicePayment, InvoicePaymentId, InvoiceStatus,
-    InvoiceVatBreakdownLine, LegalIdentity, OperationNature, OrganizationAddress, OrganizationId,
-    ProjectId, VatStatus,
+    CustomerContextId, CustomerId, CustomerOutstandingBalance, GeneratedInvoiceDocument, Invoice,
+    InvoiceId, InvoiceKind, InvoiceLine, InvoiceLineId, InvoicePayment, InvoicePaymentId,
+    InvoiceStatus, InvoiceVatBreakdownLine, LegalIdentity, OperationNature, OrganizationAddress,
+    OrganizationId, ProjectId, VatStatus,
 };
 
 #[derive(Debug, Clone)]
@@ -35,6 +35,10 @@ pub struct InvoiceRow {
     pub vat_breakdown: serde_json::Value,
     pub gross_cents: i32,
     pub issuer_identity: Option<serde_json::Value>,
+    pub document_format: Option<String>,
+    pub document_file_key: Option<String>,
+    pub document_mime_type: Option<String>,
+    pub document_generated_at: Option<DateTime<Utc>>,
     pub source_invoice_id: Option<Uuid>,
     pub deleted_at: Option<DateTime<Utc>>,
     pub created_at: DateTime<Utc>,
@@ -80,6 +84,12 @@ impl InvoiceRow {
                 city: self.delivery_address_city.unwrap_or_default(),
                 country: self.delivery_address_country.unwrap_or_default(),
             });
+        let generated_document = self.document_format.map(|format| GeneratedInvoiceDocument {
+            format,
+            file_key: self.document_file_key.unwrap_or_default(),
+            mime_type: self.document_mime_type.unwrap_or_default(),
+            generated_at: self.document_generated_at.unwrap_or(self.updated_at),
+        });
 
         Ok(Invoice {
             id: InvoiceId(self.id),
@@ -99,6 +109,7 @@ impl InvoiceRow {
             vat_breakdown,
             gross_cents: self.gross_cents,
             issuer_identity,
+            generated_document,
             lines,
             source_invoice_id: self.source_invoice_id.map(InvoiceId),
             deleted_at: self.deleted_at,

@@ -7,10 +7,10 @@ use rust_decimal::{Decimal, prelude::ToPrimitive};
 use serde_json::{Value, json};
 
 use crate::{
-    CustomerContextId, CustomerId, CustomerOutstandingBalance, DraftInvoice, Invoice, InvoiceId,
-    InvoiceKind, InvoiceLine, InvoiceLineId, InvoicePayment, InvoicePaymentId, InvoiceStatus,
-    InvoiceVatBreakdownLine, LegalIdentity, Organization, OrganizationId, Project,
-    ProjectBillingSummary, ProjectId,
+    CustomerContextId, CustomerId, CustomerOutstandingBalance, DraftInvoice,
+    GeneratedInvoiceDocument, Invoice, InvoiceId, InvoiceKind, InvoiceLine, InvoiceLineId,
+    InvoicePayment, InvoicePaymentId, InvoiceStatus, InvoiceVatBreakdownLine, LegalIdentity,
+    Organization, OrganizationId, Project, ProjectBillingSummary, ProjectId,
     domain::{
         invoice::{
             commands::{
@@ -82,6 +82,7 @@ where
             vat_breakdown: totals.vat_breakdown,
             gross_cents: totals.gross_cents,
             issuer_identity: None,
+            generated_document: None,
             lines,
             source_invoice_id: None,
             deleted_at: None,
@@ -259,6 +260,41 @@ where
         self.emit_transition(existing.status, &updated)?;
 
         Ok(updated)
+    }
+
+    /// Records the file a [`crate::domain::invoice::ports::DocumentFormat`]
+    /// adapter already generated (#342) — never generates one itself: that
+    /// happens in the handler, against the adapter and the already-uploaded
+    /// bytes, both of which are outside a domain transaction's job (see
+    /// `import_supplier_invoice`'s own doc comment for the same reasoning
+    /// on the reception side).
+    ///
+    /// Refused with a precise message when this invoice is still a draft
+    /// (no frozen `issuer_identity` to have generated *from*) or already
+    /// carries a document — both checked here for a clear error before ever
+    /// reaching `InvoiceRepository::record_generated_document`'s own
+    /// `WHERE document_file_key IS NULL`, which is what actually enforces
+    /// "at most once" against a concurrent call this check cannot see.
+    pub async fn record_generated_document(
+        &mut self,
+        id: InvoiceId,
+        document: GeneratedInvoiceDocument,
+    ) -> Result<Invoice, CoreError> {
+        let existing = self.get_invoice(id).await?;
+        if existing.status == InvoiceStatus::Draft {
+            return Err(CoreError::Conflict(format!(
+                "invoice {id} is still a draft; only an issued invoice can have a generated document"
+            )));
+        }
+        if existing.generated_document.is_some() {
+            return Err(CoreError::Conflict(format!(
+                "invoice {id} already has a generated document"
+            )));
+        }
+
+        self.repo
+            .record_generated_document(id, &document, Utc::now())
+            .await
     }
 
     /// Refused unless the invoice is still a draft: an issued invoice is a
@@ -774,6 +810,7 @@ where
             vat_breakdown: totals.vat_breakdown,
             gross_cents: totals.gross_cents,
             issuer_identity: None,
+            generated_document: None,
             lines,
             source_invoice_id: Some(source.id),
             deleted_at: None,
@@ -1271,6 +1308,7 @@ fn build_single_line_draft(
         vat_breakdown: Vec::new(),
         gross_cents: amount_cents,
         issuer_identity: None,
+        generated_document: None,
         lines: vec![line],
         // Never set here: a deposit/final draft never corrects another
         // invoice. Reserved for `issue_credit_note`, which builds its own
@@ -1565,6 +1603,7 @@ mod tests {
             vat_breakdown: Vec::new(),
             gross_cents: 5500,
             issuer_identity: None,
+            generated_document: None,
             lines: vec![InvoiceLine {
                 id: InvoiceLineId(Uuid::new_v4()),
                 organization_id,

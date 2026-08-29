@@ -2,7 +2,7 @@ use auth::Identity;
 use axum::{
     Extension,
     body::Body,
-    extract::State,
+    extract::{Query, State},
     response::{IntoResponse, Response},
 };
 use handlers::{ApiError, AppState};
@@ -14,9 +14,37 @@ use http::{
     StatusCode,
     header::{CONTENT_DISPOSITION, CONTENT_TYPE},
 };
-use mestier_core::{Customer, Invoice, InvoiceId, LegalIdentity, Organization, VatStatus};
+use mestier_core::{
+    Customer, DocumentFormat, ElectronicInvoicingFacts, FacturXDocumentFormat,
+    GeneratedInvoiceDocument, Invoice, InvoiceDocumentRequest, InvoiceId, LegalIdentity,
+    Organization, UploadFileCommand, VatStatus,
+};
+use serde::Deserialize;
+use utoipa::{IntoParams, ToSchema};
 
 use crate::{paths::InvoicePdfPath, require_invoice_membership};
+
+/// `?format=` on the invoice PDF route (#342): `pdf` (the default, #319's
+/// own visual-only export, unchanged) or `facturx`, which gains the
+/// structured CII payload embedded as a PDF/A-3 attachment.
+///
+/// Not Factur-X-specific in name on purpose, mirroring
+/// `DocumentFormat`'s own port: a second format (UBL) would extend this
+/// enum, not add a second query parameter.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Deserialize, IntoParams)]
+#[serde(rename_all = "snake_case")]
+pub struct InvoicePdfQuery {
+    #[serde(default)]
+    pub format: InvoiceDocumentFormatQuery,
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Deserialize, ToSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum InvoiceDocumentFormatQuery {
+    #[default]
+    Pdf,
+    Facturx,
+}
 
 #[utoipa::path(
     get,
@@ -25,13 +53,15 @@ use crate::{paths::InvoicePdfPath, require_invoice_membership};
     tag = super::super::TAG,
     params(
         ("invoice_id" = InvoiceId, Path, description = "Invoice identifier"),
+        InvoicePdfQuery,
     ),
     responses(
-        (status = 200, description = "Invoice PDF export", content_type = "application/pdf"),
+        (status = 200, description = "Invoice PDF export (or, with `?format=facturx`, the same document as a PDF/A-3 carrying the CII XML)", content_type = "application/pdf"),
         (status = 401, description = "Unauthorized"),
         (status = 403, description = "Forbidden"),
         (status = 404, description = "Invoice not found"),
-        (status = 409, description = "The organization's legal identity is incomplete; the response names every missing field"),
+        (status = 409, description = "The organization's legal identity is incomplete (any format), or `format=facturx` was asked of a draft invoice, or of one already carrying a generated document"),
+        (status = 422, description = "`format=facturx`: the invoice does not satisfy the EN 16931 profile — the response names every finding"),
     ),
     security(("bearer_auth" = []))
 )]
@@ -39,6 +69,7 @@ pub async fn handler(
     InvoicePdfPath { invoice_id }: InvoicePdfPath,
     State(state): State<AppState>,
     Extension(identity): Extension<Identity>,
+    Query(query): Query<InvoicePdfQuery>,
 ) -> Result<Response, ApiError> {
     let invoice = require_invoice_membership(&state, &identity, invoice_id).await?;
     let organization = state
@@ -64,6 +95,13 @@ pub async fn handler(
         .number
         .clone()
         .unwrap_or_else(|| invoice.id.0.to_string());
+
+    let bytes = match query.format {
+        InvoiceDocumentFormatQuery::Pdf => pdf,
+        InvoiceDocumentFormatQuery::Facturx => {
+            facturx_document(&state, &invoice, &customer, pdf).await?
+        }
+    };
     let filename = format!("{filename_stem}.pdf");
 
     Ok((
@@ -75,9 +113,84 @@ pub async fn handler(
                 format!("attachment; filename=\"{filename}\""),
             ),
         ],
-        Body::from(pdf),
+        Body::from(bytes),
     )
         .into_response())
+}
+
+/// The bytes served for `?format=facturx`: whatever this invoice already
+/// has stored, if it does (#342's own rule — the artefact once generated
+/// is never silently regenerated), or a freshly generated one, uploaded and
+/// recorded before being served for the first time.
+///
+/// `visual_pdf` is #319's own renderer output, computed once by the caller
+/// and passed in rather than re-rendered here — the same bytes whichever
+/// branch below runs, and never re-derived from `Invoice` a second time.
+async fn facturx_document(
+    state: &AppState,
+    invoice: &Invoice,
+    customer: &Customer,
+    visual_pdf: Vec<u8>,
+) -> Result<Vec<u8>, ApiError> {
+    if let Some(document) = &invoice.generated_document {
+        let stored = state.file_storage.get(&document.file_key).await?;
+        return Ok(stored.bytes);
+    }
+
+    let issuer_identity = invoice.issuer_identity.clone().ok_or_else(|| {
+        ApiError::Conflict(
+            "cannot generate an electronic invoice: the invoice must be issued first".to_owned(),
+        )
+    })?;
+    let facts = ElectronicInvoicingFacts::from_frozen_issuer(issuer_identity, customer).map_err(
+        |missing| {
+            ApiError::Conflict(format!(
+                "cannot generate an electronic invoice: missing {}",
+                missing.join(", ")
+            ))
+        },
+    )?;
+
+    let generated = FacturXDocumentFormat
+        .generate(InvoiceDocumentRequest {
+            invoice,
+            facts: &facts,
+            customer,
+            visual_document: &visual_pdf,
+        })
+        .map_err(|error| match error {
+            mestier_core::DocumentFormatError::NotValid { report, .. } => {
+                ApiError::UnprocessableEntity(report)
+            }
+            mestier_core::DocumentFormatError::Embedding(reason) => {
+                tracing::error!(invoice_id = %invoice.id, error = %reason, "factur-x embedding failed");
+                ApiError::Internal
+            }
+        })?;
+
+    let stored = state
+        .file_storage
+        .upload(UploadFileCommand {
+            mime_type: generated.mime_type.clone(),
+            bytes: generated.bytes.clone(),
+            folder: Some("invoices".to_owned()),
+        })
+        .await?;
+
+    state
+        .usecase
+        .record_invoice_generated_document(
+            invoice.id,
+            GeneratedInvoiceDocument {
+                format: "FACTURX".to_owned(),
+                file_key: stored.key,
+                mime_type: generated.mime_type.clone(),
+                generated_at: chrono::Utc::now(),
+            },
+        )
+        .await?;
+
+    Ok(generated.bytes)
 }
 
 /// Renders the figures the domain already computed; it must not compute

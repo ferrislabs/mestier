@@ -3,8 +3,8 @@ use common::CoreError;
 use mestier_macros::transactional;
 
 use crate::{
-    CustomerOutstandingBalance, Invoice, InvoiceId, InvoicePayment, InvoicePaymentId,
-    OrganizationId, ProjectBillingSummary, ProjectId,
+    CustomerOutstandingBalance, GeneratedInvoiceDocument, Invoice, InvoiceId, InvoicePayment,
+    InvoicePaymentId, OrganizationId, ProjectBillingSummary, ProjectId,
     application::MestierUseCase,
     domain::invoice::{
         commands::{
@@ -228,6 +228,20 @@ impl MestierUseCase {
     ) -> Result<Vec<Invoice>, CoreError> {
         let mut service = InvoiceService::new(invoice_repository, emitter);
         service.overdue_invoices(organization_id, as_of).await
+    }
+
+    /// #342: persists the file a `DocumentFormat` adapter already generated
+    /// (in the handler, against the already-uploaded bytes — see
+    /// `InvoiceService::record_generated_document`'s own doc comment for
+    /// why generation itself never happens inside this transaction).
+    #[transactional(invoice, emitter)]
+    pub async fn record_invoice_generated_document(
+        &self,
+        id: InvoiceId,
+        document: GeneratedInvoiceDocument,
+    ) -> Result<Invoice, CoreError> {
+        let mut service = InvoiceService::new(invoice_repository, emitter);
+        service.record_generated_document(id, document).await
     }
 
     /// #319: "what was quoted, what has been billed, what remains" for one
