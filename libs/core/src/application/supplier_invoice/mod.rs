@@ -14,8 +14,8 @@ use crate::{
             UpdateSupplierInvoiceNotesCommand,
         },
         ports::{
-            SupplierInvoiceParseError, SupplierInvoiceParser, SupplierInvoiceRepository,
-            supplier_identifier,
+            SupplierInvoiceAllocationRepository, SupplierInvoiceParseError, SupplierInvoiceParser,
+            SupplierInvoiceRepository, supplier_identifier,
         },
         service::SupplierInvoiceService,
     },
@@ -246,6 +246,21 @@ impl MestierUseCase {
         // does: the macro injects an immutable binding.
         let mut supplier_invoice_repository = supplier_invoice_repository;
         supplier_invoice_repository.find_line_by_id(id).await
+    }
+
+    /// #340's confirm screen needs a line's *current* allocations before it
+    /// can render the editor the `PUT` below replaces wholesale — there was
+    /// no reader for this at all until this issue, since #339 only ever
+    /// wrote through `list_by_line` internally, as a diff source.
+    #[transactional(supplier_invoice_allocation)]
+    pub async fn list_supplier_invoice_line_allocations(
+        &self,
+        line_id: SupplierInvoiceLineId,
+    ) -> Result<Vec<SupplierInvoiceLineAllocation>, CoreError> {
+        let mut supplier_invoice_allocation_repository = supplier_invoice_allocation_repository;
+        supplier_invoice_allocation_repository
+            .list_by_line(line_id)
+            .await
     }
 
     /// #339's full-replace `PUT .../supplier-invoice-lines/{line_id}/allocations`.

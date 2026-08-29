@@ -296,6 +296,28 @@ async fn replacing_line_allocations_is_reflected_in_the_project_s_supplier_costs
         "{replaced}"
     );
 
+    // #340's confirm screen reads a line's current allocations off the
+    // invoice itself — there is no other route to read them from.
+    let invoice_id = invoice["id"].as_str().expect("an id").to_owned();
+    let refetched: Value = client()
+        .get(app.supplier_invoice_url(&invoice_id))
+        .bearer_auth(&app.token)
+        .send()
+        .await
+        .expect("the api answers the get call")
+        .json()
+        .await
+        .expect("the get answer is json");
+    let line_allocations = refetched["data"]["lines"][0]["allocations"]
+        .as_array()
+        .expect("an array");
+    assert_eq!(line_allocations.len(), 1, "{refetched}");
+    assert_eq!(
+        line_allocations[0]["amount_cents"],
+        json!(line_total_cents),
+        "{refetched}"
+    );
+
     let costs: Value = client()
         .get(app.project_supplier_costs_url(&project_id.to_string()))
         .bearer_auth(&app.token)

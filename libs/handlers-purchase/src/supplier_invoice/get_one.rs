@@ -4,10 +4,14 @@ use handlers::{ApiError, AppState, DataEnvelope, Response};
 use mestier_core::SupplierInvoiceId;
 
 use crate::{
-    paths::SupplierInvoicePath, require_supplier_invoice_membership,
-    response::SupplierInvoiceResponse,
+    paths::SupplierInvoicePath,
+    require_supplier_invoice_membership,
+    response::{SupplierInvoiceLineAllocationResponse, SupplierInvoiceResponse},
 };
 
+/// The one route that reads a line's current allocations, so this is the
+/// one place `SupplierInvoiceLineResponse::allocations` is ever populated
+/// for real — see that field's own doc comment.
 #[utoipa::path(
     get,
     path = "/api/v1/supplier-invoices/{supplier_invoice_id}",
@@ -33,6 +37,18 @@ pub async fn handler(
 ) -> Result<Response<SupplierInvoiceResponse>, ApiError> {
     let invoice =
         require_supplier_invoice_membership(&state, &identity, supplier_invoice_id).await?;
+    let mut response = SupplierInvoiceResponse::from(invoice);
 
-    Ok(Response::OK(invoice.into()))
+    for line in &mut response.lines {
+        let allocations = state
+            .usecase
+            .list_supplier_invoice_line_allocations(line.id)
+            .await?;
+        line.allocations = allocations
+            .into_iter()
+            .map(SupplierInvoiceLineAllocationResponse::from)
+            .collect();
+    }
+
+    Ok(Response::OK(response))
 }

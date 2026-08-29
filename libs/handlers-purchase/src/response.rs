@@ -20,6 +20,12 @@ pub struct SupplierInvoiceLineResponse {
     pub line_total_cents: i32,
     pub vat_rate_basis_points: Option<i32>,
     pub position: i32,
+    /// Always empty on the value `From<SupplierInvoiceLine>` alone can
+    /// produce: allocations live behind a separate repository (see that
+    /// port trait's own doc comment), so populating this for real is the
+    /// caller's job — `get_one::handler` is the one route that does it,
+    /// since #340's confirm screen is the one reader that needs it.
+    pub allocations: Vec<SupplierInvoiceLineAllocationResponse>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }
@@ -36,6 +42,7 @@ impl From<SupplierInvoiceLine> for SupplierInvoiceLineResponse {
             line_total_cents: value.line_total_cents,
             vat_rate_basis_points: value.vat_rate_basis_points,
             position: value.position,
+            allocations: Vec::new(),
             created_at: value.created_at,
             updated_at: value.updated_at,
         }

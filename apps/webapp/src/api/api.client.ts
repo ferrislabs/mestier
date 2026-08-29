@@ -539,8 +539,19 @@ export namespace Schemas {
   export type GraphInvalidDetails = { errors: Array<GraphErrorResponse> };
   export type GraphInvalidBody = { code: string; details: GraphInvalidDetails; message: string; status: number };
   export type SupplierInvoiceId = string;
+  export type SupplierInvoiceLineAllocationId = string;
   export type SupplierInvoiceLineId = string;
+  export type SupplierInvoiceLineAllocationResponse = {
+    amount_cents: number;
+    created_at: string;
+    id: SupplierInvoiceLineAllocationId;
+    organization_id: OrganizationId;
+    project_id: ProjectId;
+    supplier_invoice_line_id: SupplierInvoiceLineId;
+    updated_at: string;
+  };
   export type SupplierInvoiceLineResponse = {
+    allocations: Array<SupplierInvoiceLineAllocationResponse>;
     created_at: string;
     id: SupplierInvoiceLineId;
     label: string;
@@ -904,7 +915,6 @@ export namespace Schemas {
     quoted_cents?: (number | null) | undefined;
     remaining_cents?: (number | null) | undefined;
   };
-  export type SupplierInvoiceLineAllocationId = string;
   export type ProjectSupplierCostLineResponse = {
     allocation_id: SupplierInvoiceLineAllocationId;
     amount_cents: number;
@@ -1078,15 +1088,6 @@ export namespace Schemas {
   export type StartRunRequest = Partial<{ trigger_payload: unknown }>;
   export type StartTimeEntryRequest = { task_id: TaskId };
   export type StartedRunResponse = { run_id: string };
-  export type SupplierInvoiceLineAllocationResponse = {
-    amount_cents: number;
-    created_at: string;
-    id: SupplierInvoiceLineAllocationId;
-    organization_id: OrganizationId;
-    project_id: ProjectId;
-    supplier_invoice_line_id: SupplierInvoiceLineId;
-    updated_at: string;
-  };
   export type TaskCommentAuthorResponse = { display_name: string; id: UserId };
   export type TaskCommentId = string;
   export type TaskCommentResponse = {
