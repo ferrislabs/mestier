@@ -33,6 +33,7 @@ use crate::{
         },
         role::{
             ADMIN_ROLE_NAME, MEMBER_ROLE_NAME, OWNER_ROLE_NAME, Permissions, Role, RoleId,
+            default_admin_business_permissions, default_member_business_permissions,
             ports::RoleRepository,
         },
         task_label::{PRESET_TASK_LABELS, TaskLabel, TaskLabelId, ports::TaskLabelRepository},
@@ -298,7 +299,7 @@ where
                 id: RoleId(generate_uuid_v7()),
                 organization_id: organization.id,
                 name: ADMIN_ROLE_NAME.into(),
-                permissions: Permissions::MANAGE_MEMBERS,
+                permissions: Permissions::MANAGE_MEMBERS | default_admin_business_permissions(),
                 created_at: now,
                 updated_at: now,
             })
@@ -309,7 +310,7 @@ where
                 id: RoleId(generate_uuid_v7()),
                 organization_id: organization.id,
                 name: MEMBER_ROLE_NAME.into(),
-                permissions: Permissions::NONE,
+                permissions: default_member_business_permissions(),
                 created_at: now,
                 updated_at: now,
             })

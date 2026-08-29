@@ -87,6 +87,18 @@ pub fn default_authorizer() -> MestierAuthorizer {
         .action("channel.manage", Permissions::MANAGE_CHANNELS.0)
         .action("message.delete_any", Permissions::MANAGE_CHANNELS.0)
         .action("webhook.manage", Permissions::MANAGE_WEBHOOKS.0)
+        // #283/#304: the business verbs the action map never had. Not
+        // enforced by any handler yet, on purpose — see the doc comment on
+        // the bits themselves in `domain::role::Permissions`. #305 is what
+        // wires a handler to one of these names.
+        .action("planning.view", Permissions::VIEW_PLANNING.0)
+        .action("planning.manage", Permissions::MANAGE_PLANNING.0)
+        .action("cost.view", Permissions::VIEW_COST.0)
+        .action("cost.manage", Permissions::MANAGE_COST.0)
+        .action("report.view", Permissions::VIEW_REPORTS.0)
+        .action("customer.manage", Permissions::MANAGE_CUSTOMERS.0)
+        .action("quote.manage", Permissions::MANAGE_QUOTES.0)
+        .action("reference.manage", Permissions::MANAGE_REFERENCE.0)
         .build()
 }
 
