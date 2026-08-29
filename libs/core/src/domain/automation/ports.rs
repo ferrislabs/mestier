@@ -401,3 +401,42 @@ pub trait RunRepository: Send {
         batch: i64,
     ) -> impl Future<Output = Result<u64, CoreError>> + Send;
 }
+
+/// A workflow's trigger: which event name(s) start a run for it. There is no
+/// domain entity for "a subscription" here (unlike [`WorkflowRepository`]'s
+/// aggregate) — a workflow has at most one row of `kind = 'workflow'` in
+/// `automation.subscription`, looked up the same way
+/// `PgEventDispatchRepository::dispatch_pending` already does: `kind =
+/// 'workflow'` and `target_id = workflow_id`. `org_id` is a parameter of
+/// every method for the same reason as [`WorkflowRepository`]'s: a
+/// cross-organization lookup must read back as absent, never leak or move
+/// another organization's row.
+#[cfg_attr(any(test, feature = "mock"), mockall::automock)]
+pub trait SubscriptionRepository: Send {
+    /// Replaces any existing `kind = 'workflow'` subscription row for
+    /// `workflow_id` with one carrying exactly `event_names` — never an
+    /// accumulation of two rows for the same workflow, and never a partial
+    /// union with what was there before. An empty slice deletes the row
+    /// entirely: a workflow triggered by nothing has no subscription row at
+    /// all, not a subscription to zero events.
+    ///
+    /// Returns the event names now in effect (empty once cleared) — the
+    /// same "read back what was just written" convention as
+    /// [`AutomationSettingsRepository::upsert`].
+    fn set_workflow_trigger(
+        &mut self,
+        org_id: OrganizationId,
+        workflow_id: Uuid,
+        event_names: &[String],
+    ) -> impl Future<Output = Result<Vec<String>, CoreError>> + Send;
+
+    /// The event names a workflow is currently subscribed to, empty when it
+    /// has none — never an error: absence is a normal, common state (a
+    /// freshly created workflow, or one whose trigger was just cleared),
+    /// not something to refuse.
+    fn workflow_trigger(
+        &mut self,
+        org_id: OrganizationId,
+        workflow_id: Uuid,
+    ) -> impl Future<Output = Result<Vec<String>, CoreError>> + Send;
+}

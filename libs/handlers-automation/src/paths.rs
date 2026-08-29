@@ -56,6 +56,13 @@ pub struct WorkflowPath {
 }
 
 #[derive(TypedPath, Deserialize)]
+#[typed_path("/api/v1/organizations/{organization_id}/automation/workflows/{workflow_id}/trigger")]
+pub struct WorkflowTriggerPath {
+    pub organization_id: OrganizationId,
+    pub workflow_id: Uuid,
+}
+
+#[derive(TypedPath, Deserialize)]
 #[typed_path("/api/v1/organizations/{organization_id}/automation/workflows/{workflow_id}/versions")]
 pub struct WorkflowVersionsPath {
     pub organization_id: OrganizationId,

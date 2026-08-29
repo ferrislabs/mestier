@@ -14,6 +14,8 @@ const SETTINGS_PATH =
 	'/api/v1/organizations/{organization_id}/automation/settings'
 const WORKFLOWS_PATH =
 	'/api/v1/organizations/{organization_id}/automation/workflows'
+const WORKFLOW_TRIGGER_PATH =
+	'/api/v1/organizations/{organization_id}/automation/workflows/{workflow_id}/trigger'
 const RUNS_PATH = '/api/v1/organizations/{organization_id}/automation/runs'
 const RUN_PATH =
 	'/api/v1/organizations/{organization_id}/automation/runs/{run_id}'
@@ -157,6 +159,33 @@ export function useRun(organizationId: string, runId: string | null) {
 	})
 }
 
+/** The event(s) a workflow currently triggers from (#225) — empty when it
+ * has no subscription, never a 404. What the workflow editor's Start node
+ * reads to show the current trigger picker selection. Lazy, like `useRun`:
+ * nothing to fetch before a workflow is open. */
+export function useWorkflowTrigger(
+	organizationId: string,
+	workflowId: string | null,
+) {
+	return useQuery({
+		...window.tanstackApi.get(WORKFLOW_TRIGGER_PATH, {
+			path: { organization_id: organizationId, workflow_id: workflowId ?? '' },
+		}).queryOptions,
+		enabled: workflowId !== null,
+	})
+}
+
+/** Replaces the workflow's trigger selection wholesale — an empty
+ * `event_names` clears it. Never an addition to what is already selected. */
+export function useSetWorkflowTrigger() {
+	const queryClient = useQueryClient()
+	return useMutation({
+		...window.tanstackApi.mutation('put', WORKFLOW_TRIGGER_PATH)
+			.mutationOptions,
+		onSuccess: () => invalidate(queryClient, WORKFLOW_TRIGGER_PATH),
+	})
+}
+
 export type AuthScheme = Schemas.AuthSchemeResponse
 export type AuthField = Schemas.FieldResponse
 export type EventDescriptor = Schemas.EventDescriptorResponse
@@ -165,3 +194,4 @@ export type Credential = Schemas.CredentialResponse
 export type CreatedCredential = Credential & { secret: unknown }
 export type AutomationSettings = Schemas.AutomationSettingsBody
 export type Run = Schemas.RunResponse
+export type WorkflowTrigger = Schemas.WorkflowTriggerResponse
