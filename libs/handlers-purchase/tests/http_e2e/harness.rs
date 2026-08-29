@@ -196,9 +196,16 @@ async fn seed(pool: &PgPool) -> Fixture {
     }
 }
 
-/// Only the three endpoints the test controls are overridden. Everything else,
-/// object storage included, keeps its production default and is expected to be
-/// the compose stack.
+/// Only the endpoints the test controls are overridden. Object storage
+/// itself keeps its production default (`http://localhost:9000`,
+/// `rustfsadmin`/`rustfsadmin`, bucket `mestier-files`) and is expected to
+/// be the compose stack, or CI's own `rustfs` service.
+///
+/// Unlike `handlers-invoice`'s own harness, `auto_create_bucket` is left at
+/// its default of `true` rather than forced to `false`: this is the first
+/// e2e suite whose handler actually calls `file_storage.upload`, and a
+/// freshly started `rustfs` container (CI's, in particular) has no bucket
+/// yet for `import` to write into.
 fn args_for(database_url: &str, redis_url: &str, issuer_url: &str) -> Vec<String> {
     let db = url::Url::parse(database_url).expect("DATABASE_URL is a url");
 
@@ -218,7 +225,5 @@ fn args_for(database_url: &str, redis_url: &str, issuer_url: &str) -> Vec<String
         redis_url.to_owned(),
         "--auth-issuer".to_owned(),
         issuer_url.to_owned(),
-        "--file-storage-auto-create-bucket".to_owned(),
-        "false".to_owned(),
     ]
 }

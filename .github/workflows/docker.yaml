@@ -102,12 +102,36 @@ jobs:
           --health-interval 5s
           --health-timeout 5s
           --health-retries 20
+      # #339's own e2e suite is the first to make a real upload (importing a
+      # supplier invoice both stores and parses the file), so this is the
+      # first job that needs the object store at all. Same image and
+      # credentials as the local compose stack's own `rustfs` service. No
+      # `--health-cmd`: the image ships no shell utility a healthcheck could
+      # run, hence the polling "wait for rustfs" step below instead.
+      rustfs:
+        image: rustfs/rustfs:latest
+        env:
+          RUSTFS_ACCESS_KEY: rustfsadmin
+          RUSTFS_SECRET_KEY: rustfsadmin
+          RUSTFS_ADDRESS: ":9000"
+          RUSTFS_REGION: us-east-1
+        ports:
+          - 9000:9000
     env:
       DATABASE_URL: postgres://ferriskey:ferriskey@localhost:5432/mestier
       RATE_LIMIT_REDIS_URL: redis://localhost:6379
     steps:
       - name: checkout
         uses: actions/checkout@v5
+
+      - name: wait for rustfs
+        run: |
+          for i in $(seq 1 30); do
+            nc -z localhost 9000 && exit 0
+            sleep 1
+          done
+          echo "rustfs never opened its port" >&2
+          exit 1
 
       - name: install rust toolchain
         uses: dtolnay/rust-toolchain@master
