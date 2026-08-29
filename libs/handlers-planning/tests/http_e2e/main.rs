@@ -16,6 +16,7 @@
 
 mod harness;
 mod issuer;
+mod work_time;
 
 use chrono::{Duration, Utc};
 use serde_json::json;

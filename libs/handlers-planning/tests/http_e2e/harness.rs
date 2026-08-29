@@ -139,6 +139,28 @@ impl App {
         )
     }
 
+    /// Bare `member_id` in the path, deliberately no organization — the
+    /// shape #309 exists to guard: the caller's own membership is checked
+    /// against whichever organization the target member's seat actually
+    /// belongs to, not one taken from the URL.
+    pub fn work_time_url(&self, member_id: Uuid, suffix: &str) -> String {
+        format!(
+            "{}/api/v1/members/{member_id}/work-time{suffix}",
+            self.base_url
+        )
+    }
+
+    pub fn rhythm_url(&self, member_id: Uuid) -> String {
+        format!("{}/api/v1/members/{member_id}/rhythm", self.base_url)
+    }
+
+    pub fn work_slots_url(&self, member_id: Uuid, suffix: &str) -> String {
+        format!(
+            "{}/api/v1/members/{member_id}/work-slots{suffix}",
+            self.base_url
+        )
+    }
+
     /// The materialized occurrences of `recurrence_id`, oldest first — reads
     /// straight from the database rather than through the API, since the
     /// suite needs an occurrence's own id before it can address it by URL.
@@ -186,6 +208,10 @@ impl App {
             "DELETE FROM projects WHERE org_id = $1",
             // Cascades to `project_template_tasks`.
             "DELETE FROM project_templates WHERE org_id = $1",
+            "DELETE FROM work_slots WHERE org_id = $1",
+            // Cascades to `employee_rhythm_slots`.
+            "DELETE FROM employee_rhythms WHERE org_id = $1",
+            "DELETE FROM employees WHERE org_id = $1",
             "DELETE FROM organization_members WHERE organization_id = $1",
             "DELETE FROM organizations WHERE id = $1",
         ] {
@@ -292,6 +318,23 @@ async fn seed(pool: &PgPool) -> Fixture {
     .execute(pool)
     .await
     .expect("seed the assignee's own membership");
+
+    // A contract for the assignee: `PUT .../rhythm` resolves the rhythm
+    // through this profile (`EmployeeRepository::find_by_member_id`) and
+    // refuses `NotFound` for a member with none — the work-time suite needs
+    // a real one to exercise the owning organization's happy path.
+    let assignee_employee_id = Uuid::now_v7();
+    sqlx::query(
+        "INSERT INTO employees (id, org_id, member_id, hourly_rate_cents, weekly_contract_minutes) VALUES ($1, $2, $3, $4, $5)",
+    )
+    .bind(assignee_employee_id)
+    .bind(organization_id)
+    .bind(assignee_member_id)
+    .bind(2000)
+    .bind(2100)
+    .execute(pool)
+    .await
+    .expect("seed the assignee's employee profile");
 
     let task_id = Uuid::now_v7();
     let now = chrono::Utc::now();
@@ -405,6 +448,16 @@ fn args_for(database_url: &str, redis_url: &str, issuer_url: &str) -> Vec<String
         db.path().trim_start_matches('/').to_owned(),
         "--rate-limit-redis-url".to_owned(),
         redis_url.to_owned(),
+        // The rate limiter keys on client IP alone, and every test in this
+        // suite calls in from the same loopback address through the same
+        // Redis — so the sliding window is shared across every test in a
+        // run, and across a run and the one before it if run twice inside
+        // the same window. The production default of 120/minute is a
+        // limit on one real caller, not on an entire suite's worth of
+        // fixtures; a value that low turned a second consecutive run of a
+        // clean suite into a false failure.
+        "--rate-limit-per-minute".to_owned(),
+        "100000".to_owned(),
         "--auth-issuer".to_owned(),
         issuer_url.to_owned(),
         "--file-storage-auto-create-bucket".to_owned(),
