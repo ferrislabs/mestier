@@ -71,6 +71,16 @@ impl LocalPolicyEngine {
         LocalPolicyEngineBuilder::default()
     }
 
+    /// Every action name this engine was built with (#309): the map is
+    /// hand-maintained, and an entry no use case ever passes to
+    /// `policy::require` is a rule that does not run — a caller walks this
+    /// to assert each one is actually reachable, rather than duplicating
+    /// the list by hand where it would drift the moment `default_authorizer`
+    /// gains or loses an entry.
+    pub fn action_names(&self) -> impl Iterator<Item = &str> {
+        self.actions.keys().map(String::as_str)
+    }
+
     fn required_bits(&self, action: &Action) -> Option<i64> {
         self.actions.get(&action.name).copied()
     }
