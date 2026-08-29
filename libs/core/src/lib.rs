@@ -4,6 +4,7 @@ pub mod application;
 pub(crate) mod domain;
 pub mod infrastructure;
 
+pub use application::supplier_invoice::{ImportSupplierInvoiceOutcome, TotalsMismatch};
 pub use application::*;
 pub use domain::automation::connector::{
     AuthRequirement, AuthScheme, ConnectorCatalogue, ConnectorCatalogueError, ConnectorDescriptor,
@@ -35,6 +36,7 @@ pub use infrastructure::automation::webhook::{
 };
 pub use infrastructure::automation::worker::{WorkerSchedule, run_automation_worker};
 pub use infrastructure::realtime::EventHub;
+pub use infrastructure::supplier_invoice::facturx::FacturXParser;
 
 /// The rule that turns a salaried person's monthly cost into an hourly one.
 ///
@@ -170,7 +172,9 @@ pub use domain::{
     service_rate::commands::{CreateServiceRateCommand, UpdateServiceRateCommand},
     supplier_invoice::commands::{
         AllocateSupplierInvoiceLineCommand, ConfirmSupplierInvoiceCommand,
-        CreateSupplierInvoiceCommand, RejectSupplierInvoiceCommand, SupplierInvoiceLineCommand,
+        CreateSupplierInvoiceCommand, LineAllocationShare, RejectSupplierInvoiceCommand,
+        ReplaceSupplierInvoiceLineAllocationsCommand, SupplierInvoiceLineCommand,
+        UpdateSupplierInvoiceNotesCommand,
     },
     task::commands::{CreateTaskCommand, PatchTaskCommand},
     task::service::{resolve_task_window, validate_parent_depth, validate_reparenting},

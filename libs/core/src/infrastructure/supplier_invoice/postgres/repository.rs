@@ -3,7 +3,8 @@ use mestier_macros::repository;
 use sqlx::PgConnection;
 
 use crate::{
-    OrganizationId, SupplierInvoice, SupplierInvoiceId, SupplierInvoiceLine, SupplierInvoiceReview,
+    OrganizationId, SupplierInvoice, SupplierInvoiceId, SupplierInvoiceLine, SupplierInvoiceLineId,
+    SupplierInvoiceReview,
     domain::supplier_invoice::ports::SupplierInvoiceRepository,
     infrastructure::{
         postgres::{SharedTx, error::map_sqlx_error},
@@ -34,20 +35,20 @@ impl<'tx> SupplierInvoiceRepository for PgSupplierInvoiceRepository<'tx> {
             INSERT INTO supplier_invoices (
                 id, org_id, supplier_id, supplier_name, supplier_registration_number,
                 supplier_vat_number, number, issued_on, due_on, received_at, source,
-                status, currency, notes, net_cents, vat_breakdown, gross_cents,
-                deleted_at, created_at, updated_at
+                status, currency, source_file_key, source_file_mime_type, notes,
+                net_cents, vat_breakdown, gross_cents, deleted_at, created_at, updated_at
             )
             VALUES (
                 $1, $2, $3, $4, $5,
                 $6, $7, $8, $9, $10, $11,
-                CAST($12 AS text)::supplier_invoice_status, $13, $14, $15, $16, $17,
-                $18, $19, $20
+                CAST($12 AS text)::supplier_invoice_status, $13, $14, $15, $16,
+                $17, $18, $19, $20, $21, $22
             )
             RETURNING
                 id, org_id, supplier_id, supplier_name, supplier_registration_number,
                 supplier_vat_number, number, issued_on, due_on, received_at, source,
-                status::text AS "status!", currency, notes, net_cents, vat_breakdown,
-                gross_cents, deleted_at, created_at, updated_at
+                status::text AS "status!", currency, source_file_key, source_file_mime_type,
+                notes, net_cents, vat_breakdown, gross_cents, deleted_at, created_at, updated_at
             "#,
             invoice.id.0,
             invoice.organization_id.0,
@@ -62,6 +63,8 @@ impl<'tx> SupplierInvoiceRepository for PgSupplierInvoiceRepository<'tx> {
             invoice.source.as_str(),
             invoice.status.as_str(),
             invoice.currency,
+            invoice.source_file_key,
+            invoice.source_file_mime_type,
             invoice.notes,
             invoice.net_cents,
             vat_breakdown,
@@ -89,8 +92,8 @@ impl<'tx> SupplierInvoiceRepository for PgSupplierInvoiceRepository<'tx> {
             SELECT
                 id, org_id, supplier_id, supplier_name, supplier_registration_number,
                 supplier_vat_number, number, issued_on, due_on, received_at, source,
-                status::text AS "status!", currency, notes, net_cents, vat_breakdown,
-                gross_cents, deleted_at, created_at, updated_at
+                status::text AS "status!", currency, source_file_key, source_file_mime_type,
+                notes, net_cents, vat_breakdown, gross_cents, deleted_at, created_at, updated_at
             FROM supplier_invoices
             WHERE id = $1 AND deleted_at IS NULL
             "#,
@@ -122,8 +125,8 @@ impl<'tx> SupplierInvoiceRepository for PgSupplierInvoiceRepository<'tx> {
             SELECT
                 id, org_id, supplier_id, supplier_name, supplier_registration_number,
                 supplier_vat_number, number, issued_on, due_on, received_at, source,
-                status::text AS "status!", currency, notes, net_cents, vat_breakdown,
-                gross_cents, deleted_at, created_at, updated_at
+                status::text AS "status!", currency, source_file_key, source_file_mime_type,
+                notes, net_cents, vat_breakdown, gross_cents, deleted_at, created_at, updated_at
             FROM supplier_invoices
             WHERE org_id = $1 AND deleted_at IS NULL
             ORDER BY received_at DESC, id ASC
@@ -175,8 +178,8 @@ impl<'tx> SupplierInvoiceRepository for PgSupplierInvoiceRepository<'tx> {
             RETURNING
                 id, org_id, supplier_id, supplier_name, supplier_registration_number,
                 supplier_vat_number, number, issued_on, due_on, received_at, source,
-                status::text AS "status!", currency, notes, net_cents, vat_breakdown,
-                gross_cents, deleted_at, created_at, updated_at
+                status::text AS "status!", currency, source_file_key, source_file_mime_type,
+                notes, net_cents, vat_breakdown, gross_cents, deleted_at, created_at, updated_at
             "#,
             invoice.id.0,
             invoice.status.as_str(),
@@ -232,6 +235,31 @@ impl<'tx> SupplierInvoiceRepository for PgSupplierInvoiceRepository<'tx> {
         .map_err(map_sqlx_error)?;
 
         Ok(exists)
+    }
+
+    async fn find_line_by_id(
+        &mut self,
+        line_id: SupplierInvoiceLineId,
+    ) -> Result<Option<SupplierInvoiceLine>, CoreError> {
+        let mut tx = self.tx.lock().await;
+        let row = sqlx::query_as!(
+            SupplierInvoiceLineRow,
+            r#"
+            SELECT sil.id, sil.org_id, sil.supplier_invoice_id, sil.label, sil.quantity,
+                   sil.unit, sil.unit_price_cents, sil.line_total_cents,
+                   sil.vat_rate_basis_points, sil.position, sil.deleted_at, sil.created_at,
+                   sil.updated_at
+            FROM supplier_invoice_lines sil
+            JOIN supplier_invoices si ON si.id = sil.supplier_invoice_id
+            WHERE sil.id = $1 AND sil.deleted_at IS NULL AND si.deleted_at IS NULL
+            "#,
+            line_id.0,
+        )
+        .fetch_optional(&mut ***tx)
+        .await
+        .map_err(map_sqlx_error)?;
+
+        row.map(TryInto::try_into).transpose()
     }
 }
 

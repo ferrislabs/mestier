@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM supplier_invoice_line_allocations WHERE id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "bb98e33e35c44746219c29d7b369a1ab06f2720e95d160194cd7fc3f3602ab61"
+}

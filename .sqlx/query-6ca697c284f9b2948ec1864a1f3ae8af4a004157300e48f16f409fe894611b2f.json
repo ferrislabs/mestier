@@ -1,0 +1,94 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT sil.id, sil.org_id, sil.supplier_invoice_id, sil.label, sil.quantity,\n                   sil.unit, sil.unit_price_cents, sil.line_total_cents,\n                   sil.vat_rate_basis_points, sil.position, sil.deleted_at, sil.created_at,\n                   sil.updated_at\n            FROM supplier_invoice_lines sil\n            JOIN supplier_invoices si ON si.id = sil.supplier_invoice_id\n            WHERE sil.id = $1 AND sil.deleted_at IS NULL AND si.deleted_at IS NULL\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "org_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "supplier_invoice_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 3,
+        "name": "label",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "quantity",
+        "type_info": "Numeric"
+      },
+      {
+        "ordinal": 5,
+        "name": "unit",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 6,
+        "name": "unit_price_cents",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 7,
+        "name": "line_total_cents",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 8,
+        "name": "vat_rate_basis_points",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 9,
+        "name": "position",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 10,
+        "name": "deleted_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 11,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 12,
+        "name": "updated_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      false,
+      false,
+      true,
+      false,
+      true,
+      false,
+      false
+    ]
+  },
+  "hash": "6ca697c284f9b2948ec1864a1f3ae8af4a004157300e48f16f409fe894611b2f"
+}

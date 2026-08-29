@@ -33,6 +33,12 @@ pub struct CreateSupplierInvoiceCommand {
     pub source: SupplierInvoiceSource,
     pub currency: String,
     pub lines: Vec<SupplierInvoiceLineCommand>,
+    /// The stored original file this record was parsed from (#339) — both
+    /// `Some` or both `None`, enforced at the database
+    /// (`chk_supplier_invoices_source_file_pair`); a manually created
+    /// invoice passes `None` for both.
+    pub source_file_key: Option<String>,
+    pub source_file_mime_type: Option<String>,
 }
 
 /// Accepts a `Received` document as-is. Refused by
@@ -78,4 +84,38 @@ pub struct AllocateSupplierInvoiceLineCommand {
     /// Net of VAT, same sign as the target line's own `line_total_cents` —
     /// see the doc comment on `SupplierInvoiceLineAllocation::amount_cents`.
     pub amount_cents: i32,
+}
+
+/// Metadata-only edit (#339's `PATCH .../supplier-invoices/{id}`) — the
+/// document's own fields have no path to this command at all, only
+/// `notes` does. Same "our metadata, not the document" boundary
+/// `SupplierInvoiceReview` already draws for `confirm`/`reject`; this is
+/// the same edit with no status transition attached, for a reviewer who
+/// wants to leave or clear a note without accepting or refusing anything.
+#[derive(Debug, Clone)]
+pub struct UpdateSupplierInvoiceNotesCommand {
+    pub id: SupplierInvoiceId,
+    pub notes: Option<String>,
+}
+
+/// One project's share of a line, as part of a full replacement (#339's
+/// `PUT .../supplier-invoice-lines/{line_id}/allocations`) — mirrors
+/// `Task::assignments`: the body is the complete list for that line, not a
+/// delta, the same contract for the same reason.
+#[derive(Debug, Clone)]
+pub struct LineAllocationShare {
+    pub project_id: ProjectId,
+    pub amount_cents: i32,
+}
+
+#[derive(Debug, Clone)]
+pub struct ReplaceSupplierInvoiceLineAllocationsCommand {
+    pub organization_id: OrganizationId,
+    /// Carried alongside the line id for the same reason
+    /// `AllocateSupplierInvoiceLineCommand` carries it: the service
+    /// resolves the line through `SupplierInvoiceRepository::find_by_id`,
+    /// which loads a whole invoice, not a bare line.
+    pub supplier_invoice_id: SupplierInvoiceId,
+    pub supplier_invoice_line_id: SupplierInvoiceLineId,
+    pub allocations: Vec<LineAllocationShare>,
 }

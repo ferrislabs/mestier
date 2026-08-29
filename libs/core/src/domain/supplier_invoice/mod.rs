@@ -241,6 +241,16 @@ pub struct SupplierInvoice {
     pub source: SupplierInvoiceSource,
     pub status: SupplierInvoiceStatus,
     pub currency: String,
+    /// The original file this document was parsed from (#339) — "the file
+    /// is stored, not only parsed, the original is the legal record and
+    /// the parse is a derivation of it." `None` for a manually entered
+    /// invoice, which has no file behind it at all. Set once, at creation
+    /// — there is no setter on [`SupplierInvoiceReview`] for it, the same
+    /// way the document's other fields are immutable once persisted.
+    pub source_file_key: Option<String>,
+    /// Always `Some` exactly when `source_file_key` is — enforced at the
+    /// database (`chk_supplier_invoices_source_file_pair`), not just here.
+    pub source_file_mime_type: Option<String>,
     /// Our metadata about the document, not part of it — the one other
     /// field [`SupplierInvoiceReview`] is allowed to touch, alongside
     /// `status`.

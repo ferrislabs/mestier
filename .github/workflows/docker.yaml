@@ -146,7 +146,7 @@ jobs:
 
       - name: end-to-end tests
         run: |
-          for crate in handlers-field handlers-invoice handlers-quote handlers-reporting; do
+          for crate in handlers-field handlers-invoice handlers-purchase handlers-quote handlers-reporting; do
             cargo test -p "$crate" --test http_e2e --locked -- --ignored --test-threads=1
           done
 

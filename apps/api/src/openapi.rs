@@ -12,6 +12,7 @@ use handlers_invoice as invoice;
 use handlers_member as member;
 use handlers_organization as organization;
 use handlers_planning as planning;
+use handlers_purchase as purchase;
 use handlers_quote as quote;
 use handlers_reference as reference;
 use handlers_reporting as reporting;
@@ -130,6 +131,14 @@ impl Modify for SecurityAddon {
         invoice::project::billing_summary::handler,
         invoice::project::deposit::handler,
         invoice::project::final_invoice::handler,
+        purchase::supplier_invoice::import::handler,
+        purchase::supplier_invoice::list::handler,
+        purchase::supplier_invoice::get_one::handler,
+        purchase::supplier_invoice::update::handler,
+        purchase::supplier_invoice::confirm::handler,
+        purchase::supplier_invoice::reject::handler,
+        purchase::allocation::replace::handler,
+        purchase::allocation::project_costs::handler,
         reference::employee::list::handler,
         reference::employee::upsert_profile::handler,
         reference::employee::remove_profile::handler,
@@ -330,6 +339,18 @@ impl Modify for SecurityAddon {
         invoice::response::InvoiceBalanceResponse,
         invoice::response::CustomerOutstandingBalanceResponse,
         invoice::response::ProjectBillingSummaryResponse,
+        purchase::supplier_invoice::update::UpdateSupplierInvoiceRequest,
+        purchase::supplier_invoice::confirm::ConfirmSupplierInvoiceRequest,
+        purchase::supplier_invoice::reject::RejectSupplierInvoiceRequest,
+        purchase::allocation::replace::LineAllocationShareRequest,
+        purchase::allocation::replace::ReplaceLineAllocationsRequest,
+        purchase::response::SupplierInvoiceLineResponse,
+        purchase::response::SupplierInvoiceVatBreakdownLineResponse,
+        purchase::response::SupplierInvoiceResponse,
+        purchase::response::TotalsMismatchResponse,
+        purchase::response::ImportSupplierInvoiceResponse,
+        purchase::response::SupplierInvoiceLineAllocationResponse,
+        purchase::response::ProjectSupplierCostsResponse,
         member::member::create::CreateMemberRequest,
         member::member::update::UpdateMemberRequest,
         member::response::MemberResponse,
@@ -445,6 +466,7 @@ impl Modify for SecurityAddon {
         (name = "customers", description = "Customers and customer contexts management"),
         (name = "quotes", description = "Quotes and quote lines management"),
         (name = "invoices", description = "Invoices, credit notes and payments"),
+        (name = "purchasing", description = "Supplier invoices — import, review, and cost allocation to projects"),
         (name = "members", description = "Organization seats — free or occupied, no account required"),
         (name = "reference", description = "Reference cost catalog"),
         (name = "planning", description = "Team planning — tasks, assignments, working time and availability"),

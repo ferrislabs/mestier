@@ -19,6 +19,7 @@ use handlers_invoice as invoice;
 use handlers_member as member;
 use handlers_organization as organization;
 use handlers_planning as planning;
+use handlers_purchase as purchase;
 use handlers_quote as quote;
 use handlers_reference as reference;
 use handlers_reporting as reporting;
@@ -91,6 +92,7 @@ pub fn router(state: AppState) -> Result<Router, ApiError> {
         .merge(invoice::router(&state))
         .merge(member::router(&state))
         .merge(organization::router(&state))
+        .merge(purchase::router(&state))
         .merge(quote::router(&state))
         .merge(reporting::router(&state))
         .merge(planning::router(&state))

@@ -2,13 +2,15 @@ use common::CoreError;
 use mestier_macros::transactional;
 
 use crate::{
-    OrganizationId, ProjectId, SupplierInvoice, SupplierInvoiceId, SupplierInvoiceLineAllocation,
-    SupplierInvoiceSource,
+    OrganizationId, ProjectId, SupplierInvoice, SupplierInvoiceId, SupplierInvoiceLine,
+    SupplierInvoiceLineAllocation, SupplierInvoiceLineId, SupplierInvoiceSource,
     application::MestierUseCase,
     domain::supplier_invoice::{
         commands::{
             AllocateSupplierInvoiceLineCommand, ConfirmSupplierInvoiceCommand,
-            CreateSupplierInvoiceCommand, RejectSupplierInvoiceCommand, SupplierInvoiceLineCommand,
+            CreateSupplierInvoiceCommand, RejectSupplierInvoiceCommand,
+            ReplaceSupplierInvoiceLineAllocationsCommand, SupplierInvoiceLineCommand,
+            UpdateSupplierInvoiceNotesCommand,
         },
         ports::{
             SupplierInvoiceParseError, SupplierInvoiceParser, SupplierInvoiceRepository,
@@ -86,6 +88,14 @@ impl MestierUseCase {
         organization_id: OrganizationId,
         bytes: Vec<u8>,
         parser: &(impl SupplierInvoiceParser + Sync),
+        // Already uploaded by the caller (#339's handler, reusing the
+        // existing file storage service — see `libs/handlers-purchase`)
+        // before this use case ever runs: uploading is a side effect
+        // outside a domain transaction's job, and by the time bytes reach
+        // here the original is already durable regardless of what this
+        // call decides.
+        source_file_key: String,
+        source_file_mime_type: String,
     ) -> Result<ImportSupplierInvoiceOutcome, CoreError> {
         // Shadowed as `mut`: the macro injects an immutable binding, but the
         // duplicate check below needs `&mut self` on the repository ahead of
@@ -146,6 +156,8 @@ impl MestierUseCase {
                     vat_rate_basis_points: line.vat_rate_basis_points,
                 })
                 .collect(),
+            source_file_key: Some(source_file_key),
+            source_file_mime_type: Some(source_file_mime_type),
         };
 
         let mut service = SupplierInvoiceService::new(supplier_invoice_repository, emitter);
@@ -206,6 +218,45 @@ impl MestierUseCase {
     ) -> Result<SupplierInvoice, CoreError> {
         let mut service = SupplierInvoiceService::new(supplier_invoice_repository, emitter);
         service.reject(command).await
+    }
+
+    /// #339's metadata-only `PATCH` — `notes` alone, never the document's
+    /// own fields.
+    #[transactional(supplier_invoice, emitter)]
+    pub async fn update_supplier_invoice_notes(
+        &self,
+        command: UpdateSupplierInvoiceNotesCommand,
+    ) -> Result<SupplierInvoice, CoreError> {
+        let mut service = SupplierInvoiceService::new(supplier_invoice_repository, emitter);
+        service.update_notes(command).await
+    }
+
+    /// Resolves a bare line id to the line itself — #339's handler needs
+    /// this before it can build a
+    /// [`ReplaceSupplierInvoiceLineAllocationsCommand`], since the route
+    /// (CLAUDE.md: bare ids derive their organization from the loaded row)
+    /// carries only `supplier_invoice_line_id`.
+    #[transactional(supplier_invoice)]
+    pub async fn find_supplier_invoice_line(
+        &self,
+        id: SupplierInvoiceLineId,
+    ) -> Result<Option<SupplierInvoiceLine>, CoreError> {
+        // Shadowed as `mut` for the same reason `import_supplier_invoice`
+        // does: the macro injects an immutable binding.
+        let mut supplier_invoice_repository = supplier_invoice_repository;
+        supplier_invoice_repository.find_line_by_id(id).await
+    }
+
+    /// #339's full-replace `PUT .../supplier-invoice-lines/{line_id}/allocations`.
+    #[transactional(supplier_invoice, supplier_invoice_allocation, emitter)]
+    pub async fn replace_supplier_invoice_line_allocations(
+        &self,
+        command: ReplaceSupplierInvoiceLineAllocationsCommand,
+    ) -> Result<Vec<SupplierInvoiceLineAllocation>, CoreError> {
+        let mut service = SupplierInvoiceService::new(supplier_invoice_repository, emitter);
+        service
+            .replace_line_allocations(command, supplier_invoice_allocation_repository)
+            .await
     }
 
     /// #338: attributes part (or all) of a confirmed-or-not line's cost to
@@ -289,6 +340,8 @@ mod tests {
             source: SupplierInvoiceSource::FacturX,
             status: SupplierInvoiceStatus::Received,
             currency: "EUR".to_owned(),
+            source_file_key: None,
+            source_file_mime_type: None,
             notes: None,
             net_cents,
             vat_breakdown: vec![],
