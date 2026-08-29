@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT\n                id, org_id, number, kind::text AS \"kind!\", project_id, customer_id,\n                customer_context_id, status::text AS \"status!\", issued_at, due_at, notes,\n                operation_nature::text,\n                delivery_address_line1, delivery_address_line2, delivery_address_postal_code,\n                delivery_address_city, delivery_address_country,\n                net_cents, vat_breakdown, gross_cents, issuer_identity, source_invoice_id,\n                deleted_at, created_at, updated_at\n            FROM invoices\n            WHERE id = $1 AND deleted_at IS NULL\n            ",
+  "query": "\n            INSERT INTO invoices (\n                id, org_id, number, kind, project_id, customer_id, customer_context_id,\n                status, issued_at, due_at, notes, operation_nature,\n                delivery_address_line1, delivery_address_line2, delivery_address_postal_code,\n                delivery_address_city, delivery_address_country,\n                net_cents, vat_breakdown, gross_cents,\n                issuer_identity, source_invoice_id, deleted_at, created_at, updated_at\n            )\n            VALUES (\n                $1, $2, $3, CAST($4 AS text)::invoice_kind, $5, $6, $7,\n                CAST($8 AS text)::invoice_status, $9, $10, $11,\n                CAST($12 AS text)::invoice_operation_nature,\n                $13, $14, $15, $16, $17,\n                $18, $19, $20,\n                $21, $22, $23, $24, $25\n            )\n            RETURNING\n                id, org_id, number, kind::text AS \"kind!\", project_id, customer_id,\n                customer_context_id, status::text AS \"status!\", issued_at, due_at, notes,\n                operation_nature::text,\n                delivery_address_line1, delivery_address_line2, delivery_address_postal_code,\n                delivery_address_city, delivery_address_country,\n                net_cents, vat_breakdown, gross_cents, issuer_identity,\n                document_format, document_file_key, document_mime_type, document_generated_at,\n                source_invoice_id,\n                deleted_at, created_at, updated_at\n            ",
   "describe": {
     "columns": [
       {
@@ -110,28 +110,72 @@
       },
       {
         "ordinal": 21,
+        "name": "document_format",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 22,
+        "name": "document_file_key",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 23,
+        "name": "document_mime_type",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 24,
+        "name": "document_generated_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 25,
         "name": "source_invoice_id",
         "type_info": "Uuid"
       },
       {
-        "ordinal": 22,
+        "ordinal": 26,
         "name": "deleted_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 23,
+        "ordinal": 27,
         "name": "created_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 24,
+        "ordinal": 28,
         "name": "updated_at",
         "type_info": "Timestamptz"
       }
     ],
     "parameters": {
       "Left": [
-        "Uuid"
+        "Uuid",
+        "Uuid",
+        "Text",
+        "Text",
+        "Uuid",
+        "Uuid",
+        "Uuid",
+        "Text",
+        "Timestamptz",
+        "Timestamptz",
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Int4",
+        "Jsonb",
+        "Int4",
+        "Jsonb",
+        "Uuid",
+        "Timestamptz",
+        "Timestamptz",
+        "Timestamptz"
       ]
     },
     "nullable": [
@@ -158,9 +202,13 @@
       true,
       true,
       true,
+      true,
+      true,
+      true,
+      true,
       false,
       false
     ]
   },
-  "hash": "c628319e872e981185775872b22536dcfce294febeaa37f136dde2c63cbef791"
+  "hash": "6ca56ff5369f8b5e86119b2b091ab9406ef409675f61440d37dc572eba152770"
 }

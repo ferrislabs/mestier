@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            INSERT INTO invoices (\n                id, org_id, number, kind, project_id, customer_id, customer_context_id,\n                status, issued_at, due_at, notes, operation_nature,\n                delivery_address_line1, delivery_address_line2, delivery_address_postal_code,\n                delivery_address_city, delivery_address_country,\n                net_cents, vat_breakdown, gross_cents,\n                issuer_identity, source_invoice_id, deleted_at, created_at, updated_at\n            )\n            VALUES (\n                $1, $2, $3, CAST($4 AS text)::invoice_kind, $5, $6, $7,\n                CAST($8 AS text)::invoice_status, $9, $10, $11,\n                CAST($12 AS text)::invoice_operation_nature,\n                $13, $14, $15, $16, $17,\n                $18, $19, $20,\n                $21, $22, $23, $24, $25\n            )\n            RETURNING\n                id, org_id, number, kind::text AS \"kind!\", project_id, customer_id,\n                customer_context_id, status::text AS \"status!\", issued_at, due_at, notes,\n                operation_nature::text,\n                delivery_address_line1, delivery_address_line2, delivery_address_postal_code,\n                delivery_address_city, delivery_address_country,\n                net_cents, vat_breakdown, gross_cents, issuer_identity, source_invoice_id,\n                deleted_at, created_at, updated_at\n            ",
+  "query": "\n            SELECT\n                id, org_id, number, kind::text AS \"kind!\", project_id, customer_id,\n                customer_context_id, status::text AS \"status!\", issued_at, due_at, notes,\n                operation_nature::text,\n                delivery_address_line1, delivery_address_line2, delivery_address_postal_code,\n                delivery_address_city, delivery_address_country,\n                net_cents, vat_breakdown, gross_cents, issuer_identity,\n                document_format, document_file_key, document_mime_type, document_generated_at,\n                source_invoice_id,\n                deleted_at, created_at, updated_at\n            FROM invoices i\n            WHERE i.org_id = $1\n                AND i.deleted_at IS NULL\n                AND i.status = 'ISSUED'\n                -- Same reason as `list_outstanding_by_customer`: a credit\n                -- note is itself a row here and must never be read as a\n                -- document a customer owes on. In practice a credit note\n                -- always carries `due_at = NULL` (see\n                -- `InvoiceService::issue_credit_note`) so the next\n                -- condition already excludes it, but this says so\n                -- explicitly rather than relying on that as an accident.\n                AND i.kind != 'CREDIT_NOTE'\n                AND i.due_at IS NOT NULL\n                AND i.due_at < $2\n                AND (\n                    i.gross_cents\n                    - COALESCE(\n                        (SELECT SUM(p.amount_cents) FROM invoice_payments p\n                         WHERE p.invoice_id = i.id AND p.deleted_at IS NULL),\n                        0\n                    )\n                    - COALESCE(\n                        (SELECT SUM(c.gross_cents) FROM invoices c\n                         WHERE c.source_invoice_id = i.id AND c.deleted_at IS NULL\n                             AND c.status NOT IN ('DRAFT', 'CANCELLED')),\n                        0\n                    )\n                ) > 1\n            ORDER BY i.due_at ASC, i.id ASC\n            ",
   "describe": {
     "columns": [
       {
@@ -110,21 +110,41 @@
       },
       {
         "ordinal": 21,
+        "name": "document_format",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 22,
+        "name": "document_file_key",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 23,
+        "name": "document_mime_type",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 24,
+        "name": "document_generated_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 25,
         "name": "source_invoice_id",
         "type_info": "Uuid"
       },
       {
-        "ordinal": 22,
+        "ordinal": 26,
         "name": "deleted_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 23,
+        "ordinal": 27,
         "name": "created_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 24,
+        "ordinal": 28,
         "name": "updated_at",
         "type_info": "Timestamptz"
       }
@@ -132,29 +152,6 @@
     "parameters": {
       "Left": [
         "Uuid",
-        "Uuid",
-        "Text",
-        "Text",
-        "Uuid",
-        "Uuid",
-        "Uuid",
-        "Text",
-        "Timestamptz",
-        "Timestamptz",
-        "Text",
-        "Text",
-        "Text",
-        "Text",
-        "Text",
-        "Text",
-        "Text",
-        "Int4",
-        "Jsonb",
-        "Int4",
-        "Jsonb",
-        "Uuid",
-        "Timestamptz",
-        "Timestamptz",
         "Timestamptz"
       ]
     },
@@ -182,9 +179,13 @@
       true,
       true,
       true,
+      true,
+      true,
+      true,
+      true,
       false,
       false
     ]
   },
-  "hash": "0f962efca6394dcba846e3331a95f5adf37ea9d0e495d1a65aee9ea05c24a8f0"
+  "hash": "3dac9f92a914b53d9bc2c7990319dbdfbac0ec6a8e7e93668f12b44d74cb507a"
 }

@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            UPDATE invoices\n            SET number = $2,\n                status = 'ISSUED'::invoice_status,\n                issued_at = $3,\n                issuer_identity = $4,\n                updated_at = $5\n            WHERE id = $1 AND deleted_at IS NULL AND status = 'DRAFT'\n            RETURNING\n                id, org_id, number, kind::text AS \"kind!\", project_id, customer_id,\n                customer_context_id, status::text AS \"status!\", issued_at, due_at, notes,\n                operation_nature::text,\n                delivery_address_line1, delivery_address_line2, delivery_address_postal_code,\n                delivery_address_city, delivery_address_country,\n                net_cents, vat_breakdown, gross_cents, issuer_identity, source_invoice_id,\n                deleted_at, created_at, updated_at\n            ",
+  "query": "\n            SELECT\n                id, org_id, number, kind::text AS \"kind!\", project_id, customer_id,\n                customer_context_id, status::text AS \"status!\", issued_at, due_at, notes,\n                operation_nature::text,\n                delivery_address_line1, delivery_address_line2, delivery_address_postal_code,\n                delivery_address_city, delivery_address_country,\n                net_cents, vat_breakdown, gross_cents, issuer_identity,\n                document_format, document_file_key, document_mime_type, document_generated_at,\n                source_invoice_id,\n                deleted_at, created_at, updated_at\n            FROM invoices\n            WHERE project_id = $1 AND deleted_at IS NULL\n            ORDER BY created_at ASC, id ASC\n            ",
   "describe": {
     "columns": [
       {
@@ -110,32 +110,48 @@
       },
       {
         "ordinal": 21,
+        "name": "document_format",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 22,
+        "name": "document_file_key",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 23,
+        "name": "document_mime_type",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 24,
+        "name": "document_generated_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 25,
         "name": "source_invoice_id",
         "type_info": "Uuid"
       },
       {
-        "ordinal": 22,
+        "ordinal": 26,
         "name": "deleted_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 23,
+        "ordinal": 27,
         "name": "created_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 24,
+        "ordinal": 28,
         "name": "updated_at",
         "type_info": "Timestamptz"
       }
     ],
     "parameters": {
       "Left": [
-        "Uuid",
-        "Text",
-        "Timestamptz",
-        "Jsonb",
-        "Timestamptz"
+        "Uuid"
       ]
     },
     "nullable": [
@@ -162,9 +178,13 @@
       true,
       true,
       true,
+      true,
+      true,
+      true,
+      true,
       false,
       false
     ]
   },
-  "hash": "ef28c097bc12af2acd302830c43c86ee8175ca9e5742e5049ee4879a243f961b"
+  "hash": "bca394d0c0a3bd31550aedf3944f49e8436855ae80d81824b97da13618e2af47"
 }

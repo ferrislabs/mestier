@@ -1968,6 +1968,29 @@ dependencies = [
 ]
 
 [[package]]
+name = "en16931"
+version = "0.6.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e6e7bffd0720d850ef7d1bcdc32f52130a3248191890a32157cb30f183b76af7"
+dependencies = [
+ "chrono",
+ "rust_decimal",
+ "thiserror 2.0.18",
+]
+
+[[package]]
+name = "en16931-formats"
+version = "0.6.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "34ce4c943813da93a86ac2499028921aa74f350e272a5b9ab5e79d0beea247b3"
+dependencies = [
+ "en16931",
+ "roxmltree",
+ "rust_decimal",
+ "thiserror 2.0.18",
+]
+
+[[package]]
 name = "ena"
 version = "0.14.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3664,6 +3687,8 @@ dependencies = [
  "common",
  "cucumber",
  "discord",
+ "en16931",
+ "en16931-formats",
  "events",
  "lopdf",
  "mestier-core",
@@ -4782,6 +4807,15 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 1.0.109",
+]
+
+[[package]]
+name = "roxmltree"
+version = "0.21.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f1964b10c76125c36f8afe190065a4bf9a87bf324842c05701330bba9f1cacbb"
+dependencies = [
+ "memchr",
 ]
 
 [[package]]
