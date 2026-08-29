@@ -13,6 +13,7 @@ import {
 	SidebarMenuItem,
 	SidebarRail as SidebarResizeHandle,
 } from '#/components/ui/sidebar'
+import { usePermissions } from '#/hooks/use-permissions'
 import { buildOrgPath, splitOrgPath } from '#/modules/org-path'
 import { MODULES } from '#/modules/registry'
 import { resolveModule } from '#/modules/resolve-module'
@@ -37,6 +38,21 @@ export function ModuleNav({ organizationSlug, ...props }: ModuleNavProps) {
 			module.status !== 'hidden' && module.railPlacement === 'utility',
 	)
 
+	// One read for every section's `requiredPermission` at once, rather than
+	// a `useHasPermission` call per section: that would call a hook a
+	// varying number of times across renders, which React disallows.
+	// Absent while the read is still loading — a section gated by a bit is
+	// hidden by default, the same call `usePermissions` itself makes.
+	const { data: permissionsData, isSuccess: permissionsLoaded } =
+		usePermissions()
+	const grantedPermissions = permissionsData?.data.permissions ?? []
+	const visibleSections = activeModule.sections.filter(
+		(section) =>
+			!section.requiredPermission ||
+			(permissionsLoaded &&
+				grantedPermissions.includes(section.requiredPermission)),
+	)
+
 	return (
 		<Sidebar collapsible="icon" {...props}>
 			<SidebarHeader className="pb-3">
@@ -56,7 +72,7 @@ export function ModuleNav({ organizationSlug, ...props }: ModuleNavProps) {
 			<SidebarContent>
 				<SidebarGroup>
 					<SidebarMenu>
-						{activeModule.sections.map((section) => (
+						{visibleSections.map((section) => (
 							<NavEntry
 								key={section.id}
 								target={section}

@@ -53,6 +53,39 @@ impl Permissions {
     pub const fn bits(self) -> i64 {
         self.0
     }
+
+    /// Every named bit, paired with its own constant — the single source
+    /// both the test suite's pairwise-disjointness check and #307's "what
+    /// can this caller do" read off, so a ninth bit added later needs to
+    /// be listed here exactly once to show up in both places.
+    pub const NAMED: &[(&str, Permissions)] = &[
+        ("MANAGE_ORG", Permissions::MANAGE_ORG),
+        ("MANAGE_MEMBERS", Permissions::MANAGE_MEMBERS),
+        ("MANAGE_ROLES", Permissions::MANAGE_ROLES),
+        ("MANAGE_CHANNELS", Permissions::MANAGE_CHANNELS),
+        ("MANAGE_WEBHOOKS", Permissions::MANAGE_WEBHOOKS),
+        ("VIEW_CHANNEL", Permissions::VIEW_CHANNEL),
+        ("SEND_MESSAGES", Permissions::SEND_MESSAGES),
+        ("VIEW_PLANNING", Permissions::VIEW_PLANNING),
+        ("MANAGE_PLANNING", Permissions::MANAGE_PLANNING),
+        ("VIEW_COST", Permissions::VIEW_COST),
+        ("MANAGE_COST", Permissions::MANAGE_COST),
+        ("VIEW_REPORTS", Permissions::VIEW_REPORTS),
+        ("MANAGE_CUSTOMERS", Permissions::MANAGE_CUSTOMERS),
+        ("MANAGE_QUOTES", Permissions::MANAGE_QUOTES),
+        ("MANAGE_REFERENCE", Permissions::MANAGE_REFERENCE),
+    ];
+
+    /// The names of every bit `self` carries — #307's "the caller's
+    /// permissions, available anywhere" reads exactly this, over the HTTP
+    /// boundary, to decide what to hide rather than gray out.
+    pub fn granted_names(self) -> Vec<&'static str> {
+        Permissions::NAMED
+            .iter()
+            .filter(|(_, bit)| self.contains(*bit))
+            .map(|(name, _)| *name)
+            .collect()
+    }
 }
 
 impl BitOr for Permissions {
@@ -246,24 +279,10 @@ mod tests {
     /// chat bits above already run five times over — past the point that
     /// duplication was buying anything, so this checks every named bit
     /// against every other one instead of writing an eighth near-identical
-    /// function.
-    const NAMED_BITS: &[(&str, Permissions)] = &[
-        ("MANAGE_ORG", Permissions::MANAGE_ORG),
-        ("MANAGE_MEMBERS", Permissions::MANAGE_MEMBERS),
-        ("MANAGE_ROLES", Permissions::MANAGE_ROLES),
-        ("MANAGE_CHANNELS", Permissions::MANAGE_CHANNELS),
-        ("MANAGE_WEBHOOKS", Permissions::MANAGE_WEBHOOKS),
-        ("VIEW_CHANNEL", Permissions::VIEW_CHANNEL),
-        ("SEND_MESSAGES", Permissions::SEND_MESSAGES),
-        ("VIEW_PLANNING", Permissions::VIEW_PLANNING),
-        ("MANAGE_PLANNING", Permissions::MANAGE_PLANNING),
-        ("VIEW_COST", Permissions::VIEW_COST),
-        ("MANAGE_COST", Permissions::MANAGE_COST),
-        ("VIEW_REPORTS", Permissions::VIEW_REPORTS),
-        ("MANAGE_CUSTOMERS", Permissions::MANAGE_CUSTOMERS),
-        ("MANAGE_QUOTES", Permissions::MANAGE_QUOTES),
-        ("MANAGE_REFERENCE", Permissions::MANAGE_REFERENCE),
-    ];
+    /// function. `Permissions::NAMED` itself now also backs #307's "what can
+    /// this caller do" read, so this test doubles as that list's own
+    /// disjointness check.
+    const NAMED_BITS: &[(&str, Permissions)] = Permissions::NAMED;
 
     #[test]
     fn business_permission_bits_have_stable_values() {
@@ -292,5 +311,22 @@ mod tests {
         for (name, bit) in NAMED_BITS {
             assert!(Permissions::ALL.contains(*bit), "ALL is missing {name}");
         }
+    }
+
+    #[test]
+    fn granted_names_lists_only_the_bits_actually_held() {
+        let combined = Permissions::VIEW_REPORTS | Permissions::VIEW_PLANNING;
+
+        let names = combined.granted_names();
+
+        assert_eq!(names.len(), 2);
+        assert!(names.contains(&"VIEW_REPORTS"));
+        assert!(names.contains(&"VIEW_PLANNING"));
+        assert!(!names.contains(&"VIEW_COST"));
+    }
+
+    #[test]
+    fn granted_names_is_empty_for_none() {
+        assert!(Permissions::NONE.granted_names().is_empty());
     }
 }

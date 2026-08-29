@@ -1,11 +1,65 @@
-import { render, screen } from '@testing-library/react'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { render as rtlRender, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import type { ReactNode } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import {
+	ActiveOrganizationProvider,
+	OrganizationListProvider,
+} from '#/hooks/use-active-organization'
 import {
 	type TaskListRowVM,
 	TaskListUI,
 	type TaskListUIProps,
 } from '#/pages/planning/ui/task-list-ui'
+
+const ORGANIZATION = { id: 'org-1', name: 'Atelier Bois & Co', slug: 'atelier' }
+
+/**
+ * `TaskListUI` renders its "Nouvelle tâche" action behind `RequirePermission`
+ * (#307), which needs an active organization and a resolved permission read
+ * — grants every bit by default since none of these tests exercise gating
+ * itself (covered by `require-permission.test.tsx`).
+ */
+function installFakePermissionsApi() {
+	const fakeApi = {
+		get(path: string) {
+			const queryKey = [{ _id: path }]
+			return {
+				queryKey,
+				queryOptions: {
+					queryKey,
+					queryFn: async () => ({
+						data: { permissions: ['MANAGE_PLANNING'] },
+						pagination: null,
+					}),
+				},
+			}
+		},
+		mutation() {
+			throw new Error('unmocked mutation')
+		},
+	}
+
+	// biome-ignore lint/suspicious/noExplicitAny: test-only fake, shape matches TanstackQueryApiClient's used surface
+	;(window as any).tanstackApi = fakeApi
+}
+
+function render(ui: ReactNode) {
+	installFakePermissionsApi()
+	const queryClient = new QueryClient({
+		defaultOptions: { queries: { retry: false } },
+	})
+	return rtlRender(
+		<QueryClientProvider client={queryClient}>
+			<OrganizationListProvider organizations={[ORGANIZATION]}>
+				<ActiveOrganizationProvider activeOrganization={ORGANIZATION}>
+					{ui}
+				</ActiveOrganizationProvider>
+			</OrganizationListProvider>
+		</QueryClientProvider>,
+	)
+}
 
 const ROOT_WITH_CHILDREN: TaskListRowVM = {
 	id: 'root-1',

@@ -15,6 +15,7 @@ import {
 	getPaginationViewModel,
 	useDataView,
 } from '#/components/data-view'
+import { RequirePermission } from '#/components/require-permission'
 import {
 	AlertDialog,
 	AlertDialogAction,
@@ -203,12 +204,14 @@ export function QuoteListUI({
 							<RefreshCw />
 							Actualiser
 						</Button>
-						<Button asChild type="button">
-							<Link to={buildOrgPath(organizationSlug, '/crm/quotes/new')}>
-								<Plus />
-								Nouveau devis
-							</Link>
-						</Button>
+						<RequirePermission permission="MANAGE_QUOTES">
+							<Button asChild type="button">
+								<Link to={buildOrgPath(organizationSlug, '/crm/quotes/new')}>
+									<Plus />
+									Nouveau devis
+								</Link>
+							</Button>
+						</RequirePermission>
 					</div>
 				}
 			/>
@@ -310,12 +313,14 @@ export function QuoteListUI({
 								Réinitialiser la vue
 							</Button>
 						) : (
-							<Button asChild type="button">
-								<Link to={buildOrgPath(organizationSlug, '/crm/quotes/new')}>
-									<Plus />
-									Nouveau devis
-								</Link>
-							</Button>
+							<RequirePermission permission="MANAGE_QUOTES">
+								<Button asChild type="button">
+									<Link to={buildOrgPath(organizationSlug, '/crm/quotes/new')}>
+										<Plus />
+										Nouveau devis
+									</Link>
+								</Button>
+							</RequirePermission>
 						)}
 					</div>
 				) : (

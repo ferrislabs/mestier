@@ -26,6 +26,7 @@ import {
 	useSubtasks,
 	useTask,
 } from '#/hooks/use-tasks'
+import { mutationErrorMessage } from '#/lib/api-error'
 import {
 	canLoadMoreComments,
 	canLoadOlderComments,
@@ -698,6 +699,5 @@ function sheetTitle(mode: 'create' | 'edit', isSubtask: boolean): string {
 }
 
 function errorMessage(error: unknown): string {
-	if (error instanceof Error) return error.message
-	return "L'enregistrement a échoué. Réessayez."
+	return mutationErrorMessage(error) ?? "L'enregistrement a échoué. Réessayez."
 }

@@ -14,6 +14,15 @@ pub struct MemberPath {
     pub member_id: MemberId,
 }
 
+/// The caller's own aggregated permissions in one organization (#307) —
+/// `me`, never a member id, because a caller must never be able to read
+/// anyone else's bits through this route by supplying a different id.
+#[derive(TypedPath, Deserialize)]
+#[typed_path("/api/v1/organizations/{organization_id}/members/me/permissions")]
+pub struct MyPermissionsPath {
+    pub organization_id: OrganizationId,
+}
+
 #[derive(TypedPath, Deserialize)]
 #[typed_path("/api/v1/organizations/{organization_id}/invitations")]
 pub struct InvitationsPath {

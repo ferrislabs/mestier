@@ -101,6 +101,16 @@ pub struct CreatedInvitationResponse {
     pub token: String,
 }
 
+/// The caller's own granted permission bits, by name (#307) — a plain list
+/// rather than one boolean field per bit, so a bit added later shows up
+/// here without a schema change on this response. See
+/// `mestier_core::domain::role::Permissions::NAMED` for where the set of
+/// possible names comes from.
+#[derive(Debug, Clone, PartialEq, Serialize, ToSchema)]
+pub struct MyPermissionsResponse {
+    pub permissions: Vec<String>,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
