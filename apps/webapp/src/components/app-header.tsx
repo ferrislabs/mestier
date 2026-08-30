@@ -22,7 +22,11 @@ export function AppHeader() {
 	const auth = useAuth()
 	const location = useLocation()
 	const { activeOrganization } = useActiveOrganization()
-	const activeModule = resolveModule(splitOrgPath(location.pathname).path)
+	const path = splitOrgPath(location.pathname).path
+	const activeModule = resolveModule(path)
+	// No left rail on the homepage (see `_app.o.$organizationSlug.tsx`) — its
+	// mobile trigger would just open nothing.
+	const isHome = path === '/'
 	const profile = auth.user?.profile
 	const displayName =
 		profile?.name ||
@@ -35,7 +39,7 @@ export function AppHeader() {
 	return (
 		<header className="sticky top-0 z-20 flex h-(--app-header-height) shrink-0 items-center gap-3 bg-card px-3 md:px-6">
 			{/* Sur mobile le rail est un panneau : il lui faut un déclencheur. */}
-			<SidebarTrigger className="-ml-1 md:hidden" />
+			{isHome ? null : <SidebarTrigger className="-ml-1 md:hidden" />}
 
 			<AppBreadcrumb />
 
