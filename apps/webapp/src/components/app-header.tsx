@@ -1,8 +1,9 @@
-import { useLocation } from '@tanstack/react-router'
+import { Link, useLocation } from '@tanstack/react-router'
 import { Bell, LogOut, User } from 'lucide-react'
 import { useAuth } from 'react-oidc-context'
 
 import { AppBreadcrumb } from '#/components/app-breadcrumb'
+import { MestierAppIcon } from '#/components/brand/mestier-logo'
 import { ModuleLauncher } from '#/components/module-launcher'
 import { Button } from '#/components/ui/button'
 import {
@@ -15,7 +16,7 @@ import {
 } from '#/components/ui/dropdown-menu'
 import { SidebarTrigger } from '#/components/ui/sidebar'
 import { useActiveOrganization } from '#/hooks/use-active-organization'
-import { splitOrgPath } from '#/modules/org-path'
+import { buildOrgPath, splitOrgPath } from '#/modules/org-path'
 import { resolveModule } from '#/modules/resolve-module'
 
 export function AppHeader() {
@@ -38,8 +39,23 @@ export function AppHeader() {
 
 	return (
 		<header className="sticky top-0 z-20 flex h-(--app-header-height) shrink-0 items-center gap-3 bg-card px-3 md:px-6">
-			{/* Sur mobile le rail est un panneau : il lui faut un déclencheur. */}
-			{isHome ? null : <SidebarTrigger className="-ml-1 md:hidden" />}
+			{isHome ? (
+				// No left rail on the homepage — its brand mark (`ModuleNav`'s own
+				// `SidebarHeader`) goes missing with it, so the header carries it
+				// here instead of leaving the app unbranded on its own front door.
+				<Link
+					to={buildOrgPath(activeOrganization.slug, '/')}
+					className="flex items-center gap-2"
+				>
+					<MestierAppIcon className="size-8 shrink-0 rounded-lg" />
+					<span className="hidden text-base font-medium text-foreground sm:inline">
+						Mestier
+					</span>
+				</Link>
+			) : (
+				// Sur mobile le rail est un panneau : il lui faut un déclencheur.
+				<SidebarTrigger className="-ml-1 md:hidden" />
+			)}
 
 			<AppBreadcrumb />
 
