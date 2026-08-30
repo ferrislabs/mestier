@@ -367,3 +367,80 @@ async fn creating_a_role_with_an_unknown_permission_name_is_rejected() {
 
     app.cleanup().await;
 }
+
+/// The documented gap this PR closes: assigning a role has always had a
+/// counterpart to undo it, and unassigning a role the member never held is
+/// not an error either — symmetric with `assign_role`'s own `ON CONFLICT DO
+/// NOTHING`.
+#[tokio::test]
+#[ignore = "requires live postgres and redis"]
+async fn unassigning_a_role_removes_it_from_the_members_role_ids() {
+    let app = harness::start().await;
+    let client = reqwest::Client::new();
+
+    let created: serde_json::Value = client
+        .post(app.url(&format!("/organizations/{}/roles", app.organization_id)))
+        .bearer_auth(&app.token)
+        .json(&serde_json::json!({
+            "name": "foreman",
+            "permissions": ["VIEW_PLANNING"],
+        }))
+        .send()
+        .await
+        .expect("the api answers the create call")
+        .json()
+        .await
+        .expect("the answer is json");
+    let role_id = created["data"]["id"]
+        .as_str()
+        .expect("the created role has an id")
+        .to_owned();
+
+    let assigned = client
+        .post(app.url(&format!("/members/{}/roles", app.other_member_id)))
+        .bearer_auth(&app.token)
+        .json(&serde_json::json!({ "role_id": role_id }))
+        .send()
+        .await
+        .expect("the api answers the assign call");
+    assert_eq!(assigned.status(), 204, "assigning a role succeeds");
+
+    let unassigned = client
+        .delete(app.url(&format!("/members/{}/roles/{role_id}", app.other_member_id)))
+        .bearer_auth(&app.token)
+        .send()
+        .await
+        .expect("the api answers the unassign call");
+    assert_eq!(unassigned.status(), 204, "unassigning a held role succeeds");
+
+    let after: serde_json::Value = client
+        .get(app.url(&format!("/members/{}/roles", app.other_member_id)))
+        .bearer_auth(&app.token)
+        .send()
+        .await
+        .expect("the api answers the list call")
+        .json()
+        .await
+        .expect("the answer is json");
+    assert_eq!(
+        after["data"]["role_ids"],
+        serde_json::json!([]),
+        "the unassigned role must no longer show up: {after}"
+    );
+
+    // Idempotent: unassigning a role the member no longer holds is still a
+    // success, symmetric with `assign_role`'s `ON CONFLICT DO NOTHING`.
+    let unassigned_again = client
+        .delete(app.url(&format!("/members/{}/roles/{role_id}", app.other_member_id)))
+        .bearer_auth(&app.token)
+        .send()
+        .await
+        .expect("the api answers the unassign call");
+    assert_eq!(
+        unassigned_again.status(),
+        204,
+        "unassigning an already-unheld role is not an error"
+    );
+
+    app.cleanup().await;
+}

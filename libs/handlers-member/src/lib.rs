@@ -31,6 +31,7 @@ pub fn router(state: &AppState) -> Router<AppState> {
         .typed_delete(role::delete::handler)
         .typed_get(role::list_for_member::handler)
         .typed_post(role::assign::handler)
+        .typed_delete(role::unassign::handler)
         .layer(from_fn_with_state(state.clone(), rate_limit_middleware))
         .layer(from_fn_with_state(state.clone(), auth_middleware))
 }

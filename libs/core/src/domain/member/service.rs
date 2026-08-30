@@ -11,7 +11,8 @@ use crate::{
         member::{
             Member, MemberId, MemberWithAccount,
             commands::{
-                AddMemberCommand, AssignRoleCommand, CreateMemberCommand, UpdateMemberCommand,
+                AddMemberCommand, AssignRoleCommand, CreateMemberCommand, UnassignRoleCommand,
+                UpdateMemberCommand,
             },
             ports::MemberRepository,
         },
@@ -344,6 +345,37 @@ where
 
         self.member_repository
             .assign_role(command.member_id, command.role_id)
+            .await
+    }
+
+    /// Symmetric with [`Self::assign_role`], down to the permission
+    /// boundary: removing a role is gated by the same `role.assign` action
+    /// (`MANAGE_ROLES`), not a separate one — see `default_authorizer`.
+    #[tracing::instrument(skip(self), fields(member_id = %command.member_id.0, role_id = %command.role_id.0), err)]
+    pub async fn unassign_role(&mut self, command: UnassignRoleCommand) -> Result<(), CoreError> {
+        let member = self
+            .member_repository
+            .find_by_id(command.member_id)
+            .await?
+            .ok_or(CoreError::NotFound)?;
+
+        let actor = policy::enrich_for_organization(
+            command.actor,
+            member.organization_id,
+            &mut self.member_repository,
+            &mut self.role_repository,
+        )
+        .await?;
+        policy::require(
+            &self.authz,
+            &actor,
+            "role.assign",
+            Resource::new("organization", member.organization_id.0.to_string()),
+        )
+        .await?;
+
+        self.member_repository
+            .unassign_role(command.member_id, command.role_id)
             .await
     }
 
@@ -1652,6 +1684,45 @@ mod tests {
         );
         service
             .assign_role(AssignRoleCommand {
+                actor: Subject::system(),
+                member_id: mid,
+                role_id: rid,
+            })
+            .await
+            .unwrap();
+    }
+
+    #[tokio::test]
+    async fn unassign_role_calls_repo() {
+        let organization_id = org_id();
+        let mid = MemberId(Uuid::new_v4());
+        let rid = RoleId(Uuid::new_v4());
+
+        let mut member_repository = MockMemberRepository::new();
+        member_repository
+            .expect_find_by_id()
+            .with(eq(mid))
+            .times(1)
+            .returning(move |_| {
+                let m = member(mid, organization_id);
+                Box::pin(async move { Ok(Some(m)) })
+            });
+        member_repository
+            .expect_unassign_role()
+            .with(eq(mid), eq(rid))
+            .times(1)
+            .returning(|_, _| Box::pin(async { Ok(()) }));
+        let mut authz = MockAuthorizer::new();
+        allow_once(&mut authz);
+
+        let mut service = MemberService::new(
+            member_repository,
+            MockRoleRepository::new(),
+            MockUserRepository::new(),
+            authz,
+        );
+        service
+            .unassign_role(UnassignRoleCommand {
                 actor: Subject::system(),
                 member_id: mid,
                 role_id: rid,

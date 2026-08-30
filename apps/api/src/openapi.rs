@@ -106,6 +106,7 @@ impl Modify for SecurityAddon {
         member::role::delete::handler,
         member::role::list_for_member::handler,
         member::role::assign::handler,
+        member::role::unassign::handler,
         organization::create::handler,
         organization::list::handler,
         organization::list_mine::handler,

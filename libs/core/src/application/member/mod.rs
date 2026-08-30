@@ -9,7 +9,8 @@ use crate::{
         member::{
             Member, MemberId, MemberWithAccount,
             commands::{
-                AddMemberCommand, AssignRoleCommand, CreateMemberCommand, UpdateMemberCommand,
+                AddMemberCommand, AssignRoleCommand, CreateMemberCommand, UnassignRoleCommand,
+                UpdateMemberCommand,
             },
             events::MemberRemoved,
             ports::MemberRepository,
@@ -122,6 +123,13 @@ impl MestierUseCase {
         let mut service =
             MemberService::new(member_repository, role_repository, user_repository, authz);
         service.assign_role(command).await
+    }
+
+    #[transactional(member, role, user, authz)]
+    pub async fn unassign_role(&self, command: UnassignRoleCommand) -> Result<(), CoreError> {
+        let mut service =
+            MemberService::new(member_repository, role_repository, user_repository, authz);
+        service.unassign_role(command).await
     }
 
     #[transactional(member, role, user, authz)]
