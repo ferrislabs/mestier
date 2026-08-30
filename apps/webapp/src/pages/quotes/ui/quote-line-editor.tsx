@@ -5,8 +5,8 @@ import {
 	CollapsibleContent,
 	CollapsibleTrigger,
 } from '#/components/ui/collapsible'
+import { Field } from '#/components/ui/field'
 import { Input } from '#/components/ui/input'
-import { Label } from '#/components/ui/label'
 import {
 	Select,
 	SelectContent,
@@ -132,7 +132,11 @@ export function QuoteLineEditor({
 				<div className="space-y-5 border-t px-4 py-4">
 					{/* What is being sold. */}
 					<div className="grid gap-4 md:grid-cols-2">
-						<Field label="Catalogue" htmlFor={`catalog-${line.clientId}`}>
+						<Field
+							label="Catalogue"
+							htmlFor={`catalog-${line.clientId}`}
+							size="compact"
+						>
 							<Select
 								value={line.catalogItemId || 'custom'}
 								onValueChange={(value) =>
@@ -177,7 +181,11 @@ export function QuoteLineEditor({
 							) : null}
 						</Field>
 
-						<Field label="Prestation" htmlFor={`label-${line.clientId}`}>
+						<Field
+							label="Prestation"
+							htmlFor={`label-${line.clientId}`}
+							size="compact"
+						>
 							<Input
 								id={`label-${line.clientId}`}
 								value={line.label}
@@ -197,7 +205,11 @@ export function QuoteLineEditor({
 								: 'sm:grid-cols-[1fr_1fr_1fr_auto]',
 						)}
 					>
-						<Field label="Quantité" htmlFor={`quantity-${line.clientId}`}>
+						<Field
+							label="Quantité"
+							htmlFor={`quantity-${line.clientId}`}
+							size="compact"
+						>
 							<Input
 								id={`quantity-${line.clientId}`}
 								inputMode="decimal"
@@ -205,13 +217,17 @@ export function QuoteLineEditor({
 								onChange={(event) => onChange({ quantity: event.target.value })}
 							/>
 						</Field>
-						<Field label="Unité">
+						<Field label="Unité" htmlFor={null} size="compact">
 							<UnitSelect
 								value={line.unit}
 								onChange={(unit) => onChange({ unit })}
 							/>
 						</Field>
-						<Field label="Prix unitaire" htmlFor={`price-${line.clientId}`}>
+						<Field
+							label="Prix unitaire"
+							htmlFor={`price-${line.clientId}`}
+							size="compact"
+						>
 							<Input
 								id={`price-${line.clientId}`}
 								inputMode="decimal"
@@ -223,7 +239,11 @@ export function QuoteLineEditor({
 							/>
 						</Field>
 						{vatEnabled ? (
-							<Field label="TVA" htmlFor={`vat-${line.clientId}`}>
+							<Field
+								label="TVA"
+								htmlFor={`vat-${line.clientId}`}
+								size="compact"
+							>
 								<VatRateField
 									id={`vat-${line.clientId}`}
 									valueBp={line.vatRateBp}
@@ -241,7 +261,11 @@ export function QuoteLineEditor({
 
 					{/* Everything the price does not say. */}
 					<div className="grid gap-4 lg:grid-cols-2">
-						<Field label="Note" htmlFor={`notes-${line.clientId}`}>
+						<Field
+							label="Note"
+							htmlFor={`notes-${line.clientId}`}
+							size="compact"
+						>
 							<Textarea
 								id={`notes-${line.clientId}`}
 								rows={5}
@@ -251,7 +275,7 @@ export function QuoteLineEditor({
 								placeholder="Accès, contraintes de projet, matériaux imposés, tout ce qui explique le prix"
 							/>
 						</Field>
-						<Field label="Photos">
+						<Field label="Photos" htmlFor={null} size="compact">
 							<PhotoStrip
 								photos={photos}
 								isUploading={isUploading}
@@ -327,23 +351,6 @@ function VatRateField({
 					placeholder="Taux en %"
 				/>
 			) : null}
-		</div>
-	)
-}
-
-interface FieldProps {
-	label: string
-	htmlFor?: string
-	children: React.ReactNode
-}
-
-function Field({ label, htmlFor, children }: FieldProps) {
-	return (
-		<div className="space-y-1.5">
-			<Label htmlFor={htmlFor} className="text-xs text-muted-foreground">
-				{label}
-			</Label>
-			{children}
 		</div>
 	)
 }

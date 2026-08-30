@@ -34,8 +34,8 @@ import {
 	DropdownMenuSeparator,
 	DropdownMenuTrigger,
 } from '#/components/ui/dropdown-menu'
+import { Field } from '#/components/ui/field'
 import { Input } from '#/components/ui/input'
-import { Label } from '#/components/ui/label'
 import {
 	Select,
 	SelectContent,
@@ -293,8 +293,7 @@ export function CustomerListUI({
 								description="Ces champs identifient le client dans le fichier."
 							>
 								<div className="grid gap-4">
-									<div className="flex flex-col gap-2">
-										<Label htmlFor="customer-status">Statut CRM</Label>
+									<Field label="Statut CRM" htmlFor="customer-status">
 										<Select
 											value={draft.status}
 											onValueChange={(status) =>
@@ -317,12 +316,12 @@ export function CustomerListUI({
 												<SelectItem value="CLIENT">Client</SelectItem>
 											</SelectContent>
 										</Select>
-									</div>
+									</Field>
 									{draft.status === 'PROSPECT' ? (
-										<div className="flex flex-col gap-2">
-											<Label htmlFor="customer-pipeline-stage">
-												Étape pipeline
-											</Label>
+										<Field
+											label="Étape pipeline"
+											htmlFor="customer-pipeline-stage"
+										>
 											<Select
 												value={draft.pipelineStage}
 												onValueChange={(pipelineStage) =>
@@ -349,15 +348,19 @@ export function CustomerListUI({
 													))}
 												</SelectContent>
 											</Select>
-										</div>
+										</Field>
 									) : null}
 								</div>
-								<Field
-									label="Nom ou raison sociale"
-									value={draft.name}
-									onChange={(name) => setDraft((v) => ({ ...v, name }))}
-									required
-								/>
+								<Field label="Nom ou raison sociale" htmlFor="customer-name">
+									<Input
+										id="customer-name"
+										required
+										value={draft.name}
+										onChange={(event) =>
+											setDraft((v) => ({ ...v, name: event.target.value }))
+										}
+									/>
+								</Field>
 							</FormSection>
 
 							<FormSection
@@ -365,17 +368,25 @@ export function CustomerListUI({
 								description="Renseignez ce qui est disponible aujourd'hui."
 							>
 								<div className="grid gap-4 sm:grid-cols-2">
-									<Field
-										label="Email"
-										type="email"
-										value={draft.email}
-										onChange={(email) => setDraft((v) => ({ ...v, email }))}
-									/>
-									<Field
-										label="Téléphone"
-										value={draft.phone}
-										onChange={(phone) => setDraft((v) => ({ ...v, phone }))}
-									/>
+									<Field label="Email" htmlFor="customer-email">
+										<Input
+											id="customer-email"
+											type="email"
+											value={draft.email}
+											onChange={(event) =>
+												setDraft((v) => ({ ...v, email: event.target.value }))
+											}
+										/>
+									</Field>
+									<Field label="Téléphone" htmlFor="customer-phone">
+										<Input
+											id="customer-phone"
+											value={draft.phone}
+											onChange={(event) =>
+												setDraft((v) => ({ ...v, phone: event.target.value }))
+											}
+										/>
+									</Field>
 								</div>
 							</FormSection>
 						</div>
@@ -597,36 +608,6 @@ export namespace CustomerListUI {
 			</PageShell>
 		)
 	}
-}
-
-interface FieldProps {
-	label: string
-	value: string
-	onChange: (value: string) => void
-	type?: string
-	required?: boolean
-}
-
-function Field({
-	label,
-	value,
-	onChange,
-	type = 'text',
-	required,
-}: FieldProps) {
-	const id = label.toLowerCase().replaceAll(/\s+/g, '-')
-	return (
-		<div className="flex flex-col gap-2">
-			<Label htmlFor={id}>{label}</Label>
-			<Input
-				id={id}
-				type={type}
-				value={value}
-				required={required}
-				onChange={(event) => onChange(event.target.value)}
-			/>
-		</div>
-	)
 }
 
 interface FormSectionProps {

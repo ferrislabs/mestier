@@ -24,6 +24,7 @@ import {
 	DialogHeader,
 	DialogTitle,
 } from '#/components/ui/dialog'
+import { Field } from '#/components/ui/field'
 import { Input } from '#/components/ui/input'
 import { Label } from '#/components/ui/label'
 import {
@@ -213,23 +214,35 @@ export function CustomerEditUI({
 				>
 					<Field
 						label="Nom ou raison sociale"
-						name="name"
-						value={form.name}
-						onChange={(v) => onChange({ name: v })}
+						htmlFor="name"
 						changed={changedKeys.includes('name')}
-					/>
+					>
+						<Input
+							id="name"
+							name="name"
+							value={form.name}
+							onChange={(event) => onChange({ name: event.target.value })}
+						/>
+					</Field>
 					<Field
 						label="SIREN"
-						name="registration-number"
-						value={form.registrationNumber}
-						onChange={(v) => onChange({ registrationNumber: v })}
+						htmlFor="registration-number"
 						changed={changedKeys.includes('registrationNumber')}
-					/>
-					<div className="flex flex-col gap-2">
-						<Label htmlFor="customer-status">
-							Statut CRM
-							{changedKeys.includes('status') ? <Dot /> : null}
-						</Label>
+					>
+						<Input
+							id="registration-number"
+							name="registration-number"
+							value={form.registrationNumber}
+							onChange={(event) =>
+								onChange({ registrationNumber: event.target.value })
+							}
+						/>
+					</Field>
+					<Field
+						label="Statut CRM"
+						htmlFor="customer-status"
+						changed={changedKeys.includes('status')}
+					>
 						<Select
 							value={form.status}
 							onValueChange={(status) =>
@@ -245,12 +258,12 @@ export function CustomerEditUI({
 								<SelectItem value="ARCHIVED">Archivé</SelectItem>
 							</SelectContent>
 						</Select>
-					</div>
-					<div className="flex flex-col gap-2">
-						<Label htmlFor="customer-pipeline-stage">
-							Étape pipeline
-							{changedKeys.includes('pipelineStage') ? <Dot /> : null}
-						</Label>
+					</Field>
+					<Field
+						label="Étape pipeline"
+						htmlFor="customer-pipeline-stage"
+						changed={changedKeys.includes('pipelineStage')}
+					>
 						<Select
 							value={form.pipelineStage}
 							onValueChange={(pipelineStage) =>
@@ -270,25 +283,35 @@ export function CustomerEditUI({
 								))}
 							</SelectContent>
 						</Select>
-					</div>
+					</Field>
 				</Section>
 
 				<Section title="Coordonnées" description="Email et téléphone généraux">
 					<Field
 						label="Email"
-						name="email"
-						type="email"
-						value={form.email}
-						onChange={(v) => onChange({ email: v })}
+						htmlFor="email"
 						changed={changedKeys.includes('email')}
-					/>
+					>
+						<Input
+							id="email"
+							name="email"
+							type="email"
+							value={form.email}
+							onChange={(event) => onChange({ email: event.target.value })}
+						/>
+					</Field>
 					<Field
 						label="Téléphone"
-						name="phone"
-						value={form.phone}
-						onChange={(v) => onChange({ phone: v })}
+						htmlFor="phone"
 						changed={changedKeys.includes('phone')}
-					/>
+					>
+						<Input
+							id="phone"
+							name="phone"
+							value={form.phone}
+							onChange={(event) => onChange({ phone: event.target.value })}
+						/>
+					</Field>
 				</Section>
 
 				<Section
@@ -356,37 +379,57 @@ export function CustomerEditUI({
 						</DialogHeader>
 						<div className="flex-1 overflow-y-auto py-4">
 							<div className="grid gap-4 md:grid-cols-2">
-								<Field
-									label="Prénom"
-									name="customer-contact-first-name"
-									value={customerContactDraft.firstName}
-									onChange={(v) => onCustomerContactChange({ firstName: v })}
-								/>
-								<Field
-									label="Nom"
-									name="customer-contact-last-name"
-									value={customerContactDraft.lastName}
-									onChange={(v) => onCustomerContactChange({ lastName: v })}
-								/>
-								<Field
-									label="Rôle"
-									name="customer-contact-role"
-									value={customerContactDraft.role}
-									onChange={(v) => onCustomerContactChange({ role: v })}
-								/>
-								<Field
-									label="Email"
-									name="customer-contact-email"
-									type="email"
-									value={customerContactDraft.email}
-									onChange={(v) => onCustomerContactChange({ email: v })}
-								/>
-								<Field
-									label="Téléphone"
-									name="customer-contact-phone"
-									value={customerContactDraft.phone}
-									onChange={(v) => onCustomerContactChange({ phone: v })}
-								/>
+								<Field label="Prénom" htmlFor="customer-contact-first-name">
+									<Input
+										id="customer-contact-first-name"
+										name="customer-contact-first-name"
+										value={customerContactDraft.firstName}
+										onChange={(event) =>
+											onCustomerContactChange({ firstName: event.target.value })
+										}
+									/>
+								</Field>
+								<Field label="Nom" htmlFor="customer-contact-last-name">
+									<Input
+										id="customer-contact-last-name"
+										name="customer-contact-last-name"
+										value={customerContactDraft.lastName}
+										onChange={(event) =>
+											onCustomerContactChange({ lastName: event.target.value })
+										}
+									/>
+								</Field>
+								<Field label="Rôle" htmlFor="customer-contact-role">
+									<Input
+										id="customer-contact-role"
+										name="customer-contact-role"
+										value={customerContactDraft.role}
+										onChange={(event) =>
+											onCustomerContactChange({ role: event.target.value })
+										}
+									/>
+								</Field>
+								<Field label="Email" htmlFor="customer-contact-email">
+									<Input
+										id="customer-contact-email"
+										name="customer-contact-email"
+										type="email"
+										value={customerContactDraft.email}
+										onChange={(event) =>
+											onCustomerContactChange({ email: event.target.value })
+										}
+									/>
+								</Field>
+								<Field label="Téléphone" htmlFor="customer-contact-phone">
+									<Input
+										id="customer-contact-phone"
+										name="customer-contact-phone"
+										value={customerContactDraft.phone}
+										onChange={(event) =>
+											onCustomerContactChange({ phone: event.target.value })
+										}
+									/>
+								</Field>
 								<div className="flex items-center justify-between gap-4 rounded-lg border bg-card px-3 py-2">
 									<div>
 										<Label htmlFor="customer-contact-primary">
@@ -491,36 +534,59 @@ export function CustomerEditUI({
 						</DialogHeader>
 						<div className="flex-1 overflow-y-auto py-4">
 							<div className="grid gap-4 md:grid-cols-2">
-								<Field
-									label="Libellé"
-									name="customer-context-label"
-									value={customerContextDraft.label}
-									onChange={(v) => onCustomerContextChange({ label: v })}
-								/>
-								<Field
-									label="Ville"
-									name="customer-context-city"
-									value={customerContextDraft.city}
-									onChange={(v) => onCustomerContextChange({ city: v })}
-								/>
-								<Field
-									label="Adresse"
-									name="customer-context-address-line"
-									value={customerContextDraft.addressLine}
-									onChange={(v) => onCustomerContextChange({ addressLine: v })}
-								/>
+								<Field label="Libellé" htmlFor="customer-context-label">
+									<Input
+										id="customer-context-label"
+										name="customer-context-label"
+										value={customerContextDraft.label}
+										onChange={(event) =>
+											onCustomerContextChange({ label: event.target.value })
+										}
+									/>
+								</Field>
+								<Field label="Ville" htmlFor="customer-context-city">
+									<Input
+										id="customer-context-city"
+										name="customer-context-city"
+										value={customerContextDraft.city}
+										onChange={(event) =>
+											onCustomerContextChange({ city: event.target.value })
+										}
+									/>
+								</Field>
+								<Field label="Adresse" htmlFor="customer-context-address-line">
+									<Input
+										id="customer-context-address-line"
+										name="customer-context-address-line"
+										value={customerContextDraft.addressLine}
+										onChange={(event) =>
+											onCustomerContextChange({
+												addressLine: event.target.value,
+											})
+										}
+									/>
+								</Field>
 								<Field
 									label="Code postal"
-									name="customer-context-postal-code"
-									value={customerContextDraft.postalCode}
-									onChange={(v) => onCustomerContextChange({ postalCode: v })}
-								/>
+									htmlFor="customer-context-postal-code"
+								>
+									<Input
+										id="customer-context-postal-code"
+										name="customer-context-postal-code"
+										value={customerContextDraft.postalCode}
+										onChange={(event) =>
+											onCustomerContextChange({
+												postalCode: event.target.value,
+											})
+										}
+									/>
+								</Field>
 							</div>
 							<div className="mt-4 grid gap-4 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-end">
-								<div className="flex flex-col gap-2">
-									<Label htmlFor="customer-context-photo">
-										Photo du contexte
-									</Label>
+								<Field
+									label="Photo du contexte"
+									htmlFor="customer-context-photo"
+								>
 									<div className="flex flex-col gap-3 sm:flex-row sm:items-center">
 										<label
 											htmlFor="customer-context-photo"
@@ -547,7 +613,7 @@ export function CustomerEditUI({
 											</span>
 										) : null}
 									</div>
-								</div>
+								</Field>
 
 								{photoPreviewUrl ? (
 									<img
@@ -632,50 +698,6 @@ function Section({
 			/>
 			<div className="flex flex-col gap-4 p-5">{children}</div>
 		</SectionCard>
-	)
-}
-
-interface FieldProps {
-	label: string
-	name: string
-	value: string
-	onChange: (v: string) => void
-	type?: string
-	changed?: boolean
-}
-
-function Field({
-	label,
-	name,
-	value,
-	onChange,
-	type = 'text',
-	changed,
-}: FieldProps) {
-	return (
-		<div className="flex flex-col gap-2">
-			<Label htmlFor={name}>
-				{label}
-				{changed ? <Dot /> : null}
-			</Label>
-			<Input
-				id={name}
-				name={name}
-				type={type}
-				value={value}
-				onChange={(e) => onChange(e.target.value)}
-			/>
-		</div>
-	)
-}
-
-function Dot() {
-	return (
-		<span
-			role="img"
-			aria-label="modifié"
-			className="ml-1.5 inline-block size-1.5 rounded-full bg-primary align-middle"
-		/>
 	)
 }
 
