@@ -17,10 +17,10 @@ const ORGANIZATION = { id: 'org-1', name: 'Dupont', slug: 'dupont' }
 const MY_PERMISSIONS_PATH =
 	'/api/v1/organizations/{organization_id}/members/me/permissions'
 
-/** `permissions` defaults to every bit: none of the sections exercised by
- * the pre-existing tests in this file (`crm`, `planning`) carry a
- * `requiredPermission`, so a permissive default keeps them passing without
- * each having to mock the read explicitly. */
+/** `permissions` defaults to every bit, `customers` and `invoices` (#395)
+ * included, so a permissive default keeps the pre-existing tests in this
+ * file (`crm`, `planning`) passing without each having to mock the read
+ * explicitly. */
 function installFakePermissionsApi(
 	permissions: string[] = [
 		'MANAGE_ORG',
@@ -38,6 +38,9 @@ function installFakePermissionsApi(
 		'MANAGE_CUSTOMERS',
 		'MANAGE_QUOTES',
 		'MANAGE_REFERENCE',
+		'VIEW_CUSTOMERS',
+		'VIEW_INVOICES',
+		'MANAGE_INVOICES',
 	],
 ) {
 	const fakeApi = {

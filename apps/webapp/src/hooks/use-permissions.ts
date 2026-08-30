@@ -26,6 +26,9 @@ export type PermissionName =
 	| 'MANAGE_CUSTOMERS'
 	| 'MANAGE_QUOTES'
 	| 'MANAGE_REFERENCE'
+	| 'VIEW_CUSTOMERS'
+	| 'VIEW_INVOICES'
+	| 'MANAGE_INVOICES'
 
 /**
  * The caller's own granted bits in the active organization (#307) —
