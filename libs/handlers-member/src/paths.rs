@@ -35,6 +35,17 @@ pub struct MemberRolesPath {
     pub member_id: MemberId,
 }
 
+/// One role held by one member — the unassign target. `role_id` sits in the
+/// path rather than the body, unlike `POST .../roles`: a `DELETE` with a body
+/// is the odd one out, and `role::delete::handler`'s own
+/// `DELETE /api/v1/roles/{role_id}` already sets that precedent.
+#[derive(TypedPath, Deserialize)]
+#[typed_path("/api/v1/members/{member_id}/roles/{role_id}")]
+pub struct MemberRolePath {
+    pub member_id: MemberId,
+    pub role_id: RoleId,
+}
+
 /// The caller's own aggregated permissions in one organization (#307) —
 /// `me`, never a member id, because a caller must never be able to read
 /// anyone else's bits through this route by supplying a different id.

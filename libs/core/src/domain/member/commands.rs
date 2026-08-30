@@ -51,3 +51,11 @@ pub struct AssignRoleCommand {
     pub member_id: MemberId,
     pub role_id: RoleId,
 }
+
+#[derive(Debug, Clone)]
+pub struct UnassignRoleCommand {
+    /// Authenticated actor performing the unassignment.
+    pub actor: Subject,
+    pub member_id: MemberId,
+    pub role_id: RoleId,
+}

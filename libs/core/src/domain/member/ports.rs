@@ -66,6 +66,15 @@ pub trait MemberRepository: Send {
         role_id: RoleId,
     ) -> impl Future<Output = Result<(), CoreError>> + Send;
 
+    /// Idempotent, symmetrically with [`Self::assign_role`]'s own `ON
+    /// CONFLICT DO NOTHING`: unassigning a role the member never held is not
+    /// an error.
+    fn unassign_role(
+        &mut self,
+        member_id: MemberId,
+        role_id: RoleId,
+    ) -> impl Future<Output = Result<(), CoreError>> + Send;
+
     fn list_role_ids(
         &mut self,
         member_id: MemberId,

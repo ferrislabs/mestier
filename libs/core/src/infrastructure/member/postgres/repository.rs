@@ -150,6 +150,28 @@ impl<'tx> MemberRepository for PgMemberRepository<'tx> {
         Ok(())
     }
 
+    #[tracing::instrument(skip(self), fields(db.system = "postgresql", db.operation = "delete", db.table = "member_roles"), err)]
+    async fn unassign_role(
+        &mut self,
+        member_id: MemberId,
+        role_id: RoleId,
+    ) -> Result<(), CoreError> {
+        let mut tx = self.tx.lock().await;
+        sqlx::query!(
+            r#"
+            DELETE FROM member_roles
+            WHERE member_id = $1 AND role_id = $2
+            "#,
+            member_id.0,
+            role_id.0,
+        )
+        .execute(&mut ***tx)
+        .await
+        .map_err(map_sqlx_error)?;
+
+        Ok(())
+    }
+
     #[tracing::instrument(skip(self), fields(db.system = "postgresql", db.operation = "select", db.table = "organization_members"), err)]
     async fn find_by_org_and_user(
         &mut self,

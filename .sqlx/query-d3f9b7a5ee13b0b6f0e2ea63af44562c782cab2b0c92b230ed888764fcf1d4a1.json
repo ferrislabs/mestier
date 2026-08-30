@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            DELETE FROM member_roles\n            WHERE member_id = $1 AND role_id = $2\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "d3f9b7a5ee13b0b6f0e2ea63af44562c782cab2b0c92b230ed888764fcf1d4a1"
+}

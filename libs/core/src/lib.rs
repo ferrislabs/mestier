@@ -61,6 +61,14 @@ pub use domain::quote::service::{
     TaskProposal, propose_tasks_from_quote, require_quote_accepted, validate_quote_plannable,
 };
 
+/// Exposed for the BDD suite under `tests/role_bdd`, which drives both
+/// services against `mockall` doubles of their repository ports — a role
+/// assignment touches both. Mirrors [`QuoteService`]'s own exposure above:
+/// the ports stay crate-private, only the services and commands needed to
+/// drive them from outside the crate are public.
+pub use domain::member::service::MemberService;
+pub use domain::role::service::RoleService;
+
 /// The profitability calculation, and the port it reads through. Exposed so the
 /// use case in `application` can drive it, and so the report types are usable
 /// from the handler crates.
@@ -156,7 +164,8 @@ pub use domain::{
         DocumentFormat, DocumentFormatError, GeneratedDocument, InvoiceDocumentRequest,
     },
     member::commands::{
-        AddMemberCommand, AssignRoleCommand, CreateMemberCommand, UpdateMemberCommand,
+        AddMemberCommand, AssignRoleCommand, CreateMemberCommand, UnassignRoleCommand,
+        UpdateMemberCommand,
     },
     organization::commands::{
         CreateOrganizationCommand, UpdateLegalIdentityCommand, UpdateOrganizationCommand,
