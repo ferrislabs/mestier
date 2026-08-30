@@ -67,7 +67,12 @@ import {
 } from '#/components/ui/surface'
 import { Switch } from '#/components/ui/switch'
 import { useActiveOrganization } from '#/hooks/use-active-organization'
-import { useAssignRole, useMemberRoleIds, useRoles } from '#/hooks/use-roles'
+import {
+	useAssignRole,
+	useMemberRoleIds,
+	useRoles,
+	useUnassignRole,
+} from '#/hooks/use-roles'
 import { mutationErrorMessage } from '#/lib/api-error'
 import { buildOrgPath } from '#/modules/org-path'
 import type { AccessState, MemberFormValues } from '#/pages/hr/types'
@@ -737,22 +742,21 @@ function RowActions({
 
 /**
  * The role(s) a member holds, plus — behind `MANAGE_ROLES` — a small popover
- * to assign one more (#308).
- *
- * Assignment only: there is no "remove a role from a member" endpoint on the
- * backend yet, so this never offers to unassign one. `useRoles` and
- * `useMemberRoleIds` are read directly here rather than threaded down as
- * props, the same way `RequirePermission` already resolves its own
- * permission read inside this file — a per-row, per-member query has no
- * natural place in a plain `TeamMemberRow` without turning every row's shape
- * into an N+1 fetch plan owned by the parent.
+ * to assign one more, and a remove control on each held role's badge (#308,
+ * #401, #402). `useRoles` and `useMemberRoleIds` are read directly here
+ * rather than threaded down as props, the same way `RequirePermission`
+ * already resolves its own permission read inside this file — a per-row,
+ * per-member query has no natural place in a plain `TeamMemberRow` without
+ * turning every row's shape into an N+1 fetch plan owned by the parent.
  */
 function MemberRoleCell({ memberId }: { memberId: string }) {
 	const { activeOrganizationId } = useActiveOrganization()
 	const rolesQuery = useRoles(activeOrganizationId)
 	const memberRolesQuery = useMemberRoleIds(memberId)
 	const assignRole = useAssignRole()
+	const unassignRole = useUnassignRole()
 	const [open, setOpen] = useState(false)
+	const [search, setSearch] = useState('')
 
 	// Neither read has resolved yet (or one of them 403'd) — say nothing
 	// rather than flash "Aucun rôle" and then have it change once the read
@@ -762,7 +766,11 @@ function MemberRoleCell({ memberId }: { memberId: string }) {
 	const roles = rolesQuery.data?.data ?? []
 	const heldIds = new Set(memberRolesQuery.data?.data.role_ids ?? [])
 	const heldRoles = roles.filter((role) => heldIds.has(role.id))
-	const assignableRoles = roles.filter((role) => !heldIds.has(role.id))
+	const assignableRoles = roles
+		.filter((role) => !heldIds.has(role.id))
+		.filter((role) =>
+			role.name.toLowerCase().includes(search.trim().toLowerCase()),
+		)
 
 	return (
 		<div className="flex flex-wrap items-center gap-1.5">
@@ -773,16 +781,36 @@ function MemberRoleCell({ memberId }: { memberId: string }) {
 					</span>
 				) : (
 					heldRoles.map((role) => (
-						<Badge key={role.id} variant="outline">
+						<Badge key={role.id} variant="outline" className="gap-1 pr-1">
 							{role.name}
+							<RequirePermission permission="MANAGE_ROLES">
+								<button
+									type="button"
+									className="rounded-full p-0.5 text-muted-foreground transition hover:bg-destructive-soft hover:text-destructive disabled:pointer-events-none disabled:opacity-50"
+									disabled={unassignRole.isPending}
+									aria-label={`Retirer le rôle ${role.name}`}
+									onClick={() =>
+										unassignRole.mutate({
+											path: { member_id: memberId, role_id: role.id },
+										})
+									}
+								>
+									<X className="size-3" />
+								</button>
+							</RequirePermission>
 						</Badge>
 					))
 				)
 			) : (
 				<Loader2 className="size-3.5 animate-spin text-muted-foreground" />
 			)}
+			{unassignRole.isError ? (
+				<p className="text-xs text-destructive">
+					{mutationErrorMessage(unassignRole.error)}
+				</p>
+			) : null}
 			<RequirePermission permission="MANAGE_ROLES">
-				{isKnown && assignableRoles.length === 0 ? (
+				{isKnown && assignableRoles.length === 0 && search === '' ? (
 					<Button
 						size="icon-sm"
 						variant="ghost"
@@ -792,7 +820,13 @@ function MemberRoleCell({ memberId }: { memberId: string }) {
 						<ShieldPlus />
 					</Button>
 				) : (
-					<Popover open={open} onOpenChange={setOpen}>
+					<Popover
+						open={open}
+						onOpenChange={(next) => {
+							setOpen(next)
+							if (!next) setSearch('')
+						}}
+					>
 						<PopoverTrigger asChild>
 							<Button
 								size="icon-sm"
@@ -807,26 +841,44 @@ function MemberRoleCell({ memberId }: { memberId: string }) {
 							<PopoverTitle className="px-2 pb-1">
 								Assigner un rôle
 							</PopoverTitle>
-							<div className="flex flex-col">
-								{assignableRoles.map((role) => (
-									<Button
-										key={role.id}
-										variant="ghost"
-										className="justify-start"
-										disabled={assignRole.isPending}
-										onClick={() =>
-											assignRole.mutate(
-												{
-													path: { member_id: memberId },
-													body: { role_id: role.id },
-												},
-												{ onSuccess: () => setOpen(false) },
-											)
-										}
-									>
-										{role.name}
-									</Button>
-								))}
+							{roles.length - heldRoles.length > 5 ? (
+								<div className="relative px-2 pb-2">
+									<Search className="pointer-events-none absolute left-4 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
+									<Input
+										autoFocus
+										value={search}
+										onChange={(event) => setSearch(event.target.value)}
+										placeholder="Rechercher un rôle…"
+										className="h-8 pl-7 text-sm"
+									/>
+								</div>
+							) : null}
+							<div className="flex max-h-56 flex-col overflow-y-auto">
+								{assignableRoles.length === 0 ? (
+									<p className="px-2 py-1.5 text-sm text-muted-foreground">
+										Aucun rôle trouvé
+									</p>
+								) : (
+									assignableRoles.map((role) => (
+										<Button
+											key={role.id}
+											variant="ghost"
+											className="justify-start"
+											disabled={assignRole.isPending}
+											onClick={() =>
+												assignRole.mutate(
+													{
+														path: { member_id: memberId },
+														body: { role_id: role.id },
+													},
+													{ onSuccess: () => setOpen(false) },
+												)
+											}
+										>
+											{role.name}
+										</Button>
+									))
+								)}
 							</div>
 							{assignRole.isError ? (
 								<p className="px-2 pt-1 text-xs text-destructive">

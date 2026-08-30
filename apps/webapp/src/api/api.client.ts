@@ -6331,6 +6331,15 @@ export namespace Endpoints {
     };
     responses: { 204: unknown; 401: unknown; 403: unknown; 404: unknown; 409: unknown };
   };
+  export type delete_UnassignRole = {
+    method: "DELETE";
+    path: "/api/v1/members/{member_id}/roles/{role_id}";
+    requestFormat: "json";
+    parameters: {
+      path: { member_id: string; role_id: string };
+    };
+    responses: { 204: unknown; 401: unknown; 403: unknown; 404: unknown };
+  };
   export type patch_UpdateRole = {
     method: "PATCH";
     path: "/api/v1/roles/{role_id}";
@@ -6764,6 +6773,7 @@ export type EndpointByMethod = {
     "/api/v1/invoice-payments/{invoice_payment_id}": Endpoints.delete_DeleteInvoicePayment;
     "/api/v1/members/{member_id}": Endpoints.delete_DeleteMember;
     "/api/v1/members/{member_id}/employee-profile": Endpoints.delete_RemoveEmployeeProfile;
+    "/api/v1/members/{member_id}/roles/{role_id}": Endpoints.delete_UnassignRole;
     "/api/v1/organizations/{organization_id}": Endpoints.delete_DeleteOrganization;
     "/api/v1/organizations/{organization_id}/absences/{absence_id}": Endpoints.delete_DeleteAbsence;
     "/api/v1/organizations/{organization_id}/automation/credentials/{credential_id}": Endpoints.delete_DeleteAutomationCredential;

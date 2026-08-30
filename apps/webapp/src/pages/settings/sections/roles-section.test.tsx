@@ -14,6 +14,8 @@ const ROLES_PATH = '/api/v1/organizations/{organization_id}/roles'
 const ROLE_PATH = '/api/v1/roles/{role_id}'
 const MY_PERMISSIONS_PATH =
 	'/api/v1/organizations/{organization_id}/members/me/permissions'
+const MEMBERS_PATH = '/api/v1/organizations/{organization_id}/members'
+const MEMBER_ROLES_PATH = '/api/v1/members/{member_id}/roles'
 
 const ORGANIZATION = {
 	id: 'org-1',
@@ -81,6 +83,10 @@ const DEFAULT_ROLES = [OWNER_ROLE, ADMIN_ROLE, MEMBER_ROLE, CUSTOM_ROLE]
 interface FakeApiHandlers {
 	roles?: unknown[]
 	permissions?: string[]
+	/** member id -> display name, for the member-count-per-role feature. */
+	members?: Record<string, string>
+	/** member id -> role ids held. */
+	memberRoleIds?: Record<string, string[]>
 	createRole?: (params: unknown) => unknown
 	updateRole?: (params: unknown) => unknown
 	deleteRole?: (params: unknown) => unknown
@@ -90,6 +96,8 @@ function installFakeTanstackApi(handlers: FakeApiHandlers = {}) {
 	const calls: { method: string; path: string; params: unknown }[] = []
 	const roles = handlers.roles ?? DEFAULT_ROLES
 	const permissions = handlers.permissions ?? ['MANAGE_ROLES']
+	const members = handlers.members ?? {}
+	const memberRoleIds = handlers.memberRoleIds ?? {}
 
 	const fakeApi = {
 		get(path: string, params: unknown) {
@@ -105,6 +113,23 @@ function installFakeTanstackApi(handlers: FakeApiHandlers = {}) {
 						if (path === ROLES_PATH) return { data: roles }
 						if (path === MY_PERMISSIONS_PATH) {
 							return { data: { permissions }, pagination: null }
+						}
+						if (path === MEMBERS_PATH) {
+							return {
+								data: Object.entries(members).map(([id, display_name]) => ({
+									id,
+									display_name,
+								})),
+								pagination: null,
+							}
+						}
+						if (path === MEMBER_ROLES_PATH) {
+							const memberId = (params as { path?: { member_id?: string } })
+								?.path?.member_id
+							return {
+								data: { role_ids: memberRoleIds[memberId ?? ''] ?? [] },
+								pagination: null,
+							}
 						}
 						throw new Error(`unmocked GET ${path}`)
 					},
@@ -401,5 +426,196 @@ describe('RolesSection — delete', () => {
 				'Ce rôle est encore attribué à au moins un membre ; retirez-le de ce rôle avant de le supprimer.',
 			),
 		).toBeDefined()
+	})
+})
+
+describe('RolesSection — member count per role (#402)', () => {
+	afterEach(() => {
+		vi.restoreAllMocks()
+	})
+
+	it("counts each role's members from the org's member list", async () => {
+		await renderSection({
+			members: { 'member-1': 'Alix Nova', 'member-2': 'Baptiste Parmantier' },
+			memberRoleIds: {
+				'member-1': ['role-owner'],
+				'member-2': ['role-owner', 'role-custom'],
+			},
+		})
+
+		const ownerRow = (await screen.findByText('owner')).closest('li')
+		const customRow = (await screen.findByText('Chef de chantier')).closest(
+			'li',
+		)
+		expect(
+			await within(ownerRow as HTMLElement).findByText('2 membres'),
+		).toBeDefined()
+		expect(
+			await within(customRow as HTMLElement).findByText('1 membre'),
+		).toBeDefined()
+
+		const memberRow = (await screen.findByText('member')).closest('li')
+		expect(
+			await within(memberRow as HTMLElement).findByText('Aucun membre'),
+		).toBeDefined()
+	})
+})
+
+describe('RolesSection — permission search (#402)', () => {
+	afterEach(() => {
+		vi.restoreAllMocks()
+	})
+
+	it('filters the permission editor down to matching entries', async () => {
+		const user = userEvent.setup()
+		await renderSection({})
+
+		await user.click(
+			await screen.findByRole('button', { name: 'Créer un rôle' }),
+		)
+		const sheet = await screen.findByRole('dialog')
+
+		await user.type(
+			within(sheet).getByPlaceholderText('Rechercher une permission…'),
+			'planning',
+		)
+
+		expect(within(sheet).getByLabelText('Voir le planning')).toBeDefined()
+		expect(within(sheet).queryByLabelText('Gérer les rôles')).toBeNull()
+		expect(within(sheet).queryByText('Administration')).toBeNull()
+	})
+
+	it('says outright when no permission matches the search', async () => {
+		const user = userEvent.setup()
+		await renderSection({})
+
+		await user.click(
+			await screen.findByRole('button', { name: 'Créer un rôle' }),
+		)
+		const sheet = await screen.findByRole('dialog')
+
+		await user.type(
+			within(sheet).getByPlaceholderText('Rechercher une permission…'),
+			'zzz',
+		)
+
+		expect(
+			within(sheet).getByText('Aucune permission ne correspond à « zzz ».'),
+		).toBeDefined()
+	})
+})
+
+describe('RolesSection — select all per area (#402)', () => {
+	afterEach(() => {
+		vi.restoreAllMocks()
+	})
+
+	it('checks every permission in an area at once, then unchecks them all', async () => {
+		const user = userEvent.setup()
+		await renderSection({})
+
+		await user.click(
+			await screen.findByRole('button', { name: 'Créer un rôle' }),
+		)
+		const sheet = await screen.findByRole('dialog')
+		const planningHeading = within(sheet).getByText('Planning')
+		const planningArea = planningHeading.parentElement as HTMLElement
+
+		await user.click(
+			within(planningArea).getByRole('button', { name: 'Tout cocher' }),
+		)
+
+		expect(within(sheet).getByLabelText('Voir le planning')).toHaveProperty(
+			'ariaChecked',
+			'true',
+		)
+		expect(within(sheet).getByLabelText('Modifier le planning')).toHaveProperty(
+			'ariaChecked',
+			'true',
+		)
+
+		await user.click(
+			within(planningArea).getByRole('button', { name: 'Tout décocher' }),
+		)
+
+		expect(within(sheet).getByLabelText('Voir le planning')).toHaveProperty(
+			'ariaChecked',
+			'false',
+		)
+		expect(within(sheet).getByLabelText('Modifier le planning')).toHaveProperty(
+			'ariaChecked',
+			'false',
+		)
+	})
+})
+
+describe('RolesSection — unsaved changes guard (#402)', () => {
+	afterEach(() => {
+		vi.restoreAllMocks()
+	})
+
+	it('warns before closing the sheet with unsaved edits, and keeps it open on cancel', async () => {
+		const user = userEvent.setup()
+		await renderSection({})
+
+		await user.click(
+			await screen.findByRole('button', { name: 'Créer un rôle' }),
+		)
+		const sheet = await screen.findByRole('dialog')
+		await user.type(within(sheet).getByLabelText('Nom'), 'Poseur')
+
+		await user.keyboard('{Escape}')
+
+		const confirmDialog = await screen.findByRole('alertdialog')
+		expect(
+			within(confirmDialog).getByText('Abandonner les modifications ?'),
+		).toBeDefined()
+
+		await user.click(
+			within(confirmDialog).getByRole('button', {
+				name: "Continuer l'édition",
+			}),
+		)
+
+		expect(screen.queryByRole('alertdialog')).toBeNull()
+		expect(await screen.findByRole('dialog')).toBeDefined()
+		expect(within(sheet).getByLabelText('Nom')).toHaveProperty(
+			'value',
+			'Poseur',
+		)
+	})
+
+	it('closes without asking when there is nothing unsaved', async () => {
+		const user = userEvent.setup()
+		await renderSection({})
+
+		await user.click(
+			await screen.findByRole('button', { name: 'Créer un rôle' }),
+		)
+		await screen.findByRole('dialog')
+
+		await user.keyboard('{Escape}')
+
+		expect(screen.queryByRole('alertdialog')).toBeNull()
+		expect(screen.queryByRole('dialog')).toBeNull()
+	})
+
+	it('discards the edit and closes when the warning is confirmed', async () => {
+		const user = userEvent.setup()
+		await renderSection({})
+
+		await user.click(
+			await screen.findByRole('button', { name: 'Créer un rôle' }),
+		)
+		const sheet = await screen.findByRole('dialog')
+		await user.type(within(sheet).getByLabelText('Nom'), 'Poseur')
+
+		await user.keyboard('{Escape}')
+		const confirmDialog = await screen.findByRole('alertdialog')
+		await user.click(
+			within(confirmDialog).getByRole('button', { name: 'Abandonner' }),
+		)
+
+		expect(screen.queryByRole('dialog')).toBeNull()
 	})
 })
