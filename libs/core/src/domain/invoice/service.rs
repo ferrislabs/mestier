@@ -1,5 +1,6 @@
 use std::collections::BTreeMap;
 
+use authz::{Authorizer, Resource, Subject};
 use chrono::{DateTime, Datelike, Utc};
 use common::{CoreError, generate_uuid_v7};
 use events::EventEmitter;
@@ -11,6 +12,7 @@ use crate::{
     GeneratedInvoiceDocument, Invoice, InvoiceId, InvoiceKind, InvoiceLine, InvoiceLineId,
     InvoicePayment, InvoicePaymentId, InvoiceStatus, InvoiceVatBreakdownLine, LegalIdentity,
     Organization, OrganizationId, Project, ProjectBillingSummary, ProjectId,
+    application::policy,
     domain::{
         invoice::{
             commands::{
@@ -25,28 +27,72 @@ use crate::{
             },
             ports::InvoiceRepository,
         },
+        member::ports::MemberRepository,
         organization::{legal_identity::VatStatus, ports::OrganizationRepository},
         project::{ports::ProjectRepository, service::remaining_to_bill_cents},
         quote::ports::QuoteRepository,
+        role::ports::RoleRepository,
     },
 };
 
-pub struct InvoiceService<R, E>
+pub struct InvoiceService<R, E, M, Ro, A>
 where
     R: InvoiceRepository,
     E: EventEmitter,
+    M: MemberRepository,
+    Ro: RoleRepository,
+    A: Authorizer,
 {
     repo: R,
     emitter: E,
+    member_repository: M,
+    role_repository: Ro,
+    authz: A,
 }
 
-impl<R, E> InvoiceService<R, E>
+impl<R, E, M, Ro, A> InvoiceService<R, E, M, Ro, A>
 where
     R: InvoiceRepository,
     E: EventEmitter,
+    M: MemberRepository,
+    Ro: RoleRepository,
+    A: Authorizer,
 {
-    pub fn new(repo: R, emitter: E) -> Self {
-        Self { repo, emitter }
+    pub fn new(repo: R, emitter: E, member_repository: M, role_repository: Ro, authz: A) -> Self {
+        Self {
+            repo,
+            emitter,
+            member_repository,
+            role_repository,
+            authz,
+        }
+    }
+
+    /// Enriches `actor` for `organization_id` and refuses unless it holds
+    /// `MANAGE_INVOICES` (#395) — the write-side gate every mutating method
+    /// below calls once it knows which organization it is acting against.
+    /// Mirrors `CustomerService`'s own inline enrich-then-require pair,
+    /// pulled into one helper here since every one of the eleven write
+    /// methods below needs exactly the same two calls.
+    async fn require_manage_invoices(
+        &mut self,
+        actor: Subject,
+        organization_id: OrganizationId,
+    ) -> Result<(), CoreError> {
+        let actor = policy::enrich_for_organization(
+            actor,
+            organization_id,
+            &mut self.member_repository,
+            &mut self.role_repository,
+        )
+        .await?;
+        policy::require(
+            &self.authz,
+            &actor,
+            "invoice.manage",
+            Resource::new("organization", organization_id.0.to_string()),
+        )
+        .await
     }
 
     pub async fn create_invoice<O>(
@@ -57,6 +103,9 @@ where
     where
         O: OrganizationRepository,
     {
+        self.require_manage_invoices(command.actor, command.organization_id)
+            .await?;
+
         let now = Utc::now();
         let invoice_id = InvoiceId(generate_uuid_v7());
         let organization =
@@ -196,6 +245,9 @@ where
         O: OrganizationRepository,
     {
         let existing = self.get_invoice(command.id).await?;
+        self.require_manage_invoices(command.actor, existing.organization_id)
+            .await?;
+
         let now = Utc::now();
         let organization =
             resolve_organization(&mut organization_repository, existing.organization_id).await?;
@@ -242,6 +294,9 @@ where
         command: CancelInvoiceCommand,
     ) -> Result<Invoice, CoreError> {
         let existing = self.get_invoice(command.id).await?;
+        self.require_manage_invoices(command.actor, existing.organization_id)
+            .await?;
+
         if matches!(
             existing.status,
             InvoiceStatus::Cancelled | InvoiceStatus::Paid | InvoiceStatus::PartiallyPaid
@@ -279,8 +334,12 @@ where
         &mut self,
         id: InvoiceId,
         document: GeneratedInvoiceDocument,
+        actor: Subject,
     ) -> Result<Invoice, CoreError> {
         let existing = self.get_invoice(id).await?;
+        self.require_manage_invoices(actor, existing.organization_id)
+            .await?;
+
         if existing.status == InvoiceStatus::Draft {
             return Err(CoreError::Conflict(format!(
                 "invoice {id} is still a draft; only an issued invoice can have a generated document"
@@ -299,8 +358,15 @@ where
 
     /// Refused unless the invoice is still a draft: an issued invoice is a
     /// legal document, corrected with a credit note (#318), never deleted.
-    pub async fn soft_delete_invoice(&mut self, id: InvoiceId) -> Result<(), CoreError> {
+    pub async fn soft_delete_invoice(
+        &mut self,
+        id: InvoiceId,
+        actor: Subject,
+    ) -> Result<(), CoreError> {
         let existing = self.get_invoice(id).await?;
+        self.require_manage_invoices(actor, existing.organization_id)
+            .await?;
+
         if existing.status != InvoiceStatus::Draft {
             return Err(CoreError::Conflict(format!(
                 "invoice {} is {} and cannot be deleted; only a draft can be",
@@ -335,6 +401,8 @@ where
             .find_by_id(command.invoice_id)
             .await?
             .ok_or(CoreError::NotFound)?;
+        self.require_manage_invoices(command.actor, invoice.organization_id)
+            .await?;
 
         if invoice.status != InvoiceStatus::Issued {
             return Err(CoreError::Conflict(format!(
@@ -406,6 +474,8 @@ where
             .find_payment_by_id(command.id)
             .await?
             .ok_or(CoreError::NotFound)?;
+        self.require_manage_invoices(command.actor, payment.organization_id)
+            .await?;
 
         let deleted_at = Utc::now();
         self.repo
@@ -536,6 +606,8 @@ where
         Q: QuoteRepository,
     {
         let existing = self.get_invoice(command.id).await?;
+        self.require_manage_invoices(command.actor, existing.organization_id)
+            .await?;
         let draft = DraftInvoice::try_from_invoice(existing)?;
 
         self.issue_now(
@@ -571,6 +643,8 @@ where
             .find_by_id(command.project_id)
             .await?
             .ok_or(CoreError::NotFound)?;
+        self.require_manage_invoices(command.actor, project.organization_id)
+            .await?;
         let quote_id = project.quote_id.ok_or_else(|| {
             CoreError::Conflict(format!(
                 "project {} has no quote; a deposit needs a total to compute a percentage against",
@@ -654,6 +728,8 @@ where
             .find_by_id(command.project_id)
             .await?
             .ok_or(CoreError::NotFound)?;
+        self.require_manage_invoices(command.actor, project.organization_id)
+            .await?;
         let quote_id = project.quote_id.ok_or_else(|| {
             CoreError::Conflict(format!(
                 "project {} has no quote; a final invoice needs a total to compute the remainder against",
@@ -746,6 +822,8 @@ where
         Q: QuoteRepository,
     {
         let source = self.get_invoice(command.source_invoice_id).await?;
+        self.require_manage_invoices(command.actor, source.organization_id)
+            .await?;
 
         // No chains of credit notes against credit notes: "what does this
         // correct" must always stay a single hop back to the original
@@ -1569,9 +1647,116 @@ mod tests {
     use crate::{
         CustomerContextId, CustomerId, InvoiceKind, MockProjectRepository, MockQuoteRepository,
         Organization, Quote, QuoteId, QuoteStatus, UserId,
+        domain::member::{Member, MemberId, ports::MockMemberRepository},
+        domain::role::ports::MockRoleRepository,
     };
+    use authz::{Decision, MockAuthorizer};
     use mockall::predicate::eq;
     use uuid::Uuid;
+
+    /// System subjects short-circuit `policy::enrich_for_organization` (no
+    /// member/role DB load) — the cheapest fixture default for tests that
+    /// are not themselves about authorization, same convention as
+    /// `customer::service`'s own `system_actor`.
+    fn system_actor() -> Subject {
+        Subject::system()
+    }
+
+    /// Every test built before #395 wired `InvoiceService` to `policy::
+    /// require` constructed its fixture as `InvoiceService::new(repo,
+    /// emitter)`. Rather than touch every one of those call sites to also
+    /// invent member/role/authz mocks it has no interest in, this bundles
+    /// freshly permissive ones — `MockAuthorizer::expect_evaluate` with no
+    /// `.times()` bound, so it tolerates being called zero or more times —
+    /// and is paired with `system_actor()` everywhere a command needs an
+    /// `actor`. The dedicated `_refuses_a_non_manager` tests below are the
+    /// ones actually exercising the check, and build their own mocks.
+    fn new_permissive_service<R, E>(
+        repo: R,
+        emitter: E,
+    ) -> InvoiceService<R, E, MockMemberRepository, MockRoleRepository, MockAuthorizer>
+    where
+        R: InvoiceRepository,
+        E: EventEmitter,
+    {
+        let mut authz = MockAuthorizer::new();
+        authz
+            .expect_evaluate()
+            .returning(|_| Box::pin(async { Ok(Decision::allow()) }));
+
+        InvoiceService::new(
+            repo,
+            emitter,
+            MockMemberRepository::new(),
+            MockRoleRepository::new(),
+            authz,
+        )
+    }
+
+    /// Stages a real membership (found, no roles) for `user_id` in
+    /// `organization_id` — mirrors `organization::service::tests::
+    /// stage_org_membership` exactly: `enrich_for_organization` must
+    /// succeed and reach the authorizer, so what actually refuses the
+    /// eleven `_refuses_a_non_manager` tests below is the authorizer's own
+    /// deny, not a missing membership (that gap is covered by `customer::
+    /// service::tests::update_customer_returns_forbidden_when_not_a_member`'s
+    /// own sibling shape and does not need re-proving here per method).
+    fn stage_org_membership(
+        members: &mut MockMemberRepository,
+        roles: &mut MockRoleRepository,
+        organization_id: OrganizationId,
+        user_id: UserId,
+    ) {
+        let member_id = MemberId(Uuid::new_v4());
+        members
+            .expect_find_by_org_and_user()
+            .with(eq(organization_id), eq(user_id))
+            .times(1)
+            .returning(move |organization_id, user_id| {
+                let m = Member {
+                    id: member_id,
+                    organization_id,
+                    user_id: Some(user_id),
+                    last_name: "Member".to_owned(),
+                    first_name: None,
+                    joined_at: Some(Utc::now()),
+                    created_at: Utc::now(),
+                    deleted_at: None,
+                };
+                Box::pin(async move { Ok(Some(m)) })
+            });
+        members
+            .expect_list_role_ids()
+            .with(eq(member_id))
+            .times(1)
+            .returning(|_| Box::pin(async { Ok(Vec::new()) }));
+        roles
+            .expect_list_by_organization()
+            .with(eq(organization_id))
+            .times(1)
+            .returning(|_| Box::pin(async { Ok(Vec::new()) }));
+    }
+
+    /// An authorizer that denies exactly one `invoice.manage` check against
+    /// `organization_id`, `.times(1)` — same shape as `organization::
+    /// service::tests`' own deny fixtures. The member holds no roles (see
+    /// `stage_org_membership`), so `Permissions::NONE` is what a real
+    /// `LocalPolicyEngine` would also deny here; this stubs the decision
+    /// directly since `InvoiceService` is generic over `Authorizer`, not
+    /// tied to any one implementation.
+    fn denying_authorizer(organization_id: OrganizationId) -> MockAuthorizer {
+        let mut authz = MockAuthorizer::new();
+        authz
+            .expect_evaluate()
+            .withf(move |req| {
+                req.action.name == "invoice.manage"
+                    && req.resource.r#type == "organization"
+                    && req.resource.id == organization_id.0.to_string()
+            })
+            .times(1)
+            .returning(|_| Box::pin(async { Ok(Decision::deny()) }));
+        authz
+    }
 
     fn line_command(quantity: Decimal, unit_price_cents: i32) -> InvoiceLineCommand {
         InvoiceLineCommand {
@@ -1700,10 +1885,11 @@ mod tests {
             Box::pin(async move { Ok(invoice) })
         });
 
-        let mut service = InvoiceService::new(repo, events::testing::RecordingEmitter::new());
+        let mut service = new_permissive_service(repo, events::testing::RecordingEmitter::new());
         let created = service
             .create_invoice(
                 CreateInvoiceCommand {
+                    actor: system_actor(),
                     organization_id,
                     kind: InvoiceKind::Standard,
                     project_id: None,
@@ -1738,7 +1924,7 @@ mod tests {
             Box::pin(async move { Ok(invoice) })
         });
 
-        let mut service = InvoiceService::new(repo, events::testing::RecordingEmitter::new());
+        let mut service = new_permissive_service(repo, events::testing::RecordingEmitter::new());
         let mut reduced_rate = line_command(Decimal::new(1, 0), 10_000);
         reduced_rate.vat_rate_basis_points = Some(550);
         let mut standard_rate = line_command(Decimal::new(1, 0), 10_000);
@@ -1747,6 +1933,7 @@ mod tests {
         let created = service
             .create_invoice(
                 CreateInvoiceCommand {
+                    actor: system_actor(),
                     organization_id,
                     kind: InvoiceKind::Standard,
                     project_id: None,
@@ -1784,11 +1971,12 @@ mod tests {
     async fn rejects_an_invoice_with_no_lines() {
         let organization_id = OrganizationId(Uuid::new_v4());
         let repo = crate::domain::invoice::ports::MockInvoiceRepository::new();
-        let mut service = InvoiceService::new(repo, events::testing::RecordingEmitter::new());
+        let mut service = new_permissive_service(repo, events::testing::RecordingEmitter::new());
 
         let result = service
             .create_invoice(
                 CreateInvoiceCommand {
+                    actor: system_actor(),
                     organization_id,
                     kind: InvoiceKind::Standard,
                     project_id: None,
@@ -1820,11 +2008,12 @@ mod tests {
         });
 
         let organization_id = invoice(id).organization_id;
-        let mut service = InvoiceService::new(repo, events::testing::RecordingEmitter::new());
+        let mut service = new_permissive_service(repo, events::testing::RecordingEmitter::new());
         let updated = service
             .update_invoice(
                 UpdateInvoiceCommand {
                     id,
+                    actor: system_actor(),
                     project_id: None,
                     customer_id: CustomerId(Uuid::new_v4()),
                     customer_context_id: CustomerContextId(Uuid::new_v4()),
@@ -1868,11 +2057,12 @@ mod tests {
         // repository, it has to be refused before that.
 
         let organization_id = invoice(id).organization_id;
-        let mut service = InvoiceService::new(repo, events::testing::RecordingEmitter::new());
+        let mut service = new_permissive_service(repo, events::testing::RecordingEmitter::new());
         let result = service
             .update_invoice(
                 UpdateInvoiceCommand {
                     id,
+                    actor: system_actor(),
                     project_id: None,
                     customer_id: CustomerId(Uuid::new_v4()),
                     customer_context_id: CustomerContextId(Uuid::new_v4()),
@@ -1907,10 +2097,13 @@ mod tests {
             });
 
         let emitter = events::testing::RecordingEmitter::new();
-        let mut service = InvoiceService::new(repo, &emitter);
+        let mut service = new_permissive_service(repo, &emitter);
 
         service
-            .cancel_invoice(CancelInvoiceCommand { id })
+            .cancel_invoice(CancelInvoiceCommand {
+                id,
+                actor: system_actor(),
+            })
             .await
             .unwrap();
 
@@ -1930,8 +2123,13 @@ mod tests {
             Box::pin(async move { Ok(Some(cancelled)) })
         });
 
-        let mut service = InvoiceService::new(repo, events::testing::RecordingEmitter::new());
-        let result = service.cancel_invoice(CancelInvoiceCommand { id }).await;
+        let mut service = new_permissive_service(repo, events::testing::RecordingEmitter::new());
+        let result = service
+            .cancel_invoice(CancelInvoiceCommand {
+                id,
+                actor: system_actor(),
+            })
+            .await;
 
         assert!(matches!(result, Err(CoreError::Conflict(_))));
     }
@@ -1957,8 +2155,8 @@ mod tests {
         // No `expect_soft_delete`: must be refused before the repository is
         // reached.
 
-        let mut service = InvoiceService::new(repo, events::testing::RecordingEmitter::new());
-        let result = service.soft_delete_invoice(id).await;
+        let mut service = new_permissive_service(repo, events::testing::RecordingEmitter::new());
+        let result = service.soft_delete_invoice(id, system_actor()).await;
 
         assert!(matches!(result, Err(CoreError::Conflict(_))));
     }
@@ -1975,9 +2173,12 @@ mod tests {
             .returning(|_, _| Box::pin(async { Ok(()) }));
 
         let emitter = events::testing::RecordingEmitter::new();
-        let mut service = InvoiceService::new(repo, &emitter);
+        let mut service = new_permissive_service(repo, &emitter);
 
-        service.soft_delete_invoice(id).await.unwrap();
+        service
+            .soft_delete_invoice(id, system_actor())
+            .await
+            .unwrap();
 
         assert_eq!(emitter.names(), vec!["invoice.deleted"]);
     }
@@ -1993,13 +2194,14 @@ mod tests {
             Box::pin(async move { Ok(invoice) })
         });
 
-        let mut service = InvoiceService::new(repo, events::testing::RecordingEmitter::new());
+        let mut service = new_permissive_service(repo, events::testing::RecordingEmitter::new());
         let mut line = line_command(Decimal::new(1, 0), 105);
         line.vat_rate_basis_points = Some(1000);
 
         let created = service
             .create_invoice(
                 CreateInvoiceCommand {
+                    actor: system_actor(),
                     organization_id,
                     kind: InvoiceKind::Standard,
                     project_id: None,
@@ -2251,13 +2453,14 @@ mod tests {
         let organization = complete_organization(organization_id);
 
         let store: Arc<Mutex<Vec<Invoice>>> = Arc::new(Mutex::new(Vec::new()));
-        let mut service = InvoiceService::new(
+        let mut service = new_permissive_service(
             invoice_repository_over(store.clone()),
             events::testing::RecordingEmitter::new(),
         );
 
         let deposit_command = || IssueDepositCommand {
             project_id: project.id,
+            actor: system_actor(),
             percentage_bp: 3000,
             due_at: None,
             notes: None,
@@ -2287,6 +2490,7 @@ mod tests {
         let final_invoice = service
             .issue_final_invoice(
                 IssueFinalInvoiceCommand {
+                    actor: system_actor(),
                     project_id: project.id,
                     due_at: None,
                     notes: None,
@@ -2339,13 +2543,14 @@ mod tests {
         let organization = complete_organization(organization_id);
 
         let store: Arc<Mutex<Vec<Invoice>>> = Arc::new(Mutex::new(Vec::new()));
-        let mut service = InvoiceService::new(
+        let mut service = new_permissive_service(
             invoice_repository_over(store.clone()),
             events::testing::RecordingEmitter::new(),
         );
 
         let deposit_command = || IssueDepositCommand {
             project_id: project.id,
+            actor: system_actor(),
             percentage_bp: 3000,
             due_at: None,
             notes: None,
@@ -2375,6 +2580,7 @@ mod tests {
         service
             .issue_final_invoice(
                 IssueFinalInvoiceCommand {
+                    actor: system_actor(),
                     project_id: project.id,
                     due_at: None,
                     notes: None,
@@ -2399,6 +2605,7 @@ mod tests {
         let credit_note = service
             .issue_credit_note(
                 IssueCreditNoteCommand {
+                    actor: system_actor(),
                     source_invoice_id: deposit1.id,
                     lines: vec![line_command(Decimal::new(1, 0), credited_cents)],
                     notes: None,
@@ -2438,7 +2645,7 @@ mod tests {
         };
 
         let store: Arc<Mutex<Vec<Invoice>>> = Arc::new(Mutex::new(vec![source]));
-        let mut service = InvoiceService::new(
+        let mut service = new_permissive_service(
             invoice_repository_over(store),
             events::testing::RecordingEmitter::new(),
         );
@@ -2446,6 +2653,7 @@ mod tests {
         let result = service
             .issue_credit_note(
                 IssueCreditNoteCommand {
+                    actor: system_actor(),
                     source_invoice_id: source_id,
                     lines: vec![line_command(Decimal::new(1, 0), 1_000)],
                     notes: None,
@@ -2471,7 +2679,7 @@ mod tests {
         };
 
         let store: Arc<Mutex<Vec<Invoice>>> = Arc::new(Mutex::new(vec![source]));
-        let mut service = InvoiceService::new(
+        let mut service = new_permissive_service(
             invoice_repository_over(store),
             events::testing::RecordingEmitter::new(),
         );
@@ -2479,6 +2687,7 @@ mod tests {
         let result = service
             .issue_credit_note(
                 IssueCreditNoteCommand {
+                    actor: system_actor(),
                     source_invoice_id: source_id,
                     lines: vec![line_command(Decimal::new(1, 0), 1_000)],
                     notes: None,
@@ -2510,7 +2719,7 @@ mod tests {
         };
 
         let store: Arc<Mutex<Vec<Invoice>>> = Arc::new(Mutex::new(vec![source]));
-        let mut service = InvoiceService::new(
+        let mut service = new_permissive_service(
             invoice_repository_over(store),
             events::testing::RecordingEmitter::new(),
         );
@@ -2518,6 +2727,7 @@ mod tests {
         let result = service
             .issue_credit_note(
                 IssueCreditNoteCommand {
+                    actor: system_actor(),
                     source_invoice_id: source_id,
                     lines: vec![line_command(Decimal::new(1, 0), 1_000)],
                     notes: None,
@@ -2548,7 +2758,7 @@ mod tests {
         let organization = complete_organization(organization_id);
 
         let store: Arc<Mutex<Vec<Invoice>>> = Arc::new(Mutex::new(vec![source]));
-        let mut service = InvoiceService::new(
+        let mut service = new_permissive_service(
             invoice_repository_over(store),
             events::testing::RecordingEmitter::new(),
         );
@@ -2556,6 +2766,7 @@ mod tests {
         let credit_note = service
             .issue_credit_note(
                 IssueCreditNoteCommand {
+                    actor: system_actor(),
                     source_invoice_id: source_id,
                     lines: vec![line_command(Decimal::new(1, 0), 4_000)],
                     notes: None,
@@ -2590,13 +2801,14 @@ mod tests {
         let organization = complete_organization(organization_id);
 
         let store: Arc<Mutex<Vec<Invoice>>> = Arc::new(Mutex::new(vec![source]));
-        let mut service = InvoiceService::new(
+        let mut service = new_permissive_service(
             invoice_repository_over(store.clone()),
             events::testing::RecordingEmitter::new(),
         );
 
         let credit_command = |amount_cents, allow_exceeding_invoice_total| IssueCreditNoteCommand {
             source_invoice_id: source_id,
+            actor: system_actor(),
             lines: vec![line_command(Decimal::new(1, 0), amount_cents)],
             notes: None,
             allow_exceeding_invoice_total,
@@ -2666,7 +2878,7 @@ mod tests {
             project.id,
             9_000,
         )]));
-        let mut service = InvoiceService::new(
+        let mut service = new_permissive_service(
             invoice_repository_over(store.clone()),
             events::testing::RecordingEmitter::new(),
         );
@@ -2674,6 +2886,7 @@ mod tests {
         let refused = service
             .issue_deposit(
                 IssueDepositCommand {
+                    actor: system_actor(),
                     project_id: project.id,
                     percentage_bp: 8000,
                     due_at: None,
@@ -2698,6 +2911,7 @@ mod tests {
         let allowed = service
             .issue_deposit(
                 IssueDepositCommand {
+                    actor: system_actor(),
                     project_id: project.id,
                     percentage_bp: 8000,
                     due_at: None,
@@ -2731,11 +2945,12 @@ mod tests {
         // No `expect_allocate_number`/`expect_issue`: the call must never
         // reach them, refused before that on the legal identity alone.
 
-        let mut service = InvoiceService::new(repo, events::testing::RecordingEmitter::new());
+        let mut service = new_permissive_service(repo, events::testing::RecordingEmitter::new());
 
         let result = service
             .issue_invoice(
                 IssueInvoiceCommand {
+                    actor: system_actor(),
                     id,
                     allow_exceeding_total: false,
                 },
@@ -2755,11 +2970,12 @@ mod tests {
         let project_id = project.id;
 
         let repo = crate::domain::invoice::ports::MockInvoiceRepository::new();
-        let mut service = InvoiceService::new(repo, events::testing::RecordingEmitter::new());
+        let mut service = new_permissive_service(repo, events::testing::RecordingEmitter::new());
 
         let result = service
             .issue_deposit(
                 IssueDepositCommand {
+                    actor: system_actor(),
                     project_id,
                     percentage_bp: 3000,
                     due_at: None,
@@ -2782,11 +2998,12 @@ mod tests {
         let project_id = project.id;
 
         let repo = crate::domain::invoice::ports::MockInvoiceRepository::new();
-        let mut service = InvoiceService::new(repo, events::testing::RecordingEmitter::new());
+        let mut service = new_permissive_service(repo, events::testing::RecordingEmitter::new());
 
         let result = service
             .issue_final_invoice(
                 IssueFinalInvoiceCommand {
+                    actor: system_actor(),
                     project_id,
                     due_at: None,
                     notes: None,
@@ -2839,11 +3056,12 @@ mod tests {
             },
         );
 
-        let mut service = InvoiceService::new(repo, events::testing::RecordingEmitter::new());
+        let mut service = new_permissive_service(repo, events::testing::RecordingEmitter::new());
 
         let issued = service
             .issue_invoice(
                 IssueInvoiceCommand {
+                    actor: system_actor(),
                     id,
                     allow_exceeding_total: false,
                 },
@@ -3028,5 +3246,558 @@ mod tests {
         }];
 
         assert_eq!(gross_of_credit_notes_cents(10_000, &credit_notes), 7_000);
+    }
+
+    // ---- #395: `MANAGE_INVOICES` gate, one test per write method --------
+    //
+    // Each test stages a real member (`stage_org_membership`) holding no
+    // roles, and an authorizer that denies exactly the `invoice.manage`
+    // check on that member's own organization (`denying_authorizer`) —
+    // the mutation must never reach the repository past that point, which
+    // is why none of these fixtures set up an `expect_*` write call.
+
+    #[tokio::test]
+    async fn create_invoice_refuses_an_actor_without_manage_invoices() {
+        let organization_id = OrganizationId(Uuid::new_v4());
+        let user_id = UserId(Uuid::new_v4());
+
+        let repo = crate::domain::invoice::ports::MockInvoiceRepository::new();
+        // No `expect_insert_draft`: refused before any write.
+
+        let mut member_repository = MockMemberRepository::new();
+        let mut role_repository = MockRoleRepository::new();
+        stage_org_membership(
+            &mut member_repository,
+            &mut role_repository,
+            organization_id,
+            user_id,
+        );
+        let authz = denying_authorizer(organization_id);
+
+        let mut service = InvoiceService::new(
+            repo,
+            events::testing::RecordingEmitter::new(),
+            member_repository,
+            role_repository,
+            authz,
+        );
+
+        let result = service
+            .create_invoice(
+                CreateInvoiceCommand {
+                    actor: policy::user_subject(user_id, Vec::new()),
+                    organization_id,
+                    kind: InvoiceKind::Standard,
+                    project_id: None,
+                    customer_id: CustomerId(Uuid::new_v4()),
+                    customer_context_id: CustomerContextId(Uuid::new_v4()),
+                    due_at: None,
+                    notes: None,
+                    operation_nature: None,
+                    delivery_address: None,
+                    lines: vec![line_command(Decimal::new(1, 0), 1_000)],
+                },
+                crate::domain::organization::ports::MockOrganizationRepository::new(),
+            )
+            .await;
+
+        assert!(matches!(result, Err(CoreError::Forbidden { .. })));
+    }
+
+    #[tokio::test]
+    async fn update_invoice_refuses_an_actor_without_manage_invoices() {
+        let id = InvoiceId(Uuid::new_v4());
+        let organization_id = OrganizationId(Uuid::new_v4());
+        let user_id = UserId(Uuid::new_v4());
+        let existing = Invoice {
+            organization_id,
+            ..invoice(id)
+        };
+
+        let mut repo = crate::domain::invoice::ports::MockInvoiceRepository::new();
+        repo.expect_find_by_id().with(eq(id)).returning(move |_| {
+            let existing = existing.clone();
+            Box::pin(async move { Ok(Some(existing)) })
+        });
+        // No `expect_update_draft`: refused before any write.
+
+        let mut member_repository = MockMemberRepository::new();
+        let mut role_repository = MockRoleRepository::new();
+        stage_org_membership(
+            &mut member_repository,
+            &mut role_repository,
+            organization_id,
+            user_id,
+        );
+        let authz = denying_authorizer(organization_id);
+
+        let mut service = InvoiceService::new(
+            repo,
+            events::testing::RecordingEmitter::new(),
+            member_repository,
+            role_repository,
+            authz,
+        );
+
+        let result = service
+            .update_invoice(
+                UpdateInvoiceCommand {
+                    id,
+                    actor: policy::user_subject(user_id, Vec::new()),
+                    project_id: None,
+                    customer_id: CustomerId(Uuid::new_v4()),
+                    customer_context_id: CustomerContextId(Uuid::new_v4()),
+                    due_at: None,
+                    notes: None,
+                    operation_nature: None,
+                    delivery_address: None,
+                    lines: vec![line_command(Decimal::new(1, 0), 1_000)],
+                },
+                crate::domain::organization::ports::MockOrganizationRepository::new(),
+            )
+            .await;
+
+        assert!(matches!(result, Err(CoreError::Forbidden { .. })));
+    }
+
+    #[tokio::test]
+    async fn cancel_invoice_refuses_an_actor_without_manage_invoices() {
+        let id = InvoiceId(Uuid::new_v4());
+        let organization_id = OrganizationId(Uuid::new_v4());
+        let user_id = UserId(Uuid::new_v4());
+        let existing = Invoice {
+            organization_id,
+            ..invoice(id)
+        };
+
+        let mut repo = crate::domain::invoice::ports::MockInvoiceRepository::new();
+        repo.expect_find_by_id().with(eq(id)).returning(move |_| {
+            let existing = existing.clone();
+            Box::pin(async move { Ok(Some(existing)) })
+        });
+        // No `expect_update_status`: refused before any write.
+
+        let mut member_repository = MockMemberRepository::new();
+        let mut role_repository = MockRoleRepository::new();
+        stage_org_membership(
+            &mut member_repository,
+            &mut role_repository,
+            organization_id,
+            user_id,
+        );
+        let authz = denying_authorizer(organization_id);
+
+        let mut service = InvoiceService::new(
+            repo,
+            events::testing::RecordingEmitter::new(),
+            member_repository,
+            role_repository,
+            authz,
+        );
+
+        let result = service
+            .cancel_invoice(CancelInvoiceCommand {
+                id,
+                actor: policy::user_subject(user_id, Vec::new()),
+            })
+            .await;
+
+        assert!(matches!(result, Err(CoreError::Forbidden { .. })));
+    }
+
+    #[tokio::test]
+    async fn soft_delete_invoice_refuses_an_actor_without_manage_invoices() {
+        let id = InvoiceId(Uuid::new_v4());
+        let organization_id = OrganizationId(Uuid::new_v4());
+        let user_id = UserId(Uuid::new_v4());
+        let existing = Invoice {
+            organization_id,
+            ..invoice(id)
+        };
+
+        let mut repo = crate::domain::invoice::ports::MockInvoiceRepository::new();
+        repo.expect_find_by_id().with(eq(id)).returning(move |_| {
+            let existing = existing.clone();
+            Box::pin(async move { Ok(Some(existing)) })
+        });
+        // No `expect_soft_delete`: refused before any write.
+
+        let mut member_repository = MockMemberRepository::new();
+        let mut role_repository = MockRoleRepository::new();
+        stage_org_membership(
+            &mut member_repository,
+            &mut role_repository,
+            organization_id,
+            user_id,
+        );
+        let authz = denying_authorizer(organization_id);
+
+        let mut service = InvoiceService::new(
+            repo,
+            events::testing::RecordingEmitter::new(),
+            member_repository,
+            role_repository,
+            authz,
+        );
+
+        let result = service
+            .soft_delete_invoice(id, policy::user_subject(user_id, Vec::new()))
+            .await;
+
+        assert!(matches!(result, Err(CoreError::Forbidden { .. })));
+    }
+
+    #[tokio::test]
+    async fn issue_invoice_refuses_an_actor_without_manage_invoices() {
+        let id = InvoiceId(Uuid::new_v4());
+        let organization_id = OrganizationId(Uuid::new_v4());
+        let user_id = UserId(Uuid::new_v4());
+        let existing = Invoice {
+            organization_id,
+            ..invoice(id)
+        };
+
+        let mut repo = crate::domain::invoice::ports::MockInvoiceRepository::new();
+        repo.expect_find_by_id().with(eq(id)).returning(move |_| {
+            let existing = existing.clone();
+            Box::pin(async move { Ok(Some(existing)) })
+        });
+        // No `expect_allocate_number`/`expect_issue`: refused before either.
+
+        let mut member_repository = MockMemberRepository::new();
+        let mut role_repository = MockRoleRepository::new();
+        stage_org_membership(
+            &mut member_repository,
+            &mut role_repository,
+            organization_id,
+            user_id,
+        );
+        let authz = denying_authorizer(organization_id);
+
+        let mut service = InvoiceService::new(
+            repo,
+            events::testing::RecordingEmitter::new(),
+            member_repository,
+            role_repository,
+            authz,
+        );
+
+        let result = service
+            .issue_invoice(
+                IssueInvoiceCommand {
+                    id,
+                    actor: policy::user_subject(user_id, Vec::new()),
+                    allow_exceeding_total: false,
+                },
+                crate::domain::organization::ports::MockOrganizationRepository::new(),
+                MockProjectRepository::new(),
+                MockQuoteRepository::new(),
+            )
+            .await;
+
+        assert!(matches!(result, Err(CoreError::Forbidden { .. })));
+    }
+
+    #[tokio::test]
+    async fn issue_deposit_refuses_an_actor_without_manage_invoices() {
+        let organization_id = OrganizationId(Uuid::new_v4());
+        let user_id = UserId(Uuid::new_v4());
+        let project = project_without_quote(organization_id);
+        let project_id = project.id;
+
+        let repo = crate::domain::invoice::ports::MockInvoiceRepository::new();
+        // No `expect_insert_draft`: refused before any write.
+
+        let mut member_repository = MockMemberRepository::new();
+        let mut role_repository = MockRoleRepository::new();
+        stage_org_membership(
+            &mut member_repository,
+            &mut role_repository,
+            organization_id,
+            user_id,
+        );
+        let authz = denying_authorizer(organization_id);
+
+        let mut service = InvoiceService::new(
+            repo,
+            events::testing::RecordingEmitter::new(),
+            member_repository,
+            role_repository,
+            authz,
+        );
+
+        let result = service
+            .issue_deposit(
+                IssueDepositCommand {
+                    project_id,
+                    actor: policy::user_subject(user_id, Vec::new()),
+                    percentage_bp: 3_000,
+                    due_at: None,
+                    notes: None,
+                    allow_exceeding_total: false,
+                },
+                crate::domain::organization::ports::MockOrganizationRepository::new(),
+                project_repo_with(project),
+                MockQuoteRepository::new(),
+            )
+            .await;
+
+        assert!(matches!(result, Err(CoreError::Forbidden { .. })));
+    }
+
+    #[tokio::test]
+    async fn issue_final_invoice_refuses_an_actor_without_manage_invoices() {
+        let organization_id = OrganizationId(Uuid::new_v4());
+        let user_id = UserId(Uuid::new_v4());
+        let project = project_without_quote(organization_id);
+        let project_id = project.id;
+
+        let repo = crate::domain::invoice::ports::MockInvoiceRepository::new();
+        // No `expect_insert_draft`: refused before any write.
+
+        let mut member_repository = MockMemberRepository::new();
+        let mut role_repository = MockRoleRepository::new();
+        stage_org_membership(
+            &mut member_repository,
+            &mut role_repository,
+            organization_id,
+            user_id,
+        );
+        let authz = denying_authorizer(organization_id);
+
+        let mut service = InvoiceService::new(
+            repo,
+            events::testing::RecordingEmitter::new(),
+            member_repository,
+            role_repository,
+            authz,
+        );
+
+        let result = service
+            .issue_final_invoice(
+                IssueFinalInvoiceCommand {
+                    project_id,
+                    actor: policy::user_subject(user_id, Vec::new()),
+                    due_at: None,
+                    notes: None,
+                    allow_exceeding_total: false,
+                },
+                crate::domain::organization::ports::MockOrganizationRepository::new(),
+                project_repo_with(project),
+                MockQuoteRepository::new(),
+            )
+            .await;
+
+        assert!(matches!(result, Err(CoreError::Forbidden { .. })));
+    }
+
+    #[tokio::test]
+    async fn issue_credit_note_refuses_an_actor_without_manage_invoices() {
+        let organization_id = OrganizationId(Uuid::new_v4());
+        let user_id = UserId(Uuid::new_v4());
+        let source_id = InvoiceId(Uuid::new_v4());
+        let source = Invoice {
+            organization_id,
+            ..invoice(source_id)
+        };
+
+        let store: Arc<Mutex<Vec<Invoice>>> = Arc::new(Mutex::new(vec![source]));
+        let repo = invoice_repository_over(store);
+        // `invoice_repository_over` stubs `expect_insert_draft` unconditionally,
+        // but nothing here ever calls `issue_credit_note` far enough to reach it.
+
+        let mut member_repository = MockMemberRepository::new();
+        let mut role_repository = MockRoleRepository::new();
+        stage_org_membership(
+            &mut member_repository,
+            &mut role_repository,
+            organization_id,
+            user_id,
+        );
+        let authz = denying_authorizer(organization_id);
+
+        let mut service = InvoiceService::new(
+            repo,
+            events::testing::RecordingEmitter::new(),
+            member_repository,
+            role_repository,
+            authz,
+        );
+
+        let result = service
+            .issue_credit_note(
+                IssueCreditNoteCommand {
+                    source_invoice_id: source_id,
+                    actor: policy::user_subject(user_id, Vec::new()),
+                    lines: vec![line_command(Decimal::new(1, 0), 1_000)],
+                    notes: None,
+                    allow_exceeding_invoice_total: false,
+                },
+                crate::domain::organization::ports::MockOrganizationRepository::new(),
+                MockProjectRepository::new(),
+                MockQuoteRepository::new(),
+            )
+            .await;
+
+        assert!(matches!(result, Err(CoreError::Forbidden { .. })));
+    }
+
+    #[tokio::test]
+    async fn record_payment_refuses_an_actor_without_manage_invoices() {
+        let id = InvoiceId(Uuid::new_v4());
+        let organization_id = OrganizationId(Uuid::new_v4());
+        let user_id = UserId(Uuid::new_v4());
+        let existing = Invoice {
+            organization_id,
+            ..invoice(id)
+        };
+
+        let mut repo = crate::domain::invoice::ports::MockInvoiceRepository::new();
+        repo.expect_find_by_id().with(eq(id)).returning(move |_| {
+            let existing = existing.clone();
+            Box::pin(async move { Ok(Some(existing)) })
+        });
+        // No `expect_insert_payment`: refused before any write.
+
+        let mut member_repository = MockMemberRepository::new();
+        let mut role_repository = MockRoleRepository::new();
+        stage_org_membership(
+            &mut member_repository,
+            &mut role_repository,
+            organization_id,
+            user_id,
+        );
+        let authz = denying_authorizer(organization_id);
+
+        let mut service = InvoiceService::new(
+            repo,
+            events::testing::RecordingEmitter::new(),
+            member_repository,
+            role_repository,
+            authz,
+        );
+
+        let result = service
+            .record_payment(RecordInvoicePaymentCommand {
+                invoice_id: id,
+                actor: policy::user_subject(user_id, Vec::new()),
+                amount_cents: 1_000,
+                paid_on: Utc::now().date_naive(),
+                method: "Virement".to_owned(),
+                reference: None,
+                note: None,
+                recorded_by: user_id,
+                allow_exceeding_total: false,
+            })
+            .await;
+
+        assert!(matches!(result, Err(CoreError::Forbidden { .. })));
+    }
+
+    #[tokio::test]
+    async fn delete_payment_refuses_an_actor_without_manage_invoices() {
+        let payment_id = InvoicePaymentId(Uuid::new_v4());
+        let organization_id = OrganizationId(Uuid::new_v4());
+        let user_id = UserId(Uuid::new_v4());
+        let existing_payment = payment(1_000, false);
+        let existing_payment = InvoicePayment {
+            id: payment_id,
+            organization_id,
+            ..existing_payment
+        };
+
+        let mut repo = crate::domain::invoice::ports::MockInvoiceRepository::new();
+        repo.expect_find_payment_by_id()
+            .with(eq(payment_id))
+            .returning(move |_| {
+                let existing_payment = existing_payment.clone();
+                Box::pin(async move { Ok(Some(existing_payment)) })
+            });
+        // No `expect_soft_delete_payment`: refused before any write.
+
+        let mut member_repository = MockMemberRepository::new();
+        let mut role_repository = MockRoleRepository::new();
+        stage_org_membership(
+            &mut member_repository,
+            &mut role_repository,
+            organization_id,
+            user_id,
+        );
+        let authz = denying_authorizer(organization_id);
+
+        let mut service = InvoiceService::new(
+            repo,
+            events::testing::RecordingEmitter::new(),
+            member_repository,
+            role_repository,
+            authz,
+        );
+
+        let result = service
+            .delete_payment(DeleteInvoicePaymentCommand {
+                id: payment_id,
+                actor: policy::user_subject(user_id, Vec::new()),
+                deleted_by: user_id,
+            })
+            .await;
+
+        assert!(matches!(result, Err(CoreError::Forbidden { .. })));
+    }
+
+    #[tokio::test]
+    async fn record_generated_document_refuses_an_actor_without_manage_invoices() {
+        let id = InvoiceId(Uuid::new_v4());
+        let organization_id = OrganizationId(Uuid::new_v4());
+        let user_id = UserId(Uuid::new_v4());
+        let existing = Invoice {
+            organization_id,
+            status: InvoiceStatus::Issued,
+            number: Some("FAC-2026-0001".to_owned()),
+            issued_at: Some(Utc::now()),
+            ..invoice(id)
+        };
+
+        let mut repo = crate::domain::invoice::ports::MockInvoiceRepository::new();
+        repo.expect_find_by_id().with(eq(id)).returning(move |_| {
+            let existing = existing.clone();
+            Box::pin(async move { Ok(Some(existing)) })
+        });
+        // Decoration for the `Issued` fixture, same as elsewhere in this module.
+        repo.expect_list_by_source_invoice()
+            .returning(|_| Box::pin(async { Ok(Vec::new()) }));
+        repo.expect_list_payments()
+            .returning(|_| Box::pin(async { Ok(Vec::new()) }));
+        // No `expect_record_generated_document`: refused before any write.
+
+        let mut member_repository = MockMemberRepository::new();
+        let mut role_repository = MockRoleRepository::new();
+        stage_org_membership(
+            &mut member_repository,
+            &mut role_repository,
+            organization_id,
+            user_id,
+        );
+        let authz = denying_authorizer(organization_id);
+
+        let mut service = InvoiceService::new(
+            repo,
+            events::testing::RecordingEmitter::new(),
+            member_repository,
+            role_repository,
+            authz,
+        );
+
+        let document = GeneratedInvoiceDocument {
+            format: "FACTURX".to_owned(),
+            file_key: "invoices/whatever.pdf".to_owned(),
+            mime_type: "application/pdf".to_owned(),
+            generated_at: Utc::now(),
+        };
+
+        let result = service
+            .record_generated_document(id, document, policy::user_subject(user_id, Vec::new()))
+            .await;
+
+        assert!(matches!(result, Err(CoreError::Forbidden { .. })));
     }
 }

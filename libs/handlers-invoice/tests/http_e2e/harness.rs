@@ -16,6 +16,7 @@ use std::{net::SocketAddr, sync::Arc};
 use args::Args;
 use chrono::{DateTime, SubsecRound, Utc};
 use clap::Parser;
+use mestier_core::Permissions;
 use sqlx::PgPool;
 use uuid::Uuid;
 
@@ -24,12 +25,22 @@ use crate::issuer;
 /// What a scenario needs to address the API it just started.
 pub struct App {
     pub base_url: String,
+    /// Holds `VIEW_INVOICES | MANAGE_INVOICES` (#395) — every existing
+    /// scenario in this suite predates the permission gate and exercises
+    /// full read/write access, the same reason `handlers-reporting`'s own
+    /// harness grants its main `app.token` `Permissions::ALL`.
     pub token: String,
+    /// Membership, no role assignment at all — the bare "belongs to the
+    /// organization" case #395's `VIEW_INVOICES`/`MANAGE_INVOICES` gates
+    /// now refuse outright, the same shape as `handlers-reporting`'s own
+    /// `no_role_token`.
+    pub no_role_token: String,
     pub pool: PgPool,
     pub organization_id: Uuid,
     pub customer_id: Uuid,
     pub customer_context_id: Uuid,
     user_id: Uuid,
+    no_role_user_id: Uuid,
 }
 
 /// Postgres stores microseconds; `Utc::now()` gives nanoseconds on Linux.
@@ -98,11 +109,13 @@ async fn bootstrap(complete_legal_identity: bool) -> App {
     App {
         base_url: format!("http://{addr}"),
         token: issuer::mint(&fixture.sub),
+        no_role_token: issuer::mint(&fixture.no_role_sub),
         pool,
         organization_id: fixture.organization_id,
         customer_id: fixture.customer_id,
         customer_context_id: fixture.customer_context_id,
         user_id: fixture.user_id,
+        no_role_user_id: fixture.no_role_user_id,
     }
 }
 
@@ -173,13 +186,14 @@ impl App {
     /// fail this cleanup — swallowing the error is the same choice
     /// `handlers-quote`'s own harness makes.
     pub async fn cleanup(&self) {
-        for statement in [
-            "DELETE FROM organizations WHERE id = $1",
-            "DELETE FROM users WHERE id = $2",
-        ] {
-            let _ = sqlx::query(statement)
-                .bind(self.organization_id)
-                .bind(self.user_id)
+        let _ = sqlx::query("DELETE FROM organizations WHERE id = $1")
+            .bind(self.organization_id)
+            .execute(&self.pool)
+            .await;
+
+        for user_id in [self.user_id, self.no_role_user_id] {
+            let _ = sqlx::query("DELETE FROM users WHERE id = $1")
+                .bind(user_id)
                 .execute(&self.pool)
                 .await;
         }
@@ -189,6 +203,8 @@ impl App {
 struct Fixture {
     sub: String,
     user_id: Uuid,
+    no_role_sub: String,
+    no_role_user_id: Uuid,
     organization_id: Uuid,
     customer_id: Uuid,
     customer_context_id: Uuid,
@@ -256,16 +272,56 @@ async fn seed(pool: &PgPool, complete_legal_identity: bool) -> Fixture {
         .expect("seed the legal identity");
     }
 
+    let member_id = Uuid::now_v7();
     sqlx::query(
         "INSERT INTO organization_members (id, organization_id, user_id, last_name) VALUES ($1, $2, $3, $4)",
     )
-    .bind(Uuid::now_v7())
+    .bind(member_id)
     .bind(organization_id)
     .bind(user_id)
     .bind("Artisan Test")
     .execute(pool)
     .await
     .expect("seed the membership");
+
+    // #395: every scenario in this suite predates the permission gate and
+    // exercises full read/write access over the invoice API, the same
+    // reason `handlers-reporting`'s own harness grants its main caller
+    // `Permissions::ALL` rather than leaving it at bare membership.
+    let full_access_role_id = seed_role(
+        pool,
+        organization_id,
+        "test-invoice-manager",
+        (Permissions::VIEW_INVOICES | Permissions::MANAGE_INVOICES).0,
+    )
+    .await;
+    assign_role(pool, member_id, full_access_role_id).await;
+
+    // Membership, no role assignment at all — the bare case #395's
+    // `VIEW_INVOICES`/`MANAGE_INVOICES` now refuse outright.
+    let no_role_user_id = Uuid::now_v7();
+    let no_role_sub = format!("sub-e2e-{no_role_user_id}");
+    sqlx::query(
+        "INSERT INTO users (id, email, username, display_name, sub) VALUES ($1, $2, $3, $4, $5)",
+    )
+    .bind(no_role_user_id)
+    .bind(format!("artisan-{no_role_user_id}@example.com"))
+    .bind(format!("artisan-{no_role_user_id}"))
+    .bind("Artisan Sans Role")
+    .bind(&no_role_sub)
+    .execute(pool)
+    .await
+    .expect("seed the no-role user");
+    sqlx::query(
+        "INSERT INTO organization_members (id, organization_id, user_id, last_name) VALUES ($1, $2, $3, $4)",
+    )
+    .bind(Uuid::now_v7())
+    .bind(organization_id)
+    .bind(no_role_user_id)
+    .bind("Artisan Sans Role")
+    .execute(pool)
+    .await
+    .expect("seed the no-role membership");
 
     let customer_id = Uuid::now_v7();
     sqlx::query("INSERT INTO customers (id, org_id, name) VALUES ($1, $2, $3)")
@@ -288,10 +344,39 @@ async fn seed(pool: &PgPool, complete_legal_identity: bool) -> Fixture {
     Fixture {
         sub,
         user_id,
+        no_role_sub,
+        no_role_user_id,
         organization_id,
         customer_id,
         customer_context_id,
     }
+}
+
+/// Same shape as `handlers-reporting`'s own harness helper.
+async fn seed_role(pool: &PgPool, organization_id: Uuid, name: &str, permissions: i64) -> Uuid {
+    let role_id = Uuid::now_v7();
+    sqlx::query(
+        "INSERT INTO roles (id, organization_id, name, permissions) VALUES ($1, $2, $3, $4)",
+    )
+    .bind(role_id)
+    .bind(organization_id)
+    .bind(name)
+    .bind(permissions)
+    .execute(pool)
+    .await
+    .expect("seed the role");
+
+    role_id
+}
+
+async fn assign_role(pool: &PgPool, member_id: Uuid, role_id: Uuid) {
+    sqlx::query("INSERT INTO member_roles (id, member_id, role_id) VALUES ($1, $2, $3)")
+        .bind(Uuid::now_v7())
+        .bind(member_id)
+        .bind(role_id)
+        .execute(pool)
+        .await
+        .expect("assign the role");
 }
 
 /// Only the three endpoints the test controls are overridden. Everything else,

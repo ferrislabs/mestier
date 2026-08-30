@@ -107,6 +107,18 @@ pub fn default_authorizer() -> MestierAuthorizer {
         .action("customer.manage", Permissions::MANAGE_CUSTOMERS.0)
         .action("quote.manage", Permissions::MANAGE_QUOTES.0)
         .action("reference.manage", Permissions::MANAGE_REFERENCE.0)
+        // #395: invoices had no write permission at all before this — any
+        // member could create, issue or cancel one under the plain
+        // membership gate. `invoice.manage` follows the same shape as
+        // `customer.manage`. Reading a customer or an invoice stays a
+        // handler-layer bit check (`require_view_customers`/
+        // `require_view_invoices`, mirroring `require_view_reports`) rather
+        // than an entry here — same reason `report.view` was removed above:
+        // `get_customer`/`get_invoice` are also called internally to
+        // validate a referenced id when creating an unrelated entity (e.g.
+        // an invoice's customer), and a hard refuse inside those shared
+        // domain methods would wrongly block that, not just a browse.
+        .action("invoice.manage", Permissions::MANAGE_INVOICES.0)
         .build()
 }
 

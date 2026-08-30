@@ -1,0 +1,25 @@
+-- #395: backfill VIEW_CUSTOMERS/VIEW_INVOICES/MANAGE_INVOICES onto every
+-- existing organization's default `admin` and `member` roles. `owner`
+-- needs no backfill: it is seeded (and stays seeded) as Permissions::ALL
+-- (i64::MAX), which already contains any bit added here or later, by
+-- construction.
+--
+-- Matched by `is_seeded`, not name alone (#308 added the column precisely
+-- because a custom role a user renamed to "admin" or "member" is
+-- indistinguishable from the seeded one by name) — tighter than the
+-- 20260829000002 precedent, which predates that column.
+--
+-- Bit values must stay in lockstep with
+-- domain::role::default_admin_business_permissions /
+-- default_member_business_permissions:
+--   admin:  VIEW_CUSTOMERS (32768) | VIEW_INVOICES (65536) | MANAGE_INVOICES (131072)
+--         = 229376
+--   member: VIEW_CUSTOMERS (32768) | VIEW_INVOICES (65536)
+--         = 98304
+-- `MANAGE_INVOICES` is deliberately absent from `member`: unlike the two
+-- read bits (which only name a capability every member already had under
+-- the plain membership gate this epic replaces), no member has ever needed
+-- a permission to create or cancel an invoice before — granting it by
+-- default here would be a new capability, not merely naming an old one.
+UPDATE roles SET permissions = permissions | 229376::bigint WHERE name = 'admin' AND is_seeded = true;
+UPDATE roles SET permissions = permissions | 98304::bigint WHERE name = 'member' AND is_seeded = true;

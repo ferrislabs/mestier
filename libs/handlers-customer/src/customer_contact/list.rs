@@ -8,7 +8,7 @@ use handlers::{
 };
 
 use crate::{
-    paths::CustomerContactsPath, require_customer_membership, response::CustomerContactResponse,
+    paths::CustomerContactsPath, require_customer_view, response::CustomerContactResponse,
 };
 
 #[utoipa::path(
@@ -34,7 +34,7 @@ pub async fn handler(
     Extension(identity): Extension<Identity>,
     Query(pagination): Query<PaginationParams>,
 ) -> Result<Response<CustomerContactResponse>, ApiError> {
-    require_customer_membership(&state, &identity, path.customer_id).await?;
+    require_customer_view(&state, &identity, path.customer_id).await?;
 
     let per_page = pagination.per_page();
     let page = pagination.page();

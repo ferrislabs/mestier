@@ -9,6 +9,7 @@ handlers = { workspace = true }
 handlers-quote = { workspace = true }
 mestier-core = { workspace = true }
 auth = { workspace = true }
+authz = { workspace = true }
 
 axum = { workspace = true }
 axum-extra = { workspace = true }

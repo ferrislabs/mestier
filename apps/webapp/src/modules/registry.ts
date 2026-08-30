@@ -61,6 +61,7 @@ export const MODULES: AppModule[] = [
 				to: '/crm/customers',
 				icon: Users,
 				exact: true,
+				requiredPermission: 'VIEW_CUSTOMERS',
 			},
 			{
 				id: 'pipeline',
@@ -74,6 +75,7 @@ export const MODULES: AppModule[] = [
 				label: 'Factures',
 				to: '/crm/invoices',
 				icon: Receipt,
+				requiredPermission: 'VIEW_INVOICES',
 			},
 			{
 				id: 'catalog',

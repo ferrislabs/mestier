@@ -14,6 +14,7 @@ import {
 	getPaginationViewModel,
 	useDataView,
 } from '#/components/data-view'
+import { RequirePermission } from '#/components/require-permission'
 import { Button } from '#/components/ui/button'
 import {
 	MetricCard,
@@ -193,12 +194,14 @@ export function InvoiceListUI({
 							<RefreshCw />
 							Actualiser
 						</Button>
-						<Button asChild type="button">
-							<Link to={buildOrgPath(organizationSlug, '/crm/invoices/new')}>
-								<Plus />
-								Nouvelle facture
-							</Link>
-						</Button>
+						<RequirePermission permission="MANAGE_INVOICES">
+							<Button asChild type="button">
+								<Link to={buildOrgPath(organizationSlug, '/crm/invoices/new')}>
+									<Plus />
+									Nouvelle facture
+								</Link>
+							</Button>
+						</RequirePermission>
 					</div>
 				}
 			/>
@@ -304,12 +307,16 @@ export function InvoiceListUI({
 								Réinitialiser la vue
 							</Button>
 						) : (
-							<Button asChild type="button">
-								<Link to={buildOrgPath(organizationSlug, '/crm/invoices/new')}>
-									<Plus />
-									Nouvelle facture
-								</Link>
-							</Button>
+							<RequirePermission permission="MANAGE_INVOICES">
+								<Button asChild type="button">
+									<Link
+										to={buildOrgPath(organizationSlug, '/crm/invoices/new')}
+									>
+										<Plus />
+										Nouvelle facture
+									</Link>
+								</Button>
+							</RequirePermission>
 						)}
 					</div>
 				) : (

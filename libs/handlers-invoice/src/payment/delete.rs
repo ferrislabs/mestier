@@ -1,6 +1,6 @@
 use auth::Identity;
 use axum::{Extension, extract::State};
-use handlers::{ApiError, AppState, Response, resolve_user_id};
+use handlers::{ApiError, AppState, Response};
 use mestier_core::{DeleteInvoicePaymentCommand, InvoicePaymentId};
 
 use crate::{EmptyResponse, paths::InvoicePaymentPath, require_payment_membership};
@@ -27,14 +27,15 @@ pub async fn handler(
     Extension(identity): Extension<Identity>,
 ) -> Result<Response<EmptyResponse>, ApiError> {
     require_payment_membership(&state, &identity, invoice_payment_id).await?;
-    let actor = resolve_user_id(&state, &identity).await?;
+    let (user_id, actor) = handlers::resolve_actor(&state, &identity).await?;
 
     state
         .usecase
-        .acting_as(actor)
+        .acting_as(user_id)
         .delete_invoice_payment(DeleteInvoicePaymentCommand {
             id: invoice_payment_id,
-            deleted_by: actor,
+            actor,
+            deleted_by: user_id,
         })
         .await?;
 

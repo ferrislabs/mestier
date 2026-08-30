@@ -3,9 +3,7 @@ use axum::{Extension, extract::State};
 use handlers::{ApiError, AppState, DataEnvelope, Response};
 use mestier_core::CustomerContextId;
 
-use crate::{
-    paths::CustomerContextPath, require_customer_membership, response::CustomerContextResponse,
-};
+use crate::{paths::CustomerContextPath, require_customer_view, response::CustomerContextResponse};
 
 #[utoipa::path(
     get,
@@ -34,7 +32,7 @@ pub async fn handler(
         .usecase
         .get_customer_context(customer_context_id)
         .await?;
-    require_customer_membership(&state, &identity, customer_context.customer_id).await?;
+    require_customer_view(&state, &identity, customer_context.customer_id).await?;
 
     Ok(Response::OK(customer_context.into()))
 }

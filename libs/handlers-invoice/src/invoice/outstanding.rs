@@ -3,7 +3,7 @@ use axum::{Extension, extract::State};
 use handlers::{ApiError, AppState, DataEnvelope, Response};
 
 use crate::{
-    paths::OrganizationInvoicesOutstandingPath, require_org_membership,
+    paths::OrganizationInvoicesOutstandingPath, require_view_invoices,
     response::CustomerOutstandingBalanceResponse,
 };
 
@@ -32,7 +32,7 @@ pub async fn handler(
     State(state): State<AppState>,
     Extension(identity): Extension<Identity>,
 ) -> Result<Response<Vec<CustomerOutstandingBalanceResponse>>, ApiError> {
-    require_org_membership(&state, &identity, organization_id).await?;
+    require_view_invoices(&state, &identity, organization_id).await?;
 
     let balances = state
         .usecase

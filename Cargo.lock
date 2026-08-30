@@ -2620,6 +2620,7 @@ version = "0.1.0"
 dependencies = [
  "args",
  "auth",
+ "authz",
  "axum",
  "axum-extra",
  "chrono",

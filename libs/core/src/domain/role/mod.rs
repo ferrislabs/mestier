@@ -40,6 +40,26 @@ impl Permissions {
     pub const MANAGE_QUOTES: Self = Permissions(1 << 13); // 8192
     pub const MANAGE_REFERENCE: Self = Permissions(1 << 14); // 16384
 
+    // #391/#395: closes the last plain-membership reads. Customer and
+    // invoice writes were already behind `MANAGE_CUSTOMERS` and (as of this
+    // change) `MANAGE_INVOICES`; reading either list or record had no bit at
+    // all, unlike every other business resource. `VIEW_CUSTOMERS` and
+    // `VIEW_INVOICES` are separate bits, not implied by their `MANAGE_*`
+    // counterpart, for the same reason `VIEW_COST`/`MANAGE_COST` are split:
+    // an accountant may need to see every invoice without being trusted to
+    // issue one.
+    pub const VIEW_CUSTOMERS: Self = Permissions(1 << 15); // 32768
+    pub const VIEW_INVOICES: Self = Permissions(1 << 16); // 65536
+    // Invoices had no write permission at all before this — any member could
+    // create, issue or cancel one under the plain membership gate. Deliberately
+    // *not* granted to the seeded `member` role by default (see
+    // `default_member_business_permissions`): unlike `MANAGE_CUSTOMERS` and
+    // `MANAGE_QUOTES`, which member already lacked before this epic too, this
+    // is a real behavior change for existing organizations, not a bit that
+    // merely names an existing boundary — an explicit product call, not a
+    // silent default.
+    pub const MANAGE_INVOICES: Self = Permissions(1 << 17); // 131072
+
     pub const ALL: Self = Permissions(i64::MAX);
 
     pub const fn contains(self, other: Permissions) -> bool {
@@ -74,6 +94,9 @@ impl Permissions {
         ("MANAGE_CUSTOMERS", Permissions::MANAGE_CUSTOMERS),
         ("MANAGE_QUOTES", Permissions::MANAGE_QUOTES),
         ("MANAGE_REFERENCE", Permissions::MANAGE_REFERENCE),
+        ("VIEW_CUSTOMERS", Permissions::VIEW_CUSTOMERS),
+        ("VIEW_INVOICES", Permissions::VIEW_INVOICES),
+        ("MANAGE_INVOICES", Permissions::MANAGE_INVOICES),
     ];
 
     /// The names of every bit `self` carries — #307's "the caller's
@@ -161,6 +184,11 @@ pub const MEMBER_ROLE_NAME: &str = "member";
 /// `VIEW_COST`/`MANAGE_COST` are deliberately absent: admin already trusted
 /// with running day-to-day operations does not imply trusted with payroll,
 /// and bundling the two would recreate the leak #283 exists to close.
+///
+/// #395 adds `VIEW_CUSTOMERS`/`VIEW_INVOICES`/`MANAGE_INVOICES`: admin
+/// already manages customers and quotes, so reading and now managing
+/// invoices — the natural next step after a quote — follows the same
+/// trust level, not a new one.
 pub fn default_admin_business_permissions() -> Permissions {
     Permissions::VIEW_PLANNING
         | Permissions::MANAGE_PLANNING
@@ -168,6 +196,9 @@ pub fn default_admin_business_permissions() -> Permissions {
         | Permissions::MANAGE_CUSTOMERS
         | Permissions::MANAGE_QUOTES
         | Permissions::MANAGE_REFERENCE
+        | Permissions::VIEW_CUSTOMERS
+        | Permissions::VIEW_INVOICES
+        | Permissions::MANAGE_INVOICES
 }
 
 /// #304: the business bits a fresh organization's default `member` role
@@ -177,8 +208,21 @@ pub fn default_admin_business_permissions() -> Permissions {
 /// and quotes/customers/reference stay with roles that manage the
 /// business, not everyone in it. Same backfill-agreement requirement as
 /// [`default_admin_business_permissions`].
+///
+/// #395 adds `VIEW_CUSTOMERS`/`VIEW_INVOICES` here — a member could already
+/// read every customer and invoice under the plain membership gate this
+/// epic replaces, so granting the read bits by default is not a new
+/// capability, only naming one that already existed. `MANAGE_INVOICES` is
+/// deliberately absent: unlike the two read bits, no member has ever needed
+/// a permission to create or cancel an invoice before, because nothing
+/// gated it — introducing the bit is the moment to also decide, explicitly,
+/// that member does not hold it by default. An owner who wants members
+/// invoicing directly grants it through a custom role.
 pub fn default_member_business_permissions() -> Permissions {
-    Permissions::VIEW_PLANNING | Permissions::MANAGE_PLANNING
+    Permissions::VIEW_PLANNING
+        | Permissions::MANAGE_PLANNING
+        | Permissions::VIEW_CUSTOMERS
+        | Permissions::VIEW_INVOICES
 }
 
 #[cfg(test)]

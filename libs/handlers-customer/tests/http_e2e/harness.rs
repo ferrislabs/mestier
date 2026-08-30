@@ -21,12 +21,24 @@ pub struct App {
     pub token: String,
     /// A member of the same organization holding some business permissions
     /// (`VIEW_PLANNING`) but not `MANAGE_CUSTOMERS` (#305) — the caller a
-    /// customer write must refuse.
+    /// customer write must refuse. It also lacks `VIEW_CUSTOMERS` (#395),
+    /// so the same token proves membership alone is no longer enough to
+    /// read a customer either.
     pub restricted_token: String,
+    /// A member holding exactly `VIEW_CUSTOMERS` — nothing else, no
+    /// `MANAGE_CUSTOMERS`, no `VIEW_PLANNING` (#395). Reads the same
+    /// customer, contact and context the owner does.
+    pub view_customers_token: String,
     pub pool: PgPool,
     pub organization_id: Uuid,
+    /// A customer seeded in `organization_id`, read by the get-one and
+    /// list-under-customer tests.
+    pub customer_id: Uuid,
+    pub customer_contact_id: Uuid,
+    pub customer_context_id: Uuid,
     user_id: Uuid,
     restricted_user_id: Uuid,
+    view_customers_user_id: Uuid,
 }
 
 pub async fn start() -> App {
@@ -69,10 +81,15 @@ pub async fn start() -> App {
         base_url: format!("http://{addr}"),
         token: issuer::mint(&fixture.sub),
         restricted_token: issuer::mint(&fixture.restricted_sub),
+        view_customers_token: issuer::mint(&fixture.view_customers_sub),
         pool,
         organization_id: fixture.organization_id,
+        customer_id: fixture.customer_id,
+        customer_contact_id: fixture.customer_contact_id,
+        customer_context_id: fixture.customer_context_id,
         user_id: fixture.user_id,
         restricted_user_id: fixture.restricted_user_id,
+        view_customers_user_id: fixture.view_customers_user_id,
     }
 }
 
@@ -81,6 +98,41 @@ impl App {
         format!(
             "{}/api/v1/organizations/{}/customers{suffix}",
             self.base_url, self.organization_id
+        )
+    }
+
+    /// `GET /customers/{customer_id}` — unlike `url`, not nested under an
+    /// organization path segment (#395).
+    pub fn customer_url(&self, customer_id: Uuid) -> String {
+        format!("{}/api/v1/customers/{customer_id}", self.base_url)
+    }
+
+    /// `GET /customers/{customer_id}/contacts`.
+    pub fn customer_contacts_url(&self, customer_id: Uuid) -> String {
+        format!("{}/api/v1/customers/{customer_id}/contacts", self.base_url)
+    }
+
+    /// `GET /customer-contacts/{customer_contact_id}`.
+    pub fn customer_contact_url(&self, customer_contact_id: Uuid) -> String {
+        format!(
+            "{}/api/v1/customer-contacts/{customer_contact_id}",
+            self.base_url
+        )
+    }
+
+    /// `GET /customers/{customer_id}/customer-contexts`.
+    pub fn customer_contexts_url(&self, customer_id: Uuid) -> String {
+        format!(
+            "{}/api/v1/customers/{customer_id}/customer-contexts",
+            self.base_url
+        )
+    }
+
+    /// `GET /customer-contexts/{customer_context_id}`.
+    pub fn customer_context_url(&self, customer_context_id: Uuid) -> String {
+        format!(
+            "{}/api/v1/customer-contexts/{customer_context_id}",
+            self.base_url
         )
     }
 
@@ -102,7 +154,11 @@ impl App {
                 .unwrap_or_else(|e| panic!("cleanup failed on `{statement}`: {e}"));
         }
 
-        for user_id in [self.user_id, self.restricted_user_id] {
+        for user_id in [
+            self.user_id,
+            self.restricted_user_id,
+            self.view_customers_user_id,
+        ] {
             sqlx::query("DELETE FROM users WHERE id = $1")
                 .bind(user_id)
                 .execute(&self.pool)
@@ -117,18 +173,25 @@ struct Fixture {
     user_id: Uuid,
     restricted_sub: String,
     restricted_user_id: Uuid,
+    view_customers_sub: String,
+    view_customers_user_id: Uuid,
     organization_id: Uuid,
+    customer_id: Uuid,
+    customer_contact_id: Uuid,
+    customer_context_id: Uuid,
 }
 
-/// An organization, its owner (`Permissions::ALL`), and a second member
-/// holding a role with `VIEW_PLANNING` but not `MANAGE_CUSTOMERS` — seeded
-/// with raw SQL rather than through the real `create_organization` use
-/// case, so the roles here are exactly the two bitmasks the test cares
-/// about, not #304's defaults.
+/// An organization, its owner (`Permissions::ALL`), a second member holding
+/// a role with `VIEW_PLANNING` but not `MANAGE_CUSTOMERS`/`VIEW_CUSTOMERS`,
+/// and a third holding exactly `VIEW_CUSTOMERS` — seeded with raw SQL rather
+/// than through the real `create_organization` use case, so the roles here
+/// are exactly the bitmasks the tests care about, not #304's defaults.
 async fn seed(pool: &PgPool) -> Fixture {
     let organization_id = Uuid::now_v7();
     let (user_id, sub, owner_member_id) = seed_person(pool, organization_id, true).await;
     let (restricted_user_id, restricted_sub, restricted_member_id) =
+        seed_person(pool, organization_id, false).await;
+    let (view_customers_user_id, view_customers_sub, view_customers_member_id) =
         seed_person(pool, organization_id, false).await;
 
     let owner_role_id = seed_role(pool, organization_id, "test-owner", Permissions::ALL.0).await;
@@ -143,13 +206,75 @@ async fn seed(pool: &PgPool) -> Fixture {
     .await;
     assign_role(pool, restricted_member_id, restricted_role_id).await;
 
+    // #395: exactly `VIEW_CUSTOMERS`, nothing else — no `MANAGE_CUSTOMERS`,
+    // no `VIEW_PLANNING`. Proves it is this one bit the read gate keys off.
+    let view_customers_role_id = seed_role(
+        pool,
+        organization_id,
+        "test-view-customers",
+        Permissions::VIEW_CUSTOMERS.0,
+    )
+    .await;
+    assign_role(pool, view_customers_member_id, view_customers_role_id).await;
+
+    let customer_id = seed_customer(pool, organization_id, "Duval Masonry").await;
+    let customer_contact_id = seed_customer_contact(pool, customer_id).await;
+    let customer_context_id = seed_customer_context(pool, customer_id).await;
+
     Fixture {
         sub,
         user_id,
         restricted_sub,
         restricted_user_id,
+        view_customers_sub,
+        view_customers_user_id,
         organization_id,
+        customer_id,
+        customer_contact_id,
+        customer_context_id,
     }
+}
+
+async fn seed_customer(pool: &PgPool, organization_id: Uuid, name: &str) -> Uuid {
+    let customer_id = Uuid::now_v7();
+    sqlx::query("INSERT INTO customers (id, org_id, name) VALUES ($1, $2, $3)")
+        .bind(customer_id)
+        .bind(organization_id)
+        .bind(name)
+        .execute(pool)
+        .await
+        .expect("seed the customer");
+
+    customer_id
+}
+
+async fn seed_customer_contact(pool: &PgPool, customer_id: Uuid) -> Uuid {
+    let customer_contact_id = Uuid::now_v7();
+    sqlx::query(
+        "INSERT INTO customer_contacts (id, customer_id, first_name, last_name) VALUES ($1, $2, $3, $4)",
+    )
+    .bind(customer_contact_id)
+    .bind(customer_id)
+    .bind("Jean")
+    .bind("Duval")
+    .execute(pool)
+    .await
+    .expect("seed the customer contact");
+
+    customer_contact_id
+}
+
+async fn seed_customer_context(pool: &PgPool, customer_id: Uuid) -> Uuid {
+    let customer_context_id = Uuid::now_v7();
+    sqlx::query("INSERT INTO customer_contexts (id, customer_id, label) VALUES ($1, $2, $3)")
+        .bind(customer_context_id)
+        .bind(customer_id)
+        .bind("Chantier principal")
+        .execute(pool)
+        .await
+        .expect("seed the customer context");
+
+    customer_context_id
 }
 
 async fn seed_role(pool: &PgPool, organization_id: Uuid, name: &str, permissions: i64) -> Uuid {

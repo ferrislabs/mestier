@@ -4,8 +4,7 @@ use handlers::{ApiError, AppState, DataEnvelope, Response};
 use mestier_core::CustomerContactId;
 
 use crate::{
-    paths::CustomerContactPath, require_customer_contact_membership,
-    response::CustomerContactResponse,
+    paths::CustomerContactPath, require_customer_contact_view, response::CustomerContactResponse,
 };
 
 #[utoipa::path(
@@ -31,7 +30,7 @@ pub async fn handler(
     State(state): State<AppState>,
     Extension(identity): Extension<Identity>,
 ) -> Result<Response<CustomerContactResponse>, ApiError> {
-    require_customer_contact_membership(&state, &identity, customer_contact_id).await?;
+    require_customer_contact_view(&state, &identity, customer_contact_id).await?;
     let customer_contact = state
         .usecase
         .get_customer_contact(customer_contact_id)

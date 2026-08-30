@@ -3,7 +3,7 @@ use axum::{Extension, extract::State};
 use handlers::{ApiError, AppState, DataEnvelope, Response};
 use mestier_core::CustomerId;
 
-use crate::{paths::CustomerPath, require_org_membership, response::CustomerResponse};
+use crate::{paths::CustomerPath, require_view_customers, response::CustomerResponse};
 
 #[utoipa::path(
     get,
@@ -27,7 +27,7 @@ pub async fn handler(
     Extension(identity): Extension<Identity>,
 ) -> Result<Response<CustomerResponse>, ApiError> {
     let customer = state.usecase.get_customer(customer_id).await?;
-    require_org_membership(&state, &identity, customer.organization_id).await?;
+    require_view_customers(&state, &identity, customer.organization_id).await?;
 
     Ok(Response::OK(customer.into()))
 }

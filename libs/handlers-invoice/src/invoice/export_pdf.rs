@@ -1,4 +1,5 @@
 use auth::Identity;
+use authz::Subject;
 use axum::{
     Extension,
     body::Body,
@@ -22,7 +23,7 @@ use mestier_core::{
 use serde::Deserialize;
 use utoipa::{IntoParams, ToSchema};
 
-use crate::{paths::InvoicePdfPath, require_invoice_membership};
+use crate::{paths::InvoicePdfPath, require_view_invoices};
 
 /// `?format=` on the invoice PDF route (#342): `pdf` (the default, #319's
 /// own visual-only export, unchanged) or `facturx`, which gains the
@@ -71,7 +72,8 @@ pub async fn handler(
     Extension(identity): Extension<Identity>,
     Query(query): Query<InvoicePdfQuery>,
 ) -> Result<Response, ApiError> {
-    let invoice = require_invoice_membership(&state, &identity, invoice_id).await?;
+    let invoice = state.usecase.get_invoice(invoice_id).await?;
+    require_view_invoices(&state, &identity, invoice.organization_id).await?;
     let organization = state
         .usecase
         .get_organization(invoice.organization_id)
@@ -99,7 +101,16 @@ pub async fn handler(
     let bytes = match query.format {
         InvoiceDocumentFormatQuery::Pdf => pdf,
         InvoiceDocumentFormatQuery::Facturx => {
-            facturx_document(&state, &invoice, &customer, pdf).await?
+            // Generating (and, the first time, persisting) the Factur-X
+            // artefact is a write on the invoice — `record_invoice_generated_
+            // document` is gated by `MANAGE_INVOICES` like every other one
+            // (#395), even though the surrounding route only reads. Resolved
+            // here rather than threaded through `require_view_invoices`
+            // because most calls to this route never take this branch (an
+            // already-generated document is just served back, no write at
+            // all — see `facturx_document`'s own doc comment).
+            let (_, actor) = handlers::resolve_actor(&state, &identity).await?;
+            facturx_document(&state, &invoice, &customer, pdf, actor).await?
         }
     };
     let filename = format!("{filename_stem}.pdf");
@@ -131,6 +142,7 @@ async fn facturx_document(
     invoice: &Invoice,
     customer: &Customer,
     visual_pdf: Vec<u8>,
+    actor: Subject,
 ) -> Result<Vec<u8>, ApiError> {
     if let Some(document) = &invoice.generated_document {
         let stored = state.file_storage.get(&document.file_key).await?;
@@ -187,6 +199,7 @@ async fn facturx_document(
                 mime_type: generated.mime_type.clone(),
                 generated_at: chrono::Utc::now(),
             },
+            actor,
         )
         .await?;
 

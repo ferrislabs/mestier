@@ -3,7 +3,7 @@ use axum::{Extension, extract::State};
 use handlers::{ApiError, AppState, DataEnvelope, Response};
 use mestier_core::ProjectId;
 
-use crate::{paths::ProjectInvoicesPath, require_project_membership, response::InvoiceResponse};
+use crate::{paths::ProjectInvoicesPath, require_view_invoices, response::InvoiceResponse};
 
 #[utoipa::path(
     get,
@@ -26,7 +26,8 @@ pub async fn handler(
     State(state): State<AppState>,
     Extension(identity): Extension<Identity>,
 ) -> Result<Response<Vec<InvoiceResponse>>, ApiError> {
-    require_project_membership(&state, &identity, project_id).await?;
+    let project = state.usecase.get_project(project_id).await?;
+    require_view_invoices(&state, &identity, project.organization_id).await?;
 
     let invoices = state.usecase.list_invoices_by_project(project_id).await?;
     let items: Vec<InvoiceResponse> = invoices.into_iter().map(InvoiceResponse::from).collect();
