@@ -1,10 +1,16 @@
 import type { QueryClient } from '@tanstack/react-query'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import {
+	useMutation,
+	useQueries,
+	useQuery,
+	useQueryClient,
+} from '@tanstack/react-query'
 import type { Schemas } from '#/api/api.client'
 
 const ROLES_PATH = '/api/v1/organizations/{organization_id}/roles'
 const ROLE_PATH = '/api/v1/roles/{role_id}'
 const MEMBER_ROLES_PATH = '/api/v1/members/{member_id}/roles'
+const MEMBER_ROLE_PATH = '/api/v1/members/{member_id}/roles/{role_id}'
 
 interface QueryKeyMeta {
 	_id?: unknown
@@ -129,6 +135,54 @@ export function useAssignRole() {
 						(variables as { path?: { member_id?: string } }).path?.member_id,
 					),
 			}),
+	})
+}
+
+/** `DELETE /members/{id}/roles/{id}` — the counterpart of `useAssignRole`;
+ * removes exactly the one role, leaving any other the member holds. */
+export function useUnassignRole() {
+	const queryClient = useQueryClient()
+
+	return useMutation({
+		...window.tanstackApi.mutation('delete', MEMBER_ROLE_PATH).mutationOptions,
+		onSuccess: (_data, variables) =>
+			queryClient.invalidateQueries({
+				predicate: (query) =>
+					isMemberRolesQuery(
+						query.queryKey,
+						(variables as { path?: { member_id?: string } }).path?.member_id,
+					),
+			}),
+	})
+}
+
+/**
+ * How many members hold each role, keyed by role id. One `useMemberRoleIds`
+ * query per member rather than a dedicated aggregate endpoint — the roles
+ * section is a small-team settings screen, not a list that scales past a
+ * couple dozen rows, and this reuses the same cached per-member query
+ * `MemberRoleCell` already populates on the team page.
+ */
+export function useRoleMemberCounts(memberIds: string[]): Map<string, number> {
+	return useQueries({
+		queries: memberIds.map((memberId) => ({
+			...window.tanstackApi.get(MEMBER_ROLES_PATH, {
+				path: { member_id: memberId },
+			}).queryOptions,
+		})),
+		combine: (results) => {
+			const counts = new Map<string, number>()
+			for (const result of results) {
+				const roleIds = (
+					result.data as { data?: { role_ids?: string[] } } | undefined
+				)?.data?.role_ids
+				if (!roleIds) continue
+				for (const roleId of roleIds) {
+					counts.set(roleId, (counts.get(roleId) ?? 0) + 1)
+				}
+			}
+			return counts
+		},
 	})
 }
 

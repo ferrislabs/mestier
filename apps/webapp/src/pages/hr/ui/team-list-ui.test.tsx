@@ -26,6 +26,7 @@ const MY_PERMISSIONS_PATH =
 	'/api/v1/organizations/{organization_id}/members/me/permissions'
 const ROLES_PATH = '/api/v1/organizations/{organization_id}/roles'
 const MEMBER_ROLES_PATH = '/api/v1/members/{member_id}/roles'
+const MEMBER_ROLE_PATH = '/api/v1/members/{member_id}/roles/{role_id}'
 
 function role(overrides: Partial<Role> = {}): Role {
 	return {
@@ -48,6 +49,9 @@ interface FakeApiOptions {
 	onAssignRole?: (params: {
 		path: { member_id: string }
 		body: { role_id: string }
+	}) => unknown
+	onUnassignRole?: (params: {
+		path: { member_id: string; role_id: string }
 	}) => unknown
 }
 
@@ -105,6 +109,16 @@ function installFakePermissionsApi(options: FakeApiOptions = {}) {
 								params as {
 									path: { member_id: string }
 									body: { role_id: string }
+								},
+							)
+						}
+						if (method === 'delete' && path === MEMBER_ROLE_PATH) {
+							if (!options.onUnassignRole) {
+								throw new Error('onUnassignRole not mocked')
+							}
+							return options.onUnassignRole(
+								params as {
+									path: { member_id: string; role_id: string }
 								},
 							)
 						}
@@ -629,5 +643,105 @@ describe('TeamListUI — role assignment (#308)', () => {
 		expect(
 			screen.queryByText('Administrateur', { selector: 'button' }),
 		).toBeNull()
+	})
+})
+
+describe('TeamListUI — role unassignment (#401, #402)', () => {
+	it('offers a remove control on a held role when the fixture grants MANAGE_ROLES', async () => {
+		await renderWithRouter(<TeamListUI {...baseProps()} />, undefined, {
+			permissions: ['MANAGE_ROLES'],
+			roles: [role({ id: 'role-admin', name: 'Administrateur' })],
+			memberRoleIds: { 'member-1': ['role-admin'] },
+		})
+
+		expect(
+			await screen.findByRole('button', {
+				name: 'Retirer le rôle Administrateur',
+			}),
+		).toBeDefined()
+	})
+
+	it('hides the remove control when the fixture does not grant MANAGE_ROLES', async () => {
+		await renderWithRouter(<TeamListUI {...baseProps()} />, undefined, {
+			permissions: ['MANAGE_MEMBERS'],
+			roles: [role({ id: 'role-admin', name: 'Administrateur' })],
+			memberRoleIds: { 'member-1': ['role-admin'] },
+		})
+
+		expect(await screen.findByText('Administrateur')).toBeDefined()
+		expect(screen.queryByRole('button', { name: /Retirer le rôle/ })).toBeNull()
+	})
+
+	it('calls the unassign mutation with the right member and role id, and the badge disappears', async () => {
+		const user = userEvent.setup()
+		const memberRoleIds: Record<string, string[]> = {
+			'member-1': ['role-admin'],
+		}
+		const onUnassignRole = vi.fn(
+			(params: { path: { member_id: string; role_id: string } }) => {
+				memberRoleIds[params.path.member_id] = (
+					memberRoleIds[params.path.member_id] ?? []
+				).filter((id) => id !== params.path.role_id)
+				return { data: undefined }
+			},
+		)
+
+		await renderWithRouter(<TeamListUI {...baseProps()} />, undefined, {
+			permissions: ['MANAGE_ROLES'],
+			roles: [role({ id: 'role-admin', name: 'Administrateur' })],
+			memberRoleIds,
+			onUnassignRole,
+		})
+
+		await user.click(
+			await screen.findByRole('button', {
+				name: 'Retirer le rôle Administrateur',
+			}),
+		)
+
+		await waitFor(() => {
+			expect(onUnassignRole).toHaveBeenCalledWith({
+				path: { member_id: 'member-1', role_id: 'role-admin' },
+			})
+		})
+
+		expect(await screen.findByText('Aucun rôle')).toBeDefined()
+	})
+
+	it('shows a search box in the assign popover once there are more than five assignable roles', async () => {
+		const user = userEvent.setup()
+		const roles = Array.from({ length: 6 }, (_, index) =>
+			role({ id: `role-${index}`, name: `Rôle ${index}` }),
+		)
+		await renderWithRouter(<TeamListUI {...baseProps()} />, undefined, {
+			permissions: ['MANAGE_ROLES'],
+			roles,
+		})
+
+		await user.click(
+			await screen.findByRole('button', { name: 'Assigner un rôle' }),
+		)
+
+		await user.type(
+			screen.getByPlaceholderText('Rechercher un rôle…'),
+			'Rôle 3',
+		)
+
+		expect(screen.getByRole('button', { name: 'Rôle 3' })).toBeDefined()
+		expect(screen.queryByRole('button', { name: 'Rôle 0' })).toBeNull()
+	})
+
+	it('does not show a search box in the assign popover for five or fewer assignable roles', async () => {
+		const user = userEvent.setup()
+		await renderWithRouter(<TeamListUI {...baseProps()} />, undefined, {
+			permissions: ['MANAGE_ROLES'],
+			roles: [role({ id: 'role-admin', name: 'Administrateur' })],
+		})
+
+		await user.click(
+			await screen.findByRole('button', { name: 'Assigner un rôle' }),
+		)
+
+		expect(screen.queryByPlaceholderText('Rechercher un rôle…')).toBeNull()
 	})
 })

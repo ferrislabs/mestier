@@ -3,10 +3,11 @@ import {
 	Loader2,
 	Plus,
 	Save,
+	Search,
 	ShieldCheck,
 	Trash2,
 } from 'lucide-react'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import {
 	AlertDialog,
 	AlertDialogAction,
@@ -31,13 +32,16 @@ import {
 	SheetHeader,
 	SheetTitle,
 } from '#/components/ui/sheet'
+import { Skeleton } from '#/components/ui/skeleton'
 import { SectionCard, SectionHeader } from '#/components/ui/surface'
 import { useActiveOrganization } from '#/hooks/use-active-organization'
 import { useHasPermission } from '#/hooks/use-permissions'
+import { useReferenceCatalog } from '#/hooks/use-reference-catalog'
 import {
 	type Role,
 	useCreateRole,
 	useDeleteRole,
+	useRoleMemberCounts,
 	useRoles,
 	useUpdateRole,
 } from '#/hooks/use-roles'
@@ -125,23 +129,48 @@ interface RolesSectionContentProps {
 	organizationId: string
 }
 
+/** Order-independent: two forms with the same bits in a different order are
+ * not "unsaved changes". */
+function sameForm(a: RoleFormValues, b: RoleFormValues): boolean {
+	if (a.name !== b.name) return false
+	if (a.permissions.length !== b.permissions.length) return false
+	const sortedA = [...a.permissions].sort()
+	const sortedB = [...b.permissions].sort()
+	return sortedA.every((permission, index) => permission === sortedB[index])
+}
+
 function RolesSectionContent({ organizationId }: RolesSectionContentProps) {
 	const roles = useRoles(organizationId)
 	const createRole = useCreateRole(organizationId)
 	const updateRole = useUpdateRole()
 	const deleteRole = useDeleteRole()
+	const members = useReferenceCatalog(organizationId, {
+		employeeProfiles: false,
+		equipment: false,
+		serviceRates: false,
+		products: false,
+	}).members
+	const memberCounts = useRoleMemberCounts(
+		(members.data?.data ?? []).map((member) => member.id),
+	)
 
 	const [sheetOpen, setSheetOpen] = useState(false)
 	const [mode, setMode] = useState<'create' | 'edit'>('create')
 	const [editingRole, setEditingRole] = useState<Role | null>(null)
 	const [values, setValues] = useState<RoleFormValues>(emptyRoleForm())
+	const [initialValues, setInitialValues] = useState<RoleFormValues>(
+		emptyRoleForm(),
+	)
+	const [discardConfirmOpen, setDiscardConfirmOpen] = useState(false)
 
 	const items = roles.data?.data ?? []
+	const isDirty = !sameForm(values, initialValues)
 
 	const openCreate = () => {
 		setMode('create')
 		setEditingRole(null)
 		setValues(emptyRoleForm())
+		setInitialValues(emptyRoleForm())
 		setSheetOpen(true)
 	}
 
@@ -149,7 +178,16 @@ function RolesSectionContent({ organizationId }: RolesSectionContentProps) {
 		setMode('edit')
 		setEditingRole(role)
 		setValues(roleToForm(role))
+		setInitialValues(roleToForm(role))
 		setSheetOpen(true)
+	}
+
+	const requestSheetOpenChange = (next: boolean) => {
+		if (!next && isDirty) {
+			setDiscardConfirmOpen(true)
+			return
+		}
+		setSheetOpen(next)
 	}
 
 	const handleSubmit = async () => {
@@ -198,7 +236,7 @@ function RolesSectionContent({ organizationId }: RolesSectionContentProps) {
 			) : null}
 
 			{roles.isLoading ? (
-				<p className="p-5 text-sm text-muted-foreground">Chargement…</p>
+				<RolesListSkeleton />
 			) : roles.error ? (
 				<p className="p-5 text-sm text-destructive">{roles.error.message}</p>
 			) : items.length === 0 ? (
@@ -211,6 +249,7 @@ function RolesSectionContent({ organizationId }: RolesSectionContentProps) {
 						<RoleRow
 							key={role.id}
 							role={role}
+							memberCount={memberCounts.get(role.id) ?? 0}
 							onEdit={() => openEdit(role)}
 							onDelete={() => deleteRole.mutate({ path: { role_id: role.id } })}
 						/>
@@ -225,7 +264,7 @@ function RolesSectionContent({ organizationId }: RolesSectionContentProps) {
 				values={values}
 				isPending={createRole.isPending || updateRole.isPending}
 				error={saveError}
-				onOpenChange={setSheetOpen}
+				onOpenChange={requestSheetOpenChange}
 				onChangeName={(name) => setValues((current) => ({ ...current, name }))}
 				onTogglePermission={(name, checked) =>
 					setValues((current) => ({
@@ -235,19 +274,65 @@ function RolesSectionContent({ organizationId }: RolesSectionContentProps) {
 							: current.permissions.filter((permission) => permission !== name),
 					}))
 				}
+				onSetPermissions={(names) =>
+					setValues((current) => ({ ...current, permissions: names }))
+				}
 				onSubmit={() => void handleSubmit()}
 			/>
+
+			<AlertDialog
+				open={discardConfirmOpen}
+				onOpenChange={setDiscardConfirmOpen}
+			>
+				<AlertDialogContent>
+					<AlertDialogHeader>
+						<AlertDialogTitle>Abandonner les modifications ?</AlertDialogTitle>
+						<AlertDialogDescription>
+							Les changements apportés à ce rôle n'ont pas été enregistrés et
+							seront perdus.
+						</AlertDialogDescription>
+					</AlertDialogHeader>
+					<AlertDialogFooter>
+						<AlertDialogCancel>Continuer l'édition</AlertDialogCancel>
+						<AlertDialogAction
+							onClick={() => {
+								setDiscardConfirmOpen(false)
+								setSheetOpen(false)
+							}}
+						>
+							Abandonner
+						</AlertDialogAction>
+					</AlertDialogFooter>
+				</AlertDialogContent>
+			</AlertDialog>
 		</SectionCard>
+	)
+}
+
+function RolesListSkeleton() {
+	return (
+		<div className="flex flex-col gap-4 p-5" aria-busy="true">
+			{[0, 1, 2].map((row) => (
+				<div key={row} className="flex items-center justify-between gap-4">
+					<div className="flex flex-1 flex-col gap-2">
+						<Skeleton className="h-4 w-32" />
+						<Skeleton className="h-3 w-64" />
+					</div>
+					<Skeleton className="h-8 w-20" />
+				</div>
+			))}
+		</div>
 	)
 }
 
 interface RoleRowProps {
 	role: Role
+	memberCount: number
 	onEdit: () => void
 	onDelete: () => void
 }
 
-function RoleRow({ role, onEdit, onDelete }: RoleRowProps) {
+function RoleRow({ role, memberCount, onEdit, onDelete }: RoleRowProps) {
 	const grantedByArea = permissionsByArea()
 		.map((area) => ({
 			...area,
@@ -268,6 +353,13 @@ function RoleRow({ role, onEdit, onDelete }: RoleRowProps) {
 							Rôle prédéfini
 						</Badge>
 					) : null}
+					<Badge variant="outline">
+						{memberCount === 0
+							? 'Aucun membre'
+							: memberCount === 1
+								? '1 membre'
+								: `${memberCount} membres`}
+					</Badge>
 				</div>
 				{grantedByArea.length > 0 ? (
 					<div className="mt-2 flex flex-col gap-1">
@@ -335,6 +427,10 @@ interface RoleEditorSheetProps {
 	onOpenChange: (open: boolean) => void
 	onChangeName: (name: string) => void
 	onTogglePermission: (name: string, checked: boolean) => void
+	/** Replaces the whole permission set — what "tout cocher"/"tout décocher"
+	 * per area needs, since toggling one bit at a time can't express "add
+	 * the four bits this area still lacks" in a single state update. */
+	onSetPermissions: (names: string[]) => void
 	onSubmit: () => void
 }
 
@@ -354,10 +450,30 @@ function RoleEditorSheet({
 	onOpenChange,
 	onChangeName,
 	onTogglePermission,
+	onSetPermissions,
 	onSubmit,
 }: RoleEditorSheetProps) {
+	const [permissionSearch, setPermissionSearch] = useState('')
 	const nameDisabled = mode === 'edit' && Boolean(editingRole?.is_seeded)
 	const canSubmit = values.name.trim() !== ''
+
+	const normalizedSearch = permissionSearch.trim().toLowerCase()
+	const visibleAreas = permissionsByArea()
+		.map((area) => ({
+			...area,
+			permissions: area.permissions.filter(
+				(permission) =>
+					permission.label.toLowerCase().includes(normalizedSearch) ||
+					permission.description.toLowerCase().includes(normalizedSearch),
+			),
+		}))
+		.filter((area) => area.permissions.length > 0)
+
+	// Clears the search left over from the previous role each time the sheet
+	// reopens.
+	useEffect(() => {
+		if (open) setPermissionSearch('')
+	}, [open])
 
 	return (
 		<Sheet open={open} onOpenChange={onOpenChange}>
@@ -397,48 +513,98 @@ function RoleEditorSheet({
 						) : null}
 					</div>
 
-					{permissionsByArea().map((area) => (
-						<div key={area.area} className="flex flex-col gap-3">
-							<h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-								{area.label}
-							</h3>
-							<div className="flex flex-col gap-3">
-								{area.permissions.map((permission) => {
-									const inputId = `permission-${permission.name}`
-									const checked = values.permissions.includes(permission.name)
-									return (
-										<div
-											key={permission.name}
-											className="flex items-start gap-3"
+					<div className="relative">
+						<Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+						<Input
+							value={permissionSearch}
+							onChange={(event) => setPermissionSearch(event.target.value)}
+							placeholder="Rechercher une permission…"
+							className="pl-9"
+						/>
+					</div>
+
+					{visibleAreas.length === 0 ? (
+						<p className="text-sm text-muted-foreground">
+							Aucune permission ne correspond à « {permissionSearch} ».
+						</p>
+					) : (
+						visibleAreas.map((area) => {
+							const allChecked = area.permissions.every((permission) =>
+								values.permissions.includes(permission.name),
+							)
+							return (
+								<div key={area.area} className="flex flex-col gap-3">
+									<div className="flex items-center justify-between">
+										<h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+											{area.label}
+										</h3>
+										<Button
+											type="button"
+											variant="link"
+											size="sm"
+											className="h-auto p-0 text-xs"
+											onClick={() => {
+												const areaNames: string[] = area.permissions.map(
+													(permission) => permission.name,
+												)
+												onSetPermissions(
+													allChecked
+														? values.permissions.filter(
+																(name) => !areaNames.includes(name),
+															)
+														: [
+																...values.permissions.filter(
+																	(name) => !areaNames.includes(name),
+																),
+																...areaNames,
+															],
+												)
+											}}
 										>
-											<Checkbox
-												id={inputId}
-												checked={checked}
-												onCheckedChange={(next) =>
-													onTogglePermission(permission.name, next === true)
-												}
-												className="mt-0.5"
-											/>
-											<div className="flex flex-col gap-1">
-												<Label htmlFor={inputId} className="font-normal">
-													{permission.label}
-												</Label>
-												<p className="text-xs text-muted-foreground">
-													{permission.description}
-												</p>
-												{permission.note ? (
-													<p className="flex items-start gap-1.5 text-xs text-amber-800 dark:text-amber-300">
-														<AlertTriangle className="mt-0.5 size-3.5 shrink-0" />
-														<span>{permission.note}</span>
-													</p>
-												) : null}
-											</div>
-										</div>
-									)
-								})}
-							</div>
-						</div>
-					))}
+											{allChecked ? 'Tout décocher' : 'Tout cocher'}
+										</Button>
+									</div>
+									<div className="flex flex-col gap-3">
+										{area.permissions.map((permission) => {
+											const inputId = `permission-${permission.name}`
+											const checked = values.permissions.includes(
+												permission.name,
+											)
+											return (
+												<div
+													key={permission.name}
+													className="flex items-start gap-3"
+												>
+													<Checkbox
+														id={inputId}
+														checked={checked}
+														onCheckedChange={(next) =>
+															onTogglePermission(permission.name, next === true)
+														}
+														className="mt-0.5"
+													/>
+													<div className="flex flex-col gap-1">
+														<Label htmlFor={inputId} className="font-normal">
+															{permission.label}
+														</Label>
+														<p className="text-xs text-muted-foreground">
+															{permission.description}
+														</p>
+														{permission.note ? (
+															<p className="flex items-start gap-1.5 text-xs text-amber-800 dark:text-amber-300">
+																<AlertTriangle className="mt-0.5 size-3.5 shrink-0" />
+																<span>{permission.note}</span>
+															</p>
+														) : null}
+													</div>
+												</div>
+											)
+										})}
+									</div>
+								</div>
+							)
+						})
+					)}
 				</div>
 
 				<SheetFooter>
