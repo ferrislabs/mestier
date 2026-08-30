@@ -691,7 +691,9 @@ function RowActions({
 						</Button>
 					</DropdownMenuTrigger>
 					<DropdownMenuContent align="end">
-						<DropdownMenuItem onClick={onEdit}>Modifier</DropdownMenuItem>
+						<RequirePermission permission="MANAGE_MEMBERS">
+							<DropdownMenuItem onClick={onEdit}>Modifier</DropdownMenuItem>
+						</RequirePermission>
 						{access === 'none' ? (
 							<DropdownMenuItem onClick={onInvite}>
 								<UserPlus />
@@ -710,16 +712,18 @@ function RowActions({
 								Temps de travail
 							</Link>
 						</DropdownMenuItem>
-						<DropdownMenuSeparator />
-						<AlertDialogTrigger asChild>
-							<DropdownMenuItem
-								variant="destructive"
-								onSelect={(event) => event.preventDefault()}
-							>
-								<Trash2 />
-								Supprimer
-							</DropdownMenuItem>
-						</AlertDialogTrigger>
+						<RequirePermission permission="MANAGE_MEMBERS">
+							<DropdownMenuSeparator />
+							<AlertDialogTrigger asChild>
+								<DropdownMenuItem
+									variant="destructive"
+									onSelect={(event) => event.preventDefault()}
+								>
+									<Trash2 />
+									Supprimer
+								</DropdownMenuItem>
+							</AlertDialogTrigger>
+						</RequirePermission>
 					</DropdownMenuContent>
 				</DropdownMenu>
 			</div>
