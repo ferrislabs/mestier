@@ -1,6 +1,6 @@
 use auth::Identity;
 use axum::{Extension, Json, extract::State};
-use handlers::{ApiError, AppState, DataEnvelope, Response, resolve_user_id};
+use handlers::{ApiError, AppState, DataEnvelope, Response};
 use mestier_core::{InvoiceId, IssueCreditNoteCommand};
 use serde::Deserialize;
 use utoipa::ToSchema;
@@ -50,13 +50,14 @@ pub async fn handler(
     Json(payload): Json<IssueCreditNoteRequest>,
 ) -> Result<Response<InvoiceResponse>, ApiError> {
     require_invoice_membership(&state, &identity, invoice_id).await?;
-    let actor = resolve_user_id(&state, &identity).await?;
+    let (user_id, actor) = handlers::resolve_actor(&state, &identity).await?;
 
     let credit_note = state
         .usecase
-        .acting_as(actor)
+        .acting_as(user_id)
         .issue_credit_note(IssueCreditNoteCommand {
             source_invoice_id: invoice_id,
+            actor,
             lines: into_line_commands(payload.lines)?,
             notes: payload.notes,
             allow_exceeding_invoice_total: payload.allow_exceeding_invoice_total,
@@ -90,7 +91,8 @@ pub async fn list_handler(
     State(state): State<AppState>,
     Extension(identity): Extension<Identity>,
 ) -> Result<Response<Vec<InvoiceResponse>>, ApiError> {
-    require_invoice_membership(&state, &identity, invoice_id).await?;
+    let invoice = state.usecase.get_invoice(invoice_id).await?;
+    crate::require_view_invoices(&state, &identity, invoice.organization_id).await?;
 
     let credit_notes = state.usecase.get_invoice_credit_notes(invoice_id).await?;
     let items: Vec<InvoiceResponse> = credit_notes

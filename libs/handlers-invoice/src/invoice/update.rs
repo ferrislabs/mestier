@@ -1,7 +1,7 @@
 use auth::Identity;
 use axum::{Extension, Json, extract::State};
 use chrono::{DateTime, Utc};
-use handlers::{ApiError, AppState, DataEnvelope, Response, resolve_user_id};
+use handlers::{ApiError, AppState, DataEnvelope, Response};
 use mestier_core::{
     CustomerContextId, CustomerId, InvoiceId, OperationNature, OrganizationAddress, ProjectId,
     UpdateInvoiceCommand,
@@ -59,7 +59,7 @@ pub async fn handler(
     Json(payload): Json<UpdateInvoiceRequest>,
 ) -> Result<Response<InvoiceResponse>, ApiError> {
     let current = require_invoice_membership(&state, &identity, invoice_id).await?;
-    let actor = resolve_user_id(&state, &identity).await?;
+    let (user_id, actor) = handlers::resolve_actor(&state, &identity).await?;
     require_invoice_targets(
         &state,
         current.organization_id,
@@ -73,9 +73,10 @@ pub async fn handler(
 
     let invoice = state
         .usecase
-        .acting_as(actor)
+        .acting_as(user_id)
         .update_invoice(UpdateInvoiceCommand {
             id: invoice_id,
+            actor,
             project_id: payload.project_id,
             customer_id: payload.customer_id,
             customer_context_id: payload.customer_context_id,

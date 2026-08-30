@@ -86,6 +86,67 @@ async fn issue(app: &harness::App, invoice_id: &str) -> Value {
         .expect("the issue answer is json")
 }
 
+/// #395: a member with no role at all — bare membership, the gate this
+/// issue closes — is refused reading the organization's invoices, not
+/// served a silent empty list.
+#[tokio::test]
+#[ignore = "requires live postgres and redis"]
+async fn a_member_without_view_invoices_is_refused_the_list() {
+    let app = harness::start().await;
+
+    let response = client()
+        .get(app.invoices_url())
+        .bearer_auth(&app.no_role_token)
+        .send()
+        .await
+        .expect("the api answers the no-role member's list call");
+
+    assert_eq!(
+        response.status(),
+        403,
+        "VIEW_INVOICES must gate the list, not just organization membership"
+    );
+
+    app.cleanup().await;
+}
+
+/// #395: the same no-role member is refused creating an invoice —
+/// `MANAGE_INVOICES` gates the write side the way `VIEW_INVOICES` gates
+/// reads above.
+#[tokio::test]
+#[ignore = "requires live postgres and redis"]
+async fn a_member_without_manage_invoices_is_refused_creating_an_invoice() {
+    let app = harness::start().await;
+
+    let response = client()
+        .post(app.invoices_url())
+        .bearer_auth(&app.no_role_token)
+        .json(&json!({
+            "kind": "STANDARD",
+            "project_id": null,
+            "customer_id": app.customer_id,
+            "customer_context_id": app.customer_context_id,
+            "due_at": null,
+            "notes": null,
+            "operation_nature": null,
+            "delivery_address": null,
+            "lines": [
+                { "label": "Pose de faience", "quantity": "4", "unit_price_cents": 4500 }
+            ]
+        }))
+        .send()
+        .await
+        .expect("the api answers the no-role member's create call");
+
+    assert_eq!(
+        response.status(),
+        403,
+        "MANAGE_INVOICES must gate creation, not just organization membership"
+    );
+
+    app.cleanup().await;
+}
+
 /// An unauthenticated call is turned away before it ever reaches a handler
 /// — the same first assertion `handlers-quote`'s suite opens with, proving
 /// the auth middleware is really in this crate's own layer chain and not

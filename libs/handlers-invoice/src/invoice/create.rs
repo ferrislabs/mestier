@@ -3,7 +3,7 @@ use std::str::FromStr;
 use auth::Identity;
 use axum::{Extension, Json, extract::State};
 use chrono::{DateTime, Utc};
-use handlers::{ApiError, AppState, DataEnvelope, Response, resolve_user_id};
+use handlers::{ApiError, AppState, DataEnvelope, Response};
 use mestier_core::{
     CreateInvoiceCommand, CustomerContextId, CustomerId, InvoiceKind, InvoiceLineCommand,
     OperationNature, OrganizationAddress, ProjectId,
@@ -108,7 +108,7 @@ pub async fn handler(
     Json(payload): Json<CreateInvoiceRequest>,
 ) -> Result<Response<InvoiceResponse>, ApiError> {
     require_org_membership(&state, &identity, path.organization_id).await?;
-    let actor = resolve_user_id(&state, &identity).await?;
+    let (user_id, actor) = handlers::resolve_actor(&state, &identity).await?;
     require_invoice_targets(
         &state,
         path.organization_id,
@@ -122,8 +122,9 @@ pub async fn handler(
 
     let invoice = state
         .usecase
-        .acting_as(actor)
+        .acting_as(user_id)
         .create_invoice(CreateInvoiceCommand {
+            actor,
             organization_id: path.organization_id,
             kind: payload.kind,
             project_id: payload.project_id,

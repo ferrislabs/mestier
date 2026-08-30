@@ -21,7 +21,7 @@ use axum_extra::routing::RouterExt;
 use handlers::{ApiError, AppState, auth::auth_middleware, rate_limit::rate_limit_middleware};
 use mestier_core::{
     CustomerContextId, CustomerId, Invoice, InvoicePayment, InvoicePaymentId, OrganizationId,
-    Project, ProjectId,
+    Permissions, Project, ProjectId,
 };
 
 pub mod invoice;
@@ -55,6 +55,43 @@ async fn require_org_membership(
         .await?;
 
     if membership.is_none() {
+        return Err(ApiError::Forbidden);
+    }
+
+    Ok(())
+}
+
+/// Membership is the outer gate, `VIEW_INVOICES` is the inner one (#395):
+/// belonging to the organization used to be enough to read every invoice in
+/// it, and every one of its sub-resources — no permission bit gated it at
+/// all, unlike quotes, planning or reporting's own `VIEW_REPORTS`. Mirrors
+/// `require_view_reports` in `handlers-reporting`.
+async fn require_view_invoices(
+    state: &AppState,
+    identity: &Identity,
+    organization_id: OrganizationId,
+) -> Result<(), ApiError> {
+    let user = state
+        .usecase
+        .find_user_by_sub(identity.id())
+        .await?
+        .ok_or(ApiError::Forbidden)?;
+
+    if state
+        .usecase
+        .find_membership(organization_id, user.id)
+        .await?
+        .is_none()
+    {
+        return Err(ApiError::Forbidden);
+    }
+
+    let permissions = state
+        .usecase
+        .member_permissions(user.id, organization_id)
+        .await?;
+
+    if !permissions.contains(Permissions::VIEW_INVOICES) {
         return Err(ApiError::Forbidden);
     }
 

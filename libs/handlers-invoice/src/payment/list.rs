@@ -3,9 +3,7 @@ use axum::{Extension, extract::State};
 use handlers::{ApiError, AppState, DataEnvelope, Response};
 use mestier_core::InvoiceId;
 
-use crate::{
-    paths::InvoicePaymentsPath, require_invoice_membership, response::InvoicePaymentResponse,
-};
+use crate::{paths::InvoicePaymentsPath, require_view_invoices, response::InvoicePaymentResponse};
 
 #[utoipa::path(
     get,
@@ -28,7 +26,8 @@ pub async fn handler(
     State(state): State<AppState>,
     Extension(identity): Extension<Identity>,
 ) -> Result<Response<Vec<InvoicePaymentResponse>>, ApiError> {
-    require_invoice_membership(&state, &identity, invoice_id).await?;
+    let invoice = state.usecase.get_invoice(invoice_id).await?;
+    require_view_invoices(&state, &identity, invoice.organization_id).await?;
 
     let payments = state.usecase.list_invoice_payments(invoice_id).await?;
     let items: Vec<InvoicePaymentResponse> = payments

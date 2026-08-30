@@ -1,7 +1,7 @@
 use auth::Identity;
 use axum::{Extension, Json, extract::State};
 use chrono::NaiveDate;
-use handlers::{ApiError, AppState, DataEnvelope, Response, resolve_user_id};
+use handlers::{ApiError, AppState, DataEnvelope, Response};
 use mestier_core::{InvoiceId, RecordInvoicePaymentCommand};
 use serde::Deserialize;
 use utoipa::ToSchema;
@@ -10,8 +10,9 @@ use crate::{
     paths::InvoicePaymentsPath, require_invoice_membership, response::InvoicePaymentResponse,
 };
 
-/// `recorded_by` is never a request field — it comes from `resolve_user_id`,
-/// same as `acting_as(actor)` everywhere else in this codebase.
+/// `recorded_by` is never a request field — it comes from `handlers::
+/// resolve_actor`, same as `acting_as(user_id)` everywhere else in this
+/// codebase.
 #[derive(Debug, Deserialize, ToSchema)]
 pub struct RecordInvoicePaymentRequest {
     pub amount_cents: i32,
@@ -49,19 +50,20 @@ pub async fn handler(
     Json(payload): Json<RecordInvoicePaymentRequest>,
 ) -> Result<Response<InvoicePaymentResponse>, ApiError> {
     require_invoice_membership(&state, &identity, invoice_id).await?;
-    let actor = resolve_user_id(&state, &identity).await?;
+    let (user_id, actor) = handlers::resolve_actor(&state, &identity).await?;
 
     let payment = state
         .usecase
-        .acting_as(actor)
+        .acting_as(user_id)
         .record_invoice_payment(RecordInvoicePaymentCommand {
             invoice_id,
+            actor,
             amount_cents: payload.amount_cents,
             paid_on: payload.paid_on,
             method: payload.method,
             reference: payload.reference,
             note: payload.note,
-            recorded_by: actor,
+            recorded_by: user_id,
             allow_exceeding_total: payload.allow_exceeding_total,
         })
         .await?;

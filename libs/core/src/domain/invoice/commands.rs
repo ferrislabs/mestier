@@ -1,3 +1,4 @@
+use authz::Subject;
 use chrono::{DateTime, NaiveDate, Utc};
 use common::UserId;
 use rust_decimal::Decimal;
@@ -11,9 +12,14 @@ use crate::{
 /// created `Standard` draft from #316's `create_invoice`, or a
 /// `Deposit`/`Final` draft from this issue's own `issue_deposit`/
 /// `issue_final_invoice`. See `InvoiceService::issue_invoice`.
-#[derive(Debug, Clone, Copy)]
+///
+/// No `organization_id` of its own (#395): the service loads the invoice
+/// first, the same way `CancelInvoiceCommand`'s own act does, and enriches
+/// `actor` against the loaded row's own organization.
+#[derive(Debug, Clone)]
 pub struct IssueInvoiceCommand {
     pub id: InvoiceId,
+    pub actor: Subject,
     /// Refuses issuing when it would push the project's issued total past
     /// the quote, unless the caller explicitly says this is fine: a
     /// deliberate over-bill happens, the artisan should not have to lie to
@@ -27,9 +33,14 @@ pub struct IssueInvoiceCommand {
 /// against — a general limitation of this specific act, not of invoicing
 /// as a whole (`create_invoice`/`issue_invoice` still work with no
 /// project, or a project with no quote).
+///
+/// No `organization_id` of its own (#395): the service loads the project
+/// first (it needs it anyway, for the quote) and enriches `actor` against
+/// the loaded project's own organization.
 #[derive(Debug, Clone)]
 pub struct IssueDepositCommand {
     pub project_id: ProjectId,
+    pub actor: Subject,
     /// Basis points of the quote's net total, e.g. 3000 = 30%.
     pub percentage_bp: i32,
     pub due_at: Option<DateTime<Utc>>,
@@ -44,6 +55,7 @@ pub struct IssueDepositCommand {
 #[derive(Debug, Clone)]
 pub struct IssueFinalInvoiceCommand {
     pub project_id: ProjectId,
+    pub actor: Subject,
     pub due_at: Option<DateTime<Utc>>,
     pub notes: Option<String>,
     pub allow_exceeding_total: bool,
@@ -59,6 +71,7 @@ pub struct InvoiceLineCommand {
 
 #[derive(Debug, Clone)]
 pub struct CreateInvoiceCommand {
+    pub actor: Subject,
     pub organization_id: OrganizationId,
     pub kind: InvoiceKind,
     pub project_id: Option<ProjectId>,
@@ -74,6 +87,7 @@ pub struct CreateInvoiceCommand {
 #[derive(Debug, Clone)]
 pub struct UpdateInvoiceCommand {
     pub id: InvoiceId,
+    pub actor: Subject,
     pub project_id: Option<ProjectId>,
     pub customer_id: CustomerId,
     pub customer_context_id: CustomerContextId,
@@ -93,6 +107,7 @@ pub struct UpdateInvoiceCommand {
 #[derive(Debug, Clone)]
 pub struct IssueCreditNoteCommand {
     pub source_invoice_id: InvoiceId,
+    pub actor: Subject,
     pub lines: Vec<InvoiceLineCommand>,
     pub notes: Option<String>,
     /// Refuses when the sum of this credit note and every other
@@ -105,15 +120,22 @@ pub struct IssueCreditNoteCommand {
 /// Cancels an invoice, draft or issued. Never used to reach `Issued`,
 /// `Paid` or `PartiallyPaid`: those are set by issuing (#317) and by
 /// recording payments (#320), never by hand.
-#[derive(Debug, Clone, Copy)]
+///
+/// No `organization_id` of its own (#395): the service loads the invoice
+/// first (it needs its current status anyway) and enriches `actor` against
+/// the loaded row's own organization, same as `CustomerService::
+/// soft_delete_customer` does for a bare id.
+#[derive(Debug, Clone)]
 pub struct CancelInvoiceCommand {
     pub id: InvoiceId,
+    pub actor: Subject,
 }
 
 /// Records a payment against an issued invoice (#320).
 #[derive(Debug, Clone)]
 pub struct RecordInvoicePaymentCommand {
     pub invoice_id: InvoiceId,
+    pub actor: Subject,
     pub amount_cents: i32,
     pub paid_on: NaiveDate,
     pub method: String,
@@ -128,8 +150,13 @@ pub struct RecordInvoicePaymentCommand {
 
 /// Soft-deletes a recorded payment, keeping who and when as its audit
 /// trail (#320) — the row is never hard-deleted.
-#[derive(Debug, Clone, Copy)]
+///
+/// No `organization_id` of its own (#395): the service loads the payment
+/// first (`InvoicePayment` carries its own `organization_id`, needed
+/// anyway to resolve it) and enriches `actor` against it.
+#[derive(Debug, Clone)]
 pub struct DeleteInvoicePaymentCommand {
     pub id: InvoicePaymentId,
+    pub actor: Subject,
     pub deleted_by: UserId,
 }

@@ -1,7 +1,7 @@
 use auth::Identity;
 use axum::{Extension, Json, extract::State};
 use chrono::{DateTime, Utc};
-use handlers::{ApiError, AppState, DataEnvelope, Response, resolve_user_id};
+use handlers::{ApiError, AppState, DataEnvelope, Response};
 use mestier_core::{IssueFinalInvoiceCommand, ProjectId};
 use serde::Deserialize;
 use utoipa::ToSchema;
@@ -48,13 +48,14 @@ pub async fn handler(
     Json(payload): Json<IssueFinalInvoiceRequest>,
 ) -> Result<Response<InvoiceResponse>, ApiError> {
     require_project_membership(&state, &identity, project_id).await?;
-    let actor = resolve_user_id(&state, &identity).await?;
+    let (user_id, actor) = handlers::resolve_actor(&state, &identity).await?;
 
     let invoice = state
         .usecase
-        .acting_as(actor)
+        .acting_as(user_id)
         .issue_final_invoice(IssueFinalInvoiceCommand {
             project_id,
+            actor,
             due_at: payload.due_at,
             notes: payload.notes,
             allow_exceeding_total: payload.allow_exceeding_total,

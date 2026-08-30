@@ -3,9 +3,7 @@ use axum::{Extension, extract::State};
 use handlers::{ApiError, AppState, DataEnvelope, Response};
 use mestier_core::{InvoiceId, InvoiceStatus};
 
-use crate::{
-    paths::InvoiceBalancePath, require_invoice_membership, response::InvoiceBalanceResponse,
-};
+use crate::{paths::InvoiceBalancePath, require_view_invoices, response::InvoiceBalanceResponse};
 
 /// "What remains" — computed here, in Rust, before the JSON is built
 /// (CLAUDE.md: every price calculation lives in the backend, never
@@ -35,7 +33,8 @@ pub async fn handler(
     State(state): State<AppState>,
     Extension(identity): Extension<Identity>,
 ) -> Result<Response<InvoiceBalanceResponse>, ApiError> {
-    let invoice = require_invoice_membership(&state, &identity, invoice_id).await?;
+    let invoice = state.usecase.get_invoice(invoice_id).await?;
+    require_view_invoices(&state, &identity, invoice.organization_id).await?;
 
     let credit_notes = state.usecase.get_invoice_credit_notes(invoice_id).await?;
     let credited_cents: i64 = credit_notes

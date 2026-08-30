@@ -1,6 +1,6 @@
 use auth::Identity;
 use axum::{Extension, extract::State};
-use handlers::{ApiError, AppState, DataEnvelope, Response, resolve_user_id};
+use handlers::{ApiError, AppState, DataEnvelope, Response};
 use mestier_core::{CancelInvoiceCommand, InvoiceId};
 
 use crate::{paths::InvoiceCancelPath, require_invoice_membership, response::InvoiceResponse};
@@ -28,12 +28,15 @@ pub async fn handler(
     Extension(identity): Extension<Identity>,
 ) -> Result<Response<InvoiceResponse>, ApiError> {
     require_invoice_membership(&state, &identity, invoice_id).await?;
-    let actor = resolve_user_id(&state, &identity).await?;
+    let (user_id, actor) = handlers::resolve_actor(&state, &identity).await?;
 
     let invoice = state
         .usecase
-        .acting_as(actor)
-        .cancel_invoice(CancelInvoiceCommand { id: invoice_id })
+        .acting_as(user_id)
+        .cancel_invoice(CancelInvoiceCommand {
+            id: invoice_id,
+            actor,
+        })
         .await?;
 
     Ok(Response::OK(invoice.into()))

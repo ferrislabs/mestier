@@ -4,7 +4,7 @@ use handlers::{ApiError, AppState, DataEnvelope, Response};
 use mestier_core::ProjectId;
 
 use crate::{
-    paths::ProjectBillingSummaryPath, require_project_membership,
+    paths::ProjectBillingSummaryPath, require_view_invoices,
     response::ProjectBillingSummaryResponse,
 };
 
@@ -32,7 +32,8 @@ pub async fn handler(
     State(state): State<AppState>,
     Extension(identity): Extension<Identity>,
 ) -> Result<Response<ProjectBillingSummaryResponse>, ApiError> {
-    require_project_membership(&state, &identity, project_id).await?;
+    let project = state.usecase.get_project(project_id).await?;
+    require_view_invoices(&state, &identity, project.organization_id).await?;
 
     let summary = state.usecase.project_billing_summary(project_id).await?;
 
