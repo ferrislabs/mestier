@@ -1,8 +1,9 @@
-import { Link } from '@tanstack/react-router'
 import { Receipt, Users } from 'lucide-react'
 import type * as React from 'react'
 import { MetricCard, PageShell } from '#/components/ui/surface'
 import { buildOrgPath } from '#/modules/org-path'
+import { MODULES } from '#/modules/registry'
+import { AppLauncherUI } from '#/pages/home/ui/app-launcher-ui'
 import type { SearchGroup } from '#/pages/home/ui/home-search-ui'
 import { HomeSearchUI } from '#/pages/home/ui/home-search-ui'
 import { ProfitabilityCardUI } from '#/pages/home/ui/profitability-card-ui'
@@ -21,16 +22,10 @@ interface HomeProfitability {
 	quotedCents: number
 	marginCents: number
 	costsRedacted: boolean
+	trendPercent: number | null
 	isLoading: boolean
 	error: string | null
 }
-
-const QUICK_LINKS = [
-	{ label: 'Clients', to: '/crm/customers' },
-	{ label: 'Devis', to: '/crm/quotes' },
-	{ label: 'Planning', to: '/planning' },
-	{ label: 'Achats', to: '/purchase' },
-] as const
 
 interface HomeUIProps {
 	userName?: string
@@ -40,6 +35,10 @@ interface HomeUIProps {
 	search: SearchGroup[]
 	/** The self-service pointage card, composed in by the feature layer. */
 	todayTasks?: React.ReactNode
+	/** Today's team-wide agenda, composed in by the feature layer. */
+	todayPlanning: React.ReactNode
+	/** A glance at recent chat activity, composed in by the feature layer. */
+	discussions: React.ReactNode
 }
 
 export function HomeUI({
@@ -49,7 +48,20 @@ export function HomeUI({
 	organizationSlug,
 	search,
 	todayTasks,
+	todayPlanning,
+	discussions,
 }: HomeUIProps) {
+	// Every module but Accueil itself — a shortcut back to the page you're
+	// already on would be dead weight in a launcher grid.
+	const launcherItems = MODULES.filter((module) => module.id !== 'home').map(
+		(module) => ({
+			id: module.id,
+			label: module.label,
+			icon: module.icon,
+			to: buildOrgPath(organizationSlug, module.basePath),
+		}),
+	)
+
 	return (
 		<PageShell>
 			<div className="mx-auto flex w-full max-w-2xl flex-col items-center gap-6 pt-6 pb-2 text-center">
@@ -59,45 +71,43 @@ export function HomeUI({
 
 				<HomeSearchUI groups={search} />
 
-				<nav className="flex flex-wrap items-center justify-center gap-2">
-					{QUICK_LINKS.map((link) => (
-						<Link
-							key={link.to}
-							to={buildOrgPath(organizationSlug, link.to)}
-							className="rounded-full border px-4 py-1.5 text-sm text-muted-foreground transition hover:border-primary/40 hover:bg-muted hover:text-foreground"
-						>
-							{link.label}
-						</Link>
-					))}
-				</nav>
+				<AppLauncherUI items={launcherItems} />
 			</div>
 
-			<section className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+			<section className="grid grid-cols-1 gap-4 lg:grid-cols-[1.7fr_1fr]">
 				<ProfitabilityCardUI
 					periodLabel={profitability.periodLabel}
 					organizationSlug={profitability.organizationSlug}
 					quotedCents={profitability.quotedCents}
 					marginCents={profitability.marginCents}
 					costsRedacted={profitability.costsRedacted}
+					trendPercent={profitability.trendPercent}
 					isLoading={profitability.isLoading}
 					error={profitability.error}
 				/>
-				<MetricCard
-					label="Clients"
-					value={stats.customers.toString()}
-					hint="Total enregistrés"
-					icon={<Users className="size-4" />}
-				/>
-				<MetricCard
-					label="Factures"
-					value={stats.invoices.toString()}
-					hint={
-						stats.outstandingCents === null
-							? 'Total émises'
-							: `Total émises · ${formatOutstandingHint(stats.outstandingCents)}`
-					}
-					icon={<Receipt className="size-4" />}
-				/>
+				<div className="grid grid-cols-2 gap-4 lg:grid-cols-1">
+					<MetricCard
+						label="Clients"
+						value={stats.customers.toString()}
+						hint="Total enregistrés"
+						icon={<Users className="size-4" />}
+					/>
+					<MetricCard
+						label="Factures"
+						value={stats.invoices.toString()}
+						hint={
+							stats.outstandingCents === null
+								? 'Total émises'
+								: `Total émises · ${formatOutstandingHint(stats.outstandingCents)}`
+						}
+						icon={<Receipt className="size-4" />}
+					/>
+				</div>
+			</section>
+
+			<section className="grid grid-cols-1 gap-4 md:grid-cols-2">
+				{todayPlanning}
+				{discussions}
 			</section>
 
 			{todayTasks}

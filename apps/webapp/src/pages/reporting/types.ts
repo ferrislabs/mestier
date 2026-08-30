@@ -122,6 +122,24 @@ export function currentMonthPeriod(today: Date): { from: string; to: string } {
 	return { from: isoDate(first), to: isoDate(today) }
 }
 
+/**
+ * The full previous calendar month — for a homepage trend ("+8% vs juillet"),
+ * never a partial one: comparing "1st to today" against "1st to today of last
+ * month" would be honest, but "the whole of last month" is what a reader
+ * expects "vs juillet" to mean.
+ */
+export function previousMonthPeriod(today: Date): { from: string; to: string } {
+	const firstOfCurrent = new Date(today.getFullYear(), today.getMonth(), 1)
+	const first = new Date(
+		firstOfCurrent.getFullYear(),
+		firstOfCurrent.getMonth() - 1,
+		1,
+	)
+	const last = new Date(firstOfCurrent.getTime() - 1)
+
+	return { from: isoDate(first), to: isoDate(last) }
+}
+
 export function isoDate(date: Date): string {
 	return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
 }

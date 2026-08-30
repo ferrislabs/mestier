@@ -6,10 +6,16 @@ import { useProjects } from '#/hooks/use-projects'
 import { useQuotes } from '#/hooks/use-quotes'
 import { type Period, useProfitability } from '#/hooks/use-reporting'
 import { buildOrgPath } from '#/modules/org-path'
+import { DiscussionsFeature } from '#/pages/home/feature/discussions-feature'
 import { MyTasksTodayFeature } from '#/pages/home/feature/my-tasks-today-feature'
+import { TodayPlanningFeature } from '#/pages/home/feature/today-planning-feature'
 import type { SearchGroup } from '#/pages/home/ui/home-search-ui'
 import { HomeUI } from '#/pages/home/ui/home-ui'
-import { currentMonthPeriod, isCompleteProject } from '#/pages/reporting/types'
+import {
+	currentMonthPeriod,
+	isCompleteProject,
+	previousMonthPeriod,
+} from '#/pages/reporting/types'
 
 export function HomeFeature() {
 	const { activeOrganizationId, activeOrganization } = useActiveOrganization()
@@ -18,8 +24,17 @@ export function HomeFeature() {
 	// date range picker. Anyone wanting another period follows the CTA to
 	// `/reporting`, which owns that control.
 	const [period] = useState<Period>(() => currentMonthPeriod(new Date()))
+	// The full previous month, read once alongside it purely for the trend
+	// figure ("+8% vs juillet") — never shown itself, never a control.
+	const [previousPeriod] = useState<Period>(() =>
+		previousMonthPeriod(new Date()),
+	)
 
 	const profitability = useProfitability(activeOrganizationId, period)
+	const previousProfitability = useProfitability(
+		activeOrganizationId,
+		previousPeriod,
+	)
 	// Default page size, same as every other caller of these hooks — so the
 	// query key matches whatever `/crm/customers`, `/crm/quotes`, `/planning`
 	// or `/invoices` already cached, rather than forcing a fresh fetch just for
@@ -43,6 +58,30 @@ export function HomeFeature() {
 		(sum, project) => sum + (project.margin_cents ?? 0),
 		0,
 	)
+
+	const previousReport = previousProfitability.data?.data
+	const previousCompleteProjects = (previousReport?.projects ?? []).filter(
+		isCompleteProject,
+	)
+	const previousMarginCents = previousCompleteProjects.reduce(
+		(sum, project) => sum + (project.margin_cents ?? 0),
+		0,
+	)
+
+	// `null` — no trend shown — whenever either period isn't in a state where
+	// the comparison means something: still loading, an error, costs redacted
+	// on either side, or a non-positive previous margin (a percentage change
+	// off zero or a loss is not a sentence worth showing).
+	const trendPercent =
+		!profitability.isLoading &&
+		!previousProfitability.isLoading &&
+		!profitability.error &&
+		!previousProfitability.error &&
+		report?.costs_redacted === false &&
+		previousReport?.costs_redacted === false &&
+		previousMarginCents > 0
+			? ((marginCents - previousMarginCents) / previousMarginCents) * 100
+			: null
 
 	// One number per customer, already computed server-side — summed here for
 	// the tile, not recomputed. Same pattern as the invoice list's own
@@ -121,10 +160,23 @@ export function HomeFeature() {
 				quotedCents,
 				marginCents,
 				costsRedacted: report?.costs_redacted ?? true,
+				trendPercent,
 				isLoading: profitability.isLoading,
 				error: profitability.error?.message ?? null,
 			}}
 			todayTasks={<MyTasksTodayFeature organizationId={activeOrganizationId} />}
+			todayPlanning={
+				<TodayPlanningFeature
+					organizationId={activeOrganizationId}
+					organizationSlug={activeOrganization.slug}
+				/>
+			}
+			discussions={
+				<DiscussionsFeature
+					organizationId={activeOrganizationId}
+					organizationSlug={activeOrganization.slug}
+				/>
+			}
 		/>
 	)
 }
