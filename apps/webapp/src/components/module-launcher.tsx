@@ -72,7 +72,7 @@ export function ModuleLauncher({
 			<PopoverContent
 				align="end"
 				sideOffset={8}
-				className="w-80 rounded-none p-4 shadow-[4px_4px_0_0_var(--foreground)]"
+				className="w-80 rounded-none p-4 shadow-none"
 			>
 				<p className="mb-3 px-1 text-xs font-medium text-muted-foreground">
 					Modules Mestier

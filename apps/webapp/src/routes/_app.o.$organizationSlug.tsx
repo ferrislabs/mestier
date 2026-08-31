@@ -68,19 +68,29 @@ function AppShell() {
 	const isHome = splitOrgPath(location.pathname).path === '/'
 
 	return (
-		<SidebarProvider>
-			{isHome ? null : <ModuleNav organizationSlug={activeOrganization.slug} />}
-			<SidebarInset>
-				<AppHeader />
-				<ScopeBar
-					label={scope.label}
-					tabs={scope.tabs}
-					organizationSlug={activeOrganization.slug}
-				/>
-				<div className="flex min-w-0 flex-1 flex-col">
-					<Outlet />
-				</div>
-			</SidebarInset>
+		<SidebarProvider className="flex-col">
+			{/* The header spans the full width, above the sidebar rather than
+			 * beside it — `ModuleNav`'s own fixed container is offset below it
+			 * (see its `top-(--app-header-height)` override) so the two never
+			 * occupy the same band instead of one merely painting over the
+			 * other. `SidebarProvider` still wraps both: `AppHeader`'s
+			 * `SidebarTrigger` needs its context regardless of layout. */}
+			<AppHeader />
+			<div className="flex min-h-0 flex-1">
+				{isHome ? null : (
+					<ModuleNav organizationSlug={activeOrganization.slug} />
+				)}
+				<SidebarInset>
+					<ScopeBar
+						label={scope.label}
+						tabs={scope.tabs}
+						organizationSlug={activeOrganization.slug}
+					/>
+					<div className="flex min-w-0 flex-1 flex-col">
+						<Outlet />
+					</div>
+				</SidebarInset>
+			</div>
 		</SidebarProvider>
 	)
 }

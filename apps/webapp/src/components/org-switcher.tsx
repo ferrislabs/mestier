@@ -51,7 +51,7 @@ export function OrgSwitcher() {
 			</DropdownMenuTrigger>
 			<DropdownMenuContent
 				align="start"
-				className="min-w-72 rounded-none shadow-[4px_4px_0_0_var(--foreground)]"
+				className="min-w-72 rounded-none shadow-none"
 			>
 				<DropdownMenuLabel className="text-xs text-muted-foreground">
 					Organisation active

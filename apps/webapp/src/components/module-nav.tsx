@@ -12,6 +12,7 @@ import {
 	SidebarRail as SidebarResizeHandle,
 } from '#/components/ui/sidebar'
 import { usePermissions } from '#/hooks/use-permissions'
+import { cn } from '#/lib/utils'
 import { buildOrgPath, splitOrgPath } from '#/modules/org-path'
 import { MODULES } from '#/modules/registry'
 import { resolveModule } from '#/modules/resolve-module'
@@ -31,7 +32,11 @@ interface ModuleNavProps extends React.ComponentProps<typeof Sidebar> {
  * horizontal tabs by the {@link ScopeBar}. No brand header of its own —
  * that lives in {@link AppHeader} now, common to every module.
  */
-export function ModuleNav({ organizationSlug, ...props }: ModuleNavProps) {
+export function ModuleNav({
+	organizationSlug,
+	className,
+	...props
+}: ModuleNavProps) {
 	const location = useLocation()
 	const activeModule = resolveModule(splitOrgPath(location.pathname).path)
 	const utilityModules = MODULES.filter(
@@ -55,7 +60,20 @@ export function ModuleNav({ organizationSlug, ...props }: ModuleNavProps) {
 	)
 
 	return (
-		<Sidebar collapsible="icon" {...props}>
+		<Sidebar
+			collapsible="icon"
+			{...props}
+			// `AppHeader` now spans the full width above this nav (see
+			// `_app.o.$organizationSlug.tsx`) rather than beside it — the
+			// sidebar's own fixed container defaults to the full viewport
+			// height (`inset-y-0 h-svh`); overridden (`!`, `inset-y-0`'s own
+			// utility would otherwise win) so it starts below the header
+			// instead of underneath it.
+			className={cn(
+				'top-(--app-header-height)! h-[calc(100svh-var(--app-header-height))]!',
+				className,
+			)}
+		>
 			<SidebarContent className="pt-3">
 				<SidebarGroup>
 					<SidebarMenu>

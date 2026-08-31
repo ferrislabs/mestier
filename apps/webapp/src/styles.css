@@ -48,7 +48,12 @@
   --chart-3: var(--brand-500);
   --chart-4: var(--success);
   --chart-5: var(--warning);
-  --radius: 0.75rem;
+  /* Brutalist direction: sharp corners everywhere, one token so the whole
+     app moves together — `--radius-sm/md/lg/xl` below derive from this by
+     subtraction, which would go negative at 0; browsers clamp a negative
+     border-radius to 0 rather than reject the declaration, so every one of
+     them still renders flush. */
+  --radius: 0rem;
   /* Hauteur de l'en-tête applicatif. Le ScopeBar s'y colle : une seule
      déclaration pour les deux, au lieu de constantes à synchroniser. */
   --app-header-height: 4rem;
