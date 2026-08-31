@@ -64,7 +64,7 @@ export function ModuleLauncher({
 					variant="ghost"
 					size="icon"
 					aria-label="Changer de module"
-					className="text-muted-foreground"
+					className="border border-border text-muted-foreground"
 				>
 					<AppsGridIcon />
 				</Button>

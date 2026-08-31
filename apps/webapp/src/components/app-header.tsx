@@ -53,7 +53,7 @@ export function AppHeader() {
 
 			{isHome ? null : (
 				// Sur mobile le rail est un panneau : il lui faut un déclencheur.
-				<SidebarTrigger className="md:hidden" />
+				<SidebarTrigger className="border border-border md:hidden" />
 			)}
 
 			<AppBreadcrumb />
@@ -69,7 +69,11 @@ export function AppHeader() {
 				 * one is, the counter will come from the realtime gateway — this
 				 * button must not be turned into periodic polling.
 				 */}
-				<Button variant="ghost" size="icon" className="text-muted-foreground">
+				<Button
+					variant="ghost"
+					size="icon"
+					className="border border-border text-muted-foreground"
+				>
 					<Bell />
 					<span className="sr-only">Notifications</span>
 				</Button>
@@ -79,7 +83,7 @@ export function AppHeader() {
 						<button
 							type="button"
 							aria-label="Compte utilisateur"
-							className="flex size-9 items-center justify-center rounded-full bg-primary text-sm font-medium text-primary-foreground transition-colors hover:bg-brand-muted"
+							className="flex size-9 items-center justify-center rounded-none bg-primary text-sm font-medium text-primary-foreground transition-colors hover:bg-brand-muted"
 						>
 							{initials}
 						</button>
