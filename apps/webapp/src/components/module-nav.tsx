@@ -1,4 +1,5 @@
 import { Link, useLocation } from '@tanstack/react-router'
+import { PanelLeftClose, PanelLeftOpen } from 'lucide-react'
 import type * as React from 'react'
 
 import {
@@ -9,7 +10,7 @@ import {
 	SidebarMenu,
 	SidebarMenuButton,
 	SidebarMenuItem,
-	SidebarRail as SidebarResizeHandle,
+	useSidebar,
 } from '#/components/ui/sidebar'
 import { usePermissions } from '#/hooks/use-permissions'
 import { cn } from '#/lib/utils'
@@ -38,6 +39,7 @@ export function ModuleNav({
 	...props
 }: ModuleNavProps) {
 	const location = useLocation()
+	const { state, toggleSidebar } = useSidebar()
 	const activeModule = resolveModule(splitOrgPath(location.pathname).path)
 	const utilityModules = MODULES.filter(
 		(module) =>
@@ -99,10 +101,21 @@ export function ModuleNav({
 							organizationSlug={organizationSlug}
 						/>
 					))}
+					{/* Replaces the old edge-drag rail — a 4px invisible hitbox,
+					 * `tabIndex={-1}`, discoverable only by accident. Same toggle,
+					 * as an actual button instead of a hidden one. */}
+					<SidebarMenuItem>
+						<SidebarMenuButton
+							onClick={toggleSidebar}
+							tooltip={state === 'expanded' ? 'Réduire' : 'Agrandir'}
+							className={pillClassName}
+						>
+							{state === 'expanded' ? <PanelLeftClose /> : <PanelLeftOpen />}
+							<span>{state === 'expanded' ? 'Réduire' : 'Agrandir'}</span>
+						</SidebarMenuButton>
+					</SidebarMenuItem>
 				</SidebarMenu>
 			</SidebarFooter>
-
-			<SidebarResizeHandle />
 		</Sidebar>
 	)
 }
