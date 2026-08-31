@@ -181,13 +181,6 @@ describe('ModuleNav', () => {
 		expect(corps?.textContent).not.toContain('Paramètres')
 	})
 
-	it('shows the current module under the brand', async () => {
-		await renderNav('/o/dupont/planning/team')
-
-		expect(screen.getByText('Mestier')).toBeDefined()
-		expect(screen.getByText('Planning')).toBeDefined()
-	})
-
 	/**
 	 * #307: a section gated by a bit the caller does not hold is hidden
 	 * outright, not greyed out — `profitability` (`Rentabilité`) is the one

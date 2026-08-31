@@ -18,9 +18,9 @@ interface ModuleLauncherProps {
 }
 
 const tileClassName =
-	'flex h-24 w-full flex-col items-center justify-center gap-2 rounded-xl p-2 text-center text-xs font-medium transition-colors'
+	'flex h-24 w-full flex-col items-center justify-center gap-2 rounded-none p-2 text-center text-xs font-medium transition-colors'
 
-const markClassName = 'flex size-11 items-center justify-center rounded-full'
+const markClassName = 'flex size-11 items-center justify-center rounded-none'
 
 /** Nine-dot grid: the app-switching affordance. */
 function AppsGridIcon() {
@@ -72,7 +72,7 @@ export function ModuleLauncher({
 			<PopoverContent
 				align="end"
 				sideOffset={8}
-				className="w-80 rounded-2xl p-4"
+				className="w-80 rounded-none p-4 shadow-[4px_4px_0_0_var(--foreground)]"
 			>
 				<p className="mb-3 px-1 text-xs font-medium text-muted-foreground">
 					Modules Mestier

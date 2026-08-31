@@ -1,13 +1,11 @@
 import { Link, useLocation } from '@tanstack/react-router'
 import type * as React from 'react'
 
-import { MestierAppIcon } from '#/components/brand/mestier-logo'
 import {
 	Sidebar,
 	SidebarContent,
 	SidebarFooter,
 	SidebarGroup,
-	SidebarHeader,
 	SidebarMenu,
 	SidebarMenuButton,
 	SidebarMenuItem,
@@ -26,9 +24,12 @@ interface ModuleNavProps extends React.ComponentProps<typeof Sidebar> {
 /**
  * Navigation for the active module, in the left column.
  *
- * It is not for switching modules — that is the header {@link ModuleLauncher}'s
- * job. It lists the current module's screens; their second level, when they
- * have one, is rendered as horizontal tabs by the {@link ScopeBar}.
+ * It is not for switching modules — each module is its own app, the way
+ * Calendar and Docs each own their nav rather than sharing a cross-app rail;
+ * switching is the header {@link ModuleLauncher}'s job. It lists the current
+ * module's screens; their second level, when they have one, is rendered as
+ * horizontal tabs by the {@link ScopeBar}. No brand header of its own —
+ * that lives in {@link AppHeader} now, common to every module.
  */
 export function ModuleNav({ organizationSlug, ...props }: ModuleNavProps) {
 	const location = useLocation()
@@ -55,21 +56,7 @@ export function ModuleNav({ organizationSlug, ...props }: ModuleNavProps) {
 
 	return (
 		<Sidebar collapsible="icon" {...props}>
-			<SidebarHeader className="pb-3">
-				<div className="flex items-center gap-2 px-1 py-1">
-					<MestierAppIcon className="size-8 shrink-0 rounded-lg" />
-					<div className="grid min-w-0 flex-1 leading-tight group-data-[collapsible=icon]:hidden">
-						<span className="truncate text-base font-medium text-sidebar-foreground">
-							Mestier
-						</span>
-						<span className="truncate text-xs text-sidebar-foreground/60">
-							{activeModule.label}
-						</span>
-					</div>
-				</div>
-			</SidebarHeader>
-
-			<SidebarContent>
+			<SidebarContent className="pt-3">
 				<SidebarGroup>
 					<SidebarMenu>
 						{visibleSections.map((section) => (
@@ -102,10 +89,13 @@ export function ModuleNav({ organizationSlug, ...props }: ModuleNavProps) {
 	)
 }
 
-// Rounded pill, like the Google consoles' nav: the active state is a brand
-// tint, not a background contrast.
+// Flush, not a pill: no fill, no rounding — the active state reads as a
+// left rule and a weight change, not a tinted background block.
 const pillClassName =
-	'rounded-full font-medium data-[active=true]:font-semibold group-data-[collapsible=icon]:rounded-full'
+	'rounded-none! border-l-2 border-transparent font-medium ' +
+	'hover:bg-muted! ' +
+	'data-[active=true]:border-l-brand-muted data-[active=true]:bg-transparent! data-[active=true]:font-semibold data-[active=true]:text-foreground ' +
+	'group-data-[collapsible=icon]:rounded-none!'
 
 interface NavEntryProps {
 	target: NavTarget
