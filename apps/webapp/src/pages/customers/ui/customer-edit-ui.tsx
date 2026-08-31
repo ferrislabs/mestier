@@ -15,6 +15,7 @@ import {
 	UserRound,
 } from 'lucide-react'
 import { FloatingActionBar } from '#/components/floating-action-bar'
+import { RequirePermission } from '#/components/require-permission'
 import { Button } from '#/components/ui/button'
 import {
 	Dialog,
@@ -862,6 +863,12 @@ function CustomerContextCard({
 	)
 }
 
+/**
+ * Gated on `MANAGE_CUSTOMERS` (#403) — the backend already refuses a
+ * contact/context write without it (`customer.manage` in
+ * `domain/customer/service.rs`), so hiding this here is a real boundary,
+ * not just cosmetic.
+ */
 function RowActions({
 	isDeleting,
 	onEdit,
@@ -872,21 +879,23 @@ function RowActions({
 	onDelete: () => void
 }) {
 	return (
-		<div className="flex shrink-0 gap-1">
-			<Button type="button" variant="ghost" size="icon-sm" onClick={onEdit}>
-				<Pencil />
-				<span className="sr-only">Modifier</span>
-			</Button>
-			<Button
-				type="button"
-				variant="ghost"
-				size="icon-sm"
-				disabled={isDeleting}
-				onClick={onDelete}
-			>
-				<Trash2 />
-				<span className="sr-only">Supprimer</span>
-			</Button>
-		</div>
+		<RequirePermission permission="MANAGE_CUSTOMERS">
+			<div className="flex shrink-0 gap-1">
+				<Button type="button" variant="ghost" size="icon-sm" onClick={onEdit}>
+					<Pencil />
+					<span className="sr-only">Modifier</span>
+				</Button>
+				<Button
+					type="button"
+					variant="ghost"
+					size="icon-sm"
+					disabled={isDeleting}
+					onClick={onDelete}
+				>
+					<Trash2 />
+					<span className="sr-only">Supprimer</span>
+				</Button>
+			</div>
+		</RequirePermission>
 	)
 }

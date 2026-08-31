@@ -24,6 +24,8 @@ import {
 import { Input } from '#/components/ui/input'
 import { Label } from '#/components/ui/label'
 import { SectionCard, SectionHeader } from '#/components/ui/surface'
+import type { PermissionName } from '#/hooks/use-permissions'
+import { usePermissions } from '#/hooks/use-permissions'
 
 export interface FormBinding<T> {
 	values: T
@@ -125,16 +127,48 @@ export interface RowActionsProps {
 	onCancel: () => void
 	onSave: () => void
 	onDelete: () => void
+	/**
+	 * Hides the whole control — edit and delete are this row's only actions,
+	 * so there is nothing left to show a trigger for without it — when the
+	 * caller lacks this bit. Omit where the backend does not yet enforce an
+	 * equivalent check: hiding a control the API would still accept is a
+	 * false sense of security, not a real one (#403, #394's "inverse gap").
+	 */
+	permission?: PermissionName
 }
 
-export function RowActions({
+/**
+ * Splits on `permission` at this outer level, rather than calling
+ * `usePermissions` unconditionally inside one component: that hook needs
+ * `ActiveOrganizationProvider` in the tree, and most reuse sites (and their
+ * tests) predate #403 and have no reason to carry that context when they
+ * never pass a `permission`. Conditionally rendering one of two components
+ * is fine where conditionally calling a hook inside one is not.
+ */
+export function RowActions({ permission, ...rest }: RowActionsProps) {
+	if (permission) {
+		return <GatedRowActions {...rest} permission={permission} />
+	}
+	return <RowActionsView {...rest} />
+}
+
+function GatedRowActions({
+	permission,
+	...rest
+}: Omit<RowActionsProps, 'permission'> & { permission: PermissionName }) {
+	const permissions = usePermissions()
+	if (!permissions.data?.data.permissions.includes(permission)) return null
+	return <RowActionsView {...rest} />
+}
+
+function RowActionsView({
 	isEditing,
 	isSaving,
 	onEdit,
 	onCancel,
 	onSave,
 	onDelete,
-}: RowActionsProps) {
+}: Omit<RowActionsProps, 'permission'>) {
 	if (isEditing) {
 		return (
 			<div className="flex justify-end gap-1">
