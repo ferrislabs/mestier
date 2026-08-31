@@ -10,6 +10,7 @@ import {
 	marginRate,
 	overlapNote,
 	plannedCostCents,
+	previousMonthPeriod,
 } from '#/pages/reporting/types'
 
 function project(
@@ -134,6 +135,22 @@ describe('currentMonthPeriod', () => {
 		expect(currentMonthPeriod(new Date(2026, 7, 21))).toEqual({
 			from: '2026-08-01',
 			to: '2026-08-21',
+		})
+	})
+})
+
+describe('previousMonthPeriod', () => {
+	it('runs the full previous calendar month, not a partial one', () => {
+		expect(previousMonthPeriod(new Date(2026, 7, 21))).toEqual({
+			from: '2026-07-01',
+			to: '2026-07-31',
+		})
+	})
+
+	it('crosses a year boundary correctly', () => {
+		expect(previousMonthPeriod(new Date(2026, 0, 15))).toEqual({
+			from: '2025-12-01',
+			to: '2025-12-31',
 		})
 	})
 })
