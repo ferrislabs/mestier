@@ -57,7 +57,6 @@ export type AbsenceOverviewRow = AbsenceFormValues & {
 }
 
 export interface AbsencesOverviewUIProps {
-	organizationName: string
 	isLoading: boolean
 	error: string | null
 	absences: AbsenceOverviewRow[]
@@ -75,7 +74,6 @@ export interface AbsencesOverviewUIProps {
  * replaces (see the "Équipe & ressources" reorg design doc).
  */
 export function AbsencesOverviewUI({
-	organizationName,
 	isLoading,
 	error,
 	absences,
@@ -87,7 +85,6 @@ export function AbsencesOverviewUI({
 	return (
 		<PageShell>
 			<PageHeader
-				eyebrow={organizationName}
 				title="Absences"
 				description="Congés, arrêts et indisponibilités de toute l’organisation. L’assignation d’un projet pendant cette période n’est jamais bloquée, seulement signalée."
 				actions={

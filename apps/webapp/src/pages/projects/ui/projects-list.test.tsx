@@ -22,7 +22,6 @@ function project(overrides: Partial<Project> = {}): Project {
 
 function baseProps() {
 	return {
-		organizationName: 'Atelier Vert',
 		projects: [project()],
 		customerName: () => 'Duval Maçonnerie',
 		search: '',

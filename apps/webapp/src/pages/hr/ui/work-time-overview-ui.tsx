@@ -30,7 +30,6 @@ export interface WorkTimeOverviewRow {
 }
 
 interface WorkTimeOverviewUIProps {
-	organizationName: string
 	organizationSlug: string
 	isLoading: boolean
 	error: string | null
@@ -47,7 +46,6 @@ interface WorkTimeOverviewUIProps {
 }
 
 export function WorkTimeOverviewUI({
-	organizationName,
 	organizationSlug,
 	isLoading,
 	error,
@@ -57,7 +55,6 @@ export function WorkTimeOverviewUI({
 	return (
 		<PageShell>
 			<PageHeader
-				eyebrow={organizationName}
 				title="Temps de travail"
 				description="Base contractuelle hebdomadaire et prochaine absence connue de chaque personne."
 			/>

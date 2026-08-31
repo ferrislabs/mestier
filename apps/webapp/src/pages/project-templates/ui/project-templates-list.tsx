@@ -18,7 +18,6 @@ import {
 import type { ProjectTemplate } from '#/hooks/use-project-templates'
 
 export interface ProjectTemplatesListProps {
-	organizationName: string
 	templates: ProjectTemplate[]
 	includeArchived: boolean
 	isLoading: boolean
@@ -35,7 +34,6 @@ export interface ProjectTemplatesListProps {
  * fetching, no mutation — mirrors `ProjectsList`.
  */
 export function ProjectTemplatesList({
-	organizationName,
 	templates,
 	includeArchived,
 	isLoading,
@@ -102,7 +100,6 @@ export function ProjectTemplatesList({
 	return (
 		<PageShell>
 			<PageHeader
-				eyebrow={organizationName}
 				title="Modèles de projet"
 				description="Un modèle est un ensemble de tâches types avec des décalages, pas un projet à copier. Instancier un modèle produit un vrai projet, avec de vraies tâches, sur une date choisie."
 				actions={

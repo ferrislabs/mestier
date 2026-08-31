@@ -48,7 +48,6 @@ export interface TaskListPaginationVM {
 }
 
 export interface TaskListUIProps {
-	organizationName: string
 	isLoading: boolean
 	error: string | null
 	rows: TaskListRowVM[]
@@ -108,7 +107,6 @@ const STATUS_TONE: Record<
  * per-row subtask fetch live in `feature/task-list-feature.tsx`.
  */
 export function TaskListUI({
-	organizationName,
 	isLoading,
 	error,
 	rows,
@@ -131,7 +129,6 @@ export function TaskListUI({
 	return (
 		<PageShell>
 			<PageHeader
-				eyebrow={organizationName}
 				title="Tâches"
 				description="Toutes les tâches racines, avec leurs sous-tâches à la demande."
 				actions={

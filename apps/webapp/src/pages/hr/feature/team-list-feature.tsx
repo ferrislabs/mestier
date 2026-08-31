@@ -31,7 +31,6 @@ export function TeamListFeature() {
 		<TeamDirectory
 			key={activeOrganization.id}
 			organizationId={activeOrganization.id}
-			organizationName={activeOrganization.name}
 			organizationSlug={activeOrganization.slug}
 		/>
 	)
@@ -39,13 +38,11 @@ export function TeamListFeature() {
 
 interface TeamDirectoryProps {
 	organizationId: string
-	organizationName: string
 	organizationSlug: string
 }
 
 function TeamDirectory({
 	organizationId,
-	organizationName,
 	organizationSlug,
 }: TeamDirectoryProps) {
 	const catalog = useReferenceCatalog(organizationId, {
@@ -247,7 +244,6 @@ function TeamDirectory({
 			<memberForm.Subscribe selector={(state) => state.values}>
 				{(memberValues) => (
 					<TeamListUI
-						organizationName={organizationName}
 						organizationSlug={organizationSlug}
 						isLoading={isLoading}
 						error={mutationErrorMessage(error)}

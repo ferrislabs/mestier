@@ -53,7 +53,6 @@ export function ProjectsFeature(props: ProjectsFeatureProps) {
 		<ProjectsWorkspace
 			key={activeOrganization.id}
 			organizationId={activeOrganization.id}
-			organizationName={activeOrganization.name}
 			{...props}
 		/>
 	)
@@ -68,13 +67,11 @@ type TemplateDraft = {
 
 function ProjectsWorkspace({
 	organizationId,
-	organizationName,
 	highlightedProjectId,
 	includeArchived,
 	onIncludeArchivedChange,
 }: ProjectsFeatureProps & {
 	organizationId: string
-	organizationName: string
 }) {
 	const queryClient = useQueryClient()
 	const [search, setSearch] = useState('')
@@ -292,7 +289,6 @@ function ProjectsWorkspace({
 	return (
 		<>
 			<ProjectsList
-				organizationName={organizationName}
 				projects={visible}
 				customerName={(customerId) => nameByCustomer.get(customerId) ?? null}
 				search={search}

@@ -129,7 +129,6 @@ export interface PendingInvitationRow {
 }
 
 interface TeamListUIProps {
-	organizationName: string
 	organizationSlug: string
 	isLoading: boolean
 	error: string | null
@@ -162,7 +161,6 @@ interface TeamListUIProps {
 }
 
 export function TeamListUI({
-	organizationName,
 	organizationSlug,
 	isLoading,
 	error,
@@ -188,7 +186,6 @@ export function TeamListUI({
 	return (
 		<PageShell>
 			<PageHeader
-				eyebrow={organizationName}
 				title="Équipe"
 				description="Gérez les membres de l’organisation, leurs accès et leurs taux horaires."
 				actions={

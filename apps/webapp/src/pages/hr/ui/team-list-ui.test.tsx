@@ -170,7 +170,6 @@ function member(overrides: Partial<TeamMemberRow> = {}): TeamMemberRow {
 
 function baseProps() {
 	return {
-		organizationName: 'Atelier Bois & Co',
 		organizationSlug: 'atelier-bois',
 		isLoading: false,
 		error: null,

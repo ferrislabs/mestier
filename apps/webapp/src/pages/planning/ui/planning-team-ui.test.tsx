@@ -31,7 +31,6 @@ function baseProps(
 	overrides: Partial<PlanningTeamUIProps> = {},
 ): PlanningTeamUIProps {
 	return {
-		organizationName: 'Atelier Bois & Co',
 		organizationSlug: 'atelier-bois',
 		pendingReportsCount: null,
 		view: 'week',

@@ -58,20 +58,15 @@ export function TaskListFeature() {
 		<TaskListScreen
 			key={activeOrganization.id}
 			organizationId={activeOrganization.id}
-			organizationName={activeOrganization.name}
 		/>
 	)
 }
 
 interface TaskListScreenProps {
 	organizationId: string
-	organizationName: string
 }
 
-function TaskListScreen({
-	organizationId,
-	organizationName,
-}: TaskListScreenProps) {
+function TaskListScreen({ organizationId }: TaskListScreenProps) {
 	const [page, setPage] = useState(1)
 	const rootTasksQuery = useRootTasks(organizationId, page, ROOT_TASKS_PER_PAGE)
 	const rootTasks = rootTasksQuery.data?.data ?? []
@@ -217,7 +212,6 @@ function TaskListScreen({
 
 	return (
 		<TaskListUI
-			organizationName={organizationName}
 			// Gated on both queries — `rootTasksQuery` alone would let the table
 			// render before `planningQuery`'s roster has loaded, and every
 			// assigned row would flash `resolveAssigneeNames`'s "Assigné inconnu"

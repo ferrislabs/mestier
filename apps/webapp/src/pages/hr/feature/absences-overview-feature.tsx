@@ -35,19 +35,16 @@ export function AbsencesOverviewFeature() {
 		<AbsencesOverviewScreen
 			key={activeOrganization.id}
 			organizationId={activeOrganization.id}
-			organizationName={activeOrganization.name}
 		/>
 	)
 }
 
 interface AbsencesOverviewScreenProps {
 	organizationId: string
-	organizationName: string
 }
 
 function AbsencesOverviewScreen({
 	organizationId,
-	organizationName,
 }: AbsencesOverviewScreenProps) {
 	const catalog = useReferenceCatalog(organizationId, {
 		employeeProfiles: false,
@@ -189,7 +186,6 @@ function AbsencesOverviewScreen({
 
 	return (
 		<AbsencesOverviewUI
-			organizationName={organizationName}
 			isLoading={isLoading}
 			error={loadError}
 			absences={rows}

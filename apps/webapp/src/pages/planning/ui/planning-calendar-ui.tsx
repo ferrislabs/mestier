@@ -16,7 +16,6 @@ import { MonthGrid } from '#/pages/planning/ui/month-grid'
 import { PendingReportsBadge } from '#/pages/planning/ui/pending-reports-badge'
 
 export interface PlanningCalendarUIProps {
-	organizationName: string
 	organizationSlug: string
 	/** `null` while the count is still loading — see
 	 * `PlanningTeamUIProps.pendingReportsCount`'s own doc. */
@@ -46,7 +45,6 @@ export interface PlanningCalendarUIProps {
 }
 
 export function PlanningCalendarUI({
-	organizationName,
 	organizationSlug,
 	pendingReportsCount,
 	view,
@@ -93,7 +91,6 @@ export function PlanningCalendarUI({
 	return (
 		<PageShell className="max-w-none">
 			<PageHeader
-				eyebrow={organizationName}
 				title="Calendrier"
 				actions={
 					pendingReportsCount ? (

@@ -35,7 +35,6 @@ function report(overrides: Partial<AssignmentReport> = {}): AssignmentReport {
 
 function baseProps() {
 	return {
-		organizationName: 'Paysages Bonnal',
 		reports: [report()],
 		pagination: null,
 		page: 1,

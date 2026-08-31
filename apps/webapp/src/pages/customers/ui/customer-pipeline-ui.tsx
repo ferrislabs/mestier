@@ -115,7 +115,6 @@ export function CustomerPipelineUI({
 						</Link>
 					</Button>
 				}
-				eyebrow="CRM"
 				leading={
 					<div className="flex size-12 items-center justify-center rounded-lg bg-brand-soft text-primary">
 						<KanbanSquare className="size-6" />

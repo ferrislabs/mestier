@@ -38,7 +38,6 @@ function baseProps(
 	overrides: Partial<EmployeeWorkTimeUIProps> = {},
 ): EmployeeWorkTimeUIProps {
 	return {
-		organizationName: 'Atelier Bois & Co',
 		member: member(),
 		hourlyRateCents: 1500,
 		isSalaried: false,

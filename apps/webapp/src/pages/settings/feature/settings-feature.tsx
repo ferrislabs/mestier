@@ -38,7 +38,6 @@ export function SettingsFeature() {
 	return (
 		<PageShell>
 			<PageHeader
-				eyebrow={activeOrganization.name}
 				title="Paramètres"
 				description="Configurez l'espace de travail et chacun des modules installés."
 			/>

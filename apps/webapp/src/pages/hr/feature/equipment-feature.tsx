@@ -51,14 +51,12 @@ export function EquipmentFeature() {
 		<EquipmentSectionContent
 			key={activeOrganization.id}
 			organizationId={activeOrganization.id}
-			organizationName={activeOrganization.name}
 		/>
 	)
 }
 
 interface EquipmentSectionContentProps {
 	organizationId: string
-	organizationName: string
 }
 
 type Draft = {
@@ -68,7 +66,6 @@ type Draft = {
 
 function EquipmentSectionContent({
 	organizationId,
-	organizationName,
 }: EquipmentSectionContentProps) {
 	const catalog = useReferenceCatalog(organizationId, {
 		members: false,
@@ -148,7 +145,6 @@ function EquipmentSectionContent({
 			{(equipmentValues) => (
 				<PageShell>
 					<PageHeader
-						eyebrow={organizationName}
 						title="Matériel"
 						description="Les ressources facturables et leur coût horaire, utilisés pour calculer la rentabilité d'une tâche."
 						actions={

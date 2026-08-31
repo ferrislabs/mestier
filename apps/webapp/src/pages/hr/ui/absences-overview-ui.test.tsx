@@ -30,7 +30,6 @@ function baseProps(
 	overrides: Partial<AbsencesOverviewUIProps> = {},
 ): AbsencesOverviewUIProps {
 	return {
-		organizationName: 'Atelier Bois & Co',
 		isLoading: false,
 		error: null,
 		absences: [absence()],

@@ -41,7 +41,6 @@ export interface ContractFormBinding {
 }
 
 export interface EmployeeWorkTimeUIProps {
-	organizationName: string
 	member: Member
 	/** `null` when the member has no employee profile yet. */
 	hourlyRateCents: number | null
@@ -67,7 +66,6 @@ export interface EmployeeWorkTimeUIProps {
 }
 
 export function EmployeeWorkTimeUI({
-	organizationName,
 	member,
 	hourlyRateCents,
 	isSalaried,
@@ -85,7 +83,6 @@ export function EmployeeWorkTimeUI({
 	return (
 		<PageShell>
 			<PageHeader
-				eyebrow={organizationName}
 				title={member.display_name}
 				description="Base contractuelle, rythme hebdomadaire et plages de travail."
 			/>

@@ -95,7 +95,6 @@ export function EmployeeWorkTimeFeature({
 		<EmployeeWorkTimeScreen
 			key={`${activeOrganization.id}:${memberId}`}
 			organizationId={activeOrganization.id}
-			organizationName={activeOrganization.name}
 			memberId={memberId}
 		/>
 	)
@@ -103,13 +102,11 @@ export function EmployeeWorkTimeFeature({
 
 interface EmployeeWorkTimeScreenProps {
 	organizationId: string
-	organizationName: string
 	memberId: string
 }
 
 function EmployeeWorkTimeScreen({
 	organizationId,
-	organizationName,
 	memberId,
 }: EmployeeWorkTimeScreenProps) {
 	const catalog = useReferenceCatalog(organizationId, {
@@ -454,7 +451,6 @@ function EmployeeWorkTimeScreen({
 
 	return (
 		<EmployeeWorkTimeUI
-			organizationName={organizationName}
 			member={member}
 			hourlyRateCents={profile?.hourly_rate_cents ?? null}
 			isSalaried={profile?.is_salaried ?? false}

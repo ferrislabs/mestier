@@ -95,7 +95,6 @@ const ROOT_WITHOUT_CHILDREN: TaskListRowVM = {
 
 function baseProps(overrides: Partial<TaskListUIProps> = {}): TaskListUIProps {
 	return {
-		organizationName: 'Atelier Bois & Co',
 		isLoading: false,
 		error: null,
 		rows: [ROOT_WITH_CHILDREN, ROOT_WITHOUT_CHILDREN],

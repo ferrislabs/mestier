@@ -16,7 +16,6 @@ import {
 } from '#/pages/planning/ui/planning-warning-dialog'
 
 export interface PlanningTeamUIProps {
-	organizationName: string
 	organizationSlug: string
 	/** `null` while the count is still loading — the badge stays absent
 	 * either way, since zero and "unknown yet" render the same (nothing). */
@@ -59,7 +58,6 @@ export interface PlanningTeamUIProps {
  * creates, edits or deletes them.
  */
 export function PlanningTeamUI({
-	organizationName,
 	organizationSlug,
 	pendingReportsCount,
 	view,
@@ -81,7 +79,6 @@ export function PlanningTeamUI({
 	return (
 		<PageShell>
 			<PageHeader
-				eyebrow={organizationName}
 				title="Planning"
 				description="Projets, absences et plages de travail de l'équipe."
 				actions={

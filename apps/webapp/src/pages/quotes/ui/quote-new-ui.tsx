@@ -135,7 +135,6 @@ export function QuoteNewUI({
 		>
 			<PageShell>
 				<PageHeader
-					eyebrow="Devis"
 					title="Nouveau devis"
 					description="Sélectionnez le client, puis ajoutez des services, produits ou lignes libres."
 					actions={

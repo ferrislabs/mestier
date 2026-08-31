@@ -30,7 +30,6 @@ import {
 } from '#/pages/planning/lib/pending-reports'
 
 export interface AssignmentReportListUIProps {
-	organizationName: string
 	reports: AssignmentReport[]
 	pagination?: PaginationMetadata | null
 	page: number
@@ -85,7 +84,6 @@ function resolutionLabel(resolution: AssignmentReportResolution): string {
  * current page, since no search exists on the backend endpoint.
  */
 export function AssignmentReportListUI({
-	organizationName,
 	reports,
 	pagination,
 	page,
@@ -132,7 +130,6 @@ export function AssignmentReportListUI({
 	return (
 		<PageShell>
 			<PageHeader
-				eyebrow={organizationName}
 				title="Écarts signalés"
 				description="Les corrections que les équipes de terrain ont déclarées sur leurs projets."
 				actions={

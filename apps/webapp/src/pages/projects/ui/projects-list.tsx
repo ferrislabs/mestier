@@ -27,7 +27,6 @@ import type { Project } from '#/hooks/use-projects'
 import { cn } from '#/lib/utils'
 
 export interface ProjectsListProps {
-	organizationName: string
 	projects: Project[]
 	/** Resolves a customer id into a name, or `null` while unknown. */
 	customerName: (customerId: string) => string | null
@@ -58,7 +57,6 @@ export interface ProjectsListProps {
  * it is handed, no fetching, no mutation.
  */
 export function ProjectsList({
-	organizationName,
 	projects,
 	customerName,
 	search,
@@ -192,7 +190,6 @@ export function ProjectsList({
 	return (
 		<PageShell>
 			<PageHeader
-				eyebrow={organizationName}
 				title="Projets"
 				description="Le sujet auquel un coût est rattaché. Un projet sans client est un projet interne : une réunion récurrente coûte, et doit se voir."
 				actions={

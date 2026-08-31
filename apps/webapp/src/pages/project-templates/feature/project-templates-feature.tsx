@@ -35,7 +35,6 @@ export function ProjectTemplatesFeature(props: ProjectTemplatesFeatureProps) {
 		<ProjectTemplatesWorkspace
 			key={activeOrganization.id}
 			organizationId={activeOrganization.id}
-			organizationName={activeOrganization.name}
 			{...props}
 		/>
 	)
@@ -49,12 +48,10 @@ type Draft = {
 
 function ProjectTemplatesWorkspace({
 	organizationId,
-	organizationName,
 	includeArchived,
 	onIncludeArchivedChange,
 }: ProjectTemplatesFeatureProps & {
 	organizationId: string
-	organizationName: string
 }) {
 	const [draft, setDraft] = useState<Draft | null>(null)
 
@@ -144,7 +141,6 @@ function ProjectTemplatesWorkspace({
 	return (
 		<>
 			<ProjectTemplatesList
-				organizationName={organizationName}
 				templates={rows}
 				includeArchived={includeArchived}
 				isLoading={templates.isLoading}

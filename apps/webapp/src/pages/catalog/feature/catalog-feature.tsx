@@ -90,7 +90,6 @@ export function CatalogFeature() {
 	return (
 		<PageShell>
 			<PageHeader
-				eyebrow={activeOrganization.name}
 				title="Catalogue"
 				description="Les produits et services que vous insérez dans un devis, avec leur unité et leur tarif."
 			/>
