@@ -137,7 +137,10 @@ function ModuleTile({
 			aria-current={active ? 'page' : undefined}
 			className={cn(
 				tileClassName,
-				'hover:bg-muted',
+				// Not `hover:bg-muted`: too close to the icon's own resting
+				// `bg-brand-soft` to read as a hover at all on an unselected
+				// tile — an opacity overlay stays visible against either.
+				'hover:bg-foreground/5',
 				active ? 'text-primary' : 'text-foreground',
 			)}
 		>
