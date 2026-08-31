@@ -1,5 +1,6 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { screen } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import type { ReactNode } from 'react'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { ModuleNav } from '#/components/module-nav'
@@ -181,13 +182,6 @@ describe('ModuleNav', () => {
 		expect(corps?.textContent).not.toContain('Paramètres')
 	})
 
-	it('shows the current module under the brand', async () => {
-		await renderNav('/o/dupont/planning/team')
-
-		expect(screen.getByText('Mestier')).toBeDefined()
-		expect(screen.getByText('Planning')).toBeDefined()
-	})
-
 	/**
 	 * #307: a section gated by a bit the caller does not hold is hidden
 	 * outright, not greyed out — `profitability` (`Rentabilité`) is the one
@@ -204,5 +198,23 @@ describe('ModuleNav', () => {
 		await renderNav('/o/dupont', ['VIEW_REPORTS'])
 
 		expect(await screen.findByText('Rentabilité')).toBeDefined()
+	})
+
+	/**
+	 * Replaces the old edge-drag rail (a 4px `tabIndex={-1}` hitbox) with an
+	 * actual button — same `toggleSidebar`, but one a caller can find and
+	 * click, verified through the label flipping.
+	 */
+	it('collapses and expands via a visible button, not just the hidden edge rail', async () => {
+		const user = userEvent.setup()
+		await renderNav('/o/dupont/crm/customers')
+
+		const toggle = screen.getByRole('button', { name: 'Réduire' })
+		await user.click(toggle)
+
+		expect(
+			await screen.findByRole('button', { name: 'Agrandir' }),
+		).toBeDefined()
+		expect(screen.queryByRole('button', { name: 'Réduire' })).toBeNull()
 	})
 })

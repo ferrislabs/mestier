@@ -18,9 +18,9 @@ interface ModuleLauncherProps {
 }
 
 const tileClassName =
-	'flex h-24 w-full flex-col items-center justify-center gap-2 rounded-xl p-2 text-center text-xs font-medium transition-colors'
+	'flex h-24 w-full flex-col items-center justify-center gap-2 rounded-none p-2 text-center text-xs font-medium transition-colors'
 
-const markClassName = 'flex size-11 items-center justify-center rounded-full'
+const markClassName = 'flex size-11 items-center justify-center rounded-none'
 
 /** Nine-dot grid: the app-switching affordance. */
 function AppsGridIcon() {
@@ -64,7 +64,7 @@ export function ModuleLauncher({
 					variant="ghost"
 					size="icon"
 					aria-label="Changer de module"
-					className="text-muted-foreground"
+					className="border border-foreground/20 text-muted-foreground"
 				>
 					<AppsGridIcon />
 				</Button>
@@ -72,7 +72,7 @@ export function ModuleLauncher({
 			<PopoverContent
 				align="end"
 				sideOffset={8}
-				className="w-80 rounded-2xl p-4"
+				className="w-80 rounded-none p-4 shadow-none"
 			>
 				<p className="mb-3 px-1 text-xs font-medium text-muted-foreground">
 					Modules Mestier
@@ -137,7 +137,11 @@ function ModuleTile({
 			aria-current={active ? 'page' : undefined}
 			className={cn(
 				tileClassName,
-				'hover:bg-muted',
+				// Not `hover:bg-muted`: too close to the icon's own resting
+				// `bg-brand-soft` to read as a hover at all on an unselected
+				// tile. `/5` still wasn't enough contrast against it either —
+				// `/10` is the first opacity that reads clearly on both.
+				'hover:bg-foreground/10',
 				active ? 'text-primary' : 'text-foreground',
 			)}
 		>

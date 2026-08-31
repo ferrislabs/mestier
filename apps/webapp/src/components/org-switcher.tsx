@@ -49,7 +49,10 @@ export function OrgSwitcher() {
 					<ChevronsUpDown className="size-3.5 shrink-0 text-muted-foreground" />
 				</button>
 			</DropdownMenuTrigger>
-			<DropdownMenuContent align="start" className="min-w-72 rounded-lg">
+			<DropdownMenuContent
+				align="start"
+				className="min-w-72 rounded-none shadow-none"
+			>
 				<DropdownMenuLabel className="text-xs text-muted-foreground">
 					Organisation active
 				</DropdownMenuLabel>
@@ -95,7 +98,7 @@ function OrganizationMark({ organization, className }: OrganizationMarkProps) {
 	return (
 		<div
 			className={cn(
-				'flex aspect-square size-7 items-center justify-center rounded-md bg-primary text-xs font-semibold text-primary-foreground',
+				'flex aspect-square size-7 items-center justify-center rounded-none bg-primary text-xs font-semibold text-primary-foreground',
 				className,
 			)}
 		>

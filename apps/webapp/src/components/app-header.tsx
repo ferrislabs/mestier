@@ -38,23 +38,22 @@ export function AppHeader() {
 	const initials = getInitials(displayName)
 
 	return (
-		<header className="sticky top-0 z-20 flex h-(--app-header-height) shrink-0 items-center gap-3 bg-card px-3 md:px-6">
-			{isHome ? (
-				// No left rail on the homepage — its brand mark (`ModuleNav`'s own
-				// `SidebarHeader`) goes missing with it, so the header carries it
-				// here instead of leaving the app unbranded on its own front door.
-				<Link
-					to={buildOrgPath(activeOrganization.slug, '/')}
-					className="flex items-center gap-2"
-				>
-					<MestierAppIcon className="size-8 shrink-0 rounded-lg" />
-					<span className="hidden text-base font-medium text-foreground sm:inline">
-						Mestier
-					</span>
-				</Link>
-			) : (
+		<header className="sticky top-0 z-20 flex h-(--app-header-height) shrink-0 items-center gap-2 border-b bg-card px-3 md:px-6">
+			{/* The brand mark, not `ModuleNav`'s job anymore — each module is its
+			 * own app with its own navigation (see `module-nav.tsx`'s own doc);
+			 * identity belongs at the root of the header, the way a Google app
+			 * shows its mark next to the product name rather than in a side rail. */}
+			<Link
+				to={buildOrgPath(activeOrganization.slug, '/')}
+				aria-label="Accueil"
+				className="flex shrink-0 items-center"
+			>
+				<MestierAppIcon className="size-8 shrink-0 rounded-none" />
+			</Link>
+
+			{isHome ? null : (
 				// Sur mobile le rail est un panneau : il lui faut un déclencheur.
-				<SidebarTrigger className="-ml-1 md:hidden" />
+				<SidebarTrigger className="border border-foreground/20 md:hidden" />
 			)}
 
 			<AppBreadcrumb />
@@ -70,7 +69,11 @@ export function AppHeader() {
 				 * one is, the counter will come from the realtime gateway — this
 				 * button must not be turned into periodic polling.
 				 */}
-				<Button variant="ghost" size="icon" className="text-muted-foreground">
+				<Button
+					variant="ghost"
+					size="icon"
+					className="border border-foreground/20 text-muted-foreground"
+				>
 					<Bell />
 					<span className="sr-only">Notifications</span>
 				</Button>
@@ -80,7 +83,7 @@ export function AppHeader() {
 						<button
 							type="button"
 							aria-label="Compte utilisateur"
-							className="flex size-9 items-center justify-center rounded-full bg-primary text-sm font-medium text-primary-foreground transition-colors hover:bg-brand-muted"
+							className="flex size-9 items-center justify-center rounded-none bg-primary text-sm font-medium text-primary-foreground transition-colors hover:bg-brand-muted"
 						>
 							{initials}
 						</button>
