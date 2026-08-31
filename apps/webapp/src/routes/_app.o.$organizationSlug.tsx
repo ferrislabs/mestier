@@ -68,7 +68,7 @@ function AppShell() {
 	const isHome = splitOrgPath(location.pathname).path === '/'
 
 	return (
-		<SidebarProvider className="flex-col">
+		<SidebarProvider defaultOpen={false} className="flex-col">
 			{/* The header spans the full width, above the sidebar rather than
 			 * beside it — `ModuleNav`'s own fixed container is offset below it
 			 * (see its `top-(--app-header-height)` override) so the two never

@@ -120,12 +120,14 @@ export function ModuleNav({
 	)
 }
 
-// Flush, not a pill: no fill, no rounding — the active state reads as a
-// left rule and a weight change, not a tinted background block.
+// Sharp-cornered, not a pill: a left rule was tried first, but padding
+// between the button and the sidebar's own edge kept it from ever sitting
+// flush — reading as a misaligned accent rather than a deliberate one. A
+// background fill has no edge to miss.
 const pillClassName =
-	'rounded-none! border-l-2 border-transparent font-medium ' +
+	'rounded-none! font-medium ' +
 	'hover:bg-muted! ' +
-	'data-[active=true]:border-l-brand-muted data-[active=true]:bg-transparent! data-[active=true]:font-semibold data-[active=true]:text-foreground ' +
+	'data-[active=true]:bg-brand-soft! data-[active=true]:font-semibold data-[active=true]:text-brand-muted ' +
 	'group-data-[collapsible=icon]:rounded-none!'
 
 interface NavEntryProps {
