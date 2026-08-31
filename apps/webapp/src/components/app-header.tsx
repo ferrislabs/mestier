@@ -53,7 +53,7 @@ export function AppHeader() {
 
 			{isHome ? null : (
 				// Sur mobile le rail est un panneau : il lui faut un déclencheur.
-				<SidebarTrigger className="border border-border md:hidden" />
+				<SidebarTrigger className="border border-foreground/20 md:hidden" />
 			)}
 
 			<AppBreadcrumb />
@@ -72,7 +72,7 @@ export function AppHeader() {
 				<Button
 					variant="ghost"
 					size="icon"
-					className="border border-border text-muted-foreground"
+					className="border border-foreground/20 text-muted-foreground"
 				>
 					<Bell />
 					<span className="sr-only">Notifications</span>

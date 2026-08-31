@@ -64,7 +64,7 @@ export function ModuleLauncher({
 					variant="ghost"
 					size="icon"
 					aria-label="Changer de module"
-					className="border border-border text-muted-foreground"
+					className="border border-foreground/20 text-muted-foreground"
 				>
 					<AppsGridIcon />
 				</Button>
@@ -139,8 +139,9 @@ function ModuleTile({
 				tileClassName,
 				// Not `hover:bg-muted`: too close to the icon's own resting
 				// `bg-brand-soft` to read as a hover at all on an unselected
-				// tile — an opacity overlay stays visible against either.
-				'hover:bg-foreground/5',
+				// tile. `/5` still wasn't enough contrast against it either —
+				// `/10` is the first opacity that reads clearly on both.
+				'hover:bg-foreground/10',
 				active ? 'text-primary' : 'text-foreground',
 			)}
 		>
