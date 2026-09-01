@@ -10,13 +10,6 @@ import { useState } from 'react'
 import { Button } from '#/components/ui/button'
 import { Field } from '#/components/ui/field'
 import { Input } from '#/components/ui/input'
-import {
-	Select,
-	SelectContent,
-	SelectItem,
-	SelectTrigger,
-	SelectValue,
-} from '#/components/ui/select'
 import { PageHeader, PageShell, SectionCard } from '#/components/ui/surface'
 import type { CatalogItem } from '#/hooks/use-catalog-items'
 import type { Customer, CustomerContext } from '#/hooks/use-customers'
@@ -31,8 +24,8 @@ import {
 	quoteLinesVatBreakdown,
 	quoteLineTotalCents,
 } from '#/pages/quotes/types'
-import { BillingAddressField } from '#/pages/quotes/ui/billing-address-field'
 import { EditablePaperField } from '#/pages/quotes/ui/editable-paper-field'
+import { PaperOptionList } from '#/pages/quotes/ui/paper-option-list'
 import {
 	QuoteIssuerDetails,
 	QuoteIssuerMark,
@@ -185,42 +178,44 @@ export function QuoteNewUI({
 									label="Facturé à"
 									renderEditor={(close) => (
 										<div className="space-y-4">
-											<Field label="Client" htmlFor="new-quote-customer">
-												<Select
+											<Field label="Client" htmlFor={null}>
+												<PaperOptionList
+													ariaLabel="Client"
 													value={values.customerId}
-													onValueChange={(customerId) =>
-														onChange({ customerId })
-													}
-												>
-													<SelectTrigger
-														id="new-quote-customer"
-														className="w-full"
-													>
-														<SelectValue placeholder="Sélectionner un client" />
-													</SelectTrigger>
-													<SelectContent>
-														{customers.map((customer) => (
-															<SelectItem key={customer.id} value={customer.id}>
-																{customerDisplayName(customer)}
-															</SelectItem>
-														))}
-													</SelectContent>
-												</Select>
-											</Field>
-											<Field
-												label="Adresse de facturation"
-												htmlFor="new-quote-billing-address"
-											>
-												<BillingAddressField
-													id="new-quote-billing-address"
-													value={values.customerContextId}
-													addresses={customerContexts}
-													hasCustomer={Boolean(values.customerId)}
-													isLoading={isCustomerContextsLoading}
-													onChange={(customerContextId) =>
-														onChange({ customerContextId })
-													}
+													options={customers.map((customer) => ({
+														value: customer.id,
+														label: customerDisplayName(customer),
+													}))}
+													onChange={(customerId) => onChange({ customerId })}
+													emptyLabel="Aucun client n’existe encore dans cette organisation."
 												/>
+											</Field>
+											<Field label="Adresse de facturation" htmlFor={null}>
+												{!values.customerId ? (
+													<p className="border px-3 py-2 text-sm text-muted-foreground">
+														Choisir un client d’abord
+													</p>
+												) : isCustomerContextsLoading ? (
+													<p className="border px-3 py-2 text-sm text-muted-foreground">
+														Chargement…
+													</p>
+												) : (
+													<PaperOptionList
+														ariaLabel="Adresse de facturation"
+														value={values.customerContextId}
+														options={customerContexts.map((context) => ({
+															value: context.id,
+															label: context.label,
+															description:
+																billingAddressLines(context).join(' · ') ||
+																'Adresse non renseignée',
+														}))}
+														onChange={(customerContextId) =>
+															onChange({ customerContextId })
+														}
+														emptyLabel="Aucune adresse pour ce client."
+													/>
+												)}
 											</Field>
 											<Button
 												type="button"

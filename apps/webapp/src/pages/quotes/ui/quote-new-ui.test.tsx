@@ -101,7 +101,6 @@ describe('QuoteNewUI', () => {
 		await user.click(
 			screen.getByRole('button', { name: /modifier.*facturé à/i }),
 		)
-		await user.click(screen.getByRole('combobox', { name: 'Client' }))
 		await user.click(screen.getByRole('option', { name: 'Menuiserie Dupont' }))
 
 		expect(onChange).toHaveBeenCalledWith({ customerId: 'customer-1' })

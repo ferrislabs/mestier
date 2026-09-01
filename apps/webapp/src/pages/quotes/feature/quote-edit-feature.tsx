@@ -23,13 +23,6 @@ import { Button } from '#/components/ui/button'
 import { Field } from '#/components/ui/field'
 import { Input } from '#/components/ui/input'
 import {
-	Select,
-	SelectContent,
-	SelectItem,
-	SelectTrigger,
-	SelectValue,
-} from '#/components/ui/select'
-import {
 	PageHeader,
 	PageShell,
 	SectionCard,
@@ -68,8 +61,8 @@ import {
 	quoteReferenceLabel,
 	quoteStatusLabel,
 } from '#/pages/quotes/types'
-import { BillingAddressField } from '#/pages/quotes/ui/billing-address-field'
 import { EditablePaperField } from '#/pages/quotes/ui/editable-paper-field'
+import { PaperOptionList } from '#/pages/quotes/ui/paper-option-list'
 import {
 	QuoteIssuerDetails,
 	QuoteIssuerMark,
@@ -524,25 +517,19 @@ function QuoteEditUI({
 									label="Statut"
 									className="w-auto"
 									renderEditor={(close) => (
-										<div className="space-y-4">
-											<Select
+										<div className="w-40">
+											<PaperOptionList
+												ariaLabel="Statut"
 												value={status}
-												onValueChange={(value) => {
+												options={QUOTE_STATUSES.map((value) => ({
+													value,
+													label: quoteStatusLabel(value),
+												}))}
+												onChange={(value) => {
 													onStatusChange(value as QuoteStatus)
 													close()
 												}}
-											>
-												<SelectTrigger className="w-40">
-													<SelectValue />
-												</SelectTrigger>
-												<SelectContent>
-													<SelectItem value="DRAFT">Brouillon</SelectItem>
-													<SelectItem value="SENT">Envoyé</SelectItem>
-													<SelectItem value="ACCEPTED">Accepté</SelectItem>
-													<SelectItem value="DECLINED">Refusé</SelectItem>
-													<SelectItem value="CANCELLED">Annulé</SelectItem>
-												</SelectContent>
-											</Select>
+											/>
 										</div>
 									)}
 								>
@@ -560,40 +547,44 @@ function QuoteEditUI({
 								label="Facturé à"
 								renderEditor={(close) => (
 									<div className="space-y-4">
-										<Field label="Client" htmlFor="edit-quote-customer">
-											<Select
+										<Field label="Client" htmlFor={null}>
+											<PaperOptionList
+												ariaLabel="Client"
 												value={values.customerId}
-												onValueChange={(customerId) => onChange({ customerId })}
-											>
-												<SelectTrigger
-													id="edit-quote-customer"
-													className="w-full"
-												>
-													<SelectValue placeholder="Sélectionner un client" />
-												</SelectTrigger>
-												<SelectContent>
-													{customers.map((customer) => (
-														<SelectItem key={customer.id} value={customer.id}>
-															{customerDisplayName(customer)}
-														</SelectItem>
-													))}
-												</SelectContent>
-											</Select>
-										</Field>
-										<Field
-											label="Adresse de facturation"
-											htmlFor="edit-quote-billing-address"
-										>
-											<BillingAddressField
-												id="edit-quote-billing-address"
-												value={values.customerContextId}
-												addresses={customerContexts}
-												hasCustomer={Boolean(values.customerId)}
-												isLoading={isLoading}
-												onChange={(customerContextId) =>
-													onChange({ customerContextId })
-												}
+												options={customers.map((customer) => ({
+													value: customer.id,
+													label: customerDisplayName(customer),
+												}))}
+												onChange={(customerId) => onChange({ customerId })}
+												emptyLabel="Aucun client n’existe encore dans cette organisation."
 											/>
+										</Field>
+										<Field label="Adresse de facturation" htmlFor={null}>
+											{!values.customerId ? (
+												<p className="border px-3 py-2 text-sm text-muted-foreground">
+													Choisir un client d’abord
+												</p>
+											) : isLoading ? (
+												<p className="border px-3 py-2 text-sm text-muted-foreground">
+													Chargement…
+												</p>
+											) : (
+												<PaperOptionList
+													ariaLabel="Adresse de facturation"
+													value={values.customerContextId}
+													options={customerContexts.map((context) => ({
+														value: context.id,
+														label: context.label,
+														description:
+															billingAddressLines(context).join(' · ') ||
+															'Adresse non renseignée',
+													}))}
+													onChange={(customerContextId) =>
+														onChange({ customerContextId })
+													}
+													emptyLabel="Aucune adresse pour ce client."
+												/>
+											)}
 										</Field>
 										<Button
 											type="button"
@@ -762,6 +753,14 @@ function QuoteEditUI({
 		</PageShell>
 	)
 }
+
+const QUOTE_STATUSES: QuoteStatus[] = [
+	'DRAFT',
+	'SENT',
+	'ACCEPTED',
+	'DECLINED',
+	'CANCELLED',
+]
 
 function statusTone(status: QuoteStatus) {
 	if (status === 'ACCEPTED') return 'success' as const
