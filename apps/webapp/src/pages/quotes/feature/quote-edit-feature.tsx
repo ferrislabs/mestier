@@ -5,7 +5,6 @@ import {
 	ArrowRightLeft,
 	FileText,
 	Loader2,
-	Plus,
 	Trash2,
 } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
@@ -30,12 +29,7 @@ import {
 	SelectTrigger,
 	SelectValue,
 } from '#/components/ui/select'
-import {
-	PageHeader,
-	PageShell,
-	SectionCard,
-	SectionHeader,
-} from '#/components/ui/surface'
+import { PageHeader, PageShell, SectionCard } from '#/components/ui/surface'
 import { useActiveOrganization } from '#/hooks/use-active-organization'
 import { type CatalogItem, useCatalogItems } from '#/hooks/use-catalog-items'
 import {
@@ -61,15 +55,15 @@ import {
 	emptyQuoteLine,
 	eurosToCents,
 	formatCents,
-	formatVatRateBp,
 	type QuoteFormValues,
 	type QuoteLineFormValues,
 	quoteLineTotalCents,
 	quoteReferenceLabel,
-	quoteStatusLabel,
 } from '#/pages/quotes/types'
 import { BillingAddressField } from '#/pages/quotes/ui/billing-address-field'
-import { QuoteLineEditor } from '#/pages/quotes/ui/quote-line-editor'
+import { QuoteIssuerBlock } from '#/pages/quotes/ui/quote-issuer-block'
+import { QuoteLinesTable } from '#/pages/quotes/ui/quote-lines-table'
+import { QuoteTotalsFooter } from '#/pages/quotes/ui/quote-totals-footer'
 import { LEGAL_IDENTITY_FIELD_LABELS } from '#/pages/settings/types'
 
 interface QuoteEditFeatureProps {
@@ -502,169 +496,148 @@ function QuoteEditUI({
 				</div>
 			) : null}
 
-			<div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_320px]">
-				<div className="space-y-5">
-					<SectionCard>
-						<SectionHeader
-							title="Informations"
-							description="Objet, client et adresse de facturation du devis."
-						/>
-						<div className="grid gap-4 p-5 md:grid-cols-2">
-							<Field label="Objet du devis" htmlFor={null}>
-								<Input
-									value={values.title}
-									onChange={(event) => onChange({ title: event.target.value })}
-									placeholder="Ex. Rénovation salle de bain"
-								/>
-							</Field>
-							<Field label="Statut" htmlFor={null}>
-								<Select
-									value={status}
-									onValueChange={(value) =>
-										onStatusChange(value as QuoteStatus)
-									}
-								>
-									<SelectTrigger className="w-full">
-										<SelectValue />
-									</SelectTrigger>
-									<SelectContent>
-										<SelectItem value="DRAFT">Brouillon</SelectItem>
-										<SelectItem value="SENT">Envoyé</SelectItem>
-										<SelectItem value="ACCEPTED">Accepté</SelectItem>
-										<SelectItem value="DECLINED">Refusé</SelectItem>
-										<SelectItem value="CANCELLED">Annulé</SelectItem>
-									</SelectContent>
-								</Select>
-							</Field>
-							<Field label="Client" htmlFor={null}>
-								<Select
-									value={values.customerId}
-									onValueChange={(customerId) => onChange({ customerId })}
-								>
-									<SelectTrigger className="w-full">
-										<SelectValue placeholder="Sélectionner un client" />
-									</SelectTrigger>
-									<SelectContent>
-										{customers.map((customer) => (
-											<SelectItem key={customer.id} value={customer.id}>
-												{customerDisplayName(customer)}
-											</SelectItem>
-										))}
-									</SelectContent>
-								</Select>
-							</Field>
-							<Field label="Adresse de facturation" htmlFor={null}>
-								<BillingAddressField
-									value={values.customerContextId}
-									addresses={customerContexts}
-									hasCustomer={Boolean(values.customerId)}
-									isLoading={isLoading}
-									onChange={(customerContextId) =>
-										onChange({ customerContextId })
-									}
-								/>
-							</Field>
-						</div>
-					</SectionCard>
-
-					<SectionCard>
-						<SectionHeader
-							title={`Lignes (${values.lines.length})`}
-							description="Chaque ligne peut venir du catalogue ou rester libre."
-							actions={
-								<Button
-									type="button"
-									variant="outline"
-									size="sm"
-									onClick={onAddLine}
-								>
-									<Plus />
-									Ajouter
-								</Button>
-							}
-						/>
-						<div className="divide-y">
-							{values.lines.map((line, index) => (
-								<QuoteLineEditor
-									key={line.clientId}
-									index={index}
-									line={line}
-									catalogItems={catalogItems}
-									photos={line.photoKeys.map((key) => ({
-										key,
-										url: photoUrls[key],
-									}))}
-									isOpen={openLineId === line.clientId}
-									canRemove={values.lines.length > 1}
-									isUploading={isUploading}
-									vatEnabled={vatEnabled}
-									onOpenChange={(open) =>
-										setOpenLineId(open ? line.clientId : null)
-									}
-									onChange={(patch) => onLineChange(index, patch)}
-									onSelectCatalogItem={(catalogItemId) =>
-										onSelectCatalogItem(index, catalogItemId)
-									}
-									onRemove={() => onRemoveLine(index)}
-									onUploadPhoto={(file) => void onUploadLinePhoto(index, file)}
-									onRemovePhoto={(key) =>
-										onLineChange(index, {
-											photoKeys: line.photoKeys.filter(
-												(photoKey) => photoKey !== key,
-											),
-										})
-									}
-								/>
-							))}
-						</div>
-					</SectionCard>
+			<SectionCard className="mx-auto w-full max-w-4xl">
+				<div className="flex flex-wrap items-start justify-between gap-4 border-b p-5">
+					<QuoteIssuerBlock organization={activeOrganization} />
+					<div className="flex flex-col items-end gap-2 text-right">
+						<p className="text-2xl font-bold tracking-tight">DEVIS</p>
+						<p className="text-sm text-muted-foreground">
+							{quoteReferenceLabel(quote.reference)}
+						</p>
+						<Select
+							value={status}
+							onValueChange={(value) => onStatusChange(value as QuoteStatus)}
+						>
+							<SelectTrigger className="w-40">
+								<SelectValue />
+							</SelectTrigger>
+							<SelectContent>
+								<SelectItem value="DRAFT">Brouillon</SelectItem>
+								<SelectItem value="SENT">Envoyé</SelectItem>
+								<SelectItem value="ACCEPTED">Accepté</SelectItem>
+								<SelectItem value="DECLINED">Refusé</SelectItem>
+								<SelectItem value="CANCELLED">Annulé</SelectItem>
+							</SelectContent>
+						</Select>
+					</div>
 				</div>
 
-				<aside className="h-fit rounded-lg border bg-card p-5 shadow-sm xl:sticky xl:top-5">
-					<p className="text-sm font-semibold">Résumé</p>
-					<div className="mt-4 space-y-3 text-sm">
-						<SummaryRow
-							label="Référence"
-							value={quoteReferenceLabel(quote.reference)}
+				<div className="grid gap-4 border-b p-5 md:grid-cols-2">
+					<Field label="Client" htmlFor={null}>
+						<Select
+							value={values.customerId}
+							onValueChange={(customerId) => onChange({ customerId })}
+						>
+							<SelectTrigger className="w-full">
+								<SelectValue placeholder="Sélectionner un client" />
+							</SelectTrigger>
+							<SelectContent>
+								{customers.map((customer) => (
+									<SelectItem key={customer.id} value={customer.id}>
+										{customerDisplayName(customer)}
+									</SelectItem>
+								))}
+							</SelectContent>
+						</Select>
+					</Field>
+					<Field label="Adresse de facturation" htmlFor={null}>
+						<BillingAddressField
+							value={values.customerContextId}
+							addresses={customerContexts}
+							hasCustomer={Boolean(values.customerId)}
+							isLoading={isLoading}
+							onChange={(customerContextId) => onChange({ customerContextId })}
 						/>
-						<SummaryRow label="Statut" value={quoteStatusLabel(status)} />
-						<SummaryRow label="Objet" value={values.title || 'Non renseigné'} />
-						<SummaryRow label="Lignes" value={String(values.lines.length)} />
-						<SummaryRow
-							label="Total HT (aperçu, non enregistré)"
-							value={formatCents(totalCents)}
-						/>
-					</div>
+					</Field>
+				</div>
 
-					{/* The quote's actual totals — read from what was last saved,
-					    never recomputed here (CLAUDE.md): the screen and the PDF must
-					    never be able to disagree. */}
-					<div className="mt-5 space-y-2 rounded-lg bg-muted p-4 text-sm">
-						<p className="text-xs font-medium text-muted-foreground">
-							Totaux enregistrés
-						</p>
-						<SummaryRow label="Total HT" value={formatCents(quote.net_cents)} />
-						{quote.vat_breakdown.length > 0 ? (
-							quote.vat_breakdown.map((breakdown) => (
-								<SummaryRow
-									key={breakdown.rate_bp}
-									label={`TVA ${formatVatRateBp(breakdown.rate_bp)}`}
-									value={formatCents(breakdown.vat_cents)}
-								/>
-							))
-						) : activeOrganization.vat_status?.type === 'not_subject' ? (
-							<p className="text-xs text-muted-foreground">
-								TVA non applicable, {activeOrganization.vat_status.basis}
-							</p>
-						) : null}
-						<SummaryRow
-							label="Total TTC"
-							value={formatCents(quote.gross_cents)}
-							strong
+				<div className="border-b p-5">
+					<Field label="Objet du devis" htmlFor={null}>
+						<Input
+							value={values.title}
+							onChange={(event) => onChange({ title: event.target.value })}
+							placeholder="Ex. Rénovation salle de bain"
 						/>
-					</div>
-				</aside>
-			</div>
+					</Field>
+				</div>
+
+				<QuoteLinesTable
+					lines={values.lines}
+					catalogItems={catalogItems}
+					photosByLine={Object.fromEntries(
+						values.lines.map((line) => [
+							line.clientId,
+							line.photoKeys.map((key) => ({ key, url: photoUrls[key] })),
+						]),
+					)}
+					isUploading={isUploading}
+					openLineId={openLineId}
+					vatEnabled={vatEnabled}
+					onOpenLineChange={(clientId, open) =>
+						setOpenLineId(open ? clientId : null)
+					}
+					onLineChange={(clientId, patch) => {
+						const index = values.lines.findIndex(
+							(line) => line.clientId === clientId,
+						)
+						if (index !== -1) onLineChange(index, patch)
+					}}
+					onSelectCatalogItem={(clientId, catalogItemId) => {
+						const index = values.lines.findIndex(
+							(line) => line.clientId === clientId,
+						)
+						if (index !== -1) onSelectCatalogItem(index, catalogItemId)
+					}}
+					onRemoveLine={(clientId) => {
+						const index = values.lines.findIndex(
+							(line) => line.clientId === clientId,
+						)
+						if (index !== -1) onRemoveLine(index)
+					}}
+					onAddLine={onAddLine}
+					onUploadLinePhoto={(clientId, file) => {
+						const index = values.lines.findIndex(
+							(line) => line.clientId === clientId,
+						)
+						if (index !== -1) void onUploadLinePhoto(index, file)
+					}}
+					onRemoveLinePhoto={(clientId, key) => {
+						const index = values.lines.findIndex(
+							(line) => line.clientId === clientId,
+						)
+						const line = values.lines[index]
+						if (index === -1 || !line) return
+						onLineChange(index, {
+							photoKeys: line.photoKeys.filter((photoKey) => photoKey !== key),
+						})
+					}}
+				/>
+
+				{/* The quote's actual totals — read from what was last saved, never
+				    recomputed here (CLAUDE.md): the screen and the PDF must never be
+				    able to disagree. `totalCents` (from the in-memory draft) only
+				    surfaces as the small notice below when it disagrees with what
+				    is saved. */}
+				<QuoteTotalsFooter
+					netCents={quote.net_cents}
+					vatBreakdown={quote.vat_breakdown.map((line) => ({
+						rateBp: line.rate_bp,
+						vatCents: line.vat_cents,
+					}))}
+					grossCents={quote.gross_cents}
+					vatExemptionNotice={
+						quote.vat_breakdown.length === 0 &&
+						activeOrganization.vat_status?.type === 'not_subject'
+							? `TVA non applicable, ${activeOrganization.vat_status.basis}`
+							: null
+					}
+					notice={
+						totalCents !== quote.net_cents
+							? `Aperçu non enregistré : ${formatCents(totalCents)}`
+							: null
+					}
+				/>
+			</SectionCard>
 		</PageShell>
 	)
 }
@@ -748,24 +721,5 @@ function QuoteEditError({
 				</div>
 			</SectionCard>
 		</PageShell>
-	)
-}
-
-function SummaryRow({
-	label,
-	value,
-	strong,
-}: {
-	label: string
-	value: string
-	strong?: boolean
-}) {
-	return (
-		<div className="flex items-center justify-between gap-4">
-			<span className="text-muted-foreground">{label}</span>
-			<span className={strong ? 'font-semibold' : 'truncate font-medium'}>
-				{value}
-			</span>
-		</div>
 	)
 }

@@ -22,6 +22,7 @@ import type { FilePreview } from '#/hooks/use-file-url'
 import { cn } from '#/lib/utils'
 import {
 	COMMON_VAT_RATES_BP,
+	eurosToCents,
 	formatCents,
 	formatUnit,
 	formatVatRateBp,
@@ -45,6 +46,12 @@ interface QuoteLineEditorProps {
 	 * (`activeOrganization.vat_status`). An organization not subject to VAT
 	 * gets no rate column at all — not a column of zeros. */
 	vatEnabled: boolean
+	/** Shared with the header row in `quote-lines-table.tsx` so the columns
+	 * actually line up — a `<table>` would do this for free, but `Collapsible`
+	 * needs a block-level wrapper it cannot be given inside a `<tbody>`, so
+	 * the "table" is a CSS grid instead, and its column template has to be
+	 * threaded through by hand. */
+	gridTemplateColumns: string
 	onOpenChange: (open: boolean) => void
 	onChange: (patch: Partial<QuoteLineFormValues>) => void
 	onSelectCatalogItem: (catalogItemId: string) => void
@@ -70,6 +77,7 @@ export function QuoteLineEditor({
 	canRemove,
 	isUploading,
 	vatEnabled,
+	gridTemplateColumns,
 	onOpenChange,
 	onChange,
 	onSelectCatalogItem,
@@ -83,25 +91,27 @@ export function QuoteLineEditor({
 	const selectedCatalogItem = catalogItems.find(
 		(item) => item.id === line.catalogItemId,
 	)
+	const vatLabel =
+		line.vatRateBp !== '' ? formatVatRateBp(Number(line.vatRateBp)) : '—'
 
 	return (
 		<Collapsible
 			open={isOpen}
 			onOpenChange={onOpenChange}
-			className="bg-card data-[state=open]:bg-muted/20"
+			className="border-b bg-card last:border-b-0 data-[state=open]:bg-brand-soft"
 		>
-			<div className="flex items-center gap-2 px-4 py-3">
-				<CollapsibleTrigger className="flex min-w-0 flex-1 items-center gap-3 text-left">
+			<div
+				className="grid items-center gap-3 py-2.5 pr-2 pl-3"
+				style={{ gridTemplateColumns }}
+			>
+				<CollapsibleTrigger className="flex min-w-0 items-center gap-2.5 text-left">
 					<ChevronRight
 						className={cn(
-							'size-4 shrink-0 text-muted-foreground transition-transform',
+							'size-3.5 shrink-0 text-muted-foreground transition-transform',
 							isOpen && 'rotate-90',
 						)}
 					/>
-					<span className="flex size-7 shrink-0 items-center justify-center rounded-md bg-muted text-xs font-semibold text-muted-foreground">
-						{index + 1}
-					</span>
-					<span className="min-w-0 flex-1">
+					<span className="min-w-0">
 						<span className="block truncate text-sm font-medium">
 							{line.label.trim() || `Ligne ${index + 1}`}
 						</span>
@@ -113,7 +123,18 @@ export function QuoteLineEditor({
 					</span>
 				</CollapsibleTrigger>
 
-				<span className="shrink-0 text-sm font-semibold tabular-nums">
+				<span className="justify-self-end text-sm tabular-nums">
+					{line.quantity.trim() || '0'} {formatUnit(line.unit)}
+				</span>
+				<span className="justify-self-end text-sm tabular-nums">
+					{formatCents(eurosToCents(line.unitPrice))}
+				</span>
+				{vatEnabled ? (
+					<span className="justify-self-end text-sm tabular-nums text-muted-foreground">
+						{vatLabel}
+					</span>
+				) : null}
+				<span className="justify-self-end text-sm font-semibold tabular-nums">
 					{formatCents(lineTotalCents)}
 				</span>
 				<Button
