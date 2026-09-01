@@ -58,6 +58,19 @@ export function EditablePaperField({
 			<PopoverContent
 				align="start"
 				className="w-80 rounded-none p-4 shadow-none"
+				onInteractOutside={(event) => {
+					// The editor commonly nests a Select — its dropdown renders in
+					// its own Radix popper, positioned outside this popover's own
+					// DOM node. Without this, clicking an option reads as an
+					// outside click and closes the popover before the Select can
+					// commit the value: the pencil-and-popover affordance would
+					// visibly work for a client, but picking one would silently
+					// fail every time.
+					const target = event.target as HTMLElement | null
+					if (target?.closest('[data-radix-popper-content-wrapper]')) {
+						event.preventDefault()
+					}
+				}}
 			>
 				<p className="mb-3 text-xs font-semibold tracking-wide text-muted-foreground uppercase">
 					{label}
