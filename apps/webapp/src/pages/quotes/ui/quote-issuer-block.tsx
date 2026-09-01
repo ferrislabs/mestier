@@ -1,16 +1,32 @@
 import type { Organization } from '#/hooks/use-organizations'
 
-interface QuoteIssuerBlockProps {
+interface QuoteIssuerProps {
 	organization: Organization
 }
 
 /**
- * The letterhead: who is issuing the quote. Every field here already exists
- * on the organization's legal identity (#310) — this only lays it out the way
- * a paper quote would, and skips whatever hasn't been filled in rather than
- * printing a blank.
+ * The initials mark, alone — sits at the top of the document next to the
+ * quote number, the way a letterhead logo would. Split from the details
+ * block below because a real letterhead only shows the mark once, not next
+ * to every line of the address.
  */
-export function QuoteIssuerBlock({ organization }: QuoteIssuerBlockProps) {
+export function QuoteIssuerMark({ organization }: QuoteIssuerProps) {
+	const name = organization.legal_name || organization.name
+
+	return (
+		<div className="flex size-11 shrink-0 items-center justify-center bg-primary text-base font-bold text-primary-foreground">
+			{organizationInitials(name)}
+		</div>
+	)
+}
+
+/**
+ * Who is issuing the quote, written out the way a letterhead would: name,
+ * address, legal mentions, contact — never edited here. Every field already
+ * exists on the organization's legal identity (#310); this only lays it out,
+ * and skips whatever hasn't been filled in rather than printing a blank.
+ */
+export function QuoteIssuerDetails({ organization }: QuoteIssuerProps) {
 	const name = organization.legal_name || organization.name
 	const addressLines = [
 		organization.address_line1,
@@ -36,31 +52,26 @@ export function QuoteIssuerBlock({ organization }: QuoteIssuerBlockProps) {
 		.join(' · ')
 
 	return (
-		<div className="flex items-start gap-4">
-			<div className="flex size-14 shrink-0 items-center justify-center bg-primary text-lg font-bold text-primary-foreground">
-				{organizationInitials(name)}
-			</div>
-			<div className="min-w-0">
-				<p className="text-lg font-bold">{name}</p>
-				{addressLines.map((line) => (
-					<p key={line} className="text-sm text-muted-foreground">
-						{line}
-					</p>
-				))}
-				{legalMentions.length > 0 ? (
-					<p className="mt-1 text-xs text-muted-foreground">
-						{legalMentions.join(' · ')}
-					</p>
-				) : null}
-				{contactLine ? (
-					<p className="text-xs text-muted-foreground">{contactLine}</p>
-				) : null}
-				{organization.insurance_mention ? (
-					<p className="text-xs text-muted-foreground">
-						{organization.insurance_mention}
-					</p>
-				) : null}
-			</div>
+		<div className="min-w-0">
+			<p className="font-semibold">{name}</p>
+			{addressLines.map((line) => (
+				<p key={line} className="text-sm text-muted-foreground">
+					{line}
+				</p>
+			))}
+			{contactLine ? (
+				<p className="text-sm text-muted-foreground">{contactLine}</p>
+			) : null}
+			{legalMentions.length > 0 ? (
+				<p className="mt-1 text-xs text-muted-foreground">
+					{legalMentions.join(' · ')}
+				</p>
+			) : null}
+			{organization.insurance_mention ? (
+				<p className="text-xs text-muted-foreground">
+					{organization.insurance_mention}
+				</p>
+			) : null}
 		</div>
 	)
 }

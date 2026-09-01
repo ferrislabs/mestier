@@ -29,7 +29,12 @@ import {
 	SelectTrigger,
 	SelectValue,
 } from '#/components/ui/select'
-import { PageHeader, PageShell, SectionCard } from '#/components/ui/surface'
+import {
+	PageHeader,
+	PageShell,
+	SectionCard,
+	StatusBadge,
+} from '#/components/ui/surface'
 import { useActiveOrganization } from '#/hooks/use-active-organization'
 import { type CatalogItem, useCatalogItems } from '#/hooks/use-catalog-items'
 import {
@@ -50,18 +55,25 @@ import {
 import { useReferenceCatalog } from '#/hooks/use-reference-catalog'
 import { buildOrgPath } from '#/modules/org-path'
 import {
+	billingAddressLines,
 	centsToEuros,
 	customerDisplayName,
 	emptyQuoteLine,
 	eurosToCents,
 	formatCents,
+	formatDate,
 	type QuoteFormValues,
 	type QuoteLineFormValues,
 	quoteLineTotalCents,
 	quoteReferenceLabel,
+	quoteStatusLabel,
 } from '#/pages/quotes/types'
 import { BillingAddressField } from '#/pages/quotes/ui/billing-address-field'
-import { QuoteIssuerBlock } from '#/pages/quotes/ui/quote-issuer-block'
+import { EditablePaperField } from '#/pages/quotes/ui/editable-paper-field'
+import {
+	QuoteIssuerDetails,
+	QuoteIssuerMark,
+} from '#/pages/quotes/ui/quote-issuer-block'
 import { QuoteLinesTable } from '#/pages/quotes/ui/quote-lines-table'
 import { QuoteTotalsFooter } from '#/pages/quotes/ui/quote-totals-footer'
 import { LEGAL_IDENTITY_FIELD_LABELS } from '#/pages/settings/types'
@@ -496,150 +508,266 @@ function QuoteEditUI({
 				</div>
 			) : null}
 
-			<SectionCard className="mx-auto w-full max-w-4xl">
-				<div className="flex flex-wrap items-start justify-between gap-4 border-b p-5">
-					<QuoteIssuerBlock organization={activeOrganization} />
-					<div className="flex flex-col items-end gap-2 text-right">
-						<p className="text-2xl font-bold tracking-tight">DEVIS</p>
-						<p className="text-sm text-muted-foreground">
-							{quoteReferenceLabel(quote.reference)}
-						</p>
-						<Select
-							value={status}
-							onValueChange={(value) => onStatusChange(value as QuoteStatus)}
-						>
-							<SelectTrigger className="w-40">
-								<SelectValue />
-							</SelectTrigger>
-							<SelectContent>
-								<SelectItem value="DRAFT">Brouillon</SelectItem>
-								<SelectItem value="SENT">Envoyé</SelectItem>
-								<SelectItem value="ACCEPTED">Accepté</SelectItem>
-								<SelectItem value="DECLINED">Refusé</SelectItem>
-								<SelectItem value="CANCELLED">Annulé</SelectItem>
-							</SelectContent>
-						</Select>
+			<div className="mx-auto w-full max-w-4xl bg-muted/40 p-4 sm:p-10">
+				<SectionCard className="border shadow-sm">
+					<div className="border-b p-6 sm:p-8">
+						<div className="flex items-start justify-between gap-4">
+							<QuoteIssuerMark organization={activeOrganization} />
+							<div className="flex flex-col items-end gap-2 text-right">
+								<p className="text-sm font-semibold">
+									Devis {quoteReferenceLabel(quote.reference)}
+								</p>
+								<p className="text-xs text-muted-foreground">
+									{formatDate(quote.created_at)}
+								</p>
+								<EditablePaperField
+									label="Statut"
+									className="w-auto"
+									renderEditor={(close) => (
+										<div className="space-y-4">
+											<Select
+												value={status}
+												onValueChange={(value) => {
+													onStatusChange(value as QuoteStatus)
+													close()
+												}}
+											>
+												<SelectTrigger className="w-40">
+													<SelectValue />
+												</SelectTrigger>
+												<SelectContent>
+													<SelectItem value="DRAFT">Brouillon</SelectItem>
+													<SelectItem value="SENT">Envoyé</SelectItem>
+													<SelectItem value="ACCEPTED">Accepté</SelectItem>
+													<SelectItem value="DECLINED">Refusé</SelectItem>
+													<SelectItem value="CANCELLED">Annulé</SelectItem>
+												</SelectContent>
+											</Select>
+										</div>
+									)}
+								>
+									<StatusBadge tone={statusTone(status)}>
+										{quoteStatusLabel(status)}
+									</StatusBadge>
+								</EditablePaperField>
+							</div>
+						</div>
+
+						<div className="mt-6 grid gap-8 md:grid-cols-2">
+							<QuoteIssuerDetails organization={activeOrganization} />
+
+							<EditablePaperField
+								label="Facturé à"
+								renderEditor={(close) => (
+									<div className="space-y-4">
+										<Field label="Client" htmlFor="edit-quote-customer">
+											<Select
+												value={values.customerId}
+												onValueChange={(customerId) => onChange({ customerId })}
+											>
+												<SelectTrigger
+													id="edit-quote-customer"
+													className="w-full"
+												>
+													<SelectValue placeholder="Sélectionner un client" />
+												</SelectTrigger>
+												<SelectContent>
+													{customers.map((customer) => (
+														<SelectItem key={customer.id} value={customer.id}>
+															{customerDisplayName(customer)}
+														</SelectItem>
+													))}
+												</SelectContent>
+											</Select>
+										</Field>
+										<Field
+											label="Adresse de facturation"
+											htmlFor="edit-quote-billing-address"
+										>
+											<BillingAddressField
+												id="edit-quote-billing-address"
+												value={values.customerContextId}
+												addresses={customerContexts}
+												hasCustomer={Boolean(values.customerId)}
+												isLoading={isLoading}
+												onChange={(customerContextId) =>
+													onChange({ customerContextId })
+												}
+											/>
+										</Field>
+										<Button
+											type="button"
+											variant="ghost"
+											size="sm"
+											onClick={close}
+										>
+											Fermer
+										</Button>
+									</div>
+								)}
+							>
+								{(() => {
+									const selectedCustomer = customers.find(
+										(customer) => customer.id === values.customerId,
+									)
+									const selectedCustomerContext = customerContexts.find(
+										(customerContext) =>
+											customerContext.id === values.customerContextId,
+									)
+									if (!selectedCustomer) {
+										return (
+											<p className="text-sm text-muted-foreground italic">
+												Sélectionner un client
+											</p>
+										)
+									}
+									return (
+										<>
+											<p className="font-semibold">
+												{customerDisplayName(selectedCustomer)}
+											</p>
+											{selectedCustomerContext ? (
+												billingAddressLines(selectedCustomerContext).map(
+													(line) => (
+														<p
+															key={line}
+															className="text-sm text-muted-foreground"
+														>
+															{line}
+														</p>
+													),
+												)
+											) : (
+												<p className="text-sm text-warning">
+													Adresse de facturation non renseignée
+												</p>
+											)}
+										</>
+									)
+								})()}
+							</EditablePaperField>
+						</div>
+
+						<div className="mt-8">
+							<EditablePaperField
+								label="Objet du devis"
+								renderEditor={(close) => (
+									<div className="space-y-4">
+										<Input
+											autoFocus
+											value={values.title}
+											onChange={(event) =>
+												onChange({ title: event.target.value })
+											}
+											placeholder="Ex. Rénovation salle de bain"
+										/>
+										<Button
+											type="button"
+											variant="ghost"
+											size="sm"
+											onClick={close}
+										>
+											Fermer
+										</Button>
+									</div>
+								)}
+							>
+								<h1 className="text-2xl font-bold tracking-tight">
+									{values.title || 'Objet du devis'}
+								</h1>
+							</EditablePaperField>
+						</div>
 					</div>
-				</div>
 
-				<div className="grid gap-4 border-b p-5 md:grid-cols-2">
-					<Field label="Client" htmlFor={null}>
-						<Select
-							value={values.customerId}
-							onValueChange={(customerId) => onChange({ customerId })}
-						>
-							<SelectTrigger className="w-full">
-								<SelectValue placeholder="Sélectionner un client" />
-							</SelectTrigger>
-							<SelectContent>
-								{customers.map((customer) => (
-									<SelectItem key={customer.id} value={customer.id}>
-										{customerDisplayName(customer)}
-									</SelectItem>
-								))}
-							</SelectContent>
-						</Select>
-					</Field>
-					<Field label="Adresse de facturation" htmlFor={null}>
-						<BillingAddressField
-							value={values.customerContextId}
-							addresses={customerContexts}
-							hasCustomer={Boolean(values.customerId)}
-							isLoading={isLoading}
-							onChange={(customerContextId) => onChange({ customerContextId })}
-						/>
-					</Field>
-				</div>
+					<QuoteLinesTable
+						lines={values.lines}
+						catalogItems={catalogItems}
+						photosByLine={Object.fromEntries(
+							values.lines.map((line) => [
+								line.clientId,
+								line.photoKeys.map((key) => ({ key, url: photoUrls[key] })),
+							]),
+						)}
+						isUploading={isUploading}
+						openLineId={openLineId}
+						vatEnabled={vatEnabled}
+						onOpenLineChange={(clientId, open) =>
+							setOpenLineId(open ? clientId : null)
+						}
+						onLineChange={(clientId, patch) => {
+							const index = values.lines.findIndex(
+								(line) => line.clientId === clientId,
+							)
+							if (index !== -1) onLineChange(index, patch)
+						}}
+						onSelectCatalogItem={(clientId, catalogItemId) => {
+							const index = values.lines.findIndex(
+								(line) => line.clientId === clientId,
+							)
+							if (index !== -1) onSelectCatalogItem(index, catalogItemId)
+						}}
+						onRemoveLine={(clientId) => {
+							const index = values.lines.findIndex(
+								(line) => line.clientId === clientId,
+							)
+							if (index !== -1) onRemoveLine(index)
+						}}
+						onAddLine={onAddLine}
+						onUploadLinePhoto={(clientId, file) => {
+							const index = values.lines.findIndex(
+								(line) => line.clientId === clientId,
+							)
+							if (index !== -1) void onUploadLinePhoto(index, file)
+						}}
+						onRemoveLinePhoto={(clientId, key) => {
+							const index = values.lines.findIndex(
+								(line) => line.clientId === clientId,
+							)
+							const line = values.lines[index]
+							if (index === -1 || !line) return
+							onLineChange(index, {
+								photoKeys: line.photoKeys.filter(
+									(photoKey) => photoKey !== key,
+								),
+							})
+						}}
+					/>
 
-				<div className="border-b p-5">
-					<Field label="Objet du devis" htmlFor={null}>
-						<Input
-							value={values.title}
-							onChange={(event) => onChange({ title: event.target.value })}
-							placeholder="Ex. Rénovation salle de bain"
-						/>
-					</Field>
-				</div>
-
-				<QuoteLinesTable
-					lines={values.lines}
-					catalogItems={catalogItems}
-					photosByLine={Object.fromEntries(
-						values.lines.map((line) => [
-							line.clientId,
-							line.photoKeys.map((key) => ({ key, url: photoUrls[key] })),
-						]),
-					)}
-					isUploading={isUploading}
-					openLineId={openLineId}
-					vatEnabled={vatEnabled}
-					onOpenLineChange={(clientId, open) =>
-						setOpenLineId(open ? clientId : null)
-					}
-					onLineChange={(clientId, patch) => {
-						const index = values.lines.findIndex(
-							(line) => line.clientId === clientId,
-						)
-						if (index !== -1) onLineChange(index, patch)
-					}}
-					onSelectCatalogItem={(clientId, catalogItemId) => {
-						const index = values.lines.findIndex(
-							(line) => line.clientId === clientId,
-						)
-						if (index !== -1) onSelectCatalogItem(index, catalogItemId)
-					}}
-					onRemoveLine={(clientId) => {
-						const index = values.lines.findIndex(
-							(line) => line.clientId === clientId,
-						)
-						if (index !== -1) onRemoveLine(index)
-					}}
-					onAddLine={onAddLine}
-					onUploadLinePhoto={(clientId, file) => {
-						const index = values.lines.findIndex(
-							(line) => line.clientId === clientId,
-						)
-						if (index !== -1) void onUploadLinePhoto(index, file)
-					}}
-					onRemoveLinePhoto={(clientId, key) => {
-						const index = values.lines.findIndex(
-							(line) => line.clientId === clientId,
-						)
-						const line = values.lines[index]
-						if (index === -1 || !line) return
-						onLineChange(index, {
-							photoKeys: line.photoKeys.filter((photoKey) => photoKey !== key),
-						})
-					}}
-				/>
-
-				{/* The quote's actual totals — read from what was last saved, never
+					{/* The quote's actual totals — read from what was last saved, never
 				    recomputed here (CLAUDE.md): the screen and the PDF must never be
 				    able to disagree. `totalCents` (from the in-memory draft) only
 				    surfaces as the small notice below when it disagrees with what
 				    is saved. */}
-				<QuoteTotalsFooter
-					netCents={quote.net_cents}
-					vatBreakdown={quote.vat_breakdown.map((line) => ({
-						rateBp: line.rate_bp,
-						vatCents: line.vat_cents,
-					}))}
-					grossCents={quote.gross_cents}
-					vatExemptionNotice={
-						quote.vat_breakdown.length === 0 &&
-						activeOrganization.vat_status?.type === 'not_subject'
-							? `TVA non applicable, ${activeOrganization.vat_status.basis}`
-							: null
-					}
-					notice={
-						totalCents !== quote.net_cents
-							? `Aperçu non enregistré : ${formatCents(totalCents)}`
-							: null
-					}
-				/>
-			</SectionCard>
+					<QuoteTotalsFooter
+						netCents={quote.net_cents}
+						vatBreakdown={quote.vat_breakdown.map((line) => ({
+							rateBp: line.rate_bp,
+							vatCents: line.vat_cents,
+						}))}
+						grossCents={quote.gross_cents}
+						vatExemptionNotice={
+							quote.vat_breakdown.length === 0 &&
+							activeOrganization.vat_status?.type === 'not_subject'
+								? `TVA non applicable, ${activeOrganization.vat_status.basis}`
+								: null
+						}
+						notice={
+							totalCents !== quote.net_cents
+								? `Aperçu non enregistré : ${formatCents(totalCents)}`
+								: null
+						}
+					/>
+				</SectionCard>
+			</div>
 		</PageShell>
 	)
+}
+
+function statusTone(status: QuoteStatus) {
+	if (status === 'ACCEPTED') return 'success' as const
+	if (status === 'SENT') return 'brand' as const
+	if (status === 'DECLINED' || status === 'CANCELLED') return 'error' as const
+	return 'neutral' as const
 }
 
 function quoteToForm(

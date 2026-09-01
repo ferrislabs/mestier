@@ -55,7 +55,7 @@ describe('QuoteLinesTable', () => {
 	it('reads as a table: description, quantity, price and total, one column per header', () => {
 		render(<QuoteLinesTable {...baseProps()} />)
 
-		expect(screen.getByText('Description')).toBeDefined()
+		expect(screen.getByText('Détails')).toBeDefined()
 		expect(screen.getByText('Quantité')).toBeDefined()
 		expect(screen.getByText('Prix unitaire')).toBeDefined()
 		expect(screen.getByText('Montant HT')).toBeDefined()

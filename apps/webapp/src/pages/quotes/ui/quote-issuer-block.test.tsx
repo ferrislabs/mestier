@@ -1,7 +1,7 @@
 import { render, screen } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
 import type { Organization } from '#/hooks/use-organizations'
-import { QuoteIssuerBlock } from './quote-issuer-block'
+import { QuoteIssuerDetails, QuoteIssuerMark } from './quote-issuer-block'
 
 function organization(overrides: Partial<Organization> = {}): Organization {
 	return {
@@ -18,10 +18,18 @@ function organization(overrides: Partial<Organization> = {}): Organization {
 	}
 }
 
-describe('QuoteIssuerBlock', () => {
+describe('QuoteIssuerMark', () => {
+	it('shows initials from the display name', () => {
+		render(<QuoteIssuerMark organization={organization()} />)
+
+		expect(screen.getByText('AB')).toBeDefined()
+	})
+})
+
+describe('QuoteIssuerDetails', () => {
 	it('prefers the legal name over the display name', () => {
 		render(
-			<QuoteIssuerBlock
+			<QuoteIssuerDetails
 				organization={organization({
 					name: 'Atelier Bois & Co',
 					legal_name: 'SARL Atelier Bois & Co',
@@ -33,14 +41,14 @@ describe('QuoteIssuerBlock', () => {
 	})
 
 	it('falls back to the display name when no legal name is set', () => {
-		render(<QuoteIssuerBlock organization={organization()} />)
+		render(<QuoteIssuerDetails organization={organization()} />)
 
 		expect(screen.getByText('Atelier Bois & Co')).toBeDefined()
 	})
 
 	it('writes the address as it would be on an envelope', () => {
 		render(
-			<QuoteIssuerBlock
+			<QuoteIssuerDetails
 				organization={organization({
 					address_line1: '12 rue des Artisans',
 					address_postal_code: '69001',
@@ -54,7 +62,7 @@ describe('QuoteIssuerBlock', () => {
 	})
 
 	it('skips legal mentions and contact details that were never filled in', () => {
-		render(<QuoteIssuerBlock organization={organization()} />)
+		render(<QuoteIssuerDetails organization={organization()} />)
 
 		expect(screen.queryByText(/SIRET/)).toBeNull()
 		expect(screen.queryByText(/Capital de/)).toBeNull()
@@ -62,7 +70,7 @@ describe('QuoteIssuerBlock', () => {
 
 	it('shows the SIRET and share capital once they exist', () => {
 		render(
-			<QuoteIssuerBlock
+			<QuoteIssuerDetails
 				organization={organization({
 					registration_number: '123 456 789 00012',
 					share_capital_cents: 1_000_000,

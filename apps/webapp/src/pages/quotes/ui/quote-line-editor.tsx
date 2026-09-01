@@ -98,7 +98,7 @@ export function QuoteLineEditor({
 		<Collapsible
 			open={isOpen}
 			onOpenChange={onOpenChange}
-			className="border-b bg-card last:border-b-0 data-[state=open]:bg-brand-soft"
+			className="border-b bg-card transition-colors last:border-b-0 hover:bg-muted/40 data-[state=open]:bg-brand-soft data-[state=open]:hover:bg-brand-soft"
 		>
 			<div
 				className="grid items-center gap-3 py-2.5 pr-2 pl-3"

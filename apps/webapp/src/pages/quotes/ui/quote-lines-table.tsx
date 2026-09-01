@@ -56,10 +56,10 @@ export function QuoteLinesTable({
 	return (
 		<div>
 			<div
-				className="grid items-center gap-3 border-b bg-primary py-2 pr-2 pl-3 text-xs font-semibold tracking-wide text-primary-foreground uppercase"
+				className="grid items-center gap-3 border-b-2 border-foreground py-1.5 pr-2 pl-3 text-xs font-semibold tracking-wide text-muted-foreground uppercase"
 				style={{ gridTemplateColumns: columns }}
 			>
-				<span>Description</span>
+				<span>Détails</span>
 				<span className="justify-self-end">Quantité</span>
 				<span className="justify-self-end">Prix unitaire</span>
 				{vatEnabled ? <span className="justify-self-end">TVA</span> : null}

@@ -23,6 +23,7 @@ import type { Customer, CustomerContext } from '#/hooks/use-customers'
 import type { Organization } from '#/hooks/use-organizations'
 import { buildOrgPath } from '#/modules/org-path'
 import {
+	billingAddressLines,
 	customerDisplayName,
 	type QuoteFormValues,
 	type QuoteLineFormValues,
@@ -31,7 +32,11 @@ import {
 	quoteLineTotalCents,
 } from '#/pages/quotes/types'
 import { BillingAddressField } from '#/pages/quotes/ui/billing-address-field'
-import { QuoteIssuerBlock } from '#/pages/quotes/ui/quote-issuer-block'
+import { EditablePaperField } from '#/pages/quotes/ui/editable-paper-field'
+import {
+	QuoteIssuerDetails,
+	QuoteIssuerMark,
+} from '#/pages/quotes/ui/quote-issuer-block'
 import { QuoteLinesTable } from '#/pages/quotes/ui/quote-lines-table'
 import { QuoteTotalsFooter } from '#/pages/quotes/ui/quote-totals-footer'
 
@@ -61,9 +66,10 @@ interface QuoteNewUIProps {
 
 /**
  * The quote composer, on a page of its own, laid out to read as the document
- * it becomes rather than as a settings form. It used to be a modal over the
- * quote list; writing a quote takes minutes and deserves a url you can send
- * to someone or reload without losing where you were.
+ * it becomes rather than as a settings form. Every value prints as plain
+ * text; clicking a section — the client, the object — opens the actual form
+ * control in a popover anchored to that spot, instead of surrounding the
+ * document with Selects and Inputs the way a settings page would.
  */
 export function QuoteNewUI({
 	organizationSlug,
@@ -108,6 +114,13 @@ export function QuoteNewUI({
 			)
 		})
 
+	const selectedCustomer = customers.find(
+		(customer) => customer.id === values.customerId,
+	)
+	const selectedCustomerContext = customerContexts.find(
+		(customerContext) => customerContext.id === values.customerContextId,
+	)
+
 	const netCents = values.lines.reduce((sum, line) => {
 		return sum + quoteLineTotalCents(line)
 	}, 0)
@@ -123,9 +136,8 @@ export function QuoteNewUI({
 		>
 			<PageShell>
 				<PageHeader
-					eyebrow="Devis"
 					title="Nouveau devis"
-					description="Sélectionnez le client, puis ajoutez des services, produits ou lignes libres."
+					description="Cliquez sur le client ou l’objet du devis pour les renseigner, puis ajoutez des lignes."
 					actions={
 						<div className="flex flex-col gap-2 sm:flex-row">
 							<Button asChild type="button" variant="outline">
@@ -153,132 +165,209 @@ export function QuoteNewUI({
 					</SectionCard>
 				) : null}
 
-				<SectionCard className="mx-auto w-full max-w-4xl">
-					<div className="flex flex-wrap items-start justify-between gap-4 border-b p-5">
-						<QuoteIssuerBlock organization={organization} />
-						<div className="text-right">
-							<p className="text-2xl font-bold tracking-tight">DEVIS</p>
-							<p className="text-sm text-muted-foreground">
-								Numéro attribué à l’envoi
-							</p>
+				<div className="mx-auto w-full max-w-4xl bg-muted/40 p-4 sm:p-10">
+					<SectionCard className="border shadow-sm">
+						<div className="border-b p-6 sm:p-8">
+							<div className="flex items-start justify-between gap-4">
+								<QuoteIssuerMark organization={organization} />
+								<div className="text-right">
+									<p className="text-sm font-semibold">Nouveau devis</p>
+									<p className="text-xs text-muted-foreground">
+										Numéro attribué à l’envoi
+									</p>
+								</div>
+							</div>
+
+							<div className="mt-6 grid gap-8 md:grid-cols-2">
+								<QuoteIssuerDetails organization={organization} />
+
+								<EditablePaperField
+									label="Facturé à"
+									renderEditor={(close) => (
+										<div className="space-y-4">
+											<Field label="Client" htmlFor="new-quote-customer">
+												<Select
+													value={values.customerId}
+													onValueChange={(customerId) =>
+														onChange({ customerId })
+													}
+												>
+													<SelectTrigger
+														id="new-quote-customer"
+														className="w-full"
+													>
+														<SelectValue placeholder="Sélectionner un client" />
+													</SelectTrigger>
+													<SelectContent>
+														{customers.map((customer) => (
+															<SelectItem key={customer.id} value={customer.id}>
+																{customerDisplayName(customer)}
+															</SelectItem>
+														))}
+													</SelectContent>
+												</Select>
+											</Field>
+											<Field
+												label="Adresse de facturation"
+												htmlFor="new-quote-billing-address"
+											>
+												<BillingAddressField
+													id="new-quote-billing-address"
+													value={values.customerContextId}
+													addresses={customerContexts}
+													hasCustomer={Boolean(values.customerId)}
+													isLoading={isCustomerContextsLoading}
+													onChange={(customerContextId) =>
+														onChange({ customerContextId })
+													}
+												/>
+											</Field>
+											<Button
+												type="button"
+												variant="ghost"
+												size="sm"
+												onClick={close}
+											>
+												Fermer
+											</Button>
+										</div>
+									)}
+								>
+									{selectedCustomer ? (
+										<>
+											<p className="font-semibold">
+												{customerDisplayName(selectedCustomer)}
+											</p>
+											{selectedCustomerContext ? (
+												billingAddressLines(selectedCustomerContext).map(
+													(line) => (
+														<p
+															key={line}
+															className="text-sm text-muted-foreground"
+														>
+															{line}
+														</p>
+													),
+												)
+											) : (
+												<p className="text-sm text-warning">
+													Adresse de facturation non renseignée
+												</p>
+											)}
+										</>
+									) : (
+										<p className="text-sm text-muted-foreground italic">
+											Sélectionner un client
+										</p>
+									)}
+								</EditablePaperField>
+							</div>
+
+							<div className="mt-8">
+								<EditablePaperField
+									label="Objet du devis"
+									renderEditor={(close) => (
+										<div className="space-y-4">
+											<Input
+												autoFocus
+												value={values.title}
+												onChange={(event) =>
+													onChange({ title: event.target.value })
+												}
+												placeholder="Ex. Rénovation salle de bain"
+											/>
+											<Button
+												type="button"
+												variant="ghost"
+												size="sm"
+												onClick={close}
+											>
+												Fermer
+											</Button>
+										</div>
+									)}
+								>
+									<h1 className="text-2xl font-bold tracking-tight">
+										{values.title || 'Objet du devis'}
+									</h1>
+								</EditablePaperField>
+							</div>
 						</div>
-					</div>
 
-					<div className="grid gap-4 border-b p-5 md:grid-cols-2">
-						<Field label="Client">
-							<Select
-								value={values.customerId}
-								onValueChange={(customerId) => onChange({ customerId })}
-							>
-								<SelectTrigger className="w-full">
-									<SelectValue placeholder="Sélectionner un client" />
-								</SelectTrigger>
-								<SelectContent>
-									{customers.map((customer) => (
-										<SelectItem key={customer.id} value={customer.id}>
-											{customerDisplayName(customer)}
-										</SelectItem>
-									))}
-								</SelectContent>
-							</Select>
-						</Field>
+						<QuoteLinesTable
+							lines={values.lines}
+							catalogItems={catalogItems}
+							photosByLine={Object.fromEntries(
+								values.lines.map((line) => [
+									line.clientId,
+									line.photoKeys.map((key) => ({ key, url: photoUrls[key] })),
+								]),
+							)}
+							isUploading={isUploading}
+							openLineId={openLineId}
+							vatEnabled={vatEnabled}
+							onOpenLineChange={(clientId, open) =>
+								setOpenLineId(open ? clientId : null)
+							}
+							onLineChange={(clientId, patch) => {
+								const index = values.lines.findIndex(
+									(line) => line.clientId === clientId,
+								)
+								if (index !== -1) onLineChange(index, patch)
+							}}
+							onSelectCatalogItem={(clientId, catalogItemId) => {
+								const index = values.lines.findIndex(
+									(line) => line.clientId === clientId,
+								)
+								if (index !== -1) onSelectCatalogItem(index, catalogItemId)
+							}}
+							onRemoveLine={(clientId) => {
+								const index = values.lines.findIndex(
+									(line) => line.clientId === clientId,
+								)
+								if (index !== -1) onRemoveLine(index)
+							}}
+							onAddLine={onAddLine}
+							onUploadLinePhoto={(clientId, file) => {
+								const index = values.lines.findIndex(
+									(line) => line.clientId === clientId,
+								)
+								if (index !== -1) void onUploadLinePhoto(index, file)
+							}}
+							onRemoveLinePhoto={(clientId, key) => {
+								const index = values.lines.findIndex(
+									(line) => line.clientId === clientId,
+								)
+								const line = values.lines[index]
+								if (index === -1 || !line) return
+								onLineChange(index, {
+									photoKeys: line.photoKeys.filter(
+										(photoKey) => photoKey !== key,
+									),
+								})
+							}}
+						/>
 
-						<Field label="Adresse de facturation">
-							<BillingAddressField
-								value={values.customerContextId}
-								addresses={customerContexts}
-								hasCustomer={Boolean(values.customerId)}
-								isLoading={isCustomerContextsLoading}
-								onChange={(customerContextId) =>
-									onChange({ customerContextId })
-								}
-							/>
-						</Field>
-					</div>
-
-					<div className="border-b p-5">
-						<Field label="Objet du devis">
-							<Input
-								value={values.title}
-								onChange={(event) => onChange({ title: event.target.value })}
-								placeholder="Ex. Rénovation salle de bain"
-							/>
-						</Field>
-					</div>
-
-					<QuoteLinesTable
-						lines={values.lines}
-						catalogItems={catalogItems}
-						photosByLine={Object.fromEntries(
-							values.lines.map((line) => [
-								line.clientId,
-								line.photoKeys.map((key) => ({ key, url: photoUrls[key] })),
-							]),
-						)}
-						isUploading={isUploading}
-						openLineId={openLineId}
-						vatEnabled={vatEnabled}
-						onOpenLineChange={(clientId, open) =>
-							setOpenLineId(open ? clientId : null)
-						}
-						onLineChange={(clientId, patch) => {
-							const index = values.lines.findIndex(
-								(line) => line.clientId === clientId,
-							)
-							if (index !== -1) onLineChange(index, patch)
-						}}
-						onSelectCatalogItem={(clientId, catalogItemId) => {
-							const index = values.lines.findIndex(
-								(line) => line.clientId === clientId,
-							)
-							if (index !== -1) onSelectCatalogItem(index, catalogItemId)
-						}}
-						onRemoveLine={(clientId) => {
-							const index = values.lines.findIndex(
-								(line) => line.clientId === clientId,
-							)
-							if (index !== -1) onRemoveLine(index)
-						}}
-						onAddLine={onAddLine}
-						onUploadLinePhoto={(clientId, file) => {
-							const index = values.lines.findIndex(
-								(line) => line.clientId === clientId,
-							)
-							if (index !== -1) void onUploadLinePhoto(index, file)
-						}}
-						onRemoveLinePhoto={(clientId, key) => {
-							const index = values.lines.findIndex(
-								(line) => line.clientId === clientId,
-							)
-							const line = values.lines[index]
-							if (index === -1 || !line) return
-							onLineChange(index, {
-								photoKeys: line.photoKeys.filter(
-									(photoKey) => photoKey !== key,
-								),
-							})
-						}}
-					/>
-
-					<QuoteTotalsFooter
-						netCents={netCents}
-						vatBreakdown={vatBreakdown}
-						grossCents={grossCents}
-						vatExemptionNotice={
-							organization.vat_status?.type === 'not_subject'
-								? `TVA non applicable, ${organization.vat_status.basis}`
-								: null
-						}
-						notice="Estimation, non enregistrée"
-					/>
-				</SectionCard>
-
-				{customers.length === 0 ? (
-					<SectionCard className="mx-auto flex w-full max-w-4xl items-center gap-3 p-5 text-sm text-muted-foreground">
-						<UserRound className="size-4 shrink-0" />
-						Aucun client n’existe encore dans cette organisation.
+						<QuoteTotalsFooter
+							netCents={netCents}
+							vatBreakdown={vatBreakdown}
+							grossCents={grossCents}
+							vatExemptionNotice={
+								organization.vat_status?.type === 'not_subject'
+									? `TVA non applicable, ${organization.vat_status.basis}`
+									: null
+							}
+							notice="Estimation, non enregistrée"
+						/>
 					</SectionCard>
-				) : null}
+
+					{customers.length === 0 ? (
+						<p className="mt-4 flex items-center gap-2 text-sm text-muted-foreground">
+							<UserRound className="size-4 shrink-0" />
+							Aucun client n’existe encore dans cette organisation.
+						</p>
+					) : null}
+				</div>
 			</PageShell>
 		</form>
 	)
