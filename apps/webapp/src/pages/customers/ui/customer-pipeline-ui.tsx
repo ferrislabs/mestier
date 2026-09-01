@@ -1,5 +1,5 @@
 import { Link } from '@tanstack/react-router'
-import { AlertCircle, KanbanSquare, Search, Users } from 'lucide-react'
+import { AlertCircle, Search, Users } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { Button } from '#/components/ui/button'
 import { Input } from '#/components/ui/input'
@@ -114,11 +114,6 @@ export function CustomerPipelineUI({
 							Fichier clients
 						</Link>
 					</Button>
-				}
-				leading={
-					<div className="flex size-12 items-center justify-center rounded-lg bg-brand-soft text-primary">
-						<KanbanSquare className="size-6" />
-					</div>
 				}
 			/>
 
