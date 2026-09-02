@@ -5,6 +5,7 @@ import {
 	ArrowRightLeft,
 	FileText,
 	Loader2,
+	Send,
 	Trash2,
 } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
@@ -216,20 +217,10 @@ function QuoteEditWorkspace({ quote }: { quote: Quote }) {
 		})
 	}
 
-	// Sending is refused server-side when the organization's legal identity
-	// is incomplete (#310, enforced again on export by #314) — caught here
-	// too so the button is disabled before the request is even sent, rather
-	// than only after a refusal comes back.
-	const blockedBySentIdentity =
-		status === 'SENT' &&
-		!quote.reference &&
-		missingLegalIdentityFields.length > 0
-
-	const canSave =
+	const hasValidContent =
 		Boolean(values.title.trim()) &&
 		Boolean(values.customerId) &&
 		Boolean(values.customerContextId) &&
-		!blockedBySentIdentity &&
 		values.lines.every((line) => {
 			const quantity = Number(line.quantity.replace(',', '.'))
 			return (
@@ -240,6 +231,19 @@ function QuoteEditWorkspace({ quote }: { quote: Quote }) {
 				eurosToCents(line.unitPrice) >= 0
 			)
 		})
+
+	// Sending is refused server-side when the organization's legal identity
+	// is incomplete (#310, enforced again on export by #314) — caught here
+	// too, independently of whatever status happens to be locally selected,
+	// so the warning and the disabled "Envoyer" button show up before a
+	// request is even attempted.
+	const identityIncompleteForSending =
+		!quote.reference && missingLegalIdentityFields.length > 0
+	const blockedBySentIdentity =
+		status === 'SENT' && identityIncompleteForSending
+
+	const canSave = hasValidContent && !blockedBySentIdentity
+	const canSend = hasValidContent && !identityIncompleteForSending
 
 	const totalCents = values.lines.reduce(
 		(sum, line) => sum + quoteLineTotalCents(line),
@@ -255,26 +259,40 @@ function QuoteEditWorkspace({ quote }: { quote: Quote }) {
 		uploadFile.error?.message ??
 		null
 
+	const buildUpdateBody = (targetStatus: QuoteStatus) => ({
+		title: values.title.trim(),
+		customer_id: values.customerId,
+		customer_context_id: values.customerContextId,
+		status: targetStatus,
+		lines: values.lines.map((line) => ({
+			service_rate_id: line.serviceRateId || null,
+			label: line.label.trim(),
+			quantity: line.quantity.replace(',', '.').trim(),
+			unit: line.unit,
+			unit_price_cents: eurosToCents(line.unitPrice),
+			vat_rate_bp: line.vatRateBp === '' ? null : Number(line.vatRateBp),
+			notes: line.notes.trim() || null,
+			photo_keys: line.photoKeys,
+		})),
+	})
+
 	const saveQuote = async () => {
 		if (!canSave) return
 		await updateQuote.mutateAsync({
 			path: { quote_id: quote.id },
-			body: {
-				title: values.title.trim(),
-				customer_id: values.customerId,
-				customer_context_id: values.customerContextId,
-				status,
-				lines: values.lines.map((line) => ({
-					service_rate_id: line.serviceRateId || null,
-					label: line.label.trim(),
-					quantity: line.quantity.replace(',', '.').trim(),
-					unit: line.unit,
-					unit_price_cents: eurosToCents(line.unitPrice),
-					vat_rate_bp: line.vatRateBp === '' ? null : Number(line.vatRateBp),
-					notes: line.notes.trim() || null,
-					photo_keys: line.photoKeys,
-				})),
-			},
+			body: buildUpdateBody(status),
+		})
+	}
+
+	// Built on the literal `'SENT'` rather than on `setStatus` + `saveQuote`:
+	// `setStatus` only lands on the *next* render, so a save fired right
+	// after it would still read the old `status` from this render's closure.
+	const sendQuote = async () => {
+		if (!canSend) return
+		setStatus('SENT')
+		await updateQuote.mutateAsync({
+			path: { quote_id: quote.id },
+			body: buildUpdateBody('SENT'),
 		})
 	}
 
@@ -305,6 +323,8 @@ function QuoteEditWorkspace({ quote }: { quote: Quote }) {
 			isUploading={uploadFile.isPending}
 			totalCents={totalCents}
 			canSave={canSave}
+			canSend={canSend}
+			identityIncompleteForSending={identityIncompleteForSending}
 			onChange={(patch) => {
 				if (patch.customerId !== undefined) {
 					updateValues({ customerId: patch.customerId, customerContextId: '' })
@@ -319,6 +339,7 @@ function QuoteEditWorkspace({ quote }: { quote: Quote }) {
 			onRemoveLine={removeLine}
 			onUploadLinePhoto={uploadLinePhoto}
 			onSave={saveQuote}
+			onSend={sendQuote}
 			onDelete={deleteCurrentQuote}
 		/>
 	)
@@ -338,6 +359,8 @@ function QuoteEditUI({
 	isUploading,
 	totalCents,
 	canSave,
+	canSend,
+	identityIncompleteForSending,
 	onChange,
 	onStatusChange,
 	onLineChange,
@@ -346,6 +369,7 @@ function QuoteEditUI({
 	onRemoveLine,
 	onUploadLinePhoto,
 	onSave,
+	onSend,
 	onDelete,
 }: {
 	quote: Quote
@@ -361,6 +385,8 @@ function QuoteEditUI({
 	isUploading: boolean
 	totalCents: number
 	canSave: boolean
+	canSend: boolean
+	identityIncompleteForSending: boolean
 	onChange: (patch: Partial<QuoteFormValues>) => void
 	onStatusChange: (status: QuoteStatus) => void
 	onLineChange: (index: number, patch: Partial<QuoteLineFormValues>) => void
@@ -369,16 +395,13 @@ function QuoteEditUI({
 	onRemoveLine: (index: number) => void
 	onUploadLinePhoto: (index: number, file: File) => Promise<void>
 	onSave: () => void
+	onSend: () => void
 	onDelete: () => void
 }) {
 	const { activeOrganization } = useActiveOrganization()
 	const vatEnabled = activeOrganization.vat_status?.type === 'subject'
 	const missingLegalIdentityFields =
 		activeOrganization.missing_legal_identity_fields
-	const blockedBySentIdentity =
-		status === 'SENT' &&
-		!quote.reference &&
-		missingLegalIdentityFields.length > 0
 	// Only one line open at a time, so a long quote stays readable. Opening on
 	// the first line matches the create form.
 	const [openLineId, setOpenLineId] = useState<string | null>(
@@ -465,12 +488,23 @@ function QuoteEditUI({
 						</AlertDialog>
 						<Button
 							type="button"
+							variant="outline"
 							disabled={!canSave || isSaving || isDeleting}
 							onClick={onSave}
 						>
 							{isSaving ? <Loader2 className="animate-spin" /> : <FileText />}
 							Enregistrer
 						</Button>
+						{quote.status === 'DRAFT' ? (
+							<Button
+								type="button"
+								disabled={!canSend || isSaving || isDeleting}
+								onClick={onSend}
+							>
+								{isSaving ? <Loader2 className="animate-spin" /> : <Send />}
+								Envoyer le devis
+							</Button>
+						) : null}
 					</div>
 				}
 			/>
@@ -481,7 +515,7 @@ function QuoteEditUI({
 				</div>
 			) : null}
 
-			{blockedBySentIdentity ? (
+			{identityIncompleteForSending ? (
 				<div className="flex items-start gap-3 rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-800 dark:text-amber-300">
 					<AlertCircle className="mt-0.5 size-4 shrink-0" />
 					<p>
@@ -633,6 +667,20 @@ function QuoteEditUI({
 													Adresse de facturation non renseignée
 												</p>
 											)}
+											{[selectedCustomer.email, selectedCustomer.phone]
+												.filter(Boolean)
+												.join(' · ') ? (
+												<p className="text-sm text-muted-foreground">
+													{[selectedCustomer.email, selectedCustomer.phone]
+														.filter(Boolean)
+														.join(' · ')}
+												</p>
+											) : null}
+											{selectedCustomer.registration_number ? (
+												<p className="mt-1 text-xs text-muted-foreground">
+													SIRET {selectedCustomer.registration_number}
+												</p>
+											) : null}
 										</>
 									)
 								})()}

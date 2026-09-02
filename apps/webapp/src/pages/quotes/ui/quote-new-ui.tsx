@@ -249,6 +249,20 @@ export function QuoteNewUI({
 													Adresse de facturation non renseignée
 												</p>
 											)}
+											{[selectedCustomer.email, selectedCustomer.phone]
+												.filter(Boolean)
+												.join(' · ') ? (
+												<p className="text-sm text-muted-foreground">
+													{[selectedCustomer.email, selectedCustomer.phone]
+														.filter(Boolean)
+														.join(' · ')}
+												</p>
+											) : null}
+											{selectedCustomer.registration_number ? (
+												<p className="mt-1 text-xs text-muted-foreground">
+													SIRET {selectedCustomer.registration_number}
+												</p>
+											) : null}
 										</>
 									) : (
 										<p className="text-sm text-muted-foreground italic">
