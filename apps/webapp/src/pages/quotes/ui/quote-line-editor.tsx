@@ -39,7 +39,6 @@ import {
 	formatVatRateBp,
 	type QuoteLineFormValues,
 	quoteLineSourceLabel,
-	quoteLineSummary,
 	quoteLineTotalCents,
 } from '../types'
 import { PhotoStrip } from './photo-strip'
@@ -149,10 +148,23 @@ export function QuoteLineEditor({
 							<span className="block truncate text-sm font-medium">
 								{line.label.trim() || `Ligne ${index + 1}`}
 							</span>
-							<span className="block truncate text-xs text-muted-foreground">
+							{/* Quantity and price already have their own columns to the
+							    right — repeating them here would say the same thing
+							    twice. What a folded row can usefully add is the
+							    description a customer would actually read, the way a
+							    real quote prints a few lines under each item. */}
+							<span
+								className={cn(
+									'text-xs text-muted-foreground',
+									isOpen || !line.notes.trim()
+										? 'block truncate'
+										: 'line-clamp-2',
+								)}
+							>
 								{isOpen
 									? quoteLineSourceLabel(line.catalogItemType)
-									: quoteLineSummary(line)}
+									: line.notes.trim() ||
+										quoteLineSourceLabel(line.catalogItemType)}
 							</span>
 						</span>
 					</CollapsibleTrigger>

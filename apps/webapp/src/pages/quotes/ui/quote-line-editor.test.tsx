@@ -58,6 +58,62 @@ function baseProps() {
 	}
 }
 
+describe('QuoteLineEditor — folded row preview', () => {
+	it('prints the description under the label instead of repeating quantity and price', () => {
+		render(
+			<QuoteLineEditor
+				{...baseProps()}
+				isOpen={false}
+				line={line({
+					label: 'Maquette sur-mesure',
+					notes: 'Wireframe, webdesign interactif, déclinaison des maquettes',
+				})}
+			/>,
+		)
+
+		expect(
+			screen.getByText(
+				'Wireframe, webdesign interactif, déclinaison des maquettes',
+			),
+		).toBeDefined()
+	})
+
+	it('falls back to the line source when there is no description yet', () => {
+		render(
+			<QuoteLineEditor
+				{...baseProps()}
+				isOpen={false}
+				line={line({ label: 'Maquette sur-mesure', notes: '' })}
+			/>,
+		)
+
+		expect(screen.getByText('Ligne libre')).toBeDefined()
+	})
+
+	it('shows the line source, not the description, while it is open for edit', () => {
+		render(
+			<QuoteLineEditor
+				{...baseProps()}
+				isOpen={true}
+				line={line({
+					label: 'Maquette sur-mesure',
+					notes: 'Détail interne',
+					catalogItemId: 'catalog-1',
+					catalogItemType: 'SERVICE',
+				})}
+			/>,
+		)
+
+		// The description does show while open — inside its own notes field,
+		// not doubled up as the row's sub-label.
+		expect(screen.getByText('Service catalogue')).toBeDefined()
+		expect(screen.getByRole('textbox', { name: 'Note' })).toHaveProperty(
+			'value',
+			'Détail interne',
+		)
+	})
+})
+
 describe('QuoteLineEditor — catalogue pick on a handwritten line', () => {
 	it('applies a catalogue pick immediately on a blank line — nothing to lose', async () => {
 		const user = userEvent.setup()

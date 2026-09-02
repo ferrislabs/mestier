@@ -265,14 +265,3 @@ export function quoteLineSourceLabel(
 	if (type === 'PRODUCT') return 'Produit catalogue'
 	return 'Ligne libre'
 }
-
-/**
- * One line summarising a folded quote line, in the order it is read aloud:
- * how much, of what, at what price.
- */
-export function quoteLineSummary(line: QuoteLineFormValues): string {
-	const quantity = line.quantity.trim() || '0'
-	return `${quantity} ${formatUnit(line.unit)} × ${formatCents(
-		eurosToCents(line.unitPrice),
-	)}`
-}
