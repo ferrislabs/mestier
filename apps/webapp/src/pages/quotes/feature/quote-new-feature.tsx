@@ -10,6 +10,7 @@ import {
 	useUploadFile,
 } from '#/hooks/use-customers'
 import { useFileUrls } from '#/hooks/use-file-url'
+import type { Organization } from '#/hooks/use-organizations'
 import { useCreateQuote } from '#/hooks/use-quotes'
 import { useReferenceCatalog } from '#/hooks/use-reference-catalog'
 import { mutationErrorMessage } from '#/lib/api-error'
@@ -45,6 +46,7 @@ export function QuoteNewFeature() {
 	return (
 		<QuoteNewWorkspace
 			key={activeOrganization.id}
+			organization={activeOrganization}
 			organizationId={activeOrganization.id}
 			organizationSlug={activeOrganization.slug}
 			vatEnabled={activeOrganization.vat_status?.type === 'subject'}
@@ -53,10 +55,12 @@ export function QuoteNewFeature() {
 }
 
 function QuoteNewWorkspace({
+	organization,
 	organizationId,
 	organizationSlug,
 	vatEnabled,
 }: {
+	organization: Organization
 	organizationId: string
 	organizationSlug: string
 	vatEnabled: boolean
@@ -117,6 +121,7 @@ function QuoteNewWorkspace({
 		<form.Subscribe selector={(state) => state.values}>
 			{(values) => (
 				<QuoteNewForm
+					organization={organization}
 					organizationSlug={organizationSlug}
 					values={values}
 					form={form}
@@ -158,6 +163,7 @@ interface QuoteFormApi {
 }
 
 interface QuoteNewFormProps {
+	organization: Organization
 	organizationSlug: string
 	values: QuoteFormValues
 	form: QuoteFormApi
@@ -175,6 +181,7 @@ interface QuoteNewFormProps {
  * customer being edited, and that value only exists inside `form.Subscribe`.
  */
 function QuoteNewForm({
+	organization,
 	organizationSlug,
 	values,
 	form,
@@ -251,6 +258,7 @@ function QuoteNewForm({
 
 	return (
 		<QuoteNewUI
+			organization={organization}
 			organizationSlug={organizationSlug}
 			values={values}
 			customers={customers}

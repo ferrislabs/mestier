@@ -208,21 +208,60 @@ export function quoteLineTotalCents(line: QuoteLineFormValues): number {
 	return Number(scaleTo(quantity.digits * unitPriceCents, quantity.scale, 0))
 }
 
+export interface QuoteLineDraftVatBreakdown {
+	rateBp: number
+	vatCents: number
+}
+
+/**
+ * VAT broken down per rate for a draft that has not been saved yet — the same
+ * algorithm as `domain::quote::service::calculate_totals` (rounded per line,
+ * then summed per rate), so the paper preview and the eventual saved quote
+ * never disagree by a cent. Lines with nothing chargeable yet are left out
+ * rather than shown as a "0,00 €" rate nobody asked for.
+ */
+export function quoteLinesVatBreakdown(
+	lines: QuoteLineFormValues[],
+	vatEnabled: boolean,
+): QuoteLineDraftVatBreakdown[] {
+	if (!vatEnabled) return []
+
+	const byRate = new Map<number, bigint>()
+	for (const line of lines) {
+		const lineNet = BigInt(quoteLineTotalCents(line))
+		if (lineNet === 0n) continue
+
+		const rateBp = line.vatRateBp === '' ? 0 : Number(line.vatRateBp)
+		const lineVat = divRoundHalfEven(lineNet * BigInt(rateBp), 10_000n)
+		byRate.set(rateBp, (byRate.get(rateBp) ?? 0n) + lineVat)
+	}
+
+	return Array.from(byRate.entries())
+		.sort(([a], [b]) => a - b)
+		.map(([rateBp, vatCents]) => ({ rateBp, vatCents: Number(vatCents) }))
+}
+
+export function quoteLinesGrossCents(
+	netCents: number,
+	vatBreakdown: QuoteLineDraftVatBreakdown[],
+): number {
+	return netCents + vatBreakdown.reduce((sum, line) => sum + line.vatCents, 0)
+}
+
+function divRoundHalfEven(numerator: bigint, denominator: bigint): bigint {
+	const quotient = numerator / denominator
+	const remainder = numerator % denominator
+	const doubled = remainder * 2n
+
+	if (doubled > denominator) return quotient + 1n
+	if (doubled < denominator) return quotient
+	return quotient % 2n === 0n ? quotient : quotient + 1n
+}
+
 export function quoteLineSourceLabel(
 	type: QuoteLineFormValues['catalogItemType'],
 ): string {
 	if (type === 'SERVICE') return 'Service catalogue'
 	if (type === 'PRODUCT') return 'Produit catalogue'
 	return 'Ligne libre'
-}
-
-/**
- * One line summarising a folded quote line, in the order it is read aloud:
- * how much, of what, at what price.
- */
-export function quoteLineSummary(line: QuoteLineFormValues): string {
-	const quantity = line.quantity.trim() || '0'
-	return `${quantity} ${formatUnit(line.unit)} × ${formatCents(
-		eurosToCents(line.unitPrice),
-	)}`
 }

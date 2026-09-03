@@ -10,6 +10,7 @@ import type { CustomerContext } from '#/hooks/use-customers'
 import { billingAddressLines } from '../types'
 
 interface BillingAddressFieldProps {
+	id?: string
 	value: string
 	addresses: CustomerContext[]
 	hasCustomer: boolean
@@ -26,6 +27,7 @@ interface BillingAddressFieldProps {
  * nobody could tell two sites of the same customer apart.
  */
 export function BillingAddressField({
+	id,
 	value,
 	addresses,
 	hasCustomer,
@@ -42,7 +44,7 @@ export function BillingAddressField({
 				onValueChange={onChange}
 				disabled={!hasCustomer || isLoading}
 			>
-				<SelectTrigger className="w-full">
+				<SelectTrigger id={id} className="w-full">
 					<SelectValue
 						placeholder={
 							hasCustomer

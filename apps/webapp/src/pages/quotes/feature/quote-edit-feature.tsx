@@ -5,7 +5,7 @@ import {
 	ArrowRightLeft,
 	FileText,
 	Loader2,
-	Plus,
+	Send,
 	Trash2,
 } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
@@ -24,17 +24,10 @@ import { Button } from '#/components/ui/button'
 import { Field } from '#/components/ui/field'
 import { Input } from '#/components/ui/input'
 import {
-	Select,
-	SelectContent,
-	SelectItem,
-	SelectTrigger,
-	SelectValue,
-} from '#/components/ui/select'
-import {
 	PageHeader,
 	PageShell,
 	SectionCard,
-	SectionHeader,
+	StatusBadge,
 } from '#/components/ui/surface'
 import { useActiveOrganization } from '#/hooks/use-active-organization'
 import { type CatalogItem, useCatalogItems } from '#/hooks/use-catalog-items'
@@ -56,20 +49,27 @@ import {
 import { useReferenceCatalog } from '#/hooks/use-reference-catalog'
 import { buildOrgPath } from '#/modules/org-path'
 import {
+	billingAddressLines,
 	centsToEuros,
 	customerDisplayName,
 	emptyQuoteLine,
 	eurosToCents,
 	formatCents,
-	formatVatRateBp,
+	formatDate,
 	type QuoteFormValues,
 	type QuoteLineFormValues,
 	quoteLineTotalCents,
 	quoteReferenceLabel,
 	quoteStatusLabel,
 } from '#/pages/quotes/types'
-import { BillingAddressField } from '#/pages/quotes/ui/billing-address-field'
-import { QuoteLineEditor } from '#/pages/quotes/ui/quote-line-editor'
+import { EditablePaperField } from '#/pages/quotes/ui/editable-paper-field'
+import { PaperOptionList } from '#/pages/quotes/ui/paper-option-list'
+import {
+	QuoteIssuerDetails,
+	QuoteIssuerMark,
+} from '#/pages/quotes/ui/quote-issuer-block'
+import { QuoteLinesTable } from '#/pages/quotes/ui/quote-lines-table'
+import { QuoteTotalsFooter } from '#/pages/quotes/ui/quote-totals-footer'
 import { LEGAL_IDENTITY_FIELD_LABELS } from '#/pages/settings/types'
 
 interface QuoteEditFeatureProps {
@@ -217,20 +217,10 @@ function QuoteEditWorkspace({ quote }: { quote: Quote }) {
 		})
 	}
 
-	// Sending is refused server-side when the organization's legal identity
-	// is incomplete (#310, enforced again on export by #314) — caught here
-	// too so the button is disabled before the request is even sent, rather
-	// than only after a refusal comes back.
-	const blockedBySentIdentity =
-		status === 'SENT' &&
-		!quote.reference &&
-		missingLegalIdentityFields.length > 0
-
-	const canSave =
+	const hasValidContent =
 		Boolean(values.title.trim()) &&
 		Boolean(values.customerId) &&
 		Boolean(values.customerContextId) &&
-		!blockedBySentIdentity &&
 		values.lines.every((line) => {
 			const quantity = Number(line.quantity.replace(',', '.'))
 			return (
@@ -241,6 +231,19 @@ function QuoteEditWorkspace({ quote }: { quote: Quote }) {
 				eurosToCents(line.unitPrice) >= 0
 			)
 		})
+
+	// Sending is refused server-side when the organization's legal identity
+	// is incomplete (#310, enforced again on export by #314) — caught here
+	// too, independently of whatever status happens to be locally selected,
+	// so the warning and the disabled "Envoyer" button show up before a
+	// request is even attempted.
+	const identityIncompleteForSending =
+		!quote.reference && missingLegalIdentityFields.length > 0
+	const blockedBySentIdentity =
+		status === 'SENT' && identityIncompleteForSending
+
+	const canSave = hasValidContent && !blockedBySentIdentity
+	const canSend = hasValidContent && !identityIncompleteForSending
 
 	const totalCents = values.lines.reduce(
 		(sum, line) => sum + quoteLineTotalCents(line),
@@ -256,26 +259,40 @@ function QuoteEditWorkspace({ quote }: { quote: Quote }) {
 		uploadFile.error?.message ??
 		null
 
+	const buildUpdateBody = (targetStatus: QuoteStatus) => ({
+		title: values.title.trim(),
+		customer_id: values.customerId,
+		customer_context_id: values.customerContextId,
+		status: targetStatus,
+		lines: values.lines.map((line) => ({
+			service_rate_id: line.serviceRateId || null,
+			label: line.label.trim(),
+			quantity: line.quantity.replace(',', '.').trim(),
+			unit: line.unit,
+			unit_price_cents: eurosToCents(line.unitPrice),
+			vat_rate_bp: line.vatRateBp === '' ? null : Number(line.vatRateBp),
+			notes: line.notes.trim() || null,
+			photo_keys: line.photoKeys,
+		})),
+	})
+
 	const saveQuote = async () => {
 		if (!canSave) return
 		await updateQuote.mutateAsync({
 			path: { quote_id: quote.id },
-			body: {
-				title: values.title.trim(),
-				customer_id: values.customerId,
-				customer_context_id: values.customerContextId,
-				status,
-				lines: values.lines.map((line) => ({
-					service_rate_id: line.serviceRateId || null,
-					label: line.label.trim(),
-					quantity: line.quantity.replace(',', '.').trim(),
-					unit: line.unit,
-					unit_price_cents: eurosToCents(line.unitPrice),
-					vat_rate_bp: line.vatRateBp === '' ? null : Number(line.vatRateBp),
-					notes: line.notes.trim() || null,
-					photo_keys: line.photoKeys,
-				})),
-			},
+			body: buildUpdateBody(status),
+		})
+	}
+
+	// Built on the literal `'SENT'` rather than on `setStatus` + `saveQuote`:
+	// `setStatus` only lands on the *next* render, so a save fired right
+	// after it would still read the old `status` from this render's closure.
+	const sendQuote = async () => {
+		if (!canSend) return
+		setStatus('SENT')
+		await updateQuote.mutateAsync({
+			path: { quote_id: quote.id },
+			body: buildUpdateBody('SENT'),
 		})
 	}
 
@@ -306,6 +323,8 @@ function QuoteEditWorkspace({ quote }: { quote: Quote }) {
 			isUploading={uploadFile.isPending}
 			totalCents={totalCents}
 			canSave={canSave}
+			canSend={canSend}
+			identityIncompleteForSending={identityIncompleteForSending}
 			onChange={(patch) => {
 				if (patch.customerId !== undefined) {
 					updateValues({ customerId: patch.customerId, customerContextId: '' })
@@ -320,6 +339,7 @@ function QuoteEditWorkspace({ quote }: { quote: Quote }) {
 			onRemoveLine={removeLine}
 			onUploadLinePhoto={uploadLinePhoto}
 			onSave={saveQuote}
+			onSend={sendQuote}
 			onDelete={deleteCurrentQuote}
 		/>
 	)
@@ -339,6 +359,8 @@ function QuoteEditUI({
 	isUploading,
 	totalCents,
 	canSave,
+	canSend,
+	identityIncompleteForSending,
 	onChange,
 	onStatusChange,
 	onLineChange,
@@ -347,6 +369,7 @@ function QuoteEditUI({
 	onRemoveLine,
 	onUploadLinePhoto,
 	onSave,
+	onSend,
 	onDelete,
 }: {
 	quote: Quote
@@ -362,6 +385,8 @@ function QuoteEditUI({
 	isUploading: boolean
 	totalCents: number
 	canSave: boolean
+	canSend: boolean
+	identityIncompleteForSending: boolean
 	onChange: (patch: Partial<QuoteFormValues>) => void
 	onStatusChange: (status: QuoteStatus) => void
 	onLineChange: (index: number, patch: Partial<QuoteLineFormValues>) => void
@@ -370,16 +395,13 @@ function QuoteEditUI({
 	onRemoveLine: (index: number) => void
 	onUploadLinePhoto: (index: number, file: File) => Promise<void>
 	onSave: () => void
+	onSend: () => void
 	onDelete: () => void
 }) {
 	const { activeOrganization } = useActiveOrganization()
 	const vatEnabled = activeOrganization.vat_status?.type === 'subject'
 	const missingLegalIdentityFields =
 		activeOrganization.missing_legal_identity_fields
-	const blockedBySentIdentity =
-		status === 'SENT' &&
-		!quote.reference &&
-		missingLegalIdentityFields.length > 0
 	// Only one line open at a time, so a long quote stays readable. Opening on
 	// the first line matches the create form.
 	const [openLineId, setOpenLineId] = useState<string | null>(
@@ -466,12 +488,23 @@ function QuoteEditUI({
 						</AlertDialog>
 						<Button
 							type="button"
+							variant="outline"
 							disabled={!canSave || isSaving || isDeleting}
 							onClick={onSave}
 						>
 							{isSaving ? <Loader2 className="animate-spin" /> : <FileText />}
 							Enregistrer
 						</Button>
+						{quote.status === 'DRAFT' ? (
+							<Button
+								type="button"
+								disabled={!canSend || isSaving || isDeleting}
+								onClick={onSend}
+							>
+								{isSaving ? <Loader2 className="animate-spin" /> : <Send />}
+								Envoyer le devis
+							</Button>
+						) : null}
 					</div>
 				}
 			/>
@@ -482,7 +515,7 @@ function QuoteEditUI({
 				</div>
 			) : null}
 
-			{blockedBySentIdentity ? (
+			{identityIncompleteForSending ? (
 				<div className="flex items-start gap-3 rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-800 dark:text-amber-300">
 					<AlertCircle className="mt-0.5 size-4 shrink-0" />
 					<p>
@@ -502,171 +535,286 @@ function QuoteEditUI({
 				</div>
 			) : null}
 
-			<div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_320px]">
-				<div className="space-y-5">
-					<SectionCard>
-						<SectionHeader
-							title="Informations"
-							description="Objet, client et adresse de facturation du devis."
-						/>
-						<div className="grid gap-4 p-5 md:grid-cols-2">
-							<Field label="Objet du devis" htmlFor={null}>
-								<Input
-									value={values.title}
-									onChange={(event) => onChange({ title: event.target.value })}
-									placeholder="Ex. Rénovation salle de bain"
-								/>
-							</Field>
-							<Field label="Statut" htmlFor={null}>
-								<Select
-									value={status}
-									onValueChange={(value) =>
-										onStatusChange(value as QuoteStatus)
-									}
+			<div className="mx-auto w-full max-w-4xl bg-muted/40 p-4 sm:p-10">
+				<SectionCard className="border shadow-sm">
+					<div className="border-b p-6 sm:p-8">
+						<div className="flex items-start justify-between gap-4">
+							<QuoteIssuerMark organization={activeOrganization} />
+							<div className="flex flex-col items-end gap-2 text-right">
+								<p className="text-sm font-semibold">
+									Devis {quoteReferenceLabel(quote.reference)}
+								</p>
+								<p className="text-xs text-muted-foreground">
+									{formatDate(quote.created_at)}
+								</p>
+								<EditablePaperField
+									label="Statut"
+									className="w-auto"
+									renderEditor={(close) => (
+										<div className="w-40">
+											<PaperOptionList
+												ariaLabel="Statut"
+												value={status}
+												options={QUOTE_STATUSES.map((value) => ({
+													value,
+													label: quoteStatusLabel(value),
+												}))}
+												onChange={(value) => {
+													onStatusChange(value as QuoteStatus)
+													close()
+												}}
+											/>
+										</div>
+									)}
 								>
-									<SelectTrigger className="w-full">
-										<SelectValue />
-									</SelectTrigger>
-									<SelectContent>
-										<SelectItem value="DRAFT">Brouillon</SelectItem>
-										<SelectItem value="SENT">Envoyé</SelectItem>
-										<SelectItem value="ACCEPTED">Accepté</SelectItem>
-										<SelectItem value="DECLINED">Refusé</SelectItem>
-										<SelectItem value="CANCELLED">Annulé</SelectItem>
-									</SelectContent>
-								</Select>
-							</Field>
-							<Field label="Client" htmlFor={null}>
-								<Select
-									value={values.customerId}
-									onValueChange={(customerId) => onChange({ customerId })}
-								>
-									<SelectTrigger className="w-full">
-										<SelectValue placeholder="Sélectionner un client" />
-									</SelectTrigger>
-									<SelectContent>
-										{customers.map((customer) => (
-											<SelectItem key={customer.id} value={customer.id}>
-												{customerDisplayName(customer)}
-											</SelectItem>
-										))}
-									</SelectContent>
-								</Select>
-							</Field>
-							<Field label="Adresse de facturation" htmlFor={null}>
-								<BillingAddressField
-									value={values.customerContextId}
-									addresses={customerContexts}
-									hasCustomer={Boolean(values.customerId)}
-									isLoading={isLoading}
-									onChange={(customerContextId) =>
-										onChange({ customerContextId })
-									}
-								/>
-							</Field>
+									<StatusBadge tone={statusTone(status)}>
+										{quoteStatusLabel(status)}
+									</StatusBadge>
+								</EditablePaperField>
+							</div>
 						</div>
-					</SectionCard>
 
-					<SectionCard>
-						<SectionHeader
-							title={`Lignes (${values.lines.length})`}
-							description="Chaque ligne peut venir du catalogue ou rester libre."
-							actions={
-								<Button
-									type="button"
-									variant="outline"
-									size="sm"
-									onClick={onAddLine}
-								>
-									<Plus />
-									Ajouter
-								</Button>
-							}
-						/>
-						<div className="divide-y">
-							{values.lines.map((line, index) => (
-								<QuoteLineEditor
-									key={line.clientId}
-									index={index}
-									line={line}
-									catalogItems={catalogItems}
-									photos={line.photoKeys.map((key) => ({
-										key,
-										url: photoUrls[key],
-									}))}
-									isOpen={openLineId === line.clientId}
-									canRemove={values.lines.length > 1}
-									isUploading={isUploading}
-									vatEnabled={vatEnabled}
-									onOpenChange={(open) =>
-										setOpenLineId(open ? line.clientId : null)
+						<div className="mt-6 grid gap-8 md:grid-cols-2">
+							<QuoteIssuerDetails organization={activeOrganization} />
+
+							<EditablePaperField
+								label="Facturé à"
+								renderEditor={(close) => (
+									<div className="space-y-4">
+										<Field label="Client" htmlFor={null}>
+											<PaperOptionList
+												ariaLabel="Client"
+												value={values.customerId}
+												options={customers.map((customer) => ({
+													value: customer.id,
+													label: customerDisplayName(customer),
+												}))}
+												onChange={(customerId) => onChange({ customerId })}
+												emptyLabel="Aucun client n’existe encore dans cette organisation."
+											/>
+										</Field>
+										<Field label="Adresse de facturation" htmlFor={null}>
+											{!values.customerId ? (
+												<p className="border px-3 py-2 text-sm text-muted-foreground">
+													Choisir un client d’abord
+												</p>
+											) : isLoading ? (
+												<p className="border px-3 py-2 text-sm text-muted-foreground">
+													Chargement…
+												</p>
+											) : (
+												<PaperOptionList
+													ariaLabel="Adresse de facturation"
+													value={values.customerContextId}
+													options={customerContexts.map((context) => ({
+														value: context.id,
+														label: context.label,
+														description:
+															billingAddressLines(context).join(' · ') ||
+															'Adresse non renseignée',
+													}))}
+													onChange={(customerContextId) =>
+														onChange({ customerContextId })
+													}
+													emptyLabel="Aucune adresse pour ce client."
+												/>
+											)}
+										</Field>
+										<Button
+											type="button"
+											variant="ghost"
+											size="sm"
+											onClick={close}
+										>
+											Fermer
+										</Button>
+									</div>
+								)}
+							>
+								{(() => {
+									const selectedCustomer = customers.find(
+										(customer) => customer.id === values.customerId,
+									)
+									const selectedCustomerContext = customerContexts.find(
+										(customerContext) =>
+											customerContext.id === values.customerContextId,
+									)
+									if (!selectedCustomer) {
+										return (
+											<p className="text-sm text-muted-foreground italic">
+												Sélectionner un client
+											</p>
+										)
 									}
-									onChange={(patch) => onLineChange(index, patch)}
-									onSelectCatalogItem={(catalogItemId) =>
-										onSelectCatalogItem(index, catalogItemId)
-									}
-									onRemove={() => onRemoveLine(index)}
-									onUploadPhoto={(file) => void onUploadLinePhoto(index, file)}
-									onRemovePhoto={(key) =>
-										onLineChange(index, {
-											photoKeys: line.photoKeys.filter(
-												(photoKey) => photoKey !== key,
-											),
-										})
-									}
-								/>
-							))}
+									return (
+										<>
+											<p className="font-semibold">
+												{customerDisplayName(selectedCustomer)}
+											</p>
+											{selectedCustomerContext ? (
+												billingAddressLines(selectedCustomerContext).map(
+													(line) => (
+														<p
+															key={line}
+															className="text-sm text-muted-foreground"
+														>
+															{line}
+														</p>
+													),
+												)
+											) : (
+												<p className="text-sm text-warning">
+													Adresse de facturation non renseignée
+												</p>
+											)}
+											{[selectedCustomer.email, selectedCustomer.phone]
+												.filter(Boolean)
+												.join(' · ') ? (
+												<p className="text-sm text-muted-foreground">
+													{[selectedCustomer.email, selectedCustomer.phone]
+														.filter(Boolean)
+														.join(' · ')}
+												</p>
+											) : null}
+											{selectedCustomer.registration_number ? (
+												<p className="mt-1 text-xs text-muted-foreground">
+													SIRET {selectedCustomer.registration_number}
+												</p>
+											) : null}
+										</>
+									)
+								})()}
+							</EditablePaperField>
 						</div>
-					</SectionCard>
-				</div>
 
-				<aside className="h-fit rounded-lg border bg-card p-5 shadow-sm xl:sticky xl:top-5">
-					<p className="text-sm font-semibold">Résumé</p>
-					<div className="mt-4 space-y-3 text-sm">
-						<SummaryRow
-							label="Référence"
-							value={quoteReferenceLabel(quote.reference)}
-						/>
-						<SummaryRow label="Statut" value={quoteStatusLabel(status)} />
-						<SummaryRow label="Objet" value={values.title || 'Non renseigné'} />
-						<SummaryRow label="Lignes" value={String(values.lines.length)} />
-						<SummaryRow
-							label="Total HT (aperçu, non enregistré)"
-							value={formatCents(totalCents)}
-						/>
+						<div className="mt-8">
+							<EditablePaperField
+								label="Objet du devis"
+								renderEditor={(close) => (
+									<div className="space-y-4">
+										<Input
+											autoFocus
+											value={values.title}
+											onChange={(event) =>
+												onChange({ title: event.target.value })
+											}
+											placeholder="Ex. Rénovation salle de bain"
+										/>
+										<Button
+											type="button"
+											variant="ghost"
+											size="sm"
+											onClick={close}
+										>
+											Fermer
+										</Button>
+									</div>
+								)}
+							>
+								<h1 className="text-2xl font-bold tracking-tight">
+									{values.title || 'Objet du devis'}
+								</h1>
+							</EditablePaperField>
+						</div>
 					</div>
 
-					{/* The quote's actual totals — read from what was last saved,
-					    never recomputed here (CLAUDE.md): the screen and the PDF must
-					    never be able to disagree. */}
-					<div className="mt-5 space-y-2 rounded-lg bg-muted p-4 text-sm">
-						<p className="text-xs font-medium text-muted-foreground">
-							Totaux enregistrés
-						</p>
-						<SummaryRow label="Total HT" value={formatCents(quote.net_cents)} />
-						{quote.vat_breakdown.length > 0 ? (
-							quote.vat_breakdown.map((breakdown) => (
-								<SummaryRow
-									key={breakdown.rate_bp}
-									label={`TVA ${formatVatRateBp(breakdown.rate_bp)}`}
-									value={formatCents(breakdown.vat_cents)}
-								/>
-							))
-						) : activeOrganization.vat_status?.type === 'not_subject' ? (
-							<p className="text-xs text-muted-foreground">
-								TVA non applicable, {activeOrganization.vat_status.basis}
-							</p>
-						) : null}
-						<SummaryRow
-							label="Total TTC"
-							value={formatCents(quote.gross_cents)}
-							strong
-						/>
-					</div>
-				</aside>
+					<QuoteLinesTable
+						lines={values.lines}
+						catalogItems={catalogItems}
+						photosByLine={Object.fromEntries(
+							values.lines.map((line) => [
+								line.clientId,
+								line.photoKeys.map((key) => ({ key, url: photoUrls[key] })),
+							]),
+						)}
+						isUploading={isUploading}
+						openLineId={openLineId}
+						vatEnabled={vatEnabled}
+						onOpenLineChange={(clientId, open) =>
+							setOpenLineId(open ? clientId : null)
+						}
+						onLineChange={(clientId, patch) => {
+							const index = values.lines.findIndex(
+								(line) => line.clientId === clientId,
+							)
+							if (index !== -1) onLineChange(index, patch)
+						}}
+						onSelectCatalogItem={(clientId, catalogItemId) => {
+							const index = values.lines.findIndex(
+								(line) => line.clientId === clientId,
+							)
+							if (index !== -1) onSelectCatalogItem(index, catalogItemId)
+						}}
+						onRemoveLine={(clientId) => {
+							const index = values.lines.findIndex(
+								(line) => line.clientId === clientId,
+							)
+							if (index !== -1) onRemoveLine(index)
+						}}
+						onAddLine={onAddLine}
+						onUploadLinePhoto={(clientId, file) => {
+							const index = values.lines.findIndex(
+								(line) => line.clientId === clientId,
+							)
+							if (index !== -1) void onUploadLinePhoto(index, file)
+						}}
+						onRemoveLinePhoto={(clientId, key) => {
+							const index = values.lines.findIndex(
+								(line) => line.clientId === clientId,
+							)
+							const line = values.lines[index]
+							if (index === -1 || !line) return
+							onLineChange(index, {
+								photoKeys: line.photoKeys.filter(
+									(photoKey) => photoKey !== key,
+								),
+							})
+						}}
+					/>
+
+					{/* The quote's actual totals — read from what was last saved, never
+				    recomputed here (CLAUDE.md): the screen and the PDF must never be
+				    able to disagree. `totalCents` (from the in-memory draft) only
+				    surfaces as the small notice below when it disagrees with what
+				    is saved. */}
+					<QuoteTotalsFooter
+						netCents={quote.net_cents}
+						vatBreakdown={quote.vat_breakdown.map((line) => ({
+							rateBp: line.rate_bp,
+							vatCents: line.vat_cents,
+						}))}
+						grossCents={quote.gross_cents}
+						vatExemptionNotice={
+							quote.vat_breakdown.length === 0 &&
+							activeOrganization.vat_status?.type === 'not_subject'
+								? `TVA non applicable, ${activeOrganization.vat_status.basis}`
+								: null
+						}
+						notice={
+							totalCents !== quote.net_cents
+								? `Aperçu non enregistré : ${formatCents(totalCents)}`
+								: null
+						}
+					/>
+				</SectionCard>
 			</div>
 		</PageShell>
 	)
+}
+
+const QUOTE_STATUSES: QuoteStatus[] = [
+	'DRAFT',
+	'SENT',
+	'ACCEPTED',
+	'DECLINED',
+	'CANCELLED',
+]
+
+function statusTone(status: QuoteStatus) {
+	if (status === 'ACCEPTED') return 'success' as const
+	if (status === 'SENT') return 'brand' as const
+	if (status === 'DECLINED' || status === 'CANCELLED') return 'error' as const
+	return 'neutral' as const
 }
 
 function quoteToForm(
@@ -748,24 +896,5 @@ function QuoteEditError({
 				</div>
 			</SectionCard>
 		</PageShell>
-	)
-}
-
-function SummaryRow({
-	label,
-	value,
-	strong,
-}: {
-	label: string
-	value: string
-	strong?: boolean
-}) {
-	return (
-		<div className="flex items-center justify-between gap-4">
-			<span className="text-muted-foreground">{label}</span>
-			<span className={strong ? 'font-semibold' : 'truncate font-medium'}>
-				{value}
-			</span>
-		</div>
 	)
 }

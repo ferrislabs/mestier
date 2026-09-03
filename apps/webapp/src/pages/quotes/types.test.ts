@@ -3,6 +3,8 @@ import {
 	eurosToCents,
 	formatVatRateBp,
 	type QuoteLineFormValues,
+	quoteLinesGrossCents,
+	quoteLinesVatBreakdown,
 	quoteLineTotalCents,
 	quoteReferenceLabel,
 } from '#/pages/quotes/types'
@@ -93,6 +95,83 @@ describe('quoteLineTotalCents', () => {
 
 	it('is nothing when the price has not been entered', () => {
 		expect(quoteLineTotalCents(line('4', ''))).toBe(0)
+	})
+})
+
+function lineWithVat(
+	quantity: string,
+	unitPrice: string,
+	vatRateBp: string,
+): QuoteLineFormValues {
+	return { ...line(quantity, unitPrice), vatRateBp }
+}
+
+describe('quoteLinesVatBreakdown', () => {
+	it('is empty for an organization not subject to VAT', () => {
+		expect(
+			quoteLinesVatBreakdown([lineWithVat('1', '100,00', '2000')], false),
+		).toEqual([])
+	})
+
+	it('groups VAT per rate, sorted ascending', () => {
+		expect(
+			quoteLinesVatBreakdown(
+				[
+					lineWithVat('1', '100,00', '2000'),
+					lineWithVat('1', '50,00', '1000'),
+					lineWithVat('1', '20,00', '2000'),
+				],
+				true,
+			),
+		).toEqual([
+			{ rateBp: 1000, vatCents: 500 },
+			{ rateBp: 2000, vatCents: 2400 },
+		])
+	})
+
+	/**
+	 * The exact vector `domain::quote::service`'s
+	 * `three_half_cent_vat_lines_round_per_line_then_sum` pins: three lines at
+	 * 1,05 € net and 10 % VAT each round to 10 cents of VAT (10,5 lands on the
+	 * even neighbour), summing to 30 — not 32, which is what rounding the
+	 * 3,15 € net total once would give.
+	 */
+	it('rounds VAT per line before summing, agreeing with the backend', () => {
+		const lines = [
+			lineWithVat('1', '1,05', '1000'),
+			lineWithVat('1', '1,05', '1000'),
+			lineWithVat('1', '1,05', '1000'),
+		]
+		expect(quoteLinesVatBreakdown(lines, true)).toEqual([
+			{ rateBp: 1000, vatCents: 30 },
+		])
+	})
+
+	it('treats an unset rate as 0 %, not as excluded', () => {
+		expect(
+			quoteLinesVatBreakdown([lineWithVat('1', '100,00', '')], true),
+		).toEqual([{ rateBp: 0, vatCents: 0 }])
+	})
+
+	it('leaves out lines with nothing chargeable yet', () => {
+		expect(
+			quoteLinesVatBreakdown([lineWithVat('', '100,00', '2000')], true),
+		).toEqual([])
+	})
+})
+
+describe('quoteLinesGrossCents', () => {
+	it('adds the VAT breakdown on top of the net total', () => {
+		expect(
+			quoteLinesGrossCents(31500, [
+				{ rateBp: 1000, vatCents: 30 },
+				{ rateBp: 2000, vatCents: 2400 },
+			]),
+		).toBe(33930)
+	})
+
+	it('is the net total when there is no VAT to add', () => {
+		expect(quoteLinesGrossCents(31500, [])).toBe(31500)
 	})
 })
 
