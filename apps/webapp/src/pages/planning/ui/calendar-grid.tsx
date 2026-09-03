@@ -14,6 +14,7 @@ import {
 	isCurrentTimeVisible,
 	millisecondsUntilNextMinute,
 } from '#/pages/planning/lib/current-time'
+import { AttendeeStack } from '#/pages/planning/ui/attendee-stack'
 import {
 	type CalendarEventCallbacks,
 	EventPopover,
@@ -172,11 +173,14 @@ function AllDayRow({ days, callbacks }: AllDayRowProps) {
 							<button
 								type="button"
 								className={cn(
-									'w-full truncate rounded-lg px-2 py-1 text-left text-[11px] font-medium transition-shadow hover:shadow-sm',
+									'flex w-full items-center gap-1.5 overflow-hidden rounded-lg px-2 py-1 text-left text-[11px] font-medium transition-shadow hover:shadow-sm',
 									natureClassName(event.nature),
 								)}
 							>
-								{event.title}
+								<span className="min-w-0 flex-1 truncate">{event.title}</span>
+								{event.nature === 'task' ? (
+									<AttendeeStack attendees={event.attendees} size="sm" />
+								) : null}
 							</button>
 						</EventPopover>
 					))}
@@ -305,11 +309,12 @@ interface EventCardProps {
 }
 
 /**
- * The card's density, driven by the span it covers. A half-hour task has no
- * room to show its attendees: rather than truncating at random, the rows drop
- * out in decreasing order of importance.
+ * The card's density, driven by the span it covers. A quarter-hour task has
+ * no room for anything past its title: rather than truncating at random, the
+ * rows drop out in decreasing order of importance. Time and attendees share
+ * one threshold — once there is room for one line below the title, there is
+ * room for the other.
  */
-const FULL_CARD_MINUTES = 90
 const TIMED_CARD_MINUTES = 45
 
 function EventCard({ event, callbacks }: EventCardProps) {
@@ -317,7 +322,7 @@ function EventCard({ event, callbacks }: EventCardProps) {
 	// An overlap shifts the card inside its column rather than shrinking it
 	// further: two cards side by side stay readable.
 	const left = width * event.column
-	const showFooter = event.durationMinutes >= FULL_CARD_MINUTES
+	const showFooter = event.durationMinutes >= TIMED_CARD_MINUTES
 	const showTime = event.durationMinutes >= TIMED_CARD_MINUTES
 
 	return (
@@ -346,8 +351,8 @@ function EventCard({ event, callbacks }: EventCardProps) {
 				) : null}
 
 				{showFooter ? (
-					<span className="mt-auto flex items-end justify-between gap-2">
-						{event.attendees.length > 0 ? (
+					<span className="mt-1.5 flex items-end justify-between gap-2">
+						{event.nature === 'task' && event.attendees.length > 0 ? (
 							<AttendeeStack attendees={event.attendees} />
 						) : (
 							<span />
@@ -357,34 +362,6 @@ function EventCard({ event, callbacks }: EventCardProps) {
 				) : null}
 			</button>
 		</EventPopover>
-	)
-}
-
-function AttendeeStack({
-	attendees,
-}: {
-	attendees: CalendarEventVM['attendees']
-}) {
-	const shown = attendees.slice(0, 3)
-	const extra = attendees.length - shown.length
-
-	return (
-		<span className="mt-1.5 flex items-center -space-x-1.5">
-			{shown.map((attendee) => (
-				<span
-					key={attendee.id}
-					title={attendee.name}
-					className="flex size-5 items-center justify-center rounded-full bg-card text-[9px] font-semibold text-foreground ring-1 ring-border"
-				>
-					{attendee.initials}
-				</span>
-			))}
-			{extra > 0 ? (
-				<span className="flex size-5 items-center justify-center rounded-full bg-card text-[9px] font-semibold text-muted-foreground ring-1 ring-border">
-					+{extra}
-				</span>
-			) : null}
-		</span>
 	)
 }
 

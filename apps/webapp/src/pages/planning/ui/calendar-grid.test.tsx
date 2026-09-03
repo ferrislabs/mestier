@@ -219,3 +219,92 @@ describe('CalendarGrid — detail panel', () => {
 		})
 	})
 })
+
+describe('CalendarGrid — attendees on the card', () => {
+	it('shows the assignee on a one-hour card, not just on a long one', () => {
+		const oneHourTask = {
+			...TASK,
+			ends_at: '2026-03-02T10:00:00Z',
+			member_ids: ['e-1'],
+		} as PlanningEntry
+
+		render(
+			<CalendarGrid
+				model={buildCalendarModel({
+					from: '2026-03-02',
+					to: '2026-03-02',
+					entries: [oneHourTask],
+					resources: [
+						{
+							member_id: 'e-1',
+							resource_id: 'r-1',
+							display_name: 'Marie Leroy',
+							weekly_contract_minutes: 2100,
+						},
+					],
+					workTime: [],
+					timeZone: 'UTC',
+					today: '2026-03-02',
+					filter: 'all',
+				})}
+				callbacks={{
+					onChangeStatus: vi.fn(),
+					onDelete: vi.fn(),
+					editing: null,
+					assignees: [],
+					selectedResourceIds: [],
+					onEdit: vi.fn(),
+					onEditChange: vi.fn(),
+					onToggleAssignee: vi.fn(),
+					onEditSubmit: vi.fn(),
+					onEditCancel: vi.fn(),
+				}}
+				now={new Date('2026-03-02T09:30:00Z')}
+			/>,
+		)
+
+		expect(screen.getByText('ML')).toBeDefined()
+	})
+
+	it('never shows an avatar on an absence — the ask was for tasks', () => {
+		render(
+			<CalendarGrid
+				model={buildCalendarModel({
+					from: '2026-03-02',
+					to: '2026-03-03',
+					entries: [ABSENCE],
+					resources: [
+						{
+							member_id: 'e-1',
+							resource_id: 'r-1',
+							display_name: 'Marie Leroy',
+							weekly_contract_minutes: 2100,
+						},
+					],
+					workTime: [],
+					timeZone: 'UTC',
+					today: '2026-03-02',
+					filter: 'all',
+				})}
+				callbacks={{
+					onChangeStatus: vi.fn(),
+					onDelete: vi.fn(),
+					editing: null,
+					assignees: [],
+					selectedResourceIds: [],
+					onEdit: vi.fn(),
+					onEditChange: vi.fn(),
+					onToggleAssignee: vi.fn(),
+					onEditSubmit: vi.fn(),
+					onEditCancel: vi.fn(),
+				}}
+				now={new Date('2026-03-02T09:30:00Z')}
+			/>,
+		)
+
+		expect(screen.queryByText('ML')).toBeNull()
+		// The absence's own label stays the button's whole accessible name —
+		// an avatar sneaking into it broke an exact-name lookup elsewhere.
+		expect(screen.getByRole('button', { name: 'Congé' })).toBeDefined()
+	})
+})
