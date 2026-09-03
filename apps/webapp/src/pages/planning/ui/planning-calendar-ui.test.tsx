@@ -68,6 +68,9 @@ function baseProps(
 		eventCallbacks: EVENT_CALLBACKS,
 		onRetry: vi.fn(),
 		now: new Date('2026-03-02T09:00:00Z'),
+		assigneeOptions: [],
+		onQuickCreate: vi.fn(),
+		onQuickCreateMoreOptions: vi.fn(),
 		...overrides,
 	}
 }

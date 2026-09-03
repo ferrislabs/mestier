@@ -14,6 +14,8 @@ import {
 import type { CalendarEventCallbacks } from '#/pages/planning/ui/event-popover'
 import { MonthGrid } from '#/pages/planning/ui/month-grid'
 import { PendingReportsBadge } from '#/pages/planning/ui/pending-reports-badge'
+import type { AssigneeOption } from './assignee-picker'
+import type { QuickCreateDraft } from './quick-create-popover'
 
 export interface PlanningCalendarUIProps {
 	organizationName: string
@@ -43,6 +45,11 @@ export interface PlanningCalendarUIProps {
 	onRetry: () => void
 	/** Fige l'heure courante — tests seulement. */
 	now?: Date
+	/** The week/day grid's click-to-create popover — month view has no time
+	 * slot precise enough for it, so these are unused there. */
+	assigneeOptions: AssigneeOption[]
+	onQuickCreate: (draft: QuickCreateDraft) => Promise<void>
+	onQuickCreateMoreOptions: (draft: QuickCreateDraft) => void
 }
 
 export function PlanningCalendarUI({
@@ -69,6 +76,9 @@ export function PlanningCalendarUI({
 	eventCallbacks,
 	onRetry,
 	now,
+	assigneeOptions,
+	onQuickCreate,
+	onQuickCreateMoreOptions,
 }: PlanningCalendarUIProps) {
 	const hiddenByFilter = filteredOutCount(view, model, monthModel)
 	const isMonth = view === 'month'
@@ -147,6 +157,9 @@ export function PlanningCalendarUI({
 								model={model}
 								callbacks={eventCallbacks}
 								now={now}
+								assigneeOptions={assigneeOptions}
+								onQuickCreate={onQuickCreate}
+								onQuickCreateMoreOptions={onQuickCreateMoreOptions}
 							/>
 						) : null}
 					</>
