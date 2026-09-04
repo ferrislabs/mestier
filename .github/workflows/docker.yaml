@@ -212,8 +212,26 @@ jobs:
       - name: test
         run: pnpm test
 
+  # Whether this run should push images at all. Centralised here rather than
+  # repeated in every job/step `if:` below — a job-level `if:` can't read the
+  # `env` context, only `needs`, so this has to be a job with an output.
+  # Pull-request builds only push for internal PRs (head repo == this repo):
+  # a fork PR must never be able to push with this workflow's registry creds.
+  should-push:
+    runs-on: ubuntu-24.04
+    outputs:
+      push: ${{ steps.check.outputs.push || 'false' }}
+    steps:
+      - id: check
+        if: >-
+          inputs.push || startsWith(github.ref, 'refs/tags/v') ||
+          github.ref_name == github.event.repository.default_branch ||
+          (github.event_name == 'pull_request' &&
+           github.event.pull_request.head.repo.full_name == github.repository)
+        run: echo "push=true" >> "$GITHUB_OUTPUT"
+
   build:
-    needs: [rust-check, integration, webapp]
+    needs: [rust-check, integration, webapp, should-push]
     runs-on: ${{ matrix.runner.name }}
     strategy:
       matrix:
@@ -247,8 +265,7 @@ jobs:
           images: ghcr.io/ferrislabs/mestier-${{ matrix.target }}
 
       - name: log-in to ghcr
-        if: inputs.push || startsWith(github.ref, 'refs/tags/v') || github.ref_name ==
-          github.event.repository.default_branch
+        if: needs.should-push.outputs.push == 'true'
         uses: docker/login-action@v3
         with:
           registry: ghcr.io
@@ -266,22 +283,18 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=local,src=${{ runner.temp }}/.buildx-cache
           cache-to: type=local,dest=${{ runner.temp }}/.buildx-cache-new,mode=max
-          outputs: type=image,push-by-digest=true,name-canonical=true,push=${{ inputs.push
-            || startsWith(github.ref, 'refs/tags/v') || github.ref_name ==
-            github.event.repository.default_branch }}
+          outputs: type=image,push-by-digest=true,name-canonical=true,push=${{ needs.should-push.outputs.push }}
 
       - name: prepare digest
         id: digest
-        if: inputs.push || startsWith(github.ref, 'refs/tags/v') || github.ref_name ==
-          github.event.repository.default_branch
+        if: needs.should-push.outputs.push == 'true'
         run: |
           mkdir -p ${{ runner.temp }}/digests
           digest="${{ steps.build.outputs.digest }}"
           touch "${{ runner.temp }}/digests/${digest#sha256:}"
 
       - name: upload digest
-        if: inputs.push || startsWith(github.ref, 'refs/tags/v') || github.ref_name ==
-          github.event.repository.default_branch
+        if: needs.should-push.outputs.push == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: digests-${{ runner.arch }}-${{ matrix.target }}
@@ -297,9 +310,9 @@ jobs:
           mv ${{ runner.temp }}/.buildx-cache-new ${{ runner.temp }}/.buildx-cache
 
   push-manifest:
-    if: inputs.push || startsWith(github.ref, 'refs/tags/v') || github.ref_name ==
-      github.event.repository.default_branch
+    if: needs.should-push.outputs.push == 'true'
     needs:
+      - should-push
       - build
     runs-on: ubuntu-latest
     strategy:
