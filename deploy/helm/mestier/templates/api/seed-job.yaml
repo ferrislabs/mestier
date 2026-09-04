@@ -1,0 +1,52 @@
+{{- if and .Values.api.enabled .Values.demoSeed.enabled }}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "mestier.fullname" . }}-demo-seed
+  labels:
+    {{- include "mestier.labels" . | nindent 4 }}
+    app.kubernetes.io/component: demo-seed
+  annotations:
+    # PostSync, not PreSync like the migrations Job: it needs the schema
+    # migrations already produced, and — unlike migrations, which only touch
+    # Postgres — it also calls the FerrisKey admin API to provision the demo
+    # owner, so it waits until the whole Application (api included) has
+    # synced rather than racing it. Deleted on success so re-syncs don't pile
+    # up completed Jobs; a failed run is left for inspection. Idempotent by
+    # design (see apps/seed-demo), so running again on every later sync of
+    # the same preview Application is a fast no-op once the org exists.
+    argocd.argoproj.io/hook: PostSync
+    argocd.argoproj.io/hook-delete-policy: HookSucceeded
+spec:
+  backoffLimit: 1
+  template:
+    metadata:
+      labels:
+        {{- include "mestier.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: demo-seed
+    spec:
+      restartPolicy: Never
+      {{- with .Values.global.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      # No dedicated ServiceAccount, same reasoning as the migrations Job:
+      # this talks to Postgres and to FerrisKey over HTTP, never to the
+      # Kubernetes API.
+      containers:
+        - name: seed-demo
+          image: {{ include "mestier.image" (dict "image" .Values.api.image "chart" .Chart) }}
+          imagePullPolicy: {{ .Values.api.image.pullPolicy }}
+          command: ["seed-demo"]
+          args:
+            - "--org-slug"
+            - {{ .Values.demoSeed.orgSlug | quote }}
+            - "--org-name"
+            - {{ .Values.demoSeed.orgName | quote }}
+          envFrom:
+            - configMapRef:
+                name: {{ include "mestier.fullname" . }}-api
+          env:
+            {{- include "mestier.api.secretEnvEntry" (dict "root" $ "key" "DATABASE_PASSWORD") | nindent 12 }}
+            {{- include "mestier.api.secretEnvEntry" (dict "root" $ "key" "AUTH_CLIENT_SECRET") | nindent 12 }}
+{{- end }}

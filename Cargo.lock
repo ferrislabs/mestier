@@ -5135,6 +5135,27 @@ dependencies = [
 ]
 
 [[package]]
+name = "seed-demo"
+version = "0.1.0"
+dependencies = [
+ "args",
+ "authz",
+ "chrono",
+ "clap",
+ "common",
+ "dotenvy",
+ "iam",
+ "mestier-core",
+ "rust_decimal",
+ "sqlx",
+ "thiserror 2.0.18",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+ "uuid",
+]
+
+[[package]]
 name = "semver"
 version = "1.0.28"
 source = "registry+https://github.com/rust-lang/crates.io-index"

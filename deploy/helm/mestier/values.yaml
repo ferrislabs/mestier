@@ -142,6 +142,23 @@ api:
       #   key: password
 
 # ---------------------------------------------------------------------------
+# demoSeed — runs `seed-demo` (apps/seed-demo) as an ArgoCD PostSync hook Job
+# using the api image, so a preview environment's org has demo data to show
+# a reviewer instead of an empty app. False everywhere except preview: dev,
+# staging and prod have no business getting a synthetic org seeded into
+# their (real) database. Reuses api.image and the api ConfigMap/Secret for
+# DB and FerrisKey credentials — nothing to configure here beyond identity.
+# ---------------------------------------------------------------------------
+demoSeed:
+  enabled: false
+  # -- Slug of the demo organization this preview environment gets, e.g.
+  # "pr-42". Also seed-demo's idempotency key: re-running the Job against a
+  # slug that already exists is a no-op.
+  orgSlug: ""
+  # -- Display name of the demo organization, e.g. "Preview PR 42".
+  orgName: ""
+
+# ---------------------------------------------------------------------------
 # webapp — the React app served by nginx (apps/webapp)
 # ---------------------------------------------------------------------------
 webapp:

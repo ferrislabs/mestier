@@ -49,6 +49,7 @@ USER mestier
 FROM runtime AS api
 
 COPY --from=builder /usr/local/src/mestier/target/release/api /usr/local/bin/api
+COPY --from=builder /usr/local/src/mestier/target/release/seed-demo /usr/local/bin/seed-demo
 COPY --from=builder /usr/local/src/mestier/migrations /usr/local/mestier/migrations
 COPY --from=builder /usr/local/cargo/bin/sqlx /usr/local/bin/
 

@@ -1,0 +1,23 @@
+[package]
+name = "seed-demo"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+
+[dependencies]
+args = { workspace = true }
+authz = { workspace = true }
+common = { workspace = true }
+iam = { workspace = true }
+mestier-core = { workspace = true }
+
+clap = { workspace = true }
+chrono = { workspace = true }
+dotenvy = { workspace = true }
+rust_decimal = { workspace = true }
+sqlx = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+uuid = { workspace = true }
