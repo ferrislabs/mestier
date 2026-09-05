@@ -8,6 +8,7 @@ import type {
 } from '#/pages/hr/ui/absences-overview-ui'
 import { AbsencesOverviewUI } from '#/pages/hr/ui/absences-overview-ui'
 import { renderWithRouter } from '#/test/render-with-router'
+import { wrapWithPermissions } from '#/test/with-permissions'
 
 function absence(
 	overrides: Partial<AbsenceOverviewRow> = {},
@@ -56,7 +57,9 @@ function baseProps(
 
 describe('AbsencesOverviewUI — listing', () => {
 	it('shows every absence with the resolved member name, nature and period', async () => {
-		await renderWithRouter(<AbsencesOverviewUI {...baseProps()} />)
+		await renderWithRouter(
+			wrapWithPermissions(<AbsencesOverviewUI {...baseProps()} />),
+		)
 
 		expect(screen.getByText('Martin Alix')).toBeDefined()
 		expect(screen.getByText('Congé')).toBeDefined()
@@ -65,7 +68,9 @@ describe('AbsencesOverviewUI — listing', () => {
 
 	it('shows an empty state when there is no absence', async () => {
 		await renderWithRouter(
-			<AbsencesOverviewUI {...baseProps({ absences: [] })} />,
+			wrapWithPermissions(
+				<AbsencesOverviewUI {...baseProps({ absences: [] })} />,
+			),
 		)
 
 		expect(screen.getByText('Aucune absence trouvée')).toBeDefined()
@@ -73,7 +78,9 @@ describe('AbsencesOverviewUI — listing', () => {
 
 	it('shows a loading placeholder instead of the table', async () => {
 		await renderWithRouter(
-			<AbsencesOverviewUI {...baseProps({ isLoading: true })} />,
+			wrapWithPermissions(
+				<AbsencesOverviewUI {...baseProps({ isLoading: true })} />,
+			),
 		)
 
 		expect(screen.getByText('Chargement des absences…')).toBeDefined()
@@ -82,7 +89,11 @@ describe('AbsencesOverviewUI — listing', () => {
 
 	it('surfaces a load error', async () => {
 		await renderWithRouter(
-			<AbsencesOverviewUI {...baseProps({ error: 'Impossible de charger' })} />,
+			wrapWithPermissions(
+				<AbsencesOverviewUI
+					{...baseProps({ error: 'Impossible de charger' })}
+				/>,
+			),
 		)
 
 		expect(screen.getByText('Impossible de charger')).toBeDefined()
@@ -93,7 +104,9 @@ describe('AbsencesOverviewUI — create action', () => {
 	it('calls onCreate from the page header button', async () => {
 		const user = userEvent.setup()
 		const props = baseProps()
-		await renderWithRouter(<AbsencesOverviewUI {...props} />)
+		await renderWithRouter(
+			wrapWithPermissions(<AbsencesOverviewUI {...props} />),
+		)
 
 		await user.click(
 			screen.getByRole('button', { name: /Ajouter une absence/ }),
@@ -107,7 +120,9 @@ describe('AbsencesOverviewUI — row actions', () => {
 	it('calls onEdit with the row id from the row menu', async () => {
 		const user = userEvent.setup()
 		const props = baseProps()
-		await renderWithRouter(<AbsencesOverviewUI {...props} />)
+		await renderWithRouter(
+			wrapWithPermissions(<AbsencesOverviewUI {...props} />),
+		)
 
 		await user.click(screen.getByRole('button', { name: 'Actions' }))
 		await user.click(screen.getByRole('menuitem', { name: /Modifier/ }))
@@ -118,7 +133,9 @@ describe('AbsencesOverviewUI — row actions', () => {
 	it('does not call onDelete until the confirmation dialog is accepted', async () => {
 		const user = userEvent.setup()
 		const props = baseProps()
-		await renderWithRouter(<AbsencesOverviewUI {...props} />)
+		await renderWithRouter(
+			wrapWithPermissions(<AbsencesOverviewUI {...props} />),
+		)
 
 		await user.click(screen.getByRole('button', { name: 'Actions' }))
 		await user.click(screen.getByRole('menuitem', { name: /Supprimer/ }))

@@ -1,4 +1,5 @@
 import { Plus, Trash2 } from 'lucide-react'
+import { RequirePermission } from '#/components/require-permission'
 import { Button } from '#/components/ui/button'
 import { Input } from '#/components/ui/input'
 import { SectionCard, SectionHeader } from '#/components/ui/surface'
@@ -174,13 +175,15 @@ export function RhythmSection({
 						) : null}
 
 						<div>
-							<Button
-								type="button"
-								onClick={onSubmit}
-								disabled={isSaving || errors.length > 0}
-							>
-								{isSaving ? 'Enregistrement…' : 'Enregistrer le rythme'}
-							</Button>
+							<RequirePermission permission="MANAGE_PLANNING">
+								<Button
+									type="button"
+									onClick={onSubmit}
+									disabled={isSaving || errors.length > 0}
+								>
+									{isSaving ? 'Enregistrement…' : 'Enregistrer le rythme'}
+								</Button>
+							</RequirePermission>
 						</div>
 					</>
 				)}
@@ -334,13 +337,15 @@ export function WorkSlotsSection({
 						) : null}
 
 						<div>
-							<Button
-								type="button"
-								onClick={onSubmit}
-								disabled={isSaving || errors.length > 0}
-							>
-								{isSaving ? 'Enregistrement…' : 'Enregistrer les plages'}
-							</Button>
+							<RequirePermission permission="MANAGE_PLANNING">
+								<Button
+									type="button"
+									onClick={onSubmit}
+									disabled={isSaving || errors.length > 0}
+								>
+									{isSaving ? 'Enregistrement…' : 'Enregistrer les plages'}
+								</Button>
+							</RequirePermission>
 						</div>
 					</>
 				)}

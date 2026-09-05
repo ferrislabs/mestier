@@ -1,8 +1,9 @@
-import { render, screen, within } from '@testing-library/react'
+import { screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { emptyAbsenceDraft } from '#/pages/hr/lib/absences'
 import { AbsenceFormSheet } from '#/pages/hr/ui/absence-form-sheet'
+import { renderWithPermissions } from '#/test/with-permissions'
 
 // jsdom doesn't implement ResizeObserver, and Radix `Select`'s listbox needs
 // `scrollIntoView`/pointer-capture methods it also doesn't implement.
@@ -43,12 +44,12 @@ function baseProps() {
 
 describe('AbsenceFormSheet — creation', () => {
 	it('renders nothing when open is false', () => {
-		render(<AbsenceFormSheet {...baseProps()} open={false} />)
+		renderWithPermissions(<AbsenceFormSheet {...baseProps()} open={false} />)
 		expect(screen.queryByRole('dialog')).toBeNull()
 	})
 
 	it('offers the member picker and no delete button', () => {
-		render(<AbsenceFormSheet {...baseProps()} />)
+		renderWithPermissions(<AbsenceFormSheet {...baseProps()} />)
 
 		expect(screen.getByText('Nouvelle absence')).toBeDefined()
 		expect(screen.getByRole('combobox', { name: 'Personne' })).toBeDefined()
@@ -57,7 +58,7 @@ describe('AbsenceFormSheet — creation', () => {
 
 	it('shows « {nom} {prénom} » in the member picker options', async () => {
 		const user = userEvent.setup()
-		render(<AbsenceFormSheet {...baseProps()} />)
+		renderWithPermissions(<AbsenceFormSheet {...baseProps()} />)
 
 		await user.click(screen.getByRole('combobox', { name: 'Personne' }))
 		expect(
@@ -68,7 +69,7 @@ describe('AbsenceFormSheet — creation', () => {
 
 	it('shows the surname alone in the picker when the given name is missing', async () => {
 		const user = userEvent.setup()
-		render(
+		renderWithPermissions(
 			<AbsenceFormSheet
 				{...baseProps()}
 				members={[{ memberId: 'member-3', displayName: 'Petit' }]}
@@ -80,13 +81,13 @@ describe('AbsenceFormSheet — creation', () => {
 	})
 
 	it('hides the time fields when full day is on', () => {
-		render(<AbsenceFormSheet {...baseProps()} />)
+		renderWithPermissions(<AbsenceFormSheet {...baseProps()} />)
 		expect(screen.queryByLabelText('Heure de début')).toBeNull()
 	})
 
 	it('shows the time fields when full day is off', () => {
 		const props = baseProps()
-		render(
+		renderWithPermissions(
 			<AbsenceFormSheet
 				{...props}
 				values={{ ...props.values, allDay: false }}
@@ -96,8 +97,10 @@ describe('AbsenceFormSheet — creation', () => {
 		expect(screen.getByLabelText('Heure de fin')).toBeDefined()
 	})
 
-	it('shows validation errors and disables submission', () => {
-		render(<AbsenceFormSheet {...baseProps()} errors={['Personne requise']} />)
+	it('shows validation errors and disables submission', async () => {
+		await renderWithPermissions(
+			<AbsenceFormSheet {...baseProps()} errors={['Personne requise']} />,
+		)
 
 		expect(screen.getByText('Personne requise')).toBeDefined()
 		const submit = screen.getByRole('button', {
@@ -109,7 +112,9 @@ describe('AbsenceFormSheet — creation', () => {
 	it('calls onSubmit on save click when valid', async () => {
 		const user = userEvent.setup()
 		const onSubmit = vi.fn()
-		render(<AbsenceFormSheet {...baseProps()} onSubmit={onSubmit} />)
+		await renderWithPermissions(
+			<AbsenceFormSheet {...baseProps()} onSubmit={onSubmit} />,
+		)
 
 		await user.click(screen.getByRole('button', { name: /Créer l’absence/ }))
 		expect(onSubmit).toHaveBeenCalledTimes(1)
@@ -118,7 +123,9 @@ describe('AbsenceFormSheet — creation', () => {
 	it('reports field changes through onChange', async () => {
 		const user = userEvent.setup()
 		const onChange = vi.fn()
-		render(<AbsenceFormSheet {...baseProps()} onChange={onChange} />)
+		renderWithPermissions(
+			<AbsenceFormSheet {...baseProps()} onChange={onChange} />,
+		)
 
 		await user.type(screen.getByLabelText('Note'), 'x')
 		expect(onChange).toHaveBeenCalled()
@@ -127,7 +134,7 @@ describe('AbsenceFormSheet — creation', () => {
 
 describe('AbsenceFormSheet — champ de plage', () => {
 	it('shows a single day when the range is one day long', () => {
-		render(<AbsenceFormSheet {...baseProps()} />)
+		renderWithPermissions(<AbsenceFormSheet {...baseProps()} />)
 
 		expect(screen.getByTestId('absence-range-trigger').textContent).toBe(
 			'10/08/2026',
@@ -136,7 +143,7 @@ describe('AbsenceFormSheet — champ de plage', () => {
 
 	it('shows both bounds separated by a dash when the range spans several days', () => {
 		const props = baseProps()
-		render(
+		renderWithPermissions(
 			<AbsenceFormSheet
 				{...props}
 				values={{
@@ -153,7 +160,7 @@ describe('AbsenceFormSheet — champ de plage', () => {
 
 	it('opens a calendar when the period trigger is clicked', async () => {
 		const user = userEvent.setup()
-		render(<AbsenceFormSheet {...baseProps()} />)
+		renderWithPermissions(<AbsenceFormSheet {...baseProps()} />)
 
 		await user.click(screen.getByTestId('absence-range-trigger'))
 		expect(screen.getByRole('grid')).toBeDefined()
@@ -170,7 +177,7 @@ describe('AbsenceFormSheet — editing', () => {
 	}
 
 	it('locks the member instead of offering a picker', () => {
-		render(<AbsenceFormSheet {...editProps()} />)
+		renderWithPermissions(<AbsenceFormSheet {...editProps()} />)
 
 		expect(screen.getByText('Modifier l’absence')).toBeDefined()
 		expect(screen.queryByRole('combobox', { name: 'Personne' })).toBeNull()
@@ -182,14 +189,18 @@ describe('AbsenceFormSheet — editing', () => {
 	it('shows the delete button and fires it', async () => {
 		const user = userEvent.setup()
 		const onDelete = vi.fn()
-		render(<AbsenceFormSheet {...editProps()} onDelete={onDelete} />)
+		await renderWithPermissions(
+			<AbsenceFormSheet {...editProps()} onDelete={onDelete} />,
+		)
 
 		await user.click(screen.getByRole('button', { name: /Supprimer/ }))
 		expect(onDelete).toHaveBeenCalledTimes(1)
 	})
 
 	it('shows the save error returned by the mutation', () => {
-		render(<AbsenceFormSheet {...editProps()} saveError="HTTP 409: conflit" />)
+		renderWithPermissions(
+			<AbsenceFormSheet {...editProps()} saveError="HTTP 409: conflit" />,
+		)
 		expect(screen.getByText('HTTP 409: conflit')).toBeDefined()
 	})
 })
@@ -212,7 +223,7 @@ describe('AbsenceFormSheet — no network call', () => {
 	})
 
 	it('fires no fetch on render', () => {
-		render(<AbsenceFormSheet {...baseProps()} />)
+		renderWithPermissions(<AbsenceFormSheet {...baseProps()} />)
 		expect(fetchSpy).not.toHaveBeenCalled()
 	})
 })

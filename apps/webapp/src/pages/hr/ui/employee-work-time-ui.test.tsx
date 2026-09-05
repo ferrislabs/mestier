@@ -1,4 +1,4 @@
-import { render, screen, within } from '@testing-library/react'
+import { screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Member } from '#/hooks/use-reference-catalog'
@@ -8,6 +8,7 @@ import {
 	EmployeeWorkTimeUI,
 	type EmployeeWorkTimeUIProps,
 } from '#/pages/hr/ui/employee-work-time-ui'
+import { renderWithPermissions } from '#/test/with-permissions'
 
 // jsdom doesn't implement ResizeObserver; the absence sheet's `Select` (via
 // Radix) measures its trigger with it. Stubbed locally, see
@@ -144,13 +145,13 @@ function baseProps(
 
 describe('EmployeeWorkTimeUI — name rendering', () => {
 	it('shows « {nom} {prénom} » in the title', () => {
-		render(<EmployeeWorkTimeUI {...baseProps()} />)
+		renderWithPermissions(<EmployeeWorkTimeUI {...baseProps()} />)
 
 		expect(screen.getByText('Martin Alix')).toBeDefined()
 	})
 
 	it('shows the surname alone, with no stray space, when the given name is missing', () => {
-		render(
+		renderWithPermissions(
 			<EmployeeWorkTimeUI
 				{...baseProps({
 					member: member({ first_name: null, display_name: 'Martin' }),
@@ -164,20 +165,22 @@ describe('EmployeeWorkTimeUI — name rendering', () => {
 
 describe('EmployeeWorkTimeUI', () => {
 	it('shows the hourly rate when it is filled in', () => {
-		render(<EmployeeWorkTimeUI {...baseProps()} />)
+		renderWithPermissions(<EmployeeWorkTimeUI {...baseProps()} />)
 
 		expect(screen.getByText(/15,00\s*€/)).toBeDefined()
 	})
 
 	it('shows « Non renseigné » when the hourly rate is null, never an amount of 0', () => {
-		render(<EmployeeWorkTimeUI {...baseProps({ hourlyRateCents: null })} />)
+		renderWithPermissions(
+			<EmployeeWorkTimeUI {...baseProps({ hourlyRateCents: null })} />,
+		)
 
 		expect(screen.getByText('Non renseigné')).toBeDefined()
 		expect(screen.queryByText(/0,00\s*€/)).toBeNull()
 	})
 
 	it('shows the gap between planned hours and the contractual baseline', () => {
-		render(<EmployeeWorkTimeUI {...baseProps()} />)
+		renderWithPermissions(<EmployeeWorkTimeUI {...baseProps()} />)
 
 		expect(screen.getByText(/32h00/)).toBeDefined()
 		expect(screen.getByText(/35h00/)).toBeDefined()
@@ -185,7 +188,7 @@ describe('EmployeeWorkTimeUI', () => {
 	})
 
 	it('shows a surplus with a positive sign', () => {
-		render(
+		renderWithPermissions(
 			<EmployeeWorkTimeUI
 				{...baseProps({
 					weeklyGap: {
@@ -203,7 +206,7 @@ describe('EmployeeWorkTimeUI', () => {
 	it('allows editing the contractual baseline and calls onSubmit', async () => {
 		const user = userEvent.setup()
 		const props = baseProps()
-		render(<EmployeeWorkTimeUI {...props} />)
+		await renderWithPermissions(<EmployeeWorkTimeUI {...props} />)
 
 		await user.click(
 			screen.getByRole('button', { name: 'Enregistrer la base contractuelle' }),
@@ -215,7 +218,7 @@ describe('EmployeeWorkTimeUI', () => {
 	it('calls onAddSlot with the right weekday', async () => {
 		const user = userEvent.setup()
 		const props = baseProps()
-		render(<EmployeeWorkTimeUI {...props} />)
+		renderWithPermissions(<EmployeeWorkTimeUI {...props} />)
 
 		const mardiSection = screen.getByRole('region', { name: 'Mardi' })
 		await user.click(
@@ -228,7 +231,7 @@ describe('EmployeeWorkTimeUI', () => {
 	it("calls onSlotChange when a slot's start time is edited", async () => {
 		const user = userEvent.setup()
 		const props = baseProps()
-		render(<EmployeeWorkTimeUI {...props} />)
+		renderWithPermissions(<EmployeeWorkTimeUI {...props} />)
 
 		const lundiSection = screen.getByRole('region', { name: 'Lundi' })
 		const startInput = within(lundiSection).getByLabelText('Début')
@@ -244,7 +247,7 @@ describe('EmployeeWorkTimeUI', () => {
 	it("calls onRemoveSlot when the slot's delete button is clicked", async () => {
 		const user = userEvent.setup()
 		const props = baseProps()
-		render(<EmployeeWorkTimeUI {...props} />)
+		renderWithPermissions(<EmployeeWorkTimeUI {...props} />)
 
 		const lundiSection = screen.getByRole('region', { name: 'Lundi' })
 		await user.click(
@@ -259,7 +262,7 @@ describe('EmployeeWorkTimeUI', () => {
 	it("calls the rhythm's onSubmit when Enregistrer le rythme is clicked", async () => {
 		const user = userEvent.setup()
 		const props = baseProps()
-		render(<EmployeeWorkTimeUI {...props} />)
+		await renderWithPermissions(<EmployeeWorkTimeUI {...props} />)
 
 		await user.click(
 			screen.getByRole('button', { name: 'Enregistrer le rythme' }),
@@ -268,14 +271,14 @@ describe('EmployeeWorkTimeUI', () => {
 		expect(props.rhythmSection.onSubmit).toHaveBeenCalledTimes(1)
 	})
 
-	it('disables saving the rhythm when there are validation errors', () => {
+	it('disables saving the rhythm when there are validation errors', async () => {
 		const props = baseProps({
 			rhythmSection: {
 				...baseProps().rhythmSection,
 				errors: [{ key: 'slot-1', message: 'La fin doit être après le début' }],
 			},
 		})
-		render(<EmployeeWorkTimeUI {...props} />)
+		await renderWithPermissions(<EmployeeWorkTimeUI {...props} />)
 
 		const submitButton = screen.getByRole('button', {
 			name: 'Enregistrer le rythme',
@@ -292,7 +295,7 @@ describe('EmployeeWorkTimeUI', () => {
 					'Impossible de démarrer cette version avant celle en cours (01/01/2026).',
 			},
 		})
-		render(<EmployeeWorkTimeUI {...props} />)
+		renderWithPermissions(<EmployeeWorkTimeUI {...props} />)
 
 		expect(
 			screen.getByText(
@@ -302,7 +305,7 @@ describe('EmployeeWorkTimeUI', () => {
 	})
 
 	it('shows the existing work ranges', () => {
-		render(<EmployeeWorkTimeUI {...baseProps()} />)
+		renderWithPermissions(<EmployeeWorkTimeUI {...baseProps()} />)
 
 		const dateInput = screen.getByLabelText(
 			'Date (plage 1)',
@@ -313,7 +316,7 @@ describe('EmployeeWorkTimeUI', () => {
 	it("calls the work ranges' onAddSlot when Ajouter une plage is clicked", async () => {
 		const user = userEvent.setup()
 		const props = baseProps()
-		render(<EmployeeWorkTimeUI {...props} />)
+		renderWithPermissions(<EmployeeWorkTimeUI {...props} />)
 
 		await user.click(screen.getByRole('button', { name: 'Ajouter une plage' }))
 
@@ -323,7 +326,7 @@ describe('EmployeeWorkTimeUI', () => {
 	it("calls the ranges' onSubmit when Enregistrer les plages is clicked", async () => {
 		const user = userEvent.setup()
 		const props = baseProps()
-		render(<EmployeeWorkTimeUI {...props} />)
+		await renderWithPermissions(<EmployeeWorkTimeUI {...props} />)
 
 		await user.click(
 			screen.getByRole('button', { name: 'Enregistrer les plages' }),
@@ -345,7 +348,7 @@ describe('EmployeeWorkTimeUI', () => {
 				updated_at: '2025-01-01T00:00:00Z',
 			},
 		]
-		render(
+		renderWithPermissions(
 			<EmployeeWorkTimeUI
 				{...baseProps({
 					rhythmSection: { ...baseProps().rhythmSection, otherRhythms },
@@ -357,7 +360,7 @@ describe('EmployeeWorkTimeUI', () => {
 	})
 
 	it('shows a loading state for the rhythm without crashing', () => {
-		render(
+		renderWithPermissions(
 			<EmployeeWorkTimeUI
 				{...baseProps({
 					rhythmSection: { ...baseProps().rhythmSection, isLoading: true },
@@ -371,7 +374,7 @@ describe('EmployeeWorkTimeUI', () => {
 
 describe('EmployeeWorkTimeUI — absences', () => {
 	it("renders the employee's absences section", () => {
-		render(
+		renderWithPermissions(
 			<EmployeeWorkTimeUI
 				{...baseProps({
 					absencesSection: {
@@ -399,12 +402,12 @@ describe('EmployeeWorkTimeUI — absences', () => {
 	})
 
 	it('does not show the absence form when the sheet is closed', () => {
-		render(<EmployeeWorkTimeUI {...baseProps()} />)
+		renderWithPermissions(<EmployeeWorkTimeUI {...baseProps()} />)
 		expect(screen.queryByRole('dialog')).toBeNull()
 	})
 
 	it('shows the absence form when absenceSheet.open is true', () => {
-		render(
+		renderWithPermissions(
 			<EmployeeWorkTimeUI
 				{...baseProps({
 					absenceSheet: { ...baseProps().absenceSheet, open: true },
@@ -413,6 +416,38 @@ describe('EmployeeWorkTimeUI — absences', () => {
 		)
 
 		expect(screen.getByRole('dialog')).toBeDefined()
+	})
+})
+
+describe('EmployeeWorkTimeUI — permission gating', () => {
+	it('hides the contractual-baseline save button without MANAGE_MEMBERS and MANAGE_REFERENCE', async () => {
+		await renderWithPermissions(<EmployeeWorkTimeUI {...baseProps()} />, {
+			permissions: [],
+		})
+
+		expect(
+			screen.queryByRole('button', {
+				name: 'Enregistrer la base contractuelle',
+			}),
+		).toBeNull()
+	})
+
+	it('hides the rhythm and work-slots save buttons without MANAGE_PLANNING', async () => {
+		await renderWithPermissions(<EmployeeWorkTimeUI {...baseProps()} />, {
+			permissions: ['MANAGE_MEMBERS', 'MANAGE_REFERENCE'],
+		})
+
+		expect(
+			screen.queryByRole('button', { name: 'Enregistrer le rythme' }),
+		).toBeNull()
+		expect(
+			screen.queryByRole('button', { name: 'Enregistrer les plages' }),
+		).toBeNull()
+		expect(
+			screen.getByRole('button', {
+				name: 'Enregistrer la base contractuelle',
+			}),
+		).toBeDefined()
 	})
 })
 
@@ -435,7 +470,7 @@ describe('EmployeeWorkTimeUI — no network call', () => {
 
 	it('fires no fetch on render nor during interactions', async () => {
 		const user = userEvent.setup()
-		render(<EmployeeWorkTimeUI {...baseProps()} />)
+		await renderWithPermissions(<EmployeeWorkTimeUI {...baseProps()} />)
 
 		await user.click(
 			screen.getByRole('button', { name: 'Enregistrer la base contractuelle' }),
@@ -458,7 +493,7 @@ describe('EmployeeWorkTimeUI — coût employeur', () => {
 	 * repeating the misreading they came here to fix.
 	 */
 	it('shows a salaried employee their monthly cost, not a missing hourly rate', async () => {
-		render(
+		renderWithPermissions(
 			<EmployeeWorkTimeUI
 				{...baseProps()}
 				hourlyRateCents={null}
@@ -474,7 +509,7 @@ describe('EmployeeWorkTimeUI — coût employeur', () => {
 	})
 
 	it('shows the hourly equivalent once the contract can divide the salary', async () => {
-		render(
+		renderWithPermissions(
 			<EmployeeWorkTimeUI
 				{...baseProps()}
 				hourlyRateCents={null}

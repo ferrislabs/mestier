@@ -184,8 +184,8 @@ describe('ModuleNav', () => {
 
 	/**
 	 * #307: a section gated by a bit the caller does not hold is hidden
-	 * outright, not greyed out — `profitability` (`Rentabilité`) is the one
-	 * section in the registry that carries a `requiredPermission` today.
+	 * outright, not greyed out — `profitability` (`Rentabilité`) is one of
+	 * several sections in the registry that carry a `requiredPermission`.
 	 */
 	it('hides a section the caller lacks the permission for', async () => {
 		await renderNav('/o/dupont', [])

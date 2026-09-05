@@ -1,4 +1,5 @@
 import { CalendarIcon, Loader2, Trash2 } from 'lucide-react'
+import { RequirePermission } from '#/components/require-permission'
 import { Button } from '#/components/ui/button'
 import { Calendar } from '#/components/ui/calendar'
 import {
@@ -224,16 +225,22 @@ export function AbsenceFormSheet({
 
 					<DialogFooter className="border-t pt-4 sm:justify-between">
 						{mode === 'edit' && onDelete ? (
-							<Button
-								type="button"
-								variant="ghost"
-								className="text-destructive hover:text-destructive"
-								disabled={isDeleting}
-								onClick={onDelete}
-							>
-								{isDeleting ? <Loader2 className="animate-spin" /> : <Trash2 />}
-								Supprimer
-							</Button>
+							<RequirePermission permission="MANAGE_REFERENCE">
+								<Button
+									type="button"
+									variant="ghost"
+									className="text-destructive hover:text-destructive"
+									disabled={isDeleting}
+									onClick={onDelete}
+								>
+									{isDeleting ? (
+										<Loader2 className="animate-spin" />
+									) : (
+										<Trash2 />
+									)}
+									Supprimer
+								</Button>
+							</RequirePermission>
 						) : (
 							<span />
 						)}
@@ -245,10 +252,12 @@ export function AbsenceFormSheet({
 							>
 								Annuler
 							</Button>
-							<Button type="submit" disabled={!canSubmit}>
-								{isSaving ? <Loader2 className="animate-spin" /> : null}
-								{mode === 'create' ? 'Créer l’absence' : 'Enregistrer'}
-							</Button>
+							<RequirePermission permission="MANAGE_REFERENCE">
+								<Button type="submit" disabled={!canSubmit}>
+									{isSaving ? <Loader2 className="animate-spin" /> : null}
+									{mode === 'create' ? 'Créer l’absence' : 'Enregistrer'}
+								</Button>
+							</RequirePermission>
 						</div>
 					</DialogFooter>
 				</form>

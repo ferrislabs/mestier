@@ -8,6 +8,7 @@ import {
 	OrganizationListProvider,
 } from '#/hooks/use-active-organization'
 import type { Organization } from '#/hooks/use-organizations'
+import { PERMISSION_CATALOG } from '#/lib/permission-catalog'
 import { EmployeeWorkTimeFeature } from '#/pages/hr/feature/employee-work-time-feature'
 
 // jsdom has no ResizeObserver, and Radix `Select`'s listbox needs
@@ -35,6 +36,9 @@ const WORK_SLOTS_PATH = '/api/v1/members/{member_id}/work-slots'
 const ABSENCES_PATH = '/api/v1/organizations/{organization_id}/absences'
 const ABSENCE_PATH =
 	'/api/v1/organizations/{organization_id}/absences/{absence_id}'
+const MY_PERMISSIONS_PATH =
+	'/api/v1/organizations/{organization_id}/members/me/permissions'
+const ALL_PERMISSIONS = PERMISSION_CATALOG.map((entry) => entry.name)
 
 const ORGANIZATION: Organization = {
 	id: 'org-1',
@@ -111,6 +115,7 @@ interface FakeApiHandlers {
 	members?: FakeMember[]
 	profiles?: FakeEmployeeProfile[]
 	absences?: Record<string, unknown>[]
+	permissions?: string[]
 }
 
 function installFakeTanstackApi(handlers: FakeApiHandlers = {}) {
@@ -147,6 +152,12 @@ function installFakeTanstackApi(handlers: FakeApiHandlers = {}) {
 						}
 						if (path === ABSENCES_PATH) {
 							return { data: absences, pagination: null }
+						}
+						if (path === MY_PERMISSIONS_PATH) {
+							return {
+								data: { permissions: handlers.permissions ?? ALL_PERMISSIONS },
+								pagination: null,
+							}
 						}
 						throw new Error(`unmocked GET ${path}`)
 					},
@@ -203,7 +214,7 @@ function installFakeTanstackApi(handlers: FakeApiHandlers = {}) {
 	return calls
 }
 
-function renderFeature(handlers: FakeApiHandlers = {}) {
+async function renderFeature(handlers: FakeApiHandlers = {}) {
 	const calls = installFakeTanstackApi(handlers)
 	const queryClient = new QueryClient({
 		defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
@@ -226,6 +237,13 @@ function renderFeature(handlers: FakeApiHandlers = {}) {
 			<EmployeeWorkTimeFeature memberId="member-1" />
 		</Providers>,
 	)
+	// `RequirePermission` hides its children until this resolves — every
+	// caller that interacts with a gated control needs the wait, same as
+	// `renderWithPermissions` (`#/test/with-permissions`) does generically.
+	await waitFor(() => {
+		if (queryClient.isFetching() > 0)
+			throw new Error('permissions still loading')
+	})
 
 	return { calls }
 }
@@ -236,7 +254,7 @@ describe('EmployeeWorkTimeFeature', () => {
 	})
 
 	it("loads and shows the member's current rhythm", async () => {
-		renderFeature()
+		await renderFeature()
 
 		expect(await screen.findByText('Martin Alix')).toBeDefined()
 		const lundiSection = await screen.findByRole('region', { name: 'Lundi' })
@@ -246,7 +264,7 @@ describe('EmployeeWorkTimeFeature', () => {
 	it('sends the right PUT rhythm payload on save', async () => {
 		const user = userEvent.setup()
 		const putRhythm = vi.fn().mockResolvedValue(OPEN_RHYTHM)
-		const { calls } = renderFeature({ putRhythm })
+		const { calls } = await renderFeature({ putRhythm })
 
 		await screen.findByText('Martin Alix')
 		await user.click(
@@ -272,7 +290,7 @@ describe('EmployeeWorkTimeFeature', () => {
 		)
 		conflictError.status = 409
 		const putRhythm = vi.fn().mockRejectedValue(conflictError)
-		renderFeature({ putRhythm })
+		await renderFeature({ putRhythm })
 
 		await screen.findByText('Martin Alix')
 		await user.click(
@@ -293,7 +311,7 @@ describe('EmployeeWorkTimeFeature', () => {
 	it('sends the right PUT work-slots payload on save', async () => {
 		const user = userEvent.setup()
 		const putWorkSlots = vi.fn().mockResolvedValue([])
-		const { calls } = renderFeature({ putWorkSlots })
+		const { calls } = await renderFeature({ putWorkSlots })
 
 		await screen.findByText('Martin Alix')
 		await user.click(screen.getByRole('button', { name: 'Ajouter une plage' }))
@@ -318,7 +336,7 @@ describe('EmployeeWorkTimeFeature', () => {
 	it('sends the right PUT employee-profile payload for the contractual baseline, preserving the existing rate', async () => {
 		const user = userEvent.setup()
 		const upsertProfile = vi.fn().mockResolvedValue(PROFILE)
-		const { calls } = renderFeature({ upsertProfile })
+		const { calls } = await renderFeature({ upsertProfile })
 
 		await screen.findByText('Martin Alix')
 		const contractInput = screen.getByLabelText('Base contractuelle')
@@ -342,7 +360,7 @@ describe('EmployeeWorkTimeFeature', () => {
 	})
 
 	it('a member with no employee profile shows an unset rate and a zero contractual baseline', async () => {
-		renderFeature({ members: [MEMBER], profiles: [] })
+		await renderFeature({ members: [MEMBER], profiles: [] })
 
 		await screen.findByText('Martin Alix')
 		expect(screen.getByText('Non renseigné')).toBeDefined()
@@ -385,7 +403,7 @@ describe('EmployeeWorkTimeFeature — absences', () => {
 	}
 
 	it("shows only the absences of the page's member", async () => {
-		renderFeature({
+		await renderFeature({
 			absences: [
 				absence({ id: 'ab-1', member_id: 'member-1' }),
 				absence({ id: 'ab-2', member_id: 'member-2' }),
@@ -400,7 +418,7 @@ describe('EmployeeWorkTimeFeature — absences', () => {
 	it('editing an absence prefills the form and sends a PATCH without member_id', async () => {
 		const user = userEvent.setup()
 		const patchAbsence = vi.fn().mockResolvedValue(absence())
-		const { calls } = renderFeature({
+		const { calls } = await renderFeature({
 			absences: [absence()],
 			patchAbsence,
 		})
@@ -426,7 +444,7 @@ describe('EmployeeWorkTimeFeature — absences', () => {
 	it('deleting fires a DELETE and closes the form', async () => {
 		const user = userEvent.setup()
 		const deleteAbsence = vi.fn().mockResolvedValue(undefined)
-		const { calls } = renderFeature({
+		const { calls } = await renderFeature({
 			absences: [absence()],
 			deleteAbsence,
 		})
@@ -450,7 +468,7 @@ describe('EmployeeWorkTimeFeature — absences', () => {
 	it("creating prefills the page's member and sends a POST with their member_id", async () => {
 		const user = userEvent.setup()
 		const postAbsence = vi.fn().mockResolvedValue(absence({ id: 'ab-new' }))
-		const { calls } = renderFeature({ postAbsence })
+		const { calls } = await renderFeature({ postAbsence })
 
 		await screen.findByText('Martin Alix')
 		await user.click(
@@ -474,7 +492,7 @@ describe('EmployeeWorkTimeFeature — absences', () => {
 
 	it('the member picker shows the roster’s display name, including a member with no first name', async () => {
 		const user = userEvent.setup()
-		renderFeature({ members: [MEMBER, MEMBER_2] })
+		await renderFeature({ members: [MEMBER, MEMBER_2] })
 
 		await screen.findByText('Martin Alix')
 		await user.click(
