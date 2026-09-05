@@ -2,7 +2,8 @@ use chrono::Utc;
 use common::{CoreError, generate_uuid_v7};
 
 use crate::{
-    CustomerContextId, CustomerId, OrganizationId, Project, ProjectId, Task, TaskId, TaskStatus,
+    CustomerContextId, CustomerId, OrganizationId, Project, ProjectId, QuoteId, Task, TaskId,
+    TaskStatus,
     domain::{
         project::{
             commands::{CreateProjectCommand, PlannedTaskCommand, UpdateProjectCommand},
@@ -80,6 +81,7 @@ where
         &mut self,
         organization_id: OrganizationId,
         customer_id: Option<CustomerId>,
+        quote_id: Option<QuoteId>,
         include_archived: bool,
         limit: u64,
         offset: u64,
@@ -88,6 +90,7 @@ where
             .list_by_organization(
                 organization_id,
                 customer_id,
+                quote_id,
                 include_archived,
                 limit,
                 offset,

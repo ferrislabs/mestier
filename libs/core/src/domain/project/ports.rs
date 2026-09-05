@@ -28,6 +28,7 @@ pub trait ProjectRepository: Send {
         &mut self,
         organization_id: OrganizationId,
         customer_id: Option<CustomerId>,
+        quote_id: Option<QuoteId>,
         include_archived: bool,
         limit: u64,
         offset: u64,

@@ -155,6 +155,7 @@ export namespace Schemas {
     origin_message_id?: (null | MessageId) | undefined;
     parent_id?: (null | ChannelId) | undefined;
     position: number;
+    project_id?: (null | ProjectId) | undefined;
     topic?: (string | null) | undefined;
     updated_at: string;
   };
@@ -284,6 +285,7 @@ export namespace Schemas {
     unit: ServiceRateUnit;
     unit_price_cents: number;
   };
+  export type CreateProjectChannelRequest = Partial<{ name: string | null }>;
   export type CreateProjectRequest = {
     customer_context_id?: (null | CustomerContextId) | undefined;
     customer_id?: (null | CustomerId) | undefined;
@@ -634,6 +636,7 @@ export namespace Schemas {
     paid_cents: number;
     remaining_cents: number;
   };
+  export type InvoiceDocumentFormatQuery = "pdf" | "facturx";
   export type InvoiceId = string;
   export type InvoiceLineId = string;
   export type InvoiceLineResponse = {
@@ -919,6 +922,16 @@ export namespace Schemas {
     project_id: ProjectId;
     quoted_cents?: (number | null) | undefined;
     remaining_cents?: (number | null) | undefined;
+  };
+  export type ProjectChannelResponse = {
+    archived: boolean;
+    created_at: string;
+    id: ChannelId;
+    name: string;
+    organization_id: OrganizationId;
+    project_id?: (null | ProjectId) | undefined;
+    topic?: (string | null) | undefined;
+    updated_at: string;
   };
   export type ProjectSupplierCostLineResponse = {
     allocation_id: SupplierInvoiceLineAllocationId;
@@ -1466,6 +1479,7 @@ export namespace Endpoints {
           origin_message_id?: (null | Schemas.MessageId) | undefined;
           parent_id?: (null | Schemas.ChannelId) | undefined;
           position: number;
+          project_id?: (null | Schemas.ProjectId) | undefined;
           topic?: (string | null) | undefined;
           updated_at: string;
         };
@@ -1507,6 +1521,7 @@ export namespace Endpoints {
           origin_message_id?: (null | Schemas.MessageId) | undefined;
           parent_id?: (null | Schemas.ChannelId) | undefined;
           position: number;
+          project_id?: (null | Schemas.ProjectId) | undefined;
           topic?: (string | null) | undefined;
           updated_at: string;
         };
@@ -1714,6 +1729,7 @@ export namespace Endpoints {
           origin_message_id?: (null | Schemas.MessageId) | undefined;
           parent_id?: (null | Schemas.ChannelId) | undefined;
           position: number;
+          project_id?: (null | Schemas.ProjectId) | undefined;
           topic?: (string | null) | undefined;
           updated_at: string;
         }>;
@@ -1746,6 +1762,7 @@ export namespace Endpoints {
           origin_message_id?: (null | Schemas.MessageId) | undefined;
           parent_id?: (null | Schemas.ChannelId) | undefined;
           position: number;
+          project_id?: (null | Schemas.ProjectId) | undefined;
           topic?: (string | null) | undefined;
           updated_at: string;
         };
@@ -1979,6 +1996,7 @@ export namespace Endpoints {
           origin_message_id?: (null | Schemas.MessageId) | undefined;
           parent_id?: (null | Schemas.ChannelId) | undefined;
           position: number;
+          project_id?: (null | Schemas.ProjectId) | undefined;
           topic?: (string | null) | undefined;
           updated_at: string;
         }>;
@@ -2010,6 +2028,7 @@ export namespace Endpoints {
           origin_message_id?: (null | Schemas.MessageId) | undefined;
           parent_id?: (null | Schemas.ChannelId) | undefined;
           position: number;
+          project_id?: (null | Schemas.ProjectId) | undefined;
           topic?: (string | null) | undefined;
           updated_at: string;
         };
@@ -2116,6 +2135,7 @@ export namespace Endpoints {
           origin_message_id?: (null | Schemas.MessageId) | undefined;
           parent_id?: (null | Schemas.ChannelId) | undefined;
           position: number;
+          project_id?: (null | Schemas.ProjectId) | undefined;
           topic?: (string | null) | undefined;
           updated_at: string;
         };
@@ -3210,9 +3230,9 @@ export namespace Endpoints {
     path: "/api/v1/invoices/{invoice_id}/pdf";
     requestFormat: "json";
     parameters: {
-      path: { invoice_id: string };
+      path: { invoice_id: string; format: "pdf" | "facturx" };
     };
-    responses: { 200: unknown; 401: unknown; 403: unknown; 404: unknown; 409: unknown };
+    responses: { 200: unknown; 401: unknown; 403: unknown; 404: unknown; 409: unknown; 422: unknown };
   };
   export type get_GetMember = {
     method: "GET";
@@ -3370,6 +3390,15 @@ export namespace Endpoints {
       path: { member_id: string };
 
       body: Schemas.AssignRoleRequest;
+    };
+    responses: { 204: unknown; 401: unknown; 403: unknown; 404: unknown };
+  };
+  export type delete_UnassignRole = {
+    method: "DELETE";
+    path: "/api/v1/members/{member_id}/roles/{role_id}";
+    requestFormat: "json";
+    parameters: {
+      path: { member_id: string; role_id: string };
     };
     responses: { 204: unknown; 401: unknown; 403: unknown; 404: unknown };
   };
@@ -5052,7 +5081,13 @@ export namespace Endpoints {
     path: "/api/v1/organizations/{organization_id}/projects";
     requestFormat: "json";
     parameters: {
-      query: Partial<{ page: number; per_page: number; customer_id: string; include_archived: boolean }>;
+      query: Partial<{
+        page: number;
+        per_page: number;
+        customer_id: string;
+        quote_id: string;
+        include_archived: boolean;
+      }>;
       path: { organization_id: string };
     };
     responses: {
@@ -5163,6 +5198,61 @@ export namespace Endpoints {
           name: string;
           organization_id: Schemas.OrganizationId;
           quote_id?: (null | Schemas.QuoteId) | undefined;
+          updated_at: string;
+        };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+      404: unknown;
+      409: unknown;
+    };
+  };
+  export type get_GetProjectChannel = {
+    method: "GET";
+    path: "/api/v1/organizations/{organization_id}/projects/{project_id}/channel";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string; project_id: string };
+    };
+    responses: {
+      200: {
+        data: {
+          archived: boolean;
+          created_at: string;
+          id: Schemas.ChannelId;
+          name: string;
+          organization_id: Schemas.OrganizationId;
+          project_id?: (null | Schemas.ProjectId) | undefined;
+          topic?: (string | null) | undefined;
+          updated_at: string;
+        };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+      404: unknown;
+    };
+  };
+  export type post_CreateProjectChannel = {
+    method: "POST";
+    path: "/api/v1/organizations/{organization_id}/projects/{project_id}/channel";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string; project_id: string };
+
+      body: Schemas.CreateProjectChannelRequest;
+    };
+    responses: {
+      201: {
+        data: {
+          archived: boolean;
+          created_at: string;
+          id: Schemas.ChannelId;
+          name: string;
+          organization_id: Schemas.OrganizationId;
+          project_id?: (null | Schemas.ProjectId) | undefined;
+          topic?: (string | null) | undefined;
           updated_at: string;
         };
         pagination?: (null | Schemas.PaginationMetadata) | undefined;
@@ -6331,15 +6421,6 @@ export namespace Endpoints {
     };
     responses: { 204: unknown; 401: unknown; 403: unknown; 404: unknown; 409: unknown };
   };
-  export type delete_UnassignRole = {
-    method: "DELETE";
-    path: "/api/v1/members/{member_id}/roles/{role_id}";
-    requestFormat: "json";
-    parameters: {
-      path: { member_id: string; role_id: string };
-    };
-    responses: { 204: unknown; 401: unknown; 403: unknown; 404: unknown };
-  };
   export type patch_UpdateRole = {
     method: "PATCH";
     path: "/api/v1/roles/{role_id}";
@@ -6847,6 +6928,7 @@ export type EndpointByMethod = {
     "/api/v1/organizations/{organization_id}/project-templates/{project_template_id}": Endpoints.get_GetProjectTemplate;
     "/api/v1/organizations/{organization_id}/projects": Endpoints.get_ListProjects;
     "/api/v1/organizations/{organization_id}/projects/{project_id}": Endpoints.get_GetProject;
+    "/api/v1/organizations/{organization_id}/projects/{project_id}/channel": Endpoints.get_GetProjectChannel;
     "/api/v1/organizations/{organization_id}/quotes": Endpoints.get_ListQuotes;
     "/api/v1/organizations/{organization_id}/reporting/profitability": Endpoints.get_GetProfitability;
     "/api/v1/organizations/{organization_id}/reporting/worked-hours": Endpoints.get_GetWorkedHours;
@@ -6911,6 +6993,7 @@ export type EndpointByMethod = {
     "/api/v1/organizations/{organization_id}/project-templates/{project_template_id}/instantiate": Endpoints.post_InstantiateProjectTemplate;
     "/api/v1/organizations/{organization_id}/project-templates/{project_template_id}/restore": Endpoints.post_RestoreProjectTemplate;
     "/api/v1/organizations/{organization_id}/projects": Endpoints.post_CreateProject;
+    "/api/v1/organizations/{organization_id}/projects/{project_id}/channel": Endpoints.post_CreateProjectChannel;
     "/api/v1/organizations/{organization_id}/projects/{project_id}/restore": Endpoints.post_RestoreProject;
     "/api/v1/organizations/{organization_id}/quotes": Endpoints.post_CreateQuote;
     "/api/v1/organizations/{organization_id}/roles": Endpoints.post_CreateRole;
