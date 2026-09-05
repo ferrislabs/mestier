@@ -1,70 +1,16 @@
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import type { ReactNode } from 'react'
 import { describe, expect, it, vi } from 'vitest'
-import {
-	ActiveOrganizationProvider,
-	OrganizationListProvider,
-} from '#/hooks/use-active-organization'
 import type { Customer, CustomerContext } from '#/hooks/use-customers'
 import type { Organization } from '#/hooks/use-organizations'
 import { renderWithRouter } from '#/test/render-with-router'
+import { wrapWithPermissions } from '#/test/with-permissions'
 import { emptyQuoteLine, type QuoteFormValues } from '../types'
 import { QuoteNewUI } from './quote-new-ui'
 
 Element.prototype.scrollIntoView ??= () => {}
 Element.prototype.hasPointerCapture ??= () => false
 Element.prototype.releasePointerCapture ??= () => {}
-
-const MY_PERMISSIONS_PATH =
-	'/api/v1/organizations/{organization_id}/members/me/permissions'
-
-// `QuoteNewUI` gates its submit button behind `RequirePermission`, which
-// reads the caller's permissions via the active organization — every render
-// needs that context, not just the tests that touch the gated button.
-function installFakePermissionsApi(permissions: string[]) {
-	const fakeApi = {
-		get(path: string) {
-			const queryKey = [{ _id: path }]
-			return {
-				queryKey,
-				queryOptions: {
-					queryKey,
-					queryFn: async () => {
-						if (path === MY_PERMISSIONS_PATH) {
-							return { data: { permissions }, pagination: null }
-						}
-						throw new Error(`unmocked GET ${path}`)
-					},
-				},
-			}
-		},
-		mutation() {
-			throw new Error('unmocked mutation')
-		},
-	}
-
-	// biome-ignore lint/suspicious/noExplicitAny: test-only fake, shape matches TanstackQueryApiClient's used surface
-	;(window as any).tanstackApi = fakeApi
-}
-
-function withProviders(ui: ReactNode, organization: Organization) {
-	installFakePermissionsApi(['MANAGE_QUOTES'])
-	const queryClient = new QueryClient({
-		defaultOptions: { queries: { retry: false } },
-	})
-
-	return (
-		<QueryClientProvider client={queryClient}>
-			<OrganizationListProvider organizations={[organization]}>
-				<ActiveOrganizationProvider activeOrganization={organization}>
-					{ui}
-				</ActiveOrganizationProvider>
-			</OrganizationListProvider>
-		</QueryClientProvider>
-	)
-}
 
 function organization(overrides: Partial<Organization> = {}): Organization {
 	return {
@@ -144,7 +90,10 @@ describe('QuoteNewUI', () => {
 	it('prints the document plainly: no client yet, no title yet', async () => {
 		const props = baseProps()
 		await renderWithRouter(
-			withProviders(<QuoteNewUI {...props} />, props.organization),
+			wrapWithPermissions(<QuoteNewUI {...props} />, {
+				permissions: ['MANAGE_QUOTES'],
+				organization: props.organization,
+			}),
 		)
 
 		expect(screen.getByText('Sélectionner un client')).toBeDefined()
@@ -156,10 +105,10 @@ describe('QuoteNewUI', () => {
 		const onChange = vi.fn()
 		const props = baseProps()
 		await renderWithRouter(
-			withProviders(
-				<QuoteNewUI {...props} onChange={onChange} />,
-				props.organization,
-			),
+			wrapWithPermissions(<QuoteNewUI {...props} onChange={onChange} />, {
+				permissions: ['MANAGE_QUOTES'],
+				organization: props.organization,
+			}),
 		)
 
 		await user.click(
@@ -173,7 +122,7 @@ describe('QuoteNewUI', () => {
 	it('prints the customer once it is set on the form', async () => {
 		const props = baseProps()
 		await renderWithRouter(
-			withProviders(
+			wrapWithPermissions(
 				<QuoteNewUI
 					{...props}
 					values={values({
@@ -181,7 +130,7 @@ describe('QuoteNewUI', () => {
 						customerContextId: 'context-1',
 					})}
 				/>,
-				props.organization,
+				{ permissions: ['MANAGE_QUOTES'], organization: props.organization },
 			),
 		)
 
@@ -194,10 +143,10 @@ describe('QuoteNewUI', () => {
 		const onChange = vi.fn()
 		const props = baseProps()
 		await renderWithRouter(
-			withProviders(
-				<QuoteNewUI {...props} onChange={onChange} />,
-				props.organization,
-			),
+			wrapWithPermissions(<QuoteNewUI {...props} onChange={onChange} />, {
+				permissions: ['MANAGE_QUOTES'],
+				organization: props.organization,
+			}),
 		)
 
 		await user.click(
@@ -212,19 +161,12 @@ describe('QuoteNewUI', () => {
 	})
 
 	it('hides the submit button when the caller lacks MANAGE_QUOTES', async () => {
-		installFakePermissionsApi([])
-		const queryClient = new QueryClient({
-			defaultOptions: { queries: { retry: false } },
-		})
 		const props = baseProps()
 		await renderWithRouter(
-			<QueryClientProvider client={queryClient}>
-				<OrganizationListProvider organizations={[props.organization]}>
-					<ActiveOrganizationProvider activeOrganization={props.organization}>
-						<QuoteNewUI {...props} />
-					</ActiveOrganizationProvider>
-				</OrganizationListProvider>
-			</QueryClientProvider>,
+			wrapWithPermissions(<QuoteNewUI {...props} />, {
+				permissions: [],
+				organization: props.organization,
+			}),
 		)
 
 		expect(screen.getByText('Objet du devis')).toBeDefined()
