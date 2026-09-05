@@ -1,4 +1,5 @@
 import { Plus } from 'lucide-react'
+import { RequirePermission } from '#/components/require-permission'
 import { Button } from '#/components/ui/button'
 import { SectionCard, SectionHeader } from '#/components/ui/surface'
 import {
@@ -67,10 +68,17 @@ export function AbsencesSection({
 				)}
 
 				<div>
-					<Button type="button" size="sm" variant="outline" onClick={onCreate}>
-						<Plus />
-						Ajouter une absence
-					</Button>
+					<RequirePermission permission="MANAGE_REFERENCE">
+						<Button
+							type="button"
+							size="sm"
+							variant="outline"
+							onClick={onCreate}
+						>
+							<Plus />
+							Ajouter une absence
+						</Button>
+					</RequirePermission>
 				</div>
 			</div>
 		</SectionCard>

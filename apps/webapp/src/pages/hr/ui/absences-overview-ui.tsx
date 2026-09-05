@@ -5,6 +5,7 @@ import {
 	Plus,
 	Trash2,
 } from 'lucide-react'
+import { RequirePermission } from '#/components/require-permission'
 import {
 	AlertDialog,
 	AlertDialogAction,
@@ -91,10 +92,12 @@ export function AbsencesOverviewUI({
 				title="Absences"
 				description="Congés, arrêts et indisponibilités de toute l’organisation. L’assignation d’un projet pendant cette période n’est jamais bloquée, seulement signalée."
 				actions={
-					<Button onClick={onCreate}>
-						<Plus />
-						Ajouter une absence
-					</Button>
+					<RequirePermission permission="MANAGE_REFERENCE">
+						<Button onClick={onCreate}>
+							<Plus />
+							Ajouter une absence
+						</Button>
+					</RequirePermission>
 				}
 			/>
 
@@ -233,46 +236,48 @@ interface RowActionsProps {
 
 function RowActions({ memberDisplayName, onEdit, onDelete }: RowActionsProps) {
 	return (
-		<AlertDialog>
-			<div className="flex justify-end opacity-0 transition group-hover:opacity-100 group-focus-within:opacity-100">
-				<DropdownMenu>
-					<DropdownMenuTrigger asChild>
-						<Button size="icon-sm" variant="ghost">
-							<MoreHorizontal />
-							<span className="sr-only">Actions</span>
-						</Button>
-					</DropdownMenuTrigger>
-					<DropdownMenuContent align="end">
-						<DropdownMenuItem onClick={onEdit}>Modifier</DropdownMenuItem>
-						<DropdownMenuSeparator />
-						<AlertDialogTrigger asChild>
-							<DropdownMenuItem
-								variant="destructive"
-								onSelect={(event) => event.preventDefault()}
-							>
-								<Trash2 />
-								Supprimer
-							</DropdownMenuItem>
-						</AlertDialogTrigger>
-					</DropdownMenuContent>
-				</DropdownMenu>
-			</div>
-			<AlertDialogContent>
-				<AlertDialogHeader>
-					<AlertDialogTitle>
-						Supprimer l’absence de {memberDisplayName} ?
-					</AlertDialogTitle>
-					<AlertDialogDescription>
-						Cette absence sera définitivement supprimée. Cette action est
-						irréversible.
-					</AlertDialogDescription>
-				</AlertDialogHeader>
-				<AlertDialogFooter>
-					<AlertDialogCancel>Annuler</AlertDialogCancel>
-					<AlertDialogAction onClick={onDelete}>Supprimer</AlertDialogAction>
-				</AlertDialogFooter>
-			</AlertDialogContent>
-		</AlertDialog>
+		<RequirePermission permission="MANAGE_REFERENCE">
+			<AlertDialog>
+				<div className="flex justify-end opacity-0 transition group-hover:opacity-100 group-focus-within:opacity-100">
+					<DropdownMenu>
+						<DropdownMenuTrigger asChild>
+							<Button size="icon-sm" variant="ghost">
+								<MoreHorizontal />
+								<span className="sr-only">Actions</span>
+							</Button>
+						</DropdownMenuTrigger>
+						<DropdownMenuContent align="end">
+							<DropdownMenuItem onClick={onEdit}>Modifier</DropdownMenuItem>
+							<DropdownMenuSeparator />
+							<AlertDialogTrigger asChild>
+								<DropdownMenuItem
+									variant="destructive"
+									onSelect={(event) => event.preventDefault()}
+								>
+									<Trash2 />
+									Supprimer
+								</DropdownMenuItem>
+							</AlertDialogTrigger>
+						</DropdownMenuContent>
+					</DropdownMenu>
+				</div>
+				<AlertDialogContent>
+					<AlertDialogHeader>
+						<AlertDialogTitle>
+							Supprimer l’absence de {memberDisplayName} ?
+						</AlertDialogTitle>
+						<AlertDialogDescription>
+							Cette absence sera définitivement supprimée. Cette action est
+							irréversible.
+						</AlertDialogDescription>
+					</AlertDialogHeader>
+					<AlertDialogFooter>
+						<AlertDialogCancel>Annuler</AlertDialogCancel>
+						<AlertDialogAction onClick={onDelete}>Supprimer</AlertDialogAction>
+					</AlertDialogFooter>
+				</AlertDialogContent>
+			</AlertDialog>
+		</RequirePermission>
 	)
 }
 

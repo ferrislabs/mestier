@@ -1,4 +1,5 @@
 import { formatMoney, MoneyCell, TextField } from '#/components/reference-table'
+import { RequirePermission } from '#/components/require-permission'
 import { Button } from '#/components/ui/button'
 import {
 	PageHeader,
@@ -128,13 +129,17 @@ export function EmployeeWorkTimeUI({
 						onChange={contractForm.onChange}
 						suffix="/sem."
 					/>
-					<Button
-						type="button"
-						onClick={contractForm.onSubmit}
-						disabled={contractForm.isPending}
-					>
-						Enregistrer la base contractuelle
-					</Button>
+					<RequirePermission permission="MANAGE_MEMBERS">
+						<RequirePermission permission="MANAGE_REFERENCE">
+							<Button
+								type="button"
+								onClick={contractForm.onSubmit}
+								disabled={contractForm.isPending}
+							>
+								Enregistrer la base contractuelle
+							</Button>
+						</RequirePermission>
+					</RequirePermission>
 				</div>
 				{contractForm.error ? (
 					<p className="px-5 pb-4 text-sm text-destructive">

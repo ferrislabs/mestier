@@ -11,6 +11,7 @@ import {
 	RowIdentity,
 	TextField,
 } from '#/components/reference-table'
+import { RequirePermission } from '#/components/require-permission'
 import { Button } from '#/components/ui/button'
 import {
 	Dialog,
@@ -152,10 +153,12 @@ function EquipmentSectionContent({
 						title="Matériel"
 						description="Les ressources facturables et leur coût horaire, utilisés pour calculer la rentabilité d'une tâche."
 						actions={
-							<Button onClick={() => setCreateDialogOpen(true)}>
-								<Plus />
-								Ajouter une entrée
-							</Button>
+							<RequirePermission permission="MANAGE_REFERENCE">
+								<Button onClick={() => setCreateDialogOpen(true)}>
+									<Plus />
+									Ajouter une entrée
+								</Button>
+							</RequirePermission>
 						}
 					/>
 
@@ -340,6 +343,7 @@ function EquipmentTable({
 				id: 'actions',
 				cell: ({ row }) => (
 					<RowActions
+						permission="MANAGE_REFERENCE"
 						isEditing={!!draft && draft.id === row.original.id}
 						isSaving={isSaving}
 						onEdit={() => onEdit(row.original)}

@@ -8,6 +8,7 @@ import {
 	OrganizationListProvider,
 } from '#/hooks/use-active-organization'
 import type { Organization } from '#/hooks/use-organizations'
+import { PERMISSION_CATALOG } from '#/lib/permission-catalog'
 import { AbsencesOverviewFeature } from '#/pages/hr/feature/absences-overview-feature'
 
 // jsdom has no ResizeObserver, and Radix `Select`'s listbox needs
@@ -29,6 +30,9 @@ Element.prototype.releasePointerCapture ??= () => {}
 
 const MEMBERS_PATH = '/api/v1/organizations/{organization_id}/members'
 const ABSENCES_PATH = '/api/v1/organizations/{organization_id}/absences'
+const MY_PERMISSIONS_PATH =
+	'/api/v1/organizations/{organization_id}/members/me/permissions'
+const ALL_PERMISSIONS = PERMISSION_CATALOG.map((entry) => entry.name)
 const ABSENCE_PATH =
 	'/api/v1/organizations/{organization_id}/absences/{absence_id}'
 
@@ -96,6 +100,7 @@ function absence(overrides: Record<string, unknown> = {}) {
 interface FakeApiHandlers {
 	members?: FakeMember[]
 	absences?: Record<string, unknown>[]
+	permissions?: string[]
 	postAbsence?: (params: unknown) => unknown
 	patchAbsence?: (params: unknown) => unknown
 	deleteAbsence?: (params: unknown) => unknown
@@ -125,6 +130,12 @@ function installFakeTanstackApi(handlers: FakeApiHandlers = {}) {
 						}
 						if (path === ABSENCES_PATH) {
 							return { data: absences, pagination: null }
+						}
+						if (path === MY_PERMISSIONS_PATH) {
+							return {
+								data: { permissions: handlers.permissions ?? ALL_PERMISSIONS },
+								pagination: null,
+							}
 						}
 						throw new Error(`unmocked GET ${path}`)
 					},
@@ -170,7 +181,7 @@ function installFakeTanstackApi(handlers: FakeApiHandlers = {}) {
 	return calls
 }
 
-function renderFeature(handlers: FakeApiHandlers = {}) {
+async function renderFeature(handlers: FakeApiHandlers = {}) {
 	const calls = installFakeTanstackApi(handlers)
 	const queryClient = new QueryClient({
 		defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
@@ -193,6 +204,13 @@ function renderFeature(handlers: FakeApiHandlers = {}) {
 			<AbsencesOverviewFeature />
 		</Providers>,
 	)
+	// `RequirePermission` hides its children until this resolves — every
+	// caller that interacts with a gated control needs the wait, same as
+	// `renderWithPermissions` (`#/test/with-permissions`) does generically.
+	await waitFor(() => {
+		if (queryClient.isFetching() > 0)
+			throw new Error('permissions still loading')
+	})
 
 	return { calls }
 }
@@ -203,7 +221,7 @@ describe('AbsencesOverviewFeature — listing', () => {
 	})
 
 	it('lists every absence in the organization, across members, with the resolved name', async () => {
-		renderFeature({
+		await renderFeature({
 			absences: [
 				absence({ id: 'ab-1', member_id: 'member-1' }),
 				absence({ id: 'ab-2', member_id: 'member-2' }),
@@ -216,7 +234,7 @@ describe('AbsencesOverviewFeature — listing', () => {
 	})
 
 	it('falls back to a placeholder name when the absence points at an unknown member', async () => {
-		renderFeature({
+		await renderFeature({
 			absences: [absence({ id: 'ab-1', member_id: 'member-ghost' })],
 		})
 
@@ -232,7 +250,7 @@ describe('AbsencesOverviewFeature — create', () => {
 	it('opens the shared form and sends a POST with the picked member', async () => {
 		const user = userEvent.setup()
 		const postAbsence = vi.fn().mockResolvedValue(absence({ id: 'ab-new' }))
-		const { calls } = renderFeature({ postAbsence })
+		const { calls } = await renderFeature({ postAbsence })
 
 		await screen.findByText('Absences (0)')
 		await user.click(
@@ -267,7 +285,7 @@ describe('AbsencesOverviewFeature — edit and delete from the row', () => {
 	it('"Modifier" prefills the shared form and sends a PATCH without member_id', async () => {
 		const user = userEvent.setup()
 		const patchAbsence = vi.fn().mockResolvedValue(absence())
-		const { calls } = renderFeature({
+		const { calls } = await renderFeature({
 			absences: [absence()],
 			patchAbsence,
 		})
@@ -294,7 +312,7 @@ describe('AbsencesOverviewFeature — edit and delete from the row', () => {
 	it('"Supprimer" from the row menu asks for confirmation, then sends a DELETE', async () => {
 		const user = userEvent.setup()
 		const deleteAbsence = vi.fn().mockResolvedValue(undefined)
-		const { calls } = renderFeature({
+		const { calls } = await renderFeature({
 			absences: [absence()],
 			deleteAbsence,
 		})
