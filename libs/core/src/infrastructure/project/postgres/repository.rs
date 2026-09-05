@@ -78,12 +78,14 @@ impl<'tx> ProjectRepository for PgProjectRepository<'tx> {
         &mut self,
         organization_id: OrganizationId,
         customer_id: Option<CustomerId>,
+        quote_id: Option<QuoteId>,
         include_archived: bool,
         limit: u64,
         offset: u64,
     ) -> Result<(Vec<Project>, u64), CoreError> {
         let mut tx = self.tx.lock().await;
         let customer_filter = customer_id.map(|id| id.0);
+        let quote_filter = quote_id.map(|id| id.0);
 
         let rows = sqlx::query_as!(
             ProjectRow,
@@ -92,12 +94,14 @@ impl<'tx> ProjectRepository for PgProjectRepository<'tx> {
             FROM projects
             WHERE org_id = $1
               AND ($2::uuid IS NULL OR customer_id = $2)
-              AND ($3::boolean OR archived_at IS NULL)
+              AND ($3::uuid IS NULL OR quote_id = $3)
+              AND ($4::boolean OR archived_at IS NULL)
             ORDER BY name ASC, created_at ASC
-            LIMIT $4 OFFSET $5
+            LIMIT $5 OFFSET $6
             "#,
             organization_id.0,
             customer_filter,
+            quote_filter,
             include_archived,
             limit as i64,
             offset as i64,
@@ -112,10 +116,12 @@ impl<'tx> ProjectRepository for PgProjectRepository<'tx> {
             FROM projects
             WHERE org_id = $1
               AND ($2::uuid IS NULL OR customer_id = $2)
-              AND ($3::boolean OR archived_at IS NULL)
+              AND ($3::uuid IS NULL OR quote_id = $3)
+              AND ($4::boolean OR archived_at IS NULL)
             "#,
             organization_id.0,
             customer_filter,
+            quote_filter,
             include_archived,
         )
         .fetch_one(&mut ***tx)

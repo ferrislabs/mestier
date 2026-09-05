@@ -6,13 +6,14 @@ use axum::{
 use handlers::{
     ApiError, AppState, DataEnvelope, Page, PaginationMetadata, PaginationParams, Response,
 };
-use mestier_core::CustomerId;
+use mestier_core::{CustomerId, QuoteId};
 use serde::Deserialize;
 use utoipa::IntoParams;
 
 use crate::{project::ProjectsPath, require_org_membership, response::ProjectResponse};
 
-/// `?customer_id=` narrows to one client's projects. `?include_archived=true`
+/// `?customer_id=` narrows to one client's projects. `?quote_id=` narrows to
+/// the (at most one) project a given quote turned into. `?include_archived=true`
 /// brings back retired ones, which a report needs and a picker does not — the
 /// default is the picker's.
 #[derive(Debug, Deserialize, IntoParams)]
@@ -20,6 +21,8 @@ use crate::{project::ProjectsPath, require_org_membership, response::ProjectResp
 pub struct ListProjectsQuery {
     #[serde(default)]
     pub customer_id: Option<CustomerId>,
+    #[serde(default)]
+    pub quote_id: Option<QuoteId>,
     #[serde(default)]
     pub include_archived: bool,
 }
@@ -57,6 +60,7 @@ pub async fn handler(
         .list_projects(
             path.organization_id,
             filter.customer_id,
+            filter.quote_id,
             filter.include_archived,
             per_page,
             pagination.offset(),

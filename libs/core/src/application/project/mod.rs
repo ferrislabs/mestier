@@ -6,7 +6,7 @@ use discord::{Channel, ChannelRepository, ChannelService, CreateProjectChannelCo
 use mestier_macros::transactional;
 
 use crate::{
-    CustomerId, OrganizationId, Project, ProjectId, Task,
+    CustomerId, OrganizationId, Project, ProjectId, QuoteId, Task,
     application::{MestierUseCase, policy},
     domain::{
         project::{
@@ -60,6 +60,7 @@ impl MestierUseCase {
         &self,
         organization_id: OrganizationId,
         customer_id: Option<CustomerId>,
+        quote_id: Option<QuoteId>,
         include_archived: bool,
         limit: u64,
         offset: u64,
@@ -69,6 +70,7 @@ impl MestierUseCase {
             .list_projects(
                 organization_id,
                 customer_id,
+                quote_id,
                 include_archived,
                 limit,
                 offset,

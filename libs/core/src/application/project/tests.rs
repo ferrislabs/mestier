@@ -168,14 +168,14 @@ mod tests {
             .unwrap();
 
         let (active, active_total) = usecase
-            .list_projects(fixture.organization_id, None, false, 20, 0)
+            .list_projects(fixture.organization_id, None, None, false, 20, 0)
             .await
             .unwrap();
         assert_eq!(active_total, 1);
         assert_eq!(active[0].id, kept.id);
 
         let (all, all_total) = usecase
-            .list_projects(fixture.organization_id, None, true, 20, 0)
+            .list_projects(fixture.organization_id, None, None, true, 20, 0)
             .await
             .unwrap();
         assert_eq!(all_total, 2);
