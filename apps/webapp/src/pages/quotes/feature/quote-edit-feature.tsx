@@ -9,6 +9,7 @@ import {
 	Trash2,
 } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
+import { RequirePermission } from '#/components/require-permission'
 import {
 	AlertDialog,
 	AlertDialogAction,
@@ -468,52 +469,27 @@ function QuoteEditUI({
 							</Link>
 						</Button>
 						{quote.status === 'ACCEPTED' ? (
-							<Button asChild variant="outline">
-								<Link
-									to={buildOrgPath(
-										activeOrganization.slug,
-										`/crm/quotes/${quote.id}/handover`,
-									)}
-								>
-									<ArrowRightLeft />
-									Transformer en projet
-								</Link>
-							</Button>
-						) : null}
-						<AlertDialog>
-							<AlertDialogTrigger asChild>
-								<Button
-									type="button"
-									variant="destructive"
-									disabled={isDeleting || isSaving}
-								>
-									{isDeleting ? (
-										<Loader2 className="animate-spin" />
-									) : (
-										<Trash2 />
-									)}
-									Supprimer
+							<RequirePermission permission="MANAGE_QUOTES">
+								<Button asChild variant="outline">
+									<Link
+										to={buildOrgPath(
+											activeOrganization.slug,
+											`/crm/quotes/${quote.id}/handover`,
+										)}
+									>
+										<ArrowRightLeft />
+										Transformer en projet
+									</Link>
 								</Button>
-							</AlertDialogTrigger>
-							<AlertDialogContent>
-								<AlertDialogHeader>
-									<AlertDialogTitle>Supprimer ce devis ?</AlertDialogTitle>
-									<AlertDialogDescription>
-										Le devis {quoteReferenceLabel(quote.reference)} sera
-										supprimé de la liste. Cette action est irréversible.
-									</AlertDialogDescription>
-								</AlertDialogHeader>
-								<AlertDialogFooter>
-									<AlertDialogCancel disabled={isDeleting}>
-										Annuler
-									</AlertDialogCancel>
-									<AlertDialogAction
-										disabled={isDeleting}
-										className="bg-destructive text-white hover:bg-destructive/90 focus-visible:ring-destructive/20"
-										onClick={(event) => {
-											event.preventDefault()
-											void onDelete()
-										}}
+							</RequirePermission>
+						) : null}
+						<RequirePermission permission="MANAGE_QUOTES">
+							<AlertDialog>
+								<AlertDialogTrigger asChild>
+									<Button
+										type="button"
+										variant="destructive"
+										disabled={isDeleting || isSaving}
 									>
 										{isDeleting ? (
 											<Loader2 className="animate-spin" />
@@ -521,28 +497,61 @@ function QuoteEditUI({
 											<Trash2 />
 										)}
 										Supprimer
-									</AlertDialogAction>
-								</AlertDialogFooter>
-							</AlertDialogContent>
-						</AlertDialog>
-						<Button
-							type="button"
-							variant="outline"
-							disabled={!canSave || isSaving || isDeleting}
-							onClick={onSave}
-						>
-							{isSaving ? <Loader2 className="animate-spin" /> : <FileText />}
-							Enregistrer
-						</Button>
-						{quote.status === 'DRAFT' ? (
+									</Button>
+								</AlertDialogTrigger>
+								<AlertDialogContent>
+									<AlertDialogHeader>
+										<AlertDialogTitle>Supprimer ce devis ?</AlertDialogTitle>
+										<AlertDialogDescription>
+											Le devis {quoteReferenceLabel(quote.reference)} sera
+											supprimé de la liste. Cette action est irréversible.
+										</AlertDialogDescription>
+									</AlertDialogHeader>
+									<AlertDialogFooter>
+										<AlertDialogCancel disabled={isDeleting}>
+											Annuler
+										</AlertDialogCancel>
+										<AlertDialogAction
+											disabled={isDeleting}
+											className="bg-destructive text-white hover:bg-destructive/90 focus-visible:ring-destructive/20"
+											onClick={(event) => {
+												event.preventDefault()
+												void onDelete()
+											}}
+										>
+											{isDeleting ? (
+												<Loader2 className="animate-spin" />
+											) : (
+												<Trash2 />
+											)}
+											Supprimer
+										</AlertDialogAction>
+									</AlertDialogFooter>
+								</AlertDialogContent>
+							</AlertDialog>
+						</RequirePermission>
+						<RequirePermission permission="MANAGE_QUOTES">
 							<Button
 								type="button"
-								disabled={!canSend || isSaving || isDeleting}
-								onClick={onSend}
+								variant="outline"
+								disabled={!canSave || isSaving || isDeleting}
+								onClick={onSave}
 							>
-								{isSaving ? <Loader2 className="animate-spin" /> : <Send />}
-								Envoyer le devis
+								{isSaving ? <Loader2 className="animate-spin" /> : <FileText />}
+								Enregistrer
 							</Button>
+						</RequirePermission>
+						{quote.status === 'DRAFT' ? (
+							<RequirePermission permission="MANAGE_QUOTES">
+								<Button
+									type="button"
+									disabled={!canSend || isSaving || isDeleting}
+									onClick={onSend}
+								>
+									{isSaving ? <Loader2 className="animate-spin" /> : <Send />}
+									Envoyer le devis
+								</Button>
+							</RequirePermission>
 						) : null}
 					</div>
 				}

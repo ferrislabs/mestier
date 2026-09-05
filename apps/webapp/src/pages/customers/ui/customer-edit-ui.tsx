@@ -646,19 +646,21 @@ export function CustomerEditUI({
 				</Dialog>
 			</div>
 
-			<FloatingActionBar
-				show={isDirty}
-				message={
-					changedKeys.length === 1
-						? '1 modification non enregistrée'
-						: `${changedKeys.length} modifications non enregistrées`
-				}
-				confirmLabel="Enregistrer"
-				cancelLabel="Annuler"
-				onCancel={onReset}
-				onConfirm={onSave}
-				isLoading={isSaving}
-			/>
+			<RequirePermission permission="MANAGE_CUSTOMERS">
+				<FloatingActionBar
+					show={isDirty}
+					message={
+						changedKeys.length === 1
+							? '1 modification non enregistrée'
+							: `${changedKeys.length} modifications non enregistrées`
+					}
+					confirmLabel="Enregistrer"
+					cancelLabel="Annuler"
+					onCancel={onReset}
+					onConfirm={onSave}
+					isLoading={isSaving}
+				/>
+			</RequirePermission>
 		</PageShell>
 	)
 }

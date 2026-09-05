@@ -31,6 +31,7 @@ import {
 interface CustomerPipelineUIProps {
 	customers: Customer[]
 	organizationSlug: string
+	canMove: boolean
 	error?: string | null
 	isLoading?: boolean
 	movingCustomerId?: string | null
@@ -45,6 +46,7 @@ interface CustomerPipelineUIProps {
 export function CustomerPipelineUI({
 	customers,
 	organizationSlug,
+	canMove,
 	error,
 	isLoading,
 	movingCustomerId,
@@ -209,6 +211,7 @@ export function CustomerPipelineUI({
 
 				<CustomerPipelineBoard
 					customers={filteredCustomers}
+					canMove={canMove}
 					isLoading={isLoading}
 					draggedCustomerId={draggedCustomerId}
 					movingCustomerId={movingCustomerId}

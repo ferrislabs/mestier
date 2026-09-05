@@ -13,6 +13,7 @@ import {
 } from 'lucide-react'
 import type * as React from 'react'
 import { useEffect, useRef, useState } from 'react'
+import { RequirePermission } from '#/components/require-permission'
 import {
 	AlertDialog,
 	AlertDialogAction,
@@ -296,54 +297,58 @@ function InvoiceDetailWorkspace({ invoice }: { invoice: Invoice }) {
 							PDF
 						</Button>
 						{canCancel ? (
-							<AlertDialog>
-								<AlertDialogTrigger asChild>
-									<Button
-										type="button"
-										variant="destructive"
-										disabled={cancelInvoice.isPending}
-									>
-										{cancelInvoice.isPending ? (
-											<Loader2 className="animate-spin" />
-										) : (
-											<Ban />
-										)}
-										Annuler
-									</Button>
-								</AlertDialogTrigger>
-								<AlertDialogContent>
-									<AlertDialogHeader>
-										<AlertDialogTitle>Annuler cette facture ?</AlertDialogTitle>
-										<AlertDialogDescription>
-											La facture {invoice.number ?? invoice.id} sera annulée.
-											Cette action est irréversible.
-										</AlertDialogDescription>
-									</AlertDialogHeader>
-									<AlertDialogFooter>
-										<AlertDialogCancel disabled={cancelInvoice.isPending}>
-											Retour
-										</AlertDialogCancel>
-										<AlertDialogAction
+							<RequirePermission permission="MANAGE_INVOICES">
+								<AlertDialog>
+									<AlertDialogTrigger asChild>
+										<Button
+											type="button"
+											variant="destructive"
 											disabled={cancelInvoice.isPending}
-											className="bg-destructive text-white hover:bg-destructive/90 focus-visible:ring-destructive/20"
-											onClick={(event) => {
-												event.preventDefault()
-												void doCancel()
-											}}
 										>
 											{cancelInvoice.isPending ? (
 												<Loader2 className="animate-spin" />
 											) : (
 												<Ban />
 											)}
-											Annuler la facture
-										</AlertDialogAction>
-									</AlertDialogFooter>
-								</AlertDialogContent>
-							</AlertDialog>
+											Annuler
+										</Button>
+									</AlertDialogTrigger>
+									<AlertDialogContent>
+										<AlertDialogHeader>
+											<AlertDialogTitle>
+												Annuler cette facture ?
+											</AlertDialogTitle>
+											<AlertDialogDescription>
+												La facture {invoice.number ?? invoice.id} sera annulée.
+												Cette action est irréversible.
+											</AlertDialogDescription>
+										</AlertDialogHeader>
+										<AlertDialogFooter>
+											<AlertDialogCancel disabled={cancelInvoice.isPending}>
+												Retour
+											</AlertDialogCancel>
+											<AlertDialogAction
+												disabled={cancelInvoice.isPending}
+												className="bg-destructive text-white hover:bg-destructive/90 focus-visible:ring-destructive/20"
+												onClick={(event) => {
+													event.preventDefault()
+													void doCancel()
+												}}
+											>
+												{cancelInvoice.isPending ? (
+													<Loader2 className="animate-spin" />
+												) : (
+													<Ban />
+												)}
+												Annuler la facture
+											</AlertDialogAction>
+										</AlertDialogFooter>
+									</AlertDialogContent>
+								</AlertDialog>
+							</RequirePermission>
 						) : null}
 						{isDraft ? (
-							<>
+							<RequirePermission permission="MANAGE_INVOICES">
 								<Button
 									type="button"
 									disabled={!canSave || updateInvoice.isPending}
@@ -369,7 +374,7 @@ function InvoiceDetailWorkspace({ invoice }: { invoice: Invoice }) {
 									)}
 									Émettre
 								</Button>
-							</>
+							</RequirePermission>
 						) : null}
 					</div>
 				}
@@ -696,18 +701,20 @@ function PaymentsSection({
 						value={reference}
 						onChange={(event) => setReference(event.target.value)}
 					/>
-					<Button
-						type="button"
-						disabled={!canSubmit || recordPayment.isPending}
-						onClick={() => void submit()}
-					>
-						{recordPayment.isPending ? (
-							<Loader2 className="animate-spin" />
-						) : (
-							<Receipt />
-						)}
-						Enregistrer
-					</Button>
+					<RequirePermission permission="MANAGE_INVOICES">
+						<Button
+							type="button"
+							disabled={!canSubmit || recordPayment.isPending}
+							onClick={() => void submit()}
+						>
+							{recordPayment.isPending ? (
+								<Loader2 className="animate-spin" />
+							) : (
+								<Receipt />
+							)}
+							Enregistrer
+						</Button>
+					</RequirePermission>
 				</div>
 			) : null}
 			{isLoading ? (
@@ -732,20 +739,22 @@ function PaymentsSection({
 									{payment.reference ? ` · ${payment.reference}` : ''}
 								</p>
 							</div>
-							<Button
-								type="button"
-								variant="ghost"
-								size="icon-sm"
-								disabled={deletePayment.isPending}
-								onClick={() =>
-									void deletePayment.mutateAsync({
-										path: { invoice_payment_id: payment.id },
-									})
-								}
-							>
-								<Trash2 />
-								<span className="sr-only">Supprimer le paiement</span>
-							</Button>
+							<RequirePermission permission="MANAGE_INVOICES">
+								<Button
+									type="button"
+									variant="ghost"
+									size="icon-sm"
+									disabled={deletePayment.isPending}
+									onClick={() =>
+										void deletePayment.mutateAsync({
+											path: { invoice_payment_id: payment.id },
+										})
+									}
+								>
+									<Trash2 />
+									<span className="sr-only">Supprimer le paiement</span>
+								</Button>
+							</RequirePermission>
 						</li>
 					))}
 				</ul>
@@ -822,18 +831,20 @@ function CreditNotesSection({
 						value={amount}
 						onChange={(event) => setAmount(event.target.value)}
 					/>
-					<Button
-						type="button"
-						disabled={!canSubmit || issueCreditNote.isPending}
-						onClick={() => void submit()}
-					>
-						{issueCreditNote.isPending ? (
-							<Loader2 className="animate-spin" />
-						) : (
-							<FileText />
-						)}
-						Émettre l'avoir
-					</Button>
+					<RequirePermission permission="MANAGE_INVOICES">
+						<Button
+							type="button"
+							disabled={!canSubmit || issueCreditNote.isPending}
+							onClick={() => void submit()}
+						>
+							{issueCreditNote.isPending ? (
+								<Loader2 className="animate-spin" />
+							) : (
+								<FileText />
+							)}
+							Émettre l'avoir
+						</Button>
+					</RequirePermission>
 				</div>
 			) : null}
 			{isLoading ? (
