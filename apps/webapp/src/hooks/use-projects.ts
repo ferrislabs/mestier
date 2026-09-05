@@ -13,6 +13,7 @@ export type Project = Schemas.ProjectResponse
 
 export interface ProjectFilters {
 	customerId?: string
+	quoteId?: string
 	includeArchived: boolean
 }
 
@@ -30,6 +31,7 @@ export function useProjects(organizationId: string, filters: ProjectFilters) {
 			path: { organization_id: organizationId },
 			query: {
 				customer_id: filters.customerId,
+				quote_id: filters.quoteId,
 				include_archived: filters.includeArchived,
 				per_page: 100,
 			},

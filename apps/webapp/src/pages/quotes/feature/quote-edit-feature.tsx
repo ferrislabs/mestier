@@ -40,6 +40,12 @@ import {
 } from '#/hooks/use-customers'
 import { useFileUrls } from '#/hooks/use-file-url'
 import {
+	useInvoicesByProject,
+	useProjectBillingSummary,
+} from '#/hooks/use-invoices'
+import { useHasPermission } from '#/hooks/use-permissions'
+import { useProjects } from '#/hooks/use-projects'
+import {
 	type Quote,
 	type QuoteStatus,
 	useDeleteQuote,
@@ -48,6 +54,10 @@ import {
 } from '#/hooks/use-quotes'
 import { useReferenceCatalog } from '#/hooks/use-reference-catalog'
 import { buildOrgPath } from '#/modules/org-path'
+import {
+	type BillingPipelineStep,
+	computeBillingPipelineSteps,
+} from '#/pages/quotes/lib/billing-pipeline'
 import {
 	billingAddressLines,
 	centsToEuros,
@@ -62,6 +72,7 @@ import {
 	quoteReferenceLabel,
 	quoteStatusLabel,
 } from '#/pages/quotes/types'
+import { BillingPipelineStepperUi } from '#/pages/quotes/ui/billing-pipeline-stepper-ui'
 import { EditablePaperField } from '#/pages/quotes/ui/editable-paper-field'
 import { PaperOptionList } from '#/pages/quotes/ui/paper-option-list'
 import {
@@ -118,6 +129,31 @@ function QuoteEditWorkspace({ quote }: { quote: Quote }) {
 	)
 	const missingLegalIdentityFields =
 		activeOrganization.missing_legal_identity_fields
+	const canViewInvoices = useHasPermission('VIEW_INVOICES')
+	const projectFromQuote = useProjects(quote.organization_id, {
+		quoteId: quote.id,
+		includeArchived: true,
+	})
+	const project = projectFromQuote.data?.data?.[0]
+	const billingSummary = useProjectBillingSummary(
+		project?.id ?? '',
+		Boolean(project) && canViewInvoices,
+	)
+	const projectInvoices = useInvoicesByProject(
+		project?.id ?? '',
+		Boolean(project) && canViewInvoices,
+	)
+	const billingSteps = computeBillingPipelineSteps({
+		quoteStatus: quote.status,
+		project,
+		billingSummary: billingSummary.data?.data,
+		invoices: projectInvoices.data?.data,
+	})
+	// Without VIEW_INVOICES, only the quote/project steps are shown — billing
+	// amounts and invoice statuses stay hidden entirely.
+	const visibleBillingSteps = canViewInvoices
+		? billingSteps
+		: billingSteps.slice(0, 2)
 	const updateQuote = useUpdateQuote()
 	const deleteQuote = useDeleteQuote(quote.organization_id)
 	const uploadFile = useUploadFile()
@@ -321,6 +357,7 @@ function QuoteEditWorkspace({ quote }: { quote: Quote }) {
 			isSaving={updateQuote.isPending}
 			isDeleting={deleteQuote.isPending}
 			isUploading={uploadFile.isPending}
+			billingSteps={visibleBillingSteps}
 			totalCents={totalCents}
 			canSave={canSave}
 			canSend={canSend}
@@ -357,6 +394,7 @@ function QuoteEditUI({
 	isSaving,
 	isDeleting,
 	isUploading,
+	billingSteps,
 	totalCents,
 	canSave,
 	canSend,
@@ -383,6 +421,7 @@ function QuoteEditUI({
 	isSaving: boolean
 	isDeleting: boolean
 	isUploading: boolean
+	billingSteps: BillingPipelineStep[]
 	totalCents: number
 	canSave: boolean
 	canSend: boolean
@@ -534,6 +573,12 @@ function QuoteEditUI({
 					</p>
 				</div>
 			) : null}
+
+			<SectionCard className="border shadow-sm">
+				<div className="p-5 sm:p-6">
+					<BillingPipelineStepperUi steps={billingSteps} />
+				</div>
+			</SectionCard>
 
 			<div className="mx-auto w-full max-w-4xl bg-muted/40 p-4 sm:p-10">
 				<SectionCard className="border shadow-sm">
