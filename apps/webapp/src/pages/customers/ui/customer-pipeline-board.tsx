@@ -36,6 +36,7 @@ function isTerminalPipelineStage(stage: CustomerPipelineStage): boolean {
 
 interface CustomerPipelineBoardProps {
 	customers: Customer[]
+	canMove: boolean
 	isLoading?: boolean
 	draggedCustomerId: string | null
 	movingCustomerId?: string | null
@@ -48,6 +49,7 @@ interface CustomerPipelineBoardProps {
 
 export function CustomerPipelineBoard({
 	customers,
+	canMove,
 	isLoading,
 	draggedCustomerId,
 	movingCustomerId,
@@ -101,6 +103,7 @@ export function CustomerPipelineBoard({
 										<PipelineCustomerCard
 											key={customer.id}
 											customer={customer}
+											canMove={canMove}
 											isDragging={draggedCustomerId === customer.id}
 											isMoving={movingCustomerId === customer.id}
 											onDragStart={() => onDragStart(customer.id)}
@@ -121,6 +124,7 @@ export function CustomerPipelineBoard({
 
 interface PipelineCustomerCardProps {
 	customer: Customer
+	canMove: boolean
 	isDragging: boolean
 	isMoving: boolean
 	onDragStart: () => void
@@ -131,6 +135,7 @@ interface PipelineCustomerCardProps {
 
 function PipelineCustomerCard({
 	customer,
+	canMove,
 	isDragging,
 	isMoving,
 	onDragStart,
@@ -151,7 +156,7 @@ function PipelineCustomerCard({
 
 	return (
 		<article
-			draggable
+			draggable={canMove}
 			onDragStart={onDragStart}
 			onDragEnd={onDragEnd}
 			className={`group rounded-md border bg-card p-3 shadow-xs transition ${
@@ -179,7 +184,7 @@ function PipelineCustomerCard({
 					{customerStatusLabel(customer.status)}
 				</StatusBadge>
 				<div className="flex items-center gap-1 opacity-100 transition-opacity sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100">
-					{previousStage ? (
+					{canMove && previousStage ? (
 						<Button
 							type="button"
 							size="icon-sm"
@@ -191,7 +196,7 @@ function PipelineCustomerCard({
 							<span className="sr-only">Reculer</span>
 						</Button>
 					) : null}
-					{nextStage ? (
+					{canMove && nextStage ? (
 						<Button
 							type="button"
 							size="icon-sm"
@@ -203,7 +208,7 @@ function PipelineCustomerCard({
 							<span className="sr-only">Avancer</span>
 						</Button>
 					) : null}
-					{!isTerminal ? (
+					{canMove && !isTerminal ? (
 						<>
 							<Button
 								type="button"

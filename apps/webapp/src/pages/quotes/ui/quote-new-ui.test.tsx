@@ -1,6 +1,12 @@
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import type { ReactNode } from 'react'
 import { describe, expect, it, vi } from 'vitest'
+import {
+	ActiveOrganizationProvider,
+	OrganizationListProvider,
+} from '#/hooks/use-active-organization'
 import type { Customer, CustomerContext } from '#/hooks/use-customers'
 import type { Organization } from '#/hooks/use-organizations'
 import { renderWithRouter } from '#/test/render-with-router'
@@ -10,6 +16,55 @@ import { QuoteNewUI } from './quote-new-ui'
 Element.prototype.scrollIntoView ??= () => {}
 Element.prototype.hasPointerCapture ??= () => false
 Element.prototype.releasePointerCapture ??= () => {}
+
+const MY_PERMISSIONS_PATH =
+	'/api/v1/organizations/{organization_id}/members/me/permissions'
+
+// `QuoteNewUI` gates its submit button behind `RequirePermission`, which
+// reads the caller's permissions via the active organization — every render
+// needs that context, not just the tests that touch the gated button.
+function installFakePermissionsApi(permissions: string[]) {
+	const fakeApi = {
+		get(path: string) {
+			const queryKey = [{ _id: path }]
+			return {
+				queryKey,
+				queryOptions: {
+					queryKey,
+					queryFn: async () => {
+						if (path === MY_PERMISSIONS_PATH) {
+							return { data: { permissions }, pagination: null }
+						}
+						throw new Error(`unmocked GET ${path}`)
+					},
+				},
+			}
+		},
+		mutation() {
+			throw new Error('unmocked mutation')
+		},
+	}
+
+	// biome-ignore lint/suspicious/noExplicitAny: test-only fake, shape matches TanstackQueryApiClient's used surface
+	;(window as any).tanstackApi = fakeApi
+}
+
+function withProviders(ui: ReactNode, organization: Organization) {
+	installFakePermissionsApi(['MANAGE_QUOTES'])
+	const queryClient = new QueryClient({
+		defaultOptions: { queries: { retry: false } },
+	})
+
+	return (
+		<QueryClientProvider client={queryClient}>
+			<OrganizationListProvider organizations={[organization]}>
+				<ActiveOrganizationProvider activeOrganization={organization}>
+					{ui}
+				</ActiveOrganizationProvider>
+			</OrganizationListProvider>
+		</QueryClientProvider>
+	)
+}
 
 function organization(overrides: Partial<Organization> = {}): Organization {
 	return {
@@ -87,7 +142,10 @@ function baseProps() {
 
 describe('QuoteNewUI', () => {
 	it('prints the document plainly: no client yet, no title yet', async () => {
-		await renderWithRouter(<QuoteNewUI {...baseProps()} />)
+		const props = baseProps()
+		await renderWithRouter(
+			withProviders(<QuoteNewUI {...props} />, props.organization),
+		)
 
 		expect(screen.getByText('Sélectionner un client')).toBeDefined()
 		expect(screen.getByText('Objet du devis')).toBeDefined()
@@ -96,7 +154,13 @@ describe('QuoteNewUI', () => {
 	it('opens the client editor on click and reports the chosen customer', async () => {
 		const user = userEvent.setup()
 		const onChange = vi.fn()
-		await renderWithRouter(<QuoteNewUI {...baseProps()} onChange={onChange} />)
+		const props = baseProps()
+		await renderWithRouter(
+			withProviders(
+				<QuoteNewUI {...props} onChange={onChange} />,
+				props.organization,
+			),
+		)
 
 		await user.click(
 			screen.getByRole('button', { name: /modifier.*facturé à/i }),
@@ -107,14 +171,18 @@ describe('QuoteNewUI', () => {
 	})
 
 	it('prints the customer once it is set on the form', async () => {
+		const props = baseProps()
 		await renderWithRouter(
-			<QuoteNewUI
-				{...baseProps()}
-				values={values({
-					customerId: 'customer-1',
-					customerContextId: 'context-1',
-				})}
-			/>,
+			withProviders(
+				<QuoteNewUI
+					{...props}
+					values={values({
+						customerId: 'customer-1',
+						customerContextId: 'context-1',
+					})}
+				/>,
+				props.organization,
+			),
 		)
 
 		expect(screen.getByText('Menuiserie Dupont')).toBeDefined()
@@ -124,7 +192,13 @@ describe('QuoteNewUI', () => {
 	it('opens the title editor on click and reports what was typed', async () => {
 		const user = userEvent.setup()
 		const onChange = vi.fn()
-		await renderWithRouter(<QuoteNewUI {...baseProps()} onChange={onChange} />)
+		const props = baseProps()
+		await renderWithRouter(
+			withProviders(
+				<QuoteNewUI {...props} onChange={onChange} />,
+				props.organization,
+			),
+		)
 
 		await user.click(
 			screen.getByRole('button', { name: /modifier.*objet du devis/i }),
@@ -135,5 +209,25 @@ describe('QuoteNewUI', () => {
 		)
 
 		expect(onChange).toHaveBeenCalledWith({ title: 'x' })
+	})
+
+	it('hides the submit button when the caller lacks MANAGE_QUOTES', async () => {
+		installFakePermissionsApi([])
+		const queryClient = new QueryClient({
+			defaultOptions: { queries: { retry: false } },
+		})
+		const props = baseProps()
+		await renderWithRouter(
+			<QueryClientProvider client={queryClient}>
+				<OrganizationListProvider organizations={[props.organization]}>
+					<ActiveOrganizationProvider activeOrganization={props.organization}>
+						<QuoteNewUI {...props} />
+					</ActiveOrganizationProvider>
+				</OrganizationListProvider>
+			</QueryClientProvider>,
+		)
+
+		expect(screen.getByText('Objet du devis')).toBeDefined()
+		expect(screen.queryByRole('button', { name: 'Créer le devis' })).toBeNull()
 	})
 })

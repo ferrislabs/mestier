@@ -7,6 +7,7 @@ import {
 	UserRound,
 } from 'lucide-react'
 import { useState } from 'react'
+import { RequirePermission } from '#/components/require-permission'
 import { Button } from '#/components/ui/button'
 import { Field } from '#/components/ui/field'
 import { Input } from '#/components/ui/input'
@@ -139,14 +140,16 @@ export function QuoteNewUI({
 									Retour
 								</Link>
 							</Button>
-							<Button type="submit" disabled={!canSubmit || isCreating}>
-								{isCreating ? (
-									<Loader2 className="animate-spin" />
-								) : (
-									<FileText />
-								)}
-								Créer le devis
-							</Button>
+							<RequirePermission permission="MANAGE_QUOTES">
+								<Button type="submit" disabled={!canSubmit || isCreating}>
+									{isCreating ? (
+										<Loader2 className="animate-spin" />
+									) : (
+										<FileText />
+									)}
+									Créer le devis
+								</Button>
+							</RequirePermission>
 						</div>
 					}
 				/>

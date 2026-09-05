@@ -7,6 +7,7 @@ import {
 	useCustomers,
 	useUpdateCustomer,
 } from '#/hooks/use-customers'
+import { useHasPermission } from '#/hooks/use-permissions'
 import { buildOrgPath } from '#/modules/org-path'
 import { CustomerPipelineUI } from '#/pages/customers/ui/customer-pipeline-ui'
 
@@ -48,6 +49,7 @@ function CustomerPipeline({
 	const navigate = useNavigate()
 	const customers = useCustomers(organizationId, { page: 1, perPage: 100 })
 	const updateCustomer = useUpdateCustomer()
+	const canMove = useHasPermission('MANAGE_CUSTOMERS')
 
 	const movePipelineStage = (
 		customer: Customer,
@@ -69,6 +71,7 @@ function CustomerPipeline({
 		<CustomerPipelineUI
 			organizationSlug={organizationSlug}
 			customers={customers.data?.data ?? []}
+			canMove={canMove}
 			error={customers.error?.message ?? updateCustomer.error?.message ?? null}
 			isLoading={customers.isLoading}
 			movingCustomerId={

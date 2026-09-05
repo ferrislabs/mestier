@@ -24,6 +24,7 @@ function customer(
 
 function baseProps() {
 	return {
+		canMove: true,
 		draggedCustomerId: null,
 		onDragStart: vi.fn(),
 		onDragEnd: vi.fn(),
@@ -109,5 +110,23 @@ describe('CustomerPipelineBoard — terminal stages', () => {
 		await user.click(screen.getByRole('button', { name: 'Marquer perdu' }))
 
 		expect(onMove).toHaveBeenCalledWith(target, 'LOST')
+	})
+})
+
+describe('CustomerPipelineBoard — without MANAGE_CUSTOMERS', () => {
+	it('hides every move action and disables dragging on a non-terminal card', () => {
+		render(
+			<CustomerPipelineBoard
+				{...baseProps()}
+				canMove={false}
+				customers={[customer('QUOTE_SENT')]}
+			/>,
+		)
+
+		expect(screen.queryByRole('button', { name: 'Avancer' })).toBeNull()
+		expect(screen.queryByRole('button', { name: 'Reculer' })).toBeNull()
+		expect(screen.queryByRole('button', { name: 'Marquer gagné' })).toBeNull()
+		expect(screen.queryByRole('button', { name: 'Marquer perdu' })).toBeNull()
+		expect(screen.getByRole('article').getAttribute('draggable')).toBe('false')
 	})
 })

@@ -1,5 +1,6 @@
 import { Link } from '@tanstack/react-router'
 import { ArrowLeft, Loader2, Plus, Trash2 } from 'lucide-react'
+import { RequirePermission } from '#/components/require-permission'
 import { Button } from '#/components/ui/button'
 import { Input } from '#/components/ui/input'
 import { Label } from '#/components/ui/label'
@@ -200,10 +201,12 @@ export function QuoteHandoverUI({
 			) : null}
 
 			<div className="flex justify-end">
-				<Button type="button" disabled={!canSubmit} onClick={onSubmit}>
-					{isPending ? <Loader2 className="animate-spin" /> : null}
-					Créer le projet
-				</Button>
+				<RequirePermission permission="MANAGE_QUOTES">
+					<Button type="button" disabled={!canSubmit} onClick={onSubmit}>
+						{isPending ? <Loader2 className="animate-spin" /> : null}
+						Créer le projet
+					</Button>
+				</RequirePermission>
 			</div>
 		</PageShell>
 	)
