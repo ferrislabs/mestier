@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { render, screen } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import type { ReactNode } from 'react'
 import { describe, expect, it, vi } from 'vitest'
@@ -331,5 +331,91 @@ describe('PlanningCalendarFeature — door into the full task sheet', () => {
 		)
 
 		expect(await screen.findByText('Modifier la tâche')).toBeDefined()
+	})
+})
+
+describe('PlanningCalendarFeature — quick create from an empty slot', () => {
+	it('creates a bare task, then attaches the assignee picked in the popover', async () => {
+		const { mockMutation, calls } = renderFeature((api) => {
+			api.mockGet(PLANNING_PATH, () => ({
+				data: planningResponse({ entries: [] }),
+				pagination: null,
+			}))
+		})
+		mockMutation('post', TASKS_PATH, () => ({ data: { id: 'new-task-1' } }))
+		mockMutation('patch', TASK_PATH, () => ({
+			data: { task: { id: 'new-task-1' } },
+		}))
+
+		// 2026-08-05 (Wednesday) sits inside the week window for 2026-08-07
+		// and carries no entry of its own.
+		fireEvent.click(await screen.findByTestId('day-column-2026-08-05'), {
+			clientX: 100,
+			clientY: 128,
+		})
+
+		const user = userEvent.setup()
+		await user.type(
+			screen.getByPlaceholderText('Ajouter un titre'),
+			'Relever les cotes',
+		)
+		await user.click(screen.getByRole('button', { name: /Personne assigné/ }))
+		await user.click(await screen.findByRole('option', { name: 'Alix Martin' }))
+		await user.click(screen.getByRole('button', { name: 'Enregistrer' }))
+
+		await waitFor(() => {
+			expect(
+				calls.some(
+					(call) => call.method === 'post' && call.path === TASKS_PATH,
+				),
+			).toBe(true)
+		})
+		const postCall = calls.find(
+			(call) => call.method === 'post' && call.path === TASKS_PATH,
+		)
+		expect((postCall?.params as { body: { title: string } }).body.title).toBe(
+			'Relever les cotes',
+		)
+
+		await waitFor(() => {
+			expect(
+				calls.some(
+					(call) => call.method === 'patch' && call.path === TASK_PATH,
+				),
+			).toBe(true)
+		})
+		const patchCall = calls.find(
+			(call) => call.method === 'patch' && call.path === TASK_PATH,
+		)
+		expect(
+			(patchCall?.params as { body: { assignees: unknown[] } }).body.assignees,
+		).toEqual([{ member_id: 'member-1' }])
+	})
+
+	it('escalates to the full sheet, carrying over the title already typed', async () => {
+		renderFeature((api) => {
+			api.mockGet(PLANNING_PATH, () => ({
+				data: planningResponse({ entries: [] }),
+				pagination: null,
+			}))
+		})
+
+		fireEvent.click(await screen.findByTestId('day-column-2026-08-05'), {
+			clientX: 100,
+			clientY: 128,
+		})
+
+		const user = userEvent.setup()
+		await user.type(
+			screen.getByPlaceholderText('Ajouter un titre'),
+			'Relever les cotes',
+		)
+		await user.click(screen.getByRole('button', { name: 'Autres options' }))
+
+		expect(await screen.findByRole('button', { name: /Créer/ })).toBeDefined()
+		expect(screen.getByLabelText('Titre')).toHaveProperty(
+			'value',
+			'Relever les cotes',
+		)
 	})
 })

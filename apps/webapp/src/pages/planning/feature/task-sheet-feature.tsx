@@ -60,7 +60,14 @@ import { TaskSheet } from '#/pages/planning/ui/task-sheet'
 import { formatCents, quoteReferenceLabel } from '#/pages/quotes/types'
 
 export type TaskSheetTarget =
-	| { mode: 'create'; parentTaskId: string | null }
+	| {
+			mode: 'create'
+			parentTaskId: string | null
+			/** Carried over from the calendar's quick-create popover — a title
+			 * or a time window already typed there should survive escalating to
+			 * "Autres options", not be thrown away for a blank form. */
+			draft?: Partial<TaskFormValues>
+	  }
 	| { mode: 'edit'; taskId: string }
 
 export interface TaskSheetFeatureProps {
@@ -189,10 +196,13 @@ export function TaskSheetFeature({
 
 	const [values, setValues] = useState<TaskFormValues>(() =>
 		target.mode === 'create'
-			? emptyTaskDraft({
-					parentTaskId: target.parentTaskId,
-					today: todayIsoDate(),
-				})
+			? {
+					...emptyTaskDraft({
+						parentTaskId: target.parentTaskId,
+						today: todayIsoDate(),
+					}),
+					...target.draft,
+				}
 			: emptyTaskDraft({ parentTaskId: null, today: todayIsoDate() }),
 	)
 	const [didSeedEdit, setDidSeedEdit] = useState(false)

@@ -7,6 +7,7 @@ import type {
 	MonthWeekVM,
 } from '#/pages/planning/lib/build-month-model'
 import type { CalendarNature } from '#/pages/planning/lib/calendar-filters'
+import { AttendeeStack } from '#/pages/planning/ui/attendee-stack'
 import {
 	type CalendarEventCallbacks,
 	EventPopover,
@@ -149,6 +150,9 @@ function EntryRow({ entry, callbacks }: EntryRowProps) {
 						{entry.timeLabel}
 					</span>
 				) : null}
+				{entry.nature === 'task' ? (
+					<AttendeeStack attendees={entry.detail.attendees} size="sm" />
+				) : null}
 			</button>
 		</EventPopover>
 	)
@@ -167,7 +171,7 @@ function SpanBar({ span, callbacks }: SpanBarProps) {
 			<button
 				type="button"
 				className={cn(
-					'absolute truncate px-2 text-left text-[11px] font-medium leading-5',
+					'absolute flex items-center gap-1 overflow-hidden px-2 text-left text-[11px] font-medium leading-5',
 					natureBarClassName(span.nature),
 					span.continuesBefore ? 'rounded-l-none' : 'rounded-l-full',
 					span.continuesAfter ? 'rounded-r-none' : 'rounded-r-full',
@@ -179,7 +183,10 @@ function SpanBar({ span, callbacks }: SpanBarProps) {
 					top: 32 + span.lane * SPAN_LANE_HEIGHT_PX,
 				}}
 			>
-				{span.title}
+				<span className="min-w-0 flex-1 truncate">{span.title}</span>
+				{span.nature === 'task' ? (
+					<AttendeeStack attendees={span.detail.attendees} size="sm" />
+				) : null}
 			</button>
 		</EventPopover>
 	)

@@ -9,6 +9,7 @@ import {
 import { useActiveOrganization } from '#/hooks/use-active-organization'
 import { usePendingAssignmentReportsCount } from '#/hooks/use-assignment-reports'
 import { useMoveTask, usePlanning } from '#/hooks/use-planning'
+import { useCreateTask, usePatchTask } from '#/hooks/use-tasks'
 import {
 	type AbsenceFormValues,
 	absenceToDraft,
@@ -31,7 +32,11 @@ import {
 	resourceIdFromAssigneeRef,
 } from '#/pages/planning/lib/task-drop'
 import {
+	buildCreateTaskPayload,
+	buildFollowUpPatchPayload,
 	buildPatchTaskPayload,
+	emptyTaskDraft,
+	needsFollowUpPatch,
 	type TaskFormValues,
 	taskToDraft,
 	validateTaskDraft,
@@ -49,6 +54,7 @@ import type { CalendarCreateKind } from '#/pages/planning/ui/calendar-toolbar'
 import type { EventEditState } from '#/pages/planning/ui/event-edit-form'
 import type { CalendarEventCallbacks } from '#/pages/planning/ui/event-popover'
 import { PlanningCalendarUI } from '#/pages/planning/ui/planning-calendar-ui'
+import type { QuickCreateDraft } from '#/pages/planning/ui/quick-create-popover'
 
 export interface PlanningCalendarFeatureProps {
 	view: PlanningView
@@ -165,6 +171,8 @@ function PlanningCalendarScreen({
 	const createAbsence = useCreateAbsence()
 	const updateAbsence = useUpdateAbsence()
 	const deleteAbsence = useDeleteAbsence()
+	const createTask = useCreateTask(organizationId)
+	const patchNewTaskAssignees = usePatchTask()
 
 	const model = useMemo(() => {
 		if (!data) return null
@@ -239,6 +247,57 @@ function PlanningCalendarScreen({
 			return
 		}
 		openAbsenceCreation(kind)
+	}
+
+	function draftValuesFromQuickCreate(draft: QuickCreateDraft): TaskFormValues {
+		return {
+			...emptyTaskDraft({ parentTaskId: null, today: draft.date }),
+			title: draft.title,
+			startDate: draft.date,
+			startTime: draft.startTime,
+			endDate: draft.date,
+			endTime: draft.endTime,
+			assignees: draft.assigneeResourceIds.map(assigneeRefFromResourceId),
+		}
+	}
+
+	// The popover's own "Enregistrer": a bare task (see `buildCreateTaskPayload`'s
+	// own doc — `POST /tasks` never accepts assignees), followed by the same
+	// `PATCH` `TaskSheetFeature` sends when a create picked any. A failure here
+	// is thrown back to the popover, which keeps itself open with the message —
+	// this feature never catches it.
+	async function handleQuickCreate(draft: QuickCreateDraft) {
+		const values = draftValuesFromQuickCreate(draft)
+		const payload = buildCreateTaskPayload(values, {
+			parentTaskId: null,
+			timeZone,
+		})
+		if (!payload) return
+
+		const created = await createTask.mutateAsync({
+			path: { organization_id: organizationId },
+			body: payload,
+		})
+
+		if (needsFollowUpPatch({ assignees: values.assignees, labelIds: [] })) {
+			await patchNewTaskAssignees.mutateAsync({
+				path: { organization_id: organizationId, task_id: created.data.id },
+				body: buildFollowUpPatchPayload({
+					assignees: values.assignees,
+					labelIds: [],
+				}),
+			})
+		}
+	}
+
+	// "Autres options": whatever the popover already had is carried into the
+	// full sheet's draft rather than thrown away for a blank form.
+	function handleQuickCreateMoreOptions(draft: QuickCreateDraft) {
+		setTaskSheetTarget({
+			mode: 'create',
+			parentTaskId: null,
+			draft: draftValuesFromQuickCreate(draft),
+		})
 	}
 
 	async function changeTaskStatus(taskId: string, status: TaskStatus) {
@@ -497,6 +556,9 @@ function PlanningCalendarScreen({
 				onCreate={handleCreate}
 				eventCallbacks={eventCallbacks}
 				onRetry={() => void planningQuery.refetch()}
+				assigneeOptions={assigneeOptions}
+				onQuickCreate={handleQuickCreate}
+				onQuickCreateMoreOptions={handleQuickCreateMoreOptions}
 			/>
 
 			{taskSheetTarget ? (

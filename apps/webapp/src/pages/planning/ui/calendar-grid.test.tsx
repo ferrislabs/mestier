@@ -1,6 +1,6 @@
-import { render, screen, waitFor } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { buildCalendarModel } from '#/pages/planning/lib/build-calendar-model'
 import type { PlanningEntry } from '#/pages/planning/types'
 import { CalendarGrid } from '#/pages/planning/ui/calendar-grid'
@@ -66,6 +66,9 @@ function renderGrid(
 			})}
 			callbacks={callbacks}
 			now={new Date('2026-03-02T09:30:00Z')}
+			assigneeOptions={[]}
+			onQuickCreate={vi.fn()}
+			onQuickCreateMoreOptions={vi.fn()}
 		/>,
 	)
 
@@ -217,5 +220,166 @@ describe('CalendarGrid — detail panel', () => {
 		await waitFor(() => {
 			expect(screen.queryByRole('dialog')).toBeNull()
 		})
+	})
+})
+
+describe('CalendarGrid — attendees on the card', () => {
+	it('shows the assignee on a one-hour card, not just on a long one', () => {
+		const oneHourTask = {
+			...TASK,
+			ends_at: '2026-03-02T10:00:00Z',
+			member_ids: ['e-1'],
+		} as PlanningEntry
+
+		render(
+			<CalendarGrid
+				model={buildCalendarModel({
+					from: '2026-03-02',
+					to: '2026-03-02',
+					entries: [oneHourTask],
+					resources: [
+						{
+							member_id: 'e-1',
+							resource_id: 'r-1',
+							display_name: 'Marie Leroy',
+							weekly_contract_minutes: 2100,
+						},
+					],
+					workTime: [],
+					timeZone: 'UTC',
+					today: '2026-03-02',
+					filter: 'all',
+				})}
+				callbacks={{
+					onChangeStatus: vi.fn(),
+					onDelete: vi.fn(),
+					editing: null,
+					assignees: [],
+					selectedResourceIds: [],
+					onEdit: vi.fn(),
+					onEditChange: vi.fn(),
+					onToggleAssignee: vi.fn(),
+					onEditSubmit: vi.fn(),
+					onEditCancel: vi.fn(),
+				}}
+				now={new Date('2026-03-02T09:30:00Z')}
+				assigneeOptions={[]}
+				onQuickCreate={vi.fn()}
+				onQuickCreateMoreOptions={vi.fn()}
+			/>,
+		)
+
+		expect(screen.getByText('ML')).toBeDefined()
+	})
+
+	it('never shows an avatar on an absence — the ask was for tasks', () => {
+		render(
+			<CalendarGrid
+				model={buildCalendarModel({
+					from: '2026-03-02',
+					to: '2026-03-03',
+					entries: [ABSENCE],
+					resources: [
+						{
+							member_id: 'e-1',
+							resource_id: 'r-1',
+							display_name: 'Marie Leroy',
+							weekly_contract_minutes: 2100,
+						},
+					],
+					workTime: [],
+					timeZone: 'UTC',
+					today: '2026-03-02',
+					filter: 'all',
+				})}
+				callbacks={{
+					onChangeStatus: vi.fn(),
+					onDelete: vi.fn(),
+					editing: null,
+					assignees: [],
+					selectedResourceIds: [],
+					onEdit: vi.fn(),
+					onEditChange: vi.fn(),
+					onToggleAssignee: vi.fn(),
+					onEditSubmit: vi.fn(),
+					onEditCancel: vi.fn(),
+				}}
+				now={new Date('2026-03-02T09:30:00Z')}
+				assigneeOptions={[]}
+				onQuickCreate={vi.fn()}
+				onQuickCreateMoreOptions={vi.fn()}
+			/>,
+		)
+
+		expect(screen.queryByText('ML')).toBeNull()
+		// The absence's own label stays the button's whole accessible name —
+		// an avatar sneaking into it broke an exact-name lookup elsewhere.
+		expect(screen.getByRole('button', { name: 'Congé' })).toBeDefined()
+	})
+})
+
+describe('CalendarGrid — click a slot to quick-create', () => {
+	// The grid always covers the full day (`CALENDAR_AMPLITUDE`, 00:00–24:00
+	// — see its own doc: the working range only shades off-hours, it never
+	// shrinks what is scrollable), so a click 128px down a column starting at
+	// viewport y=0 lands on 00:00 + 2h = 02:00 at `HOUR_HEIGHT_PX = 64`.
+	const originalGetBoundingClientRect = Element.prototype.getBoundingClientRect
+
+	afterEach(() => {
+		Element.prototype.getBoundingClientRect = originalGetBoundingClientRect
+	})
+
+	it('opens the popover on empty space, prefilled with the clicked time', () => {
+		Element.prototype.getBoundingClientRect = () =>
+			({ top: 0, left: 0, right: 0, bottom: 0 }) as DOMRect
+
+		render(
+			<CalendarGrid
+				model={buildCalendarModel({
+					from: '2026-03-02',
+					to: '2026-03-02',
+					entries: [],
+					resources: [],
+					workTime: [],
+					timeZone: 'UTC',
+					today: '2026-03-02',
+					filter: 'all',
+				})}
+				callbacks={{
+					onChangeStatus: vi.fn(),
+					onDelete: vi.fn(),
+					editing: null,
+					assignees: [],
+					selectedResourceIds: [],
+					onEdit: vi.fn(),
+					onEditChange: vi.fn(),
+					onToggleAssignee: vi.fn(),
+					onEditSubmit: vi.fn(),
+					onEditCancel: vi.fn(),
+				}}
+				assigneeOptions={[]}
+				onQuickCreate={vi.fn()}
+				onQuickCreateMoreOptions={vi.fn()}
+			/>,
+		)
+
+		fireEvent.click(screen.getByTestId('day-column-2026-03-02'), {
+			clientX: 300,
+			clientY: 128,
+		})
+
+		expect(screen.getByPlaceholderText('Ajouter un titre')).toBeDefined()
+		expect(
+			screen.getAllByRole('combobox', { name: 'Heure' })[0],
+		).toHaveProperty('value', '02:00')
+	})
+
+	it('does not open the popover for a click that reaches a card', async () => {
+		const user = userEvent.setup()
+		renderGrid([TASK])
+
+		await user.click(screen.getByRole('button', { name: /Taille de haie/ }))
+
+		expect(screen.queryByPlaceholderText('Ajouter un titre')).toBeNull()
 	})
 })

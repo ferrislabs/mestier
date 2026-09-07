@@ -1,4 +1,4 @@
-import { AlertCircle, CalendarDays } from 'lucide-react'
+import { AlertCircle, CalendarDays, Filter } from 'lucide-react'
 import { Button } from '#/components/ui/button'
 import { PageHeader, PageShell, SectionCard } from '#/components/ui/surface'
 import type { CalendarModel } from '#/pages/planning/lib/build-calendar-model'
@@ -14,6 +14,8 @@ import {
 import type { CalendarEventCallbacks } from '#/pages/planning/ui/event-popover'
 import { MonthGrid } from '#/pages/planning/ui/month-grid'
 import { PendingReportsBadge } from '#/pages/planning/ui/pending-reports-badge'
+import type { AssigneeOption } from './assignee-picker'
+import type { QuickCreateDraft } from './quick-create-popover'
 
 export interface PlanningCalendarUIProps {
 	organizationName: string
@@ -43,6 +45,11 @@ export interface PlanningCalendarUIProps {
 	onRetry: () => void
 	/** Fige l'heure courante — tests seulement. */
 	now?: Date
+	/** The week/day grid's click-to-create popover — month view has no time
+	 * slot precise enough for it, so these are unused there. */
+	assigneeOptions: AssigneeOption[]
+	onQuickCreate: (draft: QuickCreateDraft) => Promise<void>
+	onQuickCreateMoreOptions: (draft: QuickCreateDraft) => void
 }
 
 export function PlanningCalendarUI({
@@ -69,26 +76,13 @@ export function PlanningCalendarUI({
 	eventCallbacks,
 	onRetry,
 	now,
+	assigneeOptions,
+	onQuickCreate,
+	onQuickCreateMoreOptions,
 }: PlanningCalendarUIProps) {
 	const hiddenByFilter = filteredOutCount(view, model, monthModel)
 	const isMonth = view === 'month'
 	const activeModel = isMonth ? monthModel : model
-	const eventCount = isMonth
-		? (monthModel?.weeks.reduce(
-				(total, week) =>
-					total +
-					week.spans.length +
-					week.days.reduce(
-						(inner, day) => inner + day.entries.length + day.hiddenCount,
-						0,
-					),
-				0,
-			) ?? 0)
-		: (model?.days.reduce(
-				(total, day) =>
-					total + day.allDayEvents.length + day.timedEvents.length,
-				0,
-			) ?? 0)
 
 	return (
 		<PageShell className="max-w-none">
@@ -139,26 +133,37 @@ export function PlanningCalendarUI({
 						title="Chargement du calendrier…"
 						message="Récupération des tâches, congés et absences de la période."
 					/>
-				) : eventCount === 0 ? (
-					<CalendarNotice
-						icon={<CalendarDays className="size-6 text-muted-foreground" />}
-						title="Rien de planifié sur cette période"
-						message={
-							hiddenByFilter > 0
-								? `${hiddenByFilter} entrée${hiddenByFilter > 1 ? 's sont masquées' : ' est masquée'} par les filtres en cours.`
-								: 'Ajoutez une tâche, un congé ou une absence pour remplir le calendrier.'
-						}
-						action={
-							<Button type="button" onClick={() => onCreate('task')}>
-								Ajouter une tâche
-							</Button>
-						}
-					/>
-				) : isMonth && monthModel ? (
-					<MonthGrid model={monthModel} callbacks={eventCallbacks} />
-				) : model ? (
-					<CalendarGrid model={model} callbacks={eventCallbacks} now={now} />
-				) : null}
+				) : (
+					<>
+						{/* The grid itself already says "nothing here" for a period with
+						    no entries — the empty state used to hide the grid entirely,
+						    which meant a quiet week looked like a broken page rather than
+						    a calendar with nothing on it. A filter silently hiding real
+						    entries is a different situation, worth calling out, so that
+						    one still gets a notice — just above the grid, not instead of
+						    it. */}
+						{hiddenByFilter > 0 ? (
+							<div className="flex items-center gap-2 border-b bg-muted/40 px-4 py-2 text-xs text-muted-foreground">
+								<Filter className="size-3.5 shrink-0" />
+								{hiddenByFilter} entrée
+								{hiddenByFilter > 1 ? 's' : ''} masquée
+								{hiddenByFilter > 1 ? 's' : ''} par les filtres en cours.
+							</div>
+						) : null}
+						{isMonth && monthModel ? (
+							<MonthGrid model={monthModel} callbacks={eventCallbacks} />
+						) : model ? (
+							<CalendarGrid
+								model={model}
+								callbacks={eventCallbacks}
+								now={now}
+								assigneeOptions={assigneeOptions}
+								onQuickCreate={onQuickCreate}
+								onQuickCreateMoreOptions={onQuickCreateMoreOptions}
+							/>
+						) : null}
+					</>
+				)}
 			</SectionCard>
 		</PageShell>
 	)
