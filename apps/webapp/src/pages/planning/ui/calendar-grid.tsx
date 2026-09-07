@@ -14,10 +14,16 @@ import {
 	isCurrentTimeVisible,
 	millisecondsUntilNextMinute,
 } from '#/pages/planning/lib/current-time'
+import type { AssigneeOption } from '#/pages/planning/ui/assignee-picker'
+import { AttendeeStack } from '#/pages/planning/ui/attendee-stack'
 import {
 	type CalendarEventCallbacks,
 	EventPopover,
 } from '#/pages/planning/ui/event-popover'
+import {
+	type QuickCreateDraft,
+	QuickCreatePopover,
+} from '#/pages/planning/ui/quick-create-popover'
 
 /** Height of one grid hour, in pixels. Fixed: it is what gives the calendar its scale. */
 const HOUR_HEIGHT_PX = 64
@@ -32,9 +38,33 @@ export interface CalendarGridProps {
 	 * own; tests pass a fixed instant, like {@link CurrentTimeLine}.
 	 */
 	now?: Date
+	/** Who the quick-create popover's assignee picker can offer — the same
+	 * list `TaskSheetFeature` builds from, so a task started here or from the
+	 * full sheet sees the same people. */
+	assigneeOptions: AssigneeOption[]
+	/** Resolves once the task exists (and its assignees, if any, are
+	 * attached) — closes the popover. Rejects to keep it open with the error
+	 * shown, the same recovery shape `TaskSheetFeature` already uses. */
+	onQuickCreate: (draft: QuickCreateDraft) => Promise<void>
+	/** Escalates to the full sheet, carrying over whatever was already typed. */
+	onQuickCreateMoreOptions: (draft: QuickCreateDraft) => void
 }
 
-export function CalendarGrid({ model, callbacks, now }: CalendarGridProps) {
+interface PendingSlot {
+	date: string
+	startTime: string
+	x: number
+	y: number
+}
+
+export function CalendarGrid({
+	model,
+	callbacks,
+	now,
+	assigneeOptions,
+	onQuickCreate,
+	onQuickCreateMoreOptions,
+}: CalendarGridProps) {
 	const hourCount = Math.max(
 		1,
 		(model.amplitude.endMinute - model.amplitude.startMinute) / 60,
@@ -44,6 +74,10 @@ export function CalendarGrid({ model, callbacks, now }: CalendarGridProps) {
 	const scrollRef = useRef<HTMLDivElement>(null)
 	const { startMinute, endMinute } = model.amplitude
 	const scrollToMinute = model.scrollToMinute
+
+	const [pendingSlot, setPendingSlot] = useState<PendingSlot | null>(null)
+	const [isCreating, setIsCreating] = useState(false)
+	const [createError, setCreateError] = useState<string | null>(null)
 
 	// The grid covers the full 24 h: we open it on the period's first entry
 	// rather than at midnight, otherwise the screen opens on empty hours. We
@@ -56,6 +90,43 @@ export function CalendarGrid({ model, callbacks, now }: CalendarGridProps) {
 		const ratio = (scrollToMinute - startMinute) / span
 		container.scrollTop = ratio * bodyHeight
 	}, [scrollToMinute, startMinute, endMinute, bodyHeight])
+
+	function handleSlotClick(date: string, event: React.MouseEvent) {
+		// Only truly empty space: a click that reached a card (or one of its
+		// own children) has `target` set to that descendant, never to the
+		// column div itself.
+		if (event.target !== event.currentTarget) return
+
+		const rect = event.currentTarget.getBoundingClientRect()
+		const offsetMinutes = ((event.clientY - rect.top) / HOUR_HEIGHT_PX) * 60
+		const minuteOfDay = clampMinute(
+			snapToHalfHour(startMinute + offsetMinutes),
+			model.amplitude,
+		)
+
+		setCreateError(null)
+		setPendingSlot({
+			date,
+			startTime: minuteToTimeString(minuteOfDay),
+			x: event.clientX,
+			y: event.clientY,
+		})
+	}
+
+	async function handleQuickCreate(draft: QuickCreateDraft) {
+		setIsCreating(true)
+		setCreateError(null)
+		try {
+			await onQuickCreate(draft)
+			setPendingSlot(null)
+		} catch (error) {
+			setCreateError(
+				error instanceof Error ? error.message : 'La création a échoué.',
+			)
+		} finally {
+			setIsCreating(false)
+		}
+	}
 
 	return (
 		<div className="overflow-x-auto">
@@ -92,7 +163,12 @@ export function CalendarGrid({ model, callbacks, now }: CalendarGridProps) {
 							<HourLines marks={model.hourMarks} amplitude={model.amplitude} />
 
 							{model.days.map((day) => (
-								<DayColumn key={day.date} day={day} callbacks={callbacks} />
+								<DayColumn
+									key={day.date}
+									day={day}
+									callbacks={callbacks}
+									onSlotClick={(event) => handleSlotClick(day.date, event)}
+								/>
 							))}
 
 							<NowLine model={model} controlledNow={now} gutterOffset={false} />
@@ -102,8 +178,37 @@ export function CalendarGrid({ model, callbacks, now }: CalendarGridProps) {
 					</div>
 				</div>
 			</div>
+
+			<QuickCreatePopover
+				anchor={pendingSlot}
+				assigneeOptions={assigneeOptions}
+				isSaving={isCreating}
+				error={createError}
+				onCreate={(draft) => void handleQuickCreate(draft)}
+				onMoreOptions={(draft) => {
+					setPendingSlot(null)
+					onQuickCreateMoreOptions(draft)
+				}}
+				onClose={() => setPendingSlot(null)}
+			/>
 		</div>
 	)
+}
+
+/** Rounds to the nearest half hour — the same grid `TIME_OPTIONS` offers, so
+ * a slot click and a hand-picked time never disagree by a few minutes. */
+function snapToHalfHour(minute: number): number {
+	return Math.round(minute / 30) * 30
+}
+
+function clampMinute(minute: number, amplitude: MinuteRange): number {
+	return Math.min(Math.max(minute, amplitude.startMinute), amplitude.endMinute)
+}
+
+function minuteToTimeString(totalMinutes: number): string {
+	const hours = Math.floor(totalMinutes / 60)
+	const minutes = totalMinutes % 60
+	return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`
 }
 
 function DayHeaderRow({ days }: { days: CalendarDayVM[] }) {
@@ -172,11 +277,14 @@ function AllDayRow({ days, callbacks }: AllDayRowProps) {
 							<button
 								type="button"
 								className={cn(
-									'w-full truncate rounded-lg px-2 py-1 text-left text-[11px] font-medium transition-shadow hover:shadow-sm',
+									'flex w-full items-center gap-1.5 overflow-hidden rounded-lg px-2 py-1 text-left text-[11px] font-medium transition-shadow hover:shadow-sm',
 									natureClassName(event.nature),
 								)}
 							>
-								{event.title}
+								<span className="min-w-0 flex-1 truncate">{event.title}</span>
+								{event.nature === 'task' ? (
+									<AttendeeStack attendees={event.attendees} size="sm" />
+								) : null}
 							</button>
 						</EventPopover>
 					))}
@@ -281,16 +389,25 @@ function OffHoursBands({ amplitude, workingRange }: OffHoursBandsProps) {
 interface DayColumnProps {
 	day: CalendarDayVM
 	callbacks: CalendarEventCallbacks
+	onSlotClick: (event: React.MouseEvent<HTMLDivElement>) => void
 }
 
-function DayColumn({ day, callbacks }: DayColumnProps) {
+function DayColumn({ day, callbacks, onSlotClick }: DayColumnProps) {
 	return (
+		// An arbitrary click position (the minute it lands on) has no keyboard
+		// equivalent to give it — quick-create by clicking a time slot is the
+		// mouse shortcut, not the only path; the toolbar's "+ Ajouter" stays
+		// fully keyboard-operable.
+		// biome-ignore lint/a11y/noStaticElementInteractions: see above.
+		// biome-ignore lint/a11y/useKeyWithClickEvents: see above.
 		<div
+			data-testid={`day-column-${day.date}`}
 			className={cn(
 				'relative flex-1 border-l',
 				day.isWeekend && 'bg-muted/20',
 				day.isToday && 'bg-brand-soft/25',
 			)}
+			onClick={onSlotClick}
 		>
 			{day.timedEvents.map((event) => (
 				<EventCard key={event.key} event={event} callbacks={callbacks} />
@@ -305,11 +422,12 @@ interface EventCardProps {
 }
 
 /**
- * The card's density, driven by the span it covers. A half-hour task has no
- * room to show its attendees: rather than truncating at random, the rows drop
- * out in decreasing order of importance.
+ * The card's density, driven by the span it covers. A quarter-hour task has
+ * no room for anything past its title: rather than truncating at random, the
+ * rows drop out in decreasing order of importance. Time and attendees share
+ * one threshold — once there is room for one line below the title, there is
+ * room for the other.
  */
-const FULL_CARD_MINUTES = 90
 const TIMED_CARD_MINUTES = 45
 
 function EventCard({ event, callbacks }: EventCardProps) {
@@ -317,7 +435,7 @@ function EventCard({ event, callbacks }: EventCardProps) {
 	// An overlap shifts the card inside its column rather than shrinking it
 	// further: two cards side by side stay readable.
 	const left = width * event.column
-	const showFooter = event.durationMinutes >= FULL_CARD_MINUTES
+	const showFooter = event.durationMinutes >= TIMED_CARD_MINUTES
 	const showTime = event.durationMinutes >= TIMED_CARD_MINUTES
 
 	return (
@@ -346,8 +464,8 @@ function EventCard({ event, callbacks }: EventCardProps) {
 				) : null}
 
 				{showFooter ? (
-					<span className="mt-auto flex items-end justify-between gap-2">
-						{event.attendees.length > 0 ? (
+					<span className="mt-1.5 flex items-end justify-between gap-2">
+						{event.nature === 'task' && event.attendees.length > 0 ? (
 							<AttendeeStack attendees={event.attendees} />
 						) : (
 							<span />
@@ -357,34 +475,6 @@ function EventCard({ event, callbacks }: EventCardProps) {
 				) : null}
 			</button>
 		</EventPopover>
-	)
-}
-
-function AttendeeStack({
-	attendees,
-}: {
-	attendees: CalendarEventVM['attendees']
-}) {
-	const shown = attendees.slice(0, 3)
-	const extra = attendees.length - shown.length
-
-	return (
-		<span className="mt-1.5 flex items-center -space-x-1.5">
-			{shown.map((attendee) => (
-				<span
-					key={attendee.id}
-					title={attendee.name}
-					className="flex size-5 items-center justify-center rounded-full bg-card text-[9px] font-semibold text-foreground ring-1 ring-border"
-				>
-					{attendee.initials}
-				</span>
-			))}
-			{extra > 0 ? (
-				<span className="flex size-5 items-center justify-center rounded-full bg-card text-[9px] font-semibold text-muted-foreground ring-1 ring-border">
-					+{extra}
-				</span>
-			) : null}
-		</span>
 	)
 }
 
