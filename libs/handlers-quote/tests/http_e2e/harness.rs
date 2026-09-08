@@ -26,10 +26,15 @@ pub struct App {
     pub customer_context_id: Uuid,
     /// A second member of the same organization, holding membership but no
     /// role assignment at all — #305's `quote.manage` gate refuses this one
-    /// outright on every write.
+    /// outright on every write, and #396's `VIEW_QUOTES` gate refuses it on
+    /// every read too.
     pub no_role_token: String,
+    /// A member holding exactly `VIEW_QUOTES` — nothing else, no
+    /// `MANAGE_QUOTES` (#396). Reads the same quote the owner does.
+    pub view_quotes_token: String,
     user_id: Uuid,
     no_role_user_id: Uuid,
+    view_quotes_user_id: Uuid,
 }
 
 /// Panics rather than skipping when the stack is down: the test is `#[ignore]`d,
@@ -74,12 +79,14 @@ pub async fn start() -> App {
         base_url: format!("http://{addr}"),
         token: issuer::mint(&fixture.sub),
         no_role_token: issuer::mint(&fixture.no_role_sub),
+        view_quotes_token: issuer::mint(&fixture.view_quotes_sub),
         pool,
         organization_id: fixture.organization_id,
         customer_id: fixture.customer_id,
         customer_context_id: fixture.customer_context_id,
         user_id: fixture.user_id,
         no_role_user_id: fixture.no_role_user_id,
+        view_quotes_user_id: fixture.view_quotes_user_id,
     }
 }
 
@@ -122,7 +129,7 @@ impl App {
                 .await;
         }
 
-        for user_id in [self.user_id, self.no_role_user_id] {
+        for user_id in [self.user_id, self.no_role_user_id, self.view_quotes_user_id] {
             let _ = sqlx::query("DELETE FROM users WHERE id = $1")
                 .bind(user_id)
                 .execute(&self.pool)
@@ -136,6 +143,8 @@ struct Fixture {
     user_id: Uuid,
     no_role_sub: String,
     no_role_user_id: Uuid,
+    view_quotes_sub: String,
+    view_quotes_user_id: Uuid,
     organization_id: Uuid,
     customer_id: Uuid,
     customer_context_id: Uuid,
@@ -220,6 +229,43 @@ async fn seed(pool: &PgPool) -> Fixture {
     .await
     .expect("seed the no-role membership");
 
+    // #396: exactly `VIEW_QUOTES`, nothing else — no `MANAGE_QUOTES`. Proves
+    // it is this one bit the read gate keys off.
+    let view_quotes_user_id = Uuid::now_v7();
+    let view_quotes_sub = format!("sub-e2e-{view_quotes_user_id}");
+    sqlx::query(
+        "INSERT INTO users (id, email, username, display_name, sub) VALUES ($1, $2, $3, $4, $5)",
+    )
+    .bind(view_quotes_user_id)
+    .bind(format!("artisan-{view_quotes_user_id}@example.com"))
+    .bind(format!("artisan-{view_quotes_user_id}"))
+    .bind("Artisan View Quotes")
+    .bind(&view_quotes_sub)
+    .execute(pool)
+    .await
+    .expect("seed the view-quotes user");
+
+    let view_quotes_member_id = Uuid::now_v7();
+    sqlx::query(
+        "INSERT INTO organization_members (id, organization_id, user_id, last_name) VALUES ($1, $2, $3, $4)",
+    )
+    .bind(view_quotes_member_id)
+    .bind(organization_id)
+    .bind(view_quotes_user_id)
+    .bind("Artisan View Quotes")
+    .execute(pool)
+    .await
+    .expect("seed the view-quotes membership");
+
+    let view_quotes_role_id = seed_role(
+        pool,
+        organization_id,
+        "test-view-quotes",
+        Permissions::VIEW_QUOTES.0,
+    )
+    .await;
+    assign_role(pool, view_quotes_member_id, view_quotes_role_id).await;
+
     let customer_id = Uuid::now_v7();
     sqlx::query("INSERT INTO customers (id, org_id, name) VALUES ($1, $2, $3)")
         .bind(customer_id)
@@ -243,6 +289,8 @@ async fn seed(pool: &PgPool) -> Fixture {
         user_id,
         no_role_sub,
         no_role_user_id,
+        view_quotes_sub,
+        view_quotes_user_id,
         organization_id,
         customer_id,
         customer_context_id,

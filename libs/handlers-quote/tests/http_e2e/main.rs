@@ -9,6 +9,10 @@
 //! That is also why they are `#[ignore]`d, like the use-case integration tests
 //! already in `libs/core`: they need the compose stack up.
 //!
+//! #396 closes the matching gap on reads: the list/get-one/plan-proposal/pdf
+//! handlers used to accept plain organization membership. They now require
+//! `VIEW_QUOTES` too.
+//!
 //! ```bash
 //! docker compose up -d postgres redis
 //! source .env
@@ -232,6 +236,136 @@ async fn a_member_without_quote_manage_is_refused_creating_a_quote() {
         403,
         "a member without `quote.manage` must be refused, not silently allowed through"
     );
+
+    app.cleanup().await;
+}
+
+/// #396: plain organization membership used to be enough to list quotes. A
+/// member holding no role at all is now refused outright, while a member
+/// holding exactly `VIEW_QUOTES` reads the same page the owner does.
+#[tokio::test]
+#[ignore = "requires live postgres and redis"]
+async fn listing_quotes_requires_view_quotes() {
+    let app = harness::start().await;
+    let quote_id = create_a_quote(&app).await;
+
+    let refused = reqwest::Client::new()
+        .get(app.quotes_url())
+        .bearer_auth(&app.no_role_token)
+        .send()
+        .await
+        .expect("the api answers the no-role member's list call");
+    assert_eq!(
+        refused.status(),
+        403,
+        "membership alone must not be enough to list quotes"
+    );
+
+    let allowed: serde_json::Value = reqwest::Client::new()
+        .get(app.quotes_url())
+        .bearer_auth(&app.view_quotes_token)
+        .send()
+        .await
+        .expect("the api answers the view-quotes member's list call")
+        .json()
+        .await
+        .expect("the list answer is json");
+    assert!(
+        allowed["data"]
+            .as_array()
+            .expect("a page of quotes")
+            .iter()
+            .any(|quote| quote["id"] == json!(quote_id)),
+        "{allowed}"
+    );
+
+    app.cleanup().await;
+}
+
+/// Same gate on the single-quote read.
+#[tokio::test]
+#[ignore = "requires live postgres and redis"]
+async fn reading_a_quote_requires_view_quotes() {
+    let app = harness::start().await;
+    let quote_id = create_a_quote(&app).await;
+    let quote_url = format!("{}/api/v1/quotes/{quote_id}", app.base_url);
+
+    let refused = reqwest::Client::new()
+        .get(&quote_url)
+        .bearer_auth(&app.no_role_token)
+        .send()
+        .await
+        .expect("the api answers the no-role member's get call");
+    assert_eq!(refused.status(), 403);
+
+    let allowed = reqwest::Client::new()
+        .get(&quote_url)
+        .bearer_auth(&app.view_quotes_token)
+        .send()
+        .await
+        .expect("the api answers the view-quotes member's get call");
+    assert_eq!(allowed.status(), 200);
+    let body: serde_json::Value = allowed.json().await.expect("the answer is json");
+    assert_eq!(body["data"]["id"], json!(quote_id));
+
+    app.cleanup().await;
+}
+
+/// Same gate on the plan-proposal read — checked ahead of the "is it
+/// accepted" business rule, so a member without `VIEW_QUOTES` gets refused
+/// with a 403 even on a draft quote that would otherwise 409.
+#[tokio::test]
+#[ignore = "requires live postgres and redis"]
+async fn plan_proposal_requires_view_quotes() {
+    let app = harness::start().await;
+    let (quote_id, _quote) = create_and_accept_a_quote(&app).await;
+
+    let refused = reqwest::Client::new()
+        .get(app.plan_proposal_url(&quote_id))
+        .bearer_auth(&app.no_role_token)
+        .send()
+        .await
+        .expect("the api answers the no-role member's plan-proposal call");
+    assert_eq!(refused.status(), 403);
+
+    let allowed = reqwest::Client::new()
+        .get(app.plan_proposal_url(&quote_id))
+        .bearer_auth(&app.view_quotes_token)
+        .send()
+        .await
+        .expect("the api answers the view-quotes member's plan-proposal call");
+    assert_eq!(allowed.status(), 200);
+
+    app.cleanup().await;
+}
+
+/// Same gate on the PDF export.
+#[tokio::test]
+#[ignore = "requires live postgres and redis"]
+async fn pdf_export_requires_view_quotes() {
+    let app = harness::start().await;
+    let quote_id = create_a_quote(&app).await;
+    let pdf_url = format!("{}/api/v1/quotes/{quote_id}/pdf", app.base_url);
+
+    let refused = reqwest::Client::new()
+        .get(&pdf_url)
+        .bearer_auth(&app.no_role_token)
+        .send()
+        .await
+        .expect("the api answers the no-role member's pdf call");
+    assert_eq!(refused.status(), 403);
+
+    // The seeded organization has no legal identity, so a `VIEW_QUOTES`
+    // member reaches the same 409 the owner would — proving the permission
+    // gate let the call through, not that the PDF actually renders (see
+    // `pdf_export_renders_once_the_legal_identity_is_complete` for that).
+    let allowed = reqwest::Client::new()
+        .get(&pdf_url)
+        .bearer_auth(&app.view_quotes_token)
+        .send()
+        .await
+        .expect("the api answers the view-quotes member's pdf call");
+    assert_eq!(allowed.status(), 409);
 
     app.cleanup().await;
 }

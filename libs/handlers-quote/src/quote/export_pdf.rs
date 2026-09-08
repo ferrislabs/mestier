@@ -18,7 +18,7 @@ use crate::{
         build_pdf, format_cents, format_cents_i64, format_rate_bp, render_pdf_text_stream,
         vat_status_mention,
     },
-    require_quote_membership,
+    require_quote_view,
 };
 
 #[utoipa::path(
@@ -43,7 +43,7 @@ pub async fn handler(
     State(state): State<AppState>,
     Extension(identity): Extension<Identity>,
 ) -> Result<Response, ApiError> {
-    let quote = require_quote_membership(&state, &identity, quote_id).await?;
+    let quote = require_quote_view(&state, &identity, quote_id).await?;
     let organization = state
         .usecase
         .get_organization(quote.organization_id)

@@ -40,7 +40,7 @@ export interface PermissionDescriptor {
 /**
  * Every named bit (`mestier_core::domain::role::Permissions::NAMED`), with
  * the French sentence #308 asks for. `permission-catalog.test.ts` locks
- * this list to exactly the 18 names `PermissionName` carries, so a bit
+ * this list to exactly the 19 names `PermissionName` carries, so a bit
  * added on the backend fails loudly here instead of showing up unlabeled.
  *
  * `VIEW_COST` and `MANAGE_COST` are worded to read differently at a
@@ -98,6 +98,12 @@ export const PERMISSION_CATALOG: PermissionDescriptor[] = [
 		area: 'commercial',
 		label: 'Gérer les clients',
 		description: 'Créer, modifier et archiver les fiches clients.',
+	},
+	{
+		name: 'VIEW_QUOTES',
+		area: 'commercial',
+		label: 'Voir les devis',
+		description: 'Consulter la liste des devis et le détail de chaque devis.',
 	},
 	{
 		name: 'MANAGE_QUOTES',
