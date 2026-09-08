@@ -5,6 +5,7 @@ import { buildCalendarModel } from '#/pages/planning/lib/build-calendar-model'
 import type { PlanningEntry } from '#/pages/planning/types'
 import { CalendarGrid } from '#/pages/planning/ui/calendar-grid'
 import type { CalendarEventCallbacks } from '#/pages/planning/ui/event-popover'
+import { wrapWithPermissions } from '#/test/with-permissions'
 
 const TASK = {
 	kind: 'task',
@@ -53,23 +54,25 @@ function renderGrid(
 	}
 
 	render(
-		<CalendarGrid
-			model={buildCalendarModel({
-				from: '2026-03-02',
-				to: '2026-03-02',
-				entries,
-				resources: [],
-				workTime: [],
-				timeZone: 'UTC',
-				today: '2026-03-02',
-				filter: 'all',
-			})}
-			callbacks={callbacks}
-			now={new Date('2026-03-02T09:30:00Z')}
-			assigneeOptions={[]}
-			onQuickCreate={vi.fn()}
-			onQuickCreateMoreOptions={vi.fn()}
-		/>,
+		wrapWithPermissions(
+			<CalendarGrid
+				model={buildCalendarModel({
+					from: '2026-03-02',
+					to: '2026-03-02',
+					entries,
+					resources: [],
+					workTime: [],
+					timeZone: 'UTC',
+					today: '2026-03-02',
+					filter: 'all',
+				})}
+				callbacks={callbacks}
+				now={new Date('2026-03-02T09:30:00Z')}
+				assigneeOptions={[]}
+				onQuickCreate={vi.fn()}
+				onQuickCreateMoreOptions={vi.fn()}
+			/>,
+		),
 	)
 
 	return callbacks

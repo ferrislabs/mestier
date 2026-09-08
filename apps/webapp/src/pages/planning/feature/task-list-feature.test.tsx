@@ -8,7 +8,9 @@ import {
 	OrganizationListProvider,
 } from '#/hooks/use-active-organization'
 import type { Organization } from '#/hooks/use-organizations'
+import { PERMISSION_CATALOG } from '#/lib/permission-catalog'
 import { TaskListFeature } from '#/pages/planning/feature/task-list-feature'
+import { seedPermissionsCacheForOrganization } from '#/test/with-permissions'
 
 // jsdom has no ResizeObserver, which Radix primitives (Select, Popover,
 // Tabs) probe defensively — see the same stub in
@@ -34,6 +36,9 @@ const TASK_COMMENTS_PATH =
 	'/api/v1/organizations/{organization_id}/tasks/{task_id}/comments'
 const BULK_ASSIGN_TASKS_PATH =
 	'/api/v1/organizations/{organization_id}/tasks/bulk-assign'
+const MY_PERMISSIONS_PATH =
+	'/api/v1/organizations/{organization_id}/members/me/permissions'
+const ALL_PERMISSIONS = PERMISSION_CATALOG.map((entry) => entry.name)
 
 const ORGANIZATION: Organization = {
 	id: 'org-1',
@@ -160,11 +165,15 @@ function tasksHandler(rootTasks: ReturnType<typeof task>[]) {
 	}
 }
 
-function renderFeature(
+async function renderFeature(
 	configure: (api: ReturnType<typeof installFakeTanstackApi>) => void,
 ) {
 	const api = installFakeTanstackApi()
 	const { calls, mockGet, mockMutation } = api
+	mockGet(MY_PERMISSIONS_PATH, () => ({
+		data: { permissions: ALL_PERMISSIONS },
+		pagination: null,
+	}))
 	mockGet(PLANNING_PATH, () => ({
 		data: {
 			timezone: 'Europe/Paris',
@@ -194,6 +203,7 @@ function renderFeature(
 	const queryClient = new QueryClient({
 		defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
 	})
+	seedPermissionsCacheForOrganization(queryClient, ORGANIZATION.id)
 
 	function Providers({ children }: { children: ReactNode }) {
 		return (
@@ -218,7 +228,7 @@ function renderFeature(
 
 describe('TaskListFeature — chargement', () => {
 	it("loads page 1's root tasks, with no parent_task_id", async () => {
-		const { calls } = renderFeature((api) =>
+		const { calls } = await renderFeature((api) =>
 			api.mockGet(TASKS_PATH, tasksHandler([task()])),
 		)
 
@@ -238,7 +248,7 @@ describe('TaskListFeature — chargement', () => {
 
 describe('TaskListFeature — lazy expansion', () => {
 	it('loads subtasks only on expansion, not on the initial render', async () => {
-		const { calls } = renderFeature((api) =>
+		const { calls } = await renderFeature((api) =>
 			api.mockGet(TASKS_PATH, (params) => {
 				const query = (params as { query?: { parent_task_id?: string } }).query
 				if (query?.parent_task_id === 'root-1') {
@@ -289,7 +299,7 @@ describe('TaskListFeature — lazy expansion', () => {
 describe('TaskListFeature — pagination', () => {
 	it('asks for the next page when "Suivant" is clicked', async () => {
 		const rootTasks = [task()]
-		const { calls } = renderFeature((api) =>
+		const { calls } = await renderFeature((api) =>
 			api.mockGet(TASKS_PATH, (params) => {
 				const query = (
 					params as { query?: { parent_task_id?: string; page?: number } }
@@ -336,7 +346,7 @@ describe('TaskListFeature — reference data loading', () => {
 			resolvePlanning = resolve
 		})
 
-		renderFeature((api) => {
+		await renderFeature((api) => {
 			api.mockGet(TASKS_PATH, tasksHandler([task()]))
 			api.mockGet(PLANNING_PATH, () => planningPromise)
 		})
@@ -366,7 +376,7 @@ describe('TaskListFeature — reference data loading', () => {
 
 describe('TaskListFeature — full day', () => {
 	it('a subtask with no dates of its own, under a full-day root, shows the inherited date with no time', async () => {
-		const { mockGet } = renderFeature((api) =>
+		const { mockGet } = await renderFeature((api) =>
 			api.mockGet(TASKS_PATH, (params) => {
 				const query = (params as { query?: { parent_task_id?: string } }).query
 				if (query?.parent_task_id === 'root-1') {
@@ -415,7 +425,9 @@ describe('TaskListFeature — full day', () => {
 
 describe('TaskListFeature — bulk assign', () => {
 	it('shows the bulk-assign bar once a row is selected, and hides it again on cancel', async () => {
-		renderFeature((api) => api.mockGet(TASKS_PATH, tasksHandler([task()])))
+		await renderFeature((api) =>
+			api.mockGet(TASKS_PATH, tasksHandler([task()])),
+		)
 
 		await screen.findByText('Projet toiture')
 		expect(screen.queryByText(/tâche sélectionnée/)).toBeNull()
@@ -431,7 +443,7 @@ describe('TaskListFeature — bulk assign', () => {
 	})
 
 	it('applies the picked assignee to every selected task via one PATCH per task, merged with each task’s own existing assignees — never the replace-everything bulk-assign route', async () => {
-		const { calls } = renderFeature((api) => {
+		const { calls } = await renderFeature((api) => {
 			api.mockGet(
 				TASKS_PATH,
 				tasksHandler([
@@ -501,7 +513,7 @@ describe('TaskListFeature — bulk assign', () => {
 	})
 
 	it('names the task that failed instead of a generic error, and keeps the selection so the user can retry', async () => {
-		renderFeature((api) => {
+		await renderFeature((api) => {
 			api.mockGet(
 				TASKS_PATH,
 				tasksHandler([task(), task({ id: 'root-2', title: 'Réunion projet' })]),
@@ -540,7 +552,7 @@ describe('TaskListFeature — bulk assign', () => {
 
 describe('TaskListFeature — opening the Sheet', () => {
 	it('opens the Sheet on the clicked task', async () => {
-		const { calls, mockGet } = renderFeature((api) =>
+		const { calls, mockGet } = await renderFeature((api) =>
 			api.mockGet(TASKS_PATH, tasksHandler([task()])),
 		)
 		mockGet(TASK_PATH, (params) => ({
@@ -568,7 +580,7 @@ describe('TaskListFeature — opening the Sheet', () => {
 	})
 
 	it('opens the Sheet on the right subtask', async () => {
-		const { calls, mockGet } = renderFeature((api) =>
+		const { calls, mockGet } = await renderFeature((api) =>
 			api.mockGet(TASKS_PATH, (params) => {
 				const query = (params as { query?: { parent_task_id?: string } }).query
 				if (query?.parent_task_id === 'root-1') {

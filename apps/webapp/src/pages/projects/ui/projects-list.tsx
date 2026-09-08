@@ -13,6 +13,7 @@ import {
 	RowActions,
 	RowIdentity,
 } from '#/components/reference-table'
+import { RequirePermission } from '#/components/require-permission'
 import { Badge } from '#/components/ui/badge'
 import { Button } from '#/components/ui/button'
 import { Input } from '#/components/ui/input'
@@ -142,27 +143,32 @@ export function ProjectsList({
 				cell: ({ row }) =>
 					row.original.archived_at ? (
 						<div className="flex justify-end">
-							<Button
-								variant="outline"
-								size="sm"
-								onClick={() => onRestore(row.original)}
-							>
-								Restaurer
-							</Button>
+							<RequirePermission permission="MANAGE_PLANNING">
+								<Button
+									variant="outline"
+									size="sm"
+									onClick={() => onRestore(row.original)}
+								>
+									Restaurer
+								</Button>
+							</RequirePermission>
 						</div>
 					) : (
 						<div className="flex items-center justify-end gap-1">
-							<Button
-								variant="ghost"
-								size="icon"
-								disabled={isBuildingTemplate}
-								onClick={() => onSaveAsTemplate(row.original)}
-								aria-label="Enregistrer comme modèle"
-								title="Enregistrer comme modèle"
-							>
-								<LayoutTemplate className="size-4" />
-							</Button>
+							<RequirePermission permission="MANAGE_PLANNING">
+								<Button
+									variant="ghost"
+									size="icon"
+									disabled={isBuildingTemplate}
+									onClick={() => onSaveAsTemplate(row.original)}
+									aria-label="Enregistrer comme modèle"
+									title="Enregistrer comme modèle"
+								>
+									<LayoutTemplate className="size-4" />
+								</Button>
+							</RequirePermission>
 							<RowActions
+								permission="MANAGE_PLANNING"
 								isEditing={editingId === row.original.id}
 								isSaving={isSaving}
 								onEdit={() => onEdit(row.original)}
@@ -196,16 +202,18 @@ export function ProjectsList({
 				title="Projets"
 				description="Le sujet auquel un coût est rattaché. Un projet sans client est un projet interne : une réunion récurrente coûte, et doit se voir."
 				actions={
-					<div className="flex gap-2">
-						<Button variant="outline" onClick={onStartFromTemplate}>
-							<LayoutTemplate />
-							Depuis un modèle
-						</Button>
-						<Button onClick={onCreate}>
-							<Plus />
-							Nouveau projet
-						</Button>
-					</div>
+					<RequirePermission permission="MANAGE_PLANNING">
+						<div className="flex gap-2">
+							<Button variant="outline" onClick={onStartFromTemplate}>
+								<LayoutTemplate />
+								Depuis un modèle
+							</Button>
+							<Button onClick={onCreate}>
+								<Plus />
+								Nouveau projet
+							</Button>
+						</div>
+					</RequirePermission>
 				}
 			/>
 

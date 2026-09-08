@@ -4,9 +4,16 @@ import userEvent from '@testing-library/user-event'
 import type { ReactNode } from 'react'
 import { describe, expect, it, vi } from 'vitest'
 import {
+	ActiveOrganizationProvider,
+	OrganizationListProvider,
+} from '#/hooks/use-active-organization'
+import type { Organization } from '#/hooks/use-organizations'
+import { PERMISSION_CATALOG } from '#/lib/permission-catalog'
+import {
 	TaskSheetFeature,
 	type TaskSheetFeatureProps,
 } from '#/pages/planning/feature/task-sheet-feature'
+import { seedPermissionsCacheForOrganization } from '#/test/with-permissions'
 
 // jsdom has no ResizeObserver, which Radix primitives (Select, Popover,
 // Tabs) probe defensively.
@@ -34,6 +41,21 @@ const ASSIGNMENT_REPORT_RESOLUTION_PATH =
 	'/api/v1/assignment-reports/{assignment_report_id}/resolution'
 const TASK_RECURRENCES_PATH =
 	'/api/v1/organizations/{organization_id}/task-recurrences'
+const MY_PERMISSIONS_PATH =
+	'/api/v1/organizations/{organization_id}/members/me/permissions'
+const ALL_PERMISSIONS = PERMISSION_CATALOG.map((entry) => entry.name)
+
+const ORGANIZATION: Organization = {
+	id: 'org-1',
+	name: 'Atelier Bois & Co',
+	owner_id: 'user-1',
+	missing_legal_identity_fields: [],
+	slug: 'atelier-bois',
+	field_clock_enabled: false,
+	vat_on_debits: false,
+	created_at: '2026-01-01T00:00:00Z',
+	updated_at: '2026-01-01T00:00:00Z',
+}
 
 type Handler = (params: unknown) => unknown
 
@@ -119,7 +141,7 @@ const RESOURCE_MEMBER = {
  * `planning-team-feature.test.tsx`'s own `installFakeTanstackApi` — the
  * always-on-mount `PLANNING_PATH` fetch is baked in up front there too).
  */
-function renderFeature(
+async function renderFeature(
 	overrides: Partial<TaskSheetFeatureProps> = {},
 	configure?: (api: ReturnType<typeof installFakeTanstackApi>) => void,
 ) {
@@ -127,15 +149,26 @@ function renderFeature(
 	const { calls, mockGet, mockMutation } = api
 	mockGet(TASK_LABELS_PATH, () => ({ data: [LABEL_REUNION], pagination: null }))
 	mockGet(CUSTOMERS_PATH, () => ({ data: [], pagination: null }))
+	mockGet(MY_PERMISSIONS_PATH, () => ({
+		data: { permissions: ALL_PERMISSIONS },
+		pagination: null,
+	}))
 	configure?.(api)
 
 	const queryClient = new QueryClient({
 		defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
 	})
+	seedPermissionsCacheForOrganization(queryClient, ORGANIZATION.id)
 
 	function Providers({ children }: { children: ReactNode }) {
 		return (
-			<QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+			<QueryClientProvider client={queryClient}>
+				<OrganizationListProvider organizations={[ORGANIZATION]}>
+					<ActiveOrganizationProvider activeOrganization={ORGANIZATION}>
+						{children}
+					</ActiveOrganizationProvider>
+				</OrganizationListProvider>
+			</QueryClientProvider>
 		)
 	}
 
@@ -179,7 +212,7 @@ function patchTaskCalls(
 describe('TaskSheetFeature — creation without a customer', () => {
 	it('sends a POST with customer_id/customer_context_id null and no follow-up PATCH', async () => {
 		const user = userEvent.setup()
-		const { calls, mockMutation, onOpenChange } = renderFeature()
+		const { calls, mockMutation, onOpenChange } = await renderFeature()
 		mockMutation('post', TASKS_PATH, () => ({
 			data: { id: 'task-1', customer_id: null, customer_context_id: null },
 			pagination: null,
@@ -203,7 +236,7 @@ describe('TaskSheetFeature — creation without a customer', () => {
 describe('TaskSheetFeature — creation with assignees and labels', () => {
 	it('chains a follow-up PATCH carrying the full list of chosen assignees and labels', async () => {
 		const user = userEvent.setup()
-		const { calls, mockMutation } = renderFeature()
+		const { calls, mockMutation } = await renderFeature()
 		mockMutation('post', TASKS_PATH, () => ({
 			data: { id: 'task-1' },
 			pagination: null,
@@ -235,7 +268,7 @@ describe('TaskSheetFeature — creation with assignees and labels', () => {
 describe('TaskSheetFeature — recurrence', () => {
 	it('enabling the recurrence control sends POST /task-recurrences instead of POST /tasks', async () => {
 		const user = userEvent.setup()
-		const { calls, mockMutation, onOpenChange } = renderFeature()
+		const { calls, mockMutation, onOpenChange } = await renderFeature()
 		mockMutation('post', TASK_RECURRENCES_PATH, () => ({
 			data: { id: 'recurrence-1' },
 			pagination: null,
@@ -289,7 +322,7 @@ describe('TaskSheetFeature — editing, labels', () => {
 
 	it('sends an empty label_ids to strip every existing label', async () => {
 		const user = userEvent.setup()
-		const { calls, mockMutation } = renderFeature(
+		const { calls, mockMutation } = await renderFeature(
 			{ target: editTarget() },
 			(api) => mockEditTask(api.mockGet),
 		)
@@ -315,7 +348,7 @@ describe('TaskSheetFeature — editing, labels', () => {
 
 describe('TaskSheetFeature — paginated comment thread', () => {
 	it('asks only for the first page on open, never the whole history', async () => {
-		const { calls } = renderFeature(
+		const { calls } = await renderFeature(
 			{ target: { mode: 'edit', taskId: 'task-1' } },
 			(api) => {
 				api.mockGet(TASK_PATH, () => ({
@@ -440,7 +473,7 @@ describe('TaskSheetFeature — correction loop', () => {
 	}
 
 	it('shows the pending report with what was planned and what was reported', async () => {
-		renderFeature({ target: editTarget() }, (api) => {
+		await renderFeature({ target: editTarget() }, (api) => {
 			mockEditTaskWithAssignment(api.mockGet)
 			api.mockGet(ASSIGNMENT_REPORTS_PATH, () => ({
 				data: [PENDING_REPORT],
@@ -460,7 +493,7 @@ describe('TaskSheetFeature — correction loop', () => {
 	 */
 	it('applying prefills the end time, then PATCHes the task before resolving the report as applied', async () => {
 		const user = userEvent.setup()
-		const { calls, mockMutation } = renderFeature(
+		const { calls, mockMutation } = await renderFeature(
 			{ target: editTarget() },
 			(api) => {
 				mockEditTaskWithAssignment(api.mockGet)
@@ -516,7 +549,7 @@ describe('TaskSheetFeature — correction loop', () => {
 	 * resolve call. */
 	it('never resolves the report when the task PATCH itself fails', async () => {
 		const user = userEvent.setup()
-		const { calls, mockMutation } = renderFeature(
+		const { calls, mockMutation } = await renderFeature(
 			{ target: editTarget() },
 			(api) => {
 				mockEditTaskWithAssignment(api.mockGet)
@@ -548,7 +581,7 @@ describe('TaskSheetFeature — correction loop', () => {
 
 	it('dismissing sends the note and resolves as dismissed, without touching the task', async () => {
 		const user = userEvent.setup()
-		const { calls, mockMutation } = renderFeature(
+		const { calls, mockMutation } = await renderFeature(
 			{ target: editTarget() },
 			(api) => {
 				mockEditTaskWithAssignment(api.mockGet)

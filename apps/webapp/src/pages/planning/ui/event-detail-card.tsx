@@ -13,6 +13,7 @@ import {
 } from 'lucide-react'
 import type * as React from 'react'
 import type { Schemas } from '#/api/api.client'
+import { RequirePermission } from '#/components/require-permission'
 import { Button } from '#/components/ui/button'
 import { cn } from '#/lib/utils'
 import type { AbsenceFormValues } from '#/pages/hr/lib/absences'
@@ -141,14 +142,16 @@ export function EventDetailCard({
 						>
 							Annuler
 						</Button>
-						<Button
-							type="button"
-							size="sm"
-							disabled={isPending || editing.errors.length > 0}
-							onClick={onEditSubmit}
-						>
-							Enregistrer
-						</Button>
+						<RequirePermission permission="MANAGE_PLANNING">
+							<Button
+								type="button"
+								size="sm"
+								disabled={isPending || editing.errors.length > 0}
+								onClick={onEditSubmit}
+							>
+								Enregistrer
+							</Button>
+						</RequirePermission>
 					</footer>
 				</>
 			) : (
@@ -253,55 +256,59 @@ function ReadView({
 			{entry.kind === 'absence' ? <AbsenceRows entry={entry} /> : null}
 
 			{entry.kind === 'task' && onChangeStatus ? (
-				<footer className="border-t pt-4">
-					<p className="mb-2 text-sm font-medium text-foreground">
-						Où en est cette tâche ?
-					</p>
-					<div className="flex flex-wrap gap-2">
-						{QUICK_STATUSES.map((status) => {
-							const active = entry.status === status
-							return (
-								<Button
-									key={status}
-									type="button"
-									size="sm"
-									variant={active ? 'default' : 'outline'}
-									disabled={isPending}
-									onClick={() => onChangeStatus(status)}
-								>
-									{active ? <Check /> : null}
-									{STATUS_LABELS[status]}
-								</Button>
-							)
-						})}
+				<RequirePermission permission="MANAGE_PLANNING">
+					<footer className="border-t pt-4">
+						<p className="mb-2 text-sm font-medium text-foreground">
+							Où en est cette tâche ?
+						</p>
+						<div className="flex flex-wrap gap-2">
+							{QUICK_STATUSES.map((status) => {
+								const active = entry.status === status
+								return (
+									<Button
+										key={status}
+										type="button"
+										size="sm"
+										variant={active ? 'default' : 'outline'}
+										disabled={isPending}
+										onClick={() => onChangeStatus(status)}
+									>
+										{active ? <Check /> : null}
+										{STATUS_LABELS[status]}
+									</Button>
+								)
+							})}
+							<Button
+								type="button"
+								size="sm"
+								variant="ghost"
+								disabled={isPending || entry.status === 'CANCELLED'}
+								onClick={() => onChangeStatus('CANCELLED')}
+							>
+								<CircleSlash />
+								Annuler
+							</Button>
+						</div>
+					</footer>
+				</RequirePermission>
+			) : null}
+
+			{entry.kind === 'absence' && onDelete ? (
+				<RequirePermission permission="MANAGE_REFERENCE">
+					<footer className="border-t pt-4">
 						<Button
 							type="button"
 							size="sm"
 							variant="ghost"
-							disabled={isPending || entry.status === 'CANCELLED'}
-							onClick={() => onChangeStatus('CANCELLED')}
+							className="text-destructive hover:bg-destructive-soft"
+							disabled={isPending}
+							onClick={onDelete}
 						>
-							<CircleSlash />
-							Annuler
+							<Trash2 />
+							Supprimer cette absence
 						</Button>
-					</div>
-				</footer>
-			) : null}
-
-			{entry.kind === 'absence' && onDelete ? (
-				<footer className="border-t pt-4">
-					<Button
-						type="button"
-						size="sm"
-						variant="ghost"
-						className="text-destructive hover:bg-destructive-soft"
-						disabled={isPending}
-						onClick={onDelete}
-					>
-						<Trash2 />
-						Supprimer cette absence
-					</Button>
-				</footer>
+					</footer>
+				</RequirePermission>
 			) : null}
 		</>
 	)

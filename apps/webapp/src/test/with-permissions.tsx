@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { type RenderResult, render, waitFor } from '@testing-library/react'
+import { type RenderResult, render } from '@testing-library/react'
 import type { ReactElement, ReactNode } from 'react'
 import {
 	ActiveOrganizationProvider,
@@ -70,8 +70,16 @@ export interface WithPermissionsOptions {
 	queryClient?: QueryClient
 }
 
-/** Wraps `ui` with the query/organization context `RequirePermission` needs,
- * composable with `renderWithRouter` for pages that also need routing. */
+/**
+ * Wraps `ui` with the query/organization context `RequirePermission` needs,
+ * composable with `renderWithRouter` for pages that also need routing.
+ *
+ * Seeds the permissions query up front rather than relying on the fake
+ * fetch resolving in time: a gated control mounted behind a closed Radix
+ * dropdown/dialog may never trigger that fetch during a given test at all,
+ * which would otherwise leave the caller's permission check permanently
+ * `false` instead of merely delayed.
+ */
 export function wrapWithPermissions(
 	ui: ReactNode,
 	{
@@ -83,6 +91,7 @@ export function wrapWithPermissions(
 	}: WithPermissionsOptions = {},
 ): ReactElement {
 	installFakePermissionsApi(permissions)
+	seedPermissionsCache(queryClient, { permissions })
 
 	return (
 		<QueryClientProvider client={queryClient}>
@@ -99,22 +108,51 @@ export function wrapWithPermissions(
  * Drop-in replacement for `@testing-library/react`'s `render`, for
  * components that don't also need router context.
  *
- * Awaits the permissions read the same way `renderWithRouter` awaits the
- * router reaching `idle` — `RequirePermission` hides its children until
- * that fetch resolves, so a caller asserting on a gated button right after
- * a synchronous `render()` would race it and find nothing.
+ * `RequirePermission` hides its children until the permissions read
+ * resolves — but that read may never even start in this render (e.g. a
+ * gated control inside a closed Radix dropdown, never opened by a given
+ * test), so waiting reactively for the query to appear can wait forever.
+ * `seedPermissionsCache` sidesteps that entirely: the answer is already in
+ * the cache before the first render, so there is nothing to wait for.
  */
-export async function renderWithPermissions(
+export function renderWithPermissions(
 	ui: ReactElement,
 	options?: WithPermissionsOptions,
-): Promise<RenderResult> {
-	const queryClient =
-		options?.queryClient ??
-		new QueryClient({ defaultOptions: { queries: { retry: false } } })
-	const result = render(wrapWithPermissions(ui, { ...options, queryClient }))
-	await waitFor(() => {
-		if (queryClient.isFetching() > 0)
-			throw new Error('permissions still loading')
+): RenderResult {
+	return render(wrapWithPermissions(ui, options))
+}
+
+/**
+ * Pre-populates the permissions query this fake's own key shape (`[{ _id:
+ * path }]`, see `installFakePermissionsApi`) resolves to, so `usePermissions`
+ * reads a cache hit — `isSuccess: true` — on its very first render instead
+ * of racing a fetch that a given test's render tree might not even trigger.
+ */
+export function seedPermissionsCache(
+	queryClient: QueryClient,
+	{ permissions = ALL_PERMISSIONS }: { permissions?: string[] } = {},
+) {
+	queryClient.setQueryData([{ _id: MY_PERMISSIONS_PATH }], {
+		data: { permissions },
+		pagination: null,
 	})
-	return result
+}
+
+/**
+ * Same idea as {@link seedPermissionsCache}, for test files with their own
+ * richer fake `window.tanstackApi` (query key `[{ _id, path, query }]`,
+ * matching real params) rather than this module's own simplified one —
+ * `task-sheet-feature.test.tsx` and friends. `organizationId` must match
+ * the `Organization` those tests render with, since it is part of the key
+ * `usePermissions` actually requests.
+ */
+export function seedPermissionsCacheForOrganization(
+	queryClient: QueryClient,
+	organizationId: string,
+	permissions: string[] = ALL_PERMISSIONS,
+) {
+	queryClient.setQueryData(
+		[{ _id: MY_PERMISSIONS_PATH, path: { organization_id: organizationId } }],
+		{ data: { permissions }, pagination: null },
+	)
 }

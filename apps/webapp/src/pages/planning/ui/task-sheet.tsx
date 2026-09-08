@@ -1,4 +1,5 @@
 import { ChevronDown, Loader2, Trash2 } from 'lucide-react'
+import { RequirePermission } from '#/components/require-permission'
 import { Button } from '#/components/ui/button'
 import {
 	Dialog,
@@ -159,50 +160,54 @@ export function TaskSheet({
 
 				<DialogFooter className="border-t pt-4 sm:justify-between">
 					{mode === 'edit' && deleteSeriesOptions ? (
-						<DropdownMenu>
-							<DropdownMenuTrigger asChild>
-								<Button
-									type="button"
-									variant="ghost"
-									className="text-destructive hover:text-destructive"
-									disabled={isDeleting}
-								>
-									{isDeleting ? (
-										<Loader2 className="animate-spin" />
-									) : (
-										<Trash2 />
-									)}
-									Supprimer
-									<ChevronDown className="size-3.5" />
-								</Button>
-							</DropdownMenuTrigger>
-							<DropdownMenuContent align="start">
-								<DropdownMenuItem
-									onClick={deleteSeriesOptions.onThisOccurrence}
-								>
-									Cette occurrence seulement
-								</DropdownMenuItem>
-								<DropdownMenuItem
-									onClick={deleteSeriesOptions.onThisAndFollowing}
-								>
-									Cette occurrence et les suivantes
-								</DropdownMenuItem>
-								<DropdownMenuItem onClick={deleteSeriesOptions.onWholeSeries}>
-									Toute la série
-								</DropdownMenuItem>
-							</DropdownMenuContent>
-						</DropdownMenu>
+						<RequirePermission permission="MANAGE_PLANNING">
+							<DropdownMenu>
+								<DropdownMenuTrigger asChild>
+									<Button
+										type="button"
+										variant="ghost"
+										className="text-destructive hover:text-destructive"
+										disabled={isDeleting}
+									>
+										{isDeleting ? (
+											<Loader2 className="animate-spin" />
+										) : (
+											<Trash2 />
+										)}
+										Supprimer
+										<ChevronDown className="size-3.5" />
+									</Button>
+								</DropdownMenuTrigger>
+								<DropdownMenuContent align="start">
+									<DropdownMenuItem
+										onClick={deleteSeriesOptions.onThisOccurrence}
+									>
+										Cette occurrence seulement
+									</DropdownMenuItem>
+									<DropdownMenuItem
+										onClick={deleteSeriesOptions.onThisAndFollowing}
+									>
+										Cette occurrence et les suivantes
+									</DropdownMenuItem>
+									<DropdownMenuItem onClick={deleteSeriesOptions.onWholeSeries}>
+										Toute la série
+									</DropdownMenuItem>
+								</DropdownMenuContent>
+							</DropdownMenu>
+						</RequirePermission>
 					) : mode === 'edit' && onDelete ? (
-						<Button
-							type="button"
-							variant="ghost"
-							className="text-destructive hover:text-destructive"
-							disabled={isDeleting}
-							onClick={onDelete}
-						>
-							{isDeleting ? <Loader2 className="animate-spin" /> : <Trash2 />}
-							Supprimer
-						</Button>
+						<RequirePermission permission="MANAGE_PLANNING">
+							<Button
+								type="button"
+								variant="ghost"
+								className="text-destructive hover:text-destructive"
+								disabled={isDeleting}
+								onClick={onDelete}
+							>
+								{isDeleting ? <Loader2 className="animate-spin" /> : <Trash2 />}
+								Supprimer
+							</Button>
+						</RequirePermission>
 					) : (
 						<span />
 					)}
@@ -214,10 +219,12 @@ export function TaskSheet({
 						>
 							Annuler
 						</Button>
-						<Button type="button" disabled={isSaving} onClick={onSubmit}>
-							{isSaving ? <Loader2 className="animate-spin" /> : null}
-							{mode === 'create' ? 'Créer' : 'Enregistrer'}
-						</Button>
+						<RequirePermission permission="MANAGE_PLANNING">
+							<Button type="button" disabled={isSaving} onClick={onSubmit}>
+								{isSaving ? <Loader2 className="animate-spin" /> : null}
+								{mode === 'create' ? 'Créer' : 'Enregistrer'}
+							</Button>
+						</RequirePermission>
 					</div>
 				</DialogFooter>
 			</DialogContent>

@@ -1,4 +1,5 @@
 import { AlertCircle, Loader2 } from 'lucide-react'
+import { RequirePermission } from '#/components/require-permission'
 import { Button } from '#/components/ui/button'
 import { Textarea } from '#/components/ui/textarea'
 import type { AssignmentReport } from '#/hooks/use-assignment-reports'
@@ -121,31 +122,35 @@ export function PendingReportPanel({
 								>
 									Annuler
 								</Button>
-								<Button
-									type="button"
-									size="sm"
-									disabled={isResolving}
-									onClick={() => onConfirmDismiss(report)}
-								>
-									{isResolving ? <Loader2 className="animate-spin" /> : null}
-									Confirmer le rejet
-								</Button>
+								<RequirePermission permission="MANAGE_PLANNING">
+									<Button
+										type="button"
+										size="sm"
+										disabled={isResolving}
+										onClick={() => onConfirmDismiss(report)}
+									>
+										{isResolving ? <Loader2 className="animate-spin" /> : null}
+										Confirmer le rejet
+									</Button>
+								</RequirePermission>
 							</div>
 						</div>
 					) : (
-						<div className="mt-2 flex gap-2">
-							<Button type="button" size="sm" onClick={() => onApply(report)}>
-								Appliquer
-							</Button>
-							<Button
-								type="button"
-								size="sm"
-								variant="outline"
-								onClick={() => onStartDismiss(report)}
-							>
-								Rejeter
-							</Button>
-						</div>
+						<RequirePermission permission="MANAGE_PLANNING">
+							<div className="mt-2 flex gap-2">
+								<Button type="button" size="sm" onClick={() => onApply(report)}>
+									Appliquer
+								</Button>
+								<Button
+									type="button"
+									size="sm"
+									variant="outline"
+									onClick={() => onStartDismiss(report)}
+								>
+									Rejeter
+								</Button>
+							</div>
+						</RequirePermission>
 					)}
 				</div>
 			))}

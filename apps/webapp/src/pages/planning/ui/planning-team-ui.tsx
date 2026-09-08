@@ -1,4 +1,5 @@
 import { AlertCircle, Plus } from 'lucide-react'
+import { RequirePermission } from '#/components/require-permission'
 import { Button } from '#/components/ui/button'
 import { PageHeader, PageShell, SectionCard } from '#/components/ui/surface'
 import type { PlanningResponse, PlanningView } from '#/pages/planning/types'
@@ -30,6 +31,11 @@ export interface PlanningTeamUIProps {
 	isLoading: boolean
 	error: string | null
 	data: PlanningResponse | null
+	/** Gates dragging a task segment and the "×" unassign button on
+	 * {@link PlanningGrid} — computed by the feature layer via
+	 * `useHasPermission('MANAGE_PLANNING')`, since this component has no
+	 * hooks of its own. */
+	canManage: boolean
 	/** A task segment was dropped on the grid — forwarded to {@link PlanningGrid}. */
 	onDropTask?: (event: TaskDropEvent) => void
 	/** The grid's "×" on a task segment. */
@@ -71,6 +77,7 @@ export function PlanningTeamUI({
 	isLoading,
 	error,
 	data,
+	canManage,
 	onDropTask,
 	onRemoveAssignee,
 	onOpenTask,
@@ -93,10 +100,16 @@ export function PlanningTeamUI({
 							/>
 						) : null}
 						{onCreateTask ? (
-							<Button type="button" className="gap-1.5" onClick={onCreateTask}>
-								<Plus className="size-4" />
-								Nouvelle tâche
-							</Button>
+							<RequirePermission permission="MANAGE_PLANNING">
+								<Button
+									type="button"
+									className="gap-1.5"
+									onClick={onCreateTask}
+								>
+									<Plus className="size-4" />
+									Nouvelle tâche
+								</Button>
+							</RequirePermission>
 						) : null}
 					</div>
 				}
@@ -139,6 +152,7 @@ export function PlanningTeamUI({
 					timeZone={data.timezone}
 					resources={data.resources}
 					entries={data.entries}
+					canManage={canManage}
 					workTime={data.work_time}
 					onDropTask={onDropTask}
 					onRemoveAssignee={onRemoveAssignee}

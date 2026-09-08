@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from 'vitest'
 import type { Project } from '#/hooks/use-projects'
 import { ProjectsList } from '#/pages/projects/ui/projects-list'
 import { renderWithRouter } from '#/test/render-with-router'
+import { wrapWithPermissions } from '#/test/with-permissions'
 
 function project(overrides: Partial<Project> = {}): Project {
 	return {
@@ -47,7 +48,9 @@ function baseProps() {
 
 describe('ProjectsList', () => {
 	it('names the customer rather than showing an id', async () => {
-		await renderWithRouter(<ProjectsList {...baseProps()} />)
+		await renderWithRouter(
+			wrapWithPermissions(<ProjectsList {...baseProps()} />),
+		)
 
 		expect(screen.getByText('Duval Maçonnerie')).toBeDefined()
 		expect(screen.queryByText('customer-1')).toBeNull()
@@ -59,17 +62,19 @@ describe('ProjectsList', () => {
 	 */
 	it('marks a customer-less project as internal, deliberately', async () => {
 		await renderWithRouter(
-			<ProjectsList
-				{...baseProps()}
-				projects={[
-					project({
-						id: 'project-internal',
-						name: 'Réunion hebdo',
-						customer_id: null,
-						is_internal: true,
-					}),
-				]}
-			/>,
+			wrapWithPermissions(
+				<ProjectsList
+					{...baseProps()}
+					projects={[
+						project({
+							id: 'project-internal',
+							name: 'Réunion hebdo',
+							customer_id: null,
+							is_internal: true,
+						}),
+					]}
+				/>,
+			),
 		)
 
 		expect(screen.getByText('Interne')).toBeDefined()
@@ -77,7 +82,9 @@ describe('ProjectsList', () => {
 	})
 
 	it('says a project without a quote has no margin', async () => {
-		await renderWithRouter(<ProjectsList {...baseProps()} />)
+		await renderWithRouter(
+			wrapWithPermissions(<ProjectsList {...baseProps()} />),
+		)
 
 		expect(screen.getByText(/aucun, pas de marge/i)).toBeDefined()
 	})
@@ -86,12 +93,14 @@ describe('ProjectsList', () => {
 	it('offers a restore on an archived project instead of an edit', async () => {
 		const onRestore = vi.fn()
 		await renderWithRouter(
-			<ProjectsList
-				{...baseProps()}
-				includeArchived
-				projects={[project({ archived_at: '2026-08-10T08:00:00Z' })]}
-				onRestore={onRestore}
-			/>,
+			wrapWithPermissions(
+				<ProjectsList
+					{...baseProps()}
+					includeArchived
+					projects={[project({ archived_at: '2026-08-10T08:00:00Z' })]}
+					onRestore={onRestore}
+				/>,
+			),
 		)
 
 		expect(screen.getByText('Archivé')).toBeDefined()
@@ -100,14 +109,16 @@ describe('ProjectsList', () => {
 
 	it('counts internal projects separately, since they are the new case', async () => {
 		await renderWithRouter(
-			<ProjectsList
-				{...baseProps()}
-				projects={[
-					project(),
-					project({ id: 'p2', customer_id: null, is_internal: true }),
-					project({ id: 'p3', customer_id: null, is_internal: true }),
-				]}
-			/>,
+			wrapWithPermissions(
+				<ProjectsList
+					{...baseProps()}
+					projects={[
+						project(),
+						project({ id: 'p2', customer_id: null, is_internal: true }),
+						project({ id: 'p3', customer_id: null, is_internal: true }),
+					]}
+				/>,
+			),
 		)
 
 		expect(screen.getByText('Internes')).toBeDefined()
@@ -115,7 +126,9 @@ describe('ProjectsList', () => {
 	})
 
 	it('says so plainly when there is nothing yet', async () => {
-		await renderWithRouter(<ProjectsList {...baseProps()} projects={[]} />)
+		await renderWithRouter(
+			wrapWithPermissions(<ProjectsList {...baseProps()} projects={[]} />),
+		)
 
 		expect(screen.getByText(/aucun projet/i)).toBeDefined()
 	})

@@ -5,6 +5,7 @@ import {
 	Plus,
 	Users,
 } from 'lucide-react'
+import { RequirePermission } from '#/components/require-permission'
 import { Button } from '#/components/ui/button'
 import {
 	DropdownMenu,
@@ -184,16 +185,20 @@ export function CalendarToolbar({
 							</Button>
 						</DropdownMenuTrigger>
 						<DropdownMenuContent align="end">
-							<DropdownMenuItem onClick={() => onCreate('task')}>
-								<CalendarPlus />
-								Une tâche
-							</DropdownMenuItem>
-							<DropdownMenuItem onClick={() => onCreate('leave')}>
-								Un congé
-							</DropdownMenuItem>
-							<DropdownMenuItem onClick={() => onCreate('absence')}>
-								Une absence
-							</DropdownMenuItem>
+							<RequirePermission permission="MANAGE_PLANNING">
+								<DropdownMenuItem onClick={() => onCreate('task')}>
+									<CalendarPlus />
+									Une tâche
+								</DropdownMenuItem>
+							</RequirePermission>
+							<RequirePermission permission="MANAGE_REFERENCE">
+								<DropdownMenuItem onClick={() => onCreate('leave')}>
+									Un congé
+								</DropdownMenuItem>
+								<DropdownMenuItem onClick={() => onCreate('absence')}>
+									Une absence
+								</DropdownMenuItem>
+							</RequirePermission>
 						</DropdownMenuContent>
 					</DropdownMenu>
 				</div>
