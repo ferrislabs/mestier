@@ -31,6 +31,7 @@ import {
 interface CustomerPipelineUIProps {
 	customers: Customer[]
 	organizationSlug: string
+	organizationName: string
 	canMove: boolean
 	error?: string | null
 	isLoading?: boolean
@@ -46,6 +47,7 @@ interface CustomerPipelineUIProps {
 export function CustomerPipelineUI({
 	customers,
 	organizationSlug,
+	organizationName,
 	canMove,
 	error,
 	isLoading,
@@ -113,11 +115,11 @@ export function CustomerPipelineUI({
 					<Button asChild variant="outline">
 						<Link to={buildOrgPath(organizationSlug, '/crm/customers')}>
 							<Users />
-							Fichier clients
+							Fichier comptes
 						</Link>
 					</Button>
 				}
-				eyebrow="CRM"
+				eyebrow={organizationName}
 				leading={
 					<div className="flex size-12 items-center justify-center rounded-lg bg-brand-soft text-primary">
 						<KanbanSquare className="size-6" />

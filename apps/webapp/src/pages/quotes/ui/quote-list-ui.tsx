@@ -62,6 +62,7 @@ import {
 
 interface QuoteListUIProps {
 	organizationSlug: string
+	organizationName: string
 	/** Needed to search a quote by customer name and to label each row. */
 	customers: Customer[]
 	quotes: Quote[]
@@ -83,6 +84,7 @@ interface QuoteListUIProps {
  */
 export function QuoteListUI({
 	organizationSlug,
+	organizationName,
 	customers,
 	quotes,
 	quotesPagination,
@@ -191,6 +193,7 @@ export function QuoteListUI({
 	return (
 		<PageShell>
 			<PageHeader
+				eyebrow={organizationName}
 				title="Devis"
 				description="Pilotez les devis de l'organisation et créez un nouveau document quand le contexte client est prêt."
 				actions={

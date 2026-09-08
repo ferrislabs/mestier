@@ -174,7 +174,7 @@ export function InvoiceNewUI({
 									onValueChange={(customerId) => onChange({ customerId })}
 								>
 									<SelectTrigger className="w-full">
-										<SelectValue placeholder="Sélectionner un client" />
+										<SelectValue placeholder="Sélectionner un compte" />
 									</SelectTrigger>
 									<SelectContent>
 										{customers.map((customer) => (

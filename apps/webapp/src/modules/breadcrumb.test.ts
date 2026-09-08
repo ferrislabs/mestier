@@ -20,7 +20,7 @@ describe('buildBreadcrumbItems', () => {
 		expect(labelsOf('/o/baptiste/crm/customers')).toEqual([
 			'Baptiste',
 			'CRM',
-			'Clients',
+			'Comptes',
 		])
 		expect(labelsOf('/o/baptiste/settings')).toEqual(['Baptiste', 'Paramètres'])
 	})
@@ -29,7 +29,7 @@ describe('buildBreadcrumbItems', () => {
 		expect(labelsOf('/o/baptiste/crm/customers/pipeline')).toEqual([
 			'Baptiste',
 			'CRM',
-			'Clients',
+			'Comptes',
 			'Pipeline',
 		])
 	})
@@ -37,7 +37,7 @@ describe('buildBreadcrumbItems', () => {
 	it('adds the detail label last', () => {
 		expect(
 			labelsOf('/o/baptiste/crm/customers/abc-123', 'Marie Leroy'),
-		).toEqual(['Baptiste', 'CRM', 'Clients', 'Marie Leroy'])
+		).toEqual(['Baptiste', 'CRM', 'Comptes', 'Marie Leroy'])
 	})
 
 	it('prefixes every link target with the tenant, except the detail', () => {

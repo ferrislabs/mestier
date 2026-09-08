@@ -175,12 +175,12 @@ export function CustomerEditUI({
 					className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground"
 				>
 					<ArrowLeft className="size-4" />
-					Retour aux clients
+					Retour aux comptes
 				</Link>
 			</div>
 
 			<PageHeader
-				title={displayName || 'Nouveau client'}
+				title={displayName || 'Nouveau compte'}
 				description={
 					<span className="font-mono text-xs">id: {customer.id}</span>
 				}
@@ -471,8 +471,8 @@ export function CustomerEditUI({
 				</Dialog>
 
 				<Section
-					title="Contextes client"
-					description="Adresses, établissements ou périmètres associés à ce client"
+					title="Contextes du compte"
+					description="Adresses, établissements ou périmètres associés à ce compte"
 					className="lg:col-span-3"
 					actions={
 						<Button
@@ -500,7 +500,7 @@ export function CustomerEditUI({
 								<LayoutPanelTop className="mx-auto size-6 text-muted-foreground" />
 							}
 							label="Aucun contexte renseigné"
-							description="Ajoutez un contexte pour ce client."
+							description="Ajoutez un contexte pour ce compte."
 						/>
 					) : (
 						<div className="grid gap-3 lg:grid-cols-2">

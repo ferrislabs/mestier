@@ -133,7 +133,7 @@ describe('ModuleNav', () => {
 	it("lists the active module's sections", async () => {
 		await renderNav('/o/dupont/crm/customers')
 
-		for (const label of ['Clients', 'Pipeline', 'Devis', 'Factures']) {
+		for (const label of ['Comptes', 'Pipeline', 'Devis', 'Factures']) {
 			expect(screen.getByText(label)).toBeDefined()
 		}
 	})
@@ -178,7 +178,7 @@ describe('ModuleNav', () => {
 		const corps = container.querySelector('[data-slot="sidebar-content"]')
 
 		expect(pied?.textContent).toContain('Paramètres')
-		expect(corps?.textContent).toContain('Clients')
+		expect(corps?.textContent).toContain('Comptes')
 		expect(corps?.textContent).not.toContain('Paramètres')
 	})
 

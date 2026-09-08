@@ -55,7 +55,7 @@ export function CustomerEditFeature({ customerId }: CustomerEditFeatureProps) {
 					<AlertCircle className="size-6 text-destructive" />
 				</div>
 				<div>
-					<p className="font-semibold">Impossible de charger le client</p>
+					<p className="font-semibold">Impossible de charger le compte</p>
 					<p className="text-sm text-muted-foreground">
 						{customer.error.message}
 					</p>
@@ -74,14 +74,14 @@ export function CustomerEditFeature({ customerId }: CustomerEditFeatureProps) {
 					<UserX className="size-6 text-muted-foreground" />
 				</div>
 				<div>
-					<p className="font-semibold">Client introuvable</p>
+					<p className="font-semibold">Compte introuvable</p>
 					<p className="text-sm text-muted-foreground">
-						Aucun client ne correspond à cet identifiant.
+						Aucun compte ne correspond à cet identifiant.
 					</p>
 				</div>
 				<Button asChild variant="outline">
 					<Link to={buildOrgPath(activeOrganization.slug, '/crm/customers')}>
-						Retour aux clients
+						Retour aux comptes
 					</Link>
 				</Button>
 			</div>
