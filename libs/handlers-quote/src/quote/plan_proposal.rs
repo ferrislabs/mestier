@@ -3,7 +3,7 @@ use axum::{Extension, extract::State};
 use handlers::{ApiError, AppState, DataEnvelope, Response};
 
 use crate::{
-    paths::QuotePlanProposalPath, require_quote_membership, response::QuotePlanProposalResponse,
+    paths::QuotePlanProposalPath, require_quote_view, response::QuotePlanProposalResponse,
 };
 
 /// A read that proposes, never a write: one suggested task per quote line,
@@ -34,7 +34,7 @@ pub async fn handler(
     State(state): State<AppState>,
     Extension(identity): Extension<Identity>,
 ) -> Result<Response<QuotePlanProposalResponse>, ApiError> {
-    require_quote_membership(&state, &identity, quote_id).await?;
+    require_quote_view(&state, &identity, quote_id).await?;
 
     let (quote, proposal) = state.usecase.get_quote_plan_proposal(quote_id).await?;
 

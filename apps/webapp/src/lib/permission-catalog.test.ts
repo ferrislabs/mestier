@@ -25,6 +25,7 @@ const ALL_PERMISSION_NAMES: PermissionName[] = [
 	'VIEW_CUSTOMERS',
 	'VIEW_INVOICES',
 	'MANAGE_INVOICES',
+	'VIEW_QUOTES',
 ]
 
 describe('PERMISSION_CATALOG', () => {

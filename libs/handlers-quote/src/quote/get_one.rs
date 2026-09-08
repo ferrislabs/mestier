@@ -3,7 +3,7 @@ use axum::{Extension, extract::State};
 use handlers::{ApiError, AppState, DataEnvelope, Response};
 use mestier_core::QuoteId;
 
-use crate::{paths::QuotePath, require_quote_membership, response::QuoteResponse};
+use crate::{paths::QuotePath, require_quote_view, response::QuoteResponse};
 
 #[utoipa::path(
     get,
@@ -26,7 +26,7 @@ pub async fn handler(
     State(state): State<AppState>,
     Extension(identity): Extension<Identity>,
 ) -> Result<Response<QuoteResponse>, ApiError> {
-    let quote = require_quote_membership(&state, &identity, quote_id).await?;
+    let quote = require_quote_view(&state, &identity, quote_id).await?;
 
     Ok(Response::OK(quote.into()))
 }

@@ -2,7 +2,7 @@ use auth::Identity;
 use axum::{Router, middleware::from_fn_with_state};
 use axum_extra::routing::RouterExt;
 use handlers::{ApiError, AppState, auth::auth_middleware, rate_limit::rate_limit_middleware};
-use mestier_core::{CustomerContextId, CustomerId, OrganizationId, QuoteId};
+use mestier_core::{CustomerContextId, CustomerId, OrganizationId, Permissions, QuoteId};
 
 pub mod paths;
 pub mod pdf;
@@ -43,6 +43,62 @@ async fn require_quote_membership(
 ) -> Result<mestier_core::Quote, ApiError> {
     let quote = state.usecase.get_quote(quote_id).await?;
     require_org_membership(state, identity, quote.organization_id).await?;
+
+    Ok(quote)
+}
+
+/// Membership is the outer gate, `VIEW_QUOTES` is the inner one (#396): a
+/// plain member used to be able to read any quote's price under
+/// `require_quote_membership` alone, the same gap #395 already closed for
+/// customers and invoices. Mirrors `require_view_customers` exactly.
+///
+/// This guard belongs at the HTTP handler layer only, and must never move
+/// into `QuoteService::get_quote`/`list_quotes`: those are also called
+/// internally by the write use cases' own `quote.manage` PDP check in
+/// `libs/core/src/application/quote/mod.rs`, which has nothing to do with a
+/// user browsing a quote.
+async fn require_view_quotes(
+    state: &AppState,
+    identity: &Identity,
+    organization_id: OrganizationId,
+) -> Result<(), ApiError> {
+    let user = state
+        .usecase
+        .find_user_by_sub(identity.id())
+        .await?
+        .ok_or(ApiError::Forbidden)?;
+
+    if state
+        .usecase
+        .find_membership(organization_id, user.id)
+        .await?
+        .is_none()
+    {
+        return Err(ApiError::Forbidden);
+    }
+
+    let permissions = state
+        .usecase
+        .member_permissions(user.id, organization_id)
+        .await?;
+
+    if !permissions.contains(Permissions::VIEW_QUOTES) {
+        return Err(ApiError::Forbidden);
+    }
+
+    Ok(())
+}
+
+/// Resolves the quote to its organization, then applies
+/// `require_view_quotes` — the read-path counterpart of
+/// `require_quote_membership`, returning the loaded `Quote` the same way.
+async fn require_quote_view(
+    state: &AppState,
+    identity: &Identity,
+    quote_id: QuoteId,
+) -> Result<mestier_core::Quote, ApiError> {
+    let quote = state.usecase.get_quote(quote_id).await?;
+    require_view_quotes(state, identity, quote.organization_id).await?;
 
     Ok(quote)
 }

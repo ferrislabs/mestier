@@ -60,6 +60,13 @@ impl Permissions {
     // silent default.
     pub const MANAGE_INVOICES: Self = Permissions(1 << 17); // 131072
 
+    // #396: quotes were the last read left on the plain-membership gate —
+    // invoice's own handler comment already named this gap ("all, unlike
+    // quotes, planning or reporting's own VIEW_REPORTS") before this bit
+    // closed it. Separate from `MANAGE_QUOTES` for the same reason as the
+    // other VIEW_*/MANAGE_* splits above.
+    pub const VIEW_QUOTES: Self = Permissions(1 << 18); // 262144
+
     pub const ALL: Self = Permissions(i64::MAX);
 
     pub const fn contains(self, other: Permissions) -> bool {
@@ -97,6 +104,7 @@ impl Permissions {
         ("VIEW_CUSTOMERS", Permissions::VIEW_CUSTOMERS),
         ("VIEW_INVOICES", Permissions::VIEW_INVOICES),
         ("MANAGE_INVOICES", Permissions::MANAGE_INVOICES),
+        ("VIEW_QUOTES", Permissions::VIEW_QUOTES),
     ];
 
     /// The names of every bit `self` carries — #307's "the caller's
@@ -189,6 +197,9 @@ pub const MEMBER_ROLE_NAME: &str = "member";
 /// already manages customers and quotes, so reading and now managing
 /// invoices — the natural next step after a quote — follows the same
 /// trust level, not a new one.
+///
+/// #396 adds `VIEW_QUOTES`: admin already manages quotes via
+/// `MANAGE_QUOTES`, so the read bit merely names a capability it already had.
 pub fn default_admin_business_permissions() -> Permissions {
     Permissions::VIEW_PLANNING
         | Permissions::MANAGE_PLANNING
@@ -199,6 +210,7 @@ pub fn default_admin_business_permissions() -> Permissions {
         | Permissions::VIEW_CUSTOMERS
         | Permissions::VIEW_INVOICES
         | Permissions::MANAGE_INVOICES
+        | Permissions::VIEW_QUOTES
 }
 
 /// #304: the business bits a fresh organization's default `member` role
@@ -218,11 +230,17 @@ pub fn default_admin_business_permissions() -> Permissions {
 /// gated it — introducing the bit is the moment to also decide, explicitly,
 /// that member does not hold it by default. An owner who wants members
 /// invoicing directly grants it through a custom role.
+///
+/// #396 adds `VIEW_QUOTES` for the same reason as `VIEW_CUSTOMERS`/
+/// `VIEW_INVOICES` above: a member could already read every quote under the
+/// plain membership gate this closes, so granting the bit by default names
+/// an existing capability rather than introducing a new one.
 pub fn default_member_business_permissions() -> Permissions {
     Permissions::VIEW_PLANNING
         | Permissions::MANAGE_PLANNING
         | Permissions::VIEW_CUSTOMERS
         | Permissions::VIEW_INVOICES
+        | Permissions::VIEW_QUOTES
 }
 
 #[cfg(test)]
