@@ -30,6 +30,7 @@ import {
 	useUpdateOrganization,
 	type VatStatus,
 } from '#/hooks/use-organizations'
+import { normalizeSlugForPayload, normalizeSlugInput } from '#/modules/org-slug'
 import {
 	LEGAL_IDENTITY_FIELD_LABELS,
 	type LegalIdentityFormValues,
@@ -133,7 +134,7 @@ function OrganizationSectionContent({
 										label="Identifiant"
 										value={form.values.slug}
 										onChange={(slug) =>
-											form.onChange({ slug: normalizeSlugForDisplay(slug) })
+											form.onChange({ slug: normalizeSlugInput(slug) })
 										}
 										placeholder="mon-entreprise"
 										className="font-mono text-sm"
@@ -212,26 +213,6 @@ function OrganizationSectionContent({
 			}}
 		</organizationForm.Subscribe>
 	)
-}
-
-// Divergence preserved intentionally (pre-existing, identical to main): display normalization drops the trailing-dash trim that the payload normalization applies — still needs a decision.
-function normalizeSlugForDisplay(value: string): string {
-	return value
-		.toLowerCase()
-		.trim()
-		.replace(/\s+/g, '-')
-		.replace(/[^a-z0-9-]/g, '')
-		.replace(/-{2,}/g, '-')
-}
-
-function normalizeSlugForPayload(value: string): string {
-	return value
-		.toLowerCase()
-		.trim()
-		.replace(/\s+/g, '-')
-		.replace(/[^a-z0-9-]/g, '')
-		.replace(/-{2,}/g, '-')
-		.replace(/^-|-$/g, '')
 }
 
 function organizationToLegalIdentityForm(

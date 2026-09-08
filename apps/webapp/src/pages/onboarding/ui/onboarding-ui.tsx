@@ -3,6 +3,7 @@ import { MestierAppIcon } from '#/components/brand/mestier-logo'
 import { Button } from '#/components/ui/button'
 import { Input } from '#/components/ui/input'
 import { Label } from '#/components/ui/label'
+import { normalizeSlugInput } from '#/modules/org-slug'
 
 interface OnboardingUIProps {
 	name: string
@@ -85,7 +86,9 @@ export function OnboardingUI({
 								id="org-slug"
 								placeholder="entreprise-dupont"
 								value={slug}
-								onChange={(e) => onSlugChange(normalizeSlug(e.target.value))}
+								onChange={(e) =>
+									onSlugChange(normalizeSlugInput(e.target.value))
+								}
 								disabled={isPending}
 								className="font-mono text-sm"
 							/>
@@ -125,12 +128,4 @@ export function OnboardingUI({
 			</div>
 		</div>
 	)
-}
-
-function normalizeSlug(value: string): string {
-	return value
-		.toLowerCase()
-		.replace(/\s+/g, '-')
-		.replace(/[^a-z0-9-]/g, '')
-		.replace(/-{2,}/g, '-')
 }
