@@ -107,6 +107,7 @@ pub struct ServiceRate {
     /// Prefills, not derives: editing this later never rewrites a line
     /// already built from it.
     pub default_vat_rate_bp: Option<i32>,
+    pub description: Option<String>,
     pub deleted_at: Option<DateTime<Utc>>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,

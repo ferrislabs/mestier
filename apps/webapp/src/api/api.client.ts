@@ -281,6 +281,7 @@ export namespace Schemas {
     default_vat_rate_bp?: (number | null) | undefined;
     description?: (string | null) | undefined;
     name: string;
+    photo_keys: Array<string>;
     sku?: (string | null) | undefined;
     unit: ServiceRateUnit;
     unit_price_cents: number;
@@ -347,6 +348,7 @@ export namespace Schemas {
   export type CreateRoleRequest = { name: string; permissions: Array<string> };
   export type CreateServiceRateRequest = {
     default_vat_rate_bp?: (number | null) | undefined;
+    description?: (string | null) | undefined;
     label: string;
     rate_cents: number;
     unit: ServiceRateUnit;
@@ -888,6 +890,7 @@ export namespace Schemas {
     id: ProductId;
     name: string;
     organization_id: OrganizationId;
+    photo_keys: Array<string>;
     sku?: (string | null) | undefined;
     unit: ServiceRateUnit;
     unit_price_cents: number;
@@ -1097,6 +1100,7 @@ export namespace Schemas {
   export type ServiceRateResponse = {
     created_at: string;
     default_vat_rate_bp?: (number | null) | undefined;
+    description?: (string | null) | undefined;
     id: ServiceRateId;
     label: string;
     organization_id: OrganizationId;
@@ -1241,6 +1245,7 @@ export namespace Schemas {
     default_vat_rate_bp?: (number | null) | undefined;
     description?: (string | null) | undefined;
     name: string;
+    photo_keys: Array<string>;
     sku?: (string | null) | undefined;
     unit: ServiceRateUnit;
     unit_price_cents: number;
@@ -1263,6 +1268,7 @@ export namespace Schemas {
   export type UpdateRoleRequest = { name: string; permissions: Array<string> };
   export type UpdateServiceRateRequest = {
     default_vat_rate_bp?: (number | null) | undefined;
+    description?: (string | null) | undefined;
     label: string;
     rate_cents: number;
     unit: ServiceRateUnit;
@@ -4835,6 +4841,7 @@ export namespace Endpoints {
           id: Schemas.ProductId;
           name: string;
           organization_id: Schemas.OrganizationId;
+          photo_keys: Array<string>;
           sku?: (string | null) | undefined;
           unit: Schemas.ServiceRateUnit;
           unit_price_cents: number;
@@ -4864,6 +4871,7 @@ export namespace Endpoints {
           id: Schemas.ProductId;
           name: string;
           organization_id: Schemas.OrganizationId;
+          photo_keys: Array<string>;
           sku?: (string | null) | undefined;
           unit: Schemas.ServiceRateUnit;
           unit_price_cents: number;
@@ -5465,6 +5473,7 @@ export namespace Endpoints {
         data: Array<{
           created_at: string;
           default_vat_rate_bp?: (number | null) | undefined;
+          description?: (string | null) | undefined;
           id: Schemas.ServiceRateId;
           label: string;
           organization_id: Schemas.OrganizationId;
@@ -5492,6 +5501,7 @@ export namespace Endpoints {
         data: {
           created_at: string;
           default_vat_rate_bp?: (number | null) | undefined;
+          description?: (string | null) | undefined;
           id: Schemas.ServiceRateId;
           label: string;
           organization_id: Schemas.OrganizationId;
@@ -6038,6 +6048,7 @@ export namespace Endpoints {
           id: Schemas.ProductId;
           name: string;
           organization_id: Schemas.OrganizationId;
+          photo_keys: Array<string>;
           sku?: (string | null) | undefined;
           unit: Schemas.ServiceRateUnit;
           unit_price_cents: number;
@@ -6077,6 +6088,7 @@ export namespace Endpoints {
           id: Schemas.ProductId;
           name: string;
           organization_id: Schemas.OrganizationId;
+          photo_keys: Array<string>;
           sku?: (string | null) | undefined;
           unit: Schemas.ServiceRateUnit;
           unit_price_cents: number;
@@ -6462,6 +6474,7 @@ export namespace Endpoints {
         data: {
           created_at: string;
           default_vat_rate_bp?: (number | null) | undefined;
+          description?: (string | null) | undefined;
           id: Schemas.ServiceRateId;
           label: string;
           organization_id: Schemas.OrganizationId;
@@ -6499,6 +6512,7 @@ export namespace Endpoints {
         data: {
           created_at: string;
           default_vat_rate_bp?: (number | null) | undefined;
+          description?: (string | null) | undefined;
           id: Schemas.ServiceRateId;
           label: string;
           organization_id: Schemas.OrganizationId;

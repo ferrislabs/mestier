@@ -39,6 +39,7 @@ pub struct Product {
     /// Basis points a quote line prefills from when it picks this product.
     pub default_vat_rate_bp: Option<i32>,
     pub description: Option<String>,
+    pub photo_keys: Vec<String>,
     pub deleted_at: Option<DateTime<Utc>>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,

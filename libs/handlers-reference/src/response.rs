@@ -86,6 +86,7 @@ pub struct ServiceRateResponse {
     pub unit: ServiceRateUnit,
     pub rate_cents: i32,
     pub default_vat_rate_bp: Option<i32>,
+    pub description: Option<String>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }
@@ -99,6 +100,7 @@ impl From<ServiceRate> for ServiceRateResponse {
             unit: value.unit,
             rate_cents: value.rate_cents,
             default_vat_rate_bp: value.default_vat_rate_bp,
+            description: value.description,
             created_at: value.created_at,
             updated_at: value.updated_at,
         }
@@ -115,6 +117,7 @@ pub struct ProductResponse {
     pub unit_price_cents: i32,
     pub default_vat_rate_bp: Option<i32>,
     pub description: Option<String>,
+    pub photo_keys: Vec<String>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }
@@ -130,6 +133,7 @@ impl From<Product> for ProductResponse {
             unit_price_cents: value.unit_price_cents,
             default_vat_rate_bp: value.default_vat_rate_bp,
             description: value.description,
+            photo_keys: value.photo_keys,
             created_at: value.created_at,
             updated_at: value.updated_at,
         }

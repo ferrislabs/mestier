@@ -13,6 +13,7 @@ pub struct CreateProductCommand {
     pub unit_price_cents: i32,
     pub default_vat_rate_bp: Option<i32>,
     pub description: Option<String>,
+    pub photo_keys: Vec<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -28,4 +29,5 @@ pub struct UpdateProductCommand {
     pub unit_price_cents: i32,
     pub default_vat_rate_bp: Option<i32>,
     pub description: Option<String>,
+    pub photo_keys: Vec<String>,
 }

@@ -31,6 +31,7 @@ where
         validate_name(&command.name)?;
         validate_price(command.unit_price_cents)?;
         validate_vat_rate_bp(command.default_vat_rate_bp)?;
+        validate_photo_keys(&command.photo_keys)?;
 
         let now = Utc::now();
         self.repo
@@ -43,6 +44,7 @@ where
                 unit_price_cents: command.unit_price_cents,
                 default_vat_rate_bp: command.default_vat_rate_bp,
                 description: normalize_optional(command.description),
+                photo_keys: command.photo_keys,
                 deleted_at: None,
                 created_at: now,
                 updated_at: now,
@@ -72,6 +74,7 @@ where
         validate_name(&command.name)?;
         validate_price(command.unit_price_cents)?;
         validate_vat_rate_bp(command.default_vat_rate_bp)?;
+        validate_photo_keys(&command.photo_keys)?;
 
         let mut product = self.get_product(command.id).await?;
         product.name = command.name;
@@ -80,6 +83,7 @@ where
         product.unit_price_cents = command.unit_price_cents;
         product.default_vat_rate_bp = command.default_vat_rate_bp;
         product.description = normalize_optional(command.description);
+        product.photo_keys = command.photo_keys;
         product.updated_at = Utc::now();
 
         self.repo.update(&product).await
@@ -115,6 +119,16 @@ fn validate_vat_rate_bp(default_vat_rate_bp: Option<i32>) -> Result<(), CoreErro
     if default_vat_rate_bp.is_some_and(|rate_bp| !(0..=10_000).contains(&rate_bp)) {
         return Err(CoreError::Conflict(
             "default vat rate must be between 0 and 10000 basis points".to_owned(),
+        ));
+    }
+
+    Ok(())
+}
+
+fn validate_photo_keys(photo_keys: &[String]) -> Result<(), CoreError> {
+    if photo_keys.iter().any(|key| key.trim().is_empty()) {
+        return Err(CoreError::Conflict(
+            "product photo keys cannot be empty".to_owned(),
         ));
     }
 

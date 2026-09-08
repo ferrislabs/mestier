@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT id, org_id, label, unit, rate_cents, default_vat_rate_bp, deleted_at, created_at, updated_at\n            FROM service_rates\n            WHERE id = $1 AND deleted_at IS NULL\n            ",
+  "query": "\n            SELECT id, org_id, label, unit, rate_cents, default_vat_rate_bp, description, deleted_at, created_at, updated_at\n            FROM service_rates\n            WHERE id = $1 AND deleted_at IS NULL\n            ",
   "describe": {
     "columns": [
       {
@@ -35,16 +35,21 @@
       },
       {
         "ordinal": 6,
+        "name": "description",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 7,
         "name": "deleted_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 7,
+        "ordinal": 8,
         "name": "created_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 8,
+        "ordinal": 9,
         "name": "updated_at",
         "type_info": "Timestamptz"
       }
@@ -62,9 +67,10 @@
       false,
       true,
       true,
+      true,
       false,
       false
     ]
   },
-  "hash": "abea0794b44844d33eb010533d8f073a9345198b471f10aafe9fbb5540910a0c"
+  "hash": "6114f57f072788e734041a2bc0be774f674c783a19498400b51f94fc4ea2795e"
 }

@@ -11,6 +11,7 @@ pub struct CreateServiceRateCommand {
     pub unit: ServiceRateUnit,
     pub rate_cents: i32,
     pub default_vat_rate_bp: Option<i32>,
+    pub description: Option<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -24,4 +25,5 @@ pub struct UpdateServiceRateCommand {
     pub unit: ServiceRateUnit,
     pub rate_cents: i32,
     pub default_vat_rate_bp: Option<i32>,
+    pub description: Option<String>,
 }

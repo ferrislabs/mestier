@@ -13,6 +13,7 @@ export interface ProductCatalogFormValues {
 	unit: ServiceRateUnit
 	unitPrice: string
 	description: string
+	photoKeys: string[]
 }
 
 export interface CatalogItem {
@@ -62,7 +63,7 @@ export function buildCatalogItems(
 			label: serviceRate.label,
 			unit: serviceRate.unit,
 			unitPriceCents: serviceRate.rate_cents,
-			description: '',
+			description: serviceRate.description ?? '',
 			defaultVatRateBp: serviceRate.default_vat_rate_bp ?? null,
 		})),
 		...products.map((product) => ({

@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT id, org_id, label, unit, rate_cents, default_vat_rate_bp, deleted_at, created_at, updated_at\n            FROM service_rates\n            WHERE org_id = $1 AND deleted_at IS NULL\n            ORDER BY label ASC, created_at ASC\n            LIMIT $2 OFFSET $3\n            ",
+  "query": "\n            SELECT id, org_id, name, sku, unit, unit_price_cents, default_vat_rate_bp, description, photo_keys, deleted_at, created_at, updated_at\n            FROM products\n            WHERE id = $1 AND deleted_at IS NULL\n            ",
   "describe": {
     "columns": [
       {
@@ -15,58 +15,74 @@
       },
       {
         "ordinal": 2,
-        "name": "label",
+        "name": "name",
         "type_info": "Text"
       },
       {
         "ordinal": 3,
-        "name": "unit",
+        "name": "sku",
         "type_info": "Text"
       },
       {
         "ordinal": 4,
-        "name": "rate_cents",
-        "type_info": "Int4"
+        "name": "unit",
+        "type_info": "Text"
       },
       {
         "ordinal": 5,
-        "name": "default_vat_rate_bp",
+        "name": "unit_price_cents",
         "type_info": "Int4"
       },
       {
         "ordinal": 6,
+        "name": "default_vat_rate_bp",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 7,
+        "name": "description",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 8,
+        "name": "photo_keys",
+        "type_info": "TextArray"
+      },
+      {
+        "ordinal": 9,
         "name": "deleted_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 7,
+        "ordinal": 10,
         "name": "created_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 8,
+        "ordinal": 11,
         "name": "updated_at",
         "type_info": "Timestamptz"
       }
     ],
     "parameters": {
       "Left": [
-        "Uuid",
-        "Int8",
-        "Int8"
+        "Uuid"
       ]
     },
     "nullable": [
       false,
       false,
       false,
+      true,
       false,
       false,
       true,
+      true,
+      false,
       true,
       false,
       false
     ]
   },
-  "hash": "c29a035d3fb92eeb5f60dcee7371d9a77a5257dab420ed95d8826b80714528a9"
+  "hash": "e6dee0c058d891192d09bb922f481b906fe2719a934d9a3c23e274ce9bb8c166"
 }
