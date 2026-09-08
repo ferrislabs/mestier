@@ -696,7 +696,7 @@ function QuoteEditUI({
 									if (!selectedCustomer) {
 										return (
 											<p className="text-sm text-muted-foreground italic">
-												Sélectionner un client
+												Sélectionner un compte
 											</p>
 										)
 									}

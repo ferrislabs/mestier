@@ -96,7 +96,7 @@ describe('QuoteNewUI', () => {
 			}),
 		)
 
-		expect(screen.getByText('Sélectionner un client')).toBeDefined()
+		expect(screen.getByText('Sélectionner un compte')).toBeDefined()
 		expect(screen.getByText('Objet du devis')).toBeDefined()
 	})
 

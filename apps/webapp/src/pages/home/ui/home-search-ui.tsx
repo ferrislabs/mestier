@@ -102,7 +102,7 @@ export function HomeSearchUI({ groups, placeholder }: HomeSearchUIProps) {
 					}}
 					placeholder={
 						placeholder ??
-						'Rechercher un client, un devis, un projet, une facture…'
+						'Rechercher un compte, un devis, un projet, une facture…'
 					}
 					aria-label="Recherche rapide"
 					className="h-12 rounded-full pl-11 text-base shadow-sm"

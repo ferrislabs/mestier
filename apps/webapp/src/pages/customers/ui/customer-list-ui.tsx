@@ -80,6 +80,7 @@ import {
 interface CustomerListUIProps {
 	customers: Customer[]
 	organizationSlug: string
+	organizationName: string
 	pagination?: PaginationMetadata | null
 	page: number
 	pageSize: number
@@ -98,6 +99,7 @@ interface CustomerListUIProps {
 export function CustomerListUI({
 	customers,
 	organizationSlug,
+	organizationName,
 	pagination,
 	page,
 	pageSize,
@@ -234,8 +236,9 @@ export function CustomerListUI({
 	return (
 		<PageShell>
 			<PageHeader
-				title="Fichier client"
-				description="Gérez vos clients, leurs coordonnées et leurs contextes associés."
+				eyebrow={organizationName}
+				title="Comptes"
+				description="Gérez vos comptes clients et prospects, leurs coordonnées et leurs contextes associés."
 				actions={
 					<div className="flex flex-wrap gap-2">
 						<Button asChild variant="outline">
@@ -249,7 +252,7 @@ export function CustomerListUI({
 						<RequirePermission permission="MANAGE_CUSTOMERS">
 							<Button onClick={() => setCreateOpen(true)}>
 								<Plus />
-								Nouveau client
+								Nouveau compte
 							</Button>
 						</RequirePermission>
 					</div>
@@ -280,7 +283,7 @@ export function CustomerListUI({
 						}}
 					>
 						<DialogHeader className="border-b pb-4">
-							<DialogTitle>Créer un client</DialogTitle>
+							<DialogTitle>Créer un compte</DialogTitle>
 							<DialogDescription>
 								Ajoutez les informations de base. Les coordonnées restent
 								optionnelles.
@@ -290,7 +293,7 @@ export function CustomerListUI({
 						<div className="flex-1 space-y-6 overflow-y-auto py-4">
 							<FormSection
 								title="Identité"
-								description="Ces champs identifient le client dans le fichier."
+								description="Ces champs identifient le compte dans le fichier."
 							>
 								<div className="grid gap-4">
 									<Field label="Statut CRM" htmlFor="customer-status">
@@ -403,7 +406,7 @@ export function CustomerListUI({
 							</Button>
 							<Button type="submit" disabled={!canCreate || isCreating}>
 								<Plus />
-								Créer le client
+								Créer le compte
 							</Button>
 						</DialogFooter>
 					</form>
@@ -414,9 +417,9 @@ export function CustomerListUI({
 				<p className="mb-3 text-sm text-muted-foreground">Aperçu du fichier</p>
 				<div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
 					<MetricCard
-						label="Total clients"
+						label="Total comptes"
 						value={counts.total}
-						hint="Tous clients confondus"
+						hint="Tous comptes confondus"
 					/>
 					<MetricCard
 						label="Prospects"
@@ -438,14 +441,14 @@ export function CustomerListUI({
 
 			<section className="flex flex-col gap-3">
 				<div className="flex flex-col gap-3">
-					<h2 className="font-semibold">Clients ({dataView.filteredCount})</h2>
+					<h2 className="font-semibold">Comptes ({dataView.filteredCount})</h2>
 					<DataViewToolbar
 						search={search}
 						onSearchChange={(value) => {
 							setSearch(value)
 							onPageChange(1)
 						}}
-						searchPlaceholder="Rechercher un client…"
+						searchPlaceholder="Rechercher un compte…"
 						filter={contactFilter}
 						onFilterChange={(value) => {
 							setContactFilter(value)
@@ -478,18 +481,18 @@ export function CustomerListUI({
 							<UserPlus className="size-6 text-muted-foreground" />
 						</div>
 						<div>
-							<p className="font-medium">Aucun client trouvé</p>
+							<p className="font-medium">Aucun compte trouvé</p>
 							<p className="text-sm text-muted-foreground">
 								{search || contactFilter !== 'all'
 									? "Essayez d'autres critères"
-									: 'Commencez par ajouter votre premier client'}
+									: 'Commencez par ajouter votre premier compte'}
 							</p>
 						</div>
 						{!search && contactFilter === 'all' ? (
 							<RequirePermission permission="MANAGE_CUSTOMERS">
 								<Button onClick={() => setCreateOpen(true)} variant="outline">
 									<Plus />
-									Ajouter un client
+									Ajouter un compte
 								</Button>
 							</RequirePermission>
 						) : null}

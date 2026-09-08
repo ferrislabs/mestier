@@ -36,7 +36,7 @@ describe('resolveSection', () => {
 
 describe('resolveScope', () => {
 	it('resolves the section despite the tenant prefix', () => {
-		expect(resolveScope('/o/dupont/crm/customers').label).toBe('Clients')
+		expect(resolveScope('/o/dupont/crm/customers').label).toBe('Comptes')
 		expect(resolveScope('/o/dupont/crm/quotes').label).toBe('Devis')
 	})
 

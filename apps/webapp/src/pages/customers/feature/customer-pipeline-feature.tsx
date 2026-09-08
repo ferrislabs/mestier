@@ -35,6 +35,7 @@ export function CustomerPipelineFeature() {
 			key={activeOrganization.id}
 			organizationId={activeOrganization.id}
 			organizationSlug={activeOrganization.slug}
+			organizationName={activeOrganization.name}
 		/>
 	)
 }
@@ -42,9 +43,11 @@ export function CustomerPipelineFeature() {
 function CustomerPipeline({
 	organizationId,
 	organizationSlug,
+	organizationName,
 }: {
 	organizationId: string
 	organizationSlug: string
+	organizationName: string
 }) {
 	const navigate = useNavigate()
 	const customers = useCustomers(organizationId, { page: 1, perPage: 100 })
@@ -70,6 +73,7 @@ function CustomerPipeline({
 	return (
 		<CustomerPipelineUI
 			organizationSlug={organizationSlug}
+			organizationName={organizationName}
 			customers={customers.data?.data ?? []}
 			canMove={canMove}
 			error={customers.error?.message ?? updateCustomer.error?.message ?? null}

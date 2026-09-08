@@ -30,6 +30,7 @@ export function QuoteListFeature() {
 			key={activeOrganization.id}
 			organizationId={activeOrganization.id}
 			organizationSlug={activeOrganization.slug}
+			organizationName={activeOrganization.name}
 		/>
 	)
 }
@@ -41,9 +42,11 @@ export function QuoteListFeature() {
 function QuoteListWorkspace({
 	organizationId,
 	organizationSlug,
+	organizationName,
 }: {
 	organizationId: string
 	organizationSlug: string
+	organizationName: string
 }) {
 	const [initialQuoteListState] = useState(getQuoteListUrlState)
 	const [quotePage, setQuotePage] = useState(initialQuoteListState.page)
@@ -60,6 +63,7 @@ function QuoteListWorkspace({
 	return (
 		<QuoteListUI
 			organizationSlug={organizationSlug}
+			organizationName={organizationName}
 			customers={customers.data?.data ?? []}
 			quotes={quotes.data?.data ?? []}
 			quotesPagination={quotes.data?.pagination ?? null}

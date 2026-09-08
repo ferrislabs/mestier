@@ -415,7 +415,7 @@ function InvoiceDetailWorkspace({ invoice }: { invoice: Invoice }) {
 										}
 									>
 										<SelectTrigger className="w-full">
-											<SelectValue placeholder="Sélectionner un client" />
+											<SelectValue placeholder="Sélectionner un compte" />
 										</SelectTrigger>
 										<SelectContent>
 											{(customers.data?.data ?? []).map((customer) => (

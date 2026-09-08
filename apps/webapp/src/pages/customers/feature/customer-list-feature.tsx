@@ -25,7 +25,7 @@ export function CustomerListFeature() {
 				<div>
 					<p className="font-semibold">Organisation indisponible</p>
 					<p className="text-sm text-muted-foreground">
-						Le fichier client nécessite une organisation active.
+						Le fichier compte nécessite une organisation active.
 					</p>
 				</div>
 			</div>
@@ -37,6 +37,7 @@ export function CustomerListFeature() {
 			key={activeOrganization.id}
 			organizationId={activeOrganization.id}
 			organizationSlug={activeOrganization.slug}
+			organizationName={activeOrganization.name}
 		/>
 	)
 }
@@ -44,9 +45,11 @@ export function CustomerListFeature() {
 function CustomerList({
 	organizationId,
 	organizationSlug,
+	organizationName,
 }: {
 	organizationId: string
 	organizationSlug: string
+	organizationName: string
 }) {
 	const navigate = useNavigate()
 	const [initialListState] = useState(getCustomerListUrlState)
@@ -66,6 +69,7 @@ function CustomerList({
 	return (
 		<CustomerListUI
 			organizationSlug={organizationSlug}
+			organizationName={organizationName}
 			customers={customers.data?.data ?? []}
 			pagination={customers.data?.pagination ?? null}
 			page={page}

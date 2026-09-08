@@ -57,7 +57,7 @@ export const MODULES: AppModule[] = [
 		sections: [
 			{
 				id: 'customers',
-				label: 'Clients',
+				label: 'Comptes',
 				to: '/crm/customers',
 				icon: Users,
 				exact: true,
