@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            INSERT INTO service_rates (id, org_id, label, unit, rate_cents, default_vat_rate_bp, deleted_at, created_at, updated_at)\n            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)\n            RETURNING id, org_id, label, unit, rate_cents, default_vat_rate_bp, deleted_at, created_at, updated_at\n            ",
+  "query": "\n            INSERT INTO service_rates (id, org_id, label, unit, rate_cents, default_vat_rate_bp, description, deleted_at, created_at, updated_at)\n            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)\n            RETURNING id, org_id, label, unit, rate_cents, default_vat_rate_bp, description, deleted_at, created_at, updated_at\n            ",
   "describe": {
     "columns": [
       {
@@ -35,16 +35,21 @@
       },
       {
         "ordinal": 6,
+        "name": "description",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 7,
         "name": "deleted_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 7,
+        "ordinal": 8,
         "name": "created_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 8,
+        "ordinal": 9,
         "name": "updated_at",
         "type_info": "Timestamptz"
       }
@@ -57,6 +62,7 @@
         "Text",
         "Int4",
         "Int4",
+        "Text",
         "Timestamptz",
         "Timestamptz",
         "Timestamptz"
@@ -70,9 +76,10 @@
       false,
       true,
       true,
+      true,
       false,
       false
     ]
   },
-  "hash": "e13a8427dd15f21d28d0ab3d99806b5f73cb0b65d20285cd1fd721c099af1322"
+  "hash": "14212a8dd8a9d4b9f040c58cb9260644ec0f16c833af3cde0967c6177f3b0c6e"
 }

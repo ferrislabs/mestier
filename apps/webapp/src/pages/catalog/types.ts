@@ -4,4 +4,5 @@ export interface ServiceRateFormValues {
 	label: string
 	unit: ServiceRateUnit
 	rate: string
+	description: string
 }

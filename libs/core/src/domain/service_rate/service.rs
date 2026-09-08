@@ -41,6 +41,7 @@ where
                 unit: command.unit,
                 rate_cents: command.rate_cents,
                 default_vat_rate_bp: command.default_vat_rate_bp,
+                description: command.description,
                 deleted_at: None,
                 created_at: now,
                 updated_at: now,
@@ -76,6 +77,7 @@ where
         service_rate.unit = command.unit;
         service_rate.rate_cents = command.rate_cents;
         service_rate.default_vat_rate_bp = command.default_vat_rate_bp;
+        service_rate.description = command.description;
         service_rate.updated_at = Utc::now();
 
         self.repo.update(&service_rate).await
@@ -133,6 +135,7 @@ mod tests {
             unit: ServiceRateUnit::Hour,
             rate_cents: 5500,
             default_vat_rate_bp: None,
+            description: None,
             deleted_at: None,
             created_at: now,
             updated_at: now,
@@ -156,6 +159,7 @@ mod tests {
                 unit: ServiceRateUnit::Hour,
                 rate_cents: 5500,
                 default_vat_rate_bp: Some(2000),
+                description: None,
             })
             .await
             .unwrap();
@@ -184,6 +188,7 @@ mod tests {
                 unit: ServiceRateUnit::Ml,
                 rate_cents: 1200,
                 default_vat_rate_bp: None,
+                description: None,
             })
             .await
             .unwrap();

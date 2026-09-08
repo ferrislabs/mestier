@@ -38,6 +38,8 @@ import {
 import { Textarea } from '#/components/ui/textarea'
 import { useActiveOrganization } from '#/hooks/use-active-organization'
 import type { ProductCatalogFormValues } from '#/hooks/use-catalog-items'
+import { useUploadFile } from '#/hooks/use-customers'
+import { useFileUrls } from '#/hooks/use-file-url'
 import type {
 	Product,
 	ServiceRate,
@@ -56,6 +58,7 @@ import { mutationErrorMessage } from '#/lib/api-error'
 import { formatPricePerUnit, formatUnitLong } from '#/lib/units'
 import type { ServiceRateFormValues } from '#/pages/catalog/types'
 import { eurosToCents } from '#/pages/quotes/types'
+import { PhotoStrip } from '#/pages/quotes/ui/photo-strip'
 import { UnitSelect } from '#/pages/quotes/ui/unit-select'
 
 type CatalogTab = 'products' | 'services'
@@ -118,12 +121,14 @@ function CrmSectionContent({ organizationId }: CrmSectionContentProps) {
 	const createProduct = useCreateProduct(organizationId)
 	const updateProduct = useUpdateProduct()
 	const deleteProduct = useDeleteProduct()
+	const uploadFile = useUploadFile()
 
 	const serviceRateForm = useForm({
 		defaultValues: {
 			label: '',
 			unit: 'HOUR',
 			rate: '',
+			description: '',
 		} satisfies ServiceRateFormValues,
 		onSubmit: async ({ value }) => {
 			await createServiceRate.mutateAsync({
@@ -132,6 +137,7 @@ function CrmSectionContent({ organizationId }: CrmSectionContentProps) {
 					label: value.label.trim(),
 					unit: value.unit,
 					rate_cents: eurosToCents(value.rate),
+					description: value.description.trim() || null,
 				},
 			})
 			serviceRateForm.reset()
@@ -145,6 +151,7 @@ function CrmSectionContent({ organizationId }: CrmSectionContentProps) {
 			unit: 'M2',
 			unitPrice: '',
 			description: '',
+			photoKeys: [] as string[],
 		} satisfies ProductCatalogFormValues,
 		onSubmit: async ({ value }) => {
 			await createProduct.mutateAsync({
@@ -155,6 +162,7 @@ function CrmSectionContent({ organizationId }: CrmSectionContentProps) {
 					unit: value.unit,
 					unit_price_cents: eurosToCents(value.unitPrice),
 					description: value.description.trim() || null,
+					photo_keys: value.photoKeys,
 				},
 			})
 			productForm.reset()
@@ -167,6 +175,35 @@ function CrmSectionContent({ organizationId }: CrmSectionContentProps) {
 	const [search, setSearch] = useState('')
 	const [draft, setDraft] = useState<Draft>(null)
 	const [isSaving, setIsSaving] = useState(false)
+	const uploadDraftProductPhoto = async (file: File) => {
+		const uploaded = await uploadFile.mutateAsync(file)
+		setDraft((current) =>
+			current?.tab === 'products'
+				? {
+						...current,
+						values: {
+							...current.values,
+							photoKeys: [...current.values.photoKeys, uploaded.data.key],
+						},
+					}
+				: current,
+		)
+	}
+	const removeDraftProductPhoto = (key: string) => {
+		setDraft((current) =>
+			current?.tab === 'products'
+				? {
+						...current,
+						values: {
+							...current.values,
+							photoKeys: current.values.photoKeys.filter(
+								(photoKey) => photoKey !== key,
+							),
+						},
+					}
+				: current,
+		)
+	}
 
 	const serviceRates = catalog.serviceRates.data?.data ?? []
 	const products = catalog.products.data?.data ?? []
@@ -221,6 +258,7 @@ function CrmSectionContent({ organizationId }: CrmSectionContentProps) {
 							unit: draft.values.unit,
 							unit_price_cents: eurosToCents(draft.values.unitPrice),
 							description: draft.values.description.trim() || null,
+							photo_keys: draft.values.photoKeys,
 						},
 					})
 				}
@@ -234,6 +272,7 @@ function CrmSectionContent({ organizationId }: CrmSectionContentProps) {
 							label: draft.values.label.trim(),
 							unit: draft.values.unit,
 							rate_cents: eurosToCents(draft.values.rate),
+							description: draft.values.description.trim() || null,
 						},
 					})
 				}
@@ -287,6 +326,21 @@ function CrmSectionContent({ organizationId }: CrmSectionContentProps) {
 								}
 							},
 							onSubmit: () => productForm.handleSubmit(),
+						}
+						const uploadProductPhoto = async (file: File) => {
+							const uploaded = await uploadFile.mutateAsync(file)
+							productForm.setFieldValue('photoKeys', [
+								...productForm.state.values.photoKeys,
+								uploaded.data.key,
+							])
+						}
+						const removeProductPhoto = (key: string) => {
+							productForm.setFieldValue(
+								'photoKeys',
+								productForm.state.values.photoKeys.filter(
+									(photoKey) => photoKey !== key,
+								),
+							)
 						}
 
 						return (
@@ -384,6 +438,9 @@ function CrmSectionContent({ organizationId }: CrmSectionContentProps) {
 										products={filteredProducts}
 										draft={draft}
 										isSaving={isSaving}
+										isUploadingPhoto={uploadFile.isPending}
+										onUploadPhoto={uploadDraftProductPhoto}
+										onRemovePhoto={removeDraftProductPhoto}
 										onEdit={(product) =>
 											setDraft({
 												tab: 'products',
@@ -394,6 +451,7 @@ function CrmSectionContent({ organizationId }: CrmSectionContentProps) {
 													unit: product.unit,
 													unitPrice: centsToEuros(product.unit_price_cents),
 													description: product.description ?? '',
+													photoKeys: product.photo_keys,
 												},
 											})
 										}
@@ -426,6 +484,7 @@ function CrmSectionContent({ organizationId }: CrmSectionContentProps) {
 													label: serviceRate.label,
 													unit: serviceRate.unit,
 													rate: centsToEuros(serviceRate.rate_cents),
+													description: serviceRate.description ?? '',
 												},
 											})
 										}
@@ -463,7 +522,12 @@ function CrmSectionContent({ organizationId }: CrmSectionContentProps) {
 										</SheetHeader>
 										<div className="flex-1 overflow-y-auto p-4">
 											{createMode === 'products' ? (
-												<ProductCreateFields form={productFormBinding} />
+												<ProductCreateFields
+													form={productFormBinding}
+													isUploading={uploadFile.isPending}
+													onUploadPhoto={uploadProductPhoto}
+													onRemovePhoto={removeProductPhoto}
+												/>
 											) : (
 												<ServiceCreateFields form={serviceRateFormBinding} />
 											)}
@@ -533,8 +597,14 @@ function SegmentButton({
 
 function ProductCreateFields({
 	form,
+	isUploading,
+	onUploadPhoto,
+	onRemovePhoto,
 }: {
 	form: FormBinding<ProductCatalogFormValues>
+	isUploading?: boolean
+	onUploadPhoto: (file: File) => void
+	onRemovePhoto: (key: string) => void
 }) {
 	return (
 		<div className="space-y-4">
@@ -572,6 +642,44 @@ function ProductCreateFields({
 					placeholder="Optionnel"
 				/>
 			</div>
+			<ProductPhotoField
+				photoKeys={form.values.photoKeys}
+				isUploading={isUploading}
+				onUpload={onUploadPhoto}
+				onRemove={onRemovePhoto}
+			/>
+		</div>
+	)
+}
+
+/**
+ * Resolves its own preview urls from `photoKeys` — a genuine top-level
+ * component, not a nested closure, is what lets it call `useFileUrls`
+ * (`ProductCreateFields`'s form lives inside a `form.Subscribe` render prop,
+ * where a hook call is not allowed).
+ */
+function ProductPhotoField({
+	photoKeys,
+	isUploading,
+	onUpload,
+	onRemove,
+}: {
+	photoKeys: string[]
+	isUploading?: boolean
+	onUpload: (file: File) => void
+	onRemove: (key: string) => void
+}) {
+	const photos = useFileUrls(photoKeys)
+
+	return (
+		<div className="flex flex-col gap-2">
+			<Label>Photos</Label>
+			<PhotoStrip
+				photos={photos}
+				isUploading={isUploading}
+				onAdd={onUpload}
+				onRemove={onRemove}
+			/>
 		</div>
 	)
 }
@@ -601,6 +709,16 @@ function ServiceCreateFields({
 					suffix={unitPriceSuffix(form.values.unit)}
 				/>
 			</div>
+			<div className="flex flex-col gap-2">
+				<Label>Description</Label>
+				<Textarea
+					value={form.values.description}
+					onChange={(event) =>
+						form.onChange({ description: event.target.value })
+					}
+					placeholder="Optionnel"
+				/>
+			</div>
 		</div>
 	)
 }
@@ -609,6 +727,9 @@ function ProductList({
 	products,
 	draft,
 	isSaving,
+	isUploadingPhoto,
+	onUploadPhoto,
+	onRemovePhoto,
 	onEdit,
 	onDraftChange,
 	onCancel,
@@ -619,6 +740,9 @@ function ProductList({
 	products: Product[]
 	draft: Draft
 	isSaving: boolean
+	isUploadingPhoto?: boolean
+	onUploadPhoto: (file: File) => void
+	onRemovePhoto: (key: string) => void
 	onEdit: (product: Product) => void
 	onDraftChange: (values: ProductCatalogFormValues) => void
 	onCancel: () => void
@@ -653,6 +777,9 @@ function ProductList({
 									<ProductDraftFields
 										values={draft.values}
 										onChange={onDraftChange}
+										isUploading={isUploadingPhoto}
+										onUploadPhoto={onUploadPhoto}
+										onRemovePhoto={onRemovePhoto}
 									/>
 								) : (
 									<>
@@ -698,9 +825,15 @@ function ProductList({
 function ProductDraftFields({
 	values,
 	onChange,
+	isUploading,
+	onUploadPhoto,
+	onRemovePhoto,
 }: {
 	values: ProductCatalogFormValues
 	onChange: (values: ProductCatalogFormValues) => void
+	isUploading?: boolean
+	onUploadPhoto: (file: File) => void
+	onRemovePhoto: (key: string) => void
 }) {
 	return (
 		<>
@@ -723,6 +856,12 @@ function ProductDraftFields({
 					}
 					placeholder="Description"
 					className="md:col-span-2"
+				/>
+				<ProductPhotoField
+					photoKeys={values.photoKeys}
+					isUploading={isUploading}
+					onUpload={onUploadPhoto}
+					onRemove={onRemovePhoto}
 				/>
 			</div>
 			<UnitField
@@ -786,15 +925,27 @@ function ServiceList({
 							>
 								{isEditing ? (
 									<>
-										<Input
-											value={draft.values.label}
-											onChange={(event) =>
-												onDraftChange({
-													...draft.values,
-													label: event.target.value,
-												})
-											}
-										/>
+										<div className="grid gap-3 lg:grid-cols-1">
+											<Input
+												value={draft.values.label}
+												onChange={(event) =>
+													onDraftChange({
+														...draft.values,
+														label: event.target.value,
+													})
+												}
+											/>
+											<Textarea
+												value={draft.values.description}
+												onChange={(event) =>
+													onDraftChange({
+														...draft.values,
+														description: event.target.value,
+													})
+												}
+												placeholder="Description"
+											/>
+										</div>
 										<UnitField
 											value={draft.values.unit}
 											onChange={(unit) =>
@@ -820,6 +971,9 @@ function ServiceList({
 											</p>
 											<p className="mt-1 truncate font-mono text-xs text-muted-foreground">
 												{serviceRate.id}
+											</p>
+											<p className="mt-1 truncate text-sm text-muted-foreground">
+												{serviceRate.description || 'Aucune description'}
 											</p>
 										</div>
 										<StatusBadge tone="brand">
