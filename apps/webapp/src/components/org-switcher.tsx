@@ -1,11 +1,14 @@
 import { useLocation, useNavigate } from '@tanstack/react-router'
-import { Building2, Check, ChevronsUpDown } from 'lucide-react'
+import { Building2, Check, ChevronsUpDown, Plus } from 'lucide-react'
+import { useState } from 'react'
 
+import { CreateOrganizationDialog } from '#/components/create-organization-dialog'
 import {
 	DropdownMenu,
 	DropdownMenuContent,
 	DropdownMenuItem,
 	DropdownMenuLabel,
+	DropdownMenuSeparator,
 	DropdownMenuTrigger,
 } from '#/components/ui/dropdown-menu'
 import { useActiveOrganization } from '#/hooks/use-active-organization'
@@ -23,6 +26,7 @@ export function OrgSwitcher() {
 	const navigate = useNavigate()
 	const { organizations, activeOrganization, activeOrganizationId } =
 		useActiveOrganization()
+	const [isCreateOpen, setCreateOpen] = useState(false)
 
 	// Switching organization is a navigation: the tenant lives in the URL. We
 	// stay on the same screen, unless it names an entity of the organization
@@ -38,47 +42,64 @@ export function OrgSwitcher() {
 	}
 
 	return (
-		<DropdownMenu>
-			<DropdownMenuTrigger asChild>
-				<button
-					type="button"
-					aria-label="Changer d'organisation"
-					className="flex min-w-0 items-center gap-1.5 rounded-lg px-1.5 py-1 text-sm font-medium text-foreground transition-colors hover:bg-muted"
+		<>
+			<DropdownMenu>
+				<DropdownMenuTrigger asChild>
+					<button
+						type="button"
+						aria-label="Changer d'organisation"
+						className="flex min-w-0 items-center gap-1.5 rounded-lg px-1.5 py-1 text-sm font-medium text-foreground transition-colors hover:bg-muted"
+					>
+						<span className="max-w-40 truncate">{activeOrganization.name}</span>
+						<ChevronsUpDown className="size-3.5 shrink-0 text-muted-foreground" />
+					</button>
+				</DropdownMenuTrigger>
+				<DropdownMenuContent
+					align="start"
+					className="min-w-72 rounded-none shadow-none"
 				>
-					<span className="max-w-40 truncate">{activeOrganization.name}</span>
-					<ChevronsUpDown className="size-3.5 shrink-0 text-muted-foreground" />
-				</button>
-			</DropdownMenuTrigger>
-			<DropdownMenuContent
-				align="start"
-				className="min-w-72 rounded-none shadow-none"
-			>
-				<DropdownMenuLabel className="text-xs text-muted-foreground">
-					Organisation active
-				</DropdownMenuLabel>
-				{organizations.map((organization) => {
-					const selected = organization.id === activeOrganizationId
-					return (
-						<DropdownMenuItem
-							key={organization.id}
-							onClick={() => handleOrganizationSelect(organization)}
-							className="gap-2 p-2"
-						>
-							<OrganizationMark organization={organization} />
-							<div className="grid min-w-0 flex-1 leading-tight">
-								<span className="truncate font-medium">
-									{organization.name}
-								</span>
-								<span className="truncate text-xs text-muted-foreground">
-									{organization.slug}
-								</span>
-							</div>
-							{selected ? <Check className="size-4 text-primary" /> : null}
-						</DropdownMenuItem>
-					)
-				})}
-			</DropdownMenuContent>
-		</DropdownMenu>
+					<DropdownMenuLabel className="text-xs text-muted-foreground">
+						Organisation active
+					</DropdownMenuLabel>
+					{organizations.map((organization) => {
+						const selected = organization.id === activeOrganizationId
+						return (
+							<DropdownMenuItem
+								key={organization.id}
+								onClick={() => handleOrganizationSelect(organization)}
+								className="gap-2 p-2"
+							>
+								<OrganizationMark organization={organization} />
+								<div className="grid min-w-0 flex-1 leading-tight">
+									<span className="truncate font-medium">
+										{organization.name}
+									</span>
+									<span className="truncate text-xs text-muted-foreground">
+										{organization.slug}
+									</span>
+								</div>
+								{selected ? <Check className="size-4 text-primary" /> : null}
+							</DropdownMenuItem>
+						)
+					})}
+					<DropdownMenuSeparator />
+					<DropdownMenuItem
+						onClick={() => setCreateOpen(true)}
+						className="gap-2 p-2"
+					>
+						<div className="flex aspect-square size-7 items-center justify-center rounded-none border border-dashed text-muted-foreground">
+							<Plus className="size-4" />
+						</div>
+						<span className="font-medium">Créer une organisation</span>
+					</DropdownMenuItem>
+				</DropdownMenuContent>
+			</DropdownMenu>
+
+			{/* Mounted only while open: unmounting is what clears the form. */}
+			{isCreateOpen ? (
+				<CreateOrganizationDialog open onOpenChange={setCreateOpen} />
+			) : null}
+		</>
 	)
 }
 

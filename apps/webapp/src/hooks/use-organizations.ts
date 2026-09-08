@@ -29,11 +29,13 @@ export function useCreateOrganization() {
 	return useMutation({
 		...window.tanstackApi.mutation('post', '/api/v1/organizations')
 			.mutationOptions,
-		onSuccess: () => {
-			void queryClient.invalidateQueries({
+		// Returned, not fired and forgotten: `mutateAsync` then resolves only
+		// once the organization list carries the new tenant. Callers navigate
+		// to it right after, and the layout rejects a slug the list is missing.
+		onSuccess: () =>
+			queryClient.invalidateQueries({
 				queryKey: [{ _id: MY_ORGS_KEY }],
-			})
-		},
+			}),
 	})
 }
 

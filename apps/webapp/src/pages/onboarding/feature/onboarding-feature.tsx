@@ -2,6 +2,7 @@ import { useForm } from '@tanstack/react-form'
 import { useNavigate } from '@tanstack/react-router'
 import { useAuth } from 'react-oidc-context'
 import { useCreateOrganization } from '#/hooks/use-organizations'
+import { normalizeSlugForPayload, slugFromName } from '#/modules/org-slug'
 import { OnboardingUI } from '#/pages/onboarding/ui/onboarding-ui'
 
 export function OnboardingFeature() {
@@ -12,7 +13,12 @@ export function OnboardingFeature() {
 	const form = useForm({
 		defaultValues: { name: '', slug: '' },
 		onSubmit: async ({ value }) => {
-			await mutateAsync({ body: { name: value.name, slug: value.slug } })
+			await mutateAsync({
+				body: {
+					name: value.name.trim(),
+					slug: normalizeSlugForPayload(value.slug),
+				},
+			})
 			await navigate({ to: '/' })
 		},
 	})
@@ -21,8 +27,8 @@ export function OnboardingFeature() {
 		const prevName = form.getFieldValue('name')
 		const prevSlug = form.getFieldValue('slug')
 		form.setFieldValue('name', name)
-		if (!prevSlug || prevSlug === nameToSlug(prevName)) {
-			form.setFieldValue('slug', nameToSlug(name))
+		if (!prevSlug || prevSlug === slugFromName(prevName)) {
+			form.setFieldValue('slug', slugFromName(name))
 		}
 	}
 
@@ -42,15 +48,4 @@ export function OnboardingFeature() {
 			)}
 		</form.Subscribe>
 	)
-}
-
-function nameToSlug(name: string): string {
-	return name
-		.toLowerCase()
-		.normalize('NFD')
-		.replace(/[\u0300-\u036f]/g, '')
-		.replace(/\s+/g, '-')
-		.replace(/[^a-z0-9-]/g, '')
-		.replace(/-{2,}/g, '-')
-		.replace(/^-|-$/g, '')
 }
