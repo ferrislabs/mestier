@@ -25,6 +25,7 @@ pub mod absence;
 pub mod assignment_report;
 pub mod authorization;
 pub mod automation;
+pub mod custom_unit;
 pub mod customer;
 pub mod customer_contact;
 pub mod customer_context;

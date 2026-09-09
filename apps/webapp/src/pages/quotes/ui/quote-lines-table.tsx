@@ -21,6 +21,7 @@ interface QuoteLinesTableProps {
 	isUploading?: boolean
 	openLineId: string | null
 	vatEnabled: boolean
+	customUnits?: string[]
 	onOpenLineChange: (clientId: string, open: boolean) => void
 	onLineChange: (clientId: string, patch: Partial<QuoteLineFormValues>) => void
 	onSelectCatalogItem: (clientId: string, catalogItemId: string) => void
@@ -43,6 +44,7 @@ export function QuoteLinesTable({
 	isUploading,
 	openLineId,
 	vatEnabled,
+	customUnits,
 	onOpenLineChange,
 	onLineChange,
 	onSelectCatalogItem,
@@ -79,6 +81,7 @@ export function QuoteLinesTable({
 						canRemove={lines.length > 1}
 						isUploading={isUploading}
 						vatEnabled={vatEnabled}
+						customUnits={customUnits}
 						gridTemplateColumns={columns}
 						onOpenChange={(open) => onOpenLineChange(line.clientId, open)}
 						onChange={(patch) => onLineChange(line.clientId, patch)}

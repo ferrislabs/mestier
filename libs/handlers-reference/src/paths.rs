@@ -2,6 +2,12 @@ use axum_extra::routing::TypedPath;
 use mestier_core::{EquipmentId, MemberId, OrganizationId, ProductId, ServiceRateId};
 use serde::Deserialize;
 
+#[derive(TypedPath, Deserialize)]
+#[typed_path("/api/v1/organizations/{organization_id}/custom-units")]
+pub struct CustomUnitsPath {
+    pub organization_id: OrganizationId,
+}
+
 /// A profile is a sub-resource of the seat it describes, never addressed on
 /// its own — hence the member-scoped path and the absence of any
 /// `/employees` collection.

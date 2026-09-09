@@ -40,12 +40,9 @@ import { useActiveOrganization } from '#/hooks/use-active-organization'
 import type { ProductCatalogFormValues } from '#/hooks/use-catalog-items'
 import { useUploadFile } from '#/hooks/use-customers'
 import { useFileUrls } from '#/hooks/use-file-url'
-import type {
-	Product,
-	ServiceRate,
-	ServiceRateUnit,
-} from '#/hooks/use-reference-catalog'
+import type { Product, ServiceRate } from '#/hooks/use-reference-catalog'
 import {
+	useCreateCustomUnit,
 	useCreateProduct,
 	useCreateServiceRate,
 	useDeleteProduct,
@@ -73,11 +70,11 @@ type Draft =
  * Products keep the legacy HOUR relabelling until the rows stored before UNIT
  * existed are migrated; see catalog-item-picker.
  */
-function unitPriceSuffix(unit: ServiceRateUnit): string {
+function unitPriceSuffix(unit: string): string {
 	return formatPricePerUnit(unit)
 }
 
-function productPriceSuffix(unit: ServiceRateUnit): string {
+function productPriceSuffix(unit: string): string {
 	return unit === 'HOUR' ? '€/unité' : formatPricePerUnit(unit)
 }
 
@@ -122,6 +119,16 @@ function CrmSectionContent({ organizationId }: CrmSectionContentProps) {
 	const updateProduct = useUpdateProduct()
 	const deleteProduct = useDeleteProduct()
 	const uploadFile = useUploadFile()
+	const createCustomUnit = useCreateCustomUnit(organizationId)
+	const customUnitCodes = (catalog.customUnits.data?.data ?? []).map(
+		(customUnit) => customUnit.code,
+	)
+	const createCustomUnitCode = (code: string) => {
+		createCustomUnit.mutate({
+			path: { organization_id: organizationId },
+			body: { code },
+		})
+	}
 
 	const serviceRateForm = useForm({
 		defaultValues: {
@@ -470,6 +477,9 @@ function CrmSectionContent({ organizationId }: CrmSectionContentProps) {
 											})
 										}
 										onCreate={() => openCreate('products')}
+										customUnits={customUnitCodes}
+										onCreateCustomUnit={createCustomUnitCode}
+										isCreatingCustomUnit={createCustomUnit.isPending}
 									/>
 								) : (
 									<ServiceList
@@ -503,6 +513,9 @@ function CrmSectionContent({ organizationId }: CrmSectionContentProps) {
 											})
 										}
 										onCreate={() => openCreate('services')}
+										customUnits={customUnitCodes}
+										onCreateCustomUnit={createCustomUnitCode}
+										isCreatingCustomUnit={createCustomUnit.isPending}
 									/>
 								)}
 
@@ -527,9 +540,17 @@ function CrmSectionContent({ organizationId }: CrmSectionContentProps) {
 													isUploading={uploadFile.isPending}
 													onUploadPhoto={uploadProductPhoto}
 													onRemovePhoto={removeProductPhoto}
+													customUnits={customUnitCodes}
+													onCreateCustomUnit={createCustomUnitCode}
+													isCreatingCustomUnit={createCustomUnit.isPending}
 												/>
 											) : (
-												<ServiceCreateFields form={serviceRateFormBinding} />
+												<ServiceCreateFields
+													form={serviceRateFormBinding}
+													customUnits={customUnitCodes}
+													onCreateCustomUnit={createCustomUnitCode}
+													isCreatingCustomUnit={createCustomUnit.isPending}
+												/>
 											)}
 										</div>
 										<SheetFooter className="border-t sm:flex-row sm:justify-end">
@@ -600,11 +621,17 @@ function ProductCreateFields({
 	isUploading,
 	onUploadPhoto,
 	onRemovePhoto,
+	customUnits,
+	onCreateCustomUnit,
+	isCreatingCustomUnit,
 }: {
 	form: FormBinding<ProductCatalogFormValues>
 	isUploading?: boolean
 	onUploadPhoto: (file: File) => void
 	onRemovePhoto: (key: string) => void
+	customUnits: string[]
+	onCreateCustomUnit: (code: string) => void
+	isCreatingCustomUnit?: boolean
 }) {
 	return (
 		<div className="space-y-4">
@@ -623,6 +650,9 @@ function ProductCreateFields({
 				<UnitField
 					value={form.values.unit}
 					onChange={(unit) => form.onChange({ unit })}
+					customUnits={customUnits}
+					onCreateCustomUnit={onCreateCustomUnit}
+					isCreatingCustomUnit={isCreatingCustomUnit}
 				/>
 				<WideSuffixTextField
 					label="Prix"
@@ -686,8 +716,14 @@ function ProductPhotoField({
 
 function ServiceCreateFields({
 	form,
+	customUnits,
+	onCreateCustomUnit,
+	isCreatingCustomUnit,
 }: {
 	form: FormBinding<ServiceRateFormValues>
+	customUnits: string[]
+	onCreateCustomUnit: (code: string) => void
+	isCreatingCustomUnit?: boolean
 }) {
 	return (
 		<div className="space-y-4">
@@ -700,6 +736,9 @@ function ServiceCreateFields({
 				<UnitField
 					value={form.values.unit}
 					onChange={(unit) => form.onChange({ unit })}
+					customUnits={customUnits}
+					onCreateCustomUnit={onCreateCustomUnit}
+					isCreatingCustomUnit={isCreatingCustomUnit}
 				/>
 				<WideSuffixTextField
 					label="Tarif"
@@ -736,6 +775,9 @@ function ProductList({
 	onSave,
 	onDelete,
 	onCreate,
+	customUnits,
+	onCreateCustomUnit,
+	isCreatingCustomUnit,
 }: {
 	products: Product[]
 	draft: Draft
@@ -749,6 +791,9 @@ function ProductList({
 	onSave: () => void
 	onDelete: (product: Product) => Promise<unknown>
 	onCreate: () => void
+	customUnits: string[]
+	onCreateCustomUnit: (code: string) => void
+	isCreatingCustomUnit?: boolean
 }) {
 	return (
 		<SectionCard>
@@ -780,6 +825,9 @@ function ProductList({
 										isUploading={isUploadingPhoto}
 										onUploadPhoto={onUploadPhoto}
 										onRemovePhoto={onRemovePhoto}
+										customUnits={customUnits}
+										onCreateCustomUnit={onCreateCustomUnit}
+										isCreatingCustomUnit={isCreatingCustomUnit}
 									/>
 								) : (
 									<>
@@ -828,12 +876,18 @@ function ProductDraftFields({
 	isUploading,
 	onUploadPhoto,
 	onRemovePhoto,
+	customUnits,
+	onCreateCustomUnit,
+	isCreatingCustomUnit,
 }: {
 	values: ProductCatalogFormValues
 	onChange: (values: ProductCatalogFormValues) => void
 	isUploading?: boolean
 	onUploadPhoto: (file: File) => void
 	onRemovePhoto: (key: string) => void
+	customUnits: string[]
+	onCreateCustomUnit: (code: string) => void
+	isCreatingCustomUnit?: boolean
 }) {
 	return (
 		<>
@@ -867,6 +921,9 @@ function ProductDraftFields({
 			<UnitField
 				value={values.unit}
 				onChange={(unit) => onChange({ ...values, unit })}
+				customUnits={customUnits}
+				onCreateCustomUnit={onCreateCustomUnit}
+				isCreatingCustomUnit={isCreatingCustomUnit}
 			/>
 			<Input
 				value={values.unitPrice}
@@ -889,6 +946,9 @@ function ServiceList({
 	onSave,
 	onDelete,
 	onCreate,
+	customUnits,
+	onCreateCustomUnit,
+	isCreatingCustomUnit,
 }: {
 	serviceRates: ServiceRate[]
 	draft: Draft
@@ -899,6 +959,9 @@ function ServiceList({
 	onSave: () => void
 	onDelete: (serviceRate: ServiceRate) => Promise<unknown>
 	onCreate: () => void
+	customUnits: string[]
+	onCreateCustomUnit: (code: string) => void
+	isCreatingCustomUnit?: boolean
 }) {
 	return (
 		<SectionCard>
@@ -951,6 +1014,9 @@ function ServiceList({
 											onChange={(unit) =>
 												onDraftChange({ ...draft.values, unit })
 											}
+											customUnits={customUnits}
+											onCreateCustomUnit={onCreateCustomUnit}
+											isCreatingCustomUnit={isCreatingCustomUnit}
 										/>
 										<Input
 											value={draft.values.rate}
@@ -1010,14 +1076,26 @@ function ServiceList({
 function UnitField({
 	value,
 	onChange,
+	customUnits,
+	onCreateCustomUnit,
+	isCreatingCustomUnit,
 }: {
-	value: ServiceRateUnit
-	onChange: (unit: ServiceRateUnit) => void
+	value: string
+	onChange: (unit: string) => void
+	customUnits?: string[]
+	onCreateCustomUnit?: (code: string) => void
+	isCreatingCustomUnit?: boolean
 }) {
 	return (
 		<div className="flex flex-col gap-2">
 			<Label>Unité</Label>
-			<UnitSelect value={value} onChange={onChange} />
+			<UnitSelect
+				value={value}
+				onChange={onChange}
+				customUnits={customUnits}
+				onCreateCustomUnit={onCreateCustomUnit}
+				isCreatingCustomUnit={isCreatingCustomUnit}
+			/>
 		</div>
 	)
 }
@@ -1102,10 +1180,10 @@ function EmptyState({
  * used to fall through to "mètre carré", which meant every unit added after
  * m2 would have been mislabelled here.
  */
-function productUnitLabel(unit: ServiceRateUnit): string {
+function productUnitLabel(unit: string): string {
 	return unit === 'HOUR' ? 'unité' : formatUnitLong(unit)
 }
 
-function serviceUnitLabel(unit: ServiceRateUnit): string {
+function serviceUnitLabel(unit: string): string {
 	return formatUnitLong(unit)
 }

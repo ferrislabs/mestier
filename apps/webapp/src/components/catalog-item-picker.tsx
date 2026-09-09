@@ -4,7 +4,6 @@ import { Button } from '#/components/ui/button'
 import { Input } from '#/components/ui/input'
 import { StatusBadge } from '#/components/ui/surface'
 import type { CatalogItem, CatalogItemType } from '#/hooks/use-catalog-items'
-import type { ServiceRateUnit } from '#/hooks/use-reference-catalog'
 import { cn } from '#/lib/utils'
 import { formatCents, formatUnit } from '#/pages/quotes/types'
 
@@ -187,10 +186,7 @@ function formatCatalogItemPrice(item: CatalogItem): string {
 	return `${formatCents(item.unitPriceCents)} / ${catalogUnitLabel(item.type, item.unit)}`
 }
 
-function catalogUnitLabel(
-	type: CatalogItemType,
-	unit: ServiceRateUnit,
-): string {
+function catalogUnitLabel(type: CatalogItemType, unit: string): string {
 	// Legacy compensation: before UNIT existed, a product sold by the piece was
 	// stored as HOUR and relabelled here. Existing rows still hold HOUR, so this
 	// stays until they are migrated to UNIT, at which point it can go.

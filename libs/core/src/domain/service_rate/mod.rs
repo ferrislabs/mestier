@@ -101,7 +101,11 @@ pub struct ServiceRate {
     pub id: ServiceRateId,
     pub organization_id: OrganizationId,
     pub label: String,
-    pub unit: ServiceRateUnit,
+    /// One of [`ServiceRateUnit`]'s built-in codes, or an organization's own
+    /// [`crate::CustomUnit::code`] (#449) — this is the wire form either way,
+    /// which is why it is a plain string rather than the closed enum: an
+    /// enum cannot name a value it does not know about yet.
+    pub unit: String,
     pub rate_cents: i32,
     /// Basis points a quote line prefills from when it picks this rate.
     /// Prefills, not derives: editing this later never rewrites a line

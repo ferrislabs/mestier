@@ -82,6 +82,7 @@ export namespace Schemas {
   export type TaskAssignmentSummary = { id: TaskAssignmentId; member_id: MemberId };
   export type CustomerContextId = string;
   export type CustomerId = string;
+  export type CustomUnitId = string;
   export type EquipmentId = string;
   export type TaskEquipmentResponse = {
     created_at: string;
@@ -239,6 +240,7 @@ export namespace Schemas {
     registration_number?: (string | null) | undefined;
     status: CustomerStatus;
   };
+  export type CreateCustomUnitRequest = { code: string };
   export type CreateEquipmentRequest = { hourly_rate_cents: number; name: string };
   export type CreateInvitationRequest = Partial<{ expires_at: string | null; member_id: null | MemberId }>;
   export type DeliveryAddressRequest = {
@@ -283,7 +285,7 @@ export namespace Schemas {
     name: string;
     photo_keys: Array<string>;
     sku?: (string | null) | undefined;
-    unit: ServiceRateUnit;
+    unit: string;
     unit_price_cents: number;
   };
   export type CreateProjectChannelRequest = Partial<{ name: string | null }>;
@@ -335,7 +337,7 @@ export namespace Schemas {
     photo_keys: Array<string>;
     quantity: string;
     service_rate_id?: (null | ServiceRateId) | undefined;
-    unit: ServiceRateUnit;
+    unit: string;
     unit_price_cents: number;
     vat_rate_bp?: (number | null) | undefined;
   };
@@ -351,7 +353,7 @@ export namespace Schemas {
     description?: (string | null) | undefined;
     label: string;
     rate_cents: number;
-    unit: ServiceRateUnit;
+    unit: string;
   };
   export type CreateTaskCommentRequest = { body: string };
   export type CreateTaskLabelRequest = { color: string; name: string };
@@ -451,6 +453,12 @@ export namespace Schemas {
     registration_number?: (string | null) | undefined;
     status: CustomerStatus;
     updated_at: string;
+  };
+  export type CustomUnitResponse = {
+    code: string;
+    created_at: string;
+    id: CustomUnitId;
+    organization_id: OrganizationId;
   };
   export type DayLogId = string;
   export type EmployeeId = string;
@@ -892,7 +900,7 @@ export namespace Schemas {
     organization_id: OrganizationId;
     photo_keys: Array<string>;
     sku?: (string | null) | undefined;
-    unit: ServiceRateUnit;
+    unit: string;
     unit_price_cents: number;
     updated_at: string;
   };
@@ -997,7 +1005,7 @@ export namespace Schemas {
     quantity: string;
     quote_id: QuoteId;
     service_rate_id?: (null | ServiceRateId) | undefined;
-    unit: ServiceRateUnit;
+    unit: string;
     unit_price_cents: number;
     updated_at: string;
     vat_rate_bp?: (number | null) | undefined;
@@ -1105,7 +1113,7 @@ export namespace Schemas {
     label: string;
     organization_id: OrganizationId;
     rate_cents: number;
-    unit: ServiceRateUnit;
+    unit: string;
     updated_at: string;
   };
   export type SetEmployeeCostBasisRequest = {
@@ -1247,7 +1255,7 @@ export namespace Schemas {
     name: string;
     photo_keys: Array<string>;
     sku?: (string | null) | undefined;
-    unit: ServiceRateUnit;
+    unit: string;
     unit_price_cents: number;
   };
   export type UpdateProjectRequest = {
@@ -1271,7 +1279,7 @@ export namespace Schemas {
     description?: (string | null) | undefined;
     label: string;
     rate_cents: number;
-    unit: ServiceRateUnit;
+    unit: string;
   };
   export type UpdateSupplierInvoiceRequest = Partial<{ notes: string | null }>;
   export type UpdateTaskCommentRequest = { body: string };
@@ -4843,7 +4851,7 @@ export namespace Endpoints {
           organization_id: Schemas.OrganizationId;
           photo_keys: Array<string>;
           sku?: (string | null) | undefined;
-          unit: Schemas.ServiceRateUnit;
+          unit: string;
           unit_price_cents: number;
           updated_at: string;
         }>;
@@ -4873,11 +4881,55 @@ export namespace Endpoints {
           organization_id: Schemas.OrganizationId;
           photo_keys: Array<string>;
           sku?: (string | null) | undefined;
-          unit: Schemas.ServiceRateUnit;
+          unit: string;
           unit_price_cents: number;
           updated_at: string;
         };
         pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      400: unknown;
+      401: unknown;
+      403: unknown;
+      409: unknown;
+    };
+  };
+  export type get_ListCustomUnits = {
+    method: "GET";
+    path: "/api/v1/organizations/{organization_id}/custom-units";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string };
+    };
+    responses: {
+      200: {
+        data: Array<{
+          code: string;
+          created_at: string;
+          id: Schemas.CustomUnitId;
+          organization_id: Schemas.OrganizationId;
+        }>;
+      };
+      401: unknown;
+      403: unknown;
+    };
+  };
+  export type post_CreateCustomUnit = {
+    method: "POST";
+    path: "/api/v1/organizations/{organization_id}/custom-units";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string };
+
+      body: Schemas.CreateCustomUnitRequest;
+    };
+    responses: {
+      201: {
+        data: {
+          code: string;
+          created_at: string;
+          id: Schemas.CustomUnitId;
+          organization_id: Schemas.OrganizationId;
+        };
       };
       400: unknown;
       401: unknown;
@@ -5478,7 +5530,7 @@ export namespace Endpoints {
           label: string;
           organization_id: Schemas.OrganizationId;
           rate_cents: number;
-          unit: Schemas.ServiceRateUnit;
+          unit: string;
           updated_at: string;
         }>;
         pagination?: (null | Schemas.PaginationMetadata) | undefined;
@@ -5506,7 +5558,7 @@ export namespace Endpoints {
           label: string;
           organization_id: Schemas.OrganizationId;
           rate_cents: number;
-          unit: Schemas.ServiceRateUnit;
+          unit: string;
           updated_at: string;
         };
         pagination?: (null | Schemas.PaginationMetadata) | undefined;
@@ -6050,7 +6102,7 @@ export namespace Endpoints {
           organization_id: Schemas.OrganizationId;
           photo_keys: Array<string>;
           sku?: (string | null) | undefined;
-          unit: Schemas.ServiceRateUnit;
+          unit: string;
           unit_price_cents: number;
           updated_at: string;
         };
@@ -6090,7 +6142,7 @@ export namespace Endpoints {
           organization_id: Schemas.OrganizationId;
           photo_keys: Array<string>;
           sku?: (string | null) | undefined;
-          unit: Schemas.ServiceRateUnit;
+          unit: string;
           unit_price_cents: number;
           updated_at: string;
         };
@@ -6479,7 +6531,7 @@ export namespace Endpoints {
           label: string;
           organization_id: Schemas.OrganizationId;
           rate_cents: number;
-          unit: Schemas.ServiceRateUnit;
+          unit: string;
           updated_at: string;
         };
         pagination?: (null | Schemas.PaginationMetadata) | undefined;
@@ -6517,7 +6569,7 @@ export namespace Endpoints {
           label: string;
           organization_id: Schemas.OrganizationId;
           rate_cents: number;
-          unit: Schemas.ServiceRateUnit;
+          unit: string;
           updated_at: string;
         };
         pagination?: (null | Schemas.PaginationMetadata) | undefined;
@@ -6937,6 +6989,7 @@ export type EndpointByMethod = {
     "/api/v1/organizations/{organization_id}/members/me/permissions": Endpoints.get_GetMyPermissions;
     "/api/v1/organizations/{organization_id}/planning": Endpoints.get_GetPlanning;
     "/api/v1/organizations/{organization_id}/planning/availability": Endpoints.get_GetPlanningAvailability;
+    "/api/v1/organizations/{organization_id}/custom-units": Endpoints.get_ListCustomUnits;
     "/api/v1/organizations/{organization_id}/products": Endpoints.get_ListProducts;
     "/api/v1/organizations/{organization_id}/project-templates": Endpoints.get_ListProjectTemplates;
     "/api/v1/organizations/{organization_id}/project-templates/{project_template_id}": Endpoints.get_GetProjectTemplate;
@@ -7002,6 +7055,7 @@ export type EndpointByMethod = {
     "/api/v1/organizations/{organization_id}/invitations": Endpoints.post_CreateInvitation;
     "/api/v1/organizations/{organization_id}/invoices": Endpoints.post_CreateInvoice;
     "/api/v1/organizations/{organization_id}/members": Endpoints.post_CreateMember;
+    "/api/v1/organizations/{organization_id}/custom-units": Endpoints.post_CreateCustomUnit;
     "/api/v1/organizations/{organization_id}/products": Endpoints.post_CreateProduct;
     "/api/v1/organizations/{organization_id}/project-templates": Endpoints.post_CreateProjectTemplate;
     "/api/v1/organizations/{organization_id}/project-templates/{project_template_id}/instantiate": Endpoints.post_InstantiateProjectTemplate;

@@ -29,6 +29,7 @@ where
         command: CreateProductCommand,
     ) -> Result<Product, CoreError> {
         validate_name(&command.name)?;
+        validate_unit(&command.unit)?;
         validate_price(command.unit_price_cents)?;
         validate_vat_rate_bp(command.default_vat_rate_bp)?;
         validate_photo_keys(&command.photo_keys)?;
@@ -72,6 +73,7 @@ where
         command: UpdateProductCommand,
     ) -> Result<Product, CoreError> {
         validate_name(&command.name)?;
+        validate_unit(&command.unit)?;
         validate_price(command.unit_price_cents)?;
         validate_vat_rate_bp(command.default_vat_rate_bp)?;
         validate_photo_keys(&command.photo_keys)?;
@@ -99,6 +101,16 @@ fn validate_name(name: &str) -> Result<(), CoreError> {
     if name.trim().is_empty() {
         return Err(CoreError::Conflict(
             "product name cannot be empty".to_owned(),
+        ));
+    }
+
+    Ok(())
+}
+
+fn validate_unit(unit: &str) -> Result<(), CoreError> {
+    if unit.trim().is_empty() {
+        return Err(CoreError::Conflict(
+            "product unit cannot be empty".to_owned(),
         ));
     }
 

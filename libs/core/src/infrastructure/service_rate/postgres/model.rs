@@ -1,10 +1,8 @@
-use std::str::FromStr;
-
 use chrono::{DateTime, Utc};
 use common::CoreError;
 use uuid::Uuid;
 
-use crate::{OrganizationId, ServiceRate, ServiceRateId, ServiceRateUnit};
+use crate::{OrganizationId, ServiceRate, ServiceRateId};
 
 #[derive(Debug, Clone)]
 pub struct ServiceRateRow {
@@ -24,15 +22,11 @@ impl TryFrom<ServiceRateRow> for ServiceRate {
     type Error = CoreError;
 
     fn try_from(row: ServiceRateRow) -> Result<Self, Self::Error> {
-        let unit = ServiceRateUnit::from_str(&row.unit).map_err(|e| {
-            CoreError::Internal(format!("invalid service rate unit in database: {e}"))
-        })?;
-
         Ok(Self {
             id: ServiceRateId(row.id),
             organization_id: OrganizationId(row.org_id),
             label: row.label,
-            unit,
+            unit: row.unit,
             rate_cents: row.rate_cents,
             default_vat_rate_bp: row.default_vat_rate_bp,
             description: row.description,

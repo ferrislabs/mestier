@@ -20,8 +20,12 @@ const UNIT_LABELS: Record<ServiceRateUnit, string> = {
 	LITRE: 'L',
 }
 
-export function formatUnit(unit: ServiceRateUnit): string {
-	return UNIT_LABELS[unit] ?? unit
+/** `unit` is a built-in code or an organization's own custom unit code
+ * (#449) — only the former has an entry here, the latter falls through to
+ * its own raw value, which for a custom unit is already the short code an
+ * artisan chose (there is no separate "long form" to look up). */
+export function formatUnit(unit: string): string {
+	return UNIT_LABELS[unit as ServiceRateUnit] ?? unit
 }
 
 /**
@@ -40,12 +44,12 @@ const UNIT_LABELS_LONG: Record<ServiceRateUnit, string> = {
 	LITRE: 'litre',
 }
 
-export function formatUnitLong(unit: ServiceRateUnit): string {
-	return UNIT_LABELS_LONG[unit] ?? formatUnit(unit)
+export function formatUnitLong(unit: string): string {
+	return UNIT_LABELS_LONG[unit as ServiceRateUnit] ?? formatUnit(unit)
 }
 
 /** A price expressed per unit, as a catalogue reads it: `€/m²`. */
-export function formatPricePerUnit(unit: ServiceRateUnit): string {
+export function formatPricePerUnit(unit: string): string {
 	return `€/${formatUnit(unit)}`
 }
 

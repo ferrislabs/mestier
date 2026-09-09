@@ -7,7 +7,7 @@ use uuid::Uuid;
 
 use crate::{
     CustomerContextId, CustomerId, OrganizationId, Quote, QuoteId, QuoteLine, QuoteLineId,
-    QuoteStatus, QuoteVatBreakdownLine, ServiceRateId, ServiceRateUnit,
+    QuoteStatus, QuoteVatBreakdownLine, ServiceRateId,
 };
 
 #[derive(Debug, Clone)]
@@ -111,10 +111,6 @@ impl TryFrom<QuoteLineRow> for QuoteLine {
     type Error = CoreError;
 
     fn try_from(row: QuoteLineRow) -> Result<Self, Self::Error> {
-        let unit = ServiceRateUnit::from_str(&row.unit).map_err(|e| {
-            CoreError::Internal(format!("invalid quote line unit in database: {e}"))
-        })?;
-
         Ok(Self {
             id: QuoteLineId(row.id),
             organization_id: OrganizationId(row.org_id),
@@ -122,7 +118,7 @@ impl TryFrom<QuoteLineRow> for QuoteLine {
             service_rate_id: row.service_rate_id.map(ServiceRateId),
             label: row.label,
             quantity: row.quantity,
-            unit,
+            unit: row.unit,
             unit_price_cents: row.unit_price_cents,
             vat_rate_bp: row.vat_rate_bp,
             notes: row.notes,

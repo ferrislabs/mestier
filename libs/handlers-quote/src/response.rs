@@ -1,8 +1,7 @@
 use chrono::{DateTime, Utc};
 use mestier_core::{
     CustomerContextId, CustomerId, OrganizationId, Project, ProjectId, Quote, QuoteId, QuoteLine,
-    QuoteLineId, QuoteStatus, QuoteVatBreakdownLine, ServiceRateId, ServiceRateUnit, Task, TaskId,
-    TaskProposal,
+    QuoteLineId, QuoteStatus, QuoteVatBreakdownLine, ServiceRateId, Task, TaskId, TaskProposal,
 };
 use serde::Serialize;
 use utoipa::ToSchema;
@@ -15,7 +14,7 @@ pub struct QuoteLineResponse {
     pub service_rate_id: Option<ServiceRateId>,
     pub label: String,
     pub quantity: String,
-    pub unit: ServiceRateUnit,
+    pub unit: String,
     pub unit_price_cents: i32,
     pub vat_rate_bp: Option<i32>,
     pub notes: Option<String>,

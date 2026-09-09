@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 use uuid::Uuid;
 
-use crate::{CustomerContextId, CustomerId, OrganizationId, ServiceRateId, ServiceRateUnit};
+use crate::{CustomerContextId, CustomerId, OrganizationId, ServiceRateId};
 
 pub mod commands;
 pub mod ports;
@@ -109,7 +109,10 @@ pub struct QuoteLine {
     pub service_rate_id: Option<ServiceRateId>,
     pub label: String,
     pub quantity: Decimal,
-    pub unit: ServiceRateUnit,
+    /// One of [`crate::ServiceRateUnit`]'s built-in codes, or an
+    /// organization's own [`crate::CustomUnit::code`] (#449) — see that
+    /// field's own doc for why this is a plain string, not the closed enum.
+    pub unit: String,
     pub unit_price_cents: i32,
     /// Basis points (2000 = 20 %, 550 = 5.5 %). Travels with the line —
     /// never looked up from a referential at render time — so a document

@@ -330,7 +330,7 @@ async fn insert_lines(conn: &mut PgConnection, lines: &[QuoteLine]) -> Result<()
             line.service_rate_id.map(|id| id.0),
             line.label,
             line.quantity,
-            line.unit.as_str(),
+            line.unit,
             line.unit_price_cents,
             line.vat_rate_bp,
             line.notes,

@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 use uuid::Uuid;
 
-use crate::{OrganizationId, ServiceRateUnit};
+use crate::OrganizationId;
 
 pub mod commands;
 pub mod ports;
@@ -34,7 +34,10 @@ pub struct Product {
     pub organization_id: OrganizationId,
     pub name: String,
     pub sku: Option<String>,
-    pub unit: ServiceRateUnit,
+    /// One of [`crate::ServiceRateUnit`]'s built-in codes, or an
+    /// organization's own [`crate::CustomUnit::code`] (#449) — see that
+    /// field's own doc for why this is a plain string, not the closed enum.
+    pub unit: String,
     pub unit_price_cents: i32,
     /// Basis points a quote line prefills from when it picks this product.
     pub default_vat_rate_bp: Option<i32>,

@@ -29,6 +29,7 @@ where
         command: CreateServiceRateCommand,
     ) -> Result<ServiceRate, CoreError> {
         validate_label(&command.label)?;
+        validate_unit(&command.unit)?;
         validate_rate(command.rate_cents)?;
         validate_vat_rate_bp(command.default_vat_rate_bp)?;
 
@@ -69,6 +70,7 @@ where
         command: UpdateServiceRateCommand,
     ) -> Result<ServiceRate, CoreError> {
         validate_label(&command.label)?;
+        validate_unit(&command.unit)?;
         validate_rate(command.rate_cents)?;
         validate_vat_rate_bp(command.default_vat_rate_bp)?;
 
@@ -99,6 +101,16 @@ fn validate_label(label: &str) -> Result<(), CoreError> {
     Ok(())
 }
 
+fn validate_unit(unit: &str) -> Result<(), CoreError> {
+    if unit.trim().is_empty() {
+        return Err(CoreError::Conflict(
+            "service rate unit cannot be empty".to_owned(),
+        ));
+    }
+
+    Ok(())
+}
+
 fn validate_rate(rate_cents: i32) -> Result<(), CoreError> {
     if rate_cents < 0 {
         return Err(CoreError::Conflict(
@@ -122,7 +134,7 @@ fn validate_vat_rate_bp(default_vat_rate_bp: Option<i32>) -> Result<(), CoreErro
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{ServiceRateUnit, domain::service_rate::ports::MockServiceRateRepository};
+    use crate::domain::service_rate::ports::MockServiceRateRepository;
     use mockall::predicate::eq;
     use uuid::Uuid;
 
@@ -132,7 +144,7 @@ mod tests {
             id,
             organization_id: OrganizationId(Uuid::new_v4()),
             label: "Taille".to_owned(),
-            unit: ServiceRateUnit::Hour,
+            unit: "HOUR".to_owned(),
             rate_cents: 5500,
             default_vat_rate_bp: None,
             description: None,
@@ -156,7 +168,7 @@ mod tests {
                 actor: authz::Subject::system(),
                 organization_id: OrganizationId(Uuid::new_v4()),
                 label: "Taille".to_owned(),
-                unit: ServiceRateUnit::Hour,
+                unit: "HOUR".to_owned(),
                 rate_cents: 5500,
                 default_vat_rate_bp: Some(2000),
                 description: None,
@@ -164,7 +176,7 @@ mod tests {
             .await
             .unwrap();
 
-        assert_eq!(created.unit, ServiceRateUnit::Hour);
+        assert_eq!(created.unit, "HOUR");
     }
 
     #[tokio::test]
@@ -185,7 +197,7 @@ mod tests {
                 actor: authz::Subject::system(),
                 id,
                 label: "Haie".to_owned(),
-                unit: ServiceRateUnit::Ml,
+                unit: "ML".to_owned(),
                 rate_cents: 1200,
                 default_vat_rate_bp: None,
                 description: None,
@@ -194,7 +206,7 @@ mod tests {
             .unwrap();
 
         assert_eq!(updated.label, "Haie");
-        assert_eq!(updated.unit, ServiceRateUnit::Ml);
+        assert_eq!(updated.unit, "ML");
     }
 
     #[tokio::test]

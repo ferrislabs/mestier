@@ -1,16 +1,15 @@
 import { useMemo } from 'react'
-import type {
-	Product,
-	ServiceRate,
-	ServiceRateUnit,
-} from '#/hooks/use-reference-catalog'
+import type { Product, ServiceRate } from '#/hooks/use-reference-catalog'
 
 export type CatalogItemType = 'SERVICE' | 'PRODUCT'
 
 export interface ProductCatalogFormValues {
 	name: string
 	sku: string
-	unit: ServiceRateUnit
+	/** One of `ServiceRateUnit`'s built-in codes, or an organization's own
+	 * custom unit code (#449) — a plain string because a fixed union cannot
+	 * name a value it does not know about yet. */
+	unit: string
 	unitPrice: string
 	description: string
 	photoKeys: string[]
@@ -21,7 +20,7 @@ export interface CatalogItem {
 	type: CatalogItemType
 	sourceId: string
 	label: string
-	unit: ServiceRateUnit
+	unit: string
 	unitPriceCents: number
 	description: string
 	sku?: string

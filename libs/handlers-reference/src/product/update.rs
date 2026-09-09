@@ -1,7 +1,7 @@
 use auth::Identity;
 use axum::{Extension, Json, extract::State};
 use handlers::{ApiError, AppState, DataEnvelope, Response, resolve_actor};
-use mestier_core::{ProductId, ServiceRateUnit, UpdateProductCommand};
+use mestier_core::{ProductId, UpdateProductCommand};
 use serde::Deserialize;
 use utoipa::ToSchema;
 
@@ -11,7 +11,9 @@ use crate::{paths::ProductPath, require_org_membership, response::ProductRespons
 pub struct UpdateProductRequest {
     pub name: String,
     pub sku: Option<String>,
-    pub unit: ServiceRateUnit,
+    /// One of the built-in `ServiceRateUnit` codes, or an organization's own
+    /// custom unit code (#449).
+    pub unit: String,
     pub unit_price_cents: i32,
     #[serde(default)]
     pub default_vat_rate_bp: Option<i32>,

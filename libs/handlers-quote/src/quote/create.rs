@@ -5,7 +5,6 @@ use axum::{Extension, Json, extract::State};
 use handlers::{ApiError, AppState, DataEnvelope, Response, resolve_actor};
 use mestier_core::{
     CreateQuoteCommand, CustomerContextId, CustomerId, QuoteLineCommand, ServiceRateId,
-    ServiceRateUnit,
 };
 use rust_decimal::Decimal;
 use serde::Deserialize;
@@ -20,7 +19,9 @@ pub struct QuoteLineRequest {
     pub service_rate_id: Option<ServiceRateId>,
     pub label: String,
     pub quantity: String,
-    pub unit: ServiceRateUnit,
+    /// One of the built-in `ServiceRateUnit` codes, or an organization's own
+    /// custom unit code (#449).
+    pub unit: String,
     pub unit_price_cents: i32,
     #[serde(default)]
     pub vat_rate_bp: Option<i32>,
