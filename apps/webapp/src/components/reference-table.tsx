@@ -13,6 +13,7 @@ import {
 	Undo2,
 } from 'lucide-react'
 import type * as React from 'react'
+import { DeveloperModeOnly } from '#/components/developer-mode-only'
 import { Button } from '#/components/ui/button'
 import {
 	DropdownMenu,
@@ -265,9 +266,11 @@ export function RowIdentity({ title, id }: { title: string; id: string }) {
 	return (
 		<div className="min-w-0">
 			<p className="truncate font-medium">{title}</p>
-			<p className="mt-0.5 truncate font-mono text-xs text-muted-foreground">
-				id: {id}
-			</p>
+			<DeveloperModeOnly>
+				<p className="mt-0.5 truncate font-mono text-xs text-muted-foreground">
+					id: {id}
+				</p>
+			</DeveloperModeOnly>
 		</div>
 	)
 }

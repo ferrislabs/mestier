@@ -17,6 +17,7 @@ import {
 	getPaginationViewModel,
 	useDataView,
 } from '#/components/data-view'
+import { DeveloperModeOnly } from '#/components/developer-mode-only'
 import { RequirePermission } from '#/components/require-permission'
 import { Button } from '#/components/ui/button'
 import {
@@ -528,9 +529,11 @@ export function CustomerListUI({
 												{formatDate(c.created_at)}
 											</StatusBadge>
 										</div>
-										<p className="mt-0.5 truncate font-mono text-xs text-muted-foreground">
-											id: {c.id}
-										</p>
+										<DeveloperModeOnly>
+											<p className="mt-0.5 truncate font-mono text-xs text-muted-foreground">
+												id: {c.id}
+											</p>
+										</DeveloperModeOnly>
 									</div>
 
 									<div className="hidden flex-col items-end gap-0.5 text-xs text-muted-foreground md:flex">

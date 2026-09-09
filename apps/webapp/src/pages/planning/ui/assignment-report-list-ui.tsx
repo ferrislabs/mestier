@@ -7,6 +7,7 @@ import {
 	getPaginationViewModel,
 	useDataView,
 } from '#/components/data-view'
+import { DeveloperModeOnly } from '#/components/developer-mode-only'
 import { Button } from '#/components/ui/button'
 import {
 	PageHeader,
@@ -233,9 +234,11 @@ export function AssignmentReportListUI({
 											: null}
 									</p>
 								) : null}
-								<p className="mt-1.5 font-mono text-xs text-muted-foreground">
-									Affectation {report.task_assignment_id}
-								</p>
+								<DeveloperModeOnly>
+									<p className="mt-1.5 font-mono text-xs text-muted-foreground">
+										Affectation {report.task_assignment_id}
+									</p>
+								</DeveloperModeOnly>
 							</li>
 						))}
 					</ul>
