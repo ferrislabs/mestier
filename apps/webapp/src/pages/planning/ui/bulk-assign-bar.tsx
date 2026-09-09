@@ -1,4 +1,5 @@
 import { X } from 'lucide-react'
+import { RequirePermission } from '#/components/require-permission'
 import { Button } from '#/components/ui/button'
 import {
 	type AssigneeOption,
@@ -47,14 +48,16 @@ export function BulkAssignBar({
 						onToggle={onToggleDraftAssignee}
 					/>
 				</div>
-				<Button
-					type="button"
-					size="sm"
-					disabled={draftResourceIds.length === 0 || isApplying}
-					onClick={onApply}
-				>
-					Assigner
-				</Button>
+				<RequirePermission permission="MANAGE_PLANNING">
+					<Button
+						type="button"
+						size="sm"
+						disabled={draftResourceIds.length === 0 || isApplying}
+						onClick={onApply}
+					>
+						Assigner
+					</Button>
+				</RequirePermission>
 				<Button type="button" variant="ghost" size="sm" onClick={onCancel}>
 					<X className="size-4" />
 					Annuler

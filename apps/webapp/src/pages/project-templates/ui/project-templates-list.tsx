@@ -6,6 +6,7 @@ import {
 	RowActions,
 	RowIdentity,
 } from '#/components/reference-table'
+import { RequirePermission } from '#/components/require-permission'
 import { Badge } from '#/components/ui/badge'
 import { Button } from '#/components/ui/button'
 import { Label } from '#/components/ui/label'
@@ -76,16 +77,19 @@ export function ProjectTemplatesList({
 				cell: ({ row }) =>
 					row.original.archived_at ? (
 						<div className="flex justify-end">
-							<Button
-								variant="outline"
-								size="sm"
-								onClick={() => onRestore(row.original)}
-							>
-								Restaurer
-							</Button>
+							<RequirePermission permission="MANAGE_PLANNING">
+								<Button
+									variant="outline"
+									size="sm"
+									onClick={() => onRestore(row.original)}
+								>
+									Restaurer
+								</Button>
+							</RequirePermission>
 						</div>
 					) : (
 						<RowActions
+							permission="MANAGE_PLANNING"
 							isEditing={false}
 							isSaving={false}
 							onEdit={() => onEdit(row.original)}
@@ -106,10 +110,12 @@ export function ProjectTemplatesList({
 				title="Modèles de projet"
 				description="Un modèle est un ensemble de tâches types avec des décalages, pas un projet à copier. Instancier un modèle produit un vrai projet, avec de vraies tâches, sur une date choisie."
 				actions={
-					<Button onClick={onCreate}>
-						<Plus />
-						Nouveau modèle
-					</Button>
+					<RequirePermission permission="MANAGE_PLANNING">
+						<Button onClick={onCreate}>
+							<Plus />
+							Nouveau modèle
+						</Button>
+					</RequirePermission>
 				}
 			/>
 

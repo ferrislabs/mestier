@@ -8,11 +8,13 @@ import {
 	OrganizationListProvider,
 } from '#/hooks/use-active-organization'
 import type { Organization } from '#/hooks/use-organizations'
+import { PERMISSION_CATALOG } from '#/lib/permission-catalog'
 import {
 	PlanningTeamFeature,
 	type PlanningTeamFeatureProps,
 } from '#/pages/planning/feature/planning-team-feature'
 import type { PlanningResponse } from '#/pages/planning/types'
+import { seedPermissionsCacheForOrganization } from '#/test/with-permissions'
 
 // jsdom has no ResizeObserver, which Radix primitives (e.g. `Tabs`) probe
 // defensively. Stubbed locally — this workstream doesn't own
@@ -30,6 +32,9 @@ const PLANNING_PATH = '/api/v1/organizations/{organization_id}/planning'
 const AVAILABILITY_PATH =
 	'/api/v1/organizations/{organization_id}/planning/availability'
 const TASK_PATH = '/api/v1/organizations/{organization_id}/tasks/{task_id}'
+const MY_PERMISSIONS_PATH =
+	'/api/v1/organizations/{organization_id}/members/me/permissions'
+const ALL_PERMISSIONS = PERMISSION_CATALOG.map((entry) => entry.name)
 
 const ORGANIZATION: Organization = {
 	id: 'org-1',
@@ -146,6 +151,12 @@ function installFakeTanstackApi(planning: PlanningResponse) {
 						if (path === PLANNING_PATH) {
 							return { data: planning, pagination: null }
 						}
+						if (path === MY_PERMISSIONS_PATH) {
+							return {
+								data: { permissions: ALL_PERMISSIONS },
+								pagination: null,
+							}
+						}
 						throw new Error(`unmocked GET ${path}`)
 					},
 				},
@@ -174,7 +185,7 @@ function installFakeTanstackApi(planning: PlanningResponse) {
 	return { calls, mock }
 }
 
-function renderFeature(
+async function renderFeature(
 	options: {
 		planning?: PlanningResponse
 		overrides?: Partial<PlanningTeamFeatureProps>
@@ -185,6 +196,7 @@ function renderFeature(
 	const queryClient = new QueryClient({
 		defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
 	})
+	seedPermissionsCacheForOrganization(queryClient, ORGANIZATION.id)
 
 	function Providers({ children }: { children: ReactNode }) {
 		return (
@@ -224,7 +236,7 @@ function patchCallsFor(
 
 describe('PlanningTeamFeature', () => {
 	it('loads the planning with the from/to window derived from the view and the date', async () => {
-		const { calls } = renderFeature()
+		const { calls } = await renderFeature()
 
 		expect(await screen.findByText('Alix Martin')).toBeDefined()
 		const call = calls.find((c) => c.path === PLANNING_PATH)
@@ -235,7 +247,7 @@ describe('PlanningTeamFeature', () => {
 	})
 
 	it('recomputes the window for the month view', async () => {
-		const { calls } = renderFeature({ overrides: { view: 'month' } })
+		const { calls } = await renderFeature({ overrides: { view: 'month' } })
 
 		await screen.findByText('Alix Martin')
 		const call = calls.find((c) => c.path === PLANNING_PATH)
@@ -246,7 +258,7 @@ describe('PlanningTeamFeature', () => {
 
 	it('reports the view change to the parent rather than handling it itself', async () => {
 		const user = userEvent.setup()
-		const { onViewChange } = renderFeature()
+		const { onViewChange } = await renderFeature()
 
 		await screen.findByText('Alix Martin')
 		await user.click(screen.getByRole('tab', { name: 'Jour' }))
@@ -256,7 +268,7 @@ describe('PlanningTeamFeature', () => {
 
 	it('reports the date change to the parent', async () => {
 		const user = userEvent.setup()
-		const { onDateChange } = renderFeature()
+		const { onDateChange } = await renderFeature()
 
 		await screen.findByText('Alix Martin')
 		await user.click(screen.getByRole('button', { name: 'Période suivante' }))
@@ -267,7 +279,7 @@ describe('PlanningTeamFeature', () => {
 
 describe('PlanningTeamFeature — drag & drop without a warning', () => {
 	it('a drop changing both day and row emits a single PATCH with starts_at/ends_at and the full assignee list', async () => {
-		const { calls, mock } = renderFeature({
+		const { calls, mock } = await renderFeature({
 			planning: planningResponse({
 				resources: [RESOURCE_MEMBER_1, RESOURCE_MEMBER_2],
 				entries: [TASK_ENTRY],
@@ -321,7 +333,7 @@ describe('PlanningTeamFeature — drag & drop without a warning', () => {
 	})
 
 	it('a drop changing neither day nor row emits no call', async () => {
-		const { calls } = renderFeature({
+		const { calls } = await renderFeature({
 			planning: planningResponse({ entries: [TASK_ENTRY] }),
 		})
 
@@ -334,7 +346,7 @@ describe('PlanningTeamFeature — drag & drop without a warning', () => {
 	})
 
 	it('a drop onto a member with no employee profile applies immediately — no warning dialog', async () => {
-		const { calls, mock } = renderFeature({
+		const { calls, mock } = await renderFeature({
 			planning: planningResponse({
 				resources: [RESOURCE_MEMBER_1, RESOURCE_MEMBER_NO_PROFILE],
 				entries: [TASK_ENTRY],
@@ -362,7 +374,7 @@ describe('PlanningTeamFeature — drag & drop without a warning', () => {
 
 describe('PlanningTeamFeature — avertissements', () => {
 	it('a drop on a resource on leave opens the dialog; cancelling emits no PATCH', async () => {
-		const { calls, mock } = renderFeature({
+		const { calls, mock } = await renderFeature({
 			planning: planningResponse({
 				resources: [RESOURCE_MEMBER_1, RESOURCE_MEMBER_2],
 				entries: [TASK_ENTRY],
@@ -403,7 +415,7 @@ describe('PlanningTeamFeature — avertissements', () => {
 	})
 
 	it('confirming applies the mutation — a resource on leave stays assignable once confirmed', async () => {
-		const { calls, mock } = renderFeature({
+		const { calls, mock } = await renderFeature({
 			planning: planningResponse({
 				resources: [RESOURCE_MEMBER_1, RESOURCE_MEMBER_2],
 				entries: [TASK_ENTRY],
@@ -451,7 +463,7 @@ describe('PlanningTeamFeature — avertissements', () => {
 
 describe('PlanningTeamFeature — availability check failure', () => {
 	it('surfaces the failure in the warning dialog instead of only logging it, and lets the user apply the move anyway', async () => {
-		const { calls, mock } = renderFeature({
+		const { calls, mock } = await renderFeature({
 			planning: planningResponse({
 				resources: [RESOURCE_MEMBER_1, RESOURCE_MEMBER_2],
 				entries: [TASK_ENTRY],
@@ -485,7 +497,7 @@ describe('PlanningTeamFeature — availability check failure', () => {
 
 describe('PlanningTeamFeature — removing an assignee', () => {
 	it('the remove button sends a PATCH straight away with the full list minus the removed resource, no dialog', async () => {
-		const { calls, mock } = renderFeature({
+		const { calls, mock } = await renderFeature({
 			planning: planningResponse({
 				resources: [RESOURCE_MEMBER_1, RESOURCE_MEMBER_2],
 				entries: [{ ...TASK_ENTRY, member_ids: ['member-1', 'member-2'] }],
@@ -514,7 +526,7 @@ describe('PlanningTeamFeature — removing an assignee', () => {
 
 describe('PlanningTeamFeature — absences (affichage lecture seule)', () => {
 	it('still draws an absence segment on the grid, but with no button and no sheet — management moved to the HR module', async () => {
-		const { calls } = renderFeature({
+		const { calls } = await renderFeature({
 			planning: planningResponse({ entries: [ABSENCE_ENTRY] }),
 		})
 

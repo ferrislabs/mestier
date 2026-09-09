@@ -1,10 +1,11 @@
-import { fireEvent, render, screen } from '@testing-library/react'
+import { fireEvent, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { PlanningResponse } from '#/pages/planning/types'
 import {
 	PlanningTeamUI,
 	type PlanningTeamUIProps,
 } from '#/pages/planning/ui/planning-team-ui'
+import { renderWithPermissions } from '#/test/with-permissions'
 
 function planningResponse(
 	overrides: Partial<PlanningResponse> = {},
@@ -43,19 +44,22 @@ function baseProps(
 		isLoading: false,
 		error: null,
 		data: planningResponse(),
+		canManage: true,
 		...overrides,
 	}
 }
 
 describe('PlanningTeamUI — states', () => {
-	it('shows a loading state without crashing', () => {
-		render(<PlanningTeamUI {...baseProps({ isLoading: true, data: null })} />)
+	it('shows a loading state without crashing', async () => {
+		await renderWithPermissions(
+			<PlanningTeamUI {...baseProps({ isLoading: true, data: null })} />,
+		)
 
 		expect(screen.getByTestId('planning-loading')).toBeDefined()
 	})
 
-	it('shows the error message without exposing the raw error elsewhere', () => {
-		render(
+	it('shows the error message without exposing the raw error elsewhere', async () => {
+		await renderWithPermissions(
 			<PlanningTeamUI
 				{...baseProps({ error: 'Fenêtre supérieure à 92 jours', data: null })}
 			/>,
@@ -65,8 +69,8 @@ describe('PlanningTeamUI — states', () => {
 		expect(screen.getByText('Fenêtre supérieure à 92 jours')).toBeDefined()
 	})
 
-	it('renders the grid once the data is loaded', () => {
-		render(<PlanningTeamUI {...baseProps()} />)
+	it('renders the grid once the data is loaded', async () => {
+		await renderWithPermissions(<PlanningTeamUI {...baseProps()} />)
 
 		expect(screen.getByTestId('planning-grid')).toBeDefined()
 		expect(screen.getByText('Alix Martin')).toBeDefined()
@@ -74,8 +78,8 @@ describe('PlanningTeamUI — states', () => {
 })
 
 describe('PlanningTeamUI — barre d’outils', () => {
-	it('shows the navigation bar with the active view', () => {
-		render(<PlanningTeamUI {...baseProps()} />)
+	it('shows the navigation bar with the active view', async () => {
+		await renderWithPermissions(<PlanningTeamUI {...baseProps()} />)
 
 		expect(
 			screen.getByRole('tab', { name: 'Semaine' }).getAttribute('data-state'),
@@ -84,15 +88,15 @@ describe('PlanningTeamUI — barre d’outils', () => {
 })
 
 describe('PlanningTeamUI — editing', () => {
-	it('no longer exposes a button to add an absence — handled from the HR module', () => {
-		render(<PlanningTeamUI {...baseProps()} />)
+	it('no longer exposes a button to add an absence — handled from the HR module', async () => {
+		await renderWithPermissions(<PlanningTeamUI {...baseProps()} />)
 		expect(
 			screen.queryByRole('button', { name: /Ajouter une absence/ }),
 		).toBeNull()
 	})
 
-	it('no longer exposes an absence editing sheet, even with an absence entry in the grid', () => {
-		render(
+	it('no longer exposes an absence editing sheet, even with an absence entry in the grid', async () => {
+		await renderWithPermissions(
 			<PlanningTeamUI
 				{...baseProps({
 					data: {
@@ -117,8 +121,8 @@ describe('PlanningTeamUI — editing', () => {
 		expect(screen.queryByRole('dialog')).toBeNull()
 	})
 
-	it('shows the warning dialog when warningDialog.open is true', () => {
-		render(
+	it('shows the warning dialog when warningDialog.open is true', async () => {
+		await renderWithPermissions(
 			<PlanningTeamUI
 				{...baseProps({
 					warningDialog: {
@@ -145,22 +149,33 @@ describe('PlanningTeamUI — editing', () => {
 })
 
 describe('PlanningTeamUI — new task', () => {
-	it('shows a « Nouvelle tâche » button and reports it through onCreateTask', () => {
+	it('shows a « Nouvelle tâche » button and reports it through onCreateTask', async () => {
 		const onCreateTask = vi.fn()
-		render(<PlanningTeamUI {...baseProps({ onCreateTask })} />)
+		await renderWithPermissions(
+			<PlanningTeamUI {...baseProps({ onCreateTask })} />,
+		)
 
 		fireEvent.click(screen.getByRole('button', { name: /Nouvelle tâche/ }))
 		expect(onCreateTask).toHaveBeenCalledTimes(1)
 	})
 
-	it('does not show the button without onCreateTask', () => {
-		render(<PlanningTeamUI {...baseProps()} />)
+	it('does not show the button without onCreateTask', async () => {
+		await renderWithPermissions(<PlanningTeamUI {...baseProps()} />)
 		expect(screen.queryByRole('button', { name: /Nouvelle tâche/ })).toBeNull()
 	})
 
-	it('reports a click on a task segment through onOpenTask', () => {
+	it('does not show the button without MANAGE_PLANNING, even with onCreateTask', async () => {
+		const onCreateTask = vi.fn()
+		await renderWithPermissions(
+			<PlanningTeamUI {...baseProps({ onCreateTask, canManage: false })} />,
+			{ permissions: [] },
+		)
+		expect(screen.queryByRole('button', { name: /Nouvelle tâche/ })).toBeNull()
+	})
+
+	it('reports a click on a task segment through onOpenTask', async () => {
 		const onOpenTask = vi.fn()
-		render(
+		await renderWithPermissions(
 			<PlanningTeamUI
 				{...baseProps({
 					onOpenTask,
@@ -192,13 +207,50 @@ describe('PlanningTeamUI — new task', () => {
 		expect(onOpenTask).toHaveBeenCalledWith({ entryId: 'task-1' })
 	})
 
-	it('renders the taskSheet slot when provided', () => {
-		render(
+	it('renders the taskSheet slot when provided', async () => {
+		await renderWithPermissions(
 			<PlanningTeamUI
 				{...baseProps({ taskSheet: <div data-testid="fake-task-sheet" /> })}
 			/>,
 		)
 		expect(screen.getByTestId('fake-task-sheet')).toBeDefined()
+	})
+})
+
+describe('PlanningTeamUI — permission gating', () => {
+	it('disables dragging a task segment without MANAGE_PLANNING', async () => {
+		await renderWithPermissions(
+			<PlanningTeamUI
+				{...baseProps({
+					canManage: false,
+					data: {
+						...planningResponse(),
+						entries: [
+							{
+								kind: 'task',
+								labels: [],
+								title: 'Tâche',
+								blocks_availability: true,
+								child_count: 0,
+								id: 'task-1',
+								starts_at: '2026-08-03T08:00:00+02:00',
+								ends_at: '2026-08-03T10:00:00+02:00',
+								all_day: false,
+								status: 'PLANNED',
+								member_ids: ['member-1'],
+								customer_name: null,
+								context_label: null,
+							},
+						],
+					},
+				})}
+			/>,
+			{ permissions: [] },
+		)
+
+		expect(screen.getByTestId('grid-segment').getAttribute('draggable')).toBe(
+			'false',
+		)
 	})
 })
 
@@ -219,8 +271,8 @@ describe('PlanningTeamUI — no network call', () => {
 		fetchSpy.mockRestore()
 	})
 
-	it('fires no fetch on render', () => {
-		render(<PlanningTeamUI {...baseProps()} />)
+	it('fires no fetch on render', async () => {
+		await renderWithPermissions(<PlanningTeamUI {...baseProps()} />)
 
 		expect(fetchSpy).not.toHaveBeenCalled()
 	})

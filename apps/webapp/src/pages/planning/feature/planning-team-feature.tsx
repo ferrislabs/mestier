@@ -3,6 +3,7 @@ import { useState } from 'react'
 import type { Schemas } from '#/api/api.client'
 import { useActiveOrganization } from '#/hooks/use-active-organization'
 import { usePendingAssignmentReportsCount } from '#/hooks/use-assignment-reports'
+import { useHasPermission } from '#/hooks/use-permissions'
 import {
 	useCheckAvailability,
 	useMoveTask,
@@ -116,6 +117,7 @@ function PlanningTeamScreen({
 
 	const checkAvailability = useCheckAvailability()
 	const moveTask = useMoveTask()
+	const canManage = useHasPermission('MANAGE_PLANNING')
 
 	const [pendingDrop, setPendingDrop] = useState<PendingDrop | null>(null)
 	const [dropError, setDropError] = useState<string | null>(null)
@@ -252,6 +254,7 @@ function PlanningTeamScreen({
 			isLoading={planningQuery.isLoading}
 			error={planningQuery.error?.message ?? null}
 			data={data}
+			canManage={canManage}
 			onDropTask={(event) => void handleDropTask(event)}
 			onRemoveAssignee={handleRemoveAssignee}
 			onOpenTask={handleOpenTask}

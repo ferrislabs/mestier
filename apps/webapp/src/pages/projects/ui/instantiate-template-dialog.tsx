@@ -1,5 +1,6 @@
 import { Loader2 } from 'lucide-react'
 import { TextField } from '#/components/reference-table'
+import { RequirePermission } from '#/components/require-permission'
 import { Button } from '#/components/ui/button'
 import {
 	Dialog,
@@ -177,10 +178,12 @@ export function InstantiateTemplateDialog({
 					<Button variant="outline" onClick={() => onOpenChange(false)}>
 						Annuler
 					</Button>
-					<Button disabled={!canSubmit} onClick={onSubmit}>
-						{isPending ? <Loader2 className="animate-spin" /> : null}
-						Créer le projet
-					</Button>
+					<RequirePermission permission="MANAGE_PLANNING">
+						<Button disabled={!canSubmit} onClick={onSubmit}>
+							{isPending ? <Loader2 className="animate-spin" /> : null}
+							Créer le projet
+						</Button>
+					</RequirePermission>
 				</DialogFooter>
 			</DialogContent>
 		</Dialog>

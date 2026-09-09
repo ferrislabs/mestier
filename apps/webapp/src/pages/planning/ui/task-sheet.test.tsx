@@ -1,8 +1,9 @@
-import { render, screen } from '@testing-library/react'
+import { screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { emptyTaskDraft } from '#/pages/planning/lib/task-form'
 import { TaskSheet } from '#/pages/planning/ui/task-sheet'
+import { renderWithPermissions } from '#/test/with-permissions'
 
 class ResizeObserverStub {
 	observe() {}
@@ -82,13 +83,13 @@ function baseProps() {
 }
 
 describe('TaskSheet — creation', () => {
-	it('renders nothing when open is false', () => {
-		render(<TaskSheet {...baseProps()} open={false} />)
+	it('renders nothing when open is false', async () => {
+		await renderWithPermissions(<TaskSheet {...baseProps()} open={false} />)
 		expect(screen.queryByRole('dialog')).toBeNull()
 	})
 
-	it('shows the Details tab only — no subtasks and no comments for a task not created yet', () => {
-		render(<TaskSheet {...baseProps()} />)
+	it('shows the Details tab only — no subtasks and no comments for a task not created yet', async () => {
+		await renderWithPermissions(<TaskSheet {...baseProps()} />)
 
 		expect(screen.queryByRole('tab', { name: /Sous-tâches/ })).toBeNull()
 		expect(screen.queryByRole('tab', { name: /Commentaires/ })).toBeNull()
@@ -97,14 +98,16 @@ describe('TaskSheet — creation', () => {
 	it('calls onSubmit when create is clicked', async () => {
 		const user = userEvent.setup()
 		const onSubmit = vi.fn()
-		render(<TaskSheet {...baseProps()} onSubmit={onSubmit} />)
+		await renderWithPermissions(
+			<TaskSheet {...baseProps()} onSubmit={onSubmit} />,
+		)
 
 		await user.click(screen.getByRole('button', { name: /Créer/ }))
 		expect(onSubmit).toHaveBeenCalledTimes(1)
 	})
 
-	it('shows no delete button when creating', () => {
-		render(<TaskSheet {...baseProps()} />)
+	it('shows no delete button when creating', async () => {
+		await renderWithPermissions(<TaskSheet {...baseProps()} />)
 		expect(screen.queryByRole('button', { name: /Supprimer/ })).toBeNull()
 	})
 })
@@ -122,8 +125,8 @@ describe('TaskSheet — editing', () => {
 		}
 	}
 
-	it('shows the three tabs', () => {
-		render(<TaskSheet {...editProps()} />)
+	it('shows the three tabs', async () => {
+		await renderWithPermissions(<TaskSheet {...editProps()} />)
 
 		expect(screen.getByRole('tab', { name: /Détails/ })).toBeDefined()
 		expect(screen.getByRole('tab', { name: /Sous-tâches/ })).toBeDefined()
@@ -132,7 +135,7 @@ describe('TaskSheet — editing', () => {
 
 	it('switches to the subtasks tab on click', async () => {
 		const user = userEvent.setup()
-		render(<TaskSheet {...editProps()} />)
+		await renderWithPermissions(<TaskSheet {...editProps()} />)
 
 		await user.click(screen.getByRole('tab', { name: /Sous-tâches/ }))
 		expect(
@@ -142,14 +145,14 @@ describe('TaskSheet — editing', () => {
 
 	it('switches to the comments tab on click', async () => {
 		const user = userEvent.setup()
-		render(<TaskSheet {...editProps()} />)
+		await renderWithPermissions(<TaskSheet {...editProps()} />)
 
 		await user.click(screen.getByRole('tab', { name: /Commentaires/ }))
 		expect(screen.getByLabelText('Nouveau commentaire')).toBeDefined()
 	})
 
-	it('shows the delete button when editing, even when the task has subtasks — deletion cascades server-side', () => {
-		render(
+	it('shows the delete button when editing, even when the task has subtasks — deletion cascades server-side', async () => {
+		await renderWithPermissions(
 			<TaskSheet
 				{...editProps()}
 				subtasksTab={{
@@ -169,8 +172,10 @@ describe('TaskSheet — editing', () => {
 		expect(screen.getByRole('button', { name: /Supprimer/ })).toBeDefined()
 	})
 
-	it('hides the delete button when no onDelete is provided', () => {
-		render(<TaskSheet {...editProps()} onDelete={undefined} />)
+	it('hides the delete button when no onDelete is provided', async () => {
+		await renderWithPermissions(
+			<TaskSheet {...editProps()} onDelete={undefined} />,
+		)
 		expect(screen.queryByRole('button', { name: /Supprimer/ })).toBeNull()
 	})
 
@@ -185,7 +190,7 @@ describe('TaskSheet — editing', () => {
 
 		it('offers a menu with the three scopes instead of a plain delete button', async () => {
 			const user = userEvent.setup()
-			render(
+			await renderWithPermissions(
 				<TaskSheet
 					{...editProps()}
 					deleteSeriesOptions={deleteSeriesOptions()}
@@ -210,7 +215,9 @@ describe('TaskSheet — editing', () => {
 		it('calls onThisOccurrence when that choice is picked', async () => {
 			const user = userEvent.setup()
 			const options = deleteSeriesOptions()
-			render(<TaskSheet {...editProps()} deleteSeriesOptions={options} />)
+			await renderWithPermissions(
+				<TaskSheet {...editProps()} deleteSeriesOptions={options} />,
+			)
 
 			await user.click(screen.getByRole('button', { name: /Supprimer/ }))
 			await user.click(
@@ -225,7 +232,9 @@ describe('TaskSheet — editing', () => {
 		it('calls onWholeSeries when that choice is picked', async () => {
 			const user = userEvent.setup()
 			const options = deleteSeriesOptions()
-			render(<TaskSheet {...editProps()} deleteSeriesOptions={options} />)
+			await renderWithPermissions(
+				<TaskSheet {...editProps()} deleteSeriesOptions={options} />,
+			)
 
 			await user.click(screen.getByRole('button', { name: /Supprimer/ }))
 			await user.click(screen.getByRole('menuitem', { name: 'Toute la série' }))
@@ -234,8 +243,8 @@ describe('TaskSheet — editing', () => {
 		})
 	})
 
-	it('shows nothing about pending reports when none are provided', () => {
-		render(<TaskSheet {...editProps()} />)
+	it('shows nothing about pending reports when none are provided', async () => {
+		await renderWithPermissions(<TaskSheet {...editProps()} />)
 		expect(screen.queryByText(/écart signalé/i)).toBeNull()
 	})
 
@@ -243,7 +252,7 @@ describe('TaskSheet — editing', () => {
 	 * visible whichever tab is active. */
 	it('shows the pending-report panel above the tabs, regardless of the active tab', async () => {
 		const user = userEvent.setup()
-		render(
+		await renderWithPermissions(
 			<TaskSheet
 				{...editProps()}
 				pendingReportPanel={{
@@ -290,7 +299,9 @@ describe('TaskSheet — editing', () => {
 	it('calls onDelete when delete is clicked', async () => {
 		const user = userEvent.setup()
 		const onDelete = vi.fn()
-		render(<TaskSheet {...editProps()} onDelete={onDelete} />)
+		await renderWithPermissions(
+			<TaskSheet {...editProps()} onDelete={onDelete} />,
+		)
 
 		await user.click(screen.getByRole('button', { name: /Supprimer/ }))
 		expect(onDelete).toHaveBeenCalledTimes(1)
@@ -298,8 +309,10 @@ describe('TaskSheet — editing', () => {
 })
 
 describe('TaskSheet — erreur de sauvegarde', () => {
-	it('shows the error returned by the mutation', () => {
-		render(<TaskSheet {...baseProps()} saveError="HTTP 409: conflit" />)
+	it('shows the error returned by the mutation', async () => {
+		await renderWithPermissions(
+			<TaskSheet {...baseProps()} saveError="HTTP 409: conflit" />,
+		)
 		expect(screen.getByText('HTTP 409: conflit')).toBeDefined()
 	})
 })
@@ -321,8 +334,8 @@ describe('TaskSheet — no network call', () => {
 		fetchSpy.mockRestore()
 	})
 
-	it('fires no fetch on render', () => {
-		render(<TaskSheet {...baseProps()} />)
+	it('fires no fetch on render', async () => {
+		await renderWithPermissions(<TaskSheet {...baseProps()} />)
 		expect(fetchSpy).not.toHaveBeenCalled()
 	})
 })

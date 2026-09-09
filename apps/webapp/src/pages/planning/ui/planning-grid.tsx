@@ -57,6 +57,14 @@ export interface PlanningGridProps {
 	onRemoveAssignee?: (event: RemoveAssigneeEvent) => void
 	/** A task segment was clicked — opens its detail/edit sheet. Absence segments stay inert (see `PlanningGrid`'s own doc — absence management moved to the HR module), never call this. */
 	onOpenTask?: (event: OpenTaskEvent) => void
+	/**
+	 * Gates dragging a segment and the remove-assignee "×" — both mutate a
+	 * task's assignment, and this component has no hooks of its own to check
+	 * `MANAGE_PLANNING` itself (see its own "pure function of its props" doc).
+	 * Defaults to `true` so call sites that never pass it keep today's
+	 * behavior.
+	 */
+	canManage?: boolean
 }
 
 const SEGMENT_HEIGHT_PX: Record<PlanningView, number> = {
@@ -90,6 +98,7 @@ export function PlanningGrid({
 	onDropTask,
 	onRemoveAssignee,
 	onOpenTask,
+	canManage = true,
 }: PlanningGridProps) {
 	const model = buildGridModel({
 		windowFrom,
@@ -143,6 +152,7 @@ export function PlanningGrid({
 							onDropTask={onDropTask}
 							onRemoveAssignee={onRemoveAssignee}
 							onOpenTask={onOpenTask}
+							canManage={canManage}
 						/>
 					))}
 
@@ -206,6 +216,7 @@ interface GridInteractionHandlers {
 	onDropTask?: (event: TaskDropEvent) => void
 	onRemoveAssignee?: (event: RemoveAssigneeEvent) => void
 	onOpenTask?: (event: OpenTaskEvent) => void
+	canManage?: boolean
 }
 
 function GridRow({
@@ -214,6 +225,7 @@ function GridRow({
 	onDropTask,
 	onRemoveAssignee,
 	onOpenTask,
+	canManage,
 }: GridInteractionHandlers & {
 	view: PlanningView
 	row: GridResourceRowVM
@@ -237,6 +249,7 @@ function GridRow({
 					onDropTask={onDropTask}
 					onRemoveAssignee={onRemoveAssignee}
 					onOpenTask={onOpenTask}
+					canManage={canManage}
 				/>
 			))}
 		</div>
@@ -250,6 +263,7 @@ function GridCell({
 	onDropTask,
 	onRemoveAssignee,
 	onOpenTask,
+	canManage,
 }: GridInteractionHandlers & {
 	view: PlanningView
 	cell: GridCellVM
@@ -296,6 +310,7 @@ function GridCell({
 			{cell.segments.map((segment) => {
 				const isTask = segment.tone === 'task'
 				const openable = isTask && Boolean(onOpenTask)
+				const draggableTask = isTask && canManage
 
 				return (
 					// biome-ignore lint/a11y/noStaticElementInteractions: the drag source has no native interactive equivalent; absence segments are display-only (see PlanningGrid's own doc — absence management moved to the HR module). A task segment's own click/keyboard affordance is added explicitly below (role="button", tabIndex, onKeyDown) when onOpenTask is provided.
@@ -317,9 +332,9 @@ function GridCell({
 							top: `${segment.row * segmentHeight}px`,
 							height: `${segmentHeight - 2}px`,
 						}}
-						draggable={isTask}
+						draggable={draggableTask}
 						onDragStart={
-							isTask
+							draggableTask
 								? (event) => {
 										const payload: DragPayload = {
 											entryId: segment.entryId,
@@ -364,7 +379,7 @@ function GridCell({
 								))}
 							</span>
 						) : null}
-						{isTask && onRemoveAssignee ? (
+						{isTask && onRemoveAssignee && canManage ? (
 							<button
 								type="button"
 								className="absolute top-0 right-0 hidden size-3.5 items-center justify-center rounded-bl-sm bg-black/20 hover:bg-black/40 group-hover:flex"

@@ -7,6 +7,7 @@ import {
 	Loader2,
 	Receipt,
 } from 'lucide-react'
+import { RequirePermission } from '#/components/require-permission'
 import { Button } from '#/components/ui/button'
 import { Input } from '#/components/ui/input'
 import { Label } from '#/components/ui/label'
@@ -600,14 +601,16 @@ function Invoicer({
 				</div>
 			</div>
 
-			<Button
-				type="button"
-				disabled={!canConfirm || isIssuing}
-				onClick={onConfirm}
-			>
-				{isIssuing ? <Loader2 className="animate-spin" /> : <Receipt />}
-				Émettre la facture
-			</Button>
+			<RequirePermission permission="MANAGE_INVOICES">
+				<Button
+					type="button"
+					disabled={!canConfirm || isIssuing}
+					onClick={onConfirm}
+				>
+					{isIssuing ? <Loader2 className="animate-spin" /> : <Receipt />}
+					Émettre la facture
+				</Button>
+			</RequirePermission>
 		</div>
 	)
 }

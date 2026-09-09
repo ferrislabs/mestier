@@ -8,8 +8,10 @@ import {
 	OrganizationListProvider,
 } from '#/hooks/use-active-organization'
 import type { Organization } from '#/hooks/use-organizations'
+import { PERMISSION_CATALOG } from '#/lib/permission-catalog'
 import { PlanningCalendarFeature } from '#/pages/planning/feature/planning-calendar-feature'
 import type { PlanningResponse } from '#/pages/planning/types'
+import { seedPermissionsCacheForOrganization } from '#/test/with-permissions'
 
 // jsdom has no ResizeObserver, which Radix primitives (Popover, Select) probe
 // defensively — same stub as `planning-team-feature.test.tsx`.
@@ -35,6 +37,9 @@ const TASK_COMMENTS_PATH =
 	'/api/v1/organizations/{organization_id}/tasks/{task_id}/comments'
 const ABSENCE_PATH =
 	'/api/v1/organizations/{organization_id}/absences/{absence_id}'
+const MY_PERMISSIONS_PATH =
+	'/api/v1/organizations/{organization_id}/members/me/permissions'
+const ALL_PERMISSIONS = PERMISSION_CATALOG.map((entry) => entry.name)
 
 const ORGANIZATION: Organization = {
 	id: 'org-1',
@@ -155,11 +160,15 @@ function installFakeTanstackApi() {
 	return { calls, mockGet, mockMutation }
 }
 
-function renderFeature(
+async function renderFeature(
 	configure: (api: ReturnType<typeof installFakeTanstackApi>) => void,
 ) {
 	const api = installFakeTanstackApi()
 	const { mockGet } = api
+	mockGet(MY_PERMISSIONS_PATH, () => ({
+		data: { permissions: ALL_PERMISSIONS },
+		pagination: null,
+	}))
 	// Reference data `TaskSheetFeature` needs whenever the "Modifier en
 	// détail" door opens it — empty by default, individual tests override
 	// what they actually exercise.
@@ -185,6 +194,7 @@ function renderFeature(
 	const queryClient = new QueryClient({
 		defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
 	})
+	seedPermissionsCacheForOrganization(queryClient, ORGANIZATION.id)
 
 	function Providers({ children }: { children: ReactNode }) {
 		return (
@@ -217,7 +227,7 @@ function renderFeature(
 
 describe('PlanningCalendarFeature — quick action failures', () => {
 	it('surfaces a failed status change in the popover instead of leaving it silently unresponsive', async () => {
-		const { mockMutation } = renderFeature((api) => {
+		const { mockMutation } = await renderFeature((api) => {
 			api.mockGet(PLANNING_PATH, () => ({
 				data: planningResponse({ entries: [TASK_ENTRY] }),
 				pagination: null,
@@ -237,7 +247,7 @@ describe('PlanningCalendarFeature — quick action failures', () => {
 	})
 
 	it('surfaces a failed absence deletion in the popover', async () => {
-		const { mockMutation } = renderFeature((api) => {
+		const { mockMutation } = await renderFeature((api) => {
 			api.mockGet(PLANNING_PATH, () => ({
 				data: planningResponse({ entries: [ABSENCE_ENTRY] }),
 				pagination: null,
@@ -268,7 +278,7 @@ describe('PlanningCalendarFeature — quick action failures', () => {
 			starts_at: '2026-08-04T08:00:00+02:00',
 			ends_at: '2026-08-04T10:00:00+02:00',
 		}
-		const { mockMutation } = renderFeature((api) => {
+		const { mockMutation } = await renderFeature((api) => {
 			api.mockGet(PLANNING_PATH, () => ({
 				data: planningResponse({ entries: [TASK_ENTRY, otherTask] }),
 				pagination: null,
@@ -300,7 +310,7 @@ describe('PlanningCalendarFeature — quick action failures', () => {
 
 describe('PlanningCalendarFeature — door into the full task sheet', () => {
 	it('opens the same TaskSheetFeature the Team and Task-list views use, from the calendar popover', async () => {
-		renderFeature((api) => {
+		await renderFeature((api) => {
 			api.mockGet(PLANNING_PATH, () => ({
 				data: planningResponse({ entries: [TASK_ENTRY] }),
 				pagination: null,
@@ -336,7 +346,7 @@ describe('PlanningCalendarFeature — door into the full task sheet', () => {
 
 describe('PlanningCalendarFeature — quick create from an empty slot', () => {
 	it('creates a bare task, then attaches the assignee picked in the popover', async () => {
-		const { mockMutation, calls } = renderFeature((api) => {
+		const { mockMutation, calls } = await renderFeature((api) => {
 			api.mockGet(PLANNING_PATH, () => ({
 				data: planningResponse({ entries: [] }),
 				pagination: null,

@@ -10,6 +10,7 @@ import {
 import type { Organization } from '#/hooks/use-organizations'
 import { PERMISSION_CATALOG } from '#/lib/permission-catalog'
 import { AbsencesOverviewFeature } from '#/pages/hr/feature/absences-overview-feature'
+import { seedPermissionsCacheForOrganization } from '#/test/with-permissions'
 
 // jsdom has no ResizeObserver, and Radix `Select`'s listbox needs
 // `scrollIntoView`/pointer-capture methods it also doesn't implement — the
@@ -186,6 +187,7 @@ async function renderFeature(handlers: FakeApiHandlers = {}) {
 	const queryClient = new QueryClient({
 		defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
 	})
+	seedPermissionsCacheForOrganization(queryClient, ORGANIZATION.id)
 
 	function Providers({ children }: { children: ReactNode }) {
 		return (
@@ -204,13 +206,6 @@ async function renderFeature(handlers: FakeApiHandlers = {}) {
 			<AbsencesOverviewFeature />
 		</Providers>,
 	)
-	// `RequirePermission` hides its children until this resolves — every
-	// caller that interacts with a gated control needs the wait, same as
-	// `renderWithPermissions` (`#/test/with-permissions`) does generically.
-	await waitFor(() => {
-		if (queryClient.isFetching() > 0)
-			throw new Error('permissions still loading')
-	})
 
 	return { calls }
 }
