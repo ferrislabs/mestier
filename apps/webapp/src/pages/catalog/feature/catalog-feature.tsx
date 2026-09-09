@@ -9,6 +9,7 @@ import {
 } from 'lucide-react'
 import type * as React from 'react'
 import { useMemo, useState } from 'react'
+import { DeveloperModeOnly } from '#/components/developer-mode-only'
 import {
 	centsToEuros,
 	type FormBinding,
@@ -816,7 +817,7 @@ function ProductList({
 						return (
 							<li
 								key={product.id}
-								className="group grid gap-4 px-5 py-4 transition hover:bg-muted/35 hover:shadow-xs lg:grid-cols-[minmax(0,1fr)_140px_140px_140px_40px] lg:items-center"
+								className="group grid gap-4 px-5 py-4 transition hover:bg-muted/35 hover:shadow-xs lg:grid-cols-[minmax(0,1fr)_140px_140px_40px] lg:items-center"
 							>
 								{isEditing ? (
 									<ProductDraftFields
@@ -838,6 +839,11 @@ function ProductList({
 													<StatusBadge tone="brand">{product.sku}</StatusBadge>
 												) : null}
 											</div>
+											<DeveloperModeOnly>
+												<p className="mt-0.5 truncate font-mono text-xs text-muted-foreground">
+													{product.id}
+												</p>
+											</DeveloperModeOnly>
 											<p className="mt-1 truncate text-sm text-muted-foreground">
 												{product.description || 'Aucune description'}
 											</p>
@@ -847,9 +853,6 @@ function ProductList({
 										</StatusBadge>
 										<p className="font-semibold tabular-nums">
 											{formatMoney(product.unit_price_cents)}
-										</p>
-										<p className="truncate font-mono text-xs text-muted-foreground">
-											{product.id}
 										</p>
 									</>
 								)}
@@ -1035,9 +1038,11 @@ function ServiceList({
 											<p className="truncate font-semibold">
 												{serviceRate.label}
 											</p>
-											<p className="mt-1 truncate font-mono text-xs text-muted-foreground">
-												{serviceRate.id}
-											</p>
+											<DeveloperModeOnly>
+												<p className="mt-1 truncate font-mono text-xs text-muted-foreground">
+													{serviceRate.id}
+												</p>
+											</DeveloperModeOnly>
 											<p className="mt-1 truncate text-sm text-muted-foreground">
 												{serviceRate.description || 'Aucune description'}
 											</p>

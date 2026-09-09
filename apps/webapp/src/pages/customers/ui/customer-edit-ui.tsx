@@ -51,6 +51,7 @@ import type {
 	CustomerPipelineStage,
 	CustomerStatus,
 } from '#/hooks/use-customers'
+import { useDeveloperMode } from '#/hooks/use-developer-mode'
 import { buildOrgPath } from '#/modules/org-path'
 import {
 	type CustomerContactFormValues,
@@ -161,6 +162,7 @@ export function CustomerEditUI({
 	onRetryCustomerContacts,
 	onRetryCustomerContexts,
 }: CustomerEditUIProps) {
+	const developerMode = useDeveloperMode()
 	const displayName = form.name.trim()
 	const canSubmitCustomerContact =
 		Boolean(customerContactDraft.firstName.trim()) &&
@@ -182,7 +184,9 @@ export function CustomerEditUI({
 			<PageHeader
 				title={displayName || 'Nouveau compte'}
 				description={
-					<span className="font-mono text-xs">id: {customer.id}</span>
+					developerMode ? (
+						<span className="font-mono text-xs">id: {customer.id}</span>
+					) : undefined
 				}
 				className="items-center sm:items-center sm:justify-start"
 				eyebrow={customerStatusLabel(form.status)}
