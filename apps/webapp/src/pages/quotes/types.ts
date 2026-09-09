@@ -1,8 +1,5 @@
 import type { Customer, CustomerContext } from '#/hooks/use-customers'
-import type {
-	ServiceRate,
-	ServiceRateUnit,
-} from '#/hooks/use-reference-catalog'
+import type { ServiceRate } from '#/hooks/use-reference-catalog'
 import { formatUnit } from '#/lib/units'
 
 export { formatUnit, UNIT_GROUPS } from '#/lib/units'
@@ -14,7 +11,10 @@ export interface QuoteLineFormValues {
 	serviceRateId: string
 	label: string
 	quantity: string
-	unit: ServiceRateUnit
+	/** One of `ServiceRateUnit`'s built-in codes, or an organization's own
+	 * custom unit code (#449) — a plain string because a fixed union cannot
+	 * name a value it does not know about yet. */
+	unit: string
 	unitPrice: string
 	/** Basis points as a string for the input, `''` when unset. Only ever read
 	 * by the server when the organization is subject to VAT — an organization

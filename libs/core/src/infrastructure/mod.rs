@@ -3,6 +3,7 @@ pub mod assignment_report;
 pub mod automation;
 pub mod category;
 pub mod channel;
+pub mod custom_unit;
 pub mod customer;
 pub mod customer_contact;
 pub mod customer_context;

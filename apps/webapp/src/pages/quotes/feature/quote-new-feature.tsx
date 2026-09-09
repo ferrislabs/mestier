@@ -127,6 +127,9 @@ function QuoteNewWorkspace({
 					form={form}
 					customers={customers.data?.data ?? []}
 					catalogItems={catalogItems}
+					customUnits={(catalog.customUnits.data?.data ?? []).map(
+						(customUnit) => customUnit.code,
+					)}
 					vatEnabled={vatEnabled}
 					isCreating={createQuote.isPending}
 					isUploading={uploadFile.isPending}
@@ -169,6 +172,7 @@ interface QuoteNewFormProps {
 	form: QuoteFormApi
 	customers: Customer[]
 	catalogItems: CatalogItem[]
+	customUnits: string[]
 	vatEnabled: boolean
 	isCreating: boolean
 	isUploading: boolean
@@ -187,6 +191,7 @@ function QuoteNewForm({
 	form,
 	customers,
 	catalogItems,
+	customUnits,
 	vatEnabled,
 	isCreating,
 	isUploading,
@@ -264,6 +269,7 @@ function QuoteNewForm({
 			customers={customers}
 			customerContexts={customerContexts.data?.data ?? []}
 			catalogItems={catalogItems}
+			customUnits={customUnits}
 			photoUrls={photoUrls}
 			error={error}
 			isCreating={isCreating}

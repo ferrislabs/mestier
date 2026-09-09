@@ -1,7 +1,7 @@
 use chrono::{DateTime, Utc};
 use mestier_core::{
-    Employee, EmployeeId, Equipment, EquipmentId, MemberId, OrganizationId, Product, ProductId,
-    ServiceRate, ServiceRateId, ServiceRateUnit, salaried_hourly_rate_cents,
+    CustomUnit, CustomUnitId, Employee, EmployeeId, Equipment, EquipmentId, MemberId,
+    OrganizationId, Product, ProductId, ServiceRate, ServiceRateId, salaried_hourly_rate_cents,
 };
 use serde::Serialize;
 use utoipa::ToSchema;
@@ -83,7 +83,7 @@ pub struct ServiceRateResponse {
     pub id: ServiceRateId,
     pub organization_id: OrganizationId,
     pub label: String,
-    pub unit: ServiceRateUnit,
+    pub unit: String,
     pub rate_cents: i32,
     pub default_vat_rate_bp: Option<i32>,
     pub description: Option<String>,
@@ -113,7 +113,7 @@ pub struct ProductResponse {
     pub organization_id: OrganizationId,
     pub name: String,
     pub sku: Option<String>,
-    pub unit: ServiceRateUnit,
+    pub unit: String,
     pub unit_price_cents: i32,
     pub default_vat_rate_bp: Option<i32>,
     pub description: Option<String>,
@@ -136,6 +136,28 @@ impl From<Product> for ProductResponse {
             photo_keys: value.photo_keys,
             created_at: value.created_at,
             updated_at: value.updated_at,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, ToSchema)]
+/// An organization's own addition to the ten built-in [`mestier_core::ServiceRateUnit`]
+/// codes (#449) — `code` is what a product/service/quote line's `unit`
+/// field actually stores once this unit is picked.
+pub struct CustomUnitResponse {
+    pub id: CustomUnitId,
+    pub organization_id: OrganizationId,
+    pub code: String,
+    pub created_at: DateTime<Utc>,
+}
+
+impl From<CustomUnit> for CustomUnitResponse {
+    fn from(value: CustomUnit) -> Self {
+        Self {
+            id: value.id,
+            organization_id: value.organization_id,
+            code: value.code,
+            created_at: value.created_at,
         }
     }
 }

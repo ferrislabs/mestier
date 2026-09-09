@@ -45,6 +45,9 @@ interface QuoteNewUIProps {
 	photoUrls: Record<string, string | undefined>
 	/** Whether the active organization charges VAT — see `QuoteLineEditor`. */
 	vatEnabled: boolean
+	/** The organization's own units (#449), offered alongside the built-in
+	 * ones in each line's unit picker — see `QuoteLineEditor`. */
+	customUnits?: string[]
 	error?: string | null
 	isCreating?: boolean
 	isUploading?: boolean
@@ -74,6 +77,7 @@ export function QuoteNewUI({
 	catalogItems,
 	photoUrls,
 	vatEnabled,
+	customUnits,
 	error,
 	isCreating,
 	isUploading,
@@ -318,6 +322,7 @@ export function QuoteNewUI({
 							isUploading={isUploading}
 							openLineId={openLineId}
 							vatEnabled={vatEnabled}
+							customUnits={customUnits}
 							onOpenLineChange={(clientId, open) =>
 								setOpenLineId(open ? clientId : null)
 							}

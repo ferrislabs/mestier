@@ -1,4 +1,4 @@
-use crate::{OrganizationId, ServiceRateId, ServiceRateUnit};
+use crate::{OrganizationId, ServiceRateId};
 
 #[derive(Debug, Clone)]
 pub struct CreateServiceRateCommand {
@@ -8,7 +8,7 @@ pub struct CreateServiceRateCommand {
     pub actor: authz::Subject,
     pub organization_id: OrganizationId,
     pub label: String,
-    pub unit: ServiceRateUnit,
+    pub unit: String,
     pub rate_cents: i32,
     pub default_vat_rate_bp: Option<i32>,
     pub description: Option<String>,
@@ -22,7 +22,7 @@ pub struct UpdateServiceRateCommand {
     pub actor: authz::Subject,
     pub id: ServiceRateId,
     pub label: String,
-    pub unit: ServiceRateUnit,
+    pub unit: String,
     pub rate_cents: i32,
     pub default_vat_rate_bp: Option<i32>,
     pub description: Option<String>,

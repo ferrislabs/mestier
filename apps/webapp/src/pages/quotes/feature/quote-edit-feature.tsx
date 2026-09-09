@@ -348,6 +348,9 @@ function QuoteEditWorkspace({ quote }: { quote: Quote }) {
 			customers={customers.data?.data ?? []}
 			customerContexts={customerContexts.data?.data ?? []}
 			catalogItems={catalogItems}
+			customUnits={(catalog.customUnits.data?.data ?? []).map(
+				(customUnit) => customUnit.code,
+			)}
 			error={error}
 			isLoading={
 				customers.isLoading ||
@@ -390,6 +393,7 @@ function QuoteEditUI({
 	customers,
 	customerContexts,
 	catalogItems,
+	customUnits,
 	error,
 	isLoading,
 	isSaving,
@@ -417,6 +421,7 @@ function QuoteEditUI({
 	customers: Customer[]
 	customerContexts: CustomerContext[]
 	catalogItems: CatalogItem[]
+	customUnits: string[]
 	error: string | null
 	isLoading: boolean
 	isSaving: boolean
@@ -784,6 +789,7 @@ function QuoteEditUI({
 						isUploading={isUploading}
 						openLineId={openLineId}
 						vatEnabled={vatEnabled}
+						customUnits={customUnits}
 						onOpenLineChange={(clientId, open) =>
 							setOpenLineId(open ? clientId : null)
 						}

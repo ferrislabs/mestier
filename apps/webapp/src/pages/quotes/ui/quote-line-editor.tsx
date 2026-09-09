@@ -68,6 +68,10 @@ interface QuoteLineEditorProps {
 	onRemove: () => void
 	onUploadPhoto: (file: File) => void
 	onRemovePhoto: (key: string) => void
+	/** The organization's own units (#449). Read-only here: a quote line picks
+	 * among existing units, creation only makes sense from the catalogue where
+	 * a product/service is defined. */
+	customUnits?: string[]
 }
 
 /**
@@ -94,6 +98,7 @@ export function QuoteLineEditor({
 	onRemove,
 	onUploadPhoto,
 	onRemovePhoto,
+	customUnits,
 }: QuoteLineEditorProps) {
 	const lineTotalCents = quoteLineTotalCents(line)
 	const serviceItems = catalogItems.filter((item) => item.type === 'SERVICE')
@@ -288,6 +293,7 @@ export function QuoteLineEditor({
 								<UnitSelect
 									value={line.unit}
 									onChange={(unit) => onChange({ unit })}
+									customUnits={customUnits}
 								/>
 							</Field>
 							<Field

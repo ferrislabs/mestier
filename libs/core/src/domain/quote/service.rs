@@ -362,7 +362,7 @@ pub fn propose_tasks_from_quote(quote: &Quote) -> Vec<TaskProposal> {
 
 /// A hard 60 minutes to the hour — the only unit this reads a duration from.
 fn line_suggested_minutes(line: &QuoteLine) -> Option<i32> {
-    if line.unit != crate::ServiceRateUnit::Hour {
+    if line.unit != crate::ServiceRateUnit::Hour.as_str() {
         return None;
     }
 
@@ -452,6 +452,12 @@ fn validate_line(command: &QuoteLineCommand) -> Result<(), CoreError> {
     if command.quantity <= Decimal::ZERO {
         return Err(CoreError::Conflict(
             "quote line quantity must be positive".to_owned(),
+        ));
+    }
+
+    if command.unit.trim().is_empty() {
+        return Err(CoreError::Conflict(
+            "quote line unit cannot be empty".to_owned(),
         ));
     }
 
@@ -628,7 +634,7 @@ mod tests {
             service_rate_id: None,
             label: "Taille de haie".to_owned(),
             quantity,
-            unit: ServiceRateUnit::Ml,
+            unit: ServiceRateUnit::Ml.as_str().to_owned(),
             unit_price_cents,
             vat_rate_bp: None,
             notes: Some("Acces jardin".to_owned()),
@@ -658,7 +664,7 @@ mod tests {
                 service_rate_id: None,
                 label: "Taille de haie".to_owned(),
                 quantity: Decimal::new(1, 0),
-                unit: ServiceRateUnit::Hour,
+                unit: ServiceRateUnit::Hour.as_str().to_owned(),
                 unit_price_cents: 5500,
                 vat_rate_bp: None,
                 notes: None,
@@ -1235,7 +1241,7 @@ mod emission_tests {
             service_rate_id: None,
             label: "Taille de haie".to_owned(),
             quantity: Decimal::new(1, 0),
-            unit: crate::ServiceRateUnit::Hour,
+            unit: crate::ServiceRateUnit::Hour.as_str().to_owned(),
             unit_price_cents: 5500,
             vat_rate_bp: None,
             notes: None,
@@ -1557,7 +1563,7 @@ mod emission_tests {
     #[test]
     fn an_hourly_line_proposes_its_duration_in_minutes() {
         let mut source = quote(QuoteId(Uuid::new_v4()));
-        source.lines[0].unit = ServiceRateUnit::Hour;
+        source.lines[0].unit = ServiceRateUnit::Hour.as_str().to_owned();
         source.lines[0].quantity = Decimal::new(25, 1); // 2.5 hours
 
         let proposals = propose_tasks_from_quote(&source);
@@ -1571,7 +1577,7 @@ mod emission_tests {
     #[test]
     fn a_per_unit_line_proposes_no_duration_rather_than_a_guess() {
         let mut source = quote(QuoteId(Uuid::new_v4()));
-        source.lines[0].unit = ServiceRateUnit::Unit;
+        source.lines[0].unit = ServiceRateUnit::Unit.as_str().to_owned();
         source.lines[0].quantity = Decimal::new(10, 0);
 
         let proposals = propose_tasks_from_quote(&source);
@@ -1582,7 +1588,7 @@ mod emission_tests {
     #[test]
     fn a_flat_rate_line_proposes_no_duration() {
         let mut source = quote(QuoteId(Uuid::new_v4()));
-        source.lines[0].unit = ServiceRateUnit::FlatRate;
+        source.lines[0].unit = ServiceRateUnit::FlatRate.as_str().to_owned();
 
         let proposals = propose_tasks_from_quote(&source);
 

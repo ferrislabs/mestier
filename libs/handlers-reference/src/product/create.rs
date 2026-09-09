@@ -1,7 +1,7 @@
 use auth::Identity;
 use axum::{Extension, Json, extract::State};
 use handlers::{ApiError, AppState, DataEnvelope, Response, resolve_actor};
-use mestier_core::{CreateProductCommand, ServiceRateUnit};
+use mestier_core::CreateProductCommand;
 use serde::Deserialize;
 use utoipa::ToSchema;
 
@@ -11,7 +11,10 @@ use crate::{paths::ProductsPath, require_org_membership, response::ProductRespon
 pub struct CreateProductRequest {
     pub name: String,
     pub sku: Option<String>,
-    pub unit: ServiceRateUnit,
+    /// One of the built-in `ServiceRateUnit` codes, or an organization's own
+    /// custom unit code (#449) — a plain string because a fixed enum cannot
+    /// name a value it does not know about yet.
+    pub unit: String,
     pub unit_price_cents: i32,
     #[serde(default)]
     pub default_vat_rate_bp: Option<i32>,

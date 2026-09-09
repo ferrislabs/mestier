@@ -1,7 +1,7 @@
 use auth::Identity;
 use axum::{Extension, Json, extract::State};
 use handlers::{ApiError, AppState, DataEnvelope, Response, resolve_actor};
-use mestier_core::{ServiceRateId, ServiceRateUnit, UpdateServiceRateCommand};
+use mestier_core::{ServiceRateId, UpdateServiceRateCommand};
 use serde::Deserialize;
 use utoipa::ToSchema;
 
@@ -10,7 +10,9 @@ use crate::{paths::ServiceRatePath, require_org_membership, response::ServiceRat
 #[derive(Debug, Deserialize, ToSchema)]
 pub struct UpdateServiceRateRequest {
     pub label: String,
-    pub unit: ServiceRateUnit,
+    /// One of the built-in `ServiceRateUnit` codes, or an organization's own
+    /// custom unit code (#449).
+    pub unit: String,
     pub rate_cents: i32,
     #[serde(default)]
     pub default_vat_rate_bp: Option<i32>,

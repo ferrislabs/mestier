@@ -8,6 +8,7 @@ const EQUIPMENT_PATH = '/api/v1/organizations/{organization_id}/equipment'
 const SERVICE_RATES_PATH =
 	'/api/v1/organizations/{organization_id}/service-rates'
 const PRODUCTS_PATH = '/api/v1/organizations/{organization_id}/products'
+const CUSTOM_UNITS_PATH = '/api/v1/organizations/{organization_id}/custom-units'
 
 type ReferenceListPath =
 	| typeof MEMBERS_PATH
@@ -15,6 +16,7 @@ type ReferenceListPath =
 	| typeof EQUIPMENT_PATH
 	| typeof SERVICE_RATES_PATH
 	| typeof PRODUCTS_PATH
+	| typeof CUSTOM_UNITS_PATH
 
 interface ReferenceCatalogOptions {
 	members?: boolean
@@ -22,6 +24,7 @@ interface ReferenceCatalogOptions {
 	equipment?: boolean
 	serviceRates?: boolean
 	products?: boolean
+	customUnits?: boolean
 }
 
 interface QueryKeyMeta {
@@ -84,8 +87,21 @@ export function useReferenceCatalog(
 		...window.tanstackApi.get(PRODUCTS_PATH, params).queryOptions,
 		enabled: isReferenceEnabled(options, 'products'),
 	})
+	const customUnits = useQuery({
+		...window.tanstackApi.get(CUSTOM_UNITS_PATH, {
+			path: { organization_id: organizationId },
+		}).queryOptions,
+		enabled: isReferenceEnabled(options, 'customUnits'),
+	})
 
-	return { members, employeeProfiles, equipment, serviceRates, products }
+	return {
+		members,
+		employeeProfiles,
+		equipment,
+		serviceRates,
+		products,
+		customUnits,
+	}
 }
 
 /** A single member by id — used by screens reached by direct link (e.g. the work-time page), which can't rely on the paginated list already holding it. */
@@ -289,6 +305,16 @@ export function useDeleteProduct() {
 	})
 }
 
+export function useCreateCustomUnit(organizationId: string) {
+	const queryClient = useQueryClient()
+
+	return useMutation({
+		...window.tanstackApi.mutation('post', CUSTOM_UNITS_PATH).mutationOptions,
+		onSuccess: () => invalidateReferenceList(queryClient, CUSTOM_UNITS_PATH),
+		meta: { organizationId },
+	})
+}
+
 export type Member = Schemas.MemberResponse
 export type EmployeeProfile = Schemas.EmployeeResponse
 export type EmployeeCostBasis = Schemas.EmployeeCostBasisResponse
@@ -296,3 +322,4 @@ export type Equipment = Schemas.EquipmentResponse
 export type Product = Schemas.ProductResponse
 export type ServiceRate = Schemas.ServiceRateResponse
 export type ServiceRateUnit = Schemas.ServiceRateUnit
+export type CustomUnit = Schemas.CustomUnitResponse

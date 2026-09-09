@@ -1,16 +1,13 @@
 use rust_decimal::Decimal;
 
-use crate::{
-    CustomerContextId, CustomerId, OrganizationId, QuoteId, QuoteStatus, ServiceRateId,
-    ServiceRateUnit,
-};
+use crate::{CustomerContextId, CustomerId, OrganizationId, QuoteId, QuoteStatus, ServiceRateId};
 
 #[derive(Debug, Clone)]
 pub struct QuoteLineCommand {
     pub service_rate_id: Option<ServiceRateId>,
     pub label: String,
     pub quantity: Decimal,
-    pub unit: ServiceRateUnit,
+    pub unit: String,
     pub unit_price_cents: i32,
     pub vat_rate_bp: Option<i32>,
     pub notes: Option<String>,

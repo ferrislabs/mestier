@@ -6,6 +6,7 @@ use mestier_core::OrganizationId;
 
 pub mod absence;
 pub mod cost_basis;
+pub mod custom_unit;
 pub mod employee;
 pub mod equipment;
 pub mod paths;
@@ -60,6 +61,8 @@ pub fn router(state: &AppState) -> Router<AppState> {
         .typed_get(product::get_one::handler)
         .typed_patch(product::update::handler)
         .typed_delete(product::soft_delete::handler)
+        .typed_get(custom_unit::list::handler)
+        .typed_post(custom_unit::create::handler)
         .merge(absence::router(state))
         .merge(cost_basis::router(state))
         .layer(from_fn_with_state(state.clone(), rate_limit_middleware))
