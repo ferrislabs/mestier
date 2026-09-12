@@ -7,10 +7,15 @@ import {
 	ActiveOrganizationProvider,
 	OrganizationListProvider,
 } from '#/hooks/use-active-organization'
+import { PERMISSION_CATALOG } from '#/lib/permission-catalog'
 import { OrganizationSection } from '#/pages/settings/sections/organization-section'
 import { renderWithRouter } from '#/test/render-with-router'
+import { seedPermissionsCache } from '#/test/with-permissions'
 
 const ORGANIZATION_PATH = '/api/v1/organizations/{organization_id}'
+const MY_PERMISSIONS_PATH =
+	'/api/v1/organizations/{organization_id}/members/me/permissions'
+const ALL_PERMISSIONS = PERMISSION_CATALOG.map((entry) => entry.name)
 
 const ORGANIZATION = {
 	id: 'org-1',
@@ -39,10 +44,26 @@ const ORGANIZATION = {
 
 type Handler = (params: unknown) => unknown
 
-function installFakeTanstackApi(onPatch: Handler) {
+function installFakeTanstackApi(onPatch: Handler, permissions: string[]) {
 	const fakeApi = {
-		get() {
-			throw new Error('unmocked GET')
+		get(path: string) {
+			// `usePermissions` is the only read this section makes: the three
+			// save buttons are gated on MANAGE_ORG (#407), so a fake that
+			// refuses every GET hides them and takes the assertions with it.
+			if (path === MY_PERMISSIONS_PATH) {
+				const queryKey = [{ _id: path }]
+				return {
+					queryKey,
+					queryOptions: {
+						queryKey,
+						queryFn: async () => ({
+							data: { permissions },
+							pagination: null,
+						}),
+					},
+				}
+			}
+			throw new Error(`unmocked GET ${path}`)
 		},
 		mutation(method: string, path: string) {
 			return {
@@ -63,11 +84,15 @@ function installFakeTanstackApi(onPatch: Handler) {
 	;(window as any).tanstackApi = fakeApi
 }
 
-async function renderSection(onPatch: Handler = vi.fn()) {
-	installFakeTanstackApi(onPatch)
+async function renderSection(
+	onPatch: Handler = vi.fn(),
+	permissions: string[] = ALL_PERMISSIONS,
+) {
+	installFakeTanstackApi(onPatch, permissions)
 	const queryClient = new QueryClient({
 		defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
 	})
+	seedPermissionsCache(queryClient, { permissions })
 
 	function Providers({ children }: { children: ReactNode }) {
 		return (
@@ -139,5 +164,23 @@ describe('OrganizationSection — pointeuse', () => {
 			slug: 'atelier-bois',
 			field_clock_enabled: true,
 		})
+	})
+})
+
+describe('OrganizationSection permission gating (#407)', () => {
+	it('offers the save controls to a caller holding MANAGE_ORG', async () => {
+		await renderSection(vi.fn(), ['MANAGE_ORG'])
+		expect(
+			screen.getAllByRole('button', { name: /enregistrer/i }).length,
+		).toBeGreaterThan(0)
+	})
+
+	it('hides every save control without MANAGE_ORG', async () => {
+		// `organization.update` is required by the domain service itself
+		// (`domain/organization/service.rs`), for the legal identity form too.
+		await renderSection(vi.fn(), ['MANAGE_MEMBERS'])
+		expect(screen.queryAllByRole('button', { name: /enregistrer/i })).toEqual(
+			[],
+		)
 	})
 })

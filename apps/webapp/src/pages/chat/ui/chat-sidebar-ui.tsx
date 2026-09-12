@@ -8,6 +8,7 @@ import {
 	Plus,
 	Settings,
 } from 'lucide-react'
+import { RequirePermission } from '#/components/require-permission'
 import { Button } from '#/components/ui/button'
 import {
 	Collapsible,
@@ -73,15 +74,17 @@ export function ChatSidebarUI({
 							{mentionCount}
 						</output>
 					) : null}
-					<Button
-						type="button"
-						variant="ghost"
-						size="icon"
-						aria-label="Créer un canal ou une catégorie"
-						onClick={onRequestNewChannel}
-					>
-						<Plus className="size-4" />
-					</Button>
+					<RequirePermission permission="MANAGE_CHANNELS">
+						<Button
+							type="button"
+							variant="ghost"
+							size="icon"
+							aria-label="Créer un canal ou une catégorie"
+							onClick={onRequestNewChannel}
+						>
+							<Plus className="size-4" />
+						</Button>
+					</RequirePermission>
 				</div>
 			</div>
 
@@ -145,10 +148,12 @@ function EmptyState({
 		<div className="flex flex-col items-start gap-2 px-4 py-3 text-sm text-muted-foreground">
 			<MessageSquarePlus className="size-5" />
 			<p>Aucun canal pour le moment.</p>
-			<Button variant="outline" size="sm" onClick={onRequestNewChannel}>
-				<Plus className="size-4" />
-				Créer un canal
-			</Button>
+			<RequirePermission permission="MANAGE_CHANNELS">
+				<Button variant="outline" size="sm" onClick={onRequestNewChannel}>
+					<Plus className="size-4" />
+					Créer un canal
+				</Button>
+			</RequirePermission>
 		</div>
 	)
 }
