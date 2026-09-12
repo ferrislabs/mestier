@@ -1,4 +1,5 @@
 import { Copy, Loader2, Trash2 } from 'lucide-react'
+import { RequirePermission } from '#/components/require-permission'
 import {
 	AlertDialog,
 	AlertDialogAction,
@@ -120,8 +121,12 @@ export function ChannelAdminSheetUI({
 				<Tabs defaultValue="general" className="px-4">
 					<TabsList>
 						<TabsTrigger value="general">Général</TabsTrigger>
-						<TabsTrigger value="permissions">Permissions</TabsTrigger>
-						<TabsTrigger value="webhooks">Webhooks</TabsTrigger>
+						<RequirePermission permission="MANAGE_CHANNELS">
+							<TabsTrigger value="permissions">Permissions</TabsTrigger>
+						</RequirePermission>
+						<RequirePermission permission="MANAGE_WEBHOOKS">
+							<TabsTrigger value="webhooks">Webhooks</TabsTrigger>
+						</RequirePermission>
 					</TabsList>
 
 					<TabsContent value="general" className="flex flex-col gap-4 py-4">
@@ -165,27 +170,31 @@ export function ChannelAdminSheetUI({
 							</Select>
 						</div>
 
-						<Button
-							type="button"
-							onClick={onSaveGeneral}
-							disabled={isSavingGeneral}
-						>
-							{isSavingGeneral ? (
-								<Loader2 className="size-4 animate-spin" />
-							) : null}
-							Enregistrer
-						</Button>
-
-						<div className="mt-4 border-t pt-4">
+						<RequirePermission permission="MANAGE_CHANNELS">
 							<Button
 								type="button"
-								variant="destructive"
-								onClick={onRequestDelete}
+								onClick={onSaveGeneral}
+								disabled={isSavingGeneral}
 							>
-								<Trash2 className="size-4" />
-								Supprimer le canal
+								{isSavingGeneral ? (
+									<Loader2 className="size-4 animate-spin" />
+								) : null}
+								Enregistrer
 							</Button>
-						</div>
+						</RequirePermission>
+
+						<RequirePermission permission="MANAGE_CHANNELS">
+							<div className="mt-4 border-t pt-4">
+								<Button
+									type="button"
+									variant="destructive"
+									onClick={onRequestDelete}
+								>
+									<Trash2 className="size-4" />
+									Supprimer le canal
+								</Button>
+							</div>
+						</RequirePermission>
 
 						<AlertDialog
 							open={deleteDialogOpen}

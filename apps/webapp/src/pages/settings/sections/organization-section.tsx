@@ -8,6 +8,7 @@ import {
 	Save,
 } from 'lucide-react'
 import { type FormBinding, TextField } from '#/components/reference-table'
+import { RequirePermission } from '#/components/require-permission'
 import { Button } from '#/components/ui/button'
 import { Label } from '#/components/ui/label'
 import {
@@ -140,19 +141,21 @@ function OrganizationSectionContent({
 										className="font-mono text-sm"
 									/>
 								</div>
-								<Button
-									type="button"
-									onClick={form.onSubmit}
-									disabled={form.isPending || !hasChanges}
-									className="gap-2"
-								>
-									{form.isPending ? (
-										<Loader2 className="size-4 animate-spin" />
-									) : (
-										<Save className="size-4" />
-									)}
-									Enregistrer
-								</Button>
+								<RequirePermission permission="MANAGE_ORG">
+									<Button
+										type="button"
+										onClick={form.onSubmit}
+										disabled={form.isPending || !hasChanges}
+										className="gap-2"
+									>
+										{form.isPending ? (
+											<Loader2 className="size-4 animate-spin" />
+										) : (
+											<Save className="size-4" />
+										)}
+										Enregistrer
+									</Button>
+								</RequirePermission>
 							</div>
 						</SectionCard>
 
@@ -193,19 +196,21 @@ function OrganizationSectionContent({
 								/>
 							</div>
 							<div className="flex justify-end p-5 pt-0">
-								<Button
-									type="button"
-									onClick={form.onSubmit}
-									disabled={form.isPending || !hasChanges}
-									className="gap-2"
-								>
-									{form.isPending ? (
-										<Loader2 className="size-4 animate-spin" />
-									) : (
-										<Save className="size-4" />
-									)}
-									Enregistrer
-								</Button>
+								<RequirePermission permission="MANAGE_ORG">
+									<Button
+										type="button"
+										onClick={form.onSubmit}
+										disabled={form.isPending || !hasChanges}
+										className="gap-2"
+									>
+										{form.isPending ? (
+											<Loader2 className="size-4 animate-spin" />
+										) : (
+											<Save className="size-4" />
+										)}
+										Enregistrer
+									</Button>
+								</RequirePermission>
 							</div>
 						</SectionCard>
 					</div>
@@ -547,19 +552,21 @@ function LegalIdentitySection({ organization }: LegalIdentitySectionProps) {
 							</FieldGroup>
 
 							<div className="flex items-center justify-end gap-4 border-t pt-5">
-								<Button
-									type="button"
-									onClick={binding.onSubmit}
-									disabled={binding.isPending || !canSubmit}
-									className="gap-2"
-								>
-									{binding.isPending ? (
-										<Loader2 className="size-4 animate-spin" />
-									) : (
-										<Save className="size-4" />
-									)}
-									Enregistrer
-								</Button>
+								<RequirePermission permission="MANAGE_ORG">
+									<Button
+										type="button"
+										onClick={binding.onSubmit}
+										disabled={binding.isPending || !canSubmit}
+										className="gap-2"
+									>
+										{binding.isPending ? (
+											<Loader2 className="size-4 animate-spin" />
+										) : (
+											<Save className="size-4" />
+										)}
+										Enregistrer
+									</Button>
+								</RequirePermission>
 							</div>
 						</div>
 					</SectionCard>

@@ -1,7 +1,8 @@
-import { render, screen } from '@testing-library/react'
+import { screen } from '@testing-library/react'
 import type { UserEvent } from '@testing-library/user-event'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
+import { renderWithPermissions } from '#/test/with-permissions'
 import type { ChannelAdminSheetUIProps } from './channel-admin-sheet-ui'
 import { ChannelAdminSheetUI } from './channel-admin-sheet-ui'
 
@@ -72,7 +73,9 @@ describe('ChannelAdminSheetUI — general', () => {
 	it('calls onSaveGeneral when the save button is clicked', async () => {
 		const user = userEvent.setup()
 		const onSaveGeneral = vi.fn()
-		render(<ChannelAdminSheetUI {...baseProps({ onSaveGeneral })} />)
+		renderWithPermissions(
+			<ChannelAdminSheetUI {...baseProps({ onSaveGeneral })} />,
+		)
 
 		await user.click(screen.getByText('Enregistrer'))
 
@@ -82,7 +85,9 @@ describe('ChannelAdminSheetUI — general', () => {
 	it('opens a confirmation naming the channel before deleting', async () => {
 		const user = userEvent.setup()
 		const onRequestDelete = vi.fn()
-		render(<ChannelAdminSheetUI {...baseProps({ onRequestDelete })} />)
+		renderWithPermissions(
+			<ChannelAdminSheetUI {...baseProps({ onRequestDelete })} />,
+		)
 
 		await user.click(screen.getByText('Supprimer le canal'))
 
@@ -90,7 +95,7 @@ describe('ChannelAdminSheetUI — general', () => {
 	})
 
 	it('names what is lost in the delete confirmation', () => {
-		render(
+		renderWithPermissions(
 			<ChannelAdminSheetUI
 				{...baseProps({
 					deleteDialogOpen: true,
@@ -106,7 +111,7 @@ describe('ChannelAdminSheetUI — general', () => {
 	it('confirms deletion via the alert dialog action', async () => {
 		const user = userEvent.setup()
 		const onConfirmDelete = vi.fn()
-		render(
+		renderWithPermissions(
 			<ChannelAdminSheetUI
 				{...baseProps({ deleteDialogOpen: true, onConfirmDelete })}
 			/>,
@@ -121,7 +126,7 @@ describe('ChannelAdminSheetUI — general', () => {
 describe('ChannelAdminSheetUI — permissions', () => {
 	it('shows the everyone overwrite as inherited with no overwrite', async () => {
 		const user = userEvent.setup()
-		render(<ChannelAdminSheetUI {...baseProps()} />)
+		renderWithPermissions(<ChannelAdminSheetUI {...baseProps()} />)
 		await switchToTab(user, 'Permissions')
 
 		const buttons = screen
@@ -135,7 +140,9 @@ describe('ChannelAdminSheetUI — permissions', () => {
 	it('calls onChangeEveryoneBit with the clicked state', async () => {
 		const user = userEvent.setup()
 		const onChangeEveryoneBit = vi.fn()
-		render(<ChannelAdminSheetUI {...baseProps({ onChangeEveryoneBit })} />)
+		renderWithPermissions(
+			<ChannelAdminSheetUI {...baseProps({ onChangeEveryoneBit })} />,
+		)
 		await switchToTab(user, 'Permissions')
 
 		const allowButtons = screen.getAllByText('Autorisé')
@@ -146,7 +153,7 @@ describe('ChannelAdminSheetUI — permissions', () => {
 
 	it('reflects an existing everyone overwrite', async () => {
 		const user = userEvent.setup()
-		render(
+		renderWithPermissions(
 			<ChannelAdminSheetUI
 				{...baseProps({
 					everyoneOverwrite: {
@@ -171,7 +178,7 @@ describe('ChannelAdminSheetUI — permissions', () => {
 	it('lists existing role/member overwrites with a way to remove them', async () => {
 		const user = userEvent.setup()
 		const onDeleteTargetOverwrite = vi.fn()
-		render(
+		renderWithPermissions(
 			<ChannelAdminSheetUI
 				{...baseProps({
 					roleAndMemberOverwrites: [
@@ -199,7 +206,9 @@ describe('ChannelAdminSheetUI — permissions', () => {
 describe('ChannelAdminSheetUI — webhooks', () => {
 	it('disables webhook creation until a name is entered', async () => {
 		const user = userEvent.setup()
-		render(<ChannelAdminSheetUI {...baseProps({ newWebhookName: '' })} />)
+		renderWithPermissions(
+			<ChannelAdminSheetUI {...baseProps({ newWebhookName: '' })} />,
+		)
 		await switchToTab(user, 'Webhooks')
 
 		const button = screen.getByText('Créer').closest('button')
@@ -209,7 +218,7 @@ describe('ChannelAdminSheetUI — webhooks', () => {
 	it('shows the created token once, with a dismiss action', async () => {
 		const user = userEvent.setup()
 		const onDismissCreatedToken = vi.fn()
-		render(
+		renderWithPermissions(
 			<ChannelAdminSheetUI
 				{...baseProps({
 					createdWebhookToken: 'secret-token-123',
@@ -227,7 +236,7 @@ describe('ChannelAdminSheetUI — webhooks', () => {
 	it('lists webhooks with a revoke action', async () => {
 		const user = userEvent.setup()
 		const onDeleteWebhook = vi.fn()
-		render(
+		renderWithPermissions(
 			<ChannelAdminSheetUI
 				{...baseProps({
 					webhooks: [
@@ -250,5 +259,42 @@ describe('ChannelAdminSheetUI — webhooks', () => {
 
 		await user.click(screen.getByLabelText('Révoquer CI bot'))
 		expect(onDeleteWebhook).toHaveBeenCalledWith('wh-1')
+	})
+})
+
+describe('ChannelAdminSheetUI permission gating (#407)', () => {
+	it('shows the permissions and webhooks tabs to a fully-privileged caller', () => {
+		renderWithPermissions(<ChannelAdminSheetUI {...baseProps()} />, {
+			permissions: ['MANAGE_CHANNELS', 'MANAGE_WEBHOOKS'],
+		})
+		expect(screen.getByRole('tab', { name: 'Permissions' })).toBeDefined()
+		expect(screen.getByRole('tab', { name: 'Webhooks' })).toBeDefined()
+	})
+
+	it('hides the permissions tab without MANAGE_CHANNELS', () => {
+		// `channel/permissions/list.rs` requires `channel.manage`, so the tab
+		// would open onto a 403 rather than an empty list.
+		renderWithPermissions(<ChannelAdminSheetUI {...baseProps()} />, {
+			permissions: ['MANAGE_WEBHOOKS'],
+		})
+		expect(screen.queryByRole('tab', { name: 'Permissions' })).toBeNull()
+	})
+
+	it('hides the webhooks tab without MANAGE_WEBHOOKS', () => {
+		// `webhook/list.rs` requires `webhook.manage` — same reasoning.
+		renderWithPermissions(<ChannelAdminSheetUI {...baseProps()} />, {
+			permissions: ['MANAGE_CHANNELS'],
+		})
+		expect(screen.queryByRole('tab', { name: 'Webhooks' })).toBeNull()
+	})
+
+	it('hides the save and delete controls without MANAGE_CHANNELS', () => {
+		renderWithPermissions(<ChannelAdminSheetUI {...baseProps()} />, {
+			permissions: ['VIEW_CHANNEL'],
+		})
+		expect(screen.queryByRole('button', { name: 'Enregistrer' })).toBeNull()
+		expect(
+			screen.queryByRole('button', { name: /supprimer le canal/i }),
+		).toBeNull()
 	})
 })
