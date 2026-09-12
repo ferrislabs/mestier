@@ -1,23 +1,28 @@
 import { Link } from '@tanstack/react-router'
-import {
-	AlertCircle,
-	ArrowLeft,
-	FileText,
-	Loader2,
-	UserRound,
-} from 'lucide-react'
+import { ArrowLeft, FileText, Loader2, UserRound } from 'lucide-react'
 import { useState } from 'react'
 import { RequirePermission } from '#/components/require-permission'
 import { Button } from '#/components/ui/button'
-import { Field } from '#/components/ui/field'
 import { Input } from '#/components/ui/input'
-import { PageHeader, PageShell, SectionCard } from '#/components/ui/surface'
+import { Label } from '#/components/ui/label'
+import {
+	Select,
+	SelectContent,
+	SelectItem,
+	SelectTrigger,
+	SelectValue,
+} from '#/components/ui/select'
+import {
+	PageHeader,
+	PageShell,
+	SectionCard,
+	SectionHeader,
+} from '#/components/ui/surface'
 import type { CatalogItem } from '#/hooks/use-catalog-items'
 import type { Customer, CustomerContext } from '#/hooks/use-customers'
 import type { Organization } from '#/hooks/use-organizations'
 import { buildOrgPath } from '#/modules/org-path'
 import {
-	billingAddressLines,
 	customerDisplayName,
 	type QuoteFormValues,
 	type QuoteLineFormValues,
@@ -25,12 +30,7 @@ import {
 	quoteLinesVatBreakdown,
 	quoteLineTotalCents,
 } from '#/pages/quotes/types'
-import { EditablePaperField } from '#/pages/quotes/ui/editable-paper-field'
-import { PaperOptionList } from '#/pages/quotes/ui/paper-option-list'
-import {
-	QuoteIssuerDetails,
-	QuoteIssuerMark,
-} from '#/pages/quotes/ui/quote-issuer-block'
+import { BillingAddressField } from '#/pages/quotes/ui/billing-address-field'
 import { QuoteLinesTable } from '#/pages/quotes/ui/quote-lines-table'
 import { QuoteTotalsFooter } from '#/pages/quotes/ui/quote-totals-footer'
 
@@ -62,11 +62,9 @@ interface QuoteNewUIProps {
 }
 
 /**
- * The quote composer, on a page of its own, laid out to read as the document
- * it becomes rather than as a settings form. Every value prints as plain
- * text; clicking a section — the client, the object — opens the actual form
- * control in a popover anchored to that spot, instead of surrounding the
- * document with Selects and Inputs the way a settings page would.
+ * The quote composer, laid out as the same classic settings form as the
+ * invoice builder: client and object up top, lines below, totals and the
+ * submit action in a sticky summary aside.
  */
 export function QuoteNewUI({
 	organizationSlug,
@@ -112,13 +110,6 @@ export function QuoteNewUI({
 			)
 		})
 
-	const selectedCustomer = customers.find(
-		(customer) => customer.id === values.customerId,
-	)
-	const selectedCustomerContext = customerContexts.find(
-		(customerContext) => customerContext.id === values.customerContextId,
-	)
-
 	const netCents = values.lines.reduce((sum, line) => {
 		return sum + quoteLineTotalCents(line)
 	}, 0)
@@ -135,257 +126,200 @@ export function QuoteNewUI({
 			<PageShell>
 				<PageHeader
 					title="Nouveau devis"
-					description="Cliquez sur le client ou l’objet du devis pour les renseigner, puis ajoutez des lignes."
+					description="Renseignez le client, l'objet et les lignes du devis."
 					actions={
-						<div className="flex flex-col gap-2 sm:flex-row">
-							<Button asChild type="button" variant="outline">
-								<Link to={buildOrgPath(organizationSlug, '/crm/quotes')}>
-									<ArrowLeft />
-									Retour
-								</Link>
-							</Button>
-							<RequirePermission permission="MANAGE_QUOTES">
-								<Button type="submit" disabled={!canSubmit || isCreating}>
-									{isCreating ? (
-										<Loader2 className="animate-spin" />
-									) : (
-										<FileText />
-									)}
-									Créer le devis
-								</Button>
-							</RequirePermission>
-						</div>
+						<Button asChild type="button" variant="outline">
+							<Link to={buildOrgPath(organizationSlug, '/crm/quotes')}>
+								<ArrowLeft />
+								Retour
+							</Link>
+						</Button>
 					}
 				/>
 
 				{error ? (
-					<SectionCard className="flex items-center gap-3 border-destructive/30 bg-destructive-soft p-5 text-destructive">
-						<AlertCircle className="size-5 shrink-0" />
-						<p className="text-sm font-medium">{error}</p>
+					<SectionCard className="p-5 text-sm text-destructive">
+						{error}
 					</SectionCard>
 				) : null}
 
-				<div className="mx-auto w-full max-w-4xl bg-muted/40 p-4 sm:p-10">
-					<SectionCard className="border shadow-sm">
-						<div className="border-b p-6 sm:p-8">
-							<div className="flex items-start justify-between gap-4">
-								<QuoteIssuerMark organization={organization} />
-								<div className="text-right">
-									<p className="text-sm font-semibold">Nouveau devis</p>
-									<p className="text-xs text-muted-foreground">
-										Numéro attribué à l’envoi
-									</p>
-								</div>
-							</div>
-
-							<div className="mt-6 grid gap-8 md:grid-cols-2">
-								<QuoteIssuerDetails organization={organization} />
-
-								<EditablePaperField
-									label="Facturé à"
-									renderEditor={(close) => (
-										<div className="space-y-4">
-											<Field label="Client" htmlFor={null}>
-												<PaperOptionList
-													ariaLabel="Client"
-													value={values.customerId}
-													options={customers.map((customer) => ({
-														value: customer.id,
-														label: customerDisplayName(customer),
-													}))}
-													onChange={(customerId) => onChange({ customerId })}
-													emptyLabel="Aucun client n’existe encore dans cette organisation."
-												/>
-											</Field>
-											<Field label="Adresse de facturation" htmlFor={null}>
-												{!values.customerId ? (
-													<p className="border px-3 py-2 text-sm text-muted-foreground">
-														Choisir un client d’abord
-													</p>
-												) : isCustomerContextsLoading ? (
-													<p className="border px-3 py-2 text-sm text-muted-foreground">
-														Chargement…
-													</p>
-												) : (
-													<PaperOptionList
-														ariaLabel="Adresse de facturation"
-														value={values.customerContextId}
-														options={customerContexts.map((context) => ({
-															value: context.id,
-															label: context.label,
-															description:
-																billingAddressLines(context).join(' · ') ||
-																'Adresse non renseignée',
-														}))}
-														onChange={(customerContextId) =>
-															onChange({ customerContextId })
-														}
-														emptyLabel="Aucune adresse pour ce client."
-													/>
-												)}
-											</Field>
-											<Button
-												type="button"
-												variant="ghost"
-												size="sm"
-												onClick={close}
-											>
-												Fermer
-											</Button>
-										</div>
-									)}
-								>
-									{selectedCustomer ? (
-										<>
-											<p className="font-semibold">
-												{customerDisplayName(selectedCustomer)}
-											</p>
-											{selectedCustomerContext ? (
-												billingAddressLines(selectedCustomerContext).map(
-													(line) => (
-														<p
-															key={line}
-															className="text-sm text-muted-foreground"
-														>
-															{line}
-														</p>
-													),
-												)
-											) : (
-												<p className="text-sm text-warning">
-													Adresse de facturation non renseignée
-												</p>
-											)}
-											{[selectedCustomer.email, selectedCustomer.phone]
-												.filter(Boolean)
-												.join(' · ') ? (
-												<p className="text-sm text-muted-foreground">
-													{[selectedCustomer.email, selectedCustomer.phone]
-														.filter(Boolean)
-														.join(' · ')}
-												</p>
-											) : null}
-											{selectedCustomer.registration_number ? (
-												<p className="mt-1 text-xs text-muted-foreground">
-													SIRET {selectedCustomer.registration_number}
-												</p>
-											) : null}
-										</>
-									) : (
-										<p className="text-sm text-muted-foreground italic">
-											Sélectionner un compte
+				<div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_320px]">
+					<div className="space-y-5">
+						<SectionCard>
+							<SectionHeader
+								title="Informations"
+								description="Client, adresse de facturation et objet du devis."
+							/>
+							<div className="grid gap-4 p-5 md:grid-cols-2">
+								<FieldBlock label="Client">
+									<Select
+										value={values.customerId}
+										onValueChange={(customerId) => onChange({ customerId })}
+									>
+										<SelectTrigger className="w-full">
+											<SelectValue placeholder="Sélectionner un client" />
+										</SelectTrigger>
+										<SelectContent>
+											{customers.map((customer) => (
+												<SelectItem key={customer.id} value={customer.id}>
+													{customerDisplayName(customer)}
+												</SelectItem>
+											))}
+										</SelectContent>
+									</Select>
+									{customers.length === 0 ? (
+										<p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+											<UserRound className="size-3.5 shrink-0" />
+											Aucun client n’existe encore dans cette organisation.
 										</p>
-									)}
-								</EditablePaperField>
+									) : null}
+								</FieldBlock>
+								<FieldBlock label="Adresse de facturation">
+									<BillingAddressField
+										value={values.customerContextId}
+										addresses={customerContexts}
+										hasCustomer={Boolean(values.customerId)}
+										isLoading={isCustomerContextsLoading}
+										onChange={(customerContextId) =>
+											onChange({ customerContextId })
+										}
+									/>
+								</FieldBlock>
+								<FieldBlock label="Objet du devis" className="md:col-span-2">
+									<Input
+										value={values.title}
+										onChange={(event) =>
+											onChange({ title: event.target.value })
+										}
+										placeholder="Ex. Rénovation salle de bain"
+									/>
+								</FieldBlock>
 							</div>
+						</SectionCard>
 
-							<div className="mt-8">
-								<EditablePaperField
-									label="Objet du devis"
-									renderEditor={(close) => (
-										<div className="space-y-4">
-											<Input
-												autoFocus
-												value={values.title}
-												onChange={(event) =>
-													onChange({ title: event.target.value })
-												}
-												placeholder="Ex. Rénovation salle de bain"
-											/>
-											<Button
-												type="button"
-												variant="ghost"
-												size="sm"
-												onClick={close}
-											>
-												Fermer
-											</Button>
-										</div>
-									)}
-								>
-									<h1 className="text-2xl font-bold tracking-tight">
-										{values.title || 'Objet du devis'}
-									</h1>
-								</EditablePaperField>
-							</div>
+						<SectionCard>
+							<SectionHeader title={`Lignes (${values.lines.length})`} />
+							<QuoteLinesTable
+								lines={values.lines}
+								catalogItems={catalogItems}
+								photosByLine={Object.fromEntries(
+									values.lines.map((line) => [
+										line.clientId,
+										line.photoKeys.map((key) => ({
+											key,
+											url: photoUrls[key],
+										})),
+									]),
+								)}
+								isUploading={isUploading}
+								openLineId={openLineId}
+								vatEnabled={vatEnabled}
+								customUnits={customUnits}
+								onOpenLineChange={(clientId, open) =>
+									setOpenLineId(open ? clientId : null)
+								}
+								onLineChange={(clientId, patch) => {
+									const index = values.lines.findIndex(
+										(line) => line.clientId === clientId,
+									)
+									if (index !== -1) onLineChange(index, patch)
+								}}
+								onSelectCatalogItem={(clientId, catalogItemId) => {
+									const index = values.lines.findIndex(
+										(line) => line.clientId === clientId,
+									)
+									if (index !== -1) onSelectCatalogItem(index, catalogItemId)
+								}}
+								onRemoveLine={(clientId) => {
+									const index = values.lines.findIndex(
+										(line) => line.clientId === clientId,
+									)
+									if (index !== -1) onRemoveLine(index)
+								}}
+								onAddLine={onAddLine}
+								onUploadLinePhoto={(clientId, file) => {
+									const index = values.lines.findIndex(
+										(line) => line.clientId === clientId,
+									)
+									if (index !== -1) void onUploadLinePhoto(index, file)
+								}}
+								onRemoveLinePhoto={(clientId, key) => {
+									const index = values.lines.findIndex(
+										(line) => line.clientId === clientId,
+									)
+									const line = values.lines[index]
+									if (index === -1 || !line) return
+									onLineChange(index, {
+										photoKeys: line.photoKeys.filter(
+											(photoKey) => photoKey !== key,
+										),
+									})
+								}}
+							/>
+						</SectionCard>
+					</div>
+
+					<aside className="h-fit rounded-lg border bg-card p-5 shadow-sm xl:sticky xl:top-5">
+						<p className="text-sm font-semibold">Résumé</p>
+						<div className="mt-4 space-y-3 text-sm">
+							<SummaryRow label="Lignes" value={String(values.lines.length)} />
 						</div>
-
-						<QuoteLinesTable
-							lines={values.lines}
-							catalogItems={catalogItems}
-							photosByLine={Object.fromEntries(
-								values.lines.map((line) => [
-									line.clientId,
-									line.photoKeys.map((key) => ({ key, url: photoUrls[key] })),
-								]),
-							)}
-							isUploading={isUploading}
-							openLineId={openLineId}
-							vatEnabled={vatEnabled}
-							customUnits={customUnits}
-							onOpenLineChange={(clientId, open) =>
-								setOpenLineId(open ? clientId : null)
-							}
-							onLineChange={(clientId, patch) => {
-								const index = values.lines.findIndex(
-									(line) => line.clientId === clientId,
-								)
-								if (index !== -1) onLineChange(index, patch)
-							}}
-							onSelectCatalogItem={(clientId, catalogItemId) => {
-								const index = values.lines.findIndex(
-									(line) => line.clientId === clientId,
-								)
-								if (index !== -1) onSelectCatalogItem(index, catalogItemId)
-							}}
-							onRemoveLine={(clientId) => {
-								const index = values.lines.findIndex(
-									(line) => line.clientId === clientId,
-								)
-								if (index !== -1) onRemoveLine(index)
-							}}
-							onAddLine={onAddLine}
-							onUploadLinePhoto={(clientId, file) => {
-								const index = values.lines.findIndex(
-									(line) => line.clientId === clientId,
-								)
-								if (index !== -1) void onUploadLinePhoto(index, file)
-							}}
-							onRemoveLinePhoto={(clientId, key) => {
-								const index = values.lines.findIndex(
-									(line) => line.clientId === clientId,
-								)
-								const line = values.lines[index]
-								if (index === -1 || !line) return
-								onLineChange(index, {
-									photoKeys: line.photoKeys.filter(
-										(photoKey) => photoKey !== key,
-									),
-								})
-							}}
-						/>
-
-						<QuoteTotalsFooter
-							netCents={netCents}
-							vatBreakdown={vatBreakdown}
-							grossCents={grossCents}
-							vatExemptionNotice={
-								organization.vat_status?.type === 'not_subject'
-									? `TVA non applicable, ${organization.vat_status.basis}`
-									: null
-							}
-							notice="Estimation, non enregistrée"
-						/>
-					</SectionCard>
-
-					{customers.length === 0 ? (
-						<p className="mt-4 flex items-center gap-2 text-sm text-muted-foreground">
-							<UserRound className="size-4 shrink-0" />
-							Aucun client n’existe encore dans cette organisation.
-						</p>
-					) : null}
+						<div className="-mx-5 mt-2">
+							<QuoteTotalsFooter
+								netCents={netCents}
+								vatBreakdown={vatBreakdown}
+								grossCents={grossCents}
+								vatExemptionNotice={
+									organization.vat_status?.type === 'not_subject'
+										? `TVA non applicable, ${organization.vat_status.basis}`
+										: null
+								}
+								notice="Estimation, non enregistrée"
+							/>
+						</div>
+						<RequirePermission permission="MANAGE_QUOTES">
+							<Button
+								type="submit"
+								className="mt-5 w-full"
+								disabled={!canSubmit || isCreating}
+							>
+								{isCreating ? (
+									<Loader2 className="animate-spin" />
+								) : (
+									<FileText />
+								)}
+								Créer le devis
+							</Button>
+						</RequirePermission>
+					</aside>
 				</div>
 			</PageShell>
 		</form>
+	)
+}
+
+function FieldBlock({
+	label,
+	children,
+	className,
+}: {
+	label: string
+	children: React.ReactNode
+	className?: string
+}) {
+	return (
+		<div className={`flex min-w-0 flex-col gap-2 ${className ?? ''}`.trim()}>
+			<Label>{label}</Label>
+			{children}
+		</div>
+	)
+}
+
+function SummaryRow({ label, value }: { label: string; value: string }) {
+	return (
+		<div className="flex items-center justify-between gap-4">
+			<span className="text-muted-foreground">{label}</span>
+			<span className="truncate font-medium">{value}</span>
+		</div>
 	)
 }
