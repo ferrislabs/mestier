@@ -87,7 +87,7 @@ function baseProps() {
 }
 
 describe('QuoteNewUI', () => {
-	it('prints the document plainly: no client yet, no title yet', async () => {
+	it('shows the form empty: no customer selected, no title yet', async () => {
 		const props = baseProps()
 		await renderWithRouter(
 			wrapWithPermissions(<QuoteNewUI {...props} />, {
@@ -96,11 +96,17 @@ describe('QuoteNewUI', () => {
 			}),
 		)
 
-		expect(screen.getByText('Sélectionner un compte')).toBeDefined()
-		expect(screen.getByText('Objet du devis')).toBeDefined()
+		expect(screen.getByText('Sélectionner un client')).toBeDefined()
+		expect(
+			(
+				screen.getByPlaceholderText(
+					'Ex. Rénovation salle de bain',
+				) as HTMLInputElement
+			).value,
+		).toBe('')
 	})
 
-	it('opens the client editor on click and reports the chosen customer', async () => {
+	it('selects a customer from the list and reports the choice', async () => {
 		const user = userEvent.setup()
 		const onChange = vi.fn()
 		const props = baseProps()
@@ -112,14 +118,14 @@ describe('QuoteNewUI', () => {
 		)
 
 		await user.click(
-			screen.getByRole('button', { name: /modifier.*facturé à/i }),
+			screen.getByText('Sélectionner un client').closest('button') as Element,
 		)
 		await user.click(screen.getByRole('option', { name: 'Menuiserie Dupont' }))
 
 		expect(onChange).toHaveBeenCalledWith({ customerId: 'customer-1' })
 	})
 
-	it('prints the customer once it is set on the form', async () => {
+	it('shows the customer and its billing address once set on the form', async () => {
 		const props = baseProps()
 		await renderWithRouter(
 			wrapWithPermissions(
@@ -134,11 +140,13 @@ describe('QuoteNewUI', () => {
 			),
 		)
 
-		expect(screen.getByText('Menuiserie Dupont')).toBeDefined()
+		expect(
+			screen.getByText('Menuiserie Dupont', { selector: 'span' }),
+		).toBeDefined()
 		expect(screen.getByText('5 rue des Forges')).toBeDefined()
 	})
 
-	it('opens the title editor on click and reports what was typed', async () => {
+	it('types into the title field and reports what was typed', async () => {
 		const user = userEvent.setup()
 		const onChange = vi.fn()
 		const props = baseProps()
@@ -149,9 +157,6 @@ describe('QuoteNewUI', () => {
 			}),
 		)
 
-		await user.click(
-			screen.getByRole('button', { name: /modifier.*objet du devis/i }),
-		)
 		await user.type(
 			screen.getByPlaceholderText('Ex. Rénovation salle de bain'),
 			'x',
@@ -169,7 +174,23 @@ describe('QuoteNewUI', () => {
 			}),
 		)
 
-		expect(screen.getByText('Objet du devis')).toBeDefined()
+		expect(
+			screen.getByPlaceholderText('Ex. Rénovation salle de bain'),
+		).toBeDefined()
 		expect(screen.queryByRole('button', { name: 'Créer le devis' })).toBeNull()
+	})
+
+	it('shows a notice when the organization has no customer yet', async () => {
+		const props = baseProps()
+		await renderWithRouter(
+			wrapWithPermissions(<QuoteNewUI {...props} customers={[]} />, {
+				permissions: ['MANAGE_QUOTES'],
+				organization: props.organization,
+			}),
+		)
+
+		expect(
+			screen.getByText('Aucun client n’existe encore dans cette organisation.'),
+		).toBeDefined()
 	})
 })
