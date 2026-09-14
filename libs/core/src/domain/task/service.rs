@@ -22,33 +22,42 @@ use crate::{
 // ---------------------------------------------------------------------------
 
 /// Resolves a task's effective window: its own if it carries one, its
-/// parent's otherwise.
+/// parent's otherwise, and `None` when there is none to resolve.
 ///
-/// A root always carries its own dates (enforced by
-/// [`TaskService::create_task`] and the `chk_tasks_root_has_dates`
-/// constraint), so `parent` only matters for a subtask that omitted
-/// `starts_at`/`ends_at` — which means "inherit". Resolving here, at read
-/// time, rather than copying the parent's dates down at creation, avoids a
-/// duplicate that would silently drift the moment the parent is rescheduled
-/// (see the planning module design doc).
-pub fn resolve_task_window(task: &Task, parent: Option<&Task>) -> TimeRange {
+/// Resolving here, at read time, rather than copying the parent's dates down
+/// at creation, avoids a duplicate that would silently drift the moment the
+/// parent is rescheduled (see the planning module design doc).
+///
+/// This used to return a bare [`TimeRange`] and panic in two places, both
+/// justified by `chk_tasks_root_has_dates` — "a root always carries its own
+/// dates". That constraint is gone: a task may now live with no window at
+/// all, which is the ordinary state of anything in [`crate::TaskStatus::Backlog`].
+/// The `Option` is the whole point of the change, and every branch that can
+/// produce "no window" produces exactly `None`:
+///
+/// - a task with its own dates → `Some` of them, parent ignored;
+/// - a task without dates whose parent has some → `Some` of the parent's;
+/// - a task without dates whose parent has none, or that has no parent, or
+///   whose parent simply was not loaded by the caller → `None`.
+///
+/// There is deliberately no fallback: no `now()`, no zero-length range, no
+/// sentinel date. An invented window is indistinguishable, downstream, from
+/// one somebody agreed to, and it would put unscheduled work on a calendar
+/// and into a conflict count. Callers that need a window decide for
+/// themselves what an absent one means for them.
+pub fn resolve_task_window(task: &Task, parent: Option<&Task>) -> Option<TimeRange> {
     if let (Some(starts_at), Some(ends_at)) = (task.starts_at, task.ends_at) {
-        return TimeRange { starts_at, ends_at };
+        return Some(TimeRange { starts_at, ends_at });
     }
 
-    let parent = parent.expect(
-        "a task without its own dates must have a parent — enforced at creation by \
-         `TaskService::create_task` and the `chk_tasks_root_has_dates` constraint",
-    );
+    let parent = parent?;
 
-    TimeRange {
-        starts_at: parent.starts_at.expect(
-            "a task usable as a parent is always a root, and a root always carries its own \
-             dates — enforced by `chk_tasks_root_has_dates`",
-        ),
-        ends_at: parent
-            .ends_at
-            .expect("see the sibling `starts_at` panic: a root carries both or neither"),
+    // `chk_tasks_dates_both_or_neither` survives the migration, so the pair is
+    // still all-or-nothing; matching on both rather than unwrapping one from
+    // the other keeps that an assumption this function does not have to make.
+    match (parent.starts_at, parent.ends_at) {
+        (Some(starts_at), Some(ends_at)) => Some(TimeRange { starts_at, ends_at }),
+        _ => None,
     }
 }
 
@@ -173,6 +182,18 @@ where
             .await
     }
 
+    /// Creates a task from what the command declares, and nothing more.
+    ///
+    /// Two rules this used to apply are gone. It no longer refuses a root
+    /// without dates — an undated task is the normal state of work that is
+    /// agreed but not scheduled, and `chk_tasks_root_has_dates` was dropped
+    /// with it. And it no longer hard-codes `TaskStatus::Planned`: the status
+    /// comes from the command, defaulting to `Planned` when the caller says
+    /// nothing, so nothing written before the field existed changes behavior.
+    ///
+    /// What it does *not* do is infer either from the other. A command with
+    /// no dates does not become `Backlog`, and a command declaring `Backlog`
+    /// keeps whatever window it was given. See `TaskStatus::Backlog`.
     pub async fn create_task(&mut self, command: CreateTaskCommand) -> Result<Task, CoreError> {
         validate_title(&command.title)?;
         validate_text_field("task description", &command.description)?;
@@ -189,11 +210,7 @@ where
             }
             validate_parent_depth(Some(&parent))?;
         }
-        validate_task_dates(
-            command.parent_task_id.is_some(),
-            command.starts_at,
-            command.ends_at,
-        )?;
+        validate_task_dates(command.starts_at, command.ends_at)?;
 
         let (expenses_cents, expenses_label) =
             normalize_expenses(command.expenses_cents, command.expenses_label)?;
@@ -209,7 +226,13 @@ where
                 starts_at: command.starts_at,
                 ends_at: command.ends_at,
                 all_day: command.all_day,
-                status: crate::TaskStatus::Planned,
+                // Declared, never derived. An absent status is `Planned`,
+                // which is what every caller written before the field
+                // existed keeps getting; a task created with no dates does
+                // *not* become `Backlog` on that evidence alone, because
+                // "unscheduled" and "not started" are two different
+                // statements and only the caller knows which one it means.
+                status: command.status.unwrap_or(crate::TaskStatus::Planned),
                 blocks_availability: command.blocks_availability,
                 customer_id: command.customer_id,
                 customer_context_id: command.customer_context_id,
@@ -318,7 +341,7 @@ where
 
         let starts_at = command.starts_at.unwrap_or(task.starts_at);
         let ends_at = command.ends_at.unwrap_or(task.ends_at);
-        validate_task_dates(task.parent_task_id.is_some(), starts_at, ends_at)?;
+        validate_task_dates(starts_at, ends_at)?;
 
         task.title = title;
         task.description = description;
@@ -531,23 +554,23 @@ fn validate_title(title: &str) -> Result<(), CoreError> {
     Ok(())
 }
 
-/// Mirrors `chk_tasks_dates_both_or_neither`/`chk_tasks_root_has_dates`/
+/// Mirrors `chk_tasks_dates_both_or_neither` and
 /// `chk_tasks_ends_at_after_starts_at` in the domain, ahead of the trip to
 /// the database.
+///
+/// It used to mirror `chk_tasks_root_has_dates` too, and therefore needed to
+/// know whether the task had a parent. Both the constraint and the parameter
+/// are gone: an undated root is now legal, so nothing here depends on the
+/// task's place in the hierarchy. What is left constrains the coherence of
+/// the pair — both dates or neither, and in the right order — which holds
+/// identically for a scheduled task and for one sitting in the backlog.
 fn validate_task_dates(
-    has_parent: bool,
     starts_at: Option<DateTime<Utc>>,
     ends_at: Option<DateTime<Utc>>,
 ) -> Result<(), CoreError> {
     if starts_at.is_none() != ends_at.is_none() {
         return Err(CoreError::Conflict(
             "a task's starts_at and ends_at must be both set or both absent".to_owned(),
-        ));
-    }
-
-    if !has_parent && starts_at.is_none() {
-        return Err(CoreError::Conflict(
-            "a root task must carry its own starts_at/ends_at".to_owned(),
         ));
     }
 
@@ -654,10 +677,62 @@ mod tests {
         fn a_root_without_a_parent_uses_its_own_window() {
             let root = task(TaskId(Uuid::new_v4()), OrganizationId(Uuid::new_v4()));
 
-            let resolved = resolve_task_window(&root, None);
+            let resolved = resolve_task_window(&root, None).unwrap();
 
             assert_eq!(resolved.starts_at, root.starts_at.unwrap());
             assert_eq!(resolved.ends_at, root.ends_at.unwrap());
+        }
+
+        /// The state this workstream exists to make possible. It used to
+        /// panic, on the strength of a constraint that no longer exists.
+        #[test]
+        fn an_undated_root_has_no_window_at_all() {
+            let root = Task {
+                starts_at: None,
+                ends_at: None,
+                status: TaskStatus::Backlog,
+                ..task(TaskId(Uuid::new_v4()), OrganizationId(Uuid::new_v4()))
+            };
+
+            assert_eq!(resolve_task_window(&root, None), None);
+        }
+
+        /// `None` is returned, not a zero-length range at `now()` and not a
+        /// sentinel date: an absent window has to stay absent all the way to
+        /// its reader, or every consumer silently invents a schedule nobody
+        /// agreed to.
+        #[test]
+        fn an_undated_subtask_of_an_undated_parent_has_no_window_either() {
+            let organization_id = OrganizationId(Uuid::new_v4());
+            let parent = Task {
+                starts_at: None,
+                ends_at: None,
+                ..task(TaskId(Uuid::new_v4()), organization_id)
+            };
+            let subtask = Task {
+                parent_task_id: Some(parent.id),
+                starts_at: None,
+                ends_at: None,
+                ..task(TaskId(Uuid::new_v4()), organization_id)
+            };
+
+            assert_eq!(resolve_task_window(&subtask, Some(&parent)), None);
+        }
+
+        /// A subtask that inherits, called without its parent loaded. This
+        /// used to be the `.expect()` that fired; it is now indistinguishable
+        /// from "no window", which is the honest answer a caller holding no
+        /// parent can act on.
+        #[test]
+        fn an_inheriting_subtask_resolved_without_its_parent_has_no_window() {
+            let subtask = Task {
+                parent_task_id: Some(TaskId(Uuid::new_v4())),
+                starts_at: None,
+                ends_at: None,
+                ..task(TaskId(Uuid::new_v4()), OrganizationId(Uuid::new_v4()))
+            };
+
+            assert_eq!(resolve_task_window(&subtask, None), None);
         }
 
         #[test]
@@ -671,7 +746,7 @@ mod tests {
                 ..task(TaskId(Uuid::new_v4()), organization_id)
             };
 
-            let resolved = resolve_task_window(&subtask, Some(&parent));
+            let resolved = resolve_task_window(&subtask, Some(&parent)).unwrap();
 
             assert_eq!(resolved.starts_at, parent.starts_at.unwrap());
             assert_eq!(resolved.ends_at, parent.ends_at.unwrap());
@@ -691,7 +766,7 @@ mod tests {
                 ..task(TaskId(Uuid::new_v4()), organization_id)
             };
 
-            let resolved = resolve_task_window(&subtask, Some(&parent));
+            let resolved = resolve_task_window(&subtask, Some(&parent)).unwrap();
 
             assert_eq!(resolved.starts_at, own_starts_at);
             assert_eq!(resolved.ends_at, own_ends_at);
@@ -770,6 +845,7 @@ mod tests {
             starts_at: Some(now),
             ends_at: Some(now + chrono::Duration::hours(2)),
             all_day: false,
+            status: None,
             blocks_availability: true,
             customer_id: Some(CustomerId(Uuid::new_v4())),
             customer_context_id: Some(CustomerContextId(Uuid::new_v4())),
@@ -881,17 +957,78 @@ mod tests {
         assert!(matches!(err, CoreError::Conflict(_)));
     }
 
+    /// The inverse of the test this replaces. A root with no dates used to be
+    /// a `Conflict`; it is now the ordinary shape of anything in the backlog.
     #[tokio::test]
-    async fn create_task_rejects_a_root_without_dates() {
-        let mut service = service(MockTaskRepository::new(), MockMemberRepository::new());
+    async fn create_task_allows_a_root_without_dates() {
+        let mut task_repository = MockTaskRepository::new();
+        task_repository
+            .expect_insert()
+            .times(1)
+            .withf(|t| t.parent_task_id.is_none() && t.starts_at.is_none() && t.ends_at.is_none())
+            .returning(|t| {
+                let cloned = t.clone();
+                Box::pin(async move { Ok(cloned) })
+            });
+
+        let mut service = service(task_repository, MockMemberRepository::new());
 
         let mut command = create_command();
         command.starts_at = None;
         command.ends_at = None;
+        command.status = Some(TaskStatus::Backlog);
 
-        let err = service.create_task(command).await.unwrap_err();
+        let created = service.create_task(command).await.unwrap();
 
-        assert!(matches!(err, CoreError::Conflict(_)));
+        assert_eq!(created.status, TaskStatus::Backlog);
+        assert_eq!(created.starts_at, None);
+        assert_eq!(created.ends_at, None);
+    }
+
+    /// A status is written because the command carried it, never because the
+    /// dates suggested it: a task declared `Backlog` keeps the window it was
+    /// given.
+    #[tokio::test]
+    async fn create_task_writes_the_declared_status_even_with_a_window() {
+        let mut task_repository = MockTaskRepository::new();
+        task_repository.expect_insert().times(1).returning(|t| {
+            let cloned = t.clone();
+            Box::pin(async move { Ok(cloned) })
+        });
+
+        let mut service = service(task_repository, MockMemberRepository::new());
+
+        let mut command = create_command();
+        let starts_at = command.starts_at;
+        command.status = Some(TaskStatus::Backlog);
+
+        let created = service.create_task(command).await.unwrap();
+
+        assert_eq!(created.status, TaskStatus::Backlog);
+        assert_eq!(created.starts_at, starts_at);
+    }
+
+    /// The compatibility guarantee for every caller that predates the field:
+    /// an unset status still means `Planned`, and a dateless root does not
+    /// quietly become `Backlog` either.
+    #[tokio::test]
+    async fn create_task_defaults_to_planned_when_no_status_is_declared() {
+        let mut task_repository = MockTaskRepository::new();
+        task_repository.expect_insert().times(1).returning(|t| {
+            let cloned = t.clone();
+            Box::pin(async move { Ok(cloned) })
+        });
+
+        let mut service = service(task_repository, MockMemberRepository::new());
+
+        let mut command = create_command();
+        command.starts_at = None;
+        command.ends_at = None;
+        assert!(command.status.is_none());
+
+        let created = service.create_task(command).await.unwrap();
+
+        assert_eq!(created.status, TaskStatus::Planned);
     }
 
     #[tokio::test]
@@ -1074,6 +1211,125 @@ mod tests {
         assert_eq!(updated.ends_at, Some(new_ends_at));
     }
 
+    // -- status and window are orthogonal, in both directions ---------------
+    //
+    // The pair below is the one most likely to be broken silently by a later
+    // convenience ("a backlog task obviously has no dates", "setting dates
+    // obviously schedules it"). Each direction gets its own test so a
+    // regression names which way the leak went.
+
+    /// Direction one: a status-only `PATCH` leaves the window byte-identical.
+    /// Moving a scheduled task into the backlog must not erase the dates
+    /// somebody agreed with a customer.
+    #[tokio::test]
+    async fn patch_task_setting_only_the_status_leaves_the_window_untouched() {
+        let id = TaskId(Uuid::new_v4());
+        let organization_id = OrganizationId(Uuid::new_v4());
+        let existing = task(id, organization_id);
+        let original_starts_at = existing.starts_at;
+        let original_ends_at = existing.ends_at;
+
+        let mut task_repository = MockTaskRepository::new();
+        task_repository
+            .expect_find_by_id()
+            .with(eq(id))
+            .returning(move |_| {
+                let existing = existing.clone();
+                Box::pin(async move { Ok(Some(existing)) })
+            });
+        task_repository.expect_update().returning(|t| {
+            let cloned = t.clone();
+            Box::pin(async move { Ok(cloned) })
+        });
+
+        let mut service = service(task_repository, MockMemberRepository::new());
+
+        let mut command = PatchTaskCommand::new(id, authz::Subject::system());
+        command.status = Some(TaskStatus::Backlog);
+
+        let updated = service.patch_task(command).await.unwrap();
+
+        assert_eq!(updated.status, TaskStatus::Backlog);
+        assert_eq!(updated.starts_at, original_starts_at);
+        assert_eq!(updated.ends_at, original_ends_at);
+    }
+
+    /// Direction two: a window-only `PATCH` leaves the status alone — both
+    /// when dates are set on a backlog task (dragging it onto a calendar does
+    /// not promote it) and when they are cleared (unscheduling does not demote
+    /// it).
+    #[tokio::test]
+    async fn patch_task_setting_only_the_window_leaves_the_status_untouched() {
+        let organization_id = OrganizationId(Uuid::new_v4());
+
+        // Setting a window on a backlog task.
+        let scheduled_id = TaskId(Uuid::new_v4());
+        let backlog = Task {
+            starts_at: None,
+            ends_at: None,
+            status: TaskStatus::Backlog,
+            ..task(scheduled_id, organization_id)
+        };
+        let new_starts_at = Utc::now();
+        let new_ends_at = new_starts_at + chrono::Duration::hours(3);
+
+        let mut task_repository = MockTaskRepository::new();
+        task_repository
+            .expect_find_by_id()
+            .with(eq(scheduled_id))
+            .returning(move |_| {
+                let backlog = backlog.clone();
+                Box::pin(async move { Ok(Some(backlog)) })
+            });
+        task_repository.expect_update().returning(|t| {
+            let cloned = t.clone();
+            Box::pin(async move { Ok(cloned) })
+        });
+
+        let mut scheduling = service(task_repository, MockMemberRepository::new());
+
+        let mut command = PatchTaskCommand::new(scheduled_id, authz::Subject::system());
+        command.starts_at = Some(Some(new_starts_at));
+        command.ends_at = Some(Some(new_ends_at));
+
+        let updated = scheduling.patch_task(command).await.unwrap();
+
+        assert_eq!(updated.status, TaskStatus::Backlog);
+        assert_eq!(updated.starts_at, Some(new_starts_at));
+
+        // Clearing the window of an in-progress task.
+        let cleared_id = TaskId(Uuid::new_v4());
+        let in_progress = Task {
+            status: TaskStatus::InProgress,
+            ..task(cleared_id, organization_id)
+        };
+
+        let mut task_repository = MockTaskRepository::new();
+        task_repository
+            .expect_find_by_id()
+            .with(eq(cleared_id))
+            .returning(move |_| {
+                let in_progress = in_progress.clone();
+                Box::pin(async move { Ok(Some(in_progress)) })
+            });
+        task_repository.expect_update().returning(|t| {
+            let cloned = t.clone();
+            Box::pin(async move { Ok(cloned) })
+        });
+
+        let mut unscheduling = service(task_repository, MockMemberRepository::new());
+
+        let mut command = PatchTaskCommand::new(cleared_id, authz::Subject::system());
+        command.starts_at = Some(None);
+        command.ends_at = Some(None);
+
+        let updated = unscheduling.patch_task(command).await.unwrap();
+
+        assert_eq!(updated.status, TaskStatus::InProgress);
+        assert_eq!(updated.starts_at, None);
+        assert_eq!(updated.ends_at, None);
+    }
+
     #[tokio::test]
     async fn patch_task_rejects_ends_at_before_merged_starts_at() {
         let id = TaskId(Uuid::new_v4());
@@ -1230,11 +1486,16 @@ mod tests {
         assert!(updated.ends_at.is_none());
     }
 
+    /// The inverse of the test this replaces, which asserted a `Conflict`.
+    /// Unscheduling a root is the ordinary way a task goes back to the
+    /// backlog, so it has to be allowed — and it clears the window only,
+    /// never the status.
     #[tokio::test]
-    async fn patch_task_rejects_clearing_dates_on_a_root() {
+    async fn patch_task_allows_clearing_the_dates_of_a_root() {
         let id = TaskId(Uuid::new_v4());
         let organization_id = OrganizationId(Uuid::new_v4());
         let existing = task(id, organization_id);
+        assert!(existing.parent_task_id.is_none());
 
         let mut task_repository = MockTaskRepository::new();
         task_repository
@@ -1244,6 +1505,13 @@ mod tests {
                 let existing = existing.clone();
                 Box::pin(async move { Ok(Some(existing)) })
             });
+        task_repository
+            .expect_update()
+            .withf(|t| t.parent_task_id.is_none() && t.starts_at.is_none() && t.ends_at.is_none())
+            .returning(|t| {
+                let cloned = t.clone();
+                Box::pin(async move { Ok(cloned) })
+            });
 
         let mut service = service(task_repository, MockMemberRepository::new());
 
@@ -1251,9 +1519,11 @@ mod tests {
         command.starts_at = Some(None);
         command.ends_at = Some(None);
 
-        let err = service.patch_task(command).await.unwrap_err();
+        let updated = service.patch_task(command).await.unwrap();
 
-        assert!(matches!(err, CoreError::Conflict(_)));
+        assert_eq!(updated.starts_at, None);
+        assert_eq!(updated.ends_at, None);
+        assert_eq!(updated.status, TaskStatus::Planned);
     }
 
     #[tokio::test]
@@ -1451,8 +1721,14 @@ mod tests {
         assert_eq!(updated.assignments.len(), 1);
     }
 
+    /// The inverse of the test this replaces. Detaching a dateless subtask
+    /// used to be a `Conflict`, because the result would have been a root
+    /// with no dates and `chk_tasks_root_has_dates` forbade that. The
+    /// constraint is gone and so is the rejection: the result is an ordinary
+    /// undated root, and its window stays absent rather than being
+    /// back-filled from the parent it just left.
     #[tokio::test]
-    async fn patch_task_rejects_clearing_the_parent_of_a_dateless_subtask() {
+    async fn patch_task_allows_detaching_a_dateless_subtask_into_an_undated_root() {
         let id = TaskId(Uuid::new_v4());
         let organization_id = OrganizationId(Uuid::new_v4());
         let parent_id = TaskId(Uuid::new_v4());
@@ -1471,22 +1747,24 @@ mod tests {
                 let existing = existing.clone();
                 Box::pin(async move { Ok(Some(existing)) })
             });
-        // No `expect_update`: turning this subtask into a dateless root must
-        // be rejected before any write is attempted.
+        task_repository
+            .expect_update()
+            .withf(|t| t.parent_task_id.is_none() && t.starts_at.is_none() && t.ends_at.is_none())
+            .returning(|t| {
+                let cloned = t.clone();
+                Box::pin(async move { Ok(cloned) })
+            });
 
         let mut service = service(task_repository, MockMemberRepository::new());
 
         let mut command = PatchTaskCommand::new(id, authz::Subject::system());
         command.parent_task_id = Some(None);
 
-        let err = service.patch_task(command).await.unwrap_err();
+        let updated = service.patch_task(command).await.unwrap();
 
-        assert!(
-            matches!(err, CoreError::Conflict(_)),
-            "a root without its own dates must be rejected, even when the \
-             dates were already absent before the PATCH — clearing the \
-             parent is what turns the missing dates into a violation"
-        );
+        assert_eq!(updated.parent_task_id, None);
+        assert_eq!(updated.starts_at, None);
+        assert_eq!(updated.ends_at, None);
     }
 
     #[tokio::test]

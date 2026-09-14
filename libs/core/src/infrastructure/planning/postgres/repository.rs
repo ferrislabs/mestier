@@ -57,12 +57,24 @@ impl<'tx> PlanningRepository for PgPlanningRepository<'tx> {
         // `resolve_task_window`'s own branch exactly: the task's own dates
         // when it has them, the parent's otherwise. This is safe without
         // walking further up the tree because the domain caps nesting at
-        // two levels (`validate_parent_depth`) — a row usable as `p` here
-        // is always a root, and a root always carries its own dates
-        // (`chk_tasks_root_has_dates`). A soft-deleted parent does not
+        // two levels (`validate_parent_depth`) — a row usable as `p` here is
+        // always a root, so there is never a third level whose dates the
+        // `COALESCE` would miss. A root no longer necessarily carries dates
+        // of its own (`chk_tasks_root_has_dates` is dropped as of
+        // `20260914000001_add_backlog_status_and_undated_tasks`), and that
+        // needs no change here: the `WHERE` below compares the COALESCEd
+        // value, and `NULL < $3` is `NULL`, never `TRUE`, so an undated task
+        // — root or subtask — is simply absent from the window instead of
+        // resolving to an invented one. A soft-deleted parent does not
         // resolve (`p.deleted_at IS NULL`), so an orphaned dateless subtask
-        // is excluded rather than resolving to a dangling window. See
+        // is excluded the same way. See
         // `PlanningRepository::list_tasks_in_window`'s doc comment.
+        //
+        // WS2: "absent from the planning window" is the behavior this
+        // workstream preserves, not a decision it makes. Whether an undated
+        // task should surface somewhere in the planning read model (a
+        // backlog lane beside the calendar, say) is WS2's question, not
+        // this query's.
         let task_rows = sqlx::query_as!(
             PlanningTaskRow,
             r#"

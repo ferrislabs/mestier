@@ -21,11 +21,22 @@ pub struct CreateTaskCommand {
     pub title: String,
     pub description: Option<String>,
     /// `None` on a subtask means "inherit the parent's window" — see
-    /// `service::resolve_task_window`. A root must carry both, or neither
-    /// (`service::TaskService::create_task` rejects a bare root).
+    /// `service::resolve_task_window`. `None` on a root means the task is not
+    /// scheduled at all, which is allowed: `chk_tasks_root_has_dates` and the
+    /// matching check in `service::TaskService::create_task` are both gone.
+    /// Both fields move together — one without the other is still refused.
     pub starts_at: Option<DateTime<Utc>>,
     pub ends_at: Option<DateTime<Utc>>,
     pub all_day: bool,
+    /// Declared here, at creation, never guessed — the same register as
+    /// `blocks_availability` below, and for the same reason: a status is
+    /// never inferred from the window. `None` means `TaskStatus::Planned`,
+    /// which is what every caller that predates this field gets, so their
+    /// behavior is unchanged. Passing `Some(TaskStatus::Backlog)` with dates,
+    /// or `Some(TaskStatus::Planned)` without any, is legal and written
+    /// through as asked — see `TaskStatus::Backlog`'s own doc on why the two
+    /// axes stay independent.
+    pub status: Option<TaskStatus>,
     /// Declared here, at creation, never guessed — see `Task::blocks_availability`.
     pub blocks_availability: bool,
     /// Both present or both absent — a task with a customer is a chantier.

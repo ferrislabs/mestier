@@ -114,6 +114,7 @@ mod tests {
             starts_at: Some(now),
             ends_at: Some(now + Duration::hours(2)),
             all_day: false,
+            status: None,
             blocks_availability: true,
             customer_id: None,
             customer_context_id: None,

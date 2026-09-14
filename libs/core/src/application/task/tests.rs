@@ -213,6 +213,7 @@ mod tests {
             starts_at: Some(now),
             ends_at: Some(now + Duration::hours(2)),
             all_day: false,
+            status: None,
             blocks_availability: true,
             customer_id: Some(fixture.customer_id),
             customer_context_id: Some(fixture.customer_context_id),

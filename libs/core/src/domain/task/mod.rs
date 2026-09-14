@@ -68,6 +68,21 @@ impl Display for TaskAssignmentId {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum TaskStatus {
+    /// Work that is agreed but not scheduled. First in declaration order
+    /// because it is the earliest point of the progression, and because the
+    /// `task_status` enum in PostgreSQL carries `'BACKLOG'` `BEFORE
+    /// 'PLANNED'` — the two orders are kept in step so an `ORDER BY status`
+    /// reads the same from either side.
+    ///
+    /// Orthogonal to the window, deliberately and in both directions: a
+    /// backlog task usually has no dates, but a status is never derived from
+    /// a window and a window is never derived from a status. Dragging a
+    /// backlog task onto a calendar gives it dates and leaves it in
+    /// `Backlog` until somebody says otherwise; clearing a planned task's
+    /// dates leaves it `Planned`. The alternative — deriving one from the
+    /// other — means a date affordance silently rewrites the column the user
+    /// is looking at.
+    Backlog,
     Planned,
     InProgress,
     Done,
@@ -77,6 +92,7 @@ pub enum TaskStatus {
 impl TaskStatus {
     pub fn as_str(self) -> &'static str {
         match self {
+            Self::Backlog => "BACKLOG",
             Self::Planned => "PLANNED",
             Self::InProgress => "IN_PROGRESS",
             Self::Done => "DONE",
@@ -96,6 +112,7 @@ impl FromStr for TaskStatus {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s {
+            "BACKLOG" => Ok(Self::Backlog),
             "PLANNED" => Ok(Self::Planned),
             "IN_PROGRESS" => Ok(Self::InProgress),
             "DONE" => Ok(Self::Done),
@@ -133,10 +150,19 @@ pub struct TaskAssignment {
 /// The schema is recursive (`parent_task_id` can itself point at a task with
 /// a parent), but the domain caps the hierarchy at two levels — see
 /// [`service::validate_parent_depth`]. `starts_at`/`ends_at` are `None` on a
-/// subtask that inherits its parent's window; [`service::resolve_task_window`]
-/// resolves the effective window at read time. A root task always carries
-/// its own dates (enforced by the `chk_tasks_root_has_dates` constraint and,
-/// redundantly, by [`service::TaskService::create_task`]).
+/// subtask that inherits its parent's window, and on any task — root
+/// included — that is not scheduled at all; [`service::resolve_task_window`]
+/// resolves the effective window at read time and returns `None` when there
+/// is none to resolve.
+///
+/// A root used to be required to carry its own dates, by
+/// `chk_tasks_root_has_dates` and redundantly by
+/// [`service::TaskService::create_task`]. Both are gone: an undated task is
+/// the normal state of everything sitting in [`TaskStatus::Backlog`], and of
+/// anything else somebody unscheduled. What survives is the coherence of the
+/// pair — both dates or neither, and `ends_at` after `starts_at` —
+/// still enforced by `chk_tasks_dates_both_or_neither` and
+/// `chk_tasks_ends_at_after_starts_at`.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Task {
     pub id: TaskId,
@@ -231,6 +257,10 @@ mod tests {
     #[test]
     fn task_status_parses_known_values() {
         assert_eq!(
+            "BACKLOG".parse::<TaskStatus>().unwrap(),
+            TaskStatus::Backlog
+        );
+        assert_eq!(
             "PLANNED".parse::<TaskStatus>().unwrap(),
             TaskStatus::Planned
         );
@@ -253,6 +283,7 @@ mod tests {
     #[test]
     fn task_status_round_trips_through_as_str() {
         for status in [
+            TaskStatus::Backlog,
             TaskStatus::Planned,
             TaskStatus::InProgress,
             TaskStatus::Done,
