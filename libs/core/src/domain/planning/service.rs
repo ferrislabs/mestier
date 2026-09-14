@@ -35,6 +35,18 @@ use crate::{
 /// say) — they are skipped entirely: only a task that carries
 /// `blocks_availability = true` can produce an `OverlappingTask` conflict
 /// (invariant 9).
+///
+/// `busy` may also contain an **undated** task, and one produces no conflict
+/// at all. That is the only filter this function applies to a window: an
+/// undated task is absent because it has no window to overlap with, never
+/// because of what column it sits in. A [`crate::TaskStatus::Backlog`] task that
+/// *does* carry a window is treated exactly like any other dated task and
+/// conflicts like one when `blocks_availability` is set — dating something is
+/// committing time to it, whatever the work's progress, and
+/// `blocks_availability` stays the only switch deciding whether that time
+/// produces a conflict. Reading the status as a visibility filter ("a backlog
+/// item is not really scheduled, so it should not block anyone") is the bug
+/// this orthogonality exists to prevent.
 pub fn detect_conflicts(
     window: TimeRange,
     absences: &[Absence],
@@ -67,6 +79,12 @@ pub fn detect_conflicts(
             continue;
         }
 
+        // An undated task occupies no time, so it can collide with nothing.
+        // Skipped rather than resolved against some stand-in window: `now()`,
+        // the parent's, or a zero-length range are all indistinguishable
+        // downstream from a window somebody actually agreed to, and a
+        // conflict reported against an invented one is a refusal the user
+        // cannot trace back to anything they did.
         let (Some(starts_at), Some(ends_at)) = (task.starts_at, task.ends_at) else {
             continue;
         };
@@ -479,14 +497,23 @@ fn build_entries(tasks: &[PlanningTask], absences: &[Absence]) -> Vec<PlanningEn
 
     for planning_task in tasks {
         let task = &planning_task.task;
-        // `PlanningRepository::list_tasks_in_window` resolves a dateless
-        // subtask's window to its parent's before returning it (see that
-        // trait method's doc comment and `resolve_task_window`), so both
-        // fields are `Some` in practice for every row reaching this point.
-        // Skipped defensively rather than trusted blindly: a future
-        // repository implementation, or a directly-constructed
-        // `PlanningTask` in a test, could still hand back an unresolved
-        // one.
+        // An undated task gets no entry, so it lands in no cell of the grid.
+        // This is the rule, not a fallback: a grid cell is a claim that
+        // somebody is booked at that hour, and there is no honest hour to
+        // put an unscheduled task in. Nothing here substitutes a window —
+        // not `now()`, not the parent's, not a zero-length range.
+        //
+        // `PlanningRepository::list_tasks_in_window` already excludes such a
+        // task at the source (see that trait method's doc comment), so in
+        // production this branch is the second of two agreeing answers rather
+        // than the only one. It is kept because it is where the rule is
+        // legible: a different repository implementation, or a
+        // directly-constructed `PlanningTask`, must get the same answer.
+        //
+        // The filter is the window and only the window. `task.status` is
+        // deliberately not consulted: a `TaskStatus::Backlog` task carrying
+        // a window is an ordinary dated task and appears in the grid like
+        // any other.
         let (Some(starts_at), Some(ends_at)) = (task.starts_at, task.ends_at) else {
             continue;
         };
@@ -829,10 +856,12 @@ mod tests {
     }
 
     #[test]
-    fn a_task_with_no_dates_of_its_own_is_skipped_rather_than_panicking() {
-        // A subtask inheriting its parent's window carries `None` for both
-        // — `detect_conflicts` must not choke on it (resolving it is
-        // `resolve_task_window`'s job, upstream of this function).
+    fn an_unresolved_subtask_window_produces_no_conflict() {
+        // A subtask whose window could not be resolved (its parent is gone,
+        // or nothing resolved it yet) carries `None` for both. It occupies no
+        // time, so it collides with nothing — `detect_conflicts` neither
+        // chokes on it nor resolves it against a stand-in window of its own
+        // invention.
         let win = window(2026, 8, 10, 9, 12);
         let inheriting_subtask = Task {
             parent_task_id: Some(TaskId(Uuid::new_v4())),
@@ -846,6 +875,96 @@ mod tests {
             detect_conflicts(win, &[], &work_time, &[inheriting_subtask], Europe::Paris);
 
         assert!(conflicts.is_empty());
+    }
+
+    // -- detect_conflicts: status and dates are orthogonal -------------------
+
+    /// The half of the orthogonality rule intuition gets wrong. A `BACKLOG`
+    /// task that carries a window has had time committed to it, whatever the
+    /// work's progress, so it blocks exactly like a `PLANNED` one does.
+    /// Reading the status as a visibility filter would silently free up an
+    /// hour somebody has already promised.
+    #[test]
+    fn a_dated_backlog_task_that_blocks_availability_is_a_conflict() {
+        let win = window(2026, 8, 10, 9, 12);
+        let busy = vec![Task {
+            status: TaskStatus::Backlog,
+            blocks_availability: true,
+            ..task(utc(2026, 8, 10, 10, 0), utc(2026, 8, 10, 11, 0))
+        }];
+        let work_time = BTreeMap::from([(date(2026, 8, 10), vec![interval(0, 1440)])]);
+
+        let conflicts = detect_conflicts(win, &[], &work_time, &busy, Europe::Paris);
+
+        assert_eq!(
+            conflicts.len(),
+            1,
+            "a dated task conflicts on its window, never on its status — \
+             `BACKLOG` is not a visibility filter"
+        );
+        assert!(matches!(
+            conflicts[0].kind,
+            ConflictKind::OverlappingTask { .. }
+        ));
+    }
+
+    /// The other half: an undated task is absent because it has no window,
+    /// and that holds whatever column it sits in — `IN_PROGRESS` included.
+    /// The status never puts a task on the clock and never takes it off.
+    #[test]
+    fn an_undated_task_is_no_conflict_whatever_its_status() {
+        let win = window(2026, 8, 10, 9, 12);
+        let work_time = BTreeMap::from([(date(2026, 8, 10), vec![interval(0, 1440)])]);
+
+        for status in [
+            TaskStatus::Backlog,
+            TaskStatus::Planned,
+            TaskStatus::InProgress,
+            TaskStatus::Done,
+        ] {
+            let busy = vec![Task {
+                status,
+                blocks_availability: true,
+                starts_at: None,
+                ends_at: None,
+                ..task(utc(2026, 8, 10, 10, 0), utc(2026, 8, 10, 11, 0))
+            }];
+
+            let conflicts = detect_conflicts(win, &[], &work_time, &busy, Europe::Paris);
+
+            assert!(
+                conflicts.is_empty(),
+                "an undated `{status:?}` task occupies no time and can collide with nothing"
+            );
+        }
+    }
+
+    /// Skipping an undated task must not short-circuit the loop: the dated
+    /// task sitting behind it in `busy` still reports its own conflict. An
+    /// undated task never contributes, and never suppresses what another
+    /// task legitimately contributes.
+    #[test]
+    fn an_undated_task_does_not_suppress_a_dated_task_s_conflict() {
+        let win = window(2026, 8, 10, 9, 12);
+        let dated = task(utc(2026, 8, 10, 10, 0), utc(2026, 8, 10, 11, 0));
+        let dated_id = dated.id;
+        let busy = vec![
+            Task {
+                starts_at: None,
+                ends_at: None,
+                ..task(utc(2026, 8, 10, 10, 0), utc(2026, 8, 10, 11, 0))
+            },
+            dated,
+        ];
+        let work_time = BTreeMap::from([(date(2026, 8, 10), vec![interval(0, 1440)])]);
+
+        let conflicts = detect_conflicts(win, &[], &work_time, &busy, Europe::Paris);
+
+        assert_eq!(conflicts.len(), 1);
+        assert!(matches!(
+            conflicts[0].kind,
+            ConflictKind::OverlappingTask { task_id } if task_id == dated_id
+        ));
     }
 
     // -- detect_conflicts: multiple conflicts --------------------------------
@@ -1197,6 +1316,17 @@ mod tests {
         ));
     }
 
+    /// One grid row, so the tests below can say what they are about instead
+    /// of restating the enrichment fields they do not care about.
+    fn grid_row(task: Task) -> PlanningTask {
+        PlanningTask {
+            task,
+            customer_name: None,
+            context_label: None,
+            child_count: 0,
+        }
+    }
+
     #[test]
     fn build_entries_skips_a_task_with_no_dates_of_its_own() {
         let inheriting_subtask = Task {
@@ -1205,16 +1335,86 @@ mod tests {
             ends_at: None,
             ..task(utc(2026, 8, 10, 8, 0), utc(2026, 8, 10, 12, 0))
         };
-        let planning_tasks = vec![PlanningTask {
-            task: inheriting_subtask,
-            customer_name: None,
-            context_label: None,
-            child_count: 0,
-        }];
 
-        let entries = build_entries(&planning_tasks, &[]);
+        let entries = build_entries(&[grid_row(inheriting_subtask)], &[]);
 
         assert!(entries.is_empty());
+    }
+
+    /// The grid's filter is the window and nothing else: an undated task
+    /// lands in no cell whatever column it sits in, `IN_PROGRESS` included.
+    /// Nothing here invents a window for it — not `now()`, not a parent's,
+    /// not a zero-length range.
+    #[test]
+    fn build_entries_skips_an_undated_task_whatever_its_status() {
+        for status in [
+            TaskStatus::Backlog,
+            TaskStatus::Planned,
+            TaskStatus::InProgress,
+            TaskStatus::Done,
+        ] {
+            let undated = Task {
+                status,
+                starts_at: None,
+                ends_at: None,
+                ..task(utc(2026, 8, 10, 8, 0), utc(2026, 8, 10, 12, 0))
+            };
+
+            let entries = build_entries(&[grid_row(undated)], &[]);
+
+            assert!(
+                entries.is_empty(),
+                "an undated `{status:?}` task belongs in no cell of a grid of hours"
+            );
+        }
+    }
+
+    /// The orthogonality rule's other half, on the read side: a `BACKLOG`
+    /// task that carries a window is an ordinary dated task and shows up in
+    /// the grid exactly like a `PLANNED` one. The status is not a visibility
+    /// filter — it travels onto the entry untouched, for the client to render
+    /// however it likes.
+    #[test]
+    fn build_entries_puts_a_dated_backlog_task_in_the_grid() {
+        let dated_backlog = Task {
+            status: TaskStatus::Backlog,
+            ..task(utc(2026, 8, 10, 8, 0), utc(2026, 8, 10, 12, 0))
+        };
+
+        let entries = build_entries(&[grid_row(dated_backlog)], &[]);
+
+        assert_eq!(entries.len(), 1);
+        assert!(matches!(
+            &entries[0],
+            PlanningEntry::Task {
+                status: TaskStatus::Backlog,
+                starts_at,
+                ends_at,
+                ..
+            } if *starts_at == utc(2026, 8, 10, 8, 0) && *ends_at == utc(2026, 8, 10, 12, 0)
+        ));
+    }
+
+    /// Skipping an undated row must not cost the dated row beside it its
+    /// entry: an undated task never contributes, and never suppresses what
+    /// another task legitimately contributes.
+    #[test]
+    fn build_entries_skips_an_undated_task_without_dropping_the_dated_one_beside_it() {
+        let undated = Task {
+            starts_at: None,
+            ends_at: None,
+            ..task(utc(2026, 8, 10, 8, 0), utc(2026, 8, 10, 12, 0))
+        };
+        let dated = task(utc(2026, 8, 10, 14, 0), utc(2026, 8, 10, 16, 0));
+        let dated_id = dated.id;
+
+        let entries = build_entries(&[grid_row(undated), grid_row(dated)], &[]);
+
+        assert_eq!(entries.len(), 1);
+        assert!(matches!(
+            &entries[0],
+            PlanningEntry::Task { id, .. } if *id == dated_id
+        ));
     }
 
     #[test]

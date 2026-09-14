@@ -62,19 +62,26 @@ impl<'tx> PlanningRepository for PgPlanningRepository<'tx> {
         // `COALESCE` would miss. A root no longer necessarily carries dates
         // of its own (`chk_tasks_root_has_dates` is dropped as of
         // `20260914000001_add_backlog_status_and_undated_tasks`), and that
-        // needs no change here: the `WHERE` below compares the COALESCEd
-        // value, and `NULL < $3` is `NULL`, never `TRUE`, so an undated task
-        // — root or subtask — is simply absent from the window instead of
-        // resolving to an invented one. A soft-deleted parent does not
-        // resolve (`p.deleted_at IS NULL`), so an orphaned dateless subtask
-        // is excluded the same way. See
-        // `PlanningRepository::list_tasks_in_window`'s doc comment.
+        // needs no change to the `COALESCE` itself: an undated task — root or
+        // subtask — resolves to a `NULL` window rather than to an invented
+        // one. A soft-deleted parent does not resolve (`p.deleted_at IS
+        // NULL`), so an orphaned dateless subtask resolves to `NULL` the same
+        // way. See `PlanningRepository::list_tasks_in_window`'s doc comment.
         //
-        // WS2: "absent from the planning window" is the behavior this
-        // workstream preserves, not a decision it makes. Whether an undated
-        // task should surface somewhere in the planning read model (a
-        // backlog lane beside the calendar, say) is WS2's question, not
-        // this query's.
+        // **An undated task is absent from the planning grid.** The planning
+        // read model answers a question about hours — who is on what, when —
+        // and a task nobody has committed a time to has no honest answer to
+        // give it. The alternative, surfacing it against a stand-in window,
+        // would put it in a cell somebody would then read as a commitment.
+        // Asking for undated work is a different question with a different
+        // answer shape (a backlog lane, listed rather than placed); it is the
+        // task list's job, not this query's.
+        //
+        // The filter is the window and only the window: `t.status` is
+        // deliberately absent from the `WHERE` below. A `BACKLOG` task that
+        // carries dates appears in the grid exactly like a `PLANNED` one —
+        // dating something is committing time to it, whatever the work's
+        // progress.
         let task_rows = sqlx::query_as!(
             PlanningTaskRow,
             r#"
@@ -114,10 +121,21 @@ impl<'tx> PlanningRepository for PgPlanningRepository<'tx> {
                 GROUP BY parent_task_id
             ) child_counts ON child_counts.parent_task_id = t.id
             WHERE t.org_id = $1 AND t.deleted_at IS NULL
-              -- NULL < / > NULL is NULL, never TRUE, so a dateless subtask
-              -- whose parent is missing or itself out of window is still
-              -- excluded here — only now via the resolved (COALESCEd)
-              -- window rather than the task's own, possibly-absent one.
+              -- Spelled out rather than left to three-valued logic. The two
+              -- comparisons below already drop an unresolved window on their
+              -- own (`NULL < $3` is `NULL`, never `TRUE`), so this line
+              -- changes no row — it changes who can see the intent. Excluding
+              -- undated work from a grid of hours is a decision; leaving it to
+              -- a side effect of `NULL` semantics makes it look like one
+              -- nobody took, and invites the next editor to "fix" it with a
+              -- `COALESCE(..., now())` that would put an unscheduled task on
+              -- somebody's calendar.
+              --
+              -- One check covers both ends: `chk_tasks_dates_both_or_neither`
+              -- keeps a task's dates coherent, and the parent's are coherent
+              -- for the same reason, so a resolved `starts_at` implies a
+              -- resolved `ends_at`.
+              AND COALESCE(t.starts_at, p.starts_at) IS NOT NULL
               AND COALESCE(t.starts_at, p.starts_at) < $3
               AND COALESCE(t.ends_at, p.ends_at) > $2
             ORDER BY COALESCE(t.starts_at, p.starts_at) ASC, t.id ASC
@@ -141,6 +159,10 @@ impl<'tx> PlanningRepository for PgPlanningRepository<'tx> {
               -- Same resolved-window predicate as above, kept in sync: an
               -- assignment must only be attached to a task that itself made
               -- the cut, whether that task's window is its own or inherited.
+              -- The `IS NOT NULL` is part of "the same predicate": an
+              -- assignment on an undated task is an assignment to nothing in
+              -- particular, and it drops out here with the task it belongs to.
+              AND COALESCE(t.starts_at, p.starts_at) IS NOT NULL
               AND COALESCE(t.starts_at, p.starts_at) < $3
               AND COALESCE(t.ends_at, p.ends_at) > $2
             ORDER BY a.created_at ASC, a.id ASC

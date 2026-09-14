@@ -85,6 +85,16 @@ pub struct PlannedAssignment {
     /// The task's effective window: its own, or its parent's when a subtask
     /// inherits it. Resolved by the adapter in SQL, so the calculation never
     /// walks the hierarchy.
+    ///
+    /// Not optional, and that is a statement rather than an oversight: since
+    /// #489 a [`crate::Task`] may carry no window at all, and such a task has
+    /// no place in a report about a period. The adapter excludes it
+    /// explicitly (`starts_at IS NOT NULL` in
+    /// `PgProfitabilityRepository::load`) instead of letting it through as an
+    /// assignment with invented hours, so an undated task never becomes a
+    /// `PlannedAssignment` in the first place. Widening these two to
+    /// `Option` would only move the same exclusion one layer later and invite
+    /// somebody to fill the gap with a default.
     pub starts_at: DateTime<Utc>,
     pub ends_at: DateTime<Utc>,
     /// An all-day task has no clock window to measure. Its cost comes from this

@@ -224,6 +224,14 @@ fn cost_of_assignment(
 }
 
 /// A stretch of real time somebody is booked for.
+///
+/// Every span here came from a window somebody agreed to. Nothing in this
+/// module manufactures one: an assignment that names no stretch of real time
+/// produces an empty span list and costs nothing, and there is deliberately
+/// no path that turns an absent window into `now()`, into a parent's hours,
+/// or into a zero-length range. A minute counted here is a minute somebody
+/// will be invoiced for, and an invented one is indistinguishable from a real
+/// one by the time it reaches the report.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 struct Span {
     starts_at: DateTime<Utc>,
@@ -373,6 +381,14 @@ fn slot_span(date: NaiveDate, interval: MinuteInterval, timezone: Tz) -> Option<
 
 /// A task straddling the period boundary contributes only the minutes inside
 /// it, so consecutive periods add up to the whole task and never double it.
+///
+/// Returning `None` is how a row leaves the calculation without leaving a
+/// hole in it: [`project_profitability`] and [`member_profitability`] both
+/// skip an assignment whose span list came back empty, *before* reading its
+/// cost, so such a row adds no minutes, adds no cost, and never reaches
+/// `members_without_rate` to withhold a margin its neighbours earned. That
+/// ordering is what makes "contributes nothing" mean nothing rather than
+/// "suppresses everything".
 fn clip(span: Span, period: ReportPeriod) -> Option<Span> {
     let starts_at = span.starts_at.max(period.from);
     let ends_at = span.ends_at.min(period.to);
@@ -999,6 +1015,54 @@ mod tests {
             "nothing is planned against a week this person does not have"
         );
         assert_eq!(project.labour_cost_cents, 0);
+    }
+
+    /// The second half of "an undated task contributes nothing": it must not
+    /// take anything away either. The rateless all-day row here contributes
+    /// no span, so it is skipped before its missing rate is ever read — the
+    /// dated row beside it keeps its cost, its colleague stays out of
+    /// `members_without_rate`, and the margin is still stated instead of
+    /// being withheld by a row that was never in the period.
+    #[test]
+    fn a_row_contributing_no_time_costs_nothing_and_suppresses_nothing() {
+        let dated = assignment(1, Some(3_000));
+        let mut contributes_nothing = assignment(2, None);
+        contributes_nothing.all_day = true;
+        contributes_nothing.starts_at = monday(0, 0);
+        contributes_nothing.ends_at = monday(0, 0) + Duration::days(1);
+
+        let report = build_report(
+            facts(
+                vec![contributes_nothing, dated],
+                vec![project(Some(20_000), false)],
+            ),
+            // No rhythm and no slot: the all-day row expands to no span at
+            // all, the same empty answer an undated task gives.
+            WorkTime::default(),
+            june(),
+        );
+        let project = only_project(&report);
+
+        assert_eq!(
+            project.labour_cost_cents, 6_000,
+            "two hours at 30 €/h — exactly the dated row's cost, no more and no less"
+        );
+        assert_eq!(project.planned_minutes, 120);
+        assert!(
+            project.members_without_rate.is_empty(),
+            "a row that contributes no time has no rate to be missing: naming its \
+             member here would withhold a margin nobody's hours are unpriced in"
+        );
+        assert_eq!(
+            project.margin_cents,
+            Some(20_000 - 6_000),
+            "the margin stays stated — the skipped row never poisoned the aggregate"
+        );
+        assert_eq!(
+            report.members.len(),
+            1,
+            "only the member who actually spent time appears in the per-person totals"
+        );
     }
 
     #[test]

@@ -232,11 +232,38 @@ mod tests {
         starts_at: DateTime<Utc>,
         ends_at: DateTime<Utc>,
     ) -> Uuid {
+        seed_task_with_status(
+            pool,
+            fixture,
+            member_id,
+            Some(starts_at),
+            Some(ends_at),
+            "PLANNED",
+        )
+        .await
+    }
+
+    /// The general form: any status, and a window that may be absent
+    /// entirely. The two dates travel as a pair because
+    /// `chk_tasks_dates_both_or_neither` allows nothing else — both, or
+    /// neither.
+    async fn seed_task_with_status(
+        pool: &PgPool,
+        fixture: &Fixture,
+        member_id: MemberId,
+        starts_at: Option<DateTime<Utc>>,
+        ends_at: Option<DateTime<Utc>>,
+        status: &str,
+    ) -> Uuid {
         let task_id = generate_uuid_v7();
+        // `($7::text)::task_status` rather than a bare `$7::task_status`: the
+        // inner cast is what lets sqlx infer the parameter as `text` and keep
+        // this a compile-time-checked `query!` while the status stays a
+        // caller-chosen `&str`.
         sqlx::query!(
             r#"
             INSERT INTO tasks (id, org_id, customer_id, customer_context_id, starts_at, ends_at, status, title)
-            VALUES ($1, $2, $3, $4, $5, $6, 'PLANNED', $7)
+            VALUES ($1, $2, $3, $4, $5, $6, ($7::text)::task_status, $8)
             "#,
             task_id,
             fixture.organization_id.0,
@@ -244,6 +271,7 @@ mod tests {
             fixture.customer_context_id.0,
             starts_at,
             ends_at,
+            status,
             "Réfection toiture",
         )
         .execute(pool)
@@ -553,6 +581,83 @@ mod tests {
             }
             crate::PlanningEntry::Absence { .. } => panic!("expected a task entry"),
         }
+
+        cleanup(&pool, fixture.organization_id, &[fixture.owner_id]).await;
+    }
+
+    /// Both halves of the orthogonality rule, through the real SQL where the
+    /// window filter lives.
+    ///
+    /// The grid answers a question about hours. An undated task has no hour
+    /// to be shown at, so it appears in no cell — and that holds whatever
+    /// column it sits in, `IN_PROGRESS` as much as `BACKLOG`. A `BACKLOG`
+    /// task that *does* carry a window is an ordinary dated task and shows up
+    /// like any other: the status is not a visibility filter, and dating
+    /// something is committing time to it whatever the work's progress.
+    ///
+    /// Asserted against a live database rather than the pure `build_entries`
+    /// because the exclusion happens in the `WHERE` clause: a `COALESCE(...,
+    /// now())` slipped into that predicate would put an unscheduled task on
+    /// somebody's calendar without any domain test noticing.
+    #[tokio::test]
+    #[ignore = "requires live postgres"]
+    async fn get_planning_excludes_undated_tasks_and_keeps_dated_backlog_ones() {
+        let pool = make_pool().await;
+        let fixture = seed_fixture(&pool).await;
+        let member_id = seed_employee(&pool, fixture.organization_id).await;
+        let now = now_storable();
+
+        let dated_backlog_id = seed_task_with_status(
+            &pool,
+            &fixture,
+            member_id,
+            Some(now),
+            Some(now + Duration::hours(2)),
+            "BACKLOG",
+        )
+        .await;
+        let undated_backlog_id =
+            seed_task_with_status(&pool, &fixture, member_id, None, None, "BACKLOG").await;
+        let undated_in_progress_id =
+            seed_task_with_status(&pool, &fixture, member_id, None, None, "IN_PROGRESS").await;
+
+        let usecase = make_usecase(pool.clone());
+        let today = now.date_naive();
+        let view = usecase
+            .get_planning(
+                fixture.organization_id,
+                DateRange::new(today, today + Duration::days(1)).unwrap(),
+            )
+            .await
+            .expect("get_planning must succeed");
+
+        let task_ids: Vec<Uuid> = view
+            .entries
+            .iter()
+            .filter_map(|entry| match entry {
+                crate::PlanningEntry::Task { id, .. } => Some(id.0),
+                crate::PlanningEntry::Absence { .. } => None,
+            })
+            .collect();
+
+        assert!(
+            task_ids.contains(&dated_backlog_id),
+            "a dated BACKLOG task occupies its hours like any other and belongs in the grid"
+        );
+        assert!(
+            !task_ids.contains(&undated_backlog_id),
+            "an undated task has no cell to be placed in"
+        );
+        assert!(
+            !task_ids.contains(&undated_in_progress_id),
+            "and that is because it has no window, not because of its column — an \
+             undated IN_PROGRESS task is just as absent"
+        );
+        assert_eq!(
+            task_ids.len(),
+            1,
+            "no stand-in window was invented for either undated task"
+        );
 
         cleanup(&pool, fixture.organization_id, &[fixture.owner_id]).await;
     }

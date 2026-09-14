@@ -197,6 +197,41 @@ fn validate_title(title: &str) -> Result<(), CoreError> {
     Ok(())
 }
 
+/// The rejection a series with no window to anchor its occurrences on gets,
+/// instead of a materialized row nobody can trace back to a decision.
+///
+/// A recurrence's anchor is its template window: `start_time` plus
+/// `duration_minutes`, read in the recurrence's own `timezone`. Since #489 a
+/// [`crate::Task`] may legitimately carry no window at all, and the question
+/// that raises here has a single answer: **a series is a statement about
+/// time, so an undated anchor is not a series.** "Every Tuesday" with no hour
+/// and no duration names no occurrence — there is nothing to repeat.
+///
+/// The alternative, materializing occurrences from a stand-in window
+/// (`now()`, midnight, a zero-length range), is worse than refusing: every
+/// occurrence becomes a real `tasks` row, indistinguishable downstream from
+/// hours somebody actually agreed to, and it would land on calendars and in
+/// conflict detection and in profitability as if it had been planned.
+///
+/// Unreachable through the API today — [`TaskRecurrenceService::create_recurrence`]
+/// and [`TaskRecurrenceService::patch_recurrence`] both refuse a non-positive
+/// duration — which is exactly why the guard belongs here too: those two are
+/// the write paths that happen to agree today, and
+/// [`TaskRecurrenceService::materialize_range`] is the one read path every
+/// fill goes through.
+pub fn undated_recurrence_anchor(recurrence: &TaskRecurrence) -> CoreError {
+    CoreError::Conflict(format!(
+        "recurrence {} has no window to anchor its occurrences on and cannot be materialized",
+        recurrence.id
+    ))
+}
+
+/// Whether `recurrence`'s template describes a real span of time — the one
+/// thing [`undated_recurrence_anchor`] refuses the absence of.
+fn has_anchor_window(recurrence: &TaskRecurrence) -> bool {
+    recurrence.duration_minutes > 0
+}
+
 fn validate_rule(rule: &RecurrenceRule) -> Result<(), CoreError> {
     match rule {
         RecurrenceRule::Daily => Ok(()),
@@ -457,12 +492,30 @@ where
     /// than erroring, which is what lets both `create_recurrence` and a
     /// horizon-extension retry call this without tracking what already
     /// exists.
+    ///
+    /// Every occurrence this writes carries a window — `Some(starts_at)` and
+    /// `Some(ends_at)` below, never `None`. A materialized occurrence is a
+    /// dated task by construction: the rule said *when*, and that is the
+    /// whole content of the claim. A series whose anchor names no window is
+    /// refused outright with [`undated_recurrence_anchor`] rather than filled
+    /// from an invented one — see that function for why refusing beats
+    /// guessing here.
+    ///
+    /// The refusal is unconditional, checked ahead of the empty-range
+    /// shortcut: an undated series is a broken series whether or not this
+    /// particular call had anything to fill. It propagates out of
+    /// [`Self::extend_organization_horizons`] and rolls that pass back, which
+    /// is the right noise for an invariant that no write path can produce.
     pub async fn materialize_range(
         &mut self,
         recurrence: &TaskRecurrence,
         from: NaiveDate,
         to: NaiveDate,
     ) -> Result<u64, CoreError> {
+        if !has_anchor_window(recurrence) {
+            return Err(undated_recurrence_anchor(recurrence));
+        }
+
         if from > to {
             return Ok(0);
         }
@@ -491,6 +544,9 @@ where
                 parent_task_id: None,
                 title: recurrence.title.clone(),
                 description: recurrence.description.clone(),
+                // Always `Some`: `materialize_range` refuses a recurrence
+                // with no anchor window before reaching here, so an
+                // occurrence never has to be dated from thin air.
                 starts_at: Some(occurrence.starts_at),
                 ends_at: Some(occurrence.ends_at),
                 all_day: recurrence.all_day,
@@ -970,6 +1026,114 @@ mod tests {
     #[test]
     fn a_daily_rule_is_always_valid() {
         assert!(validate_rule(&RecurrenceRule::Daily).is_ok());
+    }
+
+    // -- TaskRecurrenceService::materialize_range ----------------------------
+
+    mod materialize_range_tests {
+        use super::*;
+        use crate::domain::member::ports::MockMemberRepository;
+        use crate::domain::task::ports::MockTaskRepository;
+        use crate::domain::task_recurrence::ports::MockTaskRecurrenceRepository;
+
+        /// A service whose task repository expects nothing at all: any
+        /// materialization attempt is an unexpected `mockall` call and fails
+        /// the test on the spot.
+        fn service_that_must_not_write() -> TaskRecurrenceService<
+            MockTaskRecurrenceRepository,
+            MockTaskRepository,
+            MockMemberRepository,
+        > {
+            TaskRecurrenceService::new(
+                MockTaskRecurrenceRepository::new(),
+                MockTaskRepository::new(),
+                MockMemberRepository::new(),
+            )
+        }
+
+        /// A series whose template names no span of time is not a series.
+        /// `materialize_range` says so with [`undated_recurrence_anchor`]
+        /// instead of writing occurrences off an invented window — the
+        /// `expect_insert_occurrence_if_absent` mockall never gets is the
+        /// assertion that nothing was materialized.
+        #[tokio::test]
+        async fn a_recurrence_with_no_anchor_window_is_rejected_rather_than_materialized() {
+            let today = Utc::now().date_naive();
+            let undated = TaskRecurrence {
+                duration_minutes: 0,
+                ..recurrence(RecurrenceRule::Daily, today, None)
+            };
+
+            // No `expect_insert_occurrence_if_absent`: mockall panics on the
+            // unexpected call, so a single materialized row fails this test.
+            let mut service = service_that_must_not_write();
+
+            let error = service
+                .materialize_range(&undated, today, today + Duration::days(7))
+                .await
+                .expect_err("an undated anchor must be refused, not filled");
+
+            assert!(
+                matches!(&error, CoreError::Conflict(message) if message.contains("no window")),
+                "expected the undated-anchor rejection, got {error:?}"
+            );
+        }
+
+        /// The refusal does not depend on the range happening to be
+        /// non-empty: an empty `[from, to]` would otherwise let a broken
+        /// series through as a silent `Ok(0)` and only fail on some later
+        /// pass, far from the recurrence that caused it.
+        #[tokio::test]
+        async fn a_recurrence_with_no_anchor_window_is_rejected_even_over_an_empty_range() {
+            let today = Utc::now().date_naive();
+            let undated = TaskRecurrence {
+                duration_minutes: 0,
+                ..recurrence(RecurrenceRule::Daily, today, None)
+            };
+
+            let mut service = service_that_must_not_write();
+
+            assert!(
+                service
+                    .materialize_range(&undated, today, today - Duration::days(1))
+                    .await
+                    .is_err()
+            );
+        }
+
+        /// The dated case, pinned beside the refusal so the guard cannot
+        /// quietly grow into a filter on anything else: an ordinary series
+        /// still materializes one occurrence per date, each of them dated.
+        #[tokio::test]
+        async fn a_recurrence_with_an_anchor_window_still_materializes_dated_occurrences() {
+            let today = Utc::now().date_naive();
+            let daily = recurrence(RecurrenceRule::Daily, today, None);
+
+            let mut task_repository = MockTaskRepository::new();
+            task_repository
+                .expect_insert_occurrence_if_absent()
+                .times(3)
+                .returning(|task| {
+                    assert!(
+                        task.starts_at.is_some() && task.ends_at.is_some(),
+                        "a materialized occurrence is a dated task by construction"
+                    );
+                    Box::pin(async { Ok(true) })
+                });
+
+            let mut service = TaskRecurrenceService::new(
+                MockTaskRecurrenceRepository::new(),
+                task_repository,
+                MockMemberRepository::new(),
+            );
+
+            let materialized = service
+                .materialize_range(&daily, today, today + Duration::days(2))
+                .await
+                .unwrap();
+
+            assert_eq!(materialized, 3);
+        }
     }
 
     // -- TaskRecurrenceService::extend_organization_horizons -----------------

@@ -1,0 +1,21 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO tasks (id, org_id, customer_id, customer_context_id, starts_at, ends_at, status, title)\n            VALUES ($1, $2, $3, $4, $5, $6, ($7::text)::task_status, $8)\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Uuid",
+        "Uuid",
+        "Timestamptz",
+        "Timestamptz",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "5d7143295e650252359fc3d9929e1b655d39520edd345c398e146a513731ff71"
+}

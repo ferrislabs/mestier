@@ -28,6 +28,17 @@ pub trait PlanningRepository: Send {
     /// returned `Task.starts_at`/`ends_at` always carry this resolved
     /// value, never `None`, so a dateless subtask assigned to someone
     /// appears on their row exactly like any other task.
+    ///
+    /// A task with **no** effective window — one nobody has committed a time
+    /// to, and no parent to inherit one from — is not returned at all. That is
+    /// why the two fields are never `None` above: an implementation excludes
+    /// such a task rather than resolving it to a stand-in window. Listing
+    /// unscheduled work is a different question, answered by the task list
+    /// rather than by a grid of hours.
+    ///
+    /// The window is the only filter. A task's `status` never decides whether
+    /// it is returned: a `BACKLOG` task that carries dates overlaps `[from,
+    /// to)` like any other and comes back like any other.
     fn list_tasks_in_window(
         &mut self,
         organization_id: OrganizationId,

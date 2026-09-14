@@ -37,6 +37,19 @@ impl<'tx> ProfitabilityRepository for PgProfitabilityRepository<'tx> {
     /// A subtask whose parent was soft-deleted resolves to a NULL window and
     /// drops out of every list. It has no dates of its own and nothing left to
     /// inherit them from, so there is no honest duration to charge for it.
+    ///
+    /// The same answer, for the same reason, covers a task that was never
+    /// dated at all — the normal state of anything in `BACKLOG`, and legal for
+    /// any task since #489: **an undated task contributes no cost.** A cost is
+    /// a number of minutes multiplied by a rate, and there are no minutes to
+    /// count. Every predicate below therefore says `IS NOT NULL` out loud
+    /// rather than letting `NULL` comparisons drop the row quietly, which is
+    /// also what makes the `"starts_at!"` / `"ends_at!"` non-null overrides
+    /// honest: the guard that earns them sits in the same `WHERE`.
+    ///
+    /// Only the window filters. `t.status` appears below only to drop
+    /// `CANCELLED` work, never to decide what counts as scheduled: a dated
+    /// `BACKLOG` task costs exactly what a dated `PLANNED` one costs.
     async fn load(
         &mut self,
         organization_id: OrganizationId,
@@ -61,6 +74,7 @@ impl<'tx> ProfitabilityRepository for PgProfitabilityRepository<'tx> {
                 WHERE t.project_id = p.id
                   AND t.deleted_at IS NULL
                   AND t.status <> 'CANCELLED'::task_status
+                  AND COALESCE(t.starts_at, pt.starts_at) IS NOT NULL
                   AND COALESCE(t.starts_at, pt.starts_at) < $3
                   AND COALESCE(t.ends_at, pt.ends_at) > $2
               )
@@ -125,6 +139,7 @@ impl<'tx> ProfitabilityRepository for PgProfitabilityRepository<'tx> {
                AND (cb.effective_to IS NULL OR cb.effective_to > ((COALESCE(t.starts_at, pt.starts_at)) AT TIME ZONE 'UTC')::date)
             WHERE t.org_id = $1
               AND t.status <> 'CANCELLED'::task_status
+              AND COALESCE(t.starts_at, pt.starts_at) IS NOT NULL
               AND COALESCE(t.starts_at, pt.starts_at) < $3
               AND COALESCE(t.ends_at, pt.ends_at) > $2
             ORDER BY COALESCE(t.starts_at, pt.starts_at), t.id, a.member_id
@@ -217,6 +232,7 @@ impl<'tx> ProfitabilityRepository for PgProfitabilityRepository<'tx> {
               AND t.project_id IS NOT NULL
               AND t.status <> 'CANCELLED'::task_status
               AND t.expenses_cents > 0
+              AND COALESCE(t.starts_at, pt.starts_at) IS NOT NULL
               AND COALESCE(t.starts_at, pt.starts_at) >= $2
               AND COALESCE(t.starts_at, pt.starts_at) < $3
             "#,
@@ -252,6 +268,7 @@ impl<'tx> ProfitabilityRepository for PgProfitabilityRepository<'tx> {
             WHERE t.org_id = $1
               AND t.project_id IS NOT NULL
               AND t.status <> 'CANCELLED'::task_status
+              AND COALESCE(t.starts_at, pt.starts_at) IS NOT NULL
               AND COALESCE(t.starts_at, pt.starts_at) < $3
               AND COALESCE(t.ends_at, pt.ends_at) > $2
             "#,
