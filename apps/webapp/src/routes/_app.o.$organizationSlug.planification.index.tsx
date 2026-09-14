@@ -1,15 +1,15 @@
 import { createFileRoute, redirect } from '@tanstack/react-router'
+import { moduleLandingPath } from '#/modules/landing'
 import { buildOrgPath } from '#/modules/org-path'
 
-/** Moved to the Planification module (#468); the old address still resolves. */
 export const Route = createFileRoute(
-	'/_app/o/$organizationSlug/planning/projects/$projectId',
+	'/_app/o/$organizationSlug/planification/',
 )({
 	beforeLoad: ({ params }) => {
 		throw redirect({
 			to: buildOrgPath(
 				params.organizationSlug,
-				`/planification/projects/${params.projectId}`,
+				moduleLandingPath('planification'),
 			),
 		})
 	},

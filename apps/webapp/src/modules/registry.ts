@@ -11,7 +11,6 @@ import {
 	KanbanSquare,
 	LayoutDashboard,
 	LayoutTemplate,
-	ListTree,
 	MessagesSquare,
 	Package,
 	Receipt,
@@ -170,31 +169,42 @@ export const MODULES: AppModule[] = [
 				requiredPermission: 'MANAGE_PLANNING',
 			},
 			{
-				id: 'tasks',
-				label: 'Liste des tâches',
-				to: '/planning/tasks',
-				icon: ListTree,
+				id: 'reports',
+				label: 'Écarts signalés',
+				to: '/planning/reports',
+				icon: FileWarning,
 				requiredPermission: 'MANAGE_PLANNING',
 			},
+		],
+	},
+	{
+		id: 'planification',
+		label: 'Planification',
+		icon: FolderKanban,
+		basePath: '/planification',
+		status: 'available',
+		hasOverview: false,
+		/**
+		 * The work half of the split (#468): what is to be done and where it
+		 * stands, as opposed to the Planning module's who-is-where-when.
+		 *
+		 * The Board (`/planification/board`) has a route but no section here
+		 * on purpose — WS5 (#466) adds the entry when the screen exists, so
+		 * `main` never carries a nav link to an empty page.
+		 */
+		sections: [
 			{
 				id: 'projects',
 				label: 'Projets',
-				to: '/planning/projects',
+				to: '/planification/projects',
 				icon: FolderKanban,
 				requiredPermission: 'MANAGE_PLANNING',
 			},
 			{
 				id: 'project-templates',
 				label: 'Modèles de projet',
-				to: '/planning/project-templates',
+				to: '/planification/project-templates',
 				icon: LayoutTemplate,
-				requiredPermission: 'MANAGE_PLANNING',
-			},
-			{
-				id: 'reports',
-				label: 'Écarts signalés',
-				to: '/planning/reports',
-				icon: FileWarning,
 				requiredPermission: 'MANAGE_PLANNING',
 			},
 		],

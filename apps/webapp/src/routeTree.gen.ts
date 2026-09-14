@@ -20,6 +20,7 @@ import { Route as AppOOrganizationSlugReportingRouteImport } from './routes/_app
 import { Route as AppOOrganizationSlugChatRouteImport } from './routes/_app.o.$organizationSlug.chat'
 import { Route as AppOOrganizationSlugPurchaseIndexRouteImport } from './routes/_app.o.$organizationSlug.purchase.index'
 import { Route as AppOOrganizationSlugPlanningIndexRouteImport } from './routes/_app.o.$organizationSlug.planning.index'
+import { Route as AppOOrganizationSlugPlanificationIndexRouteImport } from './routes/_app.o.$organizationSlug.planification.index'
 import { Route as AppOOrganizationSlugHrIndexRouteImport } from './routes/_app.o.$organizationSlug.hr.index'
 import { Route as AppOOrganizationSlugCrmIndexRouteImport } from './routes/_app.o.$organizationSlug.crm.index'
 import { Route as AppOOrganizationSlugChatIndexRouteImport } from './routes/_app.o.$organizationSlug.chat.index'
@@ -28,6 +29,8 @@ import { Route as AppOOrganizationSlugPlanningTasksRouteImport } from './routes/
 import { Route as AppOOrganizationSlugPlanningReportsRouteImport } from './routes/_app.o.$organizationSlug.planning.reports'
 import { Route as AppOOrganizationSlugPlanningProjectTemplatesRouteImport } from './routes/_app.o.$organizationSlug.planning.project-templates'
 import { Route as AppOOrganizationSlugPlanningCalendarRouteImport } from './routes/_app.o.$organizationSlug.planning.calendar'
+import { Route as AppOOrganizationSlugPlanificationProjectTemplatesRouteImport } from './routes/_app.o.$organizationSlug.planification.project-templates'
+import { Route as AppOOrganizationSlugPlanificationBoardRouteImport } from './routes/_app.o.$organizationSlug.planification.board'
 import { Route as AppOOrganizationSlugHrWorkTimeRouteImport } from './routes/_app.o.$organizationSlug.hr.work-time'
 import { Route as AppOOrganizationSlugHrEquipmentRouteImport } from './routes/_app.o.$organizationSlug.hr.equipment'
 import { Route as AppOOrganizationSlugHrAbsencesRouteImport } from './routes/_app.o.$organizationSlug.hr.absences'
@@ -35,12 +38,14 @@ import { Route as AppOOrganizationSlugCrmCatalogRouteImport } from './routes/_ap
 import { Route as AppOOrganizationSlugChatChannelIdRouteImport } from './routes/_app.o.$organizationSlug.chat.$channelId'
 import { Route as AppOOrganizationSlugPurchaseSupplierInvoicesIndexRouteImport } from './routes/_app.o.$organizationSlug.purchase.supplier-invoices.index'
 import { Route as AppOOrganizationSlugPlanningProjectsIndexRouteImport } from './routes/_app.o.$organizationSlug.planning.projects.index'
+import { Route as AppOOrganizationSlugPlanificationProjectsIndexRouteImport } from './routes/_app.o.$organizationSlug.planification.projects.index'
 import { Route as AppOOrganizationSlugHrTeamIndexRouteImport } from './routes/_app.o.$organizationSlug.hr.team.index'
 import { Route as AppOOrganizationSlugCrmQuotesIndexRouteImport } from './routes/_app.o.$organizationSlug.crm.quotes.index'
 import { Route as AppOOrganizationSlugCrmInvoicesIndexRouteImport } from './routes/_app.o.$organizationSlug.crm.invoices.index'
 import { Route as AppOOrganizationSlugCrmCustomersIndexRouteImport } from './routes/_app.o.$organizationSlug.crm.customers.index'
 import { Route as AppOOrganizationSlugPurchaseSupplierInvoicesSupplierInvoiceIdRouteImport } from './routes/_app.o.$organizationSlug.purchase.supplier-invoices.$supplierInvoiceId'
 import { Route as AppOOrganizationSlugPlanningProjectsProjectIdRouteImport } from './routes/_app.o.$organizationSlug.planning.projects.$projectId'
+import { Route as AppOOrganizationSlugPlanificationProjectsProjectIdRouteImport } from './routes/_app.o.$organizationSlug.planification.projects.$projectId'
 import { Route as AppOOrganizationSlugCrmQuotesNewRouteImport } from './routes/_app.o.$organizationSlug.crm.quotes.new'
 import { Route as AppOOrganizationSlugCrmQuotesQuoteIdRouteImport } from './routes/_app.o.$organizationSlug.crm.quotes.$quoteId'
 import { Route as AppOOrganizationSlugCrmInvoicesNewRouteImport } from './routes/_app.o.$organizationSlug.crm.invoices.new'
@@ -111,6 +116,12 @@ const AppOOrganizationSlugPlanningIndexRoute =
     path: '/planning/',
     getParentRoute: () => AppOOrganizationSlugRoute,
   } as any)
+const AppOOrganizationSlugPlanificationIndexRoute =
+  AppOOrganizationSlugPlanificationIndexRouteImport.update({
+    id: '/planification/',
+    path: '/planification/',
+    getParentRoute: () => AppOOrganizationSlugRoute,
+  } as any)
 const AppOOrganizationSlugHrIndexRoute =
   AppOOrganizationSlugHrIndexRouteImport.update({
     id: '/hr/',
@@ -159,6 +170,18 @@ const AppOOrganizationSlugPlanningCalendarRoute =
     path: '/planning/calendar',
     getParentRoute: () => AppOOrganizationSlugRoute,
   } as any)
+const AppOOrganizationSlugPlanificationProjectTemplatesRoute =
+  AppOOrganizationSlugPlanificationProjectTemplatesRouteImport.update({
+    id: '/planification/project-templates',
+    path: '/planification/project-templates',
+    getParentRoute: () => AppOOrganizationSlugRoute,
+  } as any)
+const AppOOrganizationSlugPlanificationBoardRoute =
+  AppOOrganizationSlugPlanificationBoardRouteImport.update({
+    id: '/planification/board',
+    path: '/planification/board',
+    getParentRoute: () => AppOOrganizationSlugRoute,
+  } as any)
 const AppOOrganizationSlugHrWorkTimeRoute =
   AppOOrganizationSlugHrWorkTimeRouteImport.update({
     id: '/hr/work-time',
@@ -201,6 +224,12 @@ const AppOOrganizationSlugPlanningProjectsIndexRoute =
     path: '/planning/projects/',
     getParentRoute: () => AppOOrganizationSlugRoute,
   } as any)
+const AppOOrganizationSlugPlanificationProjectsIndexRoute =
+  AppOOrganizationSlugPlanificationProjectsIndexRouteImport.update({
+    id: '/planification/projects/',
+    path: '/planification/projects/',
+    getParentRoute: () => AppOOrganizationSlugRoute,
+  } as any)
 const AppOOrganizationSlugHrTeamIndexRoute =
   AppOOrganizationSlugHrTeamIndexRouteImport.update({
     id: '/hr/team/',
@@ -237,6 +266,12 @@ const AppOOrganizationSlugPlanningProjectsProjectIdRoute =
   AppOOrganizationSlugPlanningProjectsProjectIdRouteImport.update({
     id: '/planning/projects/$projectId',
     path: '/planning/projects/$projectId',
+    getParentRoute: () => AppOOrganizationSlugRoute,
+  } as any)
+const AppOOrganizationSlugPlanificationProjectsProjectIdRoute =
+  AppOOrganizationSlugPlanificationProjectsProjectIdRouteImport.update({
+    id: '/planification/projects/$projectId',
+    path: '/planification/projects/$projectId',
     getParentRoute: () => AppOOrganizationSlugRoute,
   } as any)
 const AppOOrganizationSlugCrmQuotesNewRoute =
@@ -302,6 +337,8 @@ export interface FileRoutesByFullPath {
   '/o/$organizationSlug/hr/absences': typeof AppOOrganizationSlugHrAbsencesRoute
   '/o/$organizationSlug/hr/equipment': typeof AppOOrganizationSlugHrEquipmentRoute
   '/o/$organizationSlug/hr/work-time': typeof AppOOrganizationSlugHrWorkTimeRoute
+  '/o/$organizationSlug/planification/board': typeof AppOOrganizationSlugPlanificationBoardRoute
+  '/o/$organizationSlug/planification/project-templates': typeof AppOOrganizationSlugPlanificationProjectTemplatesRoute
   '/o/$organizationSlug/planning/calendar': typeof AppOOrganizationSlugPlanningCalendarRoute
   '/o/$organizationSlug/planning/project-templates': typeof AppOOrganizationSlugPlanningProjectTemplatesRoute
   '/o/$organizationSlug/planning/reports': typeof AppOOrganizationSlugPlanningReportsRoute
@@ -310,6 +347,7 @@ export interface FileRoutesByFullPath {
   '/o/$organizationSlug/chat/': typeof AppOOrganizationSlugChatIndexRoute
   '/o/$organizationSlug/crm/': typeof AppOOrganizationSlugCrmIndexRoute
   '/o/$organizationSlug/hr/': typeof AppOOrganizationSlugHrIndexRoute
+  '/o/$organizationSlug/planification/': typeof AppOOrganizationSlugPlanificationIndexRoute
   '/o/$organizationSlug/planning/': typeof AppOOrganizationSlugPlanningIndexRoute
   '/o/$organizationSlug/purchase/': typeof AppOOrganizationSlugPurchaseIndexRoute
   '/o/$organizationSlug/crm/customers/$customerId': typeof AppOOrganizationSlugCrmCustomersCustomerIdRoute
@@ -318,12 +356,14 @@ export interface FileRoutesByFullPath {
   '/o/$organizationSlug/crm/invoices/new': typeof AppOOrganizationSlugCrmInvoicesNewRoute
   '/o/$organizationSlug/crm/quotes/$quoteId': typeof AppOOrganizationSlugCrmQuotesQuoteIdRouteWithChildren
   '/o/$organizationSlug/crm/quotes/new': typeof AppOOrganizationSlugCrmQuotesNewRoute
+  '/o/$organizationSlug/planification/projects/$projectId': typeof AppOOrganizationSlugPlanificationProjectsProjectIdRoute
   '/o/$organizationSlug/planning/projects/$projectId': typeof AppOOrganizationSlugPlanningProjectsProjectIdRoute
   '/o/$organizationSlug/purchase/supplier-invoices/$supplierInvoiceId': typeof AppOOrganizationSlugPurchaseSupplierInvoicesSupplierInvoiceIdRoute
   '/o/$organizationSlug/crm/customers/': typeof AppOOrganizationSlugCrmCustomersIndexRoute
   '/o/$organizationSlug/crm/invoices/': typeof AppOOrganizationSlugCrmInvoicesIndexRoute
   '/o/$organizationSlug/crm/quotes/': typeof AppOOrganizationSlugCrmQuotesIndexRoute
   '/o/$organizationSlug/hr/team/': typeof AppOOrganizationSlugHrTeamIndexRoute
+  '/o/$organizationSlug/planification/projects/': typeof AppOOrganizationSlugPlanificationProjectsIndexRoute
   '/o/$organizationSlug/planning/projects/': typeof AppOOrganizationSlugPlanningProjectsIndexRoute
   '/o/$organizationSlug/purchase/supplier-invoices/': typeof AppOOrganizationSlugPurchaseSupplierInvoicesIndexRoute
   '/o/$organizationSlug/crm/quotes/$quoteId/handover': typeof AppOOrganizationSlugCrmQuotesQuoteIdHandoverRoute
@@ -341,6 +381,8 @@ export interface FileRoutesByTo {
   '/o/$organizationSlug/hr/absences': typeof AppOOrganizationSlugHrAbsencesRoute
   '/o/$organizationSlug/hr/equipment': typeof AppOOrganizationSlugHrEquipmentRoute
   '/o/$organizationSlug/hr/work-time': typeof AppOOrganizationSlugHrWorkTimeRoute
+  '/o/$organizationSlug/planification/board': typeof AppOOrganizationSlugPlanificationBoardRoute
+  '/o/$organizationSlug/planification/project-templates': typeof AppOOrganizationSlugPlanificationProjectTemplatesRoute
   '/o/$organizationSlug/planning/calendar': typeof AppOOrganizationSlugPlanningCalendarRoute
   '/o/$organizationSlug/planning/project-templates': typeof AppOOrganizationSlugPlanningProjectTemplatesRoute
   '/o/$organizationSlug/planning/reports': typeof AppOOrganizationSlugPlanningReportsRoute
@@ -349,6 +391,7 @@ export interface FileRoutesByTo {
   '/o/$organizationSlug/chat': typeof AppOOrganizationSlugChatIndexRoute
   '/o/$organizationSlug/crm': typeof AppOOrganizationSlugCrmIndexRoute
   '/o/$organizationSlug/hr': typeof AppOOrganizationSlugHrIndexRoute
+  '/o/$organizationSlug/planification': typeof AppOOrganizationSlugPlanificationIndexRoute
   '/o/$organizationSlug/planning': typeof AppOOrganizationSlugPlanningIndexRoute
   '/o/$organizationSlug/purchase': typeof AppOOrganizationSlugPurchaseIndexRoute
   '/o/$organizationSlug/crm/customers/$customerId': typeof AppOOrganizationSlugCrmCustomersCustomerIdRoute
@@ -357,12 +400,14 @@ export interface FileRoutesByTo {
   '/o/$organizationSlug/crm/invoices/new': typeof AppOOrganizationSlugCrmInvoicesNewRoute
   '/o/$organizationSlug/crm/quotes/$quoteId': typeof AppOOrganizationSlugCrmQuotesQuoteIdRouteWithChildren
   '/o/$organizationSlug/crm/quotes/new': typeof AppOOrganizationSlugCrmQuotesNewRoute
+  '/o/$organizationSlug/planification/projects/$projectId': typeof AppOOrganizationSlugPlanificationProjectsProjectIdRoute
   '/o/$organizationSlug/planning/projects/$projectId': typeof AppOOrganizationSlugPlanningProjectsProjectIdRoute
   '/o/$organizationSlug/purchase/supplier-invoices/$supplierInvoiceId': typeof AppOOrganizationSlugPurchaseSupplierInvoicesSupplierInvoiceIdRoute
   '/o/$organizationSlug/crm/customers': typeof AppOOrganizationSlugCrmCustomersIndexRoute
   '/o/$organizationSlug/crm/invoices': typeof AppOOrganizationSlugCrmInvoicesIndexRoute
   '/o/$organizationSlug/crm/quotes': typeof AppOOrganizationSlugCrmQuotesIndexRoute
   '/o/$organizationSlug/hr/team': typeof AppOOrganizationSlugHrTeamIndexRoute
+  '/o/$organizationSlug/planification/projects': typeof AppOOrganizationSlugPlanificationProjectsIndexRoute
   '/o/$organizationSlug/planning/projects': typeof AppOOrganizationSlugPlanningProjectsIndexRoute
   '/o/$organizationSlug/purchase/supplier-invoices': typeof AppOOrganizationSlugPurchaseSupplierInvoicesIndexRoute
   '/o/$organizationSlug/crm/quotes/$quoteId/handover': typeof AppOOrganizationSlugCrmQuotesQuoteIdHandoverRoute
@@ -384,6 +429,8 @@ export interface FileRoutesById {
   '/_app/o/$organizationSlug/hr/absences': typeof AppOOrganizationSlugHrAbsencesRoute
   '/_app/o/$organizationSlug/hr/equipment': typeof AppOOrganizationSlugHrEquipmentRoute
   '/_app/o/$organizationSlug/hr/work-time': typeof AppOOrganizationSlugHrWorkTimeRoute
+  '/_app/o/$organizationSlug/planification/board': typeof AppOOrganizationSlugPlanificationBoardRoute
+  '/_app/o/$organizationSlug/planification/project-templates': typeof AppOOrganizationSlugPlanificationProjectTemplatesRoute
   '/_app/o/$organizationSlug/planning/calendar': typeof AppOOrganizationSlugPlanningCalendarRoute
   '/_app/o/$organizationSlug/planning/project-templates': typeof AppOOrganizationSlugPlanningProjectTemplatesRoute
   '/_app/o/$organizationSlug/planning/reports': typeof AppOOrganizationSlugPlanningReportsRoute
@@ -392,6 +439,7 @@ export interface FileRoutesById {
   '/_app/o/$organizationSlug/chat/': typeof AppOOrganizationSlugChatIndexRoute
   '/_app/o/$organizationSlug/crm/': typeof AppOOrganizationSlugCrmIndexRoute
   '/_app/o/$organizationSlug/hr/': typeof AppOOrganizationSlugHrIndexRoute
+  '/_app/o/$organizationSlug/planification/': typeof AppOOrganizationSlugPlanificationIndexRoute
   '/_app/o/$organizationSlug/planning/': typeof AppOOrganizationSlugPlanningIndexRoute
   '/_app/o/$organizationSlug/purchase/': typeof AppOOrganizationSlugPurchaseIndexRoute
   '/_app/o/$organizationSlug/crm/customers/$customerId': typeof AppOOrganizationSlugCrmCustomersCustomerIdRoute
@@ -400,12 +448,14 @@ export interface FileRoutesById {
   '/_app/o/$organizationSlug/crm/invoices/new': typeof AppOOrganizationSlugCrmInvoicesNewRoute
   '/_app/o/$organizationSlug/crm/quotes/$quoteId': typeof AppOOrganizationSlugCrmQuotesQuoteIdRouteWithChildren
   '/_app/o/$organizationSlug/crm/quotes/new': typeof AppOOrganizationSlugCrmQuotesNewRoute
+  '/_app/o/$organizationSlug/planification/projects/$projectId': typeof AppOOrganizationSlugPlanificationProjectsProjectIdRoute
   '/_app/o/$organizationSlug/planning/projects/$projectId': typeof AppOOrganizationSlugPlanningProjectsProjectIdRoute
   '/_app/o/$organizationSlug/purchase/supplier-invoices/$supplierInvoiceId': typeof AppOOrganizationSlugPurchaseSupplierInvoicesSupplierInvoiceIdRoute
   '/_app/o/$organizationSlug/crm/customers/': typeof AppOOrganizationSlugCrmCustomersIndexRoute
   '/_app/o/$organizationSlug/crm/invoices/': typeof AppOOrganizationSlugCrmInvoicesIndexRoute
   '/_app/o/$organizationSlug/crm/quotes/': typeof AppOOrganizationSlugCrmQuotesIndexRoute
   '/_app/o/$organizationSlug/hr/team/': typeof AppOOrganizationSlugHrTeamIndexRoute
+  '/_app/o/$organizationSlug/planification/projects/': typeof AppOOrganizationSlugPlanificationProjectsIndexRoute
   '/_app/o/$organizationSlug/planning/projects/': typeof AppOOrganizationSlugPlanningProjectsIndexRoute
   '/_app/o/$organizationSlug/purchase/supplier-invoices/': typeof AppOOrganizationSlugPurchaseSupplierInvoicesIndexRoute
   '/_app/o/$organizationSlug/crm/quotes/$quoteId/handover': typeof AppOOrganizationSlugCrmQuotesQuoteIdHandoverRoute
@@ -427,6 +477,8 @@ export interface FileRouteTypes {
     | '/o/$organizationSlug/hr/absences'
     | '/o/$organizationSlug/hr/equipment'
     | '/o/$organizationSlug/hr/work-time'
+    | '/o/$organizationSlug/planification/board'
+    | '/o/$organizationSlug/planification/project-templates'
     | '/o/$organizationSlug/planning/calendar'
     | '/o/$organizationSlug/planning/project-templates'
     | '/o/$organizationSlug/planning/reports'
@@ -435,6 +487,7 @@ export interface FileRouteTypes {
     | '/o/$organizationSlug/chat/'
     | '/o/$organizationSlug/crm/'
     | '/o/$organizationSlug/hr/'
+    | '/o/$organizationSlug/planification/'
     | '/o/$organizationSlug/planning/'
     | '/o/$organizationSlug/purchase/'
     | '/o/$organizationSlug/crm/customers/$customerId'
@@ -443,12 +496,14 @@ export interface FileRouteTypes {
     | '/o/$organizationSlug/crm/invoices/new'
     | '/o/$organizationSlug/crm/quotes/$quoteId'
     | '/o/$organizationSlug/crm/quotes/new'
+    | '/o/$organizationSlug/planification/projects/$projectId'
     | '/o/$organizationSlug/planning/projects/$projectId'
     | '/o/$organizationSlug/purchase/supplier-invoices/$supplierInvoiceId'
     | '/o/$organizationSlug/crm/customers/'
     | '/o/$organizationSlug/crm/invoices/'
     | '/o/$organizationSlug/crm/quotes/'
     | '/o/$organizationSlug/hr/team/'
+    | '/o/$organizationSlug/planification/projects/'
     | '/o/$organizationSlug/planning/projects/'
     | '/o/$organizationSlug/purchase/supplier-invoices/'
     | '/o/$organizationSlug/crm/quotes/$quoteId/handover'
@@ -466,6 +521,8 @@ export interface FileRouteTypes {
     | '/o/$organizationSlug/hr/absences'
     | '/o/$organizationSlug/hr/equipment'
     | '/o/$organizationSlug/hr/work-time'
+    | '/o/$organizationSlug/planification/board'
+    | '/o/$organizationSlug/planification/project-templates'
     | '/o/$organizationSlug/planning/calendar'
     | '/o/$organizationSlug/planning/project-templates'
     | '/o/$organizationSlug/planning/reports'
@@ -474,6 +531,7 @@ export interface FileRouteTypes {
     | '/o/$organizationSlug/chat'
     | '/o/$organizationSlug/crm'
     | '/o/$organizationSlug/hr'
+    | '/o/$organizationSlug/planification'
     | '/o/$organizationSlug/planning'
     | '/o/$organizationSlug/purchase'
     | '/o/$organizationSlug/crm/customers/$customerId'
@@ -482,12 +540,14 @@ export interface FileRouteTypes {
     | '/o/$organizationSlug/crm/invoices/new'
     | '/o/$organizationSlug/crm/quotes/$quoteId'
     | '/o/$organizationSlug/crm/quotes/new'
+    | '/o/$organizationSlug/planification/projects/$projectId'
     | '/o/$organizationSlug/planning/projects/$projectId'
     | '/o/$organizationSlug/purchase/supplier-invoices/$supplierInvoiceId'
     | '/o/$organizationSlug/crm/customers'
     | '/o/$organizationSlug/crm/invoices'
     | '/o/$organizationSlug/crm/quotes'
     | '/o/$organizationSlug/hr/team'
+    | '/o/$organizationSlug/planification/projects'
     | '/o/$organizationSlug/planning/projects'
     | '/o/$organizationSlug/purchase/supplier-invoices'
     | '/o/$organizationSlug/crm/quotes/$quoteId/handover'
@@ -508,6 +568,8 @@ export interface FileRouteTypes {
     | '/_app/o/$organizationSlug/hr/absences'
     | '/_app/o/$organizationSlug/hr/equipment'
     | '/_app/o/$organizationSlug/hr/work-time'
+    | '/_app/o/$organizationSlug/planification/board'
+    | '/_app/o/$organizationSlug/planification/project-templates'
     | '/_app/o/$organizationSlug/planning/calendar'
     | '/_app/o/$organizationSlug/planning/project-templates'
     | '/_app/o/$organizationSlug/planning/reports'
@@ -516,6 +578,7 @@ export interface FileRouteTypes {
     | '/_app/o/$organizationSlug/chat/'
     | '/_app/o/$organizationSlug/crm/'
     | '/_app/o/$organizationSlug/hr/'
+    | '/_app/o/$organizationSlug/planification/'
     | '/_app/o/$organizationSlug/planning/'
     | '/_app/o/$organizationSlug/purchase/'
     | '/_app/o/$organizationSlug/crm/customers/$customerId'
@@ -524,12 +587,14 @@ export interface FileRouteTypes {
     | '/_app/o/$organizationSlug/crm/invoices/new'
     | '/_app/o/$organizationSlug/crm/quotes/$quoteId'
     | '/_app/o/$organizationSlug/crm/quotes/new'
+    | '/_app/o/$organizationSlug/planification/projects/$projectId'
     | '/_app/o/$organizationSlug/planning/projects/$projectId'
     | '/_app/o/$organizationSlug/purchase/supplier-invoices/$supplierInvoiceId'
     | '/_app/o/$organizationSlug/crm/customers/'
     | '/_app/o/$organizationSlug/crm/invoices/'
     | '/_app/o/$organizationSlug/crm/quotes/'
     | '/_app/o/$organizationSlug/hr/team/'
+    | '/_app/o/$organizationSlug/planification/projects/'
     | '/_app/o/$organizationSlug/planning/projects/'
     | '/_app/o/$organizationSlug/purchase/supplier-invoices/'
     | '/_app/o/$organizationSlug/crm/quotes/$quoteId/handover'
@@ -620,6 +685,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppOOrganizationSlugPlanningIndexRouteImport
       parentRoute: typeof AppOOrganizationSlugRoute
     }
+    '/_app/o/$organizationSlug/planification/': {
+      id: '/_app/o/$organizationSlug/planification/'
+      path: '/planification'
+      fullPath: '/o/$organizationSlug/planification/'
+      preLoaderRoute: typeof AppOOrganizationSlugPlanificationIndexRouteImport
+      parentRoute: typeof AppOOrganizationSlugRoute
+    }
     '/_app/o/$organizationSlug/hr/': {
       id: '/_app/o/$organizationSlug/hr/'
       path: '/hr'
@@ -676,6 +748,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppOOrganizationSlugPlanningCalendarRouteImport
       parentRoute: typeof AppOOrganizationSlugRoute
     }
+    '/_app/o/$organizationSlug/planification/project-templates': {
+      id: '/_app/o/$organizationSlug/planification/project-templates'
+      path: '/planification/project-templates'
+      fullPath: '/o/$organizationSlug/planification/project-templates'
+      preLoaderRoute: typeof AppOOrganizationSlugPlanificationProjectTemplatesRouteImport
+      parentRoute: typeof AppOOrganizationSlugRoute
+    }
+    '/_app/o/$organizationSlug/planification/board': {
+      id: '/_app/o/$organizationSlug/planification/board'
+      path: '/planification/board'
+      fullPath: '/o/$organizationSlug/planification/board'
+      preLoaderRoute: typeof AppOOrganizationSlugPlanificationBoardRouteImport
+      parentRoute: typeof AppOOrganizationSlugRoute
+    }
     '/_app/o/$organizationSlug/hr/work-time': {
       id: '/_app/o/$organizationSlug/hr/work-time'
       path: '/hr/work-time'
@@ -725,6 +811,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppOOrganizationSlugPlanningProjectsIndexRouteImport
       parentRoute: typeof AppOOrganizationSlugRoute
     }
+    '/_app/o/$organizationSlug/planification/projects/': {
+      id: '/_app/o/$organizationSlug/planification/projects/'
+      path: '/planification/projects'
+      fullPath: '/o/$organizationSlug/planification/projects/'
+      preLoaderRoute: typeof AppOOrganizationSlugPlanificationProjectsIndexRouteImport
+      parentRoute: typeof AppOOrganizationSlugRoute
+    }
     '/_app/o/$organizationSlug/hr/team/': {
       id: '/_app/o/$organizationSlug/hr/team/'
       path: '/hr/team'
@@ -765,6 +858,13 @@ declare module '@tanstack/react-router' {
       path: '/planning/projects/$projectId'
       fullPath: '/o/$organizationSlug/planning/projects/$projectId'
       preLoaderRoute: typeof AppOOrganizationSlugPlanningProjectsProjectIdRouteImport
+      parentRoute: typeof AppOOrganizationSlugRoute
+    }
+    '/_app/o/$organizationSlug/planification/projects/$projectId': {
+      id: '/_app/o/$organizationSlug/planification/projects/$projectId'
+      path: '/planification/projects/$projectId'
+      fullPath: '/o/$organizationSlug/planification/projects/$projectId'
+      preLoaderRoute: typeof AppOOrganizationSlugPlanificationProjectsProjectIdRouteImport
       parentRoute: typeof AppOOrganizationSlugRoute
     }
     '/_app/o/$organizationSlug/crm/quotes/new': {
@@ -867,6 +967,8 @@ interface AppOOrganizationSlugRouteChildren {
   AppOOrganizationSlugHrAbsencesRoute: typeof AppOOrganizationSlugHrAbsencesRoute
   AppOOrganizationSlugHrEquipmentRoute: typeof AppOOrganizationSlugHrEquipmentRoute
   AppOOrganizationSlugHrWorkTimeRoute: typeof AppOOrganizationSlugHrWorkTimeRoute
+  AppOOrganizationSlugPlanificationBoardRoute: typeof AppOOrganizationSlugPlanificationBoardRoute
+  AppOOrganizationSlugPlanificationProjectTemplatesRoute: typeof AppOOrganizationSlugPlanificationProjectTemplatesRoute
   AppOOrganizationSlugPlanningCalendarRoute: typeof AppOOrganizationSlugPlanningCalendarRoute
   AppOOrganizationSlugPlanningProjectTemplatesRoute: typeof AppOOrganizationSlugPlanningProjectTemplatesRoute
   AppOOrganizationSlugPlanningReportsRoute: typeof AppOOrganizationSlugPlanningReportsRoute
@@ -874,6 +976,7 @@ interface AppOOrganizationSlugRouteChildren {
   AppOOrganizationSlugPlanningTeamRoute: typeof AppOOrganizationSlugPlanningTeamRoute
   AppOOrganizationSlugCrmIndexRoute: typeof AppOOrganizationSlugCrmIndexRoute
   AppOOrganizationSlugHrIndexRoute: typeof AppOOrganizationSlugHrIndexRoute
+  AppOOrganizationSlugPlanificationIndexRoute: typeof AppOOrganizationSlugPlanificationIndexRoute
   AppOOrganizationSlugPlanningIndexRoute: typeof AppOOrganizationSlugPlanningIndexRoute
   AppOOrganizationSlugPurchaseIndexRoute: typeof AppOOrganizationSlugPurchaseIndexRoute
   AppOOrganizationSlugCrmCustomersCustomerIdRoute: typeof AppOOrganizationSlugCrmCustomersCustomerIdRoute
@@ -882,12 +985,14 @@ interface AppOOrganizationSlugRouteChildren {
   AppOOrganizationSlugCrmInvoicesNewRoute: typeof AppOOrganizationSlugCrmInvoicesNewRoute
   AppOOrganizationSlugCrmQuotesQuoteIdRoute: typeof AppOOrganizationSlugCrmQuotesQuoteIdRouteWithChildren
   AppOOrganizationSlugCrmQuotesNewRoute: typeof AppOOrganizationSlugCrmQuotesNewRoute
+  AppOOrganizationSlugPlanificationProjectsProjectIdRoute: typeof AppOOrganizationSlugPlanificationProjectsProjectIdRoute
   AppOOrganizationSlugPlanningProjectsProjectIdRoute: typeof AppOOrganizationSlugPlanningProjectsProjectIdRoute
   AppOOrganizationSlugPurchaseSupplierInvoicesSupplierInvoiceIdRoute: typeof AppOOrganizationSlugPurchaseSupplierInvoicesSupplierInvoiceIdRoute
   AppOOrganizationSlugCrmCustomersIndexRoute: typeof AppOOrganizationSlugCrmCustomersIndexRoute
   AppOOrganizationSlugCrmInvoicesIndexRoute: typeof AppOOrganizationSlugCrmInvoicesIndexRoute
   AppOOrganizationSlugCrmQuotesIndexRoute: typeof AppOOrganizationSlugCrmQuotesIndexRoute
   AppOOrganizationSlugHrTeamIndexRoute: typeof AppOOrganizationSlugHrTeamIndexRoute
+  AppOOrganizationSlugPlanificationProjectsIndexRoute: typeof AppOOrganizationSlugPlanificationProjectsIndexRoute
   AppOOrganizationSlugPlanningProjectsIndexRoute: typeof AppOOrganizationSlugPlanningProjectsIndexRoute
   AppOOrganizationSlugPurchaseSupplierInvoicesIndexRoute: typeof AppOOrganizationSlugPurchaseSupplierInvoicesIndexRoute
   AppOOrganizationSlugHrTeamMemberIdWorkTimeRoute: typeof AppOOrganizationSlugHrTeamMemberIdWorkTimeRoute
@@ -902,6 +1007,10 @@ const AppOOrganizationSlugRouteChildren: AppOOrganizationSlugRouteChildren = {
   AppOOrganizationSlugHrAbsencesRoute: AppOOrganizationSlugHrAbsencesRoute,
   AppOOrganizationSlugHrEquipmentRoute: AppOOrganizationSlugHrEquipmentRoute,
   AppOOrganizationSlugHrWorkTimeRoute: AppOOrganizationSlugHrWorkTimeRoute,
+  AppOOrganizationSlugPlanificationBoardRoute:
+    AppOOrganizationSlugPlanificationBoardRoute,
+  AppOOrganizationSlugPlanificationProjectTemplatesRoute:
+    AppOOrganizationSlugPlanificationProjectTemplatesRoute,
   AppOOrganizationSlugPlanningCalendarRoute:
     AppOOrganizationSlugPlanningCalendarRoute,
   AppOOrganizationSlugPlanningProjectTemplatesRoute:
@@ -913,6 +1022,8 @@ const AppOOrganizationSlugRouteChildren: AppOOrganizationSlugRouteChildren = {
   AppOOrganizationSlugPlanningTeamRoute: AppOOrganizationSlugPlanningTeamRoute,
   AppOOrganizationSlugCrmIndexRoute: AppOOrganizationSlugCrmIndexRoute,
   AppOOrganizationSlugHrIndexRoute: AppOOrganizationSlugHrIndexRoute,
+  AppOOrganizationSlugPlanificationIndexRoute:
+    AppOOrganizationSlugPlanificationIndexRoute,
   AppOOrganizationSlugPlanningIndexRoute:
     AppOOrganizationSlugPlanningIndexRoute,
   AppOOrganizationSlugPurchaseIndexRoute:
@@ -928,6 +1039,8 @@ const AppOOrganizationSlugRouteChildren: AppOOrganizationSlugRouteChildren = {
   AppOOrganizationSlugCrmQuotesQuoteIdRoute:
     AppOOrganizationSlugCrmQuotesQuoteIdRouteWithChildren,
   AppOOrganizationSlugCrmQuotesNewRoute: AppOOrganizationSlugCrmQuotesNewRoute,
+  AppOOrganizationSlugPlanificationProjectsProjectIdRoute:
+    AppOOrganizationSlugPlanificationProjectsProjectIdRoute,
   AppOOrganizationSlugPlanningProjectsProjectIdRoute:
     AppOOrganizationSlugPlanningProjectsProjectIdRoute,
   AppOOrganizationSlugPurchaseSupplierInvoicesSupplierInvoiceIdRoute:
@@ -939,6 +1052,8 @@ const AppOOrganizationSlugRouteChildren: AppOOrganizationSlugRouteChildren = {
   AppOOrganizationSlugCrmQuotesIndexRoute:
     AppOOrganizationSlugCrmQuotesIndexRoute,
   AppOOrganizationSlugHrTeamIndexRoute: AppOOrganizationSlugHrTeamIndexRoute,
+  AppOOrganizationSlugPlanificationProjectsIndexRoute:
+    AppOOrganizationSlugPlanificationProjectsIndexRoute,
   AppOOrganizationSlugPlanningProjectsIndexRoute:
     AppOOrganizationSlugPlanningProjectsIndexRoute,
   AppOOrganizationSlugPurchaseSupplierInvoicesIndexRoute:

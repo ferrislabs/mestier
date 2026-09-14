@@ -150,7 +150,9 @@ export function ProjectDetailUI({
 				description="Ce qui a été devisé, ce qui a été facturé, ce qu'il reste à facturer, et ce que le projet coûte d'après le planning."
 				actions={
 					<Button asChild variant="outline">
-						<Link to={buildOrgPath(organizationSlug, '/planning/projects')}>
+						<Link
+							to={buildOrgPath(organizationSlug, '/planification/projects')}
+						>
 							<ArrowLeft />
 							Retour
 						</Link>

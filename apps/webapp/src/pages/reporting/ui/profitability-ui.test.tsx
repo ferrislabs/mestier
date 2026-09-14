@@ -307,7 +307,7 @@ describe('ProfitabilityUI', () => {
 		expect(jardinLinks.length).toBeGreaterThan(0)
 		for (const link of jardinLinks) {
 			expect(link.getAttribute('href')).toBe(
-				'/o/atelier-vert/planning/projects/project-1',
+				'/o/atelier-vert/planification/projects/project-1',
 			)
 		}
 
@@ -317,7 +317,7 @@ describe('ProfitabilityUI', () => {
 		expect(terrasseLinks.length).toBeGreaterThan(0)
 		for (const link of terrasseLinks) {
 			expect(link.getAttribute('href')).toBe(
-				'/o/atelier-vert/planning/projects/project-incomplete',
+				'/o/atelier-vert/planification/projects/project-incomplete',
 			)
 		}
 	})

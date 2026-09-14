@@ -84,11 +84,31 @@ describe('buildBreadcrumbItems', () => {
 		])
 	})
 
-	it('resolves the task list trail', () => {
+	/**
+	 * #468 took the task list out of the navigation — the board replaces it in
+	 * WS5 (#466) and the route lives on meanwhile, so the trail stops at the
+	 * module rather than naming a section that is no longer registered.
+	 */
+	it('stops at the module for the unregistered task list', () => {
 		expect(labelsOf('/o/baptiste/planning/tasks')).toEqual([
 			'Baptiste',
 			'Planning',
-			'Liste des tâches',
+		])
+	})
+
+	it('resolves the planification trails', () => {
+		expect(labelsOf('/o/baptiste/planification/projects')).toEqual([
+			'Baptiste',
+			'Planification',
+			'Projets',
+		])
+		expect(
+			labelsOf('/o/baptiste/planification/projects/abc-123', 'Cuisine Dupont'),
+		).toEqual(['Baptiste', 'Planification', 'Projets', 'Cuisine Dupont'])
+		expect(labelsOf('/o/baptiste/planification/project-templates')).toEqual([
+			'Baptiste',
+			'Planification',
+			'Modèles de projet',
 		])
 	})
 })

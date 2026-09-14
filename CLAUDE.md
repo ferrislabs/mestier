@@ -22,6 +22,7 @@ Adding a module means editing a registry, never a `match`:
 - Repository → a marker in `libs/core/src/infrastructure/registry.rs`, plus `#[repository(domain = X, backend = Postgres)]` on the adapter.
 - Route and OpenAPI tag → `apps/api/src/router.rs` and `apps/api/src/openapi.rs`.
 - Frontend module and its sidebar, settings sections included → `apps/webapp/src/modules/registry.ts`.
+- Two front modules share the planning vocabulary and are deliberately kept apart: `Planning` (`/planning`) holds **time** — Calendrier, Vue équipe, Écarts signalés — and `Planification` (`/planification`) holds **work** — the board, Projets, Modèles de projet. Both gate on `MANAGE_PLANNING`, and both are served by the single backend crate `handlers-planning`.
 
 ## Commands
 

@@ -42,4 +42,25 @@ describe('resolveModule', () => {
 		expect(resolveModule('/planning/team').id).toBe('planning')
 		expect(resolveModule('/planning/tasks').id).toBe('planning')
 	})
+
+	it('resolves planification pages to the planification module', () => {
+		expect(resolveModule('/planification').id).toBe('planification')
+		expect(resolveModule('/planification/board').id).toBe('planification')
+		expect(resolveModule('/planification/projects').id).toBe('planification')
+		expect(resolveModule('/planification/projects/abc-123').id).toBe(
+			'planification',
+		)
+	})
+
+	/**
+	 * #468 put two modules under near-identical prefixes. They diverge at the
+	 * fifth character, so `startsWith` never confuses them — asserted rather
+	 * than assumed, because renaming either one could break it silently.
+	 */
+	it('keeps the planning and planification modules apart', () => {
+		expect(resolveModule('/planning/calendar').id).toBe('planning')
+		expect(resolveModule('/planification/project-templates').id).toBe(
+			'planification',
+		)
+	})
 })

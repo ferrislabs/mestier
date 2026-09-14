@@ -287,7 +287,9 @@ function DetailError({
 				</div>
 				<div className="flex gap-2">
 					<Button asChild variant="outline">
-						<Link to={buildOrgPath(organizationSlug, '/planning/projects')}>
+						<Link
+							to={buildOrgPath(organizationSlug, '/planification/projects')}
+						>
 							<ArrowLeft />
 							Retour aux projets
 						</Link>

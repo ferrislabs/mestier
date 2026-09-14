@@ -7,6 +7,7 @@ export type ModuleId =
 	| 'purchase'
 	| 'hr'
 	| 'planning'
+	| 'planification'
 	| 'chat'
 	| 'settings'
 

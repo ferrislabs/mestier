@@ -492,7 +492,7 @@ function ProjectTitleLink({
 
 	return (
 		<Link
-			to={buildOrgPath(organizationSlug, '/planning/projects/$projectId')}
+			to={buildOrgPath(organizationSlug, '/planification/projects/$projectId')}
 			params={{ projectId: project.project_id }}
 			title={
 				expenses

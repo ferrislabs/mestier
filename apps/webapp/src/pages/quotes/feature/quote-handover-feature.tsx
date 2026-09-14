@@ -176,7 +176,7 @@ function QuoteHandoverWorkspace({
 		})
 
 		await navigate({
-			to: buildOrgPath(activeOrganization.slug, '/planning/projects'),
+			to: buildOrgPath(activeOrganization.slug, '/planification/projects'),
 			search: { projectId: result.data.project.id, archived: false },
 		})
 	}

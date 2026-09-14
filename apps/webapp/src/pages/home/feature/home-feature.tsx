@@ -125,7 +125,7 @@ export function HomeFeature() {
 				label: project.name,
 				to: buildOrgPath(
 					activeOrganization.slug,
-					`/planning/projects/${project.id}`,
+					`/planification/projects/${project.id}`,
 				),
 			})),
 		},
