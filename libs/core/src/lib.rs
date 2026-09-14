@@ -117,7 +117,7 @@ pub use domain::{
 
 pub use domain::{
     Absence, AbsenceId, AbsenceKind, AssigneeRef, AssignmentReport, AssignmentReportId,
-    AssignmentReportResolution, AvailabilityReport, Conflict, ConflictKind, CustomUnit,
+    AssignmentReportResolution, AvailabilityReport, BoardRank, Conflict, ConflictKind, CustomUnit,
     CustomUnitId, Customer, CustomerContact, CustomerContactId, CustomerContext, CustomerContextId,
     CustomerId, CustomerOutstandingBalance, CustomerPipelineStage, CustomerStatus, DateRange,
     DayLog, DayLogId, DeleteScope, DraftInvoice, ElectronicInvoicingFacts, Employee,
@@ -196,7 +196,9 @@ pub use domain::{
         UpdateSupplierInvoiceNotesCommand,
     },
     task::commands::{CreateTaskCommand, PatchTaskCommand},
-    task::service::{resolve_task_window, validate_parent_depth, validate_reparenting},
+    task::service::{
+        resolve_task_window, sort_by_board_rank, validate_parent_depth, validate_reparenting,
+    },
     task_comment::commands::{CreateTaskCommentCommand, UpdateTaskCommentCommand},
     task_label::commands::{CreateTaskLabelCommand, UpdateTaskLabelCommand},
     task_recurrence::commands::{CreateTaskRecurrenceCommand, PatchTaskRecurrenceCommand},

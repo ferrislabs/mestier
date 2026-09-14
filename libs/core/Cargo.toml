@@ -103,6 +103,7 @@ sqlx = { workspace = true, features = ["migrate"] }
 authz = { workspace = true, features = ["mock"] }
 cucumber = { workspace = true }
 mockall = { workspace = true }
+proptest = { workspace = true }
 tokio = { workspace = true, features = ["time"] }
 
 # Cucumber drives its own runner: the libtest harness must stay out of the way.

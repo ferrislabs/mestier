@@ -245,6 +245,7 @@ fn instantiate_tasks(
                 expenses_cents: shape.expenses_cents,
                 expenses_label: shape.expenses_label.clone(),
                 assignments: Vec::new(),
+                board_rank: None,
                 recurrence_id: None,
                 occurrence_date: None,
                 deleted_at: None,

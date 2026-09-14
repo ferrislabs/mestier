@@ -8,7 +8,7 @@ use crate::{
     domain::{
         member::ports::MemberRepository,
         task::{
-            DeleteScope, TaskAssignment, TaskAssignmentId, TaskId,
+            BoardRank, DeleteScope, TaskAssignment, TaskAssignmentId, TaskId,
             commands::{CreateTaskCommand, PatchTaskCommand},
             ports::TaskRepository,
         },
@@ -59,6 +59,38 @@ pub fn resolve_task_window(task: &Task, parent: Option<&Task>) -> Option<TimeRan
         (Some(starts_at), Some(ends_at)) => Some(TimeRange { starts_at, ends_at }),
         _ => None,
     }
+}
+
+/// Orders a board column the way the database does: ranked cards first, in
+/// lexicographic rank order, then every unranked one, ties broken by id.
+///
+/// The point of this function existing at all is that it is written against
+/// the SQL side rather than beside it. PostgreSQL's `ORDER BY board_rank ASC
+/// NULLS LAST, id ASC` and this comparator have to produce the same sequence
+/// for the same rows, and the two ways they could drift are both closed here:
+///
+/// * `NULL` last — `Option`'s own `Ord` puts `None` *first*, which is the
+///   opposite of what SQL does for an ascending sort, so the key leads with
+///   `is_none()` (`false < true`) instead of leaning on it;
+/// * byte order — [`BoardRank`]'s derived `Ord` compares the inner `String`
+///   byte by byte, and the column is `TEXT COLLATE "C"` so PostgreSQL compares
+///   the same bytes rather than applying the database's `en_US.utf8` collation.
+///
+/// A disagreement between the two would not look like a bug. It would look
+/// like cards changing places on reload.
+pub fn sort_by_board_rank(tasks: &mut [Task]) {
+    tasks.sort_by(|left, right| board_order_key(left).cmp(&board_order_key(right)));
+}
+
+/// `(unranked, rank, id)` — the exact shape of `ORDER BY board_rank ASC NULLS
+/// LAST, id ASC`. `Uuid`'s `Ord` compares its sixteen bytes, which is how
+/// PostgreSQL compares a `uuid` too, so the tie-break agrees as well.
+fn board_order_key(task: &Task) -> (bool, Option<&BoardRank>, uuid::Uuid) {
+    (
+        task.board_rank.is_none(),
+        task.board_rank.as_ref(),
+        task.id.0,
+    )
 }
 
 /// Rejects a parent that itself has a parent. The two-level hierarchy limit
@@ -241,6 +273,13 @@ where
                 expenses_cents,
                 expenses_label,
                 assignments: Vec::new(),
+                // Unranked until somebody drags it. A task's place in its
+                // column is something a person decides by dropping it, not
+                // something creation can guess — and guessing would put every
+                // new task at the same position for no reason a user could
+                // point at. `None` sorts last, which is where a new card
+                // belongs anyway.
+                board_rank: None,
                 recurrence_id: None,
                 occurrence_date: None,
                 deleted_at: None,
@@ -358,6 +397,13 @@ where
         }
         if let Some(project_id) = command.project_id {
             task.project_id = project_id;
+        }
+        // The third axis, applied exactly like the other two and coupled to
+        // neither: this branch reads no status and no date, and the status and
+        // date branches above read no rank. Moving a card inside its column is
+        // one write of one field — see `Task::board_rank`.
+        if let Some(board_rank) = command.board_rank {
+            task.board_rank = board_rank;
         }
         let (expenses_cents, expenses_label) = normalize_expenses(
             command.expenses_cents.unwrap_or(task.expenses_cents),
@@ -645,6 +691,7 @@ mod tests {
             expenses_cents: 0,
             expenses_label: None,
             assignments: Vec::new(),
+            board_rank: None,
             recurrence_id: None,
             occurrence_date: None,
             deleted_at: None,
@@ -2406,5 +2453,223 @@ mod tests {
 
         assert_eq!(cents, 4500);
         assert_eq!(label.as_deref(), Some("Clermont"));
+    }
+    // -- board_rank ---------------------------------------------------------
+
+    /// The domain half of "`NULL` sorts last". Its SQL half lives in
+    /// `application/task/tests.rs`
+    /// (`board_rank_orders_a_column_the_same_way_in_sql_and_in_the_domain`),
+    /// which runs both orderings over the same rows and compares them: this
+    /// test says what the domain does, that one says the two agree.
+    #[test]
+    fn sort_by_board_rank_puts_unranked_tasks_last() {
+        let organization_id = OrganizationId(Uuid::new_v4());
+        let ranked = |rank: &str| Task {
+            board_rank: Some(BoardRank(rank.to_owned())),
+            ..task(TaskId(Uuid::new_v4()), organization_id)
+        };
+
+        let mut tasks = vec![
+            Task {
+                board_rank: None,
+                ..task(TaskId(Uuid::new_v4()), organization_id)
+            },
+            ranked("z"),
+            ranked("1"),
+            Task {
+                board_rank: None,
+                ..task(TaskId(Uuid::new_v4()), organization_id)
+            },
+            ranked("i"),
+        ];
+
+        sort_by_board_rank(&mut tasks);
+
+        let ranks: Vec<Option<String>> = tasks
+            .iter()
+            .map(|t| t.board_rank.as_ref().map(|r| r.0.clone()))
+            .collect();
+        assert_eq!(
+            ranks,
+            vec![
+                Some("1".to_owned()),
+                Some("i".to_owned()),
+                Some("z".to_owned()),
+                None,
+                None,
+            ]
+        );
+    }
+
+    /// Two unranked tasks are ordered by id, the same tie-break the SQL side
+    /// uses (`ORDER BY board_rank ASC NULLS LAST, id ASC`) — without it the
+    /// tail of a column would be in an arbitrary order that changes between
+    /// two reads of the same data.
+    #[test]
+    fn sort_by_board_rank_breaks_ties_on_id() {
+        let organization_id = OrganizationId(Uuid::new_v4());
+        let mut ids = [Uuid::new_v4(), Uuid::new_v4()];
+        ids.sort();
+
+        let mut tasks = vec![
+            task(TaskId(ids[1]), organization_id),
+            task(TaskId(ids[0]), organization_id),
+        ];
+        for t in &mut tasks {
+            t.board_rank = None;
+        }
+
+        sort_by_board_rank(&mut tasks);
+
+        assert_eq!(tasks[0].id.0, ids[0]);
+        assert_eq!(tasks[1].id.0, ids[1]);
+    }
+
+    /// The third axis of the orthogonality rule, and the one-row guarantee in
+    /// the same test because they are the same claim: a drop inside a column
+    /// writes the rank, writes it once, and writes nothing else.
+    ///
+    /// `.times(1)` on `update` is the row count. Every other write on the
+    /// repository is left unstubbed, and `MockTaskRepository` panics on a call
+    /// it was not told to expect — so a second `update`, an `insert`, or a
+    /// `soft_delete` slipped in by a later change fails this test rather than
+    /// passing silently.
+    #[tokio::test]
+    async fn patch_task_setting_only_the_board_rank_writes_one_row_and_nothing_else() {
+        let id = TaskId(Uuid::new_v4());
+        let organization_id = OrganizationId(Uuid::new_v4());
+        let existing = Task {
+            status: TaskStatus::InProgress,
+            board_rank: Some(BoardRank("a".to_owned())),
+            ..task(id, organization_id)
+        };
+        let original_status = existing.status;
+        let original_starts_at = existing.starts_at;
+        let original_ends_at = existing.ends_at;
+        let original_assignments = existing.assignments.clone();
+
+        let mut task_repository = MockTaskRepository::new();
+        task_repository
+            .expect_find_by_id()
+            .with(eq(id))
+            .returning(move |_| {
+                let existing = existing.clone();
+                Box::pin(async move { Ok(Some(existing)) })
+            });
+        task_repository.expect_update().times(1).returning(|t| {
+            let cloned = t.clone();
+            Box::pin(async move { Ok(cloned) })
+        });
+
+        let mut service = service(task_repository, MockMemberRepository::new());
+
+        // The rank a board would have generated for a drop between "a" and
+        // "b" — computed by the caller, carried here as a value.
+        let moved = BoardRank::between(
+            Some(&BoardRank("a".to_owned())),
+            Some(&BoardRank("b".to_owned())),
+        )
+        .unwrap();
+
+        let mut command = PatchTaskCommand::new(id, authz::Subject::system());
+        command.board_rank = Some(Some(moved.clone()));
+
+        let updated = service.patch_task(command).await.unwrap();
+
+        assert_eq!(updated.board_rank, Some(moved));
+        assert_eq!(updated.status, original_status);
+        assert_eq!(updated.starts_at, original_starts_at);
+        assert_eq!(updated.ends_at, original_ends_at);
+        assert_eq!(updated.assignments, original_assignments);
+    }
+
+    /// `Some(None)` clears the rank, the same way it clears the window: the
+    /// card drops back to the unranked tail of its column instead of keeping
+    /// a position nobody asked for.
+    #[tokio::test]
+    async fn patch_task_clearing_the_board_rank_unranks_the_task() {
+        let id = TaskId(Uuid::new_v4());
+        let organization_id = OrganizationId(Uuid::new_v4());
+        let existing = Task {
+            board_rank: Some(BoardRank("i".to_owned())),
+            ..task(id, organization_id)
+        };
+
+        let mut task_repository = MockTaskRepository::new();
+        task_repository
+            .expect_find_by_id()
+            .with(eq(id))
+            .returning(move |_| {
+                let existing = existing.clone();
+                Box::pin(async move { Ok(Some(existing)) })
+            });
+        task_repository.expect_update().times(1).returning(|t| {
+            let cloned = t.clone();
+            Box::pin(async move { Ok(cloned) })
+        });
+
+        let mut service = service(task_repository, MockMemberRepository::new());
+
+        let mut command = PatchTaskCommand::new(id, authz::Subject::system());
+        command.board_rank = Some(None);
+
+        let updated = service.patch_task(command).await.unwrap();
+
+        assert_eq!(updated.board_rank, None);
+    }
+
+    /// The reciprocal of the test above: a `PATCH` that moves a card to
+    /// another column, or reschedules it, leaves the rank exactly as it was.
+    /// Without this, "status and rank are orthogonal" only holds in one
+    /// direction, which is the direction nobody breaks.
+    #[tokio::test]
+    async fn patch_task_changing_the_status_leaves_the_board_rank_untouched() {
+        let id = TaskId(Uuid::new_v4());
+        let organization_id = OrganizationId(Uuid::new_v4());
+        let existing = Task {
+            board_rank: Some(BoardRank("i".to_owned())),
+            ..task(id, organization_id)
+        };
+
+        let mut task_repository = MockTaskRepository::new();
+        task_repository
+            .expect_find_by_id()
+            .with(eq(id))
+            .returning(move |_| {
+                let existing = existing.clone();
+                Box::pin(async move { Ok(Some(existing)) })
+            });
+        task_repository.expect_update().times(1).returning(|t| {
+            let cloned = t.clone();
+            Box::pin(async move { Ok(cloned) })
+        });
+
+        let mut service = service(task_repository, MockMemberRepository::new());
+
+        let mut command = PatchTaskCommand::new(id, authz::Subject::system());
+        command.status = Some(TaskStatus::Done);
+
+        let updated = service.patch_task(command).await.unwrap();
+
+        assert_eq!(updated.status, TaskStatus::Done);
+        assert_eq!(updated.board_rank, Some(BoardRank("i".to_owned())));
+    }
+
+    /// A task is born unranked. A rank is what dragging produces, and
+    /// inventing one at creation would put every new task at the same place
+    /// in its column for no reason anybody could point at.
+    #[tokio::test]
+    async fn create_task_leaves_the_board_rank_unset() {
+        let mut task_repository = MockTaskRepository::new();
+        task_repository.expect_insert().times(1).returning(|t| {
+            let cloned = t.clone();
+            Box::pin(async move { Ok(cloned) })
+        });
+
+        let mut service = service(task_repository, MockMemberRepository::new());
+
+        let created = service.create_task(create_command()).await.unwrap();
+
+        assert_eq!(created.board_rank, None);
     }
 }

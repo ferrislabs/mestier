@@ -1,0 +1,15 @@
+-- Reverting gives up every manual board position, and there is no honest way
+-- around that: the ranks live nowhere else. What survives is every task, with
+-- every other column untouched — a reverted board falls back to the ordering
+-- it had before this migration (`starts_at`, then `id`), which is exactly the
+-- state an un-dragged column is in today.
+--
+-- One statement is enough. `DROP COLUMN` takes `chk_tasks_board_rank_shape`
+-- and `idx_tasks_org_id_status_board_rank` with it — both depend on the
+-- column and on nothing else — so dropping them separately first would be
+-- noise that can fall out of step with the `.up.sql` it mirrors.
+--
+-- Unlike `20260914000001`'s revert, this one is symmetric: re-running the
+-- `.up.sql` afterwards restores the column, the constraint and the index
+-- exactly as they were. Only the rank values are gone.
+ALTER TABLE tasks DROP COLUMN board_rank;

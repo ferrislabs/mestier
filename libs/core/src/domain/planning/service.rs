@@ -673,6 +673,7 @@ mod tests {
             expenses_cents: 0,
             expenses_label: None,
             assignments: Vec::new(),
+            board_rank: None,
             recurrence_id: None,
             occurrence_date: None,
             deleted_at: None,

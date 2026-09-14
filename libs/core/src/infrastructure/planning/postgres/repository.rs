@@ -85,6 +85,12 @@ impl<'tx> PlanningRepository for PgPlanningRepository<'tx> {
                 t.all_day, t.status::text AS "status!", t.blocks_availability,
                 t.customer_id, t.customer_context_id, t.quote_id, t.project_id,
                 t.expenses_cents, t.expenses_label,
+                -- Selected only so the `Task` this row rebuilds carries the same
+                -- rank as a `Task` read through `PgTaskRepository`. The
+                -- planning read model does not order by it — a board column is
+                -- not a calendar — but a `Task` that reports `None` for a rank
+                -- it actually has is a lie the next reader cannot detect.
+                t.board_rank,
                 t.recurrence_id, t.occurrence_date,
                 t.deleted_at, t.created_at, t.updated_at,
                 -- Postgres's own nullability analysis of a concatenation

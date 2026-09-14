@@ -503,6 +503,7 @@ where
                 expenses_cents: 0,
                 expenses_label: None,
                 assignments,
+                board_rank: None,
                 recurrence_id: Some(recurrence.id),
                 occurrence_date: Some(occurrence.date),
                 deleted_at: None,

@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT id, org_id, parent_task_id, title, description, starts_at, ends_at, all_day, status::text AS \"status!\", blocks_availability, customer_id, customer_context_id, quote_id, project_id, expenses_cents, expenses_label, recurrence_id, occurrence_date, deleted_at, created_at, updated_at\n            FROM tasks\n            WHERE org_id = $1 AND deleted_at IS NULL\n              AND (\n                ($2::uuid IS NULL AND parent_task_id IS NULL)\n                OR parent_task_id = $2\n              )\n            ORDER BY starts_at ASC NULLS LAST, id ASC\n            LIMIT $3 OFFSET $4\n            ",
+  "query": "\n            SELECT id, org_id, parent_task_id, title, description, starts_at, ends_at, all_day, status::text AS \"status!\", blocks_availability, customer_id, customer_context_id, quote_id, project_id, expenses_cents, expenses_label, board_rank, recurrence_id, occurrence_date, deleted_at, created_at, updated_at\n            FROM tasks\n            WHERE id = $1 AND deleted_at IS NULL\n            ",
   "describe": {
     "columns": [
       {
@@ -85,36 +85,38 @@
       },
       {
         "ordinal": 16,
+        "name": "board_rank",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 17,
         "name": "recurrence_id",
         "type_info": "Uuid"
       },
       {
-        "ordinal": 17,
+        "ordinal": 18,
         "name": "occurrence_date",
         "type_info": "Date"
       },
       {
-        "ordinal": 18,
+        "ordinal": 19,
         "name": "deleted_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 19,
+        "ordinal": 20,
         "name": "created_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 20,
+        "ordinal": 21,
         "name": "updated_at",
         "type_info": "Timestamptz"
       }
     ],
     "parameters": {
       "Left": [
-        "Uuid",
-        "Uuid",
-        "Int8",
-        "Int8"
+        "Uuid"
       ]
     },
     "nullable": [
@@ -137,9 +139,10 @@
       true,
       true,
       true,
+      true,
       false,
       false
     ]
   },
-  "hash": "09259e48ebc6dcddfcbf52dbc27e3aa5ac74c564b4d92bfc2f9f6d17f575dfc8"
+  "hash": "2442653375af27ec76be9f1fb9dc8845fdef1f0cd4704a02f9aab15ed954de6f"
 }

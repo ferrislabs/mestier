@@ -379,6 +379,7 @@ mod tests {
                 member_id,
                 created_at: now,
             }],
+            board_rank: None,
             recurrence_id: None,
             occurrence_date: None,
             deleted_at: None,

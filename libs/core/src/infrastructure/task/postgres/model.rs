@@ -7,6 +7,7 @@ use uuid::Uuid;
 use crate::{
     CustomerContextId, CustomerId, MemberId, OrganizationId, ProjectId, QuoteId, Task,
     TaskAssignment, TaskAssignmentId, TaskId, TaskRecurrenceId, TaskStatus,
+    domain::task::BoardRank,
 };
 
 #[derive(Debug, Clone)]
@@ -27,6 +28,7 @@ pub struct TaskRow {
     pub project_id: Option<Uuid>,
     pub expenses_cents: i32,
     pub expenses_label: Option<String>,
+    pub board_rank: Option<String>,
     pub recurrence_id: Option<Uuid>,
     pub occurrence_date: Option<NaiveDate>,
     pub deleted_at: Option<DateTime<Utc>>,
@@ -57,6 +59,14 @@ impl TaskRow {
             expenses_cents: self.expenses_cents,
             expenses_label: self.expenses_label,
             assignments,
+            // Carried through as it was stored, never parsed or normalized.
+            // `chk_tasks_board_rank_shape` already enforces the alphabet and
+            // the no-trailing-zero rule at the column, and `BoardRank::between`
+            // validates whatever it is handed, so a task whose rank somehow
+            // went bad still reads — it just cannot be dragged until the rank
+            // is replaced. Failing the whole read for a misspelled position
+            // would take a task off the board entirely.
+            board_rank: self.board_rank.map(BoardRank),
             recurrence_id: self.recurrence_id.map(TaskRecurrenceId),
             occurrence_date: self.occurrence_date,
             deleted_at: self.deleted_at,

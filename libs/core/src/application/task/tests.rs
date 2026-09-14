@@ -2,15 +2,17 @@
 #[allow(clippy::module_inception)]
 mod tests {
 
-    use chrono::{Duration, Utc};
+    use chrono::{DateTime, Duration, Utc};
     use common::{CoreError, OrganizationId, UserId, generate_uuid_v7};
     use sqlx::PgPool;
+    use uuid::Uuid;
 
     use crate::application::test_support::{dev_pool, purge};
     use crate::application::{MestierUseCase, default_authorizer};
     use crate::domain::task::{
-        AssigneeRef,
+        AssigneeRef, BoardRank,
         commands::{CreateTaskCommand, PatchTaskCommand},
+        service::sort_by_board_rank,
     };
     use crate::infrastructure::realtime::EventHub;
     use crate::{CustomerContextId, CustomerId, MemberId, TaskId, TaskStatus};
@@ -997,5 +999,219 @@ mod tests {
         );
 
         cleanup(&pool, fixture.organization_id, &[fixture.owner_id]).await;
+    }
+    // -- board_rank ---------------------------------------------------------
+
+    /// The acceptance criterion that cannot be checked on either side alone:
+    /// PostgreSQL and the domain must order a board column identically,
+    /// `NULL` included. Both orderings are run over the same rows, in the same
+    /// process, and compared — so a change to either one (a different
+    /// collation on the column, `Option`'s own `Ord` creeping into
+    /// `sort_by_board_rank`, a dropped `NULLS LAST`) fails here rather than
+    /// showing up in production as cards that swap places when the board is
+    /// reloaded.
+    #[tokio::test]
+    #[ignore = "requires live postgres"]
+    async fn board_rank_orders_a_column_the_same_way_in_sql_and_in_the_domain() {
+        let pool = make_pool().await;
+        let fixture = seed_fixture(&pool).await;
+        let usecase = make_usecase(pool.clone());
+
+        // A column of ranked cards plus two that nobody has ever dragged.
+        // "z" and "9z" are in there on purpose: they are the pairs a
+        // linguistic collation is most likely to order differently from byte
+        // order, which is what `TEXT COLLATE "C"` exists to prevent.
+        let ranks = [
+            Some("1"),
+            Some("9z"),
+            Some("a"),
+            Some("i"),
+            Some("z"),
+            None,
+            None,
+        ];
+        let mut created_ids = Vec::new();
+        for rank in ranks {
+            let created = usecase.create_task(create_command(&fixture)).await.unwrap();
+            assert_eq!(
+                created.board_rank, None,
+                "a task is born unranked, whatever its column"
+            );
+
+            if let Some(rank) = rank {
+                let mut patch = PatchTaskCommand::new(created.id, authz::Subject::system());
+                patch.board_rank = Some(Some(BoardRank(rank.to_owned())));
+                let patched = usecase.patch_task(patch).await.unwrap();
+                assert_eq!(patched.board_rank, Some(BoardRank(rank.to_owned())));
+            }
+
+            created_ids.push(created.id);
+        }
+
+        // The SQL side: the ordering a board's read will use, straight out of
+        // the index this migration adds.
+        let sql_order: Vec<Uuid> = sqlx::query_scalar!(
+            r#"
+            SELECT id
+            FROM tasks
+            WHERE org_id = $1 AND deleted_at IS NULL
+            ORDER BY board_rank ASC NULLS LAST, id ASC
+            "#,
+            fixture.organization_id.0,
+        )
+        .fetch_all(&pool)
+        .await
+        .unwrap();
+
+        // The domain side: the same rows, read back through the repository and
+        // sorted in memory.
+        let (mut tasks, _counts, _total) = usecase
+            .list_tasks(fixture.organization_id, None, 100, 0)
+            .await
+            .unwrap();
+        sort_by_board_rank(&mut tasks);
+        let domain_order: Vec<Uuid> = tasks.iter().map(|task| task.id.0).collect();
+
+        assert_eq!(
+            domain_order, sql_order,
+            "the database and the domain must order a board column identically"
+        );
+
+        // And, explicitly, the half of that agreement most likely to rot: the
+        // two unranked cards sit at the end, not the beginning.
+        let unranked = tasks.iter().filter(|t| t.board_rank.is_none()).count();
+        assert_eq!(unranked, 2);
+        assert!(
+            tasks[tasks.len() - 2..]
+                .iter()
+                .all(|t| t.board_rank.is_none()),
+            "NULL sorts after every ranked task"
+        );
+
+        cleanup(&pool, fixture.organization_id, &[fixture.owner_id]).await;
+    }
+
+    /// The round trip through the column, and the orthogonality rule holding
+    /// against the real schema rather than against a mock: a `PATCH` carrying
+    /// only a rank comes back with the status and both dates it went in with.
+    #[tokio::test]
+    #[ignore = "requires live postgres"]
+    async fn patching_only_the_board_rank_leaves_the_status_and_the_window_alone() {
+        let pool = make_pool().await;
+        let fixture = seed_fixture(&pool).await;
+        let usecase = make_usecase(pool.clone());
+
+        let created = usecase.create_task(create_command(&fixture)).await.unwrap();
+
+        // Where a drop between the column's first two cards would land.
+        let moved = BoardRank::between(
+            Some(&BoardRank("a".to_owned())),
+            Some(&BoardRank("b".to_owned())),
+        )
+        .unwrap();
+
+        let mut patch = PatchTaskCommand::new(created.id, authz::Subject::system());
+        patch.board_rank = Some(Some(moved.clone()));
+        let patched = usecase.patch_task(patch).await.unwrap();
+
+        assert_eq!(patched.board_rank, Some(moved.clone()));
+        assert_eq!(patched.status, created.status);
+        assert_eq!(patched.starts_at, created.starts_at);
+        assert_eq!(patched.ends_at, created.ends_at);
+
+        // Read back rather than trusted: the `RETURNING` clause and the next
+        // `SELECT` have to agree about the column too.
+        let fetched = usecase.get_task(created.id).await.unwrap();
+        assert_eq!(fetched.board_rank, Some(moved));
+        assert_eq!(fetched.status, created.status);
+        assert_eq!(fetched.starts_at, created.starts_at);
+
+        // `Some(None)` clears it, and clears nothing else.
+        let mut clear = PatchTaskCommand::new(created.id, authz::Subject::system());
+        clear.board_rank = Some(None);
+        let cleared = usecase.patch_task(clear).await.unwrap();
+        assert_eq!(cleared.board_rank, None);
+        assert_eq!(cleared.status, created.status);
+        assert_eq!(cleared.starts_at, created.starts_at);
+
+        cleanup(&pool, fixture.organization_id, &[fixture.owner_id]).await;
+    }
+
+    /// The one-row guarantee, measured rather than assumed: a drop between two
+    /// neighbours writes exactly one row, and leaves every other card in the
+    /// column byte-identical.
+    ///
+    /// `xact_commit`-style counters would measure the wrong thing (the
+    /// transaction also touches `task_assignments`), so this compares the
+    /// `updated_at` of every card in the column across the move. Exactly one
+    /// changes — which is the claim "one write" is making.
+    #[tokio::test]
+    #[ignore = "requires live postgres"]
+    async fn moving_a_card_between_two_others_writes_exactly_one_row() {
+        let pool = make_pool().await;
+        let fixture = seed_fixture(&pool).await;
+        let usecase = make_usecase(pool.clone());
+
+        // A column of three ranked cards, and the card about to be dropped
+        // between the first two.
+        let mut column = Vec::new();
+        for rank in ["1", "i", "z"] {
+            let created = usecase.create_task(create_command(&fixture)).await.unwrap();
+            let mut patch = PatchTaskCommand::new(created.id, authz::Subject::system());
+            patch.board_rank = Some(Some(BoardRank(rank.to_owned())));
+            column.push(usecase.patch_task(patch).await.unwrap());
+        }
+        let moving = usecase.create_task(create_command(&fixture)).await.unwrap();
+
+        let before: Vec<(Uuid, DateTime<Utc>, Option<String>)> =
+            snapshot(&pool, fixture.organization_id).await;
+
+        let rank = BoardRank::between(column[0].board_rank.as_ref(), column[1].board_rank.as_ref())
+            .unwrap();
+        assert!(column[0].board_rank.as_ref().unwrap() < &rank);
+        assert!(&rank < column[1].board_rank.as_ref().unwrap());
+
+        let mut patch = PatchTaskCommand::new(moving.id, authz::Subject::system());
+        patch.board_rank = Some(Some(rank.clone()));
+        usecase.patch_task(patch).await.unwrap();
+
+        let after = snapshot(&pool, fixture.organization_id).await;
+
+        let touched: Vec<Uuid> = before
+            .iter()
+            .zip(after.iter())
+            .filter(|(b, a)| b != a)
+            .map(|(b, _)| b.0)
+            .collect();
+        assert_eq!(
+            touched,
+            vec![moving.id.0],
+            "a drop must rewrite the dropped card and nothing else"
+        );
+
+        cleanup(&pool, fixture.organization_id, &[fixture.owner_id]).await;
+    }
+
+    /// Every card of an organization, keyed by id, with the two columns a
+    /// write would disturb. Ordered by id so two snapshots line up positionally.
+    async fn snapshot(
+        pool: &PgPool,
+        organization_id: OrganizationId,
+    ) -> Vec<(Uuid, DateTime<Utc>, Option<String>)> {
+        sqlx::query!(
+            r#"
+            SELECT id, updated_at, board_rank
+            FROM tasks
+            WHERE org_id = $1 AND deleted_at IS NULL
+            ORDER BY id ASC
+            "#,
+            organization_id.0,
+        )
+        .fetch_all(pool)
+        .await
+        .unwrap()
+        .into_iter()
+        .map(|row| (row.id, row.updated_at, row.board_rank))
+        .collect()
     }
 }
