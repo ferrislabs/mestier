@@ -1,5 +1,6 @@
 use common::{CoreError, OrganizationId};
 use mestier_macros::repository;
+use tracing::warn;
 use uuid::Uuid;
 
 use crate::{
@@ -37,13 +38,17 @@ impl TryFrom<WorkflowRow> for Workflow {
     type Error = CoreError;
 
     fn try_from(row: WorkflowRow) -> Result<Self, Self::Error> {
-        let layout: Option<WorkflowLayout> = row
-            .layout
-            .map(serde_json::from_value)
-            .transpose()
-            .map_err(|e| {
-                CoreError::Internal(format!("invalid workflow layout in database: {e}"))
-            })?;
+        let layout = row.layout.and_then(|stored| {
+            serde_json::from_value::<WorkflowLayout>(stored)
+                .inspect_err(|error| {
+                    warn!(
+                        workflow_id = %row.id,
+                        %error,
+                        "discarding a workflow layout this build cannot read"
+                    );
+                })
+                .ok()
+        });
 
         Ok(Self {
             id: row.id,
@@ -940,6 +945,36 @@ mod tests {
         .unwrap()
         .unwrap();
         assert_eq!(found.layout, Some(layout));
+    }
+
+    #[tokio::test]
+    #[ignore = "requires live postgres"]
+    async fn a_layout_the_current_type_cannot_read_leaves_the_workflow_readable() {
+        let pool = make_pool().await;
+        let org_id = seed_organization(&pool, "unreadable-layout").await;
+        let inserted = with_tx(&pool, async |tx| {
+            let mut repo = PgWorkflowRepository::new(&tx);
+            repo.insert(&workflow(org_id, "Garbled")).await
+        })
+        .await
+        .unwrap();
+
+        sqlx::query("UPDATE automation.workflow SET layout = '{\"c1\": \"not a point\"}'::jsonb WHERE id = $1")
+            .bind(inserted.id)
+            .execute(&pool)
+            .await
+            .unwrap();
+
+        let found = with_tx(&pool, async |tx| {
+            let mut repo = PgWorkflowRepository::new(&tx);
+            repo.find_by_id(org_id, inserted.id).await
+        })
+        .await
+        .unwrap()
+        .unwrap();
+
+        assert_eq!(found.layout, None);
+        assert_eq!(found.name, "Garbled");
     }
 
     #[tokio::test]
