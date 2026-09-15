@@ -41,6 +41,7 @@ impl From<WorkflowRow> for Workflow {
             description: row.description,
             enabled: row.enabled,
             current_version_id: row.current_version_id,
+            layout: None,
             created_at: row.created_at,
             updated_at: row.updated_at,
         }
@@ -406,6 +407,7 @@ mod tests {
             description: None,
             enabled: true,
             current_version_id: None,
+            layout: None,
             created_at: now,
             updated_at: now,
         }

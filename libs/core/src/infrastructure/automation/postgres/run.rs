@@ -592,6 +592,7 @@ mod tests {
                     description: None,
                     enabled: true,
                     current_version_id: None,
+                    layout: None,
                     created_at: now,
                     updated_at: now,
                 })

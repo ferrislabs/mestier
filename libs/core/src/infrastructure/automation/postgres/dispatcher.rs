@@ -220,6 +220,7 @@ mod tests {
                     org_id,
                     workflow_id: workflow.id,
                     graph,
+                    layout: None,
                     created_by: None,
                 },
             )

@@ -99,6 +99,7 @@ mod tests {
                     org_id: org,
                     workflow_id: workflow.id,
                     graph,
+                    layout: None,
                     created_by: None,
                 },
             )

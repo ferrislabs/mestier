@@ -43,6 +43,7 @@ impl MestierUseCase {
             description: command.description,
             enabled: true,
             current_version_id: None,
+            layout: None,
             created_at: now,
             updated_at: now,
         };
@@ -424,6 +425,7 @@ mod tests {
                 org_id,
                 workflow_id: created.id,
                 graph: valid_graph(),
+                layout: None,
                 created_by: None,
             })
             .await
@@ -463,6 +465,7 @@ mod tests {
                 org_id,
                 workflow_id: created.id,
                 graph: valid_graph(),
+                layout: None,
                 created_by: None,
             })
             .await
@@ -477,6 +480,7 @@ mod tests {
                 org_id,
                 workflow_id: created.id,
                 graph: second_graph,
+                layout: None,
                 created_by: None,
             })
             .await
@@ -510,6 +514,7 @@ mod tests {
                 org_id,
                 workflow_id: generate_uuid_v7(),
                 graph: valid_graph(),
+                layout: None,
                 created_by: None,
             })
             .await
@@ -550,6 +555,7 @@ mod tests {
                 org_id,
                 workflow_id: created.id,
                 graph: invalid_graph,
+                layout: None,
                 created_by: None,
             })
             .await
@@ -619,6 +625,7 @@ mod tests {
                 org_id,
                 workflow_id: created.id,
                 graph,
+                layout: None,
                 created_by: None,
             })
             .await

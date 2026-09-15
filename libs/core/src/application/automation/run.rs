@@ -827,6 +827,7 @@ mod tests {
                 org_id,
                 workflow_id: workflow.id,
                 graph,
+                layout: None,
                 created_by: None,
             })
             .await
@@ -1358,6 +1359,7 @@ mod tests {
                     connectors: vec![condition("only_v1", "{{ true }}")],
                     edges: vec![],
                 },
+                layout: None,
                 created_by: None,
             })
             .await
@@ -1377,6 +1379,7 @@ mod tests {
                     connectors: vec![condition("only_v2", "{{ true }}")],
                     edges: vec![],
                 },
+                layout: None,
                 created_by: None,
             })
             .await

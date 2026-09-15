@@ -1,6 +1,7 @@
 use common::OrganizationId;
 use uuid::Uuid;
 
+use super::WorkflowLayout;
 use super::graph::Graph;
 
 #[derive(Debug, Clone, PartialEq)]
@@ -31,6 +32,9 @@ pub struct SaveWorkflowVersionCommand {
     pub org_id: OrganizationId,
     pub workflow_id: Uuid,
     pub graph: Graph,
+    /// `None` leaves any previously stored layout untouched — see
+    /// `application::automation::workflow::MestierUseCase::save_workflow_version`.
+    pub layout: Option<WorkflowLayout>,
     /// `users.id` of whoever saved it, when a human did. `None` for a
     /// system-authored save (an import, say).
     pub created_by: Option<Uuid>,

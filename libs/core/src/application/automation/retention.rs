@@ -380,6 +380,7 @@ mod tests {
                         }],
                         edges: Vec::new(),
                     },
+                    layout: None,
                     created_by: None,
                 },
             )
@@ -491,6 +492,7 @@ mod tests {
                             }],
                             edges: Vec::new(),
                         },
+                        layout: None,
                         created_by: None,
                     },
                 )

@@ -173,6 +173,7 @@ impl MestierUseCase {
                 }],
                 edges: Vec::<Edge>::new(),
             },
+            layout: None,
             created_by: None,
         })
         .await?;
