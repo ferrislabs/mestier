@@ -2,6 +2,7 @@ use serde::Serialize;
 use serde_json::Value;
 
 use super::field::Field;
+use crate::domain::automation::workflow::Branch;
 
 /// What a connector accepts as authentication, checked against a
 /// credential's scheme when a workflow is saved (#199).
@@ -59,6 +60,7 @@ pub struct ConnectorDescriptor {
     pub label: &'static str,
     pub auth: AuthRequirement,
     pub fields: &'static [Field],
+    pub branches: &'static [Branch],
     /// What this connector's output looks like, so the editor can offer
     /// `connectors.c1.output.id` in the mapping autocomplete before a single
     /// run has ever happened.
@@ -127,6 +129,7 @@ mod tests {
                     any_of: &["b2b"],
                 }),
             }],
+            branches: &[],
             output_example: json!({ "id": 42 }),
         };
 

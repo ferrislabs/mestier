@@ -6,6 +6,7 @@ use thiserror::Error;
 
 use super::descriptor::{AuthRequirement, ConnectorDescriptor};
 use super::field::{Field, FieldKind, SelectOption};
+use crate::domain::automation::workflow::Branch;
 
 /// Every connector kind the product can pose in a workflow graph, keyed by
 /// kind and version.
@@ -326,6 +327,7 @@ fn flow_descriptors() -> Vec<ConnectorDescriptor> {
             label: "Loop",
             auth: AuthRequirement::None,
             fields: LOOP_FIELDS,
+            branches: &[Branch::Each, Branch::After],
             output_example: json!({ "item": "…", "index": 0 }),
         },
         ConnectorDescriptor {
@@ -335,6 +337,7 @@ fn flow_descriptors() -> Vec<ConnectorDescriptor> {
             label: "Condition",
             auth: AuthRequirement::None,
             fields: CONDITION_FIELDS,
+            branches: &[Branch::Then, Branch::Else],
             output_example: json!({ "matched": true }),
         },
     ]
@@ -351,6 +354,7 @@ fn customer_descriptors() -> Vec<ConnectorDescriptor> {
         label: "Create customer",
         auth: AuthRequirement::None,
         fields: CUSTOMER_CREATE_FIELDS,
+        branches: &[],
         output_example: json!({ "id": "…", "name": "…" }),
     }]
 }
@@ -368,6 +372,7 @@ fn http_descriptors() -> Vec<ConnectorDescriptor> {
         label: "HTTP request",
         auth: AuthRequirement::AnyOf(&["bearer_token", "http_basic", "http_header"]),
         fields: HTTP_REQUEST_FIELDS,
+        branches: &[],
         output_example: json!({
             "status": 200,
             "headers": { "content-type": "application/json" },
@@ -389,6 +394,7 @@ fn odoo_descriptors() -> Vec<ConnectorDescriptor> {
             label: "Create partner",
             auth: AuthRequirement::Exactly("odoo_api"),
             fields: ODOO_CREATE_PARTNER_FIELDS,
+            branches: &[],
             output_example: json!({ "id": 42 }),
         },
         ConnectorDescriptor {
@@ -398,6 +404,7 @@ fn odoo_descriptors() -> Vec<ConnectorDescriptor> {
             label: "Update partner",
             auth: AuthRequirement::Exactly("odoo_api"),
             fields: ODOO_UPDATE_PARTNER_FIELDS,
+            branches: &[],
             output_example: json!({ "id": 42, "updated": true }),
         },
         ConnectorDescriptor {
@@ -407,6 +414,7 @@ fn odoo_descriptors() -> Vec<ConnectorDescriptor> {
             label: "Create invoice",
             auth: AuthRequirement::Exactly("odoo_api"),
             fields: ODOO_CREATE_INVOICE_FIELDS,
+            branches: &[],
             output_example: json!({ "id": 99 }),
         },
     ]
@@ -430,6 +438,7 @@ fn task_recurrence_descriptors() -> Vec<ConnectorDescriptor> {
         label: "Extend recurrence horizon",
         auth: AuthRequirement::None,
         fields: &[],
+        branches: &[],
         output_example: json!({ "materialized": 0 }),
     }]
 }
@@ -449,6 +458,7 @@ mod tests {
             label: "Loop",
             auth: AuthRequirement::None,
             fields: &[],
+            branches: &[],
             output_example: json!({ "index": 0 }),
         }
     }

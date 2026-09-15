@@ -16,11 +16,6 @@ use crate::domain::automation::expression::parse_template;
 
 use super::graph::{Branch, Edge, Graph, PlacedConnector};
 
-/// The only connector kind whose outgoing edges are `Then`/`Else`.
-const CONDITION_KIND: &str = "flow.condition";
-/// The only connector kind whose outgoing edges are `Each`/`After`.
-const LOOP_KIND: &str = "flow.loop";
-
 /// Every way a graph can be refused. Each variant names the connector at
 /// fault (`connector_id`) and, when the mistake is inside one field, the
 /// field too — that is what lets the editor put the error on the field
@@ -212,16 +207,13 @@ pub fn validate_graph(
         }
     }
 
-    // Which branch values a connector kind defines. Hardcoded to the two
-    // flow-control kinds rather than read off the descriptor: the catalogue
-    // does not (and need not) declare this as data, and the rule itself
-    // names these exact two kinds (#199).
     for edge in &valid_edges {
         let source = connectors_by_id[edge.from.as_str()];
-        let allowed: &[Branch] = match source.kind.as_str() {
-            CONDITION_KIND => &[Branch::Then, Branch::Else],
-            LOOP_KIND => &[Branch::Each, Branch::After],
-            _ => &[],
+        let Some(allowed) = catalogue
+            .get(source.kind.as_str(), source.version)
+            .map(|descriptor| descriptor.branches)
+        else {
+            continue;
         };
         let ok = match edge.branch {
             Some(branch) => allowed.contains(&branch),
@@ -326,7 +318,10 @@ pub fn validate_graph(
     // shows it matters.
     let mut loop_body: HashSet<&str> = HashSet::new();
     for connector in &graph.connectors {
-        if connector.kind != LOOP_KIND {
+        let opens_a_loop = catalogue
+            .get(connector.kind.as_str(), connector.version)
+            .is_some_and(|descriptor| descriptor.branches.contains(&Branch::Each));
+        if !opens_a_loop {
             continue;
         }
         for edge in valid_edges
@@ -722,6 +717,7 @@ mod tests {
                     secret: false,
                     visible_when: None,
                 }],
+                branches: &[],
                 output_example: json!({}),
             })
             .expect("first registration succeeds");
@@ -787,6 +783,7 @@ mod tests {
                 label: "HTTP",
                 auth: AuthRequirement::Exactly("bearer_token"),
                 fields: &[],
+                branches: &[],
                 output_example: json!({}),
             })
             .expect("first registration succeeds");
@@ -1008,13 +1005,15 @@ mod tests {
     #[test]
     fn a_then_edge_from_a_non_condition_connector_is_refused_and_named() {
         let catalogue = connector_catalogue();
+        let mut config = serde_json::Map::new();
+        config.insert("name".to_string(), json!("Ada"));
         let mut graph = graph_of(vec![
             PlacedConnector {
                 id: "c1".to_string(),
-                kind: "test.plain".to_string(),
+                kind: "mestier.customer.create".to_string(),
                 version: 1,
                 credential_id: None,
-                config: serde_json::Map::new(),
+                config,
             },
             condition("c2", "{{ true }}"),
         ]);
@@ -1025,7 +1024,7 @@ mod tests {
         });
 
         let errors = validate_graph(&graph, &catalogue, &[])
-            .expect_err("only flow.condition defines Then/Else");
+            .expect_err("a connector declaring no branch refuses a branched edge");
 
         assert!(
             errors.contains(&GraphError::InvalidBranch {
@@ -1252,5 +1251,167 @@ mod tests {
             }),
             "{errors:?}"
         );
+    }
+
+    fn catalogue_with_a_custom_branching_connector() -> ConnectorCatalogue {
+        use crate::domain::automation::connector::ConnectorDescriptor;
+
+        let mut catalogue = ConnectorCatalogue::new();
+        catalogue
+            .register(ConnectorDescriptor {
+                kind: "test.fork",
+                version: 1,
+                family: "test",
+                label: "Fork",
+                auth: AuthRequirement::None,
+                fields: &[],
+                branches: &[Branch::Then],
+                output_example: json!({}),
+            })
+            .expect("fork registers");
+        catalogue
+            .register(ConnectorDescriptor {
+                kind: "test.sink",
+                version: 1,
+                family: "test",
+                label: "Sink",
+                auth: AuthRequirement::None,
+                fields: &[],
+                branches: &[],
+                output_example: json!({}),
+            })
+            .expect("sink registers");
+        catalogue
+    }
+
+    fn fork_graph(branch: Option<Branch>) -> Graph {
+        let placed = |id: &str, kind: &str| super::super::graph::PlacedConnector {
+            id: id.to_string(),
+            kind: kind.to_string(),
+            version: 1,
+            credential_id: None,
+            config: serde_json::Map::new(),
+        };
+
+        Graph {
+            connectors: vec![placed("fork", "test.fork"), placed("sink", "test.sink")],
+            edges: vec![Edge {
+                from: "fork".to_string(),
+                to: "sink".to_string(),
+                branch,
+            }],
+        }
+    }
+
+    #[test]
+    fn a_branch_the_descriptor_declares_is_accepted() {
+        let catalogue = catalogue_with_a_custom_branching_connector();
+
+        let graph = fork_graph(Some(Branch::Then));
+
+        assert!(validate_graph(&graph, &catalogue, &[]).is_ok());
+    }
+
+    #[test]
+    fn a_branch_the_descriptor_does_not_declare_is_refused() {
+        let catalogue = catalogue_with_a_custom_branching_connector();
+
+        let graph = fork_graph(Some(Branch::Each));
+
+        let errors = validate_graph(&graph, &catalogue, &[]).expect_err("refused");
+
+        assert!(
+            errors.contains(&GraphError::InvalidBranch {
+                connector_id: "fork".to_string(),
+            }),
+            "{errors:?}"
+        );
+    }
+
+    #[test]
+    fn a_connector_declaring_branches_refuses_an_unbranched_edge() {
+        let catalogue = catalogue_with_a_custom_branching_connector();
+
+        let graph = fork_graph(None);
+
+        let errors = validate_graph(&graph, &catalogue, &[]).expect_err("refused");
+
+        assert!(
+            errors.contains(&GraphError::InvalidBranch {
+                connector_id: "fork".to_string(),
+            }),
+            "{errors:?}"
+        );
+    }
+
+    #[test]
+    fn a_custom_connector_declaring_each_opens_a_loop_scope() {
+        use crate::domain::automation::connector::{ConnectorDescriptor, Field};
+
+        let mut catalogue = ConnectorCatalogue::new();
+        catalogue
+            .register(ConnectorDescriptor {
+                kind: "test.each",
+                version: 1,
+                family: "test",
+                label: "Each",
+                auth: AuthRequirement::None,
+                fields: &[],
+                branches: &[Branch::Each],
+                output_example: json!({}),
+            })
+            .expect("each registers");
+        catalogue
+            .register(ConnectorDescriptor {
+                kind: "test.body",
+                version: 1,
+                family: "test",
+                label: "Body",
+                auth: AuthRequirement::None,
+                fields: &[Field {
+                    name: "predicate",
+                    label: "Predicate",
+                    required: true,
+                    kind: FieldKind::Text,
+                    expression: true,
+                    secret: false,
+                    visible_when: None,
+                }],
+                branches: &[],
+                output_example: json!({}),
+            })
+            .expect("body registers");
+
+        let mut config = serde_json::Map::new();
+        config.insert(
+            "predicate".to_string(),
+            json!("{{ loop.item }}").as_str().unwrap().into(),
+        );
+
+        let graph = Graph {
+            connectors: vec![
+                super::super::graph::PlacedConnector {
+                    id: "each".to_string(),
+                    kind: "test.each".to_string(),
+                    version: 1,
+                    credential_id: None,
+                    config: serde_json::Map::new(),
+                },
+                super::super::graph::PlacedConnector {
+                    id: "body".to_string(),
+                    kind: "test.body".to_string(),
+                    version: 1,
+                    credential_id: None,
+                    config,
+                },
+            ],
+            edges: vec![Edge {
+                from: "each".to_string(),
+                to: "body".to_string(),
+                branch: Some(Branch::Each),
+            }],
+        };
+
+        assert!(validate_graph(&graph, &catalogue, &[]).is_ok());
     }
 }

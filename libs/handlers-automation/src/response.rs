@@ -141,6 +141,7 @@ pub struct ConnectorDescriptorResponse {
     pub label: String,
     pub auth: AuthRequirementResponse,
     pub fields: Vec<FieldResponse>,
+    pub branches: Vec<BranchDto>,
     pub output_example: Value,
 }
 
@@ -153,6 +154,12 @@ impl From<&mestier_core::ConnectorDescriptor> for ConnectorDescriptorResponse {
             label: value.label.to_owned(),
             auth: AuthRequirementResponse::from(&value.auth),
             fields: value.fields.iter().map(FieldResponse::from).collect(),
+            branches: value
+                .branches
+                .iter()
+                .copied()
+                .map(BranchDto::from)
+                .collect(),
             output_example: value.output_example.clone(),
         }
     }
@@ -787,6 +794,24 @@ mod tests {
                 assert!(!field.label.is_empty());
             }
         }
+
+        let branches_of = |kind: &str| {
+            responses
+                .iter()
+                .find(|d| d.kind == kind)
+                .unwrap_or_else(|| panic!("`{kind}` is in the catalogue"))
+                .branches
+                .clone()
+        };
+        assert_eq!(
+            branches_of("flow.condition"),
+            vec![BranchDto::Then, BranchDto::Else]
+        );
+        assert_eq!(
+            branches_of("flow.loop"),
+            vec![BranchDto::Each, BranchDto::After]
+        );
+        assert!(branches_of("http.request").is_empty());
 
         let odoo_create_partner = responses
             .iter()
