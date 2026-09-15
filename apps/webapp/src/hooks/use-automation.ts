@@ -14,6 +14,8 @@ const SETTINGS_PATH =
 	'/api/v1/organizations/{organization_id}/automation/settings'
 const WORKFLOWS_PATH =
 	'/api/v1/organizations/{organization_id}/automation/workflows'
+const WORKFLOW_PATH =
+	'/api/v1/organizations/{organization_id}/automation/workflows/{workflow_id}'
 const WORKFLOW_TRIGGER_PATH =
 	'/api/v1/organizations/{organization_id}/automation/workflows/{workflow_id}/trigger'
 const RUNS_PATH = '/api/v1/organizations/{organization_id}/automation/runs'
@@ -149,6 +151,31 @@ export function useAutomationWorkflows(organizationId: string) {
 	)
 }
 
+export function useCreateWorkflow(organizationId: string) {
+	const queryClient = useQueryClient()
+	return useMutation({
+		...window.tanstackApi.mutation('post', WORKFLOWS_PATH).mutationOptions,
+		onSuccess: () => invalidate(queryClient, WORKFLOWS_PATH),
+		meta: { organizationId },
+	})
+}
+
+export function useUpdateWorkflow() {
+	const queryClient = useQueryClient()
+	return useMutation({
+		...window.tanstackApi.mutation('patch', WORKFLOW_PATH).mutationOptions,
+		onSuccess: () => invalidate(queryClient, WORKFLOWS_PATH),
+	})
+}
+
+export function useDeleteWorkflow() {
+	const queryClient = useQueryClient()
+	return useMutation({
+		...window.tanstackApi.mutation('delete', WORKFLOW_PATH).mutationOptions,
+		onSuccess: () => invalidate(queryClient, WORKFLOWS_PATH),
+	})
+}
+
 /** A run's steps — fetched lazily, only once its detail sheet opens. */
 export function useRun(organizationId: string, runId: string | null) {
 	return useQuery({
@@ -195,3 +222,4 @@ export type CreatedCredential = Credential & { secret: unknown }
 export type AutomationSettings = Schemas.AutomationSettingsBody
 export type Run = Schemas.RunResponse
 export type WorkflowTrigger = Schemas.WorkflowTriggerResponse
+export type Workflow = Schemas.WorkflowResponse
