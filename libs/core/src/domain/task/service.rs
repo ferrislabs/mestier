@@ -4,13 +4,13 @@ use chrono::{DateTime, Utc};
 use common::{CoreError, generate_uuid_v7};
 
 use crate::{
-    CustomerContextId, CustomerId, MemberId, OrganizationId, Task, TimeRange,
+    CustomerContextId, CustomerId, MemberId, OrganizationId, Task, TaskStatus, TimeRange,
     domain::{
         member::ports::MemberRepository,
         task::{
             BoardRank, DeleteScope, TaskAssignment, TaskAssignmentId, TaskId,
             commands::{CreateTaskCommand, PatchTaskCommand},
-            ports::TaskRepository,
+            ports::{TaskFilter, TaskRepository},
         },
     },
 };
@@ -82,13 +82,20 @@ pub fn sort_by_board_rank(tasks: &mut [Task]) {
     tasks.sort_by(|left, right| board_order_key(left).cmp(&board_order_key(right)));
 }
 
-/// `(unranked, rank, id)` — the exact shape of `ORDER BY board_rank ASC NULLS
-/// LAST, id ASC`. `Uuid`'s `Ord` compares its sixteen bytes, which is how
-/// PostgreSQL compares a `uuid` too, so the tie-break agrees as well.
-fn board_order_key(task: &Task) -> (bool, Option<&BoardRank>, uuid::Uuid) {
+/// `(unranked, rank, created_at, id)` — the exact shape of `ORDER BY
+/// board_rank ASC NULLS LAST, created_at ASC, id ASC`, the clause
+/// `TaskRepository::list_by_organization` actually issues. `created_at`
+/// separates two cards that somehow carry the same rank (nothing in
+/// [`BoardRank::between`] emits a duplicate, but the column accepts one); `id`
+/// closes the order so that neither side can return two equal keys, which is
+/// what `LIMIT`/`OFFSET` paging needs to avoid showing a row twice. `Uuid`'s
+/// `Ord` compares its sixteen bytes, which is how PostgreSQL compares a
+/// `uuid` too, so the final tie-break agrees as well.
+fn board_order_key(task: &Task) -> (bool, Option<&BoardRank>, DateTime<Utc>, uuid::Uuid) {
     (
         task.board_rank.is_none(),
         task.board_rank.as_ref(),
+        task.created_at,
         task.id.0,
     )
 }
@@ -296,26 +303,247 @@ where
             .ok_or(CoreError::NotFound)
     }
 
-    /// Lists a page of `organization_id`'s tasks — every root when
-    /// `parent_task_id` is `None`, or the children of a specific task
-    /// otherwise — together with each returned task's own child count,
-    /// fetched in one grouped query rather than one per task (see
+    /// Lists a page of `organization_id`'s tasks matching `filter`, together
+    /// with each returned task's own child count, fetched in one grouped
+    /// query rather than one per task (see
     /// `TaskRepository::count_children`'s N+1 warning).
+    ///
+    /// The page comes back in board order — see
+    /// `TaskRepository::list_by_organization` — and nothing here re-sorts it:
+    /// sorting a page after the fact would reorder the twenty rows the
+    /// database picked, not the result, which is exactly the kind of
+    /// almost-right that survives review.
     pub async fn list_tasks(
         &mut self,
         organization_id: OrganizationId,
-        parent_task_id: Option<TaskId>,
+        filter: &TaskFilter,
         limit: u64,
         offset: u64,
     ) -> Result<(Vec<Task>, HashMap<TaskId, i64>, u64), CoreError> {
         let (tasks, total) = self
             .task_repository
-            .list_by_organization(organization_id, parent_task_id, limit, offset)
+            .list_by_organization(organization_id, filter, limit, offset)
             .await?;
         let ids: Vec<TaskId> = tasks.iter().map(|task| task.id).collect();
         let child_counts = self.task_repository.count_children(&ids).await?;
 
         Ok((tasks, child_counts, total))
+    }
+
+    /// The board rank a card must take to land between `preceding` and
+    /// `following`, resolved from the two neighbours the drop named.
+    ///
+    /// The client sends ids, not a rank. The alternative — the board
+    /// computing the rank itself — puts a second base-36 implementation in
+    /// the tree that has to agree with [`BoardRank::between`] byte for byte
+    /// forever, and a divergence surfaces only as cards changing order for no
+    /// visible reason. One implementation, server-side, is the whole point.
+    ///
+    /// The four shapes mirror [`BoardRank::between`]'s own, and each is a
+    /// real gesture rather than a degenerate case:
+    ///
+    /// * both named — dropped between two cards;
+    /// * only `preceding` — dropped at the bottom of the column;
+    /// * only `following` — dropped at the top of the column;
+    /// * neither — dropped into an empty column.
+    ///
+    /// `target_status` is the column the card is landing in — the `status`
+    /// the same `PATCH` is about to write, or the card's current one when
+    /// the `PATCH` does not touch it. It is passed in rather than inferred,
+    /// because the caller is the only layer holding both halves, and because
+    /// inferring it from the neighbours is precisely the mistake this
+    /// parameter exists to make impossible: a drop that changes `status` to
+    /// one column while naming neighbours in another used to be accepted in
+    /// silence, and the card landed in the target column carrying a rank
+    /// from a different column's space.
+    ///
+    /// **This can write**, which is why it is only ever reached from inside
+    /// `MestierUseCase::patch_task`'s transaction. A neighbour that exists
+    /// but carries no rank does not refuse the drop: it triggers
+    /// [`Self::initialize_column`], which materializes the order the column
+    /// already has. See that method for why, and for why it is the column
+    /// and not the card that gets ranked.
+    ///
+    /// Three refusals, all deliberate, and all of them before any write:
+    ///
+    /// * a neighbour this organization cannot see — unknown, deleted, or
+    ///   another tenant's — is [`CoreError::NotFound`]. Reading a rank off a
+    ///   row the caller may not know exists would leak it, and answering
+    ///   anything else would place the card using a number nobody can
+    ///   account for;
+    /// * two neighbours in **different columns** are a
+    ///   [`CoreError::Conflict`]. Ranks are only comparable inside one
+    ///   `(org_id, status)`, so such a pair brackets nothing;
+    /// * neighbours that agree with each other but **not with
+    ///   `target_status`** are the same [`CoreError::Conflict`], for the same
+    ///   underlying reason. A rank means nothing outside its own column, so
+    ///   bracketing the card against a column it is not joining would give
+    ///   it a position in a space it does not occupy — no error, no signal,
+    ///   wrong place on the board.
+    ///
+    /// A cross-column drop is therefore perfectly expressible, and this is
+    /// what makes it safe: send the new `status` and the target column's
+    /// neighbours in one payload, and both land in one transaction.
+    pub async fn resolve_board_rank_between(
+        &mut self,
+        organization_id: OrganizationId,
+        target_status: TaskStatus,
+        preceding: Option<TaskId>,
+        following: Option<TaskId>,
+    ) -> Result<BoardRank, CoreError> {
+        // One grouped read for both neighbours rather than one per id — the
+        // same rule the rest of this module follows, and here it also makes
+        // the two lookups see the same snapshot.
+        let named: Vec<TaskId> = preceding.into_iter().chain(following).collect();
+        if named.is_empty() {
+            // A drop into an empty column names nobody, so there is nothing
+            // to read and no column to initialize.
+            return BoardRank::between(None, None);
+        }
+
+        let positions = self
+            .task_repository
+            .find_board_positions(organization_id, &named)
+            .await?;
+        let position = |id: TaskId| positions.get(&id).ok_or(CoreError::NotFound);
+
+        let before = preceding.map(position).transpose()?;
+        let after = following.map(position).transpose()?;
+
+        // Two checks, both before anything is written, and they are not the
+        // same check. The first asks whether the neighbours agree with each
+        // other; the second asks whether they agree with where the card is
+        // actually going.
+        let neighbours_column = match (before, after) {
+            (Some(before), Some(after)) if before.status != after.status => {
+                return Err(CoreError::Conflict(format!(
+                    "board rank neighbours are in different columns (`{}` and `{}`)",
+                    before.status.as_str(),
+                    after.status.as_str(),
+                )));
+            }
+            (Some(position), _) | (_, Some(position)) => position.status,
+            (None, None) => unreachable!("`named` is non-empty, so one neighbour was resolved"),
+        };
+
+        if neighbours_column != target_status {
+            return Err(CoreError::Conflict(format!(
+                "board rank neighbours are in column `{}`, but the card is landing in `{}`",
+                neighbours_column.as_str(),
+                target_status.as_str(),
+            )));
+        }
+
+        let mut before_rank = before.and_then(|position| position.board_rank.clone());
+        let mut after_rank = after.and_then(|position| position.board_rank.clone());
+
+        // A named neighbour with no rank is not a refusal, it is a column
+        // that has never been written down. Rank it, then read the
+        // neighbours again — `initialize_column` may legitimately have
+        // written nothing, if another transaction got there first.
+        let unranked_neighbour = (preceding.is_some() && before_rank.is_none())
+            || (following.is_some() && after_rank.is_none());
+        if unranked_neighbour {
+            // The *target* column, which the check above has just proved is
+            // also the neighbours'. Saying `target_status` rather than
+            // `neighbours_column` is not a formality: it is the column the
+            // card is joining, and it is the one that has to be ranked for
+            // the card to have a position in it.
+            self.initialize_column(organization_id, target_status)
+                .await?;
+
+            let refreshed = self
+                .task_repository
+                .find_board_positions(organization_id, &named)
+                .await?;
+            let rank_of = |id: Option<TaskId>| -> Result<Option<BoardRank>, CoreError> {
+                let Some(id) = id else {
+                    return Ok(None);
+                };
+                let position = refreshed.get(&id).ok_or(CoreError::NotFound)?;
+                position.board_rank.clone().map(Some).ok_or_else(|| {
+                    // Unreachable unless initialization silently skipped a
+                    // row: every card of the column carries a rank once it
+                    // has run. Reported rather than asserted.
+                    CoreError::Internal(format!(
+                        "task `{id}` is still unranked after its column was initialized"
+                    ))
+                })
+            };
+            before_rank = rank_of(preceding)?;
+            after_rank = rank_of(following)?;
+        }
+
+        BoardRank::between(before_rank.as_ref(), after_rank.as_ref())
+    }
+
+    /// Writes down the order a column already has.
+    ///
+    /// `board_rank` was added to `tasks` without a backfill, so every task in
+    /// every organization starts unranked. Unranked cards sort last, in
+    /// `created_at ASC, id ASC` — that is a real order, visible on the board,
+    /// simply never persisted. Until it is, the first drop into any column
+    /// has nothing to bracket: both neighbours are `NULL`, and refusing would
+    /// mean the most natural gesture on the board returns a `409` on a fresh
+    /// install with nothing to tell the user why.
+    ///
+    /// So the column is materialized rather than the drop refused. This
+    /// invents no order — it persists the one already on screen, which is why
+    /// [`TaskRepository::list_column_for_ranking`] must read the column with
+    /// the same `ORDER BY` the listing endpoint uses.
+    ///
+    /// Three properties make this safe to run at any moment:
+    ///
+    /// * **only `NULL` rows are written.** A card that already carries a rank
+    ///   keeps it, so a half-ranked column converges rather than being
+    ///   renumbered. Renumbering every card on a drop is the `i32`-position
+    ///   scheme that [`BoardRank`] exists to avoid;
+    /// * **the new ranks all sort above every existing one.** The unranked
+    ///   cards were being displayed *after* the ranked ones, and persisting
+    ///   the order means keeping them there;
+    /// * **it is idempotent.** A second run finds nothing unranked, writes
+    ///   nothing, and issues no `UPDATE` at all.
+    ///
+    /// Once, per column, for the life of the organization. After that this
+    /// costs one `SELECT` that finds no `NULL`s — and it is only reached at
+    /// all when a neighbour came back unranked, which stops happening.
+    async fn initialize_column(
+        &mut self,
+        organization_id: OrganizationId,
+        status: TaskStatus,
+    ) -> Result<(), CoreError> {
+        let column = self
+            .task_repository
+            .list_column_for_ranking(organization_id, status)
+            .await?;
+
+        // The read is ordered `board_rank ASC NULLS LAST, ...`, so the
+        // unranked cards are exactly the tail — already in the order they
+        // must be ranked in — and the last ranked card, if there is one, is
+        // the highest rank in use.
+        let floor = column
+            .iter()
+            .filter_map(|(_, rank)| rank.as_ref())
+            .next_back()
+            .cloned();
+        let unranked: Vec<TaskId> = column
+            .iter()
+            .filter(|(_, rank)| rank.is_none())
+            .map(|(id, _)| *id)
+            .collect();
+
+        if unranked.is_empty() {
+            return Ok(());
+        }
+
+        let generated = BoardRank::evenly_spaced_between(floor.as_ref(), None, unranked.len())?;
+        let writes: Vec<(TaskId, BoardRank)> = unranked.into_iter().zip(generated).collect();
+
+        self.task_repository
+            .set_board_ranks(organization_id, &writes)
+            .await?;
+
+        Ok(())
     }
 
     /// Applies a `PATCH`: reparenting, reschedule, status/title/description
@@ -549,7 +777,12 @@ where
         // matter — this is "no limit", not a page size.
         let (children, _total) = self
             .task_repository
-            .list_by_organization(task.organization_id, Some(id), i64::MAX as u64, 0)
+            .list_by_organization(
+                task.organization_id,
+                &TaskFilter::children_of(id),
+                i64::MAX as u64,
+                0,
+            )
             .await?;
 
         for child in &children {
@@ -660,7 +893,10 @@ fn validate_text_field(label: &str, value: &Option<String>) -> Result<(), CoreEr
 
 #[cfg(test)]
 mod tests {
+    use std::sync::{Arc, Mutex};
+
     use super::*;
+    use crate::domain::task::ports::BoardPosition;
     use crate::{
         AssigneeRef, CustomerContextId, CustomerId, Member, MemberId, OrganizationId, TaskStatus,
         domain::{member::ports::MockMemberRepository, task::ports::MockTaskRepository},
@@ -1200,7 +1436,10 @@ mod tests {
         task_repository
             .expect_list_by_organization()
             .withf(move |org, parent, limit, offset| {
-                *org == organization_id && parent.is_none() && *limit == 10 && *offset == 20
+                *org == organization_id
+                    && *parent == TaskFilter::roots()
+                    && *limit == 10
+                    && *offset == 20
             })
             .returning(move |org_id, _, _, _| {
                 Box::pin(async move { Ok((vec![task(root_id, org_id)], 1)) })
@@ -1213,7 +1452,7 @@ mod tests {
         let mut service = service(task_repository, MockMemberRepository::new());
 
         let (items, child_counts, total) = service
-            .list_tasks(organization_id, None, 10, 20)
+            .list_tasks(organization_id, &TaskFilter::roots(), 10, 20)
             .await
             .unwrap();
 
@@ -2339,7 +2578,9 @@ mod tests {
             });
         task_repository
             .expect_list_by_organization()
-            .withf(move |org, parent, _, _| *org == organization_id && *parent == Some(id))
+            .withf(move |org, filter, _, _| {
+                *org == organization_id && *filter == TaskFilter::children_of(id)
+            })
             .returning(|_, _, _, _| Box::pin(async { Ok((Vec::new(), 0)) }));
         task_repository
             .expect_soft_delete()
@@ -2380,7 +2621,9 @@ mod tests {
             });
         task_repository
             .expect_list_by_organization()
-            .withf(move |org, parent, _, _| *org == organization_id && *parent == Some(id))
+            .withf(move |org, filter, _, _| {
+                *org == organization_id && *filter == TaskFilter::children_of(id)
+            })
             .returning(move |_, _, _, _| {
                 let children = vec![child_a.clone(), child_b.clone()];
                 Box::pin(async move { Ok((children, 2)) })
@@ -2501,15 +2744,22 @@ mod tests {
         );
     }
 
-    /// Two unranked tasks are ordered by id, the same tie-break the SQL side
-    /// uses (`ORDER BY board_rank ASC NULLS LAST, id ASC`) — without it the
-    /// tail of a column would be in an arbitrary order that changes between
-    /// two reads of the same data.
+    /// Two tasks that tie on rank *and* on `created_at` are ordered by id —
+    /// the last tie-break of `ORDER BY board_rank ASC NULLS LAST, created_at
+    /// ASC, id ASC`, and the one that closes the order completely. Without
+    /// it the tail of a column would be in an arbitrary order that changes
+    /// between two reads of the same data, and `LIMIT`/`OFFSET` paging could
+    /// show one row twice while skipping another.
+    ///
+    /// The two tasks are given the same `created_at` on purpose: the helper
+    /// stamps `Utc::now()` per call, so leaving them apart would test the
+    /// `created_at` tie-break instead of the id one.
     #[test]
     fn sort_by_board_rank_breaks_ties_on_id() {
         let organization_id = OrganizationId(Uuid::new_v4());
         let mut ids = [Uuid::new_v4(), Uuid::new_v4()];
         ids.sort();
+        let created_at = Utc::now();
 
         let mut tasks = vec![
             task(TaskId(ids[1]), organization_id),
@@ -2517,12 +2767,45 @@ mod tests {
         ];
         for t in &mut tasks {
             t.board_rank = None;
+            t.created_at = created_at;
         }
 
         sort_by_board_rank(&mut tasks);
 
         assert_eq!(tasks[0].id.0, ids[0]);
         assert_eq!(tasks[1].id.0, ids[1]);
+    }
+
+    /// `created_at` comes *before* the id tie-break, which is what makes the
+    /// unranked tail of a column read oldest-first rather than in whatever
+    /// order two uuids happen to compare. Ids here run backwards on purpose,
+    /// so only the `created_at` key can produce the expected sequence.
+    #[test]
+    fn sort_by_board_rank_orders_equal_ranks_by_creation_date() {
+        let organization_id = OrganizationId(Uuid::new_v4());
+        let mut ids = [Uuid::new_v4(), Uuid::new_v4()];
+        ids.sort();
+        let now = Utc::now();
+
+        let older = Task {
+            board_rank: None,
+            created_at: now - chrono::Duration::hours(1),
+            ..task(TaskId(ids[1]), organization_id)
+        };
+        let newer = Task {
+            board_rank: None,
+            created_at: now,
+            ..task(TaskId(ids[0]), organization_id)
+        };
+
+        let mut tasks = vec![newer, older];
+        sort_by_board_rank(&mut tasks);
+
+        assert_eq!(
+            tasks[0].id.0, ids[1],
+            "the older task comes first even though its id sorts last"
+        );
+        assert_eq!(tasks[1].id.0, ids[0]);
     }
 
     /// The third axis of the orthogonality rule, and the one-row guarantee in
@@ -2671,5 +2954,632 @@ mod tests {
         let created = service.create_task(create_command()).await.unwrap();
 
         assert_eq!(created.board_rank, None);
+    }
+
+    // -- resolving a drop's rank from its neighbours ------------------------
+
+    /// A stand-in board, shared between the mock's reads and its writes so a
+    /// resolution that initializes a column then reads it back sees its own
+    /// effects — which is the whole sequence under test here.
+    ///
+    /// Rows are supplied in the column's display order. `list_column_for_ranking`
+    /// re-derives that order from the rows themselves (`board_rank ASC NULLS
+    /// LAST`, then supply order) so that it keeps agreeing with the SQL after
+    /// ranks are written.
+    type FakeBoard = Arc<Mutex<Vec<(TaskId, TaskStatus, Option<BoardRank>)>>>;
+
+    /// The number of rows each `set_board_ranks` call actually wrote, in
+    /// order — how the tests below say "and the second time it wrote
+    /// nothing" without inspecting a database.
+    type WriteLog = Arc<Mutex<Vec<u64>>>;
+
+    fn board_repository(
+        organization_id: OrganizationId,
+        rows: Vec<(TaskId, TaskStatus, Option<BoardRank>)>,
+    ) -> (MockTaskRepository, FakeBoard, WriteLog) {
+        let board: FakeBoard = Arc::new(Mutex::new(rows));
+        let writes: WriteLog = Arc::new(Mutex::new(Vec::new()));
+        let mut task_repository = MockTaskRepository::new();
+
+        let reads = board.clone();
+        task_repository
+            .expect_find_board_positions()
+            .returning(move |org, ids| {
+                assert_eq!(org, organization_id, "the read must be tenant-scoped");
+                let found: HashMap<TaskId, BoardPosition> = reads
+                    .lock()
+                    .unwrap()
+                    .iter()
+                    .filter(|(id, _, _)| ids.contains(id))
+                    .map(|(id, status, rank)| {
+                        (
+                            *id,
+                            BoardPosition {
+                                status: *status,
+                                board_rank: rank.clone(),
+                            },
+                        )
+                    })
+                    .collect();
+                Box::pin(async move { Ok(found) })
+            });
+
+        let column = board.clone();
+        task_repository
+            .expect_list_column_for_ranking()
+            .returning(move |org, status| {
+                assert_eq!(org, organization_id, "the read must be tenant-scoped");
+                let mut rows: Vec<(usize, TaskId, Option<BoardRank>)> = column
+                    .lock()
+                    .unwrap()
+                    .iter()
+                    .enumerate()
+                    .filter(|(_, (_, row_status, _))| *row_status == status)
+                    .map(|(index, (id, _, rank))| (index, *id, rank.clone()))
+                    .collect();
+                rows.sort_by(|left, right| {
+                    (left.2.is_none(), left.2.as_ref(), left.0).cmp(&(
+                        right.2.is_none(),
+                        right.2.as_ref(),
+                        right.0,
+                    ))
+                });
+                let ordered: Vec<(TaskId, Option<BoardRank>)> =
+                    rows.into_iter().map(|(_, id, rank)| (id, rank)).collect();
+                Box::pin(async move { Ok(ordered) })
+            });
+
+        let written = board.clone();
+        let log = writes.clone();
+        task_repository
+            .expect_set_board_ranks()
+            .returning(move |org, incoming| {
+                assert_eq!(org, organization_id, "the write must be tenant-scoped");
+                let mut rows = written.lock().unwrap();
+                let mut affected = 0u64;
+                for (id, rank) in incoming {
+                    for row in rows.iter_mut() {
+                        // The `board_rank IS NULL` guard the real statement
+                        // carries: a card that already has a rank keeps it.
+                        if row.0 == *id && row.2.is_none() {
+                            row.2 = Some(rank.clone());
+                            affected += 1;
+                        }
+                    }
+                }
+                log.lock().unwrap().push(affected);
+                Box::pin(async move { Ok(affected) })
+            });
+
+        (task_repository, board, writes)
+    }
+
+    fn ranked(board: &FakeBoard, id: TaskId) -> Option<BoardRank> {
+        board
+            .lock()
+            .unwrap()
+            .iter()
+            .find(|(row_id, _, _)| *row_id == id)
+            .and_then(|(_, _, rank)| rank.clone())
+    }
+
+    #[tokio::test]
+    async fn a_drop_between_two_cards_lands_strictly_between_their_ranks() {
+        let organization_id = OrganizationId(Uuid::new_v4());
+        let above = TaskId(Uuid::new_v4());
+        let below = TaskId(Uuid::new_v4());
+
+        let (repository, _board, writes) = board_repository(
+            organization_id,
+            vec![
+                (above, TaskStatus::Planned, Some(BoardRank("a".to_owned()))),
+                (below, TaskStatus::Planned, Some(BoardRank("b".to_owned()))),
+            ],
+        );
+        let mut service = service(repository, MockMemberRepository::new());
+
+        let rank = service
+            .resolve_board_rank_between(
+                organization_id,
+                TaskStatus::Planned,
+                Some(above),
+                Some(below),
+            )
+            .await
+            .unwrap();
+
+        assert!(BoardRank("a".to_owned()) < rank);
+        assert!(rank < BoardRank("b".to_owned()));
+        assert!(
+            writes.lock().unwrap().is_empty(),
+            "an already-ranked column is never written to on a drop"
+        );
+    }
+
+    /// The top and the bottom of a column: one neighbour, no bound on the
+    /// other side. Both are ordinary drops, not edge cases to be refused.
+    #[tokio::test]
+    async fn a_drop_at_the_edge_of_a_column_needs_only_one_neighbour() {
+        let organization_id = OrganizationId(Uuid::new_v4());
+        let card = TaskId(Uuid::new_v4());
+        let rows = vec![(card, TaskStatus::Planned, Some(BoardRank("i".to_owned())))];
+
+        let (repository, _, _) = board_repository(organization_id, rows.clone());
+        let mut top = service(repository, MockMemberRepository::new());
+        let above_everything = top
+            .resolve_board_rank_between(organization_id, TaskStatus::Planned, None, Some(card))
+            .await
+            .unwrap();
+        assert!(above_everything < BoardRank("i".to_owned()));
+
+        let (repository, _, _) = board_repository(organization_id, rows);
+        let mut bottom = service(repository, MockMemberRepository::new());
+        let below_everything = bottom
+            .resolve_board_rank_between(organization_id, TaskStatus::Planned, Some(card), None)
+            .await
+            .unwrap();
+        assert!(BoardRank("i".to_owned()) < below_everything);
+    }
+
+    /// An empty column. No neighbours to read, so no query either — the
+    /// rank lands in the middle of the scale so the next drop has room on
+    /// both sides.
+    #[tokio::test]
+    async fn a_drop_into_an_empty_column_names_no_neighbour_and_reads_nothing() {
+        let organization_id = OrganizationId(Uuid::new_v4());
+        // No expectations at all: `MockTaskRepository` panics on an
+        // unexpected call, so a needless round trip fails this test.
+        let mut service = service(MockTaskRepository::new(), MockMemberRepository::new());
+
+        let rank = service
+            .resolve_board_rank_between(organization_id, TaskStatus::Backlog, None, None)
+            .await
+            .unwrap();
+
+        assert!(BoardRank("0".to_owned()) < rank);
+        assert!(rank < BoardRank("z".to_owned()));
+    }
+
+    /// A neighbour the organization cannot see is a `NotFound`, which the
+    /// HTTP layer turns into a `404`. The repository's `org_id` predicate is
+    /// what makes "another tenant's card" and "no such card" the same answer,
+    /// so the rank is never computed from a row the caller cannot see.
+    #[tokio::test]
+    async fn a_neighbour_from_another_organization_is_not_found() {
+        let organization_id = OrganizationId(Uuid::new_v4());
+        let mine = TaskId(Uuid::new_v4());
+        let theirs = TaskId(Uuid::new_v4());
+
+        // `theirs` is simply absent from what the scoped read returns.
+        let (repository, _, _) = board_repository(
+            organization_id,
+            vec![(mine, TaskStatus::Planned, Some(BoardRank("a".to_owned())))],
+        );
+        let mut service = service(repository, MockMemberRepository::new());
+
+        let error = service
+            .resolve_board_rank_between(
+                organization_id,
+                TaskStatus::Planned,
+                Some(mine),
+                Some(theirs),
+            )
+            .await
+            .unwrap_err();
+
+        assert!(
+            matches!(error, CoreError::NotFound),
+            "a neighbour outside the organization must be a 404, never a rank: {error:?}"
+        );
+    }
+
+    /// Neighbours in the wrong order are a stale board, and
+    /// `BoardRank::between` already refuses them — this only pins that the
+    /// refusal is not swallowed on the way through.
+    #[tokio::test]
+    async fn neighbours_in_the_wrong_order_are_refused() {
+        let organization_id = OrganizationId(Uuid::new_v4());
+        let above = TaskId(Uuid::new_v4());
+        let below = TaskId(Uuid::new_v4());
+
+        let (repository, _, _) = board_repository(
+            organization_id,
+            vec![
+                (above, TaskStatus::Planned, Some(BoardRank("z".to_owned()))),
+                (below, TaskStatus::Planned, Some(BoardRank("a".to_owned()))),
+            ],
+        );
+        let mut service = service(repository, MockMemberRepository::new());
+
+        let error = service
+            .resolve_board_rank_between(
+                organization_id,
+                TaskStatus::Planned,
+                Some(above),
+                Some(below),
+            )
+            .await
+            .unwrap_err();
+
+        assert!(matches!(error, CoreError::Conflict(_)), "{error:?}");
+    }
+
+    // -- initializing a column ----------------------------------------------
+
+    /// Two ranks are only comparable inside one column, so a pair drawn from
+    /// two of them brackets nothing. Refused rather than resolved against
+    /// whichever column happened to be checked first — that would put the
+    /// card somewhere the user did not aim, silently.
+    #[tokio::test]
+    async fn two_neighbours_in_different_columns_are_refused() {
+        let organization_id = OrganizationId(Uuid::new_v4());
+        let planned = TaskId(Uuid::new_v4());
+        let done = TaskId(Uuid::new_v4());
+
+        let (repository, _, writes) = board_repository(
+            organization_id,
+            vec![
+                (
+                    planned,
+                    TaskStatus::Planned,
+                    Some(BoardRank("a".to_owned())),
+                ),
+                (done, TaskStatus::Done, Some(BoardRank("b".to_owned()))),
+            ],
+        );
+        let mut service = service(repository, MockMemberRepository::new());
+
+        let error = service
+            .resolve_board_rank_between(
+                organization_id,
+                TaskStatus::Planned,
+                Some(planned),
+                Some(done),
+            )
+            .await
+            .unwrap_err();
+
+        assert!(
+            matches!(error, CoreError::Conflict(ref message) if message.contains("different columns")),
+            "{error:?}"
+        );
+        assert!(
+            writes.lock().unwrap().is_empty(),
+            "a refused drop must not have initialized anything on its way to the refusal"
+        );
+    }
+
+    /// The gesture this correction exists for: the very first drop into a
+    /// column nobody has ever dragged in. Every card is unranked, so the
+    /// column is materialized in the order it was already being displayed
+    /// in, and only then is the drop resolved against it.
+    #[tokio::test]
+    async fn a_drop_between_two_unranked_neighbours_initializes_the_column_first() {
+        let organization_id = OrganizationId(Uuid::new_v4());
+        let first = TaskId(Uuid::new_v4());
+        let second = TaskId(Uuid::new_v4());
+        let third = TaskId(Uuid::new_v4());
+
+        // Supplied in display order, every one of them unranked — a fresh
+        // install, where `board_rank` was added with no backfill.
+        let (repository, board, writes) = board_repository(
+            organization_id,
+            vec![
+                (first, TaskStatus::Backlog, None),
+                (second, TaskStatus::Backlog, None),
+                (third, TaskStatus::Backlog, None),
+            ],
+        );
+        let mut service = service(repository, MockMemberRepository::new());
+
+        let rank = service
+            .resolve_board_rank_between(
+                organization_id,
+                TaskStatus::Backlog,
+                Some(first),
+                Some(second),
+            )
+            .await
+            .unwrap();
+
+        let ranks: Vec<BoardRank> = [first, second, third]
+            .into_iter()
+            .map(|id| ranked(&board, id).expect("every card of the column is ranked now"))
+            .collect();
+        assert_eq!(
+            writes.lock().unwrap().as_slice(),
+            &[3],
+            "one statement, three rows — the whole column at once"
+        );
+        assert!(ranks[0] < ranks[1] && ranks[1] < ranks[2], "{ranks:?}");
+        assert!(
+            ranks[0] < rank && rank < ranks[1],
+            "the drop lands between the two cards it named: {rank:?} in {ranks:?}"
+        );
+    }
+
+    /// A column that is already half written down converges instead of being
+    /// renumbered: the ranked cards keep the ranks they had, and the
+    /// unranked ones are placed after them — which is where they were being
+    /// displayed.
+    #[tokio::test]
+    async fn initializing_a_half_ranked_column_leaves_the_ranked_cards_alone() {
+        let organization_id = OrganizationId(Uuid::new_v4());
+        let kept = TaskId(Uuid::new_v4());
+        let older = TaskId(Uuid::new_v4());
+        let newer = TaskId(Uuid::new_v4());
+
+        let (repository, board, writes) = board_repository(
+            organization_id,
+            vec![
+                (kept, TaskStatus::Planned, Some(BoardRank("m".to_owned()))),
+                (older, TaskStatus::Planned, None),
+                (newer, TaskStatus::Planned, None),
+            ],
+        );
+        let mut service = service(repository, MockMemberRepository::new());
+
+        service
+            .resolve_board_rank_between(
+                organization_id,
+                TaskStatus::Planned,
+                Some(older),
+                Some(newer),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(
+            ranked(&board, kept),
+            Some(BoardRank("m".to_owned())),
+            "a card that already had a rank keeps it — renumbering is what this design avoids"
+        );
+        assert_eq!(writes.lock().unwrap().as_slice(), &[2]);
+        let older_rank = ranked(&board, older).unwrap();
+        let newer_rank = ranked(&board, newer).unwrap();
+        assert!(BoardRank("m".to_owned()) < older_rank, "{older_rank:?}");
+        assert!(older_rank < newer_rank);
+    }
+
+    /// Idempotence, measured: the second drop into the same column finds
+    /// nothing unranked and issues no `UPDATE` at all.
+    #[tokio::test]
+    async fn initializing_a_column_twice_writes_nothing_the_second_time() {
+        let organization_id = OrganizationId(Uuid::new_v4());
+        let first = TaskId(Uuid::new_v4());
+        let second = TaskId(Uuid::new_v4());
+
+        let (repository, _, writes) = board_repository(
+            organization_id,
+            vec![
+                (first, TaskStatus::Backlog, None),
+                (second, TaskStatus::Backlog, None),
+            ],
+        );
+        let mut service = service(repository, MockMemberRepository::new());
+
+        service
+            .resolve_board_rank_between(
+                organization_id,
+                TaskStatus::Backlog,
+                Some(first),
+                Some(second),
+            )
+            .await
+            .unwrap();
+        service
+            .resolve_board_rank_between(
+                organization_id,
+                TaskStatus::Backlog,
+                Some(first),
+                Some(second),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(
+            writes.lock().unwrap().as_slice(),
+            &[2],
+            "the second resolution found a ranked column and wrote nothing — not even an \
+             `UPDATE` that touches no rows"
+        );
+    }
+
+    /// Only one neighbour named, and it is unranked: the column still has to
+    /// be materialized, because the rank the drop needs is that card's.
+    #[tokio::test]
+    async fn one_unranked_neighbour_is_enough_to_initialize_the_column() {
+        let organization_id = OrganizationId(Uuid::new_v4());
+        let card = TaskId(Uuid::new_v4());
+        let other = TaskId(Uuid::new_v4());
+
+        let (repository, board, writes) = board_repository(
+            organization_id,
+            vec![
+                (card, TaskStatus::InProgress, None),
+                (other, TaskStatus::InProgress, None),
+            ],
+        );
+        let mut service = service(repository, MockMemberRepository::new());
+
+        let rank = service
+            .resolve_board_rank_between(organization_id, TaskStatus::InProgress, Some(other), None)
+            .await
+            .unwrap();
+
+        assert_eq!(writes.lock().unwrap().as_slice(), &[2]);
+        assert!(ranked(&board, card).is_some());
+        assert!(ranked(&board, other).unwrap() < rank);
+    }
+
+    /// The column that is initialized is the neighbours' own, and no other:
+    /// a fresh board has several unranked columns, and dragging inside one
+    /// must not write to the rest.
+    #[tokio::test]
+    async fn initialization_touches_only_the_column_the_neighbours_are_in() {
+        let organization_id = OrganizationId(Uuid::new_v4());
+        let backlog_a = TaskId(Uuid::new_v4());
+        let backlog_b = TaskId(Uuid::new_v4());
+        let elsewhere = TaskId(Uuid::new_v4());
+
+        let (repository, board, _) = board_repository(
+            organization_id,
+            vec![
+                (backlog_a, TaskStatus::Backlog, None),
+                (backlog_b, TaskStatus::Backlog, None),
+                (elsewhere, TaskStatus::Done, None),
+            ],
+        );
+        let mut service = service(repository, MockMemberRepository::new());
+
+        service
+            .resolve_board_rank_between(
+                organization_id,
+                TaskStatus::Backlog,
+                Some(backlog_a),
+                Some(backlog_b),
+            )
+            .await
+            .unwrap();
+
+        assert!(ranked(&board, backlog_a).is_some());
+        assert!(ranked(&board, backlog_b).is_some());
+        assert_eq!(
+            ranked(&board, elsewhere),
+            None,
+            "a drop in one column must not rank another"
+        );
+    }
+    // -- the column the card is landing in ----------------------------------
+
+    /// The hole this closes. A `PATCH` that moves a card to another column
+    /// carries the new `status` *and* the target column's neighbours in one
+    /// payload; naming the **source** column's neighbours instead used to be
+    /// accepted in silence, and the card landed in the target column holding
+    /// a rank from a space it no longer occupies.
+    #[tokio::test]
+    async fn neighbours_outside_the_target_column_are_refused() {
+        let organization_id = OrganizationId(Uuid::new_v4());
+        let source_a = TaskId(Uuid::new_v4());
+        let source_b = TaskId(Uuid::new_v4());
+
+        let (repository, _, writes) = board_repository(
+            organization_id,
+            vec![
+                (
+                    source_a,
+                    TaskStatus::Backlog,
+                    Some(BoardRank("a".to_owned())),
+                ),
+                (
+                    source_b,
+                    TaskStatus::Backlog,
+                    Some(BoardRank("b".to_owned())),
+                ),
+            ],
+        );
+        let mut service = service(repository, MockMemberRepository::new());
+
+        // The card is moving to IN_PROGRESS, but the neighbours are the ones
+        // it is leaving behind.
+        let error = service
+            .resolve_board_rank_between(
+                organization_id,
+                TaskStatus::InProgress,
+                Some(source_a),
+                Some(source_b),
+            )
+            .await
+            .unwrap_err();
+
+        assert!(
+            matches!(error, CoreError::Conflict(ref message)
+                if message.contains("BACKLOG") && message.contains("IN_PROGRESS")),
+            "the refusal must name both columns: {error:?}"
+        );
+        assert!(
+            writes.lock().unwrap().is_empty(),
+            "a refused drop must not have initialized anything on its way to the refusal"
+        );
+    }
+
+    /// The common case, and the regression guard for it: no column change, so
+    /// the target is the card's current column and the drop resolves exactly
+    /// as it did before this check existed.
+    #[tokio::test]
+    async fn a_drop_inside_one_column_still_resolves_against_that_column() {
+        let organization_id = OrganizationId(Uuid::new_v4());
+        let above = TaskId(Uuid::new_v4());
+        let below = TaskId(Uuid::new_v4());
+
+        let (repository, _, _) = board_repository(
+            organization_id,
+            vec![
+                (
+                    above,
+                    TaskStatus::InProgress,
+                    Some(BoardRank("a".to_owned())),
+                ),
+                (
+                    below,
+                    TaskStatus::InProgress,
+                    Some(BoardRank("b".to_owned())),
+                ),
+            ],
+        );
+        let mut service = service(repository, MockMemberRepository::new());
+
+        let rank = service
+            .resolve_board_rank_between(
+                organization_id,
+                TaskStatus::InProgress,
+                Some(above),
+                Some(below),
+            )
+            .await
+            .unwrap();
+
+        assert!(BoardRank("a".to_owned()) < rank && rank < BoardRank("b".to_owned()));
+    }
+
+    /// A cross-column drop into a column nobody has ever dragged in: the
+    /// column that gets written down is the one the card is joining, and the
+    /// one it is leaving is left exactly as it was.
+    #[tokio::test]
+    async fn a_cross_column_drop_initializes_the_target_and_leaves_the_source_alone() {
+        let organization_id = OrganizationId(Uuid::new_v4());
+        let source = TaskId(Uuid::new_v4());
+        let target_a = TaskId(Uuid::new_v4());
+        let target_b = TaskId(Uuid::new_v4());
+
+        let (repository, board, writes) = board_repository(
+            organization_id,
+            vec![
+                (source, TaskStatus::Backlog, None),
+                (target_a, TaskStatus::InProgress, None),
+                (target_b, TaskStatus::InProgress, None),
+            ],
+        );
+        let mut service = service(repository, MockMemberRepository::new());
+
+        let rank = service
+            .resolve_board_rank_between(
+                organization_id,
+                TaskStatus::InProgress,
+                Some(target_a),
+                Some(target_b),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(writes.lock().unwrap().as_slice(), &[2]);
+        let first = ranked(&board, target_a).expect("the target column was initialized");
+        let second = ranked(&board, target_b).expect("the target column was initialized");
+        assert!(first < rank && rank < second, "{rank:?}");
+        assert_eq!(
+            ranked(&board, source),
+            None,
+            "the column the card is leaving is not the column being written down"
+        );
     }
 }

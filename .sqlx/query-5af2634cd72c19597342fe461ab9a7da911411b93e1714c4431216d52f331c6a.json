@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE tasks AS t\n            SET board_rank = incoming.board_rank, updated_at = now()\n            FROM UNNEST($2::uuid[], $3::text[]) AS incoming(id, board_rank)\n            WHERE t.id = incoming.id\n              AND t.org_id = $1\n              AND t.deleted_at IS NULL\n              AND t.board_rank IS NULL\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "UuidArray",
+        "TextArray"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "5af2634cd72c19597342fe461ab9a7da911411b93e1714c4431216d52f331c6a"
+}

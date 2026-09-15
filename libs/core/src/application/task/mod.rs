@@ -20,6 +20,15 @@ use crate::{
 
 mod tests;
 
+/// Re-exported here rather than left behind `crate::domain`, which is
+/// `pub(crate)`: the HTTP layer builds a [`TaskFilter`] from the query string
+/// and a [`BoardDrop`] from the `PATCH` payload, and hands them to
+/// [`MestierUseCase::list_tasks`] and [`MestierUseCase::patch_task`], so both
+/// types have to be nameable from outside the crate.
+/// `mestier_core::application::policy` is reached the same way.
+pub use crate::domain::task::commands::BoardDrop;
+pub use crate::domain::task::ports::{ParentScope, TaskFilter};
+
 impl MestierUseCase {
     #[transactional(task, member, project, role, authz)]
     pub async fn create_task(&self, command: CreateTaskCommand) -> Result<Task, CoreError> {
@@ -59,22 +68,26 @@ impl MestierUseCase {
         service.get_task(id).await
     }
 
-    /// Lists a page of `organization_id`'s tasks — every root when
-    /// `parent_task_id` is `None`, or a specific task's children otherwise —
-    /// together with each returned task's own child count (see
+    /// Lists a page of `organization_id`'s tasks matching `filter`, together
+    /// with each returned task's own child count (see
     /// `TaskService::list_tasks`: computed in one grouped query, never one
-    /// per task).
+    /// per task). Ordered by board rank — see
+    /// `TaskRepository::list_by_organization`.
+    ///
+    /// `organization_id` stays a separate argument from `filter`: it is the
+    /// tenant scope, applied first and never optional, and [`TaskFilter`]
+    /// deliberately has no field for it.
     #[transactional(task, member)]
     pub async fn list_tasks(
         &self,
         organization_id: OrganizationId,
-        parent_task_id: Option<TaskId>,
+        filter: TaskFilter,
         limit: u64,
         offset: u64,
     ) -> Result<(Vec<Task>, HashMap<TaskId, i64>, u64), CoreError> {
         let mut service = TaskService::new(task_repository, member_repository);
         service
-            .list_tasks(organization_id, parent_task_id, limit, offset)
+            .list_tasks(organization_id, &filter, limit, offset)
             .await
     }
 
@@ -94,7 +107,7 @@ impl MestierUseCase {
     /// this thin, already-transactional seam avoids adding a dependency from
     /// `task`'s own domain service onto a sibling aggregate's port.
     #[transactional(task, member, task_label, equipment, project, role, authz)]
-    pub async fn patch_task(&self, command: PatchTaskCommand) -> Result<Task, CoreError> {
+    pub async fn patch_task(&self, mut command: PatchTaskCommand) -> Result<Task, CoreError> {
         let label_ids = command.label_ids.clone();
         let equipment_ids = command.equipment_ids.clone();
 
@@ -144,6 +157,34 @@ impl MestierUseCase {
             {
                 return Err(CoreError::NotFound);
             }
+        }
+
+        // The drop is resolved here, between the authorization check and the
+        // patch, and inside this transaction — not before it. It reads the
+        // named neighbours and it can write: a column whose cards have never
+        // been ranked is materialized on the spot (see
+        // `TaskService::initialize_column`). Resolving it in a transaction of
+        // its own would let two concurrent first-drops on the same column
+        // each decide to initialize it, and would leave the initialization
+        // committed behind a patch that then failed.
+        if let Some(drop) = command.board_drop.take() {
+            // The column the card is landing in, computed here because here
+            // is the only place both halves are in hand: the `status` this
+            // same patch is about to write, or the one the task already
+            // carries when the patch leaves it alone. The resolver is told
+            // rather than left to infer it from the neighbours — inferring
+            // is how a drop that changes column while naming the old
+            // column's cards used to be accepted in silence.
+            let target_status = command.status.unwrap_or(existing.status);
+            let rank = service
+                .resolve_board_rank_between(
+                    existing.organization_id,
+                    target_status,
+                    drop.preceding,
+                    drop.following,
+                )
+                .await?;
+            command.board_rank = Some(Some(rank));
         }
 
         let task = service.patch_task(command).await?;

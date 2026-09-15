@@ -51,6 +51,29 @@ pub struct CreateTaskCommand {
     pub expenses_label: Option<String>,
 }
 
+/// The two cards a drop landed between, as the client named them.
+///
+/// A gesture, not a state: it says where the user let go, and the *server*
+/// turns it into a [`BoardRank`]. The rejected alternative was the board
+/// computing the rank in TypeScript, which puts a second base-36
+/// implementation in the tree that has to agree with the Rust one byte for
+/// byte forever; a divergence surfaces only as cards changing order for no
+/// visible reason.
+///
+/// Both ids are optional and the four combinations are the four real
+/// gestures: between two cards, at the top of a column (`preceding` is
+/// `None`), at the bottom (`following` is `None`), or into an empty column
+/// (both `None`). Not naming the pair at all is a different thing again —
+/// that is `PatchTaskCommand::board_drop` being `None`, and it means the
+/// `PATCH` is not a move.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct BoardDrop {
+    /// The card that ends up immediately above the dropped one.
+    pub preceding: Option<TaskId>,
+    /// The card that ends up immediately below it.
+    pub following: Option<TaskId>,
+}
+
 /// Carries a `PATCH`: every field is optional and only the ones present are
 /// applied. `description`, `starts_at`, `ends_at` and `parent_task_id` are
 /// themselves nullable, so they need the double option — `None` means
@@ -111,6 +134,22 @@ pub struct PatchTaskCommand {
     /// A `PATCH` carrying only this leaves `status` and both dates exactly as
     /// they were — see `TaskService::patch_task`.
     pub board_rank: Option<Option<BoardRank>>,
+    /// The drop that produced the rank, when the caller sent a gesture
+    /// instead of a position — see [`BoardDrop`].
+    ///
+    /// Resolved into `board_rank` by `MestierUseCase::patch_task`, **inside
+    /// the same transaction as the patch**, and the field is consumed there:
+    /// `TaskService::patch_task` never sees it. That boundary is not a
+    /// detail. Resolving a drop can write — a column whose cards have never
+    /// been ranked is materialized on the spot, see
+    /// `TaskService::initialize_column` — and a write that happened in its
+    /// own transaction would let two concurrent first-drops on one column
+    /// each initialize it.
+    ///
+    /// Setting both this and `board_rank` is not a thing any caller does;
+    /// this one wins, because it is the one carrying what the user actually
+    /// did.
+    pub board_drop: Option<BoardDrop>,
     /// The amount is `NOT NULL` in the schema, so a single `Option` says it
     /// all: `None` leaves it alone, `Some(0)` clears the expense. The label
     /// needs the double option like every other nullable column.
@@ -138,6 +177,7 @@ impl PatchTaskCommand {
             equipment_ids: None,
             project_id: None,
             board_rank: None,
+            board_drop: None,
             expenses_cents: None,
             expenses_label: None,
         }

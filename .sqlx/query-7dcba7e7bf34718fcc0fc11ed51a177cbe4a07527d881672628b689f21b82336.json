@@ -1,0 +1,35 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT id, status::text AS \"status!\", board_rank\n            FROM tasks\n            WHERE org_id = $1 AND deleted_at IS NULL AND id = ANY($2)\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "status!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "board_rank",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "UuidArray"
+      ]
+    },
+    "nullable": [
+      false,
+      null,
+      true
+    ]
+  },
+  "hash": "7dcba7e7bf34718fcc0fc11ed51a177cbe4a07527d881672628b689f21b82336"
+}

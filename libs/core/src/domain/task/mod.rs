@@ -264,6 +264,99 @@ impl BoardRank {
         ))
     }
 
+    /// `count` ranks, strictly increasing, evenly spread across the gap
+    /// between `before` and `after` — the bulk form of [`Self::between`].
+    ///
+    /// This exists for one job: materializing the order a column already has
+    /// but has never written down. Every task predates `board_rank` (the
+    /// migration that added the column backfilled nothing), so the first
+    /// drop into any column finds every neighbour unranked and has nothing to
+    /// bracket. Ranking the column in one pass, in the order it was already
+    /// being displayed in, turns that dead end into a single `O(column)`
+    /// write that never has to happen again.
+    ///
+    /// Repeated [`Self::between`] would also produce an ordered sequence, and
+    /// it is the wrong tool: bisecting the same gap `n` times makes each rank
+    /// about one character longer than the last, so a column of forty cards
+    /// ends with a forty-character rank — the exact growth the doc on
+    /// [`BoardRank`] describes as the accepted cost of *repeated drops*, paid
+    /// here for nothing. Spacing the whole batch at once instead makes every
+    /// rank the same width, and that width is the smallest that fits:
+    /// `count + 1` intervals need `ceil(log36(count + 1))` digits, so forty
+    /// cards get two characters each and a thousand get three.
+    ///
+    /// Deterministic: the same gap and the same `count` give the same ranks,
+    /// which is what makes an initialization reproducible in a test and
+    /// diffable in a migration.
+    ///
+    /// Fallible for the same reason [`Self::between`] is, plus one more: a
+    /// gap can be too narrow to hold `count` distinct positions *at any
+    /// width* only when it is empty, but a gap can need more digits than the
+    /// scale is worth spending, and [`MAX_RANK_WIDTH`] is where that stops.
+    pub fn evenly_spaced_between(
+        before: Option<&Self>,
+        after: Option<&Self>,
+        count: usize,
+    ) -> Result<Vec<Self>, CoreError> {
+        if count == 0 {
+            return Ok(Vec::new());
+        }
+
+        let lower = match before {
+            Some(rank) => rank.digits()?,
+            None => Vec::new(),
+        };
+        let upper = match after {
+            Some(rank) => Some(rank.digits()?),
+            None => None,
+        };
+
+        // Both bounds are read as fractions, so widening the window is a
+        // lossless operation: it multiplies both ends by 36 and leaves the
+        // gap's *shape* alone while multiplying the number of positions
+        // inside it. That is why this can loop — one more digit is always
+        // 36 times more room, until the width is not worth paying for.
+        let mut width = lower
+            .len()
+            .max(upper.as_ref().map_or(0, |digits| digits.len()))
+            .max(1);
+
+        loop {
+            let low = scale_to_width(&lower, width);
+            let high = match &upper {
+                Some(digits) => scale_to_width(digits, width),
+                // No upper neighbour: the top of the scale, which is the
+                // value `1` — `36^width` at this width.
+                None => RANK_SCALE_BASE.pow(width as u32),
+            };
+
+            if high <= low {
+                return Err(CoreError::Conflict(format!(
+                    "board rank `{}` does not sort before `{}`",
+                    before.map(Self::to_string).unwrap_or_default(),
+                    after.map(Self::to_string).unwrap_or_default(),
+                )));
+            }
+
+            let intervals = count as u128 + 1;
+            if high - low >= intervals {
+                let step = (high - low) / intervals;
+                return (1..=count as u128)
+                    .map(|index| spell(low + index * step, width))
+                    .collect();
+            }
+
+            width += 1;
+            if width > MAX_RANK_WIDTH {
+                return Err(CoreError::Conflict(format!(
+                    "cannot fit {count} board ranks between `{}` and `{}`",
+                    before.map(Self::to_string).unwrap_or_default(),
+                    after.map(Self::to_string).unwrap_or_default(),
+                )));
+            }
+        }
+    }
+
     /// The rank's digits as their numeric values. Rejects anything outside the
     /// alphabet rather than skipping it: the field is public, so a caller —
     /// or a row written before `chk_tasks_board_rank_shape` existed — can hand
@@ -373,6 +466,71 @@ fn above(lower: &[u8]) -> Vec<u8> {
     }
 
     digits
+}
+
+/// The base as the arithmetic in [`BoardRank::evenly_spaced_between`] needs
+/// it. Same 36 as [`RANK_BASE`], widened once here rather than cast at every
+/// use — the intermediate values are whole-scale integers, not digits.
+const RANK_SCALE_BASE: u128 = RANK_BASE as u128;
+
+/// How many digits an evenly spaced batch may grow to before it is refused.
+///
+/// Ten base-36 digits is room for `36^10` — about 3.6 quadrillion — distinct
+/// positions in a single gap, which no column reaches by any route. The cap
+/// is not really about arithmetic room: it is there so a caller that asks for
+/// an impossible batch (a `count` read off a corrupted row count, a gap that
+/// is empty in a way the `high <= low` check cannot see) fails loudly instead
+/// of allocating a rank nobody can read.
+const MAX_RANK_WIDTH: usize = 10;
+
+/// `digits`, read as a fraction, multiplied by `36^width` — i.e. the integer
+/// the digits spell once padded with trailing zeros out to `width`.
+///
+/// Padding with zeros is what makes two ranks of different lengths
+/// comparable: `"9"` and `"91"` are `9/36` and `9/36 + 1/1296`, and at width
+/// two they are `324` and `325`. Nothing is lost, because `width` is never
+/// less than the longest input.
+fn scale_to_width(digits: &[u8], width: usize) -> u128 {
+    (0..width).fold(0u128, |value, index| {
+        value * RANK_SCALE_BASE + digits.get(index).copied().unwrap_or(0) as u128
+    })
+}
+
+/// The inverse of [`scale_to_width`]: `value` written as `width` base-36
+/// digits, with trailing zeros dropped.
+///
+/// Dropping them is not cosmetic. `chk_tasks_board_rank_shape` forbids a
+/// trailing zero because `"1"` and `"10"` denote the same fraction, and two
+/// strings naming one position is how a total order stops being one. Dropping
+/// them changes no value and cannot empty the string: every value this is
+/// called with is at least one step above the bottom of its gap.
+fn spell(value: u128, width: usize) -> Result<BoardRank, CoreError> {
+    let mut digits = vec![0u8; width];
+    let mut rest = value;
+    for slot in digits.iter_mut().rev() {
+        *slot = (rest % RANK_SCALE_BASE) as u8;
+        rest /= RANK_SCALE_BASE;
+    }
+
+    while digits.last() == Some(&0) {
+        digits.pop();
+    }
+
+    if digits.is_empty() {
+        // Unreachable by construction, and reported rather than asserted for
+        // the same reason `between_digits` reports its own impossible branch:
+        // a panic in the domain is never the answer.
+        return Err(CoreError::Internal(
+            "an evenly spaced board rank came out empty".to_owned(),
+        ));
+    }
+
+    Ok(BoardRank(
+        digits
+            .into_iter()
+            .map(|digit| RANK_ALPHABET[digit as usize] as char)
+            .collect(),
+    ))
 }
 
 /// The planning module's unit: a meeting, a trip, a training session, or a
@@ -770,6 +928,206 @@ mod tests {
                 let below = BoardRank::between(None, Some(&neighbour)).unwrap();
                 prop_assert!(below < neighbour, "{below:?} < {neighbour:?}");
                 prop_assert!(!below.0.ends_with('0'));
+            }
+        }
+
+        // -- evenly spaced batches ------------------------------------------
+        //
+        // The bulk generator, which exists to materialize a column that has
+        // an order but no ranks. Its risk is different from `between`'s: not
+        // "does one rank land in the right place" but "do `n` of them land in
+        // the right places, stay short, and keep the shape the column
+        // constraint demands".
+
+        /// Every batch this module produces has to hold three properties at
+        /// once, and a helper that checks all three keeps each test about the
+        /// case it is actually naming.
+        fn assert_batch_is_well_formed(
+            batch: &[BoardRank],
+            before: Option<&BoardRank>,
+            after: Option<&BoardRank>,
+        ) {
+            for rank in batch {
+                assert!(!rank.0.is_empty(), "a rank is never empty: {rank:?}");
+                assert!(
+                    !rank.0.ends_with('0'),
+                    "a trailing zero would let two strings name one position: {rank:?}"
+                );
+                assert!(
+                    rank.0
+                        .bytes()
+                        .all(|b| b.is_ascii_digit() || b.is_ascii_lowercase()),
+                    "a rank is spelled with `0-9a-z`: {rank:?}"
+                );
+                if let Some(before) = before {
+                    assert!(before < rank, "{before:?} < {rank:?}");
+                }
+                if let Some(after) = after {
+                    assert!(rank < after, "{rank:?} < {after:?}");
+                }
+            }
+
+            for pair in batch.windows(2) {
+                assert!(pair[0] < pair[1], "{:?} < {:?}", pair[0], pair[1]);
+            }
+        }
+
+        #[test]
+        fn an_empty_column_is_spread_across_the_whole_scale() {
+            let batch = BoardRank::evenly_spaced_between(None, None, 5).unwrap();
+
+            assert_eq!(batch.len(), 5);
+            assert_batch_is_well_formed(&batch, None, None);
+            assert!(
+                batch.iter().all(|rank| rank.0.len() == 1),
+                "five cards fit in one base-36 digit each: {batch:?}"
+            );
+        }
+
+        /// The half-ranked column: everything generated must sort above the
+        /// cards that already carry a rank, because those keep theirs and the
+        /// unranked ones were displayed after them.
+        #[test]
+        fn a_batch_above_a_lower_bound_stays_above_it() {
+            let floor = rank("z");
+
+            let batch = BoardRank::evenly_spaced_between(Some(&floor), None, 6).unwrap();
+
+            assert_eq!(batch.len(), 6);
+            assert_batch_is_well_formed(&batch, Some(&floor), None);
+        }
+
+        /// The reason this is not a loop around `between`. Bisecting the same
+        /// gap `n` times grows a character roughly every five cards; spacing
+        /// the batch at once spends the smallest width that fits and spends
+        /// it once.
+        #[test]
+        fn a_batch_is_shorter_than_the_same_count_of_repeated_bisections() {
+            let batch = BoardRank::evenly_spaced_between(None, None, 40).unwrap();
+            let widest = batch.iter().map(|rank| rank.0.len()).max().unwrap();
+            assert_eq!(
+                widest, 2,
+                "41 intervals need two base-36 digits, and no card needs more: {batch:?}"
+            );
+
+            let mut bisected = Vec::new();
+            let mut floor = None;
+            for _ in 0..40 {
+                let next = BoardRank::between(floor.as_ref(), Some(&rank("z"))).unwrap();
+                floor = Some(next.clone());
+                bisected.push(next);
+            }
+            let bisected_widest = bisected.iter().map(|rank| rank.0.len()).max().unwrap();
+            assert!(
+                bisected_widest > widest,
+                "repeated bisection is what this generator exists to avoid: {bisected_widest} \
+                 vs {widest}"
+            );
+        }
+
+        /// Reproducible, which is what lets an initialization be asserted
+        /// against a literal in a test and read in a diff.
+        #[test]
+        fn the_same_gap_and_count_always_give_the_same_ranks() {
+            let floor = rank("9");
+            let ceiling = rank("i");
+
+            let first = BoardRank::evenly_spaced_between(Some(&floor), Some(&ceiling), 7).unwrap();
+            let second = BoardRank::evenly_spaced_between(Some(&floor), Some(&ceiling), 7).unwrap();
+
+            assert_eq!(first, second);
+            assert_batch_is_well_formed(&first, Some(&floor), Some(&ceiling));
+        }
+
+        /// A batch of one is the same question `between` answers, and must
+        /// land in the same gap — not necessarily on the same rank, since the
+        /// two spend their digits differently.
+        #[test]
+        fn a_batch_of_one_lands_where_between_would_have() {
+            let floor = rank("a");
+            let ceiling = rank("c");
+
+            let batch = BoardRank::evenly_spaced_between(Some(&floor), Some(&ceiling), 1).unwrap();
+
+            assert_eq!(batch.len(), 1);
+            assert_batch_is_well_formed(&batch, Some(&floor), Some(&ceiling));
+        }
+
+        #[test]
+        fn a_batch_of_nothing_is_empty_and_reads_nothing() {
+            assert_eq!(
+                BoardRank::evenly_spaced_between(None, None, 0).unwrap(),
+                Vec::new()
+            );
+        }
+
+        /// A gap that runs the wrong way is a client holding a stale board,
+        /// and the batch form refuses it exactly like `between` does.
+        #[test]
+        fn an_inverted_gap_is_refused() {
+            let result = BoardRank::evenly_spaced_between(Some(&rank("c")), Some(&rank("a")), 3);
+
+            assert!(matches!(result, Err(CoreError::Conflict(_))), "{result:?}");
+        }
+
+        #[test]
+        fn a_gap_with_nothing_below_it_is_refused() {
+            // Nothing sorts under `"0"`, the bottom of the scale.
+            let result = BoardRank::evenly_spaced_between(None, Some(&rank("0")), 2);
+
+            assert!(matches!(result, Err(CoreError::Conflict(_))), "{result:?}");
+        }
+
+        #[test]
+        fn a_batch_against_a_neighbour_outside_the_alphabet_is_refused() {
+            assert!(BoardRank::evenly_spaced_between(Some(&rank("A")), None, 2).is_err());
+            assert!(BoardRank::evenly_spaced_between(Some(&rank("")), None, 2).is_err());
+        }
+
+        /// A batch must leave room for the drops that come after it —
+        /// initializing a column and then immediately dragging inside it is
+        /// the single most likely sequence in production.
+        #[test]
+        fn a_card_can_still_be_dropped_between_two_freshly_spaced_ranks() {
+            let batch = BoardRank::evenly_spaced_between(None, None, 12).unwrap();
+
+            for pair in batch.windows(2) {
+                let dropped = BoardRank::between(Some(&pair[0]), Some(&pair[1])).unwrap();
+                assert!(pair[0] < dropped && dropped < pair[1], "{dropped:?}");
+            }
+        }
+
+        proptest! {
+            /// The property the three examples above stand for: whatever the
+            /// gap and whatever the count, the batch is strictly increasing,
+            /// inside the gap, and shaped the way the column constraint
+            /// demands.
+            #[test]
+            fn a_batch_is_ordered_and_inside_its_gap(
+                left in "[0-9a-z]{0,4}[1-9a-z]",
+                right in "[0-9a-z]{0,4}[1-9a-z]",
+                count in 1usize..40,
+            ) {
+                let (before, after) = if left < right {
+                    (BoardRank(left), BoardRank(right))
+                } else {
+                    (BoardRank(right), BoardRank(left))
+                };
+                prop_assume!(before < after);
+
+                let batch =
+                    BoardRank::evenly_spaced_between(Some(&before), Some(&after), count).unwrap();
+
+                prop_assert_eq!(batch.len(), count);
+                for rank in &batch {
+                    prop_assert!(before < *rank, "{:?} < {:?}", before, rank);
+                    prop_assert!(*rank < after, "{:?} < {:?}", rank, after);
+                    prop_assert!(!rank.0.is_empty());
+                    prop_assert!(!rank.0.ends_with('0'));
+                }
+                for pair in batch.windows(2) {
+                    prop_assert!(pair[0] < pair[1]);
+                }
             }
         }
     }

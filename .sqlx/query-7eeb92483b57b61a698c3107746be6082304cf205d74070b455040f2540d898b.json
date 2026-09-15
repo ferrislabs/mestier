@@ -1,0 +1,31 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT COUNT(*) AS \"count!\"\n            FROM tasks t\n            WHERE t.org_id = $1 AND t.deleted_at IS NULL\n              AND (\n                $2::boolean\n                OR ($3::uuid IS NULL AND t.parent_task_id IS NULL)\n                OR t.parent_task_id = $3\n              )\n              AND ($4::uuid IS NULL OR t.project_id = $4)\n              AND ($5::text[] IS NULL OR t.status::text = ANY($5))\n              AND (\n                $6::uuid IS NULL\n                OR EXISTS (\n                  SELECT 1 FROM task_assignments a\n                  WHERE a.task_id = t.id AND a.member_id = $6 AND a.org_id = t.org_id\n                )\n              )\n              AND (\n                $7::uuid IS NULL\n                OR EXISTS (\n                  SELECT 1 FROM task_label_links l\n                  WHERE l.task_id = t.id AND l.label_id = $7\n                )\n              )\n              AND ($8::uuid IS NULL OR t.customer_id = $8)\n              AND ($9::text IS NULL OR POSITION(LOWER($9) IN LOWER(t.title)) > 0)\n              AND ($10::boolean IS NULL OR (t.starts_at IS NULL) = $10)\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "count!",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Bool",
+        "Uuid",
+        "Uuid",
+        "TextArray",
+        "Uuid",
+        "Uuid",
+        "Uuid",
+        "Text",
+        "Bool"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "7eeb92483b57b61a698c3107746be6082304cf205d74070b455040f2540d898b"
+}

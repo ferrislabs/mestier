@@ -4,7 +4,7 @@ use chrono::{DateTime, Utc};
 use handlers::{ApiError, AppState, DataEnvelope, Response, resolve_actor};
 use mestier_core::{
     AssigneeRef, EquipmentId, MemberId, PatchTaskCommand, ProjectId, TaskId, TaskLabelId,
-    TaskStatus,
+    TaskStatus, application::task::BoardDrop,
 };
 use serde::{Deserialize, Deserializer};
 use utoipa::ToSchema;
@@ -92,6 +92,41 @@ pub struct UpdateTaskRequest {
     #[serde(default, deserialize_with = "deserialize_present")]
     #[schema(value_type = Option<String>, nullable)]
     pub expenses_label: Option<Option<String>>,
+    /// The card the drop landed *after* — the one immediately above it in
+    /// the column once the move is applied.
+    ///
+    /// A drop is described by the two cards it landed between, never by a
+    /// rank the client computed. The rejected alternative was the board
+    /// computing it in TypeScript, which puts a second base-36
+    /// implementation in the tree that has to agree with the Rust one byte
+    /// for byte forever; a divergence surfaces only as cards changing order
+    /// for no visible reason. The server reads the two neighbours' ranks and
+    /// calls `BoardRank::between` itself.
+    ///
+    /// This and `following_task_id` follow the absent/`null` distinction the
+    /// rest of this payload uses (see [`deserialize_present`]), and the four
+    /// combinations are the four real gestures:
+    ///
+    /// * both absent — the `PATCH` is not a move, and the rank is left
+    ///   exactly as it was;
+    /// * both named — dropped between two cards;
+    /// * one named, the other `null` — dropped at the top (`preceding:
+    ///   null`) or the bottom (`following: null`) of the column;
+    /// * both `null` — dropped into an empty column.
+    ///
+    /// A neighbour that belongs to another organization is a `404`, the same
+    /// treatment `project_id` gets and for the same reason. A neighbour that
+    /// exists but has never been ranked is a `409`: it sorts at the end of
+    /// its column and therefore brackets nothing, and answering anyway would
+    /// mean inventing a position.
+    #[serde(default, deserialize_with = "deserialize_present")]
+    #[schema(value_type = Option<TaskId>, nullable)]
+    pub preceding_task_id: Option<Option<TaskId>>,
+    /// The card the drop landed *before* — the one immediately below it in
+    /// the column once the move is applied. See [`Self::preceding_task_id`].
+    #[serde(default, deserialize_with = "deserialize_present")]
+    #[schema(value_type = Option<TaskId>, nullable)]
+    pub following_task_id: Option<Option<TaskId>>,
 }
 
 #[utoipa::path(
@@ -109,8 +144,8 @@ pub struct UpdateTaskRequest {
         (status = 400, description = "Validation failed"),
         (status = 401, description = "Unauthorized"),
         (status = 403, description = "Forbidden"),
-        (status = 404, description = "Task, employee or member not found"),
-        (status = 409, description = "Task conflict"),
+        (status = 404, description = "Task, employee, member or named neighbour card not found"),
+        (status = 409, description = "Task conflict, or a named neighbour that carries no board rank"),
     ),
     security(("bearer_auth" = []))
 )]
@@ -145,6 +180,29 @@ pub async fn handler(
     command.project_id = payload.project_id;
     command.expenses_cents = payload.expenses_cents;
     command.expenses_label = payload.expenses_label;
+
+    // A move is the only thing that writes `board_rank`, and it writes
+    // nothing else: no status, no window. Naming neither neighbour leaves
+    // the command's `board_rank` unset, which is "leave the rank alone" —
+    // the third direction of the orthogonality rule, at the HTTP layer.
+    // Carried into the command rather than resolved here. Turning the two
+    // ids into a rank reads the neighbours *and can write* — a column whose
+    // cards have never been ranked is materialized in the process — so it
+    // belongs inside `patch_task`'s transaction, not in a round trip of its
+    // own before it. See `PatchTaskCommand::board_drop`.
+    //
+    // A `PATCH` that names neither neighbour is not a move: `board_drop`
+    // stays `None`, the rank is left exactly as it was, and no status and no
+    // window are written either. That is the third direction of the
+    // orthogonality rule, at the HTTP layer.
+    let drop_landed_somewhere =
+        payload.preceding_task_id.is_some() || payload.following_task_id.is_some();
+    if drop_landed_somewhere {
+        command.board_drop = Some(BoardDrop {
+            preceding: payload.preceding_task_id.flatten(),
+            following: payload.following_task_id.flatten(),
+        });
+    }
     command.assignees = payload
         .assignees
         .map(|assignees| assignees.into_iter().map(Into::into).collect());
@@ -412,6 +470,83 @@ mod tests {
 
         assert_eq!(payload.expenses_cents, Some(4_500));
         assert_eq!(payload.expenses_label, Some(Some("Déplacement".to_owned())));
+    }
+
+    // -- the drop's two neighbours ------------------------------------------
+
+    /// The default, and the one that matters most: a `PATCH` that says
+    /// nothing about neighbours is not a move, and must leave the card's
+    /// rank exactly where it was.
+    #[test]
+    fn an_absent_neighbour_pair_is_not_a_move() {
+        let payload = parse(json!({ "title": "Nouveau titre" }));
+
+        assert_eq!(payload.preceding_task_id, None);
+        assert_eq!(payload.following_task_id, None);
+    }
+
+    #[test]
+    fn a_drop_between_two_cards_names_both() {
+        let above: TaskId = "11111111-1111-1111-1111-111111111111".parse().unwrap();
+        let below: TaskId = "22222222-2222-2222-2222-222222222222".parse().unwrap();
+        let payload = parse(json!({
+            "preceding_task_id": above.0.to_string(),
+            "following_task_id": below.0.to_string(),
+        }));
+
+        assert_eq!(payload.preceding_task_id, Some(Some(above)));
+        assert_eq!(payload.following_task_id, Some(Some(below)));
+    }
+
+    /// The top and the bottom of a column: one neighbour named, the other
+    /// explicitly `null`. The `null` is what distinguishes "there is nothing
+    /// above this card" from "this `PATCH` is not a move at all" — absent
+    /// would mean the latter.
+    #[test]
+    fn a_drop_at_the_edge_of_a_column_names_one_neighbour_and_nulls_the_other() {
+        let neighbour: TaskId = "11111111-1111-1111-1111-111111111111".parse().unwrap();
+
+        let top = parse(json!({
+            "preceding_task_id": null,
+            "following_task_id": neighbour.0.to_string(),
+        }));
+        assert_eq!(top.preceding_task_id, Some(None));
+        assert_eq!(top.following_task_id, Some(Some(neighbour)));
+
+        let bottom = parse(json!({
+            "preceding_task_id": neighbour.0.to_string(),
+            "following_task_id": null,
+        }));
+        assert_eq!(bottom.preceding_task_id, Some(Some(neighbour)));
+        assert_eq!(bottom.following_task_id, Some(None));
+    }
+
+    #[test]
+    fn a_drop_into_an_empty_column_nulls_both_neighbours() {
+        let payload = parse(json!({
+            "preceding_task_id": null,
+            "following_task_id": null,
+        }));
+
+        assert_eq!(payload.preceding_task_id, Some(None));
+        assert_eq!(payload.following_task_id, Some(None));
+    }
+
+    /// The orthogonality rule as the payload sees it: a move carries the two
+    /// neighbours and nothing else, so there is no status and no window for
+    /// the handler to apply alongside the rank it computes.
+    #[test]
+    fn a_move_carries_no_status_and_no_window() {
+        let payload = parse(json!({
+            "preceding_task_id": "11111111-1111-1111-1111-111111111111",
+            "following_task_id": "22222222-2222-2222-2222-222222222222",
+        }));
+
+        assert_eq!(payload.status, None);
+        assert_eq!(payload.starts_at, None);
+        assert_eq!(payload.ends_at, None);
+        assert_eq!(payload.all_day, None);
+        assert_eq!(payload.parent_task_id, None);
     }
 
     #[test]

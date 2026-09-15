@@ -1,0 +1,29 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT id, board_rank\n            FROM tasks\n            WHERE org_id = $1 AND deleted_at IS NULL AND status = CAST($2 AS text)::task_status\n            ORDER BY board_rank ASC NULLS LAST, created_at ASC, id ASC\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "board_rank",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      true
+    ]
+  },
+  "hash": "433accf002a1cb21c899f8875234a6a1fa8727740953bf3cf055ae5356f4b6b5"
+}

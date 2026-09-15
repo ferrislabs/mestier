@@ -7,6 +7,7 @@ mod tests {
     use sqlx::PgPool;
     use uuid::Uuid;
 
+    use crate::application::task::{BoardDrop, ParentScope, TaskFilter};
     use crate::application::test_support::{dev_pool, purge};
     use crate::application::{MestierUseCase, default_authorizer};
     use crate::domain::task::{
@@ -15,7 +16,9 @@ mod tests {
         service::sort_by_board_rank,
     };
     use crate::infrastructure::realtime::EventHub;
-    use crate::{CustomerContextId, CustomerId, MemberId, TaskId, TaskStatus};
+    use crate::{
+        CustomerContextId, CustomerId, MemberId, ProjectId, Task, TaskId, TaskLabelId, TaskStatus,
+    };
 
     async fn make_pool() -> PgPool {
         dev_pool().await
@@ -183,6 +186,18 @@ mod tests {
         .await;
         purge(
             pool,
+            "DELETE FROM task_labels WHERE org_id = $1",
+            organization_id.0,
+        )
+        .await;
+        purge(
+            pool,
+            "DELETE FROM projects WHERE org_id = $1",
+            organization_id.0,
+        )
+        .await;
+        purge(
+            pool,
             "DELETE FROM employees WHERE org_id = $1",
             organization_id.0,
         )
@@ -296,7 +311,7 @@ mod tests {
             .unwrap();
 
         let (items, _child_counts, total) = usecase
-            .list_tasks(fixture_a.organization_id, None, 20, 0)
+            .list_tasks(fixture_a.organization_id, TaskFilter::roots(), 20, 0)
             .await
             .expect("list_tasks must succeed");
 
@@ -337,7 +352,7 @@ mod tests {
         usecase.create_task(second_child).await.unwrap();
 
         let (roots, child_counts, total) = usecase
-            .list_tasks(fixture.organization_id, None, 20, 0)
+            .list_tasks(fixture.organization_id, TaskFilter::roots(), 20, 0)
             .await
             .unwrap();
         assert_eq!(total, 1, "children must not appear in the root listing");
@@ -350,7 +365,12 @@ mod tests {
         );
 
         let (children, child_child_counts, children_total) = usecase
-            .list_tasks(fixture.organization_id, Some(root.id), 20, 0)
+            .list_tasks(
+                fixture.organization_id,
+                TaskFilter::children_of(root.id),
+                20,
+                0,
+            )
             .await
             .unwrap();
         assert_eq!(children_total, 2);
@@ -407,7 +427,7 @@ mod tests {
         // task_c is deliberately left unassigned.
 
         let (tasks, _child_counts, total) = usecase
-            .list_tasks(fixture.organization_id, None, 20, 0)
+            .list_tasks(fixture.organization_id, TaskFilter::roots(), 20, 0)
             .await
             .expect("list_tasks must succeed");
 
@@ -699,7 +719,7 @@ mod tests {
         assert!(matches!(err, common::CoreError::NotFound));
 
         let (items, _child_counts, total) = usecase
-            .list_tasks(fixture.organization_id, None, 20, 0)
+            .list_tasks(fixture.organization_id, TaskFilter::roots(), 20, 0)
             .await
             .unwrap();
         assert_eq!(total, 0);
@@ -1066,7 +1086,7 @@ mod tests {
         // The domain side: the same rows, read back through the repository and
         // sorted in memory.
         let (mut tasks, _counts, _total) = usecase
-            .list_tasks(fixture.organization_id, None, 100, 0)
+            .list_tasks(fixture.organization_id, TaskFilter::roots(), 100, 0)
             .await
             .unwrap();
         sort_by_board_rank(&mut tasks);
@@ -1213,5 +1233,1260 @@ mod tests {
         .into_iter()
         .map(|row| (row.id, row.updated_at, row.board_rank))
         .collect()
+    }
+
+    // -- filters ------------------------------------------------------------
+    //
+    // Everything below runs against the real schema rather than a mock, and
+    // that is the whole point: a predicate that quietly matches nothing —
+    // a filter bound to the wrong parameter, a join that loses a row, an
+    // `AND` where an `OR` was meant — passes every mock-based test in this
+    // repository and fails only here.
+
+    async fn seed_project(pool: &PgPool, organization_id: OrganizationId, name: &str) -> ProjectId {
+        let project_id = generate_uuid_v7();
+        sqlx::query!(
+            r#"INSERT INTO projects (id, org_id, name) VALUES ($1, $2, $3)"#,
+            project_id,
+            organization_id.0,
+            name,
+        )
+        .execute(pool)
+        .await
+        .unwrap();
+        ProjectId(project_id)
+    }
+
+    async fn seed_label(pool: &PgPool, organization_id: OrganizationId, name: &str) -> TaskLabelId {
+        let label_id = generate_uuid_v7();
+        sqlx::query!(
+            r#"INSERT INTO task_labels (id, org_id, name, color) VALUES ($1, $2, $3, $4)"#,
+            label_id,
+            organization_id.0,
+            name,
+            "#112233",
+        )
+        .execute(pool)
+        .await
+        .unwrap();
+        TaskLabelId(label_id)
+    }
+
+    /// The scope a board query uses: every task at any depth, narrowed only
+    /// by the fields the caller sets. `TaskFilter::default()` is the tree
+    /// view's "roots only", which is a different question.
+    fn board_filter() -> TaskFilter {
+        TaskFilter {
+            parent: ParentScope::Any,
+            ..TaskFilter::default()
+        }
+    }
+
+    async fn ids_matching(
+        usecase: &MestierUseCase,
+        organization_id: OrganizationId,
+        filter: TaskFilter,
+    ) -> Vec<TaskId> {
+        let (tasks, _counts, _total) = usecase
+            .list_tasks(organization_id, filter, 100, 0)
+            .await
+            .unwrap();
+        tasks.into_iter().map(|task| task.id).collect()
+    }
+
+    /// A project's board shows the project's cards, subtasks included — a
+    /// subtask attaches straight to a project without going through its
+    /// parent (see `migrations/20260821000001_create_projects.up.sql`), so
+    /// answering with roots only would hide real cards while looking like a
+    /// successful query.
+    #[tokio::test]
+    #[ignore = "requires live postgres"]
+    async fn filtering_by_project_returns_its_roots_and_its_subtasks_and_nothing_else() {
+        let pool = make_pool().await;
+        let fixture = seed_fixture(&pool).await;
+        let usecase = make_usecase(pool.clone());
+
+        let wanted = seed_project(&pool, fixture.organization_id, "Toiture Dupont").await;
+        let other = seed_project(&pool, fixture.organization_id, "Extension Martin").await;
+
+        let mut root = create_command(&fixture);
+        root.project_id = Some(wanted);
+        let root = usecase.create_task(root).await.unwrap();
+
+        let mut subtask = create_command(&fixture);
+        subtask.parent_task_id = Some(root.id);
+        subtask.project_id = Some(wanted);
+        let subtask = usecase.create_task(subtask).await.unwrap();
+
+        let mut elsewhere = create_command(&fixture);
+        elsewhere.project_id = Some(other);
+        let elsewhere = usecase.create_task(elsewhere).await.unwrap();
+
+        let mut unattached = create_command(&fixture);
+        unattached.parent_task_id = Some(root.id);
+        let unattached = usecase.create_task(unattached).await.unwrap();
+
+        let matched = ids_matching(
+            &usecase,
+            fixture.organization_id,
+            TaskFilter {
+                project_id: Some(wanted),
+                ..board_filter()
+            },
+        )
+        .await;
+
+        assert!(matched.contains(&root.id));
+        assert!(
+            matched.contains(&subtask.id),
+            "a subtask attached to the project is one of its cards"
+        );
+        assert!(!matched.contains(&elsewhere.id));
+        assert!(!matched.contains(&unattached.id));
+        assert_eq!(matched.len(), 2);
+
+        cleanup(&pool, fixture.organization_id, &[fixture.owner_id]).await;
+    }
+
+    /// Two columns of a board, asked for at once. The values of a repeated
+    /// `status` combine with `OR`; reading them as `AND` would return an
+    /// empty column and look like "there is nothing in progress".
+    #[tokio::test]
+    #[ignore = "requires live postgres"]
+    async fn two_statuses_return_the_union_of_the_two_columns() {
+        let pool = make_pool().await;
+        let fixture = seed_fixture(&pool).await;
+        let usecase = make_usecase(pool.clone());
+
+        let mut created = Vec::new();
+        for status in [
+            TaskStatus::Backlog,
+            TaskStatus::InProgress,
+            TaskStatus::Planned,
+            TaskStatus::Done,
+        ] {
+            let mut command = create_command(&fixture);
+            command.status = Some(status);
+            created.push((status, usecase.create_task(command).await.unwrap().id));
+        }
+
+        let matched = ids_matching(
+            &usecase,
+            fixture.organization_id,
+            TaskFilter {
+                statuses: Some(vec![TaskStatus::Backlog, TaskStatus::InProgress]),
+                ..board_filter()
+            },
+        )
+        .await;
+
+        for (status, id) in &created {
+            let wanted = matches!(status, TaskStatus::Backlog | TaskStatus::InProgress);
+            assert_eq!(
+                matched.contains(id),
+                wanted,
+                "{status:?} should{} be in the union",
+                if wanted { "" } else { " not" }
+            );
+        }
+        assert_eq!(matched.len(), 2);
+
+        cleanup(&pool, fixture.organization_id, &[fixture.owner_id]).await;
+    }
+
+    /// Assignments do not inherit. A subtask of a task assigned to somebody
+    /// is not thereby assigned to them, and "my tasks" that quietly includes
+    /// every child of every task you own is a list nobody can act on.
+    #[tokio::test]
+    #[ignore = "requires live postgres"]
+    async fn assignee_filter_does_not_inherit_from_the_parent() {
+        let pool = make_pool().await;
+        let fixture = seed_fixture(&pool).await;
+        let usecase = make_usecase(pool.clone());
+        let member_id = seed_employee(&pool, fixture.organization_id).await;
+
+        let parent = usecase.create_task(create_command(&fixture)).await.unwrap();
+        let mut assign = PatchTaskCommand::new(parent.id, authz::Subject::system());
+        assign.assignees = Some(vec![AssigneeRef(member_id)]);
+        usecase.patch_task(assign).await.unwrap();
+
+        let mut child = create_command(&fixture);
+        child.parent_task_id = Some(parent.id);
+        let child = usecase.create_task(child).await.unwrap();
+
+        // A second assigned task, so the filter is not trivially "one row".
+        let sibling = usecase.create_task(create_command(&fixture)).await.unwrap();
+        let mut assign_sibling = PatchTaskCommand::new(sibling.id, authz::Subject::system());
+        assign_sibling.assignees = Some(vec![AssigneeRef(member_id)]);
+        usecase.patch_task(assign_sibling).await.unwrap();
+
+        let matched = ids_matching(
+            &usecase,
+            fixture.organization_id,
+            TaskFilter {
+                assignee_id: Some(member_id),
+                ..board_filter()
+            },
+        )
+        .await;
+
+        assert!(matched.contains(&parent.id));
+        assert!(matched.contains(&sibling.id));
+        assert!(
+            !matched.contains(&child.id),
+            "a task whose parent is assigned to this member is not itself assigned to them"
+        );
+        assert_eq!(matched.len(), 2);
+
+        cleanup(&pool, fixture.organization_id, &[fixture.owner_id]).await;
+    }
+
+    /// The independence of the two axes, proved by the combination that only
+    /// works if neither is derived from the other: a *done* task that was
+    /// never on the calendar. `unscheduled` is `starts_at IS NULL` and
+    /// nothing else; it is not a spelling of `status = 'BACKLOG'`, and a
+    /// `BACKLOG` task that has been given dates is not unscheduled.
+    #[tokio::test]
+    #[ignore = "requires live postgres"]
+    async fn unscheduled_and_status_are_independent_axes() {
+        let pool = make_pool().await;
+        let fixture = seed_fixture(&pool).await;
+        let usecase = make_usecase(pool.clone());
+
+        let make = |status: TaskStatus, dated: bool| {
+            let mut command = create_command(&fixture);
+            command.status = Some(status);
+            if !dated {
+                command.starts_at = None;
+                command.ends_at = None;
+            }
+            command
+        };
+
+        let undated_done = usecase
+            .create_task(make(TaskStatus::Done, false))
+            .await
+            .unwrap();
+        let dated_done = usecase
+            .create_task(make(TaskStatus::Done, true))
+            .await
+            .unwrap();
+        let undated_backlog = usecase
+            .create_task(make(TaskStatus::Backlog, false))
+            .await
+            .unwrap();
+        let dated_backlog = usecase
+            .create_task(make(TaskStatus::Backlog, true))
+            .await
+            .unwrap();
+
+        let undated_and_done = ids_matching(
+            &usecase,
+            fixture.organization_id,
+            TaskFilter {
+                unscheduled: Some(true),
+                statuses: Some(vec![TaskStatus::Done]),
+                ..board_filter()
+            },
+        )
+        .await;
+        assert_eq!(
+            undated_and_done,
+            vec![undated_done.id],
+            "`unscheduled=true&status=DONE` must return undated done tasks — if either axis were              derived from the other this answer would be empty"
+        );
+
+        // And the other three quadrants, so the test cannot pass by a
+        // predicate that happens to select one row.
+        let undated = ids_matching(
+            &usecase,
+            fixture.organization_id,
+            TaskFilter {
+                unscheduled: Some(true),
+                ..board_filter()
+            },
+        )
+        .await;
+        assert!(undated.contains(&undated_done.id));
+        assert!(undated.contains(&undated_backlog.id));
+        assert!(!undated.contains(&dated_done.id));
+        assert!(
+            !undated.contains(&dated_backlog.id),
+            "a BACKLOG task that carries dates is scheduled — the status did not decide this"
+        );
+
+        let scheduled = ids_matching(
+            &usecase,
+            fixture.organization_id,
+            TaskFilter {
+                unscheduled: Some(false),
+                ..board_filter()
+            },
+        )
+        .await;
+        assert!(scheduled.contains(&dated_done.id));
+        assert!(scheduled.contains(&dated_backlog.id));
+        assert!(!scheduled.contains(&undated_done.id));
+
+        cleanup(&pool, fixture.organization_id, &[fixture.owner_id]).await;
+    }
+
+    /// Label, customer and title in one test because they are one claim:
+    /// each narrows, and `q` is a case-insensitive substring of the title —
+    /// not full-text search, so a fragment in the middle of a word matches.
+    #[tokio::test]
+    #[ignore = "requires live postgres"]
+    async fn label_customer_and_title_each_narrow_the_listing() {
+        let pool = make_pool().await;
+        let fixture = seed_fixture(&pool).await;
+        let usecase = make_usecase(pool.clone());
+        let label_id = seed_label(&pool, fixture.organization_id, "Urgence").await;
+
+        let mut labelled = create_command(&fixture);
+        labelled.title = "Réfection TOITURE".to_owned();
+        let labelled = usecase.create_task(labelled).await.unwrap();
+        let mut attach = PatchTaskCommand::new(labelled.id, authz::Subject::system());
+        attach.label_ids = Some(vec![label_id]);
+        usecase.patch_task(attach).await.unwrap();
+
+        let mut plain = create_command(&fixture);
+        plain.title = "Devis cuisine".to_owned();
+        plain.customer_id = None;
+        plain.customer_context_id = None;
+        let plain = usecase.create_task(plain).await.unwrap();
+
+        let by_label = ids_matching(
+            &usecase,
+            fixture.organization_id,
+            TaskFilter {
+                label_id: Some(label_id),
+                ..board_filter()
+            },
+        )
+        .await;
+        assert_eq!(by_label, vec![labelled.id]);
+
+        let by_customer = ids_matching(
+            &usecase,
+            fixture.organization_id,
+            TaskFilter {
+                customer_id: Some(fixture.customer_id),
+                ..board_filter()
+            },
+        )
+        .await;
+        assert_eq!(by_customer, vec![labelled.id]);
+        assert!(!by_customer.contains(&plain.id));
+
+        let by_title = ids_matching(
+            &usecase,
+            fixture.organization_id,
+            TaskFilter {
+                title_contains: Some("oitur".to_owned()),
+                ..board_filter()
+            },
+        )
+        .await;
+        assert_eq!(
+            by_title,
+            vec![labelled.id],
+            "`q` is a case-insensitive substring: a fragment inside a word matches, and the case              of the stored title does not"
+        );
+
+        cleanup(&pool, fixture.organization_id, &[fixture.owner_id]).await;
+    }
+
+    /// The rule that no filter may be responsible for tenant isolation. The
+    /// two organizations hold tasks that match the filter equally well, so a
+    /// filter applied without the `org_id` scope would return both.
+    #[tokio::test]
+    #[ignore = "requires live postgres"]
+    async fn a_filter_never_reaches_another_organizations_tasks() {
+        let pool = make_pool().await;
+        let mine = seed_fixture(&pool).await;
+        let theirs = seed_fixture(&pool).await;
+        let usecase = make_usecase(pool.clone());
+
+        let mut ours = create_command(&mine);
+        ours.title = "Chantier commun".to_owned();
+        ours.status = Some(TaskStatus::InProgress);
+        let ours = usecase.create_task(ours).await.unwrap();
+
+        let mut foreign = create_command(&theirs);
+        foreign.title = "Chantier commun".to_owned();
+        foreign.status = Some(TaskStatus::InProgress);
+        let foreign = usecase.create_task(foreign).await.unwrap();
+
+        let filter = TaskFilter {
+            statuses: Some(vec![TaskStatus::InProgress]),
+            title_contains: Some("Chantier commun".to_owned()),
+            ..board_filter()
+        };
+
+        let matched = ids_matching(&usecase, mine.organization_id, filter).await;
+
+        assert_eq!(matched, vec![ours.id]);
+        assert!(!matched.contains(&foreign.id));
+
+        cleanup(&pool, theirs.organization_id, &[theirs.owner_id]).await;
+        cleanup(&pool, mine.organization_id, &[mine.owner_id]).await;
+    }
+
+    /// Pagination metadata is built from a count taken under the *same*
+    /// predicate as the page. A count that ignored the filters would promise
+    /// pages the caller can never reach; one taken on a narrower predicate
+    /// would hide the tail of the result.
+    #[tokio::test]
+    #[ignore = "requires live postgres"]
+    async fn pagination_totals_follow_the_filter() {
+        let pool = make_pool().await;
+        let fixture = seed_fixture(&pool).await;
+        let usecase = make_usecase(pool.clone());
+
+        for _ in 0..5 {
+            let mut command = create_command(&fixture);
+            command.status = Some(TaskStatus::Done);
+            usecase.create_task(command).await.unwrap();
+        }
+        for _ in 0..3 {
+            let mut command = create_command(&fixture);
+            command.status = Some(TaskStatus::Planned);
+            usecase.create_task(command).await.unwrap();
+        }
+
+        let filter = TaskFilter {
+            statuses: Some(vec![TaskStatus::Done]),
+            ..board_filter()
+        };
+
+        let (first_page, _counts, total) = usecase
+            .list_tasks(fixture.organization_id, filter.clone(), 2, 0)
+            .await
+            .unwrap();
+        assert_eq!(first_page.len(), 2);
+        assert_eq!(total, 5, "the count is taken under the filter, not over it");
+
+        let (last_page, _counts, total_again) = usecase
+            .list_tasks(fixture.organization_id, filter, 2, 4)
+            .await
+            .unwrap();
+        assert_eq!(last_page.len(), 1);
+        assert_eq!(total_again, 5);
+
+        let (unfiltered, _counts, everything) = usecase
+            .list_tasks(fixture.organization_id, board_filter(), 100, 0)
+            .await
+            .unwrap();
+        assert_eq!(unfiltered.len(), 8);
+        assert_eq!(everything, 8);
+
+        cleanup(&pool, fixture.organization_id, &[fixture.owner_id]).await;
+    }
+
+    /// The order the endpoint now returns, and the reason `sort_by_board_rank`
+    /// exists: the SQL clause and the in-memory comparator must produce the
+    /// same sequence for the same rows, under a filter as well as without
+    /// one. Ranked cards first in byte order, unranked last.
+    #[tokio::test]
+    #[ignore = "requires live postgres"]
+    async fn a_filtered_listing_comes_back_in_board_order() {
+        let pool = make_pool().await;
+        let fixture = seed_fixture(&pool).await;
+        let usecase = make_usecase(pool.clone());
+
+        // Created in an order that is neither the rank order nor its
+        // reverse, so a listing that forgot to sort cannot pass by luck.
+        for rank in [Some("i"), None, Some("1"), Some("z"), None, Some("9z")] {
+            let mut command = create_command(&fixture);
+            command.status = Some(TaskStatus::InProgress);
+            let created = usecase.create_task(command).await.unwrap();
+            if let Some(rank) = rank {
+                let mut patch = PatchTaskCommand::new(created.id, authz::Subject::system());
+                patch.board_rank = Some(Some(BoardRank(rank.to_owned())));
+                usecase.patch_task(patch).await.unwrap();
+            }
+        }
+        // A card in another column, to prove the filter and the ordering
+        // compose rather than one undoing the other.
+        let mut other_column = create_command(&fixture);
+        other_column.status = Some(TaskStatus::Done);
+        let other_column = usecase.create_task(other_column).await.unwrap();
+        let mut patch = PatchTaskCommand::new(other_column.id, authz::Subject::system());
+        patch.board_rank = Some(Some(BoardRank("0i".to_owned())));
+        usecase.patch_task(patch).await.unwrap();
+
+        let (tasks, _counts, _total) = usecase
+            .list_tasks(
+                fixture.organization_id,
+                TaskFilter {
+                    statuses: Some(vec![TaskStatus::InProgress]),
+                    ..board_filter()
+                },
+                100,
+                0,
+            )
+            .await
+            .unwrap();
+
+        let ranks: Vec<Option<String>> = tasks
+            .iter()
+            .map(|task| task.board_rank.as_ref().map(|rank| rank.0.clone()))
+            .collect();
+        assert_eq!(
+            ranks,
+            vec![
+                Some("1".to_owned()),
+                Some("9z".to_owned()),
+                Some("i".to_owned()),
+                Some("z".to_owned()),
+                None,
+                None,
+            ],
+            "the endpoint orders by board rank with unranked cards last"
+        );
+        assert!(!tasks.iter().any(|task| task.id == other_column.id));
+
+        // The same rows put through the domain comparator must not move.
+        let mut again = tasks.clone();
+        sort_by_board_rank(&mut again);
+        assert_eq!(
+            again.iter().map(|t| t.id).collect::<Vec<_>>(),
+            tasks.iter().map(|t| t.id).collect::<Vec<_>>(),
+            "`ORDER BY board_rank ASC NULLS LAST, created_at ASC, id ASC` and \
+             `sort_by_board_rank` must agree row for row"
+        );
+
+        cleanup(&pool, fixture.organization_id, &[fixture.owner_id]).await;
+    }
+
+    // -- resolving a drop's rank from its neighbours -------------------------
+    //
+    // A drop is a `PATCH` naming the two cards it landed between, resolved
+    // inside that `PATCH`'s own transaction — see
+    // `PatchTaskCommand::board_drop`. There is deliberately no way to resolve
+    // one on its own: resolving can write (it materializes a column that has
+    // never been ranked), and a write outside the patch's transaction is how
+    // two concurrent first-drops both initialize the same column.
+
+    /// A `PATCH` that is nothing but a drop between `preceding` and
+    /// `following`.
+    fn drop_between(
+        id: TaskId,
+        preceding: Option<TaskId>,
+        following: Option<TaskId>,
+    ) -> PatchTaskCommand {
+        let mut patch = PatchTaskCommand::new(id, authz::Subject::system());
+        patch.board_drop = Some(BoardDrop {
+            preceding,
+            following,
+        });
+        patch
+    }
+
+    /// One column as the database holds it, in board order.
+    async fn column_ranks(
+        pool: &PgPool,
+        organization_id: OrganizationId,
+        status: TaskStatus,
+    ) -> Vec<(Uuid, Option<String>)> {
+        sqlx::query!(
+            r#"
+            SELECT id, board_rank
+            FROM tasks
+            WHERE org_id = $1 AND deleted_at IS NULL AND status = CAST($2 AS text)::task_status
+            ORDER BY board_rank ASC NULLS LAST, created_at ASC, id ASC
+            "#,
+            organization_id.0,
+            status.as_str(),
+        )
+        .fetch_all(pool)
+        .await
+        .unwrap()
+        .into_iter()
+        .map(|row| (row.id, row.board_rank))
+        .collect()
+    }
+
+    /// The server-side half of a drag: the client names the two cards the
+    /// card landed between, and the card ends up strictly between theirs
+    /// with nothing else touched.
+    #[tokio::test]
+    #[ignore = "requires live postgres"]
+    async fn a_drop_between_two_neighbours_writes_the_rank_and_nothing_else() {
+        let pool = make_pool().await;
+        let fixture = seed_fixture(&pool).await;
+        let usecase = make_usecase(pool.clone());
+
+        // One column, and the card being dragged is already in it: a drop
+        // that does not change column, which is the ordinary gesture. The
+        // card and its neighbours must share a column, because a drop is
+        // resolved against the column the card is landing in — see
+        // `a_patch_changing_column_lands_at_the_named_position_in_the_target`
+        // for the cross-column shape.
+        let mut column = Vec::new();
+        for rank in ["a", "b"] {
+            let mut command = create_command(&fixture);
+            command.status = Some(TaskStatus::Backlog);
+            let created = usecase.create_task(command).await.unwrap();
+            let mut patch = PatchTaskCommand::new(created.id, authz::Subject::system());
+            patch.board_rank = Some(Some(BoardRank(rank.to_owned())));
+            column.push(usecase.patch_task(patch).await.unwrap());
+        }
+
+        let mut moving = create_command(&fixture);
+        moving.status = Some(TaskStatus::Backlog);
+        let moving = usecase.create_task(moving).await.unwrap();
+
+        let moved = usecase
+            .patch_task(drop_between(
+                moving.id,
+                Some(column[0].id),
+                Some(column[1].id),
+            ))
+            .await
+            .unwrap();
+
+        let rank = moved.board_rank.clone().expect("the drop produced a rank");
+        assert!(column[0].board_rank.as_ref().unwrap() < &rank);
+        assert!(&rank < column[1].board_rank.as_ref().unwrap());
+        assert_eq!(
+            moved.status,
+            TaskStatus::Backlog,
+            "a `PATCH` that names only neighbours writes the rank and nothing else — the status              it went in with is the status it comes back with"
+        );
+        assert_eq!(moved.starts_at, moving.starts_at);
+        assert_eq!(moved.ends_at, moving.ends_at);
+
+        // Read back rather than trusted.
+        let fetched = usecase.get_task(moving.id).await.unwrap();
+        assert_eq!(fetched.board_rank, Some(rank));
+
+        cleanup(&pool, fixture.organization_id, &[fixture.owner_id]).await;
+    }
+
+    /// The drop at the top and at the bottom of a column: one neighbour
+    /// named, the other side unbounded.
+    #[tokio::test]
+    #[ignore = "requires live postgres"]
+    async fn a_drop_at_the_edge_of_a_column_names_one_neighbour() {
+        let pool = make_pool().await;
+        let fixture = seed_fixture(&pool).await;
+        let usecase = make_usecase(pool.clone());
+
+        let card = usecase.create_task(create_command(&fixture)).await.unwrap();
+        let mut patch = PatchTaskCommand::new(card.id, authz::Subject::system());
+        patch.board_rank = Some(Some(BoardRank("i".to_owned())));
+        let card = usecase.patch_task(patch).await.unwrap();
+
+        let over = usecase.create_task(create_command(&fixture)).await.unwrap();
+        let over = usecase
+            .patch_task(drop_between(over.id, None, Some(card.id)))
+            .await
+            .unwrap();
+        assert!(over.board_rank.unwrap() < BoardRank("i".to_owned()));
+
+        let under = usecase.create_task(create_command(&fixture)).await.unwrap();
+        let under = usecase
+            .patch_task(drop_between(under.id, Some(card.id), None))
+            .await
+            .unwrap();
+        assert!(BoardRank("i".to_owned()) < under.board_rank.unwrap());
+
+        // An empty column names nobody at all.
+        let alone = usecase.create_task(create_command(&fixture)).await.unwrap();
+        let alone = usecase
+            .patch_task(drop_between(alone.id, None, None))
+            .await
+            .unwrap();
+        assert!(BoardRank("0".to_owned()) < alone.board_rank.unwrap());
+
+        cleanup(&pool, fixture.organization_id, &[fixture.owner_id]).await;
+    }
+
+    /// A neighbour that belongs to another organization is a `404`, not a
+    /// rank read off a row the caller is not allowed to know exists. The
+    /// `org_id` predicate in `find_board_positions` is what makes it
+    /// indistinguishable from "no such task".
+    #[tokio::test]
+    #[ignore = "requires live postgres"]
+    async fn a_neighbour_from_another_organization_is_not_found() {
+        let pool = make_pool().await;
+        let mine = seed_fixture(&pool).await;
+        let theirs = seed_fixture(&pool).await;
+        let usecase = make_usecase(pool.clone());
+
+        let foreign = usecase.create_task(create_command(&theirs)).await.unwrap();
+        let mut patch = PatchTaskCommand::new(foreign.id, authz::Subject::system());
+        patch.board_rank = Some(Some(BoardRank("i".to_owned())));
+        usecase.patch_task(patch).await.unwrap();
+
+        let ours = usecase.create_task(create_command(&mine)).await.unwrap();
+
+        let error = usecase
+            .patch_task(drop_between(ours.id, Some(foreign.id), None))
+            .await
+            .unwrap_err();
+        assert!(matches!(error, CoreError::NotFound), "{error:?}");
+
+        // And an id that exists nowhere gets the identical answer.
+        let unknown = usecase
+            .patch_task(drop_between(
+                ours.id,
+                Some(TaskId(generate_uuid_v7())),
+                None,
+            ))
+            .await
+            .unwrap_err();
+        assert!(matches!(unknown, CoreError::NotFound), "{unknown:?}");
+
+        // The refused patch wrote nothing — the whole transaction rolled back.
+        let fetched = usecase.get_task(ours.id).await.unwrap();
+        assert_eq!(fetched.board_rank, None);
+
+        cleanup(&pool, theirs.organization_id, &[theirs.owner_id]).await;
+        cleanup(&pool, mine.organization_id, &[mine.owner_id]).await;
+    }
+
+    /// Two ranks are only comparable inside one column, so a pair drawn from
+    /// two of them brackets nothing. Refused rather than resolved against
+    /// whichever column was looked at first, which would put the card
+    /// somewhere the user did not aim.
+    #[tokio::test]
+    #[ignore = "requires live postgres"]
+    async fn two_neighbours_in_different_columns_are_refused() {
+        let pool = make_pool().await;
+        let fixture = seed_fixture(&pool).await;
+        let usecase = make_usecase(pool.clone());
+
+        let mut planned = create_command(&fixture);
+        planned.status = Some(TaskStatus::Planned);
+        let planned = usecase.create_task(planned).await.unwrap();
+
+        let mut done = create_command(&fixture);
+        done.status = Some(TaskStatus::Done);
+        let done = usecase.create_task(done).await.unwrap();
+
+        let moving = usecase.create_task(create_command(&fixture)).await.unwrap();
+
+        let error = usecase
+            .patch_task(drop_between(moving.id, Some(planned.id), Some(done.id)))
+            .await
+            .unwrap_err();
+
+        assert!(
+            matches!(error, CoreError::Conflict(ref message) if message.contains("different columns")),
+            "{error:?}"
+        );
+
+        // And nothing was initialized on the way to the refusal: the whole
+        // patch, initialization included, is one transaction.
+        for (_, rank) in column_ranks(&pool, fixture.organization_id, TaskStatus::Planned).await {
+            assert_eq!(rank, None, "a refused drop must not have written a rank");
+        }
+        for (_, rank) in column_ranks(&pool, fixture.organization_id, TaskStatus::Done).await {
+            assert_eq!(rank, None);
+        }
+
+        cleanup(&pool, fixture.organization_id, &[fixture.owner_id]).await;
+    }
+
+    // -- initializing a column ----------------------------------------------
+
+    /// The gesture this exists for, against the real schema: the very first
+    /// drop into a column where nothing has ever been ranked — which is every
+    /// column of every organization, since `board_rank` was added with no
+    /// backfill.
+    ///
+    /// Three claims in one test because they are one claim: the drop
+    /// succeeds, it lands between the two cards it named, and the column it
+    /// wrote down is the column that was already on screen.
+    #[tokio::test]
+    #[ignore = "requires live postgres"]
+    async fn a_drop_between_two_unranked_neighbours_ranks_the_column_and_keeps_its_order() {
+        let pool = make_pool().await;
+        let fixture = seed_fixture(&pool).await;
+        let usecase = make_usecase(pool.clone());
+
+        let mut created = Vec::new();
+        for title in ["Un", "Deux", "Trois", "Quatre"] {
+            let mut command = create_command(&fixture);
+            command.status = Some(TaskStatus::Backlog);
+            command.title = title.to_owned();
+            let task = usecase.create_task(command).await.unwrap();
+            assert_eq!(task.board_rank, None, "a task is born unranked");
+            created.push(task);
+        }
+
+        // The order the board was already displaying: every card unranked,
+        // so `created_at ASC, id ASC` — which is creation order here.
+        let before: Vec<Uuid> = column_ranks(&pool, fixture.organization_id, TaskStatus::Backlog)
+            .await
+            .into_iter()
+            .map(|(id, _)| id)
+            .collect();
+        assert_eq!(
+            before,
+            created.iter().map(|task| task.id.0).collect::<Vec<_>>()
+        );
+
+        // Drop the last card between the first two.
+        let moved = usecase
+            .patch_task(drop_between(
+                created[3].id,
+                Some(created[0].id),
+                Some(created[1].id),
+            ))
+            .await
+            .unwrap();
+
+        let after = column_ranks(&pool, fixture.organization_id, TaskStatus::Backlog).await;
+        assert!(
+            after.iter().all(|(_, rank)| rank.is_some()),
+            "every card of the column is ranked once it has been initialized: {after:?}"
+        );
+        assert_eq!(
+            after.iter().map(|(id, _)| *id).collect::<Vec<_>>(),
+            vec![
+                created[0].id.0,
+                created[3].id.0,
+                created[1].id.0,
+                created[2].id.0,
+            ],
+            "the column keeps the order it had, with the dropped card moved to where it landed"
+        );
+
+        let rank = moved.board_rank.expect("the drop produced a rank");
+        let rank_of = |task: &Task| {
+            after
+                .iter()
+                .find(|(id, _)| *id == task.id.0)
+                .and_then(|(_, rank)| rank.clone())
+                .map(BoardRank)
+                .unwrap()
+        };
+        assert!(rank_of(&created[0]) < rank && rank < rank_of(&created[1]));
+
+        cleanup(&pool, fixture.organization_id, &[fixture.owner_id]).await;
+    }
+
+    /// A half-ranked column converges instead of being renumbered. The cards
+    /// that already carry a rank keep the exact bytes they had — renumbering
+    /// every card on a drop is the `i32`-position scheme fractional ranks
+    /// exist to avoid — and the rest are placed after them, where they were
+    /// already being displayed.
+    #[tokio::test]
+    #[ignore = "requires live postgres"]
+    async fn initializing_a_half_ranked_column_does_not_renumber_the_ranked_cards() {
+        let pool = make_pool().await;
+        let fixture = seed_fixture(&pool).await;
+        let usecase = make_usecase(pool.clone());
+
+        let mut ranked = Vec::new();
+        for rank in ["1", "m"] {
+            let mut command = create_command(&fixture);
+            command.status = Some(TaskStatus::Planned);
+            let created = usecase.create_task(command).await.unwrap();
+            let mut patch = PatchTaskCommand::new(created.id, authz::Subject::system());
+            patch.board_rank = Some(Some(BoardRank(rank.to_owned())));
+            ranked.push(usecase.patch_task(patch).await.unwrap());
+        }
+
+        let mut unranked = Vec::new();
+        for _ in 0..3 {
+            let mut command = create_command(&fixture);
+            command.status = Some(TaskStatus::Planned);
+            unranked.push(usecase.create_task(command).await.unwrap());
+        }
+
+        let moving = usecase.create_task(create_command(&fixture)).await.unwrap();
+        usecase
+            .patch_task(drop_between(
+                moving.id,
+                Some(unranked[0].id),
+                Some(unranked[1].id),
+            ))
+            .await
+            .unwrap();
+
+        let after = column_ranks(&pool, fixture.organization_id, TaskStatus::Planned).await;
+        let rank_of = |id: TaskId| {
+            after
+                .iter()
+                .find(|(row, _)| *row == id.0)
+                .and_then(|(_, rank)| rank.clone())
+        };
+
+        assert_eq!(
+            rank_of(ranked[0].id),
+            Some("1".to_owned()),
+            "a card that already had a rank keeps it, byte for byte"
+        );
+        assert_eq!(rank_of(ranked[1].id), Some("m".to_owned()));
+        for card in &unranked {
+            let rank = rank_of(card.id).expect("the unranked cards were ranked");
+            assert!(
+                rank.as_str() > "m",
+                "the newly ranked cards sort after every card that already had a rank: {rank}"
+            );
+        }
+
+        cleanup(&pool, fixture.organization_id, &[fixture.owner_id]).await;
+    }
+
+    /// Idempotence, measured against the real rows: the second drop into the
+    /// same column writes only the card being moved. `updated_at` is the
+    /// instrument — an initialization that ran twice would touch every card
+    /// in the column a second time.
+    #[tokio::test]
+    #[ignore = "requires live postgres"]
+    async fn initializing_a_column_twice_writes_nothing_the_second_time() {
+        let pool = make_pool().await;
+        let fixture = seed_fixture(&pool).await;
+        let usecase = make_usecase(pool.clone());
+
+        let mut cards = Vec::new();
+        for _ in 0..4 {
+            let mut command = create_command(&fixture);
+            command.status = Some(TaskStatus::InProgress);
+            cards.push(usecase.create_task(command).await.unwrap());
+        }
+
+        usecase
+            .patch_task(drop_between(
+                cards[3].id,
+                Some(cards[0].id),
+                Some(cards[1].id),
+            ))
+            .await
+            .unwrap();
+        let after_first = snapshot(&pool, fixture.organization_id).await;
+
+        usecase
+            .patch_task(drop_between(
+                cards[2].id,
+                Some(cards[0].id),
+                Some(cards[1].id),
+            ))
+            .await
+            .unwrap();
+        let after_second = snapshot(&pool, fixture.organization_id).await;
+
+        let touched: Vec<Uuid> = after_first
+            .iter()
+            .zip(after_second.iter())
+            .filter(|((_, before, _), (_, after, _))| before != after)
+            .map(|((id, _, _), _)| *id)
+            .collect();
+        assert_eq!(
+            touched,
+            vec![cards[2].id.0],
+            "the second drop found a ranked column and wrote one row — the card it moved"
+        );
+
+        cleanup(&pool, fixture.organization_id, &[fixture.owner_id]).await;
+    }
+
+    /// The claim that only a real database can make: initialization is a
+    /// bulk write, and a bulk write is where the `TEXT COLLATE "C"` decision
+    /// either holds or quietly stops holding. Both orderings are run over
+    /// the same freshly initialized column and compared row for row.
+    ///
+    /// `"z"`-heavy and `"9"`-heavy ranks are what a linguistic collation is
+    /// most likely to order differently from byte order, and an evenly
+    /// spaced batch produces exactly those — it walks the alphabet.
+    #[tokio::test]
+    #[ignore = "requires live postgres"]
+    async fn sql_and_the_domain_still_agree_after_a_column_is_initialized() {
+        let pool = make_pool().await;
+        let fixture = seed_fixture(&pool).await;
+        let usecase = make_usecase(pool.clone());
+
+        // Thirty cards, so the generated batch spans the alphabet twice over
+        // and lands on two-character ranks.
+        let mut cards = Vec::new();
+        for index in 0..30 {
+            let mut command = create_command(&fixture);
+            command.status = Some(TaskStatus::Backlog);
+            command.title = format!("Carte {index}");
+            cards.push(usecase.create_task(command).await.unwrap());
+        }
+
+        usecase
+            .patch_task(drop_between(
+                cards[29].id,
+                Some(cards[0].id),
+                Some(cards[1].id),
+            ))
+            .await
+            .unwrap();
+
+        let sql_order: Vec<Uuid> = sqlx::query_scalar!(
+            r#"
+            SELECT id
+            FROM tasks
+            WHERE org_id = $1 AND deleted_at IS NULL
+            ORDER BY board_rank ASC NULLS LAST, created_at ASC, id ASC
+            "#,
+            fixture.organization_id.0,
+        )
+        .fetch_all(&pool)
+        .await
+        .unwrap();
+
+        let (mut tasks, _counts, _total) = usecase
+            .list_tasks(
+                fixture.organization_id,
+                TaskFilter {
+                    parent: ParentScope::Any,
+                    ..TaskFilter::default()
+                },
+                100,
+                0,
+            )
+            .await
+            .unwrap();
+        let listed: Vec<Uuid> = tasks.iter().map(|task| task.id.0).collect();
+        sort_by_board_rank(&mut tasks);
+        let domain_order: Vec<Uuid> = tasks.iter().map(|task| task.id.0).collect();
+
+        assert_eq!(
+            domain_order, sql_order,
+            "a bulk-written column must order identically in PostgreSQL and in the domain"
+        );
+        assert_eq!(
+            listed, sql_order,
+            "and the endpoint's own ordering is already that order — nothing re-sorts a page"
+        );
+        assert!(
+            tasks.iter().all(|task| task.board_rank.is_some()),
+            "the whole column was initialized"
+        );
+
+        cleanup(&pool, fixture.organization_id, &[fixture.owner_id]).await;
+    }
+    // -- the column the card is landing in ----------------------------------
+    //
+    // A cross-column drop is one request: the new `status` and the target
+    // column's neighbours travel in the same payload, `patch_task` writes the
+    // status, and the drop resolves against the column the card is joining.
+    // What these pin is that "the column the card is joining" is what the
+    // resolver is actually told, rather than something it infers from the
+    // neighbours and is therefore incapable of disagreeing with.
+
+    /// A `PATCH` carrying both halves: the card changes column and lands at
+    /// the position it named in that column.
+    #[tokio::test]
+    #[ignore = "requires live postgres"]
+    async fn a_patch_changing_column_lands_at_the_named_position_in_the_target() {
+        let pool = make_pool().await;
+        let fixture = seed_fixture(&pool).await;
+        let usecase = make_usecase(pool.clone());
+
+        // A ranked target column, and a card sitting in another one.
+        let mut target = Vec::new();
+        for rank in ["a", "b"] {
+            let mut command = create_command(&fixture);
+            command.status = Some(TaskStatus::InProgress);
+            let created = usecase.create_task(command).await.unwrap();
+            let mut patch = PatchTaskCommand::new(created.id, authz::Subject::system());
+            patch.board_rank = Some(Some(BoardRank(rank.to_owned())));
+            target.push(usecase.patch_task(patch).await.unwrap());
+        }
+
+        let mut moving = create_command(&fixture);
+        moving.status = Some(TaskStatus::Backlog);
+        let moving = usecase.create_task(moving).await.unwrap();
+
+        let mut patch = drop_between(moving.id, Some(target[0].id), Some(target[1].id));
+        patch.status = Some(TaskStatus::InProgress);
+        let moved = usecase.patch_task(patch).await.unwrap();
+
+        assert_eq!(
+            moved.status,
+            TaskStatus::InProgress,
+            "the status the same payload carried is written"
+        );
+        let rank = moved.board_rank.clone().expect("the drop produced a rank");
+        assert!(target[0].board_rank.as_ref().unwrap() < &rank);
+        assert!(&rank < target[1].board_rank.as_ref().unwrap());
+
+        // And the card really is in the target column, at that position.
+        let column = column_ranks(&pool, fixture.organization_id, TaskStatus::InProgress).await;
+        assert_eq!(
+            column.iter().map(|(id, _)| *id).collect::<Vec<_>>(),
+            vec![target[0].id.0, moving.id.0, target[1].id.0],
+        );
+        assert!(
+            column_ranks(&pool, fixture.organization_id, TaskStatus::Backlog)
+                .await
+                .is_empty(),
+            "the card left the column it came from"
+        );
+
+        cleanup(&pool, fixture.organization_id, &[fixture.owner_id]).await;
+    }
+
+    /// The silent failure this closes: a `PATCH` that changes column while
+    /// naming the cards it is *leaving behind*. The neighbours agree with
+    /// each other, so the older check passes them; they do not agree with
+    /// where the card is going, and that is now a `409` rather than a rank
+    /// borrowed from another column's space.
+    #[tokio::test]
+    #[ignore = "requires live postgres"]
+    async fn neighbours_from_the_source_column_are_refused_when_the_patch_changes_column() {
+        let pool = make_pool().await;
+        let fixture = seed_fixture(&pool).await;
+        let usecase = make_usecase(pool.clone());
+
+        let mut source = Vec::new();
+        for _ in 0..2 {
+            let mut command = create_command(&fixture);
+            command.status = Some(TaskStatus::Backlog);
+            source.push(usecase.create_task(command).await.unwrap());
+        }
+
+        let mut target = create_command(&fixture);
+        target.status = Some(TaskStatus::InProgress);
+        usecase.create_task(target).await.unwrap();
+
+        let mut moving = create_command(&fixture);
+        moving.status = Some(TaskStatus::Backlog);
+        let moving = usecase.create_task(moving).await.unwrap();
+
+        let mut patch = drop_between(moving.id, Some(source[0].id), Some(source[1].id));
+        patch.status = Some(TaskStatus::InProgress);
+        let error = usecase.patch_task(patch).await.unwrap_err();
+
+        assert!(
+            matches!(error, CoreError::Conflict(ref message)
+                if message.contains("BACKLOG") && message.contains("IN_PROGRESS")),
+            "the refusal must name the neighbours' column and the target: {error:?}"
+        );
+
+        // Neither column was initialized on the way out, and the status was
+        // not written either — the refusal rolls the whole patch back.
+        for status in [TaskStatus::Backlog, TaskStatus::InProgress] {
+            for (id, rank) in column_ranks(&pool, fixture.organization_id, status).await {
+                assert_eq!(
+                    rank, None,
+                    "a refused drop must leave every column untouched (task {id})"
+                );
+            }
+        }
+        assert_eq!(
+            usecase.get_task(moving.id).await.unwrap().status,
+            TaskStatus::Backlog,
+            "the status the refused patch carried was rolled back with it"
+        );
+
+        cleanup(&pool, fixture.organization_id, &[fixture.owner_id]).await;
+    }
+
+    /// The regression guard for the case that is not a column change at all:
+    /// no `status` in the payload, so the target is the card's current
+    /// column and the drop resolves exactly as it did before this check
+    /// existed.
+    #[tokio::test]
+    #[ignore = "requires live postgres"]
+    async fn a_drop_with_no_status_change_resolves_against_the_cards_current_column() {
+        let pool = make_pool().await;
+        let fixture = seed_fixture(&pool).await;
+        let usecase = make_usecase(pool.clone());
+
+        let mut column = Vec::new();
+        for rank in ["a", "b"] {
+            let mut command = create_command(&fixture);
+            command.status = Some(TaskStatus::Done);
+            let created = usecase.create_task(command).await.unwrap();
+            let mut patch = PatchTaskCommand::new(created.id, authz::Subject::system());
+            patch.board_rank = Some(Some(BoardRank(rank.to_owned())));
+            column.push(usecase.patch_task(patch).await.unwrap());
+        }
+
+        let mut moving = create_command(&fixture);
+        moving.status = Some(TaskStatus::Done);
+        let moving = usecase.create_task(moving).await.unwrap();
+
+        // No `status` on the patch — the card is already where it is landing.
+        let moved = usecase
+            .patch_task(drop_between(
+                moving.id,
+                Some(column[0].id),
+                Some(column[1].id),
+            ))
+            .await
+            .unwrap();
+
+        assert_eq!(moved.status, TaskStatus::Done, "the column is unchanged");
+        let rank = moved.board_rank.expect("the drop produced a rank");
+        assert!(column[0].board_rank.as_ref().unwrap() < &rank);
+        assert!(&rank < column[1].board_rank.as_ref().unwrap());
+
+        cleanup(&pool, fixture.organization_id, &[fixture.owner_id]).await;
+    }
+
+    /// A cross-column drop into a target that has never been ranked. Which
+    /// rows the initialization lands on is the whole question: the column the
+    /// card is **joining** is written down, and the one it is leaving is left
+    /// exactly as it was.
+    #[tokio::test]
+    #[ignore = "requires live postgres"]
+    async fn a_cross_column_drop_initializes_the_target_column_not_the_source() {
+        let pool = make_pool().await;
+        let fixture = seed_fixture(&pool).await;
+        let usecase = make_usecase(pool.clone());
+
+        let mut source = Vec::new();
+        for _ in 0..3 {
+            let mut command = create_command(&fixture);
+            command.status = Some(TaskStatus::Backlog);
+            source.push(usecase.create_task(command).await.unwrap());
+        }
+
+        let mut target = Vec::new();
+        for _ in 0..3 {
+            let mut command = create_command(&fixture);
+            command.status = Some(TaskStatus::Planned);
+            target.push(usecase.create_task(command).await.unwrap());
+        }
+
+        // Every card of both columns is unranked — a fresh install.
+        for status in [TaskStatus::Backlog, TaskStatus::Planned] {
+            for (_, rank) in column_ranks(&pool, fixture.organization_id, status).await {
+                assert_eq!(rank, None);
+            }
+        }
+
+        let mut patch = drop_between(source[0].id, Some(target[0].id), Some(target[1].id));
+        patch.status = Some(TaskStatus::Planned);
+        let moved = usecase.patch_task(patch).await.unwrap();
+
+        let planned = column_ranks(&pool, fixture.organization_id, TaskStatus::Planned).await;
+        assert!(
+            planned.iter().all(|(_, rank)| rank.is_some()),
+            "the target column was written down: {planned:?}"
+        );
+        assert_eq!(
+            planned.iter().map(|(id, _)| *id).collect::<Vec<_>>(),
+            vec![
+                target[0].id.0,
+                source[0].id.0,
+                target[1].id.0,
+                target[2].id.0,
+            ],
+            "the target keeps the order it had, with the arriving card where it landed"
+        );
+        assert!(moved.board_rank.is_some());
+
+        let backlog = column_ranks(&pool, fixture.organization_id, TaskStatus::Backlog).await;
+        assert_eq!(backlog.len(), 2, "the card left the source column");
+        for (id, rank) in &backlog {
+            assert_eq!(
+                *rank, None,
+                "the column the card left is not the column being written down (task {id})"
+            );
+        }
+
+        cleanup(&pool, fixture.organization_id, &[fixture.owner_id]).await;
     }
 }

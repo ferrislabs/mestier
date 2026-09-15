@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, str::FromStr};
 
 use chrono::{DateTime, NaiveDate, Utc};
 use common::CoreError;
@@ -7,8 +7,11 @@ use sqlx::PgConnection;
 use uuid::Uuid;
 
 use crate::{
-    MemberId, OrganizationId, Task, TaskAssignment, TaskId, TaskRecurrenceId,
-    domain::task::ports::TaskRepository,
+    MemberId, OrganizationId, Task, TaskAssignment, TaskId, TaskRecurrenceId, TaskStatus,
+    domain::task::{
+        BoardRank,
+        ports::{BoardPosition, ParentScope, TaskFilter, TaskRepository},
+    },
     infrastructure::{
         postgres::{SharedTx, error::map_sqlx_error},
         task::postgres::model::{TaskAssignmentRow, TaskRow},
@@ -140,27 +143,78 @@ impl<'tx> TaskRepository for PgTaskRepository<'tx> {
     async fn list_by_organization(
         &mut self,
         organization_id: OrganizationId,
-        parent_task_id: Option<TaskId>,
+        filter: &TaskFilter,
         limit: u64,
         offset: u64,
     ) -> Result<(Vec<Task>, u64), CoreError> {
         let mut tx = self.tx.lock().await;
-        let parent_task_id = parent_task_id.map(|id| id.0);
+        let FilterParams {
+            any_parent,
+            parent_task_id,
+            project_id,
+            statuses,
+            assignee_id,
+            label_id,
+            customer_id,
+            title_contains,
+            unscheduled,
+        } = FilterParams::from(filter);
+
+        // The predicate below and the count's are one predicate written
+        // twice, and they have to stay that way: a count taken under a wider
+        // `WHERE` reports pages the caller can never reach, and one taken
+        // under a narrower one hides the tail of the result. `query_as!`
+        // needs its SQL as a literal, so the duplication cannot be factored
+        // out into a shared fragment — changing one means changing both.
+        //
+        // Every `$n::type IS NULL OR ...` is the same shape: an absent filter
+        // contributes a predicate that is true for every row, so filters
+        // compose with `AND` and an absent one narrows nothing. The org scope
+        // is not written that way on purpose — it has no `IS NULL` escape
+        // hatch, because it is never optional.
         let rows = sqlx::query_as!(
             TaskRow,
             r#"
-            SELECT id, org_id, parent_task_id, title, description, starts_at, ends_at, all_day, status::text AS "status!", blocks_availability, customer_id, customer_context_id, quote_id, project_id, expenses_cents, expenses_label, board_rank, recurrence_id, occurrence_date, deleted_at, created_at, updated_at
-            FROM tasks
-            WHERE org_id = $1 AND deleted_at IS NULL
+            SELECT t.id, t.org_id, t.parent_task_id, t.title, t.description, t.starts_at, t.ends_at, t.all_day, t.status::text AS "status!", t.blocks_availability, t.customer_id, t.customer_context_id, t.quote_id, t.project_id, t.expenses_cents, t.expenses_label, t.board_rank, t.recurrence_id, t.occurrence_date, t.deleted_at, t.created_at, t.updated_at
+            FROM tasks t
+            WHERE t.org_id = $1 AND t.deleted_at IS NULL
               AND (
-                ($2::uuid IS NULL AND parent_task_id IS NULL)
-                OR parent_task_id = $2
+                $2::boolean
+                OR ($3::uuid IS NULL AND t.parent_task_id IS NULL)
+                OR t.parent_task_id = $3
               )
-            ORDER BY starts_at ASC NULLS LAST, id ASC
-            LIMIT $3 OFFSET $4
+              AND ($4::uuid IS NULL OR t.project_id = $4)
+              AND ($5::text[] IS NULL OR t.status::text = ANY($5))
+              AND (
+                $6::uuid IS NULL
+                OR EXISTS (
+                  SELECT 1 FROM task_assignments a
+                  WHERE a.task_id = t.id AND a.member_id = $6 AND a.org_id = t.org_id
+                )
+              )
+              AND (
+                $7::uuid IS NULL
+                OR EXISTS (
+                  SELECT 1 FROM task_label_links l
+                  WHERE l.task_id = t.id AND l.label_id = $7
+                )
+              )
+              AND ($8::uuid IS NULL OR t.customer_id = $8)
+              AND ($9::text IS NULL OR POSITION(LOWER($9) IN LOWER(t.title)) > 0)
+              AND ($10::boolean IS NULL OR (t.starts_at IS NULL) = $10)
+            ORDER BY t.board_rank ASC NULLS LAST, t.created_at ASC, t.id ASC
+            LIMIT $11 OFFSET $12
             "#,
             organization_id.0,
+            any_parent,
             parent_task_id,
+            project_id,
+            statuses.as_deref(),
+            assignee_id,
+            label_id,
+            customer_id,
+            title_contains,
+            unscheduled,
             limit as i64,
             offset as i64,
         )
@@ -171,15 +225,43 @@ impl<'tx> TaskRepository for PgTaskRepository<'tx> {
         let total: i64 = sqlx::query_scalar!(
             r#"
             SELECT COUNT(*) AS "count!"
-            FROM tasks
-            WHERE org_id = $1 AND deleted_at IS NULL
+            FROM tasks t
+            WHERE t.org_id = $1 AND t.deleted_at IS NULL
               AND (
-                ($2::uuid IS NULL AND parent_task_id IS NULL)
-                OR parent_task_id = $2
+                $2::boolean
+                OR ($3::uuid IS NULL AND t.parent_task_id IS NULL)
+                OR t.parent_task_id = $3
               )
+              AND ($4::uuid IS NULL OR t.project_id = $4)
+              AND ($5::text[] IS NULL OR t.status::text = ANY($5))
+              AND (
+                $6::uuid IS NULL
+                OR EXISTS (
+                  SELECT 1 FROM task_assignments a
+                  WHERE a.task_id = t.id AND a.member_id = $6 AND a.org_id = t.org_id
+                )
+              )
+              AND (
+                $7::uuid IS NULL
+                OR EXISTS (
+                  SELECT 1 FROM task_label_links l
+                  WHERE l.task_id = t.id AND l.label_id = $7
+                )
+              )
+              AND ($8::uuid IS NULL OR t.customer_id = $8)
+              AND ($9::text IS NULL OR POSITION(LOWER($9) IN LOWER(t.title)) > 0)
+              AND ($10::boolean IS NULL OR (t.starts_at IS NULL) = $10)
             "#,
             organization_id.0,
+            any_parent,
             parent_task_id,
+            project_id,
+            statuses.as_deref(),
+            assignee_id,
+            label_id,
+            customer_id,
+            title_contains,
+            unscheduled,
         )
         .fetch_one(&mut ***tx)
         .await
@@ -195,6 +277,126 @@ impl<'tx> TaskRepository for PgTaskRepository<'tx> {
         }
 
         Ok((tasks, total as u64))
+    }
+
+    async fn find_board_positions(
+        &mut self,
+        organization_id: OrganizationId,
+        task_ids: &[TaskId],
+    ) -> Result<HashMap<TaskId, BoardPosition>, CoreError> {
+        if task_ids.is_empty() {
+            return Ok(HashMap::new());
+        }
+
+        let mut tx = self.tx.lock().await;
+        let ids: Vec<Uuid> = task_ids.iter().map(|id| id.0).collect();
+        let rows = sqlx::query!(
+            r#"
+            SELECT id, status::text AS "status!", board_rank
+            FROM tasks
+            WHERE org_id = $1 AND deleted_at IS NULL AND id = ANY($2)
+            "#,
+            organization_id.0,
+            &ids,
+        )
+        .fetch_all(&mut ***tx)
+        .await
+        .map_err(map_sqlx_error)?;
+
+        // A row that did not come back is simply absent from the map. The
+        // `org_id` predicate is what makes that the same answer for "no such
+        // task" and "somebody else's task" — the caller cannot tell them
+        // apart, which is the point.
+        rows.into_iter()
+            .map(|row| {
+                let status = TaskStatus::from_str(&row.status).map_err(|error| {
+                    CoreError::Internal(format!("invalid task status in database: {error}"))
+                })?;
+                Ok((
+                    TaskId(row.id),
+                    BoardPosition {
+                        status,
+                        board_rank: row.board_rank.map(BoardRank),
+                    },
+                ))
+            })
+            .collect()
+    }
+
+    async fn list_column_for_ranking(
+        &mut self,
+        organization_id: OrganizationId,
+        status: TaskStatus,
+    ) -> Result<Vec<(TaskId, Option<BoardRank>)>, CoreError> {
+        let mut tx = self.tx.lock().await;
+        // The same ordering clause as `list_by_organization`, and it has to
+        // be: this is the order the column is being displayed in, and the
+        // order initialization is about to write down. If the two drifted,
+        // materializing a column would silently reshuffle it.
+        let rows = sqlx::query!(
+            r#"
+            SELECT id, board_rank
+            FROM tasks
+            WHERE org_id = $1 AND deleted_at IS NULL AND status = CAST($2 AS text)::task_status
+            ORDER BY board_rank ASC NULLS LAST, created_at ASC, id ASC
+            "#,
+            organization_id.0,
+            status.as_str(),
+        )
+        .fetch_all(&mut ***tx)
+        .await
+        .map_err(map_sqlx_error)?;
+
+        Ok(rows
+            .into_iter()
+            .map(|row| (TaskId(row.id), row.board_rank.map(BoardRank)))
+            .collect())
+    }
+
+    async fn set_board_ranks(
+        &mut self,
+        organization_id: OrganizationId,
+        ranks: &[(TaskId, BoardRank)],
+    ) -> Result<u64, CoreError> {
+        if ranks.is_empty() {
+            return Ok(0);
+        }
+
+        let mut tx = self.tx.lock().await;
+        let ids: Vec<Uuid> = ranks.iter().map(|(id, _)| id.0).collect();
+        let values: Vec<String> = ranks.iter().map(|(_, rank)| rank.0.clone()).collect();
+
+        // One statement for the whole column rather than one per card: an
+        // initialization touches every unranked row at once, and issuing it
+        // row by row would be the N+1 this module refuses everywhere else,
+        // at its worst — on a write.
+        //
+        // `board_rank IS NULL` is the guard the port's contract is written
+        // around. It is in the SQL rather than in the caller because that is
+        // the only place it is also a concurrency guarantee: a second
+        // transaction reaching this statement blocks on the row locks, then
+        // re-evaluates the predicate against the committed rows and updates
+        // nothing.
+        let affected = sqlx::query!(
+            r#"
+            UPDATE tasks AS t
+            SET board_rank = incoming.board_rank, updated_at = now()
+            FROM UNNEST($2::uuid[], $3::text[]) AS incoming(id, board_rank)
+            WHERE t.id = incoming.id
+              AND t.org_id = $1
+              AND t.deleted_at IS NULL
+              AND t.board_rank IS NULL
+            "#,
+            organization_id.0,
+            &ids,
+            &values,
+        )
+        .execute(&mut ***tx)
+        .await
+        .map_err(map_sqlx_error)?
+        .rows_affected();
+
+        Ok(affected)
     }
 
     async fn list_for_assignee_on(
@@ -466,4 +668,55 @@ async fn replace_assignments(
     }
 
     Ok(())
+}
+
+/// The filter, flattened into the scalar bind parameters `query_as!` needs.
+///
+/// Built once and destructured into both statements below so the list and its
+/// count cannot drift apart in the binding order — the one mistake this
+/// duplicated `WHERE` invites, and one the type checker would not catch
+/// between two `Option<Uuid>`s.
+struct FilterParams {
+    /// [`ParentScope::Any`] collapsed to a plain flag, because SQL has no
+    /// three-valued parameter and `NULL` already means "roots" here.
+    any_parent: bool,
+    parent_task_id: Option<Uuid>,
+    project_id: Option<Uuid>,
+    /// The statuses as their wire strings: the column is the `task_status`
+    /// enum, and comparing `status::text = ANY($n)` against a `text[]` keeps
+    /// the binding plain rather than teaching sqlx an array of a custom enum
+    /// type. `TaskStatus::as_str` is the same spelling the column stores.
+    statuses: Option<Vec<String>>,
+    assignee_id: Option<Uuid>,
+    label_id: Option<Uuid>,
+    customer_id: Option<Uuid>,
+    title_contains: Option<String>,
+    unscheduled: Option<bool>,
+}
+
+impl From<&TaskFilter> for FilterParams {
+    fn from(filter: &TaskFilter) -> Self {
+        let (any_parent, parent_task_id) = match filter.parent {
+            ParentScope::Roots => (false, None),
+            ParentScope::ChildrenOf(id) => (false, Some(id.0)),
+            ParentScope::Any => (true, None),
+        };
+
+        Self {
+            any_parent,
+            parent_task_id,
+            project_id: filter.project_id.map(|id| id.0),
+            statuses: filter.statuses.as_ref().map(|statuses| {
+                statuses
+                    .iter()
+                    .map(|status| status.as_str().to_owned())
+                    .collect()
+            }),
+            assignee_id: filter.assignee_id.map(|id| id.0),
+            label_id: filter.label_id.map(|id| id.0),
+            customer_id: filter.customer_id.map(|id| id.0),
+            title_contains: filter.title_contains.clone(),
+            unscheduled: filter.unscheduled,
+        }
+    }
 }
