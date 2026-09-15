@@ -93,6 +93,7 @@ const STATUS_TONE: Record<
 	Schemas.TaskStatus,
 	'success' | 'warning' | 'error' | 'neutral' | 'brand'
 > = {
+	BACKLOG: 'neutral',
 	PLANNED: 'neutral',
 	IN_PROGRESS: 'brand',
 	DONE: 'success',

@@ -29,6 +29,7 @@ import {
 type TaskStatus = Schemas.TaskStatus
 
 const STATUS_LABELS: Record<TaskStatus, string> = {
+	BACKLOG: 'Backlog',
 	PLANNED: 'Planifiée',
 	IN_PROGRESS: 'En cours',
 	DONE: 'Terminée',

@@ -82,7 +82,6 @@ export namespace Schemas {
   export type TaskAssignmentSummary = { id: TaskAssignmentId; member_id: MemberId };
   export type CustomerContextId = string;
   export type CustomerId = string;
-  export type CustomUnitId = string;
   export type EquipmentId = string;
   export type TaskEquipmentResponse = {
     created_at: string;
@@ -104,7 +103,7 @@ export namespace Schemas {
   export type ProjectId = string;
   export type QuoteId = string;
   export type TaskRecurrenceId = string;
-  export type TaskStatus = "PLANNED" | "IN_PROGRESS" | "DONE" | "CANCELLED";
+  export type TaskStatus = "BACKLOG" | "PLANNED" | "IN_PROGRESS" | "DONE" | "CANCELLED";
   export type TaskResponse = {
     all_day: boolean;
     assignments: Array<TaskAssignmentSummary>;
@@ -174,6 +173,7 @@ export namespace Schemas {
   export type ConfirmSupplierInvoiceRequest = Partial<{ notes: string | null }>;
   export type ConnectorDescriptorResponse = {
     auth: AuthRequirementResponse;
+    branches: Array<BranchDto>;
     family: string;
     fields: Array<FieldResponse>;
     kind: string;
@@ -215,6 +215,7 @@ export namespace Schemas {
     name: string;
     origin: CredentialOriginRequest;
   };
+  export type CreateCustomUnitRequest = { code: string };
   export type CreateCustomerContactRequest = {
     email?: (string | null) | undefined;
     first_name: string;
@@ -240,7 +241,6 @@ export namespace Schemas {
     registration_number?: (string | null) | undefined;
     status: CustomerStatus;
   };
-  export type CreateCustomUnitRequest = { code: string };
   export type CreateEquipmentRequest = { hourly_rate_cents: number; name: string };
   export type CreateInvitationRequest = Partial<{ expires_at: string | null; member_id: null | MemberId }>;
   export type DeliveryAddressRequest = {
@@ -278,7 +278,6 @@ export namespace Schemas {
   };
   export type CreateMessageRequest = { attachments?: Array<CreateMessageAttachment> | undefined; content: string };
   export type CreateOrganizationRequest = { name: string; slug: string };
-  export type ServiceRateUnit = "FLAT_RATE" | "HOUR" | "DAY" | "UNIT" | "ML" | "M2" | "M3" | "KG" | "TONNE" | "LITRE";
   export type CreateProductRequest = {
     default_vat_rate_bp?: (number | null) | undefined;
     description?: (string | null) | undefined;
@@ -389,6 +388,7 @@ export namespace Schemas {
     project_id?: (null | ProjectId) | undefined;
     quote_id?: (null | QuoteId) | undefined;
     starts_at?: (string | null) | undefined;
+    status?: (null | TaskStatus) | undefined;
     title: string;
   };
   export type CreateThreadRequest = { name: string; origin_message_id?: (null | MessageId) | undefined };
@@ -413,6 +413,13 @@ export namespace Schemas {
     updated_at: string;
   };
   export type CredentialWithSecretResponse = CredentialResponse & { secret: unknown };
+  export type CustomUnitId = string;
+  export type CustomUnitResponse = {
+    code: string;
+    created_at: string;
+    id: CustomUnitId;
+    organization_id: OrganizationId;
+  };
   export type CustomerContactId = string;
   export type CustomerContactResponse = {
     created_at: string;
@@ -453,12 +460,6 @@ export namespace Schemas {
     registration_number?: (string | null) | undefined;
     status: CustomerStatus;
     updated_at: string;
-  };
-  export type CustomUnitResponse = {
-    code: string;
-    created_at: string;
-    id: CustomUnitId;
-    organization_id: OrganizationId;
   };
   export type DayLogId = string;
   export type EmployeeId = string;
@@ -516,6 +517,14 @@ export namespace Schemas {
     organization_id: OrganizationId;
     updated_at: string;
   };
+  export type LoopFrameBody = { index: number; item: unknown };
+  export type EvaluateContextBody = Partial<{
+    connectors: Record<string, unknown>;
+    loop: null | LoopFrameBody;
+    trigger: unknown;
+  }>;
+  export type EvaluateExpressionRequest = { context: EvaluateContextBody; template: unknown };
+  export type EvaluateExpressionResponse = { value: unknown };
   export type EventDescriptorResponse = {
     label: string;
     name: string;
@@ -762,6 +771,7 @@ export namespace Schemas {
   };
   export type MinuteIntervalResponse = { ends_minute: number; starts_minute: number };
   export type MyPermissionsResponse = { permissions: Array<string> };
+  export type NodePositionDto = { x: number; y: number };
   export type NotificationId = string;
   export type NotificationResponse = {
     channel_id: ChannelId;
@@ -1103,8 +1113,12 @@ export namespace Schemas {
     started_at?: (string | null) | undefined;
     status: string;
   };
-  export type RunDetailResponse = RunResponse & { steps: Array<RunStepResponse> };
-  export type SaveWorkflowVersionRequest = { graph: GraphDto };
+  export type RunDetailResponse = RunResponse & {
+    graph?: (null | GraphDto) | undefined;
+    steps: Array<RunStepResponse>;
+  };
+  export type WorkflowLayoutDto = Record<string, unknown>;
+  export type SaveWorkflowVersionRequest = { graph: GraphDto; layout?: (null | WorkflowLayoutDto) | undefined };
   export type ServiceRateResponse = {
     created_at: string;
     default_vat_rate_bp?: (number | null) | undefined;
@@ -1116,6 +1130,7 @@ export namespace Schemas {
     unit: string;
     updated_at: string;
   };
+  export type ServiceRateUnit = "FLAT_RATE" | "HOUR" | "DAY" | "UNIT" | "ML" | "M2" | "M3" | "KG" | "TONNE" | "LITRE";
   export type SetEmployeeCostBasisRequest = {
     effective_from: string;
     hourly_rate_cents?: (number | null) | undefined;
@@ -1305,8 +1320,10 @@ export namespace Schemas {
     equipment_ids: Array<EquipmentId> | null;
     expenses_cents: number | null;
     expenses_label: string | null;
+    following_task_id: null | TaskId;
     label_ids: Array<TaskLabelId> | null;
     parent_task_id: null | TaskId;
+    preceding_task_id: null | TaskId;
     project_id: null | ProjectId;
     starts_at: string | null;
     status: null | TaskStatus;
@@ -1381,6 +1398,7 @@ export namespace Schemas {
     description?: (string | null) | undefined;
     enabled: boolean;
     id: string;
+    layout?: (null | WorkflowLayoutDto) | undefined;
     name: string;
     organization_id: OrganizationId;
     updated_at: string;
@@ -3898,6 +3916,22 @@ export namespace Endpoints {
       403: unknown;
     };
   };
+  export type post_EvaluateExpression = {
+    method: "POST";
+    path: "/api/v1/organizations/{organization_id}/automation/expressions/evaluate";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string };
+
+      body: Schemas.EvaluateExpressionRequest;
+    };
+    responses: {
+      200: { data: { value: unknown }; pagination?: (null | Schemas.PaginationMetadata) | undefined };
+      401: unknown;
+      403: unknown;
+      422: unknown;
+    };
+  };
   export type get_ListRuns = {
     method: "GET";
     path: "/api/v1/organizations/{organization_id}/automation/runs";
@@ -3936,7 +3970,10 @@ export namespace Endpoints {
     };
     responses: {
       200: {
-        data: Schemas.RunResponse & { steps: Array<Schemas.RunStepResponse> };
+        data: Schemas.RunResponse & {
+          graph?: (null | Schemas.GraphDto) | undefined;
+          steps: Array<Schemas.RunStepResponse>;
+        };
         pagination?: (null | Schemas.PaginationMetadata) | undefined;
       };
       401: unknown;
@@ -4090,6 +4127,7 @@ export namespace Endpoints {
           description?: (string | null) | undefined;
           enabled: boolean;
           id: string;
+          layout?: (null | Schemas.WorkflowLayoutDto) | undefined;
           name: string;
           organization_id: Schemas.OrganizationId;
           updated_at: string;
@@ -4211,6 +4249,47 @@ export namespace Endpoints {
       403: unknown;
       404: unknown;
       422: { code: string; details: Schemas.GraphInvalidDetails; message: string; status: number };
+    };
+  };
+  export type get_ListCustomUnits = {
+    method: "GET";
+    path: "/api/v1/organizations/{organization_id}/custom-units";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string };
+    };
+    responses: {
+      200: {
+        data: Array<{
+          code: string;
+          created_at: string;
+          id: Schemas.CustomUnitId;
+          organization_id: Schemas.OrganizationId;
+        }>;
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+    };
+  };
+  export type post_CreateCustomUnit = {
+    method: "POST";
+    path: "/api/v1/organizations/{organization_id}/custom-units";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string };
+
+      body: Schemas.CreateCustomUnitRequest;
+    };
+    responses: {
+      201: {
+        data: { code: string; created_at: string; id: Schemas.CustomUnitId; organization_id: Schemas.OrganizationId };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      400: unknown;
+      401: unknown;
+      403: unknown;
+      409: unknown;
     };
   };
   export type get_ListCustomers = {
@@ -4886,50 +4965,6 @@ export namespace Endpoints {
           updated_at: string;
         };
         pagination?: (null | Schemas.PaginationMetadata) | undefined;
-      };
-      400: unknown;
-      401: unknown;
-      403: unknown;
-      409: unknown;
-    };
-  };
-  export type get_ListCustomUnits = {
-    method: "GET";
-    path: "/api/v1/organizations/{organization_id}/custom-units";
-    requestFormat: "json";
-    parameters: {
-      path: { organization_id: string };
-    };
-    responses: {
-      200: {
-        data: Array<{
-          code: string;
-          created_at: string;
-          id: Schemas.CustomUnitId;
-          organization_id: Schemas.OrganizationId;
-        }>;
-      };
-      401: unknown;
-      403: unknown;
-    };
-  };
-  export type post_CreateCustomUnit = {
-    method: "POST";
-    path: "/api/v1/organizations/{organization_id}/custom-units";
-    requestFormat: "json";
-    parameters: {
-      path: { organization_id: string };
-
-      body: Schemas.CreateCustomUnitRequest;
-    };
-    responses: {
-      201: {
-        data: {
-          code: string;
-          created_at: string;
-          id: Schemas.CustomUnitId;
-          organization_id: Schemas.OrganizationId;
-        };
       };
       400: unknown;
       401: unknown;
@@ -5815,7 +5850,18 @@ export namespace Endpoints {
     path: "/api/v1/organizations/{organization_id}/tasks";
     requestFormat: "json";
     parameters: {
-      query: Partial<{ page: number; per_page: number; parent_task_id: string }>;
+      query: Partial<{
+        page: number;
+        per_page: number;
+        parent_task_id: string;
+        project_id: string;
+        status: Array<Schemas.TaskStatus>;
+        assignee_id: string;
+        label_id: string;
+        customer_id: string;
+        q: string;
+        unscheduled: boolean;
+      }>;
       path: { organization_id: string };
     };
     responses: {
@@ -5848,6 +5894,7 @@ export namespace Endpoints {
         }>;
         pagination?: (null | Schemas.PaginationMetadata) | undefined;
       };
+      400: unknown;
       401: unknown;
       403: unknown;
     };
@@ -6976,6 +7023,7 @@ export type EndpointByMethod = {
     "/api/v1/organizations/{organization_id}/automation/workflows": Endpoints.get_ListWorkflows;
     "/api/v1/organizations/{organization_id}/automation/workflows/{workflow_id}": Endpoints.get_GetWorkflow;
     "/api/v1/organizations/{organization_id}/automation/workflows/{workflow_id}/trigger": Endpoints.get_GetWorkflowTrigger;
+    "/api/v1/organizations/{organization_id}/custom-units": Endpoints.get_ListCustomUnits;
     "/api/v1/organizations/{organization_id}/customers": Endpoints.get_ListCustomers;
     "/api/v1/organizations/{organization_id}/employee-profiles": Endpoints.get_ListEmployeeProfiles;
     "/api/v1/organizations/{organization_id}/equipment": Endpoints.get_ListEquipment;
@@ -6989,7 +7037,6 @@ export type EndpointByMethod = {
     "/api/v1/organizations/{organization_id}/members/me/permissions": Endpoints.get_GetMyPermissions;
     "/api/v1/organizations/{organization_id}/planning": Endpoints.get_GetPlanning;
     "/api/v1/organizations/{organization_id}/planning/availability": Endpoints.get_GetPlanningAvailability;
-    "/api/v1/organizations/{organization_id}/custom-units": Endpoints.get_ListCustomUnits;
     "/api/v1/organizations/{organization_id}/products": Endpoints.get_ListProducts;
     "/api/v1/organizations/{organization_id}/project-templates": Endpoints.get_ListProjectTemplates;
     "/api/v1/organizations/{organization_id}/project-templates/{project_template_id}": Endpoints.get_GetProjectTemplate;
@@ -7043,9 +7090,11 @@ export type EndpointByMethod = {
     "/api/v1/organizations/{organization_id}/absences": Endpoints.post_CreateAbsence;
     "/api/v1/organizations/{organization_id}/automation/credentials": Endpoints.post_CreateAutomationCredential;
     "/api/v1/organizations/{organization_id}/automation/credentials/{credential_id}/rotate": Endpoints.post_RotateAutomationCredential;
+    "/api/v1/organizations/{organization_id}/automation/expressions/evaluate": Endpoints.post_EvaluateExpression;
     "/api/v1/organizations/{organization_id}/automation/runs/{run_id}/replay": Endpoints.post_ReplayRun;
     "/api/v1/organizations/{organization_id}/automation/workflows": Endpoints.post_CreateWorkflow;
     "/api/v1/organizations/{organization_id}/automation/workflows/{workflow_id}/runs": Endpoints.post_StartRun;
+    "/api/v1/organizations/{organization_id}/custom-units": Endpoints.post_CreateCustomUnit;
     "/api/v1/organizations/{organization_id}/customers": Endpoints.post_CreateCustomer;
     "/api/v1/organizations/{organization_id}/equipment": Endpoints.post_CreateEquipment;
     "/api/v1/organizations/{organization_id}/field/assignments/{task_assignment_id}/report": Endpoints.post_ReportAssignment;
@@ -7055,7 +7104,6 @@ export type EndpointByMethod = {
     "/api/v1/organizations/{organization_id}/invitations": Endpoints.post_CreateInvitation;
     "/api/v1/organizations/{organization_id}/invoices": Endpoints.post_CreateInvoice;
     "/api/v1/organizations/{organization_id}/members": Endpoints.post_CreateMember;
-    "/api/v1/organizations/{organization_id}/custom-units": Endpoints.post_CreateCustomUnit;
     "/api/v1/organizations/{organization_id}/products": Endpoints.post_CreateProduct;
     "/api/v1/organizations/{organization_id}/project-templates": Endpoints.post_CreateProjectTemplate;
     "/api/v1/organizations/{organization_id}/project-templates/{project_template_id}/instantiate": Endpoints.post_InstantiateProjectTemplate;
