@@ -9,6 +9,7 @@ export type ModuleId =
 	| 'planning'
 	| 'planification'
 	| 'chat'
+	| 'automatisation'
 	| 'settings'
 
 /**

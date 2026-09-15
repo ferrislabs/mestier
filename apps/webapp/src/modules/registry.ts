@@ -18,6 +18,7 @@ import {
 	ShoppingCart,
 	TrendingUp,
 	Users,
+	Workflow,
 } from 'lucide-react'
 import type { AppModule } from '#/modules/types'
 
@@ -222,6 +223,25 @@ export const MODULES: AppModule[] = [
 				label: 'Canaux',
 				to: '/chat',
 				icon: MessagesSquare,
+			},
+		],
+	},
+	{
+		id: 'automatisation',
+		label: 'Automatisation',
+		icon: Workflow,
+		basePath: '/automatisation',
+		status: 'available',
+		hasOverview: true,
+		requiredPermission: 'VIEW_AUTOMATION',
+		sections: [
+			{
+				id: 'workflows',
+				label: 'Workflows',
+				to: '/automatisation',
+				icon: Workflow,
+				exact: true,
+				requiredPermission: 'VIEW_AUTOMATION',
 			},
 		],
 	},
