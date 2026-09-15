@@ -331,6 +331,28 @@ impl<'tx> WorkflowRepository for PgWorkflowRepository<'tx> {
         row.map(WorkflowVersion::try_from).transpose()
     }
 
+    async fn find_version_by_id(
+        &mut self,
+        org_id: OrganizationId,
+        workflow_version_id: Uuid,
+    ) -> Result<Option<WorkflowVersion>, CoreError> {
+        let mut tx = self.tx.lock().await;
+        let row = sqlx::query_as!(
+            WorkflowVersionRow,
+            r#"SELECT wv.id, wv.workflow_id, wv.version, wv.graph, wv.created_at, wv.created_by
+               FROM automation.workflow_version wv
+               JOIN automation.workflow w ON w.id = wv.workflow_id
+               WHERE w.org_id = $1 AND wv.id = $2"#,
+            org_id.0,
+            workflow_version_id,
+        )
+        .fetch_optional(&mut ***tx)
+        .await
+        .map_err(map_sqlx_error)?;
+
+        row.map(WorkflowVersion::try_from).transpose()
+    }
+
     async fn list_versions(
         &mut self,
         org_id: OrganizationId,
@@ -1035,5 +1057,73 @@ mod tests {
         .await;
 
         assert!(matches!(outcome, Err(CoreError::NotFound)));
+    }
+
+    #[tokio::test]
+    #[ignore = "requires live postgres"]
+    async fn finding_a_version_by_id_in_its_own_organization_returns_it() {
+        let pool = make_pool().await;
+        let org_id = seed_organization(&pool, "version-by-id").await;
+        let inserted = with_tx(&pool, async |tx| {
+            let mut repo = PgWorkflowRepository::new(&tx);
+            let workflow = repo.insert(&workflow(org_id, "Versioned")).await?;
+            repo.insert_version(org_id, workflow.id, &graph_with_credential(None), None)
+                .await
+        })
+        .await
+        .unwrap();
+
+        let found = with_tx(&pool, async |tx| {
+            let mut repo = PgWorkflowRepository::new(&tx);
+            repo.find_version_by_id(org_id, inserted.id).await
+        })
+        .await
+        .unwrap();
+
+        assert_eq!(found, Some(inserted));
+    }
+
+    #[tokio::test]
+    #[ignore = "requires live postgres"]
+    async fn finding_a_version_by_id_from_another_organization_is_not_found() {
+        let pool = make_pool().await;
+        let org_id = seed_organization(&pool, "version-by-id-owner").await;
+        let stranger_org = seed_organization(&pool, "version-by-id-stranger").await;
+        let inserted = with_tx(&pool, async |tx| {
+            let mut repo = PgWorkflowRepository::new(&tx);
+            let workflow = repo.insert(&workflow(org_id, "Mine")).await?;
+            repo.insert_version(org_id, workflow.id, &graph_with_credential(None), None)
+                .await
+        })
+        .await
+        .unwrap();
+
+        let found = with_tx(&pool, async |tx| {
+            let mut repo = PgWorkflowRepository::new(&tx);
+            repo.find_version_by_id(stranger_org, inserted.id).await
+        })
+        .await
+        .unwrap();
+
+        assert_eq!(
+            found, None,
+            "a version id from another organization must read back as absent"
+        );
+    }
+
+    #[tokio::test]
+    #[ignore = "requires live postgres"]
+    async fn finding_a_version_by_an_id_that_does_not_exist_returns_none() {
+        let pool = make_pool().await;
+        let org_id = seed_organization(&pool, "version-by-id-missing").await;
+
+        let found = with_tx(&pool, async |tx| {
+            let mut repo = PgWorkflowRepository::new(&tx);
+            repo.find_version_by_id(org_id, generate_uuid_v7()).await
+        })
+        .await
+        .unwrap();
+
+        assert_eq!(found, None);
     }
 }

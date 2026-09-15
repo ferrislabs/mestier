@@ -724,6 +724,7 @@ pub struct RunDetailResponse {
     #[serde(flatten)]
     pub run: RunResponse,
     pub steps: Vec<RunStepResponse>,
+    pub graph: Option<GraphDto>,
 }
 
 // --- settings ------------------------------------------------------------

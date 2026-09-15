@@ -254,6 +254,12 @@ pub trait WorkflowRepository: Send {
         version: i32,
     ) -> impl Future<Output = Result<Option<WorkflowVersion>, CoreError>> + Send;
 
+    fn find_version_by_id(
+        &mut self,
+        org_id: OrganizationId,
+        workflow_version_id: Uuid,
+    ) -> impl Future<Output = Result<Option<WorkflowVersion>, CoreError>> + Send;
+
     fn list_versions(
         &mut self,
         org_id: OrganizationId,

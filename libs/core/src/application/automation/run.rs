@@ -1405,6 +1405,144 @@ mod tests {
 
     #[tokio::test]
     #[ignore = "requires live postgres"]
+    async fn a_run_keeps_resolving_the_graph_it_pinned_after_the_workflow_is_edited_twice() {
+        let pool = make_pool().await;
+        let org_id = seed_organization(&pool, "graph-pinned").await;
+        let usecase = use_case(pool.clone());
+
+        let workflow = usecase
+            .create_workflow(CreateWorkflowCommand {
+                org_id,
+                name: "Edited twice".to_string(),
+                description: None,
+            })
+            .await
+            .unwrap();
+        let pinned_graph = Graph {
+            connectors: vec![condition("only_v1", "{{ true }}")],
+            edges: vec![],
+        };
+        usecase
+            .save_workflow_version(SaveWorkflowVersionCommand {
+                org_id,
+                workflow_id: workflow.id,
+                graph: pinned_graph.clone(),
+                layout: None,
+                created_by: None,
+            })
+            .await
+            .unwrap();
+
+        let run_id = usecase
+            .start_run(org_id, workflow.id, json!({}))
+            .await
+            .unwrap();
+
+        for label in ["only_v2", "only_v3"] {
+            usecase
+                .save_workflow_version(SaveWorkflowVersionCommand {
+                    org_id,
+                    workflow_id: workflow.id,
+                    graph: Graph {
+                        connectors: vec![condition(label, "{{ true }}")],
+                        edges: vec![],
+                    },
+                    layout: None,
+                    created_by: None,
+                })
+                .await
+                .unwrap();
+        }
+
+        let run = usecase.find_run(org_id, run_id).await.unwrap().unwrap();
+        let version = usecase
+            .find_workflow_version_by_id(org_id, run.workflow_version_id)
+            .await
+            .unwrap()
+            .expect("the run's pinned version still exists");
+
+        assert_eq!(version.graph, pinned_graph);
+    }
+
+    #[tokio::test]
+    #[ignore = "requires live postgres"]
+    async fn a_run_whose_pinned_version_has_been_deleted_still_reads() {
+        let pool = make_pool().await;
+        let org_id = seed_organization(&pool, "graph-deleted-version").await;
+        let usecase = use_case(pool.clone());
+
+        let workflow = usecase
+            .create_workflow(CreateWorkflowCommand {
+                org_id,
+                name: "Doomed version".to_string(),
+                description: None,
+            })
+            .await
+            .unwrap();
+        let version = usecase
+            .save_workflow_version(SaveWorkflowVersionCommand {
+                org_id,
+                workflow_id: workflow.id,
+                graph: Graph {
+                    connectors: vec![condition("c1", "{{ true }}")],
+                    edges: vec![],
+                },
+                layout: None,
+                created_by: None,
+            })
+            .await
+            .unwrap();
+        let run_id = usecase
+            .start_run(org_id, workflow.id, json!({}))
+            .await
+            .unwrap();
+
+        // No migration today lets a run's pinned version disappear from
+        // under it — `automation.run.workflow_version_id` carries no
+        // `ON DELETE` clause specifically so that can never happen through
+        // the schema. Forcing it here, bypassing the constraint for the
+        // width of one held connection, proves the read degrades instead of
+        // failing if that ever stops being true — the same defensive intent
+        // as the layout fix on this branch, applied to a row instead of a
+        // column's contents.
+        let mut conn = pool.acquire().await.unwrap();
+        sqlx::query("SET session_replication_role = replica")
+            .execute(&mut *conn)
+            .await
+            .unwrap();
+        sqlx::query("DELETE FROM automation.workflow_version WHERE id = $1")
+            .bind(version.id)
+            .execute(&mut *conn)
+            .await
+            .unwrap();
+        sqlx::query("SET session_replication_role = DEFAULT")
+            .execute(&mut *conn)
+            .await
+            .unwrap();
+        drop(conn);
+
+        let run = usecase
+            .find_run(org_id, run_id)
+            .await
+            .unwrap()
+            .expect("the run itself is still readable");
+        assert_eq!(run.workflow_version_id, version.id);
+
+        let found_version = usecase
+            .find_workflow_version_by_id(org_id, run.workflow_version_id)
+            .await
+            .unwrap();
+        assert_eq!(
+            found_version, None,
+            "the version is gone, and that must read back as absent, not as an error"
+        );
+
+        let steps = usecase.list_run_steps(org_id, run_id).await.unwrap();
+        assert!(steps.is_empty(), "a run that never executed has no steps");
+    }
+
+    #[tokio::test]
+    #[ignore = "requires live postgres"]
     async fn nested_loops_produce_distinct_iteration_paths() {
         let _guard = RUN_CLAIM_LOCK.lock().await;
         let pool = make_pool().await;

@@ -5,7 +5,7 @@ use handlers::{ApiError, AppState, DataEnvelope, Response};
 use crate::{
     paths::RunPath,
     require_view_automation,
-    response::{RunDetailResponse, RunResponse, RunStepResponse},
+    response::{GraphDto, RunDetailResponse, RunResponse, RunStepResponse},
     run::find_run_in_org,
 };
 
@@ -19,7 +19,7 @@ use crate::{
         ("run_id" = uuid::Uuid, Path, description = "Run identifier"),
     ),
     responses(
-        (status = 200, description = "Run with its steps — resolved input, output, error and attempts on each", body = inline(DataEnvelope<RunDetailResponse>)),
+        (status = 200, description = "Run with its steps — resolved input, output, error and attempts on each — and the graph its pinned version executed, null when that version is gone", body = inline(DataEnvelope<RunDetailResponse>)),
         (status = 401, description = "Unauthorized"),
         (status = 403, description = "Forbidden"),
         (status = 404, description = "Run not found"),
@@ -40,9 +40,15 @@ pub async fn handler(
         .usecase
         .list_run_steps(organization_id, run_id)
         .await?;
+    let graph = state
+        .usecase
+        .find_workflow_version_by_id(organization_id, run.workflow_version_id)
+        .await?
+        .map(|version| GraphDto::from(version.graph));
 
     Ok(Response::OK(RunDetailResponse {
         run: RunResponse::from(run),
         steps: steps.into_iter().map(RunStepResponse::from).collect(),
+        graph,
     }))
 }

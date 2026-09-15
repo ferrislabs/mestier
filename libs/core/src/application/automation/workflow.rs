@@ -155,6 +155,18 @@ impl MestierUseCase {
     }
 
     #[transactional(workflow)]
+    pub async fn find_workflow_version_by_id(
+        &self,
+        org_id: OrganizationId,
+        workflow_version_id: Uuid,
+    ) -> Result<Option<WorkflowVersion>, CoreError> {
+        let mut repository = workflow_repository;
+        repository
+            .find_version_by_id(org_id, workflow_version_id)
+            .await
+    }
+
+    #[transactional(workflow)]
     pub async fn list_workflow_versions(
         &self,
         org_id: OrganizationId,
