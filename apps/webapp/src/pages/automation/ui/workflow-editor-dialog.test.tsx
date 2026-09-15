@@ -1,13 +1,13 @@
 import { screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import type { ReactNode } from 'react'
+import type { ReactElement } from 'react'
 import { describe, expect, it, vi } from 'vitest'
 import type { WorkflowEditorDialogProps } from '#/pages/automation/ui/workflow-editor-dialog'
 import { WorkflowEditorDialog } from '#/pages/automation/ui/workflow-editor-dialog'
 import { renderWithPermissions } from '#/test/with-permissions'
 
 function renderDialog(
-	ui: ReactNode,
+	ui: ReactElement,
 	permissions: string[] = ['MANAGE_AUTOMATION'],
 ) {
 	return renderWithPermissions(ui, { permissions })
