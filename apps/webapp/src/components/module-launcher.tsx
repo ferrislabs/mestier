@@ -9,8 +9,8 @@ import {
 } from '#/components/ui/popover'
 import { cn } from '#/lib/utils'
 import { buildOrgPath } from '#/modules/org-path'
-import { MODULES } from '#/modules/registry'
 import type { AppModule, ModuleId } from '#/modules/types'
+import { useVisibleModules } from '#/modules/use-visible-modules'
 
 interface ModuleLauncherProps {
 	activeModuleId: ModuleId
@@ -55,7 +55,7 @@ export function ModuleLauncher({
 	organizationSlug,
 }: ModuleLauncherProps) {
 	const [open, setOpen] = useState(false)
-	const modules = MODULES.filter((module) => module.status !== 'hidden')
+	const modules = useVisibleModules()
 
 	return (
 		<Popover open={open} onOpenChange={setOpen}>

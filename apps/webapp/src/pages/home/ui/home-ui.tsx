@@ -2,7 +2,7 @@ import { Receipt, Users } from 'lucide-react'
 import type * as React from 'react'
 import { MetricCard, PageShell } from '#/components/ui/surface'
 import { buildOrgPath } from '#/modules/org-path'
-import { MODULES } from '#/modules/registry'
+import type { AppModule } from '#/modules/types'
 import { AppLauncherUI } from '#/pages/home/ui/app-launcher-ui'
 import type { SearchGroup } from '#/pages/home/ui/home-search-ui'
 import { HomeSearchUI } from '#/pages/home/ui/home-search-ui'
@@ -39,6 +39,7 @@ interface HomeUIProps {
 	todayPlanning: React.ReactNode
 	/** A glance at recent chat activity, composed in by the feature layer. */
 	discussions: React.ReactNode
+	modules: AppModule[]
 }
 
 export function HomeUI({
@@ -50,17 +51,18 @@ export function HomeUI({
 	todayTasks,
 	todayPlanning,
 	discussions,
+	modules,
 }: HomeUIProps) {
 	// Every module but Accueil itself — a shortcut back to the page you're
 	// already on would be dead weight in a launcher grid.
-	const launcherItems = MODULES.filter((module) => module.id !== 'home').map(
-		(module) => ({
+	const launcherItems = modules
+		.filter((module) => module.id !== 'home')
+		.map((module) => ({
 			id: module.id,
 			label: module.label,
 			icon: module.icon,
 			to: buildOrgPath(organizationSlug, module.basePath),
-		}),
-	)
+		}))
 
 	return (
 		<PageShell>

@@ -66,4 +66,5 @@ export interface AppModule {
 	 * modules. Defaults to `primary`.
 	 */
 	railPlacement?: 'primary' | 'utility'
+	requiredPermission?: PermissionName
 }

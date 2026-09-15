@@ -6,6 +6,7 @@ import { useProjects } from '#/hooks/use-projects'
 import { useQuotes } from '#/hooks/use-quotes'
 import { type Period, useProfitability } from '#/hooks/use-reporting'
 import { buildOrgPath } from '#/modules/org-path'
+import { useVisibleModules } from '#/modules/use-visible-modules'
 import { DiscussionsFeature } from '#/pages/home/feature/discussions-feature'
 import { MyTasksTodayFeature } from '#/pages/home/feature/my-tasks-today-feature'
 import { TodayPlanningFeature } from '#/pages/home/feature/today-planning-feature'
@@ -19,6 +20,7 @@ import {
 
 export function HomeFeature() {
 	const { activeOrganizationId, activeOrganization } = useActiveOrganization()
+	const visibleModules = useVisibleModules()
 
 	// Fixed to the current month: this is a glance, not the reporting page's own
 	// date range picker. Anyone wanting another period follows the CTA to
@@ -146,6 +148,7 @@ export function HomeFeature() {
 		<HomeUI
 			userName="Nathael"
 			organizationSlug={activeOrganization.slug}
+			modules={visibleModules}
 			search={searchGroups}
 			stats={{
 				customers:
