@@ -18,6 +18,8 @@ const WORKFLOW_PATH =
 	'/api/v1/organizations/{organization_id}/automation/workflows/{workflow_id}'
 const WORKFLOW_TRIGGER_PATH =
 	'/api/v1/organizations/{organization_id}/automation/workflows/{workflow_id}/trigger'
+const WORKFLOW_VERSIONS_PATH =
+	'/api/v1/organizations/{organization_id}/automation/workflows/{workflow_id}/versions'
 const RUNS_PATH = '/api/v1/organizations/{organization_id}/automation/runs'
 const RUN_PATH =
 	'/api/v1/organizations/{organization_id}/automation/runs/{run_id}'
@@ -176,6 +178,23 @@ export function useDeleteWorkflow() {
 	})
 }
 
+export function useWorkflow(organizationId: string, workflowId: string) {
+	return useQuery(
+		window.tanstackApi.get(WORKFLOW_PATH, {
+			path: { organization_id: organizationId, workflow_id: workflowId },
+		}).queryOptions,
+	)
+}
+
+export function useSaveWorkflowVersion() {
+	const queryClient = useQueryClient()
+	return useMutation({
+		...window.tanstackApi.mutation('put', WORKFLOW_VERSIONS_PATH)
+			.mutationOptions,
+		onSuccess: () => invalidate(queryClient, WORKFLOW_PATH),
+	})
+}
+
 /** A run's steps — fetched lazily, only once its detail sheet opens. */
 export function useRun(organizationId: string, runId: string | null) {
 	return useQuery({
@@ -223,3 +242,4 @@ export type AutomationSettings = Schemas.AutomationSettingsBody
 export type Run = Schemas.RunResponse
 export type WorkflowTrigger = Schemas.WorkflowTriggerResponse
 export type Workflow = Schemas.WorkflowResponse
+export type WorkflowDetail = Schemas.WorkflowDetailResponse

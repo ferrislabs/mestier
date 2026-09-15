@@ -14,7 +14,7 @@ import {
 	useNodesState,
 } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
-import { useCallback, useRef } from 'react'
+import { useCallback, useEffect, useRef } from 'react'
 import type { Schemas } from '#/api/api.client'
 import { Button } from '#/components/ui/button'
 import type { NodePosition } from '#/pages/automation/lib/graph'
@@ -181,7 +181,7 @@ export function WorkflowCanvas({
 	onChange,
 	onSave,
 }: WorkflowCanvasProps) {
-	const [nodes, , onNodesChangeInternal] = useNodesState(() =>
+	const [nodes, setNodes, onNodesChangeInternal] = useNodesState(() =>
 		buildInitialNodes(
 			graph,
 			layout,
@@ -196,6 +196,18 @@ export function WorkflowCanvas({
 	nodesRef.current = nodes
 	const edgesRef = useRef(edges)
 	edgesRef.current = edges
+
+	useEffect(() => {
+		setNodes((current) =>
+			current.map((node) => {
+				if (node.id === TRIGGER_NODE_ID) return node
+				const data = node.data as ConnectorNodeData
+				const errors = connectorErrors.get(node.id) ?? []
+				if (data.errors === errors) return node
+				return { ...node, data: { ...data, errors } }
+			}),
+		)
+	}, [connectorErrors, setNodes])
 
 	const handleNodesChange = useCallback(
 		(changes: NodeChange[]) => {
