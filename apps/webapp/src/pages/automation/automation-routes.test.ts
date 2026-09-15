@@ -24,7 +24,7 @@ describe('automatisation routes', () => {
 		)
 	})
 
-	it('resolves a workflow placeholder', () => {
+	it('resolves the workflow editor', () => {
 		expect(routeIdFor('/o/acme/automatisation/workflow-1')).toBe(
 			'/_app/o/$organizationSlug/automatisation/$workflowId',
 		)
