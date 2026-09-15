@@ -61,7 +61,9 @@ describe('WorkflowEditorDialog — create mode', () => {
 	it('enables the submit button once a name is entered', async () => {
 		renderDialog(
 			<WorkflowEditorDialog
-				{...baseProps({ values: { name: 'Créer une facture Odoo', description: '' } })}
+				{...baseProps({
+					values: { name: 'Créer une facture Odoo', description: '' },
+				})}
 			/>,
 		)
 

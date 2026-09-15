@@ -157,7 +157,11 @@ describe('AutomationWorkflowsFeature — last run', () => {
 		renderFeature((api) => {
 			api.mockGet(RUNS_PATH, () => ({
 				data: [
-					run({ id: 'run-1', status: 'failed', created_at: '2026-08-01T00:00:00Z' }),
+					run({
+						id: 'run-1',
+						status: 'failed',
+						created_at: '2026-08-01T00:00:00Z',
+					}),
 					run({
 						id: 'run-2',
 						status: 'succeeded',
@@ -193,7 +197,9 @@ describe('AutomationWorkflowsFeature — create', () => {
 			}))
 		})
 
-		await user.click(await screen.findByRole('button', { name: 'Nouveau workflow' }))
+		await user.click(
+			await screen.findByRole('button', { name: 'Nouveau workflow' }),
+		)
 		await user.type(screen.getByLabelText('Nom'), 'Notifier le client')
 		await user.click(screen.getByRole('button', { name: 'Créer' }))
 

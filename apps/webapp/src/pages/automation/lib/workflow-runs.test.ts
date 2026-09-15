@@ -30,13 +30,21 @@ describe('latestRunByWorkflow', () => {
 
 	it('picks the most recent run when a workflow ran several times, regardless of array order', () => {
 		const result = latestRunByWorkflow([
-			run({ id: 'run-1', status: 'failed', created_at: '2026-08-01T00:00:00Z' }),
+			run({
+				id: 'run-1',
+				status: 'failed',
+				created_at: '2026-08-01T00:00:00Z',
+			}),
 			run({
 				id: 'run-2',
 				status: 'succeeded',
 				created_at: '2026-08-03T00:00:00Z',
 			}),
-			run({ id: 'run-3', status: 'running', created_at: '2026-08-02T00:00:00Z' }),
+			run({
+				id: 'run-3',
+				status: 'running',
+				created_at: '2026-08-02T00:00:00Z',
+			}),
 		])
 
 		expect(result.get('workflow-1')).toEqual({
