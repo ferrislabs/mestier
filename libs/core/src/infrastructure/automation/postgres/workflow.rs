@@ -273,6 +273,7 @@ impl<'tx> WorkflowRepository for PgWorkflowRepository<'tx> {
         row.try_into()
     }
 
+    #[allow(clippy::needless_lifetimes)]
     async fn set_layout<'a>(
         &mut self,
         org_id: OrganizationId,
