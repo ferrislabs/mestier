@@ -14,6 +14,8 @@ pub mod product;
 pub mod response;
 pub mod service_rate;
 
+pub use mestier_core::ServiceRateUnit;
+
 pub const TAG: &str = "reference";
 
 #[derive(Debug, serde::Serialize, PartialEq)]
