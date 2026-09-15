@@ -38,7 +38,7 @@ function descriptor(
 	branches: Schemas.BranchDto[] = [],
 ): Schemas.ConnectorDescriptorResponse {
 	return {
-		auth: { kind: 'none' } as Schemas.AuthRequirementResponse,
+		auth: 'None',
 		branches,
 		family: 'test',
 		fields: [],

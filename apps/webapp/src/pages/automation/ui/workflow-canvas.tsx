@@ -149,8 +149,15 @@ function buildLayout(nodes: Node[]): Map<string, NodePosition> {
 	return layout
 }
 
+export interface BranchConnection {
+	source: string
+	target: string
+	sourceHandle?: string | null
+	targetHandle?: string | null
+}
+
 export function isBranchDeclared(
-	connection: Pick<Connection, 'source' | 'sourceHandle'>,
+	connection: BranchConnection,
 	graph: Schemas.GraphDto,
 	descriptors: Map<string, Schemas.ConnectorDescriptorResponse>,
 ): boolean {
@@ -181,7 +188,7 @@ export function WorkflowCanvas({
 	onChange,
 	onSave,
 }: WorkflowCanvasProps) {
-	const [nodes, setNodes, onNodesChangeInternal] = useNodesState(() =>
+	const [nodes, setNodes, onNodesChangeInternal] = useNodesState(
 		buildInitialNodes(
 			graph,
 			layout,
@@ -190,7 +197,7 @@ export function WorkflowCanvas({
 			hasTriggerEvent,
 		),
 	)
-	const [edges, setEdges] = useEdgesState(() => buildInitialEdges(graph))
+	const [edges, setEdges] = useEdgesState(buildInitialEdges(graph))
 
 	const nodesRef = useRef(nodes)
 	nodesRef.current = nodes

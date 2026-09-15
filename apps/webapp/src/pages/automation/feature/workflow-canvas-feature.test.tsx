@@ -50,7 +50,7 @@ function descriptor(
 	label: string,
 ): Schemas.ConnectorDescriptorResponse {
 	return {
-		auth: { kind: 'none' } as Schemas.AuthRequirementResponse,
+		auth: 'None',
 		branches: [],
 		family: 'test',
 		fields: [],
