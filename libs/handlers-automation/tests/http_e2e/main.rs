@@ -221,3 +221,159 @@ async fn a_view_only_member_reads_a_trigger_but_cannot_set_it() {
 
     app.cleanup().await;
 }
+
+/// The acceptance criterion the whole endpoint exists for: the editor's live
+/// preview resolves a template against a caller-supplied context, through
+/// the same evaluator the run engine uses, with no repository and no
+/// persistence involved.
+#[tokio::test]
+#[ignore = "requires live postgres and redis"]
+async fn a_valid_expression_resolves_against_the_supplied_context() {
+    let app = harness::start().await;
+
+    let response = client()
+        .post(app.evaluate_expression_url())
+        .bearer_auth(&app.token)
+        .json(&json!({
+            "template": "{{ trigger.name }}",
+            "context": {
+                "trigger": { "name": "Brioche" },
+                "connectors": {},
+                "loop": null
+            }
+        }))
+        .send()
+        .await
+        .expect("the api answers the evaluate call");
+
+    assert_eq!(response.status(), 200);
+    let body: Value = response.json().await.expect("the answer is json");
+    assert_eq!(body["data"]["value"], json!("Brioche"));
+
+    app.cleanup().await;
+}
+
+#[tokio::test]
+#[ignore = "requires live postgres and redis"]
+async fn a_missing_path_is_refused_naming_the_path() {
+    let app = harness::start().await;
+
+    let response = client()
+        .post(app.evaluate_expression_url())
+        .bearer_auth(&app.token)
+        .json(&json!({
+            "template": "{{ trigger.missing }}",
+            "context": { "trigger": {}, "connectors": {}, "loop": null }
+        }))
+        .send()
+        .await
+        .expect("the api answers the evaluate call");
+
+    assert_eq!(response.status(), 422);
+    let body: Value = response.json().await.expect("the answer is json");
+    assert!(
+        body["message"]
+            .as_str()
+            .unwrap()
+            .contains("trigger.missing"),
+        "{body}"
+    );
+
+    app.cleanup().await;
+}
+
+#[tokio::test]
+#[ignore = "requires live postgres and redis"]
+async fn loop_outside_a_loop_frame_is_refused() {
+    let app = harness::start().await;
+
+    let response = client()
+        .post(app.evaluate_expression_url())
+        .bearer_auth(&app.token)
+        .json(&json!({
+            "template": "{{ loop.item }}",
+            "context": { "trigger": null, "connectors": {}, "loop": null }
+        }))
+        .send()
+        .await
+        .expect("the api answers the evaluate call");
+
+    assert_eq!(response.status(), 422);
+
+    app.cleanup().await;
+}
+
+#[tokio::test]
+#[ignore = "requires live postgres and redis"]
+async fn an_oversized_context_is_refused() {
+    let app = harness::start().await;
+
+    let mut connectors = serde_json::Map::new();
+    for index in 0..300 {
+        connectors.insert(format!("c{index}"), json!(true));
+    }
+
+    let response = client()
+        .post(app.evaluate_expression_url())
+        .bearer_auth(&app.token)
+        .json(&json!({
+            "template": "{{ 1 }}",
+            "context": { "trigger": null, "connectors": connectors, "loop": null }
+        }))
+        .send()
+        .await
+        .expect("the api answers the evaluate call");
+
+    assert_eq!(response.status(), 422);
+
+    app.cleanup().await;
+}
+
+/// `VIEW_AUTOMATION` is the right minimum: evaluation computes nothing
+/// sensitive and has no side effect, so a viewer — not only a manager — must
+/// be able to preview an expression while building a workflow.
+#[tokio::test]
+#[ignore = "requires live postgres and redis"]
+async fn a_view_only_member_can_evaluate_an_expression() {
+    let app = harness::start().await;
+
+    let response = client()
+        .post(app.evaluate_expression_url())
+        .bearer_auth(&app.view_only_token)
+        .json(&json!({
+            "template": "{{ 1 }}",
+            "context": { "trigger": null, "connectors": {}, "loop": null }
+        }))
+        .send()
+        .await
+        .expect("the api answers the evaluate call");
+
+    assert_eq!(response.status(), 200);
+
+    app.cleanup().await;
+}
+
+#[tokio::test]
+#[ignore = "requires live postgres and redis"]
+async fn a_caller_without_view_automation_is_refused_evaluating_an_expression() {
+    let app = harness::start().await;
+
+    let response = client()
+        .post(app.evaluate_expression_url())
+        .bearer_auth(&app.no_role_token)
+        .json(&json!({
+            "template": "{{ 1 }}",
+            "context": { "trigger": null, "connectors": {}, "loop": null }
+        }))
+        .send()
+        .await
+        .expect("the api answers the evaluate call");
+
+    assert_eq!(
+        response.status(),
+        403,
+        "VIEW_AUTOMATION must gate expression evaluation too"
+    );
+
+    app.cleanup().await;
+}

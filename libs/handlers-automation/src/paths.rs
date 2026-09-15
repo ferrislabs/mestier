@@ -101,3 +101,9 @@ pub struct RunReplayPath {
 pub struct SettingsPath {
     pub organization_id: OrganizationId,
 }
+
+#[derive(TypedPath, Deserialize)]
+#[typed_path("/api/v1/organizations/{organization_id}/automation/expressions/evaluate")]
+pub struct EvaluateExpressionPath {
+    pub organization_id: OrganizationId,
+}

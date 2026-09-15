@@ -14,6 +14,7 @@ use mestier_core::{OrganizationId, Permissions};
 
 pub mod catalogue;
 pub mod credential;
+pub mod expression;
 pub mod paths;
 pub mod response;
 pub mod run;
@@ -99,6 +100,7 @@ pub fn router(state: &AppState) -> Router<AppState> {
         .merge(workflow::router(state))
         .merge(run::router(state))
         .merge(settings::router(state))
+        .merge(expression::router(state))
         .layer(from_fn_with_state(state.clone(), rate_limit_middleware))
         .layer(from_fn_with_state(state.clone(), auth_middleware))
 }

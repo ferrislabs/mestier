@@ -119,6 +119,13 @@ impl App {
         )
     }
 
+    pub fn evaluate_expression_url(&self) -> String {
+        format!(
+            "{}/api/v1/organizations/{}/automation/expressions/evaluate",
+            self.base_url, self.organization_id
+        )
+    }
+
     /// Drops the fixture. Every table listed here references `organizations`
     /// without `ON DELETE CASCADE`, so one missing from the list makes the
     /// final delete fail — silently, since the errors are swallowed.
