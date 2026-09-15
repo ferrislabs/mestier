@@ -2,7 +2,7 @@ use auth::Identity;
 use axum::{Extension, extract::State};
 use handlers::{ApiError, AppState, DataEnvelope, Response};
 
-use crate::{paths::WorkflowsPath, require_org_membership, response::WorkflowResponse};
+use crate::{paths::WorkflowsPath, require_view_automation, response::WorkflowResponse};
 
 #[utoipa::path(
     get,
@@ -24,7 +24,7 @@ pub async fn handler(
     State(state): State<AppState>,
     Extension(identity): Extension<Identity>,
 ) -> Result<Response<Vec<WorkflowResponse>>, ApiError> {
-    require_org_membership(&state, &identity, path.organization_id).await?;
+    require_view_automation(&state, &identity, path.organization_id).await?;
 
     let workflows = state.usecase.list_workflows(path.organization_id).await?;
     let body: Vec<WorkflowResponse> = workflows.into_iter().map(WorkflowResponse::from).collect();

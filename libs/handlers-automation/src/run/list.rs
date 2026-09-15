@@ -2,7 +2,7 @@ use auth::Identity;
 use axum::{Extension, extract::State};
 use handlers::{ApiError, AppState, DataEnvelope, Response};
 
-use crate::{paths::RunsPath, require_org_membership, response::RunResponse};
+use crate::{paths::RunsPath, require_view_automation, response::RunResponse};
 
 #[utoipa::path(
     get,
@@ -24,7 +24,7 @@ pub async fn handler(
     State(state): State<AppState>,
     Extension(identity): Extension<Identity>,
 ) -> Result<Response<Vec<RunResponse>>, ApiError> {
-    require_org_membership(&state, &identity, path.organization_id).await?;
+    require_view_automation(&state, &identity, path.organization_id).await?;
 
     let runs = state.usecase.list_runs(path.organization_id).await?;
     let body: Vec<RunResponse> = runs.into_iter().map(RunResponse::from).collect();

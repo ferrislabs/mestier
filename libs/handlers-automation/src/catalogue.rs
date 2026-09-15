@@ -10,7 +10,7 @@ use mestier_core::{auth_schemes, connector_catalogue, event_catalogue};
 
 use crate::{
     paths::{ConnectorsPath, EventsPath},
-    require_org_membership,
+    require_view_automation,
     response::{
         AuthSchemeResponse, ConnectorDescriptorResponse, ConnectorsResponse,
         EventDescriptorResponse,
@@ -41,7 +41,7 @@ pub async fn connectors(
     State(state): State<AppState>,
     Extension(identity): Extension<Identity>,
 ) -> Result<Response<ConnectorsResponse>, ApiError> {
-    require_org_membership(&state, &identity, organization_id).await?;
+    require_view_automation(&state, &identity, organization_id).await?;
 
     let catalogue = connector_catalogue();
     let body = ConnectorsResponse {
@@ -78,7 +78,7 @@ pub async fn events(
     State(state): State<AppState>,
     Extension(identity): Extension<Identity>,
 ) -> Result<Response<Vec<EventDescriptorResponse>>, ApiError> {
-    require_org_membership(&state, &identity, organization_id).await?;
+    require_view_automation(&state, &identity, organization_id).await?;
 
     let catalogue = event_catalogue();
     let body: Vec<EventDescriptorResponse> = catalogue

@@ -5,7 +5,7 @@ use mestier_core::CreateWorkflowCommand;
 use serde::Deserialize;
 use utoipa::ToSchema;
 
-use crate::{paths::WorkflowsPath, require_org_membership, response::WorkflowResponse};
+use crate::{paths::WorkflowsPath, require_manage_automation, response::WorkflowResponse};
 
 #[derive(Debug, Deserialize, ToSchema)]
 pub struct CreateWorkflowRequest {
@@ -37,7 +37,7 @@ pub async fn handler(
     Extension(identity): Extension<Identity>,
     Json(payload): Json<CreateWorkflowRequest>,
 ) -> Result<Response<WorkflowResponse>, ApiError> {
-    require_org_membership(&state, &identity, path.organization_id).await?;
+    require_manage_automation(&state, &identity, path.organization_id).await?;
 
     let workflow = state
         .usecase

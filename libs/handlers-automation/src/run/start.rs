@@ -5,7 +5,7 @@ use serde::Deserialize;
 use serde_json::{Value, json};
 use utoipa::ToSchema;
 
-use crate::{paths::WorkflowRunsPath, workflow::require_workflow};
+use crate::{paths::WorkflowRunsPath, require_manage_automation, workflow::find_workflow_in_org};
 
 #[derive(Debug, Deserialize, ToSchema)]
 pub struct StartRunRequest {
@@ -49,7 +49,8 @@ pub async fn handler(
     Extension(identity): Extension<Identity>,
     Json(payload): Json<StartRunRequest>,
 ) -> Result<Response<StartedRunResponse>, ApiError> {
-    require_workflow(&state, &identity, organization_id, workflow_id).await?;
+    require_manage_automation(&state, &identity, organization_id).await?;
+    find_workflow_in_org(&state, organization_id, workflow_id).await?;
     let actor = handlers::resolve_user_id(&state, &identity).await?;
 
     let run_id = state

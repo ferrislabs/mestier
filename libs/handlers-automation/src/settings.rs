@@ -9,7 +9,10 @@ use axum::{Extension, Json, Router, extract::State};
 use axum_extra::routing::RouterExt;
 use handlers::{ApiError, AppState, DataEnvelope, Response};
 
-use crate::{paths::SettingsPath, require_org_membership, response::AutomationSettingsBody};
+use crate::{
+    paths::SettingsPath, require_manage_automation, require_view_automation,
+    response::AutomationSettingsBody,
+};
 
 pub fn router(_state: &AppState) -> Router<AppState> {
     Router::new().typed_get(get).typed_put(put)
@@ -35,7 +38,7 @@ pub async fn get(
     State(state): State<AppState>,
     Extension(identity): Extension<Identity>,
 ) -> Result<Response<AutomationSettingsBody>, ApiError> {
-    require_org_membership(&state, &identity, organization_id).await?;
+    require_view_automation(&state, &identity, organization_id).await?;
 
     let settings = state
         .usecase
@@ -68,7 +71,7 @@ pub async fn put(
     Extension(identity): Extension<Identity>,
     Json(payload): Json<AutomationSettingsBody>,
 ) -> Result<Response<AutomationSettingsBody>, ApiError> {
-    require_org_membership(&state, &identity, organization_id).await?;
+    require_manage_automation(&state, &identity, organization_id).await?;
 
     let updated = state
         .usecase

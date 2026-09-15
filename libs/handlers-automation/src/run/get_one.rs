@@ -4,8 +4,9 @@ use handlers::{ApiError, AppState, DataEnvelope, Response};
 
 use crate::{
     paths::RunPath,
+    require_view_automation,
     response::{RunDetailResponse, RunResponse, RunStepResponse},
-    run::require_run,
+    run::find_run_in_org,
 };
 
 #[utoipa::path(
@@ -33,7 +34,8 @@ pub async fn handler(
     State(state): State<AppState>,
     Extension(identity): Extension<Identity>,
 ) -> Result<Response<RunDetailResponse>, ApiError> {
-    let run = require_run(&state, &identity, organization_id, run_id).await?;
+    require_view_automation(&state, &identity, organization_id).await?;
+    let run = find_run_in_org(&state, organization_id, run_id).await?;
     let steps = state
         .usecase
         .list_run_steps(organization_id, run_id)

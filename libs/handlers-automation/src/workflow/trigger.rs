@@ -10,7 +10,8 @@ use serde::Deserialize;
 use utoipa::ToSchema;
 
 use crate::{
-    paths::WorkflowTriggerPath, response::WorkflowTriggerResponse, workflow::require_workflow,
+    paths::WorkflowTriggerPath, require_manage_automation, require_view_automation,
+    response::WorkflowTriggerResponse, workflow::find_workflow_in_org,
 };
 
 #[utoipa::path(
@@ -38,7 +39,8 @@ pub async fn get_trigger(
     State(state): State<AppState>,
     Extension(identity): Extension<Identity>,
 ) -> Result<Response<WorkflowTriggerResponse>, ApiError> {
-    require_workflow(&state, &identity, organization_id, workflow_id).await?;
+    require_view_automation(&state, &identity, organization_id).await?;
+    find_workflow_in_org(&state, organization_id, workflow_id).await?;
 
     let event_names = state
         .usecase
@@ -83,7 +85,8 @@ pub async fn set_trigger(
     Extension(identity): Extension<Identity>,
     Json(payload): Json<SetWorkflowTriggerRequest>,
 ) -> Result<Response<WorkflowTriggerResponse>, ApiError> {
-    require_workflow(&state, &identity, organization_id, workflow_id).await?;
+    require_manage_automation(&state, &identity, organization_id).await?;
+    find_workflow_in_org(&state, organization_id, workflow_id).await?;
 
     let event_names = state
         .usecase

@@ -2,14 +2,11 @@
 //! version, enable/disable and rename (`update`), delete, and read/set the
 //! event(s) that trigger it (`trigger`, #225).
 
-use auth::Identity;
 use axum::Router;
 use axum_extra::routing::RouterExt;
 use handlers::{ApiError, AppState};
 use mestier_core::{OrganizationId, Workflow};
 use uuid::Uuid;
-
-use crate::require_org_membership;
 
 pub mod create;
 pub mod delete;
@@ -31,17 +28,19 @@ pub fn router(_state: &AppState) -> Router<AppState> {
         .typed_put(trigger::set_trigger)
 }
 
-/// Loads the workflow and checks both that the caller belongs to
-/// `organization_id` and that the workflow actually belongs to it — mirrors
-/// `credential::require_credential` and `handlers-planning::task::require_task`.
-pub(crate) async fn require_workflow(
+/// Loads the workflow and checks it belongs to `organization_id` — the
+/// permission gate is the caller's job first, since a workflow is read by
+/// some routes (`get_one`, `trigger::get_trigger`) and written by others
+/// (`create` and `list` need no single workflow, but `delete`,
+/// `save_version`, `trigger::set_trigger`, `update`, and `run::start`
+/// — which starts a run on it — all do). One loader shared by both
+/// directions rather than two, the same call `run::find_run_in_org` makes
+/// for the same reason. Mirrors `handlers-planning::task::require_task`.
+pub(crate) async fn find_workflow_in_org(
     state: &AppState,
-    identity: &Identity,
     organization_id: OrganizationId,
     workflow_id: Uuid,
 ) -> Result<Workflow, ApiError> {
-    require_org_membership(state, identity, organization_id).await?;
-
     state
         .usecase
         .find_workflow(organization_id, workflow_id)

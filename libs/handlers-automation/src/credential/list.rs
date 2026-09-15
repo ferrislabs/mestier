@@ -2,7 +2,7 @@ use auth::Identity;
 use axum::{Extension, extract::State};
 use handlers::{ApiError, AppState, DataEnvelope, Response};
 
-use crate::{paths::CredentialsPath, require_org_membership, response::CredentialResponse};
+use crate::{paths::CredentialsPath, require_view_automation, response::CredentialResponse};
 
 #[utoipa::path(
     get,
@@ -24,7 +24,7 @@ pub async fn handler(
     State(state): State<AppState>,
     Extension(identity): Extension<Identity>,
 ) -> Result<Response<Vec<CredentialResponse>>, ApiError> {
-    require_org_membership(&state, &identity, path.organization_id).await?;
+    require_view_automation(&state, &identity, path.organization_id).await?;
 
     let credentials = state.usecase.list_credentials(path.organization_id).await?;
     let body: Vec<CredentialResponse> = credentials

@@ -1,14 +1,11 @@
 //! Runs: list with status and timestamps, read with steps, replay from a
 //! step, and manual start (nested under the workflow it runs).
 
-use auth::Identity;
 use axum::Router;
 use axum_extra::routing::RouterExt;
 use handlers::{ApiError, AppState};
 use mestier_core::{OrganizationId, Run};
 use uuid::Uuid;
-
-use crate::require_org_membership;
 
 pub mod get_one;
 pub mod list;
@@ -23,17 +20,18 @@ pub fn router(_state: &AppState) -> Router<AppState> {
         .typed_post(start::handler)
 }
 
-/// Loads the run and checks both that the caller belongs to
-/// `organization_id` and that the run actually belongs to it — mirrors
-/// `credential::require_credential` and `workflow::require_workflow`.
-pub(crate) async fn require_run(
+/// Loads the run and checks it belongs to `organization_id` — the
+/// permission gate is the caller's job first: `get_one` reads, so it calls
+/// `require_view_automation`; `replay` mutates, so it calls
+/// `require_manage_automation`. One loader shared by both rather than two
+/// (contrast `credential::require_credential`, gated internally, since
+/// every one of its callers is a write) because this one genuinely is not.
+/// Mirrors `workflow::find_workflow_in_org`.
+pub(crate) async fn find_run_in_org(
     state: &AppState,
-    identity: &Identity,
     organization_id: OrganizationId,
     run_id: Uuid,
 ) -> Result<Run, ApiError> {
-    require_org_membership(state, identity, organization_id).await?;
-
     state
         .usecase
         .find_run(organization_id, run_id)

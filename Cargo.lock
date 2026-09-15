@@ -2525,20 +2525,26 @@ dependencies = [
 name = "handlers-automation"
 version = "0.1.0"
 dependencies = [
+ "args",
  "auth",
  "axum",
  "axum-extra",
  "base64 0.22.1",
  "chrono",
+ "clap",
  "common",
  "events",
  "handlers",
  "http 1.4.0",
+ "jsonwebtoken",
  "mestier-core",
+ "reqwest",
  "serde",
  "serde_json",
+ "sqlx",
  "tokio",
  "tracing",
+ "url",
  "utoipa",
  "uuid",
 ]

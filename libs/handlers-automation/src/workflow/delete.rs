@@ -2,7 +2,7 @@ use auth::Identity;
 use axum::{Extension, extract::State};
 use handlers::{ApiError, AppState, Response};
 
-use crate::{paths::WorkflowPath, workflow::require_workflow};
+use crate::{paths::WorkflowPath, require_manage_automation, workflow::find_workflow_in_org};
 
 #[derive(Debug, serde::Serialize, PartialEq)]
 pub struct EmptyResponse;
@@ -32,7 +32,8 @@ pub async fn handler(
     State(state): State<AppState>,
     Extension(identity): Extension<Identity>,
 ) -> Result<Response<EmptyResponse>, ApiError> {
-    require_workflow(&state, &identity, organization_id, workflow_id).await?;
+    require_manage_automation(&state, &identity, organization_id).await?;
+    find_workflow_in_org(&state, organization_id, workflow_id).await?;
 
     state
         .usecase

@@ -8,7 +8,7 @@ use utoipa::ToSchema;
 
 use crate::{
     paths::CredentialsPath,
-    require_org_membership,
+    require_manage_automation,
     response::{CredentialResponse, CredentialWithSecretResponse, secret_value},
 };
 
@@ -63,7 +63,7 @@ pub async fn handler(
     Extension(identity): Extension<Identity>,
     Json(payload): Json<CreateCredentialRequest>,
 ) -> Result<Response<CredentialWithSecretResponse>, ApiError> {
-    require_org_membership(&state, &identity, path.organization_id).await?;
+    require_manage_automation(&state, &identity, path.organization_id).await?;
 
     let origin: CredentialOrigin = payload.origin.into();
     let (credential, plaintext) = state

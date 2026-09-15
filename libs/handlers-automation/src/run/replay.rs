@@ -4,7 +4,9 @@ use handlers::{ApiError, AppState, DataEnvelope, Response};
 use serde::Deserialize;
 use utoipa::ToSchema;
 
-use crate::{paths::RunReplayPath, response::RunResponse, run::require_run};
+use crate::{
+    paths::RunReplayPath, require_manage_automation, response::RunResponse, run::find_run_in_org,
+};
 
 #[derive(Debug, Deserialize, ToSchema)]
 pub struct ReplayRunRequest {
@@ -42,7 +44,8 @@ pub async fn handler(
     Extension(identity): Extension<Identity>,
     Json(payload): Json<ReplayRunRequest>,
 ) -> Result<Response<RunResponse>, ApiError> {
-    require_run(&state, &identity, organization_id, run_id).await?;
+    require_manage_automation(&state, &identity, organization_id).await?;
+    find_run_in_org(&state, organization_id, run_id).await?;
 
     let replayed = state
         .usecase

@@ -30,8 +30,9 @@ use utoipa::ToSchema;
 
 use crate::{
     paths::WorkflowVersionsPath,
+    require_manage_automation,
     response::{GraphDto, GraphErrorResponse, WorkflowVersionResponse},
-    workflow::require_workflow,
+    workflow::find_workflow_in_org,
 };
 
 #[derive(Debug, Deserialize, ToSchema)]
@@ -116,7 +117,8 @@ pub async fn handler(
     Extension(identity): Extension<Identity>,
     Json(payload): Json<SaveWorkflowVersionRequest>,
 ) -> Result<Response<WorkflowVersionResponse>, SaveVersionError> {
-    require_workflow(&state, &identity, organization_id, workflow_id).await?;
+    require_manage_automation(&state, &identity, organization_id).await?;
+    find_workflow_in_org(&state, organization_id, workflow_id).await?;
     let actor = handlers::resolve_user_id(&state, &identity).await?;
 
     let graph: mestier_core::Graph = payload.graph.into();

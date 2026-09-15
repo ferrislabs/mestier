@@ -2,7 +2,10 @@ use auth::Identity;
 use axum::{Extension, extract::State};
 use handlers::{ApiError, AppState, DataEnvelope, Response};
 
-use crate::{paths::WorkflowPath, response::WorkflowDetailResponse, workflow::require_workflow};
+use crate::{
+    paths::WorkflowPath, require_view_automation, response::WorkflowDetailResponse,
+    workflow::find_workflow_in_org,
+};
 
 #[utoipa::path(
     get,
@@ -29,7 +32,8 @@ pub async fn handler(
     State(state): State<AppState>,
     Extension(identity): Extension<Identity>,
 ) -> Result<Response<WorkflowDetailResponse>, ApiError> {
-    let workflow = require_workflow(&state, &identity, organization_id, workflow_id).await?;
+    require_view_automation(&state, &identity, organization_id).await?;
+    let workflow = find_workflow_in_org(&state, organization_id, workflow_id).await?;
 
     // `find_workflow_version` looks a version up by its *number*, and the
     // workflow only carries `current_version_id` (the version row's own

@@ -9,7 +9,7 @@ use handlers::{ApiError, AppState};
 use mestier_core::{Credential, OrganizationId};
 use uuid::Uuid;
 
-use crate::require_org_membership;
+use crate::require_manage_automation;
 
 pub mod create;
 pub mod delete;
@@ -26,19 +26,23 @@ pub fn router(_state: &AppState) -> Router<AppState> {
         .typed_post(rotate::handler)
 }
 
-/// Loads the credential and checks both that the caller belongs to
-/// `organization_id` and that the credential actually belongs to it —
-/// `find_credential` is itself scoped by `organization_id`, so a real
-/// `credential_id` from a different organization already reads back as
-/// absent; this only adds the membership check every route needs anyway.
-/// Mirrors `handlers-planning::task::require_task`.
+/// Loads the credential and checks both that the caller holds
+/// `MANAGE_AUTOMATION` on `organization_id` and that the credential actually
+/// belongs to it — `find_credential` is itself scoped by `organization_id`,
+/// so a real `credential_id` from a different organization already reads
+/// back as absent; this only adds the permission check every route needing
+/// it anyway. Gated on `MANAGE_AUTOMATION` unconditionally rather than
+/// taking the bit as a parameter: every one of its callers (`delete`,
+/// `update`, `rotate`) is a write, `list` being the crate's only credential
+/// read and it never loads a single credential by id. Mirrors
+/// `handlers-planning::task::require_task`.
 pub(crate) async fn require_credential(
     state: &AppState,
     identity: &Identity,
     organization_id: OrganizationId,
     credential_id: Uuid,
 ) -> Result<Credential, ApiError> {
-    require_org_membership(state, identity, organization_id).await?;
+    require_manage_automation(state, identity, organization_id).await?;
 
     state
         .usecase

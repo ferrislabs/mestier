@@ -5,7 +5,10 @@ use mestier_core::UpdateWorkflowCommand;
 use serde::{Deserialize, Deserializer};
 use utoipa::ToSchema;
 
-use crate::{paths::WorkflowPath, response::WorkflowResponse, workflow::require_workflow};
+use crate::{
+    paths::WorkflowPath, require_manage_automation, response::WorkflowResponse,
+    workflow::find_workflow_in_org,
+};
 
 /// Distinguishes "the key is absent" (leave the field unchanged) from "the
 /// key is present" (apply it, `null` included) — same convention as
@@ -59,7 +62,8 @@ pub async fn handler(
     Extension(identity): Extension<Identity>,
     Json(payload): Json<UpdateWorkflowRequest>,
 ) -> Result<Response<WorkflowResponse>, ApiError> {
-    require_workflow(&state, &identity, organization_id, workflow_id).await?;
+    require_manage_automation(&state, &identity, organization_id).await?;
+    find_workflow_in_org(&state, organization_id, workflow_id).await?;
 
     let updated = state
         .usecase
