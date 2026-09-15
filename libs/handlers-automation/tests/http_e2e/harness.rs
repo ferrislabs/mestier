@@ -119,12 +119,9 @@ impl App {
         )
     }
 
-    /// Drops the fixture. Best-effort: automation's `event` and `settings`
-    /// tables have a plain `REFERENCES organizations(id)`, not
-    /// `ON DELETE CASCADE` (unlike `workflow`/`credential`/`run`, which
-    /// cascade), so a run that left rows there would otherwise fail this
-    /// cleanup — swallowing the error is the same choice
-    /// `handlers-invoice`'s own harness makes.
+    /// Drops the fixture. Every table listed here references `organizations`
+    /// without `ON DELETE CASCADE`, so one missing from the list makes the
+    /// final delete fail — silently, since the errors are swallowed.
     pub async fn cleanup(&self) {
         for organization_id in [self.organization_id, self.other_organization_id] {
             for statement in [
@@ -197,7 +194,6 @@ async fn seed(pool: &PgPool) -> Fixture {
         seed_person(pool, organization_id, false).await;
     assign_role(pool, view_only_member_id, view_only_role_id).await;
 
-    // Membership, no role assignment at all.
     let (no_role_user_id, no_role_sub, _) = seed_person(pool, organization_id, false).await;
 
     let other_organization_id = Uuid::now_v7();
@@ -319,14 +315,8 @@ fn args_for(database_url: &str, redis_url: &str, issuer_url: &str) -> Vec<String
         db.path().trim_start_matches('/').to_owned(),
         "--rate-limit-redis-url".to_owned(),
         redis_url.to_owned(),
-        // The rate limiter keys on client IP alone, and every test in this
-        // suite calls in from the same loopback address through the same
-        // Redis — so the sliding window is shared across every test in a
-        // run, and across a run and the one before it if run twice inside
-        // the same window. The production default of 120/minute is a
-        // limit on one real caller, not on an entire suite's worth of
-        // fixtures; a value that low turned a second consecutive run of a
-        // clean suite into a false failure.
+        // The limiter keys on client IP, so the whole suite shares one window
+        // across runs. The production default fails a second consecutive run.
         "--rate-limit-per-minute".to_owned(),
         "100000".to_owned(),
         "--auth-issuer".to_owned(),

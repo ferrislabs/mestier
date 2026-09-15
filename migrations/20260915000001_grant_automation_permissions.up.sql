@@ -1,22 +1,5 @@
--- #493: backfill the automation permission bits onto every existing
--- organization's default `admin` role. `owner` needs no backfill: it is
--- seeded (and stays seeded) as Permissions::ALL (i64::MAX), which already
--- contains any bit added here or later, by construction.
---
--- Matched by role name, the same signal as
--- `20260829000002_grant_business_permissions.up.sql` and for the same
--- reason: `roles` carries no is-default flag, and a custom role renamed to
--- "admin" is indistinguishable from the seeded one either way.
---
--- Bit values must stay in lockstep with
--- domain::role::default_admin_business_permissions:
---   admin: VIEW_AUTOMATION (524288) | MANAGE_AUTOMATION (1048576) = 1572864
---
--- `member` is deliberately absent, and its absence is the point. Unlike the
--- planning and read bits that backfill above, this is not a bit naming a
--- boundary that already existed: nothing gated automation at all, so every
--- member could build workflows and store sealed third-party credentials.
--- Granting the bits here would carry that forward under a new name. An
--- owner who wants members automating grants it through a role, explicitly,
--- after this ships.
+-- 1572864 = VIEW_AUTOMATION (524288) | MANAGE_AUTOMATION (1048576), and must
+-- stay in lockstep with domain::role::default_admin_business_permissions.
+-- `member` is absent on purpose, and `owner` needs no backfill: it is seeded
+-- as Permissions::ALL.
 UPDATE roles SET permissions = permissions | 1572864::bigint WHERE name = 'admin';

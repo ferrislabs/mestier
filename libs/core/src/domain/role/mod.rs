@@ -67,16 +67,6 @@ impl Permissions {
     // other VIEW_*/MANAGE_* splits above.
     pub const VIEW_QUOTES: Self = Permissions(1 << 18); // 262144
 
-    // #493: automation had no bit at all. Credentials, retention settings,
-    // workflows and runs were reachable by anyone holding a membership —
-    // #410 records the same finding from the other end, `policy::require`
-    // missing on `automation-credential`. A credential is a sealed third-party
-    // secret, so this was the widest remaining gap in the bitfield.
-    //
-    // Two bits and not one, for the reason every other VIEW_*/MANAGE_* split
-    // above exists: reading what an automation did — which run failed, on
-    // which step, with which error — is a support question, and answering it
-    // does not imply the right to change what runs next.
     pub const VIEW_AUTOMATION: Self = Permissions(1 << 19); // 524288
     pub const MANAGE_AUTOMATION: Self = Permissions(1 << 20); // 1048576
 
@@ -216,10 +206,6 @@ pub const MEMBER_ROLE_NAME: &str = "member";
 /// #396 adds `VIEW_QUOTES`: admin already manages quotes via
 /// `MANAGE_QUOTES`, so the read bit merely names a capability it already had.
 ///
-/// #493 adds `VIEW_AUTOMATION`/`MANAGE_AUTOMATION`: admin could already do
-/// both, under no gate at all, so the bits name an existing capability rather
-/// than granting a new one. `member` deliberately gets neither — see
-/// [`default_member_business_permissions`].
 pub fn default_admin_business_permissions() -> Permissions {
     Permissions::VIEW_PLANNING
         | Permissions::MANAGE_PLANNING
@@ -257,14 +243,6 @@ pub fn default_admin_business_permissions() -> Permissions {
 /// `VIEW_INVOICES` above: a member could already read every quote under the
 /// plain membership gate this closes, so granting the bit by default names
 /// an existing capability rather than introducing a new one.
-///
-/// #493 deliberately grants neither automation bit, and that one *is* a
-/// behaviour change for existing organizations — the same explicit call
-/// `MANAGE_INVOICES` got above. A member could read and write automation
-/// under the plain membership gate, credentials included, and a credential is
-/// a sealed third-party secret. Naming that capability and keeping it is not
-/// the same decision as naming it and withdrawing it; this withdraws it. An
-/// owner who wants members building workflows grants it through a role.
 pub fn default_member_business_permissions() -> Permissions {
     Permissions::VIEW_PLANNING
         | Permissions::MANAGE_PLANNING

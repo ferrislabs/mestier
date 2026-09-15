@@ -22,10 +22,7 @@ pub mod workflow;
 
 pub const TAG: &str = "automation";
 
-/// Membership is the outer gate, `VIEW_AUTOMATION` the inner one (#493):
-/// belonging to the organization used to be enough to read every credential,
-/// workflow and run in it — no permission bit gated it at all. Mirrors
-/// `require_view_invoices` in `handlers-invoice`.
+/// Membership is the outer gate, `VIEW_AUTOMATION` the inner one.
 async fn require_view_automation(
     state: &AppState,
     identity: &Identity,
@@ -58,25 +55,11 @@ async fn require_view_automation(
     Ok(())
 }
 
-/// Same shape as [`require_view_automation`], gating on `MANAGE_AUTOMATION`
-/// instead — and, unlike `MANAGE_INVOICES` (`mestier_core::application::mod`'s
-/// `default_authorizer`, action `"invoice.manage"`), gated here at the HTTP
-/// boundary and nowhere else. Two reasons:
+/// Membership is the outer gate, `MANAGE_AUTOMATION` the inner one.
 ///
-/// 1. The use cases this bit would otherwise gate are shared between a human
-///    caller and the engine itself: `application::task_recurrence` calls
-///    `start_run` and `save_workflow_version` directly, and the dispatcher
-///    starts a run the moment a subscribed event fires. A `policy::require`
-///    refusal inside either use case would block the engine, not a browse —
-///    exactly the bug class `application::mod`'s own comment describes for
-///    why `get_customer`/`get_invoice` are gated at the handler layer
-///    instead (#395).
-/// 2. `application::mod`'s
-///    `every_registered_action_is_passed_to_policy_require_somewhere` test
-///    fails on any action registered in `default_authorizer` and never
-///    passed to `policy::require`. No automation use case can call one
-///    without recreating reason 1, so no `"automation.manage"` action is
-///    registered there at all.
+/// Do not move this into `default_authorizer` as an action: the use cases it
+/// would gate are called by the engine itself, which has no human caller to
+/// authorize, so a `policy::require` there refuses the engine.
 async fn require_manage_automation(
     state: &AppState,
     identity: &Identity,

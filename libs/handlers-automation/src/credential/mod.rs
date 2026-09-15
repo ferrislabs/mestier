@@ -26,16 +26,11 @@ pub fn router(_state: &AppState) -> Router<AppState> {
         .typed_post(rotate::handler)
 }
 
-/// Loads the credential and checks both that the caller holds
-/// `MANAGE_AUTOMATION` on `organization_id` and that the credential actually
-/// belongs to it — `find_credential` is itself scoped by `organization_id`,
-/// so a real `credential_id` from a different organization already reads
-/// back as absent; this only adds the permission check every route needing
-/// it anyway. Gated on `MANAGE_AUTOMATION` unconditionally rather than
-/// taking the bit as a parameter: every one of its callers (`delete`,
-/// `update`, `rotate`) is a write, `list` being the crate's only credential
-/// read and it never loads a single credential by id. Mirrors
-/// `handlers-planning::task::require_task`.
+/// Loads a credential of `organization_id`, refusing a caller without
+/// `MANAGE_AUTOMATION`.
+///
+/// Gating is fused in rather than taken as a parameter because every caller
+/// is a write. A read route must not reach for this.
 pub(crate) async fn require_credential(
     state: &AppState,
     identity: &Identity,

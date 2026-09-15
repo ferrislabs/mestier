@@ -20,13 +20,8 @@ pub fn router(_state: &AppState) -> Router<AppState> {
         .typed_post(start::handler)
 }
 
-/// Loads the run and checks it belongs to `organization_id` — the
-/// permission gate is the caller's job first: `get_one` reads, so it calls
-/// `require_view_automation`; `replay` mutates, so it calls
-/// `require_manage_automation`. One loader shared by both rather than two
-/// (contrast `credential::require_credential`, gated internally, since
-/// every one of its callers is a write) because this one genuinely is not.
-/// Mirrors `workflow::find_workflow_in_org`.
+/// Loads a run of `organization_id`. Gates nothing: readers and writers
+/// share it, so the caller applies its own gate first.
 pub(crate) async fn find_run_in_org(
     state: &AppState,
     organization_id: OrganizationId,

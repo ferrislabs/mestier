@@ -28,14 +28,8 @@ pub fn router(_state: &AppState) -> Router<AppState> {
         .typed_put(trigger::set_trigger)
 }
 
-/// Loads the workflow and checks it belongs to `organization_id` — the
-/// permission gate is the caller's job first, since a workflow is read by
-/// some routes (`get_one`, `trigger::get_trigger`) and written by others
-/// (`create` and `list` need no single workflow, but `delete`,
-/// `save_version`, `trigger::set_trigger`, `update`, and `run::start`
-/// — which starts a run on it — all do). One loader shared by both
-/// directions rather than two, the same call `run::find_run_in_org` makes
-/// for the same reason. Mirrors `handlers-planning::task::require_task`.
+/// Loads a workflow of `organization_id`. Gates nothing: readers and writers
+/// share it, so the caller applies its own gate first.
 pub(crate) async fn find_workflow_in_org(
     state: &AppState,
     organization_id: OrganizationId,
