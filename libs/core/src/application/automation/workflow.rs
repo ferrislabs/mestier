@@ -125,14 +125,22 @@ impl MestierUseCase {
         validate_graph(&command.graph, &catalogue, &organization_credentials)
             .map_err(|errors| CoreError::Conflict(format_graph_errors(&errors)))?;
 
-        workflows
+        let version = workflows
             .insert_version(
                 command.org_id,
                 command.workflow_id,
                 &command.graph,
                 command.created_by,
             )
-            .await
+            .await?;
+
+        if let Some(layout) = command.layout.as_ref() {
+            workflows
+                .set_layout(command.org_id, command.workflow_id, Some(layout))
+                .await?;
+        }
+
+        Ok(version)
     }
 
     #[transactional(workflow)]
