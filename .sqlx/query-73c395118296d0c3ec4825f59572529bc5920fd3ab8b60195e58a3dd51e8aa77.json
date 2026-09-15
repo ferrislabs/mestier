@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT id, org_id, name, description, enabled, current_version_id, created_at, updated_at\n               FROM automation.workflow\n               WHERE org_id = $1\n               ORDER BY name",
+  "query": "UPDATE automation.workflow\n               SET name = $3, description = $4, enabled = $5, updated_at = $6\n               WHERE org_id = $1 AND id = $2\n               RETURNING id, org_id, name, description, enabled, current_version_id, layout, created_at, updated_at",
   "describe": {
     "columns": [
       {
@@ -35,18 +35,28 @@
       },
       {
         "ordinal": 6,
+        "name": "layout",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 7,
         "name": "created_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 7,
+        "ordinal": 8,
         "name": "updated_at",
         "type_info": "Timestamptz"
       }
     ],
     "parameters": {
       "Left": [
-        "Uuid"
+        "Uuid",
+        "Uuid",
+        "Text",
+        "Text",
+        "Bool",
+        "Timestamptz"
       ]
     },
     "nullable": [
@@ -56,9 +66,10 @@
       true,
       false,
       true,
+      true,
       false,
       false
     ]
   },
-  "hash": "3027129d506515f5c49b9cbb6a65898eb88d4d4417852a411eb135eb2d1b9d92"
+  "hash": "73c395118296d0c3ec4825f59572529bc5920fd3ab8b60195e58a3dd51e8aa77"
 }

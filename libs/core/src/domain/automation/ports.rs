@@ -7,7 +7,9 @@ use crate::domain::automation::credential::Credential;
 use crate::domain::automation::run::{DueRun, Run, RunSettlement, RunStep};
 use crate::domain::automation::secret::SealedSecret;
 use crate::domain::automation::settings::AutomationSettings;
-use crate::domain::automation::workflow::{Graph, Workflow, WorkflowReference, WorkflowVersion};
+use crate::domain::automation::workflow::{
+    Graph, Workflow, WorkflowLayout, WorkflowReference, WorkflowVersion,
+};
 
 /// Appends events to the durable log.
 ///
@@ -236,6 +238,14 @@ pub trait WorkflowRepository: Send {
         graph: &Graph,
         created_by: Option<Uuid>,
     ) -> impl Future<Output = Result<WorkflowVersion, CoreError>> + Send;
+
+    #[allow(clippy::needless_lifetimes)]
+    fn set_layout<'a>(
+        &mut self,
+        org_id: OrganizationId,
+        workflow_id: Uuid,
+        layout: Option<&'a WorkflowLayout>,
+    ) -> impl Future<Output = Result<(), CoreError>> + Send;
 
     fn find_version(
         &mut self,
