@@ -152,6 +152,7 @@ function WorkflowCanvasLoaded({
 	const [isDirty, setDirty] = useState(false)
 	const [validation, setValidation] =
 		useState<GraphValidation>(EMPTY_VALIDATION)
+	const [saveError, setSaveError] = useState<string | null>(null)
 
 	const handleChange = (
 		graph: Schemas.GraphDto,
@@ -163,6 +164,7 @@ function WorkflowCanvasLoaded({
 
 	const handleSave = async () => {
 		setValidation(EMPTY_VALIDATION)
+		setSaveError(null)
 		try {
 			await saveVersion.mutateAsync({
 				path: { organization_id: organizationId, workflow_id: workflowId },
@@ -174,18 +176,27 @@ function WorkflowCanvasLoaded({
 			setDirty(false)
 		} catch (error) {
 			const errors = extractGraphErrors(error)
-			if (errors) setValidation(projectGraphErrors(errors))
+			if (errors) {
+				setValidation(projectGraphErrors(errors))
+				return
+			}
+			setSaveError(
+				error instanceof Error && error.message
+					? `L’enregistrement a échoué : ${error.message}`
+					: 'L’enregistrement a échoué.',
+			)
 		}
 	}
 
 	return (
 		<div className="flex min-h-0 flex-1 flex-col">
-			{validation.graphErrors.length > 0 ? (
+			{validation.graphErrors.length > 0 || saveError ? (
 				<div
 					role="alert"
 					className="border-b border-destructive/30 bg-destructive/10 px-4 py-2 text-sm text-destructive"
 				>
 					<ul>
+						{saveError ? <li>{saveError}</li> : null}
 						{validation.graphErrors.map((message) => (
 							<li key={message}>{message}</li>
 						))}

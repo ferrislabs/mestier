@@ -388,4 +388,59 @@ describe('WorkflowCanvasFeature — a 422 from the backend', () => {
 		expect(await within(node).findByLabelText(/Erreur/)).toBeDefined()
 		expect(await screen.findByText('Le graphe contient un cycle')).toBeDefined()
 	})
+
+	it('says the save failed when the refusal carries no graph errors', async () => {
+		const graph: Schemas.GraphDto = {
+			connectors: [connector('c1')],
+			edges: [],
+		}
+
+		renderFeature((fakeApi) => {
+			fakeApi.mockGet(WORKFLOW_PATH, () => ({
+				data: workflowDetail({ graph, layout: { c1: { x: 0, y: 0 } } }),
+				pagination: null,
+			}))
+			fakeApi.mockMutation('put', WORKFLOW_VERSIONS_PATH, () => {
+				throw Object.assign(new Error('Service Unavailable'), { status: 503 })
+			})
+		})
+
+		await clickSave()
+
+		expect(await screen.findByRole('alert')).toBeDefined()
+		expect(await screen.findByText(/enregistrement a échoué/i)).toBeDefined()
+	})
+
+	it('clears the failure message once a later save succeeds', async () => {
+		const graph: Schemas.GraphDto = {
+			connectors: [connector('c1')],
+			edges: [],
+		}
+		let attempts = 0
+
+		renderFeature((fakeApi) => {
+			fakeApi.mockGet(WORKFLOW_PATH, () => ({
+				data: workflowDetail({ graph, layout: { c1: { x: 0, y: 0 } } }),
+				pagination: null,
+			}))
+			fakeApi.mockMutation('put', WORKFLOW_VERSIONS_PATH, () => {
+				attempts += 1
+				if (attempts === 1) {
+					throw Object.assign(new Error('Service Unavailable'), {
+						status: 503,
+					})
+				}
+				return { data: null, pagination: null }
+			})
+		})
+
+		await clickSave()
+		expect(await screen.findByText(/enregistrement a échoué/i)).toBeDefined()
+
+		await clickSave()
+
+		await waitFor(() => {
+			expect(screen.queryByText(/enregistrement a échoué/i)).toBeNull()
+		})
+	})
 })
