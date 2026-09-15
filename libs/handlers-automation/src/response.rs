@@ -482,6 +482,7 @@ impl From<NodePositionDto> for NodePosition {
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, ToSchema)]
+#[schema(value_type = std::collections::BTreeMap<String, NodePositionDto>)]
 #[serde(transparent)]
 pub struct WorkflowLayoutDto(BTreeMap<String, NodePositionDto>);
 
