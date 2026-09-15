@@ -28,8 +28,8 @@ pub use domain::automation::settings::{AutomationSettings, SettingsBounds};
 pub use domain::automation::subscription::SetWorkflowTriggerCommand;
 pub use domain::automation::workflow::{
     Branch, CreateWorkflowCommand, Edge, Graph, GraphError, MAX_LAYOUT_ENTRIES, NodePosition,
-    PlacedConnector, SaveWorkflowVersionCommand, UpdateWorkflowCommand, Workflow,
-    WorkflowLayout, WorkflowReference, WorkflowVersion, validate_graph,
+    PlacedConnector, SaveWorkflowVersionCommand, UpdateWorkflowCommand, Workflow, WorkflowLayout,
+    WorkflowReference, WorkflowVersion, validate_graph,
 };
 pub use infrastructure::automation::connectors::{ConnectorRegistry, UnknownConnectorKind};
 pub use infrastructure::automation::webhook::{

@@ -146,7 +146,8 @@ mod tests {
 
     #[test]
     fn a_layout_entry_missing_a_coordinate_is_refused() {
-        let parsed: Result<WorkflowLayout, _> = serde_json::from_value(json!({ "c1": { "x": 1.0 } }));
+        let parsed: Result<WorkflowLayout, _> =
+            serde_json::from_value(json!({ "c1": { "x": 1.0 } }));
 
         assert!(parsed.is_err());
     }
@@ -159,7 +160,10 @@ mod tests {
 
         let layout = WorkflowLayout::from(positions.clone());
 
-        assert_eq!(layout.position_of("c1"), Some(NodePosition { x: 1.0, y: 2.0 }));
+        assert_eq!(
+            layout.position_of("c1"),
+            Some(NodePosition { x: 1.0, y: 2.0 })
+        );
         assert_eq!(BTreeMap::<String, NodePosition>::from(layout), positions);
     }
 

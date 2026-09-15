@@ -41,7 +41,9 @@ impl TryFrom<WorkflowRow> for Workflow {
             .layout
             .map(serde_json::from_value)
             .transpose()
-            .map_err(|e| CoreError::Internal(format!("invalid workflow layout in database: {e}")))?;
+            .map_err(|e| {
+                CoreError::Internal(format!("invalid workflow layout in database: {e}"))
+            })?;
 
         Ok(Self {
             id: row.id,
@@ -172,7 +174,9 @@ impl<'tx> WorkflowRepository for PgWorkflowRepository<'tx> {
         .await
         .map_err(map_sqlx_error)?;
 
-        row.map(Workflow::try_from).transpose()?.ok_or(CoreError::NotFound)
+        row.map(Workflow::try_from)
+            .transpose()?
+            .ok_or(CoreError::NotFound)
     }
 
     async fn delete(&mut self, org_id: OrganizationId, id: Uuid) -> Result<(), CoreError> {
@@ -276,10 +280,9 @@ impl<'tx> WorkflowRepository for PgWorkflowRepository<'tx> {
         layout: Option<&'a WorkflowLayout>,
     ) -> Result<(), CoreError> {
         let mut tx = self.tx.lock().await;
-        let layout_json = layout
-            .map(serde_json::to_value)
-            .transpose()
-            .map_err(|e| CoreError::Internal(format!("workflow layout cannot be serialized: {e}")))?;
+        let layout_json = layout.map(serde_json::to_value).transpose().map_err(|e| {
+            CoreError::Internal(format!("workflow layout cannot be serialized: {e}"))
+        })?;
 
         let outcome = sqlx::query!(
             "UPDATE automation.workflow SET layout = $3 WHERE org_id = $1 AND id = $2",
@@ -381,7 +384,9 @@ mod tests {
     use super::*;
     use crate::application::test_support::automation_pool;
     use crate::application::test_support::now_storable;
-    use crate::domain::automation::workflow::{Branch, Edge, NodePosition, PlacedConnector, WorkflowLayout};
+    use crate::domain::automation::workflow::{
+        Branch, Edge, NodePosition, PlacedConnector, WorkflowLayout,
+    };
     use crate::infrastructure::postgres::with_tx;
 
     async fn make_pool() -> PgPool {
