@@ -31,13 +31,14 @@ use utoipa::ToSchema;
 use crate::{
     paths::WorkflowVersionsPath,
     require_manage_automation,
-    response::{GraphDto, GraphErrorResponse, WorkflowVersionResponse},
+    response::{GraphDto, GraphErrorResponse, WorkflowLayoutDto, WorkflowVersionResponse},
     workflow::find_workflow_in_org,
 };
 
 #[derive(Debug, Deserialize, ToSchema)]
 pub struct SaveWorkflowVersionRequest {
     pub graph: GraphDto,
+    pub layout: Option<WorkflowLayoutDto>,
 }
 
 #[derive(Debug, Serialize, ToSchema)]
@@ -131,6 +132,7 @@ pub async fn handler(
         return Err(SaveVersionError::GraphInvalid(response));
     }
 
+    let layout = payload.layout.map(mestier_core::WorkflowLayout::from);
     let version = state
         .usecase
         .acting_as(actor)
@@ -138,6 +140,7 @@ pub async fn handler(
             org_id: organization_id,
             workflow_id,
             graph,
+            layout,
             created_by: Some(actor.0),
         })
         .await?;

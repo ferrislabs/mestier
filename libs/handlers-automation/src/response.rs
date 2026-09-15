@@ -11,15 +11,16 @@
 //! so the JSON a caller sees is exactly what the domain-level tests
 //! (`connector::descriptor`, `connector::catalogue`) already lock in.
 
+use std::collections::BTreeMap;
 use std::time::Duration;
 
 use chrono::{DateTime, Utc};
 use mestier_core::{
     AuthRequirement, AuthScheme, AutomationSettings, Credential, CredentialOrigin, Field,
-    FieldKind, OrganizationId, Run, RunStatus, RunStep, SelectOption, StepStatus, VisibleWhen,
-    Workflow, WorkflowVersion,
+    FieldKind, NodePosition, OrganizationId, Run, RunStatus, RunStep, SelectOption, StepStatus,
+    VisibleWhen, Workflow, WorkflowVersion,
 };
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize, de};
 use serde_json::Value;
 use utoipa::ToSchema;
 use uuid::Uuid;
@@ -456,6 +457,73 @@ impl From<WorkflowVersion> for WorkflowVersionResponse {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, ToSchema)]
+pub struct NodePositionDto {
+    pub x: f64,
+    pub y: f64,
+}
+
+impl From<NodePosition> for NodePositionDto {
+    fn from(value: NodePosition) -> Self {
+        Self {
+            x: value.x,
+            y: value.y,
+        }
+    }
+}
+
+impl From<NodePositionDto> for NodePosition {
+    fn from(value: NodePositionDto) -> Self {
+        Self {
+            x: value.x,
+            y: value.y,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, ToSchema)]
+#[serde(transparent)]
+pub struct WorkflowLayoutDto(BTreeMap<String, NodePositionDto>);
+
+impl<'de> Deserialize<'de> for WorkflowLayoutDto {
+    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        let positions = BTreeMap::<String, NodePositionDto>::deserialize(deserializer)?;
+
+        if positions.len() > mestier_core::MAX_LAYOUT_ENTRIES {
+            return Err(de::Error::custom(format!(
+                "a layout holds at most {} entries, got {}",
+                mestier_core::MAX_LAYOUT_ENTRIES,
+                positions.len()
+            )));
+        }
+
+        Ok(Self(positions))
+    }
+}
+
+impl From<mestier_core::WorkflowLayout> for WorkflowLayoutDto {
+    fn from(value: mestier_core::WorkflowLayout) -> Self {
+        let positions: BTreeMap<String, NodePosition> = value.into();
+        Self(
+            positions
+                .into_iter()
+                .map(|(id, position)| (id, position.into()))
+                .collect(),
+        )
+    }
+}
+
+impl From<WorkflowLayoutDto> for mestier_core::WorkflowLayout {
+    fn from(value: WorkflowLayoutDto) -> Self {
+        value
+            .0
+            .into_iter()
+            .map(|(id, position)| (id, position.into()))
+            .collect::<BTreeMap<_, _>>()
+            .into()
+    }
+}
+
 /// A workflow with its current version, when it has one — the shape
 /// `GET .../workflows/{id}` returns (#203: "read avec sa version courante").
 #[derive(Debug, Clone, PartialEq, Serialize, ToSchema)]
@@ -465,6 +533,7 @@ pub struct WorkflowDetailResponse {
     pub name: String,
     pub description: Option<String>,
     pub enabled: bool,
+    pub layout: Option<WorkflowLayoutDto>,
     pub current_version: Option<WorkflowVersionResponse>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
@@ -478,6 +547,7 @@ impl WorkflowDetailResponse {
             name: workflow.name,
             description: workflow.description,
             enabled: workflow.enabled,
+            layout: workflow.layout.map(WorkflowLayoutDto::from),
             current_version: current_version.map(WorkflowVersionResponse::from),
             created_at: workflow.created_at,
             updated_at: workflow.updated_at,
@@ -882,5 +952,34 @@ mod tests {
         let round_tripped: AutomationSettings = body.into();
 
         assert_eq!(round_tripped, settings);
+    }
+
+    #[test]
+    fn a_layout_dto_round_trips_through_its_wire_shape() {
+        let layout: mestier_core::WorkflowLayout = serde_json::from_value(json!({
+            "c1": { "x": 10.5, "y": -20.0 },
+        }))
+        .unwrap();
+
+        let dto = WorkflowLayoutDto::from(layout.clone());
+
+        assert_eq!(
+            serde_json::to_value(&dto).unwrap(),
+            json!({ "c1": { "x": 10.5, "y": -20.0 } })
+        );
+        assert_eq!(mestier_core::WorkflowLayout::from(dto), layout);
+    }
+
+    #[test]
+    fn a_layout_dto_holding_more_entries_than_the_cap_is_refused() {
+        let mut oversized = serde_json::Map::new();
+        for index in 0..=mestier_core::MAX_LAYOUT_ENTRIES {
+            oversized.insert(format!("c{index}"), json!({ "x": 0.0, "y": 0.0 }));
+        }
+
+        let parsed: Result<WorkflowLayoutDto, _> =
+            serde_json::from_value(serde_json::Value::Object(oversized));
+
+        assert!(parsed.is_err());
     }
 }
