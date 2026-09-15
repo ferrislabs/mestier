@@ -34,6 +34,7 @@ export function LabelPastilles({ labels }: { labels: LabelPastilleVM[] }) {
 
 /** The one status label dictionary the task list view's rows share — root and subtask rows alike. */
 export const STATUS_LABELS: Record<Schemas.TaskStatus, string> = {
+	BACKLOG: 'Backlog',
 	PLANNED: 'Planifiée',
 	IN_PROGRESS: 'En cours',
 	DONE: 'Terminée',

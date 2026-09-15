@@ -400,6 +400,8 @@ impl Modify for SecurityAddon {
         reference::product::create::CreateProductRequest,
         reference::product::update::UpdateProductRequest,
         reference::custom_unit::create::CreateCustomUnitRequest,
+        reference::response::CustomUnitResponse,
+        reference::ServiceRateUnit,
         planning::task::create::CreateTaskRequest,
         planning::task::update::UpdateTaskRequest,
         planning::task::soft_delete::DeleteScopeRequest,

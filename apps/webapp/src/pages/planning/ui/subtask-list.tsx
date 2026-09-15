@@ -1,11 +1,12 @@
 import { ChevronRight, Plus } from 'lucide-react'
+import type { Schemas } from '#/api/api.client'
 import { Badge } from '#/components/ui/badge'
 import { Button } from '#/components/ui/button'
 
 export interface SubtaskListItem {
 	id: string
 	title: string
-	status: 'PLANNED' | 'IN_PROGRESS' | 'DONE' | 'CANCELLED'
+	status: Schemas.TaskStatus
 	assigneeCount: number
 	/** Whether this subtask's window is its own or inherited from the parent — see `lib/subtasks.ts`'s `resolveDisplayWindow`. */
 	inheritedWindow: boolean
@@ -22,6 +23,7 @@ export interface SubtaskListProps {
 }
 
 const STATUS_LABELS: Record<SubtaskListItem['status'], string> = {
+	BACKLOG: 'Backlog',
 	PLANNED: 'Planifiée',
 	IN_PROGRESS: 'En cours',
 	DONE: 'Terminée',
