@@ -1497,14 +1497,6 @@ mod tests {
             .await
             .unwrap();
 
-        // No migration today lets a run's pinned version disappear from
-        // under it — `automation.run.workflow_version_id` carries no
-        // `ON DELETE` clause specifically so that can never happen through
-        // the schema. Forcing it here, bypassing the constraint for the
-        // width of one held connection, proves the read degrades instead of
-        // failing if that ever stops being true — the same defensive intent
-        // as the layout fix on this branch, applied to a row instead of a
-        // column's contents.
         let mut conn = pool.acquire().await.unwrap();
         sqlx::query("SET session_replication_role = replica")
             .execute(&mut *conn)

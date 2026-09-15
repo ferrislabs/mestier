@@ -222,10 +222,6 @@ async fn a_view_only_member_reads_a_trigger_but_cannot_set_it() {
     app.cleanup().await;
 }
 
-/// The acceptance criterion the whole endpoint exists for: the editor's live
-/// preview resolves a template against a caller-supplied context, through
-/// the same evaluator the run engine uses, with no repository and no
-/// persistence involved.
 #[tokio::test]
 #[ignore = "requires live postgres and redis"]
 async fn a_valid_expression_resolves_against_the_supplied_context() {
@@ -329,9 +325,6 @@ async fn an_oversized_context_is_refused() {
     app.cleanup().await;
 }
 
-/// `VIEW_AUTOMATION` is the right minimum: evaluation computes nothing
-/// sensitive and has no side effect, so a viewer — not only a manager — must
-/// be able to preview an expression while building a workflow.
 #[tokio::test]
 #[ignore = "requires live postgres and redis"]
 async fn a_view_only_member_can_evaluate_an_expression() {
