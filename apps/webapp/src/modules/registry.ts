@@ -190,9 +190,10 @@ export const MODULES: AppModule[] = [
 		 * The work half of the split (#468): what is to be done and where it
 		 * stands, as opposed to the Planning module's who-is-where-when.
 		 *
-		 * The Board (`/planification/board`) has a route but no section here
-		 * on purpose — WS5 (#466) adds the entry when the screen exists, so
-		 * `main` never carries a nav link to an empty page.
+		 * The Board comes last rather than first even though it is the screen
+		 * the chantier exists for: `moduleLandingPath` takes a module's first
+		 * navigable section, so leading with it would silently redirect
+		 * `/planification` away from the project list #468 landed it on.
 		 */
 		sections: [
 			{
@@ -207,6 +208,13 @@ export const MODULES: AppModule[] = [
 				label: 'Modèles de projet',
 				to: '/planification/project-templates',
 				icon: LayoutTemplate,
+				requiredPermission: 'MANAGE_PLANNING',
+			},
+			{
+				id: 'board',
+				label: 'Tableau',
+				to: '/planification/board',
+				icon: KanbanSquare,
 				requiredPermission: 'MANAGE_PLANNING',
 			},
 		],

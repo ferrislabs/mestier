@@ -85,11 +85,12 @@ describe('buildBreadcrumbItems', () => {
 	})
 
 	/**
-	 * #468 took the task list out of the navigation — the board replaces it in
-	 * WS5 (#466) and the route lives on meanwhile, so the trail stops at the
-	 * module rather than naming a section that is no longer registered.
+	 * #468 took the task list out of the navigation and WS5 (#466) deleted it
+	 * outright, board in its place. The path is dead, but a stale bookmark
+	 * still resolves through this trail, so it has to stop at the module
+	 * rather than naming a section that no longer exists.
 	 */
-	it('stops at the module for the unregistered task list', () => {
+	it('stops at the module for the retired task list path', () => {
 		expect(labelsOf('/o/baptiste/planning/tasks')).toEqual([
 			'Baptiste',
 			'Planning',

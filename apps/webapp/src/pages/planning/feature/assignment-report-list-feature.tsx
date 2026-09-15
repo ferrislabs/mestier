@@ -10,7 +10,7 @@ import {
 	getAssignmentReportListUrlState,
 	writeAssignmentReportListUrlState,
 } from '#/pages/planning/assignment-report-list-url-state'
-import { memberNamesById } from '#/pages/planning/lib/task-list'
+import { memberNamesById } from '#/pages/planning/lib/member-roster'
 import { computeWindow } from '#/pages/planning/lib/window'
 import { todayIsoDate } from '#/pages/planning/types'
 import { AssignmentReportListUI } from '#/pages/planning/ui/assignment-report-list-ui'

@@ -146,22 +146,30 @@ describe('module routability', () => {
 		expect(sectionsOf('planification')).toEqual([
 			'/planification/projects',
 			'/planification/project-templates',
+			'/planification/board',
 		])
 	})
 
 	/**
-	 * The route exists so WS5 (#466) has somewhere to land, but registering
-	 * the section now would leave a nav entry pointing at an empty screen for
-	 * four workstreams. WS5 adds the entry; until then this holds the line.
+	 * The other side of the line #468 drew: the route waited four workstreams
+	 * for a screen, and WS5 (#466) built it, so the nav entry is now owed.
+	 * Asserted with its position, not just its presence — the board sits last
+	 * because `moduleLandingPath` reads the first navigable section, and a
+	 * board promoted to the top would quietly redirect `/planification` to
+	 * itself (see the redirect test below, which would then be the only thing
+	 * to notice).
 	 */
-	it('does not register the board before its screen exists', () => {
+	it('registers the board now that its screen exists', () => {
 		const planification = MODULES.find(
 			(module) => module.id === 'planification',
 		)
-
-		expect(planification?.sections.map((section) => section.id)).not.toContain(
-			'board',
+		const board = planification?.sections.find(
+			(section) => section.id === 'board',
 		)
+
+		expect(board?.to).toBe('/planification/board')
+		expect(board?.requiredPermission).toBe('MANAGE_PLANNING')
+		expect(planification?.sections.at(-1)?.id).toBe('board')
 	})
 
 	it('gates both planning modules on the same permission', () => {
