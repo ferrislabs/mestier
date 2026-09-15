@@ -3,8 +3,8 @@
 //! Identical to `handlers-invoice`'s own copy: the point of this test is that
 //! the auth middleware runs for real, so the token has to survive the whole
 //! chain. Each e2e crate keeps its own copy rather than sharing one, same
-//! reason `require_org_membership` is duplicated per crate rather than
-//! imported.
+//! reason `require_view_automation` duplicates `handlers-invoice`'s
+//! `require_view_invoices` rather than importing it.
 
 use std::{
     io::{Read, Write},
