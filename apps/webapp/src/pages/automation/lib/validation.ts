@@ -29,3 +29,18 @@ export function projectGraphErrors(
 
 	return { connectorErrors, graphErrors }
 }
+
+export function fieldErrorMessage(
+	errors: ConnectorValidationError[],
+	field: string,
+): string | null {
+	return errors.find((error) => error.field === field)?.message ?? null
+}
+
+export function connectorLevelErrors(
+	errors: ConnectorValidationError[],
+): string[] {
+	return errors
+		.filter((error) => error.field === null)
+		.map((error) => error.message)
+}

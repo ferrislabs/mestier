@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import type { Schemas } from '#/api/api.client'
-import { projectGraphErrors } from '#/pages/automation/lib/validation'
+import {
+	connectorLevelErrors,
+	fieldErrorMessage,
+	projectGraphErrors,
+} from '#/pages/automation/lib/validation'
 
 function error(
 	overrides: Partial<Schemas.GraphErrorResponse> = {},
@@ -98,5 +102,50 @@ describe('projectGraphErrors', () => {
 		expect(result.connectorErrors.get('c2')).toEqual([
 			{ field: null, message: 'Erreur sur c2' },
 		])
+	})
+})
+
+describe('fieldErrorMessage', () => {
+	it('returns the message carried by the error naming that field', () => {
+		const errors = [
+			{ field: 'url', message: 'URL manquante' },
+			{ field: 'method', message: 'Méthode invalide' },
+		]
+
+		expect(fieldErrorMessage(errors, 'url')).toBe('URL manquante')
+		expect(fieldErrorMessage(errors, 'method')).toBe('Méthode invalide')
+	})
+
+	it('returns null when no error names that field', () => {
+		const errors = [{ field: 'url', message: 'URL manquante' }]
+
+		expect(fieldErrorMessage(errors, 'method')).toBeNull()
+	})
+
+	it('ignores a connector-level error (null field) when asked for a named field', () => {
+		const errors = [{ field: null, message: 'Identifiant de credential manquant' }]
+
+		expect(fieldErrorMessage(errors, 'credential_id')).toBeNull()
+	})
+})
+
+describe('connectorLevelErrors', () => {
+	it('keeps only the messages of errors carrying no field', () => {
+		const errors = [
+			{ field: null, message: 'Identifiant de credential manquant' },
+			{ field: 'url', message: 'URL manquante' },
+			{ field: null, message: 'Type de credential refusé' },
+		]
+
+		expect(connectorLevelErrors(errors)).toEqual([
+			'Identifiant de credential manquant',
+			'Type de credential refusé',
+		])
+	})
+
+	it('is empty when every error names a field', () => {
+		const errors = [{ field: 'url', message: 'URL manquante' }]
+
+		expect(connectorLevelErrors(errors)).toEqual([])
 	})
 })
