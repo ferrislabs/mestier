@@ -139,6 +139,7 @@ describe('CredentialPickerField — when the organization has none', () => {
 		render(
 			<CredentialPickerField
 				label="Identification"
+				htmlFor="credential-picker"
 				credentials={[]}
 				value={null}
 				error={null}
@@ -157,6 +158,7 @@ describe('CredentialPickerField — when the organization has none', () => {
 		render(
 			<CredentialPickerField
 				label="Identification"
+				htmlFor="credential-picker"
 				credentials={[]}
 				value={null}
 				error={null}
