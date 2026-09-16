@@ -2,9 +2,15 @@ import { describe, expect, it } from 'vitest'
 import type { Schemas } from '#/api/api.client'
 import type { Run } from '#/hooks/use-automation'
 import {
+	aggregateConnectorStatuses,
 	connectorOutputsFromSteps,
+	formatRunDuration,
+	groupRunSteps,
+	isTerminalRunStatus,
 	latestRunByWorkflow,
 	latestRunId,
+	runDurationMs,
+	runTriggerLabel,
 } from '#/pages/automation/lib/workflow-runs'
 
 function run(overrides: Partial<Run> = {}): Run {
@@ -143,5 +149,197 @@ describe('connectorOutputsFromSteps', () => {
 		])
 
 		expect(outputs).toEqual({ c1: { id: 'b' } })
+	})
+})
+
+describe('isTerminalRunStatus', () => {
+	it('is terminal for succeeded, failed and cancelled', () => {
+		expect(isTerminalRunStatus('succeeded')).toBe(true)
+		expect(isTerminalRunStatus('failed')).toBe(true)
+		expect(isTerminalRunStatus('cancelled')).toBe(true)
+	})
+
+	it('is not terminal for pending or running', () => {
+		expect(isTerminalRunStatus('pending')).toBe(false)
+		expect(isTerminalRunStatus('running')).toBe(false)
+	})
+})
+
+describe('runDurationMs', () => {
+	it('is null when the run has not started', () => {
+		expect(runDurationMs({ started_at: null, finished_at: null })).toBeNull()
+	})
+
+	it('is null when the run has not finished', () => {
+		expect(
+			runDurationMs({
+				started_at: '2026-08-01T00:00:00.000Z',
+				finished_at: null,
+			}),
+		).toBeNull()
+	})
+
+	it('is the elapsed milliseconds between start and finish', () => {
+		expect(
+			runDurationMs({
+				started_at: '2026-08-01T00:00:00.000Z',
+				finished_at: '2026-08-01T00:00:01.500Z',
+			}),
+		).toBe(1500)
+	})
+})
+
+describe('formatRunDuration', () => {
+	it('renders an unknown duration as an em dash', () => {
+		expect(formatRunDuration(null)).toBe('—')
+	})
+
+	it('renders sub-second durations in milliseconds', () => {
+		expect(formatRunDuration(340)).toBe('340ms')
+	})
+
+	it('renders sub-minute durations with one decimal of seconds', () => {
+		expect(formatRunDuration(1500)).toBe('1.5s')
+	})
+
+	it('renders minute-scale durations as minutes and seconds', () => {
+		expect(formatRunDuration(125_000)).toBe('2min 5s')
+	})
+
+	it('drops the seconds when they are exactly zero', () => {
+		expect(formatRunDuration(120_000)).toBe('2min')
+	})
+})
+
+describe('runTriggerLabel', () => {
+	it('names a run with no trigger event as manual', () => {
+		expect(runTriggerLabel({ trigger_event_id: null })).toBe('Manuel')
+	})
+
+	it('names a run carrying a trigger event as event-triggered', () => {
+		expect(runTriggerLabel({ trigger_event_id: 'evt-1' })).toBe('Événement')
+	})
+})
+
+describe('aggregateConnectorStatuses', () => {
+	it('maps a connector with a single step to that step’s status', () => {
+		const statuses = aggregateConnectorStatuses([
+			step({ connector_id: 'c1', status: 'succeeded' }),
+		])
+
+		expect(statuses.get('c1')).toBe('succeeded')
+	})
+
+	it('surfaces a failure over a success across loop iterations', () => {
+		const statuses = aggregateConnectorStatuses([
+			step({
+				connector_id: 'c1',
+				iteration_path: 'c2[0]',
+				status: 'succeeded',
+			}),
+			step({ connector_id: 'c1', iteration_path: 'c2[1]', status: 'failed' }),
+			step({ connector_id: 'c1', iteration_path: 'c2[2]', status: 'pending' }),
+		])
+
+		expect(statuses.get('c1')).toBe('failed')
+	})
+
+	it('surfaces running over pending when nothing has failed', () => {
+		const statuses = aggregateConnectorStatuses([
+			step({ connector_id: 'c1', iteration_path: 'c2[0]', status: 'pending' }),
+			step({ connector_id: 'c1', iteration_path: 'c2[1]', status: 'running' }),
+		])
+
+		expect(statuses.get('c1')).toBe('running')
+	})
+
+	it('has no entry for a connector with no step yet', () => {
+		const statuses = aggregateConnectorStatuses([
+			step({ connector_id: 'c1', status: 'succeeded' }),
+		])
+
+		expect(statuses.has('c2')).toBe(false)
+	})
+})
+
+describe('groupRunSteps', () => {
+	it('lists top-level steps as a flat sequence when there is no loop', () => {
+		const tree = groupRunSteps([
+			step({ id: 's1', connector_id: 'c1', iteration_path: '' }),
+			step({ id: 's2', connector_id: 'c2', iteration_path: '' }),
+		])
+
+		expect(tree).toEqual([
+			{ kind: 'step', step: step({ id: 's1', connector_id: 'c1' }) },
+			{ kind: 'step', step: step({ id: 's2', connector_id: 'c2' }) },
+		])
+	})
+
+	it('groups a five-item loop into a single iteration node per index, not five flat rows', () => {
+		const steps = Array.from({ length: 5 }, (_, index) =>
+			step({
+				id: `s${index}`,
+				connector_id: 'c2',
+				iteration_path: `c1[${index}]`,
+			}),
+		)
+
+		const tree = groupRunSteps(steps)
+
+		expect(tree).toHaveLength(5)
+		expect(tree.every((node) => node.kind === 'iteration')).toBe(true)
+		expect(
+			tree.map((node) => (node.kind === 'iteration' ? node.index : -1)),
+		).toEqual([0, 1, 2, 3, 4])
+	})
+
+	it('nests a loop inside a loop, following the iteration_path', () => {
+		const steps = [
+			step({ id: 's1', connector_id: 'c7', iteration_path: 'c2[3].c5[0]' }),
+		]
+
+		const tree = groupRunSteps(steps)
+
+		expect(tree).toHaveLength(1)
+		const outer = tree[0]
+		if (outer.kind !== 'iteration')
+			throw new Error('expected an iteration node')
+		expect(outer.connectorId).toBe('c2')
+		expect(outer.index).toBe(3)
+		expect(outer.path).toBe('c2[3]')
+		expect(outer.children).toHaveLength(1)
+
+		const inner = outer.children[0]
+		if (inner.kind !== 'iteration')
+			throw new Error('expected an iteration node')
+		expect(inner.connectorId).toBe('c5')
+		expect(inner.index).toBe(0)
+		expect(inner.path).toBe('c2[3].c5[0]')
+		expect(inner.children).toEqual([
+			{
+				kind: 'step',
+				step: step({
+					id: 's1',
+					connector_id: 'c7',
+					iteration_path: 'c2[3].c5[0]',
+				}),
+			},
+		])
+	})
+
+	it('preserves the original order of steps and iteration groups as they first appear', () => {
+		const tree = groupRunSteps([
+			step({ id: 's1', connector_id: 'c1', iteration_path: '' }),
+			step({ id: 's2', connector_id: 'c3', iteration_path: 'c2[0]' }),
+			step({ id: 's3', connector_id: 'c4', iteration_path: '' }),
+			step({ id: 's4', connector_id: 'c3', iteration_path: 'c2[1]' }),
+		])
+
+		expect(tree.map((node) => node.kind)).toEqual([
+			'step',
+			'iteration',
+			'step',
+			'iteration',
+		])
 	})
 })
