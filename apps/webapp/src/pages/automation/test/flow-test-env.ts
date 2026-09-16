@@ -87,13 +87,23 @@ function fireMouseEvent(
 	target.dispatchEvent(event)
 }
 
+function viewportZoom(): number {
+	const viewport = document.querySelector('.react-flow__viewport')
+	if (!(viewport instanceof HTMLElement)) return 1
+	const scale = /scale\(([\d.]+)\)/.exec(viewport.style.transform)
+	return scale ? Number(scale[1]) : 1
+}
+
 export function dragNodeBy(node: HTMLElement, dx: number, dy: number) {
+	const zoom = viewportZoom()
+	const screenDx = dx * zoom
+	const screenDy = dy * zoom
 	const startX = 100
 	const startY = 100
 	const armX = startX + 5
 	const armY = startY + 5
 	fireMouseEvent(node, 'mousedown', startX, startY)
 	fireMouseEvent(window, 'mousemove', armX, armY)
-	fireMouseEvent(window, 'mousemove', armX + dx, armY + dy)
-	fireMouseEvent(window, 'mouseup', armX + dx, armY + dy)
+	fireMouseEvent(window, 'mousemove', armX + screenDx, armY + screenDy)
+	fireMouseEvent(window, 'mouseup', armX + screenDx, armY + screenDy)
 }
