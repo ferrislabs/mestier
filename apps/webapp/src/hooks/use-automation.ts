@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import type { Schemas } from '#/api/api.client'
+import { isTerminalRunStatus } from '#/pages/automation/lib/workflow-runs'
 
 const CONNECTORS_PATH =
 	'/api/v1/organizations/{organization_id}/automation/connectors'
@@ -25,6 +26,9 @@ const RUN_PATH =
 	'/api/v1/organizations/{organization_id}/automation/runs/{run_id}'
 const RUN_REPLAY_PATH =
 	'/api/v1/organizations/{organization_id}/automation/runs/{run_id}/replay'
+const WORKFLOW_RUNS_PATH =
+	'/api/v1/organizations/{organization_id}/automation/workflows/{workflow_id}/runs'
+const RUN_POLL_INTERVAL_MS = 2000
 const EXPRESSIONS_EVALUATE_PATH =
 	'/api/v1/organizations/{organization_id}/automation/expressions/evaluate'
 
@@ -204,6 +208,32 @@ export function useRun(organizationId: string, runId: string | null) {
 			path: { organization_id: organizationId, run_id: runId ?? '' },
 		}).queryOptions,
 		enabled: runId !== null,
+	})
+}
+
+/** Starts a real run: `POST /workflows/{id}/runs` triggers the worker
+ * against real connectors — no dry-run exists (#500). */
+export function useStartRun() {
+	const queryClient = useQueryClient()
+	return useMutation({
+		...window.tanstackApi.mutation('post', WORKFLOW_RUNS_PATH).mutationOptions,
+		onSuccess: () => invalidate(queryClient, RUNS_PATH),
+	})
+}
+
+/** Same read as `useRun`, but keeps polling `GET /runs/{id}` every
+ * `RUN_POLL_INTERVAL_MS` while the run is pending or running, and stops the
+ * moment it settles — there is no realtime channel for automation (#500). */
+export function useRunPolling(organizationId: string, runId: string | null) {
+	return useQuery({
+		...window.tanstackApi.get(RUN_PATH, {
+			path: { organization_id: organizationId, run_id: runId ?? '' },
+		}).queryOptions,
+		enabled: runId !== null,
+		refetchInterval: (query) => {
+			const status = query.state.data?.data.status
+			return status && !isTerminalRunStatus(status) ? RUN_POLL_INTERVAL_MS : false
+		},
 	})
 }
 
