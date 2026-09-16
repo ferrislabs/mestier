@@ -86,6 +86,39 @@ describe('buildAvailableDataTree', () => {
 		if (trigger?.kind !== 'branch') throw new Error('expected a branch')
 		expect(trigger.children).toEqual([])
 	})
+
+	it('replaces the trigger branch with a notice when no trigger event is configured', () => {
+		const tree = buildAvailableDataTree({ trigger: undefined, connectors: [] })
+		const trigger = tree.find((node) => node.key === 'trigger')
+		expect(trigger?.kind).toBe('notice')
+		if (trigger?.kind !== 'notice') throw new Error('expected a notice')
+		expect(trigger.message.length).toBeGreaterThan(0)
+	})
+
+	it('replaces the trigger branch with the same notice when the trigger payload is null', () => {
+		const tree = buildAvailableDataTree({ trigger: null, connectors: [] })
+		const trigger = tree.find((node) => node.key === 'trigger')
+		expect(trigger?.kind).toBe('notice')
+	})
+
+	it('keeps upstream connector branches untouched when the trigger has no payload', () => {
+		const tree = buildAvailableDataTree({
+			trigger: undefined,
+			connectors: [{ id: 'c1', label: 'Créer un client', output: { id: 42 } }],
+		})
+		const connector = tree.find((node) => node.path === 'connectors.c1.output')
+		expect(connector?.kind).toBe('branch')
+		if (connector?.kind !== 'branch') throw new Error('expected a branch')
+		expect(connector.children).toEqual([
+			{
+				kind: 'leaf',
+				key: 'id',
+				label: 'id',
+				path: 'connectors.c1.output.id',
+				value: 42,
+			},
+		])
+	})
 })
 
 describe('toEvaluateContext', () => {

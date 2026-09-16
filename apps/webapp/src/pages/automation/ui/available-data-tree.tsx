@@ -87,6 +87,14 @@ function TreeNodeItem({
 }) {
 	const [open, setOpen] = useState(false)
 
+	if (node.kind === 'notice') {
+		return (
+			<li className="px-1.5 py-1 text-xs text-muted-foreground">
+				{node.message}
+			</li>
+		)
+	}
+
 	if (node.kind === 'leaf') {
 		return (
 			<li>

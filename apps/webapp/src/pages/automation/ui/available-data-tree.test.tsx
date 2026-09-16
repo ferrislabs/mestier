@@ -20,6 +20,14 @@ const TRIGGER_BRANCH: DataTreeNode = {
 	],
 }
 
+const TRIGGER_NOTICE: DataTreeNode = {
+	kind: 'notice',
+	key: 'trigger',
+	label: 'trigger',
+	path: 'trigger',
+	message: 'Aucun événement déclencheur n’est configuré.',
+}
+
 const CONNECTOR_BRANCH: DataTreeNode = {
 	kind: 'branch',
 	key: 'connectors.c1.output',
@@ -79,6 +87,16 @@ describe('AvailableDataTree — structure', () => {
 		renderTree({ branches: [] })
 
 		expect(screen.getByText(/Aucune donnée disponible/)).toBeDefined()
+	})
+
+	it('shows the trigger notice as static text instead of an expandable branch', () => {
+		renderTree({ branches: [TRIGGER_NOTICE, CONNECTOR_BRANCH] })
+
+		expect(screen.getByText(TRIGGER_NOTICE.message)).toBeDefined()
+		expect(screen.queryByRole('button', { name: /^trigger$/ })).toBeNull()
+		expect(
+			screen.getByRole('button', { name: /c1 · Créer un client/ }),
+		).toBeDefined()
 	})
 })
 

@@ -16,7 +16,15 @@ export interface DataTreeBranch {
 	children: DataTreeNode[]
 }
 
-export type DataTreeNode = DataTreeLeaf | DataTreeBranch
+export interface DataTreeNotice {
+	kind: 'notice'
+	key: string
+	label: string
+	path: string
+	message: string
+}
+
+export type DataTreeNode = DataTreeLeaf | DataTreeBranch | DataTreeNotice
 
 export interface AvailableConnectorData {
 	id: string
@@ -72,13 +80,22 @@ function valueChildren(path: string, value: unknown): DataTreeNode[] {
 }
 
 export function buildAvailableDataTree(data: AvailableData): DataTreeNode[] {
-	const triggerNode: DataTreeBranch = {
-		kind: 'branch',
-		key: 'trigger',
-		label: 'trigger',
-		path: 'trigger',
-		children: valueChildren('trigger', data.trigger),
-	}
+	const triggerNode: DataTreeNode =
+		data.trigger === undefined || data.trigger === null
+			? {
+					kind: 'notice',
+					key: 'trigger',
+					label: 'trigger',
+					path: 'trigger',
+					message: 'Aucun événement déclencheur n’est configuré.',
+				}
+			: {
+					kind: 'branch',
+					key: 'trigger',
+					label: 'trigger',
+					path: 'trigger',
+					children: valueChildren('trigger', data.trigger),
+				}
 
 	const connectorNodes: DataTreeBranch[] = data.connectors.map((connector) => {
 		const path = `connectors.${connector.id}.output`
