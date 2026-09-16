@@ -19,6 +19,8 @@ import { CredentialPickerField } from '#/pages/automation/ui/credential-picker-f
 
 export type CredentialCreationPurpose = 'typed' | 'signing'
 
+type FieldControlElement = HTMLInputElement | HTMLTextAreaElement
+
 export interface ConnectorConfigFormProps {
 	descriptor: Schemas.ConnectorDescriptorResponse
 	config: Record<string, unknown>
@@ -29,6 +31,8 @@ export interface ConnectorConfigFormProps {
 	onCredentialChange: (credentialId: string | null) => void
 	onOpenExpression: (field: Schemas.FieldResponse) => void
 	onRequestCreateCredential: (purpose: CredentialCreationPurpose) => void
+	onFieldRef?: (name: string, element: FieldControlElement | null) => void
+	onInsertExpression?: (name: string, path: string) => void
 }
 
 export function ConnectorConfigForm({
@@ -41,6 +45,8 @@ export function ConnectorConfigForm({
 	onCredentialChange,
 	onOpenExpression,
 	onRequestCreateCredential,
+	onFieldRef,
+	onInsertExpression,
 }: ConnectorConfigFormProps) {
 	const levelErrors = connectorLevelErrors(errors)
 
@@ -91,6 +97,16 @@ export function ConnectorConfigForm({
 						error={fieldErrorMessage(errors, field.name)}
 						onChange={(value) => setField(field.name, value)}
 						onOpenExpression={() => onOpenExpression(field)}
+						controlRef={
+							onFieldRef
+								? (element) => onFieldRef(field.name, element)
+								: undefined
+						}
+						onDropExpression={
+							onInsertExpression
+								? (path) => onInsertExpression(field.name, path)
+								: undefined
+						}
 					/>
 				)
 			})}

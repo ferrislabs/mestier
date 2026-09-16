@@ -273,6 +273,43 @@ describe('ConnectorConfigForm — the typed credential slot', () => {
 	})
 })
 
+describe('ConnectorConfigForm — expression assistant wiring', () => {
+	it('hands each expression-enabled field its own control ref', () => {
+		const onFieldRef = vi.fn()
+		render(
+			<ConnectorConfigForm
+				{...baseProps({
+					descriptor: descriptor({
+						fields: [field({ name: 'url', label: 'URL', expression: true })],
+					}),
+					onFieldRef,
+				})}
+			/>,
+		)
+
+		expect(onFieldRef).toHaveBeenCalledWith('url', screen.getByLabelText('URL'))
+	})
+
+	it('reports a dropped path together with the field it landed on', () => {
+		const onInsertExpression = vi.fn()
+		render(
+			<ConnectorConfigForm
+				{...baseProps({
+					descriptor: descriptor({
+						fields: [field({ name: 'url', label: 'URL', expression: true })],
+					}),
+					onInsertExpression,
+				})}
+			/>,
+		)
+
+		const dataTransfer = { getData: () => 'trigger.id' }
+		fireEvent.drop(screen.getByLabelText('URL'), { dataTransfer })
+
+		expect(onInsertExpression).toHaveBeenCalledWith('url', 'trigger.id')
+	})
+})
+
 describe('ConnectorConfigForm — the signing_credential_id field', () => {
 	it('renders as a picker offering only generated-origin credentials, never a free-text input', async () => {
 		const user = userEvent.setup()
