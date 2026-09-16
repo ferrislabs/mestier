@@ -15,7 +15,14 @@ import {
 	useNodesState,
 } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import {
+	type MouseEvent as ReactMouseEvent,
+	useCallback,
+	useEffect,
+	useMemo,
+	useRef,
+	useState,
+} from 'react'
 import type { Schemas } from '#/api/api.client'
 import {
 	AlertDialog,
@@ -28,6 +35,15 @@ import {
 	AlertDialogTitle,
 } from '#/components/ui/alert-dialog'
 import { Button } from '#/components/ui/button'
+import {
+	ContextMenu,
+	ContextMenuContent,
+	ContextMenuItem,
+	ContextMenuSub,
+	ContextMenuSubContent,
+	ContextMenuSubTrigger,
+	ContextMenuTrigger,
+} from '#/components/ui/context-menu'
 import {
 	type AvailableConnectorData,
 	buildAvailableDataTree,
@@ -52,6 +68,7 @@ import {
 	ConnectorNode,
 	type ConnectorNodeData,
 } from '#/pages/automation/ui/connector-node'
+import { ConnectorSearch } from '#/pages/automation/ui/connector-search'
 import { TriggerConfigPanel } from '#/pages/automation/ui/trigger-config-panel'
 import {
 	TriggerNode,
@@ -279,6 +296,12 @@ export function WorkflowCanvas({
 	const flowRef = useRef<ReactFlowInstance | null>(null)
 	const [openConnectorId, setOpenConnectorId] = useState<string | null>(null)
 	const [openTrigger, setOpenTrigger] = useState(false)
+	const [paneMenuKey, setPaneMenuKey] = useState(0)
+	const [paneMenuPosition, setPaneMenuPosition] = useState<NodePosition>({
+		x: 0,
+		y: 0,
+	})
+	const paneMenuTriggerRef = useRef<HTMLSpanElement | null>(null)
 
 	const nodesRef = useRef(nodes)
 	nodesRef.current = nodes
@@ -373,6 +396,7 @@ export function WorkflowCanvas({
 			sourceId: string,
 			branch: Schemas.BranchDto | null,
 			descriptor: Schemas.ConnectorDescriptorResponse,
+			explicitPosition?: NodePosition,
 		) => {
 			const currentGraph = buildGraph(nodesRef.current, edgesRef.current)
 			const newId = nextConnectorId(currentGraph)
@@ -399,7 +423,8 @@ export function WorkflowCanvas({
 			const siblingIndex = edgesRef.current.filter(
 				(edge) => edge.source === sourceId,
 			).length
-			const position = nextNodePosition(sourcePosition, siblingIndex)
+			const position =
+				explicitPosition ?? nextNodePosition(sourcePosition, siblingIndex)
 
 			const data: ConnectorNodeData = {
 				label: descriptor.label,
@@ -485,6 +510,46 @@ export function WorkflowCanvas({
 		if (node.type !== 'connector') return
 		setOpenTrigger(false)
 		setOpenConnectorId(node.id)
+	}, [])
+
+	const handlePaneContextMenu = useCallback(
+		(event: ReactMouseEvent | MouseEvent) => {
+			event.preventDefault()
+			const instance = flowRef.current
+			const position = instance
+				? instance.screenToFlowPosition({
+						x: event.clientX,
+						y: event.clientY,
+					})
+				: { x: event.clientX, y: event.clientY }
+			setPaneMenuPosition(position)
+			paneMenuTriggerRef.current?.dispatchEvent(
+				new MouseEvent('contextmenu', {
+					bubbles: true,
+					cancelable: true,
+					clientX: event.clientX,
+					clientY: event.clientY,
+				}),
+			)
+		},
+		[],
+	)
+
+	const handleAddConnectorFromPane = useCallback(
+		(descriptor: Schemas.ConnectorDescriptorResponse) => {
+			handleAddNode(TRIGGER_NODE_ID, null, descriptor, paneMenuPosition)
+			setPaneMenuKey((key) => key + 1)
+		},
+		[handleAddNode, paneMenuPosition],
+	)
+
+	const handleConfigureTriggerFromPane = useCallback(() => {
+		setOpenConnectorId(null)
+		setOpenTrigger(true)
+	}, [])
+
+	const handleFitViewFromPane = useCallback(() => {
+		flowRef.current?.fitView(FIT_VIEW_OPTIONS)
 	}, [])
 
 	const pendingDeleteNode = pendingDeleteId
@@ -604,6 +669,7 @@ export function WorkflowCanvas({
 									setOpenConnectorId(null)
 									setOpenTrigger(false)
 								}}
+								onPaneContextMenu={handlePaneContextMenu}
 								isValidConnection={validateConnection}
 								autoPanOnNodeDrag={false}
 								fitView
@@ -615,6 +681,30 @@ export function WorkflowCanvas({
 								<Background />
 							</ReactFlow>
 						</ReactFlowProvider>
+						<ContextMenu key={paneMenuKey}>
+							<ContextMenuTrigger asChild>
+								<span ref={paneMenuTriggerRef} className="sr-only" />
+							</ContextMenuTrigger>
+							<ContextMenuContent>
+								<ContextMenuSub>
+									<ContextMenuSubTrigger>
+										Ajouter un connecteur
+									</ContextMenuSubTrigger>
+									<ContextMenuSubContent className="p-2">
+										<ConnectorSearch
+											connectors={catalogue}
+											onSelect={handleAddConnectorFromPane}
+										/>
+									</ContextMenuSubContent>
+								</ContextMenuSub>
+								<ContextMenuItem onSelect={handleConfigureTriggerFromPane}>
+									Configurer le déclencheur
+								</ContextMenuItem>
+								<ContextMenuItem onSelect={handleFitViewFromPane}>
+									Cadrer le graphe
+								</ContextMenuItem>
+							</ContextMenuContent>
+						</ContextMenu>
 					</div>
 					{openConnectorId && openConnectorData && openDescriptor ? (
 						<ConnectorConfigPanel

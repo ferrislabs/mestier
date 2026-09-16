@@ -12,6 +12,7 @@ import type { NodePosition } from '#/pages/automation/lib/graph'
 import type { ConnectorValidationError } from '#/pages/automation/lib/validation'
 import {
 	dragNodeBy,
+	flowPositionOf,
 	installFlowTestEnvironment,
 } from '#/pages/automation/test/flow-test-env'
 import {
@@ -1219,5 +1220,148 @@ describe('WorkflowCanvas — the camera follows a new node', () => {
 		await waitFor(() => {
 			expect(viewport.style.transform).not.toBe(before)
 		})
+	})
+})
+
+describe('WorkflowCanvas — the pane context menu', () => {
+	it('opens on a right-click on empty canvas, offering all three actions', async () => {
+		renderHarness({
+			graph: { connectors: [connector('c1', SIMPLE_KIND)], edges: [] },
+			layout: new Map([['c1', { x: 0, y: 0 }]]),
+			descriptors: descriptorMap(SIMPLE_DESCRIPTOR),
+			onSaveSpy: vi.fn(),
+		})
+
+		await screen.findByTestId('rf__node-c1')
+		const pane = document.querySelector('.react-flow__pane') as HTMLElement
+
+		fireEvent.contextMenu(pane, { clientX: 200, clientY: 150 })
+
+		expect(await screen.findByText('Ajouter un connecteur')).toBeDefined()
+		expect(screen.getByText('Configurer le déclencheur')).toBeDefined()
+		expect(screen.getByText('Cadrer le graphe')).toBeDefined()
+	})
+
+	it('does not open from a right-click on a node', async () => {
+		renderHarness({
+			graph: { connectors: [connector('c1', SIMPLE_KIND)], edges: [] },
+			layout: new Map([['c1', { x: 0, y: 0 }]]),
+			descriptors: descriptorMap(SIMPLE_DESCRIPTOR),
+			onSaveSpy: vi.fn(),
+		})
+
+		const node = await screen.findByTestId('rf__node-c1')
+		fireEvent.contextMenu(node, { clientX: 200, clientY: 150 })
+
+		expect(screen.queryByText('Ajouter un connecteur')).toBeNull()
+	})
+
+	it('places a connector at the clicked point, unwired, when chosen from the menu', async () => {
+		const graph: Schemas.GraphDto = {
+			connectors: [connector('c1', SIMPLE_KIND)],
+			edges: [],
+		}
+		const layout = new Map<string, NodePosition>([['c1', { x: 0, y: 0 }]])
+
+		const { onSaveSpy } = renderHarness({
+			graph,
+			layout,
+			descriptors: descriptorMap(SIMPLE_DESCRIPTOR),
+		})
+
+		await screen.findByTestId('rf__node-c1')
+		const pane = document.querySelector('.react-flow__pane') as HTMLElement
+
+		fireEvent.contextMenu(pane, { clientX: 640, clientY: 260 })
+		const expectedPosition = flowPositionOf(640, 260)
+
+		fireEvent.click(await screen.findByText('Ajouter un connecteur'))
+		fireEvent.click(await screen.findByRole('button', { name: 'Étape simple' }))
+
+		await screen.findByTestId('rf__node-c2')
+		await clickSave()
+
+		const [savedGraph, savedLayout] = onSaveSpy.mock.calls[0] as [
+			Schemas.GraphDto,
+			Map<string, NodePosition>,
+		]
+		expect(savedGraph.connectors.map((c) => c.id)).toEqual(['c1', 'c2'])
+		expect(savedGraph.edges).toEqual([])
+		expect(savedLayout.get('c2')).toEqual(expectedPosition)
+		expect(
+			document.querySelector('[data-testid^="rf__edge-__trigger__->c2"]'),
+		).not.toBeNull()
+	})
+
+	it('opens the trigger panel from Configurer le déclencheur', async () => {
+		renderHarness({
+			graph: { connectors: [connector('c1', SIMPLE_KIND)], edges: [] },
+			layout: new Map([['c1', { x: 0, y: 0 }]]),
+			descriptors: descriptorMap(SIMPLE_DESCRIPTOR),
+			events: [event('quote.accepted')],
+			onSaveSpy: vi.fn(),
+		})
+
+		const pane = document.querySelector('.react-flow__pane') as HTMLElement
+		fireEvent.contextMenu(pane, { clientX: 50, clientY: 50 })
+		fireEvent.click(await screen.findByText('Configurer le déclencheur'))
+
+		expect(await screen.findByTestId('trigger-config-panel')).toBeDefined()
+	})
+
+	it('cadre le graphe on request, moving the viewport back over every node', async () => {
+		const graph: Schemas.GraphDto = {
+			connectors: [connector('c1', SIMPLE_KIND), connector('c2', SIMPLE_KIND)],
+			edges: [],
+		}
+		const layout = new Map<string, NodePosition>([
+			['c1', { x: 0, y: 0 }],
+			['c2', { x: 1800, y: 1400 }],
+		])
+
+		renderHarness({
+			graph,
+			layout,
+			descriptors: descriptorMap(SIMPLE_DESCRIPTOR),
+			onSaveSpy: vi.fn(),
+		})
+
+		await screen.findByTestId('rf__node-c1')
+		const viewport = document.querySelector(
+			'.react-flow__viewport',
+		) as HTMLElement
+		const pane = document.querySelector('.react-flow__pane') as HTMLElement
+
+		fireEvent.contextMenu(pane, { clientX: 50, clientY: 50 })
+		fireEvent.click(await screen.findByText('Ajouter un connecteur'))
+		fireEvent.click(await screen.findByRole('button', { name: 'Étape simple' }))
+		await screen.findByTestId('rf__node-c3')
+
+		const afterAdd = viewport.style.transform
+
+		fireEvent.contextMenu(pane, { clientX: 50, clientY: 50 })
+		fireEvent.click(await screen.findByText('Cadrer le graphe'))
+
+		await waitFor(() => {
+			expect(viewport.style.transform).not.toBe(afterAdd)
+		})
+	})
+
+	it('does not close an open panel the way a left pane click does', async () => {
+		renderHarness({
+			graph: { connectors: [connector('c1', SIMPLE_KIND)], edges: [] },
+			layout: new Map([['c1', { x: 0, y: 0 }]]),
+			descriptors: descriptorMap(SIMPLE_DESCRIPTOR),
+			onSaveSpy: vi.fn(),
+		})
+
+		const node = await screen.findByTestId('rf__node-c1')
+		fireEvent.click(node)
+		expect(await screen.findByTestId('connector-config-panel')).toBeDefined()
+
+		const pane = document.querySelector('.react-flow__pane') as HTMLElement
+		fireEvent.contextMenu(pane, { clientX: 50, clientY: 50 })
+
+		expect(screen.getByTestId('connector-config-panel')).toBeDefined()
 	})
 })

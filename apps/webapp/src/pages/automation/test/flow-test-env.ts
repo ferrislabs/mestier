@@ -94,6 +94,23 @@ function viewportZoom(): number {
 	return scale ? Number(scale[1]) : 1
 }
 
+export function flowPositionOf(clientX: number, clientY: number) {
+	const viewport = document.querySelector('.react-flow__viewport')
+	if (!(viewport instanceof HTMLElement)) return { x: clientX, y: clientY }
+
+	const match =
+		/translate\(([-\d.]+)px,\s*([-\d.]+)px\)\s*scale\(([\d.]+)\)/.exec(
+			viewport.style.transform,
+		)
+	if (!match) return { x: clientX, y: clientY }
+
+	const [, tx, ty, scale] = match
+	return {
+		x: (clientX - Number(tx)) / Number(scale),
+		y: (clientY - Number(ty)) / Number(scale),
+	}
+}
+
 export function dragNodeBy(node: HTMLElement, dx: number, dy: number) {
 	const zoom = viewportZoom()
 	const screenDx = dx * zoom
