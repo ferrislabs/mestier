@@ -4,13 +4,6 @@ import { describe, expect, it, vi } from 'vitest'
 import type { Schemas } from '#/api/api.client'
 import { ConnectorConfigField } from '#/pages/automation/ui/connector-config-field'
 
-/**
- * jsdom has no pointer-capture APIs or `scrollIntoView`. Radix's `Select`
- * calls both when an item is actually *selected* — see
- * `automation-section.test.tsx`'s identical stub for why this stays scoped
- * to the one file that clicks a `SelectItem` rather than living in
- * `vitest.setup.ts`.
- */
 for (const method of [
 	'hasPointerCapture',
 	'setPointerCapture',
