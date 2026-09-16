@@ -2,9 +2,13 @@ import { describe, expect, it } from 'vitest'
 import type { Schemas } from '#/api/api.client'
 import {
 	isFieldVisible,
+	isJsonMapRepresentable,
 	isSelectKind,
 	isSigningCredentialField,
+	jsonEntriesFromValue,
+	nextJsonEntryKey,
 	SIGNING_CREDENTIAL_FIELD_NAME,
+	valueFromJsonEntries,
 	visibleFields,
 	withField,
 	withoutField,
@@ -125,5 +129,108 @@ describe('isSigningCredentialField', () => {
 			false,
 		)
 		expect(isSigningCredentialField(field({ name: 'url' }))).toBe(false)
+	})
+})
+
+describe('isJsonMapRepresentable', () => {
+	it('accepts an absent value, because an empty field starts as a map', () => {
+		expect(isJsonMapRepresentable(undefined)).toBe(true)
+	})
+
+	it('accepts a plain object, empty or populated', () => {
+		expect(isJsonMapRepresentable({})).toBe(true)
+		expect(isJsonMapRepresentable({ a: 1 })).toBe(true)
+	})
+
+	it('rejects an array, since rows cannot represent an ordered list', () => {
+		expect(isJsonMapRepresentable([1, 2, 3])).toBe(false)
+	})
+
+	it('rejects a scalar, including a string holding a whole expression', () => {
+		expect(isJsonMapRepresentable('{{ trigger.items }}')).toBe(false)
+		expect(isJsonMapRepresentable(42)).toBe(false)
+		expect(isJsonMapRepresentable(true)).toBe(false)
+		expect(isJsonMapRepresentable(null)).toBe(false)
+	})
+})
+
+describe('jsonEntriesFromValue', () => {
+	it('lists no entries for an absent or non-map value', () => {
+		expect(jsonEntriesFromValue(undefined)).toEqual([])
+		expect(jsonEntriesFromValue([1, 2])).toEqual([])
+		expect(jsonEntriesFromValue('{{ trigger.items }}')).toEqual([])
+	})
+
+	it('turns each own key into an entry, string values kept verbatim', () => {
+		expect(
+			jsonEntriesFromValue({ 'Content-Type': 'application/json' }),
+		).toEqual([{ key: 'Content-Type', value: 'application/json' }])
+	})
+
+	it('stringifies a non-string value so it stays editable as text', () => {
+		expect(jsonEntriesFromValue({ retries: 3, active: true })).toEqual([
+			{ key: 'retries', value: '3' },
+			{ key: 'active', value: 'true' },
+		])
+	})
+})
+
+describe('valueFromJsonEntries', () => {
+	it('is undefined for no entries, so an empty field stays absent rather than {}', () => {
+		expect(valueFromJsonEntries([])).toBeUndefined()
+	})
+
+	it('drops entries whose key is blank', () => {
+		expect(
+			valueFromJsonEntries([{ key: '', value: 'orphan' }]),
+		).toBeUndefined()
+		expect(
+			valueFromJsonEntries([
+				{ key: 'a', value: 'kept' },
+				{ key: '  ', value: 'ignored' },
+			]),
+		).toEqual({ a: 'kept' })
+	})
+
+	it('parses a value that is valid JSON, so numbers and booleans round-trip', () => {
+		expect(
+			valueFromJsonEntries([
+				{ key: 'retries', value: '3' },
+				{ key: 'active', value: 'true' },
+			]),
+		).toEqual({ retries: 3, active: true })
+	})
+
+	it('keeps a value that is not valid JSON as a plain string', () => {
+		expect(
+			valueFromJsonEntries([
+				{ key: 'Content-Type', value: 'application/json' },
+			]),
+		).toEqual({ 'Content-Type': 'application/json' })
+	})
+
+	it('keeps a whole expression as a string rather than trying to parse it', () => {
+		expect(
+			valueFromJsonEntries([
+				{ key: 'Authorization', value: '{{ connectors.c1.output.token }}' },
+			]),
+		).toEqual({ Authorization: '{{ connectors.c1.output.token }}' })
+	})
+})
+
+describe('nextJsonEntryKey', () => {
+	it('proposes "key" when it is free', () => {
+		expect(nextJsonEntryKey([])).toBe('key')
+		expect(nextJsonEntryKey([{ key: 'other', value: 'v' }])).toBe('key')
+	})
+
+	it('numbers the proposal once "key" is already used', () => {
+		expect(nextJsonEntryKey([{ key: 'key', value: 'v' }])).toBe('key_2')
+		expect(
+			nextJsonEntryKey([
+				{ key: 'key', value: 'v' },
+				{ key: 'key_2', value: 'v' },
+			]),
+		).toBe('key_3')
 	})
 })
