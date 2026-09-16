@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest'
+import type { Schemas } from '#/api/api.client'
 import type { Run } from '#/hooks/use-automation'
-import { latestRunByWorkflow } from '#/pages/automation/lib/workflow-runs'
+import {
+	connectorOutputsFromSteps,
+	latestRunByWorkflow,
+	latestRunId,
+} from '#/pages/automation/lib/workflow-runs'
 
 function run(overrides: Partial<Run> = {}): Run {
 	return {
@@ -61,5 +66,78 @@ describe('latestRunByWorkflow', () => {
 
 		expect(result.get('workflow-1')?.status).toBe('succeeded')
 		expect(result.get('workflow-2')?.status).toBe('failed')
+	})
+})
+
+describe('latestRunId', () => {
+	it('is null when the workflow never ran', () => {
+		expect(latestRunId([], 'workflow-1')).toBeNull()
+	})
+
+	it('names the most recent run for that workflow only', () => {
+		const result = latestRunId(
+			[
+				run({
+					id: 'run-1',
+					workflow_id: 'workflow-1',
+					created_at: '2026-08-01T00:00:00Z',
+				}),
+				run({
+					id: 'run-2',
+					workflow_id: 'workflow-1',
+					created_at: '2026-08-03T00:00:00Z',
+				}),
+				run({
+					id: 'run-3',
+					workflow_id: 'workflow-2',
+					created_at: '2026-08-04T00:00:00Z',
+				}),
+			],
+			'workflow-1',
+		)
+
+		expect(result).toBe('run-2')
+	})
+})
+
+function step(
+	overrides: Partial<Schemas.RunStepResponse> = {},
+): Schemas.RunStepResponse {
+	return {
+		id: 'step-1',
+		connector_id: 'c1',
+		iteration_path: '',
+		attempts: 1,
+		status: 'succeeded',
+		created_at: '2026-08-01T00:00:00Z',
+		...overrides,
+	}
+}
+
+describe('connectorOutputsFromSteps', () => {
+	it('maps each connector id to its output', () => {
+		const outputs = connectorOutputsFromSteps([
+			step({ connector_id: 'c1', output: { id: 1 } }),
+			step({ connector_id: 'c2', output: { id: 2 } }),
+		])
+
+		expect(outputs).toEqual({ c1: { id: 1 }, c2: { id: 2 } })
+	})
+
+	it('ignores a step with no output yet', () => {
+		const outputs = connectorOutputsFromSteps([
+			step({ connector_id: 'c1', output: undefined }),
+		])
+
+		expect(outputs).toEqual({})
+	})
+
+	it('prefers the top-level iteration over a nested loop iteration', () => {
+		const outputs = connectorOutputsFromSteps([
+			step({ connector_id: 'c1', iteration_path: 'c2[0]', output: { id: 'a' } }),
+			step({ connector_id: 'c1', iteration_path: '', output: { id: 'b' } }),
+		])
+
+		expect(outputs).toEqual({ c1: { id: 'b' } })
 	})
 })
