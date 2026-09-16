@@ -5,7 +5,15 @@ export function allowedCredentialKinds(
 ): string[] {
 	if (auth === 'None') return []
 	if ('Exactly' in auth) return [auth.Exactly]
+	if ('Optional' in auth) return [...auth.Optional]
 	return [...auth.AnyOf]
+}
+
+export function isCredentialRequired(
+	auth: Schemas.AuthRequirementResponse,
+): boolean {
+	if (auth === 'None') return false
+	return !('Optional' in auth)
 }
 
 export function credentialsForAuth(

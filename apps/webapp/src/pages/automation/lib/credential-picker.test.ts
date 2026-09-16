@@ -4,6 +4,7 @@ import {
 	allowedCredentialKinds,
 	credentialsForAuth,
 	generatedCredentials,
+	isCredentialRequired,
 } from '#/pages/automation/lib/credential-picker'
 
 function credential(
@@ -93,5 +94,41 @@ describe('generatedCredentials', () => {
 		const credentials = [credential('c1', 'bearer_token', 'supplied')]
 
 		expect(generatedCredentials(credentials)).toEqual([])
+	})
+})
+
+describe('an optional requirement', () => {
+	it('offers the same schemes as AnyOf', () => {
+		expect(
+			allowedCredentialKinds({ Optional: ['bearer_token', 'http_basic'] }),
+		).toEqual(['bearer_token', 'http_basic'])
+	})
+
+	it('filters the credentials the same way', () => {
+		const credentials = [
+			credential('cred-1', 'bearer_token'),
+			credential('cred-2', 'odoo_api'),
+		]
+
+		expect(
+			credentialsForAuth(credentials, { Optional: ['bearer_token'] }).map(
+				(c) => c.id,
+			),
+		).toEqual(['cred-1'])
+	})
+})
+
+describe('isCredentialRequired', () => {
+	it('is false when the connector needs none', () => {
+		expect(isCredentialRequired('None')).toBe(false)
+	})
+
+	it('is false when the connector merely accepts one', () => {
+		expect(isCredentialRequired({ Optional: ['bearer_token'] })).toBe(false)
+	})
+
+	it('is true when the connector demands one', () => {
+		expect(isCredentialRequired({ AnyOf: ['bearer_token'] })).toBe(true)
+		expect(isCredentialRequired({ Exactly: 'odoo_api' })).toBe(true)
 	})
 })

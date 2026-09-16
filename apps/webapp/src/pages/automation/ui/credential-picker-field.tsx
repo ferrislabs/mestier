@@ -24,6 +24,7 @@ export interface CredentialPickerFieldProps {
 	credentials: Schemas.CredentialResponse[]
 	value: string | null
 	error: string | null
+	optional?: boolean
 	onChange: (credentialId: string | null) => void
 	onCreateNew: () => void
 }
@@ -34,6 +35,7 @@ export function CredentialPickerField({
 	credentials,
 	value,
 	error,
+	optional = false,
 	onChange,
 	onCreateNew,
 }: CredentialPickerFieldProps) {
@@ -82,19 +84,30 @@ export function CredentialPickerField({
 						/>
 						<CommandList>
 							<CommandEmpty>
-								<div className="flex flex-col items-center gap-2 px-2 py-4">
-									<p className="text-center text-sm text-muted-foreground">
-										{credentials.length === 0
-											? 'Aucune identification disponible'
-											: 'Aucun résultat'}
-									</p>
-									<Button type="button" size="sm" onClick={createNew}>
-										<Plus className="size-4" />
-										Créer une identification
-									</Button>
-								</div>
+								<p className="px-2 py-4 text-center text-sm text-muted-foreground">
+									{credentials.length === 0
+										? 'Aucune identification disponible'
+										: 'Aucun résultat'}
+								</p>
 							</CommandEmpty>
 							<CommandGroup>
+								{optional ? (
+									<CommandItem
+										value="__none__"
+										onSelect={() => {
+											onChange(null)
+											setOpen(false)
+										}}
+									>
+										<Check
+											className={cn(
+												'size-4',
+												selected === null ? 'opacity-100' : 'opacity-0',
+											)}
+										/>
+										Aucune identification
+									</CommandItem>
+								) : null}
 								{credentials.map((credential) => (
 									<CommandItem
 										key={credential.id}
@@ -115,20 +128,18 @@ export function CredentialPickerField({
 								))}
 							</CommandGroup>
 						</CommandList>
-						{credentials.length > 0 ? (
-							<div className="border-t p-1">
-								<Button
-									type="button"
-									variant="ghost"
-									size="sm"
-									className="w-full justify-start"
-									onClick={createNew}
-								>
-									<Plus className="size-4" />
-									Nouvelle identification
-								</Button>
-							</div>
-						) : null}
+						<div className="border-t p-1">
+							<Button
+								type="button"
+								variant="ghost"
+								size="sm"
+								className="w-full justify-start"
+								onClick={createNew}
+							>
+								<Plus className="size-4" />
+								Créer une identification
+							</Button>
+						</div>
 					</Command>
 				</PopoverContent>
 			</Popover>

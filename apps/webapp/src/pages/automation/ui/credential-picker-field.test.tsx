@@ -167,7 +167,7 @@ describe('CredentialPickerField', () => {
 
 		await user.click(screen.getByRole('combobox', { name: 'Identification' }))
 		await user.click(
-			await screen.findByRole('button', { name: /Nouvelle identification/ }),
+			await screen.findByRole('button', { name: /Créer une identification/ }),
 		)
 
 		expect(onCreateNew).toHaveBeenCalledTimes(1)
@@ -227,5 +227,52 @@ describe('CredentialPickerField — when the organization has none', () => {
 		await user.click(await screen.findByRole('button', { name: /Créer/ }))
 
 		expect(onCreateNew).toHaveBeenCalled()
+	})
+})
+
+describe('CredentialPickerField — when a credential is optional', () => {
+	it('offers going back to none once one is chosen', async () => {
+		const user = userEvent.setup()
+		const onChange = vi.fn()
+		render(
+			<CredentialPickerField
+				label="Identification"
+				htmlFor="credential-picker"
+				credentials={[credential('cred-1', 'Odoo prod')]}
+				value="cred-1"
+				error={null}
+				optional
+				onChange={onChange}
+				onCreateNew={vi.fn()}
+			/>,
+		)
+
+		await user.click(screen.getByRole('combobox'))
+		await user.click(
+			await screen.findByRole('option', { name: /Aucune identification/ }),
+		)
+
+		expect(onChange).toHaveBeenCalledWith(null)
+	})
+
+	it('offers no such choice when the connector demands one', async () => {
+		const user = userEvent.setup()
+		render(
+			<CredentialPickerField
+				label="Identification"
+				htmlFor="credential-picker"
+				credentials={[credential('cred-1', 'Odoo prod')]}
+				value="cred-1"
+				error={null}
+				onChange={vi.fn()}
+				onCreateNew={vi.fn()}
+			/>,
+		)
+
+		await user.click(screen.getByRole('combobox'))
+
+		expect(
+			screen.queryByRole('option', { name: /Aucune identification/ }),
+		).toBeNull()
 	})
 })

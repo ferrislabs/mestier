@@ -40,7 +40,11 @@ export namespace Schemas {
   export type TimeEntryPhotoPhase = "BEFORE" | "DURING" | "AFTER";
   export type AttachPhotoRequest = { phase: TimeEntryPhotoPhase; storage_key: string };
   export type AttachmentResponse = { filename: string; mime_type: string; size_bytes: number; storage_key: string };
-  export type AuthRequirementResponse = "None" | { Exactly: string } | { AnyOf: Array<string> };
+  export type AuthRequirementResponse =
+    | "None"
+    | { Exactly: string }
+    | { AnyOf: Array<string> }
+    | { Optional: Array<string> };
   export type SelectOptionResponse = { label: string; value: string };
   export type FieldKindResponse =
     | "Text"

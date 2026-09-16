@@ -8,6 +8,7 @@ import {
 import {
 	credentialsForAuth,
 	generatedCredentials,
+	isCredentialRequired,
 } from '#/pages/automation/lib/credential-picker'
 import type { ConnectorValidationError } from '#/pages/automation/lib/validation'
 import {
@@ -67,6 +68,7 @@ export function ConnectorConfigForm({
 					credentials={credentialsForAuth(credentials, descriptor.auth)}
 					value={credentialId}
 					error={levelErrors[0] ?? null}
+					optional={!isCredentialRequired(descriptor.auth)}
 					onChange={onCredentialChange}
 					onCreateNew={() => onRequestCreateCredential('typed')}
 				/>
@@ -83,6 +85,7 @@ export function ConnectorConfigForm({
 							credentials={generatedCredentials(credentials)}
 							value={typeof value === 'string' ? value : null}
 							error={fieldErrorMessage(errors, field.name)}
+							optional
 							onChange={(next) => setField(field.name, next ?? undefined)}
 							onCreateNew={() => onRequestCreateCredential('signing')}
 						/>
