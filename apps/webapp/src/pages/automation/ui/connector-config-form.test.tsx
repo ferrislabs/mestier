@@ -109,7 +109,10 @@ describe('ConnectorConfigForm — rendering every kind', () => {
 		expect((screen.getByLabelText('Timeout') as HTMLInputElement).value).toBe(
 			'5',
 		)
-		expect(screen.getByLabelText('Headers')).toBeDefined()
+		expect(screen.getByText('Headers')).toBeDefined()
+		expect(
+			screen.getByRole('button', { name: /ajouter une entrée/i }),
+		).toBeDefined()
 		expect(screen.getByRole('combobox', { name: 'Méthode' })).toBeDefined()
 	})
 })

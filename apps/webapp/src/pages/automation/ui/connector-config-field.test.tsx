@@ -158,8 +158,26 @@ describe('ConnectorConfigField — Select', () => {
 	})
 })
 
-describe('ConnectorConfigField — Json', () => {
-	it('reports the parsed value once the text is valid JSON', () => {
+describe('ConnectorConfigField — Json — the empty state', () => {
+	it('shows an empty zone and a way to add an entry, no bare textarea', () => {
+		render(
+			<ConnectorConfigField
+				field={field({ name: 'headers', label: 'Headers', kind: 'Json' })}
+				value={undefined}
+				error={null}
+				onChange={vi.fn()}
+				onOpenExpression={vi.fn()}
+			/>,
+		)
+
+		expect(screen.queryByRole('textbox')).toBeNull()
+		expect(
+			screen.getByRole('button', { name: /ajouter une entrée/i }),
+		).toBeDefined()
+	})
+
+	it('adding an entry writes a first key/value pair into the field', async () => {
+		const user = userEvent.setup()
 		const onChange = vi.fn()
 		render(
 			<ConnectorConfigField
@@ -171,31 +189,202 @@ describe('ConnectorConfigField — Json', () => {
 			/>,
 		)
 
-		fireEvent.change(screen.getByLabelText('Headers'), {
-			target: { value: '{"a":1}' },
+		await user.click(
+			screen.getByRole('button', { name: /ajouter une entrée/i }),
+		)
+
+		expect(onChange).toHaveBeenLastCalledWith({ key: 'value' })
+	})
+})
+
+describe('ConnectorConfigField — Json — rows', () => {
+	it('renders one row per entry, with a key input and a value input', () => {
+		render(
+			<ConnectorConfigField
+				field={field({ name: 'headers', label: 'Headers', kind: 'Json' })}
+				value={{ 'Content-Type': 'application/json' }}
+				error={null}
+				onChange={vi.fn()}
+				onOpenExpression={vi.fn()}
+			/>,
+		)
+
+		expect(
+			screen.getByDisplayValue('Content-Type') as HTMLInputElement,
+		).toBeDefined()
+		expect(
+			screen.getByDisplayValue('application/json') as HTMLInputElement,
+		).toBeDefined()
+	})
+
+	it('removing the last entry returns the field to its empty state, not {}', async () => {
+		const user = userEvent.setup()
+		const onChange = vi.fn()
+		render(
+			<ConnectorConfigField
+				field={field({ name: 'headers', label: 'Headers', kind: 'Json' })}
+				value={{ 'Content-Type': 'application/json' }}
+				error={null}
+				onChange={onChange}
+				onOpenExpression={vi.fn()}
+			/>,
+		)
+
+		await user.click(
+			screen.getByRole('button', { name: /supprimer l'entrée/i }),
+		)
+
+		expect(onChange).toHaveBeenLastCalledWith(undefined)
+	})
+
+	it('accepts a dropped expression on a value cell, scoped to that row', () => {
+		const onChange = vi.fn()
+		render(
+			<ConnectorConfigField
+				field={field({ name: 'headers', label: 'Headers', kind: 'Json' })}
+				value={{ Authorization: '' }}
+				error={null}
+				onChange={onChange}
+				onOpenExpression={vi.fn()}
+			/>,
+		)
+
+		const dataTransfer = { getData: () => 'connectors.c1.output.token' }
+		fireEvent.drop(screen.getByDisplayValue(''), { dataTransfer })
+
+		expect(onChange).toHaveBeenLastCalledWith({
+			Authorization: '{{ connectors.c1.output.token }}',
+		})
+	})
+})
+
+describe('ConnectorConfigField — Json — array and scalar values stay raw', () => {
+	it('renders an array value as raw JSON, since rows cannot represent it', () => {
+		render(
+			<ConnectorConfigField
+				field={field({ name: 'items', label: 'Items', kind: 'Json' })}
+				value={[1, 2, 3]}
+				error={null}
+				onChange={vi.fn()}
+				onOpenExpression={vi.fn()}
+			/>,
+		)
+
+		expect(
+			(screen.getByLabelText('Items') as HTMLTextAreaElement).value,
+		).toBe('[\n  1,\n  2,\n  3\n]')
+		expect(
+			screen.queryByRole('button', { name: /ajouter une entrée/i }),
+		).toBeNull()
+	})
+
+	it('renders a whole expression as raw JSON, not as a single-entry row', () => {
+		render(
+			<ConnectorConfigField
+				field={field({ name: 'items', label: 'Items', kind: 'Json' })}
+				value="{{ trigger.items }}"
+				error={null}
+				onChange={vi.fn()}
+				onOpenExpression={vi.fn()}
+			/>,
+		)
+
+		expect(
+			(screen.getByLabelText('Items') as HTMLTextAreaElement).value,
+		).toBe('{{ trigger.items }}')
+		expect(
+			screen.queryByRole('button', { name: /ajouter une entrée/i }),
+		).toBeNull()
+	})
+
+	it('reports the parsed value once raw text is valid JSON', () => {
+		const onChange = vi.fn()
+		render(
+			<ConnectorConfigField
+				field={field({ name: 'items', label: 'Items', kind: 'Json' })}
+				value={[1]}
+				error={null}
+				onChange={onChange}
+				onOpenExpression={vi.fn()}
+			/>,
+		)
+
+		fireEvent.change(screen.getByLabelText('Items'), {
+			target: { value: '[1,2]' },
 		})
 
-		expect(onChange).toHaveBeenLastCalledWith({ a: 1 })
+		expect(onChange).toHaveBeenLastCalledWith([1, 2])
 	})
 
 	it('flags invalid JSON locally instead of propagating garbage', () => {
 		const onChange = vi.fn()
 		render(
 			<ConnectorConfigField
-				field={field({ name: 'headers', label: 'Headers', kind: 'Json' })}
-				value={undefined}
+				field={field({ name: 'items', label: 'Items', kind: 'Json' })}
+				value={[1]}
 				error={null}
 				onChange={onChange}
 				onOpenExpression={vi.fn()}
 			/>,
 		)
 
-		fireEvent.change(screen.getByLabelText('Headers'), {
-			target: { value: '{not json' },
+		fireEvent.change(screen.getByLabelText('Items'), {
+			target: { value: '[not json' },
 		})
 
 		expect(onChange).not.toHaveBeenCalled()
 		expect(screen.getByText(/JSON invalide/i)).toBeDefined()
+	})
+})
+
+describe('ConnectorConfigField — Json — switching between rows and raw', () => {
+	it('keeps the content when switching to raw and back to rows', async () => {
+		const user = userEvent.setup()
+		const onChange = vi.fn()
+		render(
+			<ConnectorConfigField
+				field={field({ name: 'headers', label: 'Headers', kind: 'Json' })}
+				value={{ a: '1', b: '2' }}
+				error={null}
+				onChange={onChange}
+				onOpenExpression={vi.fn()}
+			/>,
+		)
+
+		await user.click(screen.getByRole('button', { name: /passer en json/i }))
+		expect((screen.getByLabelText('Headers') as HTMLTextAreaElement).value).toBe(
+			JSON.stringify({ a: '1', b: '2' }, null, 2),
+		)
+
+		await user.click(
+			screen.getByRole('button', { name: /revenir aux champs/i }),
+		)
+
+		expect(screen.getByDisplayValue('a')).toBeDefined()
+		expect(screen.getByDisplayValue('b')).toBeDefined()
+		expect(onChange).not.toHaveBeenCalled()
+	})
+
+	it('offers no raw-to-rows switch once the raw text is an array', async () => {
+		const user = userEvent.setup()
+		render(
+			<ConnectorConfigField
+				field={field({ name: 'headers', label: 'Headers', kind: 'Json' })}
+				value={{}}
+				error={null}
+				onChange={vi.fn()}
+				onOpenExpression={vi.fn()}
+			/>,
+		)
+
+		await user.click(screen.getByRole('button', { name: /passer en json/i }))
+		fireEvent.change(screen.getByLabelText('Headers'), {
+			target: { value: '[1,2]' },
+		})
+
+		expect(
+			screen.queryByRole('button', { name: /revenir aux champs/i }),
+		).toBeNull()
 	})
 })
 
@@ -293,6 +482,22 @@ describe('ConnectorConfigField — expression affordance', () => {
 
 		expect(screen.queryByRole('button')).toBeNull()
 	})
+
+	it('shows a visible label naming what it does, not a bare glyph', () => {
+		render(
+			<ConnectorConfigField
+				field={field({ name: 'url', label: 'URL', expression: true })}
+				value=""
+				error={null}
+				onChange={vi.fn()}
+				onOpenExpression={vi.fn()}
+			/>,
+		)
+
+		const button = screen.getByRole('button', { name: /URL/ })
+		expect(button.textContent?.trim().length).toBeGreaterThan(0)
+		expect(button.getAttribute('title')?.length).toBeGreaterThan(0)
+	})
 })
 
 describe('ConnectorConfigField — the control ref', () => {
@@ -314,12 +519,12 @@ describe('ConnectorConfigField — the control ref', () => {
 		expect(el).toBe(screen.getByLabelText('URL'))
 	})
 
-	it('hands back the live textarea for a Json field', () => {
+	it('hands back the live textarea for a Json field rendered raw', () => {
 		let el: HTMLInputElement | HTMLTextAreaElement | null = null
 		render(
 			<ConnectorConfigField
-				field={field({ name: 'headers', label: 'Headers', kind: 'Json' })}
-				value={undefined}
+				field={field({ name: 'items', label: 'Items', kind: 'Json' })}
+				value={[1, 2]}
 				error={null}
 				onChange={vi.fn()}
 				onOpenExpression={vi.fn()}
@@ -329,7 +534,7 @@ describe('ConnectorConfigField — the control ref', () => {
 			/>,
 		)
 
-		expect(el).toBe(screen.getByLabelText('Headers'))
+		expect(el).toBe(screen.getByLabelText('Items'))
 	})
 })
 
