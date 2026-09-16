@@ -95,7 +95,62 @@ describe('CredentialPickerField', () => {
 		).toBeDefined()
 	})
 
-	it('calls onCreateNew when the create button is pressed', async () => {
+	it('narrows the list to matching names as the search is typed', async () => {
+		const user = userEvent.setup()
+		render(
+			<CredentialPickerField
+				label="Identification"
+				htmlFor="credential-picker"
+				credentials={[
+					credential('c1', 'Odoo prod'),
+					credential('c2', 'Odoo recette'),
+				]}
+				value={null}
+				error={null}
+				onChange={vi.fn()}
+				onCreateNew={vi.fn()}
+			/>,
+		)
+
+		await user.click(screen.getByRole('combobox', { name: 'Identification' }))
+		await user.type(
+			await screen.findByPlaceholderText('Rechercher une identification…'),
+			'recette',
+		)
+
+		expect(
+			await screen.findByRole('option', { name: 'Odoo recette' }),
+		).toBeDefined()
+		expect(screen.queryByRole('option', { name: 'Odoo prod' })).toBeNull()
+	})
+
+	it('offers creating one from the empty state when the search matches nothing', async () => {
+		const user = userEvent.setup()
+		const onCreateNew = vi.fn()
+		render(
+			<CredentialPickerField
+				label="Identification"
+				htmlFor="credential-picker"
+				credentials={[credential('c1', 'Odoo prod')]}
+				value={null}
+				error={null}
+				onChange={vi.fn()}
+				onCreateNew={onCreateNew}
+			/>,
+		)
+
+		await user.click(screen.getByRole('combobox', { name: 'Identification' }))
+		await user.type(
+			await screen.findByPlaceholderText('Rechercher une identification…'),
+			'quelque chose qui ne matche rien',
+		)
+
+		await user.click(await screen.findByRole('button', { name: /Créer/ }))
+
+		expect(onCreateNew).toHaveBeenCalledTimes(1)
+	})
+
+	it('calls onCreateNew from the popover footer action even when the list is non-empty', async () => {
 		const user = userEvent.setup()
 		const onCreateNew = vi.fn()
 		render(
@@ -110,8 +165,9 @@ describe('CredentialPickerField', () => {
 			/>,
 		)
 
+		await user.click(screen.getByRole('combobox', { name: 'Identification' }))
 		await user.click(
-			screen.getByRole('button', { name: /Nouvelle identification/ }),
+			await screen.findByRole('button', { name: /Nouvelle identification/ }),
 		)
 
 		expect(onCreateNew).toHaveBeenCalledTimes(1)
@@ -135,7 +191,7 @@ describe('CredentialPickerField', () => {
 })
 
 describe('CredentialPickerField — when the organization has none', () => {
-	it('says so on the closed select rather than promising a choice', () => {
+	it('says so on the closed trigger rather than promising a choice', () => {
 		render(
 			<CredentialPickerField
 				label="Identification"
@@ -152,7 +208,7 @@ describe('CredentialPickerField — when the organization has none', () => {
 		expect(screen.queryByText('Choisir une identification…')).toBeNull()
 	})
 
-	it('offers creating one as a named action, not a bare icon', async () => {
+	it('offers creating one as a named action inside the popover, not a bare icon', async () => {
 		const user = userEvent.setup()
 		const onCreateNew = vi.fn()
 		render(
@@ -167,7 +223,8 @@ describe('CredentialPickerField — when the organization has none', () => {
 			/>,
 		)
 
-		await user.click(screen.getByRole('button', { name: /Créer/ }))
+		await user.click(screen.getByRole('combobox', { name: 'Identification' }))
+		await user.click(await screen.findByRole('button', { name: /Créer/ }))
 
 		expect(onCreateNew).toHaveBeenCalled()
 	})

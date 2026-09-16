@@ -1,14 +1,22 @@
-import { Plus } from 'lucide-react'
+import { Check, ChevronsUpDown, Plus } from 'lucide-react'
+import { useState } from 'react'
 import type { Schemas } from '#/api/api.client'
 import { Button } from '#/components/ui/button'
+import {
+	Command,
+	CommandEmpty,
+	CommandGroup,
+	CommandInput,
+	CommandItem,
+	CommandList,
+} from '#/components/ui/command'
 import { Field } from '#/components/ui/field'
 import {
-	Select,
-	SelectContent,
-	SelectItem,
-	SelectTrigger,
-	SelectValue,
-} from '#/components/ui/select'
+	Popover,
+	PopoverContent,
+	PopoverTrigger,
+} from '#/components/ui/popover'
+import { cn } from '#/lib/utils'
 
 export interface CredentialPickerFieldProps {
 	label: string
@@ -29,54 +37,101 @@ export function CredentialPickerField({
 	onChange,
 	onCreateNew,
 }: CredentialPickerFieldProps) {
+	const [open, setOpen] = useState(false)
+	const selected =
+		credentials.find((credential) => credential.id === value) ?? null
+
+	function createNew() {
+		setOpen(false)
+		onCreateNew()
+	}
+
 	return (
 		<Field label={label} htmlFor={htmlFor}>
-			<div className="flex items-center gap-2">
-				<Select
-					value={value ?? undefined}
-					onValueChange={(next) => onChange(next)}
-				>
-					<SelectTrigger
+			<Popover open={open} onOpenChange={setOpen}>
+				<PopoverTrigger asChild>
+					<Button
 						id={htmlFor}
-						className="w-full"
+						type="button"
+						variant="outline"
+						role="combobox"
+						aria-expanded={open}
 						aria-invalid={error !== null}
+						className="w-full justify-between font-normal"
 					>
-						<SelectValue
-							placeholder={
-								credentials.length === 0
+						<span
+							className={cn(
+								'truncate',
+								selected === null && 'text-muted-foreground',
+							)}
+						>
+							{selected
+								? selected.name
+								: credentials.length === 0
 									? 'Aucune identification'
-									: 'Choisir une identification…'
-							}
+									: 'Choisir une identification…'}
+						</span>
+						<ChevronsUpDown className="size-4 shrink-0 opacity-50" />
+					</Button>
+				</PopoverTrigger>
+				<PopoverContent align="start" className="w-72 p-0">
+					<Command>
+						<CommandInput
+							autoFocus
+							placeholder="Rechercher une identification…"
 						/>
-					</SelectTrigger>
-					<SelectContent>
-						{credentials.length === 0 ? (
-							<p className="px-2 py-4 text-center text-sm text-muted-foreground">
-								Aucune identification disponible
-							</p>
-						) : (
-							credentials.map((credential) => (
-								<SelectItem key={credential.id} value={credential.id}>
-									{credential.name}
-								</SelectItem>
-							))
-						)}
-					</SelectContent>
-				</Select>
-				<Button
-					type="button"
-					variant={credentials.length === 0 ? 'default' : 'outline'}
-					size={credentials.length === 0 ? 'sm' : 'icon'}
-					aria-label={
-						credentials.length === 0 ? undefined : 'Nouvelle identification'
-					}
-					title="Nouvelle identification"
-					onClick={onCreateNew}
-				>
-					<Plus className="size-4" />
-					{credentials.length === 0 ? 'Créer' : null}
-				</Button>
-			</div>
+						<CommandList>
+							<CommandEmpty>
+								<div className="flex flex-col items-center gap-2 px-2 py-4">
+									<p className="text-center text-sm text-muted-foreground">
+										{credentials.length === 0
+											? 'Aucune identification disponible'
+											: 'Aucun résultat'}
+									</p>
+									<Button type="button" size="sm" onClick={createNew}>
+										<Plus className="size-4" />
+										Créer une identification
+									</Button>
+								</div>
+							</CommandEmpty>
+							<CommandGroup>
+								{credentials.map((credential) => (
+									<CommandItem
+										key={credential.id}
+										value={credential.name}
+										onSelect={() => {
+											onChange(credential.id)
+											setOpen(false)
+										}}
+									>
+										<Check
+											className={cn(
+												'size-4',
+												credential.id === value ? 'opacity-100' : 'opacity-0',
+											)}
+										/>
+										{credential.name}
+									</CommandItem>
+								))}
+							</CommandGroup>
+						</CommandList>
+						{credentials.length > 0 ? (
+							<div className="border-t p-1">
+								<Button
+									type="button"
+									variant="ghost"
+									size="sm"
+									className="w-full justify-start"
+									onClick={createNew}
+								>
+									<Plus className="size-4" />
+									Nouvelle identification
+								</Button>
+							</div>
+						) : null}
+					</Command>
+				</PopoverContent>
+			</Popover>
 			{error ? (
 				<p role="alert" className="text-sm text-destructive">
 					{error}

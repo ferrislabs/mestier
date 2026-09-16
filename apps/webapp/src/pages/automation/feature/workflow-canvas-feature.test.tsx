@@ -685,6 +685,9 @@ describe('WorkflowCanvasFeature — inline credential creation', () => {
 		node.click()
 
 		await user.click(
+			await screen.findByRole('combobox', { name: 'Identification' }),
+		)
+		await user.click(
 			await screen.findByRole('button', {
 				name: /Créer|Nouvelle identification/,
 			}),

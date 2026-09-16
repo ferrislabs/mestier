@@ -228,8 +228,11 @@ describe('ConnectorConfigPanel — inline credential creation', () => {
 			/>,
 		)
 
+		await user.click(screen.getByRole('combobox', { name: 'Identification' }))
 		await user.click(
-			screen.getByRole('button', { name: /Créer|Nouvelle identification/ }),
+			await screen.findByRole('button', {
+				name: /Créer|Nouvelle identification/,
+			}),
 		)
 		await user.type(screen.getByLabelText('Nom'), 'Ma clé')
 		await user.type(screen.getByLabelText('Token'), 's3cr3t')
@@ -266,8 +269,11 @@ describe('ConnectorConfigPanel — inline credential creation', () => {
 			/>,
 		)
 
+		await user.click(screen.getByRole('combobox', { name: 'Identification' }))
 		await user.click(
-			screen.getByRole('button', { name: /Créer|Nouvelle identification/ }),
+			await screen.findByRole('button', {
+				name: /Créer|Nouvelle identification/,
+			}),
 		)
 		await user.type(screen.getByLabelText('Nom'), 'Signature')
 		await user.click(screen.getByRole('combobox', { name: 'Origine' }))
@@ -313,7 +319,12 @@ describe('ConnectorConfigPanel — inline credential creation', () => {
 		)
 
 		await user.click(
-			screen.getByRole('button', { name: /Créer|Nouvelle identification/ }),
+			screen.getByRole('combobox', { name: 'Signing credential' }),
+		)
+		await user.click(
+			await screen.findByRole('button', {
+				name: /Créer|Nouvelle identification/,
+			}),
 		)
 
 		expect(screen.queryByRole('combobox', { name: 'Origine' })).toBeNull()
@@ -347,8 +358,11 @@ describe('ConnectorConfigPanel — inline credential creation', () => {
 			/>,
 		)
 
+		await user.click(screen.getByRole('combobox', { name: 'Identification' }))
 		await user.click(
-			screen.getByRole('button', { name: /Créer|Nouvelle identification/ }),
+			await screen.findByRole('button', {
+				name: /Créer|Nouvelle identification/,
+			}),
 		)
 		await user.type(screen.getByLabelText('Nom'), 'Ma clé')
 		await user.type(screen.getByLabelText('Token'), 's3cr3t')
@@ -370,8 +384,11 @@ describe('ConnectorConfigPanel — inline credential creation', () => {
 			/>,
 		)
 
+		await user.click(screen.getByRole('combobox', { name: 'Identification' }))
 		await user.click(
-			screen.getByRole('button', { name: /Créer|Nouvelle identification/ }),
+			await screen.findByRole('button', {
+				name: /Créer|Nouvelle identification/,
+			}),
 		)
 		await user.click(screen.getByRole('button', { name: 'Annuler' }))
 

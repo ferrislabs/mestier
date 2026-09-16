@@ -268,8 +268,11 @@ describe('ConnectorConfigForm — the typed credential slot', () => {
 			/>,
 		)
 
+		await user.click(screen.getByRole('combobox', { name: 'Identification' }))
 		await user.click(
-			screen.getByRole('button', { name: /Créer|Nouvelle identification/ }),
+			await screen.findByRole('button', {
+				name: /Créer|Nouvelle identification/,
+			}),
 		)
 
 		expect(onRequestCreateCredential).toHaveBeenCalledWith('typed')
@@ -376,7 +379,12 @@ describe('ConnectorConfigForm — the signing_credential_id field', () => {
 		)
 
 		await user.click(
-			screen.getByRole('button', { name: /Créer|Nouvelle identification/ }),
+			screen.getByRole('combobox', { name: 'Signing credential' }),
+		)
+		await user.click(
+			await screen.findByRole('button', {
+				name: /Créer|Nouvelle identification/,
+			}),
 		)
 
 		expect(onRequestCreateCredential).toHaveBeenCalledWith('signing')
