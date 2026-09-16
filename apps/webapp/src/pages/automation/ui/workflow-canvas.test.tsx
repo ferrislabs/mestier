@@ -100,6 +100,7 @@ function Harness({
 	descriptors,
 	connectorErrors = new Map(),
 	events = [],
+	triggerMode = 'events',
 	triggerEventNames = ['quote.accepted'],
 	onSaveTrigger = () => {},
 	isSavingTrigger = false,
@@ -116,6 +117,7 @@ function Harness({
 	descriptors: Map<string, Schemas.ConnectorDescriptorResponse>
 	connectorErrors?: Map<string, ConnectorValidationError[]>
 	events?: Schemas.EventDescriptorResponse[]
+	triggerMode?: WorkflowCanvasProps['triggerMode']
 	triggerEventNames?: string[]
 	onSaveTrigger?: WorkflowCanvasProps['onSaveTrigger']
 	isSavingTrigger?: boolean
@@ -140,6 +142,7 @@ function Harness({
 		descriptors,
 		connectorErrors,
 		events,
+		triggerMode,
 		triggerEventNames,
 		onSaveTrigger,
 		isSavingTrigger,
@@ -425,6 +428,34 @@ describe('WorkflowCanvas — the virtual trigger', () => {
 		expect(screen.queryByText('Aucun événement configuré')).toBeNull()
 	})
 
+	it('states manual mode plainly instead of warning, even with no event configured', async () => {
+		renderHarness({
+			graph: { connectors: [connector('c1', SIMPLE_KIND)], edges: [] },
+			layout: new Map([['c1', { x: 0, y: 0 }]]),
+			descriptors: descriptorMap(SIMPLE_DESCRIPTOR),
+			triggerMode: 'manual',
+			triggerEventNames: [],
+			onSaveSpy: vi.fn(),
+		})
+
+		expect(await screen.findByText('Déclenchement manuel')).toBeDefined()
+		expect(screen.queryByText('Aucun événement configuré')).toBeNull()
+	})
+
+	it('still warns on an events-mode workflow with none selected, not a manual one', async () => {
+		renderHarness({
+			graph: { connectors: [connector('c1', SIMPLE_KIND)], edges: [] },
+			layout: new Map([['c1', { x: 0, y: 0 }]]),
+			descriptors: descriptorMap(SIMPLE_DESCRIPTOR),
+			triggerMode: 'events',
+			triggerEventNames: [],
+			onSaveSpy: vi.fn(),
+		})
+
+		expect(await screen.findByText('Aucun événement configuré')).toBeDefined()
+		expect(screen.queryByText('Déclenchement manuel')).toBeNull()
+	})
+
 	it('drops the warning once the panel saves an event, without needing a remount', async () => {
 		function ToggleHarness() {
 			const [names, setNames] = useState<string[]>([])
@@ -434,7 +465,7 @@ describe('WorkflowCanvas — the virtual trigger', () => {
 					layout={new Map([['c1', { x: 0, y: 0 }]])}
 					descriptors={descriptorMap(SIMPLE_DESCRIPTOR)}
 					triggerEventNames={names}
-					onSaveTrigger={setNames}
+					onSaveTrigger={(_mode, eventNames) => setNames(eventNames)}
 					events={[event('quote.accepted')]}
 					onSaveSpy={vi.fn()}
 				/>
@@ -497,7 +528,7 @@ describe('WorkflowCanvas — the trigger picker', () => {
 			}),
 		)
 
-		expect(onSaveTrigger).toHaveBeenCalledWith([
+		expect(onSaveTrigger).toHaveBeenCalledWith('events', [
 			'quote.accepted',
 			'invoice.paid',
 		])

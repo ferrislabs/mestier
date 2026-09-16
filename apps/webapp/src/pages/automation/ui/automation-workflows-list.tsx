@@ -46,6 +46,7 @@ export interface WorkflowRow {
 	name: string
 	description: string | null
 	enabled: boolean
+	triggerMode: 'events' | 'manual'
 	lastRun: WorkflowLastRun | null
 }
 
@@ -105,6 +106,17 @@ export function AutomationWorkflowsList({
 				cell: ({ row }) => (
 					<StatusBadge tone={row.original.enabled ? 'success' : 'neutral'}>
 						{row.original.enabled ? 'Activé' : 'Désactivé'}
+					</StatusBadge>
+				),
+			},
+			{
+				id: 'triggerMode',
+				header: 'Déclenchement',
+				cell: ({ row }) => (
+					<StatusBadge
+						tone={row.original.triggerMode === 'manual' ? 'neutral' : 'success'}
+					>
+						{row.original.triggerMode === 'manual' ? 'Manuel' : 'Sur événement'}
 					</StatusBadge>
 				),
 			},

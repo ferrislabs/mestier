@@ -84,8 +84,9 @@ export interface WorkflowCanvasProps {
 	descriptors: Map<string, Schemas.ConnectorDescriptorResponse>
 	connectorErrors: Map<string, ConnectorValidationError[]>
 	events: Schemas.EventDescriptorResponse[]
+	triggerMode: 'events' | 'manual'
 	triggerEventNames: string[]
-	onSaveTrigger: (eventNames: string[]) => void
+	onSaveTrigger: (mode: 'events' | 'manual', eventNames: string[]) => void
 	isSavingTrigger: boolean
 	triggerSaveError: string | null
 	lastRun: LastRunData | null
@@ -138,13 +139,14 @@ function buildInitialNodes(
 	layout: Map<string, NodePosition>,
 	descriptors: Map<string, Schemas.ConnectorDescriptorResponse>,
 	connectorErrors: Map<string, ConnectorValidationError[]>,
+	triggerMode: 'events' | 'manual',
 	triggerEventNames: string[],
 ): Node[] {
 	const triggerNode: Node = {
 		id: TRIGGER_NODE_ID,
 		type: 'trigger',
 		position: triggerPosition(graph, layout),
-		data: { hasEvent: triggerEventNames.length > 0 },
+		data: { mode: triggerMode, hasEvent: triggerEventNames.length > 0 },
 		deletable: false,
 		draggable: false,
 	}
@@ -247,6 +249,7 @@ export function WorkflowCanvas({
 	descriptors,
 	connectorErrors,
 	events,
+	triggerMode,
 	triggerEventNames,
 	onSaveTrigger,
 	isSavingTrigger,
@@ -267,6 +270,7 @@ export function WorkflowCanvas({
 			layout,
 			descriptors,
 			connectorErrors,
+			triggerMode,
 			triggerEventNames,
 		),
 	)
@@ -301,11 +305,11 @@ export function WorkflowCanvas({
 			current.map((node) => {
 				if (node.id !== TRIGGER_NODE_ID) return node
 				const data = node.data as TriggerNodeData
-				if (data.hasEvent === hasEvent) return node
-				return { ...node, data: { ...data, hasEvent } }
+				if (data.hasEvent === hasEvent && data.mode === triggerMode) return node
+				return { ...node, data: { ...data, mode: triggerMode, hasEvent } }
 			}),
 		)
-	}, [triggerEventNames, setNodes])
+	}, [triggerMode, triggerEventNames, setNodes])
 
 	const handleNodesChange = useCallback(
 		(changes: NodeChange[]) => {
@@ -640,6 +644,7 @@ export function WorkflowCanvas({
 					{openTrigger ? (
 						<TriggerConfigPanel
 							events={events}
+							mode={triggerMode}
 							selectedEventNames={triggerEventNames}
 							isSaving={isSavingTrigger}
 							saveError={triggerSaveError}

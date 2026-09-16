@@ -28,6 +28,7 @@ function baseProps(
 ) {
 	return {
 		events: EVENTS,
+		mode: 'events' as const,
 		selectedEventNames: [],
 		isSaving: false,
 		saveError: null,
@@ -98,6 +99,47 @@ describe('TriggerConfigPanel — the no-event warning', () => {
 	})
 })
 
+describe('TriggerConfigPanel — the mode choice', () => {
+	it('offers both modes explicitly', () => {
+		render(<TriggerConfigPanel {...baseProps()} />)
+
+		expect(screen.getByRole('tab', { name: 'Sur événement(s)' })).toBeDefined()
+		expect(screen.getByRole('tab', { name: 'Manuel' })).toBeDefined()
+	})
+
+	it('switching to manual hides the event list and the no-event warning', async () => {
+		const user = userEvent.setup()
+		render(<TriggerConfigPanel {...baseProps({ selectedEventNames: [] })} />)
+		expect(screen.getByText(/ne se déclenchera jamais/)).toBeDefined()
+
+		await user.click(screen.getByRole('tab', { name: 'Manuel' }))
+
+		expect(screen.queryByRole('checkbox', { name: 'Devis accepté' })).toBeNull()
+		expect(screen.queryByText(/ne se déclenchera jamais/)).toBeNull()
+	})
+
+	it('starts on the workflow current mode', () => {
+		render(<TriggerConfigPanel {...baseProps({ mode: 'manual' })} />)
+
+		expect(screen.queryByRole('checkbox', { name: 'Devis accepté' })).toBeNull()
+	})
+
+	it('saves manual mode, discarding whatever was pending in the event list', async () => {
+		const user = userEvent.setup()
+		const onSave = vi.fn()
+		render(
+			<TriggerConfigPanel
+				{...baseProps({ selectedEventNames: ['quote.accepted'], onSave })}
+			/>,
+		)
+
+		await user.click(screen.getByRole('tab', { name: 'Manuel' }))
+		await user.click(screen.getByRole('button', { name: 'Enregistrer' }))
+
+		expect(onSave).toHaveBeenCalledWith('manual', [])
+	})
+})
+
 describe('TriggerConfigPanel — saving', () => {
 	it('saves the full pending selection, additively checked, as one replacement', async () => {
 		const user = userEvent.setup()
@@ -111,7 +153,10 @@ describe('TriggerConfigPanel — saving', () => {
 		await user.click(screen.getByRole('checkbox', { name: 'Facture payée' }))
 		await user.click(screen.getByRole('button', { name: 'Enregistrer' }))
 
-		expect(onSave).toHaveBeenCalledWith(['quote.accepted', 'invoice.paid'])
+		expect(onSave).toHaveBeenCalledWith('events', [
+			'quote.accepted',
+			'invoice.paid',
+		])
 	})
 
 	it('saves an empty array when every event is unchecked, clearing the trigger', async () => {
@@ -126,7 +171,7 @@ describe('TriggerConfigPanel — saving', () => {
 		await user.click(screen.getByRole('checkbox', { name: 'Devis accepté' }))
 		await user.click(screen.getByRole('button', { name: 'Enregistrer' }))
 
-		expect(onSave).toHaveBeenCalledWith([])
+		expect(onSave).toHaveBeenCalledWith('events', [])
 	})
 
 	it('disables the save button while a save is in flight', () => {

@@ -5,6 +5,7 @@ import { AddNodeButton } from '#/pages/automation/ui/add-node-button'
 import { useWorkflowCanvasActions } from '#/pages/automation/ui/workflow-canvas-context'
 
 export interface TriggerNodeData extends Record<string, unknown> {
+	mode: 'events' | 'manual'
 	hasEvent: boolean
 }
 
@@ -13,22 +14,28 @@ export function TriggerNode({
 	data,
 }: NodeProps & { data: TriggerNodeData }) {
 	const actions = useWorkflowCanvasActions()
+	const warns = data.mode === 'events' && !data.hasEvent
 
 	return (
 		<div
 			className={cn(
 				'min-w-40 rounded-full border-2 border-dashed bg-card px-4 py-2 text-sm',
-				!data.hasEvent && 'border-amber-500 text-amber-700',
+				warns && 'border-amber-500 text-amber-700',
 			)}
 		>
 			<div className="flex items-center gap-1.5 font-medium">
 				<Zap className="size-3.5" />
 				Déclencheur
 			</div>
-			{!data.hasEvent ? (
+			{warns ? (
 				<div className="mt-1 flex items-center gap-1 text-xs">
 					<TriangleAlert className="size-3.5" />
 					Aucun événement configuré
+				</div>
+			) : null}
+			{data.mode === 'manual' ? (
+				<div className="mt-1 text-xs text-muted-foreground">
+					Déclenchement manuel
 				</div>
 			) : null}
 			<div className="relative mt-1 flex items-center justify-end gap-1 pr-2">

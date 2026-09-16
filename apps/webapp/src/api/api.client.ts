@@ -1143,7 +1143,8 @@ export namespace Schemas {
     weekly_contract_minutes: number;
   };
   export type SetPresenceRequest = { status: PresenceStatus };
-  export type SetWorkflowTriggerRequest = { event_names: Array<string> };
+  export type WorkflowTriggerModeDto = "events" | "manual";
+  export type SetWorkflowTriggerRequest = { event_names: Array<string>; mode: WorkflowTriggerModeDto };
   export type StartRunRequest = Partial<{ trigger_payload: unknown }>;
   export type StartTimeEntryRequest = { task_id: TaskId };
   export type StartedRunResponse = { run_id: string };
@@ -1415,9 +1416,10 @@ export namespace Schemas {
     id: string;
     name: string;
     organization_id: OrganizationId;
+    trigger_mode: WorkflowTriggerModeDto;
     updated_at: string;
   };
-  export type WorkflowTriggerResponse = { event_names: Array<string> };
+  export type WorkflowTriggerResponse = { event_names: Array<string>; mode: WorkflowTriggerModeDto };
 
   // </Schemas>
 }
@@ -4080,6 +4082,7 @@ export namespace Endpoints {
           id: string;
           name: string;
           organization_id: Schemas.OrganizationId;
+          trigger_mode: Schemas.WorkflowTriggerModeDto;
           updated_at: string;
         }>;
         pagination?: (null | Schemas.PaginationMetadata) | undefined;
@@ -4107,6 +4110,7 @@ export namespace Endpoints {
           id: string;
           name: string;
           organization_id: Schemas.OrganizationId;
+          trigger_mode: Schemas.WorkflowTriggerModeDto;
           updated_at: string;
         };
         pagination?: (null | Schemas.PaginationMetadata) | undefined;
@@ -4171,6 +4175,7 @@ export namespace Endpoints {
           id: string;
           name: string;
           organization_id: Schemas.OrganizationId;
+          trigger_mode: Schemas.WorkflowTriggerModeDto;
           updated_at: string;
         };
         pagination?: (null | Schemas.PaginationMetadata) | undefined;
@@ -4205,7 +4210,10 @@ export namespace Endpoints {
       path: { organization_id: string; workflow_id: string };
     };
     responses: {
-      200: { data: { event_names: Array<string> }; pagination?: (null | Schemas.PaginationMetadata) | undefined };
+      200: {
+        data: { event_names: Array<string>; mode: Schemas.WorkflowTriggerModeDto };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
       401: unknown;
       403: unknown;
       404: unknown;
@@ -4221,7 +4229,10 @@ export namespace Endpoints {
       body: Schemas.SetWorkflowTriggerRequest;
     };
     responses: {
-      200: { data: { event_names: Array<string> }; pagination?: (null | Schemas.PaginationMetadata) | undefined };
+      200: {
+        data: { event_names: Array<string>; mode: Schemas.WorkflowTriggerModeDto };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
       401: unknown;
       403: unknown;
       404: unknown;

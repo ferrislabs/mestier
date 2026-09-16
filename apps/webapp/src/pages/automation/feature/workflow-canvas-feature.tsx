@@ -143,6 +143,7 @@ function WorkflowCanvasWorkspace({
 			authSchemes={catalogueQuery.data?.data.auth_schemes ?? []}
 			credentials={credentialsQuery.data?.data ?? []}
 			events={eventsQuery.data?.data ?? []}
+			triggerMode={triggerQuery.data?.data.mode ?? 'events'}
 			triggerEventNames={triggerQuery.data?.data.event_names ?? []}
 			lastRun={lastRun}
 		/>
@@ -157,6 +158,7 @@ function WorkflowCanvasLoaded({
 	authSchemes,
 	credentials,
 	events,
+	triggerMode,
 	triggerEventNames,
 	lastRun,
 }: {
@@ -167,6 +169,7 @@ function WorkflowCanvasLoaded({
 	authSchemes: Schemas.AuthSchemeResponse[]
 	credentials: Schemas.CredentialResponse[]
 	events: Schemas.EventDescriptorResponse[]
+	triggerMode: 'events' | 'manual'
 	triggerEventNames: string[]
 	lastRun: LastRunData | null
 }) {
@@ -210,12 +213,15 @@ function WorkflowCanvasLoaded({
 		return created.data as Schemas.CredentialResponse & { secret: unknown }
 	}
 
-	const handleSaveTrigger = async (eventNames: string[]) => {
+	const handleSaveTrigger = async (
+		mode: 'events' | 'manual',
+		eventNames: string[],
+	) => {
 		setTriggerSaveError(null)
 		try {
 			await setTrigger.mutateAsync({
 				path: { organization_id: organizationId, workflow_id: workflowId },
-				body: { event_names: eventNames },
+				body: { mode, event_names: eventNames },
 			})
 		} catch (error) {
 			setTriggerSaveError(
@@ -284,8 +290,11 @@ function WorkflowCanvasLoaded({
 				descriptors={descriptors}
 				connectorErrors={validation.connectorErrors}
 				events={events}
+				triggerMode={triggerMode}
 				triggerEventNames={triggerEventNames}
-				onSaveTrigger={(eventNames) => void handleSaveTrigger(eventNames)}
+				onSaveTrigger={(mode, eventNames) =>
+					void handleSaveTrigger(mode, eventNames)
+				}
 				isSavingTrigger={setTrigger.isPending}
 				triggerSaveError={triggerSaveError}
 				lastRun={lastRun}

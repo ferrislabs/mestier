@@ -762,7 +762,58 @@ describe('WorkflowCanvasFeature — the trigger picker', () => {
 		)
 		const body = (call?.params as { body: Schemas.SetWorkflowTriggerRequest })
 			.body
+		expect(body.mode).toBe('events')
 		expect(body.event_names).toEqual(['invoice.paid'])
+	})
+
+	it('reads a manual workflow as manual, and saves switching back to events', async () => {
+		const user = userEvent.setup()
+		const api = renderFeature((fakeApi) => {
+			fakeApi.mockGet(EVENTS_PATH, () => ({
+				data: [event('quote.accepted')],
+				pagination: null,
+			}))
+			fakeApi.mockGet(WORKFLOW_TRIGGER_PATH, () => ({
+				data: { mode: 'manual', event_names: [] },
+				pagination: null,
+			}))
+			fakeApi.mockMutation('put', WORKFLOW_TRIGGER_PATH, (params) => ({
+				data: (params as { body: Schemas.SetWorkflowTriggerRequest }).body,
+				pagination: null,
+			}))
+		})
+
+		expect(await screen.findByText('Déclenchement manuel')).toBeDefined()
+
+		const trigger = await screen.findByTestId('rf__node-__trigger__')
+		trigger.click()
+		await screen.findByTestId('trigger-config-panel')
+		await user.click(
+			within(screen.getByTestId('trigger-config-panel')).getByRole('tab', {
+				name: 'Sur événement(s)',
+			}),
+		)
+		await user.click(screen.getByRole('checkbox', { name: 'quote.accepted' }))
+		await user.click(
+			within(screen.getByTestId('trigger-config-panel')).getByRole('button', {
+				name: 'Enregistrer',
+			}),
+		)
+
+		await waitFor(() => {
+			const call = api.calls.find(
+				(c) => c.method === 'put' && c.path === WORKFLOW_TRIGGER_PATH,
+			)
+			expect(call).toBeDefined()
+		})
+
+		const call = api.calls.find(
+			(c) => c.method === 'put' && c.path === WORKFLOW_TRIGGER_PATH,
+		)
+		const body = (call?.params as { body: Schemas.SetWorkflowTriggerRequest })
+			.body
+		expect(body.mode).toBe('events')
+		expect(body.event_names).toEqual(['quote.accepted'])
 	})
 
 	it('says the save failed rather than silently discarding the selection', async () => {

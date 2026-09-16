@@ -62,6 +62,7 @@ function AutomationWorkflowsWorkspace({
 		name: workflow.name,
 		description: workflow.description ?? null,
 		enabled: workflow.enabled,
+		triggerMode: workflow.trigger_mode,
 		lastRun: latestRuns.get(workflow.id) ?? null,
 	}))
 
