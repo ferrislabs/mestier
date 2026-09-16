@@ -60,6 +60,7 @@ import { WorkflowCanvasActionsContext } from '#/pages/automation/ui/workflow-can
 
 export const TRIGGER_NODE_ID = '__trigger__'
 const TRIGGER_X_OFFSET = 220
+const FIT_VIEW_OPTIONS = { padding: 0.25, maxZoom: 1 }
 
 const NODE_TYPES = {
 	connector: ConnectorNode,
@@ -589,7 +590,8 @@ export function WorkflowCanvas({
 								}}
 								isValidConnection={validateConnection}
 								autoPanOnNodeDrag={false}
-								fitView={false}
+								fitView
+								fitViewOptions={FIT_VIEW_OPTIONS}
 							>
 								<Background />
 							</ReactFlow>

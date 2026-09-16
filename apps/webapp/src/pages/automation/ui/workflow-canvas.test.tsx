@@ -1095,3 +1095,25 @@ describe('WorkflowCanvas — the available-data tree', () => {
 		expect(screen.getByText('quote_id')).toBeDefined()
 	})
 })
+
+describe('WorkflowCanvas — framing the graph on load', () => {
+	it('moves the camera onto the nodes instead of leaving them off-screen', async () => {
+		renderHarness({
+			graph: {
+				connectors: [connector('c1', SIMPLE_KIND)],
+				edges: [],
+			},
+			layout: new Map([['c1', { x: 1800, y: 1400 }]]),
+			descriptors: descriptorMap(SIMPLE_DESCRIPTOR),
+		})
+
+		await screen.findByTestId('rf__node-c1')
+
+		const viewport = document.querySelector('.react-flow__viewport')
+		await waitFor(() => {
+			const transform = (viewport as HTMLElement).style.transform
+			expect(transform).not.toBe('')
+			expect(transform).not.toMatch(/translate\(0px,\s*0px\)\s*scale\(1\)/)
+		})
+	})
+})
