@@ -44,7 +44,8 @@ export function ConnectorConfigField({
 	onDropExpression,
 }: ConnectorConfigFieldProps) {
 	const id = `connector-field-${field.name}`
-	const showFieldLevelExpressionButton = field.expression && field.kind !== 'Json'
+	const showFieldLevelExpressionButton =
+		field.expression && field.kind !== 'Json'
 
 	return (
 		<Field label={field.label} htmlFor={id}>
@@ -250,6 +251,7 @@ function JsonField({
 	const [rawInvalid, setRawInvalid] = useState(false)
 	const lastEmitted = useRef(value)
 
+	// biome-ignore lint/correctness/useExhaustiveDependencies: toRows only closes over the id counter ref
 	useEffect(() => {
 		if (value === lastEmitted.current) return
 		lastEmitted.current = value
@@ -257,7 +259,6 @@ function JsonField({
 		setRawText(stringifyJsonValue(value))
 		setRawInvalid(false)
 		setMode(isJsonMapRepresentable(value) ? 'rows' : 'raw')
-		// biome-ignore lint/correctness/useExhaustiveDependencies: toRows is stable across renders
 	}, [value])
 
 	function emit(next: unknown) {
@@ -281,22 +282,18 @@ function JsonField({
 	}
 
 	function changeRowKey(rowId: number, key: string) {
-		commitRows(
-			rows.map((row) => (row.id === rowId ? { ...row, key } : row)),
-		)
+		commitRows(rows.map((row) => (row.id === rowId ? { ...row, key } : row)))
 	}
 
 	function changeRowValue(rowId: number, entryValue: string) {
 		commitRows(
-			rows.map((row) => (row.id === rowId ? { ...row, value: entryValue } : row)),
+			rows.map((row) =>
+				row.id === rowId ? { ...row, value: entryValue } : row,
+			),
 		)
 	}
 
-	function dropOnRow(
-		rowId: number,
-		element: HTMLInputElement,
-		path: string,
-	) {
+	function dropOnRow(rowId: number, element: HTMLInputElement, path: string) {
 		const row = rows.find((candidate) => candidate.id === rowId)
 		if (!row) return
 		const selection = {
@@ -334,9 +331,7 @@ function JsonField({
 								<Input
 									aria-label={`Clé — ${field.label}`}
 									value={row.key}
-									onChange={(event) =>
-										changeRowKey(row.id, event.target.value)
-									}
+									onChange={(event) => changeRowKey(row.id, event.target.value)}
 									className="w-2/5 font-mono text-xs"
 								/>
 								<Input

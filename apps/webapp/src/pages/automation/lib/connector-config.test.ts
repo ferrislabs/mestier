@@ -181,9 +181,7 @@ describe('valueFromJsonEntries', () => {
 	})
 
 	it('drops entries whose key is blank', () => {
-		expect(
-			valueFromJsonEntries([{ key: '', value: 'orphan' }]),
-		).toBeUndefined()
+		expect(valueFromJsonEntries([{ key: '', value: 'orphan' }])).toBeUndefined()
 		expect(
 			valueFromJsonEntries([
 				{ key: 'a', value: 'kept' },

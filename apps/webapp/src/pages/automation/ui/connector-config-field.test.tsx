@@ -298,9 +298,9 @@ describe('ConnectorConfigField — Json — array and scalar values stay raw', (
 			/>,
 		)
 
-		expect(
-			(screen.getByLabelText('Items') as HTMLTextAreaElement).value,
-		).toBe('[\n  1,\n  2,\n  3\n]')
+		expect((screen.getByLabelText('Items') as HTMLTextAreaElement).value).toBe(
+			'[\n  1,\n  2,\n  3\n]',
+		)
 		expect(
 			screen.queryByRole('button', { name: /ajouter une entrée/i }),
 		).toBeNull()
@@ -317,9 +317,9 @@ describe('ConnectorConfigField — Json — array and scalar values stay raw', (
 			/>,
 		)
 
-		expect(
-			(screen.getByLabelText('Items') as HTMLTextAreaElement).value,
-		).toBe('{{ trigger.items }}')
+		expect((screen.getByLabelText('Items') as HTMLTextAreaElement).value).toBe(
+			'{{ trigger.items }}',
+		)
 		expect(
 			screen.queryByRole('button', { name: /ajouter une entrée/i }),
 		).toBeNull()
@@ -380,9 +380,9 @@ describe('ConnectorConfigField — Json — switching between rows and raw', () 
 		)
 
 		await user.click(screen.getByRole('button', { name: /passer en json/i }))
-		expect((screen.getByLabelText('Headers') as HTMLTextAreaElement).value).toBe(
-			JSON.stringify({ a: '1', b: '2' }, null, 2),
-		)
+		expect(
+			(screen.getByLabelText('Headers') as HTMLTextAreaElement).value,
+		).toBe(JSON.stringify({ a: '1', b: '2' }, null, 2))
 
 		await user.click(
 			screen.getByRole('button', { name: /revenir aux champs/i }),
