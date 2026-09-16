@@ -5,9 +5,14 @@ import { PageShell, SectionCard } from '#/components/ui/surface'
 import { useActiveOrganization } from '#/hooks/use-active-organization'
 import {
 	useAutomationCredentials,
+	useAutomationEvents,
+	useAutomationRuns,
 	useConnectorCatalogue,
 	useCreateCredential,
+	useEvaluateExpression,
+	useRun,
 	useSaveWorkflowVersion,
+	useSetWorkflowTrigger,
 	useWorkflow,
 	useWorkflowTrigger,
 	type WorkflowDetail,
@@ -19,7 +24,11 @@ import {
 	type GraphValidation,
 	projectGraphErrors,
 } from '#/pages/automation/lib/validation'
-import { WorkflowCanvas } from '#/pages/automation/ui/workflow-canvas'
+import {
+	connectorOutputsFromSteps,
+	latestRunId,
+} from '#/pages/automation/lib/workflow-runs'
+import { type LastRunData, WorkflowCanvas } from '#/pages/automation/ui/workflow-canvas'
 
 const EMPTY_VALIDATION: GraphValidation = {
 	connectorErrors: new Map(),
@@ -81,12 +90,17 @@ function WorkflowCanvasWorkspace({
 	const catalogueQuery = useConnectorCatalogue(organizationId)
 	const triggerQuery = useWorkflowTrigger(organizationId, workflowId)
 	const credentialsQuery = useAutomationCredentials(organizationId)
+	const eventsQuery = useAutomationEvents(organizationId)
+	const runsQuery = useAutomationRuns(organizationId)
+	const latestId = latestRunId(runsQuery.data?.data ?? [], workflowId)
+	const runDetailQuery = useRun(organizationId, latestId)
 
 	if (
 		workflowQuery.isLoading ||
 		catalogueQuery.isLoading ||
 		triggerQuery.isLoading ||
-		credentialsQuery.isLoading
+		credentialsQuery.isLoading ||
+		eventsQuery.isLoading
 	) {
 		return (
 			<PageShell>
@@ -115,6 +129,14 @@ function WorkflowCanvasWorkspace({
 		)
 	}
 
+	const runDetail = runDetailQuery.data?.data
+	const lastRun: LastRunData | null = runDetail
+		? {
+				triggerPayload: runDetail.trigger_payload ?? null,
+				connectorOutputs: connectorOutputsFromSteps(runDetail.steps),
+			}
+		: null
+
 	return (
 		<WorkflowCanvasLoaded
 			organizationId={organizationId}
@@ -125,7 +147,9 @@ function WorkflowCanvasWorkspace({
 			)}
 			authSchemes={catalogueQuery.data?.data.auth_schemes ?? []}
 			credentials={credentialsQuery.data?.data ?? []}
-			hasTriggerEvent={(triggerQuery.data?.data.event_names.length ?? 0) > 0}
+			events={eventsQuery.data?.data ?? []}
+			triggerEventNames={triggerQuery.data?.data.event_names ?? []}
+			lastRun={lastRun}
 		/>
 	)
 }
@@ -137,7 +161,9 @@ function WorkflowCanvasLoaded({
 	descriptors,
 	authSchemes,
 	credentials,
-	hasTriggerEvent,
+	events,
+	triggerEventNames,
+	lastRun,
 }: {
 	organizationId: string
 	workflowId: string
@@ -145,10 +171,18 @@ function WorkflowCanvasLoaded({
 	descriptors: Map<string, Schemas.ConnectorDescriptorResponse>
 	authSchemes: Schemas.AuthSchemeResponse[]
 	credentials: Schemas.CredentialResponse[]
-	hasTriggerEvent: boolean
+	events: Schemas.EventDescriptorResponse[]
+	triggerEventNames: string[]
+	lastRun: LastRunData | null
 }) {
 	const saveVersion = useSaveWorkflowVersion()
 	const createCredential = useCreateCredential(organizationId)
+	const setTrigger = useSetWorkflowTrigger()
+	const evaluateExpression = useEvaluateExpression()
+
+	const [triggerSaveError, setTriggerSaveError] = useState<string | null>(
+		null,
+	)
 
 	const [initial] = useState(() => {
 		const graph = workflow.current_version?.graph ?? {
@@ -181,6 +215,33 @@ function WorkflowCanvasLoaded({
 			body,
 		})
 		return created.data as Schemas.CredentialResponse & { secret: unknown }
+	}
+
+	const handleSaveTrigger = async (eventNames: string[]) => {
+		setTriggerSaveError(null)
+		try {
+			await setTrigger.mutateAsync({
+				path: { organization_id: organizationId, workflow_id: workflowId },
+				body: { event_names: eventNames },
+			})
+		} catch (error) {
+			setTriggerSaveError(
+				error instanceof Error && error.message
+					? `L’enregistrement a échoué : ${error.message}`
+					: 'L’enregistrement a échoué.',
+			)
+		}
+	}
+
+	const handleEvaluateExpression = async (
+		template: unknown,
+		context: Schemas.EvaluateContextBody,
+	) => {
+		const result = await evaluateExpression.mutateAsync({
+			path: { organization_id: organizationId },
+			body: { template, context },
+		})
+		return (result.data as { value: unknown }).value
 	}
 
 	const handleSave = async () => {
@@ -229,7 +290,13 @@ function WorkflowCanvasLoaded({
 				layout={initial.layout}
 				descriptors={descriptors}
 				connectorErrors={validation.connectorErrors}
-				hasTriggerEvent={hasTriggerEvent}
+				events={events}
+				triggerEventNames={triggerEventNames}
+				onSaveTrigger={(eventNames) => void handleSaveTrigger(eventNames)}
+				isSavingTrigger={setTrigger.isPending}
+				triggerSaveError={triggerSaveError}
+				lastRun={lastRun}
+				onEvaluateExpression={handleEvaluateExpression}
 				credentials={credentials}
 				authSchemes={authSchemes}
 				onCreateCredential={handleCreateCredential}

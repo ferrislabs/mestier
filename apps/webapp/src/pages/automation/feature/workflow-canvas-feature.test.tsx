@@ -1,5 +1,11 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { render, screen, waitFor, within } from '@testing-library/react'
+import {
+	fireEvent,
+	render,
+	screen,
+	waitFor,
+	within,
+} from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import type { ReactNode } from 'react'
 import { beforeEach, describe, expect, it } from 'vitest'
@@ -37,6 +43,12 @@ const CONNECTORS_PATH =
 	'/api/v1/organizations/{organization_id}/automation/connectors'
 const CREDENTIALS_PATH =
 	'/api/v1/organizations/{organization_id}/automation/credentials'
+const EVENTS_PATH = '/api/v1/organizations/{organization_id}/automation/events'
+const RUNS_PATH = '/api/v1/organizations/{organization_id}/automation/runs'
+const RUN_PATH =
+	'/api/v1/organizations/{organization_id}/automation/runs/{run_id}'
+const EXPRESSIONS_EVALUATE_PATH =
+	'/api/v1/organizations/{organization_id}/automation/expressions/evaluate'
 
 const ORGANIZATION: Organization = {
 	id: 'org-1',
@@ -89,6 +101,19 @@ function credential(
 		organization_id: 'org-1',
 		created_at: '2026-01-01T00:00:00Z',
 		updated_at: '2026-01-01T00:00:00Z',
+	}
+}
+
+function event(
+	name: string,
+	payloadExample: unknown = { id: 1 },
+): Schemas.EventDescriptorResponse {
+	return {
+		name,
+		label: name,
+		subject_kind: name.split('.')[0] ?? name,
+		version: 1,
+		payload_example: payloadExample,
 	}
 }
 
@@ -199,6 +224,14 @@ function renderFeature(configure: (api: FakeApi) => void) {
 		pagination: null,
 	}))
 	api.mockGet(CREDENTIALS_PATH, () => ({
+		data: [],
+		pagination: null,
+	}))
+	api.mockGet(EVENTS_PATH, () => ({
+		data: [],
+		pagination: null,
+	}))
+	api.mockGet(RUNS_PATH, () => ({
 		data: [],
 		pagination: null,
 	}))
@@ -680,5 +713,225 @@ describe('WorkflowCanvasFeature — inline credential creation', () => {
 		const body = (call?.params as { body: Schemas.SaveWorkflowVersionRequest })
 			.body
 		expect(body.graph.connectors[0]?.credential_id).toBe('new-cred')
+	})
+})
+
+describe('WorkflowCanvasFeature — the trigger picker', () => {
+	it('lists the events fetched for real and saves the selection through PUT /trigger', async () => {
+		const user = userEvent.setup()
+		const api = renderFeature((fakeApi) => {
+			fakeApi.mockGet(EVENTS_PATH, () => ({
+				data: [event('quote.accepted'), event('invoice.paid')],
+				pagination: null,
+			}))
+			fakeApi.mockGet(WORKFLOW_TRIGGER_PATH, () => ({
+				data: { event_names: [] },
+				pagination: null,
+			}))
+			fakeApi.mockMutation('put', WORKFLOW_TRIGGER_PATH, (params) => ({
+				data: (params as { body: Schemas.SetWorkflowTriggerRequest }).body,
+				pagination: null,
+			}))
+		})
+
+		const trigger = await screen.findByTestId('rf__node-__trigger__')
+		trigger.click()
+
+		await screen.findByRole('checkbox', { name: 'quote.accepted' })
+		await user.click(screen.getByRole('checkbox', { name: 'invoice.paid' }))
+		await user.click(
+			within(screen.getByTestId('trigger-config-panel')).getByRole('button', {
+				name: 'Enregistrer',
+			}),
+		)
+
+		await waitFor(() => {
+			const call = api.calls.find(
+				(c) => c.method === 'put' && c.path === WORKFLOW_TRIGGER_PATH,
+			)
+			expect(call).toBeDefined()
+		})
+
+		const call = api.calls.find(
+			(c) => c.method === 'put' && c.path === WORKFLOW_TRIGGER_PATH,
+		)
+		const body = (call?.params as { body: Schemas.SetWorkflowTriggerRequest })
+			.body
+		expect(body.event_names).toEqual(['invoice.paid'])
+	})
+
+	it('says the save failed rather than silently discarding the selection', async () => {
+		renderFeature((fakeApi) => {
+			fakeApi.mockGet(EVENTS_PATH, () => ({
+				data: [event('quote.accepted')],
+				pagination: null,
+			}))
+			fakeApi.mockGet(WORKFLOW_TRIGGER_PATH, () => ({
+				data: { event_names: [] },
+				pagination: null,
+			}))
+			fakeApi.mockMutation('put', WORKFLOW_TRIGGER_PATH, () => {
+				throw Object.assign(new Error('Service Unavailable'), { status: 503 })
+			})
+		})
+
+		const trigger = await screen.findByTestId('rf__node-__trigger__')
+		trigger.click()
+
+		await screen.findByRole('checkbox', { name: 'quote.accepted' })
+		screen.getByRole('checkbox', { name: 'quote.accepted' }).click()
+		within(screen.getByTestId('trigger-config-panel'))
+			.getByRole('button', { name: 'Enregistrer' })
+			.click()
+
+		expect(
+			await within(screen.getByTestId('trigger-config-panel')).findByText(
+				/enregistrement a échoué/i,
+			),
+		).toBeDefined()
+	})
+})
+
+describe('WorkflowCanvasFeature — the last run', () => {
+	it('fills the data tree with the most recent run for this workflow, and none other', async () => {
+		const graph: Schemas.GraphDto = { connectors: [connector('c1')], edges: [] }
+
+		renderFeature((fakeApi) => {
+			fakeApi.mockGet(WORKFLOW_PATH, () => ({
+				data: workflowDetail({ graph, layout: { c1: { x: 0, y: 0 } } }),
+				pagination: null,
+			}))
+			fakeApi.mockGet(WORKFLOW_TRIGGER_PATH, () => ({
+				data: { event_names: ['quote.accepted'] },
+				pagination: null,
+			}))
+			fakeApi.mockGet(RUNS_PATH, () => ({
+				data: [
+					{
+						id: 'run-old',
+						organization_id: 'org-1',
+						workflow_id: 'workflow-1',
+						workflow_version_id: 'v1',
+						status: 'succeeded',
+						created_at: '2026-08-01T00:00:00Z',
+					},
+					{
+						id: 'run-new',
+						organization_id: 'org-1',
+						workflow_id: 'workflow-1',
+						workflow_version_id: 'v1',
+						status: 'succeeded',
+						created_at: '2026-08-05T00:00:00Z',
+					},
+					{
+						id: 'run-other-workflow',
+						organization_id: 'org-1',
+						workflow_id: 'workflow-2',
+						workflow_version_id: 'v1',
+						status: 'succeeded',
+						created_at: '2026-08-09T00:00:00Z',
+					},
+				],
+				pagination: null,
+			}))
+			fakeApi.mockGet(RUN_PATH, (params) => {
+				const runId = (params as { path: { run_id: string } }).path.run_id
+				expect(runId).toBe('run-new')
+				return {
+					data: {
+						id: 'run-new',
+						organization_id: 'org-1',
+						workflow_id: 'workflow-1',
+						workflow_version_id: 'v1',
+						status: 'succeeded',
+						created_at: '2026-08-05T00:00:00Z',
+						trigger_payload: { quote_id: 'q-real' },
+						steps: [
+							{
+								id: 'step-1',
+								connector_id: 'c1',
+								iteration_path: '',
+								attempts: 1,
+								status: 'succeeded',
+								created_at: '2026-08-05T00:00:01Z',
+								output: { id: 42 },
+							},
+						],
+					},
+					pagination: null,
+				}
+			})
+		})
+
+		const node = await screen.findByTestId('rf__node-c1')
+		node.click()
+
+		const lastRunButton = (await screen.findByRole('button', {
+			name: 'Dernière exécution',
+		})) as HTMLButtonElement
+		await waitFor(() => {
+			expect(lastRunButton.disabled).toBe(false)
+		})
+	})
+})
+
+describe('WorkflowCanvasFeature — the live preview', () => {
+	it('resolves an expression through the real evaluate endpoint', async () => {
+		const withField = {
+			...descriptor(SIMPLE_KIND, 'Étape simple'),
+			fields: [
+				{
+					name: 'url',
+					label: 'URL',
+					kind: 'Text' as const,
+					required: true,
+					secret: false,
+					expression: true,
+					visible_when: null,
+				},
+			],
+		}
+
+		const api = renderFeature((fakeApi) => {
+			fakeApi.mockGet(CONNECTORS_PATH, () => ({
+				data: { auth_schemes: [], connectors: [withField] },
+				pagination: null,
+			}))
+			fakeApi.mockGet(WORKFLOW_PATH, () => ({
+				data: workflowDetail({
+					graph: {
+						connectors: [{ ...connector('c1'), config: { url: 'a' } }],
+						edges: [],
+					},
+					layout: { c1: { x: 0, y: 0 } },
+				}),
+				pagination: null,
+			}))
+			fakeApi.mockMutation('post', EXPRESSIONS_EVALUATE_PATH, () => ({
+				data: { value: 'resolved!' },
+				pagination: null,
+			}))
+		})
+
+		const node = await screen.findByTestId('rf__node-c1')
+		node.click()
+
+		fireEvent.click(
+			await screen.findByRole('button', {
+				name: 'Insérer une donnée dans URL',
+			}),
+		)
+
+		await waitFor(
+			() => {
+				expect(screen.getByText('"resolved!"')).toBeDefined()
+			},
+			{ timeout: 2000 },
+		)
+
+		const call = api.calls.find(
+			(c) => c.method === 'post' && c.path === EXPRESSIONS_EVALUATE_PATH,
+		)
+		expect(call).toBeDefined()
 	})
 })

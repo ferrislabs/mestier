@@ -25,6 +25,8 @@ const RUN_PATH =
 	'/api/v1/organizations/{organization_id}/automation/runs/{run_id}'
 const RUN_REPLAY_PATH =
 	'/api/v1/organizations/{organization_id}/automation/runs/{run_id}/replay'
+const EXPRESSIONS_EVALUATE_PATH =
+	'/api/v1/organizations/{organization_id}/automation/expressions/evaluate'
 
 interface QueryKeyMeta {
 	_id?: unknown
@@ -229,6 +231,13 @@ export function useSetWorkflowTrigger() {
 		...window.tanstackApi.mutation('put', WORKFLOW_TRIGGER_PATH)
 			.mutationOptions,
 		onSuccess: () => invalidate(queryClient, WORKFLOW_TRIGGER_PATH),
+	})
+}
+
+export function useEvaluateExpression() {
+	return useMutation({
+		...window.tanstackApi.mutation('post', EXPRESSIONS_EVALUATE_PATH)
+			.mutationOptions,
 	})
 }
 
