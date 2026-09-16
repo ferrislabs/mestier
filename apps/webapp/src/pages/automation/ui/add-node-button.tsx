@@ -27,7 +27,7 @@ export function AddNodeButton({
 				<button
 					type="button"
 					aria-label={ariaLabel}
-					className="flex size-5 items-center justify-center rounded-full border bg-background text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+					className="nodrag flex size-5 items-center justify-center rounded-full border bg-background text-muted-foreground hover:bg-accent hover:text-accent-foreground"
 				>
 					<Plus className="size-3" />
 				</button>
