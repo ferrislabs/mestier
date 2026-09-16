@@ -409,6 +409,8 @@ export function WorkflowCanvas({
 			setNodes(nextNodes)
 			setEdges(nextEdges)
 			onChange(nextGraph, buildLayout(nextNodes))
+			setOpenTrigger(false)
+			setOpenConnectorId(newId)
 		},
 		[onChange, setNodes, setEdges],
 	)

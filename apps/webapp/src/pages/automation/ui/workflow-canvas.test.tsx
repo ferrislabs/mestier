@@ -1117,3 +1117,46 @@ describe('WorkflowCanvas — framing the graph on load', () => {
 		})
 	})
 })
+
+describe('WorkflowCanvas — a node opens where you just made it', () => {
+	it('opens the configuration panel on the connector it just added', async () => {
+		renderHarness({
+			graph: { connectors: [], edges: [] },
+			layout: new Map(),
+			descriptors: descriptorMap(SIMPLE_DESCRIPTOR),
+		})
+
+		const triggerNode = await screen.findByTestId('rf__node-__trigger__')
+		fireEvent.click(
+			within(triggerNode).getByRole('button', {
+				name: 'Ajouter le premier connecteur',
+			}),
+		)
+		fireEvent.click(await screen.findByText('Étape simple'))
+
+		const panel = await screen.findByTestId('connector-config-panel')
+		expect(within(panel).getByText('Étape simple')).toBeDefined()
+	})
+
+	it('closes the trigger panel rather than stacking two panels', async () => {
+		renderHarness({
+			graph: { connectors: [], edges: [] },
+			layout: new Map(),
+			descriptors: descriptorMap(SIMPLE_DESCRIPTOR),
+		})
+
+		const triggerNode = await screen.findByTestId('rf__node-__trigger__')
+		fireEvent.click(within(triggerNode).getByText('Déclencheur'))
+		await screen.findByTestId('trigger-config-panel')
+
+		fireEvent.click(
+			within(triggerNode).getByRole('button', {
+				name: 'Ajouter le premier connecteur',
+			}),
+		)
+		fireEvent.click(await screen.findByText('Étape simple'))
+
+		await screen.findByTestId('connector-config-panel')
+		expect(screen.queryByTestId('trigger-config-panel')).toBeNull()
+	})
+})
