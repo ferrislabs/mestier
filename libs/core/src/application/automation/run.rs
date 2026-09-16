@@ -725,6 +725,7 @@ mod tests {
     use super::*;
     use crate::application::default_authorizer;
     use crate::application::test_support::automation_pool;
+    use crate::domain::automation::subscription::{SetWorkflowTriggerCommand, WorkflowTrigger};
     use crate::domain::automation::workflow::{
         CreateWorkflowCommand, Edge, SaveWorkflowVersionCommand,
     };
@@ -1675,6 +1676,36 @@ mod tests {
             .expect_err("a workflow with no version cannot be run");
 
         assert!(matches!(error, CoreError::Conflict(_)));
+    }
+
+    #[tokio::test]
+    #[ignore = "requires live postgres"]
+    async fn starting_a_run_for_a_manual_workflow_succeeds() {
+        let pool = make_pool().await;
+        let org_id = seed_organization(&pool, "manual-run").await;
+        let usecase = use_case(pool.clone());
+        let graph = Graph {
+            connectors: vec![condition("c1", "{{ true }}")],
+            edges: vec![],
+            triggers: Vec::new(),
+        };
+        let workflow_id = start_workflow(&usecase, org_id, graph).await;
+        usecase
+            .set_workflow_trigger(SetWorkflowTriggerCommand {
+                org_id,
+                workflow_id,
+                trigger: WorkflowTrigger::Manual,
+            })
+            .await
+            .unwrap();
+
+        let run_id = usecase
+            .start_run(org_id, workflow_id, json!({}))
+            .await
+            .unwrap();
+
+        let found = usecase.find_run(org_id, run_id).await.unwrap();
+        assert!(found.is_some());
     }
 
     #[tokio::test]
