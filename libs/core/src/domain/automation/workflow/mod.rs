@@ -15,7 +15,7 @@ use serde::{Deserialize, Deserializer, Serialize, de};
 use uuid::Uuid;
 
 pub use commands::{CreateWorkflowCommand, SaveWorkflowVersionCommand, UpdateWorkflowCommand};
-pub use graph::{Branch, Edge, Graph, PlacedConnector};
+pub use graph::{Branch, Edge, Graph, PlacedConnector, PlacedTrigger, TriggerKind};
 pub use validation::{GraphError, validate_graph};
 
 /// A workflow: the organization-facing identity (name, whether it is

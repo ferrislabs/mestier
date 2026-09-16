@@ -183,7 +183,9 @@ mod tests {
     /// carries requires one, and a workflow with none must never produce a
     /// run (see `a_workflow_with_no_current_version_produces_no_run`).
     async fn seed_workflow(pool: &PgPool, org_id: OrganizationId) -> Uuid {
-        use crate::domain::automation::workflow::{Graph, PlacedConnector};
+        use crate::domain::automation::workflow::{
+            Edge, Graph, PlacedConnector, PlacedTrigger, TriggerKind,
+        };
         use crate::{application::default_authorizer, infrastructure::realtime::EventHub};
 
         // Routed through the use cases (rather than raw SQL) so the workflow
@@ -212,7 +214,15 @@ mod tests {
                 credential_id: None,
                 config,
             }],
-            edges: Vec::new(),
+            edges: vec![Edge {
+                from: "t1".to_string(),
+                to: "c1".to_string(),
+                branch: None,
+            }],
+            triggers: vec![PlacedTrigger {
+                id: "t1".to_string(),
+                kind: TriggerKind::Manual,
+            }],
         };
         usecase
             .save_workflow_version(

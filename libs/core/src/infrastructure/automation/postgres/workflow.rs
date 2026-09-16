@@ -494,6 +494,7 @@ mod tests {
                 config: serde_json::Map::new(),
             }],
             edges: Vec::new(),
+            triggers: Vec::new(),
         }
     }
 
@@ -919,6 +920,7 @@ mod tests {
                 to: "c2".to_string(),
                 branch: Some(Branch::Then),
             }],
+            triggers: Vec::new(),
         };
 
         let version = with_tx(&pool, async |tx| {

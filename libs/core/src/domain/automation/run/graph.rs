@@ -148,6 +148,7 @@ mod tests {
                 connector("c2", "flow.condition"),
             ],
             edges: vec![edge("c1", "c2", Some(Branch::Then))],
+            triggers: Vec::new(),
         };
 
         assert_eq!(roots(&graph), vec!["c1"]);
@@ -161,6 +162,7 @@ mod tests {
                 connector("ca", "flow.condition"),
             ],
             edges: vec![],
+            triggers: Vec::new(),
         };
 
         assert_eq!(roots(&graph), vec!["ca", "cz"]);
@@ -175,6 +177,7 @@ mod tests {
                 edge("c1", "c3", Some(Branch::Else)),
                 edge("c1", "c4", None),
             ],
+            triggers: Vec::new(),
         };
 
         assert_eq!(branch_targets(&graph, "c1", Some(Branch::Then)), vec!["c2"]);
@@ -191,6 +194,7 @@ mod tests {
         let graph = Graph {
             connectors: vec![],
             edges: vec![edge("a", "b", None), edge("b", "c", None)],
+            triggers: Vec::new(),
         };
 
         let reached = descendants_via(&graph, &["a"]);
@@ -203,6 +207,7 @@ mod tests {
         let graph = Graph {
             connectors: vec![],
             edges: vec![edge("a", "b", None), edge("b", "a", None)],
+            triggers: Vec::new(),
         };
 
         let reached = descendants_via(&graph, &["a"]);
@@ -215,6 +220,7 @@ mod tests {
         let graph = Graph {
             connectors: vec![],
             edges: vec![],
+            triggers: Vec::new(),
         };
 
         assert_eq!(
@@ -308,6 +314,7 @@ mod tests {
         let graph = Graph {
             connectors: vec![connector("c1", "flow.condition")],
             edges: vec![],
+            triggers: Vec::new(),
         };
 
         let index = connectors_by_id(&graph);

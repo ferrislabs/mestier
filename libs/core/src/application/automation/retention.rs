@@ -294,7 +294,9 @@ mod tests {
     #[ignore = "requires live postgres"]
     async fn a_retention_pass_purges_events_and_succeeded_runs_past_their_own_organizations_retention()
      {
-        use crate::domain::automation::workflow::{CreateWorkflowCommand, Graph, PlacedConnector};
+        use crate::domain::automation::workflow::{
+            CreateWorkflowCommand, Edge, Graph, PlacedConnector, PlacedTrigger, TriggerKind,
+        };
         use crate::infrastructure::automation::postgres::PgEventLogRepository;
         use crate::infrastructure::postgres::with_tx;
         use events::{Actor, DomainEvent, EmissionContext, EventEnvelope, EventSubject};
@@ -378,7 +380,15 @@ mod tests {
                             credential_id: None,
                             config,
                         }],
-                        edges: Vec::new(),
+                        edges: vec![Edge {
+                            from: "t1".to_string(),
+                            to: "c1".to_string(),
+                            branch: None,
+                        }],
+                        triggers: vec![PlacedTrigger {
+                            id: "t1".to_string(),
+                            kind: TriggerKind::Manual,
+                        }],
                     },
                     layout: None,
                     created_by: None,
@@ -437,7 +447,9 @@ mod tests {
     #[ignore = "requires live postgres"]
     async fn a_run_within_its_retention_is_intact_even_when_a_neighboring_organization_has_a_shorter_retention()
      {
-        use crate::domain::automation::workflow::{CreateWorkflowCommand, Graph, PlacedConnector};
+        use crate::domain::automation::workflow::{
+            CreateWorkflowCommand, Edge, Graph, PlacedConnector, PlacedTrigger, TriggerKind,
+        };
         use crate::infrastructure::automation::postgres::PgRunRepository;
         use crate::infrastructure::postgres::with_tx;
         use serde_json::json;
@@ -490,7 +502,15 @@ mod tests {
                                 credential_id: None,
                                 config,
                             }],
-                            edges: Vec::new(),
+                            edges: vec![Edge {
+                                from: "t1".to_string(),
+                                to: "c1".to_string(),
+                                branch: None,
+                            }],
+                            triggers: vec![PlacedTrigger {
+                                id: "t1".to_string(),
+                                kind: TriggerKind::Manual,
+                            }],
                         },
                         layout: None,
                         created_by: None,

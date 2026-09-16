@@ -24,7 +24,9 @@ use axum::{
 };
 use handlers::{ApiError, AppState, DataEnvelope, Response};
 use http::StatusCode;
-use mestier_core::{SaveWorkflowVersionCommand, connector_catalogue, validate_graph};
+use mestier_core::{
+    SaveWorkflowVersionCommand, connector_catalogue, event_catalogue, validate_graph,
+};
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
@@ -124,9 +126,10 @@ pub async fn handler(
 
     let graph: mestier_core::Graph = payload.graph.into();
     let catalogue = connector_catalogue();
+    let events = event_catalogue();
     let credentials = state.usecase.list_credentials(organization_id).await?;
 
-    if let Err(errors) = validate_graph(&graph, &catalogue, &credentials) {
+    if let Err(errors) = validate_graph(&graph, &catalogue, &credentials, &events) {
         let response: Vec<GraphErrorResponse> =
             errors.iter().map(GraphErrorResponse::from).collect();
         return Err(SaveVersionError::GraphInvalid(response));

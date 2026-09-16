@@ -6,6 +6,7 @@ use uuid::Uuid;
 use crate::{
     application::MestierUseCase,
     domain::automation::{
+        catalogue::event_catalogue,
         connector::connector_catalogue,
         ports::{CredentialRepository, WorkflowRepository},
         workflow::{
@@ -120,10 +121,16 @@ impl MestierUseCase {
             .ok_or(CoreError::NotFound)?;
 
         let catalogue = connector_catalogue();
+        let events = event_catalogue();
         let organization_credentials = credentials.list_by_organization(command.org_id).await?;
 
-        validate_graph(&command.graph, &catalogue, &organization_credentials)
-            .map_err(|errors| CoreError::Conflict(format_graph_errors(&errors)))?;
+        validate_graph(
+            &command.graph,
+            &catalogue,
+            &organization_credentials,
+            &events,
+        )
+        .map_err(|errors| CoreError::Conflict(format_graph_errors(&errors)))?;
 
         let version = workflows
             .insert_version(
@@ -187,7 +194,9 @@ mod tests {
     use super::*;
     use crate::application::default_authorizer;
     use crate::application::test_support::automation_pool;
-    use crate::domain::automation::workflow::{Graph, PlacedConnector};
+    use crate::domain::automation::workflow::{
+        Edge, Graph, PlacedConnector, PlacedTrigger, TriggerKind,
+    };
     use crate::infrastructure::automation::webhook::secret::SecretCipher;
     use crate::infrastructure::realtime::EventHub;
 
@@ -248,7 +257,15 @@ mod tests {
                 credential_id: None,
                 config,
             }],
-            edges: Vec::new(),
+            edges: vec![Edge {
+                from: "t1".to_string(),
+                to: "c1".to_string(),
+                branch: None,
+            }],
+            triggers: vec![PlacedTrigger {
+                id: "t1".to_string(),
+                kind: TriggerKind::Manual,
+            }],
         }
     }
 
@@ -568,6 +585,7 @@ mod tests {
                 config: serde_json::Map::new(),
             }],
             edges: Vec::new(),
+            triggers: Vec::new(),
         };
 
         let error = usecase

@@ -242,7 +242,9 @@ mod tests {
     use crate::application::default_authorizer;
     use crate::application::test_support::automation_pool;
     use crate::domain::automation::credential::CredentialOrigin;
-    use crate::domain::automation::workflow::{CreateWorkflowCommand, Graph, PlacedConnector};
+    use crate::domain::automation::workflow::{
+        CreateWorkflowCommand, Edge, Graph, PlacedConnector, PlacedTrigger, TriggerKind,
+    };
     use crate::infrastructure::automation::webhook::secret::SecretCipher;
     use crate::infrastructure::realtime::EventHub;
 
@@ -638,7 +640,15 @@ mod tests {
                 credential_id: Some(created.id),
                 config: serde_json::Map::new(),
             }],
-            edges: Vec::new(),
+            edges: vec![Edge {
+                from: "t1".to_string(),
+                to: "c1".to_string(),
+                branch: None,
+            }],
+            triggers: vec![PlacedTrigger {
+                id: "t1".to_string(),
+                kind: TriggerKind::Manual,
+            }],
         };
         with_tx(&pool, async |tx| {
             let mut repo = PgWorkflowRepository::new(&tx);

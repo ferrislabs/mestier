@@ -11,8 +11,8 @@ mod tests {
     use crate::application::{MestierUseCase, default_authorizer};
     use crate::domain::automation::ports::EventLogRepository;
     use crate::domain::automation::workflow::{
-        CreateWorkflowCommand, Graph, NodePosition, PlacedConnector, SaveWorkflowVersionCommand,
-        WorkflowLayout,
+        CreateWorkflowCommand, Edge, Graph, NodePosition, PlacedConnector, PlacedTrigger,
+        SaveWorkflowVersionCommand, TriggerKind, WorkflowLayout,
     };
     use crate::infrastructure::automation::postgres::PgEventLogRepository;
     use crate::infrastructure::automation::postgres::dispatcher::DISPATCH_LOCK;
@@ -94,7 +94,15 @@ mod tests {
                 credential_id: None,
                 config,
             }],
-            edges: Vec::new(),
+            edges: vec![Edge {
+                from: "t1".to_string(),
+                to: "c1".to_string(),
+                branch: None,
+            }],
+            triggers: vec![PlacedTrigger {
+                id: "t1".to_string(),
+                kind: TriggerKind::Manual,
+            }],
         };
         usecase
             .save_workflow_version(
@@ -222,7 +230,15 @@ mod tests {
                 credential_id: None,
                 config,
             }],
-            edges: Vec::new(),
+            edges: vec![Edge {
+                from: "t1".to_string(),
+                to: connector_id.to_string(),
+                branch: None,
+            }],
+            triggers: vec![PlacedTrigger {
+                id: "t1".to_string(),
+                kind: TriggerKind::Manual,
+            }],
         }
     }
 

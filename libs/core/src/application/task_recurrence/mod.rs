@@ -5,8 +5,8 @@ use serde_json::json;
 use uuid::Uuid;
 
 use crate::{
-    CreateWorkflowCommand, Edge, Graph, OrganizationId, PlacedConnector, RunStatus,
-    SaveWorkflowVersionCommand, TaskRecurrence, TaskRecurrenceId,
+    CreateWorkflowCommand, Edge, Graph, OrganizationId, PlacedConnector, PlacedTrigger, RunStatus,
+    SaveWorkflowVersionCommand, TaskRecurrence, TaskRecurrenceId, TriggerKind,
     application::MestierUseCase,
     domain::task_recurrence::{
         commands::{CreateTaskRecurrenceCommand, PatchTaskRecurrenceCommand},
@@ -171,7 +171,15 @@ impl MestierUseCase {
                     credential_id: None,
                     config: serde_json::Map::new(),
                 }],
-                edges: Vec::<Edge>::new(),
+                edges: vec![Edge {
+                    from: "t1".to_owned(),
+                    to: "extend_horizon".to_owned(),
+                    branch: None,
+                }],
+                triggers: vec![PlacedTrigger {
+                    id: "t1".to_owned(),
+                    kind: TriggerKind::Manual,
+                }],
             },
             layout: None,
             created_by: None,

@@ -960,6 +960,7 @@ mod tests {
                 edge("c2", "c3", Some(Branch::Then)),
                 edge("c3", "c4", Some(Branch::Then)),
             ],
+            triggers: Vec::new(),
         };
         let workflow_id = start_workflow(&usecase, org_id, graph).await;
         let run_id = usecase
@@ -1003,6 +1004,7 @@ mod tests {
                 condition("body", "{{ true }}"),
             ],
             edges: vec![edge("loop1", "body", Some(Branch::Each))],
+            triggers: Vec::new(),
         };
         let workflow_id = start_workflow(&usecase, org_id, graph).await;
         let run_id = usecase
@@ -1064,6 +1066,7 @@ mod tests {
                 customer_create("body", "{{ loop.item.name }}"),
             ],
             edges: vec![edge("loop1", "body", Some(Branch::Each))],
+            triggers: Vec::new(),
         };
         let workflow_id = start_workflow(&usecase, org_id, graph).await;
         let run_id = usecase
@@ -1148,6 +1151,7 @@ mod tests {
                 edge("c1", "then_branch", Some(Branch::Then)),
                 edge("c1", "else_branch", Some(Branch::Else)),
             ],
+            triggers: Vec::new(),
         };
         let workflow_id = start_workflow(&usecase, org_id, graph).await;
         let run_id = usecase
@@ -1187,6 +1191,7 @@ mod tests {
         let graph = Graph {
             connectors: vec![customer_create("body", "")],
             edges: vec![],
+            triggers: Vec::new(),
         };
         let workflow_id = start_workflow(&usecase, org_id, graph).await;
         let run_id = usecase
@@ -1235,7 +1240,16 @@ mod tests {
             .windows(2)
             .map(|pair| edge(pair[0], pair[1], Some(Branch::Then)))
             .collect();
-        let workflow_id = start_workflow(&usecase, org_id, Graph { connectors, edges }).await;
+        let workflow_id = start_workflow(
+            &usecase,
+            org_id,
+            Graph {
+                connectors,
+                edges,
+                triggers: Vec::new(),
+            },
+        )
+        .await;
         let run_id = usecase
             .start_run(org_id, workflow_id, json!({}))
             .await
@@ -1296,6 +1310,7 @@ mod tests {
         let graph = Graph {
             connectors: vec![condition("c1", "{{ true }}")],
             edges: vec![],
+            triggers: Vec::new(),
         };
         let workflow_id = start_workflow(&usecase, org_id, graph).await;
         let run_id = usecase
@@ -1358,6 +1373,7 @@ mod tests {
                 graph: Graph {
                     connectors: vec![condition("only_v1", "{{ true }}")],
                     edges: vec![],
+                    triggers: Vec::new(),
                 },
                 layout: None,
                 created_by: None,
@@ -1378,6 +1394,7 @@ mod tests {
                 graph: Graph {
                     connectors: vec![condition("only_v2", "{{ true }}")],
                     edges: vec![],
+                    triggers: Vec::new(),
                 },
                 layout: None,
                 created_by: None,
@@ -1421,6 +1438,7 @@ mod tests {
         let pinned_graph = Graph {
             connectors: vec![condition("only_v1", "{{ true }}")],
             edges: vec![],
+            triggers: Vec::new(),
         };
         usecase
             .save_workflow_version(SaveWorkflowVersionCommand {
@@ -1446,6 +1464,7 @@ mod tests {
                     graph: Graph {
                         connectors: vec![condition(label, "{{ true }}")],
                         edges: vec![],
+                        triggers: Vec::new(),
                     },
                     layout: None,
                     created_by: None,
@@ -1486,6 +1505,7 @@ mod tests {
                 graph: Graph {
                     connectors: vec![condition("c1", "{{ true }}")],
                     edges: vec![],
+                    triggers: Vec::new(),
                 },
                 layout: None,
                 created_by: None,
@@ -1551,6 +1571,7 @@ mod tests {
                 edge("outer", "inner", Some(Branch::Each)),
                 edge("inner", "leaf", Some(Branch::Each)),
             ],
+            triggers: Vec::new(),
         };
         let workflow_id = start_workflow(&usecase, org_id, graph).await;
         let run_id = usecase
@@ -1650,6 +1671,7 @@ mod tests {
         let graph = Graph {
             connectors: vec![condition("c1", "{{ true }}")],
             edges: vec![],
+            triggers: Vec::new(),
         };
         let workflow_id = start_workflow(&usecase, org_id, graph).await;
         let run_id = usecase
@@ -1675,6 +1697,7 @@ mod tests {
         let graph = Graph {
             connectors: vec![condition("c1", "{{ true }}")],
             edges: vec![],
+            triggers: Vec::new(),
         };
         let workflow_id = start_workflow(&usecase, org_id, graph).await;
         let run_id = usecase
@@ -1700,6 +1723,7 @@ mod tests {
         let graph = Graph {
             connectors: vec![condition("c1", "{{ true }}")],
             edges: vec![],
+            triggers: Vec::new(),
         };
         let workflow_id = start_workflow(&usecase, org_id, graph.clone()).await;
         let other_workflow_id = start_workflow(&usecase, other_org, graph).await;
@@ -1728,6 +1752,7 @@ mod tests {
         let graph = Graph {
             connectors: vec![customer_create("c1", "Inspected Customer")],
             edges: vec![],
+            triggers: Vec::new(),
         };
         let workflow_id = start_workflow(&usecase, org_id, graph).await;
         let run_id = usecase
@@ -1762,6 +1787,7 @@ mod tests {
         let graph = Graph {
             connectors: vec![condition("c1", "{{ true }}")],
             edges: vec![],
+            triggers: Vec::new(),
         };
         let workflow_id = start_workflow(&usecase, org_id, graph).await;
         let run_id = usecase
@@ -1800,6 +1826,7 @@ mod tests {
                 customer_create("c3", "C"),
             ],
             edges: vec![edge("c1", "c2", None), edge("c2", "c3", None)],
+            triggers: Vec::new(),
         };
         let workflow_id = start_workflow(&usecase, org_id, graph).await;
         let run_id = usecase
@@ -1863,6 +1890,7 @@ mod tests {
         let graph = Graph {
             connectors: vec![condition("c1", "{{ true }}")],
             edges: vec![],
+            triggers: Vec::new(),
         };
         let workflow_id = start_workflow(&usecase, org_id, graph).await;
         let run_id = usecase
@@ -1893,6 +1921,7 @@ mod tests {
         let graph = Graph {
             connectors: vec![condition("c1", "{{ true }}")],
             edges: vec![],
+            triggers: Vec::new(),
         };
         let workflow_id = start_workflow(&usecase, org_id, graph).await;
         let run_id = usecase
@@ -1919,6 +1948,7 @@ mod tests {
         let graph = Graph {
             connectors: vec![condition("c1", "{{ true }}")],
             edges: vec![],
+            triggers: Vec::new(),
         };
         let workflow_id = start_workflow(&usecase, org_id, graph).await;
         let run_id = usecase

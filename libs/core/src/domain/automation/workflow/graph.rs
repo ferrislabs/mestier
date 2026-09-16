@@ -12,6 +12,8 @@ use uuid::Uuid;
 pub struct Graph {
     pub connectors: Vec<PlacedConnector>,
     pub edges: Vec<Edge>,
+    #[serde(default)]
+    pub triggers: Vec<PlacedTrigger>,
 }
 
 /// One connector instance on the canvas.
@@ -53,6 +55,18 @@ pub enum Branch {
     Else,
     Each,
     After,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct PlacedTrigger {
+    pub id: String,
+    pub kind: TriggerKind,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub enum TriggerKind {
+    Manual,
+    Events(Vec<String>),
 }
 
 #[cfg(test)]
@@ -102,6 +116,16 @@ mod tests {
                     branch: None,
                 },
             ],
+            triggers: vec![
+                PlacedTrigger {
+                    id: "t1".to_string(),
+                    kind: TriggerKind::Manual,
+                },
+                PlacedTrigger {
+                    id: "t2".to_string(),
+                    kind: TriggerKind::Events(vec!["quote.accepted".to_string()]),
+                },
+            ],
         }
     }
 
@@ -135,6 +159,10 @@ mod tests {
                 "edges": [
                     { "from": "c1", "to": "c2", "branch": "Then" },
                     { "from": "c1", "to": "c1", "branch": null }
+                ],
+                "triggers": [
+                    { "id": "t1", "kind": "Manual" },
+                    { "id": "t2", "kind": { "Events": ["quote.accepted"] } }
                 ]
             })
         );
@@ -157,7 +185,30 @@ mod tests {
             Graph {
                 connectors: Vec::new(),
                 edges: Vec::new(),
+                triggers: Vec::new(),
             }
+        );
+    }
+
+    #[test]
+    fn a_graph_stored_before_triggers_existed_still_deserializes() {
+        let json = json!({
+            "connectors": [],
+            "edges": []
+        });
+
+        let graph: Graph =
+            serde_json::from_value(json).expect("a graph with no triggers key deserializes");
+
+        assert_eq!(graph, Graph::default());
+    }
+
+    #[test]
+    fn a_manual_trigger_and_an_events_trigger_are_distinguished_by_type() {
+        assert_ne!(
+            TriggerKind::Manual,
+            TriggerKind::Events(Vec::new()),
+            "manual and events-with-nothing-selected must never compare equal"
         );
     }
 }

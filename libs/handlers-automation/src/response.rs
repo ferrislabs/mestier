@@ -434,6 +434,7 @@ impl From<GraphDto> for mestier_core::Graph {
         Self {
             connectors: value.connectors.into_iter().map(Into::into).collect(),
             edges: value.edges.into_iter().map(Into::into).collect(),
+            triggers: Vec::new(),
         }
     }
 }
@@ -567,6 +568,7 @@ impl WorkflowDetailResponse {
 #[derive(Debug, Clone, PartialEq, Serialize, ToSchema)]
 pub struct GraphErrorResponse {
     pub connector_id: Option<String>,
+    pub trigger_id: Option<String>,
     pub field: Option<String>,
     pub message: String,
 }
@@ -575,56 +577,66 @@ impl From<&mestier_core::GraphError> for GraphErrorResponse {
     fn from(value: &mestier_core::GraphError) -> Self {
         use mestier_core::GraphError::*;
 
-        let (connector_id, field) = match value {
-            DuplicateConnectorId { id } => (Some(id.clone()), None),
-            UnknownConnectorKind { connector_id, .. } => (Some(connector_id.clone()), None),
+        let (connector_id, trigger_id, field) = match value {
+            DuplicateConnectorId { id } => (Some(id.clone()), None, None),
+            UnknownConnectorKind { connector_id, .. } => (Some(connector_id.clone()), None, None),
             UnknownConfigField {
                 connector_id,
                 field,
-            } => (Some(connector_id.clone()), Some(field.clone())),
+            } => (Some(connector_id.clone()), None, Some(field.clone())),
             MissingRequiredField {
                 connector_id,
                 field,
-            } => (Some(connector_id.clone()), Some(field.clone())),
+            } => (Some(connector_id.clone()), None, Some(field.clone())),
             FieldTypeMismatch {
                 connector_id,
                 field,
                 ..
-            } => (Some(connector_id.clone()), Some(field.clone())),
+            } => (Some(connector_id.clone()), None, Some(field.clone())),
             ExpressionNotAllowed {
                 connector_id,
                 field,
-            } => (Some(connector_id.clone()), Some(field.clone())),
+            } => (Some(connector_id.clone()), None, Some(field.clone())),
             InvalidExpression {
                 connector_id,
                 field,
                 ..
-            } => (Some(connector_id.clone()), Some(field.clone())),
-            UnknownCredential { connector_id, .. } => (Some(connector_id.clone()), None),
-            CredentialSchemeNotAccepted { connector_id, .. } => (Some(connector_id.clone()), None),
-            MissingCredential { connector_id } => (Some(connector_id.clone()), None),
+            } => (Some(connector_id.clone()), None, Some(field.clone())),
+            UnknownCredential { connector_id, .. } => (Some(connector_id.clone()), None, None),
+            CredentialSchemeNotAccepted { connector_id, .. } => {
+                (Some(connector_id.clone()), None, None)
+            }
+            MissingCredential { connector_id } => (Some(connector_id.clone()), None, None),
             UnknownConnectorReference {
                 connector_id,
                 field,
                 ..
-            } => (Some(connector_id.clone()), Some(field.clone())),
+            } => (Some(connector_id.clone()), None, Some(field.clone())),
             DownstreamConnectorReference {
                 connector_id,
                 field,
                 ..
-            } => (Some(connector_id.clone()), Some(field.clone())),
+            } => (Some(connector_id.clone()), None, Some(field.clone())),
             LoopUsedOutsideLoop {
                 connector_id,
                 field,
-            } => (Some(connector_id.clone()), Some(field.clone())),
-            DanglingEdge { from, .. } => (Some(from.clone()), None),
-            InvalidBranch { connector_id } => (Some(connector_id.clone()), None),
-            Cycle { connector_ids } => (connector_ids.first().cloned(), None),
-            UnreachableConnector { connector_id } => (Some(connector_id.clone()), None),
+            } => (Some(connector_id.clone()), None, Some(field.clone())),
+            DanglingEdge { from, .. } => (Some(from.clone()), None, None),
+            InvalidBranch { connector_id } => (Some(connector_id.clone()), None, None),
+            Cycle { connector_ids } => (connector_ids.first().cloned(), None, None),
+            UnreachableConnector { connector_id } => (Some(connector_id.clone()), None, None),
+            DuplicateTriggerId { id } => (None, Some(id.clone()), None),
+            TriggerIdCollidesWithConnectorId { id } => (None, Some(id.clone()), None),
+            EdgeIntoTrigger { trigger_id, .. } => (None, Some(trigger_id.clone()), None),
+            BranchedTriggerEdge { trigger_id, .. } => (None, Some(trigger_id.clone()), None),
+            InertTrigger { trigger_id } => (None, Some(trigger_id.clone()), None),
+            EmptyEventTrigger { trigger_id } => (None, Some(trigger_id.clone()), None),
+            UnknownEventName { trigger_id, .. } => (None, Some(trigger_id.clone()), None),
         };
 
         Self {
             connector_id,
+            trigger_id,
             field,
             message: value.to_string(),
         }

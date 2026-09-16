@@ -618,6 +618,7 @@ mod tests {
                 config,
             }],
             edges: Vec::new(),
+            triggers: Vec::new(),
         }
     }
 
