@@ -68,9 +68,9 @@ describe('visibleFields', () => {
 		})
 		const always = field({ name: 'always' })
 
-		expect(
-			visibleFields([mode, target, always], { mode: 'advanced' }),
-		).toEqual([mode, target, always])
+		expect(visibleFields([mode, target, always], { mode: 'advanced' })).toEqual(
+			[mode, target, always],
+		)
 		expect(visibleFields([mode, target, always], { mode: 'simple' })).toEqual([
 			mode,
 			always,

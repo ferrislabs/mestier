@@ -2,7 +2,9 @@ import type { Schemas } from '#/api/api.client'
 
 export const SIGNING_CREDENTIAL_FIELD_NAME = 'signing_credential_id'
 
-export function isSigningCredentialField(field: Schemas.FieldResponse): boolean {
+export function isSigningCredentialField(
+	field: Schemas.FieldResponse,
+): boolean {
 	return field.name === SIGNING_CREDENTIAL_FIELD_NAME
 }
 

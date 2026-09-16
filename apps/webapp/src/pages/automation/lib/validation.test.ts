@@ -123,7 +123,9 @@ describe('fieldErrorMessage', () => {
 	})
 
 	it('ignores a connector-level error (null field) when asked for a named field', () => {
-		const errors = [{ field: null, message: 'Identifiant de credential manquant' }]
+		const errors = [
+			{ field: null, message: 'Identifiant de credential manquant' },
+		]
 
 		expect(fieldErrorMessage(errors, 'credential_id')).toBeNull()
 	})
