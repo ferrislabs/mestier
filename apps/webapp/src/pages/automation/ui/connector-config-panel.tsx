@@ -253,9 +253,9 @@ export function ConnectorConfigPanel({
 		<div
 			data-testid="connector-config-panel"
 			style={{ width }}
-			className="flex min-h-0 flex-col border-l bg-card"
+			className="flex min-h-0 flex-col overflow-hidden border-l bg-card"
 		>
-			<div className="flex items-stretch">
+			<div className="flex min-h-0 flex-1 items-stretch">
 				<button
 					type="button"
 					aria-label="Redimensionner le panneau"
@@ -288,7 +288,7 @@ export function ConnectorConfigPanel({
 						</div>
 					) : null}
 
-					<div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto p-4">
+					<div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto overscroll-contain p-4">
 						<Collapsible defaultOpen>
 							<CollapsibleTrigger className="flex w-full items-center justify-between text-sm font-medium text-muted-foreground">
 								Données disponibles

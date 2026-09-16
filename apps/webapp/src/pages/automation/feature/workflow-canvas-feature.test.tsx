@@ -685,7 +685,9 @@ describe('WorkflowCanvasFeature — inline credential creation', () => {
 		node.click()
 
 		await user.click(
-			await screen.findByRole('button', { name: 'Nouvelle identification' }),
+			await screen.findByRole('button', {
+				name: /Créer|Nouvelle identification/,
+			}),
 		)
 		await user.type(screen.getByLabelText('Nom'), 'Ma clé')
 		await user.type(screen.getByLabelText('Token'), 's3cr3t')

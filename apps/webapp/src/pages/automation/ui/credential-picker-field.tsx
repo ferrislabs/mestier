@@ -41,7 +41,13 @@ export function CredentialPickerField({
 						className="w-full"
 						aria-invalid={error !== null}
 					>
-						<SelectValue placeholder="Choisir une identification…" />
+						<SelectValue
+							placeholder={
+								credentials.length === 0
+									? 'Aucune identification'
+									: 'Choisir une identification…'
+							}
+						/>
 					</SelectTrigger>
 					<SelectContent>
 						{credentials.length === 0 ? (
@@ -59,13 +65,16 @@ export function CredentialPickerField({
 				</Select>
 				<Button
 					type="button"
-					variant="outline"
-					size="icon"
-					aria-label="Nouvelle identification"
+					variant={credentials.length === 0 ? 'default' : 'outline'}
+					size={credentials.length === 0 ? 'sm' : 'icon'}
+					aria-label={
+						credentials.length === 0 ? undefined : 'Nouvelle identification'
+					}
 					title="Nouvelle identification"
 					onClick={onCreateNew}
 				>
 					<Plus className="size-4" />
+					{credentials.length === 0 ? 'Créer' : null}
 				</Button>
 			</div>
 			{error ? (

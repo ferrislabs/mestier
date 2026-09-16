@@ -229,7 +229,7 @@ describe('ConnectorConfigPanel — inline credential creation', () => {
 		)
 
 		await user.click(
-			screen.getByRole('button', { name: 'Nouvelle identification' }),
+			screen.getByRole('button', { name: /Créer|Nouvelle identification/ }),
 		)
 		await user.type(screen.getByLabelText('Nom'), 'Ma clé')
 		await user.type(screen.getByLabelText('Token'), 's3cr3t')
@@ -267,7 +267,7 @@ describe('ConnectorConfigPanel — inline credential creation', () => {
 		)
 
 		await user.click(
-			screen.getByRole('button', { name: 'Nouvelle identification' }),
+			screen.getByRole('button', { name: /Créer|Nouvelle identification/ }),
 		)
 		await user.type(screen.getByLabelText('Nom'), 'Signature')
 		await user.click(screen.getByRole('combobox', { name: 'Origine' }))
@@ -313,7 +313,7 @@ describe('ConnectorConfigPanel — inline credential creation', () => {
 		)
 
 		await user.click(
-			screen.getByRole('button', { name: 'Nouvelle identification' }),
+			screen.getByRole('button', { name: /Créer|Nouvelle identification/ }),
 		)
 
 		expect(screen.queryByRole('combobox', { name: 'Origine' })).toBeNull()
@@ -348,7 +348,7 @@ describe('ConnectorConfigPanel — inline credential creation', () => {
 		)
 
 		await user.click(
-			screen.getByRole('button', { name: 'Nouvelle identification' }),
+			screen.getByRole('button', { name: /Créer|Nouvelle identification/ }),
 		)
 		await user.type(screen.getByLabelText('Nom'), 'Ma clé')
 		await user.type(screen.getByLabelText('Token'), 's3cr3t')
@@ -371,7 +371,7 @@ describe('ConnectorConfigPanel — inline credential creation', () => {
 		)
 
 		await user.click(
-			screen.getByRole('button', { name: 'Nouvelle identification' }),
+			screen.getByRole('button', { name: /Créer|Nouvelle identification/ }),
 		)
 		await user.click(screen.getByRole('button', { name: 'Annuler' }))
 

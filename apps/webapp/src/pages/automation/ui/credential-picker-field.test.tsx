@@ -102,7 +102,7 @@ describe('CredentialPickerField', () => {
 			<CredentialPickerField
 				label="Identification"
 				htmlFor="credential-picker"
-				credentials={[]}
+				credentials={[credential('cred-1', 'Odoo prod')]}
 				value={null}
 				error={null}
 				onChange={vi.fn()}
@@ -131,5 +131,42 @@ describe('CredentialPickerField', () => {
 		)
 
 		expect(screen.getByText('Identifiant de credential manquant')).toBeDefined()
+	})
+})
+
+describe('CredentialPickerField — when the organization has none', () => {
+	it('says so on the closed select rather than promising a choice', () => {
+		render(
+			<CredentialPickerField
+				label="Identification"
+				credentials={[]}
+				value={null}
+				error={null}
+				onChange={vi.fn()}
+				onCreateNew={vi.fn()}
+			/>,
+		)
+
+		expect(screen.getByText('Aucune identification')).toBeDefined()
+		expect(screen.queryByText('Choisir une identification…')).toBeNull()
+	})
+
+	it('offers creating one as a named action, not a bare icon', async () => {
+		const user = userEvent.setup()
+		const onCreateNew = vi.fn()
+		render(
+			<CredentialPickerField
+				label="Identification"
+				credentials={[]}
+				value={null}
+				error={null}
+				onChange={vi.fn()}
+				onCreateNew={onCreateNew}
+			/>,
+		)
+
+		await user.click(screen.getByRole('button', { name: /Créer/ }))
+
+		expect(onCreateNew).toHaveBeenCalled()
 	})
 })

@@ -38,7 +38,7 @@ export function TriggerConfigPanel({
 	return (
 		<div
 			data-testid="trigger-config-panel"
-			className="flex min-h-0 w-[360px] flex-col border-l bg-card"
+			className="flex min-h-0 w-[360px] flex-col overflow-hidden border-l bg-card"
 		>
 			<div className="flex items-center justify-between gap-2 border-b px-4 py-3">
 				<span className="truncate font-medium">Déclencheur</span>
@@ -71,7 +71,7 @@ export function TriggerConfigPanel({
 				</div>
 			) : null}
 
-			<div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto p-4">
+			<div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto overscroll-contain p-4">
 				{groups.map((group) => (
 					<div key={group.prefix} className="flex flex-col gap-2">
 						<p className="text-xs font-medium uppercase text-muted-foreground">
