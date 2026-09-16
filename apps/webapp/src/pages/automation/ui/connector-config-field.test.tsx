@@ -241,7 +241,12 @@ describe('ConnectorConfigField — Json — rows', () => {
 		const onChange = vi.fn()
 		render(
 			<ConnectorConfigField
-				field={field({ name: 'headers', label: 'Headers', kind: 'Json' })}
+				field={field({
+					name: 'headers',
+					label: 'Headers',
+					kind: 'Json',
+					expression: true,
+				})}
 				value={{ Authorization: '' }}
 				error={null}
 				onChange={onChange}
@@ -255,6 +260,29 @@ describe('ConnectorConfigField — Json — rows', () => {
 		expect(onChange).toHaveBeenLastCalledWith({
 			Authorization: '{{ connectors.c1.output.token }}',
 		})
+	})
+
+	it('ignores a dropped expression when the field does not accept one', () => {
+		const onChange = vi.fn()
+		render(
+			<ConnectorConfigField
+				field={field({
+					name: 'headers',
+					label: 'Headers',
+					kind: 'Json',
+					expression: false,
+				})}
+				value={{ Authorization: '' }}
+				error={null}
+				onChange={onChange}
+				onOpenExpression={vi.fn()}
+			/>,
+		)
+
+		const dataTransfer = { getData: () => 'connectors.c1.output.token' }
+		fireEvent.drop(screen.getByDisplayValue(''), { dataTransfer })
+
+		expect(onChange).not.toHaveBeenCalled()
 	})
 })
 

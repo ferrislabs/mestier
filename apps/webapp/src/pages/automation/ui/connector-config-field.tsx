@@ -345,16 +345,21 @@ function JsonField({
 									onChange={(event) =>
 										changeRowValue(row.id, event.target.value)
 									}
-									onDragOver={(event) => event.preventDefault()}
-									onDrop={(event) => {
-										event.preventDefault()
-										dropOnRow(
-											row.id,
-											event.currentTarget,
-											event.dataTransfer.getData('text/plain'),
-										)
-									}}
 									className="flex-1 font-mono text-xs"
+									{...(field.expression
+										? {
+												onDragOver: (event: DragEvent<HTMLInputElement>) =>
+													event.preventDefault(),
+												onDrop: (event: DragEvent<HTMLInputElement>) => {
+													event.preventDefault()
+													dropOnRow(
+														row.id,
+														event.currentTarget,
+														event.dataTransfer.getData('text/plain'),
+													)
+												},
+											}
+										: {})}
 								/>
 								<button
 									type="button"
