@@ -157,13 +157,6 @@ interface LoopBuilder {
 	iterationsByIndex: Map<number, { path: string; entries: SegmentedStep[] }>
 }
 
-/**
- * Groups a level of steps into leaves and loops — every iteration of the
- * same loop connector at this nesting depth collapses into one `loop` node
- * (#500's "a loop over five items shows one group, not five rows"), rather
- * than one node per iteration. Order follows first appearance so the tree
- * reads the way the run executed.
- */
 function buildStepTreeLevel(
 	entries: SegmentedStep[],
 	depth: number,

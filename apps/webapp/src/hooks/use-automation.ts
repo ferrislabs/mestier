@@ -211,8 +211,6 @@ export function useRun(organizationId: string, runId: string | null) {
 	})
 }
 
-/** Starts a real run: `POST /workflows/{id}/runs` triggers the worker
- * against real connectors — no dry-run exists (#500). */
 export function useStartRun() {
 	const queryClient = useQueryClient()
 	return useMutation({
@@ -221,9 +219,6 @@ export function useStartRun() {
 	})
 }
 
-/** Same read as `useRun`, but keeps polling `GET /runs/{id}` every
- * `RUN_POLL_INTERVAL_MS` while the run is pending or running, and stops the
- * moment it settles — there is no realtime channel for automation (#500). */
 export function useRunPolling(organizationId: string, runId: string | null) {
 	return useQuery({
 		...window.tanstackApi.get(RUN_PATH, {

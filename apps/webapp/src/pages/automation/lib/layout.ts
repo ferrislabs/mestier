@@ -5,13 +5,6 @@ import { rootConnectorIds } from '#/pages/automation/lib/graph'
 const COLUMN_WIDTH = 280
 const ROW_HEIGHT = 140
 
-/**
- * Node positions are stored on the workflow row, not the versioned graph
- * (#492's design note) — a run pins a graph that may name a connector
- * `stored` has no position for (added since, or drawing an older version).
- * Fills those gaps with a computed layout rather than stacking them at the
- * origin.
- */
 export function mergedLayout(
 	graph: Schemas.GraphDto,
 	stored: Map<string, NodePosition>,
