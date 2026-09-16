@@ -16,6 +16,7 @@ import {
 } from '#/pages/automation/test/flow-test-env'
 import {
 	isBranchDeclared,
+	type LastRunData,
 	WorkflowCanvas,
 	type WorkflowCanvasProps,
 } from '#/pages/automation/ui/workflow-canvas'
@@ -47,6 +48,19 @@ function descriptor(
 		label,
 		output_example: null,
 		version: 1,
+	}
+}
+
+function event(
+	name: string,
+	payloadExample: unknown = { id: 1 },
+): Schemas.EventDescriptorResponse {
+	return {
+		name,
+		label: name,
+		subject_kind: name.split('.')[0] ?? name,
+		version: 1,
+		payload_example: payloadExample,
 	}
 }
 
@@ -85,7 +99,13 @@ function Harness({
 	layout,
 	descriptors,
 	connectorErrors = new Map(),
-	hasTriggerEvent = true,
+	events = [],
+	triggerEventNames = ['quote.accepted'],
+	onSaveTrigger = () => {},
+	isSavingTrigger = false,
+	triggerSaveError = null,
+	lastRun = null,
+	onEvaluateExpression = () => Promise.resolve(null),
 	credentials = [],
 	authSchemes = [],
 	onCreateCredential = () => Promise.reject(new Error('unused in this test')),
@@ -95,7 +115,13 @@ function Harness({
 	layout: Map<string, NodePosition>
 	descriptors: Map<string, Schemas.ConnectorDescriptorResponse>
 	connectorErrors?: Map<string, ConnectorValidationError[]>
-	hasTriggerEvent?: boolean
+	events?: Schemas.EventDescriptorResponse[]
+	triggerEventNames?: string[]
+	onSaveTrigger?: WorkflowCanvasProps['onSaveTrigger']
+	isSavingTrigger?: boolean
+	triggerSaveError?: string | null
+	lastRun?: LastRunData | null
+	onEvaluateExpression?: WorkflowCanvasProps['onEvaluateExpression']
 	credentials?: Schemas.CredentialResponse[]
 	authSchemes?: Schemas.AuthSchemeResponse[]
 	onCreateCredential?: WorkflowCanvasProps['onCreateCredential']
@@ -113,7 +139,13 @@ function Harness({
 		layout,
 		descriptors,
 		connectorErrors,
-		hasTriggerEvent,
+		events,
+		triggerEventNames,
+		onSaveTrigger,
+		isSavingTrigger,
+		triggerSaveError,
+		lastRun,
+		onEvaluateExpression,
 		credentials,
 		authSchemes,
 		onCreateCredential,
@@ -373,7 +405,7 @@ describe('WorkflowCanvas — the virtual trigger', () => {
 			graph: { connectors: [connector('c1', SIMPLE_KIND)], edges: [] },
 			layout: new Map([['c1', { x: 0, y: 0 }]]),
 			descriptors: descriptorMap(SIMPLE_DESCRIPTOR),
-			hasTriggerEvent: false,
+			triggerEventNames: [],
 			onSaveSpy: vi.fn(),
 		})
 
@@ -385,12 +417,114 @@ describe('WorkflowCanvas — the virtual trigger', () => {
 			graph: { connectors: [connector('c1', SIMPLE_KIND)], edges: [] },
 			layout: new Map([['c1', { x: 0, y: 0 }]]),
 			descriptors: descriptorMap(SIMPLE_DESCRIPTOR),
-			hasTriggerEvent: true,
+			triggerEventNames: ['quote.accepted'],
 			onSaveSpy: vi.fn(),
 		})
 
 		await screen.findByTestId('rf__node-c1')
 		expect(screen.queryByText('Aucun événement configuré')).toBeNull()
+	})
+
+	it('drops the warning once the panel saves an event, without needing a remount', async () => {
+		function ToggleHarness() {
+			const [names, setNames] = useState<string[]>([])
+			return (
+				<Harness
+					graph={{ connectors: [connector('c1', SIMPLE_KIND)], edges: [] }}
+					layout={new Map([['c1', { x: 0, y: 0 }]])}
+					descriptors={descriptorMap(SIMPLE_DESCRIPTOR)}
+					triggerEventNames={names}
+					onSaveTrigger={setNames}
+					events={[event('quote.accepted')]}
+					onSaveSpy={vi.fn()}
+				/>
+			)
+		}
+
+		render(<ToggleHarness />)
+		expect(await screen.findByText('Aucun événement configuré')).toBeDefined()
+
+		fireEvent.click(await screen.findByTestId('rf__node-__trigger__'))
+		fireEvent.click(
+			screen.getByRole('checkbox', { name: 'quote.accepted' }),
+		)
+		fireEvent.click(
+			within(screen.getByTestId('trigger-config-panel')).getByRole('button', {
+				name: 'Enregistrer',
+			}),
+		)
+
+		await waitFor(() => {
+			expect(screen.queryByText('Aucun événement configuré')).toBeNull()
+		})
+	})
+})
+
+describe('WorkflowCanvas — the trigger picker', () => {
+	it('opens the event picker when the trigger node is clicked', async () => {
+		renderHarness({
+			graph: { connectors: [connector('c1', SIMPLE_KIND)], edges: [] },
+			layout: new Map([['c1', { x: 0, y: 0 }]]),
+			descriptors: descriptorMap(SIMPLE_DESCRIPTOR),
+			events: [event('quote.accepted'), event('invoice.paid')],
+			onSaveSpy: vi.fn(),
+		})
+
+		fireEvent.click(await screen.findByTestId('rf__node-__trigger__'))
+
+		expect(
+			await screen.findByRole('checkbox', { name: 'quote.accepted' }),
+		).toBeDefined()
+		expect(
+			screen.getByRole('checkbox', { name: 'invoice.paid' }),
+		).toBeDefined()
+	})
+
+	it('saves the picked selection as a full replacement', async () => {
+		const onSaveTrigger = vi.fn()
+		renderHarness({
+			graph: { connectors: [connector('c1', SIMPLE_KIND)], edges: [] },
+			layout: new Map([['c1', { x: 0, y: 0 }]]),
+			descriptors: descriptorMap(SIMPLE_DESCRIPTOR),
+			events: [event('quote.accepted'), event('invoice.paid')],
+			triggerEventNames: ['quote.accepted'],
+			onSaveTrigger,
+			onSaveSpy: vi.fn(),
+		})
+
+		fireEvent.click(await screen.findByTestId('rf__node-__trigger__'))
+		await screen.findByRole('checkbox', { name: 'quote.accepted' })
+		fireEvent.click(screen.getByRole('checkbox', { name: 'invoice.paid' }))
+		fireEvent.click(
+			within(screen.getByTestId('trigger-config-panel')).getByRole('button', {
+				name: 'Enregistrer',
+			}),
+		)
+
+		expect(onSaveTrigger).toHaveBeenCalledWith([
+			'quote.accepted',
+			'invoice.paid',
+		])
+	})
+
+	it('closes the connector panel when the trigger node opens, and vice versa', async () => {
+		renderHarness({
+			graph: { connectors: [connector('c1', SIMPLE_KIND)], edges: [] },
+			layout: new Map([['c1', { x: 0, y: 0 }]]),
+			descriptors: descriptorMap(SIMPLE_DESCRIPTOR),
+			events: [event('quote.accepted')],
+			onSaveSpy: vi.fn(),
+		})
+
+		const node = await screen.findByTestId('rf__node-c1')
+		fireEvent.click(node)
+		expect(screen.getByTestId('connector-config-panel')).toBeDefined()
+
+		fireEvent.click(await screen.findByTestId('rf__node-__trigger__'))
+		expect(screen.queryByTestId('connector-config-panel')).toBeNull()
+		expect(
+			await screen.findByRole('checkbox', { name: 'quote.accepted' }),
+		).toBeDefined()
 	})
 })
 
@@ -860,5 +994,105 @@ describe('WorkflowCanvas — the config panel', () => {
 
 		const [savedGraph] = onSaveSpy.mock.calls[0] as [Schemas.GraphDto]
 		expect(savedGraph.connectors[0]?.config).toEqual({ note: 'hello' })
+	})
+})
+
+describe('WorkflowCanvas — the available-data tree', () => {
+	const UPSTREAM_DESCRIPTOR = descriptor(SIMPLE_KIND, 'En amont', [], [])
+	const SIBLING_DESCRIPTOR = descriptor(OTHER_KIND, 'Sur l’autre branche', [], [])
+
+	it('offers only the connectors upstream of the open node, never a sibling branch', async () => {
+		const graph: Schemas.GraphDto = {
+			connectors: [
+				connector('c1', BRANCHING_KIND),
+				connector('c2', SIMPLE_KIND),
+				connector('c3', OTHER_KIND),
+				connector('c4', SIMPLE_KIND),
+			],
+			edges: [
+				{ from: 'c1', to: 'c2', branch: 'Then' },
+				{ from: 'c1', to: 'c3', branch: 'Else' },
+				{ from: 'c2', to: 'c4' },
+			],
+		}
+		const layout = new Map<string, NodePosition>([
+			['c1', { x: 0, y: 0 }],
+			['c2', { x: 280, y: 0 }],
+			['c3', { x: 280, y: 140 }],
+			['c4', { x: 560, y: 0 }],
+		])
+
+		renderHarness({
+			graph,
+			layout,
+			descriptors: descriptorMap(
+				BRANCHING_DESCRIPTOR,
+				UPSTREAM_DESCRIPTOR,
+				SIBLING_DESCRIPTOR,
+			),
+			onSaveSpy: vi.fn(),
+		})
+
+		const node = await screen.findByTestId('rf__node-c4')
+		fireEvent.click(node)
+
+		await screen.findByText('Paramètres')
+		expect(
+			screen.getByRole('button', { name: /c1 · Étape à embranchements/ }),
+		).toBeDefined()
+		expect(
+			screen.getByRole('button', { name: /c2 · En amont/ }),
+		).toBeDefined()
+		expect(
+			screen.queryByRole('button', { name: /c3 · Sur l’autre branche/ }),
+		).toBeNull()
+	})
+
+	it('fills the trigger branch from the selected event, before any run exists', async () => {
+		renderHarness({
+			graph: { connectors: [connector('c1', SIMPLE_KIND)], edges: [] },
+			layout: new Map([['c1', { x: 0, y: 0 }]]),
+			descriptors: descriptorMap(SIMPLE_DESCRIPTOR),
+			events: [event('quote.accepted', { quote_id: 'q-1' })],
+			triggerEventNames: ['quote.accepted'],
+			onSaveSpy: vi.fn(),
+		})
+
+		const node = await screen.findByTestId('rf__node-c1')
+		fireEvent.click(node)
+
+		await screen.findByText('Paramètres')
+		fireEvent.click(screen.getByRole('button', { name: 'trigger' }))
+
+		expect(screen.getByText('quote_id')).toBeDefined()
+	})
+
+	it('switches to the real values once a last run is supplied', async () => {
+		renderHarness({
+			graph: { connectors: [connector('c1', SIMPLE_KIND)], edges: [] },
+			layout: new Map([['c1', { x: 0, y: 0 }]]),
+			descriptors: descriptorMap(SIMPLE_DESCRIPTOR),
+			events: [event('quote.accepted', { quote_id: 'q-1' })],
+			triggerEventNames: ['quote.accepted'],
+			lastRun: {
+				triggerPayload: { quote_id: 'q-real' },
+				connectorOutputs: {},
+			},
+			onSaveSpy: vi.fn(),
+		})
+
+		const node = await screen.findByTestId('rf__node-c1')
+		fireEvent.click(node)
+
+		await screen.findByText('Paramètres')
+		const lastRunButton = screen.getByRole('button', {
+			name: 'Dernière exécution',
+		}) as HTMLButtonElement
+		expect(lastRunButton.disabled).toBe(false)
+
+		fireEvent.click(lastRunButton)
+		fireEvent.click(screen.getByRole('button', { name: 'trigger' }))
+
+		expect(screen.getByText('quote_id')).toBeDefined()
 	})
 })

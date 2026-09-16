@@ -33,7 +33,12 @@ export function AddNodeButton({
 					<Plus className="size-3" />
 				</button>
 			</PopoverTrigger>
-			<PopoverContent side="right" align="start" className="w-auto p-2">
+			<PopoverContent
+				side="right"
+				align="start"
+				className="w-auto p-2"
+				onClick={(event) => event.stopPropagation()}
+			>
 				<ConnectorSearch
 					connectors={catalogue}
 					onSelect={(connector) => {

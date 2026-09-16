@@ -27,6 +27,12 @@ import {
 	AlertDialogTitle,
 } from '#/components/ui/alert-dialog'
 import { Button } from '#/components/ui/button'
+import {
+	type AvailableConnectorData,
+	buildAvailableDataTree,
+	resolveTriggerExample,
+	toEvaluateContext,
+} from '#/pages/automation/lib/data-tree'
 import type { NodePosition } from '#/pages/automation/lib/graph'
 import {
 	connectorsReferencing,
@@ -34,14 +40,19 @@ import {
 	nextNodePosition,
 	removeConnector,
 	rootConnectorIds,
+	upstreamConnectorIds,
 } from '#/pages/automation/lib/graph'
 import type { ConnectorValidationError } from '#/pages/automation/lib/validation'
-import { ConnectorConfigPanel } from '#/pages/automation/ui/connector-config-panel'
+import {
+	ConnectorConfigPanel,
+	type DataTreeSourceBundle,
+} from '#/pages/automation/ui/connector-config-panel'
 import {
 	ConnectorNode,
 	type ConnectorNodeData,
 } from '#/pages/automation/ui/connector-node'
-import { TriggerNode } from '#/pages/automation/ui/trigger-node'
+import { TriggerConfigPanel } from '#/pages/automation/ui/trigger-config-panel'
+import { TriggerNode, type TriggerNodeData } from '#/pages/automation/ui/trigger-node'
 import { WorkflowCanvasActionsContext } from '#/pages/automation/ui/workflow-canvas-context'
 
 export const TRIGGER_NODE_ID = '__trigger__'
@@ -54,12 +65,26 @@ const NODE_TYPES = {
 
 type CreatedCredential = Schemas.CredentialResponse & { secret: unknown }
 
+export interface LastRunData {
+	triggerPayload: unknown
+	connectorOutputs: Record<string, unknown>
+}
+
 export interface WorkflowCanvasProps {
 	graph: Schemas.GraphDto
 	layout: Map<string, NodePosition>
 	descriptors: Map<string, Schemas.ConnectorDescriptorResponse>
 	connectorErrors: Map<string, ConnectorValidationError[]>
-	hasTriggerEvent: boolean
+	events: Schemas.EventDescriptorResponse[]
+	triggerEventNames: string[]
+	onSaveTrigger: (eventNames: string[]) => void
+	isSavingTrigger: boolean
+	triggerSaveError: string | null
+	lastRun: LastRunData | null
+	onEvaluateExpression: (
+		template: unknown,
+		context: Schemas.EvaluateContextBody,
+	) => Promise<unknown>
 	credentials?: Schemas.CredentialResponse[]
 	authSchemes?: Schemas.AuthSchemeResponse[]
 	onCreateCredential?: (
@@ -105,13 +130,13 @@ function buildInitialNodes(
 	layout: Map<string, NodePosition>,
 	descriptors: Map<string, Schemas.ConnectorDescriptorResponse>,
 	connectorErrors: Map<string, ConnectorValidationError[]>,
-	hasTriggerEvent: boolean,
+	triggerEventNames: string[],
 ): Node[] {
 	const triggerNode: Node = {
 		id: TRIGGER_NODE_ID,
 		type: 'trigger',
 		position: triggerPosition(graph, layout),
-		data: { hasEvent: hasTriggerEvent },
+		data: { hasEvent: triggerEventNames.length > 0 },
 		deletable: false,
 		draggable: false,
 	}
@@ -213,7 +238,13 @@ export function WorkflowCanvas({
 	layout,
 	descriptors,
 	connectorErrors,
-	hasTriggerEvent,
+	events,
+	triggerEventNames,
+	onSaveTrigger,
+	isSavingTrigger,
+	triggerSaveError,
+	lastRun,
+	onEvaluateExpression,
 	credentials = [],
 	authSchemes = [],
 	onCreateCredential = rejectCreateCredential,
@@ -228,12 +259,13 @@ export function WorkflowCanvas({
 			layout,
 			descriptors,
 			connectorErrors,
-			hasTriggerEvent,
+			triggerEventNames,
 		),
 	)
 	const [edges, setEdges] = useEdgesState(buildInitialEdges(graph))
 	const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null)
 	const [openConnectorId, setOpenConnectorId] = useState<string | null>(null)
+	const [openTrigger, setOpenTrigger] = useState(false)
 
 	const nodesRef = useRef(nodes)
 	nodesRef.current = nodes
@@ -253,6 +285,18 @@ export function WorkflowCanvas({
 			}),
 		)
 	}, [connectorErrors, setNodes])
+
+	useEffect(() => {
+		const hasEvent = triggerEventNames.length > 0
+		setNodes((current) =>
+			current.map((node) => {
+				if (node.id !== TRIGGER_NODE_ID) return node
+				const data = node.data as TriggerNodeData
+				if (data.hasEvent === hasEvent) return node
+				return { ...node, data: { ...data, hasEvent } }
+			}),
+		)
+	}, [triggerEventNames, setNodes])
 
 	const handleNodesChange = useCallback(
 		(changes: NodeChange[]) => {
@@ -413,7 +457,13 @@ export function WorkflowCanvas({
 	)
 
 	const handleNodeClick = useCallback((_event: unknown, node: Node) => {
+		if (node.type === 'trigger') {
+			setOpenConnectorId(null)
+			setOpenTrigger(true)
+			return
+		}
 		if (node.type !== 'connector') return
+		setOpenTrigger(false)
 		setOpenConnectorId(node.id)
 	}, [])
 
@@ -451,6 +501,62 @@ export function WorkflowCanvas({
 		? descriptors.get(openConnectorData.connector.kind)
 		: undefined
 
+	function connectorLabel(id: string): string {
+		const data = nodes.find((node) => node.id === id)?.data as
+			| ConnectorNodeData
+			| undefined
+		return data?.label ?? id
+	}
+
+	function connectorOutputExample(id: string): unknown {
+		const data = nodes.find((node) => node.id === id)?.data as
+			| ConnectorNodeData
+			| undefined
+		if (!data) return null
+		return descriptors.get(data.connector.kind)?.output_example ?? null
+	}
+
+	const upstreamIds = openConnectorId
+		? upstreamConnectorIds(buildGraph(nodes, edges), openConnectorId)
+		: []
+
+	const triggerExample = resolveTriggerExample(events, triggerEventNames)
+	const exampleConnectors: AvailableConnectorData[] = upstreamIds.map((id) => ({
+		id,
+		label: connectorLabel(id),
+		output: connectorOutputExample(id),
+	}))
+	const exampleData: DataTreeSourceBundle = {
+		tree: buildAvailableDataTree({
+			trigger: triggerExample,
+			connectors: exampleConnectors,
+		}),
+		context: toEvaluateContext({
+			trigger: triggerExample,
+			connectors: exampleConnectors,
+		}),
+	}
+
+	const lastRunConnectors: AvailableConnectorData[] = lastRun
+		? upstreamIds.map((id) => ({
+				id,
+				label: connectorLabel(id),
+				output: lastRun.connectorOutputs[id] ?? null,
+			}))
+		: []
+	const lastRunData: DataTreeSourceBundle | null = lastRun
+		? {
+				tree: buildAvailableDataTree({
+					trigger: lastRun.triggerPayload,
+					connectors: lastRunConnectors,
+				}),
+				context: toEvaluateContext({
+					trigger: lastRun.triggerPayload,
+					connectors: lastRunConnectors,
+				}),
+			}
+		: null
+
 	return (
 		<WorkflowCanvasActionsContext.Provider value={actions}>
 			<div className="flex min-h-0 flex-1 flex-col">
@@ -474,7 +580,10 @@ export function WorkflowCanvas({
 								onConnect={handleConnect}
 								onNodeDragStop={handleNodeDragStop}
 								onNodeClick={handleNodeClick}
-								onPaneClick={() => setOpenConnectorId(null)}
+								onPaneClick={() => {
+									setOpenConnectorId(null)
+									setOpenTrigger(false)
+								}}
 								isValidConnection={validateConnection}
 								autoPanOnNodeDrag={false}
 								fitView={false}
@@ -485,6 +594,7 @@ export function WorkflowCanvas({
 					</div>
 					{openConnectorId && openConnectorData && openDescriptor ? (
 						<ConnectorConfigPanel
+							connectorId={openConnectorId}
 							label={openConnectorData.label}
 							descriptor={openDescriptor}
 							config={openConnectorData.connector.config}
@@ -501,8 +611,20 @@ export function WorkflowCanvas({
 									credential_id: credentialId,
 								})
 							}
-							onOpenExpression={() => {}}
 							onCreateCredential={onCreateCredential}
+							exampleData={exampleData}
+							lastRunData={lastRunData}
+							onEvaluateExpression={onEvaluateExpression}
+						/>
+					) : null}
+					{openTrigger ? (
+						<TriggerConfigPanel
+							events={events}
+							selectedEventNames={triggerEventNames}
+							isSaving={isSavingTrigger}
+							saveError={triggerSaveError}
+							onClose={() => setOpenTrigger(false)}
+							onSave={onSaveTrigger}
 						/>
 					) : null}
 				</div>
