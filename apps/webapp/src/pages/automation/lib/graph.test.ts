@@ -170,9 +170,10 @@ describe('upstreamConnectorIds', () => {
 	})
 
 	it('is empty for a root connector', () => {
-		const graph = graphOf([connector('c1'), connector('c2')], [
-			{ from: 'c1', to: 'c2' },
-		])
+		const graph = graphOf(
+			[connector('c1'), connector('c2')],
+			[{ from: 'c1', to: 'c2' }],
+		)
 
 		expect(upstreamConnectorIds(graph, 'c1')).toEqual([])
 	})

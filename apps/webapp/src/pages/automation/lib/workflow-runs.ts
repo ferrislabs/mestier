@@ -40,12 +40,13 @@ export function connectorOutputsFromSteps(
 	for (const step of steps) {
 		if (step.output === undefined) continue
 		const existing = chosen.get(step.connector_id)
-		if (!existing || (existing.iteration_path !== '' && step.iteration_path === '')) {
+		if (
+			!existing ||
+			(existing.iteration_path !== '' && step.iteration_path === '')
+		) {
 			chosen.set(step.connector_id, step)
 		}
 	}
 
-	return Object.fromEntries(
-		[...chosen].map(([id, step]) => [id, step.output]),
-	)
+	return Object.fromEntries([...chosen].map(([id, step]) => [id, step.output]))
 }

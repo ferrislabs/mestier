@@ -99,7 +99,10 @@ function baseProps(
 		onConfigChange: vi.fn(),
 		onCredentialChange: vi.fn(),
 		onCreateCredential: vi.fn(),
-		exampleData: { tree: [], context: { trigger: null, connectors: {}, loop: null } },
+		exampleData: {
+			tree: [],
+			context: { trigger: null, connectors: {}, loop: null },
+		},
 		lastRunData: null,
 		onEvaluateExpression: vi.fn().mockResolvedValue(null),
 		...overrides,
@@ -488,9 +491,7 @@ describe('ConnectorConfigPanel — inserting an expression', () => {
 			<ConnectorConfigPanel
 				{...baseProps({
 					descriptor: descriptor({
-						fields: [
-							field({ name: 'url', label: 'URL', expression: true }),
-						],
+						fields: [field({ name: 'url', label: 'URL', expression: true })],
 					}),
 					config: { url: 'Hello ' },
 					onConfigChange,
@@ -509,7 +510,9 @@ describe('ConnectorConfigPanel — inserting an expression', () => {
 			screen.getByRole('button', { name: 'Insérer une donnée dans URL' }),
 		)
 		await user.click(screen.getByRole('button', { name: /trigger/ }))
-		await user.click(screen.getByRole('button', { name: /Insérer trigger\.name/ }))
+		await user.click(
+			screen.getByRole('button', { name: /Insérer trigger\.name/ }),
+		)
 
 		expect(onConfigChange).toHaveBeenCalledWith({
 			url: 'Hello {{ trigger.name }}',
@@ -522,9 +525,7 @@ describe('ConnectorConfigPanel — inserting an expression', () => {
 			<ConnectorConfigPanel
 				{...baseProps({
 					descriptor: descriptor({
-						fields: [
-							field({ name: 'url', label: 'URL', expression: true }),
-						],
+						fields: [field({ name: 'url', label: 'URL', expression: true })],
 					}),
 					config: { url: '' },
 					onConfigChange,
@@ -548,9 +549,7 @@ describe('ConnectorConfigPanel — the live preview', () => {
 			<ConnectorConfigPanel
 				{...baseProps({
 					descriptor: descriptor({
-						fields: [
-							field({ name: 'url', label: 'URL', expression: true }),
-						],
+						fields: [field({ name: 'url', label: 'URL', expression: true })],
 					}),
 					config: { url: '{{ connectors.c1.output.id }}' },
 					onEvaluateExpression,
@@ -583,9 +582,7 @@ describe('ConnectorConfigPanel — the live preview', () => {
 			<ConnectorConfigPanel
 				{...baseProps({
 					descriptor: descriptor({
-						fields: [
-							field({ name: 'url', label: 'URL', expression: true }),
-						],
+						fields: [field({ name: 'url', label: 'URL', expression: true })],
 					}),
 					config: { url: '{{ trigger.customer.id }}' },
 					onEvaluateExpression,

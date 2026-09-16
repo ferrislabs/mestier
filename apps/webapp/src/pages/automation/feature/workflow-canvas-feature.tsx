@@ -28,7 +28,10 @@ import {
 	connectorOutputsFromSteps,
 	latestRunId,
 } from '#/pages/automation/lib/workflow-runs'
-import { type LastRunData, WorkflowCanvas } from '#/pages/automation/ui/workflow-canvas'
+import {
+	type LastRunData,
+	WorkflowCanvas,
+} from '#/pages/automation/ui/workflow-canvas'
 
 const EMPTY_VALIDATION: GraphValidation = {
 	connectorErrors: new Map(),
@@ -180,9 +183,7 @@ function WorkflowCanvasLoaded({
 	const setTrigger = useSetWorkflowTrigger()
 	const evaluateExpression = useEvaluateExpression()
 
-	const [triggerSaveError, setTriggerSaveError] = useState<string | null>(
-		null,
-	)
+	const [triggerSaveError, setTriggerSaveError] = useState<string | null>(null)
 
 	const [initial] = useState(() => {
 		const graph = workflow.current_version?.graph ?? {

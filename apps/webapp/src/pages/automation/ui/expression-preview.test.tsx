@@ -12,17 +12,13 @@ describe('ExpressionPreview', () => {
 	})
 
 	it('names the active field while idle', () => {
-		render(
-			<ExpressionPreview fieldLabel="URL" state={{ status: 'idle' }} />,
-		)
+		render(<ExpressionPreview fieldLabel="URL" state={{ status: 'idle' }} />)
 
 		expect(screen.getByText(/URL/)).toBeDefined()
 	})
 
 	it('shows a loading state while the evaluation is in flight', () => {
-		render(
-			<ExpressionPreview fieldLabel="URL" state={{ status: 'loading' }} />,
-		)
+		render(<ExpressionPreview fieldLabel="URL" state={{ status: 'loading' }} />)
 
 		expect(screen.getByText(/valuation en cours/)).toBeDefined()
 	})

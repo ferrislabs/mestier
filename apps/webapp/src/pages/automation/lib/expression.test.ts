@@ -14,21 +14,19 @@ describe('expressionToken', () => {
 
 describe('insertExpressionAtCursor', () => {
 	it('inserts at the cursor rather than replacing the field', () => {
-		const result = insertExpressionAtCursor(
-			'Hello ',
-			'trigger.customer.name',
-			{ start: 6, end: 6 },
-		)
+		const result = insertExpressionAtCursor('Hello ', 'trigger.customer.name', {
+			start: 6,
+			end: 6,
+		})
 
 		expect(result.text).toBe('Hello {{ trigger.customer.name }}')
 	})
 
 	it('places the cursor right after the inserted token', () => {
-		const result = insertExpressionAtCursor(
-			'Hello ',
-			'trigger.customer.name',
-			{ start: 6, end: 6 },
-		)
+		const result = insertExpressionAtCursor('Hello ', 'trigger.customer.name', {
+			start: 6,
+			end: 6,
+		})
 
 		expect(result.cursor).toBe('Hello {{ trigger.customer.name }}'.length)
 	})
@@ -49,9 +47,7 @@ describe('insertExpressionAtCursor', () => {
 			{ start: 5, end: 5 },
 		)
 
-		expect(result.text).toBe(
-			'Dear {{ trigger.customer.name }}, welcome',
-		)
+		expect(result.text).toBe('Dear {{ trigger.customer.name }}, welcome')
 	})
 
 	it('appends when the value is empty', () => {

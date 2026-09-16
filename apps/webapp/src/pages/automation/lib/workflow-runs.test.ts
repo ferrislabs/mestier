@@ -134,7 +134,11 @@ describe('connectorOutputsFromSteps', () => {
 
 	it('prefers the top-level iteration over a nested loop iteration', () => {
 		const outputs = connectorOutputsFromSteps([
-			step({ connector_id: 'c1', iteration_path: 'c2[0]', output: { id: 'a' } }),
+			step({
+				connector_id: 'c1',
+				iteration_path: 'c2[0]',
+				output: { id: 'a' },
+			}),
 			step({ connector_id: 'c1', iteration_path: '', output: { id: 'b' } }),
 		])
 

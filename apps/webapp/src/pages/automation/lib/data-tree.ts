@@ -33,7 +33,12 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
 	return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
-function buildNode(path: string, key: string, label: string, value: unknown): DataTreeNode {
+function buildNode(
+	path: string,
+	key: string,
+	label: string,
+	value: unknown,
+): DataTreeNode {
 	if (Array.isArray(value)) {
 		return {
 			kind: 'branch',

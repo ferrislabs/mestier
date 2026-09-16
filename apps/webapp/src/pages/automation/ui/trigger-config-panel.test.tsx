@@ -43,8 +43,12 @@ describe('TriggerConfigPanel — listing', () => {
 
 		expect(screen.getByText('quote')).toBeDefined()
 		expect(screen.getByText('invoice')).toBeDefined()
-		expect(screen.getByRole('checkbox', { name: 'Devis accepté' })).toBeDefined()
-		expect(screen.getByRole('checkbox', { name: 'Facture payée' })).toBeDefined()
+		expect(
+			screen.getByRole('checkbox', { name: 'Devis accepté' }),
+		).toBeDefined()
+		expect(
+			screen.getByRole('checkbox', { name: 'Facture payée' }),
+		).toBeDefined()
 	})
 
 	it('pre-checks the currently selected events', () => {
@@ -81,9 +85,7 @@ describe('TriggerConfigPanel — the no-event warning', () => {
 	it('warns as soon as the pending selection is empty', () => {
 		render(<TriggerConfigPanel {...baseProps({ selectedEventNames: [] })} />)
 
-		expect(
-			screen.getByText(/ne se déclenchera jamais/),
-		).toBeDefined()
+		expect(screen.getByText(/ne se déclenchera jamais/)).toBeDefined()
 	})
 
 	it('clears the warning once at least one event is checked', async () => {

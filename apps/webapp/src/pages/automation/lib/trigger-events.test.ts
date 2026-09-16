@@ -22,7 +22,10 @@ describe('groupEventsByPrefix', () => {
 
 		expect(groups).toEqual([
 			{ prefix: 'invoice', events: [event('invoice.paid')] },
-			{ prefix: 'quote', events: [event('quote.accepted'), event('quote.sent')] },
+			{
+				prefix: 'quote',
+				events: [event('quote.accepted'), event('quote.sent')],
+			},
 		])
 	})
 
@@ -40,7 +43,10 @@ describe('groupEventsByPrefix', () => {
 			event('customer.created'),
 		])
 
-		expect(groups.map((g) => g.prefix)).toEqual(['customer', 'supplier_invoice'])
+		expect(groups.map((g) => g.prefix)).toEqual([
+			'customer',
+			'supplier_invoice',
+		])
 	})
 
 	it('is empty for an empty catalogue', () => {

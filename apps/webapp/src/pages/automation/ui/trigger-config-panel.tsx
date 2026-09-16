@@ -42,7 +42,12 @@ export function TriggerConfigPanel({
 		>
 			<div className="flex items-center justify-between gap-2 border-b px-4 py-3">
 				<span className="truncate font-medium">Déclencheur</span>
-				<Button variant="ghost" size="icon-sm" aria-label="Fermer" onClick={onClose}>
+				<Button
+					variant="ghost"
+					size="icon-sm"
+					aria-label="Fermer"
+					onClick={onClose}
+				>
 					<X className="size-4" />
 				</Button>
 			</div>

@@ -445,9 +445,7 @@ describe('WorkflowCanvas — the virtual trigger', () => {
 		expect(await screen.findByText('Aucun événement configuré')).toBeDefined()
 
 		fireEvent.click(await screen.findByTestId('rf__node-__trigger__'))
-		fireEvent.click(
-			screen.getByRole('checkbox', { name: 'quote.accepted' }),
-		)
+		fireEvent.click(screen.getByRole('checkbox', { name: 'quote.accepted' }))
 		fireEvent.click(
 			within(screen.getByTestId('trigger-config-panel')).getByRole('button', {
 				name: 'Enregistrer',
@@ -475,9 +473,7 @@ describe('WorkflowCanvas — the trigger picker', () => {
 		expect(
 			await screen.findByRole('checkbox', { name: 'quote.accepted' }),
 		).toBeDefined()
-		expect(
-			screen.getByRole('checkbox', { name: 'invoice.paid' }),
-		).toBeDefined()
+		expect(screen.getByRole('checkbox', { name: 'invoice.paid' })).toBeDefined()
 	})
 
 	it('saves the picked selection as a full replacement', async () => {
@@ -999,7 +995,12 @@ describe('WorkflowCanvas — the config panel', () => {
 
 describe('WorkflowCanvas — the available-data tree', () => {
 	const UPSTREAM_DESCRIPTOR = descriptor(SIMPLE_KIND, 'En amont', [], [])
-	const SIBLING_DESCRIPTOR = descriptor(OTHER_KIND, 'Sur l’autre branche', [], [])
+	const SIBLING_DESCRIPTOR = descriptor(
+		OTHER_KIND,
+		'Sur l’autre branche',
+		[],
+		[],
+	)
 
 	it('offers only the connectors upstream of the open node, never a sibling branch', async () => {
 		const graph: Schemas.GraphDto = {
@@ -1040,9 +1041,7 @@ describe('WorkflowCanvas — the available-data tree', () => {
 		expect(
 			screen.getByRole('button', { name: /c1 · Étape à embranchements/ }),
 		).toBeDefined()
-		expect(
-			screen.getByRole('button', { name: /c2 · En amont/ }),
-		).toBeDefined()
+		expect(screen.getByRole('button', { name: /c2 · En amont/ })).toBeDefined()
 		expect(
 			screen.queryByRole('button', { name: /c3 · Sur l’autre branche/ }),
 		).toBeNull()

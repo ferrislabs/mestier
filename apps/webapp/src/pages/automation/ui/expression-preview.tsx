@@ -17,9 +17,7 @@ export function ExpressionPreview({
 
 	return (
 		<div className="flex flex-col gap-1 rounded-md border bg-muted/40 p-2 text-xs">
-			<p className="font-medium text-muted-foreground">
-				Aperçu — {fieldLabel}
-			</p>
+			<p className="font-medium text-muted-foreground">Aperçu — {fieldLabel}</p>
 			{state.status === 'idle' ? (
 				<p className="text-muted-foreground">
 					Cliquez ou glissez une donnée pour l’insérer.

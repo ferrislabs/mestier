@@ -88,7 +88,9 @@ describe('AvailableDataTree — insertion', () => {
 		const { onInsert } = renderTree()
 
 		await user.click(screen.getByRole('button', { name: /trigger/ }))
-		await user.click(screen.getByRole('button', { name: /Insérer trigger\.id/ }))
+		await user.click(
+			screen.getByRole('button', { name: /Insérer trigger\.id/ }),
+		)
 
 		expect(onInsert).toHaveBeenCalledWith('trigger.id')
 	})
@@ -105,7 +107,10 @@ describe('AvailableDataTree — insertion', () => {
 		const dataTransfer = { setData: vi.fn() }
 		fireEvent.dragStart(leafButton, { dataTransfer })
 
-		expect(dataTransfer.setData).toHaveBeenCalledWith('text/plain', 'trigger.id')
+		expect(dataTransfer.setData).toHaveBeenCalledWith(
+			'text/plain',
+			'trigger.id',
+		)
 	})
 })
 
@@ -132,9 +137,9 @@ describe('AvailableDataTree — source toggle', () => {
 		renderTree({ source: 'example' })
 
 		expect(
-			screen.getByRole('button', { name: 'Exemple' }).getAttribute(
-				'aria-pressed',
-			),
+			screen
+				.getByRole('button', { name: 'Exemple' })
+				.getAttribute('aria-pressed'),
 		).toBe('true')
 	})
 })
