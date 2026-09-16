@@ -232,7 +232,9 @@ export function useRunPolling(organizationId: string, runId: string | null) {
 		enabled: runId !== null,
 		refetchInterval: (query) => {
 			const status = query.state.data?.data.status
-			return status && !isTerminalRunStatus(status) ? RUN_POLL_INTERVAL_MS : false
+			return status && !isTerminalRunStatus(status)
+				? RUN_POLL_INTERVAL_MS
+				: false
 		},
 	})
 }
