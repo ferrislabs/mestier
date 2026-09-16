@@ -37,6 +37,7 @@ import { Route as AppOOrganizationSlugHrEquipmentRouteImport } from './routes/_a
 import { Route as AppOOrganizationSlugHrAbsencesRouteImport } from './routes/_app.o.$organizationSlug.hr.absences'
 import { Route as AppOOrganizationSlugCrmCatalogRouteImport } from './routes/_app.o.$organizationSlug.crm.catalog'
 import { Route as AppOOrganizationSlugChatChannelIdRouteImport } from './routes/_app.o.$organizationSlug.chat.$channelId'
+import { Route as AppOOrganizationSlugAutomatisationCredentialsRouteImport } from './routes/_app.o.$organizationSlug.automatisation.credentials'
 import { Route as AppOOrganizationSlugAutomatisationWorkflowIdRouteImport } from './routes/_app.o.$organizationSlug.automatisation.$workflowId'
 import { Route as AppOOrganizationSlugPurchaseSupplierInvoicesIndexRouteImport } from './routes/_app.o.$organizationSlug.purchase.supplier-invoices.index'
 import { Route as AppOOrganizationSlugPlanningProjectsIndexRouteImport } from './routes/_app.o.$organizationSlug.planning.projects.index'
@@ -222,6 +223,12 @@ const AppOOrganizationSlugChatChannelIdRoute =
     path: '/$channelId',
     getParentRoute: () => AppOOrganizationSlugChatRoute,
   } as any)
+const AppOOrganizationSlugAutomatisationCredentialsRoute =
+  AppOOrganizationSlugAutomatisationCredentialsRouteImport.update({
+    id: '/automatisation/credentials',
+    path: '/automatisation/credentials',
+    getParentRoute: () => AppOOrganizationSlugRoute,
+  } as any)
 const AppOOrganizationSlugAutomatisationWorkflowIdRoute =
   AppOOrganizationSlugAutomatisationWorkflowIdRouteImport.update({
     id: '/automatisation/$workflowId',
@@ -364,6 +371,7 @@ export interface FileRoutesByFullPath {
   '/o/$organizationSlug/settings': typeof AppOOrganizationSlugSettingsRoute
   '/o/$organizationSlug/': typeof AppOOrganizationSlugIndexRoute
   '/o/$organizationSlug/automatisation/$workflowId': typeof AppOOrganizationSlugAutomatisationWorkflowIdRouteWithChildren
+  '/o/$organizationSlug/automatisation/credentials': typeof AppOOrganizationSlugAutomatisationCredentialsRoute
   '/o/$organizationSlug/chat/$channelId': typeof AppOOrganizationSlugChatChannelIdRoute
   '/o/$organizationSlug/crm/catalog': typeof AppOOrganizationSlugCrmCatalogRoute
   '/o/$organizationSlug/hr/absences': typeof AppOOrganizationSlugHrAbsencesRoute
@@ -412,6 +420,7 @@ export interface FileRoutesByTo {
   '/o/$organizationSlug/settings': typeof AppOOrganizationSlugSettingsRoute
   '/o/$organizationSlug': typeof AppOOrganizationSlugIndexRoute
   '/o/$organizationSlug/automatisation/$workflowId': typeof AppOOrganizationSlugAutomatisationWorkflowIdRouteWithChildren
+  '/o/$organizationSlug/automatisation/credentials': typeof AppOOrganizationSlugAutomatisationCredentialsRoute
   '/o/$organizationSlug/chat/$channelId': typeof AppOOrganizationSlugChatChannelIdRoute
   '/o/$organizationSlug/crm/catalog': typeof AppOOrganizationSlugCrmCatalogRoute
   '/o/$organizationSlug/hr/absences': typeof AppOOrganizationSlugHrAbsencesRoute
@@ -464,6 +473,7 @@ export interface FileRoutesById {
   '/_app/o/$organizationSlug/settings': typeof AppOOrganizationSlugSettingsRoute
   '/_app/o/$organizationSlug/': typeof AppOOrganizationSlugIndexRoute
   '/_app/o/$organizationSlug/automatisation/$workflowId': typeof AppOOrganizationSlugAutomatisationWorkflowIdRouteWithChildren
+  '/_app/o/$organizationSlug/automatisation/credentials': typeof AppOOrganizationSlugAutomatisationCredentialsRoute
   '/_app/o/$organizationSlug/chat/$channelId': typeof AppOOrganizationSlugChatChannelIdRoute
   '/_app/o/$organizationSlug/crm/catalog': typeof AppOOrganizationSlugCrmCatalogRoute
   '/_app/o/$organizationSlug/hr/absences': typeof AppOOrganizationSlugHrAbsencesRoute
@@ -516,6 +526,7 @@ export interface FileRouteTypes {
     | '/o/$organizationSlug/settings'
     | '/o/$organizationSlug/'
     | '/o/$organizationSlug/automatisation/$workflowId'
+    | '/o/$organizationSlug/automatisation/credentials'
     | '/o/$organizationSlug/chat/$channelId'
     | '/o/$organizationSlug/crm/catalog'
     | '/o/$organizationSlug/hr/absences'
@@ -564,6 +575,7 @@ export interface FileRouteTypes {
     | '/o/$organizationSlug/settings'
     | '/o/$organizationSlug'
     | '/o/$organizationSlug/automatisation/$workflowId'
+    | '/o/$organizationSlug/automatisation/credentials'
     | '/o/$organizationSlug/chat/$channelId'
     | '/o/$organizationSlug/crm/catalog'
     | '/o/$organizationSlug/hr/absences'
@@ -615,6 +627,7 @@ export interface FileRouteTypes {
     | '/_app/o/$organizationSlug/settings'
     | '/_app/o/$organizationSlug/'
     | '/_app/o/$organizationSlug/automatisation/$workflowId'
+    | '/_app/o/$organizationSlug/automatisation/credentials'
     | '/_app/o/$organizationSlug/chat/$channelId'
     | '/_app/o/$organizationSlug/crm/catalog'
     | '/_app/o/$organizationSlug/hr/absences'
@@ -859,6 +872,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppOOrganizationSlugChatChannelIdRouteImport
       parentRoute: typeof AppOOrganizationSlugChatRoute
     }
+    '/_app/o/$organizationSlug/automatisation/credentials': {
+      id: '/_app/o/$organizationSlug/automatisation/credentials'
+      path: '/automatisation/credentials'
+      fullPath: '/o/$organizationSlug/automatisation/credentials'
+      preLoaderRoute: typeof AppOOrganizationSlugAutomatisationCredentialsRouteImport
+      parentRoute: typeof AppOOrganizationSlugRoute
+    }
     '/_app/o/$organizationSlug/automatisation/$workflowId': {
       id: '/_app/o/$organizationSlug/automatisation/$workflowId'
       path: '/automatisation/$workflowId'
@@ -1077,6 +1097,7 @@ interface AppOOrganizationSlugRouteChildren {
   AppOOrganizationSlugSettingsRoute: typeof AppOOrganizationSlugSettingsRoute
   AppOOrganizationSlugIndexRoute: typeof AppOOrganizationSlugIndexRoute
   AppOOrganizationSlugAutomatisationWorkflowIdRoute: typeof AppOOrganizationSlugAutomatisationWorkflowIdRouteWithChildren
+  AppOOrganizationSlugAutomatisationCredentialsRoute: typeof AppOOrganizationSlugAutomatisationCredentialsRoute
   AppOOrganizationSlugCrmCatalogRoute: typeof AppOOrganizationSlugCrmCatalogRoute
   AppOOrganizationSlugHrAbsencesRoute: typeof AppOOrganizationSlugHrAbsencesRoute
   AppOOrganizationSlugHrEquipmentRoute: typeof AppOOrganizationSlugHrEquipmentRoute
@@ -1120,6 +1141,8 @@ const AppOOrganizationSlugRouteChildren: AppOOrganizationSlugRouteChildren = {
   AppOOrganizationSlugIndexRoute: AppOOrganizationSlugIndexRoute,
   AppOOrganizationSlugAutomatisationWorkflowIdRoute:
     AppOOrganizationSlugAutomatisationWorkflowIdRouteWithChildren,
+  AppOOrganizationSlugAutomatisationCredentialsRoute:
+    AppOOrganizationSlugAutomatisationCredentialsRoute,
   AppOOrganizationSlugCrmCatalogRoute: AppOOrganizationSlugCrmCatalogRoute,
   AppOOrganizationSlugHrAbsencesRoute: AppOOrganizationSlugHrAbsencesRoute,
   AppOOrganizationSlugHrEquipmentRoute: AppOOrganizationSlugHrEquipmentRoute,

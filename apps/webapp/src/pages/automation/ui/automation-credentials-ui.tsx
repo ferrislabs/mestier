@@ -1,6 +1,7 @@
 import { Check, Copy, KeyRound, Loader2, RefreshCw } from 'lucide-react'
 import { useState } from 'react'
 import { RowActions } from '#/components/reference-table'
+import { RequirePermission } from '#/components/require-permission'
 import { Button } from '#/components/ui/button'
 import { Input } from '#/components/ui/input'
 import { Label } from '#/components/ui/label'
@@ -20,12 +21,14 @@ import {
 	SheetTitle,
 } from '#/components/ui/sheet'
 import {
+	PageHeader,
+	PageShell,
 	SectionCard,
 	SectionHeader,
 	StatusBadge,
 } from '#/components/ui/surface'
 import type { AuthField, AuthScheme } from '#/hooks/use-automation'
-import type { CredentialFormValues } from '#/pages/settings/types'
+import type { CredentialFormValues } from '#/pages/automation/types'
 
 export interface CredentialRow {
 	id: string
@@ -44,6 +47,7 @@ interface FormBinding {
 }
 
 export interface AutomationCredentialsUIProps {
+	organizationName: string
 	credentials: CredentialRow[]
 	authSchemes: AuthScheme[]
 	isLoading: boolean
@@ -69,6 +73,7 @@ export interface AutomationCredentialsUIProps {
 }
 
 export function AutomationCredentialsUI({
+	organizationName,
 	credentials,
 	authSchemes,
 	isLoading,
@@ -87,132 +92,142 @@ export function AutomationCredentialsUI({
 	onDelete,
 }: AutomationCredentialsUIProps) {
 	return (
-		<SectionCard>
-			<SectionHeader
-				title={`Identifications (${credentials.length})`}
+		<PageShell>
+			<PageHeader
+				eyebrow={organizationName}
+				title="Identifications"
 				description="Authentification réutilisable par plusieurs connecteurs — Odoo, un webhook sortant, une API tierce."
 				actions={
-					<Button onClick={onOpenCreate} className="gap-2">
-						<KeyRound className="size-4" />
-						Ajouter
-					</Button>
+					<RequirePermission permission="MANAGE_AUTOMATION">
+						<Button onClick={onOpenCreate} className="gap-2">
+							<KeyRound className="size-4" />
+							Ajouter
+						</Button>
+					</RequirePermission>
 				}
 			/>
 
-			{error ? (
-				<div className="mx-5 mb-4 rounded-lg border border-destructive/30 bg-destructive-soft px-4 py-3 text-sm text-destructive">
-					{error}
-				</div>
-			) : null}
+			<SectionCard>
+				<SectionHeader title={`Identifications (${credentials.length})`} />
 
-			{isLoading ? (
-				<div className="flex items-center justify-center gap-3 p-8 text-sm text-muted-foreground">
-					<Loader2 className="size-5 animate-spin" />
-					Chargement…
-				</div>
-			) : (
-				<div className="overflow-x-auto">
-					<table className="w-full min-w-[640px] border-collapse text-sm">
-						<thead>
-							<tr className="border-b bg-muted/50">
-								<th className="px-5 py-3 text-left text-xs font-semibold uppercase text-muted-foreground">
-									Nom
-								</th>
-								<th className="px-5 py-3 text-left text-xs font-semibold uppercase text-muted-foreground">
-									Type
-								</th>
-								<th className="px-5 py-3 text-left text-xs font-semibold uppercase text-muted-foreground">
-									Origine
-								</th>
-								<th className="px-5 py-3 text-left text-xs font-semibold uppercase text-muted-foreground">
-									<span className="sr-only">Actions</span>
-								</th>
-							</tr>
-						</thead>
-						<tbody>
-							{credentials.length === 0 ? (
-								<tr>
-									<td colSpan={4} className="px-5 py-12 text-center">
-										<div className="mx-auto flex max-w-sm flex-col items-center gap-2">
-											<p className="font-medium">Aucune identification</p>
-											<p className="text-sm text-muted-foreground">
-												Ajoutez-en une pour l’attacher à un connecteur.
-											</p>
-										</div>
-									</td>
+				{error ? (
+					<div className="mx-5 mb-4 rounded-lg border border-destructive/30 bg-destructive-soft px-4 py-3 text-sm text-destructive">
+						{error}
+					</div>
+				) : null}
+
+				{isLoading ? (
+					<div className="flex items-center justify-center gap-3 p-8 text-sm text-muted-foreground">
+						<Loader2 className="size-5 animate-spin" />
+						Chargement…
+					</div>
+				) : (
+					<div className="overflow-x-auto">
+						<table className="w-full min-w-[640px] border-collapse text-sm">
+							<thead>
+								<tr className="border-b bg-muted/50">
+									<th className="px-5 py-3 text-left text-xs font-semibold uppercase text-muted-foreground">
+										Nom
+									</th>
+									<th className="px-5 py-3 text-left text-xs font-semibold uppercase text-muted-foreground">
+										Type
+									</th>
+									<th className="px-5 py-3 text-left text-xs font-semibold uppercase text-muted-foreground">
+										Origine
+									</th>
+									<th className="px-5 py-3 text-left text-xs font-semibold uppercase text-muted-foreground">
+										<span className="sr-only">Actions</span>
+									</th>
 								</tr>
-							) : (
-								credentials.map((credential) => (
-									<tr
-										key={credential.id}
-										className="group border-b transition hover:bg-muted/35 hover:shadow-xs last:border-b-0"
-									>
-										<td className="px-5 py-3 align-middle font-medium">
-											{credential.name}
-										</td>
-										<td className="px-5 py-3 align-middle text-muted-foreground">
-											{credential.kindLabel}
-										</td>
-										<td className="px-5 py-3 align-middle">
-											<StatusBadge
-												tone={
-													credential.origin === 'generated'
-														? 'brand'
-														: 'neutral'
-												}
-											>
-												{credential.origin === 'generated'
-													? 'Générée'
-													: 'Fournie'}
-											</StatusBadge>
-										</td>
-										<td className="px-5 py-3 align-middle">
-											<div className="flex justify-end gap-1 opacity-0 transition group-hover:opacity-100 group-focus-within:opacity-100">
-												{credential.origin === 'generated' ? (
-													<Button
-														size="icon-sm"
-														variant="ghost"
-														title="Régénérer le secret"
-														onClick={() => onRotate(credential)}
-														disabled={rotatingId === credential.id}
-													>
-														{rotatingId === credential.id ? (
-															<Loader2 className="animate-spin" />
-														) : (
-															<RefreshCw />
-														)}
-														<span className="sr-only">Régénérer</span>
-													</Button>
-												) : null}
-												<RowActions
-													isEditing={false}
-													isSaving={false}
-													onEdit={() => onEdit(credential)}
-													onCancel={() => {}}
-													onSave={() => {}}
-													onDelete={() => onDelete(credential)}
-												/>
+							</thead>
+							<tbody>
+								{credentials.length === 0 ? (
+									<tr>
+										<td colSpan={4} className="px-5 py-12 text-center">
+											<div className="mx-auto flex max-w-sm flex-col items-center gap-2">
+												<p className="font-medium">Aucune identification</p>
+												<p className="text-sm text-muted-foreground">
+													Ajoutez-en une pour l’attacher à un connecteur.
+												</p>
 											</div>
 										</td>
 									</tr>
-								))
-							)}
-						</tbody>
-					</table>
-				</div>
-			)}
+								) : (
+									credentials.map((credential) => (
+										<tr
+											key={credential.id}
+											className="group border-b transition hover:bg-muted/35 hover:shadow-xs last:border-b-0"
+										>
+											<td className="px-5 py-3 align-middle font-medium">
+												{credential.name}
+											</td>
+											<td className="px-5 py-3 align-middle text-muted-foreground">
+												{credential.kindLabel}
+											</td>
+											<td className="px-5 py-3 align-middle">
+												<StatusBadge
+													tone={
+														credential.origin === 'generated'
+															? 'brand'
+															: 'neutral'
+													}
+												>
+													{credential.origin === 'generated'
+														? 'Générée'
+														: 'Fournie'}
+												</StatusBadge>
+											</td>
+											<td className="px-5 py-3 align-middle">
+												<div className="flex justify-end gap-1 opacity-0 transition group-hover:opacity-100 group-focus-within:opacity-100">
+													{credential.origin === 'generated' ? (
+														<RequirePermission permission="MANAGE_AUTOMATION">
+															<Button
+																size="icon-sm"
+																variant="ghost"
+																title="Régénérer le secret"
+																onClick={() => onRotate(credential)}
+																disabled={rotatingId === credential.id}
+															>
+																{rotatingId === credential.id ? (
+																	<Loader2 className="animate-spin" />
+																) : (
+																	<RefreshCw />
+																)}
+																<span className="sr-only">Régénérer</span>
+															</Button>
+														</RequirePermission>
+													) : null}
+													<RowActions
+														permission="MANAGE_AUTOMATION"
+														isEditing={false}
+														isSaving={false}
+														onEdit={() => onEdit(credential)}
+														onCancel={() => {}}
+														onSave={() => {}}
+														onDelete={() => onDelete(credential)}
+													/>
+												</div>
+											</td>
+										</tr>
+									))
+								)}
+							</tbody>
+						</table>
+					</div>
+				)}
 
-			<CredentialFormSheet
-				open={sheetOpen}
-				mode={sheetMode}
-				authSchemes={authSchemes}
-				form={form}
-				errors={formErrors}
-				saveError={saveError}
-				revealedSecret={revealedSecret}
-				onOpenChange={onOpenChange}
-			/>
-		</SectionCard>
+				<CredentialFormSheet
+					open={sheetOpen}
+					mode={sheetMode}
+					authSchemes={authSchemes}
+					form={form}
+					errors={formErrors}
+					saveError={saveError}
+					revealedSecret={revealedSecret}
+					onOpenChange={onOpenChange}
+				/>
+			</SectionCard>
+		</PageShell>
 	)
 }
 

@@ -24,6 +24,12 @@ describe('automatisation routes', () => {
 		)
 	})
 
+	it('resolves the credentials screen ahead of the workflow editor', () => {
+		expect(routeIdFor('/o/acme/automatisation/credentials')).toBe(
+			'/_app/o/$organizationSlug/automatisation/credentials',
+		)
+	})
+
 	it('resolves the workflow editor', () => {
 		expect(routeIdFor('/o/acme/automatisation/workflow-1')).toBe(
 			'/_app/o/$organizationSlug/automatisation/$workflowId',
