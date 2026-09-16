@@ -199,6 +199,35 @@ describe('ConnectorConfigField — Json', () => {
 	})
 })
 
+describe('ConnectorConfigField — Json — external updates', () => {
+	it('resyncs the visible text when the value changes from outside the field, as an inserted expression would', () => {
+		const jsonField = field({ name: 'headers', label: 'Headers', kind: 'Json' })
+		const { rerender } = render(
+			<ConnectorConfigField
+				field={jsonField}
+				value={undefined}
+				error={null}
+				onChange={vi.fn()}
+				onOpenExpression={vi.fn()}
+			/>,
+		)
+
+		rerender(
+			<ConnectorConfigField
+				field={jsonField}
+				value="{{ trigger.headers }}"
+				error={null}
+				onChange={vi.fn()}
+				onOpenExpression={vi.fn()}
+			/>,
+		)
+
+		expect(
+			(screen.getByLabelText('Headers') as HTMLTextAreaElement).value,
+		).toBe('{{ trigger.headers }}')
+	})
+})
+
 describe('ConnectorConfigField — validation error', () => {
 	it('shows the message next to the field it names', () => {
 		render(
@@ -263,5 +292,83 @@ describe('ConnectorConfigField — expression affordance', () => {
 		)
 
 		expect(screen.queryByRole('button')).toBeNull()
+	})
+})
+
+describe('ConnectorConfigField — the control ref', () => {
+	it('hands back the live text input so a caller can read its cursor', () => {
+		let el: HTMLInputElement | HTMLTextAreaElement | null = null
+		render(
+			<ConnectorConfigField
+				field={field({ name: 'url', label: 'URL', kind: 'Text' })}
+				value="https://a"
+				error={null}
+				onChange={vi.fn()}
+				onOpenExpression={vi.fn()}
+				controlRef={(node) => {
+					el = node
+				}}
+			/>,
+		)
+
+		expect(el).toBe(screen.getByLabelText('URL'))
+	})
+
+	it('hands back the live textarea for a Json field', () => {
+		let el: HTMLInputElement | HTMLTextAreaElement | null = null
+		render(
+			<ConnectorConfigField
+				field={field({ name: 'headers', label: 'Headers', kind: 'Json' })}
+				value={undefined}
+				error={null}
+				onChange={vi.fn()}
+				onOpenExpression={vi.fn()}
+				controlRef={(node) => {
+					el = node
+				}}
+			/>,
+		)
+
+		expect(el).toBe(screen.getByLabelText('Headers'))
+	})
+})
+
+describe('ConnectorConfigField — dropping a datum', () => {
+	it('reports the dropped path on an expression-enabled field', () => {
+		const onDropExpression = vi.fn()
+		render(
+			<ConnectorConfigField
+				field={field({ name: 'url', label: 'URL', expression: true })}
+				value=""
+				error={null}
+				onChange={vi.fn()}
+				onOpenExpression={vi.fn()}
+				onDropExpression={onDropExpression}
+			/>,
+		)
+
+		const dataTransfer = { getData: () => 'trigger.customer.id' }
+		fireEvent.drop(screen.getByLabelText('URL'), { dataTransfer })
+
+		expect(onDropExpression).toHaveBeenCalledWith('trigger.customer.id')
+	})
+
+	it('does nothing on a field that does not accept an expression', () => {
+		const onDropExpression = vi.fn()
+		render(
+			<ConnectorConfigField
+				field={field({ name: 'method', label: 'Méthode', expression: false })}
+				value=""
+				error={null}
+				onChange={vi.fn()}
+				onOpenExpression={vi.fn()}
+				onDropExpression={onDropExpression}
+			/>,
+		)
+
+		const dataTransfer = { getData: () => 'trigger.customer.id' }
+		fireEvent.drop(screen.getByLabelText('Méthode'), { dataTransfer })
+
+		expect(onDropExpression).not.toHaveBeenCalled()
 	})
 })
