@@ -558,11 +558,18 @@ export namespace Schemas {
     kind: string;
     version: number;
   };
-  export type GraphDto = { connectors: Array<PlacedConnectorDto>; edges: Array<EdgeDto> };
+  export type TriggerKindDto = "Manual" | { Events: Array<string> };
+  export type PlacedTriggerDto = { id: string; kind: TriggerKindDto };
+  export type GraphDto = {
+    connectors: Array<PlacedConnectorDto>;
+    edges: Array<EdgeDto>;
+    triggers: Array<PlacedTriggerDto>;
+  };
   export type GraphErrorResponse = {
     connector_id?: (string | null) | undefined;
     field?: (string | null) | undefined;
     message: string;
+    trigger_id?: (string | null) | undefined;
   };
   export type GraphInvalidDetails = { errors: Array<GraphErrorResponse> };
   export type GraphInvalidBody = { code: string; details: GraphInvalidDetails; message: string; status: number };

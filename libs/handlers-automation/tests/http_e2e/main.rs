@@ -370,3 +370,66 @@ async fn a_caller_without_view_automation_is_refused_evaluating_an_expression() 
 
     app.cleanup().await;
 }
+
+#[tokio::test]
+#[ignore = "requires live postgres and redis"]
+async fn a_saved_version_carrying_a_trigger_reads_back_with_the_trigger_and_its_edge() {
+    let app = harness::start().await;
+    let created = create_workflow(&app, &app.token).await;
+    let workflow: Value = created.json().await.expect("the create answer is json");
+    let workflow_id = workflow["data"]["id"]
+        .as_str()
+        .expect("the created workflow carries an id");
+
+    let save_response = client()
+        .put(app.workflow_versions_url(workflow_id))
+        .bearer_auth(&app.token)
+        .json(&json!({
+            "graph": {
+                "connectors": [{
+                    "id": "c1",
+                    "kind": "flow.condition",
+                    "version": 1,
+                    "credential_id": null,
+                    "config": { "predicate": "{{ true }}" }
+                }],
+                "edges": [{ "from": "t1", "to": "c1", "branch": null }],
+                "triggers": [{ "id": "t1", "kind": "Manual" }]
+            },
+            "layout": null
+        }))
+        .send()
+        .await
+        .expect("the api answers the save version call");
+    assert_eq!(save_response.status(), 201);
+
+    let get_response = client()
+        .get(app.workflow_url(workflow_id))
+        .bearer_auth(&app.token)
+        .send()
+        .await
+        .expect("the api answers the workflow read call");
+    assert_eq!(get_response.status(), 200);
+
+    let body: Value = get_response.json().await.expect("the answer is json");
+    let graph = &body["data"]["current_version"]["graph"];
+
+    let triggers = graph["triggers"]
+        .as_array()
+        .expect("the current version's graph carries triggers");
+    assert_eq!(triggers.len(), 1);
+    assert_eq!(triggers[0]["id"], "t1");
+    assert_eq!(triggers[0]["kind"], "Manual");
+
+    let edges = graph["edges"]
+        .as_array()
+        .expect("the current version's graph carries edges");
+    assert!(
+        edges
+            .iter()
+            .any(|edge| edge["from"] == "t1" && edge["to"] == "c1"),
+        "{edges:?}"
+    );
+
+    app.cleanup().await;
+}

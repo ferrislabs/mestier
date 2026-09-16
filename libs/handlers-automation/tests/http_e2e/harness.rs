@@ -112,6 +112,14 @@ impl App {
         format!("{}/{workflow_id}/trigger", self.workflows_url())
     }
 
+    pub fn workflow_url(&self, workflow_id: &str) -> String {
+        format!("{}/{workflow_id}", self.workflows_url())
+    }
+
+    pub fn workflow_versions_url(&self, workflow_id: &str) -> String {
+        format!("{}/{workflow_id}/versions", self.workflows_url())
+    }
+
     pub fn settings_url(&self) -> String {
         format!(
             "{}/api/v1/organizations/{}/automation/settings",

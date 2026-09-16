@@ -289,6 +289,8 @@ impl Modify for SecurityAddon {
         automation::response::PlacedConnectorDto,
         automation::response::EdgeDto,
         automation::response::BranchDto,
+        automation::response::PlacedTriggerDto,
+        automation::response::TriggerKindDto,
         automation::response::GraphErrorResponse,
         automation::response::RunResponse,
         automation::response::RunDetailResponse,
