@@ -809,11 +809,43 @@ mod tests {
         }
     }
 
+    use crate::domain::automation::workflow::{PlacedTrigger, TriggerKind};
+
+    fn triggered(mut graph: Graph) -> Graph {
+        if !graph.triggers.is_empty() {
+            return graph;
+        }
+        let targeted: std::collections::HashSet<&str> =
+            graph.edges.iter().map(|e| e.to.as_str()).collect();
+        let entry_points: Vec<String> = graph
+            .connectors
+            .iter()
+            .map(|c| c.id.clone())
+            .filter(|id| !targeted.contains(id.as_str()))
+            .collect();
+        if entry_points.is_empty() {
+            return graph;
+        }
+        graph.triggers.push(PlacedTrigger {
+            id: "t1".to_string(),
+            kind: TriggerKind::Manual,
+        });
+        for id in entry_points {
+            graph.edges.push(Edge {
+                from: "t1".to_string(),
+                to: id,
+                branch: None,
+            });
+        }
+        graph
+    }
+
     async fn start_workflow(
         usecase: &MestierUseCase,
         org_id: OrganizationId,
         graph: Graph,
     ) -> Uuid {
+        let graph = triggered(graph);
         let workflow = usecase
             .create_workflow(CreateWorkflowCommand {
                 org_id,
@@ -1370,11 +1402,11 @@ mod tests {
             .save_workflow_version(SaveWorkflowVersionCommand {
                 org_id,
                 workflow_id: workflow.id,
-                graph: Graph {
+                graph: triggered(Graph {
                     connectors: vec![condition("only_v1", "{{ true }}")],
                     edges: vec![],
                     triggers: Vec::new(),
-                },
+                }),
                 layout: None,
                 created_by: None,
             })
@@ -1391,11 +1423,11 @@ mod tests {
             .save_workflow_version(SaveWorkflowVersionCommand {
                 org_id,
                 workflow_id: workflow.id,
-                graph: Graph {
+                graph: triggered(Graph {
                     connectors: vec![condition("only_v2", "{{ true }}")],
                     edges: vec![],
                     triggers: Vec::new(),
-                },
+                }),
                 layout: None,
                 created_by: None,
             })
@@ -1444,7 +1476,7 @@ mod tests {
             .save_workflow_version(SaveWorkflowVersionCommand {
                 org_id,
                 workflow_id: workflow.id,
-                graph: pinned_graph.clone(),
+                graph: triggered(pinned_graph.clone()),
                 layout: None,
                 created_by: None,
             })
@@ -1461,11 +1493,11 @@ mod tests {
                 .save_workflow_version(SaveWorkflowVersionCommand {
                     org_id,
                     workflow_id: workflow.id,
-                    graph: Graph {
+                    graph: triggered(Graph {
                         connectors: vec![condition(label, "{{ true }}")],
                         edges: vec![],
                         triggers: Vec::new(),
-                    },
+                    }),
                     layout: None,
                     created_by: None,
                 })
@@ -1480,7 +1512,7 @@ mod tests {
             .unwrap()
             .expect("the run's pinned version still exists");
 
-        assert_eq!(version.graph, pinned_graph);
+        assert_eq!(version.graph, triggered(pinned_graph));
     }
 
     #[tokio::test]
@@ -1502,11 +1534,11 @@ mod tests {
             .save_workflow_version(SaveWorkflowVersionCommand {
                 org_id,
                 workflow_id: workflow.id,
-                graph: Graph {
+                graph: triggered(Graph {
                     connectors: vec![condition("c1", "{{ true }}")],
                     edges: vec![],
                     triggers: Vec::new(),
-                },
+                }),
                 layout: None,
                 created_by: None,
             })

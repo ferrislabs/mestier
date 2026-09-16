@@ -31,7 +31,7 @@ pub fn roots(graph: &Graph) -> Vec<&str> {
     let all_ids: HashSet<&str> = graph.connectors.iter().map(|c| c.id.as_str()).collect();
     let mut has_incoming: HashSet<&str> = HashSet::new();
     for edge in &graph.edges {
-        if all_ids.contains(edge.to.as_str()) {
+        if all_ids.contains(edge.to.as_str()) && all_ids.contains(edge.from.as_str()) {
             has_incoming.insert(edge.to.as_str());
         }
     }
@@ -321,5 +321,35 @@ mod tests {
 
         assert_eq!(index.get("c1").map(|c| c.id.as_str()), Some("c1"));
         assert_eq!(index.get("missing"), None);
+    }
+
+    #[test]
+    fn a_connector_a_trigger_points_at_is_still_a_root() {
+        use crate::domain::automation::workflow::{PlacedTrigger, TriggerKind};
+
+        let graph = Graph {
+            connectors: vec![
+                connector("c1", "http.request"),
+                connector("c2", "http.request"),
+            ],
+            edges: vec![
+                Edge {
+                    from: "t1".to_string(),
+                    to: "c1".to_string(),
+                    branch: None,
+                },
+                Edge {
+                    from: "c1".to_string(),
+                    to: "c2".to_string(),
+                    branch: None,
+                },
+            ],
+            triggers: vec![PlacedTrigger {
+                id: "t1".to_string(),
+                kind: TriggerKind::Manual,
+            }],
+        };
+
+        assert_eq!(roots(&graph), vec!["c1"]);
     }
 }

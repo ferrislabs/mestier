@@ -265,11 +265,6 @@ pub fn validate_graph(
         }
     }
 
-    // Every edge is classified by what its endpoints name. An edge into a
-    // trigger, or a branched edge out of one, is refused and excluded from
-    // every graph-shape computation below, the same way a dangling edge
-    // always was: a branch check, a cycle walk or a reachability walk built
-    // from a half-real edge would only add noise on top of the real problem.
     let mut connector_edges: Vec<&Edge> = Vec::new();
     let mut trigger_edges: Vec<&Edge> = Vec::new();
     for edge in &graph.edges {
@@ -1700,8 +1695,6 @@ mod tests {
 
         assert!(validate_graph(&graph, &catalogue, &[], &EventCatalogue::new()).is_ok());
     }
-
-    // --- graph shape: triggers ----------------------------------------------
 
     fn manual_trigger(id: &str) -> PlacedTrigger {
         PlacedTrigger {
