@@ -1,3 +1,4 @@
+import { Link } from '@tanstack/react-router'
 import type { ColumnDef } from '@tanstack/react-table'
 import { Loader2, MoreHorizontal, Plus, Trash2, Workflow } from 'lucide-react'
 import { useMemo } from 'react'
@@ -29,6 +30,7 @@ import {
 	SectionCard,
 	StatusBadge,
 } from '#/components/ui/surface'
+import { buildOrgPath } from '#/modules/org-path'
 import {
 	RUN_STATUS_LABEL,
 	RUN_STATUS_TONE,
@@ -49,6 +51,7 @@ export interface WorkflowRow {
 
 export interface AutomationWorkflowsListProps {
 	organizationName: string
+	organizationSlug: string
 	workflows: WorkflowRow[]
 	isLoading: boolean
 	error: string | null
@@ -60,6 +63,7 @@ export interface AutomationWorkflowsListProps {
 
 export function AutomationWorkflowsList({
 	organizationName,
+	organizationSlug,
 	workflows,
 	isLoading,
 	error,
@@ -74,7 +78,15 @@ export function AutomationWorkflowsList({
 				id: 'name',
 				header: 'Workflow',
 				cell: ({ row }) => (
-					<RowIdentity title={row.original.name} id={row.original.id} />
+					<Link
+						to={buildOrgPath(
+							organizationSlug,
+							`/automatisation/${row.original.id}`,
+						)}
+						className="block hover:underline"
+					>
+						<RowIdentity title={row.original.name} id={row.original.id} />
+					</Link>
 				),
 			},
 			{
@@ -126,6 +138,7 @@ export function AutomationWorkflowsList({
 				cell: ({ row }) => (
 					<WorkflowRowActions
 						workflow={row.original}
+						organizationSlug={organizationSlug}
 						onRename={() => onRename(row.original)}
 						onToggleEnabled={() => onToggleEnabled(row.original)}
 						onDelete={() => onDelete(row.original)}
@@ -133,7 +146,7 @@ export function AutomationWorkflowsList({
 				),
 			},
 		],
-		[onRename, onToggleEnabled, onDelete],
+		[organizationSlug, onRename, onToggleEnabled, onDelete],
 	)
 
 	return (
@@ -187,6 +200,7 @@ export function AutomationWorkflowsList({
 
 interface WorkflowRowActionsProps {
 	workflow: WorkflowRow
+	organizationSlug: string
 	onRename: () => void
 	onToggleEnabled: () => void
 	onDelete: () => void
@@ -194,6 +208,7 @@ interface WorkflowRowActionsProps {
 
 function WorkflowRowActions({
 	workflow,
+	organizationSlug,
 	onRename,
 	onToggleEnabled,
 	onDelete,
@@ -210,7 +225,18 @@ function WorkflowRowActions({
 							</Button>
 						</DropdownMenuTrigger>
 						<DropdownMenuContent align="end">
-							<DropdownMenuItem onClick={onRename}>Modifier</DropdownMenuItem>
+							<DropdownMenuItem asChild>
+								<Link
+									to={buildOrgPath(
+										organizationSlug,
+										`/automatisation/${workflow.id}/executions`,
+									)}
+								>
+									Historique d’exécution
+								</Link>
+							</DropdownMenuItem>
+							<DropdownMenuSeparator />
+							<DropdownMenuItem onClick={onRename}>Renommer</DropdownMenuItem>
 							<DropdownMenuItem onClick={onToggleEnabled}>
 								{workflow.enabled ? 'Désactiver' : 'Activer'}
 							</DropdownMenuItem>

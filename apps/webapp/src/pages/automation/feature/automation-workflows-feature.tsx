@@ -27,6 +27,7 @@ export function AutomationWorkflowsFeature() {
 			key={activeOrganization.id}
 			organizationId={activeOrganization.id}
 			organizationName={activeOrganization.name}
+			organizationSlug={activeOrganization.slug}
 		/>
 	)
 }
@@ -39,9 +40,11 @@ interface Draft {
 function AutomationWorkflowsWorkspace({
 	organizationId,
 	organizationName,
+	organizationSlug,
 }: {
 	organizationId: string
 	organizationName: string
+	organizationSlug: string
 }) {
 	const [draft, setDraft] = useState<Draft | null>(null)
 
@@ -99,6 +102,7 @@ function AutomationWorkflowsWorkspace({
 		<>
 			<AutomationWorkflowsList
 				organizationName={organizationName}
+				organizationSlug={organizationSlug}
 				workflows={rows}
 				isLoading={workflows.isLoading}
 				error={error?.message ?? null}

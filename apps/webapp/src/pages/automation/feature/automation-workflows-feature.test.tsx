@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { render, screen, waitFor } from '@testing-library/react'
+import { screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import type { ReactNode } from 'react'
 import { describe, expect, it } from 'vitest'
@@ -9,6 +9,7 @@ import {
 } from '#/hooks/use-active-organization'
 import type { Organization } from '#/hooks/use-organizations'
 import { AutomationWorkflowsFeature } from '#/pages/automation/feature/automation-workflows-feature'
+import { renderWithRouter } from '#/test/render-with-router'
 import { seedPermissionsCacheForOrganization } from '#/test/with-permissions'
 
 const WORKFLOWS_PATH =
@@ -143,18 +144,16 @@ function renderFeature(configure: (api: FakeApi) => void) {
 		)
 	}
 
-	render(
+	return renderWithRouter(
 		<Providers>
 			<AutomationWorkflowsFeature />
 		</Providers>,
-	)
-
-	return api
+	).then(() => api)
 }
 
 describe('AutomationWorkflowsFeature — last run', () => {
 	it('shows the most recent run for a workflow that ran several times', async () => {
-		renderFeature((api) => {
+		await renderFeature((api) => {
 			api.mockGet(RUNS_PATH, () => ({
 				data: [
 					run({
@@ -177,7 +176,7 @@ describe('AutomationWorkflowsFeature — last run', () => {
 	})
 
 	it('says plainly when a workflow has never run', async () => {
-		renderFeature((api) => {
+		await renderFeature((api) => {
 			api.mockGet(RUNS_PATH, () => ({ data: [], pagination: null }))
 		})
 
@@ -188,7 +187,7 @@ describe('AutomationWorkflowsFeature — last run', () => {
 describe('AutomationWorkflowsFeature — create', () => {
 	it('creates a workflow through the dialog and calls the create mutation', async () => {
 		const user = userEvent.setup()
-		const api = renderFeature((fakeApi) => {
+		const api = await renderFeature((fakeApi) => {
 			fakeApi.mockMutation('post', WORKFLOWS_PATH, (params) => ({
 				data: workflow({
 					id: 'workflow-2',
@@ -218,7 +217,7 @@ describe('AutomationWorkflowsFeature — create', () => {
 describe('AutomationWorkflowsFeature — rename', () => {
 	it('opens the dialog pre-filled and calls the update mutation with the new name', async () => {
 		const user = userEvent.setup()
-		const api = renderFeature((fakeApi) => {
+		const api = await renderFeature((fakeApi) => {
 			fakeApi.mockMutation('patch', WORKFLOW_PATH, (params) => ({
 				data: workflow({
 					...(params as { body: Record<string, unknown> }).body,
@@ -227,7 +226,7 @@ describe('AutomationWorkflowsFeature — rename', () => {
 		})
 
 		await user.click(await screen.findByRole('button', { name: 'Actions' }))
-		await user.click(screen.getByRole('menuitem', { name: 'Modifier' }))
+		await user.click(screen.getByRole('menuitem', { name: 'Renommer' }))
 
 		expect(screen.getByDisplayValue('Créer une facture Odoo')).toBeDefined()
 
@@ -251,7 +250,7 @@ describe('AutomationWorkflowsFeature — rename', () => {
 describe('AutomationWorkflowsFeature — enable/disable', () => {
 	it('calls the update mutation with the flipped enabled flag', async () => {
 		const user = userEvent.setup()
-		const api = renderFeature((fakeApi) => {
+		const api = await renderFeature((fakeApi) => {
 			fakeApi.mockMutation('patch', WORKFLOW_PATH, (params) => ({
 				data: workflow({
 					...(params as { body: Record<string, unknown> }).body,
@@ -277,7 +276,7 @@ describe('AutomationWorkflowsFeature — enable/disable', () => {
 describe('AutomationWorkflowsFeature — delete', () => {
 	it('calls the delete mutation once the confirmation is accepted', async () => {
 		const user = userEvent.setup()
-		const api = renderFeature((fakeApi) => {
+		const api = await renderFeature((fakeApi) => {
 			fakeApi.mockMutation('delete', WORKFLOW_PATH, () => ({ data: undefined }))
 		})
 
@@ -293,5 +292,19 @@ describe('AutomationWorkflowsFeature — delete', () => {
 				path: { organization_id: 'org-1', workflow_id: 'workflow-1' },
 			})
 		})
+	})
+})
+
+describe('AutomationWorkflowsFeature — reaching the editor', () => {
+	it('builds the editor link from the active organization, not from nothing', async () => {
+		await renderFeature(() => {})
+
+		const link = await screen.findByRole('link', {
+			name: /Créer une facture Odoo/,
+		})
+
+		expect(link.getAttribute('href')).toBe(
+			'/o/atelier-bois/automatisation/workflow-1',
+		)
 	})
 })
