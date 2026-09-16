@@ -16,6 +16,10 @@ pub enum AuthRequirement {
     /// Any of these schemes authenticates the connector — an HTTP call that
     /// accepts either a bearer token or a header, say.
     AnyOf(&'static [&'static str]),
+    /// Any of these schemes authenticates the connector, and none is also a
+    /// valid answer. A call to an endpoint that asks for nothing is the
+    /// ordinary case, not a misconfiguration.
+    Optional(&'static [&'static str]),
 }
 
 impl AuthRequirement {
@@ -25,8 +29,16 @@ impl AuthRequirement {
         match self {
             AuthRequirement::None => false,
             AuthRequirement::Exactly(kind) => *kind == scheme_kind,
-            AuthRequirement::AnyOf(kinds) => kinds.contains(&scheme_kind),
+            AuthRequirement::AnyOf(kinds) | AuthRequirement::Optional(kinds) => {
+                kinds.contains(&scheme_kind)
+            }
         }
+    }
+
+    /// Whether a connector carrying this requirement may be saved with no
+    /// credential at all.
+    pub fn is_satisfied_without_a_credential(&self) -> bool {
+        matches!(self, AuthRequirement::None | AuthRequirement::Optional(_))
     }
 
     /// The schemes named here, for the catalogue's consistency test and for
@@ -44,7 +56,7 @@ impl AuthRequirement {
         match *self {
             AuthRequirement::None => Vec::new(),
             AuthRequirement::Exactly(kind) => vec![kind],
-            AuthRequirement::AnyOf(kinds) => kinds.to_vec(),
+            AuthRequirement::AnyOf(kinds) | AuthRequirement::Optional(kinds) => kinds.to_vec(),
         }
     }
 }

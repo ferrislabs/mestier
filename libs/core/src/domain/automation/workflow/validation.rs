@@ -10,7 +10,7 @@ use std::collections::{HashMap, HashSet, VecDeque};
 use serde_json::Value;
 use uuid::Uuid;
 
-use crate::domain::automation::connector::{AuthRequirement, ConnectorCatalogue, FieldKind};
+use crate::domain::automation::connector::{ConnectorCatalogue, FieldKind};
 use crate::domain::automation::credential::Credential;
 use crate::domain::automation::expression::parse_template;
 
@@ -432,7 +432,7 @@ pub fn validate_graph(
 
         match connector.credential_id {
             None => {
-                if descriptor.auth != AuthRequirement::None {
+                if !descriptor.auth.is_satisfied_without_a_credential() {
                     errors.push(GraphError::MissingCredential {
                         connector_id: connector.id.clone(),
                     });
@@ -471,6 +471,7 @@ mod tests {
     use serde_json::json;
 
     use super::*;
+    use crate::domain::automation::connector::AuthRequirement;
     use crate::domain::automation::connector::connector_catalogue;
 
     fn condition(id: &str, predicate: &str) -> super::super::graph::PlacedConnector {
@@ -817,6 +818,82 @@ mod tests {
             credential_id,
             config: serde_json::Map::new(),
         }
+    }
+
+    #[test]
+    fn a_connector_whose_credential_is_optional_is_accepted_without_one() {
+        use crate::domain::automation::connector::ConnectorDescriptor;
+
+        let mut catalogue = ConnectorCatalogue::new();
+        catalogue
+            .register(ConnectorDescriptor {
+                kind: "test.open",
+                version: 1,
+                family: "test",
+                label: "Open",
+                auth: AuthRequirement::Optional(&["bearer_token"]),
+                fields: &[],
+                branches: &[],
+                output_example: json!({}),
+            })
+            .expect("open registers");
+
+        let graph = Graph {
+            connectors: vec![super::super::graph::PlacedConnector {
+                id: "c1".to_string(),
+                kind: "test.open".to_string(),
+                version: 1,
+                credential_id: None,
+                config: serde_json::Map::new(),
+            }],
+            edges: vec![],
+        };
+
+        assert!(validate_graph(&graph, &catalogue, &[]).is_ok());
+    }
+
+    #[test]
+    fn an_optional_credential_still_has_to_match_an_accepted_scheme() {
+        use crate::domain::automation::connector::ConnectorDescriptor;
+        use common::generate_uuid_v7;
+
+        let mut catalogue = ConnectorCatalogue::new();
+        catalogue
+            .register(ConnectorDescriptor {
+                kind: "test.open",
+                version: 1,
+                family: "test",
+                label: "Open",
+                auth: AuthRequirement::Optional(&["bearer_token"]),
+                fields: &[],
+                branches: &[],
+                output_example: json!({}),
+            })
+            .expect("open registers");
+
+        let id = generate_uuid_v7();
+        let graph = Graph {
+            connectors: vec![super::super::graph::PlacedConnector {
+                id: "c1".to_string(),
+                kind: "test.open".to_string(),
+                version: 1,
+                credential_id: Some(id),
+                config: serde_json::Map::new(),
+            }],
+            edges: vec![],
+        };
+
+        let errors =
+            validate_graph(&graph, &catalogue, &[credential(id, "odoo_api")]).expect_err("refused");
+
+        assert!(
+            errors.contains(&GraphError::CredentialSchemeNotAccepted {
+                connector_id: "c1".to_string(),
+                credential_id: id,
+                scheme: "odoo_api".to_string(),
+            }),
+            "{errors:?}"
+        );
     }
 
     #[test]

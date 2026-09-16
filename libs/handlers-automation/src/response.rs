@@ -117,6 +117,7 @@ pub enum AuthRequirementResponse {
     None,
     Exactly(String),
     AnyOf(Vec<String>),
+    Optional(Vec<String>),
 }
 
 impl From<&AuthRequirement> for AuthRequirementResponse {
@@ -126,6 +127,9 @@ impl From<&AuthRequirement> for AuthRequirementResponse {
             AuthRequirement::Exactly(kind) => Self::Exactly((*kind).to_owned()),
             AuthRequirement::AnyOf(kinds) => {
                 Self::AnyOf(kinds.iter().map(|k| (*k).to_owned()).collect())
+            }
+            AuthRequirement::Optional(kinds) => {
+                Self::Optional(kinds.iter().map(|k| (*k).to_owned()).collect())
             }
         }
     }

@@ -63,7 +63,7 @@ pub enum ConnectorCatalogueError {
 
 const LOOP_FIELDS: &[Field] = &[Field {
     name: "items",
-    label: "Items",
+    label: "Éléments",
     required: true,
     kind: FieldKind::Json,
     expression: true,
@@ -73,7 +73,7 @@ const LOOP_FIELDS: &[Field] = &[Field {
 
 const CONDITION_FIELDS: &[Field] = &[Field {
     name: "predicate",
-    label: "Predicate",
+    label: "Condition",
     required: true,
     kind: FieldKind::Text,
     expression: true,
@@ -84,7 +84,7 @@ const CONDITION_FIELDS: &[Field] = &[Field {
 const CUSTOMER_CREATE_FIELDS: &[Field] = &[
     Field {
         name: "name",
-        label: "Name",
+        label: "Nom",
         required: true,
         kind: FieldKind::Text,
         expression: true,
@@ -93,7 +93,7 @@ const CUSTOMER_CREATE_FIELDS: &[Field] = &[
     },
     Field {
         name: "email",
-        label: "Email",
+        label: "E-mail",
         required: false,
         kind: FieldKind::Text,
         expression: true,
@@ -102,7 +102,7 @@ const CUSTOMER_CREATE_FIELDS: &[Field] = &[
     },
     Field {
         name: "phone",
-        label: "Phone",
+        label: "Téléphone",
         required: false,
         kind: FieldKind::Text,
         expression: true,
@@ -114,7 +114,7 @@ const CUSTOMER_CREATE_FIELDS: &[Field] = &[
 const HTTP_REQUEST_FIELDS: &[Field] = &[
     Field {
         name: "method",
-        label: "Method",
+        label: "Méthode",
         required: true,
         kind: FieldKind::Select {
             options: &[
@@ -155,7 +155,7 @@ const HTTP_REQUEST_FIELDS: &[Field] = &[
     },
     Field {
         name: "headers",
-        label: "Headers",
+        label: "En-têtes",
         required: false,
         kind: FieldKind::Json,
         expression: true,
@@ -164,7 +164,7 @@ const HTTP_REQUEST_FIELDS: &[Field] = &[
     },
     Field {
         name: "body",
-        label: "Body",
+        label: "Corps",
         required: false,
         kind: FieldKind::Json,
         expression: true,
@@ -173,7 +173,7 @@ const HTTP_REQUEST_FIELDS: &[Field] = &[
     },
     Field {
         name: "timeout_seconds",
-        label: "Timeout (seconds)",
+        label: "Délai d'expiration (secondes)",
         required: false,
         kind: FieldKind::Number,
         expression: false,
@@ -182,7 +182,7 @@ const HTTP_REQUEST_FIELDS: &[Field] = &[
     },
     Field {
         name: "signing_credential_id",
-        label: "Signing credential",
+        label: "Clé de signature sortante",
         required: false,
         kind: FieldKind::Text,
         expression: false,
@@ -194,7 +194,7 @@ const HTTP_REQUEST_FIELDS: &[Field] = &[
 const ODOO_CREATE_PARTNER_FIELDS: &[Field] = &[
     Field {
         name: "name",
-        label: "Name",
+        label: "Nom",
         required: true,
         kind: FieldKind::Text,
         expression: true,
@@ -203,7 +203,7 @@ const ODOO_CREATE_PARTNER_FIELDS: &[Field] = &[
     },
     Field {
         name: "email",
-        label: "Email",
+        label: "E-mail",
         required: false,
         kind: FieldKind::Text,
         expression: true,
@@ -212,7 +212,7 @@ const ODOO_CREATE_PARTNER_FIELDS: &[Field] = &[
     },
     Field {
         name: "phone",
-        label: "Phone",
+        label: "Téléphone",
         required: false,
         kind: FieldKind::Text,
         expression: true,
@@ -224,7 +224,7 @@ const ODOO_CREATE_PARTNER_FIELDS: &[Field] = &[
 const ODOO_UPDATE_PARTNER_FIELDS: &[Field] = &[
     Field {
         name: "partner_id",
-        label: "Partner ID",
+        label: "Identifiant du partenaire",
         required: true,
         kind: FieldKind::Number,
         expression: true,
@@ -233,7 +233,7 @@ const ODOO_UPDATE_PARTNER_FIELDS: &[Field] = &[
     },
     Field {
         name: "name",
-        label: "Name",
+        label: "Nom",
         required: false,
         kind: FieldKind::Text,
         expression: true,
@@ -242,7 +242,7 @@ const ODOO_UPDATE_PARTNER_FIELDS: &[Field] = &[
     },
     Field {
         name: "email",
-        label: "Email",
+        label: "E-mail",
         required: false,
         kind: FieldKind::Text,
         expression: true,
@@ -251,7 +251,7 @@ const ODOO_UPDATE_PARTNER_FIELDS: &[Field] = &[
     },
     Field {
         name: "phone",
-        label: "Phone",
+        label: "Téléphone",
         required: false,
         kind: FieldKind::Text,
         expression: true,
@@ -263,7 +263,7 @@ const ODOO_UPDATE_PARTNER_FIELDS: &[Field] = &[
 const ODOO_CREATE_INVOICE_FIELDS: &[Field] = &[
     Field {
         name: "partner_id",
-        label: "Partner ID",
+        label: "Identifiant du partenaire",
         required: true,
         kind: FieldKind::Number,
         expression: true,
@@ -272,7 +272,7 @@ const ODOO_CREATE_INVOICE_FIELDS: &[Field] = &[
     },
     Field {
         name: "description",
-        label: "Line description",
+        label: "Libellé de la ligne",
         required: true,
         kind: FieldKind::Text,
         expression: true,
@@ -281,7 +281,7 @@ const ODOO_CREATE_INVOICE_FIELDS: &[Field] = &[
     },
     Field {
         name: "amount",
-        label: "Amount",
+        label: "Montant",
         required: true,
         kind: FieldKind::Number,
         expression: true,
@@ -324,7 +324,7 @@ fn flow_descriptors() -> Vec<ConnectorDescriptor> {
             kind: "flow.loop",
             version: 1,
             family: "flow",
-            label: "Loop",
+            label: "Pour chaque",
             auth: AuthRequirement::None,
             fields: LOOP_FIELDS,
             branches: &[Branch::Each, Branch::After],
@@ -351,7 +351,7 @@ fn customer_descriptors() -> Vec<ConnectorDescriptor> {
         kind: "mestier.customer.create",
         version: 1,
         family: "mestier",
-        label: "Create customer",
+        label: "Créer un client",
         auth: AuthRequirement::None,
         fields: CUSTOMER_CREATE_FIELDS,
         branches: &[],
@@ -369,8 +369,8 @@ fn http_descriptors() -> Vec<ConnectorDescriptor> {
         kind: "http.request",
         version: 1,
         family: "http",
-        label: "HTTP request",
-        auth: AuthRequirement::AnyOf(&["bearer_token", "http_basic", "http_header"]),
+        label: "Requête HTTP",
+        auth: AuthRequirement::Optional(&["bearer_token", "http_basic", "http_header"]),
         fields: HTTP_REQUEST_FIELDS,
         branches: &[],
         output_example: json!({
@@ -391,7 +391,7 @@ fn odoo_descriptors() -> Vec<ConnectorDescriptor> {
             kind: "odoo.create_partner",
             version: 1,
             family: "odoo",
-            label: "Create partner",
+            label: "Créer un partenaire Odoo",
             auth: AuthRequirement::Exactly("odoo_api"),
             fields: ODOO_CREATE_PARTNER_FIELDS,
             branches: &[],
@@ -401,7 +401,7 @@ fn odoo_descriptors() -> Vec<ConnectorDescriptor> {
             kind: "odoo.update_partner",
             version: 1,
             family: "odoo",
-            label: "Update partner",
+            label: "Mettre à jour un partenaire Odoo",
             auth: AuthRequirement::Exactly("odoo_api"),
             fields: ODOO_UPDATE_PARTNER_FIELDS,
             branches: &[],
@@ -411,7 +411,7 @@ fn odoo_descriptors() -> Vec<ConnectorDescriptor> {
             kind: "odoo.create_invoice",
             version: 1,
             family: "odoo",
-            label: "Create invoice",
+            label: "Créer une facture Odoo",
             auth: AuthRequirement::Exactly("odoo_api"),
             fields: ODOO_CREATE_INVOICE_FIELDS,
             branches: &[],
@@ -435,7 +435,7 @@ fn task_recurrence_descriptors() -> Vec<ConnectorDescriptor> {
         kind: "mestier.task_recurrence.extend_horizon",
         version: 1,
         family: "mestier",
-        label: "Extend recurrence horizon",
+        label: "Étendre l'horizon de récurrence",
         auth: AuthRequirement::None,
         fields: &[],
         branches: &[],
@@ -569,8 +569,9 @@ mod tests {
             .expect("http.request is described");
         assert_eq!(
             descriptor.auth,
-            AuthRequirement::AnyOf(&["bearer_token", "http_basic", "http_header"])
+            AuthRequirement::Optional(&["bearer_token", "http_basic", "http_header"])
         );
+        assert!(descriptor.auth.is_satisfied_without_a_credential());
         assert!(
             descriptor
                 .fields
