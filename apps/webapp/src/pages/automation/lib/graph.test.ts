@@ -7,6 +7,7 @@ import {
 	readLayout,
 	removeConnector,
 	rootConnectorIds,
+	upstreamConnectorIds,
 } from '#/pages/automation/lib/graph'
 
 function connector(
@@ -139,6 +140,67 @@ describe('connectorsReferencing', () => {
 
 	it('is empty when nothing references it', () => {
 		expect(connectorsReferencing(graphOf([connector('c1')]), 'c1')).toEqual([])
+	})
+})
+
+describe('upstreamConnectorIds', () => {
+	it('names every ancestor, closest first, of a deep chain', () => {
+		const graph = graphOf(
+			[connector('c1'), connector('c2'), connector('c3')],
+			[
+				{ from: 'c1', to: 'c2' },
+				{ from: 'c2', to: 'c3' },
+			],
+		)
+
+		expect(upstreamConnectorIds(graph, 'c3')).toEqual(['c2', 'c1'])
+	})
+
+	it('excludes a sibling reachable only through a different branch', () => {
+		const graph = graphOf(
+			[connector('c1'), connector('c2'), connector('c3')],
+			[
+				{ from: 'c1', to: 'c2', branch: 'Then' },
+				{ from: 'c1', to: 'c3', branch: 'Else' },
+			],
+		)
+
+		expect(upstreamConnectorIds(graph, 'c2')).toEqual(['c1'])
+		expect(upstreamConnectorIds(graph, 'c3')).toEqual(['c1'])
+	})
+
+	it('is empty for a root connector', () => {
+		const graph = graphOf([connector('c1'), connector('c2')], [
+			{ from: 'c1', to: 'c2' },
+		])
+
+		expect(upstreamConnectorIds(graph, 'c1')).toEqual([])
+	})
+
+	it('visits a diamond merge exactly once', () => {
+		const graph = graphOf(
+			[connector('c1'), connector('c2'), connector('c3'), connector('c4')],
+			[
+				{ from: 'c1', to: 'c2' },
+				{ from: 'c1', to: 'c3' },
+				{ from: 'c2', to: 'c4' },
+				{ from: 'c3', to: 'c4' },
+			],
+		)
+
+		expect(upstreamConnectorIds(graph, 'c4').sort()).toEqual(['c1', 'c2', 'c3'])
+	})
+
+	it('does not loop forever on a cycle', () => {
+		const graph = graphOf(
+			[connector('c1'), connector('c2')],
+			[
+				{ from: 'c1', to: 'c2' },
+				{ from: 'c2', to: 'c1' },
+			],
+		)
+
+		expect(upstreamConnectorIds(graph, 'c2').sort()).toEqual(['c1', 'c2'])
 	})
 })
 

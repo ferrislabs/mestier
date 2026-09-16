@@ -65,6 +65,30 @@ export function nextNodePosition(
 	}
 }
 
+export function upstreamConnectorIds(
+	graph: Schemas.GraphDto,
+	connectorId: string,
+): string[] {
+	const predecessorsOf = new Map<string, string[]>()
+	for (const edge of graph.edges) {
+		const existing = predecessorsOf.get(edge.to) ?? []
+		existing.push(edge.from)
+		predecessorsOf.set(edge.to, existing)
+	}
+
+	const visited = new Set<string>()
+	const queue = [...(predecessorsOf.get(connectorId) ?? [])]
+
+	while (queue.length > 0) {
+		const id = queue.shift()
+		if (id === undefined || visited.has(id)) continue
+		visited.add(id)
+		queue.push(...(predecessorsOf.get(id) ?? []))
+	}
+
+	return [...visited]
+}
+
 export function connectorsReferencing(
 	graph: Schemas.GraphDto,
 	connectorId: string,
