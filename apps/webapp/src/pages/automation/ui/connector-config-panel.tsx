@@ -12,8 +12,8 @@ import {
 	CollapsibleContent,
 	CollapsibleTrigger,
 } from '#/components/ui/collapsible'
-import type { DataTreeNode } from '#/pages/automation/lib/data-tree'
 import { withField } from '#/pages/automation/lib/connector-config'
+import type { DataTreeNode } from '#/pages/automation/lib/data-tree'
 import { insertExpressionAtCursor } from '#/pages/automation/lib/expression'
 import {
 	type ConnectorValidationError,
@@ -110,11 +110,13 @@ export function ConnectorConfigPanel({
 		status: 'idle',
 	})
 	const fieldRefs = useRef(new Map<string, FieldControlElement>())
+	const [openedConnectorId, setOpenedConnectorId] = useState(connectorId)
 
-	useEffect(() => {
+	if (connectorId !== openedConnectorId) {
+		setOpenedConnectorId(connectorId)
 		setActiveField(null)
 		fieldRefs.current.clear()
-	}, [connectorId])
+	}
 
 	const activeSource =
 		dataSource === 'last_run' && lastRunData ? lastRunData : exampleData

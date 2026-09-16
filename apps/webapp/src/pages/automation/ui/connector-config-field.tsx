@@ -1,5 +1,5 @@
 import { Braces } from 'lucide-react'
-import { useEffect, useRef, useState } from 'react'
+import { type DragEvent, useEffect, useRef, useState } from 'react'
 import type { Schemas } from '#/api/api.client'
 import { Checkbox } from '#/components/ui/checkbox'
 import { Field } from '#/components/ui/field'
@@ -40,20 +40,7 @@ export function ConnectorConfigField({
 	return (
 		<Field label={field.label} htmlFor={id}>
 			<div className="flex items-center gap-2">
-				<div
-					className="min-w-0 flex-1"
-					onDragOver={
-						field.expression ? (event) => event.preventDefault() : undefined
-					}
-					onDrop={
-						field.expression && onDropExpression
-							? (event) => {
-									event.preventDefault()
-									onDropExpression(event.dataTransfer.getData('text/plain'))
-								}
-							: undefined
-					}
-				>
+				<div className="min-w-0 flex-1">
 					{renderControl({
 						id,
 						field,
@@ -61,6 +48,7 @@ export function ConnectorConfigField({
 						invalid: error !== null,
 						onChange,
 						controlRef,
+						onDropExpression: field.expression ? onDropExpression : undefined,
 					})}
 				</div>
 				{field.expression ? (
@@ -83,6 +71,18 @@ export function ConnectorConfigField({
 	)
 }
 
+function dropHandlers(onDropExpression?: (path: string) => void) {
+	if (!onDropExpression) return {}
+	return {
+		onDragOver: (event: DragEvent<FieldControlElement>) =>
+			event.preventDefault(),
+		onDrop: (event: DragEvent<FieldControlElement>) => {
+			event.preventDefault()
+			onDropExpression(event.dataTransfer.getData('text/plain'))
+		},
+	}
+}
+
 function renderControl({
 	id,
 	field,
@@ -90,6 +90,7 @@ function renderControl({
 	invalid,
 	onChange,
 	controlRef,
+	onDropExpression,
 }: {
 	id: string
 	field: Schemas.FieldResponse
@@ -97,6 +98,7 @@ function renderControl({
 	invalid: boolean
 	onChange: (value: unknown) => void
 	controlRef?: (element: FieldControlElement | null) => void
+	onDropExpression?: (path: string) => void
 }) {
 	if (isSelectKind(field.kind)) {
 		return (
@@ -152,6 +154,7 @@ function renderControl({
 				invalid={invalid}
 				onChange={onChange}
 				controlRef={controlRef}
+				onDropExpression={onDropExpression}
 			/>
 		)
 	}
@@ -165,6 +168,7 @@ function renderControl({
 			aria-invalid={invalid}
 			autoComplete="off"
 			onChange={(event) => onChange(event.target.value)}
+			{...dropHandlers(onDropExpression)}
 		/>
 	)
 }
@@ -181,12 +185,14 @@ function JsonField({
 	invalid,
 	onChange,
 	controlRef,
+	onDropExpression,
 }: {
 	id: string
 	value: unknown
 	invalid: boolean
 	onChange: (value: unknown) => void
 	controlRef?: (element: FieldControlElement | null) => void
+	onDropExpression?: (path: string) => void
 }) {
 	const [text, setText] = useState(() => stringifyJsonValue(value))
 	const [isInvalidJson, setInvalidJson] = useState(false)
@@ -225,6 +231,7 @@ function JsonField({
 						setInvalidJson(true)
 					}
 				}}
+				{...dropHandlers(onDropExpression)}
 			/>
 			{isInvalidJson ? (
 				<p className="text-xs text-destructive">JSON invalide</p>
