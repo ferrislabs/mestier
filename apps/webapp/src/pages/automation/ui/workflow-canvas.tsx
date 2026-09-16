@@ -14,17 +14,34 @@ import {
 	useNodesState,
 } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
-import { useCallback, useEffect, useRef } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { Schemas } from '#/api/api.client'
+import {
+	AlertDialog,
+	AlertDialogAction,
+	AlertDialogCancel,
+	AlertDialogContent,
+	AlertDialogDescription,
+	AlertDialogFooter,
+	AlertDialogHeader,
+	AlertDialogTitle,
+} from '#/components/ui/alert-dialog'
 import { Button } from '#/components/ui/button'
 import type { NodePosition } from '#/pages/automation/lib/graph'
-import { rootConnectorIds } from '#/pages/automation/lib/graph'
+import {
+	connectorsReferencing,
+	nextConnectorId,
+	nextNodePosition,
+	removeConnector,
+	rootConnectorIds,
+} from '#/pages/automation/lib/graph'
 import type { ConnectorValidationError } from '#/pages/automation/lib/validation'
 import {
 	ConnectorNode,
 	type ConnectorNodeData,
 } from '#/pages/automation/ui/connector-node'
 import { TriggerNode } from '#/pages/automation/ui/trigger-node'
+import { WorkflowCanvasActionsContext } from '#/pages/automation/ui/workflow-canvas-context'
 
 export const TRIGGER_NODE_ID = '__trigger__'
 const TRIGGER_X_OFFSET = 220
@@ -198,11 +215,14 @@ export function WorkflowCanvas({
 		),
 	)
 	const [edges, setEdges] = useEdgesState(buildInitialEdges(graph))
+	const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null)
 
 	const nodesRef = useRef(nodes)
 	nodesRef.current = nodes
 	const edgesRef = useRef(edges)
 	edgesRef.current = edges
+
+	const catalogue = useMemo(() => [...descriptors.values()], [descriptors])
 
 	useEffect(() => {
 		setNodes((current) =>
@@ -265,38 +285,171 @@ export function WorkflowCanvas({
 
 	const validateConnection = useCallback(
 		(connection: Connection | Edge) =>
-			isBranchDeclared(connection, graph, descriptors),
-		[graph, descriptors],
+			isBranchDeclared(
+				connection,
+				buildGraph(nodesRef.current, edgesRef.current),
+				descriptors,
+			),
+		[descriptors],
+	)
+
+	const handleAddNode = useCallback(
+		(
+			sourceId: string,
+			branch: Schemas.BranchDto | null,
+			descriptor: Schemas.ConnectorDescriptorResponse,
+		) => {
+			const currentGraph = buildGraph(nodesRef.current, edgesRef.current)
+			const newId = nextConnectorId(currentGraph)
+			const newConnector: Schemas.PlacedConnectorDto = {
+				id: newId,
+				kind: descriptor.kind,
+				version: descriptor.version,
+				config: {},
+			}
+			const nextGraph: Schemas.GraphDto = {
+				connectors: [...currentGraph.connectors, newConnector],
+				edges:
+					sourceId === TRIGGER_NODE_ID
+						? currentGraph.edges
+						: [
+								...currentGraph.edges,
+								{ from: sourceId, to: newId, branch: branch ?? null },
+							],
+			}
+
+			const sourcePosition =
+				nodesRef.current.find((node) => node.id === sourceId)?.position ??
+				({ x: 0, y: 0 } as NodePosition)
+			const siblingIndex = edgesRef.current.filter(
+				(edge) => edge.source === sourceId,
+			).length
+			const position = nextNodePosition(sourcePosition, siblingIndex)
+
+			const data: ConnectorNodeData = {
+				label: descriptor.label,
+				branches: descriptor.branches,
+				errors: [],
+				connector: newConnector,
+			}
+			const nextNodes = [
+				...nodesRef.current,
+				{ id: newId, type: 'connector', position, data },
+			]
+			const nextEdges = buildInitialEdges(nextGraph)
+
+			nodesRef.current = nextNodes
+			edgesRef.current = nextEdges
+			setNodes(nextNodes)
+			setEdges(nextEdges)
+			onChange(nextGraph, buildLayout(nextNodes))
+		},
+		[onChange, setNodes, setEdges],
+	)
+
+	const handleRequestDelete = useCallback((connectorId: string) => {
+		setPendingDeleteId(connectorId)
+	}, [])
+
+	const handleConfirmDelete = useCallback(() => {
+		if (!pendingDeleteId) return
+
+		const currentGraph = buildGraph(nodesRef.current, edgesRef.current)
+		const nextGraph = removeConnector(currentGraph, pendingDeleteId)
+		const nextNodes = nodesRef.current.filter(
+			(node) => node.id !== pendingDeleteId,
+		)
+		const nextEdges = buildInitialEdges(nextGraph)
+
+		nodesRef.current = nextNodes
+		edgesRef.current = nextEdges
+		setNodes(nextNodes)
+		setEdges(nextEdges)
+		onChange(nextGraph, buildLayout(nextNodes))
+		setPendingDeleteId(null)
+	}, [pendingDeleteId, onChange, setNodes, setEdges])
+
+	const pendingDeleteNode = pendingDeleteId
+		? nodes.find((node) => node.id === pendingDeleteId)
+		: undefined
+	const pendingDeleteLabel = pendingDeleteNode
+		? (pendingDeleteNode.data as ConnectorNodeData).label
+		: pendingDeleteId
+	const pendingDeleteReferences = pendingDeleteId
+		? connectorsReferencing(buildGraph(nodes, edges), pendingDeleteId).map(
+				(id) => {
+					const referencing = nodes.find((node) => node.id === id)
+					return referencing
+						? (referencing.data as ConnectorNodeData).label
+						: id
+				},
+			)
+		: []
+
+	const actions = useMemo(
+		() => ({
+			catalogue,
+			onAddNode: handleAddNode,
+			onRequestDelete: handleRequestDelete,
+		}),
+		[catalogue, handleAddNode, handleRequestDelete],
 	)
 
 	return (
-		<div className="flex min-h-0 flex-1 flex-col">
-			<div className="flex items-center justify-between border-b px-4 py-2">
-				<span className="text-xs text-muted-foreground">
-					{isDirty ? 'Modifications non enregistrées' : 'Enregistré'}
-				</span>
-				<Button size="sm" onClick={onSave} disabled={isSaving}>
-					{isSaving ? 'Enregistrement…' : 'Enregistrer'}
-				</Button>
+		<WorkflowCanvasActionsContext.Provider value={actions}>
+			<div className="flex min-h-0 flex-1 flex-col">
+				<div className="flex items-center justify-between border-b px-4 py-2">
+					<span className="text-xs text-muted-foreground">
+						{isDirty ? 'Modifications non enregistrées' : 'Enregistré'}
+					</span>
+					<Button size="sm" onClick={onSave} disabled={isSaving}>
+						{isSaving ? 'Enregistrement…' : 'Enregistrer'}
+					</Button>
+				</div>
+				<div className="min-h-0 flex-1">
+					<ReactFlowProvider>
+						<ReactFlow
+							nodes={nodes}
+							edges={edges}
+							nodeTypes={NODE_TYPES}
+							onNodesChange={handleNodesChange}
+							onEdgesChange={handleEdgesChange}
+							onConnect={handleConnect}
+							onNodeDragStop={handleNodeDragStop}
+							isValidConnection={validateConnection}
+							autoPanOnNodeDrag={false}
+							fitView={false}
+						>
+							<Background />
+						</ReactFlow>
+					</ReactFlowProvider>
+				</div>
+				<AlertDialog
+					open={pendingDeleteId !== null}
+					onOpenChange={(open) => {
+						if (!open) setPendingDeleteId(null)
+					}}
+				>
+					<AlertDialogContent>
+						<AlertDialogHeader>
+							<AlertDialogTitle>
+								Supprimer {pendingDeleteLabel} ?
+							</AlertDialogTitle>
+							<AlertDialogDescription>
+								{pendingDeleteReferences.length > 0
+									? `Les connecteurs suivants font référence à celui-ci dans leurs expressions : ${pendingDeleteReferences.join(', ')}. Ces expressions cesseront de fonctionner après la suppression.`
+									: 'Ce connecteur et ses connexions seront retirés du graphe.'}
+							</AlertDialogDescription>
+						</AlertDialogHeader>
+						<AlertDialogFooter>
+							<AlertDialogCancel>Annuler</AlertDialogCancel>
+							<AlertDialogAction onClick={handleConfirmDelete}>
+								Supprimer
+							</AlertDialogAction>
+						</AlertDialogFooter>
+					</AlertDialogContent>
+				</AlertDialog>
 			</div>
-			<div className="min-h-0 flex-1">
-				<ReactFlowProvider>
-					<ReactFlow
-						nodes={nodes}
-						edges={edges}
-						nodeTypes={NODE_TYPES}
-						onNodesChange={handleNodesChange}
-						onEdgesChange={handleEdgesChange}
-						onConnect={handleConnect}
-						onNodeDragStop={handleNodeDragStop}
-						isValidConnection={validateConnection}
-						autoPanOnNodeDrag={false}
-						fitView={false}
-					>
-						<Background />
-					</ReactFlow>
-				</ReactFlowProvider>
-			</div>
-		</div>
+		</WorkflowCanvasActionsContext.Provider>
 	)
 }

@@ -8,7 +8,10 @@ export interface ConnectorSearchProps {
 	onSelect: (connector: Schemas.ConnectorDescriptorResponse) => void
 }
 
-export function ConnectorSearch({ connectors, onSelect }: ConnectorSearchProps) {
+export function ConnectorSearch({
+	connectors,
+	onSelect,
+}: ConnectorSearchProps) {
 	const [query, setQuery] = useState('')
 	const groups = searchConnectors(connectors, query)
 

@@ -25,5 +25,8 @@ export function searchConnectors(
 
 	return [...families.entries()]
 		.sort(([a], [b]) => a.localeCompare(b))
-		.map(([family, groupConnectors]) => ({ family, connectors: groupConnectors }))
+		.map(([family, groupConnectors]) => ({
+			family,
+			connectors: groupConnectors,
+		}))
 }

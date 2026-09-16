@@ -4,7 +4,10 @@ import { describe, expect, it, vi } from 'vitest'
 import type { Schemas } from '#/api/api.client'
 import { AddNodeButton } from '#/pages/automation/ui/add-node-button'
 
-function descriptor(kind: string, label: string): Schemas.ConnectorDescriptorResponse {
+function descriptor(
+	kind: string,
+	label: string,
+): Schemas.ConnectorDescriptorResponse {
 	return {
 		auth: 'None',
 		branches: [],
@@ -33,7 +36,9 @@ describe('AddNodeButton', () => {
 
 		expect(screen.queryByText('Étape simple')).toBeNull()
 
-		await user.click(screen.getByRole('button', { name: 'Ajouter un connecteur' }))
+		await user.click(
+			screen.getByRole('button', { name: 'Ajouter un connecteur' }),
+		)
 		expect(await screen.findByText('Étape simple')).toBeDefined()
 
 		await user.click(screen.getByText('Étape simple'))

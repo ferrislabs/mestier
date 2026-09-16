@@ -28,7 +28,10 @@ const QUOTE = descriptor('odoo.quote.create', 'Créer un devis', 'odoo')
 describe('ConnectorSearch', () => {
 	it('renders every connector grouped under its family', () => {
 		render(
-			<ConnectorSearch connectors={[HTTP, INVOICE, QUOTE]} onSelect={vi.fn()} />,
+			<ConnectorSearch
+				connectors={[HTTP, INVOICE, QUOTE]}
+				onSelect={vi.fn()}
+			/>,
 		)
 
 		expect(screen.getByText('flow')).toBeDefined()
@@ -41,7 +44,10 @@ describe('ConnectorSearch', () => {
 	it('filters the list as the query changes', async () => {
 		const user = userEvent.setup()
 		render(
-			<ConnectorSearch connectors={[HTTP, INVOICE, QUOTE]} onSelect={vi.fn()} />,
+			<ConnectorSearch
+				connectors={[HTTP, INVOICE, QUOTE]}
+				onSelect={vi.fn()}
+			/>,
 		)
 
 		await user.type(screen.getByRole('textbox'), 'facture')

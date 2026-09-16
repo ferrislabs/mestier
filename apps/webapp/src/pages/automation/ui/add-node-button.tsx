@@ -1,7 +1,11 @@
 import { Plus } from 'lucide-react'
 import { useState } from 'react'
 import type { Schemas } from '#/api/api.client'
-import { Popover, PopoverContent, PopoverTrigger } from '#/components/ui/popover'
+import {
+	Popover,
+	PopoverContent,
+	PopoverTrigger,
+} from '#/components/ui/popover'
 import { ConnectorSearch } from '#/pages/automation/ui/connector-search'
 
 export interface AddNodeButtonProps {

@@ -43,13 +43,13 @@ describe('searchConnectors', () => {
 
 		const groups = searchConnectors(connectors, 'FACTURE')
 
-		expect(groups).toEqual([
-			{ family: 'odoo', connectors: [connectors[1]] },
-		])
+		expect(groups).toEqual([{ family: 'odoo', connectors: [connectors[1]] }])
 	})
 
 	it('does not match on the kind, only the label', () => {
-		const connectors = [descriptor('odoo.invoice.create', 'Créer une facture', 'odoo')]
+		const connectors = [
+			descriptor('odoo.invoice.create', 'Créer une facture', 'odoo'),
+		]
 
 		expect(searchConnectors(connectors, 'invoice.create')).toEqual([])
 	})

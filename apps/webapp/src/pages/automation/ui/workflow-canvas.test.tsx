@@ -51,6 +51,7 @@ function descriptor(
 
 const SIMPLE_KIND = 'test.simple'
 const BRANCHING_KIND = 'test.branching'
+const OTHER_KIND = 'test.other'
 
 const SIMPLE_DESCRIPTOR = descriptor(SIMPLE_KIND, 'Étape simple')
 const BRANCHING_DESCRIPTOR = descriptor(
@@ -58,6 +59,7 @@ const BRANCHING_DESCRIPTOR = descriptor(
 	'Étape à embranchements',
 	['Then', 'Else'],
 )
+const OTHER_DESCRIPTOR = descriptor(OTHER_KIND, 'Autre étape')
 
 function descriptorMap(
 	...entries: Schemas.ConnectorDescriptorResponse[]
@@ -456,5 +458,235 @@ describe('WorkflowCanvas — dirty indicator', () => {
 		await waitFor(() => {
 			expect(screen.queryByText(/non enregistr/i)).toBeNull()
 		})
+	})
+})
+
+describe('WorkflowCanvas — adding a node from a handle', () => {
+	it('wires the new node on the branch whose + was pressed', async () => {
+		const graph: Schemas.GraphDto = {
+			connectors: [connector('c1', BRANCHING_KIND)],
+			edges: [],
+		}
+		const layout = new Map<string, NodePosition>([['c1', { x: 0, y: 0 }]])
+
+		const { onSaveSpy } = renderHarness({
+			graph,
+			layout,
+			descriptors: descriptorMap(SIMPLE_DESCRIPTOR, BRANCHING_DESCRIPTOR),
+		})
+
+		const branchingNode = await screen.findByTestId('rf__node-c1')
+		fireEvent.click(
+			within(branchingNode).getByRole('button', {
+				name: 'Ajouter un connecteur sur la branche Then',
+			}),
+		)
+		fireEvent.click(await screen.findByText('Étape simple'))
+
+		await screen.findByTestId('rf__node-c2')
+		await clickSave()
+
+		expect(onSaveSpy).toHaveBeenCalledTimes(1)
+		const [savedGraph] = onSaveSpy.mock.calls[0] as [Schemas.GraphDto]
+		expect(savedGraph.connectors).toEqual([
+			connector('c1', BRANCHING_KIND),
+			connector('c2', SIMPLE_KIND),
+		])
+		expect(savedGraph.edges).toEqual([{ from: 'c1', to: 'c2', branch: 'Then' }])
+	})
+
+	it('wires on else when the else handle is the one pressed', async () => {
+		const graph: Schemas.GraphDto = {
+			connectors: [connector('c1', BRANCHING_KIND)],
+			edges: [],
+		}
+		const layout = new Map<string, NodePosition>([['c1', { x: 0, y: 0 }]])
+
+		const { onSaveSpy } = renderHarness({
+			graph,
+			layout,
+			descriptors: descriptorMap(SIMPLE_DESCRIPTOR, BRANCHING_DESCRIPTOR),
+		})
+
+		const branchingNode = await screen.findByTestId('rf__node-c1')
+		fireEvent.click(
+			within(branchingNode).getByRole('button', {
+				name: 'Ajouter un connecteur sur la branche Else',
+			}),
+		)
+		fireEvent.click(await screen.findByText('Étape simple'))
+
+		await screen.findByTestId('rf__node-c2')
+		await clickSave()
+
+		const [savedGraph] = onSaveSpy.mock.calls[0] as [Schemas.GraphDto]
+		expect(savedGraph.edges).toEqual([{ from: 'c1', to: 'c2', branch: 'Else' }])
+	})
+
+	it("creates the first node of an empty workflow from the trigger's +", async () => {
+		const { onSaveSpy } = renderHarness({
+			graph: { connectors: [], edges: [] },
+			layout: new Map(),
+			descriptors: descriptorMap(SIMPLE_DESCRIPTOR),
+		})
+
+		const triggerNode = await screen.findByTestId('rf__node-__trigger__')
+		fireEvent.click(
+			within(triggerNode).getByRole('button', {
+				name: 'Ajouter le premier connecteur',
+			}),
+		)
+		fireEvent.click(await screen.findByText('Étape simple'))
+
+		await screen.findByTestId('rf__node-c1')
+		expect(
+			document.querySelector('[data-testid^="rf__edge-__trigger__->c1"]'),
+		).not.toBeNull()
+
+		await clickSave()
+
+		const [savedGraph] = onSaveSpy.mock.calls[0] as [Schemas.GraphDto]
+		expect(savedGraph).toEqual({
+			connectors: [connector('c1', SIMPLE_KIND)],
+			edges: [],
+		})
+	})
+})
+
+describe('WorkflowCanvas — deleting a node', () => {
+	it('removes the node and its edges once confirmed', async () => {
+		const graph: Schemas.GraphDto = {
+			connectors: [connector('c1', SIMPLE_KIND), connector('c2', SIMPLE_KIND)],
+			edges: [{ from: 'c1', to: 'c2', branch: null }],
+		}
+		const layout = new Map<string, NodePosition>([
+			['c1', { x: 0, y: 0 }],
+			['c2', { x: 280, y: 0 }],
+		])
+
+		const { onSaveSpy } = renderHarness({
+			graph,
+			layout,
+			descriptors: descriptorMap(SIMPLE_DESCRIPTOR),
+		})
+
+		const leafNode = await screen.findByTestId('rf__node-c2')
+		fireEvent.click(
+			within(leafNode).getByRole('button', { name: 'Supprimer Étape simple' }),
+		)
+
+		await screen.findByRole('alertdialog')
+		fireEvent.click(screen.getByRole('button', { name: 'Supprimer' }))
+
+		await waitFor(() => {
+			expect(screen.queryByTestId('rf__node-c2')).toBeNull()
+		})
+
+		await clickSave()
+
+		const [savedGraph] = onSaveSpy.mock.calls[0] as [Schemas.GraphDto]
+		expect(savedGraph).toEqual({
+			connectors: [connector('c1', SIMPLE_KIND)],
+			edges: [],
+		})
+	})
+
+	it('names the connectors whose expressions reference the one being deleted', async () => {
+		const graph: Schemas.GraphDto = {
+			connectors: [
+				connector('c1', SIMPLE_KIND),
+				connector('c2', OTHER_KIND, {
+					url: '{{ connectors.c1.output.href }}',
+				}),
+			],
+			edges: [],
+		}
+		const layout = new Map<string, NodePosition>([
+			['c1', { x: 0, y: 0 }],
+			['c2', { x: 280, y: 0 }],
+		])
+
+		renderHarness({
+			graph,
+			layout,
+			descriptors: descriptorMap(SIMPLE_DESCRIPTOR, OTHER_DESCRIPTOR),
+			onSaveSpy: vi.fn(),
+		})
+
+		const sourceNode = await screen.findByTestId('rf__node-c1')
+		fireEvent.click(
+			within(sourceNode).getByRole('button', {
+				name: 'Supprimer Étape simple',
+			}),
+		)
+
+		const dialog = await screen.findByRole('alertdialog')
+		expect(within(dialog).getByText(/Autre étape/)).toBeDefined()
+	})
+
+	it('mentions no other connector when nothing references the one being deleted', async () => {
+		const graph: Schemas.GraphDto = {
+			connectors: [connector('c1', SIMPLE_KIND)],
+			edges: [],
+		}
+
+		renderHarness({
+			graph,
+			layout: new Map([['c1', { x: 0, y: 0 }]]),
+			descriptors: descriptorMap(SIMPLE_DESCRIPTOR),
+			onSaveSpy: vi.fn(),
+		})
+
+		const node = await screen.findByTestId('rf__node-c1')
+		fireEvent.click(
+			within(node).getByRole('button', { name: 'Supprimer Étape simple' }),
+		)
+
+		const dialog = await screen.findByRole('alertdialog')
+		expect(within(dialog).queryByText(/Autre étape/)).toBeNull()
+	})
+
+	it('leaves the neighbours of a deleted middle node unwired, rather than stitching them together', async () => {
+		const graph: Schemas.GraphDto = {
+			connectors: [
+				connector('c1', SIMPLE_KIND),
+				connector('c2', SIMPLE_KIND),
+				connector('c3', SIMPLE_KIND),
+			],
+			edges: [
+				{ from: 'c1', to: 'c2', branch: null },
+				{ from: 'c2', to: 'c3', branch: null },
+			],
+		}
+		const layout = new Map<string, NodePosition>([
+			['c1', { x: 0, y: 0 }],
+			['c2', { x: 280, y: 0 }],
+			['c3', { x: 560, y: 0 }],
+		])
+
+		const { onSaveSpy } = renderHarness({
+			graph,
+			layout,
+			descriptors: descriptorMap(SIMPLE_DESCRIPTOR),
+		})
+
+		const middleNode = await screen.findByTestId('rf__node-c2')
+		fireEvent.click(
+			within(middleNode).getByRole('button', {
+				name: 'Supprimer Étape simple',
+			}),
+		)
+		await screen.findByRole('alertdialog')
+		fireEvent.click(screen.getByRole('button', { name: 'Supprimer' }))
+
+		await waitFor(() => {
+			expect(screen.queryByTestId('rf__node-c2')).toBeNull()
+		})
+
+		await clickSave()
+
+		const [savedGraph] = onSaveSpy.mock.calls[0] as [Schemas.GraphDto]
+		expect(savedGraph.connectors.map((c) => c.id)).toEqual(['c1', 'c3'])
+		expect(savedGraph.edges).toEqual([])
 	})
 })

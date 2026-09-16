@@ -1,12 +1,19 @@
 import { Handle, type NodeProps, Position } from '@xyflow/react'
 import { TriangleAlert, Zap } from 'lucide-react'
 import { cn } from '#/lib/utils'
+import { AddNodeButton } from '#/pages/automation/ui/add-node-button'
+import { useWorkflowCanvasActions } from '#/pages/automation/ui/workflow-canvas-context'
 
 export interface TriggerNodeData extends Record<string, unknown> {
 	hasEvent: boolean
 }
 
-export function TriggerNode({ data }: NodeProps & { data: TriggerNodeData }) {
+export function TriggerNode({
+	id,
+	data,
+}: NodeProps & { data: TriggerNodeData }) {
+	const actions = useWorkflowCanvasActions()
+
 	return (
 		<div
 			className={cn(
@@ -24,11 +31,18 @@ export function TriggerNode({ data }: NodeProps & { data: TriggerNodeData }) {
 					Aucun événement configuré
 				</div>
 			) : null}
-			<Handle
-				type="source"
-				position={Position.Right}
-				isConnectableStart={false}
-			/>
+			<div className="relative mt-1 flex items-center justify-end gap-1 pr-2">
+				<AddNodeButton
+					ariaLabel="Ajouter le premier connecteur"
+					catalogue={actions.catalogue}
+					onSelect={(connector) => actions.onAddNode(id, null, connector)}
+				/>
+				<Handle
+					type="source"
+					position={Position.Right}
+					isConnectableStart={false}
+				/>
+			</div>
 		</div>
 	)
 }
