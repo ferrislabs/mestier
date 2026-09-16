@@ -424,6 +424,73 @@ describe('WorkflowCanvasFeature — a 422 from the backend', () => {
 		expect(await screen.findByText('Le graphe contient un cycle')).toBeDefined()
 	})
 
+	it('lands a field-scoped 422 on the exact field of the exact node, in the config panel', async () => {
+		const graph: Schemas.GraphDto = {
+			connectors: [
+				connector('c1'),
+				{ id: 'c2', kind: 'test.withfield', version: 1, config: {} },
+			],
+			edges: [],
+		}
+		const layout = { c1: { x: 0, y: 0 }, c2: { x: 280, y: 0 } }
+
+		renderFeature((fakeApi) => {
+			fakeApi.mockGet(CONNECTORS_PATH, () => ({
+				data: {
+					auth_schemes: [],
+					connectors: [
+						descriptor(SIMPLE_KIND, 'Étape simple'),
+						{
+							...descriptor('test.withfield', 'Avec un champ'),
+							fields: [
+								{
+									name: 'url',
+									label: 'URL',
+									kind: 'Text',
+									required: true,
+									secret: false,
+									expression: true,
+									visible_when: null,
+								},
+							],
+						},
+					],
+				},
+				pagination: null,
+			}))
+			fakeApi.mockGet(WORKFLOW_PATH, () => ({
+				data: workflowDetail({ graph, layout }),
+				pagination: null,
+			}))
+			fakeApi.mockMutation('put', WORKFLOW_VERSIONS_PATH, () => {
+				throw Object.assign(new Error('Invalid graph'), {
+					status: 422,
+					data: {
+						code: 'graph_invalid',
+						message: 'Invalid graph',
+						status: 422,
+						details: {
+							errors: [
+								{
+									connector_id: 'c2',
+									field: 'url',
+									message: 'URL manquante',
+								},
+							],
+						},
+					},
+				})
+			})
+		})
+
+		await clickSave()
+
+		const node = await screen.findByTestId('rf__node-c2')
+		node.click()
+
+		expect(await screen.findByText('URL manquante')).toBeDefined()
+	})
+
 	it('says the save failed when the refusal carries no graph errors', async () => {
 		const graph: Schemas.GraphDto = {
 			connectors: [connector('c1')],
