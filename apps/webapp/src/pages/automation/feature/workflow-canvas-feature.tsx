@@ -19,7 +19,7 @@ import {
 } from '#/hooks/use-automation'
 import type { NodePosition } from '#/pages/automation/lib/graph'
 import { readLayout } from '#/pages/automation/lib/graph'
-import { computeFallbackLayout } from '#/pages/automation/lib/layout'
+import { mergedLayout } from '#/pages/automation/lib/layout'
 import {
 	type GraphValidation,
 	projectGraphErrors,
@@ -72,14 +72,6 @@ function descriptorsByKind(
 	connectors: Schemas.ConnectorDescriptorResponse[],
 ): Map<string, Schemas.ConnectorDescriptorResponse> {
 	return new Map(connectors.map((connector) => [connector.kind, connector]))
-}
-
-function mergedLayout(
-	graph: Schemas.GraphDto,
-	stored: Map<string, NodePosition>,
-): Map<string, NodePosition> {
-	const fallback = computeFallbackLayout(graph, new Set(stored.keys()))
-	return new Map([...fallback, ...stored])
 }
 
 function WorkflowCanvasWorkspace({

@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import type { Schemas } from '#/api/api.client'
-import { computeFallbackLayout } from '#/pages/automation/lib/layout'
+import {
+	computeFallbackLayout,
+	mergedLayout,
+} from '#/pages/automation/lib/layout'
 
 function connector(id: string): Schemas.PlacedConnectorDto {
 	return { id, kind: 'http.request', version: 1, config: {} }
@@ -115,5 +118,29 @@ describe('computeFallbackLayout', () => {
 		const layout = computeFallbackLayout(graph, new Set(['a']))
 
 		expect(layout.size).toBe(0)
+	})
+})
+
+describe('mergedLayout', () => {
+	it('keeps the stored position for a connector that has one', () => {
+		const graph = graphOf([connector('a')])
+
+		const layout = mergedLayout(graph, new Map([['a', { x: 40, y: 20 }]]))
+
+		expect(layout.get('a')).toEqual({ x: 40, y: 20 })
+	})
+
+	it('falls back to a computed position for a connector with none stored', () => {
+		const graph = graphOf(
+			[connector('a'), connector('b')],
+			[{ from: 'a', to: 'b' }],
+		)
+
+		const layout = mergedLayout(graph, new Map([['a', { x: 40, y: 20 }]]))
+
+		expect(layout.get('a')).toEqual({ x: 40, y: 20 })
+		expect(layout.get('b')).toEqual(
+			computeFallbackLayout(graph, new Set(['a'])).get('b'),
+		)
 	})
 })
