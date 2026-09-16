@@ -87,6 +87,7 @@ function baseProps(
 	overrides: Partial<ConnectorConfigPanelProps> = {},
 ): ConnectorConfigPanelProps {
 	return {
+		connectorId: 'c1',
 		label: 'Requête HTTP',
 		descriptor: descriptor(),
 		config: {},
@@ -97,8 +98,10 @@ function baseProps(
 		onClose: vi.fn(),
 		onConfigChange: vi.fn(),
 		onCredentialChange: vi.fn(),
-		onOpenExpression: vi.fn(),
 		onCreateCredential: vi.fn(),
+		exampleData: { tree: [], context: { trigger: null, connectors: {}, loop: null } },
+		lastRunData: null,
+		onEvaluateExpression: vi.fn().mockResolvedValue(null),
 		...overrides,
 	}
 }
@@ -371,5 +374,271 @@ describe('ConnectorConfigPanel — inline credential creation', () => {
 
 		expect(screen.queryByLabelText('Nom')).toBeNull()
 		expect(onCredentialChange).not.toHaveBeenCalled()
+	})
+})
+
+const TRIGGER_BRANCH = {
+	kind: 'branch' as const,
+	key: 'trigger',
+	label: 'trigger',
+	path: 'trigger',
+	children: [
+		{
+			kind: 'leaf' as const,
+			key: 'name',
+			label: 'name',
+			path: 'trigger.name',
+			value: 'Julie',
+		},
+	],
+}
+
+const LAST_RUN_TRIGGER_BRANCH = {
+	kind: 'branch' as const,
+	key: 'trigger',
+	label: 'trigger',
+	path: 'trigger',
+	children: [
+		{
+			kind: 'leaf' as const,
+			key: 'confirmed_name',
+			label: 'confirmed_name',
+			path: 'trigger.confirmed_name',
+			value: 'Real customer',
+		},
+	],
+}
+
+describe('ConnectorConfigPanel — the available-data tree', () => {
+	it('shows the tree open by default, fed from the given branches', () => {
+		render(
+			<ConnectorConfigPanel
+				{...baseProps({
+					exampleData: {
+						tree: [TRIGGER_BRANCH],
+						context: { trigger: { name: 'Julie' }, connectors: {}, loop: null },
+					},
+				})}
+			/>,
+		)
+
+		expect(screen.getByRole('button', { name: /trigger/ })).toBeDefined()
+	})
+
+	it('disables the last-run toggle until a run exists', () => {
+		render(
+			<ConnectorConfigPanel
+				{...baseProps({
+					exampleData: {
+						tree: [TRIGGER_BRANCH],
+						context: { trigger: null, connectors: {}, loop: null },
+					},
+					lastRunData: null,
+				})}
+			/>,
+		)
+
+		const button = screen.getByRole('button', {
+			name: 'Dernière exécution',
+		}) as HTMLButtonElement
+		expect(button.disabled).toBe(true)
+	})
+
+	it('switches the same tree to the real values once a run exists', async () => {
+		const user = userEvent.setup()
+		render(
+			<ConnectorConfigPanel
+				{...baseProps({
+					exampleData: {
+						tree: [TRIGGER_BRANCH],
+						context: { trigger: { name: 'Julie' }, connectors: {}, loop: null },
+					},
+					lastRunData: {
+						tree: [LAST_RUN_TRIGGER_BRANCH],
+						context: {
+							trigger: { name: 'Real customer' },
+							connectors: {},
+							loop: null,
+						},
+					},
+				})}
+			/>,
+		)
+
+		await user.click(screen.getByRole('button', { name: 'trigger' }))
+		expect(screen.getByText('name')).toBeDefined()
+		expect(screen.queryByText('confirmed_name')).toBeNull()
+
+		await user.click(screen.getByRole('button', { name: 'Dernière exécution' }))
+
+		expect(screen.getByText('confirmed_name')).toBeDefined()
+		expect(screen.queryByText('name')).toBeNull()
+	})
+})
+
+describe('ConnectorConfigPanel — inserting an expression', () => {
+	function setCursor(input: HTMLInputElement, position: number) {
+		input.setSelectionRange(position, position)
+	}
+
+	it('inserts the clicked path at the cursor of the field last opened for expression editing', async () => {
+		const user = userEvent.setup()
+		const onConfigChange = vi.fn()
+		render(
+			<ConnectorConfigPanel
+				{...baseProps({
+					descriptor: descriptor({
+						fields: [
+							field({ name: 'url', label: 'URL', expression: true }),
+						],
+					}),
+					config: { url: 'Hello ' },
+					onConfigChange,
+					exampleData: {
+						tree: [TRIGGER_BRANCH],
+						context: { trigger: { name: 'Julie' }, connectors: {}, loop: null },
+					},
+				})}
+			/>,
+		)
+
+		const input = screen.getByLabelText('URL') as HTMLInputElement
+		setCursor(input, 6)
+
+		await user.click(
+			screen.getByRole('button', { name: 'Insérer une donnée dans URL' }),
+		)
+		await user.click(screen.getByRole('button', { name: /trigger/ }))
+		await user.click(screen.getByRole('button', { name: /Insérer trigger\.name/ }))
+
+		expect(onConfigChange).toHaveBeenCalledWith({
+			url: 'Hello {{ trigger.name }}',
+		})
+	})
+
+	it('inserts a dropped path on the field it was dropped on, without opening it first', () => {
+		const onConfigChange = vi.fn()
+		render(
+			<ConnectorConfigPanel
+				{...baseProps({
+					descriptor: descriptor({
+						fields: [
+							field({ name: 'url', label: 'URL', expression: true }),
+						],
+					}),
+					config: { url: '' },
+					onConfigChange,
+				})}
+			/>,
+		)
+
+		const dataTransfer = { getData: () => 'trigger.name' }
+		fireEvent.drop(screen.getByLabelText('URL'), { dataTransfer })
+
+		expect(onConfigChange).toHaveBeenCalledWith({
+			url: '{{ trigger.name }}',
+		})
+	})
+})
+
+describe('ConnectorConfigPanel — the live preview', () => {
+	it('shows the resolved value once the debounced evaluation returns', async () => {
+		const onEvaluateExpression = vi.fn().mockResolvedValue({ id: 42 })
+		render(
+			<ConnectorConfigPanel
+				{...baseProps({
+					descriptor: descriptor({
+						fields: [
+							field({ name: 'url', label: 'URL', expression: true }),
+						],
+					}),
+					config: { url: '{{ connectors.c1.output.id }}' },
+					onEvaluateExpression,
+				})}
+			/>,
+		)
+
+		fireEvent.click(
+			screen.getByRole('button', { name: 'Insérer une donnée dans URL' }),
+		)
+
+		await waitFor(
+			() => {
+				expect(screen.getByText('{"id":42}')).toBeDefined()
+			},
+			{ timeout: 2000 },
+		)
+
+		expect(onEvaluateExpression).toHaveBeenCalledWith(
+			'{{ connectors.c1.output.id }}',
+			{ trigger: null, connectors: {}, loop: null },
+		)
+	})
+
+	it('names the missing path verbatim, never a silent null', async () => {
+		const onEvaluateExpression = vi
+			.fn()
+			.mockRejectedValue(new Error('missing path: trigger.customer.id'))
+		render(
+			<ConnectorConfigPanel
+				{...baseProps({
+					descriptor: descriptor({
+						fields: [
+							field({ name: 'url', label: 'URL', expression: true }),
+						],
+					}),
+					config: { url: '{{ trigger.customer.id }}' },
+					onEvaluateExpression,
+				})}
+			/>,
+		)
+
+		fireEvent.click(
+			screen.getByRole('button', { name: 'Insérer une donnée dans URL' }),
+		)
+
+		await waitFor(
+			() => {
+				expect(
+					screen.getByText('missing path: trigger.customer.id'),
+				).toBeDefined()
+			},
+			{ timeout: 2000 },
+		)
+	})
+})
+
+describe('ConnectorConfigPanel — switching connectors', () => {
+	it('drops the active field when a different connector opens', () => {
+		const { rerender } = render(
+			<ConnectorConfigPanel
+				{...baseProps({
+					connectorId: 'c1',
+					descriptor: descriptor({
+						fields: [field({ name: 'url', label: 'URL', expression: true })],
+					}),
+					config: { url: '' },
+				})}
+			/>,
+		)
+
+		fireEvent.click(
+			screen.getByRole('button', { name: 'Insérer une donnée dans URL' }),
+		)
+		expect(screen.getByText(/Aperçu/)).toBeDefined()
+
+		rerender(
+			<ConnectorConfigPanel
+				{...baseProps({
+					connectorId: 'c2',
+					descriptor: descriptor({
+						fields: [field({ name: 'url', label: 'URL', expression: true })],
+					}),
+					config: { url: '' },
+				})}
+			/>,
+		)
+
+		expect(screen.queryByText(/Aperçu/)).toBeNull()
 	})
 })

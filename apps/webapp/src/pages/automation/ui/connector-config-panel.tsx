@@ -1,5 +1,10 @@
 import { ChevronDown, X } from 'lucide-react'
-import { type MouseEvent as ReactMouseEvent, useState } from 'react'
+import {
+	type MouseEvent as ReactMouseEvent,
+	useEffect,
+	useRef,
+	useState,
+} from 'react'
 import type { Schemas } from '#/api/api.client'
 import { Button } from '#/components/ui/button'
 import {
@@ -7,17 +12,36 @@ import {
 	CollapsibleContent,
 	CollapsibleTrigger,
 } from '#/components/ui/collapsible'
+import type { DataTreeNode } from '#/pages/automation/lib/data-tree'
 import { withField } from '#/pages/automation/lib/connector-config'
+import { insertExpressionAtCursor } from '#/pages/automation/lib/expression'
 import {
 	type ConnectorValidationError,
 	connectorLevelErrors,
 } from '#/pages/automation/lib/validation'
 import {
+	AvailableDataTree,
+	type DataTreeSource,
+} from '#/pages/automation/ui/available-data-tree'
+import {
 	ConnectorConfigForm,
 	type CredentialCreationPurpose,
 } from '#/pages/automation/ui/connector-config-form'
 import { CredentialSecretReveal } from '#/pages/automation/ui/credential-secret-reveal'
+import {
+	ExpressionPreview,
+	type ExpressionPreviewState,
+} from '#/pages/automation/ui/expression-preview'
 import { InlineCredentialForm } from '#/pages/automation/ui/inline-credential-form'
+
+const PREVIEW_DEBOUNCE_MS = 400
+
+type FieldControlElement = HTMLInputElement | HTMLTextAreaElement
+
+export interface DataTreeSourceBundle {
+	tree: DataTreeNode[]
+	context: Schemas.EvaluateContextBody
+}
 
 export const MIN_PANEL_WIDTH = 360
 export const MAX_PANEL_WIDTH = 720
@@ -35,6 +59,7 @@ interface CreateState {
 }
 
 export interface ConnectorConfigPanelProps {
+	connectorId: string
 	label: string
 	descriptor: Schemas.ConnectorDescriptorResponse
 	config: Record<string, unknown>
@@ -45,13 +70,19 @@ export interface ConnectorConfigPanelProps {
 	onClose: () => void
 	onConfigChange: (config: Record<string, unknown>) => void
 	onCredentialChange: (credentialId: string | null) => void
-	onOpenExpression: (field: Schemas.FieldResponse) => void
 	onCreateCredential: (
 		body: Schemas.CreateCredentialRequest,
 	) => Promise<CreatedCredential>
+	exampleData: DataTreeSourceBundle
+	lastRunData: DataTreeSourceBundle | null
+	onEvaluateExpression: (
+		template: unknown,
+		context: Schemas.EvaluateContextBody,
+	) => Promise<unknown>
 }
 
 export function ConnectorConfigPanel({
+	connectorId,
 	label,
 	descriptor,
 	config,
@@ -62,13 +93,101 @@ export function ConnectorConfigPanel({
 	onClose,
 	onConfigChange,
 	onCredentialChange,
-	onOpenExpression,
 	onCreateCredential,
+	exampleData,
+	lastRunData,
+	onEvaluateExpression,
 }: ConnectorConfigPanelProps) {
 	const [width, setWidth] = useState(DEFAULT_PANEL_WIDTH)
 	const [createState, setCreateState] = useState<CreateState | null>(null)
 	const [createPending, setCreatePending] = useState(false)
 	const [createError, setCreateError] = useState<string | null>(null)
+	const [dataSource, setDataSource] = useState<DataTreeSource>('example')
+	const [activeField, setActiveField] = useState<Schemas.FieldResponse | null>(
+		null,
+	)
+	const [previewState, setPreviewState] = useState<ExpressionPreviewState>({
+		status: 'idle',
+	})
+	const fieldRefs = useRef(new Map<string, FieldControlElement>())
+
+	useEffect(() => {
+		setActiveField(null)
+		fieldRefs.current.clear()
+	}, [connectorId])
+
+	const activeSource =
+		dataSource === 'last_run' && lastRunData ? lastRunData : exampleData
+
+	useEffect(() => {
+		if (!activeField) {
+			setPreviewState({ status: 'idle' })
+			return
+		}
+
+		const template = config[activeField.name]
+		if (
+			template === undefined ||
+			(typeof template === 'string' && template.trim() === '')
+		) {
+			setPreviewState({ status: 'idle' })
+			return
+		}
+
+		let cancelled = false
+		setPreviewState({ status: 'loading' })
+		const timer = setTimeout(() => {
+			onEvaluateExpression(template, activeSource.context)
+				.then((value) => {
+					if (!cancelled) setPreviewState({ status: 'resolved', value })
+				})
+				.catch((error: unknown) => {
+					if (!cancelled) {
+						setPreviewState({
+							status: 'error',
+							message:
+								error instanceof Error
+									? error.message
+									: "L'évaluation a échoué.",
+						})
+					}
+				})
+		}, PREVIEW_DEBOUNCE_MS)
+
+		return () => {
+			cancelled = true
+			clearTimeout(timer)
+		}
+	}, [activeField, config, activeSource, onEvaluateExpression])
+
+	function insertAt(fieldName: string, path: string) {
+		const currentValue = config[fieldName]
+		const text = typeof currentValue === 'string' ? currentValue : ''
+		const element = fieldRefs.current.get(fieldName)
+		const selection = {
+			start: element?.selectionStart ?? text.length,
+			end: element?.selectionEnd ?? text.length,
+		}
+
+		const result = insertExpressionAtCursor(text, path, selection)
+		onConfigChange(withField(config, fieldName, result.text))
+
+		if (element) {
+			element.focus()
+			element.setSelectionRange(result.cursor, result.cursor)
+		}
+	}
+
+	function handleTreeInsert(path: string) {
+		if (!activeField) return
+		insertAt(activeField.name, path)
+	}
+
+	function handleFieldDrop(fieldName: string, path: string) {
+		const field = descriptor.fields.find((f) => f.name === fieldName)
+		if (field) setActiveField(field)
+		insertAt(fieldName, path)
+	}
 
 	function handleResizeStart(event: ReactMouseEvent<HTMLButtonElement>) {
 		const startX = event.clientX
@@ -168,13 +287,23 @@ export function ConnectorConfigPanel({
 					) : null}
 
 					<div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto p-4">
-						<Collapsible>
+						<Collapsible defaultOpen>
 							<CollapsibleTrigger className="flex w-full items-center justify-between text-sm font-medium text-muted-foreground">
 								Données disponibles
 								<ChevronDown className="size-4" />
 							</CollapsibleTrigger>
-							<CollapsibleContent className="pt-2 text-sm text-muted-foreground">
-								Bientôt disponible.
+							<CollapsibleContent className="flex flex-col gap-2 pt-2">
+								<AvailableDataTree
+									branches={activeSource.tree}
+									source={dataSource}
+									hasLastRun={lastRunData !== null}
+									onSourceChange={setDataSource}
+									onInsert={handleTreeInsert}
+								/>
+								<ExpressionPreview
+									fieldLabel={activeField?.label ?? null}
+									state={previewState}
+								/>
 							</CollapsibleContent>
 						</Collapsible>
 
@@ -211,7 +340,12 @@ export function ConnectorConfigPanel({
 									errors={errors}
 									onConfigChange={onConfigChange}
 									onCredentialChange={onCredentialChange}
-									onOpenExpression={onOpenExpression}
+									onOpenExpression={setActiveField}
+									onFieldRef={(name, element) => {
+										if (element) fieldRefs.current.set(name, element)
+										else fieldRefs.current.delete(name)
+									}}
+									onInsertExpression={handleFieldDrop}
 									onRequestCreateCredential={(purpose) => {
 										setCreateError(null)
 										setCreateState({ purpose, result: null })
