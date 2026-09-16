@@ -61,7 +61,7 @@ describe('isFieldVisible', () => {
 
 describe('visibleFields', () => {
 	it('keeps unconditional fields and fields whose condition currently holds', () => {
-		const mode = field({ name: 'mode', kind: 'Select' })
+		const mode = field({ name: 'mode' })
 		const target = field({
 			name: 'target',
 			visible_when: { field: 'mode', any_of: ['advanced'] },

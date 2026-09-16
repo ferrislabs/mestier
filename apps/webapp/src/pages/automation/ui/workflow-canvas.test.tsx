@@ -36,16 +36,29 @@ function descriptor(
 	kind: string,
 	label: string,
 	branches: Schemas.BranchDto[] = [],
+	fields: Schemas.FieldResponse[] = [],
 ): Schemas.ConnectorDescriptorResponse {
 	return {
 		auth: 'None',
 		branches,
 		family: 'test',
-		fields: [],
+		fields,
 		kind,
 		label,
 		output_example: null,
 		version: 1,
+	}
+}
+
+function textField(name: string, label: string): Schemas.FieldResponse {
+	return {
+		expression: false,
+		kind: 'Text',
+		label,
+		name,
+		required: false,
+		secret: false,
+		visible_when: null,
 	}
 }
 
@@ -73,6 +86,9 @@ function Harness({
 	descriptors,
 	connectorErrors = new Map(),
 	hasTriggerEvent = true,
+	credentials = [],
+	authSchemes = [],
+	onCreateCredential = () => Promise.reject(new Error('unused in this test')),
 	onSaveSpy,
 }: {
 	graph: Schemas.GraphDto
@@ -80,6 +96,9 @@ function Harness({
 	descriptors: Map<string, Schemas.ConnectorDescriptorResponse>
 	connectorErrors?: Map<string, ConnectorValidationError[]>
 	hasTriggerEvent?: boolean
+	credentials?: Schemas.CredentialResponse[]
+	authSchemes?: Schemas.AuthSchemeResponse[]
+	onCreateCredential?: WorkflowCanvasProps['onCreateCredential']
 	onSaveSpy: (
 		graph: Schemas.GraphDto,
 		layout: Map<string, NodePosition>,
@@ -95,6 +114,9 @@ function Harness({
 		descriptors,
 		connectorErrors,
 		hasTriggerEvent,
+		credentials,
+		authSchemes,
+		onCreateCredential,
 		isDirty,
 		isSaving,
 		onChange: (nextGraph, nextLayout) => {
@@ -688,5 +710,155 @@ describe('WorkflowCanvas — deleting a node', () => {
 		const [savedGraph] = onSaveSpy.mock.calls[0] as [Schemas.GraphDto]
 		expect(savedGraph.connectors.map((c) => c.id)).toEqual(['c1', 'c3'])
 		expect(savedGraph.edges).toEqual([])
+	})
+})
+
+describe('WorkflowCanvas — the config panel', () => {
+	const NOTED_DESCRIPTOR = descriptor(
+		SIMPLE_KIND,
+		'Étape simple',
+		[],
+		[textField('note', 'Note')],
+	)
+
+	it('opens on a connector click, showing its fields', async () => {
+		renderHarness({
+			graph: { connectors: [connector('c1', SIMPLE_KIND)], edges: [] },
+			layout: new Map([['c1', { x: 0, y: 0 }]]),
+			descriptors: descriptorMap(NOTED_DESCRIPTOR),
+			onSaveSpy: vi.fn(),
+		})
+
+		expect(screen.queryByText('Paramètres')).toBeNull()
+
+		const node = await screen.findByTestId('rf__node-c1')
+		fireEvent.click(node)
+
+		expect(await screen.findByText('Paramètres')).toBeDefined()
+		expect(screen.getByLabelText('Note')).toBeDefined()
+	})
+
+	it('does not open from a click on the virtual trigger', async () => {
+		renderHarness({
+			graph: { connectors: [connector('c1', SIMPLE_KIND)], edges: [] },
+			layout: new Map([['c1', { x: 0, y: 0 }]]),
+			descriptors: descriptorMap(NOTED_DESCRIPTOR),
+			onSaveSpy: vi.fn(),
+		})
+
+		const trigger = await screen.findByTestId('rf__node-__trigger__')
+		fireEvent.click(trigger)
+
+		expect(screen.queryByText('Paramètres')).toBeNull()
+	})
+
+	it('does not open from pressing delete on the node', async () => {
+		renderHarness({
+			graph: { connectors: [connector('c1', SIMPLE_KIND)], edges: [] },
+			layout: new Map([['c1', { x: 0, y: 0 }]]),
+			descriptors: descriptorMap(NOTED_DESCRIPTOR),
+			onSaveSpy: vi.fn(),
+		})
+
+		const node = await screen.findByTestId('rf__node-c1')
+		fireEvent.click(
+			within(node).getByRole('button', { name: 'Supprimer Étape simple' }),
+		)
+
+		await screen.findByRole('alertdialog')
+		expect(screen.queryByText('Paramètres')).toBeNull()
+	})
+
+	it('does not open from pressing add on the node', async () => {
+		renderHarness({
+			graph: { connectors: [connector('c1', SIMPLE_KIND)], edges: [] },
+			layout: new Map([['c1', { x: 0, y: 0 }]]),
+			descriptors: descriptorMap(NOTED_DESCRIPTOR),
+			onSaveSpy: vi.fn(),
+		})
+
+		const node = await screen.findByTestId('rf__node-c1')
+		fireEvent.click(
+			within(node).getByRole('button', {
+				name: 'Ajouter un connecteur après Étape simple',
+			}),
+		)
+
+		expect(
+			await screen.findByRole('button', { name: 'Étape simple' }),
+		).toBeDefined()
+		expect(screen.queryByText('Paramètres')).toBeNull()
+	})
+
+	it('closes on request', async () => {
+		renderHarness({
+			graph: { connectors: [connector('c1', SIMPLE_KIND)], edges: [] },
+			layout: new Map([['c1', { x: 0, y: 0 }]]),
+			descriptors: descriptorMap(NOTED_DESCRIPTOR),
+			onSaveSpy: vi.fn(),
+		})
+
+		fireEvent.click(await screen.findByTestId('rf__node-c1'))
+		await screen.findByText('Paramètres')
+
+		fireEvent.click(screen.getByRole('button', { name: 'Fermer' }))
+
+		expect(screen.queryByText('Paramètres')).toBeNull()
+	})
+
+	it('closes once the open connector is deleted', async () => {
+		renderHarness({
+			graph: { connectors: [connector('c1', SIMPLE_KIND)], edges: [] },
+			layout: new Map([['c1', { x: 0, y: 0 }]]),
+			descriptors: descriptorMap(NOTED_DESCRIPTOR),
+			onSaveSpy: vi.fn(),
+		})
+
+		const node = await screen.findByTestId('rf__node-c1')
+		fireEvent.click(node)
+		await screen.findByText('Paramètres')
+
+		fireEvent.click(
+			within(node).getByRole('button', { name: 'Supprimer Étape simple' }),
+		)
+		await screen.findByRole('alertdialog')
+		fireEvent.click(screen.getByRole('button', { name: 'Supprimer' }))
+
+		await waitFor(() => {
+			expect(screen.queryByText('Paramètres')).toBeNull()
+		})
+	})
+
+	it('routes a field edit through the same pipeline as a structural change, so a later drag never loses it', async () => {
+		const graph: Schemas.GraphDto = {
+			connectors: [connector('c1', SIMPLE_KIND)],
+			edges: [],
+		}
+		const layout = new Map<string, NodePosition>([['c1', { x: 0, y: 0 }]])
+
+		const { onSaveSpy } = renderHarness({
+			graph,
+			layout,
+			descriptors: descriptorMap(NOTED_DESCRIPTOR),
+		})
+
+		const node = await screen.findByTestId('rf__node-c1')
+		fireEvent.click(node)
+		await screen.findByText('Paramètres')
+
+		fireEvent.change(screen.getByLabelText('Note'), {
+			target: { value: 'hello' },
+		})
+
+		dragNodeBy(node, 20, 20)
+
+		await waitFor(() => {
+			expect(screen.getByText(/non enregistr/i)).toBeDefined()
+		})
+
+		await clickSave()
+
+		const [savedGraph] = onSaveSpy.mock.calls[0] as [Schemas.GraphDto]
+		expect(savedGraph.connectors[0]?.config).toEqual({ note: 'hello' })
 	})
 })

@@ -70,7 +70,7 @@ export function ConnectorConfigPanel({
 	const [createPending, setCreatePending] = useState(false)
 	const [createError, setCreateError] = useState<string | null>(null)
 
-	function handleResizeStart(event: ReactMouseEvent<HTMLDivElement>) {
+	function handleResizeStart(event: ReactMouseEvent<HTMLButtonElement>) {
 		const startX = event.clientX
 		const startWidth = width
 

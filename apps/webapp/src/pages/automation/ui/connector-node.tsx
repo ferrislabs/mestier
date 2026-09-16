@@ -46,7 +46,10 @@ export function ConnectorNode({
 						type="button"
 						aria-label={`Supprimer ${data.label}`}
 						className="nodrag flex size-5 items-center justify-center rounded-full text-muted-foreground hover:bg-accent hover:text-destructive"
-						onClick={() => actions.onRequestDelete(id)}
+						onClick={(event) => {
+							event.stopPropagation()
+							actions.onRequestDelete(id)
+						}}
 					>
 						<Trash2 className="size-3.5" />
 					</button>

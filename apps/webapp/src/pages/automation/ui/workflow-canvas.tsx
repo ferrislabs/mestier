@@ -36,6 +36,7 @@ import {
 	rootConnectorIds,
 } from '#/pages/automation/lib/graph'
 import type { ConnectorValidationError } from '#/pages/automation/lib/validation'
+import { ConnectorConfigPanel } from '#/pages/automation/ui/connector-config-panel'
 import {
 	ConnectorNode,
 	type ConnectorNodeData,
@@ -51,16 +52,29 @@ const NODE_TYPES = {
 	trigger: TriggerNode,
 }
 
+type CreatedCredential = Schemas.CredentialResponse & { secret: unknown }
+
 export interface WorkflowCanvasProps {
 	graph: Schemas.GraphDto
 	layout: Map<string, NodePosition>
 	descriptors: Map<string, Schemas.ConnectorDescriptorResponse>
 	connectorErrors: Map<string, ConnectorValidationError[]>
 	hasTriggerEvent: boolean
+	credentials?: Schemas.CredentialResponse[]
+	authSchemes?: Schemas.AuthSchemeResponse[]
+	onCreateCredential?: (
+		body: Schemas.CreateCredentialRequest,
+	) => Promise<CreatedCredential>
 	isDirty: boolean
 	isSaving: boolean
 	onChange: (graph: Schemas.GraphDto, layout: Map<string, NodePosition>) => void
 	onSave: () => void
+}
+
+function rejectCreateCredential(): Promise<CreatedCredential> {
+	return Promise.reject(
+		new Error('onCreateCredential was not wired for this canvas'),
+	)
 }
 
 function triggerEdgeId(rootId: string): string {
@@ -200,6 +214,9 @@ export function WorkflowCanvas({
 	descriptors,
 	connectorErrors,
 	hasTriggerEvent,
+	credentials = [],
+	authSchemes = [],
+	onCreateCredential = rejectCreateCredential,
 	isDirty,
 	isSaving,
 	onChange,
@@ -216,6 +233,7 @@ export function WorkflowCanvas({
 	)
 	const [edges, setEdges] = useEdgesState(buildInitialEdges(graph))
 	const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null)
+	const [openConnectorId, setOpenConnectorId] = useState<string | null>(null)
 
 	const nodesRef = useRef(nodes)
 	nodesRef.current = nodes
@@ -366,8 +384,38 @@ export function WorkflowCanvas({
 		setNodes(nextNodes)
 		setEdges(nextEdges)
 		onChange(nextGraph, buildLayout(nextNodes))
+		setOpenConnectorId((current) =>
+			current === pendingDeleteId ? null : current,
+		)
 		setPendingDeleteId(null)
 	}, [pendingDeleteId, onChange, setNodes, setEdges])
+
+	const handleConnectorConfigChange = useCallback(
+		(
+			connectorId: string,
+			patch: Partial<
+				Pick<Schemas.PlacedConnectorDto, 'config' | 'credential_id'>
+			>,
+		) => {
+			const nextNodes = nodesRef.current.map((node) => {
+				if (node.id !== connectorId) return node
+				const data = node.data as ConnectorNodeData
+				return {
+					...node,
+					data: { ...data, connector: { ...data.connector, ...patch } },
+				}
+			})
+			nodesRef.current = nextNodes
+			setNodes(nextNodes)
+			onChange(buildGraph(nextNodes, edgesRef.current), buildLayout(nextNodes))
+		},
+		[onChange, setNodes],
+	)
+
+	const handleNodeClick = useCallback((_event: unknown, node: Node) => {
+		if (node.type !== 'connector') return
+		setOpenConnectorId(node.id)
+	}, [])
 
 	const pendingDeleteNode = pendingDeleteId
 		? nodes.find((node) => node.id === pendingDeleteId)
@@ -395,6 +443,14 @@ export function WorkflowCanvas({
 		[catalogue, handleAddNode, handleRequestDelete],
 	)
 
+	const openNode = openConnectorId
+		? nodes.find((node) => node.id === openConnectorId)
+		: undefined
+	const openConnectorData = openNode?.data as ConnectorNodeData | undefined
+	const openDescriptor = openConnectorData
+		? descriptors.get(openConnectorData.connector.kind)
+		: undefined
+
 	return (
 		<WorkflowCanvasActionsContext.Provider value={actions}>
 			<div className="flex min-h-0 flex-1 flex-col">
@@ -406,23 +462,49 @@ export function WorkflowCanvas({
 						{isSaving ? 'Enregistrement…' : 'Enregistrer'}
 					</Button>
 				</div>
-				<div className="min-h-0 flex-1">
-					<ReactFlowProvider>
-						<ReactFlow
-							nodes={nodes}
-							edges={edges}
-							nodeTypes={NODE_TYPES}
-							onNodesChange={handleNodesChange}
-							onEdgesChange={handleEdgesChange}
-							onConnect={handleConnect}
-							onNodeDragStop={handleNodeDragStop}
-							isValidConnection={validateConnection}
-							autoPanOnNodeDrag={false}
-							fitView={false}
-						>
-							<Background />
-						</ReactFlow>
-					</ReactFlowProvider>
+				<div className="flex min-h-0 flex-1">
+					<div className="min-h-0 min-w-0 flex-1">
+						<ReactFlowProvider>
+							<ReactFlow
+								nodes={nodes}
+								edges={edges}
+								nodeTypes={NODE_TYPES}
+								onNodesChange={handleNodesChange}
+								onEdgesChange={handleEdgesChange}
+								onConnect={handleConnect}
+								onNodeDragStop={handleNodeDragStop}
+								onNodeClick={handleNodeClick}
+								onPaneClick={() => setOpenConnectorId(null)}
+								isValidConnection={validateConnection}
+								autoPanOnNodeDrag={false}
+								fitView={false}
+							>
+								<Background />
+							</ReactFlow>
+						</ReactFlowProvider>
+					</div>
+					{openConnectorId && openConnectorData && openDescriptor ? (
+						<ConnectorConfigPanel
+							label={openConnectorData.label}
+							descriptor={openDescriptor}
+							config={openConnectorData.connector.config}
+							credentialId={openConnectorData.connector.credential_id ?? null}
+							credentials={credentials}
+							authSchemes={authSchemes}
+							errors={openConnectorData.errors}
+							onClose={() => setOpenConnectorId(null)}
+							onConfigChange={(config) =>
+								handleConnectorConfigChange(openConnectorId, { config })
+							}
+							onCredentialChange={(credentialId) =>
+								handleConnectorConfigChange(openConnectorId, {
+									credential_id: credentialId,
+								})
+							}
+							onOpenExpression={() => {}}
+							onCreateCredential={onCreateCredential}
+						/>
+					) : null}
 				</div>
 				<AlertDialog
 					open={pendingDeleteId !== null}
