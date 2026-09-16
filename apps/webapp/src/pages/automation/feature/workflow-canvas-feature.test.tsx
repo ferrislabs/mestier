@@ -1,5 +1,6 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render, screen, waitFor, within } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import type { ReactNode } from 'react'
 import { beforeEach, describe, expect, it } from 'vitest'
 import type { Schemas } from '#/api/api.client'
@@ -15,6 +16,17 @@ import {
 	installFlowTestEnvironment,
 } from '#/pages/automation/test/flow-test-env'
 
+for (const method of [
+	'hasPointerCapture',
+	'setPointerCapture',
+	'releasePointerCapture',
+	'scrollIntoView',
+] as const) {
+	if (typeof Element.prototype[method] !== 'function') {
+		Element.prototype[method] = (() => false) as never
+	}
+}
+
 const WORKFLOW_PATH =
 	'/api/v1/organizations/{organization_id}/automation/workflows/{workflow_id}'
 const WORKFLOW_TRIGGER_PATH =
@@ -23,6 +35,8 @@ const WORKFLOW_VERSIONS_PATH =
 	'/api/v1/organizations/{organization_id}/automation/workflows/{workflow_id}/versions'
 const CONNECTORS_PATH =
 	'/api/v1/organizations/{organization_id}/automation/connectors'
+const CREDENTIALS_PATH =
+	'/api/v1/organizations/{organization_id}/automation/credentials'
 
 const ORGANIZATION: Organization = {
 	id: 'org-1',
@@ -48,9 +62,10 @@ function connector(
 function descriptor(
 	kind: string,
 	label: string,
+	auth: Schemas.AuthRequirementResponse = 'None',
 ): Schemas.ConnectorDescriptorResponse {
 	return {
-		auth: 'None',
+		auth,
 		branches: [],
 		family: 'test',
 		fields: [],
@@ -58,6 +73,22 @@ function descriptor(
 		label,
 		output_example: null,
 		version: 1,
+	}
+}
+
+function credential(
+	id: string,
+	kind: string,
+	name: string,
+): Schemas.CredentialResponse {
+	return {
+		id,
+		kind,
+		name,
+		origin: 'supplied',
+		organization_id: 'org-1',
+		created_at: '2026-01-01T00:00:00Z',
+		updated_at: '2026-01-01T00:00:00Z',
 	}
 }
 
@@ -165,6 +196,10 @@ function renderFeature(configure: (api: FakeApi) => void) {
 	}))
 	api.mockGet(WORKFLOW_PATH, () => ({
 		data: workflowDetail(),
+		pagination: null,
+	}))
+	api.mockGet(CREDENTIALS_PATH, () => ({
+		data: [],
 		pagination: null,
 	}))
 	configure(api)
@@ -442,5 +477,141 @@ describe('WorkflowCanvasFeature — a 422 from the backend', () => {
 		await waitFor(() => {
 			expect(screen.queryByText(/enregistrement a échoué/i)).toBeNull()
 		})
+	})
+})
+
+describe('WorkflowCanvasFeature — the credential picker', () => {
+	it('offers the credentials fetched for real, filtered by the connector auth', async () => {
+		const user = userEvent.setup()
+		renderFeature((api) => {
+			api.mockGet(CONNECTORS_PATH, () => ({
+				data: {
+					auth_schemes: [
+						{ kind: 'bearer_token', label: 'Bearer token', fields: [] },
+					],
+					connectors: [
+						descriptor(SIMPLE_KIND, 'Étape simple', {
+							Exactly: 'bearer_token',
+						}),
+					],
+				},
+				pagination: null,
+			}))
+			api.mockGet(WORKFLOW_PATH, () => ({
+				data: workflowDetail({
+					graph: { connectors: [connector('c1')], edges: [] },
+					layout: { c1: { x: 0, y: 0 } },
+				}),
+				pagination: null,
+			}))
+			api.mockGet(CREDENTIALS_PATH, () => ({
+				data: [credential('cred-1', 'bearer_token', 'Ma clé')],
+				pagination: null,
+			}))
+		})
+
+		const node = await screen.findByTestId('rf__node-c1')
+		node.click()
+
+		await user.click(
+			await screen.findByRole('combobox', { name: 'Identification' }),
+		)
+
+		expect(await screen.findByRole('option', { name: 'Ma clé' })).toBeDefined()
+	})
+})
+
+describe('WorkflowCanvasFeature — inline credential creation', () => {
+	it('creates the credential through the real mutation and saves the connector pointing at it', async () => {
+		const user = userEvent.setup()
+		const api = renderFeature((fakeApi) => {
+			fakeApi.mockGet(CONNECTORS_PATH, () => ({
+				data: {
+					auth_schemes: [
+						{
+							kind: 'bearer_token',
+							label: 'Bearer token',
+							fields: [
+								{
+									name: 'token',
+									label: 'Token',
+									kind: 'Text',
+									required: true,
+									secret: true,
+									expression: false,
+									visible_when: null,
+								},
+							],
+						},
+					],
+					connectors: [
+						descriptor(SIMPLE_KIND, 'Étape simple', {
+							Exactly: 'bearer_token',
+						}),
+					],
+				},
+				pagination: null,
+			}))
+			fakeApi.mockGet(WORKFLOW_PATH, () => ({
+				data: workflowDetail({
+					graph: { connectors: [connector('c1')], edges: [] },
+					layout: { c1: { x: 0, y: 0 } },
+				}),
+				pagination: null,
+			}))
+			fakeApi.mockMutation('post', CREDENTIALS_PATH, (params) => ({
+				data: {
+					...credential(
+						'new-cred',
+						'bearer_token',
+						(params as { body: Schemas.CreateCredentialRequest }).body.name,
+					),
+					secret: 'irrelevant',
+				},
+			}))
+			fakeApi.mockMutation('put', WORKFLOW_VERSIONS_PATH, (params) => ({
+				data: {
+					id: 'version-2',
+					workflow_id: 'workflow-1',
+					version: 2,
+					graph: (params as { body: { graph: Schemas.GraphDto } }).body.graph,
+					created_at: '2026-08-02T00:00:00Z',
+					created_by: null,
+				},
+			}))
+		})
+
+		const node = await screen.findByTestId('rf__node-c1')
+		node.click()
+
+		await user.click(
+			await screen.findByRole('button', { name: 'Nouvelle identification' }),
+		)
+		await user.type(screen.getByLabelText('Nom'), 'Ma clé')
+		await user.type(screen.getByLabelText('Token'), 's3cr3t')
+		await user.click(screen.getByRole('button', { name: 'Créer' }))
+
+		await waitFor(() => {
+			const call = api.calls.find(
+				(c) => c.method === 'post' && c.path === CREDENTIALS_PATH,
+			)
+			expect(call).toBeDefined()
+		})
+
+		await clickSave()
+
+		await waitFor(() => {
+			const call = api.calls.find(
+				(c) => c.method === 'put' && c.path === WORKFLOW_VERSIONS_PATH,
+			)
+			expect(call).toBeDefined()
+		})
+
+		const call = api.calls.find(
+			(c) => c.method === 'put' && c.path === WORKFLOW_VERSIONS_PATH,
+		)
+		const body = (call?.params as { body: Schemas.SaveWorkflowVersionRequest })
+			.body
+		expect(body.graph.connectors[0]?.credential_id).toBe('new-cred')
 	})
 })

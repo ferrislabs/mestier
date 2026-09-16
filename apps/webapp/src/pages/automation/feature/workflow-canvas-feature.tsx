@@ -4,7 +4,9 @@ import type { Schemas } from '#/api/api.client'
 import { PageShell, SectionCard } from '#/components/ui/surface'
 import { useActiveOrganization } from '#/hooks/use-active-organization'
 import {
+	useAutomationCredentials,
 	useConnectorCatalogue,
+	useCreateCredential,
 	useSaveWorkflowVersion,
 	useWorkflow,
 	useWorkflowTrigger,
@@ -78,11 +80,13 @@ function WorkflowCanvasWorkspace({
 	const workflowQuery = useWorkflow(organizationId, workflowId)
 	const catalogueQuery = useConnectorCatalogue(organizationId)
 	const triggerQuery = useWorkflowTrigger(organizationId, workflowId)
+	const credentialsQuery = useAutomationCredentials(organizationId)
 
 	if (
 		workflowQuery.isLoading ||
 		catalogueQuery.isLoading ||
-		triggerQuery.isLoading
+		triggerQuery.isLoading ||
+		credentialsQuery.isLoading
 	) {
 		return (
 			<PageShell>
@@ -119,6 +123,8 @@ function WorkflowCanvasWorkspace({
 			descriptors={descriptorsByKind(
 				catalogueQuery.data?.data.connectors ?? [],
 			)}
+			authSchemes={catalogueQuery.data?.data.auth_schemes ?? []}
+			credentials={credentialsQuery.data?.data ?? []}
 			hasTriggerEvent={(triggerQuery.data?.data.event_names.length ?? 0) > 0}
 		/>
 	)
@@ -129,15 +135,20 @@ function WorkflowCanvasLoaded({
 	workflowId,
 	workflow,
 	descriptors,
+	authSchemes,
+	credentials,
 	hasTriggerEvent,
 }: {
 	organizationId: string
 	workflowId: string
 	workflow: WorkflowDetail
 	descriptors: Map<string, Schemas.ConnectorDescriptorResponse>
+	authSchemes: Schemas.AuthSchemeResponse[]
+	credentials: Schemas.CredentialResponse[]
 	hasTriggerEvent: boolean
 }) {
 	const saveVersion = useSaveWorkflowVersion()
+	const createCredential = useCreateCredential(organizationId)
 
 	const [initial] = useState(() => {
 		const graph = workflow.current_version?.graph ?? {
@@ -160,6 +171,16 @@ function WorkflowCanvasLoaded({
 	) => {
 		pending.current = { graph, layout }
 		setDirty(true)
+	}
+
+	const handleCreateCredential = async (
+		body: Schemas.CreateCredentialRequest,
+	) => {
+		const created = await createCredential.mutateAsync({
+			path: { organization_id: organizationId },
+			body,
+		})
+		return created.data as Schemas.CredentialResponse & { secret: unknown }
 	}
 
 	const handleSave = async () => {
@@ -209,6 +230,9 @@ function WorkflowCanvasLoaded({
 				descriptors={descriptors}
 				connectorErrors={validation.connectorErrors}
 				hasTriggerEvent={hasTriggerEvent}
+				credentials={credentials}
+				authSchemes={authSchemes}
+				onCreateCredential={handleCreateCredential}
 				isDirty={isDirty}
 				isSaving={saveVersion.isPending}
 				onChange={handleChange}
