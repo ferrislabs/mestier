@@ -284,6 +284,7 @@ impl Modify for SecurityAddon {
         automation::response::WorkflowDetailResponse,
         automation::response::WorkflowVersionResponse,
         automation::response::WorkflowTriggerResponse,
+        automation::response::WorkflowTriggerModeDto,
         automation::response::GraphDto,
         automation::response::PlacedConnectorDto,
         automation::response::EdgeDto,

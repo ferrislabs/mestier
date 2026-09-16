@@ -8,7 +8,7 @@ use crate::domain::automation::run::{DueRun, Run, RunSettlement, RunStep};
 use crate::domain::automation::secret::SealedSecret;
 use crate::domain::automation::settings::AutomationSettings;
 use crate::domain::automation::workflow::{
-    Graph, Workflow, WorkflowLayout, WorkflowReference, WorkflowVersion,
+    Graph, Workflow, WorkflowLayout, WorkflowReference, WorkflowTriggerMode, WorkflowVersion,
 };
 
 /// Appends events to the durable log.
@@ -245,6 +245,13 @@ pub trait WorkflowRepository: Send {
         org_id: OrganizationId,
         workflow_id: Uuid,
         layout: Option<&'a WorkflowLayout>,
+    ) -> impl Future<Output = Result<(), CoreError>> + Send;
+
+    fn set_trigger_mode(
+        &mut self,
+        org_id: OrganizationId,
+        workflow_id: Uuid,
+        mode: WorkflowTriggerMode,
     ) -> impl Future<Output = Result<(), CoreError>> + Send;
 
     fn find_version(

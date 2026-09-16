@@ -77,6 +77,7 @@ impl<'tx> EventDispatchRepository for PgEventDispatchRepository<'tx> {
             JOIN automation.workflow w
               ON w.id = s.target_id
              AND w.current_version_id IS NOT NULL
+             AND w.trigger_mode = 'events'
             LEFT JOIN automation.run r
                    ON e.actor_kind = 'automation' AND r.id = e.actor_id
             WHERE e.id = ANY($1)
@@ -369,6 +370,36 @@ mod tests {
 
         assert_eq!(runs_for(&pool, event_id).await, 1);
         assert!(is_dispatched(&pool, event_id).await);
+    }
+
+    #[tokio::test]
+    #[ignore = "requires live postgres"]
+    async fn a_manual_workflow_does_not_fire_on_an_event_it_once_subscribed_to() {
+        let _guard = DISPATCH_LOCK.lock().await;
+        let pool = make_pool().await;
+        let org_id = seed_organization(&pool).await;
+        let workflow_id = seed_workflow(&pool, org_id).await;
+        seed_workflow_subscription(&pool, org_id, workflow_id, &["quote.accepted"], true).await;
+        sqlx::query!(
+            "UPDATE automation.workflow SET trigger_mode = 'manual' WHERE id = $1",
+            workflow_id,
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+        let event_id = seed_event(&pool, org_id, Actor::system()).await;
+
+        dispatch(&pool).await;
+
+        assert_eq!(
+            runs_for(&pool, event_id).await,
+            0,
+            "a manual workflow must not fire even with a stray subscription row"
+        );
+        assert!(
+            is_dispatched(&pool, event_id).await,
+            "still done with, not retried forever"
+        );
     }
 
     #[tokio::test]

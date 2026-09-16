@@ -5,13 +5,15 @@
 use auth::Identity;
 use axum::{Extension, Json, extract::State};
 use handlers::{ApiError, AppState, DataEnvelope, Response};
-use mestier_core::SetWorkflowTriggerCommand;
+use mestier_core::{SetWorkflowTriggerCommand, WorkflowTrigger};
 use serde::Deserialize;
 use utoipa::ToSchema;
 
 use crate::{
-    paths::WorkflowTriggerPath, require_manage_automation, require_view_automation,
-    response::WorkflowTriggerResponse, workflow::find_workflow_in_org,
+    paths::WorkflowTriggerPath,
+    require_manage_automation, require_view_automation,
+    response::{WorkflowTriggerModeDto, WorkflowTriggerResponse},
+    workflow::find_workflow_in_org,
 };
 
 #[utoipa::path(
@@ -42,18 +44,19 @@ pub async fn get_trigger(
     require_view_automation(&state, &identity, organization_id).await?;
     find_workflow_in_org(&state, organization_id, workflow_id).await?;
 
-    let event_names = state
+    let trigger = state
         .usecase
         .workflow_trigger(organization_id, workflow_id)
         .await?;
 
-    Ok(Response::OK(WorkflowTriggerResponse::from(event_names)))
+    Ok(Response::OK(WorkflowTriggerResponse::from(trigger)))
 }
 
 /// Always the full desired selection — replaces whatever was there, never an
 /// addition to it. An empty list clears the trigger.
 #[derive(Debug, Deserialize, ToSchema)]
 pub struct SetWorkflowTriggerRequest {
+    pub mode: WorkflowTriggerModeDto,
     pub event_names: Vec<String>,
 }
 
@@ -88,16 +91,20 @@ pub async fn set_trigger(
     require_manage_automation(&state, &identity, organization_id).await?;
     find_workflow_in_org(&state, organization_id, workflow_id).await?;
 
-    let event_names = state
+    let trigger = match payload.mode {
+        WorkflowTriggerModeDto::Events => WorkflowTrigger::Events(payload.event_names),
+        WorkflowTriggerModeDto::Manual => WorkflowTrigger::Manual,
+    };
+    let trigger = state
         .usecase
         .set_workflow_trigger(SetWorkflowTriggerCommand {
             org_id: organization_id,
             workflow_id,
-            event_names: payload.event_names,
+            trigger,
         })
         .await?;
 
-    Ok(Response::OK(WorkflowTriggerResponse::from(event_names)))
+    Ok(Response::OK(WorkflowTriggerResponse::from(trigger)))
 }
 
 #[cfg(test)]
@@ -109,17 +116,29 @@ mod tests {
     #[test]
     fn a_list_of_event_names_parses() {
         let request: SetWorkflowTriggerRequest =
-            serde_json::from_value(json!({ "event_names": ["quote.accepted"] }))
+            serde_json::from_value(json!({ "mode": "events", "event_names": ["quote.accepted"] }))
                 .expect("payload must deserialize");
 
+        assert_eq!(request.mode, WorkflowTriggerModeDto::Events);
         assert_eq!(request.event_names, vec!["quote.accepted".to_string()]);
     }
 
     #[test]
     fn an_empty_list_parses_and_clears_the_trigger() {
         let request: SetWorkflowTriggerRequest =
-            serde_json::from_value(json!({ "event_names": [] })).expect("payload must deserialize");
+            serde_json::from_value(json!({ "mode": "events", "event_names": [] }))
+                .expect("payload must deserialize");
 
+        assert_eq!(request.mode, WorkflowTriggerModeDto::Events);
         assert!(request.event_names.is_empty());
+    }
+
+    #[test]
+    fn a_manual_mode_parses_regardless_of_event_names() {
+        let request: SetWorkflowTriggerRequest =
+            serde_json::from_value(json!({ "mode": "manual", "event_names": ["quote.accepted"] }))
+                .expect("payload must deserialize");
+
+        assert_eq!(request.mode, WorkflowTriggerModeDto::Manual);
     }
 }

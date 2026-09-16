@@ -11,7 +11,7 @@ use crate::{
         ports::{CredentialRepository, WorkflowRepository},
         workflow::{
             CreateWorkflowCommand, GraphError, SaveWorkflowVersionCommand, UpdateWorkflowCommand,
-            Workflow, WorkflowVersion, validate_graph,
+            Workflow, WorkflowTriggerMode, WorkflowVersion, validate_graph,
         },
     },
 };
@@ -45,6 +45,7 @@ impl MestierUseCase {
             enabled: true,
             current_version_id: None,
             layout: None,
+            trigger_mode: WorkflowTriggerMode::Events,
             created_at: now,
             updated_at: now,
         };
@@ -288,6 +289,7 @@ mod tests {
         assert_eq!(created.org_id, org_id);
         assert!(created.enabled);
         assert_eq!(created.current_version_id, None);
+        assert_eq!(created.trigger_mode, WorkflowTriggerMode::Events);
 
         let found = usecase.find_workflow(org_id, created.id).await.unwrap();
         assert_eq!(found, Some(created));

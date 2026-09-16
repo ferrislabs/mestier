@@ -6,7 +6,10 @@ use uuid::Uuid;
 use crate::{
     domain::automation::{
         ports::WorkflowRepository,
-        workflow::{Graph, Workflow, WorkflowLayout, WorkflowReference, WorkflowVersion},
+        workflow::{
+            Graph, Workflow, WorkflowLayout, WorkflowReference, WorkflowTriggerMode,
+            WorkflowVersion,
+        },
     },
     infrastructure::postgres::{SharedTx, error::map_sqlx_error},
 };
@@ -30,6 +33,7 @@ struct WorkflowRow {
     enabled: bool,
     current_version_id: Option<Uuid>,
     layout: Option<serde_json::Value>,
+    trigger_mode: String,
     created_at: chrono::DateTime<chrono::Utc>,
     updated_at: chrono::DateTime<chrono::Utc>,
 }
@@ -49,6 +53,7 @@ impl TryFrom<WorkflowRow> for Workflow {
                 })
                 .ok()
         });
+        let trigger_mode = row.trigger_mode.parse().map_err(CoreError::Internal)?;
 
         Ok(Self {
             id: row.id,
@@ -58,6 +63,7 @@ impl TryFrom<WorkflowRow> for Workflow {
             enabled: row.enabled,
             current_version_id: row.current_version_id,
             layout,
+            trigger_mode,
             created_at: row.created_at,
             updated_at: row.updated_at,
         })
@@ -97,15 +103,16 @@ impl<'tx> WorkflowRepository for PgWorkflowRepository<'tx> {
         let row = sqlx::query_as!(
             WorkflowRow,
             r#"INSERT INTO automation.workflow
-                   (id, org_id, name, description, enabled, current_version_id, created_at, updated_at)
-               VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-               RETURNING id, org_id, name, description, enabled, current_version_id, layout, created_at, updated_at"#,
+                   (id, org_id, name, description, enabled, current_version_id, trigger_mode, created_at, updated_at)
+               VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+               RETURNING id, org_id, name, description, enabled, current_version_id, layout, trigger_mode, created_at, updated_at"#,
             workflow.id,
             workflow.org_id.0,
             workflow.name,
             workflow.description,
             workflow.enabled,
             workflow.current_version_id,
+            workflow.trigger_mode.as_str(),
             workflow.created_at,
             workflow.updated_at,
         )
@@ -124,7 +131,7 @@ impl<'tx> WorkflowRepository for PgWorkflowRepository<'tx> {
         let mut tx = self.tx.lock().await;
         let row = sqlx::query_as!(
             WorkflowRow,
-            r#"SELECT id, org_id, name, description, enabled, current_version_id, layout, created_at, updated_at
+            r#"SELECT id, org_id, name, description, enabled, current_version_id, layout, trigger_mode, created_at, updated_at
                FROM automation.workflow WHERE org_id = $1 AND id = $2"#,
             org_id.0,
             id,
@@ -143,7 +150,7 @@ impl<'tx> WorkflowRepository for PgWorkflowRepository<'tx> {
         let mut tx = self.tx.lock().await;
         let rows = sqlx::query_as!(
             WorkflowRow,
-            r#"SELECT id, org_id, name, description, enabled, current_version_id, layout, created_at, updated_at
+            r#"SELECT id, org_id, name, description, enabled, current_version_id, layout, trigger_mode, created_at, updated_at
                FROM automation.workflow
                WHERE org_id = $1
                ORDER BY name"#,
@@ -167,7 +174,7 @@ impl<'tx> WorkflowRepository for PgWorkflowRepository<'tx> {
             r#"UPDATE automation.workflow
                SET name = $3, description = $4, enabled = $5, updated_at = $6
                WHERE org_id = $1 AND id = $2
-               RETURNING id, org_id, name, description, enabled, current_version_id, layout, created_at, updated_at"#,
+               RETURNING id, org_id, name, description, enabled, current_version_id, layout, trigger_mode, created_at, updated_at"#,
             org_id.0,
             workflow.id,
             workflow.name,
@@ -295,6 +302,31 @@ impl<'tx> WorkflowRepository for PgWorkflowRepository<'tx> {
             org_id.0,
             workflow_id,
             layout_json,
+        )
+        .execute(&mut ***tx)
+        .await
+        .map_err(map_sqlx_error)?;
+
+        if outcome.rows_affected() == 0 {
+            return Err(CoreError::NotFound);
+        }
+
+        Ok(())
+    }
+
+    async fn set_trigger_mode(
+        &mut self,
+        org_id: OrganizationId,
+        workflow_id: Uuid,
+        mode: WorkflowTriggerMode,
+    ) -> Result<(), CoreError> {
+        let mut tx = self.tx.lock().await;
+
+        let outcome = sqlx::query!(
+            "UPDATE automation.workflow SET trigger_mode = $3 WHERE org_id = $1 AND id = $2",
+            org_id.0,
+            workflow_id,
+            mode.as_str(),
         )
         .execute(&mut ***tx)
         .await
@@ -479,6 +511,7 @@ mod tests {
             enabled: true,
             current_version_id: None,
             layout: None,
+            trigger_mode: WorkflowTriggerMode::Events,
             created_at: now,
             updated_at: now,
         }
@@ -1054,6 +1087,92 @@ mod tests {
         let outcome = with_tx(&pool, async |tx| {
             let mut repo = PgWorkflowRepository::new(&tx);
             repo.set_layout(stranger_org, inserted.id, Some(&layout))
+                .await
+        })
+        .await;
+
+        assert!(matches!(outcome, Err(CoreError::NotFound)));
+    }
+
+    #[tokio::test]
+    #[ignore = "requires live postgres"]
+    async fn an_inserted_workflow_starts_in_events_mode() {
+        let pool = make_pool().await;
+        let org_id = seed_organization(&pool, "trigger-mode-default").await;
+
+        let inserted = with_tx(&pool, async |tx| {
+            let mut repo = PgWorkflowRepository::new(&tx);
+            repo.insert(&workflow(org_id, "Default mode")).await
+        })
+        .await
+        .unwrap();
+
+        assert_eq!(inserted.trigger_mode, WorkflowTriggerMode::Events);
+    }
+
+    #[tokio::test]
+    #[ignore = "requires live postgres"]
+    async fn setting_the_trigger_mode_is_read_back_on_the_workflow() {
+        let pool = make_pool().await;
+        let org_id = seed_organization(&pool, "trigger-mode-set").await;
+        let inserted = with_tx(&pool, async |tx| {
+            let mut repo = PgWorkflowRepository::new(&tx);
+            repo.insert(&workflow(org_id, "Switched to manual")).await
+        })
+        .await
+        .unwrap();
+
+        with_tx(&pool, async |tx| {
+            let mut repo = PgWorkflowRepository::new(&tx);
+            repo.set_trigger_mode(org_id, inserted.id, WorkflowTriggerMode::Manual)
+                .await
+        })
+        .await
+        .unwrap();
+
+        let found = with_tx(&pool, async |tx| {
+            let mut repo = PgWorkflowRepository::new(&tx);
+            repo.find_by_id(org_id, inserted.id).await
+        })
+        .await
+        .unwrap()
+        .unwrap();
+        assert_eq!(found.trigger_mode, WorkflowTriggerMode::Manual);
+
+        with_tx(&pool, async |tx| {
+            let mut repo = PgWorkflowRepository::new(&tx);
+            repo.set_trigger_mode(org_id, inserted.id, WorkflowTriggerMode::Events)
+                .await
+        })
+        .await
+        .unwrap();
+
+        let found = with_tx(&pool, async |tx| {
+            let mut repo = PgWorkflowRepository::new(&tx);
+            repo.find_by_id(org_id, inserted.id).await
+        })
+        .await
+        .unwrap()
+        .unwrap();
+        assert_eq!(found.trigger_mode, WorkflowTriggerMode::Events);
+    }
+
+    #[tokio::test]
+    #[ignore = "requires live postgres"]
+    async fn setting_the_trigger_mode_on_a_workflow_from_another_organization_is_not_found() {
+        let pool = make_pool().await;
+        let org_id = seed_organization(&pool, "trigger-mode-owner").await;
+        let stranger_org = seed_organization(&pool, "trigger-mode-stranger").await;
+        let inserted = with_tx(&pool, async |tx| {
+            let mut repo = PgWorkflowRepository::new(&tx);
+            repo.insert(&workflow(org_id, "Mine")).await
+        })
+        .await
+        .unwrap();
+
+        let outcome = with_tx(&pool, async |tx| {
+            let mut repo = PgWorkflowRepository::new(&tx);
+            repo.set_trigger_mode(stranger_org, inserted.id, WorkflowTriggerMode::Manual)
                 .await
         })
         .await;

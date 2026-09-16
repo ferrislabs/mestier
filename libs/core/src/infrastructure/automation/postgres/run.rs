@@ -534,7 +534,9 @@ mod tests {
     use crate::application::test_support::now_storable;
     use crate::domain::automation::ports::WorkflowRepository;
     use crate::domain::automation::run::StepStatus;
-    use crate::domain::automation::workflow::{Graph, PlacedConnector, Workflow};
+    use crate::domain::automation::workflow::{
+        Graph, PlacedConnector, Workflow, WorkflowTriggerMode,
+    };
     use crate::infrastructure::automation::postgres::PgWorkflowRepository;
     use crate::infrastructure::postgres::with_tx;
 
@@ -593,6 +595,7 @@ mod tests {
                     enabled: true,
                     current_version_id: None,
                     layout: None,
+                    trigger_mode: WorkflowTriggerMode::Events,
                     created_at: now,
                     updated_at: now,
                 })

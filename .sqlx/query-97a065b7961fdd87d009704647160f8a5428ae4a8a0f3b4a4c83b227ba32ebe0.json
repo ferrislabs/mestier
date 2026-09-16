@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE automation.workflow SET trigger_mode = 'manual' WHERE id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "97a065b7961fdd87d009704647160f8a5428ae4a8a0f3b4a4c83b227ba32ebe0"
+}

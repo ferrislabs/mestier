@@ -8,6 +8,7 @@ mod graph;
 mod validation;
 
 use std::collections::BTreeMap;
+use std::str::FromStr;
 
 use chrono::{DateTime, Utc};
 use common::OrganizationId;
@@ -33,8 +34,42 @@ pub struct Workflow {
     /// forward, by [`super::ports::WorkflowRepository::insert_version`].
     pub current_version_id: Option<Uuid>,
     pub layout: Option<WorkflowLayout>,
+    pub trigger_mode: WorkflowTriggerMode,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum WorkflowTriggerMode {
+    Events,
+    Manual,
+}
+
+impl WorkflowTriggerMode {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Events => "events",
+            Self::Manual => "manual",
+        }
+    }
+}
+
+impl std::fmt::Display for WorkflowTriggerMode {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.as_str())
+    }
+}
+
+impl FromStr for WorkflowTriggerMode {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "events" => Ok(Self::Events),
+            "manual" => Ok(Self::Manual),
+            other => Err(format!("`{other}` is not a known workflow trigger mode")),
+        }
+    }
 }
 
 /// One immutable snapshot of a workflow's graph.
@@ -127,6 +162,25 @@ impl<'de> Deserialize<'de> for WorkflowLayout {
 mod tests {
     use super::*;
     use serde_json::{json, to_value};
+
+    #[test]
+    fn a_trigger_mode_round_trips_through_its_string_form() {
+        assert_eq!(WorkflowTriggerMode::Events.as_str(), "events");
+        assert_eq!(WorkflowTriggerMode::Manual.as_str(), "manual");
+        assert_eq!(
+            "events".parse::<WorkflowTriggerMode>().unwrap(),
+            WorkflowTriggerMode::Events
+        );
+        assert_eq!(
+            "manual".parse::<WorkflowTriggerMode>().unwrap(),
+            WorkflowTriggerMode::Manual
+        );
+    }
+
+    #[test]
+    fn an_unknown_trigger_mode_string_is_rejected() {
+        assert!("cron".parse::<WorkflowTriggerMode>().is_err());
+    }
 
     #[test]
     fn a_layout_is_a_map_of_connector_id_to_a_point() {

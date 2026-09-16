@@ -4,6 +4,12 @@ use uuid::Uuid;
 
 use crate::domain::automation::ports::SubscriptionRepository;
 
+#[derive(Debug, Clone, PartialEq)]
+pub enum WorkflowTrigger {
+    Events(Vec<String>),
+    Manual,
+}
+
 /// The full desired set of event names for a workflow's trigger — always a
 /// replacement of whatever is currently selected, never an addition to it.
 /// An empty list clears the trigger entirely: the workflow then runs from
@@ -12,7 +18,7 @@ use crate::domain::automation::ports::SubscriptionRepository;
 pub struct SetWorkflowTriggerCommand {
     pub org_id: OrganizationId,
     pub workflow_id: Uuid,
-    pub event_names: Vec<String>,
+    pub trigger: WorkflowTrigger,
 }
 
 /// Refuses any name the event catalogue does not know, before a single
@@ -50,14 +56,20 @@ pub async fn set_workflow_trigger<R>(
     catalogue: &EventCatalogue,
     org_id: OrganizationId,
     workflow_id: Uuid,
-    event_names: Vec<String>,
+    trigger: &WorkflowTrigger,
 ) -> Result<Vec<String>, CoreError>
 where
     R: SubscriptionRepository,
 {
-    validate_trigger_event_names(catalogue, &event_names)?;
+    let event_names: &[String] = match trigger {
+        WorkflowTrigger::Events(event_names) => {
+            validate_trigger_event_names(catalogue, event_names)?;
+            event_names
+        }
+        WorkflowTrigger::Manual => &[],
+    };
     repository
-        .set_workflow_trigger(org_id, workflow_id, &event_names)
+        .set_workflow_trigger(org_id, workflow_id, event_names)
         .await
 }
 
@@ -97,7 +109,7 @@ mod tests {
             &catalogue(),
             org_id,
             workflow_id,
-            vec!["not.a.real.event".to_string()],
+            &WorkflowTrigger::Events(vec!["not.a.real.event".to_string()]),
         )
         .await
         .expect_err("an event name outside the catalogue must be refused");
@@ -116,7 +128,10 @@ mod tests {
             &catalogue(),
             org_id,
             workflow_id,
-            vec!["quote.accepted".to_string(), "not.a.real.event".to_string()],
+            &WorkflowTrigger::Events(vec![
+                "quote.accepted".to_string(),
+                "not.a.real.event".to_string(),
+            ]),
         )
         .await
         .expect_err("one bad name spoils the whole batch");
@@ -145,7 +160,7 @@ mod tests {
             &catalogue(),
             org_id,
             workflow_id,
-            vec!["quote.accepted".to_string()],
+            &WorkflowTrigger::Events(vec!["quote.accepted".to_string()]),
         )
         .await
         .unwrap();
@@ -169,7 +184,31 @@ mod tests {
             &catalogue(),
             org_id,
             workflow_id,
-            Vec::new(),
+            &WorkflowTrigger::Events(Vec::new()),
+        )
+        .await
+        .unwrap();
+
+        assert!(result.is_empty());
+    }
+
+    #[tokio::test]
+    async fn manual_clears_the_subscription_without_consulting_the_catalogue() {
+        let org_id = OrganizationId(generate_uuid_v7());
+        let workflow_id = generate_uuid_v7();
+        let mut repository = MockSubscriptionRepository::new();
+        repository
+            .expect_set_workflow_trigger()
+            .times(1)
+            .withf(|_, _, names: &[String]| names.is_empty())
+            .returning(|_, _, _| Box::pin(async move { Ok(Vec::new()) }));
+
+        let result = set_workflow_trigger(
+            &mut repository,
+            &EventCatalogue::new(),
+            org_id,
+            workflow_id,
+            &WorkflowTrigger::Manual,
         )
         .await
         .unwrap();

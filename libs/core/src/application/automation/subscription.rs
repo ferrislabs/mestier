@@ -7,7 +7,8 @@ use crate::{
     domain::automation::{
         event_catalogue,
         ports::{SubscriptionRepository, WorkflowRepository},
-        subscription::{self, SetWorkflowTriggerCommand},
+        subscription::{self, SetWorkflowTriggerCommand, WorkflowTrigger},
+        workflow::WorkflowTriggerMode,
     },
 };
 
@@ -22,7 +23,7 @@ impl MestierUseCase {
     pub async fn set_workflow_trigger(
         &self,
         command: SetWorkflowTriggerCommand,
-    ) -> Result<Vec<String>, CoreError> {
+    ) -> Result<WorkflowTrigger, CoreError> {
         let mut workflows = workflow_repository;
         let mut subscriptions = subscription_repository;
 
@@ -31,14 +32,27 @@ impl MestierUseCase {
             .await?
             .ok_or(CoreError::NotFound)?;
 
-        subscription::set_workflow_trigger(
+        let event_names = subscription::set_workflow_trigger(
             &mut subscriptions,
             &event_catalogue(),
             command.org_id,
             command.workflow_id,
-            command.event_names,
+            &command.trigger,
         )
-        .await
+        .await?;
+
+        let mode = match command.trigger {
+            WorkflowTrigger::Events(_) => WorkflowTriggerMode::Events,
+            WorkflowTrigger::Manual => WorkflowTriggerMode::Manual,
+        };
+        workflows
+            .set_trigger_mode(command.org_id, command.workflow_id, mode)
+            .await?;
+
+        Ok(match mode {
+            WorkflowTriggerMode::Events => WorkflowTrigger::Events(event_names),
+            WorkflowTriggerMode::Manual => WorkflowTrigger::Manual,
+        })
     }
 
     /// The event(s) a workflow currently triggers from, empty when it has no
@@ -48,16 +62,22 @@ impl MestierUseCase {
         &self,
         org_id: OrganizationId,
         workflow_id: Uuid,
-    ) -> Result<Vec<String>, CoreError> {
+    ) -> Result<WorkflowTrigger, CoreError> {
         let mut workflows = workflow_repository;
         let mut subscriptions = subscription_repository;
 
-        workflows
+        let workflow = workflows
             .find_by_id(org_id, workflow_id)
             .await?
             .ok_or(CoreError::NotFound)?;
 
-        subscriptions.workflow_trigger(org_id, workflow_id).await
+        match workflow.trigger_mode {
+            WorkflowTriggerMode::Manual => Ok(WorkflowTrigger::Manual),
+            WorkflowTriggerMode::Events => {
+                let event_names = subscriptions.workflow_trigger(org_id, workflow_id).await?;
+                Ok(WorkflowTrigger::Events(event_names))
+            }
+        }
     }
 }
 
@@ -123,6 +143,10 @@ mod tests {
             .id
     }
 
+    fn events(names: &[&str]) -> WorkflowTrigger {
+        WorkflowTrigger::Events(names.iter().map(|n| (*n).to_string()).collect())
+    }
+
     #[tokio::test]
     #[ignore = "requires live postgres"]
     async fn a_workflow_with_no_subscription_reads_back_an_empty_trigger() {
@@ -133,7 +157,7 @@ mod tests {
 
         let trigger = usecase.workflow_trigger(org_id, workflow_id).await.unwrap();
 
-        assert!(trigger.is_empty());
+        assert_eq!(trigger, WorkflowTrigger::Events(Vec::new()));
     }
 
     #[tokio::test]
@@ -148,14 +172,14 @@ mod tests {
             .set_workflow_trigger(SetWorkflowTriggerCommand {
                 org_id,
                 workflow_id,
-                event_names: vec!["quote.accepted".to_string()],
+                trigger: events(&["quote.accepted"]),
             })
             .await
             .unwrap();
-        assert_eq!(written, vec!["quote.accepted".to_string()]);
+        assert_eq!(written, events(&["quote.accepted"]));
 
         let reloaded = usecase.workflow_trigger(org_id, workflow_id).await.unwrap();
-        assert_eq!(reloaded, vec!["quote.accepted".to_string()]);
+        assert_eq!(reloaded, events(&["quote.accepted"]));
     }
 
     #[tokio::test]
@@ -169,7 +193,7 @@ mod tests {
             .set_workflow_trigger(SetWorkflowTriggerCommand {
                 org_id,
                 workflow_id,
-                event_names: vec!["quote.accepted".to_string()],
+                trigger: events(&["quote.accepted"]),
             })
             .await
             .unwrap();
@@ -178,14 +202,14 @@ mod tests {
             .set_workflow_trigger(SetWorkflowTriggerCommand {
                 org_id,
                 workflow_id,
-                event_names: vec!["quote.declined".to_string()],
+                trigger: events(&["quote.declined"]),
             })
             .await
             .unwrap();
 
-        assert_eq!(second, vec!["quote.declined".to_string()]);
+        assert_eq!(second, events(&["quote.declined"]));
         let reloaded = usecase.workflow_trigger(org_id, workflow_id).await.unwrap();
-        assert_eq!(reloaded, vec!["quote.declined".to_string()]);
+        assert_eq!(reloaded, events(&["quote.declined"]));
         let rows = sqlx::query_scalar!(
             r#"SELECT COUNT(*) FROM automation.subscription
                WHERE kind = 'workflow' AND target_id = $1"#,
@@ -209,7 +233,7 @@ mod tests {
             .set_workflow_trigger(SetWorkflowTriggerCommand {
                 org_id,
                 workflow_id,
-                event_names: vec!["quote.accepted".to_string()],
+                trigger: events(&["quote.accepted"]),
             })
             .await
             .unwrap();
@@ -218,14 +242,14 @@ mod tests {
             .set_workflow_trigger(SetWorkflowTriggerCommand {
                 org_id,
                 workflow_id,
-                event_names: Vec::new(),
+                trigger: events(&[]),
             })
             .await
             .unwrap();
 
-        assert!(cleared.is_empty());
+        assert_eq!(cleared, events(&[]));
         let reloaded = usecase.workflow_trigger(org_id, workflow_id).await.unwrap();
-        assert!(reloaded.is_empty());
+        assert_eq!(reloaded, events(&[]));
     }
 
     #[tokio::test]
@@ -240,14 +264,14 @@ mod tests {
             .set_workflow_trigger(SetWorkflowTriggerCommand {
                 org_id,
                 workflow_id,
-                event_names: vec!["not.a.real.event".to_string()],
+                trigger: events(&["not.a.real.event"]),
             })
             .await
             .expect_err("an unknown event name must be refused");
 
         assert!(matches!(error, CoreError::Conflict(_)));
         let trigger = usecase.workflow_trigger(org_id, workflow_id).await.unwrap();
-        assert!(trigger.is_empty());
+        assert_eq!(trigger, events(&[]));
     }
 
     #[tokio::test]
@@ -261,7 +285,7 @@ mod tests {
             .set_workflow_trigger(SetWorkflowTriggerCommand {
                 org_id,
                 workflow_id: generate_uuid_v7(),
-                event_names: vec!["quote.accepted".to_string()],
+                trigger: events(&["quote.accepted"]),
             })
             .await
             .expect_err("there is no workflow to trigger");
@@ -281,7 +305,7 @@ mod tests {
             .set_workflow_trigger(SetWorkflowTriggerCommand {
                 org_id: owner_org,
                 workflow_id,
-                event_names: vec!["quote.accepted".to_string()],
+                trigger: events(&["quote.accepted"]),
             })
             .await
             .unwrap();
@@ -292,5 +316,95 @@ mod tests {
             .expect_err("a stranger's workflow must read back as absent, not as data");
 
         assert!(matches!(error, CoreError::NotFound));
+    }
+
+    #[tokio::test]
+    #[ignore = "requires live postgres"]
+    async fn switching_to_manual_clears_the_subscription_and_reads_back_manual() {
+        let pool = make_pool().await;
+        let org_id = seed_organization(&pool, "trigger-manual").await;
+        let usecase = use_case(pool.clone());
+        let workflow_id = seed_workflow(&usecase, org_id).await;
+        usecase
+            .set_workflow_trigger(SetWorkflowTriggerCommand {
+                org_id,
+                workflow_id,
+                trigger: events(&["quote.accepted"]),
+            })
+            .await
+            .unwrap();
+
+        let written = usecase
+            .set_workflow_trigger(SetWorkflowTriggerCommand {
+                org_id,
+                workflow_id,
+                trigger: WorkflowTrigger::Manual,
+            })
+            .await
+            .unwrap();
+
+        assert_eq!(written, WorkflowTrigger::Manual);
+        let reloaded = usecase.workflow_trigger(org_id, workflow_id).await.unwrap();
+        assert_eq!(reloaded, WorkflowTrigger::Manual);
+        let rows = sqlx::query_scalar!(
+            r#"SELECT COUNT(*) FROM automation.subscription
+               WHERE kind = 'workflow' AND target_id = $1"#,
+            workflow_id,
+        )
+        .fetch_one(&pool)
+        .await
+        .unwrap()
+        .unwrap_or(0);
+        assert_eq!(
+            rows, 0,
+            "a manual workflow must have no subscription row at all"
+        );
+    }
+
+    #[tokio::test]
+    #[ignore = "requires live postgres"]
+    async fn switching_manual_to_events_and_back_leaves_no_orphan_subscription() {
+        let pool = make_pool().await;
+        let org_id = seed_organization(&pool, "trigger-round-trip").await;
+        let usecase = use_case(pool.clone());
+        let workflow_id = seed_workflow(&usecase, org_id).await;
+
+        usecase
+            .set_workflow_trigger(SetWorkflowTriggerCommand {
+                org_id,
+                workflow_id,
+                trigger: WorkflowTrigger::Manual,
+            })
+            .await
+            .unwrap();
+        usecase
+            .set_workflow_trigger(SetWorkflowTriggerCommand {
+                org_id,
+                workflow_id,
+                trigger: events(&["quote.accepted"]),
+            })
+            .await
+            .unwrap();
+        usecase
+            .set_workflow_trigger(SetWorkflowTriggerCommand {
+                org_id,
+                workflow_id,
+                trigger: WorkflowTrigger::Manual,
+            })
+            .await
+            .unwrap();
+
+        let reloaded = usecase.workflow_trigger(org_id, workflow_id).await.unwrap();
+        assert_eq!(reloaded, WorkflowTrigger::Manual);
+        let rows = sqlx::query_scalar!(
+            r#"SELECT COUNT(*) FROM automation.subscription
+               WHERE kind = 'workflow' AND target_id = $1"#,
+            workflow_id,
+        )
+        .fetch_one(&pool)
+        .await
+        .unwrap()
+        .unwrap_or(0);
+        assert_eq!(rows, 0, "the round trip must leave no orphan subscription");
     }
 }

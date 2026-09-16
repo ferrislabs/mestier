@@ -209,7 +209,7 @@ async fn a_view_only_member_reads_a_trigger_but_cannot_set_it() {
     let put_response = client()
         .put(app.workflow_trigger_url(workflow_id))
         .bearer_auth(&app.view_only_token)
-        .json(&json!({ "event_names": [] }))
+        .json(&json!({ "mode": "events", "event_names": [] }))
         .send()
         .await
         .expect("the api answers the view-only member's trigger write");
