@@ -3,6 +3,7 @@ import type { Schemas } from '#/api/api.client'
 import {
 	connectorsReferencing,
 	nextConnectorId,
+	nextNodePosition,
 	readLayout,
 	removeConnector,
 	rootConnectorIds,
@@ -138,5 +139,15 @@ describe('connectorsReferencing', () => {
 
 	it('is empty when nothing references it', () => {
 		expect(connectorsReferencing(graphOf([connector('c1')]), 'c1')).toEqual([])
+	})
+})
+
+describe('nextNodePosition', () => {
+	it('places the new node one column to the right of its source', () => {
+		expect(nextNodePosition({ x: 100, y: 40 }, 0)).toEqual({ x: 380, y: 40 })
+	})
+
+	it('offsets further down the same column for each existing sibling', () => {
+		expect(nextNodePosition({ x: 0, y: 0 }, 2)).toEqual({ x: 280, y: 280 })
 	})
 })

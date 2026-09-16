@@ -52,6 +52,19 @@ export function removeConnector(
 	}
 }
 
+const NEW_NODE_COLUMN_OFFSET = 280
+const NEW_NODE_ROW_OFFSET = 140
+
+export function nextNodePosition(
+	source: NodePosition,
+	siblingIndex: number,
+): NodePosition {
+	return {
+		x: source.x + NEW_NODE_COLUMN_OFFSET,
+		y: source.y + siblingIndex * NEW_NODE_ROW_OFFSET,
+	}
+}
+
 export function connectorsReferencing(
 	graph: Schemas.GraphDto,
 	connectorId: string,
