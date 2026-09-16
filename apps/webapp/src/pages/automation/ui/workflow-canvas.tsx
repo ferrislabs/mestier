@@ -52,7 +52,10 @@ import {
 	type ConnectorNodeData,
 } from '#/pages/automation/ui/connector-node'
 import { TriggerConfigPanel } from '#/pages/automation/ui/trigger-config-panel'
-import { TriggerNode, type TriggerNodeData } from '#/pages/automation/ui/trigger-node'
+import {
+	TriggerNode,
+	type TriggerNodeData,
+} from '#/pages/automation/ui/trigger-node'
 import { WorkflowCanvasActionsContext } from '#/pages/automation/ui/workflow-canvas-context'
 
 export const TRIGGER_NODE_ID = '__trigger__'
