@@ -65,13 +65,3 @@ export const LEGAL_IDENTITY_FIELD_LABELS: Record<string, string> = {
 	address_country: 'le pays',
 	insurance_mention: "la mention d'assurance professionnelle",
 }
-
-export interface CredentialFormValues {
-	kind: string
-	name: string
-	origin: 'supplied' | 'generated'
-	/** Keyed by the chosen auth scheme's field name. Ignored when
-	 * `origin === 'generated'` — the backend fabricates the secret itself
-	 * and never reads this. */
-	data: Record<string, string>
-}

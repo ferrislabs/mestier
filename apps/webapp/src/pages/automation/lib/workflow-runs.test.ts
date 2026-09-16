@@ -3,6 +3,7 @@ import type { Schemas } from '#/api/api.client'
 import type { Run } from '#/hooks/use-automation'
 import {
 	aggregateConnectorStatuses,
+	canReplay,
 	connectorOutputsFromSteps,
 	formatRunDuration,
 	groupRunSteps,
@@ -345,5 +346,18 @@ describe('groupRunSteps', () => {
 		const loop = tree[1]
 		if (loop.kind !== 'loop') throw new Error('expected a loop node')
 		expect(loop.iterations.map((iteration) => iteration.index)).toEqual([0, 1])
+	})
+})
+
+describe('canReplay', () => {
+	it('allows replay once a run has settled', () => {
+		expect(canReplay('succeeded')).toBe(true)
+		expect(canReplay('failed')).toBe(true)
+		expect(canReplay('cancelled')).toBe(true)
+	})
+
+	it('refuses replay while a run is still pending or running', () => {
+		expect(canReplay('pending')).toBe(false)
+		expect(canReplay('running')).toBe(false)
 	})
 })

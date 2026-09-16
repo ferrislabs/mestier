@@ -5,7 +5,7 @@ import { cn } from '#/lib/utils'
 import {
 	RUN_STATUS_LABEL,
 	RUN_STATUS_TONE,
-} from '#/pages/settings/lib/automation'
+} from '#/pages/automation/lib/workflow-runs'
 
 export interface RunConnectorNodeData extends Record<string, unknown> {
 	label: string

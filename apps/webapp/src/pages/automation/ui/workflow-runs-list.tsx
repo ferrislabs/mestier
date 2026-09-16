@@ -7,7 +7,7 @@ import { PageHeader, PageShell, StatusBadge } from '#/components/ui/surface'
 import {
 	RUN_STATUS_LABEL,
 	RUN_STATUS_TONE,
-} from '#/pages/settings/lib/automation'
+} from '#/pages/automation/lib/workflow-runs'
 
 export interface RunListRow {
 	id: string

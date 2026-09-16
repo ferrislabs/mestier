@@ -3,16 +3,14 @@ import { StatusBadge } from '#/components/ui/surface'
 import type { NodePosition } from '#/pages/automation/lib/graph'
 import {
 	formatRunDuration,
+	RUN_STATUS_LABEL,
+	RUN_STATUS_TONE,
 	type RunStepTreeNode,
 	runDurationMs,
 	runTriggerLabel,
 } from '#/pages/automation/lib/workflow-runs'
 import { RunGraphCanvas } from '#/pages/automation/ui/run-graph-canvas'
 import { RunStepList } from '#/pages/automation/ui/run-step-list'
-import {
-	RUN_STATUS_LABEL,
-	RUN_STATUS_TONE,
-} from '#/pages/settings/lib/automation'
 
 export interface RunInspectorProps {
 	run: Schemas.RunResponse

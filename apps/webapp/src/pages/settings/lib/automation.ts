@@ -1,44 +1,4 @@
-import type { AuthScheme, AutomationSettings } from '#/hooks/use-automation'
-import type { CredentialFormValues } from '#/pages/settings/types'
-
-export function emptyCredentialForm(defaultKind = ''): CredentialFormValues {
-	return { kind: defaultKind, name: '', origin: 'supplied', data: {} }
-}
-
-/**
- * Required-field checks against the chosen auth scheme — the same
- * validation `validate_credential_data` runs server-side, done client-side
- * first so a missing field never costs a round trip.
- *
- * In `edit` mode, the data section is optional as a whole: leaving every
- * field blank renames without touching the sealed bytes (`data: undefined`
- * on the wire); filling in any one of them means "replace", which requires
- * every field the scheme needs — a partial replacement is not a thing the
- * backend can validate against the scheme, so it is refused here first.
- */
-export function buildCredentialFormErrors(
-	values: CredentialFormValues,
-	scheme: AuthScheme | undefined,
-	mode: 'create' | 'edit',
-): string[] {
-	const errors: string[] = []
-	if (values.name.trim() === '') errors.push('Le nom est requis')
-	if (values.kind === '') errors.push('Le type est requis')
-
-	if (values.origin !== 'supplied' || !scheme) return errors
-
-	const filledAny = Object.values(values.data).some(
-		(value) => value.trim() !== '',
-	)
-	if (mode === 'edit' && !filledAny) return errors
-
-	for (const field of scheme.fields) {
-		if (field.required && (values.data[field.name] ?? '').trim() === '') {
-			errors.push(`${field.label} est requis`)
-		}
-	}
-	return errors
-}
+import type { AutomationSettings } from '#/hooks/use-automation'
 
 export interface SettingsFormValues {
 	eventRetentionSeconds: string
@@ -170,29 +130,4 @@ export function formatDurationSeconds(seconds: number): string {
 export function formatRetrySchedulePreview(seconds: number[]): string {
 	if (seconds.length === 0) return '—'
 	return seconds.map(formatDurationSeconds).join(' · ')
-}
-
-export const RUN_STATUS_LABEL: Record<string, string> = {
-	pending: 'En attente',
-	running: 'En cours',
-	succeeded: 'Réussi',
-	failed: 'Échoué',
-	cancelled: 'Annulé',
-}
-
-export const RUN_STATUS_TONE: Record<
-	string,
-	'neutral' | 'warning' | 'success' | 'error' | 'brand'
-> = {
-	pending: 'neutral',
-	running: 'brand',
-	succeeded: 'success',
-	failed: 'error',
-	cancelled: 'neutral',
-}
-
-/** Replay is refused (409) while a run is still pending or running — the
- * action is hidden for those rather than shown disabled with no explanation. */
-export function canReplay(status: string): boolean {
-	return status === 'succeeded' || status === 'failed' || status === 'cancelled'
 }

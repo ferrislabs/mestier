@@ -19,12 +19,12 @@ import {
 	CollapsibleTrigger,
 } from '#/components/ui/collapsible'
 import { StatusBadge } from '#/components/ui/surface'
-import type { RunStepTreeNode } from '#/pages/automation/lib/workflow-runs'
 import {
 	canReplay,
 	RUN_STATUS_LABEL,
 	RUN_STATUS_TONE,
-} from '#/pages/settings/lib/automation'
+	type RunStepTreeNode,
+} from '#/pages/automation/lib/workflow-runs'
 
 export interface RunStepListProps {
 	stepTree: RunStepTreeNode[]

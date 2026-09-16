@@ -238,3 +238,28 @@ export function groupRunSteps(
 
 	return buildStepTreeLevel(entries, 0, '')
 }
+
+export const RUN_STATUS_LABEL: Record<string, string> = {
+	pending: 'En attente',
+	running: 'En cours',
+	succeeded: 'Réussi',
+	failed: 'Échoué',
+	cancelled: 'Annulé',
+}
+
+export const RUN_STATUS_TONE: Record<
+	string,
+	'neutral' | 'warning' | 'success' | 'error' | 'brand'
+> = {
+	pending: 'neutral',
+	running: 'brand',
+	succeeded: 'success',
+	failed: 'error',
+	cancelled: 'neutral',
+}
+
+/** Replay is refused (409) while a run is still pending or running — the
+ * action is hidden for those rather than shown disabled with no explanation. */
+export function canReplay(status: string): boolean {
+	return status === 'succeeded' || status === 'failed' || status === 'cancelled'
+}
