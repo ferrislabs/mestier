@@ -115,15 +115,19 @@ export interface RunStepLeafNode {
 	step: Schemas.RunStepResponse
 }
 
-export interface RunStepIterationNode {
-	kind: 'iteration'
-	connectorId: string
+export interface RunStepIteration {
 	index: number
 	path: string
 	children: RunStepTreeNode[]
 }
 
-export type RunStepTreeNode = RunStepLeafNode | RunStepIterationNode
+export interface RunStepLoopNode {
+	kind: 'loop'
+	connectorId: string
+	iterations: RunStepIteration[]
+}
+
+export type RunStepTreeNode = RunStepLeafNode | RunStepLoopNode
 
 interface IterationSegment {
 	connectorId: string
@@ -147,6 +151,19 @@ interface SegmentedStep {
 	segments: IterationSegment[]
 }
 
+interface LoopBuilder {
+	connectorId: string
+	iterationOrder: number[]
+	iterationsByIndex: Map<number, { path: string; entries: SegmentedStep[] }>
+}
+
+/**
+ * Groups a level of steps into leaves and loops — every iteration of the
+ * same loop connector at this nesting depth collapses into one `loop` node
+ * (#500's "a loop over five items shows one group, not five rows"), rather
+ * than one node per iteration. Order follows first appearance so the tree
+ * reads the way the run executed.
+ */
 function buildStepTreeLevel(
 	entries: SegmentedStep[],
 	depth: number,
@@ -154,15 +171,7 @@ function buildStepTreeLevel(
 ): RunStepTreeNode[] {
 	const order: string[] = []
 	const leaves = new Map<string, Schemas.RunStepResponse>()
-	const groups = new Map<
-		string,
-		{
-			connectorId: string
-			index: number
-			path: string
-			entries: SegmentedStep[]
-		}
-	>()
+	const loops = new Map<string, LoopBuilder>()
 
 	for (const entry of entries) {
 		if (entry.segments.length === depth) {
@@ -173,37 +182,55 @@ function buildStepTreeLevel(
 		}
 
 		const segment = entry.segments[depth] as IterationSegment
-		const path = parentPath
-			? `${parentPath}.${segment.connectorId}[${segment.index}]`
-			: `${segment.connectorId}[${segment.index}]`
-		const key = `iteration:${path}`
+		const loopKey = `loop:${parentPath}:${segment.connectorId}`
 
-		let group = groups.get(key)
-		if (!group) {
-			group = {
+		let loop = loops.get(loopKey)
+		if (!loop) {
+			loop = {
 				connectorId: segment.connectorId,
-				index: segment.index,
-				path,
-				entries: [],
+				iterationOrder: [],
+				iterationsByIndex: new Map(),
 			}
-			groups.set(key, group)
-			order.push(key)
+			loops.set(loopKey, loop)
+			order.push(loopKey)
 		}
-		group.entries.push(entry)
+
+		let iteration = loop.iterationsByIndex.get(segment.index)
+		if (!iteration) {
+			const path = parentPath
+				? `${parentPath}.${segment.connectorId}[${segment.index}]`
+				: `${segment.connectorId}[${segment.index}]`
+			iteration = { path, entries: [] }
+			loop.iterationsByIndex.set(segment.index, iteration)
+			loop.iterationOrder.push(segment.index)
+		}
+		iteration.entries.push(entry)
 	}
 
 	return order.map((key) => {
 		const leaf = leaves.get(key)
 		if (leaf) return { kind: 'step', step: leaf }
 
-		const group = groups.get(key)
-		if (!group) throw new Error(`unreachable: no node for key ${key}`)
+		const loop = loops.get(key)
+		if (!loop) throw new Error(`unreachable: no node for key ${key}`)
 		return {
-			kind: 'iteration',
-			connectorId: group.connectorId,
-			index: group.index,
-			path: group.path,
-			children: buildStepTreeLevel(group.entries, depth + 1, group.path),
+			kind: 'loop',
+			connectorId: loop.connectorId,
+			iterations: loop.iterationOrder.map((index) => {
+				const iteration = loop.iterationsByIndex.get(index) as {
+					path: string
+					entries: SegmentedStep[]
+				}
+				return {
+					index,
+					path: iteration.path,
+					children: buildStepTreeLevel(
+						iteration.entries,
+						depth + 1,
+						iteration.path,
+					),
+				}
+			}),
 		}
 	})
 }

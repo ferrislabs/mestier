@@ -275,7 +275,7 @@ describe('groupRunSteps', () => {
 		])
 	})
 
-	it('groups a five-item loop into a single iteration node per index, not five flat rows', () => {
+	it('groups a five-item loop into one loop node with five iterations, not five flat rows', () => {
 		const steps = Array.from({ length: 5 }, (_, index) =>
 			step({
 				id: `s${index}`,
@@ -286,11 +286,16 @@ describe('groupRunSteps', () => {
 
 		const tree = groupRunSteps(steps)
 
-		expect(tree).toHaveLength(5)
-		expect(tree.every((node) => node.kind === 'iteration')).toBe(true)
+		expect(tree).toHaveLength(1)
+		const loop = tree[0]
+		if (loop.kind !== 'loop') throw new Error('expected a loop node')
+		expect(loop.connectorId).toBe('c1')
+		expect(loop.iterations.map((iteration) => iteration.index)).toEqual([
+			0, 1, 2, 3, 4,
+		])
 		expect(
-			tree.map((node) => (node.kind === 'iteration' ? node.index : -1)),
-		).toEqual([0, 1, 2, 3, 4])
+			loop.iterations.every((iteration) => iteration.children.length === 1),
+		).toBe(true)
 	})
 
 	it('nests a loop inside a loop, following the iteration_path', () => {
@@ -301,21 +306,22 @@ describe('groupRunSteps', () => {
 		const tree = groupRunSteps(steps)
 
 		expect(tree).toHaveLength(1)
-		const outer = tree[0]
-		if (outer.kind !== 'iteration')
-			throw new Error('expected an iteration node')
-		expect(outer.connectorId).toBe('c2')
-		expect(outer.index).toBe(3)
-		expect(outer.path).toBe('c2[3]')
-		expect(outer.children).toHaveLength(1)
+		const outerLoop = tree[0]
+		if (outerLoop.kind !== 'loop') throw new Error('expected a loop node')
+		expect(outerLoop.connectorId).toBe('c2')
+		expect(outerLoop.iterations).toHaveLength(1)
+		expect(outerLoop.iterations[0]?.index).toBe(3)
+		expect(outerLoop.iterations[0]?.path).toBe('c2[3]')
 
-		const inner = outer.children[0]
-		if (inner.kind !== 'iteration')
-			throw new Error('expected an iteration node')
-		expect(inner.connectorId).toBe('c5')
-		expect(inner.index).toBe(0)
-		expect(inner.path).toBe('c2[3].c5[0]')
-		expect(inner.children).toEqual([
+		const innerLoop = outerLoop.iterations[0]?.children[0]
+		if (!innerLoop || innerLoop.kind !== 'loop') {
+			throw new Error('expected a nested loop node')
+		}
+		expect(innerLoop.connectorId).toBe('c5')
+		expect(innerLoop.iterations).toHaveLength(1)
+		expect(innerLoop.iterations[0]?.index).toBe(0)
+		expect(innerLoop.iterations[0]?.path).toBe('c2[3].c5[0]')
+		expect(innerLoop.iterations[0]?.children).toEqual([
 			{
 				kind: 'step',
 				step: step({
@@ -327,7 +333,7 @@ describe('groupRunSteps', () => {
 		])
 	})
 
-	it('preserves the original order of steps and iteration groups as they first appear', () => {
+	it('merges every iteration of the same loop into one group even when steps outside it fall in between', () => {
 		const tree = groupRunSteps([
 			step({ id: 's1', connector_id: 'c1', iteration_path: '' }),
 			step({ id: 's2', connector_id: 'c3', iteration_path: 'c2[0]' }),
@@ -335,11 +341,9 @@ describe('groupRunSteps', () => {
 			step({ id: 's4', connector_id: 'c3', iteration_path: 'c2[1]' }),
 		])
 
-		expect(tree.map((node) => node.kind)).toEqual([
-			'step',
-			'iteration',
-			'step',
-			'iteration',
-		])
+		expect(tree.map((node) => node.kind)).toEqual(['step', 'loop', 'step'])
+		const loop = tree[1]
+		if (loop.kind !== 'loop') throw new Error('expected a loop node')
+		expect(loop.iterations.map((iteration) => iteration.index)).toEqual([0, 1])
 	})
 })
