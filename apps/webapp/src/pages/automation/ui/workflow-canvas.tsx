@@ -9,6 +9,7 @@ import {
 	type Node,
 	type NodeChange,
 	ReactFlow,
+	type ReactFlowInstance,
 	ReactFlowProvider,
 	useEdgesState,
 	useNodesState,
@@ -61,6 +62,9 @@ import { WorkflowCanvasActionsContext } from '#/pages/automation/ui/workflow-can
 export const TRIGGER_NODE_ID = '__trigger__'
 const TRIGGER_X_OFFSET = 220
 const FIT_VIEW_OPTIONS = { padding: 0.25, maxZoom: 1 }
+const NODE_CENTER_X = 90
+const NODE_CENTER_Y = 30
+const CENTER_ON_NODE = { duration: 250, zoom: 1 }
 
 const NODE_TYPES = {
 	connector: ConnectorNode,
@@ -268,6 +272,7 @@ export function WorkflowCanvas({
 	)
 	const [edges, setEdges] = useEdgesState(buildInitialEdges(graph))
 	const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null)
+	const flowRef = useRef<ReactFlowInstance | null>(null)
 	const [openConnectorId, setOpenConnectorId] = useState<string | null>(null)
 	const [openTrigger, setOpenTrigger] = useState(false)
 
@@ -411,6 +416,11 @@ export function WorkflowCanvas({
 			onChange(nextGraph, buildLayout(nextNodes))
 			setOpenTrigger(false)
 			setOpenConnectorId(newId)
+			flowRef.current?.setCenter(
+				position.x + NODE_CENTER_X,
+				position.y + NODE_CENTER_Y,
+				CENTER_ON_NODE,
+			)
 		},
 		[onChange, setNodes, setEdges],
 	)
@@ -594,6 +604,9 @@ export function WorkflowCanvas({
 								autoPanOnNodeDrag={false}
 								fitView
 								fitViewOptions={FIT_VIEW_OPTIONS}
+								onInit={(instance) => {
+									flowRef.current = instance
+								}}
 							>
 								<Background />
 							</ReactFlow>

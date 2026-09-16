@@ -1160,3 +1160,33 @@ describe('WorkflowCanvas — a node opens where you just made it', () => {
 		expect(screen.queryByTestId('trigger-config-panel')).toBeNull()
 	})
 })
+
+describe('WorkflowCanvas — the camera follows a new node', () => {
+	it('moves the viewport when a node is added off-screen', async () => {
+		renderHarness({
+			graph: { connectors: [connector('c1', SIMPLE_KIND)], edges: [] },
+			layout: new Map([['c1', { x: 0, y: 0 }]]),
+			descriptors: descriptorMap(SIMPLE_DESCRIPTOR),
+		})
+
+		const source = await screen.findByTestId('rf__node-c1')
+		const viewport = document.querySelector(
+			'.react-flow__viewport',
+		) as HTMLElement
+		const before = viewport.style.transform
+
+		fireEvent.click(
+			within(source).getByRole('button', {
+				name: 'Ajouter un connecteur après Étape simple',
+			}),
+		)
+		const options = await screen.findAllByText('Étape simple')
+		const option = options.find((element) => element.closest('button'))
+		fireEvent.click(option as HTMLElement)
+		await screen.findByTestId('rf__node-c2')
+
+		await waitFor(() => {
+			expect(viewport.style.transform).not.toBe(before)
+		})
+	})
+})
