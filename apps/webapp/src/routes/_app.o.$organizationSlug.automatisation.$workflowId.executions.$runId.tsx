@@ -1,15 +1,14 @@
 import { createFileRoute } from '@tanstack/react-router'
+import { RunInspectorFeature } from '#/pages/automation/feature/run-inspector-feature'
 
 export const Route = createFileRoute(
 	'/_app/o/$organizationSlug/automatisation/$workflowId/executions/$runId',
 )({
-	component: RunDetailPlaceholder,
+	component: RunDetailPage,
 })
 
-function RunDetailPlaceholder() {
-	return (
-		<div className="flex flex-1 items-center justify-center p-8 text-muted-foreground text-sm">
-			Le détail de l’exécution arrive bientôt.
-		</div>
-	)
+function RunDetailPage() {
+	const { workflowId, runId } = Route.useParams()
+
+	return <RunInspectorFeature workflowId={workflowId} runId={runId} />
 }
