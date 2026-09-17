@@ -4,8 +4,10 @@ import {
 	connectorsReferencing,
 	nextConnectorId,
 	nextNodePosition,
+	nextTriggerId,
 	readLayout,
 	removeConnector,
+	removeTrigger,
 	rootConnectorIds,
 	upstreamConnectorIds,
 } from '#/pages/automation/lib/graph'
@@ -83,6 +85,51 @@ describe('nextConnectorId', () => {
 	})
 })
 
+function graphWithTriggers(
+	triggers: Schemas.PlacedTriggerDto[],
+): Schemas.GraphDto {
+	return { connectors: [], edges: [], triggers }
+}
+
+describe('nextTriggerId', () => {
+	it('starts at t1 on an empty graph', () => {
+		expect(nextTriggerId(graphWithTriggers([]))).toBe('t1')
+	})
+
+	it('takes the next number after the highest one in use', () => {
+		expect(
+			nextTriggerId(
+				graphWithTriggers([
+					{ id: 't1', kind: 'Manual' },
+					{ id: 't2', kind: 'Manual' },
+				]),
+			),
+		).toBe('t3')
+	})
+
+	it('never reuses a freed id while a higher one survives', () => {
+		expect(
+			nextTriggerId(
+				graphWithTriggers([
+					{ id: 't1', kind: 'Manual' },
+					{ id: 't5', kind: 'Manual' },
+				]),
+			),
+		).toBe('t6')
+	})
+
+	it('ignores ids that carry no number', () => {
+		expect(
+			nextTriggerId(
+				graphWithTriggers([
+					{ id: 'start', kind: 'Manual' },
+					{ id: 't2', kind: 'Manual' },
+				]),
+			),
+		).toBe('t3')
+	})
+})
+
 describe('rootConnectorIds', () => {
 	it('still finds the root a trigger points at', () => {
 		const graph = triggeredGraphOf(
@@ -134,6 +181,52 @@ describe('removeConnector', () => {
 		)
 
 		expect(removeConnector(graph, 'c2').edges).toEqual([])
+	})
+})
+
+describe('removeTrigger', () => {
+	it('removes the trigger and every edge leaving it', () => {
+		const graph: Schemas.GraphDto = {
+			connectors: [connector('c1'), connector('c2')],
+			edges: [
+				{ from: 't1', to: 'c1', branch: null },
+				{ from: 't2', to: 'c2', branch: null },
+			],
+			triggers: [
+				{ id: 't1', kind: 'Manual' },
+				{ id: 't2', kind: { Events: ['quote.accepted'] } },
+			],
+		}
+
+		const next = removeTrigger(graph, 't1')
+
+		expect(next.triggers).toEqual([
+			{ id: 't2', kind: { Events: ['quote.accepted'] } },
+		])
+		expect(next.edges).toEqual([{ from: 't2', to: 'c2', branch: null }])
+	})
+
+	it('leaves the other trigger, its edges, and every connector untouched', () => {
+		const graph: Schemas.GraphDto = {
+			connectors: [connector('c1'), connector('c2')],
+			edges: [
+				{ from: 't1', to: 'c1', branch: null },
+				{ from: 't2', to: 'c2', branch: null },
+				{ from: 'c1', to: 'c2', branch: null },
+			],
+			triggers: [
+				{ id: 't1', kind: 'Manual' },
+				{ id: 't2', kind: 'Manual' },
+			],
+		}
+
+		const next = removeTrigger(graph, 't1')
+
+		expect(next.connectors).toEqual(graph.connectors)
+		expect(next.edges).toEqual([
+			{ from: 't2', to: 'c2', branch: null },
+			{ from: 'c1', to: 'c2', branch: null },
+		])
 	})
 })
 

@@ -38,7 +38,6 @@ function workflow(overrides: Record<string, unknown> = {}) {
 		description: null,
 		enabled: true,
 		current_version_id: null,
-		trigger_mode: 'events',
 		created_at: '2026-08-01T00:00:00Z',
 		updated_at: '2026-08-01T00:00:00Z',
 		...overrides,
@@ -182,19 +181,6 @@ describe('AutomationWorkflowsFeature — last run', () => {
 		})
 
 		expect(await screen.findByText('Jamais exécuté')).toBeDefined()
-	})
-})
-
-describe('AutomationWorkflowsFeature — trigger mode', () => {
-	it('shows a manual workflow as such', async () => {
-		await renderFeature((api) => {
-			api.mockGet(WORKFLOWS_PATH, () => ({
-				data: [workflow({ trigger_mode: 'manual' })],
-				pagination: null,
-			}))
-		})
-
-		expect(await screen.findByText('Manuel')).toBeDefined()
 	})
 })
 

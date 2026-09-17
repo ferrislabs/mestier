@@ -1,12 +1,13 @@
 import { useNavigate } from '@tanstack/react-router'
 import { useState } from 'react'
+import type { Schemas } from '#/api/api.client'
 import { RequirePermission } from '#/components/require-permission'
 import { Button } from '#/components/ui/button'
 import { useActiveOrganization } from '#/hooks/use-active-organization'
 import {
 	useAutomationEvents,
 	useStartRun,
-	useWorkflowTrigger,
+	useWorkflow,
 } from '#/hooks/use-automation'
 import { buildOrgPath } from '#/modules/org-path'
 import { RunNowDialog } from '#/pages/automation/ui/run-now-dialog'
@@ -28,6 +29,18 @@ export function RunNowFeature({ workflowId }: RunNowFeatureProps) {
 	)
 }
 
+function subscribedEventNames(graph: Schemas.GraphDto | null | undefined) {
+	if (!graph) return []
+
+	const names = new Set<string>()
+	for (const trigger of graph.triggers) {
+		if (trigger.kind === 'Manual') continue
+		for (const name of trigger.kind.Events) names.add(name)
+	}
+
+	return [...names]
+}
+
 function RunNowWorkspace({
 	organizationId,
 	organizationSlug,
@@ -38,7 +51,7 @@ function RunNowWorkspace({
 	workflowId: string
 }) {
 	const eventsQuery = useAutomationEvents(organizationId)
-	const triggerQuery = useWorkflowTrigger(organizationId, workflowId)
+	const workflowQuery = useWorkflow(organizationId, workflowId)
 	const startRun = useStartRun()
 	const navigate = useNavigate()
 
@@ -96,7 +109,9 @@ function RunNowWorkspace({
 			<RunNowDialog
 				open={open}
 				events={eventsQuery.data?.data ?? []}
-				triggerEventNames={triggerQuery.data?.data.event_names ?? []}
+				triggerEventNames={subscribedEventNames(
+					workflowQuery.data?.data.current_version?.graph,
+				)}
 				isStarting={startRun.isPending}
 				startError={startError}
 				onOpenChange={setOpen}

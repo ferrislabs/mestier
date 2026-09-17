@@ -30,6 +30,28 @@ export function nextConnectorId(graph: Schemas.GraphDto): string {
 	return `c${highest + 1}`
 }
 
+const NUMBERED_TRIGGER_ID = /^t(\d+)$/
+
+export function nextTriggerId(graph: Schemas.GraphDto): string {
+	const highest = graph.triggers.reduce((max, trigger) => {
+		const match = NUMBERED_TRIGGER_ID.exec(trigger.id)
+		return match ? Math.max(max, Number(match[1])) : max
+	}, 0)
+
+	return `t${highest + 1}`
+}
+
+export function removeTrigger(
+	graph: Schemas.GraphDto,
+	triggerId: string,
+): Schemas.GraphDto {
+	return {
+		...graph,
+		triggers: graph.triggers.filter((trigger) => trigger.id !== triggerId),
+		edges: graph.edges.filter((edge) => edge.from !== triggerId),
+	}
+}
+
 export function rootConnectorIds(graph: Schemas.GraphDto): string[] {
 	const triggerIds = new Set(graph.triggers.map((trigger) => trigger.id))
 	const targeted = new Set(

@@ -35,8 +35,6 @@ for (const method of [
 
 const WORKFLOW_PATH =
 	'/api/v1/organizations/{organization_id}/automation/workflows/{workflow_id}'
-const WORKFLOW_TRIGGER_PATH =
-	'/api/v1/organizations/{organization_id}/automation/workflows/{workflow_id}/trigger'
 const WORKFLOW_VERSIONS_PATH =
 	'/api/v1/organizations/{organization_id}/automation/workflows/{workflow_id}/versions'
 const CONNECTORS_PATH =
@@ -215,10 +213,6 @@ function renderFeature(configure: (api: FakeApi) => void) {
 		},
 		pagination: null,
 	}))
-	api.mockGet(WORKFLOW_TRIGGER_PATH, () => ({
-		data: { event_names: ['quote.accepted'] },
-		pagination: null,
-	}))
 	api.mockGet(WORKFLOW_PATH, () => ({
 		data: workflowDetail(),
 		pagination: null,
@@ -272,7 +266,7 @@ async function clickSave() {
 }
 
 describe('WorkflowCanvasFeature — loading the workflow', () => {
-	it('renders the graph once the workflow, catalogue and trigger have loaded', async () => {
+	it('renders the graph once the workflow and catalogue have loaded', async () => {
 		renderFeature((api) => {
 			api.mockGet(WORKFLOW_PATH, () => ({
 				data: workflowDetail({
@@ -532,6 +526,54 @@ describe('WorkflowCanvasFeature — a 422 from the backend', () => {
 		expect(await screen.findByText('URL manquante')).toBeDefined()
 	})
 
+	it('lands a trigger-scoped 422 on the trigger wired to nothing, not on the graph banner', async () => {
+		const graph: Schemas.GraphDto = {
+			connectors: [],
+			edges: [],
+			triggers: [{ id: 't1', kind: { Events: ['quote.accepted'] } }],
+		}
+		const layout = { t1: { x: 0, y: 0 } }
+
+		renderFeature((fakeApi) => {
+			fakeApi.mockGet(WORKFLOW_PATH, () => ({
+				data: workflowDetail({ graph, layout }),
+				pagination: null,
+			}))
+			fakeApi.mockMutation('put', WORKFLOW_VERSIONS_PATH, () => {
+				throw Object.assign(new Error('Invalid graph'), {
+					status: 422,
+					data: {
+						code: 'graph_invalid',
+						message: 'Invalid graph',
+						status: 422,
+						details: {
+							errors: [
+								{
+									connector_id: null,
+									trigger_id: 't1',
+									field: null,
+									message: 'Ce déclencheur ne mène nulle part.',
+								},
+							],
+						},
+					},
+				})
+			})
+		})
+
+		await clickSave()
+
+		expect(screen.queryByText('Ce déclencheur ne mène nulle part.')).toBeNull()
+
+		const node = await screen.findByTestId('rf__node-t1')
+		expect(await within(node).findByLabelText(/Erreur/)).toBeDefined()
+
+		node.click()
+		expect(
+			await screen.findByText('Ce déclencheur ne mène nulle part.'),
+		).toBeDefined()
+	})
+
 	it('says the save failed when the refusal carries no graph errors', async () => {
 		const graph: Schemas.GraphDto = {
 			connectors: [connector('c1')],
@@ -731,130 +773,110 @@ describe('WorkflowCanvasFeature — inline credential creation', () => {
 	})
 })
 
-describe('WorkflowCanvasFeature — the trigger picker', () => {
-	it('lists the events fetched for real and saves the selection through PUT /trigger', async () => {
-		const user = userEvent.setup()
+describe('WorkflowCanvasFeature — a trigger saved with the workflow', () => {
+	it('edits a real trigger node and saves it through the same PUT as the graph, with no legacy trigger endpoint involved', async () => {
+		const graph: Schemas.GraphDto = {
+			connectors: [connector('c1')],
+			edges: [{ from: 't1', to: 'c1', branch: null }],
+			triggers: [{ id: 't1', kind: { Events: ['quote.accepted'] } }],
+		}
+		const layout = { c1: { x: 280, y: 0 }, t1: { x: 0, y: 0 } }
+
 		const api = renderFeature((fakeApi) => {
 			fakeApi.mockGet(EVENTS_PATH, () => ({
 				data: [event('quote.accepted'), event('invoice.paid')],
 				pagination: null,
 			}))
-			fakeApi.mockGet(WORKFLOW_TRIGGER_PATH, () => ({
-				data: { event_names: [] },
+			fakeApi.mockGet(WORKFLOW_PATH, () => ({
+				data: workflowDetail({ graph, layout }),
 				pagination: null,
 			}))
-			fakeApi.mockMutation('put', WORKFLOW_TRIGGER_PATH, (params) => ({
-				data: (params as { body: Schemas.SetWorkflowTriggerRequest }).body,
-				pagination: null,
+			fakeApi.mockMutation('put', WORKFLOW_VERSIONS_PATH, (params) => ({
+				data: {
+					id: 'version-2',
+					workflow_id: 'workflow-1',
+					version: 2,
+					graph: (params as { body: { graph: Schemas.GraphDto } }).body.graph,
+					created_at: '2026-08-02T00:00:00Z',
+					created_by: null,
+				},
 			}))
 		})
 
-		const trigger = await screen.findByTestId('rf__node-__trigger__')
+		const trigger = await screen.findByTestId('rf__node-t1')
 		trigger.click()
 
-		await screen.findByRole('checkbox', { name: 'quote.accepted' })
-		await user.click(screen.getByRole('checkbox', { name: 'invoice.paid' }))
-		await user.click(
-			within(screen.getByTestId('trigger-config-panel')).getByRole('button', {
-				name: 'Enregistrer',
-			}),
-		)
+		await screen.findByRole('checkbox', { name: 'invoice.paid' })
+		screen.getByRole('checkbox', { name: 'invoice.paid' }).click()
+
+		await clickSave()
 
 		await waitFor(() => {
 			const call = api.calls.find(
-				(c) => c.method === 'put' && c.path === WORKFLOW_TRIGGER_PATH,
+				(c) => c.method === 'put' && c.path === WORKFLOW_VERSIONS_PATH,
 			)
 			expect(call).toBeDefined()
 		})
 
 		const call = api.calls.find(
-			(c) => c.method === 'put' && c.path === WORKFLOW_TRIGGER_PATH,
+			(c) => c.method === 'put' && c.path === WORKFLOW_VERSIONS_PATH,
 		)
-		const body = (call?.params as { body: Schemas.SetWorkflowTriggerRequest })
+		const body = (call?.params as { body: Schemas.SaveWorkflowVersionRequest })
 			.body
-		expect(body.mode).toBe('events')
-		expect(body.event_names).toEqual(['invoice.paid'])
+		expect(body.graph.triggers).toEqual([
+			{ id: 't1', kind: { Events: ['quote.accepted', 'invoice.paid'] } },
+		])
 	})
 
-	it('reads a manual workflow as manual, and saves switching back to events', async () => {
-		const user = userEvent.setup()
+	it('adds a second trigger from the pane menu and saves both alongside the connectors', async () => {
+		const graph: Schemas.GraphDto = {
+			connectors: [connector('c1')],
+			edges: [{ from: 't1', to: 'c1', branch: null }],
+			triggers: [{ id: 't1', kind: 'Manual' }],
+		}
+		const layout = { c1: { x: 280, y: 0 }, t1: { x: 0, y: 0 } }
+
 		const api = renderFeature((fakeApi) => {
-			fakeApi.mockGet(EVENTS_PATH, () => ({
-				data: [event('quote.accepted')],
+			fakeApi.mockGet(WORKFLOW_PATH, () => ({
+				data: workflowDetail({ graph, layout }),
 				pagination: null,
 			}))
-			fakeApi.mockGet(WORKFLOW_TRIGGER_PATH, () => ({
-				data: { mode: 'manual', event_names: [] },
-				pagination: null,
-			}))
-			fakeApi.mockMutation('put', WORKFLOW_TRIGGER_PATH, (params) => ({
-				data: (params as { body: Schemas.SetWorkflowTriggerRequest }).body,
-				pagination: null,
+			fakeApi.mockMutation('put', WORKFLOW_VERSIONS_PATH, (params) => ({
+				data: {
+					id: 'version-2',
+					workflow_id: 'workflow-1',
+					version: 2,
+					graph: (params as { body: { graph: Schemas.GraphDto } }).body.graph,
+					created_at: '2026-08-02T00:00:00Z',
+					created_by: null,
+				},
 			}))
 		})
 
-		expect(await screen.findByText('Déclenchement manuel')).toBeDefined()
+		await screen.findByTestId('rf__node-t1')
+		const pane = document.querySelector('.react-flow__pane') as HTMLElement
+		fireEvent.contextMenu(pane, { clientX: 400, clientY: 400 })
+		fireEvent.click(await screen.findByText('Ajouter un déclencheur'))
+		await screen.findByTestId('rf__node-t2')
 
-		const trigger = await screen.findByTestId('rf__node-__trigger__')
-		trigger.click()
-		await screen.findByTestId('trigger-config-panel')
-		await user.click(
-			within(screen.getByTestId('trigger-config-panel')).getByRole('tab', {
-				name: 'Sur événement(s)',
-			}),
-		)
-		await user.click(screen.getByRole('checkbox', { name: 'quote.accepted' }))
-		await user.click(
-			within(screen.getByTestId('trigger-config-panel')).getByRole('button', {
-				name: 'Enregistrer',
-			}),
-		)
+		await clickSave()
 
 		await waitFor(() => {
 			const call = api.calls.find(
-				(c) => c.method === 'put' && c.path === WORKFLOW_TRIGGER_PATH,
+				(c) => c.method === 'put' && c.path === WORKFLOW_VERSIONS_PATH,
 			)
 			expect(call).toBeDefined()
 		})
 
 		const call = api.calls.find(
-			(c) => c.method === 'put' && c.path === WORKFLOW_TRIGGER_PATH,
+			(c) => c.method === 'put' && c.path === WORKFLOW_VERSIONS_PATH,
 		)
-		const body = (call?.params as { body: Schemas.SetWorkflowTriggerRequest })
+		const body = (call?.params as { body: Schemas.SaveWorkflowVersionRequest })
 			.body
-		expect(body.mode).toBe('events')
-		expect(body.event_names).toEqual(['quote.accepted'])
-	})
-
-	it('says the save failed rather than silently discarding the selection', async () => {
-		renderFeature((fakeApi) => {
-			fakeApi.mockGet(EVENTS_PATH, () => ({
-				data: [event('quote.accepted')],
-				pagination: null,
-			}))
-			fakeApi.mockGet(WORKFLOW_TRIGGER_PATH, () => ({
-				data: { event_names: [] },
-				pagination: null,
-			}))
-			fakeApi.mockMutation('put', WORKFLOW_TRIGGER_PATH, () => {
-				throw Object.assign(new Error('Service Unavailable'), { status: 503 })
-			})
-		})
-
-		const trigger = await screen.findByTestId('rf__node-__trigger__')
-		trigger.click()
-
-		await screen.findByRole('checkbox', { name: 'quote.accepted' })
-		screen.getByRole('checkbox', { name: 'quote.accepted' }).click()
-		within(screen.getByTestId('trigger-config-panel'))
-			.getByRole('button', { name: 'Enregistrer' })
-			.click()
-
-		expect(
-			await within(screen.getByTestId('trigger-config-panel')).findByText(
-				/enregistrement a échoué/i,
-			),
-		).toBeDefined()
+		expect(body.graph.triggers).toEqual([
+			{ id: 't1', kind: 'Manual' },
+			{ id: 't2', kind: 'Manual' },
+		])
 	})
 })
 
@@ -869,10 +891,6 @@ describe('WorkflowCanvasFeature — the last run', () => {
 		renderFeature((fakeApi) => {
 			fakeApi.mockGet(WORKFLOW_PATH, () => ({
 				data: workflowDetail({ graph, layout: { c1: { x: 0, y: 0 } } }),
-				pagination: null,
-			}))
-			fakeApi.mockGet(WORKFLOW_TRIGGER_PATH, () => ({
-				data: { event_names: ['quote.accepted'] },
 				pagination: null,
 			}))
 			fakeApi.mockGet(RUNS_PATH, () => ({

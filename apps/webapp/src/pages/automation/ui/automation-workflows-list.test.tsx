@@ -15,7 +15,6 @@ function workflow(overrides: Partial<WorkflowRow> = {}): WorkflowRow {
 		name: 'Créer une facture Odoo',
 		description: 'Émet la facture dès la signature du devis.',
 		enabled: true,
-		triggerMode: 'events',
 		lastRun: null,
 		...overrides,
 	}
@@ -80,18 +79,6 @@ describe('AutomationWorkflowsList — table content', () => {
 		await render({ workflows: [workflow({ lastRun: null })] })
 
 		expect(screen.getByText('Jamais exécuté')).toBeDefined()
-	})
-
-	it('tells an events workflow apart from a manual one', async () => {
-		await render({
-			workflows: [
-				workflow({ id: 'a', triggerMode: 'events' }),
-				workflow({ id: 'b', triggerMode: 'manual' }),
-			],
-		})
-
-		expect(screen.getByText('Sur événement')).toBeDefined()
-		expect(screen.getByText('Manuel')).toBeDefined()
 	})
 })
 

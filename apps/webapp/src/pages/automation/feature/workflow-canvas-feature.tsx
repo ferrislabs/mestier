@@ -12,9 +12,7 @@ import {
 	useEvaluateExpression,
 	useRun,
 	useSaveWorkflowVersion,
-	useSetWorkflowTrigger,
 	useWorkflow,
-	useWorkflowTrigger,
 	type WorkflowDetail,
 } from '#/hooks/use-automation'
 import type { NodePosition } from '#/pages/automation/lib/graph'
@@ -83,7 +81,6 @@ function WorkflowCanvasWorkspace({
 }) {
 	const workflowQuery = useWorkflow(organizationId, workflowId)
 	const catalogueQuery = useConnectorCatalogue(organizationId)
-	const triggerQuery = useWorkflowTrigger(organizationId, workflowId)
 	const credentialsQuery = useAutomationCredentials(organizationId)
 	const eventsQuery = useAutomationEvents(organizationId)
 	const runsQuery = useAutomationRuns(organizationId)
@@ -93,7 +90,6 @@ function WorkflowCanvasWorkspace({
 	if (
 		workflowQuery.isLoading ||
 		catalogueQuery.isLoading ||
-		triggerQuery.isLoading ||
 		credentialsQuery.isLoading ||
 		eventsQuery.isLoading
 	) {
@@ -143,8 +139,6 @@ function WorkflowCanvasWorkspace({
 			authSchemes={catalogueQuery.data?.data.auth_schemes ?? []}
 			credentials={credentialsQuery.data?.data ?? []}
 			events={eventsQuery.data?.data ?? []}
-			triggerMode={triggerQuery.data?.data.mode ?? 'events'}
-			triggerEventNames={triggerQuery.data?.data.event_names ?? []}
 			lastRun={lastRun}
 		/>
 	)
@@ -158,8 +152,6 @@ function WorkflowCanvasLoaded({
 	authSchemes,
 	credentials,
 	events,
-	triggerMode,
-	triggerEventNames,
 	lastRun,
 }: {
 	organizationId: string
@@ -169,16 +161,11 @@ function WorkflowCanvasLoaded({
 	authSchemes: Schemas.AuthSchemeResponse[]
 	credentials: Schemas.CredentialResponse[]
 	events: Schemas.EventDescriptorResponse[]
-	triggerMode: 'events' | 'manual'
-	triggerEventNames: string[]
 	lastRun: LastRunData | null
 }) {
 	const saveVersion = useSaveWorkflowVersion()
 	const createCredential = useCreateCredential(organizationId)
-	const setTrigger = useSetWorkflowTrigger()
 	const evaluateExpression = useEvaluateExpression()
-
-	const [triggerSaveError, setTriggerSaveError] = useState<string | null>(null)
 
 	const [initial] = useState(() => {
 		const graph = workflow.current_version?.graph ?? {
@@ -212,25 +199,6 @@ function WorkflowCanvasLoaded({
 			body,
 		})
 		return created.data as Schemas.CredentialResponse & { secret: unknown }
-	}
-
-	const handleSaveTrigger = async (
-		mode: 'events' | 'manual',
-		eventNames: string[],
-	) => {
-		setTriggerSaveError(null)
-		try {
-			await setTrigger.mutateAsync({
-				path: { organization_id: organizationId, workflow_id: workflowId },
-				body: { mode, event_names: eventNames },
-			})
-		} catch (error) {
-			setTriggerSaveError(
-				error instanceof Error && error.message
-					? `L’enregistrement a échoué : ${error.message}`
-					: 'L’enregistrement a échoué.',
-			)
-		}
 	}
 
 	const handleEvaluateExpression = async (
@@ -291,13 +259,6 @@ function WorkflowCanvasLoaded({
 				descriptors={descriptors}
 				connectorErrors={validation.connectorErrors}
 				events={events}
-				triggerMode={triggerMode}
-				triggerEventNames={triggerEventNames}
-				onSaveTrigger={(mode, eventNames) =>
-					void handleSaveTrigger(mode, eventNames)
-				}
-				isSavingTrigger={setTrigger.isPending}
-				triggerSaveError={triggerSaveError}
 				lastRun={lastRun}
 				onEvaluateExpression={handleEvaluateExpression}
 				credentials={credentials}

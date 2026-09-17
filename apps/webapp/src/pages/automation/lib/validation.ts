@@ -17,14 +17,15 @@ export function projectGraphErrors(
 	const graphErrors: string[] = []
 
 	for (const error of errors) {
-		if (!error.connector_id) {
+		const nodeId = error.connector_id ?? error.trigger_id
+		if (!nodeId) {
 			graphErrors.push(error.message)
 			continue
 		}
 
-		const existing = connectorErrors.get(error.connector_id) ?? []
+		const existing = connectorErrors.get(nodeId) ?? []
 		existing.push({ field: error.field ?? null, message: error.message })
-		connectorErrors.set(error.connector_id, existing)
+		connectorErrors.set(nodeId, existing)
 	}
 
 	return { connectorErrors, graphErrors }

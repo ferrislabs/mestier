@@ -9,6 +9,7 @@ export interface WorkflowCanvasActions {
 		descriptor: Schemas.ConnectorDescriptorResponse,
 	) => void
 	onRequestDelete: (connectorId: string) => void
+	onRequestDeleteTrigger: (triggerId: string) => void
 }
 
 export const WorkflowCanvasActionsContext =

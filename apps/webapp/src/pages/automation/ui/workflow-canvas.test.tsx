@@ -5,6 +5,7 @@ import {
 	waitFor,
 	within,
 } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { useRef, useState } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Schemas } from '#/api/api.client'
@@ -32,6 +33,13 @@ function connector(
 	config: Record<string, unknown> = {},
 ): Schemas.PlacedConnectorDto {
 	return { id, kind, version: 1, config }
+}
+
+function trigger(
+	id: string,
+	kind: Schemas.TriggerKindDto = 'Manual',
+): Schemas.PlacedTriggerDto {
+	return { id, kind }
 }
 
 function descriptor(
@@ -101,11 +109,6 @@ function Harness({
 	descriptors,
 	connectorErrors = new Map(),
 	events = [],
-	triggerMode = 'events',
-	triggerEventNames = ['quote.accepted'],
-	onSaveTrigger = () => {},
-	isSavingTrigger = false,
-	triggerSaveError = null,
 	lastRun = null,
 	onEvaluateExpression = () => Promise.resolve(null),
 	credentials = [],
@@ -118,11 +121,6 @@ function Harness({
 	descriptors: Map<string, Schemas.ConnectorDescriptorResponse>
 	connectorErrors?: Map<string, ConnectorValidationError[]>
 	events?: Schemas.EventDescriptorResponse[]
-	triggerMode?: WorkflowCanvasProps['triggerMode']
-	triggerEventNames?: string[]
-	onSaveTrigger?: WorkflowCanvasProps['onSaveTrigger']
-	isSavingTrigger?: boolean
-	triggerSaveError?: string | null
 	lastRun?: LastRunData | null
 	onEvaluateExpression?: WorkflowCanvasProps['onEvaluateExpression']
 	credentials?: Schemas.CredentialResponse[]
@@ -143,11 +141,6 @@ function Harness({
 		descriptors,
 		connectorErrors,
 		events,
-		triggerMode,
-		triggerEventNames,
-		onSaveTrigger,
-		isSavingTrigger,
-		triggerSaveError,
 		lastRun,
 		onEvaluateExpression,
 		credentials,
@@ -373,23 +366,39 @@ describe('isBranchDeclared', () => {
 			),
 		).toBe(true)
 	})
+
+	it('never treats a trigger as a valid branch source', () => {
+		const graph: Schemas.GraphDto = {
+			connectors: [connector('c1', SIMPLE_KIND)],
+			edges: [],
+			triggers: [trigger('t1')],
+		}
+		const descriptors = descriptorMap(SIMPLE_DESCRIPTOR)
+
+		expect(
+			isBranchDeclared(
+				{ source: 't1', sourceHandle: null, target: 'c1', targetHandle: null },
+				graph,
+				descriptors,
+			),
+		).toBe(false)
+	})
 })
 
-describe('WorkflowCanvas — the virtual trigger', () => {
-	it('connects to every root, unwired ones included', async () => {
+describe('WorkflowCanvas — a manual and an event trigger coexist', () => {
+	it('reads a manual trigger and an event trigger differently on the canvas', async () => {
 		const graph: Schemas.GraphDto = {
-			connectors: [
-				connector('c1', SIMPLE_KIND),
-				connector('c2', SIMPLE_KIND),
-				connector('c3', SIMPLE_KIND),
+			connectors: [connector('c1', SIMPLE_KIND)],
+			edges: [],
+			triggers: [
+				trigger('t1', 'Manual'),
+				trigger('t2', { Events: ['quote.accepted'] }),
 			],
-			edges: [{ from: 'c1', to: 'c2', branch: null }],
-			triggers: [],
 		}
 		const layout = new Map<string, NodePosition>([
+			['t1', { x: -220, y: 0 }],
+			['t2', { x: -220, y: 140 }],
 			['c1', { x: 0, y: 0 }],
-			['c2', { x: 280, y: 0 }],
-			['c3', { x: 0, y: 140 }],
 		])
 
 		renderHarness({
@@ -399,199 +408,329 @@ describe('WorkflowCanvas — the virtual trigger', () => {
 			onSaveSpy: vi.fn(),
 		})
 
-		await screen.findByTestId('rf__node-c1')
-		expect(
-			document.querySelector('[data-testid^="rf__edge-__trigger__->c1"]'),
-		).not.toBeNull()
-		expect(
-			document.querySelector('[data-testid^="rf__edge-__trigger__->c3"]'),
-		).not.toBeNull()
-		expect(
-			document.querySelector('[data-testid^="rf__edge-__trigger__->c2"]'),
-		).toBeNull()
+		const manualNode = await screen.findByTestId('rf__node-t1')
+		const eventNode = await screen.findByTestId('rf__node-t2')
+
+		expect(within(manualNode).getByText('Déclenchement manuel')).toBeDefined()
+		expect(within(eventNode).getByText('quote.accepted')).toBeDefined()
+		expect(within(eventNode).queryByText('Déclenchement manuel')).toBeNull()
 	})
 
-	it('warns when the workflow has no event configured', async () => {
-		renderHarness({
-			graph: {
-				connectors: [connector('c1', SIMPLE_KIND)],
-				edges: [],
-				triggers: [],
-			},
-			layout: new Map([['c1', { x: 0, y: 0 }]]),
-			descriptors: descriptorMap(SIMPLE_DESCRIPTOR),
-			triggerEventNames: [],
-			onSaveSpy: vi.fn(),
-		})
-
-		expect(await screen.findByText('Aucun événement configuré')).toBeDefined()
-	})
-
-	it('does not warn once an event is configured', async () => {
-		renderHarness({
-			graph: {
-				connectors: [connector('c1', SIMPLE_KIND)],
-				edges: [],
-				triggers: [],
-			},
-			layout: new Map([['c1', { x: 0, y: 0 }]]),
-			descriptors: descriptorMap(SIMPLE_DESCRIPTOR),
-			triggerEventNames: ['quote.accepted'],
-			onSaveSpy: vi.fn(),
-		})
-
-		await screen.findByTestId('rf__node-c1')
-		expect(screen.queryByText('Aucun événement configuré')).toBeNull()
-	})
-
-	it('states manual mode plainly instead of warning, even with no event configured', async () => {
-		renderHarness({
-			graph: {
-				connectors: [connector('c1', SIMPLE_KIND)],
-				edges: [],
-				triggers: [],
-			},
-			layout: new Map([['c1', { x: 0, y: 0 }]]),
-			descriptors: descriptorMap(SIMPLE_DESCRIPTOR),
-			triggerMode: 'manual',
-			triggerEventNames: [],
-			onSaveSpy: vi.fn(),
-		})
-
-		expect(await screen.findByText('Déclenchement manuel')).toBeDefined()
-		expect(screen.queryByText('Aucun événement configuré')).toBeNull()
-	})
-
-	it('still warns on an events-mode workflow with none selected, not a manual one', async () => {
-		renderHarness({
-			graph: {
-				connectors: [connector('c1', SIMPLE_KIND)],
-				edges: [],
-				triggers: [],
-			},
-			layout: new Map([['c1', { x: 0, y: 0 }]]),
-			descriptors: descriptorMap(SIMPLE_DESCRIPTOR),
-			triggerMode: 'events',
-			triggerEventNames: [],
-			onSaveSpy: vi.fn(),
-		})
-
-		expect(await screen.findByText('Aucun événement configuré')).toBeDefined()
-		expect(screen.queryByText('Déclenchement manuel')).toBeNull()
-	})
-
-	it('drops the warning once the panel saves an event, without needing a remount', async () => {
-		function ToggleHarness() {
-			const [names, setNames] = useState<string[]>([])
-			return (
-				<Harness
-					graph={{
-						connectors: [connector('c1', SIMPLE_KIND)],
-						edges: [],
-						triggers: [],
-					}}
-					layout={new Map([['c1', { x: 0, y: 0 }]])}
-					descriptors={descriptorMap(SIMPLE_DESCRIPTOR)}
-					triggerEventNames={names}
-					onSaveTrigger={(_mode, eventNames) => setNames(eventNames)}
-					events={[event('quote.accepted')]}
-					onSaveSpy={vi.fn()}
-				/>
-			)
+	it('shows the count once an event trigger carries more than one event', async () => {
+		const graph: Schemas.GraphDto = {
+			connectors: [],
+			edges: [],
+			triggers: [trigger('t1', { Events: ['quote.accepted', 'invoice.paid'] })],
 		}
 
-		render(<ToggleHarness />)
-		expect(await screen.findByText('Aucun événement configuré')).toBeDefined()
+		renderHarness({
+			graph,
+			layout: new Map([['t1', { x: 0, y: 0 }]]),
+			descriptors: descriptorMap(SIMPLE_DESCRIPTOR),
+			onSaveSpy: vi.fn(),
+		})
 
-		fireEvent.click(await screen.findByTestId('rf__node-__trigger__'))
-		fireEvent.click(screen.getByRole('checkbox', { name: 'quote.accepted' }))
+		expect(await screen.findByText('2 événements')).toBeDefined()
+	})
+
+	it('warns on an event trigger with nothing selected, never on a manual one', async () => {
+		const graph: Schemas.GraphDto = {
+			connectors: [],
+			edges: [],
+			triggers: [trigger('t1', 'Manual'), trigger('t2', { Events: [] })],
+		}
+
+		renderHarness({
+			graph,
+			layout: new Map([
+				['t1', { x: 0, y: 0 }],
+				['t2', { x: 0, y: 140 }],
+			]),
+			descriptors: descriptorMap(SIMPLE_DESCRIPTOR),
+			onSaveSpy: vi.fn(),
+		})
+
+		const manualNode = await screen.findByTestId('rf__node-t1')
+		const eventNode = await screen.findByTestId('rf__node-t2')
+
+		expect(
+			within(eventNode).getByText('Aucun événement configuré'),
+		).toBeDefined()
+		expect(
+			within(manualNode).queryByText('Aucun événement configuré'),
+		).toBeNull()
+	})
+})
+
+describe('WorkflowCanvas — adding a second trigger', () => {
+	it('adds a trigger from the pane menu, configures it, and wires a connector from its own +', async () => {
+		const user = userEvent.setup()
+		const graph: Schemas.GraphDto = {
+			connectors: [connector('c1', SIMPLE_KIND)],
+			edges: [],
+			triggers: [trigger('t1', 'Manual')],
+		}
+		const layout = new Map<string, NodePosition>([
+			['t1', { x: -220, y: 0 }],
+			['c1', { x: 0, y: 0 }],
+		])
+
+		const { onSaveSpy } = renderHarness({
+			graph,
+			layout,
+			descriptors: descriptorMap(SIMPLE_DESCRIPTOR),
+			events: [event('quote.accepted')],
+		})
+
+		await screen.findByTestId('rf__node-t1')
+		const pane = document.querySelector('.react-flow__pane') as HTMLElement
+		fireEvent.contextMenu(pane, { clientX: 400, clientY: 400 })
+		fireEvent.click(await screen.findByText('Ajouter un déclencheur'))
+
+		const newTriggerNode = await screen.findByTestId('rf__node-t2')
+		expect(
+			within(newTriggerNode).getByText('Déclenchement manuel'),
+		).toBeDefined()
+
+		const panel = await screen.findByTestId('trigger-config-panel')
+		await user.click(
+			within(panel).getByRole('tab', { name: 'Sur événement(s)' }),
+		)
 		fireEvent.click(
-			within(screen.getByTestId('trigger-config-panel')).getByRole('button', {
-				name: 'Enregistrer',
+			await screen.findByRole('checkbox', { name: 'quote.accepted' }),
+		)
+
+		await waitFor(() => {
+			expect(within(newTriggerNode).getByText('quote.accepted')).toBeDefined()
+		})
+
+		fireEvent.click(
+			within(newTriggerNode).getByRole('button', {
+				name: 'Ajouter un connecteur après le déclencheur t2',
+			}),
+		)
+		fireEvent.click(await screen.findByRole('button', { name: 'Étape simple' }))
+
+		await screen.findByTestId('rf__node-c2')
+		await clickSave()
+
+		const [savedGraph] = onSaveSpy.mock.calls[0] as [Schemas.GraphDto]
+		expect(savedGraph.triggers).toEqual([
+			{ id: 't1', kind: 'Manual' },
+			{ id: 't2', kind: { Events: ['quote.accepted'] } },
+		])
+		expect(savedGraph.connectors.map((c) => c.id)).toEqual(['c1', 'c2'])
+		expect(savedGraph.edges).toEqual([{ from: 't2', to: 'c2', branch: null }])
+	})
+
+	it('places the new trigger at the point that was right-clicked', async () => {
+		renderHarness({
+			graph: { connectors: [], edges: [], triggers: [] },
+			layout: new Map(),
+			descriptors: descriptorMap(SIMPLE_DESCRIPTOR),
+			onSaveSpy: vi.fn(),
+		})
+
+		const pane = document.querySelector('.react-flow__pane') as HTMLElement
+		fireEvent.contextMenu(pane, { clientX: 500, clientY: 300 })
+		const expectedPosition = flowPositionOf(500, 300)
+		fireEvent.click(await screen.findByText('Ajouter un déclencheur'))
+
+		await screen.findByTestId('rf__node-t1')
+		const node = screen.getByTestId('rf__node-t1')
+		expect(node.style.transform).toContain(`${expectedPosition.x}px`)
+	})
+})
+
+describe('WorkflowCanvas — deleting a trigger', () => {
+	it('removes the trigger and every edge it fed, immediately, with no confirmation dialog', async () => {
+		const graph: Schemas.GraphDto = {
+			connectors: [connector('c1', SIMPLE_KIND), connector('c2', SIMPLE_KIND)],
+			edges: [
+				{ from: 't1', to: 'c1', branch: null },
+				{ from: 't2', to: 'c2', branch: null },
+			],
+			triggers: [trigger('t1'), trigger('t2', { Events: ['quote.accepted'] })],
+		}
+		const layout = new Map<string, NodePosition>([
+			['t1', { x: -220, y: 0 }],
+			['t2', { x: -220, y: 140 }],
+			['c1', { x: 0, y: 0 }],
+			['c2', { x: 0, y: 140 }],
+		])
+
+		const { onSaveSpy } = renderHarness({
+			graph,
+			layout,
+			descriptors: descriptorMap(SIMPLE_DESCRIPTOR),
+		})
+
+		const triggerNode = await screen.findByTestId('rf__node-t1')
+		fireEvent.click(
+			within(triggerNode).getByRole('button', {
+				name: 'Supprimer le déclencheur t1',
+			}),
+		)
+
+		expect(screen.queryByRole('alertdialog')).toBeNull()
+		await waitFor(() => {
+			expect(screen.queryByTestId('rf__node-t1')).toBeNull()
+		})
+
+		await clickSave()
+
+		const [savedGraph] = onSaveSpy.mock.calls[0] as [Schemas.GraphDto]
+		expect(savedGraph.triggers).toEqual([
+			{ id: 't2', kind: { Events: ['quote.accepted'] } },
+		])
+		expect(savedGraph.edges).toEqual([{ from: 't2', to: 'c2', branch: null }])
+	})
+
+	it('closes the trigger panel once the open trigger is deleted', async () => {
+		const graph: Schemas.GraphDto = {
+			connectors: [],
+			edges: [],
+			triggers: [trigger('t1')],
+		}
+
+		renderHarness({
+			graph,
+			layout: new Map([['t1', { x: 0, y: 0 }]]),
+			descriptors: descriptorMap(SIMPLE_DESCRIPTOR),
+			onSaveSpy: vi.fn(),
+		})
+
+		const triggerNode = await screen.findByTestId('rf__node-t1')
+		fireEvent.click(triggerNode)
+		await screen.findByTestId('trigger-config-panel')
+
+		fireEvent.click(
+			within(triggerNode).getByRole('button', {
+				name: 'Supprimer le déclencheur t1',
 			}),
 		)
 
 		await waitFor(() => {
-			expect(screen.queryByText('Aucun événement configuré')).toBeNull()
+			expect(screen.queryByTestId('trigger-config-panel')).toBeNull()
 		})
 	})
 })
 
-describe('WorkflowCanvas — the trigger picker', () => {
-	it('opens the event picker when the trigger node is clicked', async () => {
+describe('WorkflowCanvas — the trigger config panel', () => {
+	it('opens on a trigger click, scoped to the trigger clicked', async () => {
+		const graph: Schemas.GraphDto = {
+			connectors: [],
+			edges: [],
+			triggers: [
+				trigger('t1', { Events: ['quote.accepted'] }),
+				trigger('t2', { Events: ['invoice.paid'] }),
+			],
+		}
+
 		renderHarness({
-			graph: {
-				connectors: [connector('c1', SIMPLE_KIND)],
-				edges: [],
-				triggers: [],
-			},
-			layout: new Map([['c1', { x: 0, y: 0 }]]),
+			graph,
+			layout: new Map([
+				['t1', { x: 0, y: 0 }],
+				['t2', { x: 0, y: 140 }],
+			]),
 			descriptors: descriptorMap(SIMPLE_DESCRIPTOR),
 			events: [event('quote.accepted'), event('invoice.paid')],
 			onSaveSpy: vi.fn(),
 		})
 
-		fireEvent.click(await screen.findByTestId('rf__node-__trigger__'))
+		fireEvent.click(await screen.findByTestId('rf__node-t2'))
 
+		const panel = await screen.findByTestId('trigger-config-panel')
+		expect(within(panel).getByText('Déclencheur t2')).toBeDefined()
 		expect(
-			await screen.findByRole('checkbox', { name: 'quote.accepted' }),
-		).toBeDefined()
-		expect(screen.getByRole('checkbox', { name: 'invoice.paid' })).toBeDefined()
+			within(panel)
+				.getByRole('checkbox', { name: 'invoice.paid' })
+				.getAttribute('aria-checked'),
+		).toBe('true')
+		expect(
+			within(panel)
+				.getByRole('checkbox', { name: 'quote.accepted' })
+				.getAttribute('aria-checked'),
+		).toBe('false')
 	})
 
-	it('saves the picked selection as a full replacement', async () => {
-		const onSaveTrigger = vi.fn()
-		renderHarness({
-			graph: {
-				connectors: [connector('c1', SIMPLE_KIND)],
-				edges: [],
-				triggers: [],
-			},
-			layout: new Map([['c1', { x: 0, y: 0 }]]),
+	it('propagates a kind change straight through onChange, with no save button of its own', async () => {
+		const graph: Schemas.GraphDto = {
+			connectors: [],
+			edges: [],
+			triggers: [trigger('t1', { Events: ['quote.accepted'] })],
+		}
+
+		const { onSaveSpy } = renderHarness({
+			graph,
+			layout: new Map([['t1', { x: 0, y: 0 }]]),
 			descriptors: descriptorMap(SIMPLE_DESCRIPTOR),
 			events: [event('quote.accepted'), event('invoice.paid')],
-			triggerEventNames: ['quote.accepted'],
-			onSaveTrigger,
-			onSaveSpy: vi.fn(),
 		})
 
-		fireEvent.click(await screen.findByTestId('rf__node-__trigger__'))
-		await screen.findByRole('checkbox', { name: 'quote.accepted' })
-		fireEvent.click(screen.getByRole('checkbox', { name: 'invoice.paid' }))
-		fireEvent.click(
-			within(screen.getByTestId('trigger-config-panel')).getByRole('button', {
-				name: 'Enregistrer',
-			}),
-		)
+		fireEvent.click(await screen.findByTestId('rf__node-t1'))
+		const panel = await screen.findByTestId('trigger-config-panel')
+		expect(
+			within(panel).queryByRole('button', { name: 'Enregistrer' }),
+		).toBeNull()
 
-		expect(onSaveTrigger).toHaveBeenCalledWith('events', [
-			'quote.accepted',
-			'invoice.paid',
+		fireEvent.click(screen.getByRole('checkbox', { name: 'invoice.paid' }))
+
+		await clickSave()
+
+		const [savedGraph] = onSaveSpy.mock.calls[0] as [Schemas.GraphDto]
+		expect(savedGraph.triggers).toEqual([
+			{ id: 't1', kind: { Events: ['quote.accepted', 'invoice.paid'] } },
 		])
 	})
 
 	it('closes the connector panel when the trigger node opens, and vice versa', async () => {
+		const graph: Schemas.GraphDto = {
+			connectors: [connector('c1', SIMPLE_KIND)],
+			edges: [],
+			triggers: [trigger('t1')],
+		}
+
 		renderHarness({
-			graph: {
-				connectors: [connector('c1', SIMPLE_KIND)],
-				edges: [],
-				triggers: [],
-			},
-			layout: new Map([['c1', { x: 0, y: 0 }]]),
+			graph,
+			layout: new Map([
+				['t1', { x: -220, y: 0 }],
+				['c1', { x: 0, y: 0 }],
+			]),
 			descriptors: descriptorMap(SIMPLE_DESCRIPTOR),
 			events: [event('quote.accepted')],
 			onSaveSpy: vi.fn(),
 		})
 
-		const node = await screen.findByTestId('rf__node-c1')
-		fireEvent.click(node)
+		const connectorNode = await screen.findByTestId('rf__node-c1')
+		fireEvent.click(connectorNode)
 		expect(screen.getByTestId('connector-config-panel')).toBeDefined()
 
-		fireEvent.click(await screen.findByTestId('rf__node-__trigger__'))
+		fireEvent.click(await screen.findByTestId('rf__node-t1'))
 		expect(screen.queryByTestId('connector-config-panel')).toBeNull()
-		expect(
-			await screen.findByRole('checkbox', { name: 'quote.accepted' }),
-		).toBeDefined()
+		expect(await screen.findByTestId('trigger-config-panel')).toBeDefined()
+	})
+
+	it('closes on request', async () => {
+		const graph: Schemas.GraphDto = {
+			connectors: [],
+			edges: [],
+			triggers: [trigger('t1')],
+		}
+
+		renderHarness({
+			graph,
+			layout: new Map([['t1', { x: 0, y: 0 }]]),
+			descriptors: descriptorMap(SIMPLE_DESCRIPTOR),
+			onSaveSpy: vi.fn(),
+		})
+
+		fireEvent.click(await screen.findByTestId('rf__node-t1'))
+		await screen.findByTestId('trigger-config-panel')
+
+		fireEvent.click(screen.getByRole('button', { name: 'Fermer' }))
+
+		expect(screen.queryByTestId('trigger-config-panel')).toBeNull()
 	})
 })
 
@@ -632,6 +771,58 @@ describe('WorkflowCanvas — validation badges', () => {
 
 		const node = await screen.findByTestId('rf__node-c1')
 		expect(within(node).queryByLabelText(/Erreur/)).toBeNull()
+	})
+
+	it('badges a trigger wired to nothing, exactly as a connector error badges its connector', async () => {
+		const graph: Schemas.GraphDto = {
+			connectors: [],
+			edges: [],
+			triggers: [trigger('t1', { Events: ['quote.accepted'] })],
+		}
+
+		renderHarness({
+			graph,
+			layout: new Map([['t1', { x: 0, y: 0 }]]),
+			descriptors: descriptorMap(SIMPLE_DESCRIPTOR),
+			connectorErrors: new Map([
+				[
+					't1',
+					[{ field: null, message: 'Ce déclencheur ne mène nulle part.' }],
+				],
+			]),
+			onSaveSpy: vi.fn(),
+		})
+
+		const node = await screen.findByTestId('rf__node-t1')
+		expect(within(node).getByLabelText(/Erreur/)).toBeDefined()
+	})
+
+	it('shows the message naming the trigger inside its own config panel', async () => {
+		const graph: Schemas.GraphDto = {
+			connectors: [],
+			edges: [],
+			triggers: [trigger('t1', { Events: ['quote.accepted'] })],
+		}
+
+		renderHarness({
+			graph,
+			layout: new Map([['t1', { x: 0, y: 0 }]]),
+			descriptors: descriptorMap(SIMPLE_DESCRIPTOR),
+			events: [event('quote.accepted')],
+			connectorErrors: new Map([
+				[
+					't1',
+					[{ field: null, message: 'Ce déclencheur ne mène nulle part.' }],
+				],
+			]),
+			onSaveSpy: vi.fn(),
+		})
+
+		fireEvent.click(await screen.findByTestId('rf__node-t1'))
+
+		expect(
+			await screen.findByText('Ce déclencheur ne mène nulle part.'),
+		).toBeDefined()
 	})
 })
 
@@ -723,10 +914,7 @@ describe('WorkflowCanvas — adding a node from a handle', () => {
 			connector('c1', BRANCHING_KIND),
 			connector('c2', SIMPLE_KIND),
 		])
-		expect(savedGraph.edges).toEqual([
-			{ from: '__trigger__', to: 'c1', branch: null },
-			{ from: 'c1', to: 'c2', branch: 'Then' },
-		])
+		expect(savedGraph.edges).toEqual([{ from: 'c1', to: 'c2', branch: 'Then' }])
 	})
 
 	it('wires on else when the else handle is the one pressed', async () => {
@@ -755,30 +943,33 @@ describe('WorkflowCanvas — adding a node from a handle', () => {
 		await clickSave()
 
 		const [savedGraph] = onSaveSpy.mock.calls[0] as [Schemas.GraphDto]
-		expect(savedGraph.edges).toEqual([
-			{ from: '__trigger__', to: 'c1', branch: null },
-			{ from: 'c1', to: 'c2', branch: 'Else' },
-		])
+		expect(savedGraph.edges).toEqual([{ from: 'c1', to: 'c2', branch: 'Else' }])
 	})
 
-	it("creates the first node of an empty workflow from the trigger's +", async () => {
+	it("wires the first connector of a workflow from its real trigger's +", async () => {
+		const graph: Schemas.GraphDto = {
+			connectors: [],
+			edges: [],
+			triggers: [trigger('t1')],
+		}
+
 		const { onSaveSpy } = renderHarness({
-			graph: { connectors: [], edges: [], triggers: [] },
-			layout: new Map(),
+			graph,
+			layout: new Map([['t1', { x: 0, y: 0 }]]),
 			descriptors: descriptorMap(SIMPLE_DESCRIPTOR),
 		})
 
-		const triggerNode = await screen.findByTestId('rf__node-__trigger__')
+		const triggerNode = await screen.findByTestId('rf__node-t1')
 		fireEvent.click(
 			within(triggerNode).getByRole('button', {
-				name: 'Ajouter le premier connecteur',
+				name: 'Ajouter un connecteur après le déclencheur t1',
 			}),
 		)
 		fireEvent.click(await screen.findByText('Étape simple'))
 
 		await screen.findByTestId('rf__node-c1')
 		expect(
-			document.querySelector('[data-testid^="rf__edge-__trigger__->c1"]'),
+			document.querySelector('[data-testid^="rf__edge-t1->c1"]'),
 		).not.toBeNull()
 
 		await clickSave()
@@ -786,8 +977,8 @@ describe('WorkflowCanvas — adding a node from a handle', () => {
 		const [savedGraph] = onSaveSpy.mock.calls[0] as [Schemas.GraphDto]
 		expect(savedGraph).toEqual({
 			connectors: [connector('c1', SIMPLE_KIND)],
-			edges: [{ from: '__trigger__', to: 'c1', branch: null }],
-			triggers: [{ id: '__trigger__', kind: { Events: ['quote.accepted'] } }],
+			edges: [{ from: 't1', to: 'c1', branch: null }],
+			triggers: [{ id: 't1', kind: 'Manual' }],
 		})
 	})
 })
@@ -827,8 +1018,8 @@ describe('WorkflowCanvas — deleting a node', () => {
 		const [savedGraph] = onSaveSpy.mock.calls[0] as [Schemas.GraphDto]
 		expect(savedGraph).toEqual({
 			connectors: [connector('c1', SIMPLE_KIND)],
-			edges: [{ from: '__trigger__', to: 'c1', branch: null }],
-			triggers: [{ id: '__trigger__', kind: { Events: ['quote.accepted'] } }],
+			edges: [],
+			triggers: [],
 		})
 	})
 
@@ -931,9 +1122,7 @@ describe('WorkflowCanvas — deleting a node', () => {
 
 		const [savedGraph] = onSaveSpy.mock.calls[0] as [Schemas.GraphDto]
 		expect(savedGraph.connectors.map((c) => c.id)).toEqual(['c1', 'c3'])
-		expect(savedGraph.edges).toEqual([
-			{ from: '__trigger__', to: 'c1', branch: null },
-		])
+		expect(savedGraph.edges).toEqual([])
 	})
 })
 
@@ -966,20 +1155,23 @@ describe('WorkflowCanvas — the config panel', () => {
 		expect(screen.getByLabelText('Note')).toBeDefined()
 	})
 
-	it('does not open from a click on the virtual trigger', async () => {
+	it('does not open the connector panel from a click on a trigger node', async () => {
 		renderHarness({
 			graph: {
 				connectors: [connector('c1', SIMPLE_KIND)],
 				edges: [],
-				triggers: [],
+				triggers: [trigger('t1')],
 			},
-			layout: new Map([['c1', { x: 0, y: 0 }]]),
+			layout: new Map([
+				['t1', { x: -220, y: 0 }],
+				['c1', { x: 0, y: 0 }],
+			]),
 			descriptors: descriptorMap(NOTED_DESCRIPTOR),
 			onSaveSpy: vi.fn(),
 		})
 
-		const trigger = await screen.findByTestId('rf__node-__trigger__')
-		fireEvent.click(trigger)
+		const triggerNode = await screen.findByTestId('rf__node-t1')
+		fireEvent.click(triggerNode)
 
 		expect(screen.queryByText('Paramètres')).toBeNull()
 	})
@@ -1167,17 +1359,19 @@ describe('WorkflowCanvas — the available-data tree', () => {
 		).toBeNull()
 	})
 
-	it('fills the trigger branch from the selected event, before any run exists', async () => {
+	it('fills the trigger branch from a trigger anywhere in the graph, before any run exists', async () => {
 		renderHarness({
 			graph: {
 				connectors: [connector('c1', SIMPLE_KIND)],
 				edges: [],
-				triggers: [],
+				triggers: [trigger('t1', { Events: ['quote.accepted'] })],
 			},
-			layout: new Map([['c1', { x: 0, y: 0 }]]),
+			layout: new Map([
+				['t1', { x: -220, y: 0 }],
+				['c1', { x: 0, y: 0 }],
+			]),
 			descriptors: descriptorMap(SIMPLE_DESCRIPTOR),
 			events: [event('quote.accepted', { quote_id: 'q-1' })],
-			triggerEventNames: ['quote.accepted'],
 			onSaveSpy: vi.fn(),
 		})
 
@@ -1199,8 +1393,6 @@ describe('WorkflowCanvas — the available-data tree', () => {
 			},
 			layout: new Map([['c1', { x: 0, y: 0 }]]),
 			descriptors: descriptorMap(SIMPLE_DESCRIPTOR),
-			events: [event('quote.accepted', { quote_id: 'q-1' })],
-			triggerEventNames: ['quote.accepted'],
 			lastRun: {
 				triggerPayload: { quote_id: 'q-real' },
 				connectorOutputs: {},
@@ -1248,17 +1440,17 @@ describe('WorkflowCanvas — framing the graph on load', () => {
 })
 
 describe('WorkflowCanvas — a node opens where you just made it', () => {
-	it('opens the configuration panel on the connector it just added', async () => {
+	it("opens the configuration panel on the connector it just added from a trigger's +", async () => {
 		renderHarness({
-			graph: { connectors: [], edges: [], triggers: [] },
-			layout: new Map(),
+			graph: { connectors: [], edges: [], triggers: [trigger('t1')] },
+			layout: new Map([['t1', { x: 0, y: 0 }]]),
 			descriptors: descriptorMap(SIMPLE_DESCRIPTOR),
 		})
 
-		const triggerNode = await screen.findByTestId('rf__node-__trigger__')
+		const triggerNode = await screen.findByTestId('rf__node-t1')
 		fireEvent.click(
 			within(triggerNode).getByRole('button', {
-				name: 'Ajouter le premier connecteur',
+				name: 'Ajouter un connecteur après le déclencheur t1',
 			}),
 		)
 		fireEvent.click(await screen.findByText('Étape simple'))
@@ -1269,18 +1461,18 @@ describe('WorkflowCanvas — a node opens where you just made it', () => {
 
 	it('closes the trigger panel rather than stacking two panels', async () => {
 		renderHarness({
-			graph: { connectors: [], edges: [], triggers: [] },
-			layout: new Map(),
+			graph: { connectors: [], edges: [], triggers: [trigger('t1')] },
+			layout: new Map([['t1', { x: 0, y: 0 }]]),
 			descriptors: descriptorMap(SIMPLE_DESCRIPTOR),
 		})
 
-		const triggerNode = await screen.findByTestId('rf__node-__trigger__')
-		fireEvent.click(within(triggerNode).getByText('Déclencheur'))
+		const triggerNode = await screen.findByTestId('rf__node-t1')
+		fireEvent.click(triggerNode)
 		await screen.findByTestId('trigger-config-panel')
 
 		fireEvent.click(
 			within(triggerNode).getByRole('button', {
-				name: 'Ajouter le premier connecteur',
+				name: 'Ajouter un connecteur après le déclencheur t1',
 			}),
 		)
 		fireEvent.click(await screen.findByText('Étape simple'))
@@ -1325,7 +1517,7 @@ describe('WorkflowCanvas — the camera follows a new node', () => {
 })
 
 describe('WorkflowCanvas — the pane context menu', () => {
-	it('opens on a right-click on empty canvas, offering all three actions', async () => {
+	it('opens on a right-click on empty canvas, offering a connector, a trigger, and framing — never the old workflow-level trigger panel', async () => {
 		renderHarness({
 			graph: {
 				connectors: [connector('c1', SIMPLE_KIND)],
@@ -1343,8 +1535,9 @@ describe('WorkflowCanvas — the pane context menu', () => {
 		fireEvent.contextMenu(pane, { clientX: 200, clientY: 150 })
 
 		expect(await screen.findByText('Ajouter un connecteur')).toBeDefined()
-		expect(screen.getByText('Configurer le déclencheur')).toBeDefined()
+		expect(screen.getByText('Ajouter un déclencheur')).toBeDefined()
 		expect(screen.getByText('Cadrer le graphe')).toBeDefined()
+		expect(screen.queryByText('Configurer le déclencheur')).toBeNull()
 	})
 
 	it('does not open from a right-click on a node', async () => {
@@ -1396,34 +1589,8 @@ describe('WorkflowCanvas — the pane context menu', () => {
 			Map<string, NodePosition>,
 		]
 		expect(savedGraph.connectors.map((c) => c.id)).toEqual(['c1', 'c2'])
-		expect(savedGraph.edges).toEqual([
-			{ from: '__trigger__', to: 'c1', branch: null },
-			{ from: '__trigger__', to: 'c2', branch: null },
-		])
+		expect(savedGraph.edges).toEqual([])
 		expect(savedLayout.get('c2')).toEqual(expectedPosition)
-		expect(
-			document.querySelector('[data-testid^="rf__edge-__trigger__->c2"]'),
-		).not.toBeNull()
-	})
-
-	it('opens the trigger panel from Configurer le déclencheur', async () => {
-		renderHarness({
-			graph: {
-				connectors: [connector('c1', SIMPLE_KIND)],
-				edges: [],
-				triggers: [],
-			},
-			layout: new Map([['c1', { x: 0, y: 0 }]]),
-			descriptors: descriptorMap(SIMPLE_DESCRIPTOR),
-			events: [event('quote.accepted')],
-			onSaveSpy: vi.fn(),
-		})
-
-		const pane = document.querySelector('.react-flow__pane') as HTMLElement
-		fireEvent.contextMenu(pane, { clientX: 50, clientY: 50 })
-		fireEvent.click(await screen.findByText('Configurer le déclencheur'))
-
-		expect(await screen.findByTestId('trigger-config-panel')).toBeDefined()
 	})
 
 	it('cadre le graphe on request, moving the viewport back over every node', async () => {

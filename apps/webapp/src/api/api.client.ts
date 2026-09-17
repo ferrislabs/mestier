@@ -1150,8 +1150,6 @@ export namespace Schemas {
     weekly_contract_minutes: number;
   };
   export type SetPresenceRequest = { status: PresenceStatus };
-  export type WorkflowTriggerModeDto = "events" | "manual";
-  export type SetWorkflowTriggerRequest = { event_names: Array<string>; mode: WorkflowTriggerModeDto };
   export type StartRunRequest = Partial<{ trigger_payload: unknown }>;
   export type StartTimeEntryRequest = { task_id: TaskId };
   export type StartedRunResponse = { run_id: string };
@@ -1423,10 +1421,8 @@ export namespace Schemas {
     id: string;
     name: string;
     organization_id: OrganizationId;
-    trigger_mode: WorkflowTriggerModeDto;
     updated_at: string;
   };
-  export type WorkflowTriggerResponse = { event_names: Array<string>; mode: WorkflowTriggerModeDto };
 
   // </Schemas>
 }
@@ -4089,7 +4085,6 @@ export namespace Endpoints {
           id: string;
           name: string;
           organization_id: Schemas.OrganizationId;
-          trigger_mode: Schemas.WorkflowTriggerModeDto;
           updated_at: string;
         }>;
         pagination?: (null | Schemas.PaginationMetadata) | undefined;
@@ -4117,7 +4112,6 @@ export namespace Endpoints {
           id: string;
           name: string;
           organization_id: Schemas.OrganizationId;
-          trigger_mode: Schemas.WorkflowTriggerModeDto;
           updated_at: string;
         };
         pagination?: (null | Schemas.PaginationMetadata) | undefined;
@@ -4182,7 +4176,6 @@ export namespace Endpoints {
           id: string;
           name: string;
           organization_id: Schemas.OrganizationId;
-          trigger_mode: Schemas.WorkflowTriggerModeDto;
           updated_at: string;
         };
         pagination?: (null | Schemas.PaginationMetadata) | undefined;
@@ -4203,43 +4196,6 @@ export namespace Endpoints {
     };
     responses: {
       201: { data: { run_id: string }; pagination?: (null | Schemas.PaginationMetadata) | undefined };
-      401: unknown;
-      403: unknown;
-      404: unknown;
-      409: unknown;
-    };
-  };
-  export type get_GetWorkflowTrigger = {
-    method: "GET";
-    path: "/api/v1/organizations/{organization_id}/automation/workflows/{workflow_id}/trigger";
-    requestFormat: "json";
-    parameters: {
-      path: { organization_id: string; workflow_id: string };
-    };
-    responses: {
-      200: {
-        data: { event_names: Array<string>; mode: Schemas.WorkflowTriggerModeDto };
-        pagination?: (null | Schemas.PaginationMetadata) | undefined;
-      };
-      401: unknown;
-      403: unknown;
-      404: unknown;
-    };
-  };
-  export type put_SetWorkflowTrigger = {
-    method: "PUT";
-    path: "/api/v1/organizations/{organization_id}/automation/workflows/{workflow_id}/trigger";
-    requestFormat: "json";
-    parameters: {
-      path: { organization_id: string; workflow_id: string };
-
-      body: Schemas.SetWorkflowTriggerRequest;
-    };
-    responses: {
-      200: {
-        data: { event_names: Array<string>; mode: Schemas.WorkflowTriggerModeDto };
-        pagination?: (null | Schemas.PaginationMetadata) | undefined;
-      };
       401: unknown;
       403: unknown;
       404: unknown;
@@ -7044,7 +7000,6 @@ export type EndpointByMethod = {
     "/api/v1/organizations/{organization_id}/automation/settings": Endpoints.get_GetAutomationSettings;
     "/api/v1/organizations/{organization_id}/automation/workflows": Endpoints.get_ListWorkflows;
     "/api/v1/organizations/{organization_id}/automation/workflows/{workflow_id}": Endpoints.get_GetWorkflow;
-    "/api/v1/organizations/{organization_id}/automation/workflows/{workflow_id}/trigger": Endpoints.get_GetWorkflowTrigger;
     "/api/v1/organizations/{organization_id}/custom-units": Endpoints.get_ListCustomUnits;
     "/api/v1/organizations/{organization_id}/customers": Endpoints.get_ListCustomers;
     "/api/v1/organizations/{organization_id}/employee-profiles": Endpoints.get_ListEmployeeProfiles;
@@ -7160,7 +7115,6 @@ export type EndpointByMethod = {
     "/api/v1/members/{member_id}/rhythm": Endpoints.put_PutRhythm;
     "/api/v1/members/{member_id}/work-slots": Endpoints.put_PutWorkSlots;
     "/api/v1/organizations/{organization_id}/automation/settings": Endpoints.put_UpdateAutomationSettings;
-    "/api/v1/organizations/{organization_id}/automation/workflows/{workflow_id}/trigger": Endpoints.put_SetWorkflowTrigger;
     "/api/v1/organizations/{organization_id}/automation/workflows/{workflow_id}/versions": Endpoints.put_SaveWorkflowVersion;
     "/api/v1/organizations/{organization_id}/project-templates/{project_template_id}/tasks": Endpoints.put_ReplaceProjectTemplateTasks;
     "/api/v1/supplier-invoice-lines/{supplier_invoice_line_id}/allocations": Endpoints.put_ReplaceSupplierInvoiceLineAllocations;
