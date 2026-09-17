@@ -29,7 +29,7 @@ export function ScopeBar({
 	if (tabs.length <= 1 && !actions) return null
 
 	return (
-		<div className="sticky top-(--app-header-height) z-10 flex items-center gap-4 border-b bg-card px-3 md:px-6">
+		<div className="sticky top-(--app-header-height) z-10 flex shrink-0 items-center gap-4 border-b bg-card px-3 md:px-6">
 			<NavTabs label={label} tabs={tabs} organizationSlug={organizationSlug} />
 			{actions ? (
 				<div className="flex shrink-0 items-center gap-2 py-2">{actions}</div>

@@ -68,7 +68,10 @@ function AppShell() {
 	const isHome = splitOrgPath(location.pathname).path === '/'
 
 	return (
-		<SidebarProvider defaultOpen={false} className="flex-col">
+		<SidebarProvider
+			defaultOpen={false}
+			className="h-svh flex-col overflow-hidden"
+		>
 			{/* The header spans the full width, above the sidebar rather than
 			 * beside it — `ModuleNav`'s own fixed container is offset below it
 			 * (see its `top-(--app-header-height)` override) so the two never
@@ -80,13 +83,13 @@ function AppShell() {
 				{isHome ? null : (
 					<ModuleNav organizationSlug={activeOrganization.slug} />
 				)}
-				<SidebarInset>
+				<SidebarInset className="min-h-0">
 					<ScopeBar
 						label={scope.label}
 						tabs={scope.tabs}
 						organizationSlug={activeOrganization.slug}
 					/>
-					<div className="flex min-w-0 flex-1 flex-col">
+					<div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-auto">
 						<Outlet />
 					</div>
 				</SidebarInset>
