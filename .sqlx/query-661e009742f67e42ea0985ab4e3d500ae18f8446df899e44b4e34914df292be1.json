@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "UPDATE automation.workflow\n               SET name = $3, description = $4, enabled = $5, updated_at = $6\n               WHERE org_id = $1 AND id = $2\n               RETURNING id, org_id, name, description, enabled, current_version_id, layout, trigger_mode, created_at, updated_at",
+  "query": "SELECT id, org_id, name, description, enabled, current_version_id, layout, created_at, updated_at\n               FROM automation.workflow WHERE org_id = $1 AND id = $2",
   "describe": {
     "columns": [
       {
@@ -40,16 +40,11 @@
       },
       {
         "ordinal": 7,
-        "name": "trigger_mode",
-        "type_info": "Text"
-      },
-      {
-        "ordinal": 8,
         "name": "created_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 9,
+        "ordinal": 8,
         "name": "updated_at",
         "type_info": "Timestamptz"
       }
@@ -57,11 +52,7 @@
     "parameters": {
       "Left": [
         "Uuid",
-        "Uuid",
-        "Text",
-        "Text",
-        "Bool",
-        "Timestamptz"
+        "Uuid"
       ]
     },
     "nullable": [
@@ -73,9 +64,8 @@
       true,
       true,
       false,
-      false,
       false
     ]
   },
-  "hash": "ba7ae5f46f489d00963a3694de3aaa804b9634099940bfce148919683815ceeb"
+  "hash": "661e009742f67e42ea0985ab4e3d500ae18f8446df899e44b4e34914df292be1"
 }

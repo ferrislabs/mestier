@@ -140,6 +140,7 @@ impl MestierUseCase {
             workflow_version_id,
             trigger_event_id: None,
             trigger_payload: Some(trigger_payload),
+            trigger_id: None,
             status: RunStatus::Pending,
             error: None,
             next_attempt_at: Some(now),
@@ -725,7 +726,6 @@ mod tests {
     use super::*;
     use crate::application::default_authorizer;
     use crate::application::test_support::automation_pool;
-    use crate::domain::automation::subscription::{SetWorkflowTriggerCommand, WorkflowTrigger};
     use crate::domain::automation::workflow::{
         CreateWorkflowCommand, Edge, SaveWorkflowVersionCommand,
     };
@@ -1690,14 +1690,6 @@ mod tests {
             triggers: Vec::new(),
         };
         let workflow_id = start_workflow(&usecase, org_id, graph).await;
-        usecase
-            .set_workflow_trigger(SetWorkflowTriggerCommand {
-                org_id,
-                workflow_id,
-                trigger: WorkflowTrigger::Manual,
-            })
-            .await
-            .unwrap();
 
         let run_id = usecase
             .start_run(org_id, workflow_id, json!({}))

@@ -65,9 +65,9 @@ impl<'tx> EventDispatchRepository for PgEventDispatchRepository<'tx> {
             r#"
             INSERT INTO automation.run
                 (id, org_id, workflow_id, workflow_version_id, trigger_event_id,
-                 trigger_payload, status, next_attempt_at, created_at)
+                 trigger_payload, trigger_id, status, next_attempt_at, created_at)
             SELECT gen_random_uuid(), e.org_id, w.id, w.current_version_id, e.id, e.payload,
-                   'pending', now(), now()
+                   s.trigger_id, 'pending', now(), now()
             FROM automation.event e
             JOIN automation.subscription s
               ON s.org_id = e.org_id
@@ -77,7 +77,14 @@ impl<'tx> EventDispatchRepository for PgEventDispatchRepository<'tx> {
             JOIN automation.workflow w
               ON w.id = s.target_id
              AND w.current_version_id IS NOT NULL
-             AND w.trigger_mode = 'events'
+            JOIN automation.workflow_version wv
+              ON wv.id = w.current_version_id
+             AND EXISTS (
+                   SELECT 1
+                   FROM jsonb_array_elements(wv.graph -> 'triggers') AS trig
+                   WHERE trig ->> 'id' = s.trigger_id
+                     AND jsonb_typeof(trig -> 'kind') = 'object'
+                 )
             LEFT JOIN automation.run r
                    ON e.actor_kind = 'automation' AND r.id = e.actor_id
             WHERE e.id = ANY($1)
@@ -184,14 +191,63 @@ mod tests {
     /// carries requires one, and a workflow with none must never produce a
     /// run (see `a_workflow_with_no_current_version_produces_no_run`).
     async fn seed_workflow(pool: &PgPool, org_id: OrganizationId) -> Uuid {
+        use crate::domain::automation::ports::WorkflowRepository;
+        use crate::domain::automation::workflow::{
+            Edge, Graph, PlacedConnector, PlacedTrigger, TriggerKind, Workflow,
+        };
+        use crate::infrastructure::automation::postgres::PgWorkflowRepository;
+
+        let mut config = serde_json::Map::new();
+        config.insert("predicate".to_string(), json!("{{ true }}"));
+        let graph = Graph {
+            connectors: vec![PlacedConnector {
+                id: "c1".to_string(),
+                kind: "flow.condition".to_string(),
+                version: 1,
+                credential_id: None,
+                config,
+            }],
+            edges: vec![Edge {
+                from: "t1".to_string(),
+                to: "c1".to_string(),
+                branch: None,
+            }],
+            triggers: vec![PlacedTrigger {
+                id: "t1".to_string(),
+                kind: TriggerKind::Events(vec!["quote.accepted".to_string()]),
+            }],
+        };
+
+        with_tx(pool, async |tx| {
+            let mut repo = PgWorkflowRepository::new(&tx);
+            let now = chrono::Utc::now();
+            let workflow = repo
+                .insert(&Workflow {
+                    id: generate_uuid_v7(),
+                    org_id,
+                    name: "Dispatcher test workflow".to_string(),
+                    description: None,
+                    enabled: true,
+                    current_version_id: None,
+                    layout: None,
+                    created_at: now,
+                    updated_at: now,
+                })
+                .await?;
+            repo.insert_version(org_id, workflow.id, &graph, None)
+                .await?;
+            Ok::<_, CoreError>(workflow.id)
+        })
+        .await
+        .unwrap()
+    }
+
+    async fn seed_manual_only_workflow(pool: &PgPool, org_id: OrganizationId) -> Uuid {
         use crate::domain::automation::workflow::{
             Edge, Graph, PlacedConnector, PlacedTrigger, TriggerKind,
         };
         use crate::{application::default_authorizer, infrastructure::realtime::EventHub};
 
-        // Routed through the use cases (rather than raw SQL) so the workflow
-        // always has a real, valid graph a `graph_for_version` read could
-        // later succeed on — the same fixture the run engine's own tests use.
         let usecase = crate::application::MestierUseCase::new(
             pool.clone(),
             default_authorizer(),
@@ -200,7 +256,7 @@ mod tests {
         let workflow = usecase
             .create_workflow(crate::domain::automation::workflow::CreateWorkflowCommand {
                 org_id,
-                name: "Dispatcher test workflow".to_string(),
+                name: "Manual-only dispatcher test workflow".to_string(),
                 description: None,
             })
             .await
@@ -245,17 +301,19 @@ mod tests {
         pool: &PgPool,
         org_id: OrganizationId,
         workflow_id: Uuid,
+        trigger_id: &str,
         event_names: &[&str],
         enabled: bool,
     ) -> Uuid {
         let id = generate_uuid_v7();
         let names: Vec<String> = event_names.iter().map(|n| (*n).to_owned()).collect();
         sqlx::query!(
-            r#"INSERT INTO automation.subscription (id, org_id, kind, target_id, event_names, enabled)
-               VALUES ($1, $2, 'workflow', $3, $4, $5)"#,
+            r#"INSERT INTO automation.subscription (id, org_id, kind, target_id, trigger_id, event_names, enabled)
+               VALUES ($1, $2, 'workflow', $3, $4, $5, $6)"#,
             id,
             org_id.0,
             workflow_id,
+            trigger_id,
             &names,
             enabled,
         )
@@ -363,7 +421,8 @@ mod tests {
         let pool = make_pool().await;
         let org_id = seed_organization(&pool).await;
         let workflow_id = seed_workflow(&pool, org_id).await;
-        seed_workflow_subscription(&pool, org_id, workflow_id, &["quote.accepted"], true).await;
+        seed_workflow_subscription(&pool, org_id, workflow_id, "t1", &["quote.accepted"], true)
+            .await;
         let event_id = seed_event(&pool, org_id, Actor::system()).await;
 
         dispatch(&pool).await;
@@ -374,19 +433,13 @@ mod tests {
 
     #[tokio::test]
     #[ignore = "requires live postgres"]
-    async fn a_manual_workflow_does_not_fire_on_an_event_it_once_subscribed_to() {
+    async fn a_stray_subscription_for_a_manual_only_workflow_produces_no_run() {
         let _guard = DISPATCH_LOCK.lock().await;
         let pool = make_pool().await;
         let org_id = seed_organization(&pool).await;
-        let workflow_id = seed_workflow(&pool, org_id).await;
-        seed_workflow_subscription(&pool, org_id, workflow_id, &["quote.accepted"], true).await;
-        sqlx::query!(
-            "UPDATE automation.workflow SET trigger_mode = 'manual' WHERE id = $1",
-            workflow_id,
-        )
-        .execute(&pool)
-        .await
-        .unwrap();
+        let workflow_id = seed_manual_only_workflow(&pool, org_id).await;
+        seed_workflow_subscription(&pool, org_id, workflow_id, "t1", &["quote.accepted"], true)
+            .await;
         let event_id = seed_event(&pool, org_id, Actor::system()).await;
 
         dispatch(&pool).await;
@@ -394,7 +447,7 @@ mod tests {
         assert_eq!(
             runs_for(&pool, event_id).await,
             0,
-            "a manual workflow must not fire even with a stray subscription row"
+            "a workflow whose graph holds only a manual trigger must not fire even with a stray subscription row"
         );
         assert!(
             is_dispatched(&pool, event_id).await,
@@ -410,8 +463,10 @@ mod tests {
         let org_id = seed_organization(&pool).await;
         let workflow_a = seed_workflow(&pool, org_id).await;
         let workflow_b = seed_workflow(&pool, org_id).await;
-        seed_workflow_subscription(&pool, org_id, workflow_a, &["quote.accepted"], true).await;
-        seed_workflow_subscription(&pool, org_id, workflow_b, &["quote.accepted"], true).await;
+        seed_workflow_subscription(&pool, org_id, workflow_a, "t1", &["quote.accepted"], true)
+            .await;
+        seed_workflow_subscription(&pool, org_id, workflow_b, "t1", &["quote.accepted"], true)
+            .await;
         let event_id = seed_event(&pool, org_id, Actor::system()).await;
 
         dispatch(&pool).await;
@@ -427,7 +482,8 @@ mod tests {
         let pool = make_pool().await;
         let org_id = seed_organization(&pool).await;
         let workflow_id = seed_workflow(&pool, org_id).await;
-        seed_workflow_subscription(&pool, org_id, workflow_id, &["quote.accepted"], false).await;
+        seed_workflow_subscription(&pool, org_id, workflow_id, "t1", &["quote.accepted"], false)
+            .await;
         let event_id = seed_event(&pool, org_id, Actor::system()).await;
 
         dispatch(&pool).await;
@@ -447,7 +503,15 @@ mod tests {
         let mine = seed_organization(&pool).await;
         let theirs = seed_organization(&pool).await;
         let their_workflow = seed_workflow(&pool, theirs).await;
-        seed_workflow_subscription(&pool, theirs, their_workflow, &["quote.accepted"], true).await;
+        seed_workflow_subscription(
+            &pool,
+            theirs,
+            their_workflow,
+            "t1",
+            &["quote.accepted"],
+            true,
+        )
+        .await;
         let event_id = seed_event(&pool, mine, Actor::system()).await;
 
         dispatch(&pool).await;
@@ -462,7 +526,8 @@ mod tests {
         let pool = make_pool().await;
         let org_id = seed_organization(&pool).await;
         let workflow_id = seed_workflow(&pool, org_id).await;
-        seed_workflow_subscription(&pool, org_id, workflow_id, &["quote.declined"], true).await;
+        seed_workflow_subscription(&pool, org_id, workflow_id, "t1", &["quote.declined"], true)
+            .await;
         let event_id = seed_event(&pool, org_id, Actor::system()).await;
 
         dispatch(&pool).await;
@@ -492,7 +557,8 @@ mod tests {
             })
             .await
             .unwrap();
-        seed_workflow_subscription(&pool, org_id, workflow.id, &["quote.accepted"], true).await;
+        seed_workflow_subscription(&pool, org_id, workflow.id, "t1", &["quote.accepted"], true)
+            .await;
         let event_id = seed_event(&pool, org_id, Actor::system()).await;
 
         dispatch(&pool).await;
@@ -518,7 +584,8 @@ mod tests {
         let pool = make_pool().await;
         let org_id = seed_organization(&pool).await;
         let workflow_id = seed_workflow(&pool, org_id).await;
-        seed_workflow_subscription(&pool, org_id, workflow_id, &["quote.accepted"], true).await;
+        seed_workflow_subscription(&pool, org_id, workflow_id, "t1", &["quote.accepted"], true)
+            .await;
         let run_id = seed_run(&pool, org_id, workflow_id).await;
         let event_id = seed_event(&pool, org_id, Actor::automation(run_id)).await;
 
@@ -545,7 +612,7 @@ mod tests {
         let org_id = seed_organization(&pool).await;
         let workflow_a = seed_workflow(&pool, org_id).await;
         let workflow_b = seed_workflow(&pool, org_id).await;
-        seed_workflow_subscription(&pool, org_id, workflow_a, &["b.done"], true).await;
+        seed_workflow_subscription(&pool, org_id, workflow_a, "t1", &["b.done"], true).await;
         // Run of B emits "b.done", which A is subscribed to.
         let run_of_b = seed_run(&pool, org_id, workflow_b).await;
         let event_id = seed_event(&pool, org_id, Actor::automation(run_of_b)).await;
@@ -578,7 +645,8 @@ mod tests {
         let pool = make_pool().await;
         let org_id = seed_organization(&pool).await;
         let workflow_id = seed_workflow(&pool, org_id).await;
-        seed_workflow_subscription(&pool, org_id, workflow_id, &["quote.accepted"], true).await;
+        seed_workflow_subscription(&pool, org_id, workflow_id, "t1", &["quote.accepted"], true)
+            .await;
         let purged_run_id = generate_uuid_v7();
         let event_id = seed_event(&pool, org_id, Actor::automation(purged_run_id)).await;
 
@@ -597,7 +665,8 @@ mod tests {
         let pool = make_pool().await;
         let org_id = seed_organization(&pool).await;
         let workflow_id = seed_workflow(&pool, org_id).await;
-        seed_workflow_subscription(&pool, org_id, workflow_id, &["quote.accepted"], true).await;
+        seed_workflow_subscription(&pool, org_id, workflow_id, "t1", &["quote.accepted"], true)
+            .await;
         let event_id = seed_event(&pool, org_id, Actor::system()).await;
         dispatch(&pool).await;
 
@@ -625,7 +694,8 @@ mod tests {
         // measuring this test's event and nothing else.
         dispatch(&pool).await;
         let workflow_id = seed_workflow(&pool, org_id).await;
-        seed_workflow_subscription(&pool, org_id, workflow_id, &["quote.accepted"], true).await;
+        seed_workflow_subscription(&pool, org_id, workflow_id, "t1", &["quote.accepted"], true)
+            .await;
         seed_event(&pool, org_id, Actor::system()).await;
         dispatch(&pool).await;
 

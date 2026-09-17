@@ -25,12 +25,10 @@ pub use domain::automation::run::{
 };
 pub use domain::automation::secret::SealedSecret;
 pub use domain::automation::settings::{AutomationSettings, SettingsBounds};
-pub use domain::automation::subscription::{SetWorkflowTriggerCommand, WorkflowTrigger};
 pub use domain::automation::workflow::{
     Branch, CreateWorkflowCommand, Edge, Graph, GraphError, MAX_LAYOUT_ENTRIES, NodePosition,
     PlacedConnector, PlacedTrigger, SaveWorkflowVersionCommand, TriggerKind, UpdateWorkflowCommand,
-    Workflow, WorkflowLayout, WorkflowReference, WorkflowTriggerMode, WorkflowVersion,
-    validate_graph,
+    Workflow, WorkflowLayout, WorkflowReference, WorkflowVersion, validate_graph,
 };
 pub use infrastructure::automation::connectors::{ConnectorRegistry, UnknownConnectorKind};
 pub use infrastructure::automation::webhook::{

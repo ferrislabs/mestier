@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT trigger_id AS \"trigger_id!\" FROM automation.subscription\n               WHERE kind = 'workflow' AND target_id = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "trigger_id!",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      true
+    ]
+  },
+  "hash": "1982aacdf0a95d8eb23fd13ceda3d580268a08ea21c16344788a444c0439c14d"
+}

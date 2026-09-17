@@ -1,6 +1,5 @@
 //! Workflows: list, create, read (with its current version), save a new
-//! version, enable/disable and rename (`update`), delete, and read/set the
-//! event(s) that trigger it (`trigger`, #225).
+//! version, enable/disable and rename (`update`), delete.
 
 use axum::Router;
 use axum_extra::routing::RouterExt;
@@ -13,7 +12,6 @@ pub mod delete;
 pub mod get_one;
 pub mod list;
 pub mod save_version;
-pub mod trigger;
 pub mod update;
 
 pub fn router(_state: &AppState) -> Router<AppState> {
@@ -24,8 +22,6 @@ pub fn router(_state: &AppState) -> Router<AppState> {
         .typed_patch(update::handler)
         .typed_delete(delete::handler)
         .typed_put(save_version::handler)
-        .typed_get(trigger::get_trigger)
-        .typed_put(trigger::set_trigger)
 }
 
 /// Loads a workflow of `organization_id`. Gates nothing: readers and writers

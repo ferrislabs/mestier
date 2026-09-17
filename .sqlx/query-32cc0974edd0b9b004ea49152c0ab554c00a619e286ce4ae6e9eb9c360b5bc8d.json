@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT id, org_id, workflow_id, workflow_version_id, trigger_event_id,\n                      trigger_payload, status, error, next_attempt_at, locked_at, locked_by,\n                      started_at, finished_at, created_at\n               FROM automation.run WHERE org_id = $1 AND id = $2",
+  "query": "SELECT id, org_id, workflow_id, workflow_version_id, trigger_event_id,\n                      trigger_payload, trigger_id, status, error, next_attempt_at, locked_at,\n                      locked_by, started_at, finished_at, created_at\n               FROM automation.run\n               WHERE org_id = $1\n               ORDER BY created_at DESC",
   "describe": {
     "columns": [
       {
@@ -35,48 +35,52 @@
       },
       {
         "ordinal": 6,
-        "name": "status",
+        "name": "trigger_id",
         "type_info": "Text"
       },
       {
         "ordinal": 7,
-        "name": "error",
+        "name": "status",
         "type_info": "Text"
       },
       {
         "ordinal": 8,
+        "name": "error",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 9,
         "name": "next_attempt_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 9,
+        "ordinal": 10,
         "name": "locked_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 10,
+        "ordinal": 11,
         "name": "locked_by",
         "type_info": "Text"
       },
       {
-        "ordinal": 11,
+        "ordinal": 12,
         "name": "started_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 12,
+        "ordinal": 13,
         "name": "finished_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 13,
+        "ordinal": 14,
         "name": "created_at",
         "type_info": "Timestamptz"
       }
     ],
     "parameters": {
       "Left": [
-        "Uuid",
         "Uuid"
       ]
     },
@@ -85,6 +89,7 @@
       false,
       false,
       false,
+      true,
       true,
       true,
       false,
@@ -97,5 +102,5 @@
       false
     ]
   },
-  "hash": "02e06645f984964c098b9b316d291f21a066ad89a8d66c2b6aa53f2019770ad1"
+  "hash": "32cc0974edd0b9b004ea49152c0ab554c00a619e286ce4ae6e9eb9c360b5bc8d"
 }

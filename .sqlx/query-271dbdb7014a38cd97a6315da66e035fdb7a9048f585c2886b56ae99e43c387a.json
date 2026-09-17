@@ -1,0 +1,19 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO automation.subscription (id, org_id, kind, target_id, trigger_id, event_names, enabled)\n               VALUES ($1, $2, 'workflow', $3, $4, $5, $6)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Uuid",
+        "Text",
+        "TextArray",
+        "Bool"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "271dbdb7014a38cd97a6315da66e035fdb7a9048f585c2886b56ae99e43c387a"
+}

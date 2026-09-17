@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT trigger_id, event_names FROM automation.subscription\n               WHERE kind = 'workflow' AND target_id = $1\n               ORDER BY trigger_id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "trigger_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "event_names",
+        "type_info": "TextArray"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      true,
+      false
+    ]
+  },
+  "hash": "e611028197f7104d274616a97d5f6225038d94f930fcd7b4ed7d64141a0056bf"
+}

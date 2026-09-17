@@ -18,7 +18,7 @@ use chrono::{DateTime, Utc};
 use mestier_core::{
     AuthRequirement, AuthScheme, AutomationSettings, Credential, CredentialOrigin, Field,
     FieldKind, NodePosition, OrganizationId, Run, RunStatus, RunStep, SelectOption, StepStatus,
-    VisibleWhen, Workflow, WorkflowTrigger, WorkflowTriggerMode, WorkflowVersion,
+    VisibleWhen, Workflow, WorkflowVersion,
 };
 use serde::{Deserialize, Deserializer, Serialize, de};
 use serde_json::Value;
@@ -278,22 +278,6 @@ pub fn secret_value(origin: CredentialOrigin, plaintext: &[u8]) -> Value {
 
 // --- workflows -------------------------------------------------------------
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
-#[serde(rename_all = "snake_case")]
-pub enum WorkflowTriggerModeDto {
-    Events,
-    Manual,
-}
-
-impl From<WorkflowTriggerMode> for WorkflowTriggerModeDto {
-    fn from(value: WorkflowTriggerMode) -> Self {
-        match value {
-            WorkflowTriggerMode::Events => Self::Events,
-            WorkflowTriggerMode::Manual => Self::Manual,
-        }
-    }
-}
-
 #[derive(Debug, Clone, PartialEq, Serialize, ToSchema)]
 pub struct WorkflowResponse {
     pub id: Uuid,
@@ -302,7 +286,6 @@ pub struct WorkflowResponse {
     pub description: Option<String>,
     pub enabled: bool,
     pub current_version_id: Option<Uuid>,
-    pub trigger_mode: WorkflowTriggerModeDto,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }
@@ -316,33 +299,8 @@ impl From<Workflow> for WorkflowResponse {
             description: value.description,
             enabled: value.enabled,
             current_version_id: value.current_version_id,
-            trigger_mode: value.trigger_mode.into(),
             created_at: value.created_at,
             updated_at: value.updated_at,
-        }
-    }
-}
-
-/// The event(s) a workflow currently triggers from (#225) — `event_names`
-/// empty means no subscription, not an error: a freshly created workflow, or
-/// one whose trigger was just cleared, both read back this way.
-#[derive(Debug, Clone, PartialEq, Serialize, ToSchema)]
-pub struct WorkflowTriggerResponse {
-    pub mode: WorkflowTriggerModeDto,
-    pub event_names: Vec<String>,
-}
-
-impl From<WorkflowTrigger> for WorkflowTriggerResponse {
-    fn from(value: WorkflowTrigger) -> Self {
-        match value {
-            WorkflowTrigger::Events(event_names) => Self {
-                mode: WorkflowTriggerModeDto::Events,
-                event_names,
-            },
-            WorkflowTrigger::Manual => Self {
-                mode: WorkflowTriggerModeDto::Manual,
-                event_names: Vec::new(),
-            },
         }
     }
 }

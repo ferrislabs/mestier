@@ -31,6 +31,7 @@ struct RunRow {
     workflow_version_id: Uuid,
     trigger_event_id: Option<Uuid>,
     trigger_payload: Option<Value>,
+    trigger_id: Option<String>,
     status: String,
     error: Option<String>,
     next_attempt_at: Option<DateTime<Utc>>,
@@ -52,6 +53,7 @@ impl TryFrom<RunRow> for Run {
             workflow_version_id: row.workflow_version_id,
             trigger_event_id: row.trigger_event_id,
             trigger_payload: row.trigger_payload,
+            trigger_id: row.trigger_id,
             status: row.status.parse().map_err(CoreError::Internal)?,
             error: row.error,
             next_attempt_at: row.next_attempt_at,
@@ -109,18 +111,19 @@ impl<'tx> RunRepository for PgRunRepository<'tx> {
             RunRow,
             r#"INSERT INTO automation.run
                    (id, org_id, workflow_id, workflow_version_id, trigger_event_id,
-                    trigger_payload, status, error, next_attempt_at, locked_at, locked_by,
-                    started_at, finished_at, created_at)
-               VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+                    trigger_payload, trigger_id, status, error, next_attempt_at, locked_at,
+                    locked_by, started_at, finished_at, created_at)
+               VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
                RETURNING id, org_id, workflow_id, workflow_version_id, trigger_event_id,
-                         trigger_payload, status, error, next_attempt_at, locked_at, locked_by,
-                         started_at, finished_at, created_at"#,
+                         trigger_payload, trigger_id, status, error, next_attempt_at, locked_at,
+                         locked_by, started_at, finished_at, created_at"#,
             run.id,
             run.org_id.0,
             run.workflow_id,
             run.workflow_version_id,
             run.trigger_event_id,
             run.trigger_payload,
+            run.trigger_id,
             run.status.as_str(),
             run.error,
             run.next_attempt_at,
@@ -253,8 +256,8 @@ impl<'tx> RunRepository for PgRunRepository<'tx> {
         let row = sqlx::query_as!(
             RunRow,
             r#"SELECT id, org_id, workflow_id, workflow_version_id, trigger_event_id,
-                      trigger_payload, status, error, next_attempt_at, locked_at, locked_by,
-                      started_at, finished_at, created_at
+                      trigger_payload, trigger_id, status, error, next_attempt_at, locked_at,
+                      locked_by, started_at, finished_at, created_at
                FROM automation.run WHERE org_id = $1 AND id = $2"#,
             org_id.0,
             run_id,
@@ -275,8 +278,8 @@ impl<'tx> RunRepository for PgRunRepository<'tx> {
         let rows = sqlx::query_as!(
             RunRow,
             r#"SELECT id, org_id, workflow_id, workflow_version_id, trigger_event_id,
-                      trigger_payload, status, error, next_attempt_at, locked_at, locked_by,
-                      started_at, finished_at, created_at
+                      trigger_payload, trigger_id, status, error, next_attempt_at, locked_at,
+                      locked_by, started_at, finished_at, created_at
                FROM automation.run
                WHERE org_id = $1
                ORDER BY created_at DESC"#,
@@ -534,9 +537,7 @@ mod tests {
     use crate::application::test_support::now_storable;
     use crate::domain::automation::ports::WorkflowRepository;
     use crate::domain::automation::run::StepStatus;
-    use crate::domain::automation::workflow::{
-        Graph, PlacedConnector, Workflow, WorkflowTriggerMode,
-    };
+    use crate::domain::automation::workflow::{Graph, PlacedConnector, Workflow};
     use crate::infrastructure::automation::postgres::PgWorkflowRepository;
     use crate::infrastructure::postgres::with_tx;
 
@@ -595,7 +596,6 @@ mod tests {
                     enabled: true,
                     current_version_id: None,
                     layout: None,
-                    trigger_mode: WorkflowTriggerMode::Events,
                     created_at: now,
                     updated_at: now,
                 })
@@ -634,6 +634,7 @@ mod tests {
             workflow_version_id,
             trigger_event_id: None,
             trigger_payload: None,
+            trigger_id: None,
             status: RunStatus::Pending,
             error: None,
             next_attempt_at: Some(now),

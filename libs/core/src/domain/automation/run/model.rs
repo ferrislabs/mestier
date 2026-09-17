@@ -26,6 +26,7 @@ pub struct Run {
     /// once #201 dispatches a run from a domain event: the payload then
     /// lives on `automation.event`, reached through `trigger_event_id`.
     pub trigger_payload: Option<Value>,
+    pub trigger_id: Option<String>,
     pub status: RunStatus,
     pub error: Option<String>,
     pub next_attempt_at: Option<DateTime<Utc>>,

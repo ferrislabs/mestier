@@ -108,10 +108,6 @@ impl App {
         )
     }
 
-    pub fn workflow_trigger_url(&self, workflow_id: &str) -> String {
-        format!("{}/{workflow_id}/trigger", self.workflows_url())
-    }
-
     pub fn workflow_url(&self, workflow_id: &str) -> String {
         format!("{}/{workflow_id}", self.workflows_url())
     }

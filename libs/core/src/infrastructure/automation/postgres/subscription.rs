@@ -3,15 +3,13 @@ use mestier_macros::repository;
 use uuid::Uuid;
 
 use crate::{
-    domain::automation::ports::SubscriptionRepository,
+    domain::automation::{
+        ports::SubscriptionRepository,
+        workflow::{PlacedTrigger, TriggerKind},
+    },
     infrastructure::postgres::{SharedTx, error::map_sqlx_error},
 };
 
-/// A workflow's trigger, stored as `automation.subscription` rows of
-/// `kind = 'workflow'` — the same table and identity
-/// `PgEventDispatchRepository::dispatch_pending` already reads; this is
-/// just the write side of it, plus the single-workflow read the trigger
-/// picker needs.
 #[repository(domain = Subscription, backend = Postgres)]
 pub struct PgSubscriptionRepository<'tx> {
     tx: SharedTx<'tx>,
@@ -24,22 +22,14 @@ impl<'tx> PgSubscriptionRepository<'tx> {
 }
 
 impl<'tx> SubscriptionRepository for PgSubscriptionRepository<'tx> {
-    async fn set_workflow_trigger(
+    async fn replace_workflow_subscriptions(
         &mut self,
         org_id: OrganizationId,
         workflow_id: Uuid,
-        event_names: &[String],
-    ) -> Result<Vec<String>, CoreError> {
+        triggers: &[PlacedTrigger],
+    ) -> Result<(), CoreError> {
         let mut tx = self.tx.lock().await;
 
-        // Delete-then-insert rather than an `ON CONFLICT` upsert: there is
-        // no unique constraint on `(org_id, kind, target_id)` to conflict
-        // against — a workflow's subscription is identified by the pair
-        // `kind = 'workflow'` and `target_id`, and this pair of statements
-        // is what keeps it a single row rather than an accumulation of one
-        // per edit. Both run in the same transaction the `#[transactional]`
-        // use case already opened, so a reader never observes the row
-        // gone-and-not-yet-replaced.
         sqlx::query!(
             r#"
             DELETE FROM automation.subscription
@@ -52,53 +42,29 @@ impl<'tx> SubscriptionRepository for PgSubscriptionRepository<'tx> {
         .await
         .map_err(map_sqlx_error)?;
 
-        if event_names.is_empty() {
-            // A workflow triggered by nothing has no subscription row at
-            // all — not a row subscribed to an empty set of events, which
-            // `chk_automation_subscription_event_names` would refuse to
-            // store anyway.
-            return Ok(Vec::new());
+        for trigger in triggers {
+            let TriggerKind::Events(event_names) = &trigger.kind else {
+                continue;
+            };
+
+            sqlx::query!(
+                r#"
+                INSERT INTO automation.subscription
+                    (id, org_id, kind, target_id, trigger_id, event_names, enabled)
+                VALUES ($1, $2, 'workflow', $3, $4, $5, true)
+                "#,
+                generate_uuid_v7(),
+                org_id.0,
+                workflow_id,
+                trigger.id,
+                event_names,
+            )
+            .execute(&mut ***tx)
+            .await
+            .map_err(map_sqlx_error)?;
         }
 
-        let row = sqlx::query!(
-            r#"
-            INSERT INTO automation.subscription (id, org_id, kind, target_id, event_names, enabled)
-            VALUES ($1, $2, 'workflow', $3, $4, true)
-            RETURNING event_names
-            "#,
-            generate_uuid_v7(),
-            org_id.0,
-            workflow_id,
-            event_names,
-        )
-        .fetch_one(&mut ***tx)
-        .await
-        .map_err(map_sqlx_error)?;
-
-        Ok(row.event_names)
-    }
-
-    async fn workflow_trigger(
-        &mut self,
-        org_id: OrganizationId,
-        workflow_id: Uuid,
-    ) -> Result<Vec<String>, CoreError> {
-        let mut tx = self.tx.lock().await;
-
-        let row = sqlx::query!(
-            r#"
-            SELECT event_names
-            FROM automation.subscription
-            WHERE org_id = $1 AND kind = 'workflow' AND target_id = $2
-            "#,
-            org_id.0,
-            workflow_id,
-        )
-        .fetch_optional(&mut ***tx)
-        .await
-        .map_err(map_sqlx_error)?;
-
-        Ok(row.map(|r| r.event_names).unwrap_or_default())
+        Ok(())
     }
 }
 
@@ -154,7 +120,7 @@ mod tests {
         let workflow = usecase
             .create_workflow(crate::domain::automation::workflow::CreateWorkflowCommand {
                 org_id,
-                name: "Trigger test workflow".to_string(),
+                name: "Subscription test workflow".to_string(),
                 description: None,
             })
             .await
@@ -162,160 +128,191 @@ mod tests {
         workflow.id
     }
 
-    async fn subscription_row_count(pool: &PgPool, workflow_id: Uuid) -> i64 {
-        sqlx::query_scalar!(
-            r#"SELECT COUNT(*) FROM automation.subscription
-               WHERE kind = 'workflow' AND target_id = $1"#,
+    async fn subscription_rows(
+        pool: &PgPool,
+        workflow_id: Uuid,
+    ) -> Vec<(Option<String>, Vec<String>)> {
+        let rows = sqlx::query!(
+            r#"SELECT trigger_id, event_names FROM automation.subscription
+               WHERE kind = 'workflow' AND target_id = $1
+               ORDER BY trigger_id"#,
             workflow_id,
         )
-        .fetch_one(pool)
+        .fetch_all(pool)
         .await
-        .unwrap()
-        .unwrap_or(0)
+        .unwrap();
+
+        rows.into_iter()
+            .map(|row| (row.trigger_id, row.event_names))
+            .collect()
+    }
+
+    fn events_trigger(id: &str, names: &[&str]) -> PlacedTrigger {
+        PlacedTrigger {
+            id: id.to_string(),
+            kind: TriggerKind::Events(names.iter().map(|n| (*n).to_string()).collect()),
+        }
+    }
+
+    fn manual_trigger(id: &str) -> PlacedTrigger {
+        PlacedTrigger {
+            id: id.to_string(),
+            kind: TriggerKind::Manual,
+        }
     }
 
     #[tokio::test]
     #[ignore = "requires live postgres"]
-    async fn a_workflow_with_no_subscription_reads_back_an_empty_selection() {
+    async fn two_event_triggers_write_two_subscription_rows() {
         let pool = make_pool().await;
         let org_id = seed_organization(&pool).await;
         let workflow_id = seed_workflow(&pool, org_id).await;
+        let triggers = vec![
+            events_trigger("t1", &["quote.accepted"]),
+            events_trigger("t2", &["quote.declined", "invoice.issued"]),
+        ];
 
-        let trigger = with_tx(&pool, async |tx| {
+        with_tx(&pool, async |tx| {
             let mut repo = PgSubscriptionRepository::new(&tx);
-            repo.workflow_trigger(org_id, workflow_id).await
+            repo.replace_workflow_subscriptions(org_id, workflow_id, &triggers)
+                .await
         })
         .await
         .unwrap();
 
-        assert!(trigger.is_empty());
+        let rows = subscription_rows(&pool, workflow_id).await;
+        assert_eq!(
+            rows,
+            vec![
+                (Some("t1".to_string()), vec!["quote.accepted".to_string()]),
+                (
+                    Some("t2".to_string()),
+                    vec!["quote.declined".to_string(), "invoice.issued".to_string()]
+                ),
+            ]
+        );
     }
 
     #[tokio::test]
     #[ignore = "requires live postgres"]
-    async fn setting_a_trigger_persists_it_and_is_read_back() {
+    async fn a_manual_trigger_gets_no_subscription_row() {
         let pool = make_pool().await;
         let org_id = seed_organization(&pool).await;
         let workflow_id = seed_workflow(&pool, org_id).await;
+        let triggers = vec![manual_trigger("t1")];
 
-        let written = with_tx(&pool, async |tx| {
+        with_tx(&pool, async |tx| {
             let mut repo = PgSubscriptionRepository::new(&tx);
-            repo.set_workflow_trigger(
+            repo.replace_workflow_subscriptions(org_id, workflow_id, &triggers)
+                .await
+        })
+        .await
+        .unwrap();
+
+        assert!(subscription_rows(&pool, workflow_id).await.is_empty());
+    }
+
+    #[tokio::test]
+    #[ignore = "requires live postgres"]
+    async fn removing_a_trigger_and_replacing_removes_its_row() {
+        let pool = make_pool().await;
+        let org_id = seed_organization(&pool).await;
+        let workflow_id = seed_workflow(&pool, org_id).await;
+        with_tx(&pool, async |tx| {
+            let mut repo = PgSubscriptionRepository::new(&tx);
+            repo.replace_workflow_subscriptions(
                 org_id,
                 workflow_id,
-                &["quote.accepted".to_string(), "invoice.issued".to_string()],
+                &[
+                    events_trigger("t1", &["quote.accepted"]),
+                    events_trigger("t2", &["quote.declined"]),
+                ],
             )
             .await
         })
         .await
         .unwrap();
-        assert_eq!(
-            written,
-            vec!["quote.accepted".to_string(), "invoice.issued".to_string()]
-        );
 
-        let reread = with_tx(&pool, async |tx| {
+        with_tx(&pool, async |tx| {
             let mut repo = PgSubscriptionRepository::new(&tx);
-            repo.workflow_trigger(org_id, workflow_id).await
+            repo.replace_workflow_subscriptions(
+                org_id,
+                workflow_id,
+                &[events_trigger("t1", &["quote.accepted"])],
+            )
+            .await
         })
         .await
         .unwrap();
+
+        let rows = subscription_rows(&pool, workflow_id).await;
         assert_eq!(
-            reread,
-            vec!["quote.accepted".to_string(), "invoice.issued".to_string()]
+            rows,
+            vec![(Some("t1".to_string()), vec!["quote.accepted".to_string()])]
         );
     }
 
     #[tokio::test]
     #[ignore = "requires live postgres"]
-    async fn changing_the_selection_replaces_it_rather_than_accumulating_a_second_row() {
-        let pool = make_pool().await;
-        let org_id = seed_organization(&pool).await;
-        let workflow_id = seed_workflow(&pool, org_id).await;
-
-        with_tx(&pool, async |tx| {
-            let mut repo = PgSubscriptionRepository::new(&tx);
-            repo.set_workflow_trigger(org_id, workflow_id, &["quote.accepted".to_string()])
-                .await
-        })
-        .await
-        .unwrap();
-
-        with_tx(&pool, async |tx| {
-            let mut repo = PgSubscriptionRepository::new(&tx);
-            repo.set_workflow_trigger(org_id, workflow_id, &["quote.declined".to_string()])
-                .await
-        })
-        .await
-        .unwrap();
-
-        assert_eq!(
-            subscription_row_count(&pool, workflow_id).await,
-            1,
-            "the second write must replace the first row, not add to it"
-        );
-        let reread = with_tx(&pool, async |tx| {
-            let mut repo = PgSubscriptionRepository::new(&tx);
-            repo.workflow_trigger(org_id, workflow_id).await
-        })
-        .await
-        .unwrap();
-        assert_eq!(reread, vec!["quote.declined".to_string()]);
-    }
-
-    #[tokio::test]
-    #[ignore = "requires live postgres"]
-    async fn clearing_the_selection_removes_the_row_entirely() {
+    async fn replacing_with_no_triggers_clears_every_row() {
         let pool = make_pool().await;
         let org_id = seed_organization(&pool).await;
         let workflow_id = seed_workflow(&pool, org_id).await;
         with_tx(&pool, async |tx| {
             let mut repo = PgSubscriptionRepository::new(&tx);
-            repo.set_workflow_trigger(org_id, workflow_id, &["quote.accepted".to_string()])
-                .await
+            repo.replace_workflow_subscriptions(
+                org_id,
+                workflow_id,
+                &[events_trigger("t1", &["quote.accepted"])],
+            )
+            .await
         })
         .await
         .unwrap();
 
         with_tx(&pool, async |tx| {
             let mut repo = PgSubscriptionRepository::new(&tx);
-            repo.set_workflow_trigger(org_id, workflow_id, &[]).await
+            repo.replace_workflow_subscriptions(org_id, workflow_id, &[])
+                .await
         })
         .await
         .unwrap();
 
-        assert_eq!(subscription_row_count(&pool, workflow_id).await, 0);
-        let reread = with_tx(&pool, async |tx| {
-            let mut repo = PgSubscriptionRepository::new(&tx);
-            repo.workflow_trigger(org_id, workflow_id).await
-        })
-        .await
-        .unwrap();
-        assert!(reread.is_empty());
+        assert!(subscription_rows(&pool, workflow_id).await.is_empty());
     }
 
     #[tokio::test]
     #[ignore = "requires live postgres"]
-    async fn another_organizations_trigger_is_not_visible() {
+    async fn another_organizations_subscriptions_are_untouched() {
         let pool = make_pool().await;
         let mine = seed_organization(&pool).await;
         let theirs = seed_organization(&pool).await;
         let their_workflow = seed_workflow(&pool, theirs).await;
         with_tx(&pool, async |tx| {
             let mut repo = PgSubscriptionRepository::new(&tx);
-            repo.set_workflow_trigger(theirs, their_workflow, &["quote.accepted".to_string()])
+            repo.replace_workflow_subscriptions(
+                theirs,
+                their_workflow,
+                &[events_trigger("t1", &["quote.accepted"])],
+            )
+            .await
+        })
+        .await
+        .unwrap();
+
+        with_tx(&pool, async |tx| {
+            let mut repo = PgSubscriptionRepository::new(&tx);
+            repo.replace_workflow_subscriptions(mine, their_workflow, &[])
                 .await
         })
         .await
         .unwrap();
 
-        let trigger = with_tx(&pool, async |tx| {
-            let mut repo = PgSubscriptionRepository::new(&tx);
-            repo.workflow_trigger(mine, their_workflow).await
-        })
-        .await
-        .unwrap();
-
-        assert!(trigger.is_empty());
+        let rows = subscription_rows(&pool, their_workflow).await;
+        assert_eq!(
+            rows,
+            vec![(Some("t1".to_string()), vec!["quote.accepted".to_string()])],
+            "a stranger's replace call must not touch another organization's rows"
+        );
     }
 }

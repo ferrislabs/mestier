@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "INSERT INTO automation.run\n                   (id, org_id, workflow_id, workflow_version_id, trigger_event_id,\n                    trigger_payload, status, error, next_attempt_at, locked_at, locked_by,\n                    started_at, finished_at, created_at)\n               VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)\n               RETURNING id, org_id, workflow_id, workflow_version_id, trigger_event_id,\n                         trigger_payload, status, error, next_attempt_at, locked_at, locked_by,\n                         started_at, finished_at, created_at",
+  "query": "SELECT id, org_id, workflow_id, workflow_version_id, trigger_event_id,\n                      trigger_payload, trigger_id, status, error, next_attempt_at, locked_at,\n                      locked_by, started_at, finished_at, created_at\n               FROM automation.run WHERE org_id = $1 AND id = $2",
   "describe": {
     "columns": [
       {
@@ -35,41 +35,46 @@
       },
       {
         "ordinal": 6,
-        "name": "status",
+        "name": "trigger_id",
         "type_info": "Text"
       },
       {
         "ordinal": 7,
-        "name": "error",
+        "name": "status",
         "type_info": "Text"
       },
       {
         "ordinal": 8,
+        "name": "error",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 9,
         "name": "next_attempt_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 9,
+        "ordinal": 10,
         "name": "locked_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 10,
+        "ordinal": 11,
         "name": "locked_by",
         "type_info": "Text"
       },
       {
-        "ordinal": 11,
+        "ordinal": 12,
         "name": "started_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 12,
+        "ordinal": 13,
         "name": "finished_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 13,
+        "ordinal": 14,
         "name": "created_at",
         "type_info": "Timestamptz"
       }
@@ -77,19 +82,7 @@
     "parameters": {
       "Left": [
         "Uuid",
-        "Uuid",
-        "Uuid",
-        "Uuid",
-        "Uuid",
-        "Jsonb",
-        "Text",
-        "Text",
-        "Timestamptz",
-        "Timestamptz",
-        "Text",
-        "Timestamptz",
-        "Timestamptz",
-        "Timestamptz"
+        "Uuid"
       ]
     },
     "nullable": [
@@ -97,6 +90,7 @@
       false,
       false,
       false,
+      true,
       true,
       true,
       false,
@@ -109,5 +103,5 @@
       false
     ]
   },
-  "hash": "a592a4c602ee7e1eb7480f765918ac0f82075ff9aa2fb34502bd937100e0b7dc"
+  "hash": "d4a61143054547e23ca88fce0f43b1fc6f0a61b6688d9b37b62873cffbb1b7cc"
 }

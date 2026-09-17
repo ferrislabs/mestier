@@ -184,44 +184,6 @@ async fn a_view_only_member_reads_settings_but_cannot_update_them() {
     app.cleanup().await;
 }
 
-/// `workflow/trigger.rs` holds both a read and a write handler behind one
-/// file too — same split proof as settings, on a resource loaded through
-/// `workflow::find_workflow_in_org` rather than checked directly off the
-/// path.
-#[tokio::test]
-#[ignore = "requires live postgres and redis"]
-async fn a_view_only_member_reads_a_trigger_but_cannot_set_it() {
-    let app = harness::start().await;
-    let created = create_workflow(&app, &app.token).await;
-    let workflow: Value = created.json().await.expect("the create answer is json");
-    let workflow_id = workflow["data"]["id"]
-        .as_str()
-        .expect("the created workflow carries an id");
-
-    let get_response = client()
-        .get(app.workflow_trigger_url(workflow_id))
-        .bearer_auth(&app.view_only_token)
-        .send()
-        .await
-        .expect("the api answers the view-only member's trigger read");
-    assert_eq!(get_response.status(), 200);
-
-    let put_response = client()
-        .put(app.workflow_trigger_url(workflow_id))
-        .bearer_auth(&app.view_only_token)
-        .json(&json!({ "mode": "events", "event_names": [] }))
-        .send()
-        .await
-        .expect("the api answers the view-only member's trigger write");
-    assert_eq!(
-        put_response.status(),
-        403,
-        "MANAGE_AUTOMATION must gate the trigger write, VIEW_AUTOMATION must not"
-    );
-
-    app.cleanup().await;
-}
-
 #[tokio::test]
 #[ignore = "requires live postgres and redis"]
 async fn a_valid_expression_resolves_against_the_supplied_context() {

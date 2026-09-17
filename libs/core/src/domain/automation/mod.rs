@@ -6,7 +6,6 @@ pub mod ports;
 pub mod run;
 pub mod secret;
 pub mod settings;
-pub mod subscription;
 pub mod workflow;
 
 pub use catalogue::event_catalogue;

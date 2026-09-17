@@ -101,7 +101,7 @@ mod tests {
             }],
             triggers: vec![PlacedTrigger {
                 id: "t1".to_string(),
-                kind: TriggerKind::Manual,
+                kind: TriggerKind::Events(vec!["quote.accepted".to_string()]),
             }],
         };
         usecase
@@ -116,17 +116,6 @@ mod tests {
             )
             .await
             .unwrap();
-
-        sqlx::query!(
-            r#"INSERT INTO automation.subscription (id, org_id, kind, target_id, event_names)
-               VALUES ($1, $2, 'workflow', $3, ARRAY['quote.accepted'])"#,
-            generate_uuid_v7(),
-            org_id,
-            workflow.id,
-        )
-        .execute(pool)
-        .await
-        .unwrap();
 
         org
     }

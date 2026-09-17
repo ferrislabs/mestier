@@ -8,10 +8,10 @@ use crate::{
     domain::automation::{
         catalogue::event_catalogue,
         connector::connector_catalogue,
-        ports::{CredentialRepository, WorkflowRepository},
+        ports::{CredentialRepository, SubscriptionRepository, WorkflowRepository},
         workflow::{
             CreateWorkflowCommand, GraphError, SaveWorkflowVersionCommand, UpdateWorkflowCommand,
-            Workflow, WorkflowTriggerMode, WorkflowVersion, validate_graph,
+            Workflow, WorkflowVersion, validate_graph,
         },
     },
 };
@@ -45,7 +45,6 @@ impl MestierUseCase {
             enabled: true,
             current_version_id: None,
             layout: None,
-            trigger_mode: WorkflowTriggerMode::Events,
             created_at: now,
             updated_at: now,
         };
@@ -108,13 +107,14 @@ impl MestierUseCase {
     /// `current_version_id` to it, all inside one transaction (#199). A run
     /// (#200) reading the previous version therefore never observes a
     /// half-written one.
-    #[transactional(workflow, credential)]
+    #[transactional(workflow, credential, subscription)]
     pub async fn save_workflow_version(
         &self,
         command: SaveWorkflowVersionCommand,
     ) -> Result<WorkflowVersion, CoreError> {
         let mut workflows = workflow_repository;
         let mut credentials = credential_repository;
+        let mut subscriptions = subscription_repository;
 
         workflows
             .find_by_id(command.org_id, command.workflow_id)
@@ -139,6 +139,14 @@ impl MestierUseCase {
                 command.workflow_id,
                 &command.graph,
                 command.created_by,
+            )
+            .await?;
+
+        subscriptions
+            .replace_workflow_subscriptions(
+                command.org_id,
+                command.workflow_id,
+                &command.graph.triggers,
             )
             .await?;
 
@@ -289,7 +297,6 @@ mod tests {
         assert_eq!(created.org_id, org_id);
         assert!(created.enabled);
         assert_eq!(created.current_version_id, None);
-        assert_eq!(created.trigger_mode, WorkflowTriggerMode::Events);
 
         let found = usecase.find_workflow(org_id, created.id).await.unwrap();
         assert_eq!(found, Some(created));
@@ -479,6 +486,172 @@ mod tests {
             .unwrap()
             .unwrap();
         assert_eq!(reloaded.current_version_id, Some(version.id));
+    }
+
+    async fn subscribed_trigger_ids(pool: &PgPool, workflow_id: Uuid) -> Vec<String> {
+        let mut ids: Vec<String> = sqlx::query_scalar!(
+            r#"SELECT trigger_id AS "trigger_id!" FROM automation.subscription
+               WHERE kind = 'workflow' AND target_id = $1"#,
+            workflow_id,
+        )
+        .fetch_all(pool)
+        .await
+        .unwrap();
+        ids.sort();
+        ids
+    }
+
+    fn graph_with_two_event_triggers() -> Graph {
+        let mut config = serde_json::Map::new();
+        config.insert("predicate".to_string(), serde_json::json!("{{ true }}"));
+        Graph {
+            connectors: vec![
+                PlacedConnector {
+                    id: "c1".to_string(),
+                    kind: "flow.condition".to_string(),
+                    version: 1,
+                    credential_id: None,
+                    config: config.clone(),
+                },
+                PlacedConnector {
+                    id: "c2".to_string(),
+                    kind: "flow.condition".to_string(),
+                    version: 1,
+                    credential_id: None,
+                    config,
+                },
+            ],
+            edges: vec![
+                Edge {
+                    from: "t1".to_string(),
+                    to: "c1".to_string(),
+                    branch: None,
+                },
+                Edge {
+                    from: "t2".to_string(),
+                    to: "c2".to_string(),
+                    branch: None,
+                },
+            ],
+            triggers: vec![
+                PlacedTrigger {
+                    id: "t1".to_string(),
+                    kind: TriggerKind::Events(vec!["quote.accepted".to_string()]),
+                },
+                PlacedTrigger {
+                    id: "t2".to_string(),
+                    kind: TriggerKind::Events(vec!["quote.declined".to_string()]),
+                },
+            ],
+        }
+    }
+
+    #[tokio::test]
+    #[ignore = "requires live postgres"]
+    async fn saving_a_version_with_two_event_triggers_writes_two_subscription_rows() {
+        let pool = make_pool().await;
+        let org_id = seed_organization(&pool, "subs-two-triggers").await;
+        let usecase = use_case(pool.clone());
+        let created = usecase
+            .create_workflow(CreateWorkflowCommand {
+                org_id,
+                name: "Name".to_string(),
+                description: None,
+            })
+            .await
+            .unwrap();
+
+        usecase
+            .save_workflow_version(SaveWorkflowVersionCommand {
+                org_id,
+                workflow_id: created.id,
+                graph: graph_with_two_event_triggers(),
+                layout: None,
+                created_by: None,
+            })
+            .await
+            .unwrap();
+
+        assert_eq!(
+            subscribed_trigger_ids(&pool, created.id).await,
+            vec!["t1".to_string(), "t2".to_string()]
+        );
+    }
+
+    #[tokio::test]
+    #[ignore = "requires live postgres"]
+    async fn removing_a_trigger_and_saving_removes_its_subscription_row() {
+        let pool = make_pool().await;
+        let org_id = seed_organization(&pool, "subs-remove-trigger").await;
+        let usecase = use_case(pool.clone());
+        let created = usecase
+            .create_workflow(CreateWorkflowCommand {
+                org_id,
+                name: "Name".to_string(),
+                description: None,
+            })
+            .await
+            .unwrap();
+        usecase
+            .save_workflow_version(SaveWorkflowVersionCommand {
+                org_id,
+                workflow_id: created.id,
+                graph: graph_with_two_event_triggers(),
+                layout: None,
+                created_by: None,
+            })
+            .await
+            .unwrap();
+
+        let mut narrowed = graph_with_two_event_triggers();
+        narrowed.connectors.remove(1);
+        narrowed.edges.remove(1);
+        narrowed.triggers.remove(1);
+        usecase
+            .save_workflow_version(SaveWorkflowVersionCommand {
+                org_id,
+                workflow_id: created.id,
+                graph: narrowed,
+                layout: None,
+                created_by: None,
+            })
+            .await
+            .unwrap();
+
+        assert_eq!(
+            subscribed_trigger_ids(&pool, created.id).await,
+            vec!["t1".to_string()],
+            "t2's row must be gone in the same transaction that dropped it from the graph"
+        );
+    }
+
+    #[tokio::test]
+    #[ignore = "requires live postgres"]
+    async fn a_manual_only_graph_writes_no_subscription_row() {
+        let pool = make_pool().await;
+        let org_id = seed_organization(&pool, "subs-manual-only").await;
+        let usecase = use_case(pool.clone());
+        let created = usecase
+            .create_workflow(CreateWorkflowCommand {
+                org_id,
+                name: "Name".to_string(),
+                description: None,
+            })
+            .await
+            .unwrap();
+
+        usecase
+            .save_workflow_version(SaveWorkflowVersionCommand {
+                org_id,
+                workflow_id: created.id,
+                graph: valid_graph(),
+                layout: None,
+                created_by: None,
+            })
+            .await
+            .unwrap();
+
+        assert!(subscribed_trigger_ids(&pool, created.id).await.is_empty());
     }
 
     /// The acceptance criterion at the use-case boundary: saving a second
