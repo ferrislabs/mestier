@@ -1823,6 +1823,28 @@ describe('WorkflowCanvas — removing a connection', () => {
 
 const MIRRORING_KIND = 'test.mirroring'
 
+const MIRRORING_WITH_FIELD: Schemas.ConnectorDescriptorResponse = {
+	auth: 'None',
+	branches: [],
+	family: 'test',
+	fields: [
+		{
+			expression: true,
+			kind: 'Json',
+			label: 'Variables',
+			name: 'variables',
+			required: true,
+			secret: false,
+			visible_when: null,
+		},
+	],
+	kind: MIRRORING_KIND,
+	label: 'Configuration',
+	output_example: { generic_example: 'never shown' },
+	output_mirrors_field: 'variables',
+	version: 1,
+}
+
 const MIRRORING_DESCRIPTOR: Schemas.ConnectorDescriptorResponse = {
 	auth: 'None',
 	branches: [],
@@ -1870,5 +1892,88 @@ describe('WorkflowCanvas — a connector whose output mirrors its own config', (
 
 		expect(screen.getByText('base_url')).toBeDefined()
 		expect(screen.queryByText('generic_example')).toBeNull()
+	})
+})
+
+describe('WorkflowCanvas — variables typed into a mirroring connector', () => {
+	it('reach the downstream node through the real editing path', async () => {
+		const user = userEvent.setup()
+		const graph: Schemas.GraphDto = {
+			connectors: [
+				{ id: 'c1', kind: MIRRORING_KIND, version: 1, config: {} },
+				connector('c2', SIMPLE_KIND),
+			],
+			edges: [
+				{ from: 't1', to: 'c1', branch: null },
+				{ from: 'c1', to: 'c2', branch: null },
+			],
+			triggers: [trigger('t1', 'Manual')],
+		}
+
+		renderHarness({
+			graph,
+			layout: new Map([
+				['t1', { x: -220, y: 0 }],
+				['c1', { x: 0, y: 0 }],
+				['c2', { x: 200, y: 0 }],
+			]),
+			descriptors: descriptorMap(MIRRORING_WITH_FIELD, SIMPLE_DESCRIPTOR),
+		})
+
+		fireEvent.click(await screen.findByTestId('rf__node-c1'))
+		await screen.findByText('Paramètres')
+		await user.click(screen.getByRole('button', { name: /Ajouter une entrée/ }))
+
+		const keyInput = screen.getByDisplayValue('key') as HTMLInputElement
+		await user.clear(keyInput)
+		await user.type(keyInput, 'firstname')
+		const valueInput = keyInput
+			.closest('div')
+			?.parentElement?.querySelectorAll('input')[1] as HTMLInputElement
+		await user.type(valueInput, 'John')
+
+		fireEvent.click(screen.getByTestId('rf__node-c2'))
+		await screen.findByText('Paramètres')
+		fireEvent.click(await screen.findByRole('button', { name: /c1 · / }))
+
+		expect(screen.getByText('firstname')).toBeDefined()
+	})
+})
+
+describe('WorkflowCanvas — a past run that never reached a connector', () => {
+	it('still offers that connector its own data instead of nothing', async () => {
+		const graph: Schemas.GraphDto = {
+			connectors: [
+				{
+					id: 'c1',
+					kind: MIRRORING_KIND,
+					version: 1,
+					config: { variables: { firstname: 'John' } },
+				},
+				connector('c2', SIMPLE_KIND),
+			],
+			edges: [
+				{ from: 't1', to: 'c1', branch: null },
+				{ from: 'c1', to: 'c2', branch: null },
+			],
+			triggers: [trigger('t1', 'Manual')],
+		}
+
+		renderHarness({
+			graph,
+			layout: new Map([
+				['t1', { x: -220, y: 0 }],
+				['c1', { x: 0, y: 0 }],
+				['c2', { x: 200, y: 0 }],
+			]),
+			descriptors: descriptorMap(MIRRORING_WITH_FIELD, SIMPLE_DESCRIPTOR),
+			lastRun: { triggerPayload: null, connectorOutputs: {} },
+		})
+
+		fireEvent.click(await screen.findByTestId('rf__node-c2'))
+		await screen.findByText('Paramètres')
+		fireEvent.click(await screen.findByRole('button', { name: /c1 · / }))
+
+		expect(screen.getByText('firstname')).toBeDefined()
 	})
 })

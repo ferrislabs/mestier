@@ -70,8 +70,7 @@ export interface ConnectorConfigPanelProps {
 	onCreateCredential: (
 		body: Schemas.CreateCredentialRequest,
 	) => Promise<CreatedCredential>
-	exampleData: DataTreeSourceBundle
-	lastRunData: DataTreeSourceBundle | null
+	availableData: DataTreeSourceBundle
 	onEvaluateExpression: (
 		template: unknown,
 		context: Schemas.EvaluateContextBody,
@@ -91,8 +90,7 @@ export function ConnectorConfigPanel({
 	onConfigChange,
 	onCredentialChange,
 	onCreateCredential,
-	exampleData,
-	lastRunData,
+	availableData,
 	onEvaluateExpression,
 }: ConnectorConfigPanelProps) {
 	const [width, setWidth] = useState(DEFAULT_PANEL_WIDTH)
@@ -114,7 +112,7 @@ export function ConnectorConfigPanel({
 		fieldRefs.current.clear()
 	}
 
-	const activeSource = lastRunData ?? exampleData
+	const activeSource = availableData
 
 	useEffect(() => {
 		if (!activeField) {

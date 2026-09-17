@@ -99,11 +99,10 @@ function baseProps(
 		onConfigChange: vi.fn(),
 		onCredentialChange: vi.fn(),
 		onCreateCredential: vi.fn(),
-		exampleData: {
+		availableData: {
 			tree: [],
 			context: { trigger: null, connectors: {}, loop: null },
 		},
-		lastRunData: null,
 		onEvaluateExpression: vi.fn().mockResolvedValue(null),
 		...overrides,
 	}
@@ -413,28 +412,12 @@ const TRIGGER_BRANCH = {
 	],
 }
 
-const LAST_RUN_TRIGGER_BRANCH = {
-	kind: 'branch' as const,
-	key: 'trigger',
-	label: 'trigger',
-	path: 'trigger',
-	children: [
-		{
-			kind: 'leaf' as const,
-			key: 'confirmed_name',
-			label: 'confirmed_name',
-			path: 'trigger.confirmed_name',
-			value: 'Real customer',
-		},
-	],
-}
-
 describe('ConnectorConfigPanel — the available-data tree', () => {
 	it('shows the tree open by default, fed from the given branches', () => {
 		render(
 			<ConnectorConfigPanel
 				{...baseProps({
-					exampleData: {
+					availableData: {
 						tree: [TRIGGER_BRANCH],
 						context: { trigger: { name: 'Julie' }, connectors: {}, loop: null },
 					},
@@ -443,52 +426,6 @@ describe('ConnectorConfigPanel — the available-data tree', () => {
 		)
 
 		expect(screen.getByRole('button', { name: /trigger/ })).toBeDefined()
-	})
-
-	it('shows the real values rather than the example once a run exists', async () => {
-		const user = userEvent.setup()
-		render(
-			<ConnectorConfigPanel
-				{...baseProps({
-					exampleData: {
-						tree: [TRIGGER_BRANCH],
-						context: { trigger: { name: 'Julie' }, connectors: {}, loop: null },
-					},
-					lastRunData: {
-						tree: [LAST_RUN_TRIGGER_BRANCH],
-						context: {
-							trigger: { name: 'Real customer' },
-							connectors: {},
-							loop: null,
-						},
-					},
-				})}
-			/>,
-		)
-
-		await user.click(screen.getByRole('button', { name: 'trigger' }))
-
-		expect(screen.getByText('confirmed_name')).toBeDefined()
-		expect(screen.queryByText('name')).toBeNull()
-	})
-
-	it('falls back to the example while no run has happened', async () => {
-		const user = userEvent.setup()
-		render(
-			<ConnectorConfigPanel
-				{...baseProps({
-					exampleData: {
-						tree: [TRIGGER_BRANCH],
-						context: { trigger: { name: 'Julie' }, connectors: {}, loop: null },
-					},
-					lastRunData: null,
-				})}
-			/>,
-		)
-
-		await user.click(screen.getByRole('button', { name: 'trigger' }))
-
-		expect(screen.getByText('name')).toBeDefined()
 	})
 })
 
@@ -508,7 +445,7 @@ describe('ConnectorConfigPanel — inserting an expression', () => {
 					}),
 					config: { url: 'Hello ' },
 					onConfigChange,
-					exampleData: {
+					availableData: {
 						tree: [TRIGGER_BRANCH],
 						context: { trigger: { name: 'Julie' }, connectors: {}, loop: null },
 					},

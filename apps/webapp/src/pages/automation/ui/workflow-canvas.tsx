@@ -685,41 +685,24 @@ export function WorkflowCanvas({
 	const triggerExample = resolveTriggerExample(events, [
 		...new Set(subscribedEventNames),
 	])
-	const exampleConnectors: AvailableConnectorData[] = upstreamIds.map((id) => ({
-		id,
-		label: connectorLabel(id),
-		output: connectorOutputExample(id),
-	}))
-	const exampleData: DataTreeSourceBundle = {
+	const availableConnectors: AvailableConnectorData[] = upstreamIds.map(
+		(id) => ({
+			id,
+			label: connectorLabel(id),
+			output: lastRun?.connectorOutputs[id] ?? connectorOutputExample(id),
+		}),
+	)
+	const availableTrigger = lastRun ? lastRun.triggerPayload : triggerExample
+	const availableData: DataTreeSourceBundle = {
 		tree: buildAvailableDataTree({
-			trigger: triggerExample,
-			connectors: exampleConnectors,
+			trigger: availableTrigger,
+			connectors: availableConnectors,
 		}),
 		context: toEvaluateContext({
-			trigger: triggerExample,
-			connectors: exampleConnectors,
+			trigger: availableTrigger,
+			connectors: availableConnectors,
 		}),
 	}
-
-	const lastRunConnectors: AvailableConnectorData[] = lastRun
-		? upstreamIds.map((id) => ({
-				id,
-				label: connectorLabel(id),
-				output: lastRun.connectorOutputs[id] ?? null,
-			}))
-		: []
-	const lastRunData: DataTreeSourceBundle | null = lastRun
-		? {
-				tree: buildAvailableDataTree({
-					trigger: lastRun.triggerPayload,
-					connectors: lastRunConnectors,
-				}),
-				context: toEvaluateContext({
-					trigger: lastRun.triggerPayload,
-					connectors: lastRunConnectors,
-				}),
-			}
-		: null
 
 	return (
 		<WorkflowCanvasActionsContext.Provider value={actions}>
@@ -820,8 +803,7 @@ export function WorkflowCanvas({
 								})
 							}
 							onCreateCredential={onCreateCredential}
-							exampleData={exampleData}
-							lastRunData={lastRunData}
+							availableData={availableData}
 							onEvaluateExpression={onEvaluateExpression}
 						/>
 					) : null}
