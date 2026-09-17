@@ -77,6 +77,12 @@ pub struct ConnectorDescriptor {
     /// `connectors.c1.output.id` in the mapping autocomplete before a single
     /// run has ever happened.
     pub output_example: Value,
+    /// The config field this connector's output is a copy of, when it is one.
+    /// `flow.config` produces exactly what its `variables` field holds, so the
+    /// editor can offer the caller's own names instead of a generic example it
+    /// invented. `None` for every connector whose output only exists once it
+    /// has run.
+    pub output_mirrors_field: Option<&'static str>,
 }
 
 #[cfg(test)]
@@ -143,6 +149,7 @@ mod tests {
             }],
             branches: &[],
             output_example: json!({ "id": 42 }),
+            output_mirrors_field: None,
         };
 
         let json = to_value(&descriptor).expect("descriptor serializes");

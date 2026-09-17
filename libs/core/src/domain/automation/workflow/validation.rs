@@ -854,6 +854,7 @@ mod tests {
                 }],
                 branches: &[],
                 output_example: json!({}),
+                output_mirrors_field: None,
             })
             .expect("first registration succeeds");
         catalogue
@@ -929,6 +930,7 @@ mod tests {
                 fields: &[],
                 branches: &[],
                 output_example: json!({}),
+                output_mirrors_field: None,
             })
             .expect("first registration succeeds");
         catalogue
@@ -978,6 +980,7 @@ mod tests {
                 fields: &[],
                 branches: &[],
                 output_example: json!({}),
+                output_mirrors_field: None,
             })
             .expect("open registers");
 
@@ -1015,6 +1018,7 @@ mod tests {
                 fields: &[],
                 branches: &[],
                 output_example: json!({}),
+                output_mirrors_field: None,
             })
             .expect("open registers");
 
@@ -1541,6 +1545,7 @@ mod tests {
                 fields: &[],
                 branches: &[Branch::Then],
                 output_example: json!({}),
+                output_mirrors_field: None,
             })
             .expect("fork registers");
         catalogue
@@ -1553,6 +1558,7 @@ mod tests {
                 fields: &[],
                 branches: &[],
                 output_example: json!({}),
+                output_mirrors_field: None,
             })
             .expect("sink registers");
         catalogue
@@ -1636,6 +1642,7 @@ mod tests {
                 fields: &[],
                 branches: &[Branch::Each],
                 output_example: json!({}),
+                output_mirrors_field: None,
             })
             .expect("each registers");
         catalogue
@@ -1656,6 +1663,7 @@ mod tests {
                 }],
                 branches: &[],
                 output_example: json!({}),
+                output_mirrors_field: None,
             })
             .expect("body registers");
 

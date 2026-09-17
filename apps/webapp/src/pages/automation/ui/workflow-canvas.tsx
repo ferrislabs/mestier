@@ -665,7 +665,12 @@ export function WorkflowCanvas({
 			| ConnectorNodeData
 			| undefined
 		if (!data) return null
-		return descriptors.get(data.connector.kind)?.output_example ?? null
+
+		const descriptor = descriptors.get(data.connector.kind)
+		const mirrored = descriptor?.output_mirrors_field
+		if (mirrored) return data.connector.config[mirrored] ?? {}
+
+		return descriptor?.output_example ?? null
 	}
 
 	const upstreamIds = openConnectorId

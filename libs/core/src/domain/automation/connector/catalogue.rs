@@ -337,6 +337,7 @@ fn flow_descriptors() -> Vec<ConnectorDescriptor> {
             fields: LOOP_FIELDS,
             branches: &[Branch::Each, Branch::After],
             output_example: json!({ "item": "…", "index": 0 }),
+            output_mirrors_field: None,
         },
         ConnectorDescriptor {
             kind: "flow.condition",
@@ -347,6 +348,7 @@ fn flow_descriptors() -> Vec<ConnectorDescriptor> {
             fields: CONDITION_FIELDS,
             branches: &[Branch::Then, Branch::Else],
             output_example: json!({ "matched": true }),
+            output_mirrors_field: None,
         },
         ConnectorDescriptor {
             kind: "flow.config",
@@ -357,6 +359,7 @@ fn flow_descriptors() -> Vec<ConnectorDescriptor> {
             fields: CONFIG_FIELDS,
             branches: &[],
             output_example: json!({ "customer_id": "…", "retry_limit": 3 }),
+            output_mirrors_field: Some("variables"),
         },
     ]
 }
@@ -374,6 +377,7 @@ fn customer_descriptors() -> Vec<ConnectorDescriptor> {
         fields: CUSTOMER_CREATE_FIELDS,
         branches: &[],
         output_example: json!({ "id": "…", "name": "…" }),
+        output_mirrors_field: None,
     }]
 }
 
@@ -396,6 +400,7 @@ fn http_descriptors() -> Vec<ConnectorDescriptor> {
             "headers": { "content-type": "application/json" },
             "body": {},
         }),
+        output_mirrors_field: None,
     }]
 }
 
@@ -414,6 +419,7 @@ fn odoo_descriptors() -> Vec<ConnectorDescriptor> {
             fields: ODOO_CREATE_PARTNER_FIELDS,
             branches: &[],
             output_example: json!({ "id": 42 }),
+            output_mirrors_field: None,
         },
         ConnectorDescriptor {
             kind: "odoo.update_partner",
@@ -424,6 +430,7 @@ fn odoo_descriptors() -> Vec<ConnectorDescriptor> {
             fields: ODOO_UPDATE_PARTNER_FIELDS,
             branches: &[],
             output_example: json!({ "id": 42, "updated": true }),
+            output_mirrors_field: None,
         },
         ConnectorDescriptor {
             kind: "odoo.create_invoice",
@@ -434,6 +441,7 @@ fn odoo_descriptors() -> Vec<ConnectorDescriptor> {
             fields: ODOO_CREATE_INVOICE_FIELDS,
             branches: &[],
             output_example: json!({ "id": 99 }),
+            output_mirrors_field: None,
         },
     ]
 }
@@ -458,6 +466,7 @@ fn task_recurrence_descriptors() -> Vec<ConnectorDescriptor> {
         fields: &[],
         branches: &[],
         output_example: json!({ "materialized": 0 }),
+        output_mirrors_field: None,
     }]
 }
 
@@ -478,6 +487,7 @@ mod tests {
             fields: &[],
             branches: &[],
             output_example: json!({ "index": 0 }),
+            output_mirrors_field: None,
         }
     }
 

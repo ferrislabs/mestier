@@ -183,6 +183,7 @@ export namespace Schemas {
     kind: string;
     label: string;
     output_example: unknown;
+    output_mirrors_field?: (string | null) | undefined;
     version: number;
   };
   export type ConnectorsResponse = {

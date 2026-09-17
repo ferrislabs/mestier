@@ -1824,3 +1824,55 @@ describe('WorkflowCanvas — removing a connection', () => {
 		expect(saved.edges).toEqual([{ from: 't1', to: 'c1', branch: null }])
 	})
 })
+
+const MIRRORING_KIND = 'test.mirroring'
+
+const MIRRORING_DESCRIPTOR: Schemas.ConnectorDescriptorResponse = {
+	auth: 'None',
+	branches: [],
+	family: 'test',
+	fields: [],
+	kind: MIRRORING_KIND,
+	label: 'Configuration',
+	output_example: { generic_example: 'never shown' },
+	output_mirrors_field: 'variables',
+	version: 1,
+}
+
+describe('WorkflowCanvas — a connector whose output mirrors its own config', () => {
+	it('offers the variables actually configured, not the generic example', async () => {
+		const graph: Schemas.GraphDto = {
+			connectors: [
+				{
+					id: 'c1',
+					kind: MIRRORING_KIND,
+					version: 1,
+					config: { variables: { base_url: 'https://api.example.com' } },
+				},
+				connector('c2', SIMPLE_KIND),
+			],
+			edges: [
+				{ from: 't1', to: 'c1', branch: null },
+				{ from: 'c1', to: 'c2', branch: null },
+			],
+			triggers: [trigger('t1', 'Manual')],
+		}
+
+		renderHarness({
+			graph,
+			layout: new Map([
+				['t1', { x: -220, y: 0 }],
+				['c1', { x: 0, y: 0 }],
+				['c2', { x: 200, y: 0 }],
+			]),
+			descriptors: descriptorMap(MIRRORING_DESCRIPTOR, SIMPLE_DESCRIPTOR),
+		})
+
+		fireEvent.click(await screen.findByTestId('rf__node-c2'))
+		await screen.findByText('Paramètres')
+		fireEvent.click(screen.getByRole('button', { name: /c1/ }))
+
+		expect(screen.getByText('base_url')).toBeDefined()
+		expect(screen.queryByText('generic_example')).toBeNull()
+	})
+})

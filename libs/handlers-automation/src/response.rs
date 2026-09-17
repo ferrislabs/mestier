@@ -148,6 +148,7 @@ pub struct ConnectorDescriptorResponse {
     pub fields: Vec<FieldResponse>,
     pub branches: Vec<BranchDto>,
     pub output_example: Value,
+    pub output_mirrors_field: Option<String>,
 }
 
 impl From<&mestier_core::ConnectorDescriptor> for ConnectorDescriptorResponse {
@@ -166,6 +167,7 @@ impl From<&mestier_core::ConnectorDescriptor> for ConnectorDescriptorResponse {
                 .map(BranchDto::from)
                 .collect(),
             output_example: value.output_example.clone(),
+            output_mirrors_field: value.output_mirrors_field.map(str::to_owned),
         }
     }
 }
