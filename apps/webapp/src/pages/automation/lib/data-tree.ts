@@ -97,15 +97,22 @@ export function buildAvailableDataTree(data: AvailableData): DataTreeNode[] {
 					children: valueChildren('trigger', data.trigger),
 				}
 
-	const connectorNodes: DataTreeBranch[] = data.connectors.map((connector) => {
+	const connectorNodes: DataTreeNode[] = data.connectors.map((connector) => {
 		const path = `connectors.${connector.id}.output`
-		return {
-			kind: 'branch',
-			key: path,
-			label: `${connector.id} · ${connector.label}`,
-			path,
-			children: valueChildren(path, connector.output),
+		const label = `${connector.id} · ${connector.label}`
+		const children = valueChildren(path, connector.output)
+
+		if (children.length === 0) {
+			return {
+				kind: 'notice',
+				key: path,
+				label,
+				path,
+				message: 'Ce connecteur n’expose aucune donnée pour l’instant.',
+			}
 		}
+
+		return { kind: 'branch', key: path, label, path, children }
 	})
 
 	return [triggerNode, ...connectorNodes]

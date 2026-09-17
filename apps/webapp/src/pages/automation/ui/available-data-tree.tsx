@@ -39,8 +39,9 @@ function TreeNodeItem({
 
 	if (node.kind === 'notice') {
 		return (
-			<li className="px-1.5 py-1 text-xs text-muted-foreground">
-				{node.message}
+			<li className="flex flex-col gap-0.5 px-1.5 py-1 text-xs text-muted-foreground">
+				<span className="font-medium text-foreground">{node.label}</span>
+				<span>{node.message}</span>
 			</li>
 		)
 	}

@@ -1390,13 +1390,9 @@ describe('WorkflowCanvas — the available-data tree', () => {
 		fireEvent.click(node)
 
 		await screen.findByText('Paramètres')
-		expect(
-			screen.getByRole('button', { name: /c1 · Étape à embranchements/ }),
-		).toBeDefined()
-		expect(screen.getByRole('button', { name: /c2 · En amont/ })).toBeDefined()
-		expect(
-			screen.queryByRole('button', { name: /c3 · Sur l’autre branche/ }),
-		).toBeNull()
+		expect(screen.getByText(/c1 · Étape à embranchements/)).toBeDefined()
+		expect(screen.getByText(/c2 · En amont/)).toBeDefined()
+		expect(screen.queryByText(/c3 · Sur l’autre branche/)).toBeNull()
 	})
 
 	it('fills the trigger branch from a trigger anywhere in the graph, before any run exists', async () => {

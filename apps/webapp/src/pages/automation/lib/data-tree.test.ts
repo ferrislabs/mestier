@@ -173,3 +173,33 @@ describe('resolveTriggerExample', () => {
 		expect(resolveTriggerExample(events, ['unknown.event'])).toBeUndefined()
 	})
 })
+
+describe('buildAvailableDataTree — a connector exposing nothing', () => {
+	it('explains the empty branch instead of offering a chevron to nowhere', () => {
+		const tree = buildAvailableDataTree({
+			trigger: null,
+			connectors: [{ id: 'c2', label: 'Configuration', output: {} }],
+		})
+
+		const connectorNode = tree.find(
+			(node) => node.path === 'connectors.c2.output',
+		)
+
+		expect(connectorNode?.kind).toBe('notice')
+	})
+
+	it('still branches when the connector exposes something', () => {
+		const tree = buildAvailableDataTree({
+			trigger: null,
+			connectors: [
+				{ id: 'c2', label: 'Configuration', output: { base_url: 'https://x' } },
+			],
+		})
+
+		const connectorNode = tree.find(
+			(node) => node.path === 'connectors.c2.output',
+		)
+
+		expect(connectorNode?.kind).toBe('branch')
+	})
+})
