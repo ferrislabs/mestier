@@ -109,6 +109,7 @@ function Harness({
 	descriptors,
 	connectorErrors = new Map(),
 	runStatuses = new Map(),
+	runSteps = new Map(),
 	events = [],
 	lastRun = null,
 	onEvaluateExpression = () => Promise.resolve(null),
@@ -122,6 +123,7 @@ function Harness({
 	descriptors: Map<string, Schemas.ConnectorDescriptorResponse>
 	connectorErrors?: Map<string, ConnectorValidationError[]>
 	runStatuses?: Map<string, string>
+	runSteps?: Map<string, Schemas.RunStepResponse>
 	events?: Schemas.EventDescriptorResponse[]
 	lastRun?: LastRunData | null
 	onEvaluateExpression?: WorkflowCanvasProps['onEvaluateExpression']
@@ -143,6 +145,7 @@ function Harness({
 		descriptors,
 		connectorErrors,
 		runStatuses,
+		runSteps,
 		events,
 		lastRun,
 		onEvaluateExpression,

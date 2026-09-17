@@ -110,6 +110,7 @@ export interface WorkflowCanvasProps {
 	events: Schemas.EventDescriptorResponse[]
 	lastRun: LastRunData | null
 	runStatuses: Map<string, string>
+	runSteps: Map<string, Schemas.RunStepResponse>
 	onEvaluateExpression: (
 		template: unknown,
 		context: Schemas.EvaluateContextBody,
@@ -250,6 +251,7 @@ export function WorkflowCanvas({
 	events,
 	lastRun,
 	runStatuses,
+	runSteps,
 	onEvaluateExpression,
 	credentials = [],
 	authSchemes = [],
@@ -804,6 +806,7 @@ export function WorkflowCanvas({
 							}
 							onCreateCredential={onCreateCredential}
 							availableData={availableData}
+							lastStep={runSteps.get(openConnectorId) ?? null}
 							onEvaluateExpression={onEvaluateExpression}
 						/>
 					) : null}

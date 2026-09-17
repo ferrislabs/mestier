@@ -26,6 +26,7 @@ import {
 	aggregateConnectorStatuses,
 	connectorOutputsFromSteps,
 	latestRunId,
+	representativeStepByConnector,
 } from '#/pages/automation/lib/workflow-runs'
 import {
 	type LastRunData,
@@ -132,6 +133,9 @@ function WorkflowCanvasWorkspace({
 	const runStatuses = runDetail
 		? aggregateConnectorStatuses(runDetail.steps)
 		: new Map<string, string>()
+	const runSteps = runDetail
+		? representativeStepByConnector(runDetail.steps)
+		: new Map<string, Schemas.RunStepResponse>()
 
 	return (
 		<WorkflowCanvasLoaded
@@ -146,6 +150,7 @@ function WorkflowCanvasWorkspace({
 			events={eventsQuery.data?.data ?? []}
 			lastRun={lastRun}
 			runStatuses={runStatuses}
+			runSteps={runSteps}
 		/>
 	)
 }
@@ -160,6 +165,7 @@ function WorkflowCanvasLoaded({
 	events,
 	lastRun,
 	runStatuses,
+	runSteps,
 }: {
 	organizationId: string
 	workflowId: string
@@ -170,6 +176,7 @@ function WorkflowCanvasLoaded({
 	events: Schemas.EventDescriptorResponse[]
 	lastRun: LastRunData | null
 	runStatuses: Map<string, string>
+	runSteps: Map<string, Schemas.RunStepResponse>
 }) {
 	const saveVersion = useSaveWorkflowVersion()
 	const createCredential = useCreateCredential(organizationId)
@@ -269,6 +276,7 @@ function WorkflowCanvasLoaded({
 				events={events}
 				lastRun={lastRun}
 				runStatuses={runStatuses}
+				runSteps={runSteps}
 				onEvaluateExpression={handleEvaluateExpression}
 				credentials={credentials}
 				authSchemes={authSchemes}

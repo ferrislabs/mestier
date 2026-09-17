@@ -103,6 +103,7 @@ function baseProps(
 			tree: [],
 			context: { trigger: null, connectors: {}, loop: null },
 		},
+		lastStep: null,
 		onEvaluateExpression: vi.fn().mockResolvedValue(null),
 		...overrides,
 	}
@@ -117,7 +118,7 @@ describe('ConnectorConfigPanel — layout', () => {
 		expect(screen.getByText('Requête HTTP')).toBeDefined()
 		expect(screen.getByText('Données disponibles')).toBeDefined()
 		expect(screen.getByText('Paramètres')).toBeDefined()
-		expect(screen.getByText('Dernière sortie')).toBeDefined()
+		expect(screen.getByText('Dernière exécution')).toBeDefined()
 
 		await user.click(screen.getByRole('button', { name: /Fermer/ }))
 		expect(onClose).toHaveBeenCalledTimes(1)
@@ -587,5 +588,54 @@ describe('ConnectorConfigPanel — switching connectors', () => {
 		)
 
 		expect(screen.queryByText(/Aperçu/)).toBeNull()
+	})
+})
+
+describe('ConnectorConfigPanel — what the last run did to this connector', () => {
+	function step(
+		overrides: Partial<Schemas.RunStepResponse>,
+	): Schemas.RunStepResponse {
+		return {
+			attempts: 1,
+			connector_id: 'c1',
+			created_at: '2026-09-17T10:00:00Z',
+			id: 'step-1',
+			iteration_path: '',
+			status: 'succeeded',
+			...overrides,
+		}
+	}
+
+	it('says so when the connector has never run', () => {
+		render(<ConnectorConfigPanel {...baseProps({ lastStep: null })} />)
+
+		expect(screen.getByText('Aucune exécution.')).toBeDefined()
+	})
+
+	it('shows the error when the step failed, instead of claiming nothing ran', () => {
+		render(
+			<ConnectorConfigPanel
+				{...baseProps({
+					lastStep: step({ status: 'failed', error: 'connection refused' }),
+				})}
+			/>,
+		)
+
+		expect(screen.getByRole('alert').textContent).toContain(
+			'connection refused',
+		)
+		expect(screen.queryByText('Aucune exécution.')).toBeNull()
+	})
+
+	it('shows the output when the step succeeded', () => {
+		render(
+			<ConnectorConfigPanel
+				{...baseProps({
+					lastStep: step({ status: 'succeeded', output: { id: 42 } }),
+				})}
+			/>,
+		)
+
+		expect(screen.getByText(/"id": 42/)).toBeDefined()
 	})
 })

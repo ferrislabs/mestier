@@ -106,6 +106,25 @@ export function runStatusBorderClass(
 	return RUN_STATUS_BORDER[status] ?? null
 }
 
+export function representativeStepByConnector(
+	steps: Schemas.RunStepResponse[],
+): Map<string, Schemas.RunStepResponse> {
+	const best = new Map<string, Schemas.RunStepResponse>()
+
+	for (const step of steps) {
+		const current = best.get(step.connector_id)
+		if (
+			!current ||
+			(STATUS_PRIORITY[step.status] ?? 0) >
+				(STATUS_PRIORITY[current.status] ?? 0)
+		) {
+			best.set(step.connector_id, step)
+		}
+	}
+
+	return best
+}
+
 export function aggregateConnectorStatuses(
 	steps: Schemas.RunStepResponse[],
 ): Map<string, string> {

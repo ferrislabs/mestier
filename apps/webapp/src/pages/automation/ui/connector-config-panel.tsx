@@ -19,6 +19,7 @@ import {
 	type ConnectorValidationError,
 	connectorLevelErrors,
 } from '#/pages/automation/lib/validation'
+import { RUN_STATUS_LABEL } from '#/pages/automation/lib/workflow-runs'
 import { AvailableDataTree } from '#/pages/automation/ui/available-data-tree'
 import {
 	ConnectorConfigForm,
@@ -71,6 +72,7 @@ export interface ConnectorConfigPanelProps {
 		body: Schemas.CreateCredentialRequest,
 	) => Promise<CreatedCredential>
 	availableData: DataTreeSourceBundle
+	lastStep: Schemas.RunStepResponse | null
 	onEvaluateExpression: (
 		template: unknown,
 		context: Schemas.EvaluateContextBody,
@@ -91,6 +93,7 @@ export function ConnectorConfigPanel({
 	onCredentialChange,
 	onCreateCredential,
 	availableData,
+	lastStep,
 	onEvaluateExpression,
 }: ConnectorConfigPanelProps) {
 	const [width, setWidth] = useState(DEFAULT_PANEL_WIDTH)
@@ -347,8 +350,23 @@ export function ConnectorConfigPanel({
 						</div>
 
 						<div className="flex flex-col gap-2 border-t pt-4 text-sm text-muted-foreground">
-							<p className="font-medium text-foreground">Dernière sortie</p>
-							<p>Aucune exécution.</p>
+							<p className="font-medium text-foreground">Dernière exécution</p>
+							{lastStep === null ? (
+								<p>Aucune exécution.</p>
+							) : lastStep.error ? (
+								<p
+									role="alert"
+									className="whitespace-pre-wrap rounded-md border border-destructive/30 bg-destructive/10 p-2 text-destructive"
+								>
+									{lastStep.error}
+								</p>
+							) : lastStep.output === undefined ? (
+								<p>{RUN_STATUS_LABEL[lastStep.status] ?? lastStep.status}</p>
+							) : (
+								<pre className="overflow-x-auto rounded-md bg-muted p-2 text-xs">
+									{JSON.stringify(lastStep.output, null, 2)}
+								</pre>
+							)}
 						</div>
 					</div>
 				</div>

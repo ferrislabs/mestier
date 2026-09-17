@@ -10,6 +10,7 @@ import {
 	isTerminalRunStatus,
 	latestRunByWorkflow,
 	latestRunId,
+	representativeStepByConnector,
 	runDurationMs,
 	runStatusBorderClass,
 	runTriggerLabel,
@@ -384,5 +385,52 @@ describe('runStatusBorderClass', () => {
 	it('leaves a connector with no step at all unmarked', () => {
 		expect(runStatusBorderClass(null)).toBeNull()
 		expect(runStatusBorderClass(undefined)).toBeNull()
+	})
+})
+
+describe('representativeStepByConnector', () => {
+	function step(
+		connectorId: string,
+		status: string,
+		overrides: Partial<Schemas.RunStepResponse> = {},
+	): Schemas.RunStepResponse {
+		return {
+			attempts: 1,
+			connector_id: connectorId,
+			created_at: '2026-09-17T10:00:00Z',
+			id: `${connectorId}-${status}`,
+			iteration_path: '',
+			status,
+			...overrides,
+		}
+	}
+
+	it('keeps the step whose status the node border shows', () => {
+		const steps = [
+			step('c1', 'succeeded', { output: { ok: true } }),
+			step('c1', 'failed', { error: 'connection refused' }),
+		]
+
+		expect(representativeStepByConnector(steps).get('c1')?.error).toBe(
+			'connection refused',
+		)
+	})
+
+	it('agrees with the status the border is painted from', () => {
+		const steps = [
+			step('c1', 'succeeded'),
+			step('c1', 'failed', { error: 'boom' }),
+			step('c2', 'running'),
+		]
+		const statuses = aggregateConnectorStatuses(steps)
+		const representative = representativeStepByConnector(steps)
+
+		for (const [id, status] of statuses) {
+			expect(representative.get(id)?.status).toBe(status)
+		}
+	})
+
+	it('has nothing to say about a connector with no step', () => {
+		expect(representativeStepByConnector([]).get('c1')).toBeUndefined()
 	})
 })
