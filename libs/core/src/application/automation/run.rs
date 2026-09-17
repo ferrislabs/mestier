@@ -415,7 +415,10 @@ impl MestierUseCase {
                 match existing.status {
                     StepStatus::Succeeded => {
                         let output = existing.output.clone().unwrap_or(Value::Null);
-                        connector_outputs.insert(frame.connector_id.clone(), output.clone());
+                        connector_outputs.insert(
+                            frame.connector_id.clone(),
+                            json!({ "output": output.clone() }),
+                        );
                         let kind = placed_by_id
                             .get(frame.connector_id.as_str())
                             .map(|p| p.kind.as_str())
@@ -570,7 +573,8 @@ impl MestierUseCase {
                         ..written
                     };
                     let settled = self.write_step(&settled).await?;
-                    connector_outputs.insert(frame.connector_id.clone(), output);
+                    connector_outputs
+                        .insert(frame.connector_id.clone(), json!({ "output": output }));
                     index.insert(key, settled);
 
                     self.advance(due.id, &graph, &frame, &outcome, &mut stack, &mut index)
@@ -898,6 +902,31 @@ mod tests {
         PlacedConnector {
             id: id.to_string(),
             kind: "mestier.customer.create".to_string(),
+            version: 1,
+            credential_id: None,
+            config,
+        }
+    }
+
+    fn flow_config(id: &str, variables: Value) -> PlacedConnector {
+        let mut config = serde_json::Map::new();
+        config.insert("variables".to_string(), variables);
+        PlacedConnector {
+            id: id.to_string(),
+            kind: "flow.config".to_string(),
+            version: 1,
+            credential_id: None,
+            config,
+        }
+    }
+
+    fn http_get(id: &str, url: &str) -> PlacedConnector {
+        let mut config = serde_json::Map::new();
+        config.insert("method".to_string(), json!("GET"));
+        config.insert("url".to_string(), json!(url));
+        PlacedConnector {
+            id: id.to_string(),
+            kind: "http.request".to_string(),
             version: 1,
             credential_id: None,
             config,
@@ -2022,5 +2051,122 @@ mod tests {
             .expect_err("a stranger must not replay another organization's run");
 
         assert!(matches!(error, CoreError::NotFound));
+    }
+
+    #[tokio::test]
+    #[ignore = "requires live postgres"]
+    async fn a_downstream_connector_receives_the_url_resolved_from_an_upstream_configs_output() {
+        let _guard = RUN_CLAIM_LOCK.lock().await;
+        let pool = make_pool().await;
+        let org_id = seed_organization(&pool, "config-http").await;
+        let usecase = use_case(pool.clone());
+        let graph = Graph {
+            connectors: vec![
+                flow_config(
+                    "c2",
+                    json!({ "firstname": "John", "lastname": "Doe", "id": "1" }),
+                ),
+                http_get(
+                    "c1",
+                    "http://127.0.0.1:1/todos/{{ connectors.c2.output.id }}",
+                ),
+            ],
+            edges: vec![edge("c2", "c1", None)],
+            triggers: Vec::new(),
+        };
+        let workflow_id = start_workflow(&usecase, org_id, graph).await;
+        let run_id = usecase
+            .start_run(org_id, workflow_id, json!({}))
+            .await
+            .unwrap();
+
+        let connectors = ConnectorRegistry::new(usecase.clone());
+        usecase
+            .run_engine_pass(&connectors, "worker-1", generous_schedule())
+            .await
+            .unwrap();
+
+        let steps = usecase.list_run_steps(org_id, run_id).await.unwrap();
+        let http_step = steps
+            .iter()
+            .find(|s| s.connector_id == "c1")
+            .expect("the http.request step has its own row");
+        let input = http_step
+            .input
+            .as_ref()
+            .expect("a resolved input is recorded for a step that ran");
+        assert_eq!(
+            input["url"],
+            json!("http://127.0.0.1:1/todos/1"),
+            "the http connector must receive the id resolved from flow.config's output"
+        );
+    }
+
+    #[tokio::test]
+    #[ignore = "requires live postgres"]
+    async fn a_resumed_run_still_resolves_an_earlier_configs_output_for_a_later_step() {
+        let _guard = RUN_CLAIM_LOCK.lock().await;
+        let pool = make_pool().await;
+        let org_id = seed_organization(&pool, "config-http-resume").await;
+        let usecase = use_case(pool.clone());
+        let graph = Graph {
+            connectors: vec![
+                flow_config("c2", json!({ "id": "2" })),
+                http_get(
+                    "c1",
+                    "http://127.0.0.1:1/todos/{{ connectors.c2.output.id }}",
+                ),
+            ],
+            edges: vec![edge("c2", "c1", None)],
+            triggers: Vec::new(),
+        };
+        let workflow_id = start_workflow(&usecase, org_id, graph).await;
+        let run_id = usecase
+            .start_run(org_id, workflow_id, json!({}))
+            .await
+            .unwrap();
+
+        let connectors = ConnectorRegistry::new(usecase.clone());
+        usecase
+            .run_engine_pass(&connectors, "worker-1", schedule_with_step_budget(1))
+            .await
+            .unwrap();
+
+        assert_eq!(
+            run_status(&pool, run_id).await,
+            "pending",
+            "only the budgeted first step ran"
+        );
+        let after_first = run_steps(&pool, run_id).await;
+        let c2_first = after_first
+            .iter()
+            .find(|s| s.connector_id == "c2")
+            .expect("c2 ran in the first slice");
+        assert_eq!(c2_first.status, "succeeded");
+        assert!(
+            after_first.iter().all(|s| s.connector_id != "c1"),
+            "c1 must not have started yet: {after_first:?}"
+        );
+
+        make_run_due_now(&pool, run_id).await;
+        usecase
+            .run_engine_pass(&connectors, "worker-1", schedule_with_step_budget(1))
+            .await
+            .unwrap();
+
+        let steps = usecase.list_run_steps(org_id, run_id).await.unwrap();
+        let http_step = steps
+            .iter()
+            .find(|s| s.connector_id == "c1")
+            .expect("the http.request step ran on the resumed pass");
+        let input = http_step
+            .input
+            .as_ref()
+            .expect("a resolved input is recorded for a step that ran");
+        assert_eq!(
+            input["url"],
+            json!("http://127.0.0.1:1/todos/2"),
+            "the resumed pass must resolve c2's output the same way the first pass would"
+        );
     }
 }
