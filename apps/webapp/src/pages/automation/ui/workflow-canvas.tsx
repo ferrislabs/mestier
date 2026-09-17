@@ -70,6 +70,7 @@ import {
 	type ConnectorNodeData,
 } from '#/pages/automation/ui/connector-node'
 import { ConnectorSearch } from '#/pages/automation/ui/connector-search'
+import { DeletableEdge } from '#/pages/automation/ui/deletable-edge'
 import { TriggerConfigPanel } from '#/pages/automation/ui/trigger-config-panel'
 import {
 	TriggerNode,
@@ -88,6 +89,10 @@ const CENTER_ON_NODE = { duration: 250, zoom: 1 }
 const NODE_TYPES = {
 	connector: ConnectorNode,
 	trigger: TriggerNode,
+}
+
+const EDGE_TYPES = {
+	deletable: DeletableEdge,
 }
 
 type CreatedCredential = Schemas.CredentialResponse & { secret: unknown }
@@ -174,6 +179,7 @@ function buildInitialNodes(
 function buildInitialEdges(graph: Schemas.GraphDto): Edge[] {
 	return graph.edges.map((edge) => ({
 		id: realEdgeId(edge),
+		type: 'deletable',
 		source: edge.from,
 		target: edge.to,
 		sourceHandle: edge.branch ?? undefined,
@@ -317,9 +323,19 @@ export function WorkflowCanvas({
 		[onChange, setEdges],
 	)
 
+	const handleDeleteEdge = useCallback(
+		(edgeId: string) => {
+			handleEdgesChange([{ id: edgeId, type: 'remove' }])
+		},
+		[handleEdgesChange],
+	)
+
 	const handleConnect = useCallback(
 		(connection: Connection) => {
-			const nextEdges = addEdge(connection, edgesRef.current)
+			const nextEdges = addEdge(
+				{ ...connection, type: 'deletable' },
+				edgesRef.current,
+			)
 			edgesRef.current = nextEdges
 			setEdges(nextEdges)
 			onChange(
@@ -613,8 +629,15 @@ export function WorkflowCanvas({
 			onAddNode: handleAddNode,
 			onRequestDelete: handleRequestDelete,
 			onRequestDeleteTrigger: handleDeleteTrigger,
+			onDeleteEdge: handleDeleteEdge,
 		}),
-		[catalogue, handleAddNode, handleRequestDelete, handleDeleteTrigger],
+		[
+			catalogue,
+			handleAddNode,
+			handleRequestDelete,
+			handleDeleteTrigger,
+			handleDeleteEdge,
+		],
 	)
 
 	const openNode = openConnectorId
@@ -711,6 +734,7 @@ export function WorkflowCanvas({
 								nodes={nodes}
 								edges={edges}
 								nodeTypes={NODE_TYPES}
+								edgeTypes={EDGE_TYPES}
 								onNodesChange={handleNodesChange}
 								onEdgesChange={handleEdgesChange}
 								onConnect={handleConnect}

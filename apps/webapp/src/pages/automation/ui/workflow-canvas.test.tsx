@@ -1757,3 +1757,54 @@ describe('WorkflowCanvas — a run in progress', () => {
 		expect(borderOf('c1')).not.toContain('border-destructive')
 	})
 })
+
+describe('WorkflowCanvas — removing a connection', () => {
+	function renderTwoWiredConnectors() {
+		const graph: Schemas.GraphDto = {
+			connectors: [connector('c1', SIMPLE_KIND), connector('c2', SIMPLE_KIND)],
+			edges: [
+				{ from: 't1', to: 'c1', branch: null },
+				{ from: 'c1', to: 'c2', branch: null },
+			],
+			triggers: [trigger('t1', 'Manual')],
+		}
+
+		return renderHarness({
+			graph,
+			layout: new Map([
+				['t1', { x: -220, y: 0 }],
+				['c1', { x: 0, y: 0 }],
+				['c2', { x: 200, y: 0 }],
+			]),
+			descriptors: descriptorMap(SIMPLE_DESCRIPTOR),
+		})
+	}
+
+	it('offers no delete affordance until the connection is selected', async () => {
+		renderTwoWiredConnectors()
+		await screen.findByTestId('rf__node-c2')
+
+		expect(
+			screen.queryByRole('button', { name: /Supprimer la liaison/ }),
+		).toBeNull()
+	})
+
+	it('reveals a delete button on the clicked connection and drops it', async () => {
+		const { onSaveSpy } = renderTwoWiredConnectors()
+		await screen.findByTestId('rf__node-c2')
+
+		const edge = document.querySelector(
+			'.react-flow__edge[data-testid="rf__edge-c1->c2:"]',
+		) as HTMLElement
+		fireEvent.click(edge.querySelector('.react-flow__edge-interaction') ?? edge)
+
+		const remove = await screen.findByRole('button', {
+			name: /Supprimer la liaison/,
+		})
+		fireEvent.click(remove)
+
+		fireEvent.click(screen.getByRole('button', { name: 'Enregistrer' }))
+		const [saved] = onSaveSpy.mock.calls.at(-1) as [Schemas.GraphDto]
+		expect(saved.edges).toEqual([{ from: 't1', to: 'c1', branch: null }])
+	})
+})

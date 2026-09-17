@@ -10,6 +10,7 @@ export interface WorkflowCanvasActions {
 	) => void
 	onRequestDelete: (connectorId: string) => void
 	onRequestDeleteTrigger: (triggerId: string) => void
+	onDeleteEdge: (edgeId: string) => void
 }
 
 export const WorkflowCanvasActionsContext =
