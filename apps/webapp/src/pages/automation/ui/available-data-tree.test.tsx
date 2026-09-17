@@ -48,18 +48,14 @@ function renderTree(
 	overrides: Partial<Parameters<typeof AvailableDataTree>[0]> = {},
 ) {
 	const onInsert = vi.fn()
-	const onSourceChange = vi.fn()
 	render(
 		<AvailableDataTree
 			branches={[TRIGGER_BRANCH, CONNECTOR_BRANCH]}
-			source="example"
-			hasLastRun={false}
-			onSourceChange={onSourceChange}
 			onInsert={onInsert}
 			{...overrides}
 		/>,
 	)
-	return { onInsert, onSourceChange }
+	return { onInsert }
 }
 
 describe('AvailableDataTree — structure', () => {
@@ -129,35 +125,5 @@ describe('AvailableDataTree — insertion', () => {
 			'text/plain',
 			'trigger.id',
 		)
-	})
-})
-
-describe('AvailableDataTree — source toggle', () => {
-	it('disables the last-run option until a run exists', () => {
-		renderTree({ hasLastRun: false })
-
-		const button = screen.getByRole('button', {
-			name: 'Dernière exécution',
-		}) as HTMLButtonElement
-		expect(button.disabled).toBe(true)
-	})
-
-	it('reports the requested source once a run exists', async () => {
-		const user = userEvent.setup()
-		const { onSourceChange } = renderTree({ hasLastRun: true })
-
-		await user.click(screen.getByRole('button', { name: 'Dernière exécution' }))
-
-		expect(onSourceChange).toHaveBeenCalledWith('last_run')
-	})
-
-	it('marks the active source', () => {
-		renderTree({ source: 'example' })
-
-		expect(
-			screen
-				.getByRole('button', { name: 'Exemple' })
-				.getAttribute('aria-pressed'),
-		).toBe('true')
 	})
 })

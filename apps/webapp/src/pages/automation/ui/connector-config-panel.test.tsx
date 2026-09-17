@@ -445,26 +445,7 @@ describe('ConnectorConfigPanel — the available-data tree', () => {
 		expect(screen.getByRole('button', { name: /trigger/ })).toBeDefined()
 	})
 
-	it('disables the last-run toggle until a run exists', () => {
-		render(
-			<ConnectorConfigPanel
-				{...baseProps({
-					exampleData: {
-						tree: [TRIGGER_BRANCH],
-						context: { trigger: null, connectors: {}, loop: null },
-					},
-					lastRunData: null,
-				})}
-			/>,
-		)
-
-		const button = screen.getByRole('button', {
-			name: 'Dernière exécution',
-		}) as HTMLButtonElement
-		expect(button.disabled).toBe(true)
-	})
-
-	it('switches the same tree to the real values once a run exists', async () => {
+	it('shows the real values rather than the example once a run exists', async () => {
 		const user = userEvent.setup()
 		render(
 			<ConnectorConfigPanel
@@ -486,13 +467,28 @@ describe('ConnectorConfigPanel — the available-data tree', () => {
 		)
 
 		await user.click(screen.getByRole('button', { name: 'trigger' }))
-		expect(screen.getByText('name')).toBeDefined()
-		expect(screen.queryByText('confirmed_name')).toBeNull()
-
-		await user.click(screen.getByRole('button', { name: 'Dernière exécution' }))
 
 		expect(screen.getByText('confirmed_name')).toBeDefined()
 		expect(screen.queryByText('name')).toBeNull()
+	})
+
+	it('falls back to the example while no run has happened', async () => {
+		const user = userEvent.setup()
+		render(
+			<ConnectorConfigPanel
+				{...baseProps({
+					exampleData: {
+						tree: [TRIGGER_BRANCH],
+						context: { trigger: { name: 'Julie' }, connectors: {}, loop: null },
+					},
+					lastRunData: null,
+				})}
+			/>,
+		)
+
+		await user.click(screen.getByRole('button', { name: 'trigger' }))
+
+		expect(screen.getByText('name')).toBeDefined()
 	})
 })
 

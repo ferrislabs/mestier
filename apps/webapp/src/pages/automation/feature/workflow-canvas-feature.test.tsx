@@ -955,11 +955,8 @@ describe('WorkflowCanvasFeature — the last run', () => {
 		const node = await screen.findByTestId('rf__node-c1')
 		node.click()
 
-		const lastRunButton = (await screen.findByRole('button', {
-			name: 'Dernière exécution',
-		})) as HTMLButtonElement
 		await waitFor(() => {
-			expect(lastRunButton.disabled).toBe(false)
+			expect(screen.getByRole('button', { name: 'trigger' })).toBeDefined()
 		})
 	})
 })

@@ -1,40 +1,18 @@
 import { ChevronDown, ChevronRight } from 'lucide-react'
 import { useState } from 'react'
-import { cn } from '#/lib/utils'
 import type { DataTreeNode } from '#/pages/automation/lib/data-tree'
-
-export type DataTreeSource = 'example' | 'last_run'
 
 export interface AvailableDataTreeProps {
 	branches: DataTreeNode[]
-	source: DataTreeSource
-	hasLastRun: boolean
-	onSourceChange: (source: DataTreeSource) => void
 	onInsert: (path: string) => void
 }
 
 export function AvailableDataTree({
 	branches,
-	source,
-	hasLastRun,
-	onSourceChange,
 	onInsert,
 }: AvailableDataTreeProps) {
 	return (
 		<div className="flex flex-col gap-2">
-			<div className="flex gap-1 rounded-md border p-0.5 text-xs">
-				<SourceButton
-					label="Exemple"
-					active={source === 'example'}
-					onClick={() => onSourceChange('example')}
-				/>
-				<SourceButton
-					label="Dernière exécution"
-					active={source === 'last_run'}
-					disabled={!hasLastRun}
-					onClick={() => onSourceChange('last_run')}
-				/>
-			</div>
 			{branches.length === 0 ? (
 				<p className="text-sm text-muted-foreground">
 					Aucune donnée disponible.
@@ -47,34 +25,6 @@ export function AvailableDataTree({
 				</ul>
 			)}
 		</div>
-	)
-}
-
-function SourceButton({
-	label,
-	active,
-	disabled = false,
-	onClick,
-}: {
-	label: string
-	active: boolean
-	disabled?: boolean
-	onClick: () => void
-}) {
-	return (
-		<button
-			type="button"
-			aria-pressed={active}
-			disabled={disabled}
-			onClick={onClick}
-			className={cn(
-				'flex-1 rounded px-2 py-1',
-				active ? 'bg-accent font-medium' : 'text-muted-foreground',
-				'disabled:cursor-not-allowed disabled:opacity-50',
-			)}
-		>
-			{label}
-		</button>
 	)
 }
 

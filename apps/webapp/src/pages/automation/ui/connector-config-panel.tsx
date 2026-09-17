@@ -19,10 +19,7 @@ import {
 	type ConnectorValidationError,
 	connectorLevelErrors,
 } from '#/pages/automation/lib/validation'
-import {
-	AvailableDataTree,
-	type DataTreeSource,
-} from '#/pages/automation/ui/available-data-tree'
+import { AvailableDataTree } from '#/pages/automation/ui/available-data-tree'
 import {
 	ConnectorConfigForm,
 	type CredentialCreationPurpose,
@@ -102,7 +99,6 @@ export function ConnectorConfigPanel({
 	const [createState, setCreateState] = useState<CreateState | null>(null)
 	const [createPending, setCreatePending] = useState(false)
 	const [createError, setCreateError] = useState<string | null>(null)
-	const [dataSource, setDataSource] = useState<DataTreeSource>('example')
 	const [activeField, setActiveField] = useState<Schemas.FieldResponse | null>(
 		null,
 	)
@@ -118,8 +114,7 @@ export function ConnectorConfigPanel({
 		fieldRefs.current.clear()
 	}
 
-	const activeSource =
-		dataSource === 'last_run' && lastRunData ? lastRunData : exampleData
+	const activeSource = lastRunData ?? exampleData
 
 	useEffect(() => {
 		if (!activeField) {
@@ -297,9 +292,6 @@ export function ConnectorConfigPanel({
 							<CollapsibleContent className="flex flex-col gap-2 pt-2">
 								<AvailableDataTree
 									branches={activeSource.tree}
-									source={dataSource}
-									hasLastRun={lastRunData !== null}
-									onSourceChange={setDataSource}
 									onInsert={handleTreeInsert}
 								/>
 								<ExpressionPreview

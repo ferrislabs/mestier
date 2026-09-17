@@ -1424,7 +1424,7 @@ describe('WorkflowCanvas — the available-data tree', () => {
 		expect(screen.getByText('quote_id')).toBeDefined()
 	})
 
-	it('switches to the real values once a last run is supplied', async () => {
+	it('shows the real values once a last run is supplied', async () => {
 		renderHarness({
 			graph: {
 				connectors: [connector('c1', SIMPLE_KIND)],
@@ -1444,12 +1444,6 @@ describe('WorkflowCanvas — the available-data tree', () => {
 		fireEvent.click(node)
 
 		await screen.findByText('Paramètres')
-		const lastRunButton = screen.getByRole('button', {
-			name: 'Dernière exécution',
-		}) as HTMLButtonElement
-		expect(lastRunButton.disabled).toBe(false)
-
-		fireEvent.click(lastRunButton)
 		fireEvent.click(screen.getByRole('button', { name: 'trigger' }))
 
 		expect(screen.getByText('quote_id')).toBeDefined()
