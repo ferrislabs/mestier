@@ -5,7 +5,10 @@ import {
 	getBezierPath,
 } from '@xyflow/react'
 import { Trash2 } from 'lucide-react'
+import { useState } from 'react'
 import { useWorkflowCanvasActions } from '#/pages/automation/ui/workflow-canvas-context'
+
+const HOVER_STROKE_WIDTH = 20
 
 export function DeletableEdge({
 	id,
@@ -20,6 +23,7 @@ export function DeletableEdge({
 	selected,
 }: EdgeProps) {
 	const actions = useWorkflowCanvasActions()
+	const [hovered, setHovered] = useState(false)
 	const [path, labelX, labelY] = getBezierPath({
 		sourceX,
 		sourceY,
@@ -31,8 +35,26 @@ export function DeletableEdge({
 
 	return (
 		<>
-			<BaseEdge id={id} path={path} markerEnd={markerEnd} style={style} />
-			{selected ? (
+			<BaseEdge
+				id={id}
+				path={path}
+				markerEnd={markerEnd}
+				style={style}
+				interactionWidth={0}
+			/>
+			{/* biome-ignore lint/a11y/noStaticElementInteractions: widening the hit
+			area of a decorative path; the control it reveals is the labelled
+			button below, which is also reachable by selecting the edge. */}
+			<path
+				d={path}
+				fill="none"
+				stroke="transparent"
+				strokeWidth={HOVER_STROKE_WIDTH}
+				className="react-flow__edge-interaction"
+				onMouseEnter={() => setHovered(true)}
+				onMouseLeave={() => setHovered(false)}
+			/>
+			{hovered || selected ? (
 				<EdgeLabelRenderer>
 					<button
 						type="button"
@@ -41,6 +63,8 @@ export function DeletableEdge({
 						style={{
 							transform: `translate(-50%, -50%) translate(${labelX}px, ${labelY}px)`,
 						}}
+						onMouseEnter={() => setHovered(true)}
+						onMouseLeave={() => setHovered(false)}
 						onClick={(event) => {
 							event.stopPropagation()
 							actions.onDeleteEdge(id)

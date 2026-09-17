@@ -1780,7 +1780,7 @@ describe('WorkflowCanvas — removing a connection', () => {
 		})
 	}
 
-	it('offers no delete affordance until the connection is selected', async () => {
+	it('offers no delete affordance until the connection is hovered', async () => {
 		renderTwoWiredConnectors()
 		await screen.findByTestId('rf__node-c2')
 
@@ -1789,14 +1789,30 @@ describe('WorkflowCanvas — removing a connection', () => {
 		).toBeNull()
 	})
 
-	it('reveals a delete button on the clicked connection and drops it', async () => {
+	it('still reveals it when the connection is reached by selection', async () => {
+		renderTwoWiredConnectors()
+		await screen.findByTestId('rf__node-c2')
+
+		const edge = document.querySelector(
+			'.react-flow__edge[data-testid="rf__edge-c1->c2:"]',
+		) as HTMLElement
+		fireEvent.click(edge)
+
+		expect(
+			await screen.findByRole('button', { name: /Supprimer la liaison/ }),
+		).toBeDefined()
+	})
+
+	it('reveals a delete button on the hovered connection and drops it', async () => {
 		const { onSaveSpy } = renderTwoWiredConnectors()
 		await screen.findByTestId('rf__node-c2')
 
 		const edge = document.querySelector(
 			'.react-flow__edge[data-testid="rf__edge-c1->c2:"]',
 		) as HTMLElement
-		fireEvent.click(edge.querySelector('.react-flow__edge-interaction') ?? edge)
+		fireEvent.mouseEnter(
+			edge.querySelector('.react-flow__edge-interaction') as Element,
+		)
 
 		const remove = await screen.findByRole('button', {
 			name: /Supprimer la liaison/,
