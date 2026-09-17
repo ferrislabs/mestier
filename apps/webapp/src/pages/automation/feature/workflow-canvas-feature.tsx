@@ -10,7 +10,7 @@ import {
 	useConnectorCatalogue,
 	useCreateCredential,
 	useEvaluateExpression,
-	useRun,
+	useRunPolling,
 	useSaveWorkflowVersion,
 	useWorkflow,
 	type WorkflowDetail,
@@ -23,6 +23,7 @@ import {
 	projectGraphErrors,
 } from '#/pages/automation/lib/validation'
 import {
+	aggregateConnectorStatuses,
 	connectorOutputsFromSteps,
 	latestRunId,
 } from '#/pages/automation/lib/workflow-runs'
@@ -85,7 +86,7 @@ function WorkflowCanvasWorkspace({
 	const eventsQuery = useAutomationEvents(organizationId)
 	const runsQuery = useAutomationRuns(organizationId)
 	const latestId = latestRunId(runsQuery.data?.data ?? [], workflowId)
-	const runDetailQuery = useRun(organizationId, latestId)
+	const runDetailQuery = useRunPolling(organizationId, latestId)
 
 	if (
 		workflowQuery.isLoading ||
@@ -128,6 +129,10 @@ function WorkflowCanvasWorkspace({
 			}
 		: null
 
+	const runStatuses = runDetail
+		? aggregateConnectorStatuses(runDetail.steps)
+		: new Map<string, string>()
+
 	return (
 		<WorkflowCanvasLoaded
 			organizationId={organizationId}
@@ -140,6 +145,7 @@ function WorkflowCanvasWorkspace({
 			credentials={credentialsQuery.data?.data ?? []}
 			events={eventsQuery.data?.data ?? []}
 			lastRun={lastRun}
+			runStatuses={runStatuses}
 		/>
 	)
 }
@@ -153,6 +159,7 @@ function WorkflowCanvasLoaded({
 	credentials,
 	events,
 	lastRun,
+	runStatuses,
 }: {
 	organizationId: string
 	workflowId: string
@@ -162,6 +169,7 @@ function WorkflowCanvasLoaded({
 	credentials: Schemas.CredentialResponse[]
 	events: Schemas.EventDescriptorResponse[]
 	lastRun: LastRunData | null
+	runStatuses: Map<string, string>
 }) {
 	const saveVersion = useSaveWorkflowVersion()
 	const createCredential = useCreateCredential(organizationId)
@@ -260,6 +268,7 @@ function WorkflowCanvasLoaded({
 				connectorErrors={validation.connectorErrors}
 				events={events}
 				lastRun={lastRun}
+				runStatuses={runStatuses}
 				onEvaluateExpression={handleEvaluateExpression}
 				credentials={credentials}
 				authSchemes={authSchemes}

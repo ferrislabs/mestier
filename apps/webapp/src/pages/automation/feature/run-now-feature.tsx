@@ -61,21 +61,11 @@ function RunNowWorkspace({
 	async function handleConfirm(payload: unknown) {
 		setStartError(null)
 		try {
-			const result = await startRun.mutateAsync({
+			await startRun.mutateAsync({
 				path: { organization_id: organizationId, workflow_id: workflowId },
 				body: { trigger_payload: payload },
 			})
 			setOpen(false)
-			await navigate({
-				to: buildOrgPath(
-					organizationSlug,
-					'/automatisation/$workflowId/executions/$runId',
-				),
-				params: {
-					workflowId,
-					runId: (result.data as { run_id: string }).run_id,
-				},
-			})
 		} catch (error) {
 			setStartError(
 				error instanceof Error && error.message

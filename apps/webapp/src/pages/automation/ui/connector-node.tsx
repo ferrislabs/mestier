@@ -4,6 +4,7 @@ import type { Schemas } from '#/api/api.client'
 import { Badge } from '#/components/ui/badge'
 import { cn } from '#/lib/utils'
 import type { ConnectorValidationError } from '#/pages/automation/lib/validation'
+import { runStatusBorderClass } from '#/pages/automation/lib/workflow-runs'
 import { AddNodeButton } from '#/pages/automation/ui/add-node-button'
 import { useWorkflowCanvasActions } from '#/pages/automation/ui/workflow-canvas-context'
 
@@ -11,6 +12,7 @@ export interface ConnectorNodeData extends Record<string, unknown> {
 	label: string
 	branches: Schemas.BranchDto[]
 	errors: ConnectorValidationError[]
+	runStatus: string | null
 	connector: Schemas.PlacedConnectorDto
 }
 
@@ -21,6 +23,7 @@ export function ConnectorNode({
 }: NodeProps & { data: ConnectorNodeData }) {
 	const actions = useWorkflowCanvasActions()
 	const hasError = data.errors.length > 0
+	const runBorder = runStatusBorderClass(data.runStatus)
 
 	return (
 		<div
@@ -28,6 +31,7 @@ export function ConnectorNode({
 				'min-w-40 rounded-lg border bg-card px-3 py-2 text-sm shadow-sm',
 				selected && 'ring-2 ring-primary',
 				hasError && 'border-destructive',
+				runBorder && `border-2 ${runBorder}`,
 			)}
 		>
 			<Handle type="target" position={Position.Left} />

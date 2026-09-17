@@ -92,6 +92,20 @@ const STATUS_PRIORITY: Record<string, number> = {
 	succeeded: 0,
 }
 
+const RUN_STATUS_BORDER: Record<string, string> = {
+	running: 'border-amber-500',
+	succeeded: 'border-emerald-500',
+	failed: 'border-destructive',
+}
+
+export function runStatusBorderClass(
+	status: string | null | undefined,
+): string | null {
+	if (!status) return null
+
+	return RUN_STATUS_BORDER[status] ?? null
+}
+
 export function aggregateConnectorStatuses(
 	steps: Schemas.RunStepResponse[],
 ): Map<string, string> {

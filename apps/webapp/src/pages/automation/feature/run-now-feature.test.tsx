@@ -166,7 +166,7 @@ describe('RunNowFeature — opening the dialog', () => {
 })
 
 describe('RunNowFeature — confirming a run', () => {
-	it('starts the run through the real mutation and navigates to its inspector', async () => {
+	it('starts the run through the real mutation without leaving the editor', async () => {
 		const user = userEvent.setup()
 		renderFeature((api) => {
 			api.mockMutation('post', WORKFLOW_RUNS_PATH, () => ({
@@ -184,12 +184,9 @@ describe('RunNowFeature — confirming a run', () => {
 		)
 
 		await waitFor(() => {
-			expect(navigateSpy).toHaveBeenCalledWith(
-				expect.objectContaining({
-					params: { workflowId: 'workflow-1', runId: 'run-42' },
-				}),
-			)
+			expect(screen.queryByRole('dialog')).toBeNull()
 		})
+		expect(navigateSpy).not.toHaveBeenCalled()
 	})
 
 	it('shows the failure and keeps the dialog open when the start is refused', async () => {

@@ -104,6 +104,7 @@ export interface WorkflowCanvasProps {
 	connectorErrors: Map<string, ConnectorValidationError[]>
 	events: Schemas.EventDescriptorResponse[]
 	lastRun: LastRunData | null
+	runStatuses: Map<string, string>
 	onEvaluateExpression: (
 		template: unknown,
 		context: Schemas.EvaluateContextBody,
@@ -134,6 +135,7 @@ function buildInitialNodes(
 	layout: Map<string, NodePosition>,
 	descriptors: Map<string, Schemas.ConnectorDescriptorResponse>,
 	connectorErrors: Map<string, ConnectorValidationError[]>,
+	runStatuses: Map<string, string>,
 ): Node[] {
 	const triggerNodes: Node[] = graph.triggers.map((trigger, index) => ({
 		id: trigger.id,
@@ -154,6 +156,7 @@ function buildInitialNodes(
 			label: descriptor?.label ?? connector.id,
 			branches: descriptor?.branches ?? [],
 			errors: connectorErrors.get(connector.id) ?? [],
+			runStatus: runStatuses.get(connector.id) ?? null,
 			connector,
 		}
 
@@ -240,6 +243,7 @@ export function WorkflowCanvas({
 	connectorErrors,
 	events,
 	lastRun,
+	runStatuses,
 	onEvaluateExpression,
 	credentials = [],
 	authSchemes = [],
@@ -250,7 +254,7 @@ export function WorkflowCanvas({
 	onSave,
 }: WorkflowCanvasProps) {
 	const [nodes, setNodes, onNodesChangeInternal] = useNodesState(
-		buildInitialNodes(graph, layout, descriptors, connectorErrors),
+		buildInitialNodes(graph, layout, descriptors, connectorErrors, runStatuses),
 	)
 	const [edges, setEdges] = useEdgesState(buildInitialEdges(graph))
 	const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null)
@@ -276,11 +280,17 @@ export function WorkflowCanvas({
 			current.map((node) => {
 				const data = node.data as ConnectorNodeData | TriggerNodeData
 				const errors = connectorErrors.get(node.id) ?? []
-				if (data.errors === errors) return node
-				return { ...node, data: { ...data, errors } }
+				const runStatus = runStatuses.get(node.id) ?? null
+				if (
+					data.errors === errors &&
+					(data as ConnectorNodeData).runStatus === runStatus
+				) {
+					return node
+				}
+				return { ...node, data: { ...data, errors, runStatus } }
 			}),
 		)
-	}, [connectorErrors, setNodes])
+	}, [connectorErrors, runStatuses, setNodes])
 
 	const handleNodesChange = useCallback(
 		(changes: NodeChange[]) => {
@@ -374,6 +384,7 @@ export function WorkflowCanvas({
 				label: descriptor.label,
 				branches: descriptor.branches,
 				errors: [],
+				runStatus: null,
 				connector: newConnector,
 			}
 			const nextNodes = [
@@ -510,6 +521,7 @@ export function WorkflowCanvas({
 				label: descriptor.label,
 				branches: descriptor.branches,
 				errors: [],
+				runStatus: null,
 				connector: newConnector,
 			}
 			const nextNodes = [

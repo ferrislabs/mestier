@@ -108,6 +108,7 @@ function Harness({
 	layout,
 	descriptors,
 	connectorErrors = new Map(),
+	runStatuses = new Map(),
 	events = [],
 	lastRun = null,
 	onEvaluateExpression = () => Promise.resolve(null),
@@ -120,6 +121,7 @@ function Harness({
 	layout: Map<string, NodePosition>
 	descriptors: Map<string, Schemas.ConnectorDescriptorResponse>
 	connectorErrors?: Map<string, ConnectorValidationError[]>
+	runStatuses?: Map<string, string>
 	events?: Schemas.EventDescriptorResponse[]
 	lastRun?: LastRunData | null
 	onEvaluateExpression?: WorkflowCanvasProps['onEvaluateExpression']
@@ -140,6 +142,7 @@ function Harness({
 		layout,
 		descriptors,
 		connectorErrors,
+		runStatuses,
 		events,
 		lastRun,
 		onEvaluateExpression,
@@ -1689,5 +1692,74 @@ describe('WorkflowCanvas — the pane context menu', () => {
 		fireEvent.contextMenu(pane, { clientX: 50, clientY: 50 })
 
 		expect(screen.getByTestId('connector-config-panel')).toBeDefined()
+	})
+})
+
+describe('WorkflowCanvas — a run in progress', () => {
+	function borderOf(nodeId: string): string {
+		const node = screen.getByTestId(`rf__node-${nodeId}`)
+		return (node.firstElementChild as HTMLElement).className
+	}
+
+	it('borders each connector by the status of its step', async () => {
+		const graph: Schemas.GraphDto = {
+			connectors: [
+				connector('c1', SIMPLE_KIND),
+				connector('c2', SIMPLE_KIND),
+				connector('c3', SIMPLE_KIND),
+			],
+			edges: [
+				{ from: 't1', to: 'c1', branch: null },
+				{ from: 'c1', to: 'c2', branch: null },
+				{ from: 'c2', to: 'c3', branch: null },
+			],
+			triggers: [trigger('t1', 'Manual')],
+		}
+
+		renderHarness({
+			graph,
+			layout: new Map([
+				['t1', { x: -220, y: 0 }],
+				['c1', { x: 0, y: 0 }],
+				['c2', { x: 200, y: 0 }],
+				['c3', { x: 400, y: 0 }],
+			]),
+			descriptors: descriptorMap(SIMPLE_DESCRIPTOR),
+			runStatuses: new Map([
+				['c1', 'succeeded'],
+				['c2', 'running'],
+				['c3', 'failed'],
+			]),
+		})
+
+		await screen.findByTestId('rf__node-c1')
+
+		expect(borderOf('c1')).toContain('border-emerald-500')
+		expect(borderOf('c2')).toContain('border-amber-500')
+		expect(borderOf('c3')).toContain('border-destructive')
+	})
+
+	it('leaves a connector with no step of its own unmarked', async () => {
+		const graph: Schemas.GraphDto = {
+			connectors: [connector('c1', SIMPLE_KIND)],
+			edges: [{ from: 't1', to: 'c1', branch: null }],
+			triggers: [trigger('t1', 'Manual')],
+		}
+
+		renderHarness({
+			graph,
+			layout: new Map([
+				['t1', { x: -220, y: 0 }],
+				['c1', { x: 0, y: 0 }],
+			]),
+			descriptors: descriptorMap(SIMPLE_DESCRIPTOR),
+			runStatuses: new Map([['c1', 'pending']]),
+		})
+
+		await screen.findByTestId('rf__node-c1')
+
+		expect(borderOf('c1')).not.toContain('border-amber-500')
+		expect(borderOf('c1')).not.toContain('border-emerald-500')
+		expect(borderOf('c1')).not.toContain('border-destructive')
 	})
 })

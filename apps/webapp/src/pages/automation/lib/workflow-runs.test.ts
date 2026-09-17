@@ -11,6 +11,7 @@ import {
 	latestRunByWorkflow,
 	latestRunId,
 	runDurationMs,
+	runStatusBorderClass,
 	runTriggerLabel,
 } from '#/pages/automation/lib/workflow-runs'
 
@@ -359,5 +360,29 @@ describe('canReplay', () => {
 	it('refuses replay while a run is still pending or running', () => {
 		expect(canReplay('pending')).toBe(false)
 		expect(canReplay('running')).toBe(false)
+	})
+})
+
+describe('runStatusBorderClass', () => {
+	it('marks a step in progress amber', () => {
+		expect(runStatusBorderClass('running')).toBe('border-amber-500')
+	})
+
+	it('marks a succeeded step green', () => {
+		expect(runStatusBorderClass('succeeded')).toBe('border-emerald-500')
+	})
+
+	it('marks a failed step red', () => {
+		expect(runStatusBorderClass('failed')).toBe('border-destructive')
+	})
+
+	it('leaves a pending or cancelled step unmarked', () => {
+		expect(runStatusBorderClass('pending')).toBeNull()
+		expect(runStatusBorderClass('cancelled')).toBeNull()
+	})
+
+	it('leaves a connector with no step at all unmarked', () => {
+		expect(runStatusBorderClass(null)).toBeNull()
+		expect(runStatusBorderClass(undefined)).toBeNull()
 	})
 })
