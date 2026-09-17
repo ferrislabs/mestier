@@ -13,7 +13,7 @@ function graphOf(
 	connectors: Schemas.PlacedConnectorDto[],
 	edges: Schemas.EdgeDto[] = [],
 ): Schemas.GraphDto {
-	return { connectors, edges }
+	return { connectors, edges, triggers: [] }
 }
 
 describe('computeFallbackLayout', () => {

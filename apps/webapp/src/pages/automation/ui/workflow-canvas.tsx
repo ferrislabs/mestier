@@ -188,8 +188,33 @@ function buildInitialNodes(
 	return [triggerNode, ...connectorNodes]
 }
 
+function triggerIdsOf(graph: Schemas.GraphDto): Set<string> {
+	return new Set(graph.triggers.map((trigger) => trigger.id))
+}
+
 function buildInitialEdges(graph: Schemas.GraphDto): Edge[] {
-	const triggerEdges: Edge[] = rootConnectorIds(graph).map((rootId) => ({
+	const triggerIds = triggerIdsOf(graph)
+
+	const storedEdges: Edge[] = graph.edges.map((edge) =>
+		triggerIds.has(edge.from)
+			? {
+					id: triggerEdgeId(edge.to),
+					source: TRIGGER_NODE_ID,
+					target: edge.to,
+					deletable: false,
+					reconnectable: false,
+				}
+			: {
+					id: realEdgeId(edge),
+					source: edge.from,
+					target: edge.to,
+					sourceHandle: edge.branch ?? undefined,
+				},
+	)
+
+	if (triggerIds.size > 0) return storedEdges
+
+	const inventedEdges: Edge[] = rootConnectorIds(graph).map((rootId) => ({
 		id: triggerEdgeId(rootId),
 		source: TRIGGER_NODE_ID,
 		target: rootId,
@@ -197,30 +222,25 @@ function buildInitialEdges(graph: Schemas.GraphDto): Edge[] {
 		reconnectable: false,
 	}))
 
-	const realEdges: Edge[] = graph.edges.map((edge) => ({
-		id: realEdgeId(edge),
-		source: edge.from,
-		target: edge.to,
-		sourceHandle: edge.branch ?? undefined,
-	}))
-
-	return [...triggerEdges, ...realEdges]
+	return [...inventedEdges, ...storedEdges]
 }
 
-function buildGraph(nodes: Node[], edges: Edge[]): Schemas.GraphDto {
+function buildGraph(
+	nodes: Node[],
+	edges: Edge[],
+	trigger: Schemas.PlacedTriggerDto,
+): Schemas.GraphDto {
 	const connectors = nodes
 		.filter((node) => node.id !== TRIGGER_NODE_ID)
 		.map((node) => (node.data as ConnectorNodeData).connector)
 
-	const graphEdges: Schemas.EdgeDto[] = edges
-		.filter((edge) => edge.source !== TRIGGER_NODE_ID)
-		.map((edge) => ({
-			from: edge.source,
-			to: edge.target,
-			branch: (edge.sourceHandle as Schemas.BranchDto | undefined) ?? null,
-		}))
+	const graphEdges: Schemas.EdgeDto[] = edges.map((edge) => ({
+		from: edge.source === TRIGGER_NODE_ID ? trigger.id : edge.source,
+		to: edge.target,
+		branch: (edge.sourceHandle as Schemas.BranchDto | undefined) ?? null,
+	}))
 
-	return { connectors, edges: graphEdges }
+	return { connectors, edges: graphEdges, triggers: [trigger] }
 }
 
 function buildLayout(nodes: Node[]): Map<string, NodePosition> {
@@ -310,6 +330,20 @@ export function WorkflowCanvas({
 
 	const catalogue = useMemo(() => [...descriptors.values()], [descriptors])
 
+	const placedTrigger = useMemo<Schemas.PlacedTriggerDto>(
+		() => ({
+			id: graph.triggers[0]?.id ?? TRIGGER_NODE_ID,
+			kind: triggerMode === 'manual' ? 'Manual' : { Events: triggerEventNames },
+		}),
+		[graph.triggers, triggerMode, triggerEventNames],
+	)
+
+	const graphOf = useCallback(
+		(currentNodes: Node[], currentEdges: Edge[]) =>
+			buildGraph(currentNodes, currentEdges, placedTrigger),
+		[placedTrigger],
+	)
+
 	useEffect(() => {
 		setNodes((current) =>
 			current.map((node) => {
@@ -353,12 +387,12 @@ export function WorkflowCanvas({
 			setEdges(nextEdges)
 			if (applicable.some((change) => change.type === 'remove')) {
 				onChange(
-					buildGraph(nodesRef.current, nextEdges),
+					graphOf(nodesRef.current, nextEdges),
 					buildLayout(nodesRef.current),
 				)
 			}
 		},
-		[onChange, setEdges],
+		[graphOf, onChange, setEdges],
 	)
 
 	const handleConnect = useCallback(
@@ -367,28 +401,28 @@ export function WorkflowCanvas({
 			edgesRef.current = nextEdges
 			setEdges(nextEdges)
 			onChange(
-				buildGraph(nodesRef.current, nextEdges),
+				graphOf(nodesRef.current, nextEdges),
 				buildLayout(nodesRef.current),
 			)
 		},
-		[onChange, setEdges],
+		[graphOf, onChange, setEdges],
 	)
 
 	const handleNodeDragStop = useCallback(() => {
 		onChange(
-			buildGraph(nodesRef.current, edgesRef.current),
+			graphOf(nodesRef.current, edgesRef.current),
 			buildLayout(nodesRef.current),
 		)
-	}, [onChange])
+	}, [graphOf, onChange])
 
 	const validateConnection = useCallback(
 		(connection: Connection | Edge) =>
 			isBranchDeclared(
 				connection,
-				buildGraph(nodesRef.current, edgesRef.current),
+				graphOf(nodesRef.current, edgesRef.current),
 				descriptors,
 			),
-		[descriptors],
+		[descriptors, graphOf],
 	)
 
 	const handleAddNode = useCallback(
@@ -398,7 +432,7 @@ export function WorkflowCanvas({
 			descriptor: Schemas.ConnectorDescriptorResponse,
 			explicitPosition?: NodePosition,
 		) => {
-			const currentGraph = buildGraph(nodesRef.current, edgesRef.current)
+			const currentGraph = graphOf(nodesRef.current, edgesRef.current)
 			const newId = nextConnectorId(currentGraph)
 			const newConnector: Schemas.PlacedConnectorDto = {
 				id: newId,
@@ -407,14 +441,14 @@ export function WorkflowCanvas({
 				config: {},
 			}
 			const nextGraph: Schemas.GraphDto = {
+				...currentGraph,
 				connectors: [...currentGraph.connectors, newConnector],
-				edges:
+				edges: [
+					...currentGraph.edges,
 					sourceId === TRIGGER_NODE_ID
-						? currentGraph.edges
-						: [
-								...currentGraph.edges,
-								{ from: sourceId, to: newId, branch: branch ?? null },
-							],
+						? { from: placedTrigger.id, to: newId, branch: null }
+						: { from: sourceId, to: newId, branch: branch ?? null },
+				],
 			}
 
 			const sourcePosition =
@@ -451,7 +485,7 @@ export function WorkflowCanvas({
 				CENTER_ON_NODE,
 			)
 		},
-		[onChange, setNodes, setEdges],
+		[graphOf, onChange, placedTrigger.id, setNodes, setEdges],
 	)
 
 	const handleRequestDelete = useCallback((connectorId: string) => {
@@ -461,7 +495,7 @@ export function WorkflowCanvas({
 	const handleConfirmDelete = useCallback(() => {
 		if (!pendingDeleteId) return
 
-		const currentGraph = buildGraph(nodesRef.current, edgesRef.current)
+		const currentGraph = graphOf(nodesRef.current, edgesRef.current)
 		const nextGraph = removeConnector(currentGraph, pendingDeleteId)
 		const nextNodes = nodesRef.current.filter(
 			(node) => node.id !== pendingDeleteId,
@@ -477,7 +511,7 @@ export function WorkflowCanvas({
 			current === pendingDeleteId ? null : current,
 		)
 		setPendingDeleteId(null)
-	}, [pendingDeleteId, onChange, setNodes, setEdges])
+	}, [pendingDeleteId, graphOf, onChange, setNodes, setEdges])
 
 	const handleConnectorConfigChange = useCallback(
 		(
@@ -496,9 +530,9 @@ export function WorkflowCanvas({
 			})
 			nodesRef.current = nextNodes
 			setNodes(nextNodes)
-			onChange(buildGraph(nextNodes, edgesRef.current), buildLayout(nextNodes))
+			onChange(graphOf(nextNodes, edgesRef.current), buildLayout(nextNodes))
 		},
-		[onChange, setNodes],
+		[graphOf, onChange, setNodes],
 	)
 
 	const handleNodeClick = useCallback((_event: unknown, node: Node) => {
@@ -559,7 +593,7 @@ export function WorkflowCanvas({
 		? (pendingDeleteNode.data as ConnectorNodeData).label
 		: pendingDeleteId
 	const pendingDeleteReferences = pendingDeleteId
-		? connectorsReferencing(buildGraph(nodes, edges), pendingDeleteId).map(
+		? connectorsReferencing(graphOf(nodes, edges), pendingDeleteId).map(
 				(id) => {
 					const referencing = nodes.find((node) => node.id === id)
 					return referencing
@@ -602,7 +636,7 @@ export function WorkflowCanvas({
 	}
 
 	const upstreamIds = openConnectorId
-		? upstreamConnectorIds(buildGraph(nodes, edges), openConnectorId)
+		? upstreamConnectorIds(graphOf(nodes, edges), openConnectorId)
 		: []
 
 	const triggerExample = resolveTriggerExample(events, triggerEventNames)

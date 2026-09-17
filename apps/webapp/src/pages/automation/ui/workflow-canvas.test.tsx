@@ -198,6 +198,7 @@ describe('WorkflowCanvas — load and save round trip', () => {
 				{ from: 'c1', to: 'c2', branch: 'Then' },
 				{ from: 'c1', to: 'c3', branch: 'Else' },
 			],
+			triggers: [],
 		}
 		const layout = new Map<string, NodePosition>([
 			['c1', { x: 0, y: 0 }],
@@ -228,6 +229,7 @@ describe('WorkflowCanvas — dragging', () => {
 		const graph: Schemas.GraphDto = {
 			connectors: [connector('c1', SIMPLE_KIND)],
 			edges: [],
+			triggers: [],
 		}
 		const layout = new Map<string, NodePosition>([['c1', { x: 0, y: 0 }]])
 
@@ -262,6 +264,7 @@ describe('WorkflowCanvas — branches drive handles', () => {
 				connector('c2', SIMPLE_KIND),
 			],
 			edges: [],
+			triggers: [],
 		}
 		const layout = new Map<string, NodePosition>([
 			['c1', { x: 0, y: 0 }],
@@ -299,6 +302,7 @@ describe('isBranchDeclared', () => {
 				connector('c2', SIMPLE_KIND),
 			],
 			edges: [],
+			triggers: [],
 		}
 		const descriptors = descriptorMap(SIMPLE_DESCRIPTOR, BRANCHING_DESCRIPTOR)
 
@@ -323,6 +327,7 @@ describe('isBranchDeclared', () => {
 				connector('c2', SIMPLE_KIND),
 			],
 			edges: [],
+			triggers: [],
 		}
 		const descriptors = descriptorMap(SIMPLE_DESCRIPTOR, BRANCHING_DESCRIPTOR)
 
@@ -344,6 +349,7 @@ describe('isBranchDeclared', () => {
 		const graph: Schemas.GraphDto = {
 			connectors: [connector('c1', SIMPLE_KIND), connector('c2', SIMPLE_KIND)],
 			edges: [],
+			triggers: [],
 		}
 		const descriptors = descriptorMap(SIMPLE_DESCRIPTOR)
 
@@ -378,6 +384,7 @@ describe('WorkflowCanvas — the virtual trigger', () => {
 				connector('c3', SIMPLE_KIND),
 			],
 			edges: [{ from: 'c1', to: 'c2', branch: null }],
+			triggers: [],
 		}
 		const layout = new Map<string, NodePosition>([
 			['c1', { x: 0, y: 0 }],
@@ -406,7 +413,11 @@ describe('WorkflowCanvas — the virtual trigger', () => {
 
 	it('warns when the workflow has no event configured', async () => {
 		renderHarness({
-			graph: { connectors: [connector('c1', SIMPLE_KIND)], edges: [] },
+			graph: {
+				connectors: [connector('c1', SIMPLE_KIND)],
+				edges: [],
+				triggers: [],
+			},
 			layout: new Map([['c1', { x: 0, y: 0 }]]),
 			descriptors: descriptorMap(SIMPLE_DESCRIPTOR),
 			triggerEventNames: [],
@@ -418,7 +429,11 @@ describe('WorkflowCanvas — the virtual trigger', () => {
 
 	it('does not warn once an event is configured', async () => {
 		renderHarness({
-			graph: { connectors: [connector('c1', SIMPLE_KIND)], edges: [] },
+			graph: {
+				connectors: [connector('c1', SIMPLE_KIND)],
+				edges: [],
+				triggers: [],
+			},
 			layout: new Map([['c1', { x: 0, y: 0 }]]),
 			descriptors: descriptorMap(SIMPLE_DESCRIPTOR),
 			triggerEventNames: ['quote.accepted'],
@@ -431,7 +446,11 @@ describe('WorkflowCanvas — the virtual trigger', () => {
 
 	it('states manual mode plainly instead of warning, even with no event configured', async () => {
 		renderHarness({
-			graph: { connectors: [connector('c1', SIMPLE_KIND)], edges: [] },
+			graph: {
+				connectors: [connector('c1', SIMPLE_KIND)],
+				edges: [],
+				triggers: [],
+			},
 			layout: new Map([['c1', { x: 0, y: 0 }]]),
 			descriptors: descriptorMap(SIMPLE_DESCRIPTOR),
 			triggerMode: 'manual',
@@ -445,7 +464,11 @@ describe('WorkflowCanvas — the virtual trigger', () => {
 
 	it('still warns on an events-mode workflow with none selected, not a manual one', async () => {
 		renderHarness({
-			graph: { connectors: [connector('c1', SIMPLE_KIND)], edges: [] },
+			graph: {
+				connectors: [connector('c1', SIMPLE_KIND)],
+				edges: [],
+				triggers: [],
+			},
 			layout: new Map([['c1', { x: 0, y: 0 }]]),
 			descriptors: descriptorMap(SIMPLE_DESCRIPTOR),
 			triggerMode: 'events',
@@ -462,7 +485,11 @@ describe('WorkflowCanvas — the virtual trigger', () => {
 			const [names, setNames] = useState<string[]>([])
 			return (
 				<Harness
-					graph={{ connectors: [connector('c1', SIMPLE_KIND)], edges: [] }}
+					graph={{
+						connectors: [connector('c1', SIMPLE_KIND)],
+						edges: [],
+						triggers: [],
+					}}
 					layout={new Map([['c1', { x: 0, y: 0 }]])}
 					descriptors={descriptorMap(SIMPLE_DESCRIPTOR)}
 					triggerEventNames={names}
@@ -493,7 +520,11 @@ describe('WorkflowCanvas — the virtual trigger', () => {
 describe('WorkflowCanvas — the trigger picker', () => {
 	it('opens the event picker when the trigger node is clicked', async () => {
 		renderHarness({
-			graph: { connectors: [connector('c1', SIMPLE_KIND)], edges: [] },
+			graph: {
+				connectors: [connector('c1', SIMPLE_KIND)],
+				edges: [],
+				triggers: [],
+			},
 			layout: new Map([['c1', { x: 0, y: 0 }]]),
 			descriptors: descriptorMap(SIMPLE_DESCRIPTOR),
 			events: [event('quote.accepted'), event('invoice.paid')],
@@ -511,7 +542,11 @@ describe('WorkflowCanvas — the trigger picker', () => {
 	it('saves the picked selection as a full replacement', async () => {
 		const onSaveTrigger = vi.fn()
 		renderHarness({
-			graph: { connectors: [connector('c1', SIMPLE_KIND)], edges: [] },
+			graph: {
+				connectors: [connector('c1', SIMPLE_KIND)],
+				edges: [],
+				triggers: [],
+			},
 			layout: new Map([['c1', { x: 0, y: 0 }]]),
 			descriptors: descriptorMap(SIMPLE_DESCRIPTOR),
 			events: [event('quote.accepted'), event('invoice.paid')],
@@ -537,7 +572,11 @@ describe('WorkflowCanvas — the trigger picker', () => {
 
 	it('closes the connector panel when the trigger node opens, and vice versa', async () => {
 		renderHarness({
-			graph: { connectors: [connector('c1', SIMPLE_KIND)], edges: [] },
+			graph: {
+				connectors: [connector('c1', SIMPLE_KIND)],
+				edges: [],
+				triggers: [],
+			},
 			layout: new Map([['c1', { x: 0, y: 0 }]]),
 			descriptors: descriptorMap(SIMPLE_DESCRIPTOR),
 			events: [event('quote.accepted')],
@@ -561,6 +600,7 @@ describe('WorkflowCanvas — validation badges', () => {
 		const graph: Schemas.GraphDto = {
 			connectors: [connector('c1', SIMPLE_KIND)],
 			edges: [],
+			triggers: [],
 		}
 
 		renderHarness({
@@ -579,7 +619,11 @@ describe('WorkflowCanvas — validation badges', () => {
 
 	it('does not badge a connector with no error', async () => {
 		renderHarness({
-			graph: { connectors: [connector('c1', SIMPLE_KIND)], edges: [] },
+			graph: {
+				connectors: [connector('c1', SIMPLE_KIND)],
+				edges: [],
+				triggers: [],
+			},
 			layout: new Map([['c1', { x: 0, y: 0 }]]),
 			descriptors: descriptorMap(SIMPLE_DESCRIPTOR),
 			connectorErrors: new Map(),
@@ -596,6 +640,7 @@ describe('WorkflowCanvas — dirty indicator', () => {
 		const graph: Schemas.GraphDto = {
 			connectors: [connector('c1', SIMPLE_KIND)],
 			edges: [],
+			triggers: [],
 		}
 		const layout = new Map<string, NodePosition>([['c1', { x: 0, y: 0 }]])
 
@@ -620,6 +665,7 @@ describe('WorkflowCanvas — dirty indicator', () => {
 		const graph: Schemas.GraphDto = {
 			connectors: [connector('c1', SIMPLE_KIND)],
 			edges: [],
+			triggers: [],
 		}
 		const layout = new Map<string, NodePosition>([['c1', { x: 0, y: 0 }]])
 
@@ -650,6 +696,7 @@ describe('WorkflowCanvas — adding a node from a handle', () => {
 		const graph: Schemas.GraphDto = {
 			connectors: [connector('c1', BRANCHING_KIND)],
 			edges: [],
+			triggers: [],
 		}
 		const layout = new Map<string, NodePosition>([['c1', { x: 0, y: 0 }]])
 
@@ -676,13 +723,17 @@ describe('WorkflowCanvas — adding a node from a handle', () => {
 			connector('c1', BRANCHING_KIND),
 			connector('c2', SIMPLE_KIND),
 		])
-		expect(savedGraph.edges).toEqual([{ from: 'c1', to: 'c2', branch: 'Then' }])
+		expect(savedGraph.edges).toEqual([
+			{ from: '__trigger__', to: 'c1', branch: null },
+			{ from: 'c1', to: 'c2', branch: 'Then' },
+		])
 	})
 
 	it('wires on else when the else handle is the one pressed', async () => {
 		const graph: Schemas.GraphDto = {
 			connectors: [connector('c1', BRANCHING_KIND)],
 			edges: [],
+			triggers: [],
 		}
 		const layout = new Map<string, NodePosition>([['c1', { x: 0, y: 0 }]])
 
@@ -704,12 +755,15 @@ describe('WorkflowCanvas — adding a node from a handle', () => {
 		await clickSave()
 
 		const [savedGraph] = onSaveSpy.mock.calls[0] as [Schemas.GraphDto]
-		expect(savedGraph.edges).toEqual([{ from: 'c1', to: 'c2', branch: 'Else' }])
+		expect(savedGraph.edges).toEqual([
+			{ from: '__trigger__', to: 'c1', branch: null },
+			{ from: 'c1', to: 'c2', branch: 'Else' },
+		])
 	})
 
 	it("creates the first node of an empty workflow from the trigger's +", async () => {
 		const { onSaveSpy } = renderHarness({
-			graph: { connectors: [], edges: [] },
+			graph: { connectors: [], edges: [], triggers: [] },
 			layout: new Map(),
 			descriptors: descriptorMap(SIMPLE_DESCRIPTOR),
 		})
@@ -732,7 +786,8 @@ describe('WorkflowCanvas — adding a node from a handle', () => {
 		const [savedGraph] = onSaveSpy.mock.calls[0] as [Schemas.GraphDto]
 		expect(savedGraph).toEqual({
 			connectors: [connector('c1', SIMPLE_KIND)],
-			edges: [],
+			edges: [{ from: '__trigger__', to: 'c1', branch: null }],
+			triggers: [{ id: '__trigger__', kind: { Events: ['quote.accepted'] } }],
 		})
 	})
 })
@@ -742,6 +797,7 @@ describe('WorkflowCanvas — deleting a node', () => {
 		const graph: Schemas.GraphDto = {
 			connectors: [connector('c1', SIMPLE_KIND), connector('c2', SIMPLE_KIND)],
 			edges: [{ from: 'c1', to: 'c2', branch: null }],
+			triggers: [],
 		}
 		const layout = new Map<string, NodePosition>([
 			['c1', { x: 0, y: 0 }],
@@ -771,7 +827,8 @@ describe('WorkflowCanvas — deleting a node', () => {
 		const [savedGraph] = onSaveSpy.mock.calls[0] as [Schemas.GraphDto]
 		expect(savedGraph).toEqual({
 			connectors: [connector('c1', SIMPLE_KIND)],
-			edges: [],
+			edges: [{ from: '__trigger__', to: 'c1', branch: null }],
+			triggers: [{ id: '__trigger__', kind: { Events: ['quote.accepted'] } }],
 		})
 	})
 
@@ -784,6 +841,7 @@ describe('WorkflowCanvas — deleting a node', () => {
 				}),
 			],
 			edges: [],
+			triggers: [],
 		}
 		const layout = new Map<string, NodePosition>([
 			['c1', { x: 0, y: 0 }],
@@ -812,6 +870,7 @@ describe('WorkflowCanvas — deleting a node', () => {
 		const graph: Schemas.GraphDto = {
 			connectors: [connector('c1', SIMPLE_KIND)],
 			edges: [],
+			triggers: [],
 		}
 
 		renderHarness({
@@ -841,6 +900,7 @@ describe('WorkflowCanvas — deleting a node', () => {
 				{ from: 'c1', to: 'c2', branch: null },
 				{ from: 'c2', to: 'c3', branch: null },
 			],
+			triggers: [],
 		}
 		const layout = new Map<string, NodePosition>([
 			['c1', { x: 0, y: 0 }],
@@ -871,7 +931,9 @@ describe('WorkflowCanvas — deleting a node', () => {
 
 		const [savedGraph] = onSaveSpy.mock.calls[0] as [Schemas.GraphDto]
 		expect(savedGraph.connectors.map((c) => c.id)).toEqual(['c1', 'c3'])
-		expect(savedGraph.edges).toEqual([])
+		expect(savedGraph.edges).toEqual([
+			{ from: '__trigger__', to: 'c1', branch: null },
+		])
 	})
 })
 
@@ -885,7 +947,11 @@ describe('WorkflowCanvas — the config panel', () => {
 
 	it('opens on a connector click, showing its fields', async () => {
 		renderHarness({
-			graph: { connectors: [connector('c1', SIMPLE_KIND)], edges: [] },
+			graph: {
+				connectors: [connector('c1', SIMPLE_KIND)],
+				edges: [],
+				triggers: [],
+			},
 			layout: new Map([['c1', { x: 0, y: 0 }]]),
 			descriptors: descriptorMap(NOTED_DESCRIPTOR),
 			onSaveSpy: vi.fn(),
@@ -902,7 +968,11 @@ describe('WorkflowCanvas — the config panel', () => {
 
 	it('does not open from a click on the virtual trigger', async () => {
 		renderHarness({
-			graph: { connectors: [connector('c1', SIMPLE_KIND)], edges: [] },
+			graph: {
+				connectors: [connector('c1', SIMPLE_KIND)],
+				edges: [],
+				triggers: [],
+			},
 			layout: new Map([['c1', { x: 0, y: 0 }]]),
 			descriptors: descriptorMap(NOTED_DESCRIPTOR),
 			onSaveSpy: vi.fn(),
@@ -916,7 +986,11 @@ describe('WorkflowCanvas — the config panel', () => {
 
 	it('does not open from pressing delete on the node', async () => {
 		renderHarness({
-			graph: { connectors: [connector('c1', SIMPLE_KIND)], edges: [] },
+			graph: {
+				connectors: [connector('c1', SIMPLE_KIND)],
+				edges: [],
+				triggers: [],
+			},
 			layout: new Map([['c1', { x: 0, y: 0 }]]),
 			descriptors: descriptorMap(NOTED_DESCRIPTOR),
 			onSaveSpy: vi.fn(),
@@ -933,7 +1007,11 @@ describe('WorkflowCanvas — the config panel', () => {
 
 	it('does not open from pressing add on the node', async () => {
 		renderHarness({
-			graph: { connectors: [connector('c1', SIMPLE_KIND)], edges: [] },
+			graph: {
+				connectors: [connector('c1', SIMPLE_KIND)],
+				edges: [],
+				triggers: [],
+			},
 			layout: new Map([['c1', { x: 0, y: 0 }]]),
 			descriptors: descriptorMap(NOTED_DESCRIPTOR),
 			onSaveSpy: vi.fn(),
@@ -954,7 +1032,11 @@ describe('WorkflowCanvas — the config panel', () => {
 
 	it('closes on request', async () => {
 		renderHarness({
-			graph: { connectors: [connector('c1', SIMPLE_KIND)], edges: [] },
+			graph: {
+				connectors: [connector('c1', SIMPLE_KIND)],
+				edges: [],
+				triggers: [],
+			},
 			layout: new Map([['c1', { x: 0, y: 0 }]]),
 			descriptors: descriptorMap(NOTED_DESCRIPTOR),
 			onSaveSpy: vi.fn(),
@@ -970,7 +1052,11 @@ describe('WorkflowCanvas — the config panel', () => {
 
 	it('closes once the open connector is deleted', async () => {
 		renderHarness({
-			graph: { connectors: [connector('c1', SIMPLE_KIND)], edges: [] },
+			graph: {
+				connectors: [connector('c1', SIMPLE_KIND)],
+				edges: [],
+				triggers: [],
+			},
 			layout: new Map([['c1', { x: 0, y: 0 }]]),
 			descriptors: descriptorMap(NOTED_DESCRIPTOR),
 			onSaveSpy: vi.fn(),
@@ -995,6 +1081,7 @@ describe('WorkflowCanvas — the config panel', () => {
 		const graph: Schemas.GraphDto = {
 			connectors: [connector('c1', SIMPLE_KIND)],
 			edges: [],
+			triggers: [],
 		}
 		const layout = new Map<string, NodePosition>([['c1', { x: 0, y: 0 }]])
 
@@ -1047,6 +1134,7 @@ describe('WorkflowCanvas — the available-data tree', () => {
 				{ from: 'c1', to: 'c3', branch: 'Else' },
 				{ from: 'c2', to: 'c4' },
 			],
+			triggers: [],
 		}
 		const layout = new Map<string, NodePosition>([
 			['c1', { x: 0, y: 0 }],
@@ -1081,7 +1169,11 @@ describe('WorkflowCanvas — the available-data tree', () => {
 
 	it('fills the trigger branch from the selected event, before any run exists', async () => {
 		renderHarness({
-			graph: { connectors: [connector('c1', SIMPLE_KIND)], edges: [] },
+			graph: {
+				connectors: [connector('c1', SIMPLE_KIND)],
+				edges: [],
+				triggers: [],
+			},
 			layout: new Map([['c1', { x: 0, y: 0 }]]),
 			descriptors: descriptorMap(SIMPLE_DESCRIPTOR),
 			events: [event('quote.accepted', { quote_id: 'q-1' })],
@@ -1100,7 +1192,11 @@ describe('WorkflowCanvas — the available-data tree', () => {
 
 	it('switches to the real values once a last run is supplied', async () => {
 		renderHarness({
-			graph: { connectors: [connector('c1', SIMPLE_KIND)], edges: [] },
+			graph: {
+				connectors: [connector('c1', SIMPLE_KIND)],
+				edges: [],
+				triggers: [],
+			},
 			layout: new Map([['c1', { x: 0, y: 0 }]]),
 			descriptors: descriptorMap(SIMPLE_DESCRIPTOR),
 			events: [event('quote.accepted', { quote_id: 'q-1' })],
@@ -1134,6 +1230,7 @@ describe('WorkflowCanvas — framing the graph on load', () => {
 			graph: {
 				connectors: [connector('c1', SIMPLE_KIND)],
 				edges: [],
+				triggers: [],
 			},
 			layout: new Map([['c1', { x: 1800, y: 1400 }]]),
 			descriptors: descriptorMap(SIMPLE_DESCRIPTOR),
@@ -1153,7 +1250,7 @@ describe('WorkflowCanvas — framing the graph on load', () => {
 describe('WorkflowCanvas — a node opens where you just made it', () => {
 	it('opens the configuration panel on the connector it just added', async () => {
 		renderHarness({
-			graph: { connectors: [], edges: [] },
+			graph: { connectors: [], edges: [], triggers: [] },
 			layout: new Map(),
 			descriptors: descriptorMap(SIMPLE_DESCRIPTOR),
 		})
@@ -1172,7 +1269,7 @@ describe('WorkflowCanvas — a node opens where you just made it', () => {
 
 	it('closes the trigger panel rather than stacking two panels', async () => {
 		renderHarness({
-			graph: { connectors: [], edges: [] },
+			graph: { connectors: [], edges: [], triggers: [] },
 			layout: new Map(),
 			descriptors: descriptorMap(SIMPLE_DESCRIPTOR),
 		})
@@ -1196,7 +1293,11 @@ describe('WorkflowCanvas — a node opens where you just made it', () => {
 describe('WorkflowCanvas — the camera follows a new node', () => {
 	it('moves the viewport when a node is added off-screen', async () => {
 		renderHarness({
-			graph: { connectors: [connector('c1', SIMPLE_KIND)], edges: [] },
+			graph: {
+				connectors: [connector('c1', SIMPLE_KIND)],
+				edges: [],
+				triggers: [],
+			},
 			layout: new Map([['c1', { x: 0, y: 0 }]]),
 			descriptors: descriptorMap(SIMPLE_DESCRIPTOR),
 		})
@@ -1226,7 +1327,11 @@ describe('WorkflowCanvas — the camera follows a new node', () => {
 describe('WorkflowCanvas — the pane context menu', () => {
 	it('opens on a right-click on empty canvas, offering all three actions', async () => {
 		renderHarness({
-			graph: { connectors: [connector('c1', SIMPLE_KIND)], edges: [] },
+			graph: {
+				connectors: [connector('c1', SIMPLE_KIND)],
+				edges: [],
+				triggers: [],
+			},
 			layout: new Map([['c1', { x: 0, y: 0 }]]),
 			descriptors: descriptorMap(SIMPLE_DESCRIPTOR),
 			onSaveSpy: vi.fn(),
@@ -1244,7 +1349,11 @@ describe('WorkflowCanvas — the pane context menu', () => {
 
 	it('does not open from a right-click on a node', async () => {
 		renderHarness({
-			graph: { connectors: [connector('c1', SIMPLE_KIND)], edges: [] },
+			graph: {
+				connectors: [connector('c1', SIMPLE_KIND)],
+				edges: [],
+				triggers: [],
+			},
 			layout: new Map([['c1', { x: 0, y: 0 }]]),
 			descriptors: descriptorMap(SIMPLE_DESCRIPTOR),
 			onSaveSpy: vi.fn(),
@@ -1260,6 +1369,7 @@ describe('WorkflowCanvas — the pane context menu', () => {
 		const graph: Schemas.GraphDto = {
 			connectors: [connector('c1', SIMPLE_KIND)],
 			edges: [],
+			triggers: [],
 		}
 		const layout = new Map<string, NodePosition>([['c1', { x: 0, y: 0 }]])
 
@@ -1286,7 +1396,10 @@ describe('WorkflowCanvas — the pane context menu', () => {
 			Map<string, NodePosition>,
 		]
 		expect(savedGraph.connectors.map((c) => c.id)).toEqual(['c1', 'c2'])
-		expect(savedGraph.edges).toEqual([])
+		expect(savedGraph.edges).toEqual([
+			{ from: '__trigger__', to: 'c1', branch: null },
+			{ from: '__trigger__', to: 'c2', branch: null },
+		])
 		expect(savedLayout.get('c2')).toEqual(expectedPosition)
 		expect(
 			document.querySelector('[data-testid^="rf__edge-__trigger__->c2"]'),
@@ -1295,7 +1408,11 @@ describe('WorkflowCanvas — the pane context menu', () => {
 
 	it('opens the trigger panel from Configurer le déclencheur', async () => {
 		renderHarness({
-			graph: { connectors: [connector('c1', SIMPLE_KIND)], edges: [] },
+			graph: {
+				connectors: [connector('c1', SIMPLE_KIND)],
+				edges: [],
+				triggers: [],
+			},
 			layout: new Map([['c1', { x: 0, y: 0 }]]),
 			descriptors: descriptorMap(SIMPLE_DESCRIPTOR),
 			events: [event('quote.accepted')],
@@ -1313,6 +1430,7 @@ describe('WorkflowCanvas — the pane context menu', () => {
 		const graph: Schemas.GraphDto = {
 			connectors: [connector('c1', SIMPLE_KIND), connector('c2', SIMPLE_KIND)],
 			edges: [],
+			triggers: [],
 		}
 		const layout = new Map<string, NodePosition>([
 			['c1', { x: 0, y: 0 }],
@@ -1349,7 +1467,11 @@ describe('WorkflowCanvas — the pane context menu', () => {
 
 	it('does not close an open panel the way a left pane click does', async () => {
 		renderHarness({
-			graph: { connectors: [connector('c1', SIMPLE_KIND)], edges: [] },
+			graph: {
+				connectors: [connector('c1', SIMPLE_KIND)],
+				edges: [],
+				triggers: [],
+			},
 			layout: new Map([['c1', { x: 0, y: 0 }]]),
 			descriptors: descriptorMap(SIMPLE_DESCRIPTOR),
 			onSaveSpy: vi.fn(),

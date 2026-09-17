@@ -31,7 +31,12 @@ export function nextConnectorId(graph: Schemas.GraphDto): string {
 }
 
 export function rootConnectorIds(graph: Schemas.GraphDto): string[] {
-	const targeted = new Set(graph.edges.map((edge) => edge.to))
+	const triggerIds = new Set(graph.triggers.map((trigger) => trigger.id))
+	const targeted = new Set(
+		graph.edges
+			.filter((edge) => !triggerIds.has(edge.from))
+			.map((edge) => edge.to),
+	)
 
 	return graph.connectors
 		.map((connector) => connector.id)
@@ -43,6 +48,7 @@ export function removeConnector(
 	connectorId: string,
 ): Schemas.GraphDto {
 	return {
+		...graph,
 		connectors: graph.connectors.filter(
 			(connector) => connector.id !== connectorId,
 		),
@@ -86,7 +92,9 @@ export function upstreamConnectorIds(
 		queue.push(...(predecessorsOf.get(id) ?? []))
 	}
 
-	return [...visited]
+	const triggerIds = new Set(graph.triggers.map((trigger) => trigger.id))
+
+	return [...visited].filter((id) => !triggerIds.has(id))
 }
 
 export function connectorsReferencing(

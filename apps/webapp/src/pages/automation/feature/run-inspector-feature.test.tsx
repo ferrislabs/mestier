@@ -90,6 +90,7 @@ function runDetail(
 							{ id: 'c1', kind: 'test.simple', version: 1, config: {} },
 						],
 						edges: [],
+						triggers: [],
 					},
 		steps: overrides.steps ?? [
 			{

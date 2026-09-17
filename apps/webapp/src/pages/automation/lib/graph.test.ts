@@ -21,7 +21,18 @@ function graphOf(
 	connectors: Schemas.PlacedConnectorDto[],
 	edges: Schemas.EdgeDto[] = [],
 ): Schemas.GraphDto {
-	return { connectors, edges }
+	return { connectors, edges, triggers: [] }
+}
+
+function triggeredGraphOf(
+	connectors: Schemas.PlacedConnectorDto[],
+	edges: Schemas.EdgeDto[] = [],
+): Schemas.GraphDto {
+	return {
+		connectors,
+		edges: [{ from: 't1', to: connectors[0].id, branch: null }, ...edges],
+		triggers: [{ id: 't1', kind: 'Manual' }],
+	}
 }
 
 describe('readLayout', () => {
@@ -73,6 +84,15 @@ describe('nextConnectorId', () => {
 })
 
 describe('rootConnectorIds', () => {
+	it('still finds the root a trigger points at', () => {
+		const graph = triggeredGraphOf(
+			[connector('c1'), connector('c2')],
+			[{ from: 'c1', to: 'c2', branch: null }],
+		)
+
+		expect(rootConnectorIds(graph)).toEqual(['c1'])
+	})
+
 	it('names every connector no edge points at', () => {
 		const graph = graphOf(
 			[connector('c1'), connector('c2'), connector('c3')],
@@ -144,6 +164,16 @@ describe('connectorsReferencing', () => {
 })
 
 describe('upstreamConnectorIds', () => {
+	it('never names a trigger among the upstream connectors', () => {
+		const graph = triggeredGraphOf(
+			[connector('c1'), connector('c2')],
+			[{ from: 'c1', to: 'c2', branch: null }],
+		)
+
+		expect(upstreamConnectorIds(graph, 'c1')).toEqual([])
+		expect(upstreamConnectorIds(graph, 'c2')).toEqual(['c1'])
+	})
+
 	it('names every ancestor, closest first, of a deep chain', () => {
 		const graph = graphOf(
 			[connector('c1'), connector('c2'), connector('c3')],

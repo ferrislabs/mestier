@@ -276,7 +276,7 @@ describe('WorkflowCanvasFeature — loading the workflow', () => {
 		renderFeature((api) => {
 			api.mockGet(WORKFLOW_PATH, () => ({
 				data: workflowDetail({
-					graph: { connectors: [connector('c1')], edges: [] },
+					graph: { connectors: [connector('c1')], edges: [], triggers: [] },
 					layout: { c1: { x: 40, y: 20 } },
 				}),
 				pagination: null,
@@ -292,6 +292,7 @@ describe('WorkflowCanvasFeature — saving', () => {
 		const graph: Schemas.GraphDto = {
 			connectors: [connector('c1'), connector('c2')],
 			edges: [{ from: 'c1', to: 'c2', branch: null }],
+			triggers: [],
 		}
 		const layout = { c1: { x: 0, y: 0 }, c2: { x: 280, y: 0 } }
 
@@ -334,6 +335,7 @@ describe('WorkflowCanvasFeature — saving', () => {
 		const graph: Schemas.GraphDto = {
 			connectors: [connector('c1'), connector('c2')],
 			edges: [{ from: 'c1', to: 'c2', branch: null }],
+			triggers: [],
 		}
 		const layout = { c1: { x: 0, y: 0 } }
 
@@ -374,7 +376,11 @@ describe('WorkflowCanvasFeature — saving', () => {
 	})
 
 	it('shows the dirty indicator after a change and clears it once saved', async () => {
-		const graph: Schemas.GraphDto = { connectors: [connector('c1')], edges: [] }
+		const graph: Schemas.GraphDto = {
+			connectors: [connector('c1')],
+			edges: [],
+			triggers: [],
+		}
 		const layout = { c1: { x: 0, y: 0 } }
 
 		renderFeature((fakeApi) => {
@@ -416,6 +422,7 @@ describe('WorkflowCanvasFeature — a 422 from the backend', () => {
 		const graph: Schemas.GraphDto = {
 			connectors: [connector('c1'), connector('c2')],
 			edges: [{ from: 'c1', to: 'c2', branch: null }],
+			triggers: [],
 		}
 		const layout = { c1: { x: 0, y: 0 }, c2: { x: 280, y: 0 } }
 
@@ -464,6 +471,7 @@ describe('WorkflowCanvasFeature — a 422 from the backend', () => {
 				{ id: 'c2', kind: 'test.withfield', version: 1, config: {} },
 			],
 			edges: [],
+			triggers: [],
 		}
 		const layout = { c1: { x: 0, y: 0 }, c2: { x: 280, y: 0 } }
 
@@ -528,6 +536,7 @@ describe('WorkflowCanvasFeature — a 422 from the backend', () => {
 		const graph: Schemas.GraphDto = {
 			connectors: [connector('c1')],
 			edges: [],
+			triggers: [],
 		}
 
 		renderFeature((fakeApi) => {
@@ -550,6 +559,7 @@ describe('WorkflowCanvasFeature — a 422 from the backend', () => {
 		const graph: Schemas.GraphDto = {
 			connectors: [connector('c1')],
 			edges: [],
+			triggers: [],
 		}
 		let attempts = 0
 
@@ -599,7 +609,7 @@ describe('WorkflowCanvasFeature — the credential picker', () => {
 			}))
 			api.mockGet(WORKFLOW_PATH, () => ({
 				data: workflowDetail({
-					graph: { connectors: [connector('c1')], edges: [] },
+					graph: { connectors: [connector('c1')], edges: [], triggers: [] },
 					layout: { c1: { x: 0, y: 0 } },
 				}),
 				pagination: null,
@@ -654,7 +664,7 @@ describe('WorkflowCanvasFeature — inline credential creation', () => {
 			}))
 			fakeApi.mockGet(WORKFLOW_PATH, () => ({
 				data: workflowDetail({
-					graph: { connectors: [connector('c1')], edges: [] },
+					graph: { connectors: [connector('c1')], edges: [], triggers: [] },
 					layout: { c1: { x: 0, y: 0 } },
 				}),
 				pagination: null,
@@ -850,7 +860,11 @@ describe('WorkflowCanvasFeature — the trigger picker', () => {
 
 describe('WorkflowCanvasFeature — the last run', () => {
 	it('fills the data tree with the most recent run for this workflow, and none other', async () => {
-		const graph: Schemas.GraphDto = { connectors: [connector('c1')], edges: [] }
+		const graph: Schemas.GraphDto = {
+			connectors: [connector('c1')],
+			edges: [],
+			triggers: [],
+		}
 
 		renderFeature((fakeApi) => {
 			fakeApi.mockGet(WORKFLOW_PATH, () => ({
@@ -958,6 +972,7 @@ describe('WorkflowCanvasFeature — the live preview', () => {
 					graph: {
 						connectors: [{ ...connector('c1'), config: { url: 'a' } }],
 						edges: [],
+						triggers: [],
 					},
 					layout: { c1: { x: 0, y: 0 } },
 				}),

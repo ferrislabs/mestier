@@ -48,7 +48,7 @@ function baseProps(
 ): RunInspectorProps {
 	return {
 		run: run(),
-		graph: { connectors: [], edges: [] },
+		graph: { connectors: [], edges: [], triggers: [] },
 		layout: new Map(),
 		descriptors: new Map(),
 		connectorStatuses: new Map(),
@@ -103,6 +103,7 @@ describe('RunInspector — the graph', () => {
 							{ id: 'c1', kind: 'test.simple', version: 1, config: {} },
 						],
 						edges: [],
+						triggers: [],
 					},
 					layout: new Map([['c1', { x: 0, y: 0 }]]),
 					descriptors: new Map([

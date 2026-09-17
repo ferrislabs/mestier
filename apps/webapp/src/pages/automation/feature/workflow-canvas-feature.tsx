@@ -184,6 +184,7 @@ function WorkflowCanvasLoaded({
 		const graph = workflow.current_version?.graph ?? {
 			connectors: [],
 			edges: [],
+			triggers: [],
 		}
 		const layout = mergedLayout(graph, readLayout(workflow.layout))
 		return { graph, layout }

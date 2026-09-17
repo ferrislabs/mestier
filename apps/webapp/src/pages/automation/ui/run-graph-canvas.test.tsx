@@ -34,6 +34,7 @@ describe('RunGraphCanvas — drawing the pinned graph', () => {
 		const graph: Schemas.GraphDto = {
 			connectors: [connector('c1', 'test.simple')],
 			edges: [],
+			triggers: [],
 		}
 		render(
 			<RunGraphCanvas
@@ -53,6 +54,7 @@ describe('RunGraphCanvas — drawing the pinned graph', () => {
 		const graph: Schemas.GraphDto = {
 			connectors: [connector('c1', 'test.simple')],
 			edges: [],
+			triggers: [],
 		}
 		render(
 			<RunGraphCanvas
@@ -73,6 +75,7 @@ describe('RunGraphCanvas — drawing the pinned graph', () => {
 		const graph: Schemas.GraphDto = {
 			connectors: [connector('c1', 'test.simple')],
 			edges: [],
+			triggers: [],
 		}
 		render(
 			<RunGraphCanvas
@@ -93,6 +96,7 @@ describe('RunGraphCanvas — drawing the pinned graph', () => {
 		const graph: Schemas.GraphDto = {
 			connectors: [connector('c1', 'test.branching')],
 			edges: [],
+			triggers: [],
 		}
 		render(
 			<RunGraphCanvas
@@ -119,6 +123,7 @@ describe('RunGraphCanvas — drawing the pinned graph', () => {
 		const graph: Schemas.GraphDto = {
 			connectors: [connector('c1', 'unknown.kind')],
 			edges: [],
+			triggers: [],
 		}
 		render(
 			<RunGraphCanvas
