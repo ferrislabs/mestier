@@ -25,6 +25,19 @@ export interface BoardUIProps
 	 * without any visible pointer, so the move has to be said out loud.
 	 */
 	announcement: string
+	/**
+	 * The filter bar, mounted by the feature layer. Rendered above the
+	 * columns and inside the same card, so it stays on screen when the
+	 * filtered board comes back empty — a bar you cannot reach is a board
+	 * you cannot get out of.
+	 */
+	toolbar?: ReactNode
+	/**
+	 * Why the board is empty, when there is more to say than "nothing to
+	 * do" — a filter that matches nothing, or a project that no longer
+	 * exists. `null` falls back to the unfiltered wording.
+	 */
+	emptyReason?: string | null
 	/** The task create/edit sheet, mounted by the feature layer. */
 	taskSheet?: ReactNode
 }
@@ -36,6 +49,8 @@ export function BoardUI({
 	error,
 	onRetry,
 	announcement,
+	toolbar,
+	emptyReason = null,
 	taskSheet,
 	...boardProps
 }: BoardUIProps) {
@@ -84,12 +99,14 @@ export function BoardUI({
 					</p>
 				</div>
 
+				{toolbar}
+
 				{isEmpty ? (
 					<div className="flex flex-col items-center justify-center gap-2 rounded-md border border-dashed bg-muted/25 p-10 text-center">
 						<p className="text-sm font-semibold">Aucune tâche</p>
 						<p className="text-sm text-muted-foreground">
-							Le tableau est vide : rien n’est encore à faire, ni en cours, ni
-							terminé.
+							{emptyReason ??
+								'Le tableau est vide : rien n’est encore à faire, ni en cours, ni terminé.'}
 						</p>
 					</div>
 				) : (

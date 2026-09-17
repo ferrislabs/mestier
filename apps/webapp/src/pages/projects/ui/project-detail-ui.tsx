@@ -4,6 +4,7 @@ import {
 	ArrowLeft,
 	Building2,
 	Clock,
+	KanbanSquare,
 	Loader2,
 	Receipt,
 } from 'lucide-react'
@@ -149,14 +150,28 @@ export function ProjectDetailUI({
 				title={project.name}
 				description="Ce qui a été devisé, ce qui a été facturé, ce qu'il reste à facturer, et ce que le projet coûte d'après le planning."
 				actions={
-					<Button asChild variant="outline">
-						<Link
-							to={buildOrgPath(organizationSlug, '/planification/projects')}
-						>
-							<ArrowLeft />
-							Retour
-						</Link>
-					</Button>
+					<div className="flex flex-wrap items-center gap-2">
+						{/* The board, already narrowed to this project (#467): the
+						 * filter state lives in the search params, so pre-filtering
+						 * it is a link rather than a click-through and a picker. */}
+						<Button asChild>
+							<Link
+								to={buildOrgPath(organizationSlug, '/planification/board')}
+								search={{ project_id: project.id }}
+							>
+								<KanbanSquare />
+								Voir dans le tableau
+							</Link>
+						</Button>
+						<Button asChild variant="outline">
+							<Link
+								to={buildOrgPath(organizationSlug, '/planification/projects')}
+							>
+								<ArrowLeft />
+								Retour
+							</Link>
+						</Button>
+					</div>
 				}
 			/>
 

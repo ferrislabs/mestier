@@ -7,7 +7,7 @@ import {
 	within,
 } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import type { ReactNode } from 'react'
+import { type ReactNode, useState } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
 	ActiveOrganizationProvider,
@@ -16,6 +16,10 @@ import {
 import type { Organization } from '#/hooks/use-organizations'
 import { PERMISSION_CATALOG } from '#/lib/permission-catalog'
 import { BoardFeature } from '#/pages/planification/feature/board-feature'
+import {
+	type BoardFilters,
+	EMPTY_BOARD_FILTERS,
+} from '#/pages/planification/lib/board-filters'
 import { seedPermissionsCacheForOrganization } from '#/test/with-permissions'
 
 // jsdom has neither ResizeObserver nor pointer capture, which the Radix
@@ -36,6 +40,8 @@ Element.prototype.releasePointerCapture ??= () => {}
 const TASKS_PATH = '/api/v1/organizations/{organization_id}/tasks'
 const TASK_PATH = '/api/v1/organizations/{organization_id}/tasks/{task_id}'
 const PLANNING_PATH = '/api/v1/organizations/{organization_id}/planning'
+const PROJECTS_PATH = '/api/v1/organizations/{organization_id}/projects'
+const TASK_LABELS_PATH = '/api/v1/organizations/{organization_id}/task-labels'
 const MY_PERMISSIONS_PATH =
 	'/api/v1/organizations/{organization_id}/members/me/permissions'
 const ALL_PERMISSIONS = PERMISSION_CATALOG.map((entry) => entry.name)
@@ -68,6 +74,10 @@ interface TaskOverrides {
 	starts_at?: string | null
 	ends_at?: string | null
 	all_day?: boolean
+	project_id?: string | null
+	parent_task_id?: string | null
+	member_ids?: string[]
+	labels?: { id: string; name: string; color: string }[]
 }
 
 function task(overrides: TaskOverrides = {}) {
@@ -79,15 +89,16 @@ function task(overrides: TaskOverrides = {}) {
 		status: 'BACKLOG' as const,
 		all_day: false,
 		blocks_availability: true,
-		parent_task_id: null,
+		parent_task_id: null as string | null,
 		child_count: 0,
 		customer_id: null,
 		customer_context_id: null,
 		quote_id: null,
+		project_id: null as string | null,
 		starts_at: null,
 		ends_at: null,
 		member_ids: ['member-1'],
-		labels: [],
+		labels: [] as { id: string; name: string; color: string }[],
 		assignments: [],
 		equipment: [],
 		expenses_cents: 0,
@@ -239,17 +250,121 @@ function applyOnServer(
 	return next
 }
 
+/**
+ * What `GET /tasks` does with the filters, written out here rather than
+ * reusing `lib/board-filters.ts`, for the same reason `applyOnServer` is
+ * written out: the screen is checked against an independent reading of the
+ * endpoint's contract, not against its own helper.
+ *
+ * The widening is the part that matters and is easy to forget: with no
+ * filter the endpoint answers with the **roots**, and the moment any filter
+ * is present it answers with matching tasks at **any depth** — see
+ * `ListTasksQuery::parent_scope` in `libs/handlers-planning`.
+ */
+function listOnServer(tasks: ServerTask[], query: BoardQuery): ServerTask[] {
+	const filtered = tasks.filter((entry) => {
+		if (query.project_id && entry.project_id !== query.project_id) return false
+		if (query.assignee_id && !entry.member_ids.includes(query.assignee_id)) {
+			return false
+		}
+		if (
+			query.label_id &&
+			!entry.labels.some((label) => label.id === query.label_id)
+		) {
+			return false
+		}
+		if (query.q && !entry.title.toLowerCase().includes(query.q.toLowerCase())) {
+			return false
+		}
+		if (query.unscheduled && entry.starts_at !== null) return false
+		return true
+	})
+
+	const narrows = Object.keys(query).some(
+		(key) => key !== 'page' && key !== 'per_page',
+	)
+	return narrows
+		? filtered
+		: filtered.filter((entry) => entry.parent_task_id === null)
+}
+
+interface BoardQuery {
+	page?: number
+	per_page?: number
+	project_id?: string
+	assignee_id?: string
+	label_id?: string
+	q?: string
+	unscheduled?: boolean
+}
+
+function queryOf(params: unknown): BoardQuery {
+	return ((params as { query?: BoardQuery } | undefined)?.query ??
+		{}) as BoardQuery
+}
+
+/** The board's `GET /tasks` calls, oldest first. */
+function tasksQueries(
+	api: ReturnType<typeof installFakeTanstackApi>,
+): BoardQuery[] {
+	return api.calls
+		.filter((call) => call.method === 'get' && call.path === TASKS_PATH)
+		.map((call) => queryOf(call.params))
+}
+
 interface RenderOptions {
 	permissions?: string[]
+	/** The filters the URL carries when the board opens. */
+	filters?: BoardFilters
+	projects?: { id: string; name: string; archived_at: string | null }[]
+	labels?: { id: string; name: string; color: string }[]
+	/**
+	 * The card whose arrival means the first listing landed. `null` for a
+	 * board that opens on a filter matching nothing, where waiting for a
+	 * card would wait forever — the filter bar is what shows up instead.
+	 */
+	ready?: RegExp | null
 }
 
 type BoardApi = ReturnType<typeof installFakeTanstackApi> & {
 	seedTasks: (tasks: ServerTask[]) => void
 }
 
+/**
+ * Stands in for the route: the filters come in as props, a change writes
+ * them back, and the board re-renders from the written value — exactly the
+ * one-way trip through the URL that `routes/_app.o.$organizationSlug.
+ * planification.board.tsx` performs, minus the router.
+ */
+function BoardHarness({
+	initialFilters,
+	onFiltersChange,
+}: {
+	initialFilters: BoardFilters
+	onFiltersChange: (filters: BoardFilters) => void
+}) {
+	const [filters, setFilters] = useState(initialFilters)
+
+	return (
+		<BoardFeature
+			filters={filters}
+			onFiltersChange={(next) => {
+				onFiltersChange(next)
+				setFilters(next)
+			}}
+		/>
+	)
+}
+
 async function renderBoard(
 	configure: (api: BoardApi) => void,
-	{ permissions = ALL_PERMISSIONS }: RenderOptions = {},
+	{
+		permissions = ALL_PERMISSIONS,
+		filters = EMPTY_BOARD_FILTERS,
+		projects = [{ id: 'project-1', name: 'Toiture Duval', archived_at: null }],
+		labels = [{ id: 'label-1', name: 'Urgent', color: '#ff0000' }],
+		ready = /Commander le bois/,
+	}: RenderOptions = {},
 ) {
 	const api = installFakeTanstackApi()
 	api.mockGet(MY_PERMISSIONS_PATH, () => ({
@@ -265,8 +380,12 @@ async function renderBoard(
 		},
 		pagination: null,
 	}))
+	api.mockGet(PROJECTS_PATH, () => ({ data: projects, pagination: null }))
+	api.mockGet(TASK_LABELS_PATH, () => ({ data: labels, pagination: null }))
 	let serverTasks = boardTasks()
-	api.mockGet(TASKS_PATH, () => tasksHandler(serverTasks)())
+	api.mockGet(TASKS_PATH, (params) =>
+		tasksHandler(listOnServer(serverTasks, queryOf(params)))(),
+	)
 	api.mockMutation('patch', TASK_PATH, (params) => {
 		const { path, body } = params as {
 			path: { task_id: string }
@@ -305,15 +424,23 @@ async function renderBoard(
 		)
 	}
 
+	const filterChanges: BoardFilters[] = []
 	render(
 		<Providers>
-			<BoardFeature />
+			<BoardHarness
+				initialFilters={filters}
+				onFiltersChange={(next) => filterChanges.push(next)}
+			/>
 		</Providers>,
 	)
 
-	await screen.findByRole('article', { name: /Commander le bois/ })
+	if (ready) {
+		await screen.findByRole('article', { name: ready })
+	} else {
+		await screen.findByText('Aucune tâche')
+	}
 
-	return api
+	return { ...api, filterChanges }
 }
 
 function column(label: string): HTMLElement {
@@ -400,6 +527,8 @@ describe('BoardFeature — tableau vide', () => {
 			pagination: null,
 		}))
 		api.mockGet(TASKS_PATH, tasksHandler([]))
+		api.mockGet(PROJECTS_PATH, () => ({ data: [], pagination: null }))
+		api.mockGet(TASK_LABELS_PATH, () => ({ data: [], pagination: null }))
 
 		const queryClient = new QueryClient({
 			defaultOptions: { queries: { retry: false } },
@@ -410,7 +539,10 @@ describe('BoardFeature — tableau vide', () => {
 			<QueryClientProvider client={queryClient}>
 				<OrganizationListProvider organizations={[ORGANIZATION]}>
 					<ActiveOrganizationProvider activeOrganization={ORGANIZATION}>
-						<BoardFeature />
+						<BoardFeature
+							filters={EMPTY_BOARD_FILTERS}
+							onFiltersChange={() => {}}
+						/>
 					</ActiveOrganizationProvider>
 				</OrganizationListProvider>
 			</QueryClientProvider>,
@@ -696,6 +828,354 @@ describe('BoardFeature — planifier depuis la carte', () => {
 			'Commander le bois',
 			'Poser les tuiles',
 			'Nettoyer le chantier',
+		])
+	})
+})
+
+/**
+ * Tasks spread over two projects, plus one subtask — the shape that makes
+ * the endpoint's widening visible: unfiltered, the board shows the roots of
+ * both projects; filtered on a project, it shows that project's roots *and*
+ * its subtasks.
+ */
+function projectTasks() {
+	return [
+		task({
+			id: 'a',
+			title: 'Commander le bois',
+			status: 'BACKLOG',
+			project_id: 'project-1',
+		}),
+		task({
+			id: 'b',
+			title: 'Poser les tuiles',
+			status: 'BACKLOG',
+			project_id: 'project-2',
+		}),
+		task({
+			id: 'x',
+			title: 'Monter la charpente',
+			status: 'IN_PROGRESS',
+			project_id: 'project-1',
+		}),
+		task({
+			id: 's',
+			title: 'Bardage arrière',
+			status: 'IN_PROGRESS',
+			project_id: 'project-1',
+			parent_task_id: 'a',
+		}),
+	]
+}
+
+const PROJECT_OPTIONS = [
+	{ id: 'project-1', name: 'Toiture Duval', archived_at: null },
+	{ id: 'project-2', name: 'Extension Morel', archived_at: null },
+]
+
+function projectPicker(): HTMLElement {
+	return screen.getByLabelText('Projet')
+}
+
+/** The query of the most recent `GET /tasks`. */
+function lastTasksQuery(api: ReturnType<typeof installFakeTanstackApi>) {
+	return tasksQueries(api).at(-1)
+}
+
+describe('BoardFeature — filtres', () => {
+	it('narrows every column, server-side, and writes the filter back', async () => {
+		const api = await renderBoard(
+			(apis) => {
+				apis.seedTasks(projectTasks())
+			},
+			{ projects: PROJECT_OPTIONS },
+		)
+
+		expect(cardTitlesIn('Backlog')).toEqual([
+			'Commander le bois',
+			'Poser les tuiles',
+		])
+
+		await userEvent.selectOptions(projectPicker(), 'project-1')
+
+		await waitFor(() =>
+			expect(lastTasksQuery(api)?.project_id).toBe('project-1'),
+		)
+		await waitFor(() =>
+			expect(cardTitlesIn('Backlog')).toEqual(['Commander le bois']),
+		)
+
+		expect(api.filterChanges.at(-1)).toEqual({
+			...EMPTY_BOARD_FILTERS,
+			project_id: 'project-1',
+		})
+	})
+
+	/**
+	 * `GET /tasks` answers with the roots until something narrows it, and
+	 * with every matching task at any depth afterwards. The subtask arrives
+	 * as a card like any other and the count follows it — that is the
+	 * endpoint's contract, not a leak, and the bar says so in words.
+	 */
+	it('shows the subtasks the filtered listing starts returning, and says so', async () => {
+		await renderBoard(
+			(apis) => {
+				apis.seedTasks(projectTasks())
+			},
+			{ projects: PROJECT_OPTIONS },
+		)
+
+		expect(cardTitlesIn('En cours')).toEqual(['Monter la charpente'])
+		expect(screen.queryByText(/sous-tâches/i)).toBeNull()
+
+		await userEvent.selectOptions(projectPicker(), 'project-1')
+
+		await waitFor(() =>
+			expect(cardTitlesIn('En cours')).toEqual([
+				'Monter la charpente',
+				'Bardage arrière',
+			]),
+		)
+		expect(screen.getByText(/sous-tâches/i)).toBeDefined()
+	})
+
+	it('counts the filtered set, not the page', async () => {
+		await renderBoard(
+			(apis) => {
+				apis.seedTasks(projectTasks())
+			},
+			{ projects: PROJECT_OPTIONS },
+		)
+
+		expect(screen.getByText('3 cartes')).toBeDefined()
+
+		await userEvent.selectOptions(projectPicker(), 'project-2')
+
+		await waitFor(() => expect(screen.getByText('1 carte')).toBeDefined())
+	})
+
+	it('searches on the server when the search box is submitted', async () => {
+		const api = await renderBoard(
+			(apis) => {
+				apis.seedTasks(projectTasks())
+			},
+			{ projects: PROJECT_OPTIONS },
+		)
+
+		await userEvent.type(screen.getByLabelText('Recherche'), 'tuiles{Enter}')
+
+		await waitFor(() => expect(lastTasksQuery(api)?.q).toBe('tuiles'))
+		await waitFor(() =>
+			expect(cardTitlesIn('Backlog')).toEqual(['Poser les tuiles']),
+		)
+	})
+
+	it('sends the unscheduled toggle only when it is on', async () => {
+		const api = await renderBoard(
+			(apis) => {
+				apis.seedTasks([
+					task({ id: 'a', title: 'Commander le bois', status: 'BACKLOG' }),
+					task({
+						id: 'p',
+						title: 'Poser les tuiles',
+						status: 'BACKLOG',
+						starts_at: '2026-09-09T22:00:00.000Z',
+						ends_at: '2026-09-10T22:00:00.000Z',
+					}),
+				])
+			},
+			{ projects: PROJECT_OPTIONS },
+		)
+
+		await userEvent.click(screen.getByRole('switch'))
+
+		await waitFor(() => expect(lastTasksQuery(api)?.unscheduled).toBe(true))
+		await waitFor(() =>
+			expect(cardTitlesIn('Backlog')).toEqual(['Commander le bois']),
+		)
+
+		await userEvent.click(screen.getByRole('switch'))
+
+		// Off is absent, never `unscheduled=false`: a present `false` would be
+		// a filter the API takes at face value, widening the listing to every
+		// depth for nothing.
+		await waitFor(() =>
+			expect(lastTasksQuery(api)).toEqual({ page: 1, per_page: 200 }),
+		)
+		expect(api.filterChanges.at(-1)?.unscheduled).toBeUndefined()
+	})
+
+	it('filters on an assignee and on a label, server-side', async () => {
+		const api = await renderBoard(
+			(apis) => {
+				apis.seedTasks([
+					task({
+						id: 'a',
+						title: 'Commander le bois',
+						member_ids: ['member-1'],
+					}),
+					task({
+						id: 'z',
+						title: 'Poser les tuiles',
+						member_ids: ['member-2'],
+						labels: [{ id: 'label-1', name: 'Urgent', color: '#ff0000' }],
+					}),
+				])
+			},
+			{ projects: PROJECT_OPTIONS },
+		)
+
+		// The roster comes from `GET /planning`, so the option is the member
+		// id the API filters on — not the `member:<uuid>` resource id.
+		await userEvent.selectOptions(screen.getByLabelText('Assigné'), 'member-1')
+
+		await waitFor(() =>
+			expect(lastTasksQuery(api)?.assignee_id).toBe('member-1'),
+		)
+		await waitFor(() =>
+			expect(cardTitlesIn('Backlog')).toEqual(['Commander le bois']),
+		)
+
+		await userEvent.selectOptions(screen.getByLabelText('Assigné'), '')
+		await userEvent.selectOptions(screen.getByLabelText('Étiquette'), 'label-1')
+
+		await waitFor(() => expect(lastTasksQuery(api)?.label_id).toBe('label-1'))
+		expect(lastTasksQuery(api)?.assignee_id).toBeUndefined()
+		await waitFor(() =>
+			expect(cardTitlesIn('Backlog')).toEqual(['Poser les tuiles']),
+		)
+	})
+
+	it('clears back to the unfiltered board and to an empty search', async () => {
+		const api = await renderBoard(
+			(apis) => {
+				apis.seedTasks(projectTasks())
+			},
+			{
+				projects: PROJECT_OPTIONS,
+				filters: { ...EMPTY_BOARD_FILTERS, project_id: 'project-1', q: 'bois' },
+			},
+		)
+
+		await userEvent.click(
+			screen.getByRole('button', { name: /Effacer les filtres/ }),
+		)
+
+		const cleared = api.filterChanges.at(-1)
+		// Every key present and undefined — that is what removes it from the
+		// address. An object that simply omitted the keys would leave
+		// `?project_id=…&q=…` behind.
+		expect(cleared).toEqual(EMPTY_BOARD_FILTERS)
+		expect(Object.keys(cleared ?? {}).sort()).toEqual([
+			'assignee_id',
+			'label_id',
+			'project_id',
+			'q',
+			'unscheduled',
+		])
+		await waitFor(() =>
+			expect(lastTasksQuery(api)).toEqual({ page: 1, per_page: 200 }),
+		)
+	})
+
+	it('explains a project that no longer exists instead of crashing', async () => {
+		await renderBoard(
+			(apis) => {
+				apis.seedTasks(projectTasks())
+			},
+			{
+				projects: PROJECT_OPTIONS,
+				filters: { ...EMPTY_BOARD_FILTERS, project_id: 'project-deleted' },
+				ready: null,
+			},
+		)
+
+		expect(screen.getByText(/Ce projet est introuvable/)).toBeDefined()
+		// The picker still reflects the address rather than reading "Tous les
+		// projets" over a board that is filtered.
+		expect((projectPicker() as HTMLSelectElement).value).toBe('project-deleted')
+		expect(screen.getByText('Projet introuvable')).toBeDefined()
+	})
+
+	it('says a filter matched nothing rather than "rien à faire"', async () => {
+		await renderBoard(
+			(apis) => {
+				apis.seedTasks(projectTasks())
+			},
+			{
+				projects: PROJECT_OPTIONS,
+				filters: { ...EMPTY_BOARD_FILTERS, q: 'introuvable' },
+				ready: null,
+			},
+		)
+
+		expect(
+			screen.getByText(/Aucune tâche ne correspond aux filtres/),
+		).toBeDefined()
+	})
+})
+
+/**
+ * The trap this workstream is most likely to spring: `useMoveBoardTask`
+ * writes its optimistic update straight into the board query's cache entry.
+ * If the filters did not travel into the key, that write would land on the
+ * unfiltered entry — the screen would show the card snap back on drop, and
+ * the existing rollback test, which runs unfiltered, would still pass.
+ */
+describe('BoardFeature — déplacement sur un tableau filtré', () => {
+	it('moves optimistically and rolls back, filters and all', async () => {
+		let rejectPatch: ((error: Error) => void) | null = null
+		let served = 0
+
+		const api = await renderBoard(
+			(apis) => {
+				apis.mockGet(TASKS_PATH, (params) => {
+					served += 1
+					// Only the first read succeeds: a refetch serving the
+					// server's own order would hide whether the optimistic write
+					// and its rollback happened at all.
+					if (served > 1) throw new Error('indisponible')
+					return tasksHandler(listOnServer(projectTasks(), queryOf(params)))()
+				})
+				apis.mockMutation(
+					'patch',
+					TASK_PATH,
+					() =>
+						new Promise((_resolve, reject) => {
+							rejectPatch = reject
+						}),
+				)
+			},
+			{
+				projects: PROJECT_OPTIONS,
+				filters: { ...EMPTY_BOARD_FILTERS, project_id: 'project-1' },
+			},
+		)
+
+		// The filtered board: one card in Backlog, two in En cours (the
+		// subtask included).
+		expect(cardTitlesIn('Backlog')).toEqual(['Commander le bois'])
+		expect(lastTasksQuery(api)?.project_id).toBe('project-1')
+
+		drag(card('Commander le bois'), column('En cours'))
+
+		await waitFor(() =>
+			expect(cardTitlesIn('En cours')).toEqual([
+				'Monter la charpente',
+				'Bardage arrière',
+				'Commander le bois',
+			]),
+		)
+		expect(cardTitlesIn('Backlog')).toEqual([])
+
+		rejectPatch?.(new Error('Le serveur a refusé le déplacement.'))
+
+		await waitFor(() =>
+			expect(cardTitlesIn('Backlog')).toEqual(['Commander le bois']),
+		)
+		expect(cardTitlesIn('En cours')).toEqual([
+			'Monter la charpente',
+			'Bardage arrière',
 		])
 	})
 })

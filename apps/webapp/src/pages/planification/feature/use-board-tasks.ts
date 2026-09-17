@@ -5,6 +5,10 @@ import {
 	applyBoardPatch,
 	type UpdateTaskRequest,
 } from '#/pages/planification/lib/board'
+import {
+	type BoardFilters,
+	boardFiltersToQuery,
+} from '#/pages/planification/lib/board-filters'
 
 const TASKS_PATH = '/api/v1/organizations/{organization_id}/tasks'
 const TASK_PATH = '/api/v1/organizations/{organization_id}/tasks/{task_id}'
@@ -16,10 +20,20 @@ const TASK_PATH = '/api/v1/organizations/{organization_id}/tasks/{task_id}'
  */
 export const BOARD_TASKS_PER_PAGE = 200
 
-function boardTasksRequest(organizationId: string) {
+/**
+ * The one request both hooks below build, filters included.
+ *
+ * The filters belong in here rather than being applied to the response,
+ * and not only because a client-side filter would lie about the column
+ * counts: this object *is* the query key, and the optimistic move writes
+ * into the entry that key names. A filter that did not travel this far
+ * would leave the move patching the unfiltered board while the screen shows
+ * the filtered one.
+ */
+function boardTasksRequest(organizationId: string, filters: BoardFilters) {
 	return {
 		path: { organization_id: organizationId },
-		query: { page: 1, per_page: BOARD_TASKS_PER_PAGE },
+		query: boardFiltersToQuery(filters, BOARD_TASKS_PER_PAGE),
 	}
 }
 
@@ -29,10 +43,12 @@ function boardTasksRequest(organizationId: string) {
  * the board owns the exact request — and therefore the exact key — rather
  * than sharing one with a screen that might change its page size.
  */
-export function useBoardTasks(organizationId: string) {
+export function useBoardTasks(organizationId: string, filters: BoardFilters) {
 	return useQuery({
-		...window.tanstackApi.get(TASKS_PATH, boardTasksRequest(organizationId))
-			.queryOptions,
+		...window.tanstackApi.get(
+			TASKS_PATH,
+			boardTasksRequest(organizationId, filters),
+		).queryOptions,
 		enabled: Boolean(organizationId),
 	})
 }
@@ -60,12 +76,20 @@ interface BoardPatchVariables {
  * The rollback restores the entire previous page, not just the card that
  * moved: a card's position is the order of the list around it, and putting
  * one element back where it was is only correct if nothing else shifted.
+ *
+ * Takes the same `filters` as {@link useBoardTasks} because it has to name
+ * the same cache entry: dropping a card on a board narrowed to one project
+ * must patch that project's page, not the unfiltered one sitting beside it
+ * in the cache.
  */
-export function useMoveBoardTask(organizationId: string) {
+export function useMoveBoardTask(
+	organizationId: string,
+	filters: BoardFilters,
+) {
 	const queryClient = useQueryClient()
 	const queryKey = window.tanstackApi.get(
 		TASKS_PATH,
-		boardTasksRequest(organizationId),
+		boardTasksRequest(organizationId, filters),
 	).queryKey
 
 	return useMutation({
