@@ -6,6 +6,7 @@ use crate::infrastructure::automation::webhook::address_policy::PrivateNetworkAc
 
 use super::customer_create::CustomerCreateConnector;
 use super::flow_condition::FlowConditionConnector;
+use super::flow_config::FlowConfigConnector;
 use super::flow_loop::FlowLoopConnector;
 use super::http_request::HttpRequestConnector;
 use super::odoo::{
@@ -33,6 +34,7 @@ pub struct UnknownConnectorKind {
 pub struct ConnectorRegistry {
     flow_loop: FlowLoopConnector,
     flow_condition: FlowConditionConnector,
+    flow_config: FlowConfigConnector,
     customer_create: CustomerCreateConnector,
     http_request: HttpRequestConnector,
     odoo_create_partner: OdooCreatePartnerConnector,
@@ -61,6 +63,7 @@ impl ConnectorRegistry {
         Self {
             flow_loop: FlowLoopConnector,
             flow_condition: FlowConditionConnector,
+            flow_config: FlowConfigConnector,
             customer_create: CustomerCreateConnector::new(usecase.clone()),
             http_request: HttpRequestConnector::new(usecase.clone(), access),
             odoo_create_partner: OdooCreatePartnerConnector::new(usecase.clone(), access),
@@ -75,6 +78,7 @@ impl ConnectorRegistry {
         &[
             ("flow.loop", 1),
             ("flow.condition", 1),
+            ("flow.config", 1),
             ("mestier.customer.create", 1),
             ("http.request", 1),
             ("odoo.create_partner", 1),
@@ -93,6 +97,7 @@ impl ConnectorRegistry {
         match (kind, version) {
             ("flow.loop", 1) => Ok(self.flow_loop.execute(input).await),
             ("flow.condition", 1) => Ok(self.flow_condition.execute(input).await),
+            ("flow.config", 1) => Ok(self.flow_config.execute(input).await),
             ("mestier.customer.create", 1) => Ok(self.customer_create.execute(input).await),
             ("http.request", 1) => Ok(self.http_request.execute(input).await),
             ("odoo.create_partner", 1) => Ok(self.odoo_create_partner.execute(input).await),
@@ -193,6 +198,25 @@ mod tests {
             .unwrap();
 
         assert!(matches!(outcome, ConnectorOutcome::Branch { .. }));
+    }
+
+    #[tokio::test]
+    async fn execute_dispatches_flow_config_to_its_implementation() {
+        let mut config = serde_json::Map::new();
+        config.insert("variables".to_string(), json!({ "customer_id": "c-1" }));
+        let input = ConnectorInput {
+            org_id: OrganizationId(Uuid::from_u128(1)),
+            run_id: Uuid::from_u128(2),
+            config: &config,
+            credential_id: None,
+        };
+
+        let outcome = registry().execute("flow.config", 1, input).await.unwrap();
+
+        assert_eq!(
+            outcome,
+            ConnectorOutcome::Produced(json!({ "customer_id": "c-1" }))
+        );
     }
 
     #[tokio::test]

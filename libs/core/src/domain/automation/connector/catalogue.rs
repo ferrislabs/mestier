@@ -81,6 +81,16 @@ const CONDITION_FIELDS: &[Field] = &[Field {
     visible_when: None,
 }];
 
+const CONFIG_FIELDS: &[Field] = &[Field {
+    name: "variables",
+    label: "Variables",
+    required: true,
+    kind: FieldKind::Json,
+    expression: true,
+    secret: false,
+    visible_when: None,
+}];
+
 const CUSTOMER_CREATE_FIELDS: &[Field] = &[
     Field {
         name: "name",
@@ -313,11 +323,9 @@ fn descriptors() -> Vec<ConnectorDescriptor> {
     all
 }
 
-/// The two flow-control connectors: they act on the graph itself rather than
-/// an external system, so they need no authentication and are declared here
-/// instead of being owned by a bounded context. Described now, executed in
-/// #200 — two real cases are enough to prove the descriptor shape without
-/// running anything.
+/// The flow-control connectors: they act on the graph itself rather than an
+/// external system, so they need no authentication and are declared here
+/// instead of being owned by a bounded context.
 fn flow_descriptors() -> Vec<ConnectorDescriptor> {
     vec![
         ConnectorDescriptor {
@@ -339,6 +347,16 @@ fn flow_descriptors() -> Vec<ConnectorDescriptor> {
             fields: CONDITION_FIELDS,
             branches: &[Branch::Then, Branch::Else],
             output_example: json!({ "matched": true }),
+        },
+        ConnectorDescriptor {
+            kind: "flow.config",
+            version: 1,
+            family: "flow",
+            label: "Configuration",
+            auth: AuthRequirement::None,
+            fields: CONFIG_FIELDS,
+            branches: &[],
+            output_example: json!({ "customer_id": "…", "retry_limit": 3 }),
         },
     ]
 }
@@ -523,6 +541,24 @@ mod tests {
 
         assert!(catalogue.get("flow.loop", 1).is_some());
         assert!(catalogue.get("flow.condition", 1).is_some());
+        assert!(catalogue.get("flow.config", 1).is_some());
+    }
+
+    #[test]
+    fn the_catalogue_contains_the_flow_config_connector() {
+        let catalogue = connector_catalogue();
+
+        let descriptor = catalogue
+            .get("flow.config", 1)
+            .expect("flow.config is described");
+        assert_eq!(descriptor.auth, AuthRequirement::None);
+        assert!(descriptor.branches.is_empty());
+        assert!(
+            descriptor
+                .fields
+                .iter()
+                .any(|f| f.name == "variables" && f.required && f.expression)
+        );
     }
 
     /// The one internal connector the run engine (#200) proves itself
