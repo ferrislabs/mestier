@@ -216,7 +216,7 @@ export function isBranchDeclared(
 	descriptors: Map<string, Schemas.ConnectorDescriptorResponse>,
 ): boolean {
 	if (graph.triggers.some((trigger) => trigger.id === connection.source)) {
-		return false
+		return connection.sourceHandle == null
 	}
 
 	const source = graph.connectors.find(
@@ -532,27 +532,30 @@ export function WorkflowCanvas({
 		[onChange, paneMenuPosition, setNodes],
 	)
 
-	const handleAddTriggerFromPane = useCallback(() => {
-		const currentGraph = buildGraph(nodesRef.current, edgesRef.current)
-		const newId = nextTriggerId(currentGraph)
-		const trigger: Schemas.PlacedTriggerDto = { id: newId, kind: 'Manual' }
-		const nextNodes = [
-			...nodesRef.current,
-			{
-				id: newId,
-				type: 'trigger',
-				position: paneMenuPosition,
-				data: { trigger, errors: [] } satisfies TriggerNodeData,
-			},
-		]
+	const handleAddTriggerFromPane = useCallback(
+		(kind: Schemas.TriggerKindDto) => {
+			const currentGraph = buildGraph(nodesRef.current, edgesRef.current)
+			const newId = nextTriggerId(currentGraph)
+			const trigger: Schemas.PlacedTriggerDto = { id: newId, kind }
+			const nextNodes = [
+				...nodesRef.current,
+				{
+					id: newId,
+					type: 'trigger',
+					position: paneMenuPosition,
+					data: { trigger, errors: [] } satisfies TriggerNodeData,
+				},
+			]
 
-		nodesRef.current = nextNodes
-		setNodes(nextNodes)
-		onChange(buildGraph(nextNodes, edgesRef.current), buildLayout(nextNodes))
-		setOpenConnectorId(null)
-		setOpenTriggerId(newId)
-		setPaneMenuKey((key) => key + 1)
-	}, [onChange, paneMenuPosition, setNodes])
+			nodesRef.current = nextNodes
+			setNodes(nextNodes)
+			onChange(buildGraph(nextNodes, edgesRef.current), buildLayout(nextNodes))
+			setOpenConnectorId(null)
+			setOpenTriggerId(kind === 'Manual' ? null : newId)
+			setPaneMenuKey((key) => key + 1)
+		},
+		[onChange, paneMenuPosition, setNodes],
+	)
 
 	const handleTriggerKindChange = useCallback(
 		(triggerId: string, kind: Schemas.TriggerKindDto) => {
@@ -733,9 +736,23 @@ export function WorkflowCanvas({
 										/>
 									</ContextMenuSubContent>
 								</ContextMenuSub>
-								<ContextMenuItem onSelect={handleAddTriggerFromPane}>
-									Ajouter un déclencheur
-								</ContextMenuItem>
+								<ContextMenuSub>
+									<ContextMenuSubTrigger>
+										Ajouter un déclencheur
+									</ContextMenuSubTrigger>
+									<ContextMenuSubContent>
+										<ContextMenuItem
+											onSelect={() => handleAddTriggerFromPane('Manual')}
+										>
+											Manuel
+										</ContextMenuItem>
+										<ContextMenuItem
+											onSelect={() => handleAddTriggerFromPane({ Events: [] })}
+										>
+											Sur événement(s)
+										</ContextMenuItem>
+									</ContextMenuSubContent>
+								</ContextMenuSub>
 								<ContextMenuItem onSelect={handleFitViewFromPane}>
 									Cadrer le graphe
 								</ContextMenuItem>

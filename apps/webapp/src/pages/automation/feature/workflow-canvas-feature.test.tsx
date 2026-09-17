@@ -857,6 +857,7 @@ describe('WorkflowCanvasFeature — a trigger saved with the workflow', () => {
 		const pane = document.querySelector('.react-flow__pane') as HTMLElement
 		fireEvent.contextMenu(pane, { clientX: 400, clientY: 400 })
 		fireEvent.click(await screen.findByText('Ajouter un déclencheur'))
+		fireEvent.click(await screen.findByText('Manuel'))
 		await screen.findByTestId('rf__node-t2')
 
 		await clickSave()

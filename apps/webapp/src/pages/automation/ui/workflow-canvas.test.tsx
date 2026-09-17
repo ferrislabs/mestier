@@ -288,6 +288,38 @@ describe('WorkflowCanvas — branches drive handles', () => {
 })
 
 describe('isBranchDeclared', () => {
+	it('accepts wiring a trigger to a connector by hand', () => {
+		const graph: Schemas.GraphDto = {
+			connectors: [connector('c1', SIMPLE_KIND)],
+			edges: [],
+			triggers: [trigger('t1')],
+		}
+
+		expect(
+			isBranchDeclared(
+				{ source: 't1', sourceHandle: null, target: 'c1', targetHandle: null },
+				graph,
+				descriptorMap(SIMPLE_DESCRIPTOR),
+			),
+		).toBe(true)
+	})
+
+	it('accepts a plain connection between two branchless connectors', () => {
+		const graph: Schemas.GraphDto = {
+			connectors: [connector('c1', SIMPLE_KIND), connector('c2', SIMPLE_KIND)],
+			edges: [],
+			triggers: [],
+		}
+
+		expect(
+			isBranchDeclared(
+				{ source: 'c1', sourceHandle: null, target: 'c2', targetHandle: null },
+				graph,
+				descriptorMap(SIMPLE_DESCRIPTOR),
+			),
+		).toBe(true)
+	})
+
 	it('accepts a connection whose branch the source descriptor declares', () => {
 		const graph: Schemas.GraphDto = {
 			connectors: [
@@ -367,19 +399,23 @@ describe('isBranchDeclared', () => {
 		).toBe(true)
 	})
 
-	it('never treats a trigger as a valid branch source', () => {
+	it('refuses a branched edge leaving a trigger', () => {
 		const graph: Schemas.GraphDto = {
 			connectors: [connector('c1', SIMPLE_KIND)],
 			edges: [],
 			triggers: [trigger('t1')],
 		}
-		const descriptors = descriptorMap(SIMPLE_DESCRIPTOR)
 
 		expect(
 			isBranchDeclared(
-				{ source: 't1', sourceHandle: null, target: 'c1', targetHandle: null },
+				{
+					source: 't1',
+					sourceHandle: 'Then',
+					target: 'c1',
+					targetHandle: null,
+				},
 				graph,
-				descriptors,
+				descriptorMap(SIMPLE_DESCRIPTOR),
 			),
 		).toBe(false)
 	})
@@ -486,18 +522,16 @@ describe('WorkflowCanvas — adding a second trigger', () => {
 		const pane = document.querySelector('.react-flow__pane') as HTMLElement
 		fireEvent.contextMenu(pane, { clientX: 400, clientY: 400 })
 		fireEvent.click(await screen.findByText('Ajouter un déclencheur'))
+		fireEvent.click(await screen.findByText('Sur événement(s)'))
 
 		const newTriggerNode = await screen.findByTestId('rf__node-t2')
 		expect(
-			within(newTriggerNode).getByText('Déclenchement manuel'),
+			within(newTriggerNode).getByText('Aucun événement configuré'),
 		).toBeDefined()
 
 		const panel = await screen.findByTestId('trigger-config-panel')
 		await user.click(
-			within(panel).getByRole('tab', { name: 'Sur événement(s)' }),
-		)
-		fireEvent.click(
-			await screen.findByRole('checkbox', { name: 'quote.accepted' }),
+			within(panel).getByRole('checkbox', { name: 'quote.accepted' }),
 		)
 
 		await waitFor(() => {
@@ -535,6 +569,7 @@ describe('WorkflowCanvas — adding a second trigger', () => {
 		fireEvent.contextMenu(pane, { clientX: 500, clientY: 300 })
 		const expectedPosition = flowPositionOf(500, 300)
 		fireEvent.click(await screen.findByText('Ajouter un déclencheur'))
+		fireEvent.click(await screen.findByText('Manuel'))
 
 		await screen.findByTestId('rf__node-t1')
 		const node = screen.getByTestId('rf__node-t1')
@@ -641,7 +676,9 @@ describe('WorkflowCanvas — the trigger config panel', () => {
 		fireEvent.click(await screen.findByTestId('rf__node-t2'))
 
 		const panel = await screen.findByTestId('trigger-config-panel')
-		expect(within(panel).getByText('Déclencheur t2')).toBeDefined()
+		expect(
+			within(panel).getByText('Déclencheur sur événement(s)'),
+		).toBeDefined()
 		expect(
 			within(panel)
 				.getByRole('checkbox', { name: 'invoice.paid' })

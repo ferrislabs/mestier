@@ -3,7 +3,6 @@ import type { Schemas } from '#/api/api.client'
 import { Button } from '#/components/ui/button'
 import { Checkbox } from '#/components/ui/checkbox'
 import { Label } from '#/components/ui/label'
-import { Tabs, TabsList, TabsTrigger } from '#/components/ui/tabs'
 import { groupEventsByPrefix } from '#/pages/automation/lib/trigger-events'
 import type { ConnectorValidationError } from '#/pages/automation/lib/validation'
 import {
@@ -43,7 +42,9 @@ export function TriggerConfigPanel({
 			className="flex min-h-0 w-[360px] flex-col overflow-hidden border-l bg-card"
 		>
 			<div className="flex items-center justify-between gap-2 border-b px-4 py-3">
-				<span className="truncate font-medium">Déclencheur {trigger.id}</span>
+				<span className="truncate font-medium">
+					{manual ? 'Déclencheur manuel' : 'Déclencheur sur événement(s)'}
+				</span>
 				<Button
 					variant="ghost"
 					size="icon-sm"
@@ -52,20 +53,6 @@ export function TriggerConfigPanel({
 				>
 					<X className="size-4" />
 				</Button>
-			</div>
-
-			<div className="border-b px-4 py-3">
-				<Tabs
-					value={manual ? 'manual' : 'events'}
-					onValueChange={(value) =>
-						onChange(value === 'manual' ? 'Manual' : { Events: selected })
-					}
-				>
-					<TabsList className="w-full">
-						<TabsTrigger value="events">Sur événement(s)</TabsTrigger>
-						<TabsTrigger value="manual">Manuel</TabsTrigger>
-					</TabsList>
-				</Tabs>
 			</div>
 
 			{!manual && selected.length === 0 ? (

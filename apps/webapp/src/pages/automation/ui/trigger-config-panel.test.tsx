@@ -76,14 +76,14 @@ describe('TriggerConfigPanel — listing', () => {
 		).toBe('false')
 	})
 
-	it('names the trigger in the header', () => {
+	it('names the trigger kind in the header', () => {
 		render(
 			<TriggerConfigPanel
 				{...baseProps({ trigger: trigger({ Events: [] }, 't7') })}
 			/>,
 		)
 
-		expect(screen.getByText('Déclencheur t7')).toBeDefined()
+		expect(screen.getByText('Déclencheur sur événement(s)')).toBeDefined()
 	})
 
 	it('closes on request', async () => {
@@ -131,67 +131,6 @@ describe('TriggerConfigPanel — the no-event warning', () => {
 		)
 
 		expect(screen.queryByText(/ne partira jamais/)).toBeNull()
-	})
-})
-
-describe('TriggerConfigPanel — the mode choice', () => {
-	it('offers both modes explicitly', () => {
-		render(<TriggerConfigPanel {...baseProps()} />)
-
-		expect(screen.getByRole('tab', { name: 'Sur événement(s)' })).toBeDefined()
-		expect(screen.getByRole('tab', { name: 'Manuel' })).toBeDefined()
-	})
-
-	it('starts on the events tab for an events trigger, listing its checkboxes', () => {
-		render(
-			<TriggerConfigPanel
-				{...baseProps({ trigger: trigger({ Events: ['quote.accepted'] }) })}
-			/>,
-		)
-
-		expect(
-			screen.getByRole('checkbox', { name: 'Devis accepté' }),
-		).toBeDefined()
-	})
-
-	it('starts on the manual tab for a manual trigger, hiding the event list', () => {
-		render(
-			<TriggerConfigPanel {...baseProps({ trigger: trigger('Manual') })} />,
-		)
-
-		expect(screen.queryByRole('checkbox', { name: 'Devis accepté' })).toBeNull()
-		expect(screen.getByText(/Exécuter maintenant/)).toBeDefined()
-	})
-
-	it('reports switching to manual as just "Manual", discarding the selection immediately', async () => {
-		const user = userEvent.setup()
-		const onChange = vi.fn()
-		render(
-			<TriggerConfigPanel
-				{...baseProps({
-					trigger: trigger({ Events: ['quote.accepted'] }),
-					onChange,
-				})}
-			/>,
-		)
-
-		await user.click(screen.getByRole('tab', { name: 'Manuel' }))
-
-		expect(onChange).toHaveBeenCalledWith('Manual')
-	})
-
-	it('reports switching back to events with no events selected, since manual remembers none', async () => {
-		const user = userEvent.setup()
-		const onChange = vi.fn()
-		render(
-			<TriggerConfigPanel
-				{...baseProps({ trigger: trigger('Manual'), onChange })}
-			/>,
-		)
-
-		await user.click(screen.getByRole('tab', { name: 'Sur événement(s)' }))
-
-		expect(onChange).toHaveBeenCalledWith({ Events: [] })
 	})
 })
 
