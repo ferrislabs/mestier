@@ -38,6 +38,14 @@ export interface BoardUIProps
 	 * exists. `null` falls back to the unfiltered wording.
 	 */
 	emptyReason?: string | null
+	/**
+	 * Said when the API returned fewer cards than match the filters — it
+	 * clamps every listing to 100 rows and does not signal it. Rendered
+	 * beside the columns rather than in place of them: the cards that did
+	 * come back are still the ones being worked on. `null` when the board
+	 * is showing everything.
+	 */
+	truncationNotice?: string | null
 	/** The task create/edit sheet, mounted by the feature layer. */
 	taskSheet?: ReactNode
 }
@@ -51,6 +59,7 @@ export function BoardUI({
 	announcement,
 	toolbar,
 	emptyReason = null,
+	truncationNotice = null,
 	taskSheet,
 	...boardProps
 }: BoardUIProps) {
@@ -100,6 +109,12 @@ export function BoardUI({
 				</div>
 
 				{toolbar}
+
+				{truncationNotice ? (
+					<output className="block rounded-md border border-dashed bg-muted/25 px-3 py-2 text-sm text-muted-foreground">
+						{truncationNotice}
+					</output>
+				) : null}
 
 				{isEmpty ? (
 					<div className="flex flex-col items-center justify-center gap-2 rounded-md border border-dashed bg-muted/25 p-10 text-center">

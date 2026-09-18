@@ -111,6 +111,16 @@ function BoardScreen({
 	const tasksQuery = useBoardTasks(organizationId, filters)
 	const tasks = tasksQuery.data?.data ?? []
 
+	// The API clamps any listing to 100 rows (see `BOARD_TASKS_PER_PAGE`), and
+	// it does it silently. A board that shows 100 of 247 cards while looking
+	// complete is worse than one that shows fewer and says so: every column
+	// count is then wrong, and the counts are what a board is read for.
+	const matchingTotal = tasksQuery.data?.pagination?.total
+	const truncationNotice =
+		matchingTotal !== undefined && matchingTotal > tasks.length
+			? `${tasks.length} tâches affichées sur ${matchingTotal}. Affinez les filtres pour voir les autres.`
+			: null
+
 	// The same roster the task list read, for the same reason: `GET /planning`
 	// already carries every plannable member's display name and the
 	// organization's time zone, so the board needs no second member fetch.
@@ -299,6 +309,7 @@ function BoardScreen({
 			announcement={announcement}
 			toolbar={toolbar}
 			emptyReason={emptyReason}
+			truncationNotice={truncationNotice}
 			draggedTaskId={draggedTaskId}
 			movingTaskId={
 				moveTask.isPending

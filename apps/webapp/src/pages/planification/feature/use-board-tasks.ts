@@ -14,11 +14,18 @@ const TASKS_PATH = '/api/v1/organizations/{organization_id}/tasks'
 const TASK_PATH = '/api/v1/organizations/{organization_id}/tasks/{task_id}'
 
 /**
- * The board is not a pager: it shows every root task at once, because a
- * column whose bottom half lives on page 2 is not a column. One generous
- * page instead of the list view's 20.
+ * The board is not a pager: a column whose bottom half lives on page 2 is
+ * not a column, so it asks for one page as large as the API will serve.
+ *
+ * **100 is the ceiling, not a preference.** `PaginationParams::per_page`
+ * (`libs/pagination/src/lib.rs`) clamps every listing to `MAX_PER_PAGE = 100`,
+ * silently. Asking for more does not fail and does not warn — it just comes
+ * back with 100, which is how this constant read `200` and the board quietly
+ * dropped everything past the hundredth card. Raising this number again buys
+ * nothing until that clamp moves; what the board does instead is *say* when
+ * the listing was cut, from the `total` the API reports beside the page.
  */
-export const BOARD_TASKS_PER_PAGE = 200
+export const BOARD_TASKS_PER_PAGE = 100
 
 /**
  * The one request both hooks below build, filters included.
@@ -55,7 +62,13 @@ export function useBoardTasks(organizationId: string, filters: BoardFilters) {
 
 interface BoardTasksPage {
 	data: Task[]
-	pagination?: unknown
+	/**
+	 * `total` is how many tasks match the current filters, which is not how
+	 * many came back — see {@link BOARD_TASKS_PER_PAGE}. The optimistic move
+	 * rewrites `data` and leaves this alone: moving a card between columns
+	 * changes neither the match count nor the page size.
+	 */
+	pagination?: { total?: number }
 }
 
 interface BoardPatchVariables {

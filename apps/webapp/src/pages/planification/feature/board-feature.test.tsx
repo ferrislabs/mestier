@@ -184,7 +184,12 @@ function installFakeTanstackApi() {
 	return { calls, mockGet, mockMutation }
 }
 
-function tasksHandler(tasks: ReturnType<typeof task>[]) {
+/**
+ * `total` defaults to what came back, i.e. a complete listing. Pass it
+ * explicitly to serve a *page* of a larger match set — which is what the API
+ * does past 100 rows, silently, and what the truncation notice exists to say.
+ */
+function tasksHandler(tasks: ReturnType<typeof task>[], total?: number) {
 	return () => ({
 		data: tasks,
 		pagination: {
@@ -193,9 +198,9 @@ function tasksHandler(tasks: ReturnType<typeof task>[]) {
 			is_empty: tasks.length === 0,
 			last_page: 1,
 			next_page: null,
-			per_page: 200,
+			per_page: 100,
 			prev_page: null,
-			total: tasks.length,
+			total: total ?? tasks.length,
 		},
 	})
 }
@@ -1000,7 +1005,7 @@ describe('BoardFeature — filtres', () => {
 		// a filter the API takes at face value, widening the listing to every
 		// depth for nothing.
 		await waitFor(() =>
-			expect(lastTasksQuery(api)).toEqual({ page: 1, per_page: 200 }),
+			expect(lastTasksQuery(api)).toEqual({ page: 1, per_page: 100 }),
 		)
 		expect(api.filterChanges.at(-1)?.unscheduled).toBeUndefined()
 	})
@@ -1074,7 +1079,7 @@ describe('BoardFeature — filtres', () => {
 			'unscheduled',
 		])
 		await waitFor(() =>
-			expect(lastTasksQuery(api)).toEqual({ page: 1, per_page: 200 }),
+			expect(lastTasksQuery(api)).toEqual({ page: 1, per_page: 100 }),
 		)
 	})
 
@@ -1122,6 +1127,53 @@ describe('BoardFeature — filtres', () => {
  * unfiltered entry — the screen would show the card snap back on drop, and
  * the existing rollback test, which runs unfiltered, would still pass.
  */
+describe('BoardFeature — listing tronqué', () => {
+	/**
+	 * The API clamps every listing to 100 rows and says nothing about it, so a
+	 * board can look complete while missing cards — and its column counts are
+	 * then wrong, which is the one number a board is read for.
+	 */
+	it('says how many cards it is showing when the match set is larger', async () => {
+		await renderBoard((apis) => {
+			apis.mockGet(TASKS_PATH, (params) =>
+				tasksHandler(listOnServer(boardTasks(), queryOf(params)), 247)(),
+			)
+		})
+
+		const notice = await screen.findByText(/247/)
+		expect(notice.textContent).toBe(
+			'4 tâches affichées sur 247. Affinez les filtres pour voir les autres.',
+		)
+	})
+
+	it('says nothing when every matching card came back', async () => {
+		await renderBoard(() => {})
+
+		expect(screen.queryByText(/Affinez les filtres/)).toBeNull()
+	})
+
+	/**
+	 * The optimistic move rewrites `data` in the cache entry. If it dropped
+	 * `pagination` on the way, the notice would blink off on every drag and
+	 * back on at the refetch — a board that forgets it is truncated while you
+	 * work in it is worse than one that never said so.
+	 */
+	it('keeps saying it while a card is being moved', async () => {
+		await renderBoard((apis) => {
+			apis.mockGet(TASKS_PATH, (params) =>
+				tasksHandler(listOnServer(boardTasks(), queryOf(params)), 247)(),
+			)
+		})
+
+		await screen.findByText(/247/)
+		const moved = handle('Commander le bois')
+		moved.focus()
+		fireEvent.keyDown(moved, { key: 'ArrowRight' })
+
+		expect(screen.getByText(/247/).textContent).toContain('Affinez les filtres')
+	})
+})
+
 describe('BoardFeature — déplacement sur un tableau filtré', () => {
 	it('moves optimistically and rolls back, filters and all', async () => {
 		let rejectPatch: ((error: Error) => void) | null = null

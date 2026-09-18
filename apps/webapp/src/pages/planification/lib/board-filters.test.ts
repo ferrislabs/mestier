@@ -113,9 +113,9 @@ describe('boardFiltersIncludeSubtasks', () => {
 
 describe('boardFiltersToQuery', () => {
 	it('sends nothing but the page when no filter is set', () => {
-		expect(boardFiltersToQuery(EMPTY_BOARD_FILTERS, 200)).toEqual({
+		expect(boardFiltersToQuery(EMPTY_BOARD_FILTERS, 100)).toEqual({
 			page: 1,
-			per_page: 200,
+			per_page: 100,
 		})
 	})
 
@@ -134,11 +134,11 @@ describe('boardFiltersToQuery', () => {
 					q: 'toiture',
 					unscheduled: true,
 				},
-				200,
+				100,
 			),
 		).toEqual({
 			page: 1,
-			per_page: 200,
+			per_page: 100,
 			project_id: 'project-1',
 			q: 'toiture',
 			unscheduled: true,
