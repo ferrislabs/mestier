@@ -1,4 +1,18 @@
-//! Lays out site documents (the DOE, first) as PDF with Typst.
-//!
-//! Implements `mestier_core::DoeRenderer`. Owned by workstream W1, see
-//! docs/chantiers/doe.md and docs/adr/0003-typst-document-rendering.md.
+mod bundle;
+mod world;
+
+use mestier_core::{DoeDocument, DoeRenderError, DoeRenderer, FileBundle};
+#[derive(Debug, Default, Clone, Copy)]
+pub struct TypstDoeRenderer;
+
+impl DoeRenderer for TypstDoeRenderer {
+    fn render(
+        &self,
+        document: &DoeDocument,
+        files: &FileBundle,
+    ) -> Result<Vec<u8>, DoeRenderError> {
+        let prepared = bundle::prepare(document, files)?;
+        let world = world::DoeWorld::new(prepared);
+        world.compile_pdf()
+    }
+}
