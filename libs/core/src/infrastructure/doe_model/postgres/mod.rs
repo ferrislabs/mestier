@@ -1,3 +1,4 @@
+pub mod model;
 pub mod repository;
 pub mod settings_repository;
 
