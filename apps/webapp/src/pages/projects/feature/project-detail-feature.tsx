@@ -13,6 +13,7 @@ import {
 	useIssueInvoice,
 	useProjectBillingSummary,
 } from '#/hooks/use-invoices'
+import { useHasPermission } from '#/hooks/use-permissions'
 import { type Project, useProject } from '#/hooks/use-projects'
 import { useProfitability } from '#/hooks/use-reporting'
 import { useProjectSupplierCosts } from '#/hooks/use-supplier-invoices'
@@ -75,6 +76,7 @@ function ProjectDetailWorkspace({
 	organizationSlug: string
 }) {
 	const navigate = useNavigate()
+	const canOpenDoe = useHasPermission('MANAGE_PLANNING')
 	const hasCustomer = project.customer_id !== null
 	const hasPinnedAddress = project.customer_context_id !== null
 
@@ -216,6 +218,7 @@ function ProjectDetailWorkspace({
 			organizationSlug={organizationSlug}
 			project={project}
 			customerName={customer.data?.data.name ?? null}
+			canOpenDoe={canOpenDoe}
 			billingSummary={billingSummary.data?.data ?? null}
 			isBillingSummaryLoading={billingSummary.isLoading}
 			period={period}

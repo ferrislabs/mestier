@@ -4,6 +4,7 @@ import {
 	ArrowLeft,
 	Building2,
 	Clock,
+	FileText,
 	KanbanSquare,
 	Loader2,
 	Receipt,
@@ -43,6 +44,7 @@ export interface ProjectDetailUIProps {
 	organizationSlug: string
 	project: Project
 	customerName: string | null
+	canOpenDoe?: boolean
 
 	billingSummary: ProjectBillingSummary | null
 	isBillingSummaryLoading: boolean
@@ -137,6 +139,7 @@ export function ProjectDetailUI({
 	isIssuing,
 	error,
 	onConfirm,
+	canOpenDoe = false,
 }: ProjectDetailUIProps) {
 	const plannedCost = costRow ? plannedCostCents(costRow) : 0
 	const dueAtLabel = dueAt
@@ -163,6 +166,20 @@ export function ProjectDetailUI({
 								Voir dans le tableau
 							</Link>
 						</Button>
+						{canOpenDoe ? (
+							<Button asChild variant="outline">
+								<Link
+									to={buildOrgPath(
+										organizationSlug,
+										'/planification/projects/$projectId/doe',
+									)}
+									params={{ projectId: project.id }}
+								>
+									<FileText />
+									DOE
+								</Link>
+							</Button>
+						) : null}
 						<Button asChild variant="outline">
 							<Link
 								to={buildOrgPath(organizationSlug, '/planification/projects')}
