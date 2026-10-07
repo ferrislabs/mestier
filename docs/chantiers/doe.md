@@ -295,8 +295,8 @@ cd apps/webapp && pnpm check && pnpm test && pnpm build
 | W2 | intégré (cd42271) |
 | W3a | intégré (b143797) |
 | W3b | intégré (6cce55a) |
-| W4a | pending |
-| W4b | pending |
+| W4a | intégré (3c64862) |
+| W4b | intégré (e6ed972) |
 
 ## Decision log
 
