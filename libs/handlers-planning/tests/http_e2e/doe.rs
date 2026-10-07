@@ -413,3 +413,82 @@ async fn spec_doe_10_a_file_missing_from_storage_is_a_409_naming_it() {
 
     cleanup(&app).await;
 }
+
+fn doe_model_url(app: &harness::App, organization_id: Uuid, model_id: Uuid) -> String {
+    format!(
+        "{}/api/v1/organizations/{organization_id}/doe-models/{model_id}",
+        app.base_url
+    )
+}
+
+#[tokio::test]
+#[ignore = "requires live postgres and redis"]
+async fn a_doe_model_stays_inside_its_organization_and_writes_need_reference_manage() {
+    let app = harness::start().await;
+    let client = reqwest::Client::new();
+    let seeded = seed_project_and_model(&app).await;
+    let intruder = seed_intruder(&app.pool).await;
+    let body = json!({
+        "name": "Électricité",
+        "description": null,
+        "sections": [{ "title": "Plans", "enabled": true, "kind": { "kind": "plans" } }],
+    });
+
+    for (method, expected) in [("GET", 404), ("PUT", 404)] {
+        let request = match method {
+            "GET" => client.get(doe_model_url(
+                &app,
+                intruder.organization_id,
+                seeded.model_id,
+            )),
+            _ => client
+                .put(doe_model_url(
+                    &app,
+                    intruder.organization_id,
+                    seeded.model_id,
+                ))
+                .json(&body),
+        };
+        let response = request
+            .bearer_auth(&intruder.token)
+            .send()
+            .await
+            .expect("intruder request");
+        assert_eq!(
+            response.status(),
+            expected,
+            "{method} through the intruder's organization"
+        );
+    }
+
+    let read = client
+        .get(doe_model_url(&app, app.organization_id, seeded.model_id))
+        .bearer_auth(&app.no_permission_token)
+        .send()
+        .await
+        .expect("read");
+    assert_eq!(read.status(), 200);
+
+    let write = client
+        .put(doe_model_url(&app, app.organization_id, seeded.model_id))
+        .bearer_auth(&app.no_permission_token)
+        .json(&body)
+        .send()
+        .await
+        .expect("write");
+    assert_eq!(write.status(), 403);
+
+    let unchanged = client
+        .get(doe_model_url(&app, app.organization_id, seeded.model_id))
+        .bearer_auth(&app.token)
+        .send()
+        .await
+        .expect("read back")
+        .json::<Value>()
+        .await
+        .expect("json");
+    assert_eq!(unchanged["data"]["name"], "Paysagiste");
+
+    intruder.cleanup(&app.pool).await;
+    cleanup(&app).await;
+}
