@@ -1,0 +1,106 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO does (id, org_id, project_id, title, place, lot, issued_on, author, revision, parties, sections, created_at, updated_at)\n            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)\n            RETURNING id, org_id, project_id, title, place, lot, issued_on, author, revision, parties, sections, created_at, updated_at\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "org_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "project_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 3,
+        "name": "title",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "place",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "lot",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 6,
+        "name": "issued_on",
+        "type_info": "Date"
+      },
+      {
+        "ordinal": 7,
+        "name": "author",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 8,
+        "name": "revision",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 9,
+        "name": "parties",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 10,
+        "name": "sections",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 11,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 12,
+        "name": "updated_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Uuid",
+        "Text",
+        "Text",
+        "Text",
+        "Date",
+        "Text",
+        "Text",
+        "Jsonb",
+        "Jsonb",
+        "Timestamptz",
+        "Timestamptz"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      true,
+      true,
+      false,
+      true,
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "0992151f799645cebb284762ef9cc509b67133af028f836eb7451a1915617301"
+}

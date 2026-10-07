@@ -1,0 +1,94 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT id, org_id, project_id, title, place, lot, issued_on, author, revision, parties, sections, created_at, updated_at\n            FROM does\n            WHERE project_id = $1\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "org_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "project_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 3,
+        "name": "title",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "place",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "lot",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 6,
+        "name": "issued_on",
+        "type_info": "Date"
+      },
+      {
+        "ordinal": 7,
+        "name": "author",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 8,
+        "name": "revision",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 9,
+        "name": "parties",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 10,
+        "name": "sections",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 11,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 12,
+        "name": "updated_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      true,
+      true,
+      false,
+      true,
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "2f527e451b4406d3e2a775ccff33aca82429784d608b159b6a3b6422984ceef7"
+}

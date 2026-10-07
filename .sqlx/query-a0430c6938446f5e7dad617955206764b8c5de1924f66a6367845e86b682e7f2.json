@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT id, org_id, name, sku, unit, unit_price_cents, default_vat_rate_bp, description, photo_keys, deleted_at, created_at, updated_at\n            FROM products\n            WHERE id = $1 AND deleted_at IS NULL\n            ",
+  "query": "\n            SELECT id, org_id, name, sku, unit, unit_price_cents, default_vat_rate_bp, description, photo_keys, supplier_id, manufacturer, technical_specs, datasheet_keys, deleted_at, created_at, updated_at\n            FROM products\n            WHERE id = $1 AND deleted_at IS NULL\n            ",
   "describe": {
     "columns": [
       {
@@ -50,16 +50,36 @@
       },
       {
         "ordinal": 9,
+        "name": "supplier_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 10,
+        "name": "manufacturer",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 11,
+        "name": "technical_specs",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 12,
+        "name": "datasheet_keys",
+        "type_info": "TextArray"
+      },
+      {
+        "ordinal": 13,
         "name": "deleted_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 10,
+        "ordinal": 14,
         "name": "created_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 11,
+        "ordinal": 15,
         "name": "updated_at",
         "type_info": "Timestamptz"
       }
@@ -80,9 +100,13 @@
       true,
       false,
       true,
+      true,
+      true,
+      false,
+      true,
       false,
       false
     ]
   },
-  "hash": "e6dee0c058d891192d09bb922f481b906fe2719a934d9a3c23e274ce9bb8c166"
+  "hash": "a0430c6938446f5e7dad617955206764b8c5de1924f66a6367845e86b682e7f2"
 }

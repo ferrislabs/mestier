@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            INSERT INTO products (id, org_id, name, sku, unit, unit_price_cents, default_vat_rate_bp, description, photo_keys, deleted_at, created_at, updated_at)\n            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)\n            RETURNING id, org_id, name, sku, unit, unit_price_cents, default_vat_rate_bp, description, photo_keys, deleted_at, created_at, updated_at\n            ",
+  "query": "\n            INSERT INTO products (id, org_id, name, sku, unit, unit_price_cents, default_vat_rate_bp, description, photo_keys, supplier_id, manufacturer, technical_specs, datasheet_keys, deleted_at, created_at, updated_at)\n            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)\n            RETURNING id, org_id, name, sku, unit, unit_price_cents, default_vat_rate_bp, description, photo_keys, supplier_id, manufacturer, technical_specs, datasheet_keys, deleted_at, created_at, updated_at\n            ",
   "describe": {
     "columns": [
       {
@@ -50,16 +50,36 @@
       },
       {
         "ordinal": 9,
+        "name": "supplier_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 10,
+        "name": "manufacturer",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 11,
+        "name": "technical_specs",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 12,
+        "name": "datasheet_keys",
+        "type_info": "TextArray"
+      },
+      {
+        "ordinal": 13,
         "name": "deleted_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 10,
+        "ordinal": 14,
         "name": "created_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 11,
+        "ordinal": 15,
         "name": "updated_at",
         "type_info": "Timestamptz"
       }
@@ -73,6 +93,10 @@
         "Text",
         "Int4",
         "Int4",
+        "Text",
+        "TextArray",
+        "Uuid",
+        "Text",
         "Text",
         "TextArray",
         "Timestamptz",
@@ -91,9 +115,13 @@
       true,
       false,
       true,
+      true,
+      true,
+      false,
+      true,
       false,
       false
     ]
   },
-  "hash": "1b2684eb9f31c6783051abdf6831565e5d3f5d497c08084bd359162905ba5e28"
+  "hash": "13ff023400492b96173669599a40411277e2c6973ef2194c6d5d536d8ab15885"
 }

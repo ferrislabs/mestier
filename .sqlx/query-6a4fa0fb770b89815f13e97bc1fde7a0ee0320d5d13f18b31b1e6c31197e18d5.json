@@ -1,0 +1,34 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT org_id, accent, logo_key FROM doe_settings WHERE org_id = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "org_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "accent",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "logo_key",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      true
+    ]
+  },
+  "hash": "6a4fa0fb770b89815f13e97bc1fde7a0ee0320d5d13f18b31b1e6c31197e18d5"
+}
