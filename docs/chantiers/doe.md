@@ -304,7 +304,7 @@ cd apps/webapp && pnpm check && pnpm test && pnpm build
 - 2026-10-08 : relecture conformité. Route des modèles de départ gardée en `/doe-model-starters` pour ne pas entrer en collision avec `/doe-models/{id}`. Ajout d'e2e : isolation et droits des modèles de DOE et des fournisseurs. Restent couverts seulement au niveau du renderer : @spec-doe-5 (pas d'e2e avec de vraies photos), et @spec-doe-11 (pas de test de parcours de l'éditeur).
 
 - 2026-10-07 : W3b, un fichier de type non accepté donne 409 en nommant le fichier (corrigeable par l'utilisateur), pas 500. Chargement des fichiers séquentiel en v1.
-- 2026-10-07 : @spec-doe-10 en e2e demande un S3 réel ; non vérifié en local (aucun S3, image MinIO indisponible). Le passage NotFound → 409 est couvert par un test unitaire du handler.
+- 2026-10-07 : @spec-doe-10 en e2e demande un S3 réel ; vérifié contre RustFS local (`rustfs/rustfs`, bucket `mestier-files`), les e2e DOE passent.
 
 - 2026-10-07 : W1, insertion PDF native Typst (`image(path, page: n)`), pas de repli `lopdf` ; police Inter embarquée ; `comemo::evict(0)` après chaque rendu pour un serveur à mémoire stable.
 - 2026-10-07 : W2, `SupplierService` déplacé de `application/supplier/` vers `domain/supplier_invoice/supplier_service.rs` à l'intégration (règle hexagonale).
