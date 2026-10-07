@@ -146,6 +146,7 @@ describe('module routability', () => {
 		expect(sectionsOf('planification')).toEqual([
 			'/planification/projects',
 			'/planification/project-templates',
+			'/planification/doe-models',
 			'/planification/board',
 		])
 	})

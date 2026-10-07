@@ -54,6 +54,11 @@ import {
 } from '#/hooks/use-reference-catalog'
 import { mutationErrorMessage } from '#/lib/api-error'
 import { formatPricePerUnit, formatUnitLong } from '#/lib/units'
+import { ProductTechnicalSheetField } from '#/pages/catalog/feature/product-technical-sheet-field'
+import {
+	buildProductRequest,
+	EMPTY_TECHNICAL_SHEET,
+} from '#/pages/catalog/lib/product-request'
 import type { ServiceRateFormValues } from '#/pages/catalog/types'
 import { eurosToCents } from '#/pages/quotes/types'
 import { PhotoStrip } from '#/pages/quotes/ui/photo-strip'
@@ -160,18 +165,12 @@ function CrmSectionContent({ organizationId }: CrmSectionContentProps) {
 			unitPrice: '',
 			description: '',
 			photoKeys: [] as string[],
+			...EMPTY_TECHNICAL_SHEET,
 		} satisfies ProductCatalogFormValues,
 		onSubmit: async ({ value }) => {
 			await createProduct.mutateAsync({
 				path: { organization_id: organizationId },
-				body: {
-					name: value.name.trim(),
-					sku: value.sku.trim() || null,
-					unit: value.unit,
-					unit_price_cents: eurosToCents(value.unitPrice),
-					description: value.description.trim() || null,
-					photo_keys: value.photoKeys,
-				},
+				body: buildProductRequest(value),
 			})
 			productForm.reset()
 		},
@@ -192,6 +191,38 @@ function CrmSectionContent({ organizationId }: CrmSectionContentProps) {
 						values: {
 							...current.values,
 							photoKeys: [...current.values.photoKeys, uploaded.data.key],
+						},
+					}
+				: current,
+		)
+	}
+	const uploadDraftDatasheet = async (file: File) => {
+		const uploaded = await uploadFile.mutateAsync(file)
+		setDraft((current) =>
+			current?.tab === 'products'
+				? {
+						...current,
+						values: {
+							...current.values,
+							datasheetKeys: [
+								...current.values.datasheetKeys,
+								uploaded.data.key,
+							],
+						},
+					}
+				: current,
+		)
+	}
+	const removeDraftDatasheet = (key: string) => {
+		setDraft((current) =>
+			current?.tab === 'products'
+				? {
+						...current,
+						values: {
+							...current.values,
+							datasheetKeys: current.values.datasheetKeys.filter(
+								(datasheetKey) => datasheetKey !== key,
+							),
 						},
 					}
 				: current,
@@ -260,14 +291,7 @@ function CrmSectionContent({ organizationId }: CrmSectionContentProps) {
 				if (product) {
 					await updateProduct.mutateAsync({
 						path: { product_id: product.id },
-						body: {
-							name: draft.values.name.trim(),
-							sku: draft.values.sku.trim() || null,
-							unit: draft.values.unit,
-							unit_price_cents: eurosToCents(draft.values.unitPrice),
-							description: draft.values.description.trim() || null,
-							photo_keys: draft.values.photoKeys,
-						},
+						body: buildProductRequest(draft.values),
 					})
 				}
 			}
@@ -341,6 +365,21 @@ function CrmSectionContent({ organizationId }: CrmSectionContentProps) {
 								...productForm.state.values.photoKeys,
 								uploaded.data.key,
 							])
+						}
+						const uploadProductDatasheet = async (file: File) => {
+							const uploaded = await uploadFile.mutateAsync(file)
+							productForm.setFieldValue('datasheetKeys', [
+								...productForm.state.values.datasheetKeys,
+								uploaded.data.key,
+							])
+						}
+						const removeProductDatasheet = (key: string) => {
+							productForm.setFieldValue(
+								'datasheetKeys',
+								productForm.state.values.datasheetKeys.filter(
+									(datasheetKey) => datasheetKey !== key,
+								),
+							)
 						}
 						const removeProductPhoto = (key: string) => {
 							productForm.setFieldValue(
@@ -449,6 +488,8 @@ function CrmSectionContent({ organizationId }: CrmSectionContentProps) {
 										isUploadingPhoto={uploadFile.isPending}
 										onUploadPhoto={uploadDraftProductPhoto}
 										onRemovePhoto={removeDraftProductPhoto}
+										onUploadDatasheet={uploadDraftDatasheet}
+										onRemoveDatasheet={removeDraftDatasheet}
 										onEdit={(product) =>
 											setDraft({
 												tab: 'products',
@@ -460,6 +501,10 @@ function CrmSectionContent({ organizationId }: CrmSectionContentProps) {
 													unitPrice: centsToEuros(product.unit_price_cents),
 													description: product.description ?? '',
 													photoKeys: product.photo_keys,
+													supplierId: product.supplier_id ?? '',
+													manufacturer: product.manufacturer ?? '',
+													technicalSpecs: product.technical_specs ?? '',
+													datasheetKeys: product.datasheet_keys,
 												},
 											})
 										}
@@ -541,6 +586,8 @@ function CrmSectionContent({ organizationId }: CrmSectionContentProps) {
 													isUploading={uploadFile.isPending}
 													onUploadPhoto={uploadProductPhoto}
 													onRemovePhoto={removeProductPhoto}
+													onUploadDatasheet={uploadProductDatasheet}
+													onRemoveDatasheet={removeProductDatasheet}
 													customUnits={customUnitCodes}
 													onCreateCustomUnit={createCustomUnitCode}
 													isCreatingCustomUnit={createCustomUnit.isPending}
@@ -622,6 +669,8 @@ function ProductCreateFields({
 	isUploading,
 	onUploadPhoto,
 	onRemovePhoto,
+	onUploadDatasheet,
+	onRemoveDatasheet,
 	customUnits,
 	onCreateCustomUnit,
 	isCreatingCustomUnit,
@@ -630,6 +679,8 @@ function ProductCreateFields({
 	isUploading?: boolean
 	onUploadPhoto: (file: File) => void
 	onRemovePhoto: (key: string) => void
+	onUploadDatasheet: (file: File) => void
+	onRemoveDatasheet: (key: string) => void
 	customUnits: string[]
 	onCreateCustomUnit: (code: string) => void
 	isCreatingCustomUnit?: boolean
@@ -678,6 +729,13 @@ function ProductCreateFields({
 				isUploading={isUploading}
 				onUpload={onUploadPhoto}
 				onRemove={onRemovePhoto}
+			/>
+			<ProductTechnicalSheetField
+				values={form.values}
+				isUploading={isUploading}
+				onChange={(patch) => form.onChange(patch)}
+				onUpload={onUploadDatasheet}
+				onRemove={onRemoveDatasheet}
 			/>
 		</div>
 	)
@@ -770,6 +828,8 @@ function ProductList({
 	isUploadingPhoto,
 	onUploadPhoto,
 	onRemovePhoto,
+	onUploadDatasheet,
+	onRemoveDatasheet,
 	onEdit,
 	onDraftChange,
 	onCancel,
@@ -786,6 +846,8 @@ function ProductList({
 	isUploadingPhoto?: boolean
 	onUploadPhoto: (file: File) => void
 	onRemovePhoto: (key: string) => void
+	onUploadDatasheet: (file: File) => void
+	onRemoveDatasheet: (key: string) => void
 	onEdit: (product: Product) => void
 	onDraftChange: (values: ProductCatalogFormValues) => void
 	onCancel: () => void
@@ -826,6 +888,8 @@ function ProductList({
 										isUploading={isUploadingPhoto}
 										onUploadPhoto={onUploadPhoto}
 										onRemovePhoto={onRemovePhoto}
+										onUploadDatasheet={onUploadDatasheet}
+										onRemoveDatasheet={onRemoveDatasheet}
 										customUnits={customUnits}
 										onCreateCustomUnit={onCreateCustomUnit}
 										isCreatingCustomUnit={isCreatingCustomUnit}
@@ -879,6 +943,8 @@ function ProductDraftFields({
 	isUploading,
 	onUploadPhoto,
 	onRemovePhoto,
+	onUploadDatasheet,
+	onRemoveDatasheet,
 	customUnits,
 	onCreateCustomUnit,
 	isCreatingCustomUnit,
@@ -888,6 +954,8 @@ function ProductDraftFields({
 	isUploading?: boolean
 	onUploadPhoto: (file: File) => void
 	onRemovePhoto: (key: string) => void
+	onUploadDatasheet: (file: File) => void
+	onRemoveDatasheet: (key: string) => void
 	customUnits: string[]
 	onCreateCustomUnit: (code: string) => void
 	isCreatingCustomUnit?: boolean
@@ -920,6 +988,15 @@ function ProductDraftFields({
 					onUpload={onUploadPhoto}
 					onRemove={onRemovePhoto}
 				/>
+				<div className="md:col-span-2">
+					<ProductTechnicalSheetField
+						values={values}
+						isUploading={isUploading}
+						onChange={(patch) => onChange({ ...values, ...patch })}
+						onUpload={onUploadDatasheet}
+						onRemove={onRemoveDatasheet}
+					/>
+				</div>
 			</div>
 			<UnitField
 				value={values.unit}
