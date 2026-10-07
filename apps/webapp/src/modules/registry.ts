@@ -18,6 +18,7 @@ import {
 	Settings,
 	ShoppingCart,
 	TrendingUp,
+	Truck,
 	Users,
 	Workflow,
 } from 'lucide-react'
@@ -107,6 +108,12 @@ export const MODULES: AppModule[] = [
 				label: 'Factures fournisseurs',
 				to: '/purchase/supplier-invoices',
 				icon: FileWarning,
+			},
+			{
+				id: 'suppliers',
+				label: 'Fournisseurs',
+				to: '/purchase/suppliers',
+				icon: Truck,
 			},
 		],
 	},
@@ -208,6 +215,13 @@ export const MODULES: AppModule[] = [
 				label: 'Modèles de projet',
 				to: '/planification/project-templates',
 				icon: LayoutTemplate,
+				requiredPermission: 'MANAGE_PLANNING',
+			},
+			{
+				id: 'doe-models',
+				label: 'Modèles de DOE',
+				to: '/planification/doe-models',
+				icon: FileText,
 				requiredPermission: 'MANAGE_PLANNING',
 			},
 			{
