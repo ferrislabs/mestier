@@ -57,6 +57,10 @@ pub struct Supplier {
     pub name: String,
     pub registration_number: Option<String>,
     pub vat_number: Option<String>,
+    /// Printed under every supply a DOE copies from this supplier.
+    pub address: Option<String>,
+    pub phone: Option<String>,
+    pub email: Option<String>,
     pub deleted_at: Option<DateTime<Utc>>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,

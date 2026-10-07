@@ -62,6 +62,11 @@ pub async fn handler(
             default_vat_rate_bp: payload.default_vat_rate_bp,
             description: payload.description,
             photo_keys: payload.photo_keys,
+            // W2 (docs/chantiers/doe.md) exposes the technical sheet.
+            supplier_id: None,
+            manufacturer: None,
+            technical_specs: None,
+            datasheet_keys: Vec::new(),
         })
         .await?;
 

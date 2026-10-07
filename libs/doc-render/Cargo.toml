@@ -1,0 +1,11 @@
+[package]
+name = "doc-render"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+
+# Typst lives here and only here, so `mestier-core` never compiles it. See
+# docs/adr/0003-typst-document-rendering.md.
+
+[dependencies]
+mestier-core = { workspace = true }

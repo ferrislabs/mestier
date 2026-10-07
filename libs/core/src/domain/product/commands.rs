@@ -1,4 +1,4 @@
-use crate::{OrganizationId, ProductId};
+use crate::{OrganizationId, ProductId, SupplierId};
 
 #[derive(Debug, Clone)]
 pub struct CreateProductCommand {
@@ -14,6 +14,10 @@ pub struct CreateProductCommand {
     pub default_vat_rate_bp: Option<i32>,
     pub description: Option<String>,
     pub photo_keys: Vec<String>,
+    pub supplier_id: Option<SupplierId>,
+    pub manufacturer: Option<String>,
+    pub technical_specs: Option<String>,
+    pub datasheet_keys: Vec<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -30,4 +34,8 @@ pub struct UpdateProductCommand {
     pub default_vat_rate_bp: Option<i32>,
     pub description: Option<String>,
     pub photo_keys: Vec<String>,
+    pub supplier_id: Option<SupplierId>,
+    pub manufacturer: Option<String>,
+    pub technical_specs: Option<String>,
+    pub datasheet_keys: Vec<String>,
 }

@@ -14,6 +14,9 @@ pub mod domain {
     pub struct Customer;
     pub struct CustomerContact;
     pub struct CustomUnit;
+    pub struct Doe;
+    pub struct DoeModel;
+    pub struct DoeSettings;
     pub struct Employee;
     pub struct EmployeeCostBasis;
     pub struct Equipment;
@@ -33,6 +36,7 @@ pub mod domain {
     pub struct Role;
     pub struct Member;
     pub struct ServiceRate;
+    pub struct Supplier;
     pub struct SupplierInvoice;
     pub struct SupplierInvoiceAllocation;
     pub struct User;

@@ -34,6 +34,11 @@ impl TryFrom<ProductRow> for Product {
             default_vat_rate_bp: row.default_vat_rate_bp,
             description: row.description,
             photo_keys: row.photo_keys,
+            // W2 (docs/chantiers/doe.md) reads these columns.
+            supplier_id: None,
+            manufacturer: None,
+            technical_specs: None,
+            datasheet_keys: Vec::new(),
             deleted_at: row.deleted_at,
             created_at: row.created_at,
             updated_at: row.updated_at,
