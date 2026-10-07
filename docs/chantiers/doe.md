@@ -292,12 +292,15 @@ cd apps/webapp && pnpm check && pnpm test && pnpm build
 | W0 | intégré |
 | W1 | intégré (a8054d3) |
 | W2 | intégré (cd42271) |
-| W3a | in-flight |
-| W3b | in-flight |
+| W3a | intégré (b143797) |
+| W3b | intégré |
 | W4a | pending |
 | W4b | pending |
 
 ## Decision log
+
+- 2026-10-07 : W3b, un fichier de type non accepté donne 409 en nommant le fichier (corrigeable par l'utilisateur), pas 500. Chargement des fichiers séquentiel en v1.
+- 2026-10-07 : @spec-doe-10 en e2e demande un S3 réel ; non vérifié en local (aucun S3, image MinIO indisponible). Le passage NotFound → 409 est couvert par un test unitaire du handler.
 
 - 2026-10-07 : W1, insertion PDF native Typst (`image(path, page: n)`), pas de repli `lopdf` ; police Inter embarquée ; `comemo::evict(0)` après chaque rendu pour un serveur à mémoire stable.
 - 2026-10-07 : W2, `SupplierService` déplacé de `application/supplier/` vers `domain/supplier_invoice/supplier_service.rs` à l'intégration (règle hexagonale).

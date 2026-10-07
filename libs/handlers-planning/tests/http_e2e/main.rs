@@ -14,6 +14,7 @@
 //! cargo test -p handlers-planning --test http_e2e -- --ignored
 //! ```
 
+mod doe;
 mod harness;
 mod issuer;
 mod work_time;

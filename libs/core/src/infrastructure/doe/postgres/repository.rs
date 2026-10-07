@@ -1,10 +1,13 @@
-//! Skeleton from W0. W3b implements it, see docs/chantiers/doe.md.
-
 use common::CoreError;
 use mestier_macros::repository;
 
 use crate::{
-    Doe, DoeId, ProjectId, domain::doe::ports::DoeRepository, infrastructure::postgres::SharedTx,
+    Doe, DoeId, ProjectId,
+    domain::doe::ports::DoeRepository,
+    infrastructure::{
+        doe::postgres::model::DoeRow,
+        postgres::{SharedTx, error::map_sqlx_error},
+    },
 };
 
 #[repository(domain = Doe, backend = Postgres)]
@@ -18,21 +21,112 @@ impl<'tx> PgDoeRepository<'tx> {
     }
 }
 
+fn to_json<T: serde::Serialize>(value: &T) -> Result<serde_json::Value, CoreError> {
+    serde_json::to_value(value)
+        .map_err(|e| CoreError::Internal(format!("cannot serialize DOE content: {e}")))
+}
+
 impl<'tx> DoeRepository for PgDoeRepository<'tx> {
-    async fn insert(&mut self, _doe: &Doe) -> Result<Doe, CoreError> {
-        let _ = &self.tx;
-        todo!("W3b")
+    async fn insert(&mut self, doe: &Doe) -> Result<Doe, CoreError> {
+        let parties = to_json(&doe.parties)?;
+        let sections = to_json(&doe.sections)?;
+        let revision = doe.revision.as_str();
+
+        let mut tx = self.tx.lock().await;
+        let row = sqlx::query_as!(
+            DoeRow,
+            r#"
+            INSERT INTO does (id, org_id, project_id, title, place, lot, issued_on, author, revision, parties, sections, created_at, updated_at)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+            RETURNING id, org_id, project_id, title, place, lot, issued_on, author, revision, parties, sections, created_at, updated_at
+            "#,
+            doe.id.0,
+            doe.organization_id.0,
+            doe.project_id.0,
+            doe.title,
+            doe.place,
+            doe.lot,
+            doe.issued_on,
+            doe.author,
+            revision,
+            parties,
+            sections,
+            doe.created_at,
+            doe.updated_at,
+        )
+        .fetch_one(&mut ***tx)
+        .await
+        .map_err(map_sqlx_error)?;
+
+        row.try_into()
     }
 
-    async fn find_by_id(&mut self, _id: DoeId) -> Result<Option<Doe>, CoreError> {
-        todo!("W3b")
+    async fn find_by_id(&mut self, id: DoeId) -> Result<Option<Doe>, CoreError> {
+        let mut tx = self.tx.lock().await;
+        let row = sqlx::query_as!(
+            DoeRow,
+            r#"
+            SELECT id, org_id, project_id, title, place, lot, issued_on, author, revision, parties, sections, created_at, updated_at
+            FROM does
+            WHERE id = $1
+            "#,
+            id.0,
+        )
+        .fetch_optional(&mut ***tx)
+        .await
+        .map_err(map_sqlx_error)?;
+
+        row.map(Doe::try_from).transpose()
     }
 
-    async fn find_by_project(&mut self, _project_id: ProjectId) -> Result<Option<Doe>, CoreError> {
-        todo!("W3b")
+    async fn find_by_project(&mut self, project_id: ProjectId) -> Result<Option<Doe>, CoreError> {
+        let mut tx = self.tx.lock().await;
+        let row = sqlx::query_as!(
+            DoeRow,
+            r#"
+            SELECT id, org_id, project_id, title, place, lot, issued_on, author, revision, parties, sections, created_at, updated_at
+            FROM does
+            WHERE project_id = $1
+            "#,
+            project_id.0,
+        )
+        .fetch_optional(&mut ***tx)
+        .await
+        .map_err(map_sqlx_error)?;
+
+        row.map(Doe::try_from).transpose()
     }
 
-    async fn update(&mut self, _doe: &Doe) -> Result<Doe, CoreError> {
-        todo!("W3b")
+    async fn update(&mut self, doe: &Doe) -> Result<Doe, CoreError> {
+        let parties = to_json(&doe.parties)?;
+        let sections = to_json(&doe.sections)?;
+        let revision = doe.revision.as_str();
+
+        let mut tx = self.tx.lock().await;
+        let row = sqlx::query_as!(
+            DoeRow,
+            r#"
+            UPDATE does
+            SET title = $2, place = $3, lot = $4, issued_on = $5, author = $6, revision = $7,
+                parties = $8, sections = $9, updated_at = $10
+            WHERE id = $1
+            RETURNING id, org_id, project_id, title, place, lot, issued_on, author, revision, parties, sections, created_at, updated_at
+            "#,
+            doe.id.0,
+            doe.title,
+            doe.place,
+            doe.lot,
+            doe.issued_on,
+            doe.author,
+            revision,
+            parties,
+            sections,
+            doe.updated_at,
+        )
+        .fetch_one(&mut ***tx)
+        .await
+        .map_err(map_sqlx_error)?;
+
+        row.try_into()
     }
 }
