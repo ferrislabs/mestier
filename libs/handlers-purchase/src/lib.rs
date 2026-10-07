@@ -21,6 +21,7 @@ use mestier_core::{OrganizationId, Project, ProjectId, SupplierInvoice, Supplier
 pub mod allocation;
 pub mod paths;
 pub mod response;
+pub mod supplier;
 pub mod supplier_invoice;
 
 pub const TAG: &str = "purchasing";
@@ -99,6 +100,7 @@ async fn require_project_membership(
 
 pub fn router(state: &AppState) -> Router<AppState> {
     Router::new()
+        .merge(supplier::router(state))
         .typed_post(supplier_invoice::import::handler)
         .typed_get(supplier_invoice::list::handler)
         .typed_get(supplier_invoice::get_one::handler)

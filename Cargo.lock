@@ -2723,6 +2723,7 @@ dependencies = [
  "chrono-tz",
  "clap",
  "discord",
+ "doc-render",
  "handlers",
  "http 1.4.0",
  "jsonwebtoken",
