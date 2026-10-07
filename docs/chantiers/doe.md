@@ -290,14 +290,18 @@ cd apps/webapp && pnpm check && pnpm test && pnpm build
 | Lot | État |
 |---|---|
 | W0 | intégré |
-| W1 | in-flight |
-| W2 | in-flight |
+| W1 | intégré (a8054d3) |
+| W2 | intégré (cd42271) |
 | W3a | in-flight |
 | W3b | in-flight |
 | W4a | pending |
 | W4b | pending |
 
 ## Decision log
+
+- 2026-10-07 : W1, insertion PDF native Typst (`image(path, page: n)`), pas de repli `lopdf` ; police Inter embarquée ; `comemo::evict(0)` après chaque rendu pour un serveur à mémoire stable.
+- 2026-10-07 : W2, `SupplierService` déplacé de `application/supplier/` vers `domain/supplier_invoice/supplier_service.rs` à l'intégration (règle hexagonale).
+- 2026-10-07 : W4a attend la fin de W3 pour qu'un seul `pnpm gen:api` serve les deux lots front.
 
 - 2026-10-07 : JSONB pour le contenu du DOE et des modèles, plutôt que 5 tables. Rejeté : tables normalisées, car rien n'interroge l'intérieur d'un DOE et le remplacement complet est l'opération normale.
 - 2026-10-07 : fournisseurs sous `reference.manage`. Rejeté : un nouveau droit achats, car aucun n'existe et un fournisseur est un référentiel.
