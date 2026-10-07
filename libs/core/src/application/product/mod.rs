@@ -11,8 +11,10 @@ use crate::{
     },
 };
 
+mod tests;
+
 impl MestierUseCase {
-    #[transactional(product, role, member, authz)]
+    #[transactional(product, supplier, role, member, authz)]
     pub async fn create_product(
         &self,
         command: CreateProductCommand,
@@ -35,24 +37,24 @@ impl MestierUseCase {
         )
         .await?;
 
-        let mut service = ProductService::new(product_repository);
+        let mut service = ProductService::new(product_repository, supplier_repository);
         service.create_product(command).await
     }
 
-    #[transactional(product)]
+    #[transactional(product, supplier)]
     pub async fn get_product(&self, id: ProductId) -> Result<Product, CoreError> {
-        let mut service = ProductService::new(product_repository);
+        let mut service = ProductService::new(product_repository, supplier_repository);
         service.get_product(id).await
     }
 
-    #[transactional(product)]
+    #[transactional(product, supplier)]
     pub async fn list_products(
         &self,
         organization_id: OrganizationId,
         limit: u64,
         offset: u64,
     ) -> Result<(Vec<Product>, u64), CoreError> {
-        let mut service = ProductService::new(product_repository);
+        let mut service = ProductService::new(product_repository, supplier_repository);
         service.list_products(organization_id, limit, offset).await
     }
 
@@ -61,7 +63,7 @@ impl MestierUseCase {
     /// bare `/products/{id}` route has no organization to trust otherwise
     /// (CLAUDE.md's "bare ids derive their organization from the loaded
     /// row" rule).
-    #[transactional(product, role, member, authz)]
+    #[transactional(product, supplier, role, member, authz)]
     pub async fn update_product(
         &self,
         command: UpdateProductCommand,
@@ -69,7 +71,7 @@ impl MestierUseCase {
         let mut member_repository = member_repository;
         let mut role_repository = role_repository;
 
-        let mut service = ProductService::new(product_repository);
+        let mut service = ProductService::new(product_repository, supplier_repository);
         let existing = service.get_product(command.id).await?;
 
         let actor = policy::enrich_for_organization(
@@ -94,7 +96,7 @@ impl MestierUseCase {
     /// rule as [`Self::update_product`] — there is no domain command to
     /// carry an `actor` for a bare-id delete, so it is threaded as its own
     /// parameter instead, the same way `remove_employee_profile` does.
-    #[transactional(product, role, member, authz)]
+    #[transactional(product, supplier, role, member, authz)]
     pub async fn soft_delete_product(
         &self,
         actor: Subject,
@@ -103,7 +105,7 @@ impl MestierUseCase {
         let mut member_repository = member_repository;
         let mut role_repository = role_repository;
 
-        let mut service = ProductService::new(product_repository);
+        let mut service = ProductService::new(product_repository, supplier_repository);
         let existing = service.get_product(id).await?;
 
         let actor = policy::enrich_for_organization(

@@ -2,7 +2,7 @@ use chrono::{DateTime, Utc};
 use common::CoreError;
 use uuid::Uuid;
 
-use crate::{OrganizationId, Product, ProductId};
+use crate::{OrganizationId, Product, ProductId, SupplierId};
 
 #[derive(Debug, Clone)]
 pub struct ProductRow {
@@ -15,6 +15,10 @@ pub struct ProductRow {
     pub default_vat_rate_bp: Option<i32>,
     pub description: Option<String>,
     pub photo_keys: Vec<String>,
+    pub supplier_id: Option<Uuid>,
+    pub manufacturer: Option<String>,
+    pub technical_specs: Option<String>,
+    pub datasheet_keys: Vec<String>,
     pub deleted_at: Option<DateTime<Utc>>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
@@ -34,11 +38,10 @@ impl TryFrom<ProductRow> for Product {
             default_vat_rate_bp: row.default_vat_rate_bp,
             description: row.description,
             photo_keys: row.photo_keys,
-            // W2 (docs/chantiers/doe.md) reads these columns.
-            supplier_id: None,
-            manufacturer: None,
-            technical_specs: None,
-            datasheet_keys: Vec::new(),
+            supplier_id: row.supplier_id.map(SupplierId),
+            manufacturer: row.manufacturer,
+            technical_specs: row.technical_specs,
+            datasheet_keys: row.datasheet_keys,
             deleted_at: row.deleted_at,
             created_at: row.created_at,
             updated_at: row.updated_at,

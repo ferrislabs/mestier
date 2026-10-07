@@ -28,6 +28,7 @@ pub mod commands;
 pub mod events;
 pub mod ports;
 pub mod service;
+pub mod supplier_service;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, ToSchema)]
 pub struct SupplierId(pub Uuid);

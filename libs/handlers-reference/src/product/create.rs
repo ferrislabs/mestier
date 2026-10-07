@@ -1,7 +1,7 @@
 use auth::Identity;
 use axum::{Extension, Json, extract::State};
 use handlers::{ApiError, AppState, DataEnvelope, Response, resolve_actor};
-use mestier_core::CreateProductCommand;
+use mestier_core::{CreateProductCommand, SupplierId};
 use serde::Deserialize;
 use utoipa::ToSchema;
 
@@ -20,6 +20,14 @@ pub struct CreateProductRequest {
     pub default_vat_rate_bp: Option<i32>,
     pub description: Option<String>,
     pub photo_keys: Vec<String>,
+    #[serde(default)]
+    pub supplier_id: Option<SupplierId>,
+    #[serde(default)]
+    pub manufacturer: Option<String>,
+    #[serde(default)]
+    pub technical_specs: Option<String>,
+    #[serde(default)]
+    pub datasheet_keys: Vec<String>,
 }
 
 #[utoipa::path(
@@ -62,11 +70,10 @@ pub async fn handler(
             default_vat_rate_bp: payload.default_vat_rate_bp,
             description: payload.description,
             photo_keys: payload.photo_keys,
-            // W2 (docs/chantiers/doe.md) exposes the technical sheet.
-            supplier_id: None,
-            manufacturer: None,
-            technical_specs: None,
-            datasheet_keys: Vec::new(),
+            supplier_id: payload.supplier_id,
+            manufacturer: payload.manufacturer,
+            technical_specs: payload.technical_specs,
+            datasheet_keys: payload.datasheet_keys,
         })
         .await?;
 
