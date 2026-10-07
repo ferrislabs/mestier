@@ -15,8 +15,13 @@ pub struct Prepared {
     pub files: Vec<(String, Bytes)>,
 }
 
+/// Pages inserted from supplier datasheets and plans across one document.
+/// Bounds the layout work of a single export; a real DOE inserts a few dozen.
+const MAX_INSERTED_PAGES: usize = 600;
+
 struct Collector<'a> {
     bundle: &'a FileBundle,
+    inserted_pages: usize,
     order: Vec<String>,
     entries: HashMap<String, Value>,
     blobs: Vec<(String, Bytes)>,
@@ -48,6 +53,12 @@ impl Collector<'_> {
                 if pages == 0 {
                     return Err(DoeRenderError::Typeset(format!("PDF `{key}` has no page")));
                 }
+                self.inserted_pages += pages;
+                if self.inserted_pages > MAX_INSERTED_PAGES {
+                    return Err(DoeRenderError::TooLarge(format!(
+                        "more than {MAX_INSERTED_PAGES} inserted PDF pages"
+                    )));
+                }
                 ("pdf", pages)
             }
             _ => return Err(unsupported()),
@@ -65,6 +76,7 @@ impl Collector<'_> {
 pub fn prepare(document: &DoeDocument, bundle: &FileBundle) -> Result<Prepared, DoeRenderError> {
     let mut collector = Collector {
         bundle,
+        inserted_pages: 0,
         order: Vec::new(),
         entries: HashMap::new(),
         blobs: Vec::new(),

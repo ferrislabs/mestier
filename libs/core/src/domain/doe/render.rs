@@ -93,6 +93,9 @@ pub enum DoeRenderError {
     MissingFile { key: String },
     #[error("file `{key}` has type `{mime_type}`, which cannot be placed in a document")]
     UnsupportedFile { key: String, mime_type: String },
+    /// The document would exceed what one render may cost (pages, bytes).
+    #[error("document too large: {0}")]
+    TooLarge(String),
     #[error("typesetting failed: {0}")]
     Typeset(String),
 }

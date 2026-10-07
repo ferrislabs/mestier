@@ -26,6 +26,38 @@ use crate::{
 
 pub const MAX_SECTIONS: usize = 30;
 
+/// Distinct stored files one DOE may reference. A generous ceiling for a
+/// real job (the reference DOE has about 40), and what bounds the PDF
+/// route: every one of them is downloaded and laid out on each export.
+pub const MAX_FILES: usize = 300;
+
+fn distinct_file_keys(doe: &Doe) -> usize {
+    let mut keys = std::collections::HashSet::new();
+    keys.extend(
+        doe.parties
+            .iter()
+            .filter_map(|party| party.logo_key.as_deref()),
+    );
+    for section in &doe.sections {
+        match &section.content {
+            DoeSectionContent::Supplies { supplies, .. } => {
+                for supply in supplies {
+                    keys.extend(supply.photos.iter().map(|photo| photo.key.as_str()));
+                    keys.extend(supply.datasheet_keys.iter().map(String::as_str));
+                }
+            }
+            DoeSectionContent::Photos { photos, .. } => {
+                keys.extend(photos.iter().map(|photo| photo.key.as_str()));
+            }
+            DoeSectionContent::Plans { plans } => {
+                keys.extend(plans.iter().map(|plan| plan.key.as_str()));
+            }
+            DoeSectionContent::BlankPages { .. } => {}
+        }
+    }
+    keys.len()
+}
+
 fn blank_to_none(value: Option<String>) -> Option<String> {
     value
         .map(|text| text.trim().to_owned())
@@ -320,6 +352,12 @@ where
             updated_at: Utc::now(),
             ..existing
         };
+
+        if distinct_file_keys(&doe) > MAX_FILES {
+            return Err(CoreError::Conflict(format!(
+                "a DOE references at most {MAX_FILES} files"
+            )));
+        }
 
         self.doe_repository.update(&doe).await
     }
@@ -1130,5 +1168,49 @@ mod tests {
             .unwrap_err();
 
         assert!(matches!(err, CoreError::NotFound));
+    }
+
+    #[test]
+    fn file_keys_are_counted_once_across_the_whole_doe() {
+        let shared = DoeFile {
+            key: "photos/massif".to_owned(),
+            caption: None,
+        };
+        let mut doe = existing_doe(OrganizationId(Uuid::new_v4()));
+        doe.parties = vec![DoeParty {
+            role: crate::PartyRole::Contractor,
+            name: "Treyve".to_owned(),
+            address: None,
+            phone: None,
+            email: None,
+            logo_key: Some("logos/treyve".to_owned()),
+        }];
+        doe.sections = vec![
+            DoeSection {
+                id: Uuid::new_v4(),
+                title: "Photos".to_owned(),
+                enabled: true,
+                content: DoeSectionContent::Photos {
+                    per_page: crate::PhotosPerPage::Two,
+                    photos: vec![shared.clone(), shared.clone()],
+                },
+            },
+            DoeSection {
+                id: Uuid::new_v4(),
+                title: "Plans".to_owned(),
+                enabled: false,
+                content: DoeSectionContent::Plans {
+                    plans: vec![
+                        shared,
+                        DoeFile {
+                            key: "plans/a1".to_owned(),
+                            caption: None,
+                        },
+                    ],
+                },
+            },
+        ];
+
+        assert_eq!(distinct_file_keys(&doe), 3);
     }
 }

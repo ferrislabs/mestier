@@ -1,6 +1,6 @@
 # DOE : Dossier des Ouvrages Exécutés
 
-État : **découpage validé le 2026-10-07, W0 intégré, W1 à W3b en cours**. Mis à jour à chaque intégration.
+État : **tous les lots intégrés le 2026-10-08, relectures conformité et sécurité faites, PR à ouvrir**. Mis à jour à chaque intégration.
 
 ## Goal
 
@@ -49,6 +49,7 @@ et télécharge un PDF mis en page.
 5. L'indice n'est jamais vide et fait au plus 8 caractères. [type : `Revision::try_from`]
 6. Nombre de pages libres entre 1 et 20. [type : `BlankPageCount::try_from`]
 7. La couleur d'accent est `#rrggbb`. [type : `HexColor::try_from`]
+10. Un export reste borné : au plus 30 sections et 300 fichiers distincts par DOE (409 à l'enregistrement), 600 pages PDF insérées et 256 Mo de fichiers par export (409), 2 rendus simultanés par processus, 120 s par rendu. [test : `file_keys_are_counted_once_across_the_whole_doe`, `a_too_large_document_is_a_conflict` ; constantes dans `domain/doe/service.rs`, `doc-render/src/bundle.rs`, `handlers-planning/src/doe/pdf.rs`]
 8. Une section désactivée n'apparaît ni dans le PDF ni dans la numérotation. [test sur `DoeDocument::from_doe`]
 9. Le rendu ne lit ni disque ni réseau : il n'utilise que les fichiers fournis. [type : le `World` Typst ne reçoit qu'un `FileBundle`]
 
@@ -84,7 +85,7 @@ et télécharge un PDF mis en page.
 | GET | `/does/{doe_id}/pdf` | handlers-planning | membre |
 | GET/POST | `/doe-models` | handlers-planning | membre / reference.manage |
 | GET/PUT | `/doe-models/{id}` ; POST `/doe-models/{id}/archive`, `/restore` | handlers-planning | membre / reference.manage |
-| GET | `/doe-models/starters` ; POST `/doe-models/from-starter` `{starter}` | handlers-planning | membre / reference.manage |
+| GET | `/doe-model-starters` ; POST `/doe-models/from-starter` `{starter}` | handlers-planning | membre / reference.manage |
 | GET/PUT | `/doe-settings` | handlers-planning | membre / reference.manage |
 | GET/POST | `/suppliers` ; PUT `/suppliers/{id}` | handlers-purchase | membre / reference.manage |
 | (existant) | `/products…` gagne les champs de fiche technique | handlers-reference | reference.manage |
@@ -293,11 +294,14 @@ cd apps/webapp && pnpm check && pnpm test && pnpm build
 | W1 | intégré (a8054d3) |
 | W2 | intégré (cd42271) |
 | W3a | intégré (b143797) |
-| W3b | intégré |
+| W3b | intégré (6cce55a) |
 | W4a | pending |
 | W4b | pending |
 
 ## Decision log
+
+- 2026-10-08 : relecture sécurité. Ajout des limites de l'invariant 10 (un membre pouvait saturer l'API avec un DOE énorme). Le message 409 d'un fichier refusé ne renvoie plus son type MIME. Non corrigé, assumé : une clé de fichier d'une autre organisation, si elle a fuité, peut être intégrée au PDF ; `/files/url` le permet déjà, la vraie parade est une table de propriété des fichiers (hors chantier). Les repositories ne filtrent pas `org_id` en SQL, contrôle dans handlers et use cases comme dans tout le dépôt. Le PDF est lisible par tout membre, voulu.
+- 2026-10-08 : relecture conformité. Route des modèles de départ gardée en `/doe-model-starters` pour ne pas entrer en collision avec `/doe-models/{id}`. Ajout d'e2e : isolation et droits des modèles de DOE et des fournisseurs. Restent couverts seulement au niveau du renderer : @spec-doe-5 (pas d'e2e avec de vraies photos), et @spec-doe-11 (pas de test de parcours de l'éditeur).
 
 - 2026-10-07 : W3b, un fichier de type non accepté donne 409 en nommant le fichier (corrigeable par l'utilisateur), pas 500. Chargement des fichiers séquentiel en v1.
 - 2026-10-07 : @spec-doe-10 en e2e demande un S3 réel ; non vérifié en local (aucun S3, image MinIO indisponible). Le passage NotFound → 409 est couvert par un test unitaire du handler.

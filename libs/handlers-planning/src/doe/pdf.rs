@@ -5,6 +5,11 @@ use axum::{
     extract::State,
     response::{IntoResponse, Response},
 };
+use std::{
+    sync::{Arc, LazyLock},
+    time::Duration,
+};
+
 use doc_render::TypstDoeRenderer;
 use handlers::{ApiError, AppState};
 use http::{
@@ -14,6 +19,7 @@ use http::{
 use mestier_core::{
     BundledFile, DoeDocument, DoeRenderError, DoeRenderer, FileBundle, NumberedContent,
 };
+use tokio::sync::Semaphore;
 
 use crate::doe::{DoePdfPath, require_doe};
 
@@ -61,8 +67,13 @@ pub async fn handler(
         .into_response())
 }
 
+/// Bytes of stored files one export may load. Every file is held in memory
+/// for the duration of the render.
+const MAX_BUNDLE_BYTES: usize = 256 * 1024 * 1024;
+
 async fn load_files(state: &AppState, document: &DoeDocument) -> Result<FileBundle, ApiError> {
     let mut bundle = FileBundle::default();
+    let mut total_bytes = 0usize;
     for key in document.file_keys() {
         let object =
             state
@@ -73,6 +84,13 @@ async fn load_files(state: &AppState, document: &DoeDocument) -> Result<FileBund
                     ApiError::NotFound => missing_file(document, key),
                     other => other,
                 })?;
+        total_bytes += object.bytes.len();
+        if total_bytes > MAX_BUNDLE_BYTES {
+            return Err(ApiError::Conflict(format!(
+                "this DOE is too large to export: its files exceed {} MB",
+                MAX_BUNDLE_BYTES / (1024 * 1024)
+            )));
+        }
         bundle.insert(
             key.to_owned(),
             BundledFile {
@@ -115,16 +133,42 @@ fn owner_of(document: &DoeDocument, key: &str) -> Option<String> {
         })
 }
 
+/// Exports rendering at the same time, across the whole process. Rendering
+/// is CPU-bound and holds every file of a DOE in memory, so an unbounded
+/// number of parallel exports is how one organization slows down all others.
+const CONCURRENT_RENDERS: usize = 2;
+
+/// Past this the caller gets an error. The blocking task cannot be cancelled
+/// and finishes on its own, still holding its permit, so the limit above
+/// keeps counting it.
+const RENDER_TIMEOUT: Duration = Duration::from_secs(120);
+
+static RENDER_PERMITS: LazyLock<Arc<Semaphore>> =
+    LazyLock::new(|| Arc::new(Semaphore::new(CONCURRENT_RENDERS)));
+
 async fn render_off_the_executor(
     document: DoeDocument,
     files: FileBundle,
 ) -> Result<Vec<u8>, ApiError> {
-    tokio::task::spawn_blocking(move || render_with(&TypstDoeRenderer, &document, &files))
+    let permit = RENDER_PERMITS
+        .clone()
+        .acquire_owned()
         .await
-        .map_err(|error| {
+        .map_err(|_| ApiError::Internal)?;
+    let task = tokio::task::spawn_blocking(move || {
+        let _permit = permit;
+        render_with(&TypstDoeRenderer, &document, &files)
+    });
+    match tokio::time::timeout(RENDER_TIMEOUT, task).await {
+        Ok(joined) => joined.map_err(|error| {
             tracing::error!(error = %error, "DOE rendering task failed");
             ApiError::Internal
-        })?
+        })?,
+        Err(_) => {
+            tracing::warn!("DOE rendering exceeded {RENDER_TIMEOUT:?}");
+            Err(ApiError::Internal)
+        }
+    }
 }
 
 fn render_with<R: DoeRenderer>(
@@ -136,13 +180,16 @@ fn render_with<R: DoeRenderer>(
         .render(document, files)
         .map_err(|error| match error {
             DoeRenderError::MissingFile { key } => missing_file(document, &key),
-            DoeRenderError::UnsupportedFile { key, mime_type } => {
+            DoeRenderError::UnsupportedFile { key, .. } => {
                 let place = owner_of(document, &key)
                     .map(|owner| format!(" of {owner}"))
                     .unwrap_or_default();
                 ApiError::Conflict(format!(
-                    "file `{key}`{place} has type `{mime_type}`, which cannot be placed in a DOE"
+                    "file `{key}`{place} is not an image or a PDF and cannot be placed in a DOE"
                 ))
+            }
+            DoeRenderError::TooLarge(reason) => {
+                ApiError::Conflict(format!("this DOE is too large to export: {reason}"))
             }
             other => {
                 tracing::error!(error = %other, "DOE rendering failed");
@@ -258,6 +305,33 @@ mod tests {
         };
         assert!(message.contains("photos/banc.jpg"), "{message}");
         assert!(message.contains("2.1 Banc Garden"), "{message}");
+    }
+
+    #[test]
+    fn an_unsupported_file_is_a_conflict_without_its_type() {
+        let document = document_with_supply_photo("photos/banc.tiff");
+        let renderer = Failing(DoeRenderError::UnsupportedFile {
+            key: "photos/banc.tiff".to_owned(),
+            mime_type: "image/tiff".to_owned(),
+        });
+
+        let error = render_with(&renderer, &document, &FileBundle::default()).unwrap_err();
+
+        let ApiError::Conflict(message) = error else {
+            panic!("expected a conflict");
+        };
+        assert!(message.contains("2.1 Banc Garden"), "{message}");
+        assert!(!message.contains("image/tiff"), "{message}");
+    }
+
+    #[test]
+    fn a_too_large_document_is_a_conflict() {
+        let document = document_with_supply_photo("k");
+        let renderer = Failing(DoeRenderError::TooLarge("pages".to_owned()));
+
+        let error = render_with(&renderer, &document, &FileBundle::default()).unwrap_err();
+
+        assert!(matches!(error, ApiError::Conflict(_)));
     }
 
     #[test]
