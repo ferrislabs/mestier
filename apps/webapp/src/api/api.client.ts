@@ -584,6 +584,15 @@ export namespace Schemas {
     updated_at: string;
   };
   export type DoeSettingsResponse = { accent: string; logo_key?: (string | null) | undefined };
+  export type DoeSummaryResponse = {
+    id: DoeId;
+    issued_on: string;
+    project_id: ProjectId;
+    project_name: string;
+    revision: Revision;
+    title: string;
+    updated_at: string;
+  };
   export type DraftSupplyRequest = { product_id: ProductId };
   export type EdgeDto = { branch?: (null | BranchDto) | undefined; from: string; to: string };
   export type EmployeeCostBasisId = string;
@@ -4683,6 +4692,31 @@ export namespace Endpoints {
       403: unknown;
     };
   };
+  export type get_ListDoes = {
+    method: "GET";
+    path: "/api/v1/organizations/{organization_id}/does";
+    requestFormat: "json";
+    parameters: {
+      query: Partial<{ page: number; per_page: number }>;
+      path: { organization_id: string };
+    };
+    responses: {
+      200: {
+        data: Array<{
+          id: Schemas.DoeId;
+          issued_on: string;
+          project_id: Schemas.ProjectId;
+          project_name: string;
+          revision: Schemas.Revision;
+          title: string;
+          updated_at: string;
+        }>;
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+    };
+  };
   export type get_GetDoe = {
     method: "GET";
     path: "/api/v1/organizations/{organization_id}/does/{doe_id}";
@@ -7662,6 +7696,7 @@ export type EndpointByMethod = {
     "/api/v1/organizations/{organization_id}/doe-models": Endpoints.get_ListDoeModels;
     "/api/v1/organizations/{organization_id}/doe-models/{doe_model_id}": Endpoints.get_GetDoeModel;
     "/api/v1/organizations/{organization_id}/doe-settings": Endpoints.get_GetDoeSettings;
+    "/api/v1/organizations/{organization_id}/does": Endpoints.get_ListDoes;
     "/api/v1/organizations/{organization_id}/does/{doe_id}": Endpoints.get_GetDoe;
     "/api/v1/organizations/{organization_id}/does/{doe_id}/pdf": Endpoints.get_ExportDoePdf;
     "/api/v1/organizations/{organization_id}/employee-profiles": Endpoints.get_ListEmployeeProfiles;
