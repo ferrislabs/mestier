@@ -211,6 +211,13 @@ export const MODULES: AppModule[] = [
 				requiredPermission: 'MANAGE_PLANNING',
 			},
 			{
+				id: 'does',
+				label: 'DOE',
+				to: '/planification/does',
+				icon: FileText,
+				requiredPermission: 'MANAGE_PLANNING',
+			},
+			{
 				id: 'project-templates',
 				label: 'Modèles de projet',
 				to: '/planification/project-templates',
