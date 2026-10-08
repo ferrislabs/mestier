@@ -264,6 +264,19 @@ pub struct Doe {
     pub updated_at: DateTime<Utc>,
 }
 
+/// A DOE as listed: enough to find it and see where it stands, without its
+/// content.
+#[derive(Debug, Clone, PartialEq)]
+pub struct DoeSummary {
+    pub id: DoeId,
+    pub project_id: ProjectId,
+    pub project_name: String,
+    pub title: String,
+    pub revision: Revision,
+    pub issued_on: NaiveDate,
+    pub updated_at: DateTime<Utc>,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

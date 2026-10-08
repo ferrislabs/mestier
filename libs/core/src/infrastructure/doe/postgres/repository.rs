@@ -2,10 +2,10 @@ use common::CoreError;
 use mestier_macros::repository;
 
 use crate::{
-    Doe, DoeId, ProjectId,
+    Doe, DoeId, DoeSummary, OrganizationId, ProjectId,
     domain::doe::ports::DoeRepository,
     infrastructure::{
-        doe::postgres::model::DoeRow,
+        doe::postgres::model::{DoeRow, DoeSummaryRow},
         postgres::{SharedTx, error::map_sqlx_error},
     },
 };
@@ -59,6 +59,47 @@ impl<'tx> DoeRepository for PgDoeRepository<'tx> {
         .map_err(map_sqlx_error)?;
 
         row.try_into()
+    }
+
+    async fn list_by_organization(
+        &mut self,
+        organization_id: OrganizationId,
+        limit: u64,
+        offset: u64,
+    ) -> Result<(Vec<DoeSummary>, u64), CoreError> {
+        let limit = i64::try_from(limit).unwrap_or(i64::MAX);
+        let offset = i64::try_from(offset).unwrap_or(i64::MAX);
+        let mut tx = self.tx.lock().await;
+        let rows = sqlx::query_as!(
+            DoeSummaryRow,
+            r#"
+            SELECT d.id, d.project_id, p.name AS project_name, d.title, d.revision, d.issued_on, d.updated_at
+            FROM does d
+            JOIN projects p ON p.id = d.project_id AND p.org_id = d.org_id
+            WHERE d.org_id = $1
+            ORDER BY d.updated_at DESC, d.id
+            LIMIT $2 OFFSET $3
+            "#,
+            organization_id.0,
+            limit,
+            offset,
+        )
+        .fetch_all(&mut ***tx)
+        .await
+        .map_err(map_sqlx_error)?;
+        let total = sqlx::query_scalar!(
+            r#"SELECT COUNT(*) AS "count!" FROM does WHERE org_id = $1"#,
+            organization_id.0,
+        )
+        .fetch_one(&mut ***tx)
+        .await
+        .map_err(map_sqlx_error)?;
+
+        let summaries = rows
+            .into_iter()
+            .map(DoeSummary::try_from)
+            .collect::<Result<_, _>>()?;
+        Ok((summaries, u64::try_from(total).unwrap_or_default()))
     }
 
     async fn find_by_id(&mut self, id: DoeId) -> Result<Option<Doe>, CoreError> {

@@ -2,7 +2,7 @@ use chrono::{DateTime, NaiveDate, Utc};
 use common::CoreError;
 use uuid::Uuid;
 
-use crate::{Doe, DoeId, OrganizationId, ProjectId, Revision};
+use crate::{Doe, DoeId, DoeSummary, OrganizationId, ProjectId, Revision};
 
 #[derive(Debug, Clone)]
 pub struct DoeRow {
@@ -45,6 +45,35 @@ impl TryFrom<DoeRow> for Doe {
             parties,
             sections,
             created_at: row.created_at,
+            updated_at: row.updated_at,
+        })
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct DoeSummaryRow {
+    pub id: Uuid,
+    pub project_id: Uuid,
+    pub project_name: String,
+    pub title: String,
+    pub revision: String,
+    pub issued_on: NaiveDate,
+    pub updated_at: DateTime<Utc>,
+}
+
+impl TryFrom<DoeSummaryRow> for DoeSummary {
+    type Error = CoreError;
+
+    fn try_from(row: DoeSummaryRow) -> Result<Self, Self::Error> {
+        Ok(Self {
+            id: DoeId(row.id),
+            project_id: ProjectId(row.project_id),
+            project_name: row.project_name,
+            title: row.title,
+            revision: Revision::try_from(row.revision).map_err(|e| {
+                CoreError::Internal(format!("invalid DOE revision in database: {e}"))
+            })?,
+            issued_on: row.issued_on,
             updated_at: row.updated_at,
         })
     }

@@ -3,8 +3,8 @@ use common::CoreError;
 use mestier_macros::transactional;
 
 use crate::{
-    CreateDoeCommand, Doe, DoeDocument, DoeId, DoeSupply, DraftSupplyFromProductCommand, ProjectId,
-    UpdateDoeCommand,
+    CreateDoeCommand, Doe, DoeDocument, DoeId, DoeSummary, DoeSupply,
+    DraftSupplyFromProductCommand, OrganizationId, ProjectId, UpdateDoeCommand,
     application::{MestierUseCase, policy},
     domain::doe::service::DoeService,
 };
@@ -17,6 +17,18 @@ impl MestierUseCase {
     pub async fn get_project_doe(&self, project_id: ProjectId) -> Result<Doe, CoreError> {
         DoeService::new(doe_repository)
             .get_project_doe(project_id)
+            .await
+    }
+
+    #[transactional(doe)]
+    pub async fn list_does(
+        &self,
+        organization_id: OrganizationId,
+        limit: u64,
+        offset: u64,
+    ) -> Result<(Vec<DoeSummary>, u64), CoreError> {
+        DoeService::new(doe_repository)
+            .list(organization_id, limit, offset)
             .await
     }
 

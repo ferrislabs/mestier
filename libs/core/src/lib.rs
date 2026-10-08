@@ -119,8 +119,9 @@ pub use domain::{
 
 pub use domain::{
     BlankPageCount, Doe, DoeFile, DoeId, DoeModel, DoeModelId, DoeModelSection,
-    DoeModelSectionKind, DoeParty, DoeSection, DoeSectionContent, DoeSettings, DoeSupply, HexColor,
-    MakerLabel, PartyRole, PhotosPerPage, Revision, StarterModel, SupplierSnapshot,
+    DoeModelSectionKind, DoeParty, DoeSection, DoeSectionContent, DoeSettings, DoeSummary,
+    DoeSupply, HexColor, MakerLabel, PartyRole, PhotosPerPage, Revision, StarterModel,
+    SupplierSnapshot,
     doe::commands::{CreateDoeCommand, DraftSupplyFromProductCommand, UpdateDoeCommand},
     doe::render::{
         BundledFile, DoeDocument, DoeRenderError, DoeRenderer, FileBundle, NumberedContent,

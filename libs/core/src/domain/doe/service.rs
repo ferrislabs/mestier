@@ -2,7 +2,7 @@ use chrono::Utc;
 use common::{CoreError, generate_uuid_v7};
 
 use crate::{
-    Customer, Organization, Project, ProjectId,
+    Customer, DoeSummary, Organization, OrganizationId, Project, ProjectId,
     domain::{
         customer::ports::CustomerRepository,
         customer_context::ports::CustomerContextRepository,
@@ -229,6 +229,17 @@ where
             .find_by_id(id)
             .await?
             .ok_or(CoreError::NotFound)
+    }
+
+    pub async fn list(
+        &mut self,
+        organization_id: OrganizationId,
+        limit: u64,
+        offset: u64,
+    ) -> Result<(Vec<DoeSummary>, u64), CoreError> {
+        self.doe_repository
+            .list_by_organization(organization_id, limit, offset)
+            .await
     }
 
     pub async fn get_project_doe(&mut self, project_id: ProjectId) -> Result<Doe, CoreError> {

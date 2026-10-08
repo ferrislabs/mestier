@@ -512,3 +512,40 @@ async fn update_replaces_the_content_and_keeps_identity() {
 
     cleanup(&pool, fixture.organization_id, &[fixture.user_id]).await;
 }
+
+#[tokio::test]
+#[ignore = "needs DATABASE_URL"]
+async fn the_list_holds_only_the_organizations_does_most_recent_first() {
+    let pool = pool().await;
+    let usecase = usecase(&pool);
+    let fixture = seed_fixture(&pool).await;
+    let first = usecase.create_doe(create_command(&fixture)).await.unwrap();
+
+    let second_project =
+        seed_project(&pool, fixture.organization_id, None, "Parc des Sports").await;
+    let second = usecase
+        .create_doe(CreateDoeCommand {
+            project_id: second_project,
+            ..create_command(&fixture)
+        })
+        .await
+        .unwrap();
+
+    let other = seed_fixture(&pool).await;
+    usecase.create_doe(create_command(&other)).await.unwrap();
+
+    let (listed, total) = usecase
+        .list_does(fixture.organization_id, 50, 0)
+        .await
+        .unwrap();
+
+    assert_eq!(total, 2);
+    let ids: Vec<DoeId> = listed.iter().map(|summary| summary.id).collect();
+    assert_eq!(ids, vec![second.id, first.id]);
+    assert_eq!(listed[0].project_name, "Parc des Sports");
+    assert_eq!(listed[1].project_name, "Avenue du 8 mai");
+    assert_eq!(listed[1].revision.as_str(), "A");
+
+    cleanup(&pool, other.organization_id, &[other.user_id]).await;
+    cleanup(&pool, fixture.organization_id, &[fixture.user_id]).await;
+}

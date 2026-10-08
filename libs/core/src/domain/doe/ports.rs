@@ -1,6 +1,6 @@
 use common::CoreError;
 
-use crate::{Doe, DoeId, ProjectId};
+use crate::{Doe, DoeId, DoeSummary, OrganizationId, ProjectId};
 
 #[cfg_attr(any(test, feature = "mock"), mockall::automock)]
 pub trait DoeRepository: Send {
@@ -16,6 +16,14 @@ pub trait DoeRepository: Send {
         &mut self,
         project_id: ProjectId,
     ) -> impl Future<Output = Result<Option<Doe>, CoreError>> + Send;
+
+    /// Most recently edited first.
+    fn list_by_organization(
+        &mut self,
+        organization_id: OrganizationId,
+        limit: u64,
+        offset: u64,
+    ) -> impl Future<Output = Result<(Vec<DoeSummary>, u64), CoreError>> + Send;
 
     /// Rewrites every field but `id`, `organization_id`, `project_id` and
     /// `created_at`.

@@ -1,5 +1,5 @@
 use chrono::{DateTime, NaiveDate, Utc};
-use mestier_core::{Doe, DoeId, DoeParty, DoeSection, ProjectId, Revision};
+use mestier_core::{Doe, DoeId, DoeParty, DoeSection, DoeSummary, ProjectId, Revision};
 use serde::Serialize;
 use utoipa::ToSchema;
 
@@ -34,6 +34,31 @@ impl From<Doe> for DoeResponse {
             sections: doe.sections,
             created_at: doe.created_at,
             updated_at: doe.updated_at,
+        }
+    }
+}
+
+#[derive(Debug, Serialize, PartialEq, ToSchema)]
+pub struct DoeSummaryResponse {
+    pub id: DoeId,
+    pub project_id: ProjectId,
+    pub project_name: String,
+    pub title: String,
+    pub revision: Revision,
+    pub issued_on: NaiveDate,
+    pub updated_at: DateTime<Utc>,
+}
+
+impl From<DoeSummary> for DoeSummaryResponse {
+    fn from(summary: DoeSummary) -> Self {
+        Self {
+            id: summary.id,
+            project_id: summary.project_id,
+            project_name: summary.project_name,
+            title: summary.title,
+            revision: summary.revision,
+            issued_on: summary.issued_on,
+            updated_at: summary.updated_at,
         }
     }
 }

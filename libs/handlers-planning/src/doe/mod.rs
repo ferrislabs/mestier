@@ -14,12 +14,14 @@ pub mod create;
 pub mod draft_supply;
 pub mod get_one;
 pub mod get_project;
+pub mod list;
 pub mod pdf;
 pub mod response;
 pub mod update;
 
 pub fn router(_state: &AppState) -> Router<AppState> {
     Router::new()
+        .typed_get(list::handler)
         .typed_get(get_project::handler)
         .typed_post(create::handler)
         .typed_get(get_one::handler)
@@ -33,6 +35,12 @@ pub fn router(_state: &AppState) -> Router<AppState> {
 pub struct ProjectDoePath {
     pub organization_id: OrganizationId,
     pub project_id: ProjectId,
+}
+
+#[derive(TypedPath, Deserialize)]
+#[typed_path("/api/v1/organizations/{organization_id}/does")]
+pub struct DoesPath {
+    pub organization_id: OrganizationId,
 }
 
 #[derive(TypedPath, Deserialize)]
