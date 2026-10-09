@@ -250,6 +250,18 @@ docker compose run --rm cerbos compile /policies          # tests de politiques
 # ferriskey : la suite de vérification de son dépôt
 ```
 
+## W6 : configuration du realm et résultats
+
+Configuration du realm (API d'admin FerrisKey, PR ferriskey#1611) :
+
+1. `PUT /realms/mestier/settings` : `cimd_enabled`, `dcr_enabled`, `allowed_resources: ["<resource exacte publiée par la gateway>"]` (même chaîne, au caractère près).
+2. Scopes `mestier.read`, `mestier.doe.write` (`POST /realms/mestier/client-scopes`) avec `is_default: true` : FerrisKey ne laisse un client dynamique demander que les scopes standards ou « Default » du realm.
+3. Client confidentiel de la gateway, `service_account_enabled`, `token_exchange_enabled`, et politique d'échange `target_audience: "mestier-api"`, `allow_delegation: true`.
+
+Résultats contre FerrisKey de la PR, Cerbos, gateway, serveur MCP et API locaux (`apps/mcp-gateway/e2e/local_stack.py`, 19/19) : @spec-mcp-1 à 10 et 12 passent. Confirmé au passage : FerrisKey accepte `client_secret_post` et le token délégué porte `act`.
+
+Écart trouvé : FerrisKey n'autorise l'échange que si le client qui échange est partie du token (`azp` = son `client_id`, ou `aud` le contient). Le token client a pour audience l'URL de la ressource, pas le `client_id` de la gateway, donc l'échange est refusé. Contournement local : le `client_id` du client gateway est l'URL de la ressource. Correction attendue côté FerrisKey (décision ouverte) : rattacher une ressource autorisée au client qui la sert, et le considérer partie des tokens émis pour elle.
+
 ## Statut
 
 | Lot | État |
@@ -261,7 +273,7 @@ docker compose run --rm cerbos compile /policies          # tests de politiques
 | W4 | intégré |
 | W5a | pending |
 | W5b | intégré |
-| W6 | pending |
+| W6 | local fait (19/19 + @spec-mcp-7, -10) ; reste @spec-mcp-11 ChatGPT |
 | W7 | intégré |
 
 ## Decision log
