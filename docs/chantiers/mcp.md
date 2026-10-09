@@ -75,7 +75,7 @@ Un utilisateur Mestier colle l'URL du serveur MCP dans son client LLM (ChatGPT w
 ### Organisation
 
 - Interrupteur `mcp_enabled` sur l'organisation (colonne `organizations.mcp_enabled BOOLEAN NOT NULL DEFAULT false`, migration réversible). Lu par l'API, jamais par la gateway ni le PDP : la donnée vit là où elle est administrée.
-- L'API reconnaît un appel MCP au claim `act` du token délégué dont le `client_id` (ou `sub`) est le client de la gateway (configuré : `AUTH_MCP_GATEWAY_CLIENT_ID`). Sur une telle requête : organisation sans `mcp_enabled` → 403 « l'accès par IA est désactivé pour cette organisation » ; liste des organisations de l'utilisateur filtrée.
+- L'API reconnaît un appel MCP à la présence du claim `act` : dans le realm, seule la gateway peut échanger un token vers l'audience de l'API (politique d'échange FerrisKey), donc tout token délégué vient d'elle. Pas de configuration de l'identifiant de la gateway. Sur une telle requête : organisation sans `mcp_enabled` → 403 « l'accès par IA est désactivé pour cette organisation » ; liste des organisations de l'utilisateur filtrée.
 - Outil `list_organizations` (lecture) ; tous les autres prennent `organization` (slug). Facultatif quand l'utilisateur n'a qu'une organisation : le serveur MCP la résout. Sinon, erreur qui liste les slugs possibles.
 - Le PDP reçoit l'organisation dans la ressource AuthZEN ; l'API reste juge de l'appartenance (invariant 5).
 
@@ -259,7 +259,7 @@ docker compose run --rm cerbos compile /policies          # tests de politiques
 | W3 | intégré |
 | W4 | intégré |
 | W5a | pending |
-| W5b | pending |
+| W5b | in-flight |
 | W6 | pending |
 | W7 | pending |
 
