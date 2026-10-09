@@ -37,6 +37,7 @@ const ORGANIZATION = {
 	insurance_mention: null,
 	missing_legal_identity_fields: [],
 	field_clock_enabled: false,
+	mcp_enabled: false,
 	vat_on_debits: false,
 	created_at: '2026-01-01T00:00:00Z',
 	updated_at: '2026-01-01T00:00:00Z',
@@ -164,6 +165,41 @@ describe('OrganizationSection — pointeuse', () => {
 			slug: 'atelier-bois',
 			field_clock_enabled: true,
 		})
+	})
+})
+
+describe('OrganizationSection MCP access', () => {
+	it('is off by default and saving after switching it on sends mcp_enabled', async () => {
+		const onPatch = vi.fn(() => ({
+			data: { ...ORGANIZATION, mcp_enabled: true },
+		}))
+		const user = userEvent.setup()
+		await renderSection(onPatch)
+
+		const toggle = screen.getByRole('switch', {
+			name: /autoriser l'accès par ia/i,
+		})
+		expect(toggle.getAttribute('aria-checked')).toBe('false')
+
+		await user.click(toggle)
+		const enabledSaveButtons = screen
+			.getAllByRole('button', { name: /enregistrer/i })
+			.filter((button) => !(button as HTMLButtonElement).disabled)
+		await user.click(enabledSaveButtons[0])
+
+		await waitFor(() => expect(onPatch).toHaveBeenCalledTimes(1))
+		const [request] = onPatch.mock.calls[0] as unknown as [
+			{ body: Record<string, unknown> },
+		]
+		expect(request.body).toMatchObject({ mcp_enabled: true })
+	})
+
+	it('cannot be switched by a caller without MANAGE_ORG', async () => {
+		await renderSection(vi.fn(), [])
+		const toggle = screen.getByRole('switch', {
+			name: /autoriser l'accès par ia/i,
+		}) as HTMLButtonElement
+		expect(toggle.disabled).toBe(true)
 	})
 })
 

@@ -1,6 +1,7 @@
 import { useForm } from '@tanstack/react-form'
 import {
 	AlertTriangle,
+	Bot,
 	Building2,
 	CheckCircle2,
 	Clock,
@@ -31,6 +32,7 @@ import {
 	useUpdateOrganization,
 	type VatStatus,
 } from '#/hooks/use-organizations'
+import { useHasPermission } from '#/hooks/use-permissions'
 import { normalizeSlugForPayload, normalizeSlugInput } from '#/modules/org-slug'
 import {
 	LEGAL_IDENTITY_FIELD_LABELS,
@@ -64,6 +66,7 @@ function OrganizationSectionContent({
 }: OrganizationSectionContentProps) {
 	const organizationId = organization.id
 	const updateOrganization = useUpdateOrganization(organizationId)
+	const canManageOrganization = useHasPermission('MANAGE_ORG')
 	const error = updateOrganization.error
 
 	const organizationForm = useForm({
@@ -71,6 +74,7 @@ function OrganizationSectionContent({
 			name: organization.name,
 			slug: organization.slug,
 			fieldClockEnabled: organization.field_clock_enabled,
+			mcpEnabled: organization.mcp_enabled,
 		} satisfies OrganizationFormValues,
 		onSubmit: async ({ value }) => {
 			await updateOrganization.mutateAsync({
@@ -79,6 +83,7 @@ function OrganizationSectionContent({
 					name: value.name.trim(),
 					slug: normalizeSlugForPayload(value.slug),
 					field_clock_enabled: value.fieldClockEnabled,
+					mcp_enabled: value.mcpEnabled,
 				},
 			})
 		},
@@ -103,7 +108,8 @@ function OrganizationSectionContent({
 				const hasChanges =
 					form.values.name.trim() !== organization.name ||
 					form.values.slug.trim() !== organization.slug ||
-					form.values.fieldClockEnabled !== organization.field_clock_enabled
+					form.values.fieldClockEnabled !== organization.field_clock_enabled ||
+					form.values.mcpEnabled !== organization.mcp_enabled
 
 				return (
 					<div className="flex flex-col gap-6">
@@ -192,6 +198,59 @@ function OrganizationSectionContent({
 									checked={form.values.fieldClockEnabled}
 									onCheckedChange={(fieldClockEnabled) =>
 										form.onChange({ fieldClockEnabled })
+									}
+								/>
+							</div>
+							<div className="flex justify-end p-5 pt-0">
+								<RequirePermission permission="MANAGE_ORG">
+									<Button
+										type="button"
+										onClick={form.onSubmit}
+										disabled={form.isPending || !hasChanges}
+										className="gap-2"
+									>
+										{form.isPending ? (
+											<Loader2 className="size-4 animate-spin" />
+										) : (
+											<Save className="size-4" />
+										)}
+										Enregistrer
+									</Button>
+								</RequirePermission>
+							</div>
+						</SectionCard>
+
+						<SectionCard>
+							<SectionHeader
+								title="Accès par IA"
+								description="Utiliser Mestier depuis ChatGPT ou un autre assistant, avec le compte et les droits de chaque membre."
+								actions={
+									<StatusBadge tone="neutral">
+										<Bot className="mr-1 size-3" />
+										MCP
+									</StatusBadge>
+								}
+							/>
+							<div className="flex items-center justify-between gap-4 p-5">
+								<div>
+									<Label htmlFor="mcp-enabled" className="text-sm font-medium">
+										Autoriser l'accès par IA (MCP)
+									</Label>
+									<p className="mt-1 text-sm text-muted-foreground">
+										Un membre peut alors connecter son assistant à Mestier et
+										lui faire lire les projets, devis, factures et DOE de cette
+										organisation, ou préparer un DOE. L'assistant n'a jamais
+										plus de droits que le membre, ne supprime rien et n'émet pas
+										de facture. Désactivé, cette organisation reste invisible
+										pour les assistants.
+									</p>
+								</div>
+								<Switch
+									id="mcp-enabled"
+									checked={form.values.mcpEnabled}
+									disabled={!canManageOrganization}
+									onCheckedChange={(mcpEnabled) =>
+										form.onChange({ mcpEnabled })
 									}
 								/>
 							</div>

@@ -1,6 +1,6 @@
 # MCP : Mestier dans ChatGPT et les autres LLM
 
-État : **W0 intégré le 2026-10-09 ; W5a en PR #540 ; W1 confié à un agent FerrisKey par l'utilisateur ; W2, W3, W4 en cours**.
+État : **W0, W2, W3, W4, W5b, W7 intégrés le 2026-10-09 ; W5a en PR #540 (repris sur la branche) ; W1 chez l'utilisateur; W6 en attente de W1 et d'une URL publique**.
 
 ## Goal
 
@@ -262,7 +262,7 @@ docker compose run --rm cerbos compile /policies          # tests de politiques
 | W5a | pending |
 | W5b | intégré |
 | W6 | pending |
-| W7 | pending |
+| W7 | intégré |
 
 ## Decision log
 

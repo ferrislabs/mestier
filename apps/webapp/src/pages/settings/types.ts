@@ -20,6 +20,9 @@ export interface OrganizationFormValues {
 	/** Whether the field app's home screen offers clocking in/out — off by
 	 * default since ADR 0002 (see `Organization.field_clock_enabled`). */
 	fieldClockEnabled: boolean
+	/** Whether members may use Mestier from an AI client through MCP. Off by
+	 * default: an organization chooses to open it. */
+	mcpEnabled: boolean
 }
 
 /** `vatChoice` never carries a blank meaning "either" (#310's `VatStatus`):
