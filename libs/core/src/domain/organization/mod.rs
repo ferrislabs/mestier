@@ -61,6 +61,7 @@ pub struct Organization {
     /// explicitly on the invoice; see #341 and
     /// `legal_identity::ElectronicInvoicingFacts`.
     pub vat_on_debits: bool,
+    pub mcp_enabled: bool,
     pub deleted_at: Option<DateTime<Utc>>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,

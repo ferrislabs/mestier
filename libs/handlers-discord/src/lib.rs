@@ -25,29 +25,7 @@ pub const TAG: &str = "discord";
 #[derive(Debug, serde::Serialize, PartialEq)]
 pub struct EmptyResponse;
 
-/// Verify the caller is a member of the given org.
-/// Returns `ApiError::Forbidden` when the user has no membership record.
-pub async fn require_org_membership(
-    state: &AppState,
-    identity: &Identity,
-    organization_id: OrganizationId,
-) -> Result<(), ApiError> {
-    let user = state
-        .usecase
-        .find_user_by_sub(identity.id())
-        .await?
-        .ok_or(ApiError::Forbidden)?;
-    let membership = state
-        .usecase
-        .find_membership(organization_id, user.id)
-        .await?;
-
-    if membership.is_none() {
-        return Err(ApiError::Forbidden);
-    }
-
-    Ok(())
-}
+pub use handlers::membership::require_org_membership;
 
 /// Verify membership AND that the member holds the required permission bit.
 ///
@@ -67,6 +45,8 @@ pub async fn require_permission(
         .find_user_by_sub(identity.id())
         .await?
         .ok_or(ApiError::Forbidden)?;
+
+    handlers::require_mcp_access(state, identity, organization_id).await?;
 
     // TODO: thread JWT realm roles once Identity exposes them.
     let iam_roles: Vec<String> = Vec::new();

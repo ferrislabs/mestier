@@ -150,6 +150,9 @@ where
         organization.name = command.name;
         organization.slug = command.slug;
         organization.field_clock_enabled = command.field_clock_enabled;
+        if let Some(mcp_enabled) = command.mcp_enabled {
+            organization.mcp_enabled = mcp_enabled;
+        }
         organization.updated_at = Utc::now();
 
         self.organization_repository
@@ -303,6 +306,7 @@ where
                 invoice_number_prefix: "FAC".to_owned(),
                 field_clock_enabled: false,
                 vat_on_debits: false,
+                mcp_enabled: false,
                 deleted_at: None,
                 created_at: now,
                 updated_at: now,
@@ -455,6 +459,7 @@ mod tests {
             invoice_number_prefix: "FAC".to_owned(),
             field_clock_enabled: false,
             vat_on_debits: false,
+            mcp_enabled: false,
             deleted_at: None,
             created_at: now,
             updated_at: now,
@@ -620,6 +625,7 @@ mod tests {
                 name: "Acme Inc.".into(),
                 slug: "acme-inc".into(),
                 field_clock_enabled: false,
+                mcp_enabled: None,
             })
             .await
             .unwrap();
@@ -686,6 +692,7 @@ mod tests {
                 name: "Acme".into(),
                 slug: "acme".into(),
                 field_clock_enabled: true,
+                mcp_enabled: None,
             })
             .await
             .unwrap();
@@ -723,6 +730,7 @@ mod tests {
                 name: "Whatever".into(),
                 slug: "whatever".into(),
                 field_clock_enabled: false,
+                mcp_enabled: None,
             })
             .await
             .unwrap_err();
@@ -769,6 +777,7 @@ mod tests {
                 name: "Acme Inc.".into(),
                 slug: "acme-inc".into(),
                 field_clock_enabled: false,
+                mcp_enabled: None,
             })
             .await
             .unwrap_err();
@@ -830,6 +839,7 @@ mod tests {
                 name: "Acme Inc.".into(),
                 slug: "acme-inc".into(),
                 field_clock_enabled: false,
+                mcp_enabled: None,
             })
             .await
             .unwrap_err();
@@ -1454,6 +1464,7 @@ mod tests {
                     invoice_number_prefix: "FAC".to_owned(),
                     field_clock_enabled: false,
                     vat_on_debits: false,
+                    mcp_enabled: false,
                     deleted_at: None,
                     created_at: now,
                     updated_at: now,
@@ -1528,6 +1539,7 @@ mod tests {
                     invoice_number_prefix: "FAC".to_owned(),
                     field_clock_enabled: false,
                     vat_on_debits: false,
+                    mcp_enabled: false,
                     deleted_at: None,
                     created_at: now,
                     updated_at: now,

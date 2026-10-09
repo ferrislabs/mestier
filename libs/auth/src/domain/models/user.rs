@@ -7,4 +7,6 @@ pub struct User {
     pub email: Option<String>,
     pub name: Option<String>,
     pub roles: Vec<String>,
+    #[serde(default)]
+    pub delegated: bool,
 }

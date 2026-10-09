@@ -16,6 +16,13 @@ impl Identity {
         }
     }
 
+    pub fn is_delegated(&self) -> bool {
+        match self {
+            Identity::User(u) => u.delegated,
+            Identity::Client(c) => c.delegated,
+        }
+    }
+
     pub fn is_user(&self) -> bool {
         matches!(self, Identity::User(_))
     }
@@ -45,12 +52,14 @@ impl Identity {
 
 impl From<Claims> for Identity {
     fn from(claims: Claims) -> Self {
+        let delegated = claims.extra.contains_key("act");
         if let Some(client_id) = claims.client_id {
             Identity::Client(Client {
                 id: claims.sub.0,
                 client_id,
                 roles: Vec::new(),
                 scopes: Vec::new(),
+                delegated,
             })
         } else {
             Identity::User(User {
@@ -58,6 +67,7 @@ impl From<Claims> for Identity {
                 email: claims.email,
                 name: claims.name,
                 roles: Vec::new(),
+                delegated,
                 username: claims.preferred_username.unwrap_or(claims.sub.0),
             })
         }
@@ -155,6 +165,23 @@ mod tests {
             }
             Identity::User(_) => panic!("Expected Client, got User"),
         }
+    }
+
+    #[test]
+    fn test_identity_is_delegated_only_with_act_claim() {
+        let plain: Identity = create_user_claims().into();
+        assert!(!plain.is_delegated());
+
+        let mut claims = create_user_claims();
+        claims
+            .extra
+            .insert("act".to_string(), json!({"sub": "mestier-mcp"}));
+        let delegated: Identity = claims.into();
+        assert!(delegated.is_delegated());
+
+        let mut service = create_service_account_claims();
+        service.extra.insert("act".to_string(), json!({}));
+        assert!(Identity::from(service).is_delegated());
     }
 
     #[test]

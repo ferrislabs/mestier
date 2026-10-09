@@ -43,6 +43,8 @@ async fn require_view_reports(
         return Err(ApiError::Forbidden);
     }
 
+    handlers::require_mcp_access(state, identity, organization_id).await?;
+
     let permissions = state
         .usecase
         .member_permissions(user.id, organization_id)

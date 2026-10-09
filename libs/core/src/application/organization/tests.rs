@@ -174,3 +174,182 @@ async fn backfill_grants_business_permissions_without_leaking_payroll_to_members
         .await
         .unwrap_or_else(|error| panic!("dropping {scratch_db} failed: {error}"));
 }
+
+mod mcp_enabled {
+    use common::{CoreError, OrganizationId, UserId, generate_uuid_v7};
+    use sqlx::PgPool;
+    use tokio::sync::OnceCell;
+    use uuid::Uuid;
+
+    use crate::{
+        UpdateOrganizationCommand,
+        application::{
+            MestierUseCase, default_authorizer, policy,
+            test_support::{purge, scratch_pool},
+        },
+        domain::role::Permissions,
+        infrastructure::realtime::EventHub,
+    };
+
+    static SCRATCH: OnceCell<String> = OnceCell::const_new();
+
+    struct Fixture {
+        organization_id: OrganizationId,
+        owner_id: Uuid,
+        plain_member_id: Uuid,
+    }
+
+    async fn seed_user(pool: &PgPool) -> Uuid {
+        let id = generate_uuid_v7();
+        sqlx::query(
+            "INSERT INTO users (id, email, username, display_name, sub) VALUES ($1, $2, $3, $4, $5)",
+        )
+        .bind(id)
+        .bind(format!("user-{id}@example.com"))
+        .bind(format!("user-{id}"))
+        .bind("Test User")
+        .bind(format!("sub-{id}"))
+        .execute(pool)
+        .await
+        .unwrap();
+        id
+    }
+
+    async fn seed_member(pool: &PgPool, organization_id: Uuid, user_id: Uuid, permissions: i64) {
+        let member_id = generate_uuid_v7();
+        sqlx::query(
+            "INSERT INTO organization_members (id, organization_id, user_id, last_name) VALUES ($1, $2, $3, $4)",
+        )
+        .bind(member_id)
+        .bind(organization_id)
+        .bind(user_id)
+        .bind("Member")
+        .execute(pool)
+        .await
+        .unwrap();
+        let role_id = generate_uuid_v7();
+        sqlx::query(
+            "INSERT INTO roles (id, organization_id, name, permissions) VALUES ($1, $2, $3, $4)",
+        )
+        .bind(role_id)
+        .bind(organization_id)
+        .bind(format!("role-{role_id}"))
+        .bind(permissions)
+        .execute(pool)
+        .await
+        .unwrap();
+        sqlx::query("INSERT INTO member_roles (id, member_id, role_id) VALUES ($1, $2, $3)")
+            .bind(generate_uuid_v7())
+            .bind(member_id)
+            .bind(role_id)
+            .execute(pool)
+            .await
+            .unwrap();
+    }
+
+    async fn seed(pool: &PgPool) -> Fixture {
+        let owner_id = seed_user(pool).await;
+        let plain_member_id = seed_user(pool).await;
+        let organization_id = generate_uuid_v7();
+        sqlx::query("INSERT INTO organizations (id, name, slug, owner_id) VALUES ($1, $2, $3, $4)")
+            .bind(organization_id)
+            .bind("Mcp Org")
+            .bind(format!("mcp-org-{organization_id}"))
+            .bind(owner_id)
+            .execute(pool)
+            .await
+            .unwrap();
+        seed_member(pool, organization_id, owner_id, Permissions::ALL.0).await;
+        seed_member(pool, organization_id, plain_member_id, Permissions::NONE.0).await;
+        Fixture {
+            organization_id: OrganizationId(organization_id),
+            owner_id,
+            plain_member_id,
+        }
+    }
+
+    async fn cleanup(pool: &PgPool, fixture: &Fixture) {
+        for statement in [
+            "DELETE FROM member_roles WHERE member_id IN (SELECT id FROM organization_members WHERE organization_id = $1)",
+            "DELETE FROM organization_members WHERE organization_id = $1",
+            "DELETE FROM roles WHERE organization_id = $1",
+            "DELETE FROM organizations WHERE id = $1",
+        ] {
+            purge(pool, statement, fixture.organization_id.0).await;
+        }
+        for user_id in [fixture.owner_id, fixture.plain_member_id] {
+            purge(pool, "DELETE FROM users WHERE id = $1", user_id).await;
+        }
+    }
+
+    fn command(
+        fixture: &Fixture,
+        user_id: Uuid,
+        mcp_enabled: Option<bool>,
+    ) -> UpdateOrganizationCommand {
+        UpdateOrganizationCommand {
+            actor: policy::user_subject(UserId(user_id), Vec::new()),
+            id: fixture.organization_id,
+            name: "Mcp Org".to_owned(),
+            slug: format!("mcp-org-{}", fixture.organization_id.0),
+            field_clock_enabled: false,
+            mcp_enabled,
+        }
+    }
+
+    #[tokio::test]
+    #[ignore = "needs DATABASE_URL"]
+    async fn spec_mcp_13_the_flag_defaults_to_false_and_toggles() {
+        let pool = scratch_pool("mestier_orgmcp_test_", &SCRATCH).await;
+        let usecase = MestierUseCase::new(pool.clone(), default_authorizer(), EventHub::new());
+        let fixture = seed(&pool).await;
+
+        let initial = usecase
+            .get_organization(fixture.organization_id)
+            .await
+            .unwrap();
+        assert!(!initial.mcp_enabled);
+
+        let enabled = usecase
+            .update_organization(command(&fixture, fixture.owner_id, Some(true)))
+            .await
+            .unwrap();
+        assert!(enabled.mcp_enabled);
+
+        let unchanged = usecase
+            .update_organization(command(&fixture, fixture.owner_id, None))
+            .await
+            .unwrap();
+        assert!(unchanged.mcp_enabled, "absent leaves the flag untouched");
+
+        let disabled = usecase
+            .update_organization(command(&fixture, fixture.owner_id, Some(false)))
+            .await
+            .unwrap();
+        assert!(!disabled.mcp_enabled);
+
+        cleanup(&pool, &fixture).await;
+    }
+
+    #[tokio::test]
+    #[ignore = "needs DATABASE_URL"]
+    async fn spec_mcp_13_a_member_without_manage_org_cannot_change_it() {
+        let pool = scratch_pool("mestier_orgmcp_test_", &SCRATCH).await;
+        let usecase = MestierUseCase::new(pool.clone(), default_authorizer(), EventHub::new());
+        let fixture = seed(&pool).await;
+
+        let err = usecase
+            .update_organization(command(&fixture, fixture.plain_member_id, Some(true)))
+            .await
+            .unwrap_err();
+        assert!(matches!(err, CoreError::Forbidden { .. }), "{err:?}");
+
+        let reloaded = usecase
+            .get_organization(fixture.organization_id)
+            .await
+            .unwrap();
+        assert!(!reloaded.mcp_enabled);
+
+        cleanup(&pool, &fixture).await;
+    }
+}

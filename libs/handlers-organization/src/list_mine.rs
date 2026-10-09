@@ -22,12 +22,14 @@ pub async fn handler(
     Extension(identity): Extension<Identity>,
 ) -> Result<Response<Vec<OrganizationResponse>>, ApiError> {
     let sub = identity.id();
+    let delegated = identity.is_delegated();
 
     let organizations = state
         .usecase
         .list_organizations_for_user(sub)
         .await?
         .into_iter()
+        .filter(|organization| !delegated || organization.mcp_enabled)
         .map(OrganizationResponse::from)
         .collect();
 

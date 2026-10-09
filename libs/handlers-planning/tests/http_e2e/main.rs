@@ -17,6 +17,7 @@
 mod doe;
 mod harness;
 mod issuer;
+mod mcp_access;
 mod work_time;
 
 use chrono::{Duration, Utc};

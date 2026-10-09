@@ -44,6 +44,8 @@ async fn require_org_membership(
         return Err(ApiError::Forbidden);
     }
 
+    handlers::require_mcp_access(state, identity, organization_id).await?;
+
     Ok(user)
 }
 

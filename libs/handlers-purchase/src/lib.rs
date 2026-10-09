@@ -16,7 +16,7 @@ use auth::Identity;
 use axum::{Router, middleware::from_fn_with_state};
 use axum_extra::routing::RouterExt;
 use handlers::{ApiError, AppState, auth::auth_middleware, rate_limit::rate_limit_middleware};
-use mestier_core::{OrganizationId, Project, ProjectId, SupplierInvoice, SupplierInvoiceLine};
+use mestier_core::{Project, ProjectId, SupplierInvoice, SupplierInvoiceLine};
 
 pub mod allocation;
 pub mod paths;
@@ -26,29 +26,7 @@ pub mod supplier_invoice;
 
 pub const TAG: &str = "purchasing";
 
-/// Each handler crate defines its own copy of this check rather than
-/// sharing one — see `handlers-invoice`'s identical comment.
-async fn require_org_membership(
-    state: &AppState,
-    identity: &Identity,
-    organization_id: OrganizationId,
-) -> Result<(), ApiError> {
-    let user = state
-        .usecase
-        .find_user_by_sub(identity.id())
-        .await?
-        .ok_or(ApiError::Forbidden)?;
-    let membership = state
-        .usecase
-        .find_membership(organization_id, user.id)
-        .await?;
-
-    if membership.is_none() {
-        return Err(ApiError::Forbidden);
-    }
-
-    Ok(())
-}
+pub use handlers::membership::require_org_membership;
 
 /// Loads the invoice, then checks membership against the loaded row's own
 /// `organization_id` — never against anything in the path, since every

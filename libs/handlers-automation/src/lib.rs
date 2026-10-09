@@ -44,6 +44,8 @@ async fn require_view_automation(
         return Err(ApiError::Forbidden);
     }
 
+    handlers::require_mcp_access(state, identity, organization_id).await?;
+
     let permissions = state
         .usecase
         .member_permissions(user.id, organization_id)
@@ -80,6 +82,8 @@ async fn require_manage_automation(
     {
         return Err(ApiError::Forbidden);
     }
+
+    handlers::require_mcp_access(state, identity, organization_id).await?;
 
     let permissions = state
         .usecase

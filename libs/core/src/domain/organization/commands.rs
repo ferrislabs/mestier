@@ -26,6 +26,7 @@ pub struct UpdateOrganizationCommand {
     /// double-Option: this command mirrors `name`/`slug` in always being a
     /// full replace, echoed by the caller on every save.
     pub field_clock_enabled: bool,
+    pub mcp_enabled: Option<bool>,
 }
 
 /// Replaces the whole legal-identity block in one call: the settings

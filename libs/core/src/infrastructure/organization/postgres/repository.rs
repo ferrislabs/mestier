@@ -46,9 +46,10 @@ impl<'tx> OrganizationRepository for PgOrganizationRepository<'tx> {
                 contact_email, contact_phone, insurance_mention,
                 field_clock_enabled,
                 vat_on_debits,
+                mcp_enabled,
                 deleted_at, created_at, updated_at
             )
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25)
             RETURNING
                 id, name, slug, owner_id,
                 legal_name, legal_form, registration_number,
@@ -60,6 +61,7 @@ impl<'tx> OrganizationRepository for PgOrganizationRepository<'tx> {
                 invoice_number_prefix,
                 field_clock_enabled,
                 vat_on_debits,
+                mcp_enabled,
                 deleted_at, created_at, updated_at
             "#,
             organization.id.0,
@@ -83,6 +85,7 @@ impl<'tx> OrganizationRepository for PgOrganizationRepository<'tx> {
             organization.insurance_mention,
             organization.field_clock_enabled,
             organization.vat_on_debits,
+            organization.mcp_enabled,
             organization.deleted_at,
             organization.created_at,
             organization.updated_at,
@@ -110,6 +113,7 @@ impl<'tx> OrganizationRepository for PgOrganizationRepository<'tx> {
                 invoice_number_prefix,
                 field_clock_enabled,
                 vat_on_debits,
+                mcp_enabled,
                 deleted_at, created_at, updated_at
             FROM organizations
             WHERE id = $1 AND deleted_at IS NULL
@@ -154,6 +158,7 @@ impl<'tx> OrganizationRepository for PgOrganizationRepository<'tx> {
                 o.invoice_number_prefix,
                 o.field_clock_enabled,
                 o.vat_on_debits,
+                o.mcp_enabled,
                 o.deleted_at, o.created_at, o.updated_at
             FROM organizations o
             INNER JOIN organization_members m ON m.organization_id = o.id
@@ -191,6 +196,7 @@ impl<'tx> OrganizationRepository for PgOrganizationRepository<'tx> {
                 invoice_number_prefix,
                 field_clock_enabled,
                 vat_on_debits,
+                mcp_enabled,
                 deleted_at, created_at, updated_at
             FROM organizations
             WHERE deleted_at IS NULL
@@ -247,7 +253,8 @@ impl<'tx> OrganizationRepository for PgOrganizationRepository<'tx> {
                 insurance_mention = $18,
                 field_clock_enabled = $19,
                 vat_on_debits = $20,
-                updated_at = $21
+                mcp_enabled = $21,
+                updated_at = $22
             WHERE id = $1 AND deleted_at IS NULL
             RETURNING
                 id, name, slug, owner_id,
@@ -260,6 +267,7 @@ impl<'tx> OrganizationRepository for PgOrganizationRepository<'tx> {
                 invoice_number_prefix,
                 field_clock_enabled,
                 vat_on_debits,
+                mcp_enabled,
                 deleted_at, created_at, updated_at
             "#,
             organization.id.0,
@@ -282,6 +290,7 @@ impl<'tx> OrganizationRepository for PgOrganizationRepository<'tx> {
             organization.insurance_mention,
             organization.field_clock_enabled,
             organization.vat_on_debits,
+            organization.mcp_enabled,
             organization.updated_at,
         )
         .fetch_optional(&mut ***tx)
