@@ -18,6 +18,7 @@ Un utilisateur Mestier colle l'URL du serveur MCP dans son client LLM (ChatGPT w
   4. Gateway et serveur MCP vivent dans le dépôt Mestier pour l'instant.
   5. Outils v1 : lecture sur projets, DOE, catalogue, devis, factures ; écriture DOE seulement ; ni suppression ni émission de facture.
   6. Un connecteur, un compte, toutes les organisations de l'utilisateur : chaque outil est scopé par organisation.
+  7. Chaque organisation autorise ou non l'usage du MCP par ses membres (interrupteur dans Paramètres › Organisation, désactivé par défaut, modifiable avec `MANAGE_ORG`).
 
 ### Faits vérifiés
 
@@ -50,6 +51,7 @@ Un utilisateur Mestier colle l'URL du serveur MCP dans son client LLM (ChatGPT w
 6. Le catalogue d'outils est fermé : un nom inconnu est refusé par la gateway avant le PDP. [type : enum `Tool` côté gateway, `FromStr`]
 7. Aucun outil de suppression ni d'émission de facture n'existe en v1, et la politique Cerbos refuse toute action d'écriture hors DOE. [type : absence dans l'enum ; test : politique Cerbos]
 8. Le serveur MCP n'accepte que le trafic de la gateway. [déploiement : réseau privé ; test : le serveur refuse un appel sans token délégué valide]
+10. Une organisation qui n'a pas activé le MCP est inaccessible par un token délégué : l'API refuse (403) tout appel portant le claim `act` de la gateway sur cette organisation, et ne la liste pas. [test : intégration API ; e2e @spec-mcp-12]
 9. Les tokens délégués en cache ne servent qu'au couple (utilisateur, client LLM) qui les a obtenus et expirent avant leur `exp`. [test : unitaires cache]
 
 ## Out of scope
@@ -72,6 +74,8 @@ Un utilisateur Mestier colle l'URL du serveur MCP dans son client LLM (ChatGPT w
 
 ### Organisation
 
+- Interrupteur `mcp_enabled` sur l'organisation (colonne `organizations.mcp_enabled BOOLEAN NOT NULL DEFAULT false`, migration réversible). Lu par l'API, jamais par la gateway ni le PDP : la donnée vit là où elle est administrée.
+- L'API reconnaît un appel MCP au claim `act` du token délégué dont le `client_id` (ou `sub`) est le client de la gateway (configuré : `AUTH_MCP_GATEWAY_CLIENT_ID`). Sur une telle requête : organisation sans `mcp_enabled` → 403 « l'accès par IA est désactivé pour cette organisation » ; liste des organisations de l'utilisateur filtrée.
 - Outil `list_organizations` (lecture) ; tous les autres prennent `organization` (slug). Facultatif quand l'utilisateur n'a qu'une organisation : le serveur MCP la résout. Sinon, erreur qui liste les slugs possibles.
 - Le PDP reçoit l'organisation dans la ressource AuthZEN ; l'API reste juge de l'appartenance (invariant 5).
 
@@ -170,6 +174,19 @@ Politique Cerbos v1 : tout outil `read` autorisé avec le scope `mestier.read` ;
   When le client appelle export_doe_pdf sur un DOE existant
   Then il reçoit une ressource application/pdf qui commence par %PDF
 
+@spec-mcp-12 Scenario: organisation qui n'a pas activé le MCP
+  Given un utilisateur membre de A (MCP activé) et de B (MCP désactivé, valeur par défaut)
+  When le client appelle list_organizations puis list_does pour B
+  Then list_organizations ne renvoie que A
+  And list_does pour B renvoie une erreur indiquant que l'accès par IA est désactivé
+  And le même utilisateur garde l'accès à B depuis le webapp
+
+@spec-mcp-13 Scenario: réglage de l'organisation
+  Given un membre avec MANAGE_ORG
+  When il active « Autoriser l'accès par IA (MCP) » dans Paramètres › Organisation
+  Then l'organisation devient accessible par MCP
+  And un membre sans MANAGE_ORG ne voit pas l'interrupteur modifiable et l'API lui refuse la modification (403)
+
 @spec-mcp-11 Scenario: ChatGPT
   Given le serveur exposé sur une URL publique de test
   When on ajoute l'URL comme connecteur dans ChatGPT
@@ -189,10 +206,11 @@ Non. Pas d'état concurrent propre : le cache de tokens délégués est testé e
 | W2 | Gateway : métadonnées RFC 9728, 401, validation JWT, identification de l'outil, PEP AuthZEN, échange de token + cache, proxy | W0 | mestier |
 | W3 | Serveur MCP : `rmcp`, outils v1, client API Mestier, scoping organisation | W0 | mestier |
 | W4 | Politiques Cerbos + tests | W0 | mestier |
-| W5 | API Mestier : vérification d'audience sans casser le webapp | — | mestier |
+| W5 | API Mestier : vérification d'audience sans casser le webapp ; `mcp_enabled` (migration, réglage, refus 403 et filtrage sur token délégué) | — | mestier |
+| W7 | Webapp : interrupteur MCP dans Paramètres › Organisation | W5 + client API régénéré | mestier |
 | W6 | Bout en bout : realm FerrisKey local configuré, e2e @spec-mcp-1 à 10, recette ChatGPT @spec-mcp-11 | W1 à W5 | mestier |
 
-W1, W2, W3, W4, W5 partent ensemble après W0. W6 en dernier.
+W1, W2, W3, W4, W5 partent ensemble après W0. W7 dès W5 intégré. W6 en dernier.
 
 Fichiers : W2 possède `apps/mcp-gateway/**` hors `Cargo.toml` et `main.rs` ; W3 `apps/mcp-server/**` idem ; W4 `deploy/cerbos/**` ; W5 `libs/auth/**` et la ligne de construction dans `libs/core/src/application/mod.rs` (signalée). Orchestrateur : `Cargo.toml` (workspace et crates), `docker-compose.yml`, `apps/*/src/main.rs`, `apps/mcp-gateway/src/tool.rs` (catalogue figé), `libs/args/**`, docs. Régénérés : `Cargo.lock`, `.sqlx/` (W5 n'en a normalement pas besoin).
 
@@ -239,8 +257,10 @@ docker compose run --rm cerbos compile /policies          # tests de politiques
 | W4 | pending |
 | W5 | pending |
 | W6 | pending |
+| W7 | pending |
 
 ## Decision log
 
 - 2026-10-09 : Cerbos plutôt qu'OPA comme PDP provisoire : AuthZEN 1.0 natif (≥ 0.48), politiques YAML lisibles. OPA demande Rego et une couche AuthZEN à part.
+- 2026-10-09 : l'autorisation du MCP par organisation est appliquée par l'API Mestier, pas par la gateway ni Cerbos. Rejeté : passer `mcp_enabled` au PDP, qui obligerait la gateway à lire la configuration des organisations. Désactivé par défaut : une organisation choisit d'ouvrir l'accès.
 - 2026-10-09 : la politique v1 ne recopie pas les rôles Mestier. Elle décide sur l'outil, son accès et les scopes ; l'API reste juge des droits métier. Rejeté : alimenter Cerbos avec les permissions Mestier, qui dupliquerait la source de vérité.
