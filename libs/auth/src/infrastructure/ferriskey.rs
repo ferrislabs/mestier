@@ -6,7 +6,7 @@ use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use tracing::{info, warn};
 
-use crate::{AuthError, Claims, Identity, domain::ports::AuthRepository};
+use crate::{AcceptedAudience, AuthError, Claims, Identity, domain::ports::AuthRepository};
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Jwks {
@@ -24,15 +24,15 @@ pub struct Jwk {
 pub struct FerrisKeyRepository {
     pub http: Arc<Client>,
     pub issuer: String,
-    pub audience: Option<String>,
+    pub accepted: AcceptedAudience,
 }
 
 impl FerrisKeyRepository {
-    pub fn new(issuer: impl Into<String>, audience: Option<String>) -> Self {
+    pub fn new(issuer: impl Into<String>, accepted: AcceptedAudience) -> Self {
         Self {
             http: Arc::new(Client::new()),
             issuer: issuer.into(),
-            audience,
+            accepted,
         }
     }
 
@@ -132,6 +132,13 @@ impl AuthRepository for FerrisKeyRepository {
             return Err(AuthError::Expired);
         }
 
+        if !self.accepted.accepts(&claims) {
+            warn!("token audience is not accepted by this API");
+            return Err(AuthError::InvalidToken {
+                message: "token audience is not accepted by this API".into(),
+            });
+        }
+
         Ok(claims)
     }
 }
@@ -148,7 +155,9 @@ mod tests {
     use chrono::Utc;
     use jsonwebtoken::{Algorithm, EncodingKey, Header, encode};
 
-    use crate::{Audience, AuthError, Claims, Subject, domain::ports::AuthRepository};
+    use crate::{
+        AcceptedAudience, Audience, AuthError, Claims, Subject, domain::ports::AuthRepository,
+    };
 
     use super::FerrisKeyRepository;
 
@@ -221,6 +230,10 @@ HUim3t4M1KMtX1QmMKKCg4i4
         format!(r#"{{"keys":[{{"kid":"{kid}","n":"{n}","e":"{e}"}}]}}"#)
     }
 
+    fn accepted() -> AcceptedAudience {
+        AcceptedAudience::new("ferriscord-api", Vec::new())
+    }
+
     fn build_signed_token(exp: i64, client_id: Option<String>) -> String {
         let mut header = Header::new(Algorithm::RS256);
         header.kid = Some(TEST_KID.to_string());
@@ -249,18 +262,15 @@ HUim3t4M1KMtX1QmMKKCg4i4
 
     #[tokio::test]
     async fn test_new_sets_issuer_and_audience() {
-        let repo = FerrisKeyRepository::new(
-            "https://auth.ferriscord.com",
-            Some("ferriscord-api".to_string()),
-        );
+        let repo = FerrisKeyRepository::new("https://auth.ferriscord.com", accepted());
 
         assert_eq!(repo.issuer, "https://auth.ferriscord.com");
-        assert_eq!(repo.audience, Some("ferriscord-api".to_string()));
+        assert_eq!(repo.accepted, accepted());
     }
 
     #[tokio::test]
     async fn test_validate_token_returns_invalid_token_for_bad_format() {
-        let repo = FerrisKeyRepository::new("http://localhost:65530", None);
+        let repo = FerrisKeyRepository::new("http://localhost:65530", accepted());
 
         let err = repo
             .validate_token("not-a-jwt")
@@ -272,7 +282,7 @@ HUim3t4M1KMtX1QmMKKCg4i4
 
     #[tokio::test]
     async fn test_validate_token_returns_invalid_token_when_kid_is_missing() {
-        let repo = FerrisKeyRepository::new("http://localhost:65530", None);
+        let repo = FerrisKeyRepository::new("http://localhost:65530", accepted());
         let token = build_token_with_header(r#"{"alg":"RS256","typ":"JWT"}"#);
 
         let err = repo
@@ -288,7 +298,7 @@ HUim3t4M1KMtX1QmMKKCg4i4
 
     #[tokio::test]
     async fn test_validate_token_returns_network_error_when_jwks_fails() {
-        let repo = FerrisKeyRepository::new("http://no-such-issuer.invalid", None);
+        let repo = FerrisKeyRepository::new("http://no-such-issuer.invalid", accepted());
         let token = build_token_with_header(r#"{"alg":"RS256","typ":"JWT","kid":"test-kid"}"#);
 
         let err = repo
@@ -305,7 +315,7 @@ HUim3t4M1KMtX1QmMKKCg4i4
     #[tokio::test]
     async fn test_fetch_jwks_returns_network_error_for_http_status_error() {
         let issuer = start_server_with_response("500 Internal Server Error", r#"{"keys":[]}"#);
-        let repo = FerrisKeyRepository::new(issuer, None);
+        let repo = FerrisKeyRepository::new(issuer, accepted());
 
         let err = repo.fetch_jwks().await.expect_err("expected network error");
 
@@ -320,7 +330,7 @@ HUim3t4M1KMtX1QmMKKCg4i4
     #[tokio::test]
     async fn test_fetch_jwks_returns_network_error_for_invalid_json() {
         let issuer = start_server_with_response("200 OK", "not-json");
-        let repo = FerrisKeyRepository::new(issuer, None);
+        let repo = FerrisKeyRepository::new(issuer, accepted());
 
         let err = repo.fetch_jwks().await.expect_err("expected network error");
 
@@ -331,7 +341,7 @@ HUim3t4M1KMtX1QmMKKCg4i4
     async fn test_validate_token_returns_key_not_found_when_kid_not_in_jwks() {
         let issuer =
             start_server_with_response("200 OK", &build_jwks_json("other-kid", TEST_N, TEST_E));
-        let repo = FerrisKeyRepository::new(issuer, None);
+        let repo = FerrisKeyRepository::new(issuer, accepted());
         let token = build_token_with_header(r#"{"alg":"RS256","typ":"JWT","kid":"wanted-kid"}"#);
 
         let err = repo
@@ -349,7 +359,7 @@ HUim3t4M1KMtX1QmMKKCg4i4
     async fn test_validate_token_returns_internal_for_invalid_rsa_components() {
         let issuer =
             start_server_with_response("200 OK", &build_jwks_json(TEST_KID, "!!!", TEST_E));
-        let repo = FerrisKeyRepository::new(issuer, None);
+        let repo = FerrisKeyRepository::new(issuer, accepted());
         let token = build_token_with_header(r#"{"alg":"RS256","typ":"JWT","kid":"test-kid"}"#);
 
         let err = repo
@@ -364,7 +374,7 @@ HUim3t4M1KMtX1QmMKKCg4i4
     async fn test_validate_token_returns_expired_for_past_exp() {
         let issuer =
             start_server_with_response("200 OK", &build_jwks_json(TEST_KID, TEST_N, TEST_E));
-        let repo = FerrisKeyRepository::new(issuer, None);
+        let repo = FerrisKeyRepository::new(issuer, accepted());
         let token = build_signed_token(Utc::now().timestamp() - 120, None);
 
         let err = repo
@@ -376,10 +386,28 @@ HUim3t4M1KMtX1QmMKKCg4i4
     }
 
     #[tokio::test]
+    async fn test_validate_token_refuses_a_token_for_another_audience() {
+        let issuer =
+            start_server_with_response("200 OK", &build_jwks_json(TEST_KID, TEST_N, TEST_E));
+        let repo = FerrisKeyRepository::new(
+            issuer,
+            AcceptedAudience::new("mestier-api", vec!["mestier".to_owned()]),
+        );
+        let token = build_signed_token(Utc::now().timestamp() + 120, None);
+
+        let err = repo
+            .validate_token(&token)
+            .await
+            .expect_err("a ferriscord-api token must not pass");
+
+        assert!(matches!(err, AuthError::InvalidToken { .. }));
+    }
+
+    #[tokio::test]
     async fn test_validate_token_returns_claims_for_valid_token() {
         let issuer =
             start_server_with_response("200 OK", &build_jwks_json(TEST_KID, TEST_N, TEST_E));
-        let repo = FerrisKeyRepository::new(issuer, None);
+        let repo = FerrisKeyRepository::new(issuer, accepted());
         let token = build_signed_token(Utc::now().timestamp() + 120, None);
 
         let claims = repo
@@ -395,7 +423,7 @@ HUim3t4M1KMtX1QmMKKCg4i4
     async fn test_identity_returns_identity_from_valid_token() {
         let issuer =
             start_server_with_response("200 OK", &build_jwks_json(TEST_KID, TEST_N, TEST_E));
-        let repo = FerrisKeyRepository::new(issuer, None);
+        let repo = FerrisKeyRepository::new(issuer, accepted());
         let token = build_signed_token(
             Utc::now().timestamp() + 120,
             Some("ferriscord-bot".to_string()),

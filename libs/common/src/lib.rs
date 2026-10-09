@@ -44,6 +44,11 @@ pub struct DatabaseConfig {
 #[derive(Clone, Debug)]
 pub struct AuthConfig {
     pub issuer: String,
+    /// The audience a token must name to be for the API.
+    pub audience: String,
+    /// Mestier's own OAuth clients, whose tokens are accepted without the
+    /// API audience (the webapp).
+    pub trusted_clients: Vec<String>,
 }
 
 #[derive(Clone, Debug)]

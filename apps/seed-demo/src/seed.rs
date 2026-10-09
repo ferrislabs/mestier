@@ -415,6 +415,8 @@ mod tests {
                 issuer: "https://iam.example.com/realms/mestier".to_owned(),
                 client_id: "mestier".to_owned(),
                 client_secret: "unused".to_owned(),
+                audience: "mestier-api".to_owned(),
+                trusted_clients: Vec::new(),
             },
         };
 
