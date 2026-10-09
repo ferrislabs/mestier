@@ -223,7 +223,7 @@ Fichiers : W2 possède `apps/mcp-gateway/**`, son `Cargo.toml` compris ; W3 `app
 - Contrat gateway → serveur : `POST /mcp` interne, corps JSON-RPC inchangé, `Authorization: Bearer <token délégué>`, `X-Mestier-Mcp-Client: <client_id LLM>` (journalisation seulement).
 - Requête AuthZEN telle que ci-dessus.
 - Scopes : `mestier.read`, `mestier.doe.write`.
-- `subject.properties.roles` vaut toujours `["user"]` en v1 (Cerbos exige un rôle de principal) ; les décisions portent sur les attributs, pas sur le rôle.
+- Le rôle du principal Cerbos vient de `subject.type` (observé sur Cerbos 0.56.0) : la gateway envoie toujours `"type": "user"` et la politique exige ce rôle. `subject.properties.roles` est ignoré par Cerbos (simple attribut), gardé pour un futur PDP. Les décisions portent sur les attributs.
 - Branche `feat/mcp` posée sur `feat/doe-backend` (#538) : le serveur MCP appelle les routes du DOE.
 
 ## Risks / open questions
@@ -257,13 +257,15 @@ docker compose run --rm cerbos compile /policies          # tests de politiques
 | W1 | pending |
 | W2 | pending |
 | W3 | pending |
-| W4 | pending |
+| W4 | intégré |
 | W5a | pending |
 | W5b | pending |
 | W6 | pending |
 | W7 | pending |
 
 ## Decision log
+
+- 2026-10-09 : W4, Cerbos `ghcr.io/cerbos/cerbos:0.56.0`, AuthZEN actif par défaut sur `:3592/access/v1/evaluation`, réponse `{"decision": bool}`. Correspondance AuthZEN → Cerbos relevée par essais (absente de la doc) : `subject.type` = rôle, `properties` = `attr`, `resource.type` = kind.
 
 - 2026-10-09 : Cerbos plutôt qu'OPA comme PDP provisoire : AuthZEN 1.0 natif (≥ 0.48), politiques YAML lisibles. OPA demande Rego et une couche AuthZEN à part.
 - 2026-10-09 : l'autorisation du MCP par organisation est appliquée par l'API Mestier, pas par la gateway ni Cerbos. Rejeté : passer `mcp_enabled` au PDP, qui obligerait la gateway à lire la configuration des organisations. Désactivé par défaut : une organisation choisit d'ouvrir l'accès.
