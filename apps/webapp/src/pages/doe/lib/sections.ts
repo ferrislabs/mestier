@@ -67,6 +67,24 @@ export function newSection(
 	}
 }
 
+const IDENTIFICATION_PREFIX =
+	/^identification\s+(des|du|de\s+la|de\s+l['’]|de)\s*/i
+
+/**
+ * A tab label for a section. Every supplies theme starts with
+ * "Identification des…", which says nothing once five of them sit side by
+ * side, so the prefix goes and what is left is what tells them apart.
+ */
+export function tabLabel(title: string, max = 28): string {
+	const trimmed = title.trim()
+	const stripped = trimmed.replace(IDENTIFICATION_PREFIX, '')
+	const label =
+		stripped.length > 0
+			? stripped.charAt(0).toUpperCase() + stripped.slice(1)
+			: trimmed
+	return shortTitle(label, max)
+}
+
 export function shortTitle(title: string, max = 18): string {
 	const trimmed = title.trim()
 	if (trimmed.length <= max) return trimmed

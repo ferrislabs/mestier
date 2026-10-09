@@ -2,7 +2,7 @@ import { AlertCircle } from 'lucide-react'
 import { Badge } from '#/components/ui/badge'
 import { PageShell } from '#/components/ui/surface'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '#/components/ui/tabs'
-import { enabledNumberedSections, shortTitle } from '#/pages/doe/lib/sections'
+import { enabledNumberedSections, tabLabel } from '#/pages/doe/lib/sections'
 import type { DoeForm } from '#/pages/doe/types'
 import { DoeHeader } from '#/pages/doe/ui/doe-header'
 import { DoeInfoTab } from '#/pages/doe/ui/doe-info-tab'
@@ -58,12 +58,24 @@ export function DoeEditorUI({
 				</div>
 			) : null}
 			<Tabs value={activeTab} onValueChange={onTabChange}>
-				<TabsList variant="line" className="h-auto flex-wrap justify-start">
-					<TabsTrigger value={INFO_TAB}>Informations</TabsTrigger>
-					<TabsTrigger value={PLAN_TAB}>Plan du DOE</TabsTrigger>
+				<TabsList
+					variant="line"
+					className="h-auto w-full justify-start overflow-x-auto overflow-y-hidden pb-2"
+				>
+					<TabsTrigger value={INFO_TAB} className="flex-none">
+						Informations
+					</TabsTrigger>
+					<TabsTrigger value={PLAN_TAB} className="flex-none">
+						Plan du DOE
+					</TabsTrigger>
 					{enabled.map(({ section, number }) => (
-						<TabsTrigger key={section.id} value={section.id}>
-							{number}. {shortTitle(section.title)}
+						<TabsTrigger
+							key={section.id}
+							value={section.id}
+							title={`${number}. ${section.title}`}
+							className="flex-none"
+						>
+							{number}. {tabLabel(section.title)}
 							<Badge variant="secondary">{sectionItemCount(section)}</Badge>
 						</TabsTrigger>
 					))}

@@ -9,6 +9,7 @@ import {
 	suppliesOf,
 	supplyBadgeCounts,
 	supplyNumber,
+	tabLabel,
 	upsertSupply,
 	withSupplies,
 } from '#/pages/doe/lib/sections'
@@ -157,5 +158,22 @@ describe('isSectionEmpty', () => {
 		}
 		expect(isSectionEmpty(photos)).toBe(false)
 		expect(isSectionEmpty(newSection('c', 'Notes', 'blank_pages'))).toBe(true)
+	})
+})
+
+describe('tabLabel', () => {
+	it('drops the identification prefix every supplies theme shares', () => {
+		expect(tabLabel('Identification des végétaux')).toBe('Végétaux')
+		expect(tabLabel('Identification des matériaux')).toBe('Matériaux')
+		expect(tabLabel('Identification du mobilier')).toBe('Mobilier')
+		expect(tabLabel("Identification de l'arrosage")).toBe('Arrosage')
+		expect(tabLabel('Identification de la clôture')).toBe('Clôture')
+	})
+
+	it('keeps other titles whole up to the limit', () => {
+		expect(tabLabel('Photos générales du chantier')).toBe(
+			'Photos générales du chantier',
+		)
+		expect(tabLabel('Identification')).toBe('Identification')
 	})
 })
