@@ -1,6 +1,6 @@
 # MCP : Mestier dans ChatGPT et les autres LLM
 
-État : **spec proposée le 2026-10-09, découpage en attente de validation**.
+État : **W0 intégré le 2026-10-09 ; W5a en PR #540 ; W1 confié à un agent FerrisKey par l'utilisateur ; W2, W3, W4 en cours**.
 
 ## Goal
 
@@ -83,7 +83,7 @@ Un utilisateur Mestier colle l'URL du serveur MCP dans son client LLM (ChatGPT w
 
 ```json
 {
-  "subject":  { "type": "user", "id": "<sub>", "properties": { "client_id": "<client LLM>", "scopes": ["mestier.read"] } },
+  "subject":  { "type": "user", "id": "<sub>", "properties": { "roles": ["user"], "client_id": "<client LLM>", "scopes": ["mestier.read"] } },
   "action":   { "name": "<outil>" },
   "resource": { "type": "mcp_tool", "id": "<outil>", "properties": { "access": "read|write", "domain": "doe|project|...", "organization": "<slug|null>" } },
   "context":  {}
@@ -213,16 +213,18 @@ Non. Pas d'état concurrent propre : le cache de tokens délégués est testé e
 
 W1, W2, W3, W4, W5 partent ensemble après W0. W7 dès W5b intégré. W6 en dernier.
 
-Fichiers : W2 possède `apps/mcp-gateway/**` hors `Cargo.toml` et `main.rs` ; W3 `apps/mcp-server/**` idem ; W4 `deploy/cerbos/**` ; W5 `libs/auth/**` et la ligne de construction dans `libs/core/src/application/mod.rs` (signalée). Orchestrateur : `Cargo.toml` (workspace et crates), `docker-compose.yml`, `apps/*/src/main.rs`, `apps/mcp-gateway/src/tool.rs` (catalogue figé), `libs/args/**`, docs. Régénérés : `Cargo.lock`, `.sqlx/` (W5 n'en a normalement pas besoin).
+Fichiers : W2 possède `apps/mcp-gateway/**`, son `Cargo.toml` compris ; W3 `apps/mcp-server/**` idem ; W4 `deploy/cerbos/**` et le service `cerbos` de `docker-compose.yml` ; W5 `libs/auth/**` et la ligne de construction dans `libs/core/src/application/mod.rs` (signalée). Orchestrateur : `Cargo.toml` du workspace, `libs/mcp-tools/**` (catalogue figé), `libs/args/**`, docs. Régénérés : `Cargo.lock`, `.sqlx/` (W5 n'en a normalement pas besoin).
 
 ## Frozen contracts
 
-Écrits en W0 dans `apps/mcp-gateway/src/tool.rs` et `apps/mcp-server/src/contract.rs` :
+Écrits en W0 dans `libs/mcp-tools/src/lib.rs`, partagé par la gateway et le serveur :
 
-- `enum Tool` (les 16 outils ci-dessus), `fn access(&self) -> Access { Read, Write }`, `fn domain(&self) -> &'static str`, `FromStr` (nom MCP exact).
+- `enum Tool` (les 16 outils ci-dessus), `name()`, `access() -> Access { Read, Write }`, `domain()`, `is_organization_scoped()`, `FromStr` (nom MCP exact, sinon `UnknownTool`), constantes `SCOPE_READ`, `SCOPE_DOE_WRITE`, `CLIENT_HEADER`.
 - Contrat gateway → serveur : `POST /mcp` interne, corps JSON-RPC inchangé, `Authorization: Bearer <token délégué>`, `X-Mestier-Mcp-Client: <client_id LLM>` (journalisation seulement).
 - Requête AuthZEN telle que ci-dessus.
 - Scopes : `mestier.read`, `mestier.doe.write`.
+- `subject.properties.roles` vaut toujours `["user"]` en v1 (Cerbos exige un rôle de principal) ; les décisions portent sur les attributs, pas sur le rôle.
+- Branche `feat/mcp` posée sur `feat/doe-backend` (#538) : le serveur MCP appelle les routes du DOE.
 
 ## Risks / open questions
 
@@ -251,7 +253,7 @@ docker compose run --rm cerbos compile /policies          # tests de politiques
 
 | Lot | État |
 |---|---|
-| W0 | en attente de validation |
+| W0 | intégré |
 | W1 | pending |
 | W2 | pending |
 | W3 | pending |

@@ -1,0 +1,9 @@
+[package]
+name = "mcp-gateway"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+
+[dependencies]
+mcp-tools = { workspace = true }
+tokio = { workspace = true }
