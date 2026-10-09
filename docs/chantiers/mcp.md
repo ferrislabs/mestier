@@ -256,7 +256,7 @@ docker compose run --rm cerbos compile /policies          # tests de politiques
 | W0 | intégré |
 | W1 | pending |
 | W2 | intégré |
-| W3 | pending |
+| W3 | intégré |
 | W4 | intégré |
 | W5a | pending |
 | W5b | pending |
@@ -264,6 +264,8 @@ docker compose run --rm cerbos compile /policies          # tests de politiques
 | W7 | pending |
 
 ## Decision log
+
+- 2026-10-09 : W3, `rmcp =3.5.1` (tire `async-trait` en transitif, notre code n'en utilise pas), serveur sans session (`NeverSessionManager`, réponses JSON). `get_product`, `get_quote`, `get_invoice` passent par des routes non scopées par organisation : W5b doit appliquer le refus `mcp_enabled` aussi quand l'API retrouve l'organisation par la ressource.
 
 - 2026-10-09 : W2, la gateway lit l'outil dans le corps JSON-RPC, jamais dans les en-têtes `Mcp-Method` / `Mcp-Name` de la spec 2026-07-28 : un en-tête fourni par le client pourrait différer du corps exécuté et contourner le PDP. Les en-têtes `mcp-*` sont transmis pour que le serveur les confronte au corps. Lots JSON-RPC : chaque `tools/call` est évalué, un refus refuse le lot. Le délégué porte `act` via un `actor_token` client-credentials de la gateway (à confirmer contre FerrisKey en W6).
 
