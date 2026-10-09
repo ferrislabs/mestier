@@ -1,5 +1,5 @@
 import type { ColumnDef } from '@tanstack/react-table'
-import { FileText, Loader2, Plus, Sparkles } from 'lucide-react'
+import { FilePlus2, FileText, Loader2, Plus, Sparkles } from 'lucide-react'
 import { useMemo } from 'react'
 import {
 	ReferenceTable,
@@ -28,6 +28,7 @@ interface DoeModelsListProps {
 	onCreate: () => void
 	onOpenStarters: () => void
 	onEdit: (model: DoeModel) => void
+	onCreateDoe: (model: DoeModel) => void
 	onArchive: (model: DoeModel) => void
 	onRestore: (model: DoeModel) => void
 }
@@ -42,6 +43,7 @@ export function DoeModelsList({
 	onCreate,
 	onOpenStarters,
 	onEdit,
+	onCreateDoe,
 	onArchive,
 	onRestore,
 }: DoeModelsListProps) {
@@ -97,19 +99,31 @@ export function DoeModelsList({
 							</RequirePermission>
 						</div>
 					) : (
-						<RowActions
-							permission="MANAGE_REFERENCE"
-							isEditing={false}
-							isSaving={false}
-							onEdit={() => onEdit(row.original)}
-							onCancel={() => {}}
-							onSave={() => {}}
-							onDelete={() => onArchive(row.original)}
-						/>
+						<div className="flex items-center justify-end gap-2">
+							<RequirePermission permission="MANAGE_PLANNING">
+								<Button
+									variant="outline"
+									size="sm"
+									onClick={() => onCreateDoe(row.original)}
+								>
+									<FilePlus2 />
+									Créer un DOE avec ce modèle
+								</Button>
+							</RequirePermission>
+							<RowActions
+								permission="MANAGE_REFERENCE"
+								isEditing={false}
+								isSaving={false}
+								onEdit={() => onEdit(row.original)}
+								onCancel={() => {}}
+								onSave={() => {}}
+								onDelete={() => onArchive(row.original)}
+							/>
+						</div>
 					),
 			},
 		],
-		[onArchive, onEdit, onRestore],
+		[onArchive, onCreateDoe, onEdit, onRestore],
 	)
 
 	return (
@@ -117,7 +131,7 @@ export function DoeModelsList({
 			<PageHeader
 				eyebrow={organizationName}
 				title="Modèles de DOE"
-				description="Un modèle est une liste de thèmes pré-réglés. Créer le DOE d'un projet en copie les thèmes, ils restent modifiables ensuite."
+				description="Un modèle est une liste de thèmes pré-réglés. Pour l'utiliser, crée un DOE (menu DOE ou page d'un projet) : ses thèmes y sont copiés et restent modifiables."
 				actions={
 					<RequirePermission permission="MANAGE_REFERENCE">
 						<div className="flex flex-wrap gap-2">

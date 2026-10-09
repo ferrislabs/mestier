@@ -29,6 +29,7 @@ import type { Project } from '#/hooks/use-projects'
 import type { Period, ProjectProfitability } from '#/hooks/use-reporting'
 import type { ProjectSupplierCosts } from '#/hooks/use-supplier-invoices'
 import { buildOrgPath } from '#/modules/org-path'
+import { type DoeButtonState, doeButtonLabel } from '#/pages/doe/lib/new-doe'
 import {
 	eurosToCents,
 	formatDate,
@@ -45,6 +46,7 @@ export interface ProjectDetailUIProps {
 	project: Project
 	customerName: string | null
 	canOpenDoe?: boolean
+	doeState?: DoeButtonState
 
 	billingSummary: ProjectBillingSummary | null
 	isBillingSummaryLoading: boolean
@@ -140,6 +142,7 @@ export function ProjectDetailUI({
 	error,
 	onConfirm,
 	canOpenDoe = false,
+	doeState = 'loading',
 }: ProjectDetailUIProps) {
 	const plannedCost = costRow ? plannedCostCents(costRow) : 0
 	const dueAtLabel = dueAt
@@ -176,7 +179,7 @@ export function ProjectDetailUI({
 									params={{ projectId: project.id }}
 								>
 									<FileText />
-									DOE
+									{doeButtonLabel(doeState)}
 								</Link>
 							</Button>
 						) : null}

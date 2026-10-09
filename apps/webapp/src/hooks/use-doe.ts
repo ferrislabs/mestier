@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import type { Schemas } from '#/api/api.client'
 import { authStore } from '#/store/auth.store'
 
+const DOES_PATH = '/api/v1/organizations/{organization_id}/does'
 const PROJECT_DOE_PATH =
 	'/api/v1/organizations/{organization_id}/projects/{project_id}/doe'
 const DOE_PATH = '/api/v1/organizations/{organization_id}/does/{doe_id}'
@@ -10,6 +11,7 @@ const DRAFT_SUPPLY_PATH =
 
 export type Doe = Schemas.DoeResponse
 export type DoeSupply = Schemas.DoeSupply
+export type DoeSummary = Schemas.DoeSummaryResponse
 
 function queryId(queryKey: readonly unknown[]) {
 	const meta = queryKey[0]
@@ -37,6 +39,16 @@ export function useProjectDoe(organizationId: string, projectId: string) {
 	})
 }
 
+export function useDoes(organizationId: string) {
+	return useQuery({
+		...window.tanstackApi.get(DOES_PATH, {
+			path: { organization_id: organizationId },
+			query: { per_page: 100 },
+		}).queryOptions,
+		enabled: Boolean(organizationId),
+	})
+}
+
 function useDoeInvalidation() {
 	const queryClient = useQueryClient()
 
@@ -44,7 +56,7 @@ function useDoeInvalidation() {
 		queryClient.invalidateQueries({
 			predicate: (query) => {
 				const id = queryId(query.queryKey)
-				return id === PROJECT_DOE_PATH || id === DOE_PATH
+				return id === DOES_PATH || id === PROJECT_DOE_PATH || id === DOE_PATH
 			},
 		})
 }

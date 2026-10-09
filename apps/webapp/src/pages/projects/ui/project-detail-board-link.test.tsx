@@ -89,3 +89,25 @@ describe('ProjectDetailUI — lien vers le tableau', () => {
 		)
 	})
 })
+
+describe('ProjectDetailUI — bouton DOE', () => {
+	it('shows the revision when the project has a DOE', async () => {
+		await renderWithRouter(
+			<ProjectDetailUI {...PROPS} canOpenDoe doeState={{ revision: 'B' }} />,
+		)
+
+		const link = screen.getByRole('link', { name: /Ouvrir le DOE · indice B/ })
+
+		expect(link.getAttribute('href')).toBe(
+			'/o/acme/planification/projects/project-1/doe',
+		)
+	})
+
+	it('offers to create it when there is none', async () => {
+		await renderWithRouter(
+			<ProjectDetailUI {...PROPS} canOpenDoe doeState="none" />,
+		)
+
+		expect(screen.getByRole('link', { name: /Créer le DOE/ })).toBeDefined()
+	})
+})
