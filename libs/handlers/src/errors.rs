@@ -15,6 +15,8 @@ pub enum MiddlewareError {
     InvalidAuthHeader,
     #[error("authentication failed: {0}")]
     AuthenticationFailed(String),
+    #[error("route closed to delegated tokens")]
+    DelegatedRouteForbidden,
 }
 
 impl IntoResponse for MiddlewareError {
@@ -34,6 +36,11 @@ impl IntoResponse for MiddlewareError {
                 StatusCode::UNAUTHORIZED,
                 "E_AUTHENTICATION_FAILED",
                 "Authentication failed",
+            ),
+            MiddlewareError::DelegatedRouteForbidden => (
+                StatusCode::FORBIDDEN,
+                "E_DELEGATED_ROUTE_FORBIDDEN",
+                "Cette action n'est pas accessible par IA (MCP).",
             ),
         };
 

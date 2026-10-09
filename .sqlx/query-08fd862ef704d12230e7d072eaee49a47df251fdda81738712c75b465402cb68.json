@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT o.id, o.name, o.slug, o.owner_id,\n                o.legal_name, o.legal_form, o.registration_number,\n                o.vat_status, o.vat_number, o.vat_exemption_basis,\n                o.share_capital_cents,\n                o.address_line1, o.address_line2, o.address_postal_code, o.address_city, o.address_country,\n                o.contact_email, o.contact_phone, o.insurance_mention,\n                o.quote_number_prefix,\n                o.invoice_number_prefix,\n                o.field_clock_enabled,\n                o.vat_on_debits,\n                o.deleted_at, o.created_at, o.updated_at\n            FROM organizations o\n            INNER JOIN organization_members m ON m.organization_id = o.id\n            WHERE m.user_id = $1 AND o.deleted_at IS NULL\n            ORDER BY o.created_at ASC\n            ",
+  "query": "\n            SELECT id, name, slug, owner_id,\n                legal_name, legal_form, registration_number,\n                vat_status, vat_number, vat_exemption_basis,\n                share_capital_cents,\n                address_line1, address_line2, address_postal_code, address_city, address_country,\n                contact_email, contact_phone, insurance_mention,\n                quote_number_prefix,\n                invoice_number_prefix,\n                field_clock_enabled,\n                vat_on_debits,\n                mcp_enabled,\n                deleted_at, created_at, updated_at\n            FROM organizations\n            WHERE id = $1 AND deleted_at IS NULL\n            ",
   "describe": {
     "columns": [
       {
@@ -120,16 +120,21 @@
       },
       {
         "ordinal": 23,
+        "name": "mcp_enabled",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 24,
         "name": "deleted_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 24,
+        "ordinal": 25,
         "name": "created_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 25,
+        "ordinal": 26,
         "name": "updated_at",
         "type_info": "Timestamptz"
       }
@@ -163,10 +168,11 @@
       false,
       false,
       false,
+      false,
       true,
       false,
       false
     ]
   },
-  "hash": "c6aff097fd2f2ffc09eaef9a9cc34b4c1dd18b6d771038288840bc55e34fc26b"
+  "hash": "08fd862ef704d12230e7d072eaee49a47df251fdda81738712c75b465402cb68"
 }

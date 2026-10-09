@@ -1,4 +1,5 @@
 pub mod auth;
+pub mod delegated;
 pub mod errors;
 pub mod membership;
 pub mod rate_limit;

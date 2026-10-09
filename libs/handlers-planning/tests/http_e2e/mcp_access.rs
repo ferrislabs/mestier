@@ -91,3 +91,31 @@ async fn spec_mcp_12_enabling_mcp_lets_a_delegated_token_through() {
 
     app.cleanup().await;
 }
+
+#[tokio::test]
+#[ignore = "requires live postgres and redis"]
+async fn a_delegated_token_cannot_reach_a_route_the_mcp_server_does_not_call() {
+    let app = harness::start().await;
+    set_mcp_enabled(&app, true).await;
+    let delegated = issuer::mint_delegated(&app.manager_sub);
+
+    let response = reqwest::Client::new()
+        .get(app.project_templates_url(""))
+        .bearer_auth(&delegated)
+        .send()
+        .await
+        .expect("request");
+    assert_eq!(response.status(), 403);
+    let body: Value = response.json().await.expect("json");
+    assert_eq!(body["code"], "E_DELEGATED_ROUTE_FORBIDDEN");
+
+    let normal = reqwest::Client::new()
+        .get(app.project_templates_url(""))
+        .bearer_auth(&app.token)
+        .send()
+        .await
+        .expect("request");
+    assert_eq!(normal.status(), 200);
+
+    app.cleanup().await;
+}

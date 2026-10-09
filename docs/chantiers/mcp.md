@@ -52,6 +52,7 @@ Un utilisateur Mestier colle l'URL du serveur MCP dans son client LLM (ChatGPT w
 7. Aucun outil de suppression ni d'émission de facture n'existe en v1, et la politique Cerbos refuse toute action d'écriture hors DOE. [type : absence dans l'enum ; test : politique Cerbos]
 8. Le serveur MCP n'accepte que le trafic de la gateway. [déploiement : réseau privé ; test : le serveur refuse un appel sans token délégué valide]
 10. Une organisation qui n'a pas activé le MCP est inaccessible par un token délégué : l'API refuse (403) tout appel portant le claim `act` de la gateway sur cette organisation, et ne la liste pas. [test : intégration API ; e2e @spec-mcp-12]
+11. Un token délégué n'atteint que les routes qu'appelle le serveur MCP (liste blanche dans `libs/handlers/src/delegated.rs`, appliquée par le middleware d'authentification) ; toute autre route répond 403 `E_DELEGATED_ROUTE_FORBIDDEN`. En particulier, un token délégué ne peut pas modifier les réglages d'une organisation ni activer le MCP. [test : unitaires `delegated` ; e2e `a_delegated_token_cannot_reach_a_route_the_mcp_server_does_not_call`]
 9. Les tokens délégués en cache ne servent qu'au couple (utilisateur, client LLM) qui les a obtenus et expirent avant leur `exp`. [test : unitaires cache]
 
 ## Out of scope
@@ -259,11 +260,13 @@ docker compose run --rm cerbos compile /policies          # tests de politiques
 | W3 | intégré |
 | W4 | intégré |
 | W5a | pending |
-| W5b | in-flight |
+| W5b | intégré |
 | W6 | pending |
 | W7 | pending |
 
 ## Decision log
+
+- 2026-10-09 : W5b. L'inventaire a montré qu'un token délégué avec MANAGE_ORG pouvait activer lui-même le MCP (`PATCH /organizations/{o}`), et atteindre membres, rôles, fichiers, Discord. Plutôt que de boucher route par route, liste blanche des routes du serveur MCP dans le middleware d'authentification (invariant 11). Le contrôle `mcp_enabled` reste dans le `require_org_membership` partagé. Pas d'e2e sur `GET /users/@me/organizations` filtré : le harnais organisation n'existe pas, couvert par la relecture du filtre seulement.
 
 - 2026-10-09 : W3, `rmcp =3.5.1` (tire `async-trait` en transitif, notre code n'en utilise pas), serveur sans session (`NeverSessionManager`, réponses JSON). `get_product`, `get_quote`, `get_invoice` passent par des routes non scopées par organisation : W5b doit appliquer le refus `mcp_enabled` aussi quand l'API retrouve l'organisation par la ressource.
 

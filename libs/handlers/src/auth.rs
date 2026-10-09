@@ -3,7 +3,7 @@ use std::str::FromStr;
 use auth::Identity;
 use authz::Subject;
 use axum::{
-    extract::{Request, State},
+    extract::{MatchedPath, Request, State},
     middleware::Next,
     response::Response,
 };
@@ -12,6 +12,7 @@ use mestier_core::{CreateUserCommand, UserId, application::policy};
 use tracing::error;
 
 use crate::{
+    delegated::delegated_route_allowed,
     errors::{ApiError, MiddlewareError},
     state::AppState,
 };
@@ -77,6 +78,16 @@ pub async fn auth_middleware(
         error!("Auth middleware: failed to identify user {:?}", e);
         MiddlewareError::AuthenticationFailed(e.to_string())
     })?;
+
+    if identity.is_delegated() {
+        let allowed = req
+            .extensions()
+            .get::<MatchedPath>()
+            .is_some_and(|path| delegated_route_allowed(req.method(), path.as_str()));
+        if !allowed {
+            return Err(MiddlewareError::DelegatedRouteForbidden);
+        }
+    }
 
     if let Identity::User(user) = &identity {
         let name = user.name.as_deref().unwrap_or_else(|| &user.username);
