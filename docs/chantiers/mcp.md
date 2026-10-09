@@ -202,15 +202,16 @@ Non. Pas d'état concurrent propre : le cache de tokens délégués est testé e
 | Id | Mission | Dépend de | Où |
 |---|---|---|---|
 | W0 | Contrats : spec, ADR, squelettes `apps/mcp-gateway` et `apps/mcp-server`, enum `Tool` et catalogue, contrat gateway → serveur, service Cerbos dans compose. **Orchestrateur.** | — | mestier |
-| W1 | FerrisKey : CIMD, DCR, RFC 8414, `iss` RFC 9207, `resource` RFC 8707 | — | ferriskey |
+| W1 | FerrisKey : CIMD, DCR, RFC 8414, `iss` RFC 9207, `resource` RFC 8707. Mené par l'utilisateur avec un agent dédié, à partir de `mcp-w1-ferriskey-prompt.md` | — | ferriskey |
 | W2 | Gateway : métadonnées RFC 9728, 401, validation JWT, identification de l'outil, PEP AuthZEN, échange de token + cache, proxy | W0 | mestier |
 | W3 | Serveur MCP : `rmcp`, outils v1, client API Mestier, scoping organisation | W0 | mestier |
 | W4 | Politiques Cerbos + tests | W0 | mestier |
-| W5 | API Mestier : vérification d'audience sans casser le webapp ; `mcp_enabled` (migration, réglage, refus 403 et filtrage sur token délégué) | — | mestier |
+| W5a | API Mestier : vérification d'audience sans casser le webapp. **PR à part**, depuis `main` | — | mestier |
+| W5b | `mcp_enabled` : migration, réglage, refus 403 et filtrage sur token délégué | W5a | mestier |
 | W7 | Webapp : interrupteur MCP dans Paramètres › Organisation | W5 + client API régénéré | mestier |
 | W6 | Bout en bout : realm FerrisKey local configuré, e2e @spec-mcp-1 à 10, recette ChatGPT @spec-mcp-11 | W1 à W5 | mestier |
 
-W1, W2, W3, W4, W5 partent ensemble après W0. W7 dès W5 intégré. W6 en dernier.
+W1, W2, W3, W4, W5 partent ensemble après W0. W7 dès W5b intégré. W6 en dernier.
 
 Fichiers : W2 possède `apps/mcp-gateway/**` hors `Cargo.toml` et `main.rs` ; W3 `apps/mcp-server/**` idem ; W4 `deploy/cerbos/**` ; W5 `libs/auth/**` et la ligne de construction dans `libs/core/src/application/mod.rs` (signalée). Orchestrateur : `Cargo.toml` (workspace et crates), `docker-compose.yml`, `apps/*/src/main.rs`, `apps/mcp-gateway/src/tool.rs` (catalogue figé), `libs/args/**`, docs. Régénérés : `Cargo.lock`, `.sqlx/` (W5 n'en a normalement pas besoin).
 
@@ -255,7 +256,8 @@ docker compose run --rm cerbos compile /policies          # tests de politiques
 | W2 | pending |
 | W3 | pending |
 | W4 | pending |
-| W5 | pending |
+| W5a | pending |
+| W5b | pending |
 | W6 | pending |
 | W7 | pending |
 
