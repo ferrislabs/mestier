@@ -4,6 +4,27 @@ version.workspace = true
 authors.workspace = true
 edition.workspace = true
 
+[lib]
+name = "mcp_gateway"
+path = "src/lib.rs"
+
+[[bin]]
+name = "mcp-gateway"
+path = "src/main.rs"
+
 [dependencies]
 mcp-tools = { workspace = true }
-tokio = { workspace = true }
+axum = { workspace = true }
+bytes = { workspace = true }
+clap = { workspace = true }
+futures-util = "0.3"
+http = { workspace = true }
+jsonwebtoken = { workspace = true }
+reqwest = { workspace = true, features = ["stream"] }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true, features = ["net", "time", "sync", "signal"] }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+url = { workspace = true }

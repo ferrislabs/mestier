@@ -255,7 +255,7 @@ docker compose run --rm cerbos compile /policies          # tests de politiques
 |---|---|
 | W0 | intégré |
 | W1 | pending |
-| W2 | pending |
+| W2 | intégré |
 | W3 | pending |
 | W4 | intégré |
 | W5a | pending |
@@ -264,6 +264,8 @@ docker compose run --rm cerbos compile /policies          # tests de politiques
 | W7 | pending |
 
 ## Decision log
+
+- 2026-10-09 : W2, la gateway lit l'outil dans le corps JSON-RPC, jamais dans les en-têtes `Mcp-Method` / `Mcp-Name` de la spec 2026-07-28 : un en-tête fourni par le client pourrait différer du corps exécuté et contourner le PDP. Les en-têtes `mcp-*` sont transmis pour que le serveur les confronte au corps. Lots JSON-RPC : chaque `tools/call` est évalué, un refus refuse le lot. Le délégué porte `act` via un `actor_token` client-credentials de la gateway (à confirmer contre FerrisKey en W6).
 
 - 2026-10-09 : W4, Cerbos `ghcr.io/cerbos/cerbos:0.56.0`, AuthZEN actif par défaut sur `:3592/access/v1/evaluation`, réponse `{"decision": bool}`. Correspondance AuthZEN → Cerbos relevée par essais (absente de la doc) : `subject.type` = rôle, `properties` = `attr`, `resource.type` = kind.
 
