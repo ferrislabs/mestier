@@ -300,6 +300,8 @@ cd apps/webapp && pnpm check && pnpm test && pnpm build
 
 ## Decision log
 
+- 2026-10-09 : retour de test utilisateur, « je peux créer un modèle mais qu'est-ce que j'en fais ? ». Le DOE n'était joignable que depuis la page projet. Ajouts : route `GET /organizations/{org}/does`, page Planification › DOE avec « Nouveau DOE » (projet + modèle), action « Créer un DOE avec ce modèle » sur les modèles, bouton projet qui affiche l'état (« Ouvrir le DOE · indice B » / « Créer le DOE »). Lignes de la liste cliquables par leurs liens, pas la ligne entière (`ReferenceTable` ne le permet pas).
+
 - 2026-10-08 : relecture sécurité. Ajout des limites de l'invariant 10 (un membre pouvait saturer l'API avec un DOE énorme). Le message 409 d'un fichier refusé ne renvoie plus son type MIME. Non corrigé, assumé : une clé de fichier d'une autre organisation, si elle a fuité, peut être intégrée au PDF ; `/files/url` le permet déjà, la vraie parade est une table de propriété des fichiers (hors chantier). Les repositories ne filtrent pas `org_id` en SQL, contrôle dans handlers et use cases comme dans tout le dépôt. Le PDF est lisible par tout membre, voulu.
 - 2026-10-08 : relecture conformité. Route des modèles de départ gardée en `/doe-model-starters` pour ne pas entrer en collision avec `/doe-models/{id}`. Ajout d'e2e : isolation et droits des modèles de DOE et des fournisseurs. Restent couverts seulement au niveau du renderer : @spec-doe-5 (pas d'e2e avec de vraies photos), et @spec-doe-11 (pas de test de parcours de l'éditeur).
 
