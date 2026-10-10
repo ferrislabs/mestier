@@ -89,6 +89,8 @@ pub enum Target {
     Plan,
     SupplyPhoto,
     SupplyDatasheet,
+    /// The DOE's cover photo, replacing any previous one.
+    CoverPhoto,
 }
 
 impl Target {
@@ -279,6 +281,7 @@ mod tests {
     fn a_pdf_is_not_a_photo() {
         assert!(check_type(b"%PDF-1.4", Target::Photo).is_err());
         assert!(check_type(b"%PDF-1.4", Target::SupplyPhoto).is_err());
+        assert!(check_type(b"%PDF-1.4", Target::CoverPhoto).is_err());
         assert!(check_type(b"%PDF-1.4", Target::Plan).is_ok());
         assert!(check_type(b"%PDF-1.4", Target::SupplyDatasheet).is_ok());
     }

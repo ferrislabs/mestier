@@ -641,6 +641,7 @@ fn update_body(doe: &Value) -> Value {
         "issued_on",
         "author",
         "revision",
+        "cover_photo_key",
         "parties",
         "sections",
         "updated_at",

@@ -365,7 +365,7 @@ pub struct AddFileArgs {
     #[schemars(description = "UUID of the DOE.")]
     pub doe_id: String,
     #[schemars(
-        description = "Where the file goes: photo (a photos section), plan (a plans section), supply_photo or supply_datasheet (a supply)."
+        description = "Where the file goes: photo (a photos section), plan (a plans section), supply_photo or supply_datasheet (a supply), cover_photo (the DOE cover, replacing any previous one; no caption)."
     )]
     pub target: Target,
     #[schemars(
@@ -1081,7 +1081,7 @@ impl MestierTools {
 
     #[tool(
         meta = file_param_meta(),
-        description = "Add a file to a DOE: target photo (photos section), plan (plans section), supply_photo or supply_datasheet (a supply, by supply_id). Attach the file through `file` when the client supports attachments, else give content_base64; exactly one of the two. The type is detected from the content: JPEG, PNG and WebP, plus PDF for plans and datasheets. Returns the updated DOE."
+        description = "Add a file to a DOE: target photo (photos section), plan (plans section), supply_photo or supply_datasheet (a supply, by supply_id), cover_photo (the cover picture, printed when the organization's style shows it). Attach the file through `file` when the client supports attachments, else give content_base64; exactly one of the two. The type is detected from the content: JPEG, PNG and WebP, plus PDF for plans and datasheets. Returns the updated DOE."
     )]
     async fn add_doe_file(
         &self,
@@ -1146,7 +1146,7 @@ impl MestierTools {
     }
 
     #[tool(
-        description = "Remove a file from a DOE by its storage key, wherever it is (photos, plans, supply photos, supply datasheets). The stored object itself is kept. Returns the updated DOE."
+        description = "Remove a file from a DOE by its storage key, wherever it is (photos, plans, supply photos, supply datasheets, cover photo). The stored object itself is kept. Returns the updated DOE."
     )]
     async fn delete_doe_file(
         &self,

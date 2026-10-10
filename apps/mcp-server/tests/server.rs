@@ -46,6 +46,8 @@ struct Seen {
 struct Fake {
     log: Arc<Mutex<Vec<Seen>>>,
     stale: Arc<AtomicUsize>,
+    /// `cover_photo_key` of the rich DOE as the fake API returns it.
+    cover: Arc<Mutex<Option<String>>>,
 }
 
 impl Fake {
@@ -188,7 +190,9 @@ async fn fake_api(State(fake): State<Fake>, request: Request) -> Response {
                 .into_response()
         }
         (&Method::GET, p) if p == format!("organizations/{ORG_A}/does/{RICH}") => {
-            Json(json!({"data": rich_doe()})).into_response()
+            let mut doe = rich_doe();
+            doe["cover_photo_key"] = json!(*fake.cover.lock().unwrap());
+            Json(json!({"data": doe})).into_response()
         }
         (&Method::PUT, p) if p == format!("organizations/{ORG_A}/does/{RICH}") => {
             let remaining = fake.stale.load(Ordering::SeqCst);
@@ -236,6 +240,12 @@ async fn start() -> (String, Fake) {
     let fake = Fake::default();
     let api = serve(Router::new().fallback(fake_api).with_state(fake.clone())).await;
     let mcp = serve(router(ApiClient::new(api))).await;
+    (mcp, fake)
+}
+
+async fn start_with_cover(key: &str) -> (String, Fake) {
+    let (mcp, fake) = start().await;
+    *fake.cover.lock().unwrap() = Some(key.to_owned());
     (mcp, fake)
 }
 
@@ -1027,6 +1037,43 @@ async fn a_base64_pdf_becomes_a_supply_datasheet() {
         last_put(&fake)["sections"][0]["content"]["supplies"][0]["datasheet_keys"],
         json!(["doe/ds.pdf", "doe/uploaded.bin"])
     );
+}
+
+#[tokio::test]
+async fn spec_style_8_a_cover_photo_is_set_and_a_pdf_is_refused_for_it() {
+    use base64::Engine;
+    let (mcp, fake) = start().await;
+    let pdf = base64::engine::general_purpose::STANDARD.encode(b"%PDF-1.4 cover");
+    let refused = rich_call(
+        &mcp,
+        "add_doe_file",
+        json!({"target": "cover_photo", "content_base64": pdf}),
+    )
+    .await;
+    assert_eq!(refused["isError"], json!(true));
+    assert!(fake.seen().iter().all(|s| s.method != "POST"));
+
+    let jpeg = base64::engine::general_purpose::STANDARD.encode(JPEG);
+    let result = rich_call(
+        &mcp,
+        "add_doe_file",
+        json!({"target": "cover_photo", "content_base64": jpeg}),
+    )
+    .await;
+    assert_ne!(result["isError"], json!(true), "{result}");
+    assert_eq!(last_put(&fake)["cover_photo_key"], "doe/uploaded.bin");
+}
+
+#[tokio::test]
+async fn spec_style_8_writes_keep_the_cover_photo_and_delete_can_remove_it() {
+    let (mcp, fake) = start_with_cover("doe/cover.jpg").await;
+    let result = rich_call(&mcp, "update_doe_header", json!({"title": "Nouveau"})).await;
+    assert_ne!(result["isError"], json!(true), "{result}");
+    assert_eq!(last_put(&fake)["cover_photo_key"], "doe/cover.jpg");
+
+    let result = rich_call(&mcp, "delete_doe_file", json!({"key": "doe/cover.jpg"})).await;
+    assert_ne!(result["isError"], json!(true), "{result}");
+    assert_eq!(last_put(&fake)["cover_photo_key"], Value::Null);
 }
 
 #[tokio::test]
