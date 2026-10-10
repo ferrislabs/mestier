@@ -1,7 +1,8 @@
 use chrono::{DateTime, Utc};
 use mestier_core::{
     CustomUnit, CustomUnitId, Employee, EmployeeId, Equipment, EquipmentId, MemberId,
-    OrganizationId, Product, ProductId, ServiceRate, ServiceRateId, salaried_hourly_rate_cents,
+    OrganizationId, Product, ProductId, ServiceRate, ServiceRateId, SupplierId,
+    salaried_hourly_rate_cents,
 };
 use serde::Serialize;
 use utoipa::ToSchema;
@@ -118,6 +119,10 @@ pub struct ProductResponse {
     pub default_vat_rate_bp: Option<i32>,
     pub description: Option<String>,
     pub photo_keys: Vec<String>,
+    pub supplier_id: Option<SupplierId>,
+    pub manufacturer: Option<String>,
+    pub technical_specs: Option<String>,
+    pub datasheet_keys: Vec<String>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }
@@ -134,6 +139,10 @@ impl From<Product> for ProductResponse {
             default_vat_rate_bp: value.default_vat_rate_bp,
             description: value.description,
             photo_keys: value.photo_keys,
+            supplier_id: value.supplier_id,
+            manufacturer: value.manufacturer,
+            technical_specs: value.technical_specs,
+            datasheet_keys: value.datasheet_keys,
             created_at: value.created_at,
             updated_at: value.updated_at,
         }

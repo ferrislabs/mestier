@@ -16,6 +16,7 @@
 
 mod harness;
 mod issuer;
+mod supplier;
 
 use serde_json::{Value, json};
 

@@ -119,3 +119,28 @@ pub struct ReplaceSupplierInvoiceLineAllocationsCommand {
     pub supplier_invoice_line_id: SupplierInvoiceLineId,
     pub allocations: Vec<LineAllocationShare>,
 }
+
+#[derive(Debug, Clone)]
+pub struct CreateSupplierCommand {
+    /// Authenticated actor. Built by the handler from the request `Identity`.
+    pub actor: authz::Subject,
+    pub organization_id: OrganizationId,
+    pub name: String,
+    pub registration_number: Option<String>,
+    pub vat_number: Option<String>,
+    pub address: Option<String>,
+    pub phone: Option<String>,
+    pub email: Option<String>,
+}
+
+#[derive(Debug, Clone)]
+pub struct UpdateSupplierCommand {
+    pub actor: authz::Subject,
+    pub id: crate::SupplierId,
+    pub name: String,
+    pub registration_number: Option<String>,
+    pub vat_number: Option<String>,
+    pub address: Option<String>,
+    pub phone: Option<String>,
+    pub email: Option<String>,
+}

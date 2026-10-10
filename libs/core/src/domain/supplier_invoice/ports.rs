@@ -7,6 +7,38 @@ use crate::{
     SupplierInvoiceLine, SupplierInvoiceLineAllocation, SupplierInvoiceLineAllocationId,
     SupplierInvoiceLineId, SupplierInvoiceReview,
 };
+use crate::{Supplier, SupplierId};
+
+/// Suppliers as a referential: picked on a product's technical sheet, their
+/// contact details copied into a DOE. Supplier invoice import keeps creating
+/// its own rows through `SupplierInvoiceRepository`.
+#[cfg_attr(any(test, feature = "mock"), mockall::automock)]
+pub trait SupplierRepository: Send {
+    fn insert(
+        &mut self,
+        supplier: &Supplier,
+    ) -> impl Future<Output = Result<Supplier, CoreError>> + Send;
+
+    fn find_by_id(
+        &mut self,
+        id: SupplierId,
+    ) -> impl Future<Output = Result<Option<Supplier>, CoreError>> + Send;
+
+    /// Not deleted, ordered by name.
+    fn list_by_organization(
+        &mut self,
+        organization_id: OrganizationId,
+        limit: u64,
+        offset: u64,
+    ) -> impl Future<Output = Result<(Vec<Supplier>, u64), CoreError>> + Send;
+
+    /// Rewrites `name`, `registration_number`, `vat_number`, `address`,
+    /// `phone`, `email` and `updated_at`.
+    fn update(
+        &mut self,
+        supplier: &Supplier,
+    ) -> impl Future<Output = Result<Supplier, CoreError>> + Send;
+}
 
 #[cfg_attr(any(test, feature = "mock"), mockall::automock)]
 pub trait SupplierInvoiceRepository: Send {

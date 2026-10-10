@@ -1,0 +1,36 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO doe_settings (org_id, accent, logo_key, updated_at)\n            VALUES ($1, $2, $3, now())\n            ON CONFLICT (org_id) DO UPDATE\n            SET accent = EXCLUDED.accent, logo_key = EXCLUDED.logo_key, updated_at = now()\n            RETURNING org_id, accent, logo_key\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "org_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "accent",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "logo_key",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      true
+    ]
+  },
+  "hash": "3b5199edeb71aad12b9b3e7f3bd12d9b563d4e56bd98f60999d3760b7394f6c1"
+}

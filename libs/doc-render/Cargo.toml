@@ -1,0 +1,19 @@
+[package]
+name = "doc-render"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+
+[dependencies]
+mestier-core = { workspace = true }
+typst = "0.15.1"
+typst-pdf = "0.15.1"
+typst-layout = "0.15.1"
+comemo = "0.5.1"
+serde_json = { workspace = true }
+lopdf = { version = "0.44.0", default-features = false }
+
+[dev-dependencies]
+image = { version = "0.25", default-features = false, features = ["png", "jpeg"] }
+uuid = { workspace = true }
+chrono = { workspace = true }

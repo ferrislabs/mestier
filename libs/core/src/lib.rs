@@ -90,6 +90,8 @@ pub use domain::{
     customer::ports::MockCustomerRepository,
     customer_contact::ports::MockCustomerContactRepository,
     customer_context::ports::MockCustomerContextRepository,
+    doe::ports::MockDoeRepository,
+    doe_model::ports::{MockDoeModelRepository, MockDoeSettingsRepository},
     employee::ports::{MockEmployeeCostBasisRepository, MockEmployeeRepository},
     equipment::ports::MockEquipmentRepository,
     invitation::ports::MockInvitationRepository,
@@ -105,6 +107,7 @@ pub use domain::{
     service_rate::ports::MockServiceRateRepository,
     supplier_invoice::ports::{
         MockSupplierInvoiceAllocationRepository, MockSupplierInvoiceRepository,
+        MockSupplierRepository,
     },
     task::ports::MockTaskRepository,
     task_comment::ports::MockTaskCommentRepository,
@@ -112,6 +115,22 @@ pub use domain::{
     task_recurrence::ports::MockTaskRecurrenceRepository,
     user::ports::MockUserRepository,
     work_time::ports::{MockRhythmRepository, MockWorkSlotRepository},
+};
+
+pub use domain::{
+    BlankPageCount, Doe, DoeFile, DoeId, DoeModel, DoeModelId, DoeModelSection,
+    DoeModelSectionKind, DoeParty, DoeSection, DoeSectionContent, DoeSettings, DoeSummary,
+    DoeSupply, HexColor, MakerLabel, PartyRole, PhotosPerPage, Revision, StarterModel,
+    SupplierSnapshot,
+    doe::commands::{CreateDoeCommand, DraftSupplyFromProductCommand, UpdateDoeCommand},
+    doe::render::{
+        BundledFile, DoeDocument, DoeRenderError, DoeRenderer, FileBundle, NumberedContent,
+        NumberedSection, NumberedSupply,
+    },
+    doe_model::commands::{
+        CreateDoeModelCommand, CreateDoeModelFromStarterCommand, UpdateDoeModelCommand,
+        UpdateDoeSettingsCommand,
+    },
 };
 
 pub use domain::{
@@ -194,6 +213,7 @@ pub use domain::{
         ReplaceSupplierInvoiceLineAllocationsCommand, SupplierInvoiceLineCommand,
         UpdateSupplierInvoiceNotesCommand,
     },
+    supplier_invoice::commands::{CreateSupplierCommand, UpdateSupplierCommand},
     task::commands::{CreateTaskCommand, PatchTaskCommand},
     task::service::{
         resolve_task_window, sort_by_board_rank, validate_parent_depth, validate_reparenting,

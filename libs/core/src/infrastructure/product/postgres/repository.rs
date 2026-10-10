@@ -28,9 +28,9 @@ impl<'tx> ProductRepository for PgProductRepository<'tx> {
         let row = sqlx::query_as!(
             ProductRow,
             r#"
-            INSERT INTO products (id, org_id, name, sku, unit, unit_price_cents, default_vat_rate_bp, description, photo_keys, deleted_at, created_at, updated_at)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
-            RETURNING id, org_id, name, sku, unit, unit_price_cents, default_vat_rate_bp, description, photo_keys, deleted_at, created_at, updated_at
+            INSERT INTO products (id, org_id, name, sku, unit, unit_price_cents, default_vat_rate_bp, description, photo_keys, supplier_id, manufacturer, technical_specs, datasheet_keys, deleted_at, created_at, updated_at)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
+            RETURNING id, org_id, name, sku, unit, unit_price_cents, default_vat_rate_bp, description, photo_keys, supplier_id, manufacturer, technical_specs, datasheet_keys, deleted_at, created_at, updated_at
             "#,
             product.id.0,
             product.organization_id.0,
@@ -41,6 +41,10 @@ impl<'tx> ProductRepository for PgProductRepository<'tx> {
             product.default_vat_rate_bp,
             product.description,
             &product.photo_keys,
+            product.supplier_id.map(|id| id.0),
+            product.manufacturer,
+            product.technical_specs,
+            &product.datasheet_keys,
             product.deleted_at,
             product.created_at,
             product.updated_at,
@@ -57,7 +61,7 @@ impl<'tx> ProductRepository for PgProductRepository<'tx> {
         let row = sqlx::query_as!(
             ProductRow,
             r#"
-            SELECT id, org_id, name, sku, unit, unit_price_cents, default_vat_rate_bp, description, photo_keys, deleted_at, created_at, updated_at
+            SELECT id, org_id, name, sku, unit, unit_price_cents, default_vat_rate_bp, description, photo_keys, supplier_id, manufacturer, technical_specs, datasheet_keys, deleted_at, created_at, updated_at
             FROM products
             WHERE id = $1 AND deleted_at IS NULL
             "#,
@@ -80,7 +84,7 @@ impl<'tx> ProductRepository for PgProductRepository<'tx> {
         let rows = sqlx::query_as!(
             ProductRow,
             r#"
-            SELECT id, org_id, name, sku, unit, unit_price_cents, default_vat_rate_bp, description, photo_keys, deleted_at, created_at, updated_at
+            SELECT id, org_id, name, sku, unit, unit_price_cents, default_vat_rate_bp, description, photo_keys, supplier_id, manufacturer, technical_specs, datasheet_keys, deleted_at, created_at, updated_at
             FROM products
             WHERE org_id = $1 AND deleted_at IS NULL
             ORDER BY name ASC, created_at ASC
@@ -116,9 +120,9 @@ impl<'tx> ProductRepository for PgProductRepository<'tx> {
             ProductRow,
             r#"
             UPDATE products
-            SET name = $2, sku = $3, unit = $4, unit_price_cents = $5, default_vat_rate_bp = $6, description = $7, photo_keys = $8, updated_at = $9
+            SET name = $2, sku = $3, unit = $4, unit_price_cents = $5, default_vat_rate_bp = $6, description = $7, photo_keys = $8, supplier_id = $9, manufacturer = $10, technical_specs = $11, datasheet_keys = $12, updated_at = $13
             WHERE id = $1 AND deleted_at IS NULL
-            RETURNING id, org_id, name, sku, unit, unit_price_cents, default_vat_rate_bp, description, photo_keys, deleted_at, created_at, updated_at
+            RETURNING id, org_id, name, sku, unit, unit_price_cents, default_vat_rate_bp, description, photo_keys, supplier_id, manufacturer, technical_specs, datasheet_keys, deleted_at, created_at, updated_at
             "#,
             product.id.0,
             product.name,
@@ -128,6 +132,10 @@ impl<'tx> ProductRepository for PgProductRepository<'tx> {
             product.default_vat_rate_bp,
             product.description,
             &product.photo_keys,
+            product.supplier_id.map(|id| id.0),
+            product.manufacturer,
+            product.technical_specs,
+            &product.datasheet_keys,
             product.updated_at,
         )
         .fetch_optional(&mut ***tx)

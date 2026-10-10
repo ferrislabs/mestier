@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 use uuid::Uuid;
 
-use crate::OrganizationId;
+use crate::{OrganizationId, SupplierId};
 
 pub mod commands;
 pub mod ports;
@@ -43,6 +43,16 @@ pub struct Product {
     pub default_vat_rate_bp: Option<i32>,
     pub description: Option<String>,
     pub photo_keys: Vec<String>,
+    /// The technical sheet a DOE copies a supply from. All optional: most
+    /// products never end up in a DOE.
+    pub supplier_id: Option<SupplierId>,
+    /// Who makes it, or the nursery that grew it. Free text: not someone
+    /// the organization buys from, so not a `Supplier`.
+    pub manufacturer: Option<String>,
+    pub technical_specs: Option<String>,
+    /// The supplier's own documents (PDF or image), inserted after the
+    /// supply sheet in a DOE.
+    pub datasheet_keys: Vec<String>,
     pub deleted_at: Option<DateTime<Utc>>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,

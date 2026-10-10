@@ -7,6 +7,8 @@ pub mod custom_unit;
 pub mod customer;
 pub mod customer_contact;
 pub mod customer_context;
+pub mod doe;
+pub mod doe_model;
 pub mod employee;
 pub mod equipment;
 pub mod file_storage;

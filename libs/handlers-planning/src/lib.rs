@@ -16,6 +16,8 @@ use handlers::{ApiError, AppState, auth::auth_middleware, rate_limit::rate_limit
 use mestier_core::OrganizationId;
 
 pub mod assignment_report;
+pub mod doe;
+pub mod doe_model;
 pub mod paths;
 pub mod planning;
 pub mod project;
@@ -95,6 +97,8 @@ pub fn router(state: &AppState) -> Router<AppState> {
         .merge(planning::router(state))
         .merge(project::router(state))
         .merge(project_template::router(state))
+        .merge(doe::router(state))
+        .merge(doe_model::router(state))
         .layer(from_fn_with_state(state.clone(), rate_limit_middleware))
         .layer(from_fn_with_state(state.clone(), auth_middleware))
 }
