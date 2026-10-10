@@ -106,6 +106,7 @@ Politique Cerbos v1 : tout outil `read` autorisé avec le scope `mestier.read` ;
 | `list_invoices`, `get_invoice` | read | invoice | factures |
 | `create_doe` | write | doe | `POST /projects/{id}/doe` |
 | `add_doe_supply_from_product` | write | doe | `POST /does/{id}/supplies/draft` puis `PUT /does/{id}` |
+| `add_doe_supply` | write | doe | `GET` puis `PUT /does/{id}` : fourniture saisie (désignation, DPGF, destination, fournisseur, fabricant, caractéristiques), sans produit du catalogue |
 | `update_doe_header` | write | doe | `PUT /does/{id}` (titre, lieu, lot, date, rédacteur, indice) |
 | `export_doe_pdf` | read | doe | `GET /does/{id}/pdf`, renvoyé en ressource intégrée `application/pdf` (plafond 10 Mo, sinon erreur explicite) |
 
@@ -220,7 +221,7 @@ Fichiers : W2 possède `apps/mcp-gateway/**`, son `Cargo.toml` compris ; W3 `app
 
 Écrits en W0 dans `libs/mcp-tools/src/lib.rs`, partagé par la gateway et le serveur :
 
-- `enum Tool` (les 16 outils ci-dessus), `name()`, `access() -> Access { Read, Write }`, `domain()`, `is_organization_scoped()`, `FromStr` (nom MCP exact, sinon `UnknownTool`), constantes `SCOPE_READ`, `SCOPE_DOE_WRITE`, `CLIENT_HEADER`.
+- `enum Tool` (les 17 outils ci-dessus), `name()`, `access() -> Access { Read, Write }`, `domain()`, `is_organization_scoped()`, `FromStr` (nom MCP exact, sinon `UnknownTool`), constantes `SCOPE_READ`, `SCOPE_DOE_WRITE`, `CLIENT_HEADER`.
 - Contrat gateway → serveur : `POST /mcp` interne, corps JSON-RPC inchangé, `Authorization: Bearer <token délégué>`, `X-Mestier-Mcp-Client: <client_id LLM>` (journalisation seulement).
 - Requête AuthZEN telle que ci-dessus.
 - Scopes : `mestier.read`, `mestier.doe.write`.
@@ -277,6 +278,8 @@ Résultats contre FerrisKey de la PR, Cerbos, gateway, serveur MCP et API locaux
 | W7 | intégré |
 
 ## Decision log
+
+- 2026-10-10 : outil `add_doe_supply` ajouté à la demande de l'utilisateur : des clients utiliseront le DOE par MCP sans catalogue. La fourniture est saisie et copiée dans le DOE comme les autres (`source_product_id` nul). Aucun changement de gateway, de politique ni de liste blanche : c'est une écriture DOE par les routes déjà ouvertes.
 
 - 2026-10-10 : échange de token refusé à la gateway. Option A retenue : une ressource autorisée appartient à un client, qui devient partie des tokens émis pour elle. Rejeté : `client_id` de la gateway = URL de la ressource, fragile (un `client_id` https est aussi un client CIMD). Même PR : un drapeau de scope « ouvert aux clients dynamiques » remplace l'usage du type Default.
 

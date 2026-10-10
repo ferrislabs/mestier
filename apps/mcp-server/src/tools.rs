@@ -12,7 +12,7 @@ use serde_json::Value;
 
 use crate::{
     api::{ApiClient, Fault},
-    session::{HeaderPatch, Paging, PdfOutcome, Session, SupplyRequest},
+    session::{HeaderPatch, ManualSupply, Paging, PdfOutcome, Session, SupplyRequest},
 };
 
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
@@ -138,6 +138,53 @@ pub struct AddSupplyArgs {
     pub dpgf_ref: Option<String>,
     #[schemars(description = "Where the supply is used, for example the area of the site.")]
     pub destination: Option<String>,
+}
+
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
+#[schemars(crate = "rmcp::schemars")]
+pub struct AddManualSupplyArgs {
+    #[schemars(
+        description = "Slug of the organization. Optional when the user belongs to exactly one organization; see list_organizations."
+    )]
+    pub organization: Option<String>,
+    #[schemars(description = "UUID of the DOE.")]
+    pub doe_id: String,
+    #[schemars(
+        description = "Id of the target supplies section of the DOE (see get_doe). Takes precedence over section_title."
+    )]
+    pub section_id: Option<String>,
+    #[schemars(
+        description = "Title of the target supplies section, case-insensitive. Optional when the DOE has a single supplies section."
+    )]
+    pub section_title: Option<String>,
+    #[schemars(
+        description = "What the supply is, for example \"Banc Athène\" or \"Pouzzolane 10/20\". Required."
+    )]
+    pub designation: String,
+    #[schemars(
+        description = "Heading printed in the DOE when it differs from the designation, for example \"Plantation d'arbres\" for \"Arbres\"."
+    )]
+    pub title: Option<String>,
+    #[schemars(description = "Line of the DPGF (price breakdown) this supply answers to.")]
+    pub dpgf_ref: Option<String>,
+    #[schemars(description = "Where the supply is used, for example the area of the site.")]
+    pub destination: Option<String>,
+    #[schemars(description = "Name of the supplier the supply was bought from.")]
+    pub supplier_name: Option<String>,
+    #[schemars(
+        description = "Supplier address, several lines allowed. Ignored without supplier_name."
+    )]
+    pub supplier_address: Option<String>,
+    #[schemars(description = "Supplier phone. Ignored without supplier_name.")]
+    pub supplier_phone: Option<String>,
+    #[schemars(description = "Supplier email. Ignored without supplier_name.")]
+    pub supplier_email: Option<String>,
+    #[schemars(description = "Manufacturer, or the nursery for plants.")]
+    pub maker: Option<String>,
+    #[schemars(
+        description = "Technical characteristics, one per line (dimensions, colour, reference, sizes of plants...)."
+    )]
+    pub specs: Option<String>,
 }
 
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
@@ -535,6 +582,46 @@ impl MestierTools {
                             product_id: &args.product_id,
                             dpgf_ref: args.dpgf_ref.as_deref(),
                             destination: args.destination.as_deref(),
+                        },
+                    )
+                    .await?;
+                Ok(json_result(&data))
+            }
+            .await,
+        )
+    }
+
+    #[tool(
+        description = "Add a supply to a DOE from details given by the user, without a catalogue product: designation, DPGF line, destination, supplier, manufacturer and technical characteristics. Use add_doe_supply_from_product instead when the supply exists in the catalogue. Returns the updated DOE."
+    )]
+    async fn add_doe_supply(
+        &self,
+        Parameters(args): Parameters<AddManualSupplyArgs>,
+        Extension(parts): Extension<Parts>,
+    ) -> CallToolResult {
+        let s = match self.session(&parts, "add_doe_supply") {
+            Ok(s) => s,
+            Err(refusal) => return refusal,
+        };
+        finish(
+            async {
+                let data = s
+                    .add_manual_supply(
+                        args.organization.as_deref(),
+                        ManualSupply {
+                            doe_id: &args.doe_id,
+                            section_id: args.section_id.as_deref(),
+                            section_title: args.section_title.as_deref(),
+                            designation: &args.designation,
+                            title: args.title.as_deref(),
+                            dpgf_ref: args.dpgf_ref.as_deref(),
+                            destination: args.destination.as_deref(),
+                            supplier_name: args.supplier_name.as_deref(),
+                            supplier_address: args.supplier_address.as_deref(),
+                            supplier_phone: args.supplier_phone.as_deref(),
+                            supplier_email: args.supplier_email.as_deref(),
+                            maker: args.maker.as_deref(),
+                            specs: args.specs.as_deref(),
                         },
                     )
                     .await?;

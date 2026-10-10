@@ -346,6 +346,61 @@ async fn adding_a_supply_to_a_photos_section_is_refused() {
 }
 
 #[tokio::test]
+async fn a_supply_typed_in_by_the_user_is_added_without_the_catalogue() {
+    let (mcp, fake) = start().await;
+    let result = call(
+        &mcp,
+        "solo",
+        "add_doe_supply",
+        json!({
+            "doe_id": DOE,
+            "section_title": "mobilier",
+            "designation": "Banc Athène",
+            "dpgf_ref": "MU3",
+            "destination": "Voir plan de récolement",
+            "supplier_name": "PLAS ECO",
+            "supplier_phone": "02 31 26 01 30",
+            "maker": "PLAS ECO",
+            "specs": "Lo 180 cm\nColoris sable"
+        }),
+    )
+    .await;
+    assert_ne!(result["isError"], json!(true), "{result}");
+    assert!(
+        fake.seen()
+            .iter()
+            .all(|s| !s.path.contains("supplies/draft")),
+        "no catalogue product is involved"
+    );
+    let put = fake.seen().into_iter().find(|s| s.method == "PUT").unwrap();
+    let supplies = put.body["sections"][0]["content"]["supplies"]
+        .as_array()
+        .unwrap();
+    let added = supplies.last().unwrap();
+    assert_eq!(added["designation"], "Banc Athène");
+    assert_eq!(added["source_product_id"], Value::Null);
+    assert_eq!(added["supplier"]["name"], "PLAS ECO");
+    assert_eq!(added["supplier"]["phone"], "02 31 26 01 30");
+    assert_eq!(added["specs"], "Lo 180 cm\nColoris sable");
+    assert_eq!(added["photos"], json!([]));
+    assert!(added["id"].as_str().is_some_and(|id| !id.is_empty()));
+}
+
+#[tokio::test]
+async fn a_supply_without_designation_is_refused_before_any_write() {
+    let (mcp, fake) = start().await;
+    let result = call(
+        &mcp,
+        "solo",
+        "add_doe_supply",
+        json!({"doe_id": DOE, "section_title": "mobilier", "designation": "  "}),
+    )
+    .await;
+    assert_eq!(result["isError"], json!(true));
+    assert!(fake.seen().iter().all(|s| s.method != "PUT"));
+}
+
+#[tokio::test]
 async fn updating_the_header_patches_only_the_given_fields() {
     let (mcp, fake) = start().await;
     let result = call(

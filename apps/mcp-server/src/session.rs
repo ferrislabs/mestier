@@ -46,6 +46,23 @@ pub struct SupplyRequest<'a> {
     pub destination: Option<&'a str>,
 }
 
+/// A supply typed in by the user rather than copied from the catalogue.
+pub struct ManualSupply<'a> {
+    pub doe_id: &'a str,
+    pub section_id: Option<&'a str>,
+    pub section_title: Option<&'a str>,
+    pub designation: &'a str,
+    pub title: Option<&'a str>,
+    pub dpgf_ref: Option<&'a str>,
+    pub destination: Option<&'a str>,
+    pub supplier_name: Option<&'a str>,
+    pub supplier_address: Option<&'a str>,
+    pub supplier_phone: Option<&'a str>,
+    pub supplier_email: Option<&'a str>,
+    pub maker: Option<&'a str>,
+    pub specs: Option<&'a str>,
+}
+
 pub enum PdfOutcome {
     Pdf { bytes: Vec<u8>, uri: String },
     TooLarge,
@@ -322,6 +339,48 @@ impl<'a> Session<'a> {
                 object.insert("destination".into(), json!(destination));
             }
         }
+        doe["sections"][index]["content"]["supplies"]
+            .as_array_mut()
+            .ok_or_else(|| Fault::new("section de fournitures illisible"))?
+            .push(supply);
+        self.store_doe(&org, &doe_id, &doe).await
+    }
+
+    pub async fn add_manual_supply(
+        &self,
+        organization: Option<&str>,
+        request: ManualSupply<'_>,
+    ) -> Result<Value, Fault> {
+        let doe_id = uuid(request.doe_id)?;
+        if request.designation.trim().is_empty() {
+            return Err(Fault::new(
+                "la désignation de la fourniture est obligatoire",
+            ));
+        }
+        let org = self.organization_id(organization).await?;
+        let mut doe = self.fetch_doe(&org, &doe_id).await?;
+        let index = pick_section(&doe, request.section_id, request.section_title)?;
+        let supplier = request.supplier_name.map(|name| {
+            json!({
+                "name": name,
+                "address": request.supplier_address,
+                "phone": request.supplier_phone,
+                "email": request.supplier_email,
+            })
+        });
+        let supply = json!({
+            "id": Uuid::now_v7().to_string(),
+            "source_product_id": null,
+            "title": request.title,
+            "designation": request.designation,
+            "dpgf_ref": request.dpgf_ref,
+            "destination": request.destination,
+            "supplier": supplier,
+            "maker": request.maker,
+            "specs": request.specs,
+            "photos": [],
+            "datasheet_keys": [],
+        });
         doe["sections"][index]["content"]["supplies"]
             .as_array_mut()
             .ok_or_else(|| Fault::new("section de fournitures illisible"))?

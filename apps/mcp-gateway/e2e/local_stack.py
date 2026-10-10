@@ -153,7 +153,7 @@ st, init = mcp("initialize", {"protocolVersion": "2025-11-25", "capabilities": {
 check("initialize through the gateway", st == 200 and "result" in (init or {}), f"{st} {init}")
 st, tl = mcp("tools/list")
 names = sorted(t["name"] for t in tl.get("result", {}).get("tools", [])) if isinstance(tl, dict) else []
-check("tools/list returns the 16 tools", len(names) == 16, f"{st} {len(names)}")
+check("tools/list returns the 17 tools", len(names) == 17 and "add_doe_supply" in names, f"{st} {len(names)}")
 
 # First delegated call creates the Mestier user (the API registers users on first sight).
 st, r = tool("list_organizations")

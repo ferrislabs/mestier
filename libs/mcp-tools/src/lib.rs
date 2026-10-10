@@ -47,12 +47,13 @@ pub enum Tool {
     GetInvoice,
     CreateDoe,
     AddDoeSupplyFromProduct,
+    AddDoeSupply,
     UpdateDoeHeader,
     ExportDoePdf,
 }
 
 impl Tool {
-    pub const ALL: [Tool; 16] = [
+    pub const ALL: [Tool; 17] = [
         Tool::ListOrganizations,
         Tool::ListProjects,
         Tool::GetProject,
@@ -67,6 +68,7 @@ impl Tool {
         Tool::GetInvoice,
         Tool::CreateDoe,
         Tool::AddDoeSupplyFromProduct,
+        Tool::AddDoeSupply,
         Tool::UpdateDoeHeader,
         Tool::ExportDoePdf,
     ];
@@ -88,6 +90,7 @@ impl Tool {
             Self::GetInvoice => "get_invoice",
             Self::CreateDoe => "create_doe",
             Self::AddDoeSupplyFromProduct => "add_doe_supply_from_product",
+            Self::AddDoeSupply => "add_doe_supply",
             Self::UpdateDoeHeader => "update_doe_header",
             Self::ExportDoePdf => "export_doe_pdf",
         }
@@ -95,9 +98,10 @@ impl Tool {
 
     pub fn access(self) -> Access {
         match self {
-            Self::CreateDoe | Self::AddDoeSupplyFromProduct | Self::UpdateDoeHeader => {
-                Access::Write
-            }
+            Self::CreateDoe
+            | Self::AddDoeSupplyFromProduct
+            | Self::AddDoeSupply
+            | Self::UpdateDoeHeader => Access::Write,
             _ => Access::Read,
         }
     }
@@ -112,6 +116,7 @@ impl Tool {
             | Self::ListDoeModels
             | Self::CreateDoe
             | Self::AddDoeSupplyFromProduct
+            | Self::AddDoeSupply
             | Self::UpdateDoeHeader
             | Self::ExportDoePdf => "doe",
             Self::SearchProducts | Self::GetProduct => "catalog",
