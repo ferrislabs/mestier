@@ -30,6 +30,7 @@ export function doeToForm(doe: Doe): DoeForm {
 		issuedOn: doe.issued_on,
 		author: doe.author ?? '',
 		revision: doe.revision,
+		coverPhotoKey: doe.cover_photo_key ?? null,
 		parties: PARTY_ROLES.map((role) => {
 			const found = doe.parties.find((party) => party.role === role)
 			return found ? partyToForm(found) : emptyParty(role)
@@ -70,6 +71,7 @@ export function buildUpdatePayload(
 		issued_on: form.issuedOn,
 		author: orNull(form.author),
 		revision: form.revision.trim(),
+		cover_photo_key: form.coverPhotoKey,
 		parties,
 		sections: form.sections.map((section) => ({
 			...section,

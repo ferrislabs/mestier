@@ -5,6 +5,11 @@ import type {
 } from '#/hooks/use-doe-models'
 import type { SectionKind } from '#/pages/doe/types'
 import type { ModelDraft, ModelSectionDraft } from '#/pages/doe-models/types'
+import {
+	completeStyle,
+	isStyleValid,
+	normalizeStyle,
+} from '#/pages/doe-style/lib/style'
 
 export const MIN_BLANK_PAGES = 1
 export const MAX_BLANK_PAGES = 20
@@ -26,7 +31,7 @@ export function newModelSectionDraft(
 }
 
 export function emptyModelDraft(): ModelDraft {
-	return { id: null, name: '', description: '', sections: [] }
+	return { id: null, name: '', description: '', sections: [], style: null }
 }
 
 export function sectionToDraft(
@@ -48,7 +53,9 @@ export function sectionToDraft(
 }
 
 export function modelToDraft(
-	model: Pick<DoeModel, 'name' | 'description' | 'sections'> & { id: string },
+	model: Pick<DoeModel, 'name' | 'description' | 'sections' | 'style'> & {
+		id: string
+	},
 	keyFor: (index: number) => string,
 ): ModelDraft {
 	return {
@@ -58,6 +65,7 @@ export function modelToDraft(
 		sections: model.sections.map((section, index) =>
 			sectionToDraft(section, keyFor(index)),
 		),
+		style: model.style ? completeStyle(model.style) : null,
 	}
 }
 
@@ -92,12 +100,14 @@ export function buildModelRequest(draft: ModelDraft) {
 				kind: kindFromDraft(section),
 			}),
 		),
+		style: draft.style ? normalizeStyle(draft.style) : null,
 	}
 }
 
 export function canSubmitModel(draft: ModelDraft): boolean {
 	return (
 		draft.name.trim() !== '' &&
-		draft.sections.every((section) => section.title.trim() !== '')
+		draft.sections.every((section) => section.title.trim() !== '') &&
+		(draft.style === null || isStyleValid(draft.style))
 	)
 }

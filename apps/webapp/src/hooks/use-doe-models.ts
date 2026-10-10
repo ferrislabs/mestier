@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import type { Schemas } from '#/api/api.client'
+import { authStore } from '#/store/auth.store'
 
 const DOE_MODELS_PATH = '/api/v1/organizations/{organization_id}/doe-models'
 const DOE_MODEL_PATH =
@@ -133,5 +134,50 @@ export function useUpdateDoeSettings() {
 				predicate: (query) => queryId(query.queryKey) === DOE_SETTINGS_PATH,
 			})
 		},
+	})
+}
+
+export async function previewDoeStyle(
+	organizationId: string,
+	style: Schemas.DoeStyle,
+): Promise<void> {
+	const tab = window.open('', '_blank')
+	try {
+		const headers = new Headers({ 'Content-Type': 'application/json' })
+		const accessToken = authStore.state.accessToken
+		if (accessToken) headers.set('Authorization', `Bearer ${accessToken}`)
+
+		const response = await fetch(
+			`${window.apiUrl}/api/v1/organizations/${organizationId}/doe-style/preview`,
+			{
+				method: 'POST',
+				headers,
+				credentials: 'include',
+				body: JSON.stringify({ style }),
+			},
+		)
+		if (!response.ok) {
+			let message = `HTTP ${response.status}: ${response.statusText}`
+			try {
+				const body = (await response.json()) as { message?: string }
+				if (body.message) message = body.message
+			} catch {
+				message = `HTTP ${response.status}: ${response.statusText}`
+			}
+			throw new Error(message)
+		}
+		const objectUrl = URL.createObjectURL(await response.blob())
+		if (tab) tab.location.href = objectUrl
+		else window.open(objectUrl, '_blank')
+	} catch (error) {
+		tab?.close()
+		throw error
+	}
+}
+
+export function usePreviewDoeStyle(organizationId: string) {
+	return useMutation({
+		mutationFn: (style: Schemas.DoeStyle) =>
+			previewDoeStyle(organizationId, style),
 	})
 }

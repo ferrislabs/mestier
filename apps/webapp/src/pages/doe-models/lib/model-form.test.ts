@@ -6,6 +6,7 @@ import {
 	modelToDraft,
 	newModelSectionDraft,
 } from '#/pages/doe-models/lib/model-form'
+import { completeStyle, DEFAULT_DOE_STYLE } from '#/pages/doe-style/lib/style'
 
 describe('model draft round trip', () => {
 	it('keeps the settings of every kind', () => {
@@ -78,5 +79,44 @@ describe('canSubmitModel', () => {
 				sections: [newModelSectionDraft('a', ' ', 'plans')],
 			}),
 		).toBe(false)
+	})
+})
+
+describe('model style', () => {
+	it('sends style null when the model has no style of its own', () => {
+		expect(
+			buildModelRequest({ ...emptyModelDraft(), name: 'M' }).style,
+		).toBeNull()
+	})
+
+	it('sends the full style when the model has one', () => {
+		const style = { ...DEFAULT_DOE_STYLE, primary: '#ABCDEF' }
+		const request = buildModelRequest({
+			...emptyModelDraft(),
+			name: 'M',
+			style,
+		})
+		expect(request.style).toEqual({ ...DEFAULT_DOE_STYLE, primary: '#abcdef' })
+	})
+
+	it('completes a stored partial style and keeps null as null', () => {
+		const base = { id: 'm', name: 'M', description: null, sections: [] }
+		expect(
+			modelToDraft({ ...base, style: { body_font: 'barlow' } }, () => 'k')
+				.style,
+		).toEqual(completeStyle({ body_font: 'barlow' }))
+		expect(modelToDraft({ ...base, style: null }, () => 'k').style).toBeNull()
+		expect(modelToDraft(base, () => 'k').style).toBeNull()
+	})
+
+	it('refuses to submit an invalid own style', () => {
+		const named = { ...emptyModelDraft(), name: 'M' }
+		expect(
+			canSubmitModel({
+				...named,
+				style: { ...DEFAULT_DOE_STYLE, cover_title: ' ' },
+			}),
+		).toBe(false)
+		expect(canSubmitModel({ ...named, style: DEFAULT_DOE_STYLE })).toBe(true)
 	})
 })

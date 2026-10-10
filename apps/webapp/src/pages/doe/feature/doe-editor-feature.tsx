@@ -83,6 +83,7 @@ export function DoeEditorFeature({
 		null,
 	)
 	const [uploadingLogo, setUploadingLogo] = useState<PartyRole | null>(null)
+	const [uploadingCover, setUploadingCover] = useState(false)
 	const [sheetUploading, setSheetUploading] = useState<
 		'photos' | 'datasheets' | null
 	>(null)
@@ -106,6 +107,7 @@ export function DoeEditorFeature({
 
 	const urlKeys = useMemo(() => {
 		const keys = new Set<string>()
+		if (form.coverPhotoKey) keys.add(form.coverPhotoKey)
 		for (const party of form.parties) {
 			if (party.logoKey) keys.add(party.logoKey)
 		}
@@ -119,7 +121,7 @@ export function DoeEditorFeature({
 			for (const key of sheet.values.datasheetKeys) keys.add(key)
 		}
 		return [...keys]
-	}, [form.parties, form.sections, sheet])
+	}, [form.coverPhotoKey, form.parties, form.sections, sheet])
 	const previews = useFileUrls(urlKeys)
 	const fileUrls = useMemo(() => {
 		const urls: Record<string, string | undefined> = {}
@@ -382,6 +384,14 @@ export function DoeEditorFeature({
 				fileUrls={fileUrls}
 				info={{
 					isUploadingLogo: uploadingLogo,
+					isUploadingCover: uploadingCover,
+					onCoverPhotoUpload: async (file) => {
+						setUploadingCover(true)
+						const [uploaded] = await uploadAll([file])
+						setUploadingCover(false)
+						if (!uploaded) return
+						setForm((current) => ({ ...current, coverPhotoKey: uploaded.key }))
+					},
 					onFieldChange: (patch) =>
 						setForm((current) => ({ ...current, ...patch })),
 					onPartyChange: (role: PartyRole, patch: Partial<PartyForm>) =>

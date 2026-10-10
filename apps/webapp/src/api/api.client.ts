@@ -257,10 +257,35 @@ export namespace Schemas {
     | { kind: "plans" }
     | { count: BlankPageCount; kind: "blank_pages" };
   export type DoeModelSection = { enabled: boolean; kind: DoeModelSectionKind; title: string };
+  export type DoeFont = "inter" | "montserrat" | "source_serif" | "barlow";
+  export type DoeLabel = string;
+  export type LogoPosition = "left" | "center" | "right";
+  export type LogoSize = "small" | "medium" | "large";
+  export type DoeTemplate = string;
+  export type HexColor = string;
+  export type DoeStyle = Partial<{
+    body_font: DoeFont;
+    contents_title: DoeLabel;
+    cover_logo_position: LogoPosition;
+    cover_logo_size: LogoSize;
+    cover_photo: boolean;
+    cover_title: DoeLabel;
+    footer_text: DoeTemplate;
+    header_logo: boolean;
+    header_text: DoeTemplate;
+    heading_font: DoeFont;
+    logo_key: string | null;
+    on_primary: HexColor;
+    parties_title: DoeLabel;
+    primary: HexColor;
+    secondary: HexColor;
+    supply_table_title: DoeLabel;
+  }>;
   export type CreateDoeModelRequest = {
     description?: (string | null) | undefined;
     name: string;
     sections: Array<DoeModelSection>;
+    style?: (null | DoeStyle) | undefined;
   };
   export type DoeModelId = string;
   export type CreateDoeRequest = { model_id: DoeModelId };
@@ -525,6 +550,7 @@ export namespace Schemas {
     name: string;
     organization_id: OrganizationId;
     sections: Array<DoeModelSection>;
+    style?: (null | DoeStyle) | undefined;
     updated_at: string;
   };
   export type DoeModelStarterResponse = {
@@ -571,10 +597,12 @@ export namespace Schemas {
   export type DoeSection = { content: DoeSectionContent; enabled: boolean; id: string; title: string };
   export type DoeResponse = {
     author?: (string | null) | undefined;
+    cover_photo_key?: (string | null) | undefined;
     created_at: string;
     id: DoeId;
     issued_on: string;
     lot?: (string | null) | undefined;
+    model_id?: (null | DoeModelId) | undefined;
     parties: Array<DoeParty>;
     place?: (string | null) | undefined;
     project_id: ProjectId;
@@ -583,7 +611,7 @@ export namespace Schemas {
     title: string;
     updated_at: string;
   };
-  export type DoeSettingsResponse = { accent: string; logo_key?: (string | null) | undefined };
+  export type DoeSettingsResponse = { style: DoeStyle };
   export type DoeSummaryResponse = {
     id: DoeId;
     issued_on: string;
@@ -684,7 +712,6 @@ export namespace Schemas {
   };
   export type GraphInvalidDetails = { errors: Array<GraphErrorResponse> };
   export type GraphInvalidBody = { code: string; details: GraphInvalidDetails; message: string; status: number };
-  export type HexColor = string;
   export type SupplierInvoiceId = string;
   export type SupplierInvoiceLineAllocationId = string;
   export type SupplierInvoiceLineId = string;
@@ -1023,6 +1050,7 @@ export namespace Schemas {
     updated_at: string;
     user_id: UserId;
   };
+  export type PreviewDoeStyleRequest = { style: DoeStyle };
   export type ProductResponse = {
     created_at: string;
     datasheet_keys: Array<string>;
@@ -1374,9 +1402,11 @@ export namespace Schemas {
     description?: (string | null) | undefined;
     name: string;
     sections: Array<DoeModelSection>;
+    style?: (null | DoeStyle) | undefined;
   };
   export type UpdateDoeRequest = {
     author?: (string | null) | undefined;
+    cover_photo_key?: (string | null) | undefined;
     expected_updated_at?: (string | null) | undefined;
     issued_on: string;
     lot?: (string | null) | undefined;
@@ -1386,7 +1416,7 @@ export namespace Schemas {
     sections: Array<DoeSection>;
     title: string;
   };
-  export type UpdateDoeSettingsRequest = { accent: HexColor; logo_key?: (string | null) | undefined };
+  export type UpdateDoeSettingsRequest = { style: DoeStyle };
   export type UpdateEquipmentRequest = { hourly_rate_cents: number; name: string };
   export type UpdateInvoiceRequest = {
     customer_context_id: CustomerContextId;
@@ -4533,6 +4563,7 @@ export namespace Endpoints {
           name: string;
           organization_id: Schemas.OrganizationId;
           sections: Array<Schemas.DoeModelSection>;
+          style?: (null | Schemas.DoeStyle) | undefined;
           updated_at: string;
         }>;
         pagination?: (null | Schemas.PaginationMetadata) | undefined;
@@ -4560,6 +4591,7 @@ export namespace Endpoints {
           name: string;
           organization_id: Schemas.OrganizationId;
           sections: Array<Schemas.DoeModelSection>;
+          style?: (null | Schemas.DoeStyle) | undefined;
           updated_at: string;
         };
         pagination?: (null | Schemas.PaginationMetadata) | undefined;
@@ -4588,6 +4620,7 @@ export namespace Endpoints {
           name: string;
           organization_id: Schemas.OrganizationId;
           sections: Array<Schemas.DoeModelSection>;
+          style?: (null | Schemas.DoeStyle) | undefined;
           updated_at: string;
         };
         pagination?: (null | Schemas.PaginationMetadata) | undefined;
@@ -4613,6 +4646,7 @@ export namespace Endpoints {
           name: string;
           organization_id: Schemas.OrganizationId;
           sections: Array<Schemas.DoeModelSection>;
+          style?: (null | Schemas.DoeStyle) | undefined;
           updated_at: string;
         };
         pagination?: (null | Schemas.PaginationMetadata) | undefined;
@@ -4641,6 +4675,7 @@ export namespace Endpoints {
           name: string;
           organization_id: Schemas.OrganizationId;
           sections: Array<Schemas.DoeModelSection>;
+          style?: (null | Schemas.DoeStyle) | undefined;
           updated_at: string;
         };
         pagination?: (null | Schemas.PaginationMetadata) | undefined;
@@ -4677,10 +4712,7 @@ export namespace Endpoints {
       path: { organization_id: string };
     };
     responses: {
-      200: {
-        data: { accent: string; logo_key?: (string | null) | undefined };
-        pagination?: (null | Schemas.PaginationMetadata) | undefined;
-      };
+      200: { data: { style: Schemas.DoeStyle }; pagination?: (null | Schemas.PaginationMetadata) | undefined };
       401: unknown;
       403: unknown;
     };
@@ -4695,13 +4727,21 @@ export namespace Endpoints {
       body: Schemas.UpdateDoeSettingsRequest;
     };
     responses: {
-      200: {
-        data: { accent: string; logo_key?: (string | null) | undefined };
-        pagination?: (null | Schemas.PaginationMetadata) | undefined;
-      };
+      200: { data: { style: Schemas.DoeStyle }; pagination?: (null | Schemas.PaginationMetadata) | undefined };
       401: unknown;
       403: unknown;
     };
+  };
+  export type post_PreviewDoeStyle = {
+    method: "POST";
+    path: "/api/v1/organizations/{organization_id}/doe-style/preview";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string };
+
+      body: Schemas.PreviewDoeStyleRequest;
+    };
+    responses: { 200: unknown; 401: unknown; 403: unknown; 409: unknown };
   };
   export type get_ListDoes = {
     method: "GET";
@@ -4739,10 +4779,12 @@ export namespace Endpoints {
       200: {
         data: {
           author?: (string | null) | undefined;
+          cover_photo_key?: (string | null) | undefined;
           created_at: string;
           id: Schemas.DoeId;
           issued_on: string;
           lot?: (string | null) | undefined;
+          model_id?: (null | Schemas.DoeModelId) | undefined;
           parties: Array<Schemas.DoeParty>;
           place?: (string | null) | undefined;
           project_id: Schemas.ProjectId;
@@ -4771,10 +4813,12 @@ export namespace Endpoints {
       200: {
         data: {
           author?: (string | null) | undefined;
+          cover_photo_key?: (string | null) | undefined;
           created_at: string;
           id: Schemas.DoeId;
           issued_on: string;
           lot?: (string | null) | undefined;
+          model_id?: (null | Schemas.DoeModelId) | undefined;
           parties: Array<Schemas.DoeParty>;
           place?: (string | null) | undefined;
           project_id: Schemas.ProjectId;
@@ -5858,10 +5902,12 @@ export namespace Endpoints {
       200: {
         data: {
           author?: (string | null) | undefined;
+          cover_photo_key?: (string | null) | undefined;
           created_at: string;
           id: Schemas.DoeId;
           issued_on: string;
           lot?: (string | null) | undefined;
+          model_id?: (null | Schemas.DoeModelId) | undefined;
           parties: Array<Schemas.DoeParty>;
           place?: (string | null) | undefined;
           project_id: Schemas.ProjectId;
@@ -5890,10 +5936,12 @@ export namespace Endpoints {
       201: {
         data: {
           author?: (string | null) | undefined;
+          cover_photo_key?: (string | null) | undefined;
           created_at: string;
           id: Schemas.DoeId;
           issued_on: string;
           lot?: (string | null) | undefined;
+          model_id?: (null | Schemas.DoeModelId) | undefined;
           parties: Array<Schemas.DoeParty>;
           place?: (string | null) | undefined;
           project_id: Schemas.ProjectId;
@@ -7789,6 +7837,7 @@ export type EndpointByMethod = {
     "/api/v1/organizations/{organization_id}/doe-models": Endpoints.post_CreateDoeModel;
     "/api/v1/organizations/{organization_id}/doe-models/from-starter": Endpoints.post_CreateDoeModelFromStarter;
     "/api/v1/organizations/{organization_id}/doe-models/{doe_model_id}/restore": Endpoints.post_RestoreDoeModel;
+    "/api/v1/organizations/{organization_id}/doe-style/preview": Endpoints.post_PreviewDoeStyle;
     "/api/v1/organizations/{organization_id}/does/{doe_id}/supplies/draft": Endpoints.post_DraftDoeSupply;
     "/api/v1/organizations/{organization_id}/equipment": Endpoints.post_CreateEquipment;
     "/api/v1/organizations/{organization_id}/field/assignments/{task_assignment_id}/report": Endpoints.post_ReportAssignment;
