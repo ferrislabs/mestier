@@ -15,6 +15,10 @@ pub struct UpdateOrganizationRequest {
     /// `Organization::field_clock_enabled`'s own doc. Echoed on every save,
     /// like `name`/`slug`: this is a full replace, not a `PATCH` delta.
     pub field_clock_enabled: bool,
+    /// Whether members may reach this organization through MCP. Absent
+    /// leaves the current value unchanged.
+    #[serde(default)]
+    pub mcp_enabled: Option<bool>,
 }
 
 #[utoipa::path(
@@ -59,6 +63,7 @@ pub async fn handler(
             name: payload.name,
             slug: payload.slug,
             field_clock_enabled: payload.field_clock_enabled,
+            mcp_enabled: payload.mcp_enabled,
         })
         .await?;
 

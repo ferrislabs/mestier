@@ -105,3 +105,34 @@ pub fn mint(sub: &str) -> String {
 
     encode(&header, &claims, &key).expect("sign the test token")
 }
+
+pub fn mint_delegated(sub: &str) -> String {
+    let mut header = Header::new(Algorithm::RS256);
+    header.kid = Some(KID.to_owned());
+
+    let mut extra = serde_json::Map::new();
+    extra.insert(
+        "act".to_owned(),
+        serde_json::json!({ "sub": "mestier-mcp-gateway" }),
+    );
+
+    let claims = Claims {
+        sub: Subject(sub.to_owned()),
+        iss: "http://127.0.0.1/realms/mestier".to_owned(),
+        aud: Some(Audience::Single("mestier-api".to_owned())),
+        exp: Some((Utc::now() + chrono::Duration::hours(1)).timestamp()),
+        email: Some("artisan@example.com".to_owned()),
+        email_verified: Some(true),
+        name: Some("Artisan Test".to_owned()),
+        preferred_username: Some("artisan".to_owned()),
+        given_name: Some("Artisan".to_owned()),
+        family_name: Some("Test".to_owned()),
+        scope: "openid profile email".to_owned(),
+        client_id: None,
+        extra,
+    };
+
+    let key = EncodingKey::from_rsa_pem(PRIVATE_KEY_PEM.as_bytes()).expect("build the signing key");
+
+    encode(&header, &claims, &key).expect("sign the delegated test token")
+}

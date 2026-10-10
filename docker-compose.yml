@@ -106,6 +106,21 @@ services:
     volumes:
       - rustfs-data:/data
 
+  cerbos:
+    <<: *common
+    image: ghcr.io/cerbos/cerbos:0.56.0
+    command: ["server", "--config=/conf/config.yaml"]
+    ports:
+      - "127.0.0.1:3592:3592"
+    volumes:
+      - ./deploy/cerbos/config.yaml:/conf/config.yaml:ro
+      - ./deploy/cerbos/policies:/policies:ro
+    healthcheck:
+      test: ["CMD", "/cerbos", "healthcheck", "--config=/conf/config.yaml"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
   init-clickhouse:
     <<: *common
     image: clickhouse/clickhouse-server:25.5.6

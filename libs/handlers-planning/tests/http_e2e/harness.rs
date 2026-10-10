@@ -32,6 +32,7 @@ pub struct App {
     /// carries no `planning.manage`, the case #305's write-enforcement
     /// tests refuse.
     pub no_permission_token: String,
+    pub manager_sub: String,
     pub pool: PgPool,
     pub organization_id: Uuid,
     pub task_assignment_id: Uuid,
@@ -79,6 +80,7 @@ pub async fn start() -> App {
         base_url: format!("http://{addr}"),
         token: issuer::mint(&fixture.manager_sub),
         no_permission_token: issuer::mint(&fixture.no_permission_sub),
+        manager_sub: fixture.manager_sub.clone(),
         pool,
         organization_id: fixture.organization_id,
         task_assignment_id: fixture.task_assignment_id,

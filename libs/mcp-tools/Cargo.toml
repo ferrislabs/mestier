@@ -1,0 +1,10 @@
+[package]
+name = "mcp-tools"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+
+# The MCP tool catalogue, shared by the gateway (which decides) and the
+# server (which executes). Frozen contract of docs/chantiers/mcp.md.
+
+[dependencies]

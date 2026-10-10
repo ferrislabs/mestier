@@ -1,4 +1,4 @@
-use chrono::NaiveDate;
+use chrono::{DateTime, NaiveDate, Utc};
 
 use crate::{
     DoeId, DoeModelId, OrganizationId, ProductId, ProjectId,
@@ -27,6 +27,10 @@ pub struct UpdateDoeCommand {
     pub revision: Revision,
     pub parties: Vec<DoeParty>,
     pub sections: Vec<DoeSection>,
+    /// The `updated_at` the caller last read. When given and no longer
+    /// current, the replace is refused: someone else saved in between, and
+    /// replacing the whole document would silently drop their change.
+    pub expected_updated_at: Option<DateTime<Utc>>,
 }
 
 /// Copies a product's technical sheet into a supply the editor can insert.

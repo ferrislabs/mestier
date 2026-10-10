@@ -919,6 +919,7 @@ export namespace Schemas {
     insurance_mention?: (string | null) | undefined;
     legal_form?: (string | null) | undefined;
     legal_name?: (string | null) | undefined;
+    mcp_enabled: boolean;
     missing_legal_identity_fields: Array<str>;
     name: string;
     owner_id: UserId;
@@ -1376,6 +1377,7 @@ export namespace Schemas {
   };
   export type UpdateDoeRequest = {
     author?: (string | null) | undefined;
+    expected_updated_at?: (string | null) | undefined;
     issued_on: string;
     lot?: (string | null) | undefined;
     parties: Array<DoeParty>;
@@ -1415,7 +1417,12 @@ export namespace Schemas {
   }>;
   export type UpdateMemberRequest = Partial<{ first_name: string | null; last_name: string | null }>;
   export type UpdateMessageRequest = { content: string };
-  export type UpdateOrganizationRequest = { field_clock_enabled: boolean; name: string; slug: string };
+  export type UpdateOrganizationRequest = {
+    field_clock_enabled: boolean;
+    mcp_enabled?: (boolean | null) | undefined;
+    name: string;
+    slug: string;
+  };
   export type UpdateProductRequest = {
     datasheet_keys?: Array<string> | undefined;
     default_vat_rate_bp?: (number | null) | undefined;
@@ -3666,6 +3673,7 @@ export namespace Endpoints {
           insurance_mention?: (string | null) | undefined;
           legal_form?: (string | null) | undefined;
           legal_name?: (string | null) | undefined;
+          mcp_enabled: boolean;
           missing_legal_identity_fields: Array<Schemas.str>;
           name: string;
           owner_id: Schemas.UserId;
@@ -3704,6 +3712,7 @@ export namespace Endpoints {
           insurance_mention?: (string | null) | undefined;
           legal_form?: (string | null) | undefined;
           legal_name?: (string | null) | undefined;
+          mcp_enabled: boolean;
           missing_legal_identity_fields: Array<Schemas.str>;
           name: string;
           owner_id: Schemas.UserId;
@@ -3744,6 +3753,7 @@ export namespace Endpoints {
           insurance_mention?: (string | null) | undefined;
           legal_form?: (string | null) | undefined;
           legal_name?: (string | null) | undefined;
+          mcp_enabled: boolean;
           missing_legal_identity_fields: Array<Schemas.str>;
           name: string;
           owner_id: Schemas.UserId;
@@ -3795,6 +3805,7 @@ export namespace Endpoints {
           insurance_mention?: (string | null) | undefined;
           legal_form?: (string | null) | undefined;
           legal_name?: (string | null) | undefined;
+          mcp_enabled: boolean;
           missing_legal_identity_fields: Array<Schemas.str>;
           name: string;
           owner_id: Schemas.UserId;
@@ -5253,6 +5264,7 @@ export namespace Endpoints {
           insurance_mention?: (string | null) | undefined;
           legal_form?: (string | null) | undefined;
           legal_name?: (string | null) | undefined;
+          mcp_enabled: boolean;
           missing_legal_identity_fields: Array<Schemas.str>;
           name: string;
           owner_id: Schemas.UserId;
@@ -7562,6 +7574,7 @@ export namespace Endpoints {
           insurance_mention?: (string | null) | undefined;
           legal_form?: (string | null) | undefined;
           legal_name?: (string | null) | undefined;
+          mcp_enabled: boolean;
           missing_legal_identity_fields: Array<Schemas.str>;
           name: string;
           owner_id: Schemas.UserId;

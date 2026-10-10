@@ -312,6 +312,7 @@ async fn spec_doe_3_a_supply_is_a_copy() {
             revision: doe.revision.clone(),
             parties: doe.parties.clone(),
             sections,
+            expected_updated_at: None,
         })
         .await
         .unwrap();
@@ -433,6 +434,7 @@ async fn spec_doe_7_a_member_without_planning_manage_cannot_write() {
         revision: doe.revision.clone(),
         parties: doe.parties.clone(),
         sections: doe.sections.clone(),
+        expected_updated_at: None,
     };
     let err = usecase.update_doe(update).await.unwrap_err();
     assert!(matches!(err, CoreError::Forbidden { .. }), "{err:?}");
@@ -492,6 +494,7 @@ async fn update_replaces_the_content_and_keeps_identity() {
             revision: crate::Revision::try_from("B".to_owned()).unwrap(),
             parties: doe.parties.clone(),
             sections: doe.sections[..2].to_vec(),
+            expected_updated_at: None,
         })
         .await
         .unwrap();

@@ -1,0 +1,92 @@
+name: McpToolTests
+description: Interim MCP gateway policy v1
+principals:
+  reader:
+    id: u1
+    roles: ["user"]
+    attr:
+      scopes: ["mestier.read"]
+  doe_writer:
+    id: u2
+    roles: ["user"]
+    attr:
+      scopes: ["mestier.read", "mestier.doe.write"]
+  no_scope:
+    id: u3
+    roles: ["user"]
+    attr:
+      scopes: []
+resources:
+  read_project:
+    kind: mcp_tool
+    id: list_projects
+    attr: {access: read, domain: project, organization: acme}
+  write_doe:
+    kind: mcp_tool
+    id: create_doe
+    attr: {access: write, domain: doe, organization: acme}
+  write_invoice:
+    kind: mcp_tool
+    id: create_invoice
+    attr: {access: write, domain: invoice, organization: acme}
+tests:
+  - name: read with mestier.read is allowed
+    input:
+      principals: [reader]
+      resources: [read_project]
+      actions: [list_projects]
+    expected:
+      - principal: reader
+        resource: read_project
+        actions:
+          list_projects: EFFECT_ALLOW
+  - name: read without mestier.read is denied
+    input:
+      principals: [no_scope]
+      resources: [read_project]
+      actions: [list_projects]
+    expected:
+      - principal: no_scope
+        resource: read_project
+        actions:
+          list_projects: EFFECT_DENY
+  - name: write DOE with mestier.doe.write is allowed
+    input:
+      principals: [doe_writer]
+      resources: [write_doe]
+      actions: [create_doe]
+    expected:
+      - principal: doe_writer
+        resource: write_doe
+        actions:
+          create_doe: EFFECT_ALLOW
+  - name: write DOE with only mestier.read is denied
+    input:
+      principals: [reader]
+      resources: [write_doe]
+      actions: [create_doe]
+    expected:
+      - principal: reader
+        resource: write_doe
+        actions:
+          create_doe: EFFECT_DENY
+  - name: write outside DOE is denied even with every scope
+    input:
+      principals: [doe_writer]
+      resources: [write_invoice]
+      actions: [create_invoice]
+    expected:
+      - principal: doe_writer
+        resource: write_invoice
+        actions:
+          create_invoice: EFFECT_DENY
+  - name: unknown action on an unclassified resource is denied
+    input:
+      principals: [doe_writer]
+      resources: [write_invoice]
+      actions: [delete_project]
+    expected:
+      - principal: doe_writer
+        resource: write_invoice
+        actions:
+          delete_project: EFFECT_DENY

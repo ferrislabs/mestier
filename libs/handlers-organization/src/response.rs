@@ -52,6 +52,7 @@ pub struct OrganizationResponse {
     /// Whether this organization's VAT is due on invoicing rather than on
     /// collection — see `Organization::vat_on_debits`'s own doc.
     pub vat_on_debits: bool,
+    pub mcp_enabled: bool,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }
@@ -84,6 +85,7 @@ impl From<Organization> for OrganizationResponse {
             missing_legal_identity_fields,
             field_clock_enabled: org.field_clock_enabled,
             vat_on_debits: org.vat_on_debits,
+            mcp_enabled: org.mcp_enabled,
             created_at: org.created_at,
             updated_at: org.updated_at,
         }

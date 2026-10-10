@@ -15,6 +15,8 @@ pub enum MiddlewareError {
     InvalidAuthHeader,
     #[error("authentication failed: {0}")]
     AuthenticationFailed(String),
+    #[error("route closed to delegated tokens")]
+    DelegatedRouteForbidden,
 }
 
 impl IntoResponse for MiddlewareError {
@@ -34,6 +36,11 @@ impl IntoResponse for MiddlewareError {
                 StatusCode::UNAUTHORIZED,
                 "E_AUTHENTICATION_FAILED",
                 "Authentication failed",
+            ),
+            MiddlewareError::DelegatedRouteForbidden => (
+                StatusCode::FORBIDDEN,
+                "E_DELEGATED_ROUTE_FORBIDDEN",
+                "Cette action n'est pas accessible par IA (MCP).",
             ),
         };
 
@@ -75,6 +82,9 @@ pub enum ApiError {
     // 403
     #[error("Forbidden")]
     Forbidden,
+
+    #[error("{0}")]
+    ForbiddenWithReason(String),
 
     #[error("Insufficient permissions: required scope `{0}`")]
     InsufficientScope(String),
@@ -125,7 +135,9 @@ impl ApiError {
             Self::Unauthorized | Self::TokenNotFound | Self::TokenExpired | Self::InvalidToken => {
                 StatusCode::UNAUTHORIZED
             }
-            Self::Forbidden | Self::InsufficientScope(_) => StatusCode::FORBIDDEN,
+            Self::Forbidden | Self::ForbiddenWithReason(_) | Self::InsufficientScope(_) => {
+                StatusCode::FORBIDDEN
+            }
             Self::NotFound | Self::ResourceNotFound(_, _) => StatusCode::NOT_FOUND,
             Self::Conflict(_) => StatusCode::CONFLICT,
             Self::UnprocessableEntity(_) => StatusCode::UNPROCESSABLE_ENTITY,
@@ -145,6 +157,7 @@ impl ApiError {
             Self::TokenExpired => "E_TOKEN_EXPIRED",
             Self::InvalidToken => "E_INVALID_TOKEN",
             Self::Forbidden => "E_FORBIDDEN",
+            Self::ForbiddenWithReason(_) => "E_FORBIDDEN_REASON",
             Self::InsufficientScope(_) => "E_INSUFFICIENT_SCOPE",
             Self::NotFound => "E_NOT_FOUND",
             Self::ResourceNotFound(_, _) => "E_RESOURCE_NOT_FOUND",

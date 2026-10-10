@@ -35,31 +35,7 @@ pub const TAG: &str = "invoices";
 #[derive(Debug, serde::Serialize, PartialEq)]
 pub struct EmptyResponse;
 
-/// Each handler crate defines its own copy of this check rather than
-/// sharing one (confirmed against `handlers-quote` and `handlers-planning`,
-/// which both do the same) — small enough that a shared crate for it would
-/// be more indirection than the duplication it removes.
-async fn require_org_membership(
-    state: &AppState,
-    identity: &Identity,
-    organization_id: OrganizationId,
-) -> Result<(), ApiError> {
-    let user = state
-        .usecase
-        .find_user_by_sub(identity.id())
-        .await?
-        .ok_or(ApiError::Forbidden)?;
-    let membership = state
-        .usecase
-        .find_membership(organization_id, user.id)
-        .await?;
-
-    if membership.is_none() {
-        return Err(ApiError::Forbidden);
-    }
-
-    Ok(())
-}
+pub use handlers::membership::require_org_membership;
 
 /// Membership is the outer gate, `VIEW_INVOICES` is the inner one (#395):
 /// belonging to the organization used to be enough to read every invoice in
@@ -85,6 +61,8 @@ async fn require_view_invoices(
     {
         return Err(ApiError::Forbidden);
     }
+
+    handlers::require_mcp_access(state, identity, organization_id).await?;
 
     let permissions = state
         .usecase

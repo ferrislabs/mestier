@@ -1833,6 +1833,7 @@ mod tests {
             invoice_number_prefix: "FAC".to_owned(),
             field_clock_enabled: false,
             vat_on_debits: false,
+            mcp_enabled: false,
             deleted_at: None,
             created_at: now,
             updated_at: now,

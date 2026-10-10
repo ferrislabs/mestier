@@ -1,0 +1,26 @@
+apiVersion: api.cerbos.dev/v1
+resourcePolicy:
+  version: default
+  resource: mcp_tool
+  rules:
+    - actions: ["*"]
+      effect: EFFECT_ALLOW
+      roles: ["user"]
+      name: read_with_read_scope
+      condition:
+        match:
+          all:
+            of:
+              - expr: R.attr.access == "read"
+              - expr: '"mestier.read" in P.attr.scopes'
+    - actions: ["*"]
+      effect: EFFECT_ALLOW
+      roles: ["user"]
+      name: doe_write_with_doe_write_scope
+      condition:
+        match:
+          all:
+            of:
+              - expr: R.attr.access == "write"
+              - expr: R.attr.domain == "doe"
+              - expr: '"mestier.doe.write" in P.attr.scopes'

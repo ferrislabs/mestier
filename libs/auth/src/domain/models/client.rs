@@ -6,4 +6,6 @@ pub struct Client {
     pub client_id: String,
     pub roles: Vec<String>,
     pub scopes: Vec<String>,
+    #[serde(default)]
+    pub delegated: bool,
 }

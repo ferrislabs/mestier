@@ -45,6 +45,7 @@ pub async fn resolve_field_actor(
         .find_membership(organization_id, user_id)
         .await?
         .ok_or(ApiError::Forbidden)?;
+    handlers::require_mcp_access(state, identity, organization_id).await?;
     let employee = state
         .usecase
         .get_employee_by_member(member.id)

@@ -1,0 +1,31 @@
+[package]
+name = "mcp-server"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+
+[lib]
+name = "mcp_server"
+path = "src/lib.rs"
+
+[[bin]]
+name = "mcp-server"
+path = "src/main.rs"
+
+[dependencies]
+mcp-tools = { workspace = true }
+tokio = { workspace = true }
+axum = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+reqwest = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+clap = { workspace = true }
+base64 = { workspace = true }
+http = { workspace = true }
+uuid = { workspace = true }
+rmcp = { version = "=3.5.1", features = ["server", "macros", "transport-streamable-http-server"] }
+
+[dev-dependencies]
+reqwest = { workspace = true }

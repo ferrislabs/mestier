@@ -337,6 +337,15 @@ where
     pub async fn replace(&mut self, command: UpdateDoeCommand) -> Result<Doe, CoreError> {
         let existing = self.get_doe(command.id).await?;
 
+        if command
+            .expected_updated_at
+            .is_some_and(|expected| expected != existing.updated_at)
+        {
+            return Err(CoreError::Conflict(
+                "le DOE a été modifié entre-temps, relis-le avant de l'enregistrer".to_owned(),
+            ));
+        }
+
         if command.sections.len() > MAX_SECTIONS {
             return Err(CoreError::Conflict(format!(
                 "a DOE holds at most {MAX_SECTIONS} sections"
@@ -511,6 +520,7 @@ mod tests {
             revision: doe.revision.clone(),
             parties: Vec::new(),
             sections: Vec::new(),
+            expected_updated_at: None,
         }
     }
 
@@ -553,6 +563,28 @@ mod tests {
         DoeService::new(doe_repository_returning(doe))
             .replace(command)
             .await
+    }
+
+    #[tokio::test]
+    async fn replace_refuses_a_stale_expected_updated_at() {
+        let doe = existing_doe(OrganizationId(Uuid::new_v4()));
+        let mut command = update_command(&doe);
+        command.expected_updated_at = Some(doe.updated_at - chrono::Duration::seconds(1));
+
+        let err = replace_with(command, doe).await.unwrap_err();
+
+        assert!(matches!(err, CoreError::Conflict(_)));
+    }
+
+    #[tokio::test]
+    async fn replace_accepts_the_current_expected_updated_at() {
+        let doe = existing_doe(OrganizationId(Uuid::new_v4()));
+        let mut command = update_command(&doe);
+        command.expected_updated_at = Some(doe.updated_at);
+
+        replace_with(command, doe)
+            .await
+            .expect("current version is accepted");
     }
 
     #[tokio::test]
@@ -957,6 +989,7 @@ mod tests {
             invoice_number_prefix: "FAC".to_owned(),
             field_clock_enabled: false,
             vat_on_debits: false,
+            mcp_enabled: false,
             deleted_at: None,
             created_at: now,
             updated_at: now,

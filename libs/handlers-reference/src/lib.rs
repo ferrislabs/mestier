@@ -1,8 +1,6 @@
-use auth::Identity;
 use axum::{Router, middleware::from_fn_with_state};
 use axum_extra::routing::RouterExt;
-use handlers::{ApiError, AppState, auth::auth_middleware, rate_limit::rate_limit_middleware};
-use mestier_core::OrganizationId;
+use handlers::{AppState, auth::auth_middleware, rate_limit::rate_limit_middleware};
 
 pub mod absence;
 pub mod cost_basis;
@@ -21,27 +19,7 @@ pub const TAG: &str = "reference";
 #[derive(Debug, serde::Serialize, PartialEq)]
 pub struct EmptyResponse;
 
-async fn require_org_membership(
-    state: &AppState,
-    identity: &Identity,
-    organization_id: OrganizationId,
-) -> Result<(), ApiError> {
-    let user = state
-        .usecase
-        .find_user_by_sub(identity.id())
-        .await?
-        .ok_or(ApiError::Forbidden)?;
-    let membership = state
-        .usecase
-        .find_membership(organization_id, user.id)
-        .await?;
-
-    if membership.is_none() {
-        return Err(ApiError::Forbidden);
-    }
-
-    Ok(())
-}
+pub use handlers::membership::require_org_membership;
 
 pub fn router(state: &AppState) -> Router<AppState> {
     Router::new()

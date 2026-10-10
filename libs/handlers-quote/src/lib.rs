@@ -14,27 +14,7 @@ pub const TAG: &str = "quotes";
 #[derive(Debug, serde::Serialize, PartialEq)]
 pub struct EmptyResponse;
 
-async fn require_org_membership(
-    state: &AppState,
-    identity: &Identity,
-    organization_id: OrganizationId,
-) -> Result<(), ApiError> {
-    let user = state
-        .usecase
-        .find_user_by_sub(identity.id())
-        .await?
-        .ok_or(ApiError::Forbidden)?;
-    let membership = state
-        .usecase
-        .find_membership(organization_id, user.id)
-        .await?;
-
-    if membership.is_none() {
-        return Err(ApiError::Forbidden);
-    }
-
-    Ok(())
-}
+pub use handlers::membership::require_org_membership;
 
 async fn require_quote_membership(
     state: &AppState,
@@ -76,6 +56,8 @@ async fn require_view_quotes(
     {
         return Err(ApiError::Forbidden);
     }
+
+    handlers::require_mcp_access(state, identity, organization_id).await?;
 
     let permissions = state
         .usecase
