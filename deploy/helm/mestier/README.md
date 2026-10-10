@@ -102,6 +102,7 @@ See `values.yaml` for the full, commented list. Highlights:
 | `api.secret` | Sensitive API config (DB password, auth secret, storage keys), rendered into a Secret unless `existingSecret` is set. Per-key `valueFrom` overrides source a given env var from a different Secret/key (see above) |
 | `api.service.internalPort` | Health (`/health`) and metrics port, probed by the Deployment, not exposed via ingress/gateway |
 | `webapp.env` | `API_URL` / `ISSUER_URL` / `OIDC_CLIENT_ID`, injected at container start into `config.json` (see `apps/webapp/docker-entrypoint.sh`) — set `OIDC_CLIENT_ID` to the same value the API's `AUTH_CLIENT_ID` uses; it's a public identifier, not a secret |
+| `api.env.AUTH_AUDIENCE` / `api.env.AUTH_TRUSTED_CLIENTS` | The API only accepts a token whose `aud` names `AUTH_AUDIENCE` (default `mestier-api`) or whose `azp` is one of `AUTH_TRUSTED_CLIENTS` (comma list, default: `AUTH_CLIENT_ID`). If the webapp's `OIDC_CLIENT_ID` differs from `AUTH_CLIENT_ID`, list it in `AUTH_TRUSTED_CLIENTS` or the webapp gets 401 |
 | `api.autoscaling` / `webapp.autoscaling` | Optional HPA per component |
 | `api.migrations` | Runs `sqlx migrate run` as an ArgoCD PreSync hook before api/webapp sync (see below) |
 

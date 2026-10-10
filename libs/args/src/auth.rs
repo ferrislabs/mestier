@@ -28,12 +28,37 @@ pub struct AuthArgs {
         long_help = "The client secret to use for authentication"
     )]
     pub client_secret: String,
+
+    #[arg(
+        long = "auth-audience",
+        env = "AUTH_AUDIENCE",
+        name = "AUTH_AUDIENCE",
+        default_value = "mestier-api",
+        long_help = "The audience a token must name to be accepted by the API"
+    )]
+    pub audience: String,
+
+    #[arg(
+        long = "auth-trusted-clients",
+        env = "AUTH_TRUSTED_CLIENTS",
+        name = "AUTH_TRUSTED_CLIENTS",
+        value_delimiter = ',',
+        long_help = "Mestier's own OAuth clients whose tokens are accepted without the API audience. Defaults to AUTH_CLIENT_ID"
+    )]
+    pub trusted_clients: Vec<String>,
 }
 
 impl From<AuthArgs> for AuthConfig {
     fn from(value: AuthArgs) -> Self {
+        let trusted_clients = if value.trusted_clients.is_empty() {
+            vec![value.client_id]
+        } else {
+            value.trusted_clients
+        };
         Self {
             issuer: value.issuer,
+            audience: value.audience,
+            trusted_clients,
         }
     }
 }

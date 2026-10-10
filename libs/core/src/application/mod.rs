@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use auth::{AuthService, FerrisKeyRepository};
+use auth::{AcceptedAudience, AuthService, FerrisKeyRepository};
 use authz::LocalPolicyEngine;
 use common::{AutomationConfig, Config, CoreError};
 use rate_limit::{Quota, RateLimitService, RedisRateLimiter};
@@ -232,7 +232,10 @@ impl MestierService {
 }
 
 pub async fn create_service(config: Config) -> Result<MestierService, CoreError> {
-    let auth_repo = FerrisKeyRepository::new(config.auth.issuer, None);
+    let auth_repo = FerrisKeyRepository::new(
+        config.auth.issuer,
+        AcceptedAudience::new(config.auth.audience, config.auth.trusted_clients),
+    );
     let auth = AuthService::new(auth_repo);
     let s3_storage = S3FileStorage::from_config(&config.file_storage);
     if config.file_storage.auto_create_bucket {
