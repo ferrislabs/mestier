@@ -71,7 +71,10 @@ pub async fn handler(
 /// for the duration of the render.
 const MAX_BUNDLE_BYTES: usize = 256 * 1024 * 1024;
 
-async fn load_files(state: &AppState, document: &DoeDocument) -> Result<FileBundle, ApiError> {
+pub(crate) async fn load_files(
+    state: &AppState,
+    document: &DoeDocument,
+) -> Result<FileBundle, ApiError> {
     let mut bundle = FileBundle::default();
     let mut total_bytes = 0usize;
     for key in document.file_keys() {
@@ -146,7 +149,7 @@ const RENDER_TIMEOUT: Duration = Duration::from_secs(120);
 static RENDER_PERMITS: LazyLock<Arc<Semaphore>> =
     LazyLock::new(|| Arc::new(Semaphore::new(CONCURRENT_RENDERS)));
 
-async fn render_off_the_executor(
+pub(crate) async fn render_off_the_executor(
     document: DoeDocument,
     files: FileBundle,
 ) -> Result<Vec<u8>, ApiError> {
@@ -237,7 +240,9 @@ fn content_disposition(filename: &str) -> String {
 #[cfg(test)]
 mod tests {
     use chrono::NaiveDate;
-    use mestier_core::{DoeFile, DoeSupply, HexColor, NumberedSection, NumberedSupply};
+    use mestier_core::{
+        DocumentStyle, DoeFile, DoeStyle, DoeSupply, NumberedSection, NumberedSupply,
+    };
     use uuid::Uuid;
 
     use super::*;
@@ -278,8 +283,10 @@ mod tests {
                     }],
                 },
             }],
-            accent: HexColor::mestier_default(),
-            logo_key: None,
+            style: DocumentStyle::from(&DoeStyle::default()),
+            header: String::new(),
+            footer: String::new(),
+            cover_photo_key: None,
         }
     }
 

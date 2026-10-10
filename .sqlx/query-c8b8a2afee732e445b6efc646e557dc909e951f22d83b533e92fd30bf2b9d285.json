@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            INSERT INTO does (id, org_id, project_id, title, place, lot, issued_on, author, revision, parties, sections, created_at, updated_at)\n            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)\n            RETURNING id, org_id, project_id, title, place, lot, issued_on, author, revision, parties, sections, created_at, updated_at\n            ",
+  "query": "\n            INSERT INTO does (id, org_id, project_id, model_id, title, place, lot, issued_on, author, revision, cover_photo_key, parties, sections, created_at, updated_at)\n            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)\n            RETURNING id, org_id, project_id, model_id, title, place, lot, issued_on, author, revision, cover_photo_key, parties, sections, created_at, updated_at\n            ",
   "describe": {
     "columns": [
       {
@@ -20,51 +20,61 @@
       },
       {
         "ordinal": 3,
+        "name": "model_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 4,
         "name": "title",
         "type_info": "Text"
       },
       {
-        "ordinal": 4,
+        "ordinal": 5,
         "name": "place",
         "type_info": "Text"
       },
       {
-        "ordinal": 5,
+        "ordinal": 6,
         "name": "lot",
         "type_info": "Text"
       },
       {
-        "ordinal": 6,
+        "ordinal": 7,
         "name": "issued_on",
         "type_info": "Date"
       },
       {
-        "ordinal": 7,
+        "ordinal": 8,
         "name": "author",
         "type_info": "Text"
       },
       {
-        "ordinal": 8,
+        "ordinal": 9,
         "name": "revision",
         "type_info": "Text"
       },
       {
-        "ordinal": 9,
+        "ordinal": 10,
+        "name": "cover_photo_key",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 11,
         "name": "parties",
         "type_info": "Jsonb"
       },
       {
-        "ordinal": 10,
+        "ordinal": 12,
         "name": "sections",
         "type_info": "Jsonb"
       },
       {
-        "ordinal": 11,
+        "ordinal": 13,
         "name": "created_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 12,
+        "ordinal": 14,
         "name": "updated_at",
         "type_info": "Timestamptz"
       }
@@ -74,10 +84,12 @@
         "Uuid",
         "Uuid",
         "Uuid",
+        "Uuid",
         "Text",
         "Text",
         "Text",
         "Date",
+        "Text",
         "Text",
         "Text",
         "Jsonb",
@@ -90,17 +102,19 @@
       false,
       false,
       false,
-      false,
-      true,
       true,
       false,
       true,
+      true,
       false,
+      true,
+      false,
+      true,
       false,
       false,
       false,
       false
     ]
   },
-  "hash": "0992151f799645cebb284762ef9cc509b67133af028f836eb7451a1915617301"
+  "hash": "c8b8a2afee732e445b6efc646e557dc909e951f22d83b533e92fd30bf2b9d285"
 }

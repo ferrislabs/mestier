@@ -2,7 +2,7 @@ use chrono::Utc;
 use common::{CoreError, generate_uuid_v7};
 
 use crate::{
-    DoeModel, DoeModelId, DoeModelSection, DoeSettings, OrganizationId,
+    DoeModel, DoeModelId, DoeModelSection, DoeSettings, DoeStyle, OrganizationId,
     domain::doe_model::{
         commands::{
             CreateDoeModelCommand, CreateDoeModelFromStarterCommand, UpdateDoeModelCommand,
@@ -77,6 +77,7 @@ where
                 name: command.name.trim().to_owned(),
                 description: blank_to_none(command.description),
                 sections: command.sections,
+                style: command.style.map(DoeStyle::cleaned),
                 archived_at: None,
                 created_at: now,
                 updated_at: now,
@@ -96,6 +97,7 @@ where
                 name: command.starter.name().to_owned(),
                 description: command.starter.description().map(str::to_owned),
                 sections: command.starter.sections(),
+                style: None,
                 archived_at: None,
                 created_at: now,
                 updated_at: now,
@@ -137,6 +139,7 @@ where
         model.name = command.name.trim().to_owned();
         model.description = blank_to_none(command.description);
         model.sections = command.sections;
+        model.style = command.style.map(DoeStyle::cleaned);
         model.updated_at = Utc::now();
 
         self.model_repository.update(&model).await
@@ -172,8 +175,7 @@ where
         self.settings_repository
             .upsert(&DoeSettings {
                 organization_id: command.organization_id,
-                accent: command.accent,
-                logo_key: blank_to_none(command.logo_key),
+                style: command.style.cleaned(),
             })
             .await
     }
@@ -213,6 +215,7 @@ mod tests {
             name: name.to_owned(),
             description: Some("  ".to_owned()),
             sections,
+            style: None,
         }
     }
 
@@ -224,6 +227,7 @@ mod tests {
             name: "M".to_owned(),
             description: None,
             sections: vec![plans("P")],
+            style: None,
             archived_at: archived.then_some(now),
             created_at: now,
             updated_at: now,
@@ -311,6 +315,7 @@ mod tests {
                 name: "N".to_owned(),
                 description: None,
                 sections: vec![plans("A")],
+                style: None,
             })
             .await;
 
@@ -358,12 +363,16 @@ mod tests {
             .update_settings(UpdateDoeSettingsCommand {
                 actor: authz::Subject::system(),
                 organization_id: org(),
-                accent: HexColor::try_from("#112233".to_owned()).unwrap(),
-                logo_key: Some(" ".to_owned()),
+                style: DoeStyle {
+                    primary: HexColor::try_from("#112233".to_owned()).unwrap(),
+                    logo_key: Some(" ".to_owned()),
+                    ..DoeStyle::default()
+                },
             })
             .await
             .unwrap();
 
-        assert_eq!(got.logo_key, None);
+        assert_eq!(got.style.logo_key, None);
+        assert_eq!(got.style.primary.as_str(), "#112233");
     }
 }

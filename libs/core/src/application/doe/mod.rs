@@ -37,11 +37,12 @@ impl MestierUseCase {
         DoeService::new(doe_repository).get_doe(id).await
     }
 
-    #[transactional(doe, doe_settings)]
+    #[transactional(doe, doe_model, doe_settings)]
     pub async fn doe_document(&self, id: DoeId) -> Result<DoeDocument, CoreError> {
+        let mut doe_model_repository = doe_model_repository;
         let mut doe_settings_repository = doe_settings_repository;
         DoeService::new(doe_repository)
-            .document(id, &mut doe_settings_repository)
+            .document(id, &mut doe_model_repository, &mut doe_settings_repository)
             .await
     }
 

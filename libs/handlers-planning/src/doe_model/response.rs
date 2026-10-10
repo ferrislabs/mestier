@@ -1,5 +1,5 @@
 use chrono::{DateTime, Utc};
-use mestier_core::{DoeModel, DoeModelSection, DoeSettings, StarterModel};
+use mestier_core::{DoeModel, DoeModelSection, DoeSettings, DoeStyle, StarterModel};
 use serde::Serialize;
 use utoipa::ToSchema;
 
@@ -10,6 +10,7 @@ pub struct DoeModelResponse {
     pub name: String,
     pub description: Option<String>,
     pub sections: Vec<DoeModelSection>,
+    pub style: Option<DoeStyle>,
     pub archived_at: Option<DateTime<Utc>>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
@@ -23,6 +24,7 @@ impl From<DoeModel> for DoeModelResponse {
             name: model.name,
             description: model.description,
             sections: model.sections,
+            style: model.style,
             archived_at: model.archived_at,
             created_at: model.created_at,
             updated_at: model.updated_at,
@@ -51,15 +53,13 @@ impl From<StarterModel> for DoeModelStarterResponse {
 
 #[derive(Debug, Clone, PartialEq, Serialize, ToSchema)]
 pub struct DoeSettingsResponse {
-    pub accent: String,
-    pub logo_key: Option<String>,
+    pub style: DoeStyle,
 }
 
 impl From<DoeSettings> for DoeSettingsResponse {
     fn from(settings: DoeSettings) -> Self {
         Self {
-            accent: settings.accent.as_str().to_owned(),
-            logo_key: settings.logo_key,
+            style: settings.style,
         }
     }
 }

@@ -1,0 +1,29 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO doe_settings (org_id, style, updated_at)\n            VALUES ($1, $2, now())\n            ON CONFLICT (org_id) DO UPDATE\n            SET style = EXCLUDED.style, updated_at = now()\n            RETURNING org_id, style AS \"style: Json<DoeStyle>\"\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "org_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "style: Json<DoeStyle>",
+        "type_info": "Jsonb"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Jsonb"
+      ]
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "269ea2cd785c2bdf2b1ecb140312fe7050c6f299568328e1bfa6947e28b1c591"
+}

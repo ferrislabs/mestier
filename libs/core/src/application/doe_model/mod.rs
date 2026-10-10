@@ -3,12 +3,12 @@ use common::CoreError;
 use mestier_macros::transactional;
 
 use crate::{
-    DoeModel, DoeModelId, DoeSettings, OrganizationId,
+    DoeDocument, DoeModel, DoeModelId, DoeSettings, OrganizationId,
     application::{MestierUseCase, policy},
     domain::doe_model::{
         commands::{
-            CreateDoeModelCommand, CreateDoeModelFromStarterCommand, UpdateDoeModelCommand,
-            UpdateDoeSettingsCommand,
+            CreateDoeModelCommand, CreateDoeModelFromStarterCommand, PreviewDoeStyleCommand,
+            UpdateDoeModelCommand, UpdateDoeSettingsCommand,
         },
         service::DoeModelService,
     },
@@ -214,5 +214,36 @@ impl MestierUseCase {
 
         let mut service = DoeModelService::new(doe_model_repository, doe_settings_repository);
         service.update_settings(command).await
+    }
+
+    /// A sample DOE laid out with a style that is not saved yet. Gated like
+    /// saving a style, since it exists to edit one.
+    #[transactional(role, member, authz)]
+    pub async fn preview_doe_style(
+        &self,
+        command: PreviewDoeStyleCommand,
+    ) -> Result<DoeDocument, CoreError> {
+        let mut member_repository = member_repository;
+        let mut role_repository = role_repository;
+
+        let actor = policy::enrich_for_organization(
+            command.actor.clone(),
+            command.organization_id,
+            &mut member_repository,
+            &mut role_repository,
+        )
+        .await?;
+        policy::require(
+            &authz,
+            &actor,
+            "reference.manage",
+            Resource::new("organization", command.organization_id.0.to_string()),
+        )
+        .await?;
+
+        Ok(DoeDocument::sample(
+            &command.style.cleaned(),
+            chrono::Utc::now().date_naive(),
+        ))
     }
 }

@@ -14,7 +14,7 @@ use crate::{
             render::DoeDocument,
         },
         doe_model::{
-            DoeModel, DoeModelSection, DoeModelSectionKind, DoeSettings,
+            DoeModel, DoeModelSection, DoeModelSectionKind,
             ports::{DoeModelRepository, DoeSettingsRepository},
         },
         organization::ports::OrganizationRepository,
@@ -33,6 +33,7 @@ pub const MAX_FILES: usize = 300;
 
 fn distinct_file_keys(doe: &Doe) -> usize {
     let mut keys = std::collections::HashSet::new();
+    keys.extend(doe.cover_photo_key.as_deref());
     keys.extend(
         doe.parties
             .iter()
@@ -319,12 +320,14 @@ where
             id: DoeId(generate_uuid_v7()),
             organization_id: command.organization_id,
             project_id: project.id,
+            model_id: Some(model.id),
             title: project.name.clone(),
             place: None,
             lot: None,
             issued_on: now.date_naive(),
             author: None,
             revision: Revision::try_from("A".to_owned())?,
+            cover_photo_key: None,
             parties,
             sections: model.sections.iter().map(section_from_model).collect(),
             created_at: now,
@@ -359,6 +362,7 @@ where
             issued_on: command.issued_on,
             author: blank_to_none(command.author),
             revision: command.revision,
+            cover_photo_key: blank_to_none(command.cover_photo_key),
             parties: command
                 .parties
                 .into_iter()
@@ -434,20 +438,36 @@ where
         })
     }
 
-    pub async fn document<SR>(
+    /// The DOE as it will be printed, in its model's style if the model has
+    /// one, else the organization's, else the default.
+    pub async fn document<MR, SR>(
         &mut self,
         id: DoeId,
+        models: &mut MR,
         settings: &mut SR,
     ) -> Result<DoeDocument, CoreError>
     where
+        MR: DoeModelRepository,
         SR: DoeSettingsRepository,
     {
         let doe = self.get_doe(id).await?;
-        let settings = settings
-            .find(doe.organization_id)
-            .await?
-            .unwrap_or_else(|| DoeSettings::default_for(doe.organization_id));
-        Ok(DoeDocument::from_doe(&doe, &settings))
+        let model_style = match doe.model_id {
+            Some(model_id) => models
+                .find_by_id(model_id)
+                .await?
+                .filter(|model| model.organization_id == doe.organization_id)
+                .and_then(|model| model.style),
+            None => None,
+        };
+        let style = match model_style {
+            Some(style) => style,
+            None => settings
+                .find(doe.organization_id)
+                .await?
+                .map(|settings| settings.style)
+                .unwrap_or_default(),
+        };
+        Ok(DoeDocument::from_doe(&doe, &style))
     }
 }
 
@@ -458,8 +478,8 @@ mod tests {
 
     use super::*;
     use crate::{
-        CustomerContext, CustomerContextId, CustomerId, DoeModelId, OrganizationId, Product,
-        ProductId, Supplier, SupplierId,
+        CustomerContext, CustomerContextId, CustomerId, DoeModelId, DoeSettings, DoeStyle,
+        HexColor, OrganizationId, Product, ProductId, Supplier, SupplierId,
         domain::{
             customer::ports::MockCustomerRepository,
             customer_context::ports::MockCustomerContextRepository,
@@ -482,12 +502,14 @@ mod tests {
             id: DoeId(Uuid::new_v4()),
             organization_id,
             project_id: ProjectId(Uuid::new_v4()),
+            model_id: None,
             title: "Avenue".to_owned(),
             place: None,
             lot: None,
             issued_on: NaiveDate::from_ymd_opt(2026, 10, 7).unwrap(),
             author: None,
             revision: Revision::try_from("A".to_owned()).unwrap(),
+            cover_photo_key: None,
             parties: Vec::new(),
             sections: Vec::new(),
             created_at: now,
@@ -518,6 +540,7 @@ mod tests {
             issued_on: doe.issued_on,
             author: None,
             revision: doe.revision.clone(),
+            cover_photo_key: None,
             parties: Vec::new(),
             sections: Vec::new(),
             expected_updated_at: None,
@@ -875,20 +898,142 @@ mod tests {
         assert!(matches!(err, CoreError::NotFound));
     }
 
-    #[tokio::test]
-    async fn document_falls_back_to_default_settings() {
-        let doe = existing_doe(OrganizationId(Uuid::new_v4()));
-        let id = doe.id;
+    fn styled(primary: &str) -> DoeStyle {
+        DoeStyle {
+            primary: HexColor::try_from(primary.to_owned()).unwrap(),
+            ..DoeStyle::default()
+        }
+    }
+
+    fn settings_with(style: Option<DoeStyle>) -> MockDoeSettingsRepository {
         let mut settings = MockDoeSettingsRepository::new();
+        settings.expect_find().returning(move |organization_id| {
+            let found = style.clone().map(|style| DoeSettings {
+                organization_id,
+                style,
+            });
+            Box::pin(async move { Ok(found) })
+        });
         settings
-            .expect_find()
-            .returning(|_| Box::pin(async { Ok(None) }));
+    }
+
+    fn models_with(model: Option<DoeModel>) -> MockDoeModelRepository {
+        let mut models = MockDoeModelRepository::new();
+        models.expect_find_by_id().returning(move |_| {
+            let model = model.clone();
+            Box::pin(async move { Ok(model) })
+        });
+        models
+    }
+
+    async fn document_style(
+        doe: Doe,
+        model: Option<DoeModel>,
+        organization: Option<DoeStyle>,
+    ) -> String {
+        let id = doe.id;
+        let mut service = DoeService::new(doe_repository_returning(doe));
+        let document = service
+            .document(
+                id,
+                &mut models_with(model),
+                &mut settings_with(organization),
+            )
+            .await
+            .unwrap();
+        document.style.primary.as_str().to_owned()
+    }
+
+    #[tokio::test]
+    async fn document_falls_back_to_default_style() {
+        let doe = existing_doe(OrganizationId(Uuid::new_v4()));
+
+        assert_eq!(document_style(doe, None, None).await, "#0f3d36");
+    }
+
+    #[tokio::test]
+    async fn spec_style_4_model_style_replaces_the_organization_style() {
+        let mut fixture = fixture();
+        fixture.model.style = Some(styled("#aa0000"));
+        let mut doe = existing_doe(fixture.organization_id);
+        doe.model_id = Some(fixture.model.id);
+
+        let primary = document_style(doe, Some(fixture.model), Some(styled("#00aa00"))).await;
+
+        assert_eq!(primary, "#aa0000");
+    }
+
+    #[tokio::test]
+    async fn spec_style_4_model_without_style_or_no_model_uses_the_organization_style() {
+        let fixture = fixture();
+        let mut from_model = existing_doe(fixture.organization_id);
+        from_model.model_id = Some(fixture.model.id);
+        let without_model = existing_doe(fixture.organization_id);
+
+        assert_eq!(
+            document_style(from_model, Some(fixture.model), Some(styled("#00aa00"))).await,
+            "#00aa00"
+        );
+        assert_eq!(
+            document_style(without_model, None, Some(styled("#00aa00"))).await,
+            "#00aa00"
+        );
+    }
+
+    #[tokio::test]
+    async fn spec_style_4_a_model_of_another_organization_is_ignored() {
+        let mut fixture = fixture();
+        fixture.model.style = Some(styled("#aa0000"));
+        let mut doe = existing_doe(OrganizationId(Uuid::new_v4()));
+        doe.model_id = Some(fixture.model.id);
+
+        assert_eq!(
+            document_style(doe, Some(fixture.model), Some(styled("#00aa00"))).await,
+            "#00aa00"
+        );
+    }
+
+    #[tokio::test]
+    async fn spec_style_6_cover_photo_counts_toward_the_file_limit() {
+        let doe = existing_doe(OrganizationId(Uuid::new_v4()));
+        let mut command = update_command(&doe);
+        command.cover_photo_key = Some("cover".to_owned());
+        command.sections = vec![DoeSection {
+            id: Uuid::new_v4(),
+            title: "Photos".to_owned(),
+            enabled: true,
+            content: DoeSectionContent::Photos {
+                per_page: crate::PhotosPerPage::One,
+                photos: (0..MAX_FILES)
+                    .map(|i| DoeFile {
+                        key: format!("p{i}"),
+                        caption: None,
+                    })
+                    .collect(),
+            },
+        }];
         let mut service = DoeService::new(doe_repository_returning(doe));
 
-        let document = service.document(id, &mut settings).await.unwrap();
+        assert!(matches!(
+            service.replace(command).await,
+            Err(CoreError::Conflict(_))
+        ));
+    }
 
-        assert_eq!(document.accent.as_str(), "#0f3d36");
-        assert_eq!(document.logo_key, None);
+    #[tokio::test]
+    async fn spec_style_6_cover_photo_is_saved_and_blank_means_none() {
+        let doe = existing_doe(OrganizationId(Uuid::new_v4()));
+        let mut service = DoeService::new(doe_repository_returning(doe.clone()));
+
+        let mut command = update_command(&doe);
+        command.cover_photo_key = Some(" doe/cover ".to_owned());
+        let saved = service.replace(command).await.unwrap();
+        assert_eq!(saved.cover_photo_key.as_deref(), Some("doe/cover"));
+
+        let mut command = update_command(&doe);
+        command.cover_photo_key = Some("  ".to_owned());
+        let saved = service.replace(command).await.unwrap();
+        assert_eq!(saved.cover_photo_key, None);
     }
 
     struct Fixture {
@@ -930,6 +1075,7 @@ mod tests {
             organization_id,
             name: "Paysagiste".to_owned(),
             description: None,
+            style: None,
             sections: vec![
                 DoeModelSection {
                     title: "Végétaux".to_owned(),

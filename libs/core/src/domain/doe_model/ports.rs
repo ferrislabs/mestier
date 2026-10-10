@@ -23,7 +23,7 @@ pub trait DoeModelRepository: Send {
         offset: u64,
     ) -> impl Future<Output = Result<(Vec<DoeModel>, u64), CoreError>> + Send;
 
-    /// Rewrites `name`, `description`, `sections` and `updated_at`.
+    /// Rewrites `name`, `description`, `sections`, `style` and `updated_at`.
     fn update(
         &mut self,
         model: &DoeModel,

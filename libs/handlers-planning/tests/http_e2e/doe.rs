@@ -112,6 +112,7 @@ async fn cleanup(app: &harness::App) {
     for statement in [
         "DELETE FROM does WHERE org_id = $1",
         "DELETE FROM doe_models WHERE org_id = $1",
+        "DELETE FROM doe_settings WHERE org_id = $1",
     ] {
         sqlx::query(statement)
             .bind(app.organization_id)
@@ -537,6 +538,109 @@ async fn a_save_based_on_a_stale_read_is_refused_instead_of_overwriting() {
         .await
         .expect("json");
     assert_eq!(current["data"]["title"], "Première modification");
+
+    cleanup(&app).await;
+}
+
+fn org_url(app: &harness::App, suffix: &str) -> String {
+    format!(
+        "{}/api/v1/organizations/{}{suffix}",
+        app.base_url, app.organization_id
+    )
+}
+
+#[tokio::test]
+#[ignore = "requires live postgres and redis"]
+async fn spec_style_2_3_7_a_style_is_validated_previewed_saved_and_exported() {
+    let app = harness::start().await;
+    let client = reqwest::Client::new();
+    let seeded = seed_project_and_model(&app).await;
+    let style = json!({
+        "primary": "#7A1F2B",
+        "heading_font": "montserrat",
+        "header_text": "{titre} – {lot}",
+        "contents_title": "Table des matières",
+    });
+
+    for invalid in [
+        json!({ "header_text": "{client}" }),
+        json!({ "contents_title": "  " }),
+        json!({ "primary": "#12345" }),
+    ] {
+        let refused = client
+            .put(org_url(&app, "/doe-settings"))
+            .bearer_auth(&app.token)
+            .json(&json!({ "style": invalid }))
+            .send()
+            .await
+            .expect("invalid style");
+        assert!(refused.status().is_client_error(), "{invalid}");
+    }
+    let default = client
+        .get(org_url(&app, "/doe-settings"))
+        .bearer_auth(&app.token)
+        .send()
+        .await
+        .expect("read default")
+        .json::<Value>()
+        .await
+        .expect("json");
+    assert_eq!(default["data"]["style"]["primary"], "#0f3d36");
+    assert_eq!(default["data"]["style"]["contents_title"], "SOMMAIRE");
+
+    let forbidden = client
+        .post(org_url(&app, "/doe-style/preview"))
+        .bearer_auth(&app.no_permission_token)
+        .json(&json!({ "style": style }))
+        .send()
+        .await
+        .expect("preview without permission");
+    assert_eq!(forbidden.status(), 403);
+    let preview = client
+        .post(org_url(&app, "/doe-style/preview"))
+        .bearer_auth(&app.token)
+        .json(&json!({ "style": style }))
+        .send()
+        .await
+        .expect("preview");
+    assert_eq!(preview.status(), 200);
+    assert_eq!(
+        preview.headers()["content-type"].to_str().unwrap(),
+        "application/pdf"
+    );
+    assert!(preview.bytes().await.unwrap().starts_with(b"%PDF"));
+    let saved_rows: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM doe_settings WHERE org_id = $1")
+        .bind(app.organization_id)
+        .fetch_one(&app.pool)
+        .await
+        .unwrap();
+    assert_eq!(saved_rows, 0, "a preview saves nothing");
+
+    let saved = client
+        .put(org_url(&app, "/doe-settings"))
+        .bearer_auth(&app.token)
+        .json(&json!({ "style": style }))
+        .send()
+        .await
+        .expect("save")
+        .json::<Value>()
+        .await
+        .expect("json");
+    assert_eq!(saved["data"]["style"]["primary"], "#7a1f2b");
+    assert_eq!(saved["data"]["style"]["heading_font"], "montserrat");
+    assert_eq!(saved["data"]["style"]["parties_title"], "INTERVENANTS");
+
+    let created = create_doe(&app, &seeded).await;
+    assert_eq!(created["data"]["model_id"], json!(seeded.model_id));
+    let doe_id = created["data"]["id"].as_str().unwrap().to_owned();
+    let pdf = client
+        .get(doe_url(&app, app.organization_id, &doe_id, "/pdf"))
+        .bearer_auth(&app.token)
+        .send()
+        .await
+        .expect("export");
+    assert_eq!(pdf.status(), 200);
+    assert!(pdf.bytes().await.unwrap().starts_with(b"%PDF"));
 
     cleanup(&app).await;
 }

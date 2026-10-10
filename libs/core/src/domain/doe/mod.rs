@@ -17,7 +17,7 @@ use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 use uuid::Uuid;
 
-use crate::{OrganizationId, ProductId, ProjectId};
+use crate::{DoeModelId, OrganizationId, ProductId, ProjectId};
 
 pub mod commands;
 pub mod document;
@@ -252,12 +252,18 @@ pub struct Doe {
     pub id: DoeId,
     pub organization_id: OrganizationId,
     pub project_id: ProjectId,
+    /// The model the DOE was made from. It decides the style at export;
+    /// `None` (made before styles, or model deleted) uses the
+    /// organization's.
+    pub model_id: Option<DoeModelId>,
     pub title: String,
     pub place: Option<String>,
     pub lot: Option<String>,
     pub issued_on: NaiveDate,
     pub author: Option<String>,
     pub revision: Revision,
+    /// Printed on the cover when the style asks for it.
+    pub cover_photo_key: Option<String>,
     pub parties: Vec<DoeParty>,
     pub sections: Vec<DoeSection>,
     pub created_at: DateTime<Utc>,

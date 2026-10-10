@@ -29,10 +29,11 @@ impl<'tx> DoeModelRepository for PgDoeModelRepository<'tx> {
         let row = sqlx::query_as!(
             DoeModelRow,
             r#"
-            INSERT INTO doe_models (id, org_id, name, description, sections, archived_at, created_at, updated_at)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+            INSERT INTO doe_models (id, org_id, name, description, sections, style, archived_at, created_at, updated_at)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
             RETURNING id, org_id, name, description,
                       sections AS "sections: Json<Vec<crate::DoeModelSection>>",
+                   style AS "style: Json<crate::DoeStyle>",
                       archived_at, created_at, updated_at
             "#,
             model.id.0,
@@ -40,6 +41,7 @@ impl<'tx> DoeModelRepository for PgDoeModelRepository<'tx> {
             model.name,
             model.description,
             Json(&model.sections) as Json<&Vec<crate::DoeModelSection>>,
+            model.style.as_ref().map(Json) as Option<Json<&crate::DoeStyle>>,
             model.archived_at,
             model.created_at,
             model.updated_at,
@@ -58,6 +60,7 @@ impl<'tx> DoeModelRepository for PgDoeModelRepository<'tx> {
             r#"
             SELECT id, org_id, name, description,
                    sections AS "sections: Json<Vec<crate::DoeModelSection>>",
+                   style AS "style: Json<crate::DoeStyle>",
                    archived_at, created_at, updated_at
             FROM doe_models
             WHERE id = $1
@@ -85,6 +88,7 @@ impl<'tx> DoeModelRepository for PgDoeModelRepository<'tx> {
             r#"
             SELECT id, org_id, name, description,
                    sections AS "sections: Json<Vec<crate::DoeModelSection>>",
+                   style AS "style: Json<crate::DoeStyle>",
                    archived_at, created_at, updated_at
             FROM doe_models
             WHERE org_id = $1
@@ -124,16 +128,18 @@ impl<'tx> DoeModelRepository for PgDoeModelRepository<'tx> {
             DoeModelRow,
             r#"
             UPDATE doe_models
-            SET name = $2, description = $3, sections = $4, updated_at = $5
+            SET name = $2, description = $3, sections = $4, style = $5, updated_at = $6
             WHERE id = $1
             RETURNING id, org_id, name, description,
                       sections AS "sections: Json<Vec<crate::DoeModelSection>>",
+                   style AS "style: Json<crate::DoeStyle>",
                       archived_at, created_at, updated_at
             "#,
             model.id.0,
             model.name,
             model.description,
             Json(&model.sections) as Json<&Vec<crate::DoeModelSection>>,
+            model.style.as_ref().map(Json) as Option<Json<&crate::DoeStyle>>,
             model.updated_at,
         )
         .fetch_optional(&mut ***tx)

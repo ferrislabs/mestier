@@ -118,18 +118,18 @@ pub use domain::{
 };
 
 pub use domain::{
-    BlankPageCount, Doe, DoeFile, DoeId, DoeModel, DoeModelId, DoeModelSection,
-    DoeModelSectionKind, DoeParty, DoeSection, DoeSectionContent, DoeSettings, DoeSummary,
-    DoeSupply, HexColor, MakerLabel, PartyRole, PhotosPerPage, Revision, StarterModel,
-    SupplierSnapshot,
+    BlankPageCount, Doe, DoeFile, DoeFont, DoeId, DoeLabel, DoeModel, DoeModelId, DoeModelSection,
+    DoeModelSectionKind, DoeParty, DoeSection, DoeSectionContent, DoeSettings, DoeStyle,
+    DoeSummary, DoeSupply, DoeTemplate, HexColor, LogoPosition, LogoSize, MakerLabel, PartyRole,
+    PhotosPerPage, Revision, StarterModel, SupplierSnapshot,
     doe::commands::{CreateDoeCommand, DraftSupplyFromProductCommand, UpdateDoeCommand},
     doe::render::{
-        BundledFile, DoeDocument, DoeRenderError, DoeRenderer, FileBundle, NumberedContent,
-        NumberedSection, NumberedSupply,
+        BundledFile, DocumentStyle, DoeDocument, DoeRenderError, DoeRenderer, FileBundle,
+        NumberedContent, NumberedSection, NumberedSupply,
     },
     doe_model::commands::{
-        CreateDoeModelCommand, CreateDoeModelFromStarterCommand, UpdateDoeModelCommand,
-        UpdateDoeSettingsCommand,
+        CreateDoeModelCommand, CreateDoeModelFromStarterCommand, PreviewDoeStyleCommand,
+        UpdateDoeModelCommand, UpdateDoeSettingsCommand,
     },
 };
 

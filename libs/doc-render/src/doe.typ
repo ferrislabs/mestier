@@ -1,10 +1,16 @@
 #let data = json("/data.json")
 #let doc = data.doc
 #let files = data.files
-#let accent = rgb(doc.accent)
+#let style = doc.style
+#let primary = rgb(style.primary)
+#let secondary = rgb(style.secondary)
+#let on_primary = rgb(style.on_primary)
 #let muted = luma(90)
 
-#set text(lang: "fr", font: "Inter", size: 10.5pt)
+#set text(lang: "fr", font: style.body_font, size: 10.5pt)
+
+// Titles use the heading font; everything else inherits the body font.
+#let titled(..args) = text(font: style.heading_font, ..args)
 #set par(justify: false)
 
 #let dash(value) = if value == none or value == "" { [—] } else { value }
@@ -22,10 +28,10 @@
 
 #let band(body) = block(
   width: 100%,
-  fill: accent,
+  fill: primary,
   inset: (x: 12pt, y: 10pt),
   radius: 2pt,
-  text(white, weight: "bold", size: 15pt, body),
+  titled(on_primary, weight: "bold", size: 15pt, body),
 )
 
 #let picture(key, ..args) = image(files.at(key).path, ..args)
@@ -55,7 +61,7 @@
 #show heading.where(level: 1): it => band(upper(it.body))
 #show heading.where(level: 2): it => {
   v(10pt)
-  text(accent, weight: "bold", size: 14pt, it.body)
+  titled(secondary, weight: "bold", size: 14pt, it.body)
   v(4pt)
 }
 
@@ -69,7 +75,7 @@
       picture(party.logo_key, height: 2cm, width: 4cm, fit: "contain")
     },
     [
-      #text(accent, weight: "bold", size: 11pt, party.role_label) \
+      #text(secondary, weight: "bold", size: 11pt, party.role_label) \
       #text(weight: "bold", size: 13pt, party.name) \
       #stacked(party.address, party.phone, party.email)
     ],
@@ -78,23 +84,39 @@
 
 #set page(paper: "a4", margin: (x: 2cm, y: 2.4cm))
 
+#let logo_box = (
+  small: (height: 1.6cm, width: 4cm),
+  medium: (height: 2.4cm, width: 6cm),
+  large: (height: 3.4cm, width: 8.5cm),
+).at(style.cover_logo_size)
+#let logo_align = (left: left, center: center, right: right).at(style.cover_logo_position)
+
 #page(header: none, footer: none)[
-  #if doc.logo_key != none {
-    align(left, picture(doc.logo_key, height: 2.4cm, width: 6cm, fit: "contain"))
+  #if style.logo_key != none {
+    align(logo_align, picture(style.logo_key, ..logo_box, fit: "contain"))
   }
-  #v(2.5cm)
+  #v(if doc.cover_photo_key != none { 1.2cm } else { 2.5cm })
   #if doc.place != none {
     text(14pt, fill: muted, doc.place)
     parbreak()
   }
-  #text(32pt, weight: "bold", doc.title)
+  #titled(32pt, weight: "bold", doc.title)
   #if doc.lot != none {
     parbreak()
     text(16pt, doc.lot)
   }
-  #v(1.2cm)
-  #block(width: 100%, fill: accent, inset: (x: 14pt, y: 16pt))[
-    #align(center, text(white, weight: "bold", size: 17pt)[DOSSIER DES OUVRAGES EXÉCUTÉS (D.O.E.)])
+  // The photo takes whatever height the cover has left, so the cover stays
+  // one page whatever the logo size and title length.
+  #if doc.cover_photo_key != none {
+    v(0.8cm)
+    block(width: 100%, height: 1fr, clip: true, radius: 2pt,
+      picture(doc.cover_photo_key, width: 100%, height: 100%, fit: "cover"))
+    v(0.4cm)
+  } else {
+    v(1.2cm)
+  }
+  #block(width: 100%, fill: primary, inset: (x: 14pt, y: 16pt))[
+    #align(center, titled(on_primary, weight: "bold", size: 17pt, style.cover_title))
   ]
   #v(1cm)
   #grid(
@@ -105,15 +127,20 @@
     text(weight: "bold")[Rédacteur], dash(doc.author),
     text(weight: "bold")[Indice], doc.revision,
   )
-  #v(1fr)
+  #v(if doc.cover_photo_key != none { 0.8cm } else { 1fr })
   #if contractor != none { party_block(contractor) }
 ]
 
 #set page(
   header: [
     #grid(
-      columns: (1fr, auto),
-      [DOE – #doc.title], [Indice #doc.revision],
+      columns: (auto, 1fr, auto),
+      column-gutter: if style.header_logo and style.logo_key != none { 8pt } else { 0pt },
+      align: horizon,
+      if style.header_logo and style.logo_key != none {
+        picture(style.logo_key, height: 0.7cm, width: 2.5cm, fit: "contain")
+      },
+      doc.header, [Indice #doc.revision],
     )
     #v(-4pt)
     #line(length: 100%, stroke: 0.5pt + muted)
@@ -123,12 +150,12 @@
     #v(-4pt)
     #grid(
       columns: (1fr, auto),
-      data.issued_fr, context counter(page).display(),
+      doc.footer, context counter(page).display(),
     )
   ],
 )
 
-#text(accent, weight: "bold", size: 20pt)[INTERVENANTS]
+#titled(primary, weight: "bold", size: 20pt, style.parties_title)
 #v(10pt)
 #for party in doc.parties {
   party_block(party)
@@ -136,7 +163,7 @@
 }
 
 #pagebreak(weak: true)
-#text(accent, weight: "bold", size: 20pt)[SOMMAIRE]
+#titled(primary, weight: "bold", size: 20pt, style.contents_title)
 #v(10pt)
 #outline(title: none, depth: 2)
 
@@ -171,8 +198,8 @@
         columns: (5cm, 1fr),
         stroke: 0.5pt + luma(180),
         inset: 7pt,
-        table.header(table.cell(colspan: 2, fill: accent)[
-          #text(white, weight: "bold")[Identification de la fourniture]
+        table.header(table.cell(colspan: 2, fill: primary)[
+          #titled(on_primary, weight: "bold", style.supply_table_title)
         ]),
         ..rows.map(row => (text(weight: "bold", row.at(0)), row.at(1))).flatten(),
       )

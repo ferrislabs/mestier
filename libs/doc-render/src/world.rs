@@ -18,13 +18,21 @@ const TEMPLATE: &str = include_str!("doe.typ");
 
 static LIBRARY: LazyLock<LazyHash<Library>> = LazyLock::new(|| LazyHash::new(Library::default()));
 
-const INTER: [&[u8]; 2] = [
+/// Every family a `DoeFont` names, regular and bold. Licenses sit next to
+/// the files.
+const FONT_FILES: [&[u8]; 8] = [
     include_bytes!("../fonts/Inter-Regular.ttf"),
     include_bytes!("../fonts/Inter-Bold.ttf"),
+    include_bytes!("../fonts/Montserrat-Regular.ttf"),
+    include_bytes!("../fonts/Montserrat-Bold.ttf"),
+    include_bytes!("../fonts/SourceSerif4-Regular.ttf"),
+    include_bytes!("../fonts/SourceSerif4-Bold.ttf"),
+    include_bytes!("../fonts/Barlow-Regular.ttf"),
+    include_bytes!("../fonts/Barlow-Bold.ttf"),
 ];
 
 static FONTS: LazyLock<(LazyHash<FontBook>, Vec<Font>)> = LazyLock::new(|| {
-    let fonts: Vec<Font> = INTER
+    let fonts: Vec<Font> = FONT_FILES
         .iter()
         .flat_map(|data| Font::iter(Bytes::new(*data)))
         .collect();

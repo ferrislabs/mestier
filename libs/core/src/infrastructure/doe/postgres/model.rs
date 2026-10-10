@@ -2,19 +2,21 @@ use chrono::{DateTime, NaiveDate, Utc};
 use common::CoreError;
 use uuid::Uuid;
 
-use crate::{Doe, DoeId, DoeSummary, OrganizationId, ProjectId, Revision};
+use crate::{Doe, DoeId, DoeModelId, DoeSummary, OrganizationId, ProjectId, Revision};
 
 #[derive(Debug, Clone)]
 pub struct DoeRow {
     pub id: Uuid,
     pub org_id: Uuid,
     pub project_id: Uuid,
+    pub model_id: Option<Uuid>,
     pub title: String,
     pub place: Option<String>,
     pub lot: Option<String>,
     pub issued_on: NaiveDate,
     pub author: Option<String>,
     pub revision: String,
+    pub cover_photo_key: Option<String>,
     pub parties: serde_json::Value,
     pub sections: serde_json::Value,
     pub created_at: DateTime<Utc>,
@@ -36,12 +38,14 @@ impl TryFrom<DoeRow> for Doe {
             id: DoeId(row.id),
             organization_id: OrganizationId(row.org_id),
             project_id: ProjectId(row.project_id),
+            model_id: row.model_id.map(DoeModelId),
             title: row.title,
             place: row.place,
             lot: row.lot,
             issued_on: row.issued_on,
             author: row.author,
             revision,
+            cover_photo_key: row.cover_photo_key,
             parties,
             sections,
             created_at: row.created_at,

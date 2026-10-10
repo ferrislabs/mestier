@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT id, org_id, project_id, title, place, lot, issued_on, author, revision, parties, sections, created_at, updated_at\n            FROM does\n            WHERE project_id = $1\n            ",
+  "query": "\n            UPDATE does\n            SET title = $2, place = $3, lot = $4, issued_on = $5, author = $6, revision = $7,\n                cover_photo_key = $8, parties = $9, sections = $10, updated_at = $11\n            WHERE id = $1\n            RETURNING id, org_id, project_id, model_id, title, place, lot, issued_on, author, revision, cover_photo_key, parties, sections, created_at, updated_at\n            ",
   "describe": {
     "columns": [
       {
@@ -20,75 +20,97 @@
       },
       {
         "ordinal": 3,
+        "name": "model_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 4,
         "name": "title",
         "type_info": "Text"
       },
       {
-        "ordinal": 4,
+        "ordinal": 5,
         "name": "place",
         "type_info": "Text"
       },
       {
-        "ordinal": 5,
+        "ordinal": 6,
         "name": "lot",
         "type_info": "Text"
       },
       {
-        "ordinal": 6,
+        "ordinal": 7,
         "name": "issued_on",
         "type_info": "Date"
       },
       {
-        "ordinal": 7,
+        "ordinal": 8,
         "name": "author",
         "type_info": "Text"
       },
       {
-        "ordinal": 8,
+        "ordinal": 9,
         "name": "revision",
         "type_info": "Text"
       },
       {
-        "ordinal": 9,
+        "ordinal": 10,
+        "name": "cover_photo_key",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 11,
         "name": "parties",
         "type_info": "Jsonb"
       },
       {
-        "ordinal": 10,
+        "ordinal": 12,
         "name": "sections",
         "type_info": "Jsonb"
       },
       {
-        "ordinal": 11,
+        "ordinal": 13,
         "name": "created_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 12,
+        "ordinal": 14,
         "name": "updated_at",
         "type_info": "Timestamptz"
       }
     ],
     "parameters": {
       "Left": [
-        "Uuid"
+        "Uuid",
+        "Text",
+        "Text",
+        "Text",
+        "Date",
+        "Text",
+        "Text",
+        "Text",
+        "Jsonb",
+        "Jsonb",
+        "Timestamptz"
       ]
     },
     "nullable": [
       false,
       false,
       false,
-      false,
-      true,
       true,
       false,
       true,
+      true,
       false,
+      true,
+      false,
+      true,
       false,
       false,
       false,
       false
     ]
   },
-  "hash": "2f527e451b4406d3e2a775ccff33aca82429784d608b159b6a3b6422984ceef7"
+  "hash": "6c4cd5056b749a058adb9acb0096e034a4c8b671faec5b75b99a7469435d0bb9"
 }

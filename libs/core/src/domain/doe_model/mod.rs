@@ -24,6 +24,9 @@ pub mod commands;
 pub mod ports;
 pub mod service;
 pub mod starter;
+pub mod style;
+
+pub use style::{DoeFont, DoeLabel, DoeStyle, DoeTemplate, LogoPosition, LogoSize, TemplateValues};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, ToSchema)]
 pub struct DoeModelId(pub Uuid);
@@ -55,6 +58,10 @@ impl HexColor {
     /// Mestier's brand green, used until an organization picks its own.
     pub fn mestier_default() -> Self {
         Self("#0f3d36".to_owned())
+    }
+
+    pub fn white() -> Self {
+        Self("#ffffff".to_owned())
     }
 }
 
@@ -106,6 +113,9 @@ pub struct DoeModel {
     pub name: String,
     pub description: Option<String>,
     pub sections: Vec<DoeModelSection>,
+    /// Replaces the organization's style for the DOEs made from this model.
+    /// `None` keeps the organization's.
+    pub style: Option<DoeStyle>,
     pub archived_at: Option<DateTime<Utc>>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
@@ -129,16 +139,14 @@ pub enum StarterModel {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DoeSettings {
     pub organization_id: OrganizationId,
-    pub accent: HexColor,
-    pub logo_key: Option<String>,
+    pub style: DoeStyle,
 }
 
 impl DoeSettings {
     pub fn default_for(organization_id: OrganizationId) -> Self {
         Self {
             organization_id,
-            accent: HexColor::mestier_default(),
-            logo_key: None,
+            style: DoeStyle::default(),
         }
     }
 }
