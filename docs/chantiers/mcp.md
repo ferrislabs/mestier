@@ -260,7 +260,7 @@ Configuration du realm (API d'admin FerrisKey, PR ferriskey#1611) :
 
 Résultats contre FerrisKey de la PR, Cerbos, gateway, serveur MCP et API locaux (`apps/mcp-gateway/e2e/local_stack.py`, 19/19) : @spec-mcp-1 à 10 et 12 passent. Confirmé au passage : FerrisKey accepte `client_secret_post` et le token délégué porte `act`.
 
-Écart trouvé : FerrisKey n'autorise l'échange que si le client qui échange est partie du token (`azp` = son `client_id`, ou `aud` le contient). Le token client a pour audience l'URL de la ressource, pas le `client_id` de la gateway, donc l'échange est refusé. Contournement local : le `client_id` du client gateway est l'URL de la ressource. Correction attendue côté FerrisKey (décision ouverte) : rattacher une ressource autorisée au client qui la sert, et le considérer partie des tokens émis pour elle.
+Écart trouvé : FerrisKey n'autorise l'échange que si le client qui échange est partie du token (`azp` = son `client_id`, ou `aud` le contient). Le token client a pour audience l'URL de la ressource, pas le `client_id` de la gateway, donc l'échange est refusé. Contournement local : le `client_id` du client gateway est l'URL de la ressource. Correction décidée le 2026-10-10 (option A), confiée à l'agent FerrisKey sur la PR #1611 : rattacher une ressource autorisée au client qui la sert, et le considérer partie des tokens émis pour elle.
 
 ## Statut
 
@@ -277,6 +277,8 @@ Résultats contre FerrisKey de la PR, Cerbos, gateway, serveur MCP et API locaux
 | W7 | intégré |
 
 ## Decision log
+
+- 2026-10-10 : échange de token refusé à la gateway. Option A retenue : une ressource autorisée appartient à un client, qui devient partie des tokens émis pour elle. Rejeté : `client_id` de la gateway = URL de la ressource, fragile (un `client_id` https est aussi un client CIMD). Même PR : un drapeau de scope « ouvert aux clients dynamiques » remplace l'usage du type Default.
 
 - 2026-10-09 : W5b. L'inventaire a montré qu'un token délégué avec MANAGE_ORG pouvait activer lui-même le MCP (`PATCH /organizations/{o}`), et atteindre membres, rôles, fichiers, Discord. Plutôt que de boucher route par route, liste blanche des routes du serveur MCP dans le middleware d'authentification (invariant 11). Le contrôle `mcp_enabled` reste dans le `require_org_membership` partagé. Pas d'e2e sur `GET /users/@me/organizations` filtré : le harnais organisation n'existe pas, couvert par la relecture du filtre seulement.
 
