@@ -48,12 +48,21 @@ pub enum Tool {
     CreateDoe,
     AddDoeSupplyFromProduct,
     AddDoeSupply,
+    UpdateDoeSupply,
+    DeleteDoeSupply,
+    AddDoeSection,
+    UpdateDoeSection,
+    DeleteDoeSection,
+    ReorderDoeSections,
+    AddDoeFile,
+    UpdateDoeFile,
+    DeleteDoeFile,
     UpdateDoeHeader,
     ExportDoePdf,
 }
 
 impl Tool {
-    pub const ALL: [Tool; 17] = [
+    pub const ALL: [Tool; 26] = [
         Tool::ListOrganizations,
         Tool::ListProjects,
         Tool::GetProject,
@@ -69,6 +78,15 @@ impl Tool {
         Tool::CreateDoe,
         Tool::AddDoeSupplyFromProduct,
         Tool::AddDoeSupply,
+        Tool::UpdateDoeSupply,
+        Tool::DeleteDoeSupply,
+        Tool::AddDoeSection,
+        Tool::UpdateDoeSection,
+        Tool::DeleteDoeSection,
+        Tool::ReorderDoeSections,
+        Tool::AddDoeFile,
+        Tool::UpdateDoeFile,
+        Tool::DeleteDoeFile,
         Tool::UpdateDoeHeader,
         Tool::ExportDoePdf,
     ];
@@ -91,6 +109,15 @@ impl Tool {
             Self::CreateDoe => "create_doe",
             Self::AddDoeSupplyFromProduct => "add_doe_supply_from_product",
             Self::AddDoeSupply => "add_doe_supply",
+            Self::UpdateDoeSupply => "update_doe_supply",
+            Self::DeleteDoeSupply => "delete_doe_supply",
+            Self::AddDoeSection => "add_doe_section",
+            Self::UpdateDoeSection => "update_doe_section",
+            Self::DeleteDoeSection => "delete_doe_section",
+            Self::ReorderDoeSections => "reorder_doe_sections",
+            Self::AddDoeFile => "add_doe_file",
+            Self::UpdateDoeFile => "update_doe_file",
+            Self::DeleteDoeFile => "delete_doe_file",
             Self::UpdateDoeHeader => "update_doe_header",
             Self::ExportDoePdf => "export_doe_pdf",
         }
@@ -117,6 +144,15 @@ impl Tool {
             | Self::CreateDoe
             | Self::AddDoeSupplyFromProduct
             | Self::AddDoeSupply
+            | Self::UpdateDoeSupply
+            | Self::DeleteDoeSupply
+            | Self::AddDoeSection
+            | Self::UpdateDoeSection
+            | Self::DeleteDoeSection
+            | Self::ReorderDoeSections
+            | Self::AddDoeFile
+            | Self::UpdateDoeFile
+            | Self::DeleteDoeFile
             | Self::UpdateDoeHeader
             | Self::ExportDoePdf => "doe",
             Self::SearchProducts | Self::GetProduct => "catalog",

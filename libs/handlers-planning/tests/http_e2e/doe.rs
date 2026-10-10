@@ -492,3 +492,51 @@ async fn a_doe_model_stays_inside_its_organization_and_writes_need_reference_man
     intruder.cleanup(&app.pool).await;
     cleanup(&app).await;
 }
+
+#[tokio::test]
+#[ignore = "requires live postgres and redis"]
+async fn a_save_based_on_a_stale_read_is_refused_instead_of_overwriting() {
+    let app = harness::start().await;
+    let client = reqwest::Client::new();
+    let seeded = seed_project_and_model(&app).await;
+    let created = create_doe(&app, &seeded).await;
+    let doe_id = created["data"]["id"].as_str().unwrap().to_owned();
+    let read_at = created["data"]["updated_at"].clone();
+
+    let mut first = put_body(&created);
+    first["title"] = json!("Première modification");
+    first["expected_updated_at"] = read_at.clone();
+    let response = client
+        .put(doe_url(&app, app.organization_id, &doe_id, ""))
+        .bearer_auth(&app.token)
+        .json(&first)
+        .send()
+        .await
+        .expect("first save");
+    assert_eq!(response.status(), 200);
+
+    let mut second = put_body(&created);
+    second["title"] = json!("Seconde modification, partie de la même lecture");
+    second["expected_updated_at"] = read_at;
+    let response = client
+        .put(doe_url(&app, app.organization_id, &doe_id, ""))
+        .bearer_auth(&app.token)
+        .json(&second)
+        .send()
+        .await
+        .expect("second save");
+    assert_eq!(response.status(), 409);
+
+    let current: Value = client
+        .get(doe_url(&app, app.organization_id, &doe_id, ""))
+        .bearer_auth(&app.token)
+        .send()
+        .await
+        .expect("read back")
+        .json()
+        .await
+        .expect("json");
+    assert_eq!(current["data"]["title"], "Première modification");
+
+    cleanup(&app).await;
+}

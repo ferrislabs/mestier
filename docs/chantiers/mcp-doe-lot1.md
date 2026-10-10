@@ -1,6 +1,6 @@
 # MCP DOE, lot 1 : fichiers, fournitures, sections
 
-État : **spec proposée le 2026-10-10, en attente de validation**.
+État : **validée le 2026-10-10 ; L1-A et L1-B faits, L1-C en cours**.
 
 ## Goal
 
@@ -50,7 +50,7 @@ Moins d'outils qu'en demande : `get_doe` renvoie déjà tout le contenu (fournit
 4. Aucun outil ne supprime un DOE ; la liste blanche des routes déléguées n'ouvre aucun `DELETE`. [type : catalogue fermé ; test : liste blanche]
 5. `delete_doe_section` refuse une section qui contient quelque chose (même règle que l'éditeur web). [test]
 6. `reorder_doe_sections` exige exactement les ids des sections du DOE, chacun une fois. [test]
-7. **Écriture concurrente** : toute écriture de l'assistant relit le DOE, le modifie et le réécrit en entier. Pour ne pas écraser une modification faite entre-temps dans l'éditeur web, `PUT /does/{id}` accepte `expected_updated_at` : s'il ne correspond plus, l'API répond 409 et l'outil relit puis réessaie une fois, sinon renvoie l'erreur. [test : API + serveur MCP]
+7. **Écriture concurrente** (contrôle dans le service, dans la transaction qui relit le DOE ; une fenêtre de quelques millisecondes reste entre relecture et écriture, acceptée) : toute écriture de l'assistant relit le DOE, le modifie et le réécrit en entier. Pour ne pas écraser une modification faite entre-temps dans l'éditeur web, `PUT /does/{id}` accepte `expected_updated_at` : s'il ne correspond plus, l'API répond 409 et l'outil relit puis réessaie une fois, sinon renvoie l'erreur. [test : API + serveur MCP]
 8. Toutes les écritures passent par l'API existante : ses contrôles s'appliquent (`planning.manage`, 30 sections, 300 fichiers, `mcp_enabled`). [test e2e]
 
 ## Out of scope

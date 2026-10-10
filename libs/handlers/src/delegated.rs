@@ -58,6 +58,7 @@ const DELEGATED_ROUTES: &[(Method, &str)] = &[
         "/api/v1/organizations/{organization_id}/invoices",
     ),
     (Method::GET, "/api/v1/invoices/{invoice_id}"),
+    (Method::POST, "/api/v1/files"),
 ];
 
 /// Whether a delegated token may call `method` on the route template
@@ -78,6 +79,7 @@ mod tests {
             &Method::GET,
             "/api/v1/organizations/{organization_id}/does"
         ));
+        assert!(delegated_route_allowed(&Method::POST, "/api/v1/files"));
         assert!(delegated_route_allowed(
             &Method::PUT,
             "/api/v1/organizations/{organization_id}/does/{doe_id}"
@@ -94,6 +96,12 @@ mod tests {
             &Method::DELETE,
             "/api/v1/organizations/{organization_id}/does/{doe_id}"
         ));
-        assert!(!delegated_route_allowed(&Method::POST, "/api/v1/files"));
+        assert!(!delegated_route_allowed(&Method::GET, "/api/v1/files/url"));
+        assert!(
+            DELEGATED_ROUTES
+                .iter()
+                .all(|(method, _)| *method != Method::DELETE),
+            "no delegated route may delete anything"
+        );
     }
 }

@@ -22,6 +22,10 @@ pub struct UpdateDoeRequest {
     pub revision: String,
     pub parties: Vec<DoeParty>,
     pub sections: Vec<DoeSection>,
+    /// The `updated_at` read before editing. When it is no longer current
+    /// the save is refused with 409 instead of overwriting another change.
+    #[serde(default)]
+    pub expected_updated_at: Option<chrono::DateTime<chrono::Utc>>,
 }
 
 #[utoipa::path(
@@ -68,6 +72,7 @@ pub async fn handler(
             revision: Revision::try_from(payload.revision)?,
             parties: payload.parties,
             sections: payload.sections,
+            expected_updated_at: payload.expected_updated_at,
         })
         .await?;
 
