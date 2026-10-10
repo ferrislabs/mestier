@@ -81,6 +81,7 @@ export namespace Schemas {
     resource_id: string;
   };
   export type AvailabilityResponse = { resources: Array<AvailabilityResourceResponse> };
+  export type BlankPageCount = number;
   export type BranchDto = "Then" | "Else" | "Each" | "After";
   export type BulkAssignTasksRequest = { assignees: Array<AssigneeRefRequest>; task_ids: Array<TaskId> };
   export type TaskAssignmentSummary = { id: TaskAssignmentId; member_id: MemberId };
@@ -246,6 +247,23 @@ export namespace Schemas {
     registration_number?: (string | null) | undefined;
     status: CustomerStatus;
   };
+  export type StarterModel = "landscaping";
+  export type CreateDoeModelFromStarterRequest = { starter: StarterModel };
+  export type MakerLabel = "manufacturer" | "nursery";
+  export type PhotosPerPage = "one" | "two" | "four";
+  export type DoeModelSectionKind =
+    | { kind: "supplies"; maker_label: MakerLabel }
+    | { kind: "photos"; per_page: PhotosPerPage }
+    | { kind: "plans" }
+    | { count: BlankPageCount; kind: "blank_pages" };
+  export type DoeModelSection = { enabled: boolean; kind: DoeModelSectionKind; title: string };
+  export type CreateDoeModelRequest = {
+    description?: (string | null) | undefined;
+    name: string;
+    sections: Array<DoeModelSection>;
+  };
+  export type DoeModelId = string;
+  export type CreateDoeRequest = { model_id: DoeModelId };
   export type CreateEquipmentRequest = { hourly_rate_cents: number; name: string };
   export type CreateInvitationRequest = Partial<{ expires_at: string | null; member_id: null | MemberId }>;
   export type DeliveryAddressRequest = {
@@ -283,12 +301,17 @@ export namespace Schemas {
   };
   export type CreateMessageRequest = { attachments?: Array<CreateMessageAttachment> | undefined; content: string };
   export type CreateOrganizationRequest = { name: string; slug: string };
+  export type SupplierId = string;
   export type CreateProductRequest = {
+    datasheet_keys?: Array<string> | undefined;
     default_vat_rate_bp?: (number | null) | undefined;
     description?: (string | null) | undefined;
+    manufacturer?: (string | null) | undefined;
     name: string;
     photo_keys: Array<string>;
     sku?: (string | null) | undefined;
+    supplier_id?: (null | SupplierId) | undefined;
+    technical_specs?: (string | null) | undefined;
     unit: string;
     unit_price_cents: number;
   };
@@ -358,6 +381,14 @@ export namespace Schemas {
     label: string;
     rate_cents: number;
     unit: string;
+  };
+  export type CreateSupplierRequest = {
+    address?: (string | null) | undefined;
+    email?: (string | null) | undefined;
+    name: string;
+    phone?: (string | null) | undefined;
+    registration_number?: (string | null) | undefined;
+    vat_number?: (string | null) | undefined;
   };
   export type CreateTaskCommentRequest = { body: string };
   export type CreateTaskLabelRequest = { color: string; name: string };
@@ -484,6 +515,85 @@ export namespace Schemas {
     line2?: (string | null) | undefined;
     postal_code: string;
   };
+  export type DoeFile = { caption?: (string | null) | undefined; key: string };
+  export type DoeId = string;
+  export type DoeModelResponse = {
+    archived_at?: (string | null) | undefined;
+    created_at: string;
+    description?: (string | null) | undefined;
+    id: DoeModelId;
+    name: string;
+    organization_id: OrganizationId;
+    sections: Array<DoeModelSection>;
+    updated_at: string;
+  };
+  export type DoeModelStarterResponse = {
+    description?: (string | null) | undefined;
+    name: string;
+    sections: Array<DoeModelSection>;
+    starter: StarterModel;
+  };
+  export type PartyRole = "project_owner" | "project_manager" | "contractor";
+  export type DoeParty = {
+    address?: (string | null) | undefined;
+    email?: (string | null) | undefined;
+    logo_key?: (string | null) | undefined;
+    name: string;
+    phone?: (string | null) | undefined;
+    role: PartyRole;
+  };
+  export type Revision = string;
+  export type ProductId = string;
+  export type SupplierSnapshot = {
+    address?: (string | null) | undefined;
+    email?: (string | null) | undefined;
+    name: string;
+    phone?: (string | null) | undefined;
+  };
+  export type DoeSupply = {
+    datasheet_keys: Array<string>;
+    designation: string;
+    destination?: (string | null) | undefined;
+    dpgf_ref?: (string | null) | undefined;
+    id: string;
+    maker?: (string | null) | undefined;
+    photos: Array<DoeFile>;
+    source_product_id?: (null | ProductId) | undefined;
+    specs?: (string | null) | undefined;
+    supplier?: (null | SupplierSnapshot) | undefined;
+    title?: (string | null) | undefined;
+  };
+  export type DoeSectionContent =
+    | { kind: "supplies"; maker_label: MakerLabel; supplies: Array<DoeSupply> }
+    | { kind: "photos"; per_page: PhotosPerPage; photos: Array<DoeFile> }
+    | { kind: "plans"; plans: Array<DoeFile> }
+    | { count: BlankPageCount; kind: "blank_pages" };
+  export type DoeSection = { content: DoeSectionContent; enabled: boolean; id: string; title: string };
+  export type DoeResponse = {
+    author?: (string | null) | undefined;
+    created_at: string;
+    id: DoeId;
+    issued_on: string;
+    lot?: (string | null) | undefined;
+    parties: Array<DoeParty>;
+    place?: (string | null) | undefined;
+    project_id: ProjectId;
+    revision: Revision;
+    sections: Array<DoeSection>;
+    title: string;
+    updated_at: string;
+  };
+  export type DoeSettingsResponse = { accent: string; logo_key?: (string | null) | undefined };
+  export type DoeSummaryResponse = {
+    id: DoeId;
+    issued_on: string;
+    project_id: ProjectId;
+    project_name: string;
+    revision: Revision;
+    title: string;
+    updated_at: string;
+  };
+  export type DraftSupplyRequest = { product_id: ProductId };
   export type EdgeDto = { branch?: (null | BranchDto) | undefined; from: string; to: string };
   export type EmployeeCostBasisId = string;
   export type EmployeeCostBasisResponse = {
@@ -574,6 +684,7 @@ export namespace Schemas {
   };
   export type GraphInvalidDetails = { errors: Array<GraphErrorResponse> };
   export type GraphInvalidBody = { code: string; details: GraphInvalidDetails; message: string; status: number };
+  export type HexColor = string;
   export type SupplierInvoiceId = string;
   export type SupplierInvoiceLineAllocationId = string;
   export type SupplierInvoiceLineId = string;
@@ -602,7 +713,6 @@ export namespace Schemas {
   };
   export type SupplierInvoiceSource = "MANUAL" | "FACTUR_X";
   export type SupplierInvoiceStatus = "RECEIVED" | "CONFIRMED" | "REJECTED";
-  export type SupplierId = string;
   export type SupplierInvoiceVatBreakdownLineResponse = { rate_bp: number; vat_cents: number };
   export type SupplierInvoiceResponse = {
     created_at: string;
@@ -912,16 +1022,19 @@ export namespace Schemas {
     updated_at: string;
     user_id: UserId;
   };
-  export type ProductId = string;
   export type ProductResponse = {
     created_at: string;
+    datasheet_keys: Array<string>;
     default_vat_rate_bp?: (number | null) | undefined;
     description?: (string | null) | undefined;
     id: ProductId;
+    manufacturer?: (string | null) | undefined;
     name: string;
     organization_id: OrganizationId;
     photo_keys: Array<string>;
     sku?: (string | null) | undefined;
+    supplier_id?: (null | SupplierId) | undefined;
+    technical_specs?: (string | null) | undefined;
     unit: string;
     unit_price_cents: number;
     updated_at: string;
@@ -1154,6 +1267,18 @@ export namespace Schemas {
   export type StartRunRequest = Partial<{ trigger_payload: unknown }>;
   export type StartTimeEntryRequest = { task_id: TaskId };
   export type StartedRunResponse = { run_id: string };
+  export type SupplierResponse = {
+    address?: (string | null) | undefined;
+    created_at: string;
+    email?: (string | null) | undefined;
+    id: SupplierId;
+    name: string;
+    organization_id: OrganizationId;
+    phone?: (string | null) | undefined;
+    registration_number?: (string | null) | undefined;
+    updated_at: string;
+    vat_number?: (string | null) | undefined;
+  };
   export type TaskCommentAuthorResponse = { display_name: string; id: UserId };
   export type TaskCommentId = string;
   export type TaskCommentResponse = {
@@ -1244,6 +1369,22 @@ export namespace Schemas {
     registration_number?: (string | null) | undefined;
     status: CustomerStatus;
   };
+  export type UpdateDoeModelRequest = {
+    description?: (string | null) | undefined;
+    name: string;
+    sections: Array<DoeModelSection>;
+  };
+  export type UpdateDoeRequest = {
+    author?: (string | null) | undefined;
+    issued_on: string;
+    lot?: (string | null) | undefined;
+    parties: Array<DoeParty>;
+    place?: (string | null) | undefined;
+    revision: string;
+    sections: Array<DoeSection>;
+    title: string;
+  };
+  export type UpdateDoeSettingsRequest = { accent: HexColor; logo_key?: (string | null) | undefined };
   export type UpdateEquipmentRequest = { hourly_rate_cents: number; name: string };
   export type UpdateInvoiceRequest = {
     customer_context_id: CustomerContextId;
@@ -1276,11 +1417,15 @@ export namespace Schemas {
   export type UpdateMessageRequest = { content: string };
   export type UpdateOrganizationRequest = { field_clock_enabled: boolean; name: string; slug: string };
   export type UpdateProductRequest = {
+    datasheet_keys?: Array<string> | undefined;
     default_vat_rate_bp?: (number | null) | undefined;
     description?: (string | null) | undefined;
+    manufacturer?: (string | null) | undefined;
     name: string;
     photo_keys: Array<string>;
     sku?: (string | null) | undefined;
+    supplier_id?: (null | SupplierId) | undefined;
+    technical_specs?: (string | null) | undefined;
     unit: string;
     unit_price_cents: number;
   };
@@ -1308,6 +1453,14 @@ export namespace Schemas {
     unit: string;
   };
   export type UpdateSupplierInvoiceRequest = Partial<{ notes: string | null }>;
+  export type UpdateSupplierRequest = {
+    address?: (string | null) | undefined;
+    email?: (string | null) | undefined;
+    name: string;
+    phone?: (string | null) | undefined;
+    registration_number?: (string | null) | undefined;
+    vat_number?: (string | null) | undefined;
+  };
   export type UpdateTaskCommentRequest = { body: string };
   export type UpdateTaskLabelRequest = { color: string; name: string };
   export type UpdateTaskRecurrenceRequest = (null | RecurrenceRuleRequest) &
@@ -4330,6 +4483,343 @@ export namespace Endpoints {
       409: unknown;
     };
   };
+  export type get_ListDoeModelStarters = {
+    method: "GET";
+    path: "/api/v1/organizations/{organization_id}/doe-model-starters";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string };
+    };
+    responses: {
+      200: {
+        data: Array<{
+          description?: (string | null) | undefined;
+          name: string;
+          sections: Array<Schemas.DoeModelSection>;
+          starter: Schemas.StarterModel;
+        }>;
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+    };
+  };
+  export type get_ListDoeModels = {
+    method: "GET";
+    path: "/api/v1/organizations/{organization_id}/doe-models";
+    requestFormat: "json";
+    parameters: {
+      query: Partial<{ page: number; per_page: number; include_archived: boolean }>;
+      path: { organization_id: string };
+    };
+    responses: {
+      200: {
+        data: Array<{
+          archived_at?: (string | null) | undefined;
+          created_at: string;
+          description?: (string | null) | undefined;
+          id: Schemas.DoeModelId;
+          name: string;
+          organization_id: Schemas.OrganizationId;
+          sections: Array<Schemas.DoeModelSection>;
+          updated_at: string;
+        }>;
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+    };
+  };
+  export type post_CreateDoeModel = {
+    method: "POST";
+    path: "/api/v1/organizations/{organization_id}/doe-models";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string };
+
+      body: Schemas.CreateDoeModelRequest;
+    };
+    responses: {
+      201: {
+        data: {
+          archived_at?: (string | null) | undefined;
+          created_at: string;
+          description?: (string | null) | undefined;
+          id: Schemas.DoeModelId;
+          name: string;
+          organization_id: Schemas.OrganizationId;
+          sections: Array<Schemas.DoeModelSection>;
+          updated_at: string;
+        };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+      409: unknown;
+    };
+  };
+  export type post_CreateDoeModelFromStarter = {
+    method: "POST";
+    path: "/api/v1/organizations/{organization_id}/doe-models/from-starter";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string };
+
+      body: Schemas.CreateDoeModelFromStarterRequest;
+    };
+    responses: {
+      201: {
+        data: {
+          archived_at?: (string | null) | undefined;
+          created_at: string;
+          description?: (string | null) | undefined;
+          id: Schemas.DoeModelId;
+          name: string;
+          organization_id: Schemas.OrganizationId;
+          sections: Array<Schemas.DoeModelSection>;
+          updated_at: string;
+        };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+    };
+  };
+  export type get_GetDoeModel = {
+    method: "GET";
+    path: "/api/v1/organizations/{organization_id}/doe-models/{doe_model_id}";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string; doe_model_id: string };
+    };
+    responses: {
+      200: {
+        data: {
+          archived_at?: (string | null) | undefined;
+          created_at: string;
+          description?: (string | null) | undefined;
+          id: Schemas.DoeModelId;
+          name: string;
+          organization_id: Schemas.OrganizationId;
+          sections: Array<Schemas.DoeModelSection>;
+          updated_at: string;
+        };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+      404: unknown;
+    };
+  };
+  export type put_UpdateDoeModel = {
+    method: "PUT";
+    path: "/api/v1/organizations/{organization_id}/doe-models/{doe_model_id}";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string; doe_model_id: string };
+
+      body: Schemas.UpdateDoeModelRequest;
+    };
+    responses: {
+      200: {
+        data: {
+          archived_at?: (string | null) | undefined;
+          created_at: string;
+          description?: (string | null) | undefined;
+          id: Schemas.DoeModelId;
+          name: string;
+          organization_id: Schemas.OrganizationId;
+          sections: Array<Schemas.DoeModelSection>;
+          updated_at: string;
+        };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+      404: unknown;
+      409: unknown;
+    };
+  };
+  export type delete_ArchiveDoeModel = {
+    method: "DELETE";
+    path: "/api/v1/organizations/{organization_id}/doe-models/{doe_model_id}";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string; doe_model_id: string };
+    };
+    responses: { 204: unknown; 401: unknown; 403: unknown; 404: unknown };
+  };
+  export type post_RestoreDoeModel = {
+    method: "POST";
+    path: "/api/v1/organizations/{organization_id}/doe-models/{doe_model_id}/restore";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string; doe_model_id: string };
+    };
+    responses: { 204: unknown; 401: unknown; 403: unknown; 404: unknown };
+  };
+  export type get_GetDoeSettings = {
+    method: "GET";
+    path: "/api/v1/organizations/{organization_id}/doe-settings";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string };
+    };
+    responses: {
+      200: {
+        data: { accent: string; logo_key?: (string | null) | undefined };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+    };
+  };
+  export type put_UpdateDoeSettings = {
+    method: "PUT";
+    path: "/api/v1/organizations/{organization_id}/doe-settings";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string };
+
+      body: Schemas.UpdateDoeSettingsRequest;
+    };
+    responses: {
+      200: {
+        data: { accent: string; logo_key?: (string | null) | undefined };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+    };
+  };
+  export type get_ListDoes = {
+    method: "GET";
+    path: "/api/v1/organizations/{organization_id}/does";
+    requestFormat: "json";
+    parameters: {
+      query: Partial<{ page: number; per_page: number }>;
+      path: { organization_id: string };
+    };
+    responses: {
+      200: {
+        data: Array<{
+          id: Schemas.DoeId;
+          issued_on: string;
+          project_id: Schemas.ProjectId;
+          project_name: string;
+          revision: Schemas.Revision;
+          title: string;
+          updated_at: string;
+        }>;
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+    };
+  };
+  export type get_GetDoe = {
+    method: "GET";
+    path: "/api/v1/organizations/{organization_id}/does/{doe_id}";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string; doe_id: string };
+    };
+    responses: {
+      200: {
+        data: {
+          author?: (string | null) | undefined;
+          created_at: string;
+          id: Schemas.DoeId;
+          issued_on: string;
+          lot?: (string | null) | undefined;
+          parties: Array<Schemas.DoeParty>;
+          place?: (string | null) | undefined;
+          project_id: Schemas.ProjectId;
+          revision: Schemas.Revision;
+          sections: Array<Schemas.DoeSection>;
+          title: string;
+          updated_at: string;
+        };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+      404: unknown;
+    };
+  };
+  export type put_UpdateDoe = {
+    method: "PUT";
+    path: "/api/v1/organizations/{organization_id}/does/{doe_id}";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string; doe_id: string };
+
+      body: Schemas.UpdateDoeRequest;
+    };
+    responses: {
+      200: {
+        data: {
+          author?: (string | null) | undefined;
+          created_at: string;
+          id: Schemas.DoeId;
+          issued_on: string;
+          lot?: (string | null) | undefined;
+          parties: Array<Schemas.DoeParty>;
+          place?: (string | null) | undefined;
+          project_id: Schemas.ProjectId;
+          revision: Schemas.Revision;
+          sections: Array<Schemas.DoeSection>;
+          title: string;
+          updated_at: string;
+        };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+      404: unknown;
+      409: unknown;
+    };
+  };
+  export type get_ExportDoePdf = {
+    method: "GET";
+    path: "/api/v1/organizations/{organization_id}/does/{doe_id}/pdf";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string; doe_id: string };
+    };
+    responses: { 200: unknown; 401: unknown; 403: unknown; 404: unknown; 409: unknown };
+  };
+  export type post_DraftDoeSupply = {
+    method: "POST";
+    path: "/api/v1/organizations/{organization_id}/does/{doe_id}/supplies/draft";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string; doe_id: string };
+
+      body: Schemas.DraftSupplyRequest;
+    };
+    responses: {
+      200: {
+        data: {
+          datasheet_keys: Array<string>;
+          designation: string;
+          destination?: (string | null) | undefined;
+          dpgf_ref?: (string | null) | undefined;
+          id: string;
+          maker?: (string | null) | undefined;
+          photos: Array<Schemas.DoeFile>;
+          source_product_id?: (null | Schemas.ProductId) | undefined;
+          specs?: (string | null) | undefined;
+          supplier?: (null | Schemas.SupplierSnapshot) | undefined;
+          title?: (string | null) | undefined;
+        };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+      404: unknown;
+    };
+  };
   export type get_ListEmployeeProfiles = {
     method: "GET";
     path: "/api/v1/organizations/{organization_id}/employee-profiles";
@@ -4902,13 +5392,17 @@ export namespace Endpoints {
       200: {
         data: Array<{
           created_at: string;
+          datasheet_keys: Array<string>;
           default_vat_rate_bp?: (number | null) | undefined;
           description?: (string | null) | undefined;
           id: Schemas.ProductId;
+          manufacturer?: (string | null) | undefined;
           name: string;
           organization_id: Schemas.OrganizationId;
           photo_keys: Array<string>;
           sku?: (string | null) | undefined;
+          supplier_id?: (null | Schemas.SupplierId) | undefined;
+          technical_specs?: (string | null) | undefined;
           unit: string;
           unit_price_cents: number;
           updated_at: string;
@@ -4932,13 +5426,17 @@ export namespace Endpoints {
       201: {
         data: {
           created_at: string;
+          datasheet_keys: Array<string>;
           default_vat_rate_bp?: (number | null) | undefined;
           description?: (string | null) | undefined;
           id: Schemas.ProductId;
+          manufacturer?: (string | null) | undefined;
           name: string;
           organization_id: Schemas.OrganizationId;
           photo_keys: Array<string>;
           sku?: (string | null) | undefined;
+          supplier_id?: (null | Schemas.SupplierId) | undefined;
+          technical_specs?: (string | null) | undefined;
           unit: string;
           unit_price_cents: number;
           updated_at: string;
@@ -5337,6 +5835,69 @@ export namespace Endpoints {
       409: unknown;
     };
   };
+  export type get_GetProjectDoe = {
+    method: "GET";
+    path: "/api/v1/organizations/{organization_id}/projects/{project_id}/doe";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string; project_id: string };
+    };
+    responses: {
+      200: {
+        data: {
+          author?: (string | null) | undefined;
+          created_at: string;
+          id: Schemas.DoeId;
+          issued_on: string;
+          lot?: (string | null) | undefined;
+          parties: Array<Schemas.DoeParty>;
+          place?: (string | null) | undefined;
+          project_id: Schemas.ProjectId;
+          revision: Schemas.Revision;
+          sections: Array<Schemas.DoeSection>;
+          title: string;
+          updated_at: string;
+        };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+      404: unknown;
+    };
+  };
+  export type post_CreateDoe = {
+    method: "POST";
+    path: "/api/v1/organizations/{organization_id}/projects/{project_id}/doe";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string; project_id: string };
+
+      body: Schemas.CreateDoeRequest;
+    };
+    responses: {
+      201: {
+        data: {
+          author?: (string | null) | undefined;
+          created_at: string;
+          id: Schemas.DoeId;
+          issued_on: string;
+          lot?: (string | null) | undefined;
+          parties: Array<Schemas.DoeParty>;
+          place?: (string | null) | undefined;
+          project_id: Schemas.ProjectId;
+          revision: Schemas.Revision;
+          sections: Array<Schemas.DoeSection>;
+          title: string;
+          updated_at: string;
+        };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+      404: unknown;
+      409: unknown;
+    };
+  };
   export type post_RestoreProject = {
     method: "POST";
     path: "/api/v1/organizations/{organization_id}/projects/{project_id}/restore";
@@ -5658,6 +6219,125 @@ export namespace Endpoints {
       403: unknown;
       409: unknown;
       413: unknown;
+    };
+  };
+  export type get_ListSuppliers = {
+    method: "GET";
+    path: "/api/v1/organizations/{organization_id}/suppliers";
+    requestFormat: "json";
+    parameters: {
+      query: Partial<{ page: number; per_page: number }>;
+      path: { organization_id: string };
+    };
+    responses: {
+      200: {
+        data: Array<{
+          address?: (string | null) | undefined;
+          created_at: string;
+          email?: (string | null) | undefined;
+          id: Schemas.SupplierId;
+          name: string;
+          organization_id: Schemas.OrganizationId;
+          phone?: (string | null) | undefined;
+          registration_number?: (string | null) | undefined;
+          updated_at: string;
+          vat_number?: (string | null) | undefined;
+        }>;
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+    };
+  };
+  export type post_CreateSupplier = {
+    method: "POST";
+    path: "/api/v1/organizations/{organization_id}/suppliers";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string };
+
+      body: Schemas.CreateSupplierRequest;
+    };
+    responses: {
+      201: {
+        data: {
+          address?: (string | null) | undefined;
+          created_at: string;
+          email?: (string | null) | undefined;
+          id: Schemas.SupplierId;
+          name: string;
+          organization_id: Schemas.OrganizationId;
+          phone?: (string | null) | undefined;
+          registration_number?: (string | null) | undefined;
+          updated_at: string;
+          vat_number?: (string | null) | undefined;
+        };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      400: unknown;
+      401: unknown;
+      403: unknown;
+      409: unknown;
+    };
+  };
+  export type get_GetSupplier = {
+    method: "GET";
+    path: "/api/v1/organizations/{organization_id}/suppliers/{supplier_id}";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string; supplier_id: string };
+    };
+    responses: {
+      200: {
+        data: {
+          address?: (string | null) | undefined;
+          created_at: string;
+          email?: (string | null) | undefined;
+          id: Schemas.SupplierId;
+          name: string;
+          organization_id: Schemas.OrganizationId;
+          phone?: (string | null) | undefined;
+          registration_number?: (string | null) | undefined;
+          updated_at: string;
+          vat_number?: (string | null) | undefined;
+        };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+      404: unknown;
+    };
+  };
+  export type put_UpdateSupplier = {
+    method: "PUT";
+    path: "/api/v1/organizations/{organization_id}/suppliers/{supplier_id}";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string; supplier_id: string };
+
+      body: Schemas.UpdateSupplierRequest;
+    };
+    responses: {
+      200: {
+        data: {
+          address?: (string | null) | undefined;
+          created_at: string;
+          email?: (string | null) | undefined;
+          id: Schemas.SupplierId;
+          name: string;
+          organization_id: Schemas.OrganizationId;
+          phone?: (string | null) | undefined;
+          registration_number?: (string | null) | undefined;
+          updated_at: string;
+          vat_number?: (string | null) | undefined;
+        };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      400: unknown;
+      401: unknown;
+      403: unknown;
+      404: unknown;
+      409: unknown;
     };
   };
   export type get_ListTaskLabels = {
@@ -6121,13 +6801,17 @@ export namespace Endpoints {
       200: {
         data: {
           created_at: string;
+          datasheet_keys: Array<string>;
           default_vat_rate_bp?: (number | null) | undefined;
           description?: (string | null) | undefined;
           id: Schemas.ProductId;
+          manufacturer?: (string | null) | undefined;
           name: string;
           organization_id: Schemas.OrganizationId;
           photo_keys: Array<string>;
           sku?: (string | null) | undefined;
+          supplier_id?: (null | Schemas.SupplierId) | undefined;
+          technical_specs?: (string | null) | undefined;
           unit: string;
           unit_price_cents: number;
           updated_at: string;
@@ -6161,13 +6845,17 @@ export namespace Endpoints {
       200: {
         data: {
           created_at: string;
+          datasheet_keys: Array<string>;
           default_vat_rate_bp?: (number | null) | undefined;
           description?: (string | null) | undefined;
           id: Schemas.ProductId;
+          manufacturer?: (string | null) | undefined;
           name: string;
           organization_id: Schemas.OrganizationId;
           photo_keys: Array<string>;
           sku?: (string | null) | undefined;
+          supplier_id?: (null | Schemas.SupplierId) | undefined;
+          technical_specs?: (string | null) | undefined;
           unit: string;
           unit_price_cents: number;
           updated_at: string;
@@ -6951,6 +7639,7 @@ export type EndpointByMethod = {
     "/api/v1/organizations/{organization_id}/absences/{absence_id}": Endpoints.delete_DeleteAbsence;
     "/api/v1/organizations/{organization_id}/automation/credentials/{credential_id}": Endpoints.delete_DeleteAutomationCredential;
     "/api/v1/organizations/{organization_id}/automation/workflows/{workflow_id}": Endpoints.delete_DeleteWorkflow;
+    "/api/v1/organizations/{organization_id}/doe-models/{doe_model_id}": Endpoints.delete_ArchiveDoeModel;
     "/api/v1/organizations/{organization_id}/project-templates/{project_template_id}": Endpoints.delete_ArchiveProjectTemplate;
     "/api/v1/organizations/{organization_id}/projects/{project_id}": Endpoints.delete_ArchiveProject;
     "/api/v1/organizations/{organization_id}/task-labels/{label_id}": Endpoints.delete_DeleteTaskLabel;
@@ -7003,6 +7692,13 @@ export type EndpointByMethod = {
     "/api/v1/organizations/{organization_id}/automation/workflows/{workflow_id}": Endpoints.get_GetWorkflow;
     "/api/v1/organizations/{organization_id}/custom-units": Endpoints.get_ListCustomUnits;
     "/api/v1/organizations/{organization_id}/customers": Endpoints.get_ListCustomers;
+    "/api/v1/organizations/{organization_id}/doe-model-starters": Endpoints.get_ListDoeModelStarters;
+    "/api/v1/organizations/{organization_id}/doe-models": Endpoints.get_ListDoeModels;
+    "/api/v1/organizations/{organization_id}/doe-models/{doe_model_id}": Endpoints.get_GetDoeModel;
+    "/api/v1/organizations/{organization_id}/doe-settings": Endpoints.get_GetDoeSettings;
+    "/api/v1/organizations/{organization_id}/does": Endpoints.get_ListDoes;
+    "/api/v1/organizations/{organization_id}/does/{doe_id}": Endpoints.get_GetDoe;
+    "/api/v1/organizations/{organization_id}/does/{doe_id}/pdf": Endpoints.get_ExportDoePdf;
     "/api/v1/organizations/{organization_id}/employee-profiles": Endpoints.get_ListEmployeeProfiles;
     "/api/v1/organizations/{organization_id}/equipment": Endpoints.get_ListEquipment;
     "/api/v1/organizations/{organization_id}/field/assignment-reports": Endpoints.get_ListMyAssignmentReports;
@@ -7021,12 +7717,15 @@ export type EndpointByMethod = {
     "/api/v1/organizations/{organization_id}/projects": Endpoints.get_ListProjects;
     "/api/v1/organizations/{organization_id}/projects/{project_id}": Endpoints.get_GetProject;
     "/api/v1/organizations/{organization_id}/projects/{project_id}/channel": Endpoints.get_GetProjectChannel;
+    "/api/v1/organizations/{organization_id}/projects/{project_id}/doe": Endpoints.get_GetProjectDoe;
     "/api/v1/organizations/{organization_id}/quotes": Endpoints.get_ListQuotes;
     "/api/v1/organizations/{organization_id}/reporting/profitability": Endpoints.get_GetProfitability;
     "/api/v1/organizations/{organization_id}/reporting/worked-hours": Endpoints.get_GetWorkedHours;
     "/api/v1/organizations/{organization_id}/roles": Endpoints.get_ListRoles;
     "/api/v1/organizations/{organization_id}/service-rates": Endpoints.get_ListServiceRates;
     "/api/v1/organizations/{organization_id}/supplier-invoices": Endpoints.get_ListSupplierInvoices;
+    "/api/v1/organizations/{organization_id}/suppliers": Endpoints.get_ListSuppliers;
+    "/api/v1/organizations/{organization_id}/suppliers/{supplier_id}": Endpoints.get_GetSupplier;
     "/api/v1/organizations/{organization_id}/task-labels": Endpoints.get_ListTaskLabels;
     "/api/v1/organizations/{organization_id}/task-recurrences": Endpoints.get_ListTaskRecurrences;
     "/api/v1/organizations/{organization_id}/tasks": Endpoints.get_ListTasks;
@@ -7074,6 +7773,10 @@ export type EndpointByMethod = {
     "/api/v1/organizations/{organization_id}/automation/workflows/{workflow_id}/runs": Endpoints.post_StartRun;
     "/api/v1/organizations/{organization_id}/custom-units": Endpoints.post_CreateCustomUnit;
     "/api/v1/organizations/{organization_id}/customers": Endpoints.post_CreateCustomer;
+    "/api/v1/organizations/{organization_id}/doe-models": Endpoints.post_CreateDoeModel;
+    "/api/v1/organizations/{organization_id}/doe-models/from-starter": Endpoints.post_CreateDoeModelFromStarter;
+    "/api/v1/organizations/{organization_id}/doe-models/{doe_model_id}/restore": Endpoints.post_RestoreDoeModel;
+    "/api/v1/organizations/{organization_id}/does/{doe_id}/supplies/draft": Endpoints.post_DraftDoeSupply;
     "/api/v1/organizations/{organization_id}/equipment": Endpoints.post_CreateEquipment;
     "/api/v1/organizations/{organization_id}/field/assignments/{task_assignment_id}/report": Endpoints.post_ReportAssignment;
     "/api/v1/organizations/{organization_id}/field/day-end": Endpoints.post_EndWorkingDay;
@@ -7088,11 +7791,13 @@ export type EndpointByMethod = {
     "/api/v1/organizations/{organization_id}/project-templates/{project_template_id}/restore": Endpoints.post_RestoreProjectTemplate;
     "/api/v1/organizations/{organization_id}/projects": Endpoints.post_CreateProject;
     "/api/v1/organizations/{organization_id}/projects/{project_id}/channel": Endpoints.post_CreateProjectChannel;
+    "/api/v1/organizations/{organization_id}/projects/{project_id}/doe": Endpoints.post_CreateDoe;
     "/api/v1/organizations/{organization_id}/projects/{project_id}/restore": Endpoints.post_RestoreProject;
     "/api/v1/organizations/{organization_id}/quotes": Endpoints.post_CreateQuote;
     "/api/v1/organizations/{organization_id}/roles": Endpoints.post_CreateRole;
     "/api/v1/organizations/{organization_id}/service-rates": Endpoints.post_CreateServiceRate;
     "/api/v1/organizations/{organization_id}/supplier-invoices/import": Endpoints.post_ImportSupplierInvoice;
+    "/api/v1/organizations/{organization_id}/suppliers": Endpoints.post_CreateSupplier;
     "/api/v1/organizations/{organization_id}/task-labels": Endpoints.post_CreateTaskLabel;
     "/api/v1/organizations/{organization_id}/task-recurrences": Endpoints.post_CreateTaskRecurrence;
     "/api/v1/organizations/{organization_id}/tasks": Endpoints.post_CreateTask;
@@ -7117,7 +7822,11 @@ export type EndpointByMethod = {
     "/api/v1/members/{member_id}/work-slots": Endpoints.put_PutWorkSlots;
     "/api/v1/organizations/{organization_id}/automation/settings": Endpoints.put_UpdateAutomationSettings;
     "/api/v1/organizations/{organization_id}/automation/workflows/{workflow_id}/versions": Endpoints.put_SaveWorkflowVersion;
+    "/api/v1/organizations/{organization_id}/doe-models/{doe_model_id}": Endpoints.put_UpdateDoeModel;
+    "/api/v1/organizations/{organization_id}/doe-settings": Endpoints.put_UpdateDoeSettings;
+    "/api/v1/organizations/{organization_id}/does/{doe_id}": Endpoints.put_UpdateDoe;
     "/api/v1/organizations/{organization_id}/project-templates/{project_template_id}/tasks": Endpoints.put_ReplaceProjectTemplateTasks;
+    "/api/v1/organizations/{organization_id}/suppliers/{supplier_id}": Endpoints.put_UpdateSupplier;
     "/api/v1/supplier-invoice-lines/{supplier_invoice_line_id}/allocations": Endpoints.put_ReplaceSupplierInvoiceLineAllocations;
   };
 };

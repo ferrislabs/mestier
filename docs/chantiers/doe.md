@@ -295,16 +295,18 @@ cd apps/webapp && pnpm check && pnpm test && pnpm build
 | W2 | intégré (cd42271) |
 | W3a | intégré (b143797) |
 | W3b | intégré (6cce55a) |
-| W4a | pending |
-| W4b | pending |
+| W4a | intégré (3c64862) |
+| W4b | intégré (e6ed972) |
 
 ## Decision log
+
+- 2026-10-09 : retour de test utilisateur, « je peux créer un modèle mais qu'est-ce que j'en fais ? ». Le DOE n'était joignable que depuis la page projet. Ajouts : route `GET /organizations/{org}/does`, page Planification › DOE avec « Nouveau DOE » (projet + modèle), action « Créer un DOE avec ce modèle » sur les modèles, bouton projet qui affiche l'état (« Ouvrir le DOE · indice B » / « Créer le DOE »). Lignes de la liste cliquables par leurs liens, pas la ligne entière (`ReferenceTable` ne le permet pas).
 
 - 2026-10-08 : relecture sécurité. Ajout des limites de l'invariant 10 (un membre pouvait saturer l'API avec un DOE énorme). Le message 409 d'un fichier refusé ne renvoie plus son type MIME. Non corrigé, assumé : une clé de fichier d'une autre organisation, si elle a fuité, peut être intégrée au PDF ; `/files/url` le permet déjà, la vraie parade est une table de propriété des fichiers (hors chantier). Les repositories ne filtrent pas `org_id` en SQL, contrôle dans handlers et use cases comme dans tout le dépôt. Le PDF est lisible par tout membre, voulu.
 - 2026-10-08 : relecture conformité. Route des modèles de départ gardée en `/doe-model-starters` pour ne pas entrer en collision avec `/doe-models/{id}`. Ajout d'e2e : isolation et droits des modèles de DOE et des fournisseurs. Restent couverts seulement au niveau du renderer : @spec-doe-5 (pas d'e2e avec de vraies photos), et @spec-doe-11 (pas de test de parcours de l'éditeur).
 
 - 2026-10-07 : W3b, un fichier de type non accepté donne 409 en nommant le fichier (corrigeable par l'utilisateur), pas 500. Chargement des fichiers séquentiel en v1.
-- 2026-10-07 : @spec-doe-10 en e2e demande un S3 réel ; non vérifié en local (aucun S3, image MinIO indisponible). Le passage NotFound → 409 est couvert par un test unitaire du handler.
+- 2026-10-07 : @spec-doe-10 en e2e demande un S3 réel ; vérifié contre RustFS local (`rustfs/rustfs`, bucket `mestier-files`), les e2e DOE passent.
 
 - 2026-10-07 : W1, insertion PDF native Typst (`image(path, page: n)`), pas de repli `lopdf` ; police Inter embarquée ; `comemo::evict(0)` après chaque rendu pour un serveur à mémoire stable.
 - 2026-10-07 : W2, `SupplierService` déplacé de `application/supplier/` vers `domain/supplier_invoice/supplier_service.rs` à l'intégration (règle hexagonale).

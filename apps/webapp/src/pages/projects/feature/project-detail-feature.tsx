@@ -5,6 +5,7 @@ import { Button } from '#/components/ui/button'
 import { PageShell, SectionCard } from '#/components/ui/surface'
 import { useActiveOrganization } from '#/hooks/use-active-organization'
 import { useCustomer, useCustomerContexts } from '#/hooks/use-customers'
+import { isNotFoundError, useProjectDoe } from '#/hooks/use-doe'
 import {
 	useCreateInvoice,
 	useInvoicesByProject,
@@ -13,10 +14,12 @@ import {
 	useIssueInvoice,
 	useProjectBillingSummary,
 } from '#/hooks/use-invoices'
+import { useHasPermission } from '#/hooks/use-permissions'
 import { type Project, useProject } from '#/hooks/use-projects'
 import { useProfitability } from '#/hooks/use-reporting'
 import { useProjectSupplierCosts } from '#/hooks/use-supplier-invoices'
 import { buildOrgPath } from '#/modules/org-path'
+import type { DoeButtonState } from '#/pages/doe/lib/new-doe'
 import { eurosToCents } from '#/pages/invoices/types'
 import {
 	canInvoiceAgainstQuote,
@@ -75,6 +78,13 @@ function ProjectDetailWorkspace({
 	organizationSlug: string
 }) {
 	const navigate = useNavigate()
+	const canOpenDoe = useHasPermission('MANAGE_PLANNING')
+	const doe = useProjectDoe(organizationId, canOpenDoe ? project.id : '')
+	const doeState: DoeButtonState = doe.data
+		? { revision: doe.data.data.revision }
+		: doe.isError && isNotFoundError(doe.error)
+			? 'none'
+			: 'loading'
 	const hasCustomer = project.customer_id !== null
 	const hasPinnedAddress = project.customer_context_id !== null
 
@@ -216,6 +226,8 @@ function ProjectDetailWorkspace({
 			organizationSlug={organizationSlug}
 			project={project}
 			customerName={customer.data?.data.name ?? null}
+			canOpenDoe={canOpenDoe}
+			doeState={doeState}
 			billingSummary={billingSummary.data?.data ?? null}
 			isBillingSummaryLoading={billingSummary.isLoading}
 			period={period}

@@ -13,6 +13,10 @@ export interface ProductCatalogFormValues {
 	unitPrice: string
 	description: string
 	photoKeys: string[]
+	supplierId: string
+	manufacturer: string
+	technicalSpecs: string
+	datasheetKeys: string[]
 }
 
 export interface CatalogItem {

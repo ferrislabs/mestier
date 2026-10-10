@@ -4,6 +4,7 @@ import {
 	ArrowLeft,
 	Building2,
 	Clock,
+	FileText,
 	KanbanSquare,
 	Loader2,
 	Receipt,
@@ -28,6 +29,7 @@ import type { Project } from '#/hooks/use-projects'
 import type { Period, ProjectProfitability } from '#/hooks/use-reporting'
 import type { ProjectSupplierCosts } from '#/hooks/use-supplier-invoices'
 import { buildOrgPath } from '#/modules/org-path'
+import { type DoeButtonState, doeButtonLabel } from '#/pages/doe/lib/new-doe'
 import {
 	eurosToCents,
 	formatDate,
@@ -43,6 +45,8 @@ export interface ProjectDetailUIProps {
 	organizationSlug: string
 	project: Project
 	customerName: string | null
+	canOpenDoe?: boolean
+	doeState?: DoeButtonState
 
 	billingSummary: ProjectBillingSummary | null
 	isBillingSummaryLoading: boolean
@@ -137,6 +141,8 @@ export function ProjectDetailUI({
 	isIssuing,
 	error,
 	onConfirm,
+	canOpenDoe = false,
+	doeState = 'loading',
 }: ProjectDetailUIProps) {
 	const plannedCost = costRow ? plannedCostCents(costRow) : 0
 	const dueAtLabel = dueAt
@@ -163,6 +169,20 @@ export function ProjectDetailUI({
 								Voir dans le tableau
 							</Link>
 						</Button>
+						{canOpenDoe ? (
+							<Button asChild variant="outline">
+								<Link
+									to={buildOrgPath(
+										organizationSlug,
+										'/planification/projects/$projectId/doe',
+									)}
+									params={{ projectId: project.id }}
+								>
+									<FileText />
+									{doeButtonLabel(doeState)}
+								</Link>
+							</Button>
+						) : null}
 						<Button asChild variant="outline">
 							<Link
 								to={buildOrgPath(organizationSlug, '/planification/projects')}
