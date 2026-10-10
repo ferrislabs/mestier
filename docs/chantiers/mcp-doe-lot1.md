@@ -1,6 +1,6 @@
 # MCP DOE, lot 1 : fichiers, fournitures, sections
 
-État : **validée le 2026-10-10 ; L1-A et L1-B faits, L1-C en cours**.
+État : **intégré le 2026-10-10 ; reste la recette ChatGPT avec une vraie photo (acceptance 12)**.
 
 ## Goal
 
@@ -111,3 +111,10 @@ cargo test -p handlers-planning --test http_e2e -- --ignored
 python3 apps/mcp-gateway/e2e/local_stack.py
 cd apps/webapp && pnpm check && pnpm test && pnpm build
 ```
+
+## Résultats
+
+- Serveur MCP : 41 tests d'intégration et 3 unitaires ; gateway 17 ; API : 2 unitaires et un e2e (enregistrement fondé sur une lecture périmée refusé en 409).
+- Contre la vraie API et le stockage S3 local, par l'adresse publique : ajout de section, photo PNG ajoutée avec légende et présente dans le PDF, HTML déguisé en `.jpg` refusé, fourniture modifiée puis retirée, sections réordonnées.
+- Gateway : limite de corps portée à 8 Mio (un fichier de 5 Mo en base64 fait environ 6,7 Mo), testée dans les deux sens.
+- Écarts acceptés : un brouillon de produit peut être demandé avant qu'une section invalide soit détectée (aucune écriture) ; `file_id` facultatif (références incomplètes de ChatGPT) ; corps rmcp porté à 8 Mo.

@@ -12,20 +12,29 @@ use rmcp::transport::streamable_http_server::{
 
 use crate::{
     api::ApiClient,
+    files::{FileFetcher, FilePolicy},
     tools::{MestierTools, bearer},
 };
+
+const MAX_REQUEST_BYTES: usize = 8 * 1024 * 1024;
 
 /// Every request is served on its own: no MCP session, so the token of one
 /// request can never serve another. The server sits behind the gateway, so
 /// the DNS-rebinding `Host` allow-list is off.
 pub fn router(api: ApiClient) -> Router {
+    router_with(api, FilePolicy::default())
+}
+
+pub fn router_with(api: ApiClient, files: FilePolicy) -> Router {
+    let fetcher = FileFetcher::new(files);
     let config = StreamableHttpServerConfig::default()
         .with_legacy_session_mode(false)
         .with_json_response(true)
         .with_sse_keep_alive(None)
+        .with_max_request_body_bytes(MAX_REQUEST_BYTES)
         .disable_allowed_hosts();
     let service = StreamableHttpService::new(
-        move || Ok(MestierTools::new(api.clone())),
+        move || Ok(MestierTools::new(api.clone(), fetcher.clone())),
         std::sync::Arc::new(NeverSessionManager::default()),
         config,
     );

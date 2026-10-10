@@ -4,15 +4,20 @@ use mcp_tools::CLIENT_HEADER;
 use rmcp::{
     ServerHandler,
     handler::server::{router::tool::ToolRouter, tool::Extension, wrapper::Parameters},
-    model::{CallToolResult, ContentBlock, ResourceContents, ServerCapabilities, ServerConfig},
+    model::{
+        CallToolResult, ContentBlock, MetaObject, ResourceContents, ServerCapabilities,
+        ServerConfig,
+    },
     schemars, tool, tool_handler, tool_router,
 };
 use serde::Deserialize;
-use serde_json::Value;
+use serde_json::{Value, json};
 
 use crate::{
     api::{ApiClient, Fault},
-    session::{HeaderPatch, ManualSupply, Paging, PdfOutcome, Session, SupplyRequest},
+    edit::{MakerLabel, NewSection, PerPage, SectionKind, SectionPatch, SectionRef, SupplyPatch},
+    files::{FileFetcher, FileParam, Source, Target},
+    session::{FileRequest, HeaderPatch, ManualSupply, Paging, PdfOutcome, Session, SupplyRequest},
 };
 
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
@@ -210,16 +215,235 @@ pub struct UpdateHeaderArgs {
     pub revision: Option<String>,
 }
 
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
+#[schemars(crate = "rmcp::schemars")]
+pub struct UpdateSupplyArgs {
+    #[schemars(
+        description = "Slug of the organization. Optional when the user belongs to exactly one organization; see list_organizations."
+    )]
+    pub organization: Option<String>,
+    #[schemars(description = "UUID of the DOE.")]
+    pub doe_id: String,
+    #[schemars(description = "Id of the supply to change (see get_doe).")]
+    pub supply_id: String,
+    #[schemars(description = "Heading printed in the DOE. An empty string clears it.")]
+    pub title: Option<String>,
+    #[schemars(description = "What the supply is. Cannot be blank.")]
+    pub designation: Option<String>,
+    #[schemars(description = "Line of the DPGF. An empty string clears it.")]
+    pub dpgf_ref: Option<String>,
+    #[schemars(description = "Where the supply is used. An empty string clears it.")]
+    pub destination: Option<String>,
+    #[schemars(description = "Supplier name. An empty string removes the whole supplier.")]
+    pub supplier_name: Option<String>,
+    #[schemars(
+        description = "Supplier address. An empty string clears it. Needs an existing supplier or supplier_name."
+    )]
+    pub supplier_address: Option<String>,
+    #[schemars(
+        description = "Supplier phone. An empty string clears it. Needs an existing supplier or supplier_name."
+    )]
+    pub supplier_phone: Option<String>,
+    #[schemars(
+        description = "Supplier email. An empty string clears it. Needs an existing supplier or supplier_name."
+    )]
+    pub supplier_email: Option<String>,
+    #[schemars(
+        description = "Manufacturer, or the nursery for plants. An empty string clears it."
+    )]
+    pub maker: Option<String>,
+    #[schemars(
+        description = "Technical characteristics, one per line. An empty string clears them."
+    )]
+    pub specs: Option<String>,
+}
+
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
+#[schemars(crate = "rmcp::schemars")]
+pub struct DeleteSupplyArgs {
+    #[schemars(
+        description = "Slug of the organization. Optional when the user belongs to exactly one organization; see list_organizations."
+    )]
+    pub organization: Option<String>,
+    #[schemars(description = "UUID of the DOE.")]
+    pub doe_id: String,
+    #[schemars(description = "Id of the supply to remove (see get_doe).")]
+    pub supply_id: String,
+}
+
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
+#[schemars(crate = "rmcp::schemars")]
+pub struct AddSectionArgs {
+    #[schemars(
+        description = "Slug of the organization. Optional when the user belongs to exactly one organization; see list_organizations."
+    )]
+    pub organization: Option<String>,
+    #[schemars(description = "UUID of the DOE.")]
+    pub doe_id: String,
+    #[schemars(description = "Title of the new section. Cannot be blank.")]
+    pub title: String,
+    #[schemars(description = "Kind of section: supplies, photos, plans or blank_pages.")]
+    pub kind: SectionKind,
+    #[schemars(
+        description = "Supplies sections only: manufacturer or nursery. Default manufacturer."
+    )]
+    pub maker_label: Option<MakerLabel>,
+    #[schemars(
+        description = "Photos sections only: photos per page, one, two or four. Default two."
+    )]
+    pub per_page: Option<PerPage>,
+    #[schemars(description = "Blank pages sections only: number of pages, 1 to 20. Default 1.")]
+    pub count: Option<u8>,
+    #[schemars(description = "1-based position among the sections. Default: at the end.")]
+    pub position: Option<usize>,
+}
+
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
+#[schemars(crate = "rmcp::schemars")]
+pub struct UpdateSectionArgs {
+    #[schemars(
+        description = "Slug of the organization. Optional when the user belongs to exactly one organization; see list_organizations."
+    )]
+    pub organization: Option<String>,
+    #[schemars(description = "UUID of the DOE.")]
+    pub doe_id: String,
+    #[schemars(
+        description = "Id of the section (see get_doe). Takes precedence over section_title."
+    )]
+    pub section_id: Option<String>,
+    #[schemars(
+        description = "Title of the section, case-insensitive, when section_id is not given."
+    )]
+    pub section_title: Option<String>,
+    #[schemars(description = "New title. Cannot be blank.")]
+    pub title: Option<String>,
+    #[schemars(description = "Whether the section is printed in the DOE.")]
+    pub enabled: Option<bool>,
+    #[schemars(description = "Supplies sections only: manufacturer or nursery.")]
+    pub maker_label: Option<MakerLabel>,
+    #[schemars(description = "Photos sections only: photos per page, one, two or four.")]
+    pub per_page: Option<PerPage>,
+    #[schemars(description = "Blank pages sections only: number of pages, 1 to 20.")]
+    pub count: Option<u8>,
+}
+
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
+#[schemars(crate = "rmcp::schemars")]
+pub struct DeleteSectionArgs {
+    #[schemars(
+        description = "Slug of the organization. Optional when the user belongs to exactly one organization; see list_organizations."
+    )]
+    pub organization: Option<String>,
+    #[schemars(description = "UUID of the DOE.")]
+    pub doe_id: String,
+    #[schemars(description = "Id of the section to delete (see get_doe).")]
+    pub section_id: String,
+}
+
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
+#[schemars(crate = "rmcp::schemars")]
+pub struct ReorderSectionsArgs {
+    #[schemars(
+        description = "Slug of the organization. Optional when the user belongs to exactly one organization; see list_organizations."
+    )]
+    pub organization: Option<String>,
+    #[schemars(description = "UUID of the DOE.")]
+    pub doe_id: String,
+    #[schemars(
+        description = "Ids of all the sections of the DOE, each exactly once, in the new order."
+    )]
+    pub section_ids: Vec<String>,
+}
+
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
+#[schemars(crate = "rmcp::schemars")]
+pub struct AddFileArgs {
+    #[schemars(
+        description = "Slug of the organization. Optional when the user belongs to exactly one organization; see list_organizations."
+    )]
+    pub organization: Option<String>,
+    #[schemars(description = "UUID of the DOE.")]
+    pub doe_id: String,
+    #[schemars(
+        description = "Where the file goes: photo (a photos section), plan (a plans section), supply_photo or supply_datasheet (a supply)."
+    )]
+    pub target: Target,
+    #[schemars(
+        description = "photo and plan only: id of the target section (see get_doe). Takes precedence over section_title."
+    )]
+    pub section_id: Option<String>,
+    #[schemars(
+        description = "photo and plan only: title of the target section, case-insensitive. Optional when the DOE has a single section of that kind."
+    )]
+    pub section_title: Option<String>,
+    #[schemars(
+        description = "supply_photo and supply_datasheet only: id of the supply (see get_doe)."
+    )]
+    pub supply_id: Option<String>,
+    #[schemars(description = "Caption of the photo or plan. Datasheets have no caption.")]
+    pub caption: Option<String>,
+    #[schemars(
+        description = "The file attached by the user in the conversation. Use this when the client offers file attachments."
+    )]
+    pub file: Option<FileParam>,
+    #[schemars(
+        description = "Base64 content of the file (5 MB decoded at most), for clients without file attachments. Give exactly one of file and content_base64."
+    )]
+    pub content_base64: Option<String>,
+    #[schemars(description = "Name of the file, informational.")]
+    pub file_name: Option<String>,
+    #[schemars(
+        description = "Declared MIME type, informational: the type is detected from the content."
+    )]
+    pub mime_type: Option<String>,
+}
+
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
+#[schemars(crate = "rmcp::schemars")]
+pub struct UpdateFileArgs {
+    #[schemars(
+        description = "Slug of the organization. Optional when the user belongs to exactly one organization; see list_organizations."
+    )]
+    pub organization: Option<String>,
+    #[schemars(description = "UUID of the DOE.")]
+    pub doe_id: String,
+    #[schemars(description = "Storage key of the file (see get_doe).")]
+    pub key: String,
+    #[schemars(
+        description = "New caption. An empty string clears it. Not available for datasheets."
+    )]
+    pub caption: Option<String>,
+    #[schemars(
+        description = "Moves a photo or plan to this other section of the same kind (id, see get_doe)."
+    )]
+    pub section_id: Option<String>,
+}
+
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
+#[schemars(crate = "rmcp::schemars")]
+pub struct DeleteFileArgs {
+    #[schemars(
+        description = "Slug of the organization. Optional when the user belongs to exactly one organization; see list_organizations."
+    )]
+    pub organization: Option<String>,
+    #[schemars(description = "UUID of the DOE.")]
+    pub doe_id: String,
+    #[schemars(description = "Storage key of the file to remove from the DOE (see get_doe).")]
+    pub key: String,
+}
+
 #[derive(Clone)]
 pub struct MestierTools {
     api: ApiClient,
+    files: FileFetcher,
     tool_router: ToolRouter<Self>,
 }
 
 impl MestierTools {
-    pub fn new(api: ApiClient) -> Self {
+    pub fn new(api: ApiClient, files: FileFetcher) -> Self {
         Self {
             api,
+            files,
             tool_router: Self::tool_router(),
         }
     }
@@ -266,6 +490,13 @@ fn failure(fault: &Fault) -> CallToolResult {
 
 fn json_result(value: &Value) -> CallToolResult {
     CallToolResult::success(vec![ContentBlock::text(value.to_string())])
+}
+
+fn file_param_meta() -> MetaObject {
+    let mut meta = MetaObject::new();
+    meta.0
+        .insert("openai/fileParams".to_owned(), json!(["file"]));
+    meta
 }
 
 fn paging(args: &ListArgs) -> Paging {
@@ -658,6 +889,278 @@ impl MestierTools {
                             revision: args.revision.as_deref(),
                         },
                     )
+                    .await?;
+                Ok(json_result(&data))
+            }
+            .await,
+        )
+    }
+
+    #[tool(
+        description = "Update a supply of a DOE. Only the given fields change; an empty string clears an optional field, and an empty supplier_name removes the supplier. The designation cannot be blank. Returns the updated DOE."
+    )]
+    async fn update_doe_supply(
+        &self,
+        Parameters(args): Parameters<UpdateSupplyArgs>,
+        Extension(parts): Extension<Parts>,
+    ) -> CallToolResult {
+        let s = match self.session(&parts, "update_doe_supply") {
+            Ok(s) => s,
+            Err(refusal) => return refusal,
+        };
+        finish(
+            async {
+                let data = s
+                    .update_supply(
+                        args.organization.as_deref(),
+                        &args.doe_id,
+                        &args.supply_id,
+                        SupplyPatch {
+                            title: args.title.as_deref(),
+                            designation: args.designation.as_deref(),
+                            dpgf_ref: args.dpgf_ref.as_deref(),
+                            destination: args.destination.as_deref(),
+                            supplier_name: args.supplier_name.as_deref(),
+                            supplier_address: args.supplier_address.as_deref(),
+                            supplier_phone: args.supplier_phone.as_deref(),
+                            supplier_email: args.supplier_email.as_deref(),
+                            maker: args.maker.as_deref(),
+                            specs: args.specs.as_deref(),
+                        },
+                    )
+                    .await?;
+                Ok(json_result(&data))
+            }
+            .await,
+        )
+    }
+
+    #[tool(
+        description = "Remove a supply from a DOE (the DOE itself is never deleted). Its photos and datasheets leave the DOE with it. Returns the updated DOE."
+    )]
+    async fn delete_doe_supply(
+        &self,
+        Parameters(args): Parameters<DeleteSupplyArgs>,
+        Extension(parts): Extension<Parts>,
+    ) -> CallToolResult {
+        let s = match self.session(&parts, "delete_doe_supply") {
+            Ok(s) => s,
+            Err(refusal) => return refusal,
+        };
+        finish(
+            async {
+                let data = s
+                    .delete_supply(args.organization.as_deref(), &args.doe_id, &args.supply_id)
+                    .await?;
+                Ok(json_result(&data))
+            }
+            .await,
+        )
+    }
+
+    #[tool(
+        description = "Add a section to a DOE: kind supplies, photos, plans or blank_pages, at a 1-based position (default: at the end). Settings maker_label, per_page and count only apply to their own kind. Returns the updated DOE with the new section id."
+    )]
+    async fn add_doe_section(
+        &self,
+        Parameters(args): Parameters<AddSectionArgs>,
+        Extension(parts): Extension<Parts>,
+    ) -> CallToolResult {
+        let s = match self.session(&parts, "add_doe_section") {
+            Ok(s) => s,
+            Err(refusal) => return refusal,
+        };
+        finish(
+            async {
+                let data = s
+                    .add_section(
+                        args.organization.as_deref(),
+                        &args.doe_id,
+                        NewSection {
+                            title: &args.title,
+                            kind: args.kind,
+                            maker_label: args.maker_label,
+                            per_page: args.per_page,
+                            count: args.count,
+                            position: args.position,
+                        },
+                    )
+                    .await?;
+                Ok(json_result(&data))
+            }
+            .await,
+        )
+    }
+
+    #[tool(
+        description = "Update a section of a DOE, designated by section_id or section_title: rename it, enable or disable it, or change its settings (maker_label for supplies, per_page for photos, count for blank_pages). A setting that does not match the section kind is refused. Returns the updated DOE."
+    )]
+    async fn update_doe_section(
+        &self,
+        Parameters(args): Parameters<UpdateSectionArgs>,
+        Extension(parts): Extension<Parts>,
+    ) -> CallToolResult {
+        let s = match self.session(&parts, "update_doe_section") {
+            Ok(s) => s,
+            Err(refusal) => return refusal,
+        };
+        finish(
+            async {
+                let data = s
+                    .update_section(
+                        args.organization.as_deref(),
+                        &args.doe_id,
+                        SectionRef {
+                            id: args.section_id.as_deref(),
+                            title: args.section_title.as_deref(),
+                        },
+                        SectionPatch {
+                            title: args.title.as_deref(),
+                            enabled: args.enabled,
+                            maker_label: args.maker_label,
+                            per_page: args.per_page,
+                            count: args.count,
+                        },
+                    )
+                    .await?;
+                Ok(json_result(&data))
+            }
+            .await,
+        )
+    }
+
+    #[tool(
+        description = "Delete an empty section of a DOE by section_id. A section holding supplies, photos or plans is refused: remove its content first. Blank pages sections count as empty. Returns the updated DOE."
+    )]
+    async fn delete_doe_section(
+        &self,
+        Parameters(args): Parameters<DeleteSectionArgs>,
+        Extension(parts): Extension<Parts>,
+    ) -> CallToolResult {
+        let s = match self.session(&parts, "delete_doe_section") {
+            Ok(s) => s,
+            Err(refusal) => return refusal,
+        };
+        finish(
+            async {
+                let data = s
+                    .delete_section(args.organization.as_deref(), &args.doe_id, &args.section_id)
+                    .await?;
+                Ok(json_result(&data))
+            }
+            .await,
+        )
+    }
+
+    #[tool(
+        description = "Reorder the sections of a DOE. section_ids must list every section id of the DOE exactly once, in the new order (see get_doe). Returns the updated DOE."
+    )]
+    async fn reorder_doe_sections(
+        &self,
+        Parameters(args): Parameters<ReorderSectionsArgs>,
+        Extension(parts): Extension<Parts>,
+    ) -> CallToolResult {
+        let s = match self.session(&parts, "reorder_doe_sections") {
+            Ok(s) => s,
+            Err(refusal) => return refusal,
+        };
+        finish(
+            async {
+                let data = s
+                    .reorder_sections(
+                        args.organization.as_deref(),
+                        &args.doe_id,
+                        &args.section_ids,
+                    )
+                    .await?;
+                Ok(json_result(&data))
+            }
+            .await,
+        )
+    }
+
+    #[tool(
+        meta = file_param_meta(),
+        description = "Add a file to a DOE: target photo (photos section), plan (plans section), supply_photo or supply_datasheet (a supply, by supply_id). Attach the file through `file` when the client supports attachments, else give content_base64; exactly one of the two. The type is detected from the content: JPEG, PNG and WebP, plus PDF for plans and datasheets. Returns the updated DOE."
+    )]
+    async fn add_doe_file(
+        &self,
+        Parameters(args): Parameters<AddFileArgs>,
+        Extension(parts): Extension<Parts>,
+    ) -> CallToolResult {
+        let s = match self.session(&parts, "add_doe_file") {
+            Ok(s) => s,
+            Err(refusal) => return refusal,
+        };
+        finish(
+            async {
+                let source = Source::pick(args.file.as_ref(), args.content_base64.as_deref())?;
+                let data = s
+                    .add_file(
+                        args.organization.as_deref(),
+                        &args.doe_id,
+                        args.target,
+                        FileRequest {
+                            section_id: args.section_id.as_deref(),
+                            section_title: args.section_title.as_deref(),
+                            supply_id: args.supply_id.as_deref(),
+                            caption: args.caption.as_deref(),
+                        },
+                        &self.files,
+                        source,
+                    )
+                    .await?;
+                Ok(json_result(&data))
+            }
+            .await,
+        )
+    }
+
+    #[tool(
+        description = "Update a file of a DOE by its storage key: change the caption (photos, plans, supply photos; an empty string clears it) and/or move a photo or plan to another section of the same kind with section_id. Datasheets have no caption. Returns the updated DOE."
+    )]
+    async fn update_doe_file(
+        &self,
+        Parameters(args): Parameters<UpdateFileArgs>,
+        Extension(parts): Extension<Parts>,
+    ) -> CallToolResult {
+        let s = match self.session(&parts, "update_doe_file") {
+            Ok(s) => s,
+            Err(refusal) => return refusal,
+        };
+        finish(
+            async {
+                let data = s
+                    .update_file(
+                        args.organization.as_deref(),
+                        &args.doe_id,
+                        &args.key,
+                        args.caption.as_deref(),
+                        args.section_id.as_deref(),
+                    )
+                    .await?;
+                Ok(json_result(&data))
+            }
+            .await,
+        )
+    }
+
+    #[tool(
+        description = "Remove a file from a DOE by its storage key, wherever it is (photos, plans, supply photos, supply datasheets). The stored object itself is kept. Returns the updated DOE."
+    )]
+    async fn delete_doe_file(
+        &self,
+        Parameters(args): Parameters<DeleteFileArgs>,
+        Extension(parts): Extension<Parts>,
+    ) -> CallToolResult {
+        let s = match self.session(&parts, "delete_doe_file") {
+            Ok(s) => s,
+            Err(refusal) => return refusal,
+        };
+        finish(
+            async {
+                let data = s
+                    .delete_file(args.organization.as_deref(), &args.doe_id, &args.key)
                     .await?;
                 Ok(json_result(&data))
             }

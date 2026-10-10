@@ -8,17 +8,27 @@ pub const MAX_PDF_BYTES: usize = 10 * 1024 * 1024;
 /// A failure shown to the model as a tool error. The text is what the API
 /// said, French included, so the user can act on it.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Fault(pub String);
+pub struct Fault {
+    pub message: String,
+    stale_read: bool,
+}
 
 impl Fault {
     pub fn new(message: impl Into<String>) -> Self {
-        Self(message.into())
+        Self {
+            message: message.into(),
+            stale_read: false,
+        }
+    }
+
+    pub fn is_stale_read(&self) -> bool {
+        self.stale_read
     }
 }
 
 impl fmt::Display for Fault {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str(&self.0)
+        f.write_str(&self.message)
     }
 }
 
@@ -62,6 +72,26 @@ impl ApiClient {
     pub async fn put(&self, token: &str, path: &str, body: &Value) -> Result<Value, Fault> {
         let request = self.http.put(self.url(path)).json(body);
         self.json(request, token).await
+    }
+
+    pub async fn upload(
+        &self,
+        token: &str,
+        folder: &str,
+        mime_type: &str,
+        bytes: Vec<u8>,
+    ) -> Result<String, Fault> {
+        let request = self
+            .http
+            .post(self.url("files"))
+            .query(&[("folder", folder)])
+            .header(reqwest::header::CONTENT_TYPE, mime_type)
+            .body(bytes);
+        let body = self.json(request, token).await?;
+        body["data"]["key"]
+            .as_str()
+            .map(str::to_owned)
+            .ok_or_else(|| Fault::new("réponse d'envoi de fichier illisible"))
     }
 
     /// Returns `None` when the body exceeds `limit`, without reading the rest.
@@ -129,5 +159,9 @@ async fn check(response: reqwest::Response) -> Result<reqwest::Response, Fault> 
         .and_then(Value::as_str)
         .map(str::to_owned)
         .unwrap_or_else(|| format!("erreur {} de l'API Mestier", status.as_u16()));
-    Err(Fault(message))
+    let stale_read = status == StatusCode::CONFLICT && message.contains("entre-temps");
+    Err(Fault {
+        message,
+        stale_read,
+    })
 }

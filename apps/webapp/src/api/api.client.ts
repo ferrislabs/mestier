@@ -1377,6 +1377,7 @@ export namespace Schemas {
   };
   export type UpdateDoeRequest = {
     author?: (string | null) | undefined;
+    expected_updated_at?: (string | null) | undefined;
     issued_on: string;
     lot?: (string | null) | undefined;
     parties: Array<DoeParty>;

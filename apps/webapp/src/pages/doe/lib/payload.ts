@@ -43,7 +43,15 @@ function orNull(value: string): string | null {
 	return trimmed === '' ? null : trimmed
 }
 
-export function buildUpdatePayload(form: DoeForm): UpdateDoeRequest {
+/**
+ * `expectedUpdatedAt` is the `updated_at` of the DOE the form was loaded
+ * from: if someone saved in between (another tab, the AI assistant), the
+ * API refuses with 409 instead of the editor overwriting their change.
+ */
+export function buildUpdatePayload(
+	form: DoeForm,
+	expectedUpdatedAt: string,
+): UpdateDoeRequest {
 	const parties: DoeParty[] = form.parties
 		.filter((party) => party.name.trim() !== '')
 		.map((party) => ({
@@ -67,6 +75,7 @@ export function buildUpdatePayload(form: DoeForm): UpdateDoeRequest {
 			...section,
 			title: section.title.trim(),
 		})),
+		expected_updated_at: expectedUpdatedAt,
 	}
 }
 

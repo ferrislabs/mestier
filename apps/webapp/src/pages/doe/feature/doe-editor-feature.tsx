@@ -150,7 +150,7 @@ export function DoeEditorFeature({
 		setNotice(null)
 		await updateDoe.mutateAsync({
 			path: { organization_id: organizationId, doe_id: doe.id },
-			body: buildUpdatePayload(form),
+			body: buildUpdatePayload(form, doe.updated_at),
 		})
 		dirty.commit(form)
 		setNotice('Enregistré')

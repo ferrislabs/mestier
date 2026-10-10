@@ -1,7 +1,11 @@
 use serde_json::{Map, Value, json};
 use uuid::Uuid;
 
-use crate::api::{ApiClient, Fault, MAX_PDF_BYTES};
+use crate::{
+    api::{ApiClient, Fault, MAX_PDF_BYTES},
+    edit::{self, FilePlacement, NewSection, SectionKind, SectionPatch, SectionRef, SupplyPatch},
+    files::{FileFetcher, Source, Target},
+};
 
 const PRODUCT_PAGE_SIZE: u64 = 100;
 const PRODUCT_PAGE_CAP: u64 = 50;
@@ -111,7 +115,7 @@ impl<'a> Session<'a> {
                 .iter()
                 .find(|org| org["slug"].as_str() == Some(slug))
                 .ok_or_else(|| {
-                    Fault(format!(
+                    Fault::new(format!(
                         "organisation inconnue « {slug} ». Organisations disponibles : {}",
                         slugs()
                     ))
@@ -120,7 +124,7 @@ impl<'a> Session<'a> {
                 [] => return Err(Fault::new("aucune organisation accessible")),
                 [only] => only,
                 _ => {
-                    return Err(Fault(format!(
+                    return Err(Fault::new(format!(
                         "plusieurs organisations : précisez l'argument `organization` parmi : {}",
                         slugs()
                     )));
@@ -281,7 +285,7 @@ impl<'a> Session<'a> {
                     })
                     .collect::<Vec<_>>()
                     .join(", ");
-                Err(Fault(format!(
+                Err(Fault::new(format!(
                     "plusieurs modèles de DOE : précisez `model_id` parmi : {listed}"
                 )))
             }
@@ -312,6 +316,25 @@ impl<'a> Session<'a> {
         Ok(body["data"].clone())
     }
 
+    async fn write_once<F>(&self, org: &str, doe_id: &str, modify: &F) -> Result<Value, Fault>
+    where
+        F: Fn(&mut Value) -> Result<(), Fault>,
+    {
+        let mut doe = self.fetch_doe(org, doe_id).await?;
+        modify(&mut doe)?;
+        self.store_doe(org, doe_id, &doe).await
+    }
+
+    async fn write_doe<F>(&self, org: &str, doe_id: &str, modify: F) -> Result<Value, Fault>
+    where
+        F: Fn(&mut Value) -> Result<(), Fault>,
+    {
+        match self.write_once(org, doe_id, &modify).await {
+            Err(fault) if fault.is_stale_read() => self.write_once(org, doe_id, &modify).await,
+            outcome => outcome,
+        }
+    }
+
     pub async fn add_supply(
         &self,
         organization: Option<&str>,
@@ -320,8 +343,6 @@ impl<'a> Session<'a> {
         let doe_id = uuid(request.doe_id)?;
         let product_id = uuid(request.product_id)?;
         let org = self.organization_id(organization).await?;
-        let mut doe = self.fetch_doe(&org, &doe_id).await?;
-        let index = pick_section(&doe, request.section_id, request.section_title)?;
         let draft = self
             .api
             .post(
@@ -339,11 +360,14 @@ impl<'a> Session<'a> {
                 object.insert("destination".into(), json!(destination));
             }
         }
-        doe["sections"][index]["content"]["supplies"]
-            .as_array_mut()
-            .ok_or_else(|| Fault::new("section de fournitures illisible"))?
-            .push(supply);
-        self.store_doe(&org, &doe_id, &doe).await
+        let section = SectionRef {
+            id: request.section_id,
+            title: request.section_title,
+        };
+        self.write_doe(&org, &doe_id, |doe| {
+            push_supply(doe, section, supply.clone())
+        })
+        .await
     }
 
     pub async fn add_manual_supply(
@@ -358,8 +382,6 @@ impl<'a> Session<'a> {
             ));
         }
         let org = self.organization_id(organization).await?;
-        let mut doe = self.fetch_doe(&org, &doe_id).await?;
-        let index = pick_section(&doe, request.section_id, request.section_title)?;
         let supplier = request.supplier_name.map(|name| {
             json!({
                 "name": name,
@@ -381,11 +403,14 @@ impl<'a> Session<'a> {
             "photos": [],
             "datasheet_keys": [],
         });
-        doe["sections"][index]["content"]["supplies"]
-            .as_array_mut()
-            .ok_or_else(|| Fault::new("section de fournitures illisible"))?
-            .push(supply);
-        self.store_doe(&org, &doe_id, &doe).await
+        let section = SectionRef {
+            id: request.section_id,
+            title: request.section_title,
+        };
+        self.write_doe(&org, &doe_id, |doe| {
+            push_supply(doe, section, supply.clone())
+        })
+        .await
     }
 
     pub async fn update_header(
@@ -396,7 +421,6 @@ impl<'a> Session<'a> {
     ) -> Result<Value, Fault> {
         let doe_id = uuid(doe_id)?;
         let org = self.organization_id(organization).await?;
-        let mut doe = self.fetch_doe(&org, &doe_id).await?;
         let fields = [
             ("title", patch.title, false),
             ("place", patch.place, true),
@@ -405,16 +429,19 @@ impl<'a> Session<'a> {
             ("author", patch.author, true),
             ("revision", patch.revision, false),
         ];
-        for (name, value, clearable) in fields {
-            if let Some(value) = value {
-                doe[name] = if clearable && value.is_empty() {
-                    Value::Null
-                } else {
-                    json!(value)
-                };
+        self.write_doe(&org, &doe_id, |doe| {
+            for (name, value, clearable) in fields {
+                if let Some(value) = value {
+                    doe[name] = if clearable && value.is_empty() {
+                        Value::Null
+                    } else {
+                        json!(value)
+                    };
+                }
             }
-        }
-        self.store_doe(&org, &doe_id, &doe).await
+            Ok(())
+        })
+        .await
     }
 
     pub async fn export_pdf(
@@ -442,6 +469,159 @@ impl<'a> Session<'a> {
     }
 }
 
+#[derive(Debug, Default)]
+pub struct FileRequest<'a> {
+    pub section_id: Option<&'a str>,
+    pub section_title: Option<&'a str>,
+    pub supply_id: Option<&'a str>,
+    pub caption: Option<&'a str>,
+}
+
+impl Session<'_> {
+    async fn edit_doe<F>(
+        &self,
+        organization: Option<&str>,
+        doe_id: &str,
+        modify: F,
+    ) -> Result<Value, Fault>
+    where
+        F: Fn(&mut Value) -> Result<(), Fault>,
+    {
+        let doe_id = uuid(doe_id)?;
+        let org = self.organization_id(organization).await?;
+        self.write_doe(&org, &doe_id, modify).await
+    }
+
+    pub async fn update_supply(
+        &self,
+        organization: Option<&str>,
+        doe_id: &str,
+        supply_id: &str,
+        patch: SupplyPatch<'_>,
+    ) -> Result<Value, Fault> {
+        self.edit_doe(organization, doe_id, |doe| {
+            edit::update_supply(doe, supply_id, &patch)
+        })
+        .await
+    }
+
+    pub async fn delete_supply(
+        &self,
+        organization: Option<&str>,
+        doe_id: &str,
+        supply_id: &str,
+    ) -> Result<Value, Fault> {
+        self.edit_doe(organization, doe_id, |doe| {
+            edit::delete_supply(doe, supply_id)
+        })
+        .await
+    }
+
+    pub async fn add_section(
+        &self,
+        organization: Option<&str>,
+        doe_id: &str,
+        section: NewSection<'_>,
+    ) -> Result<Value, Fault> {
+        self.edit_doe(organization, doe_id, |doe| {
+            edit::add_section(doe, &section).map(|_| ())
+        })
+        .await
+    }
+
+    pub async fn update_section(
+        &self,
+        organization: Option<&str>,
+        doe_id: &str,
+        section: SectionRef<'_>,
+        patch: SectionPatch<'_>,
+    ) -> Result<Value, Fault> {
+        self.edit_doe(organization, doe_id, |doe| {
+            edit::update_section(doe, section, &patch)
+        })
+        .await
+    }
+
+    pub async fn delete_section(
+        &self,
+        organization: Option<&str>,
+        doe_id: &str,
+        section_id: &str,
+    ) -> Result<Value, Fault> {
+        self.edit_doe(organization, doe_id, |doe| {
+            edit::delete_section(doe, section_id)
+        })
+        .await
+    }
+
+    pub async fn reorder_sections(
+        &self,
+        organization: Option<&str>,
+        doe_id: &str,
+        section_ids: &[String],
+    ) -> Result<Value, Fault> {
+        self.edit_doe(organization, doe_id, |doe| {
+            edit::reorder_sections(doe, section_ids)
+        })
+        .await
+    }
+
+    pub async fn update_file(
+        &self,
+        organization: Option<&str>,
+        doe_id: &str,
+        key: &str,
+        caption: Option<&str>,
+        section_id: Option<&str>,
+    ) -> Result<Value, Fault> {
+        self.edit_doe(organization, doe_id, |doe| {
+            edit::update_file(doe, key, caption, section_id)
+        })
+        .await
+    }
+
+    pub async fn delete_file(
+        &self,
+        organization: Option<&str>,
+        doe_id: &str,
+        key: &str,
+    ) -> Result<Value, Fault> {
+        self.edit_doe(organization, doe_id, |doe| edit::delete_file(doe, key))
+            .await
+    }
+
+    pub async fn add_file(
+        &self,
+        organization: Option<&str>,
+        doe_id: &str,
+        target: Target,
+        request: FileRequest<'_>,
+        fetcher: &FileFetcher,
+        source: Source<'_>,
+    ) -> Result<Value, Fault> {
+        let doe_id = uuid(doe_id)?;
+        let org = self.organization_id(organization).await?;
+        let placement = FilePlacement {
+            target,
+            section: SectionRef {
+                id: request.section_id,
+                title: request.section_title,
+            },
+            supply_id: request.supply_id,
+            caption: request.caption,
+        };
+        let mut probe = self.fetch_doe(&org, &doe_id).await?;
+        edit::add_file(&mut probe, &placement, "pending")?;
+        let upload = fetcher.acquire(source, target).await?;
+        let key = self
+            .api
+            .upload(self.token, "doe", upload.kind.mime(), upload.bytes)
+            .await?;
+        self.write_doe(&org, &doe_id, |doe| edit::add_file(doe, &placement, &key))
+            .await
+    }
+}
+
 fn array(value: &Value) -> Vec<Value> {
     value.as_array().cloned().unwrap_or_default()
 }
@@ -449,7 +629,7 @@ fn array(value: &Value) -> Vec<Value> {
 fn uuid(raw: &str) -> Result<String, Fault> {
     Uuid::parse_str(raw)
         .map(|id| id.to_string())
-        .map_err(|_| Fault(format!("identifiant invalide : « {raw} »")))
+        .map_err(|_| Fault::new(format!("identifiant invalide : « {raw} »")))
 }
 
 fn update_body(doe: &Value) -> Value {
@@ -463,67 +643,21 @@ fn update_body(doe: &Value) -> Value {
         "revision",
         "parties",
         "sections",
+        "updated_at",
     ] {
         body.insert(key.to_owned(), doe[key].clone());
+    }
+    if let Some(updated_at) = body.remove("updated_at") {
+        body.insert("expected_updated_at".to_owned(), updated_at);
     }
     Value::Object(body)
 }
 
-fn pick_section(
-    doe: &Value,
-    section_id: Option<&str>,
-    section_title: Option<&str>,
-) -> Result<usize, Fault> {
-    let sections = doe["sections"].as_array().map(Vec::as_slice).unwrap_or(&[]);
-    let supplies_sections: Vec<usize> = sections
-        .iter()
-        .enumerate()
-        .filter(|(_, section)| section["content"]["kind"] == "supplies")
-        .map(|(index, _)| index)
-        .collect();
-    let describe = || {
-        supplies_sections
-            .iter()
-            .map(|&index| {
-                format!(
-                    "{} ({})",
-                    sections[index]["title"].as_str().unwrap_or("?"),
-                    sections[index]["id"].as_str().unwrap_or("?")
-                )
-            })
-            .collect::<Vec<_>>()
-            .join(", ")
-    };
-    let found = match (section_id, section_title) {
-        (Some(id), _) => sections
-            .iter()
-            .position(|section| section["id"].as_str() == Some(id)),
-        (None, Some(title)) => sections.iter().position(|section| {
-            section["title"]
-                .as_str()
-                .is_some_and(|candidate| candidate.eq_ignore_ascii_case(title))
-        }),
-        (None, None) => {
-            return match supplies_sections.as_slice() {
-                [only] => Ok(*only),
-                _ => Err(Fault(format!(
-                    "précisez `section_id` ou `section_title` parmi les sections de fournitures : {}",
-                    describe()
-                ))),
-            };
-        }
-    };
-    let index = found.ok_or_else(|| {
-        Fault(format!(
-            "section introuvable. Sections de fournitures : {}",
-            describe()
-        ))
-    })?;
-    if !supplies_sections.contains(&index) {
-        return Err(Fault(format!(
-            "cette section n'est pas une section de fournitures. Sections de fournitures : {}",
-            describe()
-        )));
-    }
-    Ok(index)
+fn push_supply(doe: &mut Value, section: SectionRef<'_>, supply: Value) -> Result<(), Fault> {
+    let index = edit::pick_section(doe, section, SectionKind::Supplies)?;
+    doe["sections"][index]["content"]["supplies"]
+        .as_array_mut()
+        .ok_or_else(|| Fault::new("section de fournitures illisible"))?
+        .push(supply);
+    Ok(())
 }

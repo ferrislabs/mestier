@@ -21,7 +21,9 @@ use crate::{
     verifier::{Principal, TokenVerifier, VerifyError},
 };
 
-const MAX_BODY_BYTES: usize = 4 * 1024 * 1024;
+/// Room for a 5 MB file sent as base64 to `add_doe_file` (about 6.7 MB), the
+/// same ceiling as the MCP server behind.
+const MAX_BODY_BYTES: usize = 8 * 1024 * 1024;
 const METADATA_PATH: &str = "/.well-known/oauth-protected-resource";
 
 const FORWARDED_REQUEST_HEADERS: [&str; 5] = [

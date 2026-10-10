@@ -580,3 +580,33 @@ async fn server_sent_events_are_streamed_not_buffered() {
     }
     assert!(rest.contains("second"));
 }
+
+fn file_call(base64_len: usize) -> Value {
+    json!({
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "tools/call",
+        "params": {"name": "get_doe", "arguments": {
+            "organization": "acme",
+            "content_base64": "A".repeat(base64_len),
+        }},
+    })
+}
+
+#[tokio::test]
+async fn a_base64_file_of_five_megabytes_gets_through() {
+    let h = Harness::start().await;
+    let token = h.token(json!({}));
+    let response = h.rpc(Some(&token), file_call(6_700_000)).await;
+    assert_eq!(response.status(), 200);
+    assert_eq!(h.upstream_calls().len(), 1);
+}
+
+#[tokio::test]
+async fn a_body_over_eight_mebibytes_is_refused_before_the_server() {
+    let h = Harness::start().await;
+    let token = h.token(json!({}));
+    let response = h.rpc(Some(&token), file_call(9 * 1024 * 1024)).await;
+    assert_eq!(response.status(), 413);
+    assert!(h.upstream_calls().is_empty());
+}

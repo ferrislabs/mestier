@@ -53,7 +53,7 @@ describe('buildUpdatePayload', () => {
 			name: names[index] ?? '',
 			phone: index === 0 ? ' 01 ' : party.phone,
 		}))
-		const payload = buildUpdatePayload(form)
+		const payload = buildUpdatePayload(form, '2026-10-10T12:00:00Z')
 		expect(payload.title).toBe('Avenue')
 		expect(payload.place).toBeNull()
 		expect(payload.revision).toBe('B')
@@ -78,5 +78,15 @@ describe('revision and save guard', () => {
 		const form = doeToForm(DOE)
 		expect(canSave(form)).toBe(true)
 		expect(canSave({ ...form, title: ' ' })).toBe(false)
+	})
+})
+
+describe('buildUpdatePayload concurrency', () => {
+	it('sends the updated_at the form was loaded from', () => {
+		const payload = buildUpdatePayload(
+			doeToForm(DOE),
+			'2026-10-10T12:00:00.123456Z',
+		)
+		expect(payload.expected_updated_at).toBe('2026-10-10T12:00:00.123456Z')
 	})
 })
