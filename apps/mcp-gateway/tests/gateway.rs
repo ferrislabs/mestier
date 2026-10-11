@@ -12,7 +12,8 @@ use std::{
 
 use axum::{
     Form, Json, Router,
-    extract::State,
+    body::Bytes,
+    extract::{DefaultBodyLimit, State},
     http::{HeaderMap, Method, StatusCode},
     response::{IntoResponse, Response, Sse, sse::Event},
     routing::{any, get, post},
@@ -126,6 +127,10 @@ async fn upstream(
     State(state): State<Arc<UpstreamState>>,
     method: Method,
     headers: HeaderMap,
+    // Read like the real server does: answering before the body is read
+    // lets the connection close while the gateway is still sending a large
+    // one, which it then reports as 502.
+    _body: Bytes,
 ) -> Response {
     let header = |name: &str| {
         headers
@@ -201,6 +206,7 @@ impl Harness {
         let upstream_base = serve(
             Router::new()
                 .route("/mcp", any(upstream))
+                .layer(DefaultBodyLimit::disable())
                 .with_state(Arc::clone(&up)),
         )
         .await;
