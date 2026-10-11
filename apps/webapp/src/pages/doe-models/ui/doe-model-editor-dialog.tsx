@@ -24,6 +24,7 @@ import {
 import { Switch } from '#/components/ui/switch'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '#/components/ui/tabs'
 import { Textarea } from '#/components/ui/textarea'
+import { cn } from '#/lib/utils'
 import { moveItem } from '#/pages/doe/lib/sections'
 import {
 	KIND_LABELS,
@@ -66,6 +67,7 @@ export function DoeModelEditorDialog({
 	onSubmit,
 }: DoeModelEditorDialogProps) {
 	const [newTitle, setNewTitle] = useState('')
+	const [tab, setTab] = useState('sections')
 	const [newKind, setNewKind] = useState<SectionKind>('supplies')
 
 	const patchSection = (key: string, patch: Partial<ModelSectionDraft>) =>
@@ -77,7 +79,12 @@ export function DoeModelEditorDialog({
 
 	return (
 		<Dialog open={open} onOpenChange={onOpenChange}>
-			<DialogContent className="flex max-h-[85vh] max-w-3xl flex-col gap-0 overflow-hidden">
+			<DialogContent
+				className={cn(
+					'flex max-h-[90vh] flex-col gap-0 overflow-hidden',
+					tab === 'style' ? 'sm:max-w-6xl' : 'sm:max-w-3xl',
+				)}
+			>
 				<DialogHeader className="border-b pb-4">
 					<DialogTitle>
 						{draft.id ? 'Modifier le modèle' : 'Nouveau modèle de DOE'}
@@ -106,7 +113,7 @@ export function DoeModelEditorDialog({
 						/>
 					</div>
 
-					<Tabs defaultValue="sections">
+					<Tabs value={tab} onValueChange={setTab}>
 						<TabsList>
 							<TabsTrigger value="sections">Sections</TabsTrigger>
 							<TabsTrigger value="style">Style</TabsTrigger>

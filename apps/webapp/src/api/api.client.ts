@@ -612,6 +612,7 @@ export namespace Schemas {
     updated_at: string;
   };
   export type DoeSettingsResponse = { style: DoeStyle };
+  export type DoeStylePreviewPagesResponse = { pages: Array<string> };
   export type DoeSummaryResponse = {
     id: DoeId;
     issued_on: string;
@@ -4743,6 +4744,22 @@ export namespace Endpoints {
     };
     responses: { 200: unknown; 401: unknown; 403: unknown; 409: unknown };
   };
+  export type post_PreviewDoeStylePages = {
+    method: "POST";
+    path: "/api/v1/organizations/{organization_id}/doe-style/preview/pages";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string };
+
+      body: Schemas.PreviewDoeStyleRequest;
+    };
+    responses: {
+      200: { data: { pages: Array<string> }; pagination?: (null | Schemas.PaginationMetadata) | undefined };
+      401: unknown;
+      403: unknown;
+      409: unknown;
+    };
+  };
   export type get_ListDoes = {
     method: "GET";
     path: "/api/v1/organizations/{organization_id}/does";
@@ -7838,6 +7855,7 @@ export type EndpointByMethod = {
     "/api/v1/organizations/{organization_id}/doe-models/from-starter": Endpoints.post_CreateDoeModelFromStarter;
     "/api/v1/organizations/{organization_id}/doe-models/{doe_model_id}/restore": Endpoints.post_RestoreDoeModel;
     "/api/v1/organizations/{organization_id}/doe-style/preview": Endpoints.post_PreviewDoeStyle;
+    "/api/v1/organizations/{organization_id}/doe-style/preview/pages": Endpoints.post_PreviewDoeStylePages;
     "/api/v1/organizations/{organization_id}/does/{doe_id}/supplies/draft": Endpoints.post_DraftDoeSupply;
     "/api/v1/organizations/{organization_id}/equipment": Endpoints.post_CreateEquipment;
     "/api/v1/organizations/{organization_id}/field/assignments/{task_assignment_id}/report": Endpoints.post_ReportAssignment;

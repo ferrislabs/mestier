@@ -63,6 +63,9 @@ function installFakeApi(onPut: (params: unknown) => unknown) {
 					mutationKey: [{ method, path }],
 					mutationFn: async (params: unknown) => {
 						if (method === 'put' && path === SETTINGS_PATH) return onPut(params)
+						if (method === 'post' && path.endsWith('/preview/pages')) {
+							return { data: { pages: [] } }
+						}
 						throw new Error(`unmocked ${method} ${path}`)
 					},
 				},
@@ -88,6 +91,13 @@ function renderSection(onPut: (params: unknown) => unknown = vi.fn()) {
 			</OrganizationListProvider>
 		</QueryClientProvider>,
 	)
+}
+
+async function openSection(
+	user: ReturnType<typeof userEvent.setup>,
+	name: string,
+) {
+	await user.click(await screen.findByRole('button', { name }))
 }
 
 describe('DocumentsSection', () => {
@@ -119,6 +129,7 @@ describe('DocumentsSection', () => {
 	it('shows an error and blocks save for a blank label', async () => {
 		const user = userEvent.setup()
 		renderSection()
+		await openSection(user, 'Libellés')
 		const input = await screen.findByLabelText('Titre du sommaire')
 
 		await user.clear(input)
@@ -136,6 +147,7 @@ describe('DocumentsSection', () => {
 	it('refuses an unknown template variable', async () => {
 		const user = userEvent.setup()
 		renderSection()
+		await openSection(user, 'En-tête et pied de page')
 		const input = await screen.findByLabelText("Texte d'en-tête")
 
 		await user.clear(input)
@@ -152,7 +164,8 @@ describe('DocumentsSection', () => {
 
 		await user.clear(input)
 		await user.type(input, '#123ABC')
-		const footer = screen.getByLabelText('Texte de pied de page')
+		await openSection(user, 'En-tête et pied de page')
+		const footer = await screen.findByLabelText('Texte de pied de page')
 		await user.clear(footer)
 		await user.click(screen.getByRole('button', { name: /enregistrer/i }))
 

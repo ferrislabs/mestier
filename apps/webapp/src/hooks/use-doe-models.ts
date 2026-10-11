@@ -181,3 +181,13 @@ export function usePreviewDoeStyle(organizationId: string) {
 			previewDoeStyle(organizationId, style),
 	})
 }
+
+const DOE_STYLE_PREVIEW_PAGES_PATH =
+	'/api/v1/organizations/{organization_id}/doe-style/preview/pages'
+
+export function usePreviewDoeStylePages() {
+	return useMutation({
+		...window.tanstackApi.mutation('post', DOE_STYLE_PREVIEW_PAGES_PATH)
+			.mutationOptions,
+	})
+}
