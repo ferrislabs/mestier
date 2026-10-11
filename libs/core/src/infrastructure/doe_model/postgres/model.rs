@@ -1,9 +1,8 @@
 use chrono::{DateTime, Utc};
-use common::CoreError;
 use sqlx::types::Json;
 use uuid::Uuid;
 
-use crate::{DoeModel, DoeModelId, DoeModelSection, DoeSettings, HexColor, OrganizationId};
+use crate::{DoeModel, DoeModelId, DoeModelSection, DoeSettings, DoeStyle, OrganizationId};
 
 #[derive(Debug, Clone)]
 pub struct DoeModelRow {
@@ -12,6 +11,7 @@ pub struct DoeModelRow {
     pub name: String,
     pub description: Option<String>,
     pub sections: Json<Vec<DoeModelSection>>,
+    pub style: Option<Json<DoeStyle>>,
     pub archived_at: Option<DateTime<Utc>>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
@@ -25,6 +25,7 @@ impl From<DoeModelRow> for DoeModel {
             name: row.name,
             description: row.description,
             sections: row.sections.0,
+            style: row.style.map(|style| style.0),
             archived_at: row.archived_at,
             created_at: row.created_at,
             updated_at: row.updated_at,
@@ -35,18 +36,14 @@ impl From<DoeModelRow> for DoeModel {
 #[derive(Debug, Clone)]
 pub struct DoeSettingsRow {
     pub org_id: Uuid,
-    pub accent: String,
-    pub logo_key: Option<String>,
+    pub style: Json<DoeStyle>,
 }
 
-impl TryFrom<DoeSettingsRow> for DoeSettings {
-    type Error = CoreError;
-
-    fn try_from(row: DoeSettingsRow) -> Result<Self, Self::Error> {
-        Ok(Self {
+impl From<DoeSettingsRow> for DoeSettings {
+    fn from(row: DoeSettingsRow) -> Self {
+        Self {
             organization_id: OrganizationId(row.org_id),
-            accent: HexColor::try_from(row.accent)?,
-            logo_key: row.logo_key,
-        })
+            style: row.style.0,
+        }
     }
 }

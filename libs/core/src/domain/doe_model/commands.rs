@@ -1,6 +1,6 @@
 use crate::{
     DoeModelId, OrganizationId,
-    domain::doe_model::{DoeModelSection, HexColor, StarterModel},
+    domain::doe_model::{DoeModelSection, DoeStyle, StarterModel},
 };
 
 #[derive(Debug, Clone)]
@@ -11,6 +11,7 @@ pub struct CreateDoeModelCommand {
     pub name: String,
     pub description: Option<String>,
     pub sections: Vec<DoeModelSection>,
+    pub style: Option<DoeStyle>,
 }
 
 #[derive(Debug, Clone)]
@@ -20,6 +21,7 @@ pub struct UpdateDoeModelCommand {
     pub name: String,
     pub description: Option<String>,
     pub sections: Vec<DoeModelSection>,
+    pub style: Option<DoeStyle>,
 }
 
 #[derive(Debug, Clone)]
@@ -33,6 +35,12 @@ pub struct CreateDoeModelFromStarterCommand {
 pub struct UpdateDoeSettingsCommand {
     pub actor: authz::Subject,
     pub organization_id: OrganizationId,
-    pub accent: HexColor,
-    pub logo_key: Option<String>,
+    pub style: DoeStyle,
+}
+
+#[derive(Debug, Clone)]
+pub struct PreviewDoeStyleCommand {
+    pub actor: authz::Subject,
+    pub organization_id: OrganizationId,
+    pub style: DoeStyle,
 }

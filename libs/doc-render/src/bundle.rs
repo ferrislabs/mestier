@@ -81,7 +81,10 @@ pub fn prepare(document: &DoeDocument, bundle: &FileBundle) -> Result<Prepared, 
         entries: HashMap::new(),
         blobs: Vec::new(),
     };
-    if let Some(key) = &document.logo_key {
+    if let Some(key) = &document.style.logo_key {
+        collector.add(key, Use::Picture)?;
+    }
+    if let Some(key) = &document.cover_photo_key {
         collector.add(key, Use::Picture)?;
     }
     for party in &document.parties {

@@ -14,22 +14,28 @@ import {
 	type PartyRole,
 } from '#/pages/doe/types'
 
+const COVER_PHOTO_ACCEPT = 'image/jpeg,image/png,image/webp'
+
 interface DoeInfoTabProps {
 	form: DoeForm
 	fileUrls: Record<string, string | undefined>
 	isUploadingLogo: PartyRole | null
+	isUploadingCover: boolean
 	onFieldChange: (patch: Partial<Omit<DoeForm, 'parties' | 'sections'>>) => void
 	onPartyChange: (role: PartyRole, patch: Partial<PartyForm>) => void
 	onLogoUpload: (role: PartyRole, file: File) => void
+	onCoverPhotoUpload: (file: File) => void
 }
 
 export function DoeInfoTab({
 	form,
 	fileUrls,
 	isUploadingLogo,
+	isUploadingCover,
 	onFieldChange,
 	onPartyChange,
 	onLogoUpload,
+	onCoverPhotoUpload,
 }: DoeInfoTabProps) {
 	const revisionLength = form.revision.trim().length
 	const revisionInvalid = revisionLength < 1 || revisionLength > 8
@@ -86,6 +92,53 @@ export function DoeInfoTab({
 						/>
 						<p className="text-xs text-muted-foreground">1 à 8 caractères.</p>
 					</div>
+				</div>
+			</SectionCard>
+
+			<SectionCard>
+				<SectionHeader
+					title="Photo de couverture"
+					description="Affichée sur la page de garde si le style du DOE l'autorise."
+				/>
+				<div className="flex flex-wrap items-center gap-3 p-5">
+					{form.coverPhotoKey ? (
+						fileUrls[form.coverPhotoKey] ? (
+							<img
+								src={fileUrls[form.coverPhotoKey]}
+								alt="Couverture du DOE"
+								className="h-20 max-w-40 rounded border object-cover"
+							/>
+						) : (
+							<span className="text-sm text-muted-foreground">
+								Photo envoyée
+							</span>
+						)
+					) : (
+						<span className="text-sm text-muted-foreground">Aucune photo</span>
+					)}
+					<RequirePermission permission="MANAGE_PLANNING">
+						<FileUploadButton
+							accept={COVER_PHOTO_ACCEPT}
+							isUploading={isUploadingCover}
+							onFiles={(files) => {
+								const file = files[0]
+								if (file) onCoverPhotoUpload(file)
+							}}
+						>
+							Choisir une photo
+						</FileUploadButton>
+						{form.coverPhotoKey ? (
+							<Button
+								type="button"
+								variant="ghost"
+								size="sm"
+								onClick={() => onFieldChange({ coverPhotoKey: null })}
+							>
+								<X />
+								Retirer la photo
+							</Button>
+						) : null}
+					</RequirePermission>
 				</div>
 			</SectionCard>
 

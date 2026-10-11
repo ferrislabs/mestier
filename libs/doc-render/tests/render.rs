@@ -5,9 +5,9 @@ use doc_render::TypstDoeRenderer;
 use image::{ImageEncoder, codecs::jpeg::JpegEncoder, codecs::png::PngEncoder};
 use lopdf::{Document, Object, Stream, dictionary};
 use mestier_core::{
-    BundledFile, DoeDocument, DoeFile, DoeParty, DoeRenderError, DoeRenderer, DoeSupply,
-    FileBundle, HexColor, NumberedContent, NumberedSection, NumberedSupply, PartyRole,
-    PhotosPerPage, SupplierSnapshot,
+    BundledFile, DocumentStyle, DoeDocument, DoeFile, DoeFont, DoeLabel, DoeParty, DoeRenderError,
+    DoeRenderer, DoeStyle, DoeSupply, DoeTemplate, FileBundle, HexColor, LogoPosition, LogoSize,
+    NumberedContent, NumberedSection, NumberedSupply, PartyRole, PhotosPerPage, SupplierSnapshot,
 };
 use uuid::Uuid;
 
@@ -210,8 +210,13 @@ fn fixture() -> (DoeDocument, FileBundle) {
             party(PartyRole::Contractor, "Verts Travaux", Some("logo")),
         ],
         sections,
-        accent: HexColor::try_from("#0f3d36".to_owned()).unwrap(),
-        logo_key: Some("logo".to_owned()),
+        style: DocumentStyle::from(&DoeStyle {
+            logo_key: Some("logo".to_owned()),
+            ..DoeStyle::default()
+        }),
+        header: "DOE – Avenue du 8 mai 1945".to_owned(),
+        footer: "07/10/2026".to_owned(),
+        cover_photo_key: None,
     };
     (document, bundle)
 }
@@ -235,6 +240,153 @@ fn renders_every_page_with_accents() {
     if let Ok(path) = std::env::var("DOE_SAMPLE_OUT") {
         std::fs::write(path, &bytes).unwrap();
     }
+}
+
+/// The `BaseFont` of every font the PDF embeds.
+fn embedded_fonts(bytes: &[u8]) -> Vec<String> {
+    let doc = Document::load_mem(bytes).unwrap();
+    doc.objects
+        .values()
+        .filter_map(|object| object.as_dict().ok())
+        .filter(|dict| dict.get(b"Type").and_then(Object::as_name).ok() == Some(b"Font"))
+        .filter_map(|dict| dict.get(b"BaseFont").and_then(Object::as_name).ok())
+        .map(|name| String::from_utf8_lossy(name).into_owned())
+        .collect()
+}
+
+#[test]
+fn spec_style_1_default_style_prints_the_titles_of_before_in_inter() {
+    let (document, bundle) = fixture();
+    let bytes = TypstDoeRenderer.render(&document, &bundle).unwrap();
+    let (_, text) = text_of(&bytes);
+    for expected in [
+        "DOSSIER DES OUVRAGES EXÉCUTÉS",
+        "INTERVENANTS",
+        "SOMMAIRE",
+        "Identification de la fourniture",
+        "DOE – Avenue du 8 mai 1945",
+    ] {
+        assert!(text.contains(expected), "{expected} missing from {text}");
+    }
+    // Helvetica comes from the supplier PDFs inserted as pages.
+    let fonts = embedded_fonts(&bytes);
+    assert!(
+        fonts
+            .iter()
+            .all(|font| font.contains("Inter") || font == "Helvetica"),
+        "{fonts:?}"
+    );
+}
+
+#[test]
+fn spec_style_2_a_custom_style_reaches_the_pdf() {
+    let (mut document, mut bundle) = fixture();
+    bundle.insert("cover".into(), file("image/jpeg", jpeg(800, 500, 99)));
+    let label = |text: &str| DoeLabel::try_from(text.to_owned()).unwrap();
+    document.style = DocumentStyle::from(&DoeStyle {
+        primary: HexColor::try_from("#7a1f2b".to_owned()).unwrap(),
+        secondary: HexColor::try_from("#335533".to_owned()).unwrap(),
+        on_primary: HexColor::try_from("#ffe9a8".to_owned()).unwrap(),
+        heading_font: DoeFont::Montserrat,
+        body_font: DoeFont::SourceSerif,
+        logo_key: Some("logo".to_owned()),
+        cover_logo_position: LogoPosition::Right,
+        cover_logo_size: LogoSize::Large,
+        cover_photo: true,
+        header_logo: true,
+        header_text: DoeTemplate::try_from("{titre}".to_owned()).unwrap(),
+        footer_text: DoeTemplate::try_from("{date}".to_owned()).unwrap(),
+        cover_title: label("Dossier des ouvrages exécutés"),
+        parties_title: label("Les intervenants"),
+        contents_title: label("Table des matières"),
+        supply_table_title: label("Fiche fourniture"),
+    });
+    document.header = "Treyve Paysages – Avenue".to_owned();
+    document.footer = "SIRET 123 456 789".to_owned();
+    document.cover_photo_key = Some("cover".to_owned());
+
+    let bytes = TypstDoeRenderer.render(&document, &bundle).unwrap();
+    if let Ok(path) = std::env::var("DOE_STYLED_OUT") {
+        std::fs::write(path, &bytes).unwrap();
+    }
+
+    let (pages, text) = text_of(&bytes);
+    assert_eq!(pages, 14);
+    for expected in [
+        "Dossier des ouvrages exécutés",
+        "Les intervenants",
+        "Table des matières",
+        "Fiche fourniture",
+        "Treyve Paysages – Avenue",
+        "SIRET 123 456 789",
+    ] {
+        assert!(text.contains(expected), "{expected} missing from {text}");
+    }
+    assert!(!text.contains("SOMMAIRE"), "{text}");
+    let fonts = embedded_fonts(&bytes);
+    assert!(fonts.iter().any(|f| f.contains("Montserrat")), "{fonts:?}");
+    assert!(
+        fonts.iter().any(|f| f.contains("SourceSerif4")),
+        "{fonts:?}"
+    );
+}
+
+#[test]
+fn every_font_renders_in_regular_and_bold() {
+    for font in [
+        DoeFont::Inter,
+        DoeFont::Montserrat,
+        DoeFont::SourceSerif,
+        DoeFont::Barlow,
+    ] {
+        let (mut document, bundle) = fixture();
+        document.style = DocumentStyle::from(&DoeStyle {
+            heading_font: font,
+            body_font: font,
+            ..DoeStyle::default()
+        });
+        let bytes = TypstDoeRenderer.render(&document, &bundle).unwrap();
+        let fonts = embedded_fonts(&bytes);
+        let stem = font.family().replace(' ', "");
+        assert!(
+            fonts
+                .iter()
+                .any(|f| f.contains(&stem) && f.contains("Bold")),
+            "{font:?}: {fonts:?}"
+        );
+        assert!(
+            fonts
+                .iter()
+                .any(|f| f.contains(&stem) && !f.contains("Bold")),
+            "{font:?}: {fonts:?}"
+        );
+    }
+}
+
+#[test]
+fn svg_pages_are_the_requested_pages_of_the_same_layout() {
+    let (document, bundle) = fixture();
+    let svgs = TypstDoeRenderer
+        .render_svg(&document, &bundle, &[0, 3, 999])
+        .unwrap();
+    assert_eq!(svgs.len(), 2, "a page past the end is skipped");
+    assert!(svgs.iter().all(|svg| svg.starts_with("<svg")));
+}
+
+#[test]
+fn spec_style_7_the_sample_previews_cover_parties_and_a_supply_sheet_quickly() {
+    let document = DoeDocument::sample(
+        &DoeStyle::default(),
+        NaiveDate::from_ymd_opt(2026, 10, 11).unwrap(),
+    );
+    let started = Instant::now();
+    let svgs = TypstDoeRenderer
+        .render_svg(&document, &FileBundle::default(), &[0, 1, 3])
+        .unwrap();
+    let elapsed = started.elapsed();
+    assert_eq!(svgs.len(), 3);
+    let total: usize = svgs.iter().map(String::len).sum();
+    eprintln!("sample preview: {elapsed:?}, {} KB", total / 1024);
 }
 
 #[test]

@@ -1,8 +1,9 @@
 use common::CoreError;
 use mestier_macros::repository;
+use sqlx::types::Json;
 
 use crate::{
-    DoeSettings, OrganizationId,
+    DoeSettings, DoeStyle, OrganizationId,
     domain::doe_model::ports::DoeSettingsRepository,
     infrastructure::{
         doe_model::postgres::model::DoeSettingsRow,
@@ -29,14 +30,14 @@ impl<'tx> DoeSettingsRepository for PgDoeSettingsRepository<'tx> {
         let mut tx = self.tx.lock().await;
         let row = sqlx::query_as!(
             DoeSettingsRow,
-            r#"SELECT org_id, accent, logo_key FROM doe_settings WHERE org_id = $1"#,
+            r#"SELECT org_id, style AS "style: Json<DoeStyle>" FROM doe_settings WHERE org_id = $1"#,
             organization_id.0,
         )
         .fetch_optional(&mut ***tx)
         .await
         .map_err(map_sqlx_error)?;
 
-        row.map(DoeSettings::try_from).transpose()
+        Ok(row.map(Into::into))
     }
 
     async fn upsert(&mut self, settings: &DoeSettings) -> Result<DoeSettings, CoreError> {
@@ -44,20 +45,19 @@ impl<'tx> DoeSettingsRepository for PgDoeSettingsRepository<'tx> {
         let row = sqlx::query_as!(
             DoeSettingsRow,
             r#"
-            INSERT INTO doe_settings (org_id, accent, logo_key, updated_at)
-            VALUES ($1, $2, $3, now())
+            INSERT INTO doe_settings (org_id, style, updated_at)
+            VALUES ($1, $2, now())
             ON CONFLICT (org_id) DO UPDATE
-            SET accent = EXCLUDED.accent, logo_key = EXCLUDED.logo_key, updated_at = now()
-            RETURNING org_id, accent, logo_key
+            SET style = EXCLUDED.style, updated_at = now()
+            RETURNING org_id, style AS "style: Json<DoeStyle>"
             "#,
             settings.organization_id.0,
-            settings.accent.as_str(),
-            settings.logo_key,
+            Json(&settings.style) as Json<&DoeStyle>,
         )
         .fetch_one(&mut ***tx)
         .await
         .map_err(map_sqlx_error)?;
 
-        DoeSettings::try_from(row)
+        Ok(row.into())
     }
 }

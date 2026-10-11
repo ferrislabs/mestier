@@ -1,7 +1,7 @@
 use auth::Identity;
 use axum::{Extension, Json, extract::State};
 use handlers::{ApiError, AppState, DataEnvelope, Response, resolve_actor};
-use mestier_core::{CreateDoeModelCommand, DoeModelSection};
+use mestier_core::{CreateDoeModelCommand, DoeModelSection, DoeStyle};
 use serde::Deserialize;
 use utoipa::ToSchema;
 
@@ -16,6 +16,10 @@ pub struct CreateDoeModelRequest {
     #[serde(default)]
     pub description: Option<String>,
     pub sections: Vec<DoeModelSection>,
+    /// Replaces the organization's style for DOEs made from this model.
+    /// Absent or null: the organization's applies.
+    #[serde(default)]
+    pub style: Option<DoeStyle>,
 }
 
 #[utoipa::path(
@@ -53,6 +57,7 @@ pub async fn handler(
             name: payload.name,
             description: payload.description,
             sections: payload.sections,
+            style: payload.style,
         })
         .await?;
 

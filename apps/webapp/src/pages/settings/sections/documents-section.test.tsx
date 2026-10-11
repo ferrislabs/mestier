@@ -8,9 +8,10 @@ import {
 } from '#/hooks/use-active-organization'
 import { PERMISSION_CATALOG } from '#/lib/permission-catalog'
 import {
-	DocumentsSection,
-	isValidAccent,
-} from '#/pages/settings/sections/documents-section'
+	type CompleteDoeStyle,
+	DEFAULT_DOE_STYLE,
+} from '#/pages/doe-style/lib/style'
+import { DocumentsSection } from '#/pages/settings/sections/documents-section'
 import { seedPermissionsCache } from '#/test/with-permissions'
 
 const SETTINGS_PATH = '/api/v1/organizations/{organization_id}/doe-settings'
@@ -41,7 +42,7 @@ function installFakeApi(onPut: (params: unknown) => unknown) {
 					queryFn: async () => {
 						if (path === SETTINGS_PATH) {
 							return {
-								data: { accent: '#0f3d36', logo_key: null },
+								data: { style: { primary: '#0f3d36' } },
 								pagination: null,
 							}
 						}
@@ -62,6 +63,9 @@ function installFakeApi(onPut: (params: unknown) => unknown) {
 					mutationKey: [{ method, path }],
 					mutationFn: async (params: unknown) => {
 						if (method === 'put' && path === SETTINGS_PATH) return onPut(params)
+						if (method === 'post' && path.endsWith('/preview/pages')) {
+							return { data: { pages: [] } }
+						}
 						throw new Error(`unmocked ${method} ${path}`)
 					},
 				},
@@ -89,23 +93,18 @@ function renderSection(onPut: (params: unknown) => unknown = vi.fn()) {
 	)
 }
 
-describe('isValidAccent', () => {
-	it('accepts #rrggbb only', () => {
-		expect(isValidAccent('#0f3d36')).toBe(true)
-		expect(isValidAccent('#ABCDEF')).toBe(true)
-		expect(isValidAccent('0f3d36')).toBe(false)
-		expect(isValidAccent('#0f3d3')).toBe(false)
-		expect(isValidAccent('#0f3d36a')).toBe(false)
-		expect(isValidAccent('#gggggg')).toBe(false)
-		expect(isValidAccent('')).toBe(false)
-	})
-})
+async function openSection(
+	user: ReturnType<typeof userEvent.setup>,
+	name: string,
+) {
+	await user.click(await screen.findByRole('button', { name }))
+}
 
 describe('DocumentsSection', () => {
-	it('flags an invalid hex and keeps save disabled', async () => {
+	it('flags an invalid hex and keeps save and preview disabled', async () => {
 		const user = userEvent.setup()
 		renderSection()
-		const input = await screen.findByLabelText('Couleur personnalisée')
+		const input = await screen.findByLabelText('Couleur principale')
 
 		await user.clear(input)
 		await user.type(input, '#12')
@@ -118,39 +117,64 @@ describe('DocumentsSection', () => {
 				}) as HTMLButtonElement
 			).disabled,
 		).toBe(true)
+		expect(
+			(
+				screen.getByRole('button', {
+					name: /aperçu pdf/i,
+				}) as HTMLButtonElement
+			).disabled,
+		).toBe(true)
 	})
 
-	it('saves the swatch picked', async () => {
-		const onPut = vi.fn(() => ({ data: { accent: '#6b1460', logo_key: null } }))
+	it('shows an error and blocks save for a blank label', async () => {
 		const user = userEvent.setup()
-		renderSection(onPut)
+		renderSection()
+		await openSection(user, 'Libellés')
+		const input = await screen.findByLabelText('Titre du sommaire')
 
-		await user.click(
-			await screen.findByRole('button', { name: 'Couleur #6b1460' }),
-		)
-		await user.click(screen.getByRole('button', { name: /enregistrer/i }))
+		await user.clear(input)
 
-		await waitFor(() => expect(onPut).toHaveBeenCalledTimes(1))
-		const params = onPut.mock.calls[0] as unknown as [
-			{ body: { accent: string; logo_key: string | null } },
-		]
-		expect(params[0].body).toEqual({ accent: '#6b1460', logo_key: null })
+		expect(screen.getByRole('alert').textContent).toMatch(/vide/)
+		expect(
+			(
+				screen.getByRole('button', {
+					name: /enregistrer/i,
+				}) as HTMLButtonElement
+			).disabled,
+		).toBe(true)
 	})
 
-	it('saves a free hex typed in', async () => {
-		const onPut = vi.fn(() => ({ data: { accent: '#123abc', logo_key: null } }))
+	it('refuses an unknown template variable', async () => {
+		const user = userEvent.setup()
+		renderSection()
+		await openSection(user, 'En-tête et pied de page')
+		const input = await screen.findByLabelText("Texte d'en-tête")
+
+		await user.clear(input)
+		await user.type(input, 'DOE {{client}')
+
+		expect(screen.getByRole('alert').textContent).toMatch(/\{client\}/)
+	})
+
+	it('saves the whole style', async () => {
+		const onPut = vi.fn(() => ({ data: { style: DEFAULT_DOE_STYLE } }))
 		const user = userEvent.setup()
 		renderSection(onPut)
-		const input = await screen.findByLabelText('Couleur personnalisée')
+		const input = await screen.findByLabelText('Couleur principale')
 
 		await user.clear(input)
 		await user.type(input, '#123ABC')
+		await openSection(user, 'En-tête et pied de page')
+		const footer = await screen.findByLabelText('Texte de pied de page')
+		await user.clear(footer)
 		await user.click(screen.getByRole('button', { name: /enregistrer/i }))
 
 		await waitFor(() => expect(onPut).toHaveBeenCalledTimes(1))
 		const params = onPut.mock.calls[0] as unknown as [
-			{ body: { accent: string } },
+			{ body: { style: CompleteDoeStyle } },
 		]
-		expect(params[0].body.accent).toBe('#123abc')
+		expect(params[0].body).toEqual({
+			style: { ...DEFAULT_DOE_STYLE, primary: '#123abc', footer_text: '' },
+		})
 	})
 })

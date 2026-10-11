@@ -1,7 +1,7 @@
 use auth::Identity;
 use axum::{Extension, Json, extract::State};
 use handlers::{ApiError, AppState, DataEnvelope, Response, resolve_actor};
-use mestier_core::{HexColor, UpdateDoeSettingsCommand};
+use mestier_core::{DoeStyle, UpdateDoeSettingsCommand};
 use serde::Deserialize;
 use utoipa::ToSchema;
 
@@ -12,9 +12,7 @@ use crate::{
 
 #[derive(Debug, Deserialize, ToSchema)]
 pub struct UpdateDoeSettingsRequest {
-    pub accent: HexColor,
-    #[serde(default)]
-    pub logo_key: Option<String>,
+    pub style: DoeStyle,
 }
 
 #[utoipa::path(
@@ -75,8 +73,7 @@ pub async fn put_handler(
         .update_doe_settings(UpdateDoeSettingsCommand {
             actor,
             organization_id: path.organization_id,
-            accent: payload.accent,
-            logo_key: payload.logo_key,
+            style: payload.style,
         })
         .await?;
 

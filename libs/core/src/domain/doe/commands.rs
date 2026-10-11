@@ -25,6 +25,7 @@ pub struct UpdateDoeCommand {
     pub issued_on: NaiveDate,
     pub author: Option<String>,
     pub revision: Revision,
+    pub cover_photo_key: Option<String>,
     pub parties: Vec<DoeParty>,
     pub sections: Vec<DoeSection>,
     /// The `updated_at` the caller last read. When given and no longer

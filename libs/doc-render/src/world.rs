@@ -18,13 +18,21 @@ const TEMPLATE: &str = include_str!("doe.typ");
 
 static LIBRARY: LazyLock<LazyHash<Library>> = LazyLock::new(|| LazyHash::new(Library::default()));
 
-const INTER: [&[u8]; 2] = [
+/// Every family a `DoeFont` names, regular and bold. Licenses sit next to
+/// the files.
+const FONT_FILES: [&[u8]; 8] = [
     include_bytes!("../fonts/Inter-Regular.ttf"),
     include_bytes!("../fonts/Inter-Bold.ttf"),
+    include_bytes!("../fonts/Montserrat-Regular.ttf"),
+    include_bytes!("../fonts/Montserrat-Bold.ttf"),
+    include_bytes!("../fonts/SourceSerif4-Regular.ttf"),
+    include_bytes!("../fonts/SourceSerif4-Bold.ttf"),
+    include_bytes!("../fonts/Barlow-Regular.ttf"),
+    include_bytes!("../fonts/Barlow-Bold.ttf"),
 ];
 
 static FONTS: LazyLock<(LazyHash<FontBook>, Vec<Font>)> = LazyLock::new(|| {
-    let fonts: Vec<Font> = INTER
+    let fonts: Vec<Font> = FONT_FILES
         .iter()
         .flat_map(|data| Font::iter(Bytes::new(*data)))
         .collect();
@@ -65,6 +73,20 @@ impl DoeWorld {
         });
         comemo::evict(0);
         pdf
+    }
+
+    pub fn compile_svg(&self, pages: &[usize]) -> Result<Vec<String>, DoeRenderError> {
+        let compiled = typst::compile::<PagedDocument>(self).output;
+        let svgs = compiled.map_err(diagnostics).map(|document| {
+            let options = typst_svg::SvgOptions::default();
+            pages
+                .iter()
+                .filter_map(|&index| document.pages().get(index))
+                .map(|page| typst_svg::svg(page, &options))
+                .collect()
+        });
+        comemo::evict(0);
+        svgs
     }
 }
 

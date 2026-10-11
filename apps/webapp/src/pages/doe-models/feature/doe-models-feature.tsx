@@ -7,6 +7,7 @@ import {
 	useCreateDoeModelFromStarter,
 	useDoeModelStarters,
 	useDoeModels,
+	useDoeSettings,
 	useRestoreDoeModel,
 	useUpdateDoeModel,
 } from '#/hooks/use-doe-models'
@@ -22,6 +23,8 @@ import type { ModelDraft } from '#/pages/doe-models/types'
 import { DoeModelEditorDialog } from '#/pages/doe-models/ui/doe-model-editor-dialog'
 import { DoeModelStartersDialog } from '#/pages/doe-models/ui/doe-model-starters-dialog'
 import { DoeModelsList } from '#/pages/doe-models/ui/doe-models-list'
+import { DoeStyleEditorFeature } from '#/pages/doe-style/feature/doe-style-editor-feature'
+import { completeStyle } from '#/pages/doe-style/lib/style'
 
 interface DoeModelsFeatureProps {
 	includeArchived: boolean
@@ -61,6 +64,7 @@ function DoeModelsWorkspace({
 	const archiveModel = useArchiveDoeModel()
 	const restoreModel = useRestoreDoeModel()
 	const fromStarter = useCreateDoeModelFromStarter()
+	const settings = useDoeSettings(organizationId)
 
 	const rows: DoeModel[] = models.data?.data ?? []
 
@@ -124,6 +128,33 @@ function DoeModelsWorkspace({
 				onOpenChange={(open) => {
 					if (!open) setDraft(null)
 				}}
+				styleEditor={
+					draft?.style ? (
+						<DoeStyleEditorFeature
+							organizationId={organizationId}
+							value={draft.style}
+							onChange={(patch) =>
+								setDraft((current) =>
+									current?.style
+										? { ...current, style: { ...current.style, ...patch } }
+										: current,
+								)
+							}
+						/>
+					) : null
+				}
+				onStyleToggle={(enabled) =>
+					setDraft((current) =>
+						current
+							? {
+									...current,
+									style: enabled
+										? completeStyle(settings.data?.data?.style)
+										: null,
+								}
+							: current,
+					)
+				}
 				onChange={(patch) =>
 					setDraft((current) => (current ? { ...current, ...patch } : current))
 				}

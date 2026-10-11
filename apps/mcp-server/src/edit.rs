@@ -539,6 +539,15 @@ pub fn add_file(doe: &mut Value, placement: &FilePlacement<'_>, key: &str) -> Re
         Ok(())
     };
     match placement.target {
+        Target::CoverPhoto => {
+            if placement.caption.is_some_and(|c| !c.trim().is_empty()) {
+                return Err(Fault::new(
+                    "la photo de couverture n'a pas de légende : retirez `caption`",
+                ));
+            }
+            doe["cover_photo_key"] = json!(key);
+            Ok(())
+        }
         Target::Photo => {
             let index = pick_section(doe, placement.section, SectionKind::Photos)?;
             push(&mut doe["sections"][index]["content"]["photos"])
@@ -648,6 +657,11 @@ pub fn update_file(
         ));
     }
     let Some(place) = locate_file(doe, key) else {
+        if doe["cover_photo_key"] == key {
+            return Err(Fault::new(
+                "la photo de couverture n'a ni légende ni section : remplacez-la ou supprimez-la",
+            ));
+        }
         if has_datasheet(doe, key) {
             return Err(Fault::new(
                 "une fiche technique n'a ni légende ni section : seule sa suppression est possible",
@@ -719,6 +733,10 @@ pub fn update_file(
 
 pub fn delete_file(doe: &mut Value, key: &str) -> Result<(), Fault> {
     let mut removed = false;
+    if doe["cover_photo_key"] == key {
+        doe["cover_photo_key"] = Value::Null;
+        removed = true;
+    }
     let Some(all) = doe["sections"].as_array_mut() else {
         return Err(unknown_file(key));
     };

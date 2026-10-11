@@ -30,6 +30,7 @@ export interface DoeForm {
 	issuedOn: string
 	author: string
 	revision: string
+	coverPhotoKey: string | null
 	parties: PartyForm[]
 	sections: DoeSection[]
 }

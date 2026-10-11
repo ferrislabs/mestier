@@ -20,6 +20,10 @@ pub struct UpdateDoeRequest {
     pub author: Option<String>,
     /// 1 to 8 characters.
     pub revision: String,
+    /// Printed on the cover when the style asks for it. Absent or null
+    /// removes it.
+    #[serde(default)]
+    pub cover_photo_key: Option<String>,
     pub parties: Vec<DoeParty>,
     pub sections: Vec<DoeSection>,
     /// The `updated_at` read before editing. When it is no longer current
@@ -70,6 +74,7 @@ pub async fn handler(
             issued_on: payload.issued_on,
             author: payload.author,
             revision: Revision::try_from(payload.revision)?,
+            cover_photo_key: payload.cover_photo_key,
             parties: payload.parties,
             sections: payload.sections,
             expected_updated_at: payload.expected_updated_at,

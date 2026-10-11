@@ -71,7 +71,10 @@ pub async fn handler(
 /// for the duration of the render.
 const MAX_BUNDLE_BYTES: usize = 256 * 1024 * 1024;
 
-async fn load_files(state: &AppState, document: &DoeDocument) -> Result<FileBundle, ApiError> {
+pub(crate) async fn load_files(
+    state: &AppState,
+    document: &DoeDocument,
+) -> Result<FileBundle, ApiError> {
     let mut bundle = FileBundle::default();
     let mut total_bytes = 0usize;
     for key in document.file_keys() {
@@ -146,10 +149,33 @@ const RENDER_TIMEOUT: Duration = Duration::from_secs(120);
 static RENDER_PERMITS: LazyLock<Arc<Semaphore>> =
     LazyLock::new(|| Arc::new(Semaphore::new(CONCURRENT_RENDERS)));
 
-async fn render_off_the_executor(
+pub(crate) async fn render_off_the_executor(
     document: DoeDocument,
     files: FileBundle,
 ) -> Result<Vec<u8>, ApiError> {
+    off_the_executor(move || render_with(&TypstDoeRenderer, &document, &files)).await
+}
+
+/// The given pages as SVG, under the same limits as a PDF export.
+pub(crate) async fn render_svg_off_the_executor(
+    document: DoeDocument,
+    files: FileBundle,
+    pages: &'static [usize],
+) -> Result<Vec<String>, ApiError> {
+    off_the_executor(move || {
+        TypstDoeRenderer
+            .render_svg(&document, &files, pages)
+            .map_err(|error| {
+                tracing::error!(error = %error, "DOE preview rendering failed");
+                ApiError::Internal
+            })
+    })
+    .await
+}
+
+async fn off_the_executor<T: Send + 'static>(
+    render: impl FnOnce() -> Result<T, ApiError> + Send + 'static,
+) -> Result<T, ApiError> {
     let permit = RENDER_PERMITS
         .clone()
         .acquire_owned()
@@ -157,7 +183,7 @@ async fn render_off_the_executor(
         .map_err(|_| ApiError::Internal)?;
     let task = tokio::task::spawn_blocking(move || {
         let _permit = permit;
-        render_with(&TypstDoeRenderer, &document, &files)
+        render()
     });
     match tokio::time::timeout(RENDER_TIMEOUT, task).await {
         Ok(joined) => joined.map_err(|error| {
@@ -237,7 +263,9 @@ fn content_disposition(filename: &str) -> String {
 #[cfg(test)]
 mod tests {
     use chrono::NaiveDate;
-    use mestier_core::{DoeFile, DoeSupply, HexColor, NumberedSection, NumberedSupply};
+    use mestier_core::{
+        DocumentStyle, DoeFile, DoeStyle, DoeSupply, NumberedSection, NumberedSupply,
+    };
     use uuid::Uuid;
 
     use super::*;
@@ -278,8 +306,10 @@ mod tests {
                     }],
                 },
             }],
-            accent: HexColor::mestier_default(),
-            logo_key: None,
+            style: DocumentStyle::from(&DoeStyle::default()),
+            header: String::new(),
+            footer: String::new(),
+            cover_photo_key: None,
         }
     }
 
@@ -287,6 +317,15 @@ mod tests {
 
     impl DoeRenderer for Failing {
         fn render(&self, _: &DoeDocument, _: &FileBundle) -> Result<Vec<u8>, DoeRenderError> {
+            Err(self.0.clone())
+        }
+
+        fn render_svg(
+            &self,
+            _: &DoeDocument,
+            _: &FileBundle,
+            _: &[usize],
+        ) -> Result<Vec<String>, DoeRenderError> {
             Err(self.0.clone())
         }
     }

@@ -12,7 +12,7 @@ use serde::Serialize;
 
 use crate::domain::{
     doe::{DoeFile, DoeParty, DoeSupply, PhotosPerPage},
-    doe_model::HexColor,
+    doe_model::{DoeStyle, HexColor, LogoPosition, LogoSize},
 };
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -25,8 +25,51 @@ pub struct DoeDocument {
     pub revision: String,
     pub parties: Vec<DoeParty>,
     pub sections: Vec<NumberedSection>,
-    pub accent: HexColor,
+    pub style: DocumentStyle,
+    /// The running header's text, variables already replaced.
+    pub header: String,
+    pub footer: String,
+    /// Set only when the DOE has a cover photo and the style prints it.
+    pub cover_photo_key: Option<String>,
+}
+
+/// A `DoeStyle` as the renderer reads it: fonts as family names, labels as
+/// plain text.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct DocumentStyle {
+    pub primary: HexColor,
+    pub secondary: HexColor,
+    pub on_primary: HexColor,
+    pub heading_font: String,
+    pub body_font: String,
     pub logo_key: Option<String>,
+    pub cover_logo_position: LogoPosition,
+    pub cover_logo_size: LogoSize,
+    pub header_logo: bool,
+    pub cover_title: String,
+    pub parties_title: String,
+    pub contents_title: String,
+    pub supply_table_title: String,
+}
+
+impl From<&DoeStyle> for DocumentStyle {
+    fn from(style: &DoeStyle) -> Self {
+        Self {
+            primary: style.primary.clone(),
+            secondary: style.secondary.clone(),
+            on_primary: style.on_primary.clone(),
+            heading_font: style.heading_font.family().to_owned(),
+            body_font: style.body_font.family().to_owned(),
+            logo_key: style.logo_key.clone(),
+            cover_logo_position: style.cover_logo_position,
+            cover_logo_size: style.cover_logo_size,
+            header_logo: style.header_logo,
+            cover_title: style.cover_title.as_str().to_owned(),
+            parties_title: style.parties_title.as_str().to_owned(),
+            contents_title: style.contents_title.as_str().to_owned(),
+            supply_table_title: style.supply_table_title.as_str().to_owned(),
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -105,4 +148,13 @@ pub enum DoeRenderError {
 pub trait DoeRenderer: Send + Sync {
     fn render(&self, document: &DoeDocument, files: &FileBundle)
     -> Result<Vec<u8>, DoeRenderError>;
+
+    /// The same layout as `render`, as one SVG per requested page (0-based),
+    /// for an on-screen preview. Pages past the end are skipped.
+    fn render_svg(
+        &self,
+        document: &DoeDocument,
+        files: &FileBundle,
+        pages: &[usize],
+    ) -> Result<Vec<String>, DoeRenderError>;
 }

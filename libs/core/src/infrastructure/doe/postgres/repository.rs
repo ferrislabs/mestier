@@ -36,19 +36,21 @@ impl<'tx> DoeRepository for PgDoeRepository<'tx> {
         let row = sqlx::query_as!(
             DoeRow,
             r#"
-            INSERT INTO does (id, org_id, project_id, title, place, lot, issued_on, author, revision, parties, sections, created_at, updated_at)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
-            RETURNING id, org_id, project_id, title, place, lot, issued_on, author, revision, parties, sections, created_at, updated_at
+            INSERT INTO does (id, org_id, project_id, model_id, title, place, lot, issued_on, author, revision, cover_photo_key, parties, sections, created_at, updated_at)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+            RETURNING id, org_id, project_id, model_id, title, place, lot, issued_on, author, revision, cover_photo_key, parties, sections, created_at, updated_at
             "#,
             doe.id.0,
             doe.organization_id.0,
             doe.project_id.0,
+            doe.model_id.map(|id| id.0),
             doe.title,
             doe.place,
             doe.lot,
             doe.issued_on,
             doe.author,
             revision,
+            doe.cover_photo_key,
             parties,
             sections,
             doe.created_at,
@@ -107,7 +109,7 @@ impl<'tx> DoeRepository for PgDoeRepository<'tx> {
         let row = sqlx::query_as!(
             DoeRow,
             r#"
-            SELECT id, org_id, project_id, title, place, lot, issued_on, author, revision, parties, sections, created_at, updated_at
+            SELECT id, org_id, project_id, model_id, title, place, lot, issued_on, author, revision, cover_photo_key, parties, sections, created_at, updated_at
             FROM does
             WHERE id = $1
             "#,
@@ -125,7 +127,7 @@ impl<'tx> DoeRepository for PgDoeRepository<'tx> {
         let row = sqlx::query_as!(
             DoeRow,
             r#"
-            SELECT id, org_id, project_id, title, place, lot, issued_on, author, revision, parties, sections, created_at, updated_at
+            SELECT id, org_id, project_id, model_id, title, place, lot, issued_on, author, revision, cover_photo_key, parties, sections, created_at, updated_at
             FROM does
             WHERE project_id = $1
             "#,
@@ -149,9 +151,9 @@ impl<'tx> DoeRepository for PgDoeRepository<'tx> {
             r#"
             UPDATE does
             SET title = $2, place = $3, lot = $4, issued_on = $5, author = $6, revision = $7,
-                parties = $8, sections = $9, updated_at = $10
+                cover_photo_key = $8, parties = $9, sections = $10, updated_at = $11
             WHERE id = $1
-            RETURNING id, org_id, project_id, title, place, lot, issued_on, author, revision, parties, sections, created_at, updated_at
+            RETURNING id, org_id, project_id, model_id, title, place, lot, issued_on, author, revision, cover_photo_key, parties, sections, created_at, updated_at
             "#,
             doe.id.0,
             doe.title,
@@ -160,6 +162,7 @@ impl<'tx> DoeRepository for PgDoeRepository<'tx> {
             doe.issued_on,
             doe.author,
             revision,
+            doe.cover_photo_key,
             parties,
             sections,
             doe.updated_at,

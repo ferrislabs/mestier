@@ -66,6 +66,25 @@ describe('buildUpdatePayload', () => {
 	})
 })
 
+describe('cover photo', () => {
+	it('is read from the DOE and sent back on save', () => {
+		const form = doeToForm({ ...DOE, cover_photo_key: 'cover-1' })
+		expect(form.coverPhotoKey).toBe('cover-1')
+		expect(buildUpdatePayload(form, 'x').cover_photo_key).toBe('cover-1')
+	})
+
+	it('is null when the DOE has none, and null once removed', () => {
+		const form = doeToForm(DOE)
+		expect(form.coverPhotoKey).toBeNull()
+		expect(buildUpdatePayload(form, 'x').cover_photo_key).toBeNull()
+		const removed = {
+			...doeToForm({ ...DOE, cover_photo_key: 'c' }),
+			coverPhotoKey: null,
+		}
+		expect(buildUpdatePayload(removed, 'x').cover_photo_key).toBeNull()
+	})
+})
+
 describe('revision and save guard', () => {
 	it('accepts 1 to 8 characters', () => {
 		expect(isRevisionValid('A')).toBe(true)

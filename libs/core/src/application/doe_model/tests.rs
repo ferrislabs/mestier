@@ -10,7 +10,10 @@ mod tests {
         CreateDoeModelFromStarterCommand, UpdateDoeModelCommand, UpdateDoeSettingsCommand,
     };
     use crate::infrastructure::realtime::EventHub;
-    use crate::{DoeModelSection, DoeModelSectionKind, DoeSettings, HexColor, StarterModel};
+    use crate::{
+        DoeFont, DoeModelSection, DoeModelSectionKind, DoeSettings, DoeStyle, DoeTemplate,
+        HexColor, StarterModel,
+    };
 
     fn make_usecase(pool: PgPool) -> MestierUseCase {
         MestierUseCase::new(pool, default_authorizer(), EventHub::new())
@@ -99,10 +102,19 @@ mod tests {
                     enabled: true,
                     kind: DoeModelSectionKind::Plans,
                 }],
+                style: Some(DoeStyle {
+                    heading_font: DoeFont::Montserrat,
+                    ..DoeStyle::default()
+                }),
             })
             .await
             .unwrap();
         assert_eq!(edited.sections.len(), 1);
+        assert_eq!(created.style, None);
+        assert_eq!(
+            edited.style.as_ref().map(|style| style.heading_font),
+            Some(DoeFont::Montserrat)
+        );
 
         let fetched = usecase.get_doe_model(created.id).await.unwrap();
         assert_eq!(fetched.name, "Paysage maison");
@@ -177,8 +189,12 @@ mod tests {
                 .update_doe_settings(UpdateDoeSettingsCommand {
                     actor: authz::Subject::system(),
                     organization_id: fixture.organization_id,
-                    accent: HexColor::try_from(accent.to_owned()).unwrap(),
-                    logo_key: logo.map(str::to_owned),
+                    style: DoeStyle {
+                        primary: HexColor::try_from(accent.to_owned()).unwrap(),
+                        logo_key: logo.map(str::to_owned),
+                        footer_text: DoeTemplate::try_from("Treyve {date}".to_owned()).unwrap(),
+                        ..DoeStyle::default()
+                    },
                 })
                 .await
                 .unwrap();
@@ -187,8 +203,9 @@ mod tests {
                 .await
                 .unwrap();
             assert_eq!(saved, fetched);
-            assert_eq!(fetched.accent.as_str(), accent.to_ascii_lowercase());
-            assert_eq!(fetched.logo_key.as_deref(), logo);
+            assert_eq!(fetched.style.primary.as_str(), accent.to_ascii_lowercase());
+            assert_eq!(fetched.style.logo_key.as_deref(), logo);
+            assert_eq!(fetched.style.footer_text.as_str(), "Treyve {date}");
         }
 
         cleanup(&pool, &fixture).await;

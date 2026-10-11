@@ -185,6 +185,8 @@ async fn spec_doe_1_create_a_doe_from_a_model() {
 
     assert_eq!(doe.title, "Avenue du 8 mai");
     assert_eq!(doe.revision.as_str(), "A");
+    assert_eq!(doe.model_id, Some(fixture.model_id));
+    assert_eq!(doe.cover_photo_key, None);
     assert_eq!(doe.sections.len(), 7);
     let titles: Vec<(&str, bool)> = doe
         .sections
@@ -310,6 +312,7 @@ async fn spec_doe_3_a_supply_is_a_copy() {
             issued_on: doe.issued_on,
             author: None,
             revision: doe.revision.clone(),
+            cover_photo_key: None,
             parties: doe.parties.clone(),
             sections,
             expected_updated_at: None,
@@ -432,6 +435,7 @@ async fn spec_doe_7_a_member_without_planning_manage_cannot_write() {
         issued_on: doe.issued_on,
         author: None,
         revision: doe.revision.clone(),
+        cover_photo_key: None,
         parties: doe.parties.clone(),
         sections: doe.sections.clone(),
         expected_updated_at: None,
@@ -492,6 +496,7 @@ async fn update_replaces_the_content_and_keeps_identity() {
             issued_on: doe.issued_on,
             author: Some("Erwan".to_owned()),
             revision: crate::Revision::try_from("B".to_owned()).unwrap(),
+            cover_photo_key: None,
             parties: doe.parties.clone(),
             sections: doe.sections[..2].to_vec(),
             expected_updated_at: None,

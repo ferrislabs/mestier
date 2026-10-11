@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import type { MakerLabel, PhotosPerPage, SectionKind } from '#/pages/doe/types'
+import type { CompleteDoeStyle } from '#/pages/doe-style/lib/style'
 
 export const doeModelsSearchSchema = z.object({
 	archived: z.boolean().catch(false),
@@ -22,4 +23,5 @@ export interface ModelDraft {
 	name: string
 	description: string
 	sections: ModelSectionDraft[]
+	style: CompleteDoeStyle | null
 }
