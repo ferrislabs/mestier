@@ -83,6 +83,17 @@ export function useUpdateDoe() {
 	})
 }
 
+export function useDeleteDoe() {
+	const invalidate = useDoeInvalidation()
+
+	return useMutation({
+		...window.tanstackApi.mutation('delete', DOE_PATH).mutationOptions,
+		onSuccess: () => {
+			void invalidate()
+		},
+	})
+}
+
 export function useDraftDoeSupply() {
 	return useMutation({
 		...window.tanstackApi.mutation('post', DRAFT_SUPPLY_PATH).mutationOptions,

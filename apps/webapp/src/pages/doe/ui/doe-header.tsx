@@ -1,5 +1,5 @@
 import { Link } from '@tanstack/react-router'
-import { Download, Eye, Loader2, Save } from 'lucide-react'
+import { Download, Eye, Loader2, Save, Trash2 } from 'lucide-react'
 import { RequirePermission } from '#/components/require-permission'
 import { Badge } from '#/components/ui/badge'
 import { Button } from '#/components/ui/button'
@@ -20,6 +20,7 @@ interface DoeHeaderProps {
 	onSave: () => void
 	onPreview: () => void
 	onDownload: () => void
+	onDelete: () => void
 }
 
 export function DoeHeader({
@@ -37,6 +38,7 @@ export function DoeHeader({
 	onSave,
 	onPreview,
 	onDownload,
+	onDelete,
 }: DoeHeaderProps) {
 	return (
 		<header className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
@@ -96,6 +98,17 @@ export function DoeHeader({
 					{isDownloading ? <Loader2 className="animate-spin" /> : <Download />}
 					Télécharger le PDF
 				</Button>
+				<RequirePermission permission="MANAGE_PLANNING">
+					<Button
+						type="button"
+						variant="outline"
+						className="text-destructive"
+						onClick={onDelete}
+					>
+						<Trash2 />
+						Supprimer le DOE
+					</Button>
+				</RequirePermission>
 				<RequirePermission permission="MANAGE_PLANNING">
 					<Button
 						type="button"

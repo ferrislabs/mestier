@@ -1,6 +1,6 @@
 import { Link } from '@tanstack/react-router'
 import type { ColumnDef } from '@tanstack/react-table'
-import { FilePlus2, FileText, Loader2, Plus } from 'lucide-react'
+import { FilePlus2, FileText, Loader2, Plus, Trash2 } from 'lucide-react'
 import { useMemo } from 'react'
 import { ReferenceTable } from '#/components/reference-table'
 import { RequirePermission } from '#/components/require-permission'
@@ -22,6 +22,7 @@ interface DoesListProps {
 	isLoading: boolean
 	error: string | null
 	onNewDoe: () => void
+	onDelete: (doe: DoeSummary) => void
 }
 
 export function DoesList({
@@ -31,6 +32,7 @@ export function DoesList({
 	isLoading,
 	error,
 	onNewDoe,
+	onDelete,
 }: DoesListProps) {
 	const columns = useMemo<ColumnDef<DoeSummary>[]>(() => {
 		const open = (doe: DoeSummary, label: string, className?: string) => (
@@ -76,8 +78,29 @@ export function DoesList({
 					<span>{formatUpdatedAt(row.original.updated_at)}</span>
 				),
 			},
+			{
+				id: 'actions',
+				header: () => <span className="sr-only">Actions</span>,
+				cell: ({ row }) => (
+					<div className="flex justify-end">
+						<RequirePermission permission="MANAGE_PLANNING">
+							<Button
+								type="button"
+								variant="ghost"
+								size="icon-sm"
+								onClick={() => onDelete(row.original)}
+							>
+								<Trash2 />
+								<span className="sr-only">
+									Supprimer le DOE {row.original.title}
+								</span>
+							</Button>
+						</RequirePermission>
+					</div>
+				),
+			},
 		]
-	}, [organizationSlug])
+	}, [organizationSlug, onDelete])
 
 	const newButton = (
 		<RequirePermission permission="MANAGE_PLANNING">
