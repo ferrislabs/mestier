@@ -4852,6 +4852,15 @@ export namespace Endpoints {
       409: unknown;
     };
   };
+  export type delete_DeleteDoe = {
+    method: "DELETE";
+    path: "/api/v1/organizations/{organization_id}/does/{doe_id}";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string; doe_id: string };
+    };
+    responses: { 204: unknown; 401: unknown; 403: unknown; 404: unknown };
+  };
   export type get_ExportDoePdf = {
     method: "GET";
     path: "/api/v1/organizations/{organization_id}/does/{doe_id}/pdf";
@@ -7718,6 +7727,7 @@ export type EndpointByMethod = {
     "/api/v1/organizations/{organization_id}/automation/credentials/{credential_id}": Endpoints.delete_DeleteAutomationCredential;
     "/api/v1/organizations/{organization_id}/automation/workflows/{workflow_id}": Endpoints.delete_DeleteWorkflow;
     "/api/v1/organizations/{organization_id}/doe-models/{doe_model_id}": Endpoints.delete_ArchiveDoeModel;
+    "/api/v1/organizations/{organization_id}/does/{doe_id}": Endpoints.delete_DeleteDoe;
     "/api/v1/organizations/{organization_id}/project-templates/{project_template_id}": Endpoints.delete_ArchiveProjectTemplate;
     "/api/v1/organizations/{organization_id}/projects/{project_id}": Endpoints.delete_ArchiveProject;
     "/api/v1/organizations/{organization_id}/task-labels/{label_id}": Endpoints.delete_DeleteTaskLabel;

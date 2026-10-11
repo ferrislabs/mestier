@@ -53,6 +53,10 @@ et télécharge un PDF mis en page.
 8. Une section désactivée n'apparaît ni dans le PDF ni dans la numérotation. [test sur `DoeDocument::from_doe`]
 9. Le rendu ne lit ni disque ni réseau : il n'utilise que les fichiers fournis. [type : le `World` Typst ne reçoit qu'un `FileBundle`]
 
+## Suppression (2026-10-11)
+
+Un DOE se supprime depuis l'interface ou par `DELETE /organizations/{org}/does/{id}` (204), avec `planning.manage`. La suppression est définitive : la ligne disparaît et le projet peut recevoir un nouveau DOE. Les fichiers référencés restent dans le stockage (même règle que le retrait d'un fichier). Un token délégué (MCP) n'atteint pas cette route : la liste blanche n'ouvre aucun `DELETE`, l'assistant ne supprime jamais un DOE.
+
 ## Out of scope
 
 - Pré-remplissage depuis les lignes de devis (`QuoteLine` n'a pas de `product_id`) et depuis les factures fournisseurs.

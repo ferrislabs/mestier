@@ -34,6 +34,12 @@ pub struct UpdateDoeCommand {
     pub expected_updated_at: Option<DateTime<Utc>>,
 }
 
+#[derive(Debug, Clone)]
+pub struct DeleteDoeCommand {
+    pub actor: authz::Subject,
+    pub id: DoeId,
+}
+
 /// Copies a product's technical sheet into a supply the editor can insert.
 /// Nothing is persisted.
 #[derive(Debug, Clone)]

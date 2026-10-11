@@ -5,8 +5,8 @@ use tokio::sync::OnceCell;
 use uuid::Uuid;
 
 use crate::{
-    CreateDoeCommand, DoeId, DoeModelId, DoeSectionContent, DraftSupplyFromProductCommand,
-    ProductId, ProjectId, UpdateDoeCommand,
+    CreateDoeCommand, DeleteDoeCommand, DoeId, DoeModelId, DoeSectionContent,
+    DraftSupplyFromProductCommand, ProductId, ProjectId, UpdateDoeCommand,
     application::{
         MestierUseCase, default_authorizer,
         test_support::{purge, scratch_pool},
@@ -249,6 +249,41 @@ async fn spec_doe_2_one_doe_per_project() {
         .unwrap_err();
 
     assert!(matches!(err, CoreError::Conflict(_)), "{err:?}");
+
+    cleanup(&pool, fixture.organization_id, &[fixture.user_id]).await;
+}
+
+#[tokio::test]
+#[ignore = "needs DATABASE_URL"]
+async fn a_deleted_doe_is_gone_and_its_project_can_get_a_new_one() {
+    let pool = pool().await;
+    let usecase = usecase(&pool);
+    let fixture = seed_fixture(&pool).await;
+    let doe = usecase.create_doe(create_command(&fixture)).await.unwrap();
+
+    usecase
+        .delete_doe(DeleteDoeCommand {
+            actor: authz::Subject::system(),
+            id: doe.id,
+        })
+        .await
+        .unwrap();
+
+    assert!(matches!(
+        usecase.get_doe(doe.id).await,
+        Err(CoreError::NotFound)
+    ));
+    assert!(matches!(
+        usecase
+            .delete_doe(DeleteDoeCommand {
+                actor: authz::Subject::system(),
+                id: doe.id,
+            })
+            .await,
+        Err(CoreError::NotFound)
+    ));
+    let recreated = usecase.create_doe(create_command(&fixture)).await.unwrap();
+    assert_ne!(recreated.id, doe.id);
 
     cleanup(&pool, fixture.organization_id, &[fixture.user_id]).await;
 }

@@ -669,3 +669,52 @@ async fn spec_style_2_3_7_a_style_is_validated_previewed_saved_and_exported() {
 
     cleanup(&app).await;
 }
+
+#[tokio::test]
+#[ignore = "requires live postgres and redis"]
+async fn a_doe_is_deleted_by_a_planner_only_and_inside_its_organization() {
+    let app = harness::start().await;
+    let client = reqwest::Client::new();
+    let intruder = seed_intruder(&app.pool).await;
+    let seeded = seed_project_and_model(&app).await;
+    let created = create_doe(&app, &seeded).await;
+    let doe_id = created["data"]["id"].as_str().unwrap().to_owned();
+
+    let through_intruder = client
+        .delete(doe_url(&app, intruder.organization_id, &doe_id, ""))
+        .bearer_auth(&intruder.token)
+        .send()
+        .await
+        .expect("intruder delete");
+    assert_eq!(through_intruder.status(), 404);
+
+    let without_permission = client
+        .delete(doe_url(&app, app.organization_id, &doe_id, ""))
+        .bearer_auth(&app.no_permission_token)
+        .send()
+        .await
+        .expect("delete without planning.manage");
+    assert_eq!(without_permission.status(), 403);
+
+    let deleted = client
+        .delete(doe_url(&app, app.organization_id, &doe_id, ""))
+        .bearer_auth(&app.token)
+        .send()
+        .await
+        .expect("delete");
+    assert_eq!(deleted.status(), 204);
+
+    let read = client
+        .get(doe_url(&app, app.organization_id, &doe_id, ""))
+        .bearer_auth(&app.token)
+        .send()
+        .await
+        .expect("read after delete");
+    assert_eq!(read.status(), 404);
+
+    let again = create_doe(&app, &seeded).await;
+    assert_ne!(again["data"]["id"].as_str().unwrap(), doe_id);
+
+    intruder.cleanup(&app.pool).await;
+    cleanup(&app).await;
+}

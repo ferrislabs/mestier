@@ -3,7 +3,7 @@ use common::CoreError;
 use mestier_macros::transactional;
 
 use crate::{
-    CreateDoeCommand, Doe, DoeDocument, DoeId, DoeSummary, DoeSupply,
+    CreateDoeCommand, DeleteDoeCommand, Doe, DoeDocument, DoeId, DoeSummary, DoeSupply,
     DraftSupplyFromProductCommand, OrganizationId, ProjectId, UpdateDoeCommand,
     application::{MestierUseCase, policy},
     domain::doe::service::DoeService,
@@ -116,6 +116,31 @@ impl MestierUseCase {
         .await?;
 
         service.replace(command).await
+    }
+
+    #[transactional(doe, member, role, authz)]
+    pub async fn delete_doe(&self, command: DeleteDoeCommand) -> Result<(), CoreError> {
+        let mut member_repository = member_repository;
+        let mut role_repository = role_repository;
+        let mut service = DoeService::new(doe_repository);
+
+        let organization_id = service.get_doe(command.id).await?.organization_id;
+        let actor = policy::enrich_for_organization(
+            command.actor.clone(),
+            organization_id,
+            &mut member_repository,
+            &mut role_repository,
+        )
+        .await?;
+        policy::require(
+            &authz,
+            &actor,
+            "planning.manage",
+            Resource::new("organization", organization_id.0.to_string()),
+        )
+        .await?;
+
+        service.delete(command.id).await
     }
 
     #[transactional(doe, product, supplier, member, role, authz)]
