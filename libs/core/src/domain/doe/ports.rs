@@ -28,4 +28,7 @@ pub trait DoeRepository: Send {
     /// Rewrites every field but `id`, `organization_id`, `project_id` and
     /// `created_at`.
     fn update(&mut self, doe: &Doe) -> impl Future<Output = Result<Doe, CoreError>> + Send;
+
+    /// Removes the row. Fails with `CoreError::NotFound` when it is gone.
+    fn delete(&mut self, id: DoeId) -> impl Future<Output = Result<(), CoreError>> + Send;
 }

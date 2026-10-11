@@ -11,6 +11,7 @@ use serde::Deserialize;
 use crate::require_org_membership;
 
 pub mod create;
+pub mod delete;
 pub mod draft_supply;
 pub mod get_one;
 pub mod get_project;
@@ -26,6 +27,7 @@ pub fn router(_state: &AppState) -> Router<AppState> {
         .typed_post(create::handler)
         .typed_get(get_one::handler)
         .typed_put(update::handler)
+        .typed_delete(delete::handler)
         .typed_post(draft_supply::handler)
         .typed_get(pdf::handler)
 }

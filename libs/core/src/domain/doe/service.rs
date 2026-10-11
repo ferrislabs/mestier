@@ -386,6 +386,11 @@ where
         self.doe_repository.update(&doe).await
     }
 
+    /// Removes the DOE for good. The files it references stay in storage.
+    pub async fn delete(&mut self, id: DoeId) -> Result<(), CoreError> {
+        self.doe_repository.delete(id).await
+    }
+
     pub async fn draft_supply_from_product<PR, SR>(
         &mut self,
         command: DraftSupplyFromProductCommand,

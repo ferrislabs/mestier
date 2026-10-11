@@ -200,6 +200,7 @@ impl Modify for SecurityAddon {
         planning::doe::update::handler,
         planning::doe::draft_supply::handler,
         planning::doe::pdf::handler,
+        planning::doe::delete::handler,
         planning::doe_model::create::handler,
         planning::doe_model::list::handler,
         planning::doe_model::get_one::handler,

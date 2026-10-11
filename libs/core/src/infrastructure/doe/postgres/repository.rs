@@ -173,4 +173,16 @@ impl<'tx> DoeRepository for PgDoeRepository<'tx> {
 
         row.try_into()
     }
+
+    async fn delete(&mut self, id: DoeId) -> Result<(), CoreError> {
+        let mut tx = self.tx.lock().await;
+        let result = sqlx::query!(r#"DELETE FROM does WHERE id = $1"#, id.0)
+            .execute(&mut ***tx)
+            .await
+            .map_err(map_sqlx_error)?;
+        if result.rows_affected() == 0 {
+            return Err(CoreError::NotFound);
+        }
+        Ok(())
+    }
 }

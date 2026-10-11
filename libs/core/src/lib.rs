@@ -122,7 +122,9 @@ pub use domain::{
     DoeModelSectionKind, DoeParty, DoeSection, DoeSectionContent, DoeSettings, DoeStyle,
     DoeSummary, DoeSupply, DoeTemplate, HexColor, LogoPosition, LogoSize, MakerLabel, PartyRole,
     PhotosPerPage, Revision, StarterModel, SupplierSnapshot,
-    doe::commands::{CreateDoeCommand, DraftSupplyFromProductCommand, UpdateDoeCommand},
+    doe::commands::{
+        CreateDoeCommand, DeleteDoeCommand, DraftSupplyFromProductCommand, UpdateDoeCommand,
+    },
     doe::render::{
         BundledFile, DocumentStyle, DoeDocument, DoeRenderError, DoeRenderer, FileBundle,
         NumberedContent, NumberedSection, NumberedSupply,

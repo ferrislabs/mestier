@@ -1,3 +1,4 @@
+import { useNavigate } from '@tanstack/react-router'
 import { useEffect, useMemo, useState } from 'react'
 import { useUploadFile } from '#/hooks/use-customers'
 import { useDirtyBaseline } from '#/hooks/use-dirty'
@@ -9,6 +10,8 @@ import {
 } from '#/hooks/use-doe'
 import { useFileUrls } from '#/hooks/use-file-url'
 import { mutationErrorMessage } from '#/lib/api-error'
+import { buildOrgPath } from '#/modules/org-path'
+import { DeleteDoeFeature } from '#/pages/doe/feature/delete-doe-feature'
 import { DoeSupplyPickerFeature } from '#/pages/doe/feature/doe-supply-picker-feature'
 import { buildUpdatePayload, canSave, doeToForm } from '#/pages/doe/lib/payload'
 import {
@@ -89,6 +92,8 @@ export function DoeEditorFeature({
 	>(null)
 
 	const updateDoe = useUpdateDoe()
+	const navigate = useNavigate()
+	const [deleteOpen, setDeleteOpen] = useState(false)
 	const uploadFile = useUploadFile()
 
 	useEffect(() => {
@@ -373,6 +378,7 @@ export function DoeEditorFeature({
 					},
 					onPreview: () =>
 						void runPdf(() => previewDoePdf(organizationId, doe.id)),
+					onDelete: () => setDeleteOpen(true),
 					onDownload: () =>
 						void runPdf(() =>
 							downloadDoePdf(organizationId, doe.id, `DOE-${form.title}.pdf`),
@@ -503,6 +509,23 @@ export function DoeEditorFeature({
 					)
 				}}
 				onSubmit={submitSheet}
+			/>
+
+			<DeleteDoeFeature
+				open={deleteOpen}
+				organizationId={organizationId}
+				doeId={doe.id}
+				title={form.title}
+				onOpenChange={setDeleteOpen}
+				onDeleted={() => {
+					void navigate({
+						to: buildOrgPath(
+							organizationSlug,
+							'/planification/projects/$projectId',
+						),
+						params: { projectId },
+					})
+				}}
 			/>
 
 			<DoeSupplyPickerFeature
