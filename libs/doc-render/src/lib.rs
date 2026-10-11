@@ -15,4 +15,15 @@ impl DoeRenderer for TypstDoeRenderer {
         let world = world::DoeWorld::new(prepared);
         world.compile_pdf()
     }
+
+    fn render_svg(
+        &self,
+        document: &DoeDocument,
+        files: &FileBundle,
+        pages: &[usize],
+    ) -> Result<Vec<String>, DoeRenderError> {
+        let prepared = bundle::prepare(document, files)?;
+        let world = world::DoeWorld::new(prepared);
+        world.compile_svg(pages)
+    }
 }

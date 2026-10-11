@@ -8,6 +8,7 @@ edition.workspace = true
 mestier-core = { workspace = true }
 typst = "0.15.1"
 typst-pdf = "0.15.1"
+typst-svg = "0.15.1"
 typst-layout = "0.15.1"
 comemo = "0.5.1"
 serde_json = { workspace = true }

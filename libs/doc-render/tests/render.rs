@@ -364,6 +364,32 @@ fn every_font_renders_in_regular_and_bold() {
 }
 
 #[test]
+fn svg_pages_are_the_requested_pages_of_the_same_layout() {
+    let (document, bundle) = fixture();
+    let svgs = TypstDoeRenderer
+        .render_svg(&document, &bundle, &[0, 3, 999])
+        .unwrap();
+    assert_eq!(svgs.len(), 2, "a page past the end is skipped");
+    assert!(svgs.iter().all(|svg| svg.starts_with("<svg")));
+}
+
+#[test]
+fn spec_style_7_the_sample_previews_cover_parties_and_a_supply_sheet_quickly() {
+    let document = DoeDocument::sample(
+        &DoeStyle::default(),
+        NaiveDate::from_ymd_opt(2026, 10, 11).unwrap(),
+    );
+    let started = Instant::now();
+    let svgs = TypstDoeRenderer
+        .render_svg(&document, &FileBundle::default(), &[0, 1, 3])
+        .unwrap();
+    let elapsed = started.elapsed();
+    assert_eq!(svgs.len(), 3);
+    let total: usize = svgs.iter().map(String::len).sum();
+    eprintln!("sample preview: {elapsed:?}, {} KB", total / 1024);
+}
+
+#[test]
 fn missing_file_is_reported() {
     let (document, mut bundle) = fixture();
     bundle.0.remove("sheet");

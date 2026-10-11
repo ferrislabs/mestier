@@ -148,4 +148,13 @@ pub enum DoeRenderError {
 pub trait DoeRenderer: Send + Sync {
     fn render(&self, document: &DoeDocument, files: &FileBundle)
     -> Result<Vec<u8>, DoeRenderError>;
+
+    /// The same layout as `render`, as one SVG per requested page (0-based),
+    /// for an on-screen preview. Pages past the end are skipped.
+    fn render_svg(
+        &self,
+        document: &DoeDocument,
+        files: &FileBundle,
+        pages: &[usize],
+    ) -> Result<Vec<String>, DoeRenderError>;
 }

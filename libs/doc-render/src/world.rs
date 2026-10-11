@@ -74,6 +74,20 @@ impl DoeWorld {
         comemo::evict(0);
         pdf
     }
+
+    pub fn compile_svg(&self, pages: &[usize]) -> Result<Vec<String>, DoeRenderError> {
+        let compiled = typst::compile::<PagedDocument>(self).output;
+        let svgs = compiled.map_err(diagnostics).map(|document| {
+            let options = typst_svg::SvgOptions::default();
+            pages
+                .iter()
+                .filter_map(|&index| document.pages().get(index))
+                .map(|page| typst_svg::svg(page, &options))
+                .collect()
+        });
+        comemo::evict(0);
+        svgs
+    }
 }
 
 fn diagnostics(errors: impl IntoIterator<Item = typst::diag::SourceDiagnostic>) -> DoeRenderError {

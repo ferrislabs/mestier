@@ -30,6 +30,7 @@ pub fn router(_state: &AppState) -> Router<AppState> {
         .typed_post(restore::handler)
         .typed_get(starters::handler)
         .typed_post(preview::handler)
+        .typed_post(preview::pages_handler)
         .typed_get(settings::get_handler)
         .typed_put(settings::put_handler)
 }
@@ -69,6 +70,12 @@ pub struct DoeModelStartersPath {
 #[derive(TypedPath, Deserialize)]
 #[typed_path("/api/v1/organizations/{organization_id}/doe-style/preview")]
 pub struct DoeStylePreviewPath {
+    pub organization_id: mestier_core::OrganizationId,
+}
+
+#[derive(TypedPath, Deserialize)]
+#[typed_path("/api/v1/organizations/{organization_id}/doe-style/preview/pages")]
+pub struct DoeStylePreviewPagesPath {
     pub organization_id: mestier_core::OrganizationId,
 }
 

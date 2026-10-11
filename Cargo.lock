@@ -2164,6 +2164,7 @@ dependencies = [
  "typst",
  "typst-layout",
  "typst-pdf",
+ "typst-svg",
  "uuid",
 ]
 

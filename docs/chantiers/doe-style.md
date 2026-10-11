@@ -20,6 +20,8 @@ Une organisation règle l'apparence de ses DOE (couleurs, polices, couverture, e
 2. **Le style est lu à l'export, pas copié dans le DOE.** Le DOE retient son modèle (`does.model_id`, nul pour les DOE existants et si le modèle disparaît) ; changer le style change les prochains exports. Les fournitures restent des copies, le style non : c'est de l'habillage.
 3. **La photo de couverture appartient au DOE** (`does.cover_photo_key`), le style ne dit que si et comment elle s'affiche.
 4. **Polices intégrées**, pas d'envoi de police : Inter, Montserrat, Source Serif 4, Barlow (OFL, régulier + gras, vendorisées comme Inter). Police des titres et police du texte au choix, séparément.
+6. **Aperçu en direct** (ajout du 2026-10-11) : le serveur rend la couverture, les intervenants et une fiche de fourniture du DOE d'exemple en SVG (`typst-svg`, même gabarit que le PDF), redessinés pendant la saisie. Mesuré : 6 ms en release, 323 Ko pour les 3 pages. Le bouton PDF reste pour le document entier.
+7. **Thèmes prêts à l'emploi** : quelques points de départ (couleurs, polices, couverture) proposés dans l'éditeur. Un thème appliqué devient le style de l'organisation ou du modèle ; logo, en-tête, pied et libellés sont gardés. Pas de bibliothèque de thèmes enregistrés : le style de l'organisation est le thème que ses utilisateurs reçoivent.
 5. **Gabarits d'en-tête et de pied** : texte libre avec `{titre}`, `{lieu}`, `{lot}`, `{indice}`, `{date}`, remplacés côté Rust dans `DoeDocument::from_doe` (le renderer ne décide rien).
 
 ## `DoeStyle`
@@ -83,6 +85,7 @@ Une organisation règle l'apparence de ses DOE (couleurs, polices, couverture, e
 7. Aperçu : 200 `application/pdf` sans rien écrire ; 403 sans `reference.manage` ; style invalide refusé.
 8. MCP : `update_doe_header` sur un DOE avec photo de couverture la conserve ; `add_doe_file target=cover_photo` la pose, un PDF y est refusé.
 9. Migration : up sur une base avec `accent = #123456` et un logo, le style les contient ; down les remet en colonnes.
+11. Aperçu en pages : `POST /organizations/{org}/doe-style/preview/pages` renvoie 3 SVG, 403 sans `reference.manage` ; l'écran les redessine pendant la saisie (anti-rebond), et un clic sur un thème change l'aperçu sans enregistrer.
 10. Webapp : régler le style dans Paramètres › Documents, aperçu, enregistrer ; cocher « style propre » dans un modèle préremplit depuis l'organisation.
 
 ## Workstreams

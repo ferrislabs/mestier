@@ -153,6 +153,29 @@ pub(crate) async fn render_off_the_executor(
     document: DoeDocument,
     files: FileBundle,
 ) -> Result<Vec<u8>, ApiError> {
+    off_the_executor(move || render_with(&TypstDoeRenderer, &document, &files)).await
+}
+
+/// The given pages as SVG, under the same limits as a PDF export.
+pub(crate) async fn render_svg_off_the_executor(
+    document: DoeDocument,
+    files: FileBundle,
+    pages: &'static [usize],
+) -> Result<Vec<String>, ApiError> {
+    off_the_executor(move || {
+        TypstDoeRenderer
+            .render_svg(&document, &files, pages)
+            .map_err(|error| {
+                tracing::error!(error = %error, "DOE preview rendering failed");
+                ApiError::Internal
+            })
+    })
+    .await
+}
+
+async fn off_the_executor<T: Send + 'static>(
+    render: impl FnOnce() -> Result<T, ApiError> + Send + 'static,
+) -> Result<T, ApiError> {
     let permit = RENDER_PERMITS
         .clone()
         .acquire_owned()
@@ -160,7 +183,7 @@ pub(crate) async fn render_off_the_executor(
         .map_err(|_| ApiError::Internal)?;
     let task = tokio::task::spawn_blocking(move || {
         let _permit = permit;
-        render_with(&TypstDoeRenderer, &document, &files)
+        render()
     });
     match tokio::time::timeout(RENDER_TIMEOUT, task).await {
         Ok(joined) => joined.map_err(|error| {
@@ -294,6 +317,15 @@ mod tests {
 
     impl DoeRenderer for Failing {
         fn render(&self, _: &DoeDocument, _: &FileBundle) -> Result<Vec<u8>, DoeRenderError> {
+            Err(self.0.clone())
+        }
+
+        fn render_svg(
+            &self,
+            _: &DoeDocument,
+            _: &FileBundle,
+            _: &[usize],
+        ) -> Result<Vec<String>, DoeRenderError> {
             Err(self.0.clone())
         }
     }

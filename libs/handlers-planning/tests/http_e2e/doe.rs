@@ -609,6 +609,31 @@ async fn spec_style_2_3_7_a_style_is_validated_previewed_saved_and_exported() {
         "application/pdf"
     );
     assert!(preview.bytes().await.unwrap().starts_with(b"%PDF"));
+    let pages = client
+        .post(org_url(&app, "/doe-style/preview/pages"))
+        .bearer_auth(&app.token)
+        .json(&json!({ "style": style }))
+        .send()
+        .await
+        .expect("preview pages")
+        .json::<Value>()
+        .await
+        .expect("json");
+    let pages = pages["data"]["pages"].as_array().expect("pages");
+    assert_eq!(pages.len(), 3);
+    assert!(
+        pages
+            .iter()
+            .all(|page| page.as_str().unwrap().starts_with("<svg"))
+    );
+    let forbidden_pages = client
+        .post(org_url(&app, "/doe-style/preview/pages"))
+        .bearer_auth(&app.no_permission_token)
+        .json(&json!({ "style": style }))
+        .send()
+        .await
+        .expect("preview pages without permission");
+    assert_eq!(forbidden_pages.status(), 403);
     let saved_rows: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM doe_settings WHERE org_id = $1")
         .bind(app.organization_id)
         .fetch_one(&app.pool)
