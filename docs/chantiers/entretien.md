@@ -74,7 +74,7 @@ Le conducteur de travaux de l'entretien voit, pour la saison, chaque prestation 
 2. `Overdue` : échéance < lundi de la semaine courante.
 3. `ThisWeek` / `NextWeek` : échéance dans la semaine courante ou la suivante (semaines ISO, fuseau de l'organisation).
 4. `Later`.
-5. `Done` : saison finie ou toutes les fenêtres faites.
+5. `Done` : saison finie ou toutes les fenêtres faites. Sans échéance, le statut est `Done` même si une tâche est ouverte. Une fenêtre en cours, sans intervention, est `ThisWeek` : elle n'est en retard qu'une fois terminée.
 
 Fonction pure dans `domain/maintenance/due.rs`, testée en unitaire. Le récap et la grille appellent la même fonction.
 
