@@ -1,4 +1,5 @@
 import { AlertCircle } from 'lucide-react'
+import type { ReactNode } from 'react'
 import { Badge } from '#/components/ui/badge'
 import { PageShell } from '#/components/ui/surface'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '#/components/ui/tabs'
@@ -22,6 +23,8 @@ type PlanProps = Parameters<typeof DoePlanTab>[0]
 
 interface DoeEditorUIProps {
 	header: HeaderProps
+	/** The project's own tabs, shown under the header. */
+	projectTabs: ReactNode
 	form: DoeForm
 	activeTab: string
 	error: string | null
@@ -34,6 +37,7 @@ interface DoeEditorUIProps {
 
 export function DoeEditorUI({
 	header,
+	projectTabs,
 	form,
 	activeTab,
 	error,
@@ -48,6 +52,7 @@ export function DoeEditorUI({
 	return (
 		<PageShell>
 			<DoeHeader {...header} />
+			{projectTabs}
 			{error ? (
 				<div
 					role="alert"

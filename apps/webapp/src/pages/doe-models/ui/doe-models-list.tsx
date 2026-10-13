@@ -1,5 +1,5 @@
 import type { ColumnDef } from '@tanstack/react-table'
-import { FilePlus2, FileText, Loader2, Plus, Sparkles } from 'lucide-react'
+import { Loader2, Plus, Sparkles } from 'lucide-react'
 import { useMemo } from 'react'
 import {
 	ReferenceTable,
@@ -10,16 +10,10 @@ import { RequirePermission } from '#/components/require-permission'
 import { Badge } from '#/components/ui/badge'
 import { Button } from '#/components/ui/button'
 import { Label } from '#/components/ui/label'
-import {
-	MetricCard,
-	PageHeader,
-	PageShell,
-	SectionCard,
-} from '#/components/ui/surface'
+import { SectionCard, SectionHeader } from '#/components/ui/surface'
 import type { DoeModel } from '#/hooks/use-doe-models'
 
 interface DoeModelsListProps {
-	organizationName: string
 	models: DoeModel[]
 	includeArchived: boolean
 	isLoading: boolean
@@ -28,13 +22,11 @@ interface DoeModelsListProps {
 	onCreate: () => void
 	onOpenStarters: () => void
 	onEdit: (model: DoeModel) => void
-	onCreateDoe: (model: DoeModel) => void
 	onArchive: (model: DoeModel) => void
 	onRestore: (model: DoeModel) => void
 }
 
 export function DoeModelsList({
-	organizationName,
 	models,
 	includeArchived,
 	isLoading,
@@ -43,7 +35,6 @@ export function DoeModelsList({
 	onCreate,
 	onOpenStarters,
 	onEdit,
-	onCreateDoe,
 	onArchive,
 	onRestore,
 }: DoeModelsListProps) {
@@ -100,16 +91,6 @@ export function DoeModelsList({
 						</div>
 					) : (
 						<div className="flex items-center justify-end gap-2">
-							<RequirePermission permission="MANAGE_PLANNING">
-								<Button
-									variant="outline"
-									size="sm"
-									onClick={() => onCreateDoe(row.original)}
-								>
-									<FilePlus2 />
-									Créer un DOE avec ce modèle
-								</Button>
-							</RequirePermission>
 							<RowActions
 								permission="MANAGE_REFERENCE"
 								isEditing={false}
@@ -123,15 +104,15 @@ export function DoeModelsList({
 					),
 			},
 		],
-		[onArchive, onCreateDoe, onEdit, onRestore],
+		[onArchive, onEdit, onRestore],
 	)
 
 	return (
-		<PageShell>
-			<PageHeader
-				eyebrow={organizationName}
+		<div className="flex flex-col gap-4">
+			<SectionHeader
+				className="border-b-0 px-0 py-0"
 				title="Modèles de DOE"
-				description="Un modèle est une liste de thèmes pré-réglés. Pour l'utiliser, crée un DOE (menu DOE ou page d'un projet) : ses thèmes y sont copiés et restent modifiables."
+				description="Un modèle est une liste de thèmes pré-réglés. Pour l'utiliser, crée un DOE depuis la page d'un projet : ses thèmes y sont copiés et restent modifiables."
 				actions={
 					<RequirePermission permission="MANAGE_REFERENCE">
 						<div className="flex flex-wrap gap-2">
@@ -147,14 +128,6 @@ export function DoeModelsList({
 					</RequirePermission>
 				}
 			/>
-
-			<section className="grid grid-cols-2 gap-4 lg:grid-cols-3">
-				<MetricCard
-					label="Modèles"
-					value={models.length}
-					icon={<FileText className="size-4" />}
-				/>
-			</section>
 
 			{error ? (
 				<div className="rounded-lg border border-destructive/30 bg-destructive-soft px-4 py-3 text-sm text-destructive">
@@ -190,6 +163,6 @@ export function DoeModelsList({
 					columns={columns}
 				/>
 			)}
-		</PageShell>
+		</div>
 	)
 }

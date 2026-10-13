@@ -1,5 +1,5 @@
 import type { ColumnDef } from '@tanstack/react-table'
-import { LayoutTemplate, Loader2, Plus } from 'lucide-react'
+import { Loader2, Plus } from 'lucide-react'
 import { useMemo } from 'react'
 import {
 	ReferenceTable,
@@ -10,16 +10,10 @@ import { RequirePermission } from '#/components/require-permission'
 import { Badge } from '#/components/ui/badge'
 import { Button } from '#/components/ui/button'
 import { Label } from '#/components/ui/label'
-import {
-	MetricCard,
-	PageHeader,
-	PageShell,
-	SectionCard,
-} from '#/components/ui/surface'
+import { SectionCard, SectionHeader } from '#/components/ui/surface'
 import type { ProjectTemplate } from '#/hooks/use-project-templates'
 
 export interface ProjectTemplatesListProps {
-	organizationName: string
 	templates: ProjectTemplate[]
 	includeArchived: boolean
 	isLoading: boolean
@@ -36,7 +30,6 @@ export interface ProjectTemplatesListProps {
  * fetching, no mutation — mirrors `ProjectsList`.
  */
 export function ProjectTemplatesList({
-	organizationName,
 	templates,
 	includeArchived,
 	isLoading,
@@ -104,9 +97,9 @@ export function ProjectTemplatesList({
 	)
 
 	return (
-		<PageShell>
-			<PageHeader
-				eyebrow={organizationName}
+		<div className="flex flex-col gap-4">
+			<SectionHeader
+				className="border-b-0 px-0 py-0"
 				title="Modèles de projet"
 				description="Un modèle est un ensemble de tâches types avec des décalages, pas un projet à copier. Instancier un modèle produit un vrai projet, avec de vraies tâches, sur une date choisie."
 				actions={
@@ -118,14 +111,6 @@ export function ProjectTemplatesList({
 					</RequirePermission>
 				}
 			/>
-
-			<section className="grid grid-cols-2 gap-4 lg:grid-cols-3">
-				<MetricCard
-					label="Modèles"
-					value={templates.length}
-					icon={<LayoutTemplate className="size-4" />}
-				/>
-			</section>
 
 			{error ? (
 				<div className="rounded-lg border border-destructive/30 bg-destructive-soft px-4 py-3 text-sm text-destructive">
@@ -161,6 +146,6 @@ export function ProjectTemplatesList({
 					columns={columns}
 				/>
 			)}
-		</PageShell>
+		</div>
 	)
 }

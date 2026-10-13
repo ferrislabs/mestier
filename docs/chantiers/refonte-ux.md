@@ -1,6 +1,6 @@
 # Refonte UX : navigation et DOE
 
-État : **spec à valider le 2026-10-13, audit W0 fait le 2026-10-14, aucun code**. Remplace l'audit de `ux-simplification.md` (écrans, 2026-08) par un chantier de navigation.
+État : **W0, W1 et W2 faits le 2026-10-14 ; W3 (menu) attend les réponses aux questions ouvertes**. Remplace l'audit de `ux-simplification.md` (écrans, 2026-08) par un chantier de navigation.
 
 ## Goal
 
@@ -22,7 +22,7 @@ Retour du product owner (2026-10-13) : DOE, projets et modèles sont au même en
 
 ## Décisions (2026-10-13)
 
-1. **Le DOE devient un onglet du projet.** Plus d'entrée « DOE » ni « Modèles de DOE » dans le menu. La liste transversale disparaît ; la liste des projets montre l'état du DOE (aucun, brouillon, indice N) et se filtre dessus.
+1. **Le DOE devient un onglet du projet.** Plus d'entrée « DOE » ni « Modèles de DOE » dans le menu. La liste transversale disparaît ; la liste des projets montre l'état du DOE (aucun, indice N) et se filtre dessus.
 2. **Les modèles vont dans Paramètres › Modèles** : modèles de projet, modèles de DOE et mise en page des PDF, trois blocs d'une même page. Le formulaire de création garde un lien « Choisir un modèle ».
 3. **Navigation d'abord.** Phase 1 : parcours et menu. Les écrans ne sont refaits qu'ensuite, un module à la fois.
 
@@ -61,7 +61,7 @@ Tâches de l'audit : créer un devis ; planifier une tâche ; voir la rentabilit
 @spec-ux-3 Scenario: l'état du DOE dans la liste des projets
   Given 3 projets dont un avec un DOE à l'indice B
   When j'ouvre la liste des projets
-  Then chaque ligne indique "Aucun DOE", "Brouillon" ou "Indice B"
+  Then chaque ligne indique "Aucun DOE" ou "Indice B"
   And le filtre "Avec DOE" ne garde qu'un projet
 
 @spec-ux-4 Scenario: tous les modèles au même endroit
@@ -117,3 +117,9 @@ Non déterminé : les bits des rôles par défaut, et le comportement du menu �
 ```bash
 cd apps/webapp && pnpm check && pnpm test && pnpm build
 ```
+
+## Décision log
+
+- 2026-10-14 : l'API ne distingue pas de brouillon de DOE, seulement un indice. La liste des projets affiche donc « Aucun DOE » ou « Indice B ».
+- 2026-10-14 : le dialogue « Nouveau DOE » (choix du projet) et le bouton « Créer un DOE avec ce modèle » sont supprimés. Un DOE se crée depuis l'onglet DOE de son projet, qui propose déjà le choix du modèle.
+- 2026-10-14 : les modèles gardent leur état « archivés » en mémoire de la page (plus dans l'adresse) puisqu'ils vivent dans une section de Paramètres.

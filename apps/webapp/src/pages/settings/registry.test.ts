@@ -26,4 +26,11 @@ describe('SETTINGS_SECTIONS', () => {
 			SETTINGS_SECTIONS.some((section) => section.id === 'automatisation'),
 		).toBe(true)
 	})
+
+	it('groupe les modèles de projet, de DOE et la mise en page au même endroit', () => {
+		expect(SETTINGS_SECTIONS.map((section) => section.id)).toContain('modeles')
+		expect(SETTINGS_SECTIONS.map((section) => section.id)).not.toContain(
+			'documents',
+		)
+	})
 })

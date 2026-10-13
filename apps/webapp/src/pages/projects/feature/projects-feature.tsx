@@ -3,6 +3,7 @@ import { useMemo, useState } from 'react'
 import type { Schemas } from '#/api/api.client'
 import { useActiveOrganization } from '#/hooks/use-active-organization'
 import { useCustomerContexts, useCustomers } from '#/hooks/use-customers'
+import { useDoes } from '#/hooks/use-doe'
 import { usePlanning } from '#/hooks/use-planning'
 import {
 	useCreateProjectTemplate,
@@ -24,6 +25,7 @@ import { todayIsoDate } from '#/pages/planning/types'
 import { buildTemplateTaskShapeRequest } from '#/pages/project-templates/lib/template-task-form'
 import { EMPTY_PROJECT_TEMPLATE_FORM } from '#/pages/project-templates/types'
 import { ProjectTemplateEditorDialog } from '#/pages/project-templates/ui/project-template-editor-dialog'
+import { filterProjects } from '#/pages/projects/lib/filter-projects'
 import { projectTasksToTemplateDrafts } from '#/pages/projects/lib/save-as-template'
 import {
 	EMPTY_PROJECT_FORM,
@@ -54,6 +56,7 @@ export function ProjectsFeature(props: ProjectsFeatureProps) {
 			key={activeOrganization.id}
 			organizationId={activeOrganization.id}
 			organizationName={activeOrganization.name}
+			organizationSlug={activeOrganization.slug}
 			{...props}
 		/>
 	)
@@ -69,15 +72,18 @@ type TemplateDraft = {
 function ProjectsWorkspace({
 	organizationId,
 	organizationName,
+	organizationSlug,
 	highlightedProjectId,
 	includeArchived,
 	onIncludeArchivedChange,
 }: ProjectsFeatureProps & {
 	organizationId: string
 	organizationName: string
+	organizationSlug: string
 }) {
 	const queryClient = useQueryClient()
 	const [search, setSearch] = useState('')
+	const [withDoeOnly, setWithDoeOnly] = useState(false)
 	const [draft, setDraft] = useState<Draft | null>(null)
 	const [instantiateDraft, setInstantiateDraft] =
 		useState<InstantiateTemplateFormValues | null>(null)
@@ -88,6 +94,7 @@ function ProjectsWorkspace({
 	const [isBuildingTemplateDraft, setIsBuildingTemplateDraft] = useState(false)
 
 	const projects = useProjects(organizationId, { includeArchived })
+	const does = useDoes(organizationId)
 	const customers = useCustomers(organizationId)
 	const quotes = useQuotes(organizationId)
 	const templates = useProjectTemplates(organizationId, {
@@ -131,13 +138,20 @@ function ProjectsWorkspace({
 		return index
 	}, [customerRows])
 
-	const normalizedSearch = search.trim().toLowerCase()
+	const revisionByProject = useMemo(() => {
+		const index = new Map<string, string>()
+		for (const doe of does.data?.data ?? [])
+			index.set(doe.project_id, doe.revision)
+
+		return index
+	}, [does.data])
+
 	const visible = useMemo(
 		() =>
-			rows.filter((project) =>
-				project.name.toLowerCase().includes(normalizedSearch),
+			filterProjects(rows, { search, withDoeOnly }, (projectId) =>
+				revisionByProject.has(projectId),
 			),
-		[rows, normalizedSearch],
+		[rows, search, withDoeOnly, revisionByProject],
 	)
 
 	// Narrowed here rather than in the dialog: which quotes belong to a customer
@@ -293,7 +307,11 @@ function ProjectsWorkspace({
 		<>
 			<ProjectsList
 				organizationName={organizationName}
+				organizationSlug={organizationSlug}
 				projects={visible}
+				withDoeOnly={withDoeOnly}
+				doeRevision={(projectId) => revisionByProject.get(projectId) ?? null}
+				onWithDoeOnlyChange={setWithDoeOnly}
 				customerName={(customerId) => nameByCustomer.get(customerId) ?? null}
 				search={search}
 				includeArchived={includeArchived}

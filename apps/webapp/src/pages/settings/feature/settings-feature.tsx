@@ -1,5 +1,5 @@
 import { AlertCircle } from 'lucide-react'
-import { useMemo } from 'react'
+import { useEffect, useMemo } from 'react'
 
 import { PageHeader, PageShell } from '#/components/ui/surface'
 import { useActiveOrganization } from '#/hooks/use-active-organization'
@@ -18,6 +18,11 @@ export function SettingsFeature() {
 	const groups = useMemo(() => buildSettingsNavGroups(SETTINGS_SECTIONS), [])
 	const ids = useMemo(() => SETTINGS_SECTIONS.map((section) => section.id), [])
 	const activeId = useActiveSection(ids)
+
+	useEffect(() => {
+		const id = window.location.hash.slice(1)
+		if (id) document.getElementById(id)?.scrollIntoView()
+	}, [])
 
 	if (!activeOrganization) {
 		return (

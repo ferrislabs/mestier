@@ -25,44 +25,52 @@ async function settlesAt(href: string): Promise<string> {
 	return router.state.location.pathname
 }
 
-/** Same, query string included. */
-async function settledSearch(href: string): Promise<string> {
+/** Same, hash included. */
+async function settledHash(href: string): Promise<string> {
 	const router = buildRouter(href)
 	await router.load()
 
-	return router.state.location.searchStr
+	return router.state.location.hash
 }
 
-describe('project template routes', () => {
-	it('resolves its own page under planification', () => {
-		expect(routeIdFor('/o/acme/planification/project-templates')).toBe(
-			'/_app/o/$organizationSlug/planification/project-templates',
+describe('moved template and DOE routes', () => {
+	it('sends the project templates to Settings › Modèles', async () => {
+		expect(await settlesAt('/o/acme/planification/project-templates')).toBe(
+			'/o/acme/settings',
+		)
+		expect(await settledHash('/o/acme/planification/project-templates')).toBe(
+			'modeles',
 		)
 	})
 
-	/**
-	 * This route is a genuine leaf today, but so was `hr/team` before it grew
-	 * a child (`hr-routes.test.ts` is the postmortem). A bare `.tsx` becomes
-	 * the *parent* of any sibling added under
-	 * `planification/project-templates/...` later — this assertion is the
-	 * tripwire for that, should one land.
-	 */
-	it('does not swallow a sibling planification route', () => {
-		expect(routeIdFor('/o/acme/planification/projects')).toBe(
-			'/_app/o/$organizationSlug/planification/projects/',
+	it('sends the DOE models to Settings › Modèles', async () => {
+		expect(await settlesAt('/o/acme/planification/doe-models')).toBe(
+			'/o/acme/settings',
+		)
+		expect(await settledHash('/o/acme/planification/doe-models')).toBe(
+			'modeles',
+		)
+	})
+
+	it('sends the DOE list to the projects', async () => {
+		expect(await settlesAt('/o/acme/planification/does')).toBe(
+			'/o/acme/planification/projects',
 		)
 	})
 
 	/** #468: the address the module split left behind still resolves. */
-	it('redirects the old planning address', async () => {
+	it('follows the old planning address all the way', async () => {
 		expect(await settlesAt('/o/acme/planning/project-templates')).toBe(
-			'/o/acme/planification/project-templates',
+			'/o/acme/settings',
 		)
 	})
 
-	it('carries the old search along', async () => {
-		expect(
-			await settledSearch('/o/acme/planning/project-templates?archived=true'),
-		).toBe('?archived=true')
+	it('still resolves the project page and its DOE tab', () => {
+		expect(routeIdFor('/o/acme/planification/projects/p1')).toBe(
+			'/_app/o/$organizationSlug/planification/projects/$projectId',
+		)
+		expect(routeIdFor('/o/acme/planification/projects/p1/doe')).toBe(
+			'/_app/o/$organizationSlug/planification/projects/$projectId_/doe',
+		)
 	})
 })

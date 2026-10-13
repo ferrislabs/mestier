@@ -1,8 +1,13 @@
-import { createFileRoute } from '@tanstack/react-router'
-import { DoesFeature } from '#/pages/does/feature/does-feature'
+import { createFileRoute, redirect } from '@tanstack/react-router'
+import { buildOrgPath } from '#/modules/org-path'
 
+/** The DOE is reached from its project now; the old list address lands on the projects. */
 export const Route = createFileRoute(
 	'/_app/o/$organizationSlug/planification/does',
 )({
-	component: DoesFeature,
+	beforeLoad: ({ params }) => {
+		throw redirect({
+			to: buildOrgPath(params.organizationSlug, '/planification/projects'),
+		})
+	},
 })
