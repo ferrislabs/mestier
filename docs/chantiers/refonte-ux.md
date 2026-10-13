@@ -1,6 +1,6 @@
 # Refonte UX : navigation et DOE
 
-État : **spec à valider le 2026-10-13, aucun code**. Remplace l'audit de `ux-simplification.md` (écrans, 2026-08) par un chantier de navigation.
+État : **spec à valider le 2026-10-13, audit W0 fait le 2026-10-14, aucun code**. Remplace l'audit de `ux-simplification.md` (écrans, 2026-08) par un chantier de navigation.
 
 ## Goal
 
@@ -38,7 +38,7 @@ Retour du product owner (2026-10-13) : DOE, projets et modèles sont au même en
 | Id | Mission | Dépend de | Fichiers possédés |
 |---|---|---|---|
 | W0 | Audit des parcours : pour 8 tâches courantes, le nombre de clics aujourd'hui et la cible. Résultat dans la section « Audit » ci-dessous. Lecture seule. | — | ce document |
-| W1 | DOE en onglet du projet, retrait des deux entrées du menu, état du DOE dans la liste des projets, redirections | décisions 1 | `pages/projects/**`, `pages/does/**`, `pages/doe/**` (liens seulement), `routes/*planification.does*` |
+| W1 | Lignes de la liste des projets en liens vers la fiche, DOE en onglet du projet, retrait des deux entrées du menu, état du DOE dans la liste, redirections | décisions 1 | `pages/projects/**`, `pages/does/**`, `pages/doe/**` (liens seulement), `routes/*planification.does*` |
 | W2 | Page Paramètres › Modèles (projet, DOE, mise en page), retrait des entrées du menu, redirections | décision 2 | `pages/settings/**`, `pages/doe-models/**`, `pages/project-templates/**`, `routes/*project-templates*`, `routes/*doe-models*` |
 | W3 | Menu : regroupement, libellés, ordre, d'après l'audit | W0, W1, W2 | `modules/registry.ts`, `modules/*.ts` |
 
@@ -81,7 +81,30 @@ Tests : 1 à 6 en vitest sur le registre, les redirections et les composants ; p
 
 ## Audit
 
-À remplir par W0.
+Mesuré le 2026-10-14 par lecture du code, depuis l'accueil. Un clic = un lien, un bouton, une entrée de menu ou l'ouverture d'un dialogue. Hors validation finale d'un formulaire.
+
+| Tâche | Aujourd'hui | Cible | Friction |
+|---|---|---|---|
+| Créer un devis | 3 : CRM › Devis › Nouveau devis | 2 | Le CRM atterrit sur « Comptes ». Pas de « Nouveau devis » depuis une fiche client. |
+| Planifier une tâche | 3 : Planning › Ajouter › Une tâche | 2 | Aucune création de tâche dans Planification, où vit le Tableau. |
+| Rentabilité d'un chantier | 1 (carte « Marge nette ») | 1 | Quatre noms pour la même chose ; l'entrée est rangée dans Accueil. |
+| Produire le DOE | 5 : Planification › DOE › Nouveau DOE › Créer › PDF | 3 ou 4 | Choix du projet dans un dialogue alors que le DOE appartient à un projet. |
+| Enregistrer une absence | 3 : Équipe & ressources › Absences › Ajouter | 3 | Le module atterrit sur « Équipe » ; doublon dans Planning. |
+| Ajouter un fournisseur | 3 : Achats › Fournisseurs › Nouveau | 2 | Achats atterrit sur « Factures fournisseurs ». |
+| Lancer un workflow | 4 : Automatisation › workflow › Exécuter › Confirmer | 3 | « Exécuter » absent de la ligne de liste ; même libellé sur le bouton et la confirmation. |
+| Inviter un membre | 5 à 7 : Équipe › ⋯ › Inviter › Générer › Copier | 4 | Menu ⋯ visible au survol seulement ; invitation absente du dialogue de création. |
+
+Faits, avec leur emplacement :
+
+- **La fiche projet n'est pas atteignable depuis la liste des projets** : aucune ligne n'est un lien (`projects-list.tsx`). On y arrive par la Rentabilité, la recherche de l'accueil ou le fil d'Ariane du DOE. Sans ce lien, l'onglet DOE de la décision 1 serait introuvable.
+- `moduleLandingPath` ignore `requiredPermission` (`modules/landing.ts:5-13`) : un membre sans `MANAGE_MEMBERS` atterrit sur `/hr/team`, dont l'entrée lui est masquée.
+- Le module Paramètres n'a qu'une entrée « Organisation » ; ses cinq sections sont des ancres, masquées sous le breakpoint `lg` (`anchor-nav.tsx`).
+- Deux sections portent le même id `team` (`registry.ts:129,174`), dans Équipe & ressources et dans Planning.
+- Libellés confondables : Planning / Planification ; Équipe / Vue équipe / Équipe & ressources ; Paramètres › Automatisation (rétention) / module Automatisation ; « Comptes » / « Clients » ; l'utilisateur dit « chantier », l'interface dit « Projet ».
+- Sections rangées dans le mauvais module : Rentabilité (dans Accueil, concerne les projets) ; Absences (Équipe et Planning) ; Rôles (définis dans Paramètres, assignés dans Équipe).
+- Écrans sans lien interne : `/field/$organizationSlug` ; la fin de « Transformer en projet » renvoie à la liste des projets, pas au projet créé.
+
+Non déterminé : les bits des rôles par défaut, et le comportement du menu ⋯ au toucher.
 
 ## Questions ouvertes
 
