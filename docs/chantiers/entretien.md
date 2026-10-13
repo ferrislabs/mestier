@@ -228,6 +228,8 @@ IA-2 ajoute à `MaintenanceContract` un statut `Draft | Active`. On le prévoit 
 
 ## Workstreams
 
+Epic : #545. Issues : W1 #546, W2 #547, W3 #548, W4 #549, W5a #550, W5b #551, W6 #552.
+
 Contrats figés par W0 : `libs/core/src/domain/maintenance/{mod,ports,commands,events,due}.rs`, migration `20261011000002_create_maintenance`. `due_for` a sa signature, son corps est un `todo!` pour W1. Le champ `Task.maintenance_line_id` (colonne déjà en base) est ajouté au domaine `task` par W3, avec la création des tâches depuis le récap.
 
 
