@@ -289,6 +289,7 @@ where
                 board_rank: None,
                 recurrence_id: None,
                 occurrence_date: None,
+                maintenance_line_id: None,
                 deleted_at: None,
                 created_at: now,
                 updated_at: now,
@@ -930,6 +931,7 @@ mod tests {
             board_rank: None,
             recurrence_id: None,
             occurrence_date: None,
+            maintenance_line_id: None,
             deleted_at: None,
             created_at: now,
             updated_at: now,
@@ -2093,6 +2095,7 @@ mod tests {
         let existing = Task {
             recurrence_id: Some(crate::TaskRecurrenceId(Uuid::new_v4())),
             occurrence_date: Some(chrono::NaiveDate::from_ymd_opt(2026, 8, 25).unwrap()),
+            maintenance_line_id: None,
             ..task(id, organization_id)
         };
 

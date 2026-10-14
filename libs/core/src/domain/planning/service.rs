@@ -703,6 +703,7 @@ mod tests {
             board_rank: None,
             recurrence_id: None,
             occurrence_date: None,
+            maintenance_line_id: None,
             deleted_at: None,
             created_at: starts_at,
             updated_at: starts_at,

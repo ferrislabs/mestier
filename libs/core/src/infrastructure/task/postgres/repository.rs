@@ -35,9 +35,9 @@ impl<'tx> TaskRepository for PgTaskRepository<'tx> {
         let row = sqlx::query_as!(
             TaskRow,
             r#"
-            INSERT INTO tasks (id, org_id, parent_task_id, title, description, starts_at, ends_at, all_day, status, blocks_availability, customer_id, customer_context_id, quote_id, project_id, expenses_cents, expenses_label, board_rank, recurrence_id, occurrence_date, deleted_at, created_at, updated_at)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, CAST($9 AS text)::task_status, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22)
-            RETURNING id, org_id, parent_task_id, title, description, starts_at, ends_at, all_day, status::text AS "status!", blocks_availability, customer_id, customer_context_id, quote_id, project_id, expenses_cents, expenses_label, board_rank, recurrence_id, occurrence_date, deleted_at, created_at, updated_at
+            INSERT INTO tasks (id, org_id, parent_task_id, title, description, starts_at, ends_at, all_day, status, blocks_availability, customer_id, customer_context_id, quote_id, project_id, expenses_cents, expenses_label, board_rank, recurrence_id, occurrence_date, maintenance_line_id, deleted_at, created_at, updated_at)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, CAST($9 AS text)::task_status, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23)
+            RETURNING id, org_id, parent_task_id, title, description, starts_at, ends_at, all_day, status::text AS "status!", blocks_availability, customer_id, customer_context_id, quote_id, project_id, expenses_cents, expenses_label, board_rank, recurrence_id, occurrence_date, maintenance_line_id, deleted_at, created_at, updated_at
             "#,
             task.id.0,
             task.organization_id.0,
@@ -58,6 +58,7 @@ impl<'tx> TaskRepository for PgTaskRepository<'tx> {
             task.board_rank.as_ref().map(|rank| rank.0.as_str()),
             task.recurrence_id.map(|id| id.0),
             task.occurrence_date,
+            task.maintenance_line_id.map(|id| id.0),
             task.deleted_at,
             task.created_at,
             task.updated_at,
@@ -75,11 +76,11 @@ impl<'tx> TaskRepository for PgTaskRepository<'tx> {
         let row = sqlx::query_as!(
             TaskRow,
             r#"
-            INSERT INTO tasks (id, org_id, parent_task_id, title, description, starts_at, ends_at, all_day, status, blocks_availability, customer_id, customer_context_id, quote_id, project_id, expenses_cents, expenses_label, board_rank, recurrence_id, occurrence_date, deleted_at, created_at, updated_at)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, CAST($9 AS text)::task_status, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22)
+            INSERT INTO tasks (id, org_id, parent_task_id, title, description, starts_at, ends_at, all_day, status, blocks_availability, customer_id, customer_context_id, quote_id, project_id, expenses_cents, expenses_label, board_rank, recurrence_id, occurrence_date, maintenance_line_id, deleted_at, created_at, updated_at)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, CAST($9 AS text)::task_status, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23)
             ON CONFLICT (recurrence_id, occurrence_date) WHERE recurrence_id IS NOT NULL AND deleted_at IS NULL
             DO NOTHING
-            RETURNING id, org_id, parent_task_id, title, description, starts_at, ends_at, all_day, status::text AS "status!", blocks_availability, customer_id, customer_context_id, quote_id, project_id, expenses_cents, expenses_label, board_rank, recurrence_id, occurrence_date, deleted_at, created_at, updated_at
+            RETURNING id, org_id, parent_task_id, title, description, starts_at, ends_at, all_day, status::text AS "status!", blocks_availability, customer_id, customer_context_id, quote_id, project_id, expenses_cents, expenses_label, board_rank, recurrence_id, occurrence_date, maintenance_line_id, deleted_at, created_at, updated_at
             "#,
             task.id.0,
             task.organization_id.0,
@@ -100,6 +101,7 @@ impl<'tx> TaskRepository for PgTaskRepository<'tx> {
             task.board_rank.as_ref().map(|rank| rank.0.as_str()),
             task.recurrence_id.map(|id| id.0),
             task.occurrence_date,
+            task.maintenance_line_id.map(|id| id.0),
             task.deleted_at,
             task.created_at,
             task.updated_at,
@@ -121,7 +123,7 @@ impl<'tx> TaskRepository for PgTaskRepository<'tx> {
         let row = sqlx::query_as!(
             TaskRow,
             r#"
-            SELECT id, org_id, parent_task_id, title, description, starts_at, ends_at, all_day, status::text AS "status!", blocks_availability, customer_id, customer_context_id, quote_id, project_id, expenses_cents, expenses_label, board_rank, recurrence_id, occurrence_date, deleted_at, created_at, updated_at
+            SELECT id, org_id, parent_task_id, title, description, starts_at, ends_at, all_day, status::text AS "status!", blocks_availability, customer_id, customer_context_id, quote_id, project_id, expenses_cents, expenses_label, board_rank, recurrence_id, occurrence_date, maintenance_line_id, deleted_at, created_at, updated_at
             FROM tasks
             WHERE id = $1 AND deleted_at IS NULL
             "#,
@@ -175,7 +177,7 @@ impl<'tx> TaskRepository for PgTaskRepository<'tx> {
         let rows = sqlx::query_as!(
             TaskRow,
             r#"
-            SELECT t.id, t.org_id, t.parent_task_id, t.title, t.description, t.starts_at, t.ends_at, t.all_day, t.status::text AS "status!", t.blocks_availability, t.customer_id, t.customer_context_id, t.quote_id, t.project_id, t.expenses_cents, t.expenses_label, t.board_rank, t.recurrence_id, t.occurrence_date, t.deleted_at, t.created_at, t.updated_at
+            SELECT t.id, t.org_id, t.parent_task_id, t.title, t.description, t.starts_at, t.ends_at, t.all_day, t.status::text AS "status!", t.blocks_availability, t.customer_id, t.customer_context_id, t.quote_id, t.project_id, t.expenses_cents, t.expenses_label, t.board_rank, t.recurrence_id, t.occurrence_date, t.maintenance_line_id, t.deleted_at, t.created_at, t.updated_at
             FROM tasks t
             WHERE t.org_id = $1 AND t.deleted_at IS NULL
               AND (
@@ -410,7 +412,7 @@ impl<'tx> TaskRepository for PgTaskRepository<'tx> {
         let rows = sqlx::query_as!(
             TaskRow,
             r#"
-            SELECT t.id, t.org_id, t.parent_task_id, t.title, t.description, t.starts_at, t.ends_at, t.all_day, t.status::text AS "status!", t.blocks_availability, t.customer_id, t.customer_context_id, t.quote_id, t.project_id, t.expenses_cents, t.expenses_label, t.board_rank, t.recurrence_id, t.occurrence_date, t.deleted_at, t.created_at, t.updated_at
+            SELECT t.id, t.org_id, t.parent_task_id, t.title, t.description, t.starts_at, t.ends_at, t.all_day, t.status::text AS "status!", t.blocks_availability, t.customer_id, t.customer_context_id, t.quote_id, t.project_id, t.expenses_cents, t.expenses_label, t.board_rank, t.recurrence_id, t.occurrence_date, t.maintenance_line_id, t.deleted_at, t.created_at, t.updated_at
             FROM tasks t
             JOIN task_assignments a ON a.task_id = t.id
             WHERE t.org_id = $1
@@ -492,7 +494,7 @@ impl<'tx> TaskRepository for PgTaskRepository<'tx> {
                 recurrence_id = $14,
                 board_rank = $15
             WHERE id = $1 AND deleted_at IS NULL
-            RETURNING id, org_id, parent_task_id, title, description, starts_at, ends_at, all_day, status::text AS "status!", blocks_availability, customer_id, customer_context_id, quote_id, project_id, expenses_cents, expenses_label, board_rank, recurrence_id, occurrence_date, deleted_at, created_at, updated_at
+            RETURNING id, org_id, parent_task_id, title, description, starts_at, ends_at, all_day, status::text AS "status!", blocks_availability, customer_id, customer_context_id, quote_id, project_id, expenses_cents, expenses_label, board_rank, recurrence_id, occurrence_date, maintenance_line_id, deleted_at, created_at, updated_at
             "#,
             task.id.0,
             task.parent_task_id.map(|id| id.0),

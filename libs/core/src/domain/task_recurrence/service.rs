@@ -562,6 +562,7 @@ where
                 board_rank: None,
                 recurrence_id: Some(recurrence.id),
                 occurrence_date: Some(occurrence.date),
+                maintenance_line_id: None,
                 deleted_at: None,
                 created_at: now,
                 updated_at: now,
