@@ -19,6 +19,7 @@ mod harness;
 mod issuer;
 mod maintenance_contract;
 mod mcp_access;
+mod recap_pdf;
 mod work_time;
 
 use chrono::{Duration, Utc};

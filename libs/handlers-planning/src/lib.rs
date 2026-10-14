@@ -22,6 +22,7 @@ pub mod paths;
 pub mod planning;
 pub mod project;
 pub mod project_template;
+pub mod recap_pdf;
 pub mod response;
 pub mod task;
 pub mod task_comment;
@@ -75,6 +76,7 @@ pub fn router(state: &AppState) -> Router<AppState> {
         .merge(doe::router(state))
         .merge(doe_model::router(state))
         .merge(maintenance_contract::router(state))
+        .merge(recap_pdf::router(state))
         .layer(from_fn_with_state(state.clone(), rate_limit_middleware))
         .layer(from_fn_with_state(state.clone(), auth_middleware))
 }

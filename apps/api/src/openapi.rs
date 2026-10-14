@@ -219,6 +219,7 @@ impl Modify for SecurityAddon {
         planning::doe_model::settings::put_handler,
         planning::doe_model::preview::handler,
         planning::doe_model::preview::pages_handler,
+        planning::recap_pdf::handler,
         planning::project_template::create::handler,
         planning::project_template::list::handler,
         planning::project_template::get_one::handler,

@@ -50,13 +50,17 @@ pub struct DoeWorld {
 
 impl DoeWorld {
     pub fn new(prepared: Prepared) -> Self {
+        Self::with_template(TEMPLATE, prepared)
+    }
+
+    pub fn with_template(template: &str, prepared: Prepared) -> Self {
         let mut files = HashMap::new();
         files.insert(file_id("/data.json"), Bytes::new(prepared.data));
         for (path, bytes) in prepared.files {
             files.insert(file_id(&path), bytes);
         }
         Self {
-            main: Source::new(file_id("/main.typ"), TEMPLATE.to_owned()),
+            main: Source::new(file_id("/main.typ"), template.to_owned()),
             files,
         }
     }
