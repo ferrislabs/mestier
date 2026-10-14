@@ -198,10 +198,11 @@ export const MODULES: AppModule[] = [
 		 * The work half of the split (#468): what is to be done and where it
 		 * stands, as opposed to the Planning module's who-is-where-when.
 		 *
-		 * The Board comes last rather than first even though it is the screen
-		 * the chantier exists for: `moduleLandingPath` takes a module's first
-		 * navigable section, so leading with it would silently redirect
-		 * `/planification` away from the project list #468 landed it on.
+		 * The Board comes after the project list rather than first even though
+		 * it is the screen the chantier exists for: `moduleLandingPath` takes a
+		 * module's first navigable section, so leading with it would silently
+		 * redirect `/planification` away from the project list #468 landed it
+		 * on.
 		 */
 		sections: [
 			{
@@ -257,6 +258,26 @@ export const MODULES: AppModule[] = [
 				to: '/planification/board',
 				icon: KanbanSquare,
 				requiredPermission: 'MANAGE_PLANNING',
+			},
+			{
+				id: 'maintenance',
+				label: 'Entretien',
+				to: '/planification/maintenance',
+				icon: Sprout,
+				requiredPermission: 'MANAGE_PLANNING',
+				tabs: [
+					{
+						id: 'maintenance-grid',
+						label: 'Grille',
+						to: '/planification/maintenance',
+						exact: true,
+					},
+					{
+						id: 'maintenance-contracts',
+						label: 'Contrats',
+						to: '/planification/maintenance/contracts',
+					},
+				],
 			},
 		],
 	},

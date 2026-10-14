@@ -1,19 +1,26 @@
-import { createFileRoute, redirect } from '@tanstack/react-router'
-import { buildOrgPath } from '#/modules/org-path'
+import { createFileRoute } from '@tanstack/react-router'
+import { GridFeature } from '#/pages/maintenance/feature/grid-feature'
+import {
+	resolveSeason,
+	seasonSearchSchema,
+} from '#/pages/maintenance/lib/season-search'
+import { todayIsoDate } from '#/pages/planning/types'
 
-/**
- * The "Entretien" entry points here. Until the grid lands, it is the recap
- * that opens: the grid replaces this redirect with its own screen.
- */
 export const Route = createFileRoute(
 	'/_app/o/$organizationSlug/planification/maintenance/',
 )({
-	beforeLoad: ({ params }) => {
-		throw redirect({
-			to: buildOrgPath(
-				params.organizationSlug,
-				'/planification/maintenance/recap',
-			),
-		})
-	},
+	validateSearch: (search) => seasonSearchSchema.parse(search),
+	component: MaintenanceGridPage,
 })
+
+function MaintenanceGridPage() {
+	const { season } = Route.useSearch()
+	const navigate = Route.useNavigate()
+
+	return (
+		<GridFeature
+			season={resolveSeason(season, todayIsoDate())}
+			onSeasonChange={(next) => navigate({ search: { season: next } })}
+		/>
+	)
+}
