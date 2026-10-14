@@ -2160,6 +2160,7 @@ dependencies = [
  "image",
  "lopdf",
  "mestier-core",
+ "serde",
  "serde_json",
  "typst",
  "typst-layout",
