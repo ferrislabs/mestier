@@ -334,26 +334,29 @@ pub async fn load_sites(
     let mut sites = HashMap::with_capacity(contracts.len());
 
     for contract in contracts {
-        if !customer_names.contains_key(&contract.customer_id) {
-            let customer = customers
-                .find_by_id(contract.customer_id)
-                .await?
-                .ok_or(CoreError::NotFound)?;
-            let (people, _) = contacts
-                .list_by_customer(contract.customer_id, CONTACTS_PER_CUSTOMER, 0)
-                .await?;
-            let contact = people
-                .into_iter()
-                .filter(|person| person.deleted_at.is_none())
-                .max_by_key(|person| person.is_primary)
-                .map(|person| SiteContact {
-                    name: format!("{} {}", person.first_name, person.last_name),
-                    phone: person.phone,
-                    email: person.email,
-                });
-            customer_names.insert(contract.customer_id, (customer.name, contact));
-        }
-        let (customer_name, contact) = &customer_names[&contract.customer_id];
+        let (customer_name, contact) = match customer_names.get(&contract.customer_id) {
+            Some(known) => known.clone(),
+            None => {
+                let customer = customers
+                    .find_by_id(contract.customer_id)
+                    .await?
+                    .ok_or(CoreError::NotFound)?;
+                let (people, _) = contacts
+                    .list_by_customer(contract.customer_id, CONTACTS_PER_CUSTOMER, 0)
+                    .await?;
+                let contact = people
+                    .into_iter()
+                    .find(|person| person.is_primary && person.deleted_at.is_none())
+                    .map(|person| SiteContact {
+                        name: format!("{} {}", person.first_name, person.last_name),
+                        phone: person.phone,
+                        email: person.email,
+                    });
+                let entry = (customer.name, contact);
+                customer_names.insert(contract.customer_id, entry.clone());
+                entry
+            }
+        };
 
         let context = contexts
             .find_by_id(contract.customer_context_id)
@@ -362,12 +365,12 @@ pub async fn load_sites(
         sites.insert(
             contract.id,
             ContractSite {
-                customer_name: customer_name.clone(),
+                customer_name,
                 site_label: context.label,
                 address_line: context.address_line,
                 postal_code: context.postal_code,
                 city: context.city,
-                contact: contact.clone(),
+                contact,
             },
         );
     }
