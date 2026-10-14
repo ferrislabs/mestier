@@ -111,7 +111,7 @@ Tables `maintenance_contracts`, `maintenance_lines`, `maintenance_interventions`
 
 ### PDF du récap
 
-Typst, comme le DOE (`libs/doc-render`, nouveau gabarit `maintenance_recap.typ`). Une ligne par prestation due : site, commune, prestation, dernière intervention, échéance, heures prévues, contact. Groupé par commune, en retard en tête.
+Typst, comme le DOE (`libs/doc-render`, nouveau gabarit `maintenance_recap.typ`). Une ligne par prestation due : site, commune, prestation, dernière intervention, échéance, heures prévues, contact. Groupé par commune, en retard en tête : les communes qui ont une prestation en retard passent d'abord, puis l'ordre alphabétique, et dans une commune les lignes en retard précèdent les autres, par échéance.
 
 ### Front (`apps/webapp`)
 

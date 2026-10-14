@@ -1,5 +1,8 @@
 mod bundle;
+mod recap;
 mod world;
+
+pub use recap::{MaintenanceRecap, RecapContact, RecapRow, TypstRecapRenderer};
 
 use mestier_core::{DoeDocument, DoeRenderError, DoeRenderer, FileBundle};
 #[derive(Debug, Default, Clone, Copy)]
