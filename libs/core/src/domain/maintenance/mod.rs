@@ -22,7 +22,10 @@ pub mod commands;
 pub mod contract_service;
 pub mod due;
 pub mod events;
+pub mod overview;
+pub mod plan;
 pub mod ports;
+pub mod visits;
 
 macro_rules! uuid_id {
     ($name:ident) => {

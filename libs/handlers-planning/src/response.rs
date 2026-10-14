@@ -1,10 +1,10 @@
 use chrono::{DateTime, NaiveDate, NaiveTime, Utc};
 use discord::{Channel, ChannelId};
 use mestier_core::{
-    CustomerContextId, CustomerId, Equipment, EquipmentId, MemberId, OrganizationId, Project,
-    ProjectId, ProjectTemplate, ProjectTemplateId, ProjectTemplateTask, ProjectTemplateTaskId,
-    QuoteId, Task, TaskAssignmentId, TaskId, TaskRecurrence, TaskRecurrenceId, TaskStatus,
-    weekday_to_iso,
+    CustomerContextId, CustomerId, Equipment, EquipmentId, MaintenanceLineId, MemberId,
+    OrganizationId, Project, ProjectId, ProjectTemplate, ProjectTemplateId, ProjectTemplateTask,
+    ProjectTemplateTaskId, QuoteId, Task, TaskAssignmentId, TaskId, TaskRecurrence,
+    TaskRecurrenceId, TaskStatus, weekday_to_iso,
 };
 use serde::Serialize;
 use utoipa::ToSchema;
@@ -71,6 +71,9 @@ pub struct TaskResponse {
     /// that did and was detached by an edit — see `PatchTaskResponse::detached`
     /// for the moment that transition is reported.
     pub recurrence_id: Option<TaskRecurrenceId>,
+    /// The maintenance line this task is a visit for, when it was planned
+    /// from the weekly recap.
+    pub maintenance_line_id: Option<MaintenanceLineId>,
     /// What the task costs beyond somebody's time. `0` with no label when there
     /// is nothing to declare.
     pub expenses_cents: i32,
@@ -131,6 +134,7 @@ impl From<Task> for TaskResponse {
             quote_id: value.quote_id,
             project_id: value.project_id,
             recurrence_id: value.recurrence_id,
+            maintenance_line_id: value.maintenance_line_id,
             expenses_cents: value.expenses_cents,
             expenses_label: value.expenses_label,
             member_ids: value
@@ -382,6 +386,7 @@ mod tests {
             board_rank: None,
             recurrence_id: None,
             occurrence_date: None,
+            maintenance_line_id: None,
             deleted_at: None,
             created_at: now,
             updated_at: now,

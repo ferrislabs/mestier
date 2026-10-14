@@ -248,6 +248,7 @@ fn instantiate_tasks(
                 board_rank: None,
                 recurrence_id: None,
                 occurrence_date: None,
+                maintenance_line_id: None,
                 deleted_at: None,
                 created_at: now,
                 updated_at: now,

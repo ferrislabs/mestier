@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT DISTINCT maintenance_line_id AS \"line_id!\"\n            FROM tasks\n            WHERE org_id = $1\n              AND maintenance_line_id = ANY($2)\n              AND deleted_at IS NULL\n              AND status::text NOT IN ('DONE', 'CANCELLED')\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "line_id!",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "UuidArray"
+      ]
+    },
+    "nullable": [
+      true
+    ]
+  },
+  "hash": "328905a7e368959c18268bf62dc3e4988f9628dc14b8a2f642cd31bc3682edce"
+}

@@ -7,7 +7,8 @@ use utoipa::ToSchema;
 use uuid::Uuid;
 
 use crate::{
-    CustomerContextId, CustomerId, MemberId, OrganizationId, ProjectId, QuoteId, TaskRecurrenceId,
+    CustomerContextId, CustomerId, MaintenanceLineId, MemberId, OrganizationId, ProjectId, QuoteId,
+    TaskRecurrenceId,
 };
 
 pub mod commands;
@@ -627,6 +628,10 @@ pub struct Task {
     /// it answers "which Tuesday was this" long after the task stopped
     /// following the series.
     pub occurrence_date: Option<NaiveDate>,
+    /// The maintenance line this task is a visit for, when it was planned
+    /// from the weekly recap. While the task is neither done nor cancelled,
+    /// the line counts as planned and leaves the recap.
+    pub maintenance_line_id: Option<MaintenanceLineId>,
     pub deleted_at: Option<DateTime<Utc>>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
