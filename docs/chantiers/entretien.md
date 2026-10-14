@@ -102,7 +102,7 @@ Tables `maintenance_contracts`, `maintenance_lines`, `maintenance_interventions`
 | POST | `/maintenance/recap/plan` `{line_ids, week}` → tâches non datées dans la semaine, au backlog du board | handlers-planning | planning.manage |
 | POST | `/maintenance/lines/{id}/interventions` `{done_on}` → `Validated` | handlers-planning | planning.manage |
 | GET | `/maintenance/interventions?status=proposed` | handlers-planning | planning.manage |
-| POST | `/maintenance/interventions/{id}/validate`, `/reject` `{note?}` | handlers-planning | planning.manage |
+| POST | `/maintenance/interventions/{id}/validate` (sans corps), `/reject` `{note?}` (non vide si présente) | handlers-planning | planning.manage |
 | POST | `/field/tasks/{task_id}/intervention` `{done_on}` → `Proposed` | handlers-field | assigné |
 
 Contrats (WS2) : le `PUT` ne change ni le client, ni le site, ni l'année (409). Le projet du contrat s'appelle « Entretien {année} - {client} - {site} ». La duplication reprend référence, conducteur, montant, notes, statut et prestations, mais pas le lien au devis, et ramène aussi à 52 les fenêtres en semaine 53. Archiver deux fois garde la première date.
@@ -126,10 +126,10 @@ Typst, comme le DOE (`libs/doc-render`, nouveau gabarit `maintenance_recap.typ`)
 
 Sous `Planification`, dans `modules/registry.ts` :
 - **Entretien › Grille** : la feuille papier. Lignes = prestations groupées par contrat, colonnes = semaines de la saison, case = jour du mois de l'intervention. Couleurs : validée, proposée, échéance, en retard. Un clic sur une case vide saisit une intervention.
-- **Entretien › Récap** : sélecteur de semaine, jeudi par défaut sur S+1. Cases à cocher, bouton « Planifier », bouton « PDF ».
-- **Entretien › À valider** : même UX que « Écarts signalés ».
+- **Entretien › Récap** : sélecteur de semaine, S+1 par défaut quel que soit le jour (le récap de S+1 contient déjà ce qui reste dû avant). Cases à cocher, bouton « Planifier », bouton « PDF ».
+- **Entretien › À valider** : même UX que « Écarts signalés », avec Valider et Rejeter (motif facultatif) sur chaque ligne. La réponse ne porte que `line_id` : la prestation et le site viennent de la grille de la saison de la visite (un contrat archivé n'y est plus).
 - **Entretien › Contrats** : liste par saison, formulaire contrat + prestations, « Dupliquer pour 2027 ».
-- Terrain : sur une tâche d'entretien de « Mes tâches », bouton « Intervention faite » (date du jour par défaut, modifiable).
+- Terrain : sur une tâche d'entretien de « Mes tâches », bouton « Intervention faite » (date du jour par défaut, modifiable, jamais après aujourd'hui). La liste du terrain ne dit pas si une visite est déjà proposée : après l'envoi, le bouton laisse place à une confirmation jusqu'au rechargement.
 
 ### Errors
 
