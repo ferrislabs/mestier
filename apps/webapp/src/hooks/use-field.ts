@@ -235,3 +235,18 @@ export function useWithdrawAssignmentReport(organizationId: string) {
 		onSuccess: () => invalidateAssignmentReports(queryClient, organizationId),
 	})
 }
+
+const PROPOSE_INTERVENTION_PATH =
+	'/api/v1/organizations/{organization_id}/field/tasks/{task_id}/intervention'
+
+/**
+ * Declares a maintenance visit done. It is only a proposal: the due date does
+ * not move until the manager validates it, so nothing on the day's list
+ * changes and there is nothing to refresh.
+ */
+export function useProposeIntervention() {
+	return useMutation({
+		...window.tanstackApi.mutation('post', PROPOSE_INTERVENTION_PATH)
+			.mutationOptions,
+	})
+}
