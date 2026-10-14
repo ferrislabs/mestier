@@ -1,0 +1,46 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT id, contract_id, label, cadence, minutes_per_intervention\n            FROM maintenance_lines\n            WHERE contract_id = ANY($1)\n            ORDER BY contract_id, position ASC, created_at ASC\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "contract_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "label",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "cadence",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 4,
+        "name": "minutes_per_intervention",
+        "type_info": "Int4"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "UuidArray"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      true
+    ]
+  },
+  "hash": "7a5962272bf74d757d19346ea3a6b1da1ec4e8166af088f66db168c48f6b38bc"
+}

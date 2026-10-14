@@ -43,6 +43,7 @@ pub mod employee;
 pub mod equipment;
 pub mod invitation;
 pub mod invoice;
+pub mod maintenance_contract;
 pub mod member;
 pub mod organization;
 pub mod planning;
