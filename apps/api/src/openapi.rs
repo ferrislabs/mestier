@@ -69,6 +69,7 @@ impl Modify for SecurityAddon {
         field::field::attach_photo::handler,
         field::field::end_day::handler,
         field::field::report_assignment::handler,
+        field::field::propose_intervention::handler,
         field::field::amend_report::handler,
         field::field::withdraw_report::handler,
         field::field::list_reports::handler,
@@ -236,6 +237,13 @@ impl Modify for SecurityAddon {
         planning::task_comment::create::handler,
         planning::task_comment::update::handler,
         planning::task_comment::delete::handler,
+        planning::maintenance_intervention::record::handler,
+        planning::maintenance_intervention::list::handler,
+        planning::maintenance_intervention::validate::handler,
+        planning::maintenance_intervention::reject::handler,
+        planning::maintenance_overview::grid::handler,
+        planning::maintenance_overview::recap::handler,
+        planning::maintenance_overview::plan::handler,
         planning::assignment_report::list::handler,
         planning::assignment_report::resolve::handler,
         reference::absence::create::handler,
@@ -347,6 +355,8 @@ impl Modify for SecurityAddon {
         field::field::attach_photo::AttachPhotoRequest,
         field::field::end_day::EndDayRequest,
         field::field::report_assignment::ReportAssignmentRequest,
+        field::field::propose_intervention::ProposeInterventionRequest,
+        field::response::FieldInterventionResponse,
         field::field::amend_report::AmendAssignmentReportRequest,
         field::response::AssignmentReportResponse,
         files::response::FileUploadResponse,
@@ -486,6 +496,30 @@ impl Modify for SecurityAddon {
         planning::task_comment::create::CreateTaskCommentRequest,
         planning::task_comment::update::UpdateTaskCommentRequest,
         planning::task_comment::TaskCommentResponse,
+        planning::maintenance_intervention::InterventionResponse,
+        planning::maintenance_intervention::record::RecordInterventionRequest,
+        planning::maintenance_intervention::reject::RejectInterventionRequest,
+        planning::maintenance_intervention::list::StatusFilter,
+        planning::maintenance_overview::plan::PlanMaintenanceLinesRequest,
+        planning::maintenance_overview::schemas::Cadence,
+        planning::maintenance_overview::schemas::ContractSite,
+        planning::maintenance_overview::schemas::ContractStatus,
+        planning::maintenance_overview::schemas::Due,
+        planning::maintenance_overview::schemas::DueStatus,
+        planning::maintenance_overview::schemas::Grid,
+        planning::maintenance_overview::schemas::GridContract,
+        planning::maintenance_overview::schemas::GridLine,
+        planning::maintenance_overview::schemas::GridVisit,
+        planning::maintenance_overview::schemas::IntervalDays,
+        planning::maintenance_overview::schemas::InterventionStatus,
+        planning::maintenance_overview::schemas::IsoWeekNumber,
+        planning::maintenance_overview::schemas::Recap,
+        planning::maintenance_overview::schemas::RecapGroup,
+        planning::maintenance_overview::schemas::RecapLine,
+        planning::maintenance_overview::schemas::Season,
+        planning::maintenance_overview::schemas::SiteContact,
+        planning::maintenance_overview::schemas::Window,
+        planning::maintenance_overview::schemas::Windows,
         planning::assignment_report::resolve::ResolveAssignmentReportRequest,
         planning::assignment_report::AssignmentReportResponse,
         planning::response::PatchTaskResponse,
@@ -696,5 +730,52 @@ mod tests {
                 "{operation_id} is missing from the document"
             );
         }
+    }
+
+    /// The visit loop, the grid and the recap: the client is generated from
+    /// this document, and the grid and recap bodies are only reachable through
+    /// the paths that return them.
+    #[test]
+    fn the_maintenance_visit_loop_and_its_views_reach_the_document() {
+        let document = ApiDoc::openapi();
+        let json = serde_json::to_string(&document).expect("the document serializes");
+
+        for operation_id in [
+            "recordMaintenanceIntervention",
+            "listMaintenanceInterventions",
+            "validateMaintenanceIntervention",
+            "rejectMaintenanceIntervention",
+            "getMaintenanceGrid",
+            "getMaintenanceRecap",
+            "planMaintenanceLines",
+            "proposeMaintenanceIntervention",
+        ] {
+            assert!(
+                json.contains(&format!("\"operationId\":\"{operation_id}\"")),
+                "{operation_id} is missing from the document"
+            );
+        }
+
+        let schemas = &document
+            .components
+            .as_ref()
+            .expect("the document has components")
+            .schemas;
+        for schema in ["Grid", "Recap", "Due", "DueStatus", "InterventionResponse"] {
+            assert!(schemas.contains_key(schema), "{schema} is not registered");
+        }
+
+        let mut dangling: Vec<&str> = json
+            .split("#/components/schemas/")
+            .skip(1)
+            .filter_map(|rest| rest.split('"').next())
+            .filter(|name| !schemas.contains_key(*name))
+            .collect();
+        dangling.sort_unstable();
+        dangling.dedup();
+        assert!(
+            dangling.is_empty(),
+            "referenced but never registered: {dangling:?}"
+        );
     }
 }

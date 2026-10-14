@@ -1,9 +1,9 @@
 use chrono::{DateTime, NaiveDate, Utc};
 use mestier_core::{
     AssignmentReport, AssignmentReportId, AssignmentReportResolution, CustomerContextId,
-    CustomerId, DayLog, DayLogId, EmployeeId, MemberId, OrganizationId, Task, TaskAssignmentId,
-    TaskId, TaskStatus, TimeEntry, TimeEntryId, TimeEntryPhoto, TimeEntryPhotoId,
-    TimeEntryPhotoPhase,
+    CustomerId, DayLog, DayLogId, EmployeeId, Intervention, InterventionId, InterventionStatus,
+    MaintenanceLineId, MemberId, OrganizationId, Task, TaskAssignmentId, TaskId, TaskStatus,
+    TimeEntry, TimeEntryId, TimeEntryPhoto, TimeEntryPhotoId, TimeEntryPhotoPhase,
 };
 use serde::Serialize;
 use utoipa::ToSchema;
@@ -111,6 +111,9 @@ pub struct FieldTaskResponse {
     pub status: TaskStatus,
     pub customer_id: Option<CustomerId>,
     pub customer_context_id: Option<CustomerContextId>,
+    /// Set on a maintenance visit: the task is where `POST
+    /// .../field/tasks/{task_id}/intervention` declares the visit done.
+    pub maintenance_line_id: Option<MaintenanceLineId>,
     /// The caller's own assignment on this task — what `POST
     /// .../field/assignments/{task_assignment_id}/report` is addressed by.
     /// Always present: `list_for_assignee_on` only ever returns tasks the
@@ -157,6 +160,28 @@ impl From<AssignmentReport> for AssignmentReportResponse {
     }
 }
 
+/// A visit the caller declared, waiting for the manager.
+#[derive(Debug, Clone, PartialEq, Serialize, ToSchema)]
+pub struct FieldInterventionResponse {
+    pub id: InterventionId,
+    pub line_id: MaintenanceLineId,
+    pub task_id: Option<TaskId>,
+    pub done_on: NaiveDate,
+    pub status: InterventionStatus,
+}
+
+impl From<Intervention> for FieldInterventionResponse {
+    fn from(value: Intervention) -> Self {
+        Self {
+            id: value.id,
+            line_id: value.line_id,
+            task_id: value.task_id,
+            done_on: value.done_on,
+            status: value.status,
+        }
+    }
+}
+
 impl FieldTaskResponse {
     /// Resolves `task_assignment_id` from `task.assignments` — which, unlike
     /// this response, carries every assignee of the task, not just the
@@ -185,6 +210,7 @@ impl FieldTaskResponse {
             status: task.status,
             customer_id: task.customer_id,
             customer_context_id: task.customer_context_id,
+            maintenance_line_id: task.maintenance_line_id,
             task_assignment_id,
         }
     }

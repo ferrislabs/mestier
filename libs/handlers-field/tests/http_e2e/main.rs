@@ -15,6 +15,7 @@
 mod assignment_reports;
 mod harness;
 mod issuer;
+mod maintenance_intervention;
 mod no_money_leak;
 
 use serde_json::json;

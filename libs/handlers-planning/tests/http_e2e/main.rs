@@ -18,6 +18,7 @@ mod doe;
 mod harness;
 mod issuer;
 mod maintenance_contract;
+mod maintenance_intervention;
 mod mcp_access;
 mod recap_pdf;
 mod work_time;

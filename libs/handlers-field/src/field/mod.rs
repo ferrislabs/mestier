@@ -5,6 +5,7 @@ pub mod declare;
 pub mod end_day;
 pub mod list_reports;
 pub mod my_tasks;
+pub mod propose_intervention;
 pub mod recover;
 pub mod report_assignment;
 pub mod start;
