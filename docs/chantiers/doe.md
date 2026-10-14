@@ -322,3 +322,4 @@ cd apps/webapp && pnpm check && pnpm test && pnpm build
 - 2026-10-07 : le brouillon de fourniture est construit côté backend (`/supplies/draft`). Rejeté : copie côté front, car la règle de copie (dont l'adresse du fournisseur) doit avoir une seule source.
 
 Amended: 2026-10-07 W1 possède le `Cargo.toml` de `doc-render` ; `DoeDocument` vit dans `domain/doe/render.rs` (orchestrateur) ; erreurs de validation en `Conflict` ; les chemins HTTP suivent la convention existante `/api/v1/organizations/{organization_id}/…` quand la ressource est listée par organisation.
+- 2026-10-14 : on garde un seul DOE par projet. Raison reconstituée : un DOE est le dossier de fin de chantier, les évolutions passent par l'indice. Plusieurs DOE par chantier (lots, phases) ne sont pas nécessaires tant qu'Erwan ne le demande pas ; les lever demanderait de retirer `UNIQUE (project_id)` et de transformer l'onglet DOE du projet en liste.
