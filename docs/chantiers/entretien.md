@@ -120,7 +120,7 @@ Contrats (WS2) : le `PUT` ne change ni le client, ni le site, ni l'année (409).
 
 ### PDF du récap
 
-Typst, comme le DOE (`libs/doc-render`, nouveau gabarit `maintenance_recap.typ`). Une ligne par prestation due : site, commune, prestation, dernière intervention, échéance, heures prévues, contact. Groupé par commune, en retard en tête : les communes qui ont une prestation en retard passent d'abord, puis l'ordre alphabétique, et dans une commune les lignes en retard précèdent les autres, par échéance.
+Typst, comme le DOE (`libs/doc-render`, nouveau gabarit `maintenance_recap.typ`). Une ligne par prestation due : site, commune, prestation, dernière intervention, échéance, heures prévues, contact. Groupé par commune, en retard en tête : les communes qui ont une prestation en retard passent d'abord, puis l'ordre alphabétique, et dans une commune les lignes en retard précèdent les autres, par échéance. Le PDF sert les lignes du même cas d'usage que `GET /maintenance/recap`, et le site s'y imprime « client - site », comme le nom du projet.
 
 ### Front (`apps/webapp`)
 
