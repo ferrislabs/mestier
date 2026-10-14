@@ -135,6 +135,11 @@ pub use domain::{
     },
 };
 
+pub use domain::maintenance::overview::{
+    ContractSite, Grid, GridContract, GridLine, GridVisit, Recap, RecapGroup, RecapLine,
+    SiteContact,
+};
+
 pub use domain::{
     BlankPageCount, Doe, DoeFile, DoeFont, DoeId, DoeLabel, DoeModel, DoeModelId, DoeModelSection,
     DoeModelSectionKind, DoeParty, DoeSection, DoeSectionContent, DoeSettings, DoeStyle,

@@ -15,6 +15,7 @@ pub mod file_storage;
 pub mod invitation;
 pub mod invoice;
 pub mod maintenance_contract;
+pub mod maintenance_intervention;
 pub mod member;
 pub mod message;
 pub mod notification;

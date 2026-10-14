@@ -107,6 +107,13 @@ Tables `maintenance_contracts`, `maintenance_lines`, `maintenance_interventions`
 
 Contrats (WS2) : le `PUT` ne change ni le client, ni le site, ni l'année (409). Le projet du contrat s'appelle « Entretien {année} - {client} - {site} ». La duplication reprend référence, conducteur, montant, notes, statut et prestations, mais pas le lien au devis, et ramène aussi à 52 les fenêtres en semaine 53. Archiver deux fois garde la première date.
 
+### Précisions du récap et des visites (WS3)
+
+- Le récap de la semaine W calcule l'échéance au lundi de W et garde `ThisWeek` et `Overdue` : les prestations dues dans W, une fenêtre encore ouverte en W, et celles dues avant W. Celles dues après W n'y sont pas. Communes en retard d'abord, puis alphabétique, sans commune en dernier ; dans une commune, en retard d'abord, puis par échéance, puis dans l'ordre du contrat.
+- Les prestations d'un contrat `Draft` ne sont jamais dues : `Done` dans la grille, absentes du récap. Un contrat archivé n'est ni dans la grille ni dans le récap.
+- `POST /maintenance/recap/plan` crée la tâche au backlog (titre = libellé de la prestation, « Entretien à prévoir en S43 2026 » en description) ; une prestation déjà portée par une tâche ouverte, ou d'un contrat archivé ou brouillon, renvoie 409 et ne crée rien.
+- Une ligne, une intervention ou une tâche d'une autre organisation, ou une tâche qui n'est pas à l'appelant ou pas d'entretien, renvoie 404. Le chemin terrain est `/organizations/{org}/field/tasks/{task_id}/intervention`.
+
 ### Événements
 
 `maintenance_intervention.proposed`, `.validated`, `.rejected`, ajoutés au catalogue. Un workflow pourra s'y brancher plus tard (Discord, Odoo).

@@ -44,6 +44,8 @@ pub mod equipment;
 pub mod invitation;
 pub mod invoice;
 pub mod maintenance_contract;
+pub mod maintenance_intervention;
+pub mod maintenance_overview;
 pub mod member;
 pub mod organization;
 pub mod planning;
