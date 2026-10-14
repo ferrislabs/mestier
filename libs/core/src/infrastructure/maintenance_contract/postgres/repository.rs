@@ -353,11 +353,27 @@ impl<'tx> MaintenanceContractRepository for PgMaintenanceContractRepository<'tx>
 
     async fn lines_with_open_task(
         &mut self,
-        _organization_id: OrganizationId,
-        _line_ids: &[MaintenanceLineId],
+        organization_id: OrganizationId,
+        line_ids: &[MaintenanceLineId],
     ) -> Result<HashSet<MaintenanceLineId>, CoreError> {
-        Err(CoreError::Internal(
-            "lines_with_open_task belongs to the interventions workstream".to_owned(),
-        ))
+        let ids: Vec<Uuid> = line_ids.iter().map(|id| id.0).collect();
+        let mut tx = self.tx.lock().await;
+        let rows = sqlx::query_scalar!(
+            r#"
+            SELECT DISTINCT maintenance_line_id AS "line_id!"
+            FROM tasks
+            WHERE org_id = $1
+              AND maintenance_line_id = ANY($2)
+              AND deleted_at IS NULL
+              AND status::text NOT IN ('DONE', 'CANCELLED')
+            "#,
+            organization_id.0,
+            &ids,
+        )
+        .fetch_all(&mut ***tx)
+        .await
+        .map_err(map_sqlx_error)?;
+
+        Ok(rows.into_iter().map(MaintenanceLineId).collect())
     }
 }
