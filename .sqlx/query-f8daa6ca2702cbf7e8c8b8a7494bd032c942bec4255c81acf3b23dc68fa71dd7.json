@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO maintenance_lines (id, org_id, contract_id, label, cadence, minutes_per_intervention, position)\n            VALUES ($1, $2, $3, $4, $5, $6, $7)\n            ON CONFLICT (id) DO UPDATE\n            SET label = EXCLUDED.label,\n                cadence = EXCLUDED.cadence,\n                minutes_per_intervention = EXCLUDED.minutes_per_intervention,\n                position = EXCLUDED.position,\n                updated_at = now()\n            WHERE maintenance_lines.contract_id = EXCLUDED.contract_id\n              AND maintenance_lines.org_id = EXCLUDED.org_id\n            RETURNING id\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Uuid",
+        "Text",
+        "Jsonb",
+        "Int4",
+        "Int4"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "f8daa6ca2702cbf7e8c8b8a7494bd032c942bec4255c81acf3b23dc68fa71dd7"
+}

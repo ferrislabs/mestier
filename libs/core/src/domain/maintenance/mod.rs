@@ -19,6 +19,7 @@ use uuid::Uuid;
 use crate::{CustomerContextId, CustomerId, MemberId, OrganizationId, ProjectId, QuoteId, TaskId};
 
 pub mod commands;
+pub mod contract_service;
 pub mod due;
 pub mod events;
 pub mod ports;

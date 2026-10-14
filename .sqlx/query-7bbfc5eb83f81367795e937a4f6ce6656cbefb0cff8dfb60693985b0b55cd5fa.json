@@ -1,0 +1,118 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                SELECT c.id, c.org_id, c.customer_id, c.customer_context_id, c.project_id, c.reference,\n                       c.season_year, c.first_week, c.last_week, c.manager_member_id, c.amount_cents,\n                       c.quote_id, c.notes, c.status, c.archived_at, c.created_at, c.updated_at\n                FROM maintenance_contracts c\n                JOIN maintenance_lines l ON l.contract_id = c.id AND l.org_id = c.org_id\n                WHERE l.id = $1\n                ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "org_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "customer_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 3,
+        "name": "customer_context_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 4,
+        "name": "project_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 5,
+        "name": "reference",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 6,
+        "name": "season_year",
+        "type_info": "Int2"
+      },
+      {
+        "ordinal": 7,
+        "name": "first_week",
+        "type_info": "Int2"
+      },
+      {
+        "ordinal": 8,
+        "name": "last_week",
+        "type_info": "Int2"
+      },
+      {
+        "ordinal": 9,
+        "name": "manager_member_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 10,
+        "name": "amount_cents",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 11,
+        "name": "quote_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 12,
+        "name": "notes",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 13,
+        "name": "status",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 14,
+        "name": "archived_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 15,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 16,
+        "name": "updated_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      false,
+      false,
+      false,
+      true,
+      true,
+      true,
+      true,
+      false,
+      true,
+      false,
+      false
+    ]
+  },
+  "hash": "7bbfc5eb83f81367795e937a4f6ce6656cbefb0cff8dfb60693985b0b55cd5fa"
+}

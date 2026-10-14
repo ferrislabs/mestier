@@ -105,6 +105,8 @@ Tables `maintenance_contracts`, `maintenance_lines`, `maintenance_interventions`
 | POST | `/maintenance/interventions/{id}/validate`, `/reject` `{note?}` | handlers-planning | planning.manage |
 | POST | `/field/tasks/{task_id}/intervention` `{done_on}` → `Proposed` | handlers-field | assigné |
 
+Contrats (WS2) : le `PUT` ne change ni le client, ni le site, ni l'année (409). Le projet du contrat s'appelle « Entretien {année} - {client} - {site} ». La duplication reprend référence, conducteur, montant, notes, statut et prestations, mais pas le lien au devis, et ramène aussi à 52 les fenêtres en semaine 53. Archiver deux fois garde la première date.
+
 ### Événements
 
 `maintenance_intervention.proposed`, `.validated`, `.rejected`, ajoutés au catalogue. Un workflow pourra s'y brancher plus tard (Discord, Odoo).
