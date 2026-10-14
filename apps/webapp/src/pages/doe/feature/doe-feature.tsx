@@ -8,6 +8,7 @@ import { useProject } from '#/hooks/use-projects'
 import { buildOrgPath } from '#/modules/org-path'
 import { DoeCreateFeature } from '#/pages/doe/feature/doe-create-feature'
 import { DoeEditorFeature } from '#/pages/doe/feature/doe-editor-feature'
+import { ProjectTabs } from '#/pages/projects/ui/project-tabs'
 
 interface DoeFeatureProps {
 	projectId: string
@@ -77,6 +78,12 @@ export function DoeFeature({ projectId }: DoeFeatureProps) {
 
 	return (
 		<PageShell>
+			<ProjectTabs
+				organizationSlug={activeOrganization.slug}
+				projectId={projectId}
+				active="doe"
+				doeLabel="DOE"
+			/>
 			<DoeCreateFeature
 				organizationId={activeOrganization.id}
 				projectId={projectId}

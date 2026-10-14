@@ -13,6 +13,7 @@ import { mutationErrorMessage } from '#/lib/api-error'
 import { buildOrgPath } from '#/modules/org-path'
 import { DeleteDoeFeature } from '#/pages/doe/feature/delete-doe-feature'
 import { DoeSupplyPickerFeature } from '#/pages/doe/feature/doe-supply-picker-feature'
+import { doeTabLabel } from '#/pages/doe/lib/new-doe'
 import { buildUpdatePayload, canSave, doeToForm } from '#/pages/doe/lib/payload'
 import {
 	enabledNumberedSections,
@@ -44,6 +45,7 @@ import type {
 import { DoeEditorUI, INFO_TAB, PLAN_TAB } from '#/pages/doe/ui/doe-editor-ui'
 import type { SectionActions } from '#/pages/doe/ui/doe-section-tab'
 import { DoeSupplySheet } from '#/pages/doe/ui/doe-supply-sheet'
+import { ProjectTabs } from '#/pages/projects/ui/project-tabs'
 
 interface DoeEditorFeatureProps {
 	doe: Doe
@@ -361,6 +363,14 @@ export function DoeEditorFeature({
 	return (
 		<>
 			<DoeEditorUI
+				projectTabs={
+					<ProjectTabs
+						organizationSlug={organizationSlug}
+						projectId={projectId}
+						active="doe"
+						doeLabel={doeTabLabel({ revision: doe.revision })}
+					/>
+				}
 				header={{
 					organizationSlug,
 					projectId,

@@ -24,7 +24,11 @@ function project(overrides: Partial<Project> = {}): Project {
 function baseProps() {
 	return {
 		organizationName: 'Atelier Vert',
+		organizationSlug: 'atelier-vert',
 		projects: [project()],
+		withDoeOnly: false,
+		doeRevision: () => null,
+		onWithDoeOnlyChange: vi.fn(),
 		customerName: () => 'Duval Maçonnerie',
 		search: '',
 		includeArchived: false,
@@ -131,5 +135,30 @@ describe('ProjectsList', () => {
 		)
 
 		expect(screen.getByText(/aucun projet/i)).toBeDefined()
+	})
+
+	it('opens the project from its name', async () => {
+		await renderWithRouter(
+			wrapWithPermissions(<ProjectsList {...baseProps()} />),
+		)
+
+		expect(
+			screen.getByRole('link', { name: /Jardin Duval/ }).getAttribute('href'),
+		).toBe('/o/atelier-vert/planification/projects/project-1')
+	})
+
+	it('shows the state of each project DOE', async () => {
+		await renderWithRouter(
+			wrapWithPermissions(
+				<ProjectsList
+					{...baseProps()}
+					projects={[project(), project({ id: 'p2', name: 'Parc de Vichy' })]}
+					doeRevision={(id) => (id === 'project-1' ? 'B' : null)}
+				/>,
+			),
+		)
+
+		expect(screen.getByRole('link', { name: 'Indice B' })).toBeDefined()
+		expect(screen.getByText('Aucun DOE')).toBeDefined()
 	})
 })

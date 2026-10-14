@@ -1,24 +1,14 @@
-import { createFileRoute } from '@tanstack/react-router'
-import { ProjectTemplatesFeature } from '#/pages/project-templates/feature/project-templates-feature'
-import { projectTemplatesSearchSchema } from '#/pages/project-templates/types'
+import { createFileRoute, redirect } from '@tanstack/react-router'
+import { buildOrgPath } from '#/modules/org-path'
 
+/** Moved to Settings › Modèles; the old address still resolves. */
 export const Route = createFileRoute(
 	'/_app/o/$organizationSlug/planification/project-templates',
 )({
-	validateSearch: (search) => projectTemplatesSearchSchema.parse(search),
-	component: ProjectTemplatesPage,
+	beforeLoad: ({ params }) => {
+		throw redirect({
+			to: buildOrgPath(params.organizationSlug, '/settings'),
+			hash: 'modeles',
+		})
+	},
 })
-
-function ProjectTemplatesPage() {
-	const { archived } = Route.useSearch()
-	const navigate = Route.useNavigate()
-
-	return (
-		<ProjectTemplatesFeature
-			includeArchived={archived}
-			onIncludeArchivedChange={(archived) =>
-				navigate({ search: (prev) => ({ ...prev, archived }) })
-			}
-		/>
-	)
-}
