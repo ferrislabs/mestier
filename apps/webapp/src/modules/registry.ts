@@ -241,6 +241,17 @@ export const MODULES: AppModule[] = [
 				requiredPermission: 'MANAGE_PLANNING',
 				tabs: [
 					{
+						id: 'maintenance-grid',
+						label: 'Grille',
+						to: '/planification/maintenance',
+						exact: true,
+					},
+					{
+						id: 'maintenance-contracts',
+						label: 'Contrats',
+						to: '/planification/maintenance/contracts',
+					},
+					{
 						id: 'recap',
 						label: 'Récap',
 						to: '/planification/maintenance/recap',
@@ -258,26 +269,6 @@ export const MODULES: AppModule[] = [
 				to: '/planification/board',
 				icon: KanbanSquare,
 				requiredPermission: 'MANAGE_PLANNING',
-			},
-			{
-				id: 'maintenance',
-				label: 'Entretien',
-				to: '/planification/maintenance',
-				icon: Sprout,
-				requiredPermission: 'MANAGE_PLANNING',
-				tabs: [
-					{
-						id: 'maintenance-grid',
-						label: 'Grille',
-						to: '/planification/maintenance',
-						exact: true,
-					},
-					{
-						id: 'maintenance-contracts',
-						label: 'Contrats',
-						to: '/planification/maintenance/contracts',
-					},
-				],
 			},
 		],
 	},
