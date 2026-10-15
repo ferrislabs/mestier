@@ -148,6 +148,7 @@ describe('module routability', () => {
 			'/planification/does',
 			'/planification/project-templates',
 			'/planification/doe-models',
+			'/planification/maintenance',
 			'/planification/board',
 		])
 	})

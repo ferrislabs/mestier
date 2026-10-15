@@ -17,6 +17,7 @@ import {
 	Receipt,
 	Settings,
 	ShoppingCart,
+	Sprout,
 	TrendingUp,
 	Truck,
 	Users,
@@ -230,6 +231,25 @@ export const MODULES: AppModule[] = [
 				to: '/planification/doe-models',
 				icon: FileText,
 				requiredPermission: 'MANAGE_PLANNING',
+			},
+			{
+				id: 'maintenance',
+				label: 'Entretien',
+				to: '/planification/maintenance',
+				icon: Sprout,
+				requiredPermission: 'MANAGE_PLANNING',
+				tabs: [
+					{
+						id: 'recap',
+						label: 'Récap',
+						to: '/planification/maintenance/recap',
+					},
+					{
+						id: 'validation',
+						label: 'À valider',
+						to: '/planification/maintenance/validation',
+					},
+				],
 			},
 			{
 				id: 'board',

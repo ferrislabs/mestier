@@ -7,6 +7,7 @@ import {
 	RefreshCw,
 	Square,
 } from 'lucide-react'
+import type { ReactNode } from 'react'
 import { Button } from '#/components/ui/button'
 import { Input } from '#/components/ui/input'
 import { Label } from '#/components/ui/label'
@@ -93,6 +94,12 @@ interface FieldDayUIProps {
 	onDraftCommentChange: (value: string) => void
 	onSubmitReport: () => void
 	onWithdrawReport: (reportId: string) => void
+	/**
+	 * What a task that carries a maintenance line shows under its start button.
+	 * A slot, because declaring a visit is a request of its own and this file
+	 * does not fetch.
+	 */
+	renderMaintenance?: (task: FieldTask) => ReactNode
 }
 
 /**
@@ -144,6 +151,7 @@ export function FieldDayUI({
 	onDraftCommentChange,
 	onSubmitReport,
 	onWithdrawReport,
+	renderMaintenance,
 }: FieldDayUIProps) {
 	const current = runningTask(tasks, running)
 
@@ -341,6 +349,10 @@ export function FieldDayUI({
 											{running ? 'Basculer sur ce projet' : 'Démarrer'}
 										</Button>
 									) : null}
+
+									{task.maintenance_line_id && renderMaintenance
+										? renderMaintenance(task)
+										: null}
 
 									<TaskReportPanel
 										task={task}
