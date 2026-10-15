@@ -14,14 +14,14 @@ use axum::{
     response::{IntoResponse, Response},
 };
 use axum_extra::routing::{RouterExt, TypedPath};
-use chrono::{NaiveDate, Weekday};
-use doc_render::{MaintenanceRecap, TypstRecapRenderer};
+use chrono::{Datelike, NaiveDate, Utc, Weekday};
+use doc_render::{MaintenanceRecap, RecapContact, RecapRow, TypstRecapRenderer};
 use handlers::{ApiError, AppState, resolve_actor};
 use http::{
     StatusCode,
     header::{CONTENT_DISPOSITION, CONTENT_TYPE},
 };
-use mestier_core::OrganizationId;
+use mestier_core::{IsoWeekNumber, OrganizationId, Recap, RecapLine, SiteContact};
 use serde::Deserialize;
 use tokio::sync::Semaphore;
 
@@ -67,10 +67,9 @@ pub async fn handler(
     Extension(identity): Extension<Identity>,
 ) -> Result<Response, ApiError> {
     require_org_membership(&state, &identity, organization_id).await?;
-    require_planning_manage(&state, &identity, organization_id).await?;
     let week_start = parse_week(&query.week)?;
 
-    let recap = recap_document(&state, organization_id, week_start).await?;
+    let recap = recap_document(&state, &identity, organization_id, week_start).await?;
     let bytes = render_off_the_executor(recap).await?;
 
     Ok((
@@ -84,33 +83,65 @@ pub async fn handler(
         .into_response())
 }
 
-/// The data seam. WS3 builds the recap (`GET /maintenance/recap`); this must
-/// call the same use case and map its lines to `RecapRow`. Until it lands the
-/// PDF is laid out from `MaintenanceRecap::sample`, so the route, the
-/// permission and the layout can be exercised.
+/// The same use case as `GET /maintenance/recap`, which also enforces
+/// `planning.manage`, so the page and the PDF list the same lines.
 async fn recap_document(
-    _state: &AppState,
-    _organization_id: OrganizationId,
-    week_start: NaiveDate,
-) -> Result<MaintenanceRecap, ApiError> {
-    Ok(MaintenanceRecap::sample(week_start))
-}
-
-async fn require_planning_manage(
     state: &AppState,
     identity: &Identity,
     organization_id: OrganizationId,
-) -> Result<(), ApiError> {
-    let (user_id, _) = resolve_actor(state, identity).await?;
-    let iam_roles = match identity {
-        Identity::User(user) => user.roles.clone(),
-        Identity::Client(client) => client.roles.clone(),
-    };
-    state
+    week_start: NaiveDate,
+) -> Result<MaintenanceRecap, ApiError> {
+    let iso = week_start.iso_week();
+    let week = u8::try_from(iso.week())
+        .ok()
+        .and_then(|week| IsoWeekNumber::try_from(week).ok())
+        .ok_or(ApiError::Internal)?;
+    let (_, actor) = resolve_actor(state, identity).await?;
+
+    let recap = state
         .usecase
-        .authorize_action(user_id, iam_roles, organization_id, "planning.manage")
+        .maintenance_recap(actor, organization_id, iso.year(), week)
         .await?;
-    Ok(())
+
+    Ok(document_of(&recap, week_start, Utc::now().date_naive()))
+}
+
+fn document_of(recap: &Recap, week_start: NaiveDate, generated_on: NaiveDate) -> MaintenanceRecap {
+    let rows = recap
+        .groups
+        .iter()
+        .flat_map(|group| &group.lines)
+        .filter_map(row_of)
+        .collect();
+    MaintenanceRecap {
+        week_start,
+        generated_on,
+        rows,
+    }
+}
+
+/// A line without a due date is never in a recap; it is skipped rather than
+/// printed with an invented date.
+fn row_of(line: &RecapLine) -> Option<RecapRow> {
+    Some(RecapRow {
+        reference: line.reference.clone(),
+        site: format!("{} - {}", line.site.customer_name, line.site.site_label),
+        town: line.site.city.clone().unwrap_or_default(),
+        line: line.label.clone(),
+        last_visit: line.last_done_on,
+        due_on: line.due.on?,
+        overdue: line.is_overdue(),
+        planned_minutes: line.minutes_per_intervention,
+        contact: line.site.contact.as_ref().map(contact_of),
+    })
+}
+
+fn contact_of(contact: &SiteContact) -> RecapContact {
+    RecapContact {
+        name: contact.name.clone(),
+        phone: contact.phone.clone(),
+        email: contact.email.clone(),
+    }
 }
 
 /// `2026-W43` to the Monday of that week.
@@ -170,6 +201,11 @@ async fn render_off_the_executor(recap: MaintenanceRecap) -> Result<Vec<u8>, Api
 
 #[cfg(test)]
 mod tests {
+    use mestier_core::{
+        ContractSite, Due, DueStatus, MaintenanceContractId, MaintenanceLineId, RecapGroup,
+    };
+    use uuid::Uuid;
+
     use super::*;
 
     fn date(y: i32, m: u32, d: u32) -> NaiveDate {
@@ -215,6 +251,108 @@ mod tests {
             "attachment; filename=\"recap-entretien-2026-S43.pdf\""
         );
         assert!(http::HeaderValue::from_str(&header).is_ok());
+    }
+
+    fn line(label: &str, due_on: Option<NaiveDate>, status: DueStatus) -> RecapLine {
+        RecapLine {
+            line_id: MaintenanceLineId(Uuid::nil()),
+            contract_id: MaintenanceContractId(Uuid::nil()),
+            reference: Some("C25029".to_owned()),
+            site: ContractSite {
+                customer_name: "GAUME".to_owned(),
+                site_label: "Domaine".to_owned(),
+                address_line: None,
+                postal_code: None,
+                city: Some("Saint-Pourçain-sur-Sioule".to_owned()),
+                contact: Some(SiteContact {
+                    name: "Odette Gaume".to_owned(),
+                    phone: Some("04 70 00 00 00".to_owned()),
+                    email: None,
+                }),
+            },
+            label: label.to_owned(),
+            minutes_per_intervention: Some(90),
+            last_done_on: Some(date(2026, 9, 21)),
+            due: Due { on: due_on, status },
+        }
+    }
+
+    fn recap_of(groups: Vec<RecapGroup>) -> Recap {
+        Recap {
+            year: 2026,
+            week: IsoWeekNumber::try_from(43).unwrap(),
+            groups,
+        }
+    }
+
+    #[test]
+    fn every_line_of_every_town_becomes_a_row_with_what_the_recap_knows() {
+        let late = line("En retard", Some(date(2026, 10, 12)), DueStatus::Overdue);
+        let mut on_time = line(
+            "Cette semaine",
+            Some(date(2026, 10, 21)),
+            DueStatus::ThisWeek,
+        );
+        on_time.site.city = None;
+        on_time.site.contact = None;
+        let recap = recap_of(vec![
+            RecapGroup {
+                town: Some("Saint-Pourçain-sur-Sioule".to_owned()),
+                lines: vec![late],
+            },
+            RecapGroup {
+                town: None,
+                lines: vec![on_time],
+            },
+        ]);
+
+        let document = document_of(&recap, date(2026, 10, 19), date(2026, 10, 15));
+
+        assert_eq!(document.week_start, date(2026, 10, 19));
+        assert_eq!(document.generated_on, date(2026, 10, 15));
+        assert_eq!(
+            document.rows,
+            [
+                RecapRow {
+                    reference: Some("C25029".to_owned()),
+                    site: "GAUME - Domaine".to_owned(),
+                    town: "Saint-Pourçain-sur-Sioule".to_owned(),
+                    line: "En retard".to_owned(),
+                    last_visit: Some(date(2026, 9, 21)),
+                    due_on: date(2026, 10, 12),
+                    overdue: true,
+                    planned_minutes: Some(90),
+                    contact: Some(RecapContact {
+                        name: "Odette Gaume".to_owned(),
+                        phone: Some("04 70 00 00 00".to_owned()),
+                        email: None,
+                    }),
+                },
+                RecapRow {
+                    reference: Some("C25029".to_owned()),
+                    site: "GAUME - Domaine".to_owned(),
+                    town: String::new(),
+                    line: "Cette semaine".to_owned(),
+                    last_visit: Some(date(2026, 9, 21)),
+                    due_on: date(2026, 10, 21),
+                    overdue: false,
+                    planned_minutes: Some(90),
+                    contact: None,
+                },
+            ]
+        );
+    }
+
+    #[test]
+    fn a_line_with_no_due_date_is_left_out() {
+        let recap = recap_of(vec![RecapGroup {
+            town: None,
+            lines: vec![line("Terminée", None, DueStatus::Done)],
+        }]);
+
+        let document = document_of(&recap, date(2026, 10, 19), date(2026, 10, 15));
+
+        assert!(document.rows.is_empty());
     }
 
     #[tokio::test]

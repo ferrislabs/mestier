@@ -102,12 +102,21 @@ async fn seed_intruder(pool: &PgPool) -> Intruder {
     }
 }
 
-struct Site {
-    customer_id: Uuid,
-    context_id: Uuid,
+pub(crate) struct Site {
+    pub(crate) customer_id: Uuid,
+    pub(crate) context_id: Uuid,
 }
 
 async fn seed_site(app: &harness::App, customer: &str, label: &str) -> Site {
+    seed_site_in(app, customer, label, "Vichy").await
+}
+
+pub(crate) async fn seed_site_in(
+    app: &harness::App,
+    customer: &str,
+    label: &str,
+    city: &str,
+) -> Site {
     let customer_id = Uuid::now_v7();
     sqlx::query("INSERT INTO customers (id, org_id, name) VALUES ($1, $2, $3)")
         .bind(customer_id)
@@ -119,11 +128,12 @@ async fn seed_site(app: &harness::App, customer: &str, label: &str) -> Site {
 
     let context_id = Uuid::now_v7();
     sqlx::query(
-        "INSERT INTO customer_contexts (id, customer_id, label, city) VALUES ($1, $2, $3, 'Vichy')",
+        "INSERT INTO customer_contexts (id, customer_id, label, city) VALUES ($1, $2, $3, $4)",
     )
     .bind(context_id)
     .bind(customer_id)
     .bind(label)
+    .bind(city)
     .execute(&app.pool)
     .await
     .expect("seed the site");
@@ -134,7 +144,7 @@ async fn seed_site(app: &harness::App, customer: &str, label: &str) -> Site {
     }
 }
 
-async fn cleanup(app: &harness::App) {
+pub(crate) async fn cleanup(app: &harness::App) {
     for statement in [
         "DELETE FROM maintenance_interventions WHERE org_id = $1",
         "DELETE FROM maintenance_lines WHERE org_id = $1",
@@ -188,7 +198,7 @@ fn create_body(site: &Site, lines: Vec<Value>) -> Value {
     })
 }
 
-async fn create_contract(app: &harness::App, site: &Site, lines: Vec<Value>) -> Value {
+pub(crate) async fn create_contract(app: &harness::App, site: &Site, lines: Vec<Value>) -> Value {
     let created = reqwest::Client::new()
         .post(contracts_url(app, app.organization_id, ""))
         .bearer_auth(&app.token)

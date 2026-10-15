@@ -29,6 +29,7 @@ utoipa = { workspace = true }
 args = { workspace = true }
 clap = { workspace = true }
 jsonwebtoken = { workspace = true }
+lopdf = { version = "0.44.0", default-features = false }
 reqwest = { workspace = true }
 serde_json = { workspace = true }
 sqlx = { workspace = true }
