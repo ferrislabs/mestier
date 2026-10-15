@@ -106,10 +106,10 @@ describe('buildBreadcrumbItems', () => {
 		expect(
 			labelsOf('/o/baptiste/planification/projects/abc-123', 'Cuisine Dupont'),
 		).toEqual(['Baptiste', 'Planification', 'Projets', 'Cuisine Dupont'])
-		expect(labelsOf('/o/baptiste/planification/project-templates')).toEqual([
+		expect(labelsOf('/o/baptiste/planification/board')).toEqual([
 			'Baptiste',
 			'Planification',
-			'Modèles de projet',
+			'Tableau',
 		])
 	})
 })

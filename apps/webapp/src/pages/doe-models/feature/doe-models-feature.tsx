@@ -12,7 +12,6 @@ import {
 	useUpdateDoeModel,
 } from '#/hooks/use-doe-models'
 import { mutationErrorMessage } from '#/lib/api-error'
-import { NewDoeDialogFeature } from '#/pages/doe/feature/new-doe-dialog-feature'
 import {
 	buildModelRequest,
 	emptyModelDraft,
@@ -38,7 +37,6 @@ export function DoeModelsFeature(props: DoeModelsFeatureProps) {
 		<DoeModelsWorkspace
 			key={activeOrganization.id}
 			organizationId={activeOrganization.id}
-			organizationName={activeOrganization.name}
 			{...props}
 		/>
 	)
@@ -46,16 +44,13 @@ export function DoeModelsFeature(props: DoeModelsFeatureProps) {
 
 function DoeModelsWorkspace({
 	organizationId,
-	organizationName,
 	includeArchived,
 	onIncludeArchivedChange,
 }: DoeModelsFeatureProps & {
 	organizationId: string
-	organizationName: string
 }) {
 	const [draft, setDraft] = useState<ModelDraft | null>(null)
 	const [startersOpen, setStartersOpen] = useState(false)
-	const [doeModelId, setDoeModelId] = useState<string | null>(null)
 
 	const models = useDoeModels(organizationId, includeArchived)
 	const starters = useDoeModelStarters(organizationId, startersOpen)
@@ -93,7 +88,6 @@ function DoeModelsWorkspace({
 	return (
 		<>
 			<DoeModelsList
-				organizationName={organizationName}
 				models={rows}
 				includeArchived={includeArchived}
 				isLoading={models.isLoading}
@@ -105,7 +99,6 @@ function DoeModelsWorkspace({
 				onIncludeArchivedChange={onIncludeArchivedChange}
 				onCreate={() => setDraft(emptyModelDraft())}
 				onOpenStarters={() => setStartersOpen(true)}
-				onCreateDoe={(model) => setDoeModelId(model.id)}
 				onEdit={(model) =>
 					setDraft(modelToDraft(model, () => crypto.randomUUID()))
 				}
@@ -177,14 +170,6 @@ function DoeModelsWorkspace({
 				}
 				onSubmit={() => {
 					void submit().catch(() => {})
-				}}
-			/>
-
-			<NewDoeDialogFeature
-				open={doeModelId !== null}
-				presetModelId={doeModelId}
-				onOpenChange={(open) => {
-					if (!open) setDoeModelId(null)
 				}}
 			/>
 

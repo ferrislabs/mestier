@@ -4,7 +4,6 @@ import {
 	ArrowLeft,
 	Building2,
 	Clock,
-	FileText,
 	KanbanSquare,
 	Loader2,
 	Receipt,
@@ -29,7 +28,7 @@ import type { Project } from '#/hooks/use-projects'
 import type { Period, ProjectProfitability } from '#/hooks/use-reporting'
 import type { ProjectSupplierCosts } from '#/hooks/use-supplier-invoices'
 import { buildOrgPath } from '#/modules/org-path'
-import { type DoeButtonState, doeButtonLabel } from '#/pages/doe/lib/new-doe'
+import { type DoeButtonState, doeTabLabel } from '#/pages/doe/lib/new-doe'
 import {
 	eurosToCents,
 	formatDate,
@@ -38,6 +37,7 @@ import {
 	invoiceStatusLabel,
 } from '#/pages/invoices/types'
 import type { InvoicerMode } from '#/pages/projects/types'
+import { ProjectTabs } from '#/pages/projects/ui/project-tabs'
 import { BillingAddressField } from '#/pages/quotes/ui/billing-address-field'
 import { incompleteReason, plannedCostCents } from '#/pages/reporting/types'
 
@@ -169,20 +169,6 @@ export function ProjectDetailUI({
 								Voir dans le tableau
 							</Link>
 						</Button>
-						{canOpenDoe ? (
-							<Button asChild variant="outline">
-								<Link
-									to={buildOrgPath(
-										organizationSlug,
-										'/planification/projects/$projectId/doe',
-									)}
-									params={{ projectId: project.id }}
-								>
-									<FileText />
-									{doeButtonLabel(doeState)}
-								</Link>
-							</Button>
-						) : null}
 						<Button asChild variant="outline">
 							<Link
 								to={buildOrgPath(organizationSlug, '/planification/projects')}
@@ -194,6 +180,15 @@ export function ProjectDetailUI({
 					</div>
 				}
 			/>
+
+			{canOpenDoe ? (
+				<ProjectTabs
+					organizationSlug={organizationSlug}
+					projectId={project.id}
+					active="overview"
+					doeLabel={doeTabLabel(doeState)}
+				/>
+			) : null}
 
 			{error ? (
 				<div className="rounded-lg border border-destructive/30 bg-destructive-soft px-4 py-3 text-sm text-destructive">

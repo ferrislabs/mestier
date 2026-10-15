@@ -90,24 +90,30 @@ describe('ProjectDetailUI — lien vers le tableau', () => {
 	})
 })
 
-describe('ProjectDetailUI — bouton DOE', () => {
+describe('ProjectDetailUI — onglet DOE', () => {
 	it('shows the revision when the project has a DOE', async () => {
 		await renderWithRouter(
 			<ProjectDetailUI {...PROPS} canOpenDoe doeState={{ revision: 'B' }} />,
 		)
 
-		const link = screen.getByRole('link', { name: /Ouvrir le DOE · indice B/ })
+		const link = screen.getByRole('link', { name: 'DOE · indice B' })
 
 		expect(link.getAttribute('href')).toBe(
 			'/o/acme/planification/projects/project-1/doe',
 		)
 	})
 
-	it('offers to create it when there is none', async () => {
+	it('still offers the tab when there is no DOE yet', async () => {
 		await renderWithRouter(
 			<ProjectDetailUI {...PROPS} canOpenDoe doeState="none" />,
 		)
 
-		expect(screen.getByRole('link', { name: /Créer le DOE/ })).toBeDefined()
+		expect(screen.getByRole('link', { name: 'DOE' })).toBeDefined()
+	})
+
+	it('hides the tab without the planning permission', async () => {
+		await renderWithRouter(<ProjectDetailUI {...PROPS} doeState="none" />)
+
+		expect(screen.queryByRole('link', { name: 'DOE' })).toBeNull()
 	})
 })

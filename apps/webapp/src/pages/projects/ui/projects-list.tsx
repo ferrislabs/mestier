@@ -1,3 +1,4 @@
+import { Link } from '@tanstack/react-router'
 import type { ColumnDef } from '@tanstack/react-table'
 import {
 	Building2,
@@ -26,14 +27,20 @@ import {
 } from '#/components/ui/surface'
 import type { Project } from '#/hooks/use-projects'
 import { cn } from '#/lib/utils'
+import { buildOrgPath } from '#/modules/org-path'
 
 export interface ProjectsListProps {
 	organizationName: string
+	organizationSlug: string
 	projects: Project[]
 	/** Resolves a customer id into a name, or `null` while unknown. */
 	customerName: (customerId: string) => string | null
 	search: string
 	includeArchived: boolean
+	/** Only the projects that already have a DOE. */
+	withDoeOnly: boolean
+	/** The revision of a project's DOE, `null` when it has none. */
+	doeRevision: (projectId: string) => string | null
 	/** The row the profitability screen linked at, highlighted once. */
 	highlightedProjectId?: string
 	isLoading: boolean
@@ -44,6 +51,7 @@ export interface ProjectsListProps {
 	isBuildingTemplate: boolean
 	onSearchChange: (search: string) => void
 	onIncludeArchivedChange: (includeArchived: boolean) => void
+	onWithDoeOnlyChange: (withDoeOnly: boolean) => void
 	onCreate: () => void
 	onStartFromTemplate: () => void
 	onEdit: (project: Project) => void
@@ -60,10 +68,13 @@ export interface ProjectsListProps {
  */
 export function ProjectsList({
 	organizationName,
+	organizationSlug,
 	projects,
 	customerName,
 	search,
 	includeArchived,
+	withDoeOnly,
+	doeRevision,
 	highlightedProjectId,
 	isLoading,
 	error,
@@ -72,6 +83,7 @@ export function ProjectsList({
 	isBuildingTemplate,
 	onSearchChange,
 	onIncludeArchivedChange,
+	onWithDoeOnlyChange,
 	onCreate,
 	onStartFromTemplate,
 	onEdit,
@@ -96,7 +108,16 @@ export function ProjectsList({
 								'-mx-2 rounded-md bg-primary/5 px-2 py-1',
 						)}
 					>
-						<RowIdentity title={row.original.name} id={row.original.id} />
+						<Link
+							to={buildOrgPath(
+								organizationSlug,
+								'/planification/projects/$projectId',
+							)}
+							params={{ projectId: row.original.id }}
+							className="min-w-0 hover:underline"
+						>
+							<RowIdentity title={row.original.name} id={row.original.id} />
+						</Link>
 						<div className="flex flex-wrap gap-1">
 							{row.original.is_internal ? (
 								<Badge variant="secondary" className="gap-1">
@@ -136,6 +157,30 @@ export function ProjectsList({
 							Aucun, pas de marge
 						</span>
 					),
+			},
+			{
+				id: 'doe',
+				header: 'DOE',
+				cell: ({ row }) => {
+					const revision = doeRevision(row.original.id)
+					if (revision === null) {
+						return (
+							<span className="text-muted-foreground italic">Aucun DOE</span>
+						)
+					}
+					return (
+						<Link
+							to={buildOrgPath(
+								organizationSlug,
+								'/planification/projects/$projectId/doe',
+							)}
+							params={{ projectId: row.original.id }}
+							className="hover:underline"
+						>
+							Indice {revision}
+						</Link>
+					)
+				},
 			},
 			{
 				id: 'actions',
@@ -182,7 +227,9 @@ export function ProjectsList({
 		],
 		[
 			customerName,
+			doeRevision,
 			editingId,
+			organizationSlug,
 			highlightedProjectId,
 			isBuildingTemplate,
 			isSaving,
@@ -248,17 +295,33 @@ export function ProjectsList({
 						className="pl-9"
 					/>
 				</div>
-				<div className="flex items-center gap-2">
-					<input
-						id="include-archived"
-						type="checkbox"
-						className="size-4"
-						checked={includeArchived}
-						onChange={(event) => onIncludeArchivedChange(event.target.checked)}
-					/>
-					<Label htmlFor="include-archived" className="text-sm">
-						Afficher les projets archivés
-					</Label>
+				<div className="flex items-center gap-4">
+					<div className="flex items-center gap-2">
+						<input
+							id="with-doe-only"
+							type="checkbox"
+							className="size-4"
+							checked={withDoeOnly}
+							onChange={(event) => onWithDoeOnlyChange(event.target.checked)}
+						/>
+						<Label htmlFor="with-doe-only" className="text-sm">
+							Seulement les projets avec un DOE
+						</Label>
+					</div>
+					<div className="flex items-center gap-2">
+						<input
+							id="include-archived"
+							type="checkbox"
+							className="size-4"
+							checked={includeArchived}
+							onChange={(event) =>
+								onIncludeArchivedChange(event.target.checked)
+							}
+						/>
+						<Label htmlFor="include-archived" className="text-sm">
+							Afficher les projets archivés
+						</Label>
+					</div>
 				</div>
 			</div>
 

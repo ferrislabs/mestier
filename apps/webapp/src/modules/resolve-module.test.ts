@@ -59,8 +59,6 @@ describe('resolveModule', () => {
 	 */
 	it('keeps the planning and planification modules apart', () => {
 		expect(resolveModule('/planning/calendar').id).toBe('planning')
-		expect(resolveModule('/planification/project-templates').id).toBe(
-			'planification',
-		)
+		expect(resolveModule('/planification/projects').id).toBe('planification')
 	})
 })
