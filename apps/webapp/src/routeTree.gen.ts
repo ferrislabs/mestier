@@ -54,6 +54,7 @@ import { Route as AppOOrganizationSlugPlanningProjectsProjectIdRouteImport } fro
 import { Route as AppOOrganizationSlugPlanificationProjectsProjectIdRouteImport } from './routes/_app.o.$organizationSlug.planification.projects.$projectId'
 import { Route as AppOOrganizationSlugPlanificationMaintenanceValidationRouteImport } from './routes/_app.o.$organizationSlug.planification.maintenance.validation'
 import { Route as AppOOrganizationSlugPlanificationMaintenanceRecapRouteImport } from './routes/_app.o.$organizationSlug.planification.maintenance.recap'
+import { Route as AppOOrganizationSlugPlanificationMaintenanceContractsRouteImport } from './routes/_app.o.$organizationSlug.planification.maintenance.contracts'
 import { Route as AppOOrganizationSlugCrmQuotesNewRouteImport } from './routes/_app.o.$organizationSlug.crm.quotes.new'
 import { Route as AppOOrganizationSlugCrmQuotesQuoteIdRouteImport } from './routes/_app.o.$organizationSlug.crm.quotes.$quoteId'
 import { Route as AppOOrganizationSlugCrmInvoicesNewRouteImport } from './routes/_app.o.$organizationSlug.crm.invoices.new'
@@ -333,6 +334,12 @@ const AppOOrganizationSlugPlanificationMaintenanceRecapRoute =
     path: '/planification/maintenance/recap',
     getParentRoute: () => AppOOrganizationSlugRoute,
   } as any)
+const AppOOrganizationSlugPlanificationMaintenanceContractsRoute =
+  AppOOrganizationSlugPlanificationMaintenanceContractsRouteImport.update({
+    id: '/planification/maintenance/contracts',
+    path: '/planification/maintenance/contracts',
+    getParentRoute: () => AppOOrganizationSlugRoute,
+  } as any)
 const AppOOrganizationSlugCrmQuotesNewRoute =
   AppOOrganizationSlugCrmQuotesNewRouteImport.update({
     id: '/crm/quotes/new',
@@ -442,6 +449,7 @@ export interface FileRoutesByFullPath {
   '/o/$organizationSlug/crm/invoices/new': typeof AppOOrganizationSlugCrmInvoicesNewRoute
   '/o/$organizationSlug/crm/quotes/$quoteId': typeof AppOOrganizationSlugCrmQuotesQuoteIdRouteWithChildren
   '/o/$organizationSlug/crm/quotes/new': typeof AppOOrganizationSlugCrmQuotesNewRoute
+  '/o/$organizationSlug/planification/maintenance/contracts': typeof AppOOrganizationSlugPlanificationMaintenanceContractsRoute
   '/o/$organizationSlug/planification/maintenance/recap': typeof AppOOrganizationSlugPlanificationMaintenanceRecapRoute
   '/o/$organizationSlug/planification/maintenance/validation': typeof AppOOrganizationSlugPlanificationMaintenanceValidationRoute
   '/o/$organizationSlug/planification/projects/$projectId': typeof AppOOrganizationSlugPlanificationProjectsProjectIdRoute
@@ -497,6 +505,7 @@ export interface FileRoutesByTo {
   '/o/$organizationSlug/crm/invoices/new': typeof AppOOrganizationSlugCrmInvoicesNewRoute
   '/o/$organizationSlug/crm/quotes/$quoteId': typeof AppOOrganizationSlugCrmQuotesQuoteIdRouteWithChildren
   '/o/$organizationSlug/crm/quotes/new': typeof AppOOrganizationSlugCrmQuotesNewRoute
+  '/o/$organizationSlug/planification/maintenance/contracts': typeof AppOOrganizationSlugPlanificationMaintenanceContractsRoute
   '/o/$organizationSlug/planification/maintenance/recap': typeof AppOOrganizationSlugPlanificationMaintenanceRecapRoute
   '/o/$organizationSlug/planification/maintenance/validation': typeof AppOOrganizationSlugPlanificationMaintenanceValidationRoute
   '/o/$organizationSlug/planification/projects/$projectId': typeof AppOOrganizationSlugPlanificationProjectsProjectIdRoute
@@ -556,6 +565,7 @@ export interface FileRoutesById {
   '/_app/o/$organizationSlug/crm/invoices/new': typeof AppOOrganizationSlugCrmInvoicesNewRoute
   '/_app/o/$organizationSlug/crm/quotes/$quoteId': typeof AppOOrganizationSlugCrmQuotesQuoteIdRouteWithChildren
   '/_app/o/$organizationSlug/crm/quotes/new': typeof AppOOrganizationSlugCrmQuotesNewRoute
+  '/_app/o/$organizationSlug/planification/maintenance/contracts': typeof AppOOrganizationSlugPlanificationMaintenanceContractsRoute
   '/_app/o/$organizationSlug/planification/maintenance/recap': typeof AppOOrganizationSlugPlanificationMaintenanceRecapRoute
   '/_app/o/$organizationSlug/planification/maintenance/validation': typeof AppOOrganizationSlugPlanificationMaintenanceValidationRoute
   '/_app/o/$organizationSlug/planification/projects/$projectId': typeof AppOOrganizationSlugPlanificationProjectsProjectIdRoute
@@ -615,6 +625,7 @@ export interface FileRouteTypes {
     | '/o/$organizationSlug/crm/invoices/new'
     | '/o/$organizationSlug/crm/quotes/$quoteId'
     | '/o/$organizationSlug/crm/quotes/new'
+    | '/o/$organizationSlug/planification/maintenance/contracts'
     | '/o/$organizationSlug/planification/maintenance/recap'
     | '/o/$organizationSlug/planification/maintenance/validation'
     | '/o/$organizationSlug/planification/projects/$projectId'
@@ -670,6 +681,7 @@ export interface FileRouteTypes {
     | '/o/$organizationSlug/crm/invoices/new'
     | '/o/$organizationSlug/crm/quotes/$quoteId'
     | '/o/$organizationSlug/crm/quotes/new'
+    | '/o/$organizationSlug/planification/maintenance/contracts'
     | '/o/$organizationSlug/planification/maintenance/recap'
     | '/o/$organizationSlug/planification/maintenance/validation'
     | '/o/$organizationSlug/planification/projects/$projectId'
@@ -728,6 +740,7 @@ export interface FileRouteTypes {
     | '/_app/o/$organizationSlug/crm/invoices/new'
     | '/_app/o/$organizationSlug/crm/quotes/$quoteId'
     | '/_app/o/$organizationSlug/crm/quotes/new'
+    | '/_app/o/$organizationSlug/planification/maintenance/contracts'
     | '/_app/o/$organizationSlug/planification/maintenance/recap'
     | '/_app/o/$organizationSlug/planification/maintenance/validation'
     | '/_app/o/$organizationSlug/planification/projects/$projectId'
@@ -1069,6 +1082,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppOOrganizationSlugPlanificationMaintenanceRecapRouteImport
       parentRoute: typeof AppOOrganizationSlugRoute
     }
+    '/_app/o/$organizationSlug/planification/maintenance/contracts': {
+      id: '/_app/o/$organizationSlug/planification/maintenance/contracts'
+      path: '/planification/maintenance/contracts'
+      fullPath: '/o/$organizationSlug/planification/maintenance/contracts'
+      preLoaderRoute: typeof AppOOrganizationSlugPlanificationMaintenanceContractsRouteImport
+      parentRoute: typeof AppOOrganizationSlugRoute
+    }
     '/_app/o/$organizationSlug/crm/quotes/new': {
       id: '/_app/o/$organizationSlug/crm/quotes/new'
       path: '/crm/quotes/new'
@@ -1243,6 +1263,7 @@ interface AppOOrganizationSlugRouteChildren {
   AppOOrganizationSlugCrmInvoicesNewRoute: typeof AppOOrganizationSlugCrmInvoicesNewRoute
   AppOOrganizationSlugCrmQuotesQuoteIdRoute: typeof AppOOrganizationSlugCrmQuotesQuoteIdRouteWithChildren
   AppOOrganizationSlugCrmQuotesNewRoute: typeof AppOOrganizationSlugCrmQuotesNewRoute
+  AppOOrganizationSlugPlanificationMaintenanceContractsRoute: typeof AppOOrganizationSlugPlanificationMaintenanceContractsRoute
   AppOOrganizationSlugPlanificationMaintenanceRecapRoute: typeof AppOOrganizationSlugPlanificationMaintenanceRecapRoute
   AppOOrganizationSlugPlanificationMaintenanceValidationRoute: typeof AppOOrganizationSlugPlanificationMaintenanceValidationRoute
   AppOOrganizationSlugPlanificationProjectsProjectIdRoute: typeof AppOOrganizationSlugPlanificationProjectsProjectIdRoute
@@ -1311,6 +1332,8 @@ const AppOOrganizationSlugRouteChildren: AppOOrganizationSlugRouteChildren = {
   AppOOrganizationSlugCrmQuotesQuoteIdRoute:
     AppOOrganizationSlugCrmQuotesQuoteIdRouteWithChildren,
   AppOOrganizationSlugCrmQuotesNewRoute: AppOOrganizationSlugCrmQuotesNewRoute,
+  AppOOrganizationSlugPlanificationMaintenanceContractsRoute:
+    AppOOrganizationSlugPlanificationMaintenanceContractsRoute,
   AppOOrganizationSlugPlanificationMaintenanceRecapRoute:
     AppOOrganizationSlugPlanificationMaintenanceRecapRoute,
   AppOOrganizationSlugPlanificationMaintenanceValidationRoute:

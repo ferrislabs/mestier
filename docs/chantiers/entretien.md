@@ -131,6 +131,13 @@ Sous `Planification`, dans `modules/registry.ts` :
 - **Entretien › Contrats** : liste par saison, formulaire contrat + prestations, « Dupliquer pour 2027 ».
 - Terrain : sur une tâche d'entretien de « Mes tâches », bouton « Intervention faite » (date du jour par défaut, modifiable, jamais après aujourd'hui). La liste du terrain ne dit pas si une visite est déjà proposée : après l'envoi, le bouton laisse place à une confirmation jusqu'au rechargement.
 
+Précisions de la grille et des contrats (WS5a) :
+- Entretien est une seule entrée du menu Planification (`/planification/maintenance`), avec les onglets Grille et Contrats ; WS5b y ajoute Récap et À valider. La saison se choisit par `?season=` (année courante par défaut).
+- Les colonnes couvrent la plus large des saisons des contrats de l'année ; les semaines hors saison d'un contrat sont hachurées et ne se cliquent pas.
+- La case porte le jour du mois, et la semaine de la case dit de quel mois il s'agit : un jour que cette semaine ne contient pas est refusé. « Au plus aujourd'hui » et « dans la saison » restent le contrôle du backend (409 affiché tel quel).
+- Une case qui a déjà une intervention (validée ou proposée) ne se clique plus : il n'existe ni modification ni suppression d'intervention en v1. Les rejetées n'apparaissent pas.
+- Le formulaire de contrat renvoie tel quel le lien au devis et le statut, qu'il n'affiche pas : le `PUT` remplace tout.
+
 ### Errors
 
 `CoreError` existant. Une cadence ou une date invalide est un `Conflict`, comme ailleurs. Valider une intervention déjà résolue renvoie 409.
