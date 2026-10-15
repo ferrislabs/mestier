@@ -5,8 +5,8 @@ use common::CoreError;
 use uuid::Uuid;
 
 use crate::{
-    CustomerContextId, CustomerId, MemberId, OrganizationId, ProjectId, QuoteId, Task,
-    TaskAssignment, TaskAssignmentId, TaskId, TaskRecurrenceId, TaskStatus,
+    CustomerContextId, CustomerId, MaintenanceLineId, MemberId, OrganizationId, ProjectId, QuoteId,
+    Task, TaskAssignment, TaskAssignmentId, TaskId, TaskRecurrenceId, TaskStatus,
     domain::task::BoardRank,
 };
 
@@ -31,6 +31,7 @@ pub struct TaskRow {
     pub board_rank: Option<String>,
     pub recurrence_id: Option<Uuid>,
     pub occurrence_date: Option<NaiveDate>,
+    pub maintenance_line_id: Option<Uuid>,
     pub deleted_at: Option<DateTime<Utc>>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
@@ -69,6 +70,7 @@ impl TaskRow {
             board_rank: self.board_rank.map(BoardRank),
             recurrence_id: self.recurrence_id.map(TaskRecurrenceId),
             occurrence_date: self.occurrence_date,
+            maintenance_line_id: self.maintenance_line_id.map(MaintenanceLineId),
             deleted_at: self.deleted_at,
             created_at: self.created_at,
             updated_at: self.updated_at,

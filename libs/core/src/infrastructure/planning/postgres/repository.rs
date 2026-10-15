@@ -98,7 +98,7 @@ impl<'tx> PlanningRepository for PgPlanningRepository<'tx> {
                 -- not a calendar — but a `Task` that reports `None` for a rank
                 -- it actually has is a lie the next reader cannot detect.
                 t.board_rank,
-                t.recurrence_id, t.occurrence_date,
+                t.recurrence_id, t.occurrence_date, t.maintenance_line_id,
                 t.deleted_at, t.created_at, t.updated_at,
                 -- Postgres's own nullability analysis of a concatenation
                 -- over a `LEFT JOIN`ed table is not reliable enough to trust

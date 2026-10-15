@@ -24,6 +24,7 @@ import {
 	timeInputValue,
 } from '#/pages/field/types'
 import { FieldDayUI } from '#/pages/field/ui/field-day-ui'
+import { FieldInterventionFeature } from '#/pages/maintenance/feature/field-intervention-feature'
 
 /** Shown when a job switch leaves the worker unclocked, distinct from the
  * generic mutation error: the shared banner would only say the start failed,
@@ -379,6 +380,12 @@ function FieldDayWorkspace({
 			onDraftCommentChange={setDraftComment}
 			onSubmitReport={() => void submitReport()}
 			onWithdrawReport={(reportId) => void withdrawReportById(reportId)}
+			renderMaintenance={(task) => (
+				<FieldInterventionFeature
+					organizationId={organizationId}
+					taskId={task.id}
+				/>
+			)}
 		/>
 	)
 }

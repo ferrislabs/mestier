@@ -1,0 +1,85 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT id, org_id, line_id, done_on, status, task_id, proposed_by,\n                   resolved_by, resolved_at, note, created_at\n            FROM maintenance_interventions\n            WHERE org_id = $1 AND status = $2\n            ORDER BY created_at ASC, id ASC\n            LIMIT $3 OFFSET $4\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "org_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "line_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 3,
+        "name": "done_on",
+        "type_info": "Date"
+      },
+      {
+        "ordinal": 4,
+        "name": "status",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "task_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 6,
+        "name": "proposed_by",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 7,
+        "name": "resolved_by",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 8,
+        "name": "resolved_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 9,
+        "name": "note",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 10,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Int8",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      false,
+      true,
+      true,
+      true,
+      false
+    ]
+  },
+  "hash": "fe54ab35c1d8038b21368da6c3013c064d5d54190787c2075abc15fcadf97368"
+}

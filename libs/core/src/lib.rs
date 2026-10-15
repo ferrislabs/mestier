@@ -96,6 +96,7 @@ pub use domain::{
     equipment::ports::MockEquipmentRepository,
     invitation::ports::MockInvitationRepository,
     invoice::ports::{MockDocumentFormat, MockInvoiceRepository},
+    maintenance::ports::{MockInterventionRepository, MockMaintenanceContractRepository},
     member::ports::MockMemberRepository,
     organization::ports::MockOrganizationRepository,
     planning::ports::MockPlanningRepository,
@@ -115,6 +116,28 @@ pub use domain::{
     task_recurrence::ports::MockTaskRecurrenceRepository,
     user::ports::MockUserRepository,
     work_time::ports::{MockRhythmRepository, MockWorkSlotRepository},
+};
+
+pub use domain::{
+    Cadence, ContractStatus, IntervalDays, Intervention, InterventionId, InterventionStatus,
+    IsoWeekNumber, MaintenanceContract, MaintenanceContractId, MaintenanceLine, MaintenanceLineId,
+    Season, Window, Windows, check_intervention_date, iso_week_of,
+    maintenance::commands::{
+        ArchiveMaintenanceContractCommand, CreateMaintenanceContractCommand,
+        DuplicateMaintenanceContractCommand, MaintenanceLineInput, PlanMaintenanceLinesCommand,
+        ProposeInterventionCommand, RecordInterventionCommand, RejectInterventionCommand,
+        UpdateMaintenanceContractCommand, ValidateInterventionCommand,
+    },
+    maintenance::due::{Due, DueStatus, LineHistory, due_for},
+    maintenance::events::{InterventionProposed, InterventionRejected, InterventionValidated},
+    maintenance::ports::{
+        InterventionRepository, MaintenanceContractRepository, TaskMaintenanceContext,
+    },
+};
+
+pub use domain::maintenance::overview::{
+    ContractSite, Grid, GridContract, GridLine, GridVisit, Recap, RecapGroup, RecapLine,
+    SiteContact,
 };
 
 pub use domain::{

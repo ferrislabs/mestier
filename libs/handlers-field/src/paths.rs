@@ -1,5 +1,5 @@
 use axum_extra::routing::TypedPath;
-use mestier_core::{AssignmentReportId, OrganizationId, TaskAssignmentId, TimeEntryId};
+use mestier_core::{AssignmentReportId, OrganizationId, TaskAssignmentId, TaskId, TimeEntryId};
 use serde::Deserialize;
 
 /// The jobs assigned to the caller for a day.
@@ -80,4 +80,12 @@ pub struct FieldAssignmentReportPath {
 #[typed_path("/api/v1/organizations/{organization_id}/field/assignment-reports")]
 pub struct FieldAssignmentReportsPath {
     pub organization_id: OrganizationId,
+}
+
+/// Declaring a maintenance visit done on one of the caller's own tasks.
+#[derive(TypedPath, Deserialize)]
+#[typed_path("/api/v1/organizations/{organization_id}/field/tasks/{task_id}/intervention")]
+pub struct FieldInterventionPath {
+    pub organization_id: OrganizationId,
+    pub task_id: TaskId,
 }

@@ -513,3 +513,61 @@ describe('FieldDayFeature — pointeuse désactivée', () => {
 		expect(currentRequests).toBe(0)
 	})
 })
+
+describe('FieldDayFeature — entretien', () => {
+	const PROPOSE_INTERVENTION_PATH =
+		'/api/v1/organizations/{organization_id}/field/tasks/{task_id}/intervention'
+
+	it('offers "Intervention faite" on a maintenance task only', async () => {
+		renderFeature((api) =>
+			api.mockGet(TASKS_PATH, () => ({
+				data: [
+					task({ id: 'task-1', title: 'Taille de haie' }),
+					task({
+						id: 'task-2',
+						title: 'Tonte avec ramassage',
+						task_assignment_id: 'assignment-2',
+						maintenance_line_id: 'line-1',
+					}),
+				],
+				pagination: null,
+			})),
+		)
+
+		await screen.findByText('Tonte avec ramassage')
+
+		expect(
+			screen.getAllByRole('button', { name: 'Intervention faite' }),
+		).toHaveLength(1)
+	})
+
+	it('sends the visit of the task it was tapped on', async () => {
+		const onPropose = vi.fn(() => ({ data: {}, pagination: null }))
+		const user = userEvent.setup()
+		renderFeature((api) => {
+			api.mockGet(TASKS_PATH, () => ({
+				data: [
+					task({
+						id: 'task-2',
+						title: 'Tonte avec ramassage',
+						task_assignment_id: 'assignment-2',
+						maintenance_line_id: 'line-1',
+					}),
+				],
+				pagination: null,
+			}))
+			api.mockMutation('post', PROPOSE_INTERVENTION_PATH, onPropose)
+		})
+
+		await user.click(
+			await screen.findByRole('button', { name: 'Intervention faite' }),
+		)
+		await user.click(screen.getByRole('button', { name: 'Envoyer' }))
+
+		await waitFor(() => expect(onPropose).toHaveBeenCalledTimes(1))
+		expect(onPropose).toHaveBeenCalledWith({
+			path: { organization_id: 'org-1', task_id: 'task-2' },
+			body: { done_on: '2026-08-19' },
+		})
+	})
+})

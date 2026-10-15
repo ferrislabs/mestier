@@ -24,6 +24,8 @@ pub mod domain {
     pub struct EventLog;
     pub struct Invitation;
     pub struct Invoice;
+    pub struct MaintenanceContract;
+    pub struct MaintenanceIntervention;
     pub struct Organization;
     pub struct Planning;
     pub struct Product;

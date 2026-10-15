@@ -1,0 +1,132 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                UPDATE maintenance_contracts\n                SET customer_id = $3, customer_context_id = $4, reference = $5,\n                    season_year = $6, first_week = $7, last_week = $8,\n                    manager_member_id = $9, amount_cents = $10, quote_id = $11,\n                    notes = $12, status = $13, archived_at = $14, updated_at = $15\n                WHERE id = $1 AND org_id = $2\n                RETURNING id, org_id, customer_id, customer_context_id, project_id, reference,\n                          season_year, first_week, last_week, manager_member_id, amount_cents,\n                          quote_id, notes, status, archived_at, created_at, updated_at\n                ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "org_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "customer_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 3,
+        "name": "customer_context_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 4,
+        "name": "project_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 5,
+        "name": "reference",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 6,
+        "name": "season_year",
+        "type_info": "Int2"
+      },
+      {
+        "ordinal": 7,
+        "name": "first_week",
+        "type_info": "Int2"
+      },
+      {
+        "ordinal": 8,
+        "name": "last_week",
+        "type_info": "Int2"
+      },
+      {
+        "ordinal": 9,
+        "name": "manager_member_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 10,
+        "name": "amount_cents",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 11,
+        "name": "quote_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 12,
+        "name": "notes",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 13,
+        "name": "status",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 14,
+        "name": "archived_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 15,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 16,
+        "name": "updated_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Uuid",
+        "Uuid",
+        "Text",
+        "Int2",
+        "Int2",
+        "Int2",
+        "Uuid",
+        "Int8",
+        "Uuid",
+        "Text",
+        "Text",
+        "Timestamptz",
+        "Timestamptz"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      false,
+      false,
+      false,
+      true,
+      true,
+      true,
+      true,
+      false,
+      true,
+      false,
+      false
+    ]
+  },
+  "hash": "d4fff3dd8113c573602f016b2bd31aea87057588deaaccebe88990e215c61500"
+}
