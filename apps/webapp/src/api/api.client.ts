@@ -105,6 +105,7 @@ export namespace Schemas {
     organization_id: OrganizationId;
     updated_at: string;
   };
+  export type MaintenanceLineId = string;
   export type ProjectId = string;
   export type QuoteId = string;
   export type TaskRecurrenceId = string;
@@ -124,6 +125,7 @@ export namespace Schemas {
     expenses_label?: (string | null) | undefined;
     id: TaskId;
     labels: Array<TaskLabelResponse>;
+    maintenance_line_id?: (null | MaintenanceLineId) | undefined;
     member_ids: Array<MemberId>;
     organization_id: OrganizationId;
     parent_task_id?: (null | TaskId) | undefined;
@@ -137,6 +139,19 @@ export namespace Schemas {
   };
   export type BulkAssignTasksResponse = { tasks: Array<TaskResponse> };
   export type ButtonStyle = "Link";
+  export type IntervalDays = number;
+  export type IsoWeekNumber = number;
+  export type Window = { from_week: IsoWeekNumber; to_week: IsoWeekNumber };
+  export type Windows = Array<Window>;
+  export type Cadence =
+    | { every_days: IntervalDays; kind: "ROLLING" }
+    | { kind: "WINDOWS"; windows: Windows }
+    | { kind: "ON_DEMAND" };
+  export type WindowRequest = { from_week: number; to_week: number };
+  export type CadenceRequest =
+    | { every_days: number; kind: "ROLLING" }
+    | { kind: "WINDOWS"; windows: Array<WindowRequest> }
+    | { kind: "ON_DEMAND" };
   export type CategoryId = string;
   export type CategoryResponse = {
     created_at: string;
@@ -190,6 +205,33 @@ export namespace Schemas {
   export type ConnectorsResponse = {
     auth_schemes: Array<AuthSchemeResponse>;
     connectors: Array<ConnectorDescriptorResponse>;
+  };
+  export type MaintenanceLineRequest = {
+    cadence: CadenceRequest;
+    id?: (null | MaintenanceLineId) | undefined;
+    label: string;
+    minutes_per_intervention?: (number | null) | undefined;
+  };
+  export type SeasonRequest = { first_week: number; last_week: number; year: number };
+  export type ContractStatus = "DRAFT" | "ACTIVE";
+  export type ContractBody = {
+    amount_cents?: (number | null) | undefined;
+    lines: Array<MaintenanceLineRequest>;
+    manager_member_id?: (null | MemberId) | undefined;
+    notes?: (string | null) | undefined;
+    quote_id?: (null | QuoteId) | undefined;
+    reference?: (string | null) | undefined;
+    season: SeasonRequest;
+    status?: (null | ContractStatus) | undefined;
+  };
+  export type SiteContact = { email?: (string | null) | undefined; name: string; phone?: (string | null) | undefined };
+  export type ContractSite = {
+    address_line?: (string | null) | undefined;
+    city?: (string | null) | undefined;
+    contact?: (null | SiteContact) | undefined;
+    customer_name: string;
+    postal_code?: (string | null) | undefined;
+    site_label: string;
   };
   export type CorrectEmployeeCostBasisRequest = {
     effective_from: string;
@@ -316,6 +358,10 @@ export namespace Schemas {
     notes?: (string | null) | undefined;
     operation_nature?: (null | OperationNature) | undefined;
     project_id?: (null | ProjectId) | undefined;
+  };
+  export type CreateMaintenanceContractRequest = ContractBody & {
+    customer_context_id: CustomerContextId;
+    customer_id: CustomerId;
   };
   export type CreateMemberRequest = { first_name?: (string | null) | undefined; last_name: string };
   export type CreateMessageAttachment = {
@@ -623,6 +669,8 @@ export namespace Schemas {
     updated_at: string;
   };
   export type DraftSupplyRequest = { product_id: ProductId };
+  export type DueStatus = "PLANNED" | "OVERDUE" | "THIS_WEEK" | "NEXT_WEEK" | "LATER" | "DONE";
+  export type Due = { on?: (string | null) | undefined; status: DueStatus };
   export type EdgeDto = { branch?: (null | BranchDto) | undefined; from: string; to: string };
   export type EmployeeCostBasisId = string;
   export type EmployeeCostBasisResponse = {
@@ -677,6 +725,15 @@ export namespace Schemas {
     version: number;
   };
   export type ExecuteWebhookRequest = { components?: (Array<Component> | null) | undefined; content: string };
+  export type InterventionId = string;
+  export type InterventionStatus = "PROPOSED" | "VALIDATED" | "REJECTED";
+  export type FieldInterventionResponse = {
+    done_on: string;
+    id: InterventionId;
+    line_id: MaintenanceLineId;
+    status: InterventionStatus;
+    task_id?: (null | TaskId) | undefined;
+  };
   export type FieldTaskResponse = {
     all_day: boolean;
     customer_context_id?: (null | CustomerContextId) | undefined;
@@ -684,6 +741,7 @@ export namespace Schemas {
     description?: (string | null) | undefined;
     ends_at?: (string | null) | undefined;
     id: TaskId;
+    maintenance_line_id?: (null | MaintenanceLineId) | undefined;
     starts_at?: (string | null) | undefined;
     status: TaskStatus;
     task_assignment_id: TaskAssignmentId;
@@ -713,6 +771,29 @@ export namespace Schemas {
   };
   export type GraphInvalidDetails = { errors: Array<GraphErrorResponse> };
   export type GraphInvalidBody = { code: string; details: GraphInvalidDetails; message: string; status: number };
+  export type MaintenanceContractId = string;
+  export type GridVisit = { done_on: string; id: InterventionId; status: InterventionStatus; week: IsoWeekNumber };
+  export type GridLine = {
+    cadence: Cadence;
+    due: Due;
+    id: MaintenanceLineId;
+    label: string;
+    minutes_per_intervention?: (number | null) | undefined;
+    visits: Array<GridVisit>;
+  };
+  export type Season = { first_week: IsoWeekNumber; last_week: IsoWeekNumber; year: number };
+  export type GridContract = {
+    customer_context_id: CustomerContextId;
+    customer_id: CustomerId;
+    id: MaintenanceContractId;
+    lines: Array<GridLine>;
+    manager_member_id?: (null | MemberId) | undefined;
+    reference?: (string | null) | undefined;
+    season: Season;
+    site: ContractSite;
+    status: ContractStatus;
+  };
+  export type Grid = { contracts: Array<GridContract>; year: number };
   export type SupplierInvoiceId = string;
   export type SupplierInvoiceLineAllocationId = string;
   export type SupplierInvoiceLineId = string;
@@ -799,6 +880,18 @@ export namespace Schemas {
     updated_at: string;
   };
   export type InstantiateProjectTemplateResponse = { project: ProjectResponse; tasks: Array<TaskResponse> };
+  export type InterventionResponse = {
+    created_at: string;
+    done_on: string;
+    id: InterventionId;
+    line_id: MaintenanceLineId;
+    note?: (string | null) | undefined;
+    proposed_by: MemberId;
+    resolved_at?: (string | null) | undefined;
+    resolved_by?: (null | MemberId) | undefined;
+    status: InterventionStatus;
+    task_id?: (null | TaskId) | undefined;
+  };
   export type InvoiceBalanceResponse = {
     credited_cents: number;
     gross_cents: number;
@@ -879,6 +972,29 @@ export namespace Schemas {
   }>;
   export type IssueInvoiceRequest = Partial<{ allow_exceeding_total: boolean }>;
   export type LineAllocationShareRequest = { amount_cents: number; project_id: ProjectId };
+  export type MaintenanceLine = {
+    cadence: Cadence;
+    id: MaintenanceLineId;
+    label: string;
+    minutes_per_intervention?: (number | null) | undefined;
+  };
+  export type MaintenanceContractResponse = {
+    amount_cents?: (number | null) | undefined;
+    archived_at?: (string | null) | undefined;
+    created_at: string;
+    customer_context_id: CustomerContextId;
+    customer_id: CustomerId;
+    id: MaintenanceContractId;
+    lines: Array<MaintenanceLine>;
+    manager_member_id?: (null | MemberId) | undefined;
+    notes?: (string | null) | undefined;
+    project_id: ProjectId;
+    quote_id?: (null | QuoteId) | undefined;
+    reference?: (string | null) | undefined;
+    season: Season;
+    status: ContractStatus;
+    updated_at: string;
+  };
   export type MarkChannelReadRequest = { message_id: MessageId };
   export type MemberAccountResponse = { email: string; name: string };
   export type MissingCost = "HOURLY_RATE" | "MONTHLY_COST" | "CONTRACTED_HOURS" | "NO_COST_BASIS";
@@ -977,6 +1093,7 @@ export namespace Schemas {
     total?: (number | null) | undefined;
   };
   export type PatchTaskResponse = { detached: boolean; task: TaskResponse };
+  export type PlanMaintenanceLinesRequest = { line_ids: Array<MaintenanceLineId>; week: string };
   export type PlannedProjectResponse = {
     created_at: string;
     customer_context_id?: (null | CustomerContextId) | undefined;
@@ -1152,6 +1269,7 @@ export namespace Schemas {
     template_id: ProjectTemplateId;
     title: string;
   };
+  export type ProposeInterventionRequest = { done_on: string };
   export type RhythmSlotRequest = { ends_minute: number; starts_minute: number; weekday: number };
   export type PutRhythmRequest = {
     effective_from: string;
@@ -1199,6 +1317,19 @@ export namespace Schemas {
   };
   export type QuotePlanProposalResponse = { quote: QuoteResponse; tasks: Array<TaskProposalResponse> };
   export type QuotePlanResponse = { project: PlannedProjectResponse; tasks: Array<PlannedTaskResponse> };
+  export type RecapLine = {
+    contract_id: MaintenanceContractId;
+    due: Due;
+    label: string;
+    last_done_on?: (string | null) | undefined;
+    line_id: MaintenanceLineId;
+    minutes_per_intervention?: (number | null) | undefined;
+    reference?: (string | null) | undefined;
+    site: ContractSite;
+  };
+  export type RecapGroup = { lines: Array<RecapLine>; town?: (string | null) | undefined };
+  export type Recap = { groups: Array<RecapGroup>; week: IsoWeekNumber; year: number };
+  export type RecordInterventionRequest = { done_on: string };
   export type RecordInvoicePaymentRequest = {
     allow_exceeding_total?: boolean | undefined;
     amount_cents: number;
@@ -1212,6 +1343,7 @@ export namespace Schemas {
     | { frequency: "DAILY" }
     | { frequency: "WEEKLY"; weekdays: Array<number> }
     | { day_of_month: number; frequency: "MONTHLY" };
+  export type RejectInterventionRequest = Partial<{ note: string | null }>;
   export type RejectSupplierInvoiceRequest = Partial<{ notes: string | null }>;
   export type ReplaceLineAllocationsRequest = { allocations: Array<LineAllocationShareRequest> };
   export type ReplaceProjectTemplateTasksRequest = { tasks: Array<ProjectTemplateTaskShapeRequest> };
@@ -1297,6 +1429,7 @@ export namespace Schemas {
   export type StartRunRequest = Partial<{ trigger_payload: unknown }>;
   export type StartTimeEntryRequest = { task_id: TaskId };
   export type StartedRunResponse = { run_id: string };
+  export type StatusFilter = "proposed" | "validated" | "rejected";
   export type SupplierResponse = {
     address?: (string | null) | undefined;
     created_at: string;
@@ -5101,6 +5234,7 @@ export namespace Endpoints {
           description?: (string | null) | undefined;
           ends_at?: (string | null) | undefined;
           id: Schemas.TaskId;
+          maintenance_line_id?: (null | Schemas.MaintenanceLineId) | undefined;
           starts_at?: (string | null) | undefined;
           status: Schemas.TaskStatus;
           task_assignment_id: Schemas.TaskAssignmentId;
@@ -5110,6 +5244,32 @@ export namespace Endpoints {
       };
       401: unknown;
       403: unknown;
+    };
+  };
+  export type post_ProposeMaintenanceIntervention = {
+    method: "POST";
+    path: "/api/v1/organizations/{organization_id}/field/tasks/{task_id}/intervention";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string; task_id: string };
+
+      body: Schemas.ProposeInterventionRequest;
+    };
+    responses: {
+      201: {
+        data: {
+          done_on: string;
+          id: Schemas.InterventionId;
+          line_id: Schemas.MaintenanceLineId;
+          status: Schemas.InterventionStatus;
+          task_id?: (null | Schemas.TaskId) | undefined;
+        };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+      404: unknown;
+      409: unknown;
     };
   };
   export type post_StartTimeEntry = {
@@ -5351,6 +5511,423 @@ export namespace Endpoints {
       401: unknown;
       403: unknown;
       404: unknown;
+    };
+  };
+  export type get_ListMaintenanceContracts = {
+    method: "GET";
+    path: "/api/v1/organizations/{organization_id}/maintenance/contracts";
+    requestFormat: "json";
+    parameters: {
+      query: { season: number; include_archived?: boolean | undefined };
+      path: { organization_id: string };
+    };
+    responses: {
+      200: {
+        data: Array<{
+          amount_cents?: (number | null) | undefined;
+          archived_at?: (string | null) | undefined;
+          created_at: string;
+          customer_context_id: Schemas.CustomerContextId;
+          customer_id: Schemas.CustomerId;
+          id: Schemas.MaintenanceContractId;
+          lines: Array<Schemas.MaintenanceLine>;
+          manager_member_id?: (null | Schemas.MemberId) | undefined;
+          notes?: (string | null) | undefined;
+          project_id: Schemas.ProjectId;
+          quote_id?: (null | Schemas.QuoteId) | undefined;
+          reference?: (string | null) | undefined;
+          season: Schemas.Season;
+          status: Schemas.ContractStatus;
+          updated_at: string;
+        }>;
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+    };
+  };
+  export type post_CreateMaintenanceContract = {
+    method: "POST";
+    path: "/api/v1/organizations/{organization_id}/maintenance/contracts";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string };
+
+      body: Schemas.CreateMaintenanceContractRequest;
+    };
+    responses: {
+      201: {
+        data: {
+          amount_cents?: (number | null) | undefined;
+          archived_at?: (string | null) | undefined;
+          created_at: string;
+          customer_context_id: Schemas.CustomerContextId;
+          customer_id: Schemas.CustomerId;
+          id: Schemas.MaintenanceContractId;
+          lines: Array<Schemas.MaintenanceLine>;
+          manager_member_id?: (null | Schemas.MemberId) | undefined;
+          notes?: (string | null) | undefined;
+          project_id: Schemas.ProjectId;
+          quote_id?: (null | Schemas.QuoteId) | undefined;
+          reference?: (string | null) | undefined;
+          season: Schemas.Season;
+          status: Schemas.ContractStatus;
+          updated_at: string;
+        };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+      404: unknown;
+      409: unknown;
+    };
+  };
+  export type get_GetMaintenanceContract = {
+    method: "GET";
+    path: "/api/v1/organizations/{organization_id}/maintenance/contracts/{contract_id}";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string; contract_id: string };
+    };
+    responses: {
+      200: {
+        data: {
+          amount_cents?: (number | null) | undefined;
+          archived_at?: (string | null) | undefined;
+          created_at: string;
+          customer_context_id: Schemas.CustomerContextId;
+          customer_id: Schemas.CustomerId;
+          id: Schemas.MaintenanceContractId;
+          lines: Array<Schemas.MaintenanceLine>;
+          manager_member_id?: (null | Schemas.MemberId) | undefined;
+          notes?: (string | null) | undefined;
+          project_id: Schemas.ProjectId;
+          quote_id?: (null | Schemas.QuoteId) | undefined;
+          reference?: (string | null) | undefined;
+          season: Schemas.Season;
+          status: Schemas.ContractStatus;
+          updated_at: string;
+        };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+      404: unknown;
+    };
+  };
+  export type put_UpdateMaintenanceContract = {
+    method: "PUT";
+    path: "/api/v1/organizations/{organization_id}/maintenance/contracts/{contract_id}";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string; contract_id: string };
+
+      body: Schemas.ContractBody;
+    };
+    responses: {
+      200: {
+        data: {
+          amount_cents?: (number | null) | undefined;
+          archived_at?: (string | null) | undefined;
+          created_at: string;
+          customer_context_id: Schemas.CustomerContextId;
+          customer_id: Schemas.CustomerId;
+          id: Schemas.MaintenanceContractId;
+          lines: Array<Schemas.MaintenanceLine>;
+          manager_member_id?: (null | Schemas.MemberId) | undefined;
+          notes?: (string | null) | undefined;
+          project_id: Schemas.ProjectId;
+          quote_id?: (null | Schemas.QuoteId) | undefined;
+          reference?: (string | null) | undefined;
+          season: Schemas.Season;
+          status: Schemas.ContractStatus;
+          updated_at: string;
+        };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+      404: unknown;
+      409: unknown;
+    };
+  };
+  export type post_ArchiveMaintenanceContract = {
+    method: "POST";
+    path: "/api/v1/organizations/{organization_id}/maintenance/contracts/{contract_id}/archive";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string; contract_id: string };
+    };
+    responses: {
+      200: {
+        data: {
+          amount_cents?: (number | null) | undefined;
+          archived_at?: (string | null) | undefined;
+          created_at: string;
+          customer_context_id: Schemas.CustomerContextId;
+          customer_id: Schemas.CustomerId;
+          id: Schemas.MaintenanceContractId;
+          lines: Array<Schemas.MaintenanceLine>;
+          manager_member_id?: (null | Schemas.MemberId) | undefined;
+          notes?: (string | null) | undefined;
+          project_id: Schemas.ProjectId;
+          quote_id?: (null | Schemas.QuoteId) | undefined;
+          reference?: (string | null) | undefined;
+          season: Schemas.Season;
+          status: Schemas.ContractStatus;
+          updated_at: string;
+        };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+      404: unknown;
+    };
+  };
+  export type post_DuplicateMaintenanceContract = {
+    method: "POST";
+    path: "/api/v1/organizations/{organization_id}/maintenance/contracts/{contract_id}/duplicate";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string; contract_id: string };
+    };
+    responses: {
+      201: {
+        data: {
+          amount_cents?: (number | null) | undefined;
+          archived_at?: (string | null) | undefined;
+          created_at: string;
+          customer_context_id: Schemas.CustomerContextId;
+          customer_id: Schemas.CustomerId;
+          id: Schemas.MaintenanceContractId;
+          lines: Array<Schemas.MaintenanceLine>;
+          manager_member_id?: (null | Schemas.MemberId) | undefined;
+          notes?: (string | null) | undefined;
+          project_id: Schemas.ProjectId;
+          quote_id?: (null | Schemas.QuoteId) | undefined;
+          reference?: (string | null) | undefined;
+          season: Schemas.Season;
+          status: Schemas.ContractStatus;
+          updated_at: string;
+        };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+      404: unknown;
+      409: unknown;
+    };
+  };
+  export type get_GetMaintenanceGrid = {
+    method: "GET";
+    path: "/api/v1/organizations/{organization_id}/maintenance/grid";
+    requestFormat: "json";
+    parameters: {
+      query: { season: number };
+      path: { organization_id: string };
+    };
+    responses: {
+      200: {
+        data: { contracts: Array<Schemas.GridContract>; year: number };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+    };
+  };
+  export type get_ListMaintenanceInterventions = {
+    method: "GET";
+    path: "/api/v1/organizations/{organization_id}/maintenance/interventions";
+    requestFormat: "json";
+    parameters: {
+      query: Partial<{ status: "proposed" | "validated" | "rejected"; page: number; per_page: number }>;
+      path: { organization_id: string };
+    };
+    responses: {
+      200: {
+        data: Array<{
+          created_at: string;
+          done_on: string;
+          id: Schemas.InterventionId;
+          line_id: Schemas.MaintenanceLineId;
+          note?: (string | null) | undefined;
+          proposed_by: Schemas.MemberId;
+          resolved_at?: (string | null) | undefined;
+          resolved_by?: (null | Schemas.MemberId) | undefined;
+          status: Schemas.InterventionStatus;
+          task_id?: (null | Schemas.TaskId) | undefined;
+        }>;
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+    };
+  };
+  export type post_RejectMaintenanceIntervention = {
+    method: "POST";
+    path: "/api/v1/organizations/{organization_id}/maintenance/interventions/{intervention_id}/reject";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string; intervention_id: string };
+
+      body: Schemas.RejectInterventionRequest;
+    };
+    responses: {
+      200: {
+        data: {
+          created_at: string;
+          done_on: string;
+          id: Schemas.InterventionId;
+          line_id: Schemas.MaintenanceLineId;
+          note?: (string | null) | undefined;
+          proposed_by: Schemas.MemberId;
+          resolved_at?: (string | null) | undefined;
+          resolved_by?: (null | Schemas.MemberId) | undefined;
+          status: Schemas.InterventionStatus;
+          task_id?: (null | Schemas.TaskId) | undefined;
+        };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+      404: unknown;
+      409: unknown;
+    };
+  };
+  export type post_ValidateMaintenanceIntervention = {
+    method: "POST";
+    path: "/api/v1/organizations/{organization_id}/maintenance/interventions/{intervention_id}/validate";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string; intervention_id: string };
+    };
+    responses: {
+      200: {
+        data: {
+          created_at: string;
+          done_on: string;
+          id: Schemas.InterventionId;
+          line_id: Schemas.MaintenanceLineId;
+          note?: (string | null) | undefined;
+          proposed_by: Schemas.MemberId;
+          resolved_at?: (string | null) | undefined;
+          resolved_by?: (null | Schemas.MemberId) | undefined;
+          status: Schemas.InterventionStatus;
+          task_id?: (null | Schemas.TaskId) | undefined;
+        };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+      404: unknown;
+      409: unknown;
+    };
+  };
+  export type post_RecordMaintenanceIntervention = {
+    method: "POST";
+    path: "/api/v1/organizations/{organization_id}/maintenance/lines/{line_id}/interventions";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string; line_id: string };
+
+      body: Schemas.RecordInterventionRequest;
+    };
+    responses: {
+      201: {
+        data: {
+          created_at: string;
+          done_on: string;
+          id: Schemas.InterventionId;
+          line_id: Schemas.MaintenanceLineId;
+          note?: (string | null) | undefined;
+          proposed_by: Schemas.MemberId;
+          resolved_at?: (string | null) | undefined;
+          resolved_by?: (null | Schemas.MemberId) | undefined;
+          status: Schemas.InterventionStatus;
+          task_id?: (null | Schemas.TaskId) | undefined;
+        };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+      404: unknown;
+      409: unknown;
+    };
+  };
+  export type get_GetMaintenanceRecap = {
+    method: "GET";
+    path: "/api/v1/organizations/{organization_id}/maintenance/recap";
+    requestFormat: "json";
+    parameters: {
+      query: { week: string };
+      path: { organization_id: string };
+    };
+    responses: {
+      200: {
+        data: { groups: Array<Schemas.RecapGroup>; week: Schemas.IsoWeekNumber; year: number };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      400: unknown;
+      401: unknown;
+      403: unknown;
+      409: unknown;
+    };
+  };
+  export type get_ExportMaintenanceRecapPdf = {
+    method: "GET";
+    path: "/api/v1/organizations/{organization_id}/maintenance/recap.pdf";
+    requestFormat: "json";
+    parameters: {
+      query: { week: string };
+      path: { organization_id: string };
+    };
+    responses: { 200: unknown; 400: unknown; 401: unknown; 403: unknown };
+  };
+  export type post_PlanMaintenanceLines = {
+    method: "POST";
+    path: "/api/v1/organizations/{organization_id}/maintenance/recap/plan";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string };
+
+      body: Schemas.PlanMaintenanceLinesRequest;
+    };
+    responses: {
+      201: {
+        data: Array<{
+          all_day: boolean;
+          assignments: Array<Schemas.TaskAssignmentSummary>;
+          blocks_availability: boolean;
+          child_count?: (number | null) | undefined;
+          created_at: string;
+          customer_context_id?: (null | Schemas.CustomerContextId) | undefined;
+          customer_id?: (null | Schemas.CustomerId) | undefined;
+          description?: (string | null) | undefined;
+          ends_at?: (string | null) | undefined;
+          equipment: Array<Schemas.TaskEquipmentResponse>;
+          expenses_cents: number;
+          expenses_label?: (string | null) | undefined;
+          id: Schemas.TaskId;
+          labels: Array<Schemas.TaskLabelResponse>;
+          maintenance_line_id?: (null | Schemas.MaintenanceLineId) | undefined;
+          member_ids: Array<Schemas.MemberId>;
+          organization_id: Schemas.OrganizationId;
+          parent_task_id?: (null | Schemas.TaskId) | undefined;
+          project_id?: (null | Schemas.ProjectId) | undefined;
+          quote_id?: (null | Schemas.QuoteId) | undefined;
+          recurrence_id?: (null | Schemas.TaskRecurrenceId) | undefined;
+          starts_at?: (string | null) | undefined;
+          status: Schemas.TaskStatus;
+          title: string;
+          updated_at: string;
+        }>;
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      400: unknown;
+      401: unknown;
+      403: unknown;
+      404: unknown;
+      409: unknown;
     };
   };
   export type get_ListMembers = {
@@ -6626,6 +7203,7 @@ export namespace Endpoints {
           expenses_label?: (string | null) | undefined;
           id: Schemas.TaskId;
           labels: Array<Schemas.TaskLabelResponse>;
+          maintenance_line_id?: (null | Schemas.MaintenanceLineId) | undefined;
           member_ids: Array<Schemas.MemberId>;
           organization_id: Schemas.OrganizationId;
           parent_task_id?: (null | Schemas.TaskId) | undefined;
@@ -6670,6 +7248,7 @@ export namespace Endpoints {
           expenses_label?: (string | null) | undefined;
           id: Schemas.TaskId;
           labels: Array<Schemas.TaskLabelResponse>;
+          maintenance_line_id?: (null | Schemas.MaintenanceLineId) | undefined;
           member_ids: Array<Schemas.MemberId>;
           organization_id: Schemas.OrganizationId;
           parent_task_id?: (null | Schemas.TaskId) | undefined;
@@ -6733,6 +7312,7 @@ export namespace Endpoints {
           expenses_label?: (string | null) | undefined;
           id: Schemas.TaskId;
           labels: Array<Schemas.TaskLabelResponse>;
+          maintenance_line_id?: (null | Schemas.MaintenanceLineId) | undefined;
           member_ids: Array<Schemas.MemberId>;
           organization_id: Schemas.OrganizationId;
           parent_task_id?: (null | Schemas.TaskId) | undefined;
@@ -7795,6 +8375,12 @@ export type EndpointByMethod = {
     "/api/v1/organizations/{organization_id}/invitations": Endpoints.get_ListInvitations;
     "/api/v1/organizations/{organization_id}/invoices": Endpoints.get_ListInvoices;
     "/api/v1/organizations/{organization_id}/invoices/outstanding": Endpoints.get_ListOutstandingBalanceByCustomer;
+    "/api/v1/organizations/{organization_id}/maintenance/contracts": Endpoints.get_ListMaintenanceContracts;
+    "/api/v1/organizations/{organization_id}/maintenance/contracts/{contract_id}": Endpoints.get_GetMaintenanceContract;
+    "/api/v1/organizations/{organization_id}/maintenance/grid": Endpoints.get_GetMaintenanceGrid;
+    "/api/v1/organizations/{organization_id}/maintenance/interventions": Endpoints.get_ListMaintenanceInterventions;
+    "/api/v1/organizations/{organization_id}/maintenance/recap": Endpoints.get_GetMaintenanceRecap;
+    "/api/v1/organizations/{organization_id}/maintenance/recap.pdf": Endpoints.get_ExportMaintenanceRecapPdf;
     "/api/v1/organizations/{organization_id}/members": Endpoints.get_ListMembers;
     "/api/v1/organizations/{organization_id}/members/me/permissions": Endpoints.get_GetMyPermissions;
     "/api/v1/organizations/{organization_id}/planning": Endpoints.get_GetPlanning;
@@ -7870,10 +8456,18 @@ export type EndpointByMethod = {
     "/api/v1/organizations/{organization_id}/equipment": Endpoints.post_CreateEquipment;
     "/api/v1/organizations/{organization_id}/field/assignments/{task_assignment_id}/report": Endpoints.post_ReportAssignment;
     "/api/v1/organizations/{organization_id}/field/day-end": Endpoints.post_EndWorkingDay;
+    "/api/v1/organizations/{organization_id}/field/tasks/{task_id}/intervention": Endpoints.post_ProposeMaintenanceIntervention;
     "/api/v1/organizations/{organization_id}/field/time-entries": Endpoints.post_StartTimeEntry;
     "/api/v1/organizations/{organization_id}/field/time-entries/declare": Endpoints.post_DeclareTimeEntry;
     "/api/v1/organizations/{organization_id}/invitations": Endpoints.post_CreateInvitation;
     "/api/v1/organizations/{organization_id}/invoices": Endpoints.post_CreateInvoice;
+    "/api/v1/organizations/{organization_id}/maintenance/contracts": Endpoints.post_CreateMaintenanceContract;
+    "/api/v1/organizations/{organization_id}/maintenance/contracts/{contract_id}/archive": Endpoints.post_ArchiveMaintenanceContract;
+    "/api/v1/organizations/{organization_id}/maintenance/contracts/{contract_id}/duplicate": Endpoints.post_DuplicateMaintenanceContract;
+    "/api/v1/organizations/{organization_id}/maintenance/interventions/{intervention_id}/reject": Endpoints.post_RejectMaintenanceIntervention;
+    "/api/v1/organizations/{organization_id}/maintenance/interventions/{intervention_id}/validate": Endpoints.post_ValidateMaintenanceIntervention;
+    "/api/v1/organizations/{organization_id}/maintenance/lines/{line_id}/interventions": Endpoints.post_RecordMaintenanceIntervention;
+    "/api/v1/organizations/{organization_id}/maintenance/recap/plan": Endpoints.post_PlanMaintenanceLines;
     "/api/v1/organizations/{organization_id}/members": Endpoints.post_CreateMember;
     "/api/v1/organizations/{organization_id}/products": Endpoints.post_CreateProduct;
     "/api/v1/organizations/{organization_id}/project-templates": Endpoints.post_CreateProjectTemplate;
@@ -7915,6 +8509,7 @@ export type EndpointByMethod = {
     "/api/v1/organizations/{organization_id}/doe-models/{doe_model_id}": Endpoints.put_UpdateDoeModel;
     "/api/v1/organizations/{organization_id}/doe-settings": Endpoints.put_UpdateDoeSettings;
     "/api/v1/organizations/{organization_id}/does/{doe_id}": Endpoints.put_UpdateDoe;
+    "/api/v1/organizations/{organization_id}/maintenance/contracts/{contract_id}": Endpoints.put_UpdateMaintenanceContract;
     "/api/v1/organizations/{organization_id}/project-templates/{project_template_id}/tasks": Endpoints.put_ReplaceProjectTemplateTasks;
     "/api/v1/organizations/{organization_id}/suppliers/{supplier_id}": Endpoints.put_UpdateSupplier;
     "/api/v1/supplier-invoice-lines/{supplier_invoice_line_id}/allocations": Endpoints.put_ReplaceSupplierInvoiceLineAllocations;
