@@ -49,7 +49,7 @@ Un utilisateur Mestier colle l'URL du serveur MCP dans son client LLM (ChatGPT w
 4. Aucun outil ne s'exécute sans décision `true` du PDP ; PDP injoignable = refus. [test : gateway, PDP coupé → refus]
 5. Un outil n'agit que sur une organisation dont l'utilisateur est membre ; l'API reste juge des droits métier (`planning.manage`, etc.). [test : e2e, organisation étrangère → erreur, pas de donnée]
 6. Le catalogue d'outils est fermé : un nom inconnu est refusé par la gateway avant le PDP. [type : enum `Tool` côté gateway, `FromStr`]
-7. Aucun outil de suppression ni d'émission de facture n'existe en v1, et la politique Cerbos refuse toute action d'écriture hors DOE. [type : absence dans l'enum ; test : politique Cerbos]
+7. Aucun outil de suppression ni d'émission de facture n'existe en v1, et la politique Cerbos refuse toute action d'écriture hors DOE et hors brouillons d'entretien. [type : absence dans l'enum ; test : politique Cerbos]
 8. Le serveur MCP n'accepte que le trafic de la gateway. [déploiement : réseau privé ; test : le serveur refuse un appel sans token délégué valide]
 10. Une organisation qui n'a pas activé le MCP est inaccessible par un token délégué : l'API refuse (403) tout appel portant le claim `act` de la gateway sur cette organisation, et ne la liste pas. [test : intégration API ; e2e @spec-mcp-12]
 11. Un token délégué n'atteint que les routes qu'appelle le serveur MCP (liste blanche dans `libs/handlers/src/delegated.rs`, appliquée par le middleware d'authentification) ; toute autre route répond 403 `E_DELEGATED_ROUTE_FORBIDDEN`. En particulier, un token délégué ne peut pas modifier les réglages d'une organisation ni activer le MCP. [test : unitaires `delegated` ; e2e `a_delegated_token_cannot_reach_a_route_the_mcp_server_does_not_call`]
@@ -68,7 +68,7 @@ Un utilisateur Mestier colle l'URL du serveur MCP dans son client LLM (ChatGPT w
 ### Parcours
 
 1. Le client LLM appelle `POST https://mcp.<domaine>/mcp` sans token → la gateway répond 401, `WWW-Authenticate: Bearer resource_metadata="https://mcp.<domaine>/.well-known/oauth-protected-resource"`.
-2. Métadonnées RFC 9728 : `resource` = l'URL de la gateway, `authorization_servers` = le realm FerrisKey, `scopes_supported` = `mestier.read`, `mestier.doe.write`.
+2. Métadonnées RFC 9728 : `resource` = l'URL de la gateway, `authorization_servers` = le realm FerrisKey, `scopes_supported` = `mestier.read`, `mestier.doe.write`, `mestier.maintenance.write` (ce dernier depuis le lot Entretien, `mcp-maintenance.md`).
 3. Le client lit les métadonnées RFC 8414 du realm, s'identifie par CIMD (ou s'enregistre en DCR), fait code d'autorisation + PKCE avec `resource` = la gateway. L'utilisateur se connecte avec son compte Mestier. FerrisKey renvoie `iss` (RFC 9207).
 4. Chaque requête MCP porte le token client. La gateway : valide le token (JWKS, `iss`, `aud`, `exp`) → identifie l'outil (en-têtes 2026-07-28 si présents, sinon corps JSON-RPC) → refuse un outil inconnu → interroge le PDP en AuthZEN → si refus, erreur JSON-RPC → sinon obtient (ou relit en cache) un token délégué par échange RFC 8693 (`subject_token` = token client, `audience` = API Mestier, `actor_token` = token client-credentials de la gateway) → transmet la requête au serveur MCP avec `Authorization: Bearer <token délégué>`.
 5. Le serveur MCP exécute l'outil en appelant l'API Mestier avec le token délégué. L'API applique ses propres contrôles (appartenance à l'organisation, permissions).
@@ -91,7 +91,7 @@ Un utilisateur Mestier colle l'URL du serveur MCP dans son client LLM (ChatGPT w
 }
 ```
 
-Politique Cerbos v1 : tout outil `read` autorisé avec le scope `mestier.read` ; outil `write` autorisé seulement si `domain == "doe"` et scope `mestier.doe.write` ; tout le reste refusé. Les droits métier restent dans l'API (pas de duplication des rôles Mestier dans Cerbos en v1).
+Politique Cerbos v1 : tout outil `read` autorisé avec le scope `mestier.read` ; outil `write` autorisé seulement si `domain == "doe"` et scope `mestier.doe.write`, ou `domain == "maintenance"` et scope `mestier.maintenance.write` ; tout le reste refusé. Les droits métier restent dans l'API (pas de duplication des rôles Mestier dans Cerbos en v1).
 
 ### Outils v1 (catalogue fermé)
 
@@ -224,7 +224,7 @@ Fichiers : W2 possède `apps/mcp-gateway/**`, son `Cargo.toml` compris ; W3 `app
 - `enum Tool` (les 17 outils ci-dessus), `name()`, `access() -> Access { Read, Write }`, `domain()`, `is_organization_scoped()`, `FromStr` (nom MCP exact, sinon `UnknownTool`), constantes `SCOPE_READ`, `SCOPE_DOE_WRITE`, `CLIENT_HEADER`.
 - Contrat gateway → serveur : `POST /mcp` interne, corps JSON-RPC inchangé, `Authorization: Bearer <token délégué>`, `X-Mestier-Mcp-Client: <client_id LLM>` (journalisation seulement).
 - Requête AuthZEN telle que ci-dessus.
-- Scopes : `mestier.read`, `mestier.doe.write`.
+- Scopes : `mestier.read`, `mestier.doe.write`, `mestier.maintenance.write` (liste `SCOPES_SUPPORTED`).
 - Le rôle du principal Cerbos vient de `subject.type` (observé sur Cerbos 0.56.0) : la gateway envoie toujours `"type": "user"` et la politique exige ce rôle. `subject.properties.roles` est ignoré par Cerbos (simple attribut), gardé pour un futur PDP. Les décisions portent sur les attributs.
 - Branche `feat/mcp` posée sur `feat/doe-backend` (#538) : le serveur MCP appelle les routes du DOE.
 
