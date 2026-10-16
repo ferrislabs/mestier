@@ -117,7 +117,7 @@ def sign_in(scope):
     return client_id, url, params, st, token
 
 
-client_id, url, params, st, token = sign_in("openid mestier.read mestier.doe.write")
+client_id, url, params, st, token = sign_in("openid mestier.read mestier.doe.write mestier.maintenance.write")
 check("@spec-mcp-2 DCR client registered and redirected to the client", url.startswith(REDIRECT), url[:120])
 check("@spec-mcp-2 redirect carries iss", params.get("iss") == REALM, str(params.get("iss")))
 check("@spec-mcp-2 code exchanged with PKCE", st == 200 and "access_token" in token, f"{st} {token}")
@@ -125,7 +125,9 @@ access = token["access_token"]
 c = claims(access)
 aud = c["aud"] if isinstance(c["aud"], list) else [c["aud"]]
 check("@spec-mcp-2 token audience is the gateway resource", GW in aud, str(c.get("aud")))
-check("token carries the Mestier scopes", "mestier.read" in c.get("scope", "") and "mestier.doe.write" in c.get("scope", ""), c.get("scope"))
+check("token carries the Mestier scopes",
+      all(scope in c.get("scope", "").split() for scope in ("mestier.read", "mestier.doe.write", "mestier.maintenance.write")),
+      c.get("scope"))
 
 # --- @spec-mcp-3 -------------------------------------------------------------
 st, _, _ = request("GET", API + "/api/v1/users/@me/organizations", headers={"Authorization": "Bearer " + access})
@@ -153,7 +155,8 @@ st, init = mcp("initialize", {"protocolVersion": "2025-11-25", "capabilities": {
 check("initialize through the gateway", st == 200 and "result" in (init or {}), f"{st} {init}")
 st, tl = mcp("tools/list")
 names = sorted(t["name"] for t in tl.get("result", {}).get("tools", [])) if isinstance(tl, dict) else []
-check("tools/list returns the 26 tools", len(names) == 26 and "add_doe_file" in names, f"{st} {len(names)}")
+check("tools/list returns the 29 tools",
+      len(names) == 29 and "add_doe_file" in names and "create_maintenance_contract_draft" in names, f"{st} {len(names)}")
 
 # First delegated call creates the Mestier user (the API registers users on first sight).
 st, r = tool("list_organizations")
@@ -191,6 +194,23 @@ _, _, _, st, ro = sign_in("openid mestier.read")
 ro_headers = dict(MCP_HEADERS, Authorization="Bearer " + ro["access_token"])
 st, r = tool("create_doe", {"organization": f"e2e-{open_org[:8]}", "project_id": str(uuid.uuid4())}, ro_headers)
 check("@spec-mcp-6 read-only token: write denied by policy", (r or {}).get("error", {}).get("code") == -32001, f"{st} {r}")
+
+# --- Entretien: the maintenance write scope -----------------------------------
+# The draft is created for a customer and a site that do not exist: the point is
+# which layer answers. Scope missing: the policy (-32001). Scope held: the
+# policy lets it through and the API answers (a tool error, not a policy error).
+draft = {"organization": f"e2e-{open_org[:8]}", "customer_id": str(uuid.uuid4()), "customer_context_id": str(uuid.uuid4()),
+         "season": {"year": 2026, "first_week": 12, "last_week": 48},
+         "lines": [{"label": "Tonte", "cadence": {"kind": "ROLLING", "every_days": 14}}]}
+st, r = tool("create_maintenance_contract_draft", draft, ro_headers)
+check("maintenance: a token without mestier.maintenance.write is denied by policy",
+      (r or {}).get("error", {}).get("code") == -32001, f"{st} {r}")
+st, r = tool("create_maintenance_contract_draft", draft)
+check("maintenance: with the scope the policy lets the draft through (the API judges)",
+      "error" not in (r or {}) and r.get("result", {}).get("isError") is True, json.dumps(r, ensure_ascii=False)[:300])
+st, r = tool("list_maintenance_due", {"organization": f"e2e-{open_org[:8]}", "week": "2026-W43"}, ro_headers)
+check("maintenance: reading the recap needs only mestier.read",
+      "error" not in (r or {}), f"{st} {r}")
 
 # --- cleanup Mestier rows ------------------------------------------------------
 for org in (open_org, closed_org):

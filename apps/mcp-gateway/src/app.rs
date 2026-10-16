@@ -8,7 +8,7 @@ use axum::{
     response::{IntoResponse, Response},
     routing::get,
 };
-use mcp_tools::{CLIENT_HEADER, SCOPE_DOE_WRITE, SCOPE_READ};
+use mcp_tools::{CLIENT_HEADER, SCOPES_SUPPORTED};
 use reqwest::Client;
 use serde_json::json;
 use tracing::{info, warn};
@@ -96,7 +96,7 @@ async fn metadata<V, P, X>(State(state): State<AppState<V, P, X>>) -> Response {
     Json(json!({
         "resource": state.0.resource_url,
         "authorization_servers": [state.0.issuer],
-        "scopes_supported": [SCOPE_READ, SCOPE_DOE_WRITE],
+        "scopes_supported": SCOPES_SUPPORTED,
         "bearer_methods_supported": ["header"],
     }))
     .into_response()

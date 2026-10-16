@@ -43,4 +43,4 @@ Response: `{"decision":true}` or `{"decision":false}`.
 
 ## Policy v1
 
-`policies/mcp_tool.yaml`: allow `access == read` with scope `mestier.read`; allow `access == write` and `domain == doe` with scope `mestier.doe.write`; everything else is denied by default. Mestier business roles are not modelled here.
+`policies/mcp_tool.yaml`: allow `access == read` with scope `mestier.read`; allow `access == write` and `domain == doe` with scope `mestier.doe.write`; allow `access == write` and `domain == maintenance` with scope `mestier.maintenance.write`; everything else is denied by default. Mestier business roles are not modelled here.

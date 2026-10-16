@@ -28,6 +28,9 @@ const PHOTOS2_SECTION: &str = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
 const PLANS_SECTION: &str = "cccccccc-cccc-4ccc-8ccc-cccccccccccc";
 const BLANK_SECTION: &str = "dddddddd-dddd-4ddd-8ddd-dddddddddddd";
 const SUPPLY: &str = "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee";
+const CONTRACT: &str = "f1111111-1111-4111-8111-111111111111";
+const CUSTOMER: &str = "f2222222-2222-4222-8222-222222222222";
+const SITE: &str = "f3333333-3333-4333-8333-333333333333";
 const UPDATED_AT: &str = "2026-10-10T08:00:00Z";
 const JPEG: &[u8] = &[0xFF, 0xD8, 0xFF, 0xE0, 0, 0x10, b'J', b'F', b'I', b'F'];
 
@@ -205,6 +208,25 @@ async fn fake_api(State(fake): State<Fake>, request: Request) -> Response {
             }
             let sent: Value = serde_json::from_slice(&bytes).unwrap();
             Json(json!({"data": sent})).into_response()
+        }
+        (&Method::GET, p) if p == format!("organizations/{ORG_A}/maintenance/recap") => {
+            Json(json!({"data": {"year": 2026, "week": 43, "groups": [{
+                "town": "Vichy",
+                "lines": [{"label": "Tonte", "contract_id": CONTRACT, "due": {"status": "OVERDUE"}}]
+            }]}}))
+            .into_response()
+        }
+        (&Method::GET, p) if p == format!("organizations/{ORG_A}/maintenance/contracts/{CONTRACT}") => {
+            Json(json!({"data": {
+                "id": CONTRACT, "customer_id": CUSTOMER, "customer_context_id": SITE,
+                "status": "DRAFT", "lines": [{"label": "Tonte"}]
+            }}))
+            .into_response()
+        }
+        (&Method::POST, p) if p == format!("organizations/{ORG_A}/maintenance/contracts") => {
+            let mut sent: Value = serde_json::from_slice(&bytes).unwrap();
+            sent["id"] = json!(CONTRACT);
+            (StatusCode::CREATED, Json(json!({"data": sent}))).into_response()
         }
         (&Method::POST, "files") => (
             StatusCode::CREATED,
@@ -1173,4 +1195,206 @@ async fn deleting_a_file_removes_its_key_everywhere_and_an_unknown_key_fails() {
     let unknown = rich_call(&mcp, "delete_doe_file", json!({"key": "doe/none.jpg"})).await;
     assert_eq!(unknown["isError"], json!(true));
     assert_eq!(fake.puts().len(), before);
+}
+
+fn draft_arguments() -> Value {
+    json!({
+        "customer_id": CUSTOMER,
+        "customer_context_id": SITE,
+        "reference": "C25029",
+        "season": {"year": 2026, "first_week": 12, "last_week": 48},
+        "amount_cents": 250000,
+        "notes": "Feuille papier du conducteur",
+        "lines": [
+            {"label": "Tonte avec ramassage", "cadence": {"kind": "ROLLING", "every_days": 14},
+             "minutes_per_intervention": 90},
+            {"label": "Taille", "cadence": {"kind": "WINDOWS", "windows": [
+                {"from_week": 14, "to_week": 17}, {"from_week": 44, "to_week": 47}]}},
+            {"label": "Entretien T1", "cadence": {"kind": "ON_DEMAND"}}
+        ]
+    })
+}
+
+fn posts(fake: &Fake) -> Vec<Seen> {
+    fake.seen()
+        .into_iter()
+        .filter(|s| s.method == "POST")
+        .collect()
+}
+
+#[tokio::test]
+async fn the_due_list_asks_the_recap_of_the_week() {
+    let (mcp, fake) = start().await;
+    let result = call(
+        &mcp,
+        "solo",
+        "list_maintenance_due",
+        json!({"week": "2026-W43"}),
+    )
+    .await;
+    assert_ne!(result["isError"], json!(true), "{result}");
+    let recap: Value = serde_json::from_str(&text(&result)).unwrap();
+    assert_eq!(recap["groups"][0]["lines"][0]["label"], "Tonte");
+    let asked = fake
+        .seen()
+        .into_iter()
+        .find(|s| s.path.ends_with("/maintenance/recap"))
+        .unwrap();
+    assert_eq!(asked.method, "GET");
+    assert_eq!(asked.query, "week=2026-W43");
+    assert_eq!(asked.authorization, "Bearer solo");
+}
+
+#[tokio::test]
+async fn a_contract_is_read_by_id_and_a_malformed_id_asks_the_api_nothing() {
+    let (mcp, fake) = start().await;
+    let result = call(
+        &mcp,
+        "solo",
+        "get_maintenance_contract",
+        json!({"contract_id": CONTRACT}),
+    )
+    .await;
+    assert_ne!(result["isError"], json!(true), "{result}");
+    let contract: Value = serde_json::from_str(&text(&result)).unwrap();
+    assert_eq!(contract["customer_context_id"], SITE);
+
+    let before = fake.seen().len();
+    let refused = call(
+        &mcp,
+        "solo",
+        "get_maintenance_contract",
+        json!({"contract_id": "../../maintenance/grid"}),
+    )
+    .await;
+    assert_eq!(refused["isError"], json!(true));
+    assert_eq!(fake.seen().len(), before);
+}
+
+#[tokio::test]
+async fn a_draft_is_posted_with_its_lines_and_the_status_draft() {
+    let (mcp, fake) = start().await;
+    let result = call(
+        &mcp,
+        "solo",
+        "create_maintenance_contract_draft",
+        draft_arguments(),
+    )
+    .await;
+    assert_ne!(result["isError"], json!(true), "{result}");
+
+    let [post] = posts(&fake).try_into().expect("exactly one write");
+    assert_eq!(
+        post.path,
+        format!("/api/v1/organizations/{ORG_A}/maintenance/contracts")
+    );
+    assert_eq!(post.body["status"], "DRAFT");
+    assert_eq!(post.body["customer_id"], CUSTOMER);
+    assert_eq!(post.body["customer_context_id"], SITE);
+    assert_eq!(post.body["reference"], "C25029");
+    assert_eq!(post.body["amount_cents"], 250000);
+    assert_eq!(
+        post.body["season"],
+        json!({"year": 2026, "first_week": 12, "last_week": 48})
+    );
+    assert_eq!(post.body["lines"], draft_arguments()["lines"]);
+    let created: Value = serde_json::from_str(&text(&result)).unwrap();
+    assert_eq!(created["status"], "DRAFT");
+}
+
+#[tokio::test]
+async fn the_assistant_cannot_ask_for_an_active_contract() {
+    let (mcp, fake) = start().await;
+    let mut arguments = draft_arguments();
+    arguments["status"] = json!("ACTIVE");
+
+    let result = call(&mcp, "solo", "create_maintenance_contract_draft", arguments).await;
+
+    assert_ne!(result["isError"], json!(true), "{result}");
+    let [post] = posts(&fake).try_into().expect("exactly one write");
+    assert_eq!(post.body["status"], "DRAFT");
+
+    let (_, _, listing) = rpc(&mcp, Some("solo"), "tools/list", json!({})).await;
+    let tool = listing["result"]["tools"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|tool| tool["name"] == "create_maintenance_contract_draft")
+        .unwrap();
+    let properties = &tool["inputSchema"]["properties"];
+    assert!(properties.get("status").is_none(), "{tool}");
+    for field in [
+        "organization",
+        "customer_id",
+        "customer_context_id",
+        "season",
+        "lines",
+    ] {
+        assert!(properties.get(field).is_some(), "{field}: {tool}");
+    }
+}
+
+#[tokio::test]
+async fn a_draft_with_a_malformed_id_writes_nothing() {
+    let (mcp, fake) = start().await;
+    for field in ["customer_id", "customer_context_id"] {
+        let mut arguments = draft_arguments();
+        arguments[field] = json!("Gaume");
+        let result = call(&mcp, "solo", "create_maintenance_contract_draft", arguments).await;
+        assert_eq!(result["isError"], json!(true), "{field}");
+    }
+    assert!(posts(&fake).is_empty());
+}
+
+#[tokio::test]
+async fn the_maintenance_tools_call_three_routes_and_no_other() {
+    let (mcp, fake) = start().await;
+    call(
+        &mcp,
+        "solo",
+        "list_maintenance_due",
+        json!({"week": "2026-W43"}),
+    )
+    .await;
+    call(
+        &mcp,
+        "solo",
+        "get_maintenance_contract",
+        json!({"contract_id": CONTRACT}),
+    )
+    .await;
+    call(
+        &mcp,
+        "solo",
+        "create_maintenance_contract_draft",
+        draft_arguments(),
+    )
+    .await;
+
+    let mut routes: Vec<(String, String)> = fake
+        .seen()
+        .into_iter()
+        .map(|s| (s.method, s.path.trim_start_matches("/api/v1/").to_owned()))
+        .filter(|(_, path)| path != "users/@me/organizations")
+        .collect();
+    routes.sort();
+    routes.dedup();
+
+    assert_eq!(
+        routes,
+        [
+            (
+                "GET".to_owned(),
+                format!("organizations/{ORG_A}/maintenance/contracts/{CONTRACT}")
+            ),
+            (
+                "GET".to_owned(),
+                format!("organizations/{ORG_A}/maintenance/recap")
+            ),
+            (
+                "POST".to_owned(),
+                format!("organizations/{ORG_A}/maintenance/contracts")
+            ),
+        ]
+    );
 }

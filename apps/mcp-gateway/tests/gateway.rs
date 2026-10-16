@@ -329,7 +329,11 @@ async fn the_metadata_document_names_the_resource_and_the_realm() {
         assert_eq!(doc["authorization_servers"], json!([h.issuer()]));
         assert_eq!(
             doc["scopes_supported"],
-            json!(["mestier.read", "mestier.doe.write"])
+            json!([
+                "mestier.read",
+                "mestier.doe.write",
+                "mestier.maintenance.write"
+            ])
         );
         assert_eq!(doc["bearer_methods_supported"], json!(["header"]));
     }
@@ -466,6 +470,52 @@ async fn an_allowed_call_reaches_the_server_with_the_delegated_token_only() {
     assert_eq!(exchange["audience"], "mestier-api");
     assert_eq!(exchange["actor_token"], "actor-token");
     assert_eq!(exchange["client_id"], "mestier-mcp-gateway");
+}
+
+#[tokio::test]
+async fn the_policy_is_asked_about_a_maintenance_write_with_the_tokens_scopes() {
+    let h = Harness::start().await;
+    let token = h.token(json!({"scope": "openid mestier.read mestier.maintenance.write"}));
+    h.rpc(
+        Some(&token),
+        call("create_maintenance_contract_draft", Some("acme")),
+    )
+    .await;
+    h.rpc(Some(&token), call("list_maintenance_due", Some("acme")))
+        .await;
+
+    let requests = h.pdp.requests.lock().unwrap().clone();
+    assert_eq!(requests.len(), 2);
+    assert_eq!(
+        requests[0]["subject"]["properties"]["scopes"],
+        json!(["openid", "mestier.read", "mestier.maintenance.write"])
+    );
+    assert_eq!(
+        requests[0]["resource"],
+        json!({"type": "mcp_tool", "id": "create_maintenance_contract_draft",
+            "properties": {"access": "write", "domain": "maintenance", "organization": "acme"}})
+    );
+    assert_eq!(
+        requests[1]["resource"]["properties"],
+        json!({"access": "read", "domain": "maintenance", "organization": "acme"})
+    );
+}
+
+#[tokio::test]
+async fn a_denied_maintenance_write_never_reaches_the_server() {
+    let h = Harness::start().await;
+    h.set_pdp(PdpMode::Deny);
+    let token = h.token(json!({}));
+    let response = h
+        .rpc(
+            Some(&token),
+            call("create_maintenance_contract_draft", Some("acme")),
+        )
+        .await;
+    let body: Value = response.json().await.unwrap();
+    assert_eq!(body["error"]["code"], -32001);
+    assert!(h.upstream_calls().is_empty());
+    assert_eq!(h.auth.exchanges.load(Ordering::SeqCst), 0);
 }
 
 #[tokio::test]

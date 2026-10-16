@@ -11,6 +11,11 @@ principals:
     roles: ["user"]
     attr:
       scopes: ["mestier.read", "mestier.doe.write"]
+  maintenance_writer:
+    id: u4
+    roles: ["user"]
+    attr:
+      scopes: ["mestier.read", "mestier.maintenance.write"]
   no_scope:
     id: u3
     roles: ["user"]
@@ -25,6 +30,14 @@ resources:
     kind: mcp_tool
     id: create_doe
     attr: {access: write, domain: doe, organization: acme}
+  write_maintenance:
+    kind: mcp_tool
+    id: create_maintenance_contract_draft
+    attr: {access: write, domain: maintenance, organization: acme}
+  read_maintenance:
+    kind: mcp_tool
+    id: list_maintenance_due
+    attr: {access: read, domain: maintenance, organization: acme}
   write_invoice:
     kind: mcp_tool
     id: create_invoice
@@ -90,3 +103,53 @@ tests:
         resource: write_invoice
         actions:
           delete_project: EFFECT_DENY
+  - name: write maintenance with mestier.maintenance.write is allowed
+    input:
+      principals: [maintenance_writer]
+      resources: [write_maintenance]
+      actions: [create_maintenance_contract_draft]
+    expected:
+      - principal: maintenance_writer
+        resource: write_maintenance
+        actions:
+          create_maintenance_contract_draft: EFFECT_ALLOW
+  - name: write maintenance with only mestier.read is denied
+    input:
+      principals: [reader]
+      resources: [write_maintenance]
+      actions: [create_maintenance_contract_draft]
+    expected:
+      - principal: reader
+        resource: write_maintenance
+        actions:
+          create_maintenance_contract_draft: EFFECT_DENY
+  - name: write maintenance with only mestier.doe.write is denied
+    input:
+      principals: [doe_writer]
+      resources: [write_maintenance]
+      actions: [create_maintenance_contract_draft]
+    expected:
+      - principal: doe_writer
+        resource: write_maintenance
+        actions:
+          create_maintenance_contract_draft: EFFECT_DENY
+  - name: mestier.maintenance.write alone does not open a DOE write
+    input:
+      principals: [maintenance_writer]
+      resources: [write_doe]
+      actions: [create_doe]
+    expected:
+      - principal: maintenance_writer
+        resource: write_doe
+        actions:
+          create_doe: EFFECT_DENY
+  - name: read maintenance with mestier.read is allowed
+    input:
+      principals: [reader]
+      resources: [read_maintenance]
+      actions: [list_maintenance_due]
+    expected:
+      - principal: reader
+        resource: read_maintenance
+        actions:
+          list_maintenance_due: EFFECT_ALLOW
