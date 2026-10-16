@@ -1,10 +1,11 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useActiveOrganization } from '#/hooks/use-active-organization'
 import {
 	useMaintenanceGrid,
 	useRecordMaintenanceIntervention,
 } from '#/hooks/use-maintenance-grid'
 import { mutationErrorMessage } from '#/lib/api-error'
+import { withoutDrafts } from '#/pages/maintenance/lib/grid-model'
 import { parseVisitDay } from '#/pages/maintenance/lib/visit-entry'
 import { isoWeekOf } from '#/pages/maintenance/lib/weeks'
 import { GridUi } from '#/pages/maintenance/ui/grid-ui'
@@ -45,6 +46,11 @@ function GridScreen({
 	const [target, setTarget] = useState<VisitEntryTarget | null>(null)
 	const [day, setDay] = useState('')
 	const [error, setError] = useState<string | null>(null)
+
+	const grid = useMemo(
+		() => (gridQuery.data ? withoutDrafts(gridQuery.data.data) : undefined),
+		[gridQuery.data],
+	)
 
 	const thisWeek = isoWeekOf(today)
 	const currentWeek = thisWeek.year === season ? thisWeek.week : null
@@ -87,7 +93,7 @@ function GridScreen({
 		<GridUi
 			organizationName={organizationName}
 			season={season}
-			grid={gridQuery.data?.data}
+			grid={grid}
 			currentWeek={currentWeek}
 			isLoading={gridQuery.isLoading}
 			error={gridQuery.isError ? mutationErrorMessage(gridQuery.error) : null}

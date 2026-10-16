@@ -15,7 +15,9 @@ import { seedPermissionsCacheForOrganization } from '#/test/with-permissions'
 
 const MAINTENANCE = '/api/v1/organizations/{organization_id}/maintenance'
 const CONTRACTS_PATH = `${MAINTENANCE}/contracts`
+const CONTRACT_PATH = `${MAINTENANCE}/contracts/{contract_id}`
 const DUPLICATE_PATH = `${MAINTENANCE}/contracts/{contract_id}/duplicate`
+const GRID_PATH = `${MAINTENANCE}/grid`
 const CUSTOMERS_PATH = '/api/v1/organizations/{organization_id}/customers'
 const SITES_PATH = '/api/v1/customers/{customer_id}/customer-contexts'
 const MEMBERS_PATH = '/api/v1/organizations/{organization_id}/members'
@@ -65,8 +67,10 @@ interface Call {
 	params: unknown
 }
 
-function installFakeApi(contracts: MaintenanceContract[]) {
+function installFakeApi(initial: MaintenanceContract[]) {
 	const calls: Call[] = []
+	let contracts = initial
+	let failWith: Error | null = null
 	const fakeApi = {
 		get(path: string, params: unknown) {
 			const { path: pathParams, query } = (params ?? {}) as {
@@ -112,6 +116,24 @@ function installFakeApi(contracts: MaintenanceContract[]) {
 					mutationKey: [{ method, path }],
 					mutationFn: async (params: unknown) => {
 						calls.push({ method, path, params })
+						if (failWith) {
+							const failure = failWith
+							failWith = null
+							throw failure
+						}
+						if (path === CONTRACT_PATH) {
+							const { path: ids, body } = params as {
+								path: { contract_id: string }
+								body: Partial<MaintenanceContract>
+							}
+							// What the API does: replace the contract's fields, keep its identity.
+							contracts = contracts.map((contract) =>
+								contract.id === ids.contract_id
+									? ({ ...contract, ...body } as MaintenanceContract)
+									: contract,
+							)
+							return page(contracts.find((c) => c.id === ids.contract_id))
+						}
 						if (path === DUPLICATE_PATH) {
 							return page({
 								...GAUME_2026,
@@ -128,11 +150,16 @@ function installFakeApi(contracts: MaintenanceContract[]) {
 	// biome-ignore lint/suspicious/noExplicitAny: test-only fake, shape matches TanstackQueryApiClient's used surface
 	;(window as any).tanstackApi = fakeApi
 
-	return calls
+	return {
+		calls,
+		failNextWith(error: Error) {
+			failWith = error
+		},
+	}
 }
 
 function renderContracts(contracts: MaintenanceContract[]) {
-	const calls = installFakeApi(contracts)
+	const { calls, failNextWith } = installFakeApi(contracts)
 	const onSeasonChange = vi.fn()
 	const queryClient = new QueryClient({
 		defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
@@ -161,7 +188,7 @@ function renderContracts(contracts: MaintenanceContract[]) {
 		</Providers>,
 	)
 
-	return { calls, onSeasonChange }
+	return { calls, onSeasonChange, failNextWith, queryClient }
 }
 
 describe('ContractsFeature', () => {
@@ -333,5 +360,204 @@ describe('ContractsFeature', () => {
 		expect(body.status).toBe('DRAFT')
 		expect(body.amount_cents).toBe(125000)
 		expect((body.lines as { id: string }[])[0].id).toBe('line-tonte')
+	})
+
+	describe('draft contracts', () => {
+		const DRAFT_VICHY: MaintenanceContract = {
+			...GAUME_2026,
+			id: 'contract-vichy',
+			customer_id: 'customer-other',
+			customer_context_id: 'site-vichy',
+			reference: 'C26001',
+			status: 'DRAFT',
+			quote_id: 'quote-9',
+			notes: 'Lu sur la feuille papier',
+			lines: [
+				{
+					id: 'line-taille',
+					label: 'Taille de printemps',
+					cadence: {
+						kind: 'WINDOWS',
+						windows: [{ from_week: 14, to_week: 17 }],
+					},
+					minutes_per_intervention: null,
+				},
+			],
+		}
+
+		function draftsSection() {
+			return screen.getByRole('region', { name: 'Brouillons à vérifier' })
+		}
+
+		function activeSection() {
+			return screen.getByRole('region', { name: 'Contrats actifs' })
+		}
+
+		it('shows only the draft contracts in their own section, with a badge', async () => {
+			renderContracts([GAUME_2026, DRAFT_VICHY])
+			await screen.findByRole('region', { name: 'Brouillons à vérifier' })
+
+			const drafts = within(draftsSection())
+			expect(drafts.getByText('C26001')).toBeTruthy()
+			expect(drafts.getByText('Brouillon')).toBeTruthy()
+			expect(drafts.queryByText('C25029')).toBeNull()
+
+			const active = within(activeSection())
+			expect(active.getByText('C25029')).toBeTruthy()
+			expect(active.queryByText('C26001')).toBeNull()
+			expect(active.queryByText('Brouillon')).toBeNull()
+		})
+
+		it('has no draft section when every contract is active', async () => {
+			renderContracts([GAUME_2026])
+			await screen.findByRole('row', { name: /GAUME - Jardin/ })
+
+			expect(
+				screen.queryByRole('region', { name: 'Brouillons à vérifier' }),
+			).toBeNull()
+		})
+
+		it('activates a draft after a confirmation: the same PUT with only the status changed, then it joins the active list', async () => {
+			const user = userEvent.setup()
+			const { calls } = renderContracts([GAUME_2026, DRAFT_VICHY])
+			await screen.findByRole('region', { name: 'Brouillons à vérifier' })
+
+			await user.click(
+				within(draftsSection()).getByRole('button', { name: /Activer/ }),
+			)
+			expect(calls).toEqual([])
+			const confirmation = await screen.findByRole('alertdialog')
+			await user.click(
+				within(confirmation).getByRole('button', { name: 'Activer' }),
+			)
+
+			await waitFor(() => expect(calls).toHaveLength(1))
+			expect(calls[0]).toEqual({
+				method: 'put',
+				path: CONTRACT_PATH,
+				params: {
+					path: { organization_id: 'org-1', contract_id: 'contract-vichy' },
+					body: {
+						reference: 'C26001',
+						season: { year: 2026, first_week: 12, last_week: 48 },
+						manager_member_id: 'member-1',
+						amount_cents: 125000,
+						quote_id: 'quote-9',
+						notes: 'Lu sur la feuille papier',
+						status: 'ACTIVE',
+						lines: [
+							{
+								id: 'line-taille',
+								label: 'Taille de printemps',
+								cadence: {
+									kind: 'WINDOWS',
+									windows: [{ from_week: 14, to_week: 17 }],
+								},
+								minutes_per_intervention: null,
+							},
+						],
+					},
+				},
+			})
+
+			await waitFor(() =>
+				expect(
+					screen.queryByRole('region', { name: 'Brouillons à vérifier' }),
+				).toBeNull(),
+			)
+			const active = within(activeSection())
+			expect(active.getByText('C26001')).toBeTruthy()
+			expect(active.queryByText('Brouillon')).toBeNull()
+		})
+
+		it('sends nothing when the confirmation is cancelled', async () => {
+			const user = userEvent.setup()
+			const { calls } = renderContracts([DRAFT_VICHY])
+			await screen.findByRole('region', { name: 'Brouillons à vérifier' })
+
+			await user.click(
+				within(draftsSection()).getByRole('button', { name: /Activer/ }),
+			)
+			const confirmation = await screen.findByRole('alertdialog')
+			await user.click(
+				within(confirmation).getByRole('button', { name: 'Annuler' }),
+			)
+
+			expect(calls).toEqual([])
+			expect(within(draftsSection()).getByText('C26001')).toBeTruthy()
+		})
+
+		it.each([
+			['409', 'Le contrat a été modifié : une semaine sort de la saison.'],
+			['404', 'Contrat introuvable.'],
+		])('shows the API refusal (%s) and keeps the contract a draft', async (_status, message) => {
+			const user = userEvent.setup()
+			const { calls, failNextWith } = renderContracts([DRAFT_VICHY])
+			await screen.findByRole('region', { name: 'Brouillons à vérifier' })
+			failNextWith(new Error(message))
+
+			await user.click(
+				within(draftsSection()).getByRole('button', { name: /Activer/ }),
+			)
+			const confirmation = await screen.findByRole('alertdialog')
+			await user.click(
+				within(confirmation).getByRole('button', { name: 'Activer' }),
+			)
+
+			expect((await screen.findByRole('alert')).textContent).toContain(message)
+			expect(calls).toHaveLength(1)
+			expect(within(draftsSection()).getByText('C26001')).toBeTruthy()
+		})
+
+		it('refreshes the grid and the recap after an activation', async () => {
+			const user = userEvent.setup()
+			const { calls, queryClient } = renderContracts([DRAFT_VICHY])
+			await screen.findByRole('region', { name: 'Brouillons à vérifier' })
+			const gridKey = [
+				{
+					_id: GRID_PATH,
+					path: { organization_id: 'org-1' },
+					query: { season: 2026 },
+				},
+			]
+			queryClient.setQueryData(gridKey, { data: { year: 2026, contracts: [] } })
+
+			await user.click(
+				within(draftsSection()).getByRole('button', { name: /Activer/ }),
+			)
+			await user.click(
+				within(await screen.findByRole('alertdialog')).getByRole('button', {
+					name: 'Activer',
+				}),
+			)
+
+			await waitFor(() => expect(calls).toHaveLength(1))
+			await waitFor(() =>
+				expect(queryClient.getQueryState(gridKey)?.isInvalidated).toBe(true),
+			)
+		})
+
+		it('opens a draft in the contract form to edit it before activating', async () => {
+			const user = userEvent.setup()
+			const { calls } = renderContracts([DRAFT_VICHY])
+			await screen.findByRole('region', { name: 'Brouillons à vérifier' })
+
+			await user.click(
+				within(draftsSection()).getByRole('button', { name: /Modifier/ }),
+			)
+			const dialog = await screen.findByRole('dialog')
+			expect(
+				(within(dialog).getByLabelText('Code affaire') as HTMLInputElement)
+					.value,
+			).toBe('C26001')
+			await user.click(
+				within(dialog).getByRole('button', { name: 'Enregistrer' }),
+			)
+
+			await waitFor(() => expect(calls).toHaveLength(1))
+			const { body } = calls[0].params as { body: Record<string, unknown> }
+			expect(calls[0].method).toBe('put')
+			expect(body.status).toBe('DRAFT')
+		})
 	})
 })

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+	activationBody,
 	type ContractDraft,
 	contractIssues,
 	contractToDraft,
@@ -197,5 +198,82 @@ describe('duplicateLabel', () => {
 		expect(
 			duplicateLabel({ season: { year: 2026, first_week: 1, last_week: 2 } }),
 		).toBe('Dupliquer pour 2027')
+	})
+})
+
+describe('activationBody', () => {
+	const draft: MaintenanceContract = {
+		id: 'contract-1',
+		customer_id: 'customer-1',
+		customer_context_id: 'context-1',
+		project_id: 'project-1',
+		reference: 'C25029',
+		season: { year: 2026, first_week: 12, last_week: 48 },
+		manager_member_id: 'member-1',
+		amount_cents: 125050,
+		quote_id: 'quote-1',
+		notes: '  Portail à gauche  ',
+		status: 'DRAFT',
+		lines: [
+			{
+				id: 'line-1',
+				label: 'Taille',
+				cadence: { kind: 'WINDOWS', windows: [{ from_week: 14, to_week: 17 }] },
+				minutes_per_intervention: 120,
+			},
+			{
+				id: 'line-2',
+				label: 'Tonte',
+				cadence: { kind: 'ROLLING', every_days: 14 },
+			},
+		],
+		created_at: '2026-01-01T00:00:00Z',
+		updated_at: '2026-01-01T00:00:00Z',
+	}
+
+	it('is the contract as it is, with only the status changed', () => {
+		expect(activationBody(draft)).toEqual({
+			reference: 'C25029',
+			season: { year: 2026, first_week: 12, last_week: 48 },
+			manager_member_id: 'member-1',
+			amount_cents: 125050,
+			quote_id: 'quote-1',
+			notes: '  Portail à gauche  ',
+			status: 'ACTIVE',
+			lines: [
+				{
+					id: 'line-1',
+					label: 'Taille',
+					cadence: {
+						kind: 'WINDOWS',
+						windows: [{ from_week: 14, to_week: 17 }],
+					},
+					minutes_per_intervention: 120,
+				},
+				{
+					id: 'line-2',
+					label: 'Tonte',
+					cadence: { kind: 'ROLLING', every_days: 14 },
+					minutes_per_intervention: null,
+				},
+			],
+		})
+	})
+
+	it('sends an absent optional field as null, so the PUT clears nothing it should keep', () => {
+		const body = activationBody({
+			...draft,
+			reference: undefined,
+			manager_member_id: undefined,
+			amount_cents: undefined,
+			quote_id: undefined,
+			notes: undefined,
+		})
+
+		expect(body.reference).toBeNull()
+		expect(body.manager_member_id).toBeNull()
+		expect(body.amount_cents).toBeNull()
+		expect(body.quote_id).toBeNull()
+		expect(body.notes).toBeNull()
 	})
 })

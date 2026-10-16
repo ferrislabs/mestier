@@ -12,6 +12,7 @@ import {
 import { useReferenceCatalog } from '#/hooks/use-reference-catalog'
 import { mutationErrorMessage } from '#/lib/api-error'
 import {
+	activationBody,
 	type ContractDraft,
 	contractIssues,
 	contractToDraft,
@@ -22,6 +23,7 @@ import {
 	toContractBody,
 	toCreateRequest,
 } from '#/pages/maintenance/lib/contract-form'
+import { splitDrafts } from '#/pages/maintenance/lib/contract-list'
 import type { MaintenanceContract } from '#/pages/maintenance/types'
 import {
 	type ContractRow,
@@ -61,6 +63,7 @@ function ContractsScreen({
 	const [showIssues, setShowIssues] = useState(false)
 	const [formError, setFormError] = useState<string | null>(null)
 	const [archiveTarget, setArchiveTarget] = useState<ContractRow | null>(null)
+	const [activateTarget, setActivateTarget] = useState<ContractRow | null>(null)
 	const [notice, setNotice] = useState<{
 		message: string
 		season: number
@@ -87,6 +90,7 @@ function ContractsScreen({
 
 	const create = useCreateMaintenanceContract()
 	const update = useUpdateMaintenanceContract()
+	const activate = useUpdateMaintenanceContract()
 	const archive = useArchiveMaintenanceContract()
 	const duplicate = useDuplicateMaintenanceContract()
 
@@ -118,6 +122,11 @@ function ContractsScreen({
 				: null,
 		}))
 	}, [contracts, customers, memberRows, siteQueries])
+
+	const { drafts: draftRows, active: activeRows } = useMemo(
+		() => splitDrafts(rows),
+		[rows],
+	)
 
 	const issues = draft ? contractIssues(draft) : { lines: {} }
 	const isSaving = create.isPending || update.isPending
@@ -217,7 +226,25 @@ function ContractsScreen({
 		)
 	}
 
+	function confirmActivate() {
+		if (!activateTarget) return
+		const { contract } = activateTarget
+		setActivateTarget(null)
+		setActionError(null)
+		setNotice(null)
+		// The grid and the recap read the contract's status: the hook refreshes
+		// every maintenance query once the PUT has gone through.
+		activate.mutate(
+			{
+				path: { organization_id: organizationId, contract_id: contract.id },
+				body: activationBody(contract),
+			},
+			{ onError: (failure) => setActionError(mutationErrorMessage(failure)) },
+		)
+	}
+
 	const pendingContractId =
+		(activate.isPending && activate.variables?.path.contract_id) ||
 		(duplicate.isPending && duplicate.variables?.path.contract_id) ||
 		(archive.isPending && archive.variables?.path.contract_id) ||
 		null
@@ -226,7 +253,8 @@ function ContractsScreen({
 		<ContractsUi
 			organizationName={organizationName}
 			season={season}
-			rows={rows}
+			rows={activeRows}
+			draftRows={draftRows}
 			includeArchived={includeArchived}
 			isLoading={contractsQuery.isLoading}
 			error={
@@ -237,6 +265,7 @@ function ContractsScreen({
 			notice={notice}
 			pendingContractId={pendingContractId}
 			archiveTarget={archiveTarget}
+			activateTarget={activateTarget}
 			form={{
 				draft,
 				customers: customers.map((c) => ({ id: c.id, label: c.name })),
@@ -278,6 +307,8 @@ function ContractsScreen({
 			onDuplicate={duplicateContract}
 			onAskArchive={setArchiveTarget}
 			onConfirmArchive={confirmArchive}
+			onAskActivate={setActivateTarget}
+			onConfirmActivate={confirmActivate}
 			onDismissNotice={() => setNotice(null)}
 		/>
 	)

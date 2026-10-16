@@ -359,4 +359,25 @@ describe('GridFeature', () => {
 			await screen.findByText('Aucun contrat pour la saison 2026.'),
 		).toBeTruthy()
 	})
+
+	it('does not show a draft contract: it is reviewed in the Contrats tab', async () => {
+		renderGrid({
+			year: 2026,
+			contracts: [
+				contract([tonte()]),
+				{
+					...contract([taille()]),
+					id: 'contract-draft',
+					reference: 'C99999',
+					status: 'DRAFT',
+					site: { customer_name: 'Mairie', site_label: 'Parc', city: 'Cusset' },
+				},
+			],
+		})
+
+		await screen.findByText('C25029 - GAUME - Jardin')
+
+		expect(screen.queryByText(/C99999/)).toBeNull()
+		expect(screen.queryByRole('row', { name: /Taille/ })).toBeNull()
+	})
 })

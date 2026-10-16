@@ -227,6 +227,35 @@ export function toContractBody(draft: ContractDraft): Schemas.ContractBody {
 	}
 }
 
+/**
+ * The `PUT` that activates a contract. It replaces everything, so every field
+ * goes back as the API gave it (not through the form, which trims and
+ * reformats), with `ACTIVE` as the only change.
+ */
+export function activationBody(
+	contract: MaintenanceContract,
+): Schemas.ContractBody {
+	return {
+		reference: contract.reference ?? null,
+		season: {
+			year: contract.season.year,
+			first_week: contract.season.first_week,
+			last_week: contract.season.last_week,
+		},
+		manager_member_id: contract.manager_member_id ?? null,
+		amount_cents: contract.amount_cents ?? null,
+		quote_id: contract.quote_id ?? null,
+		notes: contract.notes ?? null,
+		status: 'ACTIVE',
+		lines: contract.lines.map((line) => ({
+			id: line.id,
+			label: line.label,
+			cadence: line.cadence,
+			minutes_per_intervention: line.minutes_per_intervention ?? null,
+		})),
+	}
+}
+
 export function toCreateRequest(
 	draft: ContractDraft,
 ): Schemas.CreateMaintenanceContractRequest {
