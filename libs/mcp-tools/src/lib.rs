@@ -11,6 +11,11 @@ use std::{fmt, str::FromStr};
 pub const SCOPE_READ: &str = "mestier.read";
 /// OAuth scope granting the DOE write tools.
 pub const SCOPE_DOE_WRITE: &str = "mestier.doe.write";
+/// OAuth scope granting the maintenance write tool (contract drafts).
+pub const SCOPE_MAINTENANCE_WRITE: &str = "mestier.maintenance.write";
+
+/// Every scope the gateway advertises in its protected resource metadata.
+pub const SCOPES_SUPPORTED: [&str; 3] = [SCOPE_READ, SCOPE_DOE_WRITE, SCOPE_MAINTENANCE_WRITE];
 
 /// Header the gateway sets on requests it forwards, naming the LLM client
 /// the call came from. For logs only: authorization never reads it.
@@ -59,10 +64,13 @@ pub enum Tool {
     DeleteDoeFile,
     UpdateDoeHeader,
     ExportDoePdf,
+    ListMaintenanceDue,
+    GetMaintenanceContract,
+    CreateMaintenanceContractDraft,
 }
 
 impl Tool {
-    pub const ALL: [Tool; 26] = [
+    pub const ALL: [Tool; 29] = [
         Tool::ListOrganizations,
         Tool::ListProjects,
         Tool::GetProject,
@@ -89,6 +97,9 @@ impl Tool {
         Tool::DeleteDoeFile,
         Tool::UpdateDoeHeader,
         Tool::ExportDoePdf,
+        Tool::ListMaintenanceDue,
+        Tool::GetMaintenanceContract,
+        Tool::CreateMaintenanceContractDraft,
     ];
 
     /// The name MCP clients call the tool by.
@@ -120,16 +131,45 @@ impl Tool {
             Self::DeleteDoeFile => "delete_doe_file",
             Self::UpdateDoeHeader => "update_doe_header",
             Self::ExportDoePdf => "export_doe_pdf",
+            Self::ListMaintenanceDue => "list_maintenance_due",
+            Self::GetMaintenanceContract => "get_maintenance_contract",
+            Self::CreateMaintenanceContractDraft => "create_maintenance_contract_draft",
         }
     }
 
+    /// No wildcard arm: a new tool has to be classified here, because an
+    /// unclassified write would pass for a read.
     pub fn access(self) -> Access {
         match self {
             Self::CreateDoe
             | Self::AddDoeSupplyFromProduct
             | Self::AddDoeSupply
-            | Self::UpdateDoeHeader => Access::Write,
-            _ => Access::Read,
+            | Self::UpdateDoeSupply
+            | Self::DeleteDoeSupply
+            | Self::AddDoeSection
+            | Self::UpdateDoeSection
+            | Self::DeleteDoeSection
+            | Self::ReorderDoeSections
+            | Self::AddDoeFile
+            | Self::UpdateDoeFile
+            | Self::DeleteDoeFile
+            | Self::UpdateDoeHeader
+            | Self::CreateMaintenanceContractDraft => Access::Write,
+            Self::ListOrganizations
+            | Self::ListProjects
+            | Self::GetProject
+            | Self::ListDoes
+            | Self::GetDoe
+            | Self::ListDoeModels
+            | Self::SearchProducts
+            | Self::GetProduct
+            | Self::ListQuotes
+            | Self::GetQuote
+            | Self::ListInvoices
+            | Self::GetInvoice
+            | Self::ExportDoePdf
+            | Self::ListMaintenanceDue
+            | Self::GetMaintenanceContract => Access::Read,
         }
     }
 
@@ -158,6 +198,9 @@ impl Tool {
             Self::SearchProducts | Self::GetProduct => "catalog",
             Self::ListQuotes | Self::GetQuote => "quote",
             Self::ListInvoices | Self::GetInvoice => "invoice",
+            Self::ListMaintenanceDue
+            | Self::GetMaintenanceContract
+            | Self::CreateMaintenanceContractDraft => "maintenance",
         }
     }
 
@@ -216,11 +259,80 @@ mod tests {
     }
 
     #[test]
-    fn only_doe_tools_write() {
+    fn only_doe_and_maintenance_tools_write() {
         for tool in Tool::ALL {
             if tool.access() == Access::Write {
-                assert_eq!(tool.domain(), "doe", "{tool}");
+                assert!(["doe", "maintenance"].contains(&tool.domain()), "{tool}");
             }
         }
+    }
+
+    #[test]
+    fn the_write_tools_are_exactly_these() {
+        let mut writes: Vec<&str> = Tool::ALL
+            .into_iter()
+            .filter(|tool| tool.access() == Access::Write)
+            .map(Tool::name)
+            .collect();
+        writes.sort_unstable();
+
+        assert_eq!(
+            writes,
+            [
+                "add_doe_file",
+                "add_doe_section",
+                "add_doe_supply",
+                "add_doe_supply_from_product",
+                "create_doe",
+                "create_maintenance_contract_draft",
+                "delete_doe_file",
+                "delete_doe_section",
+                "delete_doe_supply",
+                "reorder_doe_sections",
+                "update_doe_file",
+                "update_doe_header",
+                "update_doe_section",
+                "update_doe_supply",
+            ]
+        );
+    }
+
+    #[test]
+    fn the_maintenance_tools_are_classified() {
+        let expected = [
+            (Tool::ListMaintenanceDue, Access::Read),
+            (Tool::GetMaintenanceContract, Access::Read),
+            (Tool::CreateMaintenanceContractDraft, Access::Write),
+        ];
+        for (tool, access) in expected {
+            assert_eq!(tool.access(), access, "{tool}");
+            assert_eq!(tool.domain(), "maintenance", "{tool}");
+            assert!(tool.is_organization_scoped(), "{tool}");
+        }
+    }
+
+    #[test]
+    fn nothing_activates_validates_or_deletes_maintenance() {
+        for tool in Tool::ALL {
+            let name = tool.name();
+            if tool.domain() == "maintenance" {
+                for forbidden in ["activate", "validate", "reject", "delete", "archive"] {
+                    assert!(!name.contains(forbidden), "{name}");
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn the_maintenance_write_scope_is_advertised_with_the_others() {
+        assert_eq!(SCOPE_MAINTENANCE_WRITE, "mestier.maintenance.write");
+        assert_eq!(
+            SCOPES_SUPPORTED,
+            [
+                "mestier.read",
+                "mestier.doe.write",
+                "mestier.maintenance.write"
+            ]
+        );
     }
 }

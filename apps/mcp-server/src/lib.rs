@@ -2,6 +2,7 @@ pub mod api;
 pub mod app;
 pub mod edit;
 pub mod files;
+pub mod maintenance;
 pub mod session;
 pub mod tools;
 

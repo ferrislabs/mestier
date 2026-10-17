@@ -1,7 +1,9 @@
 use auth::Identity;
 use axum::{Extension, Json, extract::State};
 use handlers::{ApiError, AppState, DataEnvelope, Response, resolve_actor};
-use mestier_core::{CreateMaintenanceContractCommand, CustomerContextId, CustomerId};
+use mestier_core::{
+    ContractStatus, CreateMaintenanceContractCommand, CustomerContextId, CustomerId,
+};
 use serde::Deserialize;
 use utoipa::ToSchema;
 
@@ -24,7 +26,8 @@ pub struct CreateMaintenanceContractRequest {
 }
 
 /// Also creates the contract's project, named after the customer, the site
-/// and the season.
+/// and the season. A token the MCP gateway obtained for an assistant may only
+/// create a `DRAFT`: a person activates it.
 #[utoipa::path(
     post,
     path = "/api/v1/organizations/{organization_id}/maintenance/contracts",
@@ -37,7 +40,7 @@ pub struct CreateMaintenanceContractRequest {
     responses(
         (status = 201, description = "Contract created with its lines and its project", body = inline(DataEnvelope<MaintenanceContractResponse>)),
         (status = 401, description = "Unauthorized"),
-        (status = 403, description = "Forbidden"),
+        (status = 403, description = "Forbidden, or a delegated token asking for a contract that is not a draft"),
         (status = 404, description = "Customer, site, manager or quote not found in the organization"),
         (status = 409, description = "Invalid season, cadence or line, a window outside the season, or a site that is not the customer's"),
     ),
@@ -52,6 +55,11 @@ pub async fn handler(
     require_org_membership(&state, &identity, path.organization_id).await?;
     let (_, actor) = resolve_actor(&state, &identity).await?;
     let fields = ContractFields::try_from(payload.contract)?;
+    if identity.is_delegated() && fields.status != ContractStatus::Draft {
+        return Err(ApiError::ForbiddenWithReason(
+            "Un assistant ne peut créer qu'un contrat en brouillon.".to_owned(),
+        ));
+    }
 
     let contract = state
         .usecase

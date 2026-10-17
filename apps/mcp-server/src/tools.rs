@@ -17,6 +17,7 @@ use crate::{
     api::{ApiClient, Fault},
     edit::{MakerLabel, NewSection, PerPage, SectionKind, SectionPatch, SectionRef, SupplyPatch},
     files::{FileFetcher, FileParam, Source, Target},
+    maintenance::ContractDraft,
     session::{FileRequest, HeaderPatch, ManualSupply, Paging, PdfOutcome, Session, SupplyRequest},
 };
 
@@ -430,6 +431,41 @@ pub struct DeleteFileArgs {
     pub doe_id: String,
     #[schemars(description = "Storage key of the file to remove from the DOE (see get_doe).")]
     pub key: String,
+}
+
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
+#[schemars(crate = "rmcp::schemars")]
+pub struct MaintenanceDueArgs {
+    #[schemars(
+        description = "Slug of the organization. Optional when the user belongs to exactly one organization; see list_organizations."
+    )]
+    pub organization: Option<String>,
+    #[schemars(
+        description = "ISO week to prepare, written like 2026-W43. The recap of a week also holds what was due before it."
+    )]
+    pub week: String,
+}
+
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
+#[schemars(crate = "rmcp::schemars")]
+pub struct MaintenanceContractArgs {
+    #[schemars(
+        description = "Slug of the organization. Optional when the user belongs to exactly one organization; see list_organizations."
+    )]
+    pub organization: Option<String>,
+    #[schemars(description = "UUID of the maintenance contract (contract_id of a recap line).")]
+    pub contract_id: String,
+}
+
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
+#[schemars(crate = "rmcp::schemars")]
+pub struct CreateMaintenanceDraftArgs {
+    #[schemars(
+        description = "Slug of the organization. Optional when the user belongs to exactly one organization; see list_organizations."
+    )]
+    pub organization: Option<String>,
+    #[serde(flatten)]
+    pub draft: ContractDraft,
 }
 
 #[derive(Clone)]
@@ -1161,6 +1197,79 @@ impl MestierTools {
             async {
                 let data = s
                     .delete_file(args.organization.as_deref(), &args.doe_id, &args.key)
+                    .await?;
+                Ok(json_result(&data))
+            }
+            .await,
+        )
+    }
+
+    #[tool(
+        description = "List the maintenance services (entretien) to schedule for an ISO week, for example 2026-W43: the ones due in that week, a window still open in it, and the ones overdue from before. Grouped by town, overdue first. Services already carried by an open task, finished or on-demand services, draft contracts and archived contracts are not listed. Each line has its contract_id, usable with get_maintenance_contract."
+    )]
+    async fn list_maintenance_due(
+        &self,
+        Parameters(args): Parameters<MaintenanceDueArgs>,
+        Extension(parts): Extension<Parts>,
+    ) -> CallToolResult {
+        let s = match self.session(&parts, "list_maintenance_due") {
+            Ok(s) => s,
+            Err(refusal) => return refusal,
+        };
+        finish(
+            async {
+                let recap = s
+                    .maintenance_due(args.organization.as_deref(), &args.week)
+                    .await?;
+                Ok(json_result(&recap))
+            }
+            .await,
+        )
+    }
+
+    #[tool(
+        description = "Get one maintenance contract (contrat d'entretien) by id: customer, site, season, status (DRAFT or ACTIVE) and its lines with their cadence."
+    )]
+    async fn get_maintenance_contract(
+        &self,
+        Parameters(args): Parameters<MaintenanceContractArgs>,
+        Extension(parts): Extension<Parts>,
+    ) -> CallToolResult {
+        let s = match self.session(&parts, "get_maintenance_contract") {
+            Ok(s) => s,
+            Err(refusal) => return refusal,
+        };
+        finish(
+            async {
+                let data = s
+                    .get_scoped(
+                        args.organization.as_deref(),
+                        "maintenance/contracts",
+                        &args.contract_id,
+                    )
+                    .await?;
+                Ok(json_result(&data))
+            }
+            .await,
+        )
+    }
+
+    #[tool(
+        description = "Create a maintenance contract (contrat d'entretien) as a DRAFT from a paper or Excel sheet: one contract for one customer site and one season, with a line per service and its cadence (rolling every N days, windows of weeks, or on demand). A draft is never due and stays out of the weekly recap until a person reviews and activates it in Mestier; this tool cannot activate a contract. The customer and the site must already exist. Returns the draft."
+    )]
+    async fn create_maintenance_contract_draft(
+        &self,
+        Parameters(args): Parameters<CreateMaintenanceDraftArgs>,
+        Extension(parts): Extension<Parts>,
+    ) -> CallToolResult {
+        let s = match self.session(&parts, "create_maintenance_contract_draft") {
+            Ok(s) => s,
+            Err(refusal) => return refusal,
+        };
+        finish(
+            async {
+                let data = s
+                    .create_maintenance_draft(args.organization.as_deref(), &args.draft)
                     .await?;
                 Ok(json_result(&data))
             }

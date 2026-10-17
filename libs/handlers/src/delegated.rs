@@ -59,6 +59,18 @@ const DELEGATED_ROUTES: &[(Method, &str)] = &[
     ),
     (Method::GET, "/api/v1/invoices/{invoice_id}"),
     (Method::POST, "/api/v1/files"),
+    (
+        Method::GET,
+        "/api/v1/organizations/{organization_id}/maintenance/recap",
+    ),
+    (
+        Method::GET,
+        "/api/v1/organizations/{organization_id}/maintenance/contracts/{contract_id}",
+    ),
+    (
+        Method::POST,
+        "/api/v1/organizations/{organization_id}/maintenance/contracts",
+    ),
 ];
 
 /// Whether a delegated token may call `method` on the route template
@@ -72,6 +84,8 @@ pub fn delegated_route_allowed(method: &Method, matched_path: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    const MAINTENANCE_PREFIX: &str = "/api/v1/organizations/{organization_id}/maintenance";
 
     #[test]
     fn the_routes_the_mcp_server_calls_are_open() {
@@ -103,5 +117,64 @@ mod tests {
                 .all(|(method, _)| *method != Method::DELETE),
             "no delegated route may delete anything"
         );
+    }
+
+    #[test]
+    fn maintenance_opens_the_recap_a_contract_read_and_a_contract_creation_only() {
+        let mut open: Vec<(String, &str)> = DELEGATED_ROUTES
+            .iter()
+            .filter(|(_, template)| template.starts_with(MAINTENANCE_PREFIX))
+            .map(|(method, template)| (method.to_string(), *template))
+            .collect();
+        open.sort();
+
+        let mut expected = vec![
+            (
+                "GET".to_owned(),
+                "/api/v1/organizations/{organization_id}/maintenance/contracts/{contract_id}",
+            ),
+            (
+                "GET".to_owned(),
+                "/api/v1/organizations/{organization_id}/maintenance/recap",
+            ),
+            (
+                "POST".to_owned(),
+                "/api/v1/organizations/{organization_id}/maintenance/contracts",
+            ),
+        ];
+        expected.sort();
+        assert_eq!(open, expected);
+    }
+
+    #[test]
+    fn the_assistant_can_neither_activate_a_contract_nor_validate_a_visit() {
+        let closed = [
+            (Method::PUT, "/maintenance/contracts/{contract_id}"),
+            (Method::PATCH, "/maintenance/contracts/{contract_id}"),
+            (Method::DELETE, "/maintenance/contracts/{contract_id}"),
+            (Method::POST, "/maintenance/contracts/{contract_id}/archive"),
+            (
+                Method::POST,
+                "/maintenance/contracts/{contract_id}/duplicate",
+            ),
+            (Method::GET, "/maintenance/contracts"),
+            (Method::GET, "/maintenance/grid"),
+            (Method::GET, "/maintenance/recap.pdf"),
+            (Method::POST, "/maintenance/recap/plan"),
+            (Method::POST, "/maintenance/lines/{line_id}/interventions"),
+            (Method::GET, "/maintenance/interventions"),
+            (
+                Method::POST,
+                "/maintenance/interventions/{intervention_id}/validate",
+            ),
+            (
+                Method::POST,
+                "/maintenance/interventions/{intervention_id}/reject",
+            ),
+        ];
+        for (method, suffix) in closed {
+            let path = format!("{MAINTENANCE_PREFIX}{suffix}");
+            assert!(!delegated_route_allowed(&method, &path), "{method} {path}");
+        }
     }
 }

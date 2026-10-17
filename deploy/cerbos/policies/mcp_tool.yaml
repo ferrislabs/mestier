@@ -24,3 +24,14 @@ resourcePolicy:
               - expr: R.attr.access == "write"
               - expr: R.attr.domain == "doe"
               - expr: '"mestier.doe.write" in P.attr.scopes'
+    - actions: ["*"]
+      effect: EFFECT_ALLOW
+      roles: ["user"]
+      name: maintenance_write_with_maintenance_write_scope
+      condition:
+        match:
+          all:
+            of:
+              - expr: R.attr.access == "write"
+              - expr: R.attr.domain == "maintenance"
+              - expr: '"mestier.maintenance.write" in P.attr.scopes'

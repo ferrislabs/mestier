@@ -5,6 +5,7 @@ use crate::{
     api::{ApiClient, Fault, MAX_PDF_BYTES},
     edit::{self, FilePlacement, NewSection, SectionKind, SectionPatch, SectionRef, SupplyPatch},
     files::{FileFetcher, Source, Target},
+    maintenance::ContractDraft,
 };
 
 const PRODUCT_PAGE_SIZE: u64 = 100;
@@ -229,6 +230,41 @@ impl<'a> Session<'a> {
         }
         found.truncate(MAX_SEARCH_RESULTS);
         Ok(Value::Array(found))
+    }
+
+    pub async fn maintenance_due(
+        &self,
+        organization: Option<&str>,
+        week: &str,
+    ) -> Result<Value, Fault> {
+        let org = self.organization_id(organization).await?;
+        let body = self
+            .api
+            .get(
+                self.token,
+                &format!("organizations/{org}/maintenance/recap"),
+                &[("week", week.to_owned())],
+            )
+            .await?;
+        Ok(body["data"].clone())
+    }
+
+    pub async fn create_maintenance_draft(
+        &self,
+        organization: Option<&str>,
+        draft: &ContractDraft,
+    ) -> Result<Value, Fault> {
+        let request = draft.request_body()?;
+        let org = self.organization_id(organization).await?;
+        let body = self
+            .api
+            .post(
+                self.token,
+                &format!("organizations/{org}/maintenance/contracts"),
+                &request,
+            )
+            .await?;
+        Ok(body["data"].clone())
     }
 
     pub async fn create_doe(

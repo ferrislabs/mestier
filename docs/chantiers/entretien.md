@@ -1,6 +1,6 @@
 # Entretien : contrats et échéances d'intervention
 
-État : **W0 fait le 2026-10-11 (migration, types, ports, commandes, événements), W1 à W5 à lancer**. Mis à jour à chaque intégration.
+État : **v1 intégrée dans `main` ; W6 en cours : outils MCP faits (WS6a, `mcp-maintenance.md`), bouton « Activer » du webapp (WS6b)**. Mis à jour à chaque intégration.
 
 ## Goal
 
@@ -239,6 +239,8 @@ Règle commune : l'IA propose, l'humain valide. Les écritures passent par l'ét
 | IA-3 | Proposer les tournées : échéances × disponibilités (`get_availability`) × communes × heures | lecture + `propose_maintenance_plan` | oui (tâches au backlog) |
 | IA-4 | Saisie terrain en langage naturel (« tondu chez Gaume ce matin ») | intervention `Proposed` | oui (proposée) |
 | IA-5 | Fin de saison : contrats sous-consommés ou en dépassement d'heures, brouillon de devis de renouvellement | lecture + devis brouillon | oui (brouillon) |
+
+Les outils IA-1 et IA-2 sont décrits, avec leurs invariants et leur recette, dans [`mcp-maintenance.md`](mcp-maintenance.md). Un jeton délégué (MCP) ne crée qu'un contrat `DRAFT` et n'atteint aucune route d'activation ni de validation.
 
 IA-2 ajoute à `MaintenanceContract` un statut `Draft | Active`. On le prévoit dès la v1 (colonne `status`, `Active` par défaut) pour ne pas migrer ensuite.
 
