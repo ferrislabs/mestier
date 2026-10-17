@@ -2,6 +2,7 @@ import { dayOfMonth, isoWeekOf, weekRange } from '#/pages/maintenance/lib/weeks'
 import {
 	DEFAULT_FIRST_WEEK,
 	DEFAULT_LAST_WEEK,
+	type Grid,
 	type GridContract,
 	type GridLine,
 } from '#/pages/maintenance/types'
@@ -52,6 +53,17 @@ const DUE_KIND = {
 	NEXT_WEEK: 'due',
 	LATER: 'due',
 } as const
+
+/**
+ * The sheet shows what is live. A draft has no due date and is reviewed in the
+ * Contrats tab, so it leaves the rows, and the columns it would have widened.
+ */
+export function withoutDrafts(grid: Grid): Grid {
+	return {
+		...grid,
+		contracts: grid.contracts.filter((contract) => contract.status !== 'DRAFT'),
+	}
+}
 
 /**
  * The columns of the sheet: the widest season among the contracts, so every

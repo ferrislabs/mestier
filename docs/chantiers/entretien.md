@@ -137,6 +137,7 @@ Précisions de la grille et des contrats (WS5a) :
 - La case porte le jour du mois, et la semaine de la case dit de quel mois il s'agit : un jour que cette semaine ne contient pas est refusé. « Au plus aujourd'hui » et « dans la saison » restent le contrôle du backend (409 affiché tel quel).
 - Une case qui a déjà une intervention (validée ou proposée) ne se clique plus : il n'existe ni modification ni suppression d'intervention en v1. Les rejetées n'apparaissent pas.
 - Le formulaire de contrat renvoie tel quel le lien au devis et le statut, qu'il n'affiche pas : le `PUT` remplace tout.
+- Brouillons (WS6b) : la grille ne montre pas les contrats `Draft` (l'API les renvoie, sans échéance). L'onglet Contrats les range dans « Brouillons à vérifier », avec « Activer » (un `PUT` qui renvoie tout tel quel, sauf `status: ACTIVE`) ; comme la liste, la section se lit par saison.
 
 ### Errors
 

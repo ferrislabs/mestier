@@ -19,3 +19,22 @@ export function lineSummaries(contract: MaintenanceContract): string[] {
 		(line) => `${line.label} (${describeCadence(line.cadence)})`,
 	)
 }
+
+/**
+ * The contracts a person still has to review (`DRAFT`), apart from the rest.
+ * An archived draft stays in the main list: it is out of the way already, and
+ * there is nothing left to activate.
+ */
+export function splitDrafts<T extends { contract: MaintenanceContract }>(
+	rows: T[],
+): { drafts: T[]; active: T[] } {
+	const drafts: T[] = []
+	const active: T[] = []
+	for (const row of rows) {
+		const toReview =
+			row.contract.status === 'DRAFT' && row.contract.archived_at == null
+		;(toReview ? drafts : active).push(row)
+	}
+
+	return { drafts, active }
+}

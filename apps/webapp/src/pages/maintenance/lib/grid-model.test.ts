@@ -3,6 +3,7 @@ import {
 	buildLineCells,
 	contractTitle,
 	sheetWeeks,
+	withoutDrafts,
 } from '#/pages/maintenance/lib/grid-model'
 import type { GridContract, GridLine } from '#/pages/maintenance/types'
 
@@ -230,5 +231,30 @@ describe('contractTitle', () => {
 				}),
 			),
 		).toBe('GAUME')
+	})
+})
+
+describe('withoutDrafts', () => {
+	it('leaves the draft contracts out of the sheet, and out of its columns', () => {
+		const grid = {
+			year: 2026,
+			contracts: [
+				contract({
+					id: 'active',
+					season: { year: 2026, first_week: 14, last_week: 20 },
+				}),
+				contract({
+					id: 'draft',
+					status: 'DRAFT',
+					season: { year: 2026, first_week: 10, last_week: 48 },
+				}),
+			],
+		}
+
+		const shown = withoutDrafts(grid)
+
+		expect(shown.year).toBe(2026)
+		expect(shown.contracts.map((entry) => entry.id)).toEqual(['active'])
+		expect(sheetWeeks(shown.contracts)[0]).toBe(14)
 	})
 })

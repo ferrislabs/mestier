@@ -1,4 +1,12 @@
-import { AlertCircle, Archive, Copy, Loader2, Pencil, Plus } from 'lucide-react'
+import {
+	AlertCircle,
+	Archive,
+	CheckCircle2,
+	Copy,
+	Loader2,
+	Pencil,
+	Plus,
+} from 'lucide-react'
 import {
 	AlertDialog,
 	AlertDialogAction,
@@ -35,7 +43,10 @@ export interface ContractRow {
 export interface ContractsUiProps {
 	organizationName: string
 	season: number
+	/** The contracts of the season that are not drafts to review. */
 	rows: ContractRow[]
+	/** Draft contracts, waiting for a person to read them and activate them. */
+	draftRows: ContractRow[]
 	includeArchived: boolean
 	isLoading: boolean
 	error: string | null
@@ -43,6 +54,7 @@ export interface ContractsUiProps {
 	notice: { message: string; season: number } | null
 	pendingContractId: string | null
 	archiveTarget: ContractRow | null
+	activateTarget: ContractRow | null
 	form: ContractFormDialogProps
 	onSeasonChange: (season: number) => void
 	onIncludeArchivedChange: (includeArchived: boolean) => void
@@ -51,6 +63,8 @@ export interface ContractsUiProps {
 	onDuplicate: (contract: MaintenanceContract) => void
 	onAskArchive: (row: ContractRow | null) => void
 	onConfirmArchive: () => void
+	onAskActivate: (row: ContractRow | null) => void
+	onConfirmActivate: () => void
 	onDismissNotice: () => void
 }
 
@@ -63,12 +77,14 @@ export function ContractsUi({
 	organizationName,
 	season,
 	rows,
+	draftRows,
 	includeArchived,
 	isLoading,
 	error,
 	notice,
 	pendingContractId,
 	archiveTarget,
+	activateTarget,
 	form,
 	onSeasonChange,
 	onIncludeArchivedChange,
@@ -77,8 +93,12 @@ export function ContractsUi({
 	onDuplicate,
 	onAskArchive,
 	onConfirmArchive,
+	onAskActivate,
+	onConfirmActivate,
 	onDismissNotice,
 }: ContractsUiProps) {
+	const nothingToShow = rows.length === 0 && draftRows.length === 0
+
 	return (
 		<PageShell>
 			<PageHeader
@@ -144,48 +164,61 @@ export function ContractsUi({
 				</div>
 			) : null}
 
-			{!isLoading && !error && rows.length === 0 ? (
+			{!isLoading && !error && nothingToShow ? (
 				<p className="border bg-card p-6 text-sm text-muted-foreground">
 					Aucun contrat pour la saison {season}.
 				</p>
 			) : null}
 
+			{draftRows.length > 0 ? (
+				<section
+					aria-labelledby="draft-contracts-title"
+					className="space-y-3 border border-amber-600/40 bg-amber-50/50 p-4 dark:bg-amber-950/20"
+				>
+					<div className="space-y-1">
+						<h2 className="flex items-center gap-2 text-base font-semibold">
+							<span id="draft-contracts-title">Brouillons à vérifier</span>
+							<Badge variant="outline">{draftRows.length}</Badge>
+						</h2>
+						<p className="text-sm text-muted-foreground">
+							Ces contrats n'ont aucune échéance tant qu'ils ne sont pas activés
+							: ils sont absents du récap. Relisez-les, corrigez-les si besoin,
+							puis activez-les.
+						</p>
+					</div>
+					<ContractsTable
+						rows={draftRows}
+						mode="draft"
+						pendingContractId={pendingContractId}
+						onEdit={onEdit}
+						onDuplicate={onDuplicate}
+						onAskArchive={onAskArchive}
+						onAskActivate={onAskActivate}
+					/>
+				</section>
+			) : null}
+
 			{rows.length > 0 ? (
-				<div className="overflow-x-auto border bg-card">
-					<table className="w-full text-sm">
-						<thead>
-							<tr className="border-b text-left text-muted-foreground">
-								<th scope="col" className="px-3 py-2 font-medium">
-									Contrat
-								</th>
-								<th scope="col" className="px-3 py-2 font-medium">
-									Saison
-								</th>
-								<th scope="col" className="px-3 py-2 font-medium">
-									Prestations
-								</th>
-								<th scope="col" className="px-3 py-2 text-right font-medium">
-									Montant
-								</th>
-								<th scope="col" className="px-3 py-2 font-medium">
-									<span className="sr-only">Actions</span>
-								</th>
-							</tr>
-						</thead>
-						<tbody>
-							{rows.map((row) => (
-								<ContractTableRow
-									key={row.contract.id}
-									row={row}
-									isPending={pendingContractId === row.contract.id}
-									onEdit={onEdit}
-									onDuplicate={onDuplicate}
-									onAskArchive={onAskArchive}
-								/>
-							))}
-						</tbody>
-					</table>
-				</div>
+				<section aria-labelledby="active-contracts-title" className="space-y-3">
+					<h2 id="active-contracts-title" className="text-base font-semibold">
+						Contrats actifs
+					</h2>
+					<ContractsTable
+						rows={rows}
+						mode="active"
+						pendingContractId={pendingContractId}
+						onEdit={onEdit}
+						onDuplicate={onDuplicate}
+						onAskArchive={onAskArchive}
+						onAskActivate={onAskActivate}
+					/>
+				</section>
+			) : null}
+
+			{!isLoading && !error && rows.length === 0 && draftRows.length > 0 ? (
+				<p className="text-sm text-muted-foreground">
+					Aucun contrat actif pour la saison {season}.
+				</p>
 			) : null}
 
 			<ContractFormDialog {...form} />
@@ -211,24 +244,104 @@ export function ContractsUi({
 					</AlertDialogFooter>
 				</AlertDialogContent>
 			</AlertDialog>
+
+			<AlertDialog
+				open={activateTarget !== null}
+				onOpenChange={(open) => !open && onAskActivate(null)}
+			>
+				<AlertDialogContent>
+					<AlertDialogHeader>
+						<AlertDialogTitle>Activer ce contrat ?</AlertDialogTitle>
+						<AlertDialogDescription>
+							{activateTarget
+								? `${placeLabel(activateTarget.customerName, activateTarget.siteLabel)} entre dans la grille et dans le récap : ses prestations auront des échéances.`
+								: null}
+						</AlertDialogDescription>
+					</AlertDialogHeader>
+					<AlertDialogFooter>
+						<AlertDialogCancel>Annuler</AlertDialogCancel>
+						<AlertDialogAction onClick={onConfirmActivate}>
+							Activer
+						</AlertDialogAction>
+					</AlertDialogFooter>
+				</AlertDialogContent>
+			</AlertDialog>
 		</PageShell>
+	)
+}
+
+interface ContractsTableProps {
+	rows: ContractRow[]
+	mode: 'active' | 'draft'
+	pendingContractId: string | null
+	onEdit: (contract: MaintenanceContract) => void
+	onDuplicate: (contract: MaintenanceContract) => void
+	onAskArchive: (row: ContractRow) => void
+	onAskActivate: (row: ContractRow) => void
+}
+
+function ContractsTable({
+	rows,
+	mode,
+	pendingContractId,
+	...actions
+}: ContractsTableProps) {
+	return (
+		<div className="overflow-x-auto border bg-card">
+			<table className="w-full text-sm">
+				<thead>
+					<tr className="border-b text-left text-muted-foreground">
+						<th scope="col" className="px-3 py-2 font-medium">
+							Contrat
+						</th>
+						<th scope="col" className="px-3 py-2 font-medium">
+							Saison
+						</th>
+						<th scope="col" className="px-3 py-2 font-medium">
+							Prestations
+						</th>
+						<th scope="col" className="px-3 py-2 text-right font-medium">
+							Montant
+						</th>
+						<th scope="col" className="px-3 py-2 font-medium">
+							<span className="sr-only">Actions</span>
+						</th>
+					</tr>
+				</thead>
+				<tbody>
+					{rows.map((row) => (
+						<ContractTableRow
+							key={row.contract.id}
+							row={row}
+							mode={mode}
+							isPending={pendingContractId === row.contract.id}
+							{...actions}
+						/>
+					))}
+				</tbody>
+			</table>
+		</div>
 	)
 }
 
 interface ContractTableRowProps {
 	row: ContractRow
+	mode: 'active' | 'draft'
 	isPending: boolean
 	onEdit: (contract: MaintenanceContract) => void
 	onDuplicate: (contract: MaintenanceContract) => void
 	onAskArchive: (row: ContractRow) => void
+	onAskActivate: (row: ContractRow) => void
 }
 
 function ContractTableRow({
 	row,
+	mode,
 	isPending,
 	onEdit,
 	onDuplicate,
 	onAskArchive,
+	onAskActivate,
 }: ContractTableRowProps) {
 	const { contract } = row
 	const archived = contract.archived_at != null
@@ -279,17 +392,34 @@ function ContractTableRow({
 						<Pencil />
 						Modifier
 					</Button>
-					<Button
-						type="button"
-						variant="ghost"
-						size="sm"
-						disabled={isPending}
-						aria-label={`${duplicateLabel(contract)} : ${place}`}
-						onClick={() => onDuplicate(contract)}
-					>
-						<Copy />
-						{duplicateLabel(contract)}
-					</Button>
+					{mode === 'draft' ? (
+						<Button
+							type="button"
+							size="sm"
+							disabled={isPending}
+							aria-label={`Activer ${place}`}
+							onClick={() => onAskActivate(row)}
+						>
+							{isPending ? (
+								<Loader2 className="animate-spin" />
+							) : (
+								<CheckCircle2 />
+							)}
+							Activer
+						</Button>
+					) : (
+						<Button
+							type="button"
+							variant="ghost"
+							size="sm"
+							disabled={isPending}
+							aria-label={`${duplicateLabel(contract)} : ${place}`}
+							onClick={() => onDuplicate(contract)}
+						>
+							<Copy />
+							{duplicateLabel(contract)}
+						</Button>
+					)}
 					{archived ? null : (
 						<Button
 							type="button"

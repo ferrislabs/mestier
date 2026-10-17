@@ -105,7 +105,6 @@ function ContractBlock({
 							{[contract.site.city, seasonLabel(contract.season)]
 								.filter(Boolean)
 								.join(' - ')}
-							{contract.status === 'DRAFT' ? ' - brouillon' : ''}
 						</span>
 					</div>
 				</th>
