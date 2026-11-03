@@ -5,8 +5,9 @@ use authz::Subject;
 use clap::Parser;
 use handlers::AppState;
 use mestier_core::{
-    CreateTicketCommand, CustomFields, OrganizationId, Permissions, Ticket, TicketStatus,
-    TransitionTicketCommand,
+    AddEntryCommand, Attachment, CreateTicketCommand, CustomFields, EntryKind, NewAttachment,
+    OrganizationId, Permissions, PostClientMessageCommand, Ticket, TicketEntry, TicketStatus,
+    TransitionTicketCommand, UserId, application::policy,
 };
 use serde_json::Value;
 use sqlx::PgPool;
@@ -86,6 +87,25 @@ impl App {
         self.tickets_url(&format!("/{ticket_id}{suffix}"))
     }
 
+    pub fn support_url(&self, suffix: &str) -> String {
+        format!(
+            "{}/api/v1/organizations/{}/support{suffix}",
+            self.base_url, self.organization_id
+        )
+    }
+
+    pub fn entries_url(&self, ticket_id: Uuid) -> String {
+        self.ticket_url(ticket_id, "/entries")
+    }
+
+    pub fn entry_url(&self, entry_id: Uuid, suffix: &str) -> String {
+        self.support_url(&format!("/entries/{entry_id}{suffix}"))
+    }
+
+    pub fn attachment_url(&self, attachment_id: Uuid) -> String {
+        self.support_url(&format!("/attachments/{attachment_id}/url"))
+    }
+
     pub async fn seed_ticket(
         &self,
         organization_id: Uuid,
@@ -107,6 +127,49 @@ impl App {
             .ticket
     }
 
+    pub async fn seed_entry(&self, kind: EntryKind, ticket: &Ticket, body: &str) -> TicketEntry {
+        let command = AddEntryCommand {
+            actor: policy::user_subject(UserId(self.admin.user_id), Vec::new()),
+            organization_id: ticket.organization_id,
+            ticket_id: ticket.id,
+            body: body.to_owned(),
+        };
+        let usecase = &self.state.usecase;
+
+        match kind {
+            EntryKind::InternalNote => usecase.add_support_internal_note(command).await,
+            EntryKind::Draft => usecase.save_support_draft(command).await,
+            EntryKind::Reply => usecase.send_support_reply(command).await,
+            EntryKind::ClientMessage => {
+                usecase
+                    .post_support_client_message(PostClientMessageCommand {
+                        organization_id: ticket.organization_id,
+                        ticket_id: ticket.id,
+                        body: body.to_owned(),
+                    })
+                    .await
+            }
+        }
+        .unwrap()
+    }
+
+    pub async fn seed_client_attachment(&self, entry: &TicketEntry) -> Attachment {
+        self.state
+            .usecase
+            .attach_to_support_client_message(
+                entry.organization_id,
+                entry.id,
+                NewAttachment {
+                    file_key: format!("uploads/support-tickets/{}", Uuid::now_v7()),
+                    file_name: "photo.png".to_owned(),
+                    mime_type: "image/png".to_owned(),
+                    size_bytes: 12,
+                },
+            )
+            .await
+            .unwrap()
+    }
+
     pub async fn set_status(&self, ticket: &Ticket, status: TicketStatus) {
         self.state
             .usecase
@@ -122,6 +185,17 @@ impl App {
 
     pub async fn cleanup(&self) {
         let organizations = [self.organization_id, self.other_organization_id];
+
+        let file_keys: Vec<String> = sqlx::query_scalar(
+            "SELECT file_key FROM support_ticket_attachments WHERE org_id = ANY($1)",
+        )
+        .bind(&organizations[..])
+        .fetch_all(&self.pool)
+        .await
+        .unwrap();
+        for file_key in &file_keys {
+            let _ = self.state.file_storage.delete(file_key).await;
+        }
 
         for statement in [
             "DELETE FROM automation.event WHERE org_id = ANY($1)",

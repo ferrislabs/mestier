@@ -78,5 +78,6 @@ handlers-reference = { path = "libs/handlers-reference" }
 iam = { path = "libs/iam" }
 mestier-macros = { path = "libs/macros" }
 pagination = { path = "libs/pagination" }
+percent-encoding = "2.3"
 rate-limit = { path = "libs/rate-limit" }
 server = { path = "libs/server" }
