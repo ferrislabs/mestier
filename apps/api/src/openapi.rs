@@ -299,6 +299,13 @@ impl Modify for SecurityAddon {
         support::ticket::assign::handler,
         support::ticket::add_badge::handler,
         support::ticket::remove_badge::handler,
+        support::thread::list::handler,
+        support::thread::add_entry::handler,
+        support::thread::edit_draft::handler,
+        support::thread::delete_draft::handler,
+        support::thread::send_draft::handler,
+        support::thread::attach::handler,
+        support::thread::attachment_url::handler,
     ),
     components(schemas(
         support::response::TicketResponse,
@@ -306,6 +313,11 @@ impl Modify for SecurityAddon {
         support::ticket::transition::TransitionTicketRequest,
         support::ticket::assign::AssignTicketRequest,
         support::ticket::add_badge::AddTicketBadgeRequest,
+        support::response::TicketEntryResponse,
+        support::response::AttachmentResponse,
+        support::response::AttachmentUrlResponse,
+        support::thread::add_entry::AddTicketEntryRequest,
+        support::thread::edit_draft::EditSupportDraftRequest,
         automation::credential::create::CreateCredentialRequest,
         automation::credential::create::CredentialOriginRequest,
         automation::credential::update::UpdateCredentialRequest,
@@ -659,18 +671,23 @@ mod tests {
     /// Same discipline as `every_project_route_reaches_the_document`, for the
     /// template stack #296 adds.
     #[test]
-    fn every_support_ticket_route_reaches_the_document() {
+    fn every_support_route_reaches_the_document() {
         let document = ApiDoc::openapi();
         let paths = &document.paths.paths;
 
-        let root = "/api/v1/organizations/{organization_id}/support/tickets";
+        let root = "/api/v1/organizations/{organization_id}/support";
         for path in [
-            root.to_owned(),
-            format!("{root}/{{ticket_id}}"),
-            format!("{root}/{{ticket_id}}/status"),
-            format!("{root}/{{ticket_id}}/assignee"),
-            format!("{root}/{{ticket_id}}/badges"),
-            format!("{root}/{{ticket_id}}/badges/{{label}}"),
+            format!("{root}/tickets"),
+            format!("{root}/tickets/{{ticket_id}}"),
+            format!("{root}/tickets/{{ticket_id}}/status"),
+            format!("{root}/tickets/{{ticket_id}}/assignee"),
+            format!("{root}/tickets/{{ticket_id}}/badges"),
+            format!("{root}/tickets/{{ticket_id}}/badges/{{label}}"),
+            format!("{root}/tickets/{{ticket_id}}/entries"),
+            format!("{root}/entries/{{entry_id}}"),
+            format!("{root}/entries/{{entry_id}}/send"),
+            format!("{root}/entries/{{entry_id}}/attachments"),
+            format!("{root}/attachments/{{attachment_id}}/url"),
         ] {
             assert!(paths.contains_key(&path), "{path}");
         }
@@ -683,6 +700,13 @@ mod tests {
             "assignSupportTicket",
             "addSupportTicketBadge",
             "removeSupportTicketBadge",
+            "listSupportTicketEntries",
+            "addSupportTicketEntry",
+            "editSupportDraft",
+            "deleteSupportDraft",
+            "sendSupportDraft",
+            "attachSupportEntryFile",
+            "getSupportAttachmentUrl",
         ] {
             assert!(
                 json.contains(&format!("\"operationId\":\"{operation_id}\"")),
