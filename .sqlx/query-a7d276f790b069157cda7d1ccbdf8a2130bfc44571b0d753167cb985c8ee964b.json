@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            DELETE FROM support_ticket_entries\n            WHERE id = $1 AND org_id = $2\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "a7d276f790b069157cda7d1ccbdf8a2130bfc44571b0d753167cb985c8ee964b"
+}
