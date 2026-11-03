@@ -1,7 +1,7 @@
 use events::{EventCatalogue, EventDescriptor};
 
 use crate::domain::{
-    assignment_report, invitation, invoice, maintenance, member, quote, supplier_invoice,
+    assignment_report, invitation, invoice, maintenance, member, quote, supplier_invoice, support,
     time_entry,
 };
 
@@ -31,6 +31,7 @@ fn descriptors() -> Vec<EventDescriptor> {
         assignment_report::events::descriptors(),
         maintenance::events::descriptors(),
         supplier_invoice::events::descriptors(),
+        support::events::descriptors(),
     ]
     .concat()
 }
@@ -60,6 +61,7 @@ mod tests {
             assignment_report::events::emitted_events(),
             maintenance::events::emitted_events(),
             supplier_invoice::events::emitted_events(),
+            support::events::emitted_events(),
         ]
         .concat()
         .iter()

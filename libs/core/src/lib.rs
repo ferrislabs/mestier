@@ -110,6 +110,7 @@ pub use domain::{
         MockSupplierInvoiceAllocationRepository, MockSupplierInvoiceRepository,
         MockSupplierRepository,
     },
+    support::ports::MockTicketRepository,
     task::ports::MockTaskRepository,
     task_comment::ports::MockTaskCommentRepository,
     task_label::ports::MockTaskLabelRepository,
@@ -133,6 +134,16 @@ pub use domain::{
     maintenance::ports::{
         InterventionRepository, MaintenanceContractRepository, TaskMaintenanceContext,
     },
+};
+
+pub use domain::{
+    Badge, BadgeTone, CreatedTicket, CustomFields, Ticket, TicketId, TicketNumber, TicketStatus,
+    support::commands::{
+        AddBadgeCommand, AssignTicketCommand, CreateTicketCommand, GetTicketCommand,
+        ListTicketsCommand, RemoveBadgeCommand, TransitionTicketCommand,
+    },
+    support::events::{TicketCreated, TicketTransitioned},
+    support::ports::{LastAssignment, TicketFilter, TicketPage, TicketRepository},
 };
 
 pub use domain::maintenance::overview::{
