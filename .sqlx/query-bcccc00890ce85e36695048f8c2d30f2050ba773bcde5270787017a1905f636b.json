@@ -1,0 +1,104 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                UPDATE support_tickets\n                SET subject = $3,\n                    body = $4,\n                    status = $5,\n                    assignee_member_id = $6,\n                    assigned_at = $7,\n                    custom_fields = $8,\n                    badges = $9,\n                    external_id = $10,\n                    updated_at = $11\n                WHERE id = $1 AND org_id = $2\n                RETURNING id, org_id, number, subject, body, status, assignee_member_id,\n                          assigned_at, custom_fields, badges, external_id, created_at, updated_at\n                ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "org_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "number",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 3,
+        "name": "subject",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "body",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "status",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 6,
+        "name": "assignee_member_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 7,
+        "name": "assigned_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 8,
+        "name": "custom_fields",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 9,
+        "name": "badges",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 10,
+        "name": "external_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 11,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 12,
+        "name": "updated_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Text",
+        "Text",
+        "Text",
+        "Uuid",
+        "Timestamptz",
+        "Jsonb",
+        "Jsonb",
+        "Text",
+        "Timestamptz"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      true,
+      false,
+      false,
+      true,
+      false,
+      false
+    ]
+  },
+  "hash": "bcccc00890ce85e36695048f8c2d30f2050ba773bcde5270787017a1905f636b"
+}
