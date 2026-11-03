@@ -1,7 +1,10 @@
 use chrono::{DateTime, Utc};
 use common::CoreError;
 
-use crate::{MemberId, OrganizationId, Ticket, TicketId, TicketNumber, TicketStatus};
+use crate::{
+    Attachment, AttachmentId, LocatedAttachment, MemberId, OrganizationId, Ticket, TicketEntry,
+    TicketEntryId, TicketId, TicketNumber, TicketStatus,
+};
 
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct TicketFilter {
@@ -57,4 +60,47 @@ pub trait TicketRepository: Send {
         organization_id: OrganizationId,
         members: &[MemberId],
     ) -> impl Future<Output = Result<Vec<LastAssignment>, CoreError>> + Send;
+}
+
+#[cfg_attr(any(test, feature = "mock"), mockall::automock)]
+pub trait TicketEntryRepository: Send {
+    fn create(
+        &mut self,
+        entry: &TicketEntry,
+    ) -> impl Future<Output = Result<TicketEntry, CoreError>> + Send;
+
+    fn find(
+        &mut self,
+        organization_id: OrganizationId,
+        id: TicketEntryId,
+    ) -> impl Future<Output = Result<Option<TicketEntry>, CoreError>> + Send;
+
+    fn list_for_ticket(
+        &mut self,
+        organization_id: OrganizationId,
+        ticket_id: TicketId,
+        client_visible_only: bool,
+    ) -> impl Future<Output = Result<Vec<TicketEntry>, CoreError>> + Send;
+
+    fn update(
+        &mut self,
+        entry: &TicketEntry,
+    ) -> impl Future<Output = Result<TicketEntry, CoreError>> + Send;
+
+    fn delete(
+        &mut self,
+        organization_id: OrganizationId,
+        id: TicketEntryId,
+    ) -> impl Future<Output = Result<(), CoreError>> + Send;
+
+    fn add_attachment(
+        &mut self,
+        attachment: &Attachment,
+    ) -> impl Future<Output = Result<Attachment, CoreError>> + Send;
+
+    fn find_attachment(
+        &mut self,
+        organization_id: OrganizationId,
+        id: AttachmentId,
+    ) -> impl Future<Output = Result<Option<LocatedAttachment>, CoreError>> + Send;
 }
