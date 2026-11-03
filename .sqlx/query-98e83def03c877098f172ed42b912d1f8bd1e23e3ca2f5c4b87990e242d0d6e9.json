@@ -1,0 +1,29 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT requested.member_id AS \"member_id!\",\n                   MAX(tickets.assigned_at) AS \"last_assigned_at?\"\n            FROM unnest($2::uuid[]) WITH ORDINALITY AS requested(member_id, ordinal)\n            LEFT JOIN support_tickets tickets\n                   ON tickets.assignee_member_id = requested.member_id\n                  AND tickets.org_id = $1\n            GROUP BY requested.ordinal, requested.member_id\n            ORDER BY requested.ordinal\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "member_id!",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "last_assigned_at?",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "UuidArray"
+      ]
+    },
+    "nullable": [
+      null,
+      null
+    ]
+  },
+  "hash": "98e83def03c877098f172ed42b912d1f8bd1e23e3ca2f5c4b87990e242d0d6e9"
+}

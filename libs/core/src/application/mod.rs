@@ -59,6 +59,7 @@ pub mod role;
 pub mod service_rate;
 pub mod supplier;
 pub mod supplier_invoice;
+pub mod support_ticket;
 pub mod task;
 pub mod task_comment;
 pub mod task_label;
@@ -95,6 +96,7 @@ pub fn default_authorizer() -> MestierAuthorizer {
         .action("message.delete_any", Permissions::MANAGE_CHANNELS.0)
         .action("webhook.manage", Permissions::MANAGE_WEBHOOKS.0)
         .action("planning.manage", Permissions::MANAGE_PLANNING.0)
+        .action("support.manage", Permissions::MANAGE_SUPPORT.0)
         // #309: `planning.view`, `cost.view`, `cost.manage` and
         // `report.view` used to be registered here too, from #304, on the
         // assumption a handler would eventually call

@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO support_ticket_counters (org_id, last_number)\n            VALUES ($1, 1)\n            ON CONFLICT (org_id) DO UPDATE\n            SET last_number = support_ticket_counters.last_number + 1\n            RETURNING last_number\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "last_number",
+        "type_info": "Int4"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "0c0d9f77cf66bfd5cf3f9dc5b9d047707e72b5481dde8e8d5cb939bba2ece722"
+}
