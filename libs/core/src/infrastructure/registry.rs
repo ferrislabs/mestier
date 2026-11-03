@@ -27,6 +27,7 @@ pub mod domain {
     pub struct MaintenanceContract;
     pub struct MaintenanceIntervention;
     pub struct SupportTicket;
+    pub struct SupportTicketEntry;
     pub struct Organization;
     pub struct Planning;
     pub struct Product;

@@ -12,6 +12,7 @@ use crate::{MemberId, OrganizationId};
 pub mod commands;
 pub mod events;
 pub mod ports;
+pub mod thread_service;
 pub mod ticket_service;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, ToSchema)]
@@ -35,6 +36,40 @@ impl Display for TicketId {
     Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize, ToSchema,
 )]
 pub struct TicketNumber(pub i32);
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, ToSchema)]
+pub struct TicketEntryId(pub Uuid);
+
+impl FromStr for TicketEntryId {
+    type Err = uuid::Error;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Uuid::from_str(s).map(TicketEntryId)
+    }
+}
+
+impl Display for TicketEntryId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, ToSchema)]
+pub struct AttachmentId(pub Uuid);
+
+impl FromStr for AttachmentId {
+    type Err = uuid::Error;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Uuid::from_str(s).map(AttachmentId)
+    }
+}
+
+impl Display for AttachmentId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "snake_case")]
@@ -221,6 +256,80 @@ pub struct Ticket {
     pub updated_at: DateTime<Utc>,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum EntryKind {
+    ClientMessage,
+    Reply,
+    InternalNote,
+    Draft,
+}
+
+impl EntryKind {
+    pub const ALL: [EntryKind; 4] = [
+        EntryKind::ClientMessage,
+        EntryKind::Reply,
+        EntryKind::InternalNote,
+        EntryKind::Draft,
+    ];
+
+    pub fn as_str(self) -> &'static str {
+        match self {
+            EntryKind::ClientMessage => "client_message",
+            EntryKind::Reply => "reply",
+            EntryKind::InternalNote => "internal_note",
+            EntryKind::Draft => "draft",
+        }
+    }
+
+    pub fn is_client_visible(self) -> bool {
+        matches!(self, EntryKind::ClientMessage | EntryKind::Reply)
+    }
+}
+
+impl FromStr for EntryKind {
+    type Err = CoreError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        EntryKind::ALL
+            .into_iter()
+            .find(|kind| kind.as_str() == s)
+            .ok_or_else(|| CoreError::Conflict(format!("unknown entry kind `{s}`")))
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct Attachment {
+    pub id: AttachmentId,
+    pub organization_id: OrganizationId,
+    pub ticket_id: TicketId,
+    pub entry_id: TicketEntryId,
+    pub file_key: String,
+    pub file_name: String,
+    pub mime_type: String,
+    pub size_bytes: u64,
+    pub created_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct LocatedAttachment {
+    pub attachment: Attachment,
+    pub entry_kind: EntryKind,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct TicketEntry {
+    pub id: TicketEntryId,
+    pub organization_id: OrganizationId,
+    pub ticket_id: TicketId,
+    pub kind: EntryKind,
+    pub author: Option<MemberId>,
+    pub body: String,
+    pub attachments: Vec<Attachment>,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct CreatedTicket {
     pub ticket: Ticket,
@@ -306,5 +415,22 @@ mod tests {
         let big = "x".repeat(MAX_CUSTOM_FIELDS_BYTES);
 
         assert!(CustomFields::try_from(json!({ "blob": big })).is_err());
+    }
+
+    #[test]
+    fn only_client_message_and_reply_are_client_visible() {
+        let visible: Vec<EntryKind> = EntryKind::ALL
+            .into_iter()
+            .filter(|kind| kind.is_client_visible())
+            .collect();
+
+        assert_eq!(visible, [EntryKind::ClientMessage, EntryKind::Reply]);
+    }
+
+    #[test]
+    fn every_entry_kind_round_trips_through_its_stored_value() {
+        for kind in EntryKind::ALL {
+            assert_eq!(EntryKind::from_str(kind.as_str()).unwrap(), kind);
+        }
     }
 }

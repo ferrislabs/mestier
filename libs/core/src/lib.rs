@@ -110,7 +110,7 @@ pub use domain::{
         MockSupplierInvoiceAllocationRepository, MockSupplierInvoiceRepository,
         MockSupplierRepository,
     },
-    support::ports::MockTicketRepository,
+    support::ports::{MockTicketEntryRepository, MockTicketRepository},
     task::ports::MockTaskRepository,
     task_comment::ports::MockTaskCommentRepository,
     task_label::ports::MockTaskLabelRepository,
@@ -137,13 +137,18 @@ pub use domain::{
 };
 
 pub use domain::{
-    Badge, BadgeTone, CreatedTicket, CustomFields, Ticket, TicketId, TicketNumber, TicketStatus,
+    Attachment, AttachmentId, Badge, BadgeTone, CreatedTicket, CustomFields, EntryKind,
+    LocatedAttachment, Ticket, TicketEntry, TicketEntryId, TicketId, TicketNumber, TicketStatus,
     support::commands::{
-        AddBadgeCommand, AssignTicketCommand, CreateTicketCommand, GetTicketCommand,
-        ListTicketsCommand, RemoveBadgeCommand, TransitionTicketCommand,
+        AddBadgeCommand, AddEntryCommand, AssignTicketCommand, AttachFileCommand,
+        CreateTicketCommand, DraftCommand, EditDraftCommand, GetTicketCommand, ListThreadCommand,
+        ListTicketsCommand, PostClientMessageCommand, RemoveBadgeCommand, TransitionTicketCommand,
     },
     support::events::{TicketCreated, TicketTransitioned},
-    support::ports::{LastAssignment, TicketFilter, TicketPage, TicketRepository},
+    support::ports::{
+        LastAssignment, TicketEntryRepository, TicketFilter, TicketPage, TicketRepository,
+    },
+    support::thread_service::NewAttachment,
 };
 
 pub use domain::maintenance::overview::{
