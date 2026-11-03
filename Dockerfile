@@ -58,6 +58,24 @@ EXPOSE 80
 ENTRYPOINT [ "api" ]
 
 
+FROM runtime AS mcp-gateway
+
+COPY --from=builder /usr/local/src/mestier/target/release/mcp-gateway /usr/local/bin/mcp-gateway
+
+EXPOSE 8080
+
+ENTRYPOINT [ "mcp-gateway" ]
+
+
+FROM runtime AS mcp-server
+
+COPY --from=builder /usr/local/src/mestier/target/release/mcp-server /usr/local/bin/mcp-server
+
+EXPOSE 8081
+
+ENTRYPOINT [ "mcp-server" ]
+
+
 FROM node:24.13.0-alpine AS webapp-deps
 
 WORKDIR /usr/local/src/mestier

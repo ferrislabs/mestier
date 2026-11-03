@@ -243,6 +243,8 @@ jobs:
         target:
           - webapp
           - api
+          - mcp-gateway
+          - mcp-server
     steps:
       - name: checkout
         uses: actions/checkout@v5
@@ -320,6 +322,8 @@ jobs:
         target:
           - webapp
           - api
+          - mcp-gateway
+          - mcp-server
     steps:
       - name: set up builx
         uses: docker/setup-buildx-action@v3
