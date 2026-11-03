@@ -1,0 +1,29 @@
+{{- if and .Values.gatewayApi.enabled .Values.mcpGateway.enabled }}
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: {{ include "mestier.fullname" . }}-mcp
+  labels:
+    {{- include "mestier.labels" . | nindent 4 }}
+    app.kubernetes.io/component: mcp-gateway
+  {{- with .Values.gatewayApi.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  parentRefs:
+    {{- toYaml .Values.gatewayApi.parentRefs | nindent 4 }}
+  hostnames:
+    {{- required "gatewayApi.mcp.hostnames is required when mcpGateway is enabled" .Values.gatewayApi.mcp.hostnames | toYaml | nindent 4 }}
+  rules:
+    - matches:
+        - path:
+            type: Exact
+            value: /mcp
+        - path:
+            type: PathPrefix
+            value: /.well-known/oauth-protected-resource
+      backendRefs:
+        - name: {{ include "mestier.fullname" . }}-mcp-gateway
+          port: {{ .Values.mcpGateway.service.port }}
+{{- end }}

@@ -1,0 +1,22 @@
+{{- if .Values.cerbos.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "mestier.fullname" . }}-cerbos
+  labels:
+    {{- include "mestier.labels" . | nindent 4 }}
+    app.kubernetes.io/component: cerbos
+data:
+  config.yaml: |
+    server:
+      httpListenAddr: ":{{ .Values.cerbos.service.port }}"
+    storage:
+      driver: disk
+      disk:
+        directory: /policies
+        watchForChanges: false
+    telemetry:
+      disabled: true
+  mcp_tool.yaml: |
+    {{- .Files.Get "files/mcp_tool.yaml" | nindent 4 }}
+{{- end }}

@@ -1,7 +1,7 @@
 # mestier (Helm chart)
 
-Packages the two images built by the root `Dockerfile` (targets `api` and
-`webapp`) as a Deployment + Service each, with an optional Ingress or Gateway
+Packages the images built by the root `Dockerfile` (targets `api`, `webapp`,
+and the optional `mcp-gateway` and `mcp-server`) as a Deployment + Service each, with an optional Ingress or Gateway
 API `HTTPRoute` in front.
 
 This chart does **not** provision Postgres, Redis, RustFS or the observability
@@ -133,3 +133,34 @@ helm template deploy/helm/mestier
 helm template deploy/helm/mestier --set ingress.enabled=true
 helm template deploy/helm/mestier --set gatewayApi.enabled=true
 ```
+
+## MCP (optional)
+
+Off by default. `mcpGateway`, `mcpServer` and `cerbos` each have an `enabled`
+flag; turn on all three together. The gateway is the only public piece: with
+`gatewayApi.enabled`, an HTTPRoute on `gatewayApi.mcp.hostnames` sends `/mcp`
+and `/.well-known/oauth-protected-resource*` to it. The server and Cerbos are
+ClusterIP only.
+
+```yaml
+mcpGateway:
+  enabled: true
+  existingSecret: mestier-mcp-gateway   # key MCP_GATEWAY_EXCHANGE_CLIENT_SECRET
+  env:
+    MCP_GATEWAY_RESOURCE_URL: https://demo.example.com/mcp
+    MCP_GATEWAY_ISSUER: https://auth.example.com/api/realms/mestier
+mcpServer:
+  enabled: true
+cerbos:
+  enabled: true
+gatewayApi:
+  mcp:
+    hostnames: [demo.example.com]
+```
+
+The PDP URL, the MCP server URL and the server's API URL default to the
+release's own Services. The FerrisKey realm needs its own setup (client
+`mestier-mcp-gateway`, the resource, the scopes): see `docs/chantiers/mcp.md`.
+
+`files/mcp_tool.yaml` is a copy of `deploy/cerbos/policies/mcp_tool.yaml`
+(Helm cannot read outside the chart). Edit both.

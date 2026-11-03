@@ -214,6 +214,99 @@ webapp:
     ISSUER_URL: ""
     OIDC_CLIENT_ID: ""
 
+# ---------------------------------------------------------------------------
+# mcp — the Model Context Protocol entry point for AI clients (Claude,
+# ChatGPT). Three pieces, off by default:
+#   mcpGateway  apps/mcp-gateway, the public face: verifies the client's
+#               token, asks the PDP, swaps the token for an API one (RFC 8693)
+#               and forwards to mcpServer. Serves /mcp and the RFC 9728
+#               metadata, both routed through gatewayApi.mcp below.
+#   mcpServer   apps/mcp-server, private: only the gateway reaches it.
+#   cerbos      the PDP the gateway asks (ADR 0005). Policy is files/mcp_tool.yaml.
+# Needs a FerrisKey realm set up for it (docs/chantiers/mcp.md, W6).
+# ---------------------------------------------------------------------------
+mcpGateway:
+  enabled: false
+  replicaCount: 1
+
+  image:
+    repository: ghcr.io/ferrislabs/mestier-mcp-gateway
+    tag: ""  # defaults to .Chart.AppVersion
+    pullPolicy: IfNotPresent
+
+  service:
+    type: ClusterIP
+    port: 8080
+
+  resources: {}
+  podAnnotations: {}
+  podLabels: {}
+  podSecurityContext: {}
+  securityContext: {}
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+
+  # -- Non-sensitive configuration (MCP_GATEWAY_*). The pod's own URLs for the
+  # PDP and the MCP server are filled in by the chart unless set here.
+  env:
+    # -- Public URL of /mcp. Must match, character for character, the resource
+    # declared in the FerrisKey realm.
+    MCP_GATEWAY_RESOURCE_URL: ""
+    # -- Issuer of the realm the clients sign in to.
+    MCP_GATEWAY_ISSUER: ""
+    MCP_GATEWAY_EXCHANGE_CLIENT_ID: "mestier-mcp-gateway"
+    MCP_GATEWAY_EXCHANGE_AUDIENCE: "mestier-api"
+    MCP_GATEWAY_PDP_URL: ""
+    MCP_GATEWAY_UPSTREAM_URL: ""
+    RUST_LOG: "info"
+
+  # -- Secret holding the gateway's FerrisKey client secret under the key
+  # MCP_GATEWAY_EXCHANGE_CLIENT_SECRET. Create it out of band.
+  existingSecret: ""
+
+mcpServer:
+  enabled: false
+  replicaCount: 1
+
+  image:
+    repository: ghcr.io/ferrislabs/mestier-mcp-server
+    tag: ""  # defaults to .Chart.AppVersion
+    pullPolicy: IfNotPresent
+
+  service:
+    type: ClusterIP
+    port: 8081
+
+  resources: {}
+  podAnnotations: {}
+  podLabels: {}
+  podSecurityContext: {}
+  securityContext: {}
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+
+  env:
+    # -- Left empty, the chart points it at the release's own api Service.
+    MCP_SERVER_API_URL: ""
+    RUST_LOG: "info"
+
+cerbos:
+  enabled: false
+  image:
+    repository: ghcr.io/cerbos/cerbos
+    tag: "0.56.0"
+    pullPolicy: IfNotPresent
+  service:
+    port: 3592
+  resources: {}
+  podSecurityContext: {}
+  securityContext: {}
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+
 serviceAccount:
   # -- Whether a ServiceAccount is created, shared by api and webapp pods.
   create: true
@@ -262,3 +355,8 @@ gatewayApi:
     hostnames:
       - app.mestier.example.com
     path: /
+  # -- Path-routed MCP endpoints, on the hostnames below. Rendered only when
+  # mcpGateway.enabled. The metadata path is a prefix so that both
+  # /.well-known/oauth-protected-resource and its /mcp-suffixed form match.
+  mcp:
+    hostnames: []
