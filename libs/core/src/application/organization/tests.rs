@@ -175,6 +175,110 @@ async fn backfill_grants_business_permissions_without_leaking_payroll_to_members
         .unwrap_or_else(|error| panic!("dropping {scratch_db} failed: {error}"));
 }
 
+#[tokio::test]
+#[ignore = "requires live postgres and the sqlx CLI binary on PATH"]
+async fn support_backfill_grants_both_bits_to_admin_and_none_to_member() {
+    let (base_url, _current_db) =
+        split_database_url(&std::env::var("DATABASE_URL").expect("DATABASE_URL must be set"));
+    let admin_url = format!("{base_url}/postgres");
+    let scratch_db = format!("mestier_migration_test_{}", Uuid::new_v4().simple());
+    let scratch_url = format!("{base_url}/{scratch_db}");
+
+    let admin_pool = PgPool::connect(&admin_url).await.unwrap();
+    sqlx::query(&format!(r#"CREATE DATABASE "{scratch_db}""#))
+        .execute(&admin_pool)
+        .await
+        .expect("creating the scratch database must succeed");
+
+    run_sqlx_migrate(&scratch_url, "20261011000002");
+
+    let scratch_pool = PgPool::connect(&scratch_url).await.unwrap();
+    let owner_id = generate_uuid_v7();
+    sqlx::query(
+        r#"INSERT INTO users (id, email, username, display_name, sub) VALUES ($1, $2, $3, $4, $5)"#,
+    )
+    .bind(owner_id)
+    .bind(format!("owner-{owner_id}@example.com"))
+    .bind(format!("owner-{owner_id}"))
+    .bind("Owner User")
+    .bind(format!("sub-owner-{owner_id}"))
+    .execute(&scratch_pool)
+    .await
+    .unwrap();
+
+    let org_id = generate_uuid_v7();
+    sqlx::query(r#"INSERT INTO organizations (id, name, slug, owner_id) VALUES ($1, $2, $3, $4)"#)
+        .bind(org_id)
+        .bind("Test Org")
+        .bind(format!("test-org-{org_id}"))
+        .bind(owner_id)
+        .execute(&scratch_pool)
+        .await
+        .unwrap();
+
+    let admin_role_id = generate_uuid_v7();
+    let member_role_id = generate_uuid_v7();
+    for (id, name, permissions) in [
+        (
+            admin_role_id,
+            "admin",
+            default_admin_business_permissions_before_support().bits(),
+        ),
+        (member_role_id, "member", Permissions::VIEW_PLANNING.bits()),
+    ] {
+        sqlx::query(
+            r#"INSERT INTO roles (id, organization_id, name, permissions) VALUES ($1, $2, $3, $4)"#,
+        )
+        .bind(id)
+        .bind(org_id)
+        .bind(name)
+        .bind(permissions)
+        .execute(&scratch_pool)
+        .await
+        .unwrap();
+    }
+
+    scratch_pool.close().await;
+
+    run_sqlx_migrate_to_latest(&scratch_url);
+
+    let scratch_pool = PgPool::connect(&scratch_url).await.unwrap();
+    let permissions_of = |id: Uuid| {
+        let pool = scratch_pool.clone();
+        async move {
+            let bits: i64 = sqlx::query_scalar(r#"SELECT permissions FROM roles WHERE id = $1"#)
+                .bind(id)
+                .fetch_one(&pool)
+                .await
+                .unwrap();
+            Permissions(bits)
+        }
+    };
+
+    let admin_permissions = permissions_of(admin_role_id).await;
+    assert!(admin_permissions.contains(Permissions::VIEW_SUPPORT));
+    assert!(admin_permissions.contains(Permissions::MANAGE_SUPPORT));
+    assert!(admin_permissions.contains(Permissions::MANAGE_AUTOMATION));
+
+    let member_permissions = permissions_of(member_role_id).await;
+    assert!(!member_permissions.contains(Permissions::VIEW_SUPPORT));
+    assert!(!member_permissions.contains(Permissions::MANAGE_SUPPORT));
+    assert!(member_permissions.contains(Permissions::VIEW_PLANNING));
+
+    scratch_pool.close().await;
+    sqlx::query(&format!(r#"DROP DATABASE IF EXISTS "{scratch_db}""#))
+        .execute(&admin_pool)
+        .await
+        .unwrap_or_else(|error| panic!("dropping {scratch_db} failed: {error}"));
+}
+
+fn default_admin_business_permissions_before_support() -> Permissions {
+    Permissions(
+        crate::domain::role::default_admin_business_permissions().bits()
+            & !(Permissions::VIEW_SUPPORT.bits() | Permissions::MANAGE_SUPPORT.bits()),
+    )
+}
+
 mod mcp_enabled {
     use common::{CoreError, OrganizationId, UserId, generate_uuid_v7};
     use sqlx::PgPool;

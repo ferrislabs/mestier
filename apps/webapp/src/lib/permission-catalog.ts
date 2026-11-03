@@ -10,6 +10,7 @@ export type PermissionArea =
 	| 'commercial'
 	| 'reference'
 	| 'chat'
+	| 'support'
 	| 'administration'
 
 export const PERMISSION_AREA_LABELS: Record<PermissionArea, string> = {
@@ -18,6 +19,7 @@ export const PERMISSION_AREA_LABELS: Record<PermissionArea, string> = {
 	commercial: 'Commercial',
 	reference: 'Référence',
 	chat: 'Discussion',
+	support: 'Support',
 	administration: 'Administration',
 }
 
@@ -158,6 +160,22 @@ export const PERMISSION_CATALOG: PermissionDescriptor[] = [
 		area: 'chat',
 		label: 'Gérer les automatisations de discussion',
 		description: 'Configurer les webhooks et intégrations liés aux canaux.',
+	},
+
+	{
+		name: 'VIEW_SUPPORT',
+		area: 'support',
+		label: 'Voir les tickets de support',
+		description:
+			'Consulter les tickets reçus, leur fil de discussion et les champs affichés.',
+	},
+	{
+		name: 'MANAGE_SUPPORT',
+		area: 'support',
+		label: 'Traiter les tickets de support',
+		description:
+			'Répondre au client, écrire des notes et des brouillons, assigner un ticket et changer son statut.',
+		note: 'Sans « Voir les tickets de support », ce droit n’ouvre aucun écran.',
 	},
 
 	// Administration

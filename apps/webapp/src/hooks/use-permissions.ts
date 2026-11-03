@@ -32,6 +32,8 @@ export type PermissionName =
 	| 'VIEW_QUOTES'
 	| 'VIEW_AUTOMATION'
 	| 'MANAGE_AUTOMATION'
+	| 'VIEW_SUPPORT'
+	| 'MANAGE_SUPPORT'
 
 /**
  * The caller's own granted bits in the active organization (#307) —
