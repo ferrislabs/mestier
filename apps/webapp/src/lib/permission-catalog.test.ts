@@ -26,6 +26,8 @@ const ALL_PERMISSION_NAMES: PermissionName[] = [
 	'VIEW_INVOICES',
 	'MANAGE_INVOICES',
 	'VIEW_QUOTES',
+	'VIEW_SUPPORT',
+	'MANAGE_SUPPORT',
 ]
 
 describe('PERMISSION_CATALOG', () => {
@@ -58,6 +60,12 @@ describe('PERMISSION_CATALOG', () => {
 		expect(view?.description).not.toBe(manage?.description)
 	})
 
+	it('warns that MANAGE_SUPPORT alone opens no support screen', () => {
+		const manage = permissionDescriptor('MANAGE_SUPPORT')
+
+		expect(manage?.note).toContain('Voir les tickets')
+	})
+
 	it('says on the spot what VIEW_REPORTS without VIEW_COST gives', () => {
 		const reports = permissionDescriptor('VIEW_REPORTS')
 
@@ -76,7 +84,7 @@ describe('permissionsByArea', () => {
 		expect(total).toBe(PERMISSION_CATALOG.length)
 	})
 
-	it('lists the six areas the issue names', () => {
+	it('lists the areas in their display order', () => {
 		const areas = permissionsByArea().map((group) => group.area)
 
 		expect(areas).toEqual([
@@ -85,6 +93,7 @@ describe('permissionsByArea', () => {
 			'commercial',
 			'reference',
 			'chat',
+			'support',
 			'administration',
 		])
 	})
