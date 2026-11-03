@@ -23,6 +23,7 @@ use handlers_purchase as purchase;
 use handlers_quote as quote;
 use handlers_reference as reference;
 use handlers_reporting as reporting;
+use handlers_support as support;
 
 use crate::openapi::ApiDoc;
 
@@ -96,6 +97,7 @@ pub fn router(state: AppState) -> Result<Router, ApiError> {
         .merge(quote::router(&state))
         .merge(reporting::router(&state))
         .merge(planning::router(&state))
+        .merge(support::router(&state))
         .merge(reference::router(&state))
         .merge(Scalar::with_url("/scalar", openapi.clone()))
         .merge(SwaggerUi::new("/swagger").url("/api-docs/openapi.json", openapi.clone()))

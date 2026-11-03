@@ -16,6 +16,7 @@ use handlers_purchase as purchase;
 use handlers_quote as quote;
 use handlers_reference as reference;
 use handlers_reporting as reporting;
+use handlers_support as support;
 
 pub struct SecurityAddon;
 
@@ -292,8 +293,19 @@ impl Modify for SecurityAddon {
         discord::notification::list::handler,
         discord::notification::mark_read::handler,
         discord::notification::mark_all_read::handler,
+        support::ticket::list::handler,
+        support::ticket::get_one::handler,
+        support::ticket::transition::handler,
+        support::ticket::assign::handler,
+        support::ticket::add_badge::handler,
+        support::ticket::remove_badge::handler,
     ),
     components(schemas(
+        support::response::TicketResponse,
+        support::response::BadgeResponse,
+        support::ticket::transition::TransitionTicketRequest,
+        support::ticket::assign::AssignTicketRequest,
+        support::ticket::add_badge::AddTicketBadgeRequest,
         automation::credential::create::CreateCredentialRequest,
         automation::credential::create::CredentialOriginRequest,
         automation::credential::update::UpdateCredentialRequest,
@@ -593,6 +605,7 @@ impl Modify for SecurityAddon {
         (name = "members", description = "Organization seats — free or occupied, no account required"),
         (name = "reference", description = "Reference cost catalog"),
         (name = "planning", description = "Team planning — tasks, assignments, working time and availability"),
+        (name = "support", description = "Support tickets — kanban, thread, intake by organization API key"),
         (name = "discord", description = "Chat — categories, channels, threads, messages, reactions, webhooks, presence, typing, read states, channel permission overwrites, notifications"),
     )
 )]
@@ -645,6 +658,39 @@ mod tests {
 
     /// Same discipline as `every_project_route_reaches_the_document`, for the
     /// template stack #296 adds.
+    #[test]
+    fn every_support_ticket_route_reaches_the_document() {
+        let document = ApiDoc::openapi();
+        let paths = &document.paths.paths;
+
+        let root = "/api/v1/organizations/{organization_id}/support/tickets";
+        for path in [
+            root.to_owned(),
+            format!("{root}/{{ticket_id}}"),
+            format!("{root}/{{ticket_id}}/status"),
+            format!("{root}/{{ticket_id}}/assignee"),
+            format!("{root}/{{ticket_id}}/badges"),
+            format!("{root}/{{ticket_id}}/badges/{{label}}"),
+        ] {
+            assert!(paths.contains_key(&path), "{path}");
+        }
+
+        let json = serde_json::to_string(&document).unwrap();
+        for operation_id in [
+            "listSupportTickets",
+            "getSupportTicket",
+            "transitionSupportTicket",
+            "assignSupportTicket",
+            "addSupportTicketBadge",
+            "removeSupportTicketBadge",
+        ] {
+            assert!(
+                json.contains(&format!("\"operationId\":\"{operation_id}\"")),
+                "{operation_id}"
+            );
+        }
+    }
+
     #[test]
     fn every_project_template_route_reaches_the_document() {
         let document = ApiDoc::openapi();
