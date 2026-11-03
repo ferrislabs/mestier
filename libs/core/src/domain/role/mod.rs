@@ -70,6 +70,9 @@ impl Permissions {
     pub const VIEW_AUTOMATION: Self = Permissions(1 << 19); // 524288
     pub const MANAGE_AUTOMATION: Self = Permissions(1 << 20); // 1048576
 
+    pub const VIEW_SUPPORT: Self = Permissions(1 << 21);
+    pub const MANAGE_SUPPORT: Self = Permissions(1 << 22);
+
     pub const ALL: Self = Permissions(i64::MAX);
 
     pub const fn contains(self, other: Permissions) -> bool {
@@ -110,6 +113,8 @@ impl Permissions {
         ("VIEW_QUOTES", Permissions::VIEW_QUOTES),
         ("VIEW_AUTOMATION", Permissions::VIEW_AUTOMATION),
         ("MANAGE_AUTOMATION", Permissions::MANAGE_AUTOMATION),
+        ("VIEW_SUPPORT", Permissions::VIEW_SUPPORT),
+        ("MANAGE_SUPPORT", Permissions::MANAGE_SUPPORT),
     ];
 
     /// The names of every bit `self` carries — #307's "the caller's
@@ -219,6 +224,8 @@ pub fn default_admin_business_permissions() -> Permissions {
         | Permissions::VIEW_QUOTES
         | Permissions::VIEW_AUTOMATION
         | Permissions::MANAGE_AUTOMATION
+        | Permissions::VIEW_SUPPORT
+        | Permissions::MANAGE_SUPPORT
 }
 
 /// #304: the business bits a fresh organization's default `member` role
@@ -498,5 +505,43 @@ mod tests {
 
         assert!(!member.contains(Permissions::VIEW_AUTOMATION));
         assert!(!member.contains(Permissions::MANAGE_AUTOMATION));
+    }
+
+    #[test]
+    fn support_permission_bits_have_stable_values() {
+        assert_eq!(Permissions::VIEW_SUPPORT.bits(), 2_097_152);
+        assert_eq!(Permissions::MANAGE_SUPPORT.bits(), 4_194_304);
+    }
+
+    #[test]
+    fn support_bits_round_trip_through_their_names() {
+        let original = Permissions::VIEW_SUPPORT | Permissions::MANAGE_SUPPORT;
+
+        let roundtripped = Permissions::from_names(&original.granted_names()).unwrap();
+
+        assert_eq!(roundtripped, original);
+    }
+
+    #[test]
+    fn managing_support_does_not_imply_reading_it() {
+        let manager = Permissions::MANAGE_SUPPORT;
+
+        assert!(!manager.contains(Permissions::VIEW_SUPPORT));
+    }
+
+    #[test]
+    fn admin_reads_and_manages_support_by_default() {
+        let admin = default_admin_business_permissions();
+
+        assert!(admin.contains(Permissions::VIEW_SUPPORT));
+        assert!(admin.contains(Permissions::MANAGE_SUPPORT));
+    }
+
+    #[test]
+    fn member_gets_no_support_bit_by_default() {
+        let member = default_member_business_permissions();
+
+        assert!(!member.contains(Permissions::VIEW_SUPPORT));
+        assert!(!member.contains(Permissions::MANAGE_SUPPORT));
     }
 }
