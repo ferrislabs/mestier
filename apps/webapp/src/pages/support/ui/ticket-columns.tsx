@@ -19,6 +19,7 @@ export type TicketColumnsProps = Pick<
 	| 'onDragEnd'
 	| 'onDropOnColumn'
 	| 'onShiftColumn'
+	| 'onOpenCard'
 >
 
 export function TicketColumns({
@@ -33,6 +34,7 @@ export function TicketColumns({
 	onDragEnd,
 	onDropOnColumn,
 	onShiftColumn,
+	onOpenCard,
 }: TicketColumnsProps) {
 	return (
 		<div className="min-w-0 max-w-full overflow-x-auto overscroll-x-contain pb-2">
@@ -82,6 +84,7 @@ export function TicketColumns({
 										onShiftColumn={(direction) =>
 											onShiftColumn(card.id, direction)
 										}
+										onOpen={() => onOpenCard(card.id)}
 									/>
 								))
 							)}
@@ -104,6 +107,7 @@ interface TicketCardProps {
 	onDragStart: () => void
 	onDragEnd: () => void
 	onShiftColumn: (direction: 1 | -1) => void
+	onOpen: () => void
 }
 
 function TicketCard({
@@ -117,6 +121,7 @@ function TicketCard({
 	onDragStart,
 	onDragEnd,
 	onShiftColumn,
+	onOpen,
 }: TicketCardProps) {
 	const handleReference = useRef<HTMLButtonElement>(null)
 
@@ -164,9 +169,13 @@ function TicketCard({
 					<p className="text-xs font-medium text-muted-foreground">
 						{card.numberLabel}
 					</p>
-					<p className="mt-0.5 text-sm font-semibold break-words">
+					<button
+						type="button"
+						onClick={onOpen}
+						className="mt-0.5 block max-w-full rounded text-left text-sm font-semibold break-words outline-none hover:underline focus-visible:ring-2 focus-visible:ring-ring"
+					>
 						{card.subject}
-					</p>
+					</button>
 					<p className="mt-0.5 truncate text-xs text-muted-foreground">
 						{card.assigneeLabel}
 					</p>

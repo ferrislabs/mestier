@@ -16,7 +16,10 @@ import {
 import { supportStatusTone } from '#/pages/support/lib/columns'
 import type { SupportRowVM, SupportTableUIProps } from '#/pages/support/types'
 
-function buildColumns(fieldKeys: string[]): ColumnDef<SupportRowVM>[] {
+function buildColumns(
+	fieldKeys: string[],
+	onOpenRow: (ticketId: string) => void,
+): ColumnDef<SupportRowVM>[] {
 	return [
 		{
 			id: 'number',
@@ -26,7 +29,15 @@ function buildColumns(fieldKeys: string[]): ColumnDef<SupportRowVM>[] {
 		{
 			id: 'subject',
 			header: 'Sujet',
-			cell: ({ row }) => row.original.subject,
+			cell: ({ row }) => (
+				<button
+					type="button"
+					onClick={() => onOpenRow(row.original.id)}
+					className="rounded text-left font-medium outline-none hover:underline focus-visible:ring-2 focus-visible:ring-ring"
+				>
+					{row.original.subject}
+				</button>
+			),
 		},
 		{
 			id: 'status',
@@ -75,8 +86,12 @@ export function SupportTableUI({
 	toolbar,
 	emptyReason,
 	truncationNotice,
+	onOpenRow,
 }: SupportTableUIProps) {
-	const columns = useMemo(() => buildColumns(fieldKeys), [fieldKeys])
+	const columns = useMemo(
+		() => buildColumns(fieldKeys, onOpenRow),
+		[fieldKeys, onOpenRow],
+	)
 	const table = useReactTable({
 		data: rows,
 		columns,

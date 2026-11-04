@@ -41,6 +41,7 @@ function renderTable(overrides: Partial<SupportTableUIProps> = {}) {
 		toolbar: <div>Barre de filtres</div>,
 		emptyReason: null,
 		truncationNotice: null,
+		onOpenRow: vi.fn(),
 		...overrides,
 	}
 	render(<SupportTableUI {...props} />)
@@ -181,11 +182,38 @@ describe('SupportTableUI', () => {
 		)
 	})
 
-	it('keeps rows non interactive', () => {
+	it('renders the subject as a button that opens the row', async () => {
+		const props = renderTable()
+
+		const subject = within(bodyRows()[0]).getByRole('button', {
+			name: 'Fuite sous l’évier',
+		})
+		expect(subject.getAttribute('type')).toBe('button')
+		expect(screen.queryByRole('link')).toBeNull()
+
+		await userEvent.click(subject)
+
+		expect(props.onOpenRow).toHaveBeenCalledTimes(1)
+		expect(props.onOpenRow).toHaveBeenCalledWith('ticket-1')
+	})
+
+	it('opens the row that was clicked, not another one', async () => {
+		const props = renderTable()
+
+		await userEvent.click(
+			within(bodyRows()[1]).getByRole('button', { name: 'Robinet qui goutte' }),
+		)
+
+		expect(props.onOpenRow).toHaveBeenCalledTimes(1)
+		expect(props.onOpenRow).toHaveBeenCalledWith('ticket-2')
+	})
+
+	it('makes the subject the only button of a row', () => {
 		renderTable()
 
-		expect(screen.queryByRole('link')).toBeNull()
-		expect(screen.queryByRole('button')).toBeNull()
+		for (const row of bodyRows()) {
+			expect(within(row).getAllByRole('button')).toHaveLength(1)
+		}
 	})
 
 	it('renders the header, the ticket count and the toolbar', () => {

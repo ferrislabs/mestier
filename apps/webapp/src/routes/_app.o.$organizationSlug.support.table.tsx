@@ -11,12 +11,19 @@ export const Route = createFileRoute('/_app/o/$organizationSlug/support/table')(
 
 function SupportTablePage() {
 	const filters = Route.useSearch()
+	const { organizationSlug } = Route.useParams()
 	const navigate = Route.useNavigate()
 
 	return (
 		<SupportTableFeature
 			filters={filters}
 			onFiltersChange={(next) => void navigate({ search: () => next })}
+			onOpenTicket={(ticketId) =>
+				void navigate({
+					to: '/o/$organizationSlug/support/tickets/$ticketId',
+					params: { organizationSlug, ticketId },
+				})
+			}
 		/>
 	)
 }

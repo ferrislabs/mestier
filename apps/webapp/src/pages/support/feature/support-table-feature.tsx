@@ -12,6 +12,7 @@ import { SupportToolbar } from '#/pages/support/ui/support-toolbar'
 export function SupportTableFeature({
 	filters,
 	onFiltersChange,
+	onOpenTicket,
 }: SupportScreenProps) {
 	const { activeOrganization } = useActiveOrganization()
 
@@ -24,6 +25,7 @@ export function SupportTableFeature({
 			organizationName={activeOrganization.name}
 			filters={filters}
 			onFiltersChange={onFiltersChange}
+			onOpenTicket={onOpenTicket}
 		/>
 	)
 }
@@ -38,6 +40,7 @@ function SupportTableScreen({
 	organizationName,
 	filters,
 	onFiltersChange,
+	onOpenTicket,
 }: SupportTableScreenProps) {
 	const data = useSupportScreenData(organizationId, filters)
 
@@ -63,6 +66,7 @@ function SupportTableScreen({
 			toolbar={toolbar}
 			emptyReason={data.emptyReason}
 			truncationNotice={data.truncationNotice}
+			onOpenRow={onOpenTicket}
 		/>
 	)
 }

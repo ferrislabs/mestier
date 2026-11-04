@@ -51,6 +51,7 @@ import { Route as AppOOrganizationSlugHrTeamIndexRouteImport } from './routes/_a
 import { Route as AppOOrganizationSlugCrmQuotesIndexRouteImport } from './routes/_app.o.$organizationSlug.crm.quotes.index'
 import { Route as AppOOrganizationSlugCrmInvoicesIndexRouteImport } from './routes/_app.o.$organizationSlug.crm.invoices.index'
 import { Route as AppOOrganizationSlugCrmCustomersIndexRouteImport } from './routes/_app.o.$organizationSlug.crm.customers.index'
+import { Route as AppOOrganizationSlugSupportTicketsTicketIdRouteImport } from './routes/_app.o.$organizationSlug.support.tickets.$ticketId'
 import { Route as AppOOrganizationSlugPurchaseSupplierInvoicesSupplierInvoiceIdRouteImport } from './routes/_app.o.$organizationSlug.purchase.supplier-invoices.$supplierInvoiceId'
 import { Route as AppOOrganizationSlugPlanningProjectsProjectIdRouteImport } from './routes/_app.o.$organizationSlug.planning.projects.$projectId'
 import { Route as AppOOrganizationSlugPlanificationProjectsProjectIdRouteImport } from './routes/_app.o.$organizationSlug.planification.projects.$projectId'
@@ -316,6 +317,12 @@ const AppOOrganizationSlugCrmCustomersIndexRoute =
     path: '/crm/customers/',
     getParentRoute: () => AppOOrganizationSlugRoute,
   } as any)
+const AppOOrganizationSlugSupportTicketsTicketIdRoute =
+  AppOOrganizationSlugSupportTicketsTicketIdRouteImport.update({
+    id: '/support/tickets/$ticketId',
+    path: '/support/tickets/$ticketId',
+    getParentRoute: () => AppOOrganizationSlugRoute,
+  } as any)
 const AppOOrganizationSlugPurchaseSupplierInvoicesSupplierInvoiceIdRoute =
   AppOOrganizationSlugPurchaseSupplierInvoicesSupplierInvoiceIdRouteImport.update(
     {
@@ -471,6 +478,7 @@ export interface FileRoutesByFullPath {
   '/o/$organizationSlug/planification/projects/$projectId': typeof AppOOrganizationSlugPlanificationProjectsProjectIdRoute
   '/o/$organizationSlug/planning/projects/$projectId': typeof AppOOrganizationSlugPlanningProjectsProjectIdRoute
   '/o/$organizationSlug/purchase/supplier-invoices/$supplierInvoiceId': typeof AppOOrganizationSlugPurchaseSupplierInvoicesSupplierInvoiceIdRoute
+  '/o/$organizationSlug/support/tickets/$ticketId': typeof AppOOrganizationSlugSupportTicketsTicketIdRoute
   '/o/$organizationSlug/crm/customers/': typeof AppOOrganizationSlugCrmCustomersIndexRoute
   '/o/$organizationSlug/crm/invoices/': typeof AppOOrganizationSlugCrmInvoicesIndexRoute
   '/o/$organizationSlug/crm/quotes/': typeof AppOOrganizationSlugCrmQuotesIndexRoute
@@ -529,6 +537,7 @@ export interface FileRoutesByTo {
   '/o/$organizationSlug/planification/projects/$projectId': typeof AppOOrganizationSlugPlanificationProjectsProjectIdRoute
   '/o/$organizationSlug/planning/projects/$projectId': typeof AppOOrganizationSlugPlanningProjectsProjectIdRoute
   '/o/$organizationSlug/purchase/supplier-invoices/$supplierInvoiceId': typeof AppOOrganizationSlugPurchaseSupplierInvoicesSupplierInvoiceIdRoute
+  '/o/$organizationSlug/support/tickets/$ticketId': typeof AppOOrganizationSlugSupportTicketsTicketIdRoute
   '/o/$organizationSlug/crm/customers': typeof AppOOrganizationSlugCrmCustomersIndexRoute
   '/o/$organizationSlug/crm/invoices': typeof AppOOrganizationSlugCrmInvoicesIndexRoute
   '/o/$organizationSlug/crm/quotes': typeof AppOOrganizationSlugCrmQuotesIndexRoute
@@ -591,6 +600,7 @@ export interface FileRoutesById {
   '/_app/o/$organizationSlug/planification/projects/$projectId': typeof AppOOrganizationSlugPlanificationProjectsProjectIdRoute
   '/_app/o/$organizationSlug/planning/projects/$projectId': typeof AppOOrganizationSlugPlanningProjectsProjectIdRoute
   '/_app/o/$organizationSlug/purchase/supplier-invoices/$supplierInvoiceId': typeof AppOOrganizationSlugPurchaseSupplierInvoicesSupplierInvoiceIdRoute
+  '/_app/o/$organizationSlug/support/tickets/$ticketId': typeof AppOOrganizationSlugSupportTicketsTicketIdRoute
   '/_app/o/$organizationSlug/crm/customers/': typeof AppOOrganizationSlugCrmCustomersIndexRoute
   '/_app/o/$organizationSlug/crm/invoices/': typeof AppOOrganizationSlugCrmInvoicesIndexRoute
   '/_app/o/$organizationSlug/crm/quotes/': typeof AppOOrganizationSlugCrmQuotesIndexRoute
@@ -653,6 +663,7 @@ export interface FileRouteTypes {
     | '/o/$organizationSlug/planification/projects/$projectId'
     | '/o/$organizationSlug/planning/projects/$projectId'
     | '/o/$organizationSlug/purchase/supplier-invoices/$supplierInvoiceId'
+    | '/o/$organizationSlug/support/tickets/$ticketId'
     | '/o/$organizationSlug/crm/customers/'
     | '/o/$organizationSlug/crm/invoices/'
     | '/o/$organizationSlug/crm/quotes/'
@@ -711,6 +722,7 @@ export interface FileRouteTypes {
     | '/o/$organizationSlug/planification/projects/$projectId'
     | '/o/$organizationSlug/planning/projects/$projectId'
     | '/o/$organizationSlug/purchase/supplier-invoices/$supplierInvoiceId'
+    | '/o/$organizationSlug/support/tickets/$ticketId'
     | '/o/$organizationSlug/crm/customers'
     | '/o/$organizationSlug/crm/invoices'
     | '/o/$organizationSlug/crm/quotes'
@@ -772,6 +784,7 @@ export interface FileRouteTypes {
     | '/_app/o/$organizationSlug/planification/projects/$projectId'
     | '/_app/o/$organizationSlug/planning/projects/$projectId'
     | '/_app/o/$organizationSlug/purchase/supplier-invoices/$supplierInvoiceId'
+    | '/_app/o/$organizationSlug/support/tickets/$ticketId'
     | '/_app/o/$organizationSlug/crm/customers/'
     | '/_app/o/$organizationSlug/crm/invoices/'
     | '/_app/o/$organizationSlug/crm/quotes/'
@@ -1087,6 +1100,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppOOrganizationSlugCrmCustomersIndexRouteImport
       parentRoute: typeof AppOOrganizationSlugRoute
     }
+    '/_app/o/$organizationSlug/support/tickets/$ticketId': {
+      id: '/_app/o/$organizationSlug/support/tickets/$ticketId'
+      path: '/support/tickets/$ticketId'
+      fullPath: '/o/$organizationSlug/support/tickets/$ticketId'
+      preLoaderRoute: typeof AppOOrganizationSlugSupportTicketsTicketIdRouteImport
+      parentRoute: typeof AppOOrganizationSlugRoute
+    }
     '/_app/o/$organizationSlug/purchase/supplier-invoices/$supplierInvoiceId': {
       id: '/_app/o/$organizationSlug/purchase/supplier-invoices/$supplierInvoiceId'
       path: '/purchase/supplier-invoices/$supplierInvoiceId'
@@ -1311,6 +1331,7 @@ interface AppOOrganizationSlugRouteChildren {
   AppOOrganizationSlugPlanificationProjectsProjectIdRoute: typeof AppOOrganizationSlugPlanificationProjectsProjectIdRoute
   AppOOrganizationSlugPlanningProjectsProjectIdRoute: typeof AppOOrganizationSlugPlanningProjectsProjectIdRoute
   AppOOrganizationSlugPurchaseSupplierInvoicesSupplierInvoiceIdRoute: typeof AppOOrganizationSlugPurchaseSupplierInvoicesSupplierInvoiceIdRoute
+  AppOOrganizationSlugSupportTicketsTicketIdRoute: typeof AppOOrganizationSlugSupportTicketsTicketIdRoute
   AppOOrganizationSlugCrmCustomersIndexRoute: typeof AppOOrganizationSlugCrmCustomersIndexRoute
   AppOOrganizationSlugCrmInvoicesIndexRoute: typeof AppOOrganizationSlugCrmInvoicesIndexRoute
   AppOOrganizationSlugCrmQuotesIndexRoute: typeof AppOOrganizationSlugCrmQuotesIndexRoute
@@ -1388,6 +1409,8 @@ const AppOOrganizationSlugRouteChildren: AppOOrganizationSlugRouteChildren = {
     AppOOrganizationSlugPlanningProjectsProjectIdRoute,
   AppOOrganizationSlugPurchaseSupplierInvoicesSupplierInvoiceIdRoute:
     AppOOrganizationSlugPurchaseSupplierInvoicesSupplierInvoiceIdRoute,
+  AppOOrganizationSlugSupportTicketsTicketIdRoute:
+    AppOOrganizationSlugSupportTicketsTicketIdRoute,
   AppOOrganizationSlugCrmCustomersIndexRoute:
     AppOOrganizationSlugCrmCustomersIndexRoute,
   AppOOrganizationSlugCrmInvoicesIndexRoute:
