@@ -118,7 +118,9 @@ impl<'tx> SupportApiKeyRepository for PgSupportApiKeyRepository<'tx> {
             r#"
             UPDATE support_api_keys
             SET last_used_at = now()
-            WHERE id = $1 AND revoked_at IS NULL
+            WHERE id = $1
+              AND revoked_at IS NULL
+              AND (last_used_at IS NULL OR last_used_at < now() - interval '1 minute')
             "#,
             id.0,
         )
@@ -400,6 +402,87 @@ mod tests {
                     .last_used_at,
                 None
             );
+        })
+        .await;
+    }
+
+    #[tokio::test]
+    #[ignore = "requires live postgres"]
+    async fn touch_last_used_sets_a_never_used_key_once_and_then_holds_for_a_minute() {
+        rolled_back(&dev_pool().await, async |tx| {
+            let organization_id = seed_organization(&tx).await;
+            let mut repository = PgSupportApiKeyRepository::new(&tx);
+            let never_used = key(organization_id, "00000010", now_storable());
+            repository.create(&never_used).await.unwrap();
+
+            repository.touch_last_used(never_used.id).await.unwrap();
+            let first = repository
+                .find_by_prefix("00000010")
+                .await
+                .unwrap()
+                .unwrap()
+                .last_used_at;
+            repository.touch_last_used(never_used.id).await.unwrap();
+            let second = repository
+                .find_by_prefix("00000010")
+                .await
+                .unwrap()
+                .unwrap()
+                .last_used_at;
+
+            assert!(first.is_some());
+            assert_eq!(second, first);
+        })
+        .await;
+    }
+
+    #[tokio::test]
+    #[ignore = "requires live postgres"]
+    async fn touch_last_used_does_not_move_a_stamp_younger_than_a_minute() {
+        rolled_back(&dev_pool().await, async |tx| {
+            let organization_id = seed_organization(&tx).await;
+            let mut repository = PgSupportApiKeyRepository::new(&tx);
+            let recently_used_at = now_storable() - Duration::seconds(30);
+            let mut recent = key(organization_id, "00000011", now_storable());
+            recent.last_used_at = Some(recently_used_at);
+            repository.create(&recent).await.unwrap();
+
+            repository.touch_last_used(recent.id).await.unwrap();
+
+            assert_eq!(
+                repository
+                    .find_by_prefix("00000011")
+                    .await
+                    .unwrap()
+                    .unwrap()
+                    .last_used_at,
+                Some(recently_used_at)
+            );
+        })
+        .await;
+    }
+
+    #[tokio::test]
+    #[ignore = "requires live postgres"]
+    async fn touch_last_used_moves_a_stamp_older_than_a_minute() {
+        rolled_back(&dev_pool().await, async |tx| {
+            let organization_id = seed_organization(&tx).await;
+            let mut repository = PgSupportApiKeyRepository::new(&tx);
+            let stale_at = now_storable() - Duration::minutes(2);
+            let mut stale = key(organization_id, "00000012", now_storable());
+            stale.last_used_at = Some(stale_at);
+            repository.create(&stale).await.unwrap();
+
+            repository.touch_last_used(stale.id).await.unwrap();
+
+            let moved = repository
+                .find_by_prefix("00000012")
+                .await
+                .unwrap()
+                .unwrap()
+                .last_used_at
+                .unwrap();
+            assert!(moved > stale_at + Duration::minutes(1));
         })
         .await;
     }

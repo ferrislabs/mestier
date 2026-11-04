@@ -252,6 +252,16 @@ impl World {
             .unwrap()
     }
 
+    async fn age_last_used_at(&self, key_id: SupportApiKeyId) {
+        sqlx::query(
+            "UPDATE support_api_keys SET last_used_at = last_used_at - interval '2 minutes' WHERE id = $1",
+        )
+        .bind(key_id.0)
+        .execute(&self.pool)
+        .await
+        .unwrap();
+    }
+
     async fn cleanup(self) {
         for organization_id in [self.organization_id, self.other_organization_id] {
             for statement in [
@@ -500,7 +510,7 @@ async fn revoking_a_key_of_another_organization_is_not_found_and_leaves_it_activ
 
 #[tokio::test]
 #[ignore = "requires live postgres"]
-async fn a_valid_key_authenticates_as_its_organization_and_moves_last_used_at() {
+async fn a_valid_key_authenticates_as_its_organization_and_stamps_last_used_at_on_first_use() {
     let world = World::new(&pool().await).await;
     let created = world.create("Formulaire").await;
     let other = world.create_for_other_organization("Ailleurs").await;
@@ -515,9 +525,29 @@ async fn a_valid_key_authenticates_as_its_organization_and_moves_last_used_at() 
     assert_eq!(authenticated, Some(world.organization_id));
     assert_eq!(authenticated_again, Some(world.organization_id));
     assert!(first_use.is_some());
-    assert!(second_use > first_use);
+    assert_eq!(second_use, first_use);
     assert_eq!(world.last_used_at(other.key.id).await, None);
     assert_eq!(world.event_rows().await, 0);
+    world.cleanup().await;
+}
+
+#[tokio::test]
+#[ignore = "requires live postgres"]
+async fn last_used_at_moves_again_once_its_stamp_is_older_than_a_minute() {
+    let world = World::new(&pool().await).await;
+    let created = world.create("Formulaire").await;
+    world.authenticate(&created.plaintext).await.unwrap();
+    let first_use = world.last_used_at(created.key.id).await.unwrap();
+    world.age_last_used_at(created.key.id).await;
+    let aged = world.last_used_at(created.key.id).await.unwrap();
+
+    let authenticated = world.authenticate(&created.plaintext).await;
+    let renewed = world.last_used_at(created.key.id).await.unwrap();
+
+    assert_eq!(authenticated, Some(world.organization_id));
+    assert!(aged < first_use);
+    assert!(renewed >= first_use);
+    assert!(renewed > aged + chrono::Duration::minutes(1));
     world.cleanup().await;
 }
 

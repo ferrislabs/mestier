@@ -6,9 +6,9 @@ use axum::{Router, extract::State, http::HeaderMap, routing::get};
 use clap::Parser;
 use handlers::{ApiError, AppState};
 use mestier_core::{
-    AddEntryCommand, Attachment, CreateTicketCommand, CustomFields, EntryKind, NewAttachment,
-    OrganizationId, Permissions, PostClientMessageCommand, Ticket, TicketEntry, TicketStatus,
-    TransitionTicketCommand, UserId, application::policy,
+    AddEntryCommand, AttachFileCommand, Attachment, CreateTicketCommand, CustomFields,
+    DraftCommand, EntryKind, NewAttachment, OrganizationId, Permissions, PostClientMessageCommand,
+    Ticket, TicketEntry, TicketStatus, TransitionTicketCommand, UserId, application::policy,
 };
 use serde_json::Value;
 use sqlx::PgPool;
@@ -46,6 +46,14 @@ async fn probe_intake(
 }
 
 pub async fn start() -> App {
+    boot(None).await
+}
+
+pub async fn start_with_rate_limit(limit: u32) -> App {
+    boot(Some(limit)).await
+}
+
+async fn boot(rate_limit: Option<u32>) -> App {
     let issuer_url = issuer::spawn();
     let database_url = std::env::var("DATABASE_URL").unwrap();
     let redis_url = std::env::var("RATE_LIMIT_REDIS_URL")
@@ -59,7 +67,10 @@ pub async fn start() -> App {
         &redis_url,
         &issuer_url,
     )));
-    let state = handlers::state(args).await.unwrap();
+    let mut state = handlers::state(args).await.unwrap();
+    if let Some(limit) = rate_limit {
+        state.rate_limit_quota.limit = limit;
+    }
 
     let probe = Router::new()
         .route("/probe-intake", get(probe_intake))
@@ -102,6 +113,10 @@ impl App {
             "{}/api/v1/organizations/{organization_id}/support/api-keys{suffix}",
             self.base_url
         )
+    }
+
+    pub fn intake_url(&self, suffix: &str) -> String {
+        format!("{}/api/v1/support/intake{suffix}", self.base_url)
     }
 
     pub fn probe_url(&self) -> String {
@@ -198,6 +213,34 @@ impl App {
                     size_bytes: 12,
                 },
             )
+            .await
+            .unwrap()
+    }
+
+    pub async fn seed_member_attachment(&self, entry: &TicketEntry, file_name: &str) -> Attachment {
+        self.state
+            .usecase
+            .attach_to_support_entry(AttachFileCommand {
+                actor: policy::user_subject(UserId(self.admin.user_id), Vec::new()),
+                organization_id: entry.organization_id,
+                entry_id: entry.id,
+                file_key: format!("uploads/support-tickets/{}", Uuid::now_v7()),
+                file_name: file_name.to_owned(),
+                mime_type: "image/png".to_owned(),
+                size_bytes: 12,
+            })
+            .await
+            .unwrap()
+    }
+
+    pub async fn send_draft(&self, draft: &TicketEntry) -> TicketEntry {
+        self.state
+            .usecase
+            .send_support_draft(DraftCommand {
+                actor: policy::user_subject(UserId(self.admin.user_id), Vec::new()),
+                organization_id: draft.organization_id,
+                entry_id: draft.id,
+            })
             .await
             .unwrap()
     }
