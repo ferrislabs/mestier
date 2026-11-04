@@ -620,6 +620,9 @@ async fn a_malformed_key_does_not_authenticate() {
         format!("{prefix}.{}", secret.to_uppercase()),
         format!("{prefix}.{}", &secret[..63]),
     ] {
+        if malformed == created.plaintext {
+            continue;
+        }
         assert_eq!(world.authenticate(&malformed).await, None, "{malformed:?}");
     }
 
