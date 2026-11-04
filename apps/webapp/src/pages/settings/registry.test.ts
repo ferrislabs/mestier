@@ -27,6 +27,26 @@ describe('SETTINGS_SECTIONS', () => {
 		).toBe(true)
 	})
 
+	it('enregistre la section support sous le module support, après l’automatisation', () => {
+		const ids = SETTINGS_SECTIONS.map((section) => section.id)
+		const support = SETTINGS_SECTIONS.find(
+			(section) => section.id === 'support',
+		)
+
+		expect(support?.label).toBe('Support')
+		expect(support?.moduleId).toBe('support')
+		expect(ids.indexOf('support')).toBeGreaterThan(
+			ids.indexOf('automatisation'),
+		)
+	})
+
+	it('range la section support dans le groupe du module Support', () => {
+		const groups = buildSettingsNavGroups(SETTINGS_SECTIONS)
+		const group = groups.find((entry) => entry.label === 'Support')
+
+		expect(group?.sections.map((section) => section.id)).toEqual(['support'])
+	})
+
 	it('groupe les modèles de projet, de DOE et la mise en page au même endroit', () => {
 		expect(SETTINGS_SECTIONS.map((section) => section.id)).toContain('modeles')
 		expect(SETTINGS_SECTIONS.map((section) => section.id)).not.toContain(
