@@ -1,5 +1,5 @@
 use axum_extra::routing::TypedPath;
-use mestier_core::{AttachmentId, OrganizationId, TicketEntryId, TicketId};
+use mestier_core::{AttachmentId, OrganizationId, SupportApiKeyId, TicketEntryId, TicketId};
 use serde::Deserialize;
 
 #[derive(TypedPath, Deserialize)]
@@ -83,4 +83,17 @@ pub struct AttachmentUrlPath {
 #[typed_path("/api/v1/organizations/{organization_id}/support/settings")]
 pub struct SettingsPath {
     pub organization_id: OrganizationId,
+}
+
+#[derive(TypedPath, Deserialize)]
+#[typed_path("/api/v1/organizations/{organization_id}/support/api-keys")]
+pub struct ApiKeysPath {
+    pub organization_id: OrganizationId,
+}
+
+#[derive(TypedPath, Deserialize)]
+#[typed_path("/api/v1/organizations/{organization_id}/support/api-keys/{key_id}")]
+pub struct ApiKeyPath {
+    pub organization_id: OrganizationId,
+    pub key_id: SupportApiKeyId,
 }

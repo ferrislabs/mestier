@@ -2,8 +2,9 @@ use std::{net::SocketAddr, sync::Arc};
 
 use args::Args;
 use authz::Subject;
+use axum::{Router, extract::State, http::HeaderMap, routing::get};
 use clap::Parser;
-use handlers::AppState;
+use handlers::{ApiError, AppState};
 use mestier_core::{
     AddEntryCommand, Attachment, CreateTicketCommand, CustomFields, EntryKind, NewAttachment,
     OrganizationId, Permissions, PostClientMessageCommand, Ticket, TicketEntry, TicketStatus,
@@ -29,9 +30,19 @@ pub struct App {
     pub other_organization_id: Uuid,
     pub other_member_id: Uuid,
     pub admin: Caller,
+    pub organization_admin: Caller,
+    pub other_organization_admin: Caller,
     pub viewer: Caller,
     pub outsider: Caller,
-    other_owner_user_id: Uuid,
+}
+
+async fn probe_intake(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+) -> Result<String, ApiError> {
+    let organization_id = handlers_support::require_intake_key(&state, &headers).await?;
+
+    Ok(organization_id.0.to_string())
 }
 
 pub async fn start() -> App {
@@ -50,7 +61,12 @@ pub async fn start() -> App {
     )));
     let state = handlers::state(args).await.unwrap();
 
-    let router = handlers_support::router(&state).with_state(state.clone());
+    let probe = Router::new()
+        .route("/probe-intake", get(probe_intake))
+        .with_state(state.clone());
+    let router = handlers_support::router(&state)
+        .with_state(state.clone())
+        .merge(probe);
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let addr = listener.local_addr().unwrap();
     tokio::spawn(async move {
@@ -69,13 +85,29 @@ pub async fn start() -> App {
         other_organization_id: fixture.other_organization_id,
         other_member_id: fixture.other_member_id,
         admin: fixture.admin,
+        organization_admin: fixture.organization_admin,
+        other_organization_admin: fixture.other_organization_admin,
         viewer: fixture.viewer,
         outsider: fixture.outsider,
-        other_owner_user_id: fixture.other_owner_user_id,
     }
 }
 
 impl App {
+    pub fn api_keys_url(&self, suffix: &str) -> String {
+        self.api_keys_url_in(self.organization_id, suffix)
+    }
+
+    pub fn api_keys_url_in(&self, organization_id: Uuid, suffix: &str) -> String {
+        format!(
+            "{}/api/v1/organizations/{organization_id}/support/api-keys{suffix}",
+            self.base_url
+        )
+    }
+
+    pub fn probe_url(&self) -> String {
+        format!("{}/probe-intake", self.base_url)
+    }
+
     pub fn tickets_url(&self, suffix: &str) -> String {
         format!(
             "{}/api/v1/organizations/{}/support/tickets{suffix}",
@@ -199,6 +231,7 @@ impl App {
 
         for statement in [
             "DELETE FROM automation.event WHERE org_id = ANY($1)",
+            "DELETE FROM support_api_keys WHERE org_id = ANY($1)",
             "DELETE FROM support_tickets WHERE org_id = ANY($1)",
             "DELETE FROM support_ticket_counters WHERE org_id = ANY($1)",
             "DELETE FROM organization_members WHERE organization_id = ANY($1)",
@@ -213,9 +246,10 @@ impl App {
 
         for user_id in [
             self.admin.user_id,
+            self.organization_admin.user_id,
             self.viewer.user_id,
             self.outsider.user_id,
-            self.other_owner_user_id,
+            self.other_organization_admin.user_id,
         ] {
             sqlx::query("DELETE FROM users WHERE id = $1")
                 .bind(user_id)
@@ -230,8 +264,9 @@ struct Fixture {
     organization_id: Uuid,
     other_organization_id: Uuid,
     other_member_id: Uuid,
-    other_owner_user_id: Uuid,
     admin: Caller,
+    organization_admin: Caller,
+    other_organization_admin: Caller,
     viewer: Caller,
     outsider: Caller,
 }
@@ -240,7 +275,9 @@ async fn seed(pool: &PgPool) -> Fixture {
     let (admin_user_id, admin_sub) = seed_user(pool, "admin").await;
     let (viewer_user_id, viewer_sub) = seed_user(pool, "viewer").await;
     let (outsider_user_id, outsider_sub) = seed_user(pool, "outsider").await;
-    let (other_owner_user_id, _) = seed_user(pool, "other-owner").await;
+    let (organization_admin_user_id, organization_admin_sub) =
+        seed_user(pool, "organization-admin").await;
+    let (other_owner_user_id, other_owner_sub) = seed_user(pool, "other-owner").await;
 
     let organization_id = seed_organization(pool, admin_user_id).await;
     let other_organization_id = seed_organization(pool, other_owner_user_id).await;
@@ -248,6 +285,13 @@ async fn seed(pool: &PgPool) -> Fixture {
     let admin_member_id = seed_member(pool, organization_id, admin_user_id, "Admin").await;
     let viewer_member_id = seed_member(pool, organization_id, viewer_user_id, "Viewer").await;
     let outsider_member_id = seed_member(pool, organization_id, outsider_user_id, "Outsider").await;
+    let organization_admin_member_id = seed_member(
+        pool,
+        organization_id,
+        organization_admin_user_id,
+        "Organization admin",
+    )
+    .await;
     let other_member_id =
         seed_member(pool, other_organization_id, other_owner_user_id, "Other").await;
 
@@ -269,15 +313,47 @@ async fn seed(pool: &PgPool) -> Fixture {
     .await;
     assign_role(pool, viewer_member_id, viewer_role_id).await;
 
+    let organization_admin_role_id = seed_role(
+        pool,
+        organization_id,
+        "organization-admin",
+        Permissions::MANAGE_ORG.0,
+    )
+    .await;
+    assign_role(
+        pool,
+        organization_admin_member_id,
+        organization_admin_role_id,
+    )
+    .await;
+
+    let other_admin_role_id = seed_role(
+        pool,
+        other_organization_id,
+        "organization-admin",
+        Permissions::MANAGE_ORG.0,
+    )
+    .await;
+    assign_role(pool, other_member_id, other_admin_role_id).await;
+
     Fixture {
         organization_id,
         other_organization_id,
         other_member_id,
-        other_owner_user_id,
         admin: Caller {
             token: issuer::mint(&admin_sub),
             member_id: admin_member_id,
             user_id: admin_user_id,
+        },
+        organization_admin: Caller {
+            token: issuer::mint(&organization_admin_sub),
+            member_id: organization_admin_member_id,
+            user_id: organization_admin_user_id,
+        },
+        other_organization_admin: Caller {
+            token: issuer::mint(&other_owner_sub),
+            member_id: other_member_id,
+            user_id: other_owner_user_id,
         },
         viewer: Caller {
             token: issuer::mint(&viewer_sub),

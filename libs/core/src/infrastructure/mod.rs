@@ -35,6 +35,7 @@ pub mod registry;
 pub mod role;
 pub mod service_rate;
 pub mod supplier_invoice;
+pub mod support_api_key;
 pub mod support_settings;
 pub mod support_thread;
 pub mod support_ticket;

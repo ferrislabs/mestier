@@ -111,7 +111,8 @@ pub use domain::{
         MockSupplierRepository,
     },
     support::ports::{
-        MockSupportSettingsRepository, MockTicketEntryRepository, MockTicketRepository,
+        MockSupportApiKeyRepository, MockSupportSettingsRepository, MockTicketEntryRepository,
+        MockTicketRepository,
     },
     task::ports::MockTaskRepository,
     task_comment::ports::MockTaskCommentRepository,
@@ -140,20 +141,23 @@ pub use domain::{
 
 pub use domain::{
     Attachment, AttachmentId, Badge, BadgeTone, CreatedTicket, CustomFields, DisplayFields,
-    EntryKind, LocatedAttachment, MAX_DISPLAY_FIELD_CHARS, MAX_DISPLAY_FIELDS, Ticket, TicketEntry,
-    TicketEntryId, TicketId, TicketNumber, TicketStatus,
+    EntryKind, GeneratedApiKey, LocatedAttachment, MAX_DISPLAY_FIELD_CHARS, MAX_DISPLAY_FIELDS,
+    PresentedApiKey, SupportApiKey, SupportApiKeyId, Ticket, TicketEntry, TicketEntryId, TicketId,
+    TicketNumber, TicketStatus, api_key_matches, generate_api_key,
     support::commands::{
         AddBadgeCommand, AddEntryCommand, AssignTicketCommand, AttachFileCommand,
-        CreateTicketCommand, DraftCommand, EditDraftCommand, GetDisplayFieldsCommand,
-        GetTicketCommand, ListThreadCommand, ListTicketsCommand, PostClientMessageCommand,
-        RemoveBadgeCommand, ReplaceDisplayFieldsCommand, TransitionTicketCommand,
+        CreateApiKeyCommand, CreateTicketCommand, CreatedApiKey, DraftCommand, EditDraftCommand,
+        GetDisplayFieldsCommand, GetTicketCommand, ListApiKeysCommand, ListThreadCommand,
+        ListTicketsCommand, PostClientMessageCommand, RemoveBadgeCommand,
+        ReplaceDisplayFieldsCommand, RevokeApiKeyCommand, TransitionTicketCommand,
     },
     support::events::{TicketCreated, TicketTransitioned},
     support::ports::{
-        LastAssignment, SupportSettingsRepository, TicketEntryRepository, TicketFilter, TicketPage,
-        TicketRepository,
+        LastAssignment, SupportApiKeyRepository, SupportSettingsRepository, TicketEntryRepository,
+        TicketFilter, TicketPage, TicketRepository,
     },
     support::thread_service::NewAttachment,
+    validate_api_key_name,
 };
 
 pub use domain::maintenance::overview::{

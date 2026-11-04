@@ -3,6 +3,8 @@ use axum::{Router, middleware::from_fn_with_state};
 use handlers::{ApiError, AppState, auth::auth_middleware, rate_limit::rate_limit_middleware};
 use mestier_core::{OrganizationId, Permissions};
 
+pub mod api_key;
+pub mod intake;
 pub mod paths;
 pub mod response;
 pub mod settings;
@@ -12,6 +14,7 @@ pub mod ticket;
 pub const TAG: &str = "support";
 
 pub use handlers::membership::require_org_membership;
+pub use intake::guard::require_intake_key;
 
 pub async fn require_view_support(
     state: &AppState,
@@ -52,6 +55,7 @@ pub fn router(state: &AppState) -> Router<AppState> {
         .merge(ticket::router(state))
         .merge(settings::router(state))
         .merge(thread::router(state))
+        .merge(api_key::router(state))
         .layer(from_fn_with_state(state.clone(), rate_limit_middleware))
         .layer(from_fn_with_state(state.clone(), auth_middleware))
 }
