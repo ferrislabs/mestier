@@ -91,6 +91,7 @@ export interface SupportBoardUIProps {
 	onDragEnd: () => void
 	onDropOnColumn: (status: SupportStatus) => void
 	onShiftColumn: (ticketId: string, direction: 1 | -1) => void
+	onOpenCard: (ticketId: string) => void
 }
 
 export interface SupportTableUIProps {
@@ -103,9 +104,115 @@ export interface SupportTableUIProps {
 	toolbar: ReactNode
 	emptyReason: string | null
 	truncationNotice: string | null
+	onOpenRow: (ticketId: string) => void
 }
 
 export interface SupportScreenProps {
 	filters: SupportFilters
 	onFiltersChange: (filters: SupportFilters) => void
+	onOpenTicket: (ticketId: string) => void
+}
+
+export type SupportEntryKind =
+	| 'client_message'
+	| 'reply'
+	| 'internal_note'
+	| 'draft'
+
+export interface SupportAttachmentVM {
+	id: string
+	fileName: string
+	sizeLabel: string
+}
+
+export interface SupportEntryVM {
+	id: string
+	kind: SupportEntryKind
+	kindLabel: string
+	visibilityLabel: string
+	authorLabel: string
+	createdAtLabel: string
+	body: string
+	attachments: SupportAttachmentVM[]
+}
+
+export type SupportComposerTab = 'reply' | 'draft' | 'note'
+
+export interface SupportComposerTabVM {
+	id: SupportComposerTab
+	label: string
+	actionLabel: string
+	hint: string
+}
+
+export interface SupportTicketDetailVM {
+	id: string
+	numberLabel: string
+	subject: string
+	status: SupportStatus
+	assigneeId: string | null
+	badges: SupportBadgeVM[]
+	fields: SupportFieldVM[]
+	createdAtLabel: string
+}
+
+export interface SupportStatusOption {
+	status: SupportStatus
+	label: string
+}
+
+export interface SupportThreadUIProps {
+	entries: SupportEntryVM[]
+	canManage: boolean
+	isLoading: boolean
+	error: string | null
+	onRetry: () => void
+	editingEntryId: string | null
+	pendingEntryId: string | null
+	onStartEdit: (entryId: string) => void
+	onCancelEdit: () => void
+	onSaveEdit: (entryId: string, body: string) => void
+	onSendDraft: (entryId: string) => void
+	onDeleteDraft: (entryId: string) => void
+	onOpenAttachment: (attachmentId: string) => void
+}
+
+export interface SupportComposerUIProps {
+	tabs: SupportComposerTabVM[]
+	activeTab: SupportComposerTab
+	body: string
+	isSubmitting: boolean
+	error: string | null
+	onTabChange: (tab: SupportComposerTab) => void
+	onBodyChange: (body: string) => void
+	onSubmit: () => void
+}
+
+export interface SupportSidePanelUIProps {
+	ticket: SupportTicketDetailVM
+	canManage: boolean
+	statusOptions: SupportStatusOption[]
+	assigneeLabel: string
+	assignees: SupportFilterOption[]
+	isUpdating: boolean
+	error: string | null
+	onChangeStatus: (status: SupportStatus) => void
+	onChangeAssignee: (memberId: string | null) => void
+}
+
+export interface SupportTicketPageUIProps {
+	organizationName: string
+	ticket: SupportTicketDetailVM | null
+	isLoading: boolean
+	error: string | null
+	onRetry: () => void
+	onBack: () => void
+	thread: ReactNode
+	composer: ReactNode
+	sidePanel: ReactNode
+}
+
+export interface SupportTicketScreenProps {
+	ticketId: string
+	onBack: () => void
 }
