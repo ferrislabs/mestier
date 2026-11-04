@@ -32,6 +32,17 @@ impl Modify for SecurityAddon {
                     .build(),
             ),
         );
+        components.add_security_scheme(
+            "intake_key",
+            SecurityScheme::Http(
+                HttpBuilder::new()
+                    .scheme(HttpAuthScheme::Bearer)
+                    .description(Some(
+                        "An organization API key, created with POST /organizations/{id}/support/api-keys and sent as `Authorization: Bearer <key>`. It names the organization: no route of the intake takes an organization id.",
+                    ))
+                    .build(),
+            ),
+        );
     }
 }
 
@@ -311,6 +322,12 @@ impl Modify for SecurityAddon {
         support::api_key::create::handler,
         support::api_key::list::handler,
         support::api_key::revoke::handler,
+        support::intake::create_ticket::handler,
+        support::intake::list_tickets::handler,
+        support::intake::get_ticket::handler,
+        support::intake::post_message::handler,
+        support::intake::attach_file::handler,
+        support::intake::attachment_url::handler,
     ),
     components(schemas(
         support::response::TicketResponse,
@@ -328,6 +345,13 @@ impl Modify for SecurityAddon {
         support::response::SupportApiKeyResponse,
         support::response::CreatedSupportApiKeyResponse,
         support::api_key::create::CreateSupportApiKeyRequest,
+        support::intake::types::CreateIntakeTicketRequest,
+        support::intake::types::PostIntakeMessageRequest,
+        support::intake::types::IntakeTicketResponse,
+        support::intake::types::IntakeEntryResponse,
+        support::intake::types::IntakeEntryKind,
+        support::intake::types::IntakeAttachmentResponse,
+        support::intake::types::IntakeAttachmentUrlResponse,
         automation::credential::create::CreateCredentialRequest,
         automation::credential::create::CredentialOriginRequest,
         automation::credential::update::UpdateCredentialRequest,
@@ -701,6 +725,11 @@ mod tests {
             format!("{root}/settings"),
             format!("{root}/api-keys"),
             format!("{root}/api-keys/{{key_id}}"),
+            "/api/v1/support/intake/tickets".to_owned(),
+            "/api/v1/support/intake/tickets/{ticket_id}".to_owned(),
+            "/api/v1/support/intake/tickets/{ticket_id}/messages".to_owned(),
+            "/api/v1/support/intake/tickets/{ticket_id}/attachments".to_owned(),
+            "/api/v1/support/intake/tickets/{ticket_id}/attachments/{attachment_id}/url".to_owned(),
         ] {
             assert!(paths.contains_key(&path), "{path}");
         }
@@ -725,12 +754,205 @@ mod tests {
             "createSupportApiKey",
             "listSupportApiKeys",
             "revokeSupportApiKey",
+            "createIntakeTicket",
+            "listIntakeTickets",
+            "getIntakeTicket",
+            "postIntakeMessage",
+            "attachIntakeFile",
+            "getIntakeAttachmentUrl",
         ] {
             assert!(
                 json.contains(&format!("\"operationId\":\"{operation_id}\"")),
                 "{operation_id}"
             );
         }
+    }
+
+    #[test]
+    fn every_support_intake_route_reaches_the_document_under_the_intake_key_scheme() {
+        let document = ApiDoc::openapi();
+        let json = serde_json::to_value(&document).unwrap();
+        let root = "/api/v1/support/intake";
+
+        for (path, method, operation_id) in [
+            (format!("{root}/tickets"), "post", "createIntakeTicket"),
+            (format!("{root}/tickets"), "get", "listIntakeTickets"),
+            (
+                format!("{root}/tickets/{{ticket_id}}"),
+                "get",
+                "getIntakeTicket",
+            ),
+            (
+                format!("{root}/tickets/{{ticket_id}}/messages"),
+                "post",
+                "postIntakeMessage",
+            ),
+            (
+                format!("{root}/tickets/{{ticket_id}}/attachments"),
+                "post",
+                "attachIntakeFile",
+            ),
+            (
+                format!("{root}/tickets/{{ticket_id}}/attachments/{{attachment_id}}/url"),
+                "get",
+                "getIntakeAttachmentUrl",
+            ),
+        ] {
+            let operation = &json["paths"][&path][method];
+            assert_eq!(operation["operationId"], operation_id, "{method} {path}");
+            assert_eq!(
+                operation["security"],
+                serde_json::json!([{ "intake_key": [] }]),
+                "{operation_id}"
+            );
+        }
+
+        let scheme = &json["components"]["securitySchemes"]["intake_key"];
+        assert_eq!(scheme["type"], "http");
+        assert_eq!(scheme["scheme"], "bearer");
+        assert!(
+            scheme["description"]
+                .as_str()
+                .unwrap()
+                .contains("POST /organizations/{id}/support/api-keys")
+        );
+        assert_eq!(
+            json["components"]["securitySchemes"]["bearer_auth"]["bearerFormat"],
+            "JWT"
+        );
+        assert!(
+            json["paths"][format!("{root}/tickets")]["get"]["description"]
+                .as_str()
+                .unwrap()
+                .contains(
+                    "custom_field_key and custom_field_value must be given together; the value of the top-level key is compared as text"
+                )
+        );
+    }
+
+    #[test]
+    fn the_support_intake_schemas_never_expose_a_member_or_a_storage_key() {
+        let document = ApiDoc::openapi();
+        let schemas = &document
+            .components
+            .as_ref()
+            .expect("the document has components")
+            .schemas;
+
+        for name in [
+            "CreateIntakeTicketRequest",
+            "PostIntakeMessageRequest",
+            "IntakeTicketResponse",
+            "IntakeEntryResponse",
+            "IntakeAttachmentResponse",
+            "IntakeAttachmentUrlResponse",
+        ] {
+            let schema = serde_json::to_value(
+                schemas
+                    .get(name)
+                    .unwrap_or_else(|| panic!("{name} is registered")),
+            )
+            .unwrap();
+            let properties = schema["properties"]
+                .as_object()
+                .unwrap_or_else(|| panic!("{name} has properties"));
+
+            for forbidden in [
+                "author_member_id",
+                "assignee_member_id",
+                "assigned_at",
+                "file_key",
+            ] {
+                assert!(!properties.contains_key(forbidden), "{name}.{forbidden}");
+            }
+        }
+    }
+
+    #[test]
+    fn the_support_intake_schemas_have_the_contracted_properties() {
+        let document = ApiDoc::openapi();
+        let schemas = &document
+            .components
+            .as_ref()
+            .expect("the document has components")
+            .schemas;
+        let properties = |name: &str| -> Vec<String> {
+            let schema = serde_json::to_value(
+                schemas
+                    .get(name)
+                    .unwrap_or_else(|| panic!("{name} is registered")),
+            )
+            .unwrap();
+            let mut keys: Vec<String> = schema["properties"]
+                .as_object()
+                .unwrap_or_else(|| panic!("{name} has properties"))
+                .keys()
+                .cloned()
+                .collect();
+            keys.sort_unstable();
+
+            keys
+        };
+
+        assert_eq!(
+            properties("CreateIntakeTicketRequest"),
+            ["body", "custom_fields", "external_id", "subject"]
+        );
+        assert_eq!(properties("PostIntakeMessageRequest"), ["body"]);
+        assert_eq!(
+            properties("IntakeTicketResponse"),
+            [
+                "badges",
+                "body",
+                "created_at",
+                "custom_fields",
+                "entries",
+                "external_id",
+                "id",
+                "number",
+                "status",
+                "subject"
+            ]
+        );
+        assert_eq!(
+            properties("IntakeEntryResponse"),
+            ["attachments", "body", "created_at", "id", "kind"]
+        );
+        assert_eq!(
+            properties("IntakeAttachmentResponse"),
+            ["created_at", "file_name", "id", "mime_type", "size_bytes"]
+        );
+        assert_eq!(
+            properties("IntakeAttachmentUrlResponse"),
+            ["expires_at", "url"]
+        );
+    }
+
+    #[test]
+    fn the_intake_entry_kind_lists_only_what_a_client_may_see() {
+        let document = ApiDoc::openapi();
+        let json = serde_json::to_value(&document).unwrap();
+        let schemas = &json["components"]["schemas"];
+
+        assert_eq!(
+            schemas["IntakeEntryResponse"]["properties"]["kind"]["$ref"],
+            "#/components/schemas/IntakeEntryKind"
+        );
+        assert_eq!(
+            schemas["IntakeEntryKind"]["enum"],
+            serde_json::json!(["client_message", "reply"])
+        );
+        assert!(schemas["IntakeTicketResponse"]["properties"]["updated_at"].is_null());
+        assert!(
+            !schemas["IntakeTicketResponse"]["required"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|name| name == "updated_at")
+        );
+        let text = serde_json::to_string(&schemas["IntakeEntryKind"]).unwrap();
+        assert!(!text.contains("internal_note"));
+        assert!(!text.contains("draft"));
     }
 
     #[test]

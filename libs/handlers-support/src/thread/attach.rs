@@ -12,9 +12,9 @@ use percent_encoding::percent_decode_str;
 use crate::{paths::EntryAttachmentsPath, response::AttachmentResponse, ticket::require_manager};
 
 const FILE_NAME_HEADER: &str = "x-file-name";
-const UPLOAD_FOLDER: &str = "support-tickets";
+pub(crate) const UPLOAD_FOLDER: &str = "support-tickets";
 
-fn file_name(headers: &HeaderMap) -> Result<String, ApiError> {
+pub(crate) fn file_name(headers: &HeaderMap) -> Result<String, ApiError> {
     let value = headers
         .get(FILE_NAME_HEADER)
         .ok_or_else(|| ApiError::Validation("the X-File-Name header is required".to_owned()))?;

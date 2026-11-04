@@ -51,11 +51,16 @@ pub async fn require_view_support(
 }
 
 pub fn router(state: &AppState) -> Router<AppState> {
-    Router::new()
+    let members = Router::new()
         .merge(ticket::router(state))
         .merge(settings::router(state))
         .merge(thread::router(state))
         .merge(api_key::router(state))
         .layer(from_fn_with_state(state.clone(), rate_limit_middleware))
-        .layer(from_fn_with_state(state.clone(), auth_middleware))
+        .layer(from_fn_with_state(state.clone(), auth_middleware));
+
+    let intake =
+        intake::router(state).layer(from_fn_with_state(state.clone(), rate_limit_middleware));
+
+    Router::new().merge(members).merge(intake)
 }

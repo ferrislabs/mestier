@@ -350,7 +350,8 @@ async fn revoke_answers_204_twice_and_404_outside_the_organization() {
 
 #[tokio::test]
 #[ignore = "requires live postgres and redis"]
-async fn a_valid_key_opens_the_probe_as_its_organization_and_last_used_at_moves() {
+async fn a_valid_key_opens_the_probe_as_its_organization_and_last_used_at_is_stamped_on_first_use()
+{
     let app = harness::start().await;
     let client = Client::new();
     let created = create_key(&app, &client, "Formulaire").await;
@@ -378,7 +379,7 @@ async fn a_valid_key_opens_the_probe_as_its_organization_and_last_used_at_moves(
     assert_eq!(lowercase_status, StatusCode::OK);
     assert_eq!(lowercase_body, app.organization_id.to_string());
     assert!(first_use.is_some());
-    assert!(second_use > first_use);
+    assert_eq!(second_use, first_use);
     app.cleanup().await;
 }
 
