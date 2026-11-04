@@ -2,8 +2,9 @@ use chrono::{DateTime, Utc};
 use common::CoreError;
 
 use crate::{
-    Attachment, AttachmentId, DisplayFields, LocatedAttachment, MemberId, OrganizationId, Ticket,
-    TicketEntry, TicketEntryId, TicketId, TicketNumber, TicketStatus,
+    Attachment, AttachmentId, DisplayFields, LocatedAttachment, MemberId, OrganizationId,
+    SupportApiKey, SupportApiKeyId, Ticket, TicketEntry, TicketEntryId, TicketId, TicketNumber,
+    TicketStatus,
 };
 
 #[derive(Debug, Clone, Default, PartialEq)]
@@ -117,4 +118,33 @@ pub trait SupportSettingsRepository: Send {
         organization_id: OrganizationId,
         fields: &DisplayFields,
     ) -> impl Future<Output = Result<DisplayFields, CoreError>> + Send;
+}
+
+#[cfg_attr(any(test, feature = "mock"), mockall::automock)]
+pub trait SupportApiKeyRepository: Send {
+    fn create(
+        &mut self,
+        key: &SupportApiKey,
+    ) -> impl Future<Output = Result<SupportApiKey, CoreError>> + Send;
+
+    fn list(
+        &mut self,
+        organization_id: OrganizationId,
+    ) -> impl Future<Output = Result<Vec<SupportApiKey>, CoreError>> + Send;
+
+    fn find_by_prefix(
+        &mut self,
+        prefix: &str,
+    ) -> impl Future<Output = Result<Option<SupportApiKey>, CoreError>> + Send;
+
+    fn revoke(
+        &mut self,
+        organization_id: OrganizationId,
+        id: SupportApiKeyId,
+    ) -> impl Future<Output = Result<bool, CoreError>> + Send;
+
+    fn touch_last_used(
+        &mut self,
+        id: SupportApiKeyId,
+    ) -> impl Future<Output = Result<(), CoreError>> + Send;
 }

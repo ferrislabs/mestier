@@ -1,8 +1,10 @@
+use std::fmt;
+
 use authz::Subject;
 
 use crate::{
-    Badge, CustomFields, DisplayFields, MemberId, OrganizationId, TicketEntryId, TicketId,
-    TicketStatus, domain::support::ports::TicketFilter,
+    Badge, CustomFields, DisplayFields, MemberId, OrganizationId, SupportApiKey, SupportApiKeyId,
+    TicketEntryId, TicketId, TicketStatus, domain::support::ports::TicketFilter,
 };
 
 pub struct CreateTicketCommand {
@@ -104,4 +106,35 @@ pub struct ReplaceDisplayFieldsCommand {
     pub actor: Subject,
     pub organization_id: OrganizationId,
     pub display_fields: DisplayFields,
+}
+
+pub struct CreateApiKeyCommand {
+    pub actor: Subject,
+    pub organization_id: OrganizationId,
+    pub name: String,
+}
+
+pub struct ListApiKeysCommand {
+    pub actor: Subject,
+    pub organization_id: OrganizationId,
+}
+
+pub struct RevokeApiKeyCommand {
+    pub actor: Subject,
+    pub organization_id: OrganizationId,
+    pub key_id: SupportApiKeyId,
+}
+
+pub struct CreatedApiKey {
+    pub key: SupportApiKey,
+    pub plaintext: String,
+}
+
+impl fmt::Debug for CreatedApiKey {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("CreatedApiKey")
+            .field("key", &self.key)
+            .field("plaintext", &format_args!("<redacted>"))
+            .finish()
+    }
 }

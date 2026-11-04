@@ -308,6 +308,9 @@ impl Modify for SecurityAddon {
         support::thread::attachment_url::handler,
         support::settings::get::handler,
         support::settings::replace::handler,
+        support::api_key::create::handler,
+        support::api_key::list::handler,
+        support::api_key::revoke::handler,
     ),
     components(schemas(
         support::response::TicketResponse,
@@ -322,6 +325,9 @@ impl Modify for SecurityAddon {
         support::settings::replace::ReplaceSupportSettingsRequest,
         support::thread::add_entry::AddTicketEntryRequest,
         support::thread::edit_draft::EditSupportDraftRequest,
+        support::response::SupportApiKeyResponse,
+        support::response::CreatedSupportApiKeyResponse,
+        support::api_key::create::CreateSupportApiKeyRequest,
         automation::credential::create::CreateCredentialRequest,
         automation::credential::create::CredentialOriginRequest,
         automation::credential::update::UpdateCredentialRequest,
@@ -693,6 +699,8 @@ mod tests {
             format!("{root}/entries/{{entry_id}}/attachments"),
             format!("{root}/attachments/{{attachment_id}}/url"),
             format!("{root}/settings"),
+            format!("{root}/api-keys"),
+            format!("{root}/api-keys/{{key_id}}"),
         ] {
             assert!(paths.contains_key(&path), "{path}");
         }
@@ -714,12 +722,61 @@ mod tests {
             "getSupportAttachmentUrl",
             "getSupportSettings",
             "replaceSupportSettings",
+            "createSupportApiKey",
+            "listSupportApiKeys",
+            "revokeSupportApiKey",
         ] {
             assert!(
                 json.contains(&format!("\"operationId\":\"{operation_id}\"")),
                 "{operation_id}"
             );
         }
+    }
+
+    #[test]
+    fn the_support_api_key_schemas_expose_the_secret_only_at_creation() {
+        let document = ApiDoc::openapi();
+        let schemas = &document
+            .components
+            .as_ref()
+            .expect("the document has components")
+            .schemas;
+        let properties = |name: &str| -> Vec<String> {
+            let schema = serde_json::to_value(
+                schemas
+                    .get(name)
+                    .unwrap_or_else(|| panic!("{name} is registered")),
+            )
+            .expect("the schema serializes");
+            schema["properties"]
+                .as_object()
+                .unwrap_or_else(|| panic!("{name} has properties"))
+                .keys()
+                .cloned()
+                .collect()
+        };
+
+        let created = properties("CreatedSupportApiKeyResponse");
+        let listed = properties("SupportApiKeyResponse");
+        let request = properties("CreateSupportApiKeyRequest");
+
+        for field in ["id", "name", "prefix", "key", "created_at"] {
+            assert!(created.iter().any(|name| name == field), "{field}");
+        }
+        for field in [
+            "id",
+            "name",
+            "prefix",
+            "created_at",
+            "last_used_at",
+            "revoked_at",
+        ] {
+            assert!(listed.iter().any(|name| name == field), "{field}");
+        }
+        for field in ["key", "secret", "secret_hash", "plaintext", "hash"] {
+            assert!(!listed.iter().any(|name| name == field), "{field}");
+        }
+        assert_eq!(request, ["name"]);
     }
 
     #[test]

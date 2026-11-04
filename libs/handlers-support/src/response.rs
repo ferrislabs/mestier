@@ -1,7 +1,10 @@
+use std::fmt;
+
 use chrono::{DateTime, Utc};
 use mestier_core::{
-    Attachment, AttachmentId, Badge, BadgeTone, DisplayFields, EntryKind, MemberId, PresignedUrl,
-    Ticket, TicketEntry, TicketEntryId, TicketId, TicketNumber, TicketStatus,
+    Attachment, AttachmentId, Badge, BadgeTone, CreatedApiKey, DisplayFields, EntryKind, MemberId,
+    PresignedUrl, SupportApiKey, SupportApiKeyId, Ticket, TicketEntry, TicketEntryId, TicketId,
+    TicketNumber, TicketStatus,
 };
 use serde::Serialize;
 use serde_json::Value;
@@ -122,6 +125,62 @@ impl From<PresignedUrl> for AttachmentUrlResponse {
         Self {
             url: presigned.url,
             expires_at: presigned.expires_at,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, ToSchema)]
+pub struct SupportApiKeyResponse {
+    pub id: SupportApiKeyId,
+    pub name: String,
+    pub prefix: String,
+    pub created_at: DateTime<Utc>,
+    pub last_used_at: Option<DateTime<Utc>>,
+    pub revoked_at: Option<DateTime<Utc>>,
+}
+
+impl From<SupportApiKey> for SupportApiKeyResponse {
+    fn from(key: SupportApiKey) -> Self {
+        Self {
+            id: key.id,
+            name: key.name,
+            prefix: key.prefix,
+            created_at: key.created_at,
+            last_used_at: key.last_used_at,
+            revoked_at: key.revoked_at,
+        }
+    }
+}
+
+#[derive(PartialEq, Serialize, ToSchema)]
+pub struct CreatedSupportApiKeyResponse {
+    pub id: SupportApiKeyId,
+    pub name: String,
+    pub prefix: String,
+    pub key: String,
+    pub created_at: DateTime<Utc>,
+}
+
+impl fmt::Debug for CreatedSupportApiKeyResponse {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("CreatedSupportApiKeyResponse")
+            .field("id", &self.id)
+            .field("name", &self.name)
+            .field("prefix", &self.prefix)
+            .field("key", &format_args!("<redacted>"))
+            .field("created_at", &self.created_at)
+            .finish()
+    }
+}
+
+impl From<CreatedApiKey> for CreatedSupportApiKeyResponse {
+    fn from(created: CreatedApiKey) -> Self {
+        Self {
+            id: created.key.id,
+            name: created.key.name,
+            prefix: created.key.prefix,
+            key: created.plaintext,
+            created_at: created.key.created_at,
         }
     }
 }

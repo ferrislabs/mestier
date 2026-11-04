@@ -9,6 +9,12 @@ use uuid::Uuid;
 
 use crate::{MemberId, OrganizationId};
 
+pub use api_key::{
+    GeneratedApiKey, PresentedApiKey, SupportApiKey, SupportApiKeyId, api_key_matches,
+    generate_api_key, validate_api_key_name,
+};
+
+pub mod api_key;
 pub mod commands;
 pub mod events;
 pub mod ports;
