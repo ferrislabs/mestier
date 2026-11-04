@@ -165,9 +165,11 @@ interface RenderOptions {
 function Harness({
 	initialFilters,
 	onFiltersChange,
+	onOpenTicket,
 }: {
 	initialFilters: SupportFilters
 	onFiltersChange: (filters: SupportFilters) => void
+	onOpenTicket: (ticketId: string) => void
 }) {
 	const [filters, setFilters] = useState(initialFilters)
 
@@ -178,6 +180,7 @@ function Harness({
 				onFiltersChange(next)
 				setFilters(next)
 			}}
+			onOpenTicket={onOpenTicket}
 		/>
 	)
 }
@@ -221,11 +224,13 @@ async function renderTable({
 	seedPermissionsCacheForOrganization(queryClient, ORGANIZATION.id, permissions)
 
 	const filterChanges: SupportFilters[] = []
+	const openedTickets: string[] = []
 	render(
 		<Providers queryClient={queryClient}>
 			<Harness
 				initialFilters={filters}
 				onFiltersChange={(next) => filterChanges.push(next)}
+				onOpenTicket={(ticketId) => openedTickets.push(ticketId)}
 			/>
 		</Providers>,
 	)
@@ -236,7 +241,7 @@ async function renderTable({
 		await screen.findByText('Aucun ticket ne correspond aux filtres appliqués.')
 	}
 
-	return { ...api, filterChanges }
+	return { ...api, filterChanges, openedTickets }
 }
 
 function rowCells(subject: string): string[] {
@@ -334,6 +339,26 @@ describe('SupportTableFeature — lignes', () => {
 
 		expect(screen.queryAllByRole('button', { name: /^Déplacer / })).toEqual([])
 		expect(screen.getAllByRole('row')).toHaveLength(4)
+	})
+})
+
+describe('SupportTableFeature — ouverture', () => {
+	it('opens the ticket whose subject is clicked', async () => {
+		const { openedTickets } = await renderTable()
+
+		fireEvent.click(screen.getByRole('button', { name: 'Devis salle de bain' }))
+
+		expect(openedTickets).toEqual(['ticket-2'])
+	})
+
+	it('opens a ticket without any permission too', async () => {
+		const { openedTickets } = await renderTable({ permissions: [] })
+
+		fireEvent.click(
+			screen.getByRole('button', { name: 'Chauffe-eau en panne' }),
+		)
+
+		expect(openedTickets).toEqual(['ticket-3'])
 	})
 })
 

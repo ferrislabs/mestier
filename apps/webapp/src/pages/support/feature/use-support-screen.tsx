@@ -3,7 +3,11 @@ import { useReferenceCatalog } from '#/hooks/use-reference-catalog'
 import { useSupportSettings, useSupportTickets } from '#/hooks/use-support'
 import { hasActiveSupportFilters } from '#/pages/support/lib/filters'
 import { distinctBadgeOptions } from '#/pages/support/lib/view-models'
-import type { SupportFilters, SupportToolbarProps } from '#/pages/support/types'
+import type {
+	SupportFilterOption,
+	SupportFilters,
+	SupportToolbarProps,
+} from '#/pages/support/types'
 
 export function SupportOrganizationUnavailable() {
 	return (
@@ -23,12 +27,7 @@ export function SupportOrganizationUnavailable() {
 
 const NO_FIELD_KEYS: string[] = []
 
-export function useSupportScreenData(
-	organizationId: string,
-	filters: SupportFilters,
-) {
-	const ticketsQuery = useSupportTickets(organizationId, filters)
-	const settingsQuery = useSupportSettings(organizationId)
+export function useSupportMembers(organizationId: string) {
 	const catalog = useReferenceCatalog(organizationId, {
 		employeeProfiles: false,
 		equipment: false,
@@ -37,12 +36,29 @@ export function useSupportScreenData(
 		customUnits: false,
 	})
 
-	const tickets = ticketsQuery.data?.data ?? []
-	const fieldKeys = settingsQuery.data?.data.display_fields ?? NO_FIELD_KEYS
 	const members = catalog.members.data?.data ?? []
 
 	const namesById: Record<string, string> = {}
 	for (const member of members) namesById[member.id] = member.display_name
+
+	const assignees: SupportFilterOption[] = members.map((member) => ({
+		id: member.id,
+		label: member.display_name,
+	}))
+
+	return { namesById, assignees, isLoading: catalog.members.isLoading }
+}
+
+export function useSupportScreenData(
+	organizationId: string,
+	filters: SupportFilters,
+) {
+	const ticketsQuery = useSupportTickets(organizationId, filters)
+	const settingsQuery = useSupportSettings(organizationId)
+	const members = useSupportMembers(organizationId)
+
+	const tickets = ticketsQuery.data?.data ?? []
+	const fieldKeys = settingsQuery.data?.data.display_fields ?? NO_FIELD_KEYS
 
 	const matchingTotal = ticketsQuery.data?.pagination?.total
 	const truncationNotice =
@@ -57,21 +73,16 @@ export function useSupportScreenData(
 			: fieldKeys
 
 	const isLoading =
-		ticketsQuery.isLoading ||
-		settingsQuery.isLoading ||
-		catalog.members.isLoading
+		ticketsQuery.isLoading || settingsQuery.isLoading || members.isLoading
 
 	const toolbarProps: Pick<
 		SupportToolbarProps,
 		'assignees' | 'badges' | 'fieldKeys' | 'isLoading' | 'isFiltered'
 	> = {
-		assignees: members.map((member) => ({
-			id: member.id,
-			label: member.display_name,
-		})),
+		assignees: members.assignees,
 		badges: distinctBadgeOptions(tickets, filters.badge),
 		fieldKeys: selectableFieldKeys,
-		isLoading: settingsQuery.isLoading || catalog.members.isLoading,
+		isLoading: settingsQuery.isLoading || members.isLoading,
 		isFiltered,
 	}
 
@@ -79,7 +90,7 @@ export function useSupportScreenData(
 		ticketsQuery,
 		tickets,
 		fieldKeys,
-		namesById,
+		namesById: members.namesById,
 		truncationNotice,
 		isLoading,
 		emptyReason: isFiltered

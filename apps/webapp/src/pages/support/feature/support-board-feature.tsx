@@ -28,6 +28,7 @@ import { SupportToolbar } from '#/pages/support/ui/support-toolbar'
 export function SupportBoardFeature({
 	filters,
 	onFiltersChange,
+	onOpenTicket,
 }: SupportScreenProps) {
 	const { activeOrganization } = useActiveOrganization()
 
@@ -40,6 +41,7 @@ export function SupportBoardFeature({
 			organizationName={activeOrganization.name}
 			filters={filters}
 			onFiltersChange={onFiltersChange}
+			onOpenTicket={onOpenTicket}
 		/>
 	)
 }
@@ -54,6 +56,7 @@ function SupportBoardScreen({
 	organizationName,
 	filters,
 	onFiltersChange,
+	onOpenTicket,
 }: SupportBoardScreenProps) {
 	const canMove = useHasPermission('MANAGE_SUPPORT')
 	const data = useSupportScreenData(organizationId, filters)
@@ -144,6 +147,7 @@ function SupportBoardScreen({
 			onDragEnd={() => setDraggedTicketId(null)}
 			onDropOnColumn={handleDropOnColumn}
 			onShiftColumn={handleShiftColumn}
+			onOpenCard={onOpenTicket}
 		/>
 	)
 }

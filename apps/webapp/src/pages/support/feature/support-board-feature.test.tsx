@@ -207,9 +207,11 @@ interface RenderOptions {
 function Harness({
 	initialFilters,
 	onFiltersChange,
+	onOpenTicket,
 }: {
 	initialFilters: SupportFilters
 	onFiltersChange: (filters: SupportFilters) => void
+	onOpenTicket: (ticketId: string) => void
 }) {
 	const [filters, setFilters] = useState(initialFilters)
 
@@ -220,6 +222,7 @@ function Harness({
 				onFiltersChange(next)
 				setFilters(next)
 			}}
+			onOpenTicket={onOpenTicket}
 		/>
 	)
 }
@@ -274,11 +277,13 @@ async function renderBoard({
 	seedPermissionsCacheForOrganization(queryClient, ORGANIZATION.id, permissions)
 
 	const filterChanges: SupportFilters[] = []
+	const openedTickets: string[] = []
 	render(
 		<Providers queryClient={queryClient}>
 			<Harness
 				initialFilters={filters}
 				onFiltersChange={(next) => filterChanges.push(next)}
+				onOpenTicket={(ticketId) => openedTickets.push(ticketId)}
 			/>
 		</Providers>,
 	)
@@ -289,7 +294,7 @@ async function renderBoard({
 		await screen.findByText('Aucun ticket')
 	}
 
-	return { ...api, filterChanges }
+	return { ...api, filterChanges, openedTickets }
 }
 
 function column(label: string): HTMLElement {
@@ -413,6 +418,34 @@ describe('SupportBoardFeature — rendu', () => {
 				'4 tickets affichés sur 240. Affinez les filtres pour voir les autres.',
 			),
 		).toBeDefined()
+	})
+})
+
+describe('SupportBoardFeature — ouverture', () => {
+	it('opens the ticket whose subject is clicked', async () => {
+		const { openedTickets } = await renderBoard()
+
+		fireEvent.click(
+			within(card('Devis salle de bain')).getByRole('button', {
+				name: 'Devis salle de bain',
+			}),
+		)
+
+		expect(openedTickets).toEqual(['ticket-2'])
+	})
+
+	it('opens a ticket without MANAGE_SUPPORT too', async () => {
+		const { openedTickets } = await renderBoard({
+			permissions: ['VIEW_SUPPORT'],
+		})
+
+		fireEvent.click(
+			within(card('Chauffe-eau en panne')).getByRole('button', {
+				name: 'Chauffe-eau en panne',
+			}),
+		)
+
+		expect(openedTickets).toEqual(['ticket-3'])
 	})
 })
 
@@ -688,6 +721,7 @@ describe('SupportBoardFeature — organisation', () => {
 				<SupportBoardFeature
 					filters={EMPTY_SUPPORT_FILTERS}
 					onFiltersChange={() => {}}
+					onOpenTicket={() => {}}
 				/>
 			</QueryClientProvider>,
 		)
