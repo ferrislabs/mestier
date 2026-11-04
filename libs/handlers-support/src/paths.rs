@@ -78,3 +78,9 @@ pub struct AttachmentUrlPath {
     pub organization_id: OrganizationId,
     pub attachment_id: AttachmentId,
 }
+
+#[derive(TypedPath, Deserialize)]
+#[typed_path("/api/v1/organizations/{organization_id}/support/settings")]
+pub struct SettingsPath {
+    pub organization_id: OrganizationId,
+}

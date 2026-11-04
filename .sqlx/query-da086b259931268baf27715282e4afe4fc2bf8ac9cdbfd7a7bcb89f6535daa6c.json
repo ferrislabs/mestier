@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                INSERT INTO support_settings (org_id, display_fields)\n                VALUES ($1, $2)\n                ON CONFLICT (org_id) DO UPDATE\n                SET display_fields = EXCLUDED.display_fields, updated_at = now()\n                RETURNING display_fields\n                ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "display_fields",
+        "type_info": "Jsonb"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Jsonb"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "da086b259931268baf27715282e4afe4fc2bf8ac9cdbfd7a7bcb89f6535daa6c"
+}

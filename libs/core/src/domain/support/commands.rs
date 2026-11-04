@@ -1,8 +1,8 @@
 use authz::Subject;
 
 use crate::{
-    Badge, CustomFields, MemberId, OrganizationId, TicketEntryId, TicketId, TicketStatus,
-    domain::support::ports::TicketFilter,
+    Badge, CustomFields, DisplayFields, MemberId, OrganizationId, TicketEntryId, TicketId,
+    TicketStatus, domain::support::ports::TicketFilter,
 };
 
 pub struct CreateTicketCommand {
@@ -94,4 +94,14 @@ pub struct PostClientMessageCommand {
     pub organization_id: OrganizationId,
     pub ticket_id: TicketId,
     pub body: String,
+}
+
+pub struct GetDisplayFieldsCommand {
+    pub organization_id: OrganizationId,
+}
+
+pub struct ReplaceDisplayFieldsCommand {
+    pub actor: Subject,
+    pub organization_id: OrganizationId,
+    pub display_fields: DisplayFields,
 }

@@ -2,8 +2,8 @@ use chrono::{DateTime, Utc};
 use common::CoreError;
 
 use crate::{
-    Attachment, AttachmentId, LocatedAttachment, MemberId, OrganizationId, Ticket, TicketEntry,
-    TicketEntryId, TicketId, TicketNumber, TicketStatus,
+    Attachment, AttachmentId, DisplayFields, LocatedAttachment, MemberId, OrganizationId, Ticket,
+    TicketEntry, TicketEntryId, TicketId, TicketNumber, TicketStatus,
 };
 
 #[derive(Debug, Clone, Default, PartialEq)]
@@ -103,4 +103,18 @@ pub trait TicketEntryRepository: Send {
         organization_id: OrganizationId,
         id: AttachmentId,
     ) -> impl Future<Output = Result<Option<LocatedAttachment>, CoreError>> + Send;
+}
+
+#[cfg_attr(any(test, feature = "mock"), mockall::automock)]
+pub trait SupportSettingsRepository: Send {
+    fn display_fields(
+        &mut self,
+        organization_id: OrganizationId,
+    ) -> impl Future<Output = Result<DisplayFields, CoreError>> + Send;
+
+    fn replace_display_fields(
+        &mut self,
+        organization_id: OrganizationId,
+        fields: &DisplayFields,
+    ) -> impl Future<Output = Result<DisplayFields, CoreError>> + Send;
 }

@@ -16,7 +16,7 @@ use crate::{
 #[cfg(test)]
 pub(crate) mod tests;
 
-async fn authorize<M, R>(
+pub(crate) async fn authorize<M, R>(
     authorizer: &MestierAuthorizer,
     actor: Subject,
     organization_id: OrganizationId,

@@ -110,7 +110,9 @@ pub use domain::{
         MockSupplierInvoiceAllocationRepository, MockSupplierInvoiceRepository,
         MockSupplierRepository,
     },
-    support::ports::{MockTicketEntryRepository, MockTicketRepository},
+    support::ports::{
+        MockSupportSettingsRepository, MockTicketEntryRepository, MockTicketRepository,
+    },
     task::ports::MockTaskRepository,
     task_comment::ports::MockTaskCommentRepository,
     task_label::ports::MockTaskLabelRepository,
@@ -137,16 +139,19 @@ pub use domain::{
 };
 
 pub use domain::{
-    Attachment, AttachmentId, Badge, BadgeTone, CreatedTicket, CustomFields, EntryKind,
-    LocatedAttachment, Ticket, TicketEntry, TicketEntryId, TicketId, TicketNumber, TicketStatus,
+    Attachment, AttachmentId, Badge, BadgeTone, CreatedTicket, CustomFields, DisplayFields,
+    EntryKind, LocatedAttachment, MAX_DISPLAY_FIELD_CHARS, MAX_DISPLAY_FIELDS, Ticket, TicketEntry,
+    TicketEntryId, TicketId, TicketNumber, TicketStatus,
     support::commands::{
         AddBadgeCommand, AddEntryCommand, AssignTicketCommand, AttachFileCommand,
-        CreateTicketCommand, DraftCommand, EditDraftCommand, GetTicketCommand, ListThreadCommand,
-        ListTicketsCommand, PostClientMessageCommand, RemoveBadgeCommand, TransitionTicketCommand,
+        CreateTicketCommand, DraftCommand, EditDraftCommand, GetDisplayFieldsCommand,
+        GetTicketCommand, ListThreadCommand, ListTicketsCommand, PostClientMessageCommand,
+        RemoveBadgeCommand, ReplaceDisplayFieldsCommand, TransitionTicketCommand,
     },
     support::events::{TicketCreated, TicketTransitioned},
     support::ports::{
-        LastAssignment, TicketEntryRepository, TicketFilter, TicketPage, TicketRepository,
+        LastAssignment, SupportSettingsRepository, TicketEntryRepository, TicketFilter, TicketPage,
+        TicketRepository,
     },
     support::thread_service::NewAttachment,
 };

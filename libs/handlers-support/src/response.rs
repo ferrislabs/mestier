@@ -1,7 +1,7 @@
 use chrono::{DateTime, Utc};
 use mestier_core::{
-    Attachment, AttachmentId, Badge, BadgeTone, EntryKind, MemberId, PresignedUrl, Ticket,
-    TicketEntry, TicketEntryId, TicketId, TicketNumber, TicketStatus,
+    Attachment, AttachmentId, Badge, BadgeTone, DisplayFields, EntryKind, MemberId, PresignedUrl,
+    Ticket, TicketEntry, TicketEntryId, TicketId, TicketNumber, TicketStatus,
 };
 use serde::Serialize;
 use serde_json::Value;
@@ -127,3 +127,16 @@ impl From<PresignedUrl> for AttachmentUrlResponse {
 
 #[derive(Debug, PartialEq, Serialize)]
 pub struct EmptyResponse;
+
+#[derive(Debug, Clone, PartialEq, Serialize, ToSchema)]
+pub struct SupportSettingsResponse {
+    pub display_fields: Vec<String>,
+}
+
+impl From<DisplayFields> for SupportSettingsResponse {
+    fn from(display_fields: DisplayFields) -> Self {
+        Self {
+            display_fields: display_fields.into_vec(),
+        }
+    }
+}
