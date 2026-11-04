@@ -60,6 +60,7 @@ function renderBoard(overrides: Partial<SupportBoardUIProps> = {}) {
 		onDragEnd: vi.fn(),
 		onDropOnColumn: vi.fn(),
 		onShiftColumn: vi.fn(),
+		onOpenCard: vi.fn(),
 		...overrides,
 	}
 	render(<SupportBoardUI {...props} />)
@@ -204,5 +205,16 @@ describe('SupportBoardUI', () => {
 
 		expect(props.onFocusCard).toHaveBeenCalledWith('ticket-1')
 		expect(props.onShiftColumn).toHaveBeenCalledWith('ticket-1', 1)
+	})
+
+	it('forwards onOpenCard to the cards', async () => {
+		const props = renderBoard()
+
+		await userEvent.click(
+			screen.getByRole('button', { name: 'Robinet qui goutte' }),
+		)
+
+		expect(props.onOpenCard).toHaveBeenCalledTimes(1)
+		expect(props.onOpenCard).toHaveBeenCalledWith('ticket-2')
 	})
 })

@@ -1,4 +1,5 @@
 import { fireEvent, render, screen, within } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 import type { SupportColumnVM } from '#/pages/support/types'
 import { TicketColumns } from '#/pages/support/ui/ticket-columns'
@@ -65,6 +66,7 @@ function renderColumns(overrides: Partial<TicketColumnsProps> = {}) {
 		onDragEnd: vi.fn(),
 		onDropOnColumn: vi.fn(),
 		onShiftColumn: vi.fn(),
+		onOpenCard: vi.fn(),
 		...overrides,
 	}
 	render(<TicketColumns {...props} />)
@@ -126,24 +128,57 @@ describe('TicketColumns', () => {
 		expect(within(card).getByText('Eurosmart')).toBeTruthy()
 	})
 
-	it('keeps the subject as plain text, with no click action on the card', () => {
-		renderColumns()
+	it('renders the subject as a button that opens the card', async () => {
+		const props = renderColumns()
 
 		const card = screen.getByRole('article', {
 			name: 'Fuite sous l’évier, colonne Nouveau',
 		})
+		const subject = within(card).getByRole('button', {
+			name: 'Fuite sous l’évier',
+		})
+		expect(subject.getAttribute('type')).toBe('button')
 		expect(within(card).queryByRole('link')).toBeNull()
-		expect(
-			within(card)
-				.getAllByRole('button')
-				.map((button) => button.getAttribute('aria-label')),
-		).toEqual(['Déplacer Fuite sous l’évier'])
+
+		await userEvent.click(subject)
+
+		expect(props.onOpenCard).toHaveBeenCalledTimes(1)
+		expect(props.onOpenCard).toHaveBeenCalledWith('ticket-1')
+	})
+
+	it('opens the card that was clicked, not another one', async () => {
+		const props = renderColumns()
+
+		await userEvent.click(
+			screen.getByRole('button', { name: 'Devis à valider' }),
+		)
+
+		expect(props.onOpenCard).toHaveBeenCalledTimes(1)
+		expect(props.onOpenCard).toHaveBeenCalledWith('ticket-3')
+	})
+
+	it('keeps the subject openable without canMove', async () => {
+		const props = renderColumns({ canMove: false })
+
+		await userEvent.click(
+			screen.getByRole('button', { name: 'Robinet qui goutte' }),
+		)
+
+		expect(props.onOpenCard).toHaveBeenCalledWith('ticket-2')
+	})
+
+	it('does not open the card when its move handle is used', () => {
+		const props = renderColumns()
+
+		fireEvent.keyDown(handleFor('Fuite sous l’évier'), { key: 'ArrowRight' })
+
+		expect(props.onOpenCard).not.toHaveBeenCalled()
 	})
 
 	it('has neither a handle nor a draggable attribute without canMove', () => {
 		renderColumns({ canMove: false })
 
-		expect(screen.queryByRole('button')).toBeNull()
+		expect(screen.queryByRole('button', { name: /^Déplacer / })).toBeNull()
 		for (const card of screen.getAllByRole('article')) {
 			expect(card.hasAttribute('draggable')).toBe(false)
 		}
@@ -257,6 +292,7 @@ describe('TicketColumns', () => {
 			onDragEnd: vi.fn(),
 			onDropOnColumn: vi.fn(),
 			onShiftColumn: vi.fn(),
+			onOpenCard: vi.fn(),
 		}
 		const { rerender } = render(<TicketColumns {...props} />)
 		expect(document.activeElement).toBe(document.body)
