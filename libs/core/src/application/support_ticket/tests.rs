@@ -6,10 +6,10 @@ use tokio::sync::OnceCell;
 use uuid::Uuid;
 
 use crate::{
-    AddBadgeCommand, AssignTicketCommand, Badge, BadgeTone, CreateTicketCommand, CreatedTicket,
-    CustomFields, GetTicketCommand, ListTicketsCommand, MemberId, Permissions, RemoveBadgeCommand,
-    Ticket, TicketFilter, TicketId, TicketNumber, TicketPage, TicketRepository, TicketStatus,
-    TransitionTicketCommand,
+    AddBadgeCommand, AssignTicketCommand, AssignToLeastRecentCommand, Badge, BadgeTone,
+    CreateTicketCommand, CreatedTicket, CustomFields, GetTicketCommand, ListTicketsCommand,
+    MemberId, Permissions, RemoveBadgeCommand, Ticket, TicketFilter, TicketId, TicketNumber,
+    TicketPage, TicketRepository, TicketStatus, TransitionTicketCommand,
     application::{
         MestierUseCase, default_authorizer, policy,
         test_support::{purge, scratch_pool},
@@ -21,13 +21,13 @@ use crate::{
 
 static SUPPORT_SCRATCH: OnceCell<String> = OnceCell::const_new();
 
-async fn pool() -> PgPool {
+pub(crate) async fn pool() -> PgPool {
     scratch_pool("mestier_support_test_", &SUPPORT_SCRATCH).await
 }
 
-struct Person {
+pub(crate) struct Person {
     user_id: Uuid,
-    member_id: MemberId,
+    pub(crate) member_id: MemberId,
 }
 
 impl Person {
@@ -36,13 +36,13 @@ impl Person {
     }
 }
 
-struct World {
-    pool: PgPool,
-    usecase: MestierUseCase,
-    organization_id: OrganizationId,
-    manager: Person,
-    plain: Person,
-    spare: Person,
+pub(crate) struct World {
+    pub(crate) pool: PgPool,
+    pub(crate) usecase: MestierUseCase,
+    pub(crate) organization_id: OrganizationId,
+    pub(crate) manager: Person,
+    pub(crate) plain: Person,
+    pub(crate) spare: Person,
 }
 
 async fn seed_user(pool: &PgPool, label: &str) -> Uuid {
@@ -114,7 +114,7 @@ fn numbers(page: &TicketPage) -> Vec<i32> {
 }
 
 impl World {
-    async fn new(pool: &PgPool) -> Self {
+    pub(crate) async fn new(pool: &PgPool) -> Self {
         let manager_user = seed_user(pool, "Manager").await;
         let organization_id = OrganizationId(generate_uuid_v7());
         sqlx::query("INSERT INTO organizations (id, name, slug, owner_id) VALUES ($1, $2, $3, $4)")
@@ -174,7 +174,7 @@ impl World {
             .unwrap()
     }
 
-    async fn ticket(&self, subject: &str) -> Ticket {
+    pub(crate) async fn ticket(&self, subject: &str) -> Ticket {
         self.create(subject, None, json!({})).await.ticket
     }
 
@@ -202,6 +202,33 @@ impl World {
             .unwrap()
     }
 
+    async fn assign_to_least_recent(
+        &self,
+        actor: Subject,
+        ticket_id: TicketId,
+        members: &[MemberId],
+    ) -> Result<Ticket, CoreError> {
+        self.usecase
+            .assign_support_ticket_to_least_recent(AssignToLeastRecentCommand {
+                actor,
+                organization_id: self.organization_id,
+                ticket_id,
+                members: members.to_vec(),
+            })
+            .await
+    }
+
+    pub(crate) async fn assigned_ticket_rows(&self) -> i64 {
+        sqlx::query_scalar(
+            "SELECT COUNT(*) FROM support_tickets \
+             WHERE org_id = $1 AND (assignee_member_id IS NOT NULL OR assigned_at IS NOT NULL)",
+        )
+        .bind(self.organization_id.0)
+        .fetch_one(&self.pool)
+        .await
+        .unwrap()
+    }
+
     async fn badge(&self, ticket: &Ticket, label: &str, tone: BadgeTone) -> Ticket {
         self.usecase
             .add_support_ticket_badge(AddBadgeCommand {
@@ -214,7 +241,7 @@ impl World {
             .unwrap()
     }
 
-    async fn get(&self, id: TicketId) -> Result<Ticket, CoreError> {
+    pub(crate) async fn get(&self, id: TicketId) -> Result<Ticket, CoreError> {
         self.usecase
             .get_support_ticket(GetTicketCommand {
                 organization_id: self.organization_id,
@@ -259,7 +286,7 @@ impl World {
             .unwrap()
     }
 
-    async fn cleanup(self) {
+    pub(crate) async fn cleanup(self) {
         for statement in [
             "DELETE FROM automation.event WHERE org_id = $1",
             "DELETE FROM support_tickets WHERE org_id = $1",
@@ -849,6 +876,223 @@ async fn last_assigned_at_lists_never_assigned_members_as_none() {
     .await
     .unwrap();
     assert!(nobody.is_empty());
+
+    world.cleanup().await;
+}
+
+#[tokio::test]
+#[ignore = "requires live postgres"]
+async fn assigning_to_the_least_recent_picks_a_never_assigned_member_first_then_rotates() {
+    let world = World::new(&pool().await).await;
+    let manager = world.manager.member_id;
+    let plain = world.plain.member_id;
+    let spare = world.spare.member_id;
+    let members = [plain, spare, manager];
+    let first = world.ticket("T1").await;
+    let second = world.ticket("T2").await;
+    let third = world.ticket("T3").await;
+    let fourth = world.ticket("T4").await;
+    let fifth = world.ticket("T5").await;
+
+    let to_first = world
+        .assign_to_least_recent(Subject::system(), first.id, &members)
+        .await
+        .unwrap();
+    let to_second = world
+        .assign_to_least_recent(Subject::system(), second.id, &members)
+        .await
+        .unwrap();
+    let to_third = world
+        .assign_to_least_recent(Subject::system(), third.id, &members)
+        .await
+        .unwrap();
+    let to_fourth = world
+        .assign_to_least_recent(Subject::system(), fourth.id, &members)
+        .await
+        .unwrap();
+    let to_fifth = world
+        .assign_to_least_recent(Subject::system(), fifth.id, &members)
+        .await
+        .unwrap();
+
+    assert_eq!(to_first.assignee, Some(plain));
+    assert_eq!(to_second.assignee, Some(spare));
+    assert_eq!(to_third.assignee, Some(manager));
+    assert_eq!(to_fourth.assignee, Some(plain));
+    assert_eq!(to_fifth.assignee, Some(spare));
+    assert!(to_first.assigned_at.is_some());
+    assert!(to_second.assigned_at > to_first.assigned_at);
+    assert!(to_fourth.assigned_at > to_third.assigned_at);
+    assert_eq!(world.get(first.id).await.unwrap(), to_first);
+    assert_eq!(world.get(fifth.id).await.unwrap(), to_fifth);
+    assert_eq!(world.event_names().await.len(), 5);
+
+    world.cleanup().await;
+}
+
+#[tokio::test]
+#[ignore = "requires live postgres"]
+async fn assigning_to_the_least_recent_prefers_a_member_who_never_had_a_ticket() {
+    let world = World::new(&pool().await).await;
+    let manager = world.manager.member_id;
+    let plain = world.plain.member_id;
+    let spare = world.spare.member_id;
+    let busy = world.ticket("Déjà attribué").await;
+    world.assign(&busy, Some(&world.plain)).await;
+    let waiting = world.ticket("En attente").await;
+    let later = world.ticket("Plus tard").await;
+
+    let first = world
+        .assign_to_least_recent(Subject::system(), waiting.id, &[plain, spare, manager])
+        .await
+        .unwrap();
+    let second = world
+        .assign_to_least_recent(Subject::system(), later.id, &[plain, spare, manager])
+        .await
+        .unwrap();
+
+    assert_eq!(first.assignee, Some(spare));
+    assert_eq!(second.assignee, Some(manager));
+
+    world.cleanup().await;
+}
+
+#[tokio::test]
+#[ignore = "requires live postgres"]
+async fn assigning_to_the_least_recent_breaks_ties_by_the_order_of_the_list() {
+    let world = World::new(&pool().await).await;
+    let manager = world.manager.member_id;
+    let plain = world.plain.member_id;
+    let spare = world.spare.member_id;
+    let ticket = world.ticket("T1").await;
+
+    let assigned = world
+        .assign_to_least_recent(
+            Subject::system(),
+            ticket.id,
+            &[spare, manager, plain, spare],
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(assigned.assignee, Some(spare));
+
+    world.cleanup().await;
+}
+
+#[tokio::test]
+#[ignore = "requires live postgres"]
+async fn assigning_to_the_least_recent_of_an_empty_list_is_a_conflict_and_writes_nothing() {
+    let world = World::new(&pool().await).await;
+    let ticket = world.ticket("T1").await;
+
+    let outcome = world
+        .assign_to_least_recent(Subject::system(), ticket.id, &[])
+        .await;
+
+    assert!(
+        matches!(outcome, Err(CoreError::Conflict(_))),
+        "{outcome:?}"
+    );
+    assert_eq!(world.get(ticket.id).await.unwrap(), ticket);
+    assert_eq!(world.assigned_ticket_rows().await, 0);
+
+    world.cleanup().await;
+}
+
+#[tokio::test]
+#[ignore = "requires live postgres"]
+async fn assigning_to_the_least_recent_refuses_a_member_of_another_organization() {
+    let pool = pool().await;
+    let acme = World::new(&pool).await;
+    let globex = World::new(&pool).await;
+    let ticket = acme.ticket("Chez Acme").await;
+    let foreign = globex.plain.member_id;
+    let local = acme.plain.member_id;
+
+    let only_foreign = acme
+        .assign_to_least_recent(Subject::system(), ticket.id, &[foreign])
+        .await;
+    let foreign_last = acme
+        .assign_to_least_recent(Subject::system(), ticket.id, &[local, foreign])
+        .await;
+    let foreign_first = acme
+        .assign_to_least_recent(Subject::system(), ticket.id, &[foreign, local])
+        .await;
+
+    assert!(matches!(only_foreign, Err(CoreError::NotFound)));
+    assert!(matches!(foreign_last, Err(CoreError::NotFound)));
+    assert!(matches!(foreign_first, Err(CoreError::NotFound)));
+    assert_eq!(acme.get(ticket.id).await.unwrap(), ticket);
+    assert_eq!(acme.assigned_ticket_rows().await, 0);
+
+    acme.cleanup().await;
+    globex.cleanup().await;
+}
+
+#[tokio::test]
+#[ignore = "requires live postgres"]
+async fn assigning_to_the_least_recent_needs_manage_support_unless_the_system_acts() {
+    let world = World::new(&pool().await).await;
+    let ticket = world.ticket("T1").await;
+    let members = [world.plain.member_id, world.spare.member_id];
+
+    let refused = world
+        .assign_to_least_recent(world.plain.subject(), ticket.id, &members)
+        .await;
+
+    assert!(
+        matches!(refused, Err(CoreError::Forbidden { .. })),
+        "{refused:?}"
+    );
+    assert_eq!(world.get(ticket.id).await.unwrap(), ticket);
+    assert_eq!(world.assigned_ticket_rows().await, 0);
+
+    let by_manager = world
+        .assign_to_least_recent(world.manager.subject(), ticket.id, &members)
+        .await
+        .unwrap();
+    assert_eq!(by_manager.assignee, Some(world.plain.member_id));
+
+    let other = world.ticket("T2").await;
+    let by_system = world
+        .assign_to_least_recent(Subject::system(), other.id, &members)
+        .await
+        .unwrap();
+    assert_eq!(by_system.assignee, Some(world.spare.member_id));
+
+    world.cleanup().await;
+}
+
+#[tokio::test]
+#[ignore = "requires live postgres"]
+async fn a_failing_least_recent_assignment_leaves_no_partial_state() {
+    let world = World::new(&pool().await).await;
+    let existing = world.ticket("T1").await;
+    let members = [world.plain.member_id, world.spare.member_id];
+
+    let unknown = world
+        .assign_to_least_recent(Subject::system(), TicketId(generate_uuid_v7()), &members)
+        .await;
+
+    assert!(matches!(unknown, Err(CoreError::NotFound)), "{unknown:?}");
+    assert_eq!(world.assigned_ticket_rows().await, 0);
+    assert_eq!(world.get(existing.id).await.unwrap(), existing);
+    let listed = with_tx(&world.pool, async |tx| {
+        let mut repository = PgSupportTicketRepository::new(&tx);
+        repository
+            .last_assigned_at(world.organization_id, &members)
+            .await
+    })
+    .await
+    .unwrap();
+    assert_eq!(listed, vec![(members[0], None), (members[1], None)]);
+
+    let next = world
+        .assign_to_least_recent(Subject::system(), existing.id, &members)
+        .await
+        .unwrap();
+    assert_eq!(next.assignee, Some(members[0]));
 
     world.cleanup().await;
 }

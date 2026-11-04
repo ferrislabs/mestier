@@ -13,6 +13,8 @@ mod http_client;
 mod http_request;
 mod odoo;
 mod registry;
+mod support_add_badge;
+mod support_assign_ticket;
 mod task_recurrence_extend_horizon;
 #[cfg(test)]
 mod test_support;

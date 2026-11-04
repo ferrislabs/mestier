@@ -5,9 +5,10 @@ use events::EventEmitter;
 use crate::{
     CreatedTicket, OrganizationId, Ticket, TicketId, TicketStatus,
     domain::support::{
+        assignment::pick_least_recently_assigned,
         commands::{
-            AddBadgeCommand, AssignTicketCommand, CreateTicketCommand, ListTicketsCommand,
-            RemoveBadgeCommand, TransitionTicketCommand,
+            AddBadgeCommand, AssignTicketCommand, AssignToLeastRecentCommand, CreateTicketCommand,
+            ListTicketsCommand, RemoveBadgeCommand, TransitionTicketCommand,
         },
         events::{TicketCreated, TicketTransitioned},
         ports::{TicketPage, TicketRepository},
@@ -153,6 +154,32 @@ where
         ticket.assigned_at = command.assignee.map(|_| now);
         ticket.updated_at = now;
         self.tickets.update(&ticket).await
+    }
+
+    pub async fn assign_to_least_recent(
+        &mut self,
+        command: AssignToLeastRecentCommand,
+    ) -> Result<Ticket, CoreError> {
+        if command.members.is_empty() {
+            return Err(CoreError::Conflict(
+                "at least one member is required to assign a ticket".to_owned(),
+            ));
+        }
+
+        let last_assigned = self
+            .tickets
+            .last_assigned_at(command.organization_id, &command.members)
+            .await?;
+        let assignee = pick_least_recently_assigned(&command.members, &last_assigned)
+            .ok_or_else(|| CoreError::Internal("no member could be picked".to_owned()))?;
+
+        self.assign(AssignTicketCommand {
+            actor: command.actor,
+            organization_id: command.organization_id,
+            ticket_id: command.ticket_id,
+            assignee: Some(assignee),
+        })
+        .await
     }
 
     pub async fn add_badge(&mut self, command: AddBadgeCommand) -> Result<Ticket, CoreError> {
@@ -552,6 +579,131 @@ mod tests {
         assert_eq!(updated.assigned_at, None);
         assert!(updated.updated_at > before.updated_at);
         assert!(emitter.names().is_empty());
+    }
+
+    fn least_recent_command(
+        ticket_id: TicketId,
+        members: &[MemberId],
+    ) -> AssignToLeastRecentCommand {
+        AssignToLeastRecentCommand {
+            actor: Subject::system(),
+            organization_id: organization(),
+            ticket_id,
+            members: members.to_vec(),
+        }
+    }
+
+    fn knowing(
+        tickets: &mut MockTicketRepository,
+        members: Vec<MemberId>,
+        known: Vec<(MemberId, Option<DateTime<Utc>>)>,
+    ) {
+        tickets
+            .expect_last_assigned_at()
+            .withf(move |organization_id, requested| {
+                *organization_id == organization() && requested == members.as_slice()
+            })
+            .times(1)
+            .returning(move |_, _| {
+                let known = known.clone();
+                Box::pin(async move { Ok(known) })
+            });
+    }
+
+    #[tokio::test]
+    async fn assign_to_least_recent_picks_a_never_assigned_member_and_stamps_assigned_at() {
+        let before = ticket(TicketStatus::New);
+        let members = [
+            MemberId(Uuid::from_u128(0x11)),
+            MemberId(Uuid::from_u128(0x12)),
+            MemberId(Uuid::from_u128(0x13)),
+        ];
+        let mut tickets = holding(&before);
+        knowing(
+            &mut tickets,
+            members.to_vec(),
+            vec![
+                (members[0], Some(past())),
+                (members[1], None),
+                (members[2], Some(past())),
+            ],
+        );
+        echoing_updates(&mut tickets);
+        let emitter = RecordingEmitter::new();
+        let mut service = TicketService::new(tickets, &emitter);
+        let started = Utc::now();
+
+        let updated = service
+            .assign_to_least_recent(least_recent_command(before.id, &members))
+            .await
+            .unwrap();
+
+        assert_eq!(updated.assignee, Some(members[1]));
+        let assigned_at = updated.assigned_at.unwrap();
+        assert!(assigned_at >= started);
+        assert_eq!(updated.updated_at, assigned_at);
+        assert!(emitter.names().is_empty());
+    }
+
+    #[tokio::test]
+    async fn assign_to_least_recent_picks_the_oldest_assignment_when_everyone_has_one() {
+        let before = ticket(TicketStatus::New);
+        let members = [
+            MemberId(Uuid::from_u128(0x11)),
+            MemberId(Uuid::from_u128(0x12)),
+        ];
+        let older: DateTime<Utc> = "2026-10-10T07:45:00Z".parse().unwrap();
+        let mut tickets = holding(&before);
+        knowing(
+            &mut tickets,
+            members.to_vec(),
+            vec![(members[0], Some(past())), (members[1], Some(older))],
+        );
+        echoing_updates(&mut tickets);
+        let mut service = TicketService::new(tickets, RecordingEmitter::new());
+
+        let updated = service
+            .assign_to_least_recent(least_recent_command(before.id, &members))
+            .await
+            .unwrap();
+
+        assert_eq!(updated.assignee, Some(members[1]));
+    }
+
+    #[tokio::test]
+    async fn assign_to_least_recent_rejects_an_empty_list_without_reading_or_writing() {
+        let mut service = TicketService::new(MockTicketRepository::new(), RecordingEmitter::new());
+
+        let outcome = service
+            .assign_to_least_recent(least_recent_command(TicketId(Uuid::from_u128(0x30)), &[]))
+            .await;
+
+        match outcome {
+            Err(CoreError::Conflict(message)) => assert!(message.contains("member")),
+            other => panic!("{other:?}"),
+        }
+    }
+
+    #[tokio::test]
+    async fn assign_to_least_recent_of_an_unknown_ticket_is_not_found_and_writes_nothing() {
+        let members = [MemberId(Uuid::from_u128(0x11))];
+        let mut tickets = MockTicketRepository::new();
+        knowing(&mut tickets, members.to_vec(), vec![(members[0], None)]);
+        tickets
+            .expect_find()
+            .times(1)
+            .returning(|_, _| Box::pin(async { Ok(None) }));
+        tickets.expect_update().never();
+        let mut service = TicketService::new(tickets, RecordingEmitter::new());
+
+        let outcome = service
+            .assign_to_least_recent(least_recent_command(
+                TicketId(Uuid::from_u128(0x99)),
+                &members,
+            ))
+            .await;
+
+        assert!(matches!(outcome, Err(CoreError::NotFound)));
     }
 
     #[tokio::test]

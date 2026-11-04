@@ -21,7 +21,7 @@ const FORBIDDEN_KEYS: [&str; 7] = [
     "updated_at",
 ];
 
-struct Intake<'a> {
+pub(crate) struct Intake<'a> {
     app: &'a App,
     client: Client,
     key: String,
@@ -43,7 +43,7 @@ async fn issue_key(app: &App, client: &Client, token: &str, organization_id: Uui
 }
 
 impl<'a> Intake<'a> {
-    async fn new(app: &'a App) -> Self {
+    pub(crate) async fn new(app: &'a App) -> Self {
         let client = Client::new();
         let created = issue_key(
             app,
@@ -77,7 +77,7 @@ impl<'a> Intake<'a> {
         }
     }
 
-    async fn create(&self, body: &Value) -> Response {
+    pub(crate) async fn create(&self, body: &Value) -> Response {
         self.client
             .post(self.app.intake_url("/tickets"))
             .bearer_auth(&self.key)
@@ -87,7 +87,7 @@ impl<'a> Intake<'a> {
             .unwrap()
     }
 
-    async fn list(&self, query: &str) -> Response {
+    pub(crate) async fn list(&self, query: &str) -> Response {
         self.client
             .get(self.app.intake_url(&format!("/tickets{query}")))
             .bearer_auth(&self.key)
@@ -96,7 +96,7 @@ impl<'a> Intake<'a> {
             .unwrap()
     }
 
-    async fn view(&self, ticket_id: Uuid) -> Response {
+    pub(crate) async fn view(&self, ticket_id: Uuid) -> Response {
         self.client
             .get(self.app.intake_url(&format!("/tickets/{ticket_id}")))
             .bearer_auth(&self.key)
@@ -105,7 +105,7 @@ impl<'a> Intake<'a> {
             .unwrap()
     }
 
-    async fn message(&self, ticket_id: Uuid, body: &Value) -> Response {
+    pub(crate) async fn message(&self, ticket_id: Uuid, body: &Value) -> Response {
         self.client
             .post(
                 self.app
@@ -155,7 +155,12 @@ impl<'a> Intake<'a> {
         request.send().await.unwrap()
     }
 
-    async fn attach(&self, ticket_id: Uuid, entry_id: Uuid, file_name: &str) -> Response {
+    pub(crate) async fn attach(
+        &self,
+        ticket_id: Uuid,
+        entry_id: Uuid,
+        file_name: &str,
+    ) -> Response {
         self.upload(
             ticket_id,
             &format!("?entry_id={entry_id}"),
@@ -177,13 +182,13 @@ impl<'a> Intake<'a> {
     }
 }
 
-async fn read(response: Response) -> (StatusCode, String) {
+pub(crate) async fn read(response: Response) -> (StatusCode, String) {
     let status = response.status();
 
     (status, response.text().await.unwrap())
 }
 
-fn parse(text: &str) -> Value {
+pub(crate) fn parse(text: &str) -> Value {
     serde_json::from_str(text).unwrap()
 }
 
@@ -199,7 +204,7 @@ fn sorted_keys(value: &Value) -> Vec<&str> {
     keys
 }
 
-fn id_of(value: &Value) -> Uuid {
+pub(crate) fn id_of(value: &Value) -> Uuid {
     value["id"].as_str().unwrap().parse().unwrap()
 }
 

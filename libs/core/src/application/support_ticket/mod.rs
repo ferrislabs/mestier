@@ -3,9 +3,9 @@ use common::CoreError;
 use mestier_macros::transactional;
 
 use crate::{
-    AddBadgeCommand, AssignTicketCommand, CreateTicketCommand, CreatedTicket, GetTicketCommand,
-    ListTicketsCommand, OrganizationId, RemoveBadgeCommand, Ticket, TicketPage,
-    TransitionTicketCommand,
+    AddBadgeCommand, AssignTicketCommand, AssignToLeastRecentCommand, CreateTicketCommand,
+    CreatedTicket, GetTicketCommand, ListTicketsCommand, MemberId, OrganizationId,
+    RemoveBadgeCommand, Ticket, TicketPage, TransitionTicketCommand,
     application::{MestierAuthorizer, MestierUseCase, policy},
     domain::{
         member::ports::MemberRepository, role::ports::RoleRepository,
@@ -36,6 +36,22 @@ where
     )
     .await?;
     Ok(actor)
+}
+
+async fn ensure_member_of_organization<M>(
+    members: &mut M,
+    organization_id: OrganizationId,
+    member_id: MemberId,
+) -> Result<(), CoreError>
+where
+    M: MemberRepository,
+{
+    members
+        .find_by_id(member_id)
+        .await?
+        .filter(|member| member.organization_id == organization_id)
+        .map(|_| ())
+        .ok_or(CoreError::NotFound)
 }
 
 impl MestierUseCase {
@@ -118,15 +134,47 @@ impl MestierUseCase {
         .await?;
 
         if let Some(assignee) = command.assignee {
-            member_repository
-                .find_by_id(assignee)
-                .await?
-                .filter(|member| member.organization_id == command.organization_id)
-                .ok_or(CoreError::NotFound)?;
+            ensure_member_of_organization(
+                &mut member_repository,
+                command.organization_id,
+                assignee,
+            )
+            .await?;
         }
 
         TicketService::new(support_ticket_repository, emitter)
             .assign(command)
+            .await
+    }
+
+    #[transactional(support_ticket, member, role, authz, emitter)]
+    pub async fn assign_support_ticket_to_least_recent(
+        &self,
+        mut command: AssignToLeastRecentCommand,
+    ) -> Result<Ticket, CoreError> {
+        let mut member_repository = member_repository;
+        let mut role_repository = role_repository;
+
+        command.actor = authorize(
+            authz,
+            command.actor,
+            command.organization_id,
+            &mut member_repository,
+            &mut role_repository,
+        )
+        .await?;
+
+        for member_id in &command.members {
+            ensure_member_of_organization(
+                &mut member_repository,
+                command.organization_id,
+                *member_id,
+            )
+            .await?;
+        }
+
+        TicketService::new(support_ticket_repository, emitter)
+            .assign_to_least_recent(command)
             .await
     }
 

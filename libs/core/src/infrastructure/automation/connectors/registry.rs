@@ -12,6 +12,8 @@ use super::http_request::HttpRequestConnector;
 use super::odoo::{
     OdooCreateInvoiceConnector, OdooCreatePartnerConnector, OdooUpdatePartnerConnector,
 };
+use super::support_add_badge::SupportAddBadgeConnector;
+use super::support_assign_ticket::SupportAssignTicketConnector;
 use super::task_recurrence_extend_horizon::TaskRecurrenceExtendHorizonConnector;
 
 #[derive(Debug, Error, PartialEq, Eq)]
@@ -36,6 +38,8 @@ pub struct ConnectorRegistry {
     flow_condition: FlowConditionConnector,
     flow_config: FlowConfigConnector,
     customer_create: CustomerCreateConnector,
+    support_assign_ticket: SupportAssignTicketConnector,
+    support_add_badge: SupportAddBadgeConnector,
     http_request: HttpRequestConnector,
     odoo_create_partner: OdooCreatePartnerConnector,
     odoo_update_partner: OdooUpdatePartnerConnector,
@@ -65,6 +69,8 @@ impl ConnectorRegistry {
             flow_condition: FlowConditionConnector,
             flow_config: FlowConfigConnector,
             customer_create: CustomerCreateConnector::new(usecase.clone()),
+            support_assign_ticket: SupportAssignTicketConnector::new(usecase.clone()),
+            support_add_badge: SupportAddBadgeConnector::new(usecase.clone()),
             http_request: HttpRequestConnector::new(usecase.clone(), access),
             odoo_create_partner: OdooCreatePartnerConnector::new(usecase.clone(), access),
             odoo_update_partner: OdooUpdatePartnerConnector::new(usecase.clone(), access),
@@ -80,6 +86,8 @@ impl ConnectorRegistry {
             ("flow.condition", 1),
             ("flow.config", 1),
             ("mestier.customer.create", 1),
+            ("mestier.support.assign_ticket", 1),
+            ("mestier.support.add_badge", 1),
             ("http.request", 1),
             ("odoo.create_partner", 1),
             ("odoo.update_partner", 1),
@@ -99,6 +107,10 @@ impl ConnectorRegistry {
             ("flow.condition", 1) => Ok(self.flow_condition.execute(input).await),
             ("flow.config", 1) => Ok(self.flow_config.execute(input).await),
             ("mestier.customer.create", 1) => Ok(self.customer_create.execute(input).await),
+            ("mestier.support.assign_ticket", 1) => {
+                Ok(self.support_assign_ticket.execute(input).await)
+            }
+            ("mestier.support.add_badge", 1) => Ok(self.support_add_badge.execute(input).await),
             ("http.request", 1) => Ok(self.http_request.execute(input).await),
             ("odoo.create_partner", 1) => Ok(self.odoo_create_partner.execute(input).await),
             ("odoo.update_partner", 1) => Ok(self.odoo_update_partner.execute(input).await),
