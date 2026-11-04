@@ -42,6 +42,13 @@ pub struct AssignTicketCommand {
     pub assignee: Option<MemberId>,
 }
 
+pub struct AssignToLeastRecentCommand {
+    pub actor: Subject,
+    pub organization_id: OrganizationId,
+    pub ticket_id: TicketId,
+    pub members: Vec<MemberId>,
+}
+
 pub struct AddBadgeCommand {
     pub actor: Subject,
     pub organization_id: OrganizationId,

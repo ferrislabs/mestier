@@ -121,6 +121,80 @@ const CUSTOMER_CREATE_FIELDS: &[Field] = &[
     },
 ];
 
+const SUPPORT_ASSIGN_TICKET_FIELDS: &[Field] = &[
+    Field {
+        name: "ticket_id",
+        label: "Ticket",
+        required: true,
+        kind: FieldKind::Text,
+        expression: true,
+        secret: false,
+        visible_when: None,
+    },
+    Field {
+        name: "members",
+        label: "Membres",
+        required: true,
+        kind: FieldKind::Json,
+        expression: true,
+        secret: false,
+        visible_when: None,
+    },
+];
+
+const SUPPORT_ADD_BADGE_FIELDS: &[Field] = &[
+    Field {
+        name: "ticket_id",
+        label: "Ticket",
+        required: true,
+        kind: FieldKind::Text,
+        expression: true,
+        secret: false,
+        visible_when: None,
+    },
+    Field {
+        name: "label",
+        label: "Libellé",
+        required: true,
+        kind: FieldKind::Text,
+        expression: true,
+        secret: false,
+        visible_when: None,
+    },
+    Field {
+        name: "tone",
+        label: "Ton",
+        required: false,
+        kind: FieldKind::Select {
+            options: &[
+                SelectOption {
+                    value: "neutral",
+                    label: "Neutre",
+                },
+                SelectOption {
+                    value: "brand",
+                    label: "Marque",
+                },
+                SelectOption {
+                    value: "success",
+                    label: "Succès",
+                },
+                SelectOption {
+                    value: "warning",
+                    label: "Avertissement",
+                },
+                SelectOption {
+                    value: "error",
+                    label: "Erreur",
+                },
+            ],
+        },
+        expression: false,
+        secret: false,
+        visible_when: None,
+    },
+];
+
 const HTTP_REQUEST_FIELDS: &[Field] = &[
     Field {
         name: "method",
@@ -317,6 +391,7 @@ pub fn connector_catalogue() -> ConnectorCatalogue {
 fn descriptors() -> Vec<ConnectorDescriptor> {
     let mut all = flow_descriptors();
     all.extend(customer_descriptors());
+    all.extend(support_descriptors());
     all.extend(http_descriptors());
     all.extend(odoo_descriptors());
     all.extend(task_recurrence_descriptors());
@@ -379,6 +454,33 @@ fn customer_descriptors() -> Vec<ConnectorDescriptor> {
         output_example: json!({ "id": "…", "name": "…" }),
         output_mirrors_field: None,
     }]
+}
+
+fn support_descriptors() -> Vec<ConnectorDescriptor> {
+    vec![
+        ConnectorDescriptor {
+            kind: "mestier.support.assign_ticket",
+            version: 1,
+            family: "mestier",
+            label: "Assigner un ticket",
+            auth: AuthRequirement::None,
+            fields: SUPPORT_ASSIGN_TICKET_FIELDS,
+            branches: &[],
+            output_example: json!({ "ticket_id": "…", "assignee_member_id": "…" }),
+            output_mirrors_field: None,
+        },
+        ConnectorDescriptor {
+            kind: "mestier.support.add_badge",
+            version: 1,
+            family: "mestier",
+            label: "Ajouter un badge",
+            auth: AuthRequirement::None,
+            fields: SUPPORT_ADD_BADGE_FIELDS,
+            branches: &[],
+            output_example: json!({ "ticket_id": "…", "label": "High", "tone": "neutral" }),
+            output_mirrors_field: None,
+        },
+    ]
 }
 
 /// The one network connector proved by #202: an outbound call to wherever
@@ -589,6 +691,133 @@ mod tests {
                 .iter()
                 .any(|f| f.name == "name" && f.required)
         );
+    }
+
+    #[test]
+    fn the_catalogue_describes_the_support_assign_ticket_connector() {
+        let catalogue = connector_catalogue();
+
+        let descriptor = catalogue
+            .get("mestier.support.assign_ticket", 1)
+            .expect("mestier.support.assign_ticket is described");
+        assert_eq!(descriptor.family, "mestier");
+        assert_eq!(descriptor.label, "Assigner un ticket");
+        assert_eq!(descriptor.auth, AuthRequirement::None);
+        assert!(descriptor.branches.is_empty());
+        assert_eq!(
+            descriptor.output_example,
+            json!({ "ticket_id": "…", "assignee_member_id": "…" })
+        );
+
+        let json = to_value(descriptor).expect("descriptor serializes");
+        assert_eq!(
+            json["fields"],
+            json!([
+                {
+                    "name": "ticket_id",
+                    "label": "Ticket",
+                    "required": true,
+                    "kind": "Text",
+                    "expression": true,
+                    "secret": false,
+                    "visible_when": null
+                },
+                {
+                    "name": "members",
+                    "label": "Membres",
+                    "required": true,
+                    "kind": "Json",
+                    "expression": true,
+                    "secret": false,
+                    "visible_when": null
+                }
+            ])
+        );
+    }
+
+    #[test]
+    fn the_catalogue_describes_the_support_add_badge_connector() {
+        let catalogue = connector_catalogue();
+
+        let descriptor = catalogue
+            .get("mestier.support.add_badge", 1)
+            .expect("mestier.support.add_badge is described");
+        assert_eq!(descriptor.family, "mestier");
+        assert_eq!(descriptor.label, "Ajouter un badge");
+        assert_eq!(descriptor.auth, AuthRequirement::None);
+        assert!(descriptor.branches.is_empty());
+        assert_eq!(
+            descriptor.output_example,
+            json!({ "ticket_id": "…", "label": "High", "tone": "neutral" })
+        );
+
+        let json = to_value(descriptor).expect("descriptor serializes");
+        assert_eq!(
+            json["fields"],
+            json!([
+                {
+                    "name": "ticket_id",
+                    "label": "Ticket",
+                    "required": true,
+                    "kind": "Text",
+                    "expression": true,
+                    "secret": false,
+                    "visible_when": null
+                },
+                {
+                    "name": "label",
+                    "label": "Libellé",
+                    "required": true,
+                    "kind": "Text",
+                    "expression": true,
+                    "secret": false,
+                    "visible_when": null
+                },
+                {
+                    "name": "tone",
+                    "label": "Ton",
+                    "required": false,
+                    "kind": {
+                        "Select": {
+                            "options": [
+                                { "value": "neutral", "label": "Neutre" },
+                                { "value": "brand", "label": "Marque" },
+                                { "value": "success", "label": "Succès" },
+                                { "value": "warning", "label": "Avertissement" },
+                                { "value": "error", "label": "Erreur" }
+                            ]
+                        }
+                    },
+                    "expression": false,
+                    "secret": false,
+                    "visible_when": null
+                }
+            ])
+        );
+    }
+
+    #[test]
+    fn the_support_tone_options_are_exactly_the_badge_tones() {
+        let catalogue = connector_catalogue();
+        let descriptor = catalogue
+            .get("mestier.support.add_badge", 1)
+            .expect("mestier.support.add_badge is described");
+        let tone = descriptor
+            .fields
+            .iter()
+            .find(|field| field.name == "tone")
+            .expect("add_badge has a tone field");
+        let FieldKind::Select { options } = tone.kind else {
+            panic!("tone must be a select");
+        };
+
+        let offered: Vec<&str> = options.iter().map(|option| option.value).collect();
+        let tones: Vec<&str> = crate::BadgeTone::ALL
+            .iter()
+            .map(|tone| tone.as_str())
+            .collect();
+
+        assert_eq!(offered, tones);
     }
 
     /// The connector the horizon-extension pass (#293) drives — no fields,

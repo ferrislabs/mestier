@@ -15,6 +15,7 @@ pub use api_key::{
 };
 
 pub mod api_key;
+pub mod assignment;
 pub mod commands;
 pub mod events;
 pub mod ports;

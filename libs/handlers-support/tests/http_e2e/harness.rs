@@ -1,4 +1,4 @@
-use std::{net::SocketAddr, sync::Arc};
+use std::{net::SocketAddr, sync::Arc, time::Duration};
 
 use args::Args;
 use authz::Subject;
@@ -6,9 +6,11 @@ use axum::{Router, extract::State, http::HeaderMap, routing::get};
 use clap::Parser;
 use handlers::{ApiError, AppState};
 use mestier_core::{
-    AddEntryCommand, AttachFileCommand, Attachment, CreateTicketCommand, CustomFields,
-    DraftCommand, EntryKind, NewAttachment, OrganizationId, Permissions, PostClientMessageCommand,
-    Ticket, TicketEntry, TicketStatus, TransitionTicketCommand, UserId, application::policy,
+    AddEntryCommand, AttachFileCommand, Attachment, ConnectorRegistry, CreateTicketCommand,
+    CreateWorkflowCommand, CustomFields, DraftCommand, EntryKind, Graph, NewAttachment,
+    OrganizationId, Permissions, PostClientMessageCommand, Run, RunStatus,
+    SaveWorkflowVersionCommand, Ticket, TicketEntry, TicketStatus, TransitionTicketCommand, UserId,
+    WorkerSchedule, Workflow, application::policy,
 };
 use serde_json::Value;
 use sqlx::PgPool;
@@ -258,6 +260,59 @@ impl App {
             .unwrap();
     }
 
+    pub async fn install_workflow(&self, name: &str, graph: Graph) -> Workflow {
+        let usecase = &self.state.usecase;
+        let organization_id = OrganizationId(self.organization_id);
+        let workflow = usecase
+            .create_workflow(CreateWorkflowCommand {
+                org_id: organization_id,
+                name: name.to_owned(),
+                description: None,
+            })
+            .await
+            .unwrap();
+        usecase
+            .save_workflow_version(SaveWorkflowVersionCommand {
+                org_id: organization_id,
+                workflow_id: workflow.id,
+                graph,
+                layout: None,
+                created_by: None,
+            })
+            .await
+            .unwrap();
+
+        workflow
+    }
+
+    pub async fn run_automation_until(&self, expected_runs: usize) -> Vec<Run> {
+        let usecase = &self.state.usecase;
+        let organization_id = OrganizationId(self.organization_id);
+        let connectors = ConnectorRegistry::new(usecase.clone());
+        let mut runs = Vec::new();
+
+        for _ in 0..200 {
+            usecase.dispatch_pending_events(100).await.unwrap();
+            usecase
+                .run_engine_pass(&connectors, "http-e2e", WorkerSchedule::default())
+                .await
+                .unwrap();
+            runs = usecase.list_runs(organization_id).await.unwrap();
+            let settled = runs.iter().all(|run| {
+                matches!(
+                    run.status,
+                    RunStatus::Succeeded | RunStatus::Failed | RunStatus::Cancelled
+                )
+            });
+            if runs.len() >= expected_runs && settled {
+                return runs;
+            }
+            tokio::time::sleep(Duration::from_millis(100)).await;
+        }
+
+        panic!("expected {expected_runs} settled runs, found {runs:#?}");
+    }
+
     pub async fn cleanup(&self) {
         let organizations = [self.organization_id, self.other_organization_id];
 
@@ -273,6 +328,9 @@ impl App {
         }
 
         for statement in [
+            "DELETE FROM automation.subscription WHERE org_id = ANY($1)",
+            "DELETE FROM automation.run WHERE org_id = ANY($1)",
+            "DELETE FROM automation.workflow WHERE org_id = ANY($1)",
             "DELETE FROM automation.event WHERE org_id = ANY($1)",
             "DELETE FROM support_api_keys WHERE org_id = ANY($1)",
             "DELETE FROM support_tickets WHERE org_id = ANY($1)",
