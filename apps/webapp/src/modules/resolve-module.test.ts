@@ -43,6 +43,11 @@ describe('resolveModule', () => {
 		expect(resolveModule('/planning/tasks').id).toBe('planning')
 	})
 
+	it('resolves support pages to the support module', () => {
+		expect(resolveModule('/support').id).toBe('support')
+		expect(resolveModule('/support/table').id).toBe('support')
+	})
+
 	it('resolves planification pages to the planification module', () => {
 		expect(resolveModule('/planification').id).toBe('planification')
 		expect(resolveModule('/planification/board').id).toBe('planification')

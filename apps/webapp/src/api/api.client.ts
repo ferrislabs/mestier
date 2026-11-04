@@ -16,9 +16,12 @@ export namespace Schemas {
     starts_at: string;
     updated_at: string;
   };
+  export type AddTicketBadgeRequest = { label: string; tone?: (string | null) | undefined };
+  export type AddTicketEntryRequest = { body: string; kind: string };
   export type AmendAssignmentReportRequest = { comment?: (string | null) | undefined; reported_minutes: number };
   export type RoleId = string;
   export type AssignRoleRequest = { role_id: RoleId };
+  export type AssignTicketRequest = Partial<{ member_id: null | MemberId }>;
   export type AssigneeRefRequest = { member_id: MemberId };
   export type AssignmentReportId = string;
   export type AssignmentReportResolution = "PENDING" | "APPLIED" | "DISMISSED";
@@ -39,7 +42,9 @@ export namespace Schemas {
   };
   export type TimeEntryPhotoPhase = "BEFORE" | "DURING" | "AFTER";
   export type AttachPhotoRequest = { phase: TimeEntryPhotoPhase; storage_key: string };
+  export type AttachmentId = string;
   export type AttachmentResponse = { filename: string; mime_type: string; size_bytes: number; storage_key: string };
+  export type AttachmentUrlResponse = { expires_at: string; url: string };
   export type AuthRequirementResponse =
     | "None"
     | { Exactly: string }
@@ -81,6 +86,8 @@ export namespace Schemas {
     resource_id: string;
   };
   export type AvailabilityResponse = { resources: Array<AvailabilityResourceResponse> };
+  export type BadgeTone = "neutral" | "brand" | "success" | "warning" | "error";
+  export type BadgeResponse = { label: string; tone: BadgeTone };
   export type BlankPageCount = number;
   export type BranchDto = "Then" | "Else" | "Each" | "After";
   export type BulkAssignTasksRequest = { assignees: Array<AssigneeRefRequest>; task_ids: Array<TaskId> };
@@ -672,6 +679,7 @@ export namespace Schemas {
   export type DueStatus = "PLANNED" | "OVERDUE" | "THIS_WEEK" | "NEXT_WEEK" | "LATER" | "DONE";
   export type Due = { on?: (string | null) | undefined; status: DueStatus };
   export type EdgeDto = { branch?: (null | BranchDto) | undefined; from: string; to: string };
+  export type EditSupportDraftRequest = { body: string };
   export type EmployeeCostBasisId = string;
   export type EmployeeCostBasisResponse = {
     created_at: string;
@@ -701,6 +709,7 @@ export namespace Schemas {
   };
   export type EmployeeRhythmId = string;
   export type EndDayRequest = Partial<{ ended_at: string | null }>;
+  export type EntryKind = "client_message" | "reply" | "internal_note" | "draft";
   export type EquipmentResponse = {
     created_at: string;
     hourly_rate_cents: number;
@@ -1347,6 +1356,7 @@ export namespace Schemas {
   export type RejectSupplierInvoiceRequest = Partial<{ notes: string | null }>;
   export type ReplaceLineAllocationsRequest = { allocations: Array<LineAllocationShareRequest> };
   export type ReplaceProjectTemplateTasksRequest = { tasks: Array<ProjectTemplateTaskShapeRequest> };
+  export type ReplaceSupportSettingsRequest = { display_fields: Array<string> };
   export type ReplayRunRequest = { connector_id: string };
   export type ReportAssignmentRequest = { comment?: (string | null) | undefined; reported_minutes: number };
   export type ResolveAssignmentReportRequest = {
@@ -1442,6 +1452,14 @@ export namespace Schemas {
     updated_at: string;
     vat_number?: (string | null) | undefined;
   };
+  export type SupportAttachmentResponse = {
+    created_at: string;
+    file_name: string;
+    id: AttachmentId;
+    mime_type: string;
+    size_bytes: number;
+  };
+  export type SupportSettingsResponse = { display_fields: Array<string> };
   export type TaskCommentAuthorResponse = { display_name: string; id: UserId };
   export type TaskCommentId = string;
   export type TaskCommentResponse = {
@@ -1474,6 +1492,34 @@ export namespace Schemas {
     title: string;
     updated_at: string;
   };
+  export type TicketEntryId = string;
+  export type TicketId = string;
+  export type TicketEntryResponse = {
+    attachments: Array<SupportAttachmentResponse>;
+    author_member_id?: (null | MemberId) | undefined;
+    body: string;
+    created_at: string;
+    id: TicketEntryId;
+    kind: EntryKind;
+    ticket_id: TicketId;
+    updated_at: string;
+  };
+  export type TicketNumber = number;
+  export type TicketStatus = "new" | "in_progress" | "waiting_customer" | "resolved";
+  export type TicketResponse = {
+    assigned_at?: (string | null) | undefined;
+    assignee_member_id?: (null | MemberId) | undefined;
+    badges: Array<BadgeResponse>;
+    body: string;
+    created_at: string;
+    custom_fields: Record<string, unknown>;
+    external_id?: (string | null) | undefined;
+    id: TicketId;
+    number: TicketNumber;
+    status: TicketStatus;
+    subject: string;
+    updated_at: string;
+  };
   export type TimeEntryId = string;
   export type TimeEntryPhotoId = string;
   export type TimeEntryPhotoResponse = {
@@ -1493,6 +1539,7 @@ export namespace Schemas {
     task_id: TaskId;
     worked_minutes?: (number | null) | undefined;
   };
+  export type TransitionTicketRequest = { status: string };
   export type UnreadResponse = { channel_ids: Array<ChannelId> };
   export type UpdateAbsenceRequest = Partial<{
     all_day: boolean | null;
@@ -7003,6 +7050,397 @@ export namespace Endpoints {
       409: unknown;
     };
   };
+  export type get_GetSupportAttachmentUrl = {
+    method: "GET";
+    path: "/api/v1/organizations/{organization_id}/support/attachments/{attachment_id}/url";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string; attachment_id: string };
+    };
+    responses: {
+      200: { data: { expires_at: string; url: string }; pagination?: (null | Schemas.PaginationMetadata) | undefined };
+      401: unknown;
+      403: unknown;
+      404: unknown;
+    };
+  };
+  export type delete_DeleteSupportDraft = {
+    method: "DELETE";
+    path: "/api/v1/organizations/{organization_id}/support/entries/{entry_id}";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string; entry_id: string };
+    };
+    responses: { 204: unknown; 401: unknown; 403: unknown; 404: unknown; 409: unknown };
+  };
+  export type patch_EditSupportDraft = {
+    method: "PATCH";
+    path: "/api/v1/organizations/{organization_id}/support/entries/{entry_id}";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string; entry_id: string };
+
+      body: Schemas.EditSupportDraftRequest;
+    };
+    responses: {
+      200: {
+        data: {
+          attachments: Array<Schemas.SupportAttachmentResponse>;
+          author_member_id?: (null | Schemas.MemberId) | undefined;
+          body: string;
+          created_at: string;
+          id: Schemas.TicketEntryId;
+          kind: Schemas.EntryKind;
+          ticket_id: Schemas.TicketId;
+          updated_at: string;
+        };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+      404: unknown;
+      409: unknown;
+    };
+  };
+  export type post_AttachSupportEntryFile = {
+    method: "POST";
+    path: "/api/v1/organizations/{organization_id}/support/entries/{entry_id}/attachments";
+    requestFormat: "binary";
+    parameters: {
+      path: { organization_id: string; entry_id: string };
+      header: { "X-File-Name": string };
+      body: Array<number>;
+    };
+    responses: {
+      201: {
+        data: {
+          created_at: string;
+          file_name: string;
+          id: Schemas.AttachmentId;
+          mime_type: string;
+          size_bytes: number;
+        };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      400: unknown;
+      401: unknown;
+      403: unknown;
+      404: unknown;
+      409: unknown;
+      413: unknown;
+      422: unknown;
+    };
+  };
+  export type post_SendSupportDraft = {
+    method: "POST";
+    path: "/api/v1/organizations/{organization_id}/support/entries/{entry_id}/send";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string; entry_id: string };
+    };
+    responses: {
+      200: {
+        data: {
+          attachments: Array<Schemas.SupportAttachmentResponse>;
+          author_member_id?: (null | Schemas.MemberId) | undefined;
+          body: string;
+          created_at: string;
+          id: Schemas.TicketEntryId;
+          kind: Schemas.EntryKind;
+          ticket_id: Schemas.TicketId;
+          updated_at: string;
+        };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+      404: unknown;
+      409: unknown;
+    };
+  };
+  export type get_GetSupportSettings = {
+    method: "GET";
+    path: "/api/v1/organizations/{organization_id}/support/settings";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string };
+    };
+    responses: {
+      200: { data: { display_fields: Array<string> }; pagination?: (null | Schemas.PaginationMetadata) | undefined };
+      401: unknown;
+      403: unknown;
+    };
+  };
+  export type put_ReplaceSupportSettings = {
+    method: "PUT";
+    path: "/api/v1/organizations/{organization_id}/support/settings";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string };
+
+      body: Schemas.ReplaceSupportSettingsRequest;
+    };
+    responses: {
+      200: { data: { display_fields: Array<string> }; pagination?: (null | Schemas.PaginationMetadata) | undefined };
+      401: unknown;
+      403: unknown;
+      422: unknown;
+    };
+  };
+  export type get_ListSupportTickets = {
+    method: "GET";
+    path: "/api/v1/organizations/{organization_id}/support/tickets";
+    requestFormat: "json";
+    parameters: {
+      query: Partial<{
+        status: string;
+        assignee: string;
+        badge: string;
+        custom_field_key: string;
+        custom_field_value: string;
+        page: number;
+        per_page: number;
+      }>;
+      path: { organization_id: string };
+    };
+    responses: {
+      200: {
+        data: Array<{
+          assigned_at?: (string | null) | undefined;
+          assignee_member_id?: (null | Schemas.MemberId) | undefined;
+          badges: Array<Schemas.BadgeResponse>;
+          body: string;
+          created_at: string;
+          custom_fields: Record<string, unknown>;
+          external_id?: (string | null) | undefined;
+          id: Schemas.TicketId;
+          number: Schemas.TicketNumber;
+          status: Schemas.TicketStatus;
+          subject: string;
+          updated_at: string;
+        }>;
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+      422: unknown;
+    };
+  };
+  export type get_GetSupportTicket = {
+    method: "GET";
+    path: "/api/v1/organizations/{organization_id}/support/tickets/{ticket_id}";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string; ticket_id: string };
+    };
+    responses: {
+      200: {
+        data: {
+          assigned_at?: (string | null) | undefined;
+          assignee_member_id?: (null | Schemas.MemberId) | undefined;
+          badges: Array<Schemas.BadgeResponse>;
+          body: string;
+          created_at: string;
+          custom_fields: Record<string, unknown>;
+          external_id?: (string | null) | undefined;
+          id: Schemas.TicketId;
+          number: Schemas.TicketNumber;
+          status: Schemas.TicketStatus;
+          subject: string;
+          updated_at: string;
+        };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+      404: unknown;
+    };
+  };
+  export type put_AssignSupportTicket = {
+    method: "PUT";
+    path: "/api/v1/organizations/{organization_id}/support/tickets/{ticket_id}/assignee";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string; ticket_id: string };
+
+      body: Schemas.AssignTicketRequest;
+    };
+    responses: {
+      200: {
+        data: {
+          assigned_at?: (string | null) | undefined;
+          assignee_member_id?: (null | Schemas.MemberId) | undefined;
+          badges: Array<Schemas.BadgeResponse>;
+          body: string;
+          created_at: string;
+          custom_fields: Record<string, unknown>;
+          external_id?: (string | null) | undefined;
+          id: Schemas.TicketId;
+          number: Schemas.TicketNumber;
+          status: Schemas.TicketStatus;
+          subject: string;
+          updated_at: string;
+        };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+      404: unknown;
+    };
+  };
+  export type post_AddSupportTicketBadge = {
+    method: "POST";
+    path: "/api/v1/organizations/{organization_id}/support/tickets/{ticket_id}/badges";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string; ticket_id: string };
+
+      body: Schemas.AddTicketBadgeRequest;
+    };
+    responses: {
+      200: {
+        data: {
+          assigned_at?: (string | null) | undefined;
+          assignee_member_id?: (null | Schemas.MemberId) | undefined;
+          badges: Array<Schemas.BadgeResponse>;
+          body: string;
+          created_at: string;
+          custom_fields: Record<string, unknown>;
+          external_id?: (string | null) | undefined;
+          id: Schemas.TicketId;
+          number: Schemas.TicketNumber;
+          status: Schemas.TicketStatus;
+          subject: string;
+          updated_at: string;
+        };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+      404: unknown;
+      409: unknown;
+      422: unknown;
+    };
+  };
+  export type delete_RemoveSupportTicketBadge = {
+    method: "DELETE";
+    path: "/api/v1/organizations/{organization_id}/support/tickets/{ticket_id}/badges/{label}";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string; ticket_id: string; label: string };
+    };
+    responses: {
+      200: {
+        data: {
+          assigned_at?: (string | null) | undefined;
+          assignee_member_id?: (null | Schemas.MemberId) | undefined;
+          badges: Array<Schemas.BadgeResponse>;
+          body: string;
+          created_at: string;
+          custom_fields: Record<string, unknown>;
+          external_id?: (string | null) | undefined;
+          id: Schemas.TicketId;
+          number: Schemas.TicketNumber;
+          status: Schemas.TicketStatus;
+          subject: string;
+          updated_at: string;
+        };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+      404: unknown;
+    };
+  };
+  export type get_ListSupportTicketEntries = {
+    method: "GET";
+    path: "/api/v1/organizations/{organization_id}/support/tickets/{ticket_id}/entries";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string; ticket_id: string };
+    };
+    responses: {
+      200: {
+        data: Array<{
+          attachments: Array<Schemas.SupportAttachmentResponse>;
+          author_member_id?: (null | Schemas.MemberId) | undefined;
+          body: string;
+          created_at: string;
+          id: Schemas.TicketEntryId;
+          kind: Schemas.EntryKind;
+          ticket_id: Schemas.TicketId;
+          updated_at: string;
+        }>;
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+      404: unknown;
+    };
+  };
+  export type post_AddSupportTicketEntry = {
+    method: "POST";
+    path: "/api/v1/organizations/{organization_id}/support/tickets/{ticket_id}/entries";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string; ticket_id: string };
+
+      body: Schemas.AddTicketEntryRequest;
+    };
+    responses: {
+      201: {
+        data: {
+          attachments: Array<Schemas.SupportAttachmentResponse>;
+          author_member_id?: (null | Schemas.MemberId) | undefined;
+          body: string;
+          created_at: string;
+          id: Schemas.TicketEntryId;
+          kind: Schemas.EntryKind;
+          ticket_id: Schemas.TicketId;
+          updated_at: string;
+        };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+      404: unknown;
+      409: unknown;
+      422: unknown;
+    };
+  };
+  export type patch_TransitionSupportTicket = {
+    method: "PATCH";
+    path: "/api/v1/organizations/{organization_id}/support/tickets/{ticket_id}/status";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string; ticket_id: string };
+
+      body: Schemas.TransitionTicketRequest;
+    };
+    responses: {
+      200: {
+        data: {
+          assigned_at?: (string | null) | undefined;
+          assignee_member_id?: (null | Schemas.MemberId) | undefined;
+          badges: Array<Schemas.BadgeResponse>;
+          body: string;
+          created_at: string;
+          custom_fields: Record<string, unknown>;
+          external_id?: (string | null) | undefined;
+          id: Schemas.TicketId;
+          number: Schemas.TicketNumber;
+          status: Schemas.TicketStatus;
+          subject: string;
+          updated_at: string;
+        };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+      404: unknown;
+      422: unknown;
+    };
+  };
   export type get_ListTaskLabels = {
     method: "GET";
     path: "/api/v1/organizations/{organization_id}/task-labels";
@@ -8272,6 +8710,8 @@ export type EndpointByMethod = {
     "/api/v1/organizations/{organization_id}/legal-identity": Endpoints.patch_UpdateOrganizationLegalIdentity;
     "/api/v1/organizations/{organization_id}/project-templates/{project_template_id}": Endpoints.patch_PatchProjectTemplate;
     "/api/v1/organizations/{organization_id}/projects/{project_id}": Endpoints.patch_PatchProject;
+    "/api/v1/organizations/{organization_id}/support/entries/{entry_id}": Endpoints.patch_EditSupportDraft;
+    "/api/v1/organizations/{organization_id}/support/tickets/{ticket_id}/status": Endpoints.patch_TransitionSupportTicket;
     "/api/v1/organizations/{organization_id}/task-labels/{label_id}": Endpoints.patch_UpdateTaskLabel;
     "/api/v1/organizations/{organization_id}/tasks/{task_id}": Endpoints.patch_PatchTask;
     "/api/v1/organizations/{organization_id}/tasks/{task_id}/comments/{comment_id}": Endpoints.patch_UpdateTaskComment;
@@ -8310,6 +8750,8 @@ export type EndpointByMethod = {
     "/api/v1/organizations/{organization_id}/does/{doe_id}": Endpoints.delete_DeleteDoe;
     "/api/v1/organizations/{organization_id}/project-templates/{project_template_id}": Endpoints.delete_ArchiveProjectTemplate;
     "/api/v1/organizations/{organization_id}/projects/{project_id}": Endpoints.delete_ArchiveProject;
+    "/api/v1/organizations/{organization_id}/support/entries/{entry_id}": Endpoints.delete_DeleteSupportDraft;
+    "/api/v1/organizations/{organization_id}/support/tickets/{ticket_id}/badges/{label}": Endpoints.delete_RemoveSupportTicketBadge;
     "/api/v1/organizations/{organization_id}/task-labels/{label_id}": Endpoints.delete_DeleteTaskLabel;
     "/api/v1/organizations/{organization_id}/tasks/{task_id}": Endpoints.delete_DeleteTask;
     "/api/v1/organizations/{organization_id}/tasks/{task_id}/comments/{comment_id}": Endpoints.delete_DeleteTaskComment;
@@ -8400,6 +8842,11 @@ export type EndpointByMethod = {
     "/api/v1/organizations/{organization_id}/supplier-invoices": Endpoints.get_ListSupplierInvoices;
     "/api/v1/organizations/{organization_id}/suppliers": Endpoints.get_ListSuppliers;
     "/api/v1/organizations/{organization_id}/suppliers/{supplier_id}": Endpoints.get_GetSupplier;
+    "/api/v1/organizations/{organization_id}/support/attachments/{attachment_id}/url": Endpoints.get_GetSupportAttachmentUrl;
+    "/api/v1/organizations/{organization_id}/support/settings": Endpoints.get_GetSupportSettings;
+    "/api/v1/organizations/{organization_id}/support/tickets": Endpoints.get_ListSupportTickets;
+    "/api/v1/organizations/{organization_id}/support/tickets/{ticket_id}": Endpoints.get_GetSupportTicket;
+    "/api/v1/organizations/{organization_id}/support/tickets/{ticket_id}/entries": Endpoints.get_ListSupportTicketEntries;
     "/api/v1/organizations/{organization_id}/task-labels": Endpoints.get_ListTaskLabels;
     "/api/v1/organizations/{organization_id}/task-recurrences": Endpoints.get_ListTaskRecurrences;
     "/api/v1/organizations/{organization_id}/tasks": Endpoints.get_ListTasks;
@@ -8482,6 +8929,10 @@ export type EndpointByMethod = {
     "/api/v1/organizations/{organization_id}/service-rates": Endpoints.post_CreateServiceRate;
     "/api/v1/organizations/{organization_id}/supplier-invoices/import": Endpoints.post_ImportSupplierInvoice;
     "/api/v1/organizations/{organization_id}/suppliers": Endpoints.post_CreateSupplier;
+    "/api/v1/organizations/{organization_id}/support/entries/{entry_id}/attachments": Endpoints.post_AttachSupportEntryFile;
+    "/api/v1/organizations/{organization_id}/support/entries/{entry_id}/send": Endpoints.post_SendSupportDraft;
+    "/api/v1/organizations/{organization_id}/support/tickets/{ticket_id}/badges": Endpoints.post_AddSupportTicketBadge;
+    "/api/v1/organizations/{organization_id}/support/tickets/{ticket_id}/entries": Endpoints.post_AddSupportTicketEntry;
     "/api/v1/organizations/{organization_id}/task-labels": Endpoints.post_CreateTaskLabel;
     "/api/v1/organizations/{organization_id}/task-recurrences": Endpoints.post_CreateTaskRecurrence;
     "/api/v1/organizations/{organization_id}/tasks": Endpoints.post_CreateTask;
@@ -8512,6 +8963,8 @@ export type EndpointByMethod = {
     "/api/v1/organizations/{organization_id}/maintenance/contracts/{contract_id}": Endpoints.put_UpdateMaintenanceContract;
     "/api/v1/organizations/{organization_id}/project-templates/{project_template_id}/tasks": Endpoints.put_ReplaceProjectTemplateTasks;
     "/api/v1/organizations/{organization_id}/suppliers/{supplier_id}": Endpoints.put_UpdateSupplier;
+    "/api/v1/organizations/{organization_id}/support/settings": Endpoints.put_ReplaceSupportSettings;
+    "/api/v1/organizations/{organization_id}/support/tickets/{ticket_id}/assignee": Endpoints.put_AssignSupportTicket;
     "/api/v1/supplier-invoice-lines/{supplier_invoice_line_id}/allocations": Endpoints.put_ReplaceSupplierInvoiceLineAllocations;
   };
 };

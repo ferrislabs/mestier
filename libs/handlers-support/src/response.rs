@@ -59,6 +59,7 @@ impl From<Ticket> for TicketResponse {
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, ToSchema)]
+#[schema(as = SupportAttachmentResponse)]
 pub struct AttachmentResponse {
     pub id: AttachmentId,
     pub file_name: String,
