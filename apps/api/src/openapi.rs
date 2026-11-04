@@ -306,6 +306,8 @@ impl Modify for SecurityAddon {
         support::thread::send_draft::handler,
         support::thread::attach::handler,
         support::thread::attachment_url::handler,
+        support::settings::get::handler,
+        support::settings::replace::handler,
     ),
     components(schemas(
         support::response::TicketResponse,
@@ -316,6 +318,8 @@ impl Modify for SecurityAddon {
         support::response::TicketEntryResponse,
         support::response::AttachmentResponse,
         support::response::AttachmentUrlResponse,
+        support::response::SupportSettingsResponse,
+        support::settings::replace::ReplaceSupportSettingsRequest,
         support::thread::add_entry::AddTicketEntryRequest,
         support::thread::edit_draft::EditSupportDraftRequest,
         automation::credential::create::CreateCredentialRequest,
@@ -688,6 +692,7 @@ mod tests {
             format!("{root}/entries/{{entry_id}}/send"),
             format!("{root}/entries/{{entry_id}}/attachments"),
             format!("{root}/attachments/{{attachment_id}}/url"),
+            format!("{root}/settings"),
         ] {
             assert!(paths.contains_key(&path), "{path}");
         }
@@ -707,6 +712,8 @@ mod tests {
             "sendSupportDraft",
             "attachSupportEntryFile",
             "getSupportAttachmentUrl",
+            "getSupportSettings",
+            "replaceSupportSettings",
         ] {
             assert!(
                 json.contains(&format!("\"operationId\":\"{operation_id}\"")),

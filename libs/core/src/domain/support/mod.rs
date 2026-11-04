@@ -1,4 +1,4 @@
-use std::{fmt::Display, str::FromStr};
+use std::{collections::HashSet, fmt::Display, str::FromStr};
 
 use chrono::{DateTime, Utc};
 use common::CoreError;
@@ -239,6 +239,50 @@ impl TryFrom<Value> for CustomFields {
     }
 }
 
+pub const MAX_DISPLAY_FIELDS: usize = 8;
+pub const MAX_DISPLAY_FIELD_CHARS: usize = 64;
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize)]
+#[serde(transparent)]
+pub struct DisplayFields(Vec<String>);
+
+impl DisplayFields {
+    pub fn as_slice(&self) -> &[String] {
+        &self.0
+    }
+
+    pub fn into_vec(self) -> Vec<String> {
+        self.0
+    }
+}
+
+impl TryFrom<Vec<String>> for DisplayFields {
+    type Error = CoreError;
+
+    fn try_from(keys: Vec<String>) -> Result<Self, Self::Error> {
+        if keys.len() > MAX_DISPLAY_FIELDS {
+            return Err(CoreError::Conflict(format!(
+                "display fields hold at most {MAX_DISPLAY_FIELDS} keys"
+            )));
+        }
+        if let Some(key) = keys
+            .iter()
+            .find(|key| key.is_empty() || key.chars().count() > MAX_DISPLAY_FIELD_CHARS)
+        {
+            return Err(CoreError::Conflict(format!(
+                "display field `{key}` must be 1 to {MAX_DISPLAY_FIELD_CHARS} characters"
+            )));
+        }
+        let mut seen = HashSet::with_capacity(keys.len());
+        if let Some(key) = keys.iter().find(|key| !seen.insert(key.as_str())) {
+            return Err(CoreError::Conflict(format!(
+                "display field `{key}` is listed more than once"
+            )));
+        }
+        Ok(Self(keys))
+    }
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct Ticket {
     pub id: TicketId,
@@ -415,6 +459,83 @@ mod tests {
         let big = "x".repeat(MAX_CUSTOM_FIELDS_BYTES);
 
         assert!(CustomFields::try_from(json!({ "blob": big })).is_err());
+    }
+
+    fn keys(values: &[&str]) -> Vec<String> {
+        values.iter().map(|value| (*value).to_owned()).collect()
+    }
+
+    fn is_conflict<T: std::fmt::Debug>(outcome: Result<T, CoreError>) -> bool {
+        matches!(outcome, Err(CoreError::Conflict(_)))
+    }
+
+    #[test]
+    fn display_fields_keep_the_order_they_were_given() {
+        let fields = DisplayFields::try_from(keys(&["team", "plan", "deployment_id"])).unwrap();
+
+        assert_eq!(fields.as_slice(), keys(&["team", "plan", "deployment_id"]));
+        assert_eq!(fields.into_vec(), keys(&["team", "plan", "deployment_id"]));
+    }
+
+    #[test]
+    fn display_fields_default_to_an_empty_list() {
+        assert!(DisplayFields::default().as_slice().is_empty());
+        assert!(
+            DisplayFields::try_from(Vec::new())
+                .unwrap()
+                .as_slice()
+                .is_empty()
+        );
+    }
+
+    #[test]
+    fn display_fields_accept_eight_keys_and_refuse_nine() {
+        let eight: Vec<String> = (0..MAX_DISPLAY_FIELDS).map(|i| format!("k{i}")).collect();
+        let nine: Vec<String> = (0..=MAX_DISPLAY_FIELDS).map(|i| format!("k{i}")).collect();
+
+        assert_eq!(DisplayFields::try_from(eight).unwrap().as_slice().len(), 8);
+        assert!(is_conflict(DisplayFields::try_from(nine)));
+    }
+
+    #[test]
+    fn display_fields_refuse_a_duplicate_key() {
+        assert!(is_conflict(DisplayFields::try_from(keys(&[
+            "team", "plan", "team"
+        ]))));
+    }
+
+    #[test]
+    fn display_fields_refuse_an_empty_key() {
+        assert!(is_conflict(DisplayFields::try_from(keys(&["team", ""]))));
+    }
+
+    #[test]
+    fn display_fields_accept_a_64_character_key_and_refuse_65() {
+        let accepted = "k".repeat(MAX_DISPLAY_FIELD_CHARS);
+        let refused = "k".repeat(MAX_DISPLAY_FIELD_CHARS + 1);
+
+        assert!(DisplayFields::try_from(vec![accepted]).is_ok());
+        assert!(is_conflict(DisplayFields::try_from(vec![refused])));
+    }
+
+    #[test]
+    fn display_fields_count_characters_not_bytes() {
+        let accented = "é".repeat(MAX_DISPLAY_FIELD_CHARS);
+        let too_long = "é".repeat(MAX_DISPLAY_FIELD_CHARS + 1);
+
+        assert!(accented.len() > MAX_DISPLAY_FIELD_CHARS);
+        assert!(DisplayFields::try_from(vec![accented]).is_ok());
+        assert!(is_conflict(DisplayFields::try_from(vec![too_long])));
+    }
+
+    #[test]
+    fn display_fields_serialize_as_a_plain_array() {
+        let fields = DisplayFields::try_from(keys(&["team", "plan"])).unwrap();
+
+        assert_eq!(
+            serde_json::to_value(&fields).unwrap(),
+            json!(["team", "plan"])
+        );
     }
 
     #[test]

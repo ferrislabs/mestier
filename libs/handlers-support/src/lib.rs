@@ -5,6 +5,7 @@ use mestier_core::{OrganizationId, Permissions};
 
 pub mod paths;
 pub mod response;
+pub mod settings;
 pub mod thread;
 pub mod ticket;
 
@@ -49,6 +50,7 @@ pub async fn require_view_support(
 pub fn router(state: &AppState) -> Router<AppState> {
     Router::new()
         .merge(ticket::router(state))
+        .merge(settings::router(state))
         .merge(thread::router(state))
         .layer(from_fn_with_state(state.clone(), rate_limit_middleware))
         .layer(from_fn_with_state(state.clone(), auth_middleware))
