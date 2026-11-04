@@ -1,9 +1,17 @@
-import { Bug, Building2, FileText, ShieldCheck, Workflow } from 'lucide-react'
+import {
+	Bug,
+	Building2,
+	FileText,
+	LifeBuoy,
+	ShieldCheck,
+	Workflow,
+} from 'lucide-react'
 import { AutomationSection } from '#/pages/settings/sections/automation-section'
 import { DeveloperSection } from '#/pages/settings/sections/developer-section'
 import { ModelsSection } from '#/pages/settings/sections/models-section'
 import { OrganizationSection } from '#/pages/settings/sections/organization-section'
 import { RolesSection } from '#/pages/settings/sections/roles-section'
+import { SupportSection } from '#/pages/settings/sections/support-section'
 import type { SettingsSection } from '#/pages/settings/types'
 
 export const SETTINGS_SECTIONS: SettingsSection[] = [
@@ -24,6 +32,13 @@ export const SETTINGS_SECTIONS: SettingsSection[] = [
 		label: 'Automatisation',
 		icon: Workflow,
 		Component: AutomationSection,
+	},
+	{
+		id: 'support',
+		label: 'Support',
+		icon: LifeBuoy,
+		moduleId: 'support',
+		Component: SupportSection,
 	},
 	{
 		id: 'modeles',
