@@ -1,47 +1,9 @@
-import { useForm } from '@tanstack/react-form'
-import {
-	Boxes,
-	BriefcaseBusiness,
-	Loader2,
-	Package,
-	Plus,
-	Search,
-} from 'lucide-react'
-import type * as React from 'react'
 import { useMemo, useState } from 'react'
-import { DeveloperModeOnly } from '#/components/developer-mode-only'
-import {
-	centsToEuros,
-	type FormBinding,
-	formatMoney,
-	RowActions,
-} from '#/components/reference-table'
-import { RequirePermission } from '#/components/require-permission'
-import { Button } from '#/components/ui/button'
-import { Input } from '#/components/ui/input'
 import { Label } from '#/components/ui/label'
-import {
-	Sheet,
-	SheetContent,
-	SheetDescription,
-	SheetFooter,
-	SheetHeader,
-	SheetTitle,
-} from '#/components/ui/sheet'
-import {
-	MetricCard,
-	PageHeader,
-	PageShell,
-	SectionCard,
-	SectionHeader,
-	StatusBadge,
-} from '#/components/ui/surface'
-import { Textarea } from '#/components/ui/textarea'
 import { useActiveOrganization } from '#/hooks/use-active-organization'
-import type { ProductCatalogFormValues } from '#/hooks/use-catalog-items'
 import { useUploadFile } from '#/hooks/use-customers'
 import { useFileUrls } from '#/hooks/use-file-url'
-import type { Product, ServiceRate } from '#/hooks/use-reference-catalog'
+import { useHasPermission } from '#/hooks/use-permissions'
 import {
 	useCreateCustomUnit,
 	useCreateProduct,
@@ -53,700 +15,49 @@ import {
 	useUpdateServiceRate,
 } from '#/hooks/use-reference-catalog'
 import { mutationErrorMessage } from '#/lib/api-error'
-import { formatPricePerUnit, formatUnitLong } from '#/lib/units'
-import { ProductTechnicalSheetField } from '#/pages/catalog/feature/product-technical-sheet-field'
 import {
-	buildProductRequest,
-	EMPTY_TECHNICAL_SHEET,
-} from '#/pages/catalog/lib/product-request'
-import type { ServiceRateFormValues } from '#/pages/catalog/types'
-import { eurosToCents } from '#/pages/quotes/types'
+	bpOfVatRate,
+	type CatalogFilters,
+	type CatalogForm,
+	type CatalogRow,
+	catalogRows,
+	catalogSummary,
+	categoryOptions,
+	duplicateOf,
+	emptyForm,
+	filterCatalog,
+	formOf,
+	hasSameReference,
+} from '#/pages/catalog/catalog-model'
+import {
+	EMPTY_CATALOG_EXTRAS,
+	useCatalogExtrasMap,
+	useSaveCatalogExtras,
+} from '#/pages/catalog/feature/mocks/catalog-extras'
+import { ProductTechnicalSheetField } from '#/pages/catalog/feature/product-technical-sheet-field'
+import { buildProductRequest } from '#/pages/catalog/lib/product-request'
+import type { CatalogEditor } from '#/pages/catalog/ui/catalog-form-dialog'
+import { CatalogUI } from '#/pages/catalog/ui/catalog-ui'
+import { useCrmSettings } from '#/pages/crm-settings/feature/mocks/settings'
+import { parseAmount } from '#/pages/customers/lib/format'
 import { PhotoStrip } from '#/pages/quotes/ui/photo-strip'
-import { UnitSelect } from '#/pages/quotes/ui/unit-select'
 
-type CatalogTab = 'products' | 'services'
-
-type Draft =
-	| { tab: 'products'; id: string; values: ProductCatalogFormValues }
-	| { tab: 'services'; id: string; values: ServiceRateFormValues }
-	| null
-
-/**
- * Derived rather than listed, so adding a unit does not need this file opened.
- * Products keep the legacy HOUR relabelling until the rows stored before UNIT
- * existed are migrated; see catalog-item-picker.
- */
-function unitPriceSuffix(unit: string): string {
-	return formatPricePerUnit(unit)
+interface CatalogFeatureProps {
+	filters: CatalogFilters
+	onFiltersChange: (filters: CatalogFilters) => void
 }
 
-function productPriceSuffix(unit: string): string {
-	return unit === 'HOUR' ? '€/unité' : formatPricePerUnit(unit)
-}
-
-/**
- * Catalogue of priced products and services.
- *
- * It used to live in the organization settings; it is edited daily to fill in a
- * quote, so it belongs to the module that produces them.
- */
-export function CatalogFeature() {
+export function CatalogFeature(props: CatalogFeatureProps) {
 	const { activeOrganization } = useActiveOrganization()
-
 	return (
-		<PageShell>
-			<PageHeader
-				eyebrow={activeOrganization.name}
-				title="Catalogue"
-				description="Les produits et services que vous insérez dans un devis, avec leur unité et leur tarif."
-			/>
-			<CrmSectionContent
-				key={activeOrganization.id}
-				organizationId={activeOrganization.id}
-			/>
-		</PageShell>
+		<CatalogWorkspace
+			key={activeOrganization.id}
+			organizationId={activeOrganization.id}
+			{...props}
+		/>
 	)
 }
 
-interface CrmSectionContentProps {
-	organizationId: string
-}
-
-function CrmSectionContent({ organizationId }: CrmSectionContentProps) {
-	const catalog = useReferenceCatalog(organizationId, {
-		members: false,
-		employeeProfiles: false,
-		equipment: false,
-	})
-	const createServiceRate = useCreateServiceRate(organizationId)
-	const updateServiceRate = useUpdateServiceRate()
-	const deleteServiceRate = useDeleteServiceRate()
-	const createProduct = useCreateProduct(organizationId)
-	const updateProduct = useUpdateProduct()
-	const deleteProduct = useDeleteProduct()
-	const uploadFile = useUploadFile()
-	const createCustomUnit = useCreateCustomUnit(organizationId)
-	const customUnitCodes = (catalog.customUnits.data?.data ?? []).map(
-		(customUnit) => customUnit.code,
-	)
-	const createCustomUnitCode = (code: string) => {
-		createCustomUnit.mutate({
-			path: { organization_id: organizationId },
-			body: { code },
-		})
-	}
-
-	const serviceRateForm = useForm({
-		defaultValues: {
-			label: '',
-			unit: 'HOUR',
-			rate: '',
-			description: '',
-		} satisfies ServiceRateFormValues,
-		onSubmit: async ({ value }) => {
-			await createServiceRate.mutateAsync({
-				path: { organization_id: organizationId },
-				body: {
-					label: value.label.trim(),
-					unit: value.unit,
-					rate_cents: eurosToCents(value.rate),
-					description: value.description.trim() || null,
-				},
-			})
-			serviceRateForm.reset()
-		},
-	})
-
-	const productForm = useForm({
-		defaultValues: {
-			name: '',
-			sku: '',
-			unit: 'M2',
-			unitPrice: '',
-			description: '',
-			photoKeys: [] as string[],
-			...EMPTY_TECHNICAL_SHEET,
-		} satisfies ProductCatalogFormValues,
-		onSubmit: async ({ value }) => {
-			await createProduct.mutateAsync({
-				path: { organization_id: organizationId },
-				body: buildProductRequest(value),
-			})
-			productForm.reset()
-		},
-	})
-
-	const [activeTab, setActiveTab] = useState<CatalogTab>('products')
-	const [createOpen, setCreateOpen] = useState(false)
-	const [createMode, setCreateMode] = useState<CatalogTab>('products')
-	const [search, setSearch] = useState('')
-	const [draft, setDraft] = useState<Draft>(null)
-	const [isSaving, setIsSaving] = useState(false)
-	const uploadDraftProductPhoto = async (file: File) => {
-		const uploaded = await uploadFile.mutateAsync(file)
-		setDraft((current) =>
-			current?.tab === 'products'
-				? {
-						...current,
-						values: {
-							...current.values,
-							photoKeys: [...current.values.photoKeys, uploaded.data.key],
-						},
-					}
-				: current,
-		)
-	}
-	const uploadDraftDatasheet = async (file: File) => {
-		const uploaded = await uploadFile.mutateAsync(file)
-		setDraft((current) =>
-			current?.tab === 'products'
-				? {
-						...current,
-						values: {
-							...current.values,
-							datasheetKeys: [
-								...current.values.datasheetKeys,
-								uploaded.data.key,
-							],
-						},
-					}
-				: current,
-		)
-	}
-	const removeDraftDatasheet = (key: string) => {
-		setDraft((current) =>
-			current?.tab === 'products'
-				? {
-						...current,
-						values: {
-							...current.values,
-							datasheetKeys: current.values.datasheetKeys.filter(
-								(datasheetKey) => datasheetKey !== key,
-							),
-						},
-					}
-				: current,
-		)
-	}
-	const removeDraftProductPhoto = (key: string) => {
-		setDraft((current) =>
-			current?.tab === 'products'
-				? {
-						...current,
-						values: {
-							...current.values,
-							photoKeys: current.values.photoKeys.filter(
-								(photoKey) => photoKey !== key,
-							),
-						},
-					}
-				: current,
-		)
-	}
-
-	const serviceRates = catalog.serviceRates.data?.data ?? []
-	const products = catalog.products.data?.data ?? []
-	const isLoading = catalog.serviceRates.isLoading || catalog.products.isLoading
-	const error =
-		catalog.serviceRates.error ??
-		catalog.products.error ??
-		createServiceRate.error ??
-		updateServiceRate.error ??
-		deleteServiceRate.error ??
-		createProduct.error ??
-		updateProduct.error ??
-		deleteProduct.error
-
-	const normalizedSearch = search.trim().toLowerCase()
-	const filteredProducts = useMemo(() => {
-		return products.filter((product) => {
-			return (
-				product.name.toLowerCase().includes(normalizedSearch) ||
-				(product.sku ?? '').toLowerCase().includes(normalizedSearch) ||
-				(product.description ?? '').toLowerCase().includes(normalizedSearch)
-			)
-		})
-	}, [normalizedSearch, products])
-
-	const filteredServices = useMemo(() => {
-		return serviceRates.filter((serviceRate) =>
-			serviceRate.label.toLowerCase().includes(normalizedSearch),
-		)
-	}, [normalizedSearch, serviceRates])
-
-	const catalogValueCents = products.reduce(
-		(sum, product) => sum + product.unit_price_cents,
-		0,
-	)
-	const defaultProductPrice = products.length
-		? Math.round(catalogValueCents / products.length)
-		: 0
-
-	const handleSaveDraft = async () => {
-		if (!draft) return
-		setIsSaving(true)
-		try {
-			if (draft.tab === 'products') {
-				const product = products.find((item) => item.id === draft.id)
-				if (product) {
-					await updateProduct.mutateAsync({
-						path: { product_id: product.id },
-						body: buildProductRequest(draft.values),
-					})
-				}
-			}
-			if (draft.tab === 'services') {
-				const serviceRate = serviceRates.find((item) => item.id === draft.id)
-				if (serviceRate) {
-					await updateServiceRate.mutateAsync({
-						path: { service_rate_id: serviceRate.id },
-						body: {
-							label: draft.values.label.trim(),
-							unit: draft.values.unit,
-							rate_cents: eurosToCents(draft.values.rate),
-							description: draft.values.description.trim() || null,
-						},
-					})
-				}
-			}
-			setDraft(null)
-		} finally {
-			setIsSaving(false)
-		}
-	}
-
-	const openCreate = (mode: CatalogTab = activeTab) => {
-		setCreateMode(mode)
-		setCreateOpen(true)
-	}
-
-	const handleCreateSubmit = async () => {
-		if (createMode === 'products') {
-			await productForm.handleSubmit()
-			setCreateOpen(false)
-			return
-		}
-		await serviceRateForm.handleSubmit()
-		setCreateOpen(false)
-	}
-
-	return (
-		<serviceRateForm.Subscribe selector={(state) => state.values}>
-			{(serviceRateValues) => (
-				<productForm.Subscribe selector={(state) => state.values}>
-					{(productValues) => {
-						const serviceRateFormBinding: FormBinding<ServiceRateFormValues> = {
-							values: serviceRateValues,
-							isPending: createServiceRate.isPending,
-							onChange: (patch) => {
-								for (const key of Object.keys(
-									patch,
-								) as (keyof ServiceRateFormValues)[]) {
-									serviceRateForm.setFieldValue(key, patch[key] as never)
-								}
-							},
-							onSubmit: () => serviceRateForm.handleSubmit(),
-						}
-						const productFormBinding: FormBinding<ProductCatalogFormValues> = {
-							values: productValues,
-							isPending: createProduct.isPending,
-							onChange: (patch) => {
-								for (const key of Object.keys(
-									patch,
-								) as (keyof ProductCatalogFormValues)[]) {
-									productForm.setFieldValue(key, patch[key] as never)
-								}
-							},
-							onSubmit: () => productForm.handleSubmit(),
-						}
-						const uploadProductPhoto = async (file: File) => {
-							const uploaded = await uploadFile.mutateAsync(file)
-							productForm.setFieldValue('photoKeys', [
-								...productForm.state.values.photoKeys,
-								uploaded.data.key,
-							])
-						}
-						const uploadProductDatasheet = async (file: File) => {
-							const uploaded = await uploadFile.mutateAsync(file)
-							productForm.setFieldValue('datasheetKeys', [
-								...productForm.state.values.datasheetKeys,
-								uploaded.data.key,
-							])
-						}
-						const removeProductDatasheet = (key: string) => {
-							productForm.setFieldValue(
-								'datasheetKeys',
-								productForm.state.values.datasheetKeys.filter(
-									(datasheetKey) => datasheetKey !== key,
-								),
-							)
-						}
-						const removeProductPhoto = (key: string) => {
-							productForm.setFieldValue(
-								'photoKeys',
-								productForm.state.values.photoKeys.filter(
-									(photoKey) => photoKey !== key,
-								),
-							)
-						}
-
-						return (
-							<div className="flex flex-col gap-6">
-								<div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-									<h2 className="font-semibold text-foreground">Catalogue</h2>
-									<div className="flex flex-col gap-2 sm:flex-row">
-										<RequirePermission permission="MANAGE_REFERENCE">
-											<Button
-												type="button"
-												variant="outline"
-												onClick={() => openCreate('services')}
-											>
-												<BriefcaseBusiness />
-												Nouveau service
-											</Button>
-											<Button
-												type="button"
-												onClick={() => openCreate('products')}
-											>
-												<Plus />
-												Nouveau produit
-											</Button>
-										</RequirePermission>
-									</div>
-								</div>
-
-								<div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-									<MetricCard
-										label="Produits"
-										value={products.length}
-										hint="Articles vendables"
-										icon={<Boxes className="size-4" />}
-									/>
-									<MetricCard
-										label="Services"
-										value={serviceRates.length}
-										hint="Prestations chiffrables"
-										icon={<BriefcaseBusiness className="size-4" />}
-									/>
-									<MetricCard
-										label="Prix produit moyen"
-										value={formatMoney(defaultProductPrice)}
-										hint="Base de chiffrage"
-										icon={<Package className="size-4" />}
-									/>
-								</div>
-
-								{error ? (
-									<div className="rounded-lg border border-destructive/30 bg-destructive-soft px-4 py-3 text-sm text-destructive">
-										{mutationErrorMessage(error)}
-									</div>
-								) : null}
-
-								<div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-									<div className="flex flex-wrap gap-2">
-										<SegmentButton
-											active={activeTab === 'products'}
-											icon={<Boxes className="size-4" />}
-											label="Produits"
-											onClick={() => {
-												setActiveTab('products')
-												setDraft(null)
-											}}
-										/>
-										<SegmentButton
-											active={activeTab === 'services'}
-											icon={<BriefcaseBusiness className="size-4" />}
-											label="Services"
-											onClick={() => {
-												setActiveTab('services')
-												setDraft(null)
-											}}
-										/>
-									</div>
-									<div className="relative w-full lg:w-96">
-										<Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-										<Input
-											type="search"
-											value={search}
-											onChange={(event) => setSearch(event.target.value)}
-											placeholder="Rechercher un produit, une référence ou un service"
-											className="pl-9"
-										/>
-									</div>
-								</div>
-
-								{isLoading ? (
-									<SectionCard className="flex min-h-72 items-center justify-center gap-3 p-8 text-sm text-muted-foreground">
-										<Loader2 className="size-5 animate-spin" />
-										Chargement du catalogue…
-									</SectionCard>
-								) : activeTab === 'products' ? (
-									<ProductList
-										products={filteredProducts}
-										draft={draft}
-										isSaving={isSaving}
-										isUploadingPhoto={uploadFile.isPending}
-										onUploadPhoto={uploadDraftProductPhoto}
-										onRemovePhoto={removeDraftProductPhoto}
-										onUploadDatasheet={uploadDraftDatasheet}
-										onRemoveDatasheet={removeDraftDatasheet}
-										onEdit={(product) =>
-											setDraft({
-												tab: 'products',
-												id: product.id,
-												values: {
-													name: product.name,
-													sku: product.sku ?? '',
-													unit: product.unit,
-													unitPrice: centsToEuros(product.unit_price_cents),
-													description: product.description ?? '',
-													photoKeys: product.photo_keys,
-													supplierId: product.supplier_id ?? '',
-													manufacturer: product.manufacturer ?? '',
-													technicalSpecs: product.technical_specs ?? '',
-													datasheetKeys: product.datasheet_keys,
-												},
-											})
-										}
-										onDraftChange={(values) =>
-											setDraft((current) =>
-												current?.tab === 'products'
-													? { ...current, values }
-													: current,
-											)
-										}
-										onCancel={() => setDraft(null)}
-										onSave={handleSaveDraft}
-										onDelete={(product) =>
-											deleteProduct.mutateAsync({
-												path: { product_id: product.id },
-											})
-										}
-										onCreate={() => openCreate('products')}
-										customUnits={customUnitCodes}
-										onCreateCustomUnit={createCustomUnitCode}
-										isCreatingCustomUnit={createCustomUnit.isPending}
-									/>
-								) : (
-									<ServiceList
-										serviceRates={filteredServices}
-										draft={draft}
-										isSaving={isSaving}
-										onEdit={(serviceRate) =>
-											setDraft({
-												tab: 'services',
-												id: serviceRate.id,
-												values: {
-													label: serviceRate.label,
-													unit: serviceRate.unit,
-													rate: centsToEuros(serviceRate.rate_cents),
-													description: serviceRate.description ?? '',
-												},
-											})
-										}
-										onDraftChange={(values) =>
-											setDraft((current) =>
-												current?.tab === 'services'
-													? { ...current, values }
-													: current,
-											)
-										}
-										onCancel={() => setDraft(null)}
-										onSave={handleSaveDraft}
-										onDelete={(serviceRate) =>
-											deleteServiceRate.mutateAsync({
-												path: { service_rate_id: serviceRate.id },
-											})
-										}
-										onCreate={() => openCreate('services')}
-										customUnits={customUnitCodes}
-										onCreateCustomUnit={createCustomUnitCode}
-										isCreatingCustomUnit={createCustomUnit.isPending}
-									/>
-								)}
-
-								<Sheet open={createOpen} onOpenChange={setCreateOpen}>
-									<SheetContent className="w-full overflow-y-auto sm:max-w-xl">
-										<SheetHeader className="border-b">
-											<SheetTitle>
-												{createMode === 'products'
-													? 'Nouveau produit'
-													: 'Nouveau service'}
-											</SheetTitle>
-											<SheetDescription>
-												{createMode === 'products'
-													? 'Ajoutez un article vendable qui pourra être inséré dans les devis.'
-													: 'Ajoutez une prestation réutilisable avec son unité de facturation.'}
-											</SheetDescription>
-										</SheetHeader>
-										<div className="flex-1 overflow-y-auto p-4">
-											{createMode === 'products' ? (
-												<ProductCreateFields
-													form={productFormBinding}
-													isUploading={uploadFile.isPending}
-													onUploadPhoto={uploadProductPhoto}
-													onRemovePhoto={removeProductPhoto}
-													onUploadDatasheet={uploadProductDatasheet}
-													onRemoveDatasheet={removeProductDatasheet}
-													customUnits={customUnitCodes}
-													onCreateCustomUnit={createCustomUnitCode}
-													isCreatingCustomUnit={createCustomUnit.isPending}
-												/>
-											) : (
-												<ServiceCreateFields
-													form={serviceRateFormBinding}
-													customUnits={customUnitCodes}
-													onCreateCustomUnit={createCustomUnitCode}
-													isCreatingCustomUnit={createCustomUnit.isPending}
-												/>
-											)}
-										</div>
-										<SheetFooter className="border-t sm:flex-row sm:justify-end">
-											<Button
-												type="button"
-												variant="ghost"
-												onClick={() => setCreateOpen(false)}
-											>
-												Annuler
-											</Button>
-											<Button
-												type="button"
-												onClick={handleCreateSubmit}
-												disabled={
-													createMode === 'products'
-														? createProduct.isPending
-														: createServiceRate.isPending
-												}
-											>
-												{(
-													createMode === 'products'
-														? createProduct.isPending
-														: createServiceRate.isPending
-												) ? (
-													<Loader2 className="animate-spin" />
-												) : (
-													<Plus />
-												)}
-												Ajouter
-											</Button>
-										</SheetFooter>
-									</SheetContent>
-								</Sheet>
-							</div>
-						)
-					}}
-				</productForm.Subscribe>
-			)}
-		</serviceRateForm.Subscribe>
-	)
-}
-
-function SegmentButton({
-	active,
-	icon,
-	label,
-	onClick,
-}: {
-	active: boolean
-	icon: React.ReactNode
-	label: string
-	onClick: () => void
-}) {
-	return (
-		<Button
-			type="button"
-			variant={active ? 'default' : 'outline'}
-			onClick={onClick}
-		>
-			{icon}
-			{label}
-		</Button>
-	)
-}
-
-function ProductCreateFields({
-	form,
-	isUploading,
-	onUploadPhoto,
-	onRemovePhoto,
-	onUploadDatasheet,
-	onRemoveDatasheet,
-	customUnits,
-	onCreateCustomUnit,
-	isCreatingCustomUnit,
-}: {
-	form: FormBinding<ProductCatalogFormValues>
-	isUploading?: boolean
-	onUploadPhoto: (file: File) => void
-	onRemovePhoto: (key: string) => void
-	onUploadDatasheet: (file: File) => void
-	onRemoveDatasheet: (key: string) => void
-	customUnits: string[]
-	onCreateCustomUnit: (code: string) => void
-	isCreatingCustomUnit?: boolean
-}) {
-	return (
-		<div className="space-y-4">
-			<WideSuffixTextField
-				label="Produit"
-				value={form.values.name}
-				onChange={(name) => form.onChange({ name })}
-			/>
-			<WideSuffixTextField
-				label="Référence"
-				value={form.values.sku}
-				onChange={(sku) => form.onChange({ sku })}
-				placeholder="Optionnel"
-			/>
-			<div className="grid gap-4 sm:grid-cols-2">
-				<UnitField
-					value={form.values.unit}
-					onChange={(unit) => form.onChange({ unit })}
-					customUnits={customUnits}
-					onCreateCustomUnit={onCreateCustomUnit}
-					isCreatingCustomUnit={isCreatingCustomUnit}
-				/>
-				<WideSuffixTextField
-					label="Prix"
-					value={form.values.unitPrice}
-					onChange={(unitPrice) => form.onChange({ unitPrice })}
-					inputMode="decimal"
-					suffix={productPriceSuffix(form.values.unit)}
-				/>
-			</div>
-			<div className="flex flex-col gap-2">
-				<Label>Description</Label>
-				<Textarea
-					value={form.values.description}
-					onChange={(event) =>
-						form.onChange({ description: event.target.value })
-					}
-					placeholder="Optionnel"
-				/>
-			</div>
-			<ProductPhotoField
-				photoKeys={form.values.photoKeys}
-				isUploading={isUploading}
-				onUpload={onUploadPhoto}
-				onRemove={onRemovePhoto}
-			/>
-			<ProductTechnicalSheetField
-				values={form.values}
-				isUploading={isUploading}
-				onChange={(patch) => form.onChange(patch)}
-				onUpload={onUploadDatasheet}
-				onRemove={onRemoveDatasheet}
-			/>
-		</div>
-	)
-}
-
-/**
- * Resolves its own preview urls from `photoKeys` — a genuine top-level
- * component, not a nested closure, is what lets it call `useFileUrls`
- * (`ProductCreateFields`'s form lives inside a `form.Subscribe` render prop,
- * where a hook call is not allowed).
- */
 function ProductPhotoField({
 	photoKeys,
 	isUploading,
@@ -759,7 +70,6 @@ function ProductPhotoField({
 	onRemove: (key: string) => void
 }) {
 	const photos = useFileUrls(photoKeys)
-
 	return (
 		<div className="flex flex-col gap-2">
 			<Label>Photos</Label>
@@ -773,499 +83,237 @@ function ProductPhotoField({
 	)
 }
 
-function ServiceCreateFields({
-	form,
-	customUnits,
-	onCreateCustomUnit,
-	isCreatingCustomUnit,
-}: {
-	form: FormBinding<ServiceRateFormValues>
-	customUnits: string[]
-	onCreateCustomUnit: (code: string) => void
-	isCreatingCustomUnit?: boolean
-}) {
-	return (
-		<div className="space-y-4">
-			<WideSuffixTextField
-				label="Libellé"
-				value={form.values.label}
-				onChange={(label) => form.onChange({ label })}
-			/>
-			<div className="grid gap-4 sm:grid-cols-2">
-				<UnitField
-					value={form.values.unit}
-					onChange={(unit) => form.onChange({ unit })}
-					customUnits={customUnits}
-					onCreateCustomUnit={onCreateCustomUnit}
-					isCreatingCustomUnit={isCreatingCustomUnit}
-				/>
-				<WideSuffixTextField
-					label="Tarif"
-					value={form.values.rate}
-					onChange={(rate) => form.onChange({ rate })}
-					inputMode="decimal"
-					suffix={unitPriceSuffix(form.values.unit)}
-				/>
-			</div>
-			<div className="flex flex-col gap-2">
-				<Label>Description</Label>
-				<Textarea
-					value={form.values.description}
-					onChange={(event) =>
-						form.onChange({ description: event.target.value })
-					}
-					placeholder="Optionnel"
-				/>
-			</div>
-		</div>
-	)
-}
+function CatalogWorkspace({
+	organizationId,
+	filters,
+	onFiltersChange,
+}: CatalogFeatureProps & { organizationId: string }) {
+	const catalog = useReferenceCatalog(organizationId, {
+		members: false,
+		employeeProfiles: false,
+		equipment: false,
+	})
+	const createServiceRate = useCreateServiceRate(organizationId)
+	const updateServiceRate = useUpdateServiceRate()
+	const deleteServiceRate = useDeleteServiceRate()
+	const createProduct = useCreateProduct(organizationId)
+	const updateProduct = useUpdateProduct()
+	const deleteProduct = useDeleteProduct()
+	const uploadFile = useUploadFile()
+	const createCustomUnit = useCreateCustomUnit(organizationId)
+	const canManage = useHasPermission('MANAGE_REFERENCE')
+	const extras = useCatalogExtrasMap()
+	const saveExtras = useSaveCatalogExtras()
+	const settings = useCrmSettings()
+	const [query, setQuery] = useState(filters.query)
+	const [editor, setEditor] = useState<CatalogEditor>({ mode: 'create' })
+	const [editing, setEditing] = useState(false)
+	const [deleting, setDeleting] = useState<CatalogRow | null>(null)
 
-function ProductList({
-	products,
-	draft,
-	isSaving,
-	isUploadingPhoto,
-	onUploadPhoto,
-	onRemovePhoto,
-	onUploadDatasheet,
-	onRemoveDatasheet,
-	onEdit,
-	onDraftChange,
-	onCancel,
-	onSave,
-	onDelete,
-	onCreate,
-	customUnits,
-	onCreateCustomUnit,
-	isCreatingCustomUnit,
-}: {
-	products: Product[]
-	draft: Draft
-	isSaving: boolean
-	isUploadingPhoto?: boolean
-	onUploadPhoto: (file: File) => void
-	onRemovePhoto: (key: string) => void
-	onUploadDatasheet: (file: File) => void
-	onRemoveDatasheet: (key: string) => void
-	onEdit: (product: Product) => void
-	onDraftChange: (values: ProductCatalogFormValues) => void
-	onCancel: () => void
-	onSave: () => void
-	onDelete: (product: Product) => Promise<unknown>
-	onCreate: () => void
-	customUnits: string[]
-	onCreateCustomUnit: (code: string) => void
-	isCreatingCustomUnit?: boolean
-}) {
-	return (
-		<SectionCard>
-			<SectionHeader
-				title={`Produits (${products.length})`}
-				description="Articles vendables avec référence, unité, prix et description préremplie."
-			/>
-			{products.length === 0 ? (
-				<EmptyState
-					title="Aucun produit trouvé"
-					description="Ajoutez un produit pour l’insérer rapidement dans un devis."
-					actionLabel="Nouveau produit"
-					onAction={onCreate}
-				/>
-			) : (
-				<ul className="divide-y">
-					{products.map((product) => {
-						const isEditing =
-							draft?.tab === 'products' && draft.id === product.id
-						return (
-							<li
-								key={product.id}
-								className="group grid gap-4 px-5 py-4 transition hover:bg-muted/35 hover:shadow-xs lg:grid-cols-[minmax(0,1fr)_140px_140px_40px] lg:items-center"
-							>
-								{isEditing ? (
-									<ProductDraftFields
-										values={draft.values}
-										onChange={onDraftChange}
-										isUploading={isUploadingPhoto}
-										onUploadPhoto={onUploadPhoto}
-										onRemovePhoto={onRemovePhoto}
-										onUploadDatasheet={onUploadDatasheet}
-										onRemoveDatasheet={onRemoveDatasheet}
-										customUnits={customUnits}
-										onCreateCustomUnit={onCreateCustomUnit}
-										isCreatingCustomUnit={isCreatingCustomUnit}
-									/>
-								) : (
-									<>
-										<div className="min-w-0">
-											<div className="flex min-w-0 items-center gap-2">
-												<p className="truncate font-semibold">{product.name}</p>
-												{product.sku ? (
-													<StatusBadge tone="brand">{product.sku}</StatusBadge>
-												) : null}
-											</div>
-											<DeveloperModeOnly>
-												<p className="mt-0.5 truncate font-mono text-xs text-muted-foreground">
-													{product.id}
-												</p>
-											</DeveloperModeOnly>
-											<p className="mt-1 truncate text-sm text-muted-foreground">
-												{product.description || 'Aucune description'}
-											</p>
-										</div>
-										<StatusBadge tone="brand">
-											{productUnitLabel(product.unit)}
-										</StatusBadge>
-										<p className="font-semibold tabular-nums">
-											{formatMoney(product.unit_price_cents)}
-										</p>
-									</>
-								)}
-								<RowActions
-									isEditing={isEditing}
-									isSaving={isSaving}
-									onEdit={() => onEdit(product)}
-									onCancel={onCancel}
-									onSave={onSave}
-									onDelete={() => onDelete(product)}
-								/>
-							</li>
-						)
-					})}
-				</ul>
-			)}
-		</SectionCard>
+	const products = catalog.products.data?.data
+	const serviceRates = catalog.serviceRates.data?.data
+	const rows = useMemo(
+		() => catalogRows(products ?? [], serviceRates ?? []),
+		[products, serviceRates],
 	)
-}
+	const extrasOf = (itemId: string) => extras[itemId] ?? EMPTY_CATALOG_EXTRAS
+	const current: CatalogFilters = { ...filters, query }
+	const visible = filterCatalog(rows, extrasOf, current)
+	const categories = categoryOptions(
+		rows
+			.filter((row) => !extrasOf(row.id).archived)
+			.map((row) => extrasOf(row.id).category),
+		current.category,
+	)
+	const customUnits = (catalog.customUnits.data?.data ?? []).map(
+		(customUnit) => customUnit.code,
+	)
+	const defaultVat = settings.data.settings.defaultVatRate
 
-function ProductDraftFields({
-	values,
-	onChange,
-	isUploading,
-	onUploadPhoto,
-	onRemovePhoto,
-	onUploadDatasheet,
-	onRemoveDatasheet,
-	customUnits,
-	onCreateCustomUnit,
-	isCreatingCustomUnit,
-}: {
-	values: ProductCatalogFormValues
-	onChange: (values: ProductCatalogFormValues) => void
-	isUploading?: boolean
-	onUploadPhoto: (file: File) => void
-	onRemovePhoto: (key: string) => void
-	onUploadDatasheet: (file: File) => void
-	onRemoveDatasheet: (key: string) => void
-	customUnits: string[]
-	onCreateCustomUnit: (code: string) => void
-	isCreatingCustomUnit?: boolean
-}) {
+	const initial: CatalogForm =
+		editor.mode === 'edit'
+			? formOf(editor.row, extrasOf(editor.row.id))
+			: editor.mode === 'duplicate'
+				? duplicateOf(editor.row, extrasOf(editor.row.id))
+				: emptyForm(defaultVat)
+
+	const saveError =
+		mutationErrorMessage(createProduct.error) ??
+		mutationErrorMessage(updateProduct.error) ??
+		mutationErrorMessage(createServiceRate.error) ??
+		mutationErrorMessage(updateServiceRate.error)
+
+	async function submit(form: CatalogForm) {
+		const priceCents = parseAmount(form.price) ?? 0
+		const costCents = form.cost.trim() === '' ? null : parseAmount(form.cost)
+		const vat = bpOfVatRate(form.vatRate)
+		const price = (priceCents / 100).toFixed(2)
+		let itemId: string
+		if (form.kind === 'product') {
+			const body = {
+				...buildProductRequest({
+					name: form.name,
+					sku: form.reference,
+					unit: form.unit,
+					unitPrice: price,
+					description: form.description,
+					photoKeys: form.photoKeys,
+					supplierId: form.supplierId,
+					manufacturer: form.manufacturer,
+					technicalSpecs: form.technicalSpecs,
+					datasheetKeys: form.datasheetKeys,
+				}),
+				default_vat_rate_bp: vat,
+			}
+			if (editor.mode === 'edit' && editor.row.product) {
+				itemId = editor.row.id
+				await updateProduct.mutateAsync({
+					path: { product_id: itemId },
+					body,
+				})
+			} else {
+				const created = await createProduct.mutateAsync({
+					path: { organization_id: organizationId },
+					body,
+				})
+				itemId = created.data.id
+			}
+		} else {
+			const body = {
+				label: form.name.trim(),
+				unit: form.unit,
+				rate_cents: priceCents,
+				description: form.description.trim() || null,
+				default_vat_rate_bp: vat,
+			}
+			if (editor.mode === 'edit' && editor.row.serviceRate) {
+				itemId = editor.row.id
+				await updateServiceRate.mutateAsync({
+					path: { service_rate_id: itemId },
+					body,
+				})
+			} else {
+				const created = await createServiceRate.mutateAsync({
+					path: { organization_id: organizationId },
+					body,
+				})
+				itemId = created.data.id
+			}
+		}
+		await saveExtras.mutateAsync(itemId, {
+			category: form.category.trim(),
+			cost: costCents,
+			frequency: form.frequency,
+		})
+		setEditing(false)
+	}
+
+	async function remove(row: CatalogRow) {
+		if (row.product)
+			await deleteProduct.mutateAsync({ path: { product_id: row.id } })
+		else
+			await deleteServiceRate.mutateAsync({
+				path: { service_rate_id: row.id },
+			})
+		setDeleting(null)
+	}
+
 	return (
-		<>
-			<div className="grid gap-3 md:grid-cols-2 lg:col-span-2">
-				<Input
-					value={values.name}
-					onChange={(event) =>
-						onChange({ ...values, name: event.target.value })
-					}
-				/>
-				<Input
-					value={values.sku}
-					onChange={(event) => onChange({ ...values, sku: event.target.value })}
-					placeholder="Référence"
-				/>
-				<Textarea
-					value={values.description}
-					onChange={(event) =>
-						onChange({ ...values, description: event.target.value })
-					}
-					placeholder="Description"
-					className="md:col-span-2"
-				/>
-				<ProductPhotoField
-					photoKeys={values.photoKeys}
-					isUploading={isUploading}
-					onUpload={onUploadPhoto}
-					onRemove={onRemovePhoto}
-				/>
-				<div className="md:col-span-2">
-					<ProductTechnicalSheetField
-						values={values}
-						isUploading={isUploading}
-						onChange={(patch) => onChange({ ...values, ...patch })}
-						onUpload={onUploadDatasheet}
-						onRemove={onRemoveDatasheet}
+		<CatalogUI
+			summary={catalogSummary(rows, extrasOf)}
+			totalRows={rows.length}
+			rows={visible}
+			filters={current}
+			categories={categories}
+			onFiltersChange={(next) => {
+				setQuery(next.query)
+				onFiltersChange(next)
+			}}
+			extrasOf={extrasOf}
+			canManage={canManage}
+			isLoading={catalog.serviceRates.isLoading || catalog.products.isLoading}
+			error={
+				mutationErrorMessage(catalog.serviceRates.error) ??
+				mutationErrorMessage(catalog.products.error) ??
+				mutationErrorMessage(deleteProduct.error) ??
+				mutationErrorMessage(deleteServiceRate.error)
+			}
+			editor={editor}
+			editing={editing}
+			formInitial={initial}
+			customUnits={customUnits}
+			isSaving={
+				createProduct.isPending ||
+				updateProduct.isPending ||
+				createServiceRate.isPending ||
+				updateServiceRate.isPending
+			}
+			saveError={saveError}
+			sameReference={(reference) =>
+				hasSameReference(
+					rows,
+					reference,
+					editor.mode === 'edit' ? editor.row.id : null,
+				)
+			}
+			onOpenEditor={(next) => {
+				setEditor(next)
+				setEditing(true)
+			}}
+			onCloseEditor={() => setEditing(false)}
+			onCreateCustomUnit={(code) =>
+				createCustomUnit.mutate({
+					path: { organization_id: organizationId },
+					body: { code },
+				})
+			}
+			isCreatingCustomUnit={createCustomUnit.isPending}
+			onSubmit={submit}
+			productExtras={(form, change) => (
+				<>
+					<ProductPhotoField
+						photoKeys={form.photoKeys}
+						isUploading={uploadFile.isPending}
+						onUpload={async (file) => {
+							const uploaded = await uploadFile.mutateAsync(file)
+							change({ photoKeys: [...form.photoKeys, uploaded.data.key] })
+						}}
+						onRemove={(key) =>
+							change({
+								photoKeys: form.photoKeys.filter(
+									(photoKey) => photoKey !== key,
+								),
+							})
+						}
 					/>
-				</div>
-			</div>
-			<UnitField
-				value={values.unit}
-				onChange={(unit) => onChange({ ...values, unit })}
-				customUnits={customUnits}
-				onCreateCustomUnit={onCreateCustomUnit}
-				isCreatingCustomUnit={isCreatingCustomUnit}
-			/>
-			<Input
-				value={values.unitPrice}
-				onChange={(event) =>
-					onChange({ ...values, unitPrice: event.target.value })
-				}
-				inputMode="decimal"
-			/>
-		</>
-	)
-}
-
-function ServiceList({
-	serviceRates,
-	draft,
-	isSaving,
-	onEdit,
-	onDraftChange,
-	onCancel,
-	onSave,
-	onDelete,
-	onCreate,
-	customUnits,
-	onCreateCustomUnit,
-	isCreatingCustomUnit,
-}: {
-	serviceRates: ServiceRate[]
-	draft: Draft
-	isSaving: boolean
-	onEdit: (serviceRate: ServiceRate) => void
-	onDraftChange: (values: ServiceRateFormValues) => void
-	onCancel: () => void
-	onSave: () => void
-	onDelete: (serviceRate: ServiceRate) => Promise<unknown>
-	onCreate: () => void
-	customUnits: string[]
-	onCreateCustomUnit: (code: string) => void
-	isCreatingCustomUnit?: boolean
-}) {
-	return (
-		<SectionCard>
-			<SectionHeader
-				title={`Services (${serviceRates.length})`}
-				description="Prestations réutilisables dans les devis et futures pièces commerciales."
-			/>
-			{serviceRates.length === 0 ? (
-				<EmptyState
-					title="Aucun service trouvé"
-					description="Ajoutez une prestation pour accélérer la saisie des devis."
-					actionLabel="Nouveau service"
-					onAction={onCreate}
-				/>
-			) : (
-				<ul className="divide-y">
-					{serviceRates.map((serviceRate) => {
-						const isEditing =
-							draft?.tab === 'services' && draft.id === serviceRate.id
-						return (
-							<li
-								key={serviceRate.id}
-								className="group grid gap-4 px-5 py-4 transition hover:bg-muted/35 hover:shadow-xs lg:grid-cols-[minmax(0,1fr)_140px_140px_40px] lg:items-center"
-							>
-								{isEditing ? (
-									<>
-										<div className="grid gap-3 lg:grid-cols-1">
-											<Input
-												value={draft.values.label}
-												onChange={(event) =>
-													onDraftChange({
-														...draft.values,
-														label: event.target.value,
-													})
-												}
-											/>
-											<Textarea
-												value={draft.values.description}
-												onChange={(event) =>
-													onDraftChange({
-														...draft.values,
-														description: event.target.value,
-													})
-												}
-												placeholder="Description"
-											/>
-										</div>
-										<UnitField
-											value={draft.values.unit}
-											onChange={(unit) =>
-												onDraftChange({ ...draft.values, unit })
-											}
-											customUnits={customUnits}
-											onCreateCustomUnit={onCreateCustomUnit}
-											isCreatingCustomUnit={isCreatingCustomUnit}
-										/>
-										<Input
-											value={draft.values.rate}
-											onChange={(event) =>
-												onDraftChange({
-													...draft.values,
-													rate: event.target.value,
-												})
-											}
-											inputMode="decimal"
-										/>
-									</>
-								) : (
-									<>
-										<div className="min-w-0">
-											<p className="truncate font-semibold">
-												{serviceRate.label}
-											</p>
-											<DeveloperModeOnly>
-												<p className="mt-1 truncate font-mono text-xs text-muted-foreground">
-													{serviceRate.id}
-												</p>
-											</DeveloperModeOnly>
-											<p className="mt-1 truncate text-sm text-muted-foreground">
-												{serviceRate.description || 'Aucune description'}
-											</p>
-										</div>
-										<StatusBadge tone="brand">
-											{serviceUnitLabel(serviceRate.unit)}
-										</StatusBadge>
-										<p className="font-semibold tabular-nums">
-											{formatMoney(serviceRate.rate_cents)}
-										</p>
-									</>
-								)}
-								<RowActions
-									isEditing={isEditing}
-									isSaving={isSaving}
-									onEdit={() => onEdit(serviceRate)}
-									onCancel={onCancel}
-									onSave={onSave}
-									onDelete={() => onDelete(serviceRate)}
-								/>
-							</li>
-						)
-					})}
-				</ul>
+					<ProductTechnicalSheetField
+						values={form}
+						isUploading={uploadFile.isPending}
+						onChange={(patch) => change(patch)}
+						onUpload={async (file) => {
+							const uploaded = await uploadFile.mutateAsync(file)
+							change({
+								datasheetKeys: [...form.datasheetKeys, uploaded.data.key],
+							})
+						}}
+						onRemove={(key) =>
+							change({
+								datasheetKeys: form.datasheetKeys.filter(
+									(datasheetKey) => datasheetKey !== key,
+								),
+							})
+						}
+					/>
+				</>
 			)}
-		</SectionCard>
+			onToggleArchive={(row) =>
+				void saveExtras.mutateAsync(row.id, {
+					archived: !extrasOf(row.id).archived,
+				})
+			}
+			deleting={deleting}
+			onDeleteRequest={setDeleting}
+			onDeleteConfirm={(row) => void remove(row)}
+		/>
 	)
-}
-
-/**
- * The catalogue's unit picker, delegating to the same `UnitSelect` the quote
- * line editor uses so both offer the full ten-unit set — this used to
- * hardcode three (`HOUR`, `ML`, `M2`), silently hiding the other seven from
- * anyone pricing a product or a service.
- */
-function UnitField({
-	value,
-	onChange,
-	customUnits,
-	onCreateCustomUnit,
-	isCreatingCustomUnit,
-}: {
-	value: string
-	onChange: (unit: string) => void
-	customUnits?: string[]
-	onCreateCustomUnit?: (code: string) => void
-	isCreatingCustomUnit?: boolean
-}) {
-	return (
-		<div className="flex flex-col gap-2">
-			<Label>Unité</Label>
-			<UnitSelect
-				value={value}
-				onChange={onChange}
-				customUnits={customUnits}
-				onCreateCustomUnit={onCreateCustomUnit}
-				isCreatingCustomUnit={isCreatingCustomUnit}
-			/>
-		</div>
-	)
-}
-
-interface WideSuffixTextFieldProps
-	extends Omit<
-		React.InputHTMLAttributes<HTMLInputElement>,
-		'value' | 'onChange'
-	> {
-	label: string
-	value: string
-	onChange: (value: string) => void
-	suffix?: string
-}
-
-// Pads with `pr-20`, wider than the `pr-14` used by the shared TextField in
-// `#/components/reference-table`. This section's suffixes ("€/unité",
-// "mètre linéaire"-length labels) are longer than equipment's "€/h", and
-// `pr-14` would let the input's value run under them. Kept as a local
-// variant rather than widening the shared primitive for every caller.
-function WideSuffixTextField({
-	label,
-	value,
-	onChange,
-	suffix,
-	...props
-}: WideSuffixTextFieldProps) {
-	const id = label.toLowerCase().replace(/\s+/g, '-')
-	return (
-		<div className="flex flex-col gap-2">
-			<Label htmlFor={id}>{label}</Label>
-			<div className="relative">
-				<Input
-					id={id}
-					value={value}
-					onChange={(event) => onChange(event.target.value)}
-					className={suffix ? 'pr-20' : undefined}
-					{...props}
-				/>
-				{suffix ? (
-					<span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs font-medium text-muted-foreground">
-						{suffix}
-					</span>
-				) : null}
-			</div>
-		</div>
-	)
-}
-
-function EmptyState({
-	title,
-	description,
-	actionLabel,
-	onAction,
-}: {
-	title: string
-	description: string
-	actionLabel: string
-	onAction: () => void
-}) {
-	return (
-		<div className="flex min-h-52 flex-col items-center justify-center gap-3 p-8 text-center">
-			<div className="flex size-12 items-center justify-center rounded-lg bg-muted text-muted-foreground">
-				<Package className="size-5" />
-			</div>
-			<div>
-				<p className="font-medium">{title}</p>
-				<p className="mt-1 max-w-sm text-sm text-muted-foreground">
-					{description}
-				</p>
-			</div>
-			<Button type="button" onClick={onAction}>
-				<Plus />
-				{actionLabel}
-			</Button>
-		</div>
-	)
-}
-
-/**
- * Spelled out, with the legacy HOUR relabelling products still need. These
- * used to fall through to "mètre carré", which meant every unit added after
- * m2 would have been mislabelled here.
- */
-function productUnitLabel(unit: string): string {
-	return unit === 'HOUR' ? 'unité' : formatUnitLong(unit)
-}
-
-function serviceUnitLabel(unit: string): string {
-	return formatUnitLong(unit)
 }

@@ -1,907 +1,99 @@
 import { Link } from '@tanstack/react-router'
-import {
-	AlertCircle,
-	ArrowLeft,
-	Image,
-	LayoutPanelTop,
-	Mail,
-	Pencil,
-	Phone,
-	Plus,
-	Star,
-	Trash2,
-	Upload,
-	UserCheck,
-	UserRound,
-} from 'lucide-react'
-import { FloatingActionBar } from '#/components/floating-action-bar'
-import { RequirePermission } from '#/components/require-permission'
+import { AlertCircle, ArrowLeft, UserRoundX } from 'lucide-react'
+import type { ReactNode } from 'react'
 import { Button } from '#/components/ui/button'
-import {
-	Dialog,
-	DialogContent,
-	DialogDescription,
-	DialogFooter,
-	DialogHeader,
-	DialogTitle,
-} from '#/components/ui/dialog'
-import { Field } from '#/components/ui/field'
-import { Input } from '#/components/ui/input'
-import { Label } from '#/components/ui/label'
-import {
-	Select,
-	SelectContent,
-	SelectItem,
-	SelectTrigger,
-	SelectValue,
-} from '#/components/ui/select'
-import {
-	EntityAvatar,
-	PageHeader,
-	PageShell,
-	SectionCard,
-	SectionHeader,
-	StatusBadge,
-} from '#/components/ui/surface'
-import { Switch } from '#/components/ui/switch'
-import type {
-	Customer,
-	CustomerContact,
-	CustomerContext,
-	CustomerPipelineStage,
-	CustomerStatus,
-} from '#/hooks/use-customers'
-import { useDeveloperMode } from '#/hooks/use-developer-mode'
 import { buildOrgPath } from '#/modules/org-path'
-import {
-	type CustomerContactFormValues,
-	type CustomerContextFormValues,
-	type CustomerFormValues,
-	customerInitials,
-	customerPipelineStageLabel,
-	customerStatusLabel,
-} from '#/pages/customers/types'
-
-interface CustomerEditUIProps {
-	customer: Customer
-	organizationSlug: string
-	form: CustomerFormValues
-	isDirty: boolean
-	changedKeys: (keyof CustomerFormValues)[]
-	isSaving: boolean
-	customerContacts: CustomerContact[]
-	customerContactsError: string | null
-	isCustomerContactsLoading: boolean
-	customerContactDraft: CustomerContactFormValues
-	editingCustomerContactId: string | null
-	isCustomerContactSaving: boolean
-	deletingCustomerContactId: string | null
-	contactDialogOpen: boolean
-	customerContexts: CustomerContext[]
-	customerContextsError: string | null
-	isCustomerContextsLoading: boolean
-	customerContextDraft: CustomerContextFormValues
-	editingCustomerContextId: string | null
-	isCustomerContextSaving: boolean
-	isUploadingPhoto: boolean
-	deletingCustomerContextId: string | null
-	contextDialogOpen: boolean
-	photoPreviewUrl: string | null
-	onChange: (patch: Partial<CustomerFormValues>) => void
-	onReset: () => void
-	onSave: () => void
-	onPromoteToClient: () => void
-	onCustomerContactChange: (patch: Partial<CustomerContactFormValues>) => void
-	onCustomerContactEdit: (customerContact: CustomerContact) => void
-	onCustomerContactCancel: () => void
-	onCustomerContactSubmit: () => void
-	onCustomerContactDelete: (customerContact: CustomerContact) => void
-	onContactDialogOpenChange: (open: boolean) => void
-	onCustomerContextChange: (patch: Partial<CustomerContextFormValues>) => void
-	onCustomerContextEdit: (customerContext: CustomerContext) => void
-	onCustomerContextCancel: () => void
-	onCustomerContextSubmit: () => void
-	onCustomerContextDelete: (customerContext: CustomerContext) => void
-	onCustomerContextPhotoChange: (file: File) => void
-	onContextDialogOpenChange: (open: boolean) => void
-	onRetryCustomerContacts: () => void
-	onRetryCustomerContexts: () => void
-}
-
-const CUSTOMER_PIPELINE_STAGE_OPTIONS: CustomerPipelineStage[] = [
-	'NEW',
-	'CONTACTED',
-	'QUALIFIED',
-	'QUOTE_SENT',
-	'WON',
-	'LOST',
-]
+import { BackLink } from '#/pages/customers/ui/customer-sidebar'
 
 export function CustomerEditUI({
-	customer,
-	organizationSlug,
-	form,
-	isDirty,
-	changedKeys,
-	isSaving,
-	customerContacts,
-	customerContactsError,
-	isCustomerContactsLoading,
-	customerContactDraft,
-	editingCustomerContactId,
-	isCustomerContactSaving,
-	deletingCustomerContactId,
-	contactDialogOpen,
-	customerContexts,
-	customerContextsError,
-	isCustomerContextsLoading,
-	customerContextDraft,
-	editingCustomerContextId,
-	isCustomerContextSaving,
-	isUploadingPhoto,
-	deletingCustomerContextId,
-	contextDialogOpen,
-	photoPreviewUrl,
-	onChange,
-	onReset,
-	onSave,
-	onPromoteToClient,
-	onCustomerContactChange,
-	onCustomerContactEdit,
-	onCustomerContactCancel,
-	onCustomerContactSubmit,
-	onCustomerContactDelete,
-	onContactDialogOpenChange,
-	onCustomerContextChange,
-	onCustomerContextEdit,
-	onCustomerContextCancel,
-	onCustomerContextSubmit,
-	onCustomerContextDelete,
-	onCustomerContextPhotoChange,
-	onContextDialogOpenChange,
-	onRetryCustomerContacts,
-	onRetryCustomerContexts,
-}: CustomerEditUIProps) {
-	const developerMode = useDeveloperMode()
-	const displayName = form.name.trim()
-	const canSubmitCustomerContact =
-		Boolean(customerContactDraft.firstName.trim()) &&
-		Boolean(customerContactDraft.lastName.trim())
-	const canSubmitCustomerContext = Boolean(customerContextDraft.label.trim())
-
+	sidebar,
+	children,
+}: {
+	sidebar: ReactNode
+	children: ReactNode
+}) {
 	return (
-		<PageShell className="pb-24 md:pb-28">
-			<div>
-				<Link
-					to={buildOrgPath(organizationSlug, '/crm/customers')}
-					className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground"
-				>
-					<ArrowLeft className="size-4" />
-					Retour aux comptes
-				</Link>
-			</div>
+		<div className="h-full min-h-0 flex-1 overflow-y-auto lg:grid lg:grid-cols-[minmax(20rem,24rem)_minmax(0,1fr)] lg:grid-rows-[minmax(0,1fr)] lg:overflow-hidden">
+			{sidebar}
+			<section aria-label="Détail du client" className="min-w-0 lg:min-h-0">
+				{children}
+			</section>
+		</div>
+	)
+}
 
-			<PageHeader
-				title={displayName || 'Nouveau compte'}
-				description={
-					developerMode ? (
-						<span className="font-mono text-xs">id: {customer.id}</span>
-					) : undefined
-				}
-				className="items-center sm:items-center sm:justify-start"
-				eyebrow={customerStatusLabel(form.status)}
-				actions={
-					form.status === 'PROSPECT' ? (
-						<Button
-							type="button"
-							variant="outline"
-							onClick={onPromoteToClient}
-							disabled={isSaving}
-							className="border-success/35 bg-success-soft text-success hover:bg-success-soft/80 hover:text-success"
-						>
-							<UserCheck />
-							Promouvoir en client
-						</Button>
-					) : null
-				}
-				leading={
-					<EntityAvatar tone="brand" size="lg">
-						{customerInitials(customer)}
-					</EntityAvatar>
-				}
-			/>
-
-			<div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
-				<Section
-					title="Identité"
-					description="Informations principales et statut CRM"
-					className="lg:col-span-2"
-				>
-					<Field
-						label="Nom ou raison sociale"
-						htmlFor="name"
-						changed={changedKeys.includes('name')}
-					>
-						<Input
-							id="name"
-							name="name"
-							value={form.name}
-							onChange={(event) => onChange({ name: event.target.value })}
-						/>
-					</Field>
-					<Field
-						label="SIREN"
-						htmlFor="registration-number"
-						changed={changedKeys.includes('registrationNumber')}
-					>
-						<Input
-							id="registration-number"
-							name="registration-number"
-							value={form.registrationNumber}
-							onChange={(event) =>
-								onChange({ registrationNumber: event.target.value })
-							}
-						/>
-					</Field>
-					<Field
-						label="Statut CRM"
-						htmlFor="customer-status"
-						changed={changedKeys.includes('status')}
-					>
-						<Select
-							value={form.status}
-							onValueChange={(status) =>
-								onChange({ status: status as CustomerStatus })
-							}
-						>
-							<SelectTrigger id="customer-status" className="w-full">
-								<SelectValue />
-							</SelectTrigger>
-							<SelectContent>
-								<SelectItem value="PROSPECT">Prospect</SelectItem>
-								<SelectItem value="CLIENT">Client</SelectItem>
-								<SelectItem value="ARCHIVED">Archivé</SelectItem>
-							</SelectContent>
-						</Select>
-					</Field>
-					<Field
-						label="Étape pipeline"
-						htmlFor="customer-pipeline-stage"
-						changed={changedKeys.includes('pipelineStage')}
-					>
-						<Select
-							value={form.pipelineStage}
-							onValueChange={(pipelineStage) =>
-								onChange({
-									pipelineStage: pipelineStage as CustomerPipelineStage,
-								})
-							}
-						>
-							<SelectTrigger id="customer-pipeline-stage" className="w-full">
-								<SelectValue />
-							</SelectTrigger>
-							<SelectContent>
-								{CUSTOMER_PIPELINE_STAGE_OPTIONS.map((stage) => (
-									<SelectItem key={stage} value={stage}>
-										{customerPipelineStageLabel(stage)}
-									</SelectItem>
-								))}
-							</SelectContent>
-						</Select>
-					</Field>
-				</Section>
-
-				<Section title="Coordonnées" description="Email et téléphone généraux">
-					<Field
-						label="Email"
-						htmlFor="email"
-						changed={changedKeys.includes('email')}
-					>
-						<Input
-							id="email"
-							name="email"
-							type="email"
-							value={form.email}
-							onChange={(event) => onChange({ email: event.target.value })}
-						/>
-					</Field>
-					<Field
-						label="Téléphone"
-						htmlFor="phone"
-						changed={changedKeys.includes('phone')}
-					>
-						<Input
-							id="phone"
-							name="phone"
-							value={form.phone}
-							onChange={(event) => onChange({ phone: event.target.value })}
-						/>
-					</Field>
-				</Section>
-
-				<Section
-					title="Contacts"
-					description="Interlocuteurs liés à ce prospect ou client"
-					className="lg:col-span-3"
-					actions={
-						<Button
-							type="button"
-							size="sm"
-							onClick={() => onContactDialogOpenChange(true)}
-						>
-							<Plus />
-							Ajouter un contact
-						</Button>
-					}
-				>
-					{customerContactsError ? (
-						<InlineError
-							message={customerContactsError}
-							onRetry={onRetryCustomerContacts}
-						/>
-					) : null}
-
-					{isCustomerContactsLoading ? (
-						<EmptyState label="Chargement des contacts…" />
-					) : customerContacts.length === 0 ? (
-						<EmptyState
-							icon={
-								<UserRound className="mx-auto size-6 text-muted-foreground" />
-							}
-							label="Aucun contact renseigné"
-							description="Ajoutez au moins un interlocuteur pour qualifier la relation."
-						/>
-					) : (
-						<div className="grid gap-3 lg:grid-cols-2">
-							{customerContacts.map((customerContact) => (
-								<CustomerContactCard
-									key={customerContact.id}
-									customerContact={customerContact}
-									isDeleting={deletingCustomerContactId === customerContact.id}
-									onEdit={() => onCustomerContactEdit(customerContact)}
-									onDelete={() => onCustomerContactDelete(customerContact)}
-								/>
-							))}
-						</div>
-					)}
-				</Section>
-
-				<Dialog
-					open={contactDialogOpen}
-					onOpenChange={onContactDialogOpenChange}
-				>
-					<DialogContent className="flex max-h-[85vh] flex-col gap-0 overflow-hidden">
-						<DialogHeader className="border-b pb-4">
-							<DialogTitle>
-								{editingCustomerContactId
-									? 'Modifier le contact'
-									: 'Ajouter un contact'}
-							</DialogTitle>
-							<DialogDescription>
-								Nom et prénom sont requis. Le rôle aide à identifier le bon
-								interlocuteur.
-							</DialogDescription>
-						</DialogHeader>
-						<div className="flex-1 overflow-y-auto py-4">
-							<div className="grid gap-4 md:grid-cols-2">
-								<Field label="Prénom" htmlFor="customer-contact-first-name">
-									<Input
-										id="customer-contact-first-name"
-										name="customer-contact-first-name"
-										value={customerContactDraft.firstName}
-										onChange={(event) =>
-											onCustomerContactChange({ firstName: event.target.value })
-										}
-									/>
-								</Field>
-								<Field label="Nom" htmlFor="customer-contact-last-name">
-									<Input
-										id="customer-contact-last-name"
-										name="customer-contact-last-name"
-										value={customerContactDraft.lastName}
-										onChange={(event) =>
-											onCustomerContactChange({ lastName: event.target.value })
-										}
-									/>
-								</Field>
-								<Field label="Rôle" htmlFor="customer-contact-role">
-									<Input
-										id="customer-contact-role"
-										name="customer-contact-role"
-										value={customerContactDraft.role}
-										onChange={(event) =>
-											onCustomerContactChange({ role: event.target.value })
-										}
-									/>
-								</Field>
-								<Field label="Email" htmlFor="customer-contact-email">
-									<Input
-										id="customer-contact-email"
-										name="customer-contact-email"
-										type="email"
-										value={customerContactDraft.email}
-										onChange={(event) =>
-											onCustomerContactChange({ email: event.target.value })
-										}
-									/>
-								</Field>
-								<Field label="Téléphone" htmlFor="customer-contact-phone">
-									<Input
-										id="customer-contact-phone"
-										name="customer-contact-phone"
-										value={customerContactDraft.phone}
-										onChange={(event) =>
-											onCustomerContactChange({ phone: event.target.value })
-										}
-									/>
-								</Field>
-								<div className="flex items-center justify-between gap-4 rounded-lg border bg-card px-3 py-2">
-									<div>
-										<Label htmlFor="customer-contact-primary">
-											Contact principal
-										</Label>
-										<p className="text-xs text-muted-foreground">
-											Affiché en priorité dans la fiche.
-										</p>
-									</div>
-									<Switch
-										id="customer-contact-primary"
-										checked={customerContactDraft.isPrimary}
-										onCheckedChange={(isPrimary) =>
-											onCustomerContactChange({ isPrimary })
-										}
-									/>
-								</div>
-							</div>
-						</div>
-						<DialogFooter className="border-t pt-4">
-							<Button
-								type="button"
-								variant="ghost"
-								onClick={onCustomerContactCancel}
-							>
-								Annuler
-							</Button>
-							<Button
-								type="button"
-								disabled={!canSubmitCustomerContact || isCustomerContactSaving}
-								onClick={onCustomerContactSubmit}
-							>
-								<Plus />
-								{editingCustomerContactId ? 'Enregistrer' : 'Ajouter'}
-							</Button>
-						</DialogFooter>
-					</DialogContent>
-				</Dialog>
-
-				<Section
-					title="Contextes du compte"
-					description="Adresses, établissements ou périmètres associés à ce compte"
-					className="lg:col-span-3"
-					actions={
-						<Button
-							type="button"
-							size="sm"
-							onClick={() => onContextDialogOpenChange(true)}
-						>
-							<Plus />
-							Ajouter un contexte
-						</Button>
-					}
-				>
-					{customerContextsError ? (
-						<InlineError
-							message={customerContextsError}
-							onRetry={onRetryCustomerContexts}
-						/>
-					) : null}
-
-					{isCustomerContextsLoading ? (
-						<EmptyState label="Chargement des contextes…" />
-					) : customerContexts.length === 0 ? (
-						<EmptyState
-							icon={
-								<LayoutPanelTop className="mx-auto size-6 text-muted-foreground" />
-							}
-							label="Aucun contexte renseigné"
-							description="Ajoutez un contexte pour ce compte."
-						/>
-					) : (
-						<div className="grid gap-3 lg:grid-cols-2">
-							{customerContexts.map((customerContext) => (
-								<CustomerContextCard
-									key={customerContext.id}
-									customerContext={customerContext}
-									isDeleting={deletingCustomerContextId === customerContext.id}
-									onEdit={() => onCustomerContextEdit(customerContext)}
-									onDelete={() => onCustomerContextDelete(customerContext)}
-								/>
-							))}
-						</div>
-					)}
-				</Section>
-
-				<Dialog
-					open={contextDialogOpen}
-					onOpenChange={onContextDialogOpenChange}
-				>
-					<DialogContent className="flex max-h-[85vh] flex-col gap-0 overflow-hidden">
-						<DialogHeader className="border-b pb-4">
-							<DialogTitle>
-								{editingCustomerContextId
-									? 'Modifier le contexte'
-									: 'Ajouter un contexte'}
-							</DialogTitle>
-							<DialogDescription>
-								Le libellé suffit. L’adresse reste optionnelle selon le
-								contexte.
-							</DialogDescription>
-						</DialogHeader>
-						<div className="flex-1 overflow-y-auto py-4">
-							<div className="grid gap-4 md:grid-cols-2">
-								<Field label="Libellé" htmlFor="customer-context-label">
-									<Input
-										id="customer-context-label"
-										name="customer-context-label"
-										value={customerContextDraft.label}
-										onChange={(event) =>
-											onCustomerContextChange({ label: event.target.value })
-										}
-									/>
-								</Field>
-								<Field label="Ville" htmlFor="customer-context-city">
-									<Input
-										id="customer-context-city"
-										name="customer-context-city"
-										value={customerContextDraft.city}
-										onChange={(event) =>
-											onCustomerContextChange({ city: event.target.value })
-										}
-									/>
-								</Field>
-								<Field label="Adresse" htmlFor="customer-context-address-line">
-									<Input
-										id="customer-context-address-line"
-										name="customer-context-address-line"
-										value={customerContextDraft.addressLine}
-										onChange={(event) =>
-											onCustomerContextChange({
-												addressLine: event.target.value,
-											})
-										}
-									/>
-								</Field>
-								<Field
-									label="Code postal"
-									htmlFor="customer-context-postal-code"
-								>
-									<Input
-										id="customer-context-postal-code"
-										name="customer-context-postal-code"
-										value={customerContextDraft.postalCode}
-										onChange={(event) =>
-											onCustomerContextChange({
-												postalCode: event.target.value,
-											})
-										}
-									/>
-								</Field>
-							</div>
-							<div className="mt-4 grid gap-4 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-end">
-								<Field
-									label="Photo du contexte"
-									htmlFor="customer-context-photo"
-								>
-									<div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-										<label
-											htmlFor="customer-context-photo"
-											className="inline-flex h-9 cursor-pointer items-center justify-center gap-2 rounded-lg border border-primary/40 bg-card px-4 text-sm font-medium text-primary shadow-xs hover:bg-brand-soft"
-										>
-											<Upload className="size-4" />
-											{isUploadingPhoto ? 'Téléversement…' : 'Téléverser'}
-										</label>
-										<input
-											id="customer-context-photo"
-											type="file"
-											accept="image/*"
-											className="sr-only"
-											disabled={isUploadingPhoto}
-											onChange={(event) => {
-												const file = event.target.files?.[0]
-												if (file) onCustomerContextPhotoChange(file)
-												event.currentTarget.value = ''
-											}}
-										/>
-										{customerContextDraft.photoKey ? (
-											<span className="min-w-0 truncate font-mono text-xs text-muted-foreground">
-												{customerContextDraft.photoKey}
-											</span>
-										) : null}
-									</div>
-								</Field>
-
-								{photoPreviewUrl ? (
-									<img
-										src={photoPreviewUrl}
-										alt="Aperçu du contexte"
-										className="h-24 w-36 rounded-lg border object-cover"
-									/>
-								) : null}
-							</div>
-						</div>
-						<DialogFooter className="border-t pt-4">
-							<Button
-								type="button"
-								variant="ghost"
-								onClick={onCustomerContextCancel}
-							>
-								Annuler
-							</Button>
-							<Button
-								type="button"
-								disabled={!canSubmitCustomerContext || isCustomerContextSaving}
-								onClick={onCustomerContextSubmit}
-							>
-								<Plus />
-								{editingCustomerContextId ? 'Enregistrer' : 'Ajouter'}
-							</Button>
-						</DialogFooter>
-					</DialogContent>
-				</Dialog>
-			</div>
-
-			<RequirePermission permission="MANAGE_CUSTOMERS">
-				<FloatingActionBar
-					show={isDirty}
-					message={
-						changedKeys.length === 1
-							? '1 modification non enregistrée'
-							: `${changedKeys.length} modifications non enregistrées`
-					}
-					confirmLabel="Enregistrer"
-					cancelLabel="Annuler"
-					onCancel={onReset}
-					onConfirm={onSave}
-					isLoading={isSaving}
-				/>
-			</RequirePermission>
-		</PageShell>
+function Frame({ children }: { children: ReactNode }) {
+	return (
+		<div className="h-full min-h-0 flex-1 overflow-y-auto">
+			<div className="mx-auto w-full max-w-3xl px-6 py-8">{children}</div>
+		</div>
 	)
 }
 
 export namespace CustomerEditUI {
-	export function Loading() {
+	export function Loading({ organizationSlug }: { organizationSlug: string }) {
 		return (
-			<PageShell>
-				<SectionCard className="flex items-center justify-center p-12 text-sm text-muted-foreground">
+			<Frame>
+				<BackLink organizationSlug={organizationSlug} />
+				<div className="mt-4 rounded-lg border border-dashed bg-card px-6 py-12 text-center text-[13px] text-muted-foreground">
 					Chargement…
-				</SectionCard>
-			</PageShell>
+				</div>
+			</Frame>
 		)
 	}
-}
 
-interface SectionProps {
-	title: string
-	description?: string
-	className?: string
-	actions?: React.ReactNode
-	children: React.ReactNode
-}
-
-function Section({
-	title,
-	description,
-	className = '',
-	actions,
-	children,
-}: SectionProps) {
-	return (
-		<SectionCard className={className}>
-			<SectionHeader
-				title={title}
-				description={description}
-				actions={actions}
-			/>
-			<div className="flex flex-col gap-4 p-5">{children}</div>
-		</SectionCard>
-	)
-}
-
-function InlineError({
-	message,
-	onRetry,
-}: {
-	message: string
-	onRetry: () => void
-}) {
-	return (
-		<div className="flex flex-col gap-3 rounded-lg border border-destructive/30 bg-destructive-soft p-4 text-destructive sm:flex-row sm:items-center sm:justify-between">
-			<div className="flex items-center gap-2">
-				<AlertCircle className="size-4" />
-				<p className="text-sm font-medium">{message}</p>
-			</div>
-			<Button type="button" variant="outline" size="sm" onClick={onRetry}>
-				Réessayer
-			</Button>
-		</div>
-	)
-}
-
-function EmptyState({
-	icon,
-	label,
-	description,
-}: {
-	icon?: React.ReactNode
-	label: string
-	description?: string
-}) {
-	return (
-		<div className="rounded-lg border border-dashed p-8 text-center text-sm text-muted-foreground">
-			{icon}
-			<p className={icon ? 'mt-2 font-medium text-foreground' : ''}>{label}</p>
-			{description ? <p className="mt-1">{description}</p> : null}
-		</div>
-	)
-}
-
-interface CustomerContactCardProps {
-	customerContact: CustomerContact
-	isDeleting: boolean
-	onEdit: () => void
-	onDelete: () => void
-}
-
-function CustomerContactCard({
-	customerContact,
-	isDeleting,
-	onEdit,
-	onDelete,
-}: CustomerContactCardProps) {
-	const displayName =
-		`${customerContact.first_name} ${customerContact.last_name}`.trim()
-
-	return (
-		<div className="flex gap-4 rounded-lg border bg-card p-4">
-			<div className="flex size-12 shrink-0 items-center justify-center rounded-lg bg-brand-soft text-primary">
-				<UserRound className="size-5" />
-			</div>
-			<div className="min-w-0 flex-1">
-				<div className="flex items-start justify-between gap-3">
-					<div className="min-w-0">
-						<div className="flex flex-wrap items-center gap-2">
-							<p className="truncate font-semibold">{displayName}</p>
-							{customerContact.is_primary ? (
-								<StatusBadge tone="brand">
-									<Star className="size-3" />
-									Principal
-								</StatusBadge>
-							) : null}
-						</div>
-						{customerContact.role ? (
-							<p className="mt-1 text-sm text-muted-foreground">
-								{customerContact.role}
-							</p>
-						) : null}
-						<div className="mt-2 flex flex-col gap-1 text-xs text-muted-foreground">
-							<span className="flex min-w-0 items-center gap-1">
-								<Mail className="size-3" />
-								<span className="truncate">
-									{customerContact.email || 'Email non renseigné'}
-								</span>
-							</span>
-							<span className="flex items-center gap-1">
-								<Phone className="size-3" />
-								{customerContact.phone || 'Téléphone non renseigné'}
-							</span>
-						</div>
-					</div>
-					<RowActions
-						isDeleting={isDeleting}
-						onEdit={onEdit}
-						onDelete={onDelete}
+	export function NotFound({ organizationSlug }: { organizationSlug: string }) {
+		return (
+			<Frame>
+				<BackLink organizationSlug={organizationSlug} />
+				<div className="mt-4 rounded-lg border border-dashed bg-card px-6 py-12 text-center">
+					<UserRoundX
+						className="mx-auto mb-3 size-8 text-muted-foreground"
+						aria-hidden
 					/>
-				</div>
-			</div>
-		</div>
-	)
-}
-
-interface CustomerContextCardProps {
-	customerContext: CustomerContext
-	isDeleting: boolean
-	onEdit: () => void
-	onDelete: () => void
-}
-
-function CustomerContextCard({
-	customerContext,
-	isDeleting,
-	onEdit,
-	onDelete,
-}: CustomerContextCardProps) {
-	const addressParts = [
-		customerContext.address_line,
-		[customerContext.postal_code, customerContext.city]
-			.filter(Boolean)
-			.join(' '),
-	].filter(Boolean)
-
-	return (
-		<div className="flex gap-4 rounded-lg border bg-card p-4">
-			<div className="flex size-16 shrink-0 items-center justify-center overflow-hidden rounded-lg border bg-muted">
-				{customerContext.photo_key ? (
-					<Image className="size-6 text-muted-foreground" />
-				) : (
-					<LayoutPanelTop className="size-6 text-muted-foreground" />
-				)}
-			</div>
-			<div className="min-w-0 flex-1">
-				<div className="flex items-start justify-between gap-3">
-					<div className="min-w-0">
-						<p className="truncate font-semibold">{customerContext.label}</p>
-						{addressParts.length > 0 ? (
-							<div className="mt-1 text-sm text-muted-foreground">
-								{addressParts.map((part) => (
-									<p key={part}>{part}</p>
-								))}
-							</div>
-						) : (
-							<p className="mt-1 text-sm text-muted-foreground">
-								Aucune adresse renseignée
-							</p>
-						)}
-					</div>
-					<RowActions
-						isDeleting={isDeleting}
-						onEdit={onEdit}
-						onDelete={onDelete}
-					/>
-				</div>
-				{customerContext.photo_key ? (
-					<p className="mt-2 truncate font-mono text-xs text-muted-foreground">
-						photo: {customerContext.photo_key}
+					<h1 className="font-medium">Ce client est introuvable.</h1>
+					<p className="mt-1 text-[13px] text-muted-foreground">
+						Il n’existe pas ou l’adresse n’est plus valide.
 					</p>
-				) : null}
-			</div>
-		</div>
-	)
-}
+					<Button variant="outline" size="sm" className="mt-4" asChild>
+						<Link to={buildOrgPath(organizationSlug, '/crm/customers')}>
+							<ArrowLeft aria-hidden /> Retour aux clients
+						</Link>
+					</Button>
+				</div>
+			</Frame>
+		)
+	}
 
-/**
- * Gated on `MANAGE_CUSTOMERS` (#403) — the backend already refuses a
- * contact/context write without it (`customer.manage` in
- * `domain/customer/service.rs`), so hiding this here is a real boundary,
- * not just cosmetic.
- */
-function RowActions({
-	isDeleting,
-	onEdit,
-	onDelete,
-}: {
-	isDeleting: boolean
-	onEdit: () => void
-	onDelete: () => void
-}) {
-	return (
-		<RequirePermission permission="MANAGE_CUSTOMERS">
-			<div className="flex shrink-0 gap-1">
-				<Button type="button" variant="ghost" size="icon-sm" onClick={onEdit}>
-					<Pencil />
-					<span className="sr-only">Modifier</span>
-				</Button>
-				<Button
-					type="button"
-					variant="ghost"
-					size="icon-sm"
-					disabled={isDeleting}
-					onClick={onDelete}
-				>
-					<Trash2 />
-					<span className="sr-only">Supprimer</span>
-				</Button>
-			</div>
-		</RequirePermission>
-	)
+	export function LoadError({
+		organizationSlug,
+		message,
+		onRetry,
+	}: {
+		organizationSlug: string
+		message: string
+		onRetry: () => void
+	}) {
+		return (
+			<Frame>
+				<BackLink organizationSlug={organizationSlug} />
+				<div className="mt-4 rounded-lg border border-dashed bg-card px-6 py-12 text-center">
+					<AlertCircle
+						className="mx-auto mb-3 size-8 text-state-alert"
+						aria-hidden
+					/>
+					<h1 className="font-medium">Impossible de charger le client.</h1>
+					<p className="mt-1 text-[13px] text-muted-foreground">{message}</p>
+					<Button
+						variant="outline"
+						size="sm"
+						className="mt-4"
+						onClick={onRetry}
+					>
+						Réessayer
+					</Button>
+				</div>
+			</Frame>
+		)
+	}
 }

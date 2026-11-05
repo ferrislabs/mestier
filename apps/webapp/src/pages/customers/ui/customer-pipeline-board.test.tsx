@@ -2,6 +2,7 @@ import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 import type { Customer, CustomerPipelineStage } from '#/hooks/use-customers'
+import { EMPTY_EXTRAS } from '#/pages/customers/feature/mocks/account-extras'
 import { CustomerPipelineBoard } from '#/pages/customers/ui/customer-pipeline-board'
 
 function customer(
@@ -25,16 +26,22 @@ function customer(
 function baseProps() {
 	return {
 		canMove: true,
-		draggedCustomerId: null,
-		onDragStart: vi.fn(),
-		onDragEnd: vi.fn(),
-		onDropOnStage: vi.fn(),
+		extrasOf: () => EMPTY_EXTRAS,
 		onMove: vi.fn(),
 	}
 }
 
-describe('CustomerPipelineBoard — terminal stages', () => {
-	it('offers no sequence arrow past QUOTE_SENT, but offers the two explicit actions', () => {
+async function openMenu(user: ReturnType<typeof userEvent.setup>) {
+	await user.click(
+		screen.getByRole('button', {
+			name: 'Déplacer « Mairie de Saint-Julien » vers…',
+		}),
+	)
+}
+
+describe('CustomerPipelineBoard — moving a card', () => {
+	it('lists every other stage, explicit Gagné and Perdu included, but not the current one', async () => {
+		const user = userEvent.setup()
 		render(
 			<CustomerPipelineBoard
 				{...baseProps()}
@@ -42,43 +49,17 @@ describe('CustomerPipelineBoard — terminal stages', () => {
 			/>,
 		)
 
-		expect(screen.queryByRole('button', { name: 'Avancer' })).toBeNull()
-		expect(screen.getByRole('button', { name: 'Reculer' })).toBeDefined()
-		expect(screen.getByRole('button', { name: 'Marquer gagné' })).toBeDefined()
-		expect(screen.getByRole('button', { name: 'Marquer perdu' })).toBeDefined()
+		await openMenu(user)
+
+		expect(screen.getByRole('menuitem', { name: 'Nouveau' })).toBeDefined()
+		expect(screen.getByRole('menuitem', { name: 'Contacté' })).toBeDefined()
+		expect(screen.getByRole('menuitem', { name: 'Qualifié' })).toBeDefined()
+		expect(screen.getByRole('menuitem', { name: 'Gagné' })).toBeDefined()
+		expect(screen.getByRole('menuitem', { name: 'Perdu' })).toBeDefined()
+		expect(screen.queryByRole('menuitem', { name: 'Devis envoyé' })).toBeNull()
 	})
 
-	it('offers no backward arrow before NEW, and still offers the two explicit actions', () => {
-		render(
-			<CustomerPipelineBoard {...baseProps()} customers={[customer('NEW')]} />,
-		)
-
-		expect(screen.queryByRole('button', { name: 'Reculer' })).toBeNull()
-		expect(screen.getByRole('button', { name: 'Avancer' })).toBeDefined()
-		expect(screen.getByRole('button', { name: 'Marquer gagné' })).toBeDefined()
-	})
-
-	it('shows neither the sequence arrows nor the mark actions on a WON card', () => {
-		render(
-			<CustomerPipelineBoard {...baseProps()} customers={[customer('WON')]} />,
-		)
-
-		expect(screen.queryByRole('button', { name: 'Reculer' })).toBeNull()
-		expect(screen.queryByRole('button', { name: 'Avancer' })).toBeNull()
-		expect(screen.queryByRole('button', { name: 'Marquer gagné' })).toBeNull()
-		expect(screen.queryByRole('button', { name: 'Marquer perdu' })).toBeNull()
-	})
-
-	it('shows neither the sequence arrows nor the mark actions on a LOST card', () => {
-		render(
-			<CustomerPipelineBoard {...baseProps()} customers={[customer('LOST')]} />,
-		)
-
-		expect(screen.queryByRole('button', { name: 'Avancer' })).toBeNull()
-		expect(screen.queryByRole('button', { name: 'Marquer gagné' })).toBeNull()
-	})
-
-	it('calls onMove with WON when "Marquer gagné" is clicked from a non-terminal card', async () => {
+	it('calls onMove with WON when Gagné is picked', async () => {
 		const user = userEvent.setup()
 		const onMove = vi.fn()
 		const target = customer('QUOTE_SENT')
@@ -90,12 +71,13 @@ describe('CustomerPipelineBoard — terminal stages', () => {
 			/>,
 		)
 
-		await user.click(screen.getByRole('button', { name: 'Marquer gagné' }))
+		await openMenu(user)
+		await user.click(screen.getByRole('menuitem', { name: 'Gagné' }))
 
 		expect(onMove).toHaveBeenCalledWith(target, 'WON')
 	})
 
-	it('calls onMove with LOST when "Marquer perdu" is clicked from a non-terminal card', async () => {
+	it('calls onMove with LOST when Perdu is picked', async () => {
 		const user = userEvent.setup()
 		const onMove = vi.fn()
 		const target = customer('CONTACTED')
@@ -107,14 +89,36 @@ describe('CustomerPipelineBoard — terminal stages', () => {
 			/>,
 		)
 
-		await user.click(screen.getByRole('button', { name: 'Marquer perdu' }))
+		await openMenu(user)
+		await user.click(screen.getByRole('menuitem', { name: 'Perdu' }))
 
 		expect(onMove).toHaveBeenCalledWith(target, 'LOST')
 	})
 })
 
+describe('CustomerPipelineBoard — columns', () => {
+	it('shows the six stages with their empty hints', () => {
+		render(<CustomerPipelineBoard {...baseProps()} customers={[]} />)
+
+		expect(screen.getAllByRole('region').length).toBe(6)
+		expect(screen.getByText('Aucun devis en attente de réponse.')).toBeDefined()
+	})
+
+	it('only renders the stages it is given', () => {
+		render(
+			<CustomerPipelineBoard
+				{...baseProps()}
+				stages={['NEW', 'WON']}
+				customers={[]}
+			/>,
+		)
+
+		expect(screen.getAllByRole('region').length).toBe(2)
+	})
+})
+
 describe('CustomerPipelineBoard — without MANAGE_CUSTOMERS', () => {
-	it('hides every move action and disables dragging on a non-terminal card', () => {
+	it('hides the move menu on a card', () => {
 		render(
 			<CustomerPipelineBoard
 				{...baseProps()}
@@ -123,10 +127,11 @@ describe('CustomerPipelineBoard — without MANAGE_CUSTOMERS', () => {
 			/>,
 		)
 
-		expect(screen.queryByRole('button', { name: 'Avancer' })).toBeNull()
-		expect(screen.queryByRole('button', { name: 'Reculer' })).toBeNull()
-		expect(screen.queryByRole('button', { name: 'Marquer gagné' })).toBeNull()
-		expect(screen.queryByRole('button', { name: 'Marquer perdu' })).toBeNull()
-		expect(screen.getByRole('article').getAttribute('draggable')).toBe('false')
+		expect(
+			screen.queryByRole('button', {
+				name: 'Déplacer « Mairie de Saint-Julien » vers…',
+			}),
+		).toBeNull()
+		expect(screen.getByRole('article').className).not.toContain('cursor-grab')
 	})
 })

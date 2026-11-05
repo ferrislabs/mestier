@@ -1,19 +1,32 @@
-import { useNavigate } from '@tanstack/react-router'
 import { AlertCircle } from 'lucide-react'
-import { useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { getPaginationViewModel } from '#/components/data-view'
 import { useActiveOrganization } from '#/hooks/use-active-organization'
-import {
-	type Customer,
-	useCreateCustomer,
-	useCustomers,
-	useDeleteCustomer,
-} from '#/hooks/use-customers'
+import { useCustomers } from '#/hooks/use-customers'
+import { useOutstandingByCustomer } from '#/hooks/use-invoices'
 import { mutationErrorMessage } from '#/lib/api-error'
-import { buildOrgPath } from '#/modules/org-path'
-import { getCustomerListUrlState } from '#/pages/customers/customer-list-url-state'
+import { useCrmSettings } from '#/pages/crm-settings/feature/mocks/settings'
+import {
+	type ClientFilters,
+	customersSummary,
+	filterCustomers,
+} from '#/pages/customers/customer-list-url-state'
+import {
+	EMPTY_EXTRAS,
+	useAccountExtrasMap,
+} from '#/pages/customers/feature/mocks/account-extras'
+import { CURRENT_PERSON_ID } from '#/pages/customers/feature/mocks/people'
+import { useCreateCustomerAccount } from '#/pages/customers/feature/use-create-customer-account'
 import { CustomerListUI } from '#/pages/customers/ui/customer-list-ui'
 
-export function CustomerListFeature() {
+const DEFAULT_PAGE_SIZE = 50
+
+interface CustomerListFeatureProps {
+	filters: ClientFilters
+	onFiltersChange: (filters: ClientFilters) => void
+}
+
+export function CustomerListFeature(props: CustomerListFeatureProps) {
 	const { activeOrganization } = useActiveOrganization()
 
 	if (!activeOrganization) {
@@ -37,7 +50,7 @@ export function CustomerListFeature() {
 			key={activeOrganization.id}
 			organizationId={activeOrganization.id}
 			organizationSlug={activeOrganization.slug}
-			organizationName={activeOrganization.name}
+			{...props}
 		/>
 	)
 }
@@ -45,66 +58,94 @@ export function CustomerListFeature() {
 function CustomerList({
 	organizationId,
 	organizationSlug,
-	organizationName,
-}: {
+	filters,
+	onFiltersChange,
+}: CustomerListFeatureProps & {
 	organizationId: string
 	organizationSlug: string
-	organizationName: string
 }) {
-	const navigate = useNavigate()
-	const [initialListState] = useState(getCustomerListUrlState)
-	const [page, setPage] = useState(initialListState.page)
-	const [pageSize, setPageSize] = useState(initialListState.pageSize)
+	const [page, setPage] = useState(1)
+	const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE)
+	const [creating, setCreating] = useState(false)
+	const [query, setQuery] = useState(filters.query)
+	const pushedQueries = useRef<string[]>([])
 	const customers = useCustomers(organizationId, { page, perPage: pageSize })
-	const createCustomer = useCreateCustomer(organizationId)
-	const deleteCustomer = useDeleteCustomer(organizationId)
+	const outstanding = useOutstandingByCustomer(organizationId)
+	const extras = useAccountExtrasMap()
+	const settings = useCrmSettings()
+	const account = useCreateCustomerAccount(organizationId, organizationSlug)
 
-	const handleEdit = (customer: Customer) => {
-		void navigate({
-			to: buildOrgPath(organizationSlug, '/crm/customers/$customerId'),
-			params: { customerId: customer.id },
-		})
+	useEffect(() => {
+		const index = pushedQueries.current.indexOf(filters.query)
+		if (index >= 0)
+			pushedQueries.current = pushedQueries.current.slice(index + 1)
+		else setQuery(filters.query)
+	}, [filters.query])
+
+	const rows = customers.data?.data
+	const all = useMemo(() => rows ?? [], [rows])
+	const active: ClientFilters = { ...filters, query }
+	const extrasOf = (customerId: string) => extras[customerId] ?? EMPTY_EXTRAS
+	const visible = filterCustomers(all, extrasOf, active)
+	const balances = useMemo(
+		() =>
+			new Map(
+				(outstanding.data?.data ?? []).map((row) => [
+					row.customer_id,
+					{
+						cents: row.outstanding_cents,
+						oldestDueAt: row.oldest_due_at ?? null,
+					},
+				]),
+			),
+		[outstanding.data],
+	)
+	const pagination = getPaginationViewModel(
+		customers.data?.pagination ?? null,
+		all.length,
+		page,
+		pageSize,
+	)
+
+	function change(next: ClientFilters) {
+		if (next.query !== query) {
+			setQuery(next.query)
+			pushedQueries.current = [...pushedQueries.current, next.query]
+		}
+		onFiltersChange(next)
+		setPage(1)
 	}
 
 	return (
 		<CustomerListUI
 			organizationSlug={organizationSlug}
-			organizationName={organizationName}
-			customers={customers.data?.data ?? []}
-			pagination={customers.data?.pagination ?? null}
-			page={page}
-			pageSize={pageSize}
-			error={
-				mutationErrorMessage(customers.error) ??
-				mutationErrorMessage(createCustomer.error) ??
-				mutationErrorMessage(deleteCustomer.error) ??
-				null
-			}
+			summary={customersSummary(all)}
+			totalCustomers={all.length}
+			customers={visible}
+			filters={active}
+			onFiltersChange={change}
+			extrasOf={extrasOf}
+			outstandingOf={(customerId) => balances.get(customerId)}
+			now={Date.now()}
+			error={mutationErrorMessage(customers.error)}
 			isLoading={customers.isLoading}
-			isCreating={createCustomer.isPending}
-			deletingId={
-				deleteCustomer.variables?.path.customer_id && deleteCustomer.isPending
-					? deleteCustomer.variables.path.customer_id
-					: null
-			}
+			onRetry={() => void customers.refetch()}
+			creating={creating}
+			onCreatingChange={setCreating}
+			defaultTerms={settings.data.settings.paymentTermsDays}
+			defaultOwnerId={CURRENT_PERSON_ID}
+			isCreating={account.isPending}
+			createError={account.error}
+			onCreate={async (form) => {
+				await account.create(form)
+				setCreating(false)
+			}}
+			pagination={pagination}
 			onPageChange={setPage}
-			onPageSizeChange={(nextPageSize) => {
-				setPageSize(nextPageSize)
+			onPageSizeChange={(size) => {
+				setPageSize(size)
 				setPage(1)
 			}}
-			onAdd={(payload) =>
-				createCustomer.mutateAsync({
-					path: { organization_id: organizationId },
-					body: payload,
-				})
-			}
-			onEdit={handleEdit}
-			onDelete={(customer) =>
-				deleteCustomer.mutate({
-					path: { customer_id: customer.id },
-				})
-			}
-			onRetry={() => void customers.refetch()}
 		/>
 	)
 }

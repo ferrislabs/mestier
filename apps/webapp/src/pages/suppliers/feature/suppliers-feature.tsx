@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useActiveOrganization } from '#/hooks/use-active-organization'
 import { useHasPermission } from '#/hooks/use-permissions'
 import {
@@ -8,6 +8,8 @@ import {
 	useUpdateSupplier,
 } from '#/hooks/use-suppliers'
 import { mutationErrorMessage } from '#/lib/api-error'
+import { useNotice } from '#/pages/customers/feature/use-notice'
+import { filterSuppliers } from '#/pages/suppliers/lib/suppliers-search'
 import {
 	buildSupplierRequest,
 	EMPTY_SUPPLIER_FORM,
@@ -23,39 +25,39 @@ export function SuppliersFeature() {
 		<SuppliersWorkspace
 			key={activeOrganization.id}
 			organizationId={activeOrganization.id}
-			organizationName={activeOrganization.name}
 		/>
 	)
 }
 
 type Draft = { supplier: Supplier | null }
 
-function SuppliersWorkspace({
-	organizationId,
-	organizationName,
-}: {
-	organizationId: string
-	organizationName: string
-}) {
+function SuppliersWorkspace({ organizationId }: { organizationId: string }) {
 	const [draft, setDraft] = useState<Draft | null>(null)
+	const [query, setQuery] = useState('')
+	const notice = useNotice()
 	const canManage = useHasPermission('MANAGE_REFERENCE')
 
 	const suppliers = useSuppliers(organizationId)
 	const createSupplier = useCreateSupplier()
 	const updateSupplier = useUpdateSupplier()
 
-	const rows = suppliers.data?.data ?? []
+	const all = suppliers.data?.data
+	const visible = useMemo(() => filterSuppliers(all ?? [], query), [all, query])
 	const mutationError = createSupplier.error ?? updateSupplier.error
 	const listError = suppliers.error
 
 	return (
 		<>
 			<SuppliersList
-				organizationName={organizationName}
-				suppliers={rows}
+				suppliers={visible}
+				totalSuppliers={all?.length ?? 0}
+				query={query}
+				onQueryChange={setQuery}
 				isLoading={suppliers.isLoading}
 				error={listError ? mutationErrorMessage(listError) : null}
 				canManage={canManage}
+				notice={notice.message}
+				onDismissNotice={notice.clear}
 				onCreate={() => {
 					createSupplier.reset()
 					setDraft({ supplier: null })
@@ -91,11 +93,13 @@ function SuppliersWorkspace({
 								},
 								body,
 							})
+							notice.show('Fournisseur mis à jour.')
 						} else {
 							await createSupplier.mutateAsync({
 								path: { organization_id: organizationId },
 								body,
 							})
+							notice.show('Fournisseur créé.')
 						}
 						setDraft(null)
 					}}
