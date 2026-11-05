@@ -1,5 +1,6 @@
 import { Link } from '@tanstack/react-router'
 import { Skeleton } from '#/components/ui/skeleton'
+import { cn } from '#/lib/utils'
 import { buildOrgPath } from '#/modules/org-path'
 
 export interface DiscussionChannelRow {
@@ -33,56 +34,56 @@ export function DiscussionsUI({
 	error,
 }: DiscussionsUIProps) {
 	return (
-		<div className="flex flex-col rounded-xl bg-card p-5 shadow-sm">
-			<div className="mb-1 flex items-baseline justify-between gap-4">
-				<span className="island-kicker">Discussions</span>
+		<section
+			aria-label="Discussions"
+			className="overflow-hidden rounded-xl border bg-card"
+		>
+			<header className="flex items-center justify-between border-b px-4 py-2.5">
+				<h3 className="font-medium text-[13px]">Discussions</h3>
 				<Link
 					to={buildOrgPath(organizationSlug, '/chat')}
-					className="text-xs font-semibold text-brand-muted"
+					className="text-[12px] text-primary outline-none hover:underline focus-visible:ring-2 focus-visible:ring-ring"
 				>
 					Ouvrir le chat →
 				</Link>
-			</div>
+			</header>
 
 			{isLoading ? (
-				<div className="flex flex-col gap-3 py-3" aria-busy="true">
+				<div className="flex flex-col gap-3 px-4 py-3" aria-busy="true">
 					<Skeleton className="h-4 w-full" />
 					<Skeleton className="h-4 w-5/6" />
 					<Skeleton className="h-4 w-2/3" />
 				</div>
 			) : error ? (
-				<p className="py-3 text-sm text-destructive">{error}</p>
+				<p className="px-4 py-6 text-center text-[13px] text-destructive">
+					{error}
+				</p>
 			) : channels.length === 0 ? (
-				<p className="py-3 text-sm text-muted-foreground">
+				<p className="px-4 py-6 text-center text-[13px] text-muted-foreground">
 					Aucun canal de discussion pour le moment.
 				</p>
 			) : (
-				<ul>
+				<ul className="divide-y">
 					{channels.map((channel) => (
-						<li
-							key={channel.id}
-							className="flex items-start gap-2.5 border-t py-3 first:border-t-0"
-						>
+						<li key={channel.id} className="flex items-start gap-2.5 px-4 py-3">
 							<span
-								className={
-									channel.unread
-										? 'mt-1.5 size-1.5 shrink-0 rounded-full bg-brand-500'
-										: 'mt-1.5 size-1.5 shrink-0'
-								}
+								className={cn(
+									'mt-1.5 size-1.5 shrink-0 rounded-full',
+									channel.unread && 'bg-primary',
+								)}
 								aria-hidden="true"
 							/>
 							<div className="min-w-0">
 								<p
-									className={
-										channel.unread
-											? 'truncate text-sm font-semibold text-foreground'
-											: 'truncate text-sm font-medium text-foreground'
-									}
+									className={cn(
+										'truncate text-[13.5px]',
+										channel.unread ? 'font-semibold' : 'font-medium',
+									)}
 								>
 									#{channel.name}
 								</p>
 								{channel.topic ? (
-									<p className="truncate text-xs text-muted-foreground">
+									<p className="truncate text-[12.5px] text-muted-foreground">
 										{channel.topic}
 									</p>
 								) : null}
@@ -91,6 +92,6 @@ export function DiscussionsUI({
 					))}
 				</ul>
 			)}
-		</div>
+		</section>
 	)
 }

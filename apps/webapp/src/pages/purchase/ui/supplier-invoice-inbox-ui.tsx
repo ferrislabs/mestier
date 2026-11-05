@@ -1,5 +1,5 @@
 import { Link } from '@tanstack/react-router'
-import { AlertCircle, FileWarning, Inbox, RefreshCw } from 'lucide-react'
+import { AlertCircle, FileWarning, RefreshCw } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import {
 	DataViewPagination,
@@ -8,6 +8,7 @@ import {
 	getPaginationViewModel,
 	useDataView,
 } from '#/components/data-view'
+import { EmptyState } from '#/components/empty-state'
 import { Button } from '#/components/ui/button'
 import {
 	PageHeader,
@@ -16,6 +17,14 @@ import {
 	SectionHeader,
 	StatusBadge,
 } from '#/components/ui/surface'
+import {
+	Table,
+	TableBody,
+	TableCell,
+	TableHead,
+	TableHeader,
+	TableRow,
+} from '#/components/ui/table'
 import type {
 	PaginationMetadata,
 	SupplierInvoice,
@@ -221,71 +230,76 @@ export function SupplierInvoiceInboxUI({
 					/>
 				</div>
 				{isLoading ? (
-					<p className="p-5 text-sm text-muted-foreground">Chargement…</p>
+					<p className="p-5 text-center text-[13px] text-muted-foreground">
+						Chargement…
+					</p>
 				) : dataView.rows.length === 0 ? (
-					<div className="flex min-h-52 flex-col items-center justify-center gap-3 p-8 text-center">
-						<div className="flex size-12 items-center justify-center rounded-lg bg-muted text-muted-foreground">
-							<Inbox className="size-5" />
-						</div>
-						<div>
-							<p className="font-medium">
-								{search || statusFilter !== 'all'
+					<div className="p-5">
+						<EmptyState
+							title={
+								search || statusFilter !== 'all'
 									? 'Aucune facture ne correspond aux critères.'
-									: 'Aucune facture fournisseur pour le moment.'}
-							</p>
-							<p className="mt-1 text-sm text-muted-foreground">
-								Déposez un fichier ci-dessus pour commencer.
-							</p>
-						</div>
+									: 'Aucune facture fournisseur pour le moment.'
+							}
+							hint="Déposez un fichier ci-dessus pour commencer."
+						/>
 					</div>
 				) : (
-					<ul className="divide-y">
-						{dataView.rows.map((invoice) => (
-							<li key={invoice.id}>
-								<Link
-									to={buildOrgPath(
-										organizationSlug,
-										'/purchase/supplier-invoices/$supplierInvoiceId',
-									)}
-									params={{ supplierInvoiceId: invoice.id }}
-									className="grid gap-4 px-5 py-4 transition hover:bg-muted/40 sm:grid-cols-[minmax(0,1fr)_160px_140px] sm:items-center"
-								>
-									<div className="flex min-w-0 items-center gap-4">
-										<div className="flex size-11 shrink-0 items-center justify-center rounded-lg bg-brand-soft text-primary">
-											<FileWarning className="size-5" />
-										</div>
-										<div className="min-w-0">
-											<div className="flex min-w-0 flex-wrap items-center gap-2">
-												<p className="truncate font-semibold">
-													{invoice.supplier_name}
-												</p>
-												<StatusBadge tone={statusTone(invoice.status)}>
-													{supplierInvoiceStatusLabel(invoice.status)}
-												</StatusBadge>
+					<Table>
+						<TableHeader>
+							<TableRow className="hover:bg-transparent">
+								<TableHead className="pl-5">Facture</TableHead>
+								<TableHead className="max-md:hidden">Dates</TableHead>
+								<TableHead>Statut</TableHead>
+								<TableHead className="pr-5 text-right">Total TTC</TableHead>
+							</TableRow>
+						</TableHeader>
+						<TableBody>
+							{dataView.rows.map((invoice) => (
+								<TableRow key={invoice.id} className="relative">
+									<TableCell className="py-3 pl-5">
+										<div className="flex min-w-0 items-center gap-3">
+											<div className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-brand-soft text-primary">
+												<FileWarning className="size-4" />
 											</div>
-											<p className="mt-1 truncate text-xs text-muted-foreground">
-												{invoice.number} ·{' '}
-												{supplierInvoiceSourceLabel(invoice.source)}
-											</p>
+											<div className="min-w-0">
+												<Link
+													to={buildOrgPath(
+														organizationSlug,
+														'/purchase/supplier-invoices/$supplierInvoiceId',
+													)}
+													params={{ supplierInvoiceId: invoice.id }}
+													className="block truncate font-medium outline-none before:absolute before:inset-0 focus-visible:before:ring-2 focus-visible:before:ring-inset focus-visible:before:ring-ring"
+												>
+													{invoice.supplier_name}
+												</Link>
+												<span className="block truncate text-[12px] text-muted-foreground">
+													{invoice.number} ·{' '}
+													{supplierInvoiceSourceLabel(invoice.source)}
+												</span>
+											</div>
 										</div>
-									</div>
-
-									<div className="text-sm">
-										<p className="font-medium">
+									</TableCell>
+									<TableCell className="max-md:hidden">
+										<span className="block">
 											Reçue {formatDate(invoice.received_at)}
-										</p>
-										<p className="mt-1 text-xs text-muted-foreground">
+										</span>
+										<span className="block text-[12px] text-muted-foreground">
 											Émise {formatDate(invoice.issued_on)}
-										</p>
-									</div>
-
-									<p className="text-lg font-bold sm:text-right">
+										</span>
+									</TableCell>
+									<TableCell>
+										<StatusBadge tone={statusTone(invoice.status)}>
+											{supplierInvoiceStatusLabel(invoice.status)}
+										</StatusBadge>
+									</TableCell>
+									<TableCell className="tabular pr-5 text-right font-medium">
 										{formatMoney(invoice.gross_cents)}
-									</p>
-								</Link>
-							</li>
-						))}
-					</ul>
+									</TableCell>
+								</TableRow>
+							))}
+						</TableBody>
+					</Table>
 				)}
 				{!isLoading ? (
 					<div className="border-t p-4">
@@ -309,7 +323,7 @@ export function SupplierInvoiceInboxUI({
 function statusTone(status: SupplierInvoice['status']) {
 	if (status === 'CONFIRMED') return 'success' as const
 	if (status === 'REJECTED') return 'error' as const
-	return 'brand' as const
+	return 'warning' as const
 }
 
 function invoiceMatchesSearch(

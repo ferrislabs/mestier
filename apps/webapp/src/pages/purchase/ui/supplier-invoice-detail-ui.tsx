@@ -240,7 +240,7 @@ function Metric({
 function statusTone(status: SupplierInvoice['status']) {
 	if (status === 'CONFIRMED') return 'success' as const
 	if (status === 'REJECTED') return 'error' as const
-	return 'brand' as const
+	return 'warning' as const
 }
 
 export namespace SupplierInvoiceDetailUI {

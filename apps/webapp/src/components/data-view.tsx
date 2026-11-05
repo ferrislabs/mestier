@@ -199,7 +199,7 @@ export function DataViewToolbar({
 		filterOptions.find((option) => option.value === filter)?.label ?? 'Filtres'
 
 	return (
-		<div className="flex flex-col gap-3 rounded-lg border bg-card p-3 shadow-xs">
+		<div className="flex flex-col gap-3 rounded-lg border bg-card p-3">
 			<div className="flex flex-col gap-3 lg:flex-row lg:items-center">
 				<div className="relative min-w-0 flex-1">
 					<Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
@@ -274,7 +274,7 @@ export function DataViewToolbar({
 				</div>
 			</div>
 
-			<p className="text-xs text-muted-foreground">
+			<p className="text-[12px] text-muted-foreground">
 				{filteredCount} résultat{filteredCount > 1 ? 's' : ''} sur {totalCount}
 				{filter !== defaultFilter ? ` · ${activeFilterLabel}` : null}
 			</p>
@@ -309,7 +309,7 @@ export function DataViewPagination({
 		totalCount === 0 ? '0 sur 0' : `${from}-${to} sur ${totalCount}`
 
 	return (
-		<div className="flex flex-col gap-3 rounded-lg border bg-card px-3 py-3 text-sm text-muted-foreground shadow-xs sm:flex-row sm:items-center sm:justify-between">
+		<div className="flex flex-col gap-3 rounded-lg border bg-card px-3 py-3 text-[13px] text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
 			<p>{rangeLabel}</p>
 
 			<div className="flex flex-wrap items-center gap-2">
@@ -350,7 +350,7 @@ export function DataViewPagination({
 						<ChevronLeft />
 						<span className="sr-only">Page précédente</span>
 					</Button>
-					<span className="min-w-20 text-center text-xs font-medium text-foreground">
+					<span className="tabular min-w-20 text-center font-medium text-[12px] text-foreground">
 						{page} / {pageCount}
 					</span>
 					<Button

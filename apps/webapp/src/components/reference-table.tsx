@@ -25,8 +25,17 @@ import {
 import { Input } from '#/components/ui/input'
 import { Label } from '#/components/ui/label'
 import { SectionCard, SectionHeader } from '#/components/ui/surface'
+import {
+	Table,
+	TableBody,
+	TableCell,
+	TableHead,
+	TableHeader,
+	TableRow,
+} from '#/components/ui/table'
 import type { PermissionName } from '#/hooks/use-permissions'
 import { usePermissions } from '#/hooks/use-permissions'
+import { cn } from '#/lib/utils'
 
 export interface FormBinding<T> {
 	values: T
@@ -64,59 +73,64 @@ export function ReferenceTable<T>({
 				title={`${title} (${data.length})`}
 				description={description}
 			/>
-			<div className="overflow-x-auto">
-				<table className="w-full min-w-[720px] border-collapse text-sm">
-					<thead>
-						{table.getHeaderGroups().map((headerGroup) => (
-							<tr key={headerGroup.id} className="border-b bg-muted/50">
-								{headerGroup.headers.map((header) => (
-									<th
-										key={header.id}
-										className="px-5 py-3 text-left text-xs font-semibold uppercase text-muted-foreground"
-									>
-										{header.isPlaceholder
-											? null
-											: flexRender(
-													header.column.columnDef.header,
-													header.getContext(),
-												)}
-									</th>
-								))}
-							</tr>
-						))}
-					</thead>
-					<tbody>
-						{table.getRowModel().rows.length === 0 ? (
-							<tr>
-								<td colSpan={columns.length} className="px-5 py-12 text-center">
-									<div className="mx-auto flex max-w-sm flex-col items-center gap-2">
-										<p className="font-medium">{emptyTitle}</p>
-										<p className="text-sm text-muted-foreground">
-											{emptyDescription}
-										</p>
-									</div>
-								</td>
-							</tr>
-						) : (
-							table.getRowModel().rows.map((row) => (
-								<tr
-									key={row.id}
-									className="group border-b transition hover:bg-muted/35 hover:shadow-xs last:border-b-0"
+			<Table className="min-w-[720px]">
+				<TableHeader>
+					{table.getHeaderGroups().map((headerGroup) => (
+						<TableRow key={headerGroup.id} className="hover:bg-transparent">
+							{headerGroup.headers.map((header, index) => (
+								<TableHead
+									key={header.id}
+									className={cn(
+										'text-muted-foreground',
+										index === 0 ? 'pl-5' : null,
+										index === headerGroup.headers.length - 1 ? 'pr-5' : null,
+									)}
 								>
-									{row.getVisibleCells().map((cell) => (
-										<td key={cell.id} className="px-5 py-3 align-middle">
-											{flexRender(
-												cell.column.columnDef.cell,
-												cell.getContext(),
+									{header.isPlaceholder
+										? null
+										: flexRender(
+												header.column.columnDef.header,
+												header.getContext(),
 											)}
-										</td>
-									))}
-								</tr>
-							))
-						)}
-					</tbody>
-				</table>
-			</div>
+								</TableHead>
+							))}
+						</TableRow>
+					))}
+				</TableHeader>
+				<TableBody>
+					{table.getRowModel().rows.length === 0 ? (
+						<TableRow className="hover:bg-transparent">
+							<TableCell colSpan={columns.length} className="px-5 py-12">
+								<div className="mx-auto flex max-w-sm flex-col items-center gap-1 text-center">
+									<p className="font-medium">{emptyTitle}</p>
+									<p className="whitespace-normal text-[13px] text-muted-foreground">
+										{emptyDescription}
+									</p>
+								</div>
+							</TableCell>
+						</TableRow>
+					) : (
+						table.getRowModel().rows.map((row) => (
+							<TableRow key={row.id} className="group">
+								{row.getVisibleCells().map((cell, index) => (
+									<TableCell
+										key={cell.id}
+										className={cn(
+											'py-3',
+											index === 0 ? 'pl-5' : null,
+											index === row.getVisibleCells().length - 1
+												? 'pr-5'
+												: null,
+										)}
+									>
+										{flexRender(cell.column.columnDef.cell, cell.getContext())}
+									</TableCell>
+								))}
+							</TableRow>
+						))
+					)}
+				</TableBody>
+			</Table>
 		</SectionCard>
 	)
 }
@@ -238,7 +252,7 @@ export function TextField({
 					{...props}
 				/>
 				{suffix ? (
-					<span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs font-medium text-muted-foreground">
+					<span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 font-medium text-[12px] text-muted-foreground">
 						{suffix}
 					</span>
 				) : null}
@@ -288,7 +302,7 @@ export function MoneyCell({
 	}
 
 	return (
-		<span className="font-medium tabular-nums">
+		<span className="tabular font-medium">
 			{formatMoney(value)}
 			<span className="text-muted-foreground">{suffix}</span>
 		</span>

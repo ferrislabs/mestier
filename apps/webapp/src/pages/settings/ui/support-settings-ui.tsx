@@ -1,8 +1,9 @@
 import { Loader2, Save } from 'lucide-react'
 import { Button } from '#/components/ui/button'
 import { Label } from '#/components/ui/label'
-import { SectionCard, SectionHeader } from '#/components/ui/surface'
+import { SectionCard } from '#/components/ui/surface'
 import { Textarea } from '#/components/ui/textarea'
+import { SettingsCard } from '#/pages/settings/ui/settings-card'
 
 const FIELD_ID = 'support-display-fields'
 const HELPER_ID = 'support-display-fields-helper'
@@ -30,7 +31,7 @@ export function SupportSettingsUI({
 }: SupportSettingsUIProps) {
 	if (isLoading) {
 		return (
-			<SectionCard className="flex min-h-40 items-center justify-center gap-3 p-8 text-sm text-muted-foreground">
+			<SectionCard className="flex min-h-40 rounded-lg shadow-none items-center justify-center gap-3 p-8 text-sm text-muted-foreground">
 				<Loader2 className="size-5 animate-spin" />
 				Chargement…
 			</SectionCard>
@@ -38,11 +39,10 @@ export function SupportSettingsUI({
 	}
 
 	return (
-		<SectionCard>
-			<SectionHeader
-				title="Champs affichés"
-				description="Ces clés de champs personnalisés, dans cet ordre, s’affichent sur les cartes des tickets et en colonnes du tableau."
-			/>
+		<SettingsCard
+			title="Champs affichés"
+			description="Ces clés de champs personnalisés, dans cet ordre, s’affichent sur les cartes des tickets et en colonnes du tableau."
+		>
 			<form
 				className="flex flex-col gap-5 p-5"
 				onSubmit={(event) => {
@@ -96,6 +96,6 @@ export function SupportSettingsUI({
 					</div>
 				) : null}
 			</form>
-		</SectionCard>
+		</SettingsCard>
 	)
 }

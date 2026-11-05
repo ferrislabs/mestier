@@ -3,6 +3,13 @@ import type * as React from 'react'
 import { MetricCard, PageShell } from '#/components/ui/surface'
 import { buildOrgPath } from '#/modules/org-path'
 import type { AppModule } from '#/modules/types'
+import {
+	activityCountLabel,
+	formatToday,
+	greeting,
+	type HomeActivity,
+} from '#/pages/home/types'
+import { ActivityFeedUI } from '#/pages/home/ui/activity-feed-ui'
 import { AppLauncherUI } from '#/pages/home/ui/app-launcher-ui'
 import type { SearchGroup } from '#/pages/home/ui/home-search-ui'
 import { HomeSearchUI } from '#/pages/home/ui/home-search-ui'
@@ -29,10 +36,13 @@ interface HomeProfitability {
 
 interface HomeUIProps {
 	userName?: string
+	organizationName: string
 	stats: HomeStats
 	profitability: HomeProfitability
 	organizationSlug: string
 	search: SearchGroup[]
+	activity: HomeActivity[]
+	isActivityLoading: boolean
 	/** The self-service pointage card, composed in by the feature layer. */
 	todayTasks?: React.ReactNode
 	/** Today's team-wide agenda, composed in by the feature layer. */
@@ -40,18 +50,23 @@ interface HomeUIProps {
 	/** A glance at recent chat activity, composed in by the feature layer. */
 	discussions: React.ReactNode
 	modules: AppModule[]
+	today?: Date
 }
 
 export function HomeUI({
 	userName,
+	organizationName,
 	stats,
 	profitability,
 	organizationSlug,
 	search,
+	activity,
+	isActivityLoading,
 	todayTasks,
 	todayPlanning,
 	discussions,
 	modules,
+	today = new Date(),
 }: HomeUIProps) {
 	// Every module but Accueil itself — a shortcut back to the page you're
 	// already on would be dead weight in a launcher grid.
@@ -60,23 +75,38 @@ export function HomeUI({
 		.map((module) => ({
 			id: module.id,
 			label: module.label,
-			icon: module.icon,
+			module,
 			to: buildOrgPath(organizationSlug, module.basePath),
+			hint: activityCountLabel(
+				activity.filter((item) => item.module.id === module.id).length,
+			),
+			comingSoon: module.status !== 'available',
 		}))
 
 	return (
-		<PageShell>
-			<div className="mx-auto flex w-full max-w-2xl flex-col items-center gap-6 pt-6 pb-2 text-center">
-				<h1 className="text-2xl font-normal text-foreground">
-					{userName ? `Bonjour, ${userName}` : 'Bonjour'}
-				</h1>
+		<PageShell className="gap-0">
+			<header className="flex flex-wrap items-end justify-between gap-2">
+				<div>
+					<p className="text-[13px] text-muted-foreground">
+						{formatToday(today)}, {organizationName}
+					</p>
+					<h1 className="mt-0.5 font-semibold text-2xl tracking-tight">
+						{greeting(today)}
+						{userName ? ` ${userName}` : ''}
+					</h1>
+				</div>
+			</header>
 
+			<div className="mt-6">
 				<HomeSearchUI groups={search} />
-
-				<AppLauncherUI items={launcherItems} />
 			</div>
 
-			<section className="grid grid-cols-1 gap-4 lg:grid-cols-[1.7fr_1fr]">
+			<AppLauncherUI items={launcherItems} />
+
+			<section
+				aria-label="Indicateurs"
+				className="mt-10 grid grid-cols-1 gap-4 lg:grid-cols-[1.7fr_1fr]"
+			>
 				<ProfitabilityCardUI
 					periodLabel={profitability.periodLabel}
 					organizationSlug={profitability.organizationSlug}
@@ -107,12 +137,16 @@ export function HomeUI({
 				</div>
 			</section>
 
-			<section className="grid grid-cols-1 gap-4 md:grid-cols-2">
+			<div className="mt-6">
+				<ActivityFeedUI activity={activity} isLoading={isActivityLoading} />
+			</div>
+
+			<section className="mt-6 grid grid-cols-1 items-start gap-4 md:grid-cols-2">
 				{todayPlanning}
 				{discussions}
 			</section>
 
-			{todayTasks}
+			{todayTasks ? <div className="mt-6">{todayTasks}</div> : null}
 		</PageShell>
 	)
 }

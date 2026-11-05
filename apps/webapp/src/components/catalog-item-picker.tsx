@@ -141,8 +141,8 @@ function CatalogOption({
 			type="button"
 			onClick={onClick}
 			className={cn(
-				'flex min-h-20 min-w-0 items-start gap-3 rounded-lg border bg-background p-3 text-left transition hover:border-primary/40 hover:shadow-xs focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/35',
-				active && 'border-primary/50 bg-brand-soft shadow-xs',
+				'flex min-h-20 min-w-0 items-start gap-3 rounded-lg border bg-background p-3 text-left transition-colors hover:border-primary/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+				active && 'border-primary/50 bg-brand-soft',
 			)}
 		>
 			<span
@@ -168,7 +168,9 @@ function CatalogOption({
 					{description}
 				</span>
 			</span>
-			<span className="shrink-0 text-right text-sm font-semibold">{price}</span>
+			<span className="tabular shrink-0 text-right font-semibold text-sm">
+				{price}
+			</span>
 		</button>
 	)
 }

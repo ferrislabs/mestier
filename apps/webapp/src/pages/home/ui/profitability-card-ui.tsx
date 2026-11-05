@@ -61,12 +61,14 @@ export function ProfitabilityCardUI({
 	return (
 		<Link
 			to={buildOrgPath(organizationSlug, '/reporting')}
-			className="flex flex-col gap-3 rounded-xl bg-card p-6 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
+			className="flex flex-col gap-3 rounded-xl border bg-card p-5 text-card-foreground outline-none transition-colors hover:bg-accent/40 focus-visible:ring-2 focus-visible:ring-ring"
 		>
-			<span className="island-kicker">Marge nette</span>
+			<span className="font-medium text-muted-foreground text-sm">
+				Marge nette
+			</span>
 
 			<div className="flex flex-wrap items-baseline gap-3">
-				<span className="text-4xl font-semibold tracking-tight text-foreground tabular-nums md:text-[2.75rem]">
+				<span className="tabular font-semibold text-3xl text-foreground tracking-tight">
 					{value}
 				</span>
 				{showFigures && trendPercent !== null ? (
@@ -74,9 +76,9 @@ export function ProfitabilityCardUI({
 				) : null}
 			</div>
 
-			<p className="text-sm text-muted-foreground">{hint}</p>
+			<p className="text-muted-foreground text-sm">{hint}</p>
 
-			<span className="mt-1 inline-flex items-center gap-1.5 text-sm font-medium text-brand-muted">
+			<span className="mt-1 inline-flex items-center gap-1.5 font-medium text-primary text-sm">
 				Voir le rapport complet
 				<ArrowRight className="size-3.5" />
 			</span>
@@ -92,8 +94,8 @@ function TrendBadge({ percent }: { percent: number }) {
 		<span
 			className={
 				isPositive
-					? 'inline-flex items-center gap-1 text-sm font-semibold text-success'
-					: 'inline-flex items-center gap-1 text-sm font-semibold text-destructive'
+					? 'inline-flex items-center gap-1 font-semibold text-sm text-success'
+					: 'inline-flex items-center gap-1 font-semibold text-sm text-destructive'
 			}
 		>
 			<Icon className="size-3.5" />

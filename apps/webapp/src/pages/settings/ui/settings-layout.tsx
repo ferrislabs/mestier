@@ -14,13 +14,17 @@ export function SettingsLayout({
 	activeId,
 }: SettingsLayoutProps) {
 	return (
-		<div className="flex gap-8">
+		<div className="grid gap-6 lg:grid-cols-[13rem_minmax(0,1fr)] lg:gap-10">
 			<AnchorNav groups={groups} activeId={activeId} />
-			<div className="flex min-w-0 flex-1 flex-col gap-10">
+			<div className="grid min-w-0 content-start gap-6">
 				{sections.map((section) => {
 					const Section = section.Component
 					return (
-						<section key={section.id} id={section.id} className="scroll-mt-20">
+						<section
+							key={section.id}
+							id={section.id}
+							className="scroll-mt-6 outline-none"
+						>
 							<Section />
 						</section>
 					)

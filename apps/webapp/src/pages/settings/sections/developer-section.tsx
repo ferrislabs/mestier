@@ -1,7 +1,7 @@
 import { Label } from '#/components/ui/label'
-import { SectionCard, SectionHeader } from '#/components/ui/surface'
 import { Switch } from '#/components/ui/switch'
 import { setDeveloperMode, useDeveloperMode } from '#/hooks/use-developer-mode'
+import { SettingsCard } from '#/pages/settings/ui/settings-card'
 
 /**
  * A personal preference, not organization data (#446): stored in this
@@ -13,11 +13,10 @@ export function DeveloperSection() {
 
 	return (
 		<div className="flex flex-col gap-6">
-			<SectionCard>
-				<SectionHeader
-					title="Mode développeur"
-					description="Une préférence propre à ce navigateur, pas à l'organisation."
-				/>
+			<SettingsCard
+				title="Mode développeur"
+				description="Une préférence propre à ce navigateur, pas à l'organisation."
+			>
 				<div className="flex items-center justify-between gap-4 p-5">
 					<div>
 						<Label htmlFor="developer-mode" className="text-sm font-medium">
@@ -36,7 +35,7 @@ export function DeveloperSection() {
 						onCheckedChange={setDeveloperMode}
 					/>
 				</div>
-			</SectionCard>
+			</SettingsCard>
 		</div>
 	)
 }

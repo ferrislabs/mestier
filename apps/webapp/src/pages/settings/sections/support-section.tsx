@@ -14,7 +14,7 @@ export function SupportSection() {
 	const { activeOrganization } = useActiveOrganization()
 
 	return (
-		<div className="flex flex-col gap-8" key={activeOrganization.id}>
+		<div className="flex flex-col gap-6" key={activeOrganization.id}>
 			<SettingsPanel organizationId={activeOrganization.id} />
 		</div>
 	)

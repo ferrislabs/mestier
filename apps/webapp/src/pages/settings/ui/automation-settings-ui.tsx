@@ -1,9 +1,10 @@
 import { Loader2, Save } from 'lucide-react'
 import { TextField } from '#/components/reference-table'
 import { Button } from '#/components/ui/button'
-import { SectionCard, SectionHeader } from '#/components/ui/surface'
+import { SectionCard } from '#/components/ui/surface'
 import type { SettingsFormValues } from '#/pages/settings/lib/automation'
 import { formatRetrySchedulePreview } from '#/pages/settings/lib/automation'
+import { SettingsCard } from '#/pages/settings/ui/settings-card'
 
 export interface AutomationSettingsUIProps {
 	isLoading: boolean
@@ -31,7 +32,7 @@ export function AutomationSettingsUI({
 }: AutomationSettingsUIProps) {
 	if (isLoading) {
 		return (
-			<SectionCard className="flex min-h-40 items-center justify-center gap-3 p-8 text-sm text-muted-foreground">
+			<SectionCard className="flex min-h-40 rounded-lg shadow-none items-center justify-center gap-3 p-8 text-sm text-muted-foreground">
 				<Loader2 className="size-5 animate-spin" />
 				Chargement…
 			</SectionCard>
@@ -39,11 +40,10 @@ export function AutomationSettingsUI({
 	}
 
 	return (
-		<SectionCard>
-			<SectionHeader
-				title="Réglages"
-				description="Combien de temps garder l’historique, et à quel rythme retenter une étape en échec. Une valeur hors des bornes de l’instance est refusée, jamais corrigée en silence."
-			/>
+		<SettingsCard
+			title="Réglages"
+			description="Combien de temps garder l’historique, et à quel rythme retenter une étape en échec. Une valeur hors des bornes de l’instance est refusée, jamais corrigée en silence."
+		>
 			<form
 				className="flex flex-col gap-5 p-5"
 				onSubmit={(event) => {
@@ -114,6 +114,6 @@ export function AutomationSettingsUI({
 					</Button>
 				</div>
 			</form>
-		</SectionCard>
+		</SettingsCard>
 	)
 }

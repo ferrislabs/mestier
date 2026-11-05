@@ -44,7 +44,7 @@ export function FloatingActionBar({
 					aria-label="Actions en attente"
 					className="pointer-events-none fixed inset-x-0 bottom-4 z-50 flex justify-center px-4 md:bottom-6"
 				>
-					<div className="pointer-events-auto flex w-full max-w-2xl items-center gap-3 rounded-lg border bg-card/95 p-2 pl-4 shadow-lg backdrop-blur-md">
+					<div className="pointer-events-auto flex w-full max-w-2xl items-center gap-3 rounded-lg border bg-card/95 p-2 pl-4 shadow-md backdrop-blur-md">
 						<div className="flex flex-1 items-center gap-2 text-sm">
 							<span className="relative flex size-2 shrink-0">
 								<span className="absolute inline-flex size-full animate-ping rounded-full bg-primary/40" />

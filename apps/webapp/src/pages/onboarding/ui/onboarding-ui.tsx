@@ -1,8 +1,8 @@
 import { Building2, Loader2, LogOut } from 'lucide-react'
 import { MestierAppIcon } from '#/components/brand/mestier-logo'
+import { FormField } from '#/components/form-field'
 import { Button } from '#/components/ui/button'
 import { Input } from '#/components/ui/input'
-import { Label } from '#/components/ui/label'
 import { normalizeSlugInput } from '#/modules/org-slug'
 
 interface OnboardingUIProps {
@@ -34,9 +34,9 @@ export function OnboardingUI({
 		<div className="flex min-h-screen flex-col items-center justify-center bg-background p-6">
 			<div className="flex w-full max-w-md flex-col gap-8">
 				<div className="flex flex-col items-center gap-3 text-center">
-					<MestierAppIcon className="size-12 rounded-xl border border-border bg-primary text-white shadow-sm" />
+					<MestierAppIcon className="size-12 rounded-xl bg-primary text-primary-foreground" />
 					<div>
-						<h1 className="text-xl font-semibold tracking-tight">
+						<h1 className="font-semibold text-2xl tracking-tight">
 							Bienvenue sur Mestier
 						</h1>
 						<p className="mt-1 text-sm text-muted-foreground">
@@ -46,7 +46,7 @@ export function OnboardingUI({
 					</div>
 				</div>
 
-				<div className="island-shell rounded-xl p-6">
+				<div className="rounded-lg border bg-card p-6">
 					<div className="mb-5 flex items-center gap-2">
 						<div className="flex size-8 items-center justify-center rounded-lg border bg-secondary">
 							<Building2 className="size-4 text-secondary-foreground" />
@@ -61,27 +61,27 @@ export function OnboardingUI({
 						}}
 						className="flex flex-col gap-4"
 					>
-						<div className="flex flex-col gap-1.5">
-							<Label htmlFor="org-name">Nom de l'organisation</Label>
+						<FormField
+							id="org-name"
+							label="Nom de l'organisation"
+							error={nameError}
+						>
 							<Input
 								id="org-name"
 								placeholder="Entreprise Dupont"
 								value={name}
 								onChange={(e) => onNameChange(e.target.value)}
 								disabled={isPending}
+								aria-invalid={nameError ? true : undefined}
 							/>
-							{nameError ? (
-								<p className="text-xs text-destructive">{nameError}</p>
-							) : null}
-						</div>
+						</FormField>
 
-						<div className="flex flex-col gap-1.5">
-							<div className="flex items-center justify-between">
-								<Label htmlFor="org-slug">Identifiant (slug)</Label>
-								<span className="text-[10px] text-muted-foreground">
-									Utilisé dans les URLs
-								</span>
-							</div>
+						<FormField
+							id="org-slug"
+							label="Identifiant (slug)"
+							hint="Utilisé dans les URLs"
+							error={slugError}
+						>
 							<Input
 								id="org-slug"
 								placeholder="entreprise-dupont"
@@ -90,12 +90,10 @@ export function OnboardingUI({
 									onSlugChange(normalizeSlugInput(e.target.value))
 								}
 								disabled={isPending}
+								aria-invalid={slugError ? true : undefined}
 								className="font-mono text-sm"
 							/>
-							{slugError ? (
-								<p className="text-xs text-destructive">{slugError}</p>
-							) : null}
-						</div>
+						</FormField>
 
 						{globalError ? (
 							<p className="rounded-lg border border-destructive/30 bg-destructive-soft px-3 py-2 text-sm text-destructive">
@@ -111,7 +109,7 @@ export function OnboardingUI({
 				</div>
 
 				<div className="flex items-center justify-between">
-					<p className="text-xs text-muted-foreground">
+					<p className="text-[12px] text-muted-foreground">
 						Vous pourrez modifier ces informations dans les paramètres.
 					</p>
 					<Button
