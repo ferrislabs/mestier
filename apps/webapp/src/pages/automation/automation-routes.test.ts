@@ -49,4 +49,16 @@ describe('automatisation routes', () => {
 			'/_app/o/$organizationSlug/automatisation/$workflowId/executions/$runId',
 		)
 	})
+
+	it('resolves the cross-workflow execution log ahead of the workflow editor', () => {
+		expect(routeIdFor('/o/acme/automatisation/executions')).toBe(
+			'/_app/o/$organizationSlug/automatisation/executions/',
+		)
+	})
+
+	it('resolves a project page ahead of the workflow editor', () => {
+		expect(routeIdFor('/o/acme/automatisation/projets/ventes')).toBe(
+			'/_app/o/$organizationSlug/automatisation/projets/$projectId',
+		)
+	})
 })

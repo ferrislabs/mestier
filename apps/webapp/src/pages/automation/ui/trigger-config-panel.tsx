@@ -3,8 +3,10 @@ import type { Schemas } from '#/api/api.client'
 import { Button } from '#/components/ui/button'
 import { Checkbox } from '#/components/ui/checkbox'
 import { Label } from '#/components/ui/label'
+import { TRIGGER_APPEARANCE } from '#/pages/automation/lib/connector-appearance'
 import { groupEventsByPrefix } from '#/pages/automation/lib/trigger-events'
 import type { ConnectorValidationError } from '#/pages/automation/lib/validation'
+import { KindIconTile } from '#/pages/automation/ui/kind-icon-tile'
 import {
 	isManualTrigger,
 	triggerEventNames,
@@ -41,8 +43,13 @@ export function TriggerConfigPanel({
 			data-testid="trigger-config-panel"
 			className="flex min-h-0 w-[360px] flex-col overflow-hidden border-l bg-card"
 		>
-			<div className="flex items-center justify-between gap-2 border-b px-4 py-3">
-				<span className="truncate font-medium">
+			<div className="flex items-center gap-3 border-border border-b bg-card px-4 py-3">
+				<KindIconTile
+					icon={TRIGGER_APPEARANCE.icon}
+					hue={TRIGGER_APPEARANCE.hue}
+					size="lg"
+				/>
+				<span className="min-w-0 flex-1 truncate font-semibold text-base">
 					{manual ? 'Déclencheur manuel' : 'Déclencheur sur événement(s)'}
 				</span>
 				<Button

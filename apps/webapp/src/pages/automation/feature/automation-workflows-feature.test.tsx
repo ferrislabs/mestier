@@ -118,7 +118,7 @@ function installFakeTanstackApi(): FakeApi {
 	}
 }
 
-function renderFeature(configure: (api: FakeApi) => void) {
+function renderFeature(configure: (api: FakeApi) => void, folderId?: string) {
 	const api = installFakeTanstackApi()
 	api.mockGet(WORKFLOWS_PATH, () => ({ data: [workflow()], pagination: null }))
 	api.mockGet(RUNS_PATH, () => ({ data: [], pagination: null }))
@@ -146,7 +146,7 @@ function renderFeature(configure: (api: FakeApi) => void) {
 
 	return renderWithRouter(
 		<Providers>
-			<AutomationWorkflowsFeature />
+			<AutomationWorkflowsFeature folderId={folderId} />
 		</Providers>,
 	).then(() => api)
 }
@@ -171,8 +171,8 @@ describe('AutomationWorkflowsFeature — last run', () => {
 			}))
 		})
 
-		expect(await screen.findByText('Réussi')).toBeDefined()
-		expect(screen.queryByText('Échoué')).toBeNull()
+		expect(await screen.findByText('Succès')).toBeDefined()
+		expect(screen.queryByText('Échec')).toBeNull()
 	})
 
 	it('says plainly when a workflow has never run', async () => {
@@ -225,7 +225,9 @@ describe('AutomationWorkflowsFeature — rename', () => {
 			}))
 		})
 
-		await user.click(await screen.findByRole('button', { name: 'Actions' }))
+		await user.click(
+			await screen.findByRole('button', { name: /Actions pour/ }),
+		)
 		await user.click(screen.getByRole('menuitem', { name: 'Renommer' }))
 
 		expect(screen.getByDisplayValue('Créer une facture Odoo')).toBeDefined()
@@ -258,8 +260,7 @@ describe('AutomationWorkflowsFeature — enable/disable', () => {
 			}))
 		})
 
-		await user.click(await screen.findByRole('button', { name: 'Actions' }))
-		await user.click(screen.getByRole('menuitem', { name: 'Désactiver' }))
+		await user.click(await screen.findByRole('switch', { name: /Désactiver/ }))
 
 		await waitFor(() => {
 			const call = api.calls.find(
@@ -280,7 +281,9 @@ describe('AutomationWorkflowsFeature — delete', () => {
 			fakeApi.mockMutation('delete', WORKFLOW_PATH, () => ({ data: undefined }))
 		})
 
-		await user.click(await screen.findByRole('button', { name: 'Actions' }))
+		await user.click(
+			await screen.findByRole('button', { name: /Actions pour/ }),
+		)
 		await user.click(screen.getByRole('menuitem', { name: 'Supprimer' }))
 		await user.click(screen.getByRole('button', { name: 'Supprimer' }))
 
@@ -306,5 +309,38 @@ describe('AutomationWorkflowsFeature — reaching the editor', () => {
 		expect(link.getAttribute('href')).toBe(
 			'/o/atelier-bois/automatisation/workflow-1',
 		)
+	})
+})
+
+describe('AutomationWorkflowsFeature — projects', () => {
+	it('titles the root page Workflows and shows no project breadcrumb', async () => {
+		await renderFeature(() => {})
+
+		expect(
+			await screen.findByRole('heading', { name: 'Workflows' }),
+		).toBeDefined()
+		expect(
+			screen.queryByRole('navigation', { name: 'Emplacement du projet' }),
+		).toBeNull()
+	})
+
+	it('opens a project page with its breadcrumb and subprojects', async () => {
+		await renderFeature(() => {}, 'ventes')
+
+		expect(await screen.findByRole('heading', { name: 'Ventes' })).toBeDefined()
+		expect(
+			screen.getByRole('navigation', { name: 'Emplacement du projet' }),
+		).toBeDefined()
+		const subfolders = screen.getByRole('list', { name: 'Sous-dossiers' })
+		expect(subfolders.textContent).toContain('Relances')
+		expect(
+			screen.getByText('Ce projet ne contient encore aucun workflow.'),
+		).toBeDefined()
+	})
+
+	it('says so when the project does not exist', async () => {
+		await renderFeature(() => {}, 'inconnu')
+
+		expect(await screen.findByText('Projet introuvable')).toBeDefined()
 	})
 })

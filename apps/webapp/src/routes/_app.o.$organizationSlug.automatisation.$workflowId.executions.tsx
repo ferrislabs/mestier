@@ -1,9 +1,5 @@
-import {
-	createFileRoute,
-	Outlet,
-	useChildMatches,
-} from '@tanstack/react-router'
-import { WorkflowRunsFeature } from '#/pages/automation/feature/workflow-runs-feature'
+import { createFileRoute, useParams } from '@tanstack/react-router'
+import { WorkflowExecutionsFeature } from '#/pages/automation/feature/workflow-executions-feature'
 
 export const Route = createFileRoute(
 	'/_app/o/$organizationSlug/automatisation/$workflowId/executions',
@@ -13,13 +9,10 @@ export const Route = createFileRoute(
 
 function WorkflowExecutionsPage() {
 	const { workflowId } = Route.useParams()
-	const childMatches = useChildMatches()
+	const runId = useParams({
+		strict: false,
+		select: (params) => params.runId,
+	})
 
-	if (childMatches.length > 0) return <Outlet />
-
-	return (
-		<div className="flex min-h-0 flex-1 flex-col">
-			<WorkflowRunsFeature workflowId={workflowId} />
-		</div>
-	)
+	return <WorkflowExecutionsFeature workflowId={workflowId} runId={runId} />
 }

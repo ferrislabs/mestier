@@ -1,20 +1,22 @@
-import { Handle, type NodeProps, Position } from '@xyflow/react'
-import { Trash2 } from 'lucide-react'
+import type { NodeProps } from '@xyflow/react'
 import type { Schemas } from '#/api/api.client'
-import { Badge } from '#/components/ui/badge'
-import { cn } from '#/lib/utils'
+import { connectorAppearance } from '#/pages/automation/lib/connector-appearance'
+import { executionFromRunStatus } from '#/pages/automation/lib/execution-status'
 import type { ConnectorValidationError } from '#/pages/automation/lib/validation'
-import { runStatusBorderClass } from '#/pages/automation/lib/workflow-runs'
 import { AddNodeButton } from '#/pages/automation/ui/add-node-button'
+import { AutomationNodeCard } from '#/pages/automation/ui/automation-node-card'
 import { useWorkflowCanvasActions } from '#/pages/automation/ui/workflow-canvas-context'
 
 export interface ConnectorNodeData extends Record<string, unknown> {
 	label: string
+	family?: string
 	branches: Schemas.BranchDto[]
 	errors: ConnectorValidationError[]
 	runStatus: string | null
 	connector: Schemas.PlacedConnectorDto
 }
+
+const NO_ISSUES: readonly string[] = []
 
 export function ConnectorNode({
 	id,
@@ -22,79 +24,51 @@ export function ConnectorNode({
 	selected,
 }: NodeProps & { data: ConnectorNodeData }) {
 	const actions = useWorkflowCanvasActions()
-	const hasError = data.errors.length > 0
-	const runBorder = runStatusBorderClass(data.runStatus)
+	const appearance = connectorAppearance(data.family)
+	const runStatus = executionFromRunStatus(data.runStatus)
+	const outputs =
+		data.branches.length === 0
+			? [{ id: null, open: true }]
+			: data.branches.map((branch) => ({
+					id: branch,
+					label: branch,
+					open: true,
+				}))
 
 	return (
-		<div
-			className={cn(
-				'min-w-40 rounded-lg border bg-card px-3 py-2 text-sm shadow-sm',
-				selected && 'ring-2 ring-primary',
-				hasError && 'border-destructive',
-				runBorder && `border-2 ${runBorder}`,
-			)}
-		>
-			<Handle type="target" position={Position.Left} />
-			<div className="flex items-center justify-between gap-2">
-				<span className="font-medium">{data.label}</span>
-				<div className="flex items-center gap-1">
-					{hasError ? (
-						<Badge
-							variant="destructive"
-							aria-label={`Erreur sur ${data.label}`}
-						>
-							!
-						</Badge>
-					) : null}
-					<button
-						type="button"
-						aria-label={`Supprimer ${data.label}`}
-						className="nodrag flex size-5 items-center justify-center rounded-full text-muted-foreground hover:bg-accent hover:text-destructive"
-						onClick={(event) => {
-							event.stopPropagation()
-							actions.onRequestDelete(id)
-						}}
-					>
-						<Trash2 className="size-3.5" />
-					</button>
-				</div>
-			</div>
-			{data.branches.length === 0 ? (
-				<div className="relative mt-2 flex items-center justify-end gap-1 pr-2">
+		<AutomationNodeCard
+			label={data.label}
+			subtitle={data.family ?? data.connector.kind}
+			icon={appearance.icon}
+			hue={appearance.hue}
+			trigger={false}
+			status={null}
+			needsSetup={false}
+			disabled={false}
+			bindingIssues={NO_ISSUES}
+			selected={selected ?? false}
+			hasInput
+			outputs={outputs}
+			execution={runStatus ? { status: runStatus, note: '' } : null}
+			errorLabel={data.errors.length > 0 ? `Erreur sur ${data.label}` : null}
+			deleteLabel={`Supprimer ${data.label}`}
+			onDelete={() => actions.onRequestDelete(id)}
+			renderAdd={(output) => {
+				const branch = data.branches.find((item) => item === output.id) ?? null
+				return (
 					<AddNodeButton
-						ariaLabel={`Ajouter un connecteur après ${data.label}`}
+						ariaLabel={
+							branch === null
+								? `Ajouter un connecteur après ${data.label}`
+								: `Ajouter un connecteur sur la branche ${branch}`
+						}
 						catalogue={actions.catalogue}
-						onSelect={(connector) => actions.onAddNode(id, null, connector)}
+						onSelect={(connector) => actions.onAddNode(id, branch, connector)}
 					/>
-					<Handle type="source" position={Position.Right} />
-				</div>
-			) : (
-				<div className="mt-2 flex flex-col gap-2">
-					{data.branches.map((branch, index) => (
-						<div
-							key={branch}
-							className="relative flex items-center justify-end gap-1 pr-2 text-xs text-muted-foreground"
-						>
-							{branch}
-							<AddNodeButton
-								ariaLabel={`Ajouter un connecteur sur la branche ${branch}`}
-								catalogue={actions.catalogue}
-								onSelect={(connector) =>
-									actions.onAddNode(id, branch, connector)
-								}
-							/>
-							<Handle
-								type="source"
-								position={Position.Right}
-								id={branch}
-								style={{
-									top: `${((index + 1) / (data.branches.length + 1)) * 100}%`,
-								}}
-							/>
-						</div>
-					))}
-				</div>
-			)}
-		</div>
+				)
+			}}
+			onOpen={() => {}}
+			onAddAfter={() => {}}
+		/>
 	)
 }

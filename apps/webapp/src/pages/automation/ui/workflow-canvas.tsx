@@ -3,7 +3,9 @@ import {
 	applyEdgeChanges,
 	applyNodeChanges,
 	Background,
+	BackgroundVariant,
 	type Connection,
+	Controls,
 	type Edge,
 	type EdgeChange,
 	type Node,
@@ -15,6 +17,8 @@ import {
 	useNodesState,
 } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
+import '#/pages/automation/ui/automation.css'
+import { Plus } from 'lucide-react'
 import {
 	type MouseEvent as ReactMouseEvent,
 	useCallback,
@@ -61,6 +65,7 @@ import {
 	upstreamConnectorIds,
 } from '#/pages/automation/lib/graph'
 import type { ConnectorValidationError } from '#/pages/automation/lib/validation'
+import { AddStepPopover } from '#/pages/automation/ui/add-step-popover'
 import {
 	ConnectorConfigPanel,
 	type DataTreeSourceBundle,
@@ -70,7 +75,13 @@ import {
 	type ConnectorNodeData,
 } from '#/pages/automation/ui/connector-node'
 import { ConnectorSearch } from '#/pages/automation/ui/connector-search'
+import {
+	ContextMenuAt,
+	type MenuAnchor,
+} from '#/pages/automation/ui/context-menu-at'
 import { DeletableEdge } from '#/pages/automation/ui/deletable-edge'
+import { EmptyCanvasPrompt } from '#/pages/automation/ui/empty-canvas-prompt'
+import { NodeMenuItems } from '#/pages/automation/ui/node-menu-items'
 import { TriggerConfigPanel } from '#/pages/automation/ui/trigger-config-panel'
 import {
 	TriggerNode,
@@ -78,6 +89,15 @@ import {
 	triggerEventNames,
 } from '#/pages/automation/ui/trigger-node'
 import { WorkflowCanvasActionsContext } from '#/pages/automation/ui/workflow-canvas-context'
+
+const GRID_SIZE = 20
+
+const ARIA_LABELS = {
+	'controls.ariaLabel': 'Contrôles du canevas',
+	'controls.zoomIn.ariaLabel': 'Zoomer',
+	'controls.zoomOut.ariaLabel': 'Dézoomer',
+	'controls.fitView.ariaLabel': 'Ajuster la vue',
+}
 
 const TRIGGER_X_OFFSET = 220
 const TRIGGER_Y_SPACING = 140
@@ -122,6 +142,7 @@ export interface WorkflowCanvasProps {
 	) => Promise<CreatedCredential>
 	isDirty: boolean
 	isSaving: boolean
+	hideToolbar?: boolean
 	onChange: (graph: Schemas.GraphDto, layout: Map<string, NodePosition>) => void
 	onSave: () => void
 }
@@ -160,6 +181,7 @@ function buildInitialNodes(
 		const descriptor = descriptors.get(connector.kind)
 		const data: ConnectorNodeData = {
 			label: descriptor?.label ?? connector.id,
+			family: descriptor?.family,
 			branches: descriptor?.branches ?? [],
 			errors: connectorErrors.get(connector.id) ?? [],
 			runStatus: runStatuses.get(connector.id) ?? null,
@@ -258,6 +280,7 @@ export function WorkflowCanvas({
 	onCreateCredential = rejectCreateCredential,
 	isDirty,
 	isSaving,
+	hideToolbar = false,
 	onChange,
 	onSave,
 }: WorkflowCanvasProps) {
@@ -275,6 +298,11 @@ export function WorkflowCanvas({
 		y: 0,
 	})
 	const paneMenuTriggerRef = useRef<HTMLSpanElement | null>(null)
+	const canvasAreaRef = useRef<HTMLDivElement | null>(null)
+	const [nodeMenu, setNodeMenu] = useState<{
+		anchor: MenuAnchor
+		nodeId: string
+	} | null>(null)
 
 	const nodesRef = useRef(nodes)
 	nodesRef.current = nodes
@@ -400,6 +428,7 @@ export function WorkflowCanvas({
 
 			const data: ConnectorNodeData = {
 				label: descriptor.label,
+				family: descriptor.family,
 				branches: descriptor.branches,
 				errors: [],
 				runStatus: null,
@@ -491,16 +520,37 @@ export function WorkflowCanvas({
 		[onChange, setNodes],
 	)
 
-	const handleNodeClick = useCallback((_event: unknown, node: Node) => {
-		if (node.type === 'trigger') {
+	const openNodeConfig = useCallback((id: string, type: string | undefined) => {
+		if (type === 'trigger') {
 			setOpenConnectorId(null)
-			setOpenTriggerId(node.id)
+			setOpenTriggerId(id)
 			return
 		}
-		if (node.type !== 'connector') return
+		if (type !== 'connector') return
 		setOpenTriggerId(null)
-		setOpenConnectorId(node.id)
+		setOpenConnectorId(id)
 	}, [])
+
+	const handleNodeClick = useCallback(
+		(_event: unknown, node: Node) => openNodeConfig(node.id, node.type),
+		[openNodeConfig],
+	)
+
+	const handleNodeContextMenu = useCallback(
+		(event: ReactMouseEvent, node: Node) => {
+			event.preventDefault()
+			const bounds = canvasAreaRef.current?.getBoundingClientRect()
+			if (!bounds) return
+			setNodeMenu({
+				anchor: {
+					x: event.clientX - bounds.left,
+					y: event.clientY - bounds.top,
+				},
+				nodeId: node.id,
+			})
+		},
+		[],
+	)
 
 	const handlePaneContextMenu = useCallback(
 		(event: ReactMouseEvent | MouseEvent) => {
@@ -526,7 +576,10 @@ export function WorkflowCanvas({
 	)
 
 	const handleAddConnectorFromPane = useCallback(
-		(descriptor: Schemas.ConnectorDescriptorResponse) => {
+		(
+			descriptor: Schemas.ConnectorDescriptorResponse,
+			at: NodePosition = paneMenuPosition,
+		) => {
 			const currentGraph = buildGraph(nodesRef.current, edgesRef.current)
 			const newId = nextConnectorId(currentGraph)
 			const newConnector: Schemas.PlacedConnectorDto = {
@@ -537,6 +590,7 @@ export function WorkflowCanvas({
 			}
 			const data: ConnectorNodeData = {
 				label: descriptor.label,
+				family: descriptor.family,
 				branches: descriptor.branches,
 				errors: [],
 				runStatus: null,
@@ -547,7 +601,7 @@ export function WorkflowCanvas({
 				{
 					id: newId,
 					type: 'connector',
-					position: paneMenuPosition,
+					position: at,
 					data,
 				},
 			]
@@ -563,7 +617,7 @@ export function WorkflowCanvas({
 	)
 
 	const handleAddTriggerFromPane = useCallback(
-		(kind: Schemas.TriggerKindDto) => {
+		(kind: Schemas.TriggerKindDto, at: NodePosition = paneMenuPosition) => {
 			const currentGraph = buildGraph(nodesRef.current, edgesRef.current)
 			const newId = nextTriggerId(currentGraph)
 			const trigger: Schemas.PlacedTriggerDto = { id: newId, kind }
@@ -572,7 +626,7 @@ export function WorkflowCanvas({
 				{
 					id: newId,
 					type: 'trigger',
-					position: paneMenuPosition,
+					position: at,
 					data: { trigger, errors: [] } satisfies TriggerNodeData,
 				},
 			]
@@ -603,6 +657,16 @@ export function WorkflowCanvas({
 		},
 		[onChange, setNodes],
 	)
+
+	const viewportCenter = useCallback((): NodePosition => {
+		const instance = flowRef.current
+		return instance
+			? instance.screenToFlowPosition({
+					x: window.innerWidth / 2,
+					y: window.innerHeight / 2,
+				})
+			: { x: 0, y: 0 }
+	}, [])
 
 	const handleFitViewFromPane = useCallback(() => {
 		flowRef.current?.fitView(FIT_VIEW_OPTIONS)
@@ -641,6 +705,10 @@ export function WorkflowCanvas({
 			handleDeleteEdge,
 		],
 	)
+
+	function nodeKindOf(id: string): string | undefined {
+		return nodes.find((node) => node.id === id)?.type
+	}
 
 	const openNode = openConnectorId
 		? nodes.find((node) => node.id === openConnectorId)
@@ -709,16 +777,18 @@ export function WorkflowCanvas({
 	return (
 		<WorkflowCanvasActionsContext.Provider value={actions}>
 			<div className="flex min-h-0 flex-1 flex-col">
-				<div className="flex items-center justify-between border-b px-4 py-2">
-					<span className="text-xs text-muted-foreground">
-						{isDirty ? 'Modifications non enregistrées' : 'Enregistré'}
-					</span>
-					<Button size="sm" onClick={onSave} disabled={isSaving}>
-						{isSaving ? 'Enregistrement…' : 'Enregistrer'}
-					</Button>
-				</div>
+				{hideToolbar ? null : (
+					<div className="flex items-center justify-between border-b px-4 py-2">
+						<span className="text-xs text-muted-foreground">
+							{isDirty ? 'Modifications non enregistrées' : 'Enregistré'}
+						</span>
+						<Button size="sm" onClick={onSave} disabled={isSaving}>
+							{isSaving ? 'Enregistrement…' : 'Enregistrer'}
+						</Button>
+					</div>
+				)}
 				<div className="flex min-h-0 flex-1">
-					<div className="min-h-0 min-w-0 flex-1">
+					<div ref={canvasAreaRef} className="relative min-h-0 min-w-0 flex-1">
 						<ReactFlowProvider>
 							<ReactFlow
 								nodes={nodes}
@@ -735,17 +805,84 @@ export function WorkflowCanvas({
 									setOpenTriggerId(null)
 								}}
 								onPaneContextMenu={handlePaneContextMenu}
+								onNodeContextMenu={handleNodeContextMenu}
+								onMoveStart={() => setNodeMenu(null)}
 								isValidConnection={validateConnection}
 								autoPanOnNodeDrag={false}
 								fitView
 								fitViewOptions={FIT_VIEW_OPTIONS}
+								className="automation-flow"
+								minZoom={0.25}
+								maxZoom={1.5}
+								zoomOnDoubleClick={false}
+								ariaLabelConfig={ARIA_LABELS}
 								onInit={(instance) => {
 									flowRef.current = instance
 								}}
 							>
-								<Background />
+								<Background
+									variant={BackgroundVariant.Dots}
+									gap={GRID_SIZE}
+									size={1.6}
+								/>
+								<Controls
+									position="bottom-left"
+									showInteractive={false}
+									fitViewOptions={FIT_VIEW_OPTIONS}
+								/>
 							</ReactFlow>
+							{nodes.length === 0 ? (
+								<AddStepPopover
+									catalogue={catalogue}
+									onSelectConnector={(descriptor) =>
+										handleAddConnectorFromPane(descriptor, viewportCenter())
+									}
+									onSelectTrigger={(kind) =>
+										handleAddTriggerFromPane(kind, viewportCenter())
+									}
+								>
+									<EmptyCanvasPrompt />
+								</AddStepPopover>
+							) : null}
+							<div className="absolute top-3 right-3 z-10">
+								<AddStepPopover
+									catalogue={catalogue}
+									onSelectConnector={(descriptor) =>
+										handleAddConnectorFromPane(descriptor, viewportCenter())
+									}
+									onSelectTrigger={(kind) =>
+										handleAddTriggerFromPane(kind, viewportCenter())
+									}
+								>
+									<Button
+										variant="outline"
+										size="icon"
+										className="bg-card"
+										aria-label="Ajouter un nœud"
+									>
+										<Plus />
+									</Button>
+								</AddStepPopover>
+							</div>
 						</ReactFlowProvider>
+						<ContextMenuAt
+							anchor={nodeMenu?.anchor ?? null}
+							label="Actions du nœud"
+							onClose={() => setNodeMenu(null)}
+						>
+							<NodeMenuItems
+								onOpen={() => {
+									if (nodeMenu)
+										openNodeConfig(nodeMenu.nodeId, nodeKindOf(nodeMenu.nodeId))
+								}}
+								onDelete={() => {
+									if (!nodeMenu) return
+									if (nodeKindOf(nodeMenu.nodeId) === 'trigger')
+										handleDeleteTrigger(nodeMenu.nodeId)
+									else handleRequestDelete(nodeMenu.nodeId)
+								}}
+							/>
+						</ContextMenuAt>
 						<ContextMenu key={paneMenuKey}>
 							<ContextMenuTrigger asChild>
 								<span ref={paneMenuTriggerRef} className="sr-only" />

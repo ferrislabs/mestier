@@ -12,6 +12,7 @@ import {
 	CollapsibleContent,
 	CollapsibleTrigger,
 } from '#/components/ui/collapsible'
+import { connectorAppearance } from '#/pages/automation/lib/connector-appearance'
 import { withField } from '#/pages/automation/lib/connector-config'
 import type { DataTreeNode } from '#/pages/automation/lib/data-tree'
 import { insertExpressionAtCursor } from '#/pages/automation/lib/expression'
@@ -31,6 +32,7 @@ import {
 	type ExpressionPreviewState,
 } from '#/pages/automation/ui/expression-preview'
 import { InlineCredentialForm } from '#/pages/automation/ui/inline-credential-form'
+import { KindIconTile } from '#/pages/automation/ui/kind-icon-tile'
 
 const PREVIEW_DEBOUNCE_MS = 400
 
@@ -244,6 +246,7 @@ export function ConnectorConfigPanel({
 	}
 
 	const levelErrors = connectorLevelErrors(errors)
+	const appearance = connectorAppearance(descriptor.family)
 
 	return (
 		<div
@@ -259,8 +262,20 @@ export function ConnectorConfigPanel({
 					className="w-1.5 shrink-0 cursor-col-resize bg-transparent hover:bg-accent"
 				/>
 				<div className="flex min-h-0 min-w-0 flex-1 flex-col">
-					<div className="flex items-center justify-between gap-2 border-b px-4 py-3">
-						<span className="truncate font-medium">{label}</span>
+					<div className="flex items-center gap-3 border-border border-b bg-card px-4 py-3">
+						<KindIconTile
+							icon={appearance.icon}
+							hue={appearance.hue}
+							size="lg"
+						/>
+						<div className="min-w-0 flex-1">
+							<span className="block truncate font-semibold text-base leading-tight">
+								{label}
+							</span>
+							<span className="mt-0.5 block truncate text-muted-foreground text-sm">
+								{descriptor.family}
+							</span>
+						</div>
 						<Button
 							variant="ghost"
 							size="icon-sm"
@@ -285,8 +300,11 @@ export function ConnectorConfigPanel({
 					) : null}
 
 					<div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto overscroll-contain p-4">
-						<Collapsible defaultOpen>
-							<CollapsibleTrigger className="flex w-full items-center justify-between text-sm font-medium text-muted-foreground">
+						<Collapsible
+							defaultOpen
+							className="rounded-md border border-border bg-muted/40 p-3"
+						>
+							<CollapsibleTrigger className="flex w-full items-center justify-between font-semibold text-base">
 								Données disponibles
 								<ChevronDown className="size-4" />
 							</CollapsibleTrigger>
@@ -303,9 +321,7 @@ export function ConnectorConfigPanel({
 						</Collapsible>
 
 						<div className="flex flex-col gap-3 border-t pt-4">
-							<p className="text-sm font-medium text-muted-foreground">
-								Paramètres
-							</p>
+							<p className="font-semibold text-base">Paramètres</p>
 							{createState ? (
 								createState.result ? (
 									<CredentialSecretReveal
@@ -349,21 +365,23 @@ export function ConnectorConfigPanel({
 							)}
 						</div>
 
-						<div className="flex flex-col gap-2 border-t pt-4 text-sm text-muted-foreground">
-							<p className="font-medium text-foreground">Dernière exécution</p>
+						<div className="flex flex-col gap-2 rounded-md border border-border bg-muted/40 p-3 text-sm text-muted-foreground">
+							<p className="font-semibold text-base text-foreground">
+								Dernière exécution
+							</p>
 							{lastStep === null ? (
 								<p>Aucune exécution.</p>
 							) : lastStep.error ? (
 								<p
 									role="alert"
-									className="whitespace-pre-wrap rounded-md border border-destructive/30 bg-destructive/10 p-2 text-destructive"
+									className="whitespace-pre-wrap rounded-md border border-state-alert/60 bg-state-alert/10 p-3 text-destructive"
 								>
 									{lastStep.error}
 								</p>
 							) : lastStep.output === undefined ? (
 								<p>{RUN_STATUS_LABEL[lastStep.status] ?? lastStep.status}</p>
 							) : (
-								<pre className="overflow-x-auto rounded-md bg-muted p-2 text-xs">
+								<pre className="overflow-x-auto whitespace-pre rounded-md border border-border bg-card p-3 font-mono text-xs leading-5">
 									{JSON.stringify(lastStep.output, null, 2)}
 								</pre>
 							)}

@@ -1691,7 +1691,7 @@ describe('WorkflowCanvas — the pane context menu', () => {
 describe('WorkflowCanvas — a run in progress', () => {
 	function borderOf(nodeId: string): string {
 		const node = screen.getByTestId(`rf__node-${nodeId}`)
-		return (node.firstElementChild as HTMLElement).className
+		return (node.querySelector('button') as HTMLElement).className
 	}
 
 	it('borders each connector by the status of its step', async () => {
@@ -1727,9 +1727,9 @@ describe('WorkflowCanvas — a run in progress', () => {
 
 		await screen.findByTestId('rf__node-c1')
 
-		expect(borderOf('c1')).toContain('border-emerald-500')
-		expect(borderOf('c2')).toContain('border-amber-500')
-		expect(borderOf('c3')).toContain('border-destructive')
+		expect(borderOf('c1')).toContain('border-(--auto-success)')
+		expect(borderOf('c2')).toContain('border-state-today')
+		expect(borderOf('c3')).toContain('border-state-alert')
 	})
 
 	it('leaves a connector with no step of its own unmarked', async () => {
@@ -1751,9 +1751,9 @@ describe('WorkflowCanvas — a run in progress', () => {
 
 		await screen.findByTestId('rf__node-c1')
 
-		expect(borderOf('c1')).not.toContain('border-amber-500')
-		expect(borderOf('c1')).not.toContain('border-emerald-500')
-		expect(borderOf('c1')).not.toContain('border-destructive')
+		expect(borderOf('c1')).not.toContain('border-state-today')
+		expect(borderOf('c1')).not.toContain('border-(--auto-success)')
+		expect(borderOf('c1')).not.toContain('border-state-alert')
 	})
 })
 
@@ -1978,5 +1978,86 @@ describe('WorkflowCanvas — a past run that never reached a connector', () => {
 		fireEvent.click(await screen.findByRole('button', { name: /c1 · / }))
 
 		expect(screen.getByText('firstname')).toBeDefined()
+	})
+})
+
+describe('WorkflowCanvas — the node menu', () => {
+	it('opens a menu on a right-click on a node and opens its configuration', async () => {
+		renderHarness({
+			graph: {
+				connectors: [connector('c1', SIMPLE_KIND)],
+				edges: [],
+				triggers: [],
+			},
+			layout: new Map([['c1', { x: 0, y: 0 }]]),
+			descriptors: descriptorMap(SIMPLE_DESCRIPTOR),
+			onSaveSpy: vi.fn(),
+		})
+
+		fireEvent.contextMenu(await screen.findByTestId('rf__node-c1'), {
+			clientX: 200,
+			clientY: 150,
+		})
+		fireEvent.click(await screen.findByRole('menuitem', { name: 'Ouvrir' }))
+
+		expect(await screen.findByTestId('connector-config-panel')).toBeDefined()
+	})
+
+	it('deletes the node after the usual confirmation', async () => {
+		renderHarness({
+			graph: {
+				connectors: [connector('c1', SIMPLE_KIND)],
+				edges: [],
+				triggers: [],
+			},
+			layout: new Map([['c1', { x: 0, y: 0 }]]),
+			descriptors: descriptorMap(SIMPLE_DESCRIPTOR),
+			onSaveSpy: vi.fn(),
+		})
+
+		fireEvent.contextMenu(await screen.findByTestId('rf__node-c1'), {
+			clientX: 200,
+			clientY: 150,
+		})
+		fireEvent.click(await screen.findByRole('menuitem', { name: 'Supprimer' }))
+
+		expect(
+			await screen.findByRole('alertdialog', {
+				name: /Supprimer Étape simple/,
+			}),
+		).toBeDefined()
+	})
+})
+
+describe('WorkflowCanvas — adding a first step', () => {
+	it('invites to add the first step on an empty canvas', async () => {
+		renderHarness({
+			graph: { connectors: [], edges: [], triggers: [] },
+			layout: new Map(),
+			descriptors: descriptorMap(SIMPLE_DESCRIPTOR),
+			onSaveSpy: vi.fn(),
+		})
+
+		expect(
+			await screen.findByRole('button', { name: 'Ajouter la première étape' }),
+		).toBeDefined()
+	})
+
+	it('offers triggers and connectors from the toolbar button, and drops the chosen connector on the canvas', async () => {
+		const user = userEvent.setup()
+		renderHarness({
+			graph: { connectors: [], edges: [], triggers: [] },
+			layout: new Map(),
+			descriptors: descriptorMap(SIMPLE_DESCRIPTOR),
+			onSaveSpy: vi.fn(),
+		})
+
+		await user.click(
+			await screen.findByRole('button', { name: 'Ajouter un nœud' }),
+		)
+		expect(screen.getByText('Déclencheur manuel')).toBeDefined()
+		await user.click(screen.getByRole('button', { name: 'Étape simple' }))
+
+		expect(await screen.findByTestId('rf__node-c1')).toBeDefined()
 	})
 })

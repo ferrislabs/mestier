@@ -1,7 +1,7 @@
 import { AlertCircle, Loader2 } from 'lucide-react'
 import { useRef, useState } from 'react'
 import type { Schemas } from '#/api/api.client'
-import { PageShell, SectionCard } from '#/components/ui/surface'
+import { SectionCard } from '#/components/ui/surface'
 import { useActiveOrganization } from '#/hooks/use-active-organization'
 import {
 	useAutomationCredentials,
@@ -15,6 +15,7 @@ import {
 	useWorkflow,
 	type WorkflowDetail,
 } from '#/hooks/use-automation'
+import { WorkflowTopBarFeature } from '#/pages/automation/feature/workflow-top-bar-feature'
 import type { NodePosition } from '#/pages/automation/lib/graph'
 import { readLayout } from '#/pages/automation/lib/graph'
 import { mergedLayout } from '#/pages/automation/lib/layout'
@@ -96,19 +97,20 @@ function WorkflowCanvasWorkspace({
 		eventsQuery.isLoading
 	) {
 		return (
-			<PageShell>
-				<SectionCard className="flex min-h-72 items-center justify-center gap-3 p-8 text-sm text-muted-foreground">
+			<div className="flex min-h-0 flex-1 flex-col">
+				<WorkflowTopBarFeature workflowId={workflowId} view="editor" />
+				<div className="flex min-h-0 flex-1 items-center justify-center gap-3 p-8 text-sm text-muted-foreground">
 					<Loader2 className="size-5 animate-spin" />
 					Chargement du workflow…
-				</SectionCard>
-			</PageShell>
+				</div>
+			</div>
 		)
 	}
 
 	if (workflowQuery.isError || !workflowQuery.data?.data) {
 		return (
-			<PageShell>
-				<SectionCard className="flex min-h-72 flex-col items-center justify-center gap-3 p-8 text-center">
+			<div className="flex min-h-0 flex-1 flex-col">
+				<SectionCard className="m-6 flex min-h-72 flex-col items-center justify-center gap-3 p-8 text-center">
 					<AlertCircle className="size-6 text-destructive" />
 					<div>
 						<p className="font-semibold">Impossible de charger le workflow</p>
@@ -118,7 +120,7 @@ function WorkflowCanvasWorkspace({
 						</p>
 					</div>
 				</SectionCard>
-			</PageShell>
+			</div>
 		)
 	}
 
@@ -255,6 +257,15 @@ function WorkflowCanvasLoaded({
 
 	return (
 		<div className="flex min-h-0 flex-1 flex-col">
+			<WorkflowTopBarFeature
+				workflowId={workflowId}
+				view="editor"
+				save={{
+					dirty: isDirty,
+					isSaving: saveVersion.isPending,
+					onSave: () => void handleSave(),
+				}}
+			/>
 			{validation.graphErrors.length > 0 || saveError ? (
 				<div
 					role="alert"
@@ -283,6 +294,7 @@ function WorkflowCanvasLoaded({
 				onCreateCredential={handleCreateCredential}
 				isDirty={isDirty}
 				isSaving={saveVersion.isPending}
+				hideToolbar
 				onChange={handleChange}
 				onSave={() => void handleSave()}
 			/>

@@ -1,11 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import {
-	fireEvent,
-	render,
-	screen,
-	waitFor,
-	within,
-} from '@testing-library/react'
+import { fireEvent, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import type { ReactNode } from 'react'
 import { beforeEach, describe, expect, it } from 'vitest'
@@ -21,6 +15,7 @@ import {
 	dragNodeBy,
 	installFlowTestEnvironment,
 } from '#/pages/automation/test/flow-test-env'
+import { renderWithRouter } from '#/test/render-with-router'
 
 for (const method of [
 	'hasPointerCapture',
@@ -45,6 +40,8 @@ const EVENTS_PATH = '/api/v1/organizations/{organization_id}/automation/events'
 const RUNS_PATH = '/api/v1/organizations/{organization_id}/automation/runs'
 const RUN_PATH =
 	'/api/v1/organizations/{organization_id}/automation/runs/{run_id}'
+const MY_PERMISSIONS_PATH =
+	'/api/v1/organizations/{organization_id}/members/me/permissions'
 const EXPRESSIONS_EVALUATE_PATH =
 	'/api/v1/organizations/{organization_id}/automation/expressions/evaluate'
 
@@ -229,6 +226,10 @@ function renderFeature(configure: (api: FakeApi) => void) {
 		data: [],
 		pagination: null,
 	}))
+	api.mockGet(MY_PERMISSIONS_PATH, () => ({
+		data: { permissions: ['VIEW_AUTOMATION', 'MANAGE_AUTOMATION'] },
+		pagination: null,
+	}))
 	configure(api)
 
 	const queryClient = new QueryClient({
@@ -247,7 +248,7 @@ function renderFeature(configure: (api: FakeApi) => void) {
 		)
 	}
 
-	render(
+	void renderWithRouter(
 		<Providers>
 			<WorkflowCanvasFeature workflowId="workflow-1" />
 		</Providers>,

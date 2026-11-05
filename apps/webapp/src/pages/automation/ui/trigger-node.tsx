@@ -1,10 +1,9 @@
-import { Handle, type NodeProps, Position } from '@xyflow/react'
-import { Trash2, TriangleAlert, Zap } from 'lucide-react'
+import type { NodeProps } from '@xyflow/react'
 import type { Schemas } from '#/api/api.client'
-import { Badge } from '#/components/ui/badge'
-import { cn } from '#/lib/utils'
+import { TRIGGER_APPEARANCE } from '#/pages/automation/lib/connector-appearance'
 import type { ConnectorValidationError } from '#/pages/automation/lib/validation'
 import { AddNodeButton } from '#/pages/automation/ui/add-node-button'
+import { AutomationNodeCard } from '#/pages/automation/ui/automation-node-card'
 import { useWorkflowCanvasActions } from '#/pages/automation/ui/workflow-canvas-context'
 
 export interface TriggerNodeData extends Record<string, unknown> {
@@ -29,6 +28,10 @@ function triggerSummary(trigger: Schemas.PlacedTriggerDto): string {
 	return `${names.length} événements`
 }
 
+const NO_ISSUES: readonly string[] = []
+
+const OUTPUTS = [{ id: null, open: true }]
+
 export function TriggerNode({
 	id,
 	data,
@@ -41,55 +44,31 @@ export function TriggerNode({
 		triggerEventNames(data.trigger).length === 0
 
 	return (
-		<div
-			className={cn(
-				'min-w-40 rounded-lg border bg-card px-3 py-2 text-sm shadow-sm',
-				selected && 'ring-2 ring-primary',
-				hasError && 'border-destructive',
-				!hasError && warns && 'border-amber-500',
-			)}
-		>
-			<div className="flex items-center justify-between gap-2">
-				<span className="flex items-center gap-1.5 font-medium">
-					<Zap className="size-3.5" />
-					Déclencheur
-				</span>
-				<div className="flex items-center gap-1">
-					{hasError ? (
-						<Badge variant="destructive" aria-label={`Erreur sur ${id}`}>
-							!
-						</Badge>
-					) : null}
-					<button
-						type="button"
-						aria-label={`Supprimer le déclencheur ${id}`}
-						className="nodrag flex size-5 items-center justify-center rounded-full text-muted-foreground hover:bg-accent hover:text-destructive"
-						onClick={(event) => {
-							event.stopPropagation()
-							actions.onRequestDeleteTrigger(id)
-						}}
-					>
-						<Trash2 className="size-3.5" />
-					</button>
-				</div>
-			</div>
-			<div
-				className={cn(
-					'mt-1 flex items-center gap-1 text-xs text-muted-foreground',
-					warns && 'text-amber-700',
-				)}
-			>
-				{warns ? <TriangleAlert className="size-3.5" /> : null}
-				{triggerSummary(data.trigger)}
-			</div>
-			<div className="relative mt-2 flex items-center justify-end gap-1 pr-2">
+		<AutomationNodeCard
+			label="Déclencheur"
+			subtitle={triggerSummary(data.trigger)}
+			icon={TRIGGER_APPEARANCE.icon}
+			hue={TRIGGER_APPEARANCE.hue}
+			trigger
+			status={null}
+			needsSetup={warns && !hasError}
+			disabled={false}
+			bindingIssues={NO_ISSUES}
+			selected={selected ?? false}
+			hasInput={false}
+			outputs={OUTPUTS}
+			errorLabel={hasError ? `Erreur sur ${id}` : null}
+			deleteLabel={`Supprimer le déclencheur ${id}`}
+			onDelete={() => actions.onRequestDeleteTrigger(id)}
+			renderAdd={() => (
 				<AddNodeButton
 					ariaLabel={`Ajouter un connecteur après le déclencheur ${id}`}
 					catalogue={actions.catalogue}
 					onSelect={(connector) => actions.onAddNode(id, null, connector)}
 				/>
-				<Handle type="source" position={Position.Right} />
-			</div>
-		</div>
+			)}
+			onOpen={() => {}}
+			onAddAfter={() => {}}
+		/>
 	)
 }

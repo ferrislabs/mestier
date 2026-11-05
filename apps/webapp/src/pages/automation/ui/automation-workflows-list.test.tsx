@@ -16,6 +16,9 @@ function workflow(overrides: Partial<WorkflowRow> = {}): WorkflowRow {
 		description: 'Émet la facture dès la signature du devis.',
 		enabled: true,
 		lastRun: null,
+		updatedAt: '2026-08-01T00:00:00Z',
+		tags: [],
+		folderLabel: null,
 		...overrides,
 	}
 }
@@ -24,11 +27,23 @@ function baseProps(
 	overrides: Partial<AutomationWorkflowsListProps> = {},
 ): AutomationWorkflowsListProps {
 	return {
-		organizationName: 'Atelier Bois & Co',
 		organizationSlug: 'atelier-bois',
 		workflows: [workflow()],
 		isLoading: false,
 		error: null,
+		folder: null,
+		folderPath: [],
+		folderMissing: false,
+		subfolders: [],
+		hasWorkflowsInScope: true,
+		query: '',
+		onQueryChange: vi.fn(),
+		tag: 'all',
+		tags: [],
+		onTagChange: vi.fn(),
+		sort: 'updated',
+		onSortChange: vi.fn(),
+		onResetFilters: vi.fn(),
 		onCreate: vi.fn(),
 		onRename: vi.fn(),
 		onToggleEnabled: vi.fn(),
@@ -56,13 +71,32 @@ describe('AutomationWorkflowsList — table content', () => {
 		expect(
 			screen.getByText('Émet la facture dès la signature du devis.'),
 		).toBeDefined()
-		expect(screen.getByText('Activé')).toBeDefined()
+		expect(
+			screen
+				.getByRole('switch', { name: /Désactiver le workflow/ })
+				.getAttribute('aria-checked'),
+		).toBe('true')
 	})
 
 	it('shows a disabled workflow as such', async () => {
 		await render({ workflows: [workflow({ enabled: false })] })
 
-		expect(screen.getByText('Désactivé')).toBeDefined()
+		expect(
+			screen
+				.getByRole('switch', { name: /Activer le workflow/ })
+				.getAttribute('aria-checked'),
+		).toBe('false')
+	})
+
+	it('shows the tags and the project of a workflow', async () => {
+		await render({
+			workflows: [
+				workflow({ tags: ['Ventes'], folderLabel: 'Ventes › Relances' }),
+			],
+		})
+
+		expect(screen.getByText('Ventes')).toBeDefined()
+		expect(screen.getByText('Ventes › Relances')).toBeDefined()
 	})
 
 	it('shows the last run status when the workflow has run before', async () => {
@@ -72,7 +106,7 @@ describe('AutomationWorkflowsList — table content', () => {
 			],
 		})
 
-		expect(screen.getByText('Échoué')).toBeDefined()
+		expect(screen.getByText('Échec')).toBeDefined()
 	})
 
 	it('says plainly when a workflow has never run', async () => {
@@ -84,10 +118,26 @@ describe('AutomationWorkflowsList — table content', () => {
 
 describe('AutomationWorkflowsList — empty state', () => {
 	it('explains what a workflow is instead of showing an empty table', async () => {
-		await render({ workflows: [] })
+		await render({ workflows: [], hasWorkflowsInScope: false })
 
 		expect(screen.getByText('Aucun workflow')).toBeDefined()
 		expect(screen.queryByText('Créer une facture Odoo')).toBeNull()
+	})
+
+	it('offers to reset the filters when they hide every workflow', async () => {
+		const user = userEvent.setup()
+		const props = baseProps({ workflows: [], query: 'zzz' })
+		await render(props)
+
+		expect(
+			screen.getByText('Aucun workflow ne correspond à « zzz »'),
+		).toBeDefined()
+
+		await user.click(
+			screen.getByRole('button', { name: 'Réinitialiser les filtres' }),
+		)
+
+		expect(props.onResetFilters).toHaveBeenCalled()
 	})
 })
 
@@ -109,32 +159,30 @@ describe('AutomationWorkflowsList — row actions', () => {
 		const props = baseProps()
 		await render(props)
 
-		await user.click(screen.getByRole('button', { name: 'Actions' }))
+		await user.click(screen.getByRole('button', { name: /Actions pour/ }))
 		await user.click(screen.getByRole('menuitem', { name: 'Renommer' }))
 
 		expect(props.onRename).toHaveBeenCalledWith(workflow())
 	})
 
-	it('offers to disable an enabled workflow, and calls onToggleEnabled with the row', async () => {
+	it('toggles an enabled workflow from its switch, with the row', async () => {
 		const user = userEvent.setup()
 		const props = baseProps({ workflows: [workflow({ enabled: true })] })
 		await render(props)
 
-		await user.click(screen.getByRole('button', { name: 'Actions' }))
-		await user.click(screen.getByRole('menuitem', { name: 'Désactiver' }))
+		await user.click(screen.getByRole('switch', { name: /Désactiver/ }))
 
 		expect(props.onToggleEnabled).toHaveBeenCalledWith(
 			workflow({ enabled: true }),
 		)
 	})
 
-	it('offers to enable a disabled workflow', async () => {
+	it('toggles a disabled workflow from its switch', async () => {
 		const user = userEvent.setup()
 		const props = baseProps({ workflows: [workflow({ enabled: false })] })
 		await render(props)
 
-		await user.click(screen.getByRole('button', { name: 'Actions' }))
-		await user.click(screen.getByRole('menuitem', { name: 'Activer' }))
+		await user.click(screen.getByRole('switch', { name: /Activer/ }))
 
 		expect(props.onToggleEnabled).toHaveBeenCalledWith(
 			workflow({ enabled: false }),
@@ -146,7 +194,7 @@ describe('AutomationWorkflowsList — row actions', () => {
 		const props = baseProps()
 		await render(props)
 
-		await user.click(screen.getByRole('button', { name: 'Actions' }))
+		await user.click(screen.getByRole('button', { name: /Actions pour/ }))
 		await user.click(screen.getByRole('menuitem', { name: 'Supprimer' }))
 
 		expect(props.onDelete).not.toHaveBeenCalled()
@@ -174,7 +222,45 @@ describe('AutomationWorkflowsList — permission gating', () => {
 	it('offers no row actions menu to a caller without MANAGE_AUTOMATION', async () => {
 		await render({}, ['VIEW_AUTOMATION'])
 
-		expect(screen.queryByRole('button', { name: 'Actions' })).toBeNull()
+		expect(screen.queryByRole('button', { name: /Actions pour/ })).toBeNull()
+	})
+})
+
+describe('AutomationWorkflowsList — projects', () => {
+	it('lists the subfolders with their workflow count', async () => {
+		await render({
+			subfolders: [
+				{
+					folder: { id: 'ventes', name: 'Ventes', parentId: null },
+					workflowCount: 2,
+				},
+			],
+		})
+
+		const link = screen.getByRole('link', { name: 'Ventes' })
+		expect(link.getAttribute('href')).toBe(
+			'/o/atelier-bois/automatisation/projets/ventes',
+		)
+		expect(screen.getByText('2 workflows')).toBeDefined()
+	})
+
+	it('titles the page after the project and shows its breadcrumb', async () => {
+		const ventes = { id: 'ventes', name: 'Ventes', parentId: null }
+		await render({ folder: ventes, folderPath: [ventes] })
+
+		expect(screen.getByRole('heading', { name: 'Ventes' })).toBeDefined()
+		expect(
+			screen.getByRole('navigation', { name: 'Emplacement du projet' }),
+		).toBeDefined()
+	})
+
+	it('says so when the project does not exist', async () => {
+		await render({ folderMissing: true })
+
+		expect(screen.getByText('Projet introuvable')).toBeDefined()
+		expect(
+			screen.getByRole('link', { name: 'Voir tous les workflows' }),
+		).toBeDefined()
 	})
 })
 
@@ -192,7 +278,7 @@ describe('AutomationWorkflowsList — reaching the editor', () => {
 	it('offers the execution history from the row menu', async () => {
 		await render()
 
-		await userEvent.click(screen.getByRole('button', { name: 'Actions' }))
+		await userEvent.click(screen.getByRole('button', { name: /Actions pour/ }))
 
 		const history = screen.getByRole('menuitem', { name: /Historique/ })
 		expect(history.getAttribute('href')).toBe(
@@ -203,7 +289,7 @@ describe('AutomationWorkflowsList — reaching the editor', () => {
 	it('names the rename action for what it does, not for editing the workflow', async () => {
 		await render()
 
-		await userEvent.click(screen.getByRole('button', { name: 'Actions' }))
+		await userEvent.click(screen.getByRole('button', { name: /Actions pour/ }))
 
 		expect(screen.getByRole('menuitem', { name: 'Renommer' })).toBeDefined()
 		expect(screen.queryByRole('menuitem', { name: 'Modifier' })).toBeNull()

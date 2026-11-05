@@ -1,60 +1,52 @@
 import { Link } from '@tanstack/react-router'
-import type { ColumnDef } from '@tanstack/react-table'
-import { Loader2, MoreHorizontal, Plus, Trash2, Workflow } from 'lucide-react'
-import { useMemo } from 'react'
-import { ReferenceTable, RowIdentity } from '#/components/reference-table'
+import { Loader2, Plus } from 'lucide-react'
+import { EmptyState } from '#/components/empty-state'
 import { RequirePermission } from '#/components/require-permission'
-import {
-	AlertDialog,
-	AlertDialogAction,
-	AlertDialogCancel,
-	AlertDialogContent,
-	AlertDialogDescription,
-	AlertDialogFooter,
-	AlertDialogHeader,
-	AlertDialogTitle,
-	AlertDialogTrigger,
-} from '#/components/ui/alert-dialog'
 import { Button } from '#/components/ui/button'
-import {
-	DropdownMenu,
-	DropdownMenuContent,
-	DropdownMenuItem,
-	DropdownMenuSeparator,
-	DropdownMenuTrigger,
-} from '#/components/ui/dropdown-menu'
-import {
-	MetricCard,
-	PageHeader,
-	PageShell,
-	SectionCard,
-	StatusBadge,
-} from '#/components/ui/surface'
+import { PageHeader, PageShell } from '#/components/ui/surface'
 import { buildOrgPath } from '#/modules/org-path'
+import type { WorkflowFolder } from '#/pages/automation/lib/folders'
 import {
-	RUN_STATUS_LABEL,
-	RUN_STATUS_TONE,
-} from '#/pages/automation/lib/workflow-runs'
+	ALL_TAGS,
+	type WorkflowSortKey,
+} from '#/pages/automation/lib/workflow-list'
+import { FolderBreadcrumb } from '#/pages/automation/ui/folder-breadcrumb'
+import { FolderRow } from '#/pages/automation/ui/folder-row'
+import { WorkflowListEmpty } from '#/pages/automation/ui/workflow-list-empty'
+import { WorkflowListToolbar } from '#/pages/automation/ui/workflow-list-toolbar'
+import {
+	WorkflowListRow,
+	type WorkflowRow,
+} from '#/pages/automation/ui/workflow-row'
 
-export interface WorkflowLastRun {
-	status: string
-	at: string
-}
+export type {
+	WorkflowLastRun,
+	WorkflowRow,
+} from '#/pages/automation/ui/workflow-row'
 
-export interface WorkflowRow {
-	id: string
-	name: string
-	description: string | null
-	enabled: boolean
-	lastRun: WorkflowLastRun | null
+export interface SubfolderRow {
+	folder: WorkflowFolder
+	workflowCount: number
 }
 
 export interface AutomationWorkflowsListProps {
-	organizationName: string
 	organizationSlug: string
 	workflows: WorkflowRow[]
 	isLoading: boolean
 	error: string | null
+	folder: WorkflowFolder | null
+	folderPath: WorkflowFolder[]
+	folderMissing: boolean
+	subfolders: SubfolderRow[]
+	hasWorkflowsInScope: boolean
+	query: string
+	onQueryChange: (query: string) => void
+	tag: string
+	tags: string[]
+	onTagChange: (tag: string) => void
+	sort: WorkflowSortKey
+	onSortChange: (sort: WorkflowSortKey) => void
+	onResetFilters: () => void
 	onCreate: () => void
 	onRename: (workflow: WorkflowRow) => void
 	onToggleEnabled: (workflow: WorkflowRow) => void
@@ -62,99 +54,63 @@ export interface AutomationWorkflowsListProps {
 }
 
 export function AutomationWorkflowsList({
-	organizationName,
 	organizationSlug,
 	workflows,
 	isLoading,
 	error,
+	folder,
+	folderPath,
+	folderMissing,
+	subfolders,
+	hasWorkflowsInScope,
+	query,
+	onQueryChange,
+	tag,
+	tags,
+	onTagChange,
+	sort,
+	onSortChange,
+	onResetFilters,
 	onCreate,
 	onRename,
 	onToggleEnabled,
 	onDelete,
 }: AutomationWorkflowsListProps) {
-	const columns = useMemo<ColumnDef<WorkflowRow>[]>(
-		() => [
-			{
-				id: 'name',
-				header: 'Workflow',
-				cell: ({ row }) => (
-					<Link
-						to={buildOrgPath(
-							organizationSlug,
-							`/automatisation/${row.original.id}`,
-						)}
-						className="block hover:underline"
-					>
-						<RowIdentity title={row.original.name} id={row.original.id} />
-					</Link>
-				),
-			},
-			{
-				id: 'description',
-				header: 'Description',
-				cell: ({ row }) =>
-					row.original.description ? (
-						<span className="truncate">{row.original.description}</span>
-					) : (
-						<span className="text-muted-foreground italic">Aucune</span>
-					),
-			},
-			{
-				id: 'enabled',
-				header: 'Statut',
-				cell: ({ row }) => (
-					<StatusBadge tone={row.original.enabled ? 'success' : 'neutral'}>
-						{row.original.enabled ? 'Activé' : 'Désactivé'}
-					</StatusBadge>
-				),
-			},
-			{
-				id: 'lastRun',
-				header: 'Dernière exécution',
-				cell: ({ row }) => {
-					const lastRun = row.original.lastRun
-					if (!lastRun) {
-						return (
-							<span className="text-muted-foreground italic">
-								Jamais exécuté
-							</span>
-						)
+	if (folderMissing) {
+		return (
+			<PageShell className="gap-0">
+				<PageHeader
+					className="mb-6"
+					title="Projet introuvable"
+					description="Ce projet n’existe pas ou a été supprimé."
+					actions={
+						<Button asChild variant="outline">
+							<Link to={buildOrgPath(organizationSlug, '/automatisation')}>
+								Voir tous les workflows
+							</Link>
+						</Button>
 					}
-					return (
-						<div className="flex flex-col gap-1">
-							<StatusBadge tone={RUN_STATUS_TONE[lastRun.status] ?? 'neutral'}>
-								{RUN_STATUS_LABEL[lastRun.status] ?? lastRun.status}
-							</StatusBadge>
-							<span className="text-xs text-muted-foreground">
-								{lastRun.at}
-							</span>
-						</div>
-					)
-				},
-			},
-			{
-				id: 'actions',
-				header: () => <span className="sr-only">Actions</span>,
-				cell: ({ row }) => (
-					<WorkflowRowActions
-						workflow={row.original}
-						organizationSlug={organizationSlug}
-						onRename={() => onRename(row.original)}
-						onToggleEnabled={() => onToggleEnabled(row.original)}
-						onDelete={() => onDelete(row.original)}
-					/>
-				),
-			},
-		],
-		[organizationSlug, onRename, onToggleEnabled, onDelete],
-	)
+				/>
+			</PageShell>
+		)
+	}
 
 	return (
-		<PageShell>
+		<PageShell className="gap-0">
+			{folder && (
+				<FolderBreadcrumb
+					path={folderPath}
+					organizationSlug={organizationSlug}
+				/>
+			)}
 			<PageHeader
-				eyebrow={organizationName}
-				title="Automatisation"
-				description="Un workflow automatise une suite d’actions déclenchées par un événement de l’organisation — une facture Odoo créée, un client notifié."
+				className="mb-6"
+				title={folder ? folder.name : 'Workflows'}
+				description={
+					folder
+						? 'Projet : les workflows et sous-dossiers qu’il contient.'
+						: 'Automatisez vos tâches à partir des événements de Mestier.'
+				}
 				actions={
 					<RequirePermission permission="MANAGE_AUTOMATION">
 						<Button onClick={onCreate}>
@@ -164,109 +120,71 @@ export function AutomationWorkflowsList({
 					</RequirePermission>
 				}
 			/>
-
-			<section className="grid grid-cols-2 gap-4 lg:grid-cols-3">
-				<MetricCard
-					label="Workflows"
-					value={workflows.length}
-					icon={<Workflow className="size-4" />}
-				/>
-			</section>
-
 			{error ? (
-				<div className="rounded-lg border border-destructive/30 bg-destructive-soft px-4 py-3 text-sm text-destructive">
+				<div className="mb-4 rounded-lg border border-destructive/30 bg-destructive-soft px-4 py-3 text-sm text-destructive">
 					{error}
 				</div>
 			) : null}
-
+			<WorkflowListToolbar
+				query={query}
+				onQueryChange={onQueryChange}
+				tag={tag}
+				tags={tags}
+				onTagChange={onTagChange}
+				sort={sort}
+				onSortChange={onSortChange}
+			/>
+			{subfolders.length > 0 && (
+				<ul
+					aria-label="Sous-dossiers"
+					className="mb-3 divide-y divide-border overflow-hidden rounded-lg border border-border bg-card"
+				>
+					{subfolders.map((subfolder) => (
+						<FolderRow
+							key={subfolder.folder.id}
+							folder={subfolder.folder}
+							workflowCount={subfolder.workflowCount}
+							organizationSlug={organizationSlug}
+						/>
+					))}
+				</ul>
+			)}
 			{isLoading ? (
-				<SectionCard className="flex min-h-72 items-center justify-center gap-3 p-8 text-sm text-muted-foreground">
+				<div className="flex min-h-40 items-center justify-center gap-3 rounded-lg border border-border bg-card p-8 text-sm text-muted-foreground">
 					<Loader2 className="size-5 animate-spin" />
 					Chargement des workflows…
-				</SectionCard>
-			) : (
-				<ReferenceTable
-					title={`Workflows (${workflows.length})`}
-					description="Le déclencheur de chaque workflow se choisit une fois ouvert."
-					emptyTitle="Aucun workflow"
-					emptyDescription="Un workflow automatise une suite d’actions déclenchées par un événement de l’organisation — créez le premier pour commencer."
-					data={workflows}
-					columns={columns}
+				</div>
+			) : !hasWorkflowsInScope ? (
+				folder ? (
+					<p className="rounded-lg border border-border border-dashed bg-card px-4 py-8 text-center text-muted-foreground text-sm">
+						Ce projet ne contient encore aucun workflow.
+					</p>
+				) : (
+					<EmptyState
+						title="Aucun workflow"
+						hint="Un workflow automatise une suite d’actions déclenchées par un événement de l’organisation — créez le premier pour commencer."
+					/>
+				)
+			) : workflows.length === 0 ? (
+				<WorkflowListEmpty
+					query={query}
+					tag={tag === ALL_TAGS ? null : tag}
+					onReset={onResetFilters}
 				/>
+			) : (
+				<ul className="divide-y divide-border overflow-hidden rounded-lg border border-border bg-card">
+					{workflows.map((workflow) => (
+						<WorkflowListRow
+							key={workflow.id}
+							workflow={workflow}
+							organizationSlug={organizationSlug}
+							onRename={onRename}
+							onToggleEnabled={onToggleEnabled}
+							onDelete={onDelete}
+						/>
+					))}
+				</ul>
 			)}
 		</PageShell>
-	)
-}
-
-interface WorkflowRowActionsProps {
-	workflow: WorkflowRow
-	organizationSlug: string
-	onRename: () => void
-	onToggleEnabled: () => void
-	onDelete: () => void
-}
-
-function WorkflowRowActions({
-	workflow,
-	organizationSlug,
-	onRename,
-	onToggleEnabled,
-	onDelete,
-}: WorkflowRowActionsProps) {
-	return (
-		<RequirePermission permission="MANAGE_AUTOMATION">
-			<AlertDialog>
-				<div className="flex justify-end opacity-0 transition group-hover:opacity-100 group-focus-within:opacity-100">
-					<DropdownMenu>
-						<DropdownMenuTrigger asChild>
-							<Button size="icon-sm" variant="ghost">
-								<MoreHorizontal />
-								<span className="sr-only">Actions</span>
-							</Button>
-						</DropdownMenuTrigger>
-						<DropdownMenuContent align="end">
-							<DropdownMenuItem asChild>
-								<Link
-									to={buildOrgPath(
-										organizationSlug,
-										`/automatisation/${workflow.id}/executions`,
-									)}
-								>
-									Historique d’exécution
-								</Link>
-							</DropdownMenuItem>
-							<DropdownMenuSeparator />
-							<DropdownMenuItem onClick={onRename}>Renommer</DropdownMenuItem>
-							<DropdownMenuItem onClick={onToggleEnabled}>
-								{workflow.enabled ? 'Désactiver' : 'Activer'}
-							</DropdownMenuItem>
-							<DropdownMenuSeparator />
-							<AlertDialogTrigger asChild>
-								<DropdownMenuItem
-									variant="destructive"
-									onSelect={(event) => event.preventDefault()}
-								>
-									<Trash2 />
-									Supprimer
-								</DropdownMenuItem>
-							</AlertDialogTrigger>
-						</DropdownMenuContent>
-					</DropdownMenu>
-				</div>
-				<AlertDialogContent>
-					<AlertDialogHeader>
-						<AlertDialogTitle>Supprimer {workflow.name} ?</AlertDialogTitle>
-						<AlertDialogDescription>
-							Ce workflow sera supprimé définitivement. Cette action est
-							irréversible.
-						</AlertDialogDescription>
-					</AlertDialogHeader>
-					<AlertDialogFooter>
-						<AlertDialogCancel>Annuler</AlertDialogCancel>
-						<AlertDialogAction onClick={onDelete}>Supprimer</AlertDialogAction>
-					</AlertDialogFooter>
-				</AlertDialogContent>
-			</AlertDialog>
-		</RequirePermission>
 	)
 }

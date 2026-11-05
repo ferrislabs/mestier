@@ -14,9 +14,10 @@ import { RunNowDialog } from '#/pages/automation/ui/run-now-dialog'
 
 export interface RunNowFeatureProps {
 	workflowId: string
+	bare?: boolean
 }
 
-export function RunNowFeature({ workflowId }: RunNowFeatureProps) {
+export function RunNowFeature({ workflowId, bare }: RunNowFeatureProps) {
 	const { activeOrganization } = useActiveOrganization()
 
 	return (
@@ -25,6 +26,7 @@ export function RunNowFeature({ workflowId }: RunNowFeatureProps) {
 			organizationId={activeOrganization.id}
 			organizationSlug={activeOrganization.slug}
 			workflowId={workflowId}
+			bare={bare}
 		/>
 	)
 }
@@ -45,10 +47,12 @@ function RunNowWorkspace({
 	organizationId,
 	organizationSlug,
 	workflowId,
+	bare,
 }: {
 	organizationId: string
 	organizationSlug: string
 	workflowId: string
+	bare?: boolean
 }) {
 	const eventsQuery = useAutomationEvents(organizationId)
 	const workflowQuery = useWorkflow(organizationId, workflowId)
@@ -85,6 +89,31 @@ function RunNowWorkspace({
 		})
 	}
 
+	const dialog = (
+		<RunNowDialog
+			open={open}
+			events={eventsQuery.data?.data ?? []}
+			triggerEventNames={subscribedEventNames(
+				workflowQuery.data?.data.current_version?.graph,
+			)}
+			isStarting={startRun.isPending}
+			startError={startError}
+			onOpenChange={setOpen}
+			onConfirm={(payload) => void handleConfirm(payload)}
+		/>
+	)
+
+	if (bare) {
+		return (
+			<>
+				<Button variant="outline" size="sm" onClick={() => setOpen(true)}>
+					Exécuter maintenant
+				</Button>
+				{dialog}
+			</>
+		)
+	}
+
 	return (
 		<div className="flex items-center justify-between gap-2 border-b px-4 py-2">
 			<Button variant="ghost" size="sm" onClick={handleOpenHistory}>
@@ -95,18 +124,7 @@ function RunNowWorkspace({
 					Exécuter maintenant
 				</Button>
 			</RequirePermission>
-
-			<RunNowDialog
-				open={open}
-				events={eventsQuery.data?.data ?? []}
-				triggerEventNames={subscribedEventNames(
-					workflowQuery.data?.data.current_version?.graph,
-				)}
-				isStarting={startRun.isPending}
-				startError={startError}
-				onOpenChange={setOpen}
-				onConfirm={(payload) => void handleConfirm(payload)}
-			/>
+			{dialog}
 		</div>
 	)
 }

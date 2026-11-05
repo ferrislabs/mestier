@@ -193,13 +193,18 @@ describe('AutomationCredentialsFeature — creation', () => {
 			}))
 		})
 
-		await user.click(await screen.findByRole('button', { name: 'Ajouter' }))
+		await user.click(
+			await screen.findByRole('button', { name: 'Nouvelle identification' }),
+		)
+		await user.click(screen.getByRole('button', { name: /Bearer token/ }))
 		await user.type(screen.getByLabelText('Nom'), 'Signature sortante')
 		await user.click(screen.getByRole('combobox', { name: 'Origine' }))
 		await user.click(
 			screen.getByRole('option', { name: /Générée par Mestier/ }),
 		)
-		await user.click(screen.getByRole('button', { name: 'Créer' }))
+		await user.click(
+			screen.getByRole('button', { name: 'Créer l’identification' }),
+		)
 
 		expect(await screen.findByText('Secret généré')).toBeDefined()
 		expect(screen.getByDisplayValue('c2VjcmV0LWJ5dGVz')).toBeDefined()
@@ -216,10 +221,15 @@ describe('AutomationCredentialsFeature — creation', () => {
 			}))
 		})
 
-		await user.click(await screen.findByRole('button', { name: 'Ajouter' }))
+		await user.click(
+			await screen.findByRole('button', { name: 'Nouvelle identification' }),
+		)
+		await user.click(screen.getByRole('button', { name: /Bearer token/ }))
 		await user.type(screen.getByLabelText('Nom'), 'Odoo')
 		await user.type(screen.getByLabelText('Token'), 'shh')
-		await user.click(screen.getByRole('button', { name: 'Créer' }))
+		await user.click(
+			screen.getByRole('button', { name: 'Créer l’identification' }),
+		)
 
 		await waitFor(() => {
 			expect(screen.queryByText('Secret généré')).toBeNull()
@@ -230,9 +240,14 @@ describe('AutomationCredentialsFeature — creation', () => {
 		const user = userEvent.setup()
 		const api = renderFeature(() => {})
 
-		await user.click(await screen.findByRole('button', { name: 'Ajouter' }))
+		await user.click(
+			await screen.findByRole('button', { name: 'Nouvelle identification' }),
+		)
+		await user.click(screen.getByRole('button', { name: /Bearer token/ }))
 		await user.type(screen.getByLabelText('Nom'), 'Sans token')
-		await user.click(screen.getByRole('button', { name: 'Créer' }))
+		await user.click(
+			screen.getByRole('button', { name: 'Créer l’identification' }),
+		)
 
 		expect(screen.getByText('Token est requis')).toBeDefined()
 		expect(
@@ -251,7 +266,12 @@ describe('AutomationCredentialsFeature — rotation', () => {
 			}))
 		})
 
-		await user.click(await screen.findByRole('button', { name: 'Régénérer' }))
+		await user.click(
+			await screen.findByRole('button', { name: 'Signature sortante' }),
+		)
+		await user.click(
+			await screen.findByRole('button', { name: 'Régénérer le secret' }),
+		)
 
 		expect(await screen.findByText('Secret généré')).toBeDefined()
 		expect(screen.getByDisplayValue('cm90YXRlZC1zZWNyZXQ')).toBeDefined()
@@ -264,8 +284,14 @@ describe('AutomationCredentialsFeature — rotation', () => {
 			}))
 		})
 
-		await screen.findByText('Signature sortante')
-		expect(screen.queryByRole('button', { name: 'Régénérer' })).toBeNull()
+		const user = userEvent.setup()
+		await user.click(
+			await screen.findByRole('button', { name: 'Signature sortante' }),
+		)
+		await screen.findByRole('dialog')
+		expect(
+			screen.queryByRole('button', { name: 'Régénérer le secret' }),
+		).toBeNull()
 	})
 })
 
@@ -281,8 +307,13 @@ describe('AutomationCredentialsFeature — deletion refused', () => {
 			})
 		})
 
-		await user.click(await screen.findByRole('button', { name: 'Actions' }))
-		await user.click(screen.getByRole('menuitem', { name: 'Supprimer' }))
+		await user.click(
+			await screen.findByRole('button', { name: 'Signature sortante' }),
+		)
+		await user.click(await screen.findByRole('button', { name: 'Supprimer' }))
+		await user.click(
+			screen.getByRole('button', { name: 'Supprimer définitivement' }),
+		)
 
 		expect(
 			await screen.findByText(
@@ -302,8 +333,11 @@ describe('AutomationCredentialsFeature — permission gating', () => {
 		)
 
 		await screen.findByText('Signature sortante')
-		expect(screen.queryByRole('button', { name: 'Ajouter' })).toBeNull()
-		expect(screen.queryByRole('button', { name: 'Régénérer' })).toBeNull()
-		expect(screen.queryByRole('button', { name: 'Actions' })).toBeNull()
+		expect(
+			screen.queryByRole('button', { name: 'Nouvelle identification' }),
+		).toBeNull()
+		expect(
+			screen.queryByRole('button', { name: 'Signature sortante' }),
+		).toBeNull()
 	})
 })

@@ -6,6 +6,7 @@ import {
 	PopoverContent,
 	PopoverTrigger,
 } from '#/components/ui/popover'
+import { ADD_BUTTON } from '#/pages/automation/ui/automation-node-card'
 import { ConnectorSearch } from '#/pages/automation/ui/connector-search'
 
 export interface AddNodeButtonProps {
@@ -28,15 +29,15 @@ export function AddNodeButton({
 					type="button"
 					aria-label={ariaLabel}
 					onClick={(event) => event.stopPropagation()}
-					className="nodrag flex size-5 items-center justify-center rounded-full border bg-background text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+					className={ADD_BUTTON}
 				>
-					<Plus className="size-3" />
+					<Plus className="size-3.5" />
 				</button>
 			</PopoverTrigger>
 			<PopoverContent
 				side="right"
 				align="start"
-				className="w-auto p-2"
+				className="w-auto p-0"
 				onClick={(event) => event.stopPropagation()}
 			>
 				<ConnectorSearch

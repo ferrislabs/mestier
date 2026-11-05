@@ -8,6 +8,8 @@ import {
 	useRotateCredential,
 	useUpdateCredential,
 } from '#/hooks/use-automation'
+import { useHasPermission } from '#/hooks/use-permissions'
+import { useExternalServices } from '#/pages/automation/feature/use-external-services'
 import {
 	buildCredentialFormErrors,
 	emptyCredentialForm,
@@ -25,18 +27,17 @@ export function AutomationCredentialsFeature() {
 		<AutomationCredentialsWorkspace
 			key={activeOrganization.id}
 			organizationId={activeOrganization.id}
-			organizationName={activeOrganization.name}
 		/>
 	)
 }
 
 function AutomationCredentialsWorkspace({
 	organizationId,
-	organizationName,
 }: {
 	organizationId: string
-	organizationName: string
 }) {
+	const services = useExternalServices()
+	const canManage = useHasPermission('MANAGE_AUTOMATION')
 	const catalogue = useConnectorCatalogue(organizationId)
 	const credentials = useAutomationCredentials(organizationId)
 	const createCredential = useCreateCredential(organizationId)
@@ -44,7 +45,7 @@ function AutomationCredentialsWorkspace({
 	const deleteCredential = useDeleteCredential()
 	const rotateCredential = useRotateCredential()
 
-	const [sheetOpen, setSheetOpen] = useState(false)
+	const [dialogOpen, setDialogOpen] = useState(false)
 	const [mode, setMode] = useState<'create' | 'edit'>('create')
 	const [editingId, setEditingId] = useState<string | null>(null)
 	const [values, setValues] = useState<CredentialFormValues>(
@@ -89,7 +90,7 @@ function AutomationCredentialsWorkspace({
 			if (values.origin === 'generated') {
 				setRevealedSecret(String(created.data.secret))
 			} else {
-				setSheetOpen(false)
+				setDialogOpen(false)
 			}
 			return
 		}
@@ -105,7 +106,7 @@ function AutomationCredentialsWorkspace({
 				data: hasData ? values.data : undefined,
 			},
 		})
-		setSheetOpen(false)
+		setDialogOpen(false)
 	}
 
 	const handleRotate = async (row: CredentialRow) => {
@@ -123,7 +124,7 @@ function AutomationCredentialsWorkspace({
 				data: {},
 			})
 			setRevealedSecret(String(rotated.data.secret))
-			setSheetOpen(true)
+			setDialogOpen(true)
 		} finally {
 			setRotatingId(null)
 		}
@@ -131,13 +132,15 @@ function AutomationCredentialsWorkspace({
 
 	return (
 		<AutomationCredentialsUI
-			organizationName={organizationName}
 			credentials={rows}
 			authSchemes={authSchemes}
+			services={services.data}
+			canManage={canManage}
 			isLoading={credentials.isLoading}
 			error={listError}
-			sheetOpen={sheetOpen}
-			sheetMode={mode}
+			dialogOpen={dialogOpen}
+			dialogMode={mode}
+			editing={rows.find((row) => row.id === editingId) ?? null}
 			form={{
 				values,
 				isPending: createCredential.isPending || updateCredential.isPending,
@@ -154,9 +157,9 @@ function AutomationCredentialsWorkspace({
 			onOpenCreate={() => {
 				setMode('create')
 				setEditingId(null)
-				setValues(emptyCredentialForm(authSchemes[0]?.kind ?? ''))
+				setValues(emptyCredentialForm())
 				setRevealedSecret(null)
-				setSheetOpen(true)
+				setDialogOpen(true)
 			}}
 			onEdit={(row) => {
 				setMode('edit')
@@ -168,19 +171,20 @@ function AutomationCredentialsWorkspace({
 					data: {},
 				})
 				setRevealedSecret(null)
-				setSheetOpen(true)
+				setDialogOpen(true)
 			}}
 			onOpenChange={(open) => {
-				setSheetOpen(open)
+				setDialogOpen(open)
 				if (!open) setRevealedSecret(null)
 			}}
 			onRotate={(row) => void handleRotate(row)}
 			rotatingId={rotatingId}
-			onDelete={(row) =>
+			onDelete={(row) => {
 				deleteCredential.mutate({
 					path: { organization_id: organizationId, credential_id: row.id },
 				})
-			}
+				setDialogOpen(false)
+			}}
 		/>
 	)
 }
