@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { resolveModule } from '#/modules/resolve-module'
+import { hasSideNav, resolveModule } from '#/modules/resolve-module'
 
 describe('resolveModule', () => {
 	it('returns the home module for the root', () => {
@@ -69,5 +69,24 @@ describe('resolveModule', () => {
 	it('keeps the planning and planification modules apart', () => {
 		expect(resolveModule('/planning/calendar').id).toBe('planning')
 		expect(resolveModule('/planification/board').id).toBe('planification')
+	})
+})
+
+describe('hasSideNav', () => {
+	it('gives the organization root no side nav', () => {
+		expect(hasSideNav(resolveModule('/'), '/')).toBe(false)
+	})
+
+	it('keeps the side nav on the other screens of the home module', () => {
+		expect(hasSideNav(resolveModule('/reporting'), '/reporting')).toBe(true)
+	})
+
+	it('gives the settings no side nav', () => {
+		expect(hasSideNav(resolveModule('/settings'), '/settings')).toBe(false)
+	})
+
+	it('gives every business module a side nav', () => {
+		expect(hasSideNav(resolveModule('/crm'), '/crm')).toBe(true)
+		expect(hasSideNav(resolveModule('/projet'), '/projet')).toBe(true)
 	})
 })

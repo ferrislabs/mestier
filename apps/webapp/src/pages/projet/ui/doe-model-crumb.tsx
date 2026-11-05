@@ -1,14 +1,12 @@
-import { BreadcrumbItem, BreadcrumbSeparator } from '#/components/ui/breadcrumb'
+import { BreadcrumbSeparator } from '#/modules/breadcrumb-parts'
 
 export function DoeModelCrumb({ name }: { name: string }) {
 	return (
 		<>
 			<BreadcrumbSeparator />
-			<BreadcrumbItem className="min-w-0">
-				<span aria-current="page" className="truncate font-medium">
-					{name}
-				</span>
-			</BreadcrumbItem>
+			<span aria-current="page" className="truncate font-medium">
+				{name}
+			</span>
 		</>
 	)
 }

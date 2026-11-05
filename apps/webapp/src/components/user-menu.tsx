@@ -1,4 +1,5 @@
-import { LogOut, User } from 'lucide-react'
+import { Link } from '@tanstack/react-router'
+import { LogOut, Settings } from 'lucide-react'
 import { useAuth } from 'react-oidc-context'
 
 import {
@@ -9,7 +10,9 @@ import {
 	DropdownMenuSeparator,
 	DropdownMenuTrigger,
 } from '#/components/ui/dropdown-menu'
+import { useActiveOrganization } from '#/hooks/use-active-organization'
 import { cn } from '#/lib/utils'
+import { buildOrgPath } from '#/modules/org-path'
 
 interface UserMenuProps {
 	className?: string
@@ -25,6 +28,7 @@ export function UserMenu({
 	showIdentity = false,
 }: UserMenuProps) {
 	const auth = useAuth()
+	const { activeOrganization } = useActiveOrganization()
 	const profile = auth.user?.profile
 	const displayName =
 		profile?.name ||
@@ -36,7 +40,7 @@ export function UserMenu({
 	return (
 		<DropdownMenu>
 			<DropdownMenuTrigger
-				aria-label="Compte utilisateur"
+				aria-label="Menu du compte"
 				className={cn(
 					'flex items-center gap-2.5 rounded-md text-left outline-none focus-visible:ring-2 focus-visible:ring-ring',
 					showIdentity &&
@@ -70,13 +74,13 @@ export function UserMenu({
 					) : null}
 				</DropdownMenuLabel>
 				<DropdownMenuSeparator />
-				<DropdownMenuItem disabled>
-					<User />
-					Mon profil
+				<DropdownMenuItem asChild>
+					<Link to={buildOrgPath(activeOrganization.slug, '/settings')}>
+						<Settings />
+						Paramètres
+					</Link>
 				</DropdownMenuItem>
-				<DropdownMenuSeparator />
 				<DropdownMenuItem
-					variant="destructive"
 					onClick={() => {
 						void auth.signoutRedirect()
 					}}

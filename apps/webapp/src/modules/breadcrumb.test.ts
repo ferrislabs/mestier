@@ -71,7 +71,7 @@ describe('buildBreadcrumbItems', () => {
 	it('resolves the team trail', () => {
 		expect(labelsOf('/o/baptiste/hr/team')).toEqual([
 			'Baptiste',
-			'Équipe & ressources',
+			'RH',
 			'Équipe',
 		])
 	})

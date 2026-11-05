@@ -1,5 +1,5 @@
 import { Link } from '@tanstack/react-router'
-import { BreadcrumbItem, BreadcrumbSeparator } from '#/components/ui/breadcrumb'
+import { BreadcrumbSeparator } from '#/modules/breadcrumb-parts'
 import { buildOrgPath } from '#/modules/org-path'
 import type { ProjectSection } from '#/pages/projet/lib/project-path'
 import {
@@ -29,34 +29,26 @@ export function ProjetCrumbs({
 	return (
 		<>
 			<BreadcrumbSeparator />
-			<BreadcrumbItem className="min-w-0">
-				<ProjectSwitcher {...switcher} />
-			</BreadcrumbItem>
+			<ProjectSwitcher {...switcher} />
 			<BreadcrumbSeparator />
 			{onPreview ? (
 				<>
-					<BreadcrumbItem className="min-w-0">
-						<Link
-							to={buildOrgPath(organizationSlug, '/projet/$projectId/doe')}
-							params={{ projectId: switcher.currentId }}
-							className="truncate rounded-sm text-muted-foreground outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
-						>
-							DOE
-						</Link>
-					</BreadcrumbItem>
+					<Link
+						to={buildOrgPath(organizationSlug, '/projet/$projectId/doe')}
+						params={{ projectId: switcher.currentId }}
+						className="truncate rounded-sm text-muted-foreground outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
+					>
+						DOE
+					</Link>
 					<BreadcrumbSeparator />
-					<BreadcrumbItem className="min-w-0">
-						<span aria-current="page" className="truncate font-medium">
-							Aperçu du PDF
-						</span>
-					</BreadcrumbItem>
+					<span aria-current="page" className="truncate font-medium">
+						Aperçu du PDF
+					</span>
 				</>
 			) : (
-				<BreadcrumbItem className="min-w-0">
-					<span aria-current="page" className="truncate font-medium">
-						{SECTION_LABELS[section]}
-					</span>
-				</BreadcrumbItem>
+				<span aria-current="page" className="truncate font-medium">
+					{SECTION_LABELS[section]}
+				</span>
 			)}
 		</>
 	)

@@ -172,13 +172,14 @@ describe('ModuleNav', () => {
 		expect(annonce.getAttribute('aria-disabled')).toBe('true')
 	})
 
-	it('keeps utility modules at the foot of the nav', async () => {
+	it('keeps the foot of the nav for the account menu alone', async () => {
 		const { container } = await renderNav('/o/dupont/crm/customers')
 
 		const pied = container.querySelector('[data-slot="sidebar-footer"]')
 		const corps = container.querySelector('[data-slot="sidebar-content"]')
 
-		expect(pied?.textContent).toContain('Paramètres')
+		expect(pied?.textContent).not.toContain('Paramètres')
+		expect(pied?.querySelectorAll('a, button')).toHaveLength(0)
 		expect(corps?.textContent).toContain('Comptes')
 		expect(corps?.textContent).not.toContain('Paramètres')
 	})
@@ -201,22 +202,21 @@ describe('ModuleNav', () => {
 		expect(await screen.findByText('Rentabilité')).toBeDefined()
 	})
 
-	/**
-	 * Replaces the old edge-drag rail (a 4px `tabIndex={-1}` hitbox) with an
-	 * actual button — same `toggleSidebar`, but one a caller can find and
-	 * click, verified through the label flipping.
-	 */
-	it('collapses and expands via a visible button, not just the hidden edge rail', async () => {
+	it('offers no collapse button, the sidebar keeps its keyboard shortcut', async () => {
 		const user = userEvent.setup()
-		await renderNav('/o/dupont/crm/customers')
+		const { container } = await renderNav('/o/dupont/crm/customers')
 
-		const toggle = screen.getByRole('button', { name: 'Réduire' })
-		await user.click(toggle)
-
-		expect(
-			await screen.findByRole('button', { name: 'Agrandir' }),
-		).toBeDefined()
 		expect(screen.queryByRole('button', { name: 'Réduire' })).toBeNull()
+		expect(screen.queryByRole('button', { name: 'Agrandir' })).toBeNull()
+
+		const sidebar = container.querySelector('[data-slot="sidebar"]')
+		expect(sidebar?.getAttribute('data-state')).toBe('expanded')
+
+		await user.keyboard('{Control>}b{/Control}')
+
+		await waitFor(() =>
+			expect(sidebar?.getAttribute('data-state')).toBe('collapsed'),
+		)
 	})
 
 	it('pins the primary action of the module under its mark', async () => {

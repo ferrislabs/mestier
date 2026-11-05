@@ -1,5 +1,5 @@
 import { Link, useLocation } from '@tanstack/react-router'
-import { PanelLeftClose, PanelLeftOpen, Plus } from 'lucide-react'
+import { Plus } from 'lucide-react'
 import type * as React from 'react'
 
 import { ModuleIcon } from '#/components/module-icon'
@@ -13,11 +13,9 @@ import {
 	SidebarMenu,
 	SidebarMenuButton,
 	SidebarMenuItem,
-	useSidebar,
 } from '#/components/ui/sidebar'
 import { usePermissions } from '#/hooks/use-permissions'
 import { buildOrgPath, splitOrgPath } from '#/modules/org-path'
-import { MODULES } from '#/modules/registry'
 import { resolveModule } from '#/modules/resolve-module'
 import type { AppModule, NavTarget } from '#/modules/types'
 
@@ -28,7 +26,7 @@ interface ModuleNavProps extends React.ComponentProps<typeof Sidebar> {
 }
 
 const itemClassName =
-	'h-8 gap-2.5 text-[13px] text-nav-muted hover:bg-nav-active hover:text-nav-foreground data-[active=true]:bg-nav-active data-[active=true]:font-medium data-[active=true]:text-nav-active-foreground'
+	'h-8 gap-2.5 px-2.5 text-[13px] text-nav-muted hover:bg-nav-active hover:text-nav-foreground data-[active=true]:bg-nav-active data-[active=true]:font-medium data-[active=true]:text-nav-active-foreground'
 
 /**
  * Navigation for the active module, in the left column.
@@ -47,12 +45,7 @@ export function ModuleNav({
 	...props
 }: ModuleNavProps) {
 	const location = useLocation()
-	const { state, toggleSidebar } = useSidebar()
 	const activeModule = resolveModule(splitOrgPath(location.pathname).path)
-	const utilityModules = MODULES.filter(
-		(module) =>
-			module.status !== 'hidden' && module.railPlacement === 'utility',
-	)
 
 	// One read for every section's `requiredPermission` at once, rather than
 	// a `useHasPermission` call per section: that would call a hook a
@@ -111,6 +104,7 @@ export function ModuleNav({
 				<div className="px-3 pt-1 pb-3 group-data-[collapsible=icon]:hidden">
 					<Link
 						to={buildOrgPath(organizationSlug, activeModule.primaryAction.to)}
+						search={activeModule.primaryAction.search}
 						className="flex h-9 min-w-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-md bg-nav-primary px-3 font-medium text-[13px] text-nav-primary-foreground outline-none transition-opacity hover:opacity-90 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-nav"
 					>
 						<Plus className="size-4" strokeWidth={2} aria-hidden />
@@ -119,7 +113,7 @@ export function ModuleNav({
 				</div>
 			) : null}
 
-			<SidebarContent className="px-2 pt-1">
+			<SidebarContent className="px-2 pt-1 pb-2">
 				{activeModule.sidebar ? (
 					<>
 						<div className="group-data-[collapsible=icon]:hidden">
@@ -139,27 +133,7 @@ export function ModuleNav({
 				) : null}
 			</SidebarContent>
 
-			<SidebarFooter className="gap-1 border-nav-border border-t p-2">
-				<SidebarMenu className="gap-px">
-					{utilityModules.map((module) => (
-						<UtilityEntry
-							key={module.id}
-							module={module}
-							active={module.id === activeModule.id}
-							organizationSlug={organizationSlug}
-						/>
-					))}
-					<SidebarMenuItem>
-						<SidebarMenuButton
-							onClick={toggleSidebar}
-							tooltip={state === 'expanded' ? 'Réduire' : 'Agrandir'}
-							className={itemClassName}
-						>
-							{state === 'expanded' ? <PanelLeftClose /> : <PanelLeftOpen />}
-							<span>{state === 'expanded' ? 'Réduire' : 'Agrandir'}</span>
-						</SidebarMenuButton>
-					</SidebarMenuItem>
-				</SidebarMenu>
+			<SidebarFooter className="border-nav-border border-t p-2">
 				{footer}
 			</SidebarFooter>
 		</Sidebar>
@@ -183,7 +157,7 @@ function NavEntry({ target, organizationSlug, fallbackIcon }: NavEntryProps) {
 					tooltip={`${target.label} · bientôt`}
 					className={itemClassName}
 				>
-					<Icon />
+					<Icon strokeWidth={1.8} />
 					<span>{target.label}</span>
 					<span className="ml-auto rounded-md border border-nav-border px-1.5 py-0.5 text-[10px] font-medium group-data-[collapsible=icon]:hidden">
 						bientôt
@@ -205,39 +179,13 @@ function NavEntry({ target, organizationSlug, fallbackIcon }: NavEntryProps) {
 					activeOptions={target.exact ? { exact: true } : undefined}
 					activeProps={{ 'data-active': 'true', 'aria-current': 'page' }}
 				>
-					<Icon />
+					<Icon strokeWidth={1.8} />
 					<span>{target.label}</span>
 					{target.badge !== undefined ? (
 						<span className="tabular ml-auto text-[11px] text-nav-muted group-data-[collapsible=icon]:hidden">
 							{target.badge}
 						</span>
 					) : null}
-				</Link>
-			</SidebarMenuButton>
-		</SidebarMenuItem>
-	)
-}
-
-interface UtilityEntryProps {
-	module: AppModule
-	active: boolean
-	organizationSlug: string
-}
-
-function UtilityEntry({ module, active, organizationSlug }: UtilityEntryProps) {
-	const Icon = module.icon
-
-	return (
-		<SidebarMenuItem>
-			<SidebarMenuButton
-				asChild
-				isActive={active}
-				tooltip={module.label}
-				className={itemClassName}
-			>
-				<Link to={buildOrgPath(organizationSlug, module.basePath)}>
-					<Icon />
-					<span>{module.label}</span>
 				</Link>
 			</SidebarMenuButton>
 		</SidebarMenuItem>

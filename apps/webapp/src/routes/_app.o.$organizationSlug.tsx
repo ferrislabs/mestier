@@ -20,6 +20,7 @@ import {
 } from '#/hooks/use-active-organization'
 import { PresenceProvider } from '#/hooks/use-presence'
 import { splitOrgPath } from '#/modules/org-path'
+import { hasSideNav, resolveModule } from '#/modules/resolve-module'
 import { resolveScope } from '#/modules/scope'
 
 export const Route = createFileRoute('/_app/o/$organizationSlug')({
@@ -64,20 +65,19 @@ function AppShell() {
 	const location = useLocation()
 	const { activeOrganization } = useActiveOrganization()
 	const scope = resolveScope(location.pathname)
-	// The homepage is its own launcher (app-launcher-ui.tsx's icon grid) — the
-	// side nav would just duplicate it, so it's the one screen without one.
-	const isHome = splitOrgPath(location.pathname).path === '/'
+	const path = splitOrgPath(location.pathname).path
+	const withSideNav = hasSideNav(resolveModule(path), path)
 
 	return (
 		<SidebarProvider className="h-svh overflow-hidden">
-			{isHome ? null : (
+			{withSideNav ? (
 				<ModuleNav
 					organizationSlug={activeOrganization.slug}
 					footer={
 						<UserMenu showIdentity side="top" className="hover:bg-nav-active" />
 					}
 				/>
-			)}
+			) : null}
 			<SidebarInset className="min-h-0 min-w-0">
 				<AppHeader />
 				<ScopeBar

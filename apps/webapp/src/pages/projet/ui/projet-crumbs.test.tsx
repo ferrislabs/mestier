@@ -23,9 +23,9 @@ function props(overrides: Partial<ProjetCrumbsProps> = {}): ProjetCrumbsProps {
 describe('ProjetCrumbs', () => {
 	it('shows the project switcher then the current page', async () => {
 		await renderWithRouter(
-			<ol>
+			<nav>
 				<ProjetCrumbs {...props()} />
-			</ol>,
+			</nav>,
 			'/o/dupont/projet/p1/missions',
 		)
 
@@ -39,9 +39,9 @@ describe('ProjetCrumbs', () => {
 
 	it('names an internal project as such', async () => {
 		await renderWithRouter(
-			<ol>
+			<nav>
 				<ProjetCrumbs {...props({ currentOwnerName: null })} />
-			</ol>,
+			</nav>,
 			'/o/dupont/projet/p1/missions',
 		)
 
@@ -54,9 +54,9 @@ describe('ProjetCrumbs', () => {
 
 	it('goes back to the DOE from the PDF preview', async () => {
 		await renderWithRouter(
-			<ol>
+			<nav>
 				<ProjetCrumbs {...props({ section: 'doe', onPreview: true })} />
-			</ol>,
+			</nav>,
 			'/o/dupont/projet/p1/doe/preview',
 		)
 

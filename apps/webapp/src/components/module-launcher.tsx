@@ -1,5 +1,5 @@
 import { Link } from '@tanstack/react-router'
-import { LayoutGrid } from 'lucide-react'
+import { House, LayoutGrid, Settings } from 'lucide-react'
 import { useState } from 'react'
 
 import { ModuleIcon } from '#/components/module-icon'
@@ -19,12 +19,16 @@ interface ModuleLauncherProps {
 	className?: string
 }
 
+const FOOTER_LINK =
+	'flex h-7 flex-1 items-center justify-center gap-1.5 rounded-md px-2 text-[12px] text-muted-foreground hover:bg-accent hover:text-foreground'
+
 const tileClassName =
 	'flex w-full flex-col items-center gap-1.5 rounded-md px-1.5 pt-2 pb-1.5 text-center outline-none focus-visible:ring-2 focus-visible:ring-ring'
 
 /**
- * App launcher: one button opens the grid of every module, available and
- * announced alike.
+ * App launcher: one button opens the grid of the business modules, available
+ * and announced alike. The organization home and the settings are not modules
+ * to switch to but places, so they sit in the footer row.
  *
  * Open state is driven here rather than delegated to `PopoverClose`: closing is
  * triggered by the click on the link, which no longer depends on the execution
@@ -36,7 +40,10 @@ export function ModuleLauncher({
 	className,
 }: ModuleLauncherProps) {
 	const [open, setOpen] = useState(false)
-	const modules = useVisibleModules()
+	const modules = useVisibleModules().filter(
+		(module) => module.inLauncher !== false,
+	)
+	const close = () => setOpen(false)
 
 	return (
 		<Popover open={open} onOpenChange={setOpen}>
@@ -63,11 +70,27 @@ export function ModuleLauncher({
 								module={module}
 								active={module.id === activeModuleId}
 								organizationSlug={organizationSlug}
-								onNavigate={() => setOpen(false)}
+								onNavigate={close}
 							/>
 						</li>
 					))}
 				</ul>
+				<div className="mt-1 flex items-center gap-0.5 border-t pt-1">
+					<Link
+						to={buildOrgPath(organizationSlug, '/')}
+						onClick={close}
+						className={FOOTER_LINK}
+					>
+						<House className="size-3.5" /> Accueil
+					</Link>
+					<Link
+						to={buildOrgPath(organizationSlug, '/settings')}
+						onClick={close}
+						className={FOOTER_LINK}
+					>
+						<Settings className="size-3.5" /> Paramètres
+					</Link>
+				</div>
 			</PopoverContent>
 		</Popover>
 	)

@@ -1,6 +1,6 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { useLocation } from '@tanstack/react-router'
-import { screen, waitFor } from '@testing-library/react'
+import { screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { LayoutDashboard } from 'lucide-react'
 import type { ReactNode } from 'react'
@@ -42,6 +42,7 @@ const EVERY_PERMISSION: PermissionName[] = [
 	'VIEW_QUOTES',
 	'VIEW_AUTOMATION',
 	'MANAGE_AUTOMATION',
+	'VIEW_SUPPORT',
 ]
 
 function installFakePermissionsApi(permissions: string[]) {
@@ -148,22 +149,86 @@ async function openLauncher() {
 }
 
 describe('ModuleLauncher', () => {
-	it('lists every module in the registry, upcoming ones included', async () => {
+	it('lists the business modules in the prototype order, upcoming ones included', async () => {
 		await renderLauncher(
 			<ModuleLauncher activeModuleId="home" organizationSlug="dupont" />,
 		)
 		await openLauncher()
 
-		for (const label of [
-			'Accueil',
+		const grid = screen.getByRole('list', { name: 'Modules' })
+		const labels = Array.from(grid.querySelectorAll('li')).map((tile) =>
+			tile.textContent?.replace('bientôt', '').trim(),
+		)
+
+		expect(labels).toEqual([
 			'CRM',
-			'Équipe & ressources',
+			'Projet',
 			'Planning',
+			'Planification',
 			'Discussions',
-			'Paramètres',
-		]) {
-			expect(screen.getByText(label)).toBeDefined()
-		}
+			'Support',
+			'RH',
+			'Workflows',
+			'Achats',
+			'Module annoncé',
+			'Module réservé',
+		])
+	})
+
+	it('offers neither the home nor the settings as a tile', async () => {
+		await renderLauncher(
+			<ModuleLauncher activeModuleId="home" organizationSlug="dupont" />,
+		)
+		await openLauncher()
+
+		const grid = screen.getByRole('list', { name: 'Modules' })
+		expect(within(grid).queryByText('Accueil')).toBeNull()
+		expect(within(grid).queryByText('Paramètres')).toBeNull()
+	})
+
+	it('keeps the home and the settings in a footer row under the grid', async () => {
+		await renderLauncher(
+			<ModuleLauncher activeModuleId="crm" organizationSlug="dupont" />,
+			'/crm',
+		)
+		await openLauncher()
+
+		expect(
+			screen.getByRole('link', { name: 'Accueil' }).getAttribute('href'),
+		).toBe('/o/dupont')
+		expect(
+			screen.getByRole('link', { name: 'Paramètres' }).getAttribute('href'),
+		).toBe('/o/dupont/settings')
+	})
+
+	it('highlights no tile on a screen without a module', async () => {
+		await renderLauncher(
+			<ModuleLauncher activeModuleId="settings" organizationSlug="dupont" />,
+			'/settings',
+		)
+		await openLauncher()
+
+		expect(screen.queryByRole('link', { current: 'page' })).toBeNull()
+	})
+
+	it('closes the launcher when the home is chosen', async () => {
+		await renderLauncher(
+			<>
+				<ModuleLauncher activeModuleId="crm" organizationSlug="dupont" />
+				<LocationProbe />
+			</>,
+			'/crm',
+		)
+		await openLauncher()
+
+		await userEvent.click(screen.getByRole('link', { name: 'Accueil' }))
+
+		await waitFor(() => {
+			expect(screen.queryByRole('list', { name: 'Modules' })).toBeNull()
+		})
+		await waitFor(() => {
+			expect(screen.getByTestId('pathname').textContent).toBe('/o/dupont')
+		})
 	})
 
 	it('marks the current module', async () => {

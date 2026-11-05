@@ -1,25 +1,23 @@
 import { Link, useLocation } from '@tanstack/react-router'
-import { Fragment } from 'react'
+import { Fragment, type ReactNode } from 'react'
 import { OrgSwitcher } from '#/components/org-switcher'
-import {
-	Breadcrumb,
-	BreadcrumbItem,
-	BreadcrumbLink,
-	BreadcrumbList,
-	BreadcrumbPage,
-	BreadcrumbSeparator,
-} from '#/components/ui/breadcrumb'
 import { useActiveOrganization } from '#/hooks/use-active-organization'
 import { useCustomer } from '#/hooks/use-customers'
 import { useMember } from '#/hooks/use-reference-catalog'
 import { buildBreadcrumbItems } from '#/modules/breadcrumb'
+import { BreadcrumbSeparator } from '#/modules/breadcrumb-parts'
 import { splitOrgPath } from '#/modules/org-path'
 import { customerDisplayName } from '#/pages/customers/types'
 import { DoeModelCrumbFeature } from '#/pages/projet/feature/doe-model-crumb-feature'
 import { ProjetCrumbsFeature } from '#/pages/projet/feature/projet-crumbs-feature'
 import { doeModelIdOf, projectIdOf } from '#/pages/projet/lib/project-path'
 
-export function AppBreadcrumb() {
+interface AppBreadcrumbProps {
+	/** Brand and launcher on a screen without side nav, ahead of the organization. */
+	leading?: ReactNode
+}
+
+export function AppBreadcrumb({ leading }: AppBreadcrumbProps) {
 	const location = useLocation()
 	const { activeOrganization } = useActiveOrganization()
 	// The paths matched below are relative to the organization: the tenant is
@@ -49,35 +47,43 @@ export function AppBreadcrumb() {
 	})
 
 	return (
-		<Breadcrumb className="min-w-0 flex-1">
-			<BreadcrumbList className="flex-nowrap overflow-hidden">
-				{items.map((item, index) => {
-					const isEnd = index === items.length - 1
-					const isLast = isEnd && !hasTail
+		<nav
+			aria-label="Fil d’Ariane"
+			className="flex min-w-0 items-center gap-1.5 text-[13px]"
+		>
+			{leading ? (
+				<>
+					{leading}
+					<BreadcrumbSeparator />
+				</>
+			) : null}
+			{items.map((item, index) => {
+				const isEnd = index === items.length - 1
+				const isLast = isEnd && !hasTail
 
-					return (
-						<Fragment key={item.id}>
-							<BreadcrumbItem className="min-w-0">
-								{item.id === 'organization' ? (
-									<OrgSwitcher />
-								) : isLast || !item.to ? (
-									<BreadcrumbPage className="truncate font-medium">
-										{item.label}
-									</BreadcrumbPage>
-								) : (
-									<BreadcrumbLink asChild className="truncate">
-										<Link to={item.to}>{item.label}</Link>
-									</BreadcrumbLink>
-								)}
-							</BreadcrumbItem>
-							{isEnd ? null : <BreadcrumbSeparator />}
-						</Fragment>
-					)
-				})}
-				{projectId ? <ProjetCrumbsFeature /> : null}
-				{modelId ? <DoeModelCrumbFeature modelId={modelId} /> : null}
-			</BreadcrumbList>
-		</Breadcrumb>
+				return (
+					<Fragment key={item.id}>
+						{item.id === 'organization' ? (
+							<OrgSwitcher />
+						) : isLast || !item.to ? (
+							<span aria-current="page" className="truncate font-medium">
+								{item.label}
+							</span>
+						) : (
+							<Link
+								to={item.to}
+								className="truncate rounded-sm text-muted-foreground outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
+							>
+								{item.label}
+							</Link>
+						)}
+						{isEnd ? null : <BreadcrumbSeparator />}
+					</Fragment>
+				)
+			})}
+			{projectId ? <ProjetCrumbsFeature /> : null}
+			{modelId ? <DoeModelCrumbFeature modelId={modelId} /> : null}
+		</nav>
 	)
 }
 

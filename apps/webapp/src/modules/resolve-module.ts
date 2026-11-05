@@ -18,3 +18,8 @@ export function resolveModule(pathname: string): AppModule {
 function matchesBasePath(pathname: string, basePath: string): boolean {
 	return pathname === basePath || pathname.startsWith(`${basePath}/`)
 }
+
+export function hasSideNav(module: AppModule, path: string): boolean {
+	if (module.sideNav === false) return false
+	return !(module.id === 'home' && path === '/')
+}

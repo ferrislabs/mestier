@@ -85,6 +85,11 @@ export function SearchCommand({
 								>
 									<ModuleIcon module={module} size="sm" />
 									{module.label}
+									{module.description ? (
+										<span className="ml-auto text-muted-foreground text-xs">
+											{module.description}
+										</span>
+									) : null}
 								</CommandItem>
 							))}
 					</CommandGroup>
