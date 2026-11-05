@@ -1,22 +1,17 @@
-import { Loader2, X } from 'lucide-react'
-import { FileUploadButton } from '#/components/file-upload-button'
-import { TextField } from '#/components/reference-table'
+import { FileText, ImageIcon, Loader2, X } from 'lucide-react'
+import { type ReactNode, useId } from 'react'
+import { FormField } from '#/components/form-field'
 import { Button } from '#/components/ui/button'
-import { Label } from '#/components/ui/label'
-import {
-	Sheet,
-	SheetContent,
-	SheetDescription,
-	SheetFooter,
-	SheetHeader,
-	SheetTitle,
-} from '#/components/ui/sheet'
+import { Input } from '#/components/ui/input'
 import { Textarea } from '#/components/ui/textarea'
 import {
 	canSubmitSupply,
 	type SupplyFormValues,
 } from '#/pages/doe/lib/supply-form'
 import { MAKER_LABEL_TEXT, type MakerLabel } from '#/pages/doe/types'
+import { FileDropZone } from '#/pages/doe/ui/file-drop-zone'
+import { IconButton } from '#/pages/doe/ui/icon-button'
+import { SideSheet } from '#/pages/doe/ui/side-sheet'
 
 interface DoeSupplySheetProps {
 	open: boolean
@@ -34,6 +29,26 @@ interface DoeSupplySheetProps {
 	onSubmit: () => void
 }
 
+function FormSection({
+	label,
+	hint,
+	children,
+}: {
+	label: string
+	hint?: string
+	children: ReactNode
+}) {
+	return (
+		<section aria-label={label} className="grid gap-3">
+			<div>
+				<h3 className="font-semibold text-sm">{label}</h3>
+				{hint && <p className="text-[12px] text-muted-foreground">{hint}</p>}
+			</div>
+			<div className="grid gap-3 sm:grid-cols-2">{children}</div>
+		</section>
+	)
+}
+
 export function DoeSupplySheet({
 	open,
 	isNew,
@@ -49,226 +64,293 @@ export function DoeSupplySheet({
 	onUploadDatasheets,
 	onSubmit,
 }: DoeSupplySheetProps) {
+	const baseId = useId()
+	const id = (field: string) => `${baseId}-${field}`
 	const makerText = MAKER_LABEL_TEXT[makerLabel]
+	const busy = isUploadingPhotos || isUploadingDatasheets
+	const canSubmit = canSubmitSupply(values) && !busy
 
 	return (
-		<Sheet open={open} onOpenChange={onOpenChange}>
-			<SheetContent className="w-full overflow-y-auto sm:max-w-xl">
-				<SheetHeader>
-					<SheetTitle>
-						{isNew ? 'Nouvelle fourniture' : 'Modifier la fourniture'}
-					</SheetTitle>
-					<SheetDescription>
-						Modifier ici ne change que ce DOE, pas le catalogue.
-					</SheetDescription>
-				</SheetHeader>
-
-				<div className="flex flex-1 flex-col gap-6 px-4">
-					<fieldset className="flex flex-col gap-3">
-						<legend className="mb-2 text-sm font-semibold">
-							Propre à ce chantier
-						</legend>
-						<TextField
+		<SideSheet
+			open={open}
+			onOpenChange={onOpenChange}
+			title={isNew ? 'Nouvelle fourniture' : 'Modifier la fourniture'}
+			description="Modifier ici ne change que ce DOE, pas le catalogue."
+		>
+			<form
+				noValidate
+				onSubmit={(event) => {
+					event.preventDefault()
+					if (canSubmit) onSubmit()
+				}}
+				className="flex min-h-0 flex-1 flex-col"
+			>
+				<div className="grid min-h-0 flex-1 content-start gap-6 overflow-y-auto px-6 py-5">
+					<FormSection
+						label="Propre à ce chantier"
+						hint="Ces informations ne concernent que ce DOE."
+					>
+						<FormField
+							id={id('title')}
 							label="Titre dans le DOE"
-							value={values.title}
-							onChange={(title) => onChange({ title })}
-						/>
-						<TextField
-							label="Correspondance DPGF"
-							value={values.dpgfRef}
-							onChange={(dpgfRef) => onChange({ dpgfRef })}
-						/>
-						<TextField
-							label="Destination"
-							value={values.destination}
-							onChange={(destination) => onChange({ destination })}
-						/>
-					</fieldset>
+							hint="Remplace la désignation dans le DOE. Laisse vide pour la garder."
+							className="sm:col-span-2"
+						>
+							<Input
+								id={id('title')}
+								value={values.title}
+								autoComplete="off"
+								onChange={(event) => onChange({ title: event.target.value })}
+							/>
+						</FormField>
+						<FormField id={id('dpgf')} label="Correspondance DPGF">
+							<Input
+								id={id('dpgf')}
+								value={values.dpgfRef}
+								autoComplete="off"
+								onChange={(event) => onChange({ dpgfRef: event.target.value })}
+							/>
+						</FormField>
+						<FormField id={id('destination')} label="Destination">
+							<Input
+								id={id('destination')}
+								value={values.destination}
+								autoComplete="off"
+								onChange={(event) =>
+									onChange({ destination: event.target.value })
+								}
+							/>
+						</FormField>
+					</FormSection>
 
-					<fieldset className="flex flex-col gap-3">
-						<legend className="mb-2 text-sm font-semibold">Fiche</legend>
-						<TextField
+					<FormSection label="Fiche">
+						<FormField
+							id={id('designation')}
 							label="Désignation"
 							required
-							value={values.designation}
-							onChange={(designation) => onChange({ designation })}
-						/>
-						<TextField
+							className="sm:col-span-2"
+						>
+							<Input
+								id={id('designation')}
+								value={values.designation}
+								autoComplete="off"
+								aria-required
+								onChange={(event) =>
+									onChange({ designation: event.target.value })
+								}
+							/>
+						</FormField>
+						<FormField
+							id={id('supplier-name')}
 							label="Nom du fournisseur"
-							value={values.supplierName}
-							onChange={(supplierName) => onChange({ supplierName })}
-						/>
-						<div className="flex flex-col gap-2">
-							<Label htmlFor="supply-supplier-address">
-								Adresse du fournisseur
-							</Label>
+							hint="Les coordonnées ne sont conservées qu’avec un nom."
+							className="sm:col-span-2"
+						>
+							<Input
+								id={id('supplier-name')}
+								value={values.supplierName}
+								autoComplete="off"
+								onChange={(event) =>
+									onChange({ supplierName: event.target.value })
+								}
+							/>
+						</FormField>
+						<FormField
+							id={id('supplier-address')}
+							label="Adresse du fournisseur"
+							className="sm:col-span-2"
+						>
 							<Textarea
-								id="supply-supplier-address"
+								id={id('supplier-address')}
 								rows={2}
 								value={values.supplierAddress}
 								onChange={(event) =>
 									onChange({ supplierAddress: event.target.value })
 								}
 							/>
-						</div>
-						<TextField
+						</FormField>
+						<FormField
+							id={id('supplier-phone')}
 							label="Téléphone du fournisseur"
-							value={values.supplierPhone}
-							onChange={(supplierPhone) => onChange({ supplierPhone })}
-						/>
-						<TextField
-							label="Email du fournisseur"
-							type="email"
-							value={values.supplierEmail}
-							onChange={(supplierEmail) => onChange({ supplierEmail })}
-						/>
-						<TextField
+						>
+							<Input
+								id={id('supplier-phone')}
+								type="tel"
+								value={values.supplierPhone}
+								autoComplete="off"
+								onChange={(event) =>
+									onChange({ supplierPhone: event.target.value })
+								}
+							/>
+						</FormField>
+						<FormField id={id('supplier-email')} label="Email du fournisseur">
+							<Input
+								id={id('supplier-email')}
+								type="email"
+								value={values.supplierEmail}
+								autoComplete="off"
+								onChange={(event) =>
+									onChange({ supplierEmail: event.target.value })
+								}
+							/>
+						</FormField>
+						<FormField
+							id={id('maker')}
 							label={makerText}
-							value={values.maker}
-							onChange={(maker) => onChange({ maker })}
-						/>
-						<div className="flex flex-col gap-2">
-							<Label htmlFor="supply-specs">Caractéristiques techniques</Label>
+							className="sm:col-span-2"
+						>
+							<Input
+								id={id('maker')}
+								value={values.maker}
+								autoComplete="off"
+								onChange={(event) => onChange({ maker: event.target.value })}
+							/>
+						</FormField>
+						<FormField
+							id={id('specs')}
+							label="Caractéristiques techniques"
+							className="sm:col-span-2"
+						>
 							<Textarea
-								id="supply-specs"
+								id={id('specs')}
 								rows={4}
 								value={values.specs}
 								onChange={(event) => onChange({ specs: event.target.value })}
 							/>
-						</div>
-					</fieldset>
+						</FormField>
 
-					<fieldset className="flex flex-col gap-3">
-						<legend className="mb-2 text-sm font-semibold">
-							Pièces jointes
-						</legend>
-						<div className="flex items-center justify-between">
-							<Label>Photos</Label>
-							<FileUploadButton
+						<div className="grid gap-2 sm:col-span-2">
+							<h4 className="font-medium text-sm">Photos</h4>
+							<FileDropZone
 								accept="image/*"
-								multiple
+								label="Dépose des photos ici"
+								hint="Ou clique pour choisir des images"
+								compact
 								isUploading={isUploadingPhotos}
 								onFiles={onUploadPhotos}
-							>
-								Ajouter des photos
-							</FileUploadButton>
-						</div>
-						{values.photos.length === 0 ? (
-							<p className="text-xs text-muted-foreground">Aucune photo.</p>
-						) : (
-							<ul className="grid grid-cols-2 gap-3">
-								{values.photos.map((photo, index) => {
-									const url = fileUrls[photo.key]
-									return (
-										<li key={photo.key} className="space-y-1">
-											<div className="relative">
+							/>
+							{values.photos.length === 0 ? (
+								<p className="text-muted-foreground text-xs">Aucune photo.</p>
+							) : (
+								<ul className="grid grid-cols-2 gap-3">
+									{values.photos.map((photo, index) => {
+										const url = fileUrls[photo.key]
+										const position = index + 1
+										return (
+											<li key={photo.key} className="grid content-start gap-2">
 												{url ? (
 													<img
 														src={url}
-														alt={photo.caption ?? `Photo ${index + 1}`}
-														className="aspect-video w-full rounded border object-cover"
+														alt={photo.caption?.trim() || `Photo ${position}`}
+														className="aspect-[4/3] w-full rounded-md border object-cover"
 													/>
 												) : (
-													<div className="aspect-video w-full rounded border bg-muted" />
+													<div
+														aria-hidden
+														className="flex aspect-[4/3] w-full items-center justify-center rounded-md border bg-muted text-muted-foreground"
+													>
+														<ImageIcon className="size-6" />
+													</div>
 												)}
-												<Button
-													type="button"
-													variant="secondary"
-													size="icon-xs"
-													className="absolute top-1 right-1"
-													onClick={() =>
+												<Input
+													value={photo.caption ?? ''}
+													placeholder="Légende"
+													aria-label={`Légende de la photo ${position}`}
+													autoComplete="off"
+													className="h-8"
+													onChange={(event) =>
 														onChange({
-															photos: values.photos.filter(
-																(_, position) => position !== index,
+															photos: values.photos.map((entry, at) =>
+																at === index
+																	? { ...entry, caption: event.target.value }
+																	: entry,
 															),
 														})
 													}
-												>
-													<X />
-													<span className="sr-only">
-														Retirer la photo {index + 1}
-													</span>
-												</Button>
+												/>
+												<div className="flex items-center gap-0.5">
+													<span className="flex-1" />
+													<IconButton
+														label={`Retirer la photo ${position}`}
+														icon={X}
+														onClick={() =>
+															onChange({
+																photos: values.photos.filter(
+																	(_, at) => at !== index,
+																),
+															})
+														}
+													/>
+												</div>
+											</li>
+										)
+									})}
+								</ul>
+							)}
+						</div>
+
+						<div className="grid gap-2 sm:col-span-2">
+							<h4 className="font-medium text-sm">Fiches techniques</h4>
+							<FileDropZone
+								accept="application/pdf,image/*"
+								label="Dépose des fiches techniques ici"
+								hint="Ou clique pour choisir des PDF ou des images"
+								compact
+								isUploading={isUploadingDatasheets}
+								onFiles={onUploadDatasheets}
+							/>
+							{values.datasheetKeys.length === 0 ? (
+								<p className="text-muted-foreground text-xs">
+									Aucune fiche technique.
+								</p>
+							) : (
+								<ul className="divide-y rounded-md border">
+									{values.datasheetKeys.map((key, index) => (
+										<li key={key} className="flex items-center gap-3 px-3 py-2">
+											<FileText
+												aria-hidden
+												className="size-4 shrink-0 text-muted-foreground"
+											/>
+											<div className="min-w-0 flex-1">
+												{fileUrls[key] ? (
+													<a
+														href={fileUrls[key]}
+														target="_blank"
+														rel="noreferrer"
+														className="block truncate text-sm underline"
+													>
+														Document {index + 1}
+													</a>
+												) : (
+													<p className="truncate text-sm">
+														Document {index + 1}
+													</p>
+												)}
 											</div>
-											<input
-												className="w-full rounded-md border bg-card px-2 py-1 text-xs"
-												value={photo.caption ?? ''}
-												placeholder="Légende"
-												aria-label={`Légende de la photo ${index + 1}`}
-												onChange={(event) =>
+											<IconButton
+												label={`Retirer le document ${index + 1}`}
+												icon={X}
+												onClick={() =>
 													onChange({
-														photos: values.photos.map((entry, position) =>
-															position === index
-																? { ...entry, caption: event.target.value }
-																: entry,
+														datasheetKeys: values.datasheetKeys.filter(
+															(_, at) => at !== index,
 														),
 													})
 												}
 											/>
 										</li>
-									)
-								})}
-							</ul>
-						)}
-
-						<div className="mt-2 flex items-center justify-between">
-							<Label>Documents du fournisseur</Label>
-							<FileUploadButton
-								accept="application/pdf,image/*"
-								multiple
-								isUploading={isUploadingDatasheets}
-								onFiles={onUploadDatasheets}
-							>
-								Ajouter des documents
-							</FileUploadButton>
+									))}
+								</ul>
+							)}
 						</div>
-						{values.datasheetKeys.length === 0 ? (
-							<p className="text-xs text-muted-foreground">Aucun document.</p>
-						) : (
-							<ul className="space-y-1">
-								{values.datasheetKeys.map((key, index) => (
-									<li
-										key={key}
-										className="flex items-center justify-between gap-2 rounded border px-3 py-1.5 text-sm"
-									>
-										{fileUrls[key] ? (
-											<a
-												href={fileUrls[key]}
-												target="_blank"
-												rel="noreferrer"
-												className="truncate underline"
-											>
-												Document {index + 1}
-											</a>
-										) : (
-											<span className="truncate">Document {index + 1}</span>
-										)}
-										<Button
-											type="button"
-											variant="ghost"
-											size="icon-xs"
-											onClick={() =>
-												onChange({
-													datasheetKeys: values.datasheetKeys.filter(
-														(_, position) => position !== index,
-													),
-												})
-											}
-										>
-											<X />
-											<span className="sr-only">
-												Retirer le document {index + 1}
-											</span>
-										</Button>
-									</li>
-								))}
-							</ul>
-						)}
-					</fieldset>
-					{error ? <p className="text-sm text-destructive">{error}</p> : null}
+					</FormSection>
+					{error ? (
+						<p role="alert" className="text-[13px] text-state-alert">
+							{error}
+						</p>
+					) : null}
 				</div>
-
-				<SheetFooter className="flex-row justify-end border-t">
+				<div className="flex justify-end gap-2 border-t px-6 py-4">
 					<Button
 						type="button"
 						variant="outline"
@@ -276,22 +358,12 @@ export function DoeSupplySheet({
 					>
 						Annuler
 					</Button>
-					<Button
-						type="button"
-						disabled={
-							!canSubmitSupply(values) ||
-							isUploadingPhotos ||
-							isUploadingDatasheets
-						}
-						onClick={onSubmit}
-					>
-						{isUploadingPhotos || isUploadingDatasheets ? (
-							<Loader2 className="animate-spin" />
-						) : null}
+					<Button type="submit" disabled={!canSubmit}>
+						{busy ? <Loader2 className="animate-spin" /> : null}
 						{isNew ? 'Ajouter' : 'Appliquer'}
 					</Button>
-				</SheetFooter>
-			</SheetContent>
-		</Sheet>
+				</div>
+			</form>
+		</SideSheet>
 	)
 }

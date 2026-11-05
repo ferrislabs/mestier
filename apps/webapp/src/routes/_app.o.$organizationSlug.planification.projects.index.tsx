@@ -1,5 +1,9 @@
 import { createFileRoute } from '@tanstack/react-router'
 import { ProjectsFeature } from '#/pages/projects/feature/projects-feature'
+import {
+	filtersOfSearch,
+	searchOfFilters,
+} from '#/pages/projects/lib/list-search'
 import { projectsSearchSchema } from '#/pages/projects/types'
 
 export const Route = createFileRoute(
@@ -10,15 +14,18 @@ export const Route = createFileRoute(
 })
 
 function ProjectsPage() {
-	const { projectId, archived } = Route.useSearch()
+	const search = Route.useSearch()
 	const navigate = Route.useNavigate()
 
 	return (
 		<ProjectsFeature
-			highlightedProjectId={projectId}
-			includeArchived={archived}
-			onIncludeArchivedChange={(archived) =>
-				navigate({ search: (prev) => ({ ...prev, archived }) })
+			filters={filtersOfSearch(search)}
+			highlightedProjectId={search.projectId}
+			onFiltersChange={(filters) =>
+				navigate({
+					replace: true,
+					search: searchOfFilters(filters, search.projectId),
+				})
 			}
 		/>
 	)

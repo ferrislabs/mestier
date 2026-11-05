@@ -1,4 +1,6 @@
+import { Link } from '@tanstack/react-router'
 import { FilePlus2, Loader2 } from 'lucide-react'
+import { useId } from 'react'
 import { RequirePermission } from '#/components/require-permission'
 import { Button } from '#/components/ui/button'
 import {
@@ -8,13 +10,15 @@ import {
 	SelectTrigger,
 	SelectValue,
 } from '#/components/ui/select'
-import { SectionCard } from '#/components/ui/surface'
+import { buildOrgPath } from '#/modules/org-path'
 import type { CreationMode } from '#/pages/doe/lib/empty-state'
 
 interface DoeEmptyStateProps {
+	organizationSlug: string
 	mode: CreationMode
-	models: Array<{ id: string; name: string }>
+	models: Array<{ id: string; name: string; description?: string | null }>
 	selectedModelId: string
+	hasCustomer: boolean
 	isLoading: boolean
 	isPending: boolean
 	error: string | null
@@ -24,9 +28,11 @@ interface DoeEmptyStateProps {
 }
 
 export function DoeEmptyState({
+	organizationSlug,
 	mode,
 	models,
 	selectedModelId,
+	hasCustomer,
 	isLoading,
 	isPending,
 	error,
@@ -34,47 +40,65 @@ export function DoeEmptyState({
 	onCreate,
 	onCreateStarter,
 }: DoeEmptyStateProps) {
+	const titleId = useId()
+	const model = models.find((item) => item.id === selectedModelId)
+
 	return (
-		<SectionCard className="flex flex-col items-center gap-4 p-10 text-center">
-			<FilePlus2 className="size-8 text-muted-foreground" />
-			<div>
-				<p className="font-semibold">Ce projet n'a pas encore de DOE</p>
-				<p className="mt-1 text-sm text-muted-foreground">
-					Partez d'un modèle : vous pourrez cocher les thèmes et piocher dans le
-					catalogue ensuite.
+		<section
+			aria-labelledby={titleId}
+			className="flex flex-col items-center gap-4 rounded-lg border bg-card px-6 py-10 text-center"
+		>
+			<FilePlus2 className="size-8 text-muted-foreground" aria-hidden />
+			<div className="max-w-xl">
+				<h2 id={titleId} className="font-semibold">
+					Ce projet n’a pas encore de DOE
+				</h2>
+				<p className="mt-1 text-muted-foreground text-sm">
+					Pars d’un modèle : tu pourras ensuite cocher les thèmes à inclure et
+					piocher dans les fiches techniques.
 				</p>
 			</div>
 			{isLoading ? (
-				<Loader2 className="size-5 animate-spin text-muted-foreground" />
+				<Loader2
+					className="size-5 animate-spin text-muted-foreground"
+					aria-hidden
+				/>
 			) : (
 				<RequirePermission permission="MANAGE_PLANNING">
 					{mode === 'pick-model' ? (
-						<div className="flex flex-wrap items-center justify-center gap-3">
-							<Select value={selectedModelId} onValueChange={onSelectModel}>
-								<SelectTrigger aria-label="Modèle de DOE" className="w-64">
-									<SelectValue placeholder="Choisir un modèle" />
-								</SelectTrigger>
-								<SelectContent>
-									{models.map((model) => (
-										<SelectItem key={model.id} value={model.id}>
-											{model.name}
-										</SelectItem>
-									))}
-								</SelectContent>
-							</Select>
-							<Button
-								type="button"
-								disabled={selectedModelId === '' || isPending}
-								onClick={onCreate}
-							>
-								{isPending ? <Loader2 className="animate-spin" /> : null}
-								Créer le DOE
-							</Button>
+						<div className="grid justify-items-center gap-2">
+							<div className="flex flex-wrap items-center justify-center gap-3">
+								<Select value={selectedModelId} onValueChange={onSelectModel}>
+									<SelectTrigger aria-label="Modèle de DOE" className="w-64">
+										<SelectValue placeholder="Choisir un modèle" />
+									</SelectTrigger>
+									<SelectContent>
+										{models.map((item) => (
+											<SelectItem key={item.id} value={item.id}>
+												{item.name}
+											</SelectItem>
+										))}
+									</SelectContent>
+								</Select>
+								<Button
+									type="button"
+									disabled={selectedModelId === '' || isPending}
+									onClick={onCreate}
+								>
+									{isPending ? <Loader2 className="animate-spin" /> : null}
+									Créer le DOE
+								</Button>
+							</div>
+							{model?.description ? (
+								<p className="text-[13px] text-muted-foreground">
+									{model.description}
+								</p>
+							) : null}
 						</div>
 					) : (
-						<div className="flex flex-col items-center gap-2">
-							<p className="text-sm text-muted-foreground">
-								Aucun modèle de DOE dans votre organisation.
+						<div className="grid justify-items-center gap-2">
+							<p className="text-muted-foreground text-sm">
+								Aucun modèle de DOE dans ton organisation.
 							</p>
 							<Button
 								type="button"
@@ -88,7 +112,27 @@ export function DoeEmptyState({
 					)}
 				</RequirePermission>
 			)}
-			{error ? <p className="text-sm text-destructive">{error}</p> : null}
-		</SectionCard>
+			{error ? (
+				<p role="alert" className="text-[13px] text-state-alert">
+					{error}
+				</p>
+			) : null}
+			<div className="max-w-xl text-[13px] text-muted-foreground">
+				<p>
+					Les intervenants sont préremplis : la maîtrise d’ouvrage depuis le
+					client du projet, l’entreprise depuis ton organisation.
+					{!hasCustomer &&
+						' Ce projet n’a pas de client : la maîtrise d’ouvrage restera à compléter.'}
+				</p>
+				<p className="mt-2">
+					<Link
+						to={buildOrgPath(organizationSlug, '/planification/doe-models')}
+						className="rounded-sm font-medium text-primary underline underline-offset-4 outline-none hover:no-underline focus-visible:ring-2 focus-visible:ring-ring"
+					>
+						Gérer les modèles de DOE
+					</Link>
+				</p>
+			</div>
+		</section>
 	)
 }

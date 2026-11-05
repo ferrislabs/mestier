@@ -8,13 +8,16 @@ import { useProject } from '#/hooks/use-projects'
 import { buildOrgPath } from '#/modules/org-path'
 import { DoeCreateFeature } from '#/pages/doe/feature/doe-create-feature'
 import { DoeEditorFeature } from '#/pages/doe/feature/doe-editor-feature'
-import { ProjectTabs } from '#/pages/projects/ui/project-tabs'
+import { DoeBreadcrumb } from '#/pages/doe/ui/doe-breadcrumb'
+import { Page } from '#/pages/projects/ui/page'
 
 interface DoeFeatureProps {
 	projectId: string
+	tab: string | undefined
+	onTabChange: (tab: string) => void
 }
 
-export function DoeFeature({ projectId }: DoeFeatureProps) {
+export function DoeFeature({ projectId, tab, onTabChange }: DoeFeatureProps) {
 	const { activeOrganization } = useActiveOrganization()
 	const project = useProject(activeOrganization.id, projectId)
 	const doe = useProjectDoe(activeOrganization.id, projectId)
@@ -72,23 +75,32 @@ export function DoeFeature({ projectId }: DoeFeatureProps) {
 				organizationSlug={activeOrganization.slug}
 				projectId={projectId}
 				projectName={projectName}
+				tab={tab}
+				onTabChange={onTabChange}
 			/>
 		)
 	}
 
 	return (
-		<PageShell>
-			<ProjectTabs
-				organizationSlug={activeOrganization.slug}
-				projectId={projectId}
-				active="doe"
-				doeLabel="DOE"
-			/>
-			<DoeCreateFeature
-				organizationId={activeOrganization.id}
-				projectId={projectId}
-				projectName={projectName}
-			/>
-		</PageShell>
+		<div className="h-full min-h-0 overflow-y-auto">
+			<Page>
+				<header className="mb-6">
+					<DoeBreadcrumb
+						organizationSlug={activeOrganization.slug}
+						projectId={projectId}
+						projectName={projectName}
+					/>
+					<h1 className="truncate font-normal text-2xl tracking-tight md:text-[28px]">
+						DOE – {projectName}
+					</h1>
+				</header>
+				<DoeCreateFeature
+					organizationId={activeOrganization.id}
+					organizationSlug={activeOrganization.slug}
+					projectId={projectId}
+					hasCustomer={Boolean(project.data?.data.customer_id)}
+				/>
+			</Page>
+		</div>
 	)
 }

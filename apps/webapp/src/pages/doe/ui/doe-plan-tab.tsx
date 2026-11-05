@@ -1,9 +1,8 @@
 import { ArrowDown, ArrowUp, Plus, Trash2 } from 'lucide-react'
-import { useState } from 'react'
+import { useId, useState } from 'react'
 import { RequirePermission } from '#/components/require-permission'
 import { Badge } from '#/components/ui/badge'
 import { Button } from '#/components/ui/button'
-import { Checkbox } from '#/components/ui/checkbox'
 import { Input } from '#/components/ui/input'
 import {
 	Select,
@@ -12,7 +11,7 @@ import {
 	SelectTrigger,
 	SelectValue,
 } from '#/components/ui/select'
-import { SectionCard, SectionHeader } from '#/components/ui/surface'
+import { cn } from '#/lib/utils'
 import { numberSections } from '#/pages/doe/lib/sections'
 import {
 	type DoeSection,
@@ -20,6 +19,10 @@ import {
 	SECTION_KINDS,
 	type SectionKind,
 } from '#/pages/doe/types'
+import { EditorCard } from '#/pages/doe/ui/editor-card'
+
+export const REMOVE_BLOCKED_NOTE =
+	'Ce thème contient des éléments. Retire-les avant de le supprimer, ou décoche le thème pour l’exclure du DOE.'
 
 interface DoePlanTabProps {
 	sections: DoeSection[]
@@ -40,73 +43,96 @@ export function DoePlanTab({
 	onRemove,
 	onAdd,
 }: DoePlanTabProps) {
+	const base = useId()
 	const [newTitle, setNewTitle] = useState('')
 	const [newKind, setNewKind] = useState<SectionKind>('supplies')
 	const numbered = numberSections(sections)
 
 	return (
-		<SectionCard>
-			<SectionHeader
-				title="Plan du DOE"
-				description="Cochez les thèmes à inclure. La numérotation ne compte que les thèmes cochés."
-			/>
+		<EditorCard
+			title="Thèmes"
+			description="Coche les thèmes à inclure. La numérotation ne compte que les thèmes cochés."
+		>
 			<ul className="divide-y">
-				{numbered.map(({ section, number }, index) => (
-					<li key={section.id} className="flex items-center gap-3 px-5 py-3">
-						<Checkbox
-							checked={section.enabled}
-							aria-label={`Inclure ${section.title}`}
-							onCheckedChange={(checked) =>
-								onToggle(section.id, checked === true)
-							}
-						/>
-						<span className="w-6 text-center text-sm tabular-nums text-muted-foreground">
-							{number ?? '—'}
-						</span>
-						<Input
-							value={section.title}
-							aria-label={`Titre du thème ${index + 1}`}
-							className="max-w-sm"
-							onChange={(event) => onRename(section.id, event.target.value)}
-						/>
-						<Badge variant="secondary">
-							{KIND_LABELS[section.content.kind]}
-						</Badge>
-						<div className="ml-auto flex items-center gap-1">
-							<Button
-								type="button"
-								variant="ghost"
-								size="icon-sm"
-								disabled={index === 0}
-								onClick={() => onMove(index, -1)}
-							>
-								<ArrowUp />
-								<span className="sr-only">Monter {section.title}</span>
-							</Button>
-							<Button
-								type="button"
-								variant="ghost"
-								size="icon-sm"
-								disabled={index === sections.length - 1}
-								onClick={() => onMove(index, 1)}
-							>
-								<ArrowDown />
-								<span className="sr-only">Descendre {section.title}</span>
-							</Button>
-							{removableSectionIds.has(section.id) ? (
+				{numbered.map(({ section, number }, index) => {
+					const removable = removableSectionIds.has(section.id)
+					return (
+						<li
+							key={section.id}
+							className="flex flex-wrap items-center gap-3 px-5 py-3"
+						>
+							<input
+								type="checkbox"
+								checked={section.enabled}
+								aria-label={`Inclure ${section.title}`}
+								onChange={(event) => onToggle(section.id, event.target.checked)}
+								className="size-4 rounded-sm border-input accent-primary outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+							/>
+							<span className="w-6 text-center text-muted-foreground text-sm tabular-nums">
+								{number === null ? (
+									<>
+										<span aria-hidden>—</span>
+										<span className="sr-only">Thème non numéroté</span>
+									</>
+								) : (
+									<>
+										<span className="sr-only">Thème n° </span>
+										{number}
+									</>
+								)}
+							</span>
+							<Input
+								value={section.title}
+								aria-label={`Titre du thème ${index + 1}`}
+								aria-invalid={section.title.trim() === ''}
+								onChange={(event) => onRename(section.id, event.target.value)}
+								className="min-w-48 max-w-sm flex-1"
+							/>
+							<Badge variant="secondary">
+								{KIND_LABELS[section.content.kind]}
+							</Badge>
+							<div className="ml-auto flex items-center gap-1">
 								<Button
 									type="button"
 									variant="ghost"
 									size="icon-sm"
-									onClick={() => onRemove(section.id)}
+									disabled={index === 0}
+									onClick={() => onMove(index, -1)}
 								>
-									<Trash2 />
+									<ArrowUp aria-hidden />
+									<span className="sr-only">Monter {section.title}</span>
+								</Button>
+								<Button
+									type="button"
+									variant="ghost"
+									size="icon-sm"
+									disabled={index === sections.length - 1}
+									onClick={() => onMove(index, 1)}
+								>
+									<ArrowDown aria-hidden />
+									<span className="sr-only">Descendre {section.title}</span>
+								</Button>
+								<Button
+									type="button"
+									variant="ghost"
+									size="icon-sm"
+									aria-disabled={!removable}
+									title={removable ? undefined : REMOVE_BLOCKED_NOTE}
+									className={cn(
+										!removable &&
+											'cursor-not-allowed opacity-50 hover:bg-transparent hover:text-current',
+									)}
+									onClick={() => {
+										if (removable) onRemove(section.id)
+									}}
+								>
+									<Trash2 aria-hidden />
 									<span className="sr-only">Supprimer {section.title}</span>
 								</Button>
-							) : null}
-						</div>
-					</li>
-				))}
+							</div>
+						</li>
+					)
+				})}
 			</ul>
 			<RequirePermission permission="MANAGE_PLANNING">
 				<form
@@ -118,25 +144,25 @@ export function DoePlanTab({
 						setNewTitle('')
 					}}
 				>
-					<div className="flex flex-col gap-1">
-						<label
-							htmlFor="doe-new-section-title"
-							className="text-sm font-medium"
-						>
+					<div className="grid gap-1.5">
+						<label htmlFor={`${base}-title`} className="font-medium text-sm">
 							Titre du nouveau thème
 						</label>
 						<Input
-							id="doe-new-section-title"
+							id={`${base}-title`}
 							value={newTitle}
 							className="w-64"
 							onChange={(event) => setNewTitle(event.target.value)}
 						/>
 					</div>
-					<div className="flex flex-col gap-1">
-						<span className="text-sm font-medium">Type</span>
+					<div className="grid gap-1.5">
+						<span className="font-medium text-sm">Type</span>
 						<Select
 							value={newKind}
-							onValueChange={(value) => setNewKind(value as SectionKind)}
+							onValueChange={(value) => {
+								const found = SECTION_KINDS.find((item) => item === value)
+								if (found) setNewKind(found)
+							}}
 						>
 							<SelectTrigger
 								aria-label="Type du nouveau thème"
@@ -154,11 +180,11 @@ export function DoePlanTab({
 						</Select>
 					</div>
 					<Button type="submit" disabled={newTitle.trim() === ''}>
-						<Plus />
+						<Plus aria-hidden />
 						Ajouter un thème
 					</Button>
 				</form>
 			</RequirePermission>
-		</SectionCard>
+		</EditorCard>
 	)
 }

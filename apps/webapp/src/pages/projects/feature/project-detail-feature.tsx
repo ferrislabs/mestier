@@ -1,11 +1,14 @@
+import { useQueryClient } from '@tanstack/react-query'
 import { Link, useNavigate } from '@tanstack/react-router'
 import { AlertCircle, ArrowLeft, Loader2 } from 'lucide-react'
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
+import type { Schemas } from '#/api/api.client'
+import { ConfirmDialog } from '#/components/confirm-dialog'
 import { Button } from '#/components/ui/button'
 import { PageShell, SectionCard } from '#/components/ui/surface'
 import { useActiveOrganization } from '#/hooks/use-active-organization'
 import { useCustomer, useCustomerContexts } from '#/hooks/use-customers'
-import { isNotFoundError, useProjectDoe } from '#/hooks/use-doe'
+import { useProjectDoe } from '#/hooks/use-doe'
 import {
 	useCreateInvoice,
 	useInvoicesByProject,
@@ -15,23 +18,63 @@ import {
 	useProjectBillingSummary,
 } from '#/hooks/use-invoices'
 import { useHasPermission } from '#/hooks/use-permissions'
-import { type Project, useProject } from '#/hooks/use-projects'
+import { usePlanning } from '#/hooks/use-planning'
+import { useCreateProjectTemplate } from '#/hooks/use-project-templates'
+import {
+	type Project,
+	useArchiveProject,
+	usePatchProject,
+	useProject,
+	useRestoreProject,
+} from '#/hooks/use-projects'
 import { useProfitability } from '#/hooks/use-reporting'
 import { useProjectSupplierCosts } from '#/hooks/use-supplier-invoices'
 import { buildOrgPath } from '#/modules/org-path'
-import type { DoeButtonState } from '#/pages/doe/lib/new-doe'
 import { eurosToCents } from '#/pages/invoices/types'
+import { computeWindow } from '#/pages/planning/lib/window'
+import { todayIsoDate } from '#/pages/planning/types'
+import { buildTemplateTaskShapeRequest } from '#/pages/project-templates/lib/template-task-form'
+import { EMPTY_PROJECT_TEMPLATE_FORM } from '#/pages/project-templates/types'
+import { ProjectTemplateEditorDialog } from '#/pages/project-templates/ui/project-template-editor-dialog'
+import {
+	setMissionStatus,
+	useAllMissions,
+} from '#/pages/projects/feature/mocks/missions'
+import {
+	saveProjectExtras,
+	useProjectExtras,
+} from '#/pages/projects/feature/mocks/project-extras'
+import { usePeople } from '#/pages/projects/feature/use-people'
+import { useProjectFormOptions } from '#/pages/projects/feature/use-project-form-options'
+import { sortedMissions } from '#/pages/projects/lib/missions'
+import {
+	extrasOfForm,
+	fullFormOf,
+	type ProjectFullForm,
+} from '#/pages/projects/lib/project-form'
+import { statusOf } from '#/pages/projects/lib/project-list'
+import { doeSummary } from '#/pages/projects/lib/project-view'
+import { projectTasksToTemplateDrafts } from '#/pages/projects/lib/save-as-template'
 import {
 	canInvoiceAgainstQuote,
 	depositPreviewCents,
 	type InvoicerMode,
+	optionalId,
 	percentToBasisPoints,
 } from '#/pages/projects/types'
 import { ProjectDetailUI } from '#/pages/projects/ui/project-detail-ui'
+import { ProjectEditDialog } from '#/pages/projects/ui/project-edit-dialog'
 import { currentMonthPeriod } from '#/pages/reporting/types'
+
+const TASKS_PATH = '/api/v1/organizations/{organization_id}/tasks'
 
 interface ProjectDetailFeatureProps {
 	projectId: string
+}
+
+type TemplateDraft = {
+	values: { name: string; description: string }
+	tasks: ReturnType<typeof projectTasksToTemplateDrafts>
 }
 
 export function ProjectDetailFeature({ projectId }: ProjectDetailFeatureProps) {
@@ -78,15 +121,42 @@ function ProjectDetailWorkspace({
 	organizationSlug: string
 }) {
 	const navigate = useNavigate()
+	const queryClient = useQueryClient()
 	const canOpenDoe = useHasPermission('MANAGE_PLANNING')
 	const doe = useProjectDoe(organizationId, canOpenDoe ? project.id : '')
-	const doeState: DoeButtonState = doe.data
-		? { revision: doe.data.data.revision }
-		: doe.isError && isNotFoundError(doe.error)
-			? 'none'
-			: 'loading'
 	const hasCustomer = project.customer_id !== null
 	const hasPinnedAddress = project.customer_context_id !== null
+	const extras = useProjectExtras(project.id).data
+	const missions = useAllMissions()
+	const people = usePeople(organizationId)
+	const projectMissions = useMemo(
+		() =>
+			sortedMissions(
+				missions.filter((mission) => mission.projectId === project.id),
+			),
+		[missions, project.id],
+	)
+
+	const [editDraft, setEditDraft] = useState<ProjectFullForm | null>(null)
+	const [archiving, setArchiving] = useState(false)
+	const [templateDraft, setTemplateDraft] = useState<TemplateDraft | null>(null)
+	const [templateError, setTemplateError] = useState<string | null>(null)
+	const [isBuildingTemplate, setIsBuildingTemplate] = useState(false)
+	const editOptions = useProjectFormOptions(
+		organizationId,
+		editDraft?.customerId ?? '',
+	)
+	const patchProject = usePatchProject()
+	const archiveProject = useArchiveProject()
+	const restoreProject = useRestoreProject()
+	const createTemplate = useCreateProjectTemplate()
+	const planningQuery = usePlanning(
+		organizationId,
+		computeWindow('day', todayIsoDate()),
+	)
+	const timeZone = planningQuery.data?.data.timezone ?? 'UTC'
+	const status = statusOf(project)
+	const archived = status === 'archived'
 
 	// Never recomputed from a list of invoices — see `useProjectBillingSummary`.
 	const billingSummary = useProjectBillingSummary(project.id)
@@ -221,51 +291,236 @@ function ProjectDetailWorkspace({
 		issueInvoice.error?.message ??
 		null
 
-	return (
-		<ProjectDetailUI
-			organizationSlug={organizationSlug}
-			project={project}
-			customerName={customer.data?.data.name ?? null}
-			canOpenDoe={canOpenDoe}
-			doeState={doeState}
-			billingSummary={billingSummary.data?.data ?? null}
-			isBillingSummaryLoading={billingSummary.isLoading}
-			period={period}
-			onPeriodChange={setPeriod}
-			costRow={costRow}
-			isCostLoading={profitability.isLoading}
-			invoices={invoices.data?.data ?? []}
-			isInvoicesLoading={invoices.isLoading}
-			supplierCosts={supplierCosts.data?.data ?? null}
-			isSupplierCostsLoading={supplierCosts.isLoading}
-			hasCustomer={hasCustomer}
-			hasPinnedAddress={hasPinnedAddress}
-			hasQuote={hasQuote}
-			mode={mode}
-			onModeChange={setMode}
-			percentageInput={percentageInput}
-			onPercentageInputChange={setPercentageInput}
-			percentagePreviewCents={
-				hasQuote && quotedCents !== null && percentageBp !== null
-					? depositPreviewCents(quotedCents, percentageBp)
-					: null
+	const submitEdit = async () => {
+		if (!editDraft) return
+		await patchProject.mutateAsync({
+			path: { organization_id: organizationId, project_id: project.id },
+			body: {
+				name: editDraft.name.trim(),
+				customer_id: optionalId(editDraft.customerId),
+				customer_context_id: optionalId(editDraft.customerContextId),
+				quote_id: optionalId(editDraft.quoteId),
+			},
+		})
+		await saveProjectExtras(project.id, extrasOfForm(editDraft))
+		setEditDraft(null)
+	}
+
+	const toggleArchive = async () => {
+		const path = { organization_id: organizationId, project_id: project.id }
+		if (archived) await restoreProject.mutateAsync({ path })
+		else await archiveProject.mutateAsync({ path })
+		setArchiving(false)
+	}
+
+	/**
+	 * Loads a project's whole task set (roots, then every root's subtasks —
+	 * `GET /tasks` has no `project_id` filter, so this narrows client-side)
+	 * and opens the template builder pre-filled with the offsets it computes.
+	 */
+	const startSaveAsTemplate = async () => {
+		setTemplateError(null)
+		setIsBuildingTemplate(true)
+		try {
+			const rootPage = await queryClient.fetchQuery(
+				window.tanstackApi.get(TASKS_PATH, {
+					path: { organization_id: organizationId },
+					query: { page: 1, per_page: 100 },
+				}).queryOptions,
+			)
+			const projectRoots = rootPage.data.filter(
+				(task) => task.project_id === project.id,
+			)
+			const childPages = await Promise.all(
+				projectRoots
+					.filter((root) => (root.child_count ?? 0) > 0)
+					.map((root) =>
+						queryClient.fetchQuery(
+							window.tanstackApi.get(TASKS_PATH, {
+								path: { organization_id: organizationId },
+								query: { parent_task_id: root.id, page: 1, per_page: 100 },
+							}).queryOptions,
+						),
+					),
+			)
+			const allTasks: Schemas.TaskResponse[] = [
+				...projectRoots,
+				...childPages.flatMap((page) => page.data),
+			]
+
+			const tasks = projectTasksToTemplateDrafts(allTasks, timeZone)
+			if (tasks.length === 0) {
+				setTemplateError('Ce projet ne porte aucune tâche à enregistrer.')
+				return
 			}
-			freeAmountInput={freeAmountInput}
-			onFreeAmountInputChange={setFreeAmountInput}
-			freeLabel={freeLabel}
-			onFreeLabelChange={setFreeLabel}
-			freeCustomerContexts={freeAmountCustomerContexts.data?.data ?? []}
-			isFreeCustomerContextsLoading={freeAmountCustomerContexts.isLoading}
-			freeCustomerContextId={freeCustomerContextId}
-			onFreeCustomerContextIdChange={setFreeCustomerContextId}
-			dueAt={dueAt}
-			onDueAtChange={setDueAt}
-			notes={notes}
-			onNotesChange={setNotes}
-			isIssuing={isIssuing}
-			error={error}
-			onConfirm={() => confirmHandlers[mode]()}
-		/>
+
+			setTemplateDraft({
+				values: { name: project.name, description: '' },
+				tasks,
+			})
+		} finally {
+			setIsBuildingTemplate(false)
+		}
+	}
+
+	const submitTemplateDraft = async () => {
+		if (!templateDraft) return
+
+		await createTemplate.mutateAsync({
+			path: { organization_id: organizationId },
+			body: {
+				name: templateDraft.values.name.trim(),
+				description: templateDraft.values.description.trim() || null,
+				tasks: templateDraft.tasks.map(buildTemplateTaskShapeRequest),
+			},
+		})
+
+		setTemplateDraft(null)
+	}
+
+	const actionError =
+		patchProject.error?.message ??
+		archiveProject.error?.message ??
+		restoreProject.error?.message ??
+		templateError
+
+	return (
+		<>
+			<ProjectDetailUI
+				organizationSlug={organizationSlug}
+				project={project}
+				status={status}
+				customer={
+					customer.data?.data
+						? {
+								name: customer.data.data.name,
+								email: customer.data.data.email ?? null,
+								phone: customer.data.data.phone ?? null,
+							}
+						: null
+				}
+				extras={extras}
+				owner={people.data.find((person) => person.id === extras.ownerId)}
+				people={people.data}
+				missions={projectMissions}
+				doe={doe.data?.data ? doeSummary(doe.data.data) : null}
+				isDoeLoading={canOpenDoe && doe.isLoading}
+				canOpenDoe={canOpenDoe}
+				isBuildingTemplate={isBuildingTemplate}
+				billingSummary={billingSummary.data?.data ?? null}
+				isBillingSummaryLoading={billingSummary.isLoading}
+				period={period}
+				onPeriodChange={setPeriod}
+				costRow={costRow}
+				isCostLoading={profitability.isLoading}
+				invoices={invoices.data?.data ?? []}
+				isInvoicesLoading={invoices.isLoading}
+				supplierCosts={supplierCosts.data?.data ?? null}
+				isSupplierCostsLoading={supplierCosts.isLoading}
+				hasCustomer={hasCustomer}
+				hasPinnedAddress={hasPinnedAddress}
+				hasQuote={hasQuote}
+				mode={mode}
+				onModeChange={setMode}
+				percentageInput={percentageInput}
+				onPercentageInputChange={setPercentageInput}
+				percentagePreviewCents={
+					hasQuote && quotedCents !== null && percentageBp !== null
+						? depositPreviewCents(quotedCents, percentageBp)
+						: null
+				}
+				freeAmountInput={freeAmountInput}
+				onFreeAmountInputChange={setFreeAmountInput}
+				freeLabel={freeLabel}
+				onFreeLabelChange={setFreeLabel}
+				freeCustomerContexts={freeAmountCustomerContexts.data?.data ?? []}
+				isFreeCustomerContextsLoading={freeAmountCustomerContexts.isLoading}
+				freeCustomerContextId={freeCustomerContextId}
+				onFreeCustomerContextIdChange={setFreeCustomerContextId}
+				dueAt={dueAt}
+				onDueAtChange={setDueAt}
+				notes={notes}
+				onNotesChange={setNotes}
+				isIssuing={isIssuing}
+				error={error ?? actionError}
+				onConfirm={() => confirmHandlers[mode]()}
+				onEdit={() => setEditDraft(fullFormOf(project, extras))}
+				onToggleArchive={() => setArchiving(true)}
+				onSaveAsTemplate={() => {
+					void startSaveAsTemplate().catch((failure: Error) =>
+						setTemplateError(failure.message),
+					)
+				}}
+				onMissionStatusChange={(mission, next) => {
+					void setMissionStatus(mission.id, next)
+				}}
+			/>
+
+			<ProjectEditDialog
+				open={editDraft !== null}
+				form={editDraft ?? fullFormOf(project, extras)}
+				customers={editOptions.customers}
+				quotes={editOptions.quotes}
+				customerContexts={editOptions.customerContexts}
+				isCustomerContextsLoading={editOptions.isCustomerContextsLoading}
+				people={people.data}
+				isPending={patchProject.isPending}
+				error={patchProject.error?.message ?? null}
+				onOpenChange={(open) => {
+					if (!open) setEditDraft(null)
+				}}
+				onChange={(patch) =>
+					setEditDraft((current) =>
+						current ? { ...current, ...patch } : current,
+					)
+				}
+				onSubmit={() => {
+					void submitEdit().catch(() => {})
+				}}
+			/>
+
+			<ConfirmDialog
+				open={archiving}
+				onOpenChange={setArchiving}
+				title={archived ? 'Réactiver ce projet ?' : 'Archiver ce projet ?'}
+				description={
+					archived
+						? `« ${project.name} » revient dans la liste des projets actifs.`
+						: `« ${project.name} » quitte la liste des projets actifs. Ses missions et son DOE sont conservés, tu pourras le réactiver à tout moment.`
+				}
+				confirmLabel={archived ? 'Réactiver' : 'Archiver'}
+				onConfirm={() => {
+					void toggleArchive().catch(() => setArchiving(false))
+				}}
+			/>
+
+			<ProjectTemplateEditorDialog
+				open={templateDraft !== null}
+				editingName={null}
+				values={templateDraft?.values ?? EMPTY_PROJECT_TEMPLATE_FORM}
+				tasks={templateDraft?.tasks ?? []}
+				isPending={createTemplate.isPending}
+				error={createTemplate.error?.message ?? null}
+				onOpenChange={(open) => {
+					if (!open) setTemplateDraft(null)
+				}}
+				onValuesChange={(patch) =>
+					setTemplateDraft((current) =>
+						current
+							? { ...current, values: { ...current.values, ...patch } }
+							: current,
+					)
+				}
+				onTasksChange={(tasks) =>
+					setTemplateDraft((current) =>
+						current ? { ...current, tasks } : current,
+					)
+				}
+				onSubmit={() => {
+					void submitTemplateDraft()
+				}}
+			/>
+		</>
 	)
 }
 

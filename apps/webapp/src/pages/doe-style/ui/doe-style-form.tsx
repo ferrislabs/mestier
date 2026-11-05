@@ -84,32 +84,8 @@ export function DoeStyleForm({
 	onLogoRemove,
 }: DoeStyleFormProps) {
 	return (
-		<div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,24rem)]">
-			<div className="self-start lg:sticky lg:top-4 lg:order-2">
-				<DoeStylePreview
-					pages={pages}
-					activePage={activePage}
-					loading={previewLoading}
-					error={previewError}
-					invalid={previewDisabled}
-					onSelectPage={onSelectPage}
-				/>
-				<div className="pt-3">
-					<RequirePermission permission="MANAGE_REFERENCE">
-						<Button
-							type="button"
-							variant="outline"
-							disabled={previewDisabled || previewing}
-							onClick={onPreview}
-						>
-							{previewing ? <Loader2 className="animate-spin" /> : <Eye />}
-							Aperçu PDF
-						</Button>
-					</RequirePermission>
-				</div>
-			</div>
-
-			<div className="flex min-w-0 flex-col gap-4 lg:order-1">
+		<div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_17rem] xl:grid-cols-[minmax(0,1fr)_20rem]">
+			<div className="grid min-w-0 grid-cols-1 content-start gap-5">
 				<DoeThemePicker activeId={activeThemeId} onApply={onApplyTheme} />
 				<Group title="Couleurs" defaultOpen>
 					<div className="grid gap-4 md:grid-cols-3">
@@ -303,6 +279,37 @@ export function DoeStyleForm({
 					</div>
 				</Group>
 			</div>
+			<aside
+				aria-label="Aperçu de la mise en page"
+				className="grid min-w-0 grid-cols-1 content-start gap-2 lg:sticky lg:top-6 lg:self-start"
+			>
+				<h3 className="font-medium text-sm">Aperçu</h3>
+				<DoeStylePreview
+					pages={pages}
+					activePage={activePage}
+					loading={previewLoading}
+					error={previewError}
+					invalid={previewDisabled}
+					onSelectPage={onSelectPage}
+				/>
+				<RequirePermission permission="MANAGE_REFERENCE">
+					<Button
+						type="button"
+						variant="outline"
+						size="sm"
+						className="w-fit"
+						disabled={previewDisabled || previewing}
+						onClick={onPreview}
+					>
+						{previewing ? (
+							<Loader2 className="animate-spin" aria-hidden />
+						) : (
+							<Eye aria-hidden />
+						)}
+						Aperçu PDF
+					</Button>
+				</RequirePermission>
+			</aside>
 		</div>
 	)
 }
@@ -319,13 +326,16 @@ function Group({
 	return (
 		<Collapsible
 			defaultOpen={defaultOpen}
-			className="group/section rounded-lg border"
+			className="group/section min-w-0 rounded-md border"
 		>
-			<CollapsibleTrigger className="flex w-full items-center justify-between px-4 py-3 text-sm font-medium">
+			<CollapsibleTrigger className="flex w-full items-center justify-between rounded-md px-4 py-2.5 font-medium text-sm outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50">
 				{title}
-				<ChevronDown className="size-4 transition group-data-[state=open]/section:rotate-180" />
+				<ChevronDown
+					aria-hidden
+					className="size-4 transition group-data-[state=open]/section:rotate-180"
+				/>
 			</CollapsibleTrigger>
-			<CollapsibleContent className="flex flex-col gap-4 border-t p-4">
+			<CollapsibleContent className="grid gap-4 border-t px-4 pt-4 pb-4">
 				{children}
 			</CollapsibleContent>
 		</Collapsible>
@@ -352,7 +362,7 @@ function ColorField({
 					type="color"
 					aria-label={`${label} (sélecteur)`}
 					value={valid ? value.trim().toLowerCase() : '#000000'}
-					className="h-9 w-10 cursor-pointer rounded border bg-transparent p-0.5"
+					className="h-9 w-11 shrink-0 cursor-pointer rounded-md border border-input bg-transparent p-1 outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
 					onChange={(event) => onChange(event.target.value)}
 				/>
 				<Input
@@ -364,7 +374,7 @@ function ColorField({
 				/>
 			</div>
 			{error ? (
-				<p role="alert" className="text-xs text-destructive">
+				<p role="alert" className="text-[12px] text-state-alert">
 					{error}
 				</p>
 			) : null}
@@ -421,7 +431,7 @@ function TextInput({
 				onChange={(event) => onChange(event.target.value)}
 			/>
 			{error ? (
-				<p role="alert" className="text-xs text-destructive">
+				<p role="alert" className="text-[12px] text-state-alert">
 					{error}
 				</p>
 			) : null}
@@ -439,9 +449,9 @@ function SwitchField({
 	onChange: (checked: boolean) => void
 }) {
 	return (
-		<div className="flex items-center gap-3">
+		<div className="flex items-start gap-3">
 			<Switch aria-label={label} checked={checked} onCheckedChange={onChange} />
-			<span className="text-sm">{label}</span>
+			<span className="font-medium text-sm leading-4">{label}</span>
 		</div>
 	)
 }

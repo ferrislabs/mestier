@@ -137,6 +137,8 @@ function editor() {
 			organizationSlug="organisation"
 			projectId="p1"
 			projectName="Jardin"
+			tab={undefined}
+			onTabChange={() => {}}
 		/>
 	)
 }

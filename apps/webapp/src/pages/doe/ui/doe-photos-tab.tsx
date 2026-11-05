@@ -1,11 +1,20 @@
-import { X } from 'lucide-react'
+import { ImageIcon, X } from 'lucide-react'
+import { useId } from 'react'
 import { RequirePermission } from '#/components/require-permission'
-import { Button } from '#/components/ui/button'
-import { SectionCard, SectionHeader } from '#/components/ui/surface'
-import { cn } from '#/lib/utils'
+import { Input } from '#/components/ui/input'
+import { Label } from '#/components/ui/label'
+import {
+	Select,
+	SelectContent,
+	SelectItem,
+	SelectTrigger,
+	SelectValue,
+} from '#/components/ui/select'
 import { photoSummary } from '#/pages/doe/lib/photos'
 import type { DoeFile, PhotosPerPage } from '#/pages/doe/types'
 import { FileDropZone } from '#/pages/doe/ui/file-drop-zone'
+import { IconButton } from '#/pages/doe/ui/icon-button'
+import { SectionFrame } from '#/pages/doe/ui/section-frame'
 
 interface DoePhotosTabProps {
 	sectionNumber: number
@@ -21,10 +30,14 @@ interface DoePhotosTabProps {
 }
 
 const OPTIONS: Array<{ value: PhotosPerPage; label: string }> = [
-	{ value: 'one', label: '1' },
-	{ value: 'two', label: '2' },
-	{ value: 'four', label: '4' },
+	{ value: 'one', label: '1 par page' },
+	{ value: 'two', label: '2 par page' },
+	{ value: 'four', label: '4 par page' },
 ]
+
+function isPerPage(value: string): value is PhotosPerPage {
+	return OPTIONS.some((option) => option.value === value)
+}
 
 export function DoePhotosTab({
 	sectionNumber,
@@ -38,96 +51,102 @@ export function DoePhotosTab({
 	onCaptionChange,
 	onRemove,
 }: DoePhotosTabProps) {
+	const perPageId = useId()
 	return (
-		<SectionCard>
-			<SectionHeader
-				title={`${sectionNumber}. ${title}`}
-				actions={
-					<div
-						role="radiogroup"
-						aria-label="Photos par page"
-						className="flex items-center gap-2 text-sm"
+		<SectionFrame
+			number={sectionNumber}
+			title={title}
+			actions={
+				<>
+					<Label htmlFor={perPageId} className="text-muted-foreground">
+						Photos par page
+					</Label>
+					<Select
+						value={perPage}
+						onValueChange={(value) => {
+							if (isPerPage(value)) onPerPageChange(value)
+						}}
 					>
-						<span className="text-muted-foreground">Photos par page</span>
-						{OPTIONS.map((option) => (
-							<Button
-								key={option.value}
-								type="button"
-								role="radio"
-								aria-checked={perPage === option.value}
-								size="sm"
-								variant={perPage === option.value ? 'default' : 'outline'}
-								onClick={() => onPerPageChange(option.value)}
-							>
-								{option.label}
-							</Button>
-						))}
-					</div>
-				}
-			/>
-			<div className="space-y-4 p-5">
+						<SelectTrigger id={perPageId} size="sm" className="w-36">
+							<SelectValue />
+						</SelectTrigger>
+						<SelectContent>
+							{OPTIONS.map((option) => (
+								<SelectItem key={option.value} value={option.value}>
+									{option.label}
+								</SelectItem>
+							))}
+						</SelectContent>
+					</Select>
+				</>
+			}
+		>
+			<div className="grid gap-4 p-5">
 				<RequirePermission permission="MANAGE_PLANNING">
 					<FileDropZone
 						accept="image/*"
-						label="Déposez des photos ici"
-						hint="Ou cliquez pour choisir des images"
+						label="Dépose des photos ici"
+						hint="Ou clique pour choisir des images"
 						isUploading={isUploading}
 						onFiles={onUpload}
 					/>
 				</RequirePermission>
-				<p className="text-sm text-muted-foreground">
-					{photoSummary(photos.length, perPage)}
-				</p>
-				{photos.length > 0 ? (
-					<ul className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-4">
-						{photos.map((photo, index) => {
-							const url = fileUrls[photo.key]
-							return (
-								<li key={photo.key} className="space-y-2">
-									<div className="relative">
+				{photos.length === 0 ? (
+					<p className="py-4 text-center text-muted-foreground text-sm">
+						Aucune photo dans ce thème.
+					</p>
+				) : (
+					<>
+						<output className="block text-muted-foreground text-sm">
+							{photoSummary(photos.length, perPage)}
+						</output>
+						<ul className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-4">
+							{photos.map((photo, index) => {
+								const url = fileUrls[photo.key]
+								const position = index + 1
+								return (
+									<li key={photo.key} className="grid content-start gap-2">
 										{url ? (
 											<img
 												src={url}
-												alt={photo.caption ?? `Photo ${index + 1}`}
+												alt={photo.caption?.trim() || `Photo ${position}`}
 												className="aspect-[4/3] w-full rounded-md border object-cover"
 											/>
 										) : (
 											<div
-												className={cn(
-													'aspect-[4/3] w-full rounded-md border bg-muted',
-												)}
-											/>
-										)}
-										<RequirePermission permission="MANAGE_PLANNING">
-											<Button
-												type="button"
-												variant="secondary"
-												size="icon-xs"
-												className="absolute top-1 right-1"
-												onClick={() => onRemove(index)}
+												aria-hidden
+												className="flex aspect-[4/3] w-full items-center justify-center rounded-md border bg-muted text-muted-foreground"
 											>
-												<X />
-												<span className="sr-only">
-													Retirer la photo {index + 1}
-												</span>
-											</Button>
+												<ImageIcon className="size-6" />
+											</div>
+										)}
+										<Input
+											value={photo.caption ?? ''}
+											placeholder="Légende"
+											aria-label={`Légende de la photo ${position}`}
+											autoComplete="off"
+											className="h-8"
+											onChange={(event) =>
+												onCaptionChange(index, event.target.value)
+											}
+										/>
+										<RequirePermission permission="MANAGE_PLANNING">
+											<div className="flex items-center gap-0.5">
+												<span className="flex-1" />
+												<IconButton
+													label={`Retirer la photo ${position}`}
+													icon={X}
+													onClick={() => onRemove(index)}
+												/>
+											</div>
 										</RequirePermission>
-									</div>
-									<input
-										className="w-full rounded-md border bg-card px-2 py-1 text-sm"
-										value={photo.caption ?? ''}
-										placeholder="Légende"
-										aria-label={`Légende de la photo ${index + 1}`}
-										onChange={(event) =>
-											onCaptionChange(index, event.target.value)
-										}
-									/>
-								</li>
-							)
-						})}
-					</ul>
-				) : null}
+									</li>
+								)
+							})}
+						</ul>
+					</>
+				)}
 			</div>
-		</SectionCard>
+		</SectionFrame>
 	)
 }

@@ -94,3 +94,15 @@ export function canSave(form: DoeForm): boolean {
 		form.sections.every((section) => section.title.trim() !== '')
 	)
 }
+
+export function formErrors(form: DoeForm): string[] {
+	const errors: string[] = []
+	if (form.title.trim() === '')
+		errors.push('Le titre du chantier est obligatoire.')
+	if (form.issuedOn === '') errors.push('La date n’est pas valide.')
+	if (!isRevisionValid(form.revision))
+		errors.push('L’indice doit faire de 1 à 8 caractères.')
+	if (form.sections.some((section) => section.title.trim() === ''))
+		errors.push('Chaque thème doit avoir un titre.')
+	return errors
+}

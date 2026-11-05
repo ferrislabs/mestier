@@ -1,6 +1,6 @@
 import { Loader2 } from 'lucide-react'
+import { useId } from 'react'
 import { Button } from '#/components/ui/button'
-import { Checkbox } from '#/components/ui/checkbox'
 import {
 	Dialog,
 	DialogContent,
@@ -10,6 +10,7 @@ import {
 	DialogTitle,
 } from '#/components/ui/dialog'
 import { Input } from '#/components/ui/input'
+import { Label } from '#/components/ui/label'
 
 export interface PickerProduct {
 	id: string
@@ -42,54 +43,73 @@ export function DoeSupplyPickerDialog({
 	onToggle,
 	onOpenChange,
 }: DoeSupplyPickerDialogProps) {
+	const baseId = useId()
 	return (
 		<Dialog open={open} onOpenChange={onOpenChange}>
-			<DialogContent className="flex max-h-[85vh] max-w-xl flex-col gap-0 overflow-hidden">
-				<DialogHeader className="border-b pb-4">
+			<DialogContent className="flex max-h-[85dvh] flex-col gap-0 p-0 sm:max-w-xl">
+				<DialogHeader className="border-b px-6 py-4 pr-12">
 					<DialogTitle>Piocher dans le catalogue</DialogTitle>
 					<DialogDescription>
 						Cocher un produit en copie la fiche dans ce DOE. Décocher la retire.
 					</DialogDescription>
 				</DialogHeader>
-				<div className="space-y-3 py-4">
+				<div className="grid gap-2 px-6 py-4">
+					<Label htmlFor={`${baseId}-search`} className="sr-only">
+						Rechercher un produit
+					</Label>
 					<Input
+						id={`${baseId}-search`}
+						type="search"
 						value={search}
 						placeholder="Rechercher un produit"
 						aria-label="Rechercher un produit"
+						autoComplete="off"
 						onChange={(event) => onSearchChange(event.target.value)}
 					/>
-					{error ? <p className="text-sm text-destructive">{error}</p> : null}
+					{error ? (
+						<p role="alert" className="text-[13px] text-state-alert">
+							{error}
+						</p>
+					) : null}
 				</div>
-				<div className="flex-1 overflow-y-auto">
+				<div className="min-h-0 flex-1 overflow-y-auto border-t">
 					{isLoading ? (
-						<div className="flex items-center justify-center gap-2 p-8 text-sm text-muted-foreground">
-							<Loader2 className="size-4 animate-spin" />
+						<div className="flex items-center justify-center gap-2 px-6 py-10 text-muted-foreground text-sm">
+							<Loader2 className="size-4 animate-spin" aria-hidden />
 							Chargement du catalogue…
 						</div>
 					) : products.length === 0 ? (
-						<p className="p-8 text-center text-sm text-muted-foreground">
+						<p className="px-6 py-10 text-center text-muted-foreground text-sm">
 							Aucun produit ne correspond.
 						</p>
 					) : (
 						<ul className="divide-y">
 							{products.map((product) => {
-								const inputId = `doe-pick-${product.id}`
+								const inputId = `${baseId}-${product.id}`
 								return (
-									<li key={product.id} className="flex items-center gap-3 py-2">
-										<Checkbox
+									<li
+										key={product.id}
+										className="flex items-start gap-3 px-6 py-3"
+									>
+										<input
 											id={inputId}
+											type="checkbox"
 											checked={pickedIds.has(product.id)}
 											disabled={isDrafting}
-											onCheckedChange={(checked) =>
-												onToggle(product.id, checked === true)
+											onChange={(event) =>
+												onToggle(product.id, event.target.checked)
 											}
+											className="mt-0.5 size-4 shrink-0 rounded-sm accent-primary outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:cursor-not-allowed"
 										/>
-										<label htmlFor={inputId} className="min-w-0 flex-1 text-sm">
-											<span className="block truncate font-medium">
+										<label
+											htmlFor={inputId}
+											className="grid min-w-0 flex-1 cursor-pointer gap-0.5"
+										>
+											<span className="font-medium text-sm">
 												{product.name}
 											</span>
 											{product.sku ? (
-												<span className="text-xs text-muted-foreground">
+												<span className="text-muted-foreground text-xs">
 													{product.sku}
 												</span>
 											) : null}
@@ -100,7 +120,7 @@ export function DoeSupplyPickerDialog({
 						</ul>
 					)}
 				</div>
-				<DialogFooter className="border-t pt-4">
+				<DialogFooter className="border-t px-6 py-4">
 					<Button type="button" onClick={() => onOpenChange(false)}>
 						Terminé
 					</Button>

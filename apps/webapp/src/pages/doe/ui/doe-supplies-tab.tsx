@@ -1,5 +1,4 @@
 import {
-	AlertTriangle,
 	ArrowDown,
 	ArrowUp,
 	FileText,
@@ -7,10 +6,11 @@ import {
 	Library,
 	Pencil,
 	Plus,
-	X,
+	Trash2,
 } from 'lucide-react'
+import { useState } from 'react'
+import { ConfirmDialog } from '#/components/confirm-dialog'
 import { RequirePermission } from '#/components/require-permission'
-import { Badge } from '#/components/ui/badge'
 import { Button } from '#/components/ui/button'
 import {
 	Select,
@@ -19,13 +19,15 @@ import {
 	SelectTrigger,
 	SelectValue,
 } from '#/components/ui/select'
-import { SectionCard, SectionHeader } from '#/components/ui/surface'
 import { supplyBadgeCounts, supplyNumber } from '#/pages/doe/lib/sections'
 import {
 	type DoeSupply,
 	MAKER_LABEL_TEXT,
 	type MakerLabel,
 } from '#/pages/doe/types'
+import { IconButton } from '#/pages/doe/ui/icon-button'
+import { SectionFrame } from '#/pages/doe/ui/section-frame'
+import { StatusBadge } from '#/pages/projects/ui/badges'
 
 interface DoeSuppliesTabProps {
 	sectionNumber: number
@@ -40,6 +42,10 @@ interface DoeSuppliesTabProps {
 	onRemove: (supply: DoeSupply) => void
 }
 
+function countLabel(count: number, singular: string, plural: string): string {
+	return `${count} ${count > 1 ? plural : singular}`
+}
+
 export function DoeSuppliesTab({
 	sectionNumber,
 	title,
@@ -52,62 +58,60 @@ export function DoeSuppliesTab({
 	onMove,
 	onRemove,
 }: DoeSuppliesTabProps) {
+	const [removing, setRemoving] = useState<DoeSupply | null>(null)
+
 	return (
-		<SectionCard>
-			<SectionHeader
-				title={`${sectionNumber}. ${title}`}
-				actions={
-					<RequirePermission permission="MANAGE_PLANNING">
-						<div className="flex flex-wrap items-center gap-2">
-							<Select
-								value={makerLabel}
-								onValueChange={(value) =>
-									onMakerLabelChange(value as MakerLabel)
-								}
-							>
-								<SelectTrigger
-									aria-label="Libellé du fabricant"
-									size="sm"
-									className="w-36"
-								>
-									<SelectValue />
-								</SelectTrigger>
-								<SelectContent>
-									<SelectItem value="manufacturer">
-										{MAKER_LABEL_TEXT.manufacturer}
-									</SelectItem>
-									<SelectItem value="nursery">
-										{MAKER_LABEL_TEXT.nursery}
-									</SelectItem>
-								</SelectContent>
-							</Select>
-							<Button
-								type="button"
-								variant="outline"
-								size="sm"
-								onClick={onPickFromCatalog}
-							>
-								<Library />
-								Piocher dans le catalogue
-							</Button>
-							<Button type="button" size="sm" onClick={onCreate}>
-								<Plus />
-								Nouvelle fourniture
-							</Button>
-						</div>
-					</RequirePermission>
-				}
-			/>
+		<SectionFrame
+			number={sectionNumber}
+			title={title}
+			actions={
+				<RequirePermission permission="MANAGE_PLANNING">
+					<Select
+						value={makerLabel}
+						onValueChange={(value) => onMakerLabelChange(value as MakerLabel)}
+					>
+						<SelectTrigger
+							aria-label="Libellé du fabricant"
+							size="sm"
+							className="w-36"
+						>
+							<SelectValue />
+						</SelectTrigger>
+						<SelectContent>
+							<SelectItem value="manufacturer">
+								{MAKER_LABEL_TEXT.manufacturer}
+							</SelectItem>
+							<SelectItem value="nursery">
+								{MAKER_LABEL_TEXT.nursery}
+							</SelectItem>
+						</SelectContent>
+					</Select>
+					<Button
+						type="button"
+						variant="outline"
+						size="sm"
+						onClick={onPickFromCatalog}
+					>
+						<Library aria-hidden />
+						Piocher dans le catalogue
+					</Button>
+					<Button type="button" size="sm" onClick={onCreate}>
+						<Plus aria-hidden />
+						Nouvelle fourniture
+					</Button>
+				</RequirePermission>
+			}
+		>
 			{supplies.length === 0 ? (
-				<p className="p-8 text-center text-sm text-muted-foreground">
+				<p className="px-5 py-10 text-center text-muted-foreground text-sm">
 					Aucune fourniture dans ce thème.
 				</p>
 			) : (
 				<ul className="divide-y">
 					{supplies.map((supply, index) => (
-						<SupplyCard
+						<SupplyRow
 							key={supply.id}
-							number={supplyNumber(sectionNumber, index)}
+							numbering={supplyNumber(sectionNumber, index)}
 							supply={supply}
 							makerLabel={makerLabel}
 							isFirst={index === 0}
@@ -115,17 +119,35 @@ export function DoeSuppliesTab({
 							onEdit={() => onEdit(supply)}
 							onUp={() => onMove(index, -1)}
 							onDown={() => onMove(index, 1)}
-							onRemove={() => onRemove(supply)}
+							onRemove={() => setRemoving(supply)}
 						/>
 					))}
 				</ul>
 			)}
-		</SectionCard>
+			<ConfirmDialog
+				open={removing !== null}
+				onOpenChange={(open) => {
+					if (!open) setRemoving(null)
+				}}
+				title="Supprimer cette fourniture ?"
+				description={`« ${removing ? supplyName(removing) : ''} » sera retirée de ce thème. Le catalogue n’est pas modifié.`}
+				confirmLabel="Supprimer"
+				destructive
+				onConfirm={() => {
+					if (removing) onRemove(removing)
+					setRemoving(null)
+				}}
+			/>
+		</SectionFrame>
 	)
 }
 
-interface SupplyCardProps {
-	number: string
+function supplyName(supply: DoeSupply): string {
+	return supply.title?.trim() || supply.designation
+}
+
+interface SupplyRowProps {
+	numbering: string
 	supply: DoeSupply
 	makerLabel: MakerLabel
 	isFirst: boolean
@@ -136,8 +158,8 @@ interface SupplyCardProps {
 	onRemove: () => void
 }
 
-function SupplyCard({
-	number,
+function SupplyRow({
+	numbering,
 	supply,
 	makerLabel,
 	isFirst,
@@ -146,82 +168,79 @@ function SupplyCard({
 	onUp,
 	onDown,
 	onRemove,
-}: SupplyCardProps) {
+}: SupplyRowProps) {
 	const counts = supplyBadgeCounts(supply)
-	const name = supply.title?.trim() || supply.designation
+	const name = supplyName(supply)
+	const showDesignation = name !== supply.designation
 
 	return (
 		<li className="flex flex-col gap-3 px-5 py-4 md:flex-row md:items-start md:justify-between">
-			<div className="min-w-0 space-y-2">
-				<p className="font-medium">
-					<span className="mr-2 tabular-nums text-muted-foreground">
-						{number}
-					</span>
-					{name}
-				</p>
+			<div className="grid min-w-0 gap-2">
+				<div>
+					<p className="font-medium">
+						<span className="mr-2 text-muted-foreground tabular-nums">
+							{numbering}
+						</span>
+						{name}
+					</p>
+					{showDesignation && (
+						<p className="text-[13px] text-muted-foreground">
+							{supply.designation}
+						</p>
+					)}
+				</div>
 				<dl className="grid gap-x-6 gap-y-1 text-sm sm:grid-cols-2">
 					<Field label="Fournisseur" value={supply.supplier?.name} />
 					<Field label={MAKER_LABEL_TEXT[makerLabel]} value={supply.maker} />
 					<Field label="DPGF" value={supply.dpgf_ref} />
 					<Field label="Destination" value={supply.destination} />
 				</dl>
-				<div className="flex flex-wrap gap-2">
-					{counts.photos > 0 ? (
-						<Badge variant="secondary">
-							<ImageIcon />
-							{counts.photos} {counts.photos > 1 ? 'photos' : 'photo'}
-						</Badge>
-					) : null}
-					{counts.datasheets > 0 ? (
-						<Badge variant="secondary">
-							<FileText />
-							{counts.datasheets} {counts.datasheets > 1 ? 'pages' : 'page'} de
-							fiche technique
-						</Badge>
-					) : null}
-					{counts.isEmpty ? (
-						<Badge variant="outline" className="text-warning">
-							<AlertTriangle />
-							Ni photo ni fiche technique
-						</Badge>
-					) : null}
+				<div className="flex flex-wrap gap-1.5">
+					{counts.photos > 0 && (
+						<StatusBadge tone="neutral">
+							<ImageIcon aria-hidden className="size-3" />
+							{countLabel(counts.photos, 'photo', 'photos')}
+						</StatusBadge>
+					)}
+					{counts.datasheets > 0 && (
+						<StatusBadge tone="neutral">
+							<FileText aria-hidden className="size-3" />
+							{countLabel(
+								counts.datasheets,
+								'fiche technique',
+								'fiches techniques',
+							)}
+						</StatusBadge>
+					)}
+					{counts.isEmpty && (
+						<StatusBadge tone="warn">Fiche incomplète</StatusBadge>
+					)}
 				</div>
 			</div>
 			<RequirePermission permission="MANAGE_PLANNING">
-				<div className="flex shrink-0 items-center gap-1">
+				<div className="flex shrink-0 items-center gap-0.5">
 					<Button type="button" variant="outline" size="sm" onClick={onEdit}>
-						<Pencil />
+						<Pencil aria-hidden />
 						Modifier
+						<span className="sr-only"> {name}</span>
 					</Button>
-					<Button
-						type="button"
-						variant="ghost"
-						size="icon-sm"
+					<IconButton
+						label={`Monter ${name}`}
+						icon={ArrowUp}
 						disabled={isFirst}
 						onClick={onUp}
-					>
-						<ArrowUp />
-						<span className="sr-only">Monter {name}</span>
-					</Button>
-					<Button
-						type="button"
-						variant="ghost"
-						size="icon-sm"
+					/>
+					<IconButton
+						label={`Descendre ${name}`}
+						icon={ArrowDown}
 						disabled={isLast}
 						onClick={onDown}
-					>
-						<ArrowDown />
-						<span className="sr-only">Descendre {name}</span>
-					</Button>
-					<Button
-						type="button"
-						variant="ghost"
-						size="icon-sm"
+					/>
+					<IconButton
+						label={`Supprimer ${name}`}
+						icon={Trash2}
 						onClick={onRemove}
-					>
-						<X />
-						<span className="sr-only">Retirer {name}</span>
-					</Button>
+					/>
 				</div>
 			</RequirePermission>
 		</li>

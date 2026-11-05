@@ -1,17 +1,18 @@
-import type { ColumnDef } from '@tanstack/react-table'
-import { Loader2, Plus } from 'lucide-react'
-import { useMemo } from 'react'
-import {
-	ReferenceTable,
-	RowActions,
-	RowIdentity,
-} from '#/components/reference-table'
+import { Loader2, Pencil, Plus } from 'lucide-react'
+import { EmptyState } from '#/components/empty-state'
 import { RequirePermission } from '#/components/require-permission'
-import { Badge } from '#/components/ui/badge'
 import { Button } from '#/components/ui/button'
-import { Label } from '#/components/ui/label'
-import { SectionCard, SectionHeader } from '#/components/ui/surface'
+import {
+	Table,
+	TableBody,
+	TableCell,
+	TableHead,
+	TableHeader,
+	TableRow,
+} from '#/components/ui/table'
 import type { ProjectTemplate } from '#/hooks/use-project-templates'
+import { cn } from '#/lib/utils'
+import { StatusBadge } from '#/pages/projects/ui/badges'
 
 export interface ProjectTemplatesListProps {
 	templates: ProjectTemplate[]
@@ -25,10 +26,6 @@ export interface ProjectTemplatesListProps {
 	onRestore: (template: ProjectTemplate) => void
 }
 
-/**
- * The template list. Pure presentation: no hooks beyond `useMemo`, no
- * fetching, no mutation — mirrors `ProjectsList`.
- */
 export function ProjectTemplatesList({
 	templates,
 	includeArchived,
@@ -40,111 +37,150 @@ export function ProjectTemplatesList({
 	onArchive,
 	onRestore,
 }: ProjectTemplatesListProps) {
-	const columns = useMemo<ColumnDef<ProjectTemplate>[]>(
-		() => [
-			{
-				id: 'name',
-				header: 'Modèle',
-				cell: ({ row }) => (
-					<div className="flex min-w-0 flex-col gap-1">
-						<RowIdentity title={row.original.name} id={row.original.id} />
-						{row.original.archived_at ? (
-							<Badge variant="outline">Archivé</Badge>
-						) : null}
-					</div>
-				),
-			},
-			{
-				id: 'description',
-				header: 'Description',
-				cell: ({ row }) =>
-					row.original.description ? (
-						<span className="truncate">{row.original.description}</span>
-					) : (
-						<span className="text-muted-foreground italic">Aucune</span>
-					),
-			},
-			{
-				id: 'actions',
-				header: () => <span className="sr-only">Actions</span>,
-				cell: ({ row }) =>
-					row.original.archived_at ? (
-						<div className="flex justify-end">
-							<RequirePermission permission="MANAGE_PLANNING">
-								<Button
-									variant="outline"
-									size="sm"
-									onClick={() => onRestore(row.original)}
-								>
-									Restaurer
-								</Button>
-							</RequirePermission>
-						</div>
-					) : (
-						<RowActions
-							permission="MANAGE_PLANNING"
-							isEditing={false}
-							isSaving={false}
-							onEdit={() => onEdit(row.original)}
-							onCancel={() => {}}
-							onSave={() => {}}
-							onDelete={() => onArchive(row.original)}
-						/>
-					),
-			},
-		],
-		[onArchive, onEdit, onRestore],
-	)
-
 	return (
-		<div className="flex flex-col gap-4">
-			<SectionHeader
-				className="border-b-0 px-0 py-0"
-				title="Modèles de projet"
-				description="Un modèle est un ensemble de tâches types avec des décalages, pas un projet à copier. Instancier un modèle produit un vrai projet, avec de vraies tâches, sur une date choisie."
-				actions={
-					<RequirePermission permission="MANAGE_PLANNING">
-						<Button onClick={onCreate}>
-							<Plus />
-							Nouveau modèle
-						</Button>
-					</RequirePermission>
-				}
-			/>
+		<div>
+			<header className="mb-4 flex flex-wrap items-end justify-between gap-4">
+				<div className="min-w-0">
+					<h2 className="font-semibold text-lg tracking-tight">
+						Modèles de projet
+					</h2>
+					<p className="mt-1 max-w-2xl text-muted-foreground text-sm">
+						Un modèle est un ensemble de tâches types avec des décalages, pas un
+						projet à copier. Instancier un modèle produit un vrai projet, avec
+						de vraies tâches, sur une date choisie.
+					</p>
+				</div>
+				<RequirePermission permission="MANAGE_PLANNING">
+					<Button onClick={onCreate}>
+						<Plus aria-hidden />
+						Nouveau modèle
+					</Button>
+				</RequirePermission>
+			</header>
 
 			{error ? (
-				<div className="rounded-lg border border-destructive/30 bg-destructive-soft px-4 py-3 text-sm text-destructive">
+				<div
+					role="alert"
+					className="mb-3 rounded-lg border border-destructive/30 bg-destructive-soft px-4 py-3 text-sm text-destructive"
+				>
 					{error}
 				</div>
 			) : null}
 
-			<div className="flex items-center gap-2">
-				<input
-					id="include-archived-templates"
-					type="checkbox"
-					className="size-4"
-					checked={includeArchived}
-					onChange={(event) => onIncludeArchivedChange(event.target.checked)}
-				/>
-				<Label htmlFor="include-archived-templates" className="text-sm">
+			<div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+				<label
+					htmlFor="include-archived-templates"
+					className="flex items-center gap-2 text-[13px]"
+				>
+					<input
+						id="include-archived-templates"
+						type="checkbox"
+						className="size-4 accent-primary"
+						checked={includeArchived}
+						onChange={(event) => onIncludeArchivedChange(event.target.checked)}
+					/>
 					Afficher les modèles archivés
-				</Label>
+				</label>
+				<p className="text-[13px] text-muted-foreground">
+					Archiver un modèle le retire du choix sans effacer ce qu’il a déjà
+					produit.
+				</p>
 			</div>
 
 			{isLoading ? (
-				<SectionCard className="flex min-h-72 items-center justify-center gap-3 p-8 text-sm text-muted-foreground">
-					<Loader2 className="size-5 animate-spin" />
+				<div className="flex min-h-48 items-center justify-center gap-3 rounded-lg border bg-card p-8 text-sm text-muted-foreground">
+					<Loader2 className="size-5 animate-spin" aria-hidden />
 					Chargement des modèles…
-				</SectionCard>
-			) : (
-				<ReferenceTable
-					title={`Modèles (${templates.length})`}
-					description="Archiver un modèle le retire du picker sans effacer ce qu'il a déjà produit."
-					emptyTitle="Aucun modèle"
-					emptyDescription="Créez-en un pour arrêter de reconstruire la même liste de tâches à chaque chantier."
-					data={templates}
-					columns={columns}
+				</div>
+			) : templates.length === 0 ? (
+				<EmptyState
+					title="Aucun modèle de projet"
+					hint="Crée-en un pour arrêter de reconstruire la même liste de tâches à chaque chantier."
 				/>
+			) : (
+				<div className="overflow-hidden rounded-lg border bg-card">
+					<Table>
+						<TableHeader>
+							<TableRow className="hover:bg-transparent">
+								<TableHead className="pl-4">Modèle</TableHead>
+								<TableHead className="max-md:hidden">Description</TableHead>
+								<TableHead className="pr-4 text-right">Actions</TableHead>
+							</TableRow>
+						</TableHeader>
+						<TableBody>
+							{templates.map((template) => {
+								const archived = Boolean(template.archived_at)
+								return (
+									<TableRow key={template.id} className="align-top">
+										<TableCell className="max-w-96 whitespace-normal py-3 pl-4">
+											<div className="flex flex-wrap items-center gap-2">
+												<span
+													className={cn(
+														'font-medium',
+														archived && 'opacity-70',
+													)}
+												>
+													{template.name}
+												</span>
+												{archived && (
+													<StatusBadge tone="neutral">Archivé</StatusBadge>
+												)}
+											</div>
+										</TableCell>
+										<TableCell className="max-w-96 py-3 text-[13px] max-md:hidden">
+											{template.description ? (
+												<span className="line-clamp-2 whitespace-normal">
+													{template.description}
+												</span>
+											) : (
+												<span className="text-muted-foreground">Aucune</span>
+											)}
+										</TableCell>
+										<TableCell className="py-2 pr-4">
+											<RequirePermission permission="MANAGE_PLANNING">
+												<div className="flex flex-wrap items-center justify-end gap-1">
+													{archived ? (
+														<Button
+															type="button"
+															variant="outline"
+															size="sm"
+															aria-label={`Restaurer ${template.name}`}
+															onClick={() => onRestore(template)}
+														>
+															Restaurer
+														</Button>
+													) : (
+														<>
+															<Button
+																type="button"
+																variant="outline"
+																size="sm"
+																aria-label={`Modifier ${template.name}`}
+																onClick={() => onEdit(template)}
+															>
+																<Pencil aria-hidden />
+																Modifier
+															</Button>
+															<Button
+																type="button"
+																variant="ghost"
+																size="sm"
+																aria-label={`Archiver ${template.name}`}
+																onClick={() => onArchive(template)}
+															>
+																Archiver
+															</Button>
+														</>
+													)}
+												</div>
+											</RequirePermission>
+										</TableCell>
+									</TableRow>
+								)
+							})}
+						</TableBody>
+					</Table>
+				</div>
 			)}
 		</div>
 	)

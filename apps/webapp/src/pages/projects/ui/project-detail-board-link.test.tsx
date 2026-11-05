@@ -1,11 +1,13 @@
 import { screen } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
 import type { Project } from '#/hooks/use-projects'
+import { EMPTY_EXTRAS } from '#/pages/projects/lib/model'
 import {
 	ProjectDetailUI,
 	type ProjectDetailUIProps,
 } from '#/pages/projects/ui/project-detail-ui'
 import { renderWithRouter } from '#/test/render-with-router'
+import { wrapWithPermissions } from '#/test/with-permissions'
 
 // jsdom has neither `ResizeObserver` nor pointer capture, which the Radix
 // primitives on this page probe defensively.
@@ -36,7 +38,20 @@ const PROJECT: Project = {
 const PROPS: ProjectDetailUIProps = {
 	organizationSlug: 'acme',
 	project: PROJECT,
-	customerName: null,
+	status: 'active',
+	customer: null,
+	extras: EMPTY_EXTRAS,
+	owner: undefined,
+	people: [],
+	missions: [],
+	doe: null,
+	isDoeLoading: false,
+	canOpenDoe: false,
+	isBuildingTemplate: false,
+	onEdit: () => {},
+	onToggleArchive: () => {},
+	onSaveAsTemplate: () => {},
+	onMissionStatusChange: () => {},
 	billingSummary: null,
 	isBillingSummaryLoading: false,
 	period: { from: '2026-09-01', to: '2026-09-30' },
@@ -80,7 +95,7 @@ const PROPS: ProjectDetailUIProps = {
  */
 describe('ProjectDetailUI — lien vers le tableau', () => {
 	it('links to the board already filtered on this project', async () => {
-		await renderWithRouter(<ProjectDetailUI {...PROPS} />)
+		await renderWithRouter(wrapWithPermissions(<ProjectDetailUI {...PROPS} />))
 
 		const link = screen.getByRole('link', { name: /Voir dans le tableau/ })
 
@@ -90,30 +105,42 @@ describe('ProjectDetailUI — lien vers le tableau', () => {
 	})
 })
 
-describe('ProjectDetailUI — onglet DOE', () => {
+describe('ProjectDetailUI — carte DOE', () => {
 	it('shows the revision when the project has a DOE', async () => {
 		await renderWithRouter(
-			<ProjectDetailUI {...PROPS} canOpenDoe doeState={{ revision: 'B' }} />,
+			wrapWithPermissions(
+				<ProjectDetailUI
+					{...PROPS}
+					canOpenDoe
+					doe={{
+						revision: 'B',
+						enabledSections: 2,
+						supplies: 3,
+						photos: 1,
+						plans: 0,
+					}}
+				/>,
+			),
 		)
 
-		const link = screen.getByRole('link', { name: 'DOE · indice B' })
+		const link = screen.getByRole('link', { name: 'Ouvrir le DOE · indice B' })
 
 		expect(link.getAttribute('href')).toBe(
 			'/o/acme/planification/projects/project-1/doe',
 		)
 	})
 
-	it('still offers the tab when there is no DOE yet', async () => {
+	it('still offers to create the DOE when there is none yet', async () => {
 		await renderWithRouter(
-			<ProjectDetailUI {...PROPS} canOpenDoe doeState="none" />,
+			wrapWithPermissions(<ProjectDetailUI {...PROPS} canOpenDoe />),
 		)
 
-		expect(screen.getByRole('link', { name: 'DOE' })).toBeDefined()
+		expect(screen.getByRole('link', { name: 'Créer le DOE' })).toBeDefined()
 	})
 
-	it('hides the tab without the planning permission', async () => {
-		await renderWithRouter(<ProjectDetailUI {...PROPS} doeState="none" />)
+	it('hides the link without the planning permission', async () => {
+		await renderWithRouter(wrapWithPermissions(<ProjectDetailUI {...PROPS} />))
 
-		expect(screen.queryByRole('link', { name: 'DOE' })).toBeNull()
+		expect(screen.queryByRole('link', { name: 'Créer le DOE' })).toBeNull()
 	})
 })
