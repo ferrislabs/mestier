@@ -1,8 +1,14 @@
 import { useEffect, useRef, useState } from 'react'
 import type { Schemas } from '#/api/api.client'
+import {
+	useCredentialMeta,
+	useCredentialMetaActions,
+} from '#/pages/automation/feature/use-credential-meta'
 import { withField } from '#/pages/automation/lib/connector-config'
-import { insertExpressionAtCursor } from '#/pages/automation/lib/expression'
+import { withFieldDefaults } from '#/pages/automation/lib/connector-field-copy'
+import type { CredentialStatus } from '#/pages/automation/lib/credential-meta'
 import type { NodeIssue } from '#/pages/automation/lib/node-issues'
+import { isExpression } from '#/pages/automation/lib/parameters'
 import {
 	type ConnectorValidationError,
 	connectorLevelErrors,
@@ -20,8 +26,6 @@ import { InlineCredentialForm } from '#/pages/automation/ui/inline-credential-fo
 
 const PREVIEW_DEBOUNCE_MS = 400
 
-type FieldControlElement = HTMLInputElement | HTMLTextAreaElement
-
 export type CreatedCredential = Schemas.CredentialResponse & { secret: unknown }
 
 interface CreateState {
@@ -37,6 +41,7 @@ export interface ConnectorParametersFeatureProps {
 	authSchemes: Schemas.AuthSchemeResponse[]
 	errors: ConnectorValidationError[]
 	bindingIssues: readonly NodeIssue[]
+	credentialHint?: string
 	evaluateContext: Schemas.EvaluateContextBody
 	onConfigChange: (config: Record<string, unknown>) => void
 	onCredentialChange: (credentialId: string | null) => void
@@ -49,64 +54,38 @@ export interface ConnectorParametersFeatureProps {
 	) => Promise<unknown>
 }
 
-export function ConnectorParametersFeature({
-	descriptor,
-	config,
-	credentialId,
-	credentials,
-	authSchemes,
-	errors,
-	bindingIssues,
-	evaluateContext,
-	onConfigChange,
-	onCredentialChange,
-	onCreateCredential,
-	onEvaluateExpression,
-}: ConnectorParametersFeatureProps) {
-	const [createState, setCreateState] = useState<CreateState | null>(null)
-	const [createPending, setCreatePending] = useState(false)
-	const [createError, setCreateError] = useState<string | null>(null)
-	const [activeField, setActiveField] = useState<Schemas.FieldResponse | null>(
-		null,
-	)
-	const [previewState, setPreviewState] = useState<ExpressionPreviewState>({
-		status: 'idle',
+function FieldPreview({
+	template,
+	context,
+	onEvaluate,
+}: {
+	template: string
+	context: Schemas.EvaluateContextBody
+	onEvaluate: ConnectorParametersFeatureProps['onEvaluateExpression']
+}) {
+	const [state, setState] = useState<ExpressionPreviewState>({
+		status: 'loading',
 	})
-	const fieldRefs = useRef(new Map<string, FieldControlElement>())
-	const evaluateRef = useRef(onEvaluateExpression)
-	evaluateRef.current = onEvaluateExpression
+	const evaluateRef = useRef(onEvaluate)
+	evaluateRef.current = onEvaluate
 
 	useEffect(() => {
-		if (!activeField) {
-			setPreviewState({ status: 'idle' })
-			return
-		}
-
-		const template = config[activeField.name]
-		if (
-			template === undefined ||
-			(typeof template === 'string' && template.trim() === '')
-		) {
-			setPreviewState({ status: 'idle' })
-			return
-		}
-
 		let cancelled = false
-		setPreviewState({ status: 'loading' })
+		setState({ status: 'loading' })
 		const timer = setTimeout(() => {
 			evaluateRef
-				.current(template, evaluateContext)
+				.current(template, context)
 				.then((value) => {
-					if (!cancelled) setPreviewState({ status: 'resolved', value })
+					if (!cancelled) setState({ status: 'resolved', value })
 				})
 				.catch((error: unknown) => {
 					if (!cancelled) {
-						setPreviewState({
+						setState({
 							status: 'error',
 							message:
 								error instanceof Error
 									? error.message
-									: "L'évaluation a échoué.",
+									: 'L’évaluation a échoué.',
 						})
 					}
 				})
@@ -116,30 +95,48 @@ export function ConnectorParametersFeature({
 			cancelled = true
 			clearTimeout(timer)
 		}
-	}, [activeField, config, evaluateContext])
+	}, [template, context])
 
-	function handleFieldDrop(fieldName: string, path: string) {
-		const field = descriptor.fields.find(
-			(candidate) => candidate.name === fieldName,
-		)
-		if (field) setActiveField(field)
+	return <ExpressionPreview state={state} />
+}
 
-		const currentValue = config[fieldName]
-		const text = typeof currentValue === 'string' ? currentValue : ''
-		const element = fieldRefs.current.get(fieldName)
-		const selection = {
-			start: element?.selectionStart ?? text.length,
-			end: element?.selectionEnd ?? text.length,
-		}
+export function ConnectorParametersFeature({
+	descriptor,
+	config,
+	credentialId,
+	credentials,
+	authSchemes,
+	errors,
+	bindingIssues,
+	credentialHint,
+	evaluateContext,
+	onConfigChange,
+	onCredentialChange,
+	onCreateCredential,
+	onEvaluateExpression,
+}: ConnectorParametersFeatureProps) {
+	const [createState, setCreateState] = useState<CreateState | null>(null)
+	const [createPending, setCreatePending] = useState(false)
+	const [createError, setCreateError] = useState<string | null>(null)
+	const configRef = useRef(config)
+	configRef.current = config
+	const changeRef = useRef(onConfigChange)
+	changeRef.current = onConfigChange
+	const credentialMeta = useCredentialMeta().data
+	const credentialMetaActions = useCredentialMetaActions()
+	const { rememberKinds } = credentialMetaActions
 
-		const result = insertExpressionAtCursor(text, path, selection)
-		onConfigChange(withField(config, fieldName, result.text))
+	useEffect(() => {
+		rememberKinds(credentials)
+	}, [credentials, rememberKinds])
 
-		if (element) {
-			element.focus()
-			element.setSelectionRange(result.cursor, result.cursor)
-		}
-	}
+	useEffect(() => {
+		const seeded = withFieldDefaults(descriptor.kind, configRef.current)
+		if (seeded) changeRef.current(seeded)
+	}, [descriptor.kind])
+
+	const statusOf = (credentialId: string): CredentialStatus =>
+		credentialMeta[credentialId]?.status ?? 'valid'
 
 	function applySelection(purpose: CredentialCreationPurpose, id: string) {
 		if (purpose === 'typed') {
@@ -149,12 +146,17 @@ export function ConnectorParametersFeature({
 		onConfigChange(withField(config, 'signing_credential_id', id))
 	}
 
-	async function handleCreateSubmit(body: Schemas.CreateCredentialRequest) {
+	async function handleCreateSubmit(
+		body: Schemas.CreateCredentialRequest,
+		description?: string,
+	) {
 		if (!createState) return
 		setCreatePending(true)
 		setCreateError(null)
 		try {
 			const created = await onCreateCredential(body)
+			const note = description?.trim()
+			if (note) credentialMetaActions.patch(created.id, { description: note })
 			if (created.origin === 'generated') {
 				setCreateState({ purpose: createState.purpose, result: created })
 			} else {
@@ -194,7 +196,9 @@ export function ConnectorParametersFeature({
 				lockOrigin={createState.purpose === 'signing' ? 'generated' : undefined}
 				isPending={createPending}
 				error={createError}
-				onSubmit={(body) => void handleCreateSubmit(body)}
+				onSubmit={(body, description?: string) =>
+					void handleCreateSubmit(body, description)
+				}
 				onCancel={handleCreateCancel}
 			/>
 		)
@@ -223,16 +227,20 @@ export function ConnectorParametersFeature({
 				credentials={credentials}
 				errors={errors}
 				bindingIssues={bindingIssues}
-				activeFieldName={activeField?.name ?? null}
-				preview={<ExpressionPreview state={previewState} />}
+				credentialHint={credentialHint}
+				credentialStatusOf={statusOf}
+				renderPreview={(field) => {
+					const template = config[field.name]
+					return typeof template === 'string' && isExpression(template) ? (
+						<FieldPreview
+							template={template}
+							context={evaluateContext}
+							onEvaluate={onEvaluateExpression}
+						/>
+					) : null
+				}}
 				onConfigChange={onConfigChange}
 				onCredentialChange={onCredentialChange}
-				onActivateField={setActiveField}
-				onFieldRef={(name, element) => {
-					if (element) fieldRefs.current.set(name, element)
-					else fieldRefs.current.delete(name)
-				}}
-				onInsertExpression={handleFieldDrop}
 				onRequestCreateCredential={(purpose) => {
 					setCreateError(null)
 					setCreateState({ purpose, result: null })

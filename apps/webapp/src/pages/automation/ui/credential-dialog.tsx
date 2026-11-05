@@ -1,4 +1,4 @@
-import { Check, Copy, Loader2, PlugZap, RefreshCw } from 'lucide-react'
+import { Loader2, PlugZap, RefreshCw } from 'lucide-react'
 import { useId, useState } from 'react'
 import { RequirePermission } from '#/components/require-permission'
 import { Button } from '#/components/ui/button'
@@ -19,12 +19,17 @@ import {
 	SelectTrigger,
 	SelectValue,
 } from '#/components/ui/select'
-import type { AuthField, AuthScheme } from '#/hooks/use-automation'
 import { cn } from '#/lib/utils'
 import type { ExternalService } from '#/pages/automation/feature/mocks/external-services'
-import type { CredentialFieldErrors } from '#/pages/automation/lib/credential-form'
+import {
+	type CredentialFieldErrors,
+	credentialFormDefaults,
+	visibleCredentialFields,
+} from '#/pages/automation/lib/credential-form'
 import {
 	isOauthAuthorization,
+	type LocalizedField,
+	type LocalizedScheme,
 	schemeUsageText,
 } from '#/pages/automation/lib/credential-meta'
 import { formatUsage } from '#/pages/automation/lib/format'
@@ -35,6 +40,7 @@ import {
 import type { CredentialFormValues } from '#/pages/automation/types'
 import { CredentialKindAside } from '#/pages/automation/ui/credential-kind-aside'
 import { CredentialKindPicker } from '#/pages/automation/ui/credential-kind-picker'
+import { SecretRevealField } from '#/pages/automation/ui/credential-secret-reveal'
 import { CredentialStatusLabel } from '#/pages/automation/ui/credential-status-label'
 import {
 	type CredentialRow,
@@ -54,13 +60,15 @@ export interface CredentialDialogProps {
 	open: boolean
 	mode: 'create' | 'edit'
 	editing: CredentialRow | null
-	authSchemes: AuthScheme[]
+	authSchemes: LocalizedScheme[]
 	services: readonly ExternalService[]
 	form: CredentialFormBinding
 	fieldErrors: CredentialFieldErrors
 	saveError: string | null
 	revealedSecret: string | null
 	rotatingId: string | null
+	isDeleting: boolean
+	schemesLoading: boolean
 	onOpenChange: (open: boolean) => void
 	onRotate: (row: CredentialRow) => void
 	onDelete: (row: CredentialRow) => void
@@ -68,7 +76,7 @@ export interface CredentialDialogProps {
 	onDisconnect: (row: CredentialRow) => void
 }
 
-function FieldControl({
+export function CredentialFieldControl({
 	field,
 	controlId,
 	value,
@@ -77,7 +85,7 @@ function FieldControl({
 	describedBy,
 	onChange,
 }: {
-	field: AuthField
+	field: LocalizedField
 	controlId: string
 	value: string
 	stored: boolean
@@ -108,16 +116,30 @@ function FieldControl({
 		)
 	}
 
-	if (field.secret || kind === 'Json')
+	if (field.secret)
 		return (
 			<SecretField
 				id={controlId}
 				stored={stored}
 				multiline={kind === 'Json'}
 				value={value}
+				placeholder={field.placeholder}
 				invalid={invalid}
 				describedBy={describedBy}
 				onChange={onChange}
+			/>
+		)
+
+	if (kind === 'Json')
+		return (
+			<TextArea
+				id={controlId}
+				rows={4}
+				value={value}
+				placeholder={stored ? 'Inchangé' : field.placeholder}
+				onChange={(event) => onChange(event.target.value)}
+				className="font-mono text-xs"
+				{...aria}
 			/>
 		)
 
@@ -126,7 +148,7 @@ function FieldControl({
 			id={controlId}
 			value={value}
 			inputMode={kind === 'Number' ? 'numeric' : undefined}
-			placeholder={stored ? 'Inchangé' : undefined}
+			placeholder={stored ? 'Inchangé' : field.placeholder}
 			onChange={(event) => onChange(event.target.value)}
 			className={kind === 'Number' ? 'max-w-32' : undefined}
 			autoComplete="off"
@@ -135,33 +157,56 @@ function FieldControl({
 	)
 }
 
-function SecretReveal({ value }: { value: string }) {
-	const [copied, setCopied] = useState(false)
-
-	return (
-		<div className="grid gap-2">
-			<Label htmlFor="revealed-secret">Secret</Label>
-			<div className="flex gap-2">
-				<Input
-					id="revealed-secret"
-					readOnly
-					value={value}
-					className="font-mono"
+export function CredentialFieldRows({
+	fields,
+	data,
+	baseId,
+	stored,
+	errorOf,
+	onChange,
+}: {
+	fields: readonly LocalizedField[]
+	data: Readonly<Record<string, string>>
+	baseId: string
+	stored: boolean
+	errorOf: (key: string) => string | undefined
+	onChange: (data: Record<string, string>) => void
+}) {
+	return fields.map((field) => {
+		const controlId = `${baseId}-${field.name}`
+		const error = errorOf(field.name)
+		const isSelect = typeof field.kind === 'object' && 'Select' in field.kind
+		return (
+			<div key={field.name} className="grid gap-2">
+				<Label htmlFor={controlId}>
+					{field.label}
+					{!field.required && !isSelect && (
+						<span className="font-normal text-muted-foreground">
+							{' '}
+							(facultatif)
+						</span>
+					)}
+				</Label>
+				<CredentialFieldControl
+					field={field}
+					controlId={controlId}
+					value={data[field.name] ?? ''}
+					stored={stored}
+					invalid={Boolean(error)}
+					describedBy={error ? `${controlId}-error` : undefined}
+					onChange={(value) => onChange({ ...data, [field.name]: value })}
 				/>
-				<Button
-					type="button"
-					variant="outline"
-					onClick={() => {
-						void navigator.clipboard.writeText(value)
-						setCopied(true)
-					}}
-				>
-					{copied ? <Check /> : <Copy />}
-					{copied ? 'Copié' : 'Copier'}
-				</Button>
+				{field.hint && !error && (
+					<p className="text-muted-foreground text-xs">{field.hint}</p>
+				)}
+				{error && (
+					<p id={`${controlId}-error`} className="text-state-alert text-xs">
+						{error}
+					</p>
+				)}
 			</div>
-		</div>
-	)
+		)
+	})
 }
 
 function AuthorizationSection({
@@ -215,6 +260,7 @@ function CredentialForm({
 	fieldErrors,
 	saveError,
 	rotatingId,
+	isDeleting,
 	onBack,
 	onCancel,
 	onRotate,
@@ -224,11 +270,12 @@ function CredentialForm({
 }: {
 	mode: 'create' | 'edit'
 	editing: CredentialRow | null
-	scheme: AuthScheme
+	scheme: LocalizedScheme
 	form: CredentialFormBinding
 	fieldErrors: CredentialFieldErrors
 	saveError: string | null
 	rotatingId: string | null
+	isDeleting: boolean
 	onBack?: () => void
 	onCancel: () => void
 	onRotate: (row: CredentialRow) => void
@@ -240,6 +287,7 @@ function CredentialForm({
 	const [showErrors, setShowErrors] = useState(false)
 	const [confirmingDelete, setConfirmingDelete] = useState(false)
 	const generated = form.values.origin === 'generated'
+	const visibleFields = visibleCredentialFields(scheme.fields, form.values.data)
 	const errorOf = (key: string) => (showErrors ? fieldErrors[key] : undefined)
 
 	const submit = () => {
@@ -291,7 +339,7 @@ function CredentialForm({
 					<DialogDescription>
 						{mode === 'create'
 							? 'Nommez-la, puis renseignez les paramètres de connexion.'
-							: 'Modifiez son nom, sa description ou ses paramètres de connexion. Laissez les champs vides pour ne pas modifier les données déjà enregistrées.'}
+							: 'Modifiez son nom, sa description ou ses paramètres de connexion.'}
 					</DialogDescription>
 				</DialogHeader>
 				<div className="grid min-h-0 flex-1 content-start gap-5 overflow-y-auto px-6 py-5">
@@ -360,7 +408,7 @@ function CredentialForm({
 						<h3 className="font-semibold text-sm">Connexion</h3>
 						{generated ? (
 							<div className="grid gap-2 rounded-md border border-border bg-muted/40 p-3">
-								<p className="text-muted-foreground text-sm">
+								<p className="text-muted-foreground text-xs">
 									Le secret est généré par Mestier et n’est affiché qu’une seule
 									fois.
 								</p>
@@ -386,39 +434,14 @@ function CredentialForm({
 								) : null}
 							</div>
 						) : (
-							scheme.fields.map((field) => {
-								const controlId = `${baseId}-${field.name}`
-								const error = errorOf(field.name)
-								const isSelect =
-									typeof field.kind === 'object' && 'Select' in field.kind
-								return (
-									<div key={field.name} className="grid gap-2">
-										<Label htmlFor={controlId}>
-											{field.label}
-											{!field.required && !isSelect && (
-												<span className="font-normal text-muted-foreground">
-													{' '}
-													(facultatif)
-												</span>
-											)}
-										</Label>
-										<FieldControl
-											field={field}
-											controlId={controlId}
-											value={form.values.data[field.name] ?? ''}
-											stored={mode === 'edit'}
-											invalid={Boolean(error)}
-											describedBy={error ? `${controlId}-error` : undefined}
-											onChange={(value) =>
-												form.onChange({
-													data: { ...form.values.data, [field.name]: value },
-												})
-											}
-										/>
-										{errorText(field.name, controlId)}
-									</div>
-								)
-							})
+							<CredentialFieldRows
+								fields={visibleFields}
+								data={form.values.data}
+								baseId={baseId}
+								stored={mode === 'edit'}
+								errorOf={errorOf}
+								onChange={(data) => form.onChange({ data })}
+							/>
 						)}
 						{editing && isOauthAuthorization(scheme.kind) ? (
 							<AuthorizationSection
@@ -448,6 +471,7 @@ function CredentialForm({
 							<Button
 								type="button"
 								variant="outline"
+								disabled={isDeleting}
 								onClick={() => setConfirmingDelete(false)}
 							>
 								Annuler
@@ -455,8 +479,10 @@ function CredentialForm({
 							<Button
 								type="button"
 								variant="destructive"
+								disabled={isDeleting}
 								onClick={() => onDelete(editing)}
 							>
+								{isDeleting ? <Loader2 className="animate-spin" /> : null}
 								Supprimer définitivement
 							</Button>
 						</>
@@ -489,6 +515,15 @@ function CredentialForm({
 	)
 }
 
+function DialogLoading() {
+	return (
+		<div className="flex min-h-0 flex-1 items-center justify-center gap-3 text-muted-foreground text-sm">
+			<Loader2 className="size-5 animate-spin" />
+			Chargement…
+		</div>
+	)
+}
+
 export function CredentialDialog({
 	open,
 	mode,
@@ -500,6 +535,8 @@ export function CredentialDialog({
 	saveError,
 	revealedSecret,
 	rotatingId,
+	isDeleting,
+	schemesLoading,
 	onOpenChange,
 	onRotate,
 	onDelete,
@@ -513,7 +550,10 @@ export function CredentialDialog({
 	if (revealedSecret !== null) {
 		return (
 			<Dialog open={open} onOpenChange={onOpenChange}>
-				<DialogContent className="gap-0 p-0 sm:max-w-lg">
+				<DialogContent
+					showCloseButton={false}
+					className="gap-0 p-0 sm:max-w-lg"
+				>
 					<DialogHeader className="border-border border-b px-6 py-4">
 						<DialogTitle>Secret généré</DialogTitle>
 						<DialogDescription>
@@ -521,7 +561,7 @@ export function CredentialDialog({
 						</DialogDescription>
 					</DialogHeader>
 					<div className="px-6 py-5">
-						<SecretReveal value={revealedSecret} />
+						<SecretRevealField secret={revealedSecret} />
 					</div>
 					<DialogFooter className="border-border border-t px-6 py-3">
 						<Button type="button" onClick={() => onOpenChange(false)}>
@@ -549,6 +589,7 @@ export function CredentialDialog({
 						fieldErrors={fieldErrors}
 						saveError={saveError}
 						rotatingId={rotatingId}
+						isDeleting={isDeleting}
 						onBack={
 							mode === 'create'
 								? () =>
@@ -563,6 +604,27 @@ export function CredentialDialog({
 						onConnect={onConnect}
 						onDisconnect={onDisconnect}
 					/>
+				) : mode === 'edit' ? (
+					<div className="flex min-h-0 flex-1 flex-col">
+						<DialogHeader className="border-border border-b px-6 py-4 text-left">
+							<DialogTitle className="truncate">
+								{editing ? editing.name : 'Identification'}
+							</DialogTitle>
+							<DialogDescription>
+								Modifiez son nom, sa description ou ses paramètres de connexion.
+							</DialogDescription>
+						</DialogHeader>
+						<DialogLoading />
+						<DialogFooter className="border-border border-t px-6 py-3">
+							<Button
+								type="button"
+								variant="outline"
+								onClick={() => onOpenChange(false)}
+							>
+								Annuler
+							</Button>
+						</DialogFooter>
+					</div>
 				) : (
 					<div
 						className={cn(
@@ -578,15 +640,28 @@ export function CredentialDialog({
 								système.
 							</DialogDescription>
 						</DialogHeader>
-						<div className="min-h-0 flex-1 overflow-y-auto px-6 py-5">
-							<CredentialKindPicker
-								schemes={authSchemes}
-								services={services}
-								onPick={(kind) =>
-									withViewTransition(() => form.onChange({ kind, data: {} }))
-								}
-							/>
-						</div>
+						{schemesLoading ? (
+							<DialogLoading />
+						) : (
+							<div className="min-h-0 flex-1 overflow-y-auto px-6 py-5">
+								<CredentialKindPicker
+									schemes={authSchemes}
+									services={services}
+									onPick={(kind) =>
+										withViewTransition(() =>
+											form.onChange({
+												kind,
+												data: credentialFormDefaults(
+													authSchemes.find(
+														(candidate) => candidate.kind === kind,
+													),
+												),
+											}),
+										)
+									}
+								/>
+							</div>
+						)}
 					</div>
 				)}
 			</DialogContent>

@@ -1,10 +1,13 @@
 import { Link } from '@tanstack/react-router'
 import { Loader2, Plus } from 'lucide-react'
-import { EmptyState } from '#/components/empty-state'
 import { RequirePermission } from '#/components/require-permission'
 import { Button } from '#/components/ui/button'
 import { PageHeader, PageShell } from '#/components/ui/surface'
 import { buildOrgPath } from '#/modules/org-path'
+import {
+	newWorkflowPath,
+	workflowsPath,
+} from '#/pages/automation/lib/automation-paths'
 import type { WorkflowFolder } from '#/pages/automation/lib/folders'
 import {
 	ALL_TAGS,
@@ -12,7 +15,10 @@ import {
 } from '#/pages/automation/lib/workflow-list'
 import { FolderBreadcrumb } from '#/pages/automation/ui/folder-breadcrumb'
 import { FolderRow } from '#/pages/automation/ui/folder-row'
-import { WorkflowListEmpty } from '#/pages/automation/ui/workflow-list-empty'
+import {
+	WorkflowListEmpty,
+	WorkflowListNoneYet,
+} from '#/pages/automation/ui/workflow-list-empty'
 import { WorkflowListToolbar } from '#/pages/automation/ui/workflow-list-toolbar'
 import {
 	WorkflowListRow,
@@ -47,7 +53,6 @@ export interface AutomationWorkflowsListProps {
 	sort: WorkflowSortKey
 	onSortChange: (sort: WorkflowSortKey) => void
 	onResetFilters: () => void
-	onCreate: () => void
 	onRename: (workflow: WorkflowRow) => void
 	onToggleEnabled: (workflow: WorkflowRow) => void
 	onDuplicate: (workflow: WorkflowRow) => void
@@ -74,7 +79,6 @@ export function AutomationWorkflowsList({
 	sort,
 	onSortChange,
 	onResetFilters,
-	onCreate,
 	onRename,
 	onToggleEnabled,
 	onDuplicate,
@@ -91,7 +95,7 @@ export function AutomationWorkflowsList({
 					description="Ce projet n’existe pas ou a été supprimé."
 					actions={
 						<Button asChild variant="outline">
-							<Link to={buildOrgPath(organizationSlug, '/automatisation')}>
+							<Link to={buildOrgPath(organizationSlug, workflowsPath())}>
 								Voir tous les workflows
 							</Link>
 						</Button>
@@ -119,9 +123,11 @@ export function AutomationWorkflowsList({
 				}
 				actions={
 					<RequirePermission permission="MANAGE_AUTOMATION">
-						<Button onClick={onCreate}>
-							<Plus />
-							Nouveau workflow
+						<Button asChild>
+							<Link to={buildOrgPath(organizationSlug, newWorkflowPath())}>
+								<Plus />
+								Nouveau workflow
+							</Link>
 						</Button>
 					</RequirePermission>
 				}
@@ -166,10 +172,7 @@ export function AutomationWorkflowsList({
 						Ce projet ne contient encore aucun workflow.
 					</p>
 				) : (
-					<EmptyState
-						title="Aucun workflow"
-						hint="Un workflow automatise une suite d’actions déclenchées par un événement de l’organisation — créez le premier pour commencer."
-					/>
+					<WorkflowListNoneYet />
 				)
 			) : workflows.length === 0 ? (
 				<WorkflowListEmpty

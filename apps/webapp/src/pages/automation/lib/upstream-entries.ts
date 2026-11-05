@@ -1,5 +1,6 @@
 import type { LucideIcon } from 'lucide-react'
 import type { Schemas } from '#/api/api.client'
+import { branchLabel } from '#/pages/automation/lib/branch-labels'
 import {
 	connectorAppearance,
 	triggerAppearance,
@@ -98,12 +99,29 @@ function triggerEntry(
 		rootPath: 'trigger',
 		distance,
 		direct: distance === 1,
-		branch: handle ?? undefined,
+		branch: handle ? branchLabel(handle) : undefined,
 		items: payload === undefined || payload === null ? [] : toItems(payload),
 		executed: sources.lastRun !== null,
 		status: sources.lastRun ? 'success' : null,
 		error: null,
 	}
+}
+
+function triggersLinkedFirst(
+	nodes: readonly EditorNode[],
+	byId: ReadonlyMap<string, EditorNode>,
+	links: readonly { id: string }[],
+): EditorNode[] {
+	const linked = links.flatMap((link) => {
+		const node = byId.get(link.id)
+		return node?.data.trigger ? [node] : []
+	})[0]
+	return [
+		...(linked ? [linked] : []),
+		...nodes.filter(
+			(node) => node.data.kind === 'trigger' && node.id !== linked?.id,
+		),
+	]
 }
 
 export function upstreamEntries(
@@ -114,9 +132,9 @@ export function upstreamEntries(
 ): UpstreamEntry[] {
 	const byId = new Map(nodes.map((node) => [node.id, node]))
 	const links = upstreamOf(nodeId, edges)
-	const triggers = nodes.filter((node) => node.data.kind === 'trigger')
-	const farthest = links.reduce((max, link) => Math.max(max, link.distance), 0)
 	const triggerLink = links.find((link) => byId.get(link.id)?.data.trigger)
+	const triggers = triggersLinkedFirst(nodes, byId, links)
+	const farthest = links.reduce((max, link) => Math.max(max, link.distance), 0)
 
 	const entries: UpstreamEntry[] = []
 	if (byId.get(nodeId)?.data.kind === 'connector') {
@@ -131,7 +149,10 @@ export function upstreamEntries(
 	for (const link of links) {
 		const source = byId.get(link.id)
 		if (!source?.data.connector) continue
-		const appearance = connectorAppearance(source.data.family)
+		const appearance = connectorAppearance(
+			source.data.family,
+			source.data.connector?.kind,
+		)
 		const real = sources.lastRun?.connectorOutputs[source.id]
 		const output = real ?? connectorOutputExample(source, sources.descriptors)
 		entries.push({
@@ -142,7 +163,7 @@ export function upstreamEntries(
 			rootPath: `connectors.${source.id}.output`,
 			distance: link.distance,
 			direct: link.distance === 1,
-			branch: link.handle ?? undefined,
+			branch: link.handle ? branchLabel(link.handle) : undefined,
 			items: output === undefined || output === null ? [] : toItems(output),
 			executed: real !== undefined,
 			...stepOutcome(sources.runSteps.get(source.id)),
@@ -158,13 +179,14 @@ export function evaluateContextFor(
 	sources: UpstreamSources,
 ): Schemas.EvaluateContextBody {
 	const byId = new Map(nodes.map((node) => [node.id, node]))
-	const names = nodes.flatMap((node) =>
+	const links = upstreamOf(nodeId, edges)
+	const names = triggersLinkedFirst(nodes, byId, links).flatMap((node) =>
 		node.data.trigger ? triggerEventNames(node.data.trigger) : [],
 	)
 	const trigger = sources.lastRun
 		? sources.lastRun.triggerPayload
 		: resolveTriggerExample(sources.events, [...new Set(names)])
-	const connectors = upstreamOf(nodeId, edges).flatMap((link) => {
+	const connectors = links.flatMap((link) => {
 		const source = byId.get(link.id)
 		return source?.data.connector
 			? [

@@ -1,12 +1,6 @@
-import { Plus, Trash2, Unlink } from 'lucide-react'
-import {
-	type DragEvent,
-	type ReactNode,
-	useEffect,
-	useRef,
-	useState,
-} from 'react'
-import type { Schemas } from '#/api/api.client'
+import { Plus, Unlink, X } from 'lucide-react'
+import { type ReactNode, useEffect, useRef, useState } from 'react'
+import { Button } from '#/components/ui/button'
 import { Checkbox } from '#/components/ui/checkbox'
 import { Input } from '#/components/ui/input'
 import { Label } from '#/components/ui/label'
@@ -17,34 +11,37 @@ import {
 	SelectTrigger,
 	SelectValue,
 } from '#/components/ui/select'
-import { Textarea } from '#/components/ui/textarea'
+import { ToggleGroup, ToggleGroupItem } from '#/components/ui/toggle-group'
 import { cn } from '#/lib/utils'
 import {
 	isJsonMapRepresentable,
 	isSelectKind,
+	JSON_ENTRY_KINDS,
 	type JsonEntry,
+	type JsonEntryKind,
 	jsonEntriesFromValue,
-	nextJsonEntryKey,
+	jsonEntryValue,
+	numberFieldError,
+	numberFieldValue,
+	parseRawJson,
+	RAW_JSON_ERROR,
 	valueFromJsonEntries,
 } from '#/pages/automation/lib/connector-config'
-import { insertExpressionAtCursor } from '#/pages/automation/lib/expression'
+import type { DisplayField } from '#/pages/automation/lib/connector-field-copy'
 import { isExpression } from '#/pages/automation/lib/parameters'
-
-type FieldControlElement = HTMLInputElement | HTMLTextAreaElement
+import { TextArea } from '#/pages/automation/ui/text-area'
 
 export interface ConnectorConfigFieldProps {
-	field: Schemas.FieldResponse
+	field: DisplayField
 	value: unknown
 	issues: readonly string[]
 	preview?: ReactNode
 	onChange: (value: unknown) => void
-	onActivate?: () => void
-	controlRef?: (element: FieldControlElement | null) => void
-	onDropExpression?: (path: string) => void
 }
 
 function textOf(value: unknown): string {
-	return typeof value === 'string' ? value : ''
+	if (typeof value === 'string') return value
+	return typeof value === 'number' ? String(value) : ''
 }
 
 export function ConnectorConfigField({
@@ -53,15 +50,12 @@ export function ConnectorConfigField({
 	issues,
 	preview,
 	onChange,
-	onActivate,
-	controlRef,
-	onDropExpression,
 }: ConnectorConfigFieldProps) {
 	const id = `connector-field-${field.name}`
 	const expression = field.expression && isExpression(textOf(value))
 
 	return (
-		<div className="grid gap-2" onFocusCapture={onActivate}>
+		<div className="grid gap-2">
 			<div className="flex items-center justify-between gap-2">
 				<Label htmlFor={id}>{field.label}</Label>
 				{expression && (
@@ -76,8 +70,6 @@ export function ConnectorConfigField({
 				value,
 				invalid: issues.length > 0,
 				onChange,
-				controlRef,
-				onDropExpression: field.expression ? onDropExpression : undefined,
 			})}
 			{expression && preview}
 			{issues.map((issue) => (
@@ -90,20 +82,11 @@ export function ConnectorConfigField({
 					{issue}
 				</p>
 			))}
+			{field.hint && (
+				<p className="text-muted-foreground text-xs">{field.hint}</p>
+			)}
 		</div>
 	)
-}
-
-function dropHandlers(onDropExpression?: (path: string) => void) {
-	if (!onDropExpression) return {}
-	return {
-		onDragOver: (event: DragEvent<FieldControlElement>) =>
-			event.preventDefault(),
-		onDrop: (event: DragEvent<FieldControlElement>) => {
-			event.preventDefault()
-			onDropExpression(event.dataTransfer.getData('text/plain'))
-		},
-	}
 }
 
 function renderControl({
@@ -112,16 +95,12 @@ function renderControl({
 	value,
 	invalid,
 	onChange,
-	controlRef,
-	onDropExpression,
 }: {
 	id: string
-	field: Schemas.FieldResponse
+	field: DisplayField
 	value: unknown
 	invalid: boolean
 	onChange: (value: unknown) => void
-	controlRef?: (element: FieldControlElement | null) => void
-	onDropExpression?: (path: string) => void
 }) {
 	if (isSelectKind(field.kind)) {
 		return (
@@ -155,11 +134,23 @@ function renderControl({
 	}
 
 	if (field.kind === 'Number') {
+		if (field.expression) {
+			return (
+				<NumberExpressionField
+					id={id}
+					field={field}
+					value={value}
+					invalid={invalid}
+					onChange={onChange}
+				/>
+			)
+		}
 		return (
 			<Input
 				id={id}
 				type="number"
 				value={typeof value === 'number' ? String(value) : ''}
+				placeholder={field.placeholder}
 				aria-invalid={invalid}
 				onChange={(event) => {
 					const raw = event.target.value
@@ -177,28 +168,90 @@ function renderControl({
 				value={value}
 				invalid={invalid}
 				onChange={onChange}
-				controlRef={controlRef}
-				onDropExpression={onDropExpression}
 			/>
 		)
 	}
 
 	const text = typeof value === 'string' ? value : ''
+	const className = cn(
+		field.expression && 'expression-drop',
+		isExpression(text) && 'font-mono',
+	)
+	if (field.rows !== undefined) {
+		return (
+			<TextArea
+				id={id}
+				rows={field.rows}
+				value={text}
+				placeholder={field.placeholder}
+				aria-invalid={invalid}
+				className={className}
+				onChange={(event) => onChange(event.target.value)}
+			/>
+		)
+	}
 	return (
 		<Input
 			id={id}
-			ref={controlRef}
 			type={field.secret ? 'password' : 'text'}
 			value={text}
+			placeholder={field.placeholder}
 			aria-invalid={invalid}
 			autoComplete="off"
-			className={cn(
-				field.expression && 'expression-drop',
-				isExpression(text) && 'font-mono',
-			)}
+			className={className}
 			onChange={(event) => onChange(event.target.value)}
-			{...dropHandlers(onDropExpression)}
 		/>
+	)
+}
+
+function NumberExpressionField({
+	id,
+	field,
+	value,
+	invalid,
+	onChange,
+}: {
+	id: string
+	field: DisplayField
+	value: unknown
+	invalid: boolean
+	onChange: (value: unknown) => void
+}) {
+	const [draft, setDraft] = useState(() => textOf(value))
+	const lastEmitted = useRef(value)
+
+	useEffect(() => {
+		if (value === lastEmitted.current) return
+		lastEmitted.current = value
+		setDraft(textOf(value))
+	}, [value])
+
+	const error = numberFieldError(draft)
+
+	return (
+		<>
+			<Input
+				id={id}
+				type="text"
+				inputMode="decimal"
+				value={draft}
+				placeholder={field.placeholder}
+				aria-invalid={invalid || error !== null}
+				autoComplete="off"
+				className={cn(
+					field.expression && 'expression-drop',
+					isExpression(draft) && 'font-mono',
+				)}
+				onChange={(event) => {
+					const raw = event.target.value
+					const next = numberFieldValue(raw)
+					setDraft(raw)
+					lastEmitted.current = next
+					onChange(next)
+				}}
+			/>
+			{error && <p className="text-state-alert text-xs">{error}</p>}
+		</>
 	)
 }
 
@@ -208,11 +261,17 @@ function stringifyJsonValue(value: unknown): string {
 	return JSON.stringify(value, null, 2)
 }
 
+function sameJson(a: unknown, b: unknown): boolean {
+	return JSON.stringify(a) === JSON.stringify(b)
+}
+
 type JsonMode = 'rows' | 'raw'
 
 interface JsonRow extends JsonEntry {
 	id: number
 }
+
+const ROW_COLUMNS = 'grid-cols-[minmax(0,1fr)_7.5rem_minmax(0,1.4fr)_2rem]'
 
 function JsonField({
 	id,
@@ -220,16 +279,12 @@ function JsonField({
 	value,
 	invalid,
 	onChange,
-	controlRef,
-	onDropExpression,
 }: {
 	id: string
-	field: Schemas.FieldResponse
+	field: DisplayField
 	value: unknown
 	invalid: boolean
 	onChange: (value: unknown) => void
-	controlRef?: (element: FieldControlElement | null) => void
-	onDropExpression?: (path: string) => void
 }) {
 	const nextRowId = useRef(0)
 	function toRows(entries: JsonEntry[]): JsonRow[] {
@@ -260,6 +315,7 @@ function JsonField({
 	}, [value])
 
 	function emit(next: unknown) {
+		if (sameJson(next, lastEmitted.current)) return
 		lastEmitted.current = next
 		onChange(next)
 	}
@@ -270,166 +326,178 @@ function JsonField({
 	}
 
 	function addRow() {
-		const key = nextJsonEntryKey(rows)
 		nextRowId.current += 1
-		commitRows([...rows, { id: nextRowId.current, key, value: 'value' }])
+		setRows([
+			...rows,
+			{ id: nextRowId.current, key: '', value: '', kind: 'string' },
+		])
 	}
 
-	function removeRow(rowId: number) {
-		commitRows(rows.filter((row) => row.id !== rowId))
-	}
-
-	function changeRowKey(rowId: number, key: string) {
-		commitRows(rows.map((row) => (row.id === rowId ? { ...row, key } : row)))
-	}
-
-	function changeRowValue(rowId: number, entryValue: string) {
+	function updateRow(rowId: number, patch: Partial<JsonEntry>) {
 		commitRows(
-			rows.map((row) =>
-				row.id === rowId ? { ...row, value: entryValue } : row,
-			),
+			rows.map((row) => (row.id === rowId ? { ...row, ...patch } : row)),
 		)
 	}
 
-	function dropOnRow(rowId: number, element: HTMLInputElement, path: string) {
-		const row = rows.find((candidate) => candidate.id === rowId)
-		if (!row) return
-		const selection = {
-			start: element.selectionStart ?? row.value.length,
-			end: element.selectionEnd ?? row.value.length,
+	function changeRaw(raw: string) {
+		setRawText(raw)
+		const parsed = parseRawJson(raw)
+		if (parsed.state === 'invalid') {
+			setRawInvalid(true)
+			return
 		}
-		const result = insertExpressionAtCursor(row.value, path, selection)
-		changeRowValue(rowId, result.text)
-	}
-
-	const representable = isJsonMapRepresentable(lastEmitted.current)
-
-	function switchToRaw() {
-		setRawText(stringifyJsonValue(value))
 		setRawInvalid(false)
-		setMode('raw')
+		emit(parsed.state === 'empty' ? undefined : parsed.value)
 	}
 
-	function switchToRows() {
-		setRows(toRows(jsonEntriesFromValue(value)))
-		setMode('rows')
-	}
+	const canUseRows = !rawInvalid && isJsonMapRepresentable(lastEmitted.current)
 
-	if (mode === 'rows') {
-		return (
-			<div className="flex flex-col gap-2">
-				{rows.length === 0 ? (
-					<p className="rounded-md border border-dashed px-3 py-2 text-xs text-muted-foreground">
-						Aucune entrée. Ajoutez-en une pour commencer.
-					</p>
-				) : (
-					<ul className="flex flex-col gap-1.5">
-						{rows.map((row) => (
-							<li key={row.id} className="flex items-center gap-1.5">
-								<Input
-									aria-label={`Clé — ${field.label}`}
-									value={row.key}
-									onChange={(event) => changeRowKey(row.id, event.target.value)}
-									className="w-2/5 font-mono text-xs"
-								/>
-								<Input
-									aria-label={`Valeur — ${field.label}`}
-									value={row.value}
-									onChange={(event) =>
-										changeRowValue(row.id, event.target.value)
-									}
-									className="flex-1 font-mono text-xs"
-									{...(field.expression
-										? {
-												onDragOver: (event: DragEvent<HTMLInputElement>) =>
-													event.preventDefault(),
-												onDrop: (event: DragEvent<HTMLInputElement>) => {
-													event.preventDefault()
-													dropOnRow(
-														row.id,
-														event.currentTarget,
-														event.dataTransfer.getData('text/plain'),
-													)
-												},
-											}
-										: {})}
-								/>
-								<button
-									type="button"
-									aria-label={`Supprimer l'entrée ${row.key || row.id}`}
-									onClick={() => removeRow(row.id)}
-									className="flex size-8 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-accent-foreground"
-								>
-									<Trash2 className="size-3.5" />
-								</button>
-							</li>
-						))}
-					</ul>
-				)}
-				<div className="flex items-center gap-3">
-					<button
-						type="button"
-						onClick={addRow}
-						className="inline-flex items-center gap-1 rounded-md border px-2 py-1 text-xs text-muted-foreground hover:bg-accent hover:text-accent-foreground"
-					>
-						<Plus className="size-3.5" />
-						Ajouter une entrée
-					</button>
-					<button
-						type="button"
-						onClick={switchToRaw}
-						className="text-xs text-muted-foreground underline-offset-2 hover:underline"
-					>
-						Passer en JSON
-					</button>
-				</div>
-			</div>
-		)
+	function changeMode(next: JsonMode) {
+		if (next === mode) return
+		if (next === 'raw') {
+			setRawText(stringifyJsonValue(lastEmitted.current))
+			setRawInvalid(false)
+		} else {
+			if (!canUseRows) return
+			setRows(toRows(jsonEntriesFromValue(lastEmitted.current)))
+		}
+		setMode(next)
 	}
 
 	return (
-		<div className="flex flex-col gap-1">
-			<div className="flex items-center gap-2">
-				<Textarea
-					id={id}
-					ref={controlRef}
-					value={rawText}
-					aria-invalid={invalid || rawInvalid}
-					className={cn(
-						'font-mono text-xs',
-						field.expression && 'expression-drop',
+		<fieldset aria-label={field.label} className="grid min-w-0 gap-3">
+			<ToggleGroup
+				type="single"
+				variant="outline"
+				size="sm"
+				value={mode}
+				onValueChange={(next) => next && changeMode(next as JsonMode)}
+				aria-label={
+					field.name === 'body'
+						? 'Mode de saisie du corps'
+						: `Mode de saisie : ${field.label}`
+				}
+				className="justify-self-start"
+			>
+				<ToggleGroupItem value="rows" disabled={mode === 'raw' && !canUseRows}>
+					Champs
+				</ToggleGroupItem>
+				<ToggleGroupItem value="raw">JSON</ToggleGroupItem>
+			</ToggleGroup>
+			{mode === 'raw' && !canUseRows && (
+				<p className="text-muted-foreground text-xs">
+					Le mode Champs demande un objet JSON valide.
+				</p>
+			)}
+			{mode === 'rows' ? (
+				<div className="grid gap-2">
+					{rows.length > 0 && (
+						<div
+							className={cn(
+								'grid gap-2 px-0.5 text-muted-foreground text-xs',
+								ROW_COLUMNS,
+							)}
+						>
+							<span>Clé</span>
+							<span>Type</span>
+							<span>Valeur</span>
+						</div>
 					)}
-					onChange={(event) => {
-						const raw = event.target.value
-						setRawText(raw)
-						if (raw.trim() === '') {
-							setRawInvalid(false)
-							emit(undefined)
-							return
-						}
-						try {
-							const parsed = JSON.parse(raw)
-							setRawInvalid(false)
-							emit(parsed)
-						} catch {
-							setRawInvalid(true)
-						}
-					}}
-					{...dropHandlers(onDropExpression)}
-				/>
-			</div>
-			{rawInvalid ? (
-				<p className="text-xs text-destructive">JSON invalide</p>
-			) : null}
-			{representable ? (
-				<button
-					type="button"
-					onClick={switchToRows}
-					className="self-start text-xs text-muted-foreground underline-offset-2 hover:underline"
-				>
-					Revenir aux champs
-				</button>
-			) : null}
-		</div>
+					{rows.map((row, index) => {
+						const { error } = jsonEntryValue(row)
+						const rowLabel = row.key.trim() || `champ ${index + 1}`
+						return (
+							<div key={row.id} className="grid gap-1">
+								<div className={cn('grid items-center gap-2', ROW_COLUMNS)}>
+									<Input
+										value={row.key}
+										onChange={(event) =>
+											updateRow(row.id, { key: event.target.value })
+										}
+										placeholder="clé"
+										aria-label={`Clé du ${rowLabel}`}
+										className="font-mono"
+									/>
+									<Select
+										value={row.kind}
+										onValueChange={(kind) =>
+											updateRow(row.id, { kind: kind as JsonEntryKind })
+										}
+									>
+										<SelectTrigger
+											className="w-full"
+											aria-label={`Type de ${rowLabel}`}
+										>
+											<SelectValue />
+										</SelectTrigger>
+										<SelectContent>
+											{JSON_ENTRY_KINDS.map((kind) => (
+												<SelectItem key={kind.value} value={kind.value}>
+													{kind.label}
+												</SelectItem>
+											))}
+										</SelectContent>
+									</Select>
+									<Input
+										value={row.value}
+										onChange={(event) =>
+											updateRow(row.id, { value: event.target.value })
+										}
+										placeholder={
+											row.kind === 'boolean' ? 'true ou false' : 'valeur'
+										}
+										aria-label={`Valeur de ${rowLabel}`}
+										aria-invalid={error ? true : undefined}
+										className={cn(
+											field.expression && 'expression-drop',
+											(isExpression(row.value) || row.kind === 'json') &&
+												'font-mono',
+										)}
+									/>
+									<Button
+										type="button"
+										variant="ghost"
+										size="icon-sm"
+										onClick={() =>
+											commitRows(rows.filter((other) => other.id !== row.id))
+										}
+										aria-label={`Supprimer ${rowLabel}`}
+									>
+										<X />
+									</Button>
+								</div>
+								{error && <p className="text-state-alert text-xs">{error}</p>}
+							</div>
+						)
+					})}
+					<Button
+						type="button"
+						variant="outline"
+						size="sm"
+						className="justify-self-start"
+						onClick={addRow}
+					>
+						<Plus />
+						Ajouter un champ
+					</Button>
+				</div>
+			) : (
+				<>
+					<TextArea
+						id={id}
+						rows={10}
+						value={rawText}
+						aria-label={`${field.label} en JSON`}
+						aria-invalid={invalid || rawInvalid}
+						spellCheck={false}
+						className={cn('font-mono', field.expression && 'expression-drop')}
+						onChange={(event) => changeRaw(event.target.value)}
+					/>
+					{rawInvalid && (
+						<p className="text-state-alert text-xs">{RAW_JSON_ERROR}</p>
+					)}
+				</>
+			)}
+		</fieldset>
 	)
 }

@@ -5,11 +5,10 @@ import { Button } from '#/components/ui/button'
 import { buildOrgPath } from '#/modules/org-path'
 import { useCollections } from '#/pages/automation/feature/use-collections'
 import type { ConnectorPreset } from '#/pages/automation/feature/use-workflow-graph'
+import { collectionsPath } from '#/pages/automation/lib/automation-paths'
 import {
 	allCategories,
 	COLLECTIONS_CATEGORY_ID,
-	COLLECTIONS_META,
-	type CreatorCategory,
 	type CreatorKind,
 	creatorCategories,
 	searchCreatorKinds,
@@ -67,21 +66,9 @@ export function NodeCreatorFeature({
 	const [collectionId, setCollectionId] = useState<string | null>(null)
 
 	const http = httpDescriptor(descriptors)
-	const connectorCategories = creatorCategories(descriptors)
-	const collectionsCategory: CreatorCategory | null = http
-		? {
-				id: COLLECTIONS_CATEGORY_ID,
-				...COLLECTIONS_META,
-				kinds: [],
-			}
-		: null
-	const categories = collectionsCategory
-		? [
-				...connectorCategories.slice(0, 1),
-				collectionsCategory,
-				...connectorCategories.slice(1),
-			]
-		: connectorCategories
+	const categories = creatorCategories(descriptors, {
+		collections: http !== undefined,
+	})
 	const category =
 		categoryId === TRIGGERS_CATEGORY_ID
 			? triggersCategory()
@@ -169,9 +156,7 @@ export function NodeCreatorFeature({
 			}}
 			emptyCollectionsAction={
 				<Button asChild variant="outline" size="sm">
-					<Link
-						to={buildOrgPath(organizationSlug, '/automatisation/collections')}
-					>
+					<Link to={buildOrgPath(organizationSlug, collectionsPath())}>
 						Importer une collection
 					</Link>
 				</Button>

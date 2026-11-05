@@ -211,14 +211,15 @@ describe('RunNowFeature — confirming a run', () => {
 })
 
 describe('RunNowFeature — the execution history link', () => {
-	it('navigates to the run list for this workflow', async () => {
+	it('opens the executions view of this workflow', async () => {
 		const user = userEvent.setup()
 		renderFeature(() => {})
 
 		await user.click(screen.getByRole('button', { name: /Historique/ }))
 
-		expect(navigateSpy).toHaveBeenCalledWith(
-			expect.objectContaining({ params: { workflowId: 'workflow-1' } }),
-		)
+		expect(navigateSpy).toHaveBeenCalledWith({
+			to: '/o/atelier-bois/automatisation/workflows/workflow-1',
+			search: { vue: 'executions' },
+		})
 	})
 })

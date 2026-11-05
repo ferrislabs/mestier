@@ -44,7 +44,7 @@ export function buildBreadcrumbItems({
 		activeModule.sections,
 		activeModule.basePath,
 		modulePath,
-	)) {
+	).filter((section) => section.label !== activeModule.label)) {
 		items.push({
 			id: `section-${section.id}`,
 			label: section.label,

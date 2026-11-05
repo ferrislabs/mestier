@@ -1,7 +1,7 @@
-import { fireEvent, render, screen } from '@testing-library/react'
+import { fireEvent, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
-import type { Schemas } from '#/api/api.client'
+import type { DisplayField } from '#/pages/automation/lib/connector-field-copy'
 import { ConnectorConfigField } from '#/pages/automation/ui/connector-config-field'
 
 for (const method of [
@@ -15,9 +15,7 @@ for (const method of [
 	}
 }
 
-function field(
-	overrides: Partial<Schemas.FieldResponse> = {},
-): Schemas.FieldResponse {
+function field(overrides: Partial<DisplayField> = {}): DisplayField {
 	return {
 		expression: false,
 		kind: 'Text',
@@ -65,6 +63,93 @@ describe('ConnectorConfigField — Text', () => {
 	})
 })
 
+describe('ConnectorConfigField — Text — copy', () => {
+	it('shows the placeholder of an empty field', () => {
+		render(
+			<ConnectorConfigField
+				field={field({
+					name: 'ticket_id',
+					label: 'Ticket',
+					placeholder: 'Glissez une variable depuis la colonne Entrée',
+				})}
+				value=""
+				issues={[]}
+				onChange={vi.fn()}
+			/>,
+		)
+
+		expect(
+			screen.getByPlaceholderText(
+				'Glissez une variable depuis la colonne Entrée',
+			),
+		).toBe(screen.getByLabelText('Ticket'))
+	})
+
+	it('shows the hint under the field, after its issues', () => {
+		render(
+			<ConnectorConfigField
+				field={field({
+					name: 'predicate',
+					label: 'Condition',
+					hint: 'Le flux continue par « vrai » si la condition est remplie.',
+				})}
+				value=""
+				issues={['Condition manquante']}
+				onChange={vi.fn()}
+			/>,
+		)
+
+		const issue = screen.getByText('Condition manquante')
+		const hint = screen.getByText(
+			'Le flux continue par « vrai » si la condition est remplie.',
+		)
+		expect(
+			issue.compareDocumentPosition(hint) & Node.DOCUMENT_POSITION_FOLLOWING,
+		).toBeTruthy()
+	})
+
+	it('renders a multiline field as a textarea of the declared height', async () => {
+		const user = userEvent.setup()
+		const onChange = vi.fn()
+		render(
+			<ConnectorConfigField
+				field={field({ name: 'message', label: 'Message', rows: 4 })}
+				value="Bonjour"
+				issues={[]}
+				onChange={onChange}
+			/>,
+		)
+
+		const area = screen.getByLabelText('Message') as HTMLTextAreaElement
+		expect(area.tagName).toBe('TEXTAREA')
+		expect(area.rows).toBe(4)
+
+		await user.type(area, '!')
+
+		expect(onChange).toHaveBeenLastCalledWith('Bonjour!')
+	})
+
+	it('lets a variable be dropped on a multiline field', () => {
+		render(
+			<ConnectorConfigField
+				field={field({
+					name: 'message',
+					label: 'Message',
+					rows: 4,
+					expression: true,
+				})}
+				value=""
+				issues={[]}
+				onChange={vi.fn()}
+			/>,
+		)
+
+		expect(screen.getByLabelText('Message').className).toContain(
+			'expression-drop',
+		)
+	})
+})
+
 describe('ConnectorConfigField — Number', () => {
 	it('reports a typed number as a JS number, not a string', () => {
 		const onChange = vi.fn()
@@ -99,6 +184,158 @@ describe('ConnectorConfigField — Number', () => {
 		await user.clear(screen.getByLabelText('Timeout'))
 
 		expect(onChange).toHaveBeenLastCalledWith(undefined)
+	})
+})
+
+describe('ConnectorConfigField — Number — accepting an expression', () => {
+	const amount = () =>
+		field({
+			name: 'amount',
+			label: 'Montant',
+			kind: 'Number',
+			expression: true,
+		})
+
+	it('reports a typed number as a JS number', () => {
+		const onChange = vi.fn()
+		render(
+			<ConnectorConfigField
+				field={amount()}
+				value={undefined}
+				issues={[]}
+				onChange={onChange}
+			/>,
+		)
+
+		fireEvent.change(screen.getByLabelText('Montant'), {
+			target: { value: '42.5' },
+		})
+
+		expect(onChange).toHaveBeenLastCalledWith(42.5)
+	})
+
+	it('reports a typed expression as text', () => {
+		const onChange = vi.fn()
+		render(
+			<ConnectorConfigField
+				field={amount()}
+				value={undefined}
+				issues={[]}
+				onChange={onChange}
+			/>,
+		)
+
+		fireEvent.change(screen.getByLabelText('Montant'), {
+			target: { value: '{{ trigger.total }}' },
+		})
+
+		expect(onChange).toHaveBeenLastCalledWith('{{ trigger.total }}')
+	})
+
+	it('is a text input that lets a variable be dropped, unlike a native number input', () => {
+		render(
+			<ConnectorConfigField
+				field={amount()}
+				value={undefined}
+				issues={[]}
+				onChange={vi.fn()}
+			/>,
+		)
+
+		const input = screen.getByLabelText('Montant')
+		expect(input.getAttribute('type')).toBe('text')
+		expect(input.className).toContain('expression-drop')
+	})
+
+	it('shows the expression a drop wrote, and tags it', () => {
+		const { rerender } = render(
+			<ConnectorConfigField
+				field={amount()}
+				value={undefined}
+				issues={[]}
+				onChange={vi.fn()}
+			/>,
+		)
+
+		rerender(
+			<ConnectorConfigField
+				field={amount()}
+				value="{{ connectors.c1.output.total }}"
+				issues={[]}
+				onChange={vi.fn()}
+			/>,
+		)
+
+		expect((screen.getByLabelText('Montant') as HTMLInputElement).value).toBe(
+			'{{ connectors.c1.output.total }}',
+		)
+		expect(screen.getByText('Expression')).toBeDefined()
+	})
+
+	it('keeps a decimal being typed instead of rounding it away', async () => {
+		const user = userEvent.setup()
+		const onChange = vi.fn()
+		render(
+			<ConnectorConfigField
+				field={amount()}
+				value={undefined}
+				issues={[]}
+				onChange={onChange}
+			/>,
+		)
+
+		const input = screen.getByLabelText('Montant') as HTMLInputElement
+		await user.type(input, '1.')
+
+		expect(input.value).toBe('1.')
+		expect(onChange).toHaveBeenLastCalledWith(1)
+	})
+
+	it('reports undefined once cleared', async () => {
+		const user = userEvent.setup()
+		const onChange = vi.fn()
+		render(
+			<ConnectorConfigField
+				field={amount()}
+				value={42}
+				issues={[]}
+				onChange={onChange}
+			/>,
+		)
+
+		await user.clear(screen.getByLabelText('Montant'))
+
+		expect(onChange).toHaveBeenLastCalledWith(undefined)
+	})
+
+	it('flags text that is neither a number nor an expression', () => {
+		render(
+			<ConnectorConfigField
+				field={amount()}
+				value={undefined}
+				issues={[]}
+				onChange={vi.fn()}
+			/>,
+		)
+
+		fireEvent.change(screen.getByLabelText('Montant'), {
+			target: { value: 'abc' },
+		})
+
+		expect(screen.getByText('Nombre invalide.')).toBeDefined()
+	})
+
+	it('stays a native number input when the field takes no expression', () => {
+		render(
+			<ConnectorConfigField
+				field={field({ name: 'timeout', label: 'Délai', kind: 'Number' })}
+				value={3}
+				issues={[]}
+				onChange={vi.fn()}
+			/>,
+		)
+
+		expect(screen.getByLabelText('Délai').getAttribute('type')).toBe('number')
 	})
 })
 
@@ -152,11 +389,20 @@ describe('ConnectorConfigField — Select', () => {
 	})
 })
 
+function jsonField(overrides: Partial<DisplayField> = {}): DisplayField {
+	return field({
+		name: 'headers',
+		label: 'En-têtes',
+		kind: 'Json',
+		...overrides,
+	})
+}
+
 describe('ConnectorConfigField — Json — the empty state', () => {
-	it('shows an empty zone and a way to add an entry, no bare textarea', () => {
+	it('shows only the way to add a field, no bare textarea', () => {
 		render(
 			<ConnectorConfigField
-				field={field({ name: 'headers', label: 'Headers', kind: 'Json' })}
+				field={jsonField()}
 				value={undefined}
 				issues={[]}
 				onChange={vi.fn()}
@@ -165,55 +411,172 @@ describe('ConnectorConfigField — Json — the empty state', () => {
 
 		expect(screen.queryByRole('textbox')).toBeNull()
 		expect(
-			screen.getByRole('button', { name: /ajouter une entrée/i }),
+			screen.getByRole('button', { name: 'Ajouter un champ' }),
 		).toBeDefined()
+		expect(screen.queryByText('Clé')).toBeNull()
 	})
 
-	it('adding an entry writes a first key/value pair into the field', async () => {
+	it('adding a field shows an empty row without writing anything yet', async () => {
 		const user = userEvent.setup()
 		const onChange = vi.fn()
 		render(
 			<ConnectorConfigField
-				field={field({ name: 'headers', label: 'Headers', kind: 'Json' })}
+				field={jsonField()}
 				value={undefined}
 				issues={[]}
 				onChange={onChange}
 			/>,
 		)
 
-		await user.click(
-			screen.getByRole('button', { name: /ajouter une entrée/i }),
+		await user.click(screen.getByRole('button', { name: 'Ajouter un champ' }))
+
+		expect(
+			(screen.getByLabelText('Clé du champ 1') as HTMLInputElement).value,
+		).toBe('')
+		expect(
+			(screen.getByLabelText('Valeur de champ 1') as HTMLInputElement)
+				.placeholder,
+		).toBe('valeur')
+		expect(onChange).not.toHaveBeenCalled()
+	})
+
+	it('writes the first pair once the row has a key', async () => {
+		const user = userEvent.setup()
+		const onChange = vi.fn()
+		render(
+			<ConnectorConfigField
+				field={jsonField()}
+				value={undefined}
+				issues={[]}
+				onChange={onChange}
+			/>,
 		)
 
-		expect(onChange).toHaveBeenLastCalledWith({ key: 'value' })
+		await user.click(screen.getByRole('button', { name: 'Ajouter un champ' }))
+		fireEvent.change(screen.getByLabelText('Clé du champ 1'), {
+			target: { value: 'Accept' },
+		})
+		fireEvent.change(screen.getByLabelText('Valeur de Accept'), {
+			target: { value: 'application/json' },
+		})
+
+		expect(onChange).toHaveBeenLastCalledWith({ Accept: 'application/json' })
 	})
 })
 
 describe('ConnectorConfigField — Json — rows', () => {
-	it('renders one row per entry, with a key input and a value input', () => {
+	it('lists the columns, then one row per entry with key, type and value', () => {
 		render(
 			<ConnectorConfigField
-				field={field({ name: 'headers', label: 'Headers', kind: 'Json' })}
+				field={jsonField()}
 				value={{ 'Content-Type': 'application/json' }}
 				issues={[]}
 				onChange={vi.fn()}
 			/>,
 		)
 
+		const group = screen.getByRole('group', { name: 'En-têtes' })
+		expect(within(group).getByText('Clé')).toBeDefined()
+		expect(within(group).getByText('Type')).toBeDefined()
+		expect(within(group).getByText('Valeur')).toBeDefined()
 		expect(
-			screen.getByDisplayValue('Content-Type') as HTMLInputElement,
-		).toBeDefined()
+			(within(group).getByLabelText('Clé du Content-Type') as HTMLInputElement)
+				.value,
+		).toBe('Content-Type')
 		expect(
-			screen.getByDisplayValue('application/json') as HTMLInputElement,
-		).toBeDefined()
+			(
+				within(group).getByLabelText(
+					'Valeur de Content-Type',
+				) as HTMLInputElement
+			).value,
+		).toBe('application/json')
+		expect(
+			within(group).getByLabelText('Type de Content-Type').textContent,
+		).toBe('Texte')
 	})
 
-	it('removing the last entry returns the field to its empty state, not {}', async () => {
+	it('types each row after the value it holds', () => {
+		render(
+			<ConnectorConfigField
+				field={jsonField()}
+				value={{ retries: 3, active: true, meta: { a: 1 } }}
+				issues={[]}
+				onChange={vi.fn()}
+			/>,
+		)
+
+		expect(screen.getByLabelText('Type de retries').textContent).toBe('Nombre')
+		expect(screen.getByLabelText('Type de active').textContent).toBe('Booléen')
+		expect(screen.getByLabelText('Type de meta').textContent).toBe('JSON')
+		expect(
+			(screen.getByLabelText('Valeur de active') as HTMLInputElement)
+				.placeholder,
+		).toBe('true ou false')
+	})
+
+	it('keeps a text "5" a string instead of turning it into a number', () => {
+		const onChange = vi.fn()
+		render(
+			<ConnectorConfigField
+				field={jsonField()}
+				value={{ code: 'a' }}
+				issues={[]}
+				onChange={onChange}
+			/>,
+		)
+
+		fireEvent.change(screen.getByLabelText('Valeur de code'), {
+			target: { value: '5' },
+		})
+
+		expect(onChange).toHaveBeenLastCalledWith({ code: '5' })
+	})
+
+	it('changing the type of a row retypes its value', async () => {
 		const user = userEvent.setup()
 		const onChange = vi.fn()
 		render(
 			<ConnectorConfigField
-				field={field({ name: 'headers', label: 'Headers', kind: 'Json' })}
+				field={jsonField()}
+				value={{ retries: '3' }}
+				issues={[]}
+				onChange={onChange}
+			/>,
+		)
+
+		await user.click(screen.getByLabelText('Type de retries'))
+		await user.click(await screen.findByRole('option', { name: 'Nombre' }))
+
+		expect(onChange).toHaveBeenLastCalledWith({ retries: 3 })
+	})
+
+	it('shows the error of a value that does not fit its type', () => {
+		const onChange = vi.fn()
+		render(
+			<ConnectorConfigField
+				field={jsonField()}
+				value={{ retries: 3 }}
+				issues={[]}
+				onChange={onChange}
+			/>,
+		)
+
+		fireEvent.change(screen.getByLabelText('Valeur de retries'), {
+			target: { value: 'beaucoup' },
+		})
+
+		expect(screen.getByText('Nombre invalide.')).toBeDefined()
+		expect(
+			screen.getByLabelText('Valeur de retries').getAttribute('aria-invalid'),
+		).toBe('true')
+	})
+
+	it('removing the last row returns the field to its empty state, not {}', async () => {
+		const user = userEvent.setup()
+		const onChange = vi.fn()
+		render(
+			<ConnectorConfigField
+				field={jsonField()}
 				value={{ 'Content-Type': 'application/json' }}
 				issues={[]}
 				onChange={onChange}
@@ -221,93 +584,125 @@ describe('ConnectorConfigField — Json — rows', () => {
 		)
 
 		await user.click(
-			screen.getByRole('button', { name: /supprimer l'entrée/i }),
+			screen.getByRole('button', { name: 'Supprimer Content-Type' }),
 		)
 
 		expect(onChange).toHaveBeenLastCalledWith(undefined)
 	})
 
-	it('accepts a dropped expression on a value cell, scoped to that row', () => {
+	it('lets a variable be dropped on a value cell when the field takes one', () => {
+		render(
+			<ConnectorConfigField
+				field={jsonField({ expression: true })}
+				value={{ Authorization: '' }}
+				issues={[]}
+				onChange={vi.fn()}
+			/>,
+		)
+
+		expect(
+			screen.getByLabelText('Valeur de Authorization').className,
+		).toContain('expression-drop')
+	})
+
+	it('does not offer the drop when the field takes no expression', () => {
+		render(
+			<ConnectorConfigField
+				field={jsonField({ expression: false })}
+				value={{ Authorization: '' }}
+				issues={[]}
+				onChange={vi.fn()}
+			/>,
+		)
+
+		expect(
+			screen.getByLabelText('Valeur de Authorization').className,
+		).not.toContain('expression-drop')
+	})
+
+	it('takes in what the browser drops in the cell, like a typed value', () => {
 		const onChange = vi.fn()
 		render(
 			<ConnectorConfigField
-				field={field({
-					name: 'headers',
-					label: 'Headers',
-					kind: 'Json',
-					expression: true,
-				})}
+				field={jsonField({ expression: true })}
 				value={{ Authorization: '' }}
 				issues={[]}
 				onChange={onChange}
 			/>,
 		)
 
-		const dataTransfer = { getData: () => 'connectors.c1.output.token' }
-		fireEvent.drop(screen.getByDisplayValue(''), { dataTransfer })
+		fireEvent.change(screen.getByLabelText('Valeur de Authorization'), {
+			target: { value: '{{ connectors.c1.output.token }}' },
+		})
 
 		expect(onChange).toHaveBeenLastCalledWith({
 			Authorization: '{{ connectors.c1.output.token }}',
 		})
 	})
-
-	it('ignores a dropped expression when the field does not accept one', () => {
-		const onChange = vi.fn()
-		render(
-			<ConnectorConfigField
-				field={field({
-					name: 'headers',
-					label: 'Headers',
-					kind: 'Json',
-					expression: false,
-				})}
-				value={{ Authorization: '' }}
-				issues={[]}
-				onChange={onChange}
-			/>,
-		)
-
-		const dataTransfer = { getData: () => 'connectors.c1.output.token' }
-		fireEvent.drop(screen.getByDisplayValue(''), { dataTransfer })
-
-		expect(onChange).not.toHaveBeenCalled()
-	})
 })
 
 describe('ConnectorConfigField — Json — array and scalar values stay raw', () => {
+	const items = () => field({ name: 'items', label: 'Éléments', kind: 'Json' })
+
 	it('renders an array value as raw JSON, since rows cannot represent it', () => {
 		render(
 			<ConnectorConfigField
-				field={field({ name: 'items', label: 'Items', kind: 'Json' })}
+				field={items()}
 				value={[1, 2, 3]}
 				issues={[]}
 				onChange={vi.fn()}
 			/>,
 		)
 
-		expect((screen.getByLabelText('Items') as HTMLTextAreaElement).value).toBe(
-			'[\n  1,\n  2,\n  3\n]',
-		)
 		expect(
-			screen.queryByRole('button', { name: /ajouter une entrée/i }),
+			(
+				screen.getByRole('textbox', {
+					name: 'Éléments en JSON',
+				}) as HTMLTextAreaElement
+			).value,
+		).toBe('[\n  1,\n  2,\n  3\n]')
+		expect(
+			screen.queryByRole('button', { name: 'Ajouter un champ' }),
 		).toBeNull()
+	})
+
+	it('explains why the Champs mode is not available', () => {
+		render(
+			<ConnectorConfigField
+				field={items()}
+				value={[1, 2, 3]}
+				issues={[]}
+				onChange={vi.fn()}
+			/>,
+		)
+
+		expect(
+			screen.getByText('Le mode Champs demande un objet JSON valide.'),
+		).toBeDefined()
+		expect(
+			screen.getByRole('radio', { name: 'Champs' }).hasAttribute('disabled'),
+		).toBe(true)
 	})
 
 	it('renders a whole expression as raw JSON, not as a single-entry row', () => {
 		render(
 			<ConnectorConfigField
-				field={field({ name: 'items', label: 'Items', kind: 'Json' })}
+				field={items()}
 				value="{{ trigger.items }}"
 				issues={[]}
 				onChange={vi.fn()}
 			/>,
 		)
 
-		expect((screen.getByLabelText('Items') as HTMLTextAreaElement).value).toBe(
-			'{{ trigger.items }}',
-		)
 		expect(
-			screen.queryByRole('button', { name: /ajouter une entrée/i }),
+			(
+				screen.getByRole('textbox', {
+					name: 'Éléments en JSON',
+				}) as HTMLTextAreaElement
+			).value,
+		).toBe('{{ trigger.items }}')
+		expect(
+			screen.queryByRole('button', { name: 'Ajouter un champ' }),
 		).toBeNull()
 	})
 
@@ -315,95 +710,192 @@ describe('ConnectorConfigField — Json — array and scalar values stay raw', (
 		const onChange = vi.fn()
 		render(
 			<ConnectorConfigField
-				field={field({ name: 'items', label: 'Items', kind: 'Json' })}
+				field={items()}
 				value={[1]}
 				issues={[]}
 				onChange={onChange}
 			/>,
 		)
 
-		fireEvent.change(screen.getByLabelText('Items'), {
-			target: { value: '[1,2]' },
-		})
+		fireEvent.change(
+			screen.getByRole('textbox', { name: 'Éléments en JSON' }),
+			{
+				target: { value: '[1,2]' },
+			},
+		)
 
 		expect(onChange).toHaveBeenLastCalledWith([1, 2])
+	})
+
+	it('accepts a bare expression typed by hand, as a drop would write it', () => {
+		const onChange = vi.fn()
+		render(
+			<ConnectorConfigField
+				field={items()}
+				value={[1]}
+				issues={[]}
+				onChange={onChange}
+			/>,
+		)
+
+		fireEvent.change(
+			screen.getByRole('textbox', { name: 'Éléments en JSON' }),
+			{
+				target: { value: '{{ trigger.items }}' },
+			},
+		)
+
+		expect(onChange).toHaveBeenLastCalledWith('{{ trigger.items }}')
+		expect(screen.queryByText(/JSON invalide/)).toBeNull()
 	})
 
 	it('flags invalid JSON locally instead of propagating garbage', () => {
 		const onChange = vi.fn()
 		render(
 			<ConnectorConfigField
-				field={field({ name: 'items', label: 'Items', kind: 'Json' })}
+				field={items()}
 				value={[1]}
 				issues={[]}
 				onChange={onChange}
 			/>,
 		)
 
-		fireEvent.change(screen.getByLabelText('Items'), {
-			target: { value: '[not json' },
-		})
+		fireEvent.change(
+			screen.getByRole('textbox', { name: 'Éléments en JSON' }),
+			{
+				target: { value: '[not json' },
+			},
+		)
 
 		expect(onChange).not.toHaveBeenCalled()
-		expect(screen.getByText(/JSON invalide/i)).toBeDefined()
+		expect(
+			screen.getByText(
+				'JSON invalide : vérifiez les guillemets, les virgules et les accolades. Une expression doit être entre guillemets.',
+			),
+		).toBeDefined()
+	})
+
+	it('reports undefined once the raw text is emptied', () => {
+		const onChange = vi.fn()
+		render(
+			<ConnectorConfigField
+				field={items()}
+				value={[1]}
+				issues={[]}
+				onChange={onChange}
+			/>,
+		)
+
+		fireEvent.change(
+			screen.getByRole('textbox', { name: 'Éléments en JSON' }),
+			{
+				target: { value: '  ' },
+			},
+		)
+
+		expect(onChange).toHaveBeenLastCalledWith(undefined)
 	})
 })
 
-describe('ConnectorConfigField — Json — switching between rows and raw', () => {
-	it('keeps the content when switching to raw and back to rows', async () => {
+describe('ConnectorConfigField — Json — switching between fields and JSON', () => {
+	it('names the toggle after the body for the body field', () => {
+		render(
+			<ConnectorConfigField
+				field={jsonField({ name: 'body', label: 'Corps de la requête' })}
+				value={{ a: '1' }}
+				issues={[]}
+				onChange={vi.fn()}
+			/>,
+		)
+
+		expect(
+			screen.getByRole('group', { name: 'Mode de saisie du corps' }),
+		).toBeDefined()
+	})
+
+	it('keeps the content when switching to JSON and back to fields', async () => {
 		const user = userEvent.setup()
 		const onChange = vi.fn()
 		render(
 			<ConnectorConfigField
-				field={field({ name: 'headers', label: 'Headers', kind: 'Json' })}
+				field={jsonField()}
 				value={{ a: '1', b: '2' }}
 				issues={[]}
 				onChange={onChange}
 			/>,
 		)
 
-		await user.click(screen.getByRole('button', { name: /passer en json/i }))
+		await user.click(screen.getByRole('radio', { name: 'JSON' }))
 		expect(
-			(screen.getByLabelText('Headers') as HTMLTextAreaElement).value,
+			(
+				screen.getByRole('textbox', {
+					name: 'En-têtes en JSON',
+				}) as HTMLTextAreaElement
+			).value,
 		).toBe(JSON.stringify({ a: '1', b: '2' }, null, 2))
 
-		await user.click(
-			screen.getByRole('button', { name: /revenir aux champs/i }),
-		)
+		await user.click(screen.getByRole('radio', { name: 'Champs' }))
 
 		expect(screen.getByDisplayValue('a')).toBeDefined()
 		expect(screen.getByDisplayValue('b')).toBeDefined()
 		expect(onChange).not.toHaveBeenCalled()
 	})
 
-	it('offers no raw-to-rows switch once the raw text is an array', async () => {
+	it('disables the way back to fields once the JSON text is an array', async () => {
 		const user = userEvent.setup()
 		render(
 			<ConnectorConfigField
-				field={field({ name: 'headers', label: 'Headers', kind: 'Json' })}
+				field={jsonField()}
 				value={{}}
 				issues={[]}
 				onChange={vi.fn()}
 			/>,
 		)
 
-		await user.click(screen.getByRole('button', { name: /passer en json/i }))
-		fireEvent.change(screen.getByLabelText('Headers'), {
-			target: { value: '[1,2]' },
-		})
+		await user.click(screen.getByRole('radio', { name: 'JSON' }))
+		fireEvent.change(
+			screen.getByRole('textbox', { name: 'En-têtes en JSON' }),
+			{
+				target: { value: '[1,2]' },
+			},
+		)
 
 		expect(
-			screen.queryByRole('button', { name: /revenir aux champs/i }),
-		).toBeNull()
+			screen.getByRole('radio', { name: 'Champs' }).hasAttribute('disabled'),
+		).toBe(true)
+	})
+
+	it('disables the way back to fields while the JSON text is invalid', async () => {
+		const user = userEvent.setup()
+		render(
+			<ConnectorConfigField
+				field={jsonField()}
+				value={{ a: '1' }}
+				issues={[]}
+				onChange={vi.fn()}
+			/>,
+		)
+
+		await user.click(screen.getByRole('radio', { name: 'JSON' }))
+		fireEvent.change(
+			screen.getByRole('textbox', { name: 'En-têtes en JSON' }),
+			{
+				target: { value: '{"a": ' },
+			},
+		)
+
+		expect(
+			screen.getByRole('radio', { name: 'Champs' }).hasAttribute('disabled'),
+		).toBe(true)
 	})
 })
 
 describe('ConnectorConfigField — Json — external updates', () => {
 	it('resyncs the visible text when the value changes from outside the field, as an inserted expression would', () => {
-		const jsonField = field({ name: 'headers', label: 'Headers', kind: 'Json' })
+		const items = field({ name: 'items', label: 'Éléments', kind: 'Json' })
 		const { rerender } = render(
 			<ConnectorConfigField
-				field={jsonField}
+				field={items}
 				value={undefined}
 				issues={[]}
 				onChange={vi.fn()}
@@ -412,16 +904,20 @@ describe('ConnectorConfigField — Json — external updates', () => {
 
 		rerender(
 			<ConnectorConfigField
-				field={jsonField}
-				value="{{ trigger.headers }}"
+				field={items}
+				value="{{ trigger.items }}"
 				issues={[]}
 				onChange={vi.fn()}
 			/>,
 		)
 
 		expect(
-			(screen.getByLabelText('Headers') as HTMLTextAreaElement).value,
-		).toBe('{{ trigger.headers }}')
+			(
+				screen.getByRole('textbox', {
+					name: 'Éléments en JSON',
+				}) as HTMLTextAreaElement
+			).value,
+		).toBe('{{ trigger.items }}')
 	})
 })
 
@@ -516,24 +1012,6 @@ describe('ConnectorConfigField — expressions', () => {
 		expect(screen.queryByText('Aperçu : 7')).toBeNull()
 	})
 
-	it('reports the field as active when focus enters it', async () => {
-		const user = userEvent.setup()
-		const onActivate = vi.fn()
-		render(
-			<ConnectorConfigField
-				field={field({ name: 'url', label: 'URL', expression: true })}
-				value=""
-				issues={[]}
-				onChange={vi.fn()}
-				onActivate={onActivate}
-			/>,
-		)
-
-		await user.click(screen.getByLabelText('URL'))
-
-		expect(onActivate).toHaveBeenCalled()
-	})
-
 	it('has no button of its own', () => {
 		render(
 			<ConnectorConfigField
@@ -548,76 +1026,65 @@ describe('ConnectorConfigField — expressions', () => {
 	})
 })
 
-describe('ConnectorConfigField — the control ref', () => {
-	it('hands back the live text input so a caller can read its cursor', () => {
-		let el: HTMLInputElement | HTMLTextAreaElement | null = null
-		render(
-			<ConnectorConfigField
-				field={field({ name: 'url', label: 'URL', kind: 'Text' })}
-				value="https://a"
-				issues={[]}
-				onChange={vi.fn()}
-				controlRef={(node) => {
-					el = node
-				}}
-			/>,
-		)
-
-		expect(el).toBe(screen.getByLabelText('URL'))
-	})
-
-	it('hands back the live textarea for a Json field rendered raw', () => {
-		let el: HTMLInputElement | HTMLTextAreaElement | null = null
-		render(
-			<ConnectorConfigField
-				field={field({ name: 'items', label: 'Items', kind: 'Json' })}
-				value={[1, 2]}
-				issues={[]}
-				onChange={vi.fn()}
-				controlRef={(node) => {
-					el = node
-				}}
-			/>,
-		)
-
-		expect(el).toBe(screen.getByLabelText('Items'))
-	})
-})
-
-describe('ConnectorConfigField — dropping a datum', () => {
-	it('reports the dropped path on an expression-enabled field', () => {
-		const onDropExpression = vi.fn()
+describe('ConnectorConfigField — the drop target', () => {
+	it('marks a field that takes an expression as a place to drop a variable', () => {
 		render(
 			<ConnectorConfigField
 				field={field({ name: 'url', label: 'URL', expression: true })}
 				value=""
 				issues={[]}
 				onChange={vi.fn()}
-				onDropExpression={onDropExpression}
 			/>,
 		)
 
-		const dataTransfer = { getData: () => 'trigger.customer.id' }
-		fireEvent.drop(screen.getByLabelText('URL'), { dataTransfer })
-
-		expect(onDropExpression).toHaveBeenCalledWith('trigger.customer.id')
+		expect(screen.getByLabelText('URL').className).toContain('expression-drop')
 	})
 
-	it('does nothing on a field that does not accept an expression', () => {
-		const onDropExpression = vi.fn()
+	it('does not mark a field that does not accept an expression', () => {
 		render(
 			<ConnectorConfigField
-				field={field({ name: 'method', label: 'Méthode', expression: false })}
+				field={field({ name: 'url', label: 'URL', expression: false })}
 				value=""
 				issues={[]}
 				onChange={vi.fn()}
-				onDropExpression={onDropExpression}
 			/>,
 		)
 
-		const dataTransfer = { getData: () => 'trigger.customer.id' }
-		fireEvent.drop(screen.getByLabelText('Méthode'), { dataTransfer })
+		expect(screen.getByLabelText('URL').className).not.toContain(
+			'expression-drop',
+		)
+	})
 
-		expect(onDropExpression).not.toHaveBeenCalled()
+	it('shows an expression in monospace', () => {
+		render(
+			<ConnectorConfigField
+				field={field({ name: 'url', label: 'URL', expression: true })}
+				value="{{ trigger.id }}"
+				issues={[]}
+				onChange={vi.fn()}
+			/>,
+		)
+
+		expect(screen.getByLabelText('URL').className).toContain('font-mono')
+	})
+
+	it('marks the raw JSON zone of a field that takes an expression', () => {
+		render(
+			<ConnectorConfigField
+				field={field({
+					name: 'items',
+					label: 'Éléments',
+					kind: 'Json',
+					expression: true,
+				})}
+				value={[1]}
+				issues={[]}
+				onChange={vi.fn()}
+			/>,
+		)
+
+		expect(
+			screen.getByRole('textbox', { name: 'Éléments en JSON' }).className,
+		).toContain('expression-drop')
 	})
 })

@@ -62,6 +62,51 @@ describe('ExecutionSteps', () => {
 		expect(screen.getByText('2 / 3 nœuds')).toBeDefined()
 	})
 
+	it('marks each node that was not reached with its own status', async () => {
+		await renderWithRouter(
+			<ExecutionSteps
+				steps={[{ kind: 'step', step: entry('a') }]}
+				pending={[
+					entry('p1', { status: 'waiting', detail: 'Pas encore atteint' }),
+					entry('p2', { status: 'skipped', detail: 'Aucun élément reçu' }),
+					entry('p3', {
+						status: 'skipped',
+						detail: 'Arrêt sur « Étape a »',
+					}),
+				]}
+				pendingTitle="En attente"
+				onOpen={vi.fn()}
+			/>,
+		)
+
+		expect(screen.getByRole('img', { name: 'En attente' })).toBeDefined()
+		expect(screen.getAllByRole('img', { name: 'Non appelé' })).toHaveLength(2)
+		expect(screen.getByText('Pas encore atteint')).toBeDefined()
+		expect(screen.getByText('Aucun élément reçu')).toBeDefined()
+		expect(screen.getByText('Arrêt sur « Étape a »')).toBeDefined()
+		expect(screen.getByText('1 / 4 nœuds')).toBeDefined()
+	})
+
+	it('writes the elapsed time of the step in progress in its detail', async () => {
+		await renderWithRouter(
+			<ExecutionSteps
+				steps={[
+					{ kind: 'step', step: entry('a') },
+					{
+						kind: 'step',
+						step: entry('b', { status: 'running', detail: 'En cours · 2,2 s' }),
+					},
+				]}
+				pending={[]}
+				pendingTitle="Non appelés"
+				onOpen={vi.fn()}
+			/>,
+		)
+
+		expect(screen.getByText('En cours · 2,2 s')).toBeDefined()
+		expect(screen.getByText('2')).toBeDefined()
+	})
+
 	it('opens the node of a step, inside or outside a loop', async () => {
 		const user = userEvent.setup()
 		const onOpen = vi.fn()

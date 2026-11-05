@@ -133,6 +133,7 @@ export interface WorkflowCanvasProps {
 		body: Schemas.CreateCredentialRequest,
 	) => Promise<CreatedCredential>
 	testRun: TestRun
+	canTest?: boolean
 	onChange: (change: GraphChange) => void
 }
 
@@ -179,6 +180,7 @@ function EditorCanvas({
 	authSchemes = [],
 	onCreateCredential = rejectCreateCredential,
 	testRun,
+	canTest = true,
 	onChange,
 }: WorkflowCanvasProps) {
 	const { screenToFlowPosition, deleteElements, fitView } = useReactFlow()
@@ -564,7 +566,12 @@ function EditorCanvas({
 						<Button
 							size="lg"
 							onClick={testRun.start}
-							disabled={testRun.running || graph.nodes.length === 0}
+							disabled={!canTest || testRun.running || graph.nodes.length === 0}
+							title={
+								canTest
+									? undefined
+									: 'Workflow à enregistrer avant de pouvoir le tester'
+							}
 						>
 							{testRun.running ? (
 								<LoaderCircle className="animate-spin" />

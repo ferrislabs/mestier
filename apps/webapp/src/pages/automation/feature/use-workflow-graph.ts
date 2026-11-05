@@ -8,6 +8,7 @@ import {
 } from '@xyflow/react'
 import { useCallback, useRef, useState } from 'react'
 import type { Schemas } from '#/api/api.client'
+import { withFieldDefaults } from '#/pages/automation/lib/connector-field-copy'
 import {
 	connectorNode,
 	type EditorEdge,
@@ -276,7 +277,7 @@ export function useWorkflowGraph({
 				id,
 				kind: descriptor.kind,
 				version: descriptor.version,
-				config: preset?.config ?? {},
+				config: preset?.config ?? withFieldDefaults(descriptor.kind, {}) ?? {},
 			}
 			const created = connectorNode(
 				connector,

@@ -175,6 +175,26 @@ describe('ModuleLauncher', () => {
 		])
 	})
 
+	it('draws every module glyph at 22 px in the launcher tile, announced modules included', async () => {
+		await renderLauncher(
+			<ModuleLauncher activeModuleId="home" organizationSlug="dupont" />,
+		)
+		await openLauncher()
+
+		const grid = screen.getByRole('list', { name: 'Modules' })
+		const glyphs = Array.from(grid.querySelectorAll('.module-glyph'))
+
+		expect(glyphs.length).toBeGreaterThan(0)
+		for (const glyph of glyphs) {
+			const classes = glyph.className.split(' ')
+			expect(classes).toContain('[&_svg]:size-[22px]')
+			expect(classes).not.toContain('[&_svg]:size-5')
+			expect(classes).not.toContain('[&_svg]:size-4')
+			expect(classes).toContain('size-8')
+			expect(glyph.parentElement?.className.split(' ')).toContain('size-11')
+		}
+	})
+
 	it('offers neither the home nor the settings as a tile', async () => {
 		await renderLauncher(
 			<ModuleLauncher activeModuleId="home" organizationSlug="dupont" />,

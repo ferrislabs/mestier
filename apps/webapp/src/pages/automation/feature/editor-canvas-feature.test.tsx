@@ -387,6 +387,58 @@ describe('WorkflowCanvas — triggers read as nodes', () => {
 	})
 })
 
+describe('WorkflowCanvas — choosing the event of a trigger', () => {
+	it('groups the events under the nine French domains, the unknown ones last', async () => {
+		renderHarness({
+			graph: graphWith([], [], [trigger('t1', { Events: [] })]),
+			layout: layoutOf(['t1', 0, 0]),
+			descriptors: descriptorMap(),
+			events: [
+				event('mystery.happened'),
+				event('ticket.created'),
+				event('member.joined'),
+				event('quote.sent'),
+			],
+		})
+
+		fireEvent.click(await screen.findByTestId('rf__node-t1'))
+		const dialog = await screen.findByRole('dialog')
+
+		expect(
+			within(dialog)
+				.getAllByRole('heading', { level: 3 })
+				.map((heading) => heading.textContent)
+				.filter((text) =>
+					['Devis', 'Support', 'Équipe', 'Autres'].includes(text ?? ''),
+				),
+		).toEqual(['Devis', 'Support', 'Équipe', 'Autres'])
+	})
+
+	it('preselects the first event of the first group, not the first the server sent', async () => {
+		const user = userEvent.setup()
+		const { onSaveSpy } = renderHarness({
+			graph: graphWith([], [], [trigger('t1', { Events: [] })]),
+			layout: layoutOf(['t1', 0, 0]),
+			descriptors: descriptorMap(),
+			events: [
+				event('member.joined'),
+				event('quote.sent'),
+				event('quote.created'),
+				event('invoice.paid'),
+			],
+		})
+
+		fireEvent.click(await screen.findByTestId('rf__node-t1'))
+		await user.click(
+			await screen.findByRole('button', { name: 'Utiliser cet événement' }),
+		)
+
+		expect(saved(onSaveSpy).graph.triggers).toEqual([
+			{ id: 't1', kind: { Events: ['quote.created'] } },
+		])
+	})
+})
+
 describe('WorkflowCanvas — adding nodes', () => {
 	it('opens the creator on the triggers when the canvas is empty', async () => {
 		const user = userEvent.setup()
@@ -425,7 +477,7 @@ describe('WorkflowCanvas — adding nodes', () => {
 		await screen.findByTestId('rf__node-c1')
 		await user.click(
 			screen.getByRole('button', {
-				name: 'Ajouter un nœud après « Étape à embranchements » (Else)',
+				name: 'Ajouter un nœud après « Étape à embranchements » (faux)',
 			}),
 		)
 		await pickInCreator(user, 'simple', /Étape simple/)
@@ -561,6 +613,25 @@ describe('WorkflowCanvas — a node made from a collection operation', () => {
 
 		const dialog = await openDetails('c1')
 		expect(within(dialog).getByText('Opération')).toBeDefined()
+	})
+
+	it('seeds the defaults of a fresh http node', async () => {
+		const user = userEvent.setup()
+		const { onSaveSpy } = renderHarness({
+			graph: graphWith([], [], [trigger('t1')]),
+			layout: layoutOf(['t1', 0, 0]),
+			descriptors: descriptorMap(HTTP_DESCRIPTOR),
+		})
+
+		await screen.findByTestId('rf__node-t1')
+		await user.click(
+			screen.getByRole('button', { name: 'Ajouter un nœud après « Clic »' }),
+		)
+		await pickInCreator(user, 'requete', /Requête HTTP/)
+
+		expect(saved(onSaveSpy).graph.connectors[0].config).toEqual({
+			method: 'GET',
+		})
 	})
 })
 
@@ -1008,12 +1079,18 @@ describe('WorkflowCanvas — validation', () => {
 	})
 })
 
-describe('WorkflowCanvas — a run in progress', () => {
+describe('WorkflowCanvas — the result of the last run', () => {
 	function frameOf(id: string): string {
 		return nodeButton(id).className
 	}
 
-	it('borders each connector by the status of its step', async () => {
+	function badgesOf(id: string): string[] {
+		return within(screen.getByTestId(`rf__node-${id}`))
+			.queryAllByRole('img')
+			.map((badge) => badge.getAttribute('aria-label') ?? '')
+	}
+
+	it('marks a succeeded step with a check badge and no green frame, a failed one with a red frame', async () => {
 		renderHarness({
 			graph: graphWith(
 				[
@@ -1040,9 +1117,26 @@ describe('WorkflowCanvas — a run in progress', () => {
 
 		await screen.findByTestId('rf__node-c1')
 
-		expect(frameOf('c1')).toContain('border-(--auto-success)')
-		expect(frameOf('c2')).toContain('border-state-today')
+		expect(frameOf('c1')).not.toContain('border-(--auto-success)')
+		expect(frameOf('c1')).toContain('border-border')
+		expect(badgesOf('c1')).toContain('Exécuté avec succès')
 		expect(frameOf('c3')).toContain('border-state-alert')
+		expect(badgesOf('c3')).toContain('Exécution en échec')
+	})
+
+	it('shows nothing on a step that is still running: no halo, no spinning badge', async () => {
+		renderHarness({
+			graph: graphWith([connector('c1', SIMPLE_KIND)]),
+			layout: layoutOf(['c1', 0, 0]),
+			descriptors: descriptorMap(SIMPLE_DESCRIPTOR),
+			runStatuses: new Map([['c1', 'running']]),
+		})
+
+		await screen.findByTestId('rf__node-c1')
+
+		expect(frameOf('c1')).not.toContain('border-state-today')
+		expect(frameOf('c1')).not.toContain('shadow-state-today')
+		expect(badgesOf('c1')).toEqual([])
 	})
 
 	it('leaves a connector with no step of its own unmarked', async () => {
@@ -1058,6 +1152,144 @@ describe('WorkflowCanvas — a run in progress', () => {
 		expect(frameOf('c1')).not.toContain('border-state-today')
 		expect(frameOf('c1')).not.toContain('border-(--auto-success)')
 		expect(frameOf('c1')).not.toContain('border-state-alert')
+		expect(badgesOf('c1')).toEqual([])
+	})
+
+	it('shows the correction badge over a succeeded step, never the check', async () => {
+		renderHarness({
+			graph: graphWith(
+				[
+					connector('c1', SIMPLE_KIND, {
+						url: '{{ connectors.gone.output.id }}',
+					}),
+				],
+				[],
+				[trigger('t1')],
+			),
+			layout: layoutOf(['t1', -220, 0], ['c1', 0, 0]),
+			descriptors: descriptorMap(SIMPLE_DESCRIPTOR),
+			runStatuses: new Map([['c1', 'succeeded']]),
+		})
+
+		await screen.findByTestId('rf__node-c1')
+
+		expect(badgesOf('c1')).toEqual([
+			expect.stringMatching(/^À corriger : Le nœud « gone » n’existe plus\./),
+		])
+		expect(frameOf('c1')).toContain('border-state-alert')
+		expect(frameOf('c1')).not.toContain('border-(--auto-success)')
+	})
+
+	it('shows the correction badge over a failed step, a single badge', async () => {
+		renderHarness({
+			graph: graphWith([connector('c1', SIMPLE_KIND)]),
+			layout: layoutOf(['c1', 0, 0]),
+			descriptors: descriptorMap(SIMPLE_DESCRIPTOR),
+			connectorErrors: new Map([
+				['c1', [{ field: 'url', message: 'URL manquante' }]],
+			]),
+			runStatuses: new Map([['c1', 'failed']]),
+		})
+
+		await screen.findByTestId('rf__node-c1')
+
+		expect(badgesOf('c1')).toEqual(['À corriger : URL manquante'])
+	})
+})
+
+describe('WorkflowCanvas — what a node says about itself', () => {
+	const CONDITION_DESCRIPTOR = descriptor(
+		'flow.condition',
+		'Condition',
+		['Then', 'Else'],
+		[],
+		{ family: 'flow' },
+	)
+	const ASSIGN_DESCRIPTOR = descriptor(
+		'mestier.support.assign_ticket',
+		'Assigner un ticket',
+		[],
+		[],
+		{ family: 'mestier' },
+	)
+	const BADGE_DESCRIPTOR = descriptor(
+		'mestier.support.add_badge',
+		'Ajouter un badge',
+		[],
+		[],
+		{ family: 'mestier' },
+	)
+
+	function hueOf(id: string): string {
+		const tone = screen
+			.getByTestId(`rf__node-${id}`)
+			.querySelector('.node-tone') as HTMLElement
+		return tone.style.getPropertyValue('--node-hue')
+	}
+
+	it('names the type the way the prototype does, with a readable subtitle', async () => {
+		renderHarness({
+			graph: graphWith(
+				[
+					connector('c1', 'flow.condition'),
+					connector('c2', 'mestier.support.add_badge'),
+				],
+				[],
+				[],
+			),
+			layout: layoutOf(['c1', 0, 0], ['c2', 280, 0]),
+			descriptors: descriptorMap(CONDITION_DESCRIPTOR, BADGE_DESCRIPTOR),
+		})
+
+		await screen.findByTestId('rf__node-c1')
+
+		const condition = screen.getByTestId('rf__node-c1')
+		const badge = screen.getByTestId('rf__node-c2')
+		expect(within(condition).getByText('Si')).toBeDefined()
+		expect(within(condition).getByText('Condition')).toBeDefined()
+		expect(within(badge).getByText('Ajouter un badge au ticket')).toBeDefined()
+		expect(within(badge).getByText('Action Mestier')).toBeDefined()
+		expect(within(badge).queryByText('mestier')).toBeNull()
+	})
+
+	it('gives two types of the same family their own hue', async () => {
+		renderHarness({
+			graph: graphWith([
+				connector('c1', 'mestier.support.assign_ticket'),
+				connector('c2', 'mestier.support.add_badge'),
+			]),
+			layout: layoutOf(['c1', 0, 0], ['c2', 280, 0]),
+			descriptors: descriptorMap(ASSIGN_DESCRIPTOR, BADGE_DESCRIPTOR),
+		})
+
+		await screen.findByTestId('rf__node-c1')
+
+		expect(hueOf('c1')).toBe('30')
+		expect(hueOf('c2')).toBe('75')
+	})
+
+	it('names the outputs of a branching node in French, handles and add buttons included', async () => {
+		renderHarness({
+			graph: graphWith(
+				[connector('c1', 'flow.condition')],
+				[],
+				[trigger('t1')],
+			),
+			layout: layoutOf(['t1', -220, 0], ['c1', 0, 0]),
+			descriptors: descriptorMap(CONDITION_DESCRIPTOR),
+		})
+
+		const node = await screen.findByTestId('rf__node-c1')
+
+		expect(within(node).getByText('vrai')).toBeDefined()
+		expect(within(node).getByText('faux')).toBeDefined()
+		expect(within(node).queryByText('Then')).toBeNull()
+		expect(
+			within(node).getByRole('button', {
+				name: 'Ajouter un nœud après « Si » (vrai)',
+			}),
+		).toBeDefined()
+		expect(node.querySelector('[data-handleid="Then"]')).not.toBeNull()
 	})
 })
 

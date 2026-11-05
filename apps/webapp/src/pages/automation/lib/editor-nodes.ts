@@ -1,7 +1,14 @@
 import type { Edge, Node } from '@xyflow/react'
 import type { Schemas } from '#/api/api.client'
+import {
+	connectorCopy,
+	triggerCopy,
+} from '#/pages/automation/lib/connector-copy'
 import type { NodePosition } from '#/pages/automation/lib/graph'
-import { triggerPresentation } from '#/pages/automation/lib/trigger-events'
+import {
+	isManualTrigger,
+	triggerPresentation,
+} from '#/pages/automation/lib/trigger-events'
 import type { ConnectorValidationError } from '#/pages/automation/lib/validation'
 
 export interface NodeOperationRef {
@@ -41,7 +48,7 @@ export interface EditorNodeData extends Record<string, unknown> {
 export type EditorNode = Node<EditorNodeData, 'automation'>
 export type EditorEdge = Edge
 
-export const TRIGGER_TYPE_LABEL = 'Déclencheur'
+const UNKNOWN_CONNECTOR_SUBTITLE = 'Connecteur'
 
 export function edgeId(edge: Schemas.EdgeDto): string {
 	return `${edge.from}->${edge.to}:${edge.branch ?? ''}`
@@ -62,18 +69,21 @@ function defaultPresentation(
 	if (data.trigger) {
 		return {
 			...triggerPresentation(data.trigger, lookup.events),
-			typeLabel: TRIGGER_TYPE_LABEL,
+			typeLabel: triggerCopy(
+				isManualTrigger(data.trigger) ? 'manual' : 'events',
+			).label,
 		}
 	}
 	const connector = data.connector
 	const descriptor = connector
 		? lookup.descriptors.get(connector.kind)
 		: undefined
+	const copy = connector ? connectorCopy(connector.kind) : undefined
 	return {
-		label: descriptor?.label ?? connector?.id ?? '',
-		subtitle: descriptor?.family ?? connector?.kind ?? '',
+		label: copy?.label ?? descriptor?.label ?? connector?.id ?? '',
+		subtitle: copy?.subtitle ?? UNKNOWN_CONNECTOR_SUBTITLE,
 		family: descriptor?.family,
-		typeLabel: descriptor?.label ?? connector?.kind ?? '',
+		typeLabel: copy?.label ?? descriptor?.label ?? connector?.kind ?? '',
 	}
 }
 

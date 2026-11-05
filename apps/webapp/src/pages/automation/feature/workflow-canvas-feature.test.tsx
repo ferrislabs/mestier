@@ -1,8 +1,9 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { useRouterState } from '@tanstack/react-router'
 import { fireEvent, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import type { ReactNode } from 'react'
-import { beforeEach, describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Schemas } from '#/api/api.client'
 import { TooltipProvider } from '#/components/ui/tooltip'
 import {
@@ -10,13 +11,27 @@ import {
 	OrganizationListProvider,
 } from '#/hooks/use-active-organization'
 import type { Organization } from '#/hooks/use-organizations'
-import { WorkflowCanvasFeature } from '#/pages/automation/feature/workflow-canvas-feature'
+import { WorkflowPageFeature } from '#/pages/automation/feature/workflow-page-feature'
 import { computeFallbackLayout } from '#/pages/automation/lib/layout'
 import {
 	dragNodeBy,
 	installFlowTestEnvironment,
 } from '#/pages/automation/test/flow-test-env'
 import { renderWithRouter } from '#/test/render-with-router'
+
+vi.mock('#/pages/automation/feature/workflow-executions-feature', async () => {
+	const { WorkflowTopBarFeature } = await import(
+		'#/pages/automation/feature/workflow-top-bar-feature'
+	)
+	return {
+		WorkflowExecutionsFeature: ({ workflowId }: { workflowId: string }) => (
+			<div>
+				<WorkflowTopBarFeature workflowId={workflowId} view="executions" />
+				<p>exécutions de {workflowId}</p>
+			</div>
+		),
+	}
+})
 
 for (const method of [
 	'hasPointerCapture',
@@ -31,6 +46,8 @@ for (const method of [
 
 const WORKFLOW_PATH =
 	'/api/v1/organizations/{organization_id}/automation/workflows/{workflow_id}'
+const WORKFLOWS_PATH =
+	'/api/v1/organizations/{organization_id}/automation/workflows'
 const WORKFLOW_VERSIONS_PATH =
 	'/api/v1/organizations/{organization_id}/automation/workflows/{workflow_id}/versions'
 const CONNECTORS_PATH =
@@ -202,7 +219,29 @@ function installFakeTanstackApi(): FakeApi {
 	}
 }
 
+const WORKFLOW_URL = '/o/atelier-bois/automatisation/workflows/workflow-1'
+
+function UrlDrivenPage() {
+	const location = useRouterState({ select: (state) => state.location })
+	const workflowId = location.pathname.split('/').at(-1) ?? ''
+	const search = location.search as { vue?: string }
+
+	return (
+		<WorkflowPageFeature
+			workflowId={workflowId}
+			view={search.vue === 'executions' ? 'executions' : 'editor'}
+		/>
+	)
+}
+
 function renderFeature(configure: (api: FakeApi) => void) {
+	return renderPage(configure).api
+}
+
+function renderPage(
+	configure: (api: FakeApi) => void,
+	initialPath = WORKFLOW_URL,
+) {
 	const api = installFakeTanstackApi()
 	api.mockGet(CONNECTORS_PATH, () => ({
 		data: {
@@ -249,13 +288,14 @@ function renderFeature(configure: (api: FakeApi) => void) {
 		)
 	}
 
-	void renderWithRouter(
+	const rendered = renderWithRouter(
 		<Providers>
-			<WorkflowCanvasFeature workflowId="workflow-1" />
+			<UrlDrivenPage />
 		</Providers>,
+		initialPath,
 	)
 
-	return api
+	return { api, rendered }
 }
 
 beforeEach(() => {
@@ -272,11 +312,16 @@ async function closeDetails() {
 }
 
 async function clickSave() {
-	const button = await screen.findByRole('button', { name: /Enregistrer/ })
-	button.click()
+	await waitFor(() => {
+		const button = screen.getByRole('button', {
+			name: /Enregistrer/,
+		}) as HTMLButtonElement
+		expect(button.disabled).toBe(false)
+	})
+	screen.getByRole('button', { name: /Enregistrer/ }).click()
 }
 
-describe('WorkflowCanvasFeature — loading the workflow', () => {
+describe('WorkflowPageFeature (editor) — loading the workflow', () => {
 	it('renders the graph once the workflow and catalogue have loaded', async () => {
 		renderFeature((api) => {
 			api.mockGet(WORKFLOW_PATH, () => ({
@@ -292,7 +337,7 @@ describe('WorkflowCanvasFeature — loading the workflow', () => {
 	})
 })
 
-describe('WorkflowCanvasFeature — saving', () => {
+describe('WorkflowPageFeature (editor) — saving', () => {
 	it('saves a fully-positioned graph back unchanged', async () => {
 		const graph: Schemas.GraphDto = {
 			connectors: [connector('c1'), connector('c2')],
@@ -422,7 +467,7 @@ describe('WorkflowCanvasFeature — saving', () => {
 	})
 })
 
-describe('WorkflowCanvasFeature — a 422 from the backend', () => {
+describe('WorkflowPageFeature (editor) — a 422 from the backend', () => {
 	it('badges the named connector and banners the graph-shaped errors, without a toast', async () => {
 		const graph: Schemas.GraphDto = {
 			connectors: [connector('c1'), connector('c2')],
@@ -651,7 +696,7 @@ describe('WorkflowCanvasFeature — a 422 from the backend', () => {
 	})
 })
 
-describe('WorkflowCanvasFeature — the credential picker', () => {
+describe('WorkflowPageFeature (editor) — the credential picker', () => {
 	it('offers the credentials fetched for real, filtered by the connector auth', async () => {
 		const user = userEvent.setup()
 		renderFeature((api) => {
@@ -692,7 +737,7 @@ describe('WorkflowCanvasFeature — the credential picker', () => {
 	})
 })
 
-describe('WorkflowCanvasFeature — inline credential creation', () => {
+describe('WorkflowPageFeature (editor) — inline credential creation', () => {
 	it('creates the credential through the real mutation and saves the connector pointing at it', async () => {
 		const user = userEvent.setup()
 		const api = renderFeature((fakeApi) => {
@@ -764,7 +809,7 @@ describe('WorkflowCanvasFeature — inline credential creation', () => {
 			}),
 		)
 		await user.type(screen.getByLabelText('Nom'), 'Ma clé')
-		await user.type(screen.getByLabelText('Token'), 's3cr3t')
+		await user.type(screen.getByLabelText('Jeton'), 's3cr3t')
 		await user.click(screen.getByRole('button', { name: 'Créer' }))
 
 		await waitFor(() => {
@@ -793,7 +838,7 @@ describe('WorkflowCanvasFeature — inline credential creation', () => {
 	})
 })
 
-describe('WorkflowCanvasFeature — a trigger saved with the workflow', () => {
+describe('WorkflowPageFeature (editor) — a trigger saved with the workflow', () => {
 	it('edits a real trigger node and saves it through the same PUT as the graph, with no legacy trigger endpoint involved', async () => {
 		const graph: Schemas.GraphDto = {
 			connectors: [connector('c1')],
@@ -913,7 +958,7 @@ describe('WorkflowCanvasFeature — a trigger saved with the workflow', () => {
 	})
 })
 
-describe('WorkflowCanvasFeature — the last run', () => {
+describe('WorkflowPageFeature (editor) — the last run', () => {
 	it('fills the input column with the most recent run for this workflow, and none other', async () => {
 		const graph: Schemas.GraphDto = {
 			connectors: [connector('c1')],
@@ -995,7 +1040,7 @@ describe('WorkflowCanvasFeature — the last run', () => {
 	})
 })
 
-describe('WorkflowCanvasFeature — the live preview', () => {
+describe('WorkflowPageFeature (editor) — the live preview', () => {
 	it('resolves an expression through the real evaluate endpoint', async () => {
 		const withField = {
 			...descriptor(SIMPLE_KIND, 'Étape simple'),
@@ -1051,5 +1096,585 @@ describe('WorkflowCanvasFeature — the live preview', () => {
 			(c) => c.method === 'post' && c.path === EXPRESSIONS_EVALUATE_PATH,
 		)
 		expect(call).toBeDefined()
+	})
+})
+
+interface ServerState {
+	name: string
+	enabled: boolean
+}
+
+function mockWorkflowServer(
+	api: FakeApi,
+	server: ServerState,
+	graph?: Schemas.GraphDto,
+) {
+	api.mockGet(WORKFLOW_PATH, () => ({
+		data: {
+			...workflowDetail(graph ? { graph } : {}),
+			name: server.name,
+			enabled: server.enabled,
+		},
+		pagination: null,
+	}))
+	api.mockMutation('put', WORKFLOW_VERSIONS_PATH, (params) => ({
+		data: {
+			id: 'version-2',
+			workflow_id: 'workflow-1',
+			version: 2,
+			graph: (params as { body: { graph: Schemas.GraphDto } }).body.graph,
+			created_at: '2026-08-02T00:00:00Z',
+			created_by: null,
+		},
+	}))
+	api.mockMutation('patch', WORKFLOW_PATH, (params) => {
+		const body = (params as { body: Partial<ServerState> }).body
+		server.name = body.name ?? server.name
+		server.enabled = body.enabled ?? server.enabled
+		return { data: { id: 'workflow-1', ...server }, pagination: null }
+	})
+}
+
+function mutationCalls(api: FakeApi) {
+	return api.calls.filter((call) => call.method !== 'get')
+}
+
+function workflowReads(api: FakeApi, workflowId: string) {
+	return api.calls.filter(
+		(call) =>
+			call.method === 'get' &&
+			call.path === WORKFLOW_PATH &&
+			(call.params as { path: { workflow_id: string } }).path.workflow_id ===
+				workflowId,
+	)
+}
+
+function nameField(): HTMLInputElement {
+	return screen.getByLabelText('Nom du workflow') as HTMLInputElement
+}
+
+function activeSwitch(): HTMLElement {
+	return screen.getByRole('switch', { name: 'Actif' })
+}
+
+describe('WorkflowPageFeature (editor) — the name and the switch', () => {
+	it('keeps a rename in the draft until « Enregistrer », then sends it alone and refreshes the workflow', async () => {
+		const user = userEvent.setup()
+		const server = { name: 'Relance des devis', enabled: true }
+		const api = renderFeature((fakeApi) => mockWorkflowServer(fakeApi, server))
+
+		const input = await waitFor(() => {
+			const field = nameField()
+			expect(field.value).toBe('Relance des devis')
+			return field
+		})
+		const readsBefore = workflowReads(api, 'workflow-1').length
+		await user.clear(input)
+		await user.type(input, 'Relance 2')
+
+		expect(screen.getByText('Modifications non enregistrées')).toBeDefined()
+		expect(mutationCalls(api)).toEqual([])
+
+		await clickSave()
+
+		await waitFor(() => {
+			expect(screen.getByText('Enregistré')).toBeDefined()
+		})
+		expect(mutationCalls(api).map((call) => call.method)).toEqual(['patch'])
+		expect(mutationCalls(api)[0].params).toMatchObject({
+			path: { workflow_id: 'workflow-1' },
+			body: { name: 'Relance 2' },
+		})
+		expect(nameField().value).toBe('Relance 2')
+		expect(workflowReads(api, 'workflow-1').length).toBeGreaterThan(readsBefore)
+	})
+
+	it('takes the switch into the draft too, and sends only the field that changed', async () => {
+		const user = userEvent.setup()
+		const server = { name: 'Relance des devis', enabled: true }
+		const api = renderFeature((fakeApi) => mockWorkflowServer(fakeApi, server))
+
+		await waitFor(() => {
+			expect(activeSwitch().getAttribute('aria-checked')).toBe('true')
+		})
+		await user.click(activeSwitch())
+
+		expect(activeSwitch().getAttribute('aria-checked')).toBe('false')
+		expect(screen.getByText('Modifications non enregistrées')).toBeDefined()
+		expect(mutationCalls(api)).toEqual([])
+
+		await clickSave()
+
+		await waitFor(() => {
+			expect(screen.getByText('Enregistré')).toBeDefined()
+		})
+		expect(mutationCalls(api).map((call) => call.method)).toEqual(['patch'])
+		expect(mutationCalls(api)[0].params).toMatchObject({
+			body: { enabled: false },
+		})
+		expect(
+			(mutationCalls(api)[0].params as { body: object }).body,
+		).not.toHaveProperty('name')
+		expect(server.enabled).toBe(false)
+		expect(activeSwitch().getAttribute('aria-checked')).toBe('false')
+	})
+
+	it('saves the graph first, then the name, when both changed', async () => {
+		const user = userEvent.setup()
+		const server = { name: 'Relance des devis', enabled: true }
+		const api = renderFeature((fakeApi) => mockWorkflowServer(fakeApi, server))
+
+		const input = await waitFor(() => {
+			const field = nameField()
+			expect(field.value).toBe('Relance des devis')
+			return field
+		})
+		await user.click(
+			await screen.findByRole('button', { name: 'Ajouter la première étape' }),
+		)
+		await user.click(await screen.findByRole('button', { name: /Clic/ }))
+		await screen.findByTestId('rf__node-t1')
+		await user.clear(input)
+		await user.type(input, 'Autre nom')
+
+		await clickSave()
+
+		await waitFor(() => {
+			expect(mutationCalls(api).map((call) => call.method)).toEqual([
+				'put',
+				'patch',
+			])
+		})
+	})
+
+	it('says so when the name or the switch could not be saved, and keeps what was typed', async () => {
+		const user = userEvent.setup()
+		const server = { name: 'Relance des devis', enabled: true }
+		renderFeature((fakeApi) => {
+			mockWorkflowServer(fakeApi, server)
+			fakeApi.mockMutation('patch', WORKFLOW_PATH, () => {
+				throw Object.assign(new Error('Service Unavailable'), { status: 503 })
+			})
+		})
+
+		const input = await waitFor(() => {
+			const field = nameField()
+			expect(field.value).toBe('Relance des devis')
+			return field
+		})
+		await user.clear(input)
+		await user.type(input, 'Relance 2')
+		await clickSave()
+
+		expect((await screen.findByRole('alert')).textContent).toContain(
+			'L’enregistrement du nom ou de l’état du workflow a échoué : Service Unavailable',
+		)
+		expect(nameField().value).toBe('Relance 2')
+		expect(screen.getByText('Modifications non enregistrées')).toBeDefined()
+	})
+
+	it('puts the previous name back when the field is left empty', async () => {
+		const user = userEvent.setup()
+		const server = { name: 'Relance des devis', enabled: true }
+		renderFeature((fakeApi) => mockWorkflowServer(fakeApi, server))
+
+		const input = await waitFor(() => {
+			const field = nameField()
+			expect(field.value).toBe('Relance des devis')
+			return field
+		})
+		await user.clear(input)
+		await user.tab()
+
+		expect(nameField().value).toBe('Relance des devis')
+		expect(screen.getByText('Enregistré')).toBeDefined()
+	})
+})
+
+describe('WorkflowPageFeature (editor) — switching to the executions and back', () => {
+	it('keeps the unsaved graph and the unsaved state across the round trip', async () => {
+		const user = userEvent.setup()
+		const server = { name: 'Relance des devis', enabled: true }
+		const api = renderFeature((fakeApi) => mockWorkflowServer(fakeApi, server))
+
+		await user.click(
+			await screen.findByRole('button', { name: 'Ajouter la première étape' }),
+		)
+		await user.click(await screen.findByRole('button', { name: /Clic/ }))
+		await screen.findByTestId('rf__node-t1')
+		const input = nameField()
+		await user.clear(input)
+		await user.type(input, 'Relance 2')
+
+		await user.click(screen.getByRole('tab', { name: 'Exécutions' }))
+
+		expect(await screen.findByText('exécutions de workflow-1')).toBeDefined()
+		expect(screen.queryByTestId('rf__node-t1')).toBeNull()
+		expect(screen.getByText('Modifications non enregistrées')).toBeDefined()
+		expect(nameField().value).toBe('Relance 2')
+
+		await user.click(screen.getByRole('tab', { name: 'Éditeur' }))
+
+		expect(await screen.findByTestId('rf__node-t1')).toBeDefined()
+		expect(screen.getByText('Modifications non enregistrées')).toBeDefined()
+		expect(nameField().value).toBe('Relance 2')
+		expect(mutationCalls(api)).toEqual([])
+	})
+
+	it('can save from the executions view', async () => {
+		const user = userEvent.setup()
+		const server = { name: 'Relance des devis', enabled: true }
+		const api = renderFeature((fakeApi) => mockWorkflowServer(fakeApi, server))
+
+		await user.click(
+			await screen.findByRole('button', { name: 'Ajouter la première étape' }),
+		)
+		await user.click(await screen.findByRole('button', { name: /Clic/ }))
+		await screen.findByTestId('rf__node-t1')
+		await user.click(screen.getByRole('tab', { name: 'Exécutions' }))
+		await screen.findByText('exécutions de workflow-1')
+
+		await clickSave()
+
+		await waitFor(() => {
+			expect(mutationCalls(api).map((call) => call.method)).toEqual(['put'])
+		})
+		const body = (
+			mutationCalls(api)[0].params as {
+				body: Schemas.SaveWorkflowVersionRequest
+			}
+		).body
+		expect(body.graph.triggers).toEqual([{ id: 't1', kind: 'Manual' }])
+	})
+})
+
+describe('WorkflowPageFeature (editor) — errors that go away once fixed', () => {
+	it('lifts the badge of a node as soon as its settings change, and leaves the others alone', async () => {
+		const user = userEvent.setup()
+		const withField = {
+			...descriptor('test.withfield', 'Avec un champ'),
+			fields: [
+				{
+					name: 'url',
+					label: 'URL',
+					kind: 'Text' as const,
+					required: true,
+					secret: false,
+					expression: false,
+					visible_when: null,
+				},
+			],
+		}
+		const graph: Schemas.GraphDto = {
+			connectors: [
+				{ id: 'c1', kind: 'test.withfield', version: 1, config: {} },
+				{ id: 'c2', kind: 'test.withfield', version: 1, config: {} },
+			],
+			edges: [],
+			triggers: [],
+		}
+		renderFeature((fakeApi) => {
+			fakeApi.mockGet(CONNECTORS_PATH, () => ({
+				data: { auth_schemes: [], connectors: [withField] },
+				pagination: null,
+			}))
+			fakeApi.mockGet(WORKFLOW_PATH, () => ({
+				data: workflowDetail({
+					graph,
+					layout: { c1: { x: 0, y: 0 }, c2: { x: 280, y: 0 } },
+				}),
+				pagination: null,
+			}))
+			fakeApi.mockMutation('put', WORKFLOW_VERSIONS_PATH, () => {
+				throw Object.assign(new Error('Invalid graph'), {
+					status: 422,
+					data: {
+						details: {
+							errors: [
+								{ connector_id: 'c1', field: 'url', message: 'URL manquante' },
+								{ connector_id: 'c2', field: 'url', message: 'URL manquante' },
+							],
+						},
+					},
+				})
+			})
+		})
+
+		await clickSave()
+		const first = await screen.findByTestId('rf__node-c1')
+		await within(first).findByLabelText('À corriger : URL manquante')
+
+		fireEvent.doubleClick(first)
+		await user.type(await screen.findByLabelText('URL'), 'https://a.example')
+		await closeDetails()
+
+		await waitFor(() => {
+			expect(
+				within(screen.getByTestId('rf__node-c1')).queryByLabelText(
+					/À corriger/,
+				),
+			).toBeNull()
+		})
+		expect(
+			within(screen.getByTestId('rf__node-c2')).getByLabelText(
+				'À corriger : URL manquante',
+			),
+		).toBeDefined()
+	})
+})
+
+describe('WorkflowPageFeature (editor) — a workflow that cannot be opened', () => {
+	it('shows the not-found screen, without the editor bar, for an unknown id', async () => {
+		renderFeature((fakeApi) => {
+			fakeApi.mockGet(WORKFLOW_PATH, () => {
+				throw Object.assign(new Error('Not found'), { status: 404 })
+			})
+		})
+
+		expect(
+			await screen.findByRole('heading', { name: 'Workflow introuvable' }),
+		).toBeDefined()
+		expect(screen.getByText(/« workflow-1 »/)).toBeDefined()
+		expect(
+			screen
+				.getByRole('link', { name: 'Retour aux workflows' })
+				.getAttribute('href'),
+		).toBe('/o/atelier-bois/automatisation/workflows')
+		expect(screen.queryByRole('tab', { name: 'Exécutions' })).toBeNull()
+	})
+
+	it('shows the error and a way back for any other failure', async () => {
+		renderFeature((fakeApi) => {
+			fakeApi.mockGet(WORKFLOW_PATH, () => {
+				throw Object.assign(new Error('Service Unavailable'), { status: 503 })
+			})
+		})
+
+		expect(
+			await screen.findByText('Impossible de charger le workflow'),
+		).toBeDefined()
+		expect(screen.getByText('Service Unavailable')).toBeDefined()
+		expect(
+			screen
+				.getByRole('link', { name: 'Retour aux workflows' })
+				.getAttribute('href'),
+		).toBe('/o/atelier-bois/automatisation/workflows')
+		expect(
+			screen.queryByRole('heading', { name: 'Workflow introuvable' }),
+		).toBeNull()
+	})
+})
+
+describe('WorkflowPageFeature (editor) — the new workflow draft', () => {
+	const DRAFT_URL = '/o/atelier-bois/automatisation/workflows/nouveau'
+
+	function mockCreation(api: FakeApi) {
+		api.mockMutation('post', WORKFLOWS_PATH, (params) => ({
+			data: {
+				id: 'workflow-9',
+				organization_id: 'org-1',
+				name: (params as { body: { name: string } }).body.name,
+				description: null,
+				enabled: true,
+				current_version_id: null,
+				created_at: '2026-08-02T00:00:00Z',
+				updated_at: '2026-08-02T00:00:00Z',
+			},
+			pagination: null,
+		}))
+		api.mockMutation('put', WORKFLOW_VERSIONS_PATH, (params) => ({
+			data: {
+				id: 'version-1',
+				workflow_id: 'workflow-9',
+				version: 1,
+				graph: (params as { body: { graph: Schemas.GraphDto } }).body.graph,
+				created_at: '2026-08-02T00:00:00Z',
+				created_by: null,
+			},
+		}))
+		api.mockMutation('patch', WORKFLOW_PATH, () => ({
+			data: { id: 'workflow-9' },
+			pagination: null,
+		}))
+	}
+
+	async function addClickTrigger(user: ReturnType<typeof userEvent.setup>) {
+		await user.click(
+			await screen.findByRole('button', { name: 'Ajouter la première étape' }),
+		)
+		await user.click(await screen.findByRole('button', { name: /Clic/ }))
+		return screen.findByTestId('rf__node-t1')
+	}
+
+	it('opens an empty editor named « Mon workflow », inactive, without asking the server for it', async () => {
+		const api = renderPage(mockCreation, DRAFT_URL).api
+
+		expect(
+			await screen.findByRole('button', { name: 'Ajouter la première étape' }),
+		).toBeDefined()
+		expect(nameField().value).toBe('Mon workflow')
+		expect(activeSwitch().getAttribute('aria-checked')).toBe('false')
+		expect(workflowReads(api, 'nouveau')).toEqual([])
+	})
+
+	it('creates the workflow, saves its version, keeps it inactive, then swaps the address without reloading the editor', async () => {
+		const user = userEvent.setup()
+		const rendered = renderPage(mockCreation, DRAFT_URL)
+		const node = await addClickTrigger(user)
+
+		await clickSave()
+
+		const { router } = await rendered.rendered
+		await waitFor(() => {
+			expect(router.state.location.pathname).toBe(
+				'/o/atelier-bois/automatisation/workflows/workflow-9',
+			)
+		})
+		expect(mutationCalls(rendered.api).map((call) => `${call.method}`)).toEqual(
+			['post', 'put', 'patch'],
+		)
+		expect(mutationCalls(rendered.api)[0].params).toMatchObject({
+			body: { name: 'Mon workflow' },
+		})
+		expect(mutationCalls(rendered.api)[1].params).toMatchObject({
+			path: { workflow_id: 'workflow-9' },
+			body: { graph: { triggers: [{ id: 't1', kind: 'Manual' }] } },
+		})
+		expect(mutationCalls(rendered.api)[2].params).toMatchObject({
+			path: { workflow_id: 'workflow-9' },
+			body: { enabled: false },
+		})
+		expect(screen.getByTestId('rf__node-t1')).toBe(node)
+		expect(screen.getByText('Enregistré')).toBeDefined()
+		expect(workflowReads(rendered.api, 'nouveau')).toEqual([])
+		expect(screen.queryByText('Chargement du workflow…')).toBeNull()
+	})
+
+	it('has no need to deactivate a workflow the user switched on', async () => {
+		const user = userEvent.setup()
+		const rendered = renderPage(mockCreation, DRAFT_URL)
+		await addClickTrigger(user)
+		await user.click(activeSwitch())
+
+		await clickSave()
+
+		const { router } = await rendered.rendered
+		await waitFor(() => {
+			expect(router.state.location.pathname).toContain('workflow-9')
+		})
+		expect(mutationCalls(rendered.api).map((call) => `${call.method}`)).toEqual(
+			['post', 'put'],
+		)
+	})
+
+	it('names the workflow after what was typed in the bar', async () => {
+		const user = userEvent.setup()
+		const rendered = renderPage(mockCreation, DRAFT_URL)
+		await addClickTrigger(user)
+		await user.clear(nameField())
+		await user.type(nameField(), 'Relance 3')
+
+		await clickSave()
+
+		await waitFor(() => {
+			expect(mutationCalls(rendered.api)[0]?.params).toMatchObject({
+				body: { name: 'Relance 3' },
+			})
+		})
+	})
+
+	it('creates the workflow once even when its graph is refused, and saves the version again on the next try', async () => {
+		const user = userEvent.setup()
+		let attempts = 0
+		const rendered = renderPage((fakeApi) => {
+			mockCreation(fakeApi)
+			fakeApi.mockMutation('put', WORKFLOW_VERSIONS_PATH, () => {
+				attempts += 1
+				if (attempts === 1) {
+					throw Object.assign(new Error('Invalid graph'), {
+						status: 422,
+						data: {
+							details: {
+								errors: [
+									{
+										connector_id: null,
+										trigger_id: 't1',
+										field: null,
+										message: 'Ce déclencheur ne mène nulle part.',
+									},
+								],
+							},
+						},
+					})
+				}
+				return { data: null, pagination: null }
+			})
+		}, DRAFT_URL)
+		const node = await addClickTrigger(user)
+
+		await clickSave()
+		await within(node).findByLabelText(
+			'À corriger : Ce déclencheur ne mène nulle part.',
+		)
+		const { router } = await rendered.rendered
+		expect(router.state.location.pathname).toBe(
+			'/o/atelier-bois/automatisation/workflows/nouveau',
+		)
+
+		await clickSave()
+
+		await waitFor(() => {
+			expect(router.state.location.pathname).toContain('workflow-9')
+		})
+		expect(
+			mutationCalls(rendered.api).filter((call) => call.method === 'post'),
+		).toHaveLength(1)
+	})
+
+	it('starts from a blank draft again when « nouveau » is opened after a creation', async () => {
+		const user = userEvent.setup()
+		const rendered = renderPage(mockCreation, DRAFT_URL)
+		await addClickTrigger(user)
+		await clickSave()
+		const { router } = await rendered.rendered
+		await waitFor(() => {
+			expect(router.state.location.pathname).toContain('workflow-9')
+		})
+
+		router.history.push(DRAFT_URL)
+
+		expect(
+			await screen.findByRole('button', { name: 'Ajouter la première étape' }),
+		).toBeDefined()
+		expect(nameField().value).toBe('Mon workflow')
+		expect(screen.queryByTestId('rf__node-t1')).toBeNull()
+	})
+
+	it('cannot be tested before it exists', async () => {
+		const user = userEvent.setup()
+		renderPage(mockCreation, DRAFT_URL)
+		await addClickTrigger(user)
+
+		expect(
+			(
+				screen.getByRole('button', {
+					name: 'Tester le workflow',
+				}) as HTMLButtonElement
+			).disabled,
+		).toBe(true)
+	})
+
+	it('says there is nothing to list in the executions of a draft', async () => {
+		const user = userEvent.setup()
+		renderPage(mockCreation, DRAFT_URL)
+		await screen.findByRole('button', { name: 'Ajouter la première étape' })
+
+		await user.click(screen.getByRole('tab', { name: 'Exécutions' }))
+
+		expect(
+			await screen.findByText(
+				'Aucune exécution : ce workflow n’est pas encore enregistré.',
+			),
+		).toBeDefined()
 	})
 })

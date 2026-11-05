@@ -2,6 +2,7 @@ import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 import type { Schemas } from '#/api/api.client'
+import type { CredentialStatus } from '#/pages/automation/lib/credential-meta'
 import { CredentialPickerField } from '#/pages/automation/ui/credential-picker-field'
 
 for (const method of [
@@ -30,6 +31,9 @@ function credential(
 		updated_at: '2026-01-01T00:00:00Z',
 	}
 }
+
+const EXPIRED_ALERT =
+	'Cette identification est expirée. Renouvelez-la depuis Identifications.'
 
 describe('CredentialPickerField', () => {
 	it('offers every given credential by name and reports the chosen one', async () => {
@@ -74,13 +78,12 @@ describe('CredentialPickerField', () => {
 		expect(screen.getByText('Odoo prod')).toBeDefined()
 	})
 
-	it('says plainly when there is nothing to pick from', async () => {
-		const user = userEvent.setup()
+	it('invites to choose, without an ellipsis, while nothing is selected', () => {
 		render(
 			<CredentialPickerField
 				label="Identification"
 				htmlFor="credential-picker"
-				credentials={[]}
+				credentials={[credential('c1', 'Odoo prod')]}
 				value={null}
 				error={null}
 				onChange={vi.fn()}
@@ -88,14 +91,11 @@ describe('CredentialPickerField', () => {
 			/>,
 		)
 
-		await user.click(screen.getByRole('combobox', { name: 'Identification' }))
-
-		expect(
-			await screen.findByText('Aucune identification disponible'),
-		).toBeDefined()
+		expect(screen.getByText('Choisir une identification')).toBeDefined()
+		expect(screen.queryByText('Choisir une identification…')).toBeNull()
 	})
 
-	it('narrows the list to matching names as the search is typed', async () => {
+	it('is a plain list: no search box, no empty-result message', async () => {
 		const user = userEvent.setup()
 		render(
 			<CredentialPickerField
@@ -113,64 +113,10 @@ describe('CredentialPickerField', () => {
 		)
 
 		await user.click(screen.getByRole('combobox', { name: 'Identification' }))
-		await user.type(
-			await screen.findByPlaceholderText('Rechercher une identification…'),
-			'recette',
-		)
+		await screen.findByRole('option', { name: 'Odoo prod' })
 
-		expect(
-			await screen.findByRole('option', { name: 'Odoo recette' }),
-		).toBeDefined()
-		expect(screen.queryByRole('option', { name: 'Odoo prod' })).toBeNull()
-	})
-
-	it('offers creating one from the empty state when the search matches nothing', async () => {
-		const user = userEvent.setup()
-		const onCreateNew = vi.fn()
-		render(
-			<CredentialPickerField
-				label="Identification"
-				htmlFor="credential-picker"
-				credentials={[credential('c1', 'Odoo prod')]}
-				value={null}
-				error={null}
-				onChange={vi.fn()}
-				onCreateNew={onCreateNew}
-			/>,
-		)
-
-		await user.click(screen.getByRole('combobox', { name: 'Identification' }))
-		await user.type(
-			await screen.findByPlaceholderText('Rechercher une identification…'),
-			'quelque chose qui ne matche rien',
-		)
-
-		await user.click(await screen.findByRole('button', { name: /Créer/ }))
-
-		expect(onCreateNew).toHaveBeenCalledTimes(1)
-	})
-
-	it('calls onCreateNew from the popover footer action even when the list is non-empty', async () => {
-		const user = userEvent.setup()
-		const onCreateNew = vi.fn()
-		render(
-			<CredentialPickerField
-				label="Identification"
-				htmlFor="credential-picker"
-				credentials={[credential('cred-1', 'Odoo prod')]}
-				value={null}
-				error={null}
-				onChange={vi.fn()}
-				onCreateNew={onCreateNew}
-			/>,
-		)
-
-		await user.click(screen.getByRole('combobox', { name: 'Identification' }))
-		await user.click(
-			await screen.findByRole('button', { name: /Créer une identification/ }),
-		)
-
-		expect(onCreateNew).toHaveBeenCalledTimes(1)
+		expect(screen.queryByPlaceholderText(/Rechercher/)).toBeNull()
+		expect(screen.queryByText('Aucun résultat')).toBeNull()
 	})
 
 	it('shows the validation error next to the picker', () => {
@@ -188,10 +134,53 @@ describe('CredentialPickerField', () => {
 
 		expect(screen.getByText('Identifiant de credential manquant')).toBeDefined()
 	})
+
+	it('shows a hint under the field when given one', () => {
+		render(
+			<CredentialPickerField
+				label="Identification"
+				htmlFor="credential-picker"
+				credentials={[credential('c1', 'Odoo prod')]}
+				value={null}
+				error={null}
+				hint="La spec ne déclare pas d’authentification."
+				onChange={vi.fn()}
+				onCreateNew={vi.fn()}
+			/>,
+		)
+
+		expect(
+			screen.getByText('La spec ne déclare pas d’authentification.'),
+		).toBeDefined()
+	})
+})
+
+describe('CredentialPickerField — creating one from the node', () => {
+	it('offers it as a named action under the list, even when the list is not empty', async () => {
+		const user = userEvent.setup()
+		const onCreateNew = vi.fn()
+		render(
+			<CredentialPickerField
+				label="Identification"
+				htmlFor="credential-picker"
+				credentials={[credential('cred-1', 'Odoo prod')]}
+				value={null}
+				error={null}
+				onChange={vi.fn()}
+				onCreateNew={onCreateNew}
+			/>,
+		)
+
+		await user.click(
+			screen.getByRole('button', { name: /Créer une identification/ }),
+		)
+
+		expect(onCreateNew).toHaveBeenCalledTimes(1)
+	})
 })
 
 describe('CredentialPickerField — when the organization has none', () => {
-	it('says so on the closed trigger rather than promising a choice', () => {
+	it('says so on the closed trigger and leaves it inert', () => {
 		render(
 			<CredentialPickerField
 				label="Identification"
@@ -205,10 +194,13 @@ describe('CredentialPickerField — when the organization has none', () => {
 		)
 
 		expect(screen.getByText('Aucune identification')).toBeDefined()
-		expect(screen.queryByText('Choisir une identification…')).toBeNull()
+		expect(screen.queryByText('Choisir une identification')).toBeNull()
+		expect((screen.getByRole('combobox') as HTMLButtonElement).disabled).toBe(
+			true,
+		)
 	})
 
-	it('offers creating one as a named action inside the popover, not a bare icon', async () => {
+	it('still offers creating one', async () => {
 		const user = userEvent.setup()
 		const onCreateNew = vi.fn()
 		render(
@@ -223,8 +215,7 @@ describe('CredentialPickerField — when the organization has none', () => {
 			/>,
 		)
 
-		await user.click(screen.getByRole('combobox', { name: 'Identification' }))
-		await user.click(await screen.findByRole('button', { name: /Créer/ }))
+		await user.click(screen.getByRole('button', { name: /Créer/ }))
 
 		expect(onCreateNew).toHaveBeenCalled()
 	})
@@ -274,5 +265,89 @@ describe('CredentialPickerField — when a credential is optional', () => {
 		expect(
 			screen.queryByRole('option', { name: /Aucune identification/ }),
 		).toBeNull()
+	})
+})
+
+describe('CredentialPickerField — expired credentials', () => {
+	const statusOf = (id: string): CredentialStatus =>
+		id === 'c-old' ? 'expired' : 'valid'
+
+	it('suffixes an expired credential with « (expirée) » in the list', async () => {
+		const user = userEvent.setup()
+		render(
+			<CredentialPickerField
+				label="Identification"
+				htmlFor="credential-picker"
+				credentials={[
+					credential('c-old', 'Odoo prod'),
+					credential('c-new', 'Odoo recette'),
+				]}
+				value={null}
+				error={null}
+				statusOf={statusOf}
+				onChange={vi.fn()}
+				onCreateNew={vi.fn()}
+			/>,
+		)
+
+		await user.click(screen.getByRole('combobox', { name: 'Identification' }))
+
+		expect(
+			await screen.findByRole('option', { name: 'Odoo prod (expirée)' }),
+		).toBeDefined()
+		expect(screen.getByRole('option', { name: 'Odoo recette' })).toBeDefined()
+	})
+
+	it('warns under the field when the selected credential is expired', () => {
+		render(
+			<CredentialPickerField
+				label="Identification"
+				htmlFor="credential-picker"
+				credentials={[credential('c-old', 'Odoo prod')]}
+				value="c-old"
+				error={null}
+				statusOf={statusOf}
+				onChange={vi.fn()}
+				onCreateNew={vi.fn()}
+			/>,
+		)
+
+		expect(screen.getByText(EXPIRED_ALERT)).toBeDefined()
+	})
+
+	it('does not warn when the selected credential is valid', () => {
+		render(
+			<CredentialPickerField
+				label="Identification"
+				htmlFor="credential-picker"
+				credentials={[
+					credential('c-old', 'Odoo prod'),
+					credential('c-new', 'Odoo recette'),
+				]}
+				value="c-new"
+				error={null}
+				statusOf={statusOf}
+				onChange={vi.fn()}
+				onCreateNew={vi.fn()}
+			/>,
+		)
+
+		expect(screen.queryByText(EXPIRED_ALERT)).toBeNull()
+	})
+
+	it('treats every credential as valid when no status is given', () => {
+		render(
+			<CredentialPickerField
+				label="Identification"
+				htmlFor="credential-picker"
+				credentials={[credential('c-old', 'Odoo prod')]}
+				value="c-old"
+				error={null}
+				onChange={vi.fn()}
+				onCreateNew={vi.fn()}
+			/>,
+		)
+
+		expect(screen.queryByText(EXPIRED_ALERT)).toBeNull()
 	})
 })

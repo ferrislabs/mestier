@@ -1,4 +1,5 @@
 import type { Schemas } from '#/api/api.client'
+import { isExpression } from '#/pages/automation/lib/parameters'
 
 export const SIGNING_CREDENTIAL_FIELD_NAME = 'signing_credential_id'
 
@@ -51,10 +52,26 @@ export function isSelectKind(
 	return typeof kind === 'object' && kind !== null && 'Select' in kind
 }
 
+export type JsonEntryKind = 'string' | 'number' | 'boolean' | 'json'
+
+export const JSON_ENTRY_KINDS: readonly {
+	value: JsonEntryKind
+	label: string
+}[] = [
+	{ value: 'string', label: 'Texte' },
+	{ value: 'number', label: 'Nombre' },
+	{ value: 'boolean', label: 'Booléen' },
+	{ value: 'json', label: 'JSON' },
+]
+
 export interface JsonEntry {
 	key: string
 	value: string
+	kind: JsonEntryKind
 }
+
+export const RAW_JSON_ERROR =
+	'JSON invalide : vérifiez les guillemets, les virgules et les accolades. Une expression doit être entre guillemets.'
 
 export function isJsonMapRepresentable(value: unknown): boolean {
 	return (
@@ -63,47 +80,90 @@ export function isJsonMapRepresentable(value: unknown): boolean {
 	)
 }
 
-function stringifyEntryValue(value: unknown): string {
-	if (typeof value === 'string') return value
-	return JSON.stringify(value)
+function entryOf(key: string, value: unknown): JsonEntry {
+	if (typeof value === 'string') return { key, value, kind: 'string' }
+	if (typeof value === 'number')
+		return { key, value: String(value), kind: 'number' }
+	if (typeof value === 'boolean') {
+		return { key, value: String(value), kind: 'boolean' }
+	}
+	return { key, value: JSON.stringify(value), kind: 'json' }
 }
 
 export function jsonEntriesFromValue(value: unknown): JsonEntry[] {
 	if (!isJsonMapRepresentable(value) || value === undefined) return []
-	return Object.entries(value as Record<string, unknown>).map(
-		([key, entryValue]) => ({
-			key,
-			value: stringifyEntryValue(entryValue),
-		}),
+	return Object.entries(value as Record<string, unknown>).map(([key, entry]) =>
+		entryOf(key, entry),
 	)
 }
 
-function parseEntryValue(value: string): unknown {
+export function jsonEntryValue(entry: JsonEntry): {
+	value: unknown
+	error: string | null
+} {
+	if (entry.kind === 'string' || isExpression(entry.value)) {
+		return { value: entry.value, error: null }
+	}
+	const raw = entry.value.trim()
+	if (raw === '') return { value: null, error: null }
+	if (entry.kind === 'number') {
+		const number = Number(raw)
+		return Number.isFinite(number)
+			? { value: number, error: null }
+			: { value: entry.value, error: 'Nombre invalide.' }
+	}
+	if (entry.kind === 'boolean') {
+		return raw === 'true' || raw === 'false'
+			? { value: raw === 'true', error: null }
+			: { value: entry.value, error: 'Saisissez true ou false.' }
+	}
 	try {
-		return JSON.parse(value)
+		return { value: JSON.parse(raw), error: null }
 	} catch {
-		return value
+		return { value: entry.value, error: 'JSON invalide.' }
 	}
 }
 
 export function valueFromJsonEntries(
-	entries: JsonEntry[],
+	entries: readonly JsonEntry[],
 ): Record<string, unknown> | undefined {
 	const populated = entries.filter((entry) => entry.key.trim() !== '')
 	if (populated.length === 0) return undefined
 
 	const result: Record<string, unknown> = {}
 	for (const entry of populated) {
-		result[entry.key] = parseEntryValue(entry.value)
+		result[entry.key.trim()] = jsonEntryValue(entry).value
 	}
 	return result
 }
 
-export function nextJsonEntryKey(entries: JsonEntry[]): string {
-	const used = new Set(entries.map((entry) => entry.key))
-	if (!used.has('key')) return 'key'
+export type RawJson =
+	| { state: 'empty' }
+	| { state: 'valid'; value: unknown }
+	| { state: 'invalid' }
 
-	let suffix = 2
-	while (used.has(`key_${suffix}`)) suffix += 1
-	return `key_${suffix}`
+export function parseRawJson(text: string): RawJson {
+	const trimmed = text.trim()
+	if (trimmed === '') return { state: 'empty' }
+	try {
+		return { state: 'valid', value: JSON.parse(trimmed) }
+	} catch {
+		return trimmed.startsWith('{{') && trimmed.endsWith('}}')
+			? { state: 'valid', value: trimmed }
+			: { state: 'invalid' }
+	}
+}
+
+export function numberFieldValue(raw: string): number | string | undefined {
+	const trimmed = raw.trim()
+	if (trimmed === '') return undefined
+	if (isExpression(raw)) return raw
+	const number = Number(trimmed)
+	return Number.isFinite(number) ? number : raw
+}
+
+export function numberFieldError(raw: string): string | null {
+	const trimmed = raw.trim()
+	if (trimmed === '' || isExpression(raw)) return null
+	return Number.isFinite(Number(trimmed)) ? null : 'Nombre invalide.'
 }

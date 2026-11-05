@@ -1,4 +1,4 @@
-import { screen } from '@testing-library/react'
+import { screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 import {
@@ -81,7 +81,7 @@ describe('AutomationExecutionsLog', () => {
 			name: 'Ouvrir l’exécution abcdef12 de Relance des devis',
 		})
 		expect(link.getAttribute('href')).toBe(
-			'/o/atelier-bois/automatisation/wf-1/executions/run-1',
+			'/o/atelier-bois/automatisation/workflows/wf-1?vue=executions&execution=run-1',
 		)
 
 		await user.click(screen.getByText('SMTP expiré'))
@@ -130,6 +130,26 @@ describe('AutomationExecutionsLog', () => {
 		await user.click(screen.getByRole('button', { name: 'Durée' }))
 
 		expect(props.onSort).toHaveBeenCalledWith('duration')
+	})
+
+	it('shows the elapsed time of a running run where a finished run shows its duration', async () => {
+		await render({
+			rows: [row({ status: 'running', durationMs: 2200, failure: null })],
+		}).rendered
+
+		const table = within(screen.getByRole('table'))
+		expect(table.getByText('En cours')).toBeDefined()
+		expect(table.getByText('2,2 s')).toBeDefined()
+	})
+
+	it('shows a dash for a run that has no duration yet', async () => {
+		await render({
+			rows: [row({ status: 'waiting', durationMs: null, failure: null })],
+		}).rendered
+
+		const table = within(screen.getByRole('table'))
+		expect(table.getByText('En attente')).toBeDefined()
+		expect(table.getAllByText('—').length).toBeGreaterThan(0)
 	})
 
 	it('surfaces a load error', async () => {

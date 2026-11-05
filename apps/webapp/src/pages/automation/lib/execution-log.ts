@@ -6,7 +6,7 @@ import {
 import { formatStartedAt } from '#/pages/automation/lib/format'
 import { normalizeText } from '#/pages/automation/lib/text'
 import {
-	runDurationMs,
+	runElapsedMs,
 	runTriggerLabel,
 } from '#/pages/automation/lib/workflow-runs'
 
@@ -95,7 +95,7 @@ export function buildRow(
 		stepsDone: nodes.done,
 		stepsTotal: nodes.total,
 		status: toExecutionStatus(run.status),
-		durationMs: runDurationMs(run),
+		durationMs: runElapsedMs(run, now),
 		failure: run.error ?? null,
 		version: `Version ${shortRunId(run.workflow_version_id)}`,
 	}
@@ -156,7 +156,7 @@ export function sortRows(
 		else order = STATUS_ORDER[a.status] - STATUS_ORDER[b.status]
 		return order !== 0 && Number.isFinite(order)
 			? order * sign
-			: b.startedMs - a.startedMs
+			: b.startedMs - a.startedMs || b.runId.localeCompare(a.runId)
 	})
 }
 

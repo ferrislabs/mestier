@@ -1,16 +1,12 @@
-import {
-	Boxes,
-	Library,
-	type LucideIcon,
-	Split,
-	Wrench,
-	Zap,
-} from 'lucide-react'
+import type { LucideIcon } from 'lucide-react'
 import type { Schemas } from '#/api/api.client'
 import {
-	connectorAppearance,
-	triggerAppearance,
-} from '#/pages/automation/lib/connector-appearance'
+	CATEGORY_IDS,
+	type CategoryId,
+	categoryCopy,
+	describeConnector,
+	triggerCopy,
+} from '#/pages/automation/lib/connector-copy'
 import { normalizeText } from '#/pages/automation/lib/text'
 
 export type CreatorSource =
@@ -34,117 +30,103 @@ export interface CreatorCategory {
 	kinds: CreatorKind[]
 }
 
-export const TRIGGERS_CATEGORY_ID = 'triggers'
-export const COLLECTIONS_CATEGORY_ID = 'collections'
+export const TRIGGERS_CATEGORY_ID: CategoryId = 'triggers'
+export const COLLECTIONS_CATEGORY_ID: CategoryId = 'collections'
 
-interface CategoryMeta {
-	label: string
-	description: string
-	icon: LucideIcon
+interface RankedKind {
+	kind: CreatorKind
+	category: CategoryId
+	order: number
 }
 
-const FAMILY_META: Record<string, CategoryMeta> = {
-	mestier: {
-		label: 'Actions Mestier',
-		description: 'Agir dans Mestier : projets, tickets, devis, discussions',
-		icon: Boxes,
-	},
-	flow: {
-		label: 'Logique',
-		description: 'Brancher, fusionner ou mettre en pause le workflow',
-		icon: Split,
-	},
-	http: {
-		label: 'Outils',
-		description: 'Exécuter du code, envoyer un e-mail, appeler une API',
-		icon: Wrench,
-	},
-}
-
-export const COLLECTIONS_META: CategoryMeta = {
-	label: 'Collections',
-	description: 'Appeler une API importée depuis une spec OpenAPI',
-	icon: Library,
-}
-
-const FAMILY_ORDER = ['mestier', 'flow', 'http']
-
-function familyMeta(family: string): CategoryMeta {
-	return (
-		FAMILY_META[family] ?? {
-			label: family.charAt(0).toUpperCase() + family.slice(1),
-			description: `Connecteurs ${family}`,
-			icon: Wrench,
-		}
-	)
-}
-
-function familyRank(family: string): number {
-	const index = FAMILY_ORDER.indexOf(family)
-	return index === -1 ? FAMILY_ORDER.length : index
-}
-
-function connectorKind(
+function rankedKind(
 	descriptor: Schemas.ConnectorDescriptorResponse,
-): CreatorKind {
-	const appearance = connectorAppearance(descriptor.family)
+): RankedKind | null {
+	const copy = describeConnector(descriptor)
+	if (copy.internal) return null
 	return {
-		id: `connector:${descriptor.kind}`,
-		label: descriptor.label,
-		description: familyMeta(descriptor.family).label,
-		icon: appearance.icon,
-		hue: appearance.hue,
-		source: { type: 'connector', descriptor },
+		category: copy.category,
+		order: copy.order,
+		kind: {
+			id: `connector:${descriptor.kind}`,
+			label: copy.label,
+			description: copy.description,
+			icon: copy.icon,
+			hue: copy.hue,
+			source: { type: 'connector', descriptor },
+		},
 	}
 }
 
+function byOrderThenLabel(a: RankedKind, b: RankedKind): number {
+	return (
+		a.order - b.order ||
+		a.kind.label.localeCompare(b.kind.label, 'fr') ||
+		a.kind.id.localeCompare(b.kind.id)
+	)
+}
+
 function triggerKinds(): CreatorKind[] {
-	const manual = triggerAppearance(true)
-	const events = triggerAppearance(false)
+	const events = triggerCopy('events')
+	const manual = triggerCopy('manual')
 	return [
 		{
-			id: 'trigger:manual',
-			label: 'Clic',
-			description: 'Se déclenche quand vous cliquez sur « Tester le workflow »',
-			icon: manual.icon,
-			hue: manual.hue,
-			source: { type: 'trigger', kind: 'Manual' },
-		},
-		{
 			id: 'trigger:events',
-			label: 'Event Mestier',
-			description: 'Se déclenche quand un événement se produit dans Mestier',
+			label: events.label,
+			description: events.description,
 			icon: events.icon,
 			hue: events.hue,
 			source: { type: 'trigger', kind: { Events: [] } },
+		},
+		{
+			id: 'trigger:manual',
+			label: manual.label,
+			description: manual.description,
+			icon: manual.icon,
+			hue: manual.hue,
+			source: { type: 'trigger', kind: 'Manual' },
 		},
 	]
 }
 
 export function triggersCategory(): CreatorCategory {
+	const copy = categoryCopy(TRIGGERS_CATEGORY_ID)
 	return {
-		id: TRIGGERS_CATEGORY_ID,
-		label: 'Déclencheurs',
-		description:
-			'Ce qui démarre le workflow. Un workflow peut en avoir plusieurs.',
-		icon: Zap,
+		id: copy.id,
+		label: copy.label,
+		description: copy.description,
+		icon: copy.icon,
 		kinds: triggerKinds(),
 	}
 }
 
 export function creatorCategories(
 	descriptors: readonly Schemas.ConnectorDescriptorResponse[],
+	options: { collections?: boolean } = {},
 ): CreatorCategory[] {
-	const families = [...new Set(descriptors.map((item) => item.family))].sort(
-		(a, b) => familyRank(a) - familyRank(b) || a.localeCompare(b),
-	)
-	return families.map((family) => ({
-		id: family,
-		...familyMeta(family),
-		kinds: descriptors
-			.filter((descriptor) => descriptor.family === family)
-			.map(connectorKind),
-	}))
+	const ranked = descriptors
+		.map(rankedKind)
+		.filter((entry): entry is RankedKind => entry !== null)
+		.sort(byOrderThenLabel)
+	return CATEGORY_IDS.flatMap((id) => {
+		const kinds = ranked
+			.filter((entry) => entry.category === id)
+			.map((entry) => entry.kind)
+		const shown =
+			kinds.length > 0 ||
+			(id === COLLECTIONS_CATEGORY_ID && options.collections)
+		if (!shown) return []
+		const copy = categoryCopy(id)
+		return [
+			{
+				id: copy.id,
+				label: copy.label,
+				description: copy.description,
+				icon: copy.icon,
+				kinds,
+			},
+		]
+	})
 }
 
 export function allCategories(

@@ -12,7 +12,7 @@ import {
 export function appearanceOf(data: EditorNodeData): ConnectorAppearance {
 	return data.trigger
 		? triggerAppearance(isManualTrigger(data.trigger))
-		: connectorAppearance(data.family)
+		: connectorAppearance(data.family, data.connector?.kind)
 }
 
 export function needsEventChoice(data: EditorNodeData): boolean {

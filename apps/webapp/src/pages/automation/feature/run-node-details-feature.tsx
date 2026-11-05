@@ -1,11 +1,15 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import type { Schemas } from '#/api/api.client'
+import { useAutomationCredentials } from '#/hooks/use-automation'
 import { buildOrgPath } from '#/modules/org-path'
 import { useResolvedParameters } from '#/pages/automation/feature/use-resolved-parameters'
+import { identificationsPath } from '#/pages/automation/lib/automation-paths'
+import { branchLabel } from '#/pages/automation/lib/branch-labels'
 import { shortRunId } from '#/pages/automation/lib/execution-log'
 import { toItems } from '#/pages/automation/lib/items'
 import { runNodeAppearance } from '#/pages/automation/lib/run-appearance'
 import {
+	connectorTypeLabel,
 	nodeNeighbours,
 	parameterEntries,
 } from '#/pages/automation/lib/run-node'
@@ -59,10 +63,21 @@ export function RunNodeDetailsFeature({
 	const appearance = runNodeAppearance(node)
 	const items = node.step ? toItems(node.step.input) : []
 	const index = Math.min(itemIndex, Math.max(0, items.length - 1))
+	const credentialsQuery = useAutomationCredentials(organizationId)
+	const credentialNames = useMemo(
+		() =>
+			new Map(
+				(credentialsQuery.data?.data ?? []).map((credential) => [
+					credential.id,
+					credential.name,
+				]),
+			),
+		[credentialsQuery.data],
+	)
 
 	const parameters = useResolvedParameters({
 		organizationId,
-		entries: parameterEntries(node.connector, descriptor),
+		entries: parameterEntries(node.connector, descriptor, credentialNames),
 		context: {
 			trigger: run.trigger_payload,
 			connectors: Object.fromEntries(
@@ -92,7 +107,10 @@ export function RunNodeDetailsFeature({
 			label: labelOf(neighbour.id),
 			icon: appearanceOfNeighbour.icon,
 			hue: appearanceOfNeighbour.hue,
-			branch: neighbour.branch,
+			branch:
+				neighbour.branch === undefined
+					? undefined
+					: branchLabel(neighbour.branch),
 		}
 	}
 
@@ -103,15 +121,17 @@ export function RunNodeDetailsFeature({
 		)
 		.map((edge) => {
 			const label = `« ${labelOf(edge.from)} »`
-			return edge.branch ? `${label} (branche ${edge.branch})` : label
+			return edge.branch
+				? `${label} (branche ${branchLabel(edge.branch)})`
+				: label
 		})
 
 	const reason =
-		node.kind === 'connector' && node.step === null && graph
+		node.kind === 'connector' && node.status === 'skipped' && graph
 			? skipReason(node.id, graph, view.failed?.nodeId ?? null)
 			: null
 	const notice =
-		node.status === 'waiting' && node.step === null
+		node.kind === 'connector' && node.status === 'waiting'
 			? 'Pas encore atteint : l’exécution n’est pas encore arrivée à ce nœud.'
 			: reason?.type === 'after-error'
 				? `Non appelé : l’exécution s’est arrêtée sur « ${labelOf(reason.failedNodeId)} », avant d’atteindre ce nœud.`
@@ -127,7 +147,7 @@ export function RunNodeDetailsFeature({
 			typeLabel={
 				node.kind === 'trigger'
 					? 'Déclencheur'
-					: (descriptor?.label ?? node.label)
+					: connectorTypeLabel(node.connector?.kind ?? node.id, descriptor)
 			}
 			icon={appearance.icon}
 			hue={appearance.hue}
@@ -147,7 +167,13 @@ export function RunNodeDetailsFeature({
 							nodes: view.nodes,
 							triggerPayload: run.trigger_payload,
 							appearanceOf: runNodeAppearance,
-						})
+						}).map((entry) => ({
+							...entry,
+							branch:
+								entry.branch === undefined
+									? undefined
+									: branchLabel(entry.branch),
+						}))
 					: []
 			}
 			notRunLabel={(entryId) =>
@@ -159,10 +185,7 @@ export function RunNodeDetailsFeature({
 			previous={neighbours.previous.map(toNavItem)}
 			next={neighbours.next.map(toNavItem)}
 			replay={replay}
-			credentialsHref={buildOrgPath(
-				organizationSlug,
-				'/automatisation/credentials',
-			)}
+			credentialsHref={buildOrgPath(organizationSlug, identificationsPath())}
 			onNavigate={onNavigate}
 			onClose={onClose}
 		/>

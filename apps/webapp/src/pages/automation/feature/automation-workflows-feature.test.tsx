@@ -186,32 +186,29 @@ describe('AutomationWorkflowsFeature — last run', () => {
 })
 
 describe('AutomationWorkflowsFeature — create', () => {
-	it('creates a workflow through the dialog and calls the create mutation', async () => {
-		const user = userEvent.setup()
-		const api = await renderFeature((fakeApi) => {
-			fakeApi.mockMutation('post', WORKFLOWS_PATH, (params) => ({
-				data: workflow({
-					id: 'workflow-2',
-					...(params as { body: Record<string, unknown> }).body,
-				}),
-			}))
-		})
+	it('opens a draft in the editor instead of creating a workflow from the list', async () => {
+		const api = await renderFeature(() => {})
 
-		await user.click(
-			await screen.findByRole('button', { name: 'Nouveau workflow' }),
+		const link = await screen.findByRole('link', { name: 'Nouveau workflow' })
+
+		expect(link.getAttribute('href')).toBe(
+			'/o/atelier-bois/automatisation/workflows/nouveau',
 		)
-		await user.type(screen.getByLabelText('Nom'), 'Notifier le client')
-		await user.click(screen.getByRole('button', { name: 'Créer' }))
+		expect(
+			screen.queryByRole('button', { name: 'Nouveau workflow' }),
+		).toBeNull()
+		expect(screen.queryByLabelText('Nom')).toBeNull()
+		expect(api.calls.some((call) => call.method === 'post')).toBe(false)
+	})
 
-		await waitFor(() => {
-			const call = api.calls.find(
-				(c) => c.method === 'post' && c.path === WORKFLOWS_PATH,
-			)
-			expect(call?.params).toMatchObject({
-				path: { organization_id: 'org-1' },
-				body: { name: 'Notifier le client', description: null },
-			})
-		})
+	it('offers the same draft link on a project page', async () => {
+		await renderFeature(() => {}, 'ventes')
+
+		expect(
+			(
+				await screen.findByRole('link', { name: 'Nouveau workflow' })
+			).getAttribute('href'),
+		).toBe('/o/atelier-bois/automatisation/workflows/nouveau')
 	})
 })
 
@@ -232,6 +229,7 @@ describe('AutomationWorkflowsFeature — rename', () => {
 		await user.click(screen.getByRole('menuitem', { name: 'Renommer' }))
 
 		expect(screen.getByDisplayValue('Créer une facture Odoo')).toBeDefined()
+		expect(screen.getByText('Modifier Créer une facture Odoo')).toBeDefined()
 
 		const nameField = screen.getByLabelText('Nom')
 		await user.clear(nameField)
@@ -308,7 +306,7 @@ describe('AutomationWorkflowsFeature — reaching the editor', () => {
 		})
 
 		expect(link.getAttribute('href')).toBe(
-			'/o/atelier-bois/automatisation/workflow-1',
+			'/o/atelier-bois/automatisation/workflows/workflow-1',
 		)
 	})
 })
@@ -450,12 +448,43 @@ describe('AutomationWorkflowsFeature — row actions', () => {
 		})
 	})
 
-	it('exports a workflow as a JSON download built from its current version', async () => {
+	it('names the copy of a copy "X (copie)", not "X (copie) (copie)"', async () => {
 		const user = userEvent.setup()
-		const click = vi.fn()
+		const api = await renderFeature((fakeApi) => {
+			fakeApi.mockGet(WORKFLOWS_PATH, () => ({
+				data: [workflow({ name: 'Créer une facture Odoo (copie)' })],
+				pagination: null,
+			}))
+			fakeApi.mockGet(WORKFLOW_PATH, () => ({
+				data: { ...workflow(), current_version: null, layout: null },
+			}))
+			fakeApi.mockMutation('post', WORKFLOWS_PATH, () => ({
+				data: workflow({ id: 'workflow-2' }),
+			}))
+		})
+
+		await user.click(
+			await screen.findByRole('button', { name: /Actions pour/ }),
+		)
+		await user.click(screen.getByRole('menuitem', { name: 'Dupliquer' }))
+
+		await waitFor(() => {
+			expect(
+				api.calls.find((call) => call.method === 'post')?.params,
+			).toMatchObject({ body: { name: 'Créer une facture Odoo (copie)' } })
+		})
+	})
+
+	it('exports a workflow as a JSON download built from its current version, named after the workflow', async () => {
+		const user = userEvent.setup()
+		const downloads: string[] = []
 		const createObjectURL = vi.fn(() => 'blob:export')
 		Object.assign(URL, { createObjectURL, revokeObjectURL: vi.fn() })
-		vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(click)
+		const click = vi
+			.spyOn(HTMLAnchorElement.prototype, 'click')
+			.mockImplementation(function (this: HTMLAnchorElement) {
+				downloads.push(this.download)
+			})
 		await renderFeature((fakeApi) => {
 			fakeApi.mockGet(WORKFLOW_PATH, () => ({
 				data: {
@@ -473,5 +502,6 @@ describe('AutomationWorkflowsFeature — row actions', () => {
 
 		await waitFor(() => expect(click).toHaveBeenCalled())
 		expect(createObjectURL).toHaveBeenCalled()
+		expect(downloads).toEqual(['creer-une-facture-odoo.json'])
 	})
 })

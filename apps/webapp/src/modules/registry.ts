@@ -38,6 +38,14 @@ import {
 } from 'lucide-react'
 import type { AppModule } from '#/modules/types'
 import { ProjectsSidebarFeature } from '#/pages/automation/feature/projects-sidebar-feature'
+import {
+	automationBasePath,
+	collectionsPath,
+	executionsPath,
+	identificationsPath,
+	newWorkflowPath,
+	workflowsPath,
+} from '#/pages/automation/lib/automation-paths'
 import { ProjetSidebarFeature } from '#/pages/projet/feature/projet-sidebar-feature'
 
 export const MODULES: AppModule[] = [
@@ -385,13 +393,12 @@ export const MODULES: AppModule[] = [
 		icon: Workflow,
 		hue: 30,
 		description: 'Workflows déclenchés par les événements de Mestier',
-		basePath: '/automatisation',
+		basePath: automationBasePath(),
 		status: 'available',
-		hasOverview: true,
+		hasOverview: false,
 		primaryAction: {
 			label: 'Nouveau workflow',
-			to: '/automatisation',
-			search: { nouveau: '1' },
+			to: newWorkflowPath(),
 		},
 		requiredPermission: 'VIEW_AUTOMATION',
 		sidebarExtra: ProjectsSidebarFeature,
@@ -399,30 +406,29 @@ export const MODULES: AppModule[] = [
 			{
 				id: 'workflows',
 				label: 'Workflows',
-				to: '/automatisation',
+				to: workflowsPath(),
 				icon: Workflow,
-				exact: true,
-				requiredPermission: 'VIEW_AUTOMATION',
-			},
-			{
-				id: 'credentials',
-				label: 'Identifications',
-				to: '/automatisation/credentials',
-				icon: KeyRound,
 				requiredPermission: 'VIEW_AUTOMATION',
 			},
 			{
 				id: 'executions',
 				label: 'Exécutions',
-				to: '/automatisation/executions',
+				to: executionsPath(),
 				icon: History,
 				requiredPermission: 'VIEW_AUTOMATION',
 			},
 			{
 				id: 'collections',
 				label: 'Collections',
-				to: '/automatisation/collections',
+				to: collectionsPath(),
 				icon: Library,
+				requiredPermission: 'VIEW_AUTOMATION',
+			},
+			{
+				id: 'identifications',
+				label: 'Identifications',
+				to: identificationsPath(),
+				icon: KeyRound,
 				requiredPermission: 'VIEW_AUTOMATION',
 			},
 		],

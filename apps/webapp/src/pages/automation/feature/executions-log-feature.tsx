@@ -7,6 +7,7 @@ import {
 } from '#/hooks/use-automation'
 import { buildOrgPath } from '#/modules/org-path'
 import { mockNodeCounts } from '#/pages/automation/feature/mocks/execution-node-counts'
+import { workflowExecutionsLocation } from '#/pages/automation/lib/automation-paths'
 import {
 	ALL,
 	buildRow,
@@ -26,6 +27,10 @@ import { isTerminalRunStatus } from '#/pages/automation/lib/workflow-runs'
 import { AutomationExecutionsLog } from '#/pages/automation/ui/automation-executions-log'
 
 const LIVE_POLL_MS = 3000
+
+const LIVE_TICK_MS = 200
+
+const DELETED_WORKFLOW = 'Workflow supprimé'
 
 export type ExecutionsLogFilters = Omit<ExecutionFilters, 'query'>
 
@@ -63,9 +68,12 @@ function ExecutionsLogWorkspace({
 	const runsQuery = useAutomationRuns(organizationId)
 	const workflowsQuery = useAutomationWorkflows(organizationId)
 	const { refetch: refetchRuns } = runsQuery
-	const hasLiveRun = (runsQuery.data?.data ?? []).some(
+	const runs = runsQuery.data?.data
+	const hasLiveRun = (runs ?? []).some(
 		(run) => !isTerminalRunStatus(run.status),
 	)
+	const hasRunningRun = (runs ?? []).some((run) => run.status === 'running')
+	const [now, setNow] = useState(() => Date.now())
 
 	useEffect(() => {
 		if (!hasLiveRun) return
@@ -73,25 +81,46 @@ function ExecutionsLogWorkspace({
 		return () => window.clearInterval(timer)
 	}, [hasLiveRun, refetchRuns])
 
-	const workflowList = useMemo(
+	useEffect(() => {
+		if (!hasRunningRun) return
+		setNow(Date.now())
+		const timer = window.setInterval(() => setNow(Date.now()), LIVE_TICK_MS)
+		return () => window.clearInterval(timer)
+	}, [hasRunningRun])
+
+	const names = useMemo(
 		() =>
-			(workflowsQuery.data?.data ?? []).map((workflow) => ({
-				id: workflow.id,
-				name: workflow.name,
-			})),
+			new Map(
+				(workflowsQuery.data?.data ?? []).map((workflow) => [
+					workflow.id,
+					workflow.name,
+				]),
+			),
 		[workflowsQuery.data],
 	)
-	const rows = useMemo(() => {
-		const names = new Map(workflowList.map((item) => [item.id, item.name]))
-		return (runsQuery.data?.data ?? []).map((run) =>
-			buildRow(
-				run,
-				names.get(run.workflow_id) ?? 'Workflow supprimé',
-				Date.now(),
-				mockNodeCounts(run),
+	const workflowList = useMemo(() => {
+		const withRuns = new Set((runs ?? []).map((run) => run.workflow_id))
+		return [
+			...(workflowsQuery.data?.data ?? [])
+				.filter((workflow) => withRuns.has(workflow.id))
+				.map((workflow) => ({ id: workflow.id, name: workflow.name })),
+			...[...withRuns]
+				.filter((id) => !names.has(id))
+				.map((id) => ({ id, name: DELETED_WORKFLOW })),
+		]
+	}, [runs, workflowsQuery.data, names])
+	const rows = useMemo(
+		() =>
+			(runs ?? []).map((run) =>
+				buildRow(
+					run,
+					names.get(run.workflow_id) ?? DELETED_WORKFLOW,
+					now,
+					mockNodeCounts(run),
+				),
 			),
-		)
-	}, [runsQuery.data, workflowList])
+		[runs, names, now],
+	)
 
 	const active: ExecutionFilters = { ...filters, query }
 	const visible = sortRows(filterRows(rows, active), sortKey, direction)
@@ -116,11 +145,10 @@ function ExecutionsLogWorkspace({
 	}
 
 	function open(row: ExecutionRow) {
+		const location = workflowExecutionsLocation(row.workflowId, row.runId)
 		void navigate({
-			to: buildOrgPath(
-				organizationSlug,
-				`/automatisation/${row.workflowId}/executions/${row.runId}`,
-			),
+			to: buildOrgPath(organizationSlug, location.to),
+			search: location.search,
 		})
 	}
 

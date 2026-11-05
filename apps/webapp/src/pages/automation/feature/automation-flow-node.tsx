@@ -1,6 +1,7 @@
 import { type NodeProps, useNodeConnections } from '@xyflow/react'
 import { useEditorActions } from '#/pages/automation/feature/editor-actions'
 import { useNodeIssues } from '#/pages/automation/feature/node-issues-context'
+import { branchLabel } from '#/pages/automation/lib/branch-labels'
 import {
 	type EditorNode,
 	outputHandles,
@@ -10,7 +11,15 @@ import {
 	appearanceOf,
 	needsEventChoice,
 } from '#/pages/automation/lib/node-appearance'
-import { AutomationNodeCard } from '#/pages/automation/ui/automation-node-card'
+import {
+	AutomationNodeCard,
+	type RunStatus,
+} from '#/pages/automation/ui/automation-node-card'
+
+function lastRunStatus(runStatus: string | null): RunStatus | null {
+	const status = executionFromRunStatus(runStatus)
+	return status === 'success' || status === 'error' ? status : null
+}
 
 export function AutomationFlowNode({
 	id,
@@ -26,7 +35,6 @@ export function AutomationFlowNode({
 	const appearance = appearanceOf(data)
 	const trigger = data.kind === 'trigger'
 	const needsSetup = needsEventChoice(data)
-	const execution = executionFromRunStatus(data.runStatus)
 
 	return (
 		<AutomationNodeCard
@@ -35,7 +43,7 @@ export function AutomationFlowNode({
 			icon={appearance.icon}
 			hue={appearance.hue}
 			trigger={trigger}
-			status={null}
+			status={lastRunStatus(data.runStatus)}
 			needsSetup={needsSetup}
 			disabled={data.disabled}
 			bindingIssues={[
@@ -48,10 +56,9 @@ export function AutomationFlowNode({
 			hasInput={!trigger}
 			outputs={outputHandles(data).map((handle) => ({
 				id: handle,
-				label: handle ?? undefined,
+				label: handle ? branchLabel(handle) : undefined,
 				open: !connected.has(handle),
 			}))}
-			execution={execution ? { status: execution, note: '' } : null}
 			onOpen={() =>
 				needsSetup ? actions.chooseEvent(id) : actions.openNode(id)
 			}

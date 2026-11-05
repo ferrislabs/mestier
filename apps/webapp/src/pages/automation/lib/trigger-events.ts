@@ -1,26 +1,5 @@
 import type { Schemas } from '#/api/api.client'
-
-export interface EventGroup {
-	prefix: string
-	events: Schemas.EventDescriptorResponse[]
-}
-
-export function groupEventsByPrefix(
-	events: readonly Schemas.EventDescriptorResponse[],
-): EventGroup[] {
-	const groups = new Map<string, Schemas.EventDescriptorResponse[]>()
-
-	for (const event of events) {
-		const prefix = event.name.split('.')[0] ?? event.name
-		const existing = groups.get(prefix) ?? []
-		existing.push(event)
-		groups.set(prefix, existing)
-	}
-
-	return [...groups.entries()]
-		.sort(([a], [b]) => a.localeCompare(b))
-		.map(([prefix, prefixEvents]) => ({ prefix, events: prefixEvents }))
-}
+import { triggerCopy } from '#/pages/automation/lib/connector-copy'
 
 export function triggerEventNames(trigger: Schemas.PlacedTriggerDto): string[] {
 	return trigger.kind === 'Manual' ? [] : trigger.kind.Events
@@ -47,12 +26,14 @@ export function triggerPresentation(
 	events: readonly Schemas.EventDescriptorResponse[],
 ): TriggerPresentation {
 	if (isManualTrigger(trigger)) {
-		return { label: 'Clic', subtitle: 'Déclenchement manuel' }
+		const { label, subtitle } = triggerCopy('manual')
+		return { label, subtitle }
 	}
+	const eventsLabel = triggerCopy('events').label
 	const names = triggerEventNames(trigger)
 	if (names.length === 0) {
 		return {
-			label: 'Event Mestier',
+			label: eventsLabel,
 			subtitle: 'Cliquez pour choisir l’événement',
 		}
 	}
@@ -64,7 +45,7 @@ export function triggerPresentation(
 		}
 	}
 	return {
-		label: 'Event Mestier',
+		label: eventsLabel,
 		subtitle: `${names.length} événements`,
 	}
 }

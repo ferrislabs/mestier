@@ -1,11 +1,15 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { Schemas } from '#/api/api.client'
 import {
 	ConnectorParametersFeature,
 	type ConnectorParametersFeatureProps,
 } from '#/pages/automation/feature/connector-parameters-feature'
+import {
+	forgetCredentialMeta,
+	patchCredentialMeta,
+} from '#/pages/automation/feature/mocks/credential-meta'
 
 for (const method of [
 	'hasPointerCapture',
@@ -362,27 +366,64 @@ describe('ConnectorParametersFeature — inline credential creation', () => {
 	})
 })
 
-describe('ConnectorParametersFeature — inserting an expression', () => {
-	it('inserts a dropped path at the cursor of the field it was dropped on', () => {
+describe('ConnectorParametersFeature — typing an expression in a Number', () => {
+	it('writes the expression into the field the descriptor lets take one', () => {
 		const onConfigChange = vi.fn()
 		render(
 			<ConnectorParametersFeature
 				{...baseProps({
 					descriptor: descriptor({
-						fields: [field({ name: 'url', label: 'URL', expression: true })],
+						fields: [
+							field({
+								name: 'partner_id',
+								label: 'Identifiant du partenaire',
+								kind: 'Number',
+								expression: true,
+							}),
+						],
 					}),
-					config: { url: 'Hello ' },
+					config: {},
 					onConfigChange,
 				})}
 			/>,
 		)
 
-		const input = screen.getByLabelText('URL') as HTMLInputElement
-		input.setSelectionRange(6, 6)
-		fireEvent.drop(input, { dataTransfer: { getData: () => 'trigger.name' } })
+		fireEvent.change(screen.getByLabelText('Identifiant du partenaire'), {
+			target: { value: '{{ connectors.c1.output.id }}' },
+		})
 
 		expect(onConfigChange).toHaveBeenCalledWith({
-			url: 'Hello {{ trigger.name }}',
+			partner_id: '{{ connectors.c1.output.id }}',
+		})
+	})
+
+	it('shows the expression a node already holds, and previews it', async () => {
+		const onEvaluateExpression = vi.fn().mockResolvedValue(12)
+		render(
+			<ConnectorParametersFeature
+				{...baseProps({
+					descriptor: descriptor({
+						fields: [
+							field({
+								name: 'partner_id',
+								label: 'Identifiant du partenaire',
+								kind: 'Number',
+								expression: true,
+							}),
+						],
+					}),
+					config: { partner_id: '{{ connectors.c1.output.id }}' },
+					onEvaluateExpression,
+				})}
+			/>,
+		)
+
+		expect(
+			(screen.getByLabelText('Identifiant du partenaire') as HTMLInputElement)
+				.value,
+		).toBe('{{ connectors.c1.output.id }}')
+		await waitFor(() => {
+			expect(screen.getByText('Aperçu : 12')).toBeDefined()
 		})
 	})
 })
@@ -401,8 +442,6 @@ describe('ConnectorParametersFeature — the live preview', () => {
 				})}
 			/>,
 		)
-
-		fireEvent.focus(screen.getByLabelText('URL'))
 
 		await waitFor(
 			() => {
@@ -433,8 +472,6 @@ describe('ConnectorParametersFeature — the live preview', () => {
 			/>,
 		)
 
-		fireEvent.focus(screen.getByLabelText('URL'))
-
 		await waitFor(
 			() => {
 				expect(
@@ -443,5 +480,194 @@ describe('ConnectorParametersFeature — the live preview', () => {
 			},
 			{ timeout: 2000 },
 		)
+	})
+
+	it('previews every expression field at once, without needing focus', async () => {
+		const onEvaluateExpression = vi.fn(async (template: unknown) =>
+			template === '{{ trigger.a }}' ? 'alpha' : 'beta',
+		)
+		render(
+			<ConnectorParametersFeature
+				{...baseProps({
+					descriptor: descriptor({
+						fields: [
+							field({ name: 'url', label: 'URL', expression: true }),
+							field({ name: 'name', label: 'Nom', expression: true }),
+							field({ name: 'note', label: 'Note', expression: true }),
+						],
+					}),
+					config: {
+						url: '{{ trigger.a }}',
+						name: '{{ trigger.b }}',
+						note: 'sans expression',
+					},
+					onEvaluateExpression,
+				})}
+			/>,
+		)
+
+		await waitFor(
+			() => {
+				expect(screen.getByText('Aperçu : alpha')).toBeDefined()
+				expect(screen.getByText('Aperçu : beta')).toBeDefined()
+			},
+			{ timeout: 2000 },
+		)
+		expect(onEvaluateExpression).toHaveBeenCalledTimes(2)
+	})
+
+	it('previews the expression a Number field holds', async () => {
+		const onEvaluateExpression = vi.fn().mockResolvedValue(7)
+		render(
+			<ConnectorParametersFeature
+				{...baseProps({
+					descriptor: descriptor({
+						fields: [
+							field({
+								name: 'amount',
+								label: 'Montant',
+								kind: 'Number',
+								expression: true,
+							}),
+						],
+					}),
+					config: { amount: '{{ connectors.c1.output.total }}' },
+					onEvaluateExpression,
+				})}
+			/>,
+		)
+
+		await waitFor(
+			() => {
+				expect(screen.getByText('Aperçu : 7')).toBeDefined()
+			},
+			{ timeout: 2000 },
+		)
+	})
+})
+
+describe('ConnectorParametersFeature — the defaults of a new node', () => {
+	const httpDescriptor = () =>
+		descriptor({
+			kind: 'http.request',
+			fields: [
+				field({
+					name: 'method',
+					label: 'Méthode',
+					kind: { Select: { options: [{ value: 'GET', label: 'GET' }] } },
+				}),
+				field({ name: 'url', label: 'URL', expression: true }),
+			],
+		})
+
+	it('writes the defaults the config lacks, once, when the node opens', () => {
+		const onConfigChange = vi.fn()
+		render(
+			<ConnectorParametersFeature
+				{...baseProps({
+					descriptor: httpDescriptor(),
+					config: {},
+					onConfigChange,
+				})}
+			/>,
+		)
+
+		expect(onConfigChange).toHaveBeenCalledTimes(1)
+		expect(onConfigChange).toHaveBeenCalledWith({
+			method: 'GET',
+		})
+	})
+
+	it('leaves a configured node alone', () => {
+		const onConfigChange = vi.fn()
+		render(
+			<ConnectorParametersFeature
+				{...baseProps({
+					descriptor: httpDescriptor(),
+					config: { method: 'POST', url: '' },
+					onConfigChange,
+				})}
+			/>,
+		)
+
+		expect(onConfigChange).not.toHaveBeenCalled()
+	})
+
+	it('does not write again when the config comes back with its defaults', () => {
+		const onConfigChange = vi.fn()
+		const { rerender } = render(
+			<ConnectorParametersFeature
+				{...baseProps({
+					descriptor: httpDescriptor(),
+					config: {},
+					onConfigChange,
+				})}
+			/>,
+		)
+
+		rerender(
+			<ConnectorParametersFeature
+				{...baseProps({
+					descriptor: httpDescriptor(),
+					config: { method: 'GET' },
+					onConfigChange,
+				})}
+			/>,
+		)
+
+		expect(onConfigChange).toHaveBeenCalledTimes(1)
+	})
+})
+
+describe('ConnectorParametersFeature — the identification slot', () => {
+	afterEach(() => {
+		forgetCredentialMeta('cred-expired')
+	})
+
+	it('flags an expired identification from its status', () => {
+		patchCredentialMeta('cred-expired', { status: 'expired' })
+		render(
+			<ConnectorParametersFeature
+				{...baseProps({
+					descriptor: descriptor({ auth: { Exactly: 'scheme_a' } }),
+					credentials: [credential('cred-expired', 'scheme_a')],
+					credentialId: 'cred-expired',
+				})}
+			/>,
+		)
+
+		expect(
+			screen.getByText(
+				'Cette identification est expirée. Renouvelez-la depuis Identifications.',
+			),
+		).toBeDefined()
+	})
+
+	it('does not flag a valid identification', () => {
+		patchCredentialMeta('cred-expired', { status: 'valid' })
+		render(
+			<ConnectorParametersFeature
+				{...baseProps({
+					descriptor: descriptor({ auth: { Exactly: 'scheme_a' } }),
+					credentials: [credential('cred-expired', 'scheme_a')],
+					credentialId: 'cred-expired',
+				})}
+			/>,
+		)
+
+		expect(screen.queryByText(/est expirée/)).toBeNull()
+	})
+
+	it('shows the hint the node comes with', () => {
+		render(
+			<ConnectorParametersFeature
+				{...baseProps({
+					descriptor: descriptor({ auth: { Exactly: 'scheme_a' } }),
+					credentialHint: 'La spec déclare : bearerAuth.',
+				})}
+			/>,
+		)
+
+		expect(screen.getByText('La spec déclare : bearerAuth.')).toBeDefined()
 	})
 })

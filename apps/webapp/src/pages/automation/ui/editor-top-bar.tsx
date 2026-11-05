@@ -1,5 +1,4 @@
 import { Link } from '@tanstack/react-router'
-import { useEffect, useState } from 'react'
 import { RequirePermission } from '#/components/require-permission'
 import { Badge } from '#/components/ui/badge'
 import { Button } from '#/components/ui/button'
@@ -8,6 +7,7 @@ import { Label } from '#/components/ui/label'
 import { Switch } from '#/components/ui/switch'
 import { Tabs, TabsList, TabsTrigger } from '#/components/ui/tabs'
 import { buildOrgPath } from '#/modules/org-path'
+import { workflowsPath } from '#/pages/automation/lib/automation-paths'
 
 export type EditorView = 'editor' | 'executions'
 
@@ -15,7 +15,8 @@ export function EditorTopBar({
 	organizationSlug,
 	name,
 	canRename,
-	onNameCommit,
+	onNameChange,
+	onNameBlur,
 	tags,
 	view,
 	onViewChange,
@@ -26,29 +27,20 @@ export function EditorTopBar({
 	organizationSlug: string
 	name: string
 	canRename: boolean
-	onNameCommit: (name: string) => void
+	onNameChange: (name: string) => void
+	onNameBlur: () => void
 	tags: readonly string[]
 	view: EditorView
 	onViewChange: (view: EditorView) => void
 	enabled: boolean
-	onEnabledChange: (enabled: boolean) => void
-	save?: { dirty: boolean; isSaving: boolean; onSave: () => void }
-}) {
-	const [draft, setDraft] = useState(name)
-
-	useEffect(() => {
-		setDraft(name)
-	}, [name])
-
-	function commitName() {
-		const next = draft.trim()
-		if (next === '' || next === name) {
-			setDraft(name)
-			return
-		}
-		onNameCommit(next)
+	onEnabledChange?: (enabled: boolean) => void
+	save?: {
+		dirty: boolean
+		isSaving: boolean
+		disabled?: boolean
+		onSave: () => void
 	}
-
+}) {
 	return (
 		<header className="grid h-[52px] shrink-0 grid-cols-[1fr_auto_1fr] items-center gap-4 border-border border-b bg-card px-4">
 			<div className="flex min-w-0 items-center gap-2">
@@ -57,7 +49,7 @@ export function EditorTopBar({
 					className="flex min-w-0 items-center gap-1 text-base"
 				>
 					<Link
-						to={buildOrgPath(organizationSlug, '/automatisation')}
+						to={buildOrgPath(organizationSlug, workflowsPath())}
 						className="rounded-sm px-1 text-muted-foreground outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
 					>
 						Workflows
@@ -66,15 +58,15 @@ export function EditorTopBar({
 						/
 					</span>
 					<Input
-						value={draft}
-						onChange={(event) => setDraft(event.target.value)}
-						onBlur={commitName}
+						value={name}
+						onChange={(event) => onNameChange(event.target.value)}
+						onBlur={onNameBlur}
 						onKeyDown={(event) => {
 							if (event.key === 'Enter') event.currentTarget.blur()
 						}}
 						readOnly={!canRename}
 						aria-label="Nom du workflow"
-						size={Math.max(draft.length, 10)}
+						size={Math.max(name.length, 10)}
 						className="h-8 w-auto max-w-[36vw] border-transparent bg-transparent px-2 font-medium shadow-none hover:border-input md:text-base dark:bg-transparent"
 					/>
 				</nav>
@@ -111,6 +103,7 @@ export function EditorTopBar({
 						<Switch
 							id="workflow-active"
 							checked={enabled}
+							disabled={onEnabledChange === undefined}
 							onCheckedChange={onEnabledChange}
 						/>
 					</div>
@@ -118,7 +111,7 @@ export function EditorTopBar({
 						<Button
 							size="sm"
 							variant={save.dirty ? 'default' : 'outline'}
-							disabled={save.isSaving}
+							disabled={save.isSaving || save.disabled}
 							onClick={save.onSave}
 						>
 							{save.isSaving ? 'Enregistrement…' : 'Enregistrer'}

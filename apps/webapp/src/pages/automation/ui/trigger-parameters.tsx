@@ -9,16 +9,18 @@ import {
 	triggerEventNames,
 } from '#/pages/automation/lib/trigger-events'
 
+const EVENT_HINT = 'Le workflow reçoit le payload contractuel de cet événement.'
+
 function EventCard({
 	name,
 	event,
-	removable,
+	several,
 	onChange,
 	onRemove,
 }: {
 	name: string
 	event: Schemas.EventDescriptorResponse | undefined
-	removable: boolean
+	several: boolean
 	onChange: () => void
 	onRemove: () => void
 }) {
@@ -34,14 +36,16 @@ function EventCard({
 			</span>
 			<Button
 				type="button"
-				aria-label={`Changer l’événement ${name}`}
+				aria-label={
+					several ? `Changer l’événement ${name}` : 'Changer l’événement'
+				}
 				variant="outline"
 				size="sm"
 				onClick={onChange}
 			>
 				Changer
 			</Button>
-			{removable && (
+			{several && (
 				<Button
 					type="button"
 					aria-label={`Retirer l’événement ${name}`}
@@ -68,14 +72,7 @@ export function TriggerParameters({
 	onRemoveEvent: (name: string) => void
 }) {
 	const controlId = useId()
-	if (isManualTrigger(trigger)) {
-		return (
-			<p className="text-muted-foreground text-sm">
-				Ce déclencheur ne part que lorsqu’on exécute le workflow à la main,
-				depuis « Tester le workflow ».
-			</p>
-		)
-	}
+	if (isManualTrigger(trigger)) return null
 
 	const names = triggerEventNames(trigger)
 	return (
@@ -104,7 +101,7 @@ export function TriggerParameters({
 								key={name}
 								name={name}
 								event={findEvent(events, name)}
-								removable={names.length > 1}
+								several={names.length > 1}
 								onChange={() => onChooseEvent(name)}
 								onRemove={() => onRemoveEvent(name)}
 							/>
@@ -122,6 +119,7 @@ export function TriggerParameters({
 					</>
 				)}
 			</div>
+			<p className="text-muted-foreground text-xs">{EVENT_HINT}</p>
 		</div>
 	)
 }

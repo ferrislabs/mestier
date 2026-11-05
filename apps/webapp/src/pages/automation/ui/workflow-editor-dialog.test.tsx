@@ -18,8 +18,8 @@ function baseProps(
 ): WorkflowEditorDialogProps {
 	return {
 		open: true,
-		editingName: null,
-		values: { name: '', description: '' },
+		editingName: 'Créer une facture Odoo',
+		values: { name: 'Créer une facture Odoo', description: '' },
 		isPending: false,
 		error: null,
 		onOpenChange: vi.fn(),
@@ -37,63 +37,49 @@ describe('WorkflowEditorDialog — visibility', () => {
 	})
 })
 
-describe('WorkflowEditorDialog — create mode', () => {
-	it('titles itself "Nouveau workflow" and offers a "Créer" button', async () => {
+describe('WorkflowEditorDialog — rename', () => {
+	it('titles itself after the workflow being edited and offers "Enregistrer"', async () => {
 		renderDialog(<WorkflowEditorDialog {...baseProps()} />)
 
-		expect(screen.getByText('Nouveau workflow')).toBeDefined()
-		expect(screen.getByRole('button', { name: 'Créer' })).toBeDefined()
+		expect(screen.getByText('Modifier Créer une facture Odoo')).toBeDefined()
+		expect(screen.getByRole('button', { name: 'Enregistrer' })).toBeDefined()
 	})
 
-	it('disables the submit button until a name is entered', async () => {
+	it('has no create mode left', async () => {
+		renderDialog(<WorkflowEditorDialog {...baseProps()} />)
+
+		expect(screen.queryByText('Nouveau workflow')).toBeNull()
+		expect(screen.queryByRole('button', { name: 'Créer' })).toBeNull()
+		expect(screen.queryByText(/déclencheur/)).toBeNull()
+	})
+
+	it('disables the submit button while the name is blank', async () => {
 		renderDialog(
 			<WorkflowEditorDialog
-				{...baseProps({ values: { name: '', description: '' } })}
+				{...baseProps({ values: { name: '  ', description: '' } })}
 			/>,
 		)
 
 		expect(
-			(screen.getByRole('button', { name: 'Créer' }) as HTMLButtonElement)
+			(screen.getByRole('button', { name: 'Enregistrer' }) as HTMLButtonElement)
 				.disabled,
 		).toBe(true)
 	})
 
 	it('enables the submit button once a name is entered', async () => {
-		renderDialog(
-			<WorkflowEditorDialog
-				{...baseProps({
-					values: { name: 'Créer une facture Odoo', description: '' },
-				})}
-			/>,
-		)
+		renderDialog(<WorkflowEditorDialog {...baseProps()} />)
 
 		expect(
-			(screen.getByRole('button', { name: 'Créer' }) as HTMLButtonElement)
+			(screen.getByRole('button', { name: 'Enregistrer' }) as HTMLButtonElement)
 				.disabled,
 		).toBe(false)
-	})
-})
-
-describe('WorkflowEditorDialog — edit mode', () => {
-	it('titles itself after the workflow being edited and offers "Enregistrer"', async () => {
-		renderDialog(
-			<WorkflowEditorDialog
-				{...baseProps({
-					editingName: 'Créer une facture Odoo',
-					values: { name: 'Créer une facture Odoo', description: '' },
-				})}
-			/>,
-		)
-
-		expect(screen.getByText('Modifier Créer une facture Odoo')).toBeDefined()
-		expect(screen.getByRole('button', { name: 'Enregistrer' })).toBeDefined()
 	})
 })
 
 describe('WorkflowEditorDialog — field wiring', () => {
 	it('reports a name change through onValuesChange', async () => {
 		const user = userEvent.setup()
-		const props = baseProps()
+		const props = baseProps({ values: { name: '', description: '' } })
 		renderDialog(<WorkflowEditorDialog {...props} />)
 
 		await user.type(screen.getByLabelText('Nom'), 'X')
@@ -103,7 +89,7 @@ describe('WorkflowEditorDialog — field wiring', () => {
 
 	it('reports a description change through onValuesChange', async () => {
 		const user = userEvent.setup()
-		const props = baseProps()
+		const props = baseProps({ values: { name: '', description: '' } })
 		renderDialog(<WorkflowEditorDialog {...props} />)
 
 		await user.type(screen.getByLabelText('Description'), 'X')
@@ -113,10 +99,10 @@ describe('WorkflowEditorDialog — field wiring', () => {
 
 	it('calls onSubmit when the submit button is pressed', async () => {
 		const user = userEvent.setup()
-		const props = baseProps({ values: { name: 'Facture', description: '' } })
+		const props = baseProps()
 		renderDialog(<WorkflowEditorDialog {...props} />)
 
-		await user.click(screen.getByRole('button', { name: 'Créer' }))
+		await user.click(screen.getByRole('button', { name: 'Enregistrer' }))
 
 		expect(props.onSubmit).toHaveBeenCalled()
 	})
@@ -143,14 +129,9 @@ describe('WorkflowEditorDialog — field wiring', () => {
 
 describe('WorkflowEditorDialog — permission gating', () => {
 	it('offers no submit button to a caller without MANAGE_AUTOMATION', async () => {
-		renderDialog(
-			<WorkflowEditorDialog
-				{...baseProps({ values: { name: 'Facture', description: '' } })}
-			/>,
-			[],
-		)
+		renderDialog(<WorkflowEditorDialog {...baseProps()} />, [])
 
-		expect(screen.queryByRole('button', { name: 'Créer' })).toBeNull()
+		expect(screen.queryByRole('button', { name: 'Enregistrer' })).toBeNull()
 		expect(screen.getByRole('button', { name: 'Annuler' })).toBeDefined()
 	})
 })
