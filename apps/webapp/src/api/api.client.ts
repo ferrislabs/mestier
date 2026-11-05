@@ -339,6 +339,13 @@ export namespace Schemas {
   export type DoeModelId = string;
   export type CreateDoeRequest = { model_id: DoeModelId };
   export type CreateEquipmentRequest = { hourly_rate_cents: number; name: string };
+  export type CreateFolderRequest = { name: string; parent_id?: (string | null) | undefined };
+  export type CreateIntakeTicketRequest = {
+    body: string;
+    custom_fields: Record<string, unknown>;
+    external_id?: (string | null) | undefined;
+    subject: string;
+  };
   export type CreateInvitationRequest = Partial<{ expires_at: string | null; member_id: null | MemberId }>;
   export type DeliveryAddressRequest = {
     city: string;
@@ -468,6 +475,7 @@ export namespace Schemas {
     registration_number?: (string | null) | undefined;
     vat_number?: (string | null) | undefined;
   };
+  export type CreateSupportApiKeyRequest = { name: string };
   export type CreateTaskCommentRequest = { body: string };
   export type CreateTaskLabelRequest = { color: string; name: string };
   export type RecurrenceRuleRequest =
@@ -507,7 +515,13 @@ export namespace Schemas {
   };
   export type CreateThreadRequest = { name: string; origin_message_id?: (null | MessageId) | undefined };
   export type CreateWebhookRequest = { avatar_url?: (string | null) | undefined; name: string };
-  export type CreateWorkflowRequest = { description?: (string | null) | undefined; name: string };
+  export type CreateWorkflowRequest = {
+    description?: (string | null) | undefined;
+    enabled?: (boolean | null) | undefined;
+    folder_id?: (string | null) | undefined;
+    name: string;
+    tags?: (Array<string> | null) | undefined;
+  };
   export type InvitationId = string;
   export type InvitationResponse = {
     created_at: string;
@@ -517,6 +531,14 @@ export namespace Schemas {
     organization_id: OrganizationId;
   };
   export type CreatedInvitationResponse = InvitationResponse & { token: string };
+  export type SupportApiKeyId = string;
+  export type CreatedSupportApiKeyResponse = {
+    created_at: string;
+    id: SupportApiKeyId;
+    key: string;
+    name: string;
+    prefix: string;
+  };
   export type CredentialResponse = {
     created_at: string;
     id: string;
@@ -758,15 +780,29 @@ export namespace Schemas {
   };
   export type FileUploadResponse = { key: string; mime_type: string; size_bytes: number };
   export type FileUrlResponse = { expires_at: string; url: string };
+  export type FolderResponse = {
+    created_at: string;
+    id: string;
+    name: string;
+    parent_id?: (string | null) | undefined;
+  };
   export type PlacedConnectorDto = {
     config: Record<string, unknown>;
     credential_id?: (string | null) | undefined;
+    description?: (string | null) | undefined;
+    disabled?: boolean | undefined;
     id: string;
     kind: string;
+    name?: (string | null) | undefined;
     version: number;
   };
   export type TriggerKindDto = "Manual" | { Events: Array<string> };
-  export type PlacedTriggerDto = { id: string; kind: TriggerKindDto };
+  export type PlacedTriggerDto = {
+    description?: (string | null) | undefined;
+    id: string;
+    kind: TriggerKindDto;
+    name?: (string | null) | undefined;
+  };
   export type GraphDto = {
     connectors: Array<PlacedConnectorDto>;
     edges: Array<EdgeDto>;
@@ -889,6 +925,38 @@ export namespace Schemas {
     updated_at: string;
   };
   export type InstantiateProjectTemplateResponse = { project: ProjectResponse; tasks: Array<TaskResponse> };
+  export type IntakeAttachmentResponse = {
+    created_at: string;
+    file_name: string;
+    id: AttachmentId;
+    mime_type: string;
+    size_bytes: number;
+  };
+  export type IntakeAttachmentUrlResponse = { expires_at: string; url: string };
+  export type IntakeEntryKind = "client_message" | "reply";
+  export type TicketEntryId = string;
+  export type IntakeEntryResponse = {
+    attachments: Array<IntakeAttachmentResponse>;
+    body: string;
+    created_at: string;
+    id: TicketEntryId;
+    kind: IntakeEntryKind;
+  };
+  export type TicketId = string;
+  export type TicketNumber = number;
+  export type TicketStatus = "new" | "in_progress" | "waiting_customer" | "resolved";
+  export type IntakeTicketResponse = {
+    badges: Array<BadgeResponse>;
+    body: string;
+    created_at: string;
+    custom_fields: Record<string, unknown>;
+    entries?: (Array<IntakeEntryResponse> | null) | undefined;
+    external_id?: (string | null) | undefined;
+    id: TicketId;
+    number: TicketNumber;
+    status: TicketStatus;
+    subject: string;
+  };
   export type InterventionResponse = {
     created_at: string;
     done_on: string;
@@ -1170,6 +1238,7 @@ export namespace Schemas {
     timezone: string;
     work_time: Array<PlanningWorkTimeResponse>;
   };
+  export type PostIntakeMessageRequest = { body: string };
   export type PresenceStatus = "ONLINE" | "OFFLINE" | "DND";
   export type PresenceResponse = {
     organization_id: OrganizationId;
@@ -1386,15 +1455,22 @@ export namespace Schemas {
   export type RunResponse = {
     created_at: string;
     error?: (string | null) | undefined;
+    failed_connector_id?: (string | null) | undefined;
     finished_at?: (string | null) | undefined;
     id: string;
     next_attempt_at?: (string | null) | undefined;
+    number: number;
     organization_id: OrganizationId;
     started_at?: (string | null) | undefined;
     status: string;
+    steps_done: number;
+    steps_total: number;
     trigger_event_id?: (string | null) | undefined;
+    trigger_event_name?: (string | null) | undefined;
+    trigger_id?: (string | null) | undefined;
     trigger_payload?: unknown | undefined;
     workflow_id: string;
+    workflow_version_created_at: string;
     workflow_version_id: string;
   };
   export type RunStepResponse = {
@@ -1452,6 +1528,14 @@ export namespace Schemas {
     updated_at: string;
     vat_number?: (string | null) | undefined;
   };
+  export type SupportApiKeyResponse = {
+    created_at: string;
+    id: SupportApiKeyId;
+    last_used_at?: (string | null) | undefined;
+    name: string;
+    prefix: string;
+    revoked_at?: (string | null) | undefined;
+  };
   export type SupportAttachmentResponse = {
     created_at: string;
     file_name: string;
@@ -1492,8 +1576,6 @@ export namespace Schemas {
     title: string;
     updated_at: string;
   };
-  export type TicketEntryId = string;
-  export type TicketId = string;
   export type TicketEntryResponse = {
     attachments: Array<SupportAttachmentResponse>;
     author_member_id?: (null | MemberId) | undefined;
@@ -1504,8 +1586,6 @@ export namespace Schemas {
     ticket_id: TicketId;
     updated_at: string;
   };
-  export type TicketNumber = number;
-  export type TicketStatus = "new" | "in_progress" | "waiting_customer" | "resolved";
   export type TicketResponse = {
     assigned_at?: (string | null) | undefined;
     assignee_member_id?: (null | MemberId) | undefined;
@@ -1599,6 +1679,7 @@ export namespace Schemas {
   };
   export type UpdateDoeSettingsRequest = { style: DoeStyle };
   export type UpdateEquipmentRequest = { hourly_rate_cents: number; name: string };
+  export type UpdateFolderRequest = Partial<{ name: string | null; parent_id: string | null }>;
   export type UpdateInvoiceRequest = {
     customer_context_id: CustomerContextId;
     customer_id: CustomerId;
@@ -1714,9 +1795,12 @@ export namespace Schemas {
   export type UpdateThreadRequest = { archived: boolean; name: string };
   export type UpdateWebhookRequest = { avatar_url?: (string | null) | undefined; name: string };
   export type UpdateWorkflowRequest = Partial<{
+    archived: boolean | null;
     description: string | null;
     enabled: boolean | null;
+    folder_id: string | null;
     name: string | null;
+    tags: Array<string> | null;
   }>;
   export type UpsertEmployeeProfileRequest = {
     hourly_rate_cents?: (number | null) | undefined;
@@ -1775,24 +1859,30 @@ export namespace Schemas {
     workflow_id: string;
   };
   export type WorkflowDetailResponse = {
+    archived_at?: (string | null) | undefined;
     created_at: string;
     current_version?: (null | WorkflowVersionResponse) | undefined;
     description?: (string | null) | undefined;
     enabled: boolean;
+    folder_id?: (string | null) | undefined;
     id: string;
     layout?: (null | WorkflowLayoutDto) | undefined;
     name: string;
     organization_id: OrganizationId;
+    tags: Array<string>;
     updated_at: string;
   };
   export type WorkflowResponse = {
+    archived_at?: (string | null) | undefined;
     created_at: string;
     current_version_id?: (string | null) | undefined;
     description?: (string | null) | undefined;
     enabled: boolean;
+    folder_id?: (string | null) | undefined;
     id: string;
     name: string;
     organization_id: OrganizationId;
+    tags: Array<string>;
     updated_at: string;
   };
 
@@ -4317,6 +4407,72 @@ export namespace Endpoints {
       422: unknown;
     };
   };
+  export type get_ListWorkflowFolders = {
+    method: "GET";
+    path: "/api/v1/organizations/{organization_id}/automation/folders";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string };
+    };
+    responses: {
+      200: {
+        data: Array<{ created_at: string; id: string; name: string; parent_id?: (string | null) | undefined }>;
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+    };
+  };
+  export type post_CreateWorkflowFolder = {
+    method: "POST";
+    path: "/api/v1/organizations/{organization_id}/automation/folders";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string };
+
+      body: Schemas.CreateFolderRequest;
+    };
+    responses: {
+      201: {
+        data: { created_at: string; id: string; name: string; parent_id?: (string | null) | undefined };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      400: unknown;
+      401: unknown;
+      403: unknown;
+      409: unknown;
+    };
+  };
+  export type delete_DeleteWorkflowFolder = {
+    method: "DELETE";
+    path: "/api/v1/organizations/{organization_id}/automation/folders/{folder_id}";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string; folder_id: string };
+    };
+    responses: { 204: unknown; 401: unknown; 403: unknown; 404: unknown; 409: unknown };
+  };
+  export type patch_UpdateWorkflowFolder = {
+    method: "PATCH";
+    path: "/api/v1/organizations/{organization_id}/automation/folders/{folder_id}";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string; folder_id: string };
+
+      body: Schemas.UpdateFolderRequest;
+    };
+    responses: {
+      200: {
+        data: { created_at: string; id: string; name: string; parent_id?: (string | null) | undefined };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      400: unknown;
+      401: unknown;
+      403: unknown;
+      404: unknown;
+      409: unknown;
+    };
+  };
   export type get_ListRuns = {
     method: "GET";
     path: "/api/v1/organizations/{organization_id}/automation/runs";
@@ -4329,15 +4485,22 @@ export namespace Endpoints {
         data: Array<{
           created_at: string;
           error?: (string | null) | undefined;
+          failed_connector_id?: (string | null) | undefined;
           finished_at?: (string | null) | undefined;
           id: string;
           next_attempt_at?: (string | null) | undefined;
+          number: number;
           organization_id: Schemas.OrganizationId;
           started_at?: (string | null) | undefined;
           status: string;
+          steps_done: number;
+          steps_total: number;
           trigger_event_id?: (string | null) | undefined;
+          trigger_event_name?: (string | null) | undefined;
+          trigger_id?: (string | null) | undefined;
           trigger_payload?: unknown | undefined;
           workflow_id: string;
+          workflow_version_created_at: string;
           workflow_version_id: string;
         }>;
         pagination?: (null | Schemas.PaginationMetadata) | undefined;
@@ -4380,15 +4543,22 @@ export namespace Endpoints {
         data: {
           created_at: string;
           error?: (string | null) | undefined;
+          failed_connector_id?: (string | null) | undefined;
           finished_at?: (string | null) | undefined;
           id: string;
           next_attempt_at?: (string | null) | undefined;
+          number: number;
           organization_id: Schemas.OrganizationId;
           started_at?: (string | null) | undefined;
           status: string;
+          steps_done: number;
+          steps_total: number;
           trigger_event_id?: (string | null) | undefined;
+          trigger_event_name?: (string | null) | undefined;
+          trigger_id?: (string | null) | undefined;
           trigger_payload?: unknown | undefined;
           workflow_id: string;
+          workflow_version_created_at: string;
           workflow_version_id: string;
         };
         pagination?: (null | Schemas.PaginationMetadata) | undefined;
@@ -4449,18 +4619,22 @@ export namespace Endpoints {
     path: "/api/v1/organizations/{organization_id}/automation/workflows";
     requestFormat: "json";
     parameters: {
+      query: Partial<{ archived: boolean }>;
       path: { organization_id: string };
     };
     responses: {
       200: {
         data: Array<{
+          archived_at?: (string | null) | undefined;
           created_at: string;
           current_version_id?: (string | null) | undefined;
           description?: (string | null) | undefined;
           enabled: boolean;
+          folder_id?: (string | null) | undefined;
           id: string;
           name: string;
           organization_id: Schemas.OrganizationId;
+          tags: Array<string>;
           updated_at: string;
         }>;
         pagination?: (null | Schemas.PaginationMetadata) | undefined;
@@ -4481,13 +4655,16 @@ export namespace Endpoints {
     responses: {
       201: {
         data: {
+          archived_at?: (string | null) | undefined;
           created_at: string;
           current_version_id?: (string | null) | undefined;
           description?: (string | null) | undefined;
           enabled: boolean;
+          folder_id?: (string | null) | undefined;
           id: string;
           name: string;
           organization_id: Schemas.OrganizationId;
+          tags: Array<string>;
           updated_at: string;
         };
         pagination?: (null | Schemas.PaginationMetadata) | undefined;
@@ -4495,6 +4672,7 @@ export namespace Endpoints {
       400: unknown;
       401: unknown;
       403: unknown;
+      409: unknown;
     };
   };
   export type get_GetWorkflow = {
@@ -4507,14 +4685,17 @@ export namespace Endpoints {
     responses: {
       200: {
         data: {
+          archived_at?: (string | null) | undefined;
           created_at: string;
           current_version?: (null | Schemas.WorkflowVersionResponse) | undefined;
           description?: (string | null) | undefined;
           enabled: boolean;
+          folder_id?: (string | null) | undefined;
           id: string;
           layout?: (null | Schemas.WorkflowLayoutDto) | undefined;
           name: string;
           organization_id: Schemas.OrganizationId;
+          tags: Array<string>;
           updated_at: string;
         };
         pagination?: (null | Schemas.PaginationMetadata) | undefined;
@@ -4545,20 +4726,25 @@ export namespace Endpoints {
     responses: {
       200: {
         data: {
+          archived_at?: (string | null) | undefined;
           created_at: string;
           current_version_id?: (string | null) | undefined;
           description?: (string | null) | undefined;
           enabled: boolean;
+          folder_id?: (string | null) | undefined;
           id: string;
           name: string;
           organization_id: Schemas.OrganizationId;
+          tags: Array<string>;
           updated_at: string;
         };
         pagination?: (null | Schemas.PaginationMetadata) | undefined;
       };
+      400: unknown;
       401: unknown;
       403: unknown;
       404: unknown;
+      409: unknown;
     };
   };
   export type post_StartRun = {
@@ -4602,6 +4788,7 @@ export namespace Endpoints {
       401: unknown;
       403: unknown;
       404: unknown;
+      409: unknown;
       422: { code: string; details: Schemas.GraphInvalidDetails; message: string; status: number };
     };
   };
@@ -7050,6 +7237,57 @@ export namespace Endpoints {
       409: unknown;
     };
   };
+  export type get_ListSupportApiKeys = {
+    method: "GET";
+    path: "/api/v1/organizations/{organization_id}/support/api-keys";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string };
+    };
+    responses: {
+      200: {
+        data: Array<{
+          created_at: string;
+          id: Schemas.SupportApiKeyId;
+          last_used_at?: (string | null) | undefined;
+          name: string;
+          prefix: string;
+          revoked_at?: (string | null) | undefined;
+        }>;
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+    };
+  };
+  export type post_CreateSupportApiKey = {
+    method: "POST";
+    path: "/api/v1/organizations/{organization_id}/support/api-keys";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string };
+
+      body: Schemas.CreateSupportApiKeyRequest;
+    };
+    responses: {
+      201: {
+        data: { created_at: string; id: Schemas.SupportApiKeyId; key: string; name: string; prefix: string };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+      409: unknown;
+    };
+  };
+  export type delete_RevokeSupportApiKey = {
+    method: "DELETE";
+    path: "/api/v1/organizations/{organization_id}/support/api-keys/{key_id}";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string; key_id: string };
+    };
+    responses: { 204: unknown; 401: unknown; 403: unknown; 404: unknown };
+  };
   export type get_GetSupportAttachmentUrl = {
     method: "GET";
     path: "/api/v1/organizations/{organization_id}/support/attachments/{attachment_id}/url";
@@ -8596,6 +8834,174 @@ export namespace Endpoints {
       409: unknown;
     };
   };
+  export type get_ListIntakeTickets = {
+    method: "GET";
+    path: "/api/v1/support/intake/tickets";
+    requestFormat: "json";
+    parameters: {
+      query: Partial<{ custom_field_key: string; custom_field_value: string; page: number; per_page: number }>;
+    };
+    responses: {
+      200: {
+        data: Array<{
+          badges: Array<Schemas.BadgeResponse>;
+          body: string;
+          created_at: string;
+          custom_fields: Record<string, unknown>;
+          entries?: (Array<Schemas.IntakeEntryResponse> | null) | undefined;
+          external_id?: (string | null) | undefined;
+          id: Schemas.TicketId;
+          number: Schemas.TicketNumber;
+          status: Schemas.TicketStatus;
+          subject: string;
+        }>;
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      422: unknown;
+      429: unknown;
+    };
+  };
+  export type post_CreateIntakeTicket = {
+    method: "POST";
+    path: "/api/v1/support/intake/tickets";
+    requestFormat: "json";
+    parameters: {
+      body: Schemas.CreateIntakeTicketRequest;
+    };
+    responses: {
+      200: {
+        data: {
+          badges: Array<Schemas.BadgeResponse>;
+          body: string;
+          created_at: string;
+          custom_fields: Record<string, unknown>;
+          entries?: (Array<Schemas.IntakeEntryResponse> | null) | undefined;
+          external_id?: (string | null) | undefined;
+          id: Schemas.TicketId;
+          number: Schemas.TicketNumber;
+          status: Schemas.TicketStatus;
+          subject: string;
+        };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      201: {
+        data: {
+          badges: Array<Schemas.BadgeResponse>;
+          body: string;
+          created_at: string;
+          custom_fields: Record<string, unknown>;
+          entries?: (Array<Schemas.IntakeEntryResponse> | null) | undefined;
+          external_id?: (string | null) | undefined;
+          id: Schemas.TicketId;
+          number: Schemas.TicketNumber;
+          status: Schemas.TicketStatus;
+          subject: string;
+        };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      422: unknown;
+      429: unknown;
+    };
+  };
+  export type get_GetIntakeTicket = {
+    method: "GET";
+    path: "/api/v1/support/intake/tickets/{ticket_id}";
+    requestFormat: "json";
+    parameters: {
+      path: { ticket_id: string };
+    };
+    responses: {
+      200: {
+        data: {
+          badges: Array<Schemas.BadgeResponse>;
+          body: string;
+          created_at: string;
+          custom_fields: Record<string, unknown>;
+          entries?: (Array<Schemas.IntakeEntryResponse> | null) | undefined;
+          external_id?: (string | null) | undefined;
+          id: Schemas.TicketId;
+          number: Schemas.TicketNumber;
+          status: Schemas.TicketStatus;
+          subject: string;
+        };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      404: unknown;
+      429: unknown;
+    };
+  };
+  export type post_AttachIntakeFile = {
+    method: "POST";
+    path: "/api/v1/support/intake/tickets/{ticket_id}/attachments";
+    requestFormat: "binary";
+    parameters: {
+      query: { entry_id: string };
+      path: { ticket_id: string };
+      header: { "X-File-Name": string };
+      body: Array<number>;
+    };
+    responses: {
+      201: {
+        data: {
+          created_at: string;
+          file_name: string;
+          id: Schemas.AttachmentId;
+          mime_type: string;
+          size_bytes: number;
+        };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      400: unknown;
+      401: unknown;
+      404: unknown;
+      413: unknown;
+      422: unknown;
+      429: unknown;
+    };
+  };
+  export type get_GetIntakeAttachmentUrl = {
+    method: "GET";
+    path: "/api/v1/support/intake/tickets/{ticket_id}/attachments/{attachment_id}/url";
+    requestFormat: "json";
+    parameters: {
+      path: { ticket_id: string; attachment_id: string };
+    };
+    responses: {
+      200: { data: { expires_at: string; url: string }; pagination?: (null | Schemas.PaginationMetadata) | undefined };
+      401: unknown;
+      404: unknown;
+      429: unknown;
+    };
+  };
+  export type post_PostIntakeMessage = {
+    method: "POST";
+    path: "/api/v1/support/intake/tickets/{ticket_id}/messages";
+    requestFormat: "json";
+    parameters: {
+      path: { ticket_id: string };
+
+      body: Schemas.PostIntakeMessageRequest;
+    };
+    responses: {
+      201: {
+        data: {
+          attachments: Array<Schemas.IntakeAttachmentResponse>;
+          body: string;
+          created_at: string;
+          id: Schemas.TicketEntryId;
+          kind: Schemas.IntakeEntryKind;
+        };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      404: unknown;
+      422: unknown;
+      429: unknown;
+    };
+  };
   export type delete_DeleteTaskRecurrence = {
     method: "DELETE";
     path: "/api/v1/task-recurrences/{task_recurrence_id}";
@@ -8706,6 +9112,7 @@ export type EndpointByMethod = {
     "/api/v1/organizations/{organization_id}": Endpoints.patch_UpdateOrganization;
     "/api/v1/organizations/{organization_id}/absences/{absence_id}": Endpoints.patch_PatchAbsence;
     "/api/v1/organizations/{organization_id}/automation/credentials/{credential_id}": Endpoints.patch_UpdateAutomationCredential;
+    "/api/v1/organizations/{organization_id}/automation/folders/{folder_id}": Endpoints.patch_UpdateWorkflowFolder;
     "/api/v1/organizations/{organization_id}/automation/workflows/{workflow_id}": Endpoints.patch_UpdateWorkflow;
     "/api/v1/organizations/{organization_id}/legal-identity": Endpoints.patch_UpdateOrganizationLegalIdentity;
     "/api/v1/organizations/{organization_id}/project-templates/{project_template_id}": Endpoints.patch_PatchProjectTemplate;
@@ -8745,11 +9152,13 @@ export type EndpointByMethod = {
     "/api/v1/organizations/{organization_id}": Endpoints.delete_DeleteOrganization;
     "/api/v1/organizations/{organization_id}/absences/{absence_id}": Endpoints.delete_DeleteAbsence;
     "/api/v1/organizations/{organization_id}/automation/credentials/{credential_id}": Endpoints.delete_DeleteAutomationCredential;
+    "/api/v1/organizations/{organization_id}/automation/folders/{folder_id}": Endpoints.delete_DeleteWorkflowFolder;
     "/api/v1/organizations/{organization_id}/automation/workflows/{workflow_id}": Endpoints.delete_DeleteWorkflow;
     "/api/v1/organizations/{organization_id}/doe-models/{doe_model_id}": Endpoints.delete_ArchiveDoeModel;
     "/api/v1/organizations/{organization_id}/does/{doe_id}": Endpoints.delete_DeleteDoe;
     "/api/v1/organizations/{organization_id}/project-templates/{project_template_id}": Endpoints.delete_ArchiveProjectTemplate;
     "/api/v1/organizations/{organization_id}/projects/{project_id}": Endpoints.delete_ArchiveProject;
+    "/api/v1/organizations/{organization_id}/support/api-keys/{key_id}": Endpoints.delete_RevokeSupportApiKey;
     "/api/v1/organizations/{organization_id}/support/entries/{entry_id}": Endpoints.delete_DeleteSupportDraft;
     "/api/v1/organizations/{organization_id}/support/tickets/{ticket_id}/badges/{label}": Endpoints.delete_RemoveSupportTicketBadge;
     "/api/v1/organizations/{organization_id}/task-labels/{label_id}": Endpoints.delete_DeleteTaskLabel;
@@ -8795,6 +9204,7 @@ export type EndpointByMethod = {
     "/api/v1/organizations/{organization_id}/automation/connectors": Endpoints.get_ListConnectors;
     "/api/v1/organizations/{organization_id}/automation/credentials": Endpoints.get_ListAutomationCredentials;
     "/api/v1/organizations/{organization_id}/automation/events": Endpoints.get_ListAutomationEvents;
+    "/api/v1/organizations/{organization_id}/automation/folders": Endpoints.get_ListWorkflowFolders;
     "/api/v1/organizations/{organization_id}/automation/runs": Endpoints.get_ListRuns;
     "/api/v1/organizations/{organization_id}/automation/runs/{run_id}": Endpoints.get_GetRun;
     "/api/v1/organizations/{organization_id}/automation/settings": Endpoints.get_GetAutomationSettings;
@@ -8842,6 +9252,7 @@ export type EndpointByMethod = {
     "/api/v1/organizations/{organization_id}/supplier-invoices": Endpoints.get_ListSupplierInvoices;
     "/api/v1/organizations/{organization_id}/suppliers": Endpoints.get_ListSuppliers;
     "/api/v1/organizations/{organization_id}/suppliers/{supplier_id}": Endpoints.get_GetSupplier;
+    "/api/v1/organizations/{organization_id}/support/api-keys": Endpoints.get_ListSupportApiKeys;
     "/api/v1/organizations/{organization_id}/support/attachments/{attachment_id}/url": Endpoints.get_GetSupportAttachmentUrl;
     "/api/v1/organizations/{organization_id}/support/settings": Endpoints.get_GetSupportSettings;
     "/api/v1/organizations/{organization_id}/support/tickets": Endpoints.get_ListSupportTickets;
@@ -8861,6 +9272,9 @@ export type EndpointByMethod = {
     "/api/v1/quotes/{quote_id}/plan-proposal": Endpoints.get_GetQuotePlanProposal;
     "/api/v1/service-rates/{service_rate_id}": Endpoints.get_GetServiceRate;
     "/api/v1/supplier-invoices/{supplier_invoice_id}": Endpoints.get_GetSupplierInvoice;
+    "/api/v1/support/intake/tickets": Endpoints.get_ListIntakeTickets;
+    "/api/v1/support/intake/tickets/{ticket_id}": Endpoints.get_GetIntakeTicket;
+    "/api/v1/support/intake/tickets/{ticket_id}/attachments/{attachment_id}/url": Endpoints.get_GetIntakeAttachmentUrl;
     "/api/v1/users/@me/organizations": Endpoints.get_ListMyOrganizations;
   };
   post: {
@@ -8889,6 +9303,7 @@ export type EndpointByMethod = {
     "/api/v1/organizations/{organization_id}/automation/credentials": Endpoints.post_CreateAutomationCredential;
     "/api/v1/organizations/{organization_id}/automation/credentials/{credential_id}/rotate": Endpoints.post_RotateAutomationCredential;
     "/api/v1/organizations/{organization_id}/automation/expressions/evaluate": Endpoints.post_EvaluateExpression;
+    "/api/v1/organizations/{organization_id}/automation/folders": Endpoints.post_CreateWorkflowFolder;
     "/api/v1/organizations/{organization_id}/automation/runs/{run_id}/replay": Endpoints.post_ReplayRun;
     "/api/v1/organizations/{organization_id}/automation/workflows": Endpoints.post_CreateWorkflow;
     "/api/v1/organizations/{organization_id}/automation/workflows/{workflow_id}/runs": Endpoints.post_StartRun;
@@ -8929,6 +9344,7 @@ export type EndpointByMethod = {
     "/api/v1/organizations/{organization_id}/service-rates": Endpoints.post_CreateServiceRate;
     "/api/v1/organizations/{organization_id}/supplier-invoices/import": Endpoints.post_ImportSupplierInvoice;
     "/api/v1/organizations/{organization_id}/suppliers": Endpoints.post_CreateSupplier;
+    "/api/v1/organizations/{organization_id}/support/api-keys": Endpoints.post_CreateSupportApiKey;
     "/api/v1/organizations/{organization_id}/support/entries/{entry_id}/attachments": Endpoints.post_AttachSupportEntryFile;
     "/api/v1/organizations/{organization_id}/support/entries/{entry_id}/send": Endpoints.post_SendSupportDraft;
     "/api/v1/organizations/{organization_id}/support/tickets/{ticket_id}/badges": Endpoints.post_AddSupportTicketBadge;
@@ -8943,6 +9359,9 @@ export type EndpointByMethod = {
     "/api/v1/quotes/{quote_id}/plan": Endpoints.post_CreateQuotePlan;
     "/api/v1/supplier-invoices/{supplier_invoice_id}/confirm": Endpoints.post_ConfirmSupplierInvoice;
     "/api/v1/supplier-invoices/{supplier_invoice_id}/reject": Endpoints.post_RejectSupplierInvoice;
+    "/api/v1/support/intake/tickets": Endpoints.post_CreateIntakeTicket;
+    "/api/v1/support/intake/tickets/{ticket_id}/attachments": Endpoints.post_AttachIntakeFile;
+    "/api/v1/support/intake/tickets/{ticket_id}/messages": Endpoints.post_PostIntakeMessage;
   };
   put: {
     "/api/v1/chat/channels/{channel_id}/permissions/everyone": Endpoints.put_UpsertEveryoneOverwrite;
