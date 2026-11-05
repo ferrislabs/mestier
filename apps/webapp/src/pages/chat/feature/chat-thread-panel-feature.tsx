@@ -25,18 +25,23 @@ export function ChatThreadPanelFeature({
 		useMessageThreadUi(threadChannelId)
 
 	return (
-		<div className="flex w-80 shrink-0 flex-col border-l">
+		<div className="flex min-h-0 w-80 shrink-0 flex-col border-border border-l bg-background">
 			<ThreadPanelHeaderUI
 				replyCount={messageListProps.messages.length}
 				onClose={onClose}
 			/>
 			<MessageListUI
 				{...messageListProps}
+				label="Messages du fil"
 				threadedMessageIds={new Set()}
 				onOpenThread={() => {}}
 			/>
 			<TypingIndicatorUI typingCount={typingCount} />
-			<MessageComposerUI {...composerProps} />
+			<MessageComposerUI
+				{...composerProps}
+				label="Répondre dans le fil"
+				placeholder="Répondre dans le fil"
+			/>
 		</div>
 	)
 }

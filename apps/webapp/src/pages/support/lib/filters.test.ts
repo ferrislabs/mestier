@@ -4,6 +4,7 @@ import {
 	hasActiveSupportFilters,
 	supportFiltersToQuery,
 	supportSearchSchema,
+	UNASSIGNED_FILTER,
 } from '#/pages/support/lib/filters'
 import type { SupportFilters } from '#/pages/support/types'
 
@@ -71,6 +72,29 @@ describe('supportSearchSchema', () => {
 	})
 })
 
+describe('supportSearchSchema — view filters', () => {
+	it('reads a status, a priority and an open ticket', () => {
+		expect(
+			parse({ status: 'waiting_customer', priority: 'urgent', ticket: 't-1' }),
+		).toEqual({
+			...EMPTY_SUPPORT_FILTERS,
+			status: 'waiting_customer',
+			priority: 'urgent',
+			ticket: 't-1',
+		})
+	})
+
+	it('accepts "all" as a status', () => {
+		expect(parse({ status: 'all' }).status).toBe('all')
+	})
+
+	it('drops a status or a priority it does not know', () => {
+		expect(parse({ status: 'archived', priority: 'critical' })).toEqual(
+			EMPTY_SUPPORT_FILTERS,
+		)
+	})
+})
+
 describe('EMPTY_SUPPORT_FILTERS', () => {
 	it('carries every key, explicitly undefined', () => {
 		expect(Object.keys(EMPTY_SUPPORT_FILTERS).sort()).toEqual([
@@ -78,13 +102,13 @@ describe('EMPTY_SUPPORT_FILTERS', () => {
 			'badge',
 			'custom_field_key',
 			'custom_field_value',
+			'priority',
+			'status',
+			'ticket',
 		])
-		expect(Object.values(EMPTY_SUPPORT_FILTERS)).toEqual([
-			undefined,
-			undefined,
-			undefined,
-			undefined,
-		])
+		expect(
+			Object.values(EMPTY_SUPPORT_FILTERS).every((v) => v === undefined),
+		).toBe(true)
 	})
 })
 
@@ -192,6 +216,29 @@ describe('supportFiltersToQuery', () => {
 		expect(
 			supportFiltersToQuery(
 				{ ...EMPTY_SUPPORT_FILTERS, custom_field_value: 'Lyon' },
+				100,
+			),
+		).toEqual({ per_page: 100 })
+	})
+
+	it('keeps the unassigned filter on the client side', () => {
+		expect(
+			supportFiltersToQuery(
+				{ ...EMPTY_SUPPORT_FILTERS, assignee: UNASSIGNED_FILTER },
+				100,
+			),
+		).toEqual({ per_page: 100 })
+	})
+
+	it('never sends the view filters', () => {
+		expect(
+			supportFiltersToQuery(
+				{
+					...EMPTY_SUPPORT_FILTERS,
+					status: 'resolved',
+					priority: 'low',
+					ticket: 't-1',
+				},
 				100,
 			),
 		).toEqual({ per_page: 100 })

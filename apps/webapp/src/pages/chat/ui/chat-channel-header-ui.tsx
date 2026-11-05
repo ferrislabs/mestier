@@ -1,12 +1,17 @@
-import { AlertCircle, Hash, Settings } from 'lucide-react'
-import { Button } from '#/components/ui/button'
+import { Hash, Search, Settings, Users } from 'lucide-react'
+import type { ReactNode } from 'react'
 import { Skeleton } from '#/components/ui/skeleton'
+import { IconButton, IconToggle } from '#/pages/chat/ui/icon-button'
 
 export interface ChatChannelHeaderUIProps {
 	name?: string
 	topic?: string | null
 	isLoading: boolean
-	isError: boolean
+	searchOpen: boolean
+	onSearchOpenChange: (open: boolean) => void
+	membersOpen: boolean
+	onMembersOpenChange: (open: boolean) => void
+	pinned: ReactNode
 	onOpenAdmin: () => void
 }
 
@@ -14,47 +19,60 @@ export function ChatChannelHeaderUI({
 	name,
 	topic,
 	isLoading,
-	isError,
+	searchOpen,
+	onSearchOpenChange,
+	membersOpen,
+	onMembersOpenChange,
+	pinned,
 	onOpenAdmin,
 }: ChatChannelHeaderUIProps) {
-	if (isError) {
-		return (
-			<div className="flex items-center gap-2 border-b px-4 py-3 text-sm text-destructive">
-				<AlertCircle className="size-4" />
-				<span>Ce canal est introuvable ou n’est plus accessible.</span>
-			</div>
-		)
-	}
-
 	if (isLoading) {
 		return (
-			<div className="flex items-center gap-2 border-b px-4 py-3">
+			<header className="flex min-h-12 shrink-0 items-center gap-3 border-border border-b bg-background px-4 py-2">
 				<Skeleton className="size-4 rounded-full" />
 				<Skeleton className="h-4 w-32" />
-			</div>
+			</header>
 		)
 	}
 
 	return (
-		<div className="flex items-center gap-2 border-b px-4 py-3">
-			<Hash className="size-4 shrink-0 text-muted-foreground" />
-			<h1 className="font-semibold text-foreground">{name}</h1>
-			{topic ? (
-				<>
-					<span className="text-muted-foreground">·</span>
-					<p className="truncate text-sm text-muted-foreground">{topic}</p>
-				</>
-			) : null}
-			<Button
-				type="button"
-				variant="ghost"
-				size="icon"
-				aria-label="Paramètres du canal"
-				className="ml-auto"
-				onClick={onOpenAdmin}
-			>
-				<Settings className="size-4" />
-			</Button>
-		</div>
+		<header className="flex min-h-12 shrink-0 items-center gap-3 border-border border-b bg-background px-4 py-2">
+			<div className="flex min-w-0 flex-1 items-center gap-3">
+				<h1 className="flex shrink-0 items-center gap-1 font-semibold text-base">
+					<Hash aria-hidden className="size-4 text-muted-foreground" />
+					{name}
+				</h1>
+				{topic ? (
+					<p className="hidden min-w-0 truncate text-muted-foreground text-sm md:block">
+						{topic}
+					</p>
+				) : null}
+			</div>
+			<div className="flex shrink-0 items-center gap-0.5">
+				<IconToggle
+					label="Rechercher dans le canal"
+					icon={Search}
+					pressed={searchOpen}
+					onPressedChange={onSearchOpenChange}
+				/>
+				{pinned}
+				<IconToggle
+					label={
+						membersOpen
+							? 'Masquer la liste des membres'
+							: 'Afficher la liste des membres'
+					}
+					icon={Users}
+					pressed={membersOpen}
+					onPressedChange={onMembersOpenChange}
+					className="max-xl:hidden"
+				/>
+				<IconButton
+					label="Paramètres du canal"
+					icon={Settings}
+					onClick={onOpenAdmin}
+				/>
+			</div>
+		</header>
 	)
 }

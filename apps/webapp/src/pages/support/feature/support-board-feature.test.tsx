@@ -6,20 +6,43 @@ import {
 	waitFor,
 	within,
 } from '@testing-library/react'
-import { type ReactNode, useState } from 'react'
-import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { Schemas } from '#/api/api.client'
+import userEvent from '@testing-library/user-event'
+import { useState } from 'react'
 import {
-	ActiveOrganizationProvider,
-	OrganizationListProvider,
-	useActiveOrganization,
-} from '#/hooks/use-active-organization'
-import type { Organization } from '#/hooks/use-organizations'
-import { PERMISSION_CATALOG } from '#/lib/permission-catalog'
+	afterEach,
+	beforeAll,
+	beforeEach,
+	describe,
+	expect,
+	it,
+	vi,
+} from 'vitest'
+import type { Schemas } from '#/api/api.client'
+import { useActiveOrganization } from '#/hooks/use-active-organization'
+import { resetTicketPriorities } from '#/pages/support/feature/mocks/priorities'
 import { SupportBoardFeature } from '#/pages/support/feature/support-board-feature'
+import {
+	ALL_PERMISSIONS,
+	callsTo,
+	chooseOption,
+	createQueryClient,
+	deferred,
+	ENTRIES_PATH,
+	type FakeApi,
+	installFakeTanstackApi,
+	installRadixPolyfills,
+	MEMBERS,
+	MEMBERS_PATH,
+	Providers,
+	page,
+	SETTINGS_PATH,
+	STATUS_PATH,
+	TICKET_PATH,
+	TICKETS_PATH,
+	ticket,
+} from '#/pages/support/feature/support-test-kit'
 import { EMPTY_SUPPORT_FILTERS } from '#/pages/support/lib/filters'
-import type { SupportFilters } from '#/pages/support/types'
-import { seedPermissionsCacheForOrganization } from '#/test/with-permissions'
+import type { SupportFilters, SupportView } from '#/pages/support/types'
 
 vi.mock('#/hooks/use-active-organization', async (importOriginal) => {
 	const actual =
@@ -30,64 +53,8 @@ vi.mock('#/hooks/use-active-organization', async (importOriginal) => {
 	}
 })
 
-const TICKETS_PATH = '/api/v1/organizations/{organization_id}/support/tickets'
-const TICKET_STATUS_PATH =
-	'/api/v1/organizations/{organization_id}/support/tickets/{ticket_id}/status'
-const SETTINGS_PATH = '/api/v1/organizations/{organization_id}/support/settings'
-const MEMBERS_PATH = '/api/v1/organizations/{organization_id}/members'
-const ALL_PERMISSIONS = PERMISSION_CATALOG.map((entry) => entry.name)
-
-const ORGANIZATION: Organization = {
-	id: 'org-1',
-	name: 'Atelier Bois & Co',
-	owner_id: 'user-1',
-	missing_legal_identity_fields: [],
-	slug: 'atelier-bois',
-	field_clock_enabled: false,
-	vat_on_debits: false,
-	mcp_enabled: false,
-	created_at: '2026-01-01T00:00:00Z',
-	updated_at: '2026-01-01T00:00:00Z',
-}
-
-const MEMBERS = [
-	{
-		id: 'member-1',
-		organization_id: 'org-1',
-		display_name: 'Alix Martin',
-		last_name: 'Martin',
-		first_name: 'Alix',
-		created_at: '2026-01-01T00:00:00Z',
-	},
-	{
-		id: 'member-2',
-		organization_id: 'org-1',
-		display_name: 'Jo Durand',
-		last_name: 'Durand',
-		first_name: 'Jo',
-		created_at: '2026-01-01T00:00:00Z',
-	},
-]
-
-function ticket(
-	overrides: Partial<Schemas.TicketResponse> = {},
-): Schemas.TicketResponse {
-	return {
-		id: 'ticket-1',
-		number: 1,
-		subject: 'Fuite sous évier',
-		body: 'Bonjour',
-		status: 'new',
-		assignee_member_id: null,
-		assigned_at: null,
-		custom_fields: {},
-		badges: [],
-		external_id: null,
-		created_at: '2026-10-01T07:00:00Z',
-		updated_at: '2026-10-01T07:00:00Z',
-		...overrides,
-	}
-}
+beforeAll(installRadixPolyfills)
+beforeEach(resetTicketPriorities)
 
 function serverTickets(): Schemas.TicketResponse[] {
 	return [
@@ -98,12 +65,14 @@ function serverTickets(): Schemas.TicketResponse[] {
 			status: 'new',
 			assignee_member_id: 'member-1',
 			custom_fields: { ville: 'Lyon' },
+			updated_at: '2026-10-04T07:00:00Z',
 		}),
 		ticket({
 			id: 'ticket-2',
 			number: 2,
 			subject: 'Devis salle de bain',
 			status: 'new',
+			updated_at: '2026-10-03T07:00:00Z',
 		}),
 		ticket({
 			id: 'ticket-3',
@@ -121,97 +90,26 @@ function serverTickets(): Schemas.TicketResponse[] {
 	]
 }
 
-function page(tickets: Schemas.TicketResponse[], total?: number) {
-	return {
-		data: tickets,
-		pagination: {
-			current_page: 1,
-			first_page: 1,
-			is_empty: tickets.length === 0,
-			per_page: 100,
-			total: total ?? tickets.length,
-		},
-	}
-}
-
-type Handler = (params: unknown) => unknown
-
-interface RecordedCall {
-	method: string
-	path: string
-	params: unknown
-}
-
-function installFakeTanstackApi() {
-	const calls: RecordedCall[] = []
-	const getHandlers = new Map<string, Handler>()
-	const mutationHandlers = new Map<string, Handler>()
-
-	const fakeApi = {
-		get(path: string, params: unknown) {
-			const request = (params ?? {}) as { path?: unknown; query?: unknown }
-			const queryKey = [{ _id: path, path: request.path, query: request.query }]
-			return {
-				queryKey,
-				queryOptions: {
-					queryKey,
-					queryFn: async () => {
-						calls.push({ method: 'get', path, params })
-						const handler = getHandlers.get(path)
-						if (!handler) throw new Error(`unmocked GET ${path}`)
-						return handler(params)
-					},
-				},
-			}
-		},
-		mutation(method: string, path: string) {
-			return {
-				mutationOptions: {
-					mutationKey: [{ method, path }],
-					mutationFn: async (params: unknown) => {
-						calls.push({ method, path, params })
-						const handler = mutationHandlers.get(`${method}:${path}`)
-						if (!handler) {
-							throw new Error(`unmocked ${method.toUpperCase()} ${path}`)
-						}
-						return handler(params)
-					},
-				},
-			}
-		},
-	}
-
-	Object.assign(window, { tanstackApi: fakeApi })
-
-	return {
-		calls,
-		mockGet(path: string, handler: Handler) {
-			getHandlers.set(path, handler)
-		},
-		mockMutation(method: string, path: string, handler: Handler) {
-			mutationHandlers.set(`${method}:${path}`, handler)
-		},
-	}
-}
-
-type FakeApi = ReturnType<typeof installFakeTanstackApi>
-
 interface RenderOptions {
 	permissions?: string[]
 	filters?: SupportFilters
 	displayFields?: string[]
 	configure?: (api: FakeApi) => void
-	ready?: RegExp | null
+	ready?: boolean
 }
 
 function Harness({
 	initialFilters,
 	onFiltersChange,
 	onOpenTicket,
+	onOpenFullPage,
+	onViewChange,
 }: {
 	initialFilters: SupportFilters
 	onFiltersChange: (filters: SupportFilters) => void
-	onOpenTicket: (ticketId: string) => void
+	onOpenTicket: (ticketId: string | null) => void
+	onOpenFullPage: (ticketId: string) => void
+	onViewChange: (view: SupportView) => void
 }) {
 	const [filters, setFilters] = useState(initialFilters)
 
@@ -222,26 +120,16 @@ function Harness({
 				onFiltersChange(next)
 				setFilters(next)
 			}}
-			onOpenTicket={onOpenTicket}
+			onOpenTicket={(ticketId) => {
+				onOpenTicket(ticketId)
+				setFilters((current) => ({
+					...current,
+					ticket: ticketId ?? undefined,
+				}))
+			}}
+			onOpenFullPage={onOpenFullPage}
+			onViewChange={onViewChange}
 		/>
-	)
-}
-
-function Providers({
-	queryClient,
-	children,
-}: {
-	queryClient: QueryClient
-	children: ReactNode
-}) {
-	return (
-		<QueryClientProvider client={queryClient}>
-			<OrganizationListProvider organizations={[ORGANIZATION]}>
-				<ActiveOrganizationProvider activeOrganization={ORGANIZATION}>
-					{children}
-				</ActiveOrganizationProvider>
-			</OrganizationListProvider>
-		</QueryClientProvider>
 	)
 }
 
@@ -250,7 +138,7 @@ async function renderBoard({
 	filters = EMPTY_SUPPORT_FILTERS,
 	displayFields = ['ville'],
 	configure,
-	ready = /Fuite sous évier/,
+	ready = true,
 }: RenderOptions = {}) {
 	const api = installFakeTanstackApi()
 	let tickets = serverTickets()
@@ -259,7 +147,12 @@ async function renderBoard({
 		data: { display_fields: displayFields },
 	}))
 	api.mockGet(MEMBERS_PATH, () => ({ data: MEMBERS, pagination: null }))
-	api.mockMutation('patch', TICKET_STATUS_PATH, (params) => {
+	api.mockGet(TICKET_PATH, (params) => {
+		const { path } = params as { path: { ticket_id: string } }
+		return { data: tickets.find((entry) => entry.id === path.ticket_id) }
+	})
+	api.mockGet(ENTRIES_PATH, () => ({ data: [], pagination: null }))
+	api.mockMutation('patch', STATUS_PATH, (params) => {
 		const { path, body } = params as {
 			path: { ticket_id: string }
 			body: { status: Schemas.TicketResponse['status'] }
@@ -271,88 +164,94 @@ async function renderBoard({
 	})
 	configure?.(api)
 
-	const queryClient = new QueryClient({
-		defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
-	})
-	seedPermissionsCacheForOrganization(queryClient, ORGANIZATION.id, permissions)
-
+	const queryClient = createQueryClient(permissions)
 	const filterChanges: SupportFilters[] = []
-	const openedTickets: string[] = []
+	const openedTickets: (string | null)[] = []
+	const fullPages: string[] = []
+	const views: SupportView[] = []
 	render(
 		<Providers queryClient={queryClient}>
 			<Harness
 				initialFilters={filters}
 				onFiltersChange={(next) => filterChanges.push(next)}
 				onOpenTicket={(ticketId) => openedTickets.push(ticketId)}
+				onOpenFullPage={(ticketId) => fullPages.push(ticketId)}
+				onViewChange={(view) => views.push(view)}
 			/>
 		</Providers>,
 	)
 
-	if (ready) {
-		await screen.findByRole('article', { name: ready })
-	} else {
-		await screen.findByText('Aucun ticket')
-	}
+	if (ready) await screen.findByRole('button', { name: /Fuite sous évier/ })
 
-	return { ...api, filterChanges, openedTickets }
+	return {
+		...api,
+		filterChanges,
+		openedTickets,
+		fullPages,
+		views,
+		user: userEvent.setup(),
+	}
 }
 
 function column(label: string): HTMLElement {
-	return screen.getByRole('region', { name: `Colonne ${label}` })
+	return screen.getByRole('region', { name: label })
 }
 
 function card(subject: string): HTMLElement {
-	return screen.getByRole('article', { name: new RegExp(subject) })
+	return within(column(columnOf(subject))).getByRole('button', {
+		name: new RegExp(subject),
+	})
 }
 
-function handle(subject: string): HTMLElement {
-	return within(card(subject)).getByRole('button', {
-		name: `Déplacer ${subject}`,
-	})
+const COLUMN_OF: Record<string, string> = {
+	'Fuite sous évier': 'Backlog',
+	'Devis salle de bain': 'Backlog',
+	'Chauffe-eau en panne': 'Ouvert',
+	'Robinet qui goutte': 'Fermé',
+}
+
+function columnOf(subject: string): string {
+	return COLUMN_OF[subject] ?? 'Backlog'
 }
 
 function subjectsIn(label: string): string[] {
 	return within(column(label))
-		.queryAllByRole('article')
-		.map((element) => element.getAttribute('aria-label')?.split(',')[0] ?? '')
+		.queryAllByRole('button')
+		.map((element) => element.querySelector('.line-clamp-2')?.textContent ?? '')
 }
 
 function patchCalls(api: FakeApi) {
-	return api.calls.filter(
-		(call) => call.method === 'patch' && call.path === TICKET_STATUS_PATH,
-	)
+	return callsTo(api, 'patch', STATUS_PATH)
 }
 
 function ticketQueries(api: FakeApi) {
-	return api.calls
-		.filter((call) => call.method === 'get' && call.path === TICKETS_PATH)
-		.map((call) => (call.params as { query?: unknown }).query)
+	return callsTo(api, 'get', TICKETS_PATH).map(
+		(call) => (call.params as { query?: unknown }).query,
+	)
 }
 
 function drag(from: HTMLElement, to: HTMLElement) {
-	fireEvent.dragStart(from)
-	fireEvent.dragOver(to)
-	fireEvent.drop(to)
-	fireEvent.dragEnd(from)
-}
-
-interface Deferred<T> {
-	promise: Promise<T>
-	resolve: (value: T) => void
-	reject: (reason: unknown) => void
-}
-
-function deferred<T>(): Deferred<T> {
-	let resolve: (value: T) => void = () => {}
-	let reject: (reason: unknown) => void = () => {}
-	const promise = new Promise<T>((resolvePromise, rejectPromise) => {
-		resolve = resolvePromise
-		reject = rejectPromise
-	})
-	return { promise, resolve, reject }
+	const dataTransfer = { setData() {}, effectAllowed: '', dropEffect: '' }
+	fireEvent.dragStart(from, { dataTransfer })
+	fireEvent.dragOver(to, { dataTransfer })
+	fireEvent.drop(to, { dataTransfer })
+	fireEvent.dragEnd(from, { dataTransfer })
 }
 
 describe('SupportBoardFeature — rendu', () => {
+	it('titles the page with the count of open tickets', async () => {
+		await renderBoard()
+
+		expect(
+			screen.getByRole('heading', { level: 1, name: 'Boîte de réception' }),
+		).toBeDefined()
+		expect(
+			screen.getByText(
+				'3 tickets non fermés. Les demandes reçues par l’API arrivent dans le backlog.',
+			),
+		).toBeDefined()
+	})
+
 	it('groups the tickets into the four columns, in order', async () => {
 		await renderBoard()
 
@@ -360,21 +259,18 @@ describe('SupportBoardFeature — rendu', () => {
 			screen
 				.getAllByRole('region')
 				.map((region) => region.getAttribute('aria-label')),
-		).toEqual([
-			'Colonne Nouveau',
-			'Colonne En cours',
-			'Colonne En attente du client',
-			'Colonne Résolu',
-		])
-		expect(subjectsIn('Nouveau')).toEqual([
+		).toEqual(['Backlog', 'Ouvert', 'En attente client', 'Fermé'])
+		expect(subjectsIn('Backlog')).toEqual([
 			'Fuite sous évier',
 			'Devis salle de bain',
 		])
-		expect(subjectsIn('En cours')).toEqual(['Chauffe-eau en panne'])
-		expect(subjectsIn('En attente du client')).toEqual([])
-		expect(subjectsIn('Résolu')).toEqual(['Robinet qui goutte'])
+		expect(subjectsIn('Ouvert')).toEqual(['Chauffe-eau en panne'])
+		expect(subjectsIn('En attente client')).toEqual([])
+		expect(subjectsIn('Fermé')).toEqual(['Robinet qui goutte'])
 		expect(
-			within(column('En attente du client')).getByText('Aucun ticket'),
+			within(column('En attente client')).getByText(
+				'Nous attendons une réponse du client.',
+			),
 		).toBeDefined()
 	})
 
@@ -396,9 +292,14 @@ describe('SupportBoardFeature — rendu', () => {
 		await renderBoard()
 
 		const withValue = within(card('Fuite sous évier'))
-		expect(withValue.getByText('ville')).toBeDefined()
 		expect(withValue.getByText('Lyon')).toBeDefined()
-		expect(within(card('Devis salle de bain')).queryByText('ville')).toBeNull()
+		expect(within(card('Devis salle de bain')).queryByText('Lyon')).toBeNull()
+	})
+
+	it('shows the priority of every card', async () => {
+		await renderBoard()
+
+		expect(within(card('Fuite sous évier')).getByText('Normale')).toBeDefined()
 	})
 
 	it('says nothing is truncated when the listing is complete', async () => {
@@ -419,50 +320,102 @@ describe('SupportBoardFeature — rendu', () => {
 			),
 		).toBeDefined()
 	})
+
+	it('shows the error of a failed listing and reads it again on retry', async () => {
+		let reads = 0
+		const { user } = await renderBoard({
+			ready: false,
+			configure: (api) =>
+				api.mockGet(TICKETS_PATH, () => {
+					reads += 1
+					if (reads === 1) throw new Error('Le support est indisponible.')
+					return page(serverTickets())
+				}),
+		})
+
+		expect(
+			await screen.findByText('Le support est indisponible.'),
+		).toBeDefined()
+		await user.click(screen.getByRole('button', { name: 'Réessayer' }))
+
+		expect(
+			await screen.findByRole('button', { name: /Fuite sous évier/ }),
+		).toBeDefined()
+	})
 })
 
 describe('SupportBoardFeature — ouverture', () => {
-	it('opens the ticket whose subject is clicked', async () => {
-		const { openedTickets } = await renderBoard()
+	it('opens the ticket whose card is clicked', async () => {
+		const { openedTickets, user } = await renderBoard()
 
-		fireEvent.click(
-			within(card('Devis salle de bain')).getByRole('button', {
-				name: 'Devis salle de bain',
-			}),
-		)
+		await user.click(card('Devis salle de bain'))
 
 		expect(openedTickets).toEqual(['ticket-2'])
 	})
 
 	it('opens a ticket without MANAGE_SUPPORT too', async () => {
-		const { openedTickets } = await renderBoard({
+		const { openedTickets, user } = await renderBoard({
 			permissions: ['VIEW_SUPPORT'],
 		})
 
-		fireEvent.click(
-			within(card('Chauffe-eau en panne')).getByRole('button', {
-				name: 'Chauffe-eau en panne',
-			}),
-		)
+		await user.click(card('Chauffe-eau en panne'))
 
 		expect(openedTickets).toEqual(['ticket-3'])
+	})
+
+	it('shows the ticket in a dialog once it is open, and closes it', async () => {
+		const { openedTickets, user } = await renderBoard({
+			filters: { ...EMPTY_SUPPORT_FILTERS, ticket: 'ticket-1' },
+			ready: false,
+		})
+
+		const dialog = await screen.findByRole('dialog')
+		expect(
+			await within(dialog).findByRole('heading', { name: /Fuite sous évier/ }),
+		).toBeDefined()
+
+		await user.click(within(dialog).getByLabelText('Fermer le ticket'))
+
+		expect(openedTickets).toEqual([null])
+		await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+	})
+
+	it('opens the full page of the ticket from the dialog', async () => {
+		const { fullPages, user } = await renderBoard({
+			filters: { ...EMPTY_SUPPORT_FILTERS, ticket: 'ticket-1' },
+			ready: false,
+		})
+
+		await user.click(await screen.findByLabelText('Ouvrir en pleine page'))
+
+		expect(fullPages).toEqual(['ticket-1'])
 	})
 })
 
 describe('SupportBoardFeature — permission', () => {
-	it('offers no move handle without MANAGE_SUPPORT', async () => {
+	it('makes no card draggable without MANAGE_SUPPORT', async () => {
 		await renderBoard({ permissions: ['VIEW_SUPPORT'] })
 
-		expect(screen.queryAllByRole('button', { name: /^Déplacer / })).toEqual([])
-		expect(screen.getAllByRole('article')).toHaveLength(4)
+		for (const subject of Object.keys(COLUMN_OF)) {
+			expect(card(subject).getAttribute('draggable')).toBeNull()
+		}
 	})
 
-	it('offers one handle per ticket with MANAGE_SUPPORT', async () => {
+	it('makes every card draggable with MANAGE_SUPPORT', async () => {
 		await renderBoard({ permissions: ['MANAGE_SUPPORT'] })
 
-		expect(screen.getAllByRole('button', { name: /^Déplacer / })).toHaveLength(
-			4,
-		)
+		for (const subject of Object.keys(COLUMN_OF)) {
+			expect(card(subject).getAttribute('draggable')).toBe('true')
+		}
+	})
+
+	it('ignores the arrow keys without MANAGE_SUPPORT', async () => {
+		const api = await renderBoard({ permissions: ['VIEW_SUPPORT'] })
+
+		fireEvent.keyDown(card('Fuite sous évier'), { key: 'ArrowRight' })
+
+		await waitFor(() => expect(subjectsIn('Backlog')).toHaveLength(2))
+		expect(patchCalls(api)).toHaveLength(0)
 	})
 })
 
@@ -471,9 +424,9 @@ describe('SupportBoardFeature — clavier', () => {
 		const patch = deferred<unknown>()
 		const api = await renderBoard({
 			configure: (fakeApi) =>
-				fakeApi.mockMutation('patch', TICKET_STATUS_PATH, () => patch.promise),
+				fakeApi.mockMutation('patch', STATUS_PATH, () => patch.promise),
 		})
-		const moved = handle('Fuite sous évier')
+		const moved = card('Fuite sous évier')
 		moved.focus()
 
 		fireEvent.keyDown(moved, { key: 'ArrowRight' })
@@ -484,14 +437,14 @@ describe('SupportBoardFeature — clavier', () => {
 			body: { status: 'in_progress' },
 		})
 		await waitFor(() =>
-			expect(subjectsIn('En cours')).toEqual([
+			expect(subjectsIn('Ouvert')).toEqual([
 				'Fuite sous évier',
 				'Chauffe-eau en panne',
 			]),
 		)
-		expect(subjectsIn('Nouveau')).toEqual(['Devis salle de bain'])
+		expect(subjectsIn('Backlog')).toEqual(['Devis salle de bain'])
 		expect(
-			screen.getByText('Fuite sous évier déplacé vers En cours'),
+			screen.getByText('Fuite sous évier déplacé vers Ouvert'),
 		).toBeDefined()
 
 		patch.resolve({ data: ticket({ id: 'ticket-1', status: 'in_progress' }) })
@@ -499,9 +452,8 @@ describe('SupportBoardFeature — clavier', () => {
 
 	it('moves a ticket one column back', async () => {
 		const api = await renderBoard()
-		const moved = handle('Chauffe-eau en panne')
 
-		fireEvent.keyDown(moved, { key: 'ArrowLeft' })
+		fireEvent.keyDown(card('Chauffe-eau en panne'), { key: 'ArrowLeft' })
 
 		await waitFor(() => expect(patchCalls(api)).toHaveLength(1))
 		expect(patchCalls(api)[0].params).toEqual({
@@ -513,10 +465,10 @@ describe('SupportBoardFeature — clavier', () => {
 	it('sends nothing past the first or the last column', async () => {
 		const api = await renderBoard()
 
-		fireEvent.keyDown(handle('Fuite sous évier'), { key: 'ArrowLeft' })
-		fireEvent.keyDown(handle('Robinet qui goutte'), { key: 'ArrowRight' })
+		fireEvent.keyDown(card('Fuite sous évier'), { key: 'ArrowLeft' })
+		fireEvent.keyDown(card('Robinet qui goutte'), { key: 'ArrowRight' })
 
-		await waitFor(() => expect(subjectsIn('Nouveau')).toHaveLength(2))
+		await waitFor(() => expect(subjectsIn('Backlog')).toHaveLength(2))
 		expect(patchCalls(api)).toHaveLength(0)
 	})
 })
@@ -525,7 +477,7 @@ describe('SupportBoardFeature — glisser-déposer', () => {
 	it('sends one PATCH for a drop on another column', async () => {
 		const api = await renderBoard()
 
-		drag(card('Devis salle de bain'), column('Résolu'))
+		drag(card('Devis salle de bain'), column('Fermé'))
 
 		await waitFor(() => expect(patchCalls(api)).toHaveLength(1))
 		expect(patchCalls(api)[0].params).toEqual({
@@ -533,16 +485,16 @@ describe('SupportBoardFeature — glisser-déposer', () => {
 			body: { status: 'resolved' },
 		})
 		await waitFor(() =>
-			expect(subjectsIn('Résolu')).toContain('Devis salle de bain'),
+			expect(subjectsIn('Fermé')).toContain('Devis salle de bain'),
 		)
 	})
 
 	it('sends nothing for a drop on the ticket’s own column', async () => {
 		const api = await renderBoard()
 
-		drag(card('Fuite sous évier'), column('Nouveau'))
+		drag(card('Fuite sous évier'), column('Backlog'))
 
-		await waitFor(() => expect(subjectsIn('Nouveau')).toHaveLength(2))
+		await waitFor(() => expect(subjectsIn('Backlog')).toHaveLength(2))
 		expect(patchCalls(api)).toHaveLength(0)
 	})
 })
@@ -559,13 +511,13 @@ describe('SupportBoardFeature — rollback', () => {
 					reads += 1
 					return reads === 1 ? page(serverTickets()) : refetch.promise
 				})
-				api.mockMutation('patch', TICKET_STATUS_PATH, () => patch.promise)
+				api.mockMutation('patch', STATUS_PATH, () => patch.promise)
 			},
 		})
 
-		fireEvent.keyDown(handle('Fuite sous évier'), { key: 'ArrowRight' })
+		fireEvent.keyDown(card('Fuite sous évier'), { key: 'ArrowRight' })
 		await waitFor(() =>
-			expect(subjectsIn('En cours')).toEqual([
+			expect(subjectsIn('Ouvert')).toEqual([
 				'Fuite sous évier',
 				'Chauffe-eau en panne',
 			]),
@@ -574,12 +526,12 @@ describe('SupportBoardFeature — rollback', () => {
 		patch.reject(new Error('Le serveur a refusé le déplacement.'))
 
 		await waitFor(() =>
-			expect(subjectsIn('Nouveau')).toEqual([
+			expect(subjectsIn('Backlog')).toEqual([
 				'Fuite sous évier',
 				'Devis salle de bain',
 			]),
 		)
-		expect(subjectsIn('En cours')).toEqual(['Chauffe-eau en panne'])
+		expect(subjectsIn('Ouvert')).toEqual(['Chauffe-eau en panne'])
 
 		refetch.resolve(page(serverTickets()))
 		expect(
@@ -601,6 +553,20 @@ describe('SupportBoardFeature — filtres', () => {
 		expect(ticketQueries(api)).toEqual([
 			{ per_page: 100, assignee: 'member-1', badge: 'Urgent' },
 		])
+	})
+
+	it('keeps the unassigned filter on the client side', async () => {
+		const api = await renderBoard({
+			filters: { ...EMPTY_SUPPORT_FILTERS, assignee: 'none' },
+			ready: false,
+		})
+
+		await screen.findByRole('button', { name: /Devis salle de bain/ })
+		expect(ticketQueries(api)).toEqual([{ per_page: 100 }])
+		expect(subjectsIn('Backlog')).toEqual(['Devis salle de bain'])
+		expect(
+			screen.getByRole('heading', { level: 1, name: 'Non assignés' }),
+		).toBeDefined()
 	})
 
 	it('sends the custom field pair when both halves are set', async () => {
@@ -625,25 +591,27 @@ describe('SupportBoardFeature — filtres', () => {
 		expect(ticketQueries(api)).toEqual([{ per_page: 100 }])
 	})
 
-	it('keeps a field key from a shared link selectable when it is no longer displayed', async () => {
+	it('counts the active filters on the popover button', async () => {
 		await renderBoard({
-			filters: { ...EMPTY_SUPPORT_FILTERS, custom_field_key: 'ancien_champ' },
+			filters: { ...EMPTY_SUPPORT_FILTERS, badge: 'Urgent', priority: 'high' },
+			ready: false,
 		})
 
-		const select = screen.getByLabelText('Champ')
 		expect(
-			within(select).getByRole('option', { name: 'ancien_champ' }),
+			await screen.findByRole('img', { name: '2 filtres actifs' }),
 		).toBeDefined()
-		expect(within(select).getByRole('option', { name: 'ville' })).toBeDefined()
 	})
 
 	it('writes a picked assignee back and asks the API again', async () => {
 		const api = await renderBoard()
-		await screen.findByRole('option', { name: 'Alix Martin' })
+		await api.user.click(screen.getByRole('button', { name: /Filtres/ }))
+		await screen.findByLabelText('Assigné à')
 
-		fireEvent.change(screen.getByLabelText('Assigné à'), {
-			target: { value: 'member-1' },
-		})
+		await chooseOption(
+			api.user,
+			screen.getByLabelText('Assigné à'),
+			/Alix Martin/,
+		)
 
 		expect(api.filterChanges.at(-1)).toEqual({
 			...EMPTY_SUPPORT_FILTERS,
@@ -658,11 +626,14 @@ describe('SupportBoardFeature — filtres', () => {
 	})
 
 	it('offers the badges carried by the listed tickets', async () => {
-		await renderBoard({
-			configure: (api) =>
-				api.mockGet(TICKETS_PATH, () =>
+		const api = await renderBoard({
+			configure: (fakeApi) =>
+				fakeApi.mockGet(TICKETS_PATH, () =>
 					page([
-						ticket({ badges: [{ label: 'Urgent', tone: 'error' }] }),
+						ticket({
+							subject: 'Fuite sous évier',
+							badges: [{ label: 'Urgent', tone: 'error' }],
+						}),
 						ticket({
 							id: 'ticket-2',
 							subject: 'Autre demande',
@@ -671,35 +642,136 @@ describe('SupportBoardFeature — filtres', () => {
 					]),
 				),
 		})
+		await api.user.click(screen.getByRole('button', { name: /Filtres/ }))
+		await api.user.click(await screen.findByLabelText('Badge'))
 
-		const select = screen.getByLabelText('Badge')
 		expect(
-			within(select)
-				.getAllByRole('option')
-				.map((option) => option.textContent),
+			(await screen.findAllByRole('option')).map(
+				(option) => option.textContent,
+			),
 		).toEqual(['Tous les badges', 'Garantie', 'Urgent'])
 	})
 
-	it('clears every filter at once', async () => {
+	it('keeps a field key from a shared link selectable when it is no longer displayed', async () => {
 		const api = await renderBoard({
-			filters: { ...EMPTY_SUPPORT_FILTERS, badge: 'Urgent' },
+			filters: { ...EMPTY_SUPPORT_FILTERS, custom_field_key: 'ancien_champ' },
 		})
+		await api.user.click(screen.getByRole('button', { name: /Filtres/ }))
+		await api.user.click(await screen.findByLabelText('Champ'))
 
-		fireEvent.click(screen.getByRole('button', { name: 'Effacer les filtres' }))
+		const names = (await screen.findAllByRole('option')).map(
+			(option) => option.textContent,
+		)
+		expect(names).toContain('ancien_champ')
+		expect(names).toContain('ville')
+	})
 
-		expect(api.filterChanges.at(-1)).toStrictEqual(EMPTY_SUPPORT_FILTERS)
+	it('resets every filter at once', async () => {
+		const api = await renderBoard({
+			filters: {
+				...EMPTY_SUPPORT_FILTERS,
+				badge: 'Urgent',
+				priority: 'high',
+			},
+			ready: false,
+		})
+		await api.user.click(await screen.findByRole('button', { name: /Filtres/ }))
+
+		await api.user.click(
+			await screen.findByRole('button', { name: /Réinitialiser/ }),
+		)
+
+		expect(api.filterChanges.at(-1)).toMatchObject({
+			badge: undefined,
+			priority: undefined,
+			assignee: undefined,
+		})
 	})
 
 	it('explains an empty board that a filter emptied', async () => {
 		await renderBoard({
 			filters: { ...EMPTY_SUPPORT_FILTERS, badge: 'Urgent' },
-			ready: null,
+			ready: false,
 			configure: (api) => api.mockGet(TICKETS_PATH, () => page([])),
 		})
 
 		expect(
-			screen.getByText('Aucun ticket ne correspond aux filtres appliqués.'),
+			await screen.findByText('Aucun ticket ne correspond à ces filtres.'),
 		).toBeDefined()
+	})
+
+	it('narrows the board with the search field', async () => {
+		const { user } = await renderBoard()
+
+		await user.type(screen.getByLabelText('Rechercher un ticket'), 'chauffe')
+
+		await waitFor(() => expect(subjectsIn('Backlog')).toEqual([]))
+		expect(subjectsIn('Ouvert')).toEqual(['Chauffe-eau en panne'])
+	})
+
+	it('filters by priority on the client side', async () => {
+		const api = await renderBoard({
+			filters: { ...EMPTY_SUPPORT_FILTERS, priority: 'urgent' },
+			ready: false,
+		})
+
+		expect(
+			await screen.findByText('Aucun ticket ne correspond à ces filtres.'),
+		).toBeDefined()
+		expect(ticketQueries(api)).toEqual([{ per_page: 100 }])
+		expect(subjectsIn('Backlog')).toEqual([])
+	})
+})
+
+describe('SupportBoardFeature — barre d’outils', () => {
+	it('switches to the list view', async () => {
+		const { user, views } = await renderBoard()
+
+		await user.click(screen.getByRole('radio', { name: 'Liste' }))
+
+		expect(views).toEqual(['list'])
+	})
+
+	it('lists the custom fields to display and saves a changed choice', async () => {
+		const { user, calls, mockMutation } = await renderBoard({
+			configure: (api) =>
+				api.mockMutation('put', SETTINGS_PATH, () => ({
+					data: { display_fields: [] },
+				})),
+		})
+		void mockMutation
+
+		await user.click(screen.getByRole('button', { name: 'Champs affichés' }))
+		await user.click(
+			await screen.findByRole('menuitemcheckbox', { name: 'ville' }),
+		)
+
+		await waitFor(() =>
+			expect(
+				calls.filter(
+					(call) => call.method === 'put' && call.path === SETTINGS_PATH,
+				),
+			).toHaveLength(1),
+		)
+		expect(
+			calls.find((call) => call.method === 'put' && call.path === SETTINGS_PATH)
+				?.params,
+		).toEqual({
+			path: { organization_id: 'org-1' },
+			body: { display_fields: [] },
+		})
+	})
+
+	it('does not let a reader change the displayed fields', async () => {
+		const { user } = await renderBoard({ permissions: ['VIEW_SUPPORT'] })
+
+		await user.click(screen.getByRole('button', { name: 'Champs affichés' }))
+
+		expect(
+			(
+				await screen.findByRole('menuitemcheckbox', { name: 'ville' })
+			).getAttribute('aria-disabled'),
+		).toBe('true')
 	})
 })
 
@@ -722,6 +794,8 @@ describe('SupportBoardFeature — organisation', () => {
 					filters={EMPTY_SUPPORT_FILTERS}
 					onFiltersChange={() => {}}
 					onOpenTicket={() => {}}
+					onOpenFullPage={() => {}}
+					onViewChange={() => {}}
 				/>
 			</QueryClientProvider>,
 		)

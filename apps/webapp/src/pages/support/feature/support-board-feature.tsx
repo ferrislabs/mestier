@@ -3,8 +3,11 @@ import { useActiveOrganization } from '#/hooks/use-active-organization'
 import { useHasPermission } from '#/hooks/use-permissions'
 import { useMoveSupportTicket } from '#/hooks/use-support'
 import { mutationErrorMessage } from '#/lib/api-error'
+import { SupportTicketDetailFeature } from '#/pages/support/feature/support-ticket-detail-feature'
 import {
+	resetFilters,
 	SupportOrganizationUnavailable,
+	screenTitles,
 	useSupportScreenData,
 } from '#/pages/support/feature/use-support-screen'
 import {
@@ -15,21 +18,16 @@ import {
 	type SupportMove,
 	supportStatusLabel,
 } from '#/pages/support/lib/columns'
-import { EMPTY_SUPPORT_FILTERS } from '#/pages/support/lib/filters'
-import { toCardVM } from '#/pages/support/lib/view-models'
 import type {
 	SupportColumnVM,
 	SupportScreenProps,
 	SupportStatus,
 } from '#/pages/support/types'
 import { SupportBoardUI } from '#/pages/support/ui/support-board-ui'
-import { SupportToolbar } from '#/pages/support/ui/support-toolbar'
+import { TicketModalUI } from '#/pages/support/ui/ticket-modal-ui'
+import { TicketsToolbar } from '#/pages/support/ui/tickets-toolbar'
 
-export function SupportBoardFeature({
-	filters,
-	onFiltersChange,
-	onOpenTicket,
-}: SupportScreenProps) {
+export function SupportBoardFeature(props: SupportScreenProps) {
 	const { activeOrganization } = useActiveOrganization()
 
 	if (!activeOrganization) return <SupportOrganizationUnavailable />
@@ -38,29 +36,26 @@ export function SupportBoardFeature({
 		<SupportBoardScreen
 			key={activeOrganization.id}
 			organizationId={activeOrganization.id}
-			organizationName={activeOrganization.name}
-			filters={filters}
-			onFiltersChange={onFiltersChange}
-			onOpenTicket={onOpenTicket}
+			{...props}
 		/>
 	)
 }
 
 interface SupportBoardScreenProps extends SupportScreenProps {
 	organizationId: string
-	organizationName: string
 }
 
 function SupportBoardScreen({
 	organizationId,
-	organizationName,
 	filters,
 	onFiltersChange,
 	onOpenTicket,
+	onOpenFullPage,
+	onViewChange,
 }: SupportBoardScreenProps) {
 	const canMove = useHasPermission('MANAGE_SUPPORT')
-	const data = useSupportScreenData(organizationId, filters)
-	const { tickets, fieldKeys, namesById } = data
+	const data = useSupportScreenData(organizationId, filters, 'board')
+	const { tickets } = data
 	const moveTicket = useMoveSupportTicket(organizationId, filters)
 	const [draggedTicketId, setDraggedTicketId] = useState<string | null>(null)
 	const [focusedTicketId, setFocusedTicketId] = useState<string | null>(null)
@@ -101,23 +96,30 @@ function SupportBoardScreen({
 	const columns: SupportColumnVM[] = SUPPORT_COLUMNS.map((column) => ({
 		status: column.status,
 		label: column.label,
-		cards: grouped[column.status].map((ticket) =>
-			toCardVM(ticket, fieldKeys, namesById),
-		),
+		description: column.description,
+		tickets: grouped[column.status],
 	}))
 
+	const titles = screenTitles(filters, data.openCount)
+
 	const toolbar = (
-		<SupportToolbar
+		<TicketsToolbar
 			{...data.toolbarProps}
+			title={titles.title}
+			count={tickets.length}
 			filters={filters}
+			showStatus={false}
+			view="board"
+			onViewChange={onViewChange}
 			onChange={(patch) => onFiltersChange({ ...filters, ...patch })}
-			onClear={() => onFiltersChange(EMPTY_SUPPORT_FILTERS)}
+			onReset={() => onFiltersChange(resetFilters(filters))}
 		/>
 	)
 
 	return (
 		<SupportBoardUI
-			organizationName={organizationName}
+			title={titles.title}
+			description={titles.description}
 			columns={columns}
 			canMove={canMove}
 			isLoading={data.isLoading}
@@ -129,6 +131,22 @@ function SupportBoardScreen({
 			onRetry={() => void data.ticketsQuery.refetch()}
 			announcement={announcement}
 			toolbar={toolbar}
+			modal={
+				filters.ticket ? (
+					<TicketModalUI onClose={() => onOpenTicket(null)}>
+						<SupportTicketDetailFeature
+							key={filters.ticket}
+							organizationId={organizationId}
+							ticketId={filters.ticket}
+							variant="modal"
+							siblings={data.allTickets}
+							onOpenTicket={onOpenTicket}
+							onOpenFullPage={onOpenFullPage}
+							onClose={() => onOpenTicket(null)}
+						/>
+					</TicketModalUI>
+				) : null
+			}
 			emptyReason={data.emptyReason}
 			truncationNotice={data.truncationNotice}
 			draggedTicketId={draggedTicketId}

@@ -1,6 +1,19 @@
-import { Loader2, Paperclip, Send, X } from 'lucide-react'
+import {
+	AtSign,
+	Loader2,
+	Paperclip,
+	SendHorizontal,
+	Smile,
+	X,
+} from 'lucide-react'
+import { useLayoutEffect, useRef } from 'react'
 import { Button } from '#/components/ui/button'
+import { Kbd } from '#/components/ui/kbd'
 import { cn } from '#/lib/utils'
+import { EmojiPopover } from '#/pages/chat/ui/emoji-popover'
+import { IconButton } from '#/pages/chat/ui/icon-button'
+
+const MAX_TEXTAREA_HEIGHT_PX = 160
 
 export interface PendingAttachment {
 	id: string
@@ -16,6 +29,8 @@ export interface MessageComposerUIProps {
 	pendingAttachments: PendingAttachment[]
 	onAttachFiles: (files: FileList) => void
 	onRemoveAttachment: (id: string) => void
+	label?: string
+	placeholder?: string
 }
 
 export function MessageComposerUI({
@@ -26,7 +41,11 @@ export function MessageComposerUI({
 	pendingAttachments,
 	onAttachFiles,
 	onRemoveAttachment,
+	label = 'Message',
+	placeholder = 'Écrire un message…',
 }: MessageComposerUIProps) {
+	const textareaRef = useRef<HTMLTextAreaElement>(null)
+	const fileInputRef = useRef<HTMLInputElement>(null)
 	const hasBlockingUpload = pendingAttachments.some(
 		(attachment) => attachment.status === 'uploading',
 	)
@@ -34,20 +53,45 @@ export function MessageComposerUI({
 		(value.trim().length > 0 || pendingAttachments.length > 0) &&
 		!hasBlockingUpload
 
+	useLayoutEffect(() => {
+		const textarea = textareaRef.current
+		if (!textarea) return
+		textarea.style.height = 'auto'
+		if (value !== '')
+			textarea.style.height = `${Math.min(textarea.scrollHeight, MAX_TEXTAREA_HEIGHT_PX)}px`
+	}, [value])
+
 	function submit() {
 		if (!canSend) return
 		onSend()
 	}
 
+	function appendMention() {
+		onChange(value === '' || value.endsWith(' ') ? `${value}@` : `${value} @`)
+		textareaRef.current?.focus()
+	}
+
+	function appendEmoji(emoji: string) {
+		onChange(`${value}${emoji}`)
+		textareaRef.current?.focus()
+	}
+
 	return (
-		<div className="flex flex-col gap-2 border-t p-3">
+		<form
+			aria-label="Nouveau message"
+			onSubmit={(event) => {
+				event.preventDefault()
+				submit()
+			}}
+			className="shrink-0 bg-background px-4 pt-1 pb-4"
+		>
 			{pendingAttachments.length > 0 ? (
-				<ul className="flex flex-wrap gap-2">
+				<ul className="mb-2 flex flex-wrap gap-2">
 					{pendingAttachments.map((attachment) => (
 						<li
 							key={attachment.id}
 							className={cn(
-								'flex items-center gap-1.5 rounded-md border px-2 py-1 text-xs',
+								'flex items-center gap-1.5 rounded-md border bg-card px-2 py-1 text-xs',
 								attachment.status === 'failed' &&
 									'border-destructive text-destructive',
 							)}
@@ -69,13 +113,40 @@ export function MessageComposerUI({
 					))}
 				</ul>
 			) : null}
-
-			<div className="flex items-end gap-2">
-				<label className="flex size-9 shrink-0 cursor-pointer items-center justify-center rounded-md border text-muted-foreground hover:bg-accent">
-					<Paperclip className="size-4" />
+			<div className="rounded-lg border border-input bg-card transition-shadow focus-within:border-ring focus-within:ring-[3px] focus-within:ring-ring/50">
+				<textarea
+					ref={textareaRef}
+					rows={1}
+					value={value}
+					aria-label={label}
+					placeholder={placeholder}
+					onChange={(event) => {
+						onChange(event.target.value)
+						onTyping()
+					}}
+					onKeyDown={(event) => {
+						if (
+							event.key !== 'Enter' ||
+							event.shiftKey ||
+							event.nativeEvent.isComposing
+						)
+							return
+						event.preventDefault()
+						submit()
+					}}
+					className="block max-h-40 w-full resize-none overflow-y-auto bg-transparent px-3 pt-3 pb-1 text-sm leading-relaxed outline-none placeholder:text-muted-foreground"
+				/>
+				<div className="flex items-center gap-0.5 px-2 pb-2">
+					<IconButton
+						label="Joindre un fichier"
+						icon={Paperclip}
+						onClick={() => fileInputRef.current?.click()}
+					/>
 					<input
+						ref={fileInputRef}
 						type="file"
 						multiple
+						aria-label="Fichiers à joindre"
 						className="hidden"
 						onChange={(event) => {
 							if (event.target.files && event.target.files.length > 0) {
@@ -84,35 +155,34 @@ export function MessageComposerUI({
 							event.target.value = ''
 						}}
 					/>
-				</label>
-
-				<textarea
-					value={value}
-					onChange={(event) => {
-						onChange(event.target.value)
-						onTyping()
-					}}
-					onKeyDown={(event) => {
-						if (event.key === 'Enter' && !event.shiftKey) {
-							event.preventDefault()
-							submit()
-						}
-					}}
-					placeholder="Écrire un message…"
-					rows={1}
-					className="max-h-40 flex-1 resize-none rounded-md border bg-background p-2 text-sm"
-				/>
-
-				<Button
-					type="button"
-					size="icon"
-					disabled={!canSend}
-					onClick={submit}
-					aria-label="Envoyer"
-				>
-					<Send className="size-4" />
-				</Button>
+					<IconButton
+						label="Mentionner un collègue"
+						icon={AtSign}
+						onClick={appendMention}
+					/>
+					<EmojiPopover side="top" align="start" onSelect={appendEmoji}>
+						<IconButton label="Insérer un emoji" icon={Smile} />
+					</EmojiPopover>
+					<p className="ml-auto mr-2 hidden items-center gap-1 text-muted-foreground text-xs sm:flex">
+						<Kbd>Entrée</Kbd>
+						<span>envoyer</span>
+						<span aria-hidden>·</span>
+						<Kbd>Maj</Kbd>
+						<span aria-hidden>+</span>
+						<Kbd>Entrée</Kbd>
+						<span>nouvelle ligne</span>
+					</p>
+					<Button
+						type="submit"
+						size="icon-sm"
+						aria-label="Envoyer le message"
+						disabled={!canSend}
+						className="max-sm:ml-auto"
+					>
+						<SendHorizontal aria-hidden />
+					</Button>
+				</div>
 			</div>
-		</div>
+		</form>
 	)
 }

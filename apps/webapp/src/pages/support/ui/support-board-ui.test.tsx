@@ -1,55 +1,36 @@
-import { render, screen, within } from '@testing-library/react'
+import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
-import type {
-	SupportBoardUIProps,
-	SupportColumnVM,
-} from '#/pages/support/types'
+import type { SupportBoardUIProps } from '#/pages/support/types'
 import { SupportBoardUI } from '#/pages/support/ui/support-board-ui'
+import { emptyColumns, ticketVM } from '#/pages/support/ui/support-fixtures'
 
-const EMPTY_COLUMNS: SupportColumnVM[] = [
-	{ status: 'new', label: 'Nouveau', cards: [] },
-	{ status: 'in_progress', label: 'En cours', cards: [] },
-	{ status: 'waiting_customer', label: 'En attente du client', cards: [] },
-	{ status: 'resolved', label: 'Résolu', cards: [] },
-]
-
-const FILLED_COLUMNS: SupportColumnVM[] = [
-	{
-		status: 'new',
-		label: 'Nouveau',
-		cards: [
-			{
-				id: 'ticket-1',
-				numberLabel: 'T-0001',
-				subject: 'Fuite sous l’évier',
-				assigneeLabel: 'Alix Martin',
-				badges: [],
-				fields: [],
-			},
-			{
-				id: 'ticket-2',
-				numberLabel: 'T-0002',
-				subject: 'Robinet qui goutte',
-				assigneeLabel: 'Non assigné',
-				badges: [],
-				fields: [],
-			},
-		],
-	},
-	...EMPTY_COLUMNS.slice(1),
-]
+function filledColumns() {
+	const [first, ...others] = emptyColumns()
+	return [
+		{
+			...first,
+			tickets: [
+				ticketVM({ id: 'ticket-1', subject: 'Fuite sous l’évier' }),
+				ticketVM({ id: 'ticket-2', subject: 'Robinet qui goutte' }),
+			],
+		},
+		...others,
+	]
+}
 
 function renderBoard(overrides: Partial<SupportBoardUIProps> = {}) {
 	const props: SupportBoardUIProps = {
-		organizationName: 'Atelier Bois & Co',
-		columns: FILLED_COLUMNS,
+		title: 'Boîte de réception',
+		description: '2 tickets non fermés.',
+		columns: filledColumns(),
 		canMove: true,
 		isLoading: false,
 		error: null,
 		onRetry: vi.fn(),
 		announcement: '',
 		toolbar: <div>Barre de filtres</div>,
+		modal: null,
 		emptyReason: null,
 		truncationNotice: null,
 		draggedTicketId: null,
@@ -68,46 +49,33 @@ function renderBoard(overrides: Partial<SupportBoardUIProps> = {}) {
 }
 
 describe('SupportBoardUI', () => {
-	it('renders the header with the organization as eyebrow', () => {
+	it('renders the title, the description and the toolbar', () => {
 		renderBoard()
 
 		expect(screen.getByRole('heading', { level: 1 }).textContent).toBe(
-			'Support',
+			'Boîte de réception',
 		)
-		expect(screen.getByText('Atelier Bois & Co')).toBeTruthy()
-		expect(
-			screen.getByText(
-				'Quatre colonnes, un ticket par demande. Déplacez un ticket pour changer son statut.',
-			),
-		).toBeTruthy()
-	})
-
-	it('centres the header against its leading icon', () => {
-		renderBoard()
-
-		const header = screen.getByRole('banner')
-		expect(header.className).toContain('sm:items-center')
-		expect(header.className).toContain('sm:justify-start')
-	})
-
-	it('renders the title row with the ticket count, the toolbar and the columns', () => {
-		renderBoard()
-
-		expect(screen.getByRole('heading', { name: 'Tickets' })).toBeTruthy()
-		expect(screen.getByText('2 tickets')).toBeTruthy()
+		expect(screen.getByText('2 tickets non fermés.')).toBeTruthy()
 		expect(screen.getByText('Barre de filtres')).toBeTruthy()
-		expect(screen.getAllByRole('region', { name: /^Colonne / })).toHaveLength(4)
 	})
 
-	it('uses the singular for a single ticket', () => {
-		renderBoard({
-			columns: [
-				{ ...FILLED_COLUMNS[0], cards: [FILLED_COLUMNS[0].cards[0]] },
-				...EMPTY_COLUMNS.slice(1),
-			],
-		})
+	it('renders the four columns', () => {
+		renderBoard()
 
-		expect(screen.getByText('1 ticket')).toBeTruthy()
+		expect(
+			screen.getAllByRole('region').map((region) => region.ariaLabel),
+		).toEqual(['Backlog', 'Ouvert', 'En attente client', 'Fermé'])
+	})
+
+	it('puts the toolbar before the board', () => {
+		renderBoard()
+
+		expect(
+			screen
+				.getByText('Barre de filtres')
+				.compareDocumentPosition(screen.getAllByRole('region')[0]) &
+				Node.DOCUMENT_POSITION_FOLLOWING,
+		).toBeTruthy()
 	})
 
 	it('shows the error banner and calls onRetry from its button', async () => {
@@ -125,96 +93,66 @@ describe('SupportBoardUI', () => {
 		expect(screen.queryByRole('button', { name: 'Réessayer' })).toBeNull()
 	})
 
-	it('shows the empty reason in place of the columns when there is no ticket', () => {
+	it('explains why the board is empty when a reason is given', () => {
 		renderBoard({
-			columns: EMPTY_COLUMNS,
+			columns: emptyColumns(),
 			emptyReason: 'Aucun ticket ne correspond à ces filtres.',
 		})
 
 		expect(
 			screen.getByText('Aucun ticket ne correspond à ces filtres.'),
 		).toBeTruthy()
-		expect(screen.queryByRole('region', { name: /^Colonne / })).toBeNull()
+		expect(screen.getAllByRole('region')).toHaveLength(4)
 	})
 
-	it('falls back to the default empty wording without a reason', () => {
-		renderBoard({ columns: EMPTY_COLUMNS })
+	it('does not explain an empty board without a reason', () => {
+		renderBoard({ columns: emptyColumns() })
 
-		expect(screen.getByText('Aucun ticket pour le moment.')).toBeTruthy()
+		expect(screen.getAllByRole('status')).toHaveLength(1)
 	})
 
-	it('keeps the toolbar on screen when the board is empty', () => {
-		renderBoard({ columns: EMPTY_COLUMNS })
+	it('shows the columns while loading, with a loading hint instead of the descriptions', () => {
+		renderBoard({ columns: emptyColumns(), isLoading: true })
 
-		expect(screen.getByText('Barre de filtres')).toBeTruthy()
-	})
-
-	it('shows the columns rather than the empty state while loading', () => {
-		renderBoard({ columns: EMPTY_COLUMNS, isLoading: true })
-
-		expect(screen.queryByText('Aucun ticket pour le moment.')).toBeNull()
 		expect(screen.getAllByText('Chargement…')).toHaveLength(4)
-	})
-
-	it('shows the columns rather than the empty state when there is an error', () => {
-		renderBoard({ columns: EMPTY_COLUMNS, error: 'Panne.' })
-
-		expect(screen.queryByText('Aucun ticket pour le moment.')).toBeNull()
-		expect(screen.getAllByRole('region', { name: /^Colonne / })).toHaveLength(4)
+		expect(screen.queryByText('Problème résolu.')).toBeNull()
 	})
 
 	it('shows the truncation notice in an output element', () => {
-		renderBoard({
-			truncationNotice: 'Seuls les 100 premiers tickets sont affichés.',
-		})
+		renderBoard({ truncationNotice: '100 tickets affichés sur 240.' })
 
-		const notice = screen.getByText(
-			'Seuls les 100 premiers tickets sont affichés.',
+		expect(screen.getByText('100 tickets affichés sur 240.').tagName).toBe(
+			'OUTPUT',
 		)
-		expect(notice.tagName).toBe('OUTPUT')
 	})
 
 	it('shows no truncation notice when there is none', () => {
 		renderBoard()
 
-		expect(screen.queryByText(/premiers tickets/)).toBeNull()
+		expect(screen.queryByText(/tickets affichés sur/)).toBeNull()
 	})
 
 	it('puts the announcement in a polite live region', () => {
-		renderBoard({
-			announcement: 'Fuite sous l’évier déplacé en colonne Résolu.',
-		})
+		renderBoard({ announcement: 'Fuite déplacé vers Ouvert' })
 
-		const liveRegion = screen.getByText(
-			'Fuite sous l’évier déplacé en colonne Résolu.',
-		)
-		expect(liveRegion.getAttribute('aria-live')).toBe('polite')
-		expect(liveRegion.className).toContain('sr-only')
+		const announcement = screen.getByText('Fuite déplacé vers Ouvert')
+		expect(announcement.tagName).toBe('OUTPUT')
+		expect(announcement.getAttribute('aria-live')).toBe('polite')
 	})
 
-	it('forwards the drag and keyboard props to the columns', async () => {
-		const props = renderBoard()
+	it('renders the modal slot', () => {
+		renderBoard({ modal: <div>Fenêtre du ticket</div> })
 
-		const card = screen.getByRole('article', {
-			name: 'Fuite sous l’évier, colonne Nouveau',
-		})
-		within(card)
-			.getByRole('button', { name: 'Déplacer Fuite sous l’évier' })
-			.focus()
-		await userEvent.keyboard('{ArrowRight}')
-
-		expect(props.onFocusCard).toHaveBeenCalledWith('ticket-1')
-		expect(props.onShiftColumn).toHaveBeenCalledWith('ticket-1', 1)
+		expect(screen.getByText('Fenêtre du ticket')).toBeTruthy()
 	})
 
 	it('forwards onOpenCard to the cards', async () => {
 		const props = renderBoard()
 
 		await userEvent.click(
-			screen.getByRole('button', { name: 'Robinet qui goutte' }),
+			screen.getByRole('button', { name: /Robinet qui goutte/ }),
 		)
 
-		expect(props.onOpenCard).toHaveBeenCalledTimes(1)
 		expect(props.onOpenCard).toHaveBeenCalledWith('ticket-2')
 	})
 })

@@ -1,18 +1,44 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import type { ReactNode } from 'react'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { Schemas } from '#/api/api.client'
 import {
-	ActiveOrganizationProvider,
-	OrganizationListProvider,
-	useActiveOrganization,
-} from '#/hooks/use-active-organization'
-import type { Organization } from '#/hooks/use-organizations'
-import { PERMISSION_CATALOG } from '#/lib/permission-catalog'
+	afterEach,
+	beforeAll,
+	beforeEach,
+	describe,
+	expect,
+	it,
+	vi,
+} from 'vitest'
+import type { Schemas } from '#/api/api.client'
+import { useActiveOrganization } from '#/hooks/use-active-organization'
+import { resetDraftReviews } from '#/pages/support/feature/mocks/draft-reviews'
+import { resetTicketPriorities } from '#/pages/support/feature/mocks/priorities'
+import {
+	ALL_PERMISSIONS,
+	ASSIGNEE_PATH,
+	ATTACHMENT_URL_PATH,
+	BADGE_PATH,
+	BADGES_PATH,
+	callsTo,
+	chooseOption,
+	createQueryClient,
+	deferred,
+	ENTRIES_PATH,
+	ENTRY_PATH,
+	ENTRY_SEND_PATH,
+	entry,
+	type FakeApi,
+	installFakeTanstackApi,
+	installRadixPolyfills,
+	MEMBERS,
+	MEMBERS_PATH,
+	Providers,
+	STATUS_PATH,
+	TICKET_PATH,
+	ticket,
+} from '#/pages/support/feature/support-test-kit'
 import { SupportTicketFeature } from '#/pages/support/feature/support-ticket-feature'
-import { seedPermissionsCacheForOrganization } from '#/test/with-permissions'
 
 vi.mock('#/hooks/use-active-organization', async (importOriginal) => {
 	const actual =
@@ -23,91 +49,24 @@ vi.mock('#/hooks/use-active-organization', async (importOriginal) => {
 	}
 })
 
-const TICKET_PATH =
-	'/api/v1/organizations/{organization_id}/support/tickets/{ticket_id}'
-const ENTRIES_PATH =
-	'/api/v1/organizations/{organization_id}/support/tickets/{ticket_id}/entries'
-const STATUS_PATH =
-	'/api/v1/organizations/{organization_id}/support/tickets/{ticket_id}/status'
-const ASSIGNEE_PATH =
-	'/api/v1/organizations/{organization_id}/support/tickets/{ticket_id}/assignee'
-const ENTRY_PATH =
-	'/api/v1/organizations/{organization_id}/support/entries/{entry_id}'
-const ENTRY_SEND_PATH =
-	'/api/v1/organizations/{organization_id}/support/entries/{entry_id}/send'
-const ATTACHMENT_URL_PATH =
-	'/api/v1/organizations/{organization_id}/support/attachments/{attachment_id}/url'
-const MEMBERS_PATH = '/api/v1/organizations/{organization_id}/members'
-const ALL_PERMISSIONS = PERMISSION_CATALOG.map((entry) => entry.name)
 const ATTACHMENT_URL = 'https://files.example/photo-fuite.jpg'
 const ATTACHMENT_ERROR = 'Impossible d’ouvrir la pièce jointe.'
 
-const ORGANIZATION: Organization = {
-	id: 'org-1',
-	name: 'Atelier Bois & Co',
-	owner_id: 'user-1',
-	missing_legal_identity_fields: [],
-	slug: 'atelier-bois',
-	field_clock_enabled: false,
-	vat_on_debits: false,
-	mcp_enabled: false,
-	created_at: '2026-01-01T00:00:00Z',
-	updated_at: '2026-01-01T00:00:00Z',
-}
+beforeAll(installRadixPolyfills)
+beforeEach(() => {
+	resetDraftReviews()
+	resetTicketPriorities()
+})
 
-const MEMBERS = [
-	{
-		id: 'member-1',
-		organization_id: 'org-1',
-		display_name: 'Alix Martin',
-		last_name: 'Martin',
-		first_name: 'Alix',
-		created_at: '2026-01-01T00:00:00Z',
-	},
-	{
-		id: 'member-2',
-		organization_id: 'org-1',
-		display_name: 'Jo Durand',
-		last_name: 'Durand',
-		first_name: 'Jo',
-		created_at: '2026-01-01T00:00:00Z',
-	},
-]
-
-function ticket(
-	overrides: Partial<Schemas.TicketResponse> = {},
-): Schemas.TicketResponse {
-	return {
+function sampleTicket(): Schemas.TicketResponse {
+	return ticket({
 		id: 'ticket-1',
 		number: 7,
 		subject: 'Fuite sous évier',
 		body: 'Bonjour, ma canalisation fuit.',
-		status: 'new',
-		assignee_member_id: null,
-		assigned_at: null,
-		custom_fields: { ville: 'Lyon' },
+		custom_fields: { ville: 'Lyon', requester_name: 'Claire Fontaine' },
 		badges: [{ label: 'Urgent', tone: 'error' }],
-		external_id: null,
-		created_at: '2026-11-01T07:00:00Z',
-		updated_at: '2026-11-01T07:00:00Z',
-		...overrides,
-	}
-}
-
-function entry(
-	overrides: Partial<Schemas.TicketEntryResponse> = {},
-): Schemas.TicketEntryResponse {
-	return {
-		id: 'entry-1',
-		ticket_id: 'ticket-1',
-		kind: 'reply',
-		body: 'Réponse',
-		author_member_id: 'member-1',
-		attachments: [],
-		created_at: '2026-11-01T09:00:00Z',
-		updated_at: '2026-11-01T09:00:00Z',
-		...overrides,
-	}
+	})
 }
 
 function serverEntries(): Schemas.TicketEntryResponse[] {
@@ -156,68 +115,6 @@ interface ServerState {
 	ticket: Schemas.TicketResponse
 	entries: Schemas.TicketEntryResponse[]
 }
-
-type Handler = (params: unknown) => unknown
-
-interface RecordedCall {
-	method: string
-	path: string
-	params: unknown
-}
-
-function installFakeTanstackApi() {
-	const calls: RecordedCall[] = []
-	const getHandlers = new Map<string, Handler>()
-	const mutationHandlers = new Map<string, Handler>()
-
-	const fakeApi = {
-		get(path: string, params: unknown) {
-			const request = (params ?? {}) as { path?: unknown; query?: unknown }
-			const queryKey = [{ _id: path, path: request.path, query: request.query }]
-			return {
-				queryKey,
-				queryOptions: {
-					queryKey,
-					queryFn: async () => {
-						calls.push({ method: 'get', path, params })
-						const handler = getHandlers.get(path)
-						if (!handler) throw new Error(`unmocked GET ${path}`)
-						return handler(params)
-					},
-				},
-			}
-		},
-		mutation(method: string, path: string) {
-			return {
-				mutationOptions: {
-					mutationKey: [{ method, path }],
-					mutationFn: async (params: unknown) => {
-						calls.push({ method, path, params })
-						const handler = mutationHandlers.get(`${method}:${path}`)
-						if (!handler) {
-							throw new Error(`unmocked ${method.toUpperCase()} ${path}`)
-						}
-						return handler(params)
-					},
-				},
-			}
-		},
-	}
-
-	Object.assign(window, { tanstackApi: fakeApi })
-
-	return {
-		calls,
-		mockGet(path: string, handler: Handler) {
-			getHandlers.set(path, handler)
-		},
-		mockMutation(method: string, path: string, handler: Handler) {
-			mutationHandlers.set(`${method}:${path}`, handler)
-		},
-	}
-}
-
-type FakeApi = ReturnType<typeof installFakeTanstackApi>
 
 function installServerMutations(api: FakeApi, server: ServerState) {
 	api.mockMutation('post', ENTRIES_PATH, (params) => {
@@ -271,24 +168,24 @@ function installServerMutations(api: FakeApi, server: ServerState) {
 		server.ticket = { ...server.ticket, assignee_member_id: body.member_id }
 		return { data: server.ticket }
 	})
-}
-
-function Providers({
-	queryClient,
-	children,
-}: {
-	queryClient: QueryClient
-	children: ReactNode
-}) {
-	return (
-		<QueryClientProvider client={queryClient}>
-			<OrganizationListProvider organizations={[ORGANIZATION]}>
-				<ActiveOrganizationProvider activeOrganization={ORGANIZATION}>
-					{children}
-				</ActiveOrganizationProvider>
-			</OrganizationListProvider>
-		</QueryClientProvider>
-	)
+	api.mockMutation('post', BADGES_PATH, (params) => {
+		const { body } = params as { body: { label: string } }
+		server.ticket = {
+			...server.ticket,
+			badges: [...server.ticket.badges, { label: body.label, tone: 'neutral' }],
+		}
+		return { data: server.ticket }
+	})
+	api.mockMutation('delete', BADGE_PATH, (params) => {
+		const { path } = params as { path: { label: string } }
+		server.ticket = {
+			...server.ticket,
+			badges: server.ticket.badges.filter(
+				(badge) => badge.label !== path.label,
+			),
+		}
+		return { data: server.ticket }
+	})
 }
 
 interface RenderOptions {
@@ -305,7 +202,10 @@ async function renderTicket({
 	ready = true,
 }: RenderOptions = {}) {
 	const api = installFakeTanstackApi()
-	const server: ServerState = { ticket: ticket(), entries: serverEntries() }
+	const server: ServerState = {
+		ticket: sampleTicket(),
+		entries: serverEntries(),
+	}
 	api.mockGet(TICKET_PATH, () => ({ data: server.ticket }))
 	api.mockGet(ENTRIES_PATH, () => ({
 		data: [...server.entries].reverse(),
@@ -318,52 +218,33 @@ async function renderTicket({
 	installServerMutations(api, server)
 	configure?.(api, server)
 
-	const queryClient = new QueryClient({
-		defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
-	})
-	seedPermissionsCacheForOrganization(queryClient, ORGANIZATION.id, permissions)
-
 	render(
-		<Providers queryClient={queryClient}>
+		<Providers queryClient={createQueryClient(permissions)}>
 			<SupportTicketFeature ticketId="ticket-1" onBack={onBack} />
 		</Providers>,
 	)
 
 	if (ready) {
-		await screen.findByRole('article', { name: 'Réponse envoyée, Alix Martin' })
+		await screen.findByRole('article', {
+			name: 'Envoyé au client de Alix Martin',
+		})
 	}
 
 	return { ...api, server, user: userEvent.setup() }
 }
 
-function callsTo(api: FakeApi, method: string, path: string) {
-	return api.calls.filter(
-		(call) => call.method === method && call.path === path,
-	)
+function replyField(): HTMLTextAreaElement {
+	return screen.getByRole('textbox', {
+		name: 'Réponse au client',
+	}) as HTMLTextAreaElement
 }
 
-function messageField(): HTMLTextAreaElement {
-	return screen.getByRole('textbox', { name: 'Message' }) as HTMLTextAreaElement
+function composer(): HTMLElement {
+	return screen.getByRole('region', { name: 'Écrire' })
 }
 
 function draftArticle(): HTMLElement {
-	return screen.getByRole('article', { name: 'Brouillon, Alix Martin' })
-}
-
-interface Deferred<T> {
-	promise: Promise<T>
-	resolve: (value: T) => void
-	reject: (reason: unknown) => void
-}
-
-function deferred<T>(): Deferred<T> {
-	let resolve: (value: T) => void = () => {}
-	let reject: (reason: unknown) => void = () => {}
-	const promise = new Promise<T>((resolvePromise, rejectPromise) => {
-		resolve = resolvePromise
-		reject = rejectPromise
-	})
-	return { promise, resolve, reject }
+	return screen.getByRole('article', { name: 'Brouillon de Alix Martin' })
 }
 
 describe('SupportTicketFeature — fil de discussion', () => {
@@ -380,38 +261,58 @@ describe('SupportTicketFeature — fil de discussion', () => {
 		expect(
 			articles.map((article) => article.getAttribute('aria-label')),
 		).toEqual([
-			'Message du client, Client',
-			'Réponse envoyée, Alix Martin',
-			'Note interne, Jo Durand',
-			'Brouillon, Alix Martin',
+			'Client de Claire Fontaine',
+			'Envoyé au client de Alix Martin',
+			'Note interne de Jo Durand',
+			'Brouillon de Alix Martin',
 		])
 		articles.forEach((article, index) => {
 			expect(article.textContent).toContain(expectedBodies[index])
 		})
 	})
 
-	it('titles the page with the number and the subject of the ticket', async () => {
+	it('titles the page with the subject and the number of the ticket', async () => {
 		await renderTicket()
 
 		expect(screen.getByRole('heading', { level: 1 }).textContent).toBe(
-			'#7 Fuite sous évier',
+			'Fuite sous évier',
 		)
-		expect(screen.getByText('Atelier Bois & Co')).toBeDefined()
+		expect(
+			within(
+				screen.getByRole('navigation', { name: 'Emplacement du ticket' }),
+			).getByText('#7'),
+		).toBeDefined()
 	})
 
-	it('shows the details of the ticket in the side panel', async () => {
+	it('shows the headline of the ticket: status, requester, source and badges', async () => {
 		await renderTicket()
 
-		expect(screen.getByText('Urgent')).toBeDefined()
-		expect(screen.getByText('ville')).toBeDefined()
-		expect(screen.getByText('Lyon')).toBeDefined()
+		const headline = screen.getByRole('heading', {
+			level: 1,
+		}).nextElementSibling
+		expect(headline?.textContent).toContain('Backlog')
+		expect(headline?.textContent).toContain(
+			'Claire Fontaine via saisie manuelle',
+		)
+		expect(headline?.textContent).toContain('Urgent')
 	})
 
-	it('goes back to the list from the back button', async () => {
+	it('shows the custom fields and the origin in the side panel', async () => {
+		await renderTicket()
+
+		const panel = screen.getByRole('complementary', {
+			name: 'Propriétés du ticket',
+		})
+		expect(within(panel).getByText('ville')).toBeDefined()
+		expect(within(panel).getByText('Lyon')).toBeDefined()
+		expect(within(panel).getByText('Saisie manuelle')).toBeDefined()
+	})
+
+	it('goes back to the list from the breadcrumb', async () => {
 		const onBack = vi.fn()
 		const { user } = await renderTicket({ onBack })
 
-		await user.click(screen.getByRole('button', { name: 'Retour aux tickets' }))
+		await user.click(screen.getByRole('button', { name: 'Tickets' }))
 
 		expect(onBack).toHaveBeenCalledTimes(1)
 	})
@@ -433,7 +334,7 @@ describe('SupportTicketFeature — fil de discussion', () => {
 		await user.click(screen.getByRole('button', { name: 'Réessayer' }))
 
 		expect(
-			await screen.findByRole('article', { name: 'Note interne, Jo Durand' }),
+			await screen.findByRole('article', { name: 'Note interne de Jo Durand' }),
 		).toBeDefined()
 		expect(screen.queryByText('Le fil est indisponible.')).toBeNull()
 	})
@@ -457,19 +358,45 @@ describe('SupportTicketFeature — fil de discussion', () => {
 		expect(
 			await screen.findByRole('heading', {
 				level: 1,
-				name: '#7 Fuite sous évier',
+				name: 'Fuite sous évier',
 			}),
 		).toBeDefined()
 		expect(screen.queryByText('Le ticket est indisponible.')).toBeNull()
 	})
+
+	it('says the ticket is unknown when the API returns nothing', async () => {
+		const onBack = vi.fn()
+		const { user } = await renderTicket({
+			ready: false,
+			onBack,
+			configure: (api) => api.mockGet(TICKET_PATH, () => ({ data: undefined })),
+		})
+
+		expect(await screen.findByText('Ticket introuvable')).toBeDefined()
+		await user.click(screen.getByRole('button', { name: 'Voir les tickets' }))
+
+		expect(onBack).toHaveBeenCalledTimes(1)
+	})
 })
 
 describe('SupportTicketFeature — composeur', () => {
-	it('posts a reply from the default tab and clears the field', async () => {
+	it('asks for a confirmation before sending a reply, then moves the ticket on', async () => {
 		const { user, calls } = await renderTicket()
 
-		await user.type(messageField(), 'Nous passons jeudi.')
-		await user.click(screen.getByRole('button', { name: 'Envoyer la réponse' }))
+		await user.type(replyField(), 'Nous passons jeudi.')
+		await user.click(
+			within(composer()).getByRole('button', { name: 'Envoyer au client' }),
+		)
+
+		expect(
+			calls.filter(
+				(call) => call.method === 'post' && call.path === ENTRIES_PATH,
+			),
+		).toHaveLength(0)
+
+		await user.click(
+			within(composer()).getByRole('button', { name: 'Confirmer l’envoi' }),
+		)
 
 		await waitFor(() =>
 			expect(
@@ -485,18 +412,77 @@ describe('SupportTicketFeature — composeur', () => {
 			path: { organization_id: 'org-1', ticket_id: 'ticket-1' },
 			body: { kind: 'reply', body: 'Nous passons jeudi.' },
 		})
-		await waitFor(() => expect(messageField().value).toBe(''))
+		await waitFor(() => expect(replyField().value).toBe(''))
 		expect(await screen.findByText('Nous passons jeudi.')).toBeDefined()
+		await waitFor(() =>
+			expect(
+				calls.filter(
+					(call) => call.method === 'patch' && call.path === STATUS_PATH,
+				),
+			).toHaveLength(1),
+		)
+		expect(
+			calls.find((call) => call.method === 'patch' && call.path === STATUS_PATH)
+				?.params,
+		).toEqual({
+			path: { organization_id: 'org-1', ticket_id: 'ticket-1' },
+			body: { status: 'waiting_customer' },
+		})
 	})
 
-	it('posts a draft from the Brouillon tab and clears the field', async () => {
+	it('sends the status picked for after the reply', async () => {
 		const api = await renderTicket()
-		const { user } = api
 
-		await user.click(screen.getByRole('tab', { name: 'Brouillon' }))
-		await user.type(messageField(), 'À relire avant envoi.')
-		await user.click(
-			screen.getByRole('button', { name: 'Enregistrer le brouillon' }),
+		await api.user.type(replyField(), 'C’est réglé.')
+		await chooseOption(
+			api.user,
+			screen.getByLabelText('Statut après l’envoi'),
+			'Fermé',
+		)
+		await api.user.click(
+			within(composer()).getByRole('button', { name: 'Envoyer au client' }),
+		)
+		await api.user.click(
+			within(composer()).getByRole('button', { name: 'Confirmer l’envoi' }),
+		)
+
+		await waitFor(() =>
+			expect(callsTo(api, 'patch', STATUS_PATH)).toHaveLength(1),
+		)
+		expect(callsTo(api, 'patch', STATUS_PATH)[0].params).toEqual({
+			path: { organization_id: 'org-1', ticket_id: 'ticket-1' },
+			body: { status: 'resolved' },
+		})
+	})
+
+	it('leaves the status alone when it already is the one picked', async () => {
+		const api = await renderTicket({
+			configure: (_fakeApi, server) => {
+				server.ticket = { ...server.ticket, status: 'waiting_customer' }
+			},
+		})
+
+		await api.user.type(replyField(), 'Un message.')
+		await api.user.click(
+			within(composer()).getByRole('button', { name: 'Envoyer au client' }),
+		)
+		await api.user.click(
+			within(composer()).getByRole('button', { name: 'Confirmer l’envoi' }),
+		)
+
+		await waitFor(() =>
+			expect(callsTo(api, 'post', ENTRIES_PATH)).toHaveLength(1),
+		)
+		await waitFor(() => expect(replyField().value).toBe(''))
+		expect(callsTo(api, 'patch', STATUS_PATH)).toHaveLength(0)
+	})
+
+	it('saves a draft from the reply tab and clears the field', async () => {
+		const api = await renderTicket()
+
+		await api.user.type(replyField(), 'À relire avant envoi.')
+		await api.user.click(
+			screen.getByRole('button', { name: 'Enregistrer en brouillon' }),
 		)
 
 		await waitFor(() =>
@@ -506,16 +492,21 @@ describe('SupportTicketFeature — composeur', () => {
 			path: { organization_id: 'org-1', ticket_id: 'ticket-1' },
 			body: { kind: 'draft', body: 'À relire avant envoi.' },
 		})
-		await waitFor(() => expect(messageField().value).toBe(''))
+		await waitFor(() => expect(replyField().value).toBe(''))
+		expect(callsTo(api, 'patch', STATUS_PATH)).toHaveLength(0)
 	})
 
-	it('posts an internal note from the Note interne tab and clears the field', async () => {
+	it('posts an internal note from the Note interne mode and clears the field', async () => {
 		const api = await renderTicket()
-		const { user } = api
 
-		await user.click(screen.getByRole('tab', { name: 'Note interne' }))
-		await user.type(messageField(), 'Rappeler le client lundi.')
-		await user.click(screen.getByRole('button', { name: 'Ajouter la note' }))
+		await api.user.click(screen.getByRole('radio', { name: 'Note interne' }))
+		await api.user.type(
+			screen.getByRole('textbox', { name: 'Note interne' }),
+			'Rappeler le client lundi.',
+		)
+		await api.user.click(
+			screen.getByRole('button', { name: 'Ajouter la note' }),
+		)
 
 		await waitFor(() =>
 			expect(callsTo(api, 'post', ENTRIES_PATH)).toHaveLength(1),
@@ -524,20 +515,40 @@ describe('SupportTicketFeature — composeur', () => {
 			path: { organization_id: 'org-1', ticket_id: 'ticket-1' },
 			body: { kind: 'note', body: 'Rappeler le client lundi.' },
 		})
-		await waitFor(() => expect(messageField().value).toBe(''))
+		await waitFor(() => expect(replyField().value).toBe(''))
 	})
 
 	it('sends nothing for an empty or whitespace-only body', async () => {
 		const api = await renderTicket()
-		const { user } = api
-		const submit = screen.getByRole('button', { name: 'Envoyer la réponse' })
+		const send = within(composer()).getByRole('button', {
+			name: 'Envoyer au client',
+		})
 
-		expect((submit as HTMLButtonElement).disabled).toBe(true)
+		expect((send as HTMLButtonElement).disabled).toBe(true)
 
-		await user.type(messageField(), '   ')
-		expect((submit as HTMLButtonElement).disabled).toBe(true)
-		await user.click(submit)
+		await api.user.type(replyField(), '   ')
+		expect((send as HTMLButtonElement).disabled).toBe(true)
+		await api.user.click(send)
 
+		expect(callsTo(api, 'post', ENTRIES_PATH)).toHaveLength(0)
+	})
+
+	it('disarms the confirmation when the text changes', async () => {
+		const api = await renderTicket()
+
+		await api.user.type(replyField(), 'Un')
+		await api.user.click(
+			within(composer()).getByRole('button', { name: 'Envoyer au client' }),
+		)
+		expect(
+			within(composer()).getByRole('button', { name: 'Confirmer l’envoi' }),
+		).toBeDefined()
+
+		await api.user.type(replyField(), ' mot')
+
+		expect(
+			within(composer()).getByRole('button', { name: 'Envoyer au client' }),
+		).toBeDefined()
 		expect(callsTo(api, 'post', ENTRIES_PATH)).toHaveLength(0)
 	})
 
@@ -549,24 +560,30 @@ describe('SupportTicketFeature — composeur', () => {
 				}),
 		})
 
-		await api.user.type(messageField(), 'Un message')
+		await api.user.type(replyField(), 'Un message')
 		await api.user.click(
-			screen.getByRole('button', { name: 'Envoyer la réponse' }),
+			within(composer()).getByRole('button', { name: 'Envoyer au client' }),
+		)
+		await api.user.click(
+			within(composer()).getByRole('button', { name: 'Confirmer l’envoi' }),
 		)
 
 		expect(
 			await screen.findByText('Le serveur a refusé le message.'),
 		).toBeDefined()
-		expect(messageField().value).toBe('Un message')
+		expect(replyField().value).toBe('Un message')
 	})
 })
 
 describe('SupportTicketFeature — brouillons', () => {
-	it('sends a draft to the customer', async () => {
+	it('sends a draft to the customer after a confirmation', async () => {
 		const api = await renderTicket()
 
 		await api.user.click(
-			within(draftArticle()).getByRole('button', { name: 'Envoyer' }),
+			within(draftArticle()).getByRole('button', { name: 'Envoyer au client' }),
+		)
+		await api.user.click(
+			within(draftArticle()).getByRole('button', { name: 'Confirmer l’envoi' }),
 		)
 
 		await waitFor(() =>
@@ -577,24 +594,24 @@ describe('SupportTicketFeature — brouillons', () => {
 		})
 		expect(
 			await screen.findAllByRole('article', {
-				name: 'Réponse envoyée, Alix Martin',
+				name: 'Envoyé au client de Alix Martin',
 			}),
 		).toHaveLength(2)
 	})
 
-	it('edits a draft with the new body and leaves edit mode', async () => {
+	it('loads a draft in the composer, then updates it', async () => {
 		const api = await renderTicket()
 
 		await api.user.click(
 			within(draftArticle()).getByRole('button', { name: 'Modifier' }),
 		)
-		const editor = screen.getByRole('textbox', {
-			name: 'Modifier le brouillon',
-		})
-		expect((editor as HTMLTextAreaElement).value).toBe('Brouillon de suivi.')
-		await api.user.clear(editor)
-		await api.user.type(editor, 'Brouillon corrigé.')
-		await api.user.click(screen.getByRole('button', { name: 'Enregistrer' }))
+		expect(replyField().value).toBe('Brouillon de suivi.')
+		expect(screen.getByText(/Modification d’un brouillon/)).toBeDefined()
+		await api.user.clear(replyField())
+		await api.user.type(replyField(), 'Brouillon corrigé.')
+		await api.user.click(
+			screen.getByRole('button', { name: 'Mettre à jour le brouillon' }),
+		)
 
 		await waitFor(() =>
 			expect(callsTo(api, 'patch', ENTRY_PATH)).toHaveLength(1),
@@ -604,11 +621,33 @@ describe('SupportTicketFeature — brouillons', () => {
 			body: { body: 'Brouillon corrigé.' },
 		})
 		await waitFor(() =>
-			expect(
-				screen.queryByRole('textbox', { name: 'Modifier le brouillon' }),
-			).toBeNull(),
+			expect(screen.queryByText(/Modification d’un brouillon/)).toBeNull(),
 		)
 		expect(await screen.findByText('Brouillon corrigé.')).toBeDefined()
+	})
+
+	it('updates a draft and sends it from the composer', async () => {
+		const api = await renderTicket()
+
+		await api.user.click(
+			within(draftArticle()).getByRole('button', { name: 'Modifier' }),
+		)
+		await api.user.type(replyField(), ' bis')
+		await api.user.click(
+			within(composer()).getByRole('button', { name: 'Envoyer au client' }),
+		)
+		await api.user.click(
+			within(composer()).getByRole('button', { name: 'Confirmer l’envoi' }),
+		)
+
+		await waitFor(() =>
+			expect(callsTo(api, 'post', ENTRY_SEND_PATH)).toHaveLength(1),
+		)
+		expect(callsTo(api, 'patch', ENTRY_PATH)[0].params).toEqual({
+			path: { organization_id: 'org-1', entry_id: 'entry-4' },
+			body: { body: 'Brouillon de suivi. bis' },
+		})
+		expect(callsTo(api, 'post', ENTRIES_PATH)).toHaveLength(0)
 	})
 
 	it('cancels an edit without sending anything', async () => {
@@ -619,9 +658,8 @@ describe('SupportTicketFeature — brouillons', () => {
 		)
 		await api.user.click(screen.getByRole('button', { name: 'Annuler' }))
 
-		expect(
-			screen.queryByRole('textbox', { name: 'Modifier le brouillon' }),
-		).toBeNull()
+		expect(screen.queryByText(/Modification d’un brouillon/)).toBeNull()
+		expect(replyField().value).toBe('')
 		expect(callsTo(api, 'patch', ENTRY_PATH)).toHaveLength(0)
 	})
 
@@ -631,12 +669,11 @@ describe('SupportTicketFeature — brouillons', () => {
 		await api.user.click(
 			within(draftArticle()).getByRole('button', { name: 'Modifier' }),
 		)
-		const editor = screen.getByRole('textbox', {
-			name: 'Modifier le brouillon',
+		await api.user.clear(replyField())
+		await api.user.type(replyField(), '   ')
+		const save = screen.getByRole('button', {
+			name: 'Mettre à jour le brouillon',
 		})
-		await api.user.clear(editor)
-		await api.user.type(editor, '   ')
-		const save = screen.getByRole('button', { name: 'Enregistrer' })
 		await api.user.click(save)
 
 		expect((save as HTMLButtonElement).disabled).toBe(true)
@@ -654,25 +691,24 @@ describe('SupportTicketFeature — brouillons', () => {
 		await api.user.click(
 			within(draftArticle()).getByRole('button', { name: 'Modifier' }),
 		)
-		await api.user.type(
-			screen.getByRole('textbox', { name: 'Modifier le brouillon' }),
-			' bis',
+		await api.user.type(replyField(), ' bis')
+		await api.user.click(
+			screen.getByRole('button', { name: 'Mettre à jour le brouillon' }),
 		)
-		await api.user.click(screen.getByRole('button', { name: 'Enregistrer' }))
 
 		expect(
 			await screen.findByText('Le brouillon est verrouillé.'),
 		).toBeDefined()
-		expect(
-			screen.getByRole('textbox', { name: 'Modifier le brouillon' }),
-		).toBeDefined()
+		expect(screen.getByText(/Modification d’un brouillon/)).toBeDefined()
 	})
 
 	it('deletes a draft', async () => {
 		const api = await renderTicket()
 
 		await api.user.click(
-			within(draftArticle()).getByRole('button', { name: 'Supprimer' }),
+			within(draftArticle()).getByRole('button', {
+				name: 'Supprimer le brouillon',
+			}),
 		)
 
 		await waitFor(() =>
@@ -686,22 +722,23 @@ describe('SupportTicketFeature — brouillons', () => {
 		)
 	})
 
-	it.each([
-		['sending', 'post', ENTRY_SEND_PATH, 'Envoyer'],
-		['deleting', 'delete', ENTRY_PATH, 'Supprimer'],
-	])('locks the draft while %s it', async (_label, method, path, action) => {
+	it('locks the draft while deleting it', async () => {
 		const pending = deferred<unknown>()
 		const api = await renderTicket({
 			configure: (fakeApi) =>
-				fakeApi.mockMutation(method, path, () => pending.promise),
+				fakeApi.mockMutation('delete', ENTRY_PATH, () => pending.promise),
 		})
 
 		await api.user.click(
-			within(draftArticle()).getByRole('button', { name: action }),
+			within(draftArticle()).getByRole('button', {
+				name: 'Supprimer le brouillon',
+			}),
 		)
 
-		await waitFor(() => expect(callsTo(api, method, path)).toHaveLength(1))
-		for (const name of ['Modifier', 'Envoyer', 'Supprimer']) {
+		await waitFor(() =>
+			expect(callsTo(api, 'delete', ENTRY_PATH)).toHaveLength(1),
+		)
+		for (const name of ['Modifier', 'Supprimer le brouillon']) {
 			expect(
 				(
 					within(draftArticle()).getByRole('button', {
@@ -713,44 +750,60 @@ describe('SupportTicketFeature — brouillons', () => {
 
 		pending.resolve({})
 	})
+})
 
-	it('locks the editor while saving', async () => {
-		const pending = deferred<unknown>()
-		const api = await renderTicket({
-			configure: (fakeApi) =>
-				fakeApi.mockMutation('patch', ENTRY_PATH, () => pending.promise),
-		})
+describe('SupportTicketFeature — avis sur un brouillon (maquette)', () => {
+	it('approves a draft and withdraws the approval', async () => {
+		const { user } = await renderTicket()
 
-		await api.user.click(
-			within(draftArticle()).getByRole('button', { name: 'Modifier' }),
-		)
-		await api.user.type(
-			screen.getByRole('textbox', { name: 'Modifier le brouillon' }),
-			' bis',
-		)
-		await api.user.click(screen.getByRole('button', { name: 'Enregistrer' }))
-
-		await waitFor(() =>
-			expect(callsTo(api, 'patch', ENTRY_PATH)).toHaveLength(1),
-		)
 		expect(
-			(screen.getByRole('button', { name: 'Enregistrer' }) as HTMLButtonElement)
-				.disabled,
-		).toBe(true)
-		expect(
-			(screen.getByRole('button', { name: 'Annuler' }) as HTMLButtonElement)
-				.disabled,
-		).toBe(true)
+			within(draftArticle()).getByText('Pas encore d’approbation'),
+		).toBeDefined()
+		await user.click(
+			within(draftArticle()).getByRole('button', { name: 'Approuver' }),
+		)
 
-		pending.resolve({})
+		expect(
+			await within(draftArticle()).findByText('Approuvé par Alix Martin'),
+		).toBeDefined()
+		await user.click(
+			within(draftArticle()).getByRole('button', { name: 'Approuvé' }),
+		)
+
+		expect(
+			await within(draftArticle()).findByText('Pas encore d’approbation'),
+		).toBeDefined()
+	})
+
+	it('publishes an opinion on a draft', async () => {
+		const { user } = await renderTicket()
+
+		await user.click(
+			within(draftArticle()).getByRole('button', { name: 'Donner un avis' }),
+		)
+		await user.type(
+			within(draftArticle()).getByLabelText('Avis sur le brouillon'),
+			'Plus court ?',
+		)
+		await user.click(
+			within(draftArticle()).getByRole('button', { name: 'Publier' }),
+		)
+
+		expect(
+			await within(draftArticle()).findByText(': Plus court ?'),
+		).toBeDefined()
 	})
 })
 
-describe('SupportTicketFeature — panneau de détails', () => {
+describe('SupportTicketFeature — panneau de propriétés', () => {
+	function statusTrigger() {
+		return screen.getByRole('combobox', { name: 'Statut du ticket' })
+	}
+
 	it('moves the ticket to the chosen status', async () => {
 		const api = await renderTicket()
 
-		await api.user.selectOptions(screen.getByLabelText('Statut'), 'in_progress')
+		await chooseOption(api.user, statusTrigger(), 'Ouvert')
 
 		await waitFor(() =>
 			expect(callsTo(api, 'patch', STATUS_PATH)).toHaveLength(1),
@@ -759,28 +812,38 @@ describe('SupportTicketFeature — panneau de détails', () => {
 			path: { organization_id: 'org-1', ticket_id: 'ticket-1' },
 			body: { status: 'in_progress' },
 		})
-		await waitFor(() =>
-			expect((screen.getByLabelText('Statut') as HTMLSelectElement).value).toBe(
-				'in_progress',
-			),
-		)
+		await waitFor(() => expect(statusTrigger().textContent).toContain('Ouvert'))
 	})
 
 	it('offers the four statuses in column order', async () => {
-		await renderTicket()
+		const api = await renderTicket()
+
+		await api.user.click(statusTrigger())
 
 		expect(
-			within(screen.getByLabelText('Statut'))
-				.getAllByRole('option')
-				.map((option) => option.textContent),
-		).toEqual(['Nouveau', 'En cours', 'En attente du client', 'Résolu'])
+			(await screen.findAllByRole('option')).map(
+				(option) => option.textContent,
+			),
+		).toEqual(['Backlog', 'Ouvert', 'En attente client', 'Fermé'])
+	})
+
+	it('changes the priority', async () => {
+		const api = await renderTicket()
+		const trigger = screen.getByRole('combobox', { name: 'Priorité du ticket' })
+		expect(trigger.textContent).toContain('Normale')
+
+		await chooseOption(api.user, trigger, 'Urgente')
+
+		await waitFor(() => expect(trigger.textContent).toContain('Urgente'))
 	})
 
 	it('assigns the ticket to the chosen member', async () => {
 		const api = await renderTicket()
-		await screen.findByRole('option', { name: 'Jo Durand' })
 
-		await api.user.selectOptions(screen.getByLabelText('Assigné à'), 'member-2')
+		await api.user.click(screen.getByLabelText('Modifier les assignés'))
+		await api.user.click(
+			await screen.findByRole('option', { name: /Jo Durand/ }),
+		)
 
 		await waitFor(() =>
 			expect(callsTo(api, 'put', ASSIGNEE_PATH)).toHaveLength(1),
@@ -791,17 +854,16 @@ describe('SupportTicketFeature — panneau de détails', () => {
 		})
 	})
 
-	it('unassigns the ticket with a null member for Non assigné', async () => {
+	it('unassigns the ticket with a null member when its assignee is picked again', async () => {
 		const api = await renderTicket({
 			configure: (_fakeApi, server) => {
-				server.ticket = ticket({ assignee_member_id: 'member-1' })
+				server.ticket = { ...server.ticket, assignee_member_id: 'member-1' }
 			},
 		})
-		await screen.findByRole('option', { name: 'Alix Martin' })
 
-		await api.user.selectOptions(
-			screen.getByLabelText('Assigné à'),
-			'Non assigné',
+		await api.user.click(screen.getByLabelText('Modifier les assignés'))
+		await api.user.click(
+			await screen.findByRole('option', { name: /Alix Martin/ }),
 		)
 
 		await waitFor(() =>
@@ -813,6 +875,42 @@ describe('SupportTicketFeature — panneau de détails', () => {
 		})
 	})
 
+	it('adds a badge created from the typed label', async () => {
+		const api = await renderTicket()
+
+		await api.user.click(screen.getByRole('button', { name: 'Ajouter' }))
+		await api.user.type(
+			await screen.findByPlaceholderText('Chercher ou créer un badge…'),
+			'Garantie',
+		)
+		await api.user.click(await screen.findByText('Créer « Garantie »'))
+
+		await waitFor(() =>
+			expect(callsTo(api, 'post', BADGES_PATH)).toHaveLength(1),
+		)
+		expect(callsTo(api, 'post', BADGES_PATH)[0].params).toEqual({
+			path: { organization_id: 'org-1', ticket_id: 'ticket-1' },
+			body: { label: 'Garantie' },
+		})
+	})
+
+	it('removes a badge', async () => {
+		const api = await renderTicket()
+
+		await api.user.click(screen.getByLabelText('Retirer le badge Urgent'))
+
+		await waitFor(() =>
+			expect(callsTo(api, 'delete', BADGE_PATH)).toHaveLength(1),
+		)
+		expect(callsTo(api, 'delete', BADGE_PATH)[0].params).toEqual({
+			path: {
+				organization_id: 'org-1',
+				ticket_id: 'ticket-1',
+				label: 'Urgent',
+			},
+		})
+	})
+
 	it('shows the error of a refused status change', async () => {
 		const api = await renderTicket({
 			configure: (fakeApi) =>
@@ -821,12 +919,12 @@ describe('SupportTicketFeature — panneau de détails', () => {
 				}),
 		})
 
-		await api.user.selectOptions(screen.getByLabelText('Statut'), 'resolved')
+		await chooseOption(api.user, statusTrigger(), 'Fermé')
 
 		expect(await screen.findByText('Transition refusée.')).toBeDefined()
 	})
 
-	it('shows the error of the most recent failure of the two controls', async () => {
+	it('shows the error of the most recent failure of the controls', async () => {
 		const api = await renderTicket({
 			configure: (fakeApi) => {
 				fakeApi.mockMutation('patch', STATUS_PATH, () => {
@@ -837,36 +935,17 @@ describe('SupportTicketFeature — panneau de détails', () => {
 				})
 			},
 		})
-		await screen.findByRole('option', { name: 'Jo Durand' })
 
-		await api.user.selectOptions(screen.getByLabelText('Statut'), 'resolved')
+		await chooseOption(api.user, statusTrigger(), 'Fermé')
 		expect(await screen.findByText('Transition refusée.')).toBeDefined()
 
-		await api.user.selectOptions(screen.getByLabelText('Assigné à'), 'member-2')
+		await api.user.click(screen.getByLabelText('Modifier les assignés'))
+		await api.user.click(
+			await screen.findByRole('option', { name: /Jo Durand/ }),
+		)
 
 		expect(await screen.findByText('Assignation refusée.')).toBeDefined()
 		expect(screen.queryByText('Transition refusée.')).toBeNull()
-	})
-
-	it('locks both controls while an update is in flight', async () => {
-		const pending = deferred<unknown>()
-		const api = await renderTicket({
-			configure: (fakeApi) =>
-				fakeApi.mockMutation('patch', STATUS_PATH, () => pending.promise),
-		})
-
-		await api.user.selectOptions(screen.getByLabelText('Statut'), 'resolved')
-
-		await waitFor(() =>
-			expect(
-				(screen.getByLabelText('Statut') as HTMLSelectElement).disabled,
-			).toBe(true),
-		)
-		expect(
-			(screen.getByLabelText('Assigné à') as HTMLSelectElement).disabled,
-		).toBe(true)
-
-		pending.resolve({})
 	})
 })
 
@@ -875,24 +954,31 @@ describe('SupportTicketFeature — sans MANAGE_SUPPORT', () => {
 		await renderTicket({ permissions: ['VIEW_SUPPORT'] })
 
 		expect(screen.getAllByRole('article')).toHaveLength(4)
-		expect(screen.queryByRole('tablist')).toBeNull()
 		expect(screen.queryByRole('textbox')).toBeNull()
-		expect(screen.queryByRole('combobox')).toBeNull()
-		for (const name of ['Modifier', 'Envoyer', 'Supprimer']) {
+		expect(screen.queryByRole('radio')).toBeNull()
+		for (const name of [
+			'Modifier',
+			'Envoyer au client',
+			'Supprimer le brouillon',
+		]) {
 			expect(screen.queryByRole('button', { name })).toBeNull()
 		}
 	})
 
-	it('shows the status and the assignee as plain text', async () => {
-		await renderTicket({
-			permissions: ['VIEW_SUPPORT'],
-			configure: (_fakeApi, server) => {
-				server.ticket = ticket({ assignee_member_id: 'member-2' })
-			},
-		})
+	it('locks the property controls', async () => {
+		await renderTicket({ permissions: ['VIEW_SUPPORT'] })
 
-		expect(screen.getAllByText('Nouveau').length).toBeGreaterThan(0)
-		expect(screen.getAllByText('Jo Durand').length).toBeGreaterThan(0)
+		for (const trigger of screen.getAllByRole('combobox')) {
+			expect((trigger as HTMLButtonElement).disabled).toBe(true)
+		}
+		expect(
+			(screen.getByLabelText('Modifier les assignés') as HTMLButtonElement)
+				.disabled,
+		).toBe(true)
+		expect(
+			(screen.getByLabelText('Retirer le badge Urgent') as HTMLButtonElement)
+				.disabled,
+		).toBe(true)
 	})
 })
 

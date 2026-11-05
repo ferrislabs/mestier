@@ -23,30 +23,43 @@ export interface SupportFieldVM {
 	value: string
 }
 
-export interface SupportCardVM {
+export type SupportPriority = 'low' | 'normal' | 'high' | 'urgent'
+
+export interface SupportMemberVM {
 	id: string
+	name: string
+	hue: number
+}
+
+export interface SupportRequesterVM {
+	name: string
+	email: string | null
+}
+
+export interface SupportTicketVM {
+	id: string
+	number: number
 	numberLabel: string
 	subject: string
-	assigneeLabel: string
+	status: SupportStatus
+	priority: SupportPriority
+	assignee: SupportMemberVM | null
+	requester: SupportRequesterVM
 	badges: SupportBadgeVM[]
-	fields: SupportFieldVM[]
+	displayFields: SupportFieldVM[]
+	customFields: SupportFieldVM[]
+	preview: string
+	externalId: string | null
+	sourceLabel: string
+	createdAt: string
+	updatedAt: string
 }
 
 export interface SupportColumnVM {
 	status: SupportStatus
 	label: string
-	cards: SupportCardVM[]
-}
-
-export interface SupportRowVM {
-	id: string
-	numberLabel: string
-	subject: string
-	status: SupportStatus
-	statusLabel: string
-	assigneeLabel: string
-	badges: SupportBadgeVM[]
-	fields: Record<string, string>
+	description: string
+	tickets: SupportTicketVM[]
 }
 
 export interface SupportFilterOption {
@@ -59,21 +72,38 @@ export interface SupportFilters {
 	badge?: string
 	custom_field_key?: string
 	custom_field_value?: string
+	status?: SupportStatus | 'all'
+	priority?: SupportPriority
+	ticket?: string
 }
 
+export type SupportView = 'list' | 'board'
+
 export interface SupportToolbarProps {
+	title: string
+	count: number
+	query: string
+	onQueryChange: (query: string) => void
 	filters: SupportFilters
-	assignees: SupportFilterOption[]
+	members: SupportMemberVM[]
+	assigneeCounts: ReadonlyMap<string | null, number>
 	badges: SupportFilterOption[]
 	fieldKeys: string[]
 	isLoading: boolean
-	isFiltered: boolean
+	showStatus: boolean
+	view: SupportView
+	onViewChange: (view: SupportView) => void
+	displayFieldOptions: string[]
+	displayFields: string[]
+	canEditDisplayFields: boolean
+	onDisplayFieldsChange: (fields: string[]) => void
 	onChange: (patch: Partial<SupportFilters>) => void
-	onClear: () => void
+	onReset: () => void
 }
 
 export interface SupportBoardUIProps {
-	organizationName: string
+	title: string
+	description: string
 	columns: SupportColumnVM[]
 	canMove: boolean
 	isLoading: boolean
@@ -81,6 +111,7 @@ export interface SupportBoardUIProps {
 	onRetry: () => void
 	announcement: string
 	toolbar: ReactNode
+	modal: ReactNode
 	emptyReason: string | null
 	truncationNotice: string | null
 	draggedTicketId: string | null
@@ -94,23 +125,25 @@ export interface SupportBoardUIProps {
 	onOpenCard: (ticketId: string) => void
 }
 
-export interface SupportTableUIProps {
-	organizationName: string
-	rows: SupportRowVM[]
-	fieldKeys: string[]
+export interface SupportListUIProps {
+	header: ReactNode
+	tickets: SupportTicketVM[]
+	selectedTicketId: string | null
 	isLoading: boolean
 	error: string | null
 	onRetry: () => void
-	toolbar: ReactNode
 	emptyReason: string | null
 	truncationNotice: string | null
+	detail: ReactNode
 	onOpenRow: (ticketId: string) => void
 }
 
 export interface SupportScreenProps {
 	filters: SupportFilters
 	onFiltersChange: (filters: SupportFilters) => void
-	onOpenTicket: (ticketId: string) => void
+	onOpenTicket: (ticketId: string | null) => void
+	onOpenFullPage: (ticketId: string) => void
+	onViewChange: (view: SupportView) => void
 }
 
 export type SupportEntryKind =
@@ -125,94 +158,136 @@ export interface SupportAttachmentVM {
 	sizeLabel: string
 }
 
+export interface SupportReviewVM {
+	id: string
+	memberName: string
+	memberHue: number
+	kind: 'approval' | 'comment'
+	body: string
+}
+
 export interface SupportEntryVM {
 	id: string
 	kind: SupportEntryKind
-	kindLabel: string
-	visibilityLabel: string
 	authorLabel: string
-	createdAtLabel: string
+	authorHue: number | null
+	createdAt: string
 	body: string
 	attachments: SupportAttachmentVM[]
 }
 
-export type SupportComposerTab = 'reply' | 'draft' | 'note'
+export type SupportComposerMode = 'reply' | 'note'
 
-export interface SupportComposerTabVM {
-	id: SupportComposerTab
-	label: string
-	actionLabel: string
-	hint: string
-}
-
-export interface SupportTicketDetailVM {
-	id: string
-	numberLabel: string
-	subject: string
-	status: SupportStatus
-	assigneeId: string | null
-	badges: SupportBadgeVM[]
-	fields: SupportFieldVM[]
-	createdAtLabel: string
-}
+export type SupportDetailVariant = 'page' | 'pane' | 'modal'
 
 export interface SupportStatusOption {
 	status: SupportStatus
 	label: string
 }
 
-export interface SupportThreadUIProps {
+export interface SupportDraftReviewsVM {
+	approvedBy: string[]
+	approvedByMe: boolean
+	comments: SupportReviewVM[]
+}
+
+export interface SupportConversationUIProps {
+	layout: 'page' | 'embedded'
 	entries: SupportEntryVM[]
-	canManage: boolean
 	isLoading: boolean
 	error: string | null
 	onRetry: () => void
-	editingEntryId: string | null
+	canManage: boolean
+	mode: SupportComposerMode
+	onModeChange: (mode: SupportComposerMode) => void
+	text: string
+	onTextChange: (text: string) => void
+	nextStatus: SupportStatus
+	onNextStatusChange: (status: SupportStatus) => void
+	editingDraftId: string | null
 	pendingEntryId: string | null
-	onStartEdit: (entryId: string) => void
-	onCancelEdit: () => void
-	onSaveEdit: (entryId: string, body: string) => void
+	isSubmitting: boolean
+	composerError: string | null
+	reviewsByEntry: ReadonlyMap<string, SupportDraftReviewsVM>
+	onEditDraft: (entryId: string) => void
+	onCancelDraft: () => void
 	onSendDraft: (entryId: string) => void
 	onDeleteDraft: (entryId: string) => void
+	onToggleApproval: (entryId: string) => void
+	onCommentDraft: (entryId: string, body: string) => void
+	onSend: () => void
+	onSaveDraft: () => void
+	onAddNote: () => void
 	onOpenAttachment: (attachmentId: string) => void
 }
 
-export interface SupportComposerUIProps {
-	tabs: SupportComposerTabVM[]
-	activeTab: SupportComposerTab
-	body: string
-	isSubmitting: boolean
-	error: string | null
-	onTabChange: (tab: SupportComposerTab) => void
-	onBodyChange: (body: string) => void
-	onSubmit: () => void
-}
-
-export interface SupportSidePanelUIProps {
-	ticket: SupportTicketDetailVM
+export interface SupportPropertiesUIProps {
+	ticket: SupportTicketVM
+	variant: 'card' | 'plain'
 	canManage: boolean
 	statusOptions: SupportStatusOption[]
-	assigneeLabel: string
-	assignees: SupportFilterOption[]
-	isUpdating: boolean
+	members: SupportMemberVM[]
+	knownBadges: string[]
+	otherTickets: SupportTicketVM[]
 	error: string | null
-	onChangeStatus: (status: SupportStatus) => void
-	onChangeAssignee: (memberId: string | null) => void
+	onOpenOtherTicket: (ticketId: string) => void
+	onStatusChange: (status: SupportStatus) => void
+	onPriorityChange: (priority: SupportPriority) => void
+	onAssigneeChange: (memberId: string | null) => void
+	onAddBadge: (label: string) => void
+	onRemoveBadge: (label: string) => void
+}
+
+export interface SupportDetailUIProps {
+	variant: SupportDetailVariant
+	ticket: SupportTicketVM | null
+	isLoading: boolean
+	error: string | null
+	onRetry: () => void
+	conversation: Omit<SupportConversationUIProps, 'layout'> | null
+	properties: Omit<SupportPropertiesUIProps, 'variant'> | null
+	propertiesOpen: boolean
+	onToggleProperties: () => void
+	onOpenFullPage: () => void
+	onClose?: () => void
 }
 
 export interface SupportTicketPageUIProps {
-	organizationName: string
-	ticket: SupportTicketDetailVM | null
+	ticket: SupportTicketVM | null
 	isLoading: boolean
 	error: string | null
 	onRetry: () => void
 	onBack: () => void
-	thread: ReactNode
-	composer: ReactNode
-	sidePanel: ReactNode
+	detail: ReactNode
 }
 
 export interface SupportTicketScreenProps {
 	ticketId: string
 	onBack: () => void
+}
+
+export interface SupportApiKeyVM {
+	id: string
+	name: string
+	prefix: string
+	createdAt: string
+	lastUsedAt: string | null
+	revokedAt: string | null
+}
+
+export type SupportIntegrationTestResult =
+	| { kind: 'created'; ticketNumber: number }
+	| { kind: 'duplicate'; ticketNumber: number }
+	| { kind: 'invalid'; errors: string[] }
+
+export interface SupportIntegrationUIProps {
+	origin: string
+	keys: SupportApiKeyVM[]
+	revealed: { name: string; secret: string } | null
+	testResult: SupportIntegrationTestResult | null
+	isSending: boolean
+	onCreateKey: (name: string) => void
+	onDismissRevealed: () => void
+	onRevokeKey: (keyId: string) => void
+	onSendTest: (keyId: string, payload: string) => void
 }
