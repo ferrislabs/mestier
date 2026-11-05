@@ -12,19 +12,19 @@ export function SeasonPicker({ season, onChange }: SeasonPickerProps) {
 			<Button
 				type="button"
 				variant="outline"
-				size="icon"
+				size="icon-sm"
 				aria-label="Saison précédente"
 				onClick={() => onChange(season - 1)}
 			>
 				<ChevronLeft />
 			</Button>
-			<span className="min-w-24 text-center text-sm font-semibold">
+			<span className="min-w-24 text-center text-[13px] font-medium tabular">
 				Saison {season}
 			</span>
 			<Button
 				type="button"
 				variant="outline"
-				size="icon"
+				size="icon-sm"
 				aria-label="Saison suivante"
 				onClick={() => onChange(season + 1)}
 			>

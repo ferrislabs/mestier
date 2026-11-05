@@ -1,714 +1,410 @@
 import { Link } from '@tanstack/react-router'
 import {
-	AlertCircle,
-	ArrowLeft,
-	Building2,
-	Clock,
+	Archive,
+	ArchiveRestore,
+	ArrowRight,
+	FileText,
 	KanbanSquare,
+	LayoutTemplate,
 	Loader2,
-	Receipt,
+	Pencil,
+	Plus,
+	Settings,
 } from 'lucide-react'
 import { RequirePermission } from '#/components/require-permission'
 import { Button } from '#/components/ui/button'
-import { Input } from '#/components/ui/input'
-import { Label } from '#/components/ui/label'
-import {
-	MetricCard,
-	PageHeader,
-	PageShell,
-	SectionCard,
-	SectionHeader,
-	StatusBadge,
-} from '#/components/ui/surface'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '#/components/ui/tabs'
-import { Textarea } from '#/components/ui/textarea'
-import type { CustomerContext } from '#/hooks/use-customers'
-import type { Invoice, ProjectBillingSummary } from '#/hooks/use-invoices'
-import type { Project } from '#/hooks/use-projects'
-import type { Period, ProjectProfitability } from '#/hooks/use-reporting'
-import type { ProjectSupplierCosts } from '#/hooks/use-supplier-invoices'
 import { buildOrgPath } from '#/modules/org-path'
-import { type DoeButtonState, doeTabLabel } from '#/pages/doe/lib/new-doe'
+import { formatShortDate } from '#/pages/projects/lib/dates'
+import { missionStats } from '#/pages/projects/lib/missions'
+import type {
+	Mission,
+	MissionStatus,
+	Person,
+	ProjectExtras,
+	ProjectStatus,
+} from '#/pages/projects/lib/model'
 import {
-	eurosToCents,
-	formatDate,
-	formatMoney,
-	invoiceKindLabel,
-	invoiceStatusLabel,
-} from '#/pages/invoices/types'
-import type { InvoicerMode } from '#/pages/projects/types'
-import { ProjectTabs } from '#/pages/projects/ui/project-tabs'
-import { BillingAddressField } from '#/pages/quotes/ui/billing-address-field'
-import { incompleteReason, plannedCostCents } from '#/pages/reporting/types'
+	type DoeSummary,
+	doeSummaryParts,
+	doeTileLabel,
+	missionsRatio,
+	periodLabel,
+} from '#/pages/projects/lib/project-view'
+import { countLabel } from '#/pages/projects/lib/text'
+import { PersonAvatar } from '#/pages/projects/ui/avatars'
+import { Dash } from '#/pages/projects/ui/dash'
+import { MissionStatusSelect } from '#/pages/projects/ui/mission-status-select'
+import { Page } from '#/pages/projects/ui/page'
+import {
+	ProjectBilling,
+	type ProjectBillingProps,
+} from '#/pages/projects/ui/project-billing'
+import { ProjectHeader } from '#/pages/projects/ui/project-header'
+import {
+	DetailList,
+	DetailRow,
+	SectionCard,
+} from '#/pages/projects/ui/section-card'
+import { StatTile } from '#/pages/projects/ui/stat-tile'
 
-export interface ProjectDetailUIProps {
-	organizationSlug: string
-	project: Project
-	customerName: string | null
-	canOpenDoe?: boolean
-	doeState?: DoeButtonState
+const MISSION_PREVIEW = 6
 
-	billingSummary: ProjectBillingSummary | null
-	isBillingSummaryLoading: boolean
-
-	period: Period
-	onPeriodChange: (period: Period) => void
-	costRow: ProjectProfitability | null
-	isCostLoading: boolean
-
-	invoices: Invoice[]
-	isInvoicesLoading: boolean
-
-	/** `null` while loading, or if the caller has no view onto supplier
-	 * costs at all. Itemized so each line can point back at the invoice it
-	 * came from (#340) — the reason this screen shows it in the first
-	 * place. */
-	supplierCosts: ProjectSupplierCosts | null
-	isSupplierCostsLoading: boolean
-
-	hasCustomer: boolean
-	hasPinnedAddress: boolean
-	hasQuote: boolean
-
-	mode: InvoicerMode
-	onModeChange: (mode: InvoicerMode) => void
-
-	percentageInput: string
-	onPercentageInputChange: (value: string) => void
-	percentagePreviewCents: number | null
-
-	freeAmountInput: string
-	onFreeAmountInputChange: (value: string) => void
-	freeLabel: string
-	onFreeLabelChange: (value: string) => void
-	freeCustomerContexts: CustomerContext[]
-	isFreeCustomerContextsLoading: boolean
-	freeCustomerContextId: string
-	onFreeCustomerContextIdChange: (value: string) => void
-
-	dueAt: string
-	onDueAtChange: (value: string) => void
-	notes: string
-	onNotesChange: (value: string) => void
-
-	isIssuing: boolean
-	error: string | null
-	onConfirm: () => void
+export interface ProjectCustomerInfo {
+	name: string
+	email: string | null
+	phone: string | null
 }
 
-/**
- * A project's own page: what it was quoted, what has been billed, what
- * remains, what it costs, its invoices, and the Invoicer that bills it.
- *
- * Presentational only — every figure was computed by the backend (the
- * billing summary, the profitability report), this file only formats and
- * lays them out.
- */
-export function ProjectDetailUI({
+export interface ProjectDetailUIProps extends ProjectBillingProps {
+	status: ProjectStatus
+	customer: ProjectCustomerInfo | null
+	extras: ProjectExtras
+	owner: Person | undefined
+	people: readonly Person[]
+	missions: readonly Mission[]
+	doe: DoeSummary | null
+	isDoeLoading: boolean
+	canOpenDoe: boolean
+	isBuildingTemplate: boolean
+	error: string | null
+	onEdit: () => void
+	onToggleArchive: () => void
+	onSaveAsTemplate: () => void
+	onMissionStatusChange: (mission: Mission, status: MissionStatus) => void
+}
+
+function MissionPreview({
 	organizationSlug,
-	project,
-	customerName,
-	billingSummary,
-	isBillingSummaryLoading,
-	period,
-	onPeriodChange,
-	costRow,
-	isCostLoading,
-	invoices,
-	isInvoicesLoading,
-	supplierCosts,
-	isSupplierCostsLoading,
-	hasCustomer,
-	hasPinnedAddress,
-	hasQuote,
-	mode,
-	onModeChange,
-	percentageInput,
-	onPercentageInputChange,
-	percentagePreviewCents,
-	freeAmountInput,
-	onFreeAmountInputChange,
-	freeLabel,
-	onFreeLabelChange,
-	freeCustomerContexts,
-	isFreeCustomerContextsLoading,
-	freeCustomerContextId,
-	onFreeCustomerContextIdChange,
-	dueAt,
-	onDueAtChange,
-	notes,
-	onNotesChange,
-	isIssuing,
+	projectId,
+	missions,
+	people,
+	onStatusChange,
+}: {
+	organizationSlug: string
+	projectId: string
+	missions: readonly Mission[]
+	people: readonly Person[]
+	onStatusChange: (mission: Mission, status: MissionStatus) => void
+}) {
+	const missionsPath = buildOrgPath(
+		organizationSlug,
+		'/projet/$projectId/missions',
+	)
+	if (missions.length === 0)
+		return (
+			<div className="rounded-md border border-dashed px-4 py-6 text-center">
+				<p className="text-[13px] text-muted-foreground">
+					Aucune mission pour l’instant.
+				</p>
+				<Button variant="outline" size="sm" className="mt-3" asChild>
+					<Link to={missionsPath} params={{ projectId }}>
+						<Plus aria-hidden /> Ajouter une mission
+					</Link>
+				</Button>
+			</div>
+		)
+	const shown = missions.slice(0, MISSION_PREVIEW)
+	const rest = missions.length - shown.length
+	return (
+		<>
+			<ul className="divide-y">
+				{shown.map((mission) => {
+					const responsible = people.find(
+						(person) => person.id === mission.responsibleId,
+					)
+					return (
+						<li
+							key={mission.id}
+							className="flex flex-wrap items-center gap-x-3 gap-y-2 py-2.5 first:pt-0"
+						>
+							<span className="min-w-0 flex-1">
+								<span className="block truncate font-medium text-sm">
+									{mission.title}
+								</span>
+								<span className="block truncate text-[12px] text-muted-foreground">
+									{mission.endDate
+										? `Fin prévue le ${formatShortDate(mission.endDate)}`
+										: 'Sans échéance'}
+								</span>
+							</span>
+							<span className="flex items-center gap-2">
+								<PersonAvatar person={responsible} />
+								<span className="sr-only">
+									{responsible?.name ?? 'Sans responsable'}
+								</span>
+							</span>
+							<MissionStatusSelect
+								mission={mission}
+								onChange={(status) => onStatusChange(mission, status)}
+							/>
+						</li>
+					)
+				})}
+			</ul>
+			{rest > 0 && (
+				<p className="mt-2 text-[12px] text-muted-foreground">
+					{rest === 1 ? '1 autre mission' : `${rest} autres missions`} dans la
+					liste complète.
+				</p>
+			)}
+		</>
+	)
+}
+
+function DoeCard({
+	organizationSlug,
+	projectId,
+	summary,
+	isLoading,
+	canOpenDoe,
+}: {
+	organizationSlug: string
+	projectId: string
+	summary: DoeSummary | null
+	isLoading: boolean
+	canOpenDoe: boolean
+}) {
+	return (
+		<div className="grid gap-3">
+			{summary ? (
+				<p className="text-[13px]">{doeSummaryParts(summary).join(', ')}</p>
+			) : (
+				<p className="text-[13px] text-muted-foreground">
+					{isLoading
+						? 'Chargement du DOE…'
+						: 'Ce projet n’a pas encore de DOE.'}
+				</p>
+			)}
+			{canOpenDoe && !isLoading ? (
+				<Button size="sm" className="w-fit" asChild>
+					<Link
+						to={buildOrgPath(organizationSlug, '/projet/$projectId/doe')}
+						params={{ projectId }}
+					>
+						<FileText aria-hidden />
+						{summary
+							? `Ouvrir le DOE · indice ${summary.revision}`
+							: 'Créer le DOE'}
+					</Link>
+				</Button>
+			) : null}
+		</div>
+	)
+}
+
+function CustomerBlock({ customer }: { customer: ProjectCustomerInfo | null }) {
+	if (!customer)
+		return (
+			<span className="text-muted-foreground">
+				Projet interne, sans client.
+			</span>
+		)
+	return (
+		<span className="grid gap-0.5">
+			<span className="font-medium">{customer.name}</span>
+			{customer.phone && (
+				<a
+					href={`tel:${customer.phone.replace(/\s/g, '')}`}
+					className="w-fit rounded-sm underline-offset-2 outline-none hover:underline focus-visible:ring-2 focus-visible:ring-ring"
+				>
+					{customer.phone}
+				</a>
+			)}
+			{customer.email && (
+				<a
+					href={`mailto:${customer.email}`}
+					className="w-fit rounded-sm underline-offset-2 outline-none hover:underline focus-visible:ring-2 focus-visible:ring-ring"
+				>
+					{customer.email}
+				</a>
+			)}
+		</span>
+	)
+}
+
+export function ProjectDetailUI({
+	status,
+	customer,
+	extras,
+	owner,
+	people,
+	missions,
+	doe,
+	isDoeLoading,
+	canOpenDoe,
+	isBuildingTemplate,
 	error,
-	onConfirm,
-	canOpenDoe = false,
-	doeState = 'loading',
+	onEdit,
+	onToggleArchive,
+	onSaveAsTemplate,
+	onMissionStatusChange,
+	...billing
 }: ProjectDetailUIProps) {
-	const plannedCost = costRow ? plannedCostCents(costRow) : 0
-	const dueAtLabel = dueAt
-		? formatDate(new Date(dueAt).toISOString())
-		: 'Sans échéance'
+	const { organizationSlug, project } = billing
+	const stats = missionStats(missions)
+	const archived = status === 'archived'
+	const period = periodLabel(extras.startDate, extras.endDate)
+	const projectPath = (suffix: string) =>
+		buildOrgPath(organizationSlug, `/projet/$projectId${suffix}`)
 
 	return (
-		<PageShell>
-			<PageHeader
-				eyebrow={customerName ?? 'Projet interne'}
-				title={project.name}
-				description="Ce qui a été devisé, ce qui a été facturé, ce qu'il reste à facturer, et ce que le projet coûte d'après le planning."
+		<Page>
+			<ProjectHeader
+				organizationSlug={organizationSlug}
+				name={project.name}
+				status={status}
+				customerName={customer?.name ?? null}
 				actions={
-					<div className="flex flex-wrap items-center gap-2">
-						{/* The board, already narrowed to this project (#467): the
-						 * filter state lives in the search params, so pre-filtering
-						 * it is a link rather than a click-through and a picker. */}
-						<Button asChild>
+					<>
+						<Button variant="outline" size="sm" asChild>
 							<Link
 								to={buildOrgPath(organizationSlug, '/planification/board')}
 								search={{ project_id: project.id }}
 							>
-								<KanbanSquare />
-								Voir dans le tableau
+								<KanbanSquare aria-hidden /> Voir dans le tableau
 							</Link>
 						</Button>
-						<Button asChild variant="outline">
+						<Button variant="outline" size="sm" asChild>
 							<Link
-								to={buildOrgPath(organizationSlug, '/planification/projects')}
+								to={projectPath('/settings')}
+								params={{ projectId: project.id }}
 							>
-								<ArrowLeft />
-								Retour
+								<Settings aria-hidden /> Réglages
 							</Link>
 						</Button>
-					</div>
+						<RequirePermission permission="MANAGE_PLANNING">
+							{archived ? null : (
+								<Button
+									variant="outline"
+									size="sm"
+									disabled={isBuildingTemplate}
+									onClick={onSaveAsTemplate}
+								>
+									{isBuildingTemplate ? (
+										<Loader2 className="animate-spin" aria-hidden />
+									) : (
+										<LayoutTemplate aria-hidden />
+									)}
+									Enregistrer comme modèle
+								</Button>
+							)}
+							<Button variant="outline" size="sm" onClick={onEdit}>
+								<Pencil aria-hidden /> Modifier
+							</Button>
+							<Button variant="outline" size="sm" onClick={onToggleArchive}>
+								{archived ? (
+									<ArchiveRestore aria-hidden />
+								) : (
+									<Archive aria-hidden />
+								)}
+								{archived ? 'Réactiver' : 'Archiver'}
+							</Button>
+						</RequirePermission>
+					</>
 				}
 			/>
-
-			{canOpenDoe ? (
-				<ProjectTabs
-					organizationSlug={organizationSlug}
-					projectId={project.id}
-					active="overview"
-					doeLabel={doeTabLabel(doeState)}
-				/>
-			) : null}
-
 			{error ? (
-				<div className="rounded-lg border border-destructive/30 bg-destructive-soft px-4 py-3 text-sm text-destructive">
+				<div
+					role="alert"
+					className="mb-5 rounded-lg border border-destructive/30 bg-destructive-soft px-4 py-3 text-sm text-destructive"
+				>
 					{error}
 				</div>
 			) : null}
-
-			<section className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-				<MetricCard
-					label="Devisé"
-					value={
-						isBillingSummaryLoading
-							? '…'
-							: billingSummary?.quoted_cents == null
-								? '—'
-								: formatMoney(billingSummary.quoted_cents)
-					}
+			<div className="mb-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+				<StatTile
+					label="Missions"
+					value={missionsRatio(stats)}
 					hint={
-						billingSummary?.quoted_cents == null ? 'Aucun devis' : undefined
+						stats.total === 0
+							? 'Aucune mission'
+							: `${stats.progress} % terminées`
 					}
 				/>
-				<MetricCard
-					label="Facturé"
-					value={
-						isBillingSummaryLoading
-							? '…'
-							: formatMoney(billingSummary?.billed_cents ?? 0)
-					}
-					hint="Factures émises, avoirs déduits"
+				<StatTile
+					label="DOE"
+					value={doeTileLabel(doe)}
+					hint={doe ? 'Dossier créé' : 'À créer'}
 				/>
-				<MetricCard
-					label="Reste à facturer"
+				<StatTile
+					label="Période"
+					value={period ?? 'Non planifiée'}
+					valueClassName="text-lg leading-8"
+					hint={period ? 'Début → fin' : 'Aucune date renseignée'}
+				/>
+				<StatTile
+					label="Responsable"
 					value={
-						isBillingSummaryLoading
-							? '…'
-							: billingSummary?.remaining_cents == null
-								? '—'
-								: formatMoney(billingSummary.remaining_cents)
+						<span className="flex items-center gap-2">
+							<PersonAvatar person={owner} size="md" />
+							<span className="min-w-0 truncate">
+								{owner?.name ?? 'Sans responsable'}
+							</span>
+						</span>
 					}
+					valueClassName="text-lg leading-8"
+					hint={owner?.role || 'Aucun responsable désigné'}
+				/>
+			</div>
+			<div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,22rem)]">
+				<SectionCard
+					title="Missions"
 					hint={
-						billingSummary?.remaining_cents != null &&
-						billingSummary.remaining_cents < 0
-							? 'Déjà facturé au-delà du devis'
+						stats.total > 0
+							? `${countLabel(stats.done, 'terminée', 'terminées')} sur ${stats.total}`
 							: undefined
 					}
-				/>
-				{/* No `VIEW_COST` gate yet: epic #283 has not landed on this branch.
-				 * Shown to everyone for now — see the commit message. */}
-				<MetricCard
-					label="Coût planifié"
-					value={isCostLoading ? '…' : formatMoney(plannedCost)}
-					hint={
-						costRow
-							? (incompleteReason(costRow) ?? undefined)
-							: 'Sur la période choisie'
+					action={
+						<Button variant="ghost" size="sm" asChild>
+							<Link
+								to={projectPath('/missions')}
+								params={{ projectId: project.id }}
+							>
+								Voir les missions <ArrowRight aria-hidden />
+							</Link>
+						</Button>
 					}
-					icon={<Clock className="size-4" />}
-				/>
-			</section>
-
-			<SectionCard>
-				<SectionHeader
-					title="Période du coût"
-					description="Le coût planifié ci-dessus porte sur cette période — comme sur l'écran de rentabilité."
-					actions={
-						<div className="flex flex-wrap items-end gap-2">
-							<div className="space-y-1">
-								<Label
-									htmlFor="cost-from"
-									className="text-xs text-muted-foreground"
-								>
-									Du
-								</Label>
-								<Input
-									id="cost-from"
-									type="date"
-									className="w-40"
-									value={period.from}
-									onChange={(event) =>
-										onPeriodChange({ ...period, from: event.target.value })
-									}
-								/>
-							</div>
-							<div className="space-y-1">
-								<Label
-									htmlFor="cost-to"
-									className="text-xs text-muted-foreground"
-								>
-									Au
-								</Label>
-								<Input
-									id="cost-to"
-									type="date"
-									className="w-40"
-									value={period.to}
-									onChange={(event) =>
-										onPeriodChange({ ...period, to: event.target.value })
-									}
-								/>
-							</div>
-						</div>
-					}
-				/>
-			</SectionCard>
-
-			<SectionCard>
-				<SectionHeader
-					title="Facturer"
-					description="Ce que contiendra la facture est prévisualisé avant toute création."
-				/>
-				<div className="p-5">
-					{!hasCustomer ? (
-						<p className="flex items-center gap-2 text-sm text-muted-foreground">
-							<Building2 className="size-4" />
-							Projet interne : sans client, rien à facturer.
-						</p>
-					) : (
-						<Invoicer
-							mode={mode}
-							onModeChange={onModeChange}
-							hasQuote={hasQuote}
-							hasPinnedAddress={hasPinnedAddress}
-							billingSummary={billingSummary}
-							percentageInput={percentageInput}
-							onPercentageInputChange={onPercentageInputChange}
-							percentagePreviewCents={percentagePreviewCents}
-							freeAmountInput={freeAmountInput}
-							onFreeAmountInputChange={onFreeAmountInputChange}
-							freeLabel={freeLabel}
-							onFreeLabelChange={onFreeLabelChange}
-							freeCustomerContexts={freeCustomerContexts}
-							isFreeCustomerContextsLoading={isFreeCustomerContextsLoading}
-							freeCustomerContextId={freeCustomerContextId}
-							onFreeCustomerContextIdChange={onFreeCustomerContextIdChange}
-							dueAt={dueAt}
-							onDueAtChange={onDueAtChange}
-							dueAtLabel={dueAtLabel}
-							notes={notes}
-							onNotesChange={onNotesChange}
-							isIssuing={isIssuing}
-							onConfirm={onConfirm}
-						/>
-					)}
-				</div>
-			</SectionCard>
-
-			<SectionCard>
-				<SectionHeader
-					title={`Factures (${invoices.length})`}
-					description="Toutes les factures émises ou en brouillon contre ce projet."
-				/>
-				{isInvoicesLoading ? (
-					<p className="p-5 text-sm text-muted-foreground">Chargement…</p>
-				) : invoices.length === 0 ? (
-					<p className="p-5 text-sm text-muted-foreground">
-						Aucune facture pour l'instant.
-					</p>
-				) : (
-					<ul className="divide-y">
-						{invoices.map((invoice) => (
-							<li key={invoice.id}>
-								<Link
-									to={buildOrgPath(
-										organizationSlug,
-										'/crm/invoices/$invoiceId',
-									)}
-									params={{ invoiceId: invoice.id }}
-									className="flex items-center justify-between gap-4 px-5 py-3 text-sm transition hover:bg-muted/40"
-								>
-									<div className="min-w-0">
-										<p className="truncate font-medium">
-											{invoice.number ?? 'Numéro attribué à l’émission'}
-										</p>
-										<p className="text-xs text-muted-foreground">
-											{invoiceKindLabel(invoice.kind)} ·{' '}
-											{formatDate(invoice.created_at)}
-										</p>
-									</div>
-									<div className="flex shrink-0 items-center gap-3">
-										<StatusBadge tone={statusTone(invoice.status)}>
-											{invoiceStatusLabel(invoice.status)}
-										</StatusBadge>
-										<p className="font-semibold tabular-nums">
-											{formatMoney(invoice.gross_cents)}
-										</p>
-									</div>
-								</Link>
-							</li>
-						))}
-					</ul>
-				)}
-			</SectionCard>
-
-			<SectionCard>
-				<SectionHeader
-					title="Coûts fournisseurs"
-					description="Ce que des factures fournisseur attribuent à ce chantier — chaque ligne renvoie à sa facture."
-				/>
-				{isSupplierCostsLoading ? (
-					<p className="p-5 text-sm text-muted-foreground">Chargement…</p>
-				) : !supplierCosts || supplierCosts.lines.length === 0 ? (
-					<p className="p-5 text-sm text-muted-foreground">
-						Aucun coût fournisseur attribué pour l'instant.
-					</p>
-				) : (
-					<>
-						<ul className="divide-y">
-							{supplierCosts.lines.map((line) => (
-								<li key={line.allocation_id}>
-									<Link
-										to={buildOrgPath(
-											organizationSlug,
-											'/purchase/supplier-invoices/$supplierInvoiceId',
-										)}
-										params={{ supplierInvoiceId: line.supplier_invoice_id }}
-										className="flex items-center justify-between gap-4 px-5 py-3 text-sm transition hover:bg-muted/40"
-									>
-										<div className="min-w-0">
-											<p className="truncate font-medium">
-												{line.supplier_name} · {line.line_label}
-											</p>
-											<p className="text-xs text-muted-foreground">
-												Facture {line.supplier_invoice_number} ·{' '}
-												{formatDate(line.created_at)}
-											</p>
-										</div>
-										<p className="shrink-0 font-semibold tabular-nums">
-											{formatMoney(line.amount_cents)}
-										</p>
-									</Link>
-								</li>
-							))}
-						</ul>
-						<div className="flex items-center justify-between border-t px-5 py-3 text-sm font-semibold">
-							<span>Total</span>
-							<span className="tabular-nums">
-								{formatMoney(supplierCosts.allocated_cents)}
-							</span>
-						</div>
-					</>
-				)}
-			</SectionCard>
-		</PageShell>
-	)
-}
-
-interface InvoicerProps {
-	mode: InvoicerMode
-	onModeChange: (mode: InvoicerMode) => void
-	hasQuote: boolean
-	hasPinnedAddress: boolean
-	billingSummary: ProjectBillingSummary | null
-	percentageInput: string
-	onPercentageInputChange: (value: string) => void
-	percentagePreviewCents: number | null
-	freeAmountInput: string
-	onFreeAmountInputChange: (value: string) => void
-	freeLabel: string
-	onFreeLabelChange: (value: string) => void
-	freeCustomerContexts: CustomerContext[]
-	isFreeCustomerContextsLoading: boolean
-	freeCustomerContextId: string
-	onFreeCustomerContextIdChange: (value: string) => void
-	dueAt: string
-	onDueAtChange: (value: string) => void
-	dueAtLabel: string
-	notes: string
-	onNotesChange: (value: string) => void
-	isIssuing: boolean
-	onConfirm: () => void
-}
-
-/**
- * Three ways to bill a project, each previewed before anything is created.
- * `REMAINING`/`PERCENTAGE` need a quote (and a pinned billing address on the
- * project — the same precondition `issue_deposit`/`issue_final_invoice`
- * enforce server-side); `FREE_AMOUNT` needs neither, and picks its own
- * address the way any manually composed invoice does.
- */
-function Invoicer({
-	mode,
-	onModeChange,
-	hasQuote,
-	hasPinnedAddress,
-	billingSummary,
-	percentageInput,
-	onPercentageInputChange,
-	percentagePreviewCents,
-	freeAmountInput,
-	onFreeAmountInputChange,
-	freeLabel,
-	onFreeLabelChange,
-	freeCustomerContexts,
-	isFreeCustomerContextsLoading,
-	freeCustomerContextId,
-	onFreeCustomerContextIdChange,
-	dueAt,
-	onDueAtChange,
-	dueAtLabel,
-	notes,
-	onNotesChange,
-	isIssuing,
-	onConfirm,
-}: InvoicerProps) {
-	const canInvoiceQuoted = hasQuote && hasPinnedAddress
-	const remainingCents = billingSummary?.remaining_cents ?? null
-
-	const canConfirm =
-		mode === 'REMAINING'
-			? canInvoiceQuoted && remainingCents !== null
-			: mode === 'PERCENTAGE'
-				? canInvoiceQuoted && percentagePreviewCents !== null
-				: Boolean(
-						freeCustomerContextId && freeLabel.trim() && freeAmountInput.trim(),
-					)
-
-	return (
-		<div className="space-y-4">
-			<Tabs
-				value={mode}
-				onValueChange={(value) => onModeChange(value as InvoicerMode)}
-			>
-				<TabsList>
-					<TabsTrigger value="REMAINING">Tout le restant</TabsTrigger>
-					<TabsTrigger value="PERCENTAGE">Un pourcentage</TabsTrigger>
-					<TabsTrigger value="FREE_AMOUNT">Montant libre</TabsTrigger>
-				</TabsList>
-
-				<TabsContent value="REMAINING" className="space-y-3">
-					<UnavailableNotice
-						hasQuote={hasQuote}
-						hasPinnedAddress={hasPinnedAddress}
-					/>
-					{canInvoiceQuoted ? (
-						<PreviewRow
-							label="Solde (tout ce qui reste à facturer)"
-							amountCents={remainingCents}
-							dueAtLabel={dueAtLabel}
-						/>
-					) : null}
-				</TabsContent>
-
-				<TabsContent value="PERCENTAGE" className="space-y-3">
-					<UnavailableNotice
-						hasQuote={hasQuote}
-						hasPinnedAddress={hasPinnedAddress}
-					/>
-					{canInvoiceQuoted ? (
-						<>
-							<div className="max-w-40 space-y-1">
-								<Label htmlFor="invoicer-percentage">
-									Pourcentage du devis
-								</Label>
-								<div className="relative">
-									<Input
-										id="invoicer-percentage"
-										inputMode="decimal"
-										placeholder="30"
-										value={percentageInput}
-										onChange={(event) =>
-											onPercentageInputChange(event.target.value)
-										}
-									/>
-									<span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">
-										%
-									</span>
-								</div>
-							</div>
-							<PreviewRow
-								label={`Acompte (${percentageInput || '0'} %)`}
-								amountCents={percentagePreviewCents}
-								dueAtLabel={dueAtLabel}
-							/>
-						</>
-					) : null}
-				</TabsContent>
-
-				<TabsContent value="FREE_AMOUNT" className="space-y-3">
-					<div className="grid gap-3 sm:grid-cols-2">
-						<div className="space-y-1">
-							<Label htmlFor="invoicer-free-label">Libellé de la ligne</Label>
-							<Input
-								id="invoicer-free-label"
-								value={freeLabel}
-								onChange={(event) => onFreeLabelChange(event.target.value)}
-								placeholder="Travaux supplémentaires…"
-							/>
-						</div>
-						<div className="space-y-1">
-							<Label htmlFor="invoicer-free-amount">Montant (€)</Label>
-							<Input
-								id="invoicer-free-amount"
-								inputMode="decimal"
-								value={freeAmountInput}
-								onChange={(event) =>
-									onFreeAmountInputChange(event.target.value)
-								}
-								placeholder="0,00"
-							/>
-						</div>
-						<div className="space-y-1 sm:col-span-2">
-							<Label htmlFor="invoicer-free-address">
-								Adresse de facturation
-							</Label>
-							<BillingAddressField
-								value={freeCustomerContextId}
-								addresses={freeCustomerContexts}
-								hasCustomer
-								isLoading={isFreeCustomerContextsLoading}
-								onChange={onFreeCustomerContextIdChange}
-							/>
-						</div>
-					</div>
-					<PreviewRow
-						label={freeLabel.trim() || 'Facture'}
-						amountCents={
-							freeAmountInput.trim() ? eurosToCents(freeAmountInput) : null
-						}
-						dueAtLabel={dueAtLabel}
-					/>
-				</TabsContent>
-			</Tabs>
-
-			<div className="grid gap-3 border-t pt-4 sm:grid-cols-2">
-				<div className="space-y-1">
-					<Label htmlFor="invoicer-due-at">Échéance (optionnel)</Label>
-					<Input
-						id="invoicer-due-at"
-						type="date"
-						value={dueAt}
-						onChange={(event) => onDueAtChange(event.target.value)}
-					/>
-				</div>
-				<div className="space-y-1">
-					<Label htmlFor="invoicer-notes">Note (optionnel)</Label>
-					<Textarea
-						id="invoicer-notes"
-						rows={1}
-						value={notes}
-						onChange={(event) => onNotesChange(event.target.value)}
-					/>
-				</div>
-			</div>
-
-			<RequirePermission permission="MANAGE_INVOICES">
-				<Button
-					type="button"
-					disabled={!canConfirm || isIssuing}
-					onClick={onConfirm}
 				>
-					{isIssuing ? <Loader2 className="animate-spin" /> : <Receipt />}
-					Émettre la facture
-				</Button>
-			</RequirePermission>
-		</div>
-	)
-}
-
-function UnavailableNotice({
-	hasQuote,
-	hasPinnedAddress,
-}: {
-	hasQuote: boolean
-	hasPinnedAddress: boolean
-}) {
-	if (!hasQuote) {
-		return (
-			<p className="flex items-center gap-2 text-sm text-amber-600 dark:text-amber-500">
-				<AlertCircle className="size-4 shrink-0" />
-				Ce projet n'a pas de devis : impossible de calculer un acompte ou un
-				solde.
-			</p>
-		)
-	}
-
-	if (!hasPinnedAddress) {
-		return (
-			<p className="flex items-center gap-2 text-sm text-amber-600 dark:text-amber-500">
-				<AlertCircle className="size-4 shrink-0" />
-				Ce projet n'a pas d'adresse de facturation épinglée. Ouvrez-le en
-				édition depuis la liste des projets pour en choisir une.
-			</p>
-		)
-	}
-
-	return null
-}
-
-/**
- * Display-only, never trusted for the write itself: confirming re-reads
- * whatever the corresponding mutation actually returns from the server.
- */
-function PreviewRow({
-	label,
-	amountCents,
-	dueAtLabel,
-}: {
-	label: string
-	amountCents: number | null
-	dueAtLabel: string
-}) {
-	return (
-		<div className="rounded-lg bg-muted p-4 text-sm">
-			<div className="flex items-center justify-between gap-4">
-				<span className="min-w-0 truncate text-muted-foreground">{label}</span>
-				<span className="shrink-0 font-semibold tabular-nums">
-					{amountCents === null ? '—' : formatMoney(amountCents)}
-				</span>
+					<MissionPreview
+						organizationSlug={organizationSlug}
+						projectId={project.id}
+						missions={missions}
+						people={people}
+						onStatusChange={onMissionStatusChange}
+					/>
+				</SectionCard>
+				<div className="grid gap-4">
+					<SectionCard title="DOE">
+						<DoeCard
+							organizationSlug={organizationSlug}
+							projectId={project.id}
+							summary={doe}
+							isLoading={isDoeLoading}
+							canOpenDoe={canOpenDoe}
+						/>
+					</SectionCard>
+					<SectionCard title="Informations">
+						<DetailList>
+							<DetailRow label="Client">
+								<CustomerBlock customer={customer} />
+							</DetailRow>
+							<DetailRow label="Lieu d’intervention">
+								{extras.place || <Dash />}
+							</DetailRow>
+							<DetailRow label="Description">
+								{extras.description ? (
+									<span className="whitespace-pre-line">
+										{extras.description}
+									</span>
+								) : (
+									<Dash label="Aucune description" />
+								)}
+							</DetailRow>
+						</DetailList>
+					</SectionCard>
+				</div>
 			</div>
-			<p className="mt-1 text-xs text-muted-foreground">
-				Échéance : {dueAtLabel}
-			</p>
-		</div>
+			<ProjectBilling {...billing} />
+		</Page>
 	)
-}
-
-function statusTone(status: Invoice['status']) {
-	if (status === 'PAID') return 'success'
-	if (status === 'PARTIALLY_PAID') return 'warning'
-	if (status === 'ISSUED') return 'brand'
-	if (status === 'CANCELLED') return 'error'
-	return 'neutral'
 }

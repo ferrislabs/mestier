@@ -1,10 +1,15 @@
-import { FolderKanban, Search, X } from 'lucide-react'
+import { Search, X } from 'lucide-react'
 import type { FormEvent } from 'react'
 import { Button } from '#/components/ui/button'
 import { Input } from '#/components/ui/input'
 import { Label } from '#/components/ui/label'
 import { Switch } from '#/components/ui/switch'
 import type { BoardFilters } from '#/pages/planification/lib/board-filters'
+
+const SELECT =
+	'h-8 w-full rounded-md border border-input bg-card px-2.5 text-[13px] shadow-xs outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 dark:bg-input/30'
+
+const LABEL = 'text-xs font-medium text-muted-foreground'
 
 export interface BoardFilterOption {
 	id: string
@@ -72,47 +77,36 @@ export function BoardToolbar({
 	}
 
 	return (
-		<div className="flex flex-col gap-3 rounded-md border bg-muted/20 p-3">
+		<div className="flex flex-col gap-3">
 			<div className="flex flex-col gap-3 lg:flex-row lg:items-end">
 				<div className="flex-1 space-y-1 lg:max-w-md">
-					<Label
-						htmlFor="board-filter-project"
-						className="text-xs font-semibold"
-					>
+					<Label htmlFor="board-filter-project" className={LABEL}>
 						Projet
 					</Label>
-					<div className="flex items-center gap-2">
-						<span className="flex size-9 shrink-0 items-center justify-center rounded-md bg-brand-soft text-primary">
-							<FolderKanban className="size-4" />
-						</span>
-						<select
-							id="board-filter-project"
-							className="h-10 w-full rounded-md border border-primary/30 bg-card px-3 text-sm font-medium shadow-sm"
-							value={filters.project_id ?? ''}
-							onChange={(event) =>
-								onChange({ project_id: event.target.value || undefined })
-							}
-						>
-							<option value="">Tous les projets</option>
-							{projects.map((project) => (
-								<option key={project.id} value={project.id}>
-									{project.label}
-								</option>
-							))}
-						</select>
-					</div>
+					<select
+						id="board-filter-project"
+						className={SELECT}
+						value={filters.project_id ?? ''}
+						onChange={(event) =>
+							onChange({ project_id: event.target.value || undefined })
+						}
+					>
+						<option value="">Tous les projets</option>
+						{projects.map((project) => (
+							<option key={project.id} value={project.id}>
+								{project.label}
+							</option>
+						))}
+					</select>
 				</div>
 
 				<div className="space-y-1 lg:w-52">
-					<Label
-						htmlFor="board-filter-assignee"
-						className="text-xs font-semibold"
-					>
+					<Label htmlFor="board-filter-assignee" className={LABEL}>
 						Assigné
 					</Label>
 					<select
 						id="board-filter-assignee"
-						className="h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm"
+						className={SELECT}
 						value={filters.assignee_id ?? ''}
 						onChange={(event) =>
 							onChange({ assignee_id: event.target.value || undefined })
@@ -128,12 +122,12 @@ export function BoardToolbar({
 				</div>
 
 				<div className="space-y-1 lg:w-52">
-					<Label htmlFor="board-filter-label" className="text-xs font-semibold">
+					<Label htmlFor="board-filter-label" className={LABEL}>
 						Étiquette
 					</Label>
 					<select
 						id="board-filter-label"
-						className="h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm"
+						className={SELECT}
 						value={filters.label_id ?? ''}
 						onChange={(event) =>
 							onChange({ label_id: event.target.value || undefined })
@@ -149,10 +143,7 @@ export function BoardToolbar({
 				</div>
 
 				<form onSubmit={handleSearchSubmit} className="space-y-1 lg:w-56">
-					<Label
-						htmlFor="board-filter-search"
-						className="text-xs font-semibold"
-					>
+					<Label htmlFor="board-filter-search" className={LABEL}>
 						Recherche
 					</Label>
 					<div className="flex items-center gap-2">
@@ -163,8 +154,9 @@ export function BoardToolbar({
 							type="search"
 							defaultValue={filters.q ?? ''}
 							placeholder="Titre de la tâche…"
+							className="h-8 bg-card"
 						/>
-						<Button type="submit" variant="outline" size="icon">
+						<Button type="submit" variant="outline" size="icon-sm">
 							<Search className="size-4" />
 							<span className="sr-only">Rechercher</span>
 						</Button>
@@ -181,7 +173,7 @@ export function BoardToolbar({
 							onChange({ unscheduled: checked ? true : undefined })
 						}
 					/>
-					<Label htmlFor="board-filter-unscheduled" className="text-sm">
+					<Label htmlFor="board-filter-unscheduled" className="text-[13px]">
 						Uniquement non planifiées
 					</Label>
 				</div>

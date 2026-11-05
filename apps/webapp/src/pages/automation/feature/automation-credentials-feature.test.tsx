@@ -9,6 +9,7 @@ import {
 } from '#/hooks/use-active-organization'
 import type { Organization } from '#/hooks/use-organizations'
 import { AutomationCredentialsFeature } from '#/pages/automation/feature/automation-credentials-feature'
+import { patchCredentialMeta } from '#/pages/automation/feature/mocks/credential-meta'
 import { seedPermissionsCacheForOrganization } from '#/test/with-permissions'
 
 /**
@@ -193,13 +194,18 @@ describe('AutomationCredentialsFeature — creation', () => {
 			}))
 		})
 
-		await user.click(await screen.findByRole('button', { name: 'Ajouter' }))
+		await user.click(
+			await screen.findByRole('button', { name: 'Nouvelle identification' }),
+		)
+		await user.click(screen.getByRole('button', { name: /Bearer token/ }))
 		await user.type(screen.getByLabelText('Nom'), 'Signature sortante')
 		await user.click(screen.getByRole('combobox', { name: 'Origine' }))
 		await user.click(
 			screen.getByRole('option', { name: /Générée par Mestier/ }),
 		)
-		await user.click(screen.getByRole('button', { name: 'Créer' }))
+		await user.click(
+			screen.getByRole('button', { name: 'Créer l’identification' }),
+		)
 
 		expect(await screen.findByText('Secret généré')).toBeDefined()
 		expect(screen.getByDisplayValue('c2VjcmV0LWJ5dGVz')).toBeDefined()
@@ -216,10 +222,15 @@ describe('AutomationCredentialsFeature — creation', () => {
 			}))
 		})
 
-		await user.click(await screen.findByRole('button', { name: 'Ajouter' }))
+		await user.click(
+			await screen.findByRole('button', { name: 'Nouvelle identification' }),
+		)
+		await user.click(screen.getByRole('button', { name: /Bearer token/ }))
 		await user.type(screen.getByLabelText('Nom'), 'Odoo')
 		await user.type(screen.getByLabelText('Token'), 'shh')
-		await user.click(screen.getByRole('button', { name: 'Créer' }))
+		await user.click(
+			screen.getByRole('button', { name: 'Créer l’identification' }),
+		)
 
 		await waitFor(() => {
 			expect(screen.queryByText('Secret généré')).toBeNull()
@@ -230,11 +241,16 @@ describe('AutomationCredentialsFeature — creation', () => {
 		const user = userEvent.setup()
 		const api = renderFeature(() => {})
 
-		await user.click(await screen.findByRole('button', { name: 'Ajouter' }))
+		await user.click(
+			await screen.findByRole('button', { name: 'Nouvelle identification' }),
+		)
+		await user.click(screen.getByRole('button', { name: /Bearer token/ }))
 		await user.type(screen.getByLabelText('Nom'), 'Sans token')
-		await user.click(screen.getByRole('button', { name: 'Créer' }))
+		await user.click(
+			screen.getByRole('button', { name: 'Créer l’identification' }),
+		)
 
-		expect(screen.getByText('Token est requis')).toBeDefined()
+		expect(screen.getAllByText('Champ obligatoire.').length).toBeGreaterThan(0)
 		expect(
 			api.calls.some((c) => c.method === 'post' && c.path === CREDENTIALS_PATH),
 		).toBe(false)
@@ -251,7 +267,12 @@ describe('AutomationCredentialsFeature — rotation', () => {
 			}))
 		})
 
-		await user.click(await screen.findByRole('button', { name: 'Régénérer' }))
+		await user.click(
+			await screen.findByRole('button', { name: 'Signature sortante' }),
+		)
+		await user.click(
+			await screen.findByRole('button', { name: 'Régénérer le secret' }),
+		)
 
 		expect(await screen.findByText('Secret généré')).toBeDefined()
 		expect(screen.getByDisplayValue('cm90YXRlZC1zZWNyZXQ')).toBeDefined()
@@ -264,8 +285,14 @@ describe('AutomationCredentialsFeature — rotation', () => {
 			}))
 		})
 
-		await screen.findByText('Signature sortante')
-		expect(screen.queryByRole('button', { name: 'Régénérer' })).toBeNull()
+		const user = userEvent.setup()
+		await user.click(
+			await screen.findByRole('button', { name: 'Signature sortante' }),
+		)
+		await screen.findByRole('dialog')
+		expect(
+			screen.queryByRole('button', { name: 'Régénérer le secret' }),
+		).toBeNull()
 	})
 })
 
@@ -281,8 +308,13 @@ describe('AutomationCredentialsFeature — deletion refused', () => {
 			})
 		})
 
-		await user.click(await screen.findByRole('button', { name: 'Actions' }))
-		await user.click(screen.getByRole('menuitem', { name: 'Supprimer' }))
+		await user.click(
+			await screen.findByRole('button', { name: 'Signature sortante' }),
+		)
+		await user.click(await screen.findByRole('button', { name: 'Supprimer' }))
+		await user.click(
+			screen.getByRole('button', { name: 'Supprimer définitivement' }),
+		)
 
 		expect(
 			await screen.findByText(
@@ -302,8 +334,71 @@ describe('AutomationCredentialsFeature — permission gating', () => {
 		)
 
 		await screen.findByText('Signature sortante')
-		expect(screen.queryByRole('button', { name: 'Ajouter' })).toBeNull()
-		expect(screen.queryByRole('button', { name: 'Régénérer' })).toBeNull()
-		expect(screen.queryByRole('button', { name: 'Actions' })).toBeNull()
+		expect(
+			screen.queryByRole('button', { name: 'Nouvelle identification' }),
+		).toBeNull()
+		expect(
+			screen.queryByRole('button', { name: 'Signature sortante' }),
+		).toBeNull()
+	})
+})
+
+describe('AutomationCredentialsFeature — mocked status and usage', () => {
+	it('shows the usage and status columns with the mocked values', async () => {
+		patchCredentialMeta('cred-meta', {
+			usedByWorkflows: 2,
+			status: 'expired',
+			description: 'Clé du fournisseur de tarifs.',
+		})
+		renderFeature((api) => {
+			api.mockGet(CREDENTIALS_PATH, () => ({
+				data: [credential({ id: 'cred-meta', origin: 'supplied' })],
+			}))
+		})
+
+		expect(await screen.findByText('Utilisée par 2 workflows')).toBeDefined()
+		expect(screen.getByText('Expirée')).toBeDefined()
+		expect(screen.getByText('Clé du fournisseur de tarifs.')).toBeDefined()
+		expect(screen.getByText('Statut')).toBeDefined()
+		expect(screen.getByText('Utilisation')).toBeDefined()
+	})
+
+	it('warns about the nodes that will fail before deleting a used credential', async () => {
+		patchCredentialMeta('cred-used', { usedByWorkflows: 1 })
+		const user = userEvent.setup()
+		renderFeature((api) => {
+			api.mockGet(CREDENTIALS_PATH, () => ({
+				data: [credential({ id: 'cred-used' })],
+			}))
+		})
+
+		await user.click(
+			await screen.findByRole('button', { name: 'Signature sortante' }),
+		)
+		await user.click(await screen.findByRole('button', { name: 'Supprimer' }))
+
+		expect(
+			await screen.findByText(
+				/Utilisée par 1 workflow : leurs nœuds échoueront/,
+			),
+		).toBeDefined()
+	})
+
+	it('keeps the description in the dialog as client-side metadata', async () => {
+		patchCredentialMeta('cred-desc', { description: 'Pour les relances.' })
+		const user = userEvent.setup()
+		renderFeature((api) => {
+			api.mockGet(CREDENTIALS_PATH, () => ({
+				data: [credential({ id: 'cred-desc' })],
+			}))
+		})
+
+		await user.click(
+			await screen.findByRole('button', { name: 'Signature sortante' }),
+		)
+
+		expect(
+			(await screen.findByLabelText(/Description/)) as HTMLTextAreaElement,
+		).toHaveProperty('value', 'Pour les relances.')
 	})
 })

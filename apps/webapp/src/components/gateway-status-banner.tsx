@@ -14,7 +14,7 @@ export function GatewayStatusBanner() {
 	if (state !== 'reconnecting') return null
 
 	return (
-		<div className="flex items-center justify-center gap-2 bg-amber-100 px-3 py-1.5 text-xs font-medium text-amber-900 dark:bg-amber-950 dark:text-amber-200">
+		<div className="flex items-center justify-center gap-2 bg-warning-soft px-3 py-1.5 font-medium text-[12px] text-warning">
 			<WifiOff className="size-3.5" />
 			Reconnexion en cours…
 		</div>

@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useAuth } from 'react-oidc-context'
 import { useActiveOrganization } from '#/hooks/use-active-organization'
 import { useCustomers } from '#/hooks/use-customers'
 import { useInvoices, useOutstandingByCustomer } from '#/hooks/use-invoices'
@@ -10,6 +11,8 @@ import { useVisibleModules } from '#/modules/use-visible-modules'
 import { DiscussionsFeature } from '#/pages/home/feature/discussions-feature'
 import { MyTasksTodayFeature } from '#/pages/home/feature/my-tasks-today-feature'
 import { TodayPlanningFeature } from '#/pages/home/feature/today-planning-feature'
+import { useHomeActivity } from '#/pages/home/feature/use-home-activity'
+import { firstNameOf, type HomeActivity } from '#/pages/home/types'
 import type { SearchGroup } from '#/pages/home/ui/home-search-ui'
 import { HomeUI } from '#/pages/home/ui/home-ui'
 import {
@@ -21,6 +24,25 @@ import {
 export function HomeFeature() {
 	const { activeOrganizationId, activeOrganization } = useActiveOrganization()
 	const visibleModules = useVisibleModules()
+	const auth = useAuth()
+	const activityQuery = useHomeActivity(activeOrganizationId)
+
+	const activity: HomeActivity[] = (activityQuery.data ?? []).flatMap(
+		(entry) => {
+			const module = visibleModules.find(
+				(candidate) => candidate.id === entry.moduleId,
+			)
+			if (!module) return []
+			const { moduleId: _moduleId, ...rest } = entry
+			return [
+				{
+					...rest,
+					to: buildOrgPath(activeOrganization.slug, entry.to),
+					module,
+				},
+			]
+		},
+	)
 
 	// Fixed to the current month: this is a glance, not the reporting page's own
 	// date range picker. Anyone wanting another period follows the CTA to
@@ -125,10 +147,7 @@ export function HomeFeature() {
 			items: (projects.data?.data ?? []).map((project) => ({
 				id: project.id,
 				label: project.name,
-				to: buildOrgPath(
-					activeOrganization.slug,
-					`/planification/projects/${project.id}`,
-				),
+				to: buildOrgPath(activeOrganization.slug, `/projet/${project.id}`),
 			})),
 		},
 		{
@@ -146,7 +165,10 @@ export function HomeFeature() {
 
 	return (
 		<HomeUI
-			userName="Nathael"
+			userName={firstNameOf(auth.user?.profile)}
+			organizationName={activeOrganization.name}
+			activity={activity}
+			isActivityLoading={activityQuery.isLoading}
 			organizationSlug={activeOrganization.slug}
 			modules={visibleModules}
 			search={searchGroups}

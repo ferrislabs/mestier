@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { resolveModule } from '#/modules/resolve-module'
+import { hasSideNav, resolveModule } from '#/modules/resolve-module'
 
 describe('resolveModule', () => {
 	it('returns the home module for the root', () => {
@@ -51,10 +51,14 @@ describe('resolveModule', () => {
 	it('resolves planification pages to the planification module', () => {
 		expect(resolveModule('/planification').id).toBe('planification')
 		expect(resolveModule('/planification/board').id).toBe('planification')
-		expect(resolveModule('/planification/projects').id).toBe('planification')
-		expect(resolveModule('/planification/projects/abc-123').id).toBe(
-			'planification',
-		)
+		expect(resolveModule('/planification/maintenance').id).toBe('planification')
+	})
+
+	it('resolves projet pages to the projet module', () => {
+		expect(resolveModule('/projet').id).toBe('projet')
+		expect(resolveModule('/projet/abc-123').id).toBe('projet')
+		expect(resolveModule('/projet/abc-123/doe/preview').id).toBe('projet')
+		expect(resolveModule('/projet/doe-models/m1').id).toBe('projet')
 	})
 
 	/**
@@ -64,6 +68,25 @@ describe('resolveModule', () => {
 	 */
 	it('keeps the planning and planification modules apart', () => {
 		expect(resolveModule('/planning/calendar').id).toBe('planning')
-		expect(resolveModule('/planification/projects').id).toBe('planification')
+		expect(resolveModule('/planification/board').id).toBe('planification')
+	})
+})
+
+describe('hasSideNav', () => {
+	it('gives the organization root no side nav', () => {
+		expect(hasSideNav(resolveModule('/'), '/')).toBe(false)
+	})
+
+	it('keeps the side nav on the other screens of the home module', () => {
+		expect(hasSideNav(resolveModule('/reporting'), '/reporting')).toBe(true)
+	})
+
+	it('gives the settings no side nav', () => {
+		expect(hasSideNav(resolveModule('/settings'), '/settings')).toBe(false)
+	})
+
+	it('gives every business module a side nav', () => {
+		expect(hasSideNav(resolveModule('/crm'), '/crm')).toBe(true)
+		expect(hasSideNav(resolveModule('/projet'), '/projet')).toBe(true)
 	})
 })

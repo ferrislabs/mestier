@@ -17,7 +17,6 @@ import {
 } from '#/pages/planning/ui/planning-warning-dialog'
 
 export interface PlanningTeamUIProps {
-	organizationName: string
 	organizationSlug: string
 	/** `null` while the count is still loading — the badge stays absent
 	 * either way, since zero and "unknown yet" render the same (nothing). */
@@ -65,7 +64,6 @@ export interface PlanningTeamUIProps {
  * creates, edits or deletes them.
  */
 export function PlanningTeamUI({
-	organizationName,
 	organizationSlug,
 	pendingReportsCount,
 	view,
@@ -88,7 +86,6 @@ export function PlanningTeamUI({
 	return (
 		<PageShell>
 			<PageHeader
-				eyebrow={organizationName}
 				title="Planning"
 				description="Projets, absences et plages de travail de l'équipe."
 				actions={
@@ -101,12 +98,8 @@ export function PlanningTeamUI({
 						) : null}
 						{onCreateTask ? (
 							<RequirePermission permission="MANAGE_PLANNING">
-								<Button
-									type="button"
-									className="gap-1.5"
-									onClick={onCreateTask}
-								>
-									<Plus className="size-4" />
+								<Button type="button" size="sm" onClick={onCreateTask}>
+									<Plus />
 									Nouvelle tâche
 								</Button>
 							</RequirePermission>
@@ -127,7 +120,7 @@ export function PlanningTeamUI({
 			{isLoading ? (
 				<SectionCard
 					data-testid="planning-loading"
-					className="flex min-h-72 items-center justify-center gap-3 p-8 text-sm text-muted-foreground"
+					className="flex min-h-72 items-center justify-center gap-3 p-8 text-[13px] text-muted-foreground"
 				>
 					Chargement du planning…
 				</SectionCard>
@@ -136,12 +129,12 @@ export function PlanningTeamUI({
 					data-testid="planning-error"
 					className="flex flex-col items-center justify-center gap-3 p-12 text-center"
 				>
-					<div className="flex size-14 items-center justify-center rounded-lg border bg-card">
-						<AlertCircle className="size-6 text-destructive" />
+					<div className="flex size-12 items-center justify-center rounded-lg bg-muted">
+						<AlertCircle className="size-5 text-destructive" />
 					</div>
 					<div>
-						<p className="font-semibold">Impossible de charger le planning</p>
-						<p className="text-sm text-muted-foreground">{error}</p>
+						<p className="font-medium">Impossible de charger le planning</p>
+						<p className="text-[13px] text-muted-foreground">{error}</p>
 					</div>
 				</SectionCard>
 			) : data ? (

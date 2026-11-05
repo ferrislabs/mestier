@@ -95,6 +95,46 @@ export function operationNatureLabel(nature: string): string {
 	return nature
 }
 
+export type InvoiceDisplayState =
+	| 'draft'
+	| 'unpaid'
+	| 'partial'
+	| 'overdue'
+	| 'paid'
+	| 'cancelled'
+	| 'refund_due'
+
+export const INVOICE_STATE_LABELS: Record<InvoiceDisplayState, string> = {
+	draft: 'Brouillon',
+	unpaid: 'À payer',
+	partial: 'Partiellement payée',
+	overdue: 'En retard',
+	paid: 'Payée',
+	cancelled: 'Annulée',
+	refund_due: 'À rembourser',
+}
+
+/**
+ * The state an invoice reads as in the list and on its page. Every input is a
+ * field the backend already computed (`status`, `due_at`, the balance's
+ * `remaining_cents`): this only picks a label, it never recomputes money.
+ * `remainingCents` is optional because the list has no per-invoice balance.
+ */
+export function invoiceDisplayState(
+	invoice: Pick<Invoice, 'status' | 'due_at'>,
+	remainingCents?: number | null,
+	now: Date = new Date(),
+): InvoiceDisplayState {
+	if (invoice.status === 'DRAFT') return 'draft'
+	if (invoice.status === 'CANCELLED') return 'cancelled'
+	if (remainingCents != null && remainingCents < 0) return 'refund_due'
+	if (invoice.status === 'PAID') return 'paid'
+	if (isInvoiceOverdue({ status: 'ISSUED', due_at: invoice.due_at }, now)) {
+		return 'overdue'
+	}
+	return invoice.status === 'PARTIALLY_PAID' ? 'partial' : 'unpaid'
+}
+
 /**
  * "An overdue invoice reads as overdue in the list, not only on its own
  * page" (#321) — a pure date comparison over fields the backend already

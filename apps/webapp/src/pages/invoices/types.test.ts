@@ -3,6 +3,7 @@ import {
 	eurosToCents,
 	formatVatRateBp,
 	type InvoiceLineFormValues,
+	invoiceDisplayState,
 	invoiceKindLabel,
 	invoiceLineTotalCents,
 	invoiceStatusLabel,
@@ -126,5 +127,61 @@ describe('isInvoiceOverdue', () => {
 				now,
 			),
 		).toBe(false)
+	})
+})
+
+describe('invoiceDisplayState', () => {
+	const now = new Date('2026-06-10T12:00:00Z')
+	const future = '2026-07-01T00:00:00Z'
+	const past = '2026-06-01T00:00:00Z'
+
+	it('reads a draft and a cancelled invoice as they are', () => {
+		expect(
+			invoiceDisplayState({ status: 'DRAFT', due_at: past }, null, now),
+		).toBe('draft')
+		expect(
+			invoiceDisplayState({ status: 'CANCELLED', due_at: past }, 0, now),
+		).toBe('cancelled')
+	})
+
+	it('reads an issued invoice as unpaid, or overdue once its due date passed', () => {
+		expect(
+			invoiceDisplayState({ status: 'ISSUED', due_at: future }, null, now),
+		).toBe('unpaid')
+		expect(
+			invoiceDisplayState({ status: 'ISSUED', due_at: past }, null, now),
+		).toBe('overdue')
+		expect(
+			invoiceDisplayState({ status: 'ISSUED', due_at: null }, null, now),
+		).toBe('unpaid')
+	})
+
+	it('keeps a partially paid invoice partial until it is late', () => {
+		expect(
+			invoiceDisplayState(
+				{ status: 'PARTIALLY_PAID', due_at: future },
+				5000,
+				now,
+			),
+		).toBe('partial')
+		expect(
+			invoiceDisplayState(
+				{ status: 'PARTIALLY_PAID', due_at: past },
+				5000,
+				now,
+			),
+		).toBe('overdue')
+	})
+
+	it('never calls a paid invoice late', () => {
+		expect(invoiceDisplayState({ status: 'PAID', due_at: past }, 0, now)).toBe(
+			'paid',
+		)
+	})
+
+	it('flags an overpayment as a refund due', () => {
+		expect(
+			invoiceDisplayState({ status: 'PAID', due_at: past }, -2000, now),
+		).toBe('refund_due')
 	})
 })

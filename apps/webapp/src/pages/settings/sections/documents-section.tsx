@@ -2,7 +2,6 @@ import { Loader2, Save } from 'lucide-react'
 import { useState } from 'react'
 import { RequirePermission } from '#/components/require-permission'
 import { Button } from '#/components/ui/button'
-import { SectionCard, SectionHeader } from '#/components/ui/surface'
 import { useActiveOrganization } from '#/hooks/use-active-organization'
 import {
 	type DoeSettings,
@@ -18,6 +17,7 @@ import {
 	normalizeStyle,
 	sameStyle,
 } from '#/pages/doe-style/lib/style'
+import { SettingsCard } from '#/pages/settings/ui/settings-card'
 
 export function DocumentsSection() {
 	const { activeOrganization } = useActiveOrganization()
@@ -25,11 +25,10 @@ export function DocumentsSection() {
 
 	return (
 		<div className="flex flex-col gap-6">
-			<SectionCard>
-				<SectionHeader
-					title="Mise en page des documents"
-					description="Couleurs, polices, couverture, en-tête, pied de page et libellés des documents PDF, dont le DOE. Un modèle de DOE peut les remplacer."
-				/>
+			<SettingsCard
+				title="Mise en page des documents"
+				description="Couleurs, polices, couverture, en-tête, pied de page et libellés des documents PDF, dont le DOE. Un modèle de DOE peut les remplacer."
+			>
 				{settings.isLoading ? (
 					<div className="flex items-center gap-2 p-5 text-sm text-muted-foreground">
 						<Loader2 className="size-4 animate-spin" />
@@ -46,7 +45,7 @@ export function DocumentsSection() {
 						{mutationErrorMessage(settings.error) ?? 'Réglages indisponibles.'}
 					</p>
 				)}
-			</SectionCard>
+			</SettingsCard>
 		</div>
 	)
 }

@@ -3,11 +3,24 @@ import type { SupportFilters } from '#/pages/support/types'
 
 const optionalText = z.string().trim().min(1).optional().catch(undefined)
 
+const optionalStatus = z
+	.enum(['all', 'new', 'in_progress', 'waiting_customer', 'resolved'])
+	.optional()
+	.catch(undefined)
+
+const optionalPriority = z
+	.enum(['low', 'normal', 'high', 'urgent'])
+	.optional()
+	.catch(undefined)
+
 const NO_FILTERS = {
 	assignee: undefined,
 	badge: undefined,
 	custom_field_key: undefined,
 	custom_field_value: undefined,
+	status: undefined,
+	priority: undefined,
+	ticket: undefined,
 }
 
 export const supportSearchSchema = z
@@ -16,8 +29,13 @@ export const supportSearchSchema = z
 		badge: optionalText,
 		custom_field_key: optionalText,
 		custom_field_value: optionalText,
+		status: optionalStatus,
+		priority: optionalPriority,
+		ticket: optionalText,
 	})
 	.catch(() => NO_FILTERS)
+
+export const UNASSIGNED_FILTER = 'none'
 
 export const EMPTY_SUPPORT_FILTERS: SupportFilters = NO_FILTERS
 
@@ -44,7 +62,7 @@ export function supportFiltersToQuery(
 	const query: SupportTicketsQuery = { per_page: perPage }
 	const { assignee, badge, custom_field_key, custom_field_value } = filters
 
-	if (assignee) query.assignee = assignee
+	if (assignee && assignee !== UNASSIGNED_FILTER) query.assignee = assignee
 	if (badge) query.badge = badge
 	if (custom_field_key && custom_field_value) {
 		query.custom_field_key = custom_field_key

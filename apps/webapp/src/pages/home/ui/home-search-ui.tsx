@@ -61,7 +61,7 @@ export function HomeSearchUI({ groups, placeholder }: HomeSearchUIProps) {
 	return (
 		// biome-ignore lint/a11y/noStaticElementInteractions: keeps the dropdown open while focus moves between the input and a result link; the input itself is the interactive control
 		<div
-			className="relative mx-auto w-full max-w-2xl"
+			className="relative w-full max-w-xl"
 			onBlur={(event) => {
 				if (!event.currentTarget.contains(event.relatedTarget)) {
 					setIsFocused(false)
@@ -69,7 +69,7 @@ export function HomeSearchUI({ groups, placeholder }: HomeSearchUIProps) {
 			}}
 		>
 			<div className="relative">
-				<Search className="pointer-events-none absolute left-4 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+				<Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
 				<Input
 					value={query}
 					onChange={(event) => {
@@ -105,20 +105,20 @@ export function HomeSearchUI({ groups, placeholder }: HomeSearchUIProps) {
 						'Rechercher un compte, un devis, un projet, une facture…'
 					}
 					aria-label="Recherche rapide"
-					className="h-12 rounded-full pl-11 text-base shadow-sm"
+					className="h-10 rounded-lg pl-9 text-sm"
 				/>
 			</div>
 
 			{isOpen ? (
-				<div className="absolute inset-x-0 top-full z-20 mt-2 max-h-96 overflow-y-auto rounded-xl border bg-popover py-2 text-popover-foreground shadow-lg">
+				<div className="absolute inset-x-0 top-full z-20 mt-2 max-h-96 overflow-y-auto rounded-lg border bg-popover py-1.5 text-popover-foreground shadow-md">
 					{flatResults.length === 0 ? (
-						<p className="px-4 py-6 text-center text-sm text-muted-foreground">
+						<p className="px-4 py-6 text-center text-[13px] text-muted-foreground">
 							Aucun résultat pour « {query} »
 						</p>
 					) : (
 						matches.map((group) => (
 							<div key={group.label} className="py-1">
-								<p className="px-4 py-1 text-xs font-medium text-muted-foreground uppercase tracking-wide">
+								<p className="px-4 py-1 text-[12px] font-medium text-muted-foreground">
 									{group.label}
 								</p>
 								{group.items.map((item) => {
@@ -132,15 +132,15 @@ export function HomeSearchUI({ groups, placeholder }: HomeSearchUIProps) {
 												setIsFocused(false)
 											}}
 											className={cn(
-												'flex flex-col px-4 py-2 text-sm',
+												'flex flex-col px-4 py-2 text-[13.5px] outline-none',
 												index === highlighted
-													? 'bg-muted/70'
-													: 'hover:bg-muted/40',
+													? 'bg-accent'
+													: 'hover:bg-accent/60',
 											)}
 										>
 											<span className="truncate font-medium">{item.label}</span>
 											{item.sublabel ? (
-												<span className="truncate text-xs text-muted-foreground">
+												<span className="truncate text-[12px] text-muted-foreground">
 													{item.sublabel}
 												</span>
 											) : null}

@@ -43,7 +43,6 @@ export function ContractsFeature(props: ContractsFeatureProps) {
 		<ContractsScreen
 			key={activeOrganization.id}
 			organizationId={activeOrganization.id}
-			organizationName={activeOrganization.name}
 			{...props}
 		/>
 	)
@@ -51,12 +50,10 @@ export function ContractsFeature(props: ContractsFeatureProps) {
 
 function ContractsScreen({
 	organizationId,
-	organizationName,
 	season,
 	onSeasonChange,
 }: ContractsFeatureProps & {
 	organizationId: string
-	organizationName: string
 }) {
 	const [includeArchived, setIncludeArchived] = useState(false)
 	const [draft, setDraft] = useState<ContractDraft | null>(null)
@@ -251,7 +248,6 @@ function ContractsScreen({
 
 	return (
 		<ContractsUi
-			organizationName={organizationName}
 			season={season}
 			rows={activeRows}
 			draftRows={draftRows}

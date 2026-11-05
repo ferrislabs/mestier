@@ -1,15 +1,10 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import {
-	fireEvent,
-	render,
-	screen,
-	waitFor,
-	within,
-} from '@testing-library/react'
+import { fireEvent, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import type { ReactNode } from 'react'
 import { beforeEach, describe, expect, it } from 'vitest'
 import type { Schemas } from '#/api/api.client'
+import { TooltipProvider } from '#/components/ui/tooltip'
 import {
 	ActiveOrganizationProvider,
 	OrganizationListProvider,
@@ -21,6 +16,7 @@ import {
 	dragNodeBy,
 	installFlowTestEnvironment,
 } from '#/pages/automation/test/flow-test-env'
+import { renderWithRouter } from '#/test/render-with-router'
 
 for (const method of [
 	'hasPointerCapture',
@@ -45,6 +41,8 @@ const EVENTS_PATH = '/api/v1/organizations/{organization_id}/automation/events'
 const RUNS_PATH = '/api/v1/organizations/{organization_id}/automation/runs'
 const RUN_PATH =
 	'/api/v1/organizations/{organization_id}/automation/runs/{run_id}'
+const MY_PERMISSIONS_PATH =
+	'/api/v1/organizations/{organization_id}/members/me/permissions'
 const EXPRESSIONS_EVALUATE_PATH =
 	'/api/v1/organizations/{organization_id}/automation/expressions/evaluate'
 
@@ -229,6 +227,10 @@ function renderFeature(configure: (api: FakeApi) => void) {
 		data: [],
 		pagination: null,
 	}))
+	api.mockGet(MY_PERMISSIONS_PATH, () => ({
+		data: { permissions: ['VIEW_AUTOMATION', 'MANAGE_AUTOMATION'] },
+		pagination: null,
+	}))
 	configure(api)
 
 	const queryClient = new QueryClient({
@@ -240,14 +242,14 @@ function renderFeature(configure: (api: FakeApi) => void) {
 			<QueryClientProvider client={queryClient}>
 				<OrganizationListProvider organizations={[ORGANIZATION]}>
 					<ActiveOrganizationProvider activeOrganization={ORGANIZATION}>
-						{children}
+						<TooltipProvider>{children}</TooltipProvider>
 					</ActiveOrganizationProvider>
 				</OrganizationListProvider>
 			</QueryClientProvider>
 		)
 	}
 
-	render(
+	void renderWithRouter(
 		<Providers>
 			<WorkflowCanvasFeature workflowId="workflow-1" />
 		</Providers>,
@@ -259,6 +261,15 @@ function renderFeature(configure: (api: FakeApi) => void) {
 beforeEach(() => {
 	installFlowTestEnvironment()
 })
+
+async function closeDetails() {
+	fireEvent.click(
+		await screen.findByRole('button', { name: 'Fermer les détails du nœud' }),
+	)
+	await waitFor(() => {
+		expect(screen.queryByRole('dialog')).toBeNull()
+	})
+}
 
 async function clickSave() {
 	const button = await screen.findByRole('button', { name: /Enregistrer/ })
@@ -454,11 +465,15 @@ describe('WorkflowCanvasFeature — a 422 from the backend', () => {
 		await clickSave()
 
 		const node = await screen.findByTestId('rf__node-c1')
-		expect(await within(node).findByLabelText(/Erreur/)).toBeDefined()
+		expect(
+			await within(node).findByLabelText(
+				'À corriger : Identifiant de credential manquant',
+			),
+		).toBeDefined()
 		expect(await screen.findByText('Le graphe contient un cycle')).toBeDefined()
 	})
 
-	it('lands a field-scoped 422 on the exact field of the exact node, in the config panel', async () => {
+	it('lands a field-scoped 422 on the exact field of the exact node, in the node details', async () => {
 		const graph: Schemas.GraphDto = {
 			connectors: [
 				connector('c1'),
@@ -521,7 +536,7 @@ describe('WorkflowCanvasFeature — a 422 from the backend', () => {
 		await clickSave()
 
 		const node = await screen.findByTestId('rf__node-c2')
-		node.click()
+		fireEvent.doubleClick(node)
 
 		expect(await screen.findByText('URL manquante')).toBeDefined()
 	})
@@ -566,9 +581,13 @@ describe('WorkflowCanvasFeature — a 422 from the backend', () => {
 		expect(screen.queryByText('Ce déclencheur ne mène nulle part.')).toBeNull()
 
 		const node = await screen.findByTestId('rf__node-t1')
-		expect(await within(node).findByLabelText(/Erreur/)).toBeDefined()
+		expect(
+			await within(node).findByLabelText(
+				'À corriger : Ce déclencheur ne mène nulle part.',
+			),
+		).toBeDefined()
 
-		node.click()
+		fireEvent.doubleClick(node)
 		expect(
 			await screen.findByText('Ce déclencheur ne mène nulle part.'),
 		).toBeDefined()
@@ -663,7 +682,7 @@ describe('WorkflowCanvasFeature — the credential picker', () => {
 		})
 
 		const node = await screen.findByTestId('rf__node-c1')
-		node.click()
+		fireEvent.doubleClick(node)
 
 		await user.click(
 			await screen.findByRole('combobox', { name: 'Identification' }),
@@ -734,7 +753,7 @@ describe('WorkflowCanvasFeature — inline credential creation', () => {
 		})
 
 		const node = await screen.findByTestId('rf__node-c1')
-		node.click()
+		fireEvent.doubleClick(node)
 
 		await user.click(
 			await screen.findByRole('combobox', { name: 'Identification' }),
@@ -755,6 +774,7 @@ describe('WorkflowCanvasFeature — inline credential creation', () => {
 			expect(call).toBeDefined()
 		})
 
+		await closeDetails()
 		await clickSave()
 
 		await waitFor(() => {
@@ -803,12 +823,19 @@ describe('WorkflowCanvasFeature — a trigger saved with the workflow', () => {
 			}))
 		})
 
-		const trigger = await screen.findByTestId('rf__node-t1')
-		trigger.click()
+		fireEvent.doubleClick(await screen.findByTestId('rf__node-t1'))
 
-		await screen.findByRole('checkbox', { name: 'invoice.paid' })
-		screen.getByRole('checkbox', { name: 'invoice.paid' }).click()
+		fireEvent.click(
+			await screen.findByRole('button', { name: 'Ajouter un événement' }),
+		)
+		fireEvent.click(
+			await screen.findByRole('button', { name: /invoice\.paid/ }),
+		)
+		fireEvent.click(
+			screen.getByRole('button', { name: 'Ajouter cet événement' }),
+		)
 
+		await closeDetails()
 		await clickSave()
 
 		await waitFor(() => {
@@ -856,8 +883,13 @@ describe('WorkflowCanvasFeature — a trigger saved with the workflow', () => {
 		await screen.findByTestId('rf__node-t1')
 		const pane = document.querySelector('.react-flow__pane') as HTMLElement
 		fireEvent.contextMenu(pane, { clientX: 400, clientY: 400 })
+		fireEvent.click(await screen.findByText('Ajouter un nœud'))
 		fireEvent.click(await screen.findByText('Ajouter un déclencheur'))
-		fireEvent.click(await screen.findByText('Manuel'))
+		fireEvent.click(
+			within(
+				await screen.findByRole('complementary', { name: 'Créateur de nœuds' }),
+			).getByRole('button', { name: /Clic/ }),
+		)
 		await screen.findByTestId('rf__node-t2')
 
 		await clickSave()
@@ -882,16 +914,19 @@ describe('WorkflowCanvasFeature — a trigger saved with the workflow', () => {
 })
 
 describe('WorkflowCanvasFeature — the last run', () => {
-	it('fills the data tree with the most recent run for this workflow, and none other', async () => {
+	it('fills the input column with the most recent run for this workflow, and none other', async () => {
 		const graph: Schemas.GraphDto = {
 			connectors: [connector('c1')],
-			edges: [],
-			triggers: [],
+			edges: [{ from: 't1', to: 'c1', branch: null }],
+			triggers: [{ id: 't1', kind: 'Manual' }],
 		}
 
 		renderFeature((fakeApi) => {
 			fakeApi.mockGet(WORKFLOW_PATH, () => ({
-				data: workflowDetail({ graph, layout: { c1: { x: 0, y: 0 } } }),
+				data: workflowDetail({
+					graph,
+					layout: { t1: { x: -220, y: 0 }, c1: { x: 0, y: 0 } },
+				}),
 				pagination: null,
 			}))
 			fakeApi.mockGet(RUNS_PATH, () => ({
@@ -952,12 +987,11 @@ describe('WorkflowCanvasFeature — the last run', () => {
 			})
 		})
 
-		const node = await screen.findByTestId('rf__node-c1')
-		node.click()
+		fireEvent.doubleClick(await screen.findByTestId('rf__node-c1'))
 
-		await waitFor(() => {
-			expect(screen.getByRole('button', { name: 'trigger' })).toBeDefined()
-		})
+		fireEvent.click(await screen.findByRole('radio', { name: 'Exécution' }))
+
+		expect(await screen.findByText('q-real')).toBeDefined()
 	})
 })
 
@@ -986,7 +1020,9 @@ describe('WorkflowCanvasFeature — the live preview', () => {
 			fakeApi.mockGet(WORKFLOW_PATH, () => ({
 				data: workflowDetail({
 					graph: {
-						connectors: [{ ...connector('c1'), config: { url: 'a' } }],
+						connectors: [
+							{ ...connector('c1'), config: { url: '{{ trigger.id }}' } },
+						],
 						edges: [],
 						triggers: [],
 					},
@@ -1000,18 +1036,13 @@ describe('WorkflowCanvasFeature — the live preview', () => {
 			}))
 		})
 
-		const node = await screen.findByTestId('rf__node-c1')
-		node.click()
+		fireEvent.doubleClick(await screen.findByTestId('rf__node-c1'))
 
-		fireEvent.click(
-			await screen.findByRole('button', {
-				name: 'Insérer une donnée dans URL',
-			}),
-		)
+		fireEvent.focus(await screen.findByLabelText('URL'))
 
 		await waitFor(
 			() => {
-				expect(screen.getByText('"resolved!"')).toBeDefined()
+				expect(screen.getByText('Aperçu : resolved!')).toBeDefined()
 			},
 			{ timeout: 2000 },
 		)

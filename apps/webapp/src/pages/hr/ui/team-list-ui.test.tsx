@@ -56,7 +56,7 @@ interface FakeApiOptions {
 }
 
 /**
- * `TeamListUI` renders its "Ajouter une personne" action, and the per-row
+ * `TeamListUI` renders its "Nouveau membre" action, and the per-row
  * role assignment control, behind `RequirePermission` (#307, #308), and
  * resolves a member's role badges through `useRoles`/`useMemberRoleIds`
  * directly (see `MemberRoleCell`) — all three need a fake `tanstackApi`.
@@ -164,19 +164,23 @@ function member(overrides: Partial<TeamMemberRow> = {}): TeamMemberRow {
 		monthlyCostCents: null,
 		effectiveHourlyRateCents: 1500,
 		weeklyContractMinutes: 2100,
+		rhMember: null,
 		...overrides,
 	}
 }
 
 function baseProps() {
 	return {
-		organizationName: 'Atelier Bois & Co',
 		organizationSlug: 'atelier-bois',
 		isLoading: false,
 		error: null,
 		hrDataRestricted: false,
 		members: [member()],
 		search: '',
+		rhState: null,
+		today: '2026-11-05',
+		contractFilter: 'all' as const,
+		onContractFilterChange: vi.fn(),
 		onSearchChange: vi.fn(),
 		createForm: {
 			values: {
@@ -388,14 +392,12 @@ describe('TeamListUI — create member modal', () => {
 		expect(screen.queryByLabelText('Nom')).toBeNull()
 	})
 
-	it('"Ajouter une personne" asks the feature to open the modal', async () => {
+	it('"Nouveau membre" asks the feature to open the modal', async () => {
 		const user = userEvent.setup()
 		const props = baseProps()
 		await renderWithRouter(<TeamListUI {...props} />)
 
-		await user.click(
-			screen.getByRole('button', { name: 'Ajouter une personne' }),
-		)
+		await user.click(screen.getByRole('button', { name: 'Nouveau membre' }))
 
 		expect(props.onCreateMemberDialogOpenChange).toHaveBeenCalledWith(true)
 	})

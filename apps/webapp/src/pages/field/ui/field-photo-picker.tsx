@@ -31,14 +31,14 @@ export function FieldPhotoPicker({
 				return (
 					<label
 						key={phase}
-						className="flex min-h-20 cursor-pointer flex-col items-center justify-center gap-1 rounded-xl border-2 border-dashed bg-card p-2 text-center transition-colors active:bg-muted"
+						className="flex min-h-20 cursor-pointer flex-col items-center justify-center gap-1 rounded-lg border border-dashed bg-card p-2 text-center transition-colors active:bg-muted"
 					>
 						{isPending ? (
 							<Loader2 className="size-6 animate-spin text-primary" />
 						) : (
 							<Camera className="size-6 text-primary" />
 						)}
-						<span className="text-sm font-semibold">{phaseLabel(phase)}</span>
+						<span className="font-medium text-sm">{phaseLabel(phase)}</span>
 						<span className="text-xs text-muted-foreground">
 							{count > 0 ? `${count} photo${count > 1 ? 's' : ''}` : 'aucune'}
 						</span>

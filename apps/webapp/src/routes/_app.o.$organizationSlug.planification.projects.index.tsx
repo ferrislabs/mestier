@@ -1,25 +1,14 @@
-import { createFileRoute } from '@tanstack/react-router'
-import { ProjectsFeature } from '#/pages/projects/feature/projects-feature'
-import { projectsSearchSchema } from '#/pages/projects/types'
+import { createFileRoute, redirect } from '@tanstack/react-router'
+import { buildOrgPath } from '#/modules/org-path'
 
 export const Route = createFileRoute(
 	'/_app/o/$organizationSlug/planification/projects/',
 )({
-	validateSearch: (search) => projectsSearchSchema.parse(search),
-	component: ProjectsPage,
+	validateSearch: (search: Record<string, unknown>) => search,
+	beforeLoad: ({ params, search }) => {
+		throw redirect({
+			to: buildOrgPath(params.organizationSlug, '/projet'),
+			search,
+		})
+	},
 })
-
-function ProjectsPage() {
-	const { projectId, archived } = Route.useSearch()
-	const navigate = Route.useNavigate()
-
-	return (
-		<ProjectsFeature
-			highlightedProjectId={projectId}
-			includeArchived={archived}
-			onIncludeArchivedChange={(archived) =>
-				navigate({ search: (prev) => ({ ...prev, archived }) })
-			}
-		/>
-	)
-}

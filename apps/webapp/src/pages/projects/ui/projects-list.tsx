@@ -1,345 +1,177 @@
 import { Link } from '@tanstack/react-router'
-import type { ColumnDef } from '@tanstack/react-table'
-import {
-	Building2,
-	FolderKanban,
-	LayoutTemplate,
-	Loader2,
-	Plus,
-	Search,
-} from 'lucide-react'
-import { useMemo } from 'react'
-import {
-	ReferenceTable,
-	RowActions,
-	RowIdentity,
-} from '#/components/reference-table'
+import { LayoutTemplate, Loader2, Plus } from 'lucide-react'
+import { EmptyState } from '#/components/empty-state'
 import { RequirePermission } from '#/components/require-permission'
-import { Badge } from '#/components/ui/badge'
 import { Button } from '#/components/ui/button'
-import { Input } from '#/components/ui/input'
-import { Label } from '#/components/ui/label'
-import {
-	MetricCard,
-	PageHeader,
-	PageShell,
-	SectionCard,
-} from '#/components/ui/surface'
-import type { Project } from '#/hooks/use-projects'
-import { cn } from '#/lib/utils'
 import { buildOrgPath } from '#/modules/org-path'
+import {
+	DEFAULT_FILTERS,
+	hasActiveFilters,
+	type ListEmpty,
+	type ProjectFilters,
+	type ProjectRow,
+	type ProjectTiles,
+} from '#/pages/projects/lib/project-list'
+import { Page, PageHeader } from '#/pages/projects/ui/page'
+import { ProjectsTable } from '#/pages/projects/ui/projects-table'
+import { ProjectsToolbar } from '#/pages/projects/ui/projects-toolbar'
+import { StatTile } from '#/pages/projects/ui/stat-tile'
+
+const EMPTY_COPY: Record<ListEmpty, { title: string; hint: string }> = {
+	none: {
+		title: 'Aucun projet pour l’instant',
+		hint: 'Crée ton premier projet pour suivre ses missions et préparer son DOE.',
+	},
+	'no-active': {
+		title: 'Aucun projet actif',
+		hint: 'Tous tes projets sont archivés. Affiche les archivés pour en réactiver un, ou crée un nouveau projet.',
+	},
+	'no-archived': {
+		title: 'Aucun projet archivé',
+		hint: 'Les projets que tu archives apparaissent ici et peuvent être réactivés.',
+	},
+	'no-match': {
+		title: 'Aucun projet ne correspond',
+		hint: 'Vérifie l’orthographe, le statut ou le client sélectionné.',
+	},
+}
 
 export interface ProjectsListProps {
-	organizationName: string
 	organizationSlug: string
-	projects: Project[]
-	/** Resolves a customer id into a name, or `null` while unknown. */
-	customerName: (customerId: string) => string | null
-	search: string
-	includeArchived: boolean
-	/** Only the projects that already have a DOE. */
-	withDoeOnly: boolean
-	/** The revision of a project's DOE, `null` when it has none. */
-	doeRevision: (projectId: string) => string | null
-	/** The row the profitability screen linked at, highlighted once. */
+	summary: string
+	tiles: ProjectTiles
+	filters: ProjectFilters
+	customers: readonly { id: string; label: string }[]
+	listed: readonly ProjectRow[]
+	empty: ListEmpty
+	newProjectCustomerId: string | undefined
 	highlightedProjectId?: string
 	isLoading: boolean
 	error: string | null
-	editingId: string | null
-	isSaving: boolean
-	/** True while a project's tasks are being loaded to seed "save as template". */
-	isBuildingTemplate: boolean
-	onSearchChange: (search: string) => void
-	onIncludeArchivedChange: (includeArchived: boolean) => void
-	onWithDoeOnlyChange: (withDoeOnly: boolean) => void
-	onCreate: () => void
+	onFiltersChange: (filters: ProjectFilters) => void
 	onStartFromTemplate: () => void
-	onEdit: (project: Project) => void
-	onCancelEdit: () => void
-	onSaveEdit: () => void
-	onArchive: (project: Project) => void
-	onRestore: (project: Project) => void
-	onSaveAsTemplate: (project: Project) => void
 }
 
-/**
- * The project list. Pure presentation: no hooks beyond `useMemo` over the props
- * it is handed, no fetching, no mutation.
- */
 export function ProjectsList({
-	organizationName,
 	organizationSlug,
-	projects,
-	customerName,
-	search,
-	includeArchived,
-	withDoeOnly,
-	doeRevision,
+	summary,
+	tiles,
+	filters,
+	customers,
+	listed,
+	empty,
+	newProjectCustomerId,
 	highlightedProjectId,
 	isLoading,
 	error,
-	editingId,
-	isSaving,
-	isBuildingTemplate,
-	onSearchChange,
-	onIncludeArchivedChange,
-	onWithDoeOnlyChange,
-	onCreate,
+	onFiltersChange,
 	onStartFromTemplate,
-	onEdit,
-	onCancelEdit,
-	onSaveEdit,
-	onArchive,
-	onRestore,
-	onSaveAsTemplate,
 }: ProjectsListProps) {
-	const internalCount = projects.filter((project) => project.is_internal).length
-
-	const columns = useMemo<ColumnDef<Project>[]>(
-		() => [
-			{
-				id: 'name',
-				header: 'Projet',
-				cell: ({ row }) => (
-					<div
-						className={cn(
-							'flex min-w-0 flex-col gap-1',
-							row.original.id === highlightedProjectId &&
-								'-mx-2 rounded-md bg-primary/5 px-2 py-1',
-						)}
-					>
-						<Link
-							to={buildOrgPath(
-								organizationSlug,
-								'/planification/projects/$projectId',
-							)}
-							params={{ projectId: row.original.id }}
-							className="min-w-0 hover:underline"
-						>
-							<RowIdentity title={row.original.name} id={row.original.id} />
-						</Link>
-						<div className="flex flex-wrap gap-1">
-							{row.original.is_internal ? (
-								<Badge variant="secondary" className="gap-1">
-									<Building2 className="size-3" />
-									Interne
-								</Badge>
-							) : null}
-							{row.original.archived_at ? (
-								<Badge variant="outline">Archivé</Badge>
-							) : null}
-						</div>
-					</div>
-				),
-			},
-			{
-				id: 'customer',
-				header: 'Client',
-				cell: ({ row }) =>
-					row.original.customer_id ? (
-						<span className="truncate">
-							{customerName(row.original.customer_id) ?? 'Client'}
-						</span>
-					) : (
-						<span className="text-muted-foreground italic">
-							Aucun, projet interne
-						</span>
-					),
-			},
-			{
-				id: 'quote',
-				header: 'Devis',
-				cell: ({ row }) =>
-					row.original.quote_id ? (
-						<span className="font-mono text-xs">{row.original.quote_id}</span>
-					) : (
-						<span className="text-muted-foreground italic">
-							Aucun, pas de marge
-						</span>
-					),
-			},
-			{
-				id: 'doe',
-				header: 'DOE',
-				cell: ({ row }) => {
-					const revision = doeRevision(row.original.id)
-					if (revision === null) {
-						return (
-							<span className="text-muted-foreground italic">Aucun DOE</span>
-						)
-					}
-					return (
-						<Link
-							to={buildOrgPath(
-								organizationSlug,
-								'/planification/projects/$projectId/doe',
-							)}
-							params={{ projectId: row.original.id }}
-							className="hover:underline"
-						>
-							Indice {revision}
-						</Link>
-					)
-				},
-			},
-			{
-				id: 'actions',
-				header: () => <span className="sr-only">Actions</span>,
-				cell: ({ row }) =>
-					row.original.archived_at ? (
-						<div className="flex justify-end">
-							<RequirePermission permission="MANAGE_PLANNING">
-								<Button
-									variant="outline"
-									size="sm"
-									onClick={() => onRestore(row.original)}
-								>
-									Restaurer
-								</Button>
-							</RequirePermission>
-						</div>
-					) : (
-						<div className="flex items-center justify-end gap-1">
-							<RequirePermission permission="MANAGE_PLANNING">
-								<Button
-									variant="ghost"
-									size="icon"
-									disabled={isBuildingTemplate}
-									onClick={() => onSaveAsTemplate(row.original)}
-									aria-label="Enregistrer comme modèle"
-									title="Enregistrer comme modèle"
-								>
-									<LayoutTemplate className="size-4" />
-								</Button>
-							</RequirePermission>
-							<RowActions
-								permission="MANAGE_PLANNING"
-								isEditing={editingId === row.original.id}
-								isSaving={isSaving}
-								onEdit={() => onEdit(row.original)}
-								onCancel={onCancelEdit}
-								onSave={onSaveEdit}
-								onDelete={() => onArchive(row.original)}
-							/>
-						</div>
-					),
-			},
-		],
-		[
-			customerName,
-			doeRevision,
-			editingId,
-			organizationSlug,
-			highlightedProjectId,
-			isBuildingTemplate,
-			isSaving,
-			onArchive,
-			onCancelEdit,
-			onEdit,
-			onRestore,
-			onSaveAsTemplate,
-			onSaveEdit,
-		],
-	)
-
+	const copy = EMPTY_COPY[empty]
+	const newProjectPath = buildOrgPath(organizationSlug, '/projet/new')
 	return (
-		<PageShell>
+		<Page>
 			<PageHeader
-				eyebrow={organizationName}
 				title="Projets"
-				description="Le sujet auquel un coût est rattaché. Un projet sans client est un projet interne : une réunion récurrente coûte, et doit se voir."
+				description={summary}
 				actions={
 					<RequirePermission permission="MANAGE_PLANNING">
-						<div className="flex gap-2">
-							<Button variant="outline" onClick={onStartFromTemplate}>
-								<LayoutTemplate />
-								Depuis un modèle
-							</Button>
-							<Button onClick={onCreate}>
-								<Plus />
-								Nouveau projet
-							</Button>
-						</div>
+						<Button variant="outline" size="sm" onClick={onStartFromTemplate}>
+							<LayoutTemplate aria-hidden /> Depuis un modèle
+						</Button>
+						<Button size="sm" asChild>
+							<Link
+								to={newProjectPath}
+								search={
+									newProjectCustomerId ? { client: newProjectCustomerId } : {}
+								}
+							>
+								<Plus aria-hidden /> Nouveau projet
+							</Link>
+						</Button>
 					</RequirePermission>
 				}
 			/>
-
-			<section className="grid grid-cols-2 gap-4 lg:grid-cols-3">
-				<MetricCard
-					label="Projets"
-					value={projects.length}
-					icon={<FolderKanban className="size-4" />}
+			<div className="mb-5 grid gap-3 sm:grid-cols-3">
+				<StatTile
+					label="Projets actifs"
+					value={tiles.active}
+					hint={
+						tiles.internal > 0
+							? `dont ${tiles.internal} en interne`
+							: 'Aucun projet interne'
+					}
 				/>
-				<MetricCard
-					label="Internes"
-					value={internalCount}
-					hint="Sans client, coûtés quand même"
-					icon={<Building2 className="size-4" />}
+				<StatTile
+					label="Missions en cours"
+					value={tiles.missionsInProgress}
+					hint="Sur les projets actifs"
 				/>
-			</section>
-
+				<StatTile
+					label="DOE à créer ou à finaliser"
+					value={tiles.doeToCreate}
+					hint="Projets actifs sans DOE"
+				/>
+			</div>
 			{error ? (
-				<div className="rounded-lg border border-destructive/30 bg-destructive-soft px-4 py-3 text-sm text-destructive">
+				<div
+					role="alert"
+					className="mb-3 rounded-lg border border-destructive/30 bg-destructive-soft px-4 py-3 text-sm text-destructive"
+				>
 					{error}
 				</div>
 			) : null}
-
-			<div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-				<div className="relative w-full lg:w-80">
-					<Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-					<Input
-						type="search"
-						value={search}
-						onChange={(event) => onSearchChange(event.target.value)}
-						placeholder="Rechercher un projet…"
-						className="pl-9"
-					/>
-				</div>
-				<div className="flex items-center gap-4">
-					<div className="flex items-center gap-2">
-						<input
-							id="with-doe-only"
-							type="checkbox"
-							className="size-4"
-							checked={withDoeOnly}
-							onChange={(event) => onWithDoeOnlyChange(event.target.checked)}
-						/>
-						<Label htmlFor="with-doe-only" className="text-sm">
-							Seulement les projets avec un DOE
-						</Label>
-					</div>
-					<div className="flex items-center gap-2">
-						<input
-							id="include-archived"
-							type="checkbox"
-							className="size-4"
-							checked={includeArchived}
-							onChange={(event) =>
-								onIncludeArchivedChange(event.target.checked)
-							}
-						/>
-						<Label htmlFor="include-archived" className="text-sm">
-							Afficher les projets archivés
-						</Label>
-					</div>
-				</div>
-			</div>
-
+			<ProjectsToolbar
+				filters={filters}
+				customers={customers}
+				onChange={onFiltersChange}
+			/>
 			{isLoading ? (
-				<SectionCard className="flex min-h-72 items-center justify-center gap-3 p-8 text-sm text-muted-foreground">
-					<Loader2 className="size-5 animate-spin" />
+				<div className="flex min-h-48 items-center justify-center gap-3 rounded-lg border bg-card p-8 text-sm text-muted-foreground">
+					<Loader2 className="size-5 animate-spin" aria-hidden />
 					Chargement des projets…
-				</SectionCard>
+				</div>
+			) : listed.length === 0 ? (
+				<EmptyState title={copy.title} hint={copy.hint}>
+					<div className="flex flex-wrap justify-center gap-2">
+						{empty === 'no-match' && hasActiveFilters(filters) && (
+							<Button
+								variant="outline"
+								size="sm"
+								onClick={() => onFiltersChange(DEFAULT_FILTERS)}
+							>
+								Réinitialiser les filtres
+							</Button>
+						)}
+						{empty === 'no-active' && (
+							<Button
+								variant="outline"
+								size="sm"
+								onClick={() =>
+									onFiltersChange({ ...filters, status: 'archives' })
+								}
+							>
+								Voir les archivés
+							</Button>
+						)}
+						{(empty === 'none' || empty === 'no-active') && (
+							<RequirePermission permission="MANAGE_PLANNING">
+								<Button size="sm" asChild>
+									<Link to={newProjectPath}>
+										<Plus aria-hidden /> Nouveau projet
+									</Link>
+								</Button>
+							</RequirePermission>
+						)}
+					</div>
+				</EmptyState>
 			) : (
-				<ReferenceTable
-					title={`Projets (${projects.length})`}
-					description="Archiver un projet le retire des listes sans effacer son historique de coût."
-					emptyTitle="Aucun projet"
-					emptyDescription="Créez-en un pour rattacher des tâches et voir ce qu'elles coûtent."
-					data={projects}
-					columns={columns}
+				<ProjectsTable
+					organizationSlug={organizationSlug}
+					rows={listed}
+					highlightedProjectId={highlightedProjectId}
 				/>
 			)}
-		</PageShell>
+		</Page>
 	)
 }

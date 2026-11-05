@@ -19,7 +19,6 @@ import { Textarea } from '#/components/ui/textarea'
 import type { QueueRow } from '#/pages/maintenance/lib/validation-lines'
 
 export interface ValidationUIProps {
-	organizationName: string
 	rows: QueueRow[]
 	/** Visits in the queue, which can exceed what one page shows. */
 	totalCount: number
@@ -48,7 +47,6 @@ export interface ValidationUIProps {
  * Nothing fetches here.
  */
 export function ValidationUI({
-	organizationName,
 	rows,
 	totalCount,
 	isLoading,
@@ -67,11 +65,10 @@ export function ValidationUI({
 	return (
 		<PageShell>
 			<PageHeader
-				eyebrow={organizationName}
 				title="À valider"
 				description="Les interventions que le terrain a déclarées faites. Une fois validée, une intervention décale l’échéance de la prestation."
 				actions={
-					<Button type="button" variant="outline" onClick={onRetry}>
+					<Button type="button" variant="outline" size="sm" onClick={onRetry}>
 						<RefreshCw />
 						Actualiser
 					</Button>

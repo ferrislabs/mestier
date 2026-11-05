@@ -38,9 +38,8 @@ describe('ConnectorConfigField — Text', () => {
 			<ConnectorConfigField
 				field={field({ name: 'url', label: 'URL' })}
 				value="https://a"
-				error={null}
+				issues={[]}
 				onChange={onChange}
-				onOpenExpression={vi.fn()}
 			/>,
 		)
 
@@ -57,9 +56,8 @@ describe('ConnectorConfigField — Text', () => {
 			<ConnectorConfigField
 				field={field({ name: 'token', label: 'Token', secret: true })}
 				value="s3cr3t"
-				error={null}
+				issues={[]}
 				onChange={vi.fn()}
-				onOpenExpression={vi.fn()}
 			/>,
 		)
 
@@ -74,9 +72,8 @@ describe('ConnectorConfigField — Number', () => {
 			<ConnectorConfigField
 				field={field({ name: 'timeout', label: 'Timeout', kind: 'Number' })}
 				value={undefined}
-				error={null}
+				issues={[]}
 				onChange={onChange}
-				onOpenExpression={vi.fn()}
 			/>,
 		)
 
@@ -94,9 +91,8 @@ describe('ConnectorConfigField — Number', () => {
 			<ConnectorConfigField
 				field={field({ name: 'timeout', label: 'Timeout', kind: 'Number' })}
 				value={42}
-				error={null}
+				issues={[]}
 				onChange={onChange}
-				onOpenExpression={vi.fn()}
 			/>,
 		)
 
@@ -114,9 +110,8 @@ describe('ConnectorConfigField — Bool', () => {
 			<ConnectorConfigField
 				field={field({ name: 'active', label: 'Actif', kind: 'Bool' })}
 				value={false}
-				error={null}
+				issues={[]}
 				onChange={onChange}
-				onOpenExpression={vi.fn()}
 			/>,
 		)
 
@@ -145,9 +140,8 @@ describe('ConnectorConfigField — Select', () => {
 					},
 				})}
 				value="GET"
-				error={null}
+				issues={[]}
 				onChange={onChange}
-				onOpenExpression={vi.fn()}
 			/>,
 		)
 
@@ -164,9 +158,8 @@ describe('ConnectorConfigField — Json — the empty state', () => {
 			<ConnectorConfigField
 				field={field({ name: 'headers', label: 'Headers', kind: 'Json' })}
 				value={undefined}
-				error={null}
+				issues={[]}
 				onChange={vi.fn()}
-				onOpenExpression={vi.fn()}
 			/>,
 		)
 
@@ -183,9 +176,8 @@ describe('ConnectorConfigField — Json — the empty state', () => {
 			<ConnectorConfigField
 				field={field({ name: 'headers', label: 'Headers', kind: 'Json' })}
 				value={undefined}
-				error={null}
+				issues={[]}
 				onChange={onChange}
-				onOpenExpression={vi.fn()}
 			/>,
 		)
 
@@ -203,9 +195,8 @@ describe('ConnectorConfigField — Json — rows', () => {
 			<ConnectorConfigField
 				field={field({ name: 'headers', label: 'Headers', kind: 'Json' })}
 				value={{ 'Content-Type': 'application/json' }}
-				error={null}
+				issues={[]}
 				onChange={vi.fn()}
-				onOpenExpression={vi.fn()}
 			/>,
 		)
 
@@ -224,9 +215,8 @@ describe('ConnectorConfigField — Json — rows', () => {
 			<ConnectorConfigField
 				field={field({ name: 'headers', label: 'Headers', kind: 'Json' })}
 				value={{ 'Content-Type': 'application/json' }}
-				error={null}
+				issues={[]}
 				onChange={onChange}
-				onOpenExpression={vi.fn()}
 			/>,
 		)
 
@@ -248,9 +238,8 @@ describe('ConnectorConfigField — Json — rows', () => {
 					expression: true,
 				})}
 				value={{ Authorization: '' }}
-				error={null}
+				issues={[]}
 				onChange={onChange}
-				onOpenExpression={vi.fn()}
 			/>,
 		)
 
@@ -273,9 +262,8 @@ describe('ConnectorConfigField — Json — rows', () => {
 					expression: false,
 				})}
 				value={{ Authorization: '' }}
-				error={null}
+				issues={[]}
 				onChange={onChange}
-				onOpenExpression={vi.fn()}
 			/>,
 		)
 
@@ -292,9 +280,8 @@ describe('ConnectorConfigField — Json — array and scalar values stay raw', (
 			<ConnectorConfigField
 				field={field({ name: 'items', label: 'Items', kind: 'Json' })}
 				value={[1, 2, 3]}
-				error={null}
+				issues={[]}
 				onChange={vi.fn()}
-				onOpenExpression={vi.fn()}
 			/>,
 		)
 
@@ -311,9 +298,8 @@ describe('ConnectorConfigField — Json — array and scalar values stay raw', (
 			<ConnectorConfigField
 				field={field({ name: 'items', label: 'Items', kind: 'Json' })}
 				value="{{ trigger.items }}"
-				error={null}
+				issues={[]}
 				onChange={vi.fn()}
-				onOpenExpression={vi.fn()}
 			/>,
 		)
 
@@ -331,9 +317,8 @@ describe('ConnectorConfigField — Json — array and scalar values stay raw', (
 			<ConnectorConfigField
 				field={field({ name: 'items', label: 'Items', kind: 'Json' })}
 				value={[1]}
-				error={null}
+				issues={[]}
 				onChange={onChange}
-				onOpenExpression={vi.fn()}
 			/>,
 		)
 
@@ -350,9 +335,8 @@ describe('ConnectorConfigField — Json — array and scalar values stay raw', (
 			<ConnectorConfigField
 				field={field({ name: 'items', label: 'Items', kind: 'Json' })}
 				value={[1]}
-				error={null}
+				issues={[]}
 				onChange={onChange}
-				onOpenExpression={vi.fn()}
 			/>,
 		)
 
@@ -373,9 +357,8 @@ describe('ConnectorConfigField — Json — switching between rows and raw', () 
 			<ConnectorConfigField
 				field={field({ name: 'headers', label: 'Headers', kind: 'Json' })}
 				value={{ a: '1', b: '2' }}
-				error={null}
+				issues={[]}
 				onChange={onChange}
-				onOpenExpression={vi.fn()}
 			/>,
 		)
 
@@ -399,9 +382,8 @@ describe('ConnectorConfigField — Json — switching between rows and raw', () 
 			<ConnectorConfigField
 				field={field({ name: 'headers', label: 'Headers', kind: 'Json' })}
 				value={{}}
-				error={null}
+				issues={[]}
 				onChange={vi.fn()}
-				onOpenExpression={vi.fn()}
 			/>,
 		)
 
@@ -423,9 +405,8 @@ describe('ConnectorConfigField — Json — external updates', () => {
 			<ConnectorConfigField
 				field={jsonField}
 				value={undefined}
-				error={null}
+				issues={[]}
 				onChange={vi.fn()}
-				onOpenExpression={vi.fn()}
 			/>,
 		)
 
@@ -433,9 +414,8 @@ describe('ConnectorConfigField — Json — external updates', () => {
 			<ConnectorConfigField
 				field={jsonField}
 				value="{{ trigger.headers }}"
-				error={null}
+				issues={[]}
 				onChange={vi.fn()}
-				onOpenExpression={vi.fn()}
 			/>,
 		)
 
@@ -451,9 +431,8 @@ describe('ConnectorConfigField — validation error', () => {
 			<ConnectorConfigField
 				field={field({ name: 'url', label: 'URL' })}
 				value=""
-				error="URL manquante"
+				issues={['URL manquante']}
 				onChange={vi.fn()}
-				onOpenExpression={vi.fn()}
 			/>,
 		)
 
@@ -468,9 +447,8 @@ describe('ConnectorConfigField — validation error', () => {
 			<ConnectorConfigField
 				field={field({ name: 'url', label: 'URL' })}
 				value=""
-				error={null}
+				issues={[]}
 				onChange={vi.fn()}
-				onOpenExpression={vi.fn()}
 			/>,
 		)
 
@@ -478,53 +456,95 @@ describe('ConnectorConfigField — validation error', () => {
 	})
 })
 
-describe('ConnectorConfigField — expression affordance', () => {
-	it('offers it when the field accepts an expression, and calls back on click', async () => {
+describe('ConnectorConfigField — expressions', () => {
+	it('tags an expression-capable field whose value holds an expression', () => {
+		render(
+			<ConnectorConfigField
+				field={field({ name: 'url', label: 'URL', expression: true })}
+				value="{{ trigger.id }}"
+				issues={[]}
+				onChange={vi.fn()}
+			/>,
+		)
+
+		expect(screen.getByText('Expression')).toBeDefined()
+	})
+
+	it('shows no tag for a plain value or a field that takes no expression', () => {
+		const { rerender } = render(
+			<ConnectorConfigField
+				field={field({ name: 'url', label: 'URL', expression: true })}
+				value="https://a"
+				issues={[]}
+				onChange={vi.fn()}
+			/>,
+		)
+		expect(screen.queryByText('Expression')).toBeNull()
+
+		rerender(
+			<ConnectorConfigField
+				field={field({ name: 'url', label: 'URL', expression: false })}
+				value="{{ trigger.id }}"
+				issues={[]}
+				onChange={vi.fn()}
+			/>,
+		)
+		expect(screen.queryByText('Expression')).toBeNull()
+	})
+
+	it('shows the preview under an expression value only', () => {
+		const { rerender } = render(
+			<ConnectorConfigField
+				field={field({ name: 'url', label: 'URL', expression: true })}
+				value="{{ trigger.id }}"
+				issues={[]}
+				preview={<p>Aperçu : 7</p>}
+				onChange={vi.fn()}
+			/>,
+		)
+		expect(screen.getByText('Aperçu : 7')).toBeDefined()
+
+		rerender(
+			<ConnectorConfigField
+				field={field({ name: 'url', label: 'URL', expression: true })}
+				value="https://a"
+				issues={[]}
+				preview={<p>Aperçu : 7</p>}
+				onChange={vi.fn()}
+			/>,
+		)
+		expect(screen.queryByText('Aperçu : 7')).toBeNull()
+	})
+
+	it('reports the field as active when focus enters it', async () => {
 		const user = userEvent.setup()
-		const onOpenExpression = vi.fn()
+		const onActivate = vi.fn()
 		render(
 			<ConnectorConfigField
 				field={field({ name: 'url', label: 'URL', expression: true })}
 				value=""
-				error={null}
+				issues={[]}
 				onChange={vi.fn()}
-				onOpenExpression={onOpenExpression}
+				onActivate={onActivate}
 			/>,
 		)
 
-		await user.click(screen.getByRole('button', { name: /URL/ }))
+		await user.click(screen.getByLabelText('URL'))
 
-		expect(onOpenExpression).toHaveBeenCalledTimes(1)
+		expect(onActivate).toHaveBeenCalled()
 	})
 
-	it('is absent when the field does not accept an expression', () => {
+	it('has no button of its own', () => {
 		render(
 			<ConnectorConfigField
-				field={field({ name: 'method', label: 'Méthode', expression: false })}
+				field={field({ name: 'url', label: 'URL', expression: true })}
 				value=""
-				error={null}
+				issues={[]}
 				onChange={vi.fn()}
-				onOpenExpression={vi.fn()}
 			/>,
 		)
 
 		expect(screen.queryByRole('button')).toBeNull()
-	})
-
-	it('shows a visible label naming what it does, not a bare glyph', () => {
-		render(
-			<ConnectorConfigField
-				field={field({ name: 'url', label: 'URL', expression: true })}
-				value=""
-				error={null}
-				onChange={vi.fn()}
-				onOpenExpression={vi.fn()}
-			/>,
-		)
-
-		const button = screen.getByRole('button', { name: /URL/ })
-		expect(button.textContent?.trim().length).toBeGreaterThan(0)
-		expect(button.getAttribute('title')?.length).toBeGreaterThan(0)
 	})
 })
 
@@ -535,9 +555,8 @@ describe('ConnectorConfigField — the control ref', () => {
 			<ConnectorConfigField
 				field={field({ name: 'url', label: 'URL', kind: 'Text' })}
 				value="https://a"
-				error={null}
+				issues={[]}
 				onChange={vi.fn()}
-				onOpenExpression={vi.fn()}
 				controlRef={(node) => {
 					el = node
 				}}
@@ -553,9 +572,8 @@ describe('ConnectorConfigField — the control ref', () => {
 			<ConnectorConfigField
 				field={field({ name: 'items', label: 'Items', kind: 'Json' })}
 				value={[1, 2]}
-				error={null}
+				issues={[]}
 				onChange={vi.fn()}
-				onOpenExpression={vi.fn()}
 				controlRef={(node) => {
 					el = node
 				}}
@@ -573,9 +591,8 @@ describe('ConnectorConfigField — dropping a datum', () => {
 			<ConnectorConfigField
 				field={field({ name: 'url', label: 'URL', expression: true })}
 				value=""
-				error={null}
+				issues={[]}
 				onChange={vi.fn()}
-				onOpenExpression={vi.fn()}
 				onDropExpression={onDropExpression}
 			/>,
 		)
@@ -592,9 +609,8 @@ describe('ConnectorConfigField — dropping a datum', () => {
 			<ConnectorConfigField
 				field={field({ name: 'method', label: 'Méthode', expression: false })}
 				value=""
-				error={null}
+				issues={[]}
 				onChange={vi.fn()}
-				onOpenExpression={vi.fn()}
 				onDropExpression={onDropExpression}
 			/>,
 		)

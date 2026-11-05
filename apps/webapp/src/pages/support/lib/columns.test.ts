@@ -5,6 +5,8 @@ import {
 	computeDrop,
 	groupTicketsByStatus,
 	SUPPORT_COLUMNS,
+	supportStatusDescription,
+	supportStatusDot,
 	supportStatusLabel,
 	supportStatusTone,
 } from '#/pages/support/lib/columns'
@@ -39,20 +41,20 @@ describe('SUPPORT_COLUMNS', () => {
 
 	it('labels them in French', () => {
 		expect(SUPPORT_COLUMNS.map((column) => column.label)).toEqual([
-			'Nouveau',
-			'En cours',
-			'En attente du client',
-			'Résolu',
+			'Backlog',
+			'Ouvert',
+			'En attente client',
+			'Fermé',
 		])
 	})
 })
 
 describe('supportStatusLabel and supportStatusTone', () => {
 	it('reads the label of every status', () => {
-		expect(supportStatusLabel('new')).toBe('Nouveau')
-		expect(supportStatusLabel('in_progress')).toBe('En cours')
-		expect(supportStatusLabel('waiting_customer')).toBe('En attente du client')
-		expect(supportStatusLabel('resolved')).toBe('Résolu')
+		expect(supportStatusLabel('new')).toBe('Backlog')
+		expect(supportStatusLabel('in_progress')).toBe('Ouvert')
+		expect(supportStatusLabel('waiting_customer')).toBe('En attente client')
+		expect(supportStatusLabel('resolved')).toBe('Fermé')
 	})
 
 	it('maps each status to its tone', () => {
@@ -60,6 +62,22 @@ describe('supportStatusLabel and supportStatusTone', () => {
 		expect(supportStatusTone('in_progress')).toBe('brand')
 		expect(supportStatusTone('waiting_customer')).toBe('warning')
 		expect(supportStatusTone('resolved')).toBe('success')
+	})
+})
+
+describe('supportStatusDot and supportStatusDescription', () => {
+	it('maps each status to its dot tone', () => {
+		expect(supportStatusDot('new')).toBe('neutral')
+		expect(supportStatusDot('in_progress')).toBe('progress')
+		expect(supportStatusDot('waiting_customer')).toBe('customer')
+		expect(supportStatusDot('resolved')).toBe('done')
+	})
+
+	it('explains each status', () => {
+		expect(supportStatusDescription('new')).toBe(
+			'Reçu, pas encore pris en charge.',
+		)
+		expect(supportStatusDescription('resolved')).toBe('Problème résolu.')
 	})
 })
 

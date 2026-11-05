@@ -1,5 +1,5 @@
 import { X } from 'lucide-react'
-import { Button } from '#/components/ui/button'
+import { IconButton } from '#/pages/chat/ui/icon-button'
 
 export interface ThreadPanelHeaderUIProps {
 	replyCount: number
@@ -11,9 +11,9 @@ export function ThreadPanelHeaderUI({
 	onClose,
 }: ThreadPanelHeaderUIProps) {
 	return (
-		<div className="flex items-center justify-between border-b px-4 py-3">
+		<header className="flex min-h-12 shrink-0 items-center justify-between gap-3 border-border border-b bg-background px-4 py-2">
 			<div>
-				<h2 className="font-semibold text-foreground">Fil de discussion</h2>
+				<h2 className="font-semibold text-base">Fil de discussion</h2>
 				<p className="text-xs text-muted-foreground">
 					{replyCount === 0
 						? 'Aucune réponse'
@@ -22,15 +22,7 @@ export function ThreadPanelHeaderUI({
 							: `${replyCount} réponses`}
 				</p>
 			</div>
-			<Button
-				type="button"
-				variant="ghost"
-				size="icon"
-				aria-label="Fermer le fil"
-				onClick={onClose}
-			>
-				<X className="size-4" />
-			</Button>
-		</div>
+			<IconButton label="Fermer le fil" icon={X} onClick={onClose} />
+		</header>
 	)
 }

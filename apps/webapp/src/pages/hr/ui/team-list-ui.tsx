@@ -10,7 +10,6 @@ import {
 	Trash2,
 	Undo2,
 	UserPlus,
-	Users,
 	X,
 } from 'lucide-react'
 import { useState } from 'react'
@@ -58,7 +57,6 @@ import {
 	PopoverTrigger,
 } from '#/components/ui/popover'
 import {
-	MetricCard,
 	PageHeader,
 	PageShell,
 	SectionCard,
@@ -66,6 +64,14 @@ import {
 	StatusBadge,
 } from '#/components/ui/surface'
 import { Switch } from '#/components/ui/switch'
+import {
+	Table,
+	TableBody,
+	TableCell,
+	TableHead,
+	TableHeader,
+	TableRow,
+} from '#/components/ui/table'
 import { useActiveOrganization } from '#/hooks/use-active-organization'
 import {
 	useAssignRole,
@@ -75,8 +81,19 @@ import {
 } from '#/hooks/use-roles'
 import { mutationErrorMessage } from '#/lib/api-error'
 import { buildOrgPath } from '#/modules/org-path'
+import { currentContract } from '#/pages/hr/lib/rh/contracts'
+import { contractCountLabel, contractTerm } from '#/pages/hr/lib/rh/format'
+import type { ContractFilter } from '#/pages/hr/lib/rh/members-filter'
+import { columnSummary } from '#/pages/hr/lib/rh/schedule-mode'
+import type { IsoDate, Member, RhState } from '#/pages/hr/lib/rh/types'
 import type { AccessState, MemberFormValues } from '#/pages/hr/types'
 import { formatDateFr, formatDurationMinutes } from '#/pages/hr/types'
+import { ContractBadge } from '#/pages/hr/ui/rh/members/contract-badge'
+import { DeadlinesCard } from '#/pages/hr/ui/rh/members/deadlines-card'
+import { MembersToolbar } from '#/pages/hr/ui/rh/members/members-toolbar'
+import { TodayCell } from '#/pages/hr/ui/rh/members/today-cell'
+import { WeekDots } from '#/pages/hr/ui/rh/members/week-dots'
+import { MemberAvatar } from '#/pages/hr/ui/rh/shared/member-avatar'
 
 const ACCESS_LABEL: Record<AccessState, string> = {
 	none: 'Aucun accès',
@@ -115,6 +132,7 @@ export interface TeamMemberRow {
 	effectiveHourlyRateCents: number | null
 	/** `null` when the seat has no employee profile yet. */
 	weeklyContractMinutes: number | null
+	rhMember: Member | null
 }
 
 export interface MemberDraft {
@@ -129,7 +147,6 @@ export interface PendingInvitationRow {
 }
 
 interface TeamListUIProps {
-	organizationName: string
 	organizationSlug: string
 	isLoading: boolean
 	error: string | null
@@ -143,8 +160,12 @@ interface TeamListUIProps {
 	 */
 	hrDataRestricted: boolean
 	members: TeamMemberRow[]
+	rhState: RhState | null
+	today: IsoDate
 	search: string
 	onSearchChange: (value: string) => void
+	contractFilter: ContractFilter
+	onContractFilterChange: (value: ContractFilter) => void
 	createForm: FormBinding<MemberFormValues>
 	createMemberDialogOpen: boolean
 	onCreateMemberDialogOpenChange: (open: boolean) => void
@@ -162,14 +183,17 @@ interface TeamListUIProps {
 }
 
 export function TeamListUI({
-	organizationName,
 	organizationSlug,
 	isLoading,
 	error,
 	hrDataRestricted,
 	members,
+	rhState,
+	today,
 	search,
 	onSearchChange,
+	contractFilter,
+	onContractFilterChange,
 	createForm,
 	createMemberDialogOpen,
 	onCreateMemberDialogOpenChange,
@@ -186,53 +210,51 @@ export function TeamListUI({
 	onRevokeInvitation,
 }: TeamListUIProps) {
 	return (
-		<PageShell>
+		<PageShell className="block">
 			<PageHeader
-				eyebrow={organizationName}
-				title="Équipe"
-				description="Gérez les membres de l’organisation, leurs accès et leurs taux horaires."
+				className="mb-6"
+				title="Membres"
+				description={membersSummary(members.length)}
 				actions={
 					<RequirePermission permission="MANAGE_MEMBERS">
-						<Button onClick={() => onCreateMemberDialogOpenChange(true)}>
-							<Plus />
-							Ajouter une personne
+						<Button
+							size="sm"
+							onClick={() => onCreateMemberDialogOpenChange(true)}
+						>
+							<Plus aria-hidden /> Nouveau membre
 						</Button>
 					</RequirePermission>
 				}
 			/>
 
-			<MetricCard
-				label="Équipe"
-				value={members.length}
-				hint="Sièges occupés ou libres"
-				icon={<Users className="size-4" />}
-			/>
-
 			{error ? (
-				<div className="rounded-lg border border-destructive/30 bg-destructive-soft px-4 py-3 text-sm text-destructive">
+				<div className="mb-4 rounded-lg border border-destructive/30 bg-destructive-soft px-4 py-3 text-sm text-destructive">
 					{error}
 				</div>
 			) : null}
 
 			{!error && hrDataRestricted ? (
-				<div className="rounded-lg border border-border bg-muted/50 px-4 py-3 text-sm text-muted-foreground">
+				<div className="mb-4 rounded-lg border border-border bg-muted/50 px-4 py-3 text-sm text-muted-foreground">
 					Vous n’avez pas la permission de consulter les taux horaires et bases
 					contractuelles de l’équipe.
 				</div>
 			) : null}
 
-			<div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-				<div className="relative w-full lg:w-80">
-					<Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-					<Input
-						type="search"
-						value={search}
-						onChange={(event) => onSearchChange(event.target.value)}
-						placeholder="Rechercher dans l’équipe…"
-						className="pl-9"
-					/>
-				</div>
-			</div>
+			{rhState ? (
+				<DeadlinesCard
+					state={rhState}
+					today={today}
+					organizationSlug={organizationSlug}
+				/>
+			) : null}
+
+			<MembersToolbar
+				search={search}
+				onSearchChange={onSearchChange}
+				contractFilter={contractFilter}
+				onContractFilterChange={onContractFilterChange}
+				showContractFilter={rhState !== null}
+			/>
 
 			<PendingInvitationsSection
 				invitations={pendingInvitations}
@@ -245,6 +267,8 @@ export function TeamListUI({
 			) : (
 				<TeamTable
 					data={members}
+					rhState={rhState}
+					today={today}
 					organizationSlug={organizationSlug}
 					hrDataRestricted={hrDataRestricted}
 					draft={draft}
@@ -264,7 +288,7 @@ export function TeamListUI({
 			>
 				<DialogContent className="flex max-h-[85vh] flex-col gap-0 overflow-hidden">
 					<DialogHeader className="border-b pb-4">
-						<DialogTitle>Ajouter une personne</DialogTitle>
+						<DialogTitle>Nouveau membre</DialogTitle>
 						<DialogDescription>
 							Le profil RH est optionnel : laissez le taux horaire vide pour un
 							siège sans profil, renseignez-le pour lui en attacher un — ou
@@ -355,13 +379,16 @@ export function TeamListUI({
 
 TeamListUI.Loading = function TeamListLoading() {
 	return (
-		<PageShell>
-			<SectionCard className="flex min-h-72 items-center justify-center gap-3 p-8 text-sm text-muted-foreground">
-				<Loader2 className="size-5 animate-spin" />
-				Chargement de l’équipe…
-			</SectionCard>
-		</PageShell>
+		<SectionCard className="flex min-h-72 items-center justify-center gap-3 p-8 text-sm text-muted-foreground">
+			<Loader2 className="size-5 animate-spin" />
+			Chargement de l’équipe…
+		</SectionCard>
 	)
+}
+
+function membersSummary(count: number): string {
+	if (count === 0) return 'Aucun membre'
+	return `${count} ${count > 1 ? 'membres' : 'membre'}`
 }
 
 interface PendingInvitationsSectionProps {
@@ -419,6 +446,8 @@ function PendingInvitationsSection({
 
 interface TeamTableProps {
 	data: TeamMemberRow[]
+	rhState: RhState | null
+	today: IsoDate
 	organizationSlug: string
 	hrDataRestricted: boolean
 	draft: MemberDraft | null
@@ -433,6 +462,8 @@ interface TeamTableProps {
 
 function TeamTable({
 	data,
+	rhState,
+	today,
 	organizationSlug,
 	hrDataRestricted,
 	draft,
@@ -444,60 +475,59 @@ function TeamTable({
 	onDelete,
 	onInvite,
 }: TeamTableProps) {
+	if (data.length === 0) {
+		return (
+			<div className="rounded-lg border border-dashed bg-card px-6 py-12 text-center">
+				<p className="font-medium">Aucun membre ne correspond.</p>
+				<p className="mt-1 text-[13px] text-muted-foreground">
+					Vérifie l’orthographe ou le type de contrat sélectionné, ou ajoute une
+					personne à l’équipe.
+				</p>
+			</div>
+		)
+	}
+
 	return (
-		<SectionCard>
-			<SectionHeader
-				title={`Équipe (${data.length})`}
-				description="Accès, taux horaire et base contractuelle de chaque personne."
-			/>
-			<div className="overflow-x-auto">
-				<table className="w-full min-w-[720px] border-collapse text-sm">
-					<thead>
-						<tr className="border-b bg-muted/50">
-							<th className="px-5 py-3 text-left text-xs font-semibold uppercase text-muted-foreground">
-								Nom
-							</th>
-							<th className="px-5 py-3 text-left text-xs font-semibold uppercase text-muted-foreground">
-								Accès
-							</th>
-							<th className="px-5 py-3 text-left text-xs font-semibold uppercase text-muted-foreground">
-								Rôles
-							</th>
-							<th className="px-5 py-3 text-left text-xs font-semibold uppercase text-muted-foreground">
-								Taux
-							</th>
-							<th className="px-5 py-3 text-left text-xs font-semibold uppercase text-muted-foreground">
-								Base contractuelle
-							</th>
-							<th className="px-5 py-3 text-left text-xs font-semibold uppercase text-muted-foreground">
-								<span className="sr-only">Actions</span>
-							</th>
-						</tr>
-					</thead>
-					<tbody>
-						{data.length === 0 ? (
-							<tr>
-								<td colSpan={6} className="px-5 py-12 text-center">
-									<div className="mx-auto flex max-w-sm flex-col items-center gap-2">
-										<p className="font-medium">Aucune personne trouvée</p>
-										<p className="text-sm text-muted-foreground">
-											Ajoutez une personne pour la rendre disponible dans les
-											prochains workflows opérationnels.
-										</p>
-									</div>
-								</td>
-							</tr>
-						) : (
-							data.map((member) => {
-								const isEditing = draft?.id === member.id
-								return (
-									<tr
-										key={member.id}
-										className="group border-b transition hover:bg-muted/35 hover:shadow-xs last:border-b-0"
-									>
-										<td className="px-5 py-3 align-middle">
+		<div className="overflow-hidden rounded-lg border bg-card">
+			<Table>
+				<TableHeader>
+					<TableRow className="hover:bg-transparent">
+						<TableHead className="pl-4">Membre</TableHead>
+						<TableHead>Contrat</TableHead>
+						<TableHead>Accès</TableHead>
+						<TableHead>Rôles</TableHead>
+						<TableHead>Taux</TableHead>
+						<TableHead className="max-xl:hidden">Base contractuelle</TableHead>
+						<TableHead className="max-lg:hidden">Semaine type</TableHead>
+						<TableHead>Aujourd’hui</TableHead>
+						<TableHead className="w-12 pr-4">
+							<span className="sr-only">Actions</span>
+						</TableHead>
+					</TableRow>
+				</TableHeader>
+				<TableBody>
+					{data.map((member) => {
+						const isEditing = draft?.id === member.id
+						const rhMember = member.rhMember
+						const contract =
+							rhState && rhMember ? currentContract(rhMember, today) : null
+						const rhythm = contract
+							? columnSummary(contract.schedule, today)
+							: null
+						return (
+							<TableRow
+								key={member.id}
+								className="group relative cursor-pointer focus-within:bg-muted/50"
+							>
+								<TableCell className="py-2.5 pl-4">
+									<div className="flex items-center gap-3">
+										<MemberAvatar
+											member={rhMember ?? avatarOf(member.displayName)}
+											size="lg"
+										/>
+										<span className="min-w-0">
 											{isEditing ? (
-												<div className="flex flex-col gap-1.5">
+												<span className="relative z-10 flex flex-col gap-1.5">
 													<Input
 														aria-label="Nom"
 														value={draft.values.lastName}
@@ -519,123 +549,193 @@ function TeamTable({
 															})
 														}
 													/>
-												</div>
-											) : (
-												<p className="truncate font-medium">
-													{member.displayName}
-												</p>
-											)}
-										</td>
-										<td className="px-5 py-3 align-middle">
-											<StatusBadge tone={ACCESS_TONE[member.access]}>
-												{ACCESS_LABEL[member.access]}
-											</StatusBadge>
-										</td>
-										<td className="px-5 py-3 align-middle">
-											<MemberRoleCell memberId={member.id} />
-										</td>
-										<td className="px-5 py-3 align-middle">
-											{isEditing ? (
-												<div className="flex flex-col gap-1.5">
-													<Input
-														value={draft.values.hourlyRate}
-														onChange={(event) =>
-															onDraftChange({
-																...draft.values,
-																hourlyRate: event.target.value,
-															})
-														}
-														inputMode="decimal"
-														placeholder="Optionnel"
-														disabled={draft.values.isSalaried}
-													/>
-													{draft.values.isSalaried ? (
-														<Input
-															aria-label="Coût employeur mensuel"
-															value={draft.values.monthlyCost}
-															onChange={(event) =>
-																onDraftChange({
-																	...draft.values,
-																	monthlyCost: event.target.value,
-																})
-															}
-															inputMode="decimal"
-															placeholder="€/mois chargé"
-														/>
-													) : null}
-													<div className="flex items-center gap-1.5">
-														<Switch
-															id={`salaried-${member.id}`}
-															size="sm"
-															checked={draft.values.isSalaried}
-															onCheckedChange={(isSalaried) =>
-																onDraftChange({
-																	...draft.values,
-																	isSalaried,
-																	hourlyRate: '',
-																	monthlyCost: '',
-																})
-															}
-														/>
-														<Label
-															htmlFor={`salaried-${member.id}`}
-															className="text-xs font-normal text-muted-foreground"
-														>
-															Salarié
-														</Label>
-													</div>
-												</div>
-											) : member.isSalaried ? (
-												<SalariedRateCell
-													monthlyCostCents={member.monthlyCostCents}
-													effectiveHourlyRateCents={
-														member.effectiveHourlyRateCents
-													}
-													memberId={member.id}
-													organizationSlug={organizationSlug}
-												/>
-											) : (
-												<MoneyCell value={member.hourlyRateCents} suffix="/h" />
-											)}
-										</td>
-										<td className="px-5 py-3 align-middle">
-											{member.weeklyContractMinutes === null ? (
-												<span className="text-muted-foreground italic">
-													{hrDataRestricted
-														? 'Non consultable'
-														: 'Sans profil RH'}
 												</span>
 											) : (
-												<span className="font-medium tabular-nums">
-													{formatDurationMinutes(member.weeklyContractMinutes)}
-													<span className="text-muted-foreground">/sem.</span>
-												</span>
+												<>
+													<Link
+														to={buildOrgPath(
+															organizationSlug,
+															'/hr/team/$memberId',
+														)}
+														params={{ memberId: member.id }}
+														className="flex items-center gap-2 font-medium outline-none before:absolute before:inset-0 focus-visible:before:ring-2 focus-visible:before:ring-ring focus-visible:before:ring-inset"
+													>
+														<span className="truncate">
+															{member.displayName}
+														</span>
+													</Link>
+													<span className="block truncate text-[12px] text-muted-foreground">
+														{rhMember?.jobTitle || 'Poste non renseigné'}
+													</span>
+												</>
 											)}
-										</td>
-										<td className="px-5 py-3 align-middle">
-											<RowActions
-												memberId={member.id}
-												memberName={member.displayName}
-												organizationSlug={organizationSlug}
-												access={member.access}
-												isEditing={isEditing}
-												isSaving={isSaving}
-												onEdit={() => onEdit(member)}
-												onCancel={onCancel}
-												onSave={onSave}
-												onDelete={() => onDelete(member)}
-												onInvite={() => onInvite(member)}
+										</span>
+									</div>
+								</TableCell>
+								<TableCell>
+									{rhMember && contract ? (
+										<>
+											<span className="flex items-center gap-1.5">
+												<ContractBadge contract={contract.type} />
+												{rhMember.contracts.length > 1 && (
+													<span className="text-[12px] text-muted-foreground">
+														{contractCountLabel(rhMember.contracts.length)}
+													</span>
+												)}
+											</span>
+											<span className="mt-0.5 block text-[12px] text-muted-foreground">
+												{contractTerm(contract, today)}
+											</span>
+										</>
+									) : (
+										<span className="text-muted-foreground">—</span>
+									)}
+								</TableCell>
+								<TableCell>
+									<StatusBadge tone={ACCESS_TONE[member.access]}>
+										{ACCESS_LABEL[member.access]}
+									</StatusBadge>
+								</TableCell>
+								<TableCell className="relative z-10">
+									<MemberRoleCell memberId={member.id} />
+								</TableCell>
+								<TableCell className="relative z-10">
+									{isEditing ? (
+										<div className="flex flex-col gap-1.5">
+											<Input
+												value={draft.values.hourlyRate}
+												onChange={(event) =>
+													onDraftChange({
+														...draft.values,
+														hourlyRate: event.target.value,
+													})
+												}
+												inputMode="decimal"
+												placeholder="Optionnel"
+												disabled={draft.values.isSalaried}
 											/>
-										</td>
-									</tr>
-								)
-							})
-						)}
-					</tbody>
-				</table>
-			</div>
-		</SectionCard>
+											{draft.values.isSalaried ? (
+												<Input
+													aria-label="Coût employeur mensuel"
+													value={draft.values.monthlyCost}
+													onChange={(event) =>
+														onDraftChange({
+															...draft.values,
+															monthlyCost: event.target.value,
+														})
+													}
+													inputMode="decimal"
+													placeholder="€/mois chargé"
+												/>
+											) : null}
+											<div className="flex items-center gap-1.5">
+												<Switch
+													id={`salaried-${member.id}`}
+													size="sm"
+													checked={draft.values.isSalaried}
+													onCheckedChange={(isSalaried) =>
+														onDraftChange({
+															...draft.values,
+															isSalaried,
+															hourlyRate: '',
+															monthlyCost: '',
+														})
+													}
+												/>
+												<Label
+													htmlFor={`salaried-${member.id}`}
+													className="text-xs font-normal text-muted-foreground"
+												>
+													Salarié
+												</Label>
+											</div>
+										</div>
+									) : member.isSalaried ? (
+										<SalariedRateCell
+											monthlyCostCents={member.monthlyCostCents}
+											effectiveHourlyRateCents={member.effectiveHourlyRateCents}
+											memberId={member.id}
+											organizationSlug={organizationSlug}
+										/>
+									) : (
+										<MoneyCell value={member.hourlyRateCents} suffix="/h" />
+									)}
+								</TableCell>
+								<TableCell className="max-xl:hidden">
+									{member.weeklyContractMinutes === null ? (
+										<span className="text-muted-foreground italic">
+											{hrDataRestricted ? 'Non consultable' : 'Sans profil RH'}
+										</span>
+									) : (
+										<span className="font-medium tabular-nums">
+											{formatDurationMinutes(member.weeklyContractMinutes)}
+											<span className="text-muted-foreground">/sem.</span>
+										</span>
+									)}
+								</TableCell>
+								<TableCell className="max-lg:hidden">
+									{rhythm ? (
+										<>
+											<span className="tabular mb-1 flex items-baseline gap-1.5 text-[13px]">
+												{rhythm.hours}
+												{rhythm.tag && (
+													<span className="font-medium text-[10px] text-muted-foreground uppercase tracking-wide">
+														{rhythm.tag}
+													</span>
+												)}
+											</span>
+											{rhythm.week ? (
+												<WeekDots schedule={rhythm.week} />
+											) : (
+												<span className="block text-[12px] text-muted-foreground">
+													Jour par jour
+												</span>
+											)}
+										</>
+									) : (
+										<span className="text-muted-foreground">—</span>
+									)}
+								</TableCell>
+								<TableCell>
+									{rhState && rhMember ? (
+										<TodayCell
+											state={rhState}
+											member={rhMember}
+											today={today}
+										/>
+									) : (
+										<span className="text-muted-foreground">—</span>
+									)}
+								</TableCell>
+								<TableCell className="relative z-10 pr-4">
+									<RowActions
+										memberId={member.id}
+										memberName={member.displayName}
+										organizationSlug={organizationSlug}
+										access={member.access}
+										isEditing={isEditing}
+										isSaving={isSaving}
+										onEdit={() => onEdit(member)}
+										onCancel={onCancel}
+										onSave={onSave}
+										onDelete={() => onDelete(member)}
+										onInvite={() => onInvite(member)}
+									/>
+								</TableCell>
+							</TableRow>
+						)
+					})}
+				</TableBody>
+			</Table>
+		</div>
 	)
+}
+
+function avatarOf(
+	displayName: string,
+): Pick<Member, 'firstName' | 'lastName' | 'hue'> {
+	const [first = '', ...rest] = displayName.trim().split(/\s+/)
+	return { firstName: first, lastName: rest.at(-1) ?? '', hue: 250 }
 }
 
 interface RowActionsProps {

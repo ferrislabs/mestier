@@ -2,6 +2,7 @@ import { useForm } from '@tanstack/react-form'
 import { useNavigate } from '@tanstack/react-router'
 import { Loader2 } from 'lucide-react'
 
+import { FormField } from '#/components/form-field'
 import { Button } from '#/components/ui/button'
 import {
 	Dialog,
@@ -12,7 +13,6 @@ import {
 	DialogTitle,
 } from '#/components/ui/dialog'
 import { Input } from '#/components/ui/input'
-import { Label } from '#/components/ui/label'
 import { useCreateOrganization } from '#/hooks/use-organizations'
 import { buildOrgPath } from '#/modules/org-path'
 import {
@@ -95,10 +95,10 @@ export function CreateOrganizationDialog({
 					<form.Subscribe selector={(state) => state.values}>
 						{(values) => (
 							<>
-								<div className="flex flex-col gap-1.5">
-									<Label htmlFor="new-organization-name">
-										Nom de l'organisation
-									</Label>
+								<FormField
+									id="new-organization-name"
+									label="Nom de l'organisation"
+								>
 									<Input
 										id="new-organization-name"
 										placeholder="Entreprise Dupont"
@@ -106,17 +106,13 @@ export function CreateOrganizationDialog({
 										onChange={(event) => handleNameChange(event.target.value)}
 										disabled={isPending}
 									/>
-								</div>
+								</FormField>
 
-								<div className="flex flex-col gap-1.5">
-									<div className="flex items-center justify-between">
-										<Label htmlFor="new-organization-slug">
-											Identifiant (slug)
-										</Label>
-										<span className="text-[10px] text-muted-foreground">
-											Utilisé dans les URLs
-										</span>
-									</div>
+								<FormField
+									id="new-organization-slug"
+									label="Identifiant (slug)"
+									hint="Utilisé dans les URLs"
+								>
 									<Input
 										id="new-organization-slug"
 										placeholder="entreprise-dupont"
@@ -130,7 +126,7 @@ export function CreateOrganizationDialog({
 										disabled={isPending}
 										className="font-mono text-sm"
 									/>
-								</div>
+								</FormField>
 
 								{error ? (
 									<p className="rounded-lg border border-destructive/30 bg-destructive-soft px-3 py-2 text-sm text-destructive">

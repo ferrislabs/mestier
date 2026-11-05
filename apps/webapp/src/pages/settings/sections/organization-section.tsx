@@ -19,11 +19,7 @@ import {
 	SelectTrigger,
 	SelectValue,
 } from '#/components/ui/select'
-import {
-	SectionCard,
-	SectionHeader,
-	StatusBadge,
-} from '#/components/ui/surface'
+import { StatusBadge } from '#/components/ui/surface'
 import { Switch } from '#/components/ui/switch'
 import { useActiveOrganization } from '#/hooks/use-active-organization'
 import {
@@ -39,6 +35,7 @@ import {
 	type LegalIdentityFormValues,
 	type OrganizationFormValues,
 } from '#/pages/settings/types'
+import { SettingsCard } from '#/pages/settings/ui/settings-card'
 
 export function OrganizationSection() {
 	const { activeOrganization } = useActiveOrganization()
@@ -118,17 +115,16 @@ function OrganizationSectionContent({
 								{error.message}
 							</div>
 						) : null}
-						<SectionCard>
-							<SectionHeader
-								title="Organisation"
-								description="Informations visibles dans l’application et utilisées pour identifier l’espace de travail."
-								actions={
-									<StatusBadge tone="brand">
-										<Building2 className="mr-1 size-3" />
-										{organization.slug}
-									</StatusBadge>
-								}
-							/>
+						<SettingsCard
+							title="Organisation"
+							description="Informations visibles dans l’application et utilisées pour identifier l’espace de travail."
+							actions={
+								<StatusBadge tone="brand">
+									<Building2 className="mr-1 size-3" />
+									{organization.slug}
+								</StatusBadge>
+							}
+						>
 							<div className="grid grid-cols-1 gap-4 p-5 lg:grid-cols-[1fr_auto] lg:items-end">
 								<div className="grid grid-cols-1 gap-4 md:grid-cols-2">
 									<TextField
@@ -163,19 +159,18 @@ function OrganizationSectionContent({
 									</Button>
 								</RequirePermission>
 							</div>
-						</SectionCard>
+						</SettingsCard>
 
-						<SectionCard>
-							<SectionHeader
-								title="Application terrain"
-								description="Ce que l'application mobile propose aux équipes sur le chantier."
-								actions={
-									<StatusBadge tone="neutral">
-										<Clock className="mr-1 size-3" />
-										Pointeuse
-									</StatusBadge>
-								}
-							/>
+						<SettingsCard
+							title="Application terrain"
+							description="Ce que l'application mobile propose aux équipes sur le chantier."
+							actions={
+								<StatusBadge tone="neutral">
+									<Clock className="mr-1 size-3" />
+									Pointeuse
+								</StatusBadge>
+							}
+						>
 							<div className="flex items-center justify-between gap-4 p-5">
 								<div>
 									<Label
@@ -218,19 +213,18 @@ function OrganizationSectionContent({
 									</Button>
 								</RequirePermission>
 							</div>
-						</SectionCard>
+						</SettingsCard>
 
-						<SectionCard>
-							<SectionHeader
-								title="Accès par IA"
-								description="Utiliser Mestier depuis ChatGPT ou un autre assistant, avec le compte et les droits de chaque membre."
-								actions={
-									<StatusBadge tone="neutral">
-										<Bot className="mr-1 size-3" />
-										MCP
-									</StatusBadge>
-								}
-							/>
+						<SettingsCard
+							title="Accès par IA"
+							description="Utiliser Mestier depuis ChatGPT ou un autre assistant, avec le compte et les droits de chaque membre."
+							actions={
+								<StatusBadge tone="neutral">
+									<Bot className="mr-1 size-3" />
+									MCP
+								</StatusBadge>
+							}
+						>
 							<div className="flex items-center justify-between gap-4 p-5">
 								<div>
 									<Label htmlFor="mcp-enabled" className="text-sm font-medium">
@@ -271,7 +265,7 @@ function OrganizationSectionContent({
 									</Button>
 								</RequirePermission>
 							</div>
-						</SectionCard>
+						</SettingsCard>
 					</div>
 				)
 			}}
@@ -394,20 +388,18 @@ function LegalIdentitySection({ organization }: LegalIdentitySectionProps) {
 				const canSubmit = binding.values.vatChoice !== 'undecided'
 
 				return (
-					<SectionCard>
-						<SectionHeader
-							title="Identité légale"
-							description="Les mentions obligatoires pour qu'un devis ou une facture soit valide."
-							actions={
-								missingFields.length === 0 ? (
-									<StatusBadge tone="brand">
-										<CheckCircle2 className="mr-1 size-3" />
-										Complète
-									</StatusBadge>
-								) : null
-							}
-						/>
-
+					<SettingsCard
+						title="Identité légale"
+						description="Les mentions obligatoires pour qu'un devis ou une facture soit valide."
+						actions={
+							missingFields.length === 0 ? (
+								<StatusBadge tone="brand">
+									<CheckCircle2 className="mr-1 size-3" />
+									Complète
+								</StatusBadge>
+							) : null
+						}
+					>
 						{error ? (
 							<div className="mx-5 mt-5 rounded-lg border border-destructive/30 bg-destructive-soft px-4 py-3 text-sm text-destructive">
 								{error.message}
@@ -415,7 +407,7 @@ function LegalIdentitySection({ organization }: LegalIdentitySectionProps) {
 						) : null}
 
 						{missingFields.length > 0 ? (
-							<div className="mx-5 mt-5 flex items-start gap-3 rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-800 dark:text-amber-300">
+							<div className="mx-5 mt-5 flex items-start gap-3 rounded-lg border border-warning/30 bg-warning-soft px-4 py-3 text-sm text-warning">
 								<AlertTriangle className="mt-0.5 size-4 shrink-0" />
 								<p>
 									Tant que cette identité est incomplète, aucun devis ne peut
@@ -628,7 +620,7 @@ function LegalIdentitySection({ organization }: LegalIdentitySectionProps) {
 								</RequirePermission>
 							</div>
 						</div>
-					</SectionCard>
+					</SettingsCard>
 				)
 			}}
 		</form.Subscribe>
@@ -644,9 +636,7 @@ function FieldGroup({
 }) {
 	return (
 		<div className="space-y-3">
-			<p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-				{title}
-			</p>
+			<p className="font-medium text-sm">{title}</p>
 			<div className="grid grid-cols-1 gap-4 md:grid-cols-2">{children}</div>
 		</div>
 	)

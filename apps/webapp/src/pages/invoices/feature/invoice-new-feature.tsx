@@ -17,6 +17,11 @@ import {
 	type InvoiceLineFormValues,
 } from '#/pages/invoices/types'
 import { InvoiceNewUI } from '#/pages/invoices/ui/invoice-new-ui'
+import {
+	duplicateItem,
+	moveItem,
+	newLineId,
+} from '#/pages/quotes/lib/doc-lines'
 
 export function InvoiceNewFeature() {
 	const { activeOrganization } = useActiveOrganization()
@@ -206,14 +211,28 @@ function InvoiceNewForm({
 			vatEnabled={vatEnabled}
 			onChange={updateValues}
 			onLineChange={updateLine}
-			onAddLine={() =>
-				form.setFieldValue('lines', [
-					...form.state.values.lines,
-					emptyInvoiceLine(
-						`line-${Date.now()}-${form.state.values.lines.length}`,
-					),
-				])
+			onAddLine={() => {
+				const line = emptyInvoiceLine(newLineId(form.state.values.lines.length))
+				form.setFieldValue('lines', [...form.state.values.lines, line])
+				return line.clientId
+			}}
+			onMoveLine={(index, delta) =>
+				form.setFieldValue(
+					'lines',
+					moveItem(form.state.values.lines, index, delta),
+				)
 			}
+			onDuplicateLine={(index) => {
+				const clientId = newLineId(form.state.values.lines.length)
+				form.setFieldValue(
+					'lines',
+					duplicateItem(form.state.values.lines, index, (line) => ({
+						...line,
+						clientId,
+					})),
+				)
+				return clientId
+			}}
 			onRemoveLine={(index) => {
 				const next = form.state.values.lines.filter(
 					(_line, itemIndex) => itemIndex !== index,

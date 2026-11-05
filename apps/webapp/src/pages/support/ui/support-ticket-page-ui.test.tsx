@@ -1,34 +1,18 @@
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
-import type {
-	SupportTicketDetailVM,
-	SupportTicketPageUIProps,
-} from '#/pages/support/types'
+import type { SupportTicketPageUIProps } from '#/pages/support/types'
+import { ticketVM } from '#/pages/support/ui/support-fixtures'
 import { SupportTicketPageUI } from '#/pages/support/ui/support-ticket-page-ui'
-
-const TICKET: SupportTicketDetailVM = {
-	id: 'ticket-1',
-	numberLabel: 'T-0001',
-	subject: 'Fuite sous l’évier',
-	status: 'new',
-	assigneeId: null,
-	badges: [],
-	fields: [],
-	createdAtLabel: '3 nov. 2026',
-}
 
 function renderPage(overrides: Partial<SupportTicketPageUIProps> = {}) {
 	const props: SupportTicketPageUIProps = {
-		organizationName: 'Atelier Bois & Co',
-		ticket: TICKET,
+		ticket: ticketVM({ badges: [{ label: 'Urgent', tone: 'error' }] }),
 		isLoading: false,
 		error: null,
 		onRetry: vi.fn(),
 		onBack: vi.fn(),
-		thread: <div>Fil du ticket</div>,
-		composer: <div>Zone de réponse</div>,
-		sidePanel: <div>Panneau de détails</div>,
+		detail: <div>Détail du ticket</div>,
 		...overrides,
 	}
 	render(<SupportTicketPageUI {...props} />)
@@ -36,127 +20,82 @@ function renderPage(overrides: Partial<SupportTicketPageUIProps> = {}) {
 }
 
 describe('SupportTicketPageUI', () => {
-	it('titles the page with the number and the subject, under the organization', () => {
+	it('titles the page with the subject, under a breadcrumb with the number', () => {
 		renderPage()
 
 		expect(screen.getByRole('heading', { level: 1 }).textContent).toBe(
-			'T-0001 Fuite sous l’évier',
+			'Fuite sous l’évier',
 		)
-		expect(screen.getByText('Atelier Bois & Co')).toBeTruthy()
+		expect(
+			screen.getByRole('navigation', { name: 'Emplacement du ticket' })
+				.textContent,
+		).toContain('#1')
 	})
 
-	it('falls back to a generic title without a ticket', () => {
+	it('summarises the ticket under the title', () => {
+		renderPage()
+
+		const headline = screen.getByRole('heading', {
+			level: 1,
+		}).nextElementSibling
+		expect(headline?.textContent).toContain('Backlog')
+		expect(headline?.textContent).toContain(
+			'Claire Fontaine via saisie manuelle',
+		)
+		expect(headline?.textContent).toContain('Urgent')
+	})
+
+	it('names the API as the source of a ticket with an external id', () => {
+		renderPage({ ticket: ticketVM({ externalId: 'EC-1' }) })
+
+		expect(screen.getByText(/via l’API/)).toBeTruthy()
+	})
+
+	it('goes back from the Tickets crumb', async () => {
+		const props = renderPage()
+
+		await userEvent.click(screen.getByRole('button', { name: 'Tickets' }))
+
+		expect(props.onBack).toHaveBeenCalledTimes(1)
+	})
+
+	it('shows the detail slot', () => {
+		renderPage()
+
+		expect(screen.getByText('Détail du ticket')).toBeTruthy()
+	})
+
+	it('keeps a generic title while loading', () => {
 		renderPage({ ticket: null, isLoading: true })
 
 		expect(screen.getByRole('heading', { level: 1 }).textContent).toBe('Ticket')
+		expect(screen.getByText('Détail du ticket')).toBeTruthy()
 	})
 
-	it('centres the header against its leading icon', () => {
-		renderPage()
-
-		const header = screen.getByRole('banner')
-		expect(header.className).toContain('sm:items-center')
-		expect(header.className).toContain('sm:justify-start')
-	})
-
-	it('calls onBack from the Retour aux tickets button', async () => {
-		const props = renderPage()
-
-		await userEvent.click(
-			screen.getByRole('button', { name: 'Retour aux tickets' }),
-		)
-
-		expect(props.onBack).toHaveBeenCalledTimes(1)
-	})
-
-	it('shows the thread, the composer and the side panel once loaded', () => {
-		renderPage()
-
-		expect(screen.getByText('Fil du ticket')).toBeTruthy()
-		expect(screen.getByText('Zone de réponse')).toBeTruthy()
-		expect(screen.getByText('Panneau de détails')).toBeTruthy()
-		expect(screen.queryByText('Chargement…')).toBeNull()
-		expect(screen.queryByText('Ticket introuvable.')).toBeNull()
-	})
-
-	it('puts the thread before the composer', () => {
-		renderPage()
-
-		const thread = screen.getByText('Fil du ticket')
-		const composer = screen.getByText('Zone de réponse')
-		expect(
-			thread.compareDocumentPosition(composer) &
-				Node.DOCUMENT_POSITION_FOLLOWING,
-		).toBeTruthy()
-	})
-
-	it('keeps the thread and the composer in one column and the side panel in another', () => {
-		renderPage()
-
-		const thread = screen.getByText('Fil du ticket')
-		const composer = screen.getByText('Zone de réponse')
-		const sidePanel = screen.getByText('Panneau de détails')
-		const mainColumn = thread.closest('section')
-		expect(mainColumn?.contains(composer)).toBe(true)
-		expect(mainColumn?.contains(sidePanel)).toBe(false)
-	})
-
-	it('shows the loading block and none of the slots while loading', () => {
-		renderPage({ ticket: null, isLoading: true })
-
-		expect(screen.getByText('Chargement…')).toBeTruthy()
-		expect(screen.queryByText('Fil du ticket')).toBeNull()
-		expect(screen.queryByText('Zone de réponse')).toBeNull()
-		expect(screen.queryByText('Panneau de détails')).toBeNull()
-		expect(screen.queryByText('Ticket introuvable.')).toBeNull()
-	})
-
-	it('keeps the back button reachable while loading', async () => {
-		const props = renderPage({ ticket: null, isLoading: true })
-
-		await userEvent.click(
-			screen.getByRole('button', { name: 'Retour aux tickets' }),
-		)
-
-		expect(props.onBack).toHaveBeenCalledTimes(1)
-	})
-
-	it('shows the not found block with a reachable back button', async () => {
-		const props = renderPage({ ticket: null })
-
-		expect(screen.getByText('Ticket introuvable.')).toBeTruthy()
-		expect(screen.queryByText('Fil du ticket')).toBeNull()
-		expect(screen.queryByText('Chargement…')).toBeNull()
-		await userEvent.click(
-			screen.getByRole('button', { name: 'Retour aux tickets' }),
-		)
-
-		expect(props.onBack).toHaveBeenCalledTimes(1)
-	})
-
-	it('shows the error banner and calls onRetry from its button', async () => {
+	it('shows the error banner instead of the detail and calls onRetry', async () => {
 		const props = renderPage({
 			ticket: null,
-			error: 'Impossible de charger le ticket.',
+			error: 'Le ticket est indisponible.',
 		})
 
-		expect(screen.getByText('Impossible de charger le ticket.')).toBeTruthy()
-		expect(screen.queryByText('Ticket introuvable.')).toBeNull()
+		expect(screen.getByText('Le ticket est indisponible.')).toBeTruthy()
+		expect(screen.queryByText('Détail du ticket')).toBeNull()
 		await userEvent.click(screen.getByRole('button', { name: 'Réessayer' }))
 
 		expect(props.onRetry).toHaveBeenCalledTimes(1)
 	})
 
-	it('keeps the loaded ticket on screen next to an error banner', () => {
-		renderPage({ error: 'Impossible de rafraîchir le ticket.' })
+	it('says the ticket is unknown and offers the way back', async () => {
+		const props = renderPage({ ticket: null })
 
-		expect(screen.getByText('Impossible de rafraîchir le ticket.')).toBeTruthy()
-		expect(screen.getByText('Fil du ticket')).toBeTruthy()
-	})
+		expect(screen.getByText('Ticket introuvable')).toBeTruthy()
+		expect(
+			screen.getByText('Ce ticket n’existe pas ou a été supprimé.'),
+		).toBeTruthy()
+		await userEvent.click(
+			screen.getByRole('button', { name: 'Voir les tickets' }),
+		)
 
-	it('shows no error banner without an error', () => {
-		renderPage()
-
-		expect(screen.queryByRole('button', { name: 'Réessayer' })).toBeNull()
+		expect(props.onBack).toHaveBeenCalledTimes(1)
 	})
 })

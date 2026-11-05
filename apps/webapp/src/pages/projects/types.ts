@@ -2,7 +2,7 @@ import { z } from 'zod'
 
 /**
  * `?projectId=` highlights one row, so the profitability screen can link
- * straight at the project it just costed. `?archived=` widens the list.
+ * straight at the project it just costed. `?archived=` widens the list. `?statut=`, `?q=` and `?client=` carry the list filters.
  *
  * `.catch` on both: a hand-edited URL should land on the list rather than a
  * router error page.
@@ -10,6 +10,9 @@ import { z } from 'zod'
 export const projectsSearchSchema = z.object({
 	projectId: z.string().optional().catch(undefined),
 	archived: z.boolean().catch(false),
+	statut: z.enum(['archives', 'tous']).optional().catch(undefined),
+	q: z.string().optional().catch(undefined),
+	client: z.string().optional().catch(undefined),
 })
 
 export type ProjectsSearch = z.infer<typeof projectsSearchSchema>

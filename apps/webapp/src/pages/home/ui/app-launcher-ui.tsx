@@ -1,39 +1,63 @@
 import { Link } from '@tanstack/react-router'
-import type { LucideIcon } from 'lucide-react'
+import { ModuleIcon } from '#/components/module-icon'
+import type { AppModule } from '#/modules/types'
 
 export interface AppLauncherItem {
 	id: string
 	label: string
-	icon: LucideIcon
+	module: Pick<AppModule, 'icon' | 'hue'>
 	to: string
+	hint: string
+	comingSoon?: boolean
 }
 
 export interface AppLauncherUIProps {
 	items: AppLauncherItem[]
 }
 
-/**
- * The homepage's module shortcuts, as an icon grid rather than the text pill
- * row it used to be — every module the sidebar (`modules/registry.ts`) already
- * knows about, so a module added there shows up here for free.
- */
 export function AppLauncherUI({ items }: AppLauncherUIProps) {
 	return (
-		<nav className="grid w-full max-w-xl grid-cols-3 gap-1 sm:grid-cols-6">
-			{items.map((item) => (
-				<Link
-					key={item.id}
-					to={item.to}
-					className="flex flex-col items-center gap-2 rounded-2xl px-1 py-3 text-center transition hover:-translate-y-0.5 hover:bg-card"
-				>
-					<span className="flex size-10 items-center justify-center rounded-xl bg-brand-soft text-primary">
-						<item.icon className="size-[1.15rem]" />
-					</span>
-					<span className="text-xs font-medium text-muted-foreground">
-						{item.label}
-					</span>
-				</Link>
-			))}
+		<nav
+			aria-label="Accès rapides"
+			className="mt-6 grid grid-cols-2 gap-2 sm:grid-cols-4"
+		>
+			{items.map((item) => {
+				const content = (
+					<>
+						<ModuleIcon module={item.module} size="md" />
+						<span className="min-w-0">
+							<span className="block truncate font-medium text-[13.5px]">
+								{item.label}
+							</span>
+							<span className="block truncate text-[12px] text-muted-foreground">
+								{item.hint}
+							</span>
+						</span>
+					</>
+				)
+
+				if (item.comingSoon) {
+					return (
+						<div
+							key={item.id}
+							aria-disabled="true"
+							className="flex cursor-not-allowed items-center gap-3 rounded-lg border bg-card px-3 py-2.5 opacity-60"
+						>
+							{content}
+						</div>
+					)
+				}
+
+				return (
+					<Link
+						key={item.id}
+						to={item.to}
+						className="flex items-center gap-3 rounded-lg border bg-card px-3 py-2.5 outline-none transition-colors hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring"
+					>
+						{content}
+					</Link>
+				)
+			})}
 		</nav>
 	)
 }

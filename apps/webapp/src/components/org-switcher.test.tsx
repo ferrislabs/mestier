@@ -2,7 +2,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import type { ReactNode } from 'react'
-import { describe, expect, it, vi } from 'vitest'
+import { beforeAll, describe, expect, it, vi } from 'vitest'
 import { OrgSwitcher } from '#/components/org-switcher'
 import {
 	ActiveOrganizationProvider,
@@ -69,6 +69,12 @@ function installFakeTanstackApi(
 	return { listOrganizations }
 }
 
+const OTHER_ORGANIZATION = {
+	id: 'org-9',
+	name: 'Duval Rénovation',
+	slug: 'duval-renovation',
+}
+
 async function renderSwitcher(createOrganization: (body: unknown) => unknown) {
 	const api = installFakeTanstackApi(createOrganization)
 	const queryClient = new QueryClient({
@@ -86,7 +92,9 @@ async function renderSwitcher(createOrganization: (body: unknown) => unknown) {
 		return (
 			<QueryClientProvider client={queryClient}>
 				<OrganizationListProbe />
-				<OrganizationListProvider organizations={[active]}>
+				<OrganizationListProvider
+					organizations={[active, organization(OTHER_ORGANIZATION)]}
+				>
 					<ActiveOrganizationProvider activeOrganization={active}>
 						{children}
 					</ActiveOrganizationProvider>
@@ -105,17 +113,93 @@ async function renderSwitcher(createOrganization: (body: unknown) => unknown) {
 	return { ...rendered, ...api }
 }
 
-async function openCreateDialog() {
+async function openMenu() {
 	await userEvent.click(
-		screen.getByRole('button', { name: "Changer d'organisation" }),
+		screen.getByRole('button', {
+			name: 'Organisation active : Paysages Bonnal. Changer d’organisation',
+		}),
 	)
+	await screen.findByPlaceholderText('Rechercher une organisation…')
+}
+
+async function openCreateDialog() {
+	await openMenu()
 	await userEvent.click(
-		await screen.findByRole('menuitem', { name: 'Créer une organisation' }),
+		await screen.findByRole('option', { name: 'Créer une organisation' }),
 	)
 	await screen.findByRole('dialog')
 }
 
 describe('OrgSwitcher', () => {
+	beforeAll(() => {
+		Element.prototype.scrollIntoView = vi.fn()
+	})
+
+	it('shows the active organization with its initial in the trigger', async () => {
+		await renderSwitcher(vi.fn())
+
+		const trigger = screen.getByRole('button', {
+			name: 'Organisation active : Paysages Bonnal. Changer d’organisation',
+		})
+		expect(trigger.textContent).toBe('PPaysages Bonnal')
+	})
+
+	it('lists the organizations and marks the active one', async () => {
+		await renderSwitcher(vi.fn())
+		await openMenu()
+
+		const active = screen.getByRole('option', { name: /Paysages Bonnal/ })
+		const other = screen.getByRole('option', { name: /Duval Rénovation/ })
+		expect(active.querySelector('svg.lucide-check')).not.toBeNull()
+		expect(other.querySelector('svg.lucide-check')).toBeNull()
+	})
+
+	it('filters the organizations from the search field', async () => {
+		await renderSwitcher(vi.fn())
+		await openMenu()
+
+		await userEvent.type(
+			screen.getByPlaceholderText('Rechercher une organisation…'),
+			'duval',
+		)
+
+		expect(screen.queryByRole('option', { name: /Paysages Bonnal/ })).toBeNull()
+		expect(
+			screen.getByRole('option', { name: /Duval Rénovation/ }),
+		).toBeDefined()
+	})
+
+	it('lands on the same screen of the chosen organization', async () => {
+		const { router } = await renderSwitcher(vi.fn())
+		await openMenu()
+
+		await userEvent.click(
+			screen.getByRole('option', { name: /Duval Rénovation/ }),
+		)
+
+		await waitFor(() => {
+			expect(router.state.location.pathname).toBe(
+				'/o/duval-renovation/crm/customers',
+			)
+		})
+		expect(
+			screen.queryByPlaceholderText('Rechercher une organisation…'),
+		).toBeNull()
+	})
+
+	it('stays put when the active organization is chosen', async () => {
+		const { router } = await renderSwitcher(vi.fn())
+		await openMenu()
+
+		await userEvent.click(
+			screen.getByRole('option', { name: /Paysages Bonnal/ }),
+		)
+
+		expect(router.state.location.pathname).toBe(
+			'/o/paysages-bonnal/crm/customers',
+		)
+	})
+
 	it('creates an organization and lands on it', async () => {
 		const createOrganization = vi.fn((body) => ({
 			data: organization({

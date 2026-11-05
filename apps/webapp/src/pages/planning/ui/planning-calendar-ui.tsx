@@ -18,7 +18,6 @@ import type { AssigneeOption } from './assignee-picker'
 import type { QuickCreateDraft } from './quick-create-popover'
 
 export interface PlanningCalendarUIProps {
-	organizationName: string
 	organizationSlug: string
 	/** `null` while the count is still loading — see
 	 * `PlanningTeamUIProps.pendingReportsCount`'s own doc. */
@@ -53,7 +52,6 @@ export interface PlanningCalendarUIProps {
 }
 
 export function PlanningCalendarUI({
-	organizationName,
 	organizationSlug,
 	pendingReportsCount,
 	view,
@@ -87,7 +85,6 @@ export function PlanningCalendarUI({
 	return (
 		<PageShell className="max-w-none">
 			<PageHeader
-				eyebrow={organizationName}
 				title="Calendrier"
 				actions={
 					pendingReportsCount ? (
@@ -118,18 +115,18 @@ export function PlanningCalendarUI({
 			<SectionCard className="overflow-hidden">
 				{error ? (
 					<CalendarNotice
-						icon={<AlertCircle className="size-6 text-destructive" />}
+						icon={<AlertCircle className="size-5 text-destructive" />}
 						title="Planning indisponible"
 						message={error}
 						action={
-							<Button type="button" onClick={onRetry}>
+							<Button type="button" size="sm" onClick={onRetry}>
 								Réessayer
 							</Button>
 						}
 					/>
 				) : isLoading || !activeModel ? (
 					<CalendarNotice
-						icon={<CalendarDays className="size-6 text-muted-foreground" />}
+						icon={<CalendarDays className="size-5" />}
 						title="Chargement du calendrier…"
 						message="Récupération des tâches, congés et absences de la période."
 					/>
@@ -189,12 +186,14 @@ interface CalendarNoticeProps {
 function CalendarNotice({ icon, title, message, action }: CalendarNoticeProps) {
 	return (
 		<div className="flex min-h-72 flex-col items-center justify-center gap-3 p-10 text-center">
-			<div className="flex size-14 items-center justify-center rounded-xl border bg-card">
+			<div className="flex size-12 items-center justify-center rounded-lg bg-muted text-muted-foreground">
 				{icon}
 			</div>
 			<div>
 				<p className="font-medium">{title}</p>
-				<p className="mt-1 max-w-md text-sm text-muted-foreground">{message}</p>
+				<p className="mt-1 max-w-md text-[13px] text-muted-foreground">
+					{message}
+				</p>
 			</div>
 			{action}
 		</div>

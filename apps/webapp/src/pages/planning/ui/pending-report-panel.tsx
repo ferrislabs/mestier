@@ -60,11 +60,9 @@ export function PendingReportPanel({
 			{reports.map((report) => (
 				<div
 					key={report.id}
-					className="rounded-lg border-2 border-amber-500 bg-amber-50 p-3 dark:bg-amber-950/30"
+					className="rounded-lg border border-warning/40 bg-warning-soft p-3"
 				>
-					<p className="text-xs font-semibold uppercase tracking-wide text-amber-700 dark:text-amber-500">
-						Écart signalé
-					</p>
+					<p className="text-xs font-medium text-warning">Écart signalé</p>
 					<p className="mt-1 text-sm">
 						Prévu : {plannedLabel} · Déclaré :{' '}
 						{reportedLabel(report.reported_minutes)}
@@ -87,7 +85,7 @@ export function PendingReportPanel({
 					) : null}
 
 					{applyingReportId === report.id ? (
-						<div className="mt-2 rounded-md bg-card p-2 text-sm">
+						<div className="mt-2 rounded-md bg-card p-2 text-[13px]">
 							<p>
 								La durée du projet ci-dessous a été mise à jour pour refléter
 								cet écart. Appliquer déplace le planning et change la marge —

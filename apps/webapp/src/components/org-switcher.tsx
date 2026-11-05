@@ -1,19 +1,26 @@
 import { useLocation, useNavigate } from '@tanstack/react-router'
-import { Building2, Check, ChevronsUpDown, Plus } from 'lucide-react'
-import { useState } from 'react'
+import { Check, ChevronsUpDown, Plus } from 'lucide-react'
+import { type CSSProperties, useState } from 'react'
 
 import { CreateOrganizationDialog } from '#/components/create-organization-dialog'
 import {
-	DropdownMenu,
-	DropdownMenuContent,
-	DropdownMenuItem,
-	DropdownMenuLabel,
-	DropdownMenuSeparator,
-	DropdownMenuTrigger,
-} from '#/components/ui/dropdown-menu'
+	Command,
+	CommandEmpty,
+	CommandGroup,
+	CommandInput,
+	CommandItem,
+	CommandList,
+	CommandSeparator,
+} from '#/components/ui/command'
+import {
+	Popover,
+	PopoverContent,
+	PopoverTrigger,
+} from '#/components/ui/popover'
 import { useActiveOrganization } from '#/hooks/use-active-organization'
 import type { Organization } from '#/hooks/use-organizations'
 import { cn } from '#/lib/utils'
+import { organizationHue } from '#/modules/org-hue'
 import { buildOrgPath, splitOrgPath } from '#/modules/org-path'
 import { crossOrganizationPath } from '#/modules/scope'
 
@@ -26,12 +33,11 @@ export function OrgSwitcher() {
 	const navigate = useNavigate()
 	const { organizations, activeOrganization, activeOrganizationId } =
 		useActiveOrganization()
+	const [open, setOpen] = useState(false)
 	const [isCreateOpen, setCreateOpen] = useState(false)
 
-	// Switching organization is a navigation: the tenant lives in the URL. We
-	// stay on the same screen, unless it names an entity of the organization
-	// being left — a customer id does not exist in the target organization.
 	const handleOrganizationSelect = (organization: Organization) => {
+		setOpen(false)
 		if (organization.id === activeOrganizationId) return
 
 		const { path } = splitOrgPath(location.pathname)
@@ -43,59 +49,62 @@ export function OrgSwitcher() {
 
 	return (
 		<>
-			<DropdownMenu>
-				<DropdownMenuTrigger asChild>
+			<Popover open={open} onOpenChange={setOpen}>
+				<PopoverTrigger asChild>
 					<button
 						type="button"
-						aria-label="Changer d'organisation"
-						className="flex min-w-0 items-center gap-1.5 rounded-lg px-1.5 py-1 text-sm font-medium text-foreground transition-colors hover:bg-muted"
+						aria-label={`Organisation active : ${activeOrganization.name}. Changer d’organisation`}
+						className="flex h-7 min-w-0 items-center gap-1.5 rounded-md border bg-card px-1.5 font-medium text-[13px] outline-none transition-colors hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring"
 					>
-						<span className="max-w-40 truncate">{activeOrganization.name}</span>
-						<ChevronsUpDown className="size-3.5 shrink-0 text-muted-foreground" />
+						<OrganizationBadge
+							organization={activeOrganization}
+							className="size-4 text-[9px]"
+						/>
+						<span className="truncate">{activeOrganization.name}</span>
+						<ChevronsUpDown
+							className="size-3.5 shrink-0 text-muted-foreground"
+							aria-hidden
+						/>
 					</button>
-				</DropdownMenuTrigger>
-				<DropdownMenuContent
-					align="start"
-					className="min-w-72 rounded-none shadow-none"
-				>
-					<DropdownMenuLabel className="text-xs text-muted-foreground">
-						Organisation active
-					</DropdownMenuLabel>
-					{organizations.map((organization) => {
-						const selected = organization.id === activeOrganizationId
-						return (
-							<DropdownMenuItem
-								key={organization.id}
-								onClick={() => handleOrganizationSelect(organization)}
-								className="gap-2 p-2"
-							>
-								<OrganizationMark organization={organization} />
-								<div className="grid min-w-0 flex-1 leading-tight">
-									<span className="truncate font-medium">
-										{organization.name}
-									</span>
-									<span className="truncate text-xs text-muted-foreground">
-										{organization.slug}
-									</span>
-								</div>
-								{selected ? <Check className="size-4 text-primary" /> : null}
-							</DropdownMenuItem>
-						)
-					})}
-					<DropdownMenuSeparator />
-					<DropdownMenuItem
-						onClick={() => setCreateOpen(true)}
-						className="gap-2 p-2"
-					>
-						<div className="flex aspect-square size-7 items-center justify-center rounded-none border border-dashed text-muted-foreground">
-							<Plus className="size-4" />
-						</div>
-						<span className="font-medium">Créer une organisation</span>
-					</DropdownMenuItem>
-				</DropdownMenuContent>
-			</DropdownMenu>
+				</PopoverTrigger>
+				<PopoverContent align="start" sideOffset={6} className="w-64 p-0">
+					<Command>
+						<CommandInput placeholder="Rechercher une organisation…" />
+						<CommandList>
+							<CommandEmpty>Aucune organisation.</CommandEmpty>
+							<CommandGroup>
+								{organizations.map((organization) => (
+									<CommandItem
+										key={organization.id}
+										value={`${organization.name} ${organization.slug}`}
+										onSelect={() => handleOrganizationSelect(organization)}
+									>
+										<OrganizationBadge organization={organization} />
+										<span className="truncate">{organization.name}</span>
+										{organization.id === activeOrganizationId ? (
+											<Check className="ml-auto text-highlight" />
+										) : null}
+									</CommandItem>
+								))}
+							</CommandGroup>
+							<CommandSeparator />
+							<CommandGroup>
+								<CommandItem
+									value="Créer une organisation"
+									onSelect={() => {
+										setOpen(false)
+										setCreateOpen(true)
+									}}
+								>
+									<Plus />
+									Créer une organisation
+								</CommandItem>
+							</CommandGroup>
+						</CommandList>
+					</Command>
+				</PopoverContent>
+			</Popover>
 
-			{/* Mounted only while open: unmounting is what clears the form. */}
 			{isCreateOpen ? (
 				<CreateOrganizationDialog open onOpenChange={setCreateOpen} />
 			) : null}
@@ -103,27 +112,25 @@ export function OrgSwitcher() {
 	)
 }
 
-interface OrganizationMarkProps {
-	organization: Organization
+interface OrganizationBadgeProps {
+	organization: Pick<Organization, 'name' | 'slug'>
 	className?: string
 }
 
-function OrganizationMark({ organization, className }: OrganizationMarkProps) {
-	const initials = organization.name
-		.split(/\s+/)
-		.filter(Boolean)
-		.slice(0, 2)
-		.map((part) => part[0]?.toUpperCase() ?? '')
-		.join('')
-
+function OrganizationBadge({
+	organization,
+	className,
+}: OrganizationBadgeProps) {
 	return (
-		<div
+		<span
 			className={cn(
-				'flex aspect-square size-7 items-center justify-center rounded-none bg-primary text-xs font-semibold text-primary-foreground',
+				'flex size-5 shrink-0 items-center justify-center rounded-[5px] bg-[oklch(0.55_0.12_var(--hue))] font-semibold text-[10px] text-white',
 				className,
 			)}
+			style={{ '--hue': organizationHue(organization.slug) } as CSSProperties}
+			aria-hidden
 		>
-			{initials || <Building2 className="size-4" />}
-		</div>
+			{organization.name.charAt(0).toUpperCase()}
+		</span>
 	)
 }

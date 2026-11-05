@@ -15,6 +15,13 @@ import {
 	useUpsertEmployeeProfile,
 } from '#/hooks/use-reference-catalog'
 import { isForbiddenError, mutationErrorMessage } from '#/lib/api-error'
+import { useRhModel } from '#/pages/hr/feature/use-rh-model'
+import { currentContract } from '#/pages/hr/lib/rh/contracts'
+import { todayIso } from '#/pages/hr/lib/rh/dates'
+import {
+	type ContractFilter,
+	normalizeText,
+} from '#/pages/hr/lib/rh/members-filter'
 import { accessState, type MemberFormValues } from '#/pages/hr/types'
 import { InviteMemberSheet } from '#/pages/hr/ui/invite-member-sheet'
 import {
@@ -31,7 +38,6 @@ export function TeamListFeature() {
 		<TeamDirectory
 			key={activeOrganization.id}
 			organizationId={activeOrganization.id}
-			organizationName={activeOrganization.name}
 			organizationSlug={activeOrganization.slug}
 		/>
 	)
@@ -39,13 +45,11 @@ export function TeamListFeature() {
 
 interface TeamDirectoryProps {
 	organizationId: string
-	organizationName: string
 	organizationSlug: string
 }
 
 function TeamDirectory({
 	organizationId,
-	organizationName,
 	organizationSlug,
 }: TeamDirectoryProps) {
 	const catalog = useReferenceCatalog(organizationId, {
@@ -62,7 +66,12 @@ function TeamDirectory({
 	const createInvitation = useCreateInvitation(organizationId)
 	const revokeInvitation = useRevokeInvitation()
 
+	const rh = useRhModel(organizationId, organizationSlug)
+	const rhState = rh.isLoading ? null : rh.state
+	const today = todayIso()
+
 	const [search, setSearch] = useState('')
+	const [contractFilter, setContractFilter] = useState<ContractFilter>('all')
 	const [createMemberDialogOpen, setCreateMemberDialogOpen] = useState(false)
 	const [draft, setDraft] = useState<MemberDraft | null>(null)
 	const [isSaving, setIsSaving] = useState(false)
@@ -141,6 +150,9 @@ function TeamDirectory({
 			// the profitability report, and two copies of it would drift.
 			effectiveHourlyRateCents: profile?.effective_hourly_rate_cents ?? null,
 			weeklyContractMinutes: profile?.weekly_contract_minutes ?? null,
+			rhMember:
+				rhState?.members.find((candidate) => candidate.id === member.id) ??
+				null,
 		}
 	})
 
@@ -155,10 +167,24 @@ function TeamDirectory({
 		}
 	})
 
-	const normalizedSearch = search.trim().toLowerCase()
-	const filteredRows = rows.filter((row) =>
-		row.displayName.toLowerCase().includes(normalizedSearch),
-	)
+	const normalizedSearch = normalizeText(search)
+	const filteredRows = rows.filter((row) => {
+		const rhMember = row.rhMember
+		if (
+			contractFilter !== 'all' &&
+			(!rhMember || currentContract(rhMember, today).type !== contractFilter)
+		)
+			return false
+		const haystack = normalizeText(
+			[
+				row.displayName,
+				rhMember?.jobTitle ?? '',
+				rhMember?.workEmail ?? '',
+				rhMember?.personalEmail ?? '',
+			].join(' '),
+		)
+		return haystack.includes(normalizedSearch)
+	})
 
 	const isLoading =
 		catalog.members.isLoading || catalog.employeeProfiles.isLoading
@@ -247,14 +273,17 @@ function TeamDirectory({
 			<memberForm.Subscribe selector={(state) => state.values}>
 				{(memberValues) => (
 					<TeamListUI
-						organizationName={organizationName}
 						organizationSlug={organizationSlug}
 						isLoading={isLoading}
 						error={mutationErrorMessage(error)}
 						hrDataRestricted={hrDataRestricted}
 						members={filteredRows}
+						rhState={rhState}
+						today={today}
 						search={search}
 						onSearchChange={setSearch}
+						contractFilter={contractFilter}
+						onContractFilterChange={setContractFilter}
 						createForm={{
 							values: memberValues,
 							isPending: createMember.isPending || upsertProfile.isPending,

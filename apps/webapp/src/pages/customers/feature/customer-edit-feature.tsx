@@ -1,13 +1,6 @@
-import { type AnyFormApi, useForm } from '@tanstack/react-form'
-import { Link } from '@tanstack/react-router'
-import { AlertCircle, UserX } from 'lucide-react'
-import { useEffect, useRef, useState } from 'react'
-import { Button } from '#/components/ui/button'
+import { useMemo } from 'react'
 import { useActiveOrganization } from '#/hooks/use-active-organization'
 import {
-	type Customer,
-	type CustomerContact,
-	type CustomerContext,
 	useCreateCustomerContact,
 	useCreateCustomerContext,
 	useCustomer,
@@ -20,524 +13,319 @@ import {
 	useUpdateCustomerContext,
 	useUploadFile,
 } from '#/hooks/use-customers'
-import { useDirtyBaseline } from '#/hooks/use-dirty'
-import { buildOrgPath } from '#/modules/org-path'
+import { useInvoices, useOutstandingByCustomer } from '#/hooks/use-invoices'
+import { useQuotes } from '#/hooks/use-quotes'
+import { mutationErrorMessage } from '#/lib/api-error'
+import { useCrmSettings } from '#/pages/crm-settings/feature/mocks/settings'
 import {
-	type CustomerContactFormValues,
-	type CustomerContextFormValues,
-	type CustomerFormValues,
-	customerContactToForm,
-	customerContextToForm,
-	customerToForm,
-	EMPTY_CUSTOMER_CONTACT_FORM,
-	EMPTY_CUSTOMER_CONTEXT_FORM,
+	useAccountExtras,
+	useSaveAccountExtras,
+} from '#/pages/customers/feature/mocks/account-extras'
+import { addressLineOf } from '#/pages/customers/feature/use-create-customer-account'
+import {
+	type AccountForm,
+	accountFormOf,
+	type ContactForm,
+} from '#/pages/customers/lib/account-form'
+import { invoiceRowsOf, quoteRowsOf } from '#/pages/customers/lib/activity'
+import {
+	activitySummary,
+	addressesSummary,
+	type ClientTab,
+	contactsSummary,
+	identitySummary,
+} from '#/pages/customers/lib/rubriques'
+import {
+	ACCOUNT_KIND_LABELS,
+	accountStatusOf,
+	customerBody,
+	kindOf,
+	reactivatedStatus,
 } from '#/pages/customers/types'
+import { ActivitySection } from '#/pages/customers/ui/activity-section'
+import { AddressesSection } from '#/pages/customers/ui/addresses-section'
+import { hueOf } from '#/pages/customers/ui/avatars'
+import { ContactsSection } from '#/pages/customers/ui/contacts-section'
 import { CustomerEditUI } from '#/pages/customers/ui/customer-edit-ui'
+import { CustomerSidebar } from '#/pages/customers/ui/customer-sidebar'
+import { IdentitySection } from '#/pages/customers/ui/identity-section'
 
 interface CustomerEditFeatureProps {
 	customerId: string
+	tab: ClientTab
 }
 
-export function CustomerEditFeature({ customerId }: CustomerEditFeatureProps) {
+export function CustomerEditFeature({
+	customerId,
+	tab,
+}: CustomerEditFeatureProps) {
 	const { activeOrganization } = useActiveOrganization()
-	const customer = useCustomer(customerId)
-	const customerContacts = useCustomerContacts(customerId)
-	const customerContexts = useCustomerContexts(customerId)
-
-	if (customer.isLoading) {
-		return <CustomerEditUI.Loading />
-	}
-
-	if (customer.isError) {
-		return (
-			<div className="flex flex-col items-center justify-center gap-3 p-12 text-center">
-				<div className="flex size-14 items-center justify-center rounded-lg border bg-card">
-					<AlertCircle className="size-6 text-destructive" />
-				</div>
-				<div>
-					<p className="font-semibold">Impossible de charger le compte</p>
-					<p className="text-sm text-muted-foreground">
-						{customer.error.message}
-					</p>
-				</div>
-				<Button onClick={() => void customer.refetch()} variant="outline">
-					Réessayer
-				</Button>
-			</div>
-		)
-	}
-
-	if (!customer.data?.data) {
-		return (
-			<div className="flex flex-col items-center justify-center gap-3 p-12 text-center">
-				<div className="flex size-14 items-center justify-center rounded-lg border bg-card">
-					<UserX className="size-6 text-muted-foreground" />
-				</div>
-				<div>
-					<p className="font-semibold">Compte introuvable</p>
-					<p className="text-sm text-muted-foreground">
-						Aucun compte ne correspond à cet identifiant.
-					</p>
-				</div>
-				<Button asChild variant="outline">
-					<Link to={buildOrgPath(activeOrganization.slug, '/crm/customers')}>
-						Retour aux comptes
-					</Link>
-				</Button>
-			</div>
-		)
-	}
-
-	return (
-		<CustomerEditInner
-			customer={customer.data.data}
-			customerContacts={customerContacts.data?.data ?? []}
-			customerContactsError={customerContacts.error?.message ?? null}
-			customerContexts={customerContexts.data?.data ?? []}
-			customerContextsError={customerContexts.error?.message ?? null}
-			isCustomerContactsLoading={customerContacts.isLoading}
-			isCustomerContextsLoading={customerContexts.isLoading}
-			refetchCustomerContacts={() => void customerContacts.refetch()}
-			refetchCustomerContexts={() => void customerContexts.refetch()}
-		/>
-	)
-}
-
-interface CustomerEditInnerProps {
-	customer: Customer
-	customerContacts: CustomerContact[]
-	customerContactsError: string | null
-	customerContexts: CustomerContext[]
-	customerContextsError: string | null
-	isCustomerContactsLoading: boolean
-	isCustomerContextsLoading: boolean
-	refetchCustomerContacts: () => void
-	refetchCustomerContexts: () => void
-}
-
-function CustomerEditInner({
-	customer,
-	customerContacts,
-	customerContactsError,
-	customerContexts,
-	customerContextsError,
-	isCustomerContactsLoading,
-	isCustomerContextsLoading,
-	refetchCustomerContacts,
-	refetchCustomerContexts,
-}: CustomerEditInnerProps) {
-	const updateCustomer = useUpdateCustomer()
-	const createCustomerContact = useCreateCustomerContact()
-	const updateCustomerContact = useUpdateCustomerContact()
-	const deleteCustomerContact = useDeleteCustomerContact(customer.id)
-	const createCustomerContext = useCreateCustomerContext()
-	const updateCustomerContext = useUpdateCustomerContext()
-	const deleteCustomerContext = useDeleteCustomerContext(customer.id)
-	const uploadFile = useUploadFile()
-	const commitRef = useRef<(v: CustomerFormValues) => void>(() => {})
-	const [customerContactDraft, setCustomerContactDraft] =
-		useState<CustomerContactFormValues>(EMPTY_CUSTOMER_CONTACT_FORM)
-	const [editingCustomerContactId, setEditingCustomerContactId] = useState<
-		string | null
-	>(null)
-	const [contactDialogOpen, setContactDialogOpen] = useState(false)
-	const [customerContextDraft, setCustomerContextDraft] =
-		useState<CustomerContextFormValues>(EMPTY_CUSTOMER_CONTEXT_FORM)
-	const [editingCustomerContextId, setEditingCustomerContextId] = useState<
-		string | null
-	>(null)
-	const [contextDialogOpen, setContextDialogOpen] = useState(false)
-	const [photoPreviewUrl, setPhotoPreviewUrl] = useState<string | null>(null)
-
-	const form = useForm({
-		defaultValues: customerToForm(customer),
-		onSubmit: async ({ value }) => {
-			await updateCustomer.mutateAsync({
-				path: { customer_id: customer.id },
-				body: {
-					status: value.status,
-					pipeline_stage: value.pipelineStage,
-					name: value.name.trim(),
-					registration_number: value.registrationNumber.trim() || null,
-					email: value.email.trim() || null,
-					phone: value.phone.trim() || null,
-				},
-			})
-			commitRef.current(value)
-		},
-	})
-
-	useEffect(() => {
-		return () => {
-			if (photoPreviewUrl) URL.revokeObjectURL(photoPreviewUrl)
-		}
-	}, [photoPreviewUrl])
-
-	const resetCustomerContactDraft = () => {
-		setEditingCustomerContactId(null)
-		setCustomerContactDraft(EMPTY_CUSTOMER_CONTACT_FORM)
-	}
-
-	const resetCustomerContextDraft = () => {
-		setEditingCustomerContextId(null)
-		setCustomerContextDraft(EMPTY_CUSTOMER_CONTEXT_FORM)
-		if (photoPreviewUrl) URL.revokeObjectURL(photoPreviewUrl)
-		setPhotoPreviewUrl(null)
-	}
-
-	const handleContactDialogOpenChange = (open: boolean) => {
-		setContactDialogOpen(open)
-		if (!open) resetCustomerContactDraft()
-	}
-
-	const handleContextDialogOpenChange = (open: boolean) => {
-		setContextDialogOpen(open)
-		if (!open) resetCustomerContextDraft()
-	}
-
-	const handleCustomerContactSubmit = async () => {
-		const body = {
-			first_name: customerContactDraft.firstName.trim(),
-			last_name: customerContactDraft.lastName.trim(),
-			role: customerContactDraft.role.trim() || null,
-			email: customerContactDraft.email.trim() || null,
-			phone: customerContactDraft.phone.trim() || null,
-			is_primary: customerContactDraft.isPrimary,
-		}
-
-		if (!body.first_name || !body.last_name) return
-
-		if (editingCustomerContactId) {
-			await updateCustomerContact.mutateAsync({
-				path: { customer_contact_id: editingCustomerContactId },
-				body,
-			})
-		} else {
-			await createCustomerContact.mutateAsync({
-				path: { customer_id: customer.id },
-				body,
-			})
-		}
-
-		resetCustomerContactDraft()
-		setContactDialogOpen(false)
-	}
-
-	const handleCustomerContextSubmit = async () => {
-		const body = {
-			label: customerContextDraft.label.trim(),
-			address_line: customerContextDraft.addressLine.trim() || null,
-			postal_code: customerContextDraft.postalCode.trim() || null,
-			city: customerContextDraft.city.trim() || null,
-			photo_key: customerContextDraft.photoKey.trim() || null,
-		}
-
-		if (!body.label) return
-
-		if (editingCustomerContextId) {
-			await updateCustomerContext.mutateAsync({
-				path: { customer_context_id: editingCustomerContextId },
-				body,
-			})
-		} else {
-			await createCustomerContext.mutateAsync({
-				path: { customer_id: customer.id },
-				body,
-			})
-		}
-
-		resetCustomerContextDraft()
-		setContextDialogOpen(false)
-	}
-
-	const handlePhotoChange = async (file: File) => {
-		if (photoPreviewUrl) URL.revokeObjectURL(photoPreviewUrl)
-		setPhotoPreviewUrl(URL.createObjectURL(file))
-		const uploaded = await uploadFile.mutateAsync(file)
-		setCustomerContextDraft((current) => ({
-			...current,
-			photoKey: uploaded.data.key,
-		}))
-	}
-
-	return (
-		<form.Subscribe
-			selector={(s) => ({ values: s.values, isSubmitting: s.isSubmitting })}
-		>
-			{({ values, isSubmitting }) => (
-				<CustomerEditForm
-					customer={customer}
-					values={values}
-					customerContacts={customerContacts}
-					customerContactsError={
-						customerContactsError ??
-						createCustomerContact.error?.message ??
-						updateCustomerContact.error?.message ??
-						deleteCustomerContact.error?.message ??
-						null
-					}
-					customerContexts={customerContexts}
-					customerContextsError={
-						customerContextsError ??
-						createCustomerContext.error?.message ??
-						updateCustomerContext.error?.message ??
-						deleteCustomerContext.error?.message ??
-						uploadFile.error?.message ??
-						null
-					}
-					isSubmitting={isSubmitting || updateCustomer.isPending}
-					isCustomerContactsLoading={isCustomerContactsLoading}
-					isCustomerContextsLoading={isCustomerContextsLoading}
-					customerContactDraft={customerContactDraft}
-					editingCustomerContactId={editingCustomerContactId}
-					contactDialogOpen={contactDialogOpen}
-					isCustomerContactSaving={
-						createCustomerContact.isPending || updateCustomerContact.isPending
-					}
-					customerContextDraft={customerContextDraft}
-					editingCustomerContextId={editingCustomerContextId}
-					contextDialogOpen={contextDialogOpen}
-					isCustomerContextSaving={
-						createCustomerContext.isPending || updateCustomerContext.isPending
-					}
-					isUploadingPhoto={uploadFile.isPending}
-					deletingCustomerContactId={
-						deleteCustomerContact.variables?.path.customer_contact_id &&
-						deleteCustomerContact.isPending
-							? deleteCustomerContact.variables.path.customer_contact_id
-							: null
-					}
-					deletingCustomerContextId={
-						deleteCustomerContext.variables?.path.customer_context_id &&
-						deleteCustomerContext.isPending
-							? deleteCustomerContext.variables.path.customer_context_id
-							: null
-					}
-					photoPreviewUrl={photoPreviewUrl}
-					onContactDialogOpenChange={handleContactDialogOpenChange}
-					onContextDialogOpenChange={handleContextDialogOpenChange}
-					form={form}
-					commitRef={commitRef}
-					onPromoteToClient={() => {
-						const promotedValues = {
-							...values,
-							status: 'CLIENT' as CustomerFormValues['status'],
-							pipelineStage: 'WON' as CustomerFormValues['pipelineStage'],
-						}
-
-						updateCustomer.mutate(
-							{
-								path: { customer_id: customer.id },
-								body: {
-									status: promotedValues.status,
-									pipeline_stage: promotedValues.pipelineStage,
-									name: promotedValues.name.trim(),
-									registration_number:
-										promotedValues.registrationNumber.trim() || null,
-									email: promotedValues.email.trim() || null,
-									phone: promotedValues.phone.trim() || null,
-								},
-							},
-							{
-								onSuccess: () => {
-									form.setFieldValue('status', promotedValues.status)
-									form.setFieldValue(
-										'pipelineStage',
-										promotedValues.pipelineStage,
-									)
-									commitRef.current(promotedValues)
-								},
-							},
-						)
-					}}
-					onCustomerContactChange={(patch) =>
-						setCustomerContactDraft((current) => ({ ...current, ...patch }))
-					}
-					onCustomerContactEdit={(customerContact) => {
-						setEditingCustomerContactId(customerContact.id)
-						setCustomerContactDraft(customerContactToForm(customerContact))
-						setContactDialogOpen(true)
-					}}
-					onCustomerContactCancel={() => handleContactDialogOpenChange(false)}
-					onCustomerContactSubmit={() => void handleCustomerContactSubmit()}
-					onCustomerContactDelete={(customerContact) =>
-						deleteCustomerContact.mutate({
-							path: { customer_contact_id: customerContact.id },
-						})
-					}
-					onCustomerContextChange={(patch) =>
-						setCustomerContextDraft((current) => ({ ...current, ...patch }))
-					}
-					onCustomerContextEdit={(customerContext) => {
-						setEditingCustomerContextId(customerContext.id)
-						setCustomerContextDraft(customerContextToForm(customerContext))
-						if (photoPreviewUrl) URL.revokeObjectURL(photoPreviewUrl)
-						setPhotoPreviewUrl(null)
-						setContextDialogOpen(true)
-					}}
-					onCustomerContextCancel={() => handleContextDialogOpenChange(false)}
-					onCustomerContextSubmit={() => void handleCustomerContextSubmit()}
-					onCustomerContextDelete={(customerContext) =>
-						deleteCustomerContext.mutate({
-							path: { customer_context_id: customerContext.id },
-						})
-					}
-					onCustomerContextPhotoChange={(file) => void handlePhotoChange(file)}
-					onRetryCustomerContacts={refetchCustomerContacts}
-					onRetryCustomerContexts={refetchCustomerContexts}
-				/>
-			)}
-		</form.Subscribe>
-	)
-}
-
-interface CustomerEditFormProps {
-	customer: Customer
-	values: CustomerFormValues
-	customerContacts: CustomerContact[]
-	customerContactsError: string | null
-	customerContexts: CustomerContext[]
-	customerContextsError: string | null
-	isSubmitting: boolean
-	isCustomerContactsLoading: boolean
-	isCustomerContextsLoading: boolean
-	customerContactDraft: CustomerContactFormValues
-	editingCustomerContactId: string | null
-	contactDialogOpen: boolean
-	isCustomerContactSaving: boolean
-	customerContextDraft: CustomerContextFormValues
-	editingCustomerContextId: string | null
-	contextDialogOpen: boolean
-	isCustomerContextSaving: boolean
-	isUploadingPhoto: boolean
-	deletingCustomerContactId: string | null
-	deletingCustomerContextId: string | null
-	photoPreviewUrl: string | null
-	onContactDialogOpenChange: (open: boolean) => void
-	onContextDialogOpenChange: (open: boolean) => void
-	form: AnyFormApi
-	commitRef: React.MutableRefObject<(v: CustomerFormValues) => void>
-	onCustomerContactChange: (patch: Partial<CustomerContactFormValues>) => void
-	onCustomerContactEdit: (customerContact: CustomerContact) => void
-	onCustomerContactCancel: () => void
-	onCustomerContactSubmit: () => void
-	onCustomerContactDelete: (customerContact: CustomerContact) => void
-	onPromoteToClient: () => void
-	onCustomerContextChange: (patch: Partial<CustomerContextFormValues>) => void
-	onCustomerContextEdit: (customerContext: CustomerContext) => void
-	onCustomerContextCancel: () => void
-	onCustomerContextSubmit: () => void
-	onCustomerContextDelete: (customerContext: CustomerContext) => void
-	onCustomerContextPhotoChange: (file: File) => void
-	onRetryCustomerContacts: () => void
-	onRetryCustomerContexts: () => void
-}
-
-function CustomerEditForm({
-	customer,
-	values,
-	customerContacts,
-	customerContactsError,
-	customerContexts,
-	customerContextsError,
-	isSubmitting,
-	isCustomerContactsLoading,
-	isCustomerContextsLoading,
-	customerContactDraft,
-	editingCustomerContactId,
-	contactDialogOpen,
-	isCustomerContactSaving,
-	customerContextDraft,
-	editingCustomerContextId,
-	contextDialogOpen,
-	isCustomerContextSaving,
-	isUploadingPhoto,
-	deletingCustomerContactId,
-	deletingCustomerContextId,
-	photoPreviewUrl,
-	onContactDialogOpenChange,
-	onContextDialogOpenChange,
-	form,
-	commitRef,
-	onCustomerContactChange,
-	onCustomerContactEdit,
-	onCustomerContactCancel,
-	onCustomerContactSubmit,
-	onCustomerContactDelete,
-	onPromoteToClient,
-	onCustomerContextChange,
-	onCustomerContextEdit,
-	onCustomerContextCancel,
-	onCustomerContextSubmit,
-	onCustomerContextDelete,
-	onCustomerContextPhotoChange,
-	onRetryCustomerContacts,
-	onRetryCustomerContexts,
-}: CustomerEditFormProps) {
-	const { activeOrganization } = useActiveOrganization()
+	const organizationId = activeOrganization.id
 	const organizationSlug = activeOrganization.slug
-	const baseline = customerToForm(customer)
-	const {
-		isDirty,
-		changedKeys,
-		commit,
-		reset: resetBaseline,
-	} = useDirtyBaseline(baseline, values)
+	const customerQuery = useCustomer(customerId)
+	const contacts = useCustomerContacts(customerId)
+	const contexts = useCustomerContexts(customerId)
+	const outstanding = useOutstandingByCustomer(organizationId)
+	const quotes = useQuotes(organizationId)
+	const invoices = useInvoices(organizationId)
+	const extras = useAccountExtras(customerId)
+	const settings = useCrmSettings()
+	const saveExtras = useSaveAccountExtras()
+	const updateCustomer = useUpdateCustomer()
+	const createContact = useCreateCustomerContact()
+	const updateContact = useUpdateCustomerContact()
+	const deleteContact = useDeleteCustomerContact(customerId)
+	const createContext = useCreateCustomerContext()
+	const updateContext = useUpdateCustomerContext()
+	const deleteContext = useDeleteCustomerContext(customerId)
+	const uploadFile = useUploadFile()
 
-	commitRef.current = commit
+	const quoteData = quotes.data?.data
+	const invoiceData = invoices.data?.data
+	const quoteRows = useMemo(
+		() => quoteRowsOf(quoteData ?? [], customerId),
+		[quoteData, customerId],
+	)
+	const invoiceRows = useMemo(
+		() => invoiceRowsOf(invoiceData ?? [], customerId),
+		[invoiceData, customerId],
+	)
+
+	if (customerQuery.isLoading)
+		return <CustomerEditUI.Loading organizationSlug={organizationSlug} />
+	if (customerQuery.isError)
+		return (
+			<CustomerEditUI.LoadError
+				organizationSlug={organizationSlug}
+				message={customerQuery.error.message}
+				onRetry={() => void customerQuery.refetch()}
+			/>
+		)
+	const customer = customerQuery.data?.data
+	if (!customer)
+		return <CustomerEditUI.NotFound organizationSlug={organizationSlug} />
+
+	const contactList = contacts.data?.data ?? []
+	const contextList = contexts.data?.data ?? []
+	const balance = outstanding.data?.data.find(
+		(row) => row.customer_id === customer.id,
+	)
+	const outstandingCents = balance?.outstanding_cents ?? 0
+	const oldestDueAt = balance?.oldest_due_at ?? null
+	const kind = kindOf(customer, extras)
+	const status = accountStatusOf(customer.status)
+	const defaultTerms = settings.data.settings.paymentTermsDays
+
+	const save = async (form: AccountForm) => {
+		const stage = form.pipelineStage
+		await updateCustomer.mutateAsync({
+			path: { customer_id: customer.id },
+			body: customerBody(customer, {
+				name: form.name.trim(),
+				registration_number:
+					form.kind === 'professionnel'
+						? form.registrationNumber.trim() || null
+						: null,
+				email: form.email.trim() || null,
+				phone: form.phone.trim() || null,
+				pipeline_stage: stage,
+				...(stage === 'WON' ? { status: 'CLIENT' as const } : {}),
+			}),
+		})
+		const stripe = form.stripeCustomerId.trim()
+		const terms = form.paymentTerms.trim()
+		await saveExtras.mutateAsync(customer.id, {
+			kind: form.kind,
+			vatNumber: form.vatNumber.trim(),
+			website: form.website.trim(),
+			ownerId: form.ownerId,
+			source: form.source,
+			paymentTermsDays: terms === '' ? null : Number(terms),
+			stripeCustomerId: stripe === '' ? null : stripe,
+			notes: form.notes.trim(),
+		})
+	}
+
+	const saveContact = async (
+		contact: { id: string; is_primary: boolean } | null,
+		form: ContactForm,
+	) => {
+		const body = {
+			first_name: form.firstName.trim(),
+			last_name: form.lastName.trim(),
+			role: form.role.trim() || null,
+			email: form.email.trim() || null,
+			phone: form.phone.trim() || null,
+			is_primary: contact?.is_primary ?? contactList.length === 0,
+		}
+		if (contact)
+			await updateContact.mutateAsync({
+				path: { customer_contact_id: contact.id },
+				body,
+			})
+		else
+			await createContact.mutateAsync({
+				path: { customer_id: customer.id },
+				body,
+			})
+	}
+
+	const contactError =
+		mutationErrorMessage(createContact.error) ??
+		mutationErrorMessage(updateContact.error) ??
+		mutationErrorMessage(deleteContact.error)
+	const contextError =
+		mutationErrorMessage(createContext.error) ??
+		mutationErrorMessage(updateContext.error) ??
+		mutationErrorMessage(deleteContext.error) ??
+		mutationErrorMessage(uploadFile.error)
+
+	const summaries = {
+		identite: identitySummary(customer, kind, contextList),
+		contacts: contactsSummary(contactList.length),
+		adresses: addressesSummary(contextList.length),
+		activite: activitySummary(outstandingCents),
+	}
 
 	return (
 		<CustomerEditUI
-			organizationSlug={organizationSlug}
-			customer={customer}
-			form={values}
-			isDirty={isDirty}
-			changedKeys={changedKeys}
-			isSaving={isSubmitting}
-			customerContacts={customerContacts}
-			customerContactsError={customerContactsError}
-			isCustomerContactsLoading={isCustomerContactsLoading}
-			customerContactDraft={customerContactDraft}
-			editingCustomerContactId={editingCustomerContactId}
-			contactDialogOpen={contactDialogOpen}
-			isCustomerContactSaving={isCustomerContactSaving}
-			deletingCustomerContactId={deletingCustomerContactId}
-			customerContexts={customerContexts}
-			customerContextsError={customerContextsError}
-			isCustomerContextsLoading={isCustomerContextsLoading}
-			customerContextDraft={customerContextDraft}
-			editingCustomerContextId={editingCustomerContextId}
-			contextDialogOpen={contextDialogOpen}
-			isCustomerContextSaving={isCustomerContextSaving}
-			isUploadingPhoto={isUploadingPhoto}
-			deletingCustomerContextId={deletingCustomerContextId}
-			photoPreviewUrl={photoPreviewUrl}
-			onContactDialogOpenChange={onContactDialogOpenChange}
-			onContextDialogOpenChange={onContextDialogOpenChange}
-			onChange={(patch) => {
-				for (const key of Object.keys(patch) as (keyof CustomerFormValues)[]) {
-					form.setFieldValue(key, patch[key] as never)
-				}
-			}}
-			onReset={() => {
-				form.reset()
-				resetBaseline()
-			}}
-			onSave={() => form.handleSubmit()}
-			onPromoteToClient={onPromoteToClient}
-			onCustomerContactChange={onCustomerContactChange}
-			onCustomerContactEdit={onCustomerContactEdit}
-			onCustomerContactCancel={onCustomerContactCancel}
-			onCustomerContactSubmit={onCustomerContactSubmit}
-			onCustomerContactDelete={onCustomerContactDelete}
-			onCustomerContextChange={onCustomerContextChange}
-			onCustomerContextEdit={onCustomerContextEdit}
-			onCustomerContextCancel={onCustomerContextCancel}
-			onCustomerContextSubmit={onCustomerContextSubmit}
-			onCustomerContextDelete={onCustomerContextDelete}
-			onCustomerContextPhotoChange={onCustomerContextPhotoChange}
-			onRetryCustomerContacts={onRetryCustomerContacts}
-			onRetryCustomerContexts={onRetryCustomerContexts}
-		/>
+			sidebar={
+				<CustomerSidebar
+					organizationSlug={organizationSlug}
+					customerId={customer.id}
+					name={customer.name}
+					hue={hueOf(customer.id)}
+					status={status}
+					kindLabel={ACCOUNT_KIND_LABELS[kind]}
+					tab={tab}
+					summaries={summaries}
+				/>
+			}
+		>
+			{tab === 'identite' && (
+				<IdentitySection
+					customer={customer}
+					extras={extras}
+					defaultTerms={defaultTerms}
+					initialForm={accountFormOf(customer, extras, kind)}
+					isSaving={updateCustomer.isPending || saveExtras.isPending}
+					saveError={mutationErrorMessage(updateCustomer.error)}
+					onSave={save}
+					onConvert={() =>
+						updateCustomer.mutate({
+							path: { customer_id: customer.id },
+							body: customerBody(customer, {
+								status: 'CLIENT',
+								pipeline_stage: 'WON',
+							}),
+						})
+					}
+					onArchive={() =>
+						updateCustomer.mutate({
+							path: { customer_id: customer.id },
+							body: customerBody(customer, { status: 'ARCHIVED' }),
+						})
+					}
+					onRestore={() =>
+						updateCustomer.mutate({
+							path: { customer_id: customer.id },
+							body: customerBody(customer, reactivatedStatus(customer)),
+						})
+					}
+				/>
+			)}
+			{tab === 'contacts' && (
+				<ContactsSection
+					contacts={contactList}
+					isLoading={contacts.isLoading}
+					loadError={mutationErrorMessage(contacts.error)}
+					onRetry={() => void contacts.refetch()}
+					actions={{
+						isSaving: createContact.isPending || updateContact.isPending,
+						isDeleting: (contactId) =>
+							deleteContact.isPending &&
+							deleteContact.variables?.path.customer_contact_id === contactId,
+						error: contactError,
+						onSave: (contact, form) => saveContact(contact, form),
+						onMakePrimary: (contact) =>
+							updateContact.mutate({
+								path: { customer_contact_id: contact.id },
+								body: {
+									first_name: contact.first_name,
+									last_name: contact.last_name,
+									role: contact.role ?? null,
+									email: contact.email ?? null,
+									phone: contact.phone ?? null,
+									is_primary: true,
+								},
+							}),
+						onDelete: (contact) =>
+							deleteContact.mutate({
+								path: { customer_contact_id: contact.id },
+							}),
+					}}
+				/>
+			)}
+			{tab === 'adresses' && (
+				<AddressesSection
+					contexts={contextList}
+					isLoading={contexts.isLoading}
+					loadError={mutationErrorMessage(contexts.error)}
+					onRetry={() => void contexts.refetch()}
+					actions={{
+						isSaving: createContext.isPending || updateContext.isPending,
+						isUploadingPhoto: uploadFile.isPending,
+						isDeleting: (contextId) =>
+							deleteContext.isPending &&
+							deleteContext.variables?.path.customer_context_id === contextId,
+						error: contextError,
+						onUploadPhoto: async (file) => {
+							const uploaded = await uploadFile.mutateAsync(file)
+							return uploaded.data.key
+						},
+						onSave: async (context, draft) => {
+							const body = {
+								label: draft.label.trim(),
+								address_line:
+									addressLineOf(
+										draft.address.street,
+										draft.address.complement,
+									) || null,
+								postal_code: draft.address.postalCode.trim() || null,
+								city: draft.address.city.trim() || null,
+								photo_key: draft.photoKey.trim() || null,
+							}
+							if (context)
+								await updateContext.mutateAsync({
+									path: { customer_context_id: context.id },
+									body,
+								})
+							else
+								await createContext.mutateAsync({
+									path: { customer_id: customer.id },
+									body,
+								})
+						},
+						onDelete: (context) =>
+							deleteContext.mutate({
+								path: { customer_context_id: context.id },
+							}),
+					}}
+				/>
+			)}
+			{tab === 'activite' && (
+				<ActivitySection
+					organizationSlug={organizationSlug}
+					outstanding={outstandingCents}
+					oldestDueAt={oldestDueAt}
+					late={
+						oldestDueAt !== null && new Date(oldestDueAt).getTime() < Date.now()
+					}
+					quotes={quoteRows}
+					invoices={invoiceRows}
+					isLoading={quotes.isLoading || invoices.isLoading}
+				/>
+			)}
+		</CustomerEditUI>
 	)
 }

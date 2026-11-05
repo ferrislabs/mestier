@@ -22,9 +22,9 @@ export function PendingReportsBadge({
 	if (count <= 0) return null
 
 	return (
-		<Button variant="outline" className="gap-1.5" asChild>
+		<Button variant="outline" size="sm" asChild>
 			<Link to={buildOrgPath(organizationSlug, '/planning/reports')}>
-				<FileWarning className="size-4 text-amber-600 dark:text-amber-500" />
+				<FileWarning className="text-warning" />
 				{count} écart{count > 1 ? 's' : ''} en attente
 			</Link>
 		</Button>

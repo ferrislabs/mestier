@@ -1,237 +1,144 @@
-import { Link } from '@tanstack/react-router'
-import { AlertCircle, KanbanSquare, Search, Users } from 'lucide-react'
-import { useMemo, useState } from 'react'
+import { Plus, UserCheck, X } from 'lucide-react'
+import { RequirePermission } from '#/components/require-permission'
 import { Button } from '#/components/ui/button'
-import { Input } from '#/components/ui/input'
-import {
-	Select,
-	SelectContent,
-	SelectItem,
-	SelectTrigger,
-	SelectValue,
-} from '#/components/ui/select'
-import {
-	MetricCard,
-	PageHeader,
-	PageShell,
-	SectionCard,
-	StatusBadge,
-} from '#/components/ui/surface'
+import { PageHeader, PageShell } from '#/components/ui/surface'
 import type { Customer, CustomerPipelineStage } from '#/hooks/use-customers'
-import { buildOrgPath } from '#/modules/org-path'
+import type { AccountExtras } from '#/pages/customers/feature/mocks/account-extras'
+import type { AccountForm } from '#/pages/customers/lib/account-form'
 import {
-	customerDisplayName,
-	customerPipelineStageLabel,
-} from '#/pages/customers/types'
+	DEFAULT_FILTERS,
+	type DealFilters,
+	hasActiveFilters,
+	visibleStages,
+} from '#/pages/customers/lib/pipeline-filters'
+import { CustomerCreateDialog } from '#/pages/customers/ui/customer-create-dialog'
+import { CustomerPipelineBoard } from '#/pages/customers/ui/customer-pipeline-board'
 import {
-	CUSTOMER_PIPELINE_STAGES,
-	CustomerPipelineBoard,
-} from '#/pages/customers/ui/customer-pipeline-board'
+	PipelineStats,
+	type PipelineSummary,
+} from '#/pages/customers/ui/pipeline-stats'
+import { PipelineToolbar } from '#/pages/customers/ui/pipeline-toolbar'
 
 interface CustomerPipelineUIProps {
-	customers: Customer[]
-	organizationSlug: string
-	organizationName: string
+	customers: readonly Customer[]
+	summary: PipelineSummary
+	filters: DealFilters
+	onFiltersChange: (filters: DealFilters) => void
+	extrasOf: (customerId: string) => AccountExtras
 	canMove: boolean
 	error?: string | null
 	isLoading?: boolean
 	movingCustomerId?: string | null
+	notice: string | null
+	onDismissNotice: () => void
 	onMovePipelineStage: (
 		customer: Customer,
 		pipelineStage: CustomerPipelineStage,
 	) => void
 	onOpenCustomer?: (customer: Customer) => void
 	onRetry?: () => void
+	creating: boolean
+	onCreatingChange: (open: boolean) => void
+	defaultTerms: number
+	defaultOwnerId: string | null
+	isCreating: boolean
+	createError: string | null
+	onCreate: (form: AccountForm) => Promise<void>
 }
 
 export function CustomerPipelineUI({
 	customers,
-	organizationSlug,
-	organizationName,
+	summary,
+	filters,
+	onFiltersChange,
+	extrasOf,
 	canMove,
 	error,
 	isLoading,
 	movingCustomerId,
+	notice,
+	onDismissNotice,
 	onMovePipelineStage,
 	onOpenCustomer,
 	onRetry,
+	creating,
+	onCreatingChange,
+	defaultTerms,
+	defaultOwnerId,
+	isCreating,
+	createError,
+	onCreate,
 }: CustomerPipelineUIProps) {
-	const [search, setSearch] = useState('')
-	const [stageFilter, setStageFilter] = useState<'all' | CustomerPipelineStage>(
-		'all',
-	)
-	const [draggedCustomerId, setDraggedCustomerId] = useState<string | null>(
-		null,
-	)
-
-	const pipelineCustomers = useMemo(
-		() => customers.filter((customer) => customer.status !== 'ARCHIVED'),
-		[customers],
-	)
-	const filteredCustomers = useMemo(() => {
-		const query = search.trim().toLowerCase()
-
-		return pipelineCustomers.filter((customer) => {
-			const matchesStage =
-				stageFilter === 'all' || customer.pipeline_stage === stageFilter
-			const matchesSearch =
-				!query ||
-				customerDisplayName(customer).toLowerCase().includes(query) ||
-				customerPipelineStageLabel(customer.pipeline_stage)
-					.toLowerCase()
-					.includes(query) ||
-				(customer.email ?? '').toLowerCase().includes(query) ||
-				(customer.phone ?? '').toLowerCase().includes(query)
-
-			return matchesStage && matchesSearch
-		})
-	}, [pipelineCustomers, search, stageFilter])
-	const draggedCustomer =
-		filteredCustomers.find((customer) => customer.id === draggedCustomerId) ??
-		null
-	const metrics = useMemo(() => {
-		return {
-			total: pipelineCustomers.length,
-			active: pipelineCustomers.filter(
-				(customer) =>
-					customer.pipeline_stage !== 'WON' &&
-					customer.pipeline_stage !== 'LOST',
-			).length,
-			quotes: pipelineCustomers.filter(
-				(customer) => customer.pipeline_stage === 'QUOTE_SENT',
-			).length,
-			won: pipelineCustomers.filter(
-				(customer) => customer.pipeline_stage === 'WON',
-			).length,
-		}
-	}, [pipelineCustomers])
-
 	return (
-		<PageShell className="max-w-none overflow-x-hidden">
+		<PageShell className="block max-w-none">
 			<PageHeader
-				title="Pipeline commercial"
-				description="Pilotez les prospects par étape, de la qualification à la conversion."
+				className="mb-6 flex-row flex-wrap items-end justify-between gap-4"
+				title="Pipeline"
+				description="Suis tes opportunités de la première demande au client gagné et transforme tes prospects en clients."
 				actions={
-					<Button asChild variant="outline">
-						<Link to={buildOrgPath(organizationSlug, '/crm/customers')}>
-							<Users />
-							Fichier comptes
-						</Link>
-					</Button>
-				}
-				eyebrow={organizationName}
-				leading={
-					<div className="flex size-12 items-center justify-center rounded-lg bg-brand-soft text-primary">
-						<KanbanSquare className="size-6" />
-					</div>
+					<RequirePermission permission="MANAGE_CUSTOMERS">
+						<CustomerCreateDialog
+							open={creating}
+							onOpenChange={onCreatingChange}
+							defaultTerms={defaultTerms}
+							defaultOwnerId={defaultOwnerId}
+							isPending={isCreating}
+							error={createError}
+							onSubmit={onCreate}
+							trigger={
+								<Button size="sm">
+									<Plus aria-hidden /> Nouvelle opportunité
+								</Button>
+							}
+						/>
+					</RequirePermission>
 				}
 			/>
-
+			<PipelineStats summary={summary} />
+			<PipelineToolbar
+				filters={filters}
+				canReset={hasActiveFilters(filters)}
+				onChange={(patch) => onFiltersChange({ ...filters, ...patch })}
+				onReset={() => onFiltersChange(DEFAULT_FILTERS)}
+			/>
 			{error ? (
-				<SectionCard className="flex flex-col gap-3 border-destructive/30 bg-destructive-soft p-5 text-destructive sm:flex-row sm:items-center sm:justify-between">
-					<div className="flex items-center gap-3">
-						<AlertCircle className="size-5 shrink-0" />
-						<p className="text-sm font-medium">{error}</p>
-					</div>
+				<div className="mb-3 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-state-alert/30 bg-state-alert/8 px-4 py-3 text-[13px] text-state-alert">
+					<p className="font-medium">{error}</p>
 					{onRetry ? (
-						<Button onClick={onRetry} variant="outline" size="sm">
+						<Button type="button" variant="outline" size="sm" onClick={onRetry}>
 							Réessayer
 						</Button>
 					) : null}
-				</SectionCard>
-			) : null}
-
-			<div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-				<MetricCard
-					label="Opportunités"
-					value={metrics.total}
-					hint="Prospects et clients actifs"
-				/>
-				<MetricCard
-					label="En cours"
-					value={metrics.active}
-					hint="Hors gagné/perdu"
-				/>
-				<MetricCard
-					label="Devis envoyés"
-					value={metrics.quotes}
-					hint="À suivre"
-				/>
-				<MetricCard
-					label="Gagnés"
-					value={metrics.won}
-					hint="Convertis clients"
-				/>
-			</div>
-
-			<SectionCard className="flex min-w-0 flex-col gap-4 overflow-hidden p-4">
-				<div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-					<div className="min-w-0">
-						<div className="flex flex-wrap items-center gap-2">
-							<h2 className="font-semibold">Board prospects</h2>
-							<StatusBadge tone="neutral">
-								{filteredCustomers.length} carte
-								{filteredCustomers.length > 1 ? 's' : ''}
-							</StatusBadge>
-						</div>
-						<p className="mt-1 text-sm text-muted-foreground">
-							Déplacez une carte vers Gagné pour convertir automatiquement le
-							prospect en client.
-						</p>
-					</div>
-
-					<div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-						<div className="relative">
-							<Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-							<Input
-								value={search}
-								onChange={(event) => setSearch(event.target.value)}
-								placeholder="Rechercher…"
-								className="pl-9 sm:w-64"
-							/>
-						</div>
-						<Select
-							value={stageFilter}
-							onValueChange={(value) =>
-								setStageFilter(value as 'all' | CustomerPipelineStage)
-							}
-						>
-							<SelectTrigger className="w-full bg-card sm:w-48">
-								<SelectValue />
-							</SelectTrigger>
-							<SelectContent>
-								<SelectItem value="all">Toutes les étapes</SelectItem>
-								{CUSTOMER_PIPELINE_STAGES.map((stage) => (
-									<SelectItem key={stage} value={stage}>
-										{customerPipelineStageLabel(stage)}
-									</SelectItem>
-								))}
-							</SelectContent>
-						</Select>
-					</div>
 				</div>
-
-				<CustomerPipelineBoard
-					customers={filteredCustomers}
-					canMove={canMove}
-					isLoading={isLoading}
-					draggedCustomerId={draggedCustomerId}
-					movingCustomerId={movingCustomerId}
-					onDragStart={setDraggedCustomerId}
-					onDragEnd={() => setDraggedCustomerId(null)}
-					onMove={(customer, stage) => {
-						if (customer.pipeline_stage === stage) return
-						onMovePipelineStage(customer, stage)
-					}}
-					onDropOnStage={(stage) => {
-						if (!draggedCustomer) return
-						if (draggedCustomer.pipeline_stage === stage) return
-						onMovePipelineStage(draggedCustomer, stage)
-						setDraggedCustomerId(null)
-					}}
-					onOpenCustomer={onOpenCustomer}
-				/>
-			</SectionCard>
+			) : null}
+			{notice && (
+				<output className="fixed bottom-6 left-1/2 z-50 flex max-w-[calc(100vw-2rem)] -translate-x-1/2 items-center gap-2 rounded-md border border-state-progress/30 bg-card px-3 py-2 text-sm shadow-lg">
+					<UserCheck
+						className="size-4 shrink-0 text-state-progress"
+						aria-hidden
+					/>
+					<span className="min-w-0 flex-1 font-medium">{notice}</span>
+					<Button
+						type="button"
+						variant="ghost"
+						size="icon-xs"
+						aria-label="Fermer la notification"
+						onClick={onDismissNotice}
+					>
+						<X aria-hidden />
+					</Button>
+				</output>
+			)}
+			<CustomerPipelineBoard
+				customers={customers}
+				stages={visibleStages(filters.closed)}
+				extrasOf={extrasOf}
+				canMove={canMove}
+				isLoading={isLoading}
+				movingCustomerId={movingCustomerId}
+				onMove={onMovePipelineStage}
+				onOpenCustomer={onOpenCustomer}
+			/>
 		</PageShell>
 	)
 }

@@ -111,3 +111,44 @@ export function canSubmitModel(draft: ModelDraft): boolean {
 		(draft.style === null || isStyleValid(draft.style))
 	)
 }
+
+export interface ModelErrors {
+	name: string | undefined
+	sections: boolean[]
+	messages: string[]
+}
+
+export function modelErrors(draft: ModelDraft): ModelErrors {
+	const name =
+		draft.name.trim() === '' ? 'Le nom du modèle est obligatoire.' : undefined
+	const sections = draft.sections.map((section) => section.title.trim() === '')
+	const messages = [
+		...(name ? [name] : []),
+		...(sections.some(Boolean) ? ['Chaque thème doit avoir un titre.'] : []),
+	]
+	return { name, sections, messages }
+}
+
+function comparable(draft: ModelDraft) {
+	return {
+		name: draft.name.trim(),
+		description: draft.description.trim(),
+		style: draft.style,
+		sections: draft.sections.map((section) => ({
+			title: section.title.trim(),
+			enabled: section.enabled,
+			kind: section.kind,
+			makerLabel: section.makerLabel,
+			perPage: section.perPage,
+			count: section.count,
+		})),
+	}
+}
+
+export function sameModelDraft(a: ModelDraft, b: ModelDraft): boolean {
+	return JSON.stringify(comparable(a)) === JSON.stringify(comparable(b))
+}
+
+export function canSaveModel(draft: ModelDraft, stored: ModelDraft): boolean {
+	return !sameModelDraft(draft, stored) && canSubmitModel(draft)
+}

@@ -2,7 +2,13 @@ import type { AuthScheme } from '#/hooks/use-automation'
 import type { CredentialFormValues } from '#/pages/automation/types'
 
 export function emptyCredentialForm(defaultKind = ''): CredentialFormValues {
-	return { kind: defaultKind, name: '', origin: 'supplied', data: {} }
+	return {
+		kind: defaultKind,
+		name: '',
+		description: '',
+		origin: 'supplied',
+		data: {},
+	}
 }
 
 /**
@@ -36,6 +42,34 @@ export function buildCredentialFormErrors(
 		if (field.required && (values.data[field.name] ?? '').trim() === '') {
 			errors.push(`${field.label} est requis`)
 		}
+	}
+	return errors
+}
+
+export type CredentialFieldErrors = Readonly<Record<string, string>>
+
+export function buildCredentialFieldErrors(
+	values: CredentialFormValues,
+	scheme: AuthScheme | undefined,
+	mode: 'create' | 'edit',
+): CredentialFieldErrors {
+	const errors: Record<string, string> = {}
+	if (values.name.trim() === '')
+		errors.name = 'Donnez un nom à cette identification.'
+
+	if (values.origin !== 'supplied' || !scheme) return errors
+
+	const filledAny = Object.values(values.data).some(
+		(value) => value.trim() !== '',
+	)
+	if (mode === 'edit' && !filledAny) return errors
+
+	for (const field of scheme.fields) {
+		const value = (values.data[field.name] ?? '').trim()
+		if (field.required && value === '')
+			errors[field.name] = 'Champ obligatoire.'
+		else if (field.kind === 'Number' && value !== '' && !/^\d+$/.test(value))
+			errors[field.name] = 'Nombre entier attendu.'
 	}
 	return errors
 }

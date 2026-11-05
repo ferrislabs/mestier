@@ -1,5 +1,5 @@
 import { useForm } from '@tanstack/react-form'
-import { Loader2 } from 'lucide-react'
+import type { ReactNode } from 'react'
 import { Button } from '#/components/ui/button'
 import {
 	Dialog,
@@ -11,7 +11,8 @@ import {
 } from '#/components/ui/dialog'
 import { Input } from '#/components/ui/input'
 import { Label } from '#/components/ui/label'
-import { Textarea } from '#/components/ui/textarea'
+import { cn } from '#/lib/utils'
+import { TextArea } from '#/pages/customers/ui/text-area'
 import {
 	type SupplierFormValues,
 	validateSupplierName,
@@ -25,6 +26,59 @@ export interface SupplierFormDialogProps {
 	error: string | null
 	onOpenChange: (open: boolean) => void
 	onSubmit: (values: SupplierFormValues) => void
+}
+
+function Section({
+	label,
+	hint,
+	children,
+}: {
+	label: string
+	hint?: string
+	children: ReactNode
+}) {
+	return (
+		<section aria-label={label} className="grid gap-3">
+			<div>
+				<h3 className="font-medium text-sm">{label}</h3>
+				{hint && <p className="text-[12px] text-muted-foreground">{hint}</p>}
+			</div>
+			<div className="grid gap-3 sm:grid-cols-2">{children}</div>
+		</section>
+	)
+}
+
+function Field({
+	id,
+	label,
+	required,
+	hint,
+	className,
+	children,
+}: {
+	id: string
+	label: string
+	required?: boolean
+	hint?: string
+	className?: string
+	children: ReactNode
+}) {
+	return (
+		<div className={cn('grid content-start gap-1.5', className)}>
+			<Label htmlFor={id}>
+				<span>
+					{label}
+					{required && (
+						<span aria-hidden className="ml-0.5 text-state-alert">
+							*
+						</span>
+					)}
+				</span>
+			</Label>
+			{children}
+			{hint && <p className="text-[12px] text-muted-foreground">{hint}</p>}
+		</div>
+	)
 }
 
 export function SupplierFormDialog({
@@ -45,135 +99,171 @@ export function SupplierFormDialog({
 
 	return (
 		<Dialog open={open} onOpenChange={onOpenChange}>
-			<DialogContent className="max-w-xl">
-				<DialogHeader>
-					<DialogTitle>
-						{editingName ? `Modifier ${editingName}` : 'Nouveau fournisseur'}
-					</DialogTitle>
-					<DialogDescription>
-						Les coordonnées reprises dans le DOE et sur les fiches produit.
-					</DialogDescription>
-				</DialogHeader>
-
+			<DialogContent className="flex max-h-[calc(100dvh-2rem)] flex-col gap-0 p-0 sm:max-w-2xl">
 				<form
-					className="space-y-4"
+					noValidate
+					className="flex min-h-0 flex-1 flex-col"
 					onSubmit={(event) => {
 						event.preventDefault()
 						event.stopPropagation()
 						void form.handleSubmit()
 					}}
 				>
-					<form.Field
-						name="name"
-						validators={{
-							onSubmit: ({ value }) => validateSupplierName(value),
-							onChange: ({ value }) => validateSupplierName(value),
-						}}
-					>
-						{(field) => (
-							<div className="space-y-1">
-								<Label htmlFor="supplier-name">Nom</Label>
-								<Input
-									id="supplier-name"
-									value={field.state.value}
-									onChange={(event) => field.handleChange(event.target.value)}
-									onBlur={field.handleBlur}
-									aria-invalid={field.state.meta.errors.length > 0}
-								/>
-								{field.state.meta.errors.length > 0 ? (
-									<p role="alert" className="text-sm text-destructive">
-										{field.state.meta.errors.join(' ')}
-									</p>
-								) : null}
-							</div>
-						)}
-					</form.Field>
-
-					<div className="grid gap-4 sm:grid-cols-2">
-						<form.Field name="registrationNumber">
-							{(field) => (
-								<div className="space-y-1">
-									<Label htmlFor="supplier-registration">SIRET</Label>
-									<Input
+					<DialogHeader className="px-6 pt-6 pb-4">
+						<DialogTitle>
+							{editingName ? `Modifier ${editingName}` : 'Nouveau fournisseur'}
+						</DialogTitle>
+						<DialogDescription>
+							{editingName
+								? 'Mets à jour sa fiche. Les coordonnées sont reprises dans le DOE et sur les fiches produit.'
+								: 'Renseigne l’essentiel, tu pourras compléter la fiche plus tard.'}
+						</DialogDescription>
+					</DialogHeader>
+					<div className="grid min-h-0 flex-1 gap-6 overflow-y-auto border-t px-6 py-5">
+						<Section label="Identité">
+							<form.Field
+								name="name"
+								validators={{
+									onSubmit: ({ value }) => validateSupplierName(value),
+									onChange: ({ value }) => validateSupplierName(value),
+								}}
+							>
+								{(field) => (
+									<Field
+										id="supplier-name"
+										label="Nom"
+										required
+										className="sm:col-span-2"
+									>
+										<Input
+											id="supplier-name"
+											value={field.state.value}
+											onChange={(event) =>
+												field.handleChange(event.target.value)
+											}
+											onBlur={field.handleBlur}
+											aria-invalid={field.state.meta.errors.length > 0}
+											autoComplete="off"
+										/>
+										{field.state.meta.errors.length > 0 ? (
+											<p role="alert" className="text-[12px] text-state-alert">
+												{field.state.meta.errors.join(' ')}
+											</p>
+										) : null}
+									</Field>
+								)}
+							</form.Field>
+							<form.Field name="registrationNumber">
+								{(field) => (
+									<Field
 										id="supplier-registration"
-										value={field.state.value}
-										onChange={(event) => field.handleChange(event.target.value)}
-									/>
-								</div>
-							)}
-						</form.Field>
-						<form.Field name="vatNumber">
-							{(field) => (
-								<div className="space-y-1">
-									<Label htmlFor="supplier-vat">N° de TVA</Label>
-									<Input
-										id="supplier-vat"
-										value={field.state.value}
-										onChange={(event) => field.handleChange(event.target.value)}
-									/>
-								</div>
-							)}
-						</form.Field>
+										label="SIRET"
+										hint="14 chiffres, espaces acceptés."
+									>
+										<Input
+											id="supplier-registration"
+											inputMode="numeric"
+											value={field.state.value}
+											onChange={(event) =>
+												field.handleChange(event.target.value)
+											}
+											autoComplete="off"
+										/>
+									</Field>
+								)}
+							</form.Field>
+							<form.Field name="vatNumber">
+								{(field) => (
+									<Field id="supplier-vat" label="N° de TVA">
+										<Input
+											id="supplier-vat"
+											value={field.state.value}
+											onChange={(event) =>
+												field.handleChange(event.target.value)
+											}
+											autoComplete="off"
+											placeholder="FR12345678901"
+										/>
+									</Field>
+								)}
+							</form.Field>
+						</Section>
+						<Section label="Contact">
+							<form.Field name="phone">
+								{(field) => (
+									<Field id="supplier-phone" label="Téléphone">
+										<Input
+											id="supplier-phone"
+											type="tel"
+											value={field.state.value}
+											onChange={(event) =>
+												field.handleChange(event.target.value)
+											}
+											autoComplete="off"
+										/>
+									</Field>
+								)}
+							</form.Field>
+							<form.Field name="email">
+								{(field) => (
+									<Field id="supplier-email" label="Email">
+										<Input
+											id="supplier-email"
+											type="email"
+											value={field.state.value}
+											onChange={(event) =>
+												field.handleChange(event.target.value)
+											}
+											autoComplete="off"
+										/>
+									</Field>
+								)}
+							</form.Field>
+						</Section>
+						<Section label="Adresse">
+							<form.Field name="address">
+								{(field) => (
+									<Field
+										id="supplier-address"
+										label="Adresse"
+										className="sm:col-span-2"
+									>
+										<TextArea
+											id="supplier-address"
+											rows={3}
+											value={field.state.value}
+											onChange={(event) =>
+												field.handleChange(event.target.value)
+											}
+											placeholder="Une ligne par élément d'adresse"
+										/>
+									</Field>
+								)}
+							</form.Field>
+						</Section>
 					</div>
-
-					<form.Field name="address">
-						{(field) => (
-							<div className="space-y-1">
-								<Label htmlFor="supplier-address">Adresse</Label>
-								<Textarea
-									id="supplier-address"
-									value={field.state.value}
-									onChange={(event) => field.handleChange(event.target.value)}
-									placeholder="Une ligne par élément d'adresse"
-								/>
-							</div>
-						)}
-					</form.Field>
-
-					<div className="grid gap-4 sm:grid-cols-2">
-						<form.Field name="phone">
-							{(field) => (
-								<div className="space-y-1">
-									<Label htmlFor="supplier-phone">Téléphone</Label>
-									<Input
-										id="supplier-phone"
-										type="tel"
-										value={field.state.value}
-										onChange={(event) => field.handleChange(event.target.value)}
-									/>
-								</div>
-							)}
-						</form.Field>
-						<form.Field name="email">
-							{(field) => (
-								<div className="space-y-1">
-									<Label htmlFor="supplier-email">Email</Label>
-									<Input
-										id="supplier-email"
-										type="email"
-										value={field.state.value}
-										onChange={(event) => field.handleChange(event.target.value)}
-									/>
-								</div>
-							)}
-						</form.Field>
+					<div className="grid gap-3 border-t px-6 py-4">
+						{error ? (
+							<p
+								role="alert"
+								className="rounded-md bg-state-alert/8 px-3 py-2 text-[13px] text-state-alert"
+							>
+								{error}
+							</p>
+						) : null}
+						<DialogFooter>
+							<Button
+								type="button"
+								variant="outline"
+								onClick={() => onOpenChange(false)}
+							>
+								Annuler
+							</Button>
+							<Button type="submit" disabled={isPending}>
+								{editingName ? 'Enregistrer' : 'Créer le fournisseur'}
+							</Button>
+						</DialogFooter>
 					</div>
-
-					{error ? <p className="text-sm text-destructive">{error}</p> : null}
-
-					<DialogFooter>
-						<Button
-							type="button"
-							variant="outline"
-							onClick={() => onOpenChange(false)}
-						>
-							Annuler
-						</Button>
-						<Button type="submit" disabled={isPending}>
-							{isPending ? <Loader2 className="animate-spin" /> : null}
-							{editingName ? 'Enregistrer' : 'Créer'}
-						</Button>
-					</DialogFooter>
 				</form>
 			</DialogContent>
 		</Dialog>

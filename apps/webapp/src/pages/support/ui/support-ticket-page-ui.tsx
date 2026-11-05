@@ -1,39 +1,63 @@
-import { AlertCircle, ArrowLeft, LifeBuoy } from 'lucide-react'
+import { AlertCircle, ChevronRight } from 'lucide-react'
 import { Button } from '#/components/ui/button'
 import { PageHeader, PageShell, SectionCard } from '#/components/ui/surface'
 import type { SupportTicketPageUIProps } from '#/pages/support/types'
+import { TicketHeadline } from '#/pages/support/ui/ticket-detail-ui'
 
 export function SupportTicketPageUI({
-	organizationName,
 	ticket,
 	isLoading,
 	error,
 	onRetry,
 	onBack,
-	thread,
-	composer,
-	sidePanel,
+	detail,
 }: SupportTicketPageUIProps) {
-	return (
-		<PageShell className="max-w-none overflow-x-hidden">
-			<PageHeader
-				title={ticket ? `${ticket.numberLabel} ${ticket.subject}` : 'Ticket'}
-				eyebrow={organizationName}
-				className="sm:items-center sm:justify-start"
-				leading={
-					<div className="flex size-12 items-center justify-center rounded-lg bg-brand-soft text-primary">
-						<LifeBuoy className="size-6" />
-					</div>
-				}
-				actions={
-					<Button onClick={onBack} variant="outline" size="sm">
-						<ArrowLeft />
-						Retour aux tickets
-					</Button>
-				}
-			/>
+	if (!isLoading && !error && !ticket)
+		return (
+			<PageShell className="gap-0">
+				<PageHeader
+					className="mb-6"
+					title="Ticket introuvable"
+					description="Ce ticket n’existe pas ou a été supprimé."
+					actions={
+						<Button onClick={onBack} variant="outline">
+							Voir les tickets
+						</Button>
+					}
+				/>
+			</PageShell>
+		)
 
-			{error ? (
+	return (
+		<PageShell className="max-w-7xl gap-0">
+			<nav aria-label="Emplacement du ticket" className="mb-2">
+				<ol className="flex items-center gap-1 text-muted-foreground text-sm">
+					<li>
+						<button
+							type="button"
+							onClick={onBack}
+							className="rounded-sm outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
+						>
+							Tickets
+						</button>
+					</li>
+					<ChevronRight className="size-3.5" aria-hidden />
+					<li aria-current="page" className="font-mono text-foreground">
+						{ticket?.numberLabel ?? '…'}
+					</li>
+				</ol>
+			</nav>
+			<header className="mb-6">
+				<h1 className="font-semibold text-2xl tracking-tight">
+					{ticket?.subject ?? 'Ticket'}
+				</h1>
+				{ticket ? (
+					<div className="mt-1">
+						<TicketHeadline ticket={ticket} />
+					</div>
+				) : null}
+			</header>
+			{error && !ticket ? (
 				<SectionCard className="flex flex-col gap-3 border-destructive/30 bg-destructive-soft p-5 text-destructive sm:flex-row sm:items-center sm:justify-between">
 					<div className="flex items-center gap-3">
 						<AlertCircle className="size-5 shrink-0" />
@@ -43,24 +67,8 @@ export function SupportTicketPageUI({
 						Réessayer
 					</Button>
 				</SectionCard>
-			) : null}
-
-			{isLoading ? (
-				<SectionCard className="flex items-center justify-center p-10 text-sm text-muted-foreground">
-					Chargement…
-				</SectionCard>
-			) : ticket ? (
-				<div className="grid min-w-0 gap-6 lg:grid-cols-[minmax(0,1fr)_20rem]">
-					<SectionCard className="min-w-0 overflow-hidden">
-						{thread}
-						{composer}
-					</SectionCard>
-					<div className="min-w-0">{sidePanel}</div>
-				</div>
-			) : error ? null : (
-				<SectionCard className="flex items-center justify-center p-10 text-sm text-muted-foreground">
-					Ticket introuvable.
-				</SectionCard>
+			) : (
+				detail
 			)}
 		</PageShell>
 	)

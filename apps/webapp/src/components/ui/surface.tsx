@@ -10,7 +10,7 @@ function PageShell({
 	return (
 		<div
 			className={cn(
-				'mx-auto flex w-full max-w-7xl flex-col gap-6 p-4 md:p-8',
+				'mx-auto flex w-full max-w-6xl flex-col gap-6 px-6 py-8 lg:px-10',
 				className,
 			)}
 			{...props}
@@ -52,7 +52,7 @@ function PageHeader({
 						{eyebrow}
 					</p>
 				) : null}
-				<h1 className="truncate text-2xl font-normal text-foreground md:text-[28px]">
+				<h1 className="truncate text-2xl font-semibold tracking-tight text-foreground">
 					{title}
 				</h1>
 				{description ? (
@@ -75,7 +75,7 @@ function SectionCard({
 	return (
 		<section
 			className={cn(
-				'rounded-xl border bg-card text-card-foreground',
+				'rounded-xl border bg-card text-card-foreground shadow-xs',
 				className,
 			)}
 			{...props}
@@ -154,7 +154,7 @@ function MetricCard({
 				) : null}
 			</div>
 			<div>
-				<p className="text-3xl font-normal text-foreground md:text-[32px]">
+				<p className="tabular text-3xl font-semibold tracking-tight text-foreground">
 					{value}
 				</p>
 				{hint || trend ? (

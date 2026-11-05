@@ -42,7 +42,7 @@ export function SupplierInvoiceDropZone({
 					onDrop(Array.from(event.dataTransfer.files))
 				}}
 				className={cn(
-					'flex w-full flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed p-8 text-center transition',
+					'flex w-full flex-col items-center justify-center gap-2 rounded-lg border border-dashed p-8 text-center outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring',
 					isDraggingOver
 						? 'border-primary bg-brand-soft'
 						: 'border-muted-foreground/30 hover:border-muted-foreground/50',

@@ -1,107 +1,84 @@
 import { AlertCircle } from 'lucide-react'
-import type { ReactNode } from 'react'
-import { Badge } from '#/components/ui/badge'
-import { PageShell } from '#/components/ui/surface'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '#/components/ui/tabs'
-import { enabledNumberedSections, tabLabel } from '#/pages/doe/lib/sections'
+import { RubriqueLayout } from '#/components/rubrique-layout'
+import { INFO_TAB, PLAN_TAB, type Rubrique } from '#/pages/doe/lib/rubriques'
 import type { DoeForm } from '#/pages/doe/types'
-import { DoeHeader } from '#/pages/doe/ui/doe-header'
 import { DoeInfoTab } from '#/pages/doe/ui/doe-info-tab'
 import { DoePlanTab } from '#/pages/doe/ui/doe-plan-tab'
 import {
 	DoeSectionTab,
 	type SectionActions,
-	sectionItemCount,
 } from '#/pages/doe/ui/doe-section-tab'
+import { DoeSidebar, type DoeSidebarProps } from '#/pages/doe/ui/doe-sidebar'
 
-export const INFO_TAB = 'info'
-export const PLAN_TAB = 'plan'
-
-type HeaderProps = Parameters<typeof DoeHeader>[0]
 type InfoProps = Parameters<typeof DoeInfoTab>[0]
 type PlanProps = Parameters<typeof DoePlanTab>[0]
 
+export { INFO_TAB, PLAN_TAB }
+
 interface DoeEditorUIProps {
-	header: HeaderProps
-	/** The project's own tabs, shown under the header. */
-	projectTabs: ReactNode
+	sidebar: Omit<DoeSidebarProps, 'items' | 'selected'>
 	form: DoeForm
+	items: readonly Rubrique[]
 	activeTab: string
 	error: string | null
 	fileUrls: Record<string, string | undefined>
 	info: Omit<InfoProps, 'form' | 'fileUrls'>
 	plan: Omit<PlanProps, 'sections'>
 	sectionActions: SectionActions
-	onTabChange: (tab: string) => void
 }
 
 export function DoeEditorUI({
-	header,
-	projectTabs,
+	sidebar,
 	form,
+	items,
 	activeTab,
 	error,
 	fileUrls,
 	info,
 	plan,
 	sectionActions,
-	onTabChange,
 }: DoeEditorUIProps) {
-	const enabled = enabledNumberedSections(form.sections)
+	const current = items.find((item) => item.id === activeTab)
+
+	const content = () => {
+		if (current?.section) {
+			return (
+				<DoeSectionTab
+					section={current.section}
+					number={current.number ?? 1}
+					fileUrls={fileUrls}
+					actions={sectionActions}
+				/>
+			)
+		}
+		if (activeTab === PLAN_TAB) {
+			return <DoePlanTab sections={form.sections} {...plan} />
+		}
+		return <DoeInfoTab form={form} fileUrls={fileUrls} {...info} />
+	}
 
 	return (
-		<PageShell>
-			<DoeHeader {...header} />
-			{projectTabs}
-			{error ? (
-				<div
-					role="alert"
-					className="flex items-start gap-2 rounded-lg border border-destructive/30 bg-destructive-soft px-4 py-3 text-sm text-destructive"
+		<div className="h-full min-h-0 overflow-y-auto lg:grid lg:grid-cols-[minmax(20rem,24rem)_minmax(0,1fr)] lg:grid-rows-[minmax(0,1fr)] lg:overflow-hidden">
+			<DoeSidebar {...sidebar} items={items} selected={activeTab} />
+			<section aria-label="Rubrique du DOE" className="min-w-0 lg:min-h-0">
+				<RubriqueLayout
+					key={activeTab}
+					title={current?.title ?? 'Informations'}
+					description={current?.description ?? ''}
+					wide
 				>
-					<AlertCircle className="mt-0.5 size-4 shrink-0" />
-					{error}
-				</div>
-			) : null}
-			<Tabs value={activeTab} onValueChange={onTabChange}>
-				<TabsList
-					variant="line"
-					className="h-auto w-full justify-start overflow-x-auto overflow-y-hidden pb-2"
-				>
-					<TabsTrigger value={INFO_TAB} className="flex-none">
-						Informations
-					</TabsTrigger>
-					<TabsTrigger value={PLAN_TAB} className="flex-none">
-						Plan du DOE
-					</TabsTrigger>
-					{enabled.map(({ section, number }) => (
-						<TabsTrigger
-							key={section.id}
-							value={section.id}
-							title={`${number}. ${section.title}`}
-							className="flex-none"
+					{error ? (
+						<div
+							role="alert"
+							className="flex items-start gap-2 rounded-lg border border-destructive/30 bg-destructive-soft px-4 py-3 text-sm text-destructive"
 						>
-							{number}. {tabLabel(section.title)}
-							<Badge variant="secondary">{sectionItemCount(section)}</Badge>
-						</TabsTrigger>
-					))}
-				</TabsList>
-				<TabsContent value={INFO_TAB}>
-					<DoeInfoTab form={form} fileUrls={fileUrls} {...info} />
-				</TabsContent>
-				<TabsContent value={PLAN_TAB}>
-					<DoePlanTab sections={form.sections} {...plan} />
-				</TabsContent>
-				{enabled.map(({ section, number }) => (
-					<TabsContent key={section.id} value={section.id}>
-						<DoeSectionTab
-							section={section}
-							number={number}
-							fileUrls={fileUrls}
-							actions={sectionActions}
-						/>
-					</TabsContent>
-				))}
-			</Tabs>
-		</PageShell>
+							<AlertCircle className="mt-0.5 size-4 shrink-0" aria-hidden />
+							{error}
+						</div>
+					) : null}
+					{content()}
+				</RubriqueLayout>
+			</section>
+		</div>
 	)
 }

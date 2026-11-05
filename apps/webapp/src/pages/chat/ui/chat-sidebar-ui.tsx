@@ -61,10 +61,10 @@ export function ChatSidebarUI({
 	return (
 		<nav
 			aria-label="Canaux"
-			className="flex h-full w-64 shrink-0 flex-col overflow-y-auto border-r bg-card/50"
+			className="flex h-full w-64 shrink-0 flex-col overflow-y-auto border-border border-r bg-card"
 		>
-			<div className="flex items-center justify-between px-4 py-4">
-				<h2 className="text-sm font-semibold text-foreground">Discussions</h2>
+			<div className="flex min-h-12 items-center justify-between border-border border-b px-4 py-2">
+				<h2 className="font-semibold text-base text-foreground">Discussions</h2>
 				<div className="flex items-center gap-1">
 					{mentionCount > 0 ? (
 						<output
@@ -88,7 +88,9 @@ export function ChatSidebarUI({
 				</div>
 			</div>
 
-			<PresenceSummaryUI onlineCount={onlineCount} />
+			<div className="pt-3">
+				<PresenceSummaryUI onlineCount={onlineCount} />
+			</div>
 
 			{isLoading ? <SidebarSkeleton /> : null}
 
@@ -104,7 +106,7 @@ export function ChatSidebarUI({
 			) : null}
 
 			{!isLoading && !isError && groups.length > 0 ? (
-				<div className="flex flex-col gap-1 px-2 pb-4">
+				<div className="flex flex-col gap-4 px-2 py-2">
 					{groups.map((group) => (
 						<CategoryGroup
 							key={group.category?.id ?? 'uncategorized'}
@@ -186,18 +188,18 @@ function CategoryGroup({
 						<Link
 							to={buildOrgPath(organizationSlug, `/chat/${chan.id}`)}
 							className={cn(
-								'flex items-center gap-1.5 rounded-md py-1.5 pr-8 pl-2 text-sm text-muted-foreground hover:bg-accent hover:text-accent-foreground',
+								'flex h-8 items-center gap-2 rounded-md pr-8 pl-2 text-sm text-muted-foreground outline-none transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:ring-2 focus-visible:ring-ring',
 								chan.id === activeChannelId &&
 									'bg-accent font-medium text-accent-foreground',
 								unread && 'font-semibold text-foreground',
 							)}
 						>
-							<Hash className="size-3.5 shrink-0" />
-							<span className="truncate">{chan.name}</span>
+							<Hash aria-hidden className="size-4 shrink-0" />
+							<span className="min-w-0 flex-1 truncate">{chan.name}</span>
 							{unread ? (
 								<span
 									aria-hidden="true"
-									className="ml-auto size-1.5 shrink-0 rounded-full bg-primary"
+									className="size-1.5 shrink-0 rounded-full bg-primary"
 								/>
 							) : null}
 							{unread ? <span className="sr-only">Non lu</span> : null}
@@ -209,7 +211,7 @@ function CategoryGroup({
 									variant="ghost"
 									size="icon"
 									aria-label={`Gérer le canal ${chan.name}`}
-									className="absolute top-1/2 right-1 size-6 -translate-y-1/2 opacity-0 focus-visible:opacity-100 group-hover/channel:opacity-100"
+									className="absolute top-1/2 right-1 size-6 -translate-y-1/2 opacity-0 focus-visible:opacity-100 group-hover/channel:opacity-100 data-[state=open]:opacity-100"
 								>
 									<MoreHorizontal className="size-3.5" />
 								</Button>
@@ -238,7 +240,7 @@ function CategoryGroup({
 				if (group.category) onToggleCategory(group.category.id, !open)
 			}}
 		>
-			<CollapsibleTrigger className="flex w-full items-center gap-1 rounded-md px-2 py-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground hover:text-foreground">
+			<CollapsibleTrigger className="flex w-full items-center gap-1 rounded-md px-2 pb-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring">
 				<ChevronRight
 					className={cn(
 						'size-3.5 shrink-0 transition-transform',

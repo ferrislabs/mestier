@@ -1,13 +1,42 @@
 import type { SupportBadgeTone, SupportStatus } from '#/pages/support/types'
 
+export type SupportStatusDot =
+	| 'neutral'
+	| 'progress'
+	| 'customer'
+	| 'team'
+	| 'done'
+
 export const SUPPORT_COLUMNS: ReadonlyArray<{
 	status: SupportStatus
 	label: string
+	description: string
+	dot: SupportStatusDot
 }> = [
-	{ status: 'new', label: 'Nouveau' },
-	{ status: 'in_progress', label: 'En cours' },
-	{ status: 'waiting_customer', label: 'En attente du client' },
-	{ status: 'resolved', label: 'Résolu' },
+	{
+		status: 'new',
+		label: 'Backlog',
+		description: 'Reçu, pas encore pris en charge.',
+		dot: 'neutral',
+	},
+	{
+		status: 'in_progress',
+		label: 'Ouvert',
+		description: 'Pris en charge par l’équipe.',
+		dot: 'progress',
+	},
+	{
+		status: 'waiting_customer',
+		label: 'En attente client',
+		description: 'Nous attendons une réponse du client.',
+		dot: 'customer',
+	},
+	{
+		status: 'resolved',
+		label: 'Fermé',
+		description: 'Problème résolu.',
+		dot: 'done',
+	},
 ]
 
 const STATUS_TONES: Record<SupportStatus, SupportBadgeTone> = {
@@ -20,6 +49,19 @@ const STATUS_TONES: Record<SupportStatus, SupportBadgeTone> = {
 export function supportStatusLabel(status: SupportStatus): string {
 	return (
 		SUPPORT_COLUMNS.find((column) => column.status === status)?.label ?? status
+	)
+}
+
+export function supportStatusDot(status: SupportStatus): SupportStatusDot {
+	return (
+		SUPPORT_COLUMNS.find((column) => column.status === status)?.dot ?? 'neutral'
+	)
+}
+
+export function supportStatusDescription(status: SupportStatus): string {
+	return (
+		SUPPORT_COLUMNS.find((column) => column.status === status)?.description ??
+		''
 	)
 }
 

@@ -33,7 +33,6 @@ import {
 	SheetTitle,
 } from '#/components/ui/sheet'
 import { Skeleton } from '#/components/ui/skeleton'
-import { SectionCard, SectionHeader } from '#/components/ui/surface'
 import { useActiveOrganization } from '#/hooks/use-active-organization'
 import { useHasPermission } from '#/hooks/use-permissions'
 import { useReferenceCatalog } from '#/hooks/use-reference-catalog'
@@ -47,6 +46,7 @@ import {
 } from '#/hooks/use-roles'
 import { mutationErrorMessage } from '#/lib/api-error'
 import { permissionsByArea } from '#/lib/permission-catalog'
+import { SettingsCard } from '#/pages/settings/ui/settings-card'
 
 /**
  * Whether a mutation error carries a 409 — mirrors `isForbiddenError`'s own
@@ -104,16 +104,15 @@ export function RolesSection() {
 
 	if (!canManageRoles) {
 		return (
-			<SectionCard>
-				<SectionHeader
-					title="Rôles"
-					description="Définissez ce que chaque rôle peut faire dans l'organisation."
-				/>
+			<SettingsCard
+				title="Rôles"
+				description="Définissez ce que chaque rôle peut faire dans l'organisation."
+			>
 				<p className="p-5 text-sm text-muted-foreground">
 					Vous n'avez pas la permission de gérer les rôles de cette
 					organisation.
 				</p>
-			</SectionCard>
+			</SettingsCard>
 		)
 	}
 
@@ -212,23 +211,16 @@ function RolesSectionContent({ organizationId }: RolesSectionContentProps) {
 	const deleteError = deleteRoleErrorMessage(deleteRole.error)
 
 	return (
-		<SectionCard>
-			<SectionHeader
-				title="Rôles"
-				description="Définissez ce que chaque rôle peut faire, puis attribuez-le aux membres depuis l'équipe."
-				actions={
-					<Button
-						type="button"
-						size="sm"
-						className="gap-2"
-						onClick={openCreate}
-					>
-						<Plus className="size-4" />
-						Créer un rôle
-					</Button>
-				}
-			/>
-
+		<SettingsCard
+			title="Rôles"
+			description="Définissez ce que chaque rôle peut faire, puis attribuez-le aux membres depuis l'équipe."
+			actions={
+				<Button type="button" size="sm" className="gap-2" onClick={openCreate}>
+					<Plus className="size-4" />
+					Créer un rôle
+				</Button>
+			}
+		>
 			{deleteError ? (
 				<div className="border-b border-destructive/30 bg-destructive-soft px-5 py-3 text-sm text-destructive">
 					{deleteError}
@@ -305,7 +297,7 @@ function RolesSectionContent({ organizationId }: RolesSectionContentProps) {
 					</AlertDialogFooter>
 				</AlertDialogContent>
 			</AlertDialog>
-		</SectionCard>
+		</SettingsCard>
 	)
 }
 
@@ -535,9 +527,7 @@ function RoleEditorSheet({
 							return (
 								<div key={area.area} className="flex flex-col gap-3">
 									<div className="flex items-center justify-between">
-										<h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-											{area.label}
-										</h3>
+										<h3 className="font-medium text-[13px]">{area.label}</h3>
 										<Button
 											type="button"
 											variant="link"
@@ -591,7 +581,7 @@ function RoleEditorSheet({
 															{permission.description}
 														</p>
 														{permission.note ? (
-															<p className="flex items-start gap-1.5 text-xs text-amber-800 dark:text-amber-300">
+															<p className="flex items-start gap-1.5 text-xs text-warning">
 																<AlertTriangle className="mt-0.5 size-3.5 shrink-0" />
 																<span>{permission.note}</span>
 															</p>

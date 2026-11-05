@@ -46,7 +46,6 @@ export function RecapFeature({ week, onWeekChange }: RecapFeatureProps) {
 		<RecapScreen
 			key={activeOrganization.id}
 			organizationId={activeOrganization.id}
-			organizationName={activeOrganization.name}
 			week={week}
 			onWeekChange={onWeekChange}
 		/>
@@ -55,10 +54,9 @@ export function RecapFeature({ week, onWeekChange }: RecapFeatureProps) {
 
 function RecapScreen({
 	organizationId,
-	organizationName,
 	week,
 	onWeekChange,
-}: RecapFeatureProps & { organizationId: string; organizationName: string }) {
+}: RecapFeatureProps & { organizationId: string }) {
 	const recap = useMaintenanceRecap(organizationId, week)
 	const plan = usePlanMaintenanceLines()
 
@@ -132,7 +130,6 @@ function RecapScreen({
 
 	return (
 		<RecapUI
-			organizationName={organizationName}
 			weekLabel={weekLabel(week)}
 			groups={groups}
 			selected={selected}

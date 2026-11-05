@@ -1,6 +1,6 @@
 import { useForm } from '@tanstack/react-form'
 import type { ColumnDef } from '@tanstack/react-table'
-import { Loader2, Package, Plus, Search } from 'lucide-react'
+import { Loader2, Plus, Search } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import {
 	CreateButton,
@@ -22,12 +22,7 @@ import {
 	DialogTitle,
 } from '#/components/ui/dialog'
 import { Input } from '#/components/ui/input'
-import {
-	MetricCard,
-	PageHeader,
-	PageShell,
-	SectionCard,
-} from '#/components/ui/surface'
+import { PageHeader, PageShell, SectionCard } from '#/components/ui/surface'
 import { useActiveOrganization } from '#/hooks/use-active-organization'
 import type { Equipment } from '#/hooks/use-reference-catalog'
 import {
@@ -52,14 +47,12 @@ export function EquipmentFeature() {
 		<EquipmentSectionContent
 			key={activeOrganization.id}
 			organizationId={activeOrganization.id}
-			organizationName={activeOrganization.name}
 		/>
 	)
 }
 
 interface EquipmentSectionContentProps {
 	organizationId: string
-	organizationName: string
 }
 
 type Draft = {
@@ -69,7 +62,6 @@ type Draft = {
 
 function EquipmentSectionContent({
 	organizationId,
-	organizationName,
 }: EquipmentSectionContentProps) {
 	const catalog = useReferenceCatalog(organizationId, {
 		members: false,
@@ -147,43 +139,39 @@ function EquipmentSectionContent({
 	return (
 		<equipmentForm.Subscribe selector={(state) => state.values}>
 			{(equipmentValues) => (
-				<PageShell>
+				<PageShell className="block">
 					<PageHeader
-						eyebrow={organizationName}
+						className="mb-6"
 						title="Matériel"
 						description="Les ressources facturables et leur coût horaire, utilisés pour calculer la rentabilité d'une tâche."
 						actions={
 							<RequirePermission permission="MANAGE_REFERENCE">
-								<Button onClick={() => setCreateDialogOpen(true)}>
-									<Plus />
+								<Button size="sm" onClick={() => setCreateDialogOpen(true)}>
+									<Plus aria-hidden />
 									Ajouter une entrée
 								</Button>
 							</RequirePermission>
 						}
 					/>
 
-					<MetricCard
-						label="Matériel"
-						value={equipment.length}
-						hint="Ressources facturables"
-						icon={<Package className="size-4" />}
-					/>
-
 					{error ? (
-						<div className="rounded-lg border border-destructive/30 bg-destructive-soft px-4 py-3 text-sm text-destructive">
+						<div className="mb-4 rounded-lg border border-destructive/30 bg-destructive-soft px-4 py-3 text-sm text-destructive">
 							{error.message}
 						</div>
 					) : null}
 
-					<div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-						<div className="relative w-full lg:w-80">
-							<Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+					<div className="mb-3 flex flex-wrap items-center gap-2">
+						<div className="relative w-full max-w-xs">
+							<Search
+								className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground"
+								aria-hidden
+							/>
 							<Input
 								type="search"
 								value={search}
 								onChange={(event) => setSearch(event.target.value)}
 								placeholder="Rechercher dans le référentiel…"
-								className="pl-9"
+								className="h-8 bg-card pl-8"
 							/>
 						</div>
 					</div>

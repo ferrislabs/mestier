@@ -1,0 +1,228 @@
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { screen, within } from '@testing-library/react'
+import type { ReactNode } from 'react'
+import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { TooltipProvider } from '#/components/ui/tooltip'
+import {
+	ActiveOrganizationProvider,
+	OrganizationListProvider,
+} from '#/hooks/use-active-organization'
+import { resetRhStore } from '#/pages/hr/feature/mocks/rh-store'
+import { renderWithRouter } from '#/test/render-with-router'
+import { AbsencesFeature } from './absences-feature'
+import { ExtraFeature } from './extra-feature'
+import { MemberDetailFeature } from './member-detail-feature'
+import { PlanningFeature } from './planning-feature'
+import { RightsFeature } from './rights-feature'
+
+const MEMBERS_PATH = '/api/v1/organizations/{organization_id}/members'
+const ABSENCES_PATH = '/api/v1/organizations/{organization_id}/absences'
+const PERMISSIONS_PATH =
+	'/api/v1/organizations/{organization_id}/members/me/permissions'
+
+const ORGANIZATION = {
+	id: 'org-1',
+	name: 'Atelier Bois & Co',
+	slug: 'atelier-bois',
+}
+
+function member(id: string, firstName: string, lastName: string) {
+	return {
+		id,
+		organization_id: 'org-1',
+		last_name: lastName,
+		first_name: firstName,
+		display_name: `${lastName} ${firstName}`,
+		account: null,
+		joined_at: null,
+		created_at: '2026-01-01T00:00:00Z',
+	}
+}
+
+const MEMBERS = [
+	member('u-1', 'Alix', 'Nova'),
+	member('u-2', 'Bao', 'Tran'),
+	member('u-3', 'Cleo', 'Dupont'),
+]
+
+function installFakeApi(absences: unknown[] = []) {
+	const fakeApi = {
+		get(path: string, params: unknown) {
+			const p = (params ?? {}) as { path?: unknown; query?: unknown }
+			const queryKey = [{ _id: path, path: p.path, query: p.query }]
+			return {
+				queryKey,
+				queryOptions: {
+					queryKey,
+					queryFn: async () => {
+						if (path === MEMBERS_PATH)
+							return { data: MEMBERS, pagination: null }
+						if (path === ABSENCES_PATH)
+							return { data: absences, pagination: null }
+						if (path === PERMISSIONS_PATH)
+							return {
+								data: { permissions: ['MANAGE_REFERENCE', 'MANAGE_MEMBERS'] },
+								pagination: null,
+							}
+						throw new Error(`unmocked GET ${path}`)
+					},
+				},
+			}
+		},
+		mutation(method: string, path: string) {
+			const mutationKey = [{ method, path }]
+			return {
+				mutationKey,
+				mutationOptions: {
+					mutationKey,
+					mutationFn: async () => {
+						throw new Error(`unmocked mutation ${method} ${path}`)
+					},
+				},
+			}
+		},
+	}
+
+	// biome-ignore lint/suspicious/noExplicitAny: test-only fake, shape matches TanstackQueryApiClient's used surface
+	;(window as any).tanstackApi = fakeApi
+}
+
+function renderScreen(ui: ReactNode, absences: unknown[] = []) {
+	installFakeApi(absences)
+	const queryClient = new QueryClient({
+		defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+	})
+
+	return renderWithRouter(
+		<QueryClientProvider client={queryClient}>
+			<OrganizationListProvider organizations={[ORGANIZATION as never]}>
+				<ActiveOrganizationProvider activeOrganization={ORGANIZATION as never}>
+					<TooltipProvider>{ui}</TooltipProvider>
+				</ActiveOrganizationProvider>
+			</OrganizationListProvider>
+		</QueryClientProvider>,
+	)
+}
+
+describe('RH screens over the real members', () => {
+	beforeEach(() => {
+		resetRhStore()
+	})
+
+	afterEach(() => {
+		resetRhStore()
+	})
+
+	it('rights: lists the real members in the balances table', async () => {
+		await renderScreen(
+			<RightsFeature accountId="cp" onAccountChange={() => undefined} />,
+		)
+
+		expect(
+			await screen.findByRole('heading', { name: 'Droits et RTT' }),
+		).toBeDefined()
+		expect(await screen.findAllByText('Alix Nova')).not.toHaveLength(0)
+		expect(screen.queryByText('Baptiste Parmantier')).toBeNull()
+	})
+
+	it('extra: shows the pending declarations header', async () => {
+		await renderScreen(
+			<ExtraFeature
+				tab="declarations"
+				onTabChange={() => undefined}
+				status="all"
+				memberId="all"
+				onFiltersChange={() => undefined}
+				creating={false}
+				onCreatingChange={() => undefined}
+			/>,
+		)
+
+		expect(
+			await screen.findByRole('heading', { name: 'Heures extra' }),
+		).toBeDefined()
+		expect(
+			screen.getByRole('button', { name: /Déclarer des heures/ }),
+		).toBeDefined()
+	})
+
+	it('planning: renders the grid for the real members', async () => {
+		await renderScreen(
+			<PlanningFeature
+				view="week"
+				date="2026-11-05"
+				onChange={() => undefined}
+			/>,
+		)
+
+		expect(await screen.findByText('Alix Nova')).toBeDefined()
+		expect(screen.getByText('Semaine')).toBeDefined()
+	})
+
+	it('member detail: opens the real member and its identity rubrique', async () => {
+		await renderScreen(
+			<MemberDetailFeature
+				memberId="u-2"
+				tab="identite"
+				month={null}
+				onChange={() => undefined}
+			/>,
+		)
+
+		expect(
+			await screen.findByRole('heading', { name: 'Bao Tran' }),
+		).toBeDefined()
+		expect(
+			screen.getByRole('navigation', { name: 'Rubriques du membre' }),
+		).toBeDefined()
+	})
+
+	it('member detail: says so when the member does not exist', async () => {
+		await renderScreen(
+			<MemberDetailFeature
+				memberId="inconnu"
+				tab="identite"
+				month={null}
+				onChange={() => undefined}
+			/>,
+		)
+
+		expect(await screen.findByText('Ce membre est introuvable.')).toBeDefined()
+	})
+
+	it('absences: lists a real absence next to the mock requests', async () => {
+		await renderScreen(
+			<AbsencesFeature
+				tab="demandes"
+				onTabChange={() => undefined}
+				historyStatus="all"
+				historyMemberId="all"
+				onHistoryFiltersChange={() => undefined}
+				creating={false}
+				onCreatingChange={() => undefined}
+			/>,
+			[
+				{
+					id: 'abs-real-1',
+					organization_id: 'org-1',
+					member_id: 'u-3',
+					kind: 'SICK',
+					all_day: true,
+					starts_at: '2026-11-09T00:00:00Z',
+					ends_at: '2026-11-10T00:00:00Z',
+					note: 'Grippe',
+					created_at: '2026-11-01T00:00:00Z',
+					updated_at: '2026-11-01T00:00:00Z',
+				},
+			],
+		)
+
+		const history = await screen.findByRole('region', { name: 'Historique' })
+		expect(await within(history).findAllByText('Cleo Dupont')).not.toHaveLength(
+			0,
+		)
+		expect(
+			within(history).getAllByText('Arrêt maladie').length,
+		).toBeGreaterThan(0)
+	})
+})

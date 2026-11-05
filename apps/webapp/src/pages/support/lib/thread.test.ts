@@ -1,15 +1,13 @@
 import { describe, expect, it } from 'vitest'
 import type { Schemas } from '#/api/api.client'
+import { memberHue } from '#/pages/support/lib/format'
 import {
 	canSubmitBody,
 	entryKindLabel,
-	entryVisibilityLabel,
 	formatAttachmentSize,
 	formatTimestamp,
-	SUPPORT_COMPOSER_TABS,
 	sortEntriesByCreation,
 	toEntryVM,
-	toTicketDetailVM,
 } from '#/pages/support/lib/thread'
 import { UNKNOWN_MEMBER_LABEL } from '#/pages/support/lib/view-models'
 import type { SupportEntryKind } from '#/pages/support/types'
@@ -30,54 +28,9 @@ function entry(
 	}
 }
 
-function ticket(
-	overrides: Partial<Schemas.TicketResponse> = {},
-): Schemas.TicketResponse {
-	return {
-		id: 'ticket-1',
-		number: 42,
-		subject: 'Fuite sous évier',
-		body: 'Bonjour',
-		status: 'in_progress',
-		assignee_member_id: 'member-1',
-		assigned_at: '2026-10-01T08:00:00Z',
-		custom_fields: {},
-		badges: [],
-		external_id: null,
-		created_at: '2026-10-01T07:05:00Z',
-		updated_at: '2026-10-01T07:05:00Z',
-		...overrides,
-	}
-}
-
 const NAMES: Record<string, string> = {
 	'member-1': 'Alix Martin',
 }
-
-describe('SUPPORT_COMPOSER_TABS', () => {
-	it('offers the reply, the draft and the note, in that order', () => {
-		expect(SUPPORT_COMPOSER_TABS).toEqual([
-			{
-				id: 'reply',
-				label: 'Réponse au client',
-				actionLabel: 'Envoyer la réponse',
-				hint: 'Le client verra ce message.',
-			},
-			{
-				id: 'draft',
-				label: 'Brouillon',
-				actionLabel: 'Enregistrer le brouillon',
-				hint: 'Visible par l’équipe seulement, jusqu’à son envoi.',
-			},
-			{
-				id: 'note',
-				label: 'Note interne',
-				actionLabel: 'Ajouter la note',
-				hint: 'Jamais visible par le client.',
-			},
-		])
-	})
-})
 
 describe('canSubmitBody', () => {
 	it('accepts a body that holds text', () => {
@@ -104,29 +57,14 @@ describe('canSubmitBody', () => {
 describe('entryKindLabel', () => {
 	it('names each kind in French', () => {
 		const labels: Record<SupportEntryKind, string> = {
-			client_message: 'Message du client',
-			reply: 'Réponse envoyée',
+			client_message: 'Client',
+			reply: 'Envoyé au client',
 			internal_note: 'Note interne',
 			draft: 'Brouillon',
 		}
 
 		for (const [kind, label] of Object.entries(labels)) {
 			expect(entryKindLabel(kind as SupportEntryKind)).toBe(label)
-		}
-	})
-})
-
-describe('entryVisibilityLabel', () => {
-	it('says who can read each kind', () => {
-		const labels: Record<SupportEntryKind, string> = {
-			client_message: 'Envoyé par le client',
-			reply: 'Visible par le client',
-			internal_note: 'Jamais visible par le client',
-			draft: 'Non envoyé au client',
-		}
-
-		for (const [kind, label] of Object.entries(labels)) {
-			expect(entryVisibilityLabel(kind as SupportEntryKind)).toBe(label)
 		}
 	})
 })
@@ -249,44 +187,47 @@ describe('formatAttachmentSize', () => {
 })
 
 describe('toEntryVM', () => {
-	it('maps a reply with its labels, author, date and body', () => {
-		expect(toEntryVM(entry(), NAMES, 'UTC')).toEqual({
+	it('maps a reply with its author, date and body', () => {
+		expect(toEntryVM(entry(), NAMES, 'Claire Fontaine')).toEqual({
 			id: 'entry-1',
 			kind: 'reply',
-			kindLabel: 'Réponse envoyée',
-			visibilityLabel: 'Visible par le client',
 			authorLabel: 'Alix Martin',
-			createdAtLabel: formatTimestamp('2026-10-01T07:05:00Z', 'UTC'),
+			authorHue: memberHue('member-1'),
+			createdAt: '2026-10-01T07:05:00Z',
 			body: 'Nous passons demain.',
 			attachments: [],
 		})
 	})
 
-	it('names the author Client for a client message, whatever the author id', () => {
-		expect(
-			toEntryVM(
-				entry({ kind: 'client_message', author_member_id: null }),
-				NAMES,
-			).authorLabel,
-		).toBe('Client')
+	it('names the author after the requester for a client message, whatever the author id', () => {
+		const clientMessage = entry({
+			kind: 'client_message',
+			author_member_id: null,
+		})
+
+		expect(toEntryVM(clientMessage, NAMES, 'Claire Fontaine').authorLabel).toBe(
+			'Claire Fontaine',
+		)
 		expect(
 			toEntryVM(
 				entry({ kind: 'client_message', author_member_id: 'member-1' }),
 				NAMES,
+				'Claire Fontaine',
 			).authorLabel,
-		).toBe('Client')
-		expect(toEntryVM(entry({ kind: 'client_message' }), NAMES).kindLabel).toBe(
-			'Message du client',
-		)
+		).toBe('Claire Fontaine')
+		expect(
+			toEntryVM(clientMessage, NAMES, 'Claire Fontaine').authorHue,
+		).toBeNull()
 	})
 
 	it('names the author Équipe when a team entry has no author', () => {
 		for (const kind of ['reply', 'internal_note', 'draft'] as const) {
 			expect(
-				toEntryVM(entry({ kind, author_member_id: null }), NAMES).authorLabel,
+				toEntryVM(entry({ kind, author_member_id: null }), NAMES, 'Client')
+					.authorLabel,
 			).toBe('Équipe')
 			expect(
-				toEntryVM(entry({ kind, author_member_id: undefined }), NAMES)
+				toEntryVM(entry({ kind, author_member_id: undefined }), NAMES, 'Client')
 					.authorLabel,
 			).toBe('Équipe')
 		}
@@ -297,13 +238,15 @@ describe('toEntryVM', () => {
 			toEntryVM(
 				entry({ kind: 'internal_note', author_member_id: 'member-1' }),
 				NAMES,
+				'Client',
 			).authorLabel,
 		).toBe('Alix Martin')
 	})
 
 	it('says unknown for an author the map does not hold', () => {
 		expect(
-			toEntryVM(entry({ author_member_id: 'member-9' }), NAMES).authorLabel,
+			toEntryVM(entry({ author_member_id: 'member-9' }), NAMES, 'Client')
+				.authorLabel,
 		).toBe(UNKNOWN_MEMBER_LABEL)
 	})
 
@@ -328,90 +271,12 @@ describe('toEntryVM', () => {
 				],
 			}),
 			NAMES,
+			'Client',
 		)
 
 		expect(vm.attachments).toEqual([
 			{ id: 'attachment-1', fileName: 'photo.jpg', sizeLabel: '1,5 Ko' },
 			{ id: 'attachment-2', fileName: 'devis.pdf', sizeLabel: '2,5 Mo' },
 		])
-	})
-
-	it('labels a draft as not sent to the client', () => {
-		const vm = toEntryVM(entry({ kind: 'draft' }), NAMES)
-
-		expect(vm.kindLabel).toBe('Brouillon')
-		expect(vm.visibilityLabel).toBe('Non envoyé au client')
-	})
-})
-
-describe('toTicketDetailVM', () => {
-	it('maps the identity, the status, the assignee and the date', () => {
-		expect(toTicketDetailVM(ticket(), 'UTC')).toEqual({
-			id: 'ticket-1',
-			numberLabel: '#42',
-			subject: 'Fuite sous évier',
-			status: 'in_progress',
-			assigneeId: 'member-1',
-			badges: [],
-			fields: [],
-			createdAtLabel: formatTimestamp('2026-10-01T07:05:00Z', 'UTC'),
-		})
-	})
-
-	it('maps the badges', () => {
-		const vm = toTicketDetailVM(
-			ticket({
-				badges: [
-					{ label: 'Urgent', tone: 'error' },
-					{ label: 'Garantie', tone: 'success' },
-				],
-			}),
-		)
-
-		expect(vm.badges).toEqual([
-			{ label: 'Urgent', tone: 'error' },
-			{ label: 'Garantie', tone: 'success' },
-		])
-	})
-
-	it('has no assignee for a null or missing assignee', () => {
-		expect(
-			toTicketDetailVM(ticket({ assignee_member_id: null })).assigneeId,
-		).toBeNull()
-		expect(
-			toTicketDetailVM(ticket({ assignee_member_id: undefined })).assigneeId,
-		).toBeNull()
-	})
-
-	it('keeps every non-empty custom field in insertion order', () => {
-		const vm = toTicketDetailVM(
-			ticket({
-				custom_fields: {
-					ville: 'Lyon',
-					etage: 3,
-					urgent: false,
-					vide: '',
-					nul: null,
-					adresse: { rue: 'Rue de la Paix' },
-					code: 'B12',
-				},
-			}),
-		)
-
-		expect(vm.fields).toEqual([
-			{ key: 'ville', value: 'Lyon' },
-			{ key: 'etage', value: '3' },
-			{ key: 'urgent', value: 'false' },
-			{ key: 'adresse', value: '{"rue":"Rue de la Paix"}' },
-			{ key: 'code', value: 'B12' },
-		])
-	})
-
-	it('has no field when every custom field is empty', () => {
-		const vm = toTicketDetailVM(
-			ticket({ custom_fields: { vide: '', nul: null } }),
-		)
-
-		expect(vm.fields).toEqual([])
 	})
 })

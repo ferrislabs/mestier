@@ -9,6 +9,7 @@ import {
 	PopoverTrigger,
 } from '#/components/ui/popover'
 import { StatusBadge } from '#/components/ui/surface'
+import { cn } from '#/lib/utils'
 import type { TaskStatus } from '#/pages/planification/lib/board'
 import {
 	calendarSelectionToDateRange,
@@ -113,12 +114,15 @@ export function BoardColumns({
 					<section
 						key={column.status}
 						aria-label={`Colonne ${column.label}`}
-						className="flex min-h-[28rem] min-w-0 flex-col overflow-hidden rounded-lg border bg-card"
+						className={cn(
+							'flex min-h-[28rem] min-w-0 flex-col rounded-lg border border-transparent bg-muted/50 p-2 transition-colors',
+							draggedTaskId !== null && 'border-border border-dashed',
+						)}
 						onDragOver={(event) => event.preventDefault()}
 						onDrop={() => onDropOnColumn(column.status)}
 					>
-						<div className="flex items-center justify-between gap-2 border-b px-3 py-3">
-							<p className="min-w-0 truncate text-sm font-semibold">
+						<div className="flex items-center justify-between gap-2 px-1.5 pt-1 pb-2.5">
+							<p className="min-w-0 truncate text-[13px] font-medium">
 								{column.label}
 							</p>
 							<StatusBadge tone={columnTone(column.status)}>
@@ -126,15 +130,15 @@ export function BoardColumns({
 							</StatusBadge>
 						</div>
 
-						<div className="flex flex-1 flex-col gap-2 bg-muted/25 p-2">
+						<div className="flex flex-1 flex-col gap-2">
 							{isLoading ? (
-								<div className="flex flex-1 items-center justify-center rounded-md border border-dashed bg-card/70 p-4 text-center text-xs text-muted-foreground">
+								<p className="px-2 py-6 text-center text-xs text-muted-foreground">
 									Chargement…
-								</div>
+								</p>
 							) : column.cards.length === 0 ? (
-								<div className="flex flex-1 items-center justify-center rounded-md border border-dashed bg-card/70 p-4 text-center text-xs text-muted-foreground">
+								<p className="px-2 py-6 text-center text-xs text-muted-foreground">
 									Aucune carte
-								</div>
+								</p>
 							) : (
 								column.cards.map((card) => (
 									<BoardCard
@@ -241,9 +245,10 @@ function BoardCard({
 				event.stopPropagation()
 				onDrop()
 			}}
-			className={`group rounded-md border bg-card p-3 shadow-xs transition ${
-				isDragging ? 'opacity-50 ring-2 ring-primary/30' : 'hover:shadow-md'
-			}`}
+			className={cn(
+				'group rounded-md border bg-card p-3 shadow-xs transition-[box-shadow,opacity] focus-within:ring-2 focus-within:ring-ring',
+				isDragging ? 'opacity-40' : 'hover:border-ring/60 hover:shadow-sm',
+			)}
 		>
 			<div className="flex items-start gap-2">
 				{canMove ? (
@@ -264,7 +269,7 @@ function BoardCard({
 					className="min-w-0 flex-1 text-left outline-none"
 					onClick={onOpen}
 				>
-					<p className="truncate text-sm font-semibold">{card.title}</p>
+					<p className="truncate text-[13px] font-medium">{card.title}</p>
 					<p className="mt-0.5 truncate text-xs text-muted-foreground">
 						{card.assigneeLabel}
 					</p>

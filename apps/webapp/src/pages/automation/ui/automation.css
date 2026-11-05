@@ -1,0 +1,112 @@
+:root {
+	--auto-success: oklch(0.55 0.15 152);
+	--auto-success-text: oklch(0.5 0.14 152);
+	--auto-success-foreground: oklch(1 0 0);
+}
+
+.dark {
+	--auto-success: oklch(0.76 0.15 152);
+	--auto-success-text: oklch(0.8 0.15 152);
+	--auto-success-foreground: oklch(0.2 0.04 152);
+}
+
+.node-tone {
+	--tone-fg: oklch(0.48 0.16 var(--node-hue));
+	--tone-bg: oklch(0.95 0.035 var(--node-hue));
+	--tone-border: oklch(0.86 0.06 var(--node-hue));
+}
+
+.dark .node-tone {
+	--tone-fg: oklch(0.82 0.12 var(--node-hue));
+	--tone-bg: oklch(0.3 0.05 var(--node-hue));
+	--tone-border: oklch(0.42 0.07 var(--node-hue));
+}
+
+[data-dragging-expression] .expression-drop {
+	outline: 2px dashed var(--ring);
+	outline-offset: 1px;
+	background-color: color-mix(in oklab, var(--ring) 6%, var(--card));
+}
+
+.react-flow.automation-flow {
+	--xy-background-color: var(--background);
+	--xy-background-pattern-dots-color: color-mix(
+		in oklab,
+		var(--muted-foreground) 28%,
+		transparent
+	);
+	--xy-edge-stroke: color-mix(
+		in oklab,
+		var(--muted-foreground) 75%,
+		var(--background)
+	);
+	--xy-edge-stroke-width: 2;
+	--xy-edge-stroke-selected: var(--foreground);
+	--xy-connectionline-stroke: var(--ring);
+	--xy-connectionline-stroke-width: 2;
+	--xy-handle-background-color: var(--card);
+	--xy-handle-border-color: var(--muted-foreground);
+	--xy-selection-background-color: color-mix(
+		in oklab,
+		var(--ring) 10%,
+		transparent
+	);
+	--xy-selection-border: 1px dotted var(--ring);
+	--xy-controls-button-background-color: var(--card);
+	--xy-controls-button-background-color-hover: var(--accent);
+	--xy-controls-button-color: var(--foreground);
+	--xy-controls-button-color-hover: var(--accent-foreground);
+	--xy-controls-button-border-color: var(--border);
+	--xy-controls-box-shadow: 0 0 0 1px var(--border);
+	--xy-attribution-background-color: transparent;
+	--xy-edge-label-background-color: var(--card);
+	--xy-edge-label-color: var(--foreground);
+	font-family: inherit;
+}
+
+.react-flow.automation-flow .react-flow__attribution a {
+	color: var(--muted-foreground);
+}
+
+.react-flow.automation-flow .react-flow__controls {
+	border-radius: var(--radius);
+	overflow: hidden;
+}
+
+.react-flow.automation-flow .react-flow__controls-button:focus-visible {
+	outline: 2px solid var(--ring);
+	outline-offset: -2px;
+}
+
+.react-flow.automation-flow .react-flow__handle.automation-handle {
+	width: 10px;
+	height: 10px;
+	min-width: 10px;
+	min-height: 10px;
+	border-width: 2px;
+	border-radius: 50%;
+}
+
+.react-flow.automation-flow .react-flow__handle.automation-handle:hover,
+.react-flow.automation-flow .react-flow__handle.automation-handle.connectingto,
+.react-flow.automation-flow
+	.react-flow__handle.automation-handle.connectingfrom {
+	border-color: var(--ring);
+	background: var(--ring);
+}
+
+.react-flow.automation-flow .react-flow__controls-button svg.lucide {
+	fill: none;
+	max-width: 14px;
+	max-height: 14px;
+}
+
+::view-transition-group(*) {
+	animation-duration: 340ms;
+	animation-timing-function: cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+::view-transition-old(root),
+::view-transition-new(root) {
+	animation-duration: 220ms;
+}

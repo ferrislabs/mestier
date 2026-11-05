@@ -2,17 +2,12 @@ export interface TypingIndicatorUIProps {
 	typingCount: number
 }
 
-/**
- * No names here either, for the same reason as `PresenceSummaryUI` — a
- * `user_id` from the gateway has no REST path to a display name. "Someone is
- * typing" is the honest version of "Alice is typing" this can show.
- */
 export function TypingIndicatorUI({ typingCount }: TypingIndicatorUIProps) {
 	if (typingCount === 0) return null
 
 	return (
 		<div
-			className="flex items-center gap-1.5 px-4 py-1.5 text-xs italic text-muted-foreground"
+			className="flex shrink-0 items-center gap-1.5 px-4 py-1.5 text-muted-foreground text-xs italic"
 			aria-live="polite"
 		>
 			<span className="flex gap-0.5">

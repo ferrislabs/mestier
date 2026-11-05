@@ -3,7 +3,6 @@ import {
 	Outlet,
 	useChildMatches,
 } from '@tanstack/react-router'
-import { RunNowFeature } from '#/pages/automation/feature/run-now-feature'
 import { WorkflowCanvasFeature } from '#/pages/automation/feature/workflow-canvas-feature'
 
 export const Route = createFileRoute(
@@ -20,7 +19,6 @@ function WorkflowEditorPage() {
 
 	return (
 		<div className="flex min-h-0 flex-1 flex-col">
-			<RunNowFeature workflowId={workflowId} />
 			<WorkflowCanvasFeature workflowId={workflowId} />
 		</div>
 	)

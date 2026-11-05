@@ -2,14 +2,21 @@ import { describe, expect, it } from 'vitest'
 import type { Schemas } from '#/api/api.client'
 import {
 	connectorsReferencing,
+	copyLabel,
+	findFreePosition,
+	isBranchDeclared,
+	neighboursOf,
 	nextConnectorId,
-	nextNodePosition,
 	nextTriggerId,
+	placementAfter,
 	readLayout,
+	reconnectionsAfterDelete,
 	removeConnector,
 	removeTrigger,
 	rootConnectorIds,
+	snapToGrid,
 	upstreamConnectorIds,
+	upstreamOf,
 } from '#/pages/automation/lib/graph'
 
 function connector(
@@ -328,12 +335,208 @@ describe('upstreamConnectorIds', () => {
 	})
 })
 
-describe('nextNodePosition', () => {
-	it('places the new node one column to the right of its source', () => {
-		expect(nextNodePosition({ x: 100, y: 40 }, 0)).toEqual({ x: 380, y: 40 })
+describe('snapToGrid', () => {
+	it('rounds a position onto the 20px grid', () => {
+		expect(snapToGrid({ x: 29, y: 31 })).toEqual({ x: 20, y: 40 })
+		expect(snapToGrid({ x: -9, y: 0 })).toEqual({ x: -0, y: 0 })
+	})
+})
+
+describe('copyLabel', () => {
+	it('marks a copy', () => {
+		expect(copyLabel('Créer un projet')).toBe('Créer un projet (copie)')
+	})
+})
+
+describe('findFreePosition', () => {
+	it('slides down until the slot is free', () => {
+		const taken = [{ position: { x: 0, y: 0 } }, { position: { x: 0, y: 140 } }]
+		expect(findFreePosition({ x: 0, y: 0 }, taken)).toEqual({ x: 0, y: 280 })
 	})
 
-	it('offsets further down the same column for each existing sibling', () => {
-		expect(nextNodePosition({ x: 0, y: 0 }, 2)).toEqual({ x: 280, y: 280 })
+	it('keeps a free origin', () => {
+		expect(
+			findFreePosition({ x: 400, y: 0 }, [{ position: { x: 0, y: 0 } }]),
+		).toEqual({
+			x: 400,
+			y: 0,
+		})
+	})
+})
+
+describe('placementAfter', () => {
+	it('puts a single output one column to the right', () => {
+		expect(placementAfter({ x: 100, y: 40 }, 0, 1)).toEqual({ x: 320, y: 40 })
+	})
+
+	it('spreads the branches around the source', () => {
+		expect(placementAfter({ x: 0, y: 0 }, 0, 2).y).toBe(-70)
+		expect(placementAfter({ x: 0, y: 0 }, 1, 2).y).toBe(70)
+	})
+})
+
+describe('reconnectionsAfterDelete', () => {
+	it('stitches the neighbours of a deleted middle node, keeping the branch', () => {
+		expect(
+			reconnectionsAfterDelete(
+				['b'],
+				[
+					{ source: 'a', target: 'b', sourceHandle: 'Then' },
+					{ source: 'b', target: 'c' },
+				],
+				[],
+			),
+		).toEqual([{ source: 'a', sourceHandle: 'Then', target: 'c' }])
+	})
+
+	it('does not stitch a node with several inputs', () => {
+		expect(
+			reconnectionsAfterDelete(
+				['b'],
+				[
+					{ source: 'a', target: 'b' },
+					{ source: 'x', target: 'b' },
+					{ source: 'b', target: 'c' },
+				],
+				[],
+			),
+		).toEqual([])
+	})
+
+	it('does not duplicate an edge that already exists', () => {
+		expect(
+			reconnectionsAfterDelete(
+				['b'],
+				[
+					{ source: 'a', target: 'b' },
+					{ source: 'b', target: 'c' },
+				],
+				[{ source: 'a', target: 'c' }],
+			),
+		).toEqual([])
+	})
+})
+
+describe('isBranchDeclared', () => {
+	const descriptors = new Map<string, Schemas.ConnectorDescriptorResponse>([
+		[
+			'flow.if',
+			{
+				kind: 'flow.if',
+				label: 'Si',
+				family: 'flow',
+				version: 1,
+				auth: 'None',
+				fields: [],
+				branches: ['Then', 'Else'],
+				output_example: null,
+			},
+		],
+		[
+			'http.request',
+			{
+				kind: 'http.request',
+				label: 'HTTP',
+				family: 'http',
+				version: 1,
+				auth: 'None',
+				fields: [],
+				branches: [],
+				output_example: null,
+			},
+		],
+	])
+	const graph: Schemas.GraphDto = {
+		triggers: [{ id: 't1', kind: 'Manual' }],
+		connectors: [
+			{ id: 'c1', kind: 'flow.if', version: 1, config: {} },
+			{ id: 'c2', kind: 'http.request', version: 1, config: {} },
+		],
+		edges: [],
+	}
+
+	it('accepts a plain edge out of a trigger and an unbranched connector', () => {
+		expect(
+			isBranchDeclared({ source: 't1', target: 'c1' }, graph, descriptors),
+		).toBe(true)
+		expect(
+			isBranchDeclared({ source: 'c2', target: 'c1' }, graph, descriptors),
+		).toBe(true)
+	})
+
+	it('requires a declared branch on a branched connector', () => {
+		expect(
+			isBranchDeclared(
+				{ source: 'c1', target: 'c2', sourceHandle: 'Then' },
+				graph,
+				descriptors,
+			),
+		).toBe(true)
+		expect(
+			isBranchDeclared(
+				{ source: 'c1', target: 'c2', sourceHandle: 'Each' },
+				graph,
+				descriptors,
+			),
+		).toBe(false)
+		expect(
+			isBranchDeclared({ source: 'c1', target: 'c2' }, graph, descriptors),
+		).toBe(false)
+	})
+
+	it('refuses a branch out of a trigger or an unbranched connector', () => {
+		expect(
+			isBranchDeclared(
+				{ source: 't1', target: 'c1', sourceHandle: 'Then' },
+				graph,
+				descriptors,
+			),
+		).toBe(false)
+		expect(
+			isBranchDeclared(
+				{ source: 'c2', target: 'c1', sourceHandle: 'Then' },
+				graph,
+				descriptors,
+			),
+		).toBe(false)
+	})
+})
+
+describe('upstreamOf', () => {
+	it('walks back through the edges, nearest first', () => {
+		expect(
+			upstreamOf('c3', [
+				{ source: 't1', target: 'c1' },
+				{ source: 'c1', target: 'c2', sourceHandle: 'Then' },
+				{ source: 'c2', target: 'c3' },
+			]),
+		).toEqual([
+			{ id: 'c2', distance: 1, handle: null },
+			{ id: 'c1', distance: 2, handle: 'Then' },
+			{ id: 't1', distance: 3, handle: null },
+		])
+	})
+
+	it('survives a cycle and never lists the node itself', () => {
+		expect(
+			upstreamOf('a', [
+				{ source: 'a', target: 'b' },
+				{ source: 'b', target: 'a' },
+			]).map((link) => link.id),
+		).toEqual(['b'])
+	})
+})
+
+describe('neighboursOf', () => {
+	it('splits the previous and next nodes, keeping the branch', () => {
+		expect(
+			neighboursOf('b', [
+				{ source: 'a', target: 'b' },
+				{ source: 'b', target: 'c', sourceHandle: 'Else' },
+			]),
+		).toEqual({
+			previous: [{ id: 'a', handle: null }],
+			next: [{ id: 'c', handle: 'Else' }],
+		})
 	})
 })

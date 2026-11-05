@@ -1,31 +1,29 @@
 import { Link } from '@tanstack/react-router'
-import {
-	AlertCircle,
-	AlertTriangle,
-	FileText,
-	Plus,
-	RefreshCw,
-} from 'lucide-react'
+import { Plus, RefreshCw, Search } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import {
 	DataViewPagination,
 	type DataViewSortOption,
-	DataViewToolbar,
 	getPaginationViewModel,
 	useDataView,
 } from '#/components/data-view'
+import { EmptyState } from '#/components/empty-state'
 import { RequirePermission } from '#/components/require-permission'
 import { Button } from '#/components/ui/button'
+import { Input } from '#/components/ui/input'
+import { PageHeader, PageShell } from '#/components/ui/surface'
 import {
-	MetricCard,
-	PageHeader,
-	PageShell,
-	SectionCard,
-	SectionHeader,
-	StatusBadge,
-} from '#/components/ui/surface'
+	Table,
+	TableBody,
+	TableCell,
+	TableHead,
+	TableHeader,
+	TableRow,
+} from '#/components/ui/table'
+import { ToggleGroup, ToggleGroupItem } from '#/components/ui/toggle-group'
 import type { Customer } from '#/hooks/use-customers'
 import type { Invoice, PaginationMetadata } from '#/hooks/use-invoices'
+import { cn } from '#/lib/utils'
 import { buildOrgPath } from '#/modules/org-path'
 import {
 	getInvoiceListUrlState,
@@ -35,12 +33,25 @@ import {
 	writeInvoiceListUrlState,
 } from '#/pages/invoices/invoice-list-url-state'
 import {
+	computeInvoiceTiles,
+	invoiceMatchesSearch,
+	invoiceStateCounts,
+	matchesStateFilter,
+} from '#/pages/invoices/lib/invoice-list'
+import {
 	customerDisplayName,
-	formatDate,
-	formatMoney,
-	invoiceStatusLabel,
-	isInvoiceOverdue,
+	invoiceDisplayState,
+	invoiceKindLabel,
 } from '#/pages/invoices/types'
+import {
+	dueLabel,
+	formatDocumentDate,
+	normalizeText,
+	plural,
+} from '#/pages/quotes/lib/doc-format'
+import { DocBadge, InvoiceStateBadge } from '#/pages/quotes/ui/doc/badges'
+import { AccountLink } from '#/pages/quotes/ui/doc/doc-links'
+import { Money, StatTile } from '#/pages/quotes/ui/doc/primitives'
 
 interface InvoiceListUIProps {
 	organizationSlug: string
@@ -60,9 +71,26 @@ interface InvoiceListUIProps {
 	onInvoicePageSizeChange: (pageSize: number) => void
 }
 
+function Dash() {
+	return <span className="text-muted-foreground">—</span>
+}
+
+function countLabel(count: number): string {
+	return `${count} ${plural(count, 'facture', 'factures')}`
+}
+
+function summaryOf(total: number, drafts: number): string {
+	if (total === 0) return 'Aucune facture'
+	const base = countLabel(total)
+	return drafts === 0
+		? base
+		: `${base}, dont ${drafts} ${plural(drafts, 'brouillon', 'brouillons')}`
+}
+
 /**
  * The invoice list. Composing an invoice lives on its own page, reached by
- * the "Nouvelle facture" link — same split as `QuoteListUI`.
+ * the "Nouvelle facture" link — same split as `QuoteListUI`. Credit notes have
+ * their own list and are left out of this one.
  */
 export function InvoiceListUI({
 	organizationSlug,
@@ -92,13 +120,15 @@ export function InvoiceListUI({
 			? initialInvoiceListState.sort
 			: 'created-desc',
 	)
-	const stats = useMemo(() => {
-		return {
-			total: invoicesPagination?.total ?? invoices.length,
-			issued: invoices.filter((invoice) => invoice.status === 'ISSUED').length,
-			overdue: invoices.filter((invoice) => isInvoiceOverdue(invoice)).length,
-		}
-	}, [invoices, invoicesPagination])
+	const documents = useMemo(
+		() => invoices.filter((invoice) => invoice.kind !== 'CREDIT_NOTE'),
+		[invoices],
+	)
+	const tiles = useMemo(
+		() => computeInvoiceTiles(documents, outstandingTotalCents),
+		[documents, outstandingTotalCents],
+	)
+	const counts = useMemo(() => invoiceStateCounts(documents), [documents])
 
 	const invoicePaginationView = getPaginationViewModel(
 		invoicesPagination,
@@ -108,12 +138,19 @@ export function InvoiceListUI({
 	)
 
 	const invoiceDataView = useDataView({
-		data: invoices,
+		data: documents,
 		search: invoiceSearch,
-		searchPredicate: (invoice, query) =>
-			invoiceMatchesSearch(invoice, query, customers),
+		searchPredicate: (invoice, query) => {
+			const customer = customers.find((item) => item.id === invoice.customer_id)
+			return invoiceMatchesSearch(
+				invoice,
+				normalizeText(query),
+				customer ? normalizeText(customerDisplayName(customer)) : '',
+			)
+		},
 		filter: invoiceStatusFilter,
-		filterPredicate: invoiceMatchesStatusFilter,
+		filterPredicate: (invoice, filter) =>
+			matchesStateFilter(invoiceDisplayState(invoice), filter),
 		sort: invoiceSort,
 		sortOptions: INVOICE_SORT_OPTIONS,
 		page: invoicePage,
@@ -171,6 +208,9 @@ export function InvoiceListUI({
 		return () => window.removeEventListener('popstate', syncFromUrl)
 	}, [onInvoicePageChange, onInvoicePageSizeChange])
 
+	const filtered = invoiceSearch.trim() !== '' || invoiceStatusFilter !== 'all'
+	const noInvoices = documents.length === 0 && !filtered
+
 	const resetInvoiceDataView = () => {
 		setInvoiceSearch('')
 		setInvoiceStatusFilter('all')
@@ -178,237 +218,306 @@ export function InvoiceListUI({
 		onInvoicePageChange(1)
 	}
 
+	const toggleState = (state: string) => {
+		setInvoiceStatusFilter(invoiceStatusFilter === state ? 'all' : state)
+		onInvoicePageChange(1)
+	}
+
+	const newInvoiceLink = (
+		<Button size="sm" asChild>
+			<Link to={buildOrgPath(organizationSlug, '/crm/invoices/new')}>
+				<Plus aria-hidden /> Nouvelle facture
+			</Link>
+		</Button>
+	)
+
 	return (
-		<PageShell>
+		<PageShell className="max-w-7xl gap-0">
 			<PageHeader
+				className="mb-6"
 				title="Factures"
-				description="Pilotez les factures de l'organisation et créez-en une nouvelle depuis un projet ou un client."
+				description={summaryOf(documents.length, tiles.drafts.count)}
 				actions={
 					<div className="flex items-center gap-2">
-						<Button
-							type="button"
-							variant="outline"
-							onClick={onRetry}
-							disabled={!onRetry}
-						>
-							<RefreshCw />
-							Actualiser
-						</Button>
-						<RequirePermission permission="MANAGE_INVOICES">
-							<Button asChild type="button">
-								<Link to={buildOrgPath(organizationSlug, '/crm/invoices/new')}>
-									<Plus />
-									Nouvelle facture
-								</Link>
+						{onRetry ? (
+							<Button
+								type="button"
+								variant="outline"
+								size="sm"
+								onClick={onRetry}
+							>
+								<RefreshCw aria-hidden /> Actualiser
 							</Button>
+						) : null}
+						<RequirePermission permission="MANAGE_INVOICES">
+							{newInvoiceLink}
 						</RequirePermission>
 					</div>
 				}
 			/>
 
 			{error ? (
-				<SectionCard className="flex flex-col gap-3 border-destructive/30 bg-destructive-soft p-5 text-destructive sm:flex-row sm:items-center sm:justify-between">
-					<div className="flex items-center gap-3">
-						<AlertCircle className="size-5 shrink-0" />
-						<p className="text-sm font-medium">{error}</p>
-					</div>
+				<div
+					role="alert"
+					className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-state-alert/30 bg-state-alert/8 px-4 py-3 text-sm"
+				>
+					<p className="font-medium text-state-alert">{error}</p>
 					{onRetry ? (
 						<Button onClick={onRetry} variant="outline" size="sm">
 							Réessayer
 						</Button>
 					) : null}
-				</SectionCard>
+				</div>
 			) : null}
 
-			<section>
-				<p className="mb-3 text-sm text-muted-foreground">Suivi des factures</p>
-				<div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-					<MetricCard
-						label="Total factures"
-						value={stats.total}
-						hint="Tous statuts"
-					/>
-					<MetricCard
-						label="Émises"
-						value={stats.issued}
-						hint="En attente de paiement"
-					/>
-					<MetricCard
-						label="En retard"
-						value={stats.overdue}
-						hint="Échéance dépassée"
-					/>
-					<MetricCard
-						label="Encours client"
-						value={
-							outstandingTotalCents === null
-								? '—'
-								: formatMoney(outstandingTotalCents)
-						}
-						hint="Reste à encaisser"
-					/>
-				</div>
+			<section
+				aria-label="Synthèse des factures"
+				className="mb-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4"
+			>
+				<StatTile
+					label="À encaisser"
+					value={
+						tiles.toCollect.amountCents === null ? (
+							<span aria-hidden>—</span>
+						) : (
+							<Money cents={tiles.toCollect.amountCents} />
+						)
+					}
+					hint={`${countLabel(tiles.toCollect.count)} avec un reste dû`}
+				/>
+				<StatTile
+					label="En retard"
+					value={tiles.overdue}
+					hint="Échéance dépassée"
+					tone={tiles.overdue > 0 ? 'alert' : 'default'}
+					pressed={invoiceStatusFilter === 'overdue'}
+					onClick={() => toggleState('overdue')}
+				/>
+				<StatTile
+					label="Payées"
+					value={tiles.paid}
+					hint="Factures soldées"
+					tone="ok"
+					pressed={invoiceStatusFilter === 'paid'}
+					onClick={() => toggleState('paid')}
+				/>
+				<StatTile
+					label="Brouillons"
+					value={tiles.drafts.count}
+					hint={
+						tiles.drafts.count === 0 ? (
+							'Rien en préparation'
+						) : (
+							<>
+								<Money cents={tiles.drafts.grossCents} /> en préparation
+							</>
+						)
+					}
+					pressed={invoiceStatusFilter === 'draft'}
+					onClick={() => toggleState('draft')}
+				/>
 			</section>
 
-			<SectionCard>
-				<SectionHeader
-					title={`Factures (${invoiceDataView.filteredCount})`}
-					description="Liste paginée des factures de l'organisation, avec recherche, statut et tri."
-				/>
-				<div className="border-b p-4">
-					<DataViewToolbar
-						search={invoiceSearch}
-						onSearchChange={(value) => {
-							setInvoiceSearch(value)
+			<div className="mb-3 flex flex-wrap items-center gap-2">
+				<div className="relative w-full max-w-xs">
+					<Search
+						className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground"
+						aria-hidden
+					/>
+					<Input
+						type="search"
+						value={invoiceSearch}
+						onChange={(event) => {
+							setInvoiceSearch(event.target.value)
 							onInvoicePageChange(1)
 						}}
-						searchPlaceholder="Rechercher une facture ou un client…"
-						filter={invoiceStatusFilter}
-						onFilterChange={(value) => {
-							setInvoiceStatusFilter(value)
-							onInvoicePageChange(1)
-						}}
-						filterOptions={INVOICE_FILTER_OPTIONS}
-						sort={invoiceSort}
-						onSortChange={(value) => {
-							setInvoiceSort(value)
-							onInvoicePageChange(1)
-						}}
-						sortOptions={INVOICE_SORT_OPTIONS}
-						filteredCount={invoiceDataView.filteredCount}
-						totalCount={invoiceDataView.totalCount}
-						onReset={resetInvoiceDataView}
+						placeholder="Numéro, client"
+						aria-label="Rechercher une facture"
+						className="h-8 bg-card pl-8"
 					/>
 				</div>
-				{isLoading ? (
-					<p className="p-5 text-sm text-muted-foreground">Chargement…</p>
-				) : invoiceDataView.rows.length === 0 ? (
-					<div className="flex min-h-52 flex-col items-center justify-center gap-3 p-8 text-center">
-						<div className="flex size-12 items-center justify-center rounded-lg bg-muted text-muted-foreground">
-							<FileText className="size-5" />
-						</div>
-						<div>
-							<p className="font-medium">
-								{invoiceSearch || invoiceStatusFilter !== 'all'
-									? 'Aucune facture ne correspond aux critères.'
-									: 'Aucune facture enregistrée.'}
-							</p>
-							<p className="mt-1 text-sm text-muted-foreground">
-								Créez une facture depuis l'action principale pour alimenter
-								cette vue.
-							</p>
-						</div>
-						{invoiceSearch || invoiceStatusFilter !== 'all' ? (
-							<Button
-								type="button"
-								variant="outline"
-								onClick={resetInvoiceDataView}
-							>
-								Réinitialiser la vue
-							</Button>
-						) : (
-							<RequirePermission permission="MANAGE_INVOICES">
-								<Button asChild type="button">
-									<Link
-										to={buildOrgPath(organizationSlug, '/crm/invoices/new')}
+				<div className="max-w-full overflow-x-auto">
+					<ToggleGroup
+						type="single"
+						variant="outline"
+						size="sm"
+						value={invoiceStatusFilter}
+						onValueChange={(value) => {
+							if (isValidInvoiceFilter(value)) {
+								setInvoiceStatusFilter(value)
+								onInvoicePageChange(1)
+							}
+						}}
+						aria-label="Filtrer par état"
+					>
+						{INVOICE_FILTER_OPTIONS.map((option) => (
+							<ToggleGroupItem key={option.value} value={option.value}>
+								{option.label}
+								<span className="ml-1.5 text-muted-foreground tabular-nums">
+									{counts[option.value as keyof typeof counts]}
+								</span>
+							</ToggleGroupItem>
+						))}
+					</ToggleGroup>
+				</div>
+			</div>
+
+			{isLoading ? (
+				<div className="rounded-lg border bg-card px-6 py-12 text-center text-muted-foreground text-sm">
+					Chargement…
+				</div>
+			) : invoiceDataView.rows.length === 0 ? (
+				<EmptyState
+					title={
+						noInvoices
+							? 'Aucune facture pour l’instant'
+							: 'Aucune facture ne correspond'
+					}
+					hint={
+						noInvoices
+							? 'Crée une facture à partir de zéro, ou depuis un projet issu d’un devis accepté.'
+							: 'Vérifie l’orthographe ou l’état sélectionné.'
+					}
+				>
+					{filtered ? (
+						<Button variant="outline" size="sm" onClick={resetInvoiceDataView}>
+							Réinitialiser les filtres
+						</Button>
+					) : (
+						<RequirePermission permission="MANAGE_INVOICES">
+							{newInvoiceLink}
+						</RequirePermission>
+					)}
+				</EmptyState>
+			) : (
+				<div className="overflow-hidden rounded-lg border bg-card">
+					<Table>
+						<caption className="sr-only">Liste des factures</caption>
+						<TableHeader>
+							<TableRow className="hover:bg-transparent">
+								<TableHead scope="col" className="pl-4">
+									Numéro
+								</TableHead>
+								<TableHead scope="col">Client</TableHead>
+								<TableHead scope="col" className="max-lg:hidden">
+									Émission
+								</TableHead>
+								<TableHead scope="col">Échéance</TableHead>
+								<TableHead scope="col" className="text-right">
+									Total TTC
+								</TableHead>
+								<TableHead scope="col" className="pr-4 pl-6">
+									État
+								</TableHead>
+							</TableRow>
+						</TableHeader>
+						<TableBody>
+							{invoiceDataView.rows.map((invoice) => {
+								const customer = customers.find(
+									(item) => item.id === invoice.customer_id,
+								)
+								const state = invoiceDisplayState(invoice)
+								const open =
+									state === 'unpaid' ||
+									state === 'partial' ||
+									state === 'overdue'
+								return (
+									<TableRow
+										key={invoice.id}
+										className="relative focus-within:bg-muted/50"
 									>
-										<Plus />
-										Nouvelle facture
-									</Link>
-								</Button>
-							</RequirePermission>
-						)}
-					</div>
-				) : (
-					<ul className="divide-y">
-						{invoiceDataView.rows.map((invoice) => {
-							const customer = customers.find(
-								(item) => item.id === invoice.customer_id,
-							)
-							const overdue = isInvoiceOverdue(invoice)
-
-							return (
-								<li key={invoice.id}>
-									<Link
-										to={buildOrgPath(
-											organizationSlug,
-											'/crm/invoices/$invoiceId',
-										)}
-										params={{ invoiceId: invoice.id }}
-										className="grid gap-4 px-5 py-4 transition hover:bg-muted/40 sm:grid-cols-[minmax(0,1fr)_160px_160px] sm:items-center"
-									>
-										<div className="flex min-w-0 items-center gap-4">
-											<div className="flex size-11 shrink-0 items-center justify-center rounded-lg bg-brand-soft text-primary">
-												<FileText className="size-5" />
-											</div>
-											<div className="min-w-0">
-												<div className="flex min-w-0 flex-wrap items-center gap-2">
-													<p className="truncate font-semibold">
-														{invoice.number ?? 'Numéro attribué à l’émission'}
-													</p>
-													<StatusBadge tone={statusTone(invoice.status)}>
-														{invoiceStatusLabel(invoice.status)}
-													</StatusBadge>
-													{overdue ? (
-														<StatusBadge tone="error">
-															<AlertTriangle className="mr-1 size-3" />
-															En retard
-														</StatusBadge>
-													) : null}
-												</div>
-												<p className="mt-1 truncate text-xs text-muted-foreground">
-													{customer
-														? customerDisplayName(customer)
-														: 'Client inconnu'}
-												</p>
-											</div>
-										</div>
-
-										<div className="text-sm">
-											<p className="font-medium">
-												{invoice.due_at
-													? `Échéance ${formatDate(invoice.due_at)}`
-													: 'Sans échéance'}
-											</p>
-											<p className="mt-1 text-xs text-muted-foreground">
-												{formatDate(invoice.created_at)}
-											</p>
-										</div>
-
-										<p className="text-lg font-bold sm:text-right">
-											{formatMoney(invoice.gross_cents)}
-										</p>
-									</Link>
-								</li>
-							)
-						})}
-					</ul>
-				)}
-				{!isLoading ? (
-					<div className="border-t p-4">
-						<DataViewPagination
-							page={invoiceDataView.page}
-							pageCount={invoiceDataView.pageCount}
-							pageSize={invoicePageSize}
-							from={invoiceDataView.from}
-							to={invoiceDataView.to}
-							totalCount={invoiceDataView.totalCount}
-							onPageChange={onInvoicePageChange}
-							onPageSizeChange={onInvoicePageSizeChange}
-						/>
-					</div>
-				) : null}
-			</SectionCard>
+										<TableCell className="py-2.5 pl-4">
+											<Link
+												to={buildOrgPath(
+													organizationSlug,
+													'/crm/invoices/$invoiceId',
+												)}
+												params={{ invoiceId: invoice.id }}
+												className="flex items-center gap-2 font-medium outline-none before:absolute before:inset-0 focus-visible:before:ring-2 focus-visible:before:ring-ring focus-visible:before:ring-inset"
+											>
+												<span
+													className={cn(
+														'whitespace-nowrap',
+														!invoice.number && 'text-muted-foreground italic',
+													)}
+												>
+													{invoice.number ?? 'Brouillon'}
+												</span>
+												{invoice.kind === 'DEPOSIT' ||
+												invoice.kind === 'FINAL' ? (
+													<DocBadge tone="neutral">
+														{invoiceKindLabel(invoice.kind)}
+													</DocBadge>
+												) : null}
+											</Link>
+										</TableCell>
+										<TableCell>
+											{customer ? (
+												<AccountLink
+													customerId={customer.id}
+													className="relative z-10 block max-w-48 truncate"
+												>
+													{customerDisplayName(customer)}
+												</AccountLink>
+											) : (
+												<Dash />
+											)}
+										</TableCell>
+										<TableCell className="tabular whitespace-nowrap max-lg:hidden">
+											{formatDocumentDate(invoice.issued_at)}
+										</TableCell>
+										<TableCell>
+											{state === 'draft' ? (
+												<Dash />
+											) : (
+												<span className="grid">
+													<span className="tabular whitespace-nowrap">
+														{formatDocumentDate(invoice.due_at)}
+													</span>
+													{open && (
+														<span
+															className={cn(
+																'text-xs',
+																state === 'overdue'
+																	? 'font-medium text-state-alert'
+																	: 'text-muted-foreground',
+															)}
+														>
+															{dueLabel(invoice.due_at)}
+														</span>
+													)}
+												</span>
+											)}
+										</TableCell>
+										<TableCell className="text-right">
+											<Money cents={invoice.gross_cents} />
+										</TableCell>
+										<TableCell className="pr-4 pl-6">
+											<InvoiceStateBadge state={state} />
+										</TableCell>
+									</TableRow>
+								)
+							})}
+						</TableBody>
+					</Table>
+				</div>
+			)}
+			{!isLoading ? (
+				<div className="mt-3">
+					<DataViewPagination
+						page={invoiceDataView.page}
+						pageCount={invoiceDataView.pageCount}
+						pageSize={invoicePageSize}
+						from={invoiceDataView.from}
+						to={invoiceDataView.to}
+						totalCount={invoiceDataView.totalCount}
+						onPageChange={onInvoicePageChange}
+						onPageSizeChange={onInvoicePageSizeChange}
+					/>
+				</div>
+			) : null}
 		</PageShell>
 	)
-}
-
-function statusTone(status: Invoice['status']) {
-	if (status === 'PAID') return 'success'
-	if (status === 'PARTIALLY_PAID') return 'warning'
-	if (status === 'ISSUED') return 'brand'
-	if (status === 'CANCELLED') return 'error'
-	return 'neutral'
 }
 
 const INVOICE_SORT_OPTIONS: DataViewSortOption<Invoice>[] = [
@@ -439,42 +548,6 @@ const INVOICE_SORT_OPTIONS: DataViewSortOption<Invoice>[] = [
 	},
 ]
 
-function invoiceMatchesSearch(
-	invoice: Invoice,
-	query: string,
-	customers: Customer[],
-): boolean {
-	const customer = customers.find((item) => item.id === invoice.customer_id)
-	const customerName = customer
-		? customerDisplayName(customer).toLowerCase()
-		: ''
-	return (
-		invoice.id.toLowerCase().includes(query) ||
-		(invoice.number?.toLowerCase().includes(query) ?? false) ||
-		invoiceStatusLabel(invoice.status).toLowerCase().includes(query) ||
-		formatMoney(invoice.gross_cents).toLowerCase().includes(query) ||
-		customerName.includes(query)
-	)
-}
-
-function invoiceMatchesStatusFilter(invoice: Invoice, filter: string): boolean {
-	if (filter === 'all') return true
-	if (filter === 'OVERDUE') return isInvoiceOverdue(invoice)
-	return invoice.status === filter
-}
-
 function dateValue(value: string | null | undefined): number {
 	return value ? new Date(value).getTime() : Number.POSITIVE_INFINITY
-}
-
-export namespace InvoiceListUI {
-	export function Loading() {
-		return (
-			<PageShell>
-				<SectionCard className="flex items-center justify-center p-12 text-sm text-muted-foreground">
-					Chargement…
-				</SectionCard>
-			</PageShell>
-		)
-	}
 }

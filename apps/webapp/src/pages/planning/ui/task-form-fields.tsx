@@ -131,7 +131,7 @@ export function TaskFormFields({
 	return (
 		<div className="flex flex-col gap-5">
 			{mode === 'edit' && isPartOfSeries ? (
-				<p className="rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+				<p className="rounded-lg border border-warning/40 bg-warning-soft px-4 py-3 text-sm text-warning">
 					Cette tâche fait partie d'une série. Modifier ce formulaire ne change
 					que cette occurrence : elle cessera de suivre la série, et les autres
 					occurrences resteront inchangées.

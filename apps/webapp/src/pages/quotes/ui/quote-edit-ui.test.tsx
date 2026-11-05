@@ -7,8 +7,15 @@ import type { Quote } from '#/hooks/use-quotes'
 import { renderWithRouter } from '#/test/render-with-router'
 import { wrapWithPermissions } from '#/test/with-permissions'
 import { emptyQuoteLine, type QuoteFormValues } from '../types'
+import type { PaperDocument } from './doc/document-paper'
 import { QuoteEditUI } from './quote-edit-ui'
 
+class ResizeObserverStub {
+	observe() {}
+	unobserve() {}
+	disconnect() {}
+}
+globalThis.ResizeObserver ??= ResizeObserverStub
 Element.prototype.scrollIntoView ??= () => {}
 Element.prototype.hasPointerCapture ??= () => false
 Element.prototype.releasePointerCapture ??= () => {}
@@ -22,6 +29,7 @@ function organization(overrides: Partial<Organization> = {}): Organization {
 		created_at: '2026-01-01T00:00:00Z',
 		updated_at: '2026-01-01T00:00:00Z',
 		field_clock_enabled: false,
+		mcp_enabled: false,
 		vat_on_debits: false,
 		missing_legal_identity_fields: [],
 		...overrides,
@@ -67,9 +75,12 @@ function quote(overrides: Partial<Quote> = {}): Quote {
 		customer_id: 'customer-1',
 		customer_context_id: 'context-1',
 		lines: [],
-		net_cents: 0,
-		gross_cents: 0,
-		vat_breakdown: [],
+		net_cents: 31500,
+		gross_cents: 33930,
+		vat_breakdown: [
+			{ rate_bp: 1000, vat_cents: 30 },
+			{ rate_bp: 2000, vat_cents: 2400 },
+		],
 		created_at: '2026-01-01T00:00:00Z',
 		updated_at: '2026-01-01T00:00:00Z',
 		...overrides,
@@ -86,165 +97,317 @@ function values(overrides: Partial<QuoteFormValues> = {}): QuoteFormValues {
 	}
 }
 
+const PAPER: PaperDocument = {
+	kind: 'quote',
+	draft: true,
+	heading: 'Devis',
+	number: null,
+	title: 'Rénovation salle de bain',
+	issueDate: '2026-01-01T00:00:00Z',
+	dueDate: null,
+	issuer: {
+		name: 'Atelier Bois & Co',
+		legalForm: '',
+		capital: '',
+		addressLines: [],
+		phone: '',
+		email: '',
+		legalId: '',
+		vatNumber: '',
+		insurance: '',
+	},
+	recipient: {
+		name: 'Menuiserie Dupont',
+		contactName: '',
+		addressLines: ['5 rue des Forges'],
+		legalId: '',
+	},
+	lines: [],
+	totals: { netCents: 0, vat: [], grossCents: 0 },
+	showVat: false,
+	vatNotice: null,
+	notes: '',
+	reference: null,
+	reason: '',
+}
+
 function baseProps() {
 	return {
 		quote: quote(),
 		values: values(),
-		status: 'DRAFT' as const,
+		customer: customer(),
 		customers: [customer()],
 		customerContexts: [customerContext()],
 		catalogItems: [],
+		photoUrls: {},
+		vatEnabled: false,
 		customUnits: [],
 		error: null,
 		isLoading: false,
 		isSaving: false,
 		isDeleting: false,
+		isDuplicating: false,
 		isUploading: false,
+		isDownloading: false,
 		billingSteps: [],
-		totalCents: 0,
+		linkedInvoices: [],
+		paper: PAPER,
+		history: [],
+		totals: {
+			netCents: 31500,
+			vat: [
+				{ rateBp: 1000, vatCents: 30 },
+				{ rateBp: 2000, vatCents: 2400 },
+			],
+			grossCents: 33930,
+		},
+		unsavedNotice: null as string | null,
 		canSave: true,
 		canSend: true,
 		identityIncompleteForSending: false,
 		onChange: vi.fn(),
-		onStatusChange: vi.fn(),
 		onLineChange: vi.fn(),
-		onSelectCatalogItem: vi.fn(),
-		onAddLine: vi.fn(),
+		onAddLine: vi.fn(() => 'line-2'),
+		onAddCatalogItem: vi.fn(() => 'line-2'),
+		onMoveLine: vi.fn(),
+		onDuplicateLine: vi.fn(() => 'line-2'),
 		onRemoveLine: vi.fn(),
 		onUploadLinePhoto: vi.fn(),
 		onSave: vi.fn(),
-		onSend: vi.fn(),
+		onTransition: vi.fn(),
 		onDelete: vi.fn(),
+		onDuplicate: vi.fn(),
+		onDownloadPdf: vi.fn(),
 	}
 }
 
+async function renderUi(
+	props: ReturnType<typeof baseProps>,
+	permissions: string[] = ['MANAGE_QUOTES'],
+	org: Organization = organization(),
+) {
+	return renderWithRouter(
+		wrapWithPermissions(<QuoteEditUI {...props} />, {
+			permissions,
+			organization: org,
+		}),
+	)
+}
+
 describe('QuoteEditUI', () => {
-	it('changes the status through the inline select', async () => {
-		const user = userEvent.setup()
-		const onStatusChange = vi.fn()
+	it('opens a draft on its form and shows the header', async () => {
+		await renderUi(baseProps())
+
+		expect(
+			screen.getByRole('heading', { name: 'Devis DEV-2026-001' }),
+		).toBeDefined()
+		expect(
+			screen.getByRole('textbox', { name: 'Désignation, ligne 1' }),
+		).toBeDefined()
+		expect(screen.getAllByText('Brouillon').length).toBeGreaterThan(0)
+	})
+
+	it('names a quote that has no number yet a draft', async () => {
 		const props = baseProps()
-		await renderWithRouter(
-			wrapWithPermissions(
-				<QuoteEditUI {...props} onStatusChange={onStatusChange} />,
-				{ permissions: ['MANAGE_QUOTES'], organization: organization() },
-			),
-		)
+		props.quote = quote({ reference: null })
+		await renderUi(props)
 
-		await user.click(screen.getByRole('combobox', { name: 'Statut' }))
-		await user.click(screen.getByRole('option', { name: 'Envoyé' }))
+		expect(
+			screen.getByRole('heading', { name: 'Brouillon de devis' }),
+		).toBeDefined()
+	})
 
-		expect(onStatusChange).toHaveBeenCalledWith('SENT')
+	it('switches to the paper preview', async () => {
+		const user = userEvent.setup()
+		await renderUi(baseProps())
+
+		await user.click(screen.getByRole('radio', { name: 'Aperçu' }))
+
+		expect(screen.getByRole('article')).toBeDefined()
+		expect(
+			screen.queryByRole('textbox', { name: 'Désignation, ligne 1' }),
+		).toBeNull()
+	})
+
+	it('opens a sent quote on the preview', async () => {
+		const props = baseProps()
+		props.quote = quote({ status: 'SENT' })
+		await renderUi(props)
+
+		expect(screen.getByRole('article')).toBeDefined()
+	})
+
+	it('relays the backend totals in the side column', async () => {
+		await renderUi(baseProps())
+
+		expect(screen.getByText('315,00 €')).toBeDefined()
+		expect(screen.getByText('TVA 10 %')).toBeDefined()
+		expect(screen.getByText('TVA 20 %')).toBeDefined()
+		expect(screen.getByText('339,30 €')).toBeDefined()
+	})
+
+	it('flags figures that are not saved yet', async () => {
+		const props = baseProps()
+		props.unsavedNotice = 'Aperçu non enregistré : 400,00 € HT'
+		await renderUi(props)
+
+		expect(
+			screen.getByText('Aperçu non enregistré : 400,00 € HT'),
+		).toBeDefined()
 	})
 
 	it('changes the client and reports the choice', async () => {
 		const user = userEvent.setup()
-		const onChange = vi.fn()
 		const props = baseProps()
-		await renderWithRouter(
-			wrapWithPermissions(
-				<QuoteEditUI
-					{...props}
-					values={values({ customerId: '', customerContextId: '' })}
-					onChange={onChange}
-				/>,
-				{ permissions: ['MANAGE_QUOTES'], organization: organization() },
-			),
-		)
+		props.values = values({ customerId: '', customerContextId: '' })
+		await renderUi(props)
 
-		await user.click(screen.getByRole('combobox', { name: 'Client' }))
-		await user.click(screen.getByRole('option', { name: 'Menuiserie Dupont' }))
+		await user.click(screen.getByRole('combobox', { name: /^Client/ }))
+		await user.click(screen.getByRole('option', { name: /Menuiserie Dupont/ }))
 
-		expect(onChange).toHaveBeenCalledWith({ customerId: 'customer-1' })
+		expect(props.onChange).toHaveBeenCalledWith({ customerId: 'customer-1' })
 	})
 
 	it('changes the billing address and reports the choice', async () => {
 		const user = userEvent.setup()
-		const onChange = vi.fn()
 		const props = baseProps()
-		await renderWithRouter(
-			wrapWithPermissions(
-				<QuoteEditUI
-					{...props}
-					values={values({ customerContextId: '' })}
-					onChange={onChange}
-				/>,
-				{ permissions: ['MANAGE_QUOTES'], organization: organization() },
-			),
-		)
+		props.values = values({ customerContextId: '' })
+		await renderUi(props)
 
 		await user.click(
-			screen.getByRole('combobox', { name: 'Adresse de facturation' }),
+			screen.getByRole('combobox', { name: /^Adresse de facturation/ }),
 		)
 		await user.click(screen.getByRole('option', { name: 'Atelier' }))
 
-		expect(onChange).toHaveBeenCalledWith({ customerContextId: 'context-1' })
+		expect(props.onChange).toHaveBeenCalledWith({
+			customerContextId: 'context-1',
+		})
+	})
+
+	it('warns when the customer has no billing address', async () => {
+		const props = baseProps()
+		props.customerContexts = []
+		await renderUi(props)
+
+		expect(screen.getByText('Ce client n’a aucune adresse')).toBeDefined()
 	})
 
 	it('hides the legal-identity warning when nothing is missing', async () => {
-		const props = baseProps()
-		await renderWithRouter(
-			wrapWithPermissions(<QuoteEditUI {...props} />, {
-				permissions: ['MANAGE_QUOTES'],
-				organization: organization(),
-			}),
-		)
+		await renderUi(baseProps())
 
 		expect(screen.queryByText(/ne peut pas être envoyé/i)).toBeNull()
 	})
 
 	it('shows the legal-identity warning when the quote cannot be sent', async () => {
 		const props = baseProps()
-		await renderWithRouter(
-			wrapWithPermissions(
-				<QuoteEditUI {...props} identityIncompleteForSending canSend={false} />,
-				{
-					permissions: ['MANAGE_QUOTES'],
-					organization: organization({
-						missing_legal_identity_fields: ['legal_name'],
-					}),
-				},
-			),
+		props.identityIncompleteForSending = true
+		props.canSend = false
+		await renderUi(
+			props,
+			['MANAGE_QUOTES'],
+			organization({ missing_legal_identity_fields: ['legal_name'] }),
 		)
 
 		expect(screen.getByText(/ne peut pas être envoyé/i)).toBeDefined()
 		expect(screen.getByText(/la raison sociale/i)).toBeDefined()
+		expect(
+			screen.getByRole('button', { name: 'Envoyer au client' }),
+		).toHaveProperty('disabled', true)
 	})
 
-	it('asks for confirmation before deleting the quote', async () => {
+	it('saves the quote', async () => {
 		const user = userEvent.setup()
-		const onDelete = vi.fn()
 		const props = baseProps()
-		await renderWithRouter(
-			wrapWithPermissions(<QuoteEditUI {...props} onDelete={onDelete} />, {
-				permissions: ['MANAGE_QUOTES'],
-				organization: organization(),
-			}),
-		)
+		await renderUi(props)
 
-		await user.click(screen.getByRole('button', { name: 'Supprimer' }))
-		expect(onDelete).not.toHaveBeenCalled()
+		await user.click(screen.getByRole('button', { name: 'Enregistrer' }))
 
-		const confirmDialog = await screen.findByRole('alertdialog')
-		await user.click(
-			within(confirmDialog).getByRole('button', { name: 'Supprimer' }),
-		)
-
-		expect(onDelete).toHaveBeenCalled()
+		expect(props.onSave).toHaveBeenCalled()
 	})
 
-	it('hides the save/send/delete actions when the caller lacks MANAGE_QUOTES', async () => {
+	it('asks for confirmation before sending the quote', async () => {
+		const user = userEvent.setup()
 		const props = baseProps()
-		await renderWithRouter(
-			wrapWithPermissions(<QuoteEditUI {...props} />, {
-				permissions: [],
-				organization: organization(),
-			}),
+		await renderUi(props)
+
+		await user.click(screen.getByRole('button', { name: 'Envoyer au client' }))
+		expect(props.onTransition).not.toHaveBeenCalled()
+
+		const dialog = await screen.findByRole('dialog')
+		await user.click(
+			within(dialog).getByRole('button', { name: 'Envoyer au client' }),
 		)
+
+		expect(props.onTransition).toHaveBeenCalledWith('SENT')
+	})
+
+	it('answers a sent quote', async () => {
+		const user = userEvent.setup()
+		const props = baseProps()
+		props.quote = quote({ status: 'SENT' })
+		await renderUi(props)
+
+		await user.click(
+			screen.getByRole('button', { name: 'Marquer comme accepté' }),
+		)
+		const dialog = await screen.findByRole('dialog')
+		await user.click(
+			within(dialog).getByRole('button', { name: 'Marquer comme accepté' }),
+		)
+
+		expect(props.onTransition).toHaveBeenCalledWith('ACCEPTED')
+	})
+
+	it('offers the handover to a project once the quote is accepted', async () => {
+		const props = baseProps()
+		props.quote = quote({ status: 'ACCEPTED' })
+		await renderUi(props)
+
+		expect(
+			screen.getByRole('link', { name: 'Transformer en projet' }),
+		).toBeDefined()
+		expect(
+			screen.queryByRole('button', { name: 'Envoyer au client' }),
+		).toBeNull()
+	})
+
+	it('asks for confirmation before deleting the draft', async () => {
+		const user = userEvent.setup()
+		const props = baseProps()
+		await renderUi(props)
+
+		await user.click(
+			screen.getByRole('button', { name: 'Supprimer le brouillon' }),
+		)
+		expect(props.onDelete).not.toHaveBeenCalled()
+
+		const dialog = await screen.findByRole('dialog')
+		await user.click(
+			within(dialog).getByRole('button', { name: 'Supprimer le brouillon' }),
+		)
+
+		expect(props.onDelete).toHaveBeenCalled()
+	})
+
+	it('duplicates the quote', async () => {
+		const user = userEvent.setup()
+		const props = baseProps()
+		await renderUi(props)
+
+		await user.click(screen.getByRole('button', { name: 'Dupliquer' }))
+
+		expect(props.onDuplicate).toHaveBeenCalled()
+	})
+
+	it('hides the write actions when the caller lacks MANAGE_QUOTES', async () => {
+		await renderUi(baseProps(), [])
 
 		expect(screen.queryByRole('button', { name: 'Enregistrer' })).toBeNull()
 		expect(
-			screen.queryByRole('button', { name: 'Envoyer le devis' }),
+			screen.queryByRole('button', { name: 'Envoyer au client' }),
 		).toBeNull()
-		expect(screen.queryByRole('button', { name: 'Supprimer' })).toBeNull()
+		expect(
+			screen.queryByRole('button', { name: 'Supprimer le brouillon' }),
+		).toBeNull()
 	})
 })

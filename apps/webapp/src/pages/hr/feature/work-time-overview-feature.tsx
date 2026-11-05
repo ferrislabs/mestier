@@ -19,7 +19,6 @@ export function WorkTimeOverviewFeature() {
 		<WorkTimeOverviewScreen
 			key={activeOrganization.id}
 			organizationId={activeOrganization.id}
-			organizationName={activeOrganization.name}
 			organizationSlug={activeOrganization.slug}
 		/>
 	)
@@ -27,13 +26,11 @@ export function WorkTimeOverviewFeature() {
 
 interface WorkTimeOverviewScreenProps {
 	organizationId: string
-	organizationName: string
 	organizationSlug: string
 }
 
 function WorkTimeOverviewScreen({
 	organizationId,
-	organizationName,
 	organizationSlug,
 }: WorkTimeOverviewScreenProps) {
 	const catalog = useReferenceCatalog(organizationId, {
@@ -87,7 +84,6 @@ function WorkTimeOverviewScreen({
 
 	return (
 		<WorkTimeOverviewUI
-			organizationName={organizationName}
 			organizationSlug={organizationSlug}
 			isLoading={isLoading}
 			error={error?.message ?? null}

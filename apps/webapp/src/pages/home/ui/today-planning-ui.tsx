@@ -32,45 +32,47 @@ export function TodayPlanningUI({
 	error,
 }: TodayPlanningUIProps) {
 	return (
-		<div className="flex flex-col rounded-xl bg-card p-5 shadow-sm">
-			<div className="mb-1 flex items-baseline justify-between gap-4">
-				<span className="island-kicker">Aujourd’hui</span>
+		<section
+			aria-label="Aujourd’hui"
+			className="overflow-hidden rounded-xl border bg-card"
+		>
+			<header className="flex items-center justify-between border-b px-4 py-2.5">
+				<h3 className="font-medium text-[13px]">Aujourd’hui</h3>
 				<Link
 					to={buildOrgPath(organizationSlug, '/planning/calendar')}
-					className="text-xs font-semibold text-brand-muted"
+					className="text-[12px] text-primary outline-none hover:underline focus-visible:ring-2 focus-visible:ring-ring"
 				>
 					Voir le planning →
 				</Link>
-			</div>
+			</header>
 
 			{isLoading ? (
-				<div className="flex flex-col gap-3 py-3" aria-busy="true">
+				<div className="flex flex-col gap-3 px-4 py-3" aria-busy="true">
 					<Skeleton className="h-4 w-full" />
 					<Skeleton className="h-4 w-5/6" />
 					<Skeleton className="h-4 w-2/3" />
 				</div>
 			) : error ? (
-				<p className="py-3 text-sm text-destructive">{error}</p>
+				<p className="px-4 py-6 text-center text-[13px] text-destructive">
+					{error}
+				</p>
 			) : entries.length === 0 ? (
-				<p className="py-3 text-sm text-muted-foreground">
+				<p className="px-4 py-6 text-center text-[13px] text-muted-foreground">
 					Rien de planifié aujourd’hui.
 				</p>
 			) : (
-				<ul>
+				<ul className="divide-y">
 					{entries.map((entry) => (
-						<li
-							key={entry.id}
-							className="flex items-start gap-3 border-t py-3 first:border-t-0"
-						>
-							<span className="w-[4.6rem] shrink-0 pt-px text-sm font-semibold text-brand-muted tabular-nums">
+						<li key={entry.id} className="flex items-start gap-3 px-4 py-3">
+							<span className="tabular w-[4.6rem] shrink-0 pt-px font-medium text-[12.5px] text-primary">
 								{entry.timeWindow}
 							</span>
 							<div className="min-w-0">
-								<p className="truncate text-sm font-medium text-foreground">
+								<p className="truncate font-medium text-[13.5px]">
 									{entry.title}
 								</p>
 								{entry.subtitle ? (
-									<p className="truncate text-xs text-muted-foreground">
+									<p className="truncate text-[12.5px] text-muted-foreground">
 										{entry.subtitle}
 									</p>
 								) : null}
@@ -79,6 +81,6 @@ export function TodayPlanningUI({
 					))}
 				</ul>
 			)}
-		</div>
+		</section>
 	)
 }

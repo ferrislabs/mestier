@@ -158,21 +158,21 @@ export function FieldDayUI({
 	return (
 		<div className="mx-auto flex min-h-dvh w-full max-w-md flex-col gap-4 bg-muted/30 p-4 pb-8">
 			<header className="flex items-baseline justify-between">
-				<p className="text-lg font-bold">Ma journée</p>
+				<p className="font-semibold text-xl tracking-tight">Ma journée</p>
 				<p className="truncate text-sm text-muted-foreground">
 					{organizationName}
 				</p>
 			</header>
 
 			{error ? (
-				<div className="flex items-start gap-3 rounded-xl border border-destructive/30 bg-destructive-soft p-4 text-destructive">
+				<div className="flex items-start gap-3 rounded-lg border border-destructive/30 bg-destructive-soft p-4 text-destructive">
 					<AlertCircle className="mt-0.5 size-5 shrink-0" />
 					<p className="text-sm font-medium">{error}</p>
 				</div>
 			) : null}
 
 			{clockEnabled && currentLoadFailed ? (
-				<div className="flex items-start gap-3 rounded-xl border border-destructive/30 bg-destructive-soft p-4 text-destructive">
+				<div className="flex items-start gap-3 rounded-lg border border-destructive/30 bg-destructive-soft p-4 text-destructive">
 					<AlertCircle className="mt-0.5 size-5 shrink-0" />
 					<div className="flex-1">
 						<p className="text-sm font-medium">
@@ -193,11 +193,11 @@ export function FieldDayUI({
 			) : null}
 
 			{clockEnabled && staleEntry ? (
-				<section className="rounded-xl border-2 border-amber-500 bg-card p-4">
-					<p className="text-xs font-semibold uppercase tracking-wide text-amber-600 dark:text-amber-500">
+				<section className="rounded-lg border border-warning/40 bg-warning-soft p-4">
+					<p className="font-medium text-[12px] text-warning">
 						Projet non clôturé
 					</p>
-					<p className="mt-1 text-xl font-bold leading-tight">
+					<p className="mt-1 text-xl font-semibold leading-tight">
 						{staleTaskTitle ?? 'Projet'}
 					</p>
 					<p className="mt-1 text-sm text-muted-foreground">
@@ -232,11 +232,11 @@ export function FieldDayUI({
 			) : null}
 
 			{clockEnabled && running && !staleEntry ? (
-				<section className="rounded-xl border-2 border-primary bg-card p-4">
-					<p className="text-xs font-semibold uppercase tracking-wide text-primary">
+				<section className="rounded-lg border border-primary/40 bg-brand-soft p-4">
+					<p className="font-medium text-[12px] text-primary">
 						En cours depuis {elapsedLabel(running.started_at, now)}
 					</p>
-					<p className="mt-1 text-xl font-bold leading-tight">
+					<p className="mt-1 text-xl font-semibold leading-tight">
 						{current?.title ?? 'Projet'}
 					</p>
 
@@ -268,12 +268,12 @@ export function FieldDayUI({
 
 			{clockEnabled && staleEntry ? null : (
 				<section className="space-y-2">
-					<p className="text-sm font-semibold text-muted-foreground">
+					<p className="font-medium text-[13px] text-muted-foreground">
 						Mes projets du jour
 					</p>
 
 					{tasksLoadFailed ? (
-						<div className="rounded-xl border border-destructive/30 bg-card p-4 text-sm">
+						<div className="rounded-lg border border-destructive/30 bg-card p-4 text-sm">
 							<p className="font-medium text-destructive">
 								Échec du chargement — réessayer
 							</p>
@@ -289,7 +289,7 @@ export function FieldDayUI({
 							</Button>
 						</div>
 					) : tasks.length === 0 ? (
-						<p className="rounded-xl border bg-card p-4 text-sm text-muted-foreground">
+						<p className="rounded-lg border bg-card p-4 text-sm text-muted-foreground">
 							Aucun projet ne vous est assigné aujourd'hui.
 						</p>
 					) : (
@@ -300,7 +300,7 @@ export function FieldDayUI({
 							return (
 								<div
 									key={task.id}
-									className="rounded-xl border bg-card p-4 data-[current=true]:border-primary"
+									className="rounded-lg border bg-card p-4 data-[current=true]:border-primary"
 									data-current={isCurrent}
 								>
 									<div className="flex items-start justify-between gap-3">
@@ -399,7 +399,7 @@ export function FieldDayUI({
 			)}
 
 			{clockEnabled ? (
-				<section className="mt-auto rounded-xl border bg-card p-4">
+				<section className="mt-auto rounded-lg border bg-card p-4">
 					{dayEndedAt ? (
 						<p className="flex items-center gap-2 text-sm font-medium text-primary">
 							<CheckCircle2 className="size-5 shrink-0" />
@@ -438,7 +438,7 @@ export function FieldDayUI({
 								</Button>
 							</div>
 							{running ? (
-								<p className="mt-2 text-xs text-amber-600 dark:text-amber-500">
+								<p className="mt-2 text-[12px] text-warning">
 									Le projet en cours sera clôturé à cette heure.
 								</p>
 							) : null}

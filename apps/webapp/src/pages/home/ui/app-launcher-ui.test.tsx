@@ -9,19 +9,27 @@ describe('AppLauncherUI', () => {
 		await renderWithRouter(
 			<AppLauncherUI
 				items={[
-					{ id: 'crm', label: 'CRM', icon: Users, to: '/o/atelier-bois/crm' },
+					{
+						id: 'crm',
+						label: 'CRM',
+						module: { icon: Users, hue: 255 },
+						to: '/o/atelier-bois/crm',
+						hint: '2 à suivre',
+					},
 					{
 						id: 'planning',
 						label: 'Planning',
-						icon: Users,
+						module: { icon: Users },
 						to: '/o/atelier-bois/planning',
+						hint: 'Rien à suivre',
 					},
 				]}
 			/>,
 		)
 
-		const crm = screen.getByRole('link', { name: 'CRM' })
+		const crm = screen.getByRole('link', { name: /^CRM/ })
 		expect(crm.getAttribute('href')).toBe('/o/atelier-bois/crm')
-		expect(screen.getByRole('link', { name: 'Planning' })).toBeDefined()
+		expect(screen.getByText('2 à suivre')).toBeDefined()
+		expect(screen.getByRole('link', { name: /^Planning/ })).toBeDefined()
 	})
 })

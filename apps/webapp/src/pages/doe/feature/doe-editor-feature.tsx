@@ -2,21 +2,20 @@ import { useNavigate } from '@tanstack/react-router'
 import { useEffect, useMemo, useState } from 'react'
 import { useUploadFile } from '#/hooks/use-customers'
 import { useDirtyBaseline } from '#/hooks/use-dirty'
-import {
-	type Doe,
-	downloadDoePdf,
-	previewDoePdf,
-	useUpdateDoe,
-} from '#/hooks/use-doe'
+import { type Doe, downloadDoePdf, useUpdateDoe } from '#/hooks/use-doe'
 import { useFileUrls } from '#/hooks/use-file-url'
 import { mutationErrorMessage } from '#/lib/api-error'
 import { buildOrgPath } from '#/modules/org-path'
 import { DeleteDoeFeature } from '#/pages/doe/feature/delete-doe-feature'
 import { DoeSupplyPickerFeature } from '#/pages/doe/feature/doe-supply-picker-feature'
-import { doeTabLabel } from '#/pages/doe/lib/new-doe'
-import { buildUpdatePayload, canSave, doeToForm } from '#/pages/doe/lib/payload'
 import {
-	enabledNumberedSections,
+	buildUpdatePayload,
+	canSave,
+	doeToForm,
+	formErrors,
+} from '#/pages/doe/lib/payload'
+import { resolveTab, rubriques } from '#/pages/doe/lib/rubriques'
+import {
 	isSectionEmpty,
 	moveItem,
 	newSection,
@@ -42,10 +41,10 @@ import type {
 	PartyRole,
 	SectionKind,
 } from '#/pages/doe/types'
-import { DoeEditorUI, INFO_TAB, PLAN_TAB } from '#/pages/doe/ui/doe-editor-ui'
+import { DoeEditorUI } from '#/pages/doe/ui/doe-editor-ui'
 import type { SectionActions } from '#/pages/doe/ui/doe-section-tab'
 import { DoeSupplySheet } from '#/pages/doe/ui/doe-supply-sheet'
-import { ProjectTabs } from '#/pages/projects/ui/project-tabs'
+import { LeaveGuardDialog } from '#/pages/doe/ui/leave-guard-dialog'
 
 interface DoeEditorFeatureProps {
 	doe: Doe
@@ -53,6 +52,8 @@ interface DoeEditorFeatureProps {
 	organizationSlug: string
 	projectId: string
 	projectName: string
+	tab: string | undefined
+	onTabChange: (tab: string) => void
 }
 
 interface SheetState {
@@ -73,11 +74,12 @@ export function DoeEditorFeature({
 	organizationSlug,
 	projectId,
 	projectName,
+	tab,
+	onTabChange,
 }: DoeEditorFeatureProps) {
 	const initial = useMemo(() => doeToForm(doe), [doe])
 	const [form, setForm] = useState<DoeForm>(initial)
 	const dirty = useDirtyBaseline(initial, form)
-	const [tab, setTab] = useState(INFO_TAB)
 	const [sheet, setSheet] = useState<SheetState | null>(null)
 	const [pickerSectionId, setPickerSectionId] = useState<string | null>(null)
 	const [notice, setNotice] = useState<string | null>(null)
@@ -104,13 +106,12 @@ export function DoeEditorFeature({
 		return () => clearTimeout(timer)
 	}, [notice])
 
-	const enabled = enabledNumberedSections(form.sections)
-	const activeTab =
-		tab === INFO_TAB ||
-		tab === PLAN_TAB ||
-		enabled.some(({ section }) => section.id === tab)
-			? tab
-			: PLAN_TAB
+	const activeTab = resolveTab(tab, form.sections)
+	const items = useMemo(() => rubriques(form), [form])
+
+	useEffect(() => {
+		if (tab !== undefined && tab !== activeTab) onTabChange(activeTab)
+	}, [tab, activeTab, onTabChange])
 
 	const urlKeys = useMemo(() => {
 		const keys = new Set<string>()
@@ -363,15 +364,7 @@ export function DoeEditorFeature({
 	return (
 		<>
 			<DoeEditorUI
-				projectTabs={
-					<ProjectTabs
-						organizationSlug={organizationSlug}
-						projectId={projectId}
-						active="doe"
-						doeLabel={doeTabLabel({ revision: doe.revision })}
-					/>
-				}
-				header={{
+				sidebar={{
 					organizationSlug,
 					projectId,
 					projectName,
@@ -383,17 +376,17 @@ export function DoeEditorFeature({
 					isDownloading,
 					canSave: canSave(form),
 					notice,
+					errors: formErrors(form),
 					onSave: () => {
 						void save().catch(() => {})
 					},
-					onPreview: () =>
-						void runPdf(() => previewDoePdf(organizationId, doe.id)),
-					onDelete: () => setDeleteOpen(true),
 					onDownload: () =>
 						void runPdf(() =>
 							downloadDoePdf(organizationId, doe.id, `DOE-${form.title}.pdf`),
 						),
+					onDelete: () => setDeleteOpen(true),
 				}}
+				items={items}
 				form={form}
 				activeTab={activeTab}
 				error={mutationErrorMessage(updateDoe.error) ?? pdfError ?? uploadError}
@@ -458,7 +451,6 @@ export function DoeEditorFeature({
 					},
 				}}
 				sectionActions={sectionActions}
-				onTabChange={setTab}
 			/>
 
 			<DoeSupplySheet
@@ -521,6 +513,8 @@ export function DoeEditorFeature({
 				onSubmit={submitSheet}
 			/>
 
+			<LeaveGuardDialog active={dirty.isDirty} />
+
 			<DeleteDoeFeature
 				open={deleteOpen}
 				organizationId={organizationId}
@@ -529,10 +523,7 @@ export function DoeEditorFeature({
 				onOpenChange={setDeleteOpen}
 				onDeleted={() => {
 					void navigate({
-						to: buildOrgPath(
-							organizationSlug,
-							'/planification/projects/$projectId',
-						),
+						to: buildOrgPath(organizationSlug, '/projet/$projectId'),
 						params: { projectId },
 					})
 				}}

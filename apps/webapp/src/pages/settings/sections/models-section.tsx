@@ -13,7 +13,7 @@ export function ModelsSection() {
 	const [doeModelsArchived, setDoeModelsArchived] = useState(false)
 
 	return (
-		<div className="flex flex-col gap-10">
+		<div className="flex flex-col gap-6">
 			<RequirePermission permission="MANAGE_PLANNING">
 				<ProjectTemplatesFeature
 					includeArchived={templatesArchived}

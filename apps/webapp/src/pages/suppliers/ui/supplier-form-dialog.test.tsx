@@ -29,8 +29,10 @@ describe('SupplierFormDialog', () => {
 		const user = userEvent.setup()
 		const onSubmit = renderDialog()
 
-		await user.type(screen.getByLabelText('Nom'), '   ')
-		await user.click(screen.getByRole('button', { name: 'Créer' }))
+		await user.type(screen.getByLabelText(/^Nom/), '   ')
+		await user.click(
+			screen.getByRole('button', { name: 'Créer le fournisseur' }),
+		)
 
 		expect((await screen.findByRole('alert')).textContent).toBe(
 			'Le nom est obligatoire.',
@@ -42,9 +44,11 @@ describe('SupplierFormDialog', () => {
 		const user = userEvent.setup()
 		const onSubmit = renderDialog()
 
-		await user.type(screen.getByLabelText('Nom'), 'Pépinières Martin')
+		await user.type(screen.getByLabelText(/^Nom/), 'Pépinières Martin')
 		await user.type(screen.getByLabelText('Téléphone'), '0102030405')
-		await user.click(screen.getByRole('button', { name: 'Créer' }))
+		await user.click(
+			screen.getByRole('button', { name: 'Créer le fournisseur' }),
+		)
 
 		await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1))
 		expect(onSubmit.mock.calls[0]?.[0]).toMatchObject({

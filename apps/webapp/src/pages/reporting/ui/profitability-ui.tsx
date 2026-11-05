@@ -20,6 +20,14 @@ import {
 	SectionCard,
 	SectionHeader,
 } from '#/components/ui/surface'
+import {
+	Table,
+	TableBody,
+	TableCell,
+	TableHead,
+	TableHeader,
+	TableRow,
+} from '#/components/ui/table'
 import type {
 	MemberProfitability,
 	Period,
@@ -188,9 +196,9 @@ export function ProfitabilityUI({
 			</section>
 
 			{incomplete.length > 0 ? (
-				<SectionCard className="border-amber-500/30 bg-amber-50 p-5 dark:bg-amber-950/20">
+				<SectionCard className="border-warning/30 bg-warning-soft p-5">
 					<div className="flex items-start gap-3">
-						<AlertCircle className="mt-0.5 size-5 shrink-0 text-amber-600 dark:text-amber-500" />
+						<AlertCircle className="mt-0.5 size-5 shrink-0 text-warning" />
 						<div className="min-w-0 space-y-2">
 							<p className="text-sm font-semibold">
 								{incomplete.length} projet
@@ -223,9 +231,9 @@ export function ProfitabilityUI({
 			) : null}
 
 			{doubleBooked.length > 0 ? (
-				<SectionCard className="border-sky-500/30 bg-sky-50 p-5 dark:bg-sky-950/20">
+				<SectionCard className="border-primary/30 bg-brand-soft p-5">
 					<div className="flex items-start gap-3">
-						<Users className="mt-0.5 size-5 shrink-0 text-sky-600 dark:text-sky-500" />
+						<Users className="mt-0.5 size-5 shrink-0 text-primary" />
 						<div className="min-w-0 space-y-2">
 							<p className="text-sm font-semibold">
 								{doubleBooked.length} projet
@@ -281,94 +289,92 @@ export function ProfitabilityUI({
 					description="Coût planifié, marge et temps sur la période. Les projets internes y figurent aussi : une réunion coûte."
 				/>
 				{isLoading ? (
-					<p className="p-5 text-sm text-muted-foreground">Chargement…</p>
+					<p className="p-5 text-center text-[13px] text-muted-foreground">
+						Chargement…
+					</p>
 				) : projects.length === 0 ? (
 					<p className="p-5 text-sm text-muted-foreground">
 						Rien de planifié sur cette période. Un projet apparaît ici dès
 						qu'une de ses tâches y tombe, sans attendre que quelqu'un pointe.
 					</p>
 				) : (
-					<ul className="divide-y">
-						{projects.map((project) => (
-							<li
-								key={project.project_id}
-								className={cn(
-									'grid gap-2 px-5 py-4 sm:items-center',
-									costsRedacted
-										? 'sm:grid-cols-[minmax(0,1fr)_100px]'
-										: 'sm:grid-cols-[minmax(0,1fr)_repeat(5,100px)]',
-								)}
-							>
-								<div className="min-w-0">
-									<div className="flex min-w-0 flex-wrap items-center gap-2">
-										<ProjectTitleLink
-											project={project}
-											organizationSlug={organizationSlug}
-											className="font-medium"
-										/>
-										{project.customer_id ? null : (
-											<Badge variant="secondary" className="gap-1">
-												<Building2 className="size-3" />
-												Interne
-											</Badge>
-										)}
-									</div>
-									{incompleteReason(project) ? (
-										<p className="truncate text-xs text-amber-600 dark:text-amber-500">
-											{incompleteReason(project)}
-										</p>
-									) : null}
-									{overlapNote(project) ? (
-										<p className="truncate text-xs text-sky-600 dark:text-sky-500">
-											{overlapNote(project)}
-										</p>
-									) : null}
-								</div>
+					<Table>
+						<TableHeader>
+							<TableRow className="hover:bg-transparent">
+								<TableHead className="pl-5">Projet</TableHead>
 								{costsRedacted ? null : (
 									<>
-										<Figure
-											label="Devisé"
-											value={
-												project.quoted_cents === null ||
-												project.quoted_cents === undefined
-													? '—'
-													: formatCents(project.quoted_cents)
-											}
-										/>
-										<Figure
-											label="Coût"
-											value={(() => {
-												const cost = plannedCostCents(project)
-												return cost === null ? '—' : formatCents(cost)
-											})()}
-										/>
-										<Figure
-											label="Frais"
-											value={
-												project.expenses_cents
-													? formatCents(project.expenses_cents)
-													: '—'
-											}
-										/>
-										<Figure
-											label="Marge"
-											value={
-												project.margin_cents === null ||
-												project.margin_cents === undefined
-													? '—'
-													: formatCents(project.margin_cents)
-											}
-											strong
-										/>
+										<TableHead className="text-right">Devisé</TableHead>
+										<TableHead className="text-right">Coût</TableHead>
+										<TableHead className="text-right">Frais</TableHead>
+										<TableHead className="text-right">Marge</TableHead>
 									</>
 								)}
-								<Figure
-									label="Temps"
-									value={formatMinutes(project.planned_minutes)}
-								/>
-							</li>
-						))}
-					</ul>
+								<TableHead className="pr-5 text-right">Temps</TableHead>
+							</TableRow>
+						</TableHeader>
+						<TableBody>
+							{projects.map((project) => (
+								<TableRow key={project.project_id}>
+									<TableCell className="min-w-56 whitespace-normal py-3 pl-5">
+										<div className="flex min-w-0 flex-wrap items-center gap-2">
+											<ProjectTitleLink
+												project={project}
+												organizationSlug={organizationSlug}
+												className="font-medium"
+											/>
+											{project.customer_id ? null : (
+												<Badge variant="secondary" className="gap-1">
+													<Building2 className="size-3" />
+													Interne
+												</Badge>
+											)}
+										</div>
+										{incompleteReason(project) ? (
+											<p className="text-[12px] text-warning">
+												{incompleteReason(project)}
+											</p>
+										) : null}
+										{overlapNote(project) ? (
+											<p className="text-[12px] text-primary">
+												{overlapNote(project)}
+											</p>
+										) : null}
+									</TableCell>
+									{costsRedacted ? null : (
+										<>
+											<TableCell className="tabular text-right">
+												{project.quoted_cents === null ||
+												project.quoted_cents === undefined
+													? '—'
+													: formatCents(project.quoted_cents)}
+											</TableCell>
+											<TableCell className="tabular text-right">
+												{(() => {
+													const cost = plannedCostCents(project)
+													return cost === null ? '—' : formatCents(cost)
+												})()}
+											</TableCell>
+											<TableCell className="tabular text-right">
+												{project.expenses_cents
+													? formatCents(project.expenses_cents)
+													: '—'}
+											</TableCell>
+											<TableCell className="tabular text-right font-semibold">
+												{project.margin_cents === null ||
+												project.margin_cents === undefined
+													? '—'
+													: formatCents(project.margin_cents)}
+											</TableCell>
+										</>
+									)}
+									<TableCell className="tabular pr-5 text-right">
+										{formatMinutes(project.planned_minutes)}
+									</TableCell>
+								</TableRow>
+							))}
+						</TableBody>
+					</Table>
 				)}
 			</SectionCard>
 
@@ -393,7 +399,7 @@ export function ProfitabilityUI({
 										{memberName(row.member_id) ?? 'Membre'}
 									</p>
 									{row.missing_cost ? (
-										<p className="text-xs text-amber-600 dark:text-amber-500">
+										<p className="text-xs text-warning">
 											{missingCostLabel(row.missing_cost)}
 										</p>
 									) : null}
@@ -492,7 +498,7 @@ function ProjectTitleLink({
 
 	return (
 		<Link
-			to={buildOrgPath(organizationSlug, '/planification/projects/$projectId')}
+			to={buildOrgPath(organizationSlug, '/projet/$projectId')}
 			params={{ projectId: project.project_id }}
 			title={
 				expenses
@@ -507,24 +513,5 @@ function ProjectTitleLink({
 			<span className="truncate">{project.name}</span>
 			<ArrowUpRight className="size-3 shrink-0 text-muted-foreground opacity-0 group-hover:opacity-100" />
 		</Link>
-	)
-}
-
-function Figure({
-	label,
-	value,
-	strong,
-}: {
-	label: string
-	value: string
-	strong?: boolean
-}) {
-	return (
-		<div className="sm:text-right">
-			<p className="text-xs text-muted-foreground sm:hidden">{label}</p>
-			<p className={strong ? 'font-semibold tabular-nums' : 'tabular-nums'}>
-				{value}
-			</p>
-		</div>
 	)
 }

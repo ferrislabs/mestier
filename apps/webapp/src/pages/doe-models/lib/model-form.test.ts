@@ -1,10 +1,13 @@
 import { describe, expect, it } from 'vitest'
 import {
 	buildModelRequest,
+	canSaveModel,
 	canSubmitModel,
 	emptyModelDraft,
+	modelErrors,
 	modelToDraft,
 	newModelSectionDraft,
+	sameModelDraft,
 } from '#/pages/doe-models/lib/model-form'
 import { completeStyle, DEFAULT_DOE_STYLE } from '#/pages/doe-style/lib/style'
 
@@ -118,5 +121,39 @@ describe('model style', () => {
 			}),
 		).toBe(false)
 		expect(canSubmitModel({ ...named, style: DEFAULT_DOE_STYLE })).toBe(true)
+	})
+})
+
+describe('model drafts', () => {
+	const base = {
+		id: 'm1',
+		name: 'Paysagiste',
+		description: '',
+		style: null,
+		sections: [newModelSectionDraft('k1', 'Végétaux', 'supplies')],
+	}
+
+	it('ignores section keys and surrounding spaces when comparing', () => {
+		const other = {
+			...base,
+			name: ' Paysagiste ',
+			sections: [newModelSectionDraft('k2', 'Végétaux ', 'supplies')],
+		}
+
+		expect(sameModelDraft(base, other)).toBe(true)
+		expect(canSaveModel(other, base)).toBe(false)
+	})
+
+	it('allows saving a valid change and flags missing names', () => {
+		const renamed = { ...base, name: 'Gros œuvre' }
+
+		expect(canSaveModel(renamed, base)).toBe(true)
+		expect(modelErrors({ ...base, name: ' ' }).name).toBeDefined()
+		expect(
+			modelErrors({
+				...base,
+				sections: [newModelSectionDraft('k', ' ', 'plans')],
+			}).sections,
+		).toEqual([true])
 	})
 })

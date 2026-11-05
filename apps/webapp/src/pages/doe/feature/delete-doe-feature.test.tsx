@@ -137,6 +137,8 @@ function editor() {
 			organizationSlug="organisation"
 			projectId="p1"
 			projectName="Jardin"
+			tab={undefined}
+			onTabChange={() => {}}
 		/>
 	)
 }
@@ -155,9 +157,7 @@ describe('DoeEditorFeature deletion', () => {
 		)
 
 		await waitFor(() =>
-			expect(router.state.location.pathname).toBe(
-				'/o/organisation/planification/projects/p1',
-			),
+			expect(router.state.location.pathname).toBe('/o/organisation/projet/p1'),
 		)
 		expect(onDelete).toHaveBeenCalledTimes(1)
 	})

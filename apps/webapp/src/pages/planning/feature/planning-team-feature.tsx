@@ -73,7 +73,6 @@ export function PlanningTeamFeature({
 		<PlanningTeamScreen
 			key={activeOrganization.id}
 			organizationId={activeOrganization.id}
-			organizationName={activeOrganization.name}
 			organizationSlug={activeOrganization.slug}
 			view={view}
 			date={date}
@@ -85,7 +84,6 @@ export function PlanningTeamFeature({
 
 interface PlanningTeamScreenProps {
 	organizationId: string
-	organizationName: string
 	organizationSlug: string
 	view: PlanningView
 	date: string
@@ -101,7 +99,6 @@ interface PendingDrop {
 
 function PlanningTeamScreen({
 	organizationId,
-	organizationName,
 	organizationSlug,
 	view,
 	date,
@@ -242,7 +239,6 @@ function PlanningTeamScreen({
 
 	return (
 		<PlanningTeamUI
-			organizationName={organizationName}
 			organizationSlug={organizationSlug}
 			pendingReportsCount={pendingReportsCount}
 			view={view}

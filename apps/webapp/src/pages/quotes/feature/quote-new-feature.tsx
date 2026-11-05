@@ -16,7 +16,15 @@ import { useReferenceCatalog } from '#/hooks/use-reference-catalog'
 import { mutationErrorMessage } from '#/lib/api-error'
 import { buildOrgPath } from '#/modules/org-path'
 import {
-	centsToEuros,
+	duplicateItem,
+	moveItem,
+	newLineId,
+} from '#/pages/quotes/lib/doc-lines'
+import {
+	copyQuoteLine,
+	lineFromCatalogItem,
+} from '#/pages/quotes/lib/quote-lines'
+import {
 	emptyQuoteLine,
 	eurosToCents,
 	type QuoteFormValues,
@@ -234,31 +242,9 @@ function QuoteNewForm({
 		form.setFieldValue('lines', lines)
 	}
 
-	const selectCatalogItem = (index: number, catalogItemId: string) => {
-		const catalogItem = catalogItems.find((item) => item.id === catalogItemId)
-		if (!catalogItem) {
-			updateLine(index, {
-				catalogItemId: '',
-				catalogItemType: 'CUSTOM',
-				serviceRateId: '',
-			})
-			return
-		}
-
-		updateLine(index, {
-			catalogItemId: catalogItem.id,
-			catalogItemType: catalogItem.type,
-			serviceRateId: catalogItem.type === 'SERVICE' ? catalogItem.sourceId : '',
-			label: catalogItem.label,
-			unit: catalogItem.unit,
-			unitPrice: centsToEuros(catalogItem.unitPriceCents),
-			vatRateBp:
-				catalogItem.defaultVatRateBp !== null
-					? String(catalogItem.defaultVatRateBp)
-					: form.state.values.lines[index]?.vatRateBp || '',
-			notes:
-				catalogItem.description || form.state.values.lines[index]?.notes || '',
-		})
+	const appendLine = (line: QuoteLineFormValues) => {
+		form.setFieldValue('lines', [...form.state.values.lines, line])
+		return line.clientId
 	}
 
 	return (
@@ -278,18 +264,32 @@ function QuoteNewForm({
 			vatEnabled={vatEnabled}
 			onChange={updateValues}
 			onLineChange={updateLine}
-			onSelectCatalogItem={selectCatalogItem}
 			onAddLine={() =>
-				form.setFieldValue('lines', [
-					...form.state.values.lines,
-					// Date-stamped, as the previous form did: a counter derived from
-					// the length collides after a removal and React would then
-					// see two lines with the same key.
-					emptyQuoteLine(
-						`line-${Date.now()}-${form.state.values.lines.length}`,
-					),
-				])
+				// Date-stamped: a counter derived from the length collides after a
+				// removal and React would then see two lines with the same key.
+				appendLine(emptyQuoteLine(newLineId(form.state.values.lines.length)))
 			}
+			onAddCatalogItem={(item) =>
+				appendLine(
+					lineFromCatalogItem(item, newLineId(form.state.values.lines.length)),
+				)
+			}
+			onMoveLine={(index, delta) =>
+				form.setFieldValue(
+					'lines',
+					moveItem(form.state.values.lines, index, delta),
+				)
+			}
+			onDuplicateLine={(index) => {
+				const clientId = newLineId(form.state.values.lines.length)
+				form.setFieldValue(
+					'lines',
+					duplicateItem(form.state.values.lines, index, (line) =>
+						copyQuoteLine(line, clientId),
+					),
+				)
+				return clientId
+			}}
 			onRemoveLine={(index) => {
 				const next = form.state.values.lines.filter(
 					(_line, itemIndex) => itemIndex !== index,
